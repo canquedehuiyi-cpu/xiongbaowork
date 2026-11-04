@@ -5,6 +5,7 @@ import type { WakerFlowPlan } from "../../shared/wakerflows";
 import { createDatabase } from "../src/db/client";
 import {
   agents,
+  flowRunEvents,
   groupTaskRuns,
   groupTaskTemplates,
   tasks,
@@ -52,6 +53,10 @@ const tenants: string[] = [];
 afterAll(async () => {
   for (const tenantId of tenants) {
     await runAsTenant(tenantId, async () => {
+      // WF8: recovery records the runs it closes; those rows go before the runs they name.
+      await database
+        .delete(flowRunEvents)
+        .where(eq(flowRunEvents.tenantId, tenantId));
       await database.delete(tasks).where(eq(tasks.tenantId, tenantId));
       await database
         .delete(groupTaskRuns)

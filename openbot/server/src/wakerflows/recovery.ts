@@ -1,12 +1,18 @@
 import { and, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
-import { groupTaskRuns, tasks, wakerFlowRequests } from "../db/schema";
+import {
+  flowRunRetries,
+  groupTaskRuns,
+  tasks,
+  wakerFlowRequests,
+} from "../db/schema";
 import {
   type PipelineStepStateRow,
   stepIsSettled,
 } from "../db/schema/pipeline";
 import { runAsTenant } from "../tenant/context";
 import {
+  flowRunEventWriter,
   GENERATE,
   RUN,
   RUN_UNCERTAIN_MESSAGE,
@@ -84,6 +90,8 @@ export async function recoverInterruptedFlowRuns(
         parentTaskId: groupTaskRuns.parentTaskId,
         steps: groupTaskRuns.steps,
         revision: groupTaskRuns.revision,
+        flowId: groupTaskRuns.flowId,
+        cursor: groupTaskRuns.cursor,
       })
       .from(groupTaskRuns)
       .where(
@@ -149,8 +157,23 @@ export async function recoverInterruptedFlowRuns(
               sql`${groupTaskRuns.updatedAt} < now() - (${input.olderThanMs} * interval '1 millisecond')`,
             ),
           )
-          .returning({ id: groupTaskRuns.id });
+          .returning({
+            id: groupTaskRuns.id,
+            revision: groupTaskRuns.revision,
+          });
         if (!run) return false;
+        // WF8: the closing is recorded with it, like every other change of a Flow's run: each step it
+        // closed as failed, then `run_failed`.
+        if (row.flowId)
+          await flowRunEventWriter(tx, {
+            tenantId: owner,
+            runId: row.id,
+            flowId: row.flowId,
+            revision: run.revision,
+            inputs: {},
+            before: { status: "running", steps: records },
+            after: { status: "failed", cursor: row.cursor, steps: closedSteps },
+          });
         /*
          * In the same transaction as the run, so a run reported failed never leaves its cards saying
          * "running": the reaper does not look at a failed run again, so a card left open here would be
@@ -193,8 +216,51 @@ export async function recoverInterruptedFlowRuns(
   return (
     recovered +
     (await settleStrandedRunRequests(database, input)) +
-    (await settleStrandedGenerateRequests(database, input))
+    (await settleStrandedGenerateRequests(database, input)) +
+    (await settleStrandedRetries(database, input))
   );
+}
+
+/**
+ * WF8: retries a crash left `prepared`, registered and never driven (spec §3.5 step 5). The ledger row
+ * is written with the new run, and moves to `ready` once that run is handed to its driver, so a
+ * `prepared` row older than the horizon belongs to a process that died in between. It is settled
+ * `unknown` and nothing is replayed: the new run itself, `running` with no live driver, is closed as
+ * failed by this sweep's first phase like any other interrupted run, and a person decides what next.
+ * Fenced on `prepared` and age in the UPDATE, so a live retry and a second pass are left alone.
+ */
+async function settleStrandedRetries(
+  database: Database,
+  input: { olderThanMs: number },
+): Promise<number> {
+  const stale = sql`${flowRunRetries.createdAt} < now() - (${input.olderThanMs} * interval '1 millisecond')`;
+  const stranded = await runAsTenant("platform", async () => {
+    return await database
+      .select({ id: flowRunRetries.id, tenantId: flowRunRetries.tenantId })
+      .from(flowRunRetries)
+      .where(and(eq(flowRunRetries.status, "prepared"), stale));
+  });
+  let settled = 0;
+  for (const retry of stranded) {
+    // From here on the tenant is the ledger row's own.
+    const owner = retry.tenantId;
+    const marked = await runAsTenant(owner, async () => {
+      return await database
+        .update(flowRunRetries)
+        .set({ status: "unknown" })
+        .where(
+          and(
+            eq(flowRunRetries.tenantId, owner),
+            eq(flowRunRetries.id, retry.id),
+            eq(flowRunRetries.status, "prepared"),
+            stale,
+          ),
+        )
+        .returning({ id: flowRunRetries.id });
+    });
+    if (marked.length > 0) settled++;
+  }
+  return settled;
 }
 
 /**

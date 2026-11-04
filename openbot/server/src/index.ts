@@ -360,7 +360,10 @@ import { createFlowGenerator } from "./wakerflows/generator";
 import { createFlowModelResolver } from "./wakerflows/model";
 import { recoverInterruptedFlowRuns } from "./wakerflows/recovery";
 import { createWakerFlowRoutes } from "./wakerflows/routes";
-import { createWakerFlowStore } from "./wakerflows/store";
+import {
+  createWakerFlowStore,
+  flowRunEventWriter,
+} from "./wakerflows/store";
 import { repeatAfterEach } from "./work/loop";
 import {
   createWorkQueue,
@@ -2242,6 +2245,8 @@ await startupLifecycle.run(async (startup) => {
     // Spec I6, asked per step and never substituted: see `canUseCoworker` above.
     canUse: canUseCoworker,
     quota,
+    // WF8: a WakerFlow run's state changes and questions, written with the change itself.
+    events: flowRunEventWriter,
   });
 
   /**

@@ -207,6 +207,11 @@ function serve(handle: Handler = () => undefined) {
       call.method === "GET"
     )
       return Response.json({ runs: [] });
+    // WF8: a run's timeline and questions, empty unless a test says otherwise.
+    if (call.path.includes("/events?"))
+      return Response.json({ events: [], next: null });
+    if (call.path.endsWith("/confirmations") && call.method === "GET")
+      return Response.json({ confirmations: [] });
     return Response.json({ error: "unexpected" }, { status: 500 });
   }) as typeof fetch;
 }
@@ -768,4 +773,214 @@ test("runInputProblems checks each type and a default stands in for an empty req
   expect(runInputProblems(typed, { count: "3" }, { defaults: false })).toEqual({
     tone: "请填写 语气。",
   });
+});
+
+/*
+ * WF8-7: a step parked on a question is answered or skipped from the run's detail, a step parked on an
+ * approval links to the approvals page instead, and a failed run is retried from its failed step only
+ * after the page says which step will run again.
+ */
+const CONFIRMATION_ID = "77777777-7777-4777-8777-777777777777";
+const NEW_RUN_ID = "88888888-8888-4888-8888-888888888888";
+
+const parkedRun = (step2: Partial<WakerFlowRun["steps"][number]>) =>
+  run("awaiting_action", {
+    steps: [
+      { ...plan.steps[0]!, state: "done", output: "1. 回顾 2. 计划" },
+      { ...plan.steps[1]!, state: "awaiting_action", ...step2 },
+    ],
+  });
+
+test("a step waiting on a question is answered from the run, once, and the run reads on", async () => {
+  let answered = false;
+  serve((call) => {
+    if (
+      call.path === `/api/wakerflows/${FLOW_ID}/runs` &&
+      call.method === "GET"
+    )
+      return Response.json({
+        runs: [summary(answered ? "done" : "awaiting_action")],
+      });
+    if (call.path === `/api/wakerflows/${FLOW_ID}/runs/${RUN_ID}`)
+      return Response.json({
+        run: answered
+          ? run("done", {
+              cursor: 2,
+              steps: [
+                { ...plan.steps[0]!, state: "done", output: "1. 回顾 2. 计划" },
+                { ...plan.steps[1]!, state: "done", output: "只看 Q3" },
+              ],
+            })
+          : parkedRun({ question: "要覆盖哪个季度？" }),
+      });
+    if (call.path.endsWith("/confirmations") && call.method === "GET")
+      return Response.json({
+        confirmations: [
+          {
+            id: CONFIRMATION_ID,
+            runId: RUN_ID,
+            nodeId: "step_2",
+            question: "要覆盖哪个季度？",
+            inputs: { agenda: "1. 回顾 2. 计划" },
+            status: answered ? "answered" : "pending",
+            answer: answered ? "只看 Q3" : null,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        ],
+      });
+    if (call.path.endsWith(`/confirmations/${CONFIRMATION_ID}/answer`)) {
+      answered = true;
+      return Response.json({ confirmation: { id: CONFIRMATION_ID } });
+    }
+    return undefined;
+  });
+  const { view, user } = draw(`/wakerflows/${FLOW_ID}`);
+  await user.click(await view.findByText("等待处理"));
+  expect(await view.findByText("这一步在问你：要覆盖哪个季度？")).toBeDefined();
+  // An empty answer is not sent.
+  await user.click(view.getByRole("button", { name: "提交回答" }));
+  expect(view.getByText("请填写回答。")).toBeDefined();
+  await user.type(view.getByLabelText("你的回答"), "只看 Q3");
+  await user.click(view.getByRole("button", { name: "提交回答" }));
+  await waitFor(() =>
+    expect(
+      calls.filter((entry) => entry.path.endsWith("/answer")),
+    ).toHaveLength(1),
+  );
+  const sent = calls.find((entry) => entry.path.endsWith("/answer"));
+  if (!sent) throw new Error("No answer was sent.");
+  expect(sent.path).toBe(
+    `/api/wakerflows/${FLOW_ID}/runs/${RUN_ID}/confirmations/${CONFIRMATION_ID}/answer`,
+  );
+  expect(sent.body).toMatchObject({ answer: "只看 Q3" });
+  expect(typeof (sent.body as { requestId?: unknown }).requestId).toBe(
+    "string",
+  );
+  expect(await view.findByText("只看 Q3", { exact: false })).toBeDefined();
+  await waitFor(() =>
+    expect(view.queryByRole("button", { name: "提交回答" })).toBeNull(),
+  );
+});
+
+test("跳过 skips the question, and a step waiting on an approval only links to the approvals page", async () => {
+  let approval = false;
+  serve((call) => {
+    if (
+      call.path === `/api/wakerflows/${FLOW_ID}/runs` &&
+      call.method === "GET"
+    )
+      return Response.json({ runs: [summary("awaiting_action")] });
+    if (call.path === `/api/wakerflows/${FLOW_ID}/runs/${RUN_ID}`)
+      return Response.json({
+        run: approval
+          ? parkedRun({ approvalId: "approval-1" })
+          : parkedRun({ question: "要覆盖哪个季度？" }),
+      });
+    if (call.path.endsWith("/confirmations") && call.method === "GET")
+      return Response.json({
+        confirmations: approval
+          ? []
+          : [
+              {
+                id: CONFIRMATION_ID,
+                runId: RUN_ID,
+                nodeId: "step_2",
+                question: "要覆盖哪个季度？",
+                inputs: {},
+                status: "pending",
+                answer: null,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              },
+            ],
+      });
+    if (call.path.endsWith(`/confirmations/${CONFIRMATION_ID}/skip`)) {
+      approval = true;
+      return Response.json({ confirmation: { id: CONFIRMATION_ID } });
+    }
+    return undefined;
+  });
+  const { view, user } = draw(`/wakerflows/${FLOW_ID}`);
+  await user.click(await view.findByText("等待处理"));
+  await user.click(await view.findByRole("button", { name: "跳过这一步" }));
+  await waitFor(() =>
+    expect(calls.filter((entry) => entry.path.endsWith("/skip"))).toHaveLength(
+      1,
+    ),
+  );
+  // Now parked on an approval: no answer box here, only the way to where it is answered.
+  const link = await view.findByRole("link", { name: "去审批" });
+  expect(link.getAttribute("href")).toBe("/approvals");
+  expect(view.queryByRole("button", { name: "提交回答" })).toBeNull();
+});
+
+test("从失败步骤重试 names the step that runs again before anything is sent, then opens the new run", async () => {
+  let retried = false;
+  const failedRun = run("failed", {
+    cursor: 1,
+    steps: [
+      { ...plan.steps[0]!, state: "done", output: "1. 回顾 2. 计划" },
+      { ...plan.steps[1]!, state: "failed", error: "清单生成超时" },
+    ],
+  });
+  serve((call) => {
+    if (
+      call.path === `/api/wakerflows/${FLOW_ID}/runs` &&
+      call.method === "GET"
+    )
+      return Response.json({
+        runs: retried
+          ? [{ ...summary("done"), id: NEW_RUN_ID }, summary("failed")]
+          : [summary("failed")],
+      });
+    if (call.path === `/api/wakerflows/${FLOW_ID}/runs/${RUN_ID}`)
+      return Response.json({ run: failedRun });
+    if (call.path === `/api/wakerflows/${FLOW_ID}/runs/${NEW_RUN_ID}`)
+      return Response.json({
+        run: run("done", {
+          id: NEW_RUN_ID,
+          cursor: 2,
+          steps: [
+            { ...plan.steps[0]!, state: "done", output: "1. 回顾 2. 计划" },
+            { ...plan.steps[1]!, state: "done", output: "会前清单已生成" },
+          ],
+        }),
+      });
+    if (call.path.endsWith(`/runs/${RUN_ID}/retry`)) {
+      retried = true;
+      return Response.json({
+        retry: {
+          id: "retry-1",
+          requestId: (call.body as { requestId: string }).requestId,
+          sourceRunId: RUN_ID,
+          newRunId: NEW_RUN_ID,
+          nodeId: "step_2",
+          status: "ready",
+        },
+      });
+    }
+    return undefined;
+  });
+  const { view, user } = draw(`/wakerflows/${FLOW_ID}`);
+  await user.click(await view.findByText("失败"));
+  expect(view.getByText("失败的那一步会重新执行一次。")).toBeDefined();
+  await user.click(await view.findByRole("button", { name: "从失败步骤重试" }));
+  const dialog = view.getByRole("alertdialog", { name: "确认从失败步骤重试" });
+  expect(dialog.textContent).toContain(
+    "将从第 2 步「根据议程写会前清单」重新执行",
+  );
+  expect(dialog.textContent).toContain("可能会再发生一次");
+  const retries = () => calls.filter((entry) => entry.path.endsWith("/retry"));
+  expect(retries()).toEqual([]);
+  await user.click(view.getByRole("button", { name: "取消" }));
+  expect(retries()).toEqual([]);
+
+  await user.click(view.getByRole("button", { name: "从失败步骤重试" }));
+  await user.click(view.getByRole("button", { name: "确认重试" }));
+  await waitFor(() => expect(retries()).toHaveLength(1));
+  // The new run is the one now open, with step 2 done.
+  expect(
+    await view.findByText("会前清单已生成", { exact: false }),
+  ).toBeDefined();
 });
