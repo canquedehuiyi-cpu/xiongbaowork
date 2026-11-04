@@ -174,11 +174,38 @@ export type AvatarSourceStore = {
   add: (personId: string, source: AvatarSourceInput) => Promise<AvatarSource>;
   /** False when there is no active source by that id for this person. */
   revoke: (personId: string, sourceId: string) => Promise<boolean>;
+  /**
+   * The machine a 分身 reads one of its local folders on, or null.
+   *
+   * Asked by the computer gateway on every file call that names a `root`, so a folder removed a
+   * moment ago, or one that was never this 分身's, is not read. Null unless all of these hold: the Bot
+   * is a person's own 分身 (`avatar-<person>`), the run is that person's, an active local-folder source
+   * of that 分身 names exactly this reference, and the machine it names is still the person's and still
+   * reports the folder. Read in the person's own frame.
+   */
+  folderFor: (
+    botId: string,
+    actorId: string,
+    root: string,
+  ) => Promise<{ tenantId: string; deviceId: string } | null>;
+};
+
+/** A local folder whose source was removed, so its machine can be asked to forget it (spec §6.5). */
+export type RevokedFolder = {
+  tenantId: string;
+  deviceId: string;
+  rootRef: string;
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export function createAvatarSourceStore(database: Database): AvatarSourceStore {
+export function createAvatarSourceStore(
+  database: Database,
+  options: {
+    /** Told after a local folder's source is removed. Best effort: a failure here is not the person's. */
+    onFolderRevoked?: (folder: RevokedFolder) => void;
+  } = {},
+): AvatarSourceStore {
   /** The kinds this module writes and reads back; any other row is a later stage's and not shown. */
   const activeRows = (agentId: string) =>
     database
@@ -248,12 +275,11 @@ export function createAvatarSourceStore(database: Database): AvatarSourceStore {
 
     active: (personId) =>
       runAsTenant(personId, async () =>
-        (await activeRows(avatarAgentId(personId)))
-          .filter((row) => row.kind === "declaration")
-          .map((row) => ({
-            label: row.label,
-            note: row.note,
-          })),
+        (await activeRows(avatarAgentId(personId))).map((row) =>
+          row.kind === "local_folder" && row.rootRef
+            ? { label: row.label, note: row.note, root: row.rootRef }
+            : { label: row.label, note: row.note },
+        ),
       ),
 
     add: (personId, source) =>
@@ -392,9 +418,70 @@ export function createAvatarSourceStore(database: Database): AvatarSourceStore {
               isNull(avatarSources.revokedAt),
             ),
           )
-          .returning({ id: avatarSources.id }),
+          .returning({
+            id: avatarSources.id,
+            kind: avatarSources.kind,
+            deviceId: avatarSources.deviceId,
+            rootRef: avatarSources.rootRef,
+          }),
       );
+      const [row] = revoked;
+      if (row?.kind === "local_folder" && row.deviceId && row.rootRef) {
+        try {
+          options.onFolderRevoked?.({
+            tenantId: personId,
+            deviceId: row.deviceId,
+            rootRef: row.rootRef,
+          });
+        } catch {
+          // The source is removed either way; the next run neither sees nor reads the folder.
+        }
+      }
       return revoked.length === 1;
+    },
+
+    folderFor: async (botId, actorId, root) => {
+      const personId = botId.startsWith("avatar-") ? botId.slice(7) : "";
+      if (
+        !personId ||
+        botId !== avatarAgentId(personId) ||
+        actorId !== personId ||
+        !ROOT_REF.test(root)
+      ) {
+        return null;
+      }
+      return runAsTenant(personId, async () => {
+        const [source] = await database
+          .select({ deviceId: avatarSources.deviceId })
+          .from(avatarSources)
+          .where(
+            and(
+              eq(avatarSources.tenantId, personId),
+              eq(avatarSources.agentId, botId),
+              eq(avatarSources.kind, "local_folder"),
+              eq(avatarSources.rootRef, root),
+              isNull(avatarSources.revokedAt),
+            ),
+          )
+          .limit(1);
+        if (!source?.deviceId) return null;
+        const [device] = await database
+          .select({ roots: registeredDevices.roots })
+          .from(registeredDevices)
+          .where(
+            and(
+              eq(registeredDevices.tenantId, personId),
+              eq(registeredDevices.deviceId, source.deviceId),
+            ),
+          )
+          .limit(1);
+        const offered = (reportedRoots(device?.roots) ?? []).some(
+          (entry) => entry.ref === root,
+        );
+        return offered
+          ? { tenantId: personId, deviceId: source.deviceId }
+          : null;
+      });
     },
   };
 }
