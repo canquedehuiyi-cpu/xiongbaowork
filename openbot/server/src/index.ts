@@ -254,6 +254,8 @@ import { createOnboardingStore } from "./people/onboarding";
 import { createPeopleStore } from "./people/store";
 import { createPersonaRoutes } from "./personas/routes";
 import { createPersonaTemplateStore } from "./personas/store";
+import { createRoleTemplateRoutes } from "./roles/routes";
+import { createRoleTemplateStore, officialTemplatesFrom } from "./roles/store";
 import { createPipelineRoutes } from "./pipeline/routes";
 import { createPipelineStore } from "./pipeline/store";
 import { createPipelineStepRunner } from "./pipeline/turn-channel";
@@ -4316,6 +4318,22 @@ await startupLifecycle.run(async (startup) => {
     "/api/personas",
     createPersonaRoutes(
       createPersonaTemplateStore(database),
+      config.singleUser
+        ? createDevRequireUser()
+        : createRequireUser(auth as AuthService, roleRepository),
+    ),
+  );
+
+  // Role templates (story ROLE1): the person's own, and the package's seed cards as read-only ones.
+  const officialRoleTemplates = officialTemplatesFrom(tenantPackage.agents);
+  app.route(
+    "/api/role-templates",
+    createRoleTemplateRoutes(
+      createRoleTemplateStore({
+        database,
+        profiles: agentProfileStore,
+        official: () => officialRoleTemplates,
+      }),
       config.singleUser
         ? createDevRequireUser()
         : createRequireUser(auth as AuthService, roleRepository),
