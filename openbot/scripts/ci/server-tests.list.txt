@@ -20,6 +20,7 @@ tests/agent-model-binding.test.ts
 tests/agent-profile-policy.test.ts
 tests/agent-profile-store.integration.test.ts
 tests/agent-registry.test.ts
+tests/agent-role-bible.integration.test.ts
 tests/agent-routes.test.ts
 tests/agent-test-connection-headers.test.ts
 tests/agent-tool-call-input.test.ts
