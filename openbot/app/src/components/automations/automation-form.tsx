@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useId, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FlowInputFields } from "@/components/wakerflow/flow-input-fields";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import {
   type AutomationTarget,
@@ -14,6 +15,11 @@ import {
   TRIGGER_KIND_LABEL,
   wakerflowChoicesQueryOptions,
 } from "@/lib/automations/queries";
+import {
+  filledInputValues,
+  initialInputValues,
+  runInputProblems,
+} from "@/lib/wakerflows";
 
 type TriggerDraft = {
   key: number;
@@ -79,6 +85,11 @@ export function AutomationForm({
     useState<AutomationTarget["kind"]>("waker");
   const [agentId, setAgentId] = useState("");
   const [flowId, setFlowId] = useState("");
+  const [flowValues, setFlowValues] = useState<
+    Record<string, Record<string, string>>
+  >({});
+  /** Problems are shown once a person has tried to submit, not while the form is still empty. */
+  const [showInputProblems, setShowInputProblems] = useState(false);
   const [nextKey, setNextKey] = useState(1);
   const [triggers, setTriggers] = useState<TriggerDraft[]>([
     { key: 0, kind: "schedule", cron: "", timezone: localZone(), at: "" },
@@ -90,13 +101,30 @@ export function AutomationForm({
   const chosenAgent = agentId || roster[0]?.id || "";
   const chosenFlow = flowId || flows.data?.[0]?.id || "";
   const flowMode = targetKind === "wakerflow" && canFlow;
+  // WF8: the chosen Flow's inputs, filled once here and sent with every firing. Each Flow keeps its
+  // own values, starting from its defaults, so switching between Flows loses nothing typed.
+  const flowInputs =
+    flows.data?.find((flow) => flow.id === chosenFlow)?.inputs ?? [];
+  const inputValues = flowValues[chosenFlow] ?? initialInputValues(flowInputs);
+  // A required input carries its own value: the server will not fill it from a default later.
+  const inputProblems = flowMode
+    ? runInputProblems({ inputs: flowInputs }, inputValues, { defaults: false })
+    : {};
+  const inputsMissing = Object.keys(inputProblems).length > 0;
   const target: AutomationTarget | null = flowMode
     ? chosenFlow
-      ? { kind: "wakerflow", flowId: chosenFlow }
+      ? {
+          kind: "wakerflow",
+          flowId: chosenFlow,
+          ...(flowInputs.length > 0
+            ? { inputs: filledInputValues(flowInputs, inputValues) }
+            : {}),
+        }
       : null
     : chosenAgent
       ? { kind: "waker", agentId: chosenAgent }
       : null;
+  // A missing Flow input does not disable the button: pressing it says which one is missing.
   const ready = Boolean(name.trim() && target && triggers.length > 0);
 
   const change = (key: number, patch: Partial<TriggerDraft>) =>
@@ -114,6 +142,10 @@ export function AutomationForm({
       noValidate
       onSubmit={(event) => {
         event.preventDefault();
+        if (inputsMissing) {
+          setShowInputProblems(true);
+          return;
+        }
         if (!target || create.isPending) return;
         setProblem(null);
         const runs = maxRuns.trim();
@@ -199,6 +231,28 @@ export function AutomationForm({
           </label>
         )}
       </div>
+      {flowMode && flowInputs.length > 0 ? (
+        <fieldset
+          aria-label="WakerFlow 输入"
+          className="flex flex-col gap-2 rounded-md border p-2 text-sm"
+        >
+          <legend className="px-1">
+            WakerFlow 输入（每次触发都使用这些值）
+          </legend>
+          <FlowInputFields
+            idPrefix={`${field}-flow-input`}
+            inputs={flowInputs}
+            onChange={(key, value) =>
+              setFlowValues((current) => ({
+                ...current,
+                [chosenFlow]: { ...inputValues, [key]: value },
+              }))
+            }
+            problems={showInputProblems ? inputProblems : {}}
+            values={inputValues}
+          />
+        </fieldset>
+      ) : null}
       {flowMode && flows.isSuccess && flows.data.length === 0 ? (
         <p className="text-muted-foreground text-xs">
           还没有已创建的 WakerFlow，请先去建一个。
