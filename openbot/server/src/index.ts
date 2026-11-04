@@ -191,6 +191,7 @@ import { loadConfig } from "./config";
 import {
   type IdentifyActor,
   type IdentifyUser,
+  type LoadCurrentProject,
   mountCopilotRuntime,
   normalizeModelBaseUrls,
   resolveRuntimeAgents,
@@ -351,6 +352,9 @@ import {
   createAvatarSourceRoutes,
   createAvatarSourceStore,
 } from "./avatar-sources";
+import { createProjectContext } from "./projects/context";
+import { createProjectRoutes } from "./projects/routes";
+import { createProjectStore } from "./projects/store";
 import { createUserPreferencesStore } from "./user-preferences";
 import { createVoiceSessionStore } from "./voice/sessions";
 import { createVoiceSummarizer } from "./voice/summary";
@@ -973,6 +977,23 @@ await startupLifecycle.run(async (startup) => {
     return await deviceSelector.forBot(botId);
   }
 
+  /*
+   * Story RES2: projects on the person's own machines. The context answers, per action, which project
+   * a coworker works in on the machine the action resolved to (and refuses rather than falls back,
+   * D9), and per run what its prompt says about it. Device mode only (D7): cloud mode has no machine.
+   */
+  const projectStore = createProjectStore(database);
+  const projectContext = createProjectContext(database);
+  const loadCurrentProjectForActor =
+    (_actorId: string): LoadCurrentProject =>
+    async (agentId) =>
+      config.tenantRuntime === "device"
+        ? projectContext.forPrompt(
+            agentId,
+            await deviceForBot(agentId).catch(() => null),
+          )
+        : null;
+
   /**
    * The same answer in the one form the task board takes: a machine id, or nothing.
    *
@@ -1004,6 +1025,8 @@ await startupLifecycle.run(async (startup) => {
               transport: createRunnerTransport(deviceChannel),
               resolveDevice: deviceForBot,
               deviceTakeovers,
+              // RES2: the frame's root is the coworker's current project, never the model's.
+              projects: { resolve: projectContext.resolve },
             }
           : {}),
         /*
@@ -2125,6 +2148,8 @@ await startupLifecycle.run(async (startup) => {
       resolveAgentModel,
       // And the owner's 分身's declared sources, exactly as their chat turn is told them.
       loadAvatarSourcesForActor(actor.id),
+      // And the coworker's current project, as their chat turn is told it (RES2).
+      loadCurrentProjectForActor(actor.id),
     );
     const agent = agents[agentId];
     if (!agent) {
@@ -2397,6 +2422,8 @@ await startupLifecycle.run(async (startup) => {
     resolveAgentModel,
     // What a person declared about where their material is, told to their own 分身 only (story F1).
     loadAvatarSourcesForActor,
+    // The project each coworker works in on the person's machine (story RES2).
+    loadCurrentProjectForActor,
   );
 
   const responsibilityQueue = createWorkQueue(database);
@@ -4241,6 +4268,22 @@ await startupLifecycle.run(async (startup) => {
     ),
   );
   app.route("/api/runner", createRunnerRoutes(deviceStore, quota));
+
+  // Story RES2: the signed-in person's projects on their own machines, in their own frame.
+  app.route(
+    "/api/projects",
+    createProjectRoutes(
+      projectStore,
+      config.singleUser
+        ? createDevRequireUser()
+        : createRequireUser(auth as AuthService, roleRepository),
+      {
+        isReachable: (target) => deviceChannel.isReachable(target),
+        dispatch: (target, action, payload, timeoutMs) =>
+          deviceChannel.dispatch(target, action, payload, timeoutMs),
+      },
+    ),
+  );
 
   // Story F1: the information sources of the signed-in person's own 分身, in their own frame.
   app.route(

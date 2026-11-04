@@ -21,6 +21,7 @@ import {
 } from "@/components/channels/transcript-messages";
 import { VoiceCallWidget } from "@/components/channels/voice-call-widget";
 import { HandoffResumeNotice } from "@/components/computer/handoff-resume-notice";
+import { ProjectPicker } from "@/components/projects/project-picker";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import { attachmentUrl } from "@/lib/channels/attachments";
 import {
@@ -1038,6 +1039,17 @@ export function ChannelChat({
                     这位员工已被删除。对话仍然可以查看，但它不会再回复了。
                   </p>
                 )}
+                {/*
+                 * Story RES2: the project this coworker will work in, beside the input, for a
+                 * coworker this person manages. Draws nothing when there is no project to pick.
+                 */}
+                {channel.active &&
+                agentProfiles?.find((profile) => profile.id === runtimeAgentId)
+                  ?.canManage ? (
+                  <div className="pb-2">
+                    <ProjectPicker agentId={runtimeAgentId} compact />
+                  </div>
+                ) : null}
               </>
             }
             onSubmit={async (draft) => {

@@ -25,6 +25,7 @@ import {
   recordAuditEvent,
 } from "../audit";
 import { isRunnerAddress, runnerAddress } from "../devices/channel";
+import type { ProjectRoot } from "../projects/context";
 import {
   DEVICE_HUMAN_HAS_CONTROL,
   type DeviceTakeovers,
@@ -101,6 +102,10 @@ import {
 
 /** The rule a takeover refusal names on its audit row, so an operator can count them apart. */
 export const DEVICE_TAKEOVER_RULE = "device.takeover";
+/** The rule a refusal names when a coworker's current project cannot be used (story RES2, D9). */
+export const PROJECT_UNAVAILABLE_RULE = "project.unavailable";
+const READ_ONLY_PROJECT =
+  "当前项目是只读的：可以列出和读取文件，不能写文件或运行命令。如需修改，请让项目的主人把项目设为可写。";
 
 export class ActionRefusedError extends Error {
   /** The rule that refused it, so the surface can show which one and an operator can find it. */
@@ -157,6 +162,21 @@ export type ComputerGatewayOptions = {
       root: string,
     ) => Promise<{ tenantId: string; deviceId: string } | null>;
     transport: ComputerTransport;
+  };
+  /**
+   * A coworker's current project on the machine an action resolves to (story RES2, spec §3.5).
+   *
+   * Asked for every file and shell call that names no root, once the machine is known (`resolveDevice`;
+   * a deployment without one, cloud mode included, has no projects, decision D7). With a project, the
+   * frame's `root` and `writable` are the project's, never the model's, and the policy, the row and
+   * the approval gate see the path as `<root>/<path>`; with a refusal the action is refused and
+   * recorded, and nothing is sent (D9); with null the call goes to the workspace as before.
+   */
+  projects?: {
+    resolve: (
+      botId: string,
+      machine: { tenantId: string; deviceId: string },
+    ) => Promise<ProjectRoot | null>;
   };
   /**
    * Who holds the wheel of a Bot's browser on a tenant's own machine (F2 stage 2).
@@ -625,6 +645,11 @@ export function createComputerGateway(
        * than this Bot's own computer. Named on the row and told to the gate in its place.
        */
       device?: { tenantId: string; deviceId: string };
+      /**
+       * Why this call cannot be carried out at all, decided before the policy (a coworker's current
+       * project that cannot be used, story RES2 D9). Recorded as a refusal; nothing is sent.
+       */
+      refusal?: string;
     },
     run: (address?: string) => Promise<T>,
   ): Promise<T> {
@@ -756,6 +781,33 @@ export function createComputerGateway(
         handoff,
       );
     }
+    /*
+     * The coworker's current project cannot be used here (story RES2, D9): refused and recorded with
+     * the reason, before the approval gate, and never redirected to the workspace.
+     */
+    if (subject.refusal) {
+      await write(auditStore, {
+        toolName,
+        botId,
+        actor,
+        element,
+        ref,
+        ...(subject.command ? { command: subject.command } : {}),
+        filePath,
+        pageUrl,
+        decision: {
+          allowed: false,
+          mode: decision.mode,
+          matched: PROJECT_UNAVAILABLE_RULE,
+          source: "deny",
+          forward: false,
+          reason: subject.refusal,
+        },
+        refusal: subject.refusal,
+        device: target && target !== "unknown" ? target.deviceId : null,
+      });
+      throw new ActionRefusedError(subject.refusal, PROJECT_UNAVAILABLE_RULE);
+    }
     await write(auditStore, {
       toolName,
       botId,
@@ -835,6 +887,7 @@ export function createComputerGateway(
           ...subject,
           signal: undefined,
           device: undefined,
+          refusal: undefined,
         },
         target: {
           pageUrl,
@@ -955,6 +1008,91 @@ export function createComputerGateway(
               ])
             : undefined,
         ),
+    );
+  }
+
+  /**
+   * The project a file or shell call of this coworker runs in, or null for its workspace (story RES2).
+   * Only once the machine is known; a resolver that fails is left to the ordinary path, which fails
+   * the same way for every other call.
+   */
+  async function projectOf(botId: string) {
+    if (!options.projects || !options.resolveDevice) return null;
+    const machine = await options.resolveDevice(botId).catch(() => null);
+    if (!machine) return null;
+    const root = await options.projects.resolve(botId, machine);
+    return root ? { machine, root } : null;
+  }
+
+  /**
+   * One file or shell call in the coworker's current project (story RES2, spec §3.5).
+   *
+   * The frame is built here: every field of the model's arguments that could name a folder (`root`,
+   * `writable`, `cwd`) is dropped, and the project's root, and `writable` for a write, are written
+   * in. The path the policy, the row and the approval gate see is `<root>/<path>`, so the SEC1
+   * sensitive-path floor and a workspace approval apply as they do anywhere, and a dangerous command
+   * is held exactly as in the workspace. A read-only project refuses a write or a command here,
+   * recorded, before the machine is asked; the runner would refuse it too.
+   */
+  async function inProject<T>(
+    toolName: string,
+    botId: string,
+    actor: ActionActor,
+    project: NonNullable<Awaited<ReturnType<typeof projectOf>>>,
+    route: "/files/read" | "/files/list" | "/files/write" | "/exec",
+    payload: object,
+    subject: { filePath?: string; command?: string; signal?: AbortSignal },
+    writes: boolean,
+    timeoutMs?: number,
+  ): Promise<T> {
+    const { machine, root } = project;
+    const refusal = !root.ok
+      ? root.reason
+      : writes && !root.writable
+        ? READ_ONLY_PROJECT
+        : undefined;
+    const filePath =
+      subject.filePath === undefined
+        ? undefined
+        : root.ok
+          ? `${root.rootRef}/${subject.filePath}`
+          : subject.filePath;
+    return govern(
+      toolName,
+      botId,
+      actor,
+      {
+        ...(filePath !== undefined ? { filePath } : {}),
+        ...(subject.command !== undefined ? { command: subject.command } : {}),
+        ...(subject.signal ? { signal: subject.signal } : {}),
+        device: machine,
+        ...(refusal ? { refusal } : {}),
+      },
+      () => {
+        if (!root.ok) throw new ActionRefusedError(root.reason, PROJECT_UNAVAILABLE_RULE);
+        const {
+          root: _root,
+          writable: _writable,
+          cwd: _cwd,
+          ...rest
+        } = payload as Record<string, unknown>;
+        return transport.post<T>(
+          runnerAddress(machine),
+          botId,
+          route,
+          { ...rest, root: root.rootRef, ...(writes ? { writable: true } : {}) },
+          subject.signal,
+          timeoutMs,
+          computerActionIdentity.getStore()
+            ? JSON.stringify([
+                botId,
+                route,
+                root.rootRef,
+                computerActionIdentity.getStore(),
+              ])
+            : undefined,
+        );
+      },
     );
   }
 
@@ -1369,7 +1507,7 @@ export function createComputerGateway(
      * workspace accumulates whatever a Bot has saved across every task it has ever run, so which of
      * those files it may read back is a real question for a deployment to be able to answer.
      */
-    readFile(botId: string, actor: ActionActor, input: ReadFileInput) {
+    async readFile(botId: string, actor: ActionActor, input: ReadFileInput) {
       if (input.root !== undefined) {
         return inFolder<ReadFileResult>(
           "computer_read_file",
@@ -1381,6 +1519,21 @@ export function createComputerGateway(
         ).then((result) =>
           // The person's own files, but files all the same: what is in them is not an instruction.
           withUntrustedNotice(result, "local folder file", ["text"]),
+        );
+      }
+      const project = await projectOf(botId);
+      if (project) {
+        return inProject<ReadFileResult>(
+          "computer_read_file",
+          botId,
+          actor,
+          project,
+          "/files/read",
+          input,
+          { filePath: input.path },
+          false,
+        ).then((result) =>
+          withUntrustedNotice(result, "project file", ["text"]),
         );
       }
       return govern(
@@ -1434,7 +1587,7 @@ export function createComputerGateway(
      * every task it has run is worth being able to restrict. A rule denying a folder hides it from the
      * listing as well as from reads, which is the consistent answer.
      */
-    listFiles(botId: string, actor: ActionActor, input: ListFilesInput) {
+    async listFiles(botId: string, actor: ActionActor, input: ListFilesInput) {
       if (input.root !== undefined) {
         return inFolder<ListFilesResult>(
           "computer_list_files",
@@ -1443,6 +1596,19 @@ export function createComputerGateway(
           input.root,
           input.path,
           "/files/list",
+        );
+      }
+      const project = await projectOf(botId);
+      if (project) {
+        return inProject<ListFilesResult>(
+          "computer_list_files",
+          botId,
+          actor,
+          project,
+          "/files/list",
+          input,
+          { filePath: input.path ?? "." },
+          false,
         );
       }
       return govern(
@@ -1461,12 +1627,28 @@ export function createComputerGateway(
      * text, so a deployment can refuse a shell outright with `intent == "run_command"` or refuse
      * particular commands, and either way the attempt is a row in the trail whether or not it ran.
      */
-    runCommand(
+    async runCommand(
       botId: string,
       actor: ActionActor,
       input: RunCommandInput,
       caller?: AbortSignal,
     ) {
+      const project = await projectOf(botId);
+      if (project) {
+        return inProject<RunCommandResult>(
+          "computer_run_command",
+          botId,
+          actor,
+          project,
+          "/exec",
+          input,
+          { command: input.command, ...(caller ? { signal: caller } : {}) },
+          true,
+          COMMAND_BACKSTOP_MS,
+        ).then((result) =>
+          withUntrustedNotice(result, "command output", ["stdout", "stderr"]),
+        );
+      }
       return govern(
         "computer_run_command",
         botId,
@@ -1486,7 +1668,20 @@ export function createComputerGateway(
       );
     },
 
-    writeFile(botId: string, actor: ActionActor, input: WriteFileInput) {
+    async writeFile(botId: string, actor: ActionActor, input: WriteFileInput) {
+      const project = await projectOf(botId);
+      if (project) {
+        return inProject<WriteFileResult>(
+          "computer_write_file",
+          botId,
+          actor,
+          project,
+          "/files/write",
+          input,
+          { filePath: input.path },
+          true,
+        );
+      }
       return govern(
         "computer_write_file",
         botId,
@@ -1605,6 +1800,8 @@ async function write(
     failure?: string;
     /** Set when that non-success was a person pressing Stop, so the row is typed a stop, not a failure. */
     stopped?: boolean;
+    /** Why the action could not be carried out at all, said in the row (story RES2, D9). */
+    refusal?: string;
   },
 ) {
   await recordAuditEvent(auditStore, {
@@ -1672,6 +1869,7 @@ async function write(
           ? "not in the current snapshot"
           : undefined,
       ...(entry.failure ? { failure: entry.failure } : {}),
+      ...(entry.refusal ? { refusal: entry.refusal } : {}),
       decision: {
         allowed: entry.decision.allowed,
         mode: entry.decision.mode,
