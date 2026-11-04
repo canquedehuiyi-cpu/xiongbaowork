@@ -104,6 +104,57 @@ export function createWakerFlowRoutes(options: {
     }
   });
 
+  /*
+   * WF8: the saved versions of a Flow, and rolling back to one. A rollback is a Save of the old
+   * plan, fenced by the revision the person was looking at, so a stale page answers 409 like a Save.
+   */
+  routes.get("/:id/versions", requireUser, async (context) => {
+    try {
+      return context.json({
+        versions: await store.versions(
+          tenant(context),
+          context.req.param("id"),
+        ),
+      });
+    } catch (error) {
+      return refuse(context, error);
+    }
+  });
+
+  routes.get("/:id/versions/:revision", requireUser, async (context) => {
+    try {
+      return context.json({
+        version: await store.version(
+          tenant(context),
+          context.req.param("id"),
+          Number(context.req.param("revision")),
+        ),
+      });
+    } catch (error) {
+      return refuse(context, error);
+    }
+  });
+
+  routes.post(
+    "/:id/versions/:revision/restore",
+    requireUser,
+    async (context) => {
+      const input = await body(context);
+      try {
+        const flow = await store.restore(
+          tenant(context),
+          tenant(context),
+          context.req.param("id"),
+          Number(context.req.param("revision")),
+          { revision: input.revision as number },
+        );
+        return context.json({ flow });
+      } catch (error) {
+        return refuse(context, error);
+      }
+    },
+  );
+
   routes.delete("/:id", requireUser, async (context) => {
     const raw = context.req.query("revision");
     const revision = raw === undefined ? undefined : Number(raw);

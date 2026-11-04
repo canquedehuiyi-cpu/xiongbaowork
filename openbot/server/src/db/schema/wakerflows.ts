@@ -4,6 +4,7 @@ import {
   index,
   integer,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -75,5 +76,43 @@ export const wakerFlowRequests = pgTable(
       table.requestId,
     ),
     index("waker_flow_requests_flow_idx").on(table.tenantId, table.flowId),
+  ],
+);
+
+/**
+ * WF8: every Save of a `json-plan-v1` Flow, the whole plan as saved (migration 0134). Append-only:
+ * the application role may read and add rows, never change or remove one, so a rollback is a new
+ * version saved from an old one. `revision` is the Flow's revision after that Save.
+ */
+export const wakerFlowVersions = pgTable(
+  "waker_flow_versions",
+  {
+    tenantId: tenantId(),
+    flowId: uuid("flow_id")
+      .notNull()
+      .references(() => wakerFlows.id, { onDelete: "cascade" }),
+    revision: integer("revision").notNull(),
+    plan: jsonb("plan").$type<WakerFlowPlan>().notNull(),
+    modelRef: uuid("model_ref"),
+    templateId: uuid("template_id"),
+    createdBy: text("created_by"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    primaryKey({
+      name: "waker_flow_versions_pkey",
+      columns: [table.tenantId, table.flowId, table.revision],
+    }),
+    index("waker_flow_versions_flow_idx").on(
+      table.flowId,
+      table.revision.desc(),
+    ),
+    check("waker_flow_versions_revision_positive", sql`"revision" >= 1`),
+    check(
+      "waker_flow_versions_plan_object",
+      sql`jsonb_typeof("plan") = 'object'`,
+    ),
   ],
 );
