@@ -189,7 +189,11 @@ export function createDeviceTakeovers(
       finish(entry, request, "expired");
   };
 
-  const stateOf = (entry: Entry, requestId?: string): ComputerControlState => {
+  const stateOf = (
+    target: DispatchTarget,
+    entry: Entry,
+    requestId?: string,
+  ): ComputerControlState => {
     expire(entry);
     const live = current(entry);
     const request = requestId
@@ -206,6 +210,9 @@ export function createDeviceTakeovers(
       // A device answers between frames: there is no in-flight action to drain before a person drives.
       transitioning: false,
       resumeSnapshotRequired: false,
+      // Which of the tenant's own machines, so the surface can say so. Never another tenant's: the
+      // gateway only asks for the device the Bot's owner was resolved to.
+      device: { deviceId: target.deviceId },
     };
   };
 
@@ -219,13 +226,13 @@ export function createDeviceTakeovers(
 
   return {
     state: (target, botId, requestId) =>
-      stateOf(entryOf(target, botId), requestId),
+      stateOf(target, entryOf(target, botId), requestId),
 
     request(target, botId, reason, source = "manual", toolCallId) {
       const entry = entryOf(target, botId);
       expire(entry);
       // One request at a time. Asking again while one is open is answered with the one already open.
-      if (active(current(entry))) return stateOf(entry);
+      if (active(current(entry))) return stateOf(target, entry);
       const at = iso();
       const request: HandoffRequest = {
         id: randomUUID(),
@@ -239,7 +246,7 @@ export function createDeviceTakeovers(
       };
       entry.requests.push(request);
       entry.currentId = request.id;
-      return stateOf(entry);
+      return stateOf(target, entry);
     },
 
     take(target, botId, userId, requestId) {
@@ -247,7 +254,7 @@ export function createDeviceTakeovers(
       expire(entry);
       const request = intended(entry, requestId);
       if (request.status === "taken" && entry.userId === userId)
-        return stateOf(entry);
+        return stateOf(target, entry);
       if (request.status !== "waiting" || entry.currentId !== request.id)
         throw new HandoffRequestError("That request is no longer active.", 409);
       const at = iso();
@@ -256,27 +263,27 @@ export function createDeviceTakeovers(
       entry.holder = "human";
       entry.since = at;
       entry.userId = userId;
-      return stateOf(entry);
+      return stateOf(target, entry);
     },
 
     release(target, botId, requestId) {
       const entry = entryOf(target, botId);
       const request = intended(entry, requestId);
-      if (request.status === "completed") return stateOf(entry);
+      if (request.status === "completed") return stateOf(target, entry);
       if (!active(request))
         throw new HandoffRequestError("That request is no longer active.", 409);
       finish(entry, request, "completed");
-      return stateOf(entry);
+      return stateOf(target, entry);
     },
 
     cancel(target, botId, requestId) {
       const entry = entryOf(target, botId);
       const request = intended(entry, requestId);
-      if (request.status === "cancelled") return stateOf(entry);
+      if (request.status === "cancelled") return stateOf(target, entry);
       if (!active(request))
         throw new HandoffRequestError("That request is no longer active.", 409);
       finish(entry, request, "cancelled");
-      return stateOf(entry);
+      return stateOf(target, entry);
     },
 
     blocks(target, botId) {

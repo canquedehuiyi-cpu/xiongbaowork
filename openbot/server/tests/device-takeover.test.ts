@@ -196,6 +196,8 @@ test("handing back lets the Bot act again, and the trail records both ends", asy
   const requestId = await take(h);
   const released = await h.gateway.releaseControl("bot-1", ACTOR, requestId);
   expect(released.holder).toBe("bot");
+  // The surface is told this is the tenant's own machine, and which one.
+  expect(released.device).toEqual({ deviceId: "laptop-1" });
   expect(released.request).toBeUndefined();
   expect((await h.gateway.control("bot-1", requestId)).request?.status).toBe(
     "completed",

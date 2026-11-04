@@ -2,13 +2,18 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
+import type { WakerFlow, WakerFlowPlan } from "../../shared/wakerflows";
 import type { AppVariables } from "../src/auth/guards";
 import { createAutomationRoutes } from "../src/automations/routes";
 import {
   createAutomationStore,
   hashTriggerSecret,
 } from "../src/automations/store";
-import { MAX_ACTIVE_TRIGGERS } from "../src/automations/types";
+import {
+  createAutomationTargetRegistry,
+  MAX_ACTIVE_TRIGGERS,
+} from "../src/automations/types";
+import { wakerflowAutomationTarget } from "../src/automations/waker-executor";
 import { createDatabase } from "../src/db/client";
 import { agents, automationTriggers } from "../src/db/schema";
 import { runAsTenant } from "../src/tenant/context";
@@ -463,5 +468,115 @@ describe("the list says when the breaker stopped it (C1/C3)", () => {
     expect(
       await runAsTenant(alice, () => store.consecutiveFailures(automation.id)),
     ).toBe(0);
+  });
+});
+
+/*
+ * WF8 (AUT3): a WakerFlow target carries the Flow inputs it runs with. The registry's verify is the
+ * real one (`wakerflowAutomationTarget`) over a stand-in Flow reader holding one saved Flow of
+ * alice's with a required and a typed input.
+ */
+describe("a WakerFlow target with inputs (WF8)", () => {
+  const flowId = randomUUID();
+  const plan: WakerFlowPlan = {
+    name: "周报流程",
+    description: "",
+    members: [{ agentId: wakerA, role: "撰写" }],
+    inputs: [
+      { key: "topic", label: "主题", required: true },
+      {
+        key: "tone",
+        label: "语气",
+        required: false,
+        type: "select",
+        options: ["正式", "轻松"],
+      },
+    ],
+    steps: [
+      {
+        id: "write",
+        agentId: wakerA,
+        instruction: "写周报",
+        inputKeys: ["topic", "tone"],
+        outputKey: "report",
+      },
+    ],
+  };
+  const registry = createAutomationTargetRegistry();
+  registry.register(
+    wakerflowAutomationTarget({
+      inspect: async (tenantId, id) =>
+        tenantId === alice && id === flowId
+          ? ({ id, status: "ready", revision: 2, plan } as WakerFlow)
+          : null,
+    }),
+  );
+  const flowRoutes = createAutomationRoutes(
+    createAutomationStore(database, { executors: registry }),
+    requireUser,
+  );
+  const post = async (user: string, body: unknown) => {
+    const response = await flowRoutes.request("http://openbot.test/", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-test-user": user },
+      body: JSON.stringify(body),
+    });
+    return {
+      status: response.status,
+      json: (await response.json()) as Record<string, unknown>,
+    };
+  };
+
+  test("missing or mistyped inputs are a 422 with the run panel's sentence; complete ones are saved and read back", async () => {
+    const refusals: [unknown, string][] = [
+      [undefined, "请填写 主题。"],
+      [{ topic: "发布", tone: "随意" }, "语气 需要从选项中选择。"],
+      [{ topic: "发布", other: "x" }, "流程没有声明输入 other。"],
+      [{ topic: 7 }, "流程输入格式不正确。"],
+    ];
+    for (const [inputs, error] of refusals) {
+      const response = await post(alice, {
+        name: "周报",
+        target: { kind: "wakerflow", flowId, ...(inputs ? { inputs } : {}) },
+      });
+      expect({ status: response.status, error: response.json.error }).toEqual({
+        status: 422,
+        error,
+      });
+    }
+
+    const saved = await post(alice, {
+      name: "周报",
+      target: { kind: "wakerflow", flowId, inputs: { topic: "发布" } },
+    });
+    expect(saved.status).toBe(201);
+    const automation = saved.json.automation as {
+      id: string;
+      target: unknown;
+    };
+    created.push({ tenant: alice, id: automation.id });
+    expect(automation.target).toEqual({
+      kind: "wakerflow",
+      flowId,
+      inputs: { topic: "发布" },
+    });
+    const read = await flowRoutes.request(
+      `http://openbot.test/${automation.id}`,
+      { headers: { "x-test-user": alice } },
+    );
+    expect(
+      ((await read.json()) as { automation: { target: unknown } }).automation
+        .target,
+    ).toEqual({ kind: "wakerflow", flowId, inputs: { topic: "发布" } });
+
+    // Another tenant's Flow is not found, whatever inputs come with it.
+    const stranger = await post(bob, {
+      name: "周报",
+      target: { kind: "wakerflow", flowId, inputs: { topic: "发布" } },
+    });
+    expect({ status: stranger.status, error: stranger.json.error }).toEqual({
+      status: 422,
+      error: "找不到这个 WakerFlow。",
+    });
   });
 });

@@ -1,6 +1,7 @@
 import { beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
+import type { WakerFlowPlan } from "../../shared/wakerflows";
 import {
   type AutomationFiring,
   createAutomationStore,
@@ -10,6 +11,7 @@ import { createAutomationTargetRegistry } from "../src/automations/types";
 import {
   AUTOMATION_BREAKER_LIMIT,
   AUTOMATION_FLOW_GONE,
+  AUTOMATION_FLOW_INPUTS_CHANGED,
   AUTOMATION_FLOW_NOT_READY,
   AUTOMATION_FLOW_UNAVAILABLE,
   AUTOMATION_SKIPPED_ACCESS_REVOKED,
@@ -660,7 +662,27 @@ describe("failures and the breaker (C3)", () => {
  */
 describe("a WakerFlow target (AUT3)", () => {
   const flowId = randomUUID();
-  let flow: { status: "ready" | "draft"; revision: number } | null = null;
+  /** The Flow's plan as it is now; WF8 checks an automation's saved inputs against it. */
+  const planWith = (inputs: WakerFlowPlan["inputs"]): WakerFlowPlan => ({
+    name: "周报流程",
+    description: "",
+    members: [{ agentId: "flow-agent", role: "撰写" }],
+    inputs,
+    steps: [
+      {
+        id: "write",
+        agentId: "flow-agent",
+        instruction: "写周报",
+        inputKeys: inputs.map((input) => input.key),
+        outputKey: "report",
+      },
+    ],
+  });
+  let flow: {
+    status: "ready" | "draft";
+    revision: number;
+    plan?: WakerFlowPlan | null;
+  } | null = null;
   let starts: {
     tenantId: string;
     frame: string;
@@ -672,7 +694,12 @@ describe("a WakerFlow target (AUT3)", () => {
   const flows = {
     async inspect(tenantId: string, id: string) {
       return tenantId === tenant && id === flowId && flow
-        ? { id, name: "周报流程", ...flow }
+        ? {
+            id,
+            name: "周报流程",
+            plan: flow.status === "ready" ? planWith([]) : null,
+            ...flow,
+          }
         : null;
     },
     async start(tenantId: string, actor: string, id: string, input: unknown) {
@@ -690,11 +717,11 @@ describe("a WakerFlow target (AUT3)", () => {
     startOutcome = async () => ({ status: "completed", error: null });
   });
 
-  async function newFlowAutomation() {
+  async function newFlowAutomation(inputs?: Record<string, string>) {
     const automation = await as(() =>
       flowStore.create({
         name: `流程任务 ${randomUUID().slice(0, 4)}`,
-        target: { kind: "wakerflow", flowId },
+        target: { kind: "wakerflow", flowId, ...(inputs ? { inputs } : {}) },
       }),
     );
     const { trigger } = await as(() =>
@@ -853,6 +880,109 @@ describe("a WakerFlow target (AUT3)", () => {
     expect(
       starts.map((start) => (start.input as { requestId: string }).requestId),
     ).toEqual([first.id, second.id]);
+  });
+
+  describe("the Flow's inputs (WF8)", () => {
+    const typed = planWith([
+      { key: "topic", label: "主题", required: true },
+      { key: "count", label: "人数", required: false, type: "number" },
+    ]);
+
+    test("a missing required input or a value its type refuses is refused at save time", async () => {
+      flow = { status: "ready", revision: 3, plan: typed };
+      await expect(
+        as(() =>
+          flowStore.create({
+            name: "缺输入",
+            target: { kind: "wakerflow", flowId },
+          }),
+        ),
+      ).rejects.toThrow("请填写 主题。");
+      await expect(
+        as(() =>
+          flowStore.create({
+            name: "错类型",
+            target: {
+              kind: "wakerflow",
+              flowId,
+              inputs: { topic: "发布", count: "很多" },
+            },
+          }),
+        ),
+      ).rejects.toThrow("人数 需要填写数字。");
+      await expect(
+        as(() =>
+          flowStore.create({
+            name: "多输入",
+            target: {
+              kind: "wakerflow",
+              flowId,
+              inputs: { topic: "发布", extra: "x" },
+            },
+          }),
+        ),
+      ).rejects.toThrow("流程没有声明输入 extra。");
+      // An update that changes the target is asked the same question.
+      const { automation } = await newFlowAutomation({ topic: "发布" });
+      await expect(
+        as(() =>
+          flowStore.update(automation.id, {
+            target: { kind: "wakerflow", flowId, inputs: {} },
+          }),
+        ),
+      ).rejects.toThrow("请填写 主题。");
+    });
+
+    test("a firing passes the saved inputs to the run exactly as saved", async () => {
+      flow = { status: "ready", revision: 3, plan: typed };
+      const saved = { topic: "季度复盘", count: "12" };
+      const { automation, trigger } = await newFlowAutomation(saved);
+      expect(automation.target).toEqual({
+        kind: "wakerflow",
+        flowId,
+        inputs: saved,
+      });
+      const firing = await begin(automation.id, trigger.id);
+      await fireFlow(firing);
+      expect(starts.map((start) => start.input)).toEqual([
+        { requestId: firing.id, revision: 3, inputs: saved },
+      ]);
+      expect((await firingRow(firing.id))?.status).toBe("succeeded");
+    });
+
+    test("a Flow whose inputs changed since the save fails the firing with the reason and starts nothing", async () => {
+      flow = { status: "ready", revision: 3, plan: typed };
+      const { automation, trigger } = await newFlowAutomation({
+        topic: "季度复盘",
+      });
+      // The Flow gains a required input; a default does not paper over it.
+      flow = {
+        status: "ready",
+        revision: 4,
+        plan: planWith([
+          ...typed.inputs,
+          { key: "owner", label: "负责人", required: true, default: "我" },
+        ]),
+      };
+      const added = await begin(automation.id, trigger.id);
+      await fireFlow(added);
+      expect(await firingRow(added.id)).toMatchObject({
+        status: "failed",
+        error: `${AUTOMATION_FLOW_INPUTS_CHANGED}：请填写 负责人。`,
+      });
+
+      // The Flow drops an input the automation still carries.
+      flow = { status: "ready", revision: 5, plan: planWith([]) };
+      const removed = await begin(automation.id, trigger.id);
+      await fireFlow(removed);
+      const row = await firingRow(removed.id);
+      expect(row?.status).toBe("failed");
+      expect(row?.error).toContain("输入已变更");
+      expect(row?.error).toContain("topic");
+
+      expect(starts).toHaveLength(0);
+      expect(await as(() => store.consecutiveFailures(automation.id))).toBe(2);
+    });
   });
 
   test("a deployment without the WakerFlow path records the firing as failed and starts nothing", async () => {
