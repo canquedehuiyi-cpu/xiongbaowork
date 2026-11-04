@@ -451,8 +451,8 @@ export function roleProfileOf(profile: {
 
 /**
  * The 角色 part of a coworker's dialog (§3.3): its 工作手册, where its role came from, and taking a
- * template — shown its diff first. A built-in coworker, the 分身 included, is offered no template
- * (D4): its Bible is still written here by hand.
+ * template — shown its diff first. The server says whether one may be taken: only the 分身 is
+ * offered none (D4, revised 2026-11-04), and its Bible is still written here by hand.
  */
 export function AgentRolePanel({
   agentId,

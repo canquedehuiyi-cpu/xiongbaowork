@@ -122,8 +122,8 @@ CI 里一直有三个未签名包可以下载试装：`device app unsigned deb`�
 | 编号 | 要定的事 | 对配置的影响 |
 | --- | --- | --- |
 | D3 | 谁申请签名身份，密钥放在哪 | 决定走 12.2 的 A 还是 B，以及谁做 12.3 |
-| D4 | 首个版本是否必须已签名 | 必须签名：设仓库变量 `DEVICE_RELEASE_REQUIRE_SIGNED=true`，没签名的构建会直接失败、不发布。允许先发内测版：不设这个变量 |
-| D5 | 首发平台 | 发 macOS：设仓库变量 `DEVICE_RELEASE_MACOS=true`（只有 Apple 芯片的 dmg）。不设就只发 Windows 和 Linux |
+| D4 | 首个版本是否必须已签名。**已决定（2026-11-04）：允许先发未签名内测版** | **不要设** `DEVICE_RELEASE_REQUIRE_SIGNED`：没签名的构建发成「未签名内测版」预发布，正式版仍必须签名。（若以后改成必须签名：设仓库变量 `DEVICE_RELEASE_REQUIRE_SIGNED=true`，没签名的构建会直接失败、不发布） |
+| D5 | 首发平台。**已决定（2026-11-04）：首发 Windows + Linux** | **不要设** `DEVICE_RELEASE_MACOS`，只发 Windows 和 Linux；暂不需要 Apple 身份，跳过 12.3。（以后加 macOS：设仓库变量 `DEVICE_RELEASE_MACOS=true`，只有 Apple 芯片的 dmg） |
 | D6 | 自动更新 | 没接 `tauri-plugin-updater`。发布说明会写"没有自动更新，新版需重新下载安装"，不需要 updater 密钥 |
 | D8 | 产品名和 identifier | 现在是占位的 `com.xiongbao.device`。macOS 的签名和公证都绑在 identifier 上，**首个签名版之前必须定下来**；改要走 PR，改 `openbot/desktop-device/src-tauri/tauri.conf.json` |
 
@@ -154,7 +154,9 @@ CI 里一直有三个未签名包可以下载试装：`device app unsigned deb`�
    - A：给这个应用分配该证书配置文件上的 "Artifact Signing Certificate Profile Signer" 角色（旧名 "Trusted Signing Certificate Profile Signer"）。
    - B：给它这个 Key Vault 的 Key Sign、Certificate Get、Secret Get 权限，例如 RBAC 的 Key Vault Crypto User 加 Key Vault Certificate User。
 
-### 12.3 申请 Apple 签名身份（只有 D5 定了发 macOS 才需要）
+### 12.3 申请 Apple 签名身份（暂不需要（D5：首发 Windows + Linux））
+
+D5 已定首发不含 macOS，这一节现在不用做。以后要发 macOS 时再按下面办：
 
 1. 用组织身份加入 Apple Developer Program，需要 D-U-N-S 编号，记下 Team ID。
 2. 创建一张 **Developer ID Application** 证书，连私钥一起导出成 `.p12` 并设导出密码。在钥匙串里看到的证书全名（如 `Developer ID Application: 公司名 (TEAMID)`）就是签名身份。
@@ -204,8 +206,8 @@ Settings → Environments → New environment，名称填 `device-release`：
 
 | 名称 | 值 |
 | --- | --- |
-| `DEVICE_RELEASE_MACOS` | 发 macOS 时填 `true`（D5） |
-| `DEVICE_RELEASE_REQUIRE_SIGNED` | D4 定为"必须签名"时填 `true` |
+| `DEVICE_RELEASE_MACOS` | 发 macOS 时填 `true`。D5 已定首发 Windows + Linux：**现在不设** |
+| `DEVICE_RELEASE_REQUIRE_SIGNED` | D4 定为"必须签名"时填 `true`。D4 已定允许先发未签名内测版：**现在不设** |
 
 签名模式一旦打开，配置不全时工作流会直接失败，并报出缺的变量或密钥名，不会悄悄退回成未签名。
 
