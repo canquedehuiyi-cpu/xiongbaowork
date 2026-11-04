@@ -40,6 +40,8 @@ const stranger = `tpl-edit-other-${suite}`;
 const groupId = randomUUID();
 const strangerGroupId = randomUUID();
 const flowGroupId = randomUUID();
+// Two more Flows' compiled crews, beside the plain crew `groupId` in the same workspace.
+const flowGroupIds = [randomUUID(), randomUUID()] as const;
 
 const DEV = `dev-${suite}`;
 const REVIEW = `review-${suite}`;
@@ -136,6 +138,18 @@ await runAsTenant(tenant, async () => {
     position: "0",
   });
 });
+await runAsTenant(tenant, async () => {
+  for (const [index, id] of flowGroupIds.entries()) {
+    await database.insert(wakerGroups).values({
+      id,
+      tenantId: tenant,
+      name: `流程内部小组-${index}-${suite}`,
+    });
+    await database
+      .insert(wakerGroupMembers)
+      .values({ groupId: id, agentId: DEV, position: "0" });
+  }
+});
 await runAsTenant(stranger, async () => {
   await database.insert(wakerGroups).values({
     id: strangerGroupId,
@@ -151,13 +165,13 @@ await runAsTenant(stranger, async () => {
 
 afterAll(async () => {
   await runAsTenant(tenant, async () => {
-    await database
-      .delete(wakerFlows)
-      .where(eq(wakerFlows.groupId, flowGroupId));
+    for (const crew of [flowGroupId, ...flowGroupIds])
+      await database.delete(wakerFlows).where(eq(wakerFlows.groupId, crew));
   });
   for (const [who, crew] of [
     [tenant, groupId],
     [tenant, flowGroupId],
+    ...flowGroupIds.map((crew) => [tenant, crew] as const),
     [stranger, strangerGroupId],
   ] as const) {
     await runAsTenant(who, async () => {
@@ -528,4 +542,149 @@ test("a WakerFlow's compiled template is edited only through its Flow", async ()
     groupId: flowGroupId,
     steps: [STEPS[0]!],
   });
+});
+
+/*
+ * The regression for `owningFlow()` reading `"group_id" = "group_id"` inside its subquery: once ANY
+ * Flow of the workspace existed, every template looked Flow-owned, so a plain crew's template could no
+ * longer be started. Every other test here runs before a Flow exists or only touches the Flow's own
+ * template, so none of them had a plain template and a saved Flow in one workspace at once.
+ */
+test("beside saved Flows, a plain crew's template is listed, edited, started and deleted, and a Flow's is hidden from all four", async () => {
+  calls.length = 0;
+  const pipeline = build(done);
+  const plain = await pipeline.createTemplate({
+    tenantId: tenant,
+    groupId,
+    name: `普通流水线-${suite}`,
+    steps: STEPS,
+    createdBy: tenant,
+  });
+  // Two Flows, each owning the template compiled onto its own crew.
+  const flows: { id: string; templateId: string }[] = [];
+  for (const [index, crew] of flowGroupIds.entries()) {
+    const templateId = await pipeline.createTemplate({
+      tenantId: tenant,
+      groupId: crew,
+      name: `流程编译出的模板-${index}`,
+      steps: [STEPS[0]!],
+      createdBy: tenant,
+    });
+    const [flow] = await runAsTenant(tenant, () =>
+      database
+        .insert(wakerFlows)
+        .values({
+          tenantId: tenant,
+          name: `流程-${index}-${suite}`,
+          groupId: crew,
+          templateId,
+        })
+        .returning({ id: wakerFlows.id }),
+    );
+    if (!flow) throw new Error("No Flow row.");
+    flows.push({ id: flow.id, templateId });
+  }
+  const [first, second] = flows as [
+    (typeof flows)[number],
+    (typeof flows)[number],
+  ];
+
+  // List: the plain template is there, workspace-wide and per crew; neither Flow's template is.
+  const listed = (await pipeline.listTemplates({ tenantId: tenant })).map(
+    (template) => template.id,
+  );
+  expect(listed).toContain(plain);
+  for (const flow of flows) expect(listed).not.toContain(flow.templateId);
+  expect(
+    (await pipeline.listTemplates({ tenantId: tenant, groupId })).map(
+      (template) => template.id,
+    ),
+  ).toContain(plain);
+  for (const crew of flowGroupIds)
+    expect(
+      await pipeline.listTemplates({ tenantId: tenant, groupId: crew }),
+    ).toEqual([]);
+
+  // Edit: the plain template takes the edit; a Flow's template is not here to edit.
+  await pipeline.updateTemplate({
+    tenantId: tenant,
+    templateId: plain,
+    name: `改过的普通流水线-${suite}`,
+    steps: STEPS,
+  });
+  expect((await templateRow(plain))?.name).toBe(`改过的普通流水线-${suite}`);
+  await expect(
+    pipeline.updateTemplate({
+      tenantId: tenant,
+      templateId: first.templateId,
+      name: "从流水线页改",
+      steps: [STEPS[0]!],
+    }),
+  ).rejects.toBeInstanceOf(PipelineNotFoundError);
+
+  // Start: the plain template runs to the end.
+  const run = await pipeline.start({
+    tenantId: tenant,
+    templateId: plain,
+    task: "有流程的工作区里的普通任务",
+    initiatedBy: tenant,
+  });
+  await expect(
+    pipeline.advance({ tenantId: tenant, runId: run.runId }),
+  ).resolves.toMatchObject({ status: "done", cursor: 2 });
+  expect(calls.map((call) => call.agentId)).toEqual([DEV, REVIEW]);
+  // A Flow's template starts only as a run of the Flow that owns it, not bare and not as another Flow's.
+  await expect(
+    pipeline.start({
+      tenantId: tenant,
+      templateId: first.templateId,
+      task: "绕过流程开跑",
+      initiatedBy: tenant,
+    }),
+  ).rejects.toBeInstanceOf(PipelineNotFoundError);
+  await expect(
+    pipeline.start({
+      tenantId: tenant,
+      templateId: first.templateId,
+      task: "冒充另一个流程开跑",
+      initiatedBy: tenant,
+      flowId: second.id,
+    }),
+  ).rejects.toBeInstanceOf(PipelineNotFoundError);
+  for (const flow of flows) {
+    await expect(
+      pipeline.start({
+        tenantId: tenant,
+        templateId: flow.templateId,
+        task: "流程自己的运行",
+        initiatedBy: tenant,
+        flowId: flow.id,
+      }),
+    ).resolves.toMatchObject({ runId: expect.any(String) });
+  }
+
+  // Delete: a Flow's template is not here to delete; the plain one goes, and is then gone everywhere.
+  await expect(
+    pipeline.deleteTemplate({
+      tenantId: tenant,
+      templateId: second.templateId,
+    }),
+  ).rejects.toBeInstanceOf(PipelineNotFoundError);
+  for (const flow of flows)
+    expect(await templateRow(flow.templateId)).not.toBeNull();
+  await pipeline.deleteTemplate({ tenantId: tenant, templateId: plain });
+  expect(await templateRow(plain)).toBeNull();
+  expect(
+    (await pipeline.listTemplates({ tenantId: tenant })).map(
+      (template) => template.id,
+    ),
+  ).not.toContain(plain);
+  await expect(
+    pipeline.start({
+      tenantId: tenant,
+      templateId: plain,
+      task: "删掉之后",
+      initiatedBy: tenant,
+    }),
+  ).rejects.toBeInstanceOf(PipelineNotFoundError);
 });
