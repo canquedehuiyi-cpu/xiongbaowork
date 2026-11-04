@@ -401,12 +401,17 @@ export function standingInstructionsGuidance(
  * One information source a person gave their 分身, as its prompt carries it (story F1).
  *
  * `root` is set for a local folder (stage 2): the opaque reference of a read-only folder on the
- * person's own paired machine, which the 分身 passes to the file tools. Absent for a declaration.
+ * person's own paired machine, which the 分身 passes to the file tools. `notebook` is set for one of
+ * the person's own knowledge notebooks (stage 3, S3), read with the knowledge tools; `connector` for
+ * one of their own connected accounts (stage 3, S4), whose granted tools carry the `tools` prefix.
+ * None of the three is set for a declaration.
  */
 export type AvatarSourceForPrompt = {
   label: string;
   note: string;
   root?: string;
+  notebook?: { id: string; title: string };
+  connector?: { title: string; tools: string };
 };
 
 /**
@@ -452,8 +457,15 @@ export function avatarSourcesGuidance(
   sources: readonly AvatarSourceForPrompt[] | null | undefined,
 ): string | null {
   if (!sources || sources.length === 0) return null;
-  const declared = sources.filter((source) => source.root === undefined);
+  const declared = sources.filter(
+    (source) =>
+      source.root === undefined &&
+      source.notebook === undefined &&
+      source.connector === undefined,
+  );
   const folders = sources.filter((source) => source.root !== undefined);
+  const notebooks = sources.filter((source) => source.notebook !== undefined);
+  const connectors = sources.filter((source) => source.connector !== undefined);
   const parts: string[] = [];
   if (declared.length > 0) {
     parts.push(
@@ -492,6 +504,55 @@ export function avatarSourcesGuidance(
           },
           "information source local folder",
           ["folders"],
+        ),
+      ),
+    );
+  }
+  /*
+   * A NOTEBOOK BY NAME, NEVER ITS TEXT (stage 3, S3). The person attached some of their own RES1
+   * notebooks; the 分身 reads them with the two knowledge tools, which reach exactly the notebooks
+   * bound to it and check the binding again on every call, so a notebook removed a moment ago is not
+   * read. What a search returns arrives in its own untrusted envelope.
+   */
+  if (notebooks.length > 0) {
+    parts.push(
+      "The person you represent has let you read some of their own knowledge notebooks. Use list_knowledge to see the sources in them and search_knowledge to find passages, passing a notebook's notebookId to search only that one. Only these notebooks are shared with you. Search for what the question needs, and say which notebook and source an answer came from. If a search finds nothing, the tools are missing, or a call is refused, say so instead of guessing. Never claim to have read a notebook you did not search.",
+      JSON.stringify(
+        withUntrustedNotice(
+          {
+            notebooks: notebooks.map((source) => ({
+              label: source.label,
+              note: source.note,
+              notebookId: source.notebook?.id,
+              title: source.notebook?.title,
+            })),
+          },
+          "information source notebook",
+          ["notebooks"],
+        ),
+      ),
+    );
+  }
+  /*
+   * AN ACCOUNT, THROUGH ITS GRANTED TOOLS (stage 3, S4). The person connected their own account and
+   * attached it; what the 分身 holds is the plugin grants that attachment wrote, so every call goes
+   * through the plugin store, the person's SEC1 rules and the approval gate like any other tool call.
+   */
+  if (connectors.length > 0) {
+    parts.push(
+      "The person you represent has attached some of their own connected accounts as information sources. Each one's tools are the ones whose names start with the prefix given (for example mcp__google-drive__search_files), and they act in the person's own account. Use them to read what the question needs and say which account an answer came from. A call may be refused or held for the person's approval; if so, or if the tools are missing or say the account is not connected, tell the person instead of guessing. Never claim to have read something you did not fetch.",
+      JSON.stringify(
+        withUntrustedNotice(
+          {
+            connectors: connectors.map((source) => ({
+              label: source.label,
+              note: source.note,
+              title: source.connector?.title,
+              tools: source.connector?.tools,
+            })),
+          },
+          "information source connector",
+          ["connectors"],
         ),
       ),
     );
