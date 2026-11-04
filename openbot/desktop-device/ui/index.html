@@ -70,6 +70,26 @@
       dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; }
       dt { color: var(--muted); }
       dd { margin: 0; word-break: break-all; }
+      h2 { font-size: 15px; margin: 28px 0 4px; }
+      #folder-list { list-style: none; margin: 0 0 8px; padding: 0; }
+      #folder-list li {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 6px 10px;
+        margin-bottom: 6px;
+      }
+      #folder-list .path { display: block; font-size: 12px; color: var(--muted); word-break: break-all; }
+      #folder-list button {
+        margin: 0;
+        padding: 4px 10px;
+        color: var(--bad);
+        background: transparent;
+        border: 1px solid var(--line);
+      }
       [data-tone="ok"] { color: var(--ok); font-weight: 600; }
       [data-tone="wait"] { color: var(--wait); }
       [data-tone="bad"] { color: var(--bad); }
@@ -114,6 +134,22 @@
       </dl>
       <button id="restart" type="button" hidden>重新启动设备端服务</button>
       <p class="hint">关闭此窗口后，设备端会继续在托盘中运行。要停止，请在托盘菜单中选择「退出」。</p>
+    </section>
+
+    <section id="folders" hidden>
+      <h2>本地文件夹</h2>
+      <p>添加到这里的文件夹，你的分身可以只读查看：能列出和读取其中的文件，不能修改、删除，也不能在里面运行命令。服务器只知道你起的名称，不知道文件夹在这台电脑上的位置。添加后，在熊宝的分身「信息来源」里选择它。</p>
+      <ul id="folder-list"></ul>
+      <p id="folder-empty" class="hint"></p>
+      <form id="folder-form">
+        <label for="folder-name">名称</label>
+        <input id="folder-name" maxlength="60" placeholder="例如：工作资料" autocomplete="off" />
+        <label for="folder-path">文件夹路径</label>
+        <input id="folder-path" placeholder="例如：/Users/me/Documents/工作资料 或 D:\工作资料" autocomplete="off" spellcheck="false" />
+        <div class="hint">填写完整路径。不能添加设备端自己的数据目录，也不能添加包含它的文件夹。</div>
+        <button type="submit">添加文件夹</button>
+        <div id="folder-error" class="error" role="alert"></div>
+      </form>
     </section>
 
     <script type="module" src="main.js"></script>
