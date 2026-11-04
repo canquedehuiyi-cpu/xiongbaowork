@@ -20,6 +20,7 @@ tests/agent-model-binding.test.ts
 tests/agent-profile-policy.test.ts
 tests/agent-profile-store.integration.test.ts
 tests/agent-registry.test.ts
+tests/agent-role-bible.integration.test.ts
 tests/agent-routes.test.ts
 tests/agent-test-connection-headers.test.ts
 tests/agent-tool-call-input.test.ts
@@ -71,6 +72,8 @@ tests/automation-waker-executor.test.ts
 tests/automations-model.test.ts
 tests/automations-store.integration.test.ts
 tests/autonomous-summary.test.ts
+tests/avatar-local-folder-turn.integration.test.ts
+tests/avatar-local-folder.test.ts
 tests/avatar-sources.test.ts
 tests/ban-freezes-execution.test.ts
 tests/bot-access.test.ts
@@ -161,7 +164,9 @@ tests/desktop-connection-failure.test.ts
 tests/dev-actor.integration.test.ts
 tests/device-queue.test.ts
 tests/device-safety.integration.test.ts
+tests/device-screen.test.ts
 tests/device-selection.test.ts
+tests/device-takeover.test.ts
 tests/devices.test.ts
 tests/dictation-provider.test.ts
 tests/dictation-routes.test.ts
@@ -330,6 +335,7 @@ tests/restart-recovery-sweep.integration.test.ts
 tests/restart-recovery-sweep.test.ts
 tests/rls-role.test.ts
 tests/rls-write-scope.test.ts
+tests/role-bible-prompt.test.ts
 tests/role-writer-lifecycle.test.ts
 tests/roles.test.ts
 tests/route-ids-validation.test.ts

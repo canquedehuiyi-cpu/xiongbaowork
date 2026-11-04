@@ -173,7 +173,7 @@ function AvatarSourcesSection({ profile }: { profile: AgentProfile }) {
   if (!profile.mine || sources.data?.agentId !== profile.id) return null;
   return (
     <PageSection
-      description="告诉分身你的资料放在哪里、是什么。这里只登记文字说明，分身不会因此读取任何文件。"
+      description="告诉分身你的资料放在哪里、是什么。文字声明只是说明，分身不会因此读取任何文件；本地文件夹是你电脑上交给分身只读查看的文件夹。"
       title="信息来源"
     >
       <AvatarSourcesPanel />

@@ -8,6 +8,7 @@ import {
   createRunnerBrowser,
   type RunnerBrowser,
 } from "./browser";
+import { isRootRef, type RootRegistry } from "./roots";
 
 /**
  * What a runner does when the server asks it to do something (ticket 017).
@@ -62,10 +63,19 @@ function callerPayload(body: Record<string, unknown>): Record<string, unknown> {
   return rest;
 }
 
+/**
+ * The actions that may name a read-only root (story F1, stage 2). Everything else that names one is
+ * refused: a write, a command run with a root as its folder, and any action added later, because a
+ * root is a folder the owner offered to be read and nothing more.
+ */
+const ROOT_READS = new Set(["files.list", "files.read"]);
+
 /** Where a runner's files live, where its commands run, and whose browser it drives. */
 export function createRunnerExecutor(
   workspaceDir: string,
   browser?: RunnerBrowser,
+  /** The owner's read-only folders. Absent means this machine offers none, so any root is unknown. */
+  roots?: RootRegistry,
 ): RunnerExecutor {
   const workspace = createWorkspace(workspaceDir);
   const shell = createShell(workspaceDir);
@@ -92,6 +102,52 @@ export function createRunnerExecutor(
         error: "The device action was stopped before execution.",
       };
     try {
+      /*
+       * A root is checked before anything else looks at the frame, so no action can reach a root's
+       * files except the two reads below, and an unknown one is refused rather than read as "the
+       * workspace". A command aimed at a root as its folder (`cwd`) is refused the same way: a
+       * command can write wherever it runs.
+       */
+      const rootAsFolder = isRootRef(body.cwd);
+      if (body.root !== undefined || rootAsFolder) {
+        if (!ROOT_READS.has(action) || rootAsFolder) {
+          return {
+            ok: false,
+            error:
+              "That folder is read-only on this machine: it can be listed and read, never written to, changed or run in.",
+          };
+        }
+        if (typeof body.root !== "string" || !roots) {
+          return {
+            ok: false,
+            error: "This machine has no folder by that reference.",
+          };
+        }
+        const folder = roots.open(body.root);
+        return {
+          ok: true,
+          output:
+            action === "files.list"
+              ? await folder.list(
+                  typeof body.path === "string" ? body.path : undefined,
+                )
+              : await folder.read(String(body.path ?? "")),
+        };
+      }
+      /*
+       * The person removed the information source that pointed at a root, so the server asks this
+       * machine to forget the folder too (spec §6.5). Only ever a removal: nothing the server sends
+       * can register a folder, and forgetting one only takes access away.
+       */
+      if (action === "roots.forget") {
+        return {
+          ok: true,
+          output: {
+            removed:
+              isRootRef(body.ref) && roots ? roots.remove(body.ref) : false,
+          },
+        };
+      }
       if (BROWSER_ACTIONS.has(action)) {
         // The identity is the server's fact about the frame; the rest is what the caller asked for.
         const identity = browserIdentityOf(body);
