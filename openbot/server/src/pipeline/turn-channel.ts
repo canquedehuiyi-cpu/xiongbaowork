@@ -110,9 +110,16 @@ export function createPipelineStepRunner(options: {
     } catch (error) {
       if (error instanceof HeadlessToolSuspension) {
         const approvalId = approvalIdOf(error.waiting);
+        // WF8: a turn waiting on a question (and only that kind of wait) says what it asked, so the
+        // WakerFlow page can take the answer. A device or sign-in wait is not a question.
+        const question =
+          !approvalId && error.waiting.kind === "question"
+            ? error.message
+            : undefined;
         return {
           status: "awaiting_action",
           ...(approvalId ? { approvalId } : {}),
+          ...(question ? { question } : {}),
         };
       }
       return {
