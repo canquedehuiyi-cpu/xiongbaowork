@@ -1,4 +1,6 @@
+import { isScreenFrameType } from "../../../shared/device-screen";
 import type { DeviceChannel } from "./channel";
+import type { DeviceScreens } from "./screen";
 import type { DeviceOwner, DeviceStore } from "./store";
 
 /**
@@ -37,6 +39,7 @@ export async function runnerOpen(
   ws: RunnerSocketLike,
   store: DeviceStore,
   channel: DeviceChannel,
+  screens?: DeviceScreens,
 ): Promise<void> {
   if (!(await store.isCurrent(ws.data.runner).catch(() => false))) {
     ws.close?.(1008, "Device access was revoked.");
@@ -50,6 +53,8 @@ export async function runnerOpen(
     ws.data.runner.credentialVersion,
   );
   ws.send(JSON.stringify({ type: "welcome" }));
+  // Anybody still watching a coworker on this machine gets the screen back without reloading.
+  screens?.resume({ tenantId, deviceId });
 }
 
 /** It closed: release the registration, and fail whatever was waiting on this socket. */
@@ -65,7 +70,29 @@ export async function runnerMessage(
   store: DeviceStore,
   channel: DeviceChannel,
   raw: string | Buffer | ArrayBuffer | Uint8Array,
+  screens?: DeviceScreens,
 ): Promise<void> {
+  /*
+   * The live screen, before the database is asked anything.
+   *
+   * A frame arrives many times a second, and awaiting a registration read for each one would let them
+   * overtake each other on the way to the viewer. The connection is checked in memory instead: it is
+   * this device's current socket, not detached, revoked or replaced, which the channel's own periodic
+   * validation keeps true against the database. A screen frame from anything else is dropped.
+   */
+  const early = screens ? readFrame(raw) : null;
+  if (screens && early && isScreenFrameType(early.type)) {
+    if (ws.data.connection && channel.isAttached(ws.data.connection)) {
+      screens.fromRunner(
+        {
+          tenantId: ws.data.runner.tenantId,
+          deviceId: ws.data.runner.deviceId,
+        },
+        early,
+      );
+    }
+    return;
+  }
   if (!(await store.isCurrent(ws.data.runner).catch(() => false))) {
     if (ws.data.connection) channel.detach(ws.data.connection);
     ws.close?.(1008, "Device access was revoked.");

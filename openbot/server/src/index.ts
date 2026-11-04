@@ -80,6 +80,7 @@ import {
   DEPLOYMENT_INITIATOR,
   PERSON_INITIATOR,
   recordAuditEvent,
+  recordPersonAuditEvent,
   recordPlatformAuditEvent,
 } from "./audit";
 import { startRetentionSweeps } from "./audit-retention";
@@ -183,6 +184,7 @@ import { createSnapshotStore } from "./computer/snapshot-store";
 import { streamPathBotId } from "./computer/stream-path";
 import {
   captureInFrame,
+  type DeviceScreenSocketData,
   handleComputerStreamUpgrade,
 } from "./computer/stream-upgrade";
 import { loadConfig } from "./config";
@@ -223,6 +225,8 @@ import { createDemonstrationStore } from "./demonstrations/store";
 import { createDeviceChannel, type DispatchTarget } from "./devices/channel";
 import { createDeviceQueue } from "./devices/queue";
 import { createDeviceRoutes, createRunnerRoutes } from "./devices/routes";
+import { createDeviceScreens } from "./devices/screen";
+import { createDeviceTakeovers } from "./devices/takeover";
 import { computerProviderFor, createDeviceSelector } from "./devices/selection";
 import { runnerClose, runnerMessage, runnerOpen } from "./devices/socket";
 import { createDeviceStore, type DeviceOwner } from "./devices/store";
@@ -530,6 +534,36 @@ await startupLifecycle.run(async (startup) => {
   const deviceChannel = createDeviceChannel({
     queue: deviceQueue,
     authorize: (target, version) => deviceStore.isRegistered(target, version),
+  });
+  /*
+   * The live screen of a coworker on one of those machines (F2 stage 2): frames up the runner's
+   * socket, relayed to the people watching, input back down only from whoever holds the wheel.
+   */
+  const deviceScreens = createDeviceScreens({
+    notify: (target, frame) => deviceChannel.notify(target, frame),
+    holderOf: (target, botId) => deviceTakeovers.holder(target, botId),
+    onViewerGone: (watch) => deviceTakeovers.viewerGone(watch),
+  });
+  /*
+   * Who holds the wheel of a coworker's browser on one of those machines. The gateway asks it before
+   * every action it would send there, and a person whose last screen closes hands the wheel back.
+   */
+  const deviceTakeovers = createDeviceTakeovers({
+    stillWatching: (target, botId, userId) =>
+      deviceScreens.watching(target, botId, userId),
+    // In the device's own tenant: the handback happened on the owner's machine, to the owner's Bot.
+    onReleasedOnDisconnect: ({ target, botId, userId }) =>
+      void recordPersonAuditEvent(bootAuditStore, target.tenantId, {
+        eventType: "computer.control_released",
+        targetType: "computer",
+        targetId: botId,
+        payload: {
+          bot: botId,
+          actor: userId,
+          device: target.deviceId,
+          reason: "The person's live screen closed, so control went back to the coworker.",
+        },
+      }).catch(() => undefined),
   });
   /*
    * What this tenant's plan allows, read from their own subscription.
@@ -963,6 +997,7 @@ await startupLifecycle.run(async (startup) => {
           ? {
               transport: createRunnerTransport(deviceChannel),
               resolveDevice: deviceForBot,
+              deviceTakeovers,
             }
           : {}),
         auditStore: bootAuditStore,
@@ -4299,7 +4334,11 @@ await startupLifecycle.run(async (startup) => {
    * not, rather than either feature quietly taking the slot and breaking the other on connect.
    */
   type ChannelSocket = Parameters<typeof channelSocket.open>[0];
-  type SocketData = StreamData | ChannelSocket["data"] | RunnerSocket;
+  type SocketData =
+    | StreamData
+    | ChannelSocket["data"]
+    | RunnerSocket
+    | DeviceScreenSocketData;
 
   const isProxiedStream = (data: SocketData): data is StreamData =>
     typeof (data as StreamData).upstream === "string";
@@ -4316,6 +4355,10 @@ await startupLifecycle.run(async (startup) => {
   const isRunnerSocket = (data: SocketData): data is RunnerSocket =>
     typeof (data as RunnerSocket).runner === "object" &&
     (data as RunnerSocket).runner !== null;
+  /** A person watching a coworker on a tenant's own machine; see `handleComputerStreamUpgrade`. */
+  const isDeviceScreen = (data: SocketData): data is DeviceScreenSocketData =>
+    typeof (data as DeviceScreenSocketData).screen === "object" &&
+    (data as DeviceScreenSocketData).screen !== null;
 
   // Hono owns the socket's data once it has upgraded it; this hands its own back to it.
   const asChannelSocket = (ws: { data: SocketData }) =>
@@ -4367,7 +4410,9 @@ await startupLifecycle.run(async (startup) => {
             // In the signed-in person's frame: see `handleComputerStreamUpgrade` (G01-E P4).
             const answer = await handleComputerStreamUpgrade(
               {
-                computerConfigured: Boolean(config.computer),
+                // A device-mode deployment has a computer for every coworker: the tenant's own machine.
+                computerConfigured:
+                  Boolean(config.computer) || config.tenantRuntime === "device",
                 resolveRequestActor,
                 accessCheck: computerAccessCheck(agentProfileStore),
                 locate: computerGateway
@@ -4393,9 +4438,27 @@ await startupLifecycle.run(async (startup) => {
                 ws as unknown as Parameters<typeof runnerOpen>[0],
                 deviceStore,
                 deviceChannel,
+                deviceScreens,
               ).catch(() =>
                 ws.close(1008, "Device access could not be verified."),
               );
+              return;
+            }
+            if (isDeviceScreen(ws.data)) {
+              try {
+                deviceScreens.subscribe(ws, ws.data.screen);
+              } catch (error) {
+                ws.send(
+                  JSON.stringify({
+                    type: "error",
+                    error:
+                      error instanceof Error
+                        ? error.message
+                        : "The screen could not be started.",
+                  }),
+                );
+                ws.close();
+              }
               return;
             }
             if (!isProxiedStream(ws.data)) {
@@ -4482,7 +4545,12 @@ await startupLifecycle.run(async (startup) => {
                 deviceStore,
                 deviceChannel,
                 raw,
+                deviceScreens,
               );
+              return;
+            }
+            if (isDeviceScreen(ws.data)) {
+              deviceScreens.input(ws, raw);
               return;
             }
             if (!isProxiedStream(ws.data)) {
@@ -4502,6 +4570,10 @@ await startupLifecycle.run(async (startup) => {
                 ws as unknown as Parameters<typeof runnerClose>[0],
                 deviceChannel,
               );
+              return;
+            }
+            if (isDeviceScreen(ws.data)) {
+              deviceScreens.unsubscribe(ws);
               return;
             }
             if (!isProxiedStream(ws.data)) {
