@@ -451,6 +451,7 @@ tests/wakerflow-retry.integration.test.ts
 tests/wakerflow-routes.test.ts
 tests/wakerflow-run-events.integration.test.ts
 tests/wakerflow-run.integration.test.ts
+tests/wakerflow-sessions.integration.test.ts
 tests/wakerflow-task-open.integration.test.ts
 tests/wakerflow-versions.integration.test.ts
 tests/wakerflows-store.integration.test.ts
