@@ -5,6 +5,7 @@ import { PageSection, PageShell } from "@/components/layout/page-shell";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RunPanel } from "@/components/wakerflow/run-panel";
+import { VersionList } from "@/components/wakerflow/version-list";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import { RequestError } from "@/lib/client";
 import {
@@ -21,7 +22,7 @@ import {
 /**
  * One WakerFlow (spec D10, stories WF4 and WF5): its saved plan, read-only, and its runs.
  *
- * 编辑 opens the plan editor. 复用 makes a new draft Flow holding a copy of this plan and opens it
+ * 版本 lists every saved version and restores one (WF8). 编辑 opens the plan editor. 复用 makes a new draft Flow holding a copy of this plan and opens it
  * in the editor, so the copy is only compiled when the person saves it. 删除 is refused by the server
  * while planning or a run is still going (409); the button then stays disabled with the server's
  * reason until the Flow changes or every run that was going when it refused has ended. Board cards of
@@ -299,6 +300,15 @@ export function WakerFlowDetail(props: {
             还没有计划。点「编辑」用一句话生成一份。
           </p>
         )}
+      </PageSection>
+
+      <PageSection
+        description="每次保存都会留下一个版本；恢复旧版本会另存为新版本。"
+        title="版本"
+      >
+        <div className="mt-3">
+          <VersionList flow={current} />
+        </div>
       </PageSection>
 
       <PageSection title="运行">

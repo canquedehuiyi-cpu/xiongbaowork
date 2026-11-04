@@ -278,7 +278,42 @@ export const wakerFlowKeys = {
   runs: (id: string) => ["wakerflows", "runs", id] as const,
   run: (id: string, runId: string) =>
     ["wakerflows", "runs", id, runId] as const,
+  versions: (id: string) => ["wakerflows", "versions", id] as const,
 };
+
+/** One saved version of a Flow, as `GET /api/wakerflows/:id/versions` lists it (WF8). */
+export type WakerFlowVersionSummary = {
+  /** The Flow's revision after that Save: what the page calls 第 N 版. */
+  revision: number;
+  name: string;
+  stepCount: number;
+  modelRef: string | null;
+  templateId: string | null;
+  createdBy: string | null;
+  createdAt: string;
+};
+
+export function listWakerFlowVersions(id: string) {
+  return client<WakerFlowVersionSummary[]>(`${at(id)}/versions`, "versions", {
+    fallback: "版本记录没能加载。",
+  });
+}
+
+/**
+ * Roll back to a saved version: the server saves that version's plan again as a new revision. A
+ * 409 means the page was not looking at the newest revision; the caller offers to refresh.
+ */
+export function restoreWakerFlowVersion(
+  id: string,
+  revision: number,
+  input: { revision: number },
+) {
+  return client<WakerFlow>(
+    `${at(id)}/versions/${encodeURIComponent(String(revision))}/restore`,
+    "flow",
+    { method: "POST", body: input, fallback: "没能恢复这个版本。" },
+  );
+}
 
 export function listWakerFlows() {
   return client<WakerFlow[]>(BASE, "flows", {
