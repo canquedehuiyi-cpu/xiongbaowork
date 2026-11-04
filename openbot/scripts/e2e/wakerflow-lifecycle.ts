@@ -16,7 +16,11 @@
  *   8. restart and recover (spec D10 WF-F, `server/src/wakerflows/recovery.ts`): the interrupted run is
  *      closed as FAILED and NOT replayed — step 1 keeps its output, step 2 says it was interrupted and
  *      not replayed, step 3 says it was never started, and the model receives no further step request;
- *   9. a third run after the restart runs to 已完成 with every step's output.
+ *   9. a third run after the restart runs to 已完成 with every step's output, and with the plan's typed
+ *      input (a 下拉 with a default, WF8) entered as a select and sent with its default;
+ *  10. retry the recovered run 2 from its failed step (WF8): the page names the step that runs again
+ *      and warns before anything is sent; the new run carries step 1's output without asking the model
+ *      again, runs steps 2 and 3, and the source run records that it was retried.
  *
  * Recovery horizon. The server only closes a `running` Flow run whose heartbeat (`updated_at`) is older
  * than ABANDONED_RUN_MS (10 minutes, on the database clock), in a sweep that runs 60 s after start and
@@ -265,7 +269,19 @@ function generatedPlan() {
       { agentId: ids.writer, role: "撰稿人" },
       { agentId: ids.reviewer, role: "复核人" },
     ],
-    inputs: [{ key: "topic", label: "选题", required: true }],
+    inputs: [
+      { key: "topic", label: "选题", required: true },
+      // WF8: a typed input. Optional with a default, so every run sends it without being touched.
+      {
+        key: "tone",
+        label: "语气",
+        required: false,
+        type: "select",
+        options: ["正式", "轻松"],
+        default: "正式",
+        description: "终稿的语气",
+      },
+    ],
     steps: [
       {
         id: "draft",
@@ -513,7 +529,12 @@ type RunStep = {
   error?: string;
   instruction: string;
 };
-type Run = { id: string; status: string; steps: RunStep[] };
+type Run = {
+  id: string;
+  status: string;
+  steps: RunStep[];
+  inputs?: Record<string, string>;
+};
 
 async function readRun(flowId: string, runId: string): Promise<Run> {
   const { status, body } = await api<{ run: Run }>(
@@ -1008,6 +1029,17 @@ try {
     "run 3 after the restart completes with every output",
     async () => {
       phase = "run3";
+      const tone = p.getByLabel("语气（选填）");
+      equal(
+        await tone.evaluate((node) => node.tagName),
+        "SELECT",
+        "the typed input is entered as a select",
+      );
+      equal(
+        await tone.inputValue(),
+        "正式",
+        "the select starts at its default",
+      );
       await p.getByLabel("选题（必填）").fill("重启之后的选题");
       await p.getByRole("button", { name: "运行", exact: true }).click();
       const run3 = await until("run 3 to be registered", async () => {
@@ -1034,6 +1066,11 @@ try {
         "API: run 3 carries each step's output",
       );
       equal(
+        [run.inputs?.topic, run.inputs?.tone],
+        ["重启之后的选题", "正式"],
+        "API: run 3 was sent the topic and the typed input's default",
+      );
+      equal(
         calls
           .filter((call) => call.phase === "run3")
           .map((call) => call.kind)
@@ -1041,6 +1078,75 @@ try {
         ["draft", "review-edited", "publish"],
         "run 3 asked the model for each step once, in order",
       );
+    },
+  );
+
+  await step(
+    "retry run 2 from its failed step (step 1 is carried over, not re-run)",
+    async () => {
+      phase = "retry";
+      await openRun(p, run2);
+      await p
+        .getByRole("button", { name: "从失败步骤重试", exact: true })
+        .click();
+      const dialog = p.getByRole("alertdialog", { name: "确认从失败步骤重试" });
+      await dialog.waitFor({ timeout: 10_000 });
+      const text = (await dialog.textContent()) ?? "";
+      check(
+        text.includes("将从第 2 步") && text.includes("可能会再发生一次"),
+        "the confirmation names step 2 and warns it may repeat what it did",
+      );
+      equal(count("draft", "retry"), 0, "nothing was asked before confirming");
+      const before = (
+        await api<{ runs: { id: string }[] }>(
+          "GET",
+          `/api/wakerflows/${flowId}/runs`,
+        )
+      ).body.runs.map((run) => run.id);
+      await p.getByRole("button", { name: "确认重试", exact: true }).click();
+      const retried = await until(
+        "the retried run to be registered",
+        async () => {
+          const runs = await api<{ runs: { id: string }[] }>(
+            "GET",
+            `/api/wakerflows/${flowId}/runs`,
+          );
+          return runs.body.runs.find((run) => !before.includes(run.id))?.id;
+        },
+      );
+      await p
+        .locator(`[data-run-status="${retried}"]`)
+        .getByText("已完成", { exact: true })
+        .waitFor({ timeout: 60_000 });
+      check(true, "the retried run reads 已完成 on screen");
+      const run = await readRun(flowId, retried);
+      equal(run.status, "done", "API: the retried run is done");
+      equal(
+        run.steps.map((s) => [s.state, s.output]),
+        [
+          ["done", OUTPUT.draft],
+          ["done", OUTPUT.review],
+          ["done", OUTPUT.publish],
+        ],
+        "API: step 1's output is carried over and steps 2 and 3 ran",
+      );
+      equal(
+        calls
+          .filter((call) => call.phase === "retry")
+          .map((call) => call.kind)
+          .filter((kind) => kind !== "other"),
+        ["review-edited", "publish"],
+        "the retry asked the model for steps 2 and 3 only",
+      );
+      const events = await api<{ events: { type: string }[] }>(
+        "GET",
+        `/api/wakerflows/${flowId}/runs/${run2}/events?after=0&limit=100`,
+      );
+      check(
+        events.body.events.some((event) => event.type === "run_retried"),
+        "API: run 2 records that it was retried",
+      );
+      await screenshot("run-2-retried");
     },
   );
 
@@ -1055,6 +1161,8 @@ try {
       "run3:draft",
       "run3:review-edited",
       "run3:publish",
+      "retry:review-edited",
+      "retry:publish",
     ],
     "the whole lifecycle made exactly these model requests, all to the mock",
   );

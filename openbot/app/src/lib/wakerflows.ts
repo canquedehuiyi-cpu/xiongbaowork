@@ -98,6 +98,10 @@ export type WakerFlowRunStep = {
   taskId?: string;
   output?: string;
   error?: string;
+  /** Set while the step waits on an approval: the approvals page is where it is answered (D5). */
+  approvalId?: string;
+  /** Set while the step waits on a question it asked (WF8). */
+  question?: string;
 };
 
 /** One run of a Flow, as `GET /api/wakerflows/:id/runs/:runId` answers it. */
@@ -279,7 +283,154 @@ export const wakerFlowKeys = {
   run: (id: string, runId: string) =>
     ["wakerflows", "runs", id, runId] as const,
   versions: (id: string) => ["wakerflows", "versions", id] as const,
+  confirmations: (id: string, runId: string) =>
+    ["wakerflows", "confirmations", id, runId] as const,
 };
+
+/** One recorded state change of a run (WF8). The payload never carries a step's output. */
+export type WakerFlowRunEvent = {
+  sequence: number;
+  type: string;
+  correlationId: string;
+  payload: Record<string, unknown>;
+  createdAt: string;
+};
+
+/** A question a step stopped on, and what became of it (WF8). */
+export type WakerFlowConfirmation = {
+  id: string;
+  runId: string;
+  nodeId: string;
+  question: string;
+  inputs: Record<string, string>;
+  status: "pending" | "answered" | "skipped";
+  answer: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** A retry of a failed run from its failed step (WF8). */
+export type WakerFlowRetry = {
+  id: string;
+  requestId: string;
+  sourceRunId: string;
+  newRunId: string;
+  nodeId: string;
+  status: "prepared" | "ready" | "unknown" | "cancelled";
+};
+
+const runAt = (id: string, runId: string) =>
+  `${at(id)}/runs/${encodeURIComponent(runId)}`;
+
+/** One page of a run's events, oldest first, after `after`; `next` is null on the last page. */
+export async function listWakerFlowRunEvents(
+  id: string,
+  runId: string,
+  page: { after: number; limit: number },
+): Promise<{ events: WakerFlowRunEvent[]; next: number | null }> {
+  const response = await client(
+    `${runAt(id, runId)}/events?after=${page.after}&limit=${page.limit}`,
+    { fallback: "运行记录没能加载。" },
+  );
+  const body = (await response.json().catch(() => null)) as {
+    events?: unknown;
+    next?: unknown;
+  } | null;
+  return {
+    events: Array.isArray(body?.events)
+      ? (body.events as WakerFlowRunEvent[])
+      : [],
+    next: typeof body?.next === "number" ? body.next : null,
+  };
+}
+
+export function listWakerFlowConfirmations(id: string, runId: string) {
+  return client<WakerFlowConfirmation[]>(
+    `${runAt(id, runId)}/confirmations`,
+    "confirmations",
+    { fallback: "这一步的提问没能加载。" },
+  );
+}
+
+export function answerWakerFlowConfirmation(
+  id: string,
+  runId: string,
+  confirmationId: string,
+  input: { requestId: string; answer: string },
+) {
+  return client<WakerFlowConfirmation>(
+    `${runAt(id, runId)}/confirmations/${encodeURIComponent(confirmationId)}/answer`,
+    "confirmation",
+    { method: "POST", body: input, fallback: "回答没能提交。" },
+  );
+}
+
+export function skipWakerFlowConfirmation(
+  id: string,
+  runId: string,
+  confirmationId: string,
+  input: { requestId: string },
+) {
+  return client<WakerFlowConfirmation>(
+    `${runAt(id, runId)}/confirmations/${encodeURIComponent(confirmationId)}/skip`,
+    "confirmation",
+    { method: "POST", body: input, fallback: "没能跳过这一步。" },
+  );
+}
+
+/** Retry a failed run from the step that failed; the request id makes a repeat safe. */
+export function retryWakerFlowRun(
+  id: string,
+  runId: string,
+  input: { requestId: string },
+) {
+  return client<WakerFlowRetry>(`${runAt(id, runId)}/retry`, "retry", {
+    method: "POST",
+    body: input,
+    fallback: "没能从失败的步骤重试。",
+  });
+}
+
+/** How the timeline names one event, in the person's words. */
+export function runEventLabel(event: WakerFlowRunEvent): string {
+  const payload = event.payload;
+  const index = typeof payload.index === "number" ? payload.index + 1 : null;
+  const stepName = index === null ? "这一步" : `第 ${index} 步`;
+  switch (event.type) {
+    case "run_started":
+      return typeof payload.cursor === "number" && payload.cursor > 0
+        ? `从第 ${payload.cursor + 1} 步开始运行`
+        : "开始运行";
+    case "step_started":
+      return `${stepName}开始`;
+    case "step_done":
+      return `${stepName}完成`;
+    case "step_parked":
+      return payload.waitingOn === "approval"
+        ? `${stepName}等待审批`
+        : `${stepName}等待回答`;
+    case "step_answered":
+      return `${stepName}已回答`;
+    case "step_skipped":
+      return `${stepName}已跳过`;
+    case "step_failed":
+      return typeof payload.error === "string" && payload.error
+        ? `${stepName}失败：${payload.error}`
+        : `${stepName}失败`;
+    case "run_done":
+      return "运行完成";
+    case "run_failed":
+      return "运行失败";
+    case "run_aborted":
+      return "运行已停止";
+    case "run_retried":
+      return typeof payload.index === "number"
+        ? `已从第 ${payload.index + 1} 步重试`
+        : "已重试";
+    default:
+      return event.type;
+  }
+}
 
 /** One saved version of a Flow, as `GET /api/wakerflows/:id/versions` lists it (WF8). */
 export type WakerFlowVersionSummary = {
