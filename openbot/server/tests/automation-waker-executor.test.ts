@@ -61,6 +61,22 @@ const channel: AgentChannel = {
 
 const as = <T>(run: () => Promise<T>): Promise<T> => runAsTenant(tenant, run);
 
+/**
+ * Wait until `probe` holds, for at most `ms`. A fixed sleep is a race on a loaded runner: the first
+ * firing may simply not have reached its turn yet, which says nothing about the lane.
+ */
+async function until(probe: () => boolean, what: string, ms = 5000) {
+  const deadline = Date.now() + ms;
+  while (!probe()) {
+    if (Date.now() > deadline)
+      throw new Error(`Timed out after ${ms} ms waiting for ${what}.`);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
+
+/** How long the second firing is given to (wrongly) start while the first holds the gate. */
+const HOLD_MS = 150;
+
 let said: string[] = [];
 let turns: { input: Parameters<TurnRunner>[0]; tenant: string }[] = [];
 let calls: string[] = [];
@@ -358,7 +374,8 @@ describe("a firing that runs (AUT3, C2)", () => {
       as(() => shared.run(first)),
       as(() => shared.run(second)),
     ]);
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await until(() => turns.length >= 1, "the first firing's turn");
+    await new Promise((resolve) => setTimeout(resolve, HOLD_MS));
     // The second is still waiting for the thread while the first turn is held open.
     expect(turns).toHaveLength(1);
     release();
@@ -872,7 +889,9 @@ describe("a WakerFlow target (AUT3)", () => {
       as(() => shared.run(first)),
       as(() => shared.run(second)),
     ]);
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await until(() => starts.length >= 1, "the first firing's start");
+    await new Promise((resolve) => setTimeout(resolve, HOLD_MS));
+    // The second has not started while the first holds the gate.
     expect(starts).toHaveLength(1);
     release();
     await both;
