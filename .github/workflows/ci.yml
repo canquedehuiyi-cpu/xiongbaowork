@@ -46,7 +46,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bunx biome lint --error-on-warnings --diagnostic-level=warn .
       - run: bun run typecheck
-      - run: bun test test-report.test.mjs release-tag.test.mjs manual-blocks.test.mjs
+      - run: bun test test-report.test.mjs release-tag.test.mjs manual-blocks.test.mjs device-release-workflow.test.mjs
         working-directory: openbot/scripts/ci
 
   # The Helm chart, rendered for real. openbot/.github's chart job is the upstream copy and does not
@@ -552,3 +552,111 @@ jobs:
           path: openbot/desktop-device/src-tauri/target/release/bundle/deb/*.deb
           if-no-files-found: error
           retention-days: 14
+
+  # F2 stage 3: the UNSIGNED Windows installer of the device app, the counterpart of the deb above,
+  # uploaded as an artifact for manual install tests. verify-windows-signatures.ps1 -Unsigned checks
+  # the installer carries the app and the runner, that both the installer and the app say
+  # 熊宝数字员工 设备端 and the package.json version, and that nothing in it is signed.
+  # Then a signing rehearsal: the same tree is bundled again through tauri.windows-signing.conf.json
+  # with a throwaway self-signed certificate trusted only on this runner, so the signCommand wiring,
+  # the sign script and the verifier run against real Authenticode signatures. The rehearsal output
+  # is never uploaded; device-release.yml refuses the test-certificate mode. No secrets used.
+  device-bundle-windows:
+    name: device app unsigned NSIS installer (windows-latest)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: openbot
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.14
+      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: openbot/desktop-device/src-tauri
+          key: device-bundle-windows
+      # The runner's own dependencies (playwright-core, agent-computer's yaml) for the compile.
+      - name: Install root workspaces from the frozen lockfile (no lifecycle scripts)
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Install the pinned Tauri CLI from desktop's frozen lockfile (no lifecycle scripts)
+        working-directory: openbot/desktop
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Compile the runner sidecar
+        run: bun desktop-device/scripts/build-sidecar.ts
+      - name: Bundle the unsigned NSIS installer
+        working-directory: openbot/desktop-device
+        run: |
+          ../desktop/node_modules/.bin/tauri build --ci --bundles nsis --config src-tauri/tauri.bundle.conf.json
+          if ($LASTEXITCODE -ne 0) { throw "tauri build exited $LASTEXITCODE" }
+      - name: Check the installer's payload, product name and version, and that it is unsigned
+        working-directory: openbot/desktop-device
+        run: |
+          $version = (Get-Content ../package.json -Raw | ConvertFrom-Json).version
+          ./scripts/verify-windows-signatures.ps1 -Unsigned -ExpectedVersion $version -EvidenceDirectory "$env:RUNNER_TEMP/device-unsigned-evidence"
+          Get-Content "$env:RUNNER_TEMP/device-unsigned-evidence/signatures.json"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: xiongbao-device-unsigned-nsis
+          path: openbot/desktop-device/src-tauri/target/release/bundle/nsis/*-setup.exe
+          if-no-files-found: error
+          retention-days: 14
+      - name: Signing rehearsal - throwaway certificate trusted on this runner only
+        id: rehearsal-cert
+        run: |
+          $subject = "XiongBao CI rehearsal $env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=$subject" `
+            -CertStoreLocation Cert:\CurrentUser\My -KeyExportPolicy NonExportable -NotAfter (Get-Date).AddDays(1)
+          $cer = Join-Path $env:RUNNER_TEMP 'rehearsal.cer'
+          Export-Certificate -Cert $cert -FilePath $cer | Out-Null
+          Import-Certificate -FilePath $cer -CertStoreLocation Cert:\LocalMachine\Root | Out-Null
+          Import-Certificate -FilePath $cer -CertStoreLocation Cert:\LocalMachine\TrustedPublisher | Out-Null
+          "thumbprint=$($cert.Thumbprint)" >> $env:GITHUB_OUTPUT
+          "publisher=$subject" >> $env:GITHUB_OUTPUT
+      - name: Signing rehearsal - bundle again through the signing overlay
+        working-directory: openbot/desktop-device
+        env:
+          DEVICE_WINDOWS_SIGNING: test-certificate
+          DEVICE_TEST_SIGNING_THUMBPRINT: ${{ steps.rehearsal-cert.outputs.thumbprint }}
+        run: |
+          Remove-Item src-tauri/target/release/bundle/nsis -Recurse -Force
+          ../desktop/node_modules/.bin/tauri build --ci --bundles nsis --config src-tauri/tauri.bundle.conf.json --config src-tauri/tauri.windows-signing.conf.json
+          if ($LASTEXITCODE -ne 0) { throw "tauri build exited $LASTEXITCODE" }
+      - name: Signing rehearsal - verify, and refuse the wrong publisher and the unsigned label
+        working-directory: openbot/desktop-device
+        env:
+          PUBLISHER: ${{ steps.rehearsal-cert.outputs.publisher }}
+        run: |
+          $version = (Get-Content ../package.json -Raw | ConvertFrom-Json).version
+          ./scripts/verify-windows-signatures.ps1 -ExpectedPublisher $env:PUBLISHER -ExpectedVersion $version -EvidenceDirectory "$env:RUNNER_TEMP/device-rehearsal-evidence"
+          foreach ($case in @(
+              @{ args = @{ ExpectedPublisher = "$env:PUBLISHER (someone else)" }; message = 'Unexpected publisher' },
+              @{ args = @{ Unsigned = $true }; message = 'is labelled unsigned' },
+              @{ args = @{ ExpectedPublisher = $env:PUBLISHER; ExpectedVersion = '0.0.0-wrong' }; message = 'Expected version' }
+          )) {
+            $refused = $false
+            try {
+              $parameters = $case.args
+              ./scripts/verify-windows-signatures.ps1 @parameters -EvidenceDirectory "$env:RUNNER_TEMP/device-refused-evidence" | Out-Null
+            } catch {
+              if ($_.Exception.Message -notlike "*$($case.message)*") { throw }
+              $refused = $true
+            }
+            if (-not $refused) { throw "The verifier accepted a signed build it should refuse ($($case.message))." }
+          }
+          Write-Host 'Rehearsal: signed build verified; wrong publisher, unsigned label and wrong version refused.'
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: device-bundle-windows-evidence
+          path: |
+            ${{ runner.temp }}/device-unsigned-evidence/
+            ${{ runner.temp }}/device-rehearsal-evidence/
+          if-no-files-found: ignore
