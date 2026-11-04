@@ -1,0 +1,4 @@
+src-tauri/target/
+src-tauri/gen/
+# The compiled runner, made by scripts/build-sidecar.ts. Platform-specific and about 100 MB.
+src-tauri/binaries/

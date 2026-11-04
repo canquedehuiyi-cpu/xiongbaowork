@@ -290,9 +290,17 @@ function connect(
     const url = `${options.server.replace(/^http/, "ws")}/api/runner/ws?token=${encodeURIComponent(token)}`;
     const socket = new WebSocket(url);
     let beat: ReturnType<typeof setInterval> | undefined;
+    let open = false;
 
     const stop = () => {
       if (beat) clearInterval(beat);
+      // Said once per connection that was up. A desktop shell reads these lines for its tray
+      // (desktop-device/src-tauri/src/supervise.rs `classify`): without it, a dropped connection would
+      // look online until the next dial failed, which can be half a minute away.
+      if (open) {
+        open = false;
+        console.log("runner: disconnected");
+      }
       try {
         if (socket.readyState === WebSocket.OPEN) socket.close();
       } catch {
@@ -302,6 +310,7 @@ function connect(
     };
 
     socket.addEventListener("open", () => {
+      open = true;
       console.log(`runner: connected as ${deviceId}`);
       socket.send(JSON.stringify({ type: "heartbeat" }));
       beat = setInterval(() => {

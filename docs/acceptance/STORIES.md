@@ -22,7 +22,7 @@
 | not started | 5 |
 | 合计 | 77 |
 
-- partial：F1（缺本地文件夹等来源）、F2（只做了阶段 0）。
+- partial：F1（缺本地文件夹等来源）、F2（阶段 0–1 已做，缺阶段 2–3）。
 - not started：RES2、ROLE1、WF7、WF8、WF9。这 5 个都按 11-02 的 MVP 决定移到 v1.0 后。
 
 仍未合并、与故事有关的 PR（截至 `15de1e6`）只剩一个，且按决定不合并：
@@ -76,7 +76,7 @@
 | E3 | D08 | "安装"语义：目录内的技能/连接器/MCP 由管理员上架（保留现有治理边界），员工所有者在装配页给自己的员工**自助勾选安装/卸载**，无需… | implemented | canquedehuiyi-cpu/xiongbaowork#44<br>canquedehuiyi-cpu/xiongbaowork#66 | G3 | `server/tests/plugin-self-install.integration.test.ts`<br>`app/tests/admin-install-listing.test.tsx`<br>`app/tests/assemble-self-install.test.tsx` | integrated (pending main) |  |
 | E4 | D08 | 模型库作为"能力与资源"第五区（对应 H1）。 | implemented | canquedehuiyi-cpu/xiongbaowork#57<br>canquedehuiyi-cpu/xiongbaowork#69 | G3 | `app/tests/platform-model-pool.test.tsx`<br>`app/tests/resources-aggregate.test.tsx` | integrated (pending main) |  |
 | F1 | D11 | 首次登录进入"我的分身"引导：选择信息来源（本地文件夹/知识源声明），保存后生成特殊 built-in Waker"我的分身"，其角色描述注… | partial | 基线（main 上已有）<br>canquedehuiyi-cpu/xiongbaowork#171<br>canquedehuiyi-cpu/xiongbaowork#172 | G3、G5 | `server/tests/avatar-sources.test.ts`<br>`app/tests/onboarding-sources.test.tsx`<br>`app/tests/avatar-sources-screens.test.tsx`<br>`server/tests/dev-actor.integration.test.ts` | partly integrated (pending main) | 阶段 1 已做（#171、#172）：迁移 0130 `avatar_sources`、`GET/POST/DELETE /api/me/avatar/sources`、来源声明注入分身提示词、引导向导新增信息来源一步（可跳过，进度存服务端）、员工列表「待配置」、分身详情页可增删来源，占位角色描述已替换。缺：本地文件夹来源（S2，依赖 F2 阶段 1 和 runner 只读根目录），笔记本/连接器来源（S3、S4，与 RES1 和连接器目录一起排期） |
-| F2 | D11 | **runner 桌面客户端**：将 `agent-computer`（Chromium + workspace + shell + 录屏）… | partial | 基线（main 上已有）<br>canquedehuiyi-cpu/xiongbaowork#170 | G5、G7 | `runner/tests/runner-package.test.ts`<br>`runner/tests/data-dir.test.ts`<br>`runner/tests/credentials.test.ts`<br>`server/tests/runner-channel.test.ts`<br>`server/tests/runner-dispatch.test.ts`<br>`server/tests/runner-browser.test.ts` | partly integrated (pending main) | 阶段 0 已做（#170）：`--data-dir`/`OPENBOT_RUNNER_DATA_DIR`、新设备 UUID v4（旧 ID 照常连接）、可替换的凭据存储、`bun build --compile` 单文件产物的配对与执行测试，runner 测试已进 CI。缺阶段 1–3：Tauri 壳与安装包、实时画面与接管、签名公证发布；签名身份（规格 D3）、产品名与 identifier（D8）、首发平台（D5）待定 |
+| F2 | D11 | **runner 桌面客户端**：将 `agent-computer`（Chromium + workspace + shell + 录屏）… | partial | 基线（main 上已有）<br>canquedehuiyi-cpu/xiongbaowork#170<br>canquedehuiyi-cpu/xiongbaowork#182<br>canquedehuiyi-cpu/xiongbaowork#183<br>canquedehuiyi-cpu/xiongbaowork#184<br>canquedehuiyi-cpu/xiongbaowork#185 | G5、G7 | `runner/tests/runner-package.test.ts`<br>`runner/tests/data-dir.test.ts`<br>`runner/tests/credentials.test.ts`<br>`desktop-device/src-tauri`（`cargo test --locked`，ubuntu 与 windows）<br>`desktop-device/tests/pairing.test.ts`<br>`desktop-device/tests/build-sidecar.test.ts`<br>`server/tests/runner-channel.test.ts` | partly integrated (pending main) | 阶段 0（#170）和阶段 1（#182–#185）已做：新应用 `openbot/desktop-device`「熊宝数字员工 设备端」（identifier 占位 `com.xiongbao.device`，待品牌负责人定），把编译好的 runner 作为 sidecar；中文配对窗口、托盘在线/离线/错误状态、配对成功后开机自启；守护进程退避重启，连续 5 次崩溃后停止并在托盘报错，退出时清理整个进程树（Windows 用 job object）；检测本机 Chrome/Edge，不随包附带 Chromium；CI 跑 Rust 测试（ubuntu、windows）并构建未签名 deb。缺：阶段 2（实时画面与接管）、阶段 3（签名、公证、发布、Windows 安装包），以及干净机器安装和真实重启验证（G5/G7 人工）；签名身份（D3）、产品名与 identifier（D8）、首发平台（D5）待定 |
 | F3 | D11 | Waker 的浏览器/shell/文件动作由服务端策略网关决策后，按任务绑定的 device_id **下发到对应 runner 执行**；… | implemented | canquedehuiyi-cpu/xiongbaowork#19 | G3、G5 | `server/tests/device-selection.test.ts`<br>`server/tests/device-safety.integration.test.ts` | integrated (pending main) | 缺陷 #12；真实设备动作要靠门 5 |
 | F4 | D11 | 设备在线/离线：员工卡片与看板显示设备状态；设备离线时新任务进入等待队列（复用 `work_items` 租约机制），设备回线自动续跑；离线… | implemented | canquedehuiyi-cpu/xiongbaowork#19<br>canquedehuiyi-cpu/xiongbaowork#166 | G3、G5 | `server/tests/device-safety.integration.test.ts`<br>`server/tests/devices.test.ts`<br>`app/tests/device-presence.test.ts`<br>`app/tests/tasks-board-resting.test.tsx`<br>`app/tests/wakers-screen.test.tsx` | integrated (pending main) | 离线排队、回线续跑来自 #19；任务卡、看板设备筛选和员工卡片上的在线/离线来自 #166（`app/src/lib/devices/presence.ts`，读 `GET /api/devices` 的 `online`）。真实设备断线重连要靠门 5 |
 | F5 | D11 | Web 端 URL 支持 `?machineId=` 过滤"只看待本机执行的任务"（与 QoderWake 行为一致）；无匹配设备时显示"W… | implemented | 基线（main 上已有）<br>canquedehuiyi-cpu/xiongbaowork#92 | G3 | `app/tests/tasks-board-resting.test.tsx` | integrated (pending main) |  |
@@ -157,7 +157,7 @@
 1. **J3 与 `team` 共享。** J3 写"本期无跨租户共享/协作"。G01-E（决定 2 "team-tenant"）把发布的 Team Bot、多人群组、连接器/MCP、审批团队设置、沙箱组件记为 `team` 行，在同一部署内跨人共享。代码按决定实现；故事原文需要跟着改，或者重新决定。
 2. **D5 主人能看到的审计范围。** 每行审计记在操作者自己的租户里。主人在自己的帧里读，看到的是记在自己租户的行；同事对共享员工做的操作只有持管理员能力的人（`asAdminPlatform`）看得到。是否让主人也看到同事的操作，需要决定，且要改 RLS 策略。
 3. **F6 已按决定改为生产默认 `device`**（canquedehuiyi-cpu/xiongbaowork#169）。本地试用 `docker/delivery.env.example` 固定 `cloud`；是否也改成 `device` 待定。
-4. **F1、SEC1 已按规格建议实现，F2 只做了阶段 0。** F2 后续阶段仍需拍板签名身份（D3）、产品名与 identifier（D8）、首发平台（D5）；`desktop/signing/azure-federation.json` 指向上游仓库的签名身份，本仓库拿不到。
+4. **F1、SEC1 已按规格建议实现，F2 已做阶段 0–1。** F2 后续阶段仍需拍板签名身份（D3）、产品名与 identifier（D8）、首发平台（D5）；`desktop/signing/azure-federation.json` 指向上游仓库的签名身份，本仓库拿不到。
 5. **K1 平台池放哪些模型。** 平台池没有种子行，每行用 `apiKeyEnv` 指向一个部署环境变量；Free 档实际能用哪些模型、预算多少，由运维配置决定。
 6. **K3 只手动。** 按决定交付手动切换和审计，支付 provider 接口（#54）不合并。故事原文里的"预留 provider 接口"相应不做。
 
