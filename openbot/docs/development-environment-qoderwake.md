@@ -64,7 +64,7 @@ docker compose up -d postgres   # 或复用已存在的 openbot-postgres-1
 | 变量 | 取值 | 作用 |
 | --- | --- | --- |
 | `DATABASE_URL` | 见 §1 运行期串 | 服务端与 RLS 的租户注入都走它 |
-| `TENANT_RUNTIME` | `cloud` \| `device` | `device` 时动作下发到租户自己的设备（runner），无可达设备就**拒绝**而不是悄悄在云端做；`cloud` 走部署自带的 agent-computer，也是不设这个键时的默认。已登记进 `.env.example`（2026-10-08 之前只在 `src/config.ts` 里读、示例文件没有它，现已补上） |
+| `TENANT_RUNTIME` | `cloud` \| `device` | `device` 时动作下发到租户自己的设备（runner），无可达设备就**拒绝**而不是悄悄在云端做；`cloud` 走部署自带的 agent-computer。不设这个键时：`NODE_ENV=production` 取 `device`，开发和测试取 `cloud`（F6，canquedehuiyi-cpu/xiongbaowork#169）；服务启动时打印一行 `tenant-runtime` 日志说明取值和原因。已登记进 `.env.example`（2026-10-08 之前只在 `src/config.ts` 里读、示例文件没有它，现已补上） |
 | `TENANT_PACKAGE_DIR` | 例 `examples/qoderwake` | 品牌包（品牌/员工/技能/渠道/主题），启动时按 checksum 同步 |
 | `OPENBOT_SINGLE_USER` | `true` 仅限本机单用户 | 关掉才走真实登录与租户隔离 |
 

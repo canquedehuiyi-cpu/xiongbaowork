@@ -17,15 +17,15 @@
 
 | 集成分支状态 | 故事数 |
 | --- | --- |
-| implemented | 68 |
-| partial | 4 |
+| implemented | 70 |
+| partial | 2 |
 | not started | 5 |
 | 合计 | 77 |
 
-- partial：F1、F2、F6、SEC1。
+- partial：F1（缺本地文件夹等来源）、F2（只做了阶段 0）。
 - not started：RES2、ROLE1、WF7、WF8、WF9。这 5 个都按 11-02 的 MVP 决定移到 v1.0 后。
 
-仍未合并、与故事有关的 PR（截至 `38a2c1f`）只剩一个，且按决定不合并：
+仍未合并、与故事有关的 PR（截至 `15de1e6`）只剩一个，且按决定不合并：
 
 | PR | 内容 | 涉及故事 |
 | --- | --- | --- |
@@ -75,12 +75,12 @@
 | E2 | D08 | 我可以把某技能/连接器授权给指定 Waker 或整个 Group（授权对象从"仅 Bot"扩展到"Group 展开为成员批量授权"）。 | implemented | canquedehuiyi-cpu/xiongbaowork#32 | G3 | `app/tests/crew-grant.test.ts`<br>`app/tests/admin-skill-crew-grant.test.tsx`<br>`app/tests/admin-plugin-crew-grant.test.tsx` | integrated (pending main) |  |
 | E3 | D08 | "安装"语义：目录内的技能/连接器/MCP 由管理员上架（保留现有治理边界），员工所有者在装配页给自己的员工**自助勾选安装/卸载**，无需… | implemented | canquedehuiyi-cpu/xiongbaowork#44<br>canquedehuiyi-cpu/xiongbaowork#66 | G3 | `server/tests/plugin-self-install.integration.test.ts`<br>`app/tests/admin-install-listing.test.tsx`<br>`app/tests/assemble-self-install.test.tsx` | integrated (pending main) |  |
 | E4 | D08 | 模型库作为"能力与资源"第五区（对应 H1）。 | implemented | canquedehuiyi-cpu/xiongbaowork#57<br>canquedehuiyi-cpu/xiongbaowork#69 | G3 | `app/tests/platform-model-pool.test.tsx`<br>`app/tests/resources-aggregate.test.tsx` | integrated (pending main) |  |
-| F1 | D11 | 首次登录进入"我的分身"引导：选择信息来源（本地文件夹/知识源声明），保存后生成特殊 built-in Waker"我的分身"，其角色描述注… | partial | 基线（main 上已有） | G3、G5 | `server/tests/dev-actor.integration.test.ts` | partly integrated (pending main) | 注册时 `tenant/provisioning.ts` 会建「我的分身」；选择信息来源的引导没有做，规格 `docs/specs/2026-11-02-f1-avatar-info-sources.md` 是含待决项的草案 |
-| F2 | D11 | **runner 桌面客户端**：将 `agent-computer`（Chromium + workspace + shell + 录屏）… | partial | 基线（main 上已有） | G5、G7 | `server/tests/runner-channel.test.ts`<br>`server/tests/runner-dispatch.test.ts`<br>`server/tests/runner-browser.test.ts` | partly integrated (pending main) | `openbot/runner` 是 Bun 命令行（配对、出站长连、执行）；打包成桌面客户端没开始，`desktop/` 与 runner 无集成；规格 `docs/specs/2026-11-02-f2-runner-desktop-client.md` 是草案 |
+| F1 | D11 | 首次登录进入"我的分身"引导：选择信息来源（本地文件夹/知识源声明），保存后生成特殊 built-in Waker"我的分身"，其角色描述注… | partial | 基线（main 上已有）<br>canquedehuiyi-cpu/xiongbaowork#171<br>canquedehuiyi-cpu/xiongbaowork#172 | G3、G5 | `server/tests/avatar-sources.test.ts`<br>`app/tests/onboarding-sources.test.tsx`<br>`app/tests/avatar-sources-screens.test.tsx`<br>`server/tests/dev-actor.integration.test.ts` | partly integrated (pending main) | 阶段 1 已做（#171、#172）：迁移 0130 `avatar_sources`、`GET/POST/DELETE /api/me/avatar/sources`、来源声明注入分身提示词、引导向导新增信息来源一步（可跳过，进度存服务端）、员工列表「待配置」、分身详情页可增删来源，占位角色描述已替换。缺：本地文件夹来源（S2，依赖 F2 阶段 1 和 runner 只读根目录），笔记本/连接器来源（S3、S4，与 RES1 和连接器目录一起排期） |
+| F2 | D11 | **runner 桌面客户端**：将 `agent-computer`（Chromium + workspace + shell + 录屏）… | partial | 基线（main 上已有）<br>canquedehuiyi-cpu/xiongbaowork#170 | G5、G7 | `runner/tests/runner-package.test.ts`<br>`runner/tests/data-dir.test.ts`<br>`runner/tests/credentials.test.ts`<br>`server/tests/runner-channel.test.ts`<br>`server/tests/runner-dispatch.test.ts`<br>`server/tests/runner-browser.test.ts` | partly integrated (pending main) | 阶段 0 已做（#170）：`--data-dir`/`OPENBOT_RUNNER_DATA_DIR`、新设备 UUID v4（旧 ID 照常连接）、可替换的凭据存储、`bun build --compile` 单文件产物的配对与执行测试，runner 测试已进 CI。缺阶段 1–3：Tauri 壳与安装包、实时画面与接管、签名公证发布；签名身份（规格 D3）、产品名与 identifier（D8）、首发平台（D5）待定 |
 | F3 | D11 | Waker 的浏览器/shell/文件动作由服务端策略网关决策后，按任务绑定的 device_id **下发到对应 runner 执行**；… | implemented | canquedehuiyi-cpu/xiongbaowork#19 | G3、G5 | `server/tests/device-selection.test.ts`<br>`server/tests/device-safety.integration.test.ts` | integrated (pending main) | 缺陷 #12；真实设备动作要靠门 5 |
 | F4 | D11 | 设备在线/离线：员工卡片与看板显示设备状态；设备离线时新任务进入等待队列（复用 `work_items` 租约机制），设备回线自动续跑；离线… | implemented | canquedehuiyi-cpu/xiongbaowork#19<br>canquedehuiyi-cpu/xiongbaowork#166 | G3、G5 | `server/tests/device-safety.integration.test.ts`<br>`server/tests/devices.test.ts`<br>`app/tests/device-presence.test.ts`<br>`app/tests/tasks-board-resting.test.tsx`<br>`app/tests/wakers-screen.test.tsx` | integrated (pending main) | 离线排队、回线续跑来自 #19；任务卡、看板设备筛选和员工卡片上的在线/离线来自 #166（`app/src/lib/devices/presence.ts`，读 `GET /api/devices` 的 `online`）。真实设备断线重连要靠门 5 |
 | F5 | D11 | Web 端 URL 支持 `?machineId=` 过滤"只看待本机执行的任务"（与 QoderWake 行为一致）；无匹配设备时显示"W… | implemented | 基线（main 上已有）<br>canquedehuiyi-cpu/xiongbaowork#92 | G3 | `app/tests/tasks-board-resting.test.tsx` | integrated (pending main) |  |
-| F6 | D11 | 服务端 Docker 电脑（底座 supervisor 链路）**降级为开发/演示回退**：`TENANT_RUNTIME=cloud` 时… | partial | 基线（main 上已有） | G3 | `server/tests/config.test.ts` | partly integrated (pending main) | `TENANT_RUNTIME` 有 cloud/device 两值，但不设时默认 `cloud`（`config.ts` 的 `tenantRuntime`），故事要求生产默认 `device` |
+| F6 | D11 | 服务端 Docker 电脑（底座 supervisor 链路）**降级为开发/演示回退**：`TENANT_RUNTIME=cloud` 时… | implemented | 基线（main 上已有）<br>canquedehuiyi-cpu/xiongbaowork#169 | G3 | `server/tests/config.test.ts` | integrated (pending main) | #169：`NODE_ENV=production` 且未设 `TENANT_RUNTIME` 时取 `device`，开发/测试仍取 `cloud`；显式 `cloud` 在生产仍有效，非法值照旧拒绝。启动时打一行 `tenant-runtime` 日志说明取值和原因。Helm 新增 `config.tenantRuntime`（默认 `device`，总是显式写出）；本地试用 `docker/delivery.env.example` 固定 `cloud`。升级已有 Helm release 会切到 `device`，要保留旧行为需设 `config.tenantRuntime: cloud` |
 | J1 | D04 | 注册/登录：邮箱+密码（Better Auth 自有凭据路径）+ 可选 Google/GitHub OAuth；注册成功即开通租户（初始化：… | implemented | 基线（main 上已有）<br>canquedehuiyi-cpu/xiongbaowork#4<br>canquedehuiyi-cpu/xiongbaowork#94 | G2、G3 | `server/tests/email-signup.test.ts`<br>`server/tests/github-oauth-signup.test.ts` | integrated (pending main) |  |
 | J2 | D03 | 全部业务表加 `tenant_id` 并启用 PostgreSQL **Row-Level Security**：连接会话注入 `app.t… | implemented | canquedehuiyi-cpu/xiongbaowork#10<br>canquedehuiyi-cpu/xiongbaowork#53<br>G01：#8、#11、#14、#17、#22、#24、#68、#71，测试 #72–#87<br>G01-E：#101–#146 | G2、G3 | `server/tests/rls-role.test.ts`<br>`server/tests/rls-write-scope.test.ts`<br>`server/tests/team-tenant-rls.integration.test.ts`<br>`server/tests/tenant-invariants.test.ts` | integrated (pending main) |  |
 | J3 | D03 | 我的 Waker、任务、审批、技能、连接器授权、模型 key、设备仅我可见；本期无跨租户共享/协作。 | implemented | 同 J2 | G2、G3 | `server/tests/team-tenant-rls.integration.test.ts`<br>`server/tests/tenant-invariants.test.ts` | integrated (pending main) | G01-E 起，发布的 Team Bot、多人群组、连接器等记为 `team` 行，在同一部署内跨人共享（见待决事项） |
@@ -109,7 +109,7 @@
 | WF7 | D10 | 流程图worker提示词、decision条件分支、嵌套Flow和动作实现的编辑与执行 | not started | — | — | — | — | v1.0 后 |
 | WF8 | D10 | 输入参数、确认回答与跳过、运行事件及错误恢复、版本定义与回滚 | not started | — | — | — | — | v1.0 后 |
 | WF9 | D10 | 持久自定义会话和历史、工作流分享/导入及有效期/次数约束 | not started | — | — | — | — | v1.0 后 |
-| SEC1 | D11 | 员工级危险命令审批、敏感文件路径审批、每工具直接/询问/禁用三态及企业模式入口；执行侧遵循配置，拒绝/待审批无副作用 | partial | 基线（main 上已有） | G2、G5 | `server/tests/approvals-policy.test.ts`<br>`server/tests/approvals-policy.integration.test.ts` | partly integrated (pending main) | 审批规则和策略网关已有，「拒绝/待审批无副作用」在结构上成立；员工级配置、每工具三态（含禁用）、危险命令和敏感路径审批、企业模式入口都没做。规格 `docs/specs/2026-11-02-sec1-employee-tool-permissions.md` 是草案 |
+| SEC1 | D11 | 员工级危险命令审批、敏感文件路径审批、每工具直接/询问/禁用三态及企业模式入口；执行侧遵循配置，拒绝/待审批无副作用 | implemented | 基线（main 上已有）<br>canquedehuiyi-cpu/xiongbaowork#173<br>canquedehuiyi-cpu/xiongbaowork#174<br>canquedehuiyi-cpu/xiongbaowork#175<br>canquedehuiyi-cpu/xiongbaowork#176<br>canquedehuiyi-cpu/xiongbaowork#177<br>canquedehuiyi-cpu/xiongbaowork#178 | G2、G5 | `server/tests/approvals-policy.test.ts`<br>`server/tests/approvals-policy.integration.test.ts`<br>`server/tests/employee-tool-permissions-migration.integration.test.ts`<br>`server/tests/device-safety.integration.test.ts`<br>`server/tests/plugin-store.integration.test.ts`<br>`server/tests/approvals-employee-permissions.integration.test.ts`<br>`app/tests/employee-permissions.test.tsx`<br>`app/tests/approvals-rules.test.tsx` | integrated (pending main) | 按规格方案 B 和 D1–D10 的建议实现：规则新增 `deny`（未知取值按 `deny` 处理）；确定性的危险命令分类器和默认敏感路径作为底线，出错一律按需审批；迁移 0131 新表 `agent_security_settings`（不启用休眠的 `agent_security_policies`）；员工所有者的收紧类规则在所有者的帧里读、对其他使用者也生效（D9，界面标注「员工所有者设定」）；被禁用的工具对模型隐藏且闸门仍拒绝；`hostCommandsCap` 覆盖 runner 上的命令；团队「强制危险命令审批」开关仅管理员可改；企业模式只给入口链接（D1）。G5 真机核验仍待人工 |
 | WIN1 | D16 | 原生Windows设备CLI可以实际执行命令，启动错误可见；中止取消整棵子进程树并清理 | implemented | canquedehuiyi-cpu/xiongbaowork#13<br>canquedehuiyi-cpu/xiongbaowork#152<br>canquedehuiyi-cpu/xiongbaowork#155 | G3、G7 | `scripts/ci/windows-runner-probe.ts` | integrated (pending main) | CI job `WIN1 device CLI probe (windows-latest)` |
 | DEV1 | D11 | 设备动作结果不明时持久暂停后续自动写入；新工具编号/跨实例/重启均不能绕过，所有者能核查详情并明确恢复 | implemented | 基线（main 上已有） | G3、G5 | `server/tests/device-safety.integration.test.ts`<br>`server/tests/devices.test.ts`<br>`app/tests/my-devices.test.tsx` | integrated (pending main) | 持久暂停在 `devices/queue.ts`（`outcome_unknown`） |
 
@@ -156,8 +156,8 @@
 
 1. **J3 与 `team` 共享。** J3 写"本期无跨租户共享/协作"。G01-E（决定 2 "team-tenant"）把发布的 Team Bot、多人群组、连接器/MCP、审批团队设置、沙箱组件记为 `team` 行，在同一部署内跨人共享。代码按决定实现；故事原文需要跟着改，或者重新决定。
 2. **D5 主人能看到的审计范围。** 每行审计记在操作者自己的租户里。主人在自己的帧里读，看到的是记在自己租户的行；同事对共享员工做的操作只有持管理员能力的人（`asAdminPlatform`）看得到。是否让主人也看到同事的操作，需要决定，且要改 RLS 策略。
-3. **F6 生产默认运行位置。** 故事要求生产默认 `TENANT_RUNTIME=device`；`config.ts` 不设时取 `cloud`，`.env.example` 里 `device` 是注释掉的。
-4. **F1、F2、SEC1 的规格都是含待决项的草案**（`docs/specs/2026-11-02-*.md`），动工前需要拍板。F2 另有一项硬约束：`desktop/signing/azure-federation.json` 指向上游仓库的签名身份，本仓库拿不到。
+3. **F6 已按决定改为生产默认 `device`**（canquedehuiyi-cpu/xiongbaowork#169）。本地试用 `docker/delivery.env.example` 固定 `cloud`；是否也改成 `device` 待定。
+4. **F1、SEC1 已按规格建议实现，F2 只做了阶段 0。** F2 后续阶段仍需拍板签名身份（D3）、产品名与 identifier（D8）、首发平台（D5）；`desktop/signing/azure-federation.json` 指向上游仓库的签名身份，本仓库拿不到。
 5. **K1 平台池放哪些模型。** 平台池没有种子行，每行用 `apiKeyEnv` 指向一个部署环境变量；Free 档实际能用哪些模型、预算多少，由运维配置决定。
 6. **K3 只手动。** 按决定交付手动切换和审计，支付 provider 接口（#54）不合并。故事原文里的"预留 provider 接口"相应不做。
 
