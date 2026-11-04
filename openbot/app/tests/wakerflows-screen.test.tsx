@@ -380,6 +380,44 @@ test("save is blocked while a step reads an input the plan no longer declares", 
   expect(writes()).toEqual([]);
 });
 
+test("a decision added in the editor is drawn as a diamond, and Save sends it with forward-only targets", async () => {
+  serve((call) => {
+    if (call.method === "GET" && call.path === `/api/wakerflows/${FLOW_ID}`)
+      return Response.json({ flow: flow({ plan, status: "ready" }) });
+    if (call.method === "PUT" && call.path === `/api/wakerflows/${FLOW_ID}`)
+      return Response.json({
+        flow: flow({ plan, status: "ready", revision: 2 }),
+      });
+    return undefined;
+  });
+  const { view, user } = draw(`/wakerflows/new?flow=${FLOW_ID}`);
+
+  const chart = await view.findByRole("figure", { name: "计划流程图" });
+  expect(chart.querySelector('[data-shape="diamond"]')).toBeNull();
+  await user.selectOptions(view.getByLabelText("新步骤的类型"), "decision");
+  await user.click(view.getByRole("button", { name: "添加步骤" }));
+  await waitFor(() =>
+    expect(chart.querySelector('[data-shape="diamond"]')).not.toBeNull(),
+  );
+  // The new decision is last, so its branches can only end the run.
+  expect(
+    [
+      ...(view.getByLabelText("第 2 步第 1 个分支跳到") as HTMLSelectElement)
+        .options,
+    ].map((option) => option.value),
+  ).toEqual(["__end__"]);
+  await user.click(view.getByRole("button", { name: "保存计划" }));
+  await waitFor(() => expect(writes()).toHaveLength(1));
+  const sent = writes()[0]?.body as { plan: WakerFlowPlan };
+  expect(sent.plan.steps[1]).toEqual({
+    id: "step_2",
+    kind: "decision",
+    inputKeys: [],
+    branches: [{ label: "是", when: "true", next: "__end__" }],
+    otherwise: "__end__",
+  });
+});
+
 test("a lost revision race offers to reload instead of overwriting", async () => {
   let reads = 0;
   serve((call) => {

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { PageSection, PageShell } from "@/components/layout/page-shell";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Flowchart } from "@/components/wakerflow/flowchart";
 import { RunPanel } from "@/components/wakerflow/run-panel";
 import { SessionPanel } from "@/components/wakerflow/session-panel";
 import { VersionList } from "@/components/wakerflow/version-list";
@@ -16,8 +17,10 @@ import {
   listWakerFlowRuns,
   type WakerFlow,
   type WakerFlowPlan,
+  type WakerFlowStep,
   wakerFlowKeys,
   wakerFlowQueryOptions,
+  wakerFlowsQueryOptions,
 } from "@/lib/wakerflows";
 
 /**
@@ -283,26 +286,9 @@ export function WakerFlowDetail(props: {
             </div>
             <div>
               <h3 className="font-medium">步骤</h3>
-              <ol className="mt-1 flex flex-col gap-2">
-                {plan.steps.map((step, index) => (
-                  <li className="rounded-md bg-muted px-3 py-2" key={step.id}>
-                    <p className="font-medium">
-                      第 {index + 1} 步 · {memberName(step.agentId)}
-                    </p>
-                    <p className="mt-1 whitespace-pre-wrap">
-                      {step.instruction}
-                    </p>
-                    <p className="mt-1 text-muted-foreground text-xs">
-                      读取：
-                      {step.inputKeys.length > 0
-                        ? step.inputKeys.join("、")
-                        : "无"}
-                      {" · 产出："}
-                      {step.outputKey}
-                    </p>
-                  </li>
-                ))}
-              </ol>
+              <div className="mt-2">
+                <PlanFlowchart memberName={memberName} plan={plan} />
+              </div>
             </div>
           </div>
         ) : (
@@ -338,5 +324,75 @@ export function WakerFlowDetail(props: {
         </div>
       </PageSection>
     </PageShell>
+  );
+}
+
+/**
+ * The saved plan as a flowchart (WF7): every step's kind and what it reads and produces. A nested
+ * Flow's node opens that Flow, and says so when it has been saved again since this plan pinned it.
+ */
+function PlanFlowchart(props: {
+  plan: WakerFlowPlan;
+  memberName: (agentId: string) => string;
+}) {
+  const { plan, memberName } = props;
+  const nests = plan.steps.some((step) => step.kind === "flow");
+  const flows = useQuery({ ...wakerFlowsQueryOptions(), enabled: nests });
+  const byId = (id: string) =>
+    (flows.data ?? []).find((flow) => flow.id === id);
+  const of = (step: { id: string }) =>
+    plan.steps.find((candidate) => candidate.id === step.id) as WakerFlowStep;
+  return (
+    <Flowchart
+      detail={(node) => {
+        const step = of(node);
+        const reads =
+          step.kind === "flow" ? Object.values(step.inputMap) : step.inputKeys;
+        const who =
+          step.kind === "decision" || step.kind === "flow"
+            ? ""
+            : `${memberName(step.agentId)} · `;
+        const out =
+          step.kind === "decision" ? "" : ` · 产出：${step.outputKey}`;
+        return `${who}读取：${reads.length > 0 ? reads.join("、") : "无"}${out}`;
+      }}
+      extra={(node) => {
+        const step = of(node);
+        if (step.kind !== "flow") return null;
+        const child = byId(step.targetFlowId);
+        return (
+          <span className="flex flex-wrap items-center gap-2">
+            <Link
+              className="underline"
+              params={{ flowId: step.targetFlowId }}
+              to="/wakerflows/$flowId"
+            >
+              打开子流程{child ? `「${child.name}」` : ""}（第{" "}
+              {step.targetRevision} 版）
+            </Link>
+            {child && child.revision > step.targetRevision ? (
+              <span className="text-amber-700 dark:text-amber-400">
+                子流程有新版本（第 {child.revision} 版），编辑后可更新
+              </span>
+            ) : null}
+          </span>
+        );
+      }}
+      label="计划流程图"
+      steps={plan.steps}
+      title={(node) => {
+        const step = of(node);
+        switch (step.kind) {
+          case "decision":
+            return "条件判断";
+          case "flow":
+            return byId(step.targetFlowId)?.name ?? "子流程";
+          case "action":
+            return step.tool;
+          default:
+            return step.instruction.split("\n")[0] ?? "";
+        }
+      }}
+    />
   );
 }

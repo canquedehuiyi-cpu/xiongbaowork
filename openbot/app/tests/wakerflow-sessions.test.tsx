@@ -21,6 +21,7 @@ import {
   type WakerFlowPlan,
   type WakerFlowSession,
   type WakerFlowSessionTurn,
+  type WakerFlowWorkerStep,
   wakerFlowKeys,
 } from "@/lib/wakerflows";
 import { WakerFlowDetail } from "@/routes/_authed/_app/wakerflows.$flowId";
@@ -86,8 +87,8 @@ const current: WakerFlowPlan = {
   ],
 };
 const [draftStep, reviewStep] = current.steps as [
-  WakerFlowPlan["steps"][number],
-  WakerFlowPlan["steps"][number],
+  WakerFlowWorkerStep,
+  WakerFlowWorkerStep,
 ];
 
 const reordered: WakerFlowPlan = {
@@ -186,7 +187,8 @@ function EditorStub() {
   editorSaw ??= queryClient.getQueryData<WakerFlow>(
     wakerFlowKeys.detail(FLOW_ID),
   );
-  return <p>编辑器：{editorSaw?.plan?.steps[0]?.instruction}</p>;
+  const first = editorSaw?.plan?.steps[0] as WakerFlowWorkerStep | undefined;
+  return <p>编辑器：{first?.instruction}</p>;
 }
 
 function draw() {
