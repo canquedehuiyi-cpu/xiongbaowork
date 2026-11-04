@@ -758,7 +758,8 @@ describe("sharing and importing across workspaces", () => {
     // D4/D5 defaults: 7 days and 10 uses.
     const row = await linkRow(id);
     expect(row?.maxUses).toBe(10);
-    const days = ((row?.expiresAt as Date).getTime() - Date.now()) / 86_400_000;
+    if (!row) throw new Error("The link was not stored.");
+    const days = (row.expiresAt.getTime() - Date.now()) / 86_400_000;
     expect(days).toBeGreaterThan(6.9);
     expect(days).toBeLessThanOrEqual(7);
     expect(
