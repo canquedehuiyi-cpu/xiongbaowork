@@ -97,6 +97,8 @@ type RegisteredBuiltInAgent = {
   systemPrompt: string;
   /** Who this coworker is, as its owner wrote it. Absent or empty sends no section. See ticket 014. */
   persona?: Persona | null;
+  /** Its 工作手册 (story ROLE1), sent whole after the persona. Absent or blank sends no section. */
+  bible?: string | null;
   /**
    * What the person asking declared about where their material lives, when this Bot is their own
    * 分身 (story F1). Set per build by {@link buildAgents} from {@link LoadAvatarSources}, never from
@@ -163,7 +165,27 @@ export type AgentStandingProfile = {
   roleDescription: string;
   /** Carried for a remote coworker too, because the standing role is the whole of its instruction. */
   persona?: Persona | null;
+  /** And its 工作手册 (ROLE1), for the same reason. */
+  bible?: string | null;
 };
+
+/**
+ * The coworker's 工作手册 as a prompt section, or null when there is none (story ROLE1, D3).
+ *
+ * Sent whole — at most 8000 characters, so no retrieval — after the persona and before whose
+ * instructions it works under. The owner wrote it, like the persona, so it carries no untrusted
+ * envelope; it is reference material, and the closing line puts the person's explicit request above
+ * it, the way the persona defers to the job.
+ */
+export function bibleGuidance(bible: string | null | undefined): string | null {
+  const text = bible?.trim();
+  if (!text) return null;
+  return [
+    "你的工作手册（由你的所有者编写）：",
+    text,
+    "手册是参考资料，与本人当前的明确要求冲突时，以本人要求为准。",
+  ].join("\n\n");
+}
 
 /**
  * The coworker's job, as one system message.
@@ -187,6 +209,7 @@ export function standingRoleMessage(
       ...(personaGuidance(profile.persona)
         ? [personaGuidance(profile.persona)]
         : []),
+      ...(bibleGuidance(profile.bible) ? [bibleGuidance(profile.bible)] : []),
       "This standing role applies in every channel. Treat channel messages as task-specific instructions within it.",
       /*
        * Here rather than in the package, because for a remote Bot the standing role is the only
@@ -266,6 +289,7 @@ type RuntimeAgentRow = {
   title: string;
   roleDescription: string;
   persona?: Persona | null;
+  bible?: string | null;
 };
 
 export function registeredAgentFromRow(
@@ -286,6 +310,8 @@ export function registeredAgentFromRow(
           type: "built_in",
           systemPrompt: trimmedSystemPrompt,
           persona: row.persona ?? null,
+          // Only when one was written (ROLE1): a coworker without a handbook reads as before.
+          ...(row.bible ? { bible: row.bible } : {}),
         }
       : null;
   }
@@ -480,6 +506,7 @@ export function builtInAgentConfiguration(
   const standing = standingInstructionsGuidance(standingInstructions);
   const sources = avatarSourcesGuidance(agent.avatarSources);
   const persona = personaGuidance(agent.persona);
+  const bible = bibleGuidance(agent.bible);
 
   return {
     model: planModel ?? agentModel ?? `${model.provider}/${model.defaultModel}`,
@@ -499,6 +526,8 @@ export function builtInAgentConfiguration(
       agent.systemPrompt,
       // Who it is, before whose preferences it is working under and before what it holds.
       ...(persona ? [persona] : []),
+      // Its handbook, right after who it is (ROLE1): written by the same owner, read as reference.
+      ...(bible ? [bible] : []),
       ...(standing ? [standing] : []),
       // The 分身's declared sources, beside the person's instructions: both are about who it works for.
       ...(sources ? [sources] : []),

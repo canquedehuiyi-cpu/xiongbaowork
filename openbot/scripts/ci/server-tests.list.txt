@@ -333,6 +333,7 @@ tests/restart-recovery-sweep.integration.test.ts
 tests/restart-recovery-sweep.test.ts
 tests/rls-role.test.ts
 tests/rls-write-scope.test.ts
+tests/role-bible-prompt.test.ts
 tests/role-writer-lifecycle.test.ts
 tests/roles.test.ts
 tests/route-ids-validation.test.ts
