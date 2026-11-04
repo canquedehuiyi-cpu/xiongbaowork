@@ -84,6 +84,10 @@ grep -q '^usage:' <<<"$help" || fail "the bundled runner did not start: $help"
 
 codesign -dv --verbose=4 "$app" > "$evidence/app.codesign.txt" 2>&1
 codesign -dv --verbose=4 "$sidecar" > "$evidence/runner.codesign.txt" 2>&1
+codesign -d --entitlements - --xml "$sidecar" > "$evidence/runner.entitlements.plist" 2> /dev/null || true
+# In the job log too: which signature, flags (runtime) and entitlements the runner really carries.
+grep -E '^(Identifier|Format|CodeDirectory|Signature|Authority|TeamIdentifier|Timestamp)' "$evidence/runner.codesign.txt" || true
+grep -o 'com\.apple\.security\.[a-z.-]*' "$evidence/runner.entitlements.plist" || true
 
 if [ "$mode" = unsigned ]; then
   grep -q '^Signature=adhoc' "$evidence/app.codesign.txt" || fail "an unsigned build must be ad-hoc signed only: $(cat "$evidence/app.codesign.txt")"
