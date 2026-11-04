@@ -10,6 +10,7 @@ import {
   PipelineValidationError,
 } from "../pipeline/store";
 import { QuotaExceeded } from "../quota/limits";
+import { FlowSessionError } from "./sessions";
 import { WakerFlowError, type WakerFlowStore } from "./store";
 
 type Ctx = { Variables: AppVariables };
@@ -222,6 +223,141 @@ export function createWakerFlowRoutes(options: {
   });
 
   /*
+   * WF9: customization sessions. A turn is a planning request (kind `customize`): it answers when the
+   * model does, a repeat of its request id answers from the stored row, and `/generate/cancel` and
+   * `/requests/:requestId` above serve it as they serve first planning.
+   */
+  const { sessions } = store;
+  const sessionId = (context: Context<Ctx>) =>
+    context.req.param("sessionId") ?? "";
+
+  routes.get("/:id/sessions", requireUser, async (context) => {
+    try {
+      return context.json(
+        await sessions.list(tenant(context), context.req.param("id")),
+      );
+    } catch (error) {
+      return refuse(context, error);
+    }
+  });
+
+  routes.post("/:id/sessions", requireUser, async (context) => {
+    const input = await body(context);
+    try {
+      const session = await sessions.create(
+        tenant(context),
+        context.req.param("id"),
+        {
+          requestId: String(input.requestId ?? ""),
+          title: typeof input.title === "string" ? input.title : "",
+          description:
+            typeof input.description === "string" ? input.description : "",
+        },
+      );
+      return context.json({ session }, 201);
+    } catch (error) {
+      return refuse(context, error);
+    }
+  });
+
+  routes.patch("/:id/sessions/:sessionId", requireUser, async (context) => {
+    const input = await body(context);
+    try {
+      const session = await sessions.update(
+        tenant(context),
+        context.req.param("id"),
+        sessionId(context),
+        {
+          revision: input.revision as number,
+          ...(typeof input.title === "string" ? { title: input.title } : {}),
+          ...(typeof input.description === "string"
+            ? { description: input.description }
+            : {}),
+        },
+      );
+      return context.json({ session });
+    } catch (error) {
+      return refuse(context, error);
+    }
+  });
+
+  routes.delete("/:id/sessions/:sessionId", requireUser, async (context) => {
+    const raw = context.req.query("revision");
+    const revision = raw === undefined ? undefined : Number(raw);
+    if (revision !== undefined && (!Number.isInteger(revision) || revision < 0))
+      return context.json({ error: "缺少有效的版本号，请刷新后再删除。" }, 400);
+    try {
+      await sessions.remove(
+        tenant(context),
+        context.req.param("id"),
+        sessionId(context),
+        revision,
+      );
+      return context.json({ deleted: true });
+    } catch (error) {
+      return refuse(context, error);
+    }
+  });
+
+  routes.post(
+    "/:id/sessions/:sessionId/activate",
+    requireUser,
+    async (context) => {
+      try {
+        const session = await sessions.activate(
+          tenant(context),
+          context.req.param("id"),
+          sessionId(context),
+        );
+        return context.json({ session });
+      } catch (error) {
+        return refuse(context, error);
+      }
+    },
+  );
+
+  routes.get("/:id/sessions/:sessionId/turns", requireUser, async (context) => {
+    try {
+      return context.json({
+        turns: await sessions.turns(
+          tenant(context),
+          context.req.param("id"),
+          sessionId(context),
+        ),
+      });
+    } catch (error) {
+      return refuse(context, error);
+    }
+  });
+
+  routes.post(
+    "/:id/sessions/:sessionId/turns",
+    requireUser,
+    async (context) => {
+      const input = await body(context);
+      try {
+        const request = await sessions.say(
+          tenant(context),
+          tenant(context),
+          context.req.param("id"),
+          sessionId(context),
+          {
+            requestId: String(input.requestId ?? ""),
+            modelRef: typeof input.modelRef === "string" ? input.modelRef : "",
+            prompt: typeof input.prompt === "string" ? input.prompt : "",
+            ...(Array.isArray(input.members)
+              ? { members: input.members as WakerFlowCandidate[] }
+              : {}),
+          },
+        );
+        return context.json({ request });
+      } catch (error) {
+        return refuse(context, error);
+      }
+    },
+  );
+
+  /*
    * Pressing "run" answers as soon as the run is registered and on the board, not when the crew
    * finishes: the steps are driven in the background by the pipeline's own `advance`.
    */
@@ -392,7 +528,7 @@ export function createWakerFlowRoutes(options: {
  */
 function refuse(context: Context<Ctx>, error: unknown) {
   if (error instanceof QuotaExceeded) return context.json(error.body, 402);
-  if (error instanceof WakerFlowError)
+  if (error instanceof WakerFlowError || error instanceof FlowSessionError)
     return context.json({ error: error.message }, error.status);
   if (error instanceof PipelineNotFoundError)
     return context.json({ error: error.message }, 404);
