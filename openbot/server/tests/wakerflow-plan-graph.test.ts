@@ -938,7 +938,7 @@ describe("other node fields", () => {
 });
 
 describe("what the server runs today", () => {
-  test("decisions, jumps and nested Flows are accepted on Save; actions wait for their execution", () => {
+  test("every step kind and jumps are accepted on Save now that each one runs", () => {
     expect(wakerFlowPlanSchema.safeParse(branching()).success).toBe(true);
     const later = base([
       {
@@ -959,12 +959,30 @@ describe("what the server runs today", () => {
         outputKey: "posted",
       },
     ]);
-    const issues = wakerFlowPlanSchema.safeParse(later).error?.issues ?? [];
-    expect(
-      issues
-        .filter((issue) => issue.message === "这种步骤暂时还不能运行。")
-        .map((issue) => issue.path.join(".")),
-    ).toEqual(["steps.1.kind"]);
+    expect(wakerFlowPlanSchema.safeParse(later).success).toBe(true);
+  });
+
+  test("an action calls an MCP tool only, never a computer, host or hand-off action (D7)", () => {
+    for (const tool of [
+      "host/run_command",
+      "bot/handoff",
+      "openbot/share_private_information",
+    ])
+      expect(
+        problems(
+          base([
+            {
+              id: "post",
+              kind: "action",
+              agentId: "writer",
+              tool,
+              args: {},
+              inputKeys: [],
+              outputKey: "posted",
+            },
+          ]),
+        ).map((problem) => problem.path),
+      ).toContain("steps.0.tool");
   });
 
   test("the planning model is held to coworker steps without jumps (D9)", async () => {

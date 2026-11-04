@@ -440,6 +440,7 @@ tests/voice-sessions.test.ts
 tests/voice-summary-model.test.ts
 tests/wake-up-settle.integration.test.ts
 tests/waker-groups.test.ts
+tests/wakerflow-action-step.integration.test.ts
 tests/wakerflow-generation-requests.integration.test.ts
 tests/wakerflow-generator.test.ts
 tests/wakerflow-nested.integration.test.ts
