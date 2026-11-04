@@ -401,6 +401,12 @@ function headlessComputerTools(options: {
   const snapshotId = z.number().int().positive();
   const ref = z.string().min(1);
   const text = z.string().min(1);
+  /*
+   * One of the person's read-only folders (story F1, stage 2): the opaque reference their 分身's
+   * prompt lists, never a path. Only the two read tools take it; a write has no such field, and the
+   * gateway refuses a reference that is not this 分身's.
+   */
+  const folderRoot = z.string().min(1).optional();
   const noArgs = z.strictObject({});
   function tool<T extends z.ZodType>(
     name: string,
@@ -534,8 +540,8 @@ function headlessComputerTools(options: {
     ),
     tool(
       "computer_list_files",
-      "List files and folders in your workspace. Call first before reading an uncertain filename.",
-      z.strictObject({ path: z.string().optional() }),
+      "List files and folders in your workspace. Call first before reading an uncertain filename. To list one of the person's shared read-only folders instead, pass its root.",
+      z.strictObject({ path: z.string().optional(), root: folderRoot }),
       async (input) => ({
         ok: true,
         ...(await gateway.listFiles(botId, actor, input)),
@@ -543,8 +549,8 @@ function headlessComputerTools(options: {
     ),
     tool(
       "computer_read_file",
-      "Read a saved file relative to your persistent workspace, such as notes.md.",
-      z.strictObject({ path: text }),
+      "Read a saved file relative to your persistent workspace, such as notes.md. To read from one of the person's shared read-only folders instead, pass its root and a path relative to that folder.",
+      z.strictObject({ path: text, root: folderRoot }),
       async (input) => ({
         ok: true,
         ...(await gateway.readFile(botId, actor, input)),

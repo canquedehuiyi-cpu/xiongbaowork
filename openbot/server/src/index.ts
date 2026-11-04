@@ -1003,6 +1003,18 @@ await startupLifecycle.run(async (startup) => {
               deviceTakeovers,
             }
           : {}),
+        /*
+         * Story F1, stage 2: a 分身's read-only folders on its person's own machines. Always the
+         * runner's transport, even when coworkers otherwise use this deployment's container, because
+         * the folder is on the machine and nowhere else. Asked per call: a removed source, or a folder
+         * the machine stopped reporting, is not read. The store is built further down; this runs
+         * only once a turn is underway.
+         */
+        folders: {
+          resolve: (botId, actorId, root) =>
+            avatarSourceStore.folderFor(botId, actorId, root),
+          transport: createRunnerTransport(deviceChannel),
+        },
         auditStore: bootAuditStore,
         approvalGate: approvalService.gate,
         policy: () => policyStore.get(),
@@ -1570,7 +1582,28 @@ await startupLifecycle.run(async (startup) => {
    * reason the instructions above are: a source added or removed applies to the next run. Answered
    * only for the asker's own 分身; every other Bot gets none without a read.
    */
-  const avatarSourceStore = createAvatarSourceStore(database);
+  const avatarSourceStore = createAvatarSourceStore(database, {
+    /*
+     * Spec §6.5: removing a local folder's source also asks its machine to forget the folder. Only
+     * while the machine is connected, so it is never parked for a machine that is away: the forget is
+     * a courtesy on top of the real guarantee, which is that the gateway no longer reads through a
+     * removed source at all. A machine that was away still offers the folder on its own screen, and
+     * nothing can read it through this source.
+     */
+    onFolderRevoked: ({ tenantId, deviceId, rootRef }) => {
+      const target = { tenantId, deviceId };
+      if (!deviceChannel.isReachable(target)) return;
+      void deviceChannel
+        .dispatch(
+          target,
+          "roots.forget",
+          { ref: rootRef },
+          15_000,
+          `roots.forget/${rootRef}`,
+        )
+        .catch(() => undefined);
+    },
+  });
   const loadAvatarSourcesForActor = avatarSourcesForActor(avatarSourceStore);
 
   /*
