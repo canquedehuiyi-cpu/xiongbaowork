@@ -1,4 +1,5 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { createHash } from "node:crypto";
+import { and, asc, eq, lt, sql } from "drizzle-orm";
 import {
   emptyRoleProfile,
   ROLE_LIMITS,
@@ -18,7 +19,15 @@ import type {
 } from "../agents/profile-types";
 import type { Database } from "../db/client";
 import { agentProfiles } from "../db/schema";
-import { roleTemplates } from "../db/schema/roles";
+import { roleGenerationRequests, roleTemplates } from "../db/schema/roles";
+import type { QuotaService } from "../quota/limits";
+import type { FlowModelResolver } from "../wakerflows/model";
+import {
+  ROLE_FORMAT_MESSAGE,
+  RoleGenerationRefusedError,
+  type RoleGenerator,
+  RoleProfileFormatError,
+} from "./generator";
 
 /**
  * Role templates (story ROLE1, spec §3.2 option C, §3.3).
@@ -99,6 +108,33 @@ export class RoleTemplateVersionConflictError extends Error {
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** One smart-generation request, as the editor polls it (§3.5). */
+export type RoleGenerationOutcome = {
+  requestId: string;
+  state: "pending" | "completed" | "failed" | "unknown";
+  profile: RoleProfile | null;
+  error: string | null;
+};
+
+export const ROLE_GENERATION_UNCERTAIN_MESSAGE =
+  "无法确认模型是否完成了这次生成，请发起新的生成。";
+
+/** Smart generation is not wired on this deployment. */
+export class RoleGenerationUnavailableError extends Error {
+  constructor() {
+    super("智能生成暂不可用。");
+    this.name = "RoleGenerationUnavailableError";
+  }
+}
+
+/** The request id was used before for a different description or model. */
+export class RoleGenerationConflictError extends Error {
+  constructor() {
+    super("这个请求编号已用于另一次生成，请刷新后重试。");
+    this.name = "RoleGenerationConflictError";
+  }
+}
 
 function templateName(raw: unknown): string {
   const name = typeof raw === "string" ? raw.trim() : "";
@@ -223,8 +259,77 @@ export function createRoleTemplateStore(options: {
   profiles: AgentProfileStoreWithRoles;
   /** The package's seed cards, read per call. Absent offers none. */
   official?: () => readonly OfficialRoleTemplate[];
+  /** Smart generation (§3.5): the person's own library only (D7), the call, and the plan's quota. */
+  models?: FlowModelResolver;
+  generator?: RoleGenerator;
+  quota?: Pick<QuotaService, "assertCapacity">;
 }) {
   const { database, profiles } = options;
+
+  /**
+   * A request as stored, settled first: one still `pending` after its lease ran out belonged to a
+   * call that died with its process, and is recorded as `unknown`, never replayed — the provider may
+   * have done, and charged for, the work.
+   */
+  const readRequest = async (requestId: string) => {
+    await database
+      .update(roleGenerationRequests)
+      .set({
+        state: "unknown",
+        error: ROLE_GENERATION_UNCERTAIN_MESSAGE,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(roleGenerationRequests.requestId, requestId),
+          eq(roleGenerationRequests.state, "pending"),
+          lt(roleGenerationRequests.leaseExpiresAt, sql`now()`),
+        ),
+      );
+    const [row] = await database
+      .select()
+      .from(roleGenerationRequests)
+      .where(eq(roleGenerationRequests.requestId, requestId))
+      .limit(1);
+    return row ?? null;
+  };
+
+  const outcome = (
+    row: typeof roleGenerationRequests.$inferSelect,
+  ): RoleGenerationOutcome => {
+    const known = ["pending", "completed", "failed", "unknown"] as const;
+    const state = (known as readonly string[]).includes(row.state)
+      ? (row.state as RoleGenerationOutcome["state"])
+      : "unknown";
+    return {
+      requestId: row.requestId,
+      state,
+      profile: state === "completed" ? storedProfile(row.profile) : null,
+      error: row.error,
+    };
+  };
+
+  /** The call's result, written only while the request is still this call's to settle. */
+  const settle = (
+    requestId: string,
+    result:
+      | { state: "completed"; profile: RoleProfile }
+      | { state: "failed" | "unknown"; error: string },
+  ) =>
+    database
+      .update(roleGenerationRequests)
+      .set({
+        state: result.state,
+        profile: result.state === "completed" ? result.profile : null,
+        error: result.state === "completed" ? null : result.error,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(roleGenerationRequests.requestId, requestId),
+          eq(roleGenerationRequests.state, "pending"),
+        ),
+      );
 
   const find = async (
     executor: ProfileReadExecutor,
@@ -420,6 +525,108 @@ export function createRoleTemplateStore(options: {
           modified,
         },
       };
+    },
+    /** The models smart generation may use: the person's own library, never a platform one (D7). */
+    async modelChoices(actor: AgentActor) {
+      return options.models ? options.models.choices(actor.id) : [];
+    },
+
+    /** A generation request as it stands now, or null for one this person never made. */
+    async generation(requestId: string): Promise<RoleGenerationOutcome | null> {
+      if (!UUID.test(requestId)) return null;
+      const row = await readRequest(requestId);
+      return row ? outcome(row) : null;
+    },
+
+    /**
+     * Smart generation (§3.5), once per request id. The order is the contract: a repeat answers from
+     * the stored row and never calls the model again; a new request is refused for a model that is
+     * not the person's own, enabled and keyed, before any row is written or any call made; then the
+     * quota; then the claim, which a concurrent twin loses on the primary key; then the one call. The
+     * profile is returned to the editor and saved nowhere else.
+     */
+    async generate(
+      actor: AgentActor,
+      input: { requestId: unknown; modelRef: unknown; description: unknown },
+    ): Promise<RoleGenerationOutcome> {
+      if (typeof input.requestId !== "string" || !UUID.test(input.requestId)) {
+        throw new RoleTemplateValidationError(
+          "缺少有效的请求编号，请刷新后重试。",
+        );
+      }
+      const requestId = input.requestId;
+      const description =
+        typeof input.description === "string" ? input.description.trim() : "";
+      if (!description) {
+        throw new RoleTemplateValidationError("请先用一句话描述这个角色。");
+      }
+      if ([...description].length > 500) {
+        throw new RoleTemplateValidationError("角色描述不能超过 500 字。");
+      }
+      if (typeof input.modelRef !== "string" || !input.modelRef) {
+        throw new RoleTemplateValidationError("请选择可用的模型。");
+      }
+      const fingerprint = createHash("sha256")
+        .update(JSON.stringify({ modelRef: input.modelRef, description }))
+        .digest("hex");
+      const answer = (row: typeof roleGenerationRequests.$inferSelect) => {
+        if (row.fingerprint !== fingerprint) {
+          throw new RoleGenerationConflictError();
+        }
+        return outcome(row);
+      };
+
+      const existing = await readRequest(requestId);
+      if (existing) return answer(existing);
+
+      const { models, generator } = options;
+      if (!models || !generator) throw new RoleGenerationUnavailableError();
+      const resolved = await models.resolve(actor.id, input.modelRef);
+      await options.quota?.assertCapacity(actor.id, "tasksPerMonth");
+
+      const [claimed] = await database
+        .insert(roleGenerationRequests)
+        .values({
+          ownerUserId: actor.id,
+          requestId,
+          fingerprint,
+          modelRef: resolved.modelRef,
+          state: "pending",
+          dispatchStartedAt: new Date(),
+        })
+        .onConflictDoNothing()
+        .returning();
+      if (!claimed) {
+        // A twin claimed it first; its row is the answer, whatever state it is in.
+        const twin = await readRequest(requestId);
+        if (!twin) throw new RoleTemplateNotFoundError();
+        return answer(twin);
+      }
+
+      try {
+        const profile = await generator.generate({
+          model: resolved.model,
+          description,
+        });
+        await settle(requestId, { state: "completed", profile });
+      } catch (error) {
+        if (error instanceof RoleProfileFormatError) {
+          await settle(requestId, {
+            state: "failed",
+            error: ROLE_FORMAT_MESSAGE,
+          });
+        } else if (error instanceof RoleGenerationRefusedError) {
+          await settle(requestId, { state: "failed", error: error.message });
+        } else {
+          // A timeout, a dropped line, anything unclassified: maybe done and charged, never replayed.
+          await settle(requestId, {
+            state: "unknown",
+            error: ROLE_GENERATION_UNCERTAIN_MESSAGE,
+          });
+        }
+      }
+      const settled = await readRequest(requestId);
+      return outcome(settled ?? claimed);
     },
   };
 }

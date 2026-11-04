@@ -8,7 +8,11 @@ import {
   RoleTemplateSourceError,
 } from "../agents/profile-store";
 import type { AppVariables } from "../auth/guards";
+import { QuotaExceeded } from "../quota/limits";
+import { FlowModelUnavailableError } from "../wakerflows/model";
 import {
+  RoleGenerationConflictError,
+  RoleGenerationUnavailableError,
   RoleTemplateNameTakenError,
   RoleTemplateNotFoundError,
   type RoleTemplateStore,
@@ -60,6 +64,32 @@ export function createRoleTemplateRoutes(
     } catch (error) {
       return refusal(context, error);
     }
+  });
+
+  // Smart generation (§3.5): the models offered, one request, and reading it back.
+  routes.get("/models", requireUser, async (context) =>
+    context.json({ models: await store.modelChoices(context.var.actor) }),
+  );
+
+  routes.post("/generate", requireUser, async (context) => {
+    const input = await body(context);
+    try {
+      const outcome = await store.generate(context.var.actor, {
+        requestId: input.requestId,
+        modelRef: input.modelRef,
+        description: input.description,
+      });
+      return context.json(outcome);
+    } catch (error) {
+      return refusal(context, error);
+    }
+  });
+
+  routes.get("/generate/:requestId", requireUser, async (context) => {
+    const outcome = await store.generation(context.req.param("requestId"));
+    return outcome
+      ? context.json(outcome)
+      : context.json({ error: "没有这次生成。" }, 404);
   });
 
   routes.get("/employees/:agentId", requireUser, async (context) => {
@@ -137,6 +167,16 @@ export function createRoleTemplateRoutes(
 }
 
 function refusal(context: Context<Ctx>, error: unknown): Response {
+  if (error instanceof QuotaExceeded) return context.json(error.body, 402);
+  if (error instanceof FlowModelUnavailableError) {
+    return context.json({ error: error.message }, 400);
+  }
+  if (error instanceof RoleGenerationConflictError) {
+    return context.json({ error: error.message }, 409);
+  }
+  if (error instanceof RoleGenerationUnavailableError) {
+    return context.json({ error: error.message }, 503);
+  }
   if (
     error instanceof RoleTemplateNotFoundError ||
     error instanceof AgentNotFoundError
