@@ -4,9 +4,118 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>熊宝数字员工 设备端</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --fg: #1f2328;
+        --muted: #656d76;
+        --bg: #ffffff;
+        --line: #d0d7de;
+        --accent: #0969da;
+        --ok: #1a7f37;
+        --wait: #9a6700;
+        --bad: #cf222e;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --fg: #e6edf3;
+          --muted: #8d96a0;
+          --bg: #0d1117;
+          --line: #30363d;
+          --accent: #4493f8;
+          --ok: #3fb950;
+          --wait: #d29922;
+          --bad: #f85149;
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 24px;
+        font: 14px/1.6 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+        color: var(--fg);
+        background: var(--bg);
+      }
+      h1 { font-size: 18px; margin: 0 0 4px; }
+      p { margin: 0 0 16px; color: var(--muted); }
+      label { display: block; margin: 12px 0 4px; font-weight: 600; }
+      input {
+        width: 100%;
+        padding: 8px 10px;
+        font: inherit;
+        color: inherit;
+        background: transparent;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+      }
+      button {
+        margin-top: 20px;
+        padding: 8px 16px;
+        font: inherit;
+        color: #fff;
+        background: var(--accent);
+        border: 0;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+      .error { color: var(--bad); margin-top: 12px; min-height: 1.6em; }
+      .notice {
+        border: 1px solid var(--wait);
+        color: var(--wait);
+        border-radius: 6px;
+        padding: 8px 10px;
+        margin-bottom: 16px;
+      }
+      dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; }
+      dt { color: var(--muted); }
+      dd { margin: 0; word-break: break-all; }
+      [data-tone="ok"] { color: var(--ok); font-weight: 600; }
+      [data-tone="wait"] { color: var(--wait); }
+      [data-tone="bad"] { color: var(--bad); }
+    </style>
   </head>
   <body>
     <h1>熊宝数字员工 设备端</h1>
-    <p>配对界面即将推出。</p>
+    <p>这台电脑主动连接你的熊宝服务器，供数字员工使用本机的文件、命令行和浏览器。本机不开放任何端口。</p>
+
+    <div id="browser" class="notice" hidden>
+      未检测到 Chrome 或 Edge。设备可以配对并执行文件和命令行任务，但浏览器相关任务无法执行，安装 Chrome 或 Edge 后重新启动本应用即可。
+    </div>
+
+    <form id="form" hidden>
+      <label for="server-input">服务器地址</label>
+      <input id="server-input" type="url" placeholder="https://bot.example.com" autocomplete="url" required />
+      <label for="code-input">配对码</label>
+      <input id="code-input" autocomplete="off" spellcheck="false" required />
+      <div class="hint">在熊宝的「我的设备」页面生成，十分钟内有效，只能使用一次。</div>
+      <label for="name-input">设备名称（可选）</label>
+      <input id="name-input" maxlength="120" placeholder="留空则使用本机名称" />
+      <button type="submit">配对</button>
+      <div id="form-error" class="error" role="alert"></div>
+    </form>
+
+    <div id="waiting" hidden>
+      <p>正在配对，请稍候…</p>
+    </div>
+
+    <section id="status" hidden>
+      <dl>
+        <dt>状态</dt>
+        <dd id="state"></dd>
+        <dt>服务器</dt>
+        <dd id="server"></dd>
+        <dt>设备名称</dt>
+        <dd id="name"></dd>
+        <dt>开机自动启动</dt>
+        <dd id="autostart"></dd>
+        <dt>日志</dt>
+        <dd id="log"></dd>
+      </dl>
+      <button id="restart" type="button" hidden>重新启动设备端服务</button>
+      <p class="hint">关闭此窗口后，设备端会继续在托盘中运行。要停止，请在托盘菜单中选择「退出」。</p>
+    </section>
+
+    <script type="module" src="main.js"></script>
   </body>
 </html>
