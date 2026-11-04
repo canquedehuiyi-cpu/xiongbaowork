@@ -1,0 +1,35 @@
+[package]
+name = "xiongbao-device"
+version = "0.1.0"
+description = "熊宝数字员工 设备端"
+edition = "2021"
+rust-version = "1.77"
+
+# Its own Cargo.lock, started from openbot/desktop/src-tauri/Cargo.lock so every crate both apps use
+# resolves to the same version. Nothing here is new to the repository: tauri, single-instance, serde,
+# libc and windows-sys are all already locked there. Autostart is written by hand (src/autostart.rs)
+# rather than through tauri-plugin-autostart, which needs auto-launch (not in that lock) and, in its
+# current release, a newer tauri than the lock has.
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-single-instance = "2.0.0-rc.5"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+# The same windows-sys tauri-plugin-single-instance already pulls in. Job objects keep the runner's
+# whole process tree tied to this app; the registry is where Windows keeps per-user autostart.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.60", features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_System_JobObjects",
+  "Win32_System_Registry",
+  "Win32_System_Threading",
+] }
