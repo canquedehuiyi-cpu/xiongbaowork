@@ -97,9 +97,9 @@
 | D3 | **待决策**：签名身份（Windows 代码签名证书、Apple Developer ID）由谁申请，密钥放在哪 | 自购 EV/OV 证书或 Azure Trusted Signing；Apple 组织账号 | 必须由人来办；上游的 `azure-federation.json` 不能用 |
 | D4 | **已决定（2026-11-04）：先发未签名内测版**。首个收费版本是否要求安装包已签名并已公证 | 已签名才发布 / 先发未签名内测版 | 用户选"先发未签名内测版"。流水线保持现状：没签名只发成「未签名内测版」预发布，正式版必须签名；不设仓库变量 `DEVICE_RELEASE_REQUIRE_SIGNED`（`HUMAN-STEPS.md` 12.1） |
 | D5 | **已决定（2026-11-04）：首发 Windows + Linux**。首发支持哪些平台 | Windows 和 macOS / 再加 Linux | 用户选 Windows + Linux，与第 7 道门一致；macOS 不在首发：不设仓库变量 `DEVICE_RELEASE_MACOS`，暂不需要 Apple 签名身份（`HUMAN-STEPS.md` 12.3） |
-| D6 | **待决策**：自动更新的通道和签名密钥（`tauri-plugin-updater`） | 是否在首发就上 | 首发可以只提示有新版，不自动更新 |
+| D6 | 已决定（2026-11-04）：首版不做自动更新，新版从 Release 页重新下载安装；不引入 `tauri-plugin-updater`，不需要 updater 密钥 | 是否在首发就上 | 以后再议 |
 | D7 | **待决策**：已配对设备的 ID 是否迁移成纯 UUID | 不迁移 / 强制重新配对 | 不迁移，只对新设备生效 |
-| D8 | **待决策**：产品名和 identifier | 例如在 `examples/qoderwake/brand.yaml` 的 `product_name: 熊宝数字员工` 后加"设备端" | 由品牌负责人定；identifier 不能沿用上游的 `ai.copilotkit.*` |
+| D8 | 已决定（2026-11-04）：产品名「熊宝数字员工 设备端」，identifier 定为 `com.xiongbao.device`（不再是占位） | 例如在 `examples/qoderwake/brand.yaml` 的 `product_name: 熊宝数字员工` 后加"设备端" | 首个签名版之后不再改（改了会破坏升级和开机自启） |
 | D9 | **待决策**：是否随包附带 Chromium | 只用本机 Chrome/Edge / 附带 Chromium（体积约 +150MB） | 不附带；未检测到浏览器时在托盘和 My Devices 上提示 |
 
 ---
