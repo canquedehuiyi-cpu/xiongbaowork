@@ -36,6 +36,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ProjectsSection } from "@/components/resources/projects-section";
 import { Skeleton } from "@/components/ui/skeleton";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
 import { componentDisplayTitle } from "@/lib/components/display-title";
@@ -98,6 +99,7 @@ function ResourcesPage() {
       <SkillZone />
       <ConnectorZone />
       <KnowledgeZone />
+      <ProjectsSection />
       <ComponentZone />
     </PageShell>
   );

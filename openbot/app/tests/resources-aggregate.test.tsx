@@ -230,6 +230,8 @@ const responses: Record<string, () => unknown> = {
     ],
   }),
   "/api/components": () => ({ components: [component] }),
+  // The 项目 zone (story RES2) starts from the person's machines; none here.
+  "/api/devices": () => ({ devices: [] }),
 };
 
 function draw({ fail = [] }: { fail?: string[] } = {}) {
@@ -316,7 +318,8 @@ test("one screen holds all five zones, in order: models, skills, connectors, kno
     .getAllByRole("heading", { level: 2 })
     .map((heading) => heading.textContent);
   // The five zones in order, with the two sections the integration branch added around them: the
-  // platform pool (H1/K1) ahead of the person's own models, and the WakerFlow entry (WF1) after them.
+  // platform pool (H1/K1) ahead of the person's own models, the WakerFlow entry (WF1) after them,
+  // and the projects on the person's machines (RES2) after the knowledge sources.
   expect(titles).toEqual([
     "平台体验模型",
     "模型",
@@ -324,6 +327,7 @@ test("one screen holds all five zones, in order: models, skills, connectors, kno
     "技能",
     "连接器",
     "知识来源",
+    "项目",
     "组件",
   ]);
   // No zone is in a failed state on a healthy screen.
