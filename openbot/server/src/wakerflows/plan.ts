@@ -140,9 +140,12 @@ const stepSchema = z.discriminatedUnion(
  * The kinds of step the server can run today. A kind the orchestrator cannot execute yet is refused
  * on Save rather than saved and failed at run time; each WF7 stage widens this list as it lands.
  */
-export const RUNNABLE_STEP_KINDS: readonly WakerFlowStepKind[] = ["worker"];
+export const RUNNABLE_STEP_KINDS: readonly WakerFlowStepKind[] = [
+  "worker",
+  "decision",
+];
 /** Whether the orchestrator follows `next` jumps yet; until it does, a jump is refused on Save. */
-export const RUNNABLE_JUMPS = false;
+export const RUNNABLE_JUMPS = true;
 
 /** `{{key}}` in an action's argument template. */
 const TEMPLATE_PATTERN = /\{\{\s*([^{}\s]*)\s*\}\}/g;
@@ -426,7 +429,18 @@ export function compiledSteps(plan: WakerFlowPlan): PipelineStepRow[] {
   const members = new Map(
     plan.members.map((member) => [member.agentId, member]),
   );
-  return plan.steps.map((step) => {
+  return plan.steps.map((step): PipelineStepRow => {
+    if (step.kind === "decision")
+      // No coworker of its own; `instruction` is what the run view calls it.
+      return {
+        id: step.id,
+        kind: "decision",
+        agentId: "",
+        instruction: `条件判断：${step.branches.map((branch) => branch.label).join(" / ")}`,
+        inputKeys: [...step.inputKeys],
+        branches: step.branches.map((branch) => ({ ...branch })),
+        otherwise: step.otherwise,
+      };
     if (step.kind !== undefined && step.kind !== "worker")
       throw new Error(`这种步骤暂时还不能运行（${step.kind}）。`);
     const member = members.get(step.agentId);

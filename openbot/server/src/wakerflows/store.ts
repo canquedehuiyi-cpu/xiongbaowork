@@ -34,6 +34,7 @@ import {
   PipelineValidationError,
   type StepRecord,
 } from "../pipeline/store";
+import { stepBudget } from "../pipeline/decision";
 import { QuotaExceeded, type QuotaService } from "../quota/limits";
 import type { TaskProjector } from "../tasks/projector";
 import { runAsTenant } from "../tenant/context";
@@ -323,8 +324,10 @@ export function flowRunEventsOf(transition: PipelineRunTransition): {
       state: step.state,
       from: from ?? null,
     };
-    if (step.state === "done")
+    if (step.state === "done" && step.kind !== "decision")
       payload.outputLength = (step.output ?? "").length;
+    if (step.state === "skipped" && step.skipReason)
+      payload.skipReason = step.skipReason;
     if (step.state === "failed") payload.error = errorSummary(step.error);
     if (step.state === "awaiting_action") {
       payload.waitingOn = step.approvalId ? "approval" : "question";
@@ -335,6 +338,19 @@ export function flowRunEventsOf(transition: PipelineRunTransition): {
       correlationId: `${step.runRef ?? `${runId}/${step.id}`}:${type}:${revision}`,
       payload,
     });
+    // WF7 (spec §3.3): which branch a decision took — its label and the branch's position (-1 is
+    // `otherwise`). Never the values it read.
+    if (step.kind === "decision" && step.state === "done" && step.branch)
+      out.push({
+        type: "branch_taken",
+        correlationId: `${runId}/${step.id}:branch_taken:${revision}`,
+        payload: {
+          stepId: step.id,
+          index,
+          label: step.branch.label,
+          branch: step.branch.index,
+        },
+      });
   });
   const ended = RUN_EVENT[after.status];
   if (ended && before.status !== after.status)
@@ -1564,10 +1580,11 @@ export function createWakerFlowStore(options: {
         );
       }
       // Refused before the claim, so a workspace at its ceiling is left with no row to explain.
+      // WF7 D4: counted by the steps that can run on the longest path, not the steps written.
       await options.quota?.assertCapacity(
         tenantId,
         "tasksPerMonth",
-        plan.steps.length + 1,
+        stepBudget(plan.steps) + 1,
       );
 
       const claimed = await runAsTenant(tenantId, () =>
@@ -1878,6 +1895,11 @@ export function createWakerFlowStore(options: {
       const carried = steps.slice(0, from).map((step) => ({
         state: step.state,
         ...(step.output === undefined ? {} : { output: step.output }),
+        // WF7: why a carried step was skipped, and which branch a carried decision took.
+        ...(step.skipReason === undefined
+          ? {}
+          : { skipReason: step.skipReason }),
+        ...(step.branch === undefined ? {} : { branch: step.branch }),
       }));
       if (
         carried.some(
@@ -1903,7 +1925,7 @@ export function createWakerFlowStore(options: {
         1,
         version?.revision ?? flow.revision,
       );
-      const remaining = steps.length - from;
+      const remaining = stepBudget(steps, from);
       // Refused before anything is registered: only the steps that will run are counted.
       await options.quota?.assertCapacity(
         tenantId,

@@ -17,6 +17,7 @@ import { WAKERFLOW_MAX_STEPS } from "../../../shared/wakerflows";
 import type { QuotaService } from "../quota/limits";
 import type { TaskProjector } from "../tasks/projector";
 import { runAsTenant } from "../tenant/context";
+import { decide, routeAfter, stepBudget } from "./decision";
 import { reapAbandonedPipelineRuns } from "./reap";
 
 /**
@@ -190,6 +191,21 @@ const MAX_STEPS = 10;
  * {@link MAX_STEPS}, which is checked when they are written.
  */
 const MAX_RUN_STEPS = WAKERFLOW_MAX_STEPS;
+
+/**
+ * Mark the steps a jump passes over as skipped by the branch (WF7): a step no taken path reached is
+ * not missing work, and is recorded so the run says what it did not do and why.
+ */
+function passOver(records: StepRecord[], from: number, to: number) {
+  for (let index = from + 1; index < to && index < records.length; index += 1) {
+    const record = records[index];
+    if (record && record.state === "pending")
+      records[index] = { ...record, state: "skipped", skipReason: "branch" };
+  }
+}
+
+/** The kinds this orchestrator runs; any other is failed closed rather than guessed at. */
+const RUNNABLE_KINDS = new Set(["worker", "decision"]);
 
 /** The value one declared key reads: the run's input, an earlier step's output, or the gap. */
 function readKey(
@@ -789,7 +805,10 @@ export function createPipelineStore(options: {
        */
       seed?: {
         cursor: number;
-        records: Pick<StepRecord, "state" | "output">[];
+        records: Pick<
+          StepRecord,
+          "state" | "output" | "skipReason" | "branch"
+        >[];
       };
       /**
        * Written in the same transaction as the run's first row, so whatever it records exists exactly
@@ -852,11 +871,14 @@ export function createPipelineStore(options: {
         throw new PipelineValidationError("重试的起点与这条流程的步骤对不上。");
       }
       const from = seed?.cursor ?? 0;
-      const remaining = declared.length - from;
+      // WF7 D4: what can still open a card, over the longest path; a decision opens none.
+      const remaining = stepBudget(declared, from);
       const refused: { index: number; stepId: string; agentId: string }[] = [];
       for (const [index, step] of declared.entries()) {
         // Steps a retry carries over already ran; only what will run is asked about.
         if (index < from) continue;
+        // A decision runs as nobody: the orchestrator evaluates it, no coworker is asked.
+        if (step.kind === "decision") continue;
         const allowed = await canUse(input.initiatedBy, step.agentId).catch(
           () => false,
         );
@@ -905,6 +927,12 @@ export function createPipelineStore(options: {
               ...(carried.output === undefined
                 ? {}
                 : { output: carried.output }),
+              ...(carried.skipReason === undefined
+                ? {}
+                : { skipReason: carried.skipReason }),
+              ...(carried.branch === undefined
+                ? {}
+                : { branch: carried.branch }),
             }
           : { ...step, state: "pending" };
       });
@@ -1085,7 +1113,10 @@ export function createPipelineStore(options: {
          */
         const missing = records
           .filter(
-            (record) => record.state === "skipped" || record.state === "failed",
+            (record) =>
+              // WF7: a step no taken branch reached is not missing work (spec §3.3).
+              (record.state === "skipped" && record.skipReason !== "branch") ||
+              record.state === "failed",
           )
           .map((record) => record.id);
 
@@ -1096,6 +1127,89 @@ export function createPipelineStore(options: {
           }
           // biome-ignore lint/style/noNonNullAssertion: the loop condition is this array's own length
           const record = records[cursor]!;
+          // A step a person skipped ahead of time is passed over, along its own route.
+          if (record.state === "skipped") {
+            const to = routeAfter(records, cursor);
+            passOver(records, cursor, to);
+            cursor = to;
+            continue;
+          }
+          const kind = record.kind ?? "worker";
+          if (!RUNNABLE_KINDS.has(kind)) {
+            // Save refuses a kind this orchestrator cannot run; a template that holds one anyway
+            // fails here, closed, rather than being handed to a coworker as if it were a turn.
+            records[cursor] = {
+              ...record,
+              state: "failed",
+              error: `第 ${cursor + 1} 步是暂时还不能运行的步骤类型，没有执行。`,
+            };
+            if (
+              !(await writeRun(
+                input.tenantId,
+                input.runId,
+                { cursor, status: "failed", steps: records },
+                run,
+                owner,
+              ))
+            )
+              return currentOutcome(input.tenantId, input.runId);
+            await closeParent(run, input.tenantId, true);
+            return { status: "failed", cursor, steps: records };
+          }
+          if (kind === "decision") {
+            /*
+             * WF7 (spec §3.3): a condition is the orchestrator's, not a coworker's. No card, no turn,
+             * no model, no I6 question: nobody is dispatched. An expression that cannot be evaluated
+             * fails the step and the run (fail closed), never falls through to `otherwise`.
+             */
+            const decided = decide(
+              record,
+              run.inputs,
+              records.slice(0, cursor),
+            );
+            if (!decided.ok) {
+              records[cursor] = {
+                ...record,
+                state: "failed",
+                error: decided.error,
+              };
+              if (
+                !(await writeRun(
+                  input.tenantId,
+                  input.runId,
+                  { cursor, status: "failed", steps: records },
+                  run,
+                  owner,
+                ))
+              )
+                return currentOutcome(input.tenantId, input.runId);
+              await closeParent(run, input.tenantId, true);
+              return { status: "failed", cursor, steps: records };
+            }
+            records[cursor] = {
+              ...record,
+              state: "done",
+              branch: { label: decided.label, index: decided.index },
+            };
+            const to = routeAfter(records, cursor, decided.next);
+            passOver(records, cursor, to);
+            cursor = to;
+            if (
+              !(await writeRun(
+                input.tenantId,
+                input.runId,
+                {
+                  cursor,
+                  steps: records,
+                  status: cursor >= records.length ? "done" : "running",
+                },
+                run,
+                owner,
+              ))
+            )
+              return currentOutcome(input.tenantId, input.runId);
+            continue;
+          }
           const allowed =
             initiator !== null &&
             (await canUse(initiator, record.agentId).catch(() => false));
@@ -1214,7 +1328,10 @@ export function createPipelineStore(options: {
               output: result.output,
             };
             prior.push(result.output);
-            cursor += 1;
+            // WF7: on along the step's own route; the steps a jump passes over are branch-skipped.
+            const to = routeAfter(records, cursor);
+            passOver(records, cursor, to);
+            cursor = to;
             if (
               !(await writeRun(
                 input.tenantId,
@@ -1391,8 +1508,20 @@ export function createPipelineStore(options: {
           "运行中的流程只能跳过当前步骤。请等它停下再编辑后续步骤。",
         );
       }
-      records[at] = { ...closed, state: "skipped" };
-      const cursor = at === run.cursor ? run.cursor + 1 : run.cursor;
+      // WF7: a decision runs no coworker and is evaluated when it is reached; skipping it would
+      // leave the run with no way to know which branch the person meant.
+      if (closed.kind === "decision") {
+        throw new PipelineValidationError(
+          "条件判断步骤不能跳过；运行到它时会自动判断走哪个分支。",
+        );
+      }
+      records[at] = { ...closed, state: "skipped", skipReason: "person" };
+      let cursor = run.cursor;
+      if (at === run.cursor) {
+        // On along the skipped step's own route, as if it had finished.
+        cursor = routeAfter(records, at);
+        passOver(records, at, cursor);
+      }
       const done = cursor >= records.length;
       if (
         !(await writeRun(
@@ -1569,7 +1698,9 @@ export function createPipelineStore(options: {
         approvalId: undefined,
         question: undefined,
       };
-      const next = cursor + 1;
+      // WF7: on along the parked step's own route, as `advance` would have gone.
+      const next = routeAfter(records, cursor);
+      passOver(records, cursor, next);
       if (
         !(await writeRun(
           input.tenantId,
