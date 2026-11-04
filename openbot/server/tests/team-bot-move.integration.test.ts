@@ -289,7 +289,7 @@ describe("the owner's move of a Bot to `team` and back", () => {
           sql`insert into knowledge_binding_heads (owner_user_id, agent_id) values (${owner.id}, ${agentId})`,
         );
         await tx.execute(
-          sql`insert into resource_projects (id, device_id, scope, agent_id, name, source) values (${project}, ${device?.id}, 'agent', ${agentId}, 'Repo', '{}'::jsonb)`,
+          sql`insert into resource_projects (id, device_id, scope, agent_id, name, source) values (${project}, ${device?.id}, 'agent', ${agentId}, 'Repo', '{"kind":"local","rootRef":"fld_AAAAAAAAAAAAAAAAAAAAAA","label":"Repo","writable":false}'::jsonb)`,
         );
         await tx.execute(
           sql`insert into project_context_bindings (device_id, agent_id, project_id) values (${device?.id}, ${agentId}, ${project})`,
