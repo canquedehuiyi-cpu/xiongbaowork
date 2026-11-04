@@ -762,6 +762,16 @@ export function createWakerFlowStore(options: {
    * own shape — `advance`, not awaited, a failure logged — and tests hand in one they can await.
    */
   drive?: (run: { tenantId: string; runId: string }) => void;
+  /**
+   * WF7 (spec §3.5): why this coworker may not be given this tool in an action step, or null. The
+   * tool must be granted to the coworker (its plugin grant) and not disabled by SEC1 for the person
+   * saving. Without it, a plan with an action step is refused: nothing can vouch for its tool.
+   */
+  actionTool?: (input: {
+    actor: string;
+    agentId: string;
+    tool: string;
+  }) => Promise<string | null>;
 }) {
   const { database, canUse } = options;
   const drive =
@@ -1231,6 +1241,18 @@ export function createWakerFlowStore(options: {
             `计划中的员工「${member.role}」当前不可用，请换一位员工后再保存。`,
           );
         }
+      }
+      // WF7: an action's tool is granted to its coworker and not disabled (spec §3.5).
+      const { actionTool } = options;
+      for (const [index, step] of plan.steps.entries()) {
+        if (step.kind !== "action") continue;
+        const refused = actionTool
+          ? await runAsTenant(tenantId, () =>
+              actionTool({ actor, agentId: step.agentId, tool: step.tool }),
+            ).catch(() => "无法确认这个工具是否可用。")
+          : "这里不能使用动作步骤。";
+        if (refused)
+          throw new WakerFlowValidationError(`第 ${index + 1} 步：${refused}`);
       }
       // WF7: nested Flows name live, saved versions and never lead back here (spec §3.4).
       const children = await nestedChildren(tenantId, id, plan);

@@ -37,6 +37,7 @@ import {
 import {
   configureBotLifecycle,
   createBotLifecycleStore,
+  guardBotTurn,
 } from "./agents/lifecycle";
 import { createBotReset } from "./agents/lifecycle-reset";
 import { createAgentProfileStore } from "./agents/profile-store";
@@ -260,6 +261,7 @@ import { createRoleTemplateRoutes } from "./roles/routes";
 import { createRoleTemplateStore, officialTemplatesFrom } from "./roles/store";
 import { createPipelineRoutes } from "./pipeline/routes";
 import { createPipelineStore } from "./pipeline/store";
+import { createActionStepRunner } from "./pipeline/action-step";
 import { createPipelineStepRunner } from "./pipeline/turn-channel";
 import { createPlatformRoutes } from "./platform/routes";
 import { useRoutineTools } from "./plugins/builtin-routines";
@@ -2272,6 +2274,31 @@ await startupLifecycle.run(async (startup) => {
     quota,
     // WF8: a WakerFlow run's state changes and questions, written with the change itself.
     events: flowRunEventWriter,
+    /*
+     * WF7 action steps: ADR-0001's 2026-11-04 exception, one fixed MCP call per step with no turn.
+     * The same pause guard and headless controls a turn asks, then the plugin grant, then the
+     * governed `callTool` with its approval gate. A refusal before the call writes its own row.
+     */
+    actions: createActionStepRunner({
+      guardTurn: (input) => guardBotTurn(input),
+      refusal: (input) => headlessTurnRefusal(input),
+      granted: async ({ agentId, tool }) =>
+        (await pluginStore.decide("mcp", tool, agentId)).allowed,
+      callTool: (input) => pluginStore.callTool(input),
+      audit: (event) =>
+        recordAuditEvent(bootAuditStore, {
+          eventType: "mcp.call_rejected",
+          targetType: "mcp_tool",
+          targetId: event.tool,
+          initiator: event.initiator,
+          payload: {
+            actor: event.actorId,
+            bot: event.botId,
+            refusal: `wakerflow_action_${event.gate}`,
+            reason: event.reason,
+          },
+        }),
+    }),
   });
 
   /**
@@ -2293,6 +2320,14 @@ await startupLifecycle.run(async (startup) => {
     }),
     generator: createFlowGenerator(),
     quota,
+    // WF7: an action step's tool is granted to its coworker and not disabled by SEC1.
+    actionTool: async ({ actor, agentId, tool }) => {
+      if (!(await pluginStore.decide("mcp", tool, agentId)).allowed)
+        return `员工没有被授权使用工具 ${tool}。`;
+      if ((await approvalService.disabledTools(actor, agentId))(tool))
+        return `工具 ${tool} 已被设为禁用。`;
+      return null;
+    },
   });
 
   /*
@@ -2712,6 +2747,38 @@ await startupLifecycle.run(async (startup) => {
                     approvalId: z.string().min(1),
                   })
                   .parse(item.payload);
+                /*
+                 * WF7: an action step of a crew run parked on this approval is carried on by the
+                 * pipeline itself, which calls the tool again with the identity it asked with, so the
+                 * gate consumes the decision once (or refuses it). It has no conversation to resume.
+                 * In this owner's frame only, as the crew resume below (G01-E R10, R14).
+                 */
+                const parkedAction = await pipelineStore.runHoldingApproval({
+                  approvalId: input.approvalId,
+                });
+                if (
+                  parkedAction &&
+                  parkedAction.tenantId === input.ownerUserId &&
+                  (await runAsTenant(parkedAction.tenantId, () =>
+                    pipelineStore.resumeAction({
+                      tenantId: parkedAction.tenantId,
+                      runId: parkedAction.runId,
+                      approvalId: input.approvalId,
+                    }),
+                  ))
+                ) {
+                  if (
+                    !(await approvalQueue.finish({
+                      kind: item.kind,
+                      key: item.key,
+                      owner: approvalOwner,
+                    }))
+                  )
+                    throw new Error(
+                      "The approval work lease was lost before completion.",
+                    );
+                  return;
+                }
                 const resumeDependencies: ApprovalResumeDependencies = {
                   // Asked before the action runs: with Use Bots off, or the Bot's model off the allowlist,
                   // nothing is carried out and the refusal is final rather than retried.

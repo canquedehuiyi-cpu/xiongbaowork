@@ -16,6 +16,7 @@ import {
   type WakerFlowStepKind,
 } from "../../../shared/wakerflows";
 import type { PipelineStepRow } from "../db/schema/pipeline";
+import { isMcpToolRef } from "../pipeline/action-step";
 
 const KEY_PATTERN = /^[a-z][a-z0-9_]{0,39}$/;
 const key = z
@@ -144,6 +145,7 @@ export const RUNNABLE_STEP_KINDS: readonly WakerFlowStepKind[] = [
   "worker",
   "decision",
   "flow",
+  "action",
 ];
 /** Whether the orchestrator follows `next` jumps yet; until it does, a jump is refused on Save. */
 export const RUNNABLE_JUMPS = true;
@@ -397,6 +399,12 @@ export function createWakerFlowPlanSchema(
         const reads = stepReads(step);
         if (step.kind !== "flow" && new Set(reads).size !== reads.length)
           fail(["steps", index, "inputKeys"], "步骤输入名称重复。");
+        // WF7 D7: an action calls one MCP tool; never a computer, host or hand-off action.
+        if (step.kind === "action" && !isMcpToolRef(step.tool))
+          fail(
+            ["steps", index, "tool"],
+            "动作步骤只能调用 MCP 工具（服务/工具），不能是电脑、本机命令或交接。",
+          );
         const produced = stepOutputKey(step);
         if (produced !== undefined) {
           if (names.has(produced))
@@ -466,8 +474,18 @@ export function compiledSteps(
         branches: step.branches.map((branch) => ({ ...branch })),
         otherwise: step.otherwise,
       };
-    if (step.kind !== undefined && step.kind !== "worker")
-      throw new Error(`这种步骤暂时还不能运行（${step.kind}）。`);
+    if (step.kind === "action")
+      return {
+        id: step.id,
+        kind: "action",
+        agentId: step.agentId,
+        instruction: `调用工具 ${step.tool}`,
+        tool: step.tool,
+        args: { ...step.args },
+        inputKeys: [...step.inputKeys],
+        outputKey: step.outputKey,
+        ...(step.next === undefined ? {} : { next: step.next }),
+      };
     const member = members.get(step.agentId);
     const prompt = member?.prompt?.trim();
     return {
