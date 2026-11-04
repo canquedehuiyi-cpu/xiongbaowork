@@ -16,6 +16,7 @@ import type { Database } from "../db/client";
 import {
   flowConfirmations,
   flowRunEvents,
+  flowRunRetries,
   groupTaskRuns,
   groupTaskTemplates,
   wakerFlowRequests,
@@ -28,6 +29,7 @@ import {
   type PipelineEventWriter,
   PipelineNotFoundError,
   type PipelineRunTransition,
+  PipelineStepForbiddenError,
   type PipelineStore,
   PipelineValidationError,
   type StepRecord,
@@ -298,7 +300,12 @@ export function flowRunEventsOf(transition: PipelineRunTransition): {
       {
         type: "run_started",
         correlationId: `${runId}:run_started:${revision}`,
-        payload: { status: after.status, stepCount: after.steps.length },
+        payload: {
+          status: after.status,
+          stepCount: after.steps.length,
+          // Where it starts: 0, or the failed step a retry starts from.
+          cursor: after.cursor,
+        },
       },
     ];
   const out: ReturnType<typeof flowRunEventsOf> = [];
@@ -430,6 +437,64 @@ function confirmation(row: ConfirmationRow): WakerFlowConfirmation {
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
+}
+
+/** A retry of a failed run from its failed step, as the retry ledger records it (WF8, spec §3.5). */
+export type WakerFlowRetry = {
+  id: string;
+  requestId: string;
+  sourceRunId: string;
+  newRunId: string;
+  /** The step the new run starts at: the one that failed. */
+  nodeId: string;
+  /** `prepared` until the new run is driven, then `ready`; `unknown` when a restart came between. */
+  status: "prepared" | "ready" | "unknown" | "cancelled";
+};
+
+/** The request kind the retry ledger's fingerprints are made with. */
+export const RETRY = "retry";
+const RETRY_NOT_FAILED_MESSAGE = "只有失败的运行可以从失败的步骤重试。";
+const RETRY_TAKEN_MESSAGE = "这次运行已经重试过了，请查看重试产生的运行。";
+const RETRY_DEFINITION_GONE_MESSAGE =
+  "这次运行使用的流程定义已不存在，无法从失败的步骤重试，请重新运行。";
+
+function retryOutcome(row: {
+  id: string;
+  requestId: string;
+  sourceRunId: string;
+  newRunId: string;
+  nodeId: string;
+  status: string;
+}): WakerFlowRetry {
+  return {
+    id: row.id,
+    requestId: row.requestId,
+    sourceRunId: row.sourceRunId,
+    newRunId: row.newRunId,
+    nodeId: row.nodeId,
+    status: (["prepared", "ready", "unknown", "cancelled"].includes(row.status)
+      ? row.status
+      : "unknown") as WakerFlowRetry["status"],
+  };
+}
+
+const retryColumns = {
+  id: flowRunRetries.id,
+  requestId: flowRunRetries.requestId,
+  sourceRunId: flowRunRetries.sourceRunId,
+  newRunId: flowRunRetries.newRunId,
+  nodeId: flowRunRetries.nodeId,
+  status: flowRunRetries.status,
+  fingerprint: flowRunRetries.fingerprint,
+};
+
+function uniqueViolation(error: unknown): boolean {
+  for (let at: unknown = error; at; at = (at as { cause?: unknown }).cause) {
+    const state = at as { errno?: unknown; code?: unknown };
+    if (String(state.errno) === "23505" || String(state.code) === "23505")
+      return true;
+  }
+  return false;
 }
 
 export type WakerFlowStore = ReturnType<typeof createWakerFlowStore>;
@@ -1711,6 +1776,218 @@ export function createWakerFlowStore(options: {
             ? (shown[shown.length - 1]?.sequence ?? null)
             : null,
       };
+    },
+
+    /**
+     * WF8: retry a failed run from the step that failed (spec §3.5, D6, D7), once per request id.
+     *
+     * The new run uses the SOURCE run's template, not the Flow's current one, so its definition is the
+     * one that failed (D7; a newer plan is a new run). The steps before the failed one are carried over
+     * with their outputs and never run again; the failed step runs again from the start, which may
+     * repeat whatever it did to the world before it failed (D6: the page asks first). Only the steps
+     * from there on are counted against the month and asked about (I6); a coworker the person can no
+     * longer use refuses the retry, naming the steps.
+     *
+     * The ledger row is written in the transaction that registers the new run, `prepared`, and becomes
+     * `ready` once the run is driven; a restart in between leaves it `prepared`, and recovery settles it
+     * `unknown` without driving anything (`recovery.ts`). A repeat of the request id answers from the
+     * row; the same id for another run is a 409, and so is a second retry of the same run.
+     */
+    async retry(
+      tenantId: string,
+      actor: string,
+      id: string,
+      runId: string,
+      input: { requestId: string },
+    ): Promise<WakerFlowRetry> {
+      if (!isUuid(input.requestId))
+        throw new WakerFlowValidationError(
+          "缺少有效的请求编号，请刷新后重试。",
+        );
+      const fingerprint = createHash("sha256")
+        .update(canonical({ kind: RETRY, flowId: id, sourceRunId: runId }))
+        .digest("hex");
+      const readRetry = async (
+        where: ReturnType<typeof and>,
+      ): Promise<(WakerFlowRetry & { fingerprint: string }) | null> => {
+        const [row] = await runAsTenant(tenantId, async () =>
+          database
+            .select(retryColumns)
+            .from(flowRunRetries)
+            .where(where)
+            .limit(1),
+        );
+        return row
+          ? { ...retryOutcome(row), fingerprint: row.fingerprint }
+          : null;
+      };
+      const byRequest = () =>
+        readRetry(
+          and(
+            eq(flowRunRetries.tenantId, tenantId),
+            eq(flowRunRetries.requestId, input.requestId),
+          ),
+        );
+      const answer = (row: WakerFlowRetry & { fingerprint: string }) => {
+        if (row.fingerprint !== fingerprint)
+          throw new WakerFlowRequestConflictError();
+        const { fingerprint: _, ...outcome } = row;
+        return outcome;
+      };
+      const repeated = await byRequest();
+      if (repeated) return answer(repeated);
+
+      await ownRun(tenantId, id, runId);
+      const flow = await visibleFlow(tenantId, id);
+      if (!flow) throw new WakerFlowNotFoundError();
+      const [source] = await runAsTenant(tenantId, async () =>
+        database
+          .select({
+            status: groupTaskRuns.status,
+            cursor: groupTaskRuns.cursor,
+            steps: groupTaskRuns.steps,
+            templateId: groupTaskRuns.templateId,
+            inputs: groupTaskRuns.inputs,
+          })
+          .from(groupTaskRuns)
+          .where(
+            and(
+              eq(groupTaskRuns.tenantId, tenantId),
+              eq(groupTaskRuns.id, runId),
+            ),
+          )
+          .limit(1),
+      );
+      if (!source) throw new WakerFlowRunNotFoundError();
+      if (source.status !== "failed")
+        throw new WakerFlowValidationError(RETRY_NOT_FAILED_MESSAGE);
+      const steps = (
+        Array.isArray(source.steps) ? source.steps : []
+      ) as StepRecord[];
+      const failedAt = steps.findIndex((step) => step.state === "failed");
+      const from =
+        failedAt >= 0 ? failedAt : Math.min(source.cursor, steps.length - 1);
+      const failedStep = steps[from];
+      if (!failedStep)
+        throw new WakerFlowValidationError(RETRY_NOT_FAILED_MESSAGE);
+      if (!source.templateId)
+        throw new WakerFlowNotRunnableError(RETRY_DEFINITION_GONE_MESSAGE);
+      const templateId = source.templateId;
+      const earlier = await readRetry(
+        and(
+          eq(flowRunRetries.tenantId, tenantId),
+          eq(flowRunRetries.sourceRunId, runId),
+        ),
+      );
+      if (earlier) throw new WakerFlowNotRunnableError(RETRY_TAKEN_MESSAGE);
+      const carried = steps.slice(0, from).map((step) => ({
+        state: step.state,
+        ...(step.output === undefined ? {} : { output: step.output }),
+      }));
+      if (
+        carried.some(
+          (step) => step.state !== "done" && step.state !== "skipped",
+        )
+      )
+        throw new WakerFlowValidationError(RETRY_NOT_FAILED_MESSAGE);
+      // The Flow's revision when the source run started: the version that compiled its template.
+      const [version] = await runAsTenant(tenantId, async () =>
+        database
+          .select({ revision: wakerFlowVersions.revision })
+          .from(wakerFlowVersions)
+          .where(
+            and(
+              eq(wakerFlowVersions.tenantId, tenantId),
+              eq(wakerFlowVersions.flowId, id),
+              eq(wakerFlowVersions.templateId, templateId),
+            ),
+          )
+          .limit(1),
+      );
+      const definitionRevision = Math.max(
+        1,
+        version?.revision ?? flow.revision,
+      );
+      const remaining = steps.length - from;
+      // Refused before anything is registered: only the steps that will run are counted.
+      await options.quota?.assertCapacity(
+        tenantId,
+        "tasksPerMonth",
+        remaining + 1,
+      );
+
+      const newRunId = randomUUID();
+      try {
+        await options.pipeline.start({
+          tenantId,
+          templateId,
+          flowId: id,
+          inputs: source.inputs ?? {},
+          task: flow.name,
+          initiatedBy: actor,
+          runId: newRunId,
+          seed: { cursor: from, records: carried },
+          register: async (tx, registered) => {
+            await tx.insert(flowRunRetries).values({
+              tenantId,
+              requestId: input.requestId,
+              flowId: id,
+              sourceRunId: runId,
+              sourceRevision: flow.revision,
+              definitionRevision,
+              correlationId: `${runId}:retry`,
+              nodeId: failedStep.id,
+              newRunId: registered,
+              fingerprint,
+            });
+            await tx.insert(flowRunEvents).values({
+              tenantId,
+              flowId: id,
+              runId,
+              correlationId: `${runId}:run_retried:${registered}`,
+              type: "run_retried",
+              payload: {
+                newRunId: registered,
+                fromStep: failedStep.id,
+                index: from,
+              },
+            });
+          },
+        });
+      } catch (error) {
+        if (uniqueViolation(error)) {
+          // A twin registered first: the card this attempt opened stands for nothing, and is closed.
+          await options.board
+            .finished({ tenantId, runRef: newRunId, failed: true })
+            .catch(() => undefined);
+          const twin = await byRequest();
+          if (twin) return answer(twin);
+          throw new WakerFlowNotRunnableError(RETRY_TAKEN_MESSAGE);
+        }
+        if (error instanceof PipelineStepForbiddenError)
+          throw new WakerFlowValidationError(error.message);
+        if (error instanceof PipelineNotFoundError)
+          throw new WakerFlowNotRunnableError(RETRY_DEFINITION_GONE_MESSAGE);
+        if (error instanceof PipelineValidationError)
+          throw new WakerFlowValidationError(error.message);
+        throw error;
+      }
+      drive({ tenantId, runId: newRunId });
+      await runAsTenant(tenantId, async () =>
+        database
+          .update(flowRunRetries)
+          .set({ status: "ready" })
+          .where(
+            and(
+              eq(flowRunRetries.tenantId, tenantId),
+              eq(flowRunRetries.requestId, input.requestId),
+              eq(flowRunRetries.status, "prepared"),
+            ),
+          ),
+      );
+      const settled = await byRequest();
+      if (!settled) throw new WakerFlowRunNotFoundError();
+      return answer(settled);
     },
 
     /** WF8: the questions a run of this Flow stopped on, oldest first, with what became of each. */

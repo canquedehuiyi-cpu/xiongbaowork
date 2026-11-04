@@ -1,6 +1,11 @@
 import { and, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
-import { groupTaskRuns, tasks, wakerFlowRequests } from "../db/schema";
+import {
+  flowRunRetries,
+  groupTaskRuns,
+  tasks,
+  wakerFlowRequests,
+} from "../db/schema";
 import {
   type PipelineStepStateRow,
   stepIsSettled,
@@ -193,8 +198,51 @@ export async function recoverInterruptedFlowRuns(
   return (
     recovered +
     (await settleStrandedRunRequests(database, input)) +
-    (await settleStrandedGenerateRequests(database, input))
+    (await settleStrandedGenerateRequests(database, input)) +
+    (await settleStrandedRetries(database, input))
   );
+}
+
+/**
+ * WF8: retries a crash left `prepared`, registered and never driven (spec §3.5 step 5). The ledger row
+ * is written with the new run, and moves to `ready` once that run is handed to its driver, so a
+ * `prepared` row older than the horizon belongs to a process that died in between. It is settled
+ * `unknown` and nothing is replayed: the new run itself, `running` with no live driver, is closed as
+ * failed by this sweep's first phase like any other interrupted run, and a person decides what next.
+ * Fenced on `prepared` and age in the UPDATE, so a live retry and a second pass are left alone.
+ */
+async function settleStrandedRetries(
+  database: Database,
+  input: { olderThanMs: number },
+): Promise<number> {
+  const stale = sql`${flowRunRetries.createdAt} < now() - (${input.olderThanMs} * interval '1 millisecond')`;
+  const stranded = await runAsTenant("platform", async () => {
+    return await database
+      .select({ id: flowRunRetries.id, tenantId: flowRunRetries.tenantId })
+      .from(flowRunRetries)
+      .where(and(eq(flowRunRetries.status, "prepared"), stale));
+  });
+  let settled = 0;
+  for (const retry of stranded) {
+    // From here on the tenant is the ledger row's own.
+    const owner = retry.tenantId;
+    const marked = await runAsTenant(owner, async () => {
+      return await database
+        .update(flowRunRetries)
+        .set({ status: "unknown" })
+        .where(
+          and(
+            eq(flowRunRetries.tenantId, owner),
+            eq(flowRunRetries.id, retry.id),
+            eq(flowRunRetries.status, "prepared"),
+            stale,
+          ),
+        )
+        .returning({ id: flowRunRetries.id });
+    });
+    if (marked.length > 0) settled++;
+  }
+  return settled;
 }
 
 /**

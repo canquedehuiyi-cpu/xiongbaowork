@@ -727,6 +727,20 @@ export function createPipelineStore(options: {
       inputs?: Record<string, string>;
       flowId?: string;
       runId?: string;
+      /**
+       * WF8 retry: the steps before `cursor` start as these records (each `done` or `skipped`, with
+       * the output it already produced) and are never run again; the run starts at `cursor`. Only
+       * the steps from there on are asked about (I6) and counted against the month.
+       */
+      seed?: {
+        cursor: number;
+        records: Pick<StepRecord, "state" | "output">[];
+      };
+      /**
+       * Written in the same transaction as the run's first row, so whatever it records exists exactly
+       * when the run does (the retry ledger, whose row names this run).
+       */
+      register?: (tx: PipelineTransaction, runId: string) => Promise<void>;
     }): Promise<{ runId: string; parentTaskId: string }> {
       // A malformed id is "not here" (spec D15), the same answer edit and delete give, not a cast error.
       if (!isUuid(input.templateId)) {
@@ -769,8 +783,25 @@ export function createPipelineStore(options: {
        * person could never finish. A check that errors counts as a refusal: failing open is how a
        * flaky lookup becomes "the platform ran it anyway".
        */
+      const seed = input.seed;
+      if (
+        seed &&
+        (!Number.isInteger(seed.cursor) ||
+          seed.cursor < 0 ||
+          seed.cursor >= declared.length ||
+          seed.records.length !== seed.cursor ||
+          seed.records.some(
+            (record) => record.state !== "done" && record.state !== "skipped",
+          ))
+      ) {
+        throw new PipelineValidationError("重试的起点与这条流程的步骤对不上。");
+      }
+      const from = seed?.cursor ?? 0;
+      const remaining = declared.length - from;
       const refused: { index: number; stepId: string; agentId: string }[] = [];
       for (const [index, step] of declared.entries()) {
+        // Steps a retry carries over already ran; only what will run is asked about.
+        if (index < from) continue;
         const allowed = await canUse(input.initiatedBy, step.agentId).catch(
           () => false,
         );
@@ -789,7 +820,7 @@ export function createPipelineStore(options: {
       await options.quota?.assertCapacity(
         input.tenantId,
         "tasksPerMonth",
-        declared.length + 1,
+        remaining + 1,
       );
       /*
        * The run id IS the parent card's run reference. The parent stands for this run rather than for
@@ -807,13 +838,21 @@ export function createPipelineStore(options: {
         // filtered the card out of every `executors=` view.
         source: "group_run",
         runRef: runId,
-        quotaUnits: declared.length + 1,
+        quotaUnits: remaining + 1,
       });
 
-      const steps = declared.map<StepRecord>((step) => ({
-        ...step,
-        state: "pending",
-      }));
+      const steps = declared.map<StepRecord>((step, index) => {
+        const carried = seed?.records[index];
+        return carried
+          ? {
+              ...step,
+              state: carried.state,
+              ...(carried.output === undefined
+                ? {}
+                : { output: carried.output }),
+            }
+          : { ...step, state: "pending" };
+      });
       const row = {
         id: runId,
         tenantId: input.tenantId,
@@ -821,7 +860,7 @@ export function createPipelineStore(options: {
         groupId: template.groupId,
         parentTaskId,
         status: "running",
-        cursor: 0,
+        cursor: from,
         steps,
         initiatedBy: input.initiatedBy,
         inputs: input.inputs ?? {},
@@ -829,26 +868,29 @@ export function createPipelineStore(options: {
       };
       const { events } = options;
       const flowId = input.flowId;
+      const { register } = input;
       await runAsTenant(input.tenantId, async () => {
-        if (!events || !flowId) {
+        if ((!events || !flowId) && !register) {
           await database.insert(groupTaskRuns).values(row);
           return;
         }
-        // WF8: the run's first row and its `run_started` commit together.
+        // WF8: the run's first row, its `run_started` and whatever `register` records commit together.
         await database.transaction(async (tx) => {
           const [inserted] = await tx
             .insert(groupTaskRuns)
             .values(row)
             .returning({ revision: groupTaskRuns.revision });
-          await events(tx, {
-            tenantId: input.tenantId,
-            runId,
-            flowId,
-            revision: inserted?.revision ?? 0,
-            inputs: row.inputs,
-            before: null,
-            after: { status: "running", cursor: 0, steps },
-          });
+          if (events && flowId)
+            await events(tx, {
+              tenantId: input.tenantId,
+              runId,
+              flowId,
+              revision: inserted?.revision ?? 0,
+              inputs: row.inputs,
+              before: null,
+              after: { status: "running", cursor: from, steps },
+            });
+          await register?.(tx, runId);
         });
       });
       return { runId, parentTaskId };

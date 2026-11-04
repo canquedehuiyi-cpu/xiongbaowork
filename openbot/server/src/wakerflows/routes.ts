@@ -303,6 +303,27 @@ export function createWakerFlowRoutes(options: {
     }
   });
 
+  /*
+   * WF8: retry a failed run from the step that failed, with the definition it ran on. The request id
+   * makes a repeat safe: it answers from the retry ledger and never starts a second run.
+   */
+  routes.post("/:id/runs/:runId/retry", requireUser, async (context) => {
+    const input = await body(context);
+    try {
+      return context.json({
+        retry: await store.retry(
+          tenant(context),
+          tenant(context),
+          context.req.param("id"),
+          context.req.param("runId"),
+          { requestId: String(input.requestId ?? "") },
+        ),
+      });
+    } catch (error) {
+      return refuse(context, error);
+    }
+  });
+
   routes.get("/:id/runs/:runId/confirmations", requireUser, async (context) => {
     try {
       return context.json({

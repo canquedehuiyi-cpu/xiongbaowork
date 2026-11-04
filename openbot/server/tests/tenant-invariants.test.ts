@@ -210,7 +210,8 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   "src/tenant/access.ts": { 'runAsTenant("platform"': 1 },
   // `asPlatform` itself.
   "src/tenant/context.ts": { 'runAsTenant("platform"': 1 },
-  "src/wakerflows/recovery.ts": { 'runAsTenant("platform"': 3 },
+  // WF8: the fourth finds retries a restart left `prepared`, across tenants; each is settled in its own.
+  "src/wakerflows/recovery.ts": { 'runAsTenant("platform"': 4 },
   "src/work/culler.ts": { 'runAsTenant("platform"': 2 },
   "src/work/loop.ts": { 'runAsTenant("platform"': 1 },
   "src/work/queue.ts": { 'runAsTenant("platform"': 6 },
