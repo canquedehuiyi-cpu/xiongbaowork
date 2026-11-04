@@ -95,8 +95,8 @@
 | D1 | **待决策**："录屏"的含义 | R-a / R-b / R-c | v1.0 只做 R-a，R-b 放到 v1.0 之后 |
 | D2 | **待决策**：做独立应用还是在现有 desktop 里加模式 | 方案 A / 方案 B | A |
 | D3 | **待决策**：签名身份（Windows 代码签名证书、Apple Developer ID）由谁申请，密钥放在哪 | 自购 EV/OV 证书或 Azure Trusted Signing；Apple 组织账号 | 必须由人来办；上游的 `azure-federation.json` 不能用 |
-| D4 | **待决策**：首个收费版本是否要求安装包已签名并已公证 | 已签名才发布 / 先发未签名内测版 | 与整体发布决策一起定（第 7 道门要求干净机器部署证据）；没签名就只能小范围内测 |
-| D5 | **待决策**：首发支持哪些平台 | Windows 和 macOS / 再加 Linux | 第 7 道门写的是 Windows/Linux，需要与故事对齐 |
+| D4 | **已决定（2026-11-04）：先发未签名内测版**。首个收费版本是否要求安装包已签名并已公证 | 已签名才发布 / 先发未签名内测版 | 用户选"先发未签名内测版"。流水线保持现状：没签名只发成「未签名内测版」预发布，正式版必须签名；不设仓库变量 `DEVICE_RELEASE_REQUIRE_SIGNED`（`HUMAN-STEPS.md` 12.1） |
+| D5 | **已决定（2026-11-04）：首发 Windows + Linux**。首发支持哪些平台 | Windows 和 macOS / 再加 Linux | 用户选 Windows + Linux，与第 7 道门一致；macOS 不在首发：不设仓库变量 `DEVICE_RELEASE_MACOS`，暂不需要 Apple 签名身份（`HUMAN-STEPS.md` 12.3） |
 | D6 | **待决策**：自动更新的通道和签名密钥（`tauri-plugin-updater`） | 是否在首发就上 | 首发可以只提示有新版，不自动更新 |
 | D7 | **待决策**：已配对设备的 ID 是否迁移成纯 UUID | 不迁移 / 强制重新配对 | 不迁移，只对新设备生效 |
 | D8 | **待决策**：产品名和 identifier | 例如在 `examples/qoderwake/brand.yaml` 的 `product_name: 熊宝数字员工` 后加"设备端" | 由品牌负责人定；identifier 不能沿用上游的 `ai.copilotkit.*` |
@@ -128,11 +128,11 @@
   2. 人工接管期间，Waker 的动作会被网关拒绝，并且不会产生任何副作用。
   3. 其他租户订阅同一个 `deviceId` 的画面时被拒绝（租户隔离测试）。
 
-### 阶段 3：签名、公证与发布（依赖 D3、D4）
+### 阶段 3：签名、公证与发布（依赖 D3；D4、D5 已决定）
 - 接入签名流水线，生成校验和，发布页可以下载。
 - 验收：
   1. Windows 安装包通过 `verify-windows-signatures.ps1` 校验。
-  2. macOS 包通过 `spctl --assess` 和 `stapler validate`。
+  2. macOS 包通过 `spctl --assess` 和 `stapler validate`（D5：macOS 不在首发，等 macOS 上线时再验）。
   3. 第 7 道门：两台干净机器的完整安装、配对、执行记录作为证据归档。
 
 ---
