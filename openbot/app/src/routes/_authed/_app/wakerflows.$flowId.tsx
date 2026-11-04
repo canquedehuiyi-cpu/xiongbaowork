@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Flowchart } from "@/components/wakerflow/flowchart";
 import { RunPanel } from "@/components/wakerflow/run-panel";
+import { SessionPanel } from "@/components/wakerflow/session-panel";
 import { VersionList } from "@/components/wakerflow/version-list";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import { RequestError } from "@/lib/client";
@@ -227,9 +228,18 @@ export function WakerFlowDetail(props: {
         </div>
       }
       backButton={{ label: "WakerFlow", linkProps: { to: "/wakerflows" } }}
+      // WF9: the session panel is a right-hand column on a wide screen, and comes last on a narrow one.
+      className="lg:grid lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start lg:gap-x-8 lg:[&>*]:col-start-1 lg:[&>header]:col-span-2"
       description={current.description || undefined}
       title={current.name}
+      width="wide"
     >
+      <aside
+        aria-label="修改会话"
+        className="order-last mt-8 lg:order-none lg:col-start-2! lg:row-start-2 lg:row-span-12 lg:sticky lg:top-4"
+      >
+        <SessionPanel flow={current} />
+      </aside>
       {deleteBlocked ? (
         <p className="mt-4 text-muted-foreground text-sm" role="status">
           暂时不能删除：{deleteBlocked}
