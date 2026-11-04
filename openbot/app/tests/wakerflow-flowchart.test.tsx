@@ -638,3 +638,52 @@ test("an empty 确认 question is refused before Save", async () => {
   await view.findByText("请填写要确认的问题。");
   expect(puts).toBe(0);
 });
+
+test("a 确认 step is drawn as a bubble, set apart from a coworker's box, and says when it waits on you", () => {
+  const steps = [
+    branching.steps[3]!,
+    {
+      id: "ask",
+      kind: "confirm",
+      next: undefined,
+    },
+  ];
+  const plain = render(<Flowchart label="图" steps={steps} title={title} />);
+  const ask = plain.container.querySelector('[data-step="ask"]') as HTMLElement;
+  expect(ask.getAttribute("data-kind")).toBe("confirm");
+  expect(ask.querySelector('[data-shape="bubble"]')).not.toBeNull();
+  expect(ask.querySelector('[data-shape="box"]')).toBeNull();
+  expect(within(ask).getByText(/确认/)).toBeDefined();
+  expect(
+    plain.container
+      .querySelector('[data-step="wrap"]')
+      ?.querySelector('[data-shape="box"]'),
+  ).not.toBeNull();
+  cleanup();
+
+  const running = render(
+    <Flowchart
+      states={{ wrap: { state: "done" }, ask: { state: "awaiting_action" } }}
+      steps={steps}
+      title={title}
+    />,
+  );
+  const waiting = running.container.querySelector(
+    '[data-step="ask"]',
+  ) as HTMLElement;
+  expect(waiting.getAttribute("data-state")).toBe("awaiting_action");
+  expect(within(waiting).getByText(/等你回答/)).toBeDefined();
+  // A coworker's step waiting on something else still reads 等待处理.
+  const other = render(
+    <Flowchart
+      states={{ wrap: { state: "awaiting_action" } }}
+      steps={[branching.steps[3]!]}
+      title={title}
+    />,
+  );
+  expect(
+    within(
+      other.container.querySelector('[data-step="wrap"]') as HTMLElement,
+    ).getByText(/等待处理/),
+  ).toBeDefined();
+});
