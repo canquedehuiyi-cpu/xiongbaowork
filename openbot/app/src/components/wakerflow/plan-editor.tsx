@@ -4,10 +4,15 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { RequestError } from "@/lib/client";
 import {
+  INPUT_TYPE_LABEL,
+  planForSave,
   planProblems,
   saveWakerFlow,
   WAKERFLOW_CONFLICT_MESSAGE,
+  WAKERFLOW_INPUT_TYPES,
   type WakerFlow,
+  type WakerFlowInput,
+  type WakerFlowInputType,
   type WakerFlowPlan,
 } from "@/lib/wakerflows";
 
@@ -30,6 +35,55 @@ function FieldError({ message }: { message: string | undefined }) {
       {message}
     </p>
   ) : null;
+}
+
+/** The default value of one input, entered the way its type is entered. Empty means none. */
+function DefaultEditor(props: {
+  index: number;
+  input: WakerFlowInput;
+  onChange: (value: string | undefined) => void;
+}) {
+  const { input } = props;
+  const label = `第 ${props.index + 1} 个输入的默认值`;
+  const value = input.default ?? "";
+  const set = (next: string) => props.onChange(next === "" ? undefined : next);
+  if (input.type === "boolean" || input.type === "select") {
+    const choices =
+      input.type === "boolean"
+        ? [
+            { value: "true", label: "是" },
+            { value: "false", label: "否" },
+          ]
+        : (input.options ?? [])
+            .map((option) => option.trim())
+            .filter(Boolean)
+            .map((option) => ({ value: option, label: option }));
+    return (
+      <select
+        aria-label={label}
+        className={selectClass}
+        value={value}
+        onChange={(event) => set(event.target.value)}
+      >
+        <option value="">无默认值</option>
+        {choices.map((choice) => (
+          <option key={choice.value} value={choice.value}>
+            {choice.label}
+          </option>
+        ))}
+      </select>
+    );
+  }
+  return (
+    <Input
+      aria-label={label}
+      className="w-48"
+      inputMode={input.type === "number" ? "decimal" : undefined}
+      placeholder="默认值（选填）"
+      value={value}
+      onChange={(event) => set(event.target.value)}
+    />
+  );
 }
 
 /**
@@ -70,8 +124,16 @@ export function PlanEditor(props: {
     setPlan(next);
     setSaved(false);
     // Once a Save was refused, the inline messages follow the edits so a fixed field clears.
-    if (Object.keys(problems).length > 0) setProblems(planProblems(next));
+    if (Object.keys(problems).length > 0)
+      setProblems(planProblems(planForSave(next)));
   }
+  const setInput = (index: number, patch: Partial<WakerFlowInput>) =>
+    edit({
+      ...plan,
+      inputs: plan.inputs.map((row, at) =>
+        at === index ? { ...row, ...patch } : row,
+      ),
+    });
   const setStep = (index: number, patch: Partial<Step>) =>
     edit({
       ...plan,
@@ -81,7 +143,8 @@ export function PlanEditor(props: {
     });
 
   async function save() {
-    const found = planProblems(plan);
+    const sent = planForSave(plan);
+    const found = planProblems(sent);
     setProblems(found);
     setFailure(null);
     if (Object.keys(found).length > 0) return;
@@ -89,7 +152,7 @@ export function PlanEditor(props: {
     try {
       const flow = await saveWakerFlow(props.flowId, {
         revision: props.revision,
-        plan,
+        plan: sent,
       });
       setSaved(true);
       props.onSaved(flow);
@@ -269,6 +332,26 @@ export function PlanEditor(props: {
                 />
                 必填
               </label>
+              <select
+                aria-label={`第 ${index + 1} 个输入的类型`}
+                className={selectClass}
+                value={input.type ?? "text"}
+                onChange={(event) => {
+                  const type = event.target.value as WakerFlowInputType;
+                  // A default or options that belonged to the old type would only be refused.
+                  setInput(index, {
+                    type,
+                    default: undefined,
+                    options: type === "select" ? [] : undefined,
+                  });
+                }}
+              >
+                {WAKERFLOW_INPUT_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {INPUT_TYPE_LABEL[type]}
+                  </option>
+                ))}
+              </select>
               <Button
                 aria-label={`删除输入 ${input.key || index + 1}`}
                 size="sm"
@@ -285,6 +368,38 @@ export function PlanEditor(props: {
             </div>
             <FieldError message={problems[`inputs.${index}.key`]} />
             <FieldError message={problems[`inputs.${index}.label`]} />
+            <div className="flex flex-wrap items-start gap-2">
+              <Input
+                aria-label={`第 ${index + 1} 个输入的说明`}
+                className="w-64"
+                maxLength={200}
+                placeholder="说明（选填），运行时显示在输入框下方"
+                value={input.description ?? ""}
+                onChange={(event) =>
+                  setInput(index, { description: event.target.value })
+                }
+              />
+              <DefaultEditor
+                index={index}
+                input={input}
+                onChange={(value) => setInput(index, { default: value })}
+              />
+            </div>
+            {input.type === "select" ? (
+              <Textarea
+                aria-label={`第 ${index + 1} 个输入的选项`}
+                className="w-64"
+                placeholder="每行一个选项，最多 20 个"
+                rows={3}
+                value={(input.options ?? []).join("\n")}
+                onChange={(event) =>
+                  setInput(index, { options: event.target.value.split("\n") })
+                }
+              />
+            ) : null}
+            <FieldError message={problems[`inputs.${index}.description`]} />
+            <FieldError message={problems[`inputs.${index}.options`]} />
+            <FieldError message={problems[`inputs.${index}.default`]} />
           </div>
         ))}
         <FieldError message={problems.inputs} />
