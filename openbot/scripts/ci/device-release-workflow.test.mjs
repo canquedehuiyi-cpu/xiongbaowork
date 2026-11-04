@@ -90,7 +90,14 @@ test("it runs only from device-v tags and manual dispatch", () => {
   expect(check.run).toContain('"$INPUT_TAG" != "$REF_NAME"');
   expect(check.run).toContain("git merge-base --is-ancestor HEAD origin/main");
   // Nothing is published from a dry run.
-  expect(workflow.jobs.publish.if).toBe(expression("!inputs.dry_run"));
+  expect(workflow.jobs.publish.if).toContain("!inputs.dry_run");
+  expect(workflow.jobs.publish.if).toContain(
+    "needs.assemble.result == 'success'",
+  );
+  // macOS is built only once a person opts in (D5).
+  expect(workflow.jobs.macos.if).toBe(
+    expression("vars.DEVICE_RELEASE_MACOS == 'true'"),
+  );
 });
 
 test("the tag must be device-vX.Y.Z[-rc.N] for the version package.json builds", () => {
@@ -151,10 +158,22 @@ test("least privilege: only publish writes contents, only signing gets an OIDC t
     expect(permissions.packages).toBeUndefined();
   }
   expect(workflow.jobs.windows.environment).toBe("device-release");
+  expect(workflow.jobs.macos.environment).toBe("device-release");
   expect(workflow.jobs.publish.environment).toBe("device-release");
 });
 
-test("no run script interpolates an expression, and only GITHUB_TOKEN is a secret", () => {
+/** Every place a string in `node` mentions `secrets.`, as a dotted path. */
+function secretPaths(node, path = []) {
+  if (typeof node === "string")
+    return node.includes("secrets.") ? [path.join(".")] : [];
+  if (node && typeof node === "object")
+    return Object.entries(node).flatMap(([key, value]) =>
+      secretPaths(value, [...path, key]),
+    );
+  return [];
+}
+
+test("no run script interpolates an expression, and secrets reach steps only through env", () => {
   for (const s of allSteps(workflow)) {
     if (s.run) expect(s.run).not.toContain(expression("").slice(0, 3));
     expect(s["continue-on-error"]).toBeUndefined();
@@ -162,7 +181,21 @@ test("no run script interpolates an expression, and only GITHUB_TOKEN is a secre
   const secrets = [...text.matchAll(/secrets\.([A-Za-z0-9_]+)/g)].map(
     (m) => m[1],
   );
-  expect([...new Set(secrets)]).toEqual(["GITHUB_TOKEN"]);
+  expect([...new Set(secrets)].sort()).toEqual([
+    "DEVICE_APPLE_API_KEY_P8",
+    "DEVICE_APPLE_CERTIFICATE",
+    "DEVICE_APPLE_CERTIFICATE_PASSWORD",
+    "GITHUB_TOKEN",
+  ]);
+  const paths = secretPaths(workflow.jobs);
+  expect(paths.length).toBeGreaterThan(0);
+  for (const path of paths) {
+    expect(path).toMatch(/^[\w-]+\.steps\.\d+\.env\.\w+$/);
+  }
+  // The Apple secrets go only to the macOS job.
+  for (const path of paths.filter((p) => !p.startsWith("publish."))) {
+    expect(path.startsWith("macos.")).toBe(true);
+  }
   // CI's throwaway rehearsal certificate can never sign a release.
   expect(text).not.toContain("test-certificate");
 });
@@ -234,6 +267,7 @@ function kind(env) {
   return run("assemble", "kind", {
     VERSION: "0.1.0",
     REQUIRE_SIGNED: "",
+    MACOS_SIGNED: "skipped",
     ...env,
   });
 }
@@ -270,6 +304,78 @@ test("unsigned output is always a prerelease titled 未签名内测版", () => {
   for (const WINDOWS_SIGNED of ["", "yes"]) {
     expect(kind({ RC: "false", WINDOWS_SIGNED }).status).not.toBe(0);
   }
+  for (const MACOS_SIGNED of ["", "yes"]) {
+    expect(
+      kind({ RC: "false", WINDOWS_SIGNED: "true", MACOS_SIGNED }).status,
+    ).not.toBe(0);
+  }
+  // An unsigned macOS build makes the release unsigned even when Windows is signed.
+  const mac = kind({
+    RC: "false",
+    WINDOWS_SIGNED: "true",
+    MACOS_SIGNED: "false",
+  });
+  expect(mac.outputs).toMatchObject({
+    prerelease: "true",
+    signed: "false",
+    unsigned: "macOS",
+  });
+  expect(mac.outputs.title).toContain("未签名内测版");
+  const both = kind({
+    RC: "false",
+    WINDOWS_SIGNED: "true",
+    MACOS_SIGNED: "true",
+  });
+  expect(both.outputs).toMatchObject({ prerelease: "false", signed: "true" });
+  const assemble = step("assemble", "kind").env.MACOS_SIGNED;
+  expect(assemble).toContain("needs.macos.result == 'skipped'");
+});
+
+test("macOS signing needs every Apple variable and secret, and is never half-applied", () => {
+  const none = run("macos", "mode", { DEVICE_MACOS_SIGNING: "" });
+  expect(none.status).toBe(0);
+  expect(none.outputs.mode).toBe("none");
+  const full = {
+    DEVICE_MACOS_SIGNING: "developer-id",
+    DEVICE_APPLE_SIGNING_IDENTITY:
+      "Developer ID Application: Example (TEAM123456)",
+    DEVICE_APPLE_TEAM_ID: "TEAM123456",
+    DEVICE_APPLE_API_KEY_ID: "KEY",
+    DEVICE_APPLE_API_ISSUER: "issuer",
+    HAS_DEVICE_APPLE_CERTIFICATE: "true",
+    HAS_DEVICE_APPLE_CERTIFICATE_PASSWORD: "true",
+    HAS_DEVICE_APPLE_API_KEY_P8: "true",
+  };
+  expect(run("macos", "mode", full).outputs.mode).toBe("developer-id");
+  for (const missing of Object.keys(full).slice(1)) {
+    const value = missing.startsWith("HAS_") ? "false" : "";
+    const refused = run("macos", "mode", { ...full, [missing]: value });
+    expect(refused.status).not.toBe(0);
+    expect(refused.log).toContain(missing.replace(/^HAS_/, ""));
+  }
+  expect(
+    run("macos", "mode", { ...full, DEVICE_MACOS_SIGNING: "adhoc" }).status,
+  ).not.toBe(0);
+  // The mode step sees only whether each secret is set.
+  for (const value of Object.values(step("macos", "mode").env)) {
+    expect(value).toMatch(/^\$\{\{ secrets\.\w+ != '' \}\}$/);
+  }
+  const steps = workflow.jobs.macos.steps;
+  const verify = steps.findIndex((s) => s.run?.includes("verify-macos.sh"));
+  expect(verify).toBeGreaterThan(-1);
+  expect(steps[verify].run).toContain("--unsigned");
+  expect(steps[verify].run).toContain('--team-id "$DEVICE_APPLE_TEAM_ID"');
+  expect(steps.findIndex((s) => s.id === "done")).toBeGreaterThan(verify);
+  expect(run("macos", "done", { MODE: "none" }).outputs.signed).toBe("false");
+  expect(
+    run("macos", "done", { MODE: "developer-id", DEVICE_APPLE_TEAM_ID: "T" })
+      .outputs,
+  ).toEqual({ signed: "true", team: "T" });
+  const notarize = steps.find((s) => s.run?.includes("notarytool submit"));
+  expect(notarize.run).toContain("xcrun stapler staple");
+  expect(notarize.if).toBe(
+    expression("steps.mode.outputs.mode == 'developer-id'"),
+  );
 });
 
 function release(env) {
@@ -327,15 +433,18 @@ test("publish passes --prerelease for anything unsigned and refuses an unsigned 
   // End to end over every input the release kind can see: no full release without signatures.
   for (const RC of ["true", "false"]) {
     for (const WINDOWS_SIGNED of ["true", "false"]) {
-      const decided = kind({ RC, WINDOWS_SIGNED });
-      const published = release({
-        PRERELEASE: decided.outputs.prerelease,
-        SIGNED: decided.outputs.signed,
-      });
-      expect(published.status).toBe(0);
-      if (!published.args.includes("--prerelease")) {
-        expect(WINDOWS_SIGNED).toBe("true");
-        expect(RC).toBe("false");
+      for (const MACOS_SIGNED of ["true", "false", "skipped"]) {
+        const decided = kind({ RC, WINDOWS_SIGNED, MACOS_SIGNED });
+        const published = release({
+          PRERELEASE: decided.outputs.prerelease,
+          SIGNED: decided.outputs.signed,
+        });
+        expect(published.status).toBe(0);
+        if (!published.args.includes("--prerelease")) {
+          expect(WINDOWS_SIGNED).toBe("true");
+          expect(MACOS_SIGNED).not.toBe("false");
+          expect(RC).toBe("false");
+        }
       }
     }
   }
@@ -360,6 +469,8 @@ test("the release carries exactly the installers and their SHA256SUMS", () => {
     UNSIGNED: "Windows",
     WINDOWS_SIGNED: "false",
     WINDOWS_PUBLISHER: "",
+    MACOS_SIGNED: "skipped",
+    MACOS_TEAM: "",
     COMMIT: "abc",
   };
   const unsigned = run("assemble", "assets", env, cwd);
@@ -393,4 +504,19 @@ test("the release carries exactly the installers and their SHA256SUMS", () => {
   rmSync(join(cwd, "dist", "SHA256SUMS"));
   writeFileSync(join(cwd, "dist", "stray.txt"), "?");
   expect(run("assemble", "assets", env, cwd).status).not.toBe(0);
+  rmSync(join(cwd, "dist", "stray.txt"));
+
+  // With macOS: the dmg is listed, checksummed and described; without it, it is an unexpected file.
+  const macEnv = { ...env, MACOS_SIGNED: "false", UNSIGNED: "Windows macOS" };
+  expect(run("assemble", "assets", macEnv, cwd).status).not.toBe(0);
+  writeFileSync(join(cwd, "dist", "xiongbao-device_0.1.0_aarch64.dmg"), "dmg");
+  expect(run("assemble", "assets", env, cwd).status).not.toBe(0);
+  const withMac = run("assemble", "assets", macEnv, cwd);
+  expect(withMac.status).toBe(0);
+  expect(readFileSync(join(cwd, "dist", "SHA256SUMS"), "utf8")).toContain(
+    "  xiongbao-device_0.1.0_aarch64.dmg\n",
+  );
+  const macNotes = readFileSync(join(cwd, "notes.md"), "utf8");
+  expect(macNotes).toContain("macOS 会提示无法验证开发者");
+  expect(macNotes).toContain("xiongbao-device_0.1.0_aarch64.dmg");
 });

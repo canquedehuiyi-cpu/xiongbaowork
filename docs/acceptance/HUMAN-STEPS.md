@@ -104,3 +104,150 @@ git push origin v0.2.0-rc.1
 6. 分身详情页添加一个信息来源，再问分身相关问题，回答里能体现这条来源（F1）。
 
 每一步记录结果，有失败就开 issue，写清复现步骤。
+
+## 12. F2 设备端：签名身份、发布和第 7 道门
+
+设备端「熊宝数字员工 设备端」由 `.github/workflows/device-release.yml`（「熊宝设备端发布」）发布。它和服务端的 `release.yml` 是两条线：只认 `device-v*` 标签，只发安装包，不碰镜像。
+
+签不签名完全由下面的配置决定，工作流不替人做决定：
+
+- **配了签名**：安装包签名并校验通过后，才会发成正式版。
+- **没配签名**：只能发成预发布，标题带「未签名内测版」，说明里会写明哪个安装包没签名。
+- **不会出现**"没签名的正式版"。
+
+CI 里一直有三个未签名包可以下载试装：`device app unsigned deb`、`device app unsigned NSIS installer`、`device app unsigned dmg`。Windows 那个 job 还会用一张只在 CI 机器上受信的一次性证书，把签名流程完整演练一遍。
+
+### 12.1 先拍板的决定
+
+| 编号 | 要定的事 | 对配置的影响 |
+| --- | --- | --- |
+| D3 | 谁申请签名身份，密钥放在哪 | 决定走 12.2 的 A 还是 B，以及谁做 12.3 |
+| D4 | 首个版本是否必须已签名 | 必须签名：设仓库变量 `DEVICE_RELEASE_REQUIRE_SIGNED=true`，没签名的构建会直接失败、不发布。允许先发内测版：不设这个变量 |
+| D5 | 首发平台 | 发 macOS：设仓库变量 `DEVICE_RELEASE_MACOS=true`（只有 Apple 芯片的 dmg）。不设就只发 Windows 和 Linux |
+| D6 | 自动更新 | 没接 `tauri-plugin-updater`。发布说明会写"没有自动更新，新版需重新下载安装"，不需要 updater 密钥 |
+| D8 | 产品名和 identifier | 现在是占位的 `com.xiongbao.device`。macOS 的签名和公证都绑在 identifier 上，**首个签名版之前必须定下来**；改要走 PR，改 `openbot/desktop-device/src-tauri/tauri.conf.json` |
+
+**不能用** `openbot/desktop/signing/azure-federation.json`：它指向上游仓库的签名身份。
+
+### 12.2 申请 Windows 代码签名身份（A、B 二选一）
+
+**A. Azure Artifact Signing（原名 Trusted Signing），推荐**
+
+1. 在 Azure 订阅里创建一个 Artifact Signing 账户，记下它的 endpoint（例如 `https://eus.codesigning.azure.net`）和账户名。
+2. 完成组织身份验证（Identity validation，要营业执照等材料，可能要等几天）。
+3. 新建一个 Public Trust 证书配置文件，记下配置文件名。记下证书主题里的 CN（通常就是公司名）。
+
+**B. 自购 OV 或 EV 证书，放进 Azure Key Vault**
+
+1. 证书私钥必须生成在 Key Vault 的 HSM 里，且不可导出。不要生成或保存 `.pfx`。
+2. 记下 Key Vault 的 URL（例如 `https://xxx.vault.azure.net`）、证书在 Key Vault 里的名字，以及证书主题的 CN。
+
+**A、B 都要做：用 OIDC 免密登录（仓库里不放任何 Windows 密钥）**
+
+1. 在 Entra ID 新建一个应用注册，记下 Client ID 和 Tenant ID。
+2. 给它添加 Federated credential：
+   - Issuer：`https://token.actions.githubusercontent.com`
+   - Audience：`api://AzureADTokenExchange`
+   - Subject：`repo:canquedehuiyi-cpu/xiongbaowork:environment:device-release`
+   - 如果第一次运行时 `azure/login` 报 AADSTS70021，说明 GitHub 发的 subject 是带数字 ID 的新格式。把报错里显示的 subject 原样填进去。
+3. 授权：
+   - A：给这个应用分配该证书配置文件上的 "Artifact Signing Certificate Profile Signer" 角色（旧名 "Trusted Signing Certificate Profile Signer"）。
+   - B：给它这个 Key Vault 的 Key Sign、Certificate Get、Secret Get 权限，例如 RBAC 的 Key Vault Crypto User 加 Key Vault Certificate User。
+
+### 12.3 申请 Apple 签名身份（只有 D5 定了发 macOS 才需要）
+
+1. 用组织身份加入 Apple Developer Program，需要 D-U-N-S 编号，记下 Team ID。
+2. 创建一张 **Developer ID Application** 证书，连私钥一起导出成 `.p12` 并设导出密码。在钥匙串里看到的证书全名（如 `Developer ID Application: 公司名 (TEAMID)`）就是签名身份。
+3. 在 App Store Connect → Users and Access → Integrations 新建一个 Team API Key（角色 Developer）。下载 `.p8`，只能下载一次。记下 Key ID 和 Issuer ID。
+
+### 12.4 创建 GitHub Environment `device-release`，填变量和密钥
+
+Settings → Environments → New environment，名称填 `device-release`：
+
+- Deployment branches and tags：选 Selected，只加标签规则 `device-v*`；
+- 建议勾选 Required reviewers：每次发布都要你批准；
+- 下面的 Environment variables 和 Environment secrets 都**只放在这个 Environment 里**，不要放成仓库级，也不要写进任何文件。
+
+**Windows：Environment variables（全部是标识，不是密钥）**
+
+| 名称 | 值 |
+| --- | --- |
+| `DEVICE_WINDOWS_SIGNING` | A 填 `trusted-signing`，B 填 `azure-key-vault`；不设或填 `none` 就是不签名 |
+| `DEVICE_WINDOWS_PUBLISHER` | 证书主题的 CN，和 Windows「数字签名」页显示的完全一致，校验会逐字比对 |
+| `DEVICE_AZURE_CLIENT_ID` | 12.2 应用注册的 Client ID |
+| `DEVICE_AZURE_TENANT_ID` | Tenant ID |
+| `DEVICE_TRUSTED_SIGNING_ENDPOINT` | 只用于 A：账户的 endpoint |
+| `DEVICE_TRUSTED_SIGNING_ACCOUNT` | 只用于 A：账户名 |
+| `DEVICE_TRUSTED_SIGNING_PROFILE` | 只用于 A：证书配置文件名 |
+| `DEVICE_AZURE_KEY_VAULT_URL` | 只用于 B：Key Vault URL |
+| `DEVICE_AZURE_KEY_VAULT_CERTIFICATE` | 只用于 B：证书在 Key Vault 里的名字 |
+
+**macOS：Environment variables**
+
+| 名称 | 值 |
+| --- | --- |
+| `DEVICE_MACOS_SIGNING` | `developer-id`；不设或填 `none` 就是不签名，只有 ad-hoc 签名 |
+| `DEVICE_APPLE_SIGNING_IDENTITY` | 12.3 第 2 步的证书全名 |
+| `DEVICE_APPLE_TEAM_ID` | Team ID |
+| `DEVICE_APPLE_API_KEY_ID` | API Key 的 Key ID |
+| `DEVICE_APPLE_API_ISSUER` | API Key 的 Issuer ID |
+
+**macOS：Environment secrets**
+
+| 名称 | 值 |
+| --- | --- |
+| `DEVICE_APPLE_CERTIFICATE` | `.p12` 文件的 base64：`base64 -i cert.p12 \| pbcopy` |
+| `DEVICE_APPLE_CERTIFICATE_PASSWORD` | `.p12` 的导出密码 |
+| `DEVICE_APPLE_API_KEY_P8` | `.p8` 文件的全部文本，包括 BEGIN 和 END 两行 |
+
+**Repository variables**（Settings → Secrets and variables → Actions → Variables，不放在 Environment 里）
+
+| 名称 | 值 |
+| --- | --- |
+| `DEVICE_RELEASE_MACOS` | 发 macOS 时填 `true`（D5） |
+| `DEVICE_RELEASE_REQUIRE_SIGNED` | D4 定为"必须签名"时填 `true` |
+
+签名模式一旦打开，配置不全时工作流会直接失败，并报出缺的变量或密钥名，不会悄悄退回成未签名。
+
+### 12.5 打首个设备端标签 `device-v0.1.0`
+
+设备端的版本号取自 `openbot/package.json` 的 `version`，现在是 `0.1.0`，和服务端共用。标签的版本必须和打标签那个提交里的 `package.json` 一致。如果第 7 步已经把它改成了 `0.2.0`，标签就要打 `device-v0.2.0`。
+
+1. 先演练（建议）：推一个 `device-v0.1.0-rc.1`，它总是发成预发布。或者在 Actions → 「熊宝设备端发布」→ Run workflow 里，对一个已存在的设备端标签手动运行，`dry_run` 保持勾选。这样会把构建、签名、校验、SHA256SUMS 全跑一遍，只是不发布，产物在运行页的 `device-release-dist` 里。
+2. 正式打标签：
+   ```bash
+   git fetch origin main
+   ```
+   ```bash
+   git tag device-v0.1.0 origin/main
+   ```
+   ```bash
+   git push origin device-v0.1.0
+   ```
+3. 工作流依次做这些事：
+   - 检查标签格式、版本号，以及提交是否已在 `origin/main` 上；
+   - 在标签上重跑完整 CI；
+   - 构建 Linux deb、Windows 安装包，以及 macOS dmg（如果开了）；
+   - 签名、公证和校验：Windows 用 `verify-windows-signatures.ps1`，macOS 用 `verify-macos.sh`，后者包含 `stapler validate` 和 `spctl --assess`；
+   - 生成 `SHA256SUMS`，在 `device-release` Environment 里发布 GitHub Release。
+4. 结果：
+   - 全部签名：正式版。
+   - 有没签名的：预发布「熊宝数字员工 设备端 0.1.0（未签名内测版）」。
+   - 设了 `DEVICE_RELEASE_REQUIRE_SIGNED=true` 又没签名：失败，什么都不发布。
+5. 标签一旦推送就不要移动。要重发同一个标签，先在网页上删掉那个 Release（不要删标签），再对这个标签重新运行。
+
+### 12.6 第 7 道门：两台干净机器的证据
+
+找两台从没装过设备端的干净机器：一台 Windows 10/11 x64，一台 Ubuntu 22.04/24.04 x64。如果发 macOS，再加一台 Apple 芯片的 Mac。每台都从 Release 页下载安装包，按顺序做下面这些并留证据：
+
+1. **校验和**：Linux 用 `sha256sum -c SHA256SUMS --ignore-missing`；Windows 用 `Get-FileHash <文件> -Algorithm SHA256`，与 `SHA256SUMS` 对照。保存命令输出。
+2. **签名**：
+   - Windows：在 PowerShell 运行 `Get-AuthenticodeSignature <安装包>`，状态必须是 `Valid`，发布者就是 `DEVICE_WINDOWS_PUBLISHER`。另外截图安装包「属性 → 数字签名」页。如果是未签名内测版，就截 SmartScreen 的提示。
+   - macOS：在终端运行 `spctl --assess -vv "/Applications/熊宝数字员工 设备端.app"`，输出必须是 `accepted` 和 `source=Notarized Developer ID`。
+3. 安装后打开「熊宝数字员工 设备端」，在 Web 端「我的设备」生成配对码并填入，截图页面显示设备在线和设备名。
+4. 让一个员工在这台设备上执行一个普通命令，截图结果。
+5. 从托盘退出应用，确认进程列表里没有 `openbot-runner`：Windows 看任务管理器并截图；Linux 和 macOS 保存 `ps -e | grep openbot-runner` 的空输出。
+6. 重启电脑，不重新配对，设备自动上线，截图。
+7. 卸载。
+
+把截图、命令输出和系统版本整理好，编辑这个 Release 上传为附件，然后在 `docs/acceptance/STORIES.md` 的 F2 行写上链接。拿到已签名的产物和这份两台机器的证据之后，F2 才能改成 implemented。

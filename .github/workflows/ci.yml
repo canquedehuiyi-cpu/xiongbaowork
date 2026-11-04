@@ -660,3 +660,61 @@ jobs:
             ${{ runner.temp }}/device-unsigned-evidence/
             ${{ runner.temp }}/device-rehearsal-evidence/
           if-no-files-found: ignore
+
+  # F2 stage 3: the UNSIGNED macOS build of the device app (Apple Silicon, .app and .dmg), so the
+  # release's macOS lane is exercised before anyone tags. Ad-hoc signed only (APPLE_SIGNING_IDENTITY
+  # "-"), with the hardened runtime and Entitlements.plist from tauri.macos.conf.json:
+  # verify-macos.sh --unsigned checks identifier, product name and version, that the bundled runner
+  # starts under that signature, that the dmg holds the same app, and that Gatekeeper rejects it.
+  # Whether macOS ships at all is D5; this job only proves the build. No secrets used.
+  device-bundle-macos:
+    name: device app unsigned dmg (macos-latest)
+    runs-on: macos-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+        working-directory: openbot
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.14
+      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: openbot/desktop-device/src-tauri
+          key: device-bundle-macos
+      - name: Install root workspaces from the frozen lockfile (no lifecycle scripts)
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Install the pinned Tauri CLI from desktop's frozen lockfile (no lifecycle scripts)
+        working-directory: openbot/desktop
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Compile the runner sidecar
+        run: bun desktop-device/scripts/build-sidecar.ts
+      - name: Bundle the unsigned app and dmg
+        working-directory: openbot/desktop-device
+        env:
+          APPLE_SIGNING_IDENTITY: "-"
+        run: ../desktop/node_modules/.bin/tauri build --ci --bundles app,dmg --config src-tauri/tauri.bundle.conf.json
+      - name: Check the bundle, the runner inside it, and that it is unsigned
+        working-directory: openbot/desktop-device
+        run: |
+          version="$(jq -r .version ../package.json)"
+          bash scripts/verify-macos.sh --unsigned --expected-version "$version" --evidence-dir "$RUNNER_TEMP/device-macos-evidence"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: xiongbao-device-unsigned-dmg
+          path: openbot/desktop-device/src-tauri/target/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: device-bundle-macos-evidence
+          path: ${{ runner.temp }}/device-macos-evidence/
+          if-no-files-found: ignore
