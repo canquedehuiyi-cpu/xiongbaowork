@@ -49,6 +49,7 @@ import {
 } from "./generator";
 import type { FlowModelResolver } from "./model";
 import { compiledSteps, flowInputs, wakerFlowPlanSchema } from "./plan";
+import { createFlowSessionStore } from "./sessions";
 
 /**
  * The WakerFlow store (spec D10, stories WF1/WF3/WF4).
@@ -150,6 +151,23 @@ export type WakerFlowGenerateInput = {
   idea: string;
   members: WakerFlowCandidate[];
   scenario?: string;
+};
+
+/** A transaction of the store's database, as a customization turn's row is written in one. */
+export type WakerFlowTransaction = Parameters<
+  Parameters<Database["transaction"]>[0]
+>[0];
+
+/**
+ * WF9: the session's part of a customization turn (`sessions.ts`). Planning itself is `generate`'s:
+ * the same idempotency, model pick, coworker check, quota, cancel and restart recovery.
+ */
+export type WakerFlowCustomizeTurn = {
+  sessionId: string;
+  /** Asked only for a new request: checks the session and builds the context the model is given. */
+  prepare: () => Promise<string>;
+  /** Writes the turn's row in the same transaction that claims the request. */
+  record: (tx: WakerFlowTransaction, context: string) => Promise<void>;
 };
 
 export type WakerFlowStartInput = {
@@ -609,6 +627,10 @@ export class WakerFlowRequestConflictError extends WakerFlowError {
 
 /** The request kind for planning; restart recovery (`recovery.ts`) settles the ones a crash left pending. */
 export const GENERATE = "generate";
+/** WF9: the request kind for a customization turn; planned, cancelled and recovered like `generate`. */
+export const CUSTOMIZE = "customize";
+/** The kinds of request that are one planning call. */
+export const PLANNING_KINDS = [GENERATE, CUSTOMIZE];
 /** The request kind for a run; restart recovery (`recovery.ts`) settles the ones a crash left pending. */
 export const RUN = "run";
 const NOT_SAVED_MESSAGE = "这个 WakerFlow 还没有保存为可运行的计划，请先保存。";
@@ -1501,6 +1523,8 @@ export function createWakerFlowStore(options: {
       actor: string,
       id: string,
       input: WakerFlowGenerateInput,
+      /** WF9: present for a customization turn (`sessions.ts`), whose `idea` is the change asked. */
+      turn?: WakerFlowCustomizeTurn,
     ): Promise<WakerFlowRequestOutcome> {
       if (!isUuid(id)) throw new WakerFlowNotFoundError();
       if (!isUuid(input.requestId))
@@ -1530,8 +1554,9 @@ export function createWakerFlowStore(options: {
       const fingerprint = createHash("sha256")
         .update(
           canonical({
-            kind: GENERATE,
+            kind: turn ? CUSTOMIZE : GENERATE,
             flowId: id,
+            ...(turn ? { sessionId: turn.sessionId } : {}),
             modelRef: input.modelRef,
             idea,
             members,
@@ -1560,6 +1585,7 @@ export function createWakerFlowStore(options: {
       // The request row references the Flow, and a foreign key does not look through row-level
       // security: without this read another tenant's Flow id would be accepted as a reference.
       if (!flow) throw new WakerFlowNotFoundError();
+      const context = turn ? await turn.prepare() : undefined;
       const resolved = await models.resolve(tenantId, input.modelRef);
       for (const member of members) {
         const allowed = await canUse(actor, member.agentId).catch(() => false);
@@ -1570,20 +1596,29 @@ export function createWakerFlowStore(options: {
       }
       await options.quota?.assertCapacity(tenantId, "tasksPerMonth");
 
-      const [claimed] = await runAsTenant(tenantId, async () =>
-        database
+      const claim = (db: Pick<Database, "insert">) =>
+        db
           .insert(wakerFlowRequests)
           .values({
             tenantId,
             requestId: input.requestId,
             flowId: id,
-            kind: GENERATE,
+            kind: turn ? CUSTOMIZE : GENERATE,
             fingerprint,
           })
           .onConflictDoNothing({
             target: [wakerFlowRequests.tenantId, wakerFlowRequests.requestId],
           })
-          .returning(requestColumns),
+          .returning(requestColumns);
+      // WF9: a turn's row is written with its claim, so a turn exists exactly when its request does.
+      const [claimed] = await runAsTenant(tenantId, async () =>
+        turn
+          ? database.transaction(async (tx) => {
+              const rows = await claim(tx);
+              if (rows[0]) await turn.record(tx, context ?? "");
+              return rows;
+            })
+          : claim(database),
       );
       if (!claimed) {
         // A twin claimed it first; its row is the answer, whatever state it is in.
@@ -1602,6 +1637,7 @@ export function createWakerFlowStore(options: {
           idea,
           members,
           scenario,
+          ...(context === undefined ? {} : { context }),
           signal: controller.signal,
         });
       } catch (error) {
@@ -1650,7 +1686,8 @@ export function createWakerFlowStore(options: {
                 plan,
                 name: plan.name,
                 description: plan.description,
-                idea,
+                // A change request is not the Flow's idea; only first planning sets that.
+                ...(turn ? {} : { idea }),
                 ...(isUuid(resolved.modelRef)
                   ? { modelRef: resolved.modelRef }
                   : {}),
@@ -1712,7 +1749,7 @@ export function createWakerFlowStore(options: {
               eq(wakerFlowRequests.tenantId, tenantId),
               eq(wakerFlowRequests.requestId, requestId),
               eq(wakerFlowRequests.flowId, flowId),
-              eq(wakerFlowRequests.kind, GENERATE),
+              inArray(wakerFlowRequests.kind, PLANNING_KINDS),
               eq(wakerFlowRequests.status, "pending"),
             ),
           ),
@@ -2303,5 +2340,8 @@ export function createWakerFlowStore(options: {
       return options.models.choices(tenantId);
     },
   };
-  return store;
+  // WF9: the customization sessions of these Flows, planned through `generate` above.
+  return Object.assign(store, {
+    sessions: createFlowSessionStore({ database, flows: store }),
+  });
 }

@@ -1,9 +1,11 @@
 import { generateText, type LanguageModel } from "ai";
 import {
+  isWorkerStep,
   WAKERFLOW_PLAN_FORMAT_MESSAGE,
   type WakerFlowCandidate,
   type WakerFlowPlan,
 } from "../../../shared/wakerflows";
+import { withUntrustedNotice } from "../untrusted-content";
 import { createWakerFlowPlanSchema } from "./plan";
 
 /**
@@ -73,6 +75,11 @@ export type FlowGenerationInput = {
   idea: string;
   members: WakerFlowCandidate[];
   scenario?: string;
+  /**
+   * WF9: a customization turn's context (see {@link flowCustomizationContext}). When present, `idea`
+   * is the person's change request and the model is asked to adjust the current plan.
+   */
+  context?: string;
   signal?: AbortSignal;
 };
 
@@ -87,13 +94,80 @@ const SYSTEM = [
   "每一步的 inputKeys 只能引用 inputs 中的 key 或前面步骤的 outputKey；outputKey 不能与已有名称重复。",
 ].join("\n");
 
+/** WF9 (D3): how many earlier turns of a session the context carries. */
+export const CUSTOMIZATION_TURNS = 6;
+/** WF9 (D3): the most characters a customization context may hold. */
+export const CUSTOMIZATION_CONTEXT_MAX = 20_000;
+
+/** One earlier turn of a session: what the person asked, and what came of it. */
+export type FlowCustomizationTurnSummary = { prompt: string; outcome: string };
+
+const CLIPPED = "\n…（已截断）";
+
+/**
+ * WF9: what a customization turn tells the model besides the change request — the saved plan, and
+ * the session's last {@link CUSTOMIZATION_TURNS} requests with what each produced — in at most
+ * {@link CUSTOMIZATION_CONTEXT_MAX} characters. Built on the server, never taken from a client.
+ *
+ * The current plan comes first and is kept whole when it fits; earlier turns are kept newest first
+ * until the budget runs out, and read oldest first. What an earlier turn produced is the model's own
+ * output, so it is handed back marked as untrusted data, never as instructions.
+ */
+export function flowCustomizationContext(input: {
+  plan: WakerFlowPlan | null;
+  previous: FlowCustomizationTurnSummary[];
+}): string {
+  const head = input.plan
+    ? [
+        "当前计划（JSON）：",
+        JSON.stringify(input.plan),
+        ...(input.plan.steps.some((step) => !isWorkerStep(step))
+          ? [
+              "当前计划中的判断、子流程和工具调用步骤由人在编辑器中维护；你只输出员工步骤。",
+            ]
+          : []),
+      ].join("\n")
+    : "当前计划：还没有计划。";
+  let text =
+    head.length > CUSTOMIZATION_CONTEXT_MAX
+      ? `${head.slice(0, CUSTOMIZATION_CONTEXT_MAX - CLIPPED.length)}${CLIPPED}`
+      : head;
+  const kept: string[] = [];
+  const title = "\n之前的修改要求（从早到晚）：";
+  let used = text.length + title.length;
+  const recent = input.previous.slice(-CUSTOMIZATION_TURNS);
+  for (let index = recent.length - 1; index >= 0; index -= 1) {
+    const turn = recent[index] as FlowCustomizationTurnSummary;
+    const line = `\n- 要求：${turn.prompt}\n  结果：${JSON.stringify(
+      withUntrustedNotice(
+        { outcome: turn.outcome },
+        "earlier planning result",
+        ["outcome"],
+      ),
+    )}`;
+    if (used + line.length > CUSTOMIZATION_CONTEXT_MAX) break;
+    kept.unshift(line);
+    used += line.length;
+  }
+  if (kept.length > 0) text += `${title}${kept.join("")}`;
+  return text;
+}
+
 /** The plain prompt, exported so a test can see exactly what the model is given. */
 export function flowPlanningPrompt(input: {
   idea: string;
   members: WakerFlowCandidate[];
   scenario?: string;
+  context?: string;
 }): string {
-  const lines = [`用户的想法：${input.idea}`];
+  const lines =
+    input.context === undefined
+      ? [`用户的想法：${input.idea}`]
+      : [
+          `用户的修改要求：${input.idea}`,
+          "请在当前计划的基础上按修改要求调整，输出调整后的完整计划；没有提到的部分保持不变。",
+          input.context,
+        ];
   if (input.scenario) lines.push(`参考场景：${input.scenario}`);
   lines.push("候选员工：");
   for (const member of input.members) {
