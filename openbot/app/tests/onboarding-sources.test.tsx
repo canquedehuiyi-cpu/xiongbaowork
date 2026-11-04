@@ -122,7 +122,7 @@ function drawStep(onAdvanced: () => void = () => {}) {
 const button = (view: ReturnType<typeof render>, name: string) =>
   view.getByRole("button", { name }) as HTMLButtonElement;
 
-test("the step asks where the material is, says it goes to the model, and offers no folder", async () => {
+test("the step asks where the material is, says it goes to the model, and starts on a declaration", async () => {
   serve();
   const { view } = drawStep();
 
@@ -138,8 +138,12 @@ test("the step asks where the material is, says it goes to the model, and offers
     }),
   ).toBeTruthy();
   expect(view.getByText("还没有登记信息来源。")).toBeTruthy();
-  // A local folder waits on the desktop runner and is not offered, not even greyed out (D4).
-  expect(view.queryByText(/文件夹/)).toBeNull();
+  // Stage 2 offers a local folder beside the declaration (tests/avatar-local-folder-ui.test.tsx), but
+  // the draft is a declaration until the folder is asked for, and no machine is asked about before.
+  expect(button(view, "文字声明").getAttribute("aria-pressed")).toBe("true");
+  expect(button(view, "本地文件夹").getAttribute("aria-pressed")).toBe("false");
+  expect(view.queryByText("选择一个文件夹")).toBeNull();
+  expect(calls.some((call) => call.path === "/api/devices")).toBeFalse();
   // Nothing is saved until somebody asks: no tick, no name, no save.
   expect(button(view, "保存并继续").disabled).toBeTrue();
   expect(writes()).toEqual([]);
