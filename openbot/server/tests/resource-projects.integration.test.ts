@@ -121,27 +121,17 @@ async function machine(person: string) {
       .returning({ id: registeredDevices.id }),
   );
   if (!row) throw new Error("no device row");
-  // What the socket does with a heartbeat: the report is filtered, and a path is never kept.
+  /*
+   * What the socket does with a heartbeat: the report is filtered, and a path is never kept. The
+   * second folder was registered for writing on the machine (decision D3), and the runner says so.
+   */
   await devices.heartbeat(
     person,
     runnerId,
     reportedRoots([
       { ref: READ_REF, name: "合同", path: SECRET_PATH },
-      { ref: WRITE_REF, name: "后端代码", path: SECRET_PATH },
+      { ref: WRITE_REF, name: "后端代码", mode: "write", path: SECRET_PATH },
     ]),
-  );
-  /*
-   * The second folder was registered for writing on the machine (decision D3). The runner reports a
-   * folder's mode from phase 2 on; until then the stored report is written here as that heartbeat
-   * will store it.
-   */
-  await runAsTenant(person, () =>
-    database
-      .update(registeredDevices)
-      .set({
-        roots: sql`jsonb_set(${registeredDevices.roots}, '{1,mode}', '"write"')`,
-      })
-      .where(eq(registeredDevices.id, row.id)),
   );
   return { id: row.id, runnerId };
 }

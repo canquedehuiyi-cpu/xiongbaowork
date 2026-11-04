@@ -28,7 +28,7 @@ import {
   type RunnerExecutor,
 } from "./execute";
 import { createActionJournal } from "./journal";
-import { createRootRegistry, type RootRegistry } from "./roots";
+import { createRootRegistry, type RootMode, type RootRegistry } from "./roots";
 import { createRunnerScreens } from "./screencast";
 
 /** The environment twin of `--data-dir`, for a desktop shell that starts the runner as a sidecar. */
@@ -103,9 +103,12 @@ function usage(): string {
     "it lets an assistant reach services on the network this machine is plugged into. Cloud metadata",
     "addresses stay refused either way.",
     "",
-    "Read-only folders. Your 分身 can read folders you name here, and only those, and never write to",
-    "them. Each command below changes this machine's list and exits; a running runner picks it up.",
+    "Folders. Your 分身 can read folders you name here, and only those, and never write to them.",
+    "Each command below changes this machine's list and exits; a running runner picks it up.",
     "  --add-root NAME=PATH       offer the folder at PATH (absolute) under the name NAME",
+    "  --root-mode read|write     with --add-root: write lets a coworker change files and run commands",
+    "                             there, when a project on that folder is also set writable. Default: read.",
+    "                             Your 分身 only ever reads, whatever the mode.",
     "  --remove-root REF|NAME     stop offering a folder",
     "  --list-roots               print the folders offered, as JSON",
     "The server is told each folder's name and an opaque reference, never its path.",
@@ -240,7 +243,7 @@ function runnerPrivatePaths(paths: RunnerPaths, profileRoot: string): string[] {
 
 /** One change to this machine's read-only folders, asked for on the command line. */
 export type RootCommand =
-  | { kind: "add"; name: string; path: string }
+  | { kind: "add"; name: string; path: string; mode: RootMode }
   | { kind: "remove"; target: string }
   | { kind: "list" };
 
@@ -282,6 +285,11 @@ export function parseRootCommand(
   const asked = [...ROOT_FLAGS].filter((flag) => args.has(flag));
   if (asked.length > 1)
     return "Pass one of --add-root, --remove-root or --list-roots.";
+  if (args.has("root-mode") && !args.has("add-root"))
+    return "--root-mode goes with --add-root.";
+  const modeFlag = (args.get("root-mode") ?? "read").trim().toLowerCase();
+  if (modeFlag !== "read" && modeFlag !== "write")
+    return "--root-mode must be read or write.";
   const paths = runnerPaths(args, env, cwd);
   if (typeof paths === "string") return paths;
   const profile = args.get("browser-profile")?.trim();
@@ -301,6 +309,7 @@ export function parseRootCommand(
       kind: "add",
       name: value.slice(0, split),
       path: value.slice(split + 1),
+      mode: modeFlag,
     };
   } else if (args.has("remove-root")) {
     const target = args.get("remove-root")?.trim() ?? "";
@@ -329,7 +338,7 @@ export function runRootCommand(
   try {
     const { command } = parsed;
     if (command.kind === "add") {
-      const root = registry.add(command.name, command.path);
+      const root = registry.add(command.name, command.path, command.mode);
       print(JSON.stringify({ ok: true, root, roots: registry.list() }));
       return 0;
     }

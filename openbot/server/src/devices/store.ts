@@ -39,6 +39,13 @@ export type DeviceRecord = {
   roots: DeviceRoot[];
 };
 
+/**
+ * A folder as a report keeps it: the stored `DeviceRoot`, and, when the machine's owner registered it
+ * for a project they let coworkers write in (story RES2, decision D3), its mode. No mode is `read`,
+ * which is what every folder F1 offers and what an older runner reports.
+ */
+export type ReportedDeviceRoot = DeviceRoot & { mode?: "read" | "write" };
+
 /** At most this many folders are kept from one report; the runner offers at most 20. */
 export const DEVICE_ROOT_LIMIT = 50;
 /** The runner's reference shape: `fld_` and 128 random bits in base64url. */
@@ -49,23 +56,35 @@ const ROOT_REF = /^fld_[A-Za-z0-9_-]{22}$/;
  * report at all (an older runner), which leaves what is stored alone.
  *
  * Whatever the machine sent is untrusted input from a device, so each entry is kept only when its
- * reference has the runner's shape and its name is text of at most 60 characters, and a reference
+ * reference has the runner's shape and its name is text of at most 60 characters (with its mode,
+ * `read` or `write`, when the runner said one: story RES2, decision D3), and a reference
  * named twice is kept once. Anything else is dropped rather than failing the heartbeat: a machine
  * with one odd entry is still online. A field that looks like a path is never read, so a runner
  * that sent one would not get it stored.
  */
-export function reportedRoots(value: unknown): DeviceRoot[] | undefined {
+export function reportedRoots(
+  value: unknown,
+): ReportedDeviceRoot[] | undefined {
   if (!Array.isArray(value)) return undefined;
-  const kept: DeviceRoot[] = [];
+  const kept: ReportedDeviceRoot[] = [];
   for (const entry of value) {
     if (kept.length >= DEVICE_ROOT_LIMIT) break;
-    const { ref, name } = (entry ?? {}) as { ref?: unknown; name?: unknown };
+    const { ref, name, mode } = (entry ?? {}) as {
+      ref?: unknown;
+      name?: unknown;
+      mode?: unknown;
+    };
     if (typeof ref !== "string" || !ROOT_REF.test(ref)) continue;
     if (typeof name !== "string") continue;
     const shown = name.trim();
     if (!shown || [...shown].length > 60) continue;
     if (kept.some((root) => root.ref === ref)) continue;
-    kept.push({ ref, name: shown });
+    // A mode is kept only when it is one of the two the runner knows; anything else is read-only.
+    kept.push(
+      mode === "write" || mode === "read"
+        ? { ref, name: shown, mode }
+        : { ref, name: shown },
+    );
   }
   return kept;
 }
