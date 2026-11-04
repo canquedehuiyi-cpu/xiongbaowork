@@ -167,6 +167,8 @@ export function PlanEditor(props: {
         return "嵌套子流程";
       case "action":
         return step.tool || "调用工具";
+      case "confirm":
+        return step.question.split("\n")[0] || "（还没写要确认什么）";
       default:
         return step.instruction.split("\n")[0] || "（还没写要做什么）";
     }
@@ -991,6 +993,35 @@ function StepForm(props: {
             添加参数
           </Button>
         </div>
+        {outputField(step.outputKey, (outputKey) =>
+          props.onChange({ ...step, outputKey }),
+        )}
+        {nextField(step.next)}
+      </>
+    );
+  } else if (step.kind === "confirm") {
+    fields = (
+      <>
+        <Textarea
+          aria-label={`第 ${n} 步要确认的问题`}
+          placeholder="例如：草稿如下，可以发布吗？{{draft}}"
+          value={step.question}
+          onChange={(event) =>
+            props.onChange({ ...step, question: event.target.value })
+          }
+        />
+        <p className="text-muted-foreground text-xs">
+          运行到这一步会停下来问你，不经过员工和模型。你的回答就是这一步的产出，后面的步骤会读到它；也可以跳过，后面的步骤会看到它没有产出。问题里写
+          {"{{名称}}"} 会换成勾选的输入或前面步骤的输出。
+        </p>
+        <FieldError message={at("question")} />
+        <ReadKeys
+          index={index}
+          offered={offered}
+          value={step.inputKeys}
+          onChange={(inputKeys) => props.onChange({ ...step, inputKeys })}
+        />
+        <FieldError message={at("inputKeys")} />
         {outputField(step.outputKey, (outputKey) =>
           props.onChange({ ...step, outputKey }),
         )}

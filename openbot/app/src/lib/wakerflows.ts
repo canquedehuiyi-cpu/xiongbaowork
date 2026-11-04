@@ -10,6 +10,7 @@ import {
   stepTargets,
   WAKERFLOW_END,
   WAKERFLOW_MAX_BRANCHES,
+  WAKERFLOW_MAX_QUESTION,
   WAKERFLOW_MAX_STEPS,
   type WakerFlow,
   type WakerFlowBranch,
@@ -51,6 +52,7 @@ export {
   WAKERFLOW_END,
   WAKERFLOW_INPUT_TYPES,
   WAKERFLOW_MAX_BRANCHES,
+  WAKERFLOW_MAX_QUESTION,
   WAKERFLOW_STEP_KINDS,
   WAKERFLOW_SUGGESTIONS,
 } from "../../../shared/wakerflows";
@@ -61,7 +63,16 @@ export const STEP_KIND_LABEL: Record<WakerFlowStepKind, string> = {
   decision: "条件判断",
   flow: "子流程",
   action: "动作",
+  confirm: "确认",
 };
+
+/** The `{{key}}` names a confirmation's question reads, as the server reads them. */
+export function questionReferences(question: string): string[] {
+  return Array.from(
+    question.matchAll(/\{\{\s*([^{}\s]*)\s*\}\}/g),
+    (match) => match[1] ?? "",
+  );
+}
 
 /** How each input type is named in the editor. */
 export const INPUT_TYPE_LABEL: Record<WakerFlowInputType, string> = {
@@ -825,6 +836,24 @@ export function planProblems(plan: WakerFlowPlan): Record<string, string> {
           fail(`steps.${index}.args`, "单个参数不能超过 10000 字。");
       }
     }
+    if (step.kind === "confirm") {
+      const question = step.question.trim();
+      if (!question) fail(`steps.${index}.question`, "请填写要确认的问题。");
+      else if (question.length > WAKERFLOW_MAX_QUESTION)
+        fail(
+          `steps.${index}.question`,
+          `确认问题不能超过 ${WAKERFLOW_MAX_QUESTION} 字。`,
+        );
+      else
+        for (const read of questionReferences(question))
+          if (!step.inputKeys.includes(read)) {
+            fail(
+              `steps.${index}.question`,
+              `问题引用了 {{${read}}}，但这一步没有声明读取它。`,
+            );
+            break;
+          }
+    }
     const reads = stepReads(step);
     if (reads.length > 30)
       fail(`steps.${index}.inputKeys`, "一个步骤最多读取 30 项输入。");
@@ -968,6 +997,14 @@ export function stepOfKind(
         agentId,
         tool: "",
         args: {},
+        inputKeys: [],
+        outputKey: "",
+      };
+    case "confirm":
+      return {
+        id,
+        kind: "confirm",
+        question: "",
         inputKeys: [],
         outputKey: "",
       };
@@ -1127,6 +1164,8 @@ export function planDifferences(
         return "嵌套子流程";
       case "action":
         return `调用工具 ${step.tool}`;
+      case "confirm":
+        return `确认：${step.question}`;
       default:
         return step.instruction;
     }
