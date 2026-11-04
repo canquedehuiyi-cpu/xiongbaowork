@@ -58,9 +58,10 @@ export type AgentProfile = {
    */
   roleTemplate?: { id: string; version: number } | null;
   /**
-   * Whether a role template may be applied to this coworker (ROLE1, D4). False for a `built_in` one,
-   * the 分身 included: an edit of a `built_in` coworker's role description is copied over its
-   * `configuration.systemPrompt`, so a template would replace the prompt it runs on.
+   * Whether a role template may be applied to this coworker (ROLE1, D4 as revised 2026-11-04). False
+   * only for the 分身, which runs on a prompt that is deliberately not its role description and speaks
+   * as the person. Any other coworker, `built_in` included, takes one; for a `built_in` one the
+   * template's role description is copied over `configuration.systemPrompt`, as an edit by hand is.
    */
   acceptsRoleTemplate?: boolean;
   /**

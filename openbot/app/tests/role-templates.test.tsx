@@ -337,7 +337,7 @@ describe("a coworker's 角色 panel", () => {
     expect(view.queryByRole("button", { name: "按模板更新" })).toBeNull();
   });
 
-  test("a built-in coworker has no 套用模板, but its Bible is written by hand and checked for length", async () => {
+  test("the 分身 has no 套用模板, but its Bible is written by hand and checked for length", async () => {
     routes["GET /api/role-templates"] = () =>
       Response.json({ templates: [template], official: [] });
     routes["GET /api/role-templates/employees/avatar-me"] = () =>

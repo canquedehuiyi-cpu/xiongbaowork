@@ -15,6 +15,7 @@ import { roleTemplates } from "../db/schema/roles";
 import { teamBotPublications } from "../db/schema/team-bots";
 import { TEAM_TENANT } from "../db/schema/tenant";
 import { asPlatform, currentTenant, isPersonTenant } from "../tenant/context";
+import { avatarAgentId } from "../tenant/provisioning";
 import {
   assignedCondition,
   assignedToActor,
@@ -220,11 +221,11 @@ export class OwnerlessBotPrivateError extends Error {
   }
 }
 
-/** A role template offered to a `built_in` coworker, the 分身 included (ROLE1, D4). */
+/** A role template offered to the 分身 (ROLE1, D4 as revised 2026-11-04). */
 export class RoleTemplateNotApplicableError extends Error {
   constructor() {
     super(
-      "内置员工（包括我的分身）不能套用角色模板：模板会替换它运行所用的系统提示词。手册仍可手工编辑。",
+      "我的分身不能套用角色模板：它代表你本人，按自己的系统提示词运行，模板会替换它。手册仍可手工编辑。",
     );
     this.name = "RoleTemplateNotApplicableError";
   }
@@ -263,7 +264,7 @@ const joinedProjection = {
   bible: agentProfiles.bible,
   roleTemplateId: agentProfiles.roleTemplateId,
   roleTemplateVersion: agentProfiles.roleTemplateVersion,
-  // Only to answer whether a role template may be applied (D4); the type itself is not published.
+  // Whether an edit of the role description moves the prompt it runs on; the type is not published.
   type: agents.type,
   /* The hash, only so a surface can say whether one exists. It never leaves this module. */
   callbackTokenHash: agentProfiles.callbackTokenHash,
@@ -328,11 +329,26 @@ function mapProfile(
       row.roleTemplateId !== null && row.roleTemplateVersion !== null
         ? { id: row.roleTemplateId, version: row.roleTemplateVersion }
         : null,
-    acceptsRoleTemplate: row.type !== "built_in",
+    acceptsRoleTemplate: !isAvatar(row.id),
     // Whether a key is set, never which. The form needs to show "a key is set" so a person does not
     // wipe one by saving an unrelated edit; showing the value would put a secret in a screenshot.
     hasAuth: authFromConfiguration(row.configuration) !== null,
   };
+}
+
+/**
+ * Whether this is a person's 分身 (`avatar-<person>`, `tenant/provisioning.ts`), the one coworker that
+ * takes no role template (ROLE1 D4, revised 2026-11-04).
+ *
+ * D4 first refused every `built_in` coworker. On a single-container deployment every coworker a person
+ * makes is `built_in` (it runs here on its role description), so that switched the feature off. Only
+ * the 分身 runs on a prompt that is deliberately not its role description and speaks as the person
+ * themselves; any other `built_in` coworker already has its prompt moved by an edit of its role
+ * description, and a template is that same edit. By id, not by stamp: a public Bot's tenant moves to
+ * `team`, its id never does.
+ */
+function isAvatar(id: string): boolean {
+  return id.startsWith(avatarAgentId(""));
 }
 
 /**
@@ -901,7 +917,8 @@ export function createAgentProfileStore(
           visibility: input.visibility,
           persona: input.persona ?? null,
           bible: input.bible ?? null,
-          ...(input.roleTemplate && endpoint
+          // Recorded whatever it runs on: a new coworker is never the 分身 (D4, revised 2026-11-04).
+          ...(input.roleTemplate
             ? await roleTemplateSource(transaction, input.roleTemplate)
             : {}),
         });
@@ -1190,11 +1207,43 @@ export function createAgentProfileStore(
           const profile = await findAccessibleProfile(transaction, actor, id);
           if (!profile) throw new AgentNotFoundError(id);
           requireManageable(actor, profile);
-          // D4: a `built_in` coworker runs on its systemPrompt, which a role description would replace.
+          // D4 (revised 2026-11-04): only the 分身 is refused.
           if (!profile.acceptsRoleTemplate) {
             throw new RoleTemplateNotApplicableError();
           }
           const columns = await roleTemplateSource(transaction, source);
+          /*
+           * A `built_in` coworker runs on `configuration.systemPrompt` and nothing else carries its
+           * role description to the model, so a template that changes the description has to move the
+           * prompt too, exactly as `update` does for the same edit by hand. Without it the screen would
+           * show the template's role while the Bot kept answering on the old one.
+           */
+          if (role.roleDescription !== profile.roleDescription) {
+            const [row] = await transaction
+              .select({
+                configuration: agents.configuration,
+                type: agents.type,
+              })
+              .from(agents)
+              .where(eq(agents.id, id))
+              .limit(1);
+            if (row?.type === "built_in") {
+              exactlyOne(
+                await transaction
+                  .update(agents)
+                  .set({
+                    configuration: {
+                      ...((row.configuration ?? {}) as Record<string, unknown>),
+                      systemPrompt: role.roleDescription,
+                    },
+                    updatedAt: new Date(),
+                  })
+                  .where(eq(agents.id, id))
+                  .returning({ id: agents.id }),
+                id,
+              );
+            }
+          }
           exactlyOne(
             await transaction
               .update(agentProfiles)

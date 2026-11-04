@@ -9,6 +9,7 @@ import { createAgentRoutes } from "../src/agents/routes";
 import type { AppVariables } from "../src/auth/guards";
 import { createDatabase } from "../src/db/client";
 import {
+  agentProfiles,
   agents,
   personaTemplates,
   roleTemplates,
@@ -22,6 +23,7 @@ import {
   officialTemplatesFrom,
 } from "../src/roles/store";
 import { runAsTenant } from "../src/tenant/context";
+import { avatarAgentId } from "../src/tenant/provisioning";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -467,10 +469,80 @@ describe("a template and the coworkers made from it", () => {
     expect(applied.body.status.source.modified).toBe(false);
   });
 
-  test("a built_in coworker is refused a template with 400 (D4)", async () => {
+  test("a built_in coworker that is not the 分身 takes a template (D4, revised 2026-11-04)", async () => {
+    // With no managed Bot every coworker a person makes runs here as `built_in`.
     const actor = await person("builtin");
     const call = client(actor, unmanaged);
     const agent = await coworker(call);
+    expect(
+      (await call("GET", `/api/role-templates/employees/${agent.id}`)).body,
+    ).toEqual({ acceptsRoleTemplate: true, source: null });
+    const { body } = await call("POST", "/api/role-templates", {
+      name: "代码审核员",
+      profile: reviewer,
+    });
+    const applied = await call(
+      "POST",
+      `/api/role-templates/${body.template.id}/apply`,
+      {
+        agentId: agent.id,
+        version: 1,
+      },
+    );
+    expect(applied.status).toBe(200);
+    expect(applied.body.status).toEqual({
+      acceptsRoleTemplate: true,
+      source: {
+        id: body.template.id,
+        version: 1,
+        name: "代码审核员",
+        latestVersion: 1,
+        hasUpdate: false,
+        modified: false,
+      },
+    });
+    expect(
+      (await call("GET", `/api/agents/${agent.id}`)).body.agent,
+    ).toMatchObject({
+      title: reviewer.identity.title,
+      roleDescription: reviewer.identity.roleDescription,
+      persona: reviewer.persona,
+      bible: reviewer.bible,
+      roleTemplate: { id: body.template.id, version: 1 },
+    });
+    // And it runs on the template's role description, not the one it was made with.
+    const [row] = await runAsTenant(actor.id, () =>
+      database
+        .select({ configuration: agents.configuration })
+        .from(agents)
+        .where(eq(agents.id, agent.id)),
+    );
+    expect(row?.configuration).toEqual({
+      systemPrompt: reviewer.identity.roleDescription,
+    });
+  });
+
+  test("the 分身 is still refused a template with 400 and keeps everything (D4)", async () => {
+    const actor = await person("avatar");
+    const call = client(actor, unmanaged);
+    const agentId = avatarAgentId(actor.id);
+    agentIds.push(agentId);
+    await runAsTenant(actor.id, async () => {
+      await database.insert(agents).values({
+        id: agentId,
+        name: "我的分身",
+        type: "built_in",
+        configuration: { systemPrompt: "你是用户的个人分身。" },
+      });
+      await database.insert(agentProfiles).values({
+        agentId,
+        ownerUserId: actor.id,
+        title: "个人分身",
+        roleDescription: "代表你本人收集和整理工作信息。",
+        avatarSeed: agentId,
+        visibility: "private",
+      });
+    });
     const { body } = await call("POST", "/api/role-templates", {
       name: "代码审核员",
       profile: reviewer,
@@ -479,21 +551,37 @@ describe("a template and the coworkers made from it", () => {
       "POST",
       `/api/role-templates/${body.template.id}/apply`,
       {
-        agentId: agent.id,
+        agentId,
         version: 1,
       },
     );
     expect(refused.status).toBe(400);
-    expect(refused.body.error).toContain("内置员工");
+    expect(refused.body.error).toContain("我的分身不能套用角色模板");
     expect(
-      (await call("GET", `/api/role-templates/employees/${agent.id}`)).body,
+      (await call("GET", `/api/role-templates/employees/${agentId}`)).body,
     ).toEqual({
       acceptsRoleTemplate: false,
       source: null,
     });
     expect(
-      (await call("GET", `/api/agents/${agent.id}`)).body.agent.title,
-    ).toBe(form.title);
+      (await call("GET", `/api/agents/${agentId}`)).body.agent,
+    ).toMatchObject({
+      title: "个人分身",
+      roleDescription: "代表你本人收集和整理工作信息。",
+      persona: null,
+      bible: null,
+      roleTemplate: null,
+      acceptsRoleTemplate: false,
+    });
+    const [row] = await runAsTenant(actor.id, () =>
+      database
+        .select({ configuration: agents.configuration })
+        .from(agents)
+        .where(eq(agents.id, agentId)),
+    );
+    expect(row?.configuration).toEqual({
+      systemPrompt: "你是用户的个人分身。",
+    });
   });
 
   test("deleting a template keeps the coworker's content and clears its source", async () => {
