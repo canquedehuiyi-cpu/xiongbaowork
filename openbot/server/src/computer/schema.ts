@@ -193,7 +193,11 @@ export type ActionResult = {
 };
 
 /** Absent path means the whole workspace. */
-export type ListFilesInput = { path?: string };
+/**
+ * `root` names one of the person's read-only folders on their own machine instead of the workspace
+ * (story F1, stage 2): an opaque reference, never a path. Read and list only.
+ */
+export type ListFilesInput = { path?: string; root?: string };
 
 /** One thing in the workspace. Folders included, so a Bot can see the shape, not just the leaves. */
 export type WorkspaceEntry = {
@@ -210,7 +214,7 @@ export type ListFilesResult = {
   truncated: boolean;
 };
 
-export type ReadFileInput = { path: string };
+export type ReadFileInput = { path: string; root?: string };
 export type DownloadFileInput = { path: string };
 export type ReadFileResult = {
   untrusted?: string;

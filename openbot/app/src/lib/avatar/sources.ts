@@ -9,16 +9,41 @@ import { client } from "@/lib/client";
  * The information sources a person declared for their 分身 (story F1, stage 1).
  *
  * Read and written through `/api/me/avatar/sources`, which only ever answers the signed-in person's
- * own 分身. A source is a declaration for now: a name and a note in the person's words, which the
- * 分身 is told on every run and which grants access to nothing.
+ * own 分身. A source is a declaration: a name and a note in the person's words, which the 分身 is
+ * told on every run and which grants access to nothing. Or a local folder (stage 2): one of the
+ * read-only folders the person's own paired machine reports, named by the machine's id and the
+ * folder's opaque reference, which the 分身 may read file by file through that machine.
  */
-export type AvatarSource = {
-  id: string;
-  kind: "declaration";
-  label: string;
-  note: string;
-  createdAt: string;
-};
+export type AvatarSource =
+  | {
+      id: string;
+      kind: "declaration";
+      label: string;
+      note: string;
+      createdAt: string;
+    }
+  | {
+      id: string;
+      kind: "local_folder";
+      label: string;
+      note: string;
+      /** The machine's own id, as `/api/devices` lists it in `deviceId`. */
+      deviceId: string;
+      /** The folder's reference on that machine. Never a path. */
+      rootRef: string;
+      createdAt: string;
+    };
+
+/** What a save sends. A local folder's empty name means the name the machine reports. */
+export type AvatarSourceInput =
+  | { kind?: "declaration"; label: string; note: string }
+  | {
+      kind: "local_folder";
+      deviceId: string;
+      rootRef: string;
+      label: string;
+      note: string;
+    };
 
 export type AvatarSourceState = {
   /** The 分身's agent id, so a roster card or a detail page can tell it is the one. */
@@ -65,10 +90,19 @@ const refresh = (queryClient: QueryClient) =>
 
 export function addAvatarSourceMutationOptions(queryClient: QueryClient) {
   return mutationOptions({
-    mutationFn: (input: { label: string; note: string }) =>
+    mutationFn: (input: AvatarSourceInput) =>
       client<AvatarSource>("/api/me/avatar/sources", "source", {
         method: "POST",
-        body: { kind: "declaration", label: input.label, note: input.note },
+        body:
+          input.kind === "local_folder"
+            ? {
+                kind: "local_folder",
+                deviceId: input.deviceId,
+                rootRef: input.rootRef,
+                label: input.label,
+                note: input.note,
+              }
+            : { kind: "declaration", label: input.label, note: input.note },
         fallback: "信息来源没有保存成功。",
       }),
     onSuccess: () => refresh(queryClient),

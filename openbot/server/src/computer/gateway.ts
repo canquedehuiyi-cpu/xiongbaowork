@@ -142,6 +142,23 @@ export type ComputerGatewayOptions = {
     botId: string,
   ) => Promise<{ tenantId: string; deviceId: string } | null>;
   /**
+   * The person's read-only folders on their own machines (story F1, stage 2).
+   *
+   * A file read or listing that names a `root` is carried to the machine that folder is on, whichever
+   * computer this Bot otherwise uses, and only when `resolve` answers one: in practice, only a
+   * person's own 分身, in that person's run, for a folder one of its active sources names. Absent
+   * means no folder can be named here at all, and a call that names one is refused. The transport is
+   * the runner's, even in a deployment whose coworkers use a container.
+   */
+  folders?: {
+    resolve: (
+      botId: string,
+      actorId: string,
+      root: string,
+    ) => Promise<{ tenantId: string; deviceId: string } | null>;
+    transport: ComputerTransport;
+  };
+  /**
    * Who holds the wheel of a Bot's browser on a tenant's own machine (F2 stage 2).
    *
    * Asked for every governed action that resolves to a device: while a person holds it, or has been
@@ -603,6 +620,11 @@ export function createComputerGateway(
       command?: string;
       /** The person's Stop, on its way to the browser. See the acting methods below. */
       signal?: AbortSignal;
+      /**
+       * The machine this call goes to when the call itself decided it (a read-only folder's), rather
+       * than this Bot's own computer. Named on the row and told to the gate in its place.
+       */
+      device?: { tenantId: string; deviceId: string };
     },
     run: (address?: string) => Promise<T>,
   ): Promise<T> {
@@ -688,9 +710,11 @@ export function createComputerGateway(
      * the approval gate. A resolver that fails is not "this deployment's container": in device mode
      * the action can only go to a machine, so the gate is told it is one (SEC1 D5, fail closed).
      */
-    const target = options.resolveDevice
-      ? await options.resolveDevice(botId).catch(() => "unknown" as const)
-      : null;
+    const target =
+      subject.device ??
+      (options.resolveDevice
+        ? await options.resolveDevice(botId).catch(() => "unknown" as const)
+        : null);
     /*
      * A person has the wheel of this Bot's browser on this machine: refused here, before the approval
      * gate and before `run`, so nothing reaches the device at all (F2 stage 2).
@@ -807,7 +831,11 @@ export function createComputerGateway(
           : subject.command
             ? "workspace"
             : hostOf(pageUrl) || "browser",
-        args: continuation?.args ?? { ...subject, signal: undefined },
+        args: continuation?.args ?? {
+          ...subject,
+          signal: undefined,
+          device: undefined,
+        },
         target: {
           pageUrl,
           ...(element ? { element, snapshotId } : {}),
@@ -874,6 +902,60 @@ export function createComputerGateway(
     return element && result && typeof result === "object"
       ? { ...result, element: { role: element.role, name: element.name } }
       : result;
+  }
+
+  /**
+   * A read or a listing in one of the person's read-only folders (story F1, stage 2).
+   *
+   * The folder is resolved first, and an unknown one is refused before anything is decided or sent:
+   * there is no machine to name on a row and nothing to ask about. A known one goes through `govern`
+   * like every other file call, with the path the policy, the row and the approval gate see written
+   * as `<root>/<path>`. So the SEC1 sensitive-path floor matches a `.env` inside a folder exactly as it
+   * matches one in the workspace, an approval for a workspace folder does not cover a local one, and
+   * the row says which folder was read. Only the two reads exist: nothing here writes.
+   */
+  async function inFolder<T>(
+    toolName: "computer_read_file" | "computer_list_files",
+    botId: string,
+    actor: ActionActor,
+    root: string,
+    path: string | undefined,
+    route: "/files/read" | "/files/list",
+  ): Promise<T> {
+    const machine =
+      typeof root === "string" && options.folders
+        ? await options.folders.resolve(botId, actor.id, root)
+        : null;
+    if (!options.folders || !machine) {
+      throw new ComputerUnavailableError(
+        "That folder is not one of the person's shared folders, or it is no longer shared. Only the folders listed in your information sources can be read.",
+      );
+    }
+    const relative = path?.trim() ? path : ".";
+    const transport = options.folders.transport;
+    return govern(
+      toolName,
+      botId,
+      actor,
+      { filePath: `${root}/${relative}`, device: machine },
+      () =>
+        transport.post<T>(
+          runnerAddress(machine),
+          botId,
+          route,
+          { root, ...(path === undefined ? {} : { path }) },
+          undefined,
+          undefined,
+          computerActionIdentity.getStore()
+            ? JSON.stringify([
+                botId,
+                route,
+                root,
+                computerActionIdentity.getStore(),
+              ])
+            : undefined,
+        ),
+    );
   }
 
   return {
@@ -1288,6 +1370,19 @@ export function createComputerGateway(
      * those files it may read back is a real question for a deployment to be able to answer.
      */
     readFile(botId: string, actor: ActionActor, input: ReadFileInput) {
+      if (input.root !== undefined) {
+        return inFolder<ReadFileResult>(
+          "computer_read_file",
+          botId,
+          actor,
+          input.root,
+          input.path,
+          "/files/read",
+        ).then((result) =>
+          // The person's own files, but files all the same: what is in them is not an instruction.
+          withUntrustedNotice(result, "local folder file", ["text"]),
+        );
+      }
       return govern(
         "computer_read_file",
         botId,
@@ -1340,6 +1435,16 @@ export function createComputerGateway(
      * listing as well as from reads, which is the consistent answer.
      */
     listFiles(botId: string, actor: ActionActor, input: ListFilesInput) {
+      if (input.root !== undefined) {
+        return inFolder<ListFilesResult>(
+          "computer_list_files",
+          botId,
+          actor,
+          input.root,
+          input.path,
+          "/files/list",
+        );
+      }
       return govern(
         "computer_list_files",
         botId,
