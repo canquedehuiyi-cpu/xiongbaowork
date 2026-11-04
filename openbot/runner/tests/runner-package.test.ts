@@ -31,6 +31,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { ServerWebSocket } from "bun";
 import {
   createDeviceChannel,
   type DeviceChannel,
@@ -142,6 +143,8 @@ let base = "";
 let channel: DeviceChannel;
 let memory: ReturnType<typeof memoryDeviceStore>;
 const children: Bun.Subprocess[] = [];
+/** The server's side of every open runner socket, so a test can drop one. */
+const sockets = new Set<ServerWebSocket<RunnerSocketData>>();
 
 beforeAll(async () => {
   root = mkdtempSync(join(tmpdir(), "openbot-runner-package-"));
@@ -198,6 +201,7 @@ beforeAll(async () => {
     },
     websocket: {
       open: (ws) => {
+        sockets.add(ws);
         void runnerOpen(ws, store, channel).catch(() => ws.close(1008));
       },
       message: (ws, value) => {
@@ -205,7 +209,10 @@ beforeAll(async () => {
           ws.close(1008),
         );
       },
-      close: (ws) => runnerClose(ws, channel),
+      close: (ws) => {
+        sockets.delete(ws);
+        runnerClose(ws, channel);
+      },
     },
   });
   base = `http://127.0.0.1:${server.port}`;
@@ -424,4 +431,39 @@ test("compiled with neither: the runner keeps today's layout in the directory it
     JSON.parse(readFileSync(join(launch, "runner-state.json"), "utf8"))
       .deviceId,
   ).toMatch(UUID_V4);
+}, 60_000);
+
+test("compiled: a dropped connection is reported as such and dialled again", async () => {
+  const launch = emptyDir("d-launch");
+  const home = emptyDir("d-home");
+  const tmp = emptyDir("d-tmp");
+  const dataDir = emptyDir("d-data");
+  const { code } = await memory.store.mintPairCode(TENANT);
+
+  const child = startRunner(
+    ["--pair", code, "--data-dir", dataDir, "--name", "dropped"],
+    { cwd: launch, home, tmp },
+  );
+  const paired = () =>
+    [...memory.devices.values()].find((d) => d.name === "dropped");
+  await waitUntil(() => Boolean(paired()), child, "pairing");
+  const target = { tenantId: TENANT, deviceId: paired()?.deviceId ?? "" };
+  await waitUntil(() => channel.isReachable(target), child, "the socket");
+
+  // The deployment goes away under it, as a server restart does.
+  for (const socket of sockets) socket.close(1001, "restarting");
+  await waitUntil(() => !channel.isReachable(target), child, "the drop");
+  await waitUntil(() => channel.isReachable(target), child, "the redial");
+
+  const { code: exitCode, output } = await stopRunner(child);
+  expect(exitCode, output).toBe(0);
+  // The order a tray reads: up, down, up again.
+  const lines = output
+    .split("\n")
+    .filter((line) => /^runner: (connected as|disconnected)/.test(line));
+  expect(lines.slice(0, 3).map((line) => line.split(" ")[1])).toEqual([
+    "connected",
+    "disconnected",
+    "connected",
+  ]);
 }, 60_000);
