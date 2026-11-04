@@ -1,0 +1,514 @@
+# Device app release (F2 stage 3): 熊宝数字员工 设备端 installers on a GitHub Release, with SHA256SUMS.
+# A person pushes a device-v* tag; this workflow never creates or moves one, and it is separate from
+# release.yml (the server image), whose v* tags it does not match.
+#
+# Signing is decided by configuration a person sets, never by this file (D3, D4):
+# - Windows is signed when the device-release Environment sets DEVICE_WINDOWS_SIGNING to
+#   azure-key-vault or trusted-signing (and that mode's variables); verify-windows-signatures.ps1
+#   then has to pass on the installer, the app and the runner it installs.
+# - Without it every installer is built and checked as unsigned, and the release can only be a
+#   prerelease titled 「未签名内测版」 whose notes say what is unsigned. A full (non-pre) release is
+#   published only when every installer that can be signed was signed and verified.
+# - DEVICE_RELEASE_REQUIRE_SIGNED=true (repository variable) turns "publish unsigned as a
+#   prerelease" into "fail": the switch for D4 = "first release must be signed".
+# The Linux deb is checksum-only (no OS-level signature check applies to a downloaded .deb).
+# No updater (D6): the release carries no update manifest or updater key.
+#
+# Every run script reads its inputs from env, never from ${{ }}: the steps are exercised as written
+# by openbot/scripts/ci/device-release-workflow.test.mjs.
+name: 熊宝设备端发布
+
+on:
+  push:
+    tags:
+      - "device-v*.*.*"
+  # Manual runs are for an existing tag only (a re-run, or a dry run before publishing): pick that
+  # tag under "Use workflow from" and type it again here; tag-check refuses any other ref.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 已存在的设备端版本标签（与 Use workflow from 所选标签一致），如 device-v0.1.0
+        type: string
+        required: true
+      dry_run:
+        description: 只构建、签名（若已配置）、校验和生成 SHA256SUMS，不发布
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: device-release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  tag-check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      version: ${{ steps.tag.outputs.version }}
+      rc: ${{ steps.tag.outputs.rc }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: The run is for an existing tag, on the commit it names, already on origin/main
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          EVENT: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ "$REF_TYPE" != tag ]; then
+            echo "::error::A device release runs only from a tag (got $REF_TYPE $REF_NAME)."
+            exit 1
+          fi
+          if [ "$EVENT" = workflow_dispatch ] && [ "$INPUT_TAG" != "$REF_NAME" ]; then
+            echo "::error::Input tag '$INPUT_TAG' is not the ref this run was started from ($REF_NAME). Choose $INPUT_TAG under 'Use workflow from'."
+            exit 1
+          fi
+          head="$(git rev-parse HEAD)"
+          tagged="$(git rev-parse --verify "refs/tags/$REF_NAME^{commit}")"
+          if [ "$head" != "$GITHUB_SHA" ] || [ "$tagged" != "$GITHUB_SHA" ]; then
+            echo "::error::$REF_NAME names $tagged, checked out $head, run is for $GITHUB_SHA."
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::error::The tagged commit is not on origin/main."
+            exit 1
+          fi
+      - id: tag
+        name: Tag format and the version the app is built with
+        working-directory: openbot
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          number='(0|[1-9][0-9]*)'
+          if [[ ! "$REF_NAME" =~ ^device-v${number}\.${number}\.${number}(-rc\.([1-9][0-9]*))?$ ]]; then
+            echo "::error::Not a device release tag: '$REF_NAME' (expected device-vX.Y.Z or device-vX.Y.Z-rc.N, no leading zeros)."
+            exit 1
+          fi
+          base="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
+          # tauri.conf.json's version is "../../package.json": the app is built with this version.
+          built="$(jq -r '.version' package.json)"
+          if [ "$built" != "$base" ]; then
+            echo "::error::package.json builds version $built, but the tag is for $base."
+            exit 1
+          fi
+          if [ -n "${BASH_REMATCH[5]}" ]; then rc=true; else rc=false; fi
+          {
+            echo "tag=$REF_NAME"
+            echo "version=$base"
+            echo "rc=$rc"
+          } >> "$GITHUB_OUTPUT"
+          echo "Device release $REF_NAME: version $base, rc=$rc"
+
+  # The same CI that gates main, on the tagged tree, as release.yml runs it. Nothing is built unless
+  # it passes. (CI's own unsigned device bundles run there too; the release builds its own below.)
+  checks:
+    needs: tag-check
+    uses: ./.github/workflows/ci.yml
+    with:
+      skip_image: true
+    permissions:
+      contents: read
+
+  linux:
+    needs: [tag-check, checks]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: openbot
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.14
+      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067
+        with:
+          toolchain: stable
+      - name: Linux libraries Tauri builds against
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev
+      - name: Install root workspaces from the frozen lockfile (no lifecycle scripts)
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Install the pinned Tauri CLI from desktop's frozen lockfile (no lifecycle scripts)
+        working-directory: openbot/desktop
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Compile the runner sidecar
+        run: bun desktop-device/scripts/build-sidecar.ts
+      - name: Bundle the deb
+        working-directory: openbot/desktop-device
+        run: ../desktop/node_modules/.bin/tauri build --ci --bundles deb --config src-tauri/tauri.bundle.conf.json
+      - name: Check the package and stage it under its release name
+        env:
+          VERSION: ${{ needs.tag-check.outputs.version }}
+        run: |
+          set -euo pipefail
+          debs=(desktop-device/src-tauri/target/release/bundle/deb/*.deb)
+          [ "${#debs[@]}" -eq 1 ] || { echo "::error::expected one deb, found ${#debs[@]}"; exit 1; }
+          deb="${debs[0]}"
+          dpkg-deb -f "$deb" Package Version Depends
+          test "$(dpkg-deb -f "$deb" Package)" = xiongbao-device
+          test "$(dpkg-deb -f "$deb" Version)" = "$VERSION"
+          contents=$(dpkg-deb -c "$deb")
+          grep -Eq 'usr/bin/xiongbao-device$' <<<"$contents"
+          grep -Eq 'usr/bin/openbot-runner$' <<<"$contents"
+          sudo dpkg --dry-run -i "$deb"
+          mkdir -p "$RUNNER_TEMP/dist"
+          cp "$deb" "$RUNNER_TEMP/dist/xiongbao-device_${VERSION}_amd64.deb"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: device-release-linux
+          path: ${{ runner.temp }}/dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  windows:
+    needs: [tag-check, checks]
+    runs-on: windows-latest
+    timeout-minutes: 90
+    # Holds the signing variables. Its protection rules (tags device-v*, required reviewers) are
+    # what keep the signing identity away from anything but a person's release tag.
+    environment: device-release
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      signed: ${{ steps.done.outputs.signed }}
+      publisher: ${{ steps.done.outputs.publisher }}
+    defaults:
+      run:
+        working-directory: openbot
+    env:
+      SIGNING_SOURCE_SHA: ${{ github.sha }}
+      DEVICE_WINDOWS_SIGNING: ${{ vars.DEVICE_WINDOWS_SIGNING }}
+      DEVICE_WINDOWS_PUBLISHER: ${{ vars.DEVICE_WINDOWS_PUBLISHER }}
+      DEVICE_AZURE_CLIENT_ID: ${{ vars.DEVICE_AZURE_CLIENT_ID }}
+      DEVICE_AZURE_TENANT_ID: ${{ vars.DEVICE_AZURE_TENANT_ID }}
+      DEVICE_AZURE_KEY_VAULT_URL: ${{ vars.DEVICE_AZURE_KEY_VAULT_URL }}
+      DEVICE_AZURE_KEY_VAULT_CERTIFICATE: ${{ vars.DEVICE_AZURE_KEY_VAULT_CERTIFICATE }}
+      DEVICE_TRUSTED_SIGNING_ENDPOINT: ${{ vars.DEVICE_TRUSTED_SIGNING_ENDPOINT }}
+      DEVICE_TRUSTED_SIGNING_ACCOUNT: ${{ vars.DEVICE_TRUSTED_SIGNING_ACCOUNT }}
+      DEVICE_TRUSTED_SIGNING_PROFILE: ${{ vars.DEVICE_TRUSTED_SIGNING_PROFILE }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - id: mode
+        name: Windows signing mode (from the device-release Environment)
+        run: |
+          set -euo pipefail
+          require() {
+            for name in "$@"; do
+              if [ -z "${!name:-}" ]; then
+                echo "::error::DEVICE_WINDOWS_SIGNING=$DEVICE_WINDOWS_SIGNING needs the variable $name."
+                exit 1
+              fi
+            done
+          }
+          case "${DEVICE_WINDOWS_SIGNING:-}" in
+            "" | none)
+              mode=none
+              echo "::warning::No Windows signing configured: the installer is built unsigned and the release can only be a prerelease (未签名内测版)."
+              ;;
+            azure-key-vault)
+              mode=azure-key-vault
+              require DEVICE_WINDOWS_PUBLISHER DEVICE_AZURE_CLIENT_ID DEVICE_AZURE_TENANT_ID DEVICE_AZURE_KEY_VAULT_URL DEVICE_AZURE_KEY_VAULT_CERTIFICATE
+              ;;
+            trusted-signing)
+              mode=trusted-signing
+              require DEVICE_WINDOWS_PUBLISHER DEVICE_AZURE_CLIENT_ID DEVICE_AZURE_TENANT_ID DEVICE_TRUSTED_SIGNING_ENDPOINT DEVICE_TRUSTED_SIGNING_ACCOUNT DEVICE_TRUSTED_SIGNING_PROFILE
+              ;;
+            *)
+              echo "::error::DEVICE_WINDOWS_SIGNING must be empty, none, azure-key-vault or trusted-signing (got '$DEVICE_WINDOWS_SIGNING')."
+              exit 1
+              ;;
+          esac
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "Windows signing mode: $mode"
+      # OIDC only: the federated credential on the Azure app registration names this repository and
+      # the device-release Environment, so there is no client secret anywhere.
+      - if: ${{ steps.mode.outputs.mode != 'none' }}
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.DEVICE_AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.DEVICE_AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+      - name: Install pinned AzureSignTool
+        if: ${{ steps.mode.outputs.mode == 'azure-key-vault' }}
+        shell: pwsh
+        run: |
+          $toolDirectory = Join-Path $env:RUNNER_TEMP 'azuresigntool-7.0.1'
+          New-Item -ItemType Directory -Path $toolDirectory -Force | Out-Null
+          $tool = Join-Path $toolDirectory 'AzureSignTool.exe'
+          Invoke-WebRequest 'https://github.com/vcsjones/AzureSignTool/releases/download/v7.0.1/AzureSignTool-x64.exe' -OutFile $tool
+          if ((Get-FileHash -LiteralPath $tool -Algorithm SHA256).Hash -ne 'DC85A3F24BCD5978C63FCFD167A9B41313AF9116722B99B831400F05F387FCBA') {
+            throw 'AzureSignTool download hash mismatch.'
+          }
+          $toolDirectory | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+          az keyvault certificate show --id "$env:DEVICE_AZURE_KEY_VAULT_URL/certificates/$env:DEVICE_AZURE_KEY_VAULT_CERTIFICATE" --query id --output tsv --only-show-errors
+          if ($LASTEXITCODE -ne 0) { throw 'Could not read the signing certificate from Key Vault.' }
+      - name: Install pinned Artifact Signing (Trusted Signing) dlib
+        if: ${{ steps.mode.outputs.mode == 'trusted-signing' }}
+        shell: pwsh
+        run: |
+          $package = Join-Path $env:RUNNER_TEMP 'artifactsigning-client-1.0.146.zip'
+          Invoke-WebRequest 'https://api.nuget.org/v3-flatcontainer/microsoft.artifactsigning.client/1.0.146/microsoft.artifactsigning.client.1.0.146.nupkg' -OutFile $package
+          if ((Get-FileHash -LiteralPath $package -Algorithm SHA256).Hash -ne '7761E5D8F31E54B764DA21D33CD8B0A2940E1B05526C7DFCB5E94B0431426F70') {
+            throw 'Artifact Signing client download hash mismatch.'
+          }
+          $directory = Join-Path $env:RUNNER_TEMP 'artifactsigning-client'
+          Expand-Archive -LiteralPath $package -DestinationPath $directory -Force
+          $dlib = Join-Path $directory 'bin/x64/Azure.CodeSigning.Dlib.dll'
+          if (-not (Test-Path -LiteralPath $dlib -PathType Leaf)) { throw 'Azure.CodeSigning.Dlib.dll is missing from the package.' }
+          "DEVICE_TRUSTED_SIGNING_DLIB=$dlib" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.14
+      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067
+        with:
+          toolchain: stable
+      - name: Install root workspaces from the frozen lockfile (no lifecycle scripts)
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Install the pinned Tauri CLI from desktop's frozen lockfile (no lifecycle scripts)
+        working-directory: openbot/desktop
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Compile the runner sidecar
+        run: bun desktop-device/scripts/build-sidecar.ts
+      # Signed: Tauri runs sign-windows.ps1 on the app, the runner sidecar and the installer.
+      - name: Bundle the NSIS installer
+        working-directory: openbot/desktop-device
+        env:
+          MODE: ${{ steps.mode.outputs.mode }}
+        run: |
+          set -euo pipefail
+          configs=(--config src-tauri/tauri.bundle.conf.json)
+          if [ "$MODE" != none ]; then configs+=(--config src-tauri/tauri.windows-signing.conf.json); fi
+          ../desktop/node_modules/.bin/tauri build --ci --bundles nsis "${configs[@]}"
+      - name: Verify the installer (verify-windows-signatures.ps1)
+        working-directory: openbot/desktop-device
+        shell: pwsh
+        env:
+          MODE: ${{ steps.mode.outputs.mode }}
+          VERSION: ${{ needs.tag-check.outputs.version }}
+        run: |
+          $evidence = Join-Path $env:RUNNER_TEMP 'windows-evidence'
+          if ($env:MODE -eq 'none') {
+            ./scripts/verify-windows-signatures.ps1 -Unsigned -ExpectedVersion $env:VERSION -EvidenceDirectory $evidence
+          } else {
+            ./scripts/verify-windows-signatures.ps1 -ExpectedPublisher $env:DEVICE_WINDOWS_PUBLISHER -ExpectedVersion $env:VERSION -EvidenceDirectory $evidence
+          }
+          Get-Content (Join-Path $evidence 'signatures.json')
+      - name: Stage the installer under its release name
+        env:
+          VERSION: ${{ needs.tag-check.outputs.version }}
+        run: |
+          set -euo pipefail
+          installers=(desktop-device/src-tauri/target/release/bundle/nsis/*-setup.exe)
+          [ "${#installers[@]}" -eq 1 ] || { echo "::error::expected one installer, found ${#installers[@]}"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/dist"
+          # ASCII release name: GitHub rewrites non-ASCII asset names. The signature is unaffected.
+          cp "${installers[0]}" "$RUNNER_TEMP/dist/xiongbao-device_${VERSION}_x64-setup.exe"
+      # Reached only when the verifier passed in the mode above, so "signed" is never claimed for an
+      # installer that was not verified as signed.
+      - id: done
+        name: Record the signing result
+        env:
+          MODE: ${{ steps.mode.outputs.mode }}
+        run: |
+          set -euo pipefail
+          if [ "$MODE" = none ]; then
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "publisher=" >> "$GITHUB_OUTPUT"
+          else
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+            echo "publisher=$DEVICE_WINDOWS_PUBLISHER" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: device-release-windows
+          path: ${{ runner.temp }}/dist/
+          if-no-files-found: error
+          retention-days: 7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: device-release-windows-evidence
+          path: ${{ runner.temp }}/windows-evidence/
+          if-no-files-found: ignore
+          retention-days: 30
+
+  # Everything the release will carry, decided and checksummed here, also on a dry run.
+  assemble:
+    needs: [tag-check, linux, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      prerelease: ${{ steps.kind.outputs.prerelease }}
+      signed: ${{ steps.kind.outputs.signed }}
+      title: ${{ steps.kind.outputs.title }}
+    steps:
+      - id: kind
+        name: Decide the release kind (unsigned is always a prerelease)
+        env:
+          VERSION: ${{ needs.tag-check.outputs.version }}
+          RC: ${{ needs.tag-check.outputs.rc }}
+          WINDOWS_SIGNED: ${{ needs.windows.outputs.signed }}
+          REQUIRE_SIGNED: ${{ vars.DEVICE_RELEASE_REQUIRE_SIGNED }}
+        run: |
+          set -euo pipefail
+          for pair in "RC=$RC" "WINDOWS_SIGNED=$WINDOWS_SIGNED"; do
+            case "${pair#*=}" in
+              true | false) ;;
+              *) echo "::error::${pair%%=*} is '${pair#*=}', expected true or false."; exit 1 ;;
+            esac
+          done
+          unsigned=()
+          [ "$WINDOWS_SIGNED" = true ] || unsigned+=(Windows)
+          if [ "${#unsigned[@]}" -gt 0 ]; then
+            if [ "${REQUIRE_SIGNED:-}" = true ]; then
+              echo "::error::DEVICE_RELEASE_REQUIRE_SIGNED=true, but these installers are unsigned: ${unsigned[*]}. Nothing is published."
+              exit 1
+            fi
+            signed=false
+            prerelease=true
+            title="熊宝数字员工 设备端 ${VERSION}（未签名内测版）"
+          elif [ "$RC" = true ]; then
+            signed=true
+            prerelease=true
+            title="熊宝数字员工 设备端 ${VERSION}（预发布）"
+          else
+            signed=true
+            prerelease=false
+            title="熊宝数字员工 设备端 ${VERSION}"
+          fi
+          if [ "$prerelease" != true ] && [ "$signed" != true ]; then
+            echo "::error::refusing a full release with unsigned installers"
+            exit 1
+          fi
+          {
+            echo "signed=$signed"
+            echo "prerelease=$prerelease"
+            echo "title=$title"
+            echo "unsigned=${unsigned[*]}"
+          } >> "$GITHUB_OUTPUT"
+          echo "$title: prerelease=$prerelease signed=$signed unsigned='${unsigned[*]}'"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: device-release-linux
+          path: dist
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: device-release-windows
+          path: dist
+      - id: assets
+        name: Assets, SHA256SUMS and release notes
+        env:
+          TAG: ${{ needs.tag-check.outputs.tag }}
+          VERSION: ${{ needs.tag-check.outputs.version }}
+          SIGNED: ${{ steps.kind.outputs.signed }}
+          UNSIGNED: ${{ steps.kind.outputs.unsigned }}
+          WINDOWS_SIGNED: ${{ needs.windows.outputs.signed }}
+          WINDOWS_PUBLISHER: ${{ needs.windows.outputs.publisher }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          windows="xiongbao-device_${VERSION}_x64-setup.exe"
+          linux="xiongbao-device_${VERSION}_amd64.deb"
+          expected="$(printf '%s\n' "$linux" "$windows" | sort)"
+          actual="$(cd dist && find . -mindepth 1 -printf '%P\n' | sort)"
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::dist holds unexpected files:"
+            printf '%s\n' "$actual"
+            exit 1
+          fi
+          (cd dist && sha256sum -- "$linux" "$windows" > SHA256SUMS && sha256sum -c SHA256SUMS)
+          if [ "$WINDOWS_SIGNED" = true ]; then
+            windows_state="已签名（${WINDOWS_PUBLISHER}），已通过 verify-windows-signatures.ps1 校验"
+          else
+            windows_state="**未签名**"
+          fi
+          {
+            echo "## 熊宝数字员工 设备端 ${VERSION}"
+            echo
+            echo "标签 \`${TAG}\`，提交 \`${COMMIT}\`。"
+            echo
+            if [ "$SIGNED" != true ]; then
+              echo "> **未签名内测版**：${UNSIGNED} 安装包没有代码签名，只用于小范围内测，不要发给正式客户。"
+              echo "> Windows 安装时 SmartScreen 会提示「Windows 已保护你的电脑」，需要点「更多信息 → 仍要运行」。"
+              echo
+            fi
+            echo "| 文件 | 平台 | 签名 |"
+            echo "| --- | --- | --- |"
+            echo "| \`${windows}\` | Windows 10/11 x64 | ${windows_state} |"
+            echo "| \`${linux}\` | Ubuntu / Debian x64 | 不做代码签名，只提供 SHA256 校验和 |"
+            echo
+            echo "下载后核对校验和：Linux 运行 \`sha256sum -c SHA256SUMS --ignore-missing\`；Windows 在 PowerShell 运行 \`Get-FileHash <文件> -Algorithm SHA256\`，与 \`SHA256SUMS\` 里的值对照。"
+            echo
+            echo "本版本没有自动更新，新版本需要重新下载安装。"
+          } > notes.md
+          cat notes.md
+          cat dist/SHA256SUMS
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: device-release-dist
+          path: |
+            dist/
+            notes.md
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    needs: [tag-check, assemble]
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    environment: device-release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: device-release-dist
+          path: release
+      - id: publish
+        name: Publish the GitHub Release (existing tag only)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.tag-check.outputs.tag }}
+          TITLE: ${{ needs.assemble.outputs.title }}
+          PRERELEASE: ${{ needs.assemble.outputs.prerelease }}
+          SIGNED: ${{ needs.assemble.outputs.signed }}
+        run: |
+          set -euo pipefail
+          case "$PRERELEASE/$SIGNED" in
+            true/true | true/false) flags=(--prerelease) ;;
+            false/true) flags=() ;;
+            false/false) echo "::error::refusing to publish unsigned installers as a full release"; exit 1 ;;
+            *) echo "::error::prerelease='$PRERELEASE' signed='$SIGNED'"; exit 1 ;;
+          esac
+          test -s release/notes.md
+          (cd release/dist && sha256sum -c SHA256SUMS)
+          gh release create "$TAG" release/dist/* \
+            --verify-tag --title "$TITLE" --notes-file release/notes.md "${flags[@]}"
