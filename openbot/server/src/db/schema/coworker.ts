@@ -22,7 +22,9 @@ import {
 import type { Persona } from "../../../../shared/persona";
 import { agents, users } from "./core";
 import { jsonb } from "./json";
+import { knowledgeNotebooks } from "./knowledge-foundations";
 import { modelRegistry, platformModelPool } from "./model";
+import { mcpServers } from "./plugins";
 import { tenantId } from "./tenant";
 
 const createdAt = () =>
@@ -165,6 +167,21 @@ export const avatarSources = pgTable(
     deviceId: text("device_id"),
     /** The runner's opaque id for a folder: never an absolute path (a later stage). */
     rootRef: text("root_ref"),
+    /**
+     * A notebook source's notebook (stage 3, S3): one of the person's own RES1 notebooks. Set for
+     * `notebook` and for nothing else (`avatar_sources_kind_refs`, 0142). Reading it goes through the
+     * RES1 binding the same save writes, never through this pointer.
+     */
+    notebookId: uuid("notebook_id").references(() => knowledgeNotebooks.id, {
+      onDelete: "cascade",
+    }),
+    /**
+     * A connector source's connector row (stage 3, S4, ADR-0002 `mcp_servers.id`). Set for
+     * `connector` and for nothing else. Calling it goes through the plugin grants the same save writes.
+     */
+    serverId: text("server_id").references(() => mcpServers.id, {
+      onDelete: "cascade",
+    }),
     createdAt: createdAt(),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
   },
@@ -185,6 +202,18 @@ export const avatarSources = pgTable(
       sql`char_length(${table.label}) BETWEEN 1 AND 60`,
     ),
     check("avatar_sources_note_length", sql`char_length(${table.note}) <= 500`),
+    check(
+      "avatar_sources_kind_refs",
+      sql`(${table.kind} = 'notebook') = (${table.notebookId} IS NOT NULL) AND (${table.kind} = 'connector') = (${table.serverId} IS NOT NULL) AND (${table.kind} = 'local_folder' OR (${table.deviceId} IS NULL AND ${table.rootRef} IS NULL))`,
+    ),
+    uniqueIndex("avatar_sources_active_notebook_idx")
+      .on(table.agentId, table.notebookId)
+      .where(
+        sql`${table.revokedAt} IS NULL AND ${table.notebookId} IS NOT NULL`,
+      ),
+    uniqueIndex("avatar_sources_active_connector_idx")
+      .on(table.agentId, table.serverId)
+      .where(sql`${table.revokedAt} IS NULL AND ${table.serverId} IS NOT NULL`),
     pgPolicy("tenant_isolation", {
       as: "permissive",
       for: "select",
