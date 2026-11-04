@@ -164,7 +164,7 @@
 5. **K1 平台池放哪些模型。** 平台池没有种子行，每行用 `apiKeyEnv` 指向一个部署环境变量；Free 档实际能用哪些模型、预算多少，由运维配置决定。
 6. **K3 只手动。** 按决定交付手动切换和审计，支付 provider 接口（#54）不合并。故事原文里的"预留 provider 接口"相应不做。
 7. **ROLE1 的 D4 范围。** 按 D4，所有 `built_in` 员工都不能套用角色模板；单容器部署上所有员工都是 `built_in`，等于整个功能只剩"新建时预填"。是否收窄为只挡分身，需要决定（只改 `acceptsRoleTemplate` 一处）。
-8. **WF8 的提问路径**：已决定给 WF7 补确认步骤，由 canquedehuiyi-cpu/xiongbaowork#230、#231、#232 实现（#230 已合入集成分支，另两个还没合入），G4 端到端加了「第 2 步提问 → 页面回答 → 运行完成」。worker 步骤自己发问（无人值守轮次里的 `ask_person`）仍只对职责运行生效，WakerFlow 里不做。
+8. **WF8 的提问路径**：已决定给 WF7 补确认步骤，由 canquedehuiyi-cpu/xiongbaowork#230、#231、#232 实现（三个都已合入，随 canquedehuiyi-cpu/xiongbaowork#238 进入 `main`），G4 端到端加了「第 2 步提问 → 页面回答 → 运行完成」。worker 步骤自己发问（无人值守轮次里的 `ask_person`）仍只对职责运行生效，WakerFlow 里不做。
 
 代码缺口：
 
