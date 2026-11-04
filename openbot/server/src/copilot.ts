@@ -365,8 +365,17 @@ export function standingInstructionsGuidance(
   ].join("\n\n");
 }
 
-/** One information source a person declared for their 分身, as its prompt carries it (story F1). */
-export type AvatarSourceForPrompt = { label: string; note: string };
+/**
+ * One information source a person gave their 分身, as its prompt carries it (story F1).
+ *
+ * `root` is set for a local folder (stage 2): the opaque reference of a read-only folder on the
+ * person's own paired machine, which the 分身 passes to the file tools. Absent for a declaration.
+ */
+export type AvatarSourceForPrompt = {
+  label: string;
+  note: string;
+  root?: string;
+};
 
 /**
  * The information sources of the Bot being built, when it is the asker's own 分身.
@@ -402,21 +411,51 @@ export function avatarSourcesGuidance(
   sources: readonly AvatarSourceForPrompt[] | null | undefined,
 ): string | null {
   if (!sources || sources.length === 0) return null;
-  return [
-    "The person you represent has told you where their own material lives. These are information sources they declared: a name and a note in their own words. A declaration gives you no access to the source itself. When a question depends on one of them, say which source the answer would come from and ask the person for the relevant content, or say plainly that you cannot see it. Never claim to have read a source you were only told about.",
-    JSON.stringify(
-      withUntrustedNotice(
-        {
-          sources: sources.map((source) => ({
-            label: source.label,
-            note: source.note,
-          })),
-        },
-        "information source declaration",
-        ["sources"],
+  const declared = sources.filter((source) => source.root === undefined);
+  const folders = sources.filter((source) => source.root !== undefined);
+  const parts: string[] = [];
+  if (declared.length > 0) {
+    parts.push(
+      "The person you represent has told you where their own material lives. These are information sources they declared: a name and a note in their own words. A declaration gives you no access to the source itself. When a question depends on one of them, say which source the answer would come from and ask the person for the relevant content, or say plainly that you cannot see it. Never claim to have read a source you were only told about.",
+      JSON.stringify(
+        withUntrustedNotice(
+          {
+            sources: declared.map((source) => ({
+              label: source.label,
+              note: source.note,
+            })),
+          },
+          "information source declaration",
+          ["sources"],
+        ),
       ),
-    ),
-  ].join("\n\n");
+    );
+  }
+  /*
+   * A POINTER, NEVER THE FILES (stage 2). Each folder is a name, the person's note and the reference
+   * the file tools take; nothing of what is in it is put here. Reading it is a tool call through the
+   * gateway, so every file read is decided, audited and held by the approval gate like any other, and
+   * the folder is read-only on the machine, so the 分身 is told not to try anything else.
+   */
+  if (folders.length > 0) {
+    parts.push(
+      "The person you represent has shared read-only folders on their own computer with you. You can list one with computer_list_files and read a file in it with computer_read_file, passing that folder's root (for example root=fld_…) and a path relative to the folder. Read only what the question needs, and say which folder and file an answer came from. These folders cannot be written to, changed or used to run commands; do not try. If the computer is offline, the tools are missing, or a read is refused, say so instead of guessing what the files contain. Never claim to have read a file you did not read.",
+      JSON.stringify(
+        withUntrustedNotice(
+          {
+            folders: folders.map((source) => ({
+              label: source.label,
+              note: source.note,
+              root: source.root,
+            })),
+          },
+          "information source local folder",
+          ["folders"],
+        ),
+      ),
+    );
+  }
+  return parts.join("\n\n");
 }
 
 export function builtInAgentConfiguration(
