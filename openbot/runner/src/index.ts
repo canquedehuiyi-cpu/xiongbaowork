@@ -15,7 +15,7 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { hostname, platform } from "node:os";
 import { join, resolve, sep } from "node:path";
-import { createRunnerBrowser } from "./browser";
+import { createRunnerBrowser, type RunnerBrowser } from "./browser";
 import {
   type CredentialStore,
   createFileCredentialStore,
@@ -28,6 +28,7 @@ import {
   type RunnerExecutor,
 } from "./execute";
 import { createActionJournal } from "./journal";
+import { createRunnerScreens } from "./screencast";
 
 /** The environment twin of `--data-dir`, for a desktop shell that starts the runner as a sidecar. */
 export const DATA_DIR_ENV = "OPENBOT_RUNNER_DATA_DIR";
@@ -285,15 +286,27 @@ function connect(
   token: string,
   deviceId: string,
   dispatch: ReturnType<typeof createRunnerDispatcher>,
+  browser: RunnerBrowser,
 ): Promise<void> {
   return new Promise((resolve) => {
     const url = `${options.server.replace(/^http/, "ws")}/api/runner/ws?token=${encodeURIComponent(token)}`;
     const socket = new WebSocket(url);
     let beat: ReturnType<typeof setInterval> | undefined;
     let open = false;
+    /*
+     * The live screen, per connection: it rides this socket and dies with it. The server starts it
+     * again on the next connection for whoever is still watching, so nothing is cast to a socket that
+     * is gone.
+     */
+    const screens = createRunnerScreens({
+      source: browser,
+      send: (frame) => socket.send(JSON.stringify(frame)),
+      buffered: () => socket.bufferedAmount,
+    });
 
     const stop = () => {
       if (beat) clearInterval(beat);
+      void screens.stopAll();
       // Said once per connection that was up. A desktop shell reads these lines for its tray
       // (desktop-device/src-tauri/src/supervise.rs `classify`): without it, a dropped connection would
       // look online until the next dial failed, which can be half a minute away.
@@ -323,7 +336,13 @@ function connect(
     });
     socket.addEventListener("message", (event) => {
       const text = String(event.data);
-      void handleFrame(socket, text, dispatch, `${options.server}/${deviceId}`);
+      void handleFrame(
+        socket,
+        text,
+        dispatch,
+        `${options.server}/${deviceId}`,
+        screens,
+      );
     });
     socket.addEventListener("close", stop);
     socket.addEventListener("error", () => {
@@ -390,10 +409,8 @@ export async function main(
    * directory for the default path and then be told to use another one, leaving a coworker's cookies
    * in a folder nothing was looking at.
    */
-  const executor = createRunnerExecutor(
-    paths.workspaceDir,
-    createRunnerBrowser(parsed.browser),
-  );
+  const browser = createRunnerBrowser(parsed.browser);
+  const executor = createRunnerExecutor(paths.workspaceDir, browser);
   running = executor;
 
   // Backoff between dials, capped: a deployment that is down should cost one request every half
@@ -402,7 +419,7 @@ export async function main(
   const dispatch = createRunnerDispatcher(journal, executor);
   let delay = 1_000;
   for (;;) {
-    await connect(parsed, token, deviceId, dispatch);
+    await connect(parsed, token, deviceId, dispatch, browser);
     await new Promise((resolve) => setTimeout(resolve, delay));
     delay = Math.min(delay * 2, 30_000);
   }
@@ -450,6 +467,7 @@ async function handleFrame(
   text: string,
   dispatch: ReturnType<typeof createRunnerDispatcher>,
   scope: string,
+  screens: ReturnType<typeof createRunnerScreens>,
 ): Promise<void> {
   let frame: {
     type?: unknown;
@@ -468,6 +486,9 @@ async function handleFrame(
     console.log(`runner: the deployment said ${JSON.stringify(frame)}`);
     return;
   }
+  // The live screen is not an action: nothing is journalled, and nothing is answered with a result.
+  if (await screens.handle(frame as Record<string, unknown>).catch(() => true))
+    return;
   try {
     await dispatch(scope, frame as Record<string, unknown>, (result) =>
       socket.send(JSON.stringify(result)),
