@@ -5,6 +5,8 @@ import type {
   WakerFlow,
   WakerFlowCandidate,
   WakerFlowGenerationResult,
+  WakerFlowInput,
+  WakerFlowInputType,
   WakerFlowPlan,
   WakerFlowRequestStatus,
   WakerFlowSaveInput,
@@ -15,14 +17,26 @@ export type {
   WakerFlow,
   WakerFlowCandidate,
   WakerFlowGenerationResult,
+  WakerFlowInput,
+  WakerFlowInputType,
   WakerFlowPlan,
   WakerFlowRequestStatus,
   WakerFlowSaveInput,
 };
 export {
   WAKERFLOW_CONFLICT_MESSAGE,
+  WAKERFLOW_INPUT_TYPES,
   WAKERFLOW_SUGGESTIONS,
 } from "../../../shared/wakerflows";
+
+/** How each input type is named in the editor. */
+export const INPUT_TYPE_LABEL: Record<WakerFlowInputType, string> = {
+  text: "单行文本",
+  textarea: "多行文本",
+  number: "数字",
+  select: "下拉选择",
+  boolean: "开关",
+};
 
 /**
  * The browser's side of the WakerFlow API (spec D10, stories WF1-WF3; server routes in
@@ -131,27 +145,121 @@ export function laterRunReading<T extends { status: string }>(
 }
 
 /**
- * The run form's checks before anything is sent: each required input filled, nothing over the
- * server's bounds. Keyed by input key; empty means the run may start. The server stays the authority
- * (`server/src/wakerflows/plan.ts` `flowInputs`).
+ * Why a filled value is not a value of the input's type, or null. The same rules and the same words
+ * as the server's `flowInputs` (`server/src/wakerflows/plan.ts`), which stays the authority.
  */
-export function runInputProblems(
-  plan: WakerFlowPlan,
+export function inputValueProblem(
+  input: WakerFlowInput,
+  value: string,
+): string | null {
+  switch (input.type ?? "text") {
+    case "number": {
+      const trimmed = value.trim();
+      return trimmed !== "" && Number.isFinite(Number(trimmed))
+        ? null
+        : `${input.label} 需要填写数字。`;
+    }
+    case "boolean":
+      return value === "true" || value === "false"
+        ? null
+        : `${input.label} 只能是 true（是）或 false（否）。`;
+    case "select":
+      return (input.options ?? []).includes(value)
+        ? null
+        : `${input.label} 需要从选项中选择。`;
+    default:
+      return null;
+  }
+}
+
+/**
+ * What a form for these inputs starts with: each input's default, and a required switch starts at
+ * "否" so that leaving it alone is an answer. Everything else starts empty.
+ */
+export function initialInputValues(
+  inputs: WakerFlowInput[],
+): Record<string, string> {
+  const values: Record<string, string> = {};
+  for (const input of inputs) {
+    if (input.default !== undefined && input.default !== "")
+      values[input.key] = input.default;
+    else if (input.type === "boolean" && input.required)
+      values[input.key] = "false";
+  }
+  return values;
+}
+
+/** Only declared inputs, and only what was filled: the server refuses a name it did not declare. */
+export function filledInputValues(
+  inputs: WakerFlowInput[],
   values: Record<string, string>,
 ): Record<string, string> {
+  const filled: Record<string, string> = {};
+  for (const input of inputs) {
+    const value = values[input.key] ?? "";
+    if (value.trim()) filled[input.key] = value;
+  }
+  return filled;
+}
+
+/**
+ * The run form's checks before anything is sent: each required input filled, each filled value one
+ * its type accepts, nothing over the server's bounds. Keyed by input key; empty means the run may
+ * start. The server stays the authority (`server/src/wakerflows/plan.ts` `flowInputs`).
+ *
+ * `defaults: false` is the automation form's rule: a required input must carry its own value there,
+ * because a Flow changed later is reported rather than filled in from a default.
+ */
+export function runInputProblems(
+  plan: Pick<WakerFlowPlan, "inputs">,
+  values: Record<string, string>,
+  options: { defaults?: boolean } = {},
+): Record<string, string> {
+  const fillDefaults = options.defaults ?? true;
   const problems: Record<string, string> = {};
   let total = 0;
   for (const input of plan.inputs) {
     const value = values[input.key] ?? "";
     total += value.length;
-    if (input.required && !value.trim())
-      problems[input.key] = `请填写 ${input.label}。`;
-    else if (value.length > 10000)
+    const hasDefault =
+      fillDefaults && input.default !== undefined && input.default !== "";
+    if (!value.trim()) {
+      if (input.required && !hasDefault)
+        problems[input.key] = `请填写 ${input.label}。`;
+      continue;
+    }
+    if (value.length > 10000) {
       problems[input.key] = `${input.label} 不能超过 10000 字。`;
+      continue;
+    }
+    const problem = inputValueProblem(input, value);
+    if (problem) problems[input.key] = problem;
   }
   if (total > 20000 && plan.inputs[0])
     problems[plan.inputs[0].key] ??= "流程输入合计不能超过 20000 字。";
   return problems;
+}
+
+/**
+ * The plan as Save sends it. The editor keeps a select's options as the lines being typed, so a new
+ * empty line can be started; here they are trimmed and the empty ones dropped, an empty description
+ * or default is left out, and options are kept only on a select.
+ */
+export function planForSave(plan: WakerFlowPlan): WakerFlowPlan {
+  return {
+    ...plan,
+    inputs: plan.inputs.map((input) => {
+      const { description, default: fallback, options, ...rest } = input;
+      const cleaned: WakerFlowInput = { ...rest };
+      if (description?.trim()) cleaned.description = description.trim();
+      if (fallback !== undefined && fallback !== "") cleaned.default = fallback;
+      if (input.type === "select")
+        cleaned.options = (options ?? [])
+          .map((option) => option.trim())
+          .filter(Boolean);
+      return cleaned;
+    }),
+  };
 }
 
 export type WakerFlowGenerateInput = {
@@ -370,6 +478,31 @@ export function planProblems(plan: WakerFlowPlan): Record<string, string> {
     if (!label) fail(`inputs.${index}.label`, "请填写输入的显示名称。");
     else if (label.length > 160)
       fail(`inputs.${index}.label`, "显示名称不能超过 160 字。");
+    if ((input.description ?? "").trim().length > 200)
+      fail(`inputs.${index}.description`, "输入说明不能超过 200 字。");
+    const shown = input.label.trim() || input.key;
+    if (input.type === "select") {
+      const options = input.options ?? [];
+      if (options.length === 0)
+        fail(
+          `inputs.${index}.options`,
+          `下拉输入「${shown}」至少需要一个选项。`,
+        );
+      else if (options.length > 20)
+        fail(`inputs.${index}.options`, `下拉输入「${shown}」最多 20 个选项。`);
+      else if (options.some((option) => option.length > 80))
+        fail(`inputs.${index}.options`, "每个下拉选项不能超过 80 字。");
+      else if (new Set(options).size !== options.length)
+        fail(`inputs.${index}.options`, `下拉输入「${shown}」的选项重复。`);
+    }
+    if (input.default !== undefined && input.default.trim() !== "") {
+      const problem = inputValueProblem(
+        { ...input, label: shown },
+        input.default,
+      );
+      if (problem)
+        fail(`inputs.${index}.default`, `「${shown}」的默认值无效：${problem}`);
+    }
   });
 
   if (plan.steps.length === 0) fail("steps", "计划里至少要有一个步骤。");
