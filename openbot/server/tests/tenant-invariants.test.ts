@@ -112,6 +112,14 @@ function doorCounts(files: Parsed[]): Record<string, Record<string, number>> {
       /set_config\(\s*'app\.tenant_id'\s*,\s*([^,)]+?)\s*,/g,
     ))
       bump(`set_config('app.tenant_id', ${match[1]}`);
+    /*
+     * WF9: the share token is a door too, into exactly one other tenant's row (a share link). It is
+     * counted with its third argument, so a session-wide setting (`false`) reads as a new door.
+     */
+    for (const match of parsed.text.matchAll(
+      /set_config\(\s*'app\.flow_share_token'\s*,\s*[^,)]+?\s*,\s*(\w+)\s*\)/g,
+    ))
+      bump(`set_config('app.flow_share_token', local=${match[1]}`);
   }
   return counts;
 }
@@ -214,6 +222,14 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   "src/tenant/context.ts": { 'runAsTenant("platform"': 1 },
   // WF8: the fourth finds retries a restart left `prepared`, across tenants; each is settled in its own.
   "src/wakerflows/recovery.ts": { 'runAsTenant("platform"': 4 },
+  /*
+   * WF9 (D1, D7): an importer reads, and adds one use to, the one share link whose token they hold,
+   * in their OWN frame: `SET LOCAL app.flow_share_token` inside one transaction, never platform. What
+   * that row may become in a frame not its owner's is fixed by `openbot_flow_share_guard` (0141).
+   */
+  "src/wakerflows/sharing.ts": {
+    "set_config('app.flow_share_token', local=true": 1,
+  },
   "src/work/culler.ts": { 'runAsTenant("platform"': 2 },
   "src/work/loop.ts": { 'runAsTenant("platform"': 1 },
   "src/work/queue.ts": { 'runAsTenant("platform"': 6 },
@@ -394,7 +410,8 @@ describe("the catalogue (I1–I4, I8)", () => {
              has_function_privilege('public', p.oid, 'EXECUTE') as "publicExecute",
              p.prorettype::regtype::text as "returns"
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-      where n.nspname = 'public' and p.proname like 'openbot\\_team\\_%'
+      where n.nspname = 'public'
+        and (p.proname like 'openbot\\_team\\_%' or p.proname like 'openbot\\_flow\\_share\\_%')
       order by 1
     `);
     expect(functions.length).toBeGreaterThan(0);
@@ -425,8 +442,42 @@ describe("the catalogue (I1–I4, I8)", () => {
         "openbot_team_channel_seedable",
         "openbot_team_row_guard",
         "openbot_team_server_secret",
+        // WF9 (0141): what a share link may become in a frame that is not its owner's.
+        "openbot_flow_share_guard",
       ]),
     );
+  });
+
+  test("(f) the share link guard is a BEFORE UPDATE row trigger on flow_share_links, and only there", async () => {
+    const triggers = await catalogue<{
+      table: string;
+      trigger: string;
+      enabled: string;
+      type: number;
+    }>(`
+      select c.relname as "table", t.tgname as "trigger", t.tgenabled as "enabled", t.tgtype as "type"
+      from pg_trigger t
+      join pg_class c on c.oid = t.tgrelid
+      join pg_proc p on p.oid = t.tgfoid
+      where p.proname = 'openbot_flow_share_guard' and not t.tgisinternal
+    `);
+    const BEFORE_UPDATE_ROW = 1 | 2 | 16;
+    expect(
+      triggers.map((row) => ({
+        table: row.table,
+        trigger: row.trigger,
+        enabled: row.enabled,
+        beforeUpdateRow:
+          (Number(row.type) & BEFORE_UPDATE_ROW) === BEFORE_UPDATE_ROW,
+      })),
+    ).toEqual([
+      {
+        table: "flow_share_links",
+        trigger: "openbot_flow_share_guard",
+        enabled: "O",
+        beforeUpdateRow: true,
+      },
+    ]);
   });
 
   test("(f) every table that shares team rows has the row guard, and every guard argument is a real column", async () => {

@@ -365,7 +365,10 @@ import { createWakerGroupStore } from "./waker-groups/store";
 import { createFlowGenerator } from "./wakerflows/generator";
 import { createFlowModelResolver } from "./wakerflows/model";
 import { recoverInterruptedFlowRuns } from "./wakerflows/recovery";
-import { createWakerFlowRoutes } from "./wakerflows/routes";
+import {
+  createWakerFlowRoutes,
+  createWakerFlowShareRoutes,
+} from "./wakerflows/routes";
 import {
   createWakerFlowStore,
   flowRunEventWriter,
@@ -4441,6 +4444,16 @@ await startupLifecycle.run(async (startup) => {
   app.route(
     "/api/wakerflows",
     createWakerFlowRoutes({
+      store: wakerFlowStore,
+      requireUser: config.singleUser
+        ? createDevRequireUser()
+        : createRequireUser(auth as AuthService, roleRepository),
+    }),
+  );
+  // WF9: a shared Flow's preview and import, in the signed-in importer's own frame.
+  app.route(
+    "/api/wakerflow-shares",
+    createWakerFlowShareRoutes({
       store: wakerFlowStore,
       requireUser: config.singleUser
         ? createDevRequireUser()

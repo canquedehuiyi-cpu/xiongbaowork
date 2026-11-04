@@ -18,6 +18,7 @@ import {
   flowConfirmations,
   flowRunEvents,
   flowRunRetries,
+  flowShareLinks,
   groupTaskRuns,
   groupTaskTemplates,
   wakerFlowRequests,
@@ -50,6 +51,7 @@ import {
 import type { FlowModelResolver } from "./model";
 import { compiledSteps, flowInputs, wakerFlowPlanSchema } from "./plan";
 import { createFlowSessionStore } from "./sessions";
+import { createFlowSharingStore } from "./sharing";
 
 /**
  * The WakerFlow store (spec D10, stories WF1/WF3/WF4).
@@ -1514,6 +1516,17 @@ export function createWakerFlowStore(options: {
             )
             .limit(1);
           if (planning || running) throw new WakerFlowBusyError();
+          // WF9: a deleted Flow's share links stop working with it.
+          await tx
+            .update(flowShareLinks)
+            .set({ revokedAt: new Date() })
+            .where(
+              and(
+                eq(flowShareLinks.tenantId, tenantId),
+                eq(flowShareLinks.flowId, id),
+                isNull(flowShareLinks.revokedAt),
+              ),
+            );
           const [removed] = await tx
             .update(wakerFlows)
             .set({
@@ -2362,8 +2375,10 @@ export function createWakerFlowStore(options: {
       return options.models.choices(tenantId);
     },
   };
-  // WF9: the customization sessions of these Flows, planned through `generate` above.
+  // WF9: the customization sessions of these Flows, planned through `generate` above, and their
+  // share links and imports.
   return Object.assign(store, {
     sessions: createFlowSessionStore({ database, flows: store }),
+    sharing: createFlowSharingStore({ database, flows: store, canUse }),
   });
 }
