@@ -11,6 +11,7 @@ import {
   type AvatarSource,
   type AvatarSourceInput,
   addAvatarSourceMutationOptions,
+  avatarConnectorsQueryOptions,
   avatarSourcesQueryOptions,
   removeAvatarSourceMutationOptions,
   sourceLength,
@@ -19,6 +20,7 @@ import {
   devicesQueryOptions,
   type RegisteredDevice,
 } from "@/lib/devices/queries";
+import { knowledgeNotebooksQueryOptions } from "@/lib/knowledge/queries";
 import { advanceOnboardingMutationOptions } from "@/lib/onboarding/mutations";
 
 /**
@@ -34,12 +36,18 @@ import { advanceOnboardingMutationOptions } from "@/lib/onboarding/mutations";
  *   with the runner's `--add-root`; here it is only picked, by name. With no paired machine the
  *   option says how to pair one and the other kind can still be saved (D4).
  *
+ * - 知识库 (stage 3, S3): one of the person's own notebooks on the 知识库 screen. Saving it lets the
+ *   分身 search that notebook, and only the notebooks picked here.
+ * - 连接器 (stage 3, S4): one of the accounts the person connected under 「设置 › 已连接的账号」. Saving
+ *   it gives the 分身 that connector's read tools in the person's own account, under the same approval
+ *   rules as any tool. One the administrator has not listed for people says so and cannot be picked.
+ *
  * Each kind says what reaches the model and is agreed to with one tick (D6) before it can be saved:
- * a declaration's name and note go into every prompt, and a folder's files go to the model when the
- * 分身 reads them.
+ * a declaration's name and note go into every prompt, a folder's files and a notebook's passages go
+ * to the model when the 分身 reads them, and so does what a connector fetches.
  */
 
-type SourceKind = "declaration" | "local_folder";
+type SourceKind = "declaration" | "local_folder" | "notebook" | "connector";
 
 /** One folder a machine offers, with the machine it is on. */
 type OfferedFolder = {
@@ -186,6 +194,16 @@ function SavedSources({
                 {folderWhere(source, devices.data)}
               </span>
             ) : null}
+            {source.kind === "notebook" ? (
+              <span className="text-muted-foreground text-xs">
+                知识库 · {source.title}
+              </span>
+            ) : null}
+            {source.kind === "connector" ? (
+              <span className="text-muted-foreground text-xs">
+                连接器 · {source.title}
+              </span>
+            ) : null}
             {source.note ? (
               <span className="text-muted-foreground text-xs">
                 {source.note}
@@ -222,29 +240,69 @@ function useSourceEditor() {
   const [folderLabel, setFolderLabel] = React.useState("");
   const [folderNote, setFolderNote] = React.useState("");
   const [folderConsent, setFolderConsent] = React.useState(false);
+  // A notebook or a connector draft: which one, an optional note, and its own tick.
+  const [picked, setPicked] = React.useState<{
+    notebook: string | null;
+    connector: string | null;
+  }>({ notebook: null, connector: null });
+  const [pickedNote, setPickedNote] = React.useState("");
+  const [pickedConsent, setPickedConsent] = React.useState({
+    notebook: false,
+    connector: false,
+  });
 
   const sources = state.data?.sources ?? [];
   const full = sources.length >= AVATAR_SOURCE_LIMIT;
   const asFolder = kind === "local_folder";
+  const asPicked = kind === "notebook" || kind === "connector";
   const drafted = asFolder
     ? folder !== null
-    : label.trim().length > 0 || note.trim().length > 0;
+    : asPicked
+      ? picked[kind] !== null
+      : label.trim().length > 0 || note.trim().length > 0;
   const problem = asFolder
     ? folderProblem(folderLabel, folderNote)
-    : draftProblem(label, note);
-  const agreed = asFolder ? folderConsent : consent;
+    : asPicked
+      ? folderProblem("", pickedNote)
+      : draftProblem(label, note);
+  const agreed = asFolder
+    ? folderConsent
+    : asPicked
+      ? pickedConsent[kind]
+      : consent;
 
   /** Save the draft, then clear it. Resolves false when it was refused, so a caller can stop. */
   const saveDraft = async () => {
-    const input: AvatarSourceInput | null = asFolder
-      ? folder && {
-          kind: "local_folder",
-          deviceId: folder.deviceId,
-          rootRef: folder.ref,
-          label: folderLabel.trim(),
-          note: folderNote.trim(),
-        }
-      : { label: label.trim(), note: note.trim() };
+    let input: AvatarSourceInput | null;
+    if (asFolder) {
+      input = folder && {
+        kind: "local_folder",
+        deviceId: folder.deviceId,
+        rootRef: folder.ref,
+        label: folderLabel.trim(),
+        note: folderNote.trim(),
+      };
+    } else if (kind === "notebook") {
+      input = picked.notebook
+        ? {
+            kind: "notebook",
+            notebookId: picked.notebook,
+            label: "",
+            note: pickedNote.trim(),
+          }
+        : null;
+    } else if (kind === "connector") {
+      input = picked.connector
+        ? {
+            kind: "connector",
+            serverId: picked.connector,
+            label: "",
+            note: pickedNote.trim(),
+          }
+        : null;
+    } else {
+      input = { label: label.trim(), note: note.trim() };
+    }
     if (!input) return false;
     try {
       await add.mutateAsync(input);
@@ -255,6 +313,9 @@ function useSourceEditor() {
       setFolder(null);
       setFolderLabel("");
       setFolderNote("");
+    } else if (asPicked) {
+      setPicked((current) => ({ ...current, [kind]: null }));
+      setPickedNote("");
     } else {
       setLabel("");
       setNote("");
@@ -275,6 +336,9 @@ function useSourceEditor() {
     kind,
     label,
     note,
+    picked,
+    pickedConsent,
+    pickedNote,
     problem,
     remove,
     saveDraft,
@@ -286,6 +350,9 @@ function useSourceEditor() {
     setKind,
     setLabel,
     setNote,
+    setPicked,
+    setPickedConsent,
+    setPickedNote,
     sources,
     state,
   };
@@ -305,11 +372,13 @@ function folderProblem(label: string, note: string): string | null {
 /** Which kind of source the draft is. A declaration unless the person picks a folder. */
 function KindSwitch({ editor }: { editor: SourceEditor }) {
   return (
-    <fieldset aria-label="信息来源类型" className="flex gap-2">
+    <fieldset aria-label="信息来源类型" className="flex flex-wrap gap-2">
       {(
         [
           ["declaration", "文字声明"],
           ["local_folder", "本地文件夹"],
+          ["notebook", "知识库"],
+          ["connector", "连接器"],
         ] as const
       ).map(([value, name]) => (
         <Button
@@ -465,6 +534,310 @@ function FolderPicker({
   );
 }
 
+/** A note for a notebook or connector, and the tick that agrees to what reaches the model (D6). */
+function PickedFooter({
+  consentLabel,
+  editor,
+  idPrefix,
+  notice,
+  which,
+}: {
+  consentLabel: string;
+  editor: SourceEditor;
+  idPrefix: string;
+  notice: string;
+  which: "notebook" | "connector";
+}) {
+  return (
+    <>
+      <div className="flex flex-col gap-1 text-sm">
+        <label htmlFor={`${idPrefix}-${which}-note`}>说明（可选）</label>
+        <Textarea
+          id={`${idPrefix}-${which}-note`}
+          onChange={(event) => editor.setPickedNote(event.target.value)}
+          placeholder={
+            which === "notebook"
+              ? "例如：客户拜访纪要，每次拜访后更新"
+              : "例如：合同和报价单都在这里"
+          }
+          value={editor.pickedNote}
+        />
+      </div>
+      <div className="flex flex-col gap-2 rounded-lg border border-border p-3 text-sm">
+        <p className="text-muted-foreground">{notice}</p>
+        <label
+          className="flex items-center gap-2"
+          htmlFor={`${idPrefix}-${which}-consent`}
+        >
+          <Checkbox
+            checked={editor.pickedConsent[which]}
+            id={`${idPrefix}-${which}-consent`}
+            onCheckedChange={(next) =>
+              editor.setPickedConsent((current) => ({
+                ...current,
+                [which]: next === true,
+              }))
+            }
+          />
+          {consentLabel}
+        </label>
+      </div>
+    </>
+  );
+}
+
+/**
+ * Pick one of the person's own notebooks on the 知识库 screen (S3). Only theirs are listed; one
+ * already given to the 分身 is shown but cannot be picked again. With none yet, the step says where
+ * to make one; `knowledgeHref` is a link to it outside onboarding.
+ */
+function NotebookPicker({
+  editor,
+  idPrefix,
+  knowledgeHref,
+}: {
+  editor: SourceEditor;
+  idPrefix: string;
+  knowledgeHref?: string;
+}) {
+  const notebooks = useQuery(knowledgeNotebooksQueryOptions());
+  const taken = new Set(
+    editor.sources.flatMap((source) =>
+      source.kind === "notebook" ? [source.notebookId] : [],
+    ),
+  );
+  if (notebooks.isPending) {
+    return <p className="text-muted-foreground text-sm">正在读取你的知识库…</p>;
+  }
+  if (notebooks.isError) {
+    return (
+      <p className="text-muted-foreground text-sm">
+        暂时读不到你的知识库，请稍后再试。你可以先登记文字声明。
+      </p>
+    );
+  }
+  if (notebooks.data.length === 0) {
+    return (
+      <div className="flex flex-col gap-2 rounded-lg border border-border p-3 text-sm">
+        <p className="font-medium">还没有知识库</p>
+        <p className="text-muted-foreground">
+          先在「知识库」里新建一个知识库，把资料粘贴进去，再回到这里交给分身。你可以先保存其他信息来源。
+        </p>
+        {knowledgeHref ? (
+          <a className="text-primary underline" href={knowledgeHref}>
+            前往「知识库」新建
+          </a>
+        ) : (
+          <p className="text-muted-foreground">
+            完成引导后，可以在分身详情页添加知识库。
+          </p>
+        )}
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-3">
+      <fieldset className="flex flex-col gap-2">
+        <legend className="mb-1 text-sm">选择一个你的知识库</legend>
+        {notebooks.data.map((notebook) => {
+          const id = `${idPrefix}-notebook-${notebook.id}`;
+          const already = taken.has(notebook.id);
+          return (
+            <label
+              className="flex items-center gap-2 rounded-lg bg-card p-2 text-sm"
+              htmlFor={id}
+              key={notebook.id}
+            >
+              <input
+                checked={editor.picked.notebook === notebook.id}
+                disabled={already}
+                id={id}
+                name={`${idPrefix}-notebook`}
+                onChange={() =>
+                  editor.setPicked((current) => ({
+                    ...current,
+                    notebook: notebook.id,
+                  }))
+                }
+                type="radio"
+              />
+              <span>
+                {notebook.title}
+                {already ? (
+                  <span className="text-muted-foreground"> · 已添加</span>
+                ) : null}
+              </span>
+            </label>
+          );
+        })}
+      </fieldset>
+      <PickedFooter
+        consentLabel="我已了解，分身搜索到的知识库内容会发送给模型服务"
+        editor={editor}
+        idPrefix={idPrefix}
+        notice="分身只能搜索和阅读你在这里选的知识库，不能修改它们。它需要时会搜索其中的资料，搜到的片段会发送给你所用的模型服务。删除这个信息来源后，分身立即不能再读取。"
+        which="notebook"
+      />
+    </div>
+  );
+}
+
+/**
+ * Pick one of the accounts the person connected themselves (S4). Each one the server says cannot be
+ * given to the 分身 (not listed by the administrator, nothing to read with) shows its reason and
+ * cannot be picked. With none, the step says where to connect one.
+ */
+function ConnectorPicker({
+  accountsHref,
+  editor,
+  idPrefix,
+}: {
+  accountsHref?: string;
+  editor: SourceEditor;
+  idPrefix: string;
+}) {
+  const connectors = useQuery(avatarConnectorsQueryOptions());
+  if (connectors.isPending) {
+    return (
+      <p className="text-muted-foreground text-sm">正在读取你已连接的账号…</p>
+    );
+  }
+  if (connectors.isError) {
+    return (
+      <p className="text-muted-foreground text-sm">
+        暂时读不到你已连接的账号，请稍后再试。你可以先登记文字声明。
+      </p>
+    );
+  }
+  if (connectors.data.length === 0) {
+    return (
+      <div className="flex flex-col gap-2 rounded-lg border border-border p-3 text-sm">
+        <p className="font-medium">还没有已连接的账号</p>
+        <p className="text-muted-foreground">
+          连接器用你自己的账号读取资料，例如云盘。先在「设置 ›
+          已连接的账号」里用自己的账号连接，再回到这里交给分身。你可以先保存其他信息来源。
+        </p>
+        {accountsHref ? (
+          <a className="text-primary underline" href={accountsHref}>
+            前往「已连接的账号」
+          </a>
+        ) : (
+          <p className="text-muted-foreground">
+            完成引导后，可以在分身详情页添加连接器。
+          </p>
+        )}
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-3">
+      <fieldset className="flex flex-col gap-2">
+        <legend className="mb-1 text-sm">选择一个你已连接的账号</legend>
+        {connectors.data.map((connector) => {
+          const id = `${idPrefix}-connector-${connector.serverId}`;
+          return (
+            <label
+              className="flex items-start gap-2 rounded-lg bg-card p-2 text-sm"
+              htmlFor={id}
+              key={connector.serverId}
+            >
+              <input
+                checked={editor.picked.connector === connector.serverId}
+                disabled={!connector.attachable}
+                id={id}
+                name={`${idPrefix}-connector`}
+                onChange={() =>
+                  editor.setPicked((current) => ({
+                    ...current,
+                    connector: connector.serverId,
+                  }))
+                }
+                type="radio"
+              />
+              <span className="flex flex-col">
+                <span>
+                  {connector.title}
+                  {connector.attached ? (
+                    <span className="text-muted-foreground"> · 已添加</span>
+                  ) : null}
+                </span>
+                {connector.reason ? (
+                  <span className="text-muted-foreground text-xs">
+                    {connector.reason}
+                  </span>
+                ) : null}
+              </span>
+            </label>
+          );
+        })}
+      </fieldset>
+      <PickedFooter
+        consentLabel="我已了解，分身通过连接器读到的内容会发送给模型服务"
+        editor={editor}
+        idPrefix={idPrefix}
+        notice="分身会用你自己的账号、只用这个连接器里读取资料的工具；它读到的内容会发送给你所用的模型服务。每次调用都受你的审批规则约束，你禁用的工具它用不了。删除这个信息来源后，分身立即不能再使用这个连接器。"
+        which="connector"
+      />
+    </div>
+  );
+}
+
+/** The picker or the form for the kind the draft is. */
+function DraftFor({
+  editor,
+  idPrefix,
+  links,
+}: {
+  editor: SourceEditor;
+  idPrefix: string;
+  /** Where My Devices, 知识库 and 已连接的账号 are; none during onboarding. */
+  links?: { pairing: string; knowledge: string; accounts: string };
+}) {
+  if (editor.kind === "local_folder") {
+    return (
+      <FolderPicker
+        editor={editor}
+        idPrefix={idPrefix}
+        pairingHref={links?.pairing}
+      />
+    );
+  }
+  if (editor.kind === "notebook") {
+    return (
+      <NotebookPicker
+        editor={editor}
+        idPrefix={idPrefix}
+        knowledgeHref={links?.knowledge}
+      />
+    );
+  }
+  if (editor.kind === "connector") {
+    return (
+      <ConnectorPicker
+        accountsHref={links?.accounts}
+        editor={editor}
+        idPrefix={idPrefix}
+      />
+    );
+  }
+  return (
+    <>
+      <DraftFields
+        idPrefix={idPrefix}
+        label={editor.label}
+        note={editor.note}
+        onLabel={editor.setLabel}
+        onNote={editor.setNote}
+      />
+      <ModelNotice
+        checked={editor.consent}
+        id={`${idPrefix}-consent`}
+        onChange={editor.setConsent}
+      />
+    </>
+  );
+}
+
 /**
  * The onboarding step (spec D3, D8): save and continue, or skip and configure it later.
  *
@@ -498,7 +871,7 @@ export function SourcesStep({
         告诉你的分身，你的资料在哪里
       </h1>
       <p className="text-center text-muted-foreground text-sm">
-        写下资料放在哪里、是什么，分身回答与你本人有关的问题时会参考这些信息来源。最多{" "}
+        写下资料放在哪里、是什么，或者把你的本地文件夹、知识库、已连接的账号交给分身，它回答与你本人有关的问题时会参考这些信息来源。最多{" "}
         {AVATAR_SOURCE_LIMIT} 个，之后也可以在分身的详情页修改。
       </p>
 
@@ -517,24 +890,7 @@ export function SourcesStep({
       ) : (
         <>
           <KindSwitch editor={editor} />
-          {editor.kind === "local_folder" ? (
-            <FolderPicker editor={editor} idPrefix="onboarding-source" />
-          ) : (
-            <>
-              <DraftFields
-                idPrefix="onboarding-source"
-                label={editor.label}
-                note={editor.note}
-                onLabel={editor.setLabel}
-                onNote={editor.setNote}
-              />
-              <ModelNotice
-                checked={editor.consent}
-                id="onboarding-source-consent"
-                onChange={editor.setConsent}
-              />
-            </>
-          )}
+          <DraftFor editor={editor} idPrefix="onboarding-source" />
         </>
       )}
 
@@ -576,8 +932,14 @@ export function SourcesStep({
 
 /** The 分身's detail page: list, add and remove, the same rules as the step. */
 export function AvatarSourcesPanel({
+  accountsHref = "/settings/connected-accounts",
+  knowledgeHref = "/knowledge",
   pairingHref = "/settings",
 }: {
+  /** Where 已连接的账号 is, for a person with no connected account yet (S4). */
+  accountsHref?: string;
+  /** Where the 知识库 screen is, for a person with no notebook yet (S3). */
+  knowledgeHref?: string;
   /** Where My Devices is, for the pairing guidance (D4). */
   pairingHref?: string;
 } = {}) {
@@ -623,28 +985,15 @@ export function AvatarSourcesPanel({
           }}
         >
           <KindSwitch editor={editor} />
-          {editor.kind === "local_folder" ? (
-            <FolderPicker
-              editor={editor}
-              idPrefix="avatar-source"
-              pairingHref={pairingHref}
-            />
-          ) : (
-            <>
-              <DraftFields
-                idPrefix="avatar-source"
-                label={editor.label}
-                note={editor.note}
-                onLabel={editor.setLabel}
-                onNote={editor.setNote}
-              />
-              <ModelNotice
-                checked={editor.consent}
-                id="avatar-source-consent"
-                onChange={editor.setConsent}
-              />
-            </>
-          )}
+          <DraftFor
+            editor={editor}
+            idPrefix="avatar-source"
+            links={{
+              pairing: pairingHref,
+              knowledge: knowledgeHref,
+              accounts: accountsHref,
+            }}
+          />
           {editor.drafted && editor.problem ? (
             <p className="text-muted-foreground text-sm">{editor.problem}</p>
           ) : null}
