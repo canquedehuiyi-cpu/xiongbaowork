@@ -33,6 +33,7 @@ export const WAKERFLOW_STEP_KINDS = [
   "decision",
   "flow",
   "action",
+  "confirm",
 ] as const;
 export type WakerFlowStepKind = (typeof WAKERFLOW_STEP_KINDS)[number];
 
@@ -110,11 +111,27 @@ export type WakerFlowActionStep = WakerFlowStepBase & {
   outputKey: string;
 };
 
+/** The longest a confirmation's question may be as written (before `{{key}}` is filled). */
+export const WAKERFLOW_MAX_QUESTION = 2000;
+
+/**
+ * A question the run asks a person, with no coworker and no model (WF8 §3.3's 确认节点): the run
+ * parks on it, the answer becomes this step's output, and a skip leaves the output missing.
+ * `{{key}}` in the question is replaced by that input or earlier output, as text only.
+ */
+export type WakerFlowConfirmStep = WakerFlowStepBase & {
+  kind: "confirm";
+  question: string;
+  inputKeys: string[];
+  outputKey: string;
+};
+
 export type WakerFlowStep =
   | WakerFlowWorkerStep
   | WakerFlowDecisionStep
   | WakerFlowFlowStep
-  | WakerFlowActionStep;
+  | WakerFlowActionStep
+  | WakerFlowConfirmStep;
 
 /** The kind of a step, reading an absent `kind` as `worker`. */
 export function stepKind(step: { kind?: string }): WakerFlowStepKind {
@@ -135,9 +152,14 @@ export function stepReads(step: WakerFlowStep): string[] {
   return step.kind === "flow" ? Object.values(step.inputMap) : step.inputKeys;
 }
 
-/** The coworker a step runs as, if any (a decision and a nested Flow have none of their own). */
+/**
+ * The coworker a step runs as, if any (a decision, a nested Flow and a confirmation have none of
+ * their own).
+ */
 export function stepAgentId(step: WakerFlowStep): string | undefined {
-  return step.kind === "decision" || step.kind === "flow"
+  return step.kind === "decision" ||
+    step.kind === "flow" ||
+    step.kind === "confirm"
     ? undefined
     : step.agentId;
 }

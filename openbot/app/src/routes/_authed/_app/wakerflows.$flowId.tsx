@@ -351,7 +351,9 @@ function PlanFlowchart(props: {
         const reads =
           step.kind === "flow" ? Object.values(step.inputMap) : step.inputKeys;
         const who =
-          step.kind === "decision" || step.kind === "flow"
+          step.kind === "decision" ||
+          step.kind === "flow" ||
+          step.kind === "confirm"
             ? ""
             : `${memberName(step.agentId)} · `;
         const out =
@@ -391,6 +393,8 @@ function PlanFlowchart(props: {
             return byId(step.targetFlowId)?.name ?? "子流程";
           case "action":
             return step.tool;
+          case "confirm":
+            return step.question.split("\n")[0] ?? "";
           default:
             return step.instruction.split("\n")[0] ?? "";
         }

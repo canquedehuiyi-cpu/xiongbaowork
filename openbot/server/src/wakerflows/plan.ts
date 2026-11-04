@@ -9,6 +9,7 @@ import {
   WAKERFLOW_END,
   WAKERFLOW_INPUT_TYPES,
   WAKERFLOW_MAX_BRANCHES,
+  WAKERFLOW_MAX_QUESTION,
   WAKERFLOW_MAX_STEPS,
   type WakerFlowInput,
   type WakerFlowPlan,
@@ -131,9 +132,37 @@ const actionStepSchema = z
   })
   .strict();
 
+/**
+ * A question the run asks a person (WF8 §3.3): no coworker, no model. `{{key}}` in the question is
+ * filled from the declared inputs as text, exactly as an action's arguments are.
+ */
+const confirmStepSchema = z
+  .object({
+    id: key,
+    kind: z.literal("confirm"),
+    question: z
+      .string()
+      .trim()
+      .min(1, "请填写要确认的问题。")
+      .max(
+        WAKERFLOW_MAX_QUESTION,
+        `确认问题不能超过 ${WAKERFLOW_MAX_QUESTION} 字。`,
+      ),
+    inputKeys,
+    outputKey: key,
+    next: target.optional(),
+  })
+  .strict();
+
 const stepSchema = z.discriminatedUnion(
   "kind",
-  [workerStepSchema, decisionStepSchema, flowStepSchema, actionStepSchema],
+  [
+    workerStepSchema,
+    decisionStepSchema,
+    flowStepSchema,
+    actionStepSchema,
+    confirmStepSchema,
+  ],
   { error: "未知的步骤类型。" },
 );
 
@@ -146,11 +175,12 @@ export const RUNNABLE_STEP_KINDS: readonly WakerFlowStepKind[] = [
   "decision",
   "flow",
   "action",
+  "confirm",
 ];
 /** Whether the orchestrator follows `next` jumps yet; until it does, a jump is refused on Save. */
 export const RUNNABLE_JUMPS = true;
 
-/** `{{key}}` in an action's argument template. */
+/** `{{key}}` in an action's argument template or a confirmation's question. */
 const TEMPLATE_PATTERN = /\{\{\s*([^{}\s]*)\s*\}\}/g;
 /** `inputs.key`, `outputs.key`, `inputs["key"]` and `outputs['key']` in a condition. */
 const CONDITION_REFERENCE_PATTERN =
@@ -169,7 +199,7 @@ export function conditionReferences(
   );
 }
 
-/** The keys an action's argument template reads. */
+/** The keys an action's argument template (or a confirmation's question) reads. */
 export function templateReferences(template: string): string[] {
   return Array.from(
     template.matchAll(TEMPLATE_PATTERN),
@@ -314,6 +344,16 @@ function stepProblems(
       }
     }
   }
+  if (step.kind === "confirm") {
+    const declared = new Set(step.inputKeys);
+    for (const read of templateReferences(step.question)) {
+      if (!declared.has(read))
+        fail(
+          ["steps", index, "question"],
+          `问题引用了 {{${read}}}，但这一步没有声明读取它。`,
+        );
+    }
+  }
 }
 
 /**
@@ -424,8 +464,8 @@ export function createWakerFlowPlanSchema(
  * The editable plan is also the execution contract; no hidden steps are added after Save.
  *
  * WF7 (P-A): a step may be a coworker's turn (`worker`, the default), a condition (`decision`), a
- * nested Flow (`flow`) or a fixed tool call (`action`), and may jump forward. Only the kinds the
- * server runs today are accepted ({@link RUNNABLE_STEP_KINDS}).
+ * nested Flow (`flow`), a fixed tool call (`action`) or a question to a person (`confirm`), and may
+ * jump forward. Only the kinds the server runs today are accepted ({@link RUNNABLE_STEP_KINDS}).
  */
 export const wakerFlowPlanSchema = createWakerFlowPlanSchema();
 
@@ -473,6 +513,18 @@ export function compiledSteps(
         inputKeys: [...step.inputKeys],
         branches: step.branches.map((branch) => ({ ...branch })),
         otherwise: step.otherwise,
+      };
+    if (step.kind === "confirm")
+      // No coworker of its own. The question as written is what the run view calls the step; the
+      // orchestrator fills its `{{key}}` when the run reaches it.
+      return {
+        id: step.id,
+        kind: "confirm",
+        agentId: "",
+        instruction: step.question,
+        inputKeys: [...step.inputKeys],
+        outputKey: step.outputKey,
+        ...(step.next === undefined ? {} : { next: step.next }),
       };
     if (step.kind === "action")
       return {

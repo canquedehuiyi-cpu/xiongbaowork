@@ -558,3 +558,83 @@ test("an action step added in the editor saves with its tool, arguments and read
     outputKey: "note",
   });
 });
+
+test("a 确认 step added in the editor saves with its question, reads and output, and names no coworker", async () => {
+  const saved: { plan: WakerFlowPlan }[] = [];
+  globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
+    if (init?.method === "PUT") {
+      saved.push(JSON.parse(String(init.body)));
+      return Response.json({ flow: flowOf({ plan: branching }) });
+    }
+    return Response.json({ flows: [] });
+  }) as typeof fetch;
+  const view = render(
+    withQueries(
+      <PlanEditor
+        coworkers={[{ id: "agent-a", name: "阿处" }]}
+        flowId={FLOW_ID}
+        onReload={() => undefined}
+        onSaved={() => undefined}
+        plan={branching}
+        revision={1}
+      />,
+    ),
+  );
+  const user = userEvent.setup({ document: view.container.ownerDocument });
+  const kinds = view.getByLabelText("新步骤的类型");
+  expect(
+    within(kinds)
+      .getAllByRole("option")
+      .map((option) => option.textContent),
+  ).toContain("确认");
+  await user.selectOptions(kinds, "confirm");
+  await user.click(view.getByRole("button", { name: "添加步骤" }));
+  // A question to a person: no coworker to pick.
+  expect(view.queryByLabelText("第 5 步的员工")).toBeNull();
+  await user.type(
+    view.getByLabelText("第 5 步要确认的问题"),
+    "汇总如下，可以发出吗？{{{{final}}",
+  );
+  await user.type(view.getByLabelText("第 5 步的输出名称"), "approval");
+  // The question reads {{final}}, which the step has not declared: refused before Save.
+  await user.click(view.getByRole("button", { name: "保存计划" }));
+  await view.findByText("问题引用了 {{final}}，但这一步没有声明读取它。");
+  expect(saved).toHaveLength(0);
+  await user.click(view.getByLabelText("第 5 步读取 final"));
+  await user.click(view.getByRole("button", { name: "保存计划" }));
+  await waitFor(() => expect(saved).toHaveLength(1));
+  expect(saved[0]?.plan.steps[4]).toEqual({
+    id: "step_5",
+    kind: "confirm",
+    question: "汇总如下，可以发出吗？{{final}}",
+    inputKeys: ["final"],
+    outputKey: "approval",
+  });
+});
+
+test("an empty 确认 question is refused before Save", async () => {
+  let puts = 0;
+  globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
+    if (init?.method === "PUT") puts += 1;
+    return Response.json({ flows: [] });
+  }) as typeof fetch;
+  const view = render(
+    withQueries(
+      <PlanEditor
+        coworkers={[{ id: "agent-a", name: "阿处" }]}
+        flowId={FLOW_ID}
+        onReload={() => undefined}
+        onSaved={() => undefined}
+        plan={branching}
+        revision={1}
+      />,
+    ),
+  );
+  const user = userEvent.setup({ document: view.container.ownerDocument });
+  await user.selectOptions(view.getByLabelText("新步骤的类型"), "confirm");
+  await user.click(view.getByRole("button", { name: "添加步骤" }));
+  await user.type(view.getByLabelText("第 5 步的输出名称"), "approval");
+  await user.click(view.getByRole("button", { name: "保存计划" }));
+  await view.findByText("请填写要确认的问题。");
+  expect(puts).toBe(0);
+});
