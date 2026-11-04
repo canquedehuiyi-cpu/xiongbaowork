@@ -324,6 +324,7 @@ tests/remote-approval-context.test.ts
 tests/remote-bot-handoff.integration.test.ts
 tests/remote-coordination.integration.test.ts
 tests/remote-coordination.test.ts
+tests/resource-projects.integration.test.ts
 tests/responsibilities-engine.test.ts
 tests/responsibilities-github.test.ts
 tests/responsibilities-store.integration.test.ts

@@ -925,6 +925,13 @@
       "when": 1793632200000,
       "tag": "0132_device_roots",
       "breakpoints": true
+    },
+    {
+      "idx": 138,
+      "version": "7",
+      "when": 1793634000000,
+      "tag": "0138_resource_projects_active",
+      "breakpoints": true
     }
   ]
 }
