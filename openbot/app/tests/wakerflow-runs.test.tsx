@@ -9,7 +9,13 @@ import {
   Outlet,
   RouterProvider,
 } from "@tanstack/react-router";
-import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PlanEditor } from "@/components/wakerflow/plan-editor";
 import type { AgentProfile } from "@/lib/agents/queries";
@@ -913,6 +919,89 @@ test("跳过 skips the question, and a step waiting on an approval only links to
   const link = await view.findByRole("link", { name: "去审批" });
   expect(link.getAttribute("href")).toBe("/approvals");
   expect(view.queryByRole("button", { name: "提交回答" })).toBeNull();
+});
+
+test("a 确认 step parked on its question shows the filled question, the answer box and 跳过, and its node is a bubble", async () => {
+  const confirmStep = {
+    id: "step_2",
+    kind: "confirm" as const,
+    agentId: "",
+    instruction: "议程如下，要覆盖哪个季度？{{agenda}}",
+    inputKeys: ["agenda"],
+    outputKey: "quarter",
+  };
+  let skipped = false;
+  serve((call) => {
+    if (
+      call.path === `/api/wakerflows/${FLOW_ID}/runs` &&
+      call.method === "GET"
+    )
+      return Response.json({
+        runs: [summary(skipped ? "done" : "awaiting_action")],
+      });
+    if (call.path === `/api/wakerflows/${FLOW_ID}/runs/${RUN_ID}`)
+      return Response.json({
+        run: run(skipped ? "done" : "awaiting_action", {
+          cursor: skipped ? 2 : 1,
+          steps: [
+            { ...plan.steps[0]!, state: "done", output: "1. 回顾 2. 计划" },
+            skipped
+              ? { ...confirmStep, state: "skipped", skipReason: "person" }
+              : {
+                  ...confirmStep,
+                  state: "awaiting_action",
+                  question: "议程如下，要覆盖哪个季度？1. 回顾 2. 计划",
+                },
+          ],
+        }),
+      });
+    if (call.path.endsWith("/confirmations") && call.method === "GET")
+      return Response.json({
+        confirmations: [
+          {
+            id: CONFIRMATION_ID,
+            runId: RUN_ID,
+            nodeId: "step_2",
+            question: "议程如下，要覆盖哪个季度？1. 回顾 2. 计划",
+            inputs: { agenda: "1. 回顾 2. 计划" },
+            status: skipped ? "skipped" : "pending",
+            answer: null,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        ],
+      });
+    if (call.path.endsWith(`/confirmations/${CONFIRMATION_ID}/skip`)) {
+      skipped = true;
+      return Response.json({ confirmation: { id: CONFIRMATION_ID } });
+    }
+    return undefined;
+  });
+  const { view, user } = draw(`/wakerflows/${FLOW_ID}`);
+  await user.click(await view.findByText("等待处理"));
+  expect(
+    await view.findByText(
+      "这一步在问你：议程如下，要覆盖哪个季度？1. 回顾 2. 计划",
+    ),
+  ).toBeDefined();
+  expect(view.getByLabelText("你的回答")).toBeDefined();
+  expect(view.getByRole("button", { name: "提交回答" })).toBeDefined();
+  // No coworker and no approval: no link away, the question is answered here.
+  expect(view.queryByRole("link", { name: "去审批" })).toBeNull();
+  const chart = view.getByLabelText("运行流程图");
+  const node = chart.querySelector('[data-step="step_2"]') as HTMLElement;
+  expect(node.getAttribute("data-kind")).toBe("confirm");
+  expect(node.querySelector('[data-shape="bubble"]')).not.toBeNull();
+  expect(within(node).getByText(/等你回答/)).toBeDefined();
+  await user.click(view.getByRole("button", { name: "跳过这一步" }));
+  await waitFor(() =>
+    expect(calls.filter((entry) => entry.path.endsWith("/skip"))).toHaveLength(
+      1,
+    ),
+  );
+  await waitFor(() =>
+    expect(view.queryByRole("button", { name: "提交回答" })).toBeNull(),
+  );
 });
 
 test("从失败步骤重试 names the step that runs again before anything is sent, then opens the new run", async () => {

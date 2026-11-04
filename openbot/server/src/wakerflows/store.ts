@@ -11,12 +11,14 @@ import {
   type WakerFlowPlan,
   type WakerFlowRequestStatus,
   type WakerFlowSaveInput,
+  stepOutputKey,
 } from "../../../shared/wakerflows";
 import type { Database } from "../db/client";
 import {
   flowConfirmations,
   flowRunEvents,
   flowRunRetries,
+  flowShareLinks,
   groupTaskRuns,
   groupTaskTemplates,
   wakerFlowRequests,
@@ -26,6 +28,8 @@ import {
   wakerGroups,
 } from "../db/schema";
 import {
+  NestedFlowRefusal,
+  type NestedFlowRunner,
   type PipelineEventWriter,
   PipelineNotFoundError,
   type PipelineRunTransition,
@@ -46,6 +50,8 @@ import {
 } from "./generator";
 import type { FlowModelResolver } from "./model";
 import { compiledSteps, flowInputs, wakerFlowPlanSchema } from "./plan";
+import { createFlowSessionStore } from "./sessions";
+import { createFlowSharingStore } from "./sharing";
 
 /**
  * The WakerFlow store (spec D10, stories WF1/WF3/WF4).
@@ -147,6 +153,23 @@ export type WakerFlowGenerateInput = {
   idea: string;
   members: WakerFlowCandidate[];
   scenario?: string;
+};
+
+/** A transaction of the store's database, as a customization turn's row is written in one. */
+export type WakerFlowTransaction = Parameters<
+  Parameters<Database["transaction"]>[0]
+>[0];
+
+/**
+ * WF9: the session's part of a customization turn (`sessions.ts`). Planning itself is `generate`'s:
+ * the same idempotency, model pick, coworker check, quota, cancel and restart recovery.
+ */
+export type WakerFlowCustomizeTurn = {
+  sessionId: string;
+  /** Asked only for a new request: checks the session and builds the context the model is given. */
+  prepare: () => Promise<string>;
+  /** Writes the turn's row in the same transaction that claims the request. */
+  record: (tx: WakerFlowTransaction, context: string) => Promise<void>;
 };
 
 export type WakerFlowStartInput = {
@@ -330,8 +353,14 @@ export function flowRunEventsOf(transition: PipelineRunTransition): {
       payload.skipReason = step.skipReason;
     if (step.state === "failed") payload.error = errorSummary(step.error);
     if (step.state === "awaiting_action") {
-      payload.waitingOn = step.approvalId ? "approval" : "question";
+      // WF7: a nested Flow's step waits on its child run, not on a person.
+      payload.waitingOn = step.approvalId
+        ? "approval"
+        : step.childRunId
+          ? "child_flow"
+          : "question";
       if (step.approvalId) payload.approvalId = step.approvalId;
+      if (step.childRunId) payload.childRunId = step.childRunId;
     }
     out.push({
       type,
@@ -600,6 +629,10 @@ export class WakerFlowRequestConflictError extends WakerFlowError {
 
 /** The request kind for planning; restart recovery (`recovery.ts`) settles the ones a crash left pending. */
 export const GENERATE = "generate";
+/** WF9: the request kind for a customization turn; planned, cancelled and recovered like `generate`. */
+export const CUSTOMIZE = "customize";
+/** The kinds of request that are one planning call. */
+export const PLANNING_KINDS = [GENERATE, CUSTOMIZE];
 /** The request kind for a run; restart recovery (`recovery.ts`) settles the ones a crash left pending. */
 export const RUN = "run";
 const NOT_SAVED_MESSAGE = "这个 WakerFlow 还没有保存为可运行的计划，请先保存。";
@@ -723,6 +756,18 @@ function versionSummary(row: {
   };
 }
 
+/**
+ * The child run of one parent step, named by the pair: a parent step driven twice (a restart, a
+ * second replica) asks for the same id, and the 0139 unique index refuses a second child anyway.
+ */
+export function childRunIdFor(parentRunId: string, parentStepId: string) {
+  const hex = createHash("sha256")
+    .update(`wakerflow-child:${parentRunId}:${parentStepId}`)
+    .digest("hex");
+  const variant = ((Number.parseInt(hex[16] ?? "0", 16) & 3) | 8).toString(16);
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-${variant}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+}
+
 export function createWakerFlowStore(options: {
   database: Database;
   /** WF-C: a run is the existing pipeline's run of the compiled template, driven by its `advance`. */
@@ -741,6 +786,16 @@ export function createWakerFlowStore(options: {
    * own shape — `advance`, not awaited, a failure logged — and tests hand in one they can await.
    */
   drive?: (run: { tenantId: string; runId: string }) => void;
+  /**
+   * WF7 (spec §3.5): why this coworker may not be given this tool in an action step, or null. The
+   * tool must be granted to the coworker (its plugin grant) and not disabled by SEC1 for the person
+   * saving. Without it, a plan with an action step is refused: nothing can vouch for its tool.
+   */
+  actionTool?: (input: {
+    actor: string;
+    agentId: string;
+    tool: string;
+  }) => Promise<string | null>;
 }) {
   const { database, canUse } = options;
   const drive =
@@ -789,6 +844,199 @@ export function createWakerFlowStore(options: {
     );
     if (!row) throw new WakerFlowRunNotFoundError();
   };
+  /** WF7: one saved version of a live Flow of this tenant, with the template it compiled to. */
+  const pinnedVersion = async (
+    tenantId: string,
+    flowId: string,
+    revision: number,
+  ) => {
+    const flow = await visibleFlow(tenantId, flowId);
+    if (!flow) return null;
+    const [row] = await runAsTenant(tenantId, async () =>
+      database
+        .select({
+          plan: wakerFlowVersions.plan,
+          templateId: wakerFlowVersions.templateId,
+        })
+        .from(wakerFlowVersions)
+        .where(
+          and(
+            eq(wakerFlowVersions.tenantId, tenantId),
+            eq(wakerFlowVersions.flowId, flowId),
+            eq(wakerFlowVersions.revision, revision),
+          ),
+        )
+        .limit(1),
+    );
+    if (!row?.templateId) return null;
+    return { flow, plan: row.plan, templateId: row.templateId };
+  };
+
+  /**
+   * WF7 (spec §3.4): every `flow` step of a plan about to be saved as Flow `id` names a saved
+   * version of another live Flow of this tenant, maps only inputs that version declares (and every
+   * required one it has no default for), and does not lead back to `id` through the versions it
+   * pins, however deep. Answers each step's template and name for the compile.
+   */
+  async function nestedChildren(
+    tenantId: string,
+    id: string,
+    plan: WakerFlowPlan,
+  ) {
+    const children = new Map<string, { templateId: string; name: string }>();
+    for (const [index, step] of plan.steps.entries()) {
+      if (step.kind !== "flow") continue;
+      const where = `第 ${index + 1} 步的子流程`;
+      if (step.targetFlowId === id)
+        throw new WakerFlowValidationError(`${where}不能是这个流程自己。`);
+      const child = await pinnedVersion(
+        tenantId,
+        step.targetFlowId,
+        step.targetRevision,
+      );
+      if (!child)
+        throw new WakerFlowValidationError(
+          `${where}不存在，或没有保存过第 ${step.targetRevision} 版。`,
+        );
+      const name = child.plan.name;
+      const declared = new Set(child.plan.inputs.map((input) => input.key));
+      for (const key of Object.keys(step.inputMap))
+        if (!declared.has(key))
+          throw new WakerFlowValidationError(
+            `子流程「${name}」没有输入 ${key}。`,
+          );
+      for (const input of child.plan.inputs)
+        if (input.required && !input.default && !(input.key in step.inputMap))
+          throw new WakerFlowValidationError(
+            `子流程「${name}」的必填输入「${input.label}」没有对应的值。`,
+          );
+      if (
+        step.resultKey &&
+        !child.plan.steps.some(
+          (childStep) => stepOutputKey(childStep) === step.resultKey,
+        )
+      )
+        throw new WakerFlowValidationError(
+          `子流程「${name}」没有产出 ${step.resultKey}。`,
+        );
+      // Down the versions this child pins, and theirs, looking for the way back to this Flow.
+      const seen = new Set<string>();
+      const pending = [child.plan];
+      while (pending.length > 0) {
+        const current = pending.pop() as WakerFlowPlan;
+        for (const inner of current.steps) {
+          if (inner.kind !== "flow") continue;
+          if (inner.targetFlowId === id)
+            throw new WakerFlowValidationError(
+              `子流程之间不能互相嵌套：「${name}」会再嵌套回这个流程。`,
+            );
+          const key = `${inner.targetFlowId}@${inner.targetRevision}`;
+          if (seen.has(key) || seen.size >= 100) continue;
+          seen.add(key);
+          const next = await pinnedVersion(
+            tenantId,
+            inner.targetFlowId,
+            inner.targetRevision,
+          );
+          if (next) pending.push(next.plan);
+        }
+      }
+      children.set(step.id, { templateId: child.templateId, name });
+    }
+    return children;
+  }
+
+  /**
+   * WF7 (spec §3.4 step 1): start the child run of a parent's `flow` step, as the parent's
+   * initiator, from the version pinned on Save. I6, the month's ceiling and the inputs' rules are
+   * the pipeline's and the plan's own, asked by `pipeline.start` as for any run. The run id is
+   * derived from the parent run and step, and an existing child is answered as is, so a parent
+   * step driven twice starts one child.
+   */
+  async function startChild(input: Parameters<NestedFlowRunner["start"]>[0]) {
+    const { tenantId } = input;
+    const existing = async () => {
+      const [row] = await runAsTenant(tenantId, async () =>
+        database
+          .select({ id: groupTaskRuns.id })
+          .from(groupTaskRuns)
+          .where(
+            and(
+              eq(groupTaskRuns.tenantId, tenantId),
+              eq(groupTaskRuns.parentRunId, input.parentRunId),
+              eq(groupTaskRuns.parentStepId, input.parentStepId),
+            ),
+          )
+          .limit(1),
+      );
+      return row ? { runId: row.id } : null;
+    };
+    const found = await existing();
+    if (found) return found;
+    const child = await pinnedVersion(
+      tenantId,
+      input.targetFlowId,
+      input.targetRevision,
+    );
+    if (!child)
+      throw new NestedFlowRefusal(
+        `子流程已被删除，或第 ${input.targetRevision} 版已不可用，这一步没有执行。`,
+      );
+    const name = child.plan.name;
+    let inputs: Record<string, string>;
+    try {
+      inputs = flowInputs(child.plan, input.inputs);
+    } catch (error) {
+      throw new NestedFlowRefusal(
+        `子流程「${name}」的输入不正确：${error instanceof Error && !(error instanceof z.ZodError) ? error.message : "格式不正确。"}`,
+      );
+    }
+    const runId = childRunIdFor(input.parentRunId, input.parentStepId);
+    try {
+      await options.pipeline.start({
+        tenantId,
+        templateId: child.templateId,
+        flowId: child.flow.id,
+        inputs,
+        task: name,
+        initiatedBy: input.initiatedBy,
+        runId,
+        parent: {
+          runId: input.parentRunId,
+          stepId: input.parentStepId,
+          ...(input.parentTaskId ? { taskId: input.parentTaskId } : {}),
+        },
+      });
+    } catch (error) {
+      if (error instanceof PipelineStepForbiddenError)
+        throw new NestedFlowRefusal(
+          `子流程「${name}」的${error.refused
+            .map(
+              (step) =>
+                `第 ${step.index + 1} 步（${step.stepId}）的员工 ${step.agentId}`,
+            )
+            .join("、")}你没有使用权，子流程没有启动。`,
+        );
+      if (error instanceof QuotaExceeded)
+        throw new NestedFlowRefusal(
+          `本月任务额度不足，子流程「${name}」没有启动。`,
+        );
+      if (
+        error instanceof PipelineNotFoundError ||
+        error instanceof PipelineValidationError
+      )
+        throw new NestedFlowRefusal(
+          `子流程「${name}」没有启动：${error.message}`,
+        );
+      if (uniqueViolation(error)) {
+        const twin = await existing();
+        if (twin) return twin;
+      }
+      throw error;
+    }
+    return { runId };
+  }
+
   /** Calls running in THIS process, so Cancel can stop the socket and not only the row. */
   const inflight = new Map<
     string,
@@ -911,6 +1159,9 @@ export function createWakerFlowStore(options: {
     return confirmation(settled);
   }
 
+  // WF7: the pipeline starts a `flow` step's child through this store, and drives it with `drive`.
+  options.pipeline.attachNestedFlows?.({ start: startChild, drive });
+
   const store = {
     async create(tenantId: string, input: WakerFlowCreateInput) {
       const idea = typeof input.idea === "string" ? input.idea.trim() : "";
@@ -1015,8 +1266,22 @@ export function createWakerFlowStore(options: {
           );
         }
       }
+      // WF7: an action's tool is granted to its coworker and not disabled (spec §3.5).
+      const { actionTool } = options;
+      for (const [index, step] of plan.steps.entries()) {
+        if (step.kind !== "action") continue;
+        const refused = actionTool
+          ? await runAsTenant(tenantId, () =>
+              actionTool({ actor, agentId: step.agentId, tool: step.tool }),
+            ).catch(() => "无法确认这个工具是否可用。")
+          : "这里不能使用动作步骤。";
+        if (refused)
+          throw new WakerFlowValidationError(`第 ${index + 1} 步：${refused}`);
+      }
+      // WF7: nested Flows name live, saved versions and never lead back here (spec §3.4).
+      const children = await nestedChildren(tenantId, id, plan);
       // WF7: each member's role and prompt goes ahead of that coworker's steps (D2).
-      const steps = compiledSteps(plan);
+      const steps = compiledSteps(plan, children);
 
       const row = await runAsTenant(tenantId, () =>
         database.transaction(async (tx) => {
@@ -1251,6 +1516,17 @@ export function createWakerFlowStore(options: {
             )
             .limit(1);
           if (planning || running) throw new WakerFlowBusyError();
+          // WF9: a deleted Flow's share links stop working with it.
+          await tx
+            .update(flowShareLinks)
+            .set({ revokedAt: new Date() })
+            .where(
+              and(
+                eq(flowShareLinks.tenantId, tenantId),
+                eq(flowShareLinks.flowId, id),
+                isNull(flowShareLinks.revokedAt),
+              ),
+            );
           const [removed] = await tx
             .update(wakerFlows)
             .set({
@@ -1282,6 +1558,8 @@ export function createWakerFlowStore(options: {
       actor: string,
       id: string,
       input: WakerFlowGenerateInput,
+      /** WF9: present for a customization turn (`sessions.ts`), whose `idea` is the change asked. */
+      turn?: WakerFlowCustomizeTurn,
     ): Promise<WakerFlowRequestOutcome> {
       if (!isUuid(id)) throw new WakerFlowNotFoundError();
       if (!isUuid(input.requestId))
@@ -1311,8 +1589,9 @@ export function createWakerFlowStore(options: {
       const fingerprint = createHash("sha256")
         .update(
           canonical({
-            kind: GENERATE,
+            kind: turn ? CUSTOMIZE : GENERATE,
             flowId: id,
+            ...(turn ? { sessionId: turn.sessionId } : {}),
             modelRef: input.modelRef,
             idea,
             members,
@@ -1341,6 +1620,7 @@ export function createWakerFlowStore(options: {
       // The request row references the Flow, and a foreign key does not look through row-level
       // security: without this read another tenant's Flow id would be accepted as a reference.
       if (!flow) throw new WakerFlowNotFoundError();
+      const context = turn ? await turn.prepare() : undefined;
       const resolved = await models.resolve(tenantId, input.modelRef);
       for (const member of members) {
         const allowed = await canUse(actor, member.agentId).catch(() => false);
@@ -1351,20 +1631,29 @@ export function createWakerFlowStore(options: {
       }
       await options.quota?.assertCapacity(tenantId, "tasksPerMonth");
 
-      const [claimed] = await runAsTenant(tenantId, async () =>
-        database
+      const claim = (db: Pick<Database, "insert">) =>
+        db
           .insert(wakerFlowRequests)
           .values({
             tenantId,
             requestId: input.requestId,
             flowId: id,
-            kind: GENERATE,
+            kind: turn ? CUSTOMIZE : GENERATE,
             fingerprint,
           })
           .onConflictDoNothing({
             target: [wakerFlowRequests.tenantId, wakerFlowRequests.requestId],
           })
-          .returning(requestColumns),
+          .returning(requestColumns);
+      // WF9: a turn's row is written with its claim, so a turn exists exactly when its request does.
+      const [claimed] = await runAsTenant(tenantId, async () =>
+        turn
+          ? database.transaction(async (tx) => {
+              const rows = await claim(tx);
+              if (rows[0]) await turn.record(tx, context ?? "");
+              return rows;
+            })
+          : claim(database),
       );
       if (!claimed) {
         // A twin claimed it first; its row is the answer, whatever state it is in.
@@ -1383,6 +1672,7 @@ export function createWakerFlowStore(options: {
           idea,
           members,
           scenario,
+          ...(context === undefined ? {} : { context }),
           signal: controller.signal,
         });
       } catch (error) {
@@ -1431,7 +1721,8 @@ export function createWakerFlowStore(options: {
                 plan,
                 name: plan.name,
                 description: plan.description,
-                idea,
+                // A change request is not the Flow's idea; only first planning sets that.
+                ...(turn ? {} : { idea }),
                 ...(isUuid(resolved.modelRef)
                   ? { modelRef: resolved.modelRef }
                   : {}),
@@ -1493,7 +1784,7 @@ export function createWakerFlowStore(options: {
               eq(wakerFlowRequests.tenantId, tenantId),
               eq(wakerFlowRequests.requestId, requestId),
               eq(wakerFlowRequests.flowId, flowId),
-              eq(wakerFlowRequests.kind, GENERATE),
+              inArray(wakerFlowRequests.kind, PLANNING_KINDS),
               eq(wakerFlowRequests.status, "pending"),
             ),
           ),
@@ -2084,5 +2375,10 @@ export function createWakerFlowStore(options: {
       return options.models.choices(tenantId);
     },
   };
-  return store;
+  // WF9: the customization sessions of these Flows, planned through `generate` above, and their
+  // share links and imports.
+  return Object.assign(store, {
+    sessions: createFlowSessionStore({ database, flows: store }),
+    sharing: createFlowSharingStore({ database, flows: store, canUse }),
+  });
 }

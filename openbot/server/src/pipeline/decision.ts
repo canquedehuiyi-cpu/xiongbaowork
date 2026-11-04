@@ -187,7 +187,8 @@ export function routeAfter(
 /**
  * The most steps that can still open a card from `from` on, over every path (D4: the month is
  * counted by the steps a run can actually execute, and a decision executes no turn and opens no
- * card). A plan without decisions or jumps counts every remaining step, exactly as before.
+ * card; nor does a confirmation, which asks a person). A plan without decisions, confirmations or
+ * jumps counts every remaining step, exactly as before.
  */
 export function stepBudget(steps: RouteStep[], from = 0): number {
   const longest = new Array<number>(steps.length + 1).fill(0);
@@ -204,7 +205,9 @@ export function stepBudget(steps: RouteStep[], from = 0): number {
           ]
         : [routeAfter(steps, index)];
     const after = Math.max(0, ...targets.map((to) => longest[to] ?? 0));
-    longest[index] = (step.kind === "decision" ? 0 : 1) + after;
+    // A decision and a confirmation run no turn and open no card.
+    longest[index] =
+      (step.kind === "decision" || step.kind === "confirm" ? 0 : 1) + after;
   }
   return longest[from] ?? 0;
 }

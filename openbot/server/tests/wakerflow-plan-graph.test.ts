@@ -938,7 +938,7 @@ describe("other node fields", () => {
 });
 
 describe("what the server runs today", () => {
-  test("decisions and jumps are accepted on Save; nested Flows and actions wait for their execution", () => {
+  test("every step kind and jumps are accepted on Save now that each one runs", () => {
     expect(wakerFlowPlanSchema.safeParse(branching()).success).toBe(true);
     const later = base([
       {
@@ -959,12 +959,30 @@ describe("what the server runs today", () => {
         outputKey: "posted",
       },
     ]);
-    const issues = wakerFlowPlanSchema.safeParse(later).error?.issues ?? [];
-    expect(
-      issues
-        .filter((issue) => issue.message === "这种步骤暂时还不能运行。")
-        .map((issue) => issue.path.join(".")),
-    ).toEqual(["steps.0.kind", "steps.1.kind"]);
+    expect(wakerFlowPlanSchema.safeParse(later).success).toBe(true);
+  });
+
+  test("an action calls an MCP tool only, never a computer, host or hand-off action (D7)", () => {
+    for (const tool of [
+      "host/run_command",
+      "bot/handoff",
+      "openbot/share_private_information",
+    ])
+      expect(
+        problems(
+          base([
+            {
+              id: "post",
+              kind: "action",
+              agentId: "writer",
+              tool,
+              args: {},
+              inputKeys: [],
+              outputKey: "posted",
+            },
+          ]),
+        ).map((problem) => problem.path),
+      ).toContain("steps.0.tool");
   });
 
   test("the planning model is held to coworker steps without jumps (D9)", async () => {
@@ -1058,5 +1076,144 @@ describe("worker prompt (D2)", () => {
         expect(instruction).not.toContain("本流程中你的角色");
       }
     }
+  });
+});
+
+describe("confirmation steps (WF8 §3.3's 确认节点)", () => {
+  const ask = (
+    extra: Partial<Extract<WakerFlowStep, { kind: "confirm" }>> = {},
+  ): WakerFlowStep => ({
+    id: "ask",
+    kind: "confirm",
+    question: "主题「{{topic}}」的草稿：{{draft}}。可以发布吗？",
+    inputKeys: ["topic", "draft"],
+    outputKey: "approved",
+    ...extra,
+  });
+  const three = (middle: WakerFlowStep, last?: WakerFlowStep) =>
+    base([
+      worker("write", ["topic"], "draft"),
+      middle,
+      last ?? worker("publish", ["approved"], "final"),
+    ]);
+
+  test("is accepted on Save, names no coworker, and its output is read like any other", () => {
+    expect(wakerFlowPlanSchema.safeParse(three(ask())).success).toBe(true);
+    // The planning model's own kinds are untouched: still workers only (D9).
+    expect(problems(three(ask()))).toEqual([]);
+  });
+
+  test("compiles to a template step that holds its question and no coworker", () => {
+    const plan = three(ask({ next: WAKERFLOW_END }));
+    expect(compiledSteps(plan)[1]).toEqual({
+      id: "ask",
+      kind: "confirm",
+      agentId: "",
+      instruction: "主题「{{topic}}」的草稿：{{draft}}。可以发布吗？",
+      inputKeys: ["topic", "draft"],
+      outputKey: "approved",
+      next: WAKERFLOW_END,
+    });
+  });
+
+  test("refused: an empty question, or one over 2000 characters", () => {
+    expect(problems(three(ask({ question: "   " })))).toContainEqual({
+      path: "steps.1.question",
+      message: "请填写要确认的问题。",
+    });
+    expect(
+      problems(three(ask({ question: "长".repeat(2001), inputKeys: [] }))),
+    ).toContainEqual({
+      path: "steps.1.question",
+      message: "确认问题不能超过 2000 字。",
+    });
+    expect(
+      problems(three(ask({ question: "长".repeat(2000), inputKeys: [] }))),
+    ).toEqual([]);
+  });
+
+  test("refused: a {{key}} the step does not declare reading", () => {
+    expect(
+      problems(three(ask({ inputKeys: ["topic"] }))).map(
+        (problem) => problem.message,
+      ),
+    ).toContain("问题引用了 {{draft}}，但这一步没有声明读取它。");
+  });
+
+  test("refused: a coworker, an instruction or an unknown field (it is not a worker)", () => {
+    for (const extra of [
+      { agentId: "writer" },
+      { instruction: "做点什么" },
+      { branches: [] },
+    ])
+      expect(
+        problems(three({ ...ask(), ...extra } as unknown as WakerFlowStep))
+          .length,
+      ).toBeGreaterThan(0);
+  });
+
+  test("joins the forward-only and dominance checks like the other kinds", () => {
+    // Reading an output nobody has produced yet.
+    expect(
+      problems(
+        base([
+          ask({ question: "{{draft}}?", inputKeys: ["draft"] }),
+          worker("write", ["topic"], "draft"),
+        ]),
+      ).map((problem) => problem.message),
+    ).toContain("输入 draft 尚未产生；只能读取流程输入或前面步骤的输出。");
+    // A backward jump.
+    expect(
+      problems(three(ask({ next: "write" }))).map((problem) => problem.path),
+    ).toContain("steps.1.next");
+    // On one branch only: the step after the join may not read its answer.
+    const branched = base([
+      {
+        id: "decide",
+        kind: "decision",
+        inputKeys: ["topic"],
+        branches: [
+          { label: "问", when: "size(inputs.topic) > 3", next: "ask" },
+        ],
+        otherwise: "join",
+      },
+      ask({ question: "{{topic}}?", inputKeys: ["topic"] }),
+      worker("join", ["approved"], "final"),
+    ]);
+    expect(problems(branched).map((problem) => problem.message)).toContain(
+      "输入 approved 只在部分分支中产生；走到这一步的其他路径上没有它。",
+    );
+    // A jump that passes over the only way into a step leaves that step unreachable.
+    expect(
+      problems(
+        base([
+          ask({ question: "{{topic}}?", inputKeys: ["topic"], next: "end" }),
+          worker("middle", ["approved"], "mid"),
+          worker("end", ["approved"], "final"),
+        ]),
+      ).map((problem) => problem.message),
+    ).toContain("没有任何路径会走到步骤 middle。");
+  });
+
+  test("its output may not overwrite an input or another output", () => {
+    expect(
+      problems(three(ask({ outputKey: "draft" }))).map(
+        (problem) => problem.message,
+      ),
+    ).toContain("步骤输出不能覆盖已有输入或输出。");
+  });
+
+  test("the planning model still makes coworker steps only (D9)", async () => {
+    const generated = createFlowGenerator({
+      generate: async () => ({ text: JSON.stringify(three(ask())) }),
+    }).plan({
+      model: "fake/planner" as unknown as LanguageModel,
+      idea: "确认",
+      members: [
+        { agentId: "writer", name: "小写", role: "撰写" },
+        { agentId: "reviewer", name: "小审", role: "审核" },
+      ],
+    });
+    await expect(generated).rejects.toBeInstanceOf(FlowPlanFormatError);
   });
 });

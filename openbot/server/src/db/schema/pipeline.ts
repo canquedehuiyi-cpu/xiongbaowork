@@ -1,4 +1,7 @@
+import { sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
+  check,
   customType,
   index,
   integer,
@@ -46,7 +49,11 @@ export type PipelineStepRow = {
   instruction: string;
   inputKeys?: string[];
   outputKey?: string;
-  kind?: "worker" | "decision" | "flow" | "action";
+  /**
+   * `confirm` (WF8 §3.3): a question to a person, with no coworker (`""`) and no turn; its
+   * `instruction` is the question as written, `{{key}}` filled from `inputKeys` when it is reached.
+   */
+  kind?: "worker" | "decision" | "flow" | "action" | "confirm";
   /** The member's role and prompt in this Flow (D2), put ahead of the step's own instruction. */
   rolePrompt?: string;
   /** Jump forward to this step id (or `__end__`) when the step ends; absent is the next one. */
@@ -212,11 +219,28 @@ export const groupTaskRuns = pgTable(
      */
     steps: jsonbArray<PipelineStepStateRow>().notNull(),
     initiatedBy: text("initiated_by"),
+    /**
+     * WF7 (migration 0139): the run and step that started this one, when it is a nested Flow's run.
+     * Both null for every other run. At most one child per parent step (the partial unique index), so
+     * a parent step driven twice cannot start a second child.
+     */
+    parentRunId: uuid("parent_run_id").references(
+      (): AnyPgColumn => groupTaskRuns.id,
+      { onDelete: "set null" },
+    ),
+    parentStepId: text("parent_step_id"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (table) => [
     index("group_task_runs_tenant_status_idx").on(table.tenantId, table.status),
     index("group_task_runs_parent_idx").on(table.parentTaskId),
+    uniqueIndex("group_task_runs_parent_step_idx")
+      .on(table.tenantId, table.parentRunId, table.parentStepId)
+      .where(sql`${table.parentRunId} is not null`),
+    check(
+      "group_task_runs_parent_pair_check",
+      sql`(${table.parentRunId} is null) = (${table.parentStepId} is null)`,
+    ),
   ],
 );

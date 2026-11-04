@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { RequestError } from "@/lib/client";
 import { newId } from "@/lib/new-id";
 import { FlowInputFields } from "./flow-input-fields";
+import { Flowchart } from "./flowchart";
 import { RunTimeline } from "./run-timeline";
 import {
   abortWakerFlowRun,
@@ -403,6 +404,23 @@ function RunDetail(props: {
           {stopFailure}
         </p>
       ) : null}
+      {/* WF7: the run on the plan's flowchart, each node in its step's state. */}
+      <Flowchart
+        label="运行流程图"
+        states={Object.fromEntries(
+          run.steps.map((step) => [
+            step.id,
+            {
+              state: step.state,
+              ...(step.skipReason ? { skipReason: step.skipReason } : {}),
+            },
+          ]),
+        )}
+        steps={run.steps}
+        title={(node) =>
+          run.steps.find((step) => step.id === node.id)?.instruction ?? node.id
+        }
+      />
       <ol className="flex flex-col gap-2">
         {run.steps.map((step, index) => (
           <li className="rounded-md bg-muted px-3 py-2 text-sm" key={step.id}>
@@ -411,7 +429,9 @@ function RunDetail(props: {
                 第 {index + 1} 步 · {step.instruction}
               </span>
               <span className="shrink-0 text-muted-foreground">
-                {STEP_STATE[step.state] ?? step.state}
+                {step.state === "skipped" && step.skipReason === "branch"
+                  ? "分支未选中"
+                  : (STEP_STATE[step.state] ?? step.state)}
               </span>
             </div>
             {step.output ? (
@@ -423,10 +443,27 @@ function RunDetail(props: {
             {step.error ? (
               <p className="mt-2 text-destructive text-xs">{step.error}</p>
             ) : null}
+            {step.branch ? (
+              <p className="mt-2 text-muted-foreground text-xs">
+                走了「{step.branch.label}」分支
+              </p>
+            ) : null}
             {run.status === "awaiting_action" &&
             index === run.cursor &&
             step.state === "awaiting_action" ? (
-              step.approvalId ? (
+              step.childRunId && step.targetFlowId ? (
+                // WF7: a nested Flow's step waits on its child run, which has its own page.
+                <p className="mt-2 text-xs">
+                  这一步在等子流程运行完成。{" "}
+                  <Link
+                    className="underline"
+                    params={{ flowId: step.targetFlowId }}
+                    to="/wakerflows/$flowId"
+                  >
+                    查看子流程
+                  </Link>
+                </p>
+              ) : step.approvalId ? (
                 // D5: an approval has one place to be answered, and it is not here.
                 <p className="mt-2 text-xs">
                   这一步在等审批。{" "}

@@ -13,7 +13,7 @@ import {
 import { runAsTenant } from "../tenant/context";
 import {
   flowRunEventWriter,
-  GENERATE,
+  PLANNING_KINDS,
   RUN,
   RUN_UNCERTAIN_MESSAGE,
   UNCERTAIN_MESSAGE,
@@ -56,7 +56,8 @@ import {
  * so it is settled `unknown` with the sentence `generate` itself stores for a call whose outcome
  * nobody saw. It is never re-driven and no model is called; the Flow is not written (the plan only
  * reaches the Flow in the transaction that also marks the request `completed`, and the Flow has no
- * planning status of its own). A new request id is how a person plans again.
+ * planning status of its own). A new request id is how a person plans again. A customization turn
+ * (kind `customize`, WF9) is the same planning call and is settled the same way.
  */
 
 /** What the step that was running says about itself after a restart. */
@@ -387,7 +388,7 @@ async function settleStrandedGenerateRequests(
       .from(wakerFlowRequests)
       .where(
         and(
-          eq(wakerFlowRequests.kind, GENERATE),
+          inArray(wakerFlowRequests.kind, PLANNING_KINDS),
           eq(wakerFlowRequests.status, "pending"),
           stale,
         ),
@@ -410,7 +411,7 @@ async function settleStrandedGenerateRequests(
           and(
             eq(wakerFlowRequests.tenantId, owner),
             eq(wakerFlowRequests.id, request.id),
-            eq(wakerFlowRequests.kind, GENERATE),
+            inArray(wakerFlowRequests.kind, PLANNING_KINDS),
             eq(wakerFlowRequests.status, "pending"),
             stale,
           ),

@@ -10,6 +10,8 @@ import {
   PipelineValidationError,
 } from "../pipeline/store";
 import { QuotaExceeded } from "../quota/limits";
+import { FlowSessionError } from "./sessions";
+import { FlowShareError } from "./sharing";
 import { WakerFlowError, type WakerFlowStore } from "./store";
 
 type Ctx = { Variables: AppVariables };
@@ -222,6 +224,189 @@ export function createWakerFlowRoutes(options: {
   });
 
   /*
+   * WF9: customization sessions. A turn is a planning request (kind `customize`): it answers when the
+   * model does, a repeat of its request id answers from the stored row, and `/generate/cancel` and
+   * `/requests/:requestId` above serve it as they serve first planning.
+   */
+  const { sessions } = store;
+  const sessionId = (context: Context<Ctx>) =>
+    context.req.param("sessionId") ?? "";
+
+  routes.get("/:id/sessions", requireUser, async (context) => {
+    try {
+      return context.json(
+        await sessions.list(tenant(context), context.req.param("id")),
+      );
+    } catch (error) {
+      return refuse(context, error);
+    }
+  });
+
+  routes.post("/:id/sessions", requireUser, async (context) => {
+    const input = await body(context);
+    try {
+      const session = await sessions.create(
+        tenant(context),
+        context.req.param("id"),
+        {
+          requestId: String(input.requestId ?? ""),
+          title: typeof input.title === "string" ? input.title : "",
+          description:
+            typeof input.description === "string" ? input.description : "",
+        },
+      );
+      return context.json({ session }, 201);
+    } catch (error) {
+      return refuse(context, error);
+    }
+  });
+
+  routes.patch("/:id/sessions/:sessionId", requireUser, async (context) => {
+    const input = await body(context);
+    try {
+      const session = await sessions.update(
+        tenant(context),
+        context.req.param("id"),
+        sessionId(context),
+        {
+          revision: input.revision as number,
+          ...(typeof input.title === "string" ? { title: input.title } : {}),
+          ...(typeof input.description === "string"
+            ? { description: input.description }
+            : {}),
+        },
+      );
+      return context.json({ session });
+    } catch (error) {
+      return refuse(context, error);
+    }
+  });
+
+  routes.delete("/:id/sessions/:sessionId", requireUser, async (context) => {
+    const raw = context.req.query("revision");
+    const revision = raw === undefined ? undefined : Number(raw);
+    if (revision !== undefined && (!Number.isInteger(revision) || revision < 0))
+      return context.json({ error: "缺少有效的版本号，请刷新后再删除。" }, 400);
+    try {
+      await sessions.remove(
+        tenant(context),
+        context.req.param("id"),
+        sessionId(context),
+        revision,
+      );
+      return context.json({ deleted: true });
+    } catch (error) {
+      return refuse(context, error);
+    }
+  });
+
+  routes.post(
+    "/:id/sessions/:sessionId/activate",
+    requireUser,
+    async (context) => {
+      try {
+        const session = await sessions.activate(
+          tenant(context),
+          context.req.param("id"),
+          sessionId(context),
+        );
+        return context.json({ session });
+      } catch (error) {
+        return refuse(context, error);
+      }
+    },
+  );
+
+  routes.get("/:id/sessions/:sessionId/turns", requireUser, async (context) => {
+    try {
+      return context.json({
+        turns: await sessions.turns(
+          tenant(context),
+          context.req.param("id"),
+          sessionId(context),
+        ),
+      });
+    } catch (error) {
+      return refuse(context, error);
+    }
+  });
+
+  routes.post(
+    "/:id/sessions/:sessionId/turns",
+    requireUser,
+    async (context) => {
+      const input = await body(context);
+      try {
+        const request = await sessions.say(
+          tenant(context),
+          tenant(context),
+          context.req.param("id"),
+          sessionId(context),
+          {
+            requestId: String(input.requestId ?? ""),
+            modelRef: typeof input.modelRef === "string" ? input.modelRef : "",
+            prompt: typeof input.prompt === "string" ? input.prompt : "",
+            ...(Array.isArray(input.members)
+              ? { members: input.members as WakerFlowCandidate[] }
+              : {}),
+          },
+        );
+        return context.json({ request });
+      } catch (error) {
+        return refuse(context, error);
+      }
+    },
+  );
+
+  /*
+   * WF9: the owner's share links of a saved Flow. The token is in the create answer only; the list
+   * never carries one. Importing is `/api/wakerflow-shares` (`createWakerFlowShareRoutes`).
+   */
+  const { sharing } = store;
+
+  routes.get("/:id/shares", requireUser, async (context) => {
+    try {
+      return context.json({
+        shares: await sharing.list(tenant(context), context.req.param("id")),
+      });
+    } catch (error) {
+      return refuse(context, error);
+    }
+  });
+
+  routes.post("/:id/shares", requireUser, async (context) => {
+    const input = await body(context);
+    try {
+      const created = await sharing.create(
+        tenant(context),
+        context.req.param("id"),
+        {
+          id: String(input.id ?? ""),
+          expiresInDays: input.expiresInDays,
+          maxUses: input.maxUses,
+        },
+      );
+      return context.json(created, created.token ? 201 : 200);
+    } catch (error) {
+      return refuse(context, error);
+    }
+  });
+
+  routes.post("/:id/shares/:shareId/revoke", requireUser, async (context) => {
+    try {
+      return context.json({
+        share: await sharing.revoke(
+          tenant(context),
+          context.req.param("id"),
+          context.req.param("shareId"),
+        ),
+      });
+    } catch (error) {
+      return refuse(context, error);
+    }
+  });
+
+  /*
    * Pressing "run" answers as soon as the run is registered and on the board, not when the crew
    * finishes: the steps are driven in the background by the pipeline's own `advance`.
    */
@@ -387,12 +572,62 @@ export function createWakerFlowRoutes(options: {
 }
 
 /**
+ * WF9: a shared Flow, by its token, for a signed-in person of any workspace (D9): the preview, which
+ * spends nothing, and the import, which spends one use and creates a draft of the importer's own.
+ * A token that names no link is a 404, whatever else is wrong with it.
+ */
+export function createWakerFlowShareRoutes(options: {
+  store: WakerFlowStore;
+  requireUser: MiddlewareHandler<Ctx>;
+}) {
+  const { store, requireUser } = options;
+  const routes = new Hono<Ctx>();
+  routes.get("/:token", requireUser, async (context) => {
+    try {
+      return context.json({
+        share: await store.sharing.preview(
+          context.var.actor.id,
+          context.req.param("token"),
+        ),
+      });
+    } catch (error) {
+      return refuse(context, error);
+    }
+  });
+  routes.post("/:token/import", requireUser, async (context) => {
+    const input = (await context.req
+      .json<Record<string, unknown>>()
+      .catch(() => null)) as Record<string, unknown> | null;
+    try {
+      return context.json({
+        imported: await store.sharing.import(
+          context.var.actor.id,
+          context.var.actor.id,
+          context.req.param("token"),
+          {
+            requestId: String(input?.requestId ?? ""),
+            members: input?.members,
+          },
+        ),
+      });
+    } catch (error) {
+      return refuse(context, error);
+    }
+  });
+  return routes;
+}
+
+/**
  * What the stores' refusals mean as HTTP. Every WakerFlow refusal carries its own status; a quota
  * refusal keeps the ceiling's own body, as on the pipeline routes; anything else is a real failure.
  */
 function refuse(context: Context<Ctx>, error: unknown) {
   if (error instanceof QuotaExceeded) return context.json(error.body, 402);
-  if (error instanceof WakerFlowError)
+  if (
+    error instanceof WakerFlowError ||
+    error instanceof FlowSessionError ||
+    error instanceof FlowShareError
+  )
     return context.json({ error: error.message }, error.status);
   if (error instanceof PipelineNotFoundError)
     return context.json({ error: error.message }, 404);
