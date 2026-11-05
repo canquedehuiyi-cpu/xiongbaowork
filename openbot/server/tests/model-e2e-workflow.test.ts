@@ -111,25 +111,38 @@ test("actions are pinned to full commit SHAs, Bun is 1.3.14, the lockfile is fro
 
 test("the key reaches the job only as the model-e2e Environment's secrets.DEEPSEEK_API_KEY, through env", () => {
   const references = text.match(/secrets\.[A-Za-z0-9_]+/g) ?? [];
-  expect(references).toEqual(["secrets.DEEPSEEK_API_KEY"]);
+  // One reference per carrier job (below), and no other secret named anywhere.
+  expect(references).toEqual([
+    "secrets.DEEPSEEK_API_KEY",
+    "secrets.DEEPSEEK_API_KEY",
+  ]);
   expect(text).not.toMatch(/secrets\[/);
   expect(text).not.toContain("toJSON(secrets");
 
-  // Environment secrets reach only jobs that name the Environment; every job here does (above), and
-  // the one job that carries the key is one of them.
-  const carrierJobs = jobs.filter((job) =>
-    job.steps.some((step) =>
+  // Environment secrets reach only jobs that name the Environment; every job here does (above).
+  // Exactly two jobs carry the key — G6's reconciliation and G4's real-model WakerFlow run — each in
+  // exactly one step, and each of them is one of those jobs.
+  const carrierOf = (job: Job) =>
+    job.steps.filter((step) =>
       Object.values(step.env ?? {}).some((value) =>
         String(value).includes("secrets."),
       ),
-    ),
+    );
+  const carrierJobs = Object.entries(workflow.jobs).filter(
+    ([, job]) => carrierOf(job).length > 0,
   );
-  expect(carrierJobs).toHaveLength(1);
-  const carrierEnvironment =
-    typeof carrierJobs[0].environment === "string"
-      ? carrierJobs[0].environment
-      : carrierJobs[0].environment?.name;
-  expect(carrierEnvironment).toBe("model-e2e");
+  expect(carrierJobs.map(([name]) => name).sort()).toEqual([
+    "model-e2e",
+    "wakerflow-real-model",
+  ]);
+  for (const [, job] of carrierJobs) {
+    expect(carrierOf(job)).toHaveLength(1);
+    const carrierEnvironment =
+      typeof job.environment === "string"
+        ? job.environment
+        : job.environment?.name;
+    expect(carrierEnvironment).toBe("model-e2e");
+  }
 
   const steps = jobs.flatMap((job) => job.steps);
   const carriers = steps.filter((step) =>
@@ -137,25 +150,32 @@ test("the key reaches the job only as the model-e2e Environment's secrets.DEEPSE
       String(value).includes("secrets."),
     ),
   );
-  expect(carriers).toHaveLength(1);
-  expect(carriers[0].env?.MODEL_E2E_API_KEY).toBe(
-    expression("secrets.DEEPSEEK_API_KEY"),
-  );
+  expect(carriers).toHaveLength(2);
   for (const step of steps) {
     expect(step.run ?? "").not.toContain("secrets.");
     expect(JSON.stringify(step.with ?? {})).not.toContain("secrets.");
   }
-  // The key is a DeepSeek key, so the provider is DeepSeek; model and endpoint are variables with
-  // DeepSeek's own defaults when the variable is unset.
-  expect(carriers[0].env?.MODEL_E2E_PROVIDER).toBe("deepseek");
-  expect(carriers[0].env?.MODEL_E2E_MODEL).toBe(
-    expression("vars.MODEL_E2E_MODEL || 'deepseek-chat'"),
-  );
-  expect(carriers[0].env?.MODEL_E2E_BASE_URL).toBe(
-    expression("vars.MODEL_E2E_BASE_URL || 'https://api.deepseek.com/v1'"),
-  );
-  expect(carriers[0].env?.MODEL_E2E).toBe("1");
-  expect(carriers[0].run).toContain("scripts/model-e2e.ts");
+  for (const carrier of carriers) {
+    expect(carrier.env?.MODEL_E2E_API_KEY).toBe(
+      expression("secrets.DEEPSEEK_API_KEY"),
+    );
+    // Model and endpoint are variables with DeepSeek's own defaults when the variable is unset.
+    expect(carrier.env?.MODEL_E2E_MODEL).toBe(
+      expression("vars.MODEL_E2E_MODEL || 'deepseek-chat'"),
+    );
+    expect(carrier.env?.MODEL_E2E_BASE_URL).toBe(
+      expression("vars.MODEL_E2E_BASE_URL || 'https://api.deepseek.com/v1'"),
+    );
+    expect(carrier.env?.MODEL_E2E).toBe("1");
+    // The mock-provider switch is for a laptop only; the armed jobs never set it.
+    expect(carrier.env?.MODEL_E2E_LOCAL_MOCK).toBeUndefined();
+  }
+  const [g6] = carrierOf(workflow.jobs["model-e2e"] as Job);
+  // The key is a DeepSeek key, so G6's provider is DeepSeek.
+  expect(g6?.env?.MODEL_E2E_PROVIDER).toBe("deepseek");
+  expect(g6?.run).toContain("scripts/model-e2e.ts");
+  const [g4] = carrierOf(workflow.jobs["wakerflow-real-model"] as Job);
+  expect(g4?.run).toContain("scripts/e2e/wakerflow-real-model.ts");
 });
 
 test("the DeepSeek defaults pass the harness gate", () => {

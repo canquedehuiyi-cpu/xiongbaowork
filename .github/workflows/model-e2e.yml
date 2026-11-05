@@ -1,7 +1,13 @@
-# Story G6 / audit defect #11: one minimal REAL bound-model call, reconciled against the
-# model_token_calls row it wrote. Spends a real key, so it runs only by hand, only from main, and
-# only inside the GitHub Environment `model-e2e` (whose protection rules gate the secret).
-# ci.yml never runs this; there is deliberately no pull_request or push trigger here.
+# Two jobs, both spending a real key, so both run only by hand, only from main, and only inside the
+# GitHub Environment `model-e2e` (whose protection rules gate the secret). ci.yml never runs this;
+# there is deliberately no pull_request or push trigger here.
+#
+#   model-e2e             Story G6 / audit defect #11: one minimal REAL bound-model call, reconciled
+#                         against the model_token_calls row it wrote.
+#   wakerflow-real-model  Gate G4 with a real model: the WakerFlow lifecycle through the API (the real
+#                         planner generates a plan, it is edited, saved, run to completion, a second run
+#                         is aborted) against a real server and Postgres, with model_token_calls read as
+#                         the tenant. ci.yml's e2e-wakerflow proves the same lifecycle with a mocked model.
 #
 # The key is the DeepSeek key stored ONLY as the `model-e2e` Environment's secret
 # DEEPSEEK_API_KEY: an Environment secret reaches only a job that names that Environment.
@@ -68,3 +74,53 @@ jobs:
           MODEL_E2E_BASE_URL: ${{ vars.MODEL_E2E_BASE_URL || 'https://api.deepseek.com/v1' }}
           MODEL_E2E_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         run: bun run --cwd server scripts/model-e2e.ts
+
+  wakerflow-real-model:
+    name: G4 WakerFlow with a real model
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: model-e2e
+    # The same ceiling as model-e2e (server/tests/model-e2e-workflow.test.ts): a locally mocked run
+    # takes under a minute end to end, so ten minutes is room for a slow provider, not a habit.
+    timeout-minutes: 10
+    services:
+      # PostgreSQL 17 with pgvector: migration 0000 creates the `vector` extension.
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: openbot
+          POSTGRES_PASSWORD: e2e-owner
+          POSTGRES_DB: openbot_g4_real
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U openbot -d openbot_g4_real"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      PGPASSWORD: e2e-owner
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.3.14
+      # This job holds a real key: no dependency lifecycle script runs in it.
+      - run: bun install --frozen-lockfile --ignore-scripts
+      - name: Migrate the job's own database and set the runtime role passwords (ci.yml e2e-wakerflow recipe)
+        run: |
+          DATABASE_URL=postgres://openbot:e2e-owner@127.0.0.1:5432/openbot_g4_real bun run --cwd server scripts/migrate.ts
+          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_app WITH PASSWORD 'e2e-app' NOSUPERUSER NOBYPASSRLS"
+          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_role_writer WITH PASSWORD 'e2e-role-writer'"
+      # No app build: the harness drives the API only, and the server serves no APP_DIST_DIR. The
+      # server log stays on the runner (it is neither printed nor uploaded).
+      - name: G4 WakerFlow lifecycle with a real model
+        env:
+          MODEL_E2E: "1"
+          E2E_DATABASE_URL: postgres://openbot_app:e2e-app@127.0.0.1:5432/openbot_g4_real
+          E2E_ROLE_WRITER_DATABASE_URL: postgres://openbot_role_writer:e2e-role-writer@127.0.0.1:5432/openbot_g4_real
+          E2E_ARTIFACTS_DIR: ${{ runner.temp }}/g4-real
+          MODEL_E2E_MODEL: ${{ vars.MODEL_E2E_MODEL || 'deepseek-chat' }}
+          MODEL_E2E_BASE_URL: ${{ vars.MODEL_E2E_BASE_URL || 'https://api.deepseek.com/v1' }}
+          MODEL_E2E_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: bun scripts/e2e/wakerflow-real-model.ts
