@@ -200,8 +200,11 @@ jobs:
     outputs:
       signed: ${{ steps.done.outputs.signed }}
       publisher: ${{ steps.done.outputs.publisher }}
+    # windows-latest runs a step in PowerShell unless it says otherwise. These steps are bash
+    # (Git Bash on the runner); the ones written for PowerShell declare `shell: pwsh`.
     defaults:
       run:
+        shell: bash
         working-directory: openbot
     env:
       SIGNING_SOURCE_SHA: ${{ github.sha }}
