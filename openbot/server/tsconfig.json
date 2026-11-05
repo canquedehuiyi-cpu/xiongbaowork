@@ -32,10 +32,13 @@
   //
   // `../scripts/e2e/wakerflow-lifecycle.ts`: the G4 gate's harness, run by the `e2e-wakerflow` CI job.
   // It is a module and drives this workspace's server, so it is checked here like composio-smoke.
+  // `../scripts/e2e/wakerflow-real-model.ts`: the same gate once with a real model, run by hand by
+  // the `wakerflow-real-model` job of model-e2e.yml; checked here for the same reason.
   "include": [
     "src",
     "scripts",
     "../scripts/composio-smoke.ts",
-    "../scripts/e2e/wakerflow-lifecycle.ts"
+    "../scripts/e2e/wakerflow-lifecycle.ts",
+    "../scripts/e2e/wakerflow-real-model.ts"
   ]
 }
