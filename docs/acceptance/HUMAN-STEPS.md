@@ -19,7 +19,7 @@
 | 9 GHCR 公开 | 已完成 | 发布的 digest 能匿名取到 manifest（HTTP 200） |
 | 10 G7 | Linux 已完成，Windows 待做 | `g7-linux` 内置库、外部库两个 job 都通过（同一发布运行） |
 | 11 G5 真机 | 待做 | 需要一台真实电脑 |
-| 12 F2 设备端 | 演练中 | `device-v0.2.0-rc.1`：Linux 成功，Windows 因 bash 步骤被 PowerShell 解析而失败，已由 canquedehuiyi-cpu/xiongbaowork#250 修复；在修复后的 `main` 上推 `device-v0.2.0-rc.2` 重新演练。签名身份（D3）和两台干净机器证据（12.6）待人工 |
+| 12 F2 设备端 | 未签名内测版已发，签名与干净机器待人工 | `device-v0.2.0-rc.1` 的 Windows job 失败，已由 canquedehuiyi-cpu/xiongbaowork#250 修复；`device-v0.2.0-rc.2` → 「熊宝设备端发布」运行 41963394570 全绿，预发布「熊宝数字员工 设备端 0.2.0（未签名内测版）」含 Windows 安装包、Linux deb 和 `SHA256SUMS`（下载复核通过）。签名身份（D3，12.2/12.4）和两台干净机器证据（12.6）待人工 |
 
 ## 1. 把 `main` 设为默认分支
 
