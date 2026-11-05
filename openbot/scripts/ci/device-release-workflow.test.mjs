@@ -200,6 +200,25 @@ test("no run script interpolates an expression, and secrets reach steps only thr
   expect(text).not.toContain("test-certificate");
 });
 
+test("every run step runs in the shell it is written for, never PowerShell by default", () => {
+  // GitHub runs a step in PowerShell on Windows runners and in bash elsewhere unless the step or its
+  // job names a shell. The bash steps the tests below execute must get bash on every runner, and a
+  // PowerShell step must say so itself.
+  const top = workflow.defaults?.run?.shell;
+  for (const [name, job] of Object.entries(workflow.jobs)) {
+    const runner = String(job["runs-on"] ?? "");
+    const jobShell = job.defaults?.run?.shell ?? top;
+    for (const s of job.steps ?? []) {
+      if (s.run === undefined) continue;
+      const shell = s.shell ?? jobShell ?? (runner.startsWith("windows") ? "pwsh" : "bash");
+      const label = `${name}: ${s.name ?? s.id ?? s.run.split("\n")[0]}`;
+      if (shell === "pwsh") expect([label, s.shell]).toEqual([label, "pwsh"]);
+      else expect([label, shell]).toEqual([label, "bash"]);
+    }
+  }
+  expect(workflow.jobs.windows.defaults.run.shell).toBe("bash");
+});
+
 test("the Windows signing mode comes from configuration and a half-set one fails", () => {
   const none = run("windows", "mode", { DEVICE_WINDOWS_SIGNING: "" });
   expect(none.status).toBe(0);
