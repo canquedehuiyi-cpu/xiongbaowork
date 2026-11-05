@@ -271,7 +271,7 @@ Settings → Environments → New environment，名称填 `device-release`：
 
 把截图、命令输出和系统版本整理好，编辑这个 Release 上传为附件，然后在 `docs/acceptance/STORIES.md` 的 F2 行写上链接。拿到已签名的产物和这份两台机器的证据之后，F2 才能改成 implemented。
 
-**流水线现在自动做的部分**：「熊宝设备端发布」在 `assemble` 之后、`publish` 之前加了 `clean-linux`（`ubuntu-latest`）和 `clean-windows`（`windows-latest`）两个 job，每次都在全新的 GitHub 托管机器上用 `device-release-dist` 里**将要发布的那几个文件**做检查；任何一项不过，Release 就不会发。两份记录 `device-clean-linux-evidence.txt`、`device-clean-windows-evidence.txt`（系统版本、文件 SHA256、签名状态、每项 PASS，最后一行 `RESULT: PASS`）会作为附件跟 Release 一起上传（不进 `SHA256SUMS`），也在运行页的 `device-clean-<os>-evidence` 制品里。
+**流水线现在自动做的部分**：「熊宝设备端发布」在 `assemble` 之后、`publish` 之前加了 `clean-linux`（`ubuntu-latest`）和 `clean-windows`（`windows-latest`）两个 job，每次都在全新的 GitHub 托管机器上用 `device-release-dist` 里**将要发布的那几个文件**做检查；任何一项不过，Release 就不会发。两份记录 `device-clean-linux-evidence.txt`、`device-clean-windows-evidence.txt`（系统版本、文件 SHA256、签名状态、每项 PASS，最后一行 `RESULT: PASS`）会作为附件跟 Release 一起上传（不进 `SHA256SUMS`），也在运行页的 `device-clean-<os>-evidence` 制品里。同样的检查（同一份 `scripts/ci/device-clean-linux.sh` 和 `scripts/ci/device-clean-windows.ps1`）也在每个 PR 的「熊宝交付 CI」里对 CI 构建的未签名 deb 和 NSIS 安装包跑一遍（job `device clean-machine install (ubuntu-latest)`、`device clean-machine install (windows-latest)`，记录在 `device-clean-<os>-ci-evidence` 制品里）。
 
 - 第 1 步校验和：两台都自动做（Linux `sha256sum -c --ignore-missing`，Windows `Get-FileHash` 对照 `SHA256SUMS`）。
 - 第 2 步签名：Windows 自动跑 `Get-AuthenticodeSignature`，已签名的发布必须是 `Valid` 且发布者与 `windows` job 校验过的一致；未签名内测版只记录 `NotSigned`，不因此失败。Linux deb 只核对校验和。
