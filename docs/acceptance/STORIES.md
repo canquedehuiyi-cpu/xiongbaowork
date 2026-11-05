@@ -122,13 +122,13 @@
 
 | 门 | 要求 | CI 里已自动化的部分 | 仍需人工的部分 | 状态 |
 | --- | --- | --- | --- | --- |
-| G1 | 同一最终 SHA 的正式镜像：8 个页面 GET 200，未知 API 404 | `ci.yml` 的 `image` job：构建镜像、启动容器、跑 smoke 断言。`release.yml`（canquedehuiyi-cpu/xiongbaowork#34）：打 tag 后构建一次、只按 digest 推 GHCR，对拉回来的同一 digest 跑门 1 断言，然后才打可读 tag、发 GitHub Release | 有人推版本 tag；把 GHCR 包设为公开（否则 G7 的匿名拉取失败） | 部分：PR 构建上自动；正式 tag 还没发过 |
+| G1 | 同一最终 SHA 的正式镜像：8 个页面 GET 200，未知 API 404 | `ci.yml` 的 `image` job：构建镜像、启动容器、跑 smoke 断言。`release.yml`（canquedehuiyi-cpu/xiongbaowork#34）：打 tag 后构建一次、只按 digest 推 GHCR，对拉回来的同一 digest 跑门 1 断言，然后才打可读 tag、发 GitHub Release | 无（tag 已推、GHCR 包已公开） | **已证成（预发布 `v0.2.0-rc.1`）**：2026-11-05 「熊宝发布」运行 41952108367 全绿（29 成功、1 跳过），提交 `cbadf9f`；`verify-digest` 对拉回的 `ghcr.io/canquedehuiyi-cpu/xiongbaowork@sha256:687502b4…add4f` 跑门 1 断言通过，GitHub Release `v0.2.0-rc.1`（预发布，附 `container-images.json`）已发。该 digest 可匿名拉取（ghcr 匿名 token 取 manifest 返回 200）。正式版 `v0.2.0` 还没打 |
 | G2 | 未登录拒绝、跨租户私有资源 404、无越权，被拒后不调用上游 | server-test 分片里的租户与权限套件：`tenant-invariants`、`team-tenant-rls.integration`、`rls-role`、`rls-write-scope`、`outbound-guard`（SSRF，#6、#7、#153）、`approvals-policy` 等 | 没有针对正式镜像的端到端越权探针；结论只来自测试套件 | 部分：自动测试在；对正式镜像未单独证成 |
 | G3 | 前后端全套测试无 fail、无 Unhandled error，锁文件安装下严格 CI | `static`、`chart`、`server-test (1)–(6)`、`app-test`、`workspace tests`（agent-computer、supervisor、shared、worker，#13）、`WIN1 device CLI probe (windows-latest)`、`desktop tests (windows-latest)`（#13、#23、#152、#155） | 无 | 自动；以合进 `main` 后 `main` 上的运行为准 |
 | G4 | WakerFlow 生成-编辑-保存-执行-中止-查收及重启恢复 | `e2e-wakerflow` job「G4 WakerFlow lifecycle (browser, mocked model)」（#157）；重启恢复有 `wakerflow-restart-recovery.integration`（#90） | 用真实模型走一遍（CI 里是模拟模型） | 部分：模拟模型下自动 |
 | G5 | 用户设备上浏览器真实动作、离线重连、授权审批闭环 | server-test 分片里 runner 协议与下发的测试（`runner-channel`、`runner-dispatch`、`runner-browser`、`devices`、`device-safety.integration`）。浏览器探针脚本 `scripts/ci/runner-browser-probe*.ts` 在仓库里，但 CI 不跑 | **需要一台真实设备**：安装 runner、配对、执行浏览器/命令/文件动作、断网重连、审批 | 未证成 |
-| G6 | 真实模型最小授权运行与正确计费 | `model-e2e.yml`（#52）：一次真实绑定模型调用，与它写的 `model_token_calls` 行对账 | **需要人手动触发**：只能从 `main`、只在 GitHub Environment `model-e2e` 里跑（密钥只存在该 Environment） | 未证成：还没在 `main` 上跑过 |
-| G7 | Windows/Linux 干净客户部署证据 | Linux：`clean-deploy.yml`（#36，被 `release.yml` 调用），在空目录按 README 原样安装已发布版本，内置库和外部库两种，校验运行的是发布记录里的 digest 并跑门 1 断言 | **Windows 需要一台 Windows 机器**按 README 的「Windows Docker Desktop 快速上手」（`<!-- g7:windows -->` 段）人工跑一遍；CI 只检查该段不含源码构建步骤 | 未证成：Linux 半边要等首个正式版本；Windows 半边待人工 |
+| G6 | 真实模型最小授权运行与正确计费 | `model-e2e.yml`（#52）：一次真实绑定模型调用，与它写的 `model_token_calls` 行对账 | 无（每次要重证时，从 `main` 手动触发） | **已证成**：2026-11-05 在 `main` 上的「模型 E2E 计量对账」运行 41952789605 成功。DeepSeek 真实调用，供应商报 input 8 / output 1 token，`model_token_calls` 行同为 8 / 1，`usageSource=wire`，`mismatches=[]` |
+| G7 | Windows/Linux 干净客户部署证据 | Linux：`clean-deploy.yml`（#36，被 `release.yml` 调用），在空目录按 README 原样安装已发布版本，内置库和外部库两种，校验运行的是发布记录里的 digest 并跑门 1 断言 | **Windows 需要一台 Windows 机器**按 README 的「Windows Docker Desktop 快速上手」（`<!-- g7:windows -->` 段）人工跑一遍；CI 只检查该段不含源码构建步骤 | 部分：**Linux 已证成**——`v0.2.0-rc.1` 发布运行里的 `g7-linux / linux (embedded database)` 和 `g7-linux / linux (external database)` 两个 job 都通过（空目录、无 registry 登录、按 README 安装，运行的就是发布记录里的 digest）。Windows 半边待人工 |
 
 ## 14 个阻断缺陷
 

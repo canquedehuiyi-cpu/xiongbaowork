@@ -2,7 +2,24 @@
 
 这些步骤要用仓库管理员身份在 GitHub 网页上操作，或要用真机和密钥。自动化流程不能代做：没有对应权限，也按约束不创建 environment、secret 和 tag。按下面的顺序做，前一步是后一步的前提。
 
-仓库：`canquedehuiyi-cpu/xiongbaowork`。`main` 已包含集成分支的全部工作，最近一次合并是 canquedehuiyi-cpu/xiongbaowork#180。
+仓库：`canquedehuiyi-cpu/xiongbaowork`。`main` 已包含集成分支的全部工作，最近一次合并是 canquedehuiyi-cpu/xiongbaowork#251。
+
+## 进度（2026-11-05）
+
+| 步骤 | 状态 | 证据 |
+| --- | --- | --- |
+| 1 默认分支 | 已完成 | 仓库默认分支是 `main` |
+| 2 分支保护 | 未核实 | 本会话读不到仓库规则设置，请在网页上自查 |
+| 3 Environment `model-e2e` | 已完成 | 含 `DEEPSEEK_API_KEY`，第 6 步已用它跑通 |
+| 4 Environment `release` | 已完成 | 第 8 步的发布在它里面跑通 |
+| 5 删除 `codex/*` 分支 | 未做 | 不影响发布 |
+| 6 G6 | **已完成** | 「模型 E2E 计量对账」运行 41952789605：供应商 8/1 token，计量行 8/1，`mismatches=[]` |
+| 7 准备首个发布 | 已完成 | canquedehuiyi-cpu/xiongbaowork#246：`package.json` 0.2.0，CHANGELOG `## 0.2.0` |
+| 8 打 tag | **已完成（预发布）** | `v0.2.0-rc.1` → 「熊宝发布」运行 41952108367 全绿，Release `v0.2.0-rc.1` 已发。正式版 `v0.2.0` 待打 |
+| 9 GHCR 公开 | 已完成 | 发布的 digest 能匿名取到 manifest（HTTP 200） |
+| 10 G7 | Linux 已完成，Windows 待做 | `g7-linux` 内置库、外部库两个 job 都通过（同一发布运行） |
+| 11 G5 真机 | 待做 | 需要一台真实电脑 |
+| 12 F2 设备端 | 演练中 | `device-v0.2.0-rc.1`：Linux 成功，Windows 因 bash 步骤被 PowerShell 解析而失败，已由 canquedehuiyi-cpu/xiongbaowork#250 修复；在修复后的 `main` 上推 `device-v0.2.0-rc.2` 重新演练。签名身份（D3）和两台干净机器证据（12.6）待人工 |
 
 ## 1. 把 `main` 设为默认分支
 
