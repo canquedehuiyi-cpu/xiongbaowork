@@ -14,9 +14,9 @@ function check(ok, name) {
   console.log(`${ok ? "PASS" : "FAIL"} ${name}`);
   if (!ok) failures++;
 }
-async function request(path, cookie, body) {
+async function request(path, cookie, body, method) {
   const response = await fetch(`${origin}${path}`, {
-    method: body === undefined ? "GET" : "POST",
+    method: method ?? (body === undefined ? "GET" : "POST"),
     headers: {
       origin,
       ...(cookie ? { cookie } : {}),
@@ -119,6 +119,61 @@ const unknownSummary = await request(
 check(
   unknownSummary.response.status === 404,
   "unknown autonomous coworker returns 404",
+);
+// G2, no escalation: B cannot change or remove A's private employee. The refusal is the same 404 a
+// read gets (no hint the row exists), and afterwards A still has it, unchanged.
+const agentPath = `/api/agents/${encodeURIComponent(id)}`;
+const foreignEdit = await request(
+  agentPath,
+  b,
+  { ...input, name: "被他人改名" },
+  "PATCH",
+);
+check(
+  foreignEdit.response.status === 404,
+  "B editing A private employee returns 404",
+);
+const foreignDelete = await request(agentPath, b, undefined, "DELETE");
+check(
+  foreignDelete.response.status === 404,
+  "B deleting A private employee returns 404",
+);
+const afterward = await request(agentPath, a);
+check(
+  afterward.response.status === 200 &&
+    afterward.value?.agent?.id === id &&
+    afterward.value.agent.name === input.name,
+  "A private employee still present and unchanged after B's attempts",
+);
+const anonymousCreate = await request("/api/agents", "", input);
+check(
+  anonymousCreate.response.status === 401,
+  "anonymous employee creation 401",
+);
+// G2, no escalation: a signed-in person who is not an administrator is refused every administrator
+// and operator door, including the two that would make them one (role) or hand out a tier (plan).
+const users = await request("/api/admin/people", a);
+check(users.response.status === 403, "non-admin GET /api/admin/people 403");
+for (const [path, body] of [
+  ["/api/admin/status", undefined],
+  ["/api/admin/audit-events", undefined],
+  ["/api/platform/tenants", undefined],
+  [
+    `/api/admin/people/${encodeURIComponent(randomUUID())}/role`,
+    { role: "admin" },
+  ],
+  ["/api/quota/plan", { planId: "pro" }],
+]) {
+  const denied = await request(path, b, body);
+  check(
+    denied.response.status === 403,
+    `non-admin ${body === undefined ? "GET" : "POST"} ${path.replace(/people\/[^/]+/, "people/:id")} 403`,
+  );
+}
+const quotaAfter = await request("/api/quota", b);
+check(
+  quotaAfter.response.status === 200 && quotaAfter.value?.plan?.id === "free",
+  "B still on the free plan after the refused switch",
 );
 for (const path of ["/api", "/api/missing-delivery-route"]) {
   check(
