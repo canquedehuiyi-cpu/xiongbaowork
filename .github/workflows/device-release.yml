@@ -18,6 +18,9 @@
 #   signed only and counts as unsigned, like Windows above.
 # The Linux deb is checksum-only (no OS-level signature check applies to a downloaded .deb).
 # No updater (D6): the release carries no update manifest or updater key.
+# Before anything is published, clean-linux and clean-windows install the exact files assemble made
+# on fresh GitHub-hosted machines (HUMAN-STEPS 12.6), and their records
+# (device-clean-{linux,windows}-evidence.txt) go up with the release, outside SHA256SUMS.
 #
 # Every run script reads its inputs from env, never from ${{ }}: the steps are exercised as written
 # by openbot/scripts/ci/device-release-workflow.test.mjs.
@@ -701,6 +704,8 @@ jobs:
             echo
             echo "下载后核对校验和：Linux 运行 \`sha256sum -c SHA256SUMS --ignore-missing\`，macOS 运行 \`shasum -a 256 <文件>\`；Windows 在 PowerShell 运行 \`Get-FileHash <文件> -Algorithm SHA256\`，与 \`SHA256SUMS\` 里的值对照。"
             echo
+            echo "\`device-clean-linux-evidence.txt\` 与 \`device-clean-windows-evidence.txt\` 是发布前在全新的 GitHub 托管 Ubuntu 与 Windows 机器上，用上表这些文件自动做的校验、安装、启动、退出与卸载记录（不在 SHA256SUMS 里）。"
+            echo
             echo "本版本没有自动更新，新版本需要重新下载安装。"
           } > notes.md
           cat notes.md
@@ -714,10 +719,466 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  publish:
+  # HUMAN-STEPS 12.6 on a fresh GitHub-hosted Ubuntu machine, with the exact files assemble made:
+  # SHA256SUMS, apt install (Depends from the archive), the installed files, the installed runner
+  # paired with a real server (and PostgreSQL) through the API, one command from the server, quit with
+  # no openbot-runner left, the installed app back online without pairing, apt remove. No secret and
+  # no Environment; publish waits for it. Not the default success(): macOS may have been skipped.
+  clean-linux:
     needs: [tag-check, assemble]
-    # Not the default success(): macOS may have been skipped upstream of assemble.
-    if: ${{ !cancelled() && !inputs.dry_run && needs.tag-check.result == 'success' && needs.assemble.result == 'success' }}
+    if: ${{ !cancelled() && needs.tag-check.result == 'success' && needs.assemble.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: openbot
+          POSTGRES_PASSWORD: ci-owner
+          POSTGRES_DB: openbot_device_clean
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U openbot -d openbot_device_clean"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      VERSION: ${{ needs.tag-check.outputs.version }}
+      # The job's own throwaway database (the e2e-wakerflow recipe in ci.yml), not a secret.
+      PGPASSWORD: ci-owner
+      OWNER_DATABASE_URL: postgres://openbot:ci-owner@127.0.0.1:5432/openbot_device_clean
+      APP_DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_device_clean
+      ROLE_WRITER_URL: postgres://openbot_role_writer:ci-role-writer@127.0.0.1:5432/openbot_device_clean
+      ORIGIN: http://127.0.0.1:3901
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: device-release-dist
+          path: release
+      - id: sums
+        name: The deb is the one SHA256SUMS names (sha256sum -c --ignore-missing)
+        env:
+          COMMIT: ${{ github.sha }}
+          TAG: ${{ needs.tag-check.outputs.tag }}
+        run: |
+          set -euo pipefail
+          deb="xiongbao-device_${VERSION}_amd64.deb"
+          evidence="$RUNNER_TEMP/device-clean-linux/device-clean-linux-evidence.txt"
+          mkdir -p "$(dirname "$evidence")"
+          os="$(. /etc/os-release && echo "$PRETTY_NAME")"
+          {
+            echo "熊宝数字员工 设备端 ${VERSION}：全新 Linux 机器检查（HUMAN-STEPS 12.6）"
+            echo "标签 ${TAG}，提交 ${COMMIT}"
+            echo "系统：${os}，内核 $(uname -r)，$(uname -m)，托管镜像 ${ImageOS:-未知} ${ImageVersion:-未知}"
+          } > "$evidence"
+          listed="$(awk -v file="$deb" '$2 == file { print $1 }' release/dist/SHA256SUMS)"
+          if ! [[ "$listed" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "::error::SHA256SUMS does not list $deb exactly once."
+            exit 1
+          fi
+          (cd release/dist && sha256sum -c --ignore-missing SHA256SUMS)
+          actual="$(sha256sum "release/dist/$deb" | cut -d' ' -f1)"
+          [ "$actual" = "$listed" ]
+          {
+            echo "安装包：${deb}"
+            echo "SHA256：${actual}"
+            echo "签名：deb 不做代码签名，只核对 SHA256（checksum-only）"
+            echo "PASS SHA256SUMS 校验（sha256sum -c --ignore-missing）"
+          } >> "$evidence"
+      - name: Install the deb with apt (its Depends come from the archive)
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y "./release/dist/xiongbao-device_${VERSION}_amd64.deb"
+          echo "PASS sudo apt-get install -y ./xiongbao-device_${VERSION}_amd64.deb" >> "$RUNNER_TEMP/device-clean-linux/device-clean-linux-evidence.txt"
+      - id: files
+        name: The installed app, runner sidecar and desktop entry
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/device-clean-linux/device-clean-linux-evidence.txt"
+          status="$(dpkg-query -W -f='${Status} ${Version}' xiongbao-device)"
+          [ "$status" = "install ok installed $VERSION" ] || { echo "::error::dpkg says: $status"; exit 1; }
+          for binary in /usr/bin/xiongbao-device /usr/bin/openbot-runner; do
+            [ -x "$binary" ] || { echo "::error::$binary is missing or not executable."; exit 1; }
+            echo "已安装 ${binary}，SHA256 $(sha256sum "$binary" | cut -d' ' -f1)" >> "$evidence"
+          done
+          entry=/usr/share/applications/xiongbao-device.desktop
+          grep -qx 'Exec=xiongbao-device' "$entry"
+          grep -qx 'Name=熊宝数字员工 设备端' "$entry"
+          echo "PASS 已安装 /usr/bin/xiongbao-device、/usr/bin/openbot-runner 与 ${entry}（dpkg：${status}）" >> "$evidence"
+      - id: selfcheck
+        name: The installed runner's own checks (no network)
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/device-clean-linux/device-clean-linux-evidence.txt"
+          scratch="$(mktemp -d)"
+          code=0
+          /usr/bin/openbot-runner --help > "$scratch/help.txt" 2>&1 || code=$?
+          [ "$code" = 2 ] && grep -q -- '--pair CODE' "$scratch/help.txt"
+          mkdir "$scratch/folder"
+          data="$scratch/data"
+          /usr/bin/openbot-runner --data-dir "$data" --add-root "selfcheck=$scratch/folder" | jq -e '.ok and (.roots | length) == 1' > /dev/null
+          /usr/bin/openbot-runner --data-dir "$data" --list-roots | jq -e '.ok and .roots[0].name == "selfcheck"' > /dev/null
+          /usr/bin/openbot-runner --data-dir "$data" --remove-root selfcheck | jq -e '.ok and (.roots | length) == 0' > /dev/null
+          if [ -n "$(ps -C openbot-runner -o pid= || true)" ]; then
+            echo "::error::an openbot-runner is still running after the one-shot commands."
+            exit 1
+          fi
+          rm -rf "$scratch"
+          echo "PASS 已安装的 openbot-runner 自检：--help 退出码 2 并打印用法；--add-root / --list-roots / --remove-root 正常；之后没有残留进程" >> "$evidence"
+      # The server side of 「我的设备」, from the tagged tree: only the server runs from source, the
+      # device side is what apt installed.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          path: source
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.14
+      - name: Install root workspaces from the frozen lockfile (no lifecycle scripts)
+        working-directory: source/openbot
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Migrate the job's own database and set the runtime role passwords (server-test recipe)
+        working-directory: source/openbot
+        run: |
+          set -euo pipefail
+          DATABASE_URL="$OWNER_DATABASE_URL" bun run --cwd server scripts/migrate.ts
+          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_app WITH PASSWORD 'ci-app' NOSUPERUSER NOBYPASSRLS"
+          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_role_writer WITH PASSWORD 'ci-role-writer'"
+      - name: Start the real server (stopped by its PID below)
+        working-directory: source/openbot/server
+        env:
+          NODE_ENV: test
+          PORT: "3901"
+          TENANT_PACKAGE_DIR: ../examples/qoderwake
+          INTELLIGENCE_MODE: local
+          COPILOTKIT_TELEMETRY_DISABLED: "true"
+          DO_NOT_TRACK: "1"
+        run: |
+          set -euo pipefail
+          logs="$RUNNER_TEMP/device-clean-logs"
+          mkdir -p "$logs"
+          KEY_ENCRYPTION_KEY="$(openssl rand -base64 32)"
+          BETTER_AUTH_SECRET="$(openssl rand -hex 32)"
+          echo "::add-mask::$KEY_ENCRYPTION_KEY"
+          echo "::add-mask::$BETTER_AUTH_SECRET"
+          export KEY_ENCRYPTION_KEY BETTER_AUTH_SECRET
+          export DATABASE_URL="$APP_DATABASE_URL" ROLE_WRITER_DATABASE_URL="$ROLE_WRITER_URL"
+          export BETTER_AUTH_URL="$ORIGIN" OPENBOT_PUBLIC_URL="$ORIGIN"
+          nohup bun src/index.ts > "$logs/server.log" 2>&1 &
+          echo "$!" > "$RUNNER_TEMP/device-clean-server.pid"
+          for _ in $(seq 1 90); do
+            if [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 "$ORIGIN/health" || true)" = 200 ]; then exit 0; fi
+            kill -0 "$(cat "$RUNNER_TEMP/device-clean-server.pid")" || { echo "::error::the server exited"; exit 1; }
+            sleep 1
+          done
+          echo "::error::the server was not healthy within 90s"
+          exit 1
+      - name: Pair the installed runner, one command, quit, back online (device-clean-linux.sh)
+        working-directory: source/openbot
+        env:
+          EVIDENCE: ${{ runner.temp }}/device-clean-linux/device-clean-linux-evidence.txt
+          LOG_DIR: ${{ runner.temp }}/device-clean-logs
+          RUNNER_BIN: /usr/bin/openbot-runner
+          APP_BIN: /usr/bin/xiongbao-device
+        run: |
+          set -euo pipefail
+          # Test harness only, not the app's dependencies: a virtual display for the tray app.
+          sudo apt-get install -y xvfb dbus-daemon dbus-session-bus-common
+          bash scripts/ci/device-clean-linux.sh
+      - name: Stop the server by its PID
+        if: always()
+        run: |
+          pidfile="$RUNNER_TEMP/device-clean-server.pid"
+          if [ -f "$pidfile" ]; then
+            pid="$(cat "$pidfile")"
+            kill -TERM "$pid" 2> /dev/null || true
+            for _ in $(seq 1 20); do kill -0 "$pid" 2> /dev/null || break; sleep 1; done
+            kill -KILL "$pid" 2> /dev/null || true
+          fi
+      - id: uninstall
+        name: Uninstall with apt and nothing of the package is left
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/device-clean-linux/device-clean-linux-evidence.txt"
+          sudo apt-get remove -y xiongbao-device
+          status="$(dpkg-query -W -f='${Status}' xiongbao-device 2> /dev/null || true)"
+          case "$status" in
+            "" | "deinstall ok config-files" | "unknown ok not-installed" | "deinstall ok not-installed") ;;
+            *) echo "::error::xiongbao-device is still installed: $status"; exit 1 ;;
+          esac
+          for file in /usr/bin/xiongbao-device /usr/bin/openbot-runner /usr/share/applications/xiongbao-device.desktop; do
+            if [ -e "$file" ]; then echo "::error::$file is still there after apt-get remove."; exit 1; fi
+          done
+          if [ -n "$(ps -C openbot-runner -o pid= || true)" ]; then
+            echo "::error::an openbot-runner is still running after uninstall."
+            exit 1
+          fi
+          echo "PASS sudo apt-get remove -y xiongbao-device：应用、openbot-runner 与桌面入口都已删除，没有残留进程" >> "$evidence"
+          echo "说明：apt 不删除用户目录里的 ~/.local/share/com.xiongbao.device（配对信息），与普通 Linux 软件一致" >> "$evidence"
+      - name: Every check passed
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/device-clean-linux/device-clean-linux-evidence.txt"
+          if grep -q '^FAIL ' "$evidence"; then exit 1; fi
+          echo "RESULT: PASS" >> "$evidence"
+          cat "$evidence"
+      - name: Print server, runner and app logs (credentials masked)
+        if: failure()
+        run: |
+          for f in "$RUNNER_TEMP"/device-clean-logs/*.log; do
+            bash source/openbot/scripts/ci/print-diagnostics.sh "$f" || true
+          done
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: device-clean-linux-evidence
+          path: ${{ runner.temp }}/device-clean-linux/
+          if-no-files-found: error
+          retention-days: 30
+
+  # The same on a fresh GitHub-hosted Windows machine, as far as one can go without a server there
+  # (no pgvector PostgreSQL on windows-latest): SHA256SUMS, the installer's Authenticode state, a
+  # silent NSIS install, the installed files, the installed runner's own checks, the installed app
+  # starting the installed runner and leaving none behind when it ends, a silent uninstall.
+  clean-windows:
+    needs: [tag-check, windows, assemble]
+    if: ${{ !cancelled() && needs.tag-check.result == 'success' && needs.windows.result == 'success' && needs.assemble.result == 'success' }}
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.tag-check.outputs.version }}
+      PRODUCT: 熊宝数字员工 设备端
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: device-release-dist
+          path: release
+      - id: sums
+        name: The installer is the one SHA256SUMS names (Get-FileHash)
+        shell: pwsh
+        env:
+          COMMIT: ${{ github.sha }}
+          TAG: ${{ needs.tag-check.outputs.tag }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = "xiongbao-device_$($env:VERSION)_x64-setup.exe"
+          $evidence = Join-Path $env:RUNNER_TEMP 'device-clean-windows/device-clean-windows-evidence.txt'
+          New-Item -ItemType Directory -Path (Split-Path $evidence) -Force | Out-Null
+          $os = Get-CimInstance Win32_OperatingSystem
+          @(
+            "熊宝数字员工 设备端 $($env:VERSION)：全新 Windows 机器检查（HUMAN-STEPS 12.6）"
+            "标签 $($env:TAG)，提交 $($env:COMMIT)"
+            "系统：$($os.Caption) $($os.Version)（build $($os.BuildNumber)），$($os.OSArchitecture)，托管镜像 $($env:ImageOS) $($env:ImageVersion)"
+          ) | Set-Content -LiteralPath $evidence -Encoding utf8NoBOM
+          $listed = @(Get-Content -LiteralPath 'release/dist/SHA256SUMS' | ForEach-Object {
+            $hash, $name = $_ -split '  ', 2
+            if ($name -ceq $installer) { $hash }
+          })
+          if ($listed.Count -ne 1 -or $listed[0] -notmatch '^[0-9a-f]{64}$') { throw "SHA256SUMS does not list $installer exactly once." }
+          $actual = (Get-FileHash -LiteralPath "release/dist/$installer" -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -cne $listed[0]) { throw "SHA256 mismatch for ${installer}: $actual, SHA256SUMS says $($listed[0])." }
+          @(
+            "安装包：$installer"
+            "SHA256：$actual"
+            "PASS Get-FileHash 与 SHA256SUMS 一致"
+          ) | Add-Content -LiteralPath $evidence -Encoding utf8NoBOM
+      - id: signature
+        name: The installer's Authenticode state (Valid when signed, NotSigned otherwise)
+        shell: pwsh
+        env:
+          WINDOWS_SIGNED: ${{ needs.windows.outputs.signed }}
+          WINDOWS_PUBLISHER: ${{ needs.windows.outputs.publisher }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $evidence = Join-Path $env:RUNNER_TEMP 'device-clean-windows/device-clean-windows-evidence.txt'
+          $signature = Get-AuthenticodeSignature -LiteralPath "release/dist/xiongbao-device_$($env:VERSION)_x64-setup.exe"
+          $status = [string]$signature.Status
+          if ($env:WINDOWS_SIGNED -eq 'true') {
+            if ($status -ne 'Valid') { throw "The release is signed, but the installer's Authenticode status is $status." }
+            $publisher = $signature.SignerCertificate.GetNameInfo([System.Security.Cryptography.X509Certificates.X509NameType]::SimpleName, $false)
+            if ($publisher -cne $env:WINDOWS_PUBLISHER) { throw "Signed by '$publisher', expected '$($env:WINDOWS_PUBLISHER)'." }
+            $line = "签名：Valid，发布者 $publisher，证书指纹 $($signature.SignerCertificate.Thumbprint)"
+          } elseif ($env:WINDOWS_SIGNED -eq 'false') {
+            if ($status -ne 'NotSigned') { throw "The release is labelled unsigned, but the installer's Authenticode status is $status." }
+            $line = '签名：NotSigned（未签名内测版，SmartScreen 会提示）'
+          } else {
+            throw "WINDOWS_SIGNED is '$($env:WINDOWS_SIGNED)', expected true or false."
+          }
+          @($line, "PASS Get-AuthenticodeSignature：$status") | Add-Content -LiteralPath $evidence -Encoding utf8NoBOM
+      - id: install
+        name: Silent install (NSIS /S) and the installed files
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $evidence = Join-Path $env:RUNNER_TEMP 'device-clean-windows/device-clean-windows-evidence.txt'
+          $setup = Start-Process -FilePath "release/dist/xiongbao-device_$($env:VERSION)_x64-setup.exe" -ArgumentList '/S' -Wait -PassThru
+          if ($setup.ExitCode -ne 0) { throw "The installer exited $($setup.ExitCode)." }
+          # Tauri's NSIS installer registers itself under ...\Uninstall with DisplayName = productName;
+          # the default installMode is currentUser (HKCU, %LOCALAPPDATA%\<productName>).
+          $roots = @(
+            'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*',
+            'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*',
+            'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
+          )
+          $all = @(Get-ItemProperty -Path $roots -ErrorAction SilentlyContinue)
+          $entries = @($all | Where-Object { $_.DisplayName -ceq $env:PRODUCT })
+          if ($entries.Count -eq 0) { $entries = @($all | Where-Object { [string]$_.DisplayIcon -like '*\xiongbao-device.exe*' }) }
+          if ($entries.Count -ne 1) {
+            $all | Where-Object { $_.DisplayName } | ForEach-Object { Write-Host "uninstall entry: $($_.PSChildName) = $($_.DisplayName)" }
+            throw "Expected one uninstall entry for $($env:PRODUCT), found $($entries.Count)."
+          }
+          $entry = $entries[0]
+          if ($entry.DisplayVersion -cne $env:VERSION) { throw "Installed version $($entry.DisplayVersion), expected $($env:VERSION)." }
+          $directory = ([string]$entry.InstallLocation).Trim().Trim('"').TrimEnd('\')
+          if (-not $directory) { $directory = Split-Path -Parent ([string]$entry.UninstallString).Trim().Trim('"') }
+          $uninstaller = Join-Path $directory 'uninstall.exe'
+          $app = Join-Path $directory 'xiongbao-device.exe'
+          $sidecar = Join-Path $directory 'openbot-runner.exe'
+          foreach ($file in @($app, $sidecar, $uninstaller)) {
+            if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { throw "$file is missing after the install." }
+          }
+          $info = (Get-Item -LiteralPath $app).VersionInfo
+          if ($info.ProductName -cne $env:PRODUCT -or $info.ProductVersion -cne $env:VERSION) {
+            throw "The installed app says $($info.ProductName) $($info.ProductVersion)."
+          }
+          $scope = if ($entry.PSPath -like '*HKEY_CURRENT_USER*') { '当前用户（HKCU）' } else { '本机所有用户（HKLM）' }
+          $default = Join-Path $env:LOCALAPPDATA $env:PRODUCT
+          "INSTALL_DIR=$directory" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          @(
+            "安装方式：$scope，安装目录 $directory$(if ($directory -eq $default) { '（Tauri 默认的 %LOCALAPPDATA%\<产品名>）' })"
+            "已安装 xiongbao-device.exe，SHA256 $((Get-FileHash -LiteralPath $app -Algorithm SHA256).Hash.ToLowerInvariant())，签名 $([string](Get-AuthenticodeSignature -LiteralPath $app).Status)"
+            "已安装 openbot-runner.exe，SHA256 $((Get-FileHash -LiteralPath $sidecar -Algorithm SHA256).Hash.ToLowerInvariant())，签名 $([string](Get-AuthenticodeSignature -LiteralPath $sidecar).Status)"
+            "PASS 静默安装（/S，退出码 0）：xiongbao-device.exe、openbot-runner.exe、uninstall.exe 都在安装目录，卸载项版本 $($entry.DisplayVersion)"
+          ) | Add-Content -LiteralPath $evidence -Encoding utf8NoBOM
+      - id: selfcheck
+        name: The installed runner's own checks (no network)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $evidence = Join-Path $env:RUNNER_TEMP 'device-clean-windows/device-clean-windows-evidence.txt'
+          $sidecar = Join-Path $env:INSTALL_DIR 'openbot-runner.exe'
+          $scratch = Join-Path $env:RUNNER_TEMP 'runner-selfcheck'
+          New-Item -ItemType Directory -Path (Join-Path $scratch 'folder') -Force | Out-Null
+          $help = Start-Process -FilePath $sidecar -ArgumentList '--help' -Wait -PassThru -NoNewWindow `
+            -RedirectStandardOutput (Join-Path $scratch 'help.out') -RedirectStandardError (Join-Path $scratch 'help.err')
+          $usage = (Get-Content -Raw (Join-Path $scratch 'help.out')) + (Get-Content -Raw (Join-Path $scratch 'help.err'))
+          if ($help.ExitCode -ne 2 -or $usage -notmatch '--pair CODE') { throw "--help exited $($help.ExitCode) without the usage." }
+          $data = Join-Path $scratch 'data'
+          $added = & $sidecar --data-dir $data --add-root "selfcheck=$(Join-Path $scratch 'folder')" | ConvertFrom-Json
+          if (-not $added.ok -or @($added.roots).Count -ne 1) { throw "--add-root: $($added | ConvertTo-Json -Compress)" }
+          $listed = & $sidecar --data-dir $data --list-roots | ConvertFrom-Json
+          if (-not $listed.ok -or $listed.roots[0].name -cne 'selfcheck') { throw "--list-roots: $($listed | ConvertTo-Json -Compress)" }
+          $removed = & $sidecar --data-dir $data --remove-root selfcheck | ConvertFrom-Json
+          if (-not $removed.ok -or @($removed.roots).Count -ne 0) { throw "--remove-root: $($removed | ConvertTo-Json -Compress)" }
+          if (Get-Process -Name openbot-runner -ErrorAction SilentlyContinue) { throw 'openbot-runner is still running after the one-shot commands.' }
+          Remove-Item -LiteralPath $scratch -Recurse -Force
+          'PASS 已安装的 openbot-runner.exe 自检：--help 退出码 2 并打印用法；--add-root / --list-roots / --remove-root 正常；之后没有残留进程' |
+            Add-Content -LiteralPath $evidence -Encoding utf8NoBOM
+      # No server on this machine, so the app is given a pairing that cannot connect: the runner it
+      # starts keeps retrying, which is enough to see whose child it is and that it dies with the app.
+      - id: app
+        name: The installed app starts the installed runner, and no openbot-runner outlives it
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $evidence = Join-Path $env:RUNNER_TEMP 'device-clean-windows/device-clean-windows-evidence.txt'
+          $sidecar = Join-Path $env:INSTALL_DIR 'openbot-runner.exe'
+          $data = Join-Path $env:APPDATA 'com.xiongbao.device'
+          if (Test-Path -LiteralPath $data) { throw "$data already exists: this is not a clean machine." }
+          New-Item -ItemType Directory -Path (Join-Path $data 'runner') -Force | Out-Null
+          '{"server": "http://127.0.0.1:9", "name": "clean-windows"}' | Set-Content -LiteralPath (Join-Path $data 'device.json') -Encoding utf8NoBOM
+          '{"deviceId": "clean-windows", "token": "not-a-device-token", "server": "http://127.0.0.1:9"}' |
+            Set-Content -LiteralPath (Join-Path $data 'runner/runner-state.json') -Encoding utf8NoBOM
+          if (Get-Process -Name openbot-runner -ErrorAction SilentlyContinue) { throw 'An openbot-runner is already running.' }
+          $app = Start-Process -FilePath (Join-Path $env:INSTALL_DIR 'xiongbao-device.exe') -PassThru
+          $child = $null
+          foreach ($second in 1..60) {
+            # The supervised runner, not a one-shot --list-roots the window may ask for (roots.rs).
+            $child = Get-CimInstance Win32_Process -Filter "Name = 'openbot-runner.exe' AND ParentProcessId = $($app.Id)" |
+              Where-Object { $_.CommandLine -notlike '*--list-roots*' } | Select-Object -First 1
+            if ($child) { break }
+            if ($app.HasExited) { throw "The app exited $($app.ExitCode) before starting the runner." }
+            Start-Sleep -Seconds 1
+          }
+          if (-not $child) { throw 'The app did not start openbot-runner within 60s.' }
+          if ($child.ExecutablePath -ne $sidecar) { throw "The app started $($child.ExecutablePath), not the installed $sidecar." }
+          if ($child.CommandLine -match '--pair') { throw 'The app passed --pair without a pairing code.' }
+          Start-Sleep -Seconds 5
+          if (-not (Get-Process -Id $child.ProcessId -ErrorAction SilentlyContinue)) { throw 'The runner did not keep running.' }
+          # The hardest way out: the app is killed outright, and the job object it holds
+          # (process_tree.rs, KILL_ON_JOB_CLOSE) has to take the runner with it.
+          Stop-Process -Id $app.Id -Force
+          $app.WaitForExit(30000) | Out-Null
+          $left = $null
+          foreach ($second in 1..15) {
+            $left = Get-Process -Name openbot-runner -ErrorAction SilentlyContinue
+            if (-not $left) { break }
+            Start-Sleep -Seconds 1
+          }
+          if ($left) { throw "openbot-runner is still running after the app ended: $($left.Id -join ', ')" }
+          Remove-Item -LiteralPath $data -Recurse -Force
+          @(
+            "PASS 启动已安装的 xiongbao-device.exe：它拉起安装目录里的 openbot-runner.exe（PID $($child.ProcessId)，命令行不带 --pair）"
+            'PASS 结束应用进程（Stop-Process -Force，比托盘「退出」更粗暴）后 15 秒内没有任何 openbot-runner 进程（Get-Process）'
+          ) | Add-Content -LiteralPath $evidence -Encoding utf8NoBOM
+      - id: uninstall
+        name: Silent uninstall (/S) removes the app and the runner
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $evidence = Join-Path $env:RUNNER_TEMP 'device-clean-windows/device-clean-windows-evidence.txt'
+          $uninstaller = Join-Path $env:INSTALL_DIR 'uninstall.exe'
+          $run = Start-Process -FilePath $uninstaller -ArgumentList '/S' -Wait -PassThru
+          if ($run.ExitCode -ne 0) { throw "The uninstaller exited $($run.ExitCode)." }
+          # An NSIS uninstaller copies itself to %TEMP% and finishes from there.
+          $files = @('xiongbao-device.exe', 'openbot-runner.exe', 'uninstall.exe') | ForEach-Object { Join-Path $env:INSTALL_DIR $_ }
+          foreach ($second in 1..60) {
+            $remaining = @($files | Where-Object { Test-Path -LiteralPath $_ })
+            if ($remaining.Count -eq 0) { break }
+            Start-Sleep -Seconds 1
+          }
+          if ($remaining.Count -ne 0) { throw "Still there after uninstall: $($remaining -join ', ')" }
+          $roots = @(
+            'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*',
+            'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*',
+            'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
+          )
+          if (@(Get-ItemProperty -Path $roots -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -ceq $env:PRODUCT }).Count -ne 0) {
+            throw 'The uninstall entry is still registered.'
+          }
+          if (Get-Process -Name openbot-runner, xiongbao-device -ErrorAction SilentlyContinue) { throw 'A device process is still running after uninstall.' }
+          $folder = if (Test-Path -LiteralPath $env:INSTALL_DIR) { '安装目录仍在（只剩空目录或非安装文件）' } else { '安装目录已删除' }
+          "PASS 静默卸载（uninstall.exe /S）：xiongbao-device.exe、openbot-runner.exe、uninstall.exe 与卸载项都已删除，$folder，没有残留进程" |
+            Add-Content -LiteralPath $evidence -Encoding utf8NoBOM
+      - name: Every check passed
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $evidence = Join-Path $env:RUNNER_TEMP 'device-clean-windows/device-clean-windows-evidence.txt'
+          if (Select-String -LiteralPath $evidence -Pattern '^FAIL ' -Quiet) { throw 'A check failed.' }
+          'RESULT: PASS' | Add-Content -LiteralPath $evidence -Encoding utf8NoBOM
+          Get-Content -LiteralPath $evidence -Encoding utf8
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: device-clean-windows-evidence
+          path: ${{ runner.temp }}/device-clean-windows/
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    needs: [tag-check, assemble, clean-linux, clean-windows]
+    # Not the default success(): macOS may have been skipped upstream of assemble. Nothing is
+    # published unless both fresh-machine checks passed on the files being published.
+    if: >-
+      ${{ !cancelled() && !inputs.dry_run && needs.tag-check.result == 'success' &&
+      needs.assemble.result == 'success' && needs.clean-linux.result == 'success' &&
+      needs.clean-windows.result == 'success' }}
     runs-on: ubuntu-latest
     environment: device-release
     permissions:
@@ -727,6 +1188,15 @@ jobs:
         with:
           name: device-release-dist
           path: release
+      # The fresh-machine records, in a directory of their own: SHA256SUMS covers the installers only.
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: device-clean-linux-evidence
+          path: evidence
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: device-clean-windows-evidence
+          path: evidence
       - id: publish
         name: Publish the GitHub Release (existing tag only)
         env:
@@ -746,5 +1216,13 @@ jobs:
           esac
           test -s release/notes.md
           (cd release/dist && sha256sum -c SHA256SUMS)
-          gh release create "$TAG" release/dist/* \
+          evidence=(evidence/device-clean-linux-evidence.txt evidence/device-clean-windows-evidence.txt)
+          for file in "${evidence[@]}"; do
+            # The Windows record has CRLF line ends.
+            if ! tr -d '\r' < "$file" | grep -qx 'RESULT: PASS'; then
+              echo "::error::$file is missing or does not say RESULT: PASS."
+              exit 1
+            fi
+          done
+          gh release create "$TAG" release/dist/* "${evidence[@]}" \
             --verify-tag --title "$TITLE" --notes-file release/notes.md "${flags[@]}"

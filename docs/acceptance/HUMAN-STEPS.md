@@ -270,3 +270,15 @@ Settings → Environments → New environment，名称填 `device-release`：
 7. 卸载。
 
 把截图、命令输出和系统版本整理好，编辑这个 Release 上传为附件，然后在 `docs/acceptance/STORIES.md` 的 F2 行写上链接。拿到已签名的产物和这份两台机器的证据之后，F2 才能改成 implemented。
+
+**流水线现在自动做的部分**：「熊宝设备端发布」在 `assemble` 之后、`publish` 之前加了 `clean-linux`（`ubuntu-latest`）和 `clean-windows`（`windows-latest`）两个 job，每次都在全新的 GitHub 托管机器上用 `device-release-dist` 里**将要发布的那几个文件**做检查；任何一项不过，Release 就不会发。两份记录 `device-clean-linux-evidence.txt`、`device-clean-windows-evidence.txt`（系统版本、文件 SHA256、签名状态、每项 PASS，最后一行 `RESULT: PASS`）会作为附件跟 Release 一起上传（不进 `SHA256SUMS`），也在运行页的 `device-clean-<os>-evidence` 制品里。
+
+- 第 1 步校验和：两台都自动做（Linux `sha256sum -c --ignore-missing`，Windows `Get-FileHash` 对照 `SHA256SUMS`）。
+- 第 2 步签名：Windows 自动跑 `Get-AuthenticodeSignature`，已签名的发布必须是 `Valid` 且发布者与 `windows` job 校验过的一致；未签名内测版只记录 `NotSigned`，不因此失败。Linux deb 只核对校验和。
+- 第 3 步安装和配对：Linux 用 `sudo apt-get install -y ./xiongbao-device_*_amd64.deb` 安装（依赖从软件源装），检查 `/usr/bin/xiongbao-device`、`/usr/bin/openbot-runner` 和桌面入口；再在同一台机器上起真实服务端和 PostgreSQL，通过 API 注册、在「我的设备」生成配对码，用**已安装的** `openbot-runner` 配对，确认设备在线、配对码不能用第二次。Windows 用 `/S` 静默安装（Tauri 默认按当前用户装到 `%LOCALAPPDATA%\熊宝数字员工 设备端`，实际的安装方式和目录从卸载项读出并写进记录），检查 `xiongbao-device.exe`、`openbot-runner.exe`、卸载项和版本；Windows 上没有带 pgvector 的 PostgreSQL，所以不配对，只跑 runner 自检（`--help`、`--add-root`/`--list-roots`/`--remove-root`）。
+- 第 4 步执行命令：Linux 由服务器给设备下发一条不经过模型的命令（`projects.branches`，设备上运行 `git ls-remote`），确认返回结果。Windows 不做。
+- 第 5 步退出后无残留：Linux 按 PID 停掉 runner，再两次启动已安装的应用、用 SIGTERM 退出（与托盘「退出」走同一个 `quit()`），每次都确认没有 `openbot-runner` 进程、服务器显示离线。Windows 启动已安装的应用，确认它拉起安装目录里的 `openbot-runner.exe`，再强制结束应用（比托盘退出更粗暴），确认 `Get-Process` 里没有 `openbot-runner`。
+- 第 6 步重启后自动上线：Linux 用「不重新配对、重新启动应用、设备重新在线」代替，不是真实重启。
+- 第 7 步卸载：Linux `sudo apt-get remove -y xiongbao-device`，Windows `uninstall.exe /S`，都确认程序文件（和 Windows 卸载项）已删除、没有残留进程。
+
+**仍然要人来做的部分**：在真实用户自己的电脑上（不是托管 CI 机器）按上面 1–7 步走一遍；Windows「属性 → 数字签名」页或 SmartScreen 提示的截图；真机重启后不重新配对、设备自动上线（含开机自启）；用真实模型驱动的员工在设备上执行一个普通命令并截图；macOS（若发布）的 `spctl --assess`。托管机器预装了很多软件，也不是普通用户的桌面环境，所以自动记录只能替代"文件对不对、装得上、跑得起来、退得干净、卸得掉"这部分，不能替代真机证据。
