@@ -210,7 +210,8 @@ test("every run step runs in the shell it is written for, never PowerShell by de
     const jobShell = job.defaults?.run?.shell ?? top;
     for (const s of job.steps ?? []) {
       if (s.run === undefined) continue;
-      const shell = s.shell ?? jobShell ?? (runner.startsWith("windows") ? "pwsh" : "bash");
+      const shell =
+        s.shell ?? jobShell ?? (runner.startsWith("windows") ? "pwsh" : "bash");
       const label = `${name}: ${s.name ?? s.id ?? s.run.split("\n")[0]}`;
       if (shell === "pwsh") expect([label, s.shell]).toEqual([label, "pwsh"]);
       else expect([label, shell]).toEqual([label, "bash"]);
@@ -397,9 +398,27 @@ test("macOS signing needs every Apple variable and secret, and is never half-app
   );
 });
 
-function release(env) {
+const EVIDENCE = [
+  "evidence/device-clean-linux-evidence.txt",
+  "evidence/device-clean-windows-evidence.txt",
+];
+
+function release(
+  env,
+  evidence = {
+    linux: "PASS a\nRESULT: PASS\n",
+    windows: "PASS a\r\nRESULT: PASS\r\n",
+  },
+) {
   const cwd = scratch();
   mkdirSync(join(cwd, "release", "dist"), { recursive: true });
+  mkdirSync(join(cwd, "evidence"));
+  for (const [os, content] of Object.entries(evidence))
+    if (content !== null)
+      writeFileSync(
+        join(cwd, "evidence", `device-clean-${os}-evidence.txt`),
+        content,
+      );
   writeFileSync(join(cwd, "release", "notes.md"), "notes\n");
   writeFileSync(join(cwd, "release", "dist", "a.exe"), "installer");
   const sums = spawnSync("sha256sum", ["a.exe"], {
@@ -468,6 +487,31 @@ test("publish passes --prerelease for anything unsigned and refuses an unsigned 
     }
   }
   expect(workflow.jobs.publish.needs).toContain("assemble");
+  // The fresh-machine records go up beside the installers, and SHA256SUMS still names installers only.
+  const attached = release({ PRERELEASE: "true", SIGNED: "false" });
+  expect(attached.args.slice(2)).toEqual([
+    "device-v0.1.0",
+    "release/dist/SHA256SUMS",
+    "release/dist/a.exe",
+    ...EVIDENCE,
+    "--verify-tag",
+    "--title",
+    "t",
+    "--notes-file",
+    "release/notes.md",
+    "--prerelease",
+  ]);
+  // A missing record, or one that does not end in RESULT: PASS, publishes nothing.
+  for (const evidence of [
+    { linux: null, windows: "RESULT: PASS\n" },
+    { linux: "RESULT: PASS\n", windows: null },
+    { linux: "PASS a\nFAIL b\n", windows: "RESULT: PASS\n" },
+    { linux: "RESULT: PASS\n", windows: "RESULT: PASSED\r\n" },
+  ]) {
+    const refused = release({ PRERELEASE: "true", SIGNED: "false" }, evidence);
+    expect(refused.status).not.toBe(0);
+    expect(refused.args).toBeNull();
+  }
   const env = step("publish", "publish").env;
   expect(env.PRERELEASE).toBe(expression("needs.assemble.outputs.prerelease"));
   expect(env.SIGNED).toBe(expression("needs.assemble.outputs.signed"));
@@ -538,4 +582,149 @@ test("the release carries exactly the installers and their SHA256SUMS", () => {
   const macNotes = readFileSync(join(cwd, "notes.md"), "utf8");
   expect(macNotes).toContain("macOS 会提示无法验证开发者");
   expect(macNotes).toContain("xiongbao-device_0.1.0_aarch64.dmg");
+});
+
+const CLEAN = ["clean-linux", "clean-windows"];
+
+test("nothing is published until a fresh Ubuntu and a fresh Windows machine checked the exact files", () => {
+  expect(workflow.jobs["clean-linux"]["runs-on"]).toBe("ubuntu-latest");
+  expect(workflow.jobs["clean-windows"]["runs-on"]).toBe("windows-latest");
+  for (const name of CLEAN) {
+    const job = workflow.jobs[name];
+    expect(job.needs).toContain("assemble");
+    expect(job.if).toContain("needs.assemble.result == 'success'");
+    expect(job.if).toContain("!cancelled()");
+    // Read-only, no Environment (its reviewers and signing variables), no secret anywhere in it.
+    expect(job.permissions).toEqual({ contents: "read" });
+    expect(job.environment).toBeUndefined();
+    expect(secretPaths(job)).toEqual([]);
+    // The artifact publish uploads, not a rebuild.
+    const download = job.steps.find((s) =>
+      s.uses?.startsWith("actions/download-artifact@"),
+    );
+    expect(download.with.name).toBe("device-release-dist");
+    expect(job.steps.indexOf(download)).toBe(0);
+    const upload = job.steps.find(
+      (s) =>
+        s.uses?.startsWith("actions/upload-artifact@") &&
+        s.with.name === `device-clean-${name.slice(6)}-evidence`,
+    );
+    expect(upload).toBeDefined();
+    expect(upload.if).toBe("always()");
+    // The record says RESULT: PASS only from the last unconditional step, which every check before it
+    // had to pass to reach; steps after it run only on failure or only upload.
+    const unconditional = job.steps.filter((s) => s.run && !s.if);
+    expect(unconditional.at(-1).run).toContain("RESULT: PASS");
+    for (const s of job.steps.slice(
+      job.steps.indexOf(unconditional.at(-1)) + 1,
+    ))
+      expect(["always()", "failure()"]).toContain(s.if);
+    expect(publishNeeds()).toContain(name);
+    expect(workflow.jobs.publish.if).toContain(
+      `needs.${name}.result == 'success'`,
+    );
+  }
+  // Windows: the signature is held to what the windows job verified, and the install is silent.
+  expect(workflow.jobs["clean-windows"].needs).toContain("windows");
+  const signature = step("clean-windows", "signature");
+  expect(signature.env.WINDOWS_SIGNED).toBe(
+    expression("needs.windows.outputs.signed"),
+  );
+  expect(signature.run).toContain("Get-AuthenticodeSignature");
+  expect(signature.run).toContain("'Valid'");
+  expect(signature.run).toContain("'NotSigned'");
+  expect(step("clean-windows", "sums").run).toContain("Get-FileHash");
+  expect(step("clean-windows", "install").run).toContain("-ArgumentList '/S'");
+  expect(step("clean-windows", "app").run).toContain(
+    "Get-Process -Name openbot-runner",
+  );
+  expect(step("clean-windows", "uninstall").run).toContain("uninstall.exe");
+  expect(step("clean-windows", "uninstall").run).toContain(
+    "-ArgumentList '/S'",
+  );
+  // Linux: apt installs it (and its Depends), the INSTALLED binaries are what the lifecycle runs, and
+  // apt removes it.
+  const linux = workflow.jobs["clean-linux"].steps;
+  expect(
+    linux.some((s) =>
+      s.run?.includes(
+        'sudo apt-get install -y "./release/dist/xiongbao-device_$',
+      ),
+    ),
+  ).toBe(true);
+  const lifecycle = linux.find((s) =>
+    s.run?.includes("scripts/ci/device-clean-linux.sh"),
+  );
+  expect(lifecycle.env.RUNNER_BIN).toBe("/usr/bin/openbot-runner");
+  expect(lifecycle.env.APP_BIN).toBe("/usr/bin/xiongbao-device");
+  expect(step("clean-linux", "uninstall").run).toContain(
+    "sudo apt-get remove -y xiongbao-device",
+  );
+  const lint = spawnSync(
+    "bash",
+    ["-n", join(root, "openbot", "scripts", "ci", "device-clean-linux.sh")],
+    { encoding: "utf8" },
+  );
+  expect(lint.status).toBe(0);
+});
+
+function publishNeeds() {
+  return workflow.jobs.publish.needs;
+}
+
+function cleanSums(files, sums) {
+  const cwd = scratch();
+  const temp = scratch();
+  mkdirSync(join(cwd, "release", "dist"), { recursive: true });
+  for (const [name, content] of Object.entries(files))
+    writeFileSync(join(cwd, "release", "dist", name), content);
+  writeFileSync(join(cwd, "release", "dist", "SHA256SUMS"), sums);
+  const result = run(
+    "clean-linux",
+    "sums",
+    {
+      VERSION: "0.1.0",
+      TAG: "device-v0.1.0",
+      COMMIT: "abc",
+      RUNNER_TEMP: temp,
+    },
+    cwd,
+  );
+  const file = join(
+    temp,
+    "device-clean-linux",
+    "device-clean-linux-evidence.txt",
+  );
+  return {
+    ...result,
+    evidence: existsSync(file) ? readFileSync(file, "utf8") : "",
+  };
+}
+
+test("the Linux check verifies the deb against SHA256SUMS before anything is installed", () => {
+  const deb = "xiongbao-device_0.1.0_amd64.deb";
+  const exe = "xiongbao-device_0.1.0_x64-setup.exe";
+  const hash = (content) =>
+    new Bun.CryptoHasher("sha256").update(content).digest("hex");
+  const sums = `${hash("deb")}  ${deb}\n${hash("exe")}  ${exe}\n`;
+  const ok = cleanSums({ [deb]: "deb", [exe]: "exe" }, sums);
+  expect(ok.status).toBe(0);
+  expect(ok.evidence).toContain(`SHA256：${hash("deb")}`);
+  expect(ok.evidence).toContain("PASS SHA256SUMS");
+  expect(ok.evidence).toContain("checksum-only");
+  // Only the deb arrived (--ignore-missing), still checked.
+  expect(cleanSums({ [deb]: "deb" }, sums).status).toBe(0);
+  // A changed deb, a deb SHA256SUMS does not name, or a deb named twice: nothing is installed.
+  expect(cleanSums({ [deb]: "changed", [exe]: "exe" }, sums).status).not.toBe(
+    0,
+  );
+  expect(
+    cleanSums({ [deb]: "deb" }, `${hash("exe")}  ${exe}\n`).status,
+  ).not.toBe(0);
+  expect(
+    cleanSums(
+      { [deb]: "deb" },
+      `${hash("deb")}  ${deb}\n${hash("deb")}  ${deb}\n`,
+    ).status,
+  ).not.toBe(0);
 });
