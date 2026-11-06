@@ -56,11 +56,39 @@ export function MyDevices() {
         {pairing ? (
           <div className="grid gap-2 rounded-lg border border-border bg-card p-3">
             <p className="font-medium text-sm">
-              把下面这段在那台机器上输入一次，过期前有效。
+              在那台电脑的「熊宝数字员工
+              设备端」里填写下面两项，然后点「配对」。
             </p>
-            <code className="block break-all rounded bg-foreground/5 p-2 font-mono text-xs">
-              {runnerCommand(window.location.origin, pairing.code)}
-            </code>
+            {/*
+             * The two fields the desktop app asks for, each on its own.
+             *
+             * This used to show only the source-checkout command, and the first real pairing
+             * (2026-11-06) pasted that whole line into the app's code field, which refuses anything
+             * with a space in it. The app is how a person pairs now; the command stays below for a
+             * machine that runs the runner from a checkout.
+             */}
+            <dl className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1 text-sm">
+              <dt className="text-muted-foreground">服务器地址</dt>
+              <dd>
+                <code className="break-all rounded bg-foreground/5 px-1.5 py-0.5 font-mono">
+                  {window.location.origin}
+                </code>
+              </dd>
+              <dt className="text-muted-foreground">配对码</dt>
+              <dd>
+                <code className="rounded bg-foreground/5 px-1.5 py-0.5 font-mono text-base tracking-widest">
+                  {pairing.code}
+                </code>
+              </dd>
+            </dl>
+            <details className="text-xs">
+              <summary className="cursor-pointer text-muted-foreground">
+                从源码运行设备端（开发者）
+              </summary>
+              <code className="mt-1 block break-all rounded bg-foreground/5 p-2 font-mono">
+                {runnerCommand(window.location.origin, pairing.code)}
+              </code>
+            </details>
             <p className="text-muted-foreground text-xs">
               配对码在{relativeTime(pairing.expiresAt)}
               之前有效，只能用于一台机器。之后运行器会保存自己的设备令牌，不再需要配对码。
