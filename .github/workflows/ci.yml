@@ -784,9 +784,9 @@ jobs:
         shell: bash
         working-directory: openbot
     env:
-      DIST: ${{ runner.temp }}/device-dist
-      EVIDENCE: ${{ runner.temp }}/device-clean-linux/device-clean-linux-evidence.txt
-      LOG_DIR: ${{ runner.temp }}/device-clean-logs
+      DIST: ${{ github.workspace }}/device-dist
+      EVIDENCE: ${{ github.workspace }}/device-clean-linux/device-clean-linux-evidence.txt
+      LOG_DIR: ${{ github.workspace }}/device-clean-logs
       PGPASSWORD: ci-owner
       OWNER_DATABASE_URL: postgres://openbot:ci-owner@127.0.0.1:5432/openbot_device_clean
       APP_DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_device_clean
@@ -865,7 +865,7 @@ jobs:
         if: always()
         with:
           name: device-clean-linux-ci-evidence
-          path: ${{ runner.temp }}/device-clean-linux/
+          path: ${{ github.workspace }}/device-clean-linux/
           if-no-files-found: error
           retention-days: 14
 
@@ -886,8 +886,8 @@ jobs:
         shell: pwsh
         working-directory: openbot
     env:
-      DIST: ${{ runner.temp }}/device-dist
-      EVIDENCE: ${{ runner.temp }}/device-clean-windows/device-clean-windows-evidence.txt
+      DIST: ${{ github.workspace }}/device-dist
+      EVIDENCE: ${{ github.workspace }}/device-clean-windows/device-clean-windows-evidence.txt
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -947,6 +947,6 @@ jobs:
         if: always()
         with:
           name: device-clean-windows-ci-evidence
-          path: ${{ runner.temp }}/device-clean-windows/
+          path: ${{ github.workspace }}/device-clean-windows/
           if-no-files-found: error
           retention-days: 14

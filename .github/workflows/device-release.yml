@@ -753,8 +753,8 @@ jobs:
     env:
       VERSION: ${{ needs.tag-check.outputs.version }}
       DIST: ${{ github.workspace }}/release/dist
-      EVIDENCE: ${{ runner.temp }}/device-clean-linux/device-clean-linux-evidence.txt
-      LOG_DIR: ${{ runner.temp }}/device-clean-logs
+      EVIDENCE: ${{ github.workspace }}/device-clean-linux/device-clean-linux-evidence.txt
+      LOG_DIR: ${{ github.workspace }}/device-clean-logs
       # The job's own throwaway database (the e2e-wakerflow recipe in ci.yml), not a secret.
       PGPASSWORD: ci-owner
       OWNER_DATABASE_URL: postgres://openbot:ci-owner@127.0.0.1:5432/openbot_device_clean
@@ -821,7 +821,7 @@ jobs:
         if: always()
         with:
           name: device-clean-linux-evidence
-          path: ${{ runner.temp }}/device-clean-linux/
+          path: ${{ github.workspace }}/device-clean-linux/
           if-no-files-found: error
           retention-days: 30
 
@@ -847,7 +847,7 @@ jobs:
       VERSION: ${{ needs.tag-check.outputs.version }}
       PRODUCT: 熊宝数字员工 设备端
       DIST: ${{ github.workspace }}/release/dist
-      EVIDENCE: ${{ runner.temp }}/device-clean-windows/device-clean-windows-evidence.txt
+      EVIDENCE: ${{ github.workspace }}/device-clean-windows/device-clean-windows-evidence.txt
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -898,7 +898,7 @@ jobs:
         if: always()
         with:
           name: device-clean-windows-evidence
-          path: ${{ runner.temp }}/device-clean-windows/
+          path: ${{ github.workspace }}/device-clean-windows/
           if-no-files-found: error
           retention-days: 30
 
