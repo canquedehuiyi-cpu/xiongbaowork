@@ -1021,6 +1021,11 @@ await startupLifecycle.run(async (startup) => {
     );
   }
 
+  /** Where the computer tools act, so their descriptions tell the model the truth (G5, 2026-11-06). */
+  const computerMachine =
+    config.tenantRuntime === "device"
+      ? ("device" as const)
+      : ("workspace" as const);
   const computerGateway = computerProvider
     ? createComputerGateway({
         provider: computerProvider,
@@ -2230,6 +2235,7 @@ await startupLifecycle.run(async (startup) => {
         actor: { id: actor.id, userId: actor.id, initiator },
         auditStore: bootAuditStore,
         ...(signInService ? { signIn: signInService } : {}),
+        machine: computerMachine,
         disabled: await approvalService.disabledTools(actor.id, agentId),
       });
     },
@@ -2519,6 +2525,7 @@ await startupLifecycle.run(async (startup) => {
                     actor: { id: actor.id, userId: actor.id, initiator },
                     auditStore: bootAuditStore,
                     ...(signInService ? { signIn: signInService } : {}),
+                    machine: computerMachine,
                     disabled: await approvalService.disabledTools(actor.id, context.agentId),
                   })
                 : [];
@@ -2684,6 +2691,7 @@ await startupLifecycle.run(async (startup) => {
           actor: { id: actor.id, userId: actor.id, initiator },
           auditStore: bootAuditStore,
           ...(signInService ? { signIn: signInService } : {}),
+          machine: computerMachine,
         })
       : [];
   };
@@ -3398,6 +3406,7 @@ await startupLifecycle.run(async (startup) => {
           actor: { id: actor.id, userId: actor.id, initiator },
           auditStore: bootAuditStore,
           ...(signInService ? { signIn: signInService } : {}),
+          machine: computerMachine,
           disabled: await approvalService.disabledTools(actor.id, agentId),
         });
       },
@@ -3490,6 +3499,7 @@ await startupLifecycle.run(async (startup) => {
           actor: { id: actor.id, userId: actor.id, initiator },
           auditStore: bootAuditStore,
           ...(signInService ? { signIn: signInService } : {}),
+          machine: computerMachine,
           disabled: await approvalService.disabledTools(actor.id, agentId),
         });
       },
