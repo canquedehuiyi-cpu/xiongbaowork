@@ -86,7 +86,13 @@ type Recorded = {
   payload: Record<string, unknown>;
 };
 
-function app(options: { routed?: string; undecided?: RoutingUndecided } = {}) {
+function app(
+  options: {
+    routed?: string;
+    undecided?: RoutingUndecided;
+    roster?: readonly (typeof ROSTER)[number][];
+  } = {},
+) {
   const written: Recorded[] = [];
   /** Every call the router was asked to make, so "never asked" is an assertion and not a hope. */
   const asked: string[] = [];
@@ -100,8 +106,9 @@ function app(options: { routed?: string; undecided?: RoutingUndecided } = {}) {
     await next();
   };
 
+  const roster = options.roster ?? ROSTER;
   const store = {
-    list: async () => ROSTER,
+    list: async () => roster,
   } as unknown as AgentProfileStore;
 
   const router = {
@@ -111,7 +118,7 @@ function app(options: { routed?: string; undecided?: RoutingUndecided } = {}) {
       const chosen = options.routed ?? "knowledge";
       return {
         agentId: chosen,
-        name: ROSTER.find((a) => a.id === chosen)?.name ?? chosen,
+        name: roster.find((a) => a.id === chosen)?.name ?? chosen,
         reason: "matches what it is for",
         fallback: options.undecided !== undefined,
         undecided: options.undecided ?? null,
@@ -189,6 +196,75 @@ describe("choosing the default route target", () => {
     await post(server, { text: "show me hacker news" });
 
     expect(defaults).toEqual(["picked-harness"]);
+  });
+
+  /*
+   * Found on a real deployment (2026-11-06): with no `@`, a person's first conversation went to the
+   * first shared coworker -- a catalogue Bot that belongs to nobody, so with `TENANT_RUNTIME=device` it
+   * could never use their paired machine. Their own 分身 could.
+   */
+  const shared = profile({
+    id: "general-assistant",
+    name: "通用助手",
+    roleDescription: "通用问题",
+    visibility: "public",
+  });
+  const mine = profile({
+    id: `avatar-${ACTOR.id}`,
+    name: "我的分身",
+    roleDescription: "代表你本人",
+    visibility: "private",
+  });
+  const someoneElses = profile({
+    id: "avatar-someone-else",
+    name: "我的分身",
+    roleDescription: "代表别人本人",
+    visibility: "private",
+  });
+
+  test("the asker's own 分身 comes before the first shared coworker", () => {
+    expect(defaultRoutingProfile([shared, mine], ACTOR.id)?.id).toBe(
+      `avatar-${ACTOR.id}`,
+    );
+    // Nobody else's 分身 stands in for it, wherever it sits in the roster.
+    expect(defaultRoutingProfile([someoneElses, shared], ACTOR.id)?.id).toBe(
+      "general-assistant",
+    );
+    // Without an asker the old order holds.
+    expect(defaultRoutingProfile([mine, shared])?.id).toBe("general-assistant");
+  });
+
+  test("a package-picked harness still wins over the 分身", () => {
+    expect(
+      defaultRoutingProfile(
+        [
+          mine,
+          profile({
+            id: "picked-harness",
+            name: "OpenBot",
+            roleDescription: "the package-selected harness",
+            visibility: "public",
+          }),
+        ],
+        ACTOR.id,
+      )?.id,
+    ).toBe("picked-harness");
+  });
+
+  test("the route endpoint passes the asker's 分身 as the router default", async () => {
+    const { server, defaults } = app({
+      undecided: "unconfident",
+      routed: `avatar-${ACTOR.id}`,
+      // No package pick here: that one is asserted to win above.
+      roster: [
+        ...ROSTER.filter((entry) => entry.id !== "picked-harness"),
+        mine,
+      ],
+    });
+
+    await post(server, { text: "在我电脑上看看 C 盘还剩多少空间" });
+
+    expect(defaults).toEqual([`avatar-${ACTOR.id}`]);
   });
 });
 

@@ -13,9 +13,15 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   it was the shared Bot `general-assistant`, which belongs to nobody and never could. That Bot is
   renamed 「通用助手」, and the conversation that used to be called 「我的分身」 keeps its history under
   that name. The 分身 is also given `bot-creator` and `skill-creator`, so coworkers and skills can still
-  be built in the default conversation. Applied on the next start, with no migration. Packages can use
-  the same mechanism: `avatar: true` on a channel and `avatar.skills` in `agents.yaml`
-  (see `docs/configuration.md`).
+  be built in the default conversation. Packages can use the same mechanism: `avatar: true` on a
+  channel and `avatar.skills` in `agents.yaml` (see `docs/configuration.md`).
+- **With sign-in, every person gets a conversation with their own 分身, and it is the default.** The
+  first time a person's conversation list is read, a 「我的分身」 conversation with their own 分身 is
+  made if they never had one (one they deleted stays deleted). An older conversation still named after
+  their 分身 without it in it is renamed from its coworkers' current names. A message sent without
+  `@` now defaults to the person's own 分身 rather than the first shared coworker, in `/api/route` and
+  in the app. No migration: single-user deployments get it from the package sync on the next start,
+  and deployments with sign-in on each person's next visit.
 
 ## 0.2.0
 

@@ -5,6 +5,7 @@ import type { AgentProfile } from "../agents/profile-types";
 import type { AuditStore } from "../audit";
 import { recordAuditEvent } from "../audit";
 import type { AppVariables } from "../auth/guards";
+import { avatarAgentId } from "../tenant/provisioning";
 import type {
   IntentRouter,
   RoutingCandidate,
@@ -15,9 +16,18 @@ const PICKED_HARNESS_AGENT_ID = "picked-harness";
 
 export function defaultRoutingProfile(
   roster: readonly AgentProfile[],
+  /**
+   * Who is asking. Their own 分身 (`avatar-<them>`) comes before any shared coworker: it is the one
+   * coworker that is theirs from the start, and with `TENANT_RUNTIME=device` the only one that can
+   * use their paired machine. A catalogue Bot answering the default instead is how a person's first
+   * conversation went to a Bot that belongs to nobody.
+   */
+  askerId?: string,
 ): AgentProfile | undefined {
+  const avatarId = askerId ? avatarAgentId(askerId) : undefined;
   return (
     roster.find((agent) => agent.id === PICKED_HARNESS_AGENT_ID) ??
+    (avatarId ? roster.find((agent) => agent.id === avatarId) : undefined) ??
     roster.find((agent) => agent.visibility === "public") ??
     roster[0]
   );
@@ -126,8 +136,9 @@ export function createRoutingRoutes(
 
     const actor = context.var.actor;
     const roster = await store.list(actor, false);
-    // The same default the composer shows: the package-picked harness, then the first public coworker.
-    const preferred = defaultRoutingProfile(roster);
+    // The same default the composer shows: the package-picked harness, then the asker's own 分身, then
+    // the first public coworker.
+    const preferred = defaultRoutingProfile(roster, actor.id);
     if (!preferred) {
       return context.json({ error: "No coworker is available." }, 409);
     }
