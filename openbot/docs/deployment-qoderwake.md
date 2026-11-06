@@ -71,7 +71,7 @@ PowerShell 可把命令写在一行，或用反引号续行。修改宿主端口
 只用邮箱密码登录的部署，请先用该地址注册，再在服务器容器里执行一次：
 
 ```bash
-docker exec -it <容器名> /command/with-contenv sh -c 'cd /app/server && bun scripts/grant-admin.ts admin@example.com'
+docker exec <容器名> sh -c 'export DATABASE_URL="$(cat /run/s6/container_environment/DATABASE_URL)" ROLE_WRITER_DATABASE_URL="$(cat /run/s6/container_environment/ROLE_WRITER_DATABASE_URL)"; cd /app/server && bun scripts/grant-admin.ts admin@example.com'
 ```
 
 能在容器里执行命令的人已经掌握数据库和全部密钥，所以由他指定首位管理员。这条命令会写一条审计记录。
