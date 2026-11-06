@@ -195,7 +195,7 @@ done
 ## 10. D1（数字员工页）实测 + 走查工具的本机限制（2026-10-07）
 - **白标那条推广条确实没了**：带上 `OPENBOT_SELF_HOST_BANNER=false` 重启后，`/wakers` 的结构快照里不再有 `complementary "Self-host OpenBot"`，`/api/capabilities` 也回 `selfHostBanner:false`。**配置生效，不需要改代码**。
 - **D1 成立**：`heading "数字员工"` + 双页签「员工 / 小组」（小组 = D3 的入口已存在）+ 状态筛选带计数「全部 (16) / 运行中 (0) / 待命 (16) / 已停用 (0)」，卡片「打开」链到 `/agents?agent=<id>`（D5 的入口）。
-- **品牌包真的同步进来了**：16 位员工里有 `后端工程师/Backend Engineer`、`代码审核员/Code Reviewer`、`运营助手/Operations`、`测试工程师/QA Engineer`、`我的分身/个人分身`（CONTEXT.md 里 `avatar-<tenant>` 那位）。
+- **品牌包真的同步进来了**：16 位员工里有 `后端工程师/Backend Engineer`、`代码审核员/Code Reviewer`、`运营助手/Operations`、`测试工程师/QA Engineer`、`我的分身/个人分身`（当时以为是 CONTEXT.md 里 `avatar-<tenant>` 那位；**更正（2026-11-06）**：这张卡其实是品牌包的公共员工 `general-assistant`，它和本人的分身同名。现在它叫「通用助手/General Assistant」，默认对话「我的分身」由本人的 `avatar-<tenant>` 接，见 #283）。
 - ⚠️ **024 的实证缺口（新found，具体到名字）**：这 16 位里**只有 5 位是中文显示名**，其余 11 位仍是上游英文名与英文角色标签——`Expense Review / Finance Operations`、`Feedback Digest / Product Research`、`Interview Notes / Recruiting`、`Knowledge / Company Knowledge`、`Meeting Follow-ups / Meetings`、`Onboarding Buddy / People Operations`、`On-call Handover / Reliability`、`Release Notes / Release Communications`、`Research Desk / Briefings`、`Ticket Triage / Support Operations`、`Vendor Review / Procurement`。**下一刀就是这些**：改 `examples/qoderwake/agents.yaml` 的显示名/角色（品牌包路径，不是改界面文案），因为界面是从包读的名字。
 - **走查工具在本机的形状**（省下一轮时间）：`navigate_page` 对 vite dev server **经常 30s 超时**（HMR 长连让 load 事件不结），**但页面其实没导航成功与否要看重试**——原样再调一次通常立刻成功；`take_screenshot` 不可用（`NATIVE_BROWSER_VIEWPORT_UNAVAILABLE`，`visibilityState=hidden`），`list_network_requests` 恒返回 `No requests found`，所以**只能靠 `take_snapshot` 的结构树当证据**。SPA 全客户端渲染，`curl` 只能拿到空壳，替代不了浏览器。
 

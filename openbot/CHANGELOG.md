@@ -8,6 +8,15 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+- **熊宝 package: the default conversation is each person's own 分身.** 「我的分身」 is now answered by
+  the person's own `avatar-<person>`, which can run computer actions on their paired machine; before,
+  it was the shared Bot `general-assistant`, which belongs to nobody and never could. That Bot is
+  renamed 「通用助手」, and the conversation that used to be called 「我的分身」 keeps its history under
+  that name. The 分身 is also given `bot-creator` and `skill-creator`, so coworkers and skills can still
+  be built in the default conversation. Applied on the next start, with no migration. Packages can use
+  the same mechanism: `avatar: true` on a channel and `avatar.skills` in `agents.yaml`
+  (see `docs/configuration.md`).
+
 ## 0.2.0
 
 - **`TENANT_RUNTIME` now defaults to `device` in production (F6).** With `NODE_ENV=production` and no
