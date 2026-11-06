@@ -27,9 +27,9 @@
  * `tenant_id`, and the crew pass writes each run and its cards inside that run's own tenant frame.
  * Nothing here writes under `system`. The lease item itself is the platform's row, not a tenant's.
  *
- * WHAT THIS DOES NOT DO: resume approved actions. `approval.resume` stays blocked
- * (`ApprovalRecoveryBlockedError`) until Root's release verifier attests the local recovery target —
- * see `APPROVAL_RESUME_GATED_REASON` and `docs/restart-recovery.md`.
+ * WHAT THIS DOES NOT DO: resume approved actions. `approval.resume` work items are carried by their
+ * own worker, which settles each one on the approval row (claimed once, answered once, never run
+ * again after a crash) — see `docs/restart-recovery.md`.
  */
 import { ABANDONED_RUN_MS } from "../routines/sweep";
 import { runAsTenant } from "../tenant/context";
@@ -56,13 +56,14 @@ export const REAPED_ROUTINE_RUN =
   "the server never finished this run; it may have restarted mid-turn, or the run may never have been dispatched";
 
 /**
- * Why `approval.resume` is refused after a restart, in the server's own logs.
+ * Why an `approval.resume` item was refused, in the server's own logs.
  *
- * Not a fault this sweep can mend: the local continuation recovery port is composed only from a
- * Root-verified release attestation (`approvals/local-recovery-composition.ts`), and the server never
- * fabricates one.
+ * The server settles approved actions itself (`settlement: "database"`), so this is raised only for a
+ * row whose tenant, owner or run binding does not match the frame that claimed it. Such a row is never
+ * run. The Root-attested local continuation port (`approvals/local-recovery-composition.ts`) is still
+ * never fabricated.
  */
-export const APPROVAL_RESUME_GATED_REASON = "root_release_not_attested";
+export const APPROVAL_RESUME_GATED_REASON = "approval_binding_refused";
 
 export type RecoveryPhaseName = "routineRuns" | "pipelineRuns" | "cards";
 

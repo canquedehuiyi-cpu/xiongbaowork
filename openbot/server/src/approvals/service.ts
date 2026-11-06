@@ -94,6 +94,12 @@ const userTurnsOf = (continuation: ApprovalContinuation | undefined) =>
   (continuation?.messages ?? []).filter((message) => message.role === "user")
     .length;
 
+/**
+ * What the Bot is told when an approved action was started and the process running it stopped
+ * before its result was saved (结果不明). It is never run a second time.
+ */
+export const APPROVAL_OUTCOME_UNKNOWN =
+  "This action was started but its outcome is unknown. It was not repeated. Check whether it happened before asking the person again.";
 /** What a hand-off answers the Bot with once the person has done it themselves. */
 export const HANDLED_BY_PERSON =
   "The person did this themselves. Do not repeat it; continue from what they have done.";
@@ -167,11 +173,63 @@ export function createApprovalService(
     review?: ReviewModel;
     continuationRecovery?: ApprovalRecoveryPort;
     freshProducer?: ApprovalFreshProducerPort;
+    /**
+     * `database`: the server settles an approved action itself, on the approval row, when neither
+     * Root-attested port above is supplied. Internal composition only (index.ts); no request or
+     * configuration value maps to it, and with either port present that port's path is used instead.
+     *
+     * The row is the fence. `consume` claims the run (approved → consumed, result still SQL NULL,
+     * under a row lock), so at most one process ever carries the action out; `saveResult` is a
+     * compare-and-set on the NULL result, so exactly one answer is kept and only the process that
+     * saved it continues the conversation; `finish` comes last. A row found consumed with no result
+     * is never run again: it is answered "outcome unknown".
+     */
+    settlement?: "database";
   } = {},
 ) {
   const fresh = options.freshProducer
     ? createApprovalFreshCoordinator(store, options.freshProducer)
     : undefined;
+  // Decided once, here: a resume never reads an option, so a blocked retry touches nothing.
+  const databaseSettled =
+    options.settlement === "database" && !fresh && !options.continuationRecovery;
+  /**
+   * The row this frame reads must be the owner's own, stamped with the frame's tenant, and bound to
+   * the run and call it was opened for (G01). Anything else is never run and never answered.
+   */
+  async function assertDatabaseBinding(request: ApprovalRecord, owner: string) {
+    if (!store.getRecoveryContext) throw new ApprovalRecoveryBlockedError();
+    try {
+      const context = await store.getRecoveryContext(owner, request.id);
+      validateApprovalRecoveryContext(context, owner, request.id, currentTenant());
+      if (!isDeepStrictEqual(context.request.action, request.action))
+        throw new ApprovalRecoveryBlockedError();
+    } catch (error) {
+      if (error instanceof ApprovalNotFoundError) throw error;
+      throw new ApprovalRecoveryBlockedError();
+    }
+  }
+  /** The saved answer goes back to the conversation that asked, then the request is closed. */
+  async function publishDatabase(
+    request: ApprovalRecord,
+    owner: string,
+    result: NonNullable<ApprovalRecord["result"]>,
+    dependencies: Pick<ApprovalResumeDependencies, "continue" | "refusal">,
+  ) {
+    // A Bot the deployment no longer lets run is not continued, even with an answer saved earlier.
+    const refused = dependencies.refusal
+      ? await dependencies.refusal(request.action)
+      : null;
+    const continuation = request.action.continuation;
+    if (!refused && continuation)
+      await dependencies.continue({
+        approvalId: request.id,
+        messageId: `approval:${request.id}`,
+        continuation,
+        result,
+      });
+    await store.finish(owner, request.id);
+  }
   async function freshOperation<T>(operation: () => Promise<T>): Promise<T> {
     try {
       return await operation();
@@ -772,21 +830,25 @@ export function createApprovalService(
         throw new ApprovalRefusedError(
           "This action is still waiting for your decision.",
         );
-      // Default remains closed. A trusted producer must verify an EXISTING
-      // frozen seed before validation, execution or any result write.
+      // The server's own settlement checks the row's binding before anything else is read.
+      if (databaseSettled) await assertDatabaseBinding(request, ownerUserId);
+      // Otherwise the default remains closed. A trusted producer must verify an
+      // EXISTING frozen seed before validation, execution or any result write.
       // The no-result/no-producer case is decided first so a blocked retry
       // reads no recovery option or store capability at all.
-      if ((!request.result && !fresh) || !options.continuationRecovery ||
+      else if ((!request.result && !fresh) || !options.continuationRecovery ||
           !store.getRecoveryContext)
         throw new ApprovalRecoveryBlockedError();
       const prepared = !request.result && fresh
         ? await freshOperation(() => fresh.prepare(request, ownerUserId))
         : undefined;
       let executionClaimed = false;
-      const saveFresh = (
+      const saveFresh = async (
         value: NonNullable<ApprovalRecord["result"]>,
         disposition: "continue" | "final" = "continue",
       ) => {
+        // Compare-and-set on the SQL NULL result: one answer is kept, and only its saver goes on.
+        if (databaseSettled) return store.saveResult(ownerUserId, id, value);
         if (!prepared) throw new ApprovalRecoveryBlockedError();
         return freshOperation(() => prepared.commit(
           value, disposition, executionClaimed ? "consumed" : request.status,
@@ -799,9 +861,25 @@ export function createApprovalService(
         );
       let result = request.result;
       const refused =
-        !result && dependencies.refusal
+        (!result || databaseSettled) && dependencies.refusal
           ? await dependencies.refusal(request.action)
           : null;
+      if (refused && databaseSettled) {
+        /*
+         * Final: the Bot cannot answer, so nothing is continued. An answer already saved is kept;
+         * otherwise only the process that saves the refusal ends the request. A run that was
+         * started is not described as not done.
+         */
+        const answer =
+          request.status === "consumed" ? APPROVAL_OUTCOME_UNKNOWN : refused;
+        if (
+          !result &&
+          !(await saveFresh({ content: answer, error: answer }, "final"))
+        )
+          return;
+        await store.finish(ownerUserId, id);
+        return;
+      }
       if (refused) {
         // Only the process that saves the refusal ends the request.
         if (
@@ -821,8 +899,7 @@ export function createApprovalService(
          * could do it twice, and refusing to answer left the conversation waiting forever, so the
          * Bot is told. Only the process that saves this answer continues the conversation.
          */
-        const reason =
-          "This action was started but its outcome is unknown. It was not repeated. Check whether it happened before asking the person again.";
+        const reason = APPROVAL_OUTCOME_UNKNOWN;
         if (!(await saveFresh({ content: reason, error: reason }))) return;
         result = { content: reason, error: reason };
       } else if (!result) {
@@ -898,6 +975,12 @@ export function createApprovalService(
         // Saved by one process only: whichever saves the answer is the one that continues.
         if (!(await saveFresh(result))) return;
       }
+      if (databaseSettled) {
+        if (!result) throw new ApprovalRecoveryBlockedError();
+        // Saved before it is published: a retry after a crash here re-sends this answer, never the action.
+        await publishDatabase(request, ownerUserId, result, dependencies);
+        return;
+      }
       const published = fresh
         ? await freshOperation(() => fresh.publish(request, ownerUserId))
         : { request, final: false };
@@ -907,17 +990,36 @@ export function createApprovalService(
       ownerUserId: string,
       id: string,
       reason: string,
-      _dependencies: Pick<ApprovalResumeDependencies, "continue">,
+      dependencies: Pick<ApprovalResumeDependencies, "continue" | "refusal">,
     ): Promise<void> {
       const request = await store.get(ownerUserId, id);
       if (request.status === "completed" || request.status === "pending")
         return;
+      if (databaseSettled) {
+        /*
+         * The work item ran out of tries. The action is never run from here: the Bot is told it
+         * could not be carried out (or, if it was started, that its outcome is unknown), and only
+         * the process that saves that answer continues the conversation.
+         */
+        await assertDatabaseBinding(request, ownerUserId);
+        let result = request.result;
+        if (!result) {
+          const content =
+            request.status === "consumed"
+              ? APPROVAL_OUTCOME_UNKNOWN
+              : `This action could not be carried out: ${reason.slice(0, 300)}. It was not run by this recovery attempt.`;
+          result = { content, error: content };
+          if (!(await store.saveResult(ownerUserId, id, result))) return;
+        }
+        await publishDatabase(request, ownerUserId, result, dependencies);
+        return;
+      }
       if (!request.result) {
         if (!fresh || !options.continuationRecovery || !store.getRecoveryContext)
           throw new ApprovalRecoveryBlockedError();
         const prepared = await freshOperation(() => fresh.prepare(request, ownerUserId));
         const content = request.status === "consumed"
-          ? "This action was started but its outcome is unknown. It was not repeated. Check whether it happened before asking the person again."
+          ? APPROVAL_OUTCOME_UNKNOWN
           : `This action could not be carried out: ${reason}. It was not run by this recovery attempt.`;
         if (!(await freshOperation(() => prepared.commit({ content, error: content })))) return;
       }
