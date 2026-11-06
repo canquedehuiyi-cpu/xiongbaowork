@@ -250,6 +250,70 @@ export const CATALOGUE: readonly CatalogueEntry[] = Object.freeze([
       "https://developers.google.com/workspace/guides/configure-mcp-servers",
   },
   {
+    key: "baidu-netdisk",
+    title: "百度网盘",
+    vendor: "百度",
+    summary: "提问的人自己百度网盘里的文件（只读）。",
+    /*
+     * Baidu's xpan REST API, the only interface Baidu publishes for a netdisk: there is no MCP
+     * server to prefer. The adapter is modelled on Drive's and offers only reads. Every request
+     * carries the person's token as Baidu's `access_token` query parameter, and file downloads go
+     * to the `dlink` address Baidu returns, which the adapter only fetches on Baidu's own download
+     * hosts (`d.pcs.baidu.com`, `*.baidupcs.com`) — see `baidu-netdisk-rest.ts`.
+     */
+    host: "https://pan.baidu.com",
+    path: "/rest/2.0/xpan",
+    transport: "baidu-netdisk-rest",
+    /*
+     * The person's own grant, as for Drive: the deployment registers one app at 百度网盘开放平台
+     * (AppKey as the client id, SecretKey as the client secret) and each person consents for
+     * themselves. Baidu issues a refresh token on every authorization-code grant, so no
+     * Google-style offline/consent parameters are needed, and rotates it on every refresh, which
+     * the store already handles.
+     *
+     * PKCE: the shared flow always sends `code_challenge` and, at redemption, `code_verifier`.
+     * Baidu documents neither and, as OAuth 2.0 requires of an authorization server, ignores
+     * parameters it does not recognise. The code is still bound to this deployment by the
+     * SecretKey, which Baidu does check, and the request by the sealed state.
+     */
+    auth: {
+      kind: "user-oauth",
+      authorizationUrl: "https://openapi.baidu.com/oauth/2.0/authorize",
+      tokenUrl: "https://openapi.baidu.com/oauth/2.0/token",
+      /*
+       * Baidu's "revoke this user's authorization" endpoint. Recorded for review like every
+       * entry's, but NOTHING in this deployment calls any entry's `revokeUrl` today: disconnecting
+       * deletes the stored token here and leaves the grant at the vendor, for Baidu as for Google.
+       * A person who wants Baidu to forget it too removes the app in their Baidu account settings.
+       */
+      revokeUrl:
+        "https://openapi.baidu.com/rest/2.0/passport/auth/revokeAuthorization",
+      /*
+       * One string, sent verbatim. Baidu's netdisk documentation fixes the value as exactly
+       * `basic,netdisk`, comma-joined, while the shared flow joins entries with a space. Baidu has
+       * no read-only netdisk scope, so `writeTools` below is what names writes; the adapter offers
+       * none.
+       */
+      scopes: Object.freeze(["basic,netdisk"]),
+      // Baidu's own consent page layout. Not a security parameter, and Google's pair is not sent.
+      authorizationParams: Object.freeze({ display: "page" }),
+    },
+    /*
+     * Named although the adapter implements none of them, because unlike Drive there is no
+     * read-only scope behind this list: `basic,netdisk` can write, so this list is what keeps a
+     * write added to the adapter later from classifying as a read.
+     */
+    writeTools: Object.freeze([
+      "create_folder",
+      "upload_file",
+      "copy_file",
+      "move_file",
+      "rename_file",
+      "delete_file",
+    ]),
+    docsUrl: "https://pan.baidu.com/union/doc/",
+  },
+  {
     key: "notion",
     title: "Notion",
     vendor: "Notion",
