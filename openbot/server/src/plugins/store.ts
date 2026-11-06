@@ -1352,6 +1352,13 @@ const TEAM_GRANT_REFUSAL =
   "Only this Bot's owner, or an administrator, changes what a shared Bot is granted.";
 
 /**
+ * A grant the platform made (stamped `system`: the brand package's, on its catalogue Bots), changed
+ * from anywhere but `platform`. Every frame may read it and none but `platform` may write it.
+ */
+const PLATFORM_GRANT_REFUSAL =
+  "This Bot was given that by the deployment itself, and it is changed only there.";
+
+/**
  * Whether the database refused the statement for want of privilege: row security's "new row violates
  * row-level security policy" carries SQLSTATE 42501. The query builder wraps the driver's error, so it
  * may sit on the error or on its cause; Bun's driver puts the SQLSTATE in `errno`, others in `code`.
@@ -1426,6 +1433,31 @@ export function createPluginStore(options: PluginStoreOptions) {
         if (exchangeChains.get(key) === next) exchangeChains.delete(key);
       });
     return next;
+  }
+
+  /**
+   * Whether this exact grant is still there as the platform's own (`system`) row, read in the
+   * caller's frame. Asked after a write row security may have quietly declined: `platform` (and
+   * `system` itself) may write such a row, so there it is gone after a revoke and this answers false.
+   */
+  async function platformGrantKept(
+    kind: PluginKind,
+    ref: string,
+    agentId: string,
+  ): Promise<boolean> {
+    const [kept] = await database
+      .select({ ref: pluginGrants.ref })
+      .from(pluginGrants)
+      .where(
+        and(
+          eq(pluginGrants.kind, kind),
+          eq(pluginGrants.ref, ref),
+          eq(pluginGrants.agentId, agentId),
+          eq(pluginGrants.tenantId, SYSTEM_TENANT),
+        ),
+      )
+      .limit(1);
+    return kept !== undefined;
   }
 
   async function grantsFor(kind: PluginKind, refs: string[]) {
@@ -5333,8 +5365,15 @@ export function createPluginStore(options: PluginStoreOptions) {
             set: { grantedBy: by, updatedAt: new Date() },
           });
       } catch (error) {
-        if (team && refusedByRowSecurity(error))
-          throw new PluginRefusedError(TEAM_GRANT_REFUSAL, null);
+        if (refusedByRowSecurity(error)) {
+          if (team) throw new PluginRefusedError(TEAM_GRANT_REFUSAL, null);
+          /*
+           * The same grant already exists and is the platform's: the conflict reaches a `system` row
+           * this frame may read but not update. Said in words rather than as a database error.
+           */
+          if (await platformGrantKept(kind, ref, agentId))
+            throw new PluginRefusedError(PLATFORM_GRANT_REFUSAL, null);
+        }
         throw error;
       }
 
@@ -5380,6 +5419,12 @@ export function createPluginStore(options: PluginStoreOptions) {
           .limit(1);
         if (kept) throw new PluginRefusedError(TEAM_GRANT_REFUSAL, null);
       }
+      /*
+       * And a grant the platform made, the same way: row security admits a `system` row to every
+       * frame's reads and to no person's deletes, so a delete of one is "0 rows", not a refusal.
+       */
+      if (await platformGrantKept(kind, ref, agentId))
+        throw new PluginRefusedError(PLATFORM_GRANT_REFUSAL, null);
 
       await recordAuditEvent(auditStore, {
         eventType: "configuration.changed",
@@ -5585,6 +5630,18 @@ export function createPluginStore(options: PluginStoreOptions) {
        * resolve in the owner's frame and under `platform`, and a teammate's row security shows them
        * only the deployment's own. A teammate's own skill of the same name never stands in for the
        * owner's inside the owner's Bot.
+       *
+       * A catalogue Bot (stamped `system`: the brand package's coworkers, which belong to nobody) holds
+       * the grants the platform made it, and those are stamped `system` too — the package sync writes
+       * them in its own `system` scope. In a person's frame they are read alongside the person's own
+       * grants on that Bot, because they are what the Bot IS for everybody: 通用助手 holds
+       * `bot-creator` and `skill-creator` for every signed-in person, and read under the frame alone
+       * it held nothing. Reading them is all this widens. The base SELECT policy already admits
+       * `system` rows to every tenant; the write policies admit them to nobody but `platform`, so a
+       * person can see them here and never change them (see `grant` and `revoke`). Another person's
+       * grants on the same Bot stay theirs: only the frame's own stamp and `system` are named. Their
+       * skill slugs are the platform's, resolved only against `system` rows, so a person's own skill of
+       * the same name never stands in for the deployment's inside the deployment's Bot.
        */
       const frame = currentTenant();
       const [bot] = await database
@@ -5598,6 +5655,8 @@ export function createPluginStore(options: PluginStoreOptions) {
         .limit(1);
       let tenant: string;
       let skillTenant: string;
+      /** The platform's grants on a catalogue Bot, read in a person's frame too. */
+      let catalogue = false;
       if (bot?.tenantId === TEAM_TENANT) {
         tenant = TEAM_TENANT;
         skillTenant = isPersonTenant(bot.ownerUserId)
@@ -5610,6 +5669,7 @@ export function createPluginStore(options: PluginStoreOptions) {
       } else {
         tenant = frame;
         skillTenant = frame;
+        catalogue = bot?.tenantId === SYSTEM_TENANT && frame !== SYSTEM_TENANT;
       }
       const held = await database
         .select()
@@ -5617,7 +5677,9 @@ export function createPluginStore(options: PluginStoreOptions) {
         .where(
           and(
             eq(pluginGrants.agentId, agentId),
-            eq(pluginGrants.tenantId, tenant),
+            catalogue
+              ? inArray(pluginGrants.tenantId, [tenant, SYSTEM_TENANT])
+              : eq(pluginGrants.tenantId, tenant),
           ),
         );
       if (held.length === 0) return { tools: [], skills: [] };
@@ -5625,8 +5687,12 @@ export function createPluginStore(options: PluginStoreOptions) {
       const toolRefs = held
         .filter((row) => row.kind === "mcp")
         .map((row) => row.ref);
+      // `(kind, ref, agent_id)` is the key, so a slug is either the frame's grant or the platform's.
       const skillSlugs = held
-        .filter((row) => row.kind === "skill")
+        .filter((row) => row.kind === "skill" && row.tenantId === tenant)
+        .map((row) => row.ref);
+      const platformSkillSlugs = held
+        .filter((row) => row.kind === "skill" && row.tenantId !== tenant)
         .map((row) => row.ref);
 
       /*
@@ -5678,16 +5744,26 @@ export function createPluginStore(options: PluginStoreOptions) {
        * one in grant resolution exactly as it does on the Skills page.
        */
       const skillRows =
-        skillSlugs.length === 0
+        skillSlugs.length === 0 && platformSkillSlugs.length === 0
           ? []
           : withoutShadowed(
               await database
                 .select()
                 .from(skills)
                 .where(
-                  and(
-                    inArray(skills.slug, skillSlugs),
-                    inArray(skills.tenantId, skillTenants(skillTenant)),
+                  or(
+                    skillSlugs.length === 0
+                      ? undefined
+                      : and(
+                          inArray(skills.slug, skillSlugs),
+                          inArray(skills.tenantId, skillTenants(skillTenant)),
+                        ),
+                    platformSkillSlugs.length === 0
+                      ? undefined
+                      : and(
+                          inArray(skills.slug, platformSkillSlugs),
+                          eq(skills.tenantId, SYSTEM_TENANT),
+                        ),
                   ),
                 ),
             );
