@@ -327,7 +327,7 @@ const driveQuery = (query: string) => {
  * `cut` is true when reading stopped before the file ended (see {@link readOpening}), so the file's
  * full length is not known and is not claimed.
  */
-function asResult(text: string, cut = false): McpCallResult {
+export function asResult(text: string, cut = false): McpCallResult {
   const joined = text.trim();
   if (joined === "") {
     return {
@@ -356,8 +356,11 @@ function asResult(text: string, cut = false): McpCallResult {
  *
  * Decoded the way `response.text()` decodes: UTF-8, with a byte order mark dropped and anything
  * malformed replaced.
+ *
+ * Exported, with {@link asResult}, for the Baidu Netdisk adapter, so the two read-only file
+ * connectors cap and word a file the same way rather than drifting apart.
  */
-async function readOpening(
+export async function readOpening(
   response: Response,
 ): Promise<{ text: string; cut: boolean }> {
   if (!response.body) return { text: "", cut: false };
