@@ -32,6 +32,7 @@ import {
 } from "../db/schema";
 import { TEAM_TENANT } from "../db/schema/tenant";
 import { currentTenant, isTenantFramed } from "../tenant/context";
+import { ensureAvatarConversation } from "./avatar-conversation";
 import {
   CHANNEL_ACTIVITY_TOPIC,
   type ChannelActivityEvent,
@@ -196,6 +197,12 @@ export type ChannelStore = {
    * would look for the answer.
    */
   direct(actor: AgentActor, agentId: string): Promise<AgentChannel>;
+  /**
+   * Make sure this person has had a conversation with their own 分身, and that no other conversation
+   * of theirs still carries its name (`avatar-conversation.ts`). Optional so a store written for a test
+   * need not say anything about it; the channel list calls it when it is there.
+   */
+  ensureAvatarConversation?(actor: AgentActor): Promise<void>;
   get(actor: AgentActor, channelId: string): Promise<AgentChannel | null>;
   list(actor: AgentActor, query?: ChannelQuery): Promise<ChannelPage>;
   /** Pin or unpin the caller's own membership. Throws ChannelNotFoundError for a non-member. */
@@ -423,6 +430,9 @@ export function createChannelStore(
       );
   };
 
+  /** Whose 分身 conversation this process has already seen to; see `ensureAvatarConversation`. */
+  const avatarConversationsEnsured = new Set<string>();
+
   const store: ChannelStore = {
     create(actor, agentIds, options) {
       return database.transaction(
@@ -495,6 +505,20 @@ export function createChannelStore(
       // Null only if it was deleted between the two reads, which is a reason to make a new one
       // rather than to fail: the caller asked for a conversation, not for that row.
       return channel ?? store.create(actor, [agentId]);
+    },
+
+    async ensureAvatarConversation(actor) {
+      // Once per person per process; the check itself is what makes a repeat after a restart safe.
+      if (avatarConversationsEnsured.has(actor.id)) return;
+      await ensureAvatarConversation(
+        {
+          database,
+          direct: (who, agentId) => store.direct(who, agentId),
+          channelName,
+        },
+        actor,
+      );
+      avatarConversationsEnsured.add(actor.id);
     },
 
     async get(actor, channelId) {
@@ -1269,6 +1293,19 @@ export function createChannelRoutes(
         MAX_CHANNEL_PAGE,
       );
       if (!parsed.ok) return context.json({ error: parsed.error }, 400);
+      /*
+       * The first read of somebody's conversations is where their 分身 conversation is made, for a new
+       * sign-up and for a person who signed up before it existed alike. Never in the way of the list:
+       * a failure here is logged and the person still gets the conversations they have.
+       */
+      await store.ensureAvatarConversation?.(context.var.actor).catch((error) =>
+        console.error(
+          JSON.stringify({
+            type: "avatar-conversation-ensure-failed",
+            error: String(error),
+          }),
+        ),
+      );
       const page = await store.list(context.var.actor, {
         ...(url.searchParams.get("cursor")
           ? { cursor: url.searchParams.get("cursor") as string }
