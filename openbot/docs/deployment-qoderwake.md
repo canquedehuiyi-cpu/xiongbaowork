@@ -159,6 +159,31 @@ BOT_MODEL=<供应商当前支持的准确模型名>
 不能承诺“设置 BOT_MODEL 后所有员工立即使用它”。修改环境配置后重新创建容器，`docker restart`
 不会读取已改的 env-file。B 线验证不发送对话，不使用任何真实 provider。
 
+### 5.1 首次真实部署实测要点（2026-11-06，京东云 Ubuntu 22.04，v0.2.0）
+
+以下各条都已在真实部署上遇到，并对照代码核实：
+
+1. **单容器镜像不带内置 Bot。**
+   - 新建员工时「内置」一项是灰的，提示「这个部署没有自带的员工可供运行」。原因是没有设置 `MANAGED_AGENT_AG_UI_URL`（见 `server/src/config.ts` 的 `managedAgentConfig`），内置 Bot 是 Compose 里单独的 `agent-bot` 服务。
+   - 单容器部署里能直接对话的是每个人的「我的分身」。它用的是部署级模型，即本节开头的 `OPENAI_BASE_URL`、`OPENAI_API_KEY` 和 `BOT_MODEL`。
+   - 分身由系统统一管理，设置页只能看，模型显示为「外部托管模型」，这是正常现象。
+2. **模型库接入自己的密钥要看套餐。**
+   - 新租户默认是 Free 套餐，「能力与资源 → 模型」会提示「免费版只能使用平台体验模型」，接入按钮不可用。
+   - 管理员在 `/plans` 把工作空间切到允许「可接入自己的模型」的套餐即可。这里不涉及付费，切换立即生效。
+3. **v0.2.0 的模型「测试」按钮必然失败。**
+   - 不论密钥是否正确，都显示 "The connectivity test could not be run."，原因是前端发的是 GET，服务端只认 POST。
+   - canquedehuiyi-cpu/xiongbaowork#276 已修复，下一个镜像版本生效。在那之前，直接用对话来验证模型。
+4. **在服务器上写入密钥，不要把它打在命令里。**
+   - 用 `read -rsp "提示语" K` 读入，提示语原样保留，出现提示后只粘贴一次。粘两次会得到两倍长度的无效密钥，供应商会报 `Authentication Fails`。
+   - 可以只检查长度，不显示内容。DeepSeek 密钥是 35 位：
+
+     ```bash
+     awk -F= '/^OPENAI_API_KEY=/{print length(substr($0,16))}' /opt/xiongbao/.env.delivery
+     ```
+
+   - 密钥一旦出现在终端回显或聊天记录里，就到供应商后台删除并重建。
+5. **健康检查地址是 `/health`，不是 `/api/health`。** 后者会返回 404。
+
 ## 6. 备份、恢复与升级
 
 至少备份数据库、两个同卷口令文件、workspace、profiles，以及原有 KEY_ENCRYPTION_KEY 和登录 secret。
