@@ -1,4 +1,5 @@
 import type { OutboundPolicy } from "../net/outbound-guard";
+import * as baiduNetdiskRest from "./baidu-netdisk-rest";
 import * as builtinRoutines from "./builtin-routines";
 import * as composio from "./composio";
 import * as driveRest from "./google-drive-rest";
@@ -123,6 +124,7 @@ export type VendorTransport = {
 export type TransportKind =
   | "mcp"
   | "google-drive-rest"
+  | "baidu-netdisk-rest"
   | "builtin-routines"
   | "composio";
 
@@ -148,6 +150,7 @@ export type CuratedTransportKind = Exclude<TransportKind, "composio">;
 const TRANSPORTS: Record<TransportKind, VendorTransport> = {
   mcp,
   "google-drive-rest": driveRest,
+  "baidu-netdisk-rest": baiduNetdiskRest,
   "builtin-routines": builtinRoutines,
   composio,
 };
