@@ -72,6 +72,7 @@ tests/automation-waker-executor.test.ts
 tests/automations-model.test.ts
 tests/automations-store.integration.test.ts
 tests/autonomous-summary.test.ts
+tests/avatar-conversation.integration.test.ts
 tests/avatar-local-folder-turn.integration.test.ts
 tests/avatar-local-folder.test.ts
 tests/avatar-notebook-connector.integration.test.ts
