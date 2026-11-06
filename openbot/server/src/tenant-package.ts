@@ -20,7 +20,7 @@ import {
 } from "./db/schema";
 import { SYSTEM_TENANT } from "./db/schema/tenant";
 import { runAsTenant } from "./tenant/context";
-import { packageChannelId } from "./tenant/provisioning";
+import { avatarAgentId, packageChannelId } from "./tenant/provisioning";
 
 const approvedThemeVariables = new Set([
   "--background",
@@ -206,6 +206,17 @@ type TenantChannel = {
   name: string;
   description: string;
   permittedAgents: string[];
+  /**
+   * Whether each person's own 分身 (`avatar-<person>`, `tenant/provisioning.ts`) answers here too.
+   *
+   * Not an agent id in `permittedAgents`, because there is no one id to write: the 分身 is a
+   * different, person-owned Bot in every workspace, and it is the only coworker that may run on that
+   * person's paired machine (`devices/selection.ts` picks the Bot OWNER's device, and a catalogue Bot
+   * has no owner). So it is resolved per person, where the per-person copy of the channel is written,
+   * and a channel with no person to resolve it for -- the platform-partition copy -- has no 分身.
+   * Present only when true, so a package that never says it reads exactly as it did before.
+   */
+  avatar?: true;
   allowedGroups: string[];
 };
 
@@ -217,6 +228,14 @@ export type TenantPackage = {
   /** Remote agents explicitly disabled by a blank endpoint, not arbitrary removed YAML rows. */
   omittedAgentIds: string[];
   channels: TenantChannel[];
+  /**
+   * The package skills each person's own 分身 is given, by slug (`avatar:` in `agents.yaml`).
+   *
+   * The 分身 is not declared by the package -- provisioning makes it, one per person -- so these are
+   * granted per person, in that person's scope, next to their copies of the channels. Optional only so
+   * a package assembled in code without it reads as granting nothing.
+   */
+  avatarSkills?: string[];
   model: {
     provider: "openai" | "anthropic";
     credentialSecretRef: string;
@@ -505,6 +524,34 @@ function collectAgents(
   return agents;
 }
 
+/**
+ * `avatar:` in `agents.yaml`: what the package gives each person's own 分身.
+ *
+ * Only skills, and only this package's own, under the same refusals an agent's list gets: a slug the
+ * package does not ship is a typo that would otherwise attach nothing, and a repeat would collide in
+ * the grant INSERT. Nothing else about the 分身 is the package's to say -- its name, prompt and owner
+ * are provisioning's, and it is the person's coworker, not the brand's.
+ */
+function parseAvatarSkills(value: unknown, skillSlugs: Set<string>): string[] {
+  if (value === undefined || value === null) return [];
+  const avatar = asRecord(value, "agents.yaml avatar");
+  if (avatar.skills === undefined || avatar.skills === null) return [];
+  const slugs = stringArray(avatar.skills, "avatar.skills");
+  const named = new Set<string>();
+  for (const slug of slugs) {
+    if (named.has(slug)) {
+      throw new Error(`avatar names skill "${slug}" twice`);
+    }
+    named.add(slug);
+    if (!skillSlugs.has(slug)) {
+      throw new Error(
+        `avatar names skill "${slug}", which this package does not ship`,
+      );
+    }
+  }
+  return slugs;
+}
+
 export function validateTenantPackage(files: PackageFiles): TenantPackage {
   if (files.themeCss.trim()) {
     validateThemeCss(files.themeCss);
@@ -563,6 +610,7 @@ export function validateTenantPackage(files: PackageFiles): TenantPackage {
       }
     }
   }
+  const avatarSkills = parseAvatarSkills(agentsYaml.avatar, skillSlugs);
   const channelIds = new Set<string>();
   const channels = asList(channelsYaml.channels, "channels.yaml channels").map(
     (value) => {
@@ -587,11 +635,21 @@ export function validateTenantPackage(files: PackageFiles): TenantPackage {
           throw new Error(`channel references unknown agent "${agentId}"`);
         }
       }
+      if (
+        channel.avatar !== undefined &&
+        channel.avatar !== null &&
+        typeof channel.avatar !== "boolean"
+      ) {
+        throw new Error(
+          `channel "${id}": channel.avatar must be true or false`,
+        );
+      }
       return {
         id,
         name: requiredString(channel.name, "channel.name"),
         description: requiredString(channel.description, "channel.description"),
         permittedAgents,
+        ...(channel.avatar === true ? { avatar: true as const } : {}),
         allowedGroups: stringArray(
           channel.allowed_groups,
           "channel.allowed_groups",
@@ -628,6 +686,7 @@ export function validateTenantPackage(files: PackageFiles): TenantPackage {
     agents,
     omittedAgentIds: [...omittedAgentIds],
     channels,
+    avatarSkills,
     model: {
       provider: model.provider,
       credentialSecretRef: requiredString(
@@ -1175,6 +1234,12 @@ export async function synchronizeTenantPackage(
             ),
           );
 
+        /*
+         * Which of this package's skills it actually owns once seeded, slug to row id. The 分身's grants
+         * are written after this transaction, in each person's scope, and must name only these: the
+         * same reason the pairing below is inside the seeded branch.
+         */
+        const ownedSkills = new Map<string, string>();
         for (const skill of tenantPackage.skills) {
           const [seeded] = await transaction
             .insert(skillTable)
@@ -1231,6 +1296,7 @@ export async function synchronizeTenantPackage(
             );
             continue;
           }
+          ownedSkills.set(skill.slug, seeded.id);
 
           // Replaced wholesale, so a tool the package stopped declaring stops being declared. The same
           // rule the API path applies, and the reason the table is keyed on (skill, ref).
@@ -1353,7 +1419,15 @@ export async function synchronizeTenantPackage(
           );
         }
 
-        return { deploymentPackage, members, channels: tenantPackage.channels };
+        return {
+          deploymentPackage,
+          members,
+          channels: tenantPackage.channels,
+          avatarSkillIds: (tenantPackage.avatarSkills ?? []).flatMap((slug) => {
+            const id = ownedSkills.get(slug);
+            return id ? [id] : [];
+          }),
+        };
       }),
   );
 
@@ -1369,7 +1443,44 @@ export async function synchronizeTenantPackage(
    * A person with no channels to join writes nothing, and an empty membership list is the ordinary
    * case for a deployment with several people: their channels come with their own provisioning.
    */
+  /*
+   * Each person's own 分身, where the package gives it a conversation or skills.
+   *
+   * Looked up in that person's scope, before anything of theirs is written, and refused rather than
+   * skipped for the same reason an unknown member is: skipping would leave a default conversation
+   * with nobody to answer it -- the channel read path inner-joins its Bots, so it would simply not be
+   * there -- and a boot log that reads like success. Provisioning always makes the 分身, and the
+   * single-user start-up provisions before it synchronizes, so this only fires on a sync that ran
+   * ahead of provisioning.
+   *
+   * Its stamp is read too, because a grant is read back under the Bot's own (`listForAgent`): a 分身
+   * someone shared with the team carries `team`, and a grant under the person's stamp would offer it
+   * nothing.
+   */
+  const needsAvatar =
+    synced.avatarSkillIds.length > 0 ||
+    synced.channels.some((channel) => channel.avatar);
+  const avatarTenants = new Map<string, string>();
+  if (needsAvatar) {
+    for (const userId of synced.members) {
+      const [avatar] = await runAsTenant(userId, () =>
+        database
+          .select({ tenantId: agentTable.tenantId })
+          .from(agentTable)
+          .where(eq(agentTable.id, avatarAgentId(userId)))
+          .limit(1),
+      );
+      if (!avatar) {
+        throw new Error(
+          `Tenant package gives "${userId}"'s 分身 a conversation or skills, and "${userId}" has no 分身. Provision the person before synchronizing the package, or their default conversation will have nobody to answer it.`,
+        );
+      }
+      avatarTenants.set(userId, avatar.tenantId);
+    }
+  }
+
   for (const userId of synced.members) {
+    const avatarId = avatarAgentId(userId);
     await runAsTenant(userId, async () => {
       /*
        * This person's copies of what the brand stopped declaring.
@@ -1426,12 +1537,21 @@ export async function synchronizeTenantPackage(
           );
         }
 
+        /*
+         * Replaced wholesale, like the platform copy's, so an existing person's conversation follows
+         * the package on the next boot: a channel that gained the 分身 gains it here, one that lost a
+         * coworker loses it. The 分身 is this person's own, resolved here because this is the only
+         * place that knows whose copy of the channel it is.
+         */
+        const answeredBy = channel.avatar
+          ? [...channel.permittedAgents, avatarId]
+          : channel.permittedAgents;
         await database
           .delete(channelAgents)
           .where(eq(channelAgents.channelId, channelId));
-        if (channel.permittedAgents.length) {
+        if (answeredBy.length) {
           await database.insert(channelAgents).values(
-            channel.permittedAgents.map((agentId) => ({
+            answeredBy.map((agentId) => ({
               channelId,
               agentId,
             })),
@@ -1461,6 +1581,41 @@ export async function synchronizeTenantPackage(
             threadId: randomUUID(),
           })
           .onConflictDoNothing();
+      }
+
+      /*
+       * The skills `avatar:` gives this person's 分身, written the way the catalogue Bots' are: under the
+       * package's mark, every grant it made last time taken back first, so a package that stops giving
+       * one takes it back. Only its own -- a grant the person or an administrator made carries their id
+       * and survives, and an existing one keeps that credit. Named by the row this package seeded, so a
+       * slug somebody else's skill already holds is not handed to the 分身 under the package's name.
+       */
+      await database
+        .delete(pluginGrants)
+        .where(
+          and(
+            eq(pluginGrants.kind, "skill"),
+            eq(pluginGrants.agentId, avatarId),
+            eq(pluginGrants.grantedBy, PACKAGE_GRANT),
+          ),
+        );
+      const avatarTenant = avatarTenants.get(userId);
+      if (synced.avatarSkillIds.length > 0 && avatarTenant) {
+        await database
+          .insert(pluginGrants)
+          .values(
+            synced.avatarSkillIds.map((ref) => ({
+              kind: "skill",
+              ref,
+              agentId: avatarId,
+              grantedBy: PACKAGE_GRANT,
+              tenantId: avatarTenant,
+            })),
+          )
+          .onConflictDoUpdate({
+            target: [pluginGrants.kind, pluginGrants.ref, pluginGrants.agentId],
+            set: { updatedAt: new Date() },
+          });
       }
     });
   }

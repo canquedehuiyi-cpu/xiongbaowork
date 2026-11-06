@@ -59,6 +59,28 @@ describe("default agent selection", () => {
     ).toBe("general-assistant");
   });
 
+  test("the person's own 分身 comes before the route's shared fallback", () => {
+    // Found on a real deployment: the home composer's default was the first shared coworker, a Bot
+    // that belongs to nobody and so could never use the person's paired machine.
+    const shared = {
+      ...agent("general-assistant", "通用助手"),
+      mine: false,
+      visibility: "public" as const,
+    };
+    const avatar = agent("avatar-u1", "我的分身");
+
+    expect(defaultAgentProfile([shared, avatar], shared)?.id).toBe("avatar-u1");
+    expect(defaultAgentId([shared, avatar])).toBe("avatar-u1");
+    // Only the person's own: somebody else's 分身 shared with them is not theirs to default to.
+    expect(
+      defaultAgentProfile([shared, { ...avatar, mine: false }], shared)?.id,
+    ).toBe("general-assistant");
+    // A package-picked harness is still the deployment's explicit choice.
+    expect(
+      defaultAgentProfile([avatar, agent(PICKED_HARNESS_AGENT_ID)], shared)?.id,
+    ).toBe(PICKED_HARNESS_AGENT_ID);
+  });
+
   test("returns undefined when the roster is still absent", () => {
     expect(defaultAgentId(undefined)).toBeUndefined();
   });
