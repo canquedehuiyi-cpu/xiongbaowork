@@ -5585,6 +5585,12 @@ export function createPluginStore(options: PluginStoreOptions) {
        * resolve in the owner's frame and under `platform`, and a teammate's row security shows them
        * only the deployment's own. A teammate's own skill of the same name never stands in for the
        * owner's inside the owner's Bot.
+       *
+       * A catalogue Bot (`agents.tenant_id = system`, written by `synchronizeTenantPackage`) has the
+       * pairings its package declared stamped `system` too, and they are the deployment's: in a tenant
+       * frame they are read beside the frame's own grants on that Bot. Never another tenant's — the
+       * read names exactly the frame and `system`. Their slugs resolve as the frame's do, its own row
+       * first and then the platform's, so a tenant's shadow skill wins inside that tenant only.
        */
       const frame = currentTenant();
       const [bot] = await database
@@ -5596,19 +5602,22 @@ export function createPluginStore(options: PluginStoreOptions) {
         .leftJoin(agentProfiles, eq(agentProfiles.agentId, agents.id))
         .where(eq(agents.id, agentId))
         .limit(1);
-      let tenant: string;
+      let grantTenants: string[];
       let skillTenant: string;
       if (bot?.tenantId === TEAM_TENANT) {
-        tenant = TEAM_TENANT;
+        grantTenants = [TEAM_TENANT];
         skillTenant = isPersonTenant(bot.ownerUserId)
           ? bot.ownerUserId
           : TEAM_TENANT;
       } else if (frame === "platform") {
         if (!bot) return { tools: [], skills: [] };
-        tenant = bot.tenantId;
-        skillTenant = tenant;
+        grantTenants = [bot.tenantId];
+        skillTenant = bot.tenantId;
       } else {
-        tenant = frame;
+        grantTenants =
+          bot?.tenantId === SYSTEM_TENANT && frame !== SYSTEM_TENANT
+            ? [frame, SYSTEM_TENANT]
+            : [frame];
         skillTenant = frame;
       }
       const held = await database
@@ -5617,7 +5626,7 @@ export function createPluginStore(options: PluginStoreOptions) {
         .where(
           and(
             eq(pluginGrants.agentId, agentId),
-            eq(pluginGrants.tenantId, tenant),
+            inArray(pluginGrants.tenantId, grantTenants),
           ),
         );
       if (held.length === 0) return { tools: [], skills: [] };

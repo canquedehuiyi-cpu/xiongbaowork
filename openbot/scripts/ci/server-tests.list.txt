@@ -85,6 +85,7 @@ tests/bot-lifecycle-watcher.test.ts
 tests/bot-lifecycle.integration.test.ts
 tests/builtin-routines.test.ts
 tests/bunfig-preload.test.ts
+tests/catalogue-bot-skill-grants.integration.test.ts
 tests/channel-activity-input.test.ts
 tests/channel-activity.integration.test.ts
 tests/channel-cursor.test.ts
