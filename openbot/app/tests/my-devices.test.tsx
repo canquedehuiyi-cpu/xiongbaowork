@@ -84,7 +84,7 @@ test("the list says which machines are here now", async () => {
   expect(view.getByText(/最后在线 /)).toBeTruthy();
 });
 
-test("pairing mints a code and hands the person the command to type", async () => {
+test("pairing mints a code and shows the desktop app's two fields, with the command as a fallback", async () => {
   const { view } = draw([]);
 
   await userEvent
@@ -94,10 +94,14 @@ test("pairing mints a code and hands the person the command to type", async () =
   await waitFor(() =>
     expect(calls.some((c) => c.path.includes("/api/devices/pair"))).toBeTrue(),
   );
-  const code = await view.findByText(/K7M2QP4R/);
-  // The command, not just the code: a person standing at the machine has nothing else to copy from.
-  expect(code.textContent).toContain("--server");
-  expect(code.textContent).toContain("--pair K7M2QP4R");
+  // The two fields the desktop app asks for, each alone, so neither is pasted with anything around
+  // it: the app's code field refuses a value with a space, which is what the whole command has.
+  // Exact-text queries: each matches only an element holding that value and nothing else.
+  expect(await view.findByText("K7M2QP4R")).toBeTruthy();
+  expect(view.getByText(window.location.origin)).toBeTruthy();
+  // The source-checkout command is still there, for a runner started from a checkout.
+  const command = view.getByText(/--pair K7M2QP4R/);
+  expect(command.textContent).toContain("--server");
 });
 
 test("removing a device is a delete against that device alone", async () => {
