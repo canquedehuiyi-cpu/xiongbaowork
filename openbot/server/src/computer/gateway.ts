@@ -31,7 +31,10 @@ import {
   type DeviceTakeovers,
 } from "../devices/takeover";
 import { withUntrustedNotice } from "../untrusted-content";
-import { computerActionIdentity } from "./action-identity";
+import {
+  computerActionIdentity,
+  computerActionOrigin,
+} from "./action-identity";
 import {
   ComputerStoppedError,
   type ComputerTransport,
@@ -906,10 +909,26 @@ export function createComputerGateway(
         },
         continuation,
       });
+      /*
+       * Where this action's outcome belongs if it has to wait for a machine that is away: the run's
+       * own conversation, held by the server, never the model's arguments.
+       */
+      const origin = continuation?.threadId
+        ? {
+            botId,
+            actorId: actor.id,
+            threadId: continuation.threadId,
+            ...(continuation.toolCallId
+              ? { toolCallId: continuation.toolCallId }
+              : {}),
+          }
+        : undefined;
       result =
         approval && "replay" in approval
           ? (approval.replay as T)
-          : await run(address);
+          : origin
+            ? await computerActionOrigin.run(origin, () => run(address))
+            : await run(address);
       await approval?.complete(result);
     } catch (error) {
       if (error instanceof HeadlessToolSuspension) throw error;

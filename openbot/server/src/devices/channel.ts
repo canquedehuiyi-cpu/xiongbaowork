@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { computerActionOrigin } from "../computer/action-identity";
 import {
   actionFingerprint,
   DeviceDeliveryError,
@@ -128,6 +129,11 @@ export function createDeviceChannel(options?: {
     credentialVersion?: string,
   ) => Promise<boolean>;
   validationIntervalMs?: number;
+  /**
+   * Called after every flush, drained or not, so the outcome of each action that waited for this
+   * machine is told to the conversation that queued it. Its own failures never fail the flush.
+   */
+  afterFlush?: (target: DispatchTarget) => Promise<unknown>;
 }): DeviceChannel {
   const sockets = new Map<string, RunnerSocketLike>();
   const identities = new Map<
@@ -282,9 +288,13 @@ export function createDeviceChannel(options?: {
     async flush(target) {
       const connectionId = byDevice.get(keyOf(target));
       if (!queue || !connectionId) return 0;
-      return queue.drain(target, connectionId, (item) =>
-        sendDirect(target, item.action, item.payload, undefined, item.key),
-      );
+      try {
+        return await queue.drain(target, connectionId, (item) =>
+          sendDirect(target, item.action, item.payload, undefined, item.key),
+        );
+      } finally {
+        await options?.afterFlush?.(target).catch(() => undefined);
+      }
     },
 
     detach(connectionId) {
@@ -390,7 +400,13 @@ export function createDeviceChannel(options?: {
           if (!queue)
             return Promise.reject(new DeviceOfflineError(target.deviceId));
           return (async () => {
-            await queue.enqueue(target, { key, action, payload });
+            const origin = computerActionOrigin.getStore();
+            await queue.enqueue(target, {
+              key,
+              action,
+              payload,
+              ...(origin ? { origin } : {}),
+            });
             const receipt = await queue.receipt(target, key);
             if (receipt?.state === "completed") return receipt.output as T;
             if (receipt?.state === "unknown" || receipt?.state === "failed")
