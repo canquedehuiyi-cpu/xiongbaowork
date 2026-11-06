@@ -8,6 +8,25 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+## 0.2.1
+
+- **Approved actions now run, exactly once.** Before, an action a person approved (a dangerous
+  command or a sensitive-file read the floor held for approval) was never carried out on a production
+  deployment: resuming it needed a Root release attestation no deployment has, and the server logged
+  `approval-resume-gated` until the queue gave up. The server now settles an approved action on the
+  approval row itself: claimed once before it runs, its answer saved once before the conversation is
+  continued, and never run again after a crash (that ends as "outcome unknown"). Rejected actions
+  still never run. See `docs/restart-recovery.md`. No migration.
+- **Device mode tells the model where its commands run.** With `TENANT_RUNTIME=device` the file and
+  command tools now say they act on the person's own paired machine (Windows PowerShell, macOS or
+  Linux) instead of "bash in your workspace, use apt-get", which made a 分身 refuse to run commands on
+  a real paired Windows machine.
+- **Windows devices:** commands keep `COMPUTERNAME`, `USERNAME`, `ProgramFiles` and similar
+  non-secret variables (the user's own profile folders stay out), and PowerShell progress records no
+  longer reach stderr as CLIXML.
+- **Pairing card and model test button.** 「我的设备」 shows the server address and the pairing code as
+  the two fields the desktop app asks for; the command line moved under 「从源码运行设备端（开发者）」.
+  The model library's 「测试」 button sends `POST` (it sent `GET` and always failed).
 - **熊宝 package: the default conversation is each person's own 分身.** 「我的分身」 is now answered by
   the person's own `avatar-<person>`, which can run computer actions on their paired machine; before,
   it was the shared Bot `general-assistant`, which belongs to nobody and never could. That Bot is
