@@ -56,6 +56,30 @@ describe("what a command inherits", () => {
     expect(env.USERPROFILE).toBe("C:\\work");
     expect(env.KEY_ENCRYPTION_KEY).toBeUndefined();
   });
+  test("Windows keeps the machine's name and program folders, not the user's profile folders", () => {
+    const env = environmentForCommand(
+      {
+        Path: "C:\\Tools",
+        SystemRoot: "C:\\Windows",
+        COMPUTERNAME: "STUDIO-PC",
+        USERNAME: "feng",
+        ProgramFiles: "C:\\Program Files",
+        "ProgramFiles(x86)": "C:\\Program Files (x86)",
+        APPDATA: "C:\\Users\\feng\\AppData\\Roaming",
+        LOCALAPPDATA: "C:\\Users\\feng\\AppData\\Local",
+        ...secrets,
+      },
+      "C:\\work",
+      "win32",
+    );
+    expect(env.COMPUTERNAME).toBe("STUDIO-PC");
+    expect(env.USERNAME).toBe("feng");
+    expect(env.ProgramFiles).toBe("C:\\Program Files");
+    expect(env["ProgramFiles(x86)"]).toBe("C:\\Program Files (x86)");
+    expect(env.APPDATA).toBeUndefined();
+    expect(env.LOCALAPPDATA).toBeUndefined();
+    expect(env.KEY_ENCRYPTION_KEY).toBeUndefined();
+  });
   test("Windows selects a native shell without profiles and preserves literal command text", () => {
     const shell = commandShell("Write-Output '熊宝'; exit 7", "win32", {
       SystemRoot: "C:\\Windows",
@@ -67,6 +91,10 @@ describe("what a command inherits", () => {
     expect(
       Buffer.from(shell.args.at(-1) ?? "", "base64").toString("utf16le"),
     ).toContain("Write-Output '熊宝'; exit 7");
+    // Progress records would otherwise reach stderr as CLIXML and read as an error.
+    expect(
+      Buffer.from(shell.args.at(-1) ?? "", "base64").toString("utf16le"),
+    ).toStartWith("$ProgressPreference = 'SilentlyContinue';");
     expect(commandShell("echo hi", "linux", {}).executable).toBe("/bin/bash");
   });
   test("PATH, locale, terminal and proxy variables pass", () => {

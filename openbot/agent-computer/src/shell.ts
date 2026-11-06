@@ -125,6 +125,24 @@ export function environmentForCommand(
       "PATHEXT",
       "TEMP",
       "TMP",
+      /*
+       * Which machine and account this is, and where programs are installed: none of them is a
+       * credential, and without them `$env:COMPUTERNAME` is empty and tools that find themselves
+       * through `ProgramFiles` fail. Found on the first real paired Windows machine (2026-11-06),
+       * where a 分身 asked for the machine name and got nothing. The user's own profile folders
+       * (APPDATA, LOCALAPPDATA) stay out: USERPROFILE is the workspace on purpose.
+       */
+      "COMPUTERNAME",
+      "USERNAME",
+      "USERDOMAIN",
+      "OS",
+      "PROCESSOR_ARCHITECTURE",
+      "NUMBER_OF_PROCESSORS",
+      "ProgramFiles",
+      "ProgramFiles(x86)",
+      "ProgramW6432",
+      "CommonProgramFiles",
+      "ProgramData",
     ])
       copy(name);
     env.USERPROFILE = workspaceDir;
@@ -476,7 +494,11 @@ export function commandShell(
   if (platform !== "win32")
     return { executable: "/bin/bash", args: ["-c", command] };
   const root = source.SystemRoot ?? source.SYSTEMROOT ?? "C:\\Windows";
-  const script = `$OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new(); ${command}\n$openbotCommandSucceeded = $?; $openbotCommandExit = $LASTEXITCODE; if ($openbotCommandExit) { exit $openbotCommandExit }; if (-not $openbotCommandSucceeded) { exit 1 }`;
+  /*
+   * `$ProgressPreference` off: with stderr redirected, Windows PowerShell serialises progress records
+   * ("正在准备首次使用模块") into stderr as CLIXML, which the model then reads as an error.
+   */
+  const script = `$ProgressPreference = 'SilentlyContinue'; $OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new(); ${command}\n$openbotCommandSucceeded = $?; $openbotCommandExit = $LASTEXITCODE; if ($openbotCommandExit) { exit $openbotCommandExit }; if (-not $openbotCommandSucceeded) { exit 1 }`;
   return {
     executable: win32.join(
       root,
