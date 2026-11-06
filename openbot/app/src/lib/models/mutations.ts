@@ -42,7 +42,9 @@ export function testModelMutationOptions() {
     mutationFn: async (
       id: string,
     ): Promise<{ ok: boolean; error?: string }> => {
-      const response = await tryClient(`/api/models/${id}/test`);
+      const response = await tryClient(`/api/models/${id}/test`, {
+        method: "POST",
+      });
       const body = (await response.json().catch(() => null)) as {
         ok?: boolean;
         error?: string;
