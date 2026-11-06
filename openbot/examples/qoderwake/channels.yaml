@@ -1,9 +1,17 @@
 # 频道即"工作台的哪一个入口"。导航五项与规格截图同构：任务看板 / @Waker / 自主工作 /
 # Waker 管理 / 能力与资源（后三项在应用侧是页面，这里声明的是对话入口与可见范围）。
 channels:
-  - id: general-assistant
+  # 默认对话：本人自己的「我的分身」接（`avatar: true`），它能用你配对的电脑。
+  - id: avatar
     name: 我的分身
-    description: 有事直接说，个人分身接。
+    description: 有事直接说，你自己的分身接；它能用你配对的电脑干活。
+    avatar: true
+    permitted_agents: []
+    allowed_groups: [all]
+  # 原先叫「我的分身」的那段对话就是这一条：同一个 id，所以老部署里的历史还在，只是改了名字。
+  - id: general-assistant
+    name: 通用助手
+    description: 大家共用的助手：问通用问题，或者在对话里造员工、写技能。
     permitted_agents: [general-assistant]
     allowed_groups: [all]
   - id: engineering

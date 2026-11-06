@@ -412,6 +412,7 @@ tests/tenant-frame-guard.test.ts
 tests/tenant-frame-returned-builder.test.ts
 tests/tenant-invariants.test.ts
 tests/tenant-package-agent-files.test.ts
+tests/tenant-package-avatar-channel.test.ts
 tests/tenant-package-channel-membership.test.ts
 tests/tenant-package-duplicates.test.ts
 tests/tenant-package-switch-retires.test.ts
