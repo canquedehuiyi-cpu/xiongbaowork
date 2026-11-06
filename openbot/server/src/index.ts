@@ -944,7 +944,16 @@ await startupLifecycle.run(async (startup) => {
         signal: new AbortController().signal,
       });
     },
-    { review: (prompt, signal) => chooseSkills(prompt, signal) },
+    {
+      review: (prompt, signal) => chooseSkills(prompt, signal),
+      /*
+       * An approved action is carried out by the server itself, fenced on the approval row: claimed
+       * once (approved → consumed) before it runs, its answer saved once before the conversation is
+       * continued, and never run again after a crash (that ends as "outcome unknown"). See
+       * `docs/restart-recovery.md`. The Root-attested ports are not composed here.
+       */
+      settlement: "database",
+    },
   );
   // Housekeeping on a schedule: audit rows when asked for, screenshots always, one timer. See audit-retention.ts.
   startup.acquireSync(
@@ -1021,6 +1030,11 @@ await startupLifecycle.run(async (startup) => {
     );
   }
 
+  /** Where the computer tools act, so their descriptions tell the model the truth (G5, 2026-11-06). */
+  const computerMachine =
+    config.tenantRuntime === "device"
+      ? ("device" as const)
+      : ("workspace" as const);
   const computerGateway = computerProvider
     ? createComputerGateway({
         provider: computerProvider,
@@ -2230,6 +2244,7 @@ await startupLifecycle.run(async (startup) => {
         actor: { id: actor.id, userId: actor.id, initiator },
         auditStore: bootAuditStore,
         ...(signInService ? { signIn: signInService } : {}),
+        machine: computerMachine,
         disabled: await approvalService.disabledTools(actor.id, agentId),
       });
     },
@@ -2519,6 +2534,7 @@ await startupLifecycle.run(async (startup) => {
                     actor: { id: actor.id, userId: actor.id, initiator },
                     auditStore: bootAuditStore,
                     ...(signInService ? { signIn: signInService } : {}),
+                    machine: computerMachine,
                     disabled: await approvalService.disabledTools(actor.id, context.agentId),
                   })
                 : [];
@@ -2684,6 +2700,7 @@ await startupLifecycle.run(async (startup) => {
           actor: { id: actor.id, userId: actor.id, initiator },
           auditStore: bootAuditStore,
           ...(signInService ? { signIn: signInService } : {}),
+          machine: computerMachine,
         })
       : [];
   };
@@ -3058,10 +3075,11 @@ await startupLifecycle.run(async (startup) => {
           }
         } catch (error) {
           /*
-           * Named, so an operator can tell this from a fault: resuming an approved action after the
-           * decision needs the local continuation recovery port, which is composed only from a
-           * Root-verified release attestation. This deployment has none, and the server never
-           * fabricates one (`approvals/local-recovery-composition.ts`), so the refusal is expected.
+           * Named, so an operator can tell this from a fault. The server settles approved actions on
+           * the approval row itself (`settlement: "database"` above), so this is no longer the normal
+           * outcome: it is raised only when a row's tenant, owner or run binding does not match the
+           * frame that claimed it, and that row is never run. The Root-attested local continuation
+           * port (`approvals/local-recovery-composition.ts`) is still never fabricated here.
            */
           if (error instanceof ApprovalRecoveryBlockedError) {
             console.warn(
@@ -3398,6 +3416,7 @@ await startupLifecycle.run(async (startup) => {
           actor: { id: actor.id, userId: actor.id, initiator },
           auditStore: bootAuditStore,
           ...(signInService ? { signIn: signInService } : {}),
+          machine: computerMachine,
           disabled: await approvalService.disabledTools(actor.id, agentId),
         });
       },
@@ -3490,6 +3509,7 @@ await startupLifecycle.run(async (startup) => {
           actor: { id: actor.id, userId: actor.id, initiator },
           auditStore: bootAuditStore,
           ...(signInService ? { signIn: signInService } : {}),
+          machine: computerMachine,
           disabled: await approvalService.disabledTools(actor.id, agentId),
         });
       },

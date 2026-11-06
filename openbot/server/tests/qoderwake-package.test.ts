@@ -42,9 +42,41 @@ test("the package declares the product, five seed coworkers and the navigation e
     loaded.agents.find((entry) => entry.id === "backend-engineer")?.title,
   ).toBe("Backend Engineer");
   expect(loaded.channels.length).toBeGreaterThanOrEqual(3);
-  // `我的分身` is the personal avatar card: the onboarding asks somebody to configure it, so a package
-  // without it starts every new tenant with a hole in the middle of their nav.
-  expect(loaded.agents[0]?.name).toContain("分身");
+});
+
+test("the default conversation is the person's own 分身, and the shared Bot does not claim to be it", () => {
+  /*
+   * `我的分身` is still the first thing in the nav -- the onboarding asks somebody to configure it, so a
+   * package without it starts every new tenant with a hole in the middle of their nav -- but it is now
+   * the conversation with the person's OWN 分身 (`avatar: true`), not with a catalogue Bot of that name.
+   * A catalogue Bot has no owner, so it can never use anybody's paired machine; the 分身 can.
+   */
+  const [first] = loaded.channels;
+  expect(first?.name).toBe("我的分身");
+  expect(first?.avatar).toBe(true);
+  expect(first?.permittedAgents).toEqual([]);
+
+  // The shared one is 通用助手, and nothing a person reads on it says it is somebody's 分身. Before
+  // this, two Bots were both called 我的分身 and the catalogue one's page said it belonged to someone
+  // else.
+  const shared = loaded.agents.find(
+    (entry) => entry.id === "general-assistant",
+  );
+  expect(shared?.name).toBe("通用助手");
+  expect(
+    [shared?.name, shared?.title, shared?.roleDescription].join(" "),
+  ).not.toContain("个人分身");
+  expect(
+    loaded.channels.find((entry) => entry.id === "general-assistant")?.name,
+  ).toBe("通用助手");
+  for (const agent of loaded.agents) expect(agent.name).not.toBe("我的分身");
+
+  /*
+   * Building a coworker or a skill in a conversation is gated on holding these two skills. The 分身
+   * holds them so the default conversation keeps the feature, and 通用助手 keeps them too.
+   */
+  expect(loaded.avatarSkills).toEqual(["bot-creator", "skill-creator"]);
+  expect(shared?.skills).toEqual(["bot-creator", "skill-creator"]);
 });
 
 test("the shipped copy says nothing in English that a person would read as unfinished", async () => {

@@ -945,6 +945,22 @@ An agent may list `skills:`, slugs of skills this package ships in `skills.yaml`
 does not ship, or the same slug twice, stops the server. Two agents with the same `id` in
 `agents.yaml` stop it as well.
 
+Every agent here is a catalogue Bot: it belongs to nobody, so with `TENANT_RUNTIME=device` it can
+never run computer actions on anybody's paired machine. The Bot that can is each person's own 分身
+(`avatar-<person>`), which provisioning makes and the person owns. A package does not declare it, but
+it may give it skills, with the same rules as an agent's list:
+
+```yaml
+avatar:
+  skills:
+    - bot-creator
+    - skill-creator
+```
+
+The grants are written for every person the package's channels are written for, in that person's
+own workspace, and taken back when the package stops naming a skill. A grant the person or an
+administrator made by hand survives.
+
 The two types are told different amounts, which is easy to miss. A `built-in` agent gets its
 `system_prompt`; a `remote-ag-ui` agent has none, and its `role_description` is the only instruction
 it ever receives from the package. Write that sentence as the whole brief for the Bot, not as a
@@ -1003,6 +1019,30 @@ channels:
 ```
 
 Each channel requires `id`, `name`, `description`, `permitted_agents`, and `allowed_groups`. Every `permitted_agents` entry must match an agent id. A channel `id` declared twice, or an agent listed twice in one channel, stops the server.
+
+`avatar: true` adds each person's own 分身 to the channel, next to `permitted_agents`. There is no
+single id to write for it, because it is a different Bot in every workspace, so it is resolved when
+the channel is copied into a person's workspace. A channel whose only answerer is the 分身 is a 1:1
+conversation with it, which is how `examples/qoderwake` makes 「我的分身」 every person's default
+conversation and lets it use their paired machine:
+
+```yaml
+  - id: avatar
+    name: 我的分身
+    description: 有事直接说，你自己的分身接；它能用你配对的电脑干活。
+    avatar: true
+    permitted_agents: []
+    allowed_groups: [all]
+```
+
+A person the package is applied for who has no 分身 stops the server with a message naming them,
+because their conversation would otherwise have nobody in it. The copy of the channel in the
+platform's own partition, written when the package is applied for nobody, has no 分身.
+
+The channel rows follow the package on every start: an existing person's copy of a channel takes the
+new name, description and answerers. A thread belongs to one Bot, so to move a conversation to a
+different Bot declare a new channel `id` rather than changing who answers an existing one; the old
+conversation and its history stay with the Bot that wrote them.
 
 `allowed_groups` is validated and stored, and nothing reads it. It decides nothing today, and a
 deployment that writes one must not treat it as an access control. Both halves of that control are

@@ -382,6 +382,15 @@ export function createHeadlessComputerTools(options: {
    * offered them. The gateway's approval gate still refuses each of them if called anyway.
    */
   disabled?: (toolRef: string) => boolean;
+  /**
+   * Where the file and command tools act: this deployment's own computer, or the person's paired
+   * machine (`TENANT_RUNTIME=device`). Only the descriptions change; the gateway decides the route.
+   *
+   * The model reads the description and nothing else about where a command lands. Told "bash in
+   * your workspace, use sudo apt-get", a 分身 on the first real paired Windows machine (2026-11-06)
+   * refused to run `hostname`, saying the result would come from its own container.
+   */
+  machine?: "workspace" | "device";
 }): HeadlessTool[] {
   const tools = headlessComputerTools(options);
   const { disabled } = options;
@@ -396,8 +405,13 @@ function headlessComputerTools(options: {
   actor: ActionActor;
   auditStore?: AuditStore;
   signIn?: HeadlessSignInRequester;
+  machine?: "workspace" | "device";
 }): HeadlessTool[] {
   const { gateway, botId, actor, auditStore, signIn } = options;
+  const onDevice = options.machine === "device";
+  const where = onDevice
+    ? "your workspace folder on the person's own paired machine (not a container of yours)"
+    : "your workspace";
   const snapshotId = z.number().int().positive();
   const ref = z.string().min(1);
   const text = z.string().min(1);
@@ -540,7 +554,7 @@ function headlessComputerTools(options: {
     ),
     tool(
       "computer_list_files",
-      "List files and folders in your workspace. Call first before reading an uncertain filename. To list one of the person's shared read-only folders instead, pass its root.",
+      `List files and folders in ${where}. Call first before reading an uncertain filename. To list one of the person's shared read-only folders instead, pass its root.`,
       z.strictObject({ path: z.string().optional(), root: folderRoot }),
       async (input) => ({
         ok: true,
@@ -549,7 +563,7 @@ function headlessComputerTools(options: {
     ),
     tool(
       "computer_read_file",
-      "Read a saved file relative to your persistent workspace, such as notes.md. To read from one of the person's shared read-only folders instead, pass its root and a path relative to that folder.",
+      `Read a saved file relative to ${onDevice ? where : "your persistent workspace"}, such as notes.md. To read from one of the person's shared read-only folders instead, pass its root and a path relative to that folder.`,
       z.strictObject({ path: text, root: folderRoot }),
       async (input) => ({
         ok: true,
@@ -558,7 +572,7 @@ function headlessComputerTools(options: {
     ),
     tool(
       "computer_write_file",
-      "Save text in your workspace. Set append to add to the end of an existing file.",
+      `Save text in ${where}. Set append to add to the end of an existing file.`,
       z.strictObject({
         path: text,
         contents: z.string(),
@@ -571,7 +585,9 @@ function headlessComputerTools(options: {
     ),
     tool(
       "computer_run_command",
-      "Run a bash shell command in your workspace. Pipes and && work; long output is truncated and long commands are stopped. For package installation use sudo apt-get; if refused say so rather than retrying.",
+      onDevice
+        ? `Run a shell command on the person's own paired machine, in ${where}: this is how you act on their computer when they ask. The machine may run Windows (PowerShell), macOS or Linux, so write the command for that system. Long output is truncated and long commands are stopped. A command that deletes recursively, formats a drive or names a file that may hold secrets waits for the person's approval; if refused say so rather than retrying.`
+        : "Run a bash shell command in your workspace. Pipes and && work; long output is truncated and long commands are stopped. For package installation use sudo apt-get; if refused say so rather than retrying.",
       z.strictObject({ command: text }),
       async (input, { signal }) => ({
         ok: true,

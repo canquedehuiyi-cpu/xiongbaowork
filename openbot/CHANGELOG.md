@@ -8,6 +8,40 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+## 0.2.1
+
+- **Approved actions now run, exactly once.** Before, an action a person approved (a dangerous
+  command or a sensitive-file read the floor held for approval) was never carried out on a production
+  deployment: resuming it needed a Root release attestation no deployment has, and the server logged
+  `approval-resume-gated` until the queue gave up. The server now settles an approved action on the
+  approval row itself: claimed once before it runs, its answer saved once before the conversation is
+  continued, and never run again after a crash (that ends as "outcome unknown"). Rejected actions
+  still never run. See `docs/restart-recovery.md`. No migration.
+- **Device mode tells the model where its commands run.** With `TENANT_RUNTIME=device` the file and
+  command tools now say they act on the person's own paired machine (Windows PowerShell, macOS or
+  Linux) instead of "bash in your workspace, use apt-get", which made a 分身 refuse to run commands on
+  a real paired Windows machine.
+- **Windows devices:** commands keep `COMPUTERNAME`, `USERNAME`, `ProgramFiles` and similar
+  non-secret variables (the user's own profile folders stay out), and PowerShell progress records no
+  longer reach stderr as CLIXML.
+- **Pairing card and model test button.** 「我的设备」 shows the server address and the pairing code as
+  the two fields the desktop app asks for; the command line moved under 「从源码运行设备端（开发者）」.
+  The model library's 「测试」 button sends `POST` (it sent `GET` and always failed).
+- **熊宝 package: the default conversation is each person's own 分身.** 「我的分身」 is now answered by
+  the person's own `avatar-<person>`, which can run computer actions on their paired machine; before,
+  it was the shared Bot `general-assistant`, which belongs to nobody and never could. That Bot is
+  renamed 「通用助手」, and the conversation that used to be called 「我的分身」 keeps its history under
+  that name. The 分身 is also given `bot-creator` and `skill-creator`, so coworkers and skills can still
+  be built in the default conversation. Packages can use the same mechanism: `avatar: true` on a
+  channel and `avatar.skills` in `agents.yaml` (see `docs/configuration.md`).
+- **With sign-in, every person gets a conversation with their own 分身, and it is the default.** The
+  first time a person's conversation list is read, a 「我的分身」 conversation with their own 分身 is
+  made if they never had one (one they deleted stays deleted). An older conversation still named after
+  their 分身 without it in it is renamed from its coworkers' current names. A message sent without
+  `@` now defaults to the person's own 分身 rather than the first shared coworker, in `/api/route` and
+  in the app. No migration: single-user deployments get it from the package sync on the next start,
+  and deployments with sign-in on each person's next visit.
+
 ## 0.2.0
 
 - **`TENANT_RUNTIME` now defaults to `device` in production (F6).** With `NODE_ENV=production` and no

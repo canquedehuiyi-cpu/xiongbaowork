@@ -604,3 +604,45 @@ test("human help creates a durable suspension, persists the waiting event, and r
   );
   expect(lockCalls).toEqual(["acquire", "cleanup"]);
 });
+
+test("on a paired machine the file and command tools say so; in the deployment's computer they do not", () => {
+  const { gateway } = computerHarness();
+  const describe = (machine?: "workspace" | "device") =>
+    Object.fromEntries(
+      headless
+        .createHeadlessComputerTools({
+          gateway,
+          botId: "bot",
+          actor: {
+            id: "owner",
+            userId: "owner",
+            initiator: { kind: "routine", id: "routine" },
+          },
+          ...(machine ? { machine } : {}),
+        })
+        .map((tool) => [tool.definition.name, tool.definition.description]),
+    ) as Record<string, string>;
+
+  // Device mode: the first real paired machine (2026-11-06) was Windows, and a 分身 told "bash in
+  // your workspace, use sudo apt-get" refused to run a command there, believing it would land in a
+  // container of its own.
+  const device = describe("device");
+  for (const name of [
+    "computer_run_command",
+    "computer_list_files",
+    "computer_read_file",
+    "computer_write_file",
+  ]) {
+    expect(device[name]).toContain("paired machine");
+  }
+  expect(device.computer_run_command).toContain("PowerShell");
+  expect(device.computer_run_command).not.toContain("apt-get");
+  expect(device.computer_run_command).not.toContain("bash");
+
+  // The deployment's own computer keeps its words, and so does an unspecified caller.
+  for (const workspace of [describe("workspace"), describe()]) {
+    expect(workspace.computer_run_command).toContain("bash");
+    expect(workspace.computer_run_command).not.toContain("paired machine");
+    expect(workspace.computer_list_files).not.toContain("paired machine");
+  }
+});

@@ -31,7 +31,7 @@ Release 附件 `container-images.json`，生成密钥，并把 `OPENBOT_IMAGE` �
 需要 curl、OpenSSL 和 jq。不设置 `OPENBOT_IMAGE` 时，Compose 使用只在源码构建后才存在的本机镜像，`up` 会失败。
 
 ```bash
-OPENBOT_TAG=v0.2.0
+OPENBOT_TAG=v0.2.1
 raw="https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/$OPENBOT_TAG/openbot/docker"
 mkdir -p docker
 curl --fail --silent --show-error --location -o docker/compose.delivery.yml "$raw/compose.delivery.yml"
@@ -159,6 +159,41 @@ BOT_MODEL=<供应商当前支持的准确模型名>
 不能承诺“设置 BOT_MODEL 后所有员工立即使用它”。修改环境配置后重新创建容器，`docker restart`
 不会读取已改的 env-file。B 线验证不发送对话，不使用任何真实 provider。
 
+### 5.1 首次真实部署实测要点（2026-11-06，京东云 Ubuntu 22.04，v0.2.0）
+
+以下各条都已在真实部署上遇到，并对照代码核实：
+
+1. **单容器镜像不带内置 Bot。**
+   - 新建员工时「内置」一项是灰的，提示「这个部署没有自带的员工可供运行」。原因是没有设置 `MANAGED_AGENT_AG_UI_URL`（见 `server/src/config.ts` 的 `managedAgentConfig`），内置 Bot 是 Compose 里单独的 `agent-bot` 服务。
+   - 单容器部署里能直接对话的是每个人的「我的分身」。它用的是部署级模型，即本节开头的 `OPENAI_BASE_URL`、`OPENAI_API_KEY` 和 `BOT_MODEL`。
+   - 品牌包里的公共员工（通用助手等）由系统统一管理，设置页只能看，会写「这位员工归别人所有」，模型显示为「外部托管模型」，这是正常现象。
+2. **模型库接入自己的密钥要看套餐。**
+   - 新租户默认是 Free 套餐，「能力与资源 → 模型」会提示「免费版只能使用平台体验模型」，接入按钮不可用。
+   - 管理员在 `/plans` 把工作空间切到允许「可接入自己的模型」的套餐即可。这里不涉及付费，切换立即生效。
+3. **v0.2.0 的模型「测试」按钮必然失败。**
+   - 不论密钥是否正确，都显示 "The connectivity test could not be run."，原因是前端发的是 GET，服务端只认 POST。
+   - canquedehuiyi-cpu/xiongbaowork#276 已修复，下一个镜像版本生效。在那之前，直接用对话来验证模型。
+4. **在服务器上写入密钥，不要把它打在命令里。**
+   - 用 `read -rsp "提示语" K` 读入，提示语原样保留，出现提示后只粘贴一次。粘两次会得到两倍长度的无效密钥，供应商会报 `Authentication Fails`。
+   - 可以只检查长度，不显示内容。DeepSeek 密钥是 35 位：
+
+     ```bash
+     awk -F= '/^OPENAI_API_KEY=/{print length(substr($0,16))}' /opt/xiongbao/.env.delivery
+     ```
+
+   - 密钥一旦出现在终端回显或聊天记录里，就到供应商后台删除并重建。
+5. **健康检查地址是 `/health`，不是 `/api/health`。** 后者会返回 404。
+6. **要在自己电脑上执行命令，得跟本人的「我的分身」说。**
+   - 生产默认 `TENANT_RUNTIME=device`：员工的电脑操作跑在这个员工**主人**配对的设备上（`server/src/devices/selection.ts`）。品牌包的公共员工不归任何人，所以永远用不了谁的电脑，会提示 "does not belong to a tenant with machines of its own."。
+   - v0.2.0 里侧栏那段「我的分身」对话（`/channel/channel_<uuid>`）其实由公共员工 `general-assistant` 接，它当时也叫「我的分身」，所以在这段对话里用不了电脑。这段对话是首页「开始新对话」不 @ 时默认交给第一个公共员工建出来的；多用户部署（`OPENBOT_SINGLE_USER=false`）不会给每个人建品牌包的对话。实测改为跟本人的分身（`avatar-<本人>`）对话后，命令在配对的 Windows 设备上跑通了。
+   - 已修复（#283、#286）：
+     - 公共员工改名「通用助手」，它的说明写明不代表任何人、用不了任何人的电脑。
+     - 每个人第一次打开应用（读对话列表）时，自动有一段和本人分身的对话「我的分身」；删掉的不会再补回来。
+     - 不 @ 时默认交给本人的分身，而不是第一个公共员工。
+     - 分身带上造员工、造技能的技能。
+     - 已有的人下次打开就会补上；旧的那段对话和群聊会按员工的当前名字改名（例如「通用助手」），员工和历史都不变。
+     - 单用户部署由品牌包同步在启动时处理。两种部署都不需要手工迁移。
+
 ## 6. 备份、恢复与升级
 
 至少备份数据库、两个同卷口令文件、workspace、profiles，以及原有 KEY_ENCRYPTION_KEY 和登录 secret。
@@ -191,7 +226,7 @@ Compose 把 `.env.delivery` 中的 `OPENBOT_IMAGE` 改为同样的 digest 引用
 部署和升级使用 digest，而不是可移动的标签；部署前可校验镜像由本仓库的发布流程构建。
 
 ```bash
-OPENBOT_TAG=v0.2.0
+OPENBOT_TAG=v0.2.1
 gh release download "$OPENBOT_TAG" -R canquedehuiyi-cpu/xiongbaowork --pattern container-images.json
 OPENBOT_IMAGE="$(jq -r .images.openbot.reference container-images.json)"
 gh attestation verify "oci://$OPENBOT_IMAGE" -R canquedehuiyi-cpu/xiongbaowork

@@ -3,14 +3,17 @@ import { randomUUID } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
 import { createDatabase } from "../src/db/client";
 import {
+  agentProfiles,
+  agents,
   channelAgents,
   channelMemberships,
   channels,
   intelligenceChannelMappings,
+  subscriptions,
   users,
 } from "../src/db/schema";
 import { runAsTenant } from "../src/tenant/context";
-import { packageChannelId } from "../src/tenant/provisioning";
+import { packageChannelId, provisionTenant } from "../src/tenant/provisioning";
 import {
   loadTenantPackage,
   synchronizeTenantPackage,
@@ -56,6 +59,15 @@ await runAsTenant(person, () =>
     name: "Package channel fixture",
   }),
 );
+/*
+ * Provisioned the way every arrival path does it before the package is applied: the package's default
+ * conversation is answered by this person's own 分身, which provisioning makes, so a person who was
+ * never provisioned is refused by the sync rather than handed a conversation with nobody in it.
+ */
+await provisionTenant(database, {
+  id: person,
+  email: `${person}@example.test`,
+});
 await applyPackage();
 
 afterAll(async () => {
@@ -77,9 +89,17 @@ afterAll(async () => {
         ]),
       );
   });
-  await runAsTenant(person, () =>
-    database.delete(users).where(eq(users.id, person)),
-  );
+  await runAsTenant(person, async () => {
+    // The 分身 and its subscription, which provisioning wrote; the 分身's grants go with it.
+    await database
+      .delete(agentProfiles)
+      .where(eq(agentProfiles.tenantId, person));
+    await database.delete(agents).where(eq(agents.tenantId, person));
+    await database
+      .delete(subscriptions)
+      .where(eq(subscriptions.tenantId, person));
+    await database.delete(users).where(eq(users.id, person));
+  });
   await database.$client.close();
 });
 
