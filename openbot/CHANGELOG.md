@@ -24,6 +24,15 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 - **Windows devices:** commands keep `COMPUTERNAME`, `USERNAME`, `ProgramFiles` and similar
   non-secret variables (the user's own profile folders stay out), and PowerShell progress records no
   longer reach stderr as CLIXML.
+- **A queued device action's outcome now reaches the conversation.** When the person's machine was
+  offline, a command was answered "queued" and later ran on reconnect, but nobody was told what
+  happened. Now the Bot posts one message in the conversation that asked: the exit code and a clipped,
+  scrubbed stdout/stderr, or that the outcome is unknown and the device is paused. Once per action,
+  across retries and replicas; nothing is re-run.
+- **通用助手 offers its 造员工 / 造技能 skills to signed-in people.** The package's grants on its
+  catalogue Bots are stamped `system`, and a person's frame read only their own grants, so the Bot held
+  nothing for them. They are now read alongside the person's own (read-only: a person cannot revoke or
+  overwrite them, and is told so).
 - **Pairing card and model test button.** 「我的设备」 shows the server address and the pairing code as
   the two fields the desktop app asks for; the command line moved under 「从源码运行设备端（开发者）」.
   The model library's 「测试」 button sends `POST` (it sent `GET` and always failed).
