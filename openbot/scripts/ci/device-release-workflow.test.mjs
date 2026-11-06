@@ -2,6 +2,8 @@
 // person's device-v* tag (or a manual run on one), every action is pinned to a commit, and an
 // unsigned installer can only ever be published as a prerelease. The decision steps are run here as
 // written in the workflow (bash, inputs from env), with a stub `gh` standing in for the release.
+// Its clean-machine checks live in scripts/ci/device-clean-{linux.sh,windows.ps1}, which ci.yml's
+// device-clean-linux and device-clean-windows also run on every pull request's unsigned installers.
 import { afterEach, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import {
@@ -36,18 +38,25 @@ function scratch() {
 /** A GitHub expression as the YAML spells it, e.g. `${{ vars.X }}`. */
 const expression = (inner) => `\${{ ${inner} }}`;
 
-function step(job, id) {
-  const found = workflow.jobs[job].steps.find((s) => s.id === id);
+function step(job, id, doc = workflow) {
+  const found = doc.jobs[job].steps.find((s) => s.id === id);
   if (!found) throw new Error(`no step ${id} in job ${job}`);
   return found;
 }
 
 /** Runs a workflow step's script the way GitHub runs `shell: bash`, with only `env` set. */
-function run(job, id, env, cwd = scratch(), path = process.env.PATH) {
+function run(
+  job,
+  id,
+  env,
+  cwd = scratch(),
+  path = process.env.PATH,
+  doc = workflow,
+) {
   const output = join(scratch(), "github-output");
   writeFileSync(output, "");
   const script = join(scratch(), "step.sh");
-  writeFileSync(script, step(job, id).run);
+  writeFileSync(script, step(job, id, doc).run);
   const result = spawnSync(
     "bash",
     ["--noprofile", "--norc", "-eo", "pipefail", script],
@@ -585,12 +594,97 @@ test("the release carries exactly the installers and their SHA256SUMS", () => {
 });
 
 const CLEAN = ["clean-linux", "clean-windows"];
+const openbotDir = join(root, "openbot");
+const linuxScriptPath = join(
+  openbotDir,
+  "scripts",
+  "ci",
+  "device-clean-linux.sh",
+);
+const windowsScriptPath = join(
+  openbotDir,
+  "scripts",
+  "ci",
+  "device-clean-windows.ps1",
+);
+const linuxScript = readFileSync(linuxScriptPath, "utf8");
+const windowsScript = readFileSync(windowsScriptPath, "utf8");
+const ciText = readFileSync(join(workflows, "ci.yml"), "utf8");
+const ci = Bun.YAML.parse(ciText);
+
+// Each clean-machine check is one phase of the shared script, run by one step, in this order, in both
+// device-release.yml and ci.yml.
+const LINUX_PHASES = [
+  "sums",
+  "install",
+  "files",
+  "selfcheck",
+  "server",
+  "lifecycle",
+  "stop-server",
+  "uninstall",
+  "result",
+];
+const WINDOWS_PHASES = [
+  "sums",
+  "signature",
+  "install",
+  "selfcheck",
+  "app",
+  "uninstall",
+  "result",
+];
+const LINUX_CALL = /^bash scripts\/ci\/device-clean-linux\.sh ([\w-]+)$/;
+const WINDOWS_CALL =
+  /^\.\/scripts\/ci\/device-clean-windows\.ps1 -Phase (\w+)(?: .*)?$/;
+
+/** The body of one phase of device-clean-linux.sh, `phase_<name>() { ... }`. */
+function linuxPhase(name) {
+  const found = linuxScript.match(
+    new RegExp(
+      `^phase_${name.replace("-", "_")}\\(\\) \\{\\n[\\s\\S]*?\\n\\}$`,
+      "m",
+    ),
+  );
+  if (!found) throw new Error(`no phase ${name} in device-clean-linux.sh`);
+  return found[0];
+}
+
+/** The body of one phase of device-clean-windows.ps1, `function Invoke-<Name> { ... }`. */
+function windowsPhase(name) {
+  const title = name[0].toUpperCase() + name.slice(1);
+  const found = windowsScript.match(
+    new RegExp(`^function Invoke-${title} \\{\\n[\\s\\S]*?\\n\\}$`, "m"),
+  );
+  if (!found) throw new Error(`no phase ${name} in device-clean-windows.ps1`);
+  return found[0];
+}
+
+/** The phases a job's steps run, in order. Every step that calls the script does only that. */
+function phases(job) {
+  return job.steps
+    .filter((s) => s.run?.includes("scripts/ci/device-clean-"))
+    .map((s) => {
+      const call = s.run.trim();
+      const found = call.match(LINUX_CALL) ?? call.match(WINDOWS_CALL);
+      expect([call, found !== null]).toEqual([call, true]);
+      return found[1];
+    });
+}
+
+function phaseStep(job, phase) {
+  return job.steps.find((s) => {
+    const call = s.run?.trim() ?? "";
+    return (call.match(LINUX_CALL) ?? call.match(WINDOWS_CALL))?.[1] === phase;
+  });
+}
 
 test("nothing is published until a fresh Ubuntu and a fresh Windows machine checked the exact files", () => {
   expect(workflow.jobs["clean-linux"]["runs-on"]).toBe("ubuntu-latest");
   expect(workflow.jobs["clean-windows"]["runs-on"]).toBe("windows-latest");
   for (const name of CLEAN) {
     const job = workflow.jobs[name];
+    const os = name.slice(6);
     expect(job.needs).toContain("assemble");
     expect(job.if).toContain("needs.assemble.result == 'success'");
     expect(job.if).toContain("!cancelled()");
@@ -604,17 +698,32 @@ test("nothing is published until a fresh Ubuntu and a fresh Windows machine chec
     );
     expect(download.with.name).toBe("device-release-dist");
     expect(job.steps.indexOf(download)).toBe(0);
+    expect(job.env.DIST).toBe(
+      `${expression("github.workspace")}/${download.with.path}/dist`,
+    );
+    // The scripts come from the tagged commit, checked out beside the artifact.
+    const checkout = job.steps[1];
+    expect(checkout.uses).toStartWith("actions/checkout@");
+    expect(checkout.with).toEqual({
+      ref: expression("github.sha"),
+      "persist-credentials": false,
+      path: "source",
+    });
+    expect(job.defaults.run["working-directory"]).toBe("source/openbot");
     const upload = job.steps.find(
       (s) =>
         s.uses?.startsWith("actions/upload-artifact@") &&
-        s.with.name === `device-clean-${name.slice(6)}-evidence`,
+        s.with.name === `device-clean-${os}-evidence`,
     );
     expect(upload).toBeDefined();
     expect(upload.if).toBe("always()");
+    expect(job.env.EVIDENCE).toBe(
+      `${upload.with.path}device-clean-${os}-evidence.txt`,
+    );
     // The record says RESULT: PASS only from the last unconditional step, which every check before it
     // had to pass to reach; steps after it run only on failure or only upload.
     const unconditional = job.steps.filter((s) => s.run && !s.if);
-    expect(unconditional.at(-1).run).toContain("RESULT: PASS");
+    expect(unconditional.at(-1)).toBe(phaseStep(job, "result"));
     for (const s of job.steps.slice(
       job.steps.indexOf(unconditional.at(-1)) + 1,
     ))
@@ -624,47 +733,59 @@ test("nothing is published until a fresh Ubuntu and a fresh Windows machine chec
       `needs.${name}.result == 'success'`,
     );
   }
+  expect(phases(workflow.jobs["clean-linux"])).toEqual(LINUX_PHASES);
+  expect(phases(workflow.jobs["clean-windows"])).toEqual(WINDOWS_PHASES);
+  for (const result of [linuxPhase("result"), windowsPhase("result")]) {
+    expect(result).toContain("RESULT: PASS");
+    expect(result).toContain("'^FAIL '");
+  }
   // Windows: the signature is held to what the windows job verified, and the install is silent.
   expect(workflow.jobs["clean-windows"].needs).toContain("windows");
   const signature = step("clean-windows", "signature");
   expect(signature.env.WINDOWS_SIGNED).toBe(
     expression("needs.windows.outputs.signed"),
   );
-  expect(signature.run).toContain("Get-AuthenticodeSignature");
-  expect(signature.run).toContain("'Valid'");
-  expect(signature.run).toContain("'NotSigned'");
-  expect(step("clean-windows", "sums").run).toContain("Get-FileHash");
-  expect(step("clean-windows", "install").run).toContain("-ArgumentList '/S'");
-  expect(step("clean-windows", "app").run).toContain(
-    "Get-Process -Name openbot-runner",
+  expect(signature.env.WINDOWS_PUBLISHER).toBe(
+    expression("needs.windows.outputs.publisher"),
   );
-  expect(step("clean-windows", "uninstall").run).toContain("uninstall.exe");
-  expect(step("clean-windows", "uninstall").run).toContain(
-    "-ArgumentList '/S'",
+  expect(signature.run).toContain("-Phase signature");
+  expect(signature.run).toContain("-ExpectedSigned $env:WINDOWS_SIGNED");
+  expect(signature.run).toContain("-ExpectedPublisher $env:WINDOWS_PUBLISHER");
+  const authenticode = windowsPhase("signature");
+  expect(authenticode).toContain("Get-AuthenticodeSignature");
+  expect(authenticode).toContain("'Valid'");
+  expect(authenticode).toContain("'NotSigned'");
+  expect(authenticode).toContain("$publisher -cne $ExpectedPublisher");
+  expect(authenticode).toContain(
+    "throw \"ExpectedSigned is '$ExpectedSigned', expected true or false.\"",
   );
+  expect(step("clean-windows", "sums").run).toContain("-Phase sums");
+  expect(windowsPhase("sums")).toContain("Get-FileHash");
+  expect(step("clean-windows", "install").run).toContain("-Phase install");
+  expect(windowsPhase("install")).toContain("-ArgumentList '/S'");
+  expect(step("clean-windows", "app").run).toContain("-Phase app");
+  expect(windowsPhase("app")).toContain("Get-Process -Name openbot-runner");
+  expect(step("clean-windows", "uninstall").run).toContain("-Phase uninstall");
+  expect(windowsPhase("uninstall")).toContain("uninstall.exe");
+  expect(windowsPhase("uninstall")).toContain("-ArgumentList '/S'");
   // Linux: apt installs it (and its Depends), the INSTALLED binaries are what the lifecycle runs, and
   // apt removes it.
-  const linux = workflow.jobs["clean-linux"].steps;
-  expect(
-    linux.some((s) =>
-      s.run?.includes(
-        'sudo apt-get install -y "./release/dist/xiongbao-device_$',
-      ),
-    ),
-  ).toBe(true);
-  const lifecycle = linux.find((s) =>
-    s.run?.includes("scripts/ci/device-clean-linux.sh"),
+  expect(step("clean-linux", "install").run).toContain(
+    "device-clean-linux.sh install",
   );
+  expect(linuxPhase("install")).toContain('sudo apt-get install -y "');
+  expect(linuxScript).toContain(`echo "xiongbao-device_\${VERSION}_amd64.deb"`);
+  const lifecycle = step("clean-linux", "lifecycle");
+  expect(lifecycle.run).toContain("device-clean-linux.sh lifecycle");
   expect(lifecycle.env.RUNNER_BIN).toBe("/usr/bin/openbot-runner");
   expect(lifecycle.env.APP_BIN).toBe("/usr/bin/xiongbao-device");
   expect(step("clean-linux", "uninstall").run).toContain(
+    "device-clean-linux.sh uninstall",
+  );
+  expect(linuxPhase("uninstall")).toContain(
     "sudo apt-get remove -y xiongbao-device",
   );
-  const lint = spawnSync(
-    "bash",
-    ["-n", join(root, "openbot", "scripts", "ci", "device-clean-linux.sh")],
-    { encoding: "utf8" },
-  );
+  const lint = spawnSync("bash", ["-n", linuxScriptPath], { encoding: "utf8" });
   expect(lint.status).toBe(0);
 });
 
@@ -672,28 +793,25 @@ function publishNeeds() {
   return workflow.jobs.publish.needs;
 }
 
-function cleanSums(files, sums) {
+/** The release's sums step as written, from openbot/ (its working directory), on a scratch dist. */
+function cleanSums(files, sums, env = { TAG: "device-v0.1.0" }) {
   const cwd = scratch();
   const temp = scratch();
-  mkdirSync(join(cwd, "release", "dist"), { recursive: true });
+  const dist = join(cwd, "release", "dist");
+  mkdirSync(dist, { recursive: true });
   for (const [name, content] of Object.entries(files))
-    writeFileSync(join(cwd, "release", "dist", name), content);
-  writeFileSync(join(cwd, "release", "dist", "SHA256SUMS"), sums);
-  const result = run(
-    "clean-linux",
-    "sums",
-    {
-      VERSION: "0.1.0",
-      TAG: "device-v0.1.0",
-      COMMIT: "abc",
-      RUNNER_TEMP: temp,
-    },
-    cwd,
-  );
+    writeFileSync(join(dist, name), content);
+  if (sums !== null) writeFileSync(join(dist, "SHA256SUMS"), sums);
   const file = join(
     temp,
     "device-clean-linux",
     "device-clean-linux-evidence.txt",
+  );
+  const result = run(
+    "clean-linux",
+    "sums",
+    { VERSION: "0.1.0", COMMIT: "abc", DIST: dist, EVIDENCE: file, ...env },
+    openbotDir,
   );
   return {
     ...result,
@@ -709,6 +827,7 @@ test("the Linux check verifies the deb against SHA256SUMS before anything is ins
   const sums = `${hash("deb")}  ${deb}\n${hash("exe")}  ${exe}\n`;
   const ok = cleanSums({ [deb]: "deb", [exe]: "exe" }, sums);
   expect(ok.status).toBe(0);
+  expect(ok.evidence).toContain("标签 device-v0.1.0，提交 abc");
   expect(ok.evidence).toContain(`SHA256：${hash("deb")}`);
   expect(ok.evidence).toContain("PASS SHA256SUMS");
   expect(ok.evidence).toContain("checksum-only");
@@ -727,4 +846,179 @@ test("the Linux check verifies the deb against SHA256SUMS before anything is ins
       `${hash("deb")}  ${deb}\n${hash("deb")}  ${deb}\n`,
     ).status,
   ).not.toBe(0);
+  // No SHA256SUMS at all: nothing is installed either.
+  const missing = cleanSums({ [deb]: "deb" }, null);
+  expect(missing.status).not.toBe(0);
+  expect(missing.evidence).toContain("FAIL ");
+});
+
+test("RESULT: PASS is written only when no check wrote FAIL", () => {
+  const verdict = (content) => {
+    const file = join(scratch(), "evidence.txt");
+    if (content !== null) writeFileSync(file, content);
+    const result = run("clean-linux", "result", { EVIDENCE: file }, openbotDir);
+    return {
+      status: result.status,
+      evidence: existsSync(file) ? readFileSync(file, "utf8") : "",
+    };
+  };
+  const passed = verdict("header\nPASS a\nPASS b\n");
+  expect(passed.status).toBe(0);
+  expect(passed.evidence.trimEnd().split("\n").at(-1)).toBe("RESULT: PASS");
+  const failed = verdict("header\nPASS a\nFAIL b\n");
+  expect(failed.status).not.toBe(0);
+  expect(failed.evidence).not.toContain("RESULT: PASS");
+  expect(verdict(null).status).not.toBe(0);
+});
+
+test("every pull request runs the same clean-machine phases on the unsigned CI installers", () => {
+  const lanes = [
+    [
+      "device-clean-linux",
+      "clean-linux",
+      "device-bundle-linux",
+      "ubuntu-latest",
+      "linux",
+      LINUX_PHASES,
+    ],
+    [
+      "device-clean-windows",
+      "clean-windows",
+      "device-bundle-windows",
+      "windows-latest",
+      "windows",
+      WINDOWS_PHASES,
+    ],
+  ];
+  for (const [name, release, bundle, runner, os, expected] of lanes) {
+    const job = ci.jobs[name];
+    expect(job.name).toBe(`device clean-machine install (${runner})`);
+    expect(job["runs-on"]).toBe(runner);
+    expect([job.needs].flat()).toEqual([bundle]);
+    expect(job.if).toBeUndefined();
+    expect(job.permissions).toEqual({ contents: "read" });
+    expect(job.environment).toBeUndefined();
+    expect(secretPaths(job)).toEqual([]);
+    expect(job["timeout-minutes"]).toBeGreaterThan(0);
+    expect(job["timeout-minutes"]).toBeLessThanOrEqual(60);
+    // The installer the bundle job built and uploaded on this run, not a rebuild.
+    const uploaded = ci.jobs[bundle].steps
+      .filter((s) => s.uses?.startsWith("actions/upload-artifact@"))
+      .map((s) => s.with.name);
+    const download = job.steps.find((s) =>
+      s.uses?.startsWith("actions/download-artifact@"),
+    );
+    expect(download.with.name).toStartWith("xiongbao-device-unsigned-");
+    expect(uploaded).toContain(download.with.name);
+    // CI uploads no SHA256SUMS: a stage step writes one for the download, then the same phases run,
+    // in the same order and by the same script as in the release job.
+    const stage = job.steps.findIndex((s) => s.id === "stage");
+    expect(stage).toBeGreaterThan(job.steps.indexOf(download));
+    expect(stage).toBeLessThan(job.steps.indexOf(phaseStep(job, "sums")));
+    expect(job.steps[stage].run).toContain("SHA256SUMS");
+    expect(phases(job)).toEqual(expected);
+    expect(phases(workflow.jobs[release])).toEqual(expected);
+    // The evidence is uploaded under a name of its own: device-release.yml calls ci.yml, and its
+    // clean-linux and clean-windows upload device-clean-<os>-evidence in the same run.
+    const upload = job.steps.find((s) =>
+      s.uses?.startsWith("actions/upload-artifact@"),
+    );
+    expect(upload.if).toBe("always()");
+    expect(upload.with.name).toBe(`device-clean-${os}-ci-evidence`);
+    expect(job.env.EVIDENCE).toBe(
+      `${upload.with.path}device-clean-${os}-evidence.txt`,
+    );
+    const unconditional = job.steps.filter((s) => s.run && !s.if);
+    expect(unconditional.at(-1)).toBe(phaseStep(job, "result"));
+    for (const s of job.steps.slice(
+      job.steps.indexOf(unconditional.at(-1)) + 1,
+    ))
+      expect(["always()", "failure()"]).toContain(s.if);
+    // The file's conventions: inputs through env only, bash with openbot/ as the working directory,
+    // and every PowerShell step says so itself.
+    expect(job.defaults.run["working-directory"]).toBe("openbot");
+    for (const s of job.steps) {
+      if (s.run === undefined) continue;
+      expect(s.run).not.toContain(expression("").slice(0, 3));
+      expect(s["continue-on-error"]).toBeUndefined();
+      const label = `${name}: ${s.name ?? s.id}`;
+      if (os === "windows") expect([label, s.shell]).toEqual([label, "pwsh"]);
+      else
+        expect([label, s.shell ?? job.defaults.run.shell]).toEqual([
+          label,
+          "bash",
+        ]);
+    }
+  }
+  // A CI build is never signed, so NotSigned is what the signature phase must see.
+  expect(step("device-clean-windows", "signature", ci).run).toBe(
+    "./scripts/ci/device-clean-windows.ps1 -Phase signature -ExpectedSigned false",
+  );
+  // Linux pairs the installed runner with the same server and database recipe as the release job.
+  const linux = ci.jobs["device-clean-linux"];
+  const releaseLinux = workflow.jobs["clean-linux"];
+  expect(linux.services).toEqual(releaseLinux.services);
+  for (const key of [
+    "PGPASSWORD",
+    "OWNER_DATABASE_URL",
+    "APP_DATABASE_URL",
+    "ROLE_WRITER_URL",
+    "ORIGIN",
+    "LOG_DIR",
+  ])
+    expect([key, linux.env[key]]).toEqual([key, releaseLinux.env[key]]);
+  expect(step("device-clean-linux", "lifecycle", ci).env).toEqual(
+    step("clean-linux", "lifecycle").env,
+  );
+});
+
+test("the CI deb is staged under its release name with a SHA256SUMS the sums phase accepts", () => {
+  const stage = (debs) => {
+    const cwd = scratch();
+    const download = join(cwd, "download");
+    const dist = join(cwd, "dist");
+    const githubEnv = join(cwd, "github-env");
+    mkdirSync(download);
+    writeFileSync(githubEnv, "");
+    writeFileSync(
+      join(cwd, "package.json"),
+      JSON.stringify({ version: "0.1.0" }),
+    );
+    for (const deb of debs) writeFileSync(join(download, deb), `deb ${deb}`);
+    const result = run(
+      "device-clean-linux",
+      "stage",
+      { DOWNLOAD: download, DIST: dist, GITHUB_ENV: githubEnv },
+      cwd,
+      process.env.PATH,
+      ci,
+    );
+    return { ...result, dist, githubEnv };
+  };
+  const ok = stage(["熊宝数字员工 设备端_0.1.0_amd64.deb"]);
+  expect(ok.status).toBe(0);
+  expect(readFileSync(ok.githubEnv, "utf8")).toBe("VERSION=0.1.0\n");
+  const deb = "xiongbao-device_0.1.0_amd64.deb";
+  expect(readFileSync(join(ok.dist, deb), "utf8")).toBe(
+    "deb 熊宝数字员工 设备端_0.1.0_amd64.deb",
+  );
+  expect(readFileSync(join(ok.dist, "SHA256SUMS"), "utf8")).toMatch(
+    new RegExp(`^[0-9a-f]{64} {2}${deb.replaceAll(".", "\\.")}\\n$`),
+  );
+  const evidence = join(scratch(), "evidence.txt");
+  const sums = run(
+    "device-clean-linux",
+    "sums",
+    { VERSION: "0.1.0", COMMIT: "abc", DIST: ok.dist, EVIDENCE: evidence },
+    openbotDir,
+    process.env.PATH,
+    ci,
+  );
+  expect(sums.status).toBe(0);
+  const record = readFileSync(evidence, "utf8");
+  expect(record).toContain("CI 构建的未签名安装包（不发布），提交 abc");
+  expect(record).toContain("PASS SHA256SUMS");
+  // None, or more than one deb in the artifact: nothing is staged.
+  expect(stage([]).status).not.toBe(0);
+  expect(stage(["a_0.1.0_amd64.deb", "b_0.1.0_amd64.deb"]).status).not.toBe(0);
 });
