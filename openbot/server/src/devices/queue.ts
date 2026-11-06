@@ -3,7 +3,7 @@ import { actionFingerprint } from "../../../shared/runner-actions";
 export { actionFingerprint } from "../../../shared/runner-actions";
 
 import { randomUUID } from "node:crypto";
-import { and, count, eq, isNull, sql } from "drizzle-orm";
+import { and, count, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { workItems } from "../db/schema";
 import { runAsTenant } from "../tenant/context";
@@ -16,7 +16,56 @@ export const QUEUE_ATTENTION_THRESHOLD = 20;
 const LEASE_MS = 120_000;
 const UNKNOWN = "outcome_unknown";
 
-export type QueuedAction = { key: string; action: string; payload: unknown };
+/**
+ * Who was told "queued" and where, so the outcome can reach that conversation once it is known.
+ *
+ * Held by the server from the governed call that queued the action (the Bot, the person, the run's
+ * thread), never read from the action's own payload, and kept beside the action rather than inside
+ * it: it is not part of what the machine is asked to do, nor of the fingerprint that fences a
+ * different request reusing the same key.
+ */
+export type QueuedOrigin = {
+  botId: string;
+  actorId: string;
+  threadId: string;
+  toolCallId?: string;
+};
+export type QueuedAction = {
+  key: string;
+  action: string;
+  payload: unknown;
+  origin?: QueuedOrigin;
+};
+/** A concluded queued action whose outcome is owed to the conversation that asked for it. */
+export type QueuedNotice = {
+  key: string;
+  action: string;
+  payload: unknown;
+  origin: QueuedOrigin;
+  receipt: ActionReceipt;
+};
+const NOTICE_LEASE_MS = 120_000;
+const NOTICE_BATCH = 25;
+const ORIGIN_FIELD_MAX = 512;
+
+function originOf(value: unknown): QueuedOrigin | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const body = value as Record<string, unknown>;
+  const field = (name: string) => {
+    const text = body[name];
+    return typeof text === "string" &&
+      text.trim() !== "" &&
+      text.length <= ORIGIN_FIELD_MAX
+      ? text
+      : null;
+  };
+  const botId = field("botId");
+  const actorId = field("actorId");
+  const threadId = field("threadId");
+  if (!botId || !actorId || !threadId) return null;
+  const toolCallId = field("toolCallId");
+  return { botId, actorId, threadId, ...(toolCallId ? { toolCallId } : {}) };
+}
 export class DeviceDeliveryError extends Error {
   constructor(
     message: string,
@@ -70,6 +119,25 @@ export type DeviceQueue = {
     owner: string,
     execute: (item: QueuedAction) => Promise<unknown>,
   ) => Promise<number>;
+  /**
+   * Lease the concluded actions whose outcome has not yet been told to the conversation that queued
+   * them. A lease, not a flag, so two replicas flushing the same device never both hold one, and a
+   * process that dies holding it gives it back when the lease runs out.
+   */
+  claimNotices: (
+    target: DispatchTarget,
+    owner: string,
+  ) => Promise<QueuedNotice[]>;
+  /**
+   * Settle a leased notice: `posted` or `skipped` is final, `null` hands it back to be tried again.
+   * False when the lease was no longer this owner's.
+   */
+  settleNotice: (
+    target: DispatchTarget,
+    key: string,
+    owner: string,
+    outcome: "posted" | "skipped" | null,
+  ) => Promise<boolean>;
 };
 
 /**
@@ -232,6 +300,7 @@ export function createDeviceQueue(database: Database): DeviceQueue {
           return "already";
         }
         await assertUnpaused(tx, target);
+        const origin = originOf(item.origin);
         await tx.insert(workItems).values({
           tenantId: target.tenantId,
           kind: runnerQueueKind(target),
@@ -242,6 +311,7 @@ export function createDeviceQueue(database: Database): DeviceQueue {
             action: item.action,
             payload: item.payload ?? null,
             fingerprint,
+            ...(origin ? { origin } : {}),
           },
         });
         return "queued";
@@ -450,6 +520,59 @@ export function createDeviceQueue(database: Database): DeviceQueue {
         done += 1;
       }
       return done;
+    },
+    async claimNotices(target, owner) {
+      const rows = await withDevice(target, async (tx) => {
+        const due = sql`${workItems.key} in (select ${workItems.key} from ${workItems} where ${and(
+          deviceMatch(target),
+          isNotNull(workItems.finishedAt),
+          sql`${workItems.payload}->'origin' is not null`,
+          sql`(${workItems.payload}->'notice' is null or (${workItems.payload}->'notice'->>'state' = 'leased' and (${workItems.payload}->'notice'->>'until')::timestamptz <= now()))`,
+        )} order by ${workItems.finishedAt}, ${workItems.key} limit ${NOTICE_BATCH})`;
+        return tx
+          .update(workItems)
+          .set({
+            payload: sql`${workItems.payload} || jsonb_build_object('notice', jsonb_build_object('state', 'leased', 'by', ${owner}::text, 'until', now() + make_interval(secs => ${NOTICE_LEASE_MS / 1000})))`,
+            updatedAt: sql`now()`,
+          })
+          .where(and(deviceMatch(target), due))
+          .returning();
+      });
+      return rows.flatMap((row) => {
+        const body = row.payload as Record<string, unknown>;
+        const origin = originOf(body.origin);
+        if (!origin) return [];
+        return [
+          {
+            key: row.key.slice(`${runnerQueueKind(target)}:`.length),
+            action: String(body.action ?? ""),
+            payload: body.payload,
+            origin,
+            receipt: receiptOf(row),
+          },
+        ];
+      });
+    },
+    async settleNotice(target, key, owner, outcome) {
+      const [row] = await withDevice(target, (tx) =>
+        tx
+          .update(workItems)
+          .set({
+            payload: outcome
+              ? sql`${workItems.payload} || jsonb_build_object('notice', jsonb_build_object('state', ${outcome}::text, 'at', now()))`
+              : sql`${workItems.payload} - 'notice'`,
+            updatedAt: sql`now()`,
+          })
+          .where(
+            and(
+              match(target, key),
+              sql`${workItems.payload}->'notice'->>'state' = 'leased'`,
+              sql`${workItems.payload}->'notice'->>'by' = ${owner}::text`,
+            ),
+          )
+          .returning({ key: workItems.key }),
+      );
+      return !!row;
     },
   };
   return self;

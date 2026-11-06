@@ -226,6 +226,10 @@ import { createDemonstrationRecorder } from "./demonstrations/recording";
 import { createDemonstrationStore } from "./demonstrations/store";
 import { createDeviceChannel, type DispatchTarget } from "./devices/channel";
 import { createDeviceQueue } from "./devices/queue";
+import {
+  createQueuedResultNotices,
+  createThreadResultPoster,
+} from "./devices/queued-results";
 import { createDeviceRoutes, createRunnerRoutes } from "./devices/routes";
 import { createDeviceScreens } from "./devices/screen";
 import { createDeviceTakeovers } from "./devices/takeover";
@@ -546,9 +550,17 @@ await startupLifecycle.run(async (startup) => {
    */
 
   const deviceQueue = createDeviceQueue(database);
+  /*
+   * Told after every flush, so the outcome of an action that waited for an away machine reaches the
+   * conversation that queued it. Assigned once the thread runner exists, further down.
+   */
+  let queuedResults:
+    | ReturnType<typeof createQueuedResultNotices>
+    | undefined;
   const deviceChannel = createDeviceChannel({
     queue: deviceQueue,
     authorize: (target, version) => deviceStore.isRegistered(target, version),
+    afterFlush: async (target) => queuedResults?.announce(target),
   });
   /*
    * The live screen of a coworker on one of those machines (F2 stage 2): frames up the runner's
@@ -2211,6 +2223,34 @@ await startupLifecycle.run(async (startup) => {
     // a conversation that happened without a device still happened (ticket 017).
     deviceIdForBot,
   );
+
+  /*
+   * A queued device action's outcome, posted by its Bot into the conversation that queued it, through
+   * this same runner so it is an ordinary turn of that conversation. The roster is bumped the way a
+   * relayed handoff answer bumps it.
+   */
+  queuedResults = createQueuedResultNotices({
+    queue: deviceQueue,
+    post: createThreadResultPoster({
+      database,
+      runner: localThreadRunner,
+      announce: async ({ origin, text }) => {
+        const [mapped] = await database
+          .select({ channelId: intelligenceChannelMappings.channelId })
+          .from(intelligenceChannelMappings)
+          .where(eq(intelligenceChannelMappings.threadId, origin.threadId))
+          .limit(1);
+        if (!mapped) return;
+        const actor = await actorFor(origin.actorId).catch(() => null);
+        if (!actor) return;
+        await channelStore.recordActivity(actor, mapped.channelId, {
+          text,
+          agentId: origin.botId,
+          at: new Date(),
+        });
+      },
+    }),
+  });
 
   const routineIntelligence: ThreadPlatform =
     createLocalThreadPlatform(localThreadRunner);
