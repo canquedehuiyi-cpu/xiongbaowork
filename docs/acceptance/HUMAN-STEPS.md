@@ -20,6 +20,7 @@
 | 10 G7 | Linux 已完成，Windows 待做 | `v0.2.0` 发布运行 41989346546 里 `g7-linux` 内置库、外部库两个 job 都通过 |
 | 11 G5 真机 | 待做 | 需要一台真实电脑 |
 | 12 F2 设备端 | 未签名内测版已发；全新机器安装检查已在 CI 自动通过；签名与真人电脑证据待人工 | `device-v0.2.0-rc.1` 的 Windows job 失败，已由 canquedehuiyi-cpu/xiongbaowork#250 修复；`device-v0.2.0-rc.2` → 「熊宝设备端发布」运行 41963394570 全绿，预发布「熊宝数字员工 设备端 0.2.0（未签名内测版）」含 Windows 安装包、Linux deb 和 `SHA256SUMS`（下载复核通过）。签名身份（D3，12.2/12.4）和两台干净机器证据（12.6）待人工 |。全新托管机器（Ubuntu、Windows）上的安装、配对、启动退出、卸载检查已在 #266 的 CI 上首次实跑通过，此后每个 PR 和每次设备端发布都会跑
+| 13 Google Drive 来源 | 待做 | 需要人在 Google Cloud 建 OAuth 客户端并在「插件」页登记，见第 13 节 |
 
 ## 1. 把 `main` 设为默认分支
 
@@ -282,3 +283,20 @@ Settings → Environments → New environment，名称填 `device-release`：
 - 第 7 步卸载：Linux `sudo apt-get remove -y xiongbao-device`，Windows `uninstall.exe /S`，都确认程序文件（和 Windows 卸载项）已删除、没有残留进程。
 
 **仍然要人来做的部分**：在真实用户自己的电脑上（不是托管 CI 机器）按上面 1–7 步走一遍；Windows「属性 → 数字签名」页或 SmartScreen 提示的截图；真机重启后不重新配对、设备自动上线（含开机自启）；用真实模型驱动的员工在设备上执行一个普通命令并截图；macOS（若发布）的 `spctl --assess`。托管机器预装了很多软件，也不是普通用户的桌面环境，所以自动记录只能替代"文件对不对、装得上、跑得起来、退得干净、卸得掉"这部分，不能替代真机证据。
+
+## 13. F1：上架 Google Drive 信息来源
+
+「我的分身」可以把 Google Drive 当作信息来源（F1 的 S4 连接器来源）。代码已在 `main` 上：目录条目 `google-drive`（`server/src/plugins/catalogue.ts`），走 Google Drive v3 REST、只读权限 `drive.readonly`，每个人连自己的账号。缺的是一个 **Google OAuth 客户端**：它属于部署方的 Google Cloud 账号，只能由人在 Google 那边建，然后在管理后台登记。
+
+1. **建 OAuth 客户端**（Google Cloud Console，用你自己的 Google 账号）：
+   1. 新建或选一个项目，在「API 和服务 → 库」里启用 **Google Drive API**。
+   2. 「OAuth 同意屏幕」：用户类型选「外部」（或公司 Workspace 内部用选「内部」），填应用名「熊宝数字员工」、支持邮箱；范围里加 `https://www.googleapis.com/auth/drive.readonly`；发布前在「测试用户」里加上要先试用的人的邮箱。
+   3. 「凭据 → 创建凭据 → OAuth 客户端 ID」，应用类型选 **Web 应用**，「已获授权的重定向 URI」填：`<你的部署地址>/api/plugins/oauth/callback`（就是 `OPENBOT_PUBLIC_URL` 加这个路径，例如 `https://xiongbao.example.com/api/plugins/oauth/callback`，地址必须完全一致）。
+   4. 记下 **客户端 ID** 和 **客户端密钥**。密钥只填到下一步的页面里，不要发给任何人、不要写进仓库或聊天。
+2. **在管理后台登记**（用管理员账号登录部署）：管理后台 → 「员工能做什么 → 插件」→ 找到 **Google Drive** → 添加 → 在「连接」一节的「OAuth 客户端」里填入客户端 ID 和密钥并保存，状态显示「已登记」。
+3. **每个人连自己的账号**：先在「设置 › 已连接的账号」里连接 Google Drive，用自己的 Google 账号授权；再到「我的分身」详情页的「信息来源」里添加一条「连接器」来源，选 Google Drive 并保存。分身只看得到这个人自己有权限看的文件。
+4. **怎么算完成**：一个测试用户连上 Drive 后，问分身一个只有自己 Drive 里某份文档才答得出的问题，回答里能看到引用了那份文档；换另一个没有这份文档权限的人问，答不出来。截图存档，然后告诉我，我把证据写进 `STORIES.md` 的 F1 行。
+5. 应用要给「测试用户」以外的人用，需要在「OAuth 同意屏幕」点「发布应用」；`drive.readonly` 属于敏感范围，Google 可能要求验证，审核时间以 Google 为准。
+
+OneDrive 不在平台目录里，这一步只涉及 Google Drive。
+
