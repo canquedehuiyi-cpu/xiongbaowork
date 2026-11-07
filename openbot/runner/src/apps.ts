@@ -41,7 +41,15 @@ export type AppEntry =
     }
   | { ref: string; name: string; kind: "http"; url: string; enabled: boolean };
 
-export type AppInput = Omit<AppEntry, "ref" | "enabled"> & {
+/**
+ * `Omit` on a union collapses it to the keys every member shares, which would erase `command` and
+ * `url`; omitting from each member keeps the two kinds distinct.
+ */
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
+  ? Omit<T, K>
+  : never;
+
+export type AppInput = DistributiveOmit<AppEntry, "ref" | "enabled"> & {
   enabled?: boolean;
 };
 

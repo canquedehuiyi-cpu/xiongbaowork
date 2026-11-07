@@ -1,5 +1,11 @@
 import { afterAll, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import {
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { APP_REF, createAppRegistry } from "../src/apps";
@@ -128,4 +134,27 @@ test("persists across registry instances", () => {
   const again = createAppRegistry({ dataDir });
   expect(again.list()).toEqual([entry, { ...http, enabled: false }]);
   expect(again.reported()).toEqual([{ ref: entry.ref, name: "持久" }]);
+});
+
+test("names are unique regardless of case", () => {
+  const { apps } = machine();
+  apps.add(stdio("Figma"));
+  expect(() => apps.add(stdio("figma"))).toThrow("重名");
+  expect(apps.byName("FIGMA")?.name).toBe("Figma");
+});
+
+test("a hand-edited non-loopback http url is dropped on load", () => {
+  const { dataDir, apps } = machine();
+  apps.add({ name: "好的", kind: "http", url: "http://localhost:1/mcp" });
+  apps.add({ name: "被改", kind: "http", url: "http://localhost:2/mcp" });
+  const file = join(dataDir, "runner-apps.json");
+  writeFileSync(
+    file,
+    readFileSync(file, "utf8").replace(
+      "http://localhost:2/mcp",
+      "http://example.com/mcp",
+    ),
+  );
+  expect(apps.list().map((app) => app.name)).toEqual(["好的"]);
+  expect(apps.byName("被改")).toBeUndefined();
 });
