@@ -48,6 +48,8 @@ test("a url is accepted only as http or https on this computer", () => {
     "http://127.0.0.1:8080/mcp",
     "https://localhost/mcp",
     "http://[::1]:3000",
+    "http://LOCALHOST:3845/mcp",
+    "http://127.0.0.1:65535",
   ]) {
     expect(validateUrl(ok)).toEqual({ ok: true, value: ok });
   }
@@ -59,6 +61,8 @@ test("a url is accepted only as http or https on this computer", () => {
     "http://192.168.1.5:8080",
     "http://0.0.0.0:8080",
     "http://localhost.evil.com",
+    "http://127.0.0.1@evil.com",
+    "http://localhost:99999",
   ]) {
     expect(validateUrl(bad)).toMatchObject({ ok: false });
   }
@@ -158,6 +162,9 @@ test("remove, enable and test go to their commands", async () => {
     ["set_app_enabled", { target: "app_x", enabled: false }],
     ["test_app", { target: "app_x" }],
   ]);
+  expect(await testApp("app_x", async () => ({ count: 0 }))).toEqual({
+    message: "连接成功，找到 0 个工具",
+  });
   expect(tested).toEqual({ message: "连接成功，找到 2 个工具：a、b" });
   expect(
     await testApp("app_x", async () => {
