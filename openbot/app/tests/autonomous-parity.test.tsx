@@ -10,6 +10,7 @@ import {
   RouterProvider,
 } from "@tanstack/react-router";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -648,4 +649,59 @@ test("a failed automation read says so with a retry, and the other rows stay", a
   await user.click(within(alert).getByRole("button", { name: "重试" }));
   expect(await view.findByText("Weekly report")).toBeTruthy();
   await waitFor(() => expect(view.queryByRole("alert")).toBeNull());
+});
+
+/*
+ * Request volume (deferred review finding, PR #296). The list endpoint carries no triggers, so the
+ * unified list reads each automation's detail once. It must not then poll every detail every five
+ * minutes, nor poll 长期职责 every ten seconds the way the /responsibilities page does: a detail is
+ * read again only when the list shows that automation changed.
+ */
+test("the unified list reads automation details without polling them, and responsibilities slowly", async () => {
+  serve();
+  const { view, queryClient } = draw();
+  await view.findByRole("heading", { level: 1, name: "自主工作" });
+  for (const automation of AUTOMATIONS) {
+    const query = queryClient
+      .getQueryCache()
+      .find({ queryKey: automationKeys.detail(automation.id) });
+    const intervals = query?.observers.map(
+      (observer) => observer.options.refetchInterval,
+    );
+    expect(intervals?.length).toBeGreaterThan(0);
+    expect(intervals?.every((interval) => interval === false)).toBe(true);
+  }
+  const duties = queryClient
+    .getQueryCache()
+    .find({ queryKey: responsibilityKeys.all });
+  expect(
+    duties?.observers.map((observer) => observer.options.refetchInterval),
+  ).toEqual([60_000]);
+});
+
+test("an automation's detail is read again when the list shows it ran, and only that one", async () => {
+  serve();
+  const { view, queryClient } = draw();
+  await view.findByRole("heading", { level: 1, name: "自主工作" });
+  const [first, second] = AUTOMATIONS;
+  if (!first || !second) throw new Error("fixture needs two automations");
+  calls.length = 0;
+  act(() => {
+    queryClient.setQueryData(
+      automationKeys.list(),
+      AUTOMATIONS.map((entry) =>
+        entry.id === first.id
+          ? { ...entry, runCount: entry.runCount + 1 }
+          : entry,
+      ),
+    );
+  });
+  await waitFor(() =>
+    expect(calls.map((call) => call.path)).toContain(
+      `/api/automations/${first.id}`,
+    ),
+  );
+  expect(calls.map((call) => call.path)).not.toContain(
+    `/api/automations/${second.id}`,
+  );
 });
