@@ -20,6 +20,7 @@ import { cleanup, render, waitFor } from "@testing-library/react";
 import { type AgentProfile, agentKeys } from "@/lib/agents/queries";
 import { Route as AgentsRoute } from "@/routes/_authed/_app/agents/index";
 import { Route as HomeRoute } from "@/routes/_authed/_app/index";
+import { Route as WakersRoute } from "@/routes/_authed/_app/wakers";
 
 /**
  * Both agent-facing screens read the same `agentListQueryOptions()` query, and both drew their
@@ -36,6 +37,13 @@ import { Route as HomeRoute } from "@/routes/_authed/_app/index";
  * `query-client.ts`) retries once, which is correct for production and would just slow this test
  * down for no assertion it needs. Both screens are exercised through their real, exported `Route`,
  * not a stand-in; see `renderAgents` below for what that costs on `/agents`.
+ *
+ * `/agents` (员工列表) is archived into `/wakers` (员工管理): the route now only redirects, with its
+ * `?new` / `?agent` parameters carried over, and the wall there carries what this roster said (已置顶,
+ * 共享给你, 已隐藏, and an 编辑 per card). The `/agents` tests below therefore enter at `/agents`,
+ * follow the real redirect, and hold the wall to the same promises the roster made: a failure is
+ * said as a failure, loading is a skeleton, a failed background refetch keeps the cached roster, and
+ * hidden and pinned employees stay visible and reachable.
  */
 
 beforeAll(() => GlobalRegistrator.register());
@@ -145,7 +153,8 @@ function renderHome(queryClient: QueryClient) {
 }
 
 /**
- * `/agents`'s component calls `Route.useSearch()` and `Route.useNavigate()`, which read `this.id`
+ * `/wakers`'s component (which `/agents` redirects to) calls `Route.useSearch()` and `useNavigate()`,
+ * which read `this.id`
  * off the very `Route` singleton the source file exports — so, unlike `/`, a bare root standing in
  * for it is not enough; those hooks fail to resolve a match unless that exact object is present in
  * the router's tree with the id it expects.
@@ -225,15 +234,20 @@ function restoreRouteState(
  * `options` clone each time, so the constant itself is never written to after this line.
  */
 const pristineAgentsRouteState = captureRouteState(AgentsRoute);
+/** The same fixed point for `/wakers`, which `renderAgents` now wires in as the redirect's target. */
+const pristineWakersRouteState = captureRouteState(WakersRoute);
 
 let agentsRouteSnapshot: Record<string, unknown>;
+let wakersRouteSnapshot: Record<string, unknown>;
 
 beforeEach(() => {
   agentsRouteSnapshot = captureRouteState(pristineAgentsRouteState);
+  wakersRouteSnapshot = captureRouteState(pristineWakersRouteState);
 });
 
 afterEach(() => {
   restoreRouteState(AgentsRoute, agentsRouteSnapshot);
+  restoreRouteState(WakersRoute, wakersRouteSnapshot);
 });
 
 function renderAgents(queryClient: QueryClient) {
@@ -257,30 +271,71 @@ function renderAgents(queryClient: QueryClient) {
     path: "/agents/",
     getParentRoute: () => appRoute,
   });
+  // The archived roster's redirect target, under the same decoy chain so its own
+  // `Route.useSearch()` / `useNavigate()` resolve to `/_authed/_app/wakers`, its real id.
+  const wall = (
+    WakersRoute as unknown as {
+      update: (options: unknown) => typeof WakersRoute;
+    }
+  ).update({
+    id: "/wakers",
+    path: "/wakers",
+    getParentRoute: () => appRoute,
+  });
   const tree = rootRoute.addChildren([
-    authedRoute.addChildren([appRoute.addChildren([wired])]),
+    authedRoute.addChildren([appRoute.addChildren([wired, wall])]),
   ]);
   const router = createRouter({
     routeTree: tree,
     history: createMemoryHistory({ initialEntries: ["/agents"] }),
   });
-  return render(
+  const view = render(
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router as never} />
     </QueryClientProvider>,
   );
+  return Object.assign(view, { router });
 }
+
+/** Waits until the archived `/agents` has redirected onto the `/wakers` wall. */
+async function landedOnWakers(view: ReturnType<typeof renderAgents>) {
+  await waitFor(() =>
+    expect(view.router.state.location.pathname).toBe("/wakers"),
+  );
+  expect(view.router.state.location.search).toEqual({});
+}
+
+/** The wall's card for one employee, by the name its title link carries. */
+function cardOf(view: ReturnType<typeof renderAgents>, name: string) {
+  const card = view
+    .getAllByTestId("waker-card")
+    .find(
+      (candidate) =>
+        candidate.querySelector("[data-card-name]")?.textContent === name,
+    );
+  expect(card).toBeTruthy();
+  return card as HTMLElement;
+}
+
+/** The employees on the wall, in the order their cards are drawn. */
+const wallNames = (view: ReturnType<typeof renderAgents>) =>
+  view
+    .getAllByTestId("waker-card")
+    .map((card) => card.querySelector("[data-card-name]")?.textContent);
 
 test("a failed roster on /agents reports the failure, not an empty roster", async () => {
   const view = renderAgents(failingQueryClient());
+  await landedOnWakers(view);
 
-  expect(await view.findByText("读不到你的员工。")).toBeTruthy();
-  expect(await view.findByText("读不到共享给你的员工。")).toBeTruthy();
+  // Said as the failure it is, with a way to ask again.
+  const failure = await view.findByText(/^读不到员工：/);
+  expect(failure.closest("[role=alert]")?.textContent).toContain("重试");
 
   // The whole point: a person with agents must never be told they have none because the request
   // that would have proven otherwise never came back.
-  expect(view.queryByText("你还没有创建任何员工。")).toBeNull();
-  expect(view.queryByText("还没有人把员工共享给你。")).toBeNull();
+  expect(view.queryByText("这里还没有员工。")).toBeNull();
+  expect(view.queryByText("没有符合这个筛选条件的员工。")).toBeNull();
+  expect(view.queryByTestId("waker-grid")).toBeNull();
 });
 
 test("a failed roster on / reports the failure and explains the disabled composer", async () => {
@@ -302,7 +357,7 @@ test("a failed roster on / reports the failure and explains the disabled compose
   ).toBeTruthy();
 });
 
-test("both /agents sections hold a skeleton while the roster is pending, not an empty state", async () => {
+test("/agents lands on a /wakers wall holding skeletons while the roster is pending, not an empty state", async () => {
   // A fetch that never settles is `isPending` forever — the state each section's loading arm
   // renders once the router has finished its own (also async) initial match, which is why this
   // still waits rather than reading `view.container` on the very next line.
@@ -310,21 +365,23 @@ test("both /agents sections hold a skeleton while the roster is pending, not an 
     new Promise<Response>(() => {})) as unknown as typeof fetch;
 
   const view = renderAgents(failingQueryClient());
+  await landedOnWakers(view);
 
+  // The wall's loading arm: one row of card-sized skeletons.
   const skeletons = await waitFor(() => {
     const found = view.container.querySelectorAll('[data-slot="skeleton"]');
-    expect(found.length).toBe(2);
+    expect(found.length).toBe(3);
     return found;
   });
-  expect(skeletons.length).toBe(2);
+  expect(skeletons.length).toBe(3);
 
   // A skeleton sitting beside a premature empty or error sentence would be no fix at all: the
   // point is that loading reserves the section's height instead of claiming an answer it doesn't
   // have yet.
-  expect(view.queryByText("你还没有创建任何员工。")).toBeNull();
-  expect(view.queryByText("还没有人把员工共享给你。")).toBeNull();
-  expect(view.queryByText("读不到你的员工。")).toBeNull();
-  expect(view.queryByText("读不到共享给你的员工。")).toBeNull();
+  expect(view.queryByText("这里还没有员工。")).toBeNull();
+  expect(view.queryByText("没有符合这个筛选条件的员工。")).toBeNull();
+  expect(view.queryByText(/^读不到员工：/)).toBeNull();
+  expect(view.queryByTestId("waker-grid")).toBeNull();
 });
 
 /*
@@ -348,12 +405,13 @@ test("a failed REFETCH on /agents keeps the roster it already had, not the error
   const queryClient = staleQueryClient([mine, shared]);
 
   const view = renderAgents(queryClient);
+  await landedOnWakers(view);
   await waitForFailedRefetch(queryClient);
 
   expect(await view.findByText("Mine Agent")).toBeTruthy();
   expect(await view.findByText("Shared Agent")).toBeTruthy();
-  expect(view.queryByText("读不到你的员工。")).toBeNull();
-  expect(view.queryByText("读不到共享给你的员工。")).toBeNull();
+  expect(wallNames(view)).toEqual(["Mine Agent", "Shared Agent"]);
+  expect(view.queryByText(/^读不到员工：/)).toBeNull();
 });
 
 test("a failed REFETCH on / keeps the roster and does not disclaim the composer", async () => {
@@ -399,11 +457,15 @@ test("a failed REFETCH on /agents with one empty slice shows it as empty, not br
   const queryClient = staleQueryClient([mine]);
 
   const view = renderAgents(queryClient);
+  await landedOnWakers(view);
   await waitForFailedRefetch(queryClient);
 
   expect(await view.findByText("Mine Agent")).toBeTruthy();
-  expect(await view.findByText("还没有人把员工共享给你。")).toBeTruthy();
-  expect(view.queryByText("读不到共享给你的员工。")).toBeNull();
+  // The loaded answer held no shared employee: nothing is tagged shared, and nothing says broken.
+  expect(wallNames(view)).toEqual(["Mine Agent"]);
+  expect(view.getByTestId("waker-count").textContent).toBe("1 名员工");
+  expect(view.queryByText("共享给你")).toBeNull();
+  expect(view.queryByText(/^读不到员工：/)).toBeNull();
 });
 
 test("a failed REFETCH on /agents with the other slice empty also shows it as empty", async () => {
@@ -416,11 +478,16 @@ test("a failed REFETCH on /agents with the other slice empty also shows it as em
   const queryClient = staleQueryClient([shared]);
 
   const view = renderAgents(queryClient);
+  await landedOnWakers(view);
   await waitForFailedRefetch(queryClient);
 
   expect(await view.findByText("Shared Agent")).toBeTruthy();
-  expect(await view.findByText("你还没有创建任何员工。")).toBeTruthy();
-  expect(view.queryByText("读不到你的员工。")).toBeNull();
+  // The one employee is someone else's, and its card says so, as the old 发现员工 section did.
+  expect(wallNames(view)).toEqual(["Shared Agent"]);
+  expect(
+    cardOf(view, "Shared Agent").querySelector("[data-shared]")?.textContent,
+  ).toBe("共享给你");
+  expect(view.queryByText(/^读不到员工：/)).toBeNull();
 });
 
 /*
@@ -436,31 +503,36 @@ function servingRosters(visible: AgentProfile[], hidden: AgentProfile[]) {
   }) as unknown as typeof fetch;
 }
 
-test("a hidden coworker is on /agents under Hidden, collapsed, with a card that opens it", async () => {
+test("a hidden coworker from /agents is on the /wakers wall after the listed ones, tagged, with an 编辑 that opens it", async () => {
   const mine = agent({ id: "mine-1", name: "Mine Agent" });
   const tucked = agent({ id: "hidden-1", name: "Tucked Agent", hidden: true });
   servingRosters([mine], [tucked]);
 
   const view = renderAgents(failingQueryClient());
+  await landedOnWakers(view);
 
   expect(await view.findByText("已隐藏")).toBeTruthy();
-  const section = view.container.querySelector("details");
-  expect(section).not.toBeNull();
-  // Collapsed until asked for, so it does not push the two rosters apart.
-  expect(section?.open).toBe(false);
-  // Inside the section rather than in either roster above it.
-  expect(section?.textContent).toContain("Tucked Agent");
-  expect(section?.textContent).not.toContain("Mine Agent");
-  // The card's own Details link is the way to the dialog that holds Unhide.
-  const link = view.getByLabelText("查看 Tucked Agent 的详情");
-  expect(link.getAttribute("href")).toBe("/agents?agent=hidden-1");
+  // After the listed employees, as the old Hidden section sat below both rosters.
+  await waitFor(() =>
+    expect(wallNames(view)).toEqual(["Mine Agent", "Tucked Agent"]),
+  );
+  // The tag is on the hidden card only.
+  expect(view.getAllByText("已隐藏")).toHaveLength(1);
+  expect(
+    cardOf(view, "Tucked Agent").querySelector("[data-hidden]")?.textContent,
+  ).toBe("已隐藏");
+  expect(cardOf(view, "Mine Agent").querySelector("[data-hidden]")).toBeNull();
+  // The card's own 编辑 is the way to the dialog that holds Unhide, now over the wall.
+  const link = view.getByLabelText("编辑 Tucked Agent");
+  expect(link.getAttribute("href")).toBe("/wakers?agent=hidden-1");
 });
 
-test("with nothing hidden, /agents has no Hidden section at all", async () => {
+test("with nothing hidden, the wall /agents lands on has no 已隐藏 tag at all", async () => {
   servingRosters([agent({ id: "mine-1", name: "Mine Agent" })], []);
   const queryClient = failingQueryClient();
 
   const view = renderAgents(queryClient);
+  await landedOnWakers(view);
 
   expect(await view.findByText("Mine Agent")).toBeTruthy();
   // Absent because the hidden roster came back empty, not because it has not come back yet.
@@ -470,47 +542,57 @@ test("with nothing hidden, /agents has no Hidden section at all", async () => {
     );
   });
   expect(view.queryByText("已隐藏")).toBeNull();
-  expect(view.container.querySelector("details")).toBeNull();
+  expect(view.container.querySelector("[data-hidden]")).toBeNull();
+  expect(wallNames(view)).toEqual(["Mine Agent"]);
 });
 
-test("a pinned coworker moves into Pinned at the top, out of its roster", async () => {
+test("a pinned coworker from /agents leads the /wakers wall, tagged 已置顶, once", async () => {
   const kept = agent({ id: "mine-1", name: "Kept Agent" });
   const favourite = agent({ id: "mine-2", name: "Favourite", pinned: true });
   servingRosters([kept, favourite], []);
 
   const view = renderAgents(failingQueryClient());
+  await landedOnWakers(view);
 
   expect(await view.findByText("已置顶")).toBeTruthy();
-  const headings = [...view.container.querySelectorAll("h2")].map(
-    (heading) => heading.textContent,
-  );
-  expect(headings).toEqual(["已置顶", "我的员工", "发现员工"]);
-  // Once, in Pinned, rather than twice.
+  // At the top of the wall, ahead of the roster order that listed it second.
+  expect(wallNames(view)).toEqual(["Favourite", "Kept Agent"]);
+  // Once, tagged, rather than twice.
   expect(view.getAllByText("Favourite")).toHaveLength(1);
-  const pinnedSection = view.getByText("已置顶").parentElement;
-  expect(pinnedSection?.textContent).toContain("Favourite");
-  expect(pinnedSection?.textContent).not.toContain("Kept Agent");
+  expect(view.getAllByText("已置顶")).toHaveLength(1);
+  expect(
+    cardOf(view, "Favourite").querySelector("[data-pinned]")?.textContent,
+  ).toBe("已置顶");
+  expect(cardOf(view, "Kept Agent").querySelector("[data-pinned]")).toBeNull();
 });
 
-test("with every coworker of yours pinned, Your agents says so instead of claiming none", async () => {
+test("with every coworker pinned, the /wakers wall lists them instead of claiming none", async () => {
   servingRosters(
     [agent({ id: "mine-1", name: "Favourite", pinned: true })],
     [],
   );
 
   const view = renderAgents(failingQueryClient());
+  await landedOnWakers(view);
 
-  expect(await view.findByText("你的员工都已置顶在上面。")).toBeTruthy();
-  expect(view.queryByText("你还没有创建任何员工。")).toBeNull();
+  // Pinning everything moves nothing off the wall: it is listed, tagged, and nothing claims none.
+  expect(await view.findByText("Favourite")).toBeTruthy();
+  expect(wallNames(view)).toEqual(["Favourite"]);
+  expect(
+    cardOf(view, "Favourite").querySelector("[data-pinned]")?.textContent,
+  ).toBe("已置顶");
+  expect(view.queryByText("这里还没有员工。")).toBeNull();
 });
 
-test("with nothing pinned, /agents has no Pinned section", async () => {
+test("with nothing pinned, the wall /agents lands on has no 已置顶 tag", async () => {
   servingRosters([agent({ id: "mine-1", name: "Mine Agent" })], []);
 
   const view = renderAgents(failingQueryClient());
+  await landedOnWakers(view);
 
   expect(await view.findByText("Mine Agent")).toBeTruthy();
   expect(view.queryByText("已置顶")).toBeNull();
+  expect(view.container.querySelector("[data-pinned]")).toBeNull();
 });
 
 test("a failed REFETCH on / with explore empty shows it as empty, not broken", async () => {

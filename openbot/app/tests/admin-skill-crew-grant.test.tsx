@@ -84,7 +84,7 @@ const agents = [
 // One member already holding the skill, two who do not, and one the deployment has no coworker for.
 const crew: WakerGroup = {
   id: "crew-1",
-  name: "编程小组",
+  name: "编程群组",
   description: null,
   members: [
     { agentId: "agent-dev", position: 0 },
@@ -146,23 +146,23 @@ function draw() {
   );
 }
 
-const CHIP = "把 /weekly-report 交给编程小组";
+const CHIP = "把 /weekly-report 交给编程群组";
 
 test("the crew chip counts the members who do not hold the skill yet", async () => {
   const view = draw();
   const chip = await view.findByRole("button", { name: CHIP });
   // 4 members: one already holds it, one is no coworker of this deployment.
-  await waitFor(() => expect(chip.textContent).toBe("编程小组 · 2"));
+  await waitFor(() => expect(chip.textContent).toBe("编程群组 · 2"));
 });
 
 test("one press writes one grant per member and never one for the group", async () => {
   const view = draw();
   const chip = await view.findByRole("button", { name: CHIP });
-  await waitFor(() => expect(chip.textContent).toBe("编程小组 · 2"));
+  await waitFor(() => expect(chip.textContent).toBe("编程群组 · 2"));
   await userEvent.click(chip);
 
   expect(
-    await view.findByText("编程小组：全部 2 位员工都已拿到 /weekly-report。"),
+    await view.findByText("编程群组：全部 2 位员工都已拿到 /weekly-report。"),
   ).toBeTruthy();
   expect(writes.map((write) => write.path)).toEqual([
     "/api/plugins/grants",
@@ -184,11 +184,11 @@ test("a refused member is said, with the server's reason, and does not stop the 
   refused = new Set(["agent-review"]);
   const view = draw();
   const chip = await view.findByRole("button", { name: CHIP });
-  await waitFor(() => expect(chip.textContent).toBe("编程小组 · 2"));
+  await waitFor(() => expect(chip.textContent).toBe("编程群组 · 2"));
   await userEvent.click(chip);
 
   const line = await view.findByText(
-    "编程小组：2 位里有 1 位拿到 /weekly-report，1 位被拒绝（这位员工已停用。）。",
+    "编程群组：2 位里有 1 位拿到 /weekly-report，1 位被拒绝（这位员工已停用。）。",
   );
   expect(line.getAttribute("role")).toBe("alert");
   expect(writes).toHaveLength(2);

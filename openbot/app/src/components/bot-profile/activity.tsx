@@ -89,7 +89,7 @@ function linkFor(item: ActivityItem) {
     case "responsibility":
       return <Link to="/responsibilities" />;
     case "routine":
-      return <Link to="/routines" />;
+      return <Link search={{ trigger: "schedule" }} to="/autonomous" />;
     default:
       return null;
   }

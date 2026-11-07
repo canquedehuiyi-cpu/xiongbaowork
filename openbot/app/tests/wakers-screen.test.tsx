@@ -9,7 +9,7 @@ import {
   Outlet,
   RouterProvider,
 } from "@tanstack/react-router";
-import { cleanup, render, waitFor } from "@testing-library/react";
+import { cleanup, render, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { AgentProfile } from "@/lib/agents/queries";
 import { agentKeys } from "@/lib/agents/queries";
@@ -109,7 +109,7 @@ const attentionRow = (agent: AgentProfile, paused: boolean): BotAttention => ({
 
 const crew: WakerGroup = {
   id: "crew-1",
-  name: "编程小组",
+  name: "编程群组",
   description: null,
   members: [
     { agentId: "agent-1", position: 0 },
@@ -170,12 +170,12 @@ function draw() {
         getParentRoute: () => root,
         path: "/wakers",
       } as never),
-      // The header's 新建员工 is a deep link into the roster's create dialog, and a Link needs its
-      // address to resolve. The generator's options are wider than this literal; the tree only needs
-      // the path.
+      // Each card's 动态 opens the employee's Bot profile (archived 员工列表/Bot 会话 merged into this
+      // wall), and a Link needs its address to resolve. The generator's options are wider than this
+      // literal; the tree only needs the path.
       createRoute({
         getParentRoute: () => root,
-        path: "/agents",
+        path: "/bots/$agentId",
         component: () => null,
       } as never),
       // Spec D7: each card links to the coworker's own assembly screen.
@@ -203,6 +203,33 @@ function draw() {
 function badgeOf(screen: ReturnType<typeof draw>, name: string) {
   const title = screen.getByText(name).closest("[data-slot=item-title]");
   return title?.querySelector("[data-status]")?.getAttribute("data-status");
+}
+
+/**
+ * The 运行状态 dropdown's options, each with its count. Parity plan F2 moved the status filter from a
+ * row of buttons into the toolbar's dropdown; the words and the counts are the same ones. The
+ * reference round made it the shared labelled native select (「运行状态 全部」), whose "all" option
+ * says 全部 — the total is the count at the toolbar's right.
+ */
+async function statusOptions(screen: ReturnType<typeof draw>) {
+  const select = screen.getByRole("combobox", {
+    name: "运行状态",
+  }) as HTMLSelectElement;
+  return [...select.options].map((option) => option.textContent);
+}
+
+/** Choose one status in the 运行状态 dropdown. */
+async function pickStatus(screen: ReturnType<typeof draw>, option: string) {
+  const user = userEvent.setup({ document });
+  await user.selectOptions(
+    screen.getByRole("combobox", { name: "运行状态" }),
+    option,
+  );
+}
+
+/** Open the 群组 tab (parity plan F2: the tab is a SegmentedTabs tab, labelled 群组). */
+async function openGroupsTab(screen: ReturnType<typeof draw>) {
+  await userEvent.click(await screen.findByRole("tab", { name: "群组" }));
 }
 
 /** A fetch fake that records every call and answers each read with its own envelope. */
@@ -243,7 +270,7 @@ test("the status line says what the board says, and 暂停 is the bot lifecycle,
   );
   // Working because a task card is running now, not because a status column said so; the crew it
   // belongs to is named on the card.
-  expect(screen.getByText("正在处理一个任务。 · 编程小组")).toBeTruthy();
+  expect(screen.getByText("正在处理一个任务。 · 编程群组")).toBeTruthy();
   // Paused because the person paused it, and the card says who did.
   expect(screen.getByText(/你已暂停它/)).toBeTruthy();
   expect(screen.getByText("当前没有运行中的任务。")).toBeTruthy();
@@ -260,11 +287,13 @@ test("the status line says what the board says, and 暂停 is the bot lifecycle,
   ).toContain("Night Auditor");
 
   // Spec D1/D4: one vocabulary on the card and on the filter -- 在线 / 休息 / 暂停 (CONTEXT.md).
-  expect(screen.getByRole("button", { name: "全部 (4)" })).toBeTruthy();
-  expect(screen.getByRole("button", { name: "在线 (2)" })).toBeTruthy();
-  expect(screen.getByRole("button", { name: "休息 (1)" })).toBeTruthy();
-  expect(screen.getByRole("button", { name: "暂停 (1)" })).toBeTruthy();
-  expect(screen.getByRole("button", { name: "状态未知 (0)" })).toBeTruthy();
+  expect(await statusOptions(screen)).toEqual([
+    "全部",
+    "在线 (2)",
+    "休息 (1)",
+    "暂停 (1)",
+    "状态未知 (0)",
+  ]);
 });
 
 test("each card shows its avatar, its role, and links to its assembly and detail screens; the header creates one", async () => {
@@ -277,7 +306,12 @@ test("each card shows its avatar, its role, and links to its assembly and detail
   // Spec D1: the avatar is announced once, by the coworker's name.
   expect(screen.getByRole("img", { name: "Backend Engineer" })).toBeTruthy();
   expect(screen.getByRole("img", { name: "Code Reviewer" })).toBeTruthy();
-  expect(screen.getAllByText("Writes the migration")).toHaveLength(2);
+  // On each card, as its role tag (the 角色 filter lists the same title as an option).
+  expect(
+    screen
+      .getAllByText("Writes the migration")
+      .filter((node) => node.closest("[data-testid=waker-card]")),
+  ).toHaveLength(2);
 
   // Spec D7: one tap from the card to the coworker's own assembly screen.
   const assemble = screen
@@ -285,15 +319,18 @@ test("each card shows its avatar, its role, and links to its assembly and detail
     .map((node) => node.closest("a")?.getAttribute("href"));
   expect(assemble).toEqual(["/assemble/agent-1", "/assemble/agent-2"]);
 
-  // Spec D5: 打开 is the coworker's detail page, not the roster's editor dialog.
-  const open = screen
-    .getAllByText("打开")
-    .map((node) => node.closest("a")?.getAttribute("href"));
+  // Spec D5: the card (its name) opens the coworker's detail page, not the roster's editor dialog.
+  const open = ["Backend Engineer", "Code Reviewer"].map((name) =>
+    screen.getByRole("link", { name }).getAttribute("href"),
+  );
   expect(open).toEqual(["/wakers/agent-1", "/wakers/agent-2"]);
 
-  // Spec D2: creating a coworker is the roster's own create dialog, deep-linked.
-  const create = screen.getByText("新建员工").closest("a");
-  expect(create?.getAttribute("href")).toBe("/agents?new=true");
+  // Spec D2: creating a coworker is a create dialog over this wall, deep-linked (the archived
+  // `/agents?new=true` redirects here).
+  const create = within(screen.getByTestId("wakers-header-actions"))
+    .getByText("新建员工")
+    .closest("a");
+  expect(create?.getAttribute("href")).toBe("/wakers?new=true");
 });
 
 test("the status filter narrows the wall to the coworkers in that state", async () => {
@@ -303,21 +340,28 @@ test("the status filter narrows the wall to the coworkers in that state", async 
     expect(screen.getByText("Backend Engineer")).toBeTruthy(),
   );
 
-  await userEvent.click(screen.getByRole("button", { name: "暂停 (1)" }));
+  await pickStatus(screen, "暂停 (1)");
+  await waitFor(() =>
+    expect(screen.queryByText("Backend Engineer")).toBeNull(),
+  );
   expect(screen.getByText("Code Reviewer")).toBeTruthy();
   expect(screen.queryByText("Backend Engineer")).toBeNull();
   expect(screen.queryByText("QA Engineer")).toBeNull();
 
-  await userEvent.click(screen.getByRole("button", { name: "在线 (1)" }));
-  expect(screen.getByText("Backend Engineer")).toBeTruthy();
+  await pickStatus(screen, "在线 (1)");
+  await waitFor(() =>
+    expect(screen.getByText("Backend Engineer")).toBeTruthy(),
+  );
   expect(screen.queryByText("Code Reviewer")).toBeNull();
 
   // An empty filter says nothing matches, not that the workspace is empty.
-  await userEvent.click(screen.getByRole("button", { name: "状态未知 (0)" }));
-  expect(screen.getByText("没有符合这个筛选条件的员工。")).toBeTruthy();
+  await pickStatus(screen, "状态未知 (0)");
+  await waitFor(() =>
+    expect(screen.getByText("没有符合这个筛选条件的员工。")).toBeTruthy(),
+  );
 
-  await userEvent.click(screen.getByRole("button", { name: "全部 (3)" }));
-  expect(screen.getByText("QA Engineer")).toBeTruthy();
+  await pickStatus(screen, "全部");
+  await waitFor(() => expect(screen.getByText("QA Engineer")).toBeTruthy());
 });
 
 test("pause and resume go to the bot lifecycle, and the card follows the answer", async () => {
@@ -434,8 +478,9 @@ test("a pause read that fails is said as 状态未知, and no pause button guess
   expect(badgeOf(screen, "Backend Engineer")).toBe("unknown");
   expect(badgeOf(screen, "Code Reviewer")).toBe("unknown");
   expect(screen.getAllByText(/读不到它是否被暂停/)).toHaveLength(2);
-  expect(screen.getByRole("button", { name: "状态未知 (2)" })).toBeTruthy();
-  expect(screen.getByRole("button", { name: "暂停 (0)" })).toBeTruthy();
+  const options = await statusOptions(screen);
+  expect(options).toContain("状态未知 (2)");
+  expect(options).toContain("暂停 (0)");
   expect(screen.queryByRole("button", { name: /^暂停 Backend/ })).toBeNull();
   expect(screen.queryByRole("button", { name: /^恢复 / })).toBeNull();
   // The wall still renders, avatar and assembly link included.
@@ -466,10 +511,9 @@ test("the groups tab edits a crew by sending the whole roster", async () => {
   }) as typeof fetch;
 
   const screen = draw();
-  await waitFor(() => expect(screen.getByText("小组")).toBeTruthy());
-  await userEvent.click(screen.getByRole("button", { name: "小组" }));
+  await openGroupsTab(screen);
 
-  expect(await screen.findByText("编程小组")).toBeTruthy();
+  expect(await screen.findByText("编程群组")).toBeTruthy();
   // The order a person put them in is shown, because a pipeline crew reads as a sequence.
   expect(
     screen.getByText("顺序：Backend Engineer → Code Reviewer"),
@@ -484,6 +528,8 @@ test("the groups tab edits a crew by sending the whole roster", async () => {
   expect(href).toContain("agent-1");
   expect(href).toContain("agent-2");
 
+  // The member chips sit behind the card's 管理成员 (parity plan F2's 管理).
+  await userEvent.click(screen.getByRole("button", { name: "管理成员" }));
   await userEvent.click(screen.getByRole("button", { name: "QA Engineer" }));
   await waitFor(() => expect(writes()).toHaveLength(1));
   expect(writes()[0]?.method).toBe("PUT");
@@ -511,22 +557,28 @@ test("a new crew is created by name, and its purpose is optional", async () => {
         String(input).includes("/api/tasks") ? { tasks: [] } : { groups: [] },
       );
     return Response.json({
-      group: { id: "crew-2", name: "值班小组", members: [] },
+      group: { id: "crew-2", name: "值班群组", members: [] },
     });
   }) as typeof fetch;
 
   const screen = draw();
-  await waitFor(() => expect(screen.getByText("小组")).toBeTruthy());
-  await userEvent.click(screen.getByRole("button", { name: "小组" }));
-  expect(screen.getByText(/还没有小组/)).toBeTruthy();
+  await openGroupsTab(screen);
+  expect(await screen.findByText("还没有群组")).toBeTruthy();
 
-  await userEvent.type(screen.getByPlaceholderText("小组名称"), "值班小组");
-  await userEvent.click(screen.getByRole("button", { name: "新建小组" }));
+  // Parity plan F2: the name and purpose are asked in the 新建群组 dialog.
+  await userEvent.click(
+    screen.getAllByRole("button", { name: "新建群组" })[0] as HTMLElement,
+  );
+  await userEvent.type(
+    await screen.findByPlaceholderText("群组名称"),
+    "值班群组",
+  );
+  await userEvent.click(screen.getByRole("button", { name: "创建" }));
 
   await waitFor(() => expect(writes()).toHaveLength(1));
   expect(writes()[0]?.method).toBe("POST");
   expect(writes()[0]?.path).toBe("/api/waker-groups");
-  expect(writes()[0]?.body).toEqual({ name: "值班小组", description: "" });
+  expect(writes()[0]?.body).toEqual({ name: "值班群组", description: "" });
 });
 
 test("a name the workspace already used comes back as the server's own sentence", async () => {
@@ -541,10 +593,18 @@ test("a name the workspace already used comes back as the server's own sentence"
     )) as typeof fetch;
 
   const screen = draw();
-  await waitFor(() => expect(screen.getByText("小组")).toBeTruthy());
-  await userEvent.click(screen.getByRole("button", { name: "小组" }));
-  await userEvent.type(screen.getByPlaceholderText("小组名称"), "编程小组");
-  await userEvent.click(screen.getByRole("button", { name: "新建小组" }));
+  await openGroupsTab(screen);
+  // The header's 新建群组 (the grid's create card opens the same dialog).
+  await userEvent.click(
+    (
+      await screen.findAllByRole("button", { name: "新建群组" })
+    )[0] as HTMLElement,
+  );
+  await userEvent.type(
+    await screen.findByPlaceholderText("群组名称"),
+    "编程群组",
+  );
+  await userEvent.click(screen.getByRole("button", { name: "创建" }));
 
   expect(
     await screen.findByText("This workspace already has a group by that name."),
@@ -648,7 +708,7 @@ test("each card says whether the machine its work runs on is online", async () =
   const lineOf = (name: string) =>
     screen
       .getByText(name)
-      .closest("[data-slot=item]")
+      .closest("[data-testid=waker-card]")
       ?.querySelector("[data-device-line]");
 
   // Its running task is bound to the laptop, which is away.

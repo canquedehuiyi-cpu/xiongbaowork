@@ -29,11 +29,17 @@ import { SidebarToggle, useSidebarToggleVisible } from "./sidebar-toggle";
  * `wide` exists for one page. An audit log is a table you scan, and forcing it into the prose column
  * would wrap every row. It is not a licence for anything else to be wide.
  */
-type ShellWidth = "prose" | "wide";
+type ShellWidth = "prose" | "wide" | "workbench";
 
+/*
+ * `workbench` is the five primary pages' frame (parity plan F1): full width and left-aligned,
+ * 40 CSS px in from the sidebar's edge, where the reference's main column starts. Written in px
+ * because this app's root font size is 15px and Tailwind's rem steps would land a few px short.
+ */
 const WIDTHS: Record<ShellWidth, string> = {
-  prose: "max-w-2xl",
-  wide: "max-w-5xl",
+  prose: "mx-auto max-w-2xl px-4",
+  wide: "mx-auto max-w-5xl px-4",
+  workbench: "mx-auto max-w-[1760px] px-[40px]",
 };
 
 export function PageShell({
@@ -113,20 +119,43 @@ export function PageShell({
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div
           className={cn(
-            "mx-auto flex w-full flex-col px-4 pb-12",
+            "flex w-full flex-col",
+            /*
+             * The workbench pages carry the floating 小管家 button at the bottom centre; the extra
+             * room lets the last row scroll clear of it instead of ending underneath.
+             */
+            width === "workbench" ? "pb-[112px]" : "pb-12",
             // Without a bar above it the heading keeps the full original space.
-            bar ? "pt-8" : "pt-12",
+            width === "workbench" ? "pt-[46px]" : bar ? "pt-8" : "pt-12",
             WIDTHS[width],
             className,
           )}
         >
-          <header className="flex flex-col gap-2">
+          <header
+            className={cn(
+              "flex flex-col",
+              width === "workbench" ? "gap-[5px]" : "gap-2",
+            )}
+          >
             <div className="flex flex-row items-center justify-between gap-4">
-              <h1 className="font-bold text-2xl">{title}</h1>
+              <h1
+                className={
+                  width === "workbench"
+                    ? "font-semibold text-[28px] leading-[32px] tracking-tight"
+                    : "font-bold text-2xl"
+                }
+              >
+                {title}
+              </h1>
               {action}
             </div>
             {description ? (
-              <p className="max-w-prose text-pretty text-muted-foreground text-sm leading-relaxed">
+              <p
+                className={cn(
+                  "max-w-prose text-pretty text-muted-foreground leading-relaxed",
+                  width === "workbench" ? "text-[14px]" : "text-sm",
+                )}
+              >
                 {description}
               </p>
             ) : null}

@@ -23,12 +23,14 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AppSidebar } from "@/components/app-sidebar/app-sidebar";
+import { ConversationWorkspace } from "@/components/app-sidebar/conversation-workspace";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { agentKeys } from "@/lib/agents/queries";
 import { authKeys } from "@/lib/auth/queries";
 import { botLifecycleKeys } from "@/lib/bot-lifecycle/queries";
 import { type ChannelSummary, channelKeys } from "@/lib/channels/queries";
 import { userPreferencesQueryOptions } from "@/lib/settings/message-list";
+import { wakerGroupKeys } from "@/lib/waker-groups/queries";
 
 // Keep the sidebar's live-update socket offline; these tests exercise HTTP pagination.
 class OfflineWebSocket extends EventTarget implements WebSocket {
@@ -150,7 +152,8 @@ function channel(id: string): ChannelSummary {
     threadId: id,
     active: true,
     lastMessageAt: null,
-    summary: null,
+    // Named, so the title the workspace row leads with is the id the assertions look for.
+    summary: id,
     lastMessage: null,
     lastMessageAgentId: null,
     createdAt: "2026-09-15T00:00:00Z",
@@ -159,7 +162,7 @@ function channel(id: string): ChannelSummary {
   };
 }
 
-function renderSidebar() {
+function renderSidebar(first: ChannelSummary = channel("Recent conversation")) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
@@ -181,22 +184,22 @@ function renderSidebar() {
     refetchInterval: false,
   });
   queryClient.setQueryData(botLifecycleKeys.attention, []);
+  queryClient.setQueryData(wakerGroupKeys.list(), []);
   queryClient.setQueryData(channelKeys.list(), {
-    pages: [
-      { channels: [channel("Recent conversation")], nextCursor: "older/page" },
-    ],
+    pages: [{ channels: [first], nextCursor: "older/page" }],
     pageParams: [""],
   });
   const routeTree = createRootRoute({
     component: () => (
       <SidebarProvider>
         <AppSidebar />
+        <ConversationWorkspace />
       </SidebarProvider>
     ),
   });
   const router = createRouter({
     routeTree,
-    history: createMemoryHistory({ initialEntries: ["/"] }),
+    history: createMemoryHistory({ initialEntries: ["/channel/new"] }),
   });
   return render(
     <QueryClientProvider client={queryClient}>
@@ -212,18 +215,26 @@ function activeObserver() {
 }
 
 test("message emphasis updates mounted rows from the account preferences cache", async () => {
-  const view = renderSidebar();
-  const agent = await view.findByText("Recent conversation");
-  const thread = view.getByText("新会话");
-  expect(thread.className).toContain("text-[0.9rem]");
+  // Not named yet, so its title is still 新会话.
+  const view = renderSidebar({
+    ...channel("Recent conversation"),
+    summary: null,
+  });
+  // 对话标题 emphasis: the title leads in bold and the kind follows in grey.
+  const thread = await view.findByText("新会话");
+  expect(thread.className).toContain("font-semibold");
+  expect(view.getByText("聊天").className).toContain("text-muted-foreground");
+  expect(view.queryByText("Recent conversation")).toBeNull();
   act(() =>
     clients[0]?.setQueryData(userPreferencesQueryOptions("user").queryKey, {
       messageListEmphasis: "agent",
       selfHostBannerDismissed: false,
     }),
   );
-  await waitFor(() => expect(agent.className).toContain("text-[0.9rem]"));
-  expect(thread.className).toContain("text-muted-foreground");
+  // 员工名字 emphasis: the name leads, and the title moves down to the grey line.
+  const agent = await view.findByText("Recent conversation");
+  expect(agent.className).toContain("font-semibold");
+  expect(view.getByText("新会话").className).toContain("text-muted-foreground");
 });
 
 test("scrolling requests the cursor once, appends older rows, and stops at the final page", async () => {
@@ -235,7 +246,7 @@ test("scrolling requests the cursor once, appends older rows, and stops at the f
   await waitFor(() => expect(ScrollObserver.active.size).toBe(1));
   const observer = activeObserver();
   expect(observer.root).toBe(
-    view.container.querySelector('[data-sidebar="content"]'),
+    view.container.querySelector('[data-slot="workspace-list"]'),
   );
   act(() => observer.intersect(false));
   expect(requests).toEqual([]);
@@ -299,7 +310,8 @@ test("search loads older history explicitly and includes new matches", async () 
   await view.findByText("Recent conversation");
   // The field's name is the sidebar's own Chinese label since ticket 024's sidebar pass; this line
   // still asked for the old English one, which is why the test failed even when run on its own.
-  const search = view.getByRole("textbox", { name: "搜索会话" });
+  await user.click(view.getByRole("button", { name: "搜索对话" }));
+  const search = view.getByRole("searchbox", { name: "搜索会话" });
   await user.type(search, "Archived");
   expect(await view.findByText("已加载的会话里没有匹配的")).toBeTruthy();
   expect(ScrollObserver.active.size).toBe(0);

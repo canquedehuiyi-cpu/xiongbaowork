@@ -309,6 +309,26 @@ export function setAutomationEnabledMutationOptions(queryClient: QueryClient) {
   });
 }
 
+/**
+ * 编辑: `PATCH /api/automations/:id` with what the person changed (AUT1/AUT4). The store judges
+ * every value — a cap below the runs already made, an end date in the past — and refuses in its
+ * own words; nothing is checked twice here.
+ */
+export function updateAutomationMutationOptions(queryClient: QueryClient) {
+  return mutationOptions({
+    mutationFn: (variables: {
+      id: string;
+      changes: Partial<Pick<NewAutomation, "name" | "maxRuns" | "endDate">>;
+    }) =>
+      client<Automation>(automationPath(variables.id), "automation", {
+        method: "PATCH",
+        body: variables.changes,
+        fallback: "这个自动任务没能修改。",
+      }),
+    onSuccess: () => invalidate(queryClient),
+  });
+}
+
 export function deleteAutomationMutationOptions(queryClient: QueryClient) {
   return mutationOptions({
     mutationFn: (id: string) =>

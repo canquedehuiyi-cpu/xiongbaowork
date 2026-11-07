@@ -227,7 +227,7 @@ function RouteComponent() {
                       {(crews.data ?? []).length === 0 ? null : (
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-muted-foreground text-xs">
-                            或者交给一个小组：
+                            或者交给一个群组：
                           </span>
                           {(crews.data ?? []).map((crew) => {
                             /* The chip's number is the writes it will make: members not holding it yet. */

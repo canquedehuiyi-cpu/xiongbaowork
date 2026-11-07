@@ -63,7 +63,7 @@ afterEach(() => {
 
 const crew: WakerGroup = {
   id: "crew-1",
-  name: "编程小组",
+  name: "编程群组",
   description: null,
   members: [
     { agentId: "agent-review", position: 1 },
@@ -185,9 +185,9 @@ test("the summary counts members, and quotes the first refusal", () => {
     ],
   };
   expect(
-    crewSummary(allLanded, { label: "编程小组", what: "/weekly" }),
+    crewSummary(allLanded, { label: "编程群组", what: "/weekly" }),
   ).toEqual({
-    text: "编程小组：全部 2 位员工都已拿到 /weekly。",
+    text: "编程群组：全部 2 位员工都已拿到 /weekly。",
     failed: false,
   });
 

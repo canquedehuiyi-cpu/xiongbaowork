@@ -195,7 +195,7 @@ export function GroupChat({ channelId }: { channelId: string }) {
                   ? draft.text.replace(`@${option.label}`, "").trim()
                   : draft.text,
               });
-              setStarted({ label: option?.label ?? "小组", runId: run.runId });
+              setStarted({ label: option?.label ?? "群组", runId: run.runId });
               return;
             }
             if (!draft.text) return;

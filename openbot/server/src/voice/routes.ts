@@ -123,14 +123,14 @@ export function createVoiceRoutes(
       const agentId = channel.agentIds[0];
       if (channel.agentIds.length !== 1 || !agentId)
         return context.json(
-          { error: "实时语音要求频道中恰好有一位数字员工。" },
+          { error: "实时语音要求频道中恰好有一位员工。" },
           400,
         );
       let profile: Awaited<ReturnType<AgentProfileStore["get"]>>;
       try {
         profile = await profiles.get(context.var.actor, agentId);
       } catch {
-        return context.json({ error: "无法加载该数字员工，请重试。" }, 503);
+        return context.json({ error: "无法加载该员工，请重试。" }, 503);
       }
       if (!profile || profile.deletedAt)
         return context.json({ error: "Agent not found." }, 404);

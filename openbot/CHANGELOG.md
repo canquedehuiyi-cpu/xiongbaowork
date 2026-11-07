@@ -29,6 +29,39 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   (Shipped first in `device-v0.2.1-rc.1`.)
 - **Device pause and offline messages are in Chinese** and point the owner to 「设置 › 我的设备 ›
   核查并恢复」. The review screen names an action it has no label for.
+- **The workbench pages are laid out like the reference product.** The sidebar is 240px. It opens on
+  five entries: 任务看板, @Waker, 自主工作, 员工管理 and 能力与资源. Every other route it used to list
+  is under 更多. Conversations are split into 员工 and 群组 tabs. The primary action is green in both
+  themes.
+- **Page layout:** the five pages use full width, and their filters and tabs live in the URL, so
+  refresh, Back and shared links keep them.
+- **What changed on each page:**
+  - /reachability is now titled @Waker. Linking a conversation opens in a dialog from 接入 IM 聊天.
+  - /autonomous opens on one list of all automations. The per-employee view is at `?view=agents`.
+  - /wakers (员工管理) has 员工 and 群组 tabs (`?tab=groups`), plus search and status, role, environment and
+    sort filters.
+  - /resources has nine tabs (`?tab=plugins|skills|…|models`). Links to the model library now land on
+    `?tab=models`.
+- **One word for a named set of coworkers: 群组.** The screens and the server's messages used to say
+  小组 in some places. Now they say 群组 everywhere, including the hints that point to
+  「员工管理 › 群组」. Only the copy changes; the API and data are the same.
+- **One word for a coworker: 员工.** 唤醒者, 数字员工 and the 「Waker 管理」 label are gone from the
+  screens and the server's messages. The brand 熊宝数字员工 and the feature names @Waker and WakerFlow
+  stay.
+- **Duplicate pages are archived into the five workbench pages.** Their old addresses redirect, and
+  their parameters carry over:
+  - `/agents` goes to `/wakers`. `?new=true` and `?agent=<id>` open the create and edit dialogs there.
+  - `/bots` goes to `/wakers`. Each employee card now shows what the employee needs from you and links
+    to its `/bots/<id>` profile.
+  - `/routines` goes to `/autonomous?trigger=schedule`.
+  - `/skills`, `/knowledge` and `/memory` go to `/resources?tab=skills|knowledge|sources`. Those tabs now
+    hold the full pages, not summaries.
+  - 更多 in the sidebar keeps only 组团流程, 团队 Bot and 审批.
+  - `/bots/<id>` goes to `/wakers/<id>`, which is now the only detail page for an employee. That page
+    gains the old profile's sections: 对你 (pause, notifications, message, reset), its activity
+    (in progress, scheduled, done), tool permissions and where updates go.
+- **No API or data changes.** Entries without a backend contract, such as 自动接入 and 接入申请, are
+  shown disabled with an explanation.
 
 ## 0.2.1
 

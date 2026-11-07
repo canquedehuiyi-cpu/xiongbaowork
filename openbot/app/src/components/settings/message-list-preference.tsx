@@ -36,7 +36,9 @@ export function MessageListPreference() {
       <Item size="sm">
         <ItemContent>
           <ItemTitle>消息列表突出显示</ItemTitle>
-          <ItemDescription>选择在侧栏里用大字显示哪个名字。</ItemDescription>
+          <ItemDescription>
+            选择在对话列表里用大字显示哪个名字。
+          </ItemDescription>
         </ItemContent>
         <ItemActions>
           <Select

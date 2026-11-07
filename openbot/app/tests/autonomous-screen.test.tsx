@@ -139,7 +139,7 @@ function draw(over: Partial<AutonomousSummary> = {}) {
   const root = createRootRoute({ component: () => <Outlet /> });
   const router = createRouter({
     context: {},
-    history: createMemoryHistory({ initialEntries: ["/autonomous"] }),
+    history: createMemoryHistory({ initialEntries: ["/autonomous?view=agents"] }),
     routeTree: root.addChildren([
       AutonomousRoute.update({
         getParentRoute: () => root,

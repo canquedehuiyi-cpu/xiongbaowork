@@ -444,7 +444,11 @@ function WakerFlowWorkbench({
             <p className="text-muted-foreground text-sm" role="status">
               {modelProblem}{" "}
               {!choices.error ? (
-                <Link className="underline" to="/resources">
+                <Link
+                  className="underline"
+                  search={{ tab: "models" }}
+                  to="/resources"
+                >
                   去接入模型
                 </Link>
               ) : null}

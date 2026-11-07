@@ -61,3 +61,65 @@ export function runningTasksQueryOptions() {
     refetchInterval: 5000,
   });
 }
+
+/**
+ * The board rows a card's 任务数 and 最近运行 are counted from: the last 30 days of `GET /api/tasks`,
+ * unfiltered, newest first.
+ *
+ * Deliberately the board's own stat-bar read (`/tasks` with its default address asks the same URL
+ * under the same key), so /wakers adds no request of its own and the two screens share one cache
+ * entry: a card can never count a different month from the board it links to. The key has to stay
+ * identical to the one `tasks.tsx` builds for `period=month` with no machine, crew or trigger.
+ *
+ * The endpoint returns at most `MONTH_TASK_LIMIT` rows, so a full page means the oldest of the month
+ * may be missing and every count is a lower bound; `taskStatsOf` says so.
+ */
+export type MonthTaskRow = {
+  id: string;
+  executorAgentId: string | null;
+  status: string;
+  updatedAt: string;
+};
+
+/** The server's cap on one `GET /api/tasks` page (`server/src/tasks/routes.ts`). */
+export const MONTH_TASK_LIMIT = 200;
+
+export function monthTaskStatsQueryOptions() {
+  return queryOptions({
+    queryKey: ["tasks-summary", "month", "", ""] as const,
+    queryFn: () =>
+      client<MonthTaskRow[]>("/api/tasks?period=month", "tasks", {
+        fallback: "无法读取任务统计，请稍后重试。",
+      }),
+    refetchInterval: 30000,
+  });
+}
+
+/** One coworker's month on the board: how many cards it executed and when the latest one moved. */
+export type TaskStats = { count: number; lastRunAt: string | null };
+
+/**
+ * Per-coworker counts out of the month's rows. `truncated` is true when the server's page was full,
+ * so a count may be short of the real number and the card should say "at least".
+ */
+export function taskStatsOf(rows: readonly MonthTaskRow[]): {
+  byAgent: Map<string, TaskStats>;
+  truncated: boolean;
+} {
+  const byAgent = new Map<string, TaskStats>();
+  for (const row of rows) {
+    if (!row.executorAgentId) continue;
+    const entry = byAgent.get(row.executorAgentId) ?? {
+      count: 0,
+      lastRunAt: null,
+    };
+    entry.count += 1;
+    if (
+      !entry.lastRunAt ||
+      new Date(row.updatedAt).getTime() > new Date(entry.lastRunAt).getTime()
+    )
+      entry.lastRunAt = row.updatedAt;
+    byAgent.set(row.executorAgentId, entry);
+  }
+  return { byAgent, truncated: rows.length >= MONTH_TASK_LIMIT };
+}

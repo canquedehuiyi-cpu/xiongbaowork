@@ -8,9 +8,7 @@ import {
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Fragment, useState } from "react";
-import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import { PageRows, PageSection } from "@/components/layout/page-shell";
-import { BotPermissions } from "./permissions";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -49,8 +47,6 @@ import {
   updateRoutingQueryOptions,
 } from "@/lib/bot-lifecycle/queries";
 import { queryClient } from "@/query-client";
-import { BotActivitySections } from "./activity";
-import { BotPausedBanner } from "./pause-banner";
 
 const NOTIFY_LABEL: Record<BotNotify, string> = {
   all: "全部",
@@ -187,7 +183,7 @@ function ResetDialog({
   );
 }
 
-function UpdateRoutingSection() {
+export function UpdateRoutingSection() {
   const routing = useQuery(updateRoutingQueryOptions());
   const save = useMutation(setUpdateRoutingMutationOptions(queryClient));
   return (
@@ -258,7 +254,12 @@ function UpdateRoutingSection() {
 }
 
 /** A Bot's own page: its state for you, what it is doing, and the lifecycle controls. */
-export function BotProfile({ agent }: { agent: AgentProfile }) {
+/**
+ * 对你: this person's relationship with one employee — pause, notifications, a new conversation,
+ * reset. One section of the employee's detail page (/wakers/$agentId); the activity feed, tool
+ * permissions and update routing that used to share a page with it are their own exports.
+ */
+export function BotControls({ agent }: { agent: AgentProfile }) {
   const lifecycle = useQuery(botLifecycleQueryOptions(agent.id));
   const pause = useMutation(setBotPausedMutationOptions(queryClient));
   const notify = useMutation(setBotNotifyMutationOptions(queryClient));
@@ -275,19 +276,6 @@ export function BotProfile({ agent }: { agent: AgentProfile }) {
 
   return (
     <>
-      <div className="mt-6 flex items-center gap-3">
-        <AbstractAvatar name={agent.name} seed={agent.avatarSeed} size={40} />
-        <div className="min-w-0">
-          <p className="truncate font-medium">{agent.title}</p>
-          <p className="line-clamp-2 text-muted-foreground text-sm">
-            {agent.roleDescription}
-          </p>
-        </div>
-      </div>
-      <div className="mt-4">
-        <BotPausedBanner agentId={agent.id} />
-      </div>
-
       <PageSection title="对你">
         {lifecycle.isPending ? null : lifecycle.error ? (
           <p className="mt-4 text-destructive text-sm" role="alert">
@@ -415,9 +403,6 @@ export function BotProfile({ agent }: { agent: AgentProfile }) {
         )}
       </PageSection>
 
-      <BotActivitySections agentId={agent.id} />
-      <BotPermissions agentId={agent.id} />
-      <UpdateRoutingSection />
       <ResetDialog agent={agent} onOpenChange={setResetOpen} open={resetOpen} />
     </>
   );

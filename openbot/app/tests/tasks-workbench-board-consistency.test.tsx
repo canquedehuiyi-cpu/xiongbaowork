@@ -329,9 +329,9 @@ test("a full window says 200+ while the running count stays exact", async () => 
   const { view } = draw("/tasks?period=all&view=list", requests, many);
   await resultsShouldShow(view, "full card");
   expect(statValue(view, "任务总数")).toBe("200+");
-  expect(statValue(view, "进行中")).toBe("199");
+  expect(statValue(view, "进行中任务")).toBe("199");
   expect(statValue(view, "需要操作")).toBe("0");
-  expect(statValue(view, "已结束")).toBe("1");
+  expect(statValue(view, "已结束任务")).toBe("1");
 });
 
 test("the bar partitions the batch the way the board defines it", async () => {
@@ -340,9 +340,9 @@ test("the bar partitions the batch the way the board defines it", async () => {
   const { view } = draw("/tasks?period=all&view=list", requests, ALL_ROWS);
   await resultsShouldShow(view, "needs card");
   expect(statValue(view, "任务总数")).toBe("6");
-  expect(statValue(view, "进行中")).toBe("1");
+  expect(statValue(view, "进行中任务")).toBe("1");
   expect(statValue(view, "需要操作")).toBe("1");
-  expect(statValue(view, "已结束")).toBe("3");
+  expect(statValue(view, "已结束任务")).toBe("3");
   expect((badgeOf(view, "odd card").textContent ?? "").trim()).toBe(
     "scheduling",
   );
@@ -509,7 +509,7 @@ test("the Waker/Group dropdown asks for one coworker as executor and a crew as g
               groups: [
                 {
                   id: "group-1",
-                  name: "编程小组",
+                  name: "编程群组",
                   members: [{ agentId: "pkg,agent", position: "0" }],
                 },
               ],
@@ -527,7 +527,7 @@ test("the Waker/Group dropdown asks for one coworker as executor and a crew as g
   await resultsShouldShow(view, "failed card");
   const select = () =>
     view.container.querySelector(
-      'select[aria-label="Waker/Group"]',
+      'select[aria-label="员工 / 群组"]',
     ) as HTMLSelectElement;
   await waitFor(() => {
     expect(select().querySelectorAll("option").length).toBe(3);

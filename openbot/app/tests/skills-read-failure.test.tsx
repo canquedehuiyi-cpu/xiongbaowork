@@ -16,11 +16,11 @@ import {
   Outlet,
   RouterProvider,
 } from "@tanstack/react-router";
-import { cleanup, render, waitFor } from "@testing-library/react";
+import { cleanup, render, waitFor, within } from "@testing-library/react";
 import type { ComponentType } from "react";
 import { EditSkill } from "@/components/skills/edit-skill";
 import { type PluginsPage, pluginKeys } from "@/lib/plugins/queries";
-import { Route as SkillsRoute } from "@/routes/_authed/_app/skills";
+import { Route as ResourcesRoute } from "@/routes/_authed/_app/resources";
 import { Route as AdminSkillsRoute } from "@/routes/_authed/admin/skills";
 
 /**
@@ -117,18 +117,21 @@ function restoreRouteState(
   Object.assign(route, snapshot);
 }
 
-const pristineSkillsRouteState = captureRouteState(SkillsRoute);
+const pristineResourcesRouteState = captureRouteState(ResourcesRoute);
 let skillsRouteSnapshot: Record<string, unknown>;
 
 beforeEach(() => {
-  skillsRouteSnapshot = captureRouteState(pristineSkillsRouteState);
+  skillsRouteSnapshot = captureRouteState(pristineResourcesRouteState);
 });
 
 afterEach(() => {
-  restoreRouteState(SkillsRoute, skillsRouteSnapshot);
+  restoreRouteState(ResourcesRoute, skillsRouteSnapshot);
 });
 
-/** `/skills`, at the id its `Route.useSearch()` reads: `/_authed/_app/skills`. */
+/**
+ * 能力与资源 › 技能 (`/resources?tab=skills`, which the standalone `/skills` page was archived
+ * into), at the id its `Route.useSearch()` reads: `/_authed/_app/resources`.
+ */
 function renderSkills(client: QueryClient) {
   const rootRoute = createRootRoute({ component: Outlet });
   const authedRoute = createRoute({
@@ -142,9 +145,9 @@ function renderSkills(client: QueryClient) {
     component: Outlet,
   });
   const skills = (
-    SkillsRoute as unknown as { update: (options: unknown) => unknown }
+    ResourcesRoute as unknown as { update: (options: unknown) => unknown }
   ).update({
-    path: "/skills",
+    path: "/resources",
     getParentRoute: () => appRoute,
   });
   const tree = rootRoute.addChildren([
@@ -152,7 +155,7 @@ function renderSkills(client: QueryClient) {
   ]);
   const router = createRouter({
     routeTree: tree,
-    history: createMemoryHistory({ initialEntries: ["/skills"] }),
+    history: createMemoryHistory({ initialEntries: ["/resources?tab=skills"] }),
   });
   return render(
     <QueryClientProvider client={client}>
@@ -179,8 +182,11 @@ test("a person's skills page says the skills failed to load, not that they have 
   const view = renderSkills(client);
   await waitForFailedRead(client);
 
-  expect(await view.findByText("你的技能没能加载出来。")).toBeTruthy();
+  const alert = await view.findByRole("alert");
+  expect(alert.textContent).toContain("读不到技能");
+  expect(within(alert).getByRole("button", { name: "重试" })).toBeTruthy();
   expect(view.queryByText("你还没有写过技能。")).toBeNull();
+  expect(view.queryByText("这个部署还没有管理员写的技能。")).toBeNull();
 });
 
 test("a person with genuinely no skills is still told so", async () => {
@@ -188,8 +194,11 @@ test("a person with genuinely no skills is still told so", async () => {
   const view = renderSkills(client);
   await waitForFailedRead(client);
 
+  // The answer already held stays on screen; the refetch that failed after it is said above it,
+  // rather than replacing it.
   expect(await view.findByText("你还没有写过技能。")).toBeTruthy();
-  expect(view.queryByText("你的技能没能加载出来。")).toBeNull();
+  expect(view.getByText("这个部署还没有管理员写的技能。")).toBeTruthy();
+  expect((await view.findByRole("alert")).textContent).toContain("读不到技能");
 });
 
 test("the admin skills page says the skills failed to load, not that there are none", async () => {

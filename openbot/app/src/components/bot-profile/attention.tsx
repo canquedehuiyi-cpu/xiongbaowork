@@ -1,14 +1,5 @@
-import { IconPlayerPause } from "@tabler/icons-react";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import { useEffect, useRef } from "react";
-import { SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
-import { setBotPausedMutationOptions } from "@/lib/bot-lifecycle/mutations";
-import {
-  type BotAttention,
-  botAttentionQueryOptions,
-} from "@/lib/bot-lifecycle/queries";
-import { queryClient } from "@/query-client";
+import type { BotAttention } from "@/lib/bot-lifecycle/queries";
 
 /** Questions, approvals and stalled hand-offs: the things only the person can move forward. */
 export function needsInput(bot: BotAttention): number {
@@ -29,7 +20,7 @@ export function attentionSummary(bot: BotAttention): string {
  * A browser notification when a Bot starts needing this person, if they allowed notifications and
  * did not mute this Bot. Badges show either way; this is the interruption, and it is opt-in.
  */
-function useAttentionNotifications(bots: BotAttention[] | undefined) {
+export function useAttentionNotifications(bots: BotAttention[] | undefined) {
   const seen = useRef<Map<string, number> | null>(null);
   useEffect(() => {
     if (!bots) return;
@@ -60,70 +51,4 @@ function useAttentionNotifications(bots: BotAttention[] | undefined) {
       }
     }
   }, [bots]);
-}
-
-/**
- * The Bots that need this person, for the sidebar: a badge per Bot that has a question, an approval
- * or a stalled hand-off waiting, or something unread, and a resume button for one they paused.
- *
- * Renders nothing when no Bot needs anything, so a quiet day costs the roster no space.
- */
-export function BotAttentionList() {
-  const attention = useQuery(botAttentionQueryOptions());
-  const resume = useMutation(setBotPausedMutationOptions(queryClient));
-  useAttentionNotifications(attention.data);
-  const bots = (attention.data ?? []).filter(
-    (bot) => bot.paused || needsInput(bot) > 0 || bot.unread > 0,
-  );
-  if (attention.isPending || attention.error || bots.length === 0) return null;
-  return (
-    <>
-      {bots.map((bot) => {
-        const waiting = needsInput(bot);
-        return (
-          <SidebarMenuItem key={bot.agentId} className="flex flex-row gap-1">
-            <SidebarMenuButton
-              aria-label={`${bot.name}：${bot.paused ? "已暂停" : attentionSummary(bot)}`}
-              className="hover:bg-foreground/5 h-9 flex-1"
-              render={(props) => (
-                <Link
-                  {...props}
-                  to="/bots/$agentId"
-                  params={{ agentId: bot.agentId }}
-                  activeProps={{ className: "bg-foreground/5" }}
-                />
-              )}
-            >
-              <span className="truncate text-sm">{bot.name}</span>
-              {waiting > 0 ? (
-                <span
-                  className="ml-auto rounded-full bg-primary px-1.5 text-[11px] font-medium text-primary-foreground tabular-nums"
-                  title={attentionSummary(bot)}
-                >
-                  {waiting}
-                </span>
-              ) : bot.unread > 0 ? (
-                <span
-                  className="ml-auto size-2 rounded-full bg-primary"
-                  title={attentionSummary(bot)}
-                />
-              ) : null}
-            </SidebarMenuButton>
-            {bot.paused ? (
-              <SidebarMenuButton
-                className="hover:bg-foreground/5 h-9 w-auto shrink-0 gap-1 text-muted-foreground text-xs"
-                disabled={resume.isPending}
-                onClick={() =>
-                  resume.mutate({ agentId: bot.agentId, paused: false })
-                }
-              >
-                <IconPlayerPause className="size-3.5" />
-                已暂停，点一下恢复
-              </SidebarMenuButton>
-            ) : null}
-          </SidebarMenuItem>
-        );
-      })}
-    </>
-  );
 }

@@ -105,7 +105,7 @@ const agents = [
 // Two coworkers on the roster and one id this deployment has no coworker for.
 const crew: WakerGroup = {
   id: "crew-1",
-  name: "编程小组",
+  name: "编程群组",
   description: null,
   members: [
     { agentId: "agent-dev", position: 0 },
@@ -230,7 +230,7 @@ async function grantCrewEverything(view: ReturnType<typeof draw>) {
   await userEvent.click(await view.findByRole("button", { name: "授予工具…" }));
   // The chip counts only members this dialog can show: the roster's two, not the unknown id.
   await userEvent.click(
-    await view.findByRole("button", { name: "选择编程小组的 2 位员工" }),
+    await view.findByRole("button", { name: "选择编程群组的 2 位员工" }),
   );
   await userEvent.click(await view.findByRole("button", { name: "全选" }));
   await userEvent.click(await view.findByRole("button", { name: "授予" }));

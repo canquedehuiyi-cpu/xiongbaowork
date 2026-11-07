@@ -16,8 +16,8 @@ import { modelKeys } from "@/lib/models/queries";
 import { personaKeys } from "@/lib/personas/queries";
 import type { InstallListing, PluginsPage } from "@/lib/plugins/queries";
 import { routineKeys } from "@/lib/routines/queries";
-import { Route as AgentsRoute } from "@/routes/_authed/_app/agents/index";
 import { Route as AssembleRoute } from "@/routes/_authed/_app/assemble.$agentId";
+import { Route as WakersRoute } from "@/routes/_authed/_app/wakers";
 import { settleReactWork } from "./settle-react-work";
 
 /**
@@ -247,9 +247,9 @@ function draw({
     routeTree: root.addChildren([
       // `as never`, as in `assemble-install.test.tsx`: the file routes are registered in the
       // generated tree under their real parents, and this only re-addresses them for one render.
-      AgentsRoute.update({
+      WakersRoute.update({
         getParentRoute: () => root,
-        path: "/agents",
+        path: "/wakers",
       } as never),
       AssembleRoute.update({
         getParentRoute: () => root,

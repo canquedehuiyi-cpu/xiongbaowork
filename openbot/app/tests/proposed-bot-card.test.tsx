@@ -80,7 +80,7 @@ function routed(node: ReactNode) {
     }),
     createRoute({
       getParentRoute: () => rootRoute,
-      path: "/agents",
+      path: "/wakers",
       component: () => null,
     }),
   ]);
@@ -88,7 +88,7 @@ function routed(node: ReactNode) {
     routeTree,
     history: createMemoryHistory({ initialEntries: ["/"] }),
   });
-  // The app's router is registered globally for typing; this one only has to resolve /agents.
+  // The app's router is registered globally for typing; this one only has to resolve /wakers.
   return render(<RouterProvider router={router as never} />);
 }
 
@@ -291,7 +291,7 @@ test("a completed card links to the coworker, rebuilt from the answer alone", as
   );
 
   const link = await view.findByText("打开「Renewal Desk」");
-  expect(link.closest("a")?.getAttribute("href")).toContain("agent=agent_1");
+  expect(link.closest("a")?.getAttribute("href")).toBe("/wakers?agent=agent_1");
 });
 
 /**

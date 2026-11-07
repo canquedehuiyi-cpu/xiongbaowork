@@ -123,7 +123,7 @@ await runAsTenant(tenantB, async () => {
 test("a crew keeps its members in the order they were put in", async () => {
   const group = await runAsTenant(tenantA, () =>
     store.create({
-      name: "编程小组",
+      name: "编程群组",
       description: "Backend, reviewer and QA.",
     }),
   );
@@ -141,14 +141,14 @@ test("a crew keeps its members in the order they were put in", async () => {
   ]);
 
   const listed = await runAsTenant(tenantA, () => store.list());
-  expect(listed.map((entry) => entry.name)).toEqual(["编程小组"]);
+  expect(listed.map((entry) => entry.name)).toEqual(["编程群组"]);
   expect(listed[0]?.description).toBe("Backend, reviewer and QA.");
   expect(listed[0]?.members).toHaveLength(3);
 });
 
 test("a foreign workspace cannot see the crew, or the people in it", async () => {
   const group = await runAsTenant(tenantA, () =>
-    store.create({ name: "私有小组" }),
+    store.create({ name: "私有群组" }),
   );
   await runAsTenant(tenantA, () =>
     store.setMembers(group.id, ["agent-x", "agent-y"]),
@@ -187,7 +187,7 @@ test("a foreign workspace cannot see the crew, or the people in it", async () =>
  */
 test("a crew cannot be pointed at another workspace's coworker", async () => {
   const group = await runAsTenant(tenantA, () =>
-    store.create({ name: "越界小组" }),
+    store.create({ name: "越界群组" }),
   );
   await runAsTenant(tenantA, () =>
     store.setMembers(group.id, ["agent-a", "agent-b"]),
@@ -213,7 +213,7 @@ test("a crew cannot be pointed at another workspace's coworker", async () => {
 
   // And the same rule stands behind the route, with a sentence rather than a 500.
   const created = await runAsTenant(tenantA, async () =>
-    (await routes.request(post({ name: "越界小组路由" }))).json(),
+    (await routes.request(post({ name: "越界群组路由" }))).json(),
   );
   const response = await runAsTenant(
     tenantA,
@@ -233,18 +233,18 @@ test("a crew cannot be pointed at another workspace's coworker", async () => {
 });
 
 test("one workspace does not get to name two crews the same thing", async () => {
-  await runAsTenant(tenantA, () => store.create({ name: "重名小组" }));
+  await runAsTenant(tenantA, () => store.create({ name: "重名群组" }));
 
   await expect(
-    runAsTenant(tenantA, () => store.create({ name: "重名小组" })),
+    runAsTenant(tenantA, () => store.create({ name: "重名群组" })),
   ).rejects.toBeInstanceOf(WakerGroupNameTakenError);
 
   // Two workspaces naming the same crew is not a collision: the index is per tenant, so the second
   // one keeps its own group with its own roster.
   const other = await runAsTenant(tenantB, () =>
-    store.create({ name: "重名小组" }),
+    store.create({ name: "重名群组" }),
   );
-  expect(other.name).toBe("重名小组");
+  expect(other.name).toBe("重名群组");
 
   await expect(
     runAsTenant(tenantA, () => store.create({ name: "   " })),
@@ -253,18 +253,18 @@ test("one workspace does not get to name two crews the same thing", async () => 
 
 test("the routes carry the same rules as the store", async () => {
   const created = await runAsTenant(tenantA, () =>
-    routes.request(post({ name: "路线小组", description: "  " })),
+    routes.request(post({ name: "路线群组", description: "  " })),
   );
   expect(created.status).toBe(201);
   const body = (await created.json()) as {
     group: { id: string; name: string; description: string | null };
   };
-  expect(body.group.name).toBe("路线小组");
+  expect(body.group.name).toBe("路线群组");
   // A blank purpose is the same as no purpose: it would otherwise render as an empty paragraph.
   expect(body.group.description).toBeNull();
 
   const clash = await runAsTenant(tenantA, () =>
-    routes.request(post({ name: "路线小组" })),
+    routes.request(post({ name: "路线群组" })),
   );
   expect(clash.status).toBe(409);
 
@@ -310,7 +310,7 @@ test("the routes carry the same rules as the store", async () => {
 
 test("the board answers to a crew's name, not only to one coworker", async () => {
   const group = await runAsTenant(tenantA, () =>
-    store.create({ name: "看板小组" }),
+    store.create({ name: "看板群组" }),
   );
   const roster = ["board-1", "board-2"];
   const crewed = await runAsTenant(tenantA, () =>

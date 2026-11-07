@@ -5,7 +5,7 @@ import { wakerGroupKeys } from "./queries";
 /**
  * Crews are written by name and by roster, and by nothing else.
  *
- * There is no rename: the name is what a person says out loud (`@编程小组`), so the honest way to
+ * There is no rename: the name is what a person says out loud (`@编程群组`), so the honest way to
  * change one is to retire the crew and make a new one while watching who is in it — an in-place
  * rename would silently point an old habit at a different set of coworkers.
  */

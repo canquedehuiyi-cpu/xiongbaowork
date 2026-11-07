@@ -214,7 +214,7 @@ async function workspace(kind: string) {
     await database.insert(channelAgents).values({ channelId, agentId });
     await database
       .insert(wakerGroups)
-      .values({ id: groupId, tenantId: tenant, name: "小组" });
+      .values({ id: groupId, tenantId: tenant, name: "群组" });
     await database
       .insert(wakerGroupMembers)
       .values({ groupId, agentId, position: "0" });

@@ -112,7 +112,7 @@ await runAsTenant(tenant, async () => {
   await database.insert(wakerGroups).values({
     id: groupId,
     tenantId: tenant,
-    name: `编程小组-${suite}`,
+    name: `编程群组-${suite}`,
   });
   // ALT is in the crew so an edit has somebody legitimate to hand a step to; OUTSIDER is not.
   await database.insert(wakerGroupMembers).values(
@@ -128,7 +128,7 @@ await runAsTenant(tenant, async () => {
   await database.insert(wakerGroups).values({
     id: flowGroupId,
     tenantId: tenant,
-    name: `流程内部小组-${suite}`,
+    name: `流程内部群组-${suite}`,
   });
   await database.insert(wakerGroupMembers).values({
     groupId: flowGroupId,
@@ -140,7 +140,7 @@ await runAsTenant(stranger, async () => {
   await database.insert(wakerGroups).values({
     id: strangerGroupId,
     tenantId: stranger,
-    name: `别人的小组-${suite}`,
+    name: `别人的群组-${suite}`,
   });
   await database.insert(wakerGroupMembers).values({
     groupId: strangerGroupId,

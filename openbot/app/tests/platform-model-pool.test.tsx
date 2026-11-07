@@ -163,7 +163,7 @@ function drawResources() {
   const root = createRootRoute({ component: () => <Outlet /> });
   const router = createRouter({
     context: {},
-    history: createMemoryHistory({ initialEntries: ["/resources"] }),
+    history: createMemoryHistory({ initialEntries: ["/resources?tab=models"] }),
     routeTree: root.addChildren([
       ResourcesRoute.update({
         getParentRoute: () => root,

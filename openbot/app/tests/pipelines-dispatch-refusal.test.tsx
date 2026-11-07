@@ -79,7 +79,7 @@ const writer: AgentProfile = {
 
 const crew: WakerGroup = {
   id: "crew-1",
-  name: "编程小组",
+  name: "编程群组",
   description: null,
   members: [
     { agentId: "agent-dev", position: 0 },

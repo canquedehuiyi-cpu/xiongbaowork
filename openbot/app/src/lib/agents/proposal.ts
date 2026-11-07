@@ -59,7 +59,7 @@ export const botCardAnswer = {
     }
     parts.push(
       "It was granted no connector, no tool and no address. Tell the person that anything it needs to reach is granted on its profile, that it can be talked to now, and that its profile is at",
-      `/agents?agent=${input.agentId}.`,
+      `/wakers?agent=${input.agentId}.`,
     );
     return parts.join(" ");
   },

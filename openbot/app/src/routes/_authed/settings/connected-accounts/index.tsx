@@ -160,6 +160,7 @@ function RouteComponent() {
 
   return (
     <PageShell
+      width="workbench"
       className="max-w-4xl @container"
       description="连接你的应用，让员工可以用它们干活。"
       title="已连接的账号"
