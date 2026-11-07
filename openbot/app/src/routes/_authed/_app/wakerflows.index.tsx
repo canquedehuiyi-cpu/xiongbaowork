@@ -49,7 +49,11 @@ function WakerFlowsPage() {
   return (
     <PageShell
       action={rows.length > 0 ? <NewButton /> : null}
-      backButton={{ label: "能力与资源", linkProps: { to: "/resources" } }}
+      backButton={{
+        label: "能力与资源",
+        // Back to the tab this list belongs to, not to 插件, which /resources opens on.
+        linkProps: { to: "/resources", search: { tab: "wakerflows" } },
+      }}
       description="用一句话描述想要的流程，生成由多位员工分步执行的计划，修改并保存后即可运行。"
       title="WakerFlow"
     >

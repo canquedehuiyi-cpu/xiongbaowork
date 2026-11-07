@@ -29,6 +29,7 @@ import { agentKeys } from "@/lib/agents/queries";
 import { authKeys } from "@/lib/auth/queries";
 import { botLifecycleKeys } from "@/lib/bot-lifecycle/queries";
 import { type ChannelSummary, channelKeys } from "@/lib/channels/queries";
+import { quotaKeys } from "@/lib/quota/queries";
 import { userPreferencesQueryOptions } from "@/lib/settings/message-list";
 import { wakerGroupKeys } from "@/lib/waker-groups/queries";
 
@@ -170,6 +171,13 @@ function renderSidebar(first: ChannelSummary = channel("Recent conversation")) {
   queryClient.setQueryData(userPreferencesQueryOptions("user").queryKey, {
     messageListEmphasis: "thread",
     selfHostBannerDismissed: false,
+  });
+  // The footer reads the plan once on its own; these tests count channel requests only.
+  queryClient.setQueryData(quotaKeys.usage(), {
+    plan: { id: "pro", name: "专业版" },
+    limits: { wakers: 10, tasksPerMonth: 100, devices: 3 },
+    usage: { wakers: 2, tasks: 4, devices: 1 },
+    tokens: null,
   });
   queryClient.setQueryData(authKeys.currentUser(), {
     id: "user",
