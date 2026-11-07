@@ -1,6 +1,11 @@
 import { IconPlus } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Link,
+  type LinkProps,
+  linkOptions,
+} from "@tanstack/react-router";
 import { PageRows, PageShell } from "@/components/layout/page-shell";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,6 +31,18 @@ import { wakerFlowsQueryOptions } from "@/lib/wakerflows";
  *
  * Rows open the Flow's own page (`wakerflows.$flowId.tsx`): its plan, 编辑/复用/删除, and its runs.
  */
+/*
+ * Checked against /resources' own search schema by `linkOptions`, then widened to the shell's
+ * `LinkProps` (as `wakersBackLink` does): an inline object literal there is inferred against the
+ * union of every route's search and rejects `tab: "wakerflows"`. The widening goes through
+ * `unknown` because the validated, route-specific type and the shell's generic one share too little
+ * for a direct assertion; `linkOptions` above is what checks the address.
+ */
+const WAKERFLOWS_TAB = linkOptions({
+  to: "/resources",
+  search: { tab: "wakerflows" },
+}) as unknown as LinkProps;
+
 export const Route = createFileRoute("/_authed/_app/wakerflows/")({
   component: WakerFlowsPage,
 });
@@ -52,7 +69,7 @@ function WakerFlowsPage() {
       backButton={{
         label: "能力与资源",
         // Back to the tab this list belongs to, not to 插件, which /resources opens on.
-        linkProps: { to: "/resources", search: { tab: "wakerflows" } },
+        linkProps: WAKERFLOWS_TAB,
       }}
       description="用一句话描述想要的流程，生成由多位员工分步执行的计划，修改并保存后即可运行。"
       title="WakerFlow"
