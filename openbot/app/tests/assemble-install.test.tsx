@@ -13,8 +13,8 @@ import userEvent from "@testing-library/user-event";
 import { type AgentProfile, agentKeys } from "@/lib/agents/queries";
 import { authKeys } from "@/lib/auth/queries";
 import { pluginKeys } from "@/lib/plugins/queries";
-import { Route as AgentsRoute } from "@/routes/_authed/_app/agents/index";
 import { Route as AssembleRoute } from "@/routes/_authed/_app/assemble.$agentId";
+import { Route as WakersRoute } from "@/routes/_authed/_app/wakers";
 
 /**
  * Ticket 015 acceptance, at the screen where it is decided: installing a skill on one coworker is a
@@ -115,9 +115,9 @@ function draw(grantedSlugs: string[]) {
       // `as never` on the parent: TanStack's own file route is already registered in the generated
       // tree with its real parent, and this only needs it answering to a different address for the
       // duration of one render. `agent-roster-error.test.tsx` casts the same way for the same reason.
-      AgentsRoute.update({
+      WakersRoute.update({
         getParentRoute: () => root,
-        path: "/agents",
+        path: "/wakers",
       } as never),
       AssembleRoute.update({
         getParentRoute: () => root,

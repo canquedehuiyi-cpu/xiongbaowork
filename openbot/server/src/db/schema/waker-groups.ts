@@ -11,7 +11,7 @@ const updatedAt = () =>
  * (ticket 023, spec D4).
  *
  * Deliberately its own tables rather than a view over the upstream user groups: those are about people
- * in an organisation, and a Waker is not a person. A crew of three coworkers answers to `@编程小组`
+ * in an organisation, and a Waker is not a person. A crew of three coworkers answers to `@编程群组`
  * while a person's team membership answers to nothing at all, and folding the two together would mean
  * every coworker group is also a claim about human staff.
  */

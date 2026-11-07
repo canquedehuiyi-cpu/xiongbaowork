@@ -85,7 +85,11 @@ function ScheduleSkill({
       <p className="w-full text-xs">
         已排期。/{recording.skillSlug} 下次运行于{" "}
         {new Date(scheduled.nextRunAt).toLocaleString("zh-CN")}。{" "}
-        <Link to="/routines" className="underline">
+        <Link
+          className="underline"
+          search={{ trigger: "schedule" }}
+          to="/autonomous"
+        >
           查看定时任务
         </Link>{" "}
         <button type="button" className="underline" onClick={onDone}>
@@ -351,8 +355,8 @@ export function DemonstrationRecorder({
               {recording.status === "published" && recording.skillSlug ? (
                 <>
                   <Link
-                    to="/skills"
-                    search={{ edit: recording.skillSlug }}
+                    to="/resources"
+                    search={{ tab: "skills", edit: recording.skillSlug }}
                     className="text-xs underline"
                   >
                     编辑 /{recording.skillSlug}

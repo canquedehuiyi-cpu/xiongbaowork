@@ -4,9 +4,16 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import { AgentAuditTrail } from "@/components/agents/audit-trail";
 import { AvatarSourcesPanel } from "@/components/avatar/avatar-sources";
+import { BotActivitySections } from "@/components/bot-profile/activity";
+import { BotPausedBanner } from "@/components/bot-profile/pause-banner";
+import { BotPermissions } from "@/components/bot-profile/permissions";
+import {
+  BotControls,
+  UpdateRoutingSection,
+} from "@/components/bot-profile/profile";
 import { PageSection, PageShell } from "@/components/layout/page-shell";
-import { ProjectPicker } from "@/components/projects/project-picker";
 import { QueryError } from "@/components/layout/query-error";
+import { ProjectPicker } from "@/components/projects/project-picker";
 import { Button } from "@/components/ui/button";
 import {
   Empty,
@@ -22,6 +29,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
+import { wakersBackLink } from "@/components/wakers/wakers-search";
 import { type AgentProfile, agentQueryOptions } from "@/lib/agents/queries";
 import { avatarSourcesQueryOptions } from "@/lib/avatar/sources";
 import { agentRunningTasksQueryOptions } from "@/lib/bot-lifecycle/queries";
@@ -33,11 +41,11 @@ import {
 } from "@/lib/models/queries";
 import { agentPluginsQueryOptions } from "@/lib/plugins/queries";
 import { relativeTime } from "@/lib/relative-time";
-import { routinesQueryOptions } from "@/lib/routines/queries";
 import {
   type ResponsibilityRecord,
   responsibilitiesQueryOptions,
 } from "@/lib/responsibilities";
+import { routinesQueryOptions } from "@/lib/routines/queries";
 
 /**
  * One coworker's detail page (story D5): what it is responsible for, what it is doing now, which
@@ -87,7 +95,10 @@ function WakerDetailPage() {
       agent.error instanceof RequestError && agent.error.status === 404;
     return (
       <PageShell
-        backButton={{ label: "数字员工", linkProps: { to: "/wakers" } }}
+        backButton={{
+          label: "员工管理",
+          linkProps: wakersBackLink(),
+        }}
         title="员工详情"
       >
         {missing ? (
@@ -126,7 +137,10 @@ function WakerDetailPage() {
           装配
         </Button>
       }
-      backButton={{ label: "数字员工", linkProps: { to: "/wakers" } }}
+      backButton={{
+        label: "员工管理",
+        linkProps: wakersBackLink(),
+      }}
       description={profile.title || undefined}
       title={profile.name}
     >
@@ -136,19 +150,36 @@ function WakerDetailPage() {
           seed={profile.avatarSeed}
           size={40}
         />
-        <p className="min-w-0 text-muted-foreground text-sm">
-          {profile.canManage
-            ? "你是它的主人，可以在装配页修改它。"
-            : "这位员工归别人所有，这里只能看。"}
-        </p>
+        <div className="min-w-0">
+          {profile.roleDescription ? (
+            <p className="line-clamp-2 text-sm">{profile.roleDescription}</p>
+          ) : null}
+          <p className="text-muted-foreground text-sm">
+            {profile.canManage
+              ? "你是它的主人，可以在装配页修改它。"
+              : "这位员工归别人所有，这里只能看。"}
+          </p>
+        </div>
+      </div>
+      <div className="mt-4">
+        <BotPausedBanner agentId={profile.id} />
       </div>
       <ModelLine profile={profile} />
 
+      {/*
+       * One employee, one page (user decision: 合并成一个详情页). First what is between this person
+       * and the employee and what it is doing for them — the old /bots profile — then what it is
+       * set up with.
+       */}
+      <BotControls agent={profile} />
+      <BotActivitySections agentId={profile.id} />
+      <RunningTasksSection agentId={profile.id} />
       <AvatarSourcesSection profile={profile} />
       <ProjectSection profile={profile} />
       <DutiesSection profile={profile} />
-      <RunningTasksSection agentId={profile.id} />
       <SkillGrantsSection agentId={profile.id} />
+      <BotPermissions agentId={profile.id} />
+      <UpdateRoutingSection />
 
       <PageSection
         description="谁在什么时候对它做了什么，读自现有的审计记录。"
@@ -399,8 +430,8 @@ function RunningTasksSection({ agentId }: { agentId: string }) {
           在看板上看
         </Button>
       }
-      description="任务看板上由它执行、还没结束的任务。"
-      title="进行中任务"
+      description="任务看板上由它执行、还没结束的任务；上面的「进行中」是它替你跟进的事和等你处理的事。"
+      title="看板上的进行中任务"
     >
       {running.isPending ? (
         <Skeleton

@@ -37,6 +37,7 @@ function RouteComponent() {
    */
   return (
     <PageShell
+      width="workbench"
       description="应用在你这里的外观和行为。消息列表偏好会随账号同步；主题只保存在这个浏览器里。"
       title="偏好设置"
     >

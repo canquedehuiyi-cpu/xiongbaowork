@@ -1,14 +1,23 @@
+import { IconPlus } from "@tabler/icons-react";
 import {
-  queryOptions,
   type UseQueryResult,
   useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useId, useRef, useState } from "react";
 import { AutomationsSection } from "@/components/automations/automations-section";
+import { CreateAutomationPanel } from "@/components/autonomous/create-panel";
+import { UnifiedAutomations } from "@/components/autonomous/unified-list";
+import {
+  describe,
+  RunStrip,
+  recentRunsOf,
+  statusWord,
+  WorkSwitch,
+} from "@/components/autonomous/work-bits";
 import {
   PageRows,
   PageSection,
@@ -28,17 +37,17 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { type AgentProfile, agentListQueryOptions } from "@/lib/agents/queries";
 import {
-  setProactiveEnabledMutationOptions,
-  setResponsibilityEnabledMutationOptions,
-} from "@/lib/autonomous/mutations";
-import {
   type AutonomousSummary,
   autonomousKeys,
+  autonomousOverviewQueryOptions,
   autonomousQueryOptions,
-  type LastRun,
 } from "@/lib/autonomous/queries";
+import {
+  type AutonomousSearch,
+  autonomousSearch,
+} from "@/lib/autonomous/unified";
 import { channelListQueryOptions } from "@/lib/channels/queries";
-import { client, RequestError } from "@/lib/client";
+import { RequestError } from "@/lib/client";
 import { relativeTime } from "@/lib/relative-time";
 import {
   cronFor,
@@ -55,34 +64,95 @@ import {
 
 export const Route = createFileRoute("/_authed/_app/autonomous")({
   component: RouteComponent,
+  /**
+   * Every field optional: a bare `/autonomous` (the sidebar, every older link) is a complete
+   * question, and an unknown value is dropped rather than failing the route.
+   */
+  validateSearch: (search: Record<string, unknown>): AutonomousSearch =>
+    autonomousSearch(search),
 });
 
-/**
- * Spec C1's 全部员工: every coworker's unattended work in one read (`GET /api/agents/autonomous/all`),
- * keyed under `autonomousKeys.all` so every write on this page that refreshes one coworker refreshes
- * the overview too.
- */
-const overviewQueryOptions = (enabled: boolean) =>
-  queryOptions({
-    // An object, not a string: `autonomousKeys.forAgent(id)` is `["autonomous", id]`, and a
-    // coworker whose id happened to be "overview" would otherwise share this cache entry.
-    queryKey: [...autonomousKeys.all, { overview: true }] as const,
-    enabled,
-    queryFn: () =>
-      client<AutonomousSummary[]>("/api/agents/autonomous/all", "autonomous", {
-        fallback: "Could not load what the coworkers do on their own.",
-      }),
-    refetchInterval: 300_000,
-  });
+type View = "list" | "agents";
 
 /**
- * A schedule's newest firings, newest first (at most five), as the server sends them beside `lastRun`.
- * Read defensively: a server from before the field sends none, and that is an empty strip, not a crash.
+ * 自主工作 (parity plan): the title with its one primary action, then two views of the same work.
+ *
+ * 任务列表 (the default, as in the reference) is one list over every kind of unattended work with
+ * four metrics, search and filters, all mirrored into the URL. 按员工 (`?view=agents`) is the
+ * earlier per-coworker page, kept whole, because it carries what the list does not: a coworker's
+ * routine form with its conversation picker, and the 全部员工 overview grouped by coworker. The
+ * reference has no such view, so it is reached from a quiet 「按员工查看」 link at the toolbar's
+ * end rather than a switch in the header, and left by 「返回任务列表」.
  */
-function recentRunsOf(row: object): LastRun[] {
-  return "recentRuns" in row && Array.isArray(row.recentRuns)
-    ? (row.recentRuns as LastRun[])
-    : [];
+function RouteComponent() {
+  const search = Route.useSearch();
+  const navigate = useNavigate();
+  const [creating, setCreating] = useState(false);
+  const view: View = search.view === "agents" ? "agents" : "list";
+  /*
+   * Only the axes that are set go into the address, so a cleared filter leaves no `?status=`. A
+   * patch is merged into the address as it is when the navigation runs, not as this render saw it,
+   * so two controls changed in quick succession both land.
+   */
+  const update = (
+    next: AutonomousSearch | ((current: AutonomousSearch) => AutonomousSearch),
+  ) =>
+    void navigate({
+      to: "/autonomous",
+      search: (current: Record<string, unknown>) =>
+        Object.fromEntries(
+          Object.entries(
+            typeof next === "function" ? next(autonomousSearch(current)) : next,
+          ).filter(([, value]) => value !== undefined && value !== ""),
+        ) as AutonomousSearch,
+      replace: true,
+    });
+
+  return (
+    <PageShell
+      action={
+        <Button
+          aria-expanded={view === "list" && creating}
+          /*
+           * The reference centres its action on the title and subtitle together, not on the title
+           * line alone: the nudge is visual only, so the header's own layout is untouched.
+           */
+          className="h-[32px] translate-y-[15px] gap-[10px] pr-[12px] pl-[13px] text-[13px]"
+          onClick={() => {
+            if (view === "agents") {
+              update({});
+              setCreating(true);
+              return;
+            }
+            setCreating((open) => !open);
+          }}
+        >
+          <IconPlus aria-hidden="true" className="size-[14px]" />
+          新建自动任务
+        </Button>
+      }
+      description="通过定时、事件或 API 自动开工，并由员工或 WakerFlow 响应。"
+      title="自主工作"
+      width="workbench"
+    >
+      {view === "list" ? (
+        <>
+          {creating ? (
+            <CreateAutomationPanel onClose={() => setCreating(false)} />
+          ) : null}
+          <UnifiedAutomations
+            onChange={(patch) =>
+              update((current) => ({ ...current, ...patch }))
+            }
+            onReset={() => update({})}
+            search={search}
+          />
+        </>
+      ) : (
+        <AgentsView />
+      )}
+    </PageShell>
+  );
 }
 
 /**
@@ -94,7 +164,7 @@ function recentRunsOf(row: object): LastRun[] {
  * `POST /api/routines`, which goes through the same store a Bot's tool does: this page asks, the store
  * decides, and its refusal is shown in its own words. Asking a coworker in a conversation still works.
  */
-function RouteComponent() {
+function AgentsView() {
   const queryClient = useQueryClient();
   const agents = useQuery(agentListQueryOptions());
   const [pinned, setPinned] = useState<string | null>(null);
@@ -103,7 +173,7 @@ function RouteComponent() {
   const roster = agents.data ?? [];
   const agentId = everyone ? null : (pinned ?? roster[0]?.id ?? null);
   const summary = useQuery(autonomousQueryOptions(agentId));
-  const overview = useQuery(overviewQueryOptions(everyone));
+  const overview = useQuery(autonomousOverviewQueryOptions(everyone));
   const toggle = useMutation(setRoutineEnabledMutationOptions(queryClient));
   const runNow = useMutation(runRoutineNowMutationOptions(queryClient));
   const remove = useMutation(deleteRoutineMutationOptions(queryClient));
@@ -141,10 +211,20 @@ function RouteComponent() {
   };
 
   return (
-    <PageShell
-      description="这位数字员工自己安排的定时任务、长期职责与主动巡检，以及它们上一次的结果。"
-      title="自主工作"
-    >
+    <>
+      <div className="flex flex-wrap items-center justify-between gap-3 pt-[32px] pb-[12px]">
+        <p className="text-muted-foreground text-sm">
+          这位员工自己安排的定时任务、长期职责与主动巡检，以及它们上一次的结果。
+        </p>
+        {/* The filters belong to the list, so going back starts it from a bare address. */}
+        <Link
+          className="text-[13px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+          search={{}}
+          to="/autonomous"
+        >
+          返回任务列表
+        </Link>
+      </div>
       {agents.isError ? (
         <QueryError
           label="员工加载失败"
@@ -398,7 +478,7 @@ function RouteComponent() {
           </p>
         </>
       ) : null}
-    </PageShell>
+    </>
   );
 }
 
@@ -532,131 +612,6 @@ function Overview({
         </PageSection>
       ))}
     </>
-  );
-}
-
-const SWITCH_NOUN = {
-  responsibility: "长期职责",
-  proactive: "主动巡检",
-} as const;
-
-/**
- * The 启停开关 of spec C1 for one responsibility or one proactive check-in.
- *
- * It moves at once and moves back if the server refuses, with the server's sentence shown under it as
- * it was said. A person who cannot manage this coworker sees the switch but cannot move it, and a
- * completed responsibility has nothing left to switch on. Routines keep their 暂停/恢复 press, which
- * goes through the routine store and its floor.
- *
- * A native `<button role="switch">` drawn like `ui/switch`, not the Base UI one: this page draws a
- * switch on every row, and with a Base UI root per row a single failed DOM assertion took bun several
- * seconds to print (measured: ~4 s per element), enough to time out the page's existing tests.
- */
-function WorkSwitch({
-  kind,
-  id,
-  name,
-  enabled,
-  canManage,
-  status,
-}: {
-  kind: keyof typeof SWITCH_NOUN;
-  id: string;
-  name: string;
-  enabled: boolean;
-  canManage: boolean;
-  /** A responsibility's own status; only `active` and `paused` can be switched. */
-  status?: string;
-}) {
-  const queryClient = useQueryClient();
-  const toggle = useMutation(
-    kind === "responsibility"
-      ? setResponsibilityEnabledMutationOptions(queryClient)
-      : setProactiveEnabledMutationOptions(queryClient),
-  );
-  const [problem, setProblem] = useState<string | null>(null);
-  const finished = kind === "responsibility" && status === "completed";
-  const reason = !canManage
-    ? "只有能管理这位员工的人才能开关"
-    : finished
-      ? "这条职责已经完成，不能再开启"
-      : undefined;
-
-  return (
-    <div className="flex flex-col items-end gap-1">
-      <button
-        aria-checked={enabled}
-        aria-label={`${SWITCH_NOUN[kind]}开关：${name}`}
-        className="group/switch relative inline-flex h-[14px] w-[24px] shrink-0 items-center rounded-full border border-transparent bg-input outline-none transition-[background-color,box-shadow] duration-150 ease-out focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-checked:bg-primary dark:bg-input/80 dark:aria-checked:bg-primary"
-        disabled={reason !== undefined || toggle.isPending}
-        onClick={() => {
-          setProblem(null);
-          toggle.mutate(
-            { id, enabled: !enabled },
-            {
-              onError: (thrown: Error) =>
-                setProblem(thrown.message || "没能切换，请重试。"),
-            },
-          );
-        }}
-        role="switch"
-        title={reason}
-        type="button"
-      >
-        <span className="pointer-events-none block size-3 rounded-full bg-background transition-transform duration-150 ease-out group-aria-checked/switch:translate-x-[calc(100%-2px)] dark:bg-foreground dark:group-aria-checked/switch:bg-primary-foreground" />
-      </button>
-      {problem ? (
-        <p className="text-destructive text-xs" role="alert">
-          {problem}
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
-const RUN_TONE: Record<string, string> = {
-  succeeded: "bg-emerald-500",
-  failed: "bg-red-500",
-  running: "bg-sky-500",
-  waiting: "bg-amber-500",
-  waiting_for_input: "bg-amber-500",
-  skipped: "bg-foreground/30",
-  queued: "bg-foreground/30",
-};
-
-/**
- * The last few firings, newest on the left, one mark each (spec C1: 最近 N 次运行结果). Each mark
- * names its outcome and time for a screen reader and on hover; nothing is drawn for a schedule that
- * has never fired, which its own line already says.
- */
-function RunStrip({ runs }: { runs: LastRun[] }) {
-  if (runs.length === 0) return null;
-  const marks = runs.map((run, ordinal) => ({
-    run,
-    id: `${ordinal}`,
-    label: `${run.status ? statusWord(run.status) : "结果未知"}${run.at ? ` · ${relativeTime(run.at)}` : ""}`,
-  }));
-  return (
-    <div className="flex items-center gap-1.5 pt-1 text-muted-foreground text-xs">
-      <span>近 {runs.length} 次</span>
-      <ol aria-label="近几次运行" className="flex list-none items-center gap-1">
-        {marks.map((mark) => (
-          <li
-            className="flex items-center"
-            data-run-status={mark.run.status ?? "unknown"}
-            key={mark.id}
-            title={mark.label}
-          >
-            <span
-              className={`inline-block size-2.5 rounded-sm ${
-                RUN_TONE[mark.run.status ?? ""] ?? "bg-foreground/30"
-              }`}
-            />
-            <span className="sr-only">{mark.label}</span>
-          </li>
-        ))}
-      </ol>
-    </div>
   );
 }
 
@@ -909,50 +864,4 @@ function NewRoutineForm({
       </div>
     </form>
   );
-}
-
-/**
- * The last firing, in the words a person wants: what happened and when.
- *
- * A run that never finished says so rather than going blank, because an in-flight firing is the one
- * state this page is most likely being opened to check.
- */
-function describe(run: LastRun | null, routine = false): string {
-  if (!run) return "从未触发过";
-  if (
-    run.status === "running" ||
-    (routine &&
-      run.status === null &&
-      run.at !== null &&
-      Number.isFinite(Date.parse(run.at)))
-  )
-    return run.at ? `正在进行（开始于 ${relativeTime(run.at)}）` : "正在进行";
-  if (!run.at)
-    return run.status
-      ? `${statusWord(run.status)}（无开始时间）`
-      : "结果未知（无开始时间）";
-  return `上一次${run.status ? statusWord(run.status) : "结果未知"} ${relativeTime(run.at)}`;
-}
-
-/**
- * The words for the states a run, a goal or a check-in reports, which arrive as the server's codes.
- * A code this map has not met is shown as it came, rather than hidden.
- */
-const STATUS_WORDS: Record<string, string> = {
-  succeeded: "成功",
-  failed: "失败",
-  running: "运行中",
-  queued: "排队中",
-  skipped: "跳过",
-  waiting: "等待中",
-  waiting_for_input: "等你处理",
-  cancelled: "已取消",
-  idle: "空闲",
-  active: "进行中",
-  paused: "已暂停",
-  completed: "已完成",
-};
-
-function statusWord(status: string): string {
-  return STATUS_WORDS[status] ?? status;
 }

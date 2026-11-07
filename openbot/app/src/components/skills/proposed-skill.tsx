@@ -197,8 +197,8 @@ function PutItOnABot({ slug }: { slug: string }) {
   return (
     <Link
       className="mt-2 inline-block text-sm underline underline-offset-4"
-      search={{ edit: slug }}
-      to="/skills"
+      search={{ tab: "skills", edit: slug }}
+      to="/resources"
     >
       把它交给一位员工
     </Link>

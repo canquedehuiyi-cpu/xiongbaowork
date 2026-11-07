@@ -63,6 +63,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { wakersReturnSearch } from "@/components/wakers/wakers-search";
 import {
   type AgentFormValues,
   agentFormSchema,
@@ -1296,7 +1297,10 @@ function ManageSection({
                   hidden: !profile.hidden,
                 });
                 if (!profile.hidden)
-                  await navigate({ search: {}, to: "/agents" });
+                  await navigate({
+                    search: wakersReturnSearch(),
+                    to: "/wakers",
+                  });
               }}
               size="sm"
               variant="outline"
@@ -1324,7 +1328,10 @@ function ManageSection({
               disabled={duplicateAgent.isPending}
               onClick={async () => {
                 const copy = await duplicateAgent.mutateAsync(agentId);
-                await navigate({ search: { agent: copy.id }, to: "/agents" });
+                await navigate({
+                  search: { ...wakersReturnSearch(), agent: copy.id },
+                  to: "/wakers",
+                });
               }}
               size="sm"
               variant="outline"
@@ -1390,7 +1397,7 @@ function ManageSection({
               disabled={deleteAgent.isPending}
               onClick={async () => {
                 await deleteAgent.mutateAsync(agentId);
-                await navigate({ search: {}, to: "/agents" });
+                await navigate({ search: wakersReturnSearch(), to: "/wakers" });
               }}
               size="sm"
               variant="destructive"

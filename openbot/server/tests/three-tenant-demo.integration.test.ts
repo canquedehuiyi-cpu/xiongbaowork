@@ -189,7 +189,7 @@ for (const tenant of tenants) {
       await database.insert(wakerGroups).values({
         id: groupId,
         tenantId: tenant,
-        name: `演示小组-${tenant}`,
+        name: `演示群组-${tenant}`,
       }),
   );
   // Its own employee is a member of it, which is what lets a pipeline step be written for anybody.

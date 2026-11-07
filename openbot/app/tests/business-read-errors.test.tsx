@@ -58,7 +58,7 @@ afterEach(async () => {
   });
 });
 
-function draw(route: (typeof routes)[number], path: string) {
+function draw(route: (typeof routes)[number], path: string, entry = path) {
   const root = createRootRoute({ component: Outlet });
   const authed = createRoute({
     id: "/_authed",
@@ -75,7 +75,7 @@ function draw(route: (typeof routes)[number], path: string) {
     routeTree: root.addChildren([
       authed.addChildren([app.addChildren([wired])]),
     ]),
-    history: createMemoryHistory({ initialEntries: [path] }),
+    history: createMemoryHistory({ initialEntries: [entry] }),
   });
   return render(
     <QueryClientProvider client={queryClient}>
@@ -100,7 +100,7 @@ const agent = {
 };
 const crew = {
   id: "business-crew",
-  name: "业务小组",
+  name: "业务群组",
   members: [],
   description: null,
 };
@@ -157,12 +157,12 @@ test("a failed group read says it failed instead of claiming there are no groups
   const api = serve("/api/waker-groups", 500);
   const view = draw(PipelinesRoute, "/pipelines");
   expect((await view.findByRole("alert")).textContent).toContain(
-    "小组加载失败",
+    "群组加载失败",
   );
-  expect(view.queryByText("还没有小组")).toBeNull();
+  expect(view.queryByText("还没有群组")).toBeNull();
   api.recover();
   await userEvent.click(view.getByRole("button", { name: "重试" }));
-  expect(await view.findByRole("button", { name: "业务小组" })).toBeTruthy();
+  expect(await view.findByRole("button", { name: "业务群组" })).toBeTruthy();
   await waitFor(() => expect(view.queryByRole("alert")).toBeNull());
 });
 
@@ -181,7 +181,7 @@ test("a failed template read offers retry without claiming the group has zero fl
 
 test("an autonomous read failure has an error and retry instead of a blank page", async () => {
   const api = serve(`/api/agents/${agent.id}/autonomous`);
-  const view = draw(AutonomousRoute, "/autonomous");
+  const view = draw(AutonomousRoute, "/autonomous", "/autonomous?view=agents");
   expect((await view.findByRole("alert")).textContent).toContain(
     "自主工作加载失败",
   );
@@ -196,7 +196,7 @@ test("an autonomous read failure has an error and retry instead of a blank page"
 
 test("a failed employee read on autonomous work offers retry without a false empty state", async () => {
   const api = serve("/api/agents", 500);
-  const view = draw(AutonomousRoute, "/autonomous");
+  const view = draw(AutonomousRoute, "/autonomous", "/autonomous?view=agents");
   expect((await view.findByRole("alert")).textContent).toContain(
     "员工加载失败",
   );

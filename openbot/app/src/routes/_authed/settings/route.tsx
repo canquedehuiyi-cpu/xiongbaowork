@@ -1,18 +1,20 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
-import { SidebarShell } from "@/components/layout/sidebar-shell";
-import { SettingsSidebar } from "@/components/settings/settings-sidebar";
+import { AppShell } from "@/components/app-sidebar/app-shell";
+import { SettingsNav } from "@/components/settings/settings-sidebar";
 
 export const Route = createFileRoute("/_authed/settings")({
   component: RouteComponent,
 });
 
+/*
+ * Settings inside the app shell (description (7) of the parity brief): the app sidebar stays, and
+ * settings' own navigation is the second column. The pages keep their `PageShell`, whose own
+ * scroller fits the shell's one-viewport frame.
+ */
 function RouteComponent() {
   return (
-    <SidebarShell width="300px">
-      <SettingsSidebar />
-      <main className="flex-1">
-        <Outlet />
-      </main>
-    </SidebarShell>
+    <AppShell secondary={<SettingsNav />}>
+      <Outlet />
+    </AppShell>
   );
 }

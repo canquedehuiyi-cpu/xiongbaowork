@@ -10,7 +10,6 @@ import {
   RouterProvider,
 } from "@tanstack/react-router";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { agentKeys } from "@/lib/agents/queries";
 import { Route as TasksRoute } from "@/routes/_authed/_app/tasks";
 import { settleReactWork } from "./settle-react-work";
@@ -211,23 +210,24 @@ const boardHeadingCount = () =>
     (node) => (node.textContent ?? "").trim() === "任务看板",
   ).length;
 /**
- * Buttons are found by their own text inside one view and only when that text is unique there. A
- * label matching twice throws here rather than clicking whichever node the DOM handed over, which
- * is the difference between a test that means something and one that happens to pass.
+ * A filter box is found by its own label inside one view and only when that label is unique there. A
+ * label matching twice throws here rather than changing whichever node the DOM handed over, which is
+ * the difference between a test that means something and one that happens to pass.
  */
-async function clickButtonByText(
+async function chooseByLabel(
   view: ReturnType<typeof render>,
-  text: string,
+  label: string,
+  value: string,
 ) {
-  const matches = [...view.container.querySelectorAll("button")].filter(
-    (node) => (node.textContent ?? "").trim() === text,
-  );
+  const matches = [
+    ...view.container.querySelectorAll(`select[aria-label="${label}"]`),
+  ];
   if (matches.length !== 1) {
     throw new Error(
-      `expected one button named ${text}, found ${matches.length}`,
+      `expected one box labelled ${label}, found ${matches.length}`,
     );
   }
-  await userEvent.click(matches[0]);
+  fireEvent.change(matches[0] as HTMLSelectElement, { target: { value } });
   await settleReactWork();
 }
 
@@ -407,9 +407,10 @@ test("clearing the machine leaves the crew and the rest of the filter in place",
     requests,
   );
   await mainResultShouldHoldExactlyOne(view, "failed card");
-  await view.findByText("全部设备");
+  // The machines live in the banner's 设备 box; 全部 is its empty choice.
+  await view.findByRole("option", { name: "dev-laptop · 在线" });
   const before = taskRequests(requests).length;
-  await clickButtonByText(view, "全部设备");
+  await chooseByLabel(view, "设备", "");
   await waitFor(() => {
     expect(taskRequests(requests).length).toBeGreaterThan(before);
   });
@@ -433,7 +434,7 @@ test("the 状态 and 数据周期 dropdowns write their axes and keep the others
   const { router, view } = draw("/tasks?machineId=d-1&q=weekly", requests);
   await waitFor(() => {
     expect(
-      view.container.querySelector('select[aria-label="状态"]'),
+      view.container.querySelector('select[aria-label="任务状态"]'),
     ).not.toBeNull();
   });
   const select = (label: string) =>
@@ -441,20 +442,22 @@ test("the 状态 and 数据周期 dropdowns write their axes and keep the others
       `select[aria-label="${label}"]`,
     ) as HTMLSelectElement;
   // Every status the address can carry, including the stat bar's 已结束.
-  expect([...select("状态").options].map((option) => option.value)).toEqual([
-    "",
-    "running",
-    "needs_action",
-    "awaiting_review",
-    "done",
-    "failed",
-    "ended",
-  ]);
+  expect([...select("任务状态").options].map((option) => option.value)).toEqual(
+    [
+      "",
+      "running",
+      "needs_action",
+      "awaiting_review",
+      "done",
+      "failed",
+      "ended",
+    ],
+  );
   expect([...select("数据周期").options].map((option) => option.value)).toEqual(
     ["week", "month", "all"],
   );
   // The defaults read as chosen: every status, the last month.
-  expect(select("状态").value).toBe("");
+  expect(select("任务状态").value).toBe("");
   expect(select("数据周期").value).toBe("month");
   // No status or period buttons are left beside the dropdowns.
   for (const label of ["全部", "进行中", "一周", "一月"]) {
@@ -467,7 +470,7 @@ test("the 状态 and 数据周期 dropdowns write their axes and keep the others
 
   const before = taskRequests(requests).length;
   // One choice at a time, as a person makes them: each writes its axis onto the current address.
-  fireEvent.change(select("状态"), { target: { value: "failed" } });
+  fireEvent.change(select("任务状态"), { target: { value: "failed" } });
   await waitFor(() => {
     expect(router.state.location.href).toInclude("status=failed");
   });
@@ -488,12 +491,12 @@ test("the 状态 and 数据周期 dropdowns write their axes and keep the others
     "q=weekly",
   ])
     expect(href).toInclude(axis);
-  expect(select("状态").value).toBe("failed");
+  expect(select("任务状态").value).toBe("failed");
   expect(select("数据周期").value).toBe("week");
   // The stat bar's 已结束 is ended in the address, and the dropdown says so.
-  fireEvent.change(select("状态"), { target: { value: "ended" } });
+  fireEvent.change(select("任务状态"), { target: { value: "ended" } });
   await waitFor(() => {
     expect(router.state.location.href).toInclude("status=ended");
   });
-  expect(select("状态").value).toBe("ended");
+  expect(select("任务状态").value).toBe("ended");
 });

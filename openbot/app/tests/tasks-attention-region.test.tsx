@@ -104,15 +104,15 @@ test("the counts ride the tabs, and 需要操作 includes what broke", async () 
     card({ status: "running" }),
   ]);
 
-  expect(view.getByRole("button", { name: "需要操作 (2)" })).toBeTruthy();
-  expect(view.getByRole("button", { name: "查收结果 (1)" })).toBeTruthy();
+  expect(view.getByRole("tab", { name: "需要操作 (2)" })).toBeTruthy();
+  expect(view.getByRole("tab", { name: "查收结果 (1)" })).toBeTruthy();
 
   // C3 in the open: the failure sits on the ask side, not filed under results.
   expect(view.getByText("failed card")).toBeTruthy();
   expect(view.getByText("needs_action card")).toBeTruthy();
   expect(view.queryByText("awaiting_review card")).toBeNull();
 
-  await userEvent.click(view.getByRole("button", { name: "查收结果 (1)" }));
+  await userEvent.click(view.getByRole("tab", { name: "查收结果 (1)" }));
   expect(view.getByText("awaiting_review card")).toBeTruthy();
   // Swapped, not added to: one tab's cards at a time.
   expect(view.queryByText("failed card")).toBeNull();
@@ -120,19 +120,18 @@ test("the counts ride the tabs, and 需要操作 includes what broke", async () 
 
 test("the empty ask says the spec's sentence, not a generic nothing", () => {
   const view = draw([card({ status: "running" })]);
+  // A title and the sentence under it, as the reference's empty panel draws them.
+  expect(view.getByText("暂无需要操作的任务")).toBeTruthy();
   expect(
-    view.getByText(
-      "暂无需要操作的任务——需要你确认、回答或补充信息的任务会显示在这里",
-    ),
+    view.getByText("需要你确认、回答或补充信息的任务会显示在这里。"),
   ).toBeTruthy();
 });
 
 test("the empty results tab says what belongs there", async () => {
   const view = draw([card({ status: "needs_action" })]);
-  await userEvent.click(view.getByRole("button", { name: "查收结果 (0)" }));
-  expect(
-    view.getByText("暂无待查收的结果——员工做完、等你过目的任务会显示在这里"),
-  ).toBeTruthy();
+  await userEvent.click(view.getByRole("tab", { name: "查收结果 (0)" }));
+  expect(view.getByText("暂无待查收的结果")).toBeTruthy();
+  expect(view.getByText("员工做完、等你过目的任务会显示在这里。")).toBeTruthy();
 });
 
 /*
@@ -351,7 +350,7 @@ test("a breaker-closed failure shows 已熔断·已自动停用 with a link to �
 
   await view.findByText("tripped card");
   // All three failures are on the ask side: the breaker does not move a card out of 需要关注.
-  expect(view.getByRole("button", { name: "需要操作 (3)" })).toBeTruthy();
+  expect(view.getByRole("tab", { name: "需要操作 (3)" })).toBeTruthy();
   // Exactly one badge, on the tripped card.
   const badges = view.getAllByText("已熔断·已自动停用");
   expect(badges).toHaveLength(1);
@@ -403,8 +402,6 @@ test("a breaker-closed failure stays in 需要关注 until archived, then moves 
   expect(laneOfTask(archived)).toEqual(["finished"]);
 
   const view = drawRouted([archived]);
-  expect(
-    await view.findByRole("button", { name: "需要操作 (0)" }),
-  ).toBeTruthy();
+  expect(await view.findByRole("tab", { name: "需要操作 (0)" })).toBeTruthy();
   expect(view.queryByText("已熔断·已自动停用")).toBeNull();
 });

@@ -16,12 +16,13 @@ import { Route as ResourcesRoute } from "@/routes/_authed/_app/resources";
 import { settleReactWork } from "./settle-react-work";
 
 /**
- * Stories E1 and E4 (D08) on `/resources`: "能力与资源" is one screen of five zones — models (E4),
- * skills (the person's own and the deployment's), connectors with their grant and account state,
- * knowledge (bases above memory sources) and components — and each zone fails on its own.
+ * Stories E1 and E4 (D08) on `/resources`: "能力与资源" holds the zones — models (E4), skills (the
+ * person's own and the deployment's), connectors with their grant and account state, knowledge
+ * bases, memory sources and components — each now one tab of the parity shell (plan F4), and each
+ * fails on its own.
  *
  * Every zone is drawn from a fake `fetch` keyed by path; a path in `fail` answers 500, so a failure
- * is asserted as that zone's own sentence while the other zones still show their rows.
+ * is asserted as that tab's own alert while the other tabs still show their rows.
  */
 let registeredHere = false;
 beforeAll(() => {
@@ -232,9 +233,19 @@ const responses: Record<string, () => unknown> = {
   "/api/components": () => ({ components: [component] }),
   // The 项目 zone (story RES2) starts from the person's machines; none here.
   "/api/devices": () => ({ devices: [] }),
+  /*
+   * What the full screens in the 知识库 and 信息源与记忆 tabs also read (the standalone `/knowledge`
+   * and `/memory` pages were archived into them): the person's employees for 授权给 and the source
+   * picker, what they remember, and the background research with its suggestions.
+   */
+  "/api/agents": () => ({ agents: [] }),
+  "/api/memory": () => ({ memories: [] }),
+  "/api/proactive/suggestions": () => ({ suggestions: [] }),
+  "/api/proactive/settings": () => ({ settings: [] }),
+  "/api/channels": () => ({ channels: [], nextCursor: null }),
 };
 
-function draw({ fail = [] }: { fail?: string[] } = {}) {
+function draw({ fail = [], tab }: { fail?: string[]; tab: string }) {
   const requested: string[] = [];
   globalThis.fetch = (async (input: Parameters<typeof fetch>[0]) => {
     const path = String(input).split("?")[0] ?? "";
@@ -259,7 +270,9 @@ function draw({ fail = [] }: { fail?: string[] } = {}) {
   const root = createRootRoute({ component: () => <Outlet /> });
   const router = createRouter({
     context: {},
-    history: createMemoryHistory({ initialEntries: ["/resources"] }),
+    history: createMemoryHistory({
+      initialEntries: [`/resources?tab=${tab}`],
+    }),
     routeTree: root.addChildren([
       // `as never`, as in the assembly tests: the file route is registered in the generated tree
       // under its real parent, and this only re-addresses it for one render.
@@ -280,67 +293,86 @@ function draw({ fail = [] }: { fail?: string[] } = {}) {
 
 type View = ReturnType<typeof draw>["view"];
 
-/** The `<section>` a zone's level-2 heading opens, so a row is asserted in the zone it belongs to. */
-async function zone(view: View, title: string) {
-  const heading = await view.findByRole("heading", { level: 2, name: title });
-  const section = heading.closest("section");
-  if (!section) throw new Error(`zone ${title} has no section`);
-  return within(section);
+/** The selected tab's panel, so a row is asserted in the tab it belongs to. */
+async function panel(view: View) {
+  return within(await view.findByRole("tabpanel"));
 }
 
-/** Every zone's healthy content, by zone, so one failing zone can be checked against the rest. */
-const healthy: Record<string, (view: View) => Promise<void>> = {
-  模型: async (view) => {
-    await (await zone(view, "模型")).findByText("gpt-6 · OpenAI");
+/**
+ * The knowledge tab's list of bases. A base's title is also the open base's heading below it, so a
+ * base in the list is asserted in the list.
+ */
+const baseList = (knowledge: Awaited<ReturnType<typeof panel>>) =>
+  knowledge.getByRole("list", { name: "知识库列表" });
+
+/** Each zone's tab and its healthy content, so one failing read can be checked against the rest. */
+const healthy: Record<
+  string,
+  { tab: string; check: (view: View) => Promise<void> }
+> = {
+  模型: {
+    tab: "models",
+    check: async (view) => {
+      await (await panel(view)).findByText("gpt-6 · OpenAI");
+    },
   },
-  技能: async (view) => {
-    await (await zone(view, "技能")).findByText("周报");
+  技能: {
+    tab: "skills",
+    check: async (view) => {
+      await (await panel(view)).findByText("周报");
+    },
   },
-  连接器: async (view) => {
-    await (await zone(view, "连接器")).findByText("Notion");
+  连接器: {
+    tab: "connectors",
+    check: async (view) => {
+      await (await panel(view)).findByText("Notion");
+    },
   },
-  知识库: async (view) => {
-    await (await zone(view, "知识来源")).findByText("产品手册");
+  知识库: {
+    tab: "knowledge",
+    check: async (view) => {
+      const knowledge = await panel(view);
+      await within(
+        await knowledge.findByRole("list", { name: "知识库列表" }),
+      ).findByText("产品手册");
+    },
   },
-  信息源: async (view) => {
-    await (await zone(view, "知识来源")).findByText("飞书文档同步");
+  信息源: {
+    tab: "sources",
+    check: async (view) => {
+      await (await panel(view)).findByText("飞书文档同步");
+    },
   },
-  组件: async (view) => {
-    await (await zone(view, "组件")).findByText("数据表格");
+  组件: {
+    tab: "components",
+    check: async (view) => {
+      await (await panel(view)).findByText("数据表格");
+    },
   },
 };
 
-test("one screen holds all five zones, in order: models, skills, connectors, knowledge, components", async () => {
-  const { view } = draw();
-
-  for (const check of Object.values(healthy)) await check(view);
-  const titles = view
-    .getAllByRole("heading", { level: 2 })
-    .map((heading) => heading.textContent);
-  // The five zones in order, with the two sections the integration branch added around them: the
-  // platform pool (H1/K1) ahead of the person's own models, the WakerFlow entry (WF1) after them,
-  // and the projects on the person's machines (RES2) after the knowledge sources.
-  expect(titles).toEqual([
-    "平台体验模型",
-    "模型",
-    "WakerFlow",
-    "技能",
-    "连接器",
-    "知识来源",
-    "项目",
-    "组件",
-  ]);
-  // No zone is in a failed state on a healthy screen.
-  expect(view.queryByText(/^读不到/)).toBeNull();
+test("each zone is its own tab of the one screen, and draws its rows there", async () => {
+  // The parity shell (plan F4) replaced the single long page: the zones are tabs now, and the order
+  // of the tabs is asserted in `resources-parity.test.tsx`.
+  for (const { tab, check } of Object.values(healthy)) {
+    const { view } = draw({ tab });
+    await check(view);
+    // No zone is in a failed state on a healthy screen.
+    expect(view.queryByRole("alert")).toBeNull();
+    cleanup();
+  }
 });
 
 test("skills are split into 我的 and 部署; only a listed deployment skill is 可自助安装", async () => {
-  const { view } = draw();
-  const skills = await zone(view, "技能");
+  const { view } = draw({ tab: "skills" });
+  const skills = await panel(view);
   await skills.findByText("周报");
 
   const group = (title: string) => {
-    const heading = skills.getByRole("heading", { level: 3, name: title });
+    const heading = skills.getByRole("heading", {
+      level: 3,
+      name: new RegExp(`^${title}`),
+    });
     const container = heading.parentElement;
     if (!container) throw new Error(`group ${title} has no container`);
     return within(container);
@@ -371,8 +403,8 @@ test("skills are split into 我的 and 部署; only a listed deployment skill is
 });
 
 test("connectors count employees across tools and say whether you connected a per-person app", async () => {
-  const { view } = draw();
-  const connectors = await zone(view, "连接器");
+  const { view } = draw({ tab: "connectors" });
+  const connectors = await panel(view);
   await connectors.findByText("你已连接");
 
   const row = (title: string) => {
@@ -408,8 +440,8 @@ test("a team-scoped curated connector is still asked about the person's own acco
   const saved = { ...responses };
   responses["/api/plugins"] = () => ({ ...page, servers: [teamLinear] });
   try {
-    const { view } = draw();
-    const connectors = await zone(view, "连接器");
+    const { view } = draw({ tab: "connectors" });
+    const connectors = await panel(view);
     // Per-person (`user-oauth` under `linear`), not "没有凭据" for want of a deployment key.
     await connectors.findByText("未连接");
     expect(connectors.queryByText("没有凭据")).toBeNull();
@@ -418,119 +450,125 @@ test("a team-scoped curated connector is still asked about the person's own acco
   }
 });
 
-test("knowledge bases, with how many employees each is authorised to, sit above the memory sources", async () => {
-  const { view } = draw();
-  const knowledge = await zone(view, "知识来源");
+test("knowledge bases say how many employees each is authorised to; the memory sources are their own tab", async () => {
+  const { view } = draw({ tab: "knowledge" });
+  const knowledge = await panel(view);
 
   await knowledge.findByText("已授权 2 位员工");
   await knowledge.findByText("尚未授权任何员工");
-  const base = knowledge.getByText("产品手册");
-  const source = await knowledge.findByText("飞书文档同步");
+  expect(within(baseList(knowledge)).getByText("产品手册")).toBeTruthy();
+  expect(knowledge.queryByText("飞书文档同步")).toBeNull();
+  // The tab is the knowledge screen itself (`/knowledge` was archived into it), so it creates a base
+  // and opens the first one in place, rather than linking out to a page that does.
+  expect(knowledge.getByLabelText("新知识库名称")).toBeTruthy();
   expect(
-    base.compareDocumentPosition(source) & Node.DOCUMENT_POSITION_FOLLOWING,
+    await knowledge.findByRole("heading", { level: 2, name: "产品手册" }),
   ).toBeTruthy();
-  // A Base UI button rendered as a router link: role "button", with the link's href.
-  expect(
-    knowledge.getByRole("button", { name: "知识库" }).getAttribute("href"),
-  ).toBe("/knowledge");
+  expect(knowledge.getByRole("form", { name: "添加资料" })).toBeTruthy();
+  expect(knowledge.queryByText("打开知识库页")).toBeNull();
+  cleanup();
+
+  const sources = draw({ tab: "sources" });
+  await (await panel(sources.view)).findByText("飞书文档同步");
 });
 
-/** Each zone's read, the sentence it shows when that read fails, and the zones it takes down. */
-const failures: { path: string; sentence: string; down: string[] }[] = [
-  { path: "/api/models", sentence: "读不到模型库。", down: ["模型"] },
-  // Skills and connectors are both drawn from `/api/plugins`, so that read failing is both zones'.
-  {
-    path: "/api/plugins",
-    sentence: "读不到技能。",
-    down: ["技能", "连接器"],
-  },
-  {
-    path: "/api/knowledge/notebooks",
-    sentence: "读不到知识库。",
-    down: ["知识库"],
-  },
-  { path: "/api/memory/sources", sentence: "读不到信息源。", down: ["信息源"] },
-  { path: "/api/components", sentence: "读不到组件。", down: ["组件"] },
+/** Each zone's read, the words its alert opens with when that read fails, and the tabs it takes down. */
+const failures: { path: string; label: string; down: string[] }[] = [
+  { path: "/api/models", label: "读不到模型库", down: ["模型"] },
+  // Skills and connectors are both drawn from `/api/plugins`, so that read failing is both tabs'.
+  { path: "/api/plugins", label: "读不到", down: ["技能", "连接器"] },
+  { path: "/api/knowledge/notebooks", label: "读不到知识库", down: ["知识库"] },
+  { path: "/api/memory/sources", label: "读不到信息源", down: ["信息源"] },
+  { path: "/api/components", label: "读不到组件", down: ["组件"] },
 ];
 
-for (const { path, sentence, down } of failures) {
-  test(`${path} failing says so in its own zone and leaves every other zone drawn`, async () => {
-    const { view } = draw({ fail: [path] });
-
-    await view.findByText(sentence);
-    for (const [name, check] of Object.entries(healthy)) {
-      if (down.includes(name)) continue;
-      await check(view);
+for (const { path, label, down } of failures) {
+  test(`${path} failing is an alert with a retry in its own tab, and every other tab is drawn`, async () => {
+    for (const [name, { tab, check }] of Object.entries(healthy)) {
+      const { view } = draw({ fail: [path], tab });
+      if (down.includes(name)) {
+        const alerts = await view.findAllByRole("alert");
+        const alert = alerts.find((node) => node.textContent?.includes(label));
+        expect(alert).toBeTruthy();
+        expect(
+          within(alert as HTMLElement).getByRole("button", { name: "重试" }),
+        ).toBeTruthy();
+      } else {
+        await check(view);
+        expect(view.queryByRole("alert")).toBeNull();
+      }
+      cleanup();
     }
-    // Only the zones this read feeds failed: one sentence each, and no other zone's.
-    const failed = view
-      .getAllByText(/^读不到.*。$/)
-      .map((node) => node.textContent);
-    const expected =
-      path === "/api/plugins" ? ["读不到技能。", "读不到连接器。"] : [sentence];
-    expect(failed).toEqual(expected);
   });
 }
 
 test("the reads that only add detail take away that detail and nothing else", async () => {
-  const { view } = draw({
-    fail: [
-      "/api/plugins/listings",
-      "/api/plugins/connections",
-      "/api/knowledge/notebooks/nb-1",
-    ],
-  });
-
-  const skills = await zone(view, "技能");
-  await skills.findByText("周报");
-  expect(skills.queryByText("可自助安装")).toBeNull();
-
-  const connectors = await zone(view, "连接器");
-  // Not "未连接": a failed read is not an answer about the person's account.
-  expect(await connectors.findAllByText("读不到你的连接")).toHaveLength(2);
-  expect(connectors.queryByText("未连接")).toBeNull();
-  expect(connectors.getByText("已接入")).toBeTruthy();
-
-  const knowledge = await zone(view, "知识来源");
-  await knowledge.findByText("读不到授权");
-  await knowledge.findByText("尚未授权任何员工");
-  expect(knowledge.getByText("产品手册")).toBeTruthy();
-
-  for (const check of Object.values(healthy)) await check(view);
+  const fail = [
+    "/api/plugins/listings",
+    "/api/plugins/connections",
+    "/api/knowledge/notebooks/nb-1",
+  ];
+  {
+    const { view } = draw({ fail, tab: "skills" });
+    const skills = await panel(view);
+    await skills.findByText("周报");
+    expect(skills.queryByText("可自助安装")).toBeNull();
+    cleanup();
+  }
+  {
+    const { view } = draw({ fail, tab: "connectors" });
+    const connectors = await panel(view);
+    // Not "未连接": a failed read is not an answer about the person's account.
+    expect(await connectors.findAllByText("读不到你的连接")).toHaveLength(2);
+    expect(connectors.queryByText("未连接")).toBeNull();
+    expect(connectors.getByText("已接入")).toBeTruthy();
+    cleanup();
+  }
+  {
+    const { view } = draw({ fail, tab: "knowledge" });
+    const knowledge = await panel(view);
+    await knowledge.findByText("读不到授权");
+    await knowledge.findByText("尚未授权任何员工");
+    expect(within(baseList(knowledge)).getByText("产品手册")).toBeTruthy();
+  }
 });
 
-test("a person with no skills, connectors or bases sees each zone say so rather than a blank", async () => {
+test("a person with no skills, connectors or bases sees each tab say so rather than a blank", async () => {
   const saved = { ...responses };
   responses["/api/plugins"] = () => ({ ...page, servers: [], skills: [] });
   responses["/api/knowledge/notebooks"] = () => ({ notebooks: [] });
   try {
-    const { view } = draw();
-    await view.findByText("你还没有写过技能。");
-    await view.findByText("这个部署还没有管理员写的技能。");
-    await view.findByText("还没有连接器");
-    await view.findByText(/还没有知识库/);
-    await healthy.模型?.(view);
-    await healthy.组件?.(view);
+    const skills = draw({ tab: "skills" });
+    await skills.view.findByText("你还没有写过技能。");
+    await skills.view.findByText("这个部署还没有管理员写的技能。");
+    cleanup();
+    const connectors = draw({ tab: "connectors" });
+    await connectors.view.findByText("还没有连接器");
+    cleanup();
+    const knowledge = draw({ tab: "knowledge" });
+    await knowledge.view.findByText("还没有知识库");
   } finally {
     Object.assign(responses, saved);
   }
 });
 
-test("the screen reads each zone's own endpoint, one detail per knowledge base", async () => {
-  const { view, requested } = draw();
-  for (const check of Object.values(healthy)) await check(view);
-  await waitFor(() =>
-    expect(requested).toContain("/api/knowledge/notebooks/nb-2"),
-  );
-  for (const path of [
-    "/api/models",
-    "/api/plugins",
-    "/api/plugins/listings",
-    "/api/plugins/connections",
-    "/api/knowledge/notebooks",
-    "/api/knowledge/notebooks/nb-1",
-    "/api/memory/sources",
-    "/api/components",
-  ])
-    expect(requested).toContain(path);
+test("each tab reads its own endpoints, the knowledge tab one detail per base", async () => {
+  const expected: Record<string, string[]> = {
+    models: ["/api/models"],
+    skills: ["/api/plugins", "/api/plugins/listings"],
+    connectors: ["/api/plugins", "/api/plugins/connections"],
+    knowledge: [
+      "/api/knowledge/notebooks",
+      "/api/knowledge/notebooks/nb-1",
+      "/api/knowledge/notebooks/nb-2",
+    ],
+    sources: ["/api/memory/sources"],
+    components: ["/api/components"],
+  };
+  for (const [tab, paths] of Object.entries(expected)) {
+    const { requested } = draw({ tab });
+    for (const path of paths)
+      await waitFor(() => expect(requested).toContain(path));
+    cleanup();
+  }
 });

@@ -304,7 +304,7 @@ test("with no notebook or no connected account the panel says where to make or c
   expect(await view.findByText("还没有知识库")).toBeTruthy();
   expect(
     view.getByRole("link", { name: "前往「知识库」新建" }).getAttribute("href"),
-  ).toBe("/knowledge");
+  ).toBe("/resources?tab=knowledge");
 
   await user.click(button(view, "连接器"));
   expect(await view.findByText("还没有已连接的账号")).toBeTruthy();

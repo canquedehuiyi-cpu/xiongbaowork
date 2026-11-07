@@ -141,7 +141,7 @@ function drawWakers(queryClient: QueryClient) {
         getParentRoute: () => root,
         path: "/wakers",
       } as never),
-      stub("/agents"),
+      stub("/bots/$agentId"),
       stub("/assemble/$agentId"),
       stub("/wakers/$agentId"),
     ]),

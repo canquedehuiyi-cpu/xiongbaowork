@@ -17,7 +17,7 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { AgentProfile } from "@/lib/agents/queries";
-import { Route as KnowledgeRoute } from "@/routes/_authed/_app/knowledge";
+import { Route as ResourcesRoute } from "@/routes/_authed/_app/resources";
 import { settleReactWork } from "./settle-react-work";
 
 /**
@@ -25,7 +25,8 @@ import { settleReactWork } from "./settle-react-work";
  * Markdown or text in it under the 64K-character cap the server enforces, decides which of their
  * own Wakers may read it, and is told — not overwritten — when somebody else changed it first.
  *
- * The route is the real one. `fetch` is a small in-memory stand-in for `/api/knowledge` that keeps
+ * The screen is 能力与资源 › 知识库 (`/resources?tab=knowledge`), which the standalone `/knowledge`
+ * page was archived into; the route is the real one. `fetch` is a small in-memory stand-in for `/api/knowledge` that keeps
  * revisions the way the server does, so what is asserted is what the screen sends and how it
  * answers the server's 409, not what this harness happens to return.
  */
@@ -291,13 +292,15 @@ function draw(initial: FakeNotebook[] = []) {
   const root = createRootRoute({ component: () => <Outlet /> });
   const router = createRouter({
     context: {},
-    history: createMemoryHistory({ initialEntries: ["/knowledge"] }),
+    history: createMemoryHistory({
+      initialEntries: ["/resources?tab=knowledge"],
+    }),
     routeTree: root.addChildren([
       // `as never`, as in `assemble-install.test.tsx`: the file route is registered in the generated
       // tree under its real parent, and this only re-addresses it for one render.
-      KnowledgeRoute.update({
+      ResourcesRoute.update({
         getParentRoute: () => root,
-        path: "/knowledge",
+        path: "/resources",
       } as never),
     ]),
   });

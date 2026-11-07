@@ -133,7 +133,7 @@ await runAsTenant(tenant, async () => {
   await database.insert(wakerGroups).values({
     id: groupId,
     tenantId: tenant,
-    name: `编程小组-${suite}`,
+    name: `编程群组-${suite}`,
   });
   // The three step agents are the crew's own members, because that is what a template is allowed to
   // name -- `createTemplate` refuses an outsider, and a fixture that skipped this would be testing a

@@ -20,6 +20,12 @@ export type Reachability = {
     state: string;
     error: string | null;
     createdAt: string;
+    /**
+     * Which receiver it went to. The server answers the whole outbox row, so these were always in
+     * the response; declared optional because nothing here may assume an older server sends them.
+     */
+    bindingId?: string | null;
+    deviceId?: string | null;
   }[];
   available: { slack: boolean; teams: boolean; sms: boolean; push: boolean };
 };

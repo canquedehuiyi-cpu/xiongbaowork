@@ -112,7 +112,7 @@ export function createPipelineRoutes(
       .catch((): Record<string, unknown> => ({}));
     const task = typeof body.task === "string" ? body.task.trim() : "";
     if (!task) {
-      return context.json({ error: "给小组的任务不能是空的。" }, 400);
+      return context.json({ error: "给群组的任务不能是空的。" }, 400);
     }
     const tenantId = context.var.actor.id;
     try {

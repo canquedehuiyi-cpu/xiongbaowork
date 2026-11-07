@@ -89,7 +89,7 @@ const outsider: AgentProfile = {
 
 const crew: WakerGroup = {
   id: "crew-1",
-  name: "编程小组",
+  name: "编程群组",
   description: null,
   members: [
     { agentId: "agent-dev", position: 0 },
@@ -259,7 +259,7 @@ test("a step can only be given to somebody the crew actually has", async () => {
   const view = draw(seed());
 
   // Which crew is chosen is in the accessibility tree, not only in its colour.
-  const chosen = await view.findByRole("button", { name: "编程小组" });
+  const chosen = await view.findByRole("button", { name: "编程群组" });
   expect(chosen.getAttribute("aria-pressed")).toBe("true");
 
   await userEvent.click(await view.findByRole("button", { name: "加一步" }));
@@ -267,7 +267,7 @@ test("a step can only be given to somebody the crew actually has", async () => {
     "第 1 步的员工",
   )) as HTMLSelectElement;
   // This workspace has a third coworker who is not in the crew, and the plan is not offered to them —
-  // the screen's own sentence is 流程的步骤只能交给组里的员工, and the server refuses what it takes.
+  // the screen's own sentence is 流程的步骤只能交给群组里的员工, and the server refuses what it takes.
   expect([...picker.options].map((option) => option.textContent)).toEqual([
     "阿开",
     "阿审",

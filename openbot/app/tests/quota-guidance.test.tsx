@@ -134,7 +134,7 @@ test("guidanceFor names the plan, used/limit, /plans and the cleanup screen for 
     sentence: "Team 套餐：员工已用 3/3",
     hint: "删除不再需要的员工即可腾出名额，或升级套餐获得更多名额。",
     upgradeHref: "/plans",
-    cleanup: { href: "/agents", label: "管理员工" },
+    cleanup: { href: "/wakers", label: "管理员工" },
   });
   expect(guidanceFor(details("devices", 1, 1))).toEqual({
     metric: "devices",
@@ -212,7 +212,7 @@ test("a 402 mutation opens the dialog with used/limit, the /plans link and the c
   });
   expect(dialog.textContent).toContain("Team 套餐：员工已用 2/2");
   expect(hrefOf(dialog, "升级套餐")).toBe("/plans");
-  expect(hrefOf(dialog, "管理员工")).toBe("/agents");
+  expect(hrefOf(dialog, "管理员工")).toBe("/wakers");
   // The screen's own inline message is kept beside the dialog. The modal dialog marks everything
   // outside its portal aria-hidden while open, so the alert is only reachable with `hidden: true`.
   const alert = await view.findByRole("alert", { hidden: true });

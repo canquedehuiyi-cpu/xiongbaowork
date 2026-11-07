@@ -58,3 +58,27 @@ export function autonomousQueryOptions(agentId: string | null) {
     refetchInterval: 300_000,
   });
 }
+
+/**
+ * Spec C1's 全部员工: every coworker's unattended work in one read (`GET /api/agents/autonomous/all`),
+ * under `autonomousKeys.all` so every write that refreshes one coworker refreshes the overview too.
+ *
+ * An object in the key, not a string: `autonomousKeys.forAgent(id)` is `["autonomous", id]`, and a
+ * coworker whose id happened to be "overview" would otherwise share this cache entry.
+ */
+export const autonomousOverviewKey = [
+  ...autonomousKeys.all,
+  { overview: true },
+] as const;
+
+export function autonomousOverviewQueryOptions(enabled: boolean) {
+  return queryOptions({
+    queryKey: autonomousOverviewKey,
+    enabled,
+    queryFn: () =>
+      client<AutonomousSummary[]>("/api/agents/autonomous/all", "autonomous", {
+        fallback: "全部员工的自主工作加载失败，请稍后再试。",
+      }),
+    refetchInterval: 300_000,
+  });
+}

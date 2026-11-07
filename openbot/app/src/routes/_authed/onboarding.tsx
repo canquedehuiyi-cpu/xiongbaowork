@@ -61,7 +61,7 @@ function WelcomeStep() {
           compact
           className="scale-90"
           editorClassName="text-base"
-          initialValue="把任务交给你的数字员工团队"
+          initialValue="把任务交给你的员工团队"
         />
       </div>
     </div>
@@ -230,7 +230,10 @@ function RouteComponent() {
       initial={false}
       onAnimationComplete={() => {
         if (leaving) {
-          navigate({ to: destination });
+          // Connecting a model lands on 能力与资源's model library tab, not its default 插件 tab.
+          if (destination === "/resources")
+            navigate({ to: destination, search: { tab: "models" } });
+          else navigate({ to: destination });
         }
       }}
       transition={{ duration: 0.5, ease: "easeInOut" }}

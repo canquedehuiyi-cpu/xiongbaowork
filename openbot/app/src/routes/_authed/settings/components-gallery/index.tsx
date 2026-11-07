@@ -30,6 +30,7 @@ function RouteComponent() {
 
   return (
     <PageShell
+      width="workbench"
       description="员工可以在对话里直接画出来、代替大段文字描述的组件。某位员工能用哪些，由管理员决定。"
       title="组件展示"
     >

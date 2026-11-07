@@ -19,7 +19,7 @@ import { Route as TasksRoute } from "@/routes/_authed/_app/tasks";
 import { settleReactWork } from "./settle-react-work";
 
 /**
- * Spec I2 from the board: 派给小组 in the board's header hands a crew's flow a task through the same
+ * Spec I2 from the board: 派给群组 in the board's header hands a crew's flow a task through the same
  * start-run call the template page uses. Success refreshes the board's reads and points at the run on
  * /pipelines; a 403 from the pre-dispatch check (spec I6) lists the refused step numbers and starts
  * nothing. Data comes from a recording fetch stub -- no network, no real model.
@@ -73,7 +73,7 @@ const writer: AgentProfile = { ...developer, id: "agent-writer", name: "阿写" 
 
 const crew: WakerGroup = {
   id: "crew-1",
-  name: "编程小组",
+  name: "编程群组",
   description: null,
   members: [
     { agentId: "agent-dev", position: 0 },
@@ -179,16 +179,16 @@ const taskReads = (calls: Call[]) =>
 
 async function openDialog(view: ReturnType<typeof render>) {
   const user = userEvent.setup({ document });
-  await user.click(await view.findByRole("button", { name: "派给小组" }));
+  await user.click(await view.findByRole("button", { name: "派给群组" }));
   const dialog = await within(document.body).findByRole("dialog");
   // The crew's flow arrives from its own read; the picker names the crew and its step count.
   const picker = (await within(dialog).findByLabelText(
-    "小组流程",
+    "群组流程",
   )) as HTMLSelectElement;
   return { user, dialog, picker };
 }
 
-test("派给小组 starts the crew's flow, refreshes the board and links to the run", async () => {
+test("派给群组 starts the crew's flow, refreshes the board and links to the run", async () => {
   const calls: Call[] = [];
   serve(calls, () =>
     Response.json(
@@ -203,7 +203,7 @@ test("派给小组 starts the crew's flow, refreshes the board and links to the 
   const { user, dialog, picker } = await openDialog(view);
   expect(picker.value).toBe("tpl-1");
   expect([...picker.options].map((option) => option.textContent)).toEqual([
-    "编程小组（3 步）",
+    "编程群组（3 步）",
   ]);
   const send = within(dialog).getByRole("button", { name: "派出去" });
   // Nothing to send until there is a task to send.
@@ -217,7 +217,7 @@ test("派给小组 starts the crew's flow, refreshes the board and links to the 
   await user.click(send);
 
   expect((await within(dialog).findByRole("status")).textContent).toContain(
-    "已派给「编程小组」",
+    "已派给「编程群组」",
   );
   const posts = calls.filter((call) => call.method === "POST");
   expect(posts).toEqual([
@@ -306,7 +306,7 @@ test("the picker names a crew's flows apart only when it has more than one, and 
     id: "tpl-3",
     groupId: "crew-elsewhere",
   };
-  const solo: WakerGroup = { ...crew, id: "crew-2", name: "写作小组" };
+  const solo: WakerGroup = { ...crew, id: "crew-2", name: "写作群组" };
   const soloFlow: PipelineTemplate = {
     ...template,
     id: "tpl-4",
@@ -317,8 +317,8 @@ test("the picker names a crew's flows apart only when it has more than one, and 
   expect(
     groupFlowOptions([template, second, stranger, soloFlow], [crew, solo]),
   ).toEqual([
-    { templateId: "tpl-1", label: "编程小组 · 编程任务", steps: 3 },
-    { templateId: "tpl-2", label: "编程小组 · 修缺陷", steps: 3 },
-    { templateId: "tpl-4", label: "写作小组", steps: 1 },
+    { templateId: "tpl-1", label: "编程群组 · 编程任务", steps: 3 },
+    { templateId: "tpl-2", label: "编程群组 · 修缺陷", steps: 3 },
+    { templateId: "tpl-4", label: "写作群组", steps: 1 },
   ]);
 });

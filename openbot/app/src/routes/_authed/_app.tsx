@@ -1,7 +1,5 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
-import { AppSidebar } from "@/components/app-sidebar/app-sidebar";
-import { SelfHostBanner } from "@/components/layout/self-host-banner";
-import { SidebarShell } from "@/components/layout/sidebar-shell";
+import { AppShell } from "@/components/app-sidebar/app-shell";
 
 export const Route = createFileRoute("/_authed/_app")({
   component: RouteComponent,
@@ -9,14 +7,8 @@ export const Route = createFileRoute("/_authed/_app")({
 
 function RouteComponent() {
   return (
-    // One viewport, never scrolls: panes scroll inside it. A growable shell lets the transcript's
-    // scroller size against the page, grow it, and grow again.
-    <SidebarShell className="h-svh overflow-hidden" width="340px">
-      <AppSidebar />
-      <main className="flex-1 flex flex-col min-h-0 overflow-hidden">
-        <SelfHostBanner />
-        <Outlet />
-      </main>
-    </SidebarShell>
+    <AppShell>
+      <Outlet />
+    </AppShell>
   );
 }
