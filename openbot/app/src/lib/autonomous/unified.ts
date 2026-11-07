@@ -25,7 +25,7 @@ import type { RoutineRecord } from "@/lib/routines/queries";
 export type ExecutorKind = "employee" | "flow";
 export type TriggerType = "schedule" | "event" | "api";
 export type StatusFilter = "enabled" | "paused" | "running" | "failed";
-export type SortKey = "next" | "last" | "name";
+export type SortKey = "created" | "next" | "last" | "name";
 export type EntrySource =
   | "automation"
   | "routine"
@@ -51,6 +51,7 @@ export const STATUS_FILTER_LABEL: Record<StatusFilter, string> = {
 };
 
 export const SORT_LABEL: Record<SortKey, string> = {
+  created: "最近创建",
   next: "下次运行",
   last: "最近运行",
   name: "名称",
@@ -91,6 +92,13 @@ export type UnifiedEntry = {
   nextRunAt: string | null;
   lastRunAt: string | null;
   lastStatus: string | null;
+  /** When it was created, where its contract says (an automation's `createdAt`); else null. */
+  createdAt: string | null;
+  /**
+   * Its place in a list the server already orders newest-created first, where there is one but no
+   * timestamp: a routine's index in `GET /api/routines` (`orderBy(desc(routines.createdAt))`).
+   */
+  createdRank: number | null;
 };
 
 export type AutonomousSearch = {
@@ -132,7 +140,8 @@ export function autonomousSearch(
     "failed",
   ] as const);
   if (status) out.status = status;
-  const sort = pick(search.sort, ["last", "name"] as const);
+  // 最近创建 is the default, so it never appears in the address; the other sorts are explicit.
+  const sort = pick(search.sort, ["next", "last", "name"] as const);
   if (sort) out.sort = sort;
   if (typeof search.detail === "string" && search.detail)
     out.detail = search.detail;
@@ -210,6 +219,9 @@ export function buildEntries(input: {
   const now = input.now ?? new Date();
   const entries: UnifiedEntry[] = [];
   const schedules = new Map(input.routines.map((row) => [row.id, row]));
+  const routineRank = new Map(
+    input.routines.map((row, index) => [row.id, index]),
+  );
   const goals = new Map(input.responsibilities.map((row) => [row.id, row]));
 
   for (const automation of input.automations) {
@@ -253,6 +265,8 @@ export function buildEntries(input: {
       nextRunAt: next ?? null,
       lastRunAt: null,
       lastStatus: null,
+      createdAt: automation.createdAt || null,
+      createdRank: null,
     });
   }
 
@@ -288,6 +302,8 @@ export function buildEntries(input: {
         nextRunAt: routine.enabled ? routine.nextRunAt : null,
         lastRunAt: routine.lastRun?.at || null,
         lastStatus: routine.lastRun?.status ?? null,
+        createdAt: null,
+        createdRank: routineRank.get(routine.id) ?? null,
       });
     }
     for (const goal of summary.responsibilities) {
@@ -329,6 +345,8 @@ export function buildEntries(input: {
         nextRunAt: null,
         lastRunAt: goal.lastRun?.at || null,
         lastStatus: goal.lastRun?.status ?? null,
+        createdAt: null,
+        createdRank: null,
       });
     }
     for (const setting of summary.proactive) {
@@ -354,6 +372,8 @@ export function buildEntries(input: {
         nextRunAt: setting.enabled ? setting.nextRunAt : null,
         lastRunAt: setting.lastRunAt,
         lastStatus: setting.lastRunAt ? setting.lastStatus : null,
+        createdAt: null,
+        createdRank: null,
       });
     }
   }
@@ -363,15 +383,25 @@ export function buildEntries(input: {
 export type AutonomousMetrics = {
   total: number;
   enabled: number;
+  employee: number;
+  flow: number;
+  /** Not panel cells (the reference has none): the status filter carries them on its options. */
   running: number;
   attention: number;
 };
 
-/** The four numbers in the panel, over everything (filters narrow the list, not the overview). */
+/**
+ * Counts over everything (filters narrow the list, not the overview). The panel shows the
+ * reference's four — 总数, 已启用, 员工执行, WakerFlow 执行; 运行中 and 需要关注 ride on the status
+ * filter's options, and each row still says it.
+ */
 export function metricsOf(entries: UnifiedEntry[]): AutonomousMetrics {
   return {
     total: entries.length,
     enabled: entries.filter((entry) => entry.enabled).length,
+    employee: entries.filter((entry) => entry.executor.kind === "employee")
+      .length,
+    flow: entries.filter((entry) => entry.executor.kind === "flow").length,
     running: entries.filter((entry) => entry.running).length,
     attention: entries.filter((entry) => entry.failed).length,
   };
@@ -409,11 +439,53 @@ export function filterEntries(
 const byName = (a: UnifiedEntry, b: UnifiedEntry) =>
   a.name.localeCompare(b.name, "zh-CN");
 
-/** Earliest first for 下次运行, newest first for 最近运行; what has no time goes last, by name. */
+/** Under 最近创建, the order of the kinds that carry no creation time. */
+const UNDATED_ORDER: Record<EntrySource, number> = {
+  automation: 0,
+  routine: 1,
+  responsibility: 2,
+  proactive: 3,
+};
+
+const createdTime = (entry: UnifiedEntry) => {
+  const parsed = entry.createdAt ? Date.parse(entry.createdAt) : Number.NaN;
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+/**
+ * 最近创建 (the default). Only an automation carries a creation time (`createdAt`); the overview's
+ * routines, responsibilities and check-ins do not, so none can be placed honestly among the dated.
+ * The stable fallback: dated entries newest first; then the undated by kind — 定时任务 in
+ * `/api/routines`' own newest-created-first order (an unranked one after the ranked), then 长期职责,
+ * then 主动巡检 — by name within a kind and on every tie.
+ */
+function byCreated(a: UnifiedEntry, b: UnifiedEntry): number {
+  const left = createdTime(a);
+  const right = createdTime(b);
+  if (left !== null || right !== null) {
+    if (left === null) return 1;
+    if (right === null) return -1;
+    return right - left || byName(a, b);
+  }
+  const kind = UNDATED_ORDER[a.source] - UNDATED_ORDER[b.source];
+  if (kind) return kind;
+  if (a.createdRank !== b.createdRank) {
+    if (a.createdRank === null) return 1;
+    if (b.createdRank === null) return -1;
+    return a.createdRank - b.createdRank;
+  }
+  return byName(a, b);
+}
+
+/**
+ * 最近创建 by default (see `byCreated`); earliest first for 下次运行 and newest first for 最近运行,
+ * where what has no time goes last, by name.
+ */
 export function sortEntries(
   entries: UnifiedEntry[],
-  sort: SortKey = "next",
+  sort: SortKey = "created",
 ): UnifiedEntry[] {
+  if (sort === "created") return [...entries].sort(byCreated);
   if (sort === "name") return [...entries].sort(byName);
   const field = sort === "next" ? "nextRunAt" : "lastRunAt";
   const direction = sort === "next" ? 1 : -1;

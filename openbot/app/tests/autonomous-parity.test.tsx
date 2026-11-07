@@ -34,7 +34,7 @@ import { settleReactWork } from "./settle-react-work";
 
 /**
  * Parity plan, 自主工作 (`/autonomous-work` in the reference): the header's primary action, the one
- * panel of four metrics, the toolbar's search and 执行者 / 触发类型 / 状态 / 排序 (mirrored into the
+ * panel of four metrics, the toolbar's search and 执行者 / 触发类型 / 自动任务状态 / 排序 (mirrored into the
  * URL), one list over every kind of unattended work, and its switches writing through the existing
  * endpoints. Reads are seeded; what is asserted is what the page computes and what it writes.
  */
@@ -376,10 +376,18 @@ test("the four metrics are computed from every kind of unattended work", async (
   const { view } = draw();
 
   await view.findByText("Summarise arrivals");
-  expect(metric(view, "全部自动任务")).toBe("6");
+  expect(metric(view, "自动任务总数")).toBe("6");
   expect(metric(view, "已启用")).toBe("4");
-  expect(metric(view, "运行中")).toBe("1");
-  expect(metric(view, "需要关注")).toBe("2");
+  expect(metric(view, "员工执行")).toBe("5");
+  expect(metric(view, "WakerFlow 执行")).toBe("1");
+  // 运行中 and 需要关注 left the panel (the reference has neither); the status filter counts them.
+  const status = view.getByLabelText("自动任务状态") as HTMLSelectElement;
+  expect(
+    Array.from(status.options).map((option) => option.textContent),
+  ).toContain("运行中 · 1");
+  expect(
+    Array.from(status.options).map((option) => option.textContent),
+  ).toContain("需要关注 · 2");
 });
 
 test("each row names its executor and its trigger with the detail", async () => {
@@ -441,7 +449,7 @@ test("executor, trigger type and status narrow the list, and each is written int
   fireEvent.change(view.getByLabelText("触发类型"), {
     target: { value: "schedule" },
   });
-  fireEvent.change(view.getByLabelText("状态"), {
+  fireEvent.change(view.getByLabelText("自动任务状态"), {
     target: { value: "paused" },
   });
   await waitFor(() =>
@@ -483,7 +491,12 @@ test("sorting orders by next run, last run or name", async () => {
   const { view, router } = draw();
   await view.findByText("Weekly report");
 
-  // Default: the next firing first; nothing scheduled (paused, event-driven) after, by name.
+  // 下次运行 (no longer the default — 最近创建 is): the next firing first; nothing scheduled
+  // (paused, event-driven) after, by name.
+  fireEvent.change(view.getByLabelText("排序"), { target: { value: "next" } });
+  await waitFor(() =>
+    expect(router.state.location.search).toMatchObject({ sort: "next" }),
+  );
   expect(listed(view)).toEqual([
     "Summarise arrivals",
     "Weekly report",
@@ -600,17 +613,17 @@ test("with nothing unattended anywhere the page says so, and the metrics read ze
   const { view } = draw({ overview: [], automations: [] });
 
   expect(await view.findByText(/还没有自动任务/)).toBeTruthy();
-  expect(metric(view, "全部自动任务")).toBe("0");
-  expect(metric(view, "需要关注")).toBe("0");
+  expect(metric(view, "自动任务总数")).toBe("0");
+  expect(metric(view, "WakerFlow 执行")).toBe("0");
   expect(view.queryByRole("list", { name: "自动任务列表" })).toBeNull();
 });
 
-test("the per-employee view stays one tab away, in the URL", async () => {
+test("the per-employee view stays one link away, in the URL", async () => {
   serve();
   const { view, user, router } = draw();
   await view.findByText("Weekly report");
 
-  await user.click(view.getByRole("tab", { name: "按员工" }));
+  await user.click(view.getByRole("link", { name: "按员工查看" }));
   expect(router.state.location.search).toMatchObject({ view: "agents" });
   expect(await view.findByRole("button", { name: "全部员工" })).toBeTruthy();
 });

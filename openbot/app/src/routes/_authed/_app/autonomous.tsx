@@ -1,3 +1,4 @@
+import { IconPlus } from "@tabler/icons-react";
 import {
   type UseQueryResult,
   useInfiniteQuery,
@@ -23,7 +24,6 @@ import {
   PageShell,
 } from "@/components/layout/page-shell";
 import { QueryError } from "@/components/layout/query-error";
-import { SegmentedTabs } from "@/components/layout/segmented-tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -78,9 +78,11 @@ type View = "list" | "agents";
  * 自主工作 (parity plan): the title with its one primary action, then two views of the same work.
  *
  * 任务列表 (the default, as in the reference) is one list over every kind of unattended work with
- * four metrics, search and filters, all mirrored into the URL. 按员工 is the earlier per-coworker
- * page, kept whole, because it carries what the list does not: a coworker's routine form with its
- * conversation picker, and the 全部员工 overview grouped by coworker.
+ * four metrics, search and filters, all mirrored into the URL. 按员工 (`?view=agents`) is the
+ * earlier per-coworker page, kept whole, because it carries what the list does not: a coworker's
+ * routine form with its conversation picker, and the 全部员工 overview grouped by coworker. The
+ * reference has no such view, so it is reached from a quiet 「按员工查看」 link at the toolbar's
+ * end rather than a switch in the header, and left by 「返回任务列表」.
  */
 function RouteComponent() {
   const search = Route.useSearch();
@@ -111,7 +113,11 @@ function RouteComponent() {
       action={
         <Button
           aria-expanded={view === "list" && creating}
-          className="h-[32px] px-3 text-[13px]"
+          /*
+           * The reference centres its action on the title and subtitle together, not on the title
+           * line alone: the nudge is visual only, so the header's own layout is untouched.
+           */
+          className="h-[32px] translate-y-[15px] gap-[10px] pr-[12px] pl-[13px] text-[13px]"
           onClick={() => {
             if (view === "agents") {
               update({});
@@ -121,27 +127,14 @@ function RouteComponent() {
             setCreating((open) => !open);
           }}
         >
+          <IconPlus aria-hidden="true" className="size-[14px]" />
           新建自动任务
         </Button>
       }
-      description="员工与 WakerFlow 在无人值守时做的事：按定时、事件或 API 触发。"
+      description="通过定时、事件或 API 自动开工，并由员工或 WakerFlow 响应。"
       title="自主工作"
       width="workbench"
     >
-      <div className="pt-5">
-        <SegmentedTabs
-          label="自主工作视图"
-          onValueChange={(next: View) =>
-            // The filters belong to the list; the per-coworker view starts from its own state.
-            update(next === "agents" ? { view: "agents" } : {})
-          }
-          tabs={[
-            { value: "list", label: "任务列表" },
-            { value: "agents", label: "按员工" },
-          ]}
-          value={view}
-        />
-      </div>
       {view === "list" ? (
         <>
           {creating ? (
@@ -219,9 +212,19 @@ function AgentsView() {
 
   return (
     <>
-      <p className="pt-4 text-muted-foreground text-sm">
-        这位员工自己安排的定时任务、长期职责与主动巡检，以及它们上一次的结果。
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-3 pt-[32px] pb-[12px]">
+        <p className="text-muted-foreground text-sm">
+          这位员工自己安排的定时任务、长期职责与主动巡检，以及它们上一次的结果。
+        </p>
+        {/* The filters belong to the list, so going back starts it from a bare address. */}
+        <Link
+          className="text-[13px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+          search={{}}
+          to="/autonomous"
+        >
+          返回任务列表
+        </Link>
+      </div>
       {agents.isError ? (
         <QueryError
           label="员工加载失败"

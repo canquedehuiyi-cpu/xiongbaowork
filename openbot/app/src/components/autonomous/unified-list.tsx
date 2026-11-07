@@ -15,7 +15,12 @@ import {
   ToggleSwitch,
   WorkSwitch,
 } from "@/components/autonomous/work-bits";
+import {
+  LabeledSelect,
+  type LabeledSelectOption,
+} from "@/components/layout/labeled-select";
 import { QueryError } from "@/components/layout/query-error";
+import { SearchBox } from "@/components/layout/search-box";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -34,17 +39,21 @@ import {
   autonomousOverviewQueryOptions,
 } from "@/lib/autonomous/queries";
 import {
+  type AutonomousMetrics,
   type AutonomousSearch,
   buildEntries,
   EXECUTOR_LABEL,
+  type ExecutorKind,
   filterEntries,
   metricsOf,
   SORT_LABEL,
   type SortKey,
   SOURCE_LABEL,
   STATUS_FILTER_LABEL,
+  type StatusFilter,
   sortEntries,
   TRIGGER_TYPE_LABEL,
+  type TriggerType,
   type UnifiedEntry,
 } from "@/lib/autonomous/unified";
 import { relativeTime } from "@/lib/relative-time";
@@ -67,9 +76,8 @@ type Raw =
   | { kind: "responsibility"; row: Goal }
   | { kind: "proactive"; row: Setting };
 
-/** The reference's toolbar control: 32 CSS px tall, 13px text. */
-const CONTROL =
-  "h-[32px] rounded-md border border-input bg-transparent px-2 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-ring/60 dark:bg-input/30";
+/** A row's action, at the reference's control height: 32 CSS px, 13px text. */
+const ROW_ACTION = "h-[32px] px-3 text-[13px]";
 
 const COLUMNS =
   "md:grid md:grid-cols-[minmax(0,2.2fr)_minmax(0,1.1fr)_minmax(0,1.6fr)_minmax(0,0.8fr)_minmax(0,1.2fr)_auto] md:items-center md:gap-4";
@@ -164,10 +172,12 @@ export function UnifiedAutomations({
     search.q || search.executor || search.trigger || search.status,
   );
 
+  const metrics = ready ? metricsOf(entries) : null;
+
   return (
     <>
-      <Metrics entries={ready ? entries : null} />
-      <Toolbar onChange={onChange} search={search} />
+      <Metrics metrics={metrics} />
+      <Toolbar metrics={metrics} onChange={onChange} search={search} />
 
       {agents.isError ? (
         // Rows still draw without names (the id stands in), so this is said beside them.
@@ -215,32 +225,48 @@ export function UnifiedAutomations({
       ) : null}
 
       {!ready ? (
-        <div className="mt-4 flex flex-col gap-2">
-          <Skeleton className="h-12" />
-          <Skeleton className="h-12" />
+        <div className="mt-[16px] flex flex-col gap-2">
+          <Skeleton className="h-[52px]" />
+          <Skeleton className="h-[52px]" />
         </div>
       ) : entries.length === 0 ? (
         overview.isError || automations.isError ? null : (
-          <p className="mt-6 text-muted-foreground text-sm">
-            还没有自动任务。点右上角「新建自动任务」，让员工或 WakerFlow
-            按定时、事件或 API 去做事。
-          </p>
+          /*
+           * Text only, centred under the toolbar where the reference puts it (its title sits 70px
+           * below the toolbar); the floating mascot is the shell's, not this page's.
+           */
+          <div
+            className="flex flex-col items-center gap-[8px] px-6 pt-[70px] pb-12 text-center"
+            data-empty
+          >
+            <p className="font-semibold text-[14px] leading-[20px]">
+              还没有自动任务
+            </p>
+            <p className="text-[12px] text-muted-foreground/80 leading-[18px]">
+              创建自动任务，按定时、事件或 API 自动唤起员工 / WakerFlow。
+            </p>
+          </div>
         )
       ) : shown.length === 0 ? (
-        <div className="mt-6 flex items-center gap-3 text-sm">
+        <div className="mt-6 flex items-center gap-3 text-[14px]">
           <p className="text-muted-foreground">没有符合条件的自动任务。</p>
           {filtered ? (
-            <Button onClick={onReset} size="sm" variant="outline">
+            <Button
+              className={ROW_ACTION}
+              onClick={onReset}
+              size="sm"
+              variant="outline"
+            >
               清除筛选
             </Button>
           ) : null}
         </div>
       ) : (
-        <div className="mt-4 overflow-hidden rounded-lg border border-border bg-card dark:border-transparent">
+        <div className="mt-[16px] overflow-hidden rounded-[8px] border border-border bg-card dark:border-transparent">
           <div
             aria-hidden="true"
             className={cn(
-              "hidden border-border border-b px-4 py-2 text-[12px] text-muted-foreground",
+              "hidden h-[36px] border-border border-b px-4 text-[12px] text-muted-foreground",
               COLUMNS,
             )}
           >
@@ -282,37 +308,56 @@ export function UnifiedAutomations({
   );
 }
 
-/** One panel, four numbers, over everything — the filters narrow the list, not the overview. */
-function Metrics({ entries }: { entries: UnifiedEntry[] | null }) {
-  const metrics = entries ? metricsOf(entries) : null;
+/**
+ * One panel, four numbers, over everything — the filters narrow the list, not the overview. Measured
+ * off the reference (docs/acceptance/qoderwake-reference/autonomous.png): a #1a1a1a panel with 8px
+ * corners, 20px sides, 23px top and 20px bottom padding (134px tall), 35px under the subtitle,
+ * four equal cells split by hairlines, each a 44px number over a bold 13px label and a dimmer
+ * 12px caption.
+ */
+function Metrics({ metrics }: { metrics: AutonomousMetrics | null }) {
   const cells = [
-    { label: "全部自动任务", value: metrics?.total },
-    { label: "已启用", value: metrics?.enabled },
-    { label: "运行中", value: metrics?.running },
-    { label: "需要关注", value: metrics?.attention },
+    { label: "自动任务总数", caption: "全部自动任务", value: metrics?.total },
+    {
+      label: "已启用",
+      caption: "当前已启用的自动任务",
+      value: metrics?.enabled,
+    },
+    {
+      label: "员工执行",
+      caption: "由员工执行的自动任务",
+      value: metrics?.employee,
+    },
+    {
+      label: "WakerFlow 执行",
+      caption: "由 WakerFlow 执行的自动任务",
+      value: metrics?.flow,
+    },
   ];
   return (
     <section
       aria-label="自主工作概览"
-      className="mt-5 grid grid-cols-2 overflow-hidden rounded-lg border border-border bg-card md:grid-cols-4 dark:border-transparent"
+      className="mt-[35px] grid grid-cols-2 gap-y-[16px] rounded-[8px] bg-secondary px-[20px] pt-[23px] pb-[20px] md:grid-cols-4 md:gap-y-0"
     >
       {cells.map((cell, index) => (
         <div
           className={cn(
-            "flex flex-col gap-1 px-5 py-4",
-            index > 0 && "md:border-border md:border-l",
-            index % 2 === 1 && "border-border border-l",
-            index >= 2 && "border-border border-t md:border-t-0",
+            "flex min-w-0 flex-col",
+            index % 2 === 1 && "border-foreground/5 border-l pl-[20px]",
+            index === 2 && "md:border-foreground/5 md:border-l md:pl-[20px]",
           )}
           data-metric
           data-value={cell.value ?? ""}
           key={cell.label}
         >
-          <span className="text-[13px] text-muted-foreground">
+          <span className="font-semibold text-[44px] tabular-nums leading-[44px]">
+            {cell.value ?? "—"}
+          </span>
+          <span className="mt-[4px] truncate font-semibold text-[13px] leading-[20px]">
             {cell.label}
           </span>
-          <span className="font-semibold text-[24px] tabular-nums leading-[32px]">
-            {cell.value ?? "—"}
+          <span className="mt-[5px] truncate text-[12px] text-muted-foreground/70 leading-[18px]">
+            {cell.caption}
           </span>
         </div>
       ))}
@@ -320,99 +365,106 @@ function Metrics({ entries }: { entries: UnifiedEntry[] | null }) {
   );
 }
 
+const EXECUTOR_OPTIONS: LabeledSelectOption<"" | ExecutorKind>[] = [
+  { value: "", label: "全部执行者" },
+  { value: "employee", label: EXECUTOR_LABEL.employee },
+  { value: "flow", label: "WakerFlow" },
+];
+
+const TRIGGER_OPTIONS: LabeledSelectOption<"" | TriggerType>[] = [
+  { value: "", label: "全部类型" },
+  ...(["schedule", "event", "api"] as const).map((value) => ({
+    value,
+    label: TRIGGER_TYPE_LABEL[value],
+  })),
+];
+
+const SORT_OPTIONS: LabeledSelectOption<SortKey>[] = (
+  ["created", "next", "last", "name"] as const
+).map((value) => ({ value, label: SORT_LABEL[value] }));
+
+/**
+ * The reference's toolbar: a 256px search, then four 176px labelled filters 8px apart, all 32px
+ * tall. 最近创建 is the default sort. The per-employee view, which the reference does not have, is
+ * a quiet text link at the end rather than a switch in the header.
+ */
 function Toolbar({
   search,
+  metrics,
   onChange,
 }: {
   search: AutonomousSearch;
+  metrics: AutonomousMetrics | null;
   onChange: (patch: Partial<AutonomousSearch>) => void;
 }) {
   // Typed locally and mirrored into the URL, so a keystroke never waits on a navigation.
   const [text, setText] = useState(search.q ?? "");
   useEffect(() => setText(search.q ?? ""), [search.q]);
+  /*
+   * 运行中 and 需要关注 are not panel cells in the reference, but they are what a person most needs
+   * to find, so their counts ride on the options that find them.
+   */
+  const counted = (value: StatusFilter, count: number | undefined) =>
+    count
+      ? `${STATUS_FILTER_LABEL[value]} · ${count}`
+      : STATUS_FILTER_LABEL[value];
+  const statusOptions: LabeledSelectOption<"" | StatusFilter>[] = [
+    { value: "", label: "全部状态" },
+    { value: "enabled", label: STATUS_FILTER_LABEL.enabled },
+    { value: "paused", label: STATUS_FILTER_LABEL.paused },
+    { value: "running", label: counted("running", metrics?.running) },
+    { value: "failed", label: counted("failed", metrics?.attention) },
+  ];
 
   return (
-    <div className="mt-5 flex flex-wrap items-center gap-2">
-      <Input
-        aria-label="搜索自动任务"
-        className="h-[32px] w-[240px] text-[13px]"
-        onChange={(event) => {
-          setText(event.target.value);
-          onChange({ q: event.target.value || undefined });
+    <div className="mt-[36px] flex flex-wrap items-center gap-[8px]">
+      <SearchBox
+        className="w-[256px]"
+        label="搜索自动任务"
+        onValueChange={(value) => {
+          setText(value);
+          onChange({ q: value || undefined });
         }}
-        placeholder="搜索名称、执行者或触发方式"
-        type="search"
+        placeholder="搜索任务名称..."
         value={text}
       />
-      <select
-        aria-label="执行者"
-        className={CONTROL}
-        onChange={(event) =>
-          onChange({
-            executor: (event.target.value ||
-              undefined) as AutonomousSearch["executor"],
-          })
-        }
+      <LabeledSelect
+        className="w-[176px]"
+        label="执行者"
+        onValueChange={(value) => onChange({ executor: value || undefined })}
+        options={EXECUTOR_OPTIONS}
         value={search.executor ?? ""}
-      >
-        <option value="">全部执行者</option>
-        {(["employee", "flow"] as const).map((value) => (
-          <option key={value} value={value}>
-            {EXECUTOR_LABEL[value]}
-          </option>
-        ))}
-      </select>
-      <select
-        aria-label="触发类型"
-        className={CONTROL}
-        onChange={(event) =>
-          onChange({
-            trigger: (event.target.value ||
-              undefined) as AutonomousSearch["trigger"],
-          })
-        }
+      />
+      <LabeledSelect
+        className="w-[176px]"
+        label="触发类型"
+        onValueChange={(value) => onChange({ trigger: value || undefined })}
+        options={TRIGGER_OPTIONS}
         value={search.trigger ?? ""}
-      >
-        <option value="">全部触发类型</option>
-        {(["schedule", "event", "api"] as const).map((value) => (
-          <option key={value} value={value}>
-            {TRIGGER_TYPE_LABEL[value]}
-          </option>
-        ))}
-      </select>
-      <select
-        aria-label="状态"
-        className={CONTROL}
-        onChange={(event) =>
-          onChange({
-            status: (event.target.value ||
-              undefined) as AutonomousSearch["status"],
-          })
-        }
+      />
+      <LabeledSelect
+        className="w-[176px]"
+        label="自动任务状态"
+        onValueChange={(value) => onChange({ status: value || undefined })}
+        options={statusOptions}
         value={search.status ?? ""}
+      />
+      <LabeledSelect
+        className="w-[176px]"
+        label="排序"
+        onValueChange={(value) =>
+          onChange({ sort: value === "created" ? undefined : value })
+        }
+        options={SORT_OPTIONS}
+        value={search.sort ?? "created"}
+      />
+      <Link
+        className="ms-auto text-[13px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+        search={{ view: "agents" }}
+        to="/autonomous"
       >
-        <option value="">全部状态</option>
-        {(["enabled", "paused", "running", "failed"] as const).map((value) => (
-          <option key={value} value={value}>
-            {STATUS_FILTER_LABEL[value]}
-          </option>
-        ))}
-      </select>
-      <select
-        aria-label="排序"
-        className={cn(CONTROL, "ms-auto")}
-        onChange={(event) => {
-          const value = event.target.value as SortKey;
-          onChange({ sort: value === "next" ? undefined : value });
-        }}
-        value={search.sort ?? "next"}
-      >
-        {(["next", "last", "name"] as const).map((value) => (
-          <option key={value} value={value}>
-            按{SORT_LABEL[value]}
-          </option>
-        ))}
-      </select>
+        按员工查看
+      </Link>
     </div>
   );
 }
@@ -443,15 +495,21 @@ function EntryRow({
   const detailId = useId();
 
   return (
-    <li aria-label={entry.name} className="px-4 py-3" data-name={entry.name}>
+    <li
+      aria-label={entry.name}
+      className="px-4 py-[10px]"
+      data-name={entry.name}
+    >
       <div className={cn("flex flex-col gap-2", COLUMNS)}>
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <span className="truncate font-medium text-[14px]">{entry.name}</span>
-          <span className="text-[12px] text-muted-foreground">
+        <div className="flex min-w-0 flex-col">
+          <span className="truncate font-medium text-[14px] leading-[20px]">
+            {entry.name}
+          </span>
+          <span className="text-[12px] text-muted-foreground leading-[18px]">
             {SOURCE_LABEL[entry.source]}
           </span>
         </div>
-        <span className="truncate text-[13px]">
+        <span className="truncate text-[14px]">
           {EXECUTOR_LABEL[entry.executor.kind]} · {entry.executor.name}
         </span>
         <ul aria-label="触发" className="flex min-w-0 flex-wrap gap-1">
@@ -475,7 +533,7 @@ function EntryRow({
         </ul>
         <span
           className={cn(
-            "text-[13px]",
+            "text-[14px]",
             entry.failed
               ? "text-destructive"
               : entry.running
@@ -517,6 +575,7 @@ function EntryRow({
           <Button
             aria-controls={detailId}
             aria-expanded={open}
+            className={ROW_ACTION}
             onClick={() => onDetail(!open)}
             size="sm"
             variant="ghost"
@@ -653,7 +712,7 @@ function RoutineSwitch({
 }
 
 const LINK_ACTION =
-  "inline-flex h-7 items-center rounded-md px-2.5 text-[0.8rem] hover:bg-muted";
+  "inline-flex h-[32px] items-center rounded-md px-3 text-[13px] hover:bg-muted";
 
 /**
  * 编辑, wired to whatever each kind has: an automation is patched here; a responsibility and a
@@ -674,6 +733,7 @@ function EditAction({
     return (
       <Button
         aria-expanded={editing}
+        className={ROW_ACTION}
         onClick={onEdit}
         size="sm"
         variant="ghost"
@@ -697,7 +757,13 @@ function EditAction({
     );
   }
   return (
-    <Button disabled size="sm" title={ROUTINE_NO_EDIT} variant="ghost">
+    <Button
+      className={ROW_ACTION}
+      disabled
+      size="sm"
+      title={ROUTINE_NO_EDIT}
+      variant="ghost"
+    >
       编辑
     </Button>
   );
