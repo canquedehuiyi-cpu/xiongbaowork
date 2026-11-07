@@ -14,7 +14,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { type ApprovalDecision, approvalPreview } from "../approvals/types";
+import { type ApprovalDecision, approvalArgsPreview } from "../approvals/types";
 import {
   ingestSlackEvent,
   type SlackTriggerEvent,
@@ -468,7 +468,7 @@ async function approvalCard(
     approver: `${binding.transport}:${binding.identity}`,
     effect: record.action.effect,
     // The approvals preview already redacts secrets and private content.
-    fields: approvalFields(approvalPreview(record.action.args)),
+    fields: approvalFields(approvalArgsPreview(record.action)),
   });
 }
 

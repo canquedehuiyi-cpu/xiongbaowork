@@ -10,6 +10,7 @@ import {
   decideAction,
   effectiveHostCommandPolicy,
   globMatches,
+  refusedOutright,
   reviewAction,
   safetyRequirement,
   securityFloor,
@@ -34,6 +35,7 @@ import {
   type ApprovalTeamRule,
   type ApprovalTeamSettings,
   approvalAction,
+  approvalArgsPreview,
   DEFAULT_EMPLOYEE_SECURITY,
   type EmployeePolicy,
   withApprovalContext,
@@ -1612,6 +1614,40 @@ describe("device apps: the app-tool floor", () => {
     expect(
       await decideAction({ ...base, candidate: appCall(undefined, spoofed) }),
     ).toMatchObject({ behaviour: "ask", source: "app_tool" });
+  });
+  test("the card masks secrets by name before cutting an app call's arguments to 2 KB", () => {
+    const shown = approvalArgsPreview({
+      toolRef: "computer_app_call",
+      args: {
+        app: "Notes",
+        tool: "write_note",
+        args: { token: "tok-SECRET", note: "长".repeat(5000) },
+      },
+      target: { app: "Notes", tool: "write_note", description: "Write a note" },
+    }) as { app: string; tool: string; description: string; args: string };
+    expect(shown).toMatchObject({ app: "Notes", tool: "write_note", description: "Write a note" });
+    expect(shown.args).not.toContain("tok-SECRET");
+    expect(shown.args).toContain("[private value]");
+    expect(new TextEncoder().encode(shown.args).length).toBeLessThanOrEqual(2048);
+    expect(shown.args.endsWith("…")).toBeTrue();
+    // Every other tool keeps the ordinary preview.
+    expect(
+      approvalArgsPreview({ toolRef: "computer_run_command", args: { command: "ls" } }),
+    ).toEqual({ command: "ls" });
+  });
+  test("an outright refusal is known before the tool list: a disabled tool, or the cap at never", () => {
+    const call = appCall(undefined);
+    expect(
+      refusedOutright({ ...base, candidate: call, hostCommandsCap: "never" }),
+    ).toMatchObject({ behaviour: "deny", source: "host_command_cap" });
+    expect(
+      refusedOutright({
+        ...base,
+        candidate: call,
+        personal: [rule("deny", { toolRef: "computer_app_call" })],
+      }),
+    ).toMatchObject({ behaviour: "deny", reason: TOOL_DISABLED });
+    expect(refusedOutright({ ...base, candidate: call, hostCommandsCap: "ask" })).toBeUndefined();
   });
   test("team cap never denies computer_app_call; ask asks", async () => {
     expect(

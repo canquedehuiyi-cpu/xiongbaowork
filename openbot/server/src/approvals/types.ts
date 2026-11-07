@@ -492,6 +492,49 @@ export function approvalPreview(args: unknown, depth = 0): unknown {
   return args;
 }
 
+/** How much of a local app call's arguments its card shows (device MCP bridge §4.5). */
+const APP_ARGS_PREVIEW_BYTES = 2048;
+
+/**
+ * An action's arguments as a card shows them: {@link approvalPreview}, except for a local app's
+ * call, which shows the app and tool (the gateway's own names), the tool's description from the
+ * device's list, and the tool's arguments masked by `approvalPreview` first and then as JSON cut to
+ * 2 KB. Display only: what is approved and run is the whole call, bound by the action digest.
+ */
+export function approvalArgsPreview(action: {
+  toolRef: string;
+  args: unknown;
+  target?: unknown;
+}): unknown {
+  if (action.toolRef !== "computer_app_call")
+    return approvalPreview(action.args);
+  const field = (value: unknown, key: string) =>
+    value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)[key]
+      : undefined;
+  // Masked as an object, so secrets by name are hidden before the JSON is cut.
+  const json =
+    JSON.stringify(approvalPreview(field(action.args, "args") ?? {})) ?? "{}";
+  const bytes = new TextEncoder().encode(json);
+  const shown =
+    bytes.length > APP_ARGS_PREVIEW_BYTES
+      ? `${new TextDecoder()
+          .decode(bytes.slice(0, APP_ARGS_PREVIEW_BYTES - 3))
+          .replace(/\uFFFD+$/, "")}…`
+      : json;
+  const description = field(action.target, "description");
+  return {
+    app: approvalPreview(field(action.target, "app") ?? field(action.args, "app")),
+    tool: approvalPreview(
+      field(action.target, "tool") ?? field(action.args, "tool"),
+    ),
+    ...(typeof description === "string"
+      ? { description: approvalPreview(description) }
+      : {}),
+    args: shown,
+  };
+}
+
 /** Database parent columns, not HTTP claims or an owner-derived tenant. */
 export type ApprovalRecoveryContext = {
   request: ApprovalRecord;

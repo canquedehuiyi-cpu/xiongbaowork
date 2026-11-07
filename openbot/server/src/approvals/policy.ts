@@ -681,27 +681,9 @@ export async function decideAction(input: {
     layers.personal,
     layers.owner,
   );
-  if (matched && rankOf(matched.rule.behaviour) >= RANK.deny)
-    return {
-      behaviour: "deny",
-      source: matched.layer,
-      ruleId: matched.rule.id,
-      reason: TOOL_DISABLED,
-    };
-  /*
-   * Calling a local app's MCP tool on a paired machine runs a program there, so the team's
-   * host-command cap applies to it exactly as to a command (device MCP bridge §4.3).
-   */
-  const runnerCommand =
-    candidate.subject?.runner === true &&
-    (candidate.toolRef === "computer_run_command" ||
-      candidate.toolRef === "computer_app_call");
-  if (runnerCommand && input.hostCommandsCap === "never")
-    return {
-      behaviour: "deny",
-      source: "host_command_cap",
-      reason: HOST_COMMANDS_NEVER,
-    };
+  const refused = refusedOutright(input);
+  if (refused) return refused;
+  const runnerCommand = isRunnerCommand(candidate);
   const safety = safetyRequirement(candidate);
   if (safety)
     return {
@@ -746,6 +728,58 @@ export async function decideAction(input: {
       ...(decided.review ? { review: decided.review } : {}),
     };
   return decided;
+}
+
+/**
+ * Calling a local app's MCP tool on a paired machine runs a program there, so the team's
+ * host-command cap applies to it exactly as to a command (device MCP bridge §4.3).
+ */
+function isRunnerCommand(candidate: ApprovalCandidate): boolean {
+  return (
+    candidate.subject?.runner === true &&
+    (candidate.toolRef === "computer_run_command" ||
+      candidate.toolRef === "computer_app_call")
+  );
+}
+
+/**
+ * Step 2 of {@link decideAction} on its own: a disabled tool (a `deny` in any layer), or the team's
+ * host-command cap of `never` for a command or app call on a paired computer. Either refuses the
+ * action outright, whatever else is true of it.
+ */
+export function refusedOutright(input: {
+  candidate: ApprovalCandidate;
+  team: readonly ApprovalTeamRule[];
+  personal: readonly ApprovalRule[];
+  owner?: readonly ApprovalRule[];
+  customRulesEnabled: boolean;
+  hostCommandsCap?: HostCommandPolicy;
+}): ApprovalPolicyOutcome | undefined {
+  const layers = applicableRules({
+    personal: input.personal,
+    ...(input.owner ? { owner: input.owner } : {}),
+    customRulesEnabled: input.customRulesEnabled,
+  });
+  const matched = strictestRule(
+    input.candidate,
+    input.team,
+    layers.personal,
+    layers.owner,
+  );
+  if (matched && rankOf(matched.rule.behaviour) >= RANK.deny)
+    return {
+      behaviour: "deny",
+      source: matched.layer,
+      ruleId: matched.rule.id,
+      reason: TOOL_DISABLED,
+    };
+  if (isRunnerCommand(input.candidate) && input.hostCommandsCap === "never")
+    return {
+      behaviour: "deny",
+      source: "host_command_cap",
+      reason: HOST_COMMANDS_NEVER,
+    };
+  return undefined;
 }
 
 /** Step 5 of {@link decideAction}: the strictest rule, the reviewer, and the person's default. */

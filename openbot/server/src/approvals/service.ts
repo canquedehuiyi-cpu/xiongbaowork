@@ -11,6 +11,7 @@ import {
   decideAction,
   effectiveHostCommandPolicy,
   type ReviewModel,
+  refusedOutright,
   ruleMatches,
   toolDisabled,
 } from "./policy";
@@ -39,6 +40,7 @@ import {
   type EmployeeToolMode,
   EMPLOYEE_TOOL_BEHAVIOUR,
   approvalAction,
+  approvalArgsPreview,
   approvalPreview,
   currentApprovalContext,
   type HostCommandPolicy,
@@ -618,6 +620,38 @@ export function createApprovalService(
       const rules = [teamRules, layers.owner, layers.personal];
       return (toolRef) => toolDisabled({ botId, toolRef }, rules);
     },
+    /**
+     * Why this action would be refused outright, whichever way it turns out to change things: a
+     * disabled tool, or the team's host-command cap of `never` (SEC1 D4, D5). Asked before the work of
+     * finding out (a local app's tool list starts the app on the machine), so a refused call starts
+     * nothing; the gate still decides the action in full afterwards. Undefined: not refused outright.
+     */
+    async refusal(candidate: ApprovalCandidate): Promise<string | undefined> {
+      const policy = store.policy;
+      if (!policy) return undefined;
+      const [team, teamRules, personal, employee] = await Promise.all([
+        policy.teamSettings(),
+        policy.teamRules(),
+        store.rules(candidate.actorId),
+        policy.employee?.(candidate.botId),
+      ]);
+      let reason: string | undefined;
+      for (const effect of ["read", "write"]) {
+        const refused = refusedOutright({
+          candidate: { ...candidate, effect },
+          team: teamRules,
+          personal,
+          ...(employee?.ownerUserId && employee.ownerUserId !== candidate.actorId
+            ? { owner: employee.rules }
+            : {}),
+          customRulesEnabled: team.customRulesEnabled,
+          hostCommandsCap: team.hostCommandsCap,
+        });
+        if (!refused) return undefined;
+        reason = refused.reason;
+      }
+      return reason;
+    },
     /** Commands on this person's own computer, after the team cap: the stricter setting applies. */
     async hostCommandPolicy(ownerUserId: string): Promise<HostCommandPolicy> {
       const policy = store.policy;
@@ -1052,34 +1086,6 @@ function permanentReason(error: unknown): string {
     return "the saved request no longer has a valid shape.";
   return "the app it needs is no longer available.";
 }
-/** How much of a local app call's arguments its card shows (device MCP bridge §4.5). */
-const APP_ARGS_PREVIEW_BYTES = 2048;
-/**
- * A local app's call as its card shows it: the app and tool (the gateway's own names), the tool's
- * description from the device's list, and the arguments as JSON cut to 2 KB. Display only: what is
- * approved and run is the whole call, bound by the action digest.
- */
-function appCallPreview(action: ApprovalAction): unknown {
-  const field = (value: unknown, key: string) =>
-    value && typeof value === "object" && !Array.isArray(value)
-      ? (value as Record<string, unknown>)[key]
-      : undefined;
-  const json = JSON.stringify(field(action.args, "args") ?? {}) ?? "{}";
-  const bytes = new TextEncoder().encode(json);
-  const shown =
-    bytes.length > APP_ARGS_PREVIEW_BYTES
-      ? `${new TextDecoder()
-          .decode(bytes.slice(0, APP_ARGS_PREVIEW_BYTES - 3))
-          .replace(/\uFFFD+$/, "")}…`
-      : json;
-  const description = field(action.target, "description");
-  return approvalPreview({
-    app: field(action.target, "app") ?? field(action.args, "app"),
-    tool: field(action.target, "tool") ?? field(action.args, "tool"),
-    ...(typeof description === "string" ? { description } : {}),
-    args: shown,
-  });
-}
 function publicApproval(request: ApprovalRecord) {
   const { action, ...record } = request;
   return {
@@ -1093,10 +1099,7 @@ function publicApproval(request: ApprovalRecord) {
       threadId: action.threadId,
       // The owner's own call id, so the conversation can draw this request where the action was.
       toolCallId: action.toolCallId,
-      args:
-        action.toolRef === "computer_app_call"
-          ? appCallPreview(action)
-          : approvalPreview(action.args),
+      args: approvalArgsPreview(action),
       target: approvalPreview(action.target),
       ...(action.policy
         ? {
