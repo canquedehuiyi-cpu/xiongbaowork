@@ -121,17 +121,22 @@ export function PageShell({
           className={cn(
             "flex w-full flex-col pb-12",
             // Without a bar above it the heading keeps the full original space.
-            width === "workbench" ? "pt-[48px]" : bar ? "pt-8" : "pt-12",
+            width === "workbench" ? "pt-[46px]" : bar ? "pt-8" : "pt-12",
             WIDTHS[width],
             className,
           )}
         >
-          <header className="flex flex-col gap-2">
+          <header
+            className={cn(
+              "flex flex-col",
+              width === "workbench" ? "gap-[5px]" : "gap-2",
+            )}
+          >
             <div className="flex flex-row items-center justify-between gap-4">
               <h1
                 className={
                   width === "workbench"
-                    ? "font-semibold text-[28px] leading-[36px] tracking-tight"
+                    ? "font-semibold text-[28px] leading-[32px] tracking-tight"
                     : "font-bold text-2xl"
                 }
               >
