@@ -5,6 +5,7 @@ import { and, eq, inArray, like } from "drizzle-orm";
 import { Hono } from "hono";
 import { EMPTY } from "rxjs";
 import {
+  decideFromSnapshot,
   type EnterpriseControls,
   guardDeliveryStore,
   installEnterpriseControls,
@@ -15,6 +16,7 @@ import { createHandoffDelivery } from "../src/agents/handoff-delivery";
 import { addAuditTap, createAuditStore, recordAuditEvent } from "../src/audit";
 import { createAuth } from "../src/auth";
 import type { AppVariables } from "../src/auth/guards";
+import type { PolicyContext } from "../src/computer/policy";
 import type { ComputerProvider } from "../src/computer/provider";
 import type { DeploymentConfig } from "../src/config";
 import { createDatabase } from "../src/db/client";
@@ -25,6 +27,7 @@ import {
   auditEvents,
   capabilitySettings,
   enterpriseSettings,
+  mcpServers,
   modelUsage,
   networkPolicies,
   revokedAccess,
@@ -34,6 +37,7 @@ import {
   teamBotPublications,
   users,
 } from "../src/db/schema";
+import { TEAM_TENANT } from "../src/db/schema/tenant";
 import { createTurnRunner } from "../src/routines/run-turn";
 import { createTeamBots } from "../src/team-bots/team-bots";
 import { runAsTenant } from "../src/tenant/context";
@@ -321,6 +325,95 @@ describe("capability switches", () => {
         (row) => row.capability === "cloudBrowser" && row.allowed === false,
       ),
     ).toBe(true);
+  });
+});
+
+describe("MCP allowlist", () => {
+  // A curated connector as an administrator's add leaves it since G01-E: the team's row, id
+  // `team:<key>`, carrying the key. A tool call names the APP, so the boundary is asked about `<key>`.
+  const appKey = `ent-notion-${suite}`;
+  const rowId = `team:${appKey}`;
+  const custom = `ent-custom-${suite}`;
+  const call = (server: string): PolicyContext => ({
+    tool: { name: `${server}__search` },
+    bot: { id: bot },
+    actor: { id: member.id },
+    page: { url: "", host: "" },
+    intent: "read_tool",
+    key: "",
+    element: { ref: "", role: "", name: "", type: "" },
+    file: { path: "", name: "", extension: "" },
+    command: "",
+    mcp: { server, tool: "search", effect: "read" },
+    initiator: { kind: "person", id: member.id },
+  });
+
+  // Awaited inside the frame: a drizzle builder is a lazy thenable, and handed back unawaited it
+  // would run (or not) outside `platform`.
+  beforeAll(() =>
+    asPlatform(async () => {
+      await database.insert(mcpServers).values([
+        {
+          tenantId: TEAM_TENANT,
+          id: rowId,
+          catalogueKey: appKey,
+          title: "Notion",
+          vendor: "notion",
+          url: `https://${appKey}.example/mcp`,
+        },
+        {
+          tenantId: TEAM_TENANT,
+          id: custom,
+          title: "Custom",
+          vendor: "custom",
+          url: `https://${custom}.example/mcp`,
+          provenance: "custom",
+        },
+      ]);
+    }),
+  );
+  afterAll(() =>
+    asPlatform(async () => {
+      await database
+        .delete(mcpServers)
+        .where(inArray(mcpServers.id, [rowId, custom]));
+    }),
+  );
+
+  test("the admin list offers each app once, by the key a tool call names", async () => {
+    const overview = (await (
+      await asAdmin.request("/api/admin/enterprise")
+    ).json()) as {
+      mcpServers: { id: string; rowIds: string[] }[];
+    };
+    const ids = overview.mcpServers.map((server) => server.id);
+    expect(ids).toContain(appKey);
+    expect(ids).toContain(custom);
+    expect(ids).not.toContain(rowId);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(
+      overview.mcpServers.find((server) => server.id === appKey)?.rowIds,
+    ).toContain(rowId);
+  });
+
+  test("an approved curated app is callable whether the list holds its key or its row id", async () => {
+    try {
+      for (const servers of [[rowId], [appKey]]) {
+        await put(asAdmin, "/api/admin/enterprise/settings/mcpAllowlist", {
+          value: { enabled: true, servers: [...servers, custom] },
+        });
+        const current = controls.snapshot();
+        expect(decideFromSnapshot(current, call(appKey))).toBeNull();
+        expect(decideFromSnapshot(current, call(custom))).toBeNull();
+        expect(
+          decideFromSnapshot(current, call(`ent-other-${suite}`))?.matched,
+        ).toBe("mcp_allowlist");
+      }
+    } finally {
+      await put(asAdmin, "/api/admin/enterprise/settings/mcpAllowlist", {
+        value: { enabled: false, servers: [] },
+      });
+    }
   });
 });
 

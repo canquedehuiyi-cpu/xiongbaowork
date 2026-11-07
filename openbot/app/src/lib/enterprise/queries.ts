@@ -50,13 +50,51 @@ export type EnterpriseSettings = {
   mcpAllowlist: { enabled: boolean; servers: string[] };
 };
 
+export type McpAllowlistServer = {
+  id: string;
+  title: string;
+  url: string;
+  rowIds: string[];
+};
+
+/**
+ * Whether the saved MCP allowlist approves this app. An entry naming one of its rows counts: since
+ * G01-E a curated row is `team:<key>`, and this screen used to save the row id, which the server's
+ * boundary also reads as approving `<key>`.
+ */
+export function isMcpServerApproved(
+  saved: string[],
+  server: Pick<McpAllowlistServer, "id" | "rowIds">,
+): boolean {
+  return saved.some(
+    (entry) => entry === server.id || server.rowIds.includes(entry),
+  );
+}
+
+/**
+ * The allowlist after switching one app on or off. On saves the app key (and leaves an entry that
+ * already approves it alone); off removes the key and every row id, so no older entry keeps it approved.
+ */
+export function withMcpServerApproval(
+  saved: string[],
+  server: Pick<McpAllowlistServer, "id" | "rowIds">,
+  approved: boolean,
+): string[] {
+  if (approved)
+    return isMcpServerApproved(saved, server) ? saved : [...saved, server.id];
+  return saved.filter(
+    (entry) => entry !== server.id && !server.rowIds.includes(entry),
+  );
+}
+
 export type EnterpriseOverview = {
   capabilities: CapabilitySetting[];
   settings: EnterpriseSettings;
   groups: string[];
   network: NetworkPolicy[];
   defaultDestinations: string[];
-  mcpServers: { id: string; title: string; url: string }[];
+  /** One per app: `id` is the key a tool call names; `rowIds` the server rows behind it. */
+  mcpServers: McpAllowlistServer[];
   builtInModel: string | null;
   scim: {
     configured: boolean;

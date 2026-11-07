@@ -64,9 +64,11 @@ import {
   type EgressRule,
   type EnterpriseOverview,
   enterpriseOverviewQueryOptions,
+  isMcpServerApproved,
   modelUsageQueryOptions,
   type NetworkMode,
   type NetworkPolicy,
+  withMcpServerApproval,
 } from "@/lib/enterprise/queries";
 import { queryClient } from "@/query-client";
 
@@ -403,7 +405,10 @@ function EnterpriseSections({
             </ItemActions>
           </Item>
           {data.mcpServers.map((server) => {
-            const approved = settings.mcpAllowlist.servers.includes(server.id);
+            const approved = isMcpServerApproved(
+              settings.mcpAllowlist.servers,
+              server,
+            );
             return (
               <div key={server.id}>
                 <Separator />
@@ -423,11 +428,11 @@ function EnterpriseSections({
                       onCheckedChange={(checked) =>
                         onSetting("mcpAllowlist", {
                           ...settings.mcpAllowlist,
-                          servers: checked
-                            ? [...settings.mcpAllowlist.servers, server.id]
-                            : settings.mcpAllowlist.servers.filter(
-                                (id) => id !== server.id,
-                              ),
+                          servers: withMcpServerApproval(
+                            settings.mcpAllowlist.servers,
+                            server,
+                            checked,
+                          ),
                         })
                       }
                     />
