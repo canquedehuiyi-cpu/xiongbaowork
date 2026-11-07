@@ -48,7 +48,7 @@ export function WorkRecordBanner({
   return (
     <section
       aria-label="工作记录"
-      className="relative mt-[28px] overflow-hidden rounded-[10px] border border-primary/25 bg-primary/10 px-[14px] pt-[12px] pb-[23px] dark:border-[#263d26] dark:bg-[#1e361e]"
+      className="relative mt-[37px] overflow-hidden rounded-[10px] border border-primary/25 bg-primary/10 px-[14px] pt-[12px] pb-[23px] dark:border-[#263d26] dark:bg-[#1e361e]"
       data-slot="work-record-banner"
     >
       <div aria-hidden="true" className={HATCH} />
