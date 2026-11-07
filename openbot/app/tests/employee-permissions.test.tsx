@@ -127,6 +127,19 @@ const choice = (view: ReturnType<typeof draw>, tool: string, label: string) =>
       .querySelectorAll<HTMLElement>('[role="radio"]'),
   ).find((node) => node.textContent === label) as HTMLElement;
 
+test("the two local-app tools can be set like any other (device MCP bridge §4.2)", async () => {
+  const view = draw();
+  await view.findByRole("radiogroup", { name: "「查看本机应用」的权限" });
+  fireEvent.click(choice(view, "使用本机应用", "禁用"));
+  await waitFor(() =>
+    expect(sent).toContainEqual({
+      path: "/api/approvals/employees/desk/tools",
+      method: "PUT",
+      body: { toolRef: "computer_app_call", mode: "disabled" },
+    }),
+  );
+});
+
 test("each tool is 直接 / 询问 / 禁用, and a choice writes the matching rule", async () => {
   const view = draw();
   await view.findByRole("radiogroup", { name: "「运行命令」的权限" });

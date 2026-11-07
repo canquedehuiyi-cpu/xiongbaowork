@@ -11,6 +11,7 @@ import {
   decideAction,
   effectiveHostCommandPolicy,
   type ReviewModel,
+  refusedOutright,
   ruleMatches,
   toolDisabled,
 } from "./policy";
@@ -39,6 +40,7 @@ import {
   type EmployeeToolMode,
   EMPLOYEE_TOOL_BEHAVIOUR,
   approvalAction,
+  approvalArgsPreview,
   approvalPreview,
   currentApprovalContext,
   type HostCommandPolicy,
@@ -618,6 +620,50 @@ export function createApprovalService(
       const rules = [teamRules, layers.owner, layers.personal];
       return (toolRef) => toolDisabled({ botId, toolRef }, rules);
     },
+    /**
+     * Why this action would be refused outright, whichever way it turns out to change things: a
+     * disabled tool, or the team's host-command cap of `never` (SEC1 D4, D5). Asked before the work of
+     * finding out (a local app's tool list starts the app on the machine), so a refused call starts
+     * nothing; the gate still decides the action in full afterwards. Undefined: not refused outright.
+     */
+    async refusal(candidate: ApprovalCandidate): Promise<string | undefined> {
+      const policy = store.policy;
+      if (!policy) return undefined;
+      const [team, teamRules, personal, employee] = await Promise.all([
+        policy.teamSettings(),
+        policy.teamRules(),
+        store.rules(candidate.actorId),
+        policy.employee?.(candidate.botId),
+      ]);
+      let outcome: ApprovalPolicyOutcome | undefined;
+      for (const effect of ["read", "write"]) {
+        const refused = refusedOutright({
+          candidate: { ...candidate, effect },
+          team: teamRules,
+          personal,
+          ...(employee?.ownerUserId && employee.ownerUserId !== candidate.actorId
+            ? { owner: employee.rules }
+            : {}),
+          customRulesEnabled: team.customRulesEnabled,
+          hostCommandsCap: team.hostCommandsCap,
+        });
+        if (!refused) return undefined;
+        outcome = refused;
+      }
+      if (!outcome) return undefined;
+      // On the decision log like the gate's own refusal, so a disabled tool is counted either way.
+      const continuation = candidate.continuation ?? currentApprovalContext();
+      await policy.recordDecision({
+        ownerUserId: candidate.actorId,
+        botId: candidate.botId,
+        toolRef: candidate.toolRef,
+        effect: candidate.effect,
+        scope: candidate.scope,
+        outcome,
+        ...(continuation?.initiator ? { initiator: continuation.initiator } : {}),
+      });
+      return outcome.reason;
+    },
     /** Commands on this person's own computer, after the team cap: the stricter setting applies. */
     async hostCommandPolicy(ownerUserId: string): Promise<HostCommandPolicy> {
       const policy = store.policy;
@@ -1065,7 +1111,7 @@ function publicApproval(request: ApprovalRecord) {
       threadId: action.threadId,
       // The owner's own call id, so the conversation can draw this request where the action was.
       toolCallId: action.toolCallId,
-      args: approvalPreview(action.args),
+      args: approvalArgsPreview(action),
       target: approvalPreview(action.target),
       ...(action.policy
         ? {

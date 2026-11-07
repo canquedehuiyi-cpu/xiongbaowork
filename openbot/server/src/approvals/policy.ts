@@ -633,6 +633,9 @@ export const TOOL_DISABLED =
   "This tool is disabled for this Bot, so the action was not done and cannot be approved. Do not try it, or anything equivalent, another way; tell the person it is disabled.";
 export const HOST_COMMANDS_NEVER =
   "Commands on paired computers are set to never run by your team, so this command was not run. Do not try it another way; tell the person.";
+/** Why a local app's tool asks: the device does not list it as read-only (device MCP bridge §4.4). */
+export const APP_TOOL_MAY_CHANGE =
+  "这个本机应用操作可能修改数据，需要你批准后再执行。";
 
 /**
  * The whole decision, layer by layer (SEC1 §4.2). The first layer that settles the action decides,
@@ -643,7 +646,8 @@ export const HOST_COMMANDS_NEVER =
  *     So does the team's host-command cap of `never` for a command on a paired computer (D5).
  *  3. The built-in safety requirements: always handed to the person. "Run directly" cannot skip them.
  *  4. The deterministic floors: a dangerous command or a sensitive path asks at least (§4.3, §4.4),
- *     and so does the team cap of `ask` for a command on a paired computer.
+ *     and so does the team cap of `ask` for a command on a paired computer, and so does a local
+ *     app's tool the device does not list as read-only. The cap also covers `computer_app_call`.
  *  5. The strictest rule across the team's, the owner's and the person's own; then the reviewer
  *     where it applies; then the person's own "ask before making changes" default.
  */
@@ -677,22 +681,9 @@ export async function decideAction(input: {
     layers.personal,
     layers.owner,
   );
-  if (matched && rankOf(matched.rule.behaviour) >= RANK.deny)
-    return {
-      behaviour: "deny",
-      source: matched.layer,
-      ruleId: matched.rule.id,
-      reason: TOOL_DISABLED,
-    };
-  const runnerCommand =
-    candidate.subject?.runner === true &&
-    candidate.toolRef === "computer_run_command";
-  if (runnerCommand && input.hostCommandsCap === "never")
-    return {
-      behaviour: "deny",
-      source: "host_command_cap",
-      reason: HOST_COMMANDS_NEVER,
-    };
+  const refused = refusedOutright(input);
+  if (refused) return refused;
+  const runnerCommand = isRunnerCommand(candidate);
   const safety = safetyRequirement(candidate);
   if (safety)
     return {
@@ -700,7 +691,10 @@ export async function decideAction(input: {
       source: "safety",
       reason: safety.reason,
     };
-  const floor: SecurityFloor | { source: "host_command_cap"; reason: string } | undefined =
+  const floor:
+    | SecurityFloor
+    | { source: "host_command_cap" | "app_tool"; reason: string }
+    | undefined =
     securityFloor(
       candidate,
       input.security ?? DEFAULT_EMPLOYEE_SECURITY,
@@ -712,6 +706,15 @@ export async function decideAction(input: {
           reason:
             "Your team asks before any command runs on a paired computer, so this needs approval.",
         }
+      : undefined) ??
+    /*
+     * A local app's tool runs without asking only when the device's own list marks it read-only and
+     * not destructive (`subject.appTool`, set by the gateway). Unannotated, destructive, unknown or a
+     * list that could not be fetched: at least ask. No setting turns this off.
+     */
+    (candidate.toolRef === "computer_app_call" &&
+    candidate.subject?.appTool?.readOnly !== true
+      ? { source: "app_tool", reason: APP_TOOL_MAY_CHANGE }
       : undefined);
   const decided = await decideByRules(input, matched);
   // A floor only raises: an action the rules let through still asks; one already asked about or
@@ -725,6 +728,72 @@ export async function decideAction(input: {
       ...(decided.review ? { review: decided.review } : {}),
     };
   return decided;
+}
+
+/**
+ * Calling a local app's MCP tool on a paired machine runs a program there, so the team's
+ * host-command cap applies to it exactly as to a command (device MCP bridge §4.3).
+ */
+function isRunnerCommand(candidate: ApprovalCandidate): boolean {
+  return (
+    candidate.subject?.runner === true &&
+    (candidate.toolRef === "computer_run_command" ||
+      candidate.toolRef === "computer_app_call")
+  );
+}
+
+/**
+ * Listing a paired machine's local apps starts each of them there (a stdio app is a program), so the
+ * team's cap of `never` refuses that too. Only `never`: under `ask` a listing changes nothing and is
+ * not asked about; the call that follows it is.
+ */
+function isRunnerAppListing(candidate: ApprovalCandidate): boolean {
+  return (
+    candidate.subject?.runner === true && candidate.toolRef === "computer_apps"
+  );
+}
+
+/**
+ * Step 2 of {@link decideAction} on its own: a disabled tool (a `deny` in any layer), or the team's
+ * host-command cap of `never` for a command, an app call or an app listing on a paired computer.
+ * Either refuses the action outright, whatever else is true of it.
+ */
+export function refusedOutright(input: {
+  candidate: ApprovalCandidate;
+  team: readonly ApprovalTeamRule[];
+  personal: readonly ApprovalRule[];
+  owner?: readonly ApprovalRule[];
+  customRulesEnabled: boolean;
+  hostCommandsCap?: HostCommandPolicy;
+}): ApprovalPolicyOutcome | undefined {
+  const layers = applicableRules({
+    personal: input.personal,
+    ...(input.owner ? { owner: input.owner } : {}),
+    customRulesEnabled: input.customRulesEnabled,
+  });
+  const matched = strictestRule(
+    input.candidate,
+    input.team,
+    layers.personal,
+    layers.owner,
+  );
+  if (matched && rankOf(matched.rule.behaviour) >= RANK.deny)
+    return {
+      behaviour: "deny",
+      source: matched.layer,
+      ruleId: matched.rule.id,
+      reason: TOOL_DISABLED,
+    };
+  if (
+    (isRunnerCommand(input.candidate) || isRunnerAppListing(input.candidate)) &&
+    input.hostCommandsCap === "never"
+  )
+    return {
+      behaviour: "deny",
+      source: "host_command_cap",
+      reason: HOST_COMMANDS_NEVER,
+    };
+  return undefined;
 }
 
 /** Step 5 of {@link decideAction}: the strictest rule, the reviewer, and the person's default. */

@@ -151,6 +151,12 @@ export function MyDevices() {
                     {device.queued ? (
                       <span>· {device.queued} 项等待执行</span>
                     ) : null}
+                    {device.apps?.length ? (
+                      <span>
+                        · 本机应用：
+                        {device.apps.map((app) => app.name).join("、")}
+                      </span>
+                    ) : null}
                     {device.uncertain ? (
                       <span className="text-destructive">
                         · {device.uncertain}{" "}
@@ -247,7 +253,8 @@ function ReviewAction({
   return (
     <div className="space-y-2 rounded border p-3 text-sm">
       <p className="font-medium">
-        {labels[action.action] ?? "设备动作"} · {relativeTime(action.createdAt)}
+        {labels[action.action] ?? `设备动作（${action.action}）`} ·{" "}
+        {relativeTime(action.createdAt)}
       </p>
       <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-all rounded bg-muted p-2 text-xs">
         {JSON.stringify(action.payload, null, 2)}

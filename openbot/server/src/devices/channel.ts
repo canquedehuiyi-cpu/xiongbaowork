@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { computerActionOrigin } from "../computer/action-identity";
 import {
   actionFingerprint,
+  DEVICE_PAUSED,
   DeviceDeliveryError,
   type DeviceQueue,
 } from "./queue";
@@ -28,7 +29,7 @@ export type DispatchTarget = { tenantId: string; deviceId: string };
 export class DeviceOfflineError extends Error {
   constructor(readonly deviceId: string) {
     super(
-      `${deviceId} is not connected to this server right now. Its runner dials out, so it reconnects on its own when the machine is back.`,
+      `设备 ${deviceId} 现在没有连到服务器。设备端会自己重连，电脑开机并打开设备端后就会恢复。`,
     );
     this.name = "DeviceOfflineError";
   }
@@ -83,6 +84,12 @@ export type DeviceChannel = {
     /** Whose identity this action is, so the same one offered twice is queued and run once. */
     idempotencyKey?: string,
     caller?: AbortSignal,
+    /**
+     * `durable: false` is for a read that changes nothing (a local app's tool list): written straight
+     * to the connected socket, never queued, never given a receipt, so losing it cannot pause the
+     * device. Refused at once when the machine is not connected to this process.
+     */
+    mode?: { durable?: boolean },
   ) => Promise<T>;
   /**
    * A frame arrived from a runner. Delivered only when it answers a request this process sent to that
@@ -387,6 +394,7 @@ export function createDeviceChannel(options?: {
       timeoutMs?: number,
       idempotencyKey?: string,
       caller?: AbortSignal,
+      mode?: { durable?: boolean },
     ): Promise<T> {
       if (caller?.aborted)
         return Promise.reject(
@@ -395,6 +403,20 @@ export function createDeviceChannel(options?: {
           ),
         );
       const key = idempotencyKey ?? randomUUID();
+      if (mode?.durable === false) {
+        if (!self.isReachable(target))
+          return Promise.reject(new DeviceOfflineError(target.deviceId));
+        return (async () => {
+          /*
+           * A paused device takes nothing new, not even a read: the person has not checked the
+           * action whose outcome is unknown yet, and a read can still start a program there.
+           */
+          if (queue && (await queue.uncertain(target)) > 0)
+            throw new DeviceDeliveryError(DEVICE_PAUSED, false);
+          // `sendDirect` asks `authorize` itself before writing the frame.
+          return sendDirect<T>(target, action, payload, timeoutMs, key, caller);
+        })();
+      }
       const offer = (): Promise<T> => {
         if (!self.isReachable(target)) {
           if (!queue)
@@ -411,12 +433,12 @@ export function createDeviceChannel(options?: {
             if (receipt?.state === "completed") return receipt.output as T;
             if (receipt?.state === "unknown" || receipt?.state === "failed")
               throw new DeviceDeliveryError(
-                "The earlier action has no confirmed successful result. Check the device before requesting another action.",
+                "上一次的同一操作没有确认成功的结果。请先在设备上核查，再重新发起。",
                 receipt.state === "unknown",
               );
             if (await queue.uncertain(target))
               throw new DeviceDeliveryError(
-                "This device is paused. Its owner must check and review the uncertain action before any more work is accepted.",
+                "这台设备已暂停：有一项结果不明的操作等待核查。请设备的主人先在「设置 › 我的设备」里核查并恢复，之后才会接受新的操作。",
               );
             return { queued: true, key } as T;
           })();

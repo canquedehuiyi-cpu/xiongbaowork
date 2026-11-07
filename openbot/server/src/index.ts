@@ -164,7 +164,7 @@ import { createThreadIdentity } from "./channels/thread-identity";
 import { createChannelTitler } from "./channels/titler";
 import { createSandboxedStore } from "./components/sandboxed";
 import { createComponentStore } from "./components/store";
-import { createComputerGateway } from "./computer/gateway";
+import { createComputerGateway, localAppsAllowed } from "./computer/gateway";
 import {
   createHeadlessComputerTools,
   HeadlessToolSuspension,
@@ -1047,6 +1047,18 @@ await startupLifecycle.run(async (startup) => {
     config.tenantRuntime === "device"
       ? ("device" as const)
       : ("workspace" as const);
+  /**
+   * Whether a coworker gets the local-app tools (device MCP bridge §4.1): device mode, and a run that
+   * is the Bot owner's own, since the apps are on the owner's paired machine. A teammate using a
+   * shared Bot, an admin, or a catalogue Bot (no owner) gets none; the gateway refuses them too.
+   */
+  const usesDeviceApps = async (agentId: string, actorId: string) =>
+    computerMachine === "device" &&
+    localAppsAllowed({
+      machine: computerMachine,
+      owner: await ownerTenantOfBot(database, agentId).catch(() => null),
+      actorId,
+    });
   const computerGateway = computerProvider
     ? createComputerGateway({
         provider: computerProvider,
@@ -1055,6 +1067,11 @@ await startupLifecycle.run(async (startup) => {
           ? {
               transport: createRunnerTransport(deviceChannel),
               resolveDevice: deviceForBot,
+              // Only `{ref, name}` per app, as the machine's heartbeat reported them (MCP bridge §3.4).
+              deviceApps: async (machine) =>
+                (await deviceStore.list(machine.tenantId)).find(
+                  (device) => device.deviceId === machine.deviceId,
+                )?.apps ?? [],
               deviceTakeovers,
               // RES2: the frame's root is the coworker's current project, never the model's.
               projects: { resolve: projectContext.resolve },
@@ -1074,6 +1091,8 @@ await startupLifecycle.run(async (startup) => {
         },
         auditStore: bootAuditStore,
         approvalGate: approvalService.gate,
+        // Asked before a local app's tool list starts the app on the machine (MCP bridge §4).
+        approvalRefusal: approvalService.refusal,
         policy: () => policyStore.get(),
         // In Postgres, so the ref a click carries resolves against the snapshot that produced it even
         // when the snapshot was taken by another server. A Map here would be blank on every replica
@@ -2285,6 +2304,7 @@ await startupLifecycle.run(async (startup) => {
         auditStore: bootAuditStore,
         ...(signInService ? { signIn: signInService } : {}),
         machine: computerMachine,
+        apps: await usesDeviceApps(agentId, actor.id),
         disabled: await approvalService.disabledTools(actor.id, agentId),
       });
     },
@@ -2575,6 +2595,7 @@ await startupLifecycle.run(async (startup) => {
                     auditStore: bootAuditStore,
                     ...(signInService ? { signIn: signInService } : {}),
                     machine: computerMachine,
+                    apps: await usesDeviceApps(context.agentId, actor.id),
                     disabled: await approvalService.disabledTools(actor.id, context.agentId),
                   })
                 : [];
@@ -2741,6 +2762,7 @@ await startupLifecycle.run(async (startup) => {
           auditStore: bootAuditStore,
           ...(signInService ? { signIn: signInService } : {}),
           machine: computerMachine,
+          apps: await usesDeviceApps(agentId, actor.id),
         })
       : [];
   };
@@ -3457,6 +3479,7 @@ await startupLifecycle.run(async (startup) => {
           auditStore: bootAuditStore,
           ...(signInService ? { signIn: signInService } : {}),
           machine: computerMachine,
+          apps: await usesDeviceApps(agentId, actor.id),
           disabled: await approvalService.disabledTools(actor.id, agentId),
         });
       },
@@ -3550,6 +3573,7 @@ await startupLifecycle.run(async (startup) => {
           auditStore: bootAuditStore,
           ...(signInService ? { signIn: signInService } : {}),
           machine: computerMachine,
+          apps: await usesDeviceApps(agentId, actor.id),
           disabled: await approvalService.disabledTools(actor.id, agentId),
         });
       },

@@ -28,6 +28,11 @@ export type RegisteredDevice = {
    * older server, when it offers none.
    */
   roots?: { ref: string; name: string }[];
+  /**
+   * The local MCP apps the machine offers (the device MCP bridge): an opaque reference and the name the
+   * owner gave each on the machine. Never a command, url or key. Absent from an older server.
+   */
+  apps?: { ref: string; name: string }[];
 };
 
 export const deviceKeys = {

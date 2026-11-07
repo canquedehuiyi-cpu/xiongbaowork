@@ -62,6 +62,12 @@ export const registeredDevices = pgTable(
      */
     // This module's `jsonb`, which stores the array as an array (see json.ts), not as a string.
     roots: jsonb("roots").$type<DeviceRoot[]>().notNull().default([]),
+    /**
+     * The local apps (MCP) this machine offers, as its last heartbeat reported them (migration 0143):
+     * an opaque reference the runner made and the name its owner chose. Never a command or a path.
+     * An older runner reports nothing and this stays empty.
+     */
+    apps: jsonb("apps").$type<DeviceApp[]>().notNull().default([]),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -75,11 +81,18 @@ export const registeredDevices = pgTable(
       "registered_devices_roots_shape",
       sql`jsonb_typeof(${table.roots}) = 'array' AND jsonb_array_length(${table.roots}) <= 50`,
     ),
+    check(
+      "registered_devices_apps_shape",
+      sql`jsonb_typeof(${table.apps}) = 'array' AND jsonb_array_length(${table.apps}) <= 50`,
+    ),
   ],
 );
 
 /** One read-only folder a machine offers: its opaque reference and its owner's name for it. */
 export type DeviceRoot = { ref: string; name: string };
+
+/** One local app a machine offers: its opaque reference and its owner's name for it. */
+export type DeviceApp = { ref: string; name: string };
 
 /** How long a device may be silent before the screen calls it offline. */
 export const OFFLINE_AFTER_MS = 60_000;
