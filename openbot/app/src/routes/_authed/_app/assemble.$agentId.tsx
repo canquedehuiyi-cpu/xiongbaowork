@@ -667,7 +667,9 @@ function KnowledgeZone({
     <PageSection
       action={
         <Button
-          render={(props) => <Link {...props} to="/knowledge" />}
+          render={(props) => (
+            <Link {...props} search={{ tab: "knowledge" }} to="/resources" />
+          )}
           size="sm"
           variant="outline"
         >

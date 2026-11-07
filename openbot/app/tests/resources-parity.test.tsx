@@ -327,7 +327,11 @@ test("the selected tab round-trips through ?tab=, including Back and a deep link
       "aria-selected",
     ),
   ).toBe("true");
-  expect(await deep.view.findByText("产品手册")).toBeTruthy();
+  expect(
+    await within(
+      await deep.view.findByRole("list", { name: "知识库列表" }),
+    ).findByText("产品手册"),
+  ).toBeTruthy();
   // A deep link to an unknown tab falls back to the default rather than a blank page.
   cleanup();
   const unknown = draw({ entry: "/resources?tab=nope" });
@@ -346,6 +350,12 @@ test("a tab that is not selected makes none of its reads", async () => {
     "/api/models",
     "/api/knowledge/notebooks",
     "/api/memory/sources",
+    // The rest of the full screens 信息源与记忆 and 知识库 hold since `/memory` and `/knowledge` were
+    // archived into them.
+    "/api/memory",
+    "/api/proactive/suggestions",
+    "/api/proactive/settings",
+    "/api/agents",
     "/api/components",
     "/api/devices",
     "/api/wakerflows",

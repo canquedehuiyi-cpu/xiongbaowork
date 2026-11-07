@@ -43,11 +43,11 @@ export const ROUTES: RouteSpec[] = [
   // The reference's `/management?tab=groups`; ours deep-links the same way.
   { path: "/wakers?tab=groups", slug: "wakers-groups" },
   { path: "/resources", main: true },
+  // `/skills` and `/knowledge` were archived into these tabs and only redirect now.
   { path: "/resources?tab=skills", slug: "resources-skills" },
+  { path: "/resources?tab=knowledge", slug: "resources-knowledge" },
   { path: "/resources?tab=wakerflows", slug: "resources-wakerflows" },
   { path: "/autonomous?view=agents", slug: "autonomous-agents" },
-  { path: "/skills" },
-  { path: "/knowledge" },
   { path: "/wakerflows" },
   { path: "/bot" },
   { path: "/settings" },

@@ -1,4 +1,3 @@
-import { IconPencil } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
@@ -12,14 +11,10 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
-import { currentUserQueryOptions } from "@/lib/auth/queries";
 import {
   appKeyOf,
   connectionsQueryOptions,
-  installListingsQueryOptions,
-  listedRefs,
   type PluginServer,
-  type PluginSkill,
   type PluginsPage,
   pluginsPageQueryOptions,
 } from "@/lib/plugins/queries";
@@ -31,15 +26,14 @@ import {
   TabEmpty,
   TabHeader,
   TabSearch,
-  Tag,
 } from "./resource-kit";
 
 /*
- * ── Stories E1/E4 (D08-7): skills and connectors, each now its own tab of 能力与资源. ──
+ * ── Stories E1/E4 (D08-7): connectors as their own tab of 能力与资源, and the card every tab draws. ──
  *
- * Both are drawn from the one `/api/plugins` read, so that request failing is each tab's alert; the
- * reads beside it (who you are, what is listed, what you connected) only take away the detail they
- * add.
+ * Connectors are drawn from the one `/api/plugins` read, so that request failing is the tab's alert;
+ * the read beside it (what you connected) only takes away the detail it adds. The skills tab, which
+ * reads the same endpoint, is the full skills screen in `components/skills/skills-screen.tsx`.
  */
 
 /** A row of a tab, drawn as a card in the tab's grid. `Item` keeps the slots the tests read. */
@@ -87,152 +81,6 @@ const textMatch = (query: string, ...fields: (string | null | undefined)[]) => {
 };
 
 export { textMatch };
-
-/**
- * Story E1's skills: the person's own and the deployment's, as two groups.
- *
- * Only the signed-in person's own count as 我的. An administrator's `/api/plugins` also carries other
- * people's personal skills; those are governed on the administrator's skill screen and are neither
- * this person's nor the deployment's, so this view leaves them out. A deployment skill an
- * administrator listed (上架, spec E3) carries 可自助安装: an owner ticks it onto a Waker on the
- * assembly page without asking anyone. The listings are a separate read, so failing to read them
- * drops the tag and nothing else.
- */
-export function SkillsTab({
-  query,
-  onQuery,
-}: {
-  query: string;
-  onQuery: (value: string) => void;
-}) {
-  const plugins = useQuery(pluginsPageQueryOptions());
-  const me = useQuery(currentUserQueryOptions());
-  const listings = useQuery(installListingsQueryOptions());
-  const skills = plugins.data?.skills ?? [];
-  const meId = me.data?.id;
-  const visible = skills.filter((skill) =>
-    textMatch(query, skill.title, skill.summary),
-  );
-  const mine = visible.filter(
-    (skill) => skill.ownerUserId !== null && skill.ownerUserId === meId,
-  );
-  const deployment = visible.filter((skill) => skill.ownerUserId === null);
-  const listed = listedRefs(listings.data, "skill");
-  const anyOwnOrDeployment = skills.some(
-    (skill) =>
-      skill.ownerUserId === null ||
-      (skill.ownerUserId !== null && skill.ownerUserId === meId),
-  );
-
-  const card = (skill: PluginSkill, selfInstall: boolean) => (
-    <ResourceCard
-      actions={
-        <span className="text-[12px] text-muted-foreground">
-          {grantedSentence(skill.grantedTo.length)}
-        </span>
-      }
-      description={skill.summary}
-      key={skill.slug}
-      title={
-        <>
-          {skill.title}
-          {selfInstall ? <Tag>可自助安装</Tag> : null}
-        </>
-      }
-    />
-  );
-
-  return (
-    <>
-      <TabHeader
-        actions={
-          <>
-            <Button
-              render={(props) => (
-                <Link search={{ new: true }} to="/skills" {...props} />
-              )}
-              size="sm"
-              variant="outline"
-            >
-              <IconPencil />
-              撰写
-            </Button>
-            <Button
-              render={(props) => <Link search={{}} to="/skills" {...props} />}
-              size="sm"
-              variant="ghost"
-            >
-              打开技能页
-            </Button>
-          </>
-        }
-        description="员工在活儿需要时会照做的说明。你自己写的在“我的”里；管理员写的在“部署”里，按员工授予给他们，标着可自助安装的由你在员工装配页里自己装上。"
-        search={<TabSearch label="搜索技能" onChange={onQuery} value={query} />}
-      />
-      <QueryState
-        label="读不到技能"
-        query={{ ...plugins, isPending: plugins.isPending || me.isPending }}
-      >
-        {query.trim() &&
-        anyOwnOrDeployment &&
-        mine.length + deployment.length === 0 ? (
-          <NoMatch onClear={() => onQuery("")} title="没有匹配的技能" />
-        ) : (
-          <>
-            <SkillGroup
-              empty={
-                query.trim()
-                  ? "没有匹配的技能。"
-                  : me.error
-                    ? "读不到你自己的技能。"
-                    : "你还没有写过技能。"
-              }
-              rows={mine.map((skill) => card(skill, false))}
-              title="我的"
-            />
-            <SkillGroup
-              empty={
-                query.trim()
-                  ? "没有匹配的技能。"
-                  : "这个部署还没有管理员写的技能。"
-              }
-              rows={deployment.map((skill) =>
-                card(skill, listed.has(skill.slug)),
-              )}
-              title="部署"
-            />
-          </>
-        )}
-      </QueryState>
-    </>
-  );
-}
-
-function SkillGroup({
-  empty,
-  rows,
-  title,
-}: {
-  empty: string;
-  rows: ReactNode[];
-  title: string;
-}) {
-  return (
-    <div className="mt-5 flex flex-col gap-2">
-      <h3 className="font-medium text-[13px]">
-        {title}
-        <span className="ml-1.5 text-muted-foreground tabular-nums">
-          {rows.length}
-        </span>
-      </h3>
-      {rows.length > 0 ? (
-        <CardGrid label={`${title}的技能`}>{rows}</CardGrid>
-      ) : (
-        <p className="text-[13px] text-muted-foreground">{empty}</p>
-      )}
-    </div>
-  );
-}
 
 /**
  * Whether an app answers as whoever is asking, so a Waker reaches it only once this person connected

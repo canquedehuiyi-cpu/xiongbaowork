@@ -1,14 +1,9 @@
-import { IconBook, IconPlus } from "@tabler/icons-react";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { IconPlus } from "@tabler/icons-react";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { componentDisplayTitle } from "@/lib/components/display-title";
 import { componentListQueryOptions } from "@/lib/components/queries";
-import {
-  knowledgeNotebookQueryOptions,
-  knowledgeNotebooksQueryOptions,
-} from "@/lib/knowledge/queries";
-import { memorySourcesQueryOptions } from "@/lib/memory";
 import { wakerFlowsQueryOptions } from "@/lib/wakerflows";
 import { ResourceCard, textMatch } from "./capability-tabs";
 import {
@@ -22,96 +17,6 @@ import {
 } from "./resource-kit";
 
 type SearchProps = { query: string; onQuery: (value: string) => void };
-
-/**
- * Story E1's knowledge, as its own tab: the person's knowledge bases (D08 RES1).
- *
- * 已授权 N 位员工 is the number of distinct Wakers bound to a base, read from each base's detail —
- * the list endpoint carries no bindings. One base's detail failing says so on that card; the list
- * failing is the tab's alert. The memory sources that used to sit under the bases are this fork's
- * own entry, 信息源与记忆.
- */
-export function KnowledgeTab({ query, onQuery }: SearchProps) {
-  const notebooks = useQuery(knowledgeNotebooksQueryOptions());
-  const bases = notebooks.data ?? [];
-  const details = useQueries({
-    queries: bases.map((notebook) =>
-      knowledgeNotebookQueryOptions(notebook.id),
-    ),
-  });
-  const visible = bases
-    .map((notebook, index) => ({ notebook, index }))
-    .filter(({ notebook }) => textMatch(query, notebook.title));
-
-  const boundSentence = (index: number): string => {
-    const detail = details[index];
-    if (!detail || detail.isPending) return "正在读取授权…";
-    if (detail.error || !detail.data) return "读不到授权";
-    const count = new Set(
-      detail.data.bindings.map((binding) => binding.agentId),
-    ).size;
-    return count > 0 ? `已授权 ${count} 位员工` : "尚未授权任何员工";
-  };
-
-  return (
-    <>
-      <TabHeader
-        actions={
-          <Button
-            render={(props) => <Link to="/knowledge" {...props} />}
-            size="sm"
-            variant="outline"
-          >
-            <IconBook />
-            打开知识库页
-          </Button>
-        }
-        description="你整理好、授权给员工去读的知识库。建库、加资料和授权都在知识库页里做。"
-        search={
-          <TabSearch label="搜索知识库" onChange={onQuery} value={query} />
-        }
-      />
-      <QueryState label="读不到知识库" query={notebooks}>
-        {bases.length === 0 ? (
-          <TabEmpty
-            action={
-              <Button
-                render={(props) => <Link to="/knowledge" {...props} />}
-                size="sm"
-              >
-                <IconPlus />
-                去建一个
-              </Button>
-            }
-            description="在知识库页里建一个，再授权给员工。"
-            title="还没有知识库"
-          />
-        ) : visible.length === 0 ? (
-          <NoMatch onClear={() => onQuery("")} title="没有匹配的知识库" />
-        ) : (
-          <CardGrid className="mt-4" label="知识库列表">
-            {visible.map(({ notebook, index }) => (
-              <ResourceCard
-                actions={
-                  <span className="text-[12px] text-muted-foreground">
-                    {boundSentence(index)}
-                  </span>
-                }
-                key={notebook.id}
-                media={
-                  <span className="flex size-[32px] items-center justify-center rounded-md bg-muted">
-                    <IconBook className="size-4" />
-                  </span>
-                }
-                title={notebook.title}
-              />
-            ))}
-          </CardGrid>
-        )}
-      </QueryState>
-    </>
-  );
-}
 
 /**
  * 能力与资源 › WakerFlow: the workspace's Flows as cards, with the way to the standalone page
@@ -193,56 +98,6 @@ export function WakerFlowsTab({ query, onQuery }: SearchProps) {
                     </Tag>
                   </>
                 }
-              />
-            ))}
-          </CardGrid>
-        )}
-      </QueryState>
-    </>
-  );
-}
-
-/** This fork's own entry: the sources synced in for employees to fetch from, and their memory. */
-export function SourcesTab({ query, onQuery }: SearchProps) {
-  const sources = useQuery(memorySourcesQueryOptions());
-  const rows = sources.data ?? [];
-  const visible = rows.filter((source) => textMatch(query, source.title));
-  return (
-    <>
-      <TabHeader
-        actions={
-          <Button
-            render={(props) => <Link to="/memory" {...props} />}
-            size="sm"
-            variant="outline"
-          >
-            去管理
-          </Button>
-        }
-        description="同步过来让员工主动去拿的来源，以及别人告诉它并留下来的记忆。"
-        search={
-          <TabSearch label="搜索信息源" onChange={onQuery} value={query} />
-        }
-      />
-      <QueryState label="读不到信息源" query={sources}>
-        {rows.length === 0 ? (
-          <TabEmpty title="还没有接入信息源" />
-        ) : visible.length === 0 ? (
-          <NoMatch onClear={() => onQuery("")} title="没有匹配的信息源" />
-        ) : (
-          <CardGrid className="mt-4" label="信息源列表">
-            {visible.map((source) => (
-              <ResourceCard
-                description={
-                  <>
-                    {source.enabled
-                      ? `同步状态 ${source.syncStatus}`
-                      : "已暂停"}
-                    {source.lastSyncAt ? ` · 上次 ${source.lastSyncAt}` : ""}
-                  </>
-                }
-                key={source.id}
-                title={source.title}
               />
             ))}
           </CardGrid>

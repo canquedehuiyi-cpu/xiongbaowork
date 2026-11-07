@@ -233,6 +233,16 @@ const responses: Record<string, () => unknown> = {
   "/api/components": () => ({ components: [component] }),
   // The 项目 zone (story RES2) starts from the person's machines; none here.
   "/api/devices": () => ({ devices: [] }),
+  /*
+   * What the full screens in the 知识库 and 信息源与记忆 tabs also read (the standalone `/knowledge`
+   * and `/memory` pages were archived into them): the person's employees for 授权给 and the source
+   * picker, what they remember, and the background research with its suggestions.
+   */
+  "/api/agents": () => ({ agents: [] }),
+  "/api/memory": () => ({ memories: [] }),
+  "/api/proactive/suggestions": () => ({ suggestions: [] }),
+  "/api/proactive/settings": () => ({ settings: [] }),
+  "/api/channels": () => ({ channels: [], nextCursor: null }),
 };
 
 function draw({ fail = [], tab }: { fail?: string[]; tab: string }) {
@@ -288,6 +298,13 @@ async function panel(view: View) {
   return within(await view.findByRole("tabpanel"));
 }
 
+/**
+ * The knowledge tab's list of bases. A base's title is also the open base's heading below it, so a
+ * base in the list is asserted in the list.
+ */
+const baseList = (knowledge: Awaited<ReturnType<typeof panel>>) =>
+  knowledge.getByRole("list", { name: "知识库列表" });
+
 /** Each zone's tab and its healthy content, so one failing read can be checked against the rest. */
 const healthy: Record<
   string,
@@ -314,7 +331,10 @@ const healthy: Record<
   知识库: {
     tab: "knowledge",
     check: async (view) => {
-      await (await panel(view)).findByText("产品手册");
+      const knowledge = await panel(view);
+      await within(
+        await knowledge.findByRole("list", { name: "知识库列表" }),
+      ).findByText("产品手册");
     },
   },
   信息源: {
@@ -436,12 +456,16 @@ test("knowledge bases say how many employees each is authorised to; the memory s
 
   await knowledge.findByText("已授权 2 位员工");
   await knowledge.findByText("尚未授权任何员工");
-  expect(knowledge.getByText("产品手册")).toBeTruthy();
+  expect(within(baseList(knowledge)).getByText("产品手册")).toBeTruthy();
   expect(knowledge.queryByText("飞书文档同步")).toBeNull();
-  // A Base UI button rendered as a router link, with the link's href.
+  // The tab is the knowledge screen itself (`/knowledge` was archived into it), so it creates a base
+  // and opens the first one in place, rather than linking out to a page that does.
+  expect(knowledge.getByLabelText("新知识库名称")).toBeTruthy();
   expect(
-    knowledge.getByText("打开知识库页").closest("a")?.getAttribute("href"),
-  ).toBe("/knowledge");
+    await knowledge.findByRole("heading", { level: 2, name: "产品手册" }),
+  ).toBeTruthy();
+  expect(knowledge.getByRole("form", { name: "添加资料" })).toBeTruthy();
+  expect(knowledge.queryByText("打开知识库页")).toBeNull();
   cleanup();
 
   const sources = draw({ tab: "sources" });
@@ -505,7 +529,7 @@ test("the reads that only add detail take away that detail and nothing else", as
     const knowledge = await panel(view);
     await knowledge.findByText("读不到授权");
     await knowledge.findByText("尚未授权任何员工");
-    expect(knowledge.getByText("产品手册")).toBeTruthy();
+    expect(within(baseList(knowledge)).getByText("产品手册")).toBeTruthy();
   }
 });
 

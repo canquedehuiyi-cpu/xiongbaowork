@@ -316,7 +316,7 @@ function draw(
       } as never),
       createRoute({
         getParentRoute: () => root,
-        path: "/memory",
+        path: "/resources",
         component: () => null,
       } as never),
     ]),
@@ -406,6 +406,12 @@ test("each row names its executor and its trigger with the detail", async () => 
   expect(
     within(row("Unfinished work")).getByText(/每隔 240 分钟/),
   ).toBeTruthy();
+  // Background research is edited in 能力与资源 › 信息源与记忆, which `/memory` was archived into.
+  expect(
+    within(row("Unfinished work"))
+      .getByRole("link", { name: "编辑" })
+      .getAttribute("href"),
+  ).toBe("/resources?tab=sources");
 });
 
 test("executor, trigger type and status narrow the list, and each is written into the URL", async () => {

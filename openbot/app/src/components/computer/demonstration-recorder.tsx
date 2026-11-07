@@ -351,8 +351,8 @@ export function DemonstrationRecorder({
               {recording.status === "published" && recording.skillSlug ? (
                 <>
                   <Link
-                    to="/skills"
-                    search={{ edit: recording.skillSlug }}
+                    to="/resources"
+                    search={{ tab: "skills", edit: recording.skillSlug }}
                     className="text-xs underline"
                   >
                     编辑 /{recording.skillSlug}
