@@ -263,36 +263,40 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </div>
           ))}
         </nav>
-        {/* The end of the 员工资源 group: this product's own destinations, folded, same row style. */}
-        <div className="mt-[4px] px-[12px]">
-          <SidebarMenu className="gap-[4px]">
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                aria-controls="sidebar-more-nav"
-                aria-expanded={moreOpen}
-                className={navRowClassName}
-                onClick={toggleMore}
-              >
-                <IconDots />
-                <span className="flex-1 truncate">更多</span>
-                <IconChevronDown
-                  className={moreOpen ? "rotate-180" : undefined}
-                />
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-          {moreOpen ? (
-            <nav aria-label="更多入口" id="sidebar-more-nav">
-              <SidebarMenu className="gap-[4px] pt-[4px]">
-                {MORE_NAV.map((item) => (
-                  <NavRow key={item.to} {...item} />
-                ))}
-              </SidebarMenu>
-            </nav>
-          ) : null}
-        </div>
         <SidebarRoster />
       </SidebarContent>
+      {/*
+       * This product's own destinations, folded, same row style — at the foot, above the account,
+       * so the workbench groups and the 员工 / 群组 roster sit exactly where the reference has them
+       * (the reference has no such row; between the two it pushed the roster down 36px).
+       */}
+      <div className="border-sidebar-border border-t px-[12px] pt-[6px]">
+        <SidebarMenu className="gap-[4px]">
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              aria-controls="sidebar-more-nav"
+              aria-expanded={moreOpen}
+              className={navRowClassName}
+              onClick={toggleMore}
+            >
+              <IconDots />
+              <span className="flex-1 truncate">更多</span>
+              <IconChevronDown
+                className={moreOpen ? "rotate-180" : undefined}
+              />
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+        {moreOpen ? (
+          <nav aria-label="更多入口" id="sidebar-more-nav">
+            <SidebarMenu className="gap-[4px] pt-[4px]">
+              {MORE_NAV.map((item) => (
+                <NavRow key={item.to} {...item} />
+              ))}
+            </SidebarMenu>
+          </nav>
+        ) : null}
+      </div>
       <SidebarAccount />
       <SidebarRail />
     </Sidebar>

@@ -297,14 +297,15 @@ test("the five entries sit under two labelled groups, in the reference order", a
   expect(textOf(nav)).toBe(
     "工作管理任务看板@Waker自主工作员工资源员工管理能力与资源",
   );
-  // 更多 closes the 员工资源 group: after 能力与资源, before the 员工 / 群组 tabs.
+  // The 员工 / 群组 tabs follow the two groups directly, as in the reference; 更多 (ours, not the
+  // reference's) sits at the foot after the roster so it cannot push the roster down.
   const more = view.getByRole("button", { name: "更多" });
   const tabs = view.getByRole("tablist", { name: "员工与群组" });
   expect(
-    nav.compareDocumentPosition(more) & Node.DOCUMENT_POSITION_FOLLOWING,
+    nav.compareDocumentPosition(tabs) & Node.DOCUMENT_POSITION_FOLLOWING,
   ).toBeTruthy();
   expect(
-    more.compareDocumentPosition(tabs) & Node.DOCUMENT_POSITION_FOLLOWING,
+    tabs.compareDocumentPosition(more) & Node.DOCUMENT_POSITION_FOLLOWING,
   ).toBeTruthy();
 });
 

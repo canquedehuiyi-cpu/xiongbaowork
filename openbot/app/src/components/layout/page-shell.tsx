@@ -119,7 +119,12 @@ export function PageShell({
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div
           className={cn(
-            "flex w-full flex-col pb-12",
+            "flex w-full flex-col",
+            /*
+             * The workbench pages carry the floating 小管家 button at the bottom centre; the extra
+             * room lets the last row scroll clear of it instead of ending underneath.
+             */
+            width === "workbench" ? "pb-[112px]" : "pb-12",
             // Without a bar above it the heading keeps the full original space.
             width === "workbench" ? "pt-[46px]" : bar ? "pt-8" : "pt-12",
             WIDTHS[width],

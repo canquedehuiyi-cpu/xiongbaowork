@@ -389,10 +389,10 @@ function RouteComponent() {
     >
       {/*
         Measured off the reference (CSS px at 1696 wide): the pill's top at y=140, the toolbar 24px
-        under it (y=197), the cards 24px under that (y=253). 27px of top padding is what lands the
+        under it (y=197), the cards 24px under that (y=253). 36px of top padding is what lands the
         pill at 140 under the shared PageShell header.
       */}
-      <div className="flex flex-col gap-[24px] pt-[27px] pb-8">
+      <div className="flex flex-col gap-[24px] pt-[36px] pb-8">
         <SegmentedTabs
           // The reference's pill: 218 × 33 CSS px, two equal halves, 4px inset.
           className="grid h-[33px] w-[218px] grid-cols-2 gap-0 bg-foreground/[0.08] p-[4px] dark:[&>[aria-selected=true]]:bg-foreground/[0.14] [&>[role=tab]]:h-[25px]"
