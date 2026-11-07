@@ -39,7 +39,7 @@ type ShellWidth = "prose" | "wide" | "workbench";
 const WIDTHS: Record<ShellWidth, string> = {
   prose: "mx-auto max-w-2xl px-4",
   wide: "mx-auto max-w-5xl px-4",
-  workbench: "px-[40px]",
+  workbench: "mx-auto max-w-[1760px] px-[40px]",
 };
 
 export function PageShell({
@@ -121,7 +121,7 @@ export function PageShell({
           className={cn(
             "flex w-full flex-col pb-12",
             // Without a bar above it the heading keeps the full original space.
-            width === "workbench" ? "pt-[24px]" : bar ? "pt-8" : "pt-12",
+            width === "workbench" ? "pt-[48px]" : bar ? "pt-8" : "pt-12",
             WIDTHS[width],
             className,
           )}
@@ -131,7 +131,7 @@ export function PageShell({
               <h1
                 className={
                   width === "workbench"
-                    ? "font-semibold text-[20px] leading-[28px]"
+                    ? "font-semibold text-[28px] leading-[36px] tracking-tight"
                     : "font-bold text-2xl"
                 }
               >
@@ -140,7 +140,12 @@ export function PageShell({
               {action}
             </div>
             {description ? (
-              <p className="max-w-prose text-pretty text-muted-foreground text-sm leading-relaxed">
+              <p
+                className={cn(
+                  "max-w-prose text-pretty text-muted-foreground leading-relaxed",
+                  width === "workbench" ? "text-[14px]" : "text-sm",
+                )}
+              >
                 {description}
               </p>
             ) : null}

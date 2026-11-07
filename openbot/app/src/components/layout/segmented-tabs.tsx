@@ -24,6 +24,7 @@ export function SegmentedTabs<T extends string>({
   label,
   className,
   size = "default",
+  variant = "pill",
 }: {
   tabs: readonly SegmentedTab<T>[];
   value: T;
@@ -32,6 +33,12 @@ export function SegmentedTabs<T extends string>({
   label: string;
   className?: string;
   size?: "default" | "sm";
+  /**
+   * `pill` is the boxed switch (员工 / 群组 on 员工管理, 列表 / 泳道); `underline` is the text tab
+   * with a bar under the selected one (需要操作 / 查收结果, 插件市场 / 我的插件, the sidebar's
+   * 员工 / 群组), both as the reference draws them.
+   */
+  variant?: "pill" | "underline";
 }) {
   const refs = useRef(new Map<T, HTMLButtonElement>());
 
@@ -63,9 +70,12 @@ export function SegmentedTabs<T extends string>({
     <div
       aria-label={label}
       className={cn(
-        "inline-flex items-center gap-0.5 rounded-lg bg-foreground/[0.04] p-0.5",
+        variant === "underline"
+          ? "flex items-end gap-6 border-border border-b"
+          : "inline-flex items-center gap-0.5 rounded-lg bg-foreground/[0.04] p-0.5",
         className,
       )}
+      data-variant={variant}
       role="tablist"
     >
       {tabs.map((tab, index) => {
@@ -74,11 +84,26 @@ export function SegmentedTabs<T extends string>({
           <button
             aria-selected={selected}
             className={cn(
-              "inline-flex items-center justify-center gap-1.5 rounded-md px-3 font-medium whitespace-nowrap outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/60",
-              size === "sm" ? "h-[26px] text-[12px]" : "h-[28px] text-[13px]",
-              selected
-                ? "bg-background text-foreground shadow-xs dark:bg-foreground/10"
-                : "text-muted-foreground hover:text-foreground",
+              "inline-flex items-center justify-center gap-1.5 font-medium whitespace-nowrap outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/60",
+              variant === "underline"
+                ? cn(
+                    "-mb-px border-b-2 px-1",
+                    size === "sm"
+                      ? "h-[32px] text-[12px]"
+                      : "h-[36px] text-[14px]",
+                    selected
+                      ? "border-foreground text-foreground"
+                      : "border-transparent text-muted-foreground hover:text-foreground",
+                  )
+                : cn(
+                    "rounded-md px-3",
+                    size === "sm"
+                      ? "h-[26px] text-[12px]"
+                      : "h-[28px] text-[13px]",
+                    selected
+                      ? "bg-background text-foreground shadow-xs dark:bg-foreground/10"
+                      : "text-muted-foreground hover:text-foreground",
+                  ),
             )}
             key={tab.value}
             onClick={() => onValueChange(tab.value)}

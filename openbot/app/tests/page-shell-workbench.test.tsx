@@ -36,11 +36,23 @@ function frameOf(width?: "prose" | "wide" | "workbench") {
   return classes;
 }
 
-test("a workbench page is full width and starts 40px in", () => {
+test("a workbench page sits 40px in, capped and centred on very wide screens, under a 28px title", () => {
+  // Measured from docs/acceptance/qoderwake-reference: at 1696px the main column starts 40px in from
+  // the sidebar; at ~2640px the 能力与资源 page is a ~1680px column centred in the main area.
   const classes = frameOf("workbench");
-  expect(classes).toContain("px-[40px]");
-  expect(classes).not.toContain("mx-auto");
-  expect(classes.some((name) => name.startsWith("max-w-"))).toBe(false);
+  expect(classes).toEqual(
+    expect.arrayContaining(["px-[40px]", "mx-auto", "max-w-[1760px]"]),
+  );
+  const view = render(
+    <SidebarProvider>
+      <PageShell description="说明" title="任务看板" width="workbench">
+        <p>正文</p>
+      </PageShell>
+    </SidebarProvider>,
+  );
+  const heading = view.getByRole("heading", { level: 1, name: "任务看板" });
+  expect(heading.className).toContain("text-[28px]");
+  expect(view.getByText("说明").className).toContain("text-[14px]");
 });
 
 test("the reading widths are unchanged", () => {
