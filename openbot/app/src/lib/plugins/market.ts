@@ -212,4 +212,5 @@ export function matchesSearch(card: PluginCard, query: string): boolean {
     .includes(term);
 }
 
-export const PLUGIN_PAGE_SIZE = 12;
+/** Twenty a page: four full rows of the five-column grid the reference draws at full width. */
+export const PLUGIN_PAGE_SIZE = 20;

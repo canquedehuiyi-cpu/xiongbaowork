@@ -1,4 +1,4 @@
-import { IconSearch } from "@tabler/icons-react";
+import { IconArrowLeft, IconArrowRight, IconSearch } from "@tabler/icons-react";
 import type { ReactNode } from "react";
 import { QueryError } from "@/components/layout/query-error";
 import { Button } from "@/components/ui/button";
@@ -226,8 +226,37 @@ export function grantedSentence(count: number): string {
 }
 
 /**
- * The pager under a grid: previous, the page numbers, next. One-based, and the caller keeps the page
- * in the URL so a reload or a shared link lands on the same page.
+ * Which page numbers the pager draws: every page when there are five or fewer, otherwise the first,
+ * the last, the current one and its neighbours (the first three while near the start, the last three
+ * near the end), with `"gap"` where numbers are left out — 「1 2 3 … 7」 as the reference draws it.
+ * A gap of exactly one page draws that page instead, since an ellipsis would be no shorter.
+ */
+export function pageWindow(page: number, pages: number): (number | "gap")[] {
+  if (pages <= 5) return Array.from({ length: pages }, (_, index) => index + 1);
+  const keep = new Set([1, pages, page - 1, page, page + 1]);
+  if (page <= 2) for (const n of [2, 3]) keep.add(n);
+  if (page >= pages - 1) for (const n of [pages - 2, pages - 1]) keep.add(n);
+  const numbers = [...keep]
+    .filter((n) => n >= 1 && n <= pages)
+    .sort((a, b) => a - b);
+  const out: (number | "gap")[] = [];
+  let previous = 0;
+  for (const n of numbers) {
+    if (n - previous === 2) out.push(n - 1);
+    else if (n - previous > 2) out.push("gap");
+    out.push(n);
+    previous = n;
+  }
+  return out;
+}
+
+const PAGER_BUTTON =
+  "inline-flex size-[32px] items-center justify-center rounded-md text-[13px] tabular-nums outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/60 disabled:pointer-events-none disabled:opacity-40";
+
+/**
+ * The pager under a grid, bottom right: ←, the page numbers with the current one boxed, →. One-based,
+ * and the caller keeps the page in the URL so a reload or a shared link lands on the same page. The
+ * arrows are named 上一页 / 下一页 for a screen reader.
  */
 export function Pager({
   page,
@@ -240,35 +269,62 @@ export function Pager({
 }) {
   if (pages <= 1) return null;
   return (
-    <nav aria-label="分页" className="mt-4 flex items-center justify-end gap-1">
-      <Button
+    <nav
+      aria-label="分页"
+      className="mt-[20px] flex items-center justify-end gap-[4px]"
+    >
+      <button
+        aria-label="上一页"
+        className={cn(
+          PAGER_BUTTON,
+          "text-muted-foreground hover:text-foreground",
+        )}
         disabled={page <= 1}
         onClick={() => onPage(page - 1)}
-        size="sm"
-        variant="ghost"
+        type="button"
       >
-        上一页
-      </Button>
-      {Array.from({ length: pages }, (_, index) => index + 1).map((number) => (
-        <Button
-          aria-current={number === page ? "page" : undefined}
-          className="min-w-[32px] tabular-nums"
-          key={number}
-          onClick={() => onPage(number)}
-          size="sm"
-          variant={number === page ? "secondary" : "ghost"}
-        >
-          {number}
-        </Button>
-      ))}
-      <Button
+        <IconArrowLeft aria-hidden="true" className="size-[16px]" />
+      </button>
+      {pageWindow(page, pages).map((item, index, all) =>
+        item === "gap" ? (
+          <span
+            aria-hidden="true"
+            className="inline-flex size-[32px] items-center justify-center text-[13px] text-muted-foreground"
+            // A gap always follows a number, which names it.
+            key={`gap-after-${all[index - 1]}`}
+          >
+            …
+          </span>
+        ) : (
+          <button
+            aria-current={item === page ? "page" : undefined}
+            className={cn(
+              PAGER_BUTTON,
+              item === page
+                ? "border border-foreground/25 font-medium text-foreground"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+            data-current={item === page ? "true" : undefined}
+            key={item}
+            onClick={() => onPage(item)}
+            type="button"
+          >
+            {item}
+          </button>
+        ),
+      )}
+      <button
+        aria-label="下一页"
+        className={cn(
+          PAGER_BUTTON,
+          "text-muted-foreground hover:text-foreground",
+        )}
         disabled={page >= pages}
         onClick={() => onPage(page + 1)}
-        size="sm"
-        variant="ghost"
+        type="button"
       >
-        下一页
-      </Button>
+        <IconArrowRight aria-hidden="true" className="size-[16px]" />
+      </button>
     </nav>
   );
 }

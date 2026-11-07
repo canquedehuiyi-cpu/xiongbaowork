@@ -2,6 +2,7 @@ import { IconExternalLink } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
+import { SearchBox } from "@/components/layout/search-box";
 import { SegmentedTabs } from "@/components/layout/segmented-tabs";
 import { PluginLogo } from "@/components/plugins/plugin-logo";
 import { Button } from "@/components/ui/button";
@@ -35,14 +36,11 @@ import {
 } from "@/lib/plugins/queries";
 import { cn } from "@/lib/utils";
 import {
-  CardGrid,
   grantedSentence,
   NoMatch,
   Pager,
   QueryState,
   TabEmpty,
-  TabHeader,
-  TabSearch,
   Tag,
 } from "./resource-kit";
 
@@ -56,8 +54,9 @@ export type PluginsSearch = {
 };
 
 /**
- * 能力与资源 › 插件 (parity plan F4): 插件市场 / 我的插件, a category sidebar, a card grid paged
- * twelve at a time, and a details sheet per card.
+ * 能力与资源 › 插件 (parity plan F4, reference description 6): underline tabs 插件市场 / 我的插件, a
+ * 210px rail with the search over the categories, and on the right the category's heading with its
+ * count, a card grid five across at full width paged twenty at a time, and a details sheet per card.
  *
  * Reads `/api/plugins` with the listings and this person's connections beside it; each of those two
  * only takes away the detail it adds. Installing is an administrator's write that needs a token or a
@@ -103,56 +102,27 @@ export function PluginsTab({
 
   return (
     <>
-      <TabHeader
-        actions={
-          isAdmin ? (
-            <Button
-              render={(props) => <Link to="/admin/plugins" {...props} />}
-              size="sm"
-              variant="outline"
-            >
-              管理插件
-            </Button>
-          ) : null
+      <SegmentedTabs
+        className="mt-[24px]"
+        label="插件范围"
+        onValueChange={(value) =>
+          onSearch({ view: value, category: undefined, page: undefined })
         }
-        description="员工干活时可以用到的外部服务。插件市场是这个部署可以添加的插件；我的插件是已经添加的，连同它们在你这里的授权状态。"
-        search={
-          <TabSearch
-            label="搜索插件"
-            onChange={(value) => {
-              setText(value);
-              onSearch(
-                { q: value || undefined, page: undefined },
-                {
-                  replace: true,
-                },
-              );
-            }}
-            value={text}
-          />
-        }
+        tabs={[
+          {
+            value: "market",
+            label: "插件市场",
+            ...(plugins.data ? { count: market.length } : {}),
+          },
+          {
+            value: "mine",
+            label: "我的插件",
+            ...(plugins.data ? { count: mine.length } : {}),
+          },
+        ]}
+        value={view}
+        variant="underline"
       />
-      <div className="mt-4">
-        <SegmentedTabs
-          label="插件范围"
-          onValueChange={(value) =>
-            onSearch({ view: value, category: undefined, page: undefined })
-          }
-          tabs={[
-            {
-              value: "market",
-              label: "插件市场",
-              ...(plugins.data ? { count: market.length } : {}),
-            },
-            {
-              value: "mine",
-              label: "我的插件",
-              ...(plugins.data ? { count: mine.length } : {}),
-            },
-          ]}
-          value={view}
-        />
-      </div>
       <QueryState label="读不到插件" query={plugins}>
         {scoped.length === 0 ? (
           view === "market" ? (
@@ -171,15 +141,53 @@ export function PluginsTab({
             />
           )
         ) : (
-          <div className="mt-4 flex flex-col gap-4 md:flex-row md:items-start">
-            <CategorySidebar
-              cards={searched}
-              onChange={(next) =>
-                onSearch({ category: next ?? undefined, page: undefined })
-              }
-              value={category}
-            />
-            <div className="min-w-0 flex-1">
+          <div className="mt-[20px] flex flex-col gap-[24px] md:flex-row md:items-start">
+            <div
+              className="flex shrink-0 flex-col gap-[12px] md:w-[210px]"
+              data-slot="plugin-rail"
+            >
+              <SearchBox
+                label="搜索插件"
+                onValueChange={(value) => {
+                  setText(value);
+                  onSearch(
+                    { q: value || undefined, page: undefined },
+                    { replace: true },
+                  );
+                }}
+                placeholder="搜索插件"
+                value={text}
+              />
+              <CategorySidebar
+                cards={searched}
+                onChange={(next) =>
+                  onSearch({ category: next ?? undefined, page: undefined })
+                }
+                value={category}
+              />
+            </div>
+            <div className="@container min-w-0 flex-1">
+              <div className="flex min-h-[32px] items-center gap-[8px]">
+                <h2 className="font-semibold text-[16px] leading-[24px]">
+                  {category
+                    ? (PLUGIN_CATEGORIES.find((row) => row.id === category)
+                        ?.label ?? "全部分类")
+                    : "全部分类"}
+                </h2>
+                <span className="text-[13px] text-muted-foreground tabular-nums">
+                  {shown.length} 个插件
+                </span>
+                {isAdmin ? (
+                  <Button
+                    className="ml-auto"
+                    render={(props) => <Link to="/admin/plugins" {...props} />}
+                    size="sm"
+                    variant="outline"
+                  >
+                    管理插件
+                  </Button>
+                ) : null}
+              </div>
               {shown.length === 0 ? (
                 <NoMatch
                   onClear={() => {
@@ -194,7 +202,10 @@ export function PluginsTab({
                 />
               ) : (
                 <>
-                  <CardGrid label="插件列表">
+                  <ul
+                    aria-label="插件列表"
+                    className="mt-[12px] grid grid-cols-1 gap-[12px] @min-[400px]:grid-cols-2 @min-[620px]:grid-cols-3 @min-[840px]:grid-cols-4 @min-[1060px]:grid-cols-5"
+                  >
                     {paged.map((card) => (
                       <PluginCardView
                         card={card}
@@ -204,7 +215,7 @@ export function PluginsTab({
                         status={status(card)}
                       />
                     ))}
-                  </CardGrid>
+                  </ul>
                   <Pager
                     onPage={(next) => onSearch({ page: next })}
                     page={page}
@@ -252,7 +263,7 @@ function CategorySidebar({
   return (
     <nav
       aria-label="插件分类"
-      className="flex shrink-0 flex-row flex-wrap gap-1 md:w-[180px] md:flex-col"
+      className="flex flex-row flex-wrap gap-[2px] md:flex-col"
     >
       {rows.map((row) => {
         const selected = row.id === value;
@@ -262,8 +273,8 @@ function CategorySidebar({
             className={cn(
               "flex h-[32px] items-center justify-between gap-3 rounded-md px-3 text-left text-[13px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/60",
               selected
-                ? "bg-foreground/[0.06] font-medium text-foreground"
-                : "text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground",
+                ? "bg-sidebar-accent font-medium text-foreground"
+                : "text-foreground/85 hover:bg-sidebar-accent/50 hover:text-foreground",
             )}
             key={row.id ?? "all"}
             onClick={() => onChange(row.id)}
@@ -380,39 +391,54 @@ function PluginCardView({
 }) {
   const titleId = `plugin-card-${card.key}-${card.server?.id ?? "entry"}`;
   return (
+    /*
+     * The reference's card: icon and name, three lines of description, and a footer of 「@vendor」
+     * with the install count. There is no install count here (nothing records one), so the footer's
+     * right is where this plugin stands for the person looking. The whole card opens the details;
+     * the one action it offers rises in its corner on hover or focus (always, on a touch screen),
+     * and is in the details too.
+     */
     <li
       aria-labelledby={titleId}
-      className="flex min-h-[148px] flex-col gap-3 rounded-lg border border-border bg-card p-4"
+      className="group relative flex min-h-[156px] flex-col gap-[10px] rounded-lg border border-border bg-card p-[16px] transition-colors hover:border-foreground/15"
     >
-      <div className="flex items-start gap-3">
-        <span className="flex size-[36px] shrink-0 items-center justify-center rounded-md bg-muted">
+      <div className="flex min-w-0 items-center gap-[10px]">
+        <span className="flex size-[28px] shrink-0 items-center justify-center rounded-md bg-muted">
           <PluginLogo logo={card.logo} />
         </span>
-        <div className="flex min-w-0 flex-1 flex-col">
-          <span
-            className="truncate font-medium text-[14px] leading-[20px]"
-            data-slot="plugin-card-title"
-            id={titleId}
-          >
-            {card.title}
-          </span>
-          <span className="truncate text-[12px] text-muted-foreground">
-            {card.vendor}
-          </span>
-        </div>
+        <span
+          className="min-w-0 truncate font-semibold text-[14px] leading-[20px]"
+          data-slot="plugin-card-title"
+          id={titleId}
+        >
+          {card.title}
+        </span>
       </div>
-      <p className="line-clamp-2 text-[13px] text-muted-foreground leading-[20px]">
+      <p
+        className="line-clamp-3 min-h-[60px] text-[13px] text-muted-foreground leading-[20px]"
+        data-slot="plugin-card-summary"
+      >
         {card.summary || "这个插件没有提供说明。"}
       </p>
-      <div className="mt-auto flex flex-wrap items-center gap-2">
-        <Tag tone={statusTone(status)}>{status.label}</Tag>
+      <div
+        className="mt-auto flex min-w-0 items-center gap-[6px] text-[12px] text-muted-foreground"
+        data-slot="plugin-card-footer"
+      >
+        <span className="min-w-0 flex-1 truncate">
+          {card.vendor ? `@${card.vendor}` : null}
+        </span>
         {card.listed ? <Tag>可自助安装</Tag> : null}
-        <div className="ml-auto flex items-center gap-1">
-          <Button onClick={onOpen} size="sm" variant="ghost">
-            详情
-          </Button>
-          <PluginAction card={card} isAdmin={isAdmin} status={status} />
-        </div>
+        <Tag tone={statusTone(status)}>{status.label}</Tag>
+      </div>
+      <button
+        className="absolute inset-0 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+        onClick={onOpen}
+        type="button"
+      >
+        <span className="sr-only">详情</span>
+      </button>
+      <div className="absolute top-[12px] right-[12px] z-10 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100">
+        <PluginAction card={card} isAdmin={isAdmin} status={status} />
       </div>
     </li>
   );

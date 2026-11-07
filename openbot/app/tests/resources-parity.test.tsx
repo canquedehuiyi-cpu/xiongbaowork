@@ -24,10 +24,11 @@ import { settleReactWork } from "./settle-react-work";
 
 /**
  * Parity plan F4, 能力与资源: `/resources` is one shell of tabs — the reference's six entries in its
- * order (插件 · 技能 · 连接器 · 知识库 · WakerFlow · 公开项目), then this fork's own entries after a
- * divider — with the selected tab in `?tab=`, and only that tab's reads made.
+ * order (插件 · 技能 · 连接器 · 知识库 · WakerFlow · 公开项目) as entry cards, then this fork's own
+ * entries in a secondary row under them — with the selected tab in `?tab=`, and only that tab's
+ * reads made.
  *
- * The 插件 tab is the market: 插件市场 / 我的插件, a category sidebar, a card grid paged twelve at a
+ * The 插件 tab is the market: 插件市场 / 我的插件, a category sidebar, a card grid paged twenty at a
  * time, and a details sheet per card. Everything is drawn from a fake `fetch` keyed by path.
  */
 let registeredHere = false;
@@ -96,13 +97,13 @@ const server = (
   ...extra,
 });
 
-/** Fifteen catalogue entries: more than one page of twelve. */
+/** Twenty-five catalogue entries: more than one page of twenty. */
 const catalogue = [
   entry("notion", "Notion", "user-oauth"),
   entry("linear", "Linear", "user-oauth"),
   entry("github", "GitHub", "deployment-bearer"),
   entry("web-search", "联网搜索", "builtin"),
-  ...Array.from({ length: 11 }, (_, index) =>
+  ...Array.from({ length: 21 }, (_, index) =>
     entry(
       `app-${String(index + 1).padStart(2, "0")}`,
       `应用 ${String(index + 1).padStart(2, "0")}`,
@@ -276,22 +277,33 @@ const ORDER = [
   "信息源与记忆",
 ];
 
-test("the six reference entries come first in order, then this fork's own after a divider; 插件 is the default", async () => {
+test("the six reference entries come first in order, then this fork's own in the row under them; 插件 is the default", async () => {
   const { view } = draw();
   const tablist = await view.findByRole("tablist", { name: "能力与资源" });
   const tabs = within(tablist).getAllByRole("tab");
-  expect(tabs.map((tab) => tab.textContent)).toEqual(ORDER);
+  // An entry card's name is its label; the selected card's description is not part of it.
+  expect(
+    tabs.map(
+      (tab) =>
+        tab.querySelector("[data-slot='entry-label']")?.textContent ??
+        tab.textContent,
+    ),
+  ).toEqual(ORDER);
   expect(
     within(tablist)
       .getByRole("tab", { name: "插件" })
       .getAttribute("aria-selected"),
   ).toBe("true");
 
-  // The divider sits between the reference's six and this fork's entries.
-  const divider = tablist.querySelector("[data-slot='tab-divider']");
-  expect(divider).toBeTruthy();
-  expect(divider?.previousElementSibling?.textContent).toBe("公开项目");
-  expect(divider?.nextElementSibling?.textContent).toBe("模型库");
+  // The reference's six are the entry cards; this fork's entries are the row under them.
+  const cards = tablist.querySelector("[data-slot='resource-entry-cards']");
+  const more = tablist.querySelector("[data-slot='resource-more-tabs']");
+  expect(within(cards as HTMLElement).getAllByRole("tab")).toHaveLength(6);
+  expect(
+    within(more as HTMLElement)
+      .getAllByRole("tab")
+      .map((tab) => tab.textContent),
+  ).toEqual(["模型库", "组件", "信息源与记忆"]);
 
   // The selected tab's panel is labelled by it.
   const panel = view.getByRole("tabpanel");
@@ -403,9 +415,9 @@ test("the category sidebar narrows the grid and is kept in the URL", async () =>
   expect(await cardTitles(view)).toEqual(["联网搜索"]);
 });
 
-test("more than twelve plugins page twelve at a time, with the page in the URL", async () => {
+test("more than twenty plugins page twenty at a time, with the page in the URL", async () => {
   const { view, router, user } = draw();
-  expect(await cardTitles(view)).toHaveLength(12);
+  expect(await cardTitles(view)).toHaveLength(20);
   const pager = view.getByRole("navigation", { name: "分页" });
   expect(
     within(pager)
@@ -422,7 +434,7 @@ test("more than twelve plugins page twelve at a time, with the page in the URL",
   await waitFor(() =>
     expect(router.state.location.search).toMatchObject({ page: 2 }),
   );
-  await waitFor(async () => expect(await cardTitles(view)).toHaveLength(3));
+  await waitFor(async () => expect(await cardTitles(view)).toHaveLength(5));
   expect(
     within(pager)
       .getByRole("button", { name: "下一页" })
@@ -430,13 +442,13 @@ test("more than twelve plugins page twelve at a time, with the page in the URL",
   ).toBe(true);
 
   await user.click(within(pager).getByRole("button", { name: "上一页" }));
-  await waitFor(async () => expect(await cardTitles(view)).toHaveLength(12));
+  await waitFor(async () => expect(await cardTitles(view)).toHaveLength(20));
   cleanup();
 
   // A deep link to page two lands there.
   const deep = draw({ entry: "/resources?tab=plugins&page=2" });
   await waitFor(async () =>
-    expect(await cardTitles(deep.view)).toHaveLength(3),
+    expect(await cardTitles(deep.view)).toHaveLength(5),
   );
 });
 
@@ -501,7 +513,7 @@ test("a failed read says so with a retry, and the retry draws the cards", async 
   expect(alert.textContent).toContain("读不到插件");
   failing.delete("/api/plugins");
   await user.click(within(alert).getByRole("button", { name: "重试" }));
-  expect(await cardTitles(view)).toHaveLength(12);
+  expect(await cardTitles(view)).toHaveLength(20);
 });
 
 test("nothing in the catalogue and nothing installed are each said, not left blank", async () => {

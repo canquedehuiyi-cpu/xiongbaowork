@@ -93,7 +93,7 @@ function ResourcesPage() {
   return (
     <PageShell
       width="workbench"
-      description="你的员工能被赋予的东西：它们用的插件、技能与连接器，它们读取的知识，它们执行的流程与项目，以及它们用来回答的模型。"
+      description="释放你的员工潜能，解锁更多可能"
       title="能力与资源"
     >
       <ResourceTabs
