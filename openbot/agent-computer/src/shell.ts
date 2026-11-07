@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import { win32 } from "node:path";
 
@@ -316,6 +316,10 @@ export function createShell(
        * signals the whole group.
        */
       const shell = commandShell(input.command, process.platform, sourceEnv);
+      const windows = process.platform === "win32";
+      const codePage = windows
+        ? await windowsCodePage(shell.executable)
+        : undefined;
       const child = spawn(shell.executable, shell.args, {
         cwd: workspaceDir,
         // The egress filter's address last, so a command cannot be pointed around it.
@@ -364,12 +368,14 @@ export function createShell(
 
       const outBuffer = collect();
       const errBuffer = collect();
+      const outDecoder = windows ? windowsOutputDecoder(codePage) : undefined;
+      const errDecoder = windows ? windowsOutputDecoder(codePage) : undefined;
 
       child.stdout.on("data", (chunk) => {
-        outBuffer.add(chunk);
+        outBuffer.add(outDecoder ? outDecoder.write(chunk) : chunk);
       });
       child.stderr.on("data", (chunk) => {
-        errBuffer.add(chunk);
+        errBuffer.add(errDecoder ? errDecoder.write(chunk) : chunk);
       });
 
       let failStop: (error: Error) => void = () => {};
@@ -462,8 +468,12 @@ export function createShell(
         input.signal?.removeEventListener("abort", onAbort);
       }
 
+      if (outDecoder) outBuffer.add(outDecoder.end());
+      if (errDecoder) errBuffer.add(errDecoder.end());
       const out = clamp(outBuffer.text);
-      const err = clamp(errBuffer.text);
+      const err = clamp(
+        windows ? plainPowerShellStderr(errBuffer.text) : errBuffer.text,
+      );
       return {
         command: input.command,
         exitCode,
@@ -485,6 +495,184 @@ export function createShell(
 
 export type Shell = ReturnType<typeof createShell>;
 
+/** The upper half of the two Western OEM code pages, which have no `TextDecoder` label. */
+const OEM_UPPER_HALF: Record<number, string> = {
+  437: "\xc7\xfc\xe9\xe2\xe4\xe0\xe5\xe7\xea\xeb\xe8\xef\xee\xec\xc4\xc5\xc9\xe6\xc6\xf4\xf6\xf2\xfb\xf9\xff\xd6\xdc\xa2\xa3\xa5\u20a7\u0192\xe1\xed\xf3\xfa\xf1\xd1\xaa\xba\xbf\u2310\xac\xbd\xbc\xa1\xab\xbb\u2591\u2592\u2593\u2502\u2524\u2561\u2562\u2556\u2555\u2563\u2551\u2557\u255d\u255c\u255b\u2510\u2514\u2534\u252c\u251c\u2500\u253c\u255e\u255f\u255a\u2554\u2569\u2566\u2560\u2550\u256c\u2567\u2568\u2564\u2565\u2559\u2558\u2552\u2553\u256b\u256a\u2518\u250c\u2588\u2584\u258c\u2590\u2580\u03b1\xdf\u0393\u03c0\u03a3\u03c3\xb5\u03c4\u03a6\u0398\u03a9\u03b4\u221e\u03c6\u03b5\u2229\u2261\xb1\u2265\u2264\u2320\u2321\xf7\u2248\xb0\u2219\xb7\u221a\u207f\xb2\u25a0\xa0",
+  850: "\xc7\xfc\xe9\xe2\xe4\xe0\xe5\xe7\xea\xeb\xe8\xef\xee\xec\xc4\xc5\xc9\xe6\xc6\xf4\xf6\xf2\xfb\xf9\xff\xd6\xdc\xf8\xa3\xd8\xd7\u0192\xe1\xed\xf3\xfa\xf1\xd1\xaa\xba\xbf\xae\xac\xbd\xbc\xa1\xab\xbb\u2591\u2592\u2593\u2502\u2524\xc1\xc2\xc0\xa9\u2563\u2551\u2557\u255d\xa2\xa5\u2510\u2514\u2534\u252c\u251c\u2500\u253c\xe3\xc3\u255a\u2554\u2569\u2566\u2560\u2550\u256c\xa4\xf0\xd0\xca\xcb\xc8\u0131\xcd\xce\xcf\u2518\u250c\u2588\u2584\xa6\xcc\u2580\xd3\xdf\xd4\xd2\xf5\xd5\xb5\xfe\xde\xda\xdb\xd9\xfd\xdd\xaf\xb4\xad\xb1\u2017\xbe\xb6\xa7\xf7\xb8\xb0\xa8\xb7\xb9\xb3\xb2\u25a0\xa0",
+};
+
+const LEGACY_LABELS: Record<number, string> = {
+  866: "ibm866",
+  874: "windows-874",
+  932: "shift_jis",
+  936: "gbk",
+  949: "euc-kr",
+  950: "big5",
+  1250: "windows-1250",
+  1251: "windows-1251",
+  1252: "windows-1252",
+  1253: "windows-1253",
+  1254: "windows-1254",
+  1255: "windows-1255",
+  1256: "windows-1256",
+  1257: "windows-1257",
+  1258: "windows-1258",
+  54936: "gb18030",
+};
+
+/** A decoder for one Windows code page, or `undefined` when this side knows none for it. */
+function codePageDecoder(
+  codePage: number | undefined,
+): ((bytes: Uint8Array) => string) | undefined {
+  if (codePage === undefined) return undefined;
+  const upper = OEM_UPPER_HALF[codePage];
+  if (upper)
+    return (bytes) =>
+      Array.from(bytes, (byte) =>
+        byte < 0x80
+          ? String.fromCharCode(byte)
+          : (upper[byte - 0x80] ?? "\uFFFD"),
+      ).join("");
+  const label = LEGACY_LABELS[codePage];
+  if (!label) return undefined;
+  try {
+    const decoder = new TextDecoder(label);
+    return (bytes) => decoder.decode(bytes);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Bytes from a Windows command, decoded a line at a time.
+ *
+ * Two writers share the pipe. PowerShell writes its own text as UTF-8; a native program that is the
+ * last step of the command (`hostname`, `ipconfig`, `ping`) writes straight into the pipe in the
+ * machine's OEM code page, GBK on a Chinese Windows, and PowerShell never sees those bytes. A line
+ * that is valid UTF-8 is read as UTF-8; any other is read in the machine's code page. GBK text that
+ * also happens to be valid UTF-8 is rare, and a line that is neither still arrives, with U+FFFD.
+ */
+export function windowsOutputDecoder(codePage: number | undefined) {
+  const legacy = codePageDecoder(codePage);
+  const strict = new TextDecoder("utf-8", { fatal: true });
+  const lenient = new TextDecoder("utf-8");
+  let pending: Uint8Array = new Uint8Array(0);
+  const line = (bytes: Uint8Array) => {
+    try {
+      return strict.decode(bytes);
+    } catch {
+      return legacy ? legacy(bytes) : lenient.decode(bytes);
+    }
+  };
+  return {
+    write(chunk: Uint8Array): string {
+      const joined = new Uint8Array(pending.length + chunk.length);
+      joined.set(pending);
+      joined.set(chunk, pending.length);
+      const end = joined.lastIndexOf(0x0a);
+      if (end === -1) {
+        pending = joined;
+        return "";
+      }
+      pending = joined.slice(end + 1);
+      let text = "";
+      let start = 0;
+      for (let at = 0; at <= end; at += 1)
+        if (joined[at] === 0x0a) {
+          text += line(joined.subarray(start, at + 1));
+          start = at + 1;
+        }
+      return text;
+    },
+    end(): string {
+      const rest = pending;
+      pending = new Uint8Array(0);
+      return rest.length === 0 ? "" : line(rest);
+    },
+  };
+}
+
+let machineCodePage: Promise<number | undefined> | undefined;
+
+/**
+ * The machine's console code page, asked of PowerShell once per process. A command's console keeps
+ * it (nothing here changes it), so it is the code page native programs write in.
+ */
+export function windowsCodePage(
+  executable: string,
+): Promise<number | undefined> {
+  machineCodePage ??= new Promise((resolve) => {
+    execFile(
+      executable,
+      [
+        "-NoLogo",
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        "[Console]::OutputEncoding.CodePage",
+      ],
+      { windowsHide: true, timeout: 15_000 },
+      (error, stdout) => {
+        const value = Number(String(stdout).trim());
+        resolve(
+          !error && Number.isSafeInteger(value) && value > 0
+            ? value
+            : undefined,
+        );
+      },
+    );
+  });
+  return machineCodePage;
+}
+
+const CLIXML_HEADER = "#< CLIXML";
+
+/** `_x000D_`-style escapes and the five XML entities, as PowerShell's serializer writes them. */
+function decodeClixmlText(text: string): string {
+  return text
+    .replace(/_x([0-9A-Fa-f]{4})_/g, (_, hex: string) =>
+      String.fromCharCode(Number.parseInt(hex, 16)),
+    )
+    .replace(/&#x([0-9A-Fa-f]+);/g, (_, hex: string) =>
+      String.fromCodePoint(Number.parseInt(hex, 16)),
+    )
+    .replace(/&#([0-9]+);/g, (_, dec: string) =>
+      String.fromCodePoint(Number.parseInt(dec, 10)),
+    )
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, "&");
+}
+
+/**
+ * What Windows PowerShell wrote to a redirected stderr, as text a person or a model can read.
+ *
+ * With stderr redirected it writes `#< CLIXML` and then XML: progress records ("正在准备首次使用模块",
+ * which is not an error at all) and error, warning and verbose lines as `<S S="Error">…</S>`.
+ * Progress is dropped; every `<S>` line keeps its words. Anything this does not recognise, a stream
+ * cut off mid-element included, is returned exactly as it came, so nothing is ever lost to parsing.
+ */
+export function plainPowerShellStderr(stderr: string): string {
+  const at = stderr.indexOf(CLIXML_HEADER);
+  if (at === -1) return stderr;
+  const before = stderr.slice(0, at);
+  const body = stderr
+    .slice(at + CLIXML_HEADER.length)
+    .replace(/<Obj S="progress"[^>]*>[\s\S]*?<\/Obj>/g, "");
+  const lines: string[] = [];
+  const rest = body
+    .replace(/<S S="[A-Za-z]+">([\s\S]*?)<\/S>/g, (_, text: string) => {
+      lines.push(decodeClixmlText(text));
+      return "";
+    })
+    .replace(/<Objs\b[^>]*>|<\/Objs>/g, "")
+    .trim();
+  if (rest !== "") return stderr;
+  return before + lines.join("");
+}
+
 /** Native Windows commands use PowerShell without profiles; Unix retains the existing bash contract. */
 export function commandShell(
   command: string,
@@ -496,9 +684,19 @@ export function commandShell(
   const root = source.SystemRoot ?? source.SYSTEMROOT ?? "C:\\Windows";
   /*
    * `$ProgressPreference` off: with stderr redirected, Windows PowerShell serialises progress records
-   * ("正在准备首次使用模块") into stderr as CLIXML, which the model then reads as an error.
+   * ("正在准备首次使用模块") into stderr as CLIXML, which the model then reads as an error. It is not
+   * enough on its own (the first-use record is written before the script runs), so
+   * `plainPowerShellStderr` also takes CLIXML apart on the way out.
+   *
+   * Encoding: PowerShell decodes what a native program prints with `[Console]::OutputEncoding`, and
+   * `hostname.exe`, `ipconfig` and the other built-ins print in the machine's OEM code page (GBK on a
+   * Chinese Windows) whatever that property says. Setting it to UTF-8 turned their Chinese into
+   * U+FFFD before this process ever saw it. So the property keeps the machine's own code page, and
+   * PowerShell's own writes go out as UTF-8 through `SetOut` / `SetError` instead. A native program
+   * that is the command's last step bypasses PowerShell and writes its code page straight into the
+   * pipe; `windowsOutputDecoder` reads those lines.
    */
-  const script = `$ProgressPreference = 'SilentlyContinue'; $OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new(); ${command}\n$openbotCommandSucceeded = $?; $openbotCommandExit = $LASTEXITCODE; if ($openbotCommandExit) { exit $openbotCommandExit }; if (-not $openbotCommandSucceeded) { exit 1 }`;
+  const script = `$ProgressPreference = 'SilentlyContinue'; $OutputEncoding = [System.Text.UTF8Encoding]::new($false); $openbotOut = [System.IO.StreamWriter]::new([Console]::OpenStandardOutput(), [System.Text.UTF8Encoding]::new($false)); $openbotOut.AutoFlush = $true; [Console]::SetOut($openbotOut); $openbotErr = [System.IO.StreamWriter]::new([Console]::OpenStandardError(), [System.Text.UTF8Encoding]::new($false)); $openbotErr.AutoFlush = $true; [Console]::SetError($openbotErr); ${command}\n$openbotCommandSucceeded = $?; $openbotCommandExit = $LASTEXITCODE; if ($openbotCommandExit) { exit $openbotCommandExit }; if (-not $openbotCommandSucceeded) { exit 1 }`;
   return {
     executable: win32.join(
       root,
