@@ -101,7 +101,9 @@ export type PolicyContext = {
     // editJiraIssue, transitionJiraIssue, addCommentToJiraIssue and the six others".
     | "read_tool"
     | "write_tool"
-    | "run_command";
+    | "run_command"
+    // A tool of a local app on the person's paired machine (device MCP bridge).
+    | "app_call";
   /**
    * The file a `computer_read_file`, `computer_download_file` or `computer_write_file` call is aimed at.
    *

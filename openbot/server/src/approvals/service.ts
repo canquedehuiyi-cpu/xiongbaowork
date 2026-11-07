@@ -1052,6 +1052,34 @@ function permanentReason(error: unknown): string {
     return "the saved request no longer has a valid shape.";
   return "the app it needs is no longer available.";
 }
+/** How much of a local app call's arguments its card shows (device MCP bridge §4.5). */
+const APP_ARGS_PREVIEW_BYTES = 2048;
+/**
+ * A local app's call as its card shows it: the app and tool (the gateway's own names), the tool's
+ * description from the device's list, and the arguments as JSON cut to 2 KB. Display only: what is
+ * approved and run is the whole call, bound by the action digest.
+ */
+function appCallPreview(action: ApprovalAction): unknown {
+  const field = (value: unknown, key: string) =>
+    value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)[key]
+      : undefined;
+  const json = JSON.stringify(field(action.args, "args") ?? {}) ?? "{}";
+  const bytes = new TextEncoder().encode(json);
+  const shown =
+    bytes.length > APP_ARGS_PREVIEW_BYTES
+      ? `${new TextDecoder()
+          .decode(bytes.slice(0, APP_ARGS_PREVIEW_BYTES - 3))
+          .replace(/\uFFFD+$/, "")}…`
+      : json;
+  const description = field(action.target, "description");
+  return approvalPreview({
+    app: field(action.target, "app") ?? field(action.args, "app"),
+    tool: field(action.target, "tool") ?? field(action.args, "tool"),
+    ...(typeof description === "string" ? { description } : {}),
+    args: shown,
+  });
+}
 function publicApproval(request: ApprovalRecord) {
   const { action, ...record } = request;
   return {
@@ -1065,7 +1093,10 @@ function publicApproval(request: ApprovalRecord) {
       threadId: action.threadId,
       // The owner's own call id, so the conversation can draw this request where the action was.
       toolCallId: action.toolCallId,
-      args: approvalPreview(action.args),
+      args:
+        action.toolRef === "computer_app_call"
+          ? appCallPreview(action)
+          : approvalPreview(action.args),
       target: approvalPreview(action.target),
       ...(action.policy
         ? {

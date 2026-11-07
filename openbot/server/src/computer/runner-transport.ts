@@ -64,7 +64,11 @@ export function createRunnerTransport(
           ? "files.read"
           : bare === "files/write"
             ? "files.write"
-            : bare;
+            : bare === "apps/tools"
+              ? "apps.tools"
+              : bare === "apps/call"
+                ? "apps.call"
+                : bare;
   };
 
   /**
@@ -111,6 +115,13 @@ export function createRunnerTransport(
     idempotencyKey?: string,
     caller?: AbortSignal,
   ): Promise<T> {
+    /*
+     * A local app's tool list decides whether a call asks first, so it has to be the machine's answer
+     * now: refused while the machine is away rather than parked in the queue (device MCP bridge §3.4).
+     */
+    if (action === "apps.tools" && !channel.isReachable(target)) {
+      return Promise.reject(new DeviceOfflineError(target.deviceId));
+    }
     if (!BROWSER_ACTIONS.has(action)) {
       return channel.dispatch<T>(
         target,
