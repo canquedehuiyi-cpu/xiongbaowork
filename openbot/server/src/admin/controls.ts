@@ -18,7 +18,7 @@
  * never loaded refuses everything it is asked about. Every async check reads the database fresh.
  */
 
-import { and, eq, inArray, like, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, like, sql } from "drizzle-orm";
 import postgres from "postgres";
 import { ownerTenantOfBot } from "../agents/bot-owner";
 import {
@@ -41,7 +41,7 @@ import {
 } from "../computer/policy-network";
 import type { ComputerProvider } from "../computer/provider";
 import type { Database } from "../db/client";
-import { agentProfiles, agents, auditEvents } from "../db/schema";
+import { agentProfiles, agents, auditEvents, mcpServers } from "../db/schema";
 import { boundModelName } from "../models/runtime-resolver";
 import { createOtelEventExporter, type EventExporter } from "../telemetry/otel";
 import { scrubCommand } from "../telemetry/scrub";
@@ -71,6 +71,11 @@ type Snapshot = {
   groupsByUser: Map<string, string[]>;
   settings: EnterpriseSettings;
   network: NetworkPolicyRow[];
+  /**
+   * The app each server-row id on the MCP allowlist instantiates (`team:notion` → `notion`), read
+   * from `mcp_servers.catalogue_key`. Only rows with a key: a custom server's id is its own name.
+   */
+  mcpAppOfRow: Map<string, string>;
   loadedAt: Date;
 };
 
@@ -181,7 +186,17 @@ export function decideFromSnapshot(
 
   if (context.mcp?.server) {
     const allowlist = snapshot.settings.mcpAllowlist;
-    if (allowlist.enabled && !allowlist.servers.includes(context.mcp.server)) {
+    /*
+     * A tool call names the APP (`notion/search`), while since G01-E a curated connector's row is
+     * `team:notion`, and an allowlist the admin screen saved before it listed apps holds that row id.
+     * So an entry approves the app it names directly, or the app its row instantiates, as the
+     * database says (`mcpAppOfRow`) — never by taking the spelling apart.
+     */
+    const server = context.mcp.server;
+    const approved = allowlist.servers.some(
+      (entry) => entry === server || snapshot.mcpAppOfRow.get(entry) === server,
+    );
+    if (allowlist.enabled && !approved) {
       return refusal(
         "mcp_allowlist",
         `The MCP server "${context.mcp.server}" is not on this deployment's approved list, so ${context.mcp.tool} was not called.`,
@@ -234,7 +249,29 @@ function portOf(url: string): number {
   }
 }
 
-async function loadSnapshot(store: EnterpriseStore): Promise<Snapshot> {
+/** Which app each allowlisted row id instantiates. See {@link Snapshot.mcpAppOfRow}. */
+async function mcpAppsOfRows(
+  database: Database,
+  ids: string[],
+): Promise<Map<string, string>> {
+  if (!ids.length) return new Map();
+  const rows = await database
+    .select({ id: mcpServers.id, catalogueKey: mcpServers.catalogueKey })
+    .from(mcpServers)
+    .where(
+      and(inArray(mcpServers.id, ids), isNotNull(mcpServers.catalogueKey)),
+    );
+  return new Map(
+    rows.flatMap((row) =>
+      row.catalogueKey ? [[row.id, row.catalogueKey] as const] : [],
+    ),
+  );
+}
+
+async function loadSnapshot(
+  store: EnterpriseStore,
+  database: Database,
+): Promise<Snapshot> {
   /*
    * One after another, not Promise.all. Concurrent statements on one Bun SQL connection were seen to
    * swap prepared-statement result shapes ("bind message has 7 result formats but query has 1
@@ -255,12 +292,17 @@ async function loadSnapshot(store: EnterpriseStore): Promise<Snapshot> {
     ]),
   ];
   const groupsByUser = await store.groupMembers(groups);
+  const mcpAppOfRow = await mcpAppsOfRows(
+    database,
+    settings.mcpAllowlist.servers,
+  );
   return {
     rows,
     admins,
     groupsByUser,
     settings,
     network,
+    mcpAppOfRow,
     loadedAt: new Date(),
   };
 }
@@ -363,7 +405,9 @@ async function initializeEnterpriseControls(
     const refresh = async () => {
       if (closing) return;
       try {
-        snapshot = await runAsTenant("platform", () => loadSnapshot(store));
+        snapshot = await runAsTenant("platform", () =>
+          loadSnapshot(store, deps.database),
+        );
       } catch (error) {
         console.error(
           JSON.stringify({

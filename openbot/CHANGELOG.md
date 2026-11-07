@@ -19,6 +19,25 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   - The sidebar shows the plan name without first opening /plans. It reads `/api/quota` once per
     session.
 
+## 0.2.3
+
+- **The MCP allowlist approves a curated connector again.** Admin > Enterprise controls saved the
+  server row id (`team:<key>`), while a tool call names the app (`<key>/<tool>`), so with 只用已批准的服务器
+  on, an approved curated connector was still refused by `mcp_allowlist`. The boundary now reads an
+  entry as approving the app it names or the app its row instantiates (from `catalogue_key`), so
+  lists already saved keep working; the screen lists one entry per app by its key and shows a saved
+  `team:<key>` as approved.
+- **Connecting a curated app by its `team:<key>` id works again.** The connect route, its OAuth
+  callback and the memory-source check now resolve the catalogue entry from the row's
+  `catalogue_key` (or the tool ref's app key), so `POST /api/plugins/servers/team%3A<key>/connect`
+  no longer answers 400 "not connected as an individual person", and a person-OAuth memory source
+  asks the person to reconnect before the app is called.
+- **An added curated connector is found again by its catalogue key.** Since its row became the
+  team's `team:<key>`, `/admin/plugins` listed it twice (connected, and still not added under
+  发现插件), its admin page showed the switch off and a bearer-token row instead of 「OAuth 客户端」, and
+  已连接的账号 never offered it to connect. These screens now match a server by its row id or its
+  catalogue key, and link by the catalogue key.
+
 ## 0.2.2
 
 - **Coworkers can use MCP tools offered by apps on the owner's own computer.** In the device app's

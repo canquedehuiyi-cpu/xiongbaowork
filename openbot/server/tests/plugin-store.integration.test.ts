@@ -5355,6 +5355,8 @@ test("a server's address is the url the row holds, not one composed from its id"
 
     expect(await store.serverAddress("gmail")).toEqual({
       id: "gmail",
+      // A brokered row instantiates no catalogue entry, so the entry a reader resolves is none.
+      catalogueKey: null,
       title: "Gmail",
       // Not `composio://gmail`. That is what composing the url from the id would have answered, and
       // it is the app this row does not run against.

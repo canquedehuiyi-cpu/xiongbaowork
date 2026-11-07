@@ -20,6 +20,7 @@ import {
   parseEgressRules,
 } from "../computer/policy-network";
 import { mcpServers } from "../db/schema";
+import { TEAM_TENANT } from "../db/schema/tenant";
 import { otelConfigured } from "../telemetry/otel";
 import { capabilityFor, runAsTenant } from "../tenant/context";
 import {
@@ -116,13 +117,41 @@ export function createEnterpriseAdminRoutes(
     // In the administrator's own frame on purpose: the allowlist offers the servers this
     // deployment shares and the administrator's own, which RLS already answers here. A `platform`
     // read would add every person's private custom servers to a list meant for everybody.
-    const servers = await controls.deps.database
+    const serverRows = await controls.deps.database
       .select({
         id: mcpServers.id,
+        catalogueKey: mcpServers.catalogueKey,
+        tenantId: mcpServers.tenantId,
         title: mcpServers.title,
         url: mcpServers.url,
       })
       .from(mcpServers);
+    /*
+     * One entry per APP, keyed the way a tool call names it (`catalogue_key ?? id`), because that is
+     * what the boundary is asked about: since G01-E a curated row is `team:<key>`, and saving its id
+     * approved nothing a call could name. `rowIds` are the rows behind the app, so the screen can show
+     * an allowlist saved before this (holding `team:<key>`) as approving `<key>`. The team's row gives
+     * the title and URL where an app has several (an older admin-tenant row, a `system` one).
+     */
+    const servers = new Map<
+      string,
+      { id: string; title: string; url: string; rowIds: string[] }
+    >();
+    for (const row of [...serverRows].sort(
+      (a, b) =>
+        Number(b.tenantId === TEAM_TENANT) - Number(a.tenantId === TEAM_TENANT),
+    )) {
+      const app = row.catalogueKey ?? row.id;
+      const entry = servers.get(app);
+      if (entry) entry.rowIds.push(row.id);
+      else
+        servers.set(app, {
+          id: app,
+          title: row.title,
+          url: row.url,
+          rowIds: [row.id],
+        });
+    }
     return context.json({
       capabilities: CAPABILITIES.map((capability) => ({
         capability,
@@ -154,7 +183,7 @@ export function createEnterpriseAdminRoutes(
       groups,
       network,
       defaultDestinations: DEFAULT_EGRESS_DESTINATIONS,
-      mcpServers: servers,
+      mcpServers: [...servers.values()],
       builtInModel: controls.deps.builtInModel ?? null,
       scim: scimStatus(controls.deps.env ?? process.env),
       otel: { configured: otelConfigured(controls.deps.env ?? process.env) },
