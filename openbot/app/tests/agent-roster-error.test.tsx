@@ -336,6 +336,8 @@ test("a failed roster on /agents reports the failure, not an empty roster", asyn
   expect(view.queryByText("这里还没有员工。")).toBeNull();
   expect(view.queryByText("没有符合这个筛选条件的员工。")).toBeNull();
   expect(view.queryByTestId("waker-grid")).toBeNull();
+  // Nor a count of zero beside the error: an unread roster has no count.
+  expect(view.queryByTestId("waker-count")).toBeNull();
 });
 
 test("a failed roster on / reports the failure and explains the disabled composer", async () => {
@@ -382,6 +384,8 @@ test("/agents lands on a /wakers wall holding skeletons while the roster is pend
   expect(view.queryByText("没有符合这个筛选条件的员工。")).toBeNull();
   expect(view.queryByText(/^读不到员工：/)).toBeNull();
   expect(view.queryByTestId("waker-grid")).toBeNull();
+  // 「0 名员工」 would be the same premature answer as an empty state.
+  expect(view.queryByTestId("waker-count")).toBeNull();
 });
 
 /*

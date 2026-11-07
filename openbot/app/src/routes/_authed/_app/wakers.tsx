@@ -465,14 +465,17 @@ function RouteComponent() {
                     清除筛选
                   </Button>
                 ) : null}
-                <span
-                  className="ml-auto text-muted-foreground text-[13px] tabular-nums"
-                  data-testid="waker-count"
-                >
-                  {narrowed
-                    ? `${visible.length} / ${roster.length} 名员工`
-                    : `${roster.length} 名员工`}
-                </span>
+                {/* An unread roster has no count: 「0 名员工」 beside a skeleton or an error would be a wrong answer. */}
+                {agents.data ? (
+                  <span
+                    className="ml-auto text-muted-foreground text-[13px] tabular-nums"
+                    data-testid="waker-count"
+                  >
+                    {narrowed
+                      ? `${visible.length} / ${roster.length} 名员工`
+                      : `${roster.length} 名员工`}
+                  </span>
+                ) : null}
               </div>
 
               {running.isError ? (

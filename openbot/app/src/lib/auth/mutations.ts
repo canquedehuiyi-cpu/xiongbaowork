@@ -1,5 +1,6 @@
 import { mutationOptions, type QueryClient } from "@tanstack/react-query";
 import { client } from "@/lib/client";
+import { forgetSession } from "@/lib/session-memory";
 import { authKeys } from "./queries";
 
 async function signOut() {
@@ -12,6 +13,9 @@ async function signOut() {
 export function signOutMutationOptions(queryClient: QueryClient) {
   return mutationOptions({
     mutationFn: signOut,
-    onSuccess: () => queryClient.removeQueries({ queryKey: authKeys.all }),
+    onSuccess: () => {
+      forgetSession();
+      queryClient.removeQueries({ queryKey: authKeys.all });
+    },
   });
 }

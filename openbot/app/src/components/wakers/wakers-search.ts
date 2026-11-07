@@ -1,4 +1,5 @@
 import type { LinkProps } from "@tanstack/react-router";
+import { rememberForSession } from "@/lib/session-memory";
 
 /**
  * The address of the 员工管理 wall (`/wakers`): which tab, and how the employee wall is narrowed
@@ -110,6 +111,9 @@ export const isNarrowed = (search: WakersSearch, query: string): boolean =>
  * is enough, and a reload of the detail page simply falls back to the unfiltered wall.
  */
 let lastWakersSearch: WakersSearch = {};
+rememberForSession(() => {
+  lastWakersSearch = {};
+});
 
 export function rememberWakersSearch(search: WakersSearch): void {
   // A dialog open at the time is not part of the wall the back link should return to.
