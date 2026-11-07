@@ -117,7 +117,7 @@ function RouteComponent() {
            * The reference centres its action on the title and subtitle together, not on the title
            * line alone: the nudge is visual only, so the header's own layout is untouched.
            */
-          className="h-[32px] translate-y-[15px] gap-[10px] pr-[12px] pl-[13px] text-[13px]"
+          className="h-[32px] sm:translate-y-[15px] gap-[10px] pr-[12px] pl-[13px] text-[13px]"
           onClick={() => {
             if (view === "agents") {
               update({});

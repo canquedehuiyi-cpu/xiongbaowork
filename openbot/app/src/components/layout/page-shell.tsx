@@ -39,7 +39,7 @@ type ShellWidth = "prose" | "wide" | "workbench";
 const WIDTHS: Record<ShellWidth, string> = {
   prose: "mx-auto max-w-2xl px-4",
   wide: "mx-auto max-w-5xl px-4",
-  workbench: "mx-auto max-w-[1760px] px-[40px]",
+  workbench: "mx-auto max-w-[1760px] px-4 sm:px-6 lg:px-[40px]",
 };
 
 export function PageShell({
@@ -137,11 +137,17 @@ export function PageShell({
               width === "workbench" ? "gap-[5px]" : "gap-2",
             )}
           >
-            <div className="flex flex-row items-center justify-between gap-4">
+            <div
+              className={cn(
+                "flex flex-row items-center justify-between gap-4",
+                // On a phone the action drops below the title rather than squeezing it to a column.
+                width === "workbench" && "flex-wrap gap-y-3",
+              )}
+            >
               <h1
                 className={
                   width === "workbench"
-                    ? "font-semibold text-[28px] leading-[32px] tracking-tight"
+                    ? "max-w-full shrink-0 font-semibold text-[28px] leading-[32px] tracking-tight"
                     : "font-bold text-2xl"
                 }
               >

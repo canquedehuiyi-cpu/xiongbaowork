@@ -41,7 +41,7 @@ test("a workbench page sits 40px in, capped and centred on very wide screens, un
   // the sidebar; at ~2640px the 能力与资源 page is a ~1680px column centred in the main area.
   const classes = frameOf("workbench");
   expect(classes).toEqual(
-    expect.arrayContaining(["px-[40px]", "mx-auto", "max-w-[1760px]"]),
+    expect.arrayContaining(["lg:px-[40px]", "mx-auto", "max-w-[1760px]"]),
   );
   const view = render(
     <SidebarProvider>
@@ -60,4 +60,24 @@ test("the reading widths are unchanged", () => {
   expect(frameOf("wide")).toEqual(
     expect.arrayContaining(["mx-auto", "max-w-5xl"]),
   );
+});
+
+test("on a phone the frame narrows its gutter and the header action wraps below the title instead of squeezing it", () => {
+  const classes = frameOf("workbench");
+  // 16px gutters on a 320px screen; the reference's 40px from lg up.
+  expect(classes).toEqual(expect.arrayContaining(["px-4", "sm:px-6"]));
+  const view = render(
+    <SidebarProvider>
+      <PageShell
+        action={<button type="button">新建员工</button>}
+        title="员工管理"
+        width="workbench"
+      >
+        <p>正文</p>
+      </PageShell>
+    </SidebarProvider>,
+  );
+  const heading = view.getByRole("heading", { level: 1, name: "员工管理" });
+  expect(heading.className).toContain("shrink-0");
+  expect(heading.parentElement?.className).toContain("flex-wrap");
 });

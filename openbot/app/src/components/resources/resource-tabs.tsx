@@ -154,7 +154,7 @@ export function ResourceTabs({
   return (
     <div aria-label="能力与资源" className="mt-[24px]" role="tablist">
       <div
-        className="grid grid-cols-3 gap-[12px] xl:grid-cols-6"
+        className="grid grid-cols-2 gap-[12px] sm:grid-cols-3 xl:grid-cols-6"
         data-slot="resource-entry-cards"
       >
         {RESOURCE_TABS.map((tab, index) => {
