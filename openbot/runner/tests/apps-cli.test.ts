@@ -140,3 +140,43 @@ test("root flags and app flags cannot be combined", () => {
     typeof parseAppCommand(["--list-apps", "--enable-app", "a"], {}, dir),
   ).toBe("string");
 });
+
+test("--add-app - reads the app from stdin, so a key never appears on the command line", async () => {
+  const dataDir = fresh();
+  const input = JSON.stringify({
+    kind: "stdio",
+    name: "笔记",
+    command: "x",
+    args: [],
+    env: { API_KEY: "sk-secret" },
+  });
+  const argv = ["--data-dir", dataDir, "--add-app", "-"];
+  expect(argv.join(" ")).not.toContain("sk-secret");
+  const child = Bun.spawn(
+    [process.execPath, resolve(import.meta.dir, "../src/index.ts"), ...argv],
+    { stdin: new Blob([input]), stdout: "pipe", stderr: "pipe", cwd: dataDir },
+  );
+  const [stdout, code] = await Promise.all([
+    new Response(child.stdout).text(),
+    child.exited,
+  ]);
+  expect(code).toBe(0);
+  const reply = JSON.parse(stdout.trim().split("\n").pop() ?? "null");
+  expect(reply.ok).toBe(true);
+  expect(reply.app.name).toBe("笔记");
+  expect(stdout).not.toContain("sk-secret");
+  expect(createAppRegistry({ dataDir }).list()[0]).toMatchObject({
+    env: { API_KEY: "sk-secret" },
+  });
+
+  // In process too: what stdin says is checked like an argument, and a refusal is one JSON line.
+  const parsed = parseAppCommand(argv, {}, dataDir);
+  if (parsed === null || typeof parsed === "string")
+    throw new Error("not an app command");
+  const lines: string[] = [];
+  expect(
+    await runAppCommand(parsed, (line) => lines.push(line), async () => "{nope"),
+  ).toBe(2);
+  expect(JSON.parse(lines[0] ?? "null")).toMatchObject({ ok: false });
+  expect(lines[0]).toContain("JSON");
+}, 20_000);
