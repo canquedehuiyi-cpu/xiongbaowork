@@ -62,6 +62,8 @@ export type ApprovalPolicyOutcome = {
     | "sensitive_path"
     /** The team's host-command cap, applied to a command on a paired machine (SEC1 D5). */
     | "host_command_cap"
+    /** A local app's tool the device does not list as read-only (device MCP bridge §4.4). */
+    | "app_tool"
     | "auto_review"
     | "default"
     /** The person already declined this action, or an equivalent, earlier in this conversation. */
@@ -109,6 +111,12 @@ export type ApprovalSubject = {
   command?: string;
   path?: string;
   runner?: boolean;
+  /**
+   * A local app's tool on a paired machine (device MCP bridge): whether the device's own tool list,
+   * fetched by the gateway, says it is read-only and not destructive. Never from the model's
+   * arguments; absent means unknown, which is not read-only.
+   */
+  appTool?: { readOnly: boolean };
 };
 export type ApprovalCandidate = {
   actorId: string;
@@ -482,6 +490,49 @@ export function approvalPreview(args: unknown, depth = 0): unknown {
       )
       .replace(/Bearer\s+\S+/gi, "Bearer [private value]");
   return args;
+}
+
+/** How much of a local app call's arguments its card shows (device MCP bridge §4.5). */
+const APP_ARGS_PREVIEW_BYTES = 2048;
+
+/**
+ * An action's arguments as a card shows them: {@link approvalPreview}, except for a local app's
+ * call, which shows the app and tool (the gateway's own names), the tool's description from the
+ * device's list, and the tool's arguments masked by `approvalPreview` first and then as JSON cut to
+ * 2 KB. Display only: what is approved and run is the whole call, bound by the action digest.
+ */
+export function approvalArgsPreview(action: {
+  toolRef: string;
+  args: unknown;
+  target?: unknown;
+}): unknown {
+  if (action.toolRef !== "computer_app_call")
+    return approvalPreview(action.args);
+  const field = (value: unknown, key: string) =>
+    value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)[key]
+      : undefined;
+  // Masked as an object, so secrets by name are hidden before the JSON is cut.
+  const json =
+    JSON.stringify(approvalPreview(field(action.args, "args") ?? {})) ?? "{}";
+  const bytes = new TextEncoder().encode(json);
+  const shown =
+    bytes.length > APP_ARGS_PREVIEW_BYTES
+      ? `${new TextDecoder()
+          .decode(bytes.slice(0, APP_ARGS_PREVIEW_BYTES - 3))
+          .replace(/\uFFFD+$/, "")}…`
+      : json;
+  const description = field(action.target, "description");
+  return {
+    app: approvalPreview(field(action.target, "app") ?? field(action.args, "app")),
+    tool: approvalPreview(
+      field(action.target, "tool") ?? field(action.args, "tool"),
+    ),
+    ...(typeof description === "string"
+      ? { description: approvalPreview(description) }
+      : {}),
+    args: shown,
+  };
 }
 
 /** Database parent columns, not HTTP claims or an owner-derived tenant. */
