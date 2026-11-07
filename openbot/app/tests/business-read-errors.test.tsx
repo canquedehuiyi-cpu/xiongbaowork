@@ -58,7 +58,7 @@ afterEach(async () => {
   });
 });
 
-function draw(route: (typeof routes)[number], path: string) {
+function draw(route: (typeof routes)[number], path: string, entry = path) {
   const root = createRootRoute({ component: Outlet });
   const authed = createRoute({
     id: "/_authed",
@@ -75,7 +75,7 @@ function draw(route: (typeof routes)[number], path: string) {
     routeTree: root.addChildren([
       authed.addChildren([app.addChildren([wired])]),
     ]),
-    history: createMemoryHistory({ initialEntries: [path] }),
+    history: createMemoryHistory({ initialEntries: [entry] }),
   });
   return render(
     <QueryClientProvider client={queryClient}>
@@ -181,7 +181,7 @@ test("a failed template read offers retry without claiming the group has zero fl
 
 test("an autonomous read failure has an error and retry instead of a blank page", async () => {
   const api = serve(`/api/agents/${agent.id}/autonomous`);
-  const view = draw(AutonomousRoute, "/autonomous");
+  const view = draw(AutonomousRoute, "/autonomous", "/autonomous?view=agents");
   expect((await view.findByRole("alert")).textContent).toContain(
     "自主工作加载失败",
   );
@@ -196,7 +196,7 @@ test("an autonomous read failure has an error and retry instead of a blank page"
 
 test("a failed employee read on autonomous work offers retry without a false empty state", async () => {
   const api = serve("/api/agents", 500);
-  const view = draw(AutonomousRoute, "/autonomous");
+  const view = draw(AutonomousRoute, "/autonomous", "/autonomous?view=agents");
   expect((await view.findByRole("alert")).textContent).toContain(
     "员工加载失败",
   );

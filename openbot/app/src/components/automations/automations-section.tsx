@@ -46,7 +46,7 @@ function formatInstant(iso: string): string {
 }
 
 /** One Hook / API secret, shown once: after this it can only be replaced, never read again (AUT2). */
-function SecretOnce({
+export function SecretOnce({
   triggerId,
   secret,
   onDismiss,
@@ -116,7 +116,7 @@ function TriggerChip({
   );
 }
 
-function AutomationRow({
+export function AutomationRow({
   automation,
   agentName,
 }: {

@@ -68,8 +68,11 @@ function toConfig(draft: TriggerDraft): AutomationTriggerConfig {
  */
 export function AutomationForm({
   onCreated,
+  initialTriggerKind = "schedule",
 }: {
   onCreated: (created: CreatedAutomation) => void;
+  /** The first trigger's kind, when the form is opened for one (自主工作's 定时 / API). */
+  initialTriggerKind?: AutomationTriggerConfig["kind"];
 }) {
   const queryClient = useQueryClient();
   const create = useMutation(createAutomationMutationOptions(queryClient));
@@ -92,7 +95,13 @@ export function AutomationForm({
   const [showInputProblems, setShowInputProblems] = useState(false);
   const [nextKey, setNextKey] = useState(1);
   const [triggers, setTriggers] = useState<TriggerDraft[]>([
-    { key: 0, kind: "schedule", cron: "", timezone: localZone(), at: "" },
+    {
+      key: 0,
+      kind: initialTriggerKind,
+      cron: "",
+      timezone: localZone(),
+      at: "",
+    },
   ]);
   const [maxRuns, setMaxRuns] = useState("");
   const [endDate, setEndDate] = useState("");
