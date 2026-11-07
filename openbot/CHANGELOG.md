@@ -8,6 +8,22 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+- **The workbench pages are laid out like the reference product.** The sidebar is 240px. It opens on
+  five entries: 任务看板, @Waker, 自主工作, Waker 管理 and 能力与资源. Every other route it used to list
+  is under 更多. Conversations are split into 员工 and 群组 tabs. The primary action is green in both
+  themes.
+- **Page layout:** the five pages use full width, and their filters and tabs live in the URL, so
+  refresh, Back and shared links keep them.
+- **What changed on each page:**
+  - /reachability is now titled @Waker. Linking a conversation opens in a dialog from 接入 IM 聊天.
+  - /autonomous opens on one list of all automations. The per-employee view is at `?view=agents`.
+  - /wakers has 唤醒者 and 群组 tabs (`?tab=groups`), plus search and status, role, environment and
+    sort filters.
+  - /resources has nine tabs (`?tab=plugins|skills|…|models`). Links to the model library now land on
+    `?tab=models`.
+- **No server or data changes.** Entries without a backend contract, such as 自动接入 and 接入申请, are
+  shown disabled with an explanation.
+
 ## 0.2.1
 
 - **Approved actions now run, exactly once.** Before, an action a person approved (a dangerous
