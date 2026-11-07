@@ -75,7 +75,11 @@ bun tests/parity/capture.ts \
 <out>/reference/<theme>/<WxH>/<route-slug>.png
 ```
 
-例如 `<out>/reference/dark/1440x900/tasks.png`。`route-slug` 与本地截图文件名一致（`/tasks` → `tasks`，`/wakers/agent-analyst` → `wakers-agent-analyst`，小组页签 → `wakers-groups`）。参考图请使用相同视口、设备像素比 1、仅视口范围（不是整页长图）。
+例如 `<out>/reference/dark/1440x900/tasks.png`。`route-slug` 与本地截图文件名一致（`/tasks` → `tasks`，`/wakers/agent-analyst` → `wakers-agent-analyst`，群组页签 `/wakers?tab=groups` → `wakers-groups`）。参考图请使用相同视口、设备像素比 1、仅视口范围（不是整页长图）。
+
+同一页面的测量：在参考站开发者工具控制台粘贴运行 `reference-measure.js` 的全部内容，它把与我方 `.json` 同结构的锚点盒模型、字号、颜色复制到剪贴板，另存为同路径的 `<route-slug>.json`。分享前检查 `text` 字段，去掉账号名、机器名等标识。
+
+参考路径与我方路径对照：`/work-management` → `tasks`，`/at-waker` → `reachability`，`/autonomous-work` → `autonomous`，`/management` → `wakers`，`/management?tab=groups` → `wakers-groups`，`/resources/plugins` → `resources`。
 
 ## 4. 对比
 
