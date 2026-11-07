@@ -100,6 +100,13 @@ test("a device with apps shows 本机应用：Excel、Blender, and one without s
   expect(view.queryAllByText(/本机应用：/)).toHaveLength(1);
 });
 
+test("a device with an empty apps list shows no 本机应用 line", async () => {
+  const { view } = draw([{ ...studio, apps: [] }]);
+
+  expect(await view.findByText("Studio desktop")).toBeTruthy();
+  expect(view.queryAllByText(/本机应用/)).toHaveLength(0);
+});
+
 test("pairing mints a code and shows the desktop app's two fields, with the command as a fallback", async () => {
   const { view } = draw([]);
 
