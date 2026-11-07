@@ -18,13 +18,19 @@
  * The refs are opaque to the caller precisely so that the server holds the mapping.
  */
 
-import { type ApprovalGate, currentApprovalContext } from "../approvals/types";
+import {
+  type ApprovalCandidate,
+  type ApprovalGate,
+  ApprovalRefusedError,
+  currentApprovalContext,
+} from "../approvals/types";
 import {
   type AuditInitiator,
   type AuditStore,
   recordAuditEvent,
 } from "../audit";
 import { isRunnerAddress, runnerAddress } from "../devices/channel";
+import { DeviceDeliveryError } from "../devices/queue";
 import type { ProjectRoot } from "../projects/context";
 import {
   DEVICE_HUMAN_HAS_CONTROL,
@@ -107,6 +113,8 @@ import {
 export const DEVICE_TAKEOVER_RULE = "device.takeover";
 /** The rule a refusal names when a coworker's current project cannot be used (story RES2, D9). */
 export const PROJECT_UNAVAILABLE_RULE = "project.unavailable";
+/** The rule a refusal names for a local app or app tool the device does not have (MCP bridge §5). */
+export const APP_UNAVAILABLE_RULE = "app.unavailable";
 const READ_ONLY_PROJECT =
   "当前项目是只读的：可以列出和读取文件，不能写文件或运行命令。如需修改，请让项目的主人把项目设为可写。";
 
@@ -131,6 +139,37 @@ export type ActionActor = {
   initiator?: AuditInitiator;
 };
 
+/**
+ * One tool of a local app, as the device's own `apps.tools` listed it (device MCP bridge §3.4). The
+ * annotations are the app's own hints; only this list, never the model's arguments, decides whether
+ * a call may run without asking.
+ */
+export type AppTool = {
+  name: string;
+  description?: string;
+  inputSchema?: unknown;
+  annotations?: {
+    readOnlyHint?: boolean;
+    destructiveHint?: boolean;
+    [key: string]: unknown;
+  };
+};
+
+/** What `computer_apps` answers: each app by name, with its tools or why they could not be listed. */
+export type ListAppsResult = {
+  apps: { name: string; tools?: AppTool[]; error?: string }[];
+};
+
+/** What a local app's tool answered, or that the call waits for a machine that is away. */
+export type AppCallResult =
+  | {
+      content: { type: "text"; text: string }[];
+      structuredContent?: unknown;
+      isError: boolean;
+      truncated: boolean;
+    }
+  | { queued: true; key: string };
+
 export type ComputerGatewayOptions = {
   /**
    * How an allowed action reaches the computer. Absent means HTTP to the located address, which is
@@ -149,6 +188,15 @@ export type ComputerGatewayOptions = {
   resolveDevice?: (
     botId: string,
   ) => Promise<{ tenantId: string; deviceId: string } | null>;
+  /**
+   * The local apps a machine reported on its heartbeat, `{ref, name}` and nothing else (device MCP
+   * bridge §3.4). Asked for the machine `resolveDevice` answered; absent means no Bot here can use a
+   * local app, and both app tools refuse.
+   */
+  deviceApps?: (machine: {
+    tenantId: string;
+    deviceId: string;
+  }) => Promise<{ ref: string; name: string }[]>;
   /**
    * The person's read-only folders on their own machines (story F1, stage 2).
    *
@@ -190,6 +238,13 @@ export type ComputerGatewayOptions = {
    */
   deviceTakeovers?: DeviceTakeovers;
   approvalGate?: ApprovalGate;
+  /**
+   * Why the gate would refuse an action outright, whatever its effect turns out to be (a disabled
+   * tool, the team's host-command cap of `never`): asked before a local app's tool list is fetched,
+   * because fetching it starts the app on the person's machine. Absent: nothing is asked early, and
+   * the gate still decides in full.
+   */
+  approvalRefusal?: (candidate: ApprovalCandidate) => Promise<string | undefined>;
   provider: ComputerProvider;
   auditStore: AuditStore;
   /** Absent denies everything. See evaluateActionPolicy. */
@@ -284,6 +339,20 @@ export interface ComputerGateway {
     actor: ActionActor,
     input: WriteFileInput,
   ): Promise<WriteFileResult>;
+  /** The local apps on the owner's paired machine, and each one's tools (device MCP bridge §3.4). */
+  listApps(
+    botId: string,
+    actor: ActionActor,
+    input: { app?: string },
+    signal?: AbortSignal,
+  ): Promise<ListAppsResult>;
+  /** One tool of a local app on the owner's paired machine, governed like a command. */
+  callApp(
+    botId: string,
+    actor: ActionActor,
+    input: { app: string; tool: string; args?: Record<string, unknown> },
+    signal?: AbortSignal,
+  ): Promise<AppCallResult>;
   control(botId: string, requestId?: string): Promise<ControlState>;
   requestHelp(
     botId: string,
@@ -653,6 +722,25 @@ export function createComputerGateway(
        * project that cannot be used, story RES2 D9). Recorded as a refusal; nothing is sent.
        */
       refusal?: string;
+      /** The rule that refusal names. Absent: the project rule. */
+      refusalRule?: string;
+      /**
+       * A local app's tool this call is about (device MCP bridge §3.4): the app's name and the tool.
+       * Whether the device's own list marks it read-only and not destructive comes from `resolveApp`,
+       * never from the model's arguments; unknown means not read-only.
+       */
+      app?: {
+        name: string;
+        tool: string;
+        readOnly?: boolean;
+        description?: string;
+      };
+      /**
+       * How to learn the rest of `app` from the machine (its tool list), asked only once the action
+       * has got past a takeover, a refusal, the deployment's policy and an outright refusal by the
+       * gate, and before the gate decides. May refuse (a tool the list does not have).
+       */
+      resolveApp?: () => Promise<{ readOnly: boolean; description?: string }>;
     },
     run: (address?: string) => Promise<T>,
   ): Promise<T> {
@@ -686,6 +774,10 @@ export function createComputerGateway(
     const pageUrl = subject.targetUrl ?? stored?.url ?? "";
 
     const intent = intentOf(toolName, subject.key);
+    // Which app and tool, on every row this action writes; never the arguments.
+    const appRow = subject.app
+      ? { app: { name: subject.app.name, tool: subject.app.tool } }
+      : {};
 
     /*
      * Every field is bound, present or not.
@@ -801,15 +893,19 @@ export function createComputerGateway(
         decision: {
           allowed: false,
           mode: decision.mode,
-          matched: PROJECT_UNAVAILABLE_RULE,
+          matched: subject.refusalRule ?? PROJECT_UNAVAILABLE_RULE,
           source: "deny",
           forward: false,
           reason: subject.refusal,
         },
         refusal: subject.refusal,
         device: target && target !== "unknown" ? target.deviceId : null,
+        ...appRow,
       });
-      throw new ActionRefusedError(subject.refusal, PROJECT_UNAVAILABLE_RULE);
+      throw new ActionRefusedError(
+        subject.refusal,
+        subject.refusalRule ?? PROJECT_UNAVAILABLE_RULE,
+      );
     }
     await write(auditStore, {
       toolName,
@@ -831,6 +927,7 @@ export function createComputerGateway(
        * machine is already in the outcome of the action itself.
        */
       device: target && target !== "unknown" ? target.deviceId : null,
+      ...appRow,
     });
     if (!decision.forward) {
       throw new ActionRefusedError(decision.reason, decision.matched);
@@ -872,31 +969,70 @@ export function createComputerGateway(
         );
       }
       const continuation = currentApprovalContext();
+      /*
+       * A local app's tool list is fetched here and no earlier: fetching it starts the app on the
+       * person's machine, so a call already refused (a takeover, the policy above, a disabled tool or
+       * the team's cap of `never`) must not get as far as starting it.
+       */
+      let app = subject.app;
+      if (app && subject.resolveApp) {
+        const refused = await options.approvalRefusal?.({
+          actorId: actor.id,
+          botId,
+          toolRef: toolName,
+          effect: "write",
+          scope: `${app.name}/${app.tool}`,
+          args: continuation?.args ?? {},
+          subject: { runner: target !== null },
+          ...(continuation ? { continuation } : {}),
+        });
+        if (refused) throw new ApprovalRefusedError(refused);
+        app = { ...app, ...(await subject.resolveApp()) };
+      }
       const approval = await options.approvalGate?.({
         actorId: actor.id,
         botId,
         toolRef: toolName,
-        effect: ["activate", "type", "write_file", "run_command"].includes(
-          intent ?? "",
-        )
-          ? "write"
-          : "read",
-        scope: filePath
-          ? filePath.split("/").slice(0, -1).join("/") || "workspace"
-          : subject.command
-            ? "workspace"
-            : hostOf(pageUrl) || "browser",
+        effect: app
+          ? app.readOnly === true
+            ? "read"
+            : "write"
+          : ["activate", "type", "write_file", "run_command"].includes(
+                intent ?? "",
+              )
+            ? "write"
+            : "read",
+        /*
+         * A local app's tool is its own target, so a rule or an "always allow" names one tool of one
+         * app rather than every tool the app has.
+         */
+        scope: app
+          ? `${app.name}/${app.tool}`
+          : filePath
+            ? filePath.split("/").slice(0, -1).join("/") || "workspace"
+            : subject.command
+              ? "workspace"
+              : hostOf(pageUrl) || "browser",
         args: continuation?.args ?? {
           ...subject,
           signal: undefined,
           device: undefined,
           refusal: undefined,
+          refusalRule: undefined,
+          app: undefined,
+          resolveApp: undefined,
         },
-        target: {
-          pageUrl,
-          ...(element ? { element, snapshotId } : {}),
-          ...(filePath ? { filePath } : {}),
-        },
+        target: app
+          ? {
+              app: app.name,
+              tool: app.tool,
+              ...(app.description ? { description: app.description } : {}),
+            }
+          : {
+              pageUrl,
+              ...(element ? { element, snapshotId } : {}),
+              ...(filePath ? { filePath } : {}),
+            },
         /*
          * What this call will actually run and touch, from this call site rather than from the
          * model's arguments, for the gate's dangerous-command and sensitive-path floors and the
@@ -906,6 +1042,8 @@ export function createComputerGateway(
           ...(subject.command !== undefined ? { command: subject.command } : {}),
           ...(filePath !== undefined ? { path: filePath } : {}),
           runner: target !== null,
+          // The device-list verdict for a local app's tool, for the app-tool floor (§4.4).
+          ...(app ? { appTool: { readOnly: app.readOnly === true } } : {}),
         },
         continuation,
       });
@@ -961,6 +1099,7 @@ export function createComputerGateway(
         pageUrl,
         decision,
         failure: error instanceof Error ? error.message : "The action failed.",
+        ...appRow,
         // A person pressing Stop mid-action is not the computer failing. The message still says so;
         // this keeps the row's type a stop, so a count of failed actions does not read every Stop as
         // an outage.
@@ -1113,6 +1252,81 @@ export function createComputerGateway(
         );
       },
     );
+  }
+
+  /**
+   * The device's own tool lists, per tenant, machine and app (`tenant/device/ref`), kept five minutes
+   * (device MCP bridge §3.4). This is what the approval decision reads; a list that is not here and
+   * cannot be fetched counts as "not read-only".
+   */
+  const appTools = new Map<string, { tools: AppTool[]; at: number }>();
+
+  /** The machine this Bot's local apps are on, and the apps it reported. Refuses a Bot with none. */
+  async function appsOf(botId: string) {
+    if (!options.resolveDevice || !options.deviceApps) {
+      throw new ComputerUnavailableError(NO_LOCAL_APPS);
+    }
+    const machine = await options.resolveDevice(botId);
+    if (!machine) throw new ComputerUnavailableError(NO_LOCAL_APPS);
+    return { machine, apps: await options.deviceApps(machine) };
+  }
+
+  /**
+   * One app's tools, asked of the machine itself. Only while the machine is connected: the runner
+   * transport sends a listing straight to the socket, never through the queue. An answer that is not
+   * a list (a queued receipt, anything malformed) is "no list": thrown, and never cached.
+   */
+  async function fetchAppTools(
+    machine: { tenantId: string; deviceId: string },
+    botId: string,
+    ref: string,
+    signal?: AbortSignal,
+  ): Promise<AppTool[]> {
+    const output = await transport.post<unknown>(
+      runnerAddress(machine),
+      botId,
+      "/apps/tools",
+      { app: ref },
+      signal,
+      APP_LIST_BACKSTOP_MS,
+    );
+    const listed =
+      output && typeof output === "object" && !("queued" in output)
+        ? (output as { tools?: unknown }).tools
+        : undefined;
+    if (!Array.isArray(listed))
+      throw new ComputerUnavailableError(
+        "设备没有返回这个本机应用的工具列表。",
+      );
+    const tools = readAppTools(listed);
+    const key = `${machine.tenantId}/${machine.deviceId}/${ref}`;
+    appTools.delete(key);
+    appTools.set(key, { tools, at: Date.now() });
+    // Insertion order is age order: the oldest entries go first once there are too many.
+    for (const old of appTools.keys()) {
+      if (appTools.size <= APP_TOOLS_CACHE_LIMIT) break;
+      appTools.delete(old);
+    }
+    return tools;
+  }
+
+  /** The cached list when it is fresh, otherwise a fresh one; undefined when it cannot be had. */
+  async function appToolsFor(
+    machine: { tenantId: string; deviceId: string },
+    botId: string,
+    ref: string,
+    signal?: AbortSignal,
+  ): Promise<AppTool[] | undefined> {
+    const cached = appTools.get(`${machine.tenantId}/${machine.deviceId}/${ref}`);
+    if (cached && Date.now() - cached.at < APP_TOOLS_TTL_MS) return cached.tools;
+    try {
+      return await fetchAppTools(machine, botId, ref, signal);
+    } catch (error) {
+      // The person's Stop is a stop, and a paused device is paused: neither is a missing list to ask
+      // about, and the model is told which it was.
+      if (signal?.aborted || error instanceof DeviceDeliveryError) throw error;
+      return undefined;
+    }
   }
 
   return {
@@ -1709,7 +1923,179 @@ export function createComputerGateway(
         () => post<WriteFileResult>(botId, "/files/write", input),
       );
     },
+
+    /**
+     * The owner's local apps on their paired machine, by name, each with the tools its machine lists
+     * now (device MCP bridge §3.4). A read: governed and recorded, never asked about. An app whose
+     * tools cannot be listed says why in its own entry and does not fail the others.
+     */
+    async listApps(
+      botId: string,
+      actor: ActionActor,
+      input: { app?: string },
+      signal?: AbortSignal,
+    ) {
+      const { machine, apps } = await appsOf(botId);
+      const named =
+        input.app === undefined ? undefined : findApp(apps, input.app);
+      const refusal =
+        input.app !== undefined && !named
+          ? noSuchApp(input.app, apps)
+          : undefined;
+      const result = await govern(
+        "computer_apps",
+        botId,
+        actor,
+        {
+          device: machine,
+          ...(signal ? { signal } : {}),
+          ...(refusal ? { refusal, refusalRule: APP_UNAVAILABLE_RULE } : {}),
+        },
+        async (): Promise<ListAppsResult> => {
+          const listed: ListAppsResult["apps"] = [];
+          for (const app of named ? [named] : apps) {
+            try {
+              listed.push({
+                name: app.name,
+                tools: await fetchAppTools(machine, botId, app.ref, signal),
+              });
+            } catch (error) {
+              listed.push({
+                name: app.name,
+                error:
+                  error instanceof Error ? error.message : "没有取到工具列表。",
+              });
+            }
+          }
+          return { apps: listed };
+        },
+      );
+      // Tool names and descriptions are whatever the app says they are.
+      return withUntrustedNotice(result, "local app", ["apps"]);
+    },
+
+    /**
+     * One tool of a local app, judged before it runs (device MCP bridge §3.4, §4).
+     *
+     * The app is found by name among the apps the machine reported, so the frame carries a reference
+     * this server holds, never one the model wrote. The tool is looked up in the machine's own list,
+     * fresh or at most five minutes old, inside `govern` once nothing has refused the call yet: a
+     * tool the list does not have is refused and nothing is sent; a list that cannot be had is "not
+     * read-only". Only that list says whether the call may run without asking. The app's answer is
+     * outside content and comes back marked as such.
+     */
+    async callApp(
+      botId: string,
+      actor: ActionActor,
+      input: { app: string; tool: string; args?: Record<string, unknown> },
+      signal?: AbortSignal,
+    ) {
+      const { machine, apps } = await appsOf(botId);
+      const app = findApp(apps, input.app);
+      const refusal = app ? undefined : noSuchApp(input.app, apps);
+      const resolveApp = async (known: { ref: string; name: string }) => {
+        const tools = await appToolsFor(machine, botId, known.ref, signal);
+        const tool = tools?.find((candidate) => candidate.name === input.tool);
+        if (tools && !tool)
+          throw new ActionRefusedError(
+            `「${known.name}」没有名为「${input.tool}」的工具（已有：${tools.map((candidate) => candidate.name).join("、") || "无"}）`,
+            APP_UNAVAILABLE_RULE,
+          );
+        return {
+          readOnly:
+            tool?.annotations?.readOnlyHint === true &&
+            tool.annotations.destructiveHint !== true,
+          ...(tool?.description ? { description: tool.description } : {}),
+        };
+      };
+      const result = await govern<AppCallResult>(
+        "computer_app_call",
+        botId,
+        actor,
+        {
+          device: machine,
+          app: { name: app?.name ?? input.app, tool: input.tool },
+          ...(app ? { resolveApp: () => resolveApp(app) } : {}),
+          ...(signal ? { signal } : {}),
+          ...(refusal ? { refusal, refusalRule: APP_UNAVAILABLE_RULE } : {}),
+        },
+        () =>
+          post<AppCallResult>(
+            botId,
+            "/apps/call",
+            { app: app?.ref, tool: input.tool, args: input.args ?? {} },
+            signal,
+            APP_CALL_BACKSTOP_MS,
+            runnerAddress(machine),
+          ),
+      );
+      return "queued" in result
+        ? result
+        : withUntrustedNotice(result, "local app", [
+            "content",
+            "structuredContent",
+          ]);
+    },
   };
+}
+
+/** Why a Bot has no local apps to use: not device mode, or no owner's machine to use them on. */
+const NO_LOCAL_APPS =
+  "本机应用只能在员工主人自己配对的电脑上使用，这个员工现在用不了。";
+/** The device's tool lists are trusted for this long (device MCP bridge §3.4). */
+const APP_TOOLS_TTL_MS = 300_000;
+const APP_TOOLS_CACHE_LIMIT = 1000;
+/* Backstops that outlast the runner's own deadlines: start 20s + list 20s, start 20s + call 120s. */
+const APP_LIST_BACKSTOP_MS = 45_000;
+const APP_CALL_BACKSTOP_MS = 150_000;
+
+/** At most `limit` bytes of UTF-8, never ending in half a character. */
+function cutUtf8(text: string, limit: number): string {
+  const bytes = new TextEncoder().encode(text);
+  return bytes.length <= limit
+    ? text
+    : new TextDecoder().decode(bytes.slice(0, limit)).replace(/\uFFFD+$/, "");
+}
+
+/** An app by the name the model used, without regard to case or surrounding spaces. */
+function findApp(
+  apps: { ref: string; name: string }[],
+  name: string,
+): { ref: string; name: string } | undefined {
+  const wanted = name.trim().toLowerCase();
+  return apps.find((app) => app.name.trim().toLowerCase() === wanted);
+}
+
+function noSuchApp(name: string, apps: { name: string }[]): string {
+  return `这台电脑上没有名为「${name}」的本机应用（已有：${apps.map((app) => app.name).join("、") || "无"}）`;
+}
+
+/**
+ * A machine's tool list, kept to the shape this server reads. Untrusted input: an entry without a
+ * name, or with one over 128 characters, is dropped, a description is cut to 1 KB of UTF-8, and
+ * annotations are kept only as an object.
+ */
+function readAppTools(value: unknown[]): AppTool[] {
+  return value.flatMap((entry): AppTool[] => {
+    if (!entry || typeof entry !== "object") return [];
+    const { name, description, inputSchema, annotations } = entry as Record<
+      string,
+      unknown
+    >;
+    if (typeof name !== "string" || !name || name.length > 128) return [];
+    return [
+      {
+        name,
+        ...(typeof description === "string"
+          ? { description: cutUtf8(description, 1024) }
+          : {}),
+        ...(inputSchema !== undefined ? { inputSchema } : {}),
+        ...(annotations && typeof annotations === "object" && !Array.isArray(annotations)
+          ? { annotations: annotations as AppTool["annotations"] }
+          : {}),
+      },
+    ];
+  });
 }
 
 /**
@@ -1793,6 +2179,11 @@ export function intentOf(
       return "run_command";
     case "computer_list_files":
       return "list_files";
+    // Listing a machine's local apps changes nothing; calling one of their tools runs a program there.
+    case "computer_apps":
+      return "read";
+    case "computer_app_call":
+      return "app_call";
     default:
       return undefined;
   }
@@ -1821,6 +2212,8 @@ async function write(
     stopped?: boolean;
     /** Why the action could not be carried out at all, said in the row (story RES2, D9). */
     refusal?: string;
+    /** The local app and tool a `computer_app_call` named; never its arguments. */
+    app?: { name: string; tool: string };
   },
 ) {
   await recordAuditEvent(auditStore, {
@@ -1889,6 +2282,7 @@ async function write(
           : undefined,
       ...(entry.failure ? { failure: entry.failure } : {}),
       ...(entry.refusal ? { refusal: entry.refusal } : {}),
+      ...(entry.app ? { app: entry.app } : {}),
       decision: {
         allowed: entry.decision.allowed,
         mode: entry.decision.mode,

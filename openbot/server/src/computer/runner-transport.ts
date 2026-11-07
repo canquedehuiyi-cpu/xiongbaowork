@@ -64,7 +64,11 @@ export function createRunnerTransport(
           ? "files.read"
           : bare === "files/write"
             ? "files.write"
-            : bare;
+            : bare === "apps/tools"
+              ? "apps.tools"
+              : bare === "apps/call"
+                ? "apps.call"
+                : bare;
   };
 
   /**
@@ -111,6 +115,22 @@ export function createRunnerTransport(
     idempotencyKey?: string,
     caller?: AbortSignal,
   ): Promise<T> {
+    /*
+     * A local app's tool list decides whether a call asks first, so it has to be the machine's answer
+     * now, and it changes nothing: sent straight to the connected machine, never parked in the queue
+     * and never given a receipt, so a lost answer cannot pause the device (device MCP bridge §3.4).
+     */
+    if (action === "apps.tools") {
+      return channel.dispatch<T>(
+        target,
+        action,
+        payload,
+        timeoutMs,
+        idempotencyKey,
+        caller,
+        { durable: false },
+      );
+    }
     if (!BROWSER_ACTIONS.has(action)) {
       return channel.dispatch<T>(
         target,
