@@ -12,10 +12,13 @@ import {
  *
  * LAZY, REUSED, IDLE-CLOSED. Nothing is started until an app is first asked for; one connection per
  * app is then reused, and closed after `idleMs` (10 minutes) without use. The next use reconnects.
- * `closeAll()` is for the runner's exit.
+ * `closeAll()` is for the runner's exit: it closes everything, refuses any
+ * operation still queued or connecting (a connection that lands afterwards is closed at once), and
+ * waits briefly for those to settle.
  *
  * ONE THING AT A TIME PER APP. Every operation on an app (connecting, listing, calling) goes through
- * that app's promise chain, so two calls never overlap and an app never sees two requests at once.
+ * that app's promise chain, so two calls never overlap. (After a call times out the app may still be
+ * working on it; the next request is only sent once the host has given up on the old one.)
  * Different apps run side by side.
  *
  * THE REGISTRY IS READ ON EVERY OPERATION. An app the owner disabled or removed stops working at its
@@ -31,6 +34,8 @@ import {
  */
 
 export const IDLE_MS = 600_000;
+/** How long closeAll waits for operations still running before it gives up on them. */
+const CLOSE_WAIT_MS = 3000;
 export const DESCRIPTION_LIMIT_BYTES = 1024;
 
 const DEFAULT_TIMEOUTS = { initMs: 20_000, listMs: 20_000, callMs: 120_000 };
@@ -81,6 +86,7 @@ type State = {
   idle?: ReturnType<typeof setTimeout>;
 };
 
+const CLOSED = "本机应用服务正在关闭，这次调用没有执行。";
 const UNAVAILABLE = "这台电脑上没有这个本机应用，或它已停用。";
 
 /** At most `limit` bytes of UTF-8, never ending inside a character. */
@@ -94,6 +100,12 @@ function cutBytes(text: string, limit: number): string {
     out += char;
   }
   return out;
+}
+
+function abortError(): Error {
+  const error = new Error("The call was aborted.");
+  error.name = "AbortError";
+  return error;
 }
 
 function isAbort(error: unknown): boolean {
@@ -121,6 +133,8 @@ export function createAppHost(
   const timeouts = { ...DEFAULT_TIMEOUTS, ...opts?.timeouts };
   const connect: typeof connectApp = opts?.connect ?? connectApp;
   const states = new Map<string, State>();
+  // Set by closeAll: from then on nothing may open, or keep, a connection.
+  let closed = false;
 
   const stateOf = (ref: string): State => {
     let state = states.get(ref);
@@ -221,6 +235,7 @@ export function createAppHost(
   function run<T>(
     ref: string,
     phase: AppHostPhase,
+    signal: AbortSignal | undefined,
     work: (conn: McpConnection, entry: AppEntry, state: State) => Promise<T>,
   ): Promise<T> {
     const state = stateOf(ref);
@@ -229,6 +244,8 @@ export function createAppHost(
       if (state.idle) clearTimeout(state.idle);
       state.idle = undefined;
       try {
+        if (closed) throw new AppHostError("failed", phase, CLOSED);
+        if (signal?.aborted) throw abortError();
         const entry = registry.byRef(ref);
         if (!entry?.enabled) {
           await drop(state);
@@ -242,11 +259,18 @@ export function createAppHost(
           await drop(state);
         }
         if (!state.conn) {
+          let fresh: McpConnection;
           try {
-            state.conn = await connect(entry, { timeouts });
+            fresh = await connect(entry, { timeouts });
           } catch (error) {
             throw wrap(entry, "connect", error);
           }
+          if (closed) {
+            // closeAll ran while this was connecting: do not let the new connection outlive it.
+            await fresh.close().catch(() => {});
+            throw new AppHostError("failed", "connect", CLOSED);
+          }
+          state.conn = fresh;
           state.entry = entry;
         }
         const conn = state.conn;
@@ -285,10 +309,12 @@ export function createAppHost(
 
   return {
     tools: (ref, signal) =>
-      run(ref, "list", (conn, _entry, state) => list(conn, state, signal)),
+      run(ref, "list", signal, (conn, _entry, state) =>
+        list(conn, state, signal),
+      ),
 
     call: (ref, tool, args, signal) =>
-      run(ref, "list", async (conn, entry, state) => {
+      run(ref, "list", signal, async (conn, entry, state) => {
         const tools = state.tools ?? (await list(conn, state, signal));
         if (!tools.some((known) => known.name === tool)) {
           const names = tools.map((known) => known.name).join("、");
@@ -307,8 +333,19 @@ export function createAppHost(
       }),
 
     async closeAll() {
+      closed = true;
       const all = [...states.values()];
       await Promise.all(all.map((state) => drop(state)));
+      // Let in-flight and queued operations finish refusing (a pending connect closes its new
+      // connection as it lands), but never wait on one that hangs.
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      await Promise.race([
+        Promise.all(all.map((state) => state.chain)),
+        new Promise((resolve) => {
+          timer = setTimeout(resolve, CLOSE_WAIT_MS);
+        }),
+      ]);
+      clearTimeout(timer);
     },
   };
 }

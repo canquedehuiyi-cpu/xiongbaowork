@@ -151,6 +151,7 @@ test("a dead connection (closed) is replaced on the next call", async () => {
   if (conns[0]) conns[0].dead = true;
   await host.call(entry.ref, "draw", {});
   expect(conns.length).toBe(2);
+  expect(conns[0]?.closeCount).toBe(1);
   await host.closeAll();
 });
 
@@ -223,13 +224,13 @@ test("an edited entry drops the old connection", async () => {
 });
 
 test("errors are worded in Chinese and keep the original as cause", async () => {
-  const failing = (error: unknown, entryName = "画图") => {
+  const failing = (error: unknown) => {
     const { host, entry } = setup({
       connect: async () => {
         throw error;
       },
     });
-    return { host, entry, name: entryName };
+    return { host, entry };
   };
   const start = new McpAppError("start", "x", "boom");
   const a = failing(start);
@@ -286,4 +287,173 @@ test("a timeout during a call names the seconds, is phase call, and an abort pas
     .catch((e) => e);
   expect(aborted).toBe(abort);
   await second.host.closeAll();
+});
+
+/* Concurrency regressions. */
+
+type FakeConn = McpConnection & { dead: boolean; closeCount: number };
+
+function fakeConn(over: Partial<McpConnection> = {}): FakeConn {
+  const conn: FakeConn = {
+    dead: false,
+    closeCount: 0,
+    get closed(): boolean {
+      return conn.dead;
+    },
+    listTools: async () => [{ name: "draw" }],
+    callTool: async () => ok("x"),
+    close: async () => {
+      conn.dead = true;
+      conn.closeCount += 1;
+    },
+    ...over,
+  };
+  return conn;
+}
+
+function deferred<T = void>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((r) => {
+    resolve = r;
+  });
+  return { promise, resolve };
+}
+
+test("a failed call and an aborted call do not break the chain", async () => {
+  let n = 0;
+  const { host, entry } = setup({
+    call: async () => {
+      n += 1;
+      if (n === 1) throw new McpAppError("protocol", "bad");
+      if (n === 2) {
+        const e = new Error("a");
+        e.name = "AbortError";
+        throw e;
+      }
+      return ok("fine");
+    },
+  });
+  await expect(host.call(entry.ref, "draw", {})).rejects.toBeInstanceOf(
+    AppHostError,
+  );
+  await expect(host.call(entry.ref, "draw", {})).rejects.toHaveProperty(
+    "name",
+    "AbortError",
+  );
+  expect((await host.call(entry.ref, "draw", {})).content[0]?.text).toBe(
+    "fine",
+  );
+  await host.closeAll();
+});
+
+test("an already-aborted call does not connect", async () => {
+  const { host, entry, conns } = setup();
+  const controller = new AbortController();
+  controller.abort();
+  await expect(
+    host.call(entry.ref, "draw", {}, controller.signal),
+  ).rejects.toHaveProperty("name", "AbortError");
+  expect(conns.length).toBe(0);
+});
+
+test("two different apps run concurrently", async () => {
+  const { host, entry, registry } = setup({
+    call: async () => {
+      running += 1;
+      max = Math.max(max, running);
+      await sleep(40);
+      running -= 1;
+      return ok("x");
+    },
+  });
+  let running = 0;
+  let max = 0;
+  const other = registry.add({
+    name: "表格",
+    kind: "http",
+    url: "http://127.0.0.1:9/mcp",
+  });
+  await Promise.all([
+    host.call(entry.ref, "draw", {}),
+    host.call(other.ref, "draw", {}),
+  ]);
+  expect(max).toBe(2);
+  await host.closeAll();
+});
+
+test("concurrent first use opens exactly one connection", async () => {
+  const { host, entry, conns } = setup();
+  await Promise.all([
+    host.tools(entry.ref),
+    host.call(entry.ref, "draw", {}),
+    host.call(entry.ref, "erase", {}),
+  ]);
+  expect(conns.length).toBe(1);
+  await host.closeAll();
+});
+
+test("a call longer than idleMs is not closed mid-call", async () => {
+  const { host, entry, conns } = setup({
+    idleMs: 20,
+    call: async () => {
+      await sleep(100);
+      return ok("long");
+    },
+  });
+  const outcome = await host.call(entry.ref, "draw", {});
+  expect(outcome.content[0]?.text).toBe("long");
+  expect(conns[0]?.closeCount).toBe(0);
+  await host.closeAll();
+});
+
+test("closeAll while a connect is pending leaves no live connection and rejects the ops", async () => {
+  const gate = deferred();
+  const made: FakeConn[] = [];
+  const { host, entry } = setup({
+    connect: async () => {
+      await gate.promise;
+      const conn = fakeConn();
+      made.push(conn);
+      return conn;
+    },
+  });
+  const first = host.tools(entry.ref).catch((e) => e);
+  const queued = host.call(entry.ref, "draw", {}).catch((e) => e);
+  await sleep(10);
+  const closing = host.closeAll();
+  gate.resolve();
+  await closing;
+  expect((await first).kind).toBe("failed");
+  expect((await queued).kind).toBe("failed");
+  expect(made.length).toBe(1);
+  expect(made[0]?.dead).toBe(true);
+  await sleep(30);
+  expect(made.length).toBe(1);
+});
+
+test("closeAll while a call is in flight and one is queued: the queued one does not reconnect", async () => {
+  const gate = deferred();
+  const made: FakeConn[] = [];
+  const { host, entry } = setup({
+    connect: async () => {
+      const conn = fakeConn({
+        callTool: async () => {
+          await gate.promise;
+          return ok("late");
+        },
+      });
+      made.push(conn);
+      return conn;
+    },
+  });
+  const inflight = host.call(entry.ref, "draw", {}).catch((e) => e);
+  await sleep(10);
+  const queued = host.call(entry.ref, "draw", {}).catch((e) => e);
+  const closing = host.closeAll();
+  gate.resolve();
+  await closing;
+  await inflight;
+  expect((await queued).kind).toBe("failed");
+  expect(made.length).toBe(1);
+  expect(made[0]?.closeCount).toBe(1);
 });
