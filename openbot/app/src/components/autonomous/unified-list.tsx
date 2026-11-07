@@ -54,7 +54,7 @@ import {
   runRoutineNowMutationOptions,
   setRoutineEnabledMutationOptions,
 } from "@/lib/routines/mutations";
-import { routinesQueryOptions } from "@/lib/routines/queries";
+import { nothingIsFiring, routinesQueryOptions } from "@/lib/routines/queries";
 import { cn } from "@/lib/utils";
 
 type Routine = AutonomousSummary["routines"][number];
@@ -79,7 +79,8 @@ const COLUMNS =
  * automation, routine, responsibility and check-in this person can see.
  *
  * Every read is an existing one under its existing key, so a switch flipped here and a row on the
- * 按员工 view or on `/routines` agree. Every write is the existing mutation of that kind.
+ * 按员工 view agree. Every write is the existing mutation of that kind. The archived 定时任务 page
+ * (`/routines`) redirects here narrowed to schedules, so its "nothing is firing" warning is here too.
  */
 export function UnifiedAutomations({
   search,
@@ -192,6 +193,25 @@ export function UnifiedAutomations({
           onRetry={() => void automations.refetch()}
           retrying={automations.isFetching}
         />
+      ) : null}
+      {nothingIsFiring(routines.data?.sweep, routineRecords.length) ? (
+        /*
+         * Carried over from the archived 定时任务 page: the routine rows below look like they will
+         * fire, and without this they would say nothing about a deployment with no runner.
+         */
+        <div
+          className="mt-4 rounded-lg border border-amber-500/40 bg-amber-500/5 px-4 py-3 text-sm"
+          role="alert"
+        >
+          <p className="font-medium text-amber-600 dark:text-amber-500">
+            没有在执行这些定时任务
+          </p>
+          <p className="mt-1 text-muted-foreground">
+            {routines.data?.sweep.lastSweptAt
+              ? `定时任务的执行程序上一次检查是在${relativeTime(routines.data.sweep.lastSweptAt)}。它重新运行之前，这些都不会触发。`
+              : "还没有任何定时任务执行程序报到过，所以这些都不会触发。部署里需要有一个在运行才能执行它们。"}
+          </p>
+        </div>
       ) : null}
 
       {!ready ? (

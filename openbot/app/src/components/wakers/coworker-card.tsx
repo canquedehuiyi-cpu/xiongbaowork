@@ -1,6 +1,10 @@
 import { IconPlus } from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
+import {
+  attentionSummary,
+  needsInput,
+} from "@/components/bot-profile/attention";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Item,
@@ -9,10 +13,11 @@ import {
   ItemDescription,
   ItemTitle,
 } from "@/components/ui/item";
-import type { AgentProfile } from "@/lib/agents/queries";
+import { type AgentProfile, isSharedWithYou } from "@/lib/agents/queries";
+import type { BotAttention } from "@/lib/bot-lifecycle/queries";
 import { relativeTime } from "@/lib/relative-time";
 import type { TaskStats, WakerGroup } from "@/lib/waker-groups/queries";
-import type { WakerStatus } from "./wakers-search";
+import type { WakersSearch, WakerStatus } from "./wakers-search";
 
 /**
  * Spec D1's three words, on the card itself and on the filter that sorts by them (D4) — one
@@ -73,6 +78,13 @@ export type CardStats = { stats: TaskStats; truncated: boolean } | null;
  * One employee on the 员工管理 wall (parity plan F2): status, environment, avatar, name, role, task
  * count and last run, with 进对话 / 装配 / 暂停·恢复 one tap away.
  *
+ * It also carries what the two archived pages said about the same employee: the old 员工列表
+ * (`/agents`) told pinned and shared-with-you employees apart and opened each one's edit dialog, so
+ * the card wears 已置顶 / 共享给你 and offers 编辑 (`/wakers?agent=<id>`); the old Bot 会话 (`/bots`)
+ * said what each one needs from the person, so the card says that too and links to its
+ * `/bots/$agentId` profile (动态), which holds the activity feed and the notification settings the
+ * detail page does not.
+ *
  * The whole card opens the detail page: the name is the link, and its `::after` stretches over the
  * card, so the card is one tab stop with a visible focus ring and the actions sit above it on their
  * own layer instead of being nested inside a link (which would be invalid and unreachable by
@@ -80,9 +92,11 @@ export type CardStats = { stats: TaskStats; truncated: boolean } | null;
  */
 export function CoworkerCard({
   agent,
+  attention,
   busy,
   crews,
   device,
+  editSearch,
   onTogglePause,
   pauseKnown,
   pauseUnreadable,
@@ -92,10 +106,14 @@ export function CoworkerCard({
   unconfigured,
 }: {
   agent: AgentProfile;
+  /** This employee's row of `GET /api/bots/attention`, when the read answered and names it. */
+  attention?: BotAttention;
   /** A pause or resume for this card is in flight. */
   busy: boolean;
   crews: WakerGroup[];
   device: DeviceLine | null;
+  /** The wall's address plus `agent`: 编辑 opens the edit dialog over the same narrowed wall. */
+  editSearch: WakersSearch;
   onTogglePause: () => void;
   /** The pause read answered, so the card can offer the one action that is actually its next. */
   pauseKnown: boolean;
@@ -115,6 +133,8 @@ export function CoworkerCard({
   const lastRun = stats?.stats.lastRunAt
     ? relativeTime(stats.stats.lastRunAt)
     : "—";
+  const waiting = attention ? attentionSummary(attention) : "";
+  const asks = attention ? needsInput(attention) : 0;
   return (
     <Item
       className="relative flex-col items-stretch gap-3 bg-card p-4 hover:border-foreground/20"
@@ -152,6 +172,23 @@ export function CoworkerCard({
                 已隐藏
               </span>
             ) : null}
+            {agent.pinned ? (
+              <span
+                className="rounded border px-1.5 py-0.5 text-xs font-normal text-muted-foreground"
+                data-pinned="true"
+              >
+                已置顶
+              </span>
+            ) : null}
+            {isSharedWithYou(agent) ? (
+              <span
+                className="rounded border px-1.5 py-0.5 text-xs font-normal text-muted-foreground"
+                data-shared="true"
+                title="别人创建并公开的员工，你可以使用。"
+              >
+                共享给你
+              </span>
+            ) : null}
             {unconfigured ? (
               <span
                 className="rounded border border-dashed border-amber-500/60 px-1.5 py-0.5 text-xs font-normal text-amber-600 dark:text-amber-400"
@@ -169,6 +206,26 @@ export function CoworkerCard({
       </div>
 
       <div className="flex flex-col gap-1">
+        {waiting ? (
+          /*
+           * What the archived Bot 会话 list said per employee: questions, approvals and stalled
+           * hand-offs only the person can move, plus unread messages. Absent on a quiet card.
+           */
+          <p
+            className="flex items-center gap-1.5 text-foreground text-xs"
+            data-attention={String(asks)}
+          >
+            {asks > 0 ? (
+              <span
+                aria-hidden="true"
+                className="rounded-full bg-primary px-1.5 font-medium text-[11px] text-primary-foreground tabular-nums"
+              >
+                {asks}
+              </span>
+            ) : null}
+            需要你：{waiting}
+          </p>
+        ) : null}
         <p className="text-muted-foreground text-xs">
           {statusSentence(status, pauseKnown, pauseUnreadable)}
           {crews.length > 0
@@ -249,6 +306,24 @@ export function CoworkerCard({
           >
             装配
           </Link>
+          {/* The edit dialog the archived 员工列表 opened, now over this wall. */}
+          <Link
+            aria-label={`编辑 ${agent.name}`}
+            className={buttonVariants({ size: "xs", variant: "ghost" })}
+            search={editSearch}
+            to="/wakers"
+          >
+            编辑
+          </Link>
+          {/* The employee's own Bot profile: its activity, notifications and reset. */}
+          <Link
+            aria-label={`${agent.name} 的动态`}
+            className={buttonVariants({ size: "xs", variant: "ghost" })}
+            params={{ agentId: agent.id }}
+            to="/bots/$agentId"
+          >
+            动态
+          </Link>
         </ItemActions>
       </div>
       {problem ? (
@@ -261,16 +336,16 @@ export function CoworkerCard({
 }
 
 /**
- * The wall's last cell: a dashed card that opens the roster's own create dialog (spec D2), the same
- * deep link as the header's 新建员工.
+ * The wall's last cell: a dashed card that opens the create dialog (spec D2) over this wall, the
+ * same deep link as the header's 新建员工.
  */
-export function CreateCoworkerCard() {
+export function CreateCoworkerCard({ search }: { search: WakersSearch }) {
   return (
     <Link
       className="flex min-h-[148px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border text-muted-foreground text-sm outline-none transition-colors hover:border-foreground/30 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60"
       data-testid="waker-create-card"
-      search={{ new: true }}
-      to="/agents"
+      search={search}
+      to="/wakers"
     >
       <IconPlus aria-hidden="true" className="size-5" />
       创建员工

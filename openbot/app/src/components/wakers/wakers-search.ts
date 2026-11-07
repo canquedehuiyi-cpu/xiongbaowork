@@ -30,6 +30,13 @@ export type WakersSearch = {
   role?: string;
   env?: WakerEnv;
   sort?: WakerSort;
+  /**
+   * The two dialogs archived here from the old 员工列表 (`/agents`): `new` opens the create dialog,
+   * `agent` opens that employee's edit dialog. Search parameters rather than local state so Back
+   * closes them and the old `/agents?new=true` / `/agents?agent=<id>` links redirect onto them.
+   */
+  new?: true;
+  agent?: string;
 };
 
 const STATUSES: readonly WakerStatus[] = [
@@ -64,10 +71,29 @@ export function parseWakersSearch(raw: Record<string, unknown>): WakersSearch {
     role: text(raw.role),
     env: oneOf(raw.env, ENVS),
     sort: oneOf(raw.sort, SORTS),
+    // The router parses `?new=true` into a boolean; a hand-typed string is honoured too.
+    new: raw.new === true || raw.new === "true" ? true : undefined,
+    agent: text(raw.agent),
   };
   return Object.fromEntries(
     Object.entries(next).filter(([, value]) => value !== undefined),
   ) as WakersSearch;
+}
+
+/** The wall's own address without the dialog keys: where closing a dialog returns to. */
+export function wallSearch(search: WakersSearch): WakersSearch {
+  const { new: _new, agent: _agent, ...wall } = search;
+  return wall;
+}
+
+/**
+ * The archived `/agents` address mapped onto `/wakers`: `new` and `agent` keep their meaning, and
+ * nothing else on it ever existed. Anything unparseable is dropped, as the wall itself would.
+ */
+export function wakersSearchFromAgents(
+  raw: Record<string, unknown>,
+): WakersSearch {
+  return parseWakersSearch({ new: raw.new, agent: raw.agent });
 }
 
 /** Whether anything narrows the employee wall, so an empty wall reads "none match", not "none exist". */
@@ -86,7 +112,8 @@ export const isNarrowed = (search: WakersSearch, query: string): boolean =>
 let lastWakersSearch: WakersSearch = {};
 
 export function rememberWakersSearch(search: WakersSearch): void {
-  lastWakersSearch = search;
+  // A dialog open at the time is not part of the wall the back link should return to.
+  lastWakersSearch = wallSearch(search);
 }
 
 export function wakersReturnSearch(): WakersSearch {

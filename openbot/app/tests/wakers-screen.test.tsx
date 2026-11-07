@@ -170,12 +170,12 @@ function draw() {
         getParentRoute: () => root,
         path: "/wakers",
       } as never),
-      // The header's 新建员工 is a deep link into the roster's create dialog, and a Link needs its
-      // address to resolve. The generator's options are wider than this literal; the tree only needs
-      // the path.
+      // Each card's 动态 opens the employee's Bot profile (archived 员工列表/Bot 会话 merged into this
+      // wall), and a Link needs its address to resolve. The generator's options are wider than this
+      // literal; the tree only needs the path.
       createRoute({
         getParentRoute: () => root,
-        path: "/agents",
+        path: "/bots/$agentId",
         component: () => null,
       } as never),
       // Spec D7: each card links to the coworker's own assembly screen.
@@ -321,9 +321,10 @@ test("each card shows its avatar, its role, and links to its assembly and detail
   );
   expect(open).toEqual(["/wakers/agent-1", "/wakers/agent-2"]);
 
-  // Spec D2: creating a coworker is the roster's own create dialog, deep-linked.
+  // Spec D2: creating a coworker is a create dialog over this wall, deep-linked (the archived
+  // `/agents?new=true` redirects here).
   const create = screen.getByText("新建员工").closest("a");
-  expect(create?.getAttribute("href")).toBe("/agents?new=true");
+  expect(create?.getAttribute("href")).toBe("/wakers?new=true");
 });
 
 test("the status filter narrows the wall to the coworkers in that state", async () => {

@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { BotProfile } from "@/components/bot-profile/profile";
 import { PageShell } from "@/components/layout/page-shell";
+import { wakersBackLink } from "@/components/wakers/wakers-search";
 import { agentQueryOptions } from "@/lib/agents/queries";
 
 export const Route = createFileRoute("/_authed/_app/bots/$agentId")({
@@ -13,7 +14,7 @@ function BotProfilePage() {
   const agent = useQuery(agentQueryOptions(agentId));
   return (
     <PageShell
-      backButton={{ label: "Bot 会话", linkProps: { to: "/bots" } }}
+      backButton={{ label: "员工管理", linkProps: wakersBackLink() }}
       description="这位员工在为你做什么，以及它怎么运行。"
       title={agent.data?.name ?? "员工"}
     >

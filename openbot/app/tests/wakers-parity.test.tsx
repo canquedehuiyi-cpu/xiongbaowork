@@ -187,7 +187,7 @@ function draw(entry = "/wakers") {
         getParentRoute: () => root,
         path: "/wakers/$agentId",
       } as never),
-      stub("/agents"),
+      stub("/bots/$agentId"),
       stub("/assemble/$agentId"),
       stub("/channel/new"),
       stub("/role-templates"),
@@ -237,7 +237,7 @@ test("the header names the page, and 员工 / 群组 is one tablist mirrored to 
   expect(router.state.location.search).toEqual({});
   // On the employees tab the header's primary action creates an employee.
   const create = screen.getByText("新建员工").closest("a");
-  expect(create?.getAttribute("href")).toBe("/agents?new=true");
+  expect(create?.getAttribute("href")).toBe("/wakers?new=true");
 
   const user = userEvent.setup({ document });
   await user.click(tabs[1] as HTMLElement);
@@ -361,7 +361,7 @@ test("the last cell is a dashed create card wired to the new-employee flow", asy
   const grid = screen.getByTestId("waker-grid");
   const last = grid.lastElementChild as HTMLElement;
   expect(last.getAttribute("data-testid")).toBe("waker-create-card");
-  expect(last.getAttribute("href")).toBe("/agents?new=true");
+  expect(last.getAttribute("href")).toBe("/wakers?new=true");
   expect(last.className).toContain("border-dashed");
 });
 

@@ -27,6 +27,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
+import { wakersBackLink } from "@/components/wakers/wakers-search";
 import { agentQueryOptions } from "@/lib/agents/queries";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
 import {
@@ -97,7 +98,7 @@ function AssemblePage() {
     <PageShell
       backButton={{
         label: "员工",
-        linkProps: { search: {}, to: "/agents" },
+        linkProps: wakersBackLink(),
       }}
       description="它用的模型、它的性格、它能碰到什么——一起决定，从下一轮开始生效。"
       title={profile.name}

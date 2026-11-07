@@ -8,6 +8,8 @@ import {
   useRef,
   useState,
 } from "react";
+import { AgentDialog } from "@/components/agents/agent-dialog";
+import { CreateAgentDialog } from "@/components/agents/create-agent-dialog";
 import { PageShell } from "@/components/layout/page-shell";
 import { QueryError } from "@/components/layout/query-error";
 import { SegmentedTabs } from "@/components/layout/segmented-tabs";
@@ -40,11 +42,15 @@ import {
   type WakerSort,
   type WakerStatus,
   type WakersSearch,
+  wallSearch,
 } from "@/components/wakers/wakers-search";
 import { type AgentProfile, agentListQueryOptions } from "@/lib/agents/queries";
 import { avatarSourcesQueryOptions } from "@/lib/avatar/sources";
 import { setBotPausedMutationOptions } from "@/lib/bot-lifecycle/mutations";
-import { botAttentionQueryOptions } from "@/lib/bot-lifecycle/queries";
+import {
+  type BotAttention,
+  botAttentionQueryOptions,
+} from "@/lib/bot-lifecycle/queries";
 import {
   ownerPresence,
   presenceOf,
@@ -64,6 +70,10 @@ import {
  * The tab, the search and the four toolbar choices are the address, so a reload, a shared link and
  * the detail page's back link all land on the same narrowed wall. Every axis is optional: the plain
  * `/wakers` the sidebar links to is still the unfiltered employees tab.
+ *
+ * It is also where the archived 员工列表 (`/agents`) and Bot 会话 (`/bots`) went: `?new=true` opens
+ * the create dialog and `?agent=<id>` an employee's edit dialog over the wall, and both old
+ * addresses redirect here (see their route files).
  */
 export const Route = createFileRoute("/_authed/_app/wakers")({
   component: RouteComponent,
@@ -227,6 +237,14 @@ function RouteComponent() {
     () => new Set((running.data ?? []).map((task) => task.executorAgentId)),
     [running.data],
   );
+  /** Each employee's attention row, for the "需要你" line the archived Bot 会话 list carried. */
+  const attentionById = useMemo(
+    () =>
+      new Map<string, BotAttention>(
+        (attention.data ?? []).map((bot) => [bot.agentId, bot]),
+      ),
+    [attention.data],
+  );
   const pausedIds = useMemo(
     () =>
       attention.data
@@ -289,8 +307,20 @@ function RouteComponent() {
                 (stats?.byAgent.get(b.id)?.count ?? 0) -
                 (stats?.byAgent.get(a.id)?.count ?? 0),
             )
-          : filtered;
+          : // The roster's own order with pinned employees first, as the archived 员工列表 put its
+            // 已置顶 section on top. `sort` is stable, so the rest keep their order.
+            [...filtered].sort((a, b) => Number(b.pinned) - Number(a.pinned));
   const narrowed = isNarrowed(search, query);
+
+  /*
+   * The two dialogs archived here from 员工列表. Creating wins if both are set: it is the more
+   * recent intent. Closing returns to the wall's own address, filters intact; a pushed entry, as on
+   * the old page, so Back reopens what was just closed.
+   */
+  const wall = wallSearch(search);
+  const showCreate = search.new === true;
+  const showProfile = !showCreate && search.agent !== undefined;
+  const closeDialog = () => void navigate({ search: wall, to: "/wakers" });
 
   const clearFilters = () => {
     setQuery("");
@@ -315,11 +345,11 @@ function RouteComponent() {
             >
               角色模板
             </Button>
-            {/* Spec D2: creating a coworker is the roster's own create dialog, deep-linked. */}
+            {/* Spec D2: creating a coworker is a dialog over this wall, deep-linked. */}
             <Button
               className="h-[32px]"
               render={(props) => (
-                <Link search={{ new: true }} to="/agents" {...props} />
+                <Link search={{ ...wall, new: true }} to="/wakers" {...props} />
               )}
             >
               新建员工
@@ -480,8 +510,10 @@ function RouteComponent() {
                 return (
                   <PausableCard
                     agent={agent}
+                    attention={attentionById.get(agent.id)}
                     crews={crews}
                     device={deviceLineOf(agent)}
+                    editSearch={{ ...wall, agent: agent.id }}
                     key={agent.id}
                     pauseKnown={pausedIds !== null}
                     pauseUnreadable={attention.isError}
@@ -493,6 +525,7 @@ function RouteComponent() {
                 );
               }}
               roster={visible}
+              createSearch={{ ...wall, new: true }}
               total={roster.length}
             />
           </>
@@ -519,12 +552,25 @@ function RouteComponent() {
         open={creatingCrew}
         queryClient={queryClient}
       />
+      <CreateAgentDialog
+        onClose={closeDialog}
+        onCreated={(agentId) =>
+          void navigate({ search: { ...wall, agent: agentId }, to: "/wakers" })
+        }
+        open={showCreate}
+      />
+      <AgentDialog
+        agentId={search.agent ?? null}
+        onClose={closeDialog}
+        open={showProfile}
+      />
     </PageShell>
   );
 }
 
 /** The employee grid with its loading, failed, empty and no-match states, ending in the create card. */
 function CoworkerWall({
+  createSearch,
   error,
   failed,
   loading,
@@ -536,6 +582,8 @@ function CoworkerWall({
   roster,
   total,
 }: {
+  /** The wall's address plus `new`, for the create card. */
+  createSearch: WakersSearch;
   error: Error | null;
   failed: boolean;
   loading: boolean;
@@ -587,7 +635,7 @@ function CoworkerWall({
       ) : null}
       <div className={GRID} data-testid="waker-grid">
         {roster.map(render)}
-        <CreateCoworkerCard />
+        <CreateCoworkerCard search={createSearch} />
       </div>
     </>
   );

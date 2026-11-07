@@ -10,7 +10,7 @@ import { type QuotaErrorDetails, RequestError } from "@/lib/client";
  */
 
 /** The screens that free a slot. Every one is a registered route in `routeTree.gen.ts`. */
-export type QuotaCleanupHref = "/agents" | "/settings" | "/resources";
+export type QuotaCleanupHref = "/wakers" | "/settings" | "/resources";
 
 export type QuotaGuidance = Readonly<{
   metric: QuotaErrorDetails["metric"];
@@ -36,7 +36,7 @@ const COPY: Readonly<Record<QuotaErrorDetails["metric"], MetricCopy>> = {
     label: "员工",
     title: "员工数量已达套餐上限",
     hint: "删除不再需要的员工即可腾出名额，或升级套餐获得更多名额。",
-    cleanup: { href: "/agents", label: "管理员工" },
+    cleanup: { href: "/wakers", label: "管理员工" },
   },
   devices: {
     label: "设备",
