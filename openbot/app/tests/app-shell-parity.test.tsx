@@ -451,7 +451,10 @@ test("the 群组 tab lists groups with their members and links to the group wall
   const row = within(list).getByRole("link", { name: /周报群/ });
   expect(hrefOf(row)).toBe("/wakers?tab=groups");
   expect(within(row).getByText("2 名员工")).toBeTruthy();
-  expect(within(row).getByRole("img", { name: "分析师" })).toBeTruthy();
+  // The stacked avatars are named once, as a group, not one name per face.
+  expect(
+    within(row).getByRole("img", { name: "成员：分析师、写手" }),
+  ).toBeTruthy();
 });
 
 test("the 群组 tab says so when there are none", async () => {
@@ -735,4 +738,36 @@ test("settings keep the app sidebar and add their own column with a way back", a
   ).toEqual(["密码"]);
   // No conversation column here: the settings column takes its place.
   expect(view.queryByRole("complementary", { name: /的对话/ })).toBeNull();
+});
+
+/*
+ * An employee's name is already written on its row, in the workspace header and on the group row,
+ * so the avatar beside it is decoration. Labelling it with the name again made screen readers say
+ * every name twice and made `getByLabel("<name>")` in the G4 browser run match the sidebar as well
+ * as the WakerFlow form's member checkbox.
+ */
+test("no element in the shell is labelled with an employee's bare name", async () => {
+  const { view } = renderShell("/channel/c-analyst-new", {
+    groups: [
+      {
+        id: "g1",
+        name: "周报群",
+        description: null,
+        members: [
+          { agentId: "agent-analyst", position: 0 },
+          { agentId: "agent-writer", position: 1 },
+        ],
+      },
+    ],
+  });
+  await view.findByRole("complementary", { name: "分析师的对话" });
+  const labelled = () =>
+    ["分析师", "写手"].flatMap((name) => [
+      ...[...view.container.querySelectorAll(`[aria-label="${name}"]`)].map(
+        (node) => `${node.tagName.toLowerCase()}[aria-label=${name}]`,
+      ),
+    ]);
+  expect(labelled()).toEqual([]);
+  await userEvent.click(await view.findByRole("tab", { name: "群组 (1)" }));
+  expect(labelled()).toEqual([]);
 });

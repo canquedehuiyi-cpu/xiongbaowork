@@ -181,7 +181,12 @@ function EmployeeRow({
   const body = (
     <>
       <span aria-hidden="true" className="contents">
-        <AbstractAvatar name={agent.name} seed={agent.avatarSeed} size={32} />
+        <AbstractAvatar
+          decorative
+          name={agent.name}
+          seed={agent.avatarSeed}
+          size={32}
+        />
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate font-semibold text-[14px] leading-[20px]">
@@ -325,8 +330,16 @@ function MemberStack({
       </span>
     );
   }
+  // One name for the whole stack — 「成员：甲、乙」 — rather than one bare name per face.
+  const names = [...group.members]
+    .sort((a, b) => a.position - b.position)
+    .map((member) => agentsById.get(member.agentId)?.name ?? "员工");
   return (
-    <span className="flex h-[32px] w-[32px] shrink-0 items-center">
+    <span
+      aria-label={`成员：${names.join("、")}`}
+      className="flex h-[32px] w-[32px] shrink-0 items-center"
+      role="img"
+    >
       {shown.map((member, index) => {
         const agent = agentsById.get(member.agentId);
         return (
@@ -338,6 +351,7 @@ function MemberStack({
             key={member.agentId}
           >
             <AbstractAvatar
+              decorative
               name={agent?.name ?? "员工"}
               seed={agent?.avatarSeed ?? member.agentId}
               size={shown.length === 1 ? 32 : 18}

@@ -430,6 +430,7 @@ function WorkspaceHeader({
       {agentId ? (
         <span aria-hidden="true" className="contents">
           <AbstractAvatar
+            decorative
             name={name}
             seed={agent?.avatarSeed ?? agentId}
             size={32}
