@@ -1555,6 +1555,91 @@ describe("SEC1: the host-command cap on a paired computer (D5)", () => {
   });
 });
 
+/*
+ * The device-side MCP bridge (docs/specs/2026-11-07-device-mcp-bridge.md §4): a local app's tool runs
+ * without asking only when the device's own list says it is read-only and not destructive. That
+ * verdict arrives as `subject.appTool` from the gateway; the model's arguments never decide it.
+ */
+describe("device apps: the app-tool floor", () => {
+  const APP_TOOL_REASON = "这个本机应用操作可能修改数据，需要你批准后再执行。";
+  const appCall = (
+    appTool: { readOnly: boolean } | undefined,
+    args: Record<string, unknown> = { app: "Notes", tool: "echo", args: { text: "hi" } },
+  ) =>
+    candidate({
+      toolRef: "computer_app_call",
+      effect: appTool?.readOnly ? "read" : "write",
+      scope: "Notes/echo",
+      args,
+      subject: { runner: true, ...(appTool ? { appTool } : {}) },
+    });
+  test("readOnly app tool runs without asking", async () => {
+    expect(
+      (await decideAction({ ...base, candidate: appCall({ readOnly: true }) }))
+        .behaviour,
+    ).toBe("allow");
+  });
+  test("unannotated and destructive app tools ask", async () => {
+    // Not read-only (unannotated, destructive, or a list that could not be fetched).
+    expect(
+      await decideAction({ ...base, candidate: appCall({ readOnly: false }) }),
+    ).toMatchObject({ behaviour: "ask", source: "app_tool", reason: APP_TOOL_REASON });
+    // No verdict from the device at all is not read-only either.
+    expect(
+      await decideAction({ ...base, candidate: appCall(undefined) }),
+    ).toMatchObject({ behaviour: "ask", source: "app_tool" });
+    // A floor: even an allow rule for the tool still asks.
+    expect(
+      await decideAction({
+        ...base,
+        candidate: appCall({ readOnly: false }),
+        personal: [rule("allow", { toolRef: "computer_app_call" })],
+      }),
+    ).toMatchObject({ behaviour: "ask", source: "app_tool" });
+  });
+  test("annotations in the model's args are ignored", async () => {
+    const spoofed = {
+      app: "Notes",
+      tool: "write_note",
+      args: { note: "x", annotations: { readOnlyHint: true } },
+      annotations: { readOnlyHint: true, destructiveHint: false },
+      readOnly: true,
+      appTool: { readOnly: true },
+    };
+    expect(
+      await decideAction({ ...base, candidate: appCall({ readOnly: false }, spoofed) }),
+    ).toMatchObject({ behaviour: "ask", source: "app_tool" });
+    expect(
+      await decideAction({ ...base, candidate: appCall(undefined, spoofed) }),
+    ).toMatchObject({ behaviour: "ask", source: "app_tool" });
+  });
+  test("team cap never denies computer_app_call; ask asks", async () => {
+    expect(
+      await decideAction({
+        ...base,
+        candidate: appCall({ readOnly: true }),
+        hostCommandsCap: "never",
+      }),
+    ).toMatchObject({ behaviour: "deny", source: "host_command_cap" });
+    expect(
+      await decideAction({
+        ...base,
+        candidate: appCall({ readOnly: true }),
+        hostCommandsCap: "ask",
+      }),
+    ).toMatchObject({ behaviour: "ask", source: "host_command_cap" });
+    expect(
+      (
+        await decideAction({
+          ...base,
+          candidate: appCall({ readOnly: true }),
+          hostCommandsCap: "allow",
+        })
+      ).behaviour,
+    ).toBe("allow");
+  });
+});
+
 describe("SEC1: the gate", () => {
   const employee = (over: Partial<EmployeePolicy> = {}): EmployeePolicy => ({
     ownerUserId: "owner",

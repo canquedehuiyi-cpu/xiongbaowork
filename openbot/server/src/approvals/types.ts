@@ -62,6 +62,8 @@ export type ApprovalPolicyOutcome = {
     | "sensitive_path"
     /** The team's host-command cap, applied to a command on a paired machine (SEC1 D5). */
     | "host_command_cap"
+    /** A local app's tool the device does not list as read-only (device MCP bridge §4.4). */
+    | "app_tool"
     | "auto_review"
     | "default"
     /** The person already declined this action, or an equivalent, earlier in this conversation. */
@@ -109,6 +111,12 @@ export type ApprovalSubject = {
   command?: string;
   path?: string;
   runner?: boolean;
+  /**
+   * A local app's tool on a paired machine (device MCP bridge): whether the device's own tool list,
+   * fetched by the gateway, says it is read-only and not destructive. Never from the model's
+   * arguments; absent means unknown, which is not read-only.
+   */
+  appTool?: { readOnly: boolean };
 };
 export type ApprovalCandidate = {
   actorId: string;
