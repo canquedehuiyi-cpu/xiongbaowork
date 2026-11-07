@@ -50,7 +50,7 @@
 - 登记数量上限 20 个。
 - 新增四个命令行参数，供设备端外壳调用，每次只输出一行 JSON：
   - `--list-apps`
-  - `--add-app <json>`
+  - `--add-app <json>`，或 `--add-app -` 从标准输入读取同样的 JSON（设备端外壳只用后一种，环境变量里的密钥不出现在进程命令行上）
   - `--remove-app <name>`
   - `--test-app <name>`：启动或连接后执行 `tools/list`，返回工具名和工具个数，然后关闭。
 
