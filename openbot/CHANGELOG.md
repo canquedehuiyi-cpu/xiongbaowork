@@ -8,6 +8,12 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+- **Connecting a curated app by its `team:<key>` id works again.** The connect route, its OAuth
+  callback and the memory-source check now resolve the catalogue entry from the row's
+  `catalogue_key` (or the tool ref's app key), so `POST /api/plugins/servers/team%3A<key>/connect`
+  no longer answers 400 "not connected as an individual person", and a person-OAuth memory source
+  asks the person to reconnect before the app is called.
+
 ## 0.2.2
 
 - **Coworkers can use MCP tools offered by apps on the owner's own computer.** In the device app's

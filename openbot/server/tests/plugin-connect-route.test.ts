@@ -38,6 +38,8 @@ function app(store: {
     serverId: string,
     by: string,
   ) => Promise<OAuthClient | null>;
+  /** The row an address resolves to. No row by default; see the note below. */
+  serverAddress?: (serverId: string) => Promise<unknown>;
 }) {
   const routes = createPluginRoutes(
     {
@@ -174,5 +176,51 @@ describe("connecting a vendor this deployment has not added", () => {
     expect(body.error).toBe(
       "Notion has not been added to this deployment yet. An administrator has to add it first.",
     );
+  });
+});
+
+/**
+ * Connecting a curated vendor by its row id rather than its catalogue key.
+ *
+ * Since G01-E a curated row is called `team:<key>`, and that is the id the server list hands the
+ * browser. The catalogue entry is the row's `catalogue_key`, never its id: read off the id,
+ * `team:notion` named no entry and the connect was refused as "not connected as an individual
+ * person" for a vendor that is exactly that. The store resolves the client and the connection by
+ * either address, so the id travels on unchanged.
+ */
+describe("connecting a curated vendor by its team row id", () => {
+  test("resolves the catalogue entry from the row's key and mints the authorization URL", async () => {
+    const ensureCalls: { serverId: string; by: string }[] = [];
+    const hono = app({
+      serverAddress: async (serverId) =>
+        serverId === "team:notion"
+          ? {
+              id: "team:notion",
+              catalogueKey: "notion",
+              title: "Notion",
+              url: "https://mcp.notion.com/mcp",
+              authScheme: null,
+            }
+          : undefined,
+      oauthClientFor: async () => null,
+      ensureOAuthClient: async (serverId, by) => {
+        ensureCalls.push({ serverId, by });
+        return { clientId: "dyn-1", clientSecret: "" };
+      },
+    });
+
+    const response = await hono.request(
+      "http://t/api/plugins/servers/team%3Anotion/connect",
+      { method: "POST" },
+    );
+
+    expect(response.status).toBe(200);
+    expect(ensureCalls).toEqual([
+      { serverId: "team:notion", by: "person@openbot.test" },
+    ]);
+    const body = (await response.json()) as { authorizationUrl: string };
+    const url = new URL(body.authorizationUrl);
+    expect(url.host).toBe("mcp.notion.com");
+    expect(url.searchParams.get("client_id")).toBe("dyn-1");
   });
 });

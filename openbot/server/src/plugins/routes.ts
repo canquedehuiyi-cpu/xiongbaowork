@@ -23,7 +23,7 @@ import {
   type SchemeKind,
   schemeKind,
 } from "./broker";
-import { CATALOGUE, catalogueEntry } from "./catalogue";
+import { CATALOGUE, type CatalogueEntry, catalogueEntry } from "./catalogue";
 import { toolkitOf, vendorSentence } from "./composio";
 import {
   authorizationUrlFor,
@@ -45,6 +45,7 @@ import {
   type PluginKind,
   PluginRefusedError,
   type PluginStore,
+  type ServerAddress,
 } from "./store";
 
 /**
@@ -114,6 +115,23 @@ function brokerRefusal(
  */
 const DIRECTORY_UNAVAILABLE =
   "Composio would not answer with its app directory, and said nothing about why. Check that COMPOSIO_API_KEY is this project's key, and check Composio's status if it persists.";
+
+/**
+ * The catalogue entry the server at an address instantiates.
+ *
+ * READ OFF THE ROW, NEVER OFF THE ADDRESS. Since G01-E a curated row is called `team:<key>`, which
+ * is the id the server list hands the browser, and no catalogue entry is spelled that way: looked up
+ * by the address, `team:notion` named nothing and its connect was refused as "not connected as an
+ * individual person". The row's `catalogue_key` is the entry, its own id where it has none — the
+ * rule the store reads entries by everywhere. With no row, the address is all there is to ask about,
+ * which keeps "a catalogue vendor nobody has added" reaching the refusal written for it.
+ */
+function catalogueEntryAt(
+  row: ServerAddress | undefined,
+  address: string,
+): CatalogueEntry | null {
+  return catalogueEntry(row ? (row.catalogueKey ?? row.id) : address);
+}
 
 /**
  * The Plugins surface: what this deployment has added, and which Bots may use it.
@@ -1683,7 +1701,7 @@ export function createPluginRoutes(
       );
     }
 
-    const entry = catalogueEntry(serverId);
+    const entry = catalogueEntryAt(row, serverId);
     if (entry?.auth.kind !== "user-oauth") {
       return context.json(
         { error: `${serverId} is not connected as an individual person.` },
@@ -2129,7 +2147,14 @@ export function createPluginRoutes(
         return context.redirect(failed);
       }
 
-      const entry = catalogueEntry(state.serverId);
+      /*
+       * The entry connect found, resolved the way connect resolved it: the sealed address is the one
+       * the person connected with, which may be a `team:<key>` row id. See {@link catalogueEntryAt}.
+       */
+      const entry = catalogueEntryAt(
+        await asPerson(() => store.serverAddress(state.serverId)),
+        state.serverId,
+      );
       if (entry?.auth.kind !== "user-oauth") return context.redirect(failed);
 
       const client = await asPerson(() => store.oauthClientFor(state.serverId));
