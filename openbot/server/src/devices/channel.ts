@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { computerActionOrigin } from "../computer/action-identity";
 import {
   actionFingerprint,
+  DEVICE_PAUSED,
   DeviceDeliveryError,
   type DeviceQueue,
 } from "./queue";
@@ -83,6 +84,12 @@ export type DeviceChannel = {
     /** Whose identity this action is, so the same one offered twice is queued and run once. */
     idempotencyKey?: string,
     caller?: AbortSignal,
+    /**
+     * `durable: false` is for a read that changes nothing (a local app's tool list): written straight
+     * to the connected socket, never queued, never given a receipt, so losing it cannot pause the
+     * device. Refused at once when the machine is not connected to this process.
+     */
+    mode?: { durable?: boolean },
   ) => Promise<T>;
   /**
    * A frame arrived from a runner. Delivered only when it answers a request this process sent to that
@@ -387,6 +394,7 @@ export function createDeviceChannel(options?: {
       timeoutMs?: number,
       idempotencyKey?: string,
       caller?: AbortSignal,
+      mode?: { durable?: boolean },
     ): Promise<T> {
       if (caller?.aborted)
         return Promise.reject(
@@ -395,6 +403,20 @@ export function createDeviceChannel(options?: {
           ),
         );
       const key = idempotencyKey ?? randomUUID();
+      if (mode?.durable === false) {
+        if (!self.isReachable(target))
+          return Promise.reject(new DeviceOfflineError(target.deviceId));
+        return (async () => {
+          /*
+           * A paused device takes nothing new, not even a read: the person has not checked the
+           * action whose outcome is unknown yet, and a read can still start a program there.
+           */
+          if (queue && (await queue.uncertain(target)) > 0)
+            throw new DeviceDeliveryError(DEVICE_PAUSED, false);
+          // `sendDirect` asks `authorize` itself before writing the frame.
+          return sendDirect<T>(target, action, payload, timeoutMs, key, caller);
+        })();
+      }
       const offer = (): Promise<T> => {
         if (!self.isReachable(target)) {
           if (!queue)
