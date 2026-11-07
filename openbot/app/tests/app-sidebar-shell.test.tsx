@@ -240,28 +240,50 @@ test("the entry for the open page is marked current", async () => {
   expect(current?.textContent?.trim()).toBe("员工管理");
 });
 
-test("routes outside the five entries stay reachable under 更多", async () => {
+test("更多 holds only what no workbench page covers; duplicates are archived", async () => {
   const view = renderSidebar();
   const more = await view.findByRole("button", { name: "更多" });
   expect(more.getAttribute("aria-expanded")).toBe("false");
   await userEvent.click(more);
   expect(more.getAttribute("aria-expanded")).toBe("true");
   const region = view.getByRole("navigation", { name: "更多入口" });
-  const hrefs = [...region.querySelectorAll("a")].map(hrefOf);
-  for (const href of [
+  expect([...region.querySelectorAll("a")].map(hrefOf)).toEqual([
     "/pipelines",
+    "/team-bots",
+    "/approvals",
+  ]);
+  // Each of these is now a tab or a view of one of the five pages.
+  for (const href of [
+    "/agents",
     "/bots",
     "/skills",
-    "/agents",
-    "/team-bots",
-    "/responsibilities",
-    "/memory",
     "/knowledge",
-    "/approvals",
+    "/memory",
+    "/responsibilities",
+    "/routines",
   ]) {
-    expect(hrefs).toContain(href);
+    expect(view.container.querySelector(`a[href="${href}"]`)).toBeNull();
   }
 });
+
+test.each([
+  ["/responsibilities", "自主工作"],
+  ["/bots/agent-1", "员工管理"],
+  ["/assemble/agent-1", "员工管理"],
+  ["/wakers/agent-1", "员工管理"],
+  ["/wakerflows", "能力与资源"],
+  ["/wakerflows/flow-1", "能力与资源"],
+])(
+  "on %s the entry that owns it, %s, is marked current",
+  async (path, label) => {
+    const view = renderSidebar(path);
+    const nav = await view.findByRole("navigation", { name: "主导航" });
+    const current = [...nav.querySelectorAll('[aria-current="page"]')].map(
+      (node) => node.textContent?.trim(),
+    );
+    expect(current).toEqual([label]);
+  },
+);
 
 test("a conversation with two or more coworkers is a group; everything else belongs to 员工", () => {
   expect(channelTab(channel("solo", ["a"]))).toBe("wakers");

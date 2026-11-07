@@ -1,24 +1,18 @@
 import {
   IconAt,
   IconBolt,
-  IconBook,
-  IconBox,
   IconBoxSeam,
-  IconBrain,
   IconChecks,
   IconChevronDown,
   IconDots,
   IconLayoutKanban,
   IconLogout,
   IconPlus,
-  IconRobot,
   IconRoute,
   IconSearch,
   IconSettings,
   IconShieldLock,
   IconSparkles,
-  IconTargetArrow,
-  IconUserCircle,
   IconUsers,
   IconUsersGroup,
 } from "@tabler/icons-react";
@@ -261,25 +255,42 @@ const CONVERSATION_TABS = [
 const PRIMARY_NAV = [
   { to: "/tasks", label: "任务看板", icon: IconLayoutKanban },
   { to: "/reachability", label: "@Waker", icon: IconAt },
-  { to: "/autonomous", label: "自主工作", icon: IconBolt },
-  { to: "/wakers", label: "员工管理", icon: IconUsers },
-  { to: "/resources", label: "能力与资源", icon: IconBoxSeam },
+  // 长期职责 and 定时任务 are rows of the 自主工作 list; their own screens belong to it.
+  {
+    to: "/autonomous",
+    label: "自主工作",
+    icon: IconBolt,
+    owns: ["/responsibilities", "/routines"],
+  },
+  // One employee's profile, assembly and the archived roster are all part of 员工管理.
+  {
+    to: "/wakers",
+    label: "员工管理",
+    icon: IconUsers,
+    owns: ["/bots", "/assemble", "/agents"],
+  },
+  // WakerFlow, skills, knowledge and memory are tabs of 能力与资源; their screens belong to it.
+  {
+    to: "/resources",
+    label: "能力与资源",
+    icon: IconBoxSeam,
+    owns: ["/wakerflows", "/skills", "/knowledge", "/memory"],
+  },
 ] as const;
 
+function underPath(pathname: string, path: string): boolean {
+  return pathname === path || pathname.startsWith(`${path}/`);
+}
+
 /*
- * Everything this product had in its sidebar before the workbench layout, kept one click away.
- * None of these are in the reference's primary navigation, and every one of them is a route
- * somebody may have bookmarked or be used to — so they fold away rather than disappear.
+ * What no workbench page covers. Everything else this sidebar used to list — the employee list,
+ * Bot 会话, 技能, 知识库, 记忆, 职责 — duplicated a tab or a view of one of the five pages and is
+ * archived (CONTEXT.md, "所有重复的都归档"): the five entries are the one way in, and the old URLs
+ * redirect there.
  */
 const MORE_NAV = [
   { to: "/pipelines", label: "组团流程", icon: IconRoute },
-  { to: "/bots", label: "Bot 会话", icon: IconRobot },
-  { to: "/skills", label: "技能", icon: IconBox },
-  { to: "/agents", label: "员工列表", icon: IconUserCircle },
   { to: "/team-bots", label: "团队 Bot", icon: IconUsersGroup },
-  { to: "/responsibilities", label: "职责", icon: IconTargetArrow },
-  { to: "/memory", label: "记忆", icon: IconBrain },
-  { to: "/knowledge", label: "知识库", icon: IconBook },
   { to: "/approvals", label: "审批", icon: IconChecks },
 ] as const;
 
@@ -312,16 +323,31 @@ function NavRow({
   to,
   label,
   icon: Icon,
+  owns = [],
 }: {
   to: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
+  /** Other paths whose screens belong to this entry, so it stays marked while one is open. */
+  owns?: readonly string[];
 }) {
+  const ownsCurrent = useRouterState({
+    select: (state) =>
+      owns.some((path) => underPath(state.location.pathname, path)),
+  });
   return (
     <SidebarMenuItem>
       <SidebarMenuButton
         className={navRowClassName}
-        render={(props) => <Link {...props} to={to} />}
+        render={(props) => (
+          <Link
+            {...props}
+            {...(ownsCurrent
+              ? { "aria-current": "page" as const, "data-status": "active" }
+              : {})}
+            to={to}
+          />
+        )}
       >
         <Icon />
         <span className="truncate">{label}</span>
@@ -352,9 +378,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
    * A page that lives under 更多 opens the section, so the current place is always marked: folded
    * away, a person on /approvals would see no entry lit at all.
    */
-  const inMore = MORE_NAV.some(
-    (item) => pathname === item.to || pathname.startsWith(`${item.to}/`),
-  );
+  const inMore = MORE_NAV.some((item) => underPath(pathname, item.to));
   const [moreOpen, setMoreOpen] = useState(() => readMoreOpen() || inMore);
   useEffect(() => {
     if (inMore) setMoreOpen(true);
