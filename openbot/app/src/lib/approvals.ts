@@ -36,6 +36,7 @@ export const POLICY_SOURCE_LABELS: Record<string, string> = {
   dangerous_command: "危险命令",
   sensitive_path: "敏感文件",
   host_command_cap: "团队命令上限",
+  app_tool: "本机应用",
   auto_review: "自动审查",
   default: "你的偏好",
   person_declined: "你已拒绝过",
