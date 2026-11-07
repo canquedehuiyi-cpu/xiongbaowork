@@ -8,6 +8,8 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+## 0.2.3
+
 - **The MCP allowlist approves a curated connector again.** Admin > Enterprise controls saved the
   server row id (`team:<key>`), while a tool call names the app (`<key>/<tool>`), so with 只用已批准的服务器
   on, an approved curated connector was still refused by `mcp_allowlist`. The boundary now reads an
