@@ -463,7 +463,11 @@ export function createShell(
       }
 
       const out = clamp(outBuffer.text);
-      const err = clamp(errBuffer.text);
+      const err = clamp(
+        process.platform === "win32"
+          ? plainPowerShellStderr(errBuffer.text)
+          : errBuffer.text,
+      );
       return {
         command: input.command,
         exitCode,
@@ -485,6 +489,54 @@ export function createShell(
 
 export type Shell = ReturnType<typeof createShell>;
 
+const CLIXML_HEADER = "#< CLIXML";
+
+/** `_x000D_`-style escapes and the five XML entities, as PowerShell's serializer writes them. */
+function decodeClixmlText(text: string): string {
+  return text
+    .replace(/_x([0-9A-Fa-f]{4})_/g, (_, hex: string) =>
+      String.fromCharCode(Number.parseInt(hex, 16)),
+    )
+    .replace(/&#x([0-9A-Fa-f]+);/g, (_, hex: string) =>
+      String.fromCodePoint(Number.parseInt(hex, 16)),
+    )
+    .replace(/&#([0-9]+);/g, (_, dec: string) =>
+      String.fromCodePoint(Number.parseInt(dec, 10)),
+    )
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, "&");
+}
+
+/**
+ * What Windows PowerShell wrote to a redirected stderr, as text a person or a model can read.
+ *
+ * With stderr redirected it writes `#< CLIXML` and then XML: progress records ("正在准备首次使用模块",
+ * which is not an error at all) and error, warning and verbose lines as `<S S="Error">…</S>`.
+ * Progress is dropped; every `<S>` line keeps its words. Anything this does not recognise, a stream
+ * cut off mid-element included, is returned exactly as it came, so nothing is ever lost to parsing.
+ */
+export function plainPowerShellStderr(stderr: string): string {
+  const at = stderr.indexOf(CLIXML_HEADER);
+  if (at === -1) return stderr;
+  const before = stderr.slice(0, at);
+  const body = stderr
+    .slice(at + CLIXML_HEADER.length)
+    .replace(/<Obj S="progress"[^>]*>[\s\S]*?<\/Obj>/g, "");
+  const lines: string[] = [];
+  const rest = body
+    .replace(/<S S="[A-Za-z]+">([\s\S]*?)<\/S>/g, (_, text: string) => {
+      lines.push(decodeClixmlText(text));
+      return "";
+    })
+    .replace(/<Objs\b[^>]*>|<\/Objs>/g, "")
+    .trim();
+  if (rest !== "") return stderr;
+  return before + lines.join("");
+}
+
 /** Native Windows commands use PowerShell without profiles; Unix retains the existing bash contract. */
 export function commandShell(
   command: string,
@@ -496,9 +548,18 @@ export function commandShell(
   const root = source.SystemRoot ?? source.SYSTEMROOT ?? "C:\\Windows";
   /*
    * `$ProgressPreference` off: with stderr redirected, Windows PowerShell serialises progress records
-   * ("正在准备首次使用模块") into stderr as CLIXML, which the model then reads as an error.
+   * ("正在准备首次使用模块") into stderr as CLIXML, which the model then reads as an error. It is not
+   * enough on its own (the first-use record is written before the script runs), so
+   * `plainPowerShellStderr` also takes CLIXML apart on the way out.
+   *
+   * Encoding: PowerShell decodes what a native program prints with `[Console]::OutputEncoding`, and
+   * `hostname.exe`, `ipconfig` and the other built-ins print in the machine's OEM code page (GBK on a
+   * Chinese Windows) whatever that property says. Setting it to UTF-8 turned their Chinese into
+   * U+FFFD before this process ever saw it. So the property keeps the machine's own code page, and
+   * PowerShell's own writes go out as UTF-8 through `SetOut` / `SetError` instead, which is what
+   * this side decodes.
    */
-  const script = `$ProgressPreference = 'SilentlyContinue'; $OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new(); ${command}\n$openbotCommandSucceeded = $?; $openbotCommandExit = $LASTEXITCODE; if ($openbotCommandExit) { exit $openbotCommandExit }; if (-not $openbotCommandSucceeded) { exit 1 }`;
+  const script = `$ProgressPreference = 'SilentlyContinue'; $OutputEncoding = [System.Text.UTF8Encoding]::new($false); $openbotOut = [System.IO.StreamWriter]::new([Console]::OpenStandardOutput(), [System.Text.UTF8Encoding]::new($false)); $openbotOut.AutoFlush = $true; [Console]::SetOut($openbotOut); $openbotErr = [System.IO.StreamWriter]::new([Console]::OpenStandardError(), [System.Text.UTF8Encoding]::new($false)); $openbotErr.AutoFlush = $true; [Console]::SetError($openbotErr); ${command}\n$openbotCommandSucceeded = $?; $openbotCommandExit = $LASTEXITCODE; if ($openbotCommandExit) { exit $openbotCommandExit }; if (-not $openbotCommandSucceeded) { exit 1 }`;
   return {
     executable: win32.join(
       root,
