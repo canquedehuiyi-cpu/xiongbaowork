@@ -384,6 +384,8 @@ export function runRootCommand(
 export type AppCommand =
   | { kind: "list" }
   | { kind: "add"; input: AppInput }
+  /** `--add-app -`: the app's JSON is read from stdin, so its keys are never on a command line. */
+  | { kind: "add-stdin" }
   | { kind: "remove"; target: string }
   | { kind: "test"; target: string }
   | { kind: "enable"; target: string }
@@ -426,15 +428,13 @@ export function parseAppCommand(
   const value = args.get(flag)?.trim() ?? "";
   let command: AppCommand;
   if (flag === "add-app") {
-    let input: unknown;
-    try {
-      input = JSON.parse(args.get(flag) ?? "");
-    } catch {
-      return '--add-app needs the app as a JSON object, for example \'{"kind":"stdio","name":"笔记","command":"npx","args":["-y","some-mcp"],"env":{}}\'.';
+    if (value === "-") {
+      command = { kind: "add-stdin" };
+    } else {
+      const input = parseAppInput(args.get(flag) ?? "");
+      if (typeof input === "string") return input;
+      command = { kind: "add", input };
     }
-    if (!input || typeof input !== "object" || Array.isArray(input))
-      return "--add-app needs the app as a JSON object.";
-    command = { kind: "add", input: input as AppInput };
   } else if (flag === "list-apps") {
     command = { kind: "list" };
   } else {
@@ -445,6 +445,26 @@ export function parseAppCommand(
     };
   }
   return { command, dataDir: paths.dataDir };
+}
+
+/** The app `--add-app` was given, as JSON text, or the sentence that says what was wrong. */
+function parseAppInput(text: string): AppInput | string {
+  let input: unknown;
+  try {
+    input = JSON.parse(text);
+  } catch {
+    return '--add-app needs the app as a JSON object, for example \'{"kind":"stdio","name":"笔记","command":"npx","args":["-y","some-mcp"],"env":{}}\'.';
+  }
+  if (!input || typeof input !== "object" || Array.isArray(input))
+    return "--add-app needs the app as a JSON object.";
+  return input as AppInput;
+}
+
+/** All of stdin, as UTF-8 text. */
+async function readStdin(): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) chunks.push(Buffer.from(chunk));
+  return Buffer.concat(chunks).toString("utf8");
 }
 
 /** Every environment value hidden: what is printed is read on screen, and a key must not be. */
@@ -460,11 +480,21 @@ function maskedApp(app: AppEntry): AppEntry {
 export async function runAppCommand(
   parsed: { command: AppCommand; dataDir: string },
   print: (line: string) => void = (line) => console.log(line),
+  /** Where `--add-app -` reads the app from. Tests hand in their own. */
+  stdin: () => Promise<string> = readStdin,
 ): Promise<number> {
   const registry = createAppRegistry({ dataDir: parsed.dataDir });
   const apps = () => registry.list().map(maskedApp);
   try {
-    const { command } = parsed;
+    let { command } = parsed;
+    if (command.kind === "add-stdin") {
+      const input = parseAppInput(await stdin());
+      if (typeof input === "string") {
+        print(JSON.stringify({ ok: false, error: input }));
+        return 2;
+      }
+      command = { kind: "add", input };
+    }
     if (command.kind === "add") {
       const app = maskedApp(registry.add(command.input));
       print(JSON.stringify({ ok: true, app, apps: apps() }));
