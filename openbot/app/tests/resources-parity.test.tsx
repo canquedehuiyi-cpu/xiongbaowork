@@ -456,7 +456,7 @@ test("each card opens its details, with the tools, how many hold them and the wa
   const { view, user } = draw();
   const notion = await card(view, "Notion");
   expect(notion.getByText("待授权")).toBeTruthy();
-  await user.click(notion.getByRole("button", { name: "详情" }));
+  await user.click(notion.getByRole("button", { name: /^详情/ }));
 
   const dialog = await within(document.body).findByRole("dialog", {
     name: "Notion",

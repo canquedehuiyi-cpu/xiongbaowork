@@ -602,7 +602,7 @@ test("details open under the row and keep the existing run-now action reachable"
     name: "Summarise arrivals",
   })) as HTMLElement;
 
-  await user.click(within(row).getByRole("button", { name: "详情" }));
+  await user.click(within(row).getByRole("button", { name: /^详情/ }));
   expect(within(row).getByRole("button", { name: "立即运行" })).toBeTruthy();
   expect(router.state.location.search).toMatchObject({
     detail: "routine:routine-1",
@@ -704,4 +704,29 @@ test("an automation's detail is read again when the list shows it ran, and only 
   expect(calls.map((call) => call.path)).not.toContain(
     `/api/automations/${second.id}`,
   );
+});
+
+test("each row's 详情 button names its automation, so a screen reader can tell them apart", async () => {
+  serve();
+  const { view } = draw();
+  await view.findByRole("heading", { level: 1, name: "自主工作" });
+  const names = view
+    .getAllByRole("button", { name: /^详情/ })
+    .map((button) => button.textContent?.trim());
+  expect(names.length).toBeGreaterThan(1);
+  expect(new Set(names).size).toBe(names.length);
+  expect(names).toContain("详情：Deploy hook");
+});
+
+test("the row switches are drawn small but hit 44×44", async () => {
+  serve();
+  const { view } = draw();
+  await view.findByRole("heading", { level: 1, name: "自主工作" });
+  const switches = view.getAllByRole("switch");
+  expect(switches.length).toBeGreaterThan(0);
+  for (const control of switches) {
+    // 24 + 2×10 wide, 14 + 2×15 tall: the touch target a finger needs, the look unchanged.
+    expect(control.className).toContain("after:-inset-x-[10px]");
+    expect(control.className).toContain("after:-inset-y-[15px]");
+  }
 });

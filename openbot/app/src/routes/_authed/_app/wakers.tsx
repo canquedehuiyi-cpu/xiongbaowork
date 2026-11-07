@@ -17,7 +17,10 @@ import {
 import { PageShell } from "@/components/layout/page-shell";
 import { QueryError } from "@/components/layout/query-error";
 import { SearchBox } from "@/components/layout/search-box";
-import { SegmentedTabs } from "@/components/layout/segmented-tabs";
+import {
+  SegmentedTabs,
+  tabPanelProps,
+} from "@/components/layout/segmented-tabs";
 import { BearMascot } from "@/components/layout/workbench-empty";
 import { Button } from "@/components/ui/button";
 import {
@@ -369,9 +372,14 @@ function RouteComponent() {
           // The reference's pill: 218 × 33 CSS px, two equal halves, 4px inset.
           className="grid h-[33px] w-[218px] grid-cols-2 gap-0 bg-foreground/[0.08] p-[4px] dark:[&>[aria-selected=true]]:bg-foreground/[0.14] [&>[role=tab]]:h-[25px]"
           label="员工与群组"
-          onValueChange={(next) =>
-            void patch({ tab: next === "groups" ? "groups" : undefined }, false)
+          // A click is a step Back can return to; arrowing across the two is not.
+          onValueChange={(next, change) =>
+            void patch(
+              { tab: next === "groups" ? "groups" : undefined },
+              change.keyboard,
+            )
           }
+          panelId="wakers-wall"
           tabs={[
             { value: "coworkers", label: "员工" },
             { value: "groups", label: "群组" },
@@ -379,178 +387,183 @@ function RouteComponent() {
           value={tab}
         />
 
-        {tab === "coworkers" ? (
-          <>
-            <div className="flex flex-wrap items-center gap-[8px]">
-              <SearchBox
-                className="w-[220px]"
-                label="搜索名称或角色"
-                onValueChange={(next) => {
-                  setQuery(next);
-                  void patch({ q: next || undefined });
-                }}
-                placeholder="搜索名称或角色..."
-                value={query}
-              />
-              <LabeledSelect
-                className={FILTER}
-                label="运行状态"
-                onValueChange={(next) =>
-                  void patch({ status: next === "all" ? undefined : next })
-                }
-                options={[
-                  // The total is the count at the right; each state carries its own.
-                  { value: "all", label: "全部" },
-                  ...STATUS_ORDER.map((key) => ({
-                    value: key,
-                    label: `${STATUS_WORD[key]} (${counts[key]})`,
-                  })),
-                ]}
-                value={search.status ?? "all"}
-              />
-              <LabeledSelect
-                className={FILTER}
-                label="角色"
-                onValueChange={(next) =>
-                  void patch({ role: next === "\u0000" ? undefined : next })
-                }
-                options={[
-                  // A role can be any text, so "all" is a value no title can be.
-                  { value: "\u0000", label: "全部角色" },
-                  ...(search.role && !roles.includes(search.role)
-                    ? [search.role]
-                    : []
-                  )
-                    .concat(roles)
-                    .map((role) => ({ value: role, label: role })),
-                ]}
-                value={search.role ?? "\u0000"}
-              />
-              <LabeledSelect
-                className={FILTER}
-                label="环境"
-                onValueChange={(next) =>
-                  void patch({ env: next === "all" ? undefined : next })
-                }
-                options={ENV_OPTIONS}
-                value={search.env ?? "all"}
-              />
-              <LabeledSelect
-                className={FILTER}
-                label="排序字段"
-                onValueChange={(next) =>
-                  void patch({ sort: next === "default" ? undefined : next })
-                }
-                options={SORT_OPTIONS}
-                value={search.sort ?? "default"}
-              />
-              {narrowed ? (
-                <Button
-                  className="h-[32px]"
-                  onClick={clearFilters}
-                  variant="ghost"
+        <div
+          {...tabPanelProps("wakers-wall", tab)}
+          className="flex flex-col gap-[24px]"
+        >
+          {tab === "coworkers" ? (
+            <>
+              <div className="flex flex-wrap items-center gap-[8px]">
+                <SearchBox
+                  className="w-[220px]"
+                  label="搜索名称或角色"
+                  onValueChange={(next) => {
+                    setQuery(next);
+                    void patch({ q: next || undefined });
+                  }}
+                  placeholder="搜索名称或角色..."
+                  value={query}
+                />
+                <LabeledSelect
+                  className={FILTER}
+                  label="运行状态"
+                  onValueChange={(next) =>
+                    void patch({ status: next === "all" ? undefined : next })
+                  }
+                  options={[
+                    // The total is the count at the right; each state carries its own.
+                    { value: "all", label: "全部" },
+                    ...STATUS_ORDER.map((key) => ({
+                      value: key,
+                      label: `${STATUS_WORD[key]} (${counts[key]})`,
+                    })),
+                  ]}
+                  value={search.status ?? "all"}
+                />
+                <LabeledSelect
+                  className={FILTER}
+                  label="角色"
+                  onValueChange={(next) =>
+                    void patch({ role: next === "\u0000" ? undefined : next })
+                  }
+                  options={[
+                    // A role can be any text, so "all" is a value no title can be.
+                    { value: "\u0000", label: "全部角色" },
+                    ...(search.role && !roles.includes(search.role)
+                      ? [search.role]
+                      : []
+                    )
+                      .concat(roles)
+                      .map((role) => ({ value: role, label: role })),
+                  ]}
+                  value={search.role ?? "\u0000"}
+                />
+                <LabeledSelect
+                  className={FILTER}
+                  label="环境"
+                  onValueChange={(next) =>
+                    void patch({ env: next === "all" ? undefined : next })
+                  }
+                  options={ENV_OPTIONS}
+                  value={search.env ?? "all"}
+                />
+                <LabeledSelect
+                  className={FILTER}
+                  label="排序字段"
+                  onValueChange={(next) =>
+                    void patch({ sort: next === "default" ? undefined : next })
+                  }
+                  options={SORT_OPTIONS}
+                  value={search.sort ?? "default"}
+                />
+                {narrowed ? (
+                  <Button
+                    className="h-[32px]"
+                    onClick={clearFilters}
+                    variant="ghost"
+                  >
+                    清除筛选
+                  </Button>
+                ) : null}
+                <span
+                  className="ml-auto text-muted-foreground text-[13px] tabular-nums"
+                  data-testid="waker-count"
                 >
-                  清除筛选
-                </Button>
+                  {narrowed
+                    ? `${visible.length} / ${roster.length} 名员工`
+                    : `${roster.length} 名员工`}
+                </span>
+              </div>
+
+              {running.isError ? (
+                /*
+                 * Said once, above everything, as well as on each card: without this line the cards
+                 * below would read "nothing running" as fact when the board could not be read at all.
+                 */
+                <p className="text-destructive text-sm" role="alert">
+                  看板读不到，所以下面显示的状态无法确认。
+                </p>
               ) : null}
-              <span
-                className="ml-auto text-muted-foreground text-[13px] tabular-nums"
-                data-testid="waker-count"
-              >
-                {narrowed
-                  ? `${visible.length} / ${roster.length} 名员工`
-                  : `${roster.length} 名员工`}
-              </span>
-            </div>
-
-            {running.isError ? (
-              /*
-               * Said once, above everything, as well as on each card: without this line the cards
-               * below would read "nothing running" as fact when the board could not be read at all.
-               */
-              <p className="text-destructive text-sm" role="alert">
-                看板读不到，所以下面显示的状态无法确认。
-              </p>
-            ) : null}
-            {attention.isError ? (
-              <p className="text-destructive text-sm" role="alert">
-                暂停状态读不到，所以下面的员工是否被暂停无法确认。
-              </p>
-            ) : null}
-            {month.isError && !month.data ? (
-              /*
-               * A side read: the wall is still right without it, so it is a status line with a way to
-               * ask again rather than an alert, and the cards say "—" instead of a zero never seen.
-               */
-              <p
-                className="flex items-center gap-2 text-muted-foreground text-sm"
-                role="status"
-              >
-                任务数和最近运行读不到（{month.error.message}
-                ），卡片上暂时显示为 —。
-                <Button
-                  disabled={month.isFetching}
-                  onClick={() => void month.refetch()}
-                  size="xs"
-                  variant="outline"
+              {attention.isError ? (
+                <p className="text-destructive text-sm" role="alert">
+                  暂停状态读不到，所以下面的员工是否被暂停无法确认。
+                </p>
+              ) : null}
+              {month.isError && !month.data ? (
+                /*
+                 * A side read: the wall is still right without it, so it is a status line with a way to
+                 * ask again rather than an alert, and the cards say "—" instead of a zero never seen.
+                 */
+                <p
+                  className="flex items-center gap-2 text-muted-foreground text-sm"
+                  role="status"
                 >
-                  重新读取
-                </Button>
-              </p>
-            ) : null}
+                  任务数和最近运行读不到（{month.error.message}
+                  ），卡片上暂时显示为 —。
+                  <Button
+                    disabled={month.isFetching}
+                    onClick={() => void month.refetch()}
+                    size="xs"
+                    variant="outline"
+                  >
+                    重新读取
+                  </Button>
+                </p>
+              ) : null}
 
-            <CoworkerWall
-              failed={agents.isError && !agents.data}
-              loading={agents.isPending}
-              narrowed={narrowed}
-              onClear={clearFilters}
-              onRetry={() => void agents.refetch()}
-              retrying={agents.isFetching}
-              error={agents.error}
-              render={(agent) => {
-                const crews = (groups.data ?? []).filter((group) =>
-                  group.members.some((member) => member.agentId === agent.id),
-                );
-                return (
-                  <PausableCard
-                    agent={agent}
-                    attention={attentionById.get(agent.id)}
-                    crews={crews}
-                    device={deviceLineOf(agent)}
-                    editSearch={{ ...wall, agent: agent.id }}
-                    isAvatar={agent.id === avatarAgentId}
-                    key={agent.id}
-                    pauseKnown={pausedIds !== null}
-                    pauseUnreadable={attention.isError}
-                    queryClient={queryClient}
-                    stats={statsOf(agent)}
-                    status={statusOf(agent)}
-                    unconfigured={agent.id === unconfiguredAvatar}
-                  />
-                );
-              }}
-              roster={visible}
-              createSearch={{ ...wall, new: true }}
-              total={roster.length}
+              <CoworkerWall
+                failed={agents.isError && !agents.data}
+                loading={agents.isPending}
+                narrowed={narrowed}
+                onClear={clearFilters}
+                onRetry={() => void agents.refetch()}
+                retrying={agents.isFetching}
+                error={agents.error}
+                render={(agent) => {
+                  const crews = (groups.data ?? []).filter((group) =>
+                    group.members.some((member) => member.agentId === agent.id),
+                  );
+                  return (
+                    <PausableCard
+                      agent={agent}
+                      attention={attentionById.get(agent.id)}
+                      crews={crews}
+                      device={deviceLineOf(agent)}
+                      editSearch={{ ...wall, agent: agent.id }}
+                      isAvatar={agent.id === avatarAgentId}
+                      key={agent.id}
+                      pauseKnown={pausedIds !== null}
+                      pauseUnreadable={attention.isError}
+                      queryClient={queryClient}
+                      stats={statsOf(agent)}
+                      status={statusOf(agent)}
+                      unconfigured={agent.id === unconfiguredAvatar}
+                    />
+                  );
+                }}
+                roster={visible}
+                createSearch={{ ...wall, new: true }}
+                total={roster.length}
+              />
+            </>
+          ) : groups.isError && !groups.data ? (
+            <QueryError
+              error={groups.error}
+              label="读不到群组"
+              onRetry={() => void groups.refetch()}
+              retrying={groups.isFetching}
             />
-          </>
-        ) : groups.isError && !groups.data ? (
-          <QueryError
-            error={groups.error}
-            label="读不到群组"
-            onRetry={() => void groups.refetch()}
-            retrying={groups.isFetching}
-          />
-        ) : (
-          <CrewTab
-            crews={groups.data ?? []}
-            loading={groups.isPending}
-            onCreate={() => setCreatingCrew(true)}
-            queryClient={queryClient}
-            roster={(agents.data ?? []).filter((agent) => !agent.hidden)}
-            rosterLoading={agents.isPending}
-          />
-        )}
+          ) : (
+            <CrewTab
+              crews={groups.data ?? []}
+              loading={groups.isPending}
+              onCreate={() => setCreatingCrew(true)}
+              queryClient={queryClient}
+              roster={(agents.data ?? []).filter((agent) => !agent.hidden)}
+              rosterLoading={agents.isPending}
+            />
+          )}
+        </div>
       </div>
       <CreateCrewDialog
         onOpenChange={setCreatingCrew}

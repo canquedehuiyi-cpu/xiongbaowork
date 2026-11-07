@@ -593,6 +593,8 @@ function EntryRow({
             variant="ghost"
           >
             详情
+            {/* Every row has one: the name tells a screen reader which. */}
+            <span className="sr-only">：{entry.name}</span>
           </Button>
         </div>
       </div>

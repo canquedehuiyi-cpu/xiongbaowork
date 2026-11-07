@@ -359,3 +359,25 @@ test("the groups tab uses the same grid: create card first, then centred group c
     within(card).getByText("2 名员工").closest("[data-card-footer]"),
   ).not.toBeNull();
 });
+
+test("the 员工 / 群组 tabs control a labelled panel; arrows replace history, a click pushes it", async () => {
+  const { screen, router } = draw();
+  const tabs = await screen.findByRole("tablist", { name: "员工与群组" });
+  const user = userEvent.setup({ document });
+  const coworkers = within(tabs).getByRole("tab", { name: "员工" });
+  expect(coworkers.getAttribute("aria-controls")).toBe("wakers-wall");
+  expect(screen.getByRole("tabpanel", { name: "员工" })).toBeTruthy();
+
+  const before = router.history.length;
+  coworkers.focus();
+  await user.keyboard("{ArrowRight}");
+  await waitFor(() =>
+    expect(router.state.location.search).toEqual({ tab: "groups" }),
+  );
+  expect(router.history.length).toBe(before);
+  expect(screen.getByRole("tabpanel", { name: "群组" })).toBeTruthy();
+
+  await user.click(within(tabs).getByRole("tab", { name: "员工" }));
+  await waitFor(() => expect(router.state.location.search).toEqual({}));
+  expect(router.history.length).toBe(before + 1);
+});

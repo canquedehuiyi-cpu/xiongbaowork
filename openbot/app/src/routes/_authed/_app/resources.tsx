@@ -97,9 +97,10 @@ function ResourcesPage() {
       title="能力与资源"
     >
       <ResourceTabs
-        onValueChange={(value) =>
-          // A tab's own filters belong to it: switching starts the next one clean.
-          navigate({ search: { tab: value } })
+        onValueChange={(value, change) =>
+          // A tab's own filters belong to it: switching starts the next one clean. Arrowing across
+          // the nine entries replaces history, so Back leaves the page rather than every tab passed.
+          navigate({ replace: change.keyboard, search: { tab: value } })
         }
         value={tab}
       />

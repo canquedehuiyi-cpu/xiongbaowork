@@ -5,7 +5,10 @@ import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { LabeledSelect } from "@/components/layout/labeled-select";
 import { SearchBox } from "@/components/layout/search-box";
-import { SegmentedTabs } from "@/components/layout/segmented-tabs";
+import {
+  SegmentedTabs,
+  tabPanelProps,
+} from "@/components/layout/segmented-tabs";
 import { WorkbenchEmpty } from "@/components/layout/workbench-empty";
 
 /*
@@ -116,4 +119,52 @@ test("the empty state draws our own mascot and says what is missing", () => {
   expect(view.getByRole("img", { name: "熊宝" })).toBeTruthy();
   expect(view.getByText("暂无任务")).toBeTruthy();
   expect(view.getByText("当前筛选条件下没有可展示的任务。")).toBeTruthy();
+});
+
+test("tabs say whether a change came from the keyboard, so callers can replace history instead of pushing", async () => {
+  const changes: { value: string; keyboard: boolean }[] = [];
+  const view = render(
+    <SegmentedTabs
+      label="视图"
+      onValueChange={(value, change) =>
+        changes.push({ value, keyboard: change.keyboard })
+      }
+      tabs={[
+        { value: "a", label: "列表" },
+        { value: "b", label: "泳道" },
+      ]}
+      value="a"
+    />,
+  );
+  const user = userEvent.setup({ document: view.container.ownerDocument });
+  await user.click(view.getByRole("tab", { name: "泳道" }));
+  view.getByRole("tab", { name: "列表" }).focus();
+  await user.keyboard("{ArrowRight}");
+  expect(changes).toEqual([
+    { value: "b", keyboard: false },
+    { value: "b", keyboard: true },
+  ]);
+});
+
+test("with a panel id, each tab controls the panel and the panel is labelled by the selected tab", () => {
+  const view = render(
+    <>
+      <SegmentedTabs
+        label="员工与群组"
+        onValueChange={() => {}}
+        panelId="wall"
+        tabs={[
+          { value: "coworkers", label: "员工" },
+          { value: "groups", label: "群组" },
+        ]}
+        value="groups"
+      />
+      <div {...tabPanelProps("wall", "groups")}>内容</div>
+    </>,
+  );
+  for (const tab of view.getAllByRole("tab")) {
+    expect(tab.getAttribute("aria-controls")).toBe("wall");
+  }
+  const panel = view.getByRole("tabpanel", { name: "群组" });
+  expect(panel.textContent).toBe("内容");
 });
