@@ -1,10 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useRef, useState } from "react";
+import { IconList, IconStack2 } from "@tabler/icons-react";
+import { type ReactNode, useRef, useState } from "react";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
+import { LabeledSelect } from "@/components/layout/labeled-select";
 import { PageShell } from "@/components/layout/page-shell";
 import { QueryError } from "@/components/layout/query-error";
+import { SearchBox } from "@/components/layout/search-box";
 import { SegmentedTabs } from "@/components/layout/segmented-tabs";
+import { WorkbenchEmpty } from "@/components/layout/workbench-empty";
 import {
   ApprovalActions,
   type OnBoardAnswer,
@@ -14,6 +18,7 @@ import { DispatchToGroup } from "@/components/tasks/dispatch-to-group";
 import {
   type WorkRecord,
   WorkRecordBanner,
+  WorkRecordStatus,
 } from "@/components/tasks/work-record-banner";
 import { Button } from "@/components/ui/button";
 import { agentListQueryOptions } from "@/lib/agents/queries";
@@ -52,7 +57,14 @@ type BoardSearch = {
   group: string;
   status: string;
   q: string;
+  /** How far back the 工作记录 banner (and, unless `listPeriod` says otherwise, the list) reaches. */
   period: Period;
+  /**
+   * How far back the 全部任务 list reaches, when a person chose it apart from the banner: the
+   * reference has a second 数据周期 in the list's toolbar. Absent means the list follows `period`, so
+   * every link written before this existed still opens the board it did.
+   */
+  listPeriod?: Period;
   view: View;
   source: Trigger;
 };
@@ -87,6 +99,7 @@ export const boardSearch = (search: Record<string, unknown>): BoardSearch => {
     return typeof value === "string" ? value : "";
   };
   const period = text("period");
+  const listPeriod = text("listPeriod");
   const view = text("view");
   return {
     machineId: text("machineId"),
@@ -96,6 +109,9 @@ export const boardSearch = (search: Record<string, unknown>): BoardSearch => {
     status: text("status"),
     q: text("q"),
     period: period === "week" || period === "all" ? period : "month",
+    ...(listPeriod === "week" || listPeriod === "month" || listPeriod === "all"
+      ? { listPeriod }
+      : {}),
     view: view === "lanes" ? view : "list",
     source: triggerOf(text("source")),
   };
@@ -107,21 +123,23 @@ export const boardSearch = (search: Record<string, unknown>): BoardSearch => {
  *
  * `scope` is the part of the address the stat bar is also read under — which machine, which crew,
  * which 触发方式, how far back — and `list` adds the two things a person narrows the list by (status
- * and the words in the search box), which the bar must not move with.
+ * and the words in the search box), which the bar must not move with. The list reaches back as far
+ * as its own 数据周期 says (`listPeriod`), which is the banner's unless a person chose otherwise.
  */
 export const boardQuery = (
   search: BoardSearch,
 ): { list: string; scope: string } => {
-  const scope = [`period=${search.period}`];
+  const axes: string[] = [];
   if (search.machineId)
-    scope.push(`deviceId=${encodeURIComponent(search.machineId)}`);
-  if (search.crew) scope.push(`executors=${encodeURIComponent(search.crew)}`);
+    axes.push(`deviceId=${encodeURIComponent(search.machineId)}`);
+  if (search.crew) axes.push(`executors=${encodeURIComponent(search.crew)}`);
   if (search.executor)
-    scope.push(`executor=${encodeURIComponent(search.executor)}`);
-  if (search.group) scope.push(`group=${encodeURIComponent(search.group)}`);
+    axes.push(`executor=${encodeURIComponent(search.executor)}`);
+  if (search.group) axes.push(`group=${encodeURIComponent(search.group)}`);
   const trigger = TRIGGERS.find((entry) => entry.key === search.source);
-  if (trigger) scope.push(`source=${trigger.sources.join(",")}`);
-  const list = [...scope];
+  if (trigger) axes.push(`source=${trigger.sources.join(",")}`);
+  const scope = [`period=${search.period}`, ...axes];
+  const list = [`period=${search.listPeriod ?? search.period}`, ...axes];
   // `ended` is three statuses, which the endpoint cannot be asked for at once: see `shownForStatus`.
   if (search.status && search.status !== "ended")
     list.push(`status=${encodeURIComponent(search.status)}`);
@@ -177,13 +195,6 @@ export const workRecordOf = (
     count: tasks.filter((task) => trigger.sources.includes(task.source)).length,
   })),
 });
-
-/**
- * One look for every control in the board's toolbars: the reference product's 32px control on the
- * dark grey surface, a hairline border and 13px text.
- */
-const CONTROL =
-  "h-[32px] rounded-md border border-border bg-foreground/[0.04] px-2.5 text-[13px] outline-none transition-colors hover:bg-foreground/[0.07] focus-visible:ring-2 focus-visible:ring-ring/50";
 
 /** A pill-shaped choice in the same toolbars (the machine filter), at the same height. */
 const choiceClass = (pressed: boolean) =>
@@ -450,7 +461,8 @@ export const archivesOnDrop = (
  * filter the bar set rather than a blank.
  */
 export const STATUS_FILTERS = [
-  { key: "", label: "全部状态" },
+  // The box names its axis (「任务状态 全部」), so the choice itself is just 全部.
+  { key: "", label: "全部" },
   { key: "running", label: "进行中" },
   { key: "needs_action", label: "需要操作" },
   { key: "awaiting_review", label: "查收结果" },
@@ -559,7 +571,7 @@ export const boardEmptySentence = (filters: {
     return `这台机器在当前时间范围内没有待办——其他机器在 /tasks 有各自的看板。`;
   }
   if (narrowed) {
-    return "没有符合当前筛选条件的任务。";
+    return "当前筛选条件下没有可展示的任务。";
   }
   return "当前时间范围内还没有任务——和员工说句话，工作就会出现在这里。";
 };
@@ -581,42 +593,71 @@ export function StatBar({
   tasks,
   status,
   onSelect,
+  footer,
 }: {
   tasks: { status: string }[];
   status: string;
   onSelect: (status: string) => void;
+  /** The 工作记录 status line, drawn on the row under the cards beside the counting rule. */
+  footer?: ReactNode;
 }) {
   return (
-    <section aria-label="任务统计" className="mb-4">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        {boardStats(tasks).map((stat) => (
-          <button
-            aria-pressed={status === stat.key}
-            className={`flex flex-col items-start gap-1 rounded-lg border px-4 py-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 ${
-              status === stat.key
-                ? "border-foreground/30 bg-foreground/[0.08]"
-                : "border-border bg-foreground/[0.03] hover:bg-foreground/[0.06]"
-            }`}
-            key={stat.key || "all"}
-            onClick={() => onSelect(status === stat.key ? "" : stat.key)}
-            type="button"
-          >
-            <span className="text-[22px] font-semibold leading-tight tabular-nums">
-              {stat.value}
-            </span>
-            <span className="text-muted-foreground text-[12px]">
-              {stat.label}
-            </span>
-          </button>
-        ))}
+    <section aria-label="任务统计">
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+        {boardStats(tasks).map((stat) => {
+          const pressed = status === stat.key;
+          return (
+            /*
+             * The reference's record card: dark card, the number big over its label, and the card
+             * that is filtering the list outlined in the primary green. 84px tall at 1696×850.
+             */
+            <button
+              aria-pressed={pressed}
+              className={`flex flex-col items-start rounded-[8px] border bg-card px-4 pt-[15px] pb-[14px] text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 ${
+                pressed
+                  ? "border-primary"
+                  : "border-transparent hover:border-foreground/15"
+              }`}
+              key={stat.key || "all"}
+              onClick={() => onSelect(pressed ? "" : stat.key)}
+              type="button"
+            >
+              <span
+                className={`font-semibold text-[28px] leading-[28px] tabular-nums ${
+                  pressed ? "text-primary" : ""
+                }`}
+              >
+                {stat.value}
+              </span>
+              <span
+                className={`mt-[8px] text-[12px] leading-[16px] ${
+                  pressed ? "text-primary" : "text-muted-foreground"
+                }`}
+              >
+                {STAT_CARD_LABEL[stat.key] ?? stat.label}
+              </span>
+            </button>
+          );
+        })}
       </div>
-      <p className="text-muted-foreground pt-1.5 text-[12px]">
-        已结束 = 已完成 + 失败 +
-        待查收。四个数按所选周期统计；点一个数就只看这些任务，再点一次取消。
-      </p>
+      <div className="mt-[11px] flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        {footer}
+        <p className="text-[12px] text-muted-foreground/70 leading-[18px]">
+          已结束 = 已完成 + 失败 +
+          待查收。四个数按所选周期统计；点一个数就只看这些任务，再点一次取消。
+        </p>
+      </div>
     </section>
   );
 }
+
+/** The cards' own words, as the reference prints them; `boardStats` keeps the filter's short name. */
+const STAT_CARD_LABEL: Record<string, string> = {
+  "": "任务总数",
+  running: "进行中任务",
+  needs_action: "需要操作",
+  ended: "已结束任务",
+};
 
 function relative(date: string): string {
   const seconds = Math.max(0, (Date.now() - new Date(date).getTime()) / 1000);
@@ -986,6 +1027,7 @@ function TaskCard({
 
 import {
   type DevicePresence,
+  ownerPresence,
   presenceOf,
   presenceWord,
 } from "@/lib/devices/presence";
@@ -1045,48 +1087,55 @@ export function AttentionRegion({
   const shown = groups[tab];
 
   return (
-    <section
-      aria-label="需要关注"
-      className="mb-4 rounded-lg border border-border bg-foreground/[0.03] p-3"
-    >
-      <div className="flex flex-wrap items-center gap-3">
-        <h2 className="text-[14px] font-semibold">需要关注</h2>
-        <SegmentedTabs
-          label="关注分类"
-          onValueChange={setTab}
-          tabs={[
-            {
-              value: "needsYou",
-              label: `需要操作 (${groups.needsYou.length})`,
-            },
-            { value: "review", label: `查收结果 (${groups.review.length})` },
-          ]}
-          value={tab}
-        />
+    /*
+     * The reference draws this area as text tabs with a bar under the chosen one, over a bordered
+     * panel; the tabs ARE its heading, so no separate title sits above them.
+     */
+    <section aria-label="需要关注" className="mt-[26px]">
+      <SegmentedTabs
+        className="w-fit gap-[20px] [&_[role=tab]]:px-[8px] [&_[role=tab]]:text-[15px]"
+        label="关注分类"
+        onValueChange={setTab}
+        tabs={[
+          {
+            value: "needsYou",
+            label: `需要操作 (${groups.needsYou.length})`,
+          },
+          { value: "review", label: `查收结果 (${groups.review.length})` },
+        ]}
+        value={tab}
+        variant="underline"
+      />
+      <div className="mt-[14px] rounded-[10px] border border-border bg-card">
+        {shown.length === 0 ? (
+          <div className="flex min-h-[131px] flex-col items-center justify-center px-6 text-center">
+            <p className="font-semibold text-[14px] leading-[20px]">
+              {tab === "needsYou" ? "暂无需要操作的任务" : "暂无待查收的结果"}
+            </p>
+            <p className="mt-[7px] text-[12px] text-muted-foreground leading-[16px]">
+              {tab === "needsYou"
+                ? "需要你确认、回答或补充信息的任务会显示在这里。"
+                : "员工做完、等你过目的任务会显示在这里。"}
+            </p>
+          </div>
+        ) : (
+          <ul className="list-none space-y-1.5 p-2">
+            {shown.map((task) => (
+              // TaskCard is an `li` of its own — the board's cards and these are the same cards.
+              <TaskCard
+                decidingIds={decidingIds}
+                key={task.id}
+                machine={machineLabel(task.deviceId)}
+                onArchive={onArchive}
+                onDecide={onDecide}
+                onReview={onReview}
+                pendingIds={pendingIds}
+                task={task}
+              />
+            ))}
+          </ul>
+        )}
       </div>
-      {shown.length === 0 ? (
-        <p className="text-muted-foreground pt-3 text-sm">
-          {tab === "needsYou"
-            ? "暂无需要操作的任务——需要你确认、回答或补充信息的任务会显示在这里"
-            : "暂无待查收的结果——员工做完、等你过目的任务会显示在这里"}
-        </p>
-      ) : (
-        <ul className="list-none space-y-1.5 pt-3">
-          {shown.map((task) => (
-            // TaskCard is an `li` of its own — the board's cards and these are the same cards.
-            <TaskCard
-              decidingIds={decidingIds}
-              key={task.id}
-              machine={machineLabel(task.deviceId)}
-              onArchive={onArchive}
-              onDecide={onDecide}
-              onReview={onReview}
-              pendingIds={pendingIds}
-              task={task}
-            />
-          ))}
-        </ul>
-      )}
     </section>
   );
 }
@@ -1142,11 +1191,11 @@ export const whoAddress = (
   };
 };
 
-/** Spec A4's 数据周期 dropdown. Its own words, since the 状态 dropdown beside it also has a 全部. */
+/** Spec A4's 数据周期 dropdown, in the reference's words: the box already says 数据周期. */
 export const PERIODS: { label: string; value: Period }[] = [
-  { label: "最近一周", value: "week" },
-  { label: "最近一月", value: "month" },
-  { label: "全部时间", value: "all" },
+  { label: "一周", value: "week" },
+  { label: "一个月", value: "month" },
+  { label: "全部", value: "all" },
 ];
 
 function TasksPage() {
@@ -1165,6 +1214,8 @@ function TasksPage() {
     view,
     source: trigger,
   } = address;
+  /* The list's own window: the banner's unless a person chose one in the list's toolbar. */
+  const listPeriod = address.listPeriod ?? period;
   const navigate = useNavigate();
   const machines = useQuery(devicesQueryOptions());
   /*
@@ -1195,6 +1246,7 @@ function TasksPage() {
   const setStatus = (next: string) => patch({ status: next });
   const setSearch = (next: string) => patch({ q: next });
   const setPeriod = (next: Period) => patch({ period: next });
+  const setListPeriod = (next: Period) => patch({ listPeriod: next });
   const setAttention = (next: AttentionTab) =>
     patch({ attention: next === "review" ? "review" : undefined });
   const wire = boardQuery(address);
@@ -1218,7 +1270,15 @@ function TasksPage() {
     ...(group ? [`group:${group}`] : []),
   ];
   const tasks = useQuery({
-    queryKey: ["tasks", period, status, search, machineId, crew, ...byTrigger],
+    queryKey: [
+      "tasks",
+      listPeriod,
+      status,
+      search,
+      machineId,
+      crew,
+      ...byTrigger,
+    ],
     queryFn: () =>
       client<Task[]>(`/api/tasks?${wire.list}`, "tasks", {
         fallback: "无法读取任务，请稍后重试。",
@@ -1359,13 +1419,52 @@ function TasksPage() {
     void summary.refetch();
     act.reset();
   };
+  /*
+   * The machines, folded into the banner's 设备 filter: each says whether it is there and whether
+   * work is waiting on it (spec F4), because that is where a person looks when nothing is moving. A
+   * machine the address names but the list does not know is kept as an option, so the box shows the
+   * filter that is applied rather than a different one.
+   */
+  const machineOptions = [
+    { value: "", label: "全部" },
+    ...(machineId &&
+    machines.data !== undefined &&
+    !machines.data.some((machine) => machine.deviceId === machineId)
+      ? [{ value: machineId, label: "未登记的设备" }]
+      : []),
+    ...(machines.data ?? []).map((machine) => ({
+      value: machine.deviceId,
+      label: `${machine.name} · ${presenceWord(machine.online)}${
+        machine.needsAttention
+          ? ` · 需要你 (${machine.queued})`
+          : machine.queued
+            ? ` · ${machine.queued} 个在排队`
+            : ""
+      }`,
+    })),
+  ];
+  const emptySentence = boardEmptySentence({
+    machineId,
+    crew: crew || executor || group,
+    status,
+    q: search,
+    source: trigger,
+    machineRegistered,
+  });
+  const emptyList = (
+    <WorkbenchEmpty
+      className="gap-[4px] pt-[6px] pb-[40px] [&>p:first-of-type]:mt-0 [&>p:first-of-type]:font-semibold [&>p:last-of-type]:mt-[5px]"
+      description={emptySentence}
+      title="暂无任务"
+    />
+  );
   return (
     <PageShell
       width="workbench"
       /* Spec I2: hand a crew's flow a task from the board itself. */
       action={<DispatchToGroup />}
       title="任务看板"
-      description="从工作本身出发：员工做了什么、什么需要你、什么等你查收。"
+      description="从「事」出发：查看员工做了什么，完成必要操作并查收结果。"
     >
       {tasks.isError || summary.isError ? (
         <QueryError
@@ -1406,84 +1505,59 @@ function TasksPage() {
         </div>
       ) : null}
       {/*
-       * The parity plan's 工作记录横幅: the window in one line, counted from the stat bar's own read so
-       * the banner and the four cards can never disagree. Cached data rides through a failed refetch.
+       * The parity plan's 工作记录横幅, drawn as the reference draws it: the panel HOLDS the window's
+       * scope (数据周期, 设备), the four cards and the status line. Everything in it is counted from
+       * the stat bar's own read -- without the status or the search applied -- so the cards and the
+       * line can never disagree, and cached data rides through a failed refetch.
        */}
       <WorkRecordBanner
-        failed={summary.isError}
-        periodLabel={
-          PERIODS.find((entry) => entry.value === period)?.label ?? ""
+        controls={
+          <>
+            {(machines.data?.length ?? 0) > 0 ? (
+              <LabeledSelect
+                className="max-w-[320px] bg-card [&>span]:text-foreground"
+                label="设备"
+                onValueChange={(next) => patch({ machineId: next })}
+                options={machineOptions}
+                value={machineId}
+              />
+            ) : null}
+            <LabeledSelect
+              className="w-[152px] bg-card [&>span]:text-foreground"
+              label="数据周期"
+              onValueChange={setPeriod}
+              options={PERIODS}
+              value={period}
+            />
+          </>
         }
-        record={summary.data === undefined ? null : workRecordOf(summary.data)}
-      />
-      {/*
-       * The board's scope: how far back and on which machine. Both narrow every area below — the
-       * cards, the attention area and the list — so they sit above all three rather than among the
-       * list's own filters.
-       */}
-      <fieldset
-        aria-label="看板范围"
-        className="mb-4 flex min-w-0 flex-wrap items-center gap-2"
       >
-        <select
-          aria-label="数据周期"
-          className={CONTROL}
-          onChange={(event) => setPeriod(event.target.value as Period)}
-          value={period}
-        >
-          {PERIODS.map((entry) => (
-            <option key={entry.value} value={entry.value}>
-              {entry.label}
-            </option>
-          ))}
-        </select>
-        {/*
-         * Which machine, from the machines this person owns: a task list without the laptop in it is a
-         * different question answered. A machine with work waiting on it says so here, because that is
-         * where a person looks when something is not moving.
-         */}
-        {(machines.data?.length ?? 0) > 0 ? (
-          <span className="flex flex-wrap items-center gap-2">
-            <button
-              aria-pressed={!machineId}
-              type="button"
-              onClick={() => patch({ machineId: "" })}
-              className={choiceClass(!machineId)}
-            >
-              全部设备
-            </button>
-            {(machines.data ?? []).map((machine) => (
-              <button
-                aria-pressed={machineId === machine.deviceId}
-                key={machine.deviceId}
-                type="button"
-                onClick={() => patch({ machineId: machine.deviceId })}
-                className={choiceClass(machineId === machine.deviceId)}
-              >
-                {machine.name}
-                {/* Spec F4: each machine says whether it is there, not only when it is away. */}
-                {` · ${presenceWord(machine.online)}`}
-                {machine.needsAttention
-                  ? ` · 需要你 (${machine.queued})`
-                  : machine.queued
-                    ? ` · ${machine.queued} 个在排队`
-                    : ""}
-              </button>
-            ))}
-          </span>
-        ) : null}
-      </fieldset>
-      {/*
-       * The window's own totals, read without the status or the search applied (see `summary`): four
-       * numbers that moved when you filtered would describe the filter rather than the workspace.
-       */}
-      {summary.data !== undefined ? (
-        <StatBar
-          onSelect={setStatus}
-          status={status}
-          tasks={summary.data ?? []}
-        />
-      ) : null}
+        {(() => {
+          const line = (
+            <WorkRecordStatus
+              devices={ownerPresence(machines.data)}
+              failed={summary.isError}
+              record={
+                summary.data === undefined ? null : workRecordOf(summary.data)
+              }
+              running={
+                (summary.data ?? []).filter((task) => task.status === "running")
+                  .length
+              }
+            />
+          );
+          return summary.data !== undefined ? (
+            <StatBar
+              footer={line}
+              onSelect={setStatus}
+              status={status}
+              tasks={summary.data}
+            />
+          ) : (
+            line
+          );
+        })()}
+      </WorkRecordBanner>
       {/*
        * A7's region, fixed above the board. It reads the same list the board renders, on purpose: a
        * second fetch would put two answers to "what needs me" on one screen, and they would disagree
@@ -1504,81 +1578,98 @@ function TasksPage() {
           tasks={list}
         />
       ) : null}
-      <section aria-label="全部任务">
-        <div className="flex flex-wrap items-center gap-3 pb-3">
-          <h2 className="text-[14px] font-semibold">全部任务</h2>
+      <section aria-label="全部任务" className="mt-[33px]">
+        <div className="flex min-h-[32px] flex-wrap items-center gap-3">
+          <h2 className="font-bold text-[16px] leading-[32px]">全部任务</h2>
+          {/*
+           * The reference's icon pill: a dark segment for the chosen view on a lighter track, 32px
+           * tall and 76px wide. The names stay for assistive technology.
+           */}
           <SegmentedTabs
-            className="ml-auto"
+            className="ml-auto gap-[4px] bg-sidebar-accent p-[4px] [&_[aria-selected=true]]:bg-card! [&_[role=tab]]:h-[24px] [&_[role=tab]]:w-[32px] [&_[role=tab]]:px-0"
             label="视图"
             onValueChange={setView}
             tabs={(["list", "lanes"] as const).map((mode) => ({
               value: mode,
-              label: VIEW_LABEL[mode],
+              label: (
+                <>
+                  {mode === "list" ? (
+                    <IconList aria-hidden="true" className="size-[16px]" />
+                  ) : (
+                    <IconStack2 aria-hidden="true" className="size-[16px]" />
+                  )}
+                  <span className="sr-only">{VIEW_LABEL[mode]}</span>
+                </>
+              ),
             }))}
             value={view}
           />
         </div>
-        <div className="flex flex-wrap items-center gap-2 pb-4">
-          <input
-            aria-label="搜索任务"
+        {/*
+         * Spec A4: what was said, who did it — one coworker or a whole crew — how it started, which
+         * state it is in, and how far back the list reaches. Each writes one axis of the address
+         * (`q`, `executor`/`group`, `source`, `status`, `listPeriod`), so a narrowed board can be
+         * bookmarked and shared. Widths are the reference's at 1696px.
+         */}
+        <div className="mt-[12px] flex flex-wrap items-center gap-2">
+          <SearchBox
+            className="w-[258px] bg-card"
+            label="搜索任务"
+            onValueChange={setSearch}
+            placeholder="搜索任务、员工或群组"
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="搜索任务"
-            className={`${CONTROL} w-56 placeholder:text-muted-foreground`}
           />
-          {/*
-           * Spec A4: who did it — one coworker or a whole crew — and how it started, then which state
-           * it is in. Each writes one axis of the address (`executor`/`group`, `source`, `status`), so a
-           * narrowed board can be bookmarked and shared and means what it did when these were buttons.
-           */}
-          <select
-            aria-label="员工/群组"
-            className={CONTROL}
-            onChange={(event) => patch(whoAddress(event.target.value))}
+          <LabeledSelect
+            className="w-[209px] bg-card"
+            label="员工 / 群组"
+            onValueChange={(next) => patch(whoAddress(next))}
+            options={[
+              { value: "", label: "全部" },
+              ...(who && !crewOptions.some((option) => option.value === who)
+                ? // A link from elsewhere may name a roster no option spells; it is still what is applied.
+                  [{ value: who, label: "当前筛选的员工" }]
+                : []),
+              ...crewOptions,
+            ]}
             value={who}
-          >
-            <option value="">全部员工/群组</option>
-            {who && !crewOptions.some((option) => option.value === who) ? (
-              // A link from elsewhere may name a roster no option spells; it is still what is applied.
-              <option value={who}>当前筛选的员工</option>
-            ) : null}
-            {crewOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label="触发方式"
-            className={CONTROL}
-            onChange={(event) =>
-              patch({ source: triggerOf(event.target.value) })
-            }
+          />
+          <LabeledSelect
+            className="w-[209px] bg-card"
+            label="触发方式"
+            onValueChange={(next) => patch({ source: triggerOf(next) })}
+            options={[
+              { value: "", label: "全部" },
+              ...TRIGGERS.map((entry) => ({
+                value: entry.key,
+                label: entry.label,
+              })),
+            ]}
             value={trigger}
-          >
-            <option value="">全部触发方式</option>
-            {TRIGGERS.map((entry) => (
-              <option key={entry.key} value={entry.key}>
-                {entry.label}
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label="状态"
-            className={CONTROL}
-            onChange={(event) => setStatus(event.target.value)}
+          />
+          <LabeledSelect
+            className="w-[209px] bg-card"
+            label="任务状态"
+            onValueChange={setStatus}
+            options={[
+              ...(status &&
+              !STATUS_FILTERS.some((entry) => entry.key === status)
+                ? // A link may name a status this release has no word for; it is still what is applied.
+                  [{ value: status, label: `当前状态：${status}` }]
+                : []),
+              ...STATUS_FILTERS.map((entry) => ({
+                value: entry.key,
+                label: entry.label,
+              })),
+            ]}
             value={status}
-          >
-            {status && !STATUS_FILTERS.some((entry) => entry.key === status) ? (
-              // A link may name a status this release has no word for; it is still what is applied.
-              <option value={status}>当前状态：{status}</option>
-            ) : null}
-            {STATUS_FILTERS.map((entry) => (
-              <option key={entry.key} value={entry.key}>
-                {entry.label}
-              </option>
-            ))}
-          </select>
+          />
+          <LabeledSelect
+            className="w-[209px] bg-card"
+            label="数据周期"
+            onValueChange={setListPeriod}
+            options={PERIODS}
+            value={listPeriod}
+          />
           {/*
            * A crew arrived at from /wakers, shown as the thing it was filtered by and dismissible
            * without losing the machine alongside it: two axes, each cleared on its own.
@@ -1593,99 +1684,93 @@ function TasksPage() {
             </button>
           ) : null}
         </div>
-        {tasks.data === undefined ? (
-          tasks.isPending ? (
-            <p className="text-muted-foreground text-sm">正在加载任务…</p>
-          ) : null
-        ) : view === "list" ? (
-          <ul className="list-none space-y-1">
-            {list.map((task) => (
-              <TaskCard
-                key={task.id}
-                task={task}
-                machine={machineLabel(task.deviceId)}
-                onReview={(id) => runAction(id, "review")}
-                onArchive={(id) => runAction(id, "archive")}
-                pendingIds={pendingIds}
-                onDecide={approval.decide}
-                decidingIds={approval.pending}
-              />
-            ))}
-            {/*
-             * The board's nothing-here sentence, said per machine: "no tasks" and "this machine is idle"
-             * are different facts, and the second one is the reason the filter exists.
-             */}
-            {list.length === 0 && !readFailed ? (
-              <li className="py-10 text-center text-sm opacity-50">
-                {boardEmptySentence({
-                  machineId,
-                  crew: crew || executor || group,
-                  status,
-                  q: search,
-                  source: trigger,
-                  machineRegistered,
-                })}
-              </li>
-            ) : null}
-          </ul>
-        ) : (
-          <>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-              {LANES.map((lane) => (
-                // biome-ignore lint/a11y/useSemanticElements: the lane column is the drop target for its whole area, including the empty space under its cards — which is the part that has to answer. A form region is not what that is.
-                <div
-                  aria-label={`${lane.label}泳道`}
-                  key={lane.key}
-                  role="group"
-                  onDragOver={(event) => {
-                    if (lane.key === "finished") event.preventDefault();
-                  }}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    dropLane(
-                      lane.key,
-                      event.dataTransfer.getData("text/plain"),
-                    );
-                  }}
-                  className="bg-foreground/[0.02] rounded-xl p-2"
-                >
-                  <div className="pb-2 text-xs font-medium uppercase tracking-wide opacity-50">
-                    {lane.label}
-                  </div>
-                  <ul className="list-none space-y-1.5">
-                    {list
-                      .filter((task) => laneOfTask(task).includes(lane.key))
-                      .map((task) => (
-                        <TaskCard
-                          key={task.id}
-                          task={task}
-                          machine={machineLabel(task.deviceId)}
-                          onReview={(id) => runAction(id, "review")}
-                          onArchive={(id) => runAction(id, "archive")}
-                          pendingIds={pendingIds}
-                          onDecide={approval.decide}
-                          decidingIds={approval.pending}
-                        />
-                      ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
-            {!readFailed && (list.length === 0 || lanesUnmappable(list)) ? (
-              <p className="text-muted-foreground py-10 text-center text-sm opacity-50">
-                {lanesUnmappable(list)
-                  ? "当前任务暂无可归入泳道的状态，可切换列表查看。"
-                  : boardEmptySentence({
-                      machineId,
-                      crew: crew || executor || group,
-                      status,
-                      q: search,
-                      source: trigger,
-                      machineRegistered,
-                    })}
+        {/* A read that failed with nothing cached draws no panel: the alert above says why. */}
+        {tasks.data === undefined && !tasks.isPending ? null : (
+          <div
+            className="mt-[12px] rounded-[10px] border border-border bg-card"
+            data-slot="task-results"
+          >
+            {tasks.data === undefined ? (
+              <p className="px-4 py-10 text-center text-muted-foreground text-sm">
+                正在加载任务…
               </p>
-            ) : null}
-          </>
+            ) : view === "list" ? (
+              <>
+                {list.length > 0 ? (
+                  <ul className="list-none space-y-1 p-2">
+                    {list.map((task) => (
+                      <TaskCard
+                        key={task.id}
+                        task={task}
+                        machine={machineLabel(task.deviceId)}
+                        onReview={(id) => runAction(id, "review")}
+                        onArchive={(id) => runAction(id, "archive")}
+                        pendingIds={pendingIds}
+                        onDecide={approval.decide}
+                        decidingIds={approval.pending}
+                      />
+                    ))}
+                  </ul>
+                ) : null}
+                {/*
+                 * The board's nothing-here sentence, said per machine: "no tasks" and "this machine is
+                 * idle" are different facts, and the second one is the reason the filter exists.
+                 */}
+                {list.length === 0 && !readFailed ? emptyList : null}
+              </>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 gap-3 p-2 md:grid-cols-3">
+                  {LANES.map((lane) => (
+                    // biome-ignore lint/a11y/useSemanticElements: the lane column is the drop target for its whole area, including the empty space under its cards — which is the part that has to answer. A form region is not what that is.
+                    <div
+                      aria-label={`${lane.label}泳道`}
+                      key={lane.key}
+                      role="group"
+                      onDragOver={(event) => {
+                        if (lane.key === "finished") event.preventDefault();
+                      }}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        dropLane(
+                          lane.key,
+                          event.dataTransfer.getData("text/plain"),
+                        );
+                      }}
+                      className="bg-foreground/[0.02] rounded-xl p-2"
+                    >
+                      <div className="pb-2 text-xs font-medium uppercase tracking-wide opacity-50">
+                        {lane.label}
+                      </div>
+                      <ul className="list-none space-y-1.5">
+                        {list
+                          .filter((task) => laneOfTask(task).includes(lane.key))
+                          .map((task) => (
+                            <TaskCard
+                              key={task.id}
+                              task={task}
+                              machine={machineLabel(task.deviceId)}
+                              onReview={(id) => runAction(id, "review")}
+                              onArchive={(id) => runAction(id, "archive")}
+                              pendingIds={pendingIds}
+                              onDecide={approval.decide}
+                              decidingIds={approval.pending}
+                            />
+                          ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+                {!readFailed && lanesUnmappable(list) ? (
+                  <p className="py-10 text-center text-muted-foreground text-sm">
+                    当前任务暂无可归入泳道的状态，可切换列表查看。
+                  </p>
+                ) : !readFailed && list.length === 0 ? (
+                  emptyList
+                ) : null}
+              </>
+            )}
+          </div>
         )}
       </section>
     </PageShell>

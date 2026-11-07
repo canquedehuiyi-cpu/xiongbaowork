@@ -222,7 +222,7 @@ describe("boardQuery", () => {
         q: "",
         source: "autonomous",
       }),
-    ).toBe("没有符合当前筛选条件的任务。");
+    ).toBe("当前筛选条件下没有可展示的任务。");
   });
 });
 

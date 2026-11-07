@@ -46,6 +46,12 @@ afterAll(async () => {
 });
 
 const RESTING = "正在休息";
+/*
+ * The F5 claim about the ADDRESSED machine. The 工作记录 banner also says 员工们正在休息 when the
+ * window holds no running work -- a different fact, read from the tasks, not from the device list --
+ * so the negative checks below look for the F5 sentence itself.
+ */
+const F5_RESTING = /Waker 们正在休息/;
 const IDLE =
   "这台机器在当前时间范围内没有待办——其他机器在 /tasks 有各自的看板。";
 
@@ -170,8 +176,8 @@ test("a registered device with no tasks keeps the idle sentence", async () => {
   const { view } = draw("/tasks?machineId=d-1");
   await view.findByText(IDLE);
   // The chip for the registered machine is drawn, so the list has answered before the check.
-  await view.findByRole("button", { name: /dev-laptop/ });
-  expect(view.queryByText(new RegExp(RESTING))).toBeNull();
+  await view.findByRole("option", { name: /dev-laptop/ });
+  expect(view.queryByText(F5_RESTING)).toBeNull();
 });
 
 test("while the device list is still loading, nobody is said to be resting", async () => {
@@ -179,7 +185,7 @@ test("while the device list is still loading, nobody is said to be resting", asy
   const { view, queryClient } = draw("/tasks?machineId=ghost-9");
   await view.findByText(IDLE);
   expect(queryClient.getQueryState(deviceKeys.list())?.status).toBe("pending");
-  expect(view.queryByText(new RegExp(RESTING))).toBeNull();
+  expect(view.queryByText(F5_RESTING)).toBeNull();
 });
 
 test("when the device list failed, nobody is said to be resting", async () => {
@@ -189,13 +195,13 @@ test("when the device list failed, nobody is said to be resting", async () => {
     expect(queryClient.getQueryState(deviceKeys.list())?.status).toBe("error"),
   );
   await view.findByText(IDLE);
-  expect(view.queryByText(new RegExp(RESTING))).toBeNull();
+  expect(view.queryByText(F5_RESTING)).toBeNull();
 });
 
 test("each machine on the board says whether it is online (spec F4)", async () => {
   controlFetch("ok");
   const { view } = draw("/tasks");
-  const chip = await view.findByRole("button", { name: /dev-laptop/ });
+  const chip = await view.findByRole("option", { name: /dev-laptop/ });
   // Said when it is there, not only when it is away.
   expect(chip.textContent).toBe("dev-laptop · 在线");
 });

@@ -120,19 +120,18 @@ test("the counts ride the tabs, and 需要操作 includes what broke", async () 
 
 test("the empty ask says the spec's sentence, not a generic nothing", () => {
   const view = draw([card({ status: "running" })]);
+  // A title and the sentence under it, as the reference's empty panel draws them.
+  expect(view.getByText("暂无需要操作的任务")).toBeTruthy();
   expect(
-    view.getByText(
-      "暂无需要操作的任务——需要你确认、回答或补充信息的任务会显示在这里",
-    ),
+    view.getByText("需要你确认、回答或补充信息的任务会显示在这里。"),
   ).toBeTruthy();
 });
 
 test("the empty results tab says what belongs there", async () => {
   const view = draw([card({ status: "needs_action" })]);
   await userEvent.click(view.getByRole("tab", { name: "查收结果 (0)" }));
-  expect(
-    view.getByText("暂无待查收的结果——员工做完、等你过目的任务会显示在这里"),
-  ).toBeTruthy();
+  expect(view.getByText("暂无待查收的结果")).toBeTruthy();
+  expect(view.getByText("员工做完、等你过目的任务会显示在这里。")).toBeTruthy();
 });
 
 /*

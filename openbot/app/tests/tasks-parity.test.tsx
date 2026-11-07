@@ -23,9 +23,9 @@ import { settleReactWork } from "./settle-react-work";
 
 /**
  * F2 任务看板 parity (docs/plans/2026-11-07-qoderwake-cn-frontend-parity.md, 任务看板 row): the page
- * reads top to bottom as 工作记录横幅 → 数据周期工具栏 → 四张统计卡 → 关注区（需要操作 / 查收结果）→
- * 全部任务（列表/泳道、搜索、员工/群组 · 触发 · 状态筛选）, and every switch and filter lives in the
- * address. Real route, real router, controlled fetch — the harness tasks-workbench-navigation uses.
+ * reads top to bottom as 工作记录横幅（数据周期 + 四张统计卡 + 状态行）→ 关注区（需要操作 / 查收结果）→
+ * 全部任务（列表/泳道、搜索、员工/群组 · 触发 · 状态 · 数据周期筛选）, and every switch and filter lives
+ * in the address. The reference screenshot puts the cards and the period INSIDE the banner. Real route, real router, controlled fetch — the harness tasks-workbench-navigation uses.
  */
 let registeredHere = false;
 const originalFetch = globalThis.fetch;
@@ -149,7 +149,9 @@ const region = (view: ReturnType<typeof render>, name: string) =>
 /** Waits until both reads have answered: the banner counts and the attention area is drawn. */
 const ready = (view: ReturnType<typeof render>) =>
   waitFor(() => {
-    expect(region(view, "工作记录").textContent).toContain("4 个任务");
+    expect(
+      within(region(view, "任务统计")).getAllByRole("button")[0]?.textContent,
+    ).toBe("4任务总数");
     expect(region(view, "需要关注")).toBeTruthy();
     expect(region(view, "全部任务").textContent).toContain("running card");
   });
@@ -159,18 +161,20 @@ const laneGroups = (view: ReturnType<typeof render>) =>
     (node.getAttribute("aria-label") ?? "").endsWith("泳道"),
   );
 
-test("the page reads banner, period group, four cards, attention, then all tasks", async () => {
+test("the page reads banner (period, then four cards), attention, then all tasks", async () => {
   controlFetch([]);
   const { view } = draw("/tasks");
   await ready(view);
 
-  const order = [
-    region(view, "工作记录"),
-    view.getByRole("group", { name: "看板范围" }),
-    region(view, "任务统计"),
-    region(view, "需要关注"),
-    region(view, "全部任务"),
-  ];
+  // Inside the banner: its period filter comes before the four cards.
+  const banner = region(view, "工作记录");
+  const period = within(banner).getByLabelText("数据周期");
+  const cards = within(banner).getByRole("region", { name: "任务统计" });
+  expect(
+    period.compareDocumentPosition(cards) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+
+  const order = [banner, region(view, "需要关注"), region(view, "全部任务")];
   for (let index = 1; index < order.length; index += 1) {
     const before = order[index - 1] as HTMLElement;
     const after = order[index] as HTMLElement;
@@ -188,24 +192,31 @@ test("the 工作记录 banner summarises the chosen period from the tasks alread
   await ready(view);
   const banner = region(view, "工作记录");
   // The chosen period by its own word, the window's count, and who and how the work started.
-  expect(banner.textContent).toContain("最近一月");
-  expect(banner.textContent).toContain("4 个任务");
+  expect(
+    (within(banner).getByLabelText("数据周期") as HTMLSelectElement)
+      .selectedOptions[0]?.textContent,
+  ).toBe("一个月");
+  expect(
+    within(
+      within(banner).getByRole("region", { name: "任务统计" }),
+    ).getAllByRole("button")[0]?.textContent,
+  ).toBe("4任务总数");
   expect(banner.textContent).toContain("2 位员工");
   expect(banner.textContent).toContain("对话触发 2");
   expect(banner.textContent).toContain("自主工作 1");
   expect(banner.textContent).toContain("交接 1");
 });
 
-test("the four cards are one row: 任务总数, 进行中, 需要操作, 已结束", async () => {
+test("the four cards are one row: 任务总数, 进行中任务, 需要操作, 已结束任务", async () => {
   controlFetch([]);
   const { view } = draw("/tasks");
   await ready(view);
   const cards = within(region(view, "任务统计")).getAllByRole("button");
   expect(cards.map((card) => card.textContent?.replace(/\d+/g, ""))).toEqual([
     "任务总数",
-    "进行中",
+    "进行中任务",
     "需要操作",
-    "已结束",
+    "已结束任务",
   ]);
   expect(cards.map((card) => card.textContent?.replace(/\D+/g, ""))).toEqual([
     "4",
@@ -215,22 +226,24 @@ test("the four cards are one row: 任务总数, 进行中, 需要操作, 已结�
   ]);
 });
 
-test("the period control sits in the top scope group and the list filters in the all-tasks area, all 32px tall", async () => {
+test("the period control sits in the banner and the list filters in the all-tasks area, all 32px tall", async () => {
   controlFetch([]);
   const { view } = draw("/tasks");
   await ready(view);
-  const toolbar = view.getByRole("group", { name: "看板范围" });
-  const period = within(toolbar).getByLabelText("数据周期");
+  const period = within(region(view, "工作记录")).getByLabelText("数据周期");
   const all = region(view, "全部任务");
   const controls = [
     period,
     within(all).getByLabelText("搜索任务"),
-    within(all).getByLabelText("员工/群组"),
+    within(all).getByLabelText("员工 / 群组"),
     within(all).getByLabelText("触发方式"),
-    within(all).getByLabelText("状态"),
+    within(all).getByLabelText("任务状态"),
+    within(all).getByLabelText("数据周期"),
   ];
   for (const control of controls) {
-    expect(control.className).toContain("h-[32px]");
+    // The 32px box is the shared control's frame around the native field.
+    const frame = control.closest("[data-slot]") as HTMLElement;
+    expect(frame.className).toContain("h-[32px]");
   }
 });
 
