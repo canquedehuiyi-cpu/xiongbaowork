@@ -85,6 +85,7 @@ function snapshot(
     groupsByUser: new Map<string, string[]>(),
     settings: DEFAULT_ENTERPRISE_SETTINGS,
     network: [],
+    mcpAppOfRow: new Map<string, string>(),
     loadedAt: new Date(),
     ...overrides,
   };
@@ -186,6 +187,44 @@ describe("the computer boundary overlay", () => {
     expect(decideFromSnapshot(current, call("shadow-mcp"))?.matched).toBe(
       "mcp_allowlist",
     );
+  });
+
+  test("the MCP allowlist approves a curated app by its key or by its row id", () => {
+    /*
+     * Since G01-E a curated connector's row is `team:<catalogue key>`, while a tool call names the
+     * app (`notion/search`, so `mcp.server` is `notion`). An allowlist an earlier admin screen saved
+     * holds the row id; one saved now holds the app key. Both must approve the app, and a custom
+     * server (no catalogue key, id = its own name) keeps matching by its name.
+     */
+    const call = (server: string) =>
+      context({
+        tool: { name: `${server}__search` },
+        intent: "read_tool",
+        page: { url: "", host: "" },
+        mcp: { server, tool: "search", effect: "read" },
+      });
+    const withList = (servers: string[]) =>
+      snapshot({
+        settings: {
+          ...DEFAULT_ENTERPRISE_SETTINGS,
+          mcpAllowlist: { enabled: true, servers },
+        },
+        mcpAppOfRow: new Map([["team:notion", "notion"]]),
+      });
+    expect(
+      decideFromSnapshot(withList(["team:notion"]), call("notion")),
+    ).toBeNull();
+    expect(decideFromSnapshot(withList(["notion"]), call("notion"))).toBeNull();
+    expect(
+      decideFromSnapshot(withList(["my-custom"]), call("my-custom")),
+    ).toBeNull();
+    expect(
+      decideFromSnapshot(withList(["team:notion"]), call("jira"))?.matched,
+    ).toBe("mcp_allowlist");
+    // An entry the database does not resolve is not guessed at from its spelling.
+    expect(
+      decideFromSnapshot(withList(["team:linear"]), call("linear"))?.matched,
+    ).toBe("mcp_allowlist");
   });
 
   test("a navigation off the allowlist is refused before it reaches the computer", () => {
