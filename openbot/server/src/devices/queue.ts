@@ -203,7 +203,7 @@ export function createDeviceQueue(database: Database): DeviceQueue {
       .limit(1);
     if (unknown)
       throw new DeviceDeliveryError(
-        "This device is paused because an action may already have run. Its owner must check the device and review the receipt before requesting another action.",
+        "这台设备已暂停：有一项操作可能已经执行，但没有收到结果。请设备的主人先在「设置 › 我的设备」里核查并恢复，再让员工继续操作这台设备。",
       );
   };
   const read = (target: DispatchTarget, key: string) =>
@@ -237,8 +237,8 @@ export function createDeviceQueue(database: Database): DeviceQueue {
     if (receipt.state === "completed") return receipt.output as T;
     throw new DeviceDeliveryError(
       receipt.state === "failed"
-        ? "The device refused this action. It will not be replayed."
-        : "This action may already have run. Check the device before creating a new action.",
+        ? "设备拒绝了这项操作，不会重放。"
+        : "这项操作可能已经执行，但没有收到结果。请先在设备上核查，再发起新的操作。",
       receipt.state !== "failed",
     );
   };
