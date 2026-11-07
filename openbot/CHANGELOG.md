@@ -8,6 +8,11 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+- **Connecting a curated app by its `team:<key>` id works again.** The connect route, its OAuth
+  callback and the memory-source check now resolve the catalogue entry from the row's
+  `catalogue_key` (or the tool ref's app key), so `POST /api/plugins/servers/team%3A<key>/connect`
+  no longer answers 400 "not connected as an individual person", and a person-OAuth memory source
+  asks the person to reconnect before the app is called.
 - **An added curated connector is found again by its catalogue key.** Since its row became the
   team's `team:<key>`, `/admin/plugins` listed it twice (connected, and still not added under
   发现插件), its admin page showed the switch off and a bearer-token row instead of 「OAuth 客户端」, and
