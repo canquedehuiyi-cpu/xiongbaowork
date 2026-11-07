@@ -21,8 +21,7 @@ import {
   Outlet,
   RouterProvider,
 } from "@tanstack/react-router";
-import { cleanup, render, waitFor, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { cleanup, render, waitFor } from "@testing-library/react";
 import type { AgentProfile } from "@/lib/agents/queries";
 import { authKeys } from "@/lib/auth/queries";
 import type {
@@ -64,8 +63,6 @@ afterEach(() => {
 
 const originalFetch = globalThis.fetch;
 const calls: { method: string; path: string }[] = [];
-const gets = (prefix: string) =>
-  calls.filter((call) => call.method === "GET" && call.path.startsWith(prefix));
 
 const agentId = "agent-1";
 const meId = "user-me";
@@ -141,10 +138,6 @@ const event = (
 
 type Answer = { status: number; body: unknown } | "hang";
 const ok = (body: unknown): Answer => ({ status: 200, body });
-const fail = (status: number, error: string): Answer => ({
-  status,
-  body: { error },
-});
 
 type Answers = {
   agent: Answer;
