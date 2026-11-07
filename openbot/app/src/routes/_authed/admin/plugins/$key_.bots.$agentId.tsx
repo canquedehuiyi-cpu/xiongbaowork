@@ -27,6 +27,7 @@ import {
   setPluginGrantMutationOptions,
 } from "@/lib/plugins/mutations";
 import {
+  appKeyOf,
   type PluginTool,
   pluginsPageQueryOptions,
 } from "@/lib/plugins/queries";
@@ -104,9 +105,16 @@ function RouteComponent() {
     onError: (thrown: Error) => setError(thrown.message),
   });
 
-  const server = plugins.data?.servers.find((row) => row.id === key);
+  /*
+   * Either name: the route may carry the catalogue key or, from an old link, the row id, which for a
+   * curated connector is the team's `team:<catalogue key>` since G01-E.
+   */
+  const server = plugins.data?.servers.find(
+    (row) => row.id === key || appKeyOf(row) === key,
+  );
+  const appKey = server ? appKeyOf(server) : key;
   const appTitle =
-    plugins.data?.catalogue.find((item) => item.key === key)?.title ??
+    plugins.data?.catalogue.find((item) => item.key === appKey)?.title ??
     server?.title ??
     key;
   const bot =

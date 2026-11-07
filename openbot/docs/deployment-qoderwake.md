@@ -31,7 +31,7 @@ Release 附件 `container-images.json`，生成密钥，并把 `OPENBOT_IMAGE` �
 需要 curl、OpenSSL 和 jq。不设置 `OPENBOT_IMAGE` 时，Compose 使用只在源码构建后才存在的本机镜像，`up` 会失败。
 
 ```bash
-OPENBOT_TAG=v0.2.2
+OPENBOT_TAG=v0.2.3
 raw="https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/$OPENBOT_TAG/openbot/docker"
 mkdir -p docker
 curl --fail --silent --show-error --location -o docker/compose.delivery.yml "$raw/compose.delivery.yml"
@@ -226,7 +226,7 @@ Compose 把 `.env.delivery` 中的 `OPENBOT_IMAGE` 改为同样的 digest 引用
 部署和升级使用 digest，而不是可移动的标签；部署前可校验镜像由本仓库的发布流程构建。
 
 ```bash
-OPENBOT_TAG=v0.2.2
+OPENBOT_TAG=v0.2.3
 gh release download "$OPENBOT_TAG" -R canquedehuiyi-cpu/xiongbaowork --pattern container-images.json
 OPENBOT_IMAGE="$(jq -r .images.openbot.reference container-images.json)"
 gh attestation verify "oci://$OPENBOT_IMAGE" -R canquedehuiyi-cpu/xiongbaowork

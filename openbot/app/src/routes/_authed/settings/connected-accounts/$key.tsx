@@ -29,6 +29,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { connectAccountMutationOptions } from "@/lib/plugins/mutations";
 import {
+  appKeyOf,
   connectionsQueryOptions,
   pluginsPageQueryOptions,
 } from "@/lib/plugins/queries";
@@ -78,11 +79,19 @@ function RouteComponent() {
     },
   });
 
-  const entry = plugins.data?.catalogue.find((item) => item.key === key);
-  const server = (plugins.data?.servers ?? []).find((s) => s.id === key);
+  /*
+   * Either name finds the server: the list links by catalogue key while a curated connector's row is
+   * the team's `team:<catalogue key>` since G01-E. A connection names the ROW, so it is matched by
+   * the row's own id.
+   */
+  const server = (plugins.data?.servers ?? []).find(
+    (s) => s.id === key || appKeyOf(s) === key,
+  );
+  const appKey = server ? appKeyOf(server) : key;
+  const entry = plugins.data?.catalogue.find((item) => item.key === appKey);
   const enabled = server !== undefined;
   const connection = (connections.data?.connections ?? []).find(
-    (row) => row.serverId === key,
+    (row) => row.serverId === (server?.id ?? key),
   );
   /*
    * Asked of the row rather than the catalogue, because a brokered app has no catalogue entry at
@@ -337,7 +346,8 @@ function RouteComponent() {
                   disabled={!enabled || connect.isPending}
                   onClick={() => {
                     setNotice(null);
-                    connect.mutate(key);
+                    // The catalogue key: the consent route looks the vendor up by it.
+                    connect.mutate(appKey);
                   }}
                   size="sm"
                   type="button"

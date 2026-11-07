@@ -152,7 +152,12 @@ export function createMemoryIngestion(options: {
       throw new MemoryRefusedError(
         "Memory sources must use a read-only connected app action.",
       );
-    const access = accessFor(server, catalogueEntry(server.id));
+    // The entry is the app the tool ref names (the row's catalogue key, or its own id where it has
+    // none), never the row id: since G01-E a curated row is `team:<key>`, which names no entry.
+    const access = accessFor(
+      server,
+      catalogueEntry(tool.ref.slice(0, tool.ref.indexOf("/"))),
+    );
     if (
       access.credential === "person-oauth" &&
       !(await plugins.connectionsFor(source.ownerUserId)).some(
