@@ -527,7 +527,7 @@ test("the Waker/Group dropdown asks for one coworker as executor and a crew as g
   await resultsShouldShow(view, "failed card");
   const select = () =>
     view.container.querySelector(
-      'select[aria-label="Waker/Group"]',
+      'select[aria-label="员工/群组"]',
     ) as HTMLSelectElement;
   await waitFor(() => {
     expect(select().querySelectorAll("option").length).toBe(3);

@@ -4,12 +4,17 @@ import { useRef, useState } from "react";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import { PageShell } from "@/components/layout/page-shell";
 import { QueryError } from "@/components/layout/query-error";
+import { SegmentedTabs } from "@/components/layout/segmented-tabs";
 import {
   ApprovalActions,
   type OnBoardAnswer,
   useApprovalDecision,
 } from "@/components/tasks/approval-actions";
 import { DispatchToGroup } from "@/components/tasks/dispatch-to-group";
+import {
+  type WorkRecord,
+  WorkRecordBanner,
+} from "@/components/tasks/work-record-banner";
 import { Button } from "@/components/ui/button";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import { client, RequestError } from "@/lib/client";
@@ -132,9 +137,61 @@ export const Route = createFileRoute("/_authed/_app/tasks")({
    * complete questions. Declaring the schema required here would make unrelated links carry seven keys
    * nobody chose, so the route accepts a partial address and boardSearch fills in the rest.
    */
-  validateSearch: (search: Record<string, unknown>): Partial<BoardSearch> =>
-    boardSearch(search),
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): Partial<BoardSearch> & { attention?: "review" } => ({
+    ...boardSearch(search),
+    // The attention area's tab rides along only when it is not the default, so a bare /tasks stays bare.
+    ...(attentionOf(search) === "review" ? { attention: "review" } : {}),
+  }),
 });
+
+/**
+ * The attention area's two tabs (spec A7). Its own address key, `attention`, rather than an eighth
+ * field of `BoardSearch`: the tab changes which of the area's cards are drawn, never what is read, so
+ * it stays out of the wire format and the query keys.
+ */
+export type AttentionTab = "needsYou" | "review";
+
+export const attentionOf = (search: Record<string, unknown>): AttentionTab =>
+  search.attention === "review" ? "review" : "needsYou";
+
+/**
+ * The 工作记录 banner's line, counted over the stat bar's read: how many tasks, how many distinct
+ * coworkers did them, and how many started each way the 触发方式 dropdown names. A source no choice
+ * covers is in the total but in no trigger count, rather than being filed under a wrong one.
+ */
+export const workRecordOf = (
+  tasks: { source: string; executorAgentId: string | null }[],
+): WorkRecord => ({
+  total: tasks.length >= 200 ? "200+" : `${tasks.length}`,
+  capped: tasks.length >= 200,
+  coworkers: new Set(
+    tasks.flatMap((task) =>
+      task.executorAgentId ? [task.executorAgentId] : [],
+    ),
+  ).size,
+  triggers: TRIGGERS.map((trigger) => ({
+    // The dropdown's 自主工作（无人值守） says what the filter also means; the banner needs only the name.
+    label: trigger.label.replace(/（.*）$/, ""),
+    count: tasks.filter((task) => trigger.sources.includes(task.source)).length,
+  })),
+});
+
+/**
+ * One look for every control in the board's toolbars: the reference product's 32px control on the
+ * dark grey surface, a hairline border and 13px text.
+ */
+const CONTROL =
+  "h-[32px] rounded-md border border-border bg-foreground/[0.04] px-2.5 text-[13px] outline-none transition-colors hover:bg-foreground/[0.07] focus-visible:ring-2 focus-visible:ring-ring/50";
+
+/** A pill-shaped choice in the same toolbars (the machine filter), at the same height. */
+const choiceClass = (pressed: boolean) =>
+  `inline-flex h-[32px] items-center rounded-md border px-2.5 text-[13px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 ${
+    pressed
+      ? "border-foreground/30 bg-foreground/[0.1] text-foreground"
+      : "border-border bg-foreground/[0.04] text-muted-foreground hover:bg-foreground/[0.07] hover:text-foreground"
+  }`;
 
 /**
  * Where a card opens, as the server resolved it (`openbot/docs/contracts/tasks-open-field.md`).
@@ -530,32 +587,34 @@ export function StatBar({
   onSelect: (status: string) => void;
 }) {
   return (
-    <div className="pb-3">
-      <div className="flex flex-wrap gap-2">
+    <section aria-label="任务统计" className="mb-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {boardStats(tasks).map((stat) => (
           <button
             aria-pressed={status === stat.key}
-            className={`flex min-w-24 flex-col items-start rounded-lg px-3 py-2 text-left ${
+            className={`flex flex-col items-start gap-1 rounded-lg border px-4 py-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 ${
               status === stat.key
-                ? "bg-foreground text-background"
-                : "bg-foreground/5 hover:bg-foreground/10"
+                ? "border-foreground/30 bg-foreground/[0.08]"
+                : "border-border bg-foreground/[0.03] hover:bg-foreground/[0.06]"
             }`}
             key={stat.key || "all"}
             onClick={() => onSelect(status === stat.key ? "" : stat.key)}
             type="button"
           >
-            <span className="text-lg font-medium leading-tight">
+            <span className="text-[22px] font-semibold leading-tight tabular-nums">
               {stat.value}
             </span>
-            <span className="text-xs opacity-70">{stat.label}</span>
+            <span className="text-muted-foreground text-[12px]">
+              {stat.label}
+            </span>
           </button>
         ))}
       </div>
-      <p className="text-muted-foreground pt-1.5 text-xs">
+      <p className="text-muted-foreground pt-1.5 text-[12px]">
         已结束 = 已完成 + 失败 +
         待查收。四个数按所选周期统计；点一个数就只看这些任务，再点一次取消。
       </p>
-    </div>
+    </section>
   );
 }
 
@@ -961,43 +1020,49 @@ export function AttentionRegion({
   pendingIds,
   onDecide,
   decidingIds,
+  tab: chosenTab,
+  onTabChange,
 }: {
   tasks: Task[];
   machineLabel: (deviceId: string | null) => DevicePresence | null;
   onReview: (id: string) => void;
   onArchive: (id: string) => void;
   pendingIds: ReadonlySet<string>;
+  /**
+   * The page passes the tab from the address (`attention=`) so it survives a reload; drawn on its
+   * own (a test of the region alone) the region keeps the choice itself.
+   */
+  tab?: AttentionTab;
+  onTabChange?: (tab: AttentionTab) => void;
 } & ApprovalWiring) {
-  const [tab, setTab] = useState<"needsYou" | "review">("needsYou");
+  const [ownTab, setOwnTab] = useState<AttentionTab>("needsYou");
+  const tab = chosenTab ?? ownTab;
+  const setTab = (next: AttentionTab) => {
+    setOwnTab(next);
+    onTabChange?.(next);
+  };
   const groups = attentionGroups(tasks);
   const shown = groups[tab];
 
   return (
     <section
       aria-label="需要关注"
-      className="bg-foreground/[0.03] mb-4 rounded-xl p-3"
+      className="mb-4 rounded-lg border border-border bg-foreground/[0.03] p-3"
     >
-      <div className="flex flex-wrap items-center gap-2">
-        {(
-          [
-            ["needsYou", `需要操作 (${groups.needsYou.length})`],
-            ["review", `查收结果 (${groups.review.length})`],
-          ] as const
-        ).map(([key, label]) => (
-          <button
-            aria-pressed={tab === key}
-            className={`rounded-full px-3 py-1 text-sm ${
-              tab === key
-                ? "bg-foreground text-background"
-                : "bg-foreground/5 hover:bg-foreground/10"
-            }`}
-            key={key}
-            onClick={() => setTab(key)}
-            type="button"
-          >
-            {label}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center gap-3">
+        <h2 className="text-[14px] font-semibold">需要关注</h2>
+        <SegmentedTabs
+          label="关注分类"
+          onValueChange={setTab}
+          tabs={[
+            {
+              value: "needsYou",
+              label: `需要操作 (${groups.needsYou.length})`,
+            },
+            { value: "review", label: `查收结果 (${groups.review.length})` },
+          ]}
+          value={tab}
+        />
       </div>
       {shown.length === 0 ? (
         <p className="text-muted-foreground pt-3 text-sm">
@@ -1086,7 +1151,9 @@ export const PERIODS: { label: string; value: Period }[] = [
 
 function TasksPage() {
   const queryClient = useQueryClient();
-  const address = boardSearch(Route.useSearch());
+  const rawSearch = Route.useSearch();
+  const address = boardSearch(rawSearch);
+  const attention = attentionOf(rawSearch);
   const {
     machineId,
     crew,
@@ -1113,10 +1180,14 @@ function TasksPage() {
    * How far back this list reaches, now carried in the address: a month is the horizon a person
    * checks a coworker over, a week is did it run today, everything is the audit question.
    */
-  const patch = (over: Partial<BoardSearch>) =>
+  const patch = (over: Partial<BoardSearch> & { attention?: "review" }) =>
     navigate({
       replace: true,
-      search: { ...address, ...over },
+      search: {
+        ...address,
+        ...(attention === "review" ? { attention } : {}),
+        ...over,
+      },
       to: "/tasks",
     });
   /* Each control writes one axis of the address; the other axes ride along unchanged. */
@@ -1124,6 +1195,8 @@ function TasksPage() {
   const setStatus = (next: string) => patch({ status: next });
   const setSearch = (next: string) => patch({ q: next });
   const setPeriod = (next: Period) => patch({ period: next });
+  const setAttention = (next: AttentionTab) =>
+    patch({ attention: next === "review" ? "review" : undefined });
   const wire = boardQuery(address);
   /*
    * Spec A4's two dropdowns read the coworkers and crews this person already has. A choice made here
@@ -1333,59 +1406,28 @@ function TasksPage() {
         </div>
       ) : null}
       {/*
-       * A7's region, fixed above the board. It reads the same list the board renders, on purpose: a
-       * second fetch would put two answers to "what needs me" on one screen, and they would disagree
-       * the first time a filter or a machine narrowed one of them. So the region answers about the
-       * scope you are looking at — narrow it to one laptop and the counts follow, which is the question
-       * a person actually asked by narrowing.
+       * The parity plan's 工作记录横幅: the window in one line, counted from the stat bar's own read so
+       * the banner and the four cards can never disagree. Cached data rides through a failed refetch.
        */}
-      {tasks.data !== undefined ? (
-        <AttentionRegion
-          decidingIds={approval.pending}
-          machineLabel={machineLabel}
-          onArchive={(id) => runAction(id, "archive")}
-          onDecide={approval.decide}
-          onReview={(id) => runAction(id, "review")}
-          pendingIds={pendingIds}
-          tasks={list}
-        />
-      ) : null}
+      <WorkRecordBanner
+        failed={summary.isError}
+        periodLabel={
+          PERIODS.find((entry) => entry.value === period)?.label ?? ""
+        }
+        record={summary.data === undefined ? null : workRecordOf(summary.data)}
+      />
       {/*
-       * The window's own totals, read without the status or the search applied (see `summary`): four
-       * numbers that moved when you filtered would describe the filter rather than the workspace.
+       * The board's scope: how far back and on which machine. Both narrow every area below — the
+       * cards, the attention area and the list — so they sit above all three rather than among the
+       * list's own filters.
        */}
-      {summary.data !== undefined ? (
-        <StatBar
-          onSelect={setStatus}
-          status={status}
-          tasks={summary.data ?? []}
-        />
-      ) : null}
-      <div className="flex flex-wrap items-center gap-2 pb-4">
-        {/*
-         * Spec A4: 状态 and 数据周期 are dropdowns, like Waker/Group and 触发方式 beside them. Each
-         * still writes one axis of the address (`status`, `period`), so the query and a shared link
-         * mean what they did when these were buttons.
-         */}
-        <select
-          aria-label="状态"
-          className="bg-foreground/5 rounded-full px-3 py-1 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-          onChange={(event) => setStatus(event.target.value)}
-          value={status}
-        >
-          {status && !STATUS_FILTERS.some((entry) => entry.key === status) ? (
-            // A link may name a status this release has no word for; it is still what is applied.
-            <option value={status}>当前状态：{status}</option>
-          ) : null}
-          {STATUS_FILTERS.map((entry) => (
-            <option key={entry.key} value={entry.key}>
-              {entry.label}
-            </option>
-          ))}
-        </select>
+      <fieldset
+        aria-label="看板范围"
+        className="mb-4 flex min-w-0 flex-wrap items-center gap-2"
+      >
         <select
           aria-label="数据周期"
-          className="bg-foreground/5 rounded-full px-3 py-1 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          className={CONTROL}
           onChange={(event) => setPeriod(event.target.value as Period)}
           value={period}
         >
@@ -1395,76 +1437,18 @@ function TasksPage() {
             </option>
           ))}
         </select>
-        <input
-          aria-label="搜索任务"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="搜索任务"
-          className="bg-foreground/5 rounded-full px-3 py-1 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-        />
-        {/*
-         * Spec A4: who did it — one coworker or a whole crew — and how it started. Both are axes of
-         * the address like the rest, so a narrowed board can be bookmarked and shared.
-         */}
-        <select
-          aria-label="Waker/Group"
-          className="bg-foreground/5 rounded-full px-3 py-1 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-          onChange={(event) => patch(whoAddress(event.target.value))}
-          value={who}
-        >
-          <option value="">全部 Waker/Group</option>
-          {who && !crewOptions.some((option) => option.value === who) ? (
-            // A link from elsewhere may name a roster no option spells; it is still what is applied.
-            <option value={who}>当前筛选的员工</option>
-          ) : null}
-          {crewOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label="触发方式"
-          className="bg-foreground/5 rounded-full px-3 py-1 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-          onChange={(event) => patch({ source: triggerOf(event.target.value) })}
-          value={trigger}
-        >
-          <option value="">全部触发方式</option>
-          {TRIGGERS.map((entry) => (
-            <option key={entry.key} value={entry.key}>
-              {entry.label}
-            </option>
-          ))}
-        </select>
-        {/*
-         * A crew arrived at from /wakers, shown as the thing it was filtered by and dismissible
-         * without losing the machine alongside it: two axes, each cleared on its own.
-         */}
-        {crew ? (
-          <button
-            type="button"
-            onClick={() => patch({ crew: "" })}
-            className="bg-foreground/5 hover:bg-foreground/10 rounded-full px-3 py-1 text-sm"
-          >
-            只看该小组 · 清除
-          </button>
-        ) : null}
         {/*
          * Which machine, from the machines this person owns: a task list without the laptop in it is a
          * different question answered. A machine with work waiting on it says so here, because that is
          * where a person looks when something is not moving.
          */}
         {(machines.data?.length ?? 0) > 0 ? (
-          <span className="flex flex-wrap items-center gap-1">
+          <span className="flex flex-wrap items-center gap-2">
             <button
               aria-pressed={!machineId}
               type="button"
               onClick={() => patch({ machineId: "" })}
-              className={`rounded-full px-3 py-1 text-sm ${
-                !machineId
-                  ? "bg-foreground text-background"
-                  : "bg-foreground/5 hover:bg-foreground/10"
-              }`}
+              className={choiceClass(!machineId)}
             >
               全部设备
             </button>
@@ -1474,11 +1458,7 @@ function TasksPage() {
                 key={machine.deviceId}
                 type="button"
                 onClick={() => patch({ machineId: machine.deviceId })}
-                className={`rounded-full px-3 py-1 text-sm ${
-                  machineId === machine.deviceId
-                    ? "bg-foreground text-background"
-                    : "bg-foreground/5 hover:bg-foreground/10"
-                }`}
+                className={choiceClass(machineId === machine.deviceId)}
               >
                 {machine.name}
                 {/* Spec F4: each machine says whether it is there, not only when it is away. */}
@@ -1492,113 +1472,222 @@ function TasksPage() {
             ))}
           </span>
         ) : null}
-        <div className="ml-auto flex rounded-lg bg-foreground/5 p-0.5 text-sm">
-          {(["list", "lanes"] as const).map((mode) => (
-            <button
-              aria-pressed={view === mode}
-              key={mode}
-              type="button"
-              onClick={() => setView(mode)}
-              className={`rounded-md px-2.5 py-0.5 capitalize ${
-                view === mode ? "bg-foreground text-background" : "opacity-70"
-              }`}
-            >
-              {VIEW_LABEL[mode]}
-            </button>
-          ))}
+      </fieldset>
+      {/*
+       * The window's own totals, read without the status or the search applied (see `summary`): four
+       * numbers that moved when you filtered would describe the filter rather than the workspace.
+       */}
+      {summary.data !== undefined ? (
+        <StatBar
+          onSelect={setStatus}
+          status={status}
+          tasks={summary.data ?? []}
+        />
+      ) : null}
+      {/*
+       * A7's region, fixed above the board. It reads the same list the board renders, on purpose: a
+       * second fetch would put two answers to "what needs me" on one screen, and they would disagree
+       * the first time a filter or a machine narrowed one of them. So the region answers about the
+       * scope you are looking at — narrow it to one laptop and the counts follow, which is the question
+       * a person actually asked by narrowing.
+       */}
+      {tasks.data !== undefined ? (
+        <AttentionRegion
+          decidingIds={approval.pending}
+          machineLabel={machineLabel}
+          onArchive={(id) => runAction(id, "archive")}
+          onDecide={approval.decide}
+          onReview={(id) => runAction(id, "review")}
+          onTabChange={setAttention}
+          pendingIds={pendingIds}
+          tab={attention}
+          tasks={list}
+        />
+      ) : null}
+      <section aria-label="全部任务">
+        <div className="flex flex-wrap items-center gap-3 pb-3">
+          <h2 className="text-[14px] font-semibold">全部任务</h2>
+          <SegmentedTabs
+            className="ml-auto"
+            label="视图"
+            onValueChange={setView}
+            tabs={(["list", "lanes"] as const).map((mode) => ({
+              value: mode,
+              label: VIEW_LABEL[mode],
+            }))}
+            value={view}
+          />
         </div>
-      </div>
-      {tasks.data === undefined ? (
-        tasks.isPending ? (
-          <p className="text-muted-foreground text-sm">正在加载任务…</p>
-        ) : null
-      ) : view === "list" ? (
-        <ul className="list-none space-y-1">
-          {list.map((task) => (
-            <TaskCard
-              key={task.id}
-              task={task}
-              machine={machineLabel(task.deviceId)}
-              onReview={(id) => runAction(id, "review")}
-              onArchive={(id) => runAction(id, "archive")}
-              pendingIds={pendingIds}
-              onDecide={approval.decide}
-              decidingIds={approval.pending}
-            />
-          ))}
+        <div className="flex flex-wrap items-center gap-2 pb-4">
+          <input
+            aria-label="搜索任务"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="搜索任务"
+            className={`${CONTROL} w-56 placeholder:text-muted-foreground`}
+          />
           {/*
-           * The board's nothing-here sentence, said per machine: "no tasks" and "this machine is idle"
-           * are different facts, and the second one is the reason the filter exists.
+           * Spec A4: who did it — one coworker or a whole crew — and how it started, then which state
+           * it is in. Each writes one axis of the address (`executor`/`group`, `source`, `status`), so a
+           * narrowed board can be bookmarked and shared and means what it did when these were buttons.
            */}
-          {list.length === 0 && !readFailed ? (
-            <li className="py-10 text-center text-sm opacity-50">
-              {boardEmptySentence({
-                machineId,
-                crew: crew || executor || group,
-                status,
-                q: search,
-                source: trigger,
-                machineRegistered,
-              })}
-            </li>
-          ) : null}
-        </ul>
-      ) : (
-        <>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-            {LANES.map((lane) => (
-              // biome-ignore lint/a11y/useSemanticElements: the lane column is the drop target for its whole area, including the empty space under its cards — which is the part that has to answer. A form region is not what that is.
-              <div
-                aria-label={`${lane.label}泳道`}
-                key={lane.key}
-                role="group"
-                onDragOver={(event) => {
-                  if (lane.key === "finished") event.preventDefault();
-                }}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  dropLane(lane.key, event.dataTransfer.getData("text/plain"));
-                }}
-                className="bg-foreground/[0.02] rounded-xl p-2"
-              >
-                <div className="pb-2 text-xs font-medium uppercase tracking-wide opacity-50">
-                  {lane.label}
-                </div>
-                <ul className="list-none space-y-1.5">
-                  {list
-                    .filter((task) => laneOfTask(task).includes(lane.key))
-                    .map((task) => (
-                      <TaskCard
-                        key={task.id}
-                        task={task}
-                        machine={machineLabel(task.deviceId)}
-                        onReview={(id) => runAction(id, "review")}
-                        onArchive={(id) => runAction(id, "archive")}
-                        pendingIds={pendingIds}
-                        onDecide={approval.decide}
-                        decidingIds={approval.pending}
-                      />
-                    ))}
-                </ul>
-              </div>
+          <select
+            aria-label="员工/群组"
+            className={CONTROL}
+            onChange={(event) => patch(whoAddress(event.target.value))}
+            value={who}
+          >
+            <option value="">全部员工/群组</option>
+            {who && !crewOptions.some((option) => option.value === who) ? (
+              // A link from elsewhere may name a roster no option spells; it is still what is applied.
+              <option value={who}>当前筛选的员工</option>
+            ) : null}
+            {crewOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
             ))}
-          </div>
-          {!readFailed && (list.length === 0 || lanesUnmappable(list)) ? (
-            <p className="text-muted-foreground py-10 text-center text-sm opacity-50">
-              {lanesUnmappable(list)
-                ? "当前任务暂无可归入泳道的状态，可切换列表查看。"
-                : boardEmptySentence({
-                    machineId,
-                    crew: crew || executor || group,
-                    status,
-                    q: search,
-                    source: trigger,
-                    machineRegistered,
-                  })}
-            </p>
+          </select>
+          <select
+            aria-label="触发方式"
+            className={CONTROL}
+            onChange={(event) =>
+              patch({ source: triggerOf(event.target.value) })
+            }
+            value={trigger}
+          >
+            <option value="">全部触发方式</option>
+            {TRIGGERS.map((entry) => (
+              <option key={entry.key} value={entry.key}>
+                {entry.label}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="状态"
+            className={CONTROL}
+            onChange={(event) => setStatus(event.target.value)}
+            value={status}
+          >
+            {status && !STATUS_FILTERS.some((entry) => entry.key === status) ? (
+              // A link may name a status this release has no word for; it is still what is applied.
+              <option value={status}>当前状态：{status}</option>
+            ) : null}
+            {STATUS_FILTERS.map((entry) => (
+              <option key={entry.key} value={entry.key}>
+                {entry.label}
+              </option>
+            ))}
+          </select>
+          {/*
+           * A crew arrived at from /wakers, shown as the thing it was filtered by and dismissible
+           * without losing the machine alongside it: two axes, each cleared on its own.
+           */}
+          {crew ? (
+            <button
+              type="button"
+              onClick={() => patch({ crew: "" })}
+              className={choiceClass(false)}
+            >
+              只看该小组 · 清除
+            </button>
           ) : null}
-        </>
-      )}
+        </div>
+        {tasks.data === undefined ? (
+          tasks.isPending ? (
+            <p className="text-muted-foreground text-sm">正在加载任务…</p>
+          ) : null
+        ) : view === "list" ? (
+          <ul className="list-none space-y-1">
+            {list.map((task) => (
+              <TaskCard
+                key={task.id}
+                task={task}
+                machine={machineLabel(task.deviceId)}
+                onReview={(id) => runAction(id, "review")}
+                onArchive={(id) => runAction(id, "archive")}
+                pendingIds={pendingIds}
+                onDecide={approval.decide}
+                decidingIds={approval.pending}
+              />
+            ))}
+            {/*
+             * The board's nothing-here sentence, said per machine: "no tasks" and "this machine is idle"
+             * are different facts, and the second one is the reason the filter exists.
+             */}
+            {list.length === 0 && !readFailed ? (
+              <li className="py-10 text-center text-sm opacity-50">
+                {boardEmptySentence({
+                  machineId,
+                  crew: crew || executor || group,
+                  status,
+                  q: search,
+                  source: trigger,
+                  machineRegistered,
+                })}
+              </li>
+            ) : null}
+          </ul>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              {LANES.map((lane) => (
+                // biome-ignore lint/a11y/useSemanticElements: the lane column is the drop target for its whole area, including the empty space under its cards — which is the part that has to answer. A form region is not what that is.
+                <div
+                  aria-label={`${lane.label}泳道`}
+                  key={lane.key}
+                  role="group"
+                  onDragOver={(event) => {
+                    if (lane.key === "finished") event.preventDefault();
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    dropLane(
+                      lane.key,
+                      event.dataTransfer.getData("text/plain"),
+                    );
+                  }}
+                  className="bg-foreground/[0.02] rounded-xl p-2"
+                >
+                  <div className="pb-2 text-xs font-medium uppercase tracking-wide opacity-50">
+                    {lane.label}
+                  </div>
+                  <ul className="list-none space-y-1.5">
+                    {list
+                      .filter((task) => laneOfTask(task).includes(lane.key))
+                      .map((task) => (
+                        <TaskCard
+                          key={task.id}
+                          task={task}
+                          machine={machineLabel(task.deviceId)}
+                          onReview={(id) => runAction(id, "review")}
+                          onArchive={(id) => runAction(id, "archive")}
+                          pendingIds={pendingIds}
+                          onDecide={approval.decide}
+                          decidingIds={approval.pending}
+                        />
+                      ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+            {!readFailed && (list.length === 0 || lanesUnmappable(list)) ? (
+              <p className="text-muted-foreground py-10 text-center text-sm opacity-50">
+                {lanesUnmappable(list)
+                  ? "当前任务暂无可归入泳道的状态，可切换列表查看。"
+                  : boardEmptySentence({
+                      machineId,
+                      crew: crew || executor || group,
+                      status,
+                      q: search,
+                      source: trigger,
+                      machineRegistered,
+                    })}
+              </p>
+            ) : null}
+          </>
+        )}
+      </section>
     </PageShell>
   );
 }

@@ -136,7 +136,7 @@ test("a card in 查收结果 shows what it produced, and 查收 asks to close th
     </QueryClientProvider>,
   );
 
-  await userEvent.click(view.getByRole("button", { name: "查收结果 (3)" }));
+  await userEvent.click(view.getByRole("tab", { name: "查收结果 (3)" }));
   expect(view.getByText("收入图")).toBeTruthy();
   // One chip, on the one card whose ref is a deliverable.
   const chips = view.container.querySelectorAll("[data-deliverable]");
