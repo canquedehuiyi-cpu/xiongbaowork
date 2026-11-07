@@ -9,7 +9,7 @@ import {
 export type ToolbarOption<T extends string> = { value: T; label: string };
 
 /**
- * One dropdown on the Waker 管理 toolbar (运行状态 / 角色 / 环境 / 排序): the shared Select, at the
+ * One dropdown on the 员工管理 toolbar (运行状态 / 角色 / 环境 / 排序): the shared Select, at the
  * reference's 32 CSS px toolbar height, named by `label` for assistive technology. The closed
  * trigger shows the chosen option's own words, so "全部状态" reads as the filter being off.
  */

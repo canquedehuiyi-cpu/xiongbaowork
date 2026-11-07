@@ -59,7 +59,7 @@ import {
 } from "@/lib/waker-groups/queries";
 
 /**
- * Waker 管理 (parity plan F2; the reference's `/management` and `/management?tab=groups`).
+ * 员工管理 (parity plan F2; the reference's `/management` and `/management?tab=groups`).
  *
  * The tab, the search and the four toolbar choices are the address, so a reload, a shared link and
  * the detail page's back link all land on the same narrowed wall. Every axis is optional: the plain
@@ -331,18 +331,18 @@ function RouteComponent() {
           </Button>
         )
       }
-      title="Waker 管理"
+      title="员工管理"
       width="workbench"
     >
       <div className="flex flex-col gap-4 pt-4 pb-8">
         <SegmentedTabs
           className="self-start"
-          label="唤醒者与群组"
+          label="员工与群组"
           onValueChange={(next) =>
             void patch({ tab: next === "groups" ? "groups" : undefined }, false)
           }
           tabs={[
-            { value: "coworkers", label: "唤醒者" },
+            { value: "coworkers", label: "员工" },
             { value: "groups", label: "群组" },
           ]}
           value={tab}

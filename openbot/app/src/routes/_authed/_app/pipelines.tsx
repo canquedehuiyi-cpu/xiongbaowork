@@ -135,7 +135,7 @@ function RouteComponent() {
           <EmptyHeader>
             <EmptyTitle>还没有群组</EmptyTitle>
             <EmptyDescription>
-              流程的步骤只能交给群组里的员工。先到「Waker 管理 ›
+              流程的步骤只能交给群组里的员工。先到「员工管理 ›
               群组」建一个群组，再来这里排流程。
             </EmptyDescription>
           </EmptyHeader>
@@ -308,7 +308,7 @@ function TemplateEditor(props: {
         />
         {props.coworkers.length === 0 ? (
           <p className="text-muted-foreground text-sm">
-            这个群组里还没有员工。先到「Waker 管理 › 群组」把人加进来 ——
+            这个群组里还没有员工。先到「员工管理 › 群组」把人加进来 ——
             流程的步骤只能交给组里的员工。
           </p>
         ) : steps.length === 0 ? (

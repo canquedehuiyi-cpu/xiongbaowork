@@ -1,7 +1,7 @@
 import type { LinkProps } from "@tanstack/react-router";
 
 /**
- * The address of the Waker 管理 wall (`/wakers`): which tab, and how the employee wall is narrowed
+ * The address of the 员工管理 wall (`/wakers`): which tab, and how the employee wall is narrowed
  * and ordered (parity plan F2). Every axis is optional and absent means "the default", so the
  * sidebar's plain `/wakers` link and an old bookmark keep landing on the unfiltered employees tab,
  * while a narrowed wall survives a reload, a shared link and the detail page's back link.

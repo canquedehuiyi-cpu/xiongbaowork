@@ -89,7 +89,7 @@ function WakerDetailPage() {
     return (
       <PageShell
         backButton={{
-          label: "Waker 管理",
+          label: "员工管理",
           linkProps: wakersBackLink(),
         }}
         title="员工详情"
@@ -131,7 +131,7 @@ function WakerDetailPage() {
         </Button>
       }
       backButton={{
-        label: "Waker 管理",
+        label: "员工管理",
         linkProps: wakersBackLink(),
       }}
       description={profile.title || undefined}

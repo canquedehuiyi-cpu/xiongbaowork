@@ -763,7 +763,7 @@ export function createPipelineStore(options: {
     }
     if (!isUuid(input.groupId)) {
       throw new PipelineValidationError(
-        "流程要写给一个群组，得先从「Waker 管理 › 群组」里挑一个。",
+        "流程要写给一个群组，得先从「员工管理 › 群组」里挑一个。",
       );
     }
     const [flowOwned] = await runAsTenant(input.tenantId, async () =>
@@ -792,7 +792,7 @@ export function createPipelineStore(options: {
     );
     if (roster.length === 0) {
       throw new PipelineValidationError(
-        "这个群组里还没有员工。先到「Waker 管理 › 群组」把人加进去，再来排流程。",
+        "这个群组里还没有员工。先到「员工管理 › 群组」把人加进去，再来排流程。",
       );
     }
     if (

@@ -70,7 +70,7 @@ export type DeviceLine = {
 export type CardStats = { stats: TaskStats; truncated: boolean } | null;
 
 /**
- * One employee on the Waker 管理 wall (parity plan F2): status, environment, avatar, name, role, task
+ * One employee on the 员工管理 wall (parity plan F2): status, environment, avatar, name, role, task
  * count and last run, with 进对话 / 装配 / 暂停·恢复 one tap away.
  *
  * The whole card opens the detail page: the name is the link, and its `::after` stretches over the

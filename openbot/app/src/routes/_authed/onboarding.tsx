@@ -61,7 +61,7 @@ function WelcomeStep() {
           compact
           className="scale-90"
           editorClassName="text-base"
-          initialValue="把任务交给你的数字员工团队"
+          initialValue="把任务交给你的员工团队"
         />
       </div>
     </div>

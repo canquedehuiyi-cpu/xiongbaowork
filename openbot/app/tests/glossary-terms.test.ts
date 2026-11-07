@@ -26,16 +26,39 @@ function* sourceFiles(dir: string): Generator<string> {
   }
 }
 
-test("the app and the server say 群组, never 小组", () => {
+function linesMatching(match: (line: string) => boolean): string[] {
   const offenders: string[] = [];
   for (const root of ROOTS) {
     for (const file of sourceFiles(root)) {
       readFileSync(file, "utf8")
         .split("\n")
         .forEach((line, index) => {
-          if (line.includes("小组")) offenders.push(`${file}:${index + 1}`);
+          if (match(line)) offenders.push(`${file}:${index + 1}`);
         });
     }
   }
-  expect(offenders).toEqual([]);
+  return offenders;
+}
+
+test("the app and the server say 群组, never 小组", () => {
+  expect(linesMatching((line) => line.includes("小组"))).toEqual([]);
+});
+
+/*
+ * CONTEXT.md: the coworker is 员工 on every screen. 唤醒者 and 数字员工 were synonyms for it, and
+ * "Waker 管理" was the English-flavoured name of 员工管理. The brand 「熊宝数字员工」 is a product name,
+ * not the term, so it stays; so does the role generator's instruction to the model, which is
+ * written for the model rather than read by a person.
+ */
+const MODEL_PROMPT = "server/src/roles/generator.ts";
+
+test("the app and the server say 员工, never 唤醒者, 数字员工 or Waker 管理", () => {
+  expect(
+    linesMatching(
+      (line) =>
+        line.includes("唤醒者") ||
+        line.includes("Waker 管理") ||
+        line.replaceAll("熊宝数字员工", "").includes("数字员工"),
+    ).filter((where) => !where.includes(MODEL_PROMPT)),
+  ).toEqual([]);
 });

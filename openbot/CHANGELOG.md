@@ -9,7 +9,7 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 ## Unreleased
 
 - **The workbench pages are laid out like the reference product.** The sidebar is 240px. It opens on
-  five entries: 任务看板, @Waker, 自主工作, Waker 管理 and 能力与资源. Every other route it used to list
+  five entries: 任务看板, @Waker, 自主工作, 员工管理 and 能力与资源. Every other route it used to list
   is under 更多. Conversations are split into 员工 and 群组 tabs. The primary action is green in both
   themes.
 - **Page layout:** the five pages use full width, and their filters and tabs live in the URL, so
@@ -17,13 +17,16 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 - **What changed on each page:**
   - /reachability is now titled @Waker. Linking a conversation opens in a dialog from 接入 IM 聊天.
   - /autonomous opens on one list of all automations. The per-employee view is at `?view=agents`.
-  - /wakers has 唤醒者 and 群组 tabs (`?tab=groups`), plus search and status, role, environment and
+  - /wakers (员工管理) has 员工 and 群组 tabs (`?tab=groups`), plus search and status, role, environment and
     sort filters.
   - /resources has nine tabs (`?tab=plugins|skills|…|models`). Links to the model library now land on
     `?tab=models`.
 - **One word for a named set of coworkers: 群组.** The screens and the server's messages used to say
   小组 in some places. Now they say 群组 everywhere, including the hints that point to
-  「Waker 管理 › 群组」. Only the copy changes; the API and data are the same.
+  「员工管理 › 群组」. Only the copy changes; the API and data are the same.
+- **One word for a coworker: 员工.** 唤醒者, 数字员工 and the 「Waker 管理」 label are gone from the
+  screens and the server's messages. The brand 熊宝数字员工 and the feature names @Waker and WakerFlow
+  stay.
 - **No API or data changes.** Entries without a backend contract, such as 自动接入 and 接入申请, are
   shown disabled with an explanation.
 

@@ -220,7 +220,7 @@ function AgentsView() {
   return (
     <>
       <p className="pt-4 text-muted-foreground text-sm">
-        这位数字员工自己安排的定时任务、长期职责与主动巡检，以及它们上一次的结果。
+        这位员工自己安排的定时任务、长期职责与主动巡检，以及它们上一次的结果。
       </p>
       {agents.isError ? (
         <QueryError

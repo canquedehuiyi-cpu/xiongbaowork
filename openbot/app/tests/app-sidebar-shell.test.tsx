@@ -221,7 +221,7 @@ test("the primary navigation lists the five workbench entries in the reference o
     "任务看板",
     "@Waker",
     "自主工作",
-    "Waker 管理",
+    "员工管理",
     "能力与资源",
   ]);
   expect(links.map(hrefOf)).toEqual([
@@ -237,7 +237,7 @@ test("the entry for the open page is marked current", async () => {
   const view = renderSidebar("/wakers");
   const nav = await view.findByRole("navigation", { name: "主导航" });
   const current = nav.querySelector('[aria-current="page"]');
-  expect(current?.textContent?.trim()).toBe("Waker 管理");
+  expect(current?.textContent?.trim()).toBe("员工管理");
 });
 
 test("routes outside the five entries stay reachable under 更多", async () => {

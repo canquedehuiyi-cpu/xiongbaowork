@@ -29,8 +29,8 @@ import { Route as WakerDetailRoute } from "@/routes/_authed/_app/wakers_.$agentI
 import { settleReactWork } from "./settle-react-work";
 
 /**
- * Parity plan F2, Waker 管理 (`/management` in the reference, `/wakers` here): the header's new
- * action, the 唤醒者 / 群组 tabs mirrored to `?tab=groups`, the name/role search, the 运行状态 / 角色 /
+ * Parity plan F2, 员工管理 (`/management` in the reference, `/wakers` here): the header's new
+ * action, the 员工 / 群组 tabs mirrored to `?tab=groups`, the name/role search, the 运行状态 / 角色 /
  * 环境 / 排序 filters with a count, the card grid ending in a dashed create card, and the groups tab's
  * real empty state. Every filter lives in the address, so the detail page's back link lands on the
  * same narrowed wall.
@@ -221,17 +221,17 @@ async function pick(
   await user.click(within(document.body).getByRole("option", { name: option }));
 }
 
-test("the header names the page, and 唤醒者 / 群组 is one tablist mirrored to ?tab=groups", async () => {
+test("the header names the page, and 员工 / 群组 is one tablist mirrored to ?tab=groups", async () => {
   seed();
   const { screen, router } = draw();
   await waitFor(() =>
     expect(screen.getByText("Backend Engineer")).toBeTruthy(),
   );
 
-  expect(screen.getByRole("heading", { name: "Waker 管理" })).toBeTruthy();
-  const tablist = screen.getByRole("tablist", { name: "唤醒者与群组" });
+  expect(screen.getByRole("heading", { name: "员工管理" })).toBeTruthy();
+  const tablist = screen.getByRole("tablist", { name: "员工与群组" });
   const tabs = within(tablist).getAllByRole("tab");
-  expect(tabs.map((tab) => tab.textContent)).toEqual(["唤醒者", "群组"]);
+  expect(tabs.map((tab) => tab.textContent)).toEqual(["员工", "群组"]);
   expect(tabs[0]?.getAttribute("aria-selected")).toBe("true");
   // The employees tab is the default, so it carries no parameter.
   expect(router.state.location.search).toEqual({});
@@ -250,12 +250,12 @@ test("the header names the page, and 唤醒者 / 群组 is one tablist mirrored 
   ).toBeGreaterThanOrEqual(1);
   expect(screen.queryByText("新建员工")).toBeNull();
 
-  // Keyboard: Left moves back to 唤醒者 and drops the parameter.
+  // Keyboard: Left moves back to 员工 and drops the parameter.
   (screen.getByRole("tab", { name: "群组" }) as HTMLElement).focus();
   await user.keyboard("{ArrowLeft}");
   await waitFor(() => expect(router.state.location.search).toEqual({}));
   expect(
-    screen.getByRole("tab", { name: "唤醒者" }).getAttribute("aria-selected"),
+    screen.getByRole("tab", { name: "员工" }).getAttribute("aria-selected"),
   ).toBe("true");
 });
 
@@ -503,7 +503,7 @@ test("the detail page's back link returns to the same filtered wall", async () =
     expect(router.state.location.pathname).toBe("/wakers/agent-2"),
   );
   // PageShell's back control, drawn as an anchor.
-  const back = (await screen.findByText("Waker 管理")).closest("a");
+  const back = (await screen.findByText("员工管理")).closest("a");
   expect(back?.getAttribute("href")).toBe(
     "/wakers?q=%E8%AF%84%E5%AE%A1&sort=tasks",
   );

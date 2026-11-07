@@ -262,7 +262,7 @@ const PRIMARY_NAV = [
   { to: "/tasks", label: "任务看板", icon: IconLayoutKanban },
   { to: "/reachability", label: "@Waker", icon: IconAt },
   { to: "/autonomous", label: "自主工作", icon: IconBolt },
-  { to: "/wakers", label: "Waker 管理", icon: IconUsers },
+  { to: "/wakers", label: "员工管理", icon: IconUsers },
   { to: "/resources", label: "能力与资源", icon: IconBoxSeam },
 ] as const;
 
