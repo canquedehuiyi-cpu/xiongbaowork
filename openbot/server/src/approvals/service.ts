@@ -635,7 +635,7 @@ export function createApprovalService(
         store.rules(candidate.actorId),
         policy.employee?.(candidate.botId),
       ]);
-      let reason: string | undefined;
+      let outcome: ApprovalPolicyOutcome | undefined;
       for (const effect of ["read", "write"]) {
         const refused = refusedOutright({
           candidate: { ...candidate, effect },
@@ -648,9 +648,21 @@ export function createApprovalService(
           hostCommandsCap: team.hostCommandsCap,
         });
         if (!refused) return undefined;
-        reason = refused.reason;
+        outcome = refused;
       }
-      return reason;
+      if (!outcome) return undefined;
+      // On the decision log like the gate's own refusal, so a disabled tool is counted either way.
+      const continuation = candidate.continuation ?? currentApprovalContext();
+      await policy.recordDecision({
+        ownerUserId: candidate.actorId,
+        botId: candidate.botId,
+        toolRef: candidate.toolRef,
+        effect: candidate.effect,
+        scope: candidate.scope,
+        outcome,
+        ...(continuation?.initiator ? { initiator: continuation.initiator } : {}),
+      });
+      return outcome.reason;
     },
     /** Commands on this person's own computer, after the team cap: the stricter setting applies. */
     async hostCommandPolicy(ownerUserId: string): Promise<HostCommandPolicy> {
