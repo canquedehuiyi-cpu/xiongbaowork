@@ -167,6 +167,7 @@ tests/deployment-model-metering.test.ts
 tests/deployment-route-bot-end-to-end.test.ts
 tests/desktop-connection-failure.test.ts
 tests/dev-actor.integration.test.ts
+tests/device-apps.integration.test.ts
 tests/device-queue.test.ts
 tests/device-queued-results.integration.test.ts
 tests/device-safety.integration.test.ts
