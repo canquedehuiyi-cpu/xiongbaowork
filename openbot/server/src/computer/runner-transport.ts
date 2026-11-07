@@ -117,10 +117,19 @@ export function createRunnerTransport(
   ): Promise<T> {
     /*
      * A local app's tool list decides whether a call asks first, so it has to be the machine's answer
-     * now: refused while the machine is away rather than parked in the queue (device MCP bridge §3.4).
+     * now, and it changes nothing: sent straight to the connected machine, never parked in the queue
+     * and never given a receipt, so a lost answer cannot pause the device (device MCP bridge §3.4).
      */
-    if (action === "apps.tools" && !channel.isReachable(target)) {
-      return Promise.reject(new DeviceOfflineError(target.deviceId));
+    if (action === "apps.tools") {
+      return channel.dispatch<T>(
+        target,
+        action,
+        payload,
+        timeoutMs,
+        idempotencyKey,
+        caller,
+        { durable: false },
+      );
     }
     if (!BROWSER_ACTIONS.has(action)) {
       return channel.dispatch<T>(

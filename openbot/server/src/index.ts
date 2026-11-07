@@ -1086,6 +1086,8 @@ await startupLifecycle.run(async (startup) => {
         },
         auditStore: bootAuditStore,
         approvalGate: approvalService.gate,
+        // Asked before a local app's tool list starts the app on the machine (MCP bridge §4).
+        approvalRefusal: approvalService.refusal,
         policy: () => policyStore.get(),
         // In Postgres, so the ref a click carries resolves against the snapshot that produced it even
         // when the snapshot was taken by another server. A Map here would be blank on every replica

@@ -10,6 +10,7 @@ import { createAppRegistry } from "../../runner/src/apps";
 import { createRunnerDispatcher } from "../../runner/src/dispatch";
 import { createRunnerExecutor } from "../../runner/src/execute";
 import { createActionJournal } from "../../runner/src/journal";
+import { TOOL_DISABLED } from "../src/approvals/policy";
 import { createApprovalService } from "../src/approvals/service";
 import { createApprovalStore } from "../src/approvals/store";
 import {
@@ -45,6 +46,7 @@ import {
   runnerOpen,
 } from "../src/devices/socket";
 import { createDeviceStore } from "../src/devices/store";
+import { createDeviceTakeovers } from "../src/devices/takeover";
 import { runAsTenant } from "../src/tenant/context";
 import { PostgresAgentRunner } from "../src/threads/postgres-runner";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
@@ -78,7 +80,9 @@ async function poll(check: () => Promise<boolean> | boolean, timeoutMs = 8000) {
   throw new Error("The condition was not met in time.");
 }
 
-async function pairedDevice() {
+async function pairedDevice(
+  options: { hostCommandsCap?: "allow" | "ask" | "never" } = {},
+) {
   const tenant = `dapps-${suite}-${tenants.length}`;
   tenants.push(tenant);
   const botId = `${tenant}-bot`;
@@ -168,6 +172,9 @@ async function pairedDevice() {
     },
   });
   let socket: WebSocket | undefined;
+  let listing:
+    | ((frame: Record<string, unknown>) => Record<string, unknown> | undefined)
+    | undefined;
   /** The runner dials in, says hello with its apps on a heartbeat, and runs what it is sent. */
   async function connect() {
     const ws = new WebSocket(
@@ -185,6 +192,13 @@ async function pairedDevice() {
         if (frame.type === "welcome") resolve();
         if (frame.type === "ack") acked();
         if (frame.type === "action") frames.push(frame);
+        // A test can answer the tool list itself: a shape of its own, or nothing at all.
+        if (frame.type === "action" && frame.action === "apps.tools" && listing) {
+          const answer = listing(frame);
+          if (answer !== undefined && ws.readyState === WebSocket.OPEN)
+            ws.send(JSON.stringify({ type: "result", id: frame.id, ...answer }));
+          return;
+        }
         if (frame.type === "action" || frame.type === "cancel")
           void dispatch("device-apps/studio", frame, (result) => {
             if (ws.readyState === WebSocket.OPEN)
@@ -208,7 +222,18 @@ async function pairedDevice() {
   }
 
   const store = createApprovalStore(database);
+  const policy = store.policy;
+  if (!policy) throw new Error("The approval store has no policy surface.");
+  if (options.hostCommandsCap) {
+    // Only the value the gate reads is changed; the team row itself is covered elsewhere.
+    const teamSettings = policy.teamSettings.bind(policy);
+    policy.teamSettings = async () => ({
+      ...(await teamSettings()),
+      hostCommandsCap: options.hostCommandsCap as "allow" | "ask" | "never",
+    });
+  }
   const service = createApprovalService(store);
+  const takeovers = createDeviceTakeovers();
   const catalogueBot = `${tenant}-catalogue`;
   const selector = createDeviceSelector({
     ownerOf: async (bot) => (bot === botId ? tenant : null),
@@ -236,6 +261,8 @@ async function pairedDevice() {
     auditStore: { insert: async () => undefined },
     policy: () => ({ mode: "enforce", allow: ["true"], deny: [] }),
     approvalGate: service.gate,
+    approvalRefusal: service.refusal,
+    deviceTakeovers: takeovers,
   });
   const actor = { id: tenant, userId: tenant };
   const tools = createHeadlessComputerTools({
@@ -297,6 +324,27 @@ async function pairedDevice() {
     requests,
     connect,
     disconnect,
+    takeovers,
+    /** Answer `apps.tools` frames from the test (undefined: no answer); unset: the real runner. */
+    answerListing: (
+      answer:
+        | ((frame: Record<string, unknown>) => Record<string, unknown> | undefined)
+        | undefined,
+    ) => {
+      listing = answer;
+    },
+    /** The device-queue rows written for one action on this machine. */
+    queuedRows: (action: string) =>
+      runAsTenant(tenant, async () =>
+        (
+          await database
+            .select({ payload: workItems.payload })
+            .from(workItems)
+            .where(eq(workItems.tenantId, tenant))
+        ).filter(
+          (row) => (row.payload as Record<string, unknown>).action === action,
+        ).length,
+      ),
   };
 }
 
@@ -347,6 +395,10 @@ test("computer_app_call echo runs once without approval", async () => {
   expect(result.untrusted).toContain("untrusted");
   expect(device.sent("apps.call")).toHaveLength(1);
   expect(await device.requests()).toEqual([]);
+  // The tool list was read straight off the socket: no device-queue row, no receipt.
+  expect(device.sent("apps.tools")).toHaveLength(1);
+  expect(await device.queuedRows("apps.tools")).toBe(0);
+  expect(await device.queuedRows("apps.call")).toBe(1);
 }, 20_000);
 
 test("computer_app_call write_note waits for approval, runs once after approve, never after reject", async () => {
@@ -474,14 +526,14 @@ test("a catalogue Bot (no owner) has no apps tools", async () => {
   // And a call that names the gateway anyway reaches no machine.
   await expect(
     device.gateway.listApps(device.catalogueBot, device.actor, {}),
-  ).rejects.toThrow();
+  ).rejects.toThrow("does not belong to a tenant with machines of its own");
   await expect(
     device.gateway.callApp(device.catalogueBot, device.actor, {
       app: "Notes",
       tool: "echo",
       args: {},
     }),
-  ).rejects.toThrow();
+  ).rejects.toThrow("does not belong to a tenant with machines of its own");
   expect(device.sent("apps.tools")).toHaveLength(0);
   expect(device.sent("apps.call")).toHaveLength(0);
 }, 20_000);
@@ -557,6 +609,105 @@ test("a call cut off by a socket drop becomes outcome unknown and pauses the dev
     }),
   ).rejects.toThrow("已暂停");
   expect(device.sent("apps.call")).toHaveLength(1);
+}, 20_000);
+
+test("the approval card masks secrets in an app call's arguments before cutting them", async () => {
+  const device = await pairedDevice();
+  const args = {
+    app: "Notes",
+    tool: "write_note",
+    args: { note: "x", token: "tok-SECRET-123", nested: { password: "pw-SECRET-456" } },
+  };
+  await expect(
+    device.call("computer_app_call", args, "secret-args"),
+  ).rejects.toBeInstanceOf(HeadlessToolSuspension);
+  const card = (
+    await runAsTenant(device.tenant, () => device.service.inbox(device.tenant))
+  ).requests.find((candidate) => candidate.action.toolCallId === "secret-args");
+  const shown = JSON.stringify(card?.action);
+  expect(shown).not.toContain("tok-SECRET-123");
+  expect(shown).not.toContain("pw-SECRET-456");
+  expect(String((card?.action.args as { args?: string } | undefined)?.args)).toContain(
+    "[private value]",
+  );
+}, 20_000);
+
+test("a queued or malformed tool list is no list: the call asks, and nothing is cached", async () => {
+  for (const answer of [
+    { ok: true, output: { queued: true, key: "parked" } },
+    { ok: true, output: { tools: "not a list" } },
+  ]) {
+    const device = await pairedDevice();
+    device.answerListing(() => answer);
+    // Not refused as an unknown tool: the list could not be read, so the call waits for approval.
+    await expect(
+      device.call("computer_app_call", { app: "Notes", tool: "echo", args: { text: "a" } }),
+    ).rejects.toBeInstanceOf(HeadlessToolSuspension);
+    expect(device.sent("apps.call")).toHaveLength(0);
+    // Nothing was cached from it: with the real list back, a read-only tool runs without asking.
+    device.answerListing(undefined);
+    await expect(
+      device.call("computer_app_call", { app: "Notes", tool: "echo", args: { text: "b" } }),
+    ).resolves.toMatchObject({ isError: false });
+    expect(device.sent("apps.tools")).toHaveLength(2);
+    expect(device.sent("apps.call")).toHaveLength(1);
+  }
+}, 30_000);
+
+test("with the team's cap at never, or the tool disabled, the app is never started for its list", async () => {
+  const capped = await pairedDevice({ hostCommandsCap: "never" });
+  await expect(
+    capped.call("computer_app_call", { app: "Notes", tool: "echo", args: { text: "x" } }),
+  ).rejects.toThrow("set to never run");
+  expect(capped.sent("apps.tools")).toHaveLength(0);
+  expect(capped.sent("apps.call")).toHaveLength(0);
+
+  const disabled = await pairedDevice();
+  await runAsTenant(disabled.tenant, () =>
+    disabled.service.createRule(disabled.tenant, {
+      botId: disabled.botId,
+      toolRef: "computer_app_call",
+      effect: "*",
+      scope: "*",
+      behaviour: "deny",
+    }),
+  );
+  await expect(
+    disabled.call("computer_app_call", { app: "Notes", tool: "echo", args: { text: "x" } }),
+  ).rejects.toThrow(TOOL_DISABLED);
+  expect(disabled.sent("apps.tools")).toHaveLength(0);
+  expect(disabled.sent("apps.call")).toHaveLength(0);
+}, 20_000);
+
+test("while a person has taken over the machine, the app is never started for its list", async () => {
+  const device = await pairedDevice();
+  device.takeovers.request(device.target, device.botId, "我来操作一下");
+  await expect(
+    device.call("computer_app_call", { app: "Notes", tool: "echo", args: { text: "x" } }),
+  ).rejects.toBeInstanceOf(HeadlessToolSuspension);
+  expect(device.sent("apps.tools")).toHaveLength(0);
+  expect(device.sent("apps.call")).toHaveLength(0);
+}, 20_000);
+
+test("a socket drop while listing tools asks instead and never pauses the device", async () => {
+  const device = await pairedDevice();
+  let listed: () => void = () => {};
+  const asked = new Promise<void>((resolve) => {
+    listed = resolve;
+  });
+  device.answerListing(() => {
+    listed();
+    return undefined;
+  });
+  const pending = device
+    .call("computer_app_call", { app: "Notes", tool: "echo", args: { text: "x" } })
+    .catch((error: unknown) => error);
+  await asked;
+  await device.disconnect();
+  expect(await pending).toBeInstanceOf(HeadlessToolSuspension);
+  expect(await device.queue.uncertain(device.target)).toBe(0);
+  expect(await device.queuedRows("apps.tools")).toBe(0);
+  expect(device.sent("apps.call")).toHaveLength(0);
 }, 20_000);
 
 afterAll(async () => {

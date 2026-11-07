@@ -18,7 +18,12 @@
  * The refs are opaque to the caller precisely so that the server holds the mapping.
  */
 
-import { type ApprovalGate, currentApprovalContext } from "../approvals/types";
+import {
+  type ApprovalCandidate,
+  type ApprovalGate,
+  ApprovalRefusedError,
+  currentApprovalContext,
+} from "../approvals/types";
 import {
   type AuditInitiator,
   type AuditStore,
@@ -232,6 +237,13 @@ export type ComputerGatewayOptions = {
    */
   deviceTakeovers?: DeviceTakeovers;
   approvalGate?: ApprovalGate;
+  /**
+   * Why the gate would refuse an action outright, whatever its effect turns out to be (a disabled
+   * tool, the team's host-command cap of `never`): asked before a local app's tool list is fetched,
+   * because fetching it starts the app on the person's machine. Absent: nothing is asked early, and
+   * the gate still decides in full.
+   */
+  approvalRefusal?: (candidate: ApprovalCandidate) => Promise<string | undefined>;
   provider: ComputerProvider;
   auditStore: AuditStore;
   /** Absent denies everything. See evaluateActionPolicy. */
@@ -712,16 +724,22 @@ export function createComputerGateway(
       /** The rule that refusal names. Absent: the project rule. */
       refusalRule?: string;
       /**
-       * A local app's tool this call is about (device MCP bridge §3.4): the app's name, the tool, and
-       * whether the device's own list marks it read-only and not destructive. Decided by the caller
-       * from that list, never from the model's arguments.
+       * A local app's tool this call is about (device MCP bridge §3.4): the app's name and the tool.
+       * Whether the device's own list marks it read-only and not destructive comes from `resolveApp`,
+       * never from the model's arguments; unknown means not read-only.
        */
       app?: {
         name: string;
         tool: string;
-        readOnly: boolean;
+        readOnly?: boolean;
         description?: string;
       };
+      /**
+       * How to learn the rest of `app` from the machine (its tool list), asked only once the action
+       * has got past a takeover, a refusal, the deployment's policy and an outright refusal by the
+       * gate, and before the gate decides. May refuse (a tool the list does not have).
+       */
+      resolveApp?: () => Promise<{ readOnly: boolean; description?: string }>;
     },
     run: (address?: string) => Promise<T>,
   ): Promise<T> {
@@ -950,12 +968,32 @@ export function createComputerGateway(
         );
       }
       const continuation = currentApprovalContext();
+      /*
+       * A local app's tool list is fetched here and no earlier: fetching it starts the app on the
+       * person's machine, so a call already refused (a takeover, the policy above, a disabled tool or
+       * the team's cap of `never`) must not get as far as starting it.
+       */
+      let app = subject.app;
+      if (app && subject.resolveApp) {
+        const refused = await options.approvalRefusal?.({
+          actorId: actor.id,
+          botId,
+          toolRef: toolName,
+          effect: "write",
+          scope: `${app.name}/${app.tool}`,
+          args: continuation?.args ?? {},
+          subject: { runner: target !== null },
+          ...(continuation ? { continuation } : {}),
+        });
+        if (refused) throw new ApprovalRefusedError(refused);
+        app = { ...app, ...(await subject.resolveApp()) };
+      }
       const approval = await options.approvalGate?.({
         actorId: actor.id,
         botId,
         toolRef: toolName,
-        effect: subject.app
-          ? subject.app.readOnly
+        effect: app
+          ? app.readOnly === true
             ? "read"
             : "write"
           : ["activate", "type", "write_file", "run_command"].includes(
@@ -967,8 +1005,8 @@ export function createComputerGateway(
          * A local app's tool is its own target, so a rule or an "always allow" names one tool of one
          * app rather than every tool the app has.
          */
-        scope: subject.app
-          ? `${subject.app.name}/${subject.app.tool}`
+        scope: app
+          ? `${app.name}/${app.tool}`
           : filePath
             ? filePath.split("/").slice(0, -1).join("/") || "workspace"
             : subject.command
@@ -981,14 +1019,13 @@ export function createComputerGateway(
           refusal: undefined,
           refusalRule: undefined,
           app: undefined,
+          resolveApp: undefined,
         },
-        target: subject.app
+        target: app
           ? {
-              app: subject.app.name,
-              tool: subject.app.tool,
-              ...(subject.app.description
-                ? { description: subject.app.description }
-                : {}),
+              app: app.name,
+              tool: app.tool,
+              ...(app.description ? { description: app.description } : {}),
             }
           : {
               pageUrl,
@@ -1005,9 +1042,7 @@ export function createComputerGateway(
           ...(filePath !== undefined ? { path: filePath } : {}),
           runner: target !== null,
           // The device-list verdict for a local app's tool, for the app-tool floor (§4.4).
-          ...(subject.app
-            ? { appTool: { readOnly: subject.app.readOnly } }
-            : {}),
+          ...(app ? { appTool: { readOnly: app.readOnly === true } } : {}),
         },
         continuation,
       });
@@ -1237,7 +1272,8 @@ export function createComputerGateway(
 
   /**
    * One app's tools, asked of the machine itself. Only while the machine is connected: the runner
-   * transport refuses a listing for a machine that is away rather than queueing it.
+   * transport sends a listing straight to the socket, never through the queue. An answer that is not
+   * a list (a queued receipt, anything malformed) is "no list": thrown, and never cached.
    */
   async function fetchAppTools(
     machine: { tenantId: string; deviceId: string },
@@ -1245,7 +1281,7 @@ export function createComputerGateway(
     ref: string,
     signal?: AbortSignal,
   ): Promise<AppTool[]> {
-    const output = await transport.post<{ tools?: unknown }>(
+    const output = await transport.post<unknown>(
       runnerAddress(machine),
       botId,
       "/apps/tools",
@@ -1253,7 +1289,15 @@ export function createComputerGateway(
       signal,
       APP_LIST_BACKSTOP_MS,
     );
-    const tools = readAppTools(output?.tools);
+    const listed =
+      output && typeof output === "object" && !("queued" in output)
+        ? (output as { tools?: unknown }).tools
+        : undefined;
+    if (!Array.isArray(listed))
+      throw new ComputerUnavailableError(
+        "设备没有返回这个本机应用的工具列表。",
+      );
+    const tools = readAppTools(listed);
     const key = `${machine.tenantId}/${machine.deviceId}/${ref}`;
     appTools.delete(key);
     appTools.set(key, { tools, at: Date.now() });
@@ -1276,7 +1320,9 @@ export function createComputerGateway(
     if (cached && Date.now() - cached.at < APP_TOOLS_TTL_MS) return cached.tools;
     try {
       return await fetchAppTools(machine, botId, ref, signal);
-    } catch {
+    } catch (error) {
+      // The person's Stop is a stop, not a missing list to ask about.
+      if (signal?.aborted) throw error;
       return undefined;
     }
   }
@@ -1931,9 +1977,10 @@ export function createComputerGateway(
      *
      * The app is found by name among the apps the machine reported, so the frame carries a reference
      * this server holds, never one the model wrote. The tool is looked up in the machine's own list,
-     * fresh or at most five minutes old: a tool the list does not have is refused here and nothing is
-     * sent; a list that cannot be had is "not read-only". Only that list says whether the call may
-     * run without asking. The app's answer is outside content and comes back marked as such.
+     * fresh or at most five minutes old, inside `govern` once nothing has refused the call yet: a
+     * tool the list does not have is refused and nothing is sent; a list that cannot be had is "not
+     * read-only". Only that list says whether the call may run without asking. The app's answer is
+     * outside content and comes back marked as such.
      */
     async callApp(
       botId: string,
@@ -1943,30 +1990,30 @@ export function createComputerGateway(
     ) {
       const { machine, apps } = await appsOf(botId);
       const app = findApp(apps, input.app);
-      const tools = app
-        ? await appToolsFor(machine, botId, app.ref, signal)
-        : undefined;
-      const tool = tools?.find((candidate) => candidate.name === input.tool);
-      const refusal = !app
-        ? noSuchApp(input.app, apps)
-        : tools && !tool
-          ? `「${app.name}」没有名为「${input.tool}」的工具（已有：${tools.map((candidate) => candidate.name).join("、") || "无"}）`
-          : undefined;
-      const readOnly =
-        tool?.annotations?.readOnlyHint === true &&
-        tool.annotations.destructiveHint !== true;
+      const refusal = app ? undefined : noSuchApp(input.app, apps);
+      const resolveApp = async (known: { ref: string; name: string }) => {
+        const tools = await appToolsFor(machine, botId, known.ref, signal);
+        const tool = tools?.find((candidate) => candidate.name === input.tool);
+        if (tools && !tool)
+          throw new ActionRefusedError(
+            `「${known.name}」没有名为「${input.tool}」的工具（已有：${tools.map((candidate) => candidate.name).join("、") || "无"}）`,
+            APP_UNAVAILABLE_RULE,
+          );
+        return {
+          readOnly:
+            tool?.annotations?.readOnlyHint === true &&
+            tool.annotations.destructiveHint !== true,
+          ...(tool?.description ? { description: tool.description } : {}),
+        };
+      };
       const result = await govern<AppCallResult>(
         "computer_app_call",
         botId,
         actor,
         {
           device: machine,
-          app: {
-            name: app?.name ?? input.app,
-            tool: input.tool,
-            readOnly,
-            ...(tool?.description ? { description: tool.description } : {}),
-          },
+          app: { name: app?.name ?? input.app, tool: input.tool },
+          ...(app ? { resolveApp: () => resolveApp(app) } : {}),
           ...(signal ? { signal } : {}),
           ...(refusal ? { refusal, refusalRule: APP_UNAVAILABLE_RULE } : {}),
         },
@@ -2000,6 +2047,14 @@ const APP_TOOLS_CACHE_LIMIT = 1000;
 const APP_LIST_BACKSTOP_MS = 45_000;
 const APP_CALL_BACKSTOP_MS = 150_000;
 
+/** At most `limit` bytes of UTF-8, never ending in half a character. */
+function cutUtf8(text: string, limit: number): string {
+  const bytes = new TextEncoder().encode(text);
+  return bytes.length <= limit
+    ? text
+    : new TextDecoder().decode(bytes.slice(0, limit)).replace(/\uFFFD+$/, "");
+}
+
 /** An app by the name the model used, without regard to case or surrounding spaces. */
 function findApp(
   apps: { ref: string; name: string }[],
@@ -2015,22 +2070,22 @@ function noSuchApp(name: string, apps: { name: string }[]): string {
 
 /**
  * A machine's tool list, kept to the shape this server reads. Untrusted input: an entry without a
- * name is dropped, a description is cut to 1 KB, and annotations are kept only as an object.
+ * name, or with one over 128 characters, is dropped, a description is cut to 1 KB of UTF-8, and
+ * annotations are kept only as an object.
  */
-function readAppTools(value: unknown): AppTool[] {
-  if (!Array.isArray(value)) return [];
+function readAppTools(value: unknown[]): AppTool[] {
   return value.flatMap((entry): AppTool[] => {
     if (!entry || typeof entry !== "object") return [];
     const { name, description, inputSchema, annotations } = entry as Record<
       string,
       unknown
     >;
-    if (typeof name !== "string" || !name) return [];
+    if (typeof name !== "string" || !name || name.length > 128) return [];
     return [
       {
         name,
         ...(typeof description === "string"
-          ? { description: description.slice(0, 1024) }
+          ? { description: cutUtf8(description, 1024) }
           : {}),
         ...(inputSchema !== undefined ? { inputSchema } : {}),
         ...(annotations && typeof annotations === "object" && !Array.isArray(annotations)
