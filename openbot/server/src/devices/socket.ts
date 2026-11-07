@@ -1,7 +1,7 @@
 import { isScreenFrameType } from "../../../shared/device-screen";
 import type { DeviceChannel } from "./channel";
 import type { DeviceScreens } from "./screen";
-import { type DeviceOwner, type DeviceStore, reportedRoots } from "./store";
+import { type DeviceOwner, type DeviceStore, reportedApps, reportedRoots } from "./store";
 
 /**
  * The frames a runner sends, and what the server does with them.
@@ -115,7 +115,12 @@ export async function runnerMessage(
   if (frame.type === "heartbeat") {
     // A runner that offers read-only folders lists them on every beat (story F1, stage 2): a
     // reference and a name each, checked in `reportedRoots`. A beat without the field changes none.
-    await store.heartbeat(tenantId, deviceId, reportedRoots(frame.roots));
+    await store.heartbeat(
+      tenantId,
+      deviceId,
+      reportedRoots(frame.roots),
+      reportedApps(frame.apps),
+    );
     ws.send(JSON.stringify({ type: "ack" }));
     void channel.flush({ tenantId, deviceId }).catch(() => undefined);
     return;
