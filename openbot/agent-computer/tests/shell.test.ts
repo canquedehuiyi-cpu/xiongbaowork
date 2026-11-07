@@ -2,7 +2,13 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { commandShell, createShell, environmentForCommand } from "../src/shell";
+import {
+  commandShell,
+  createShell,
+  environmentForCommand,
+  plainPowerShellStderr,
+  windowsOutputDecoder,
+} from "../src/shell";
 
 /**
  * What a command on the computer is allowed to see.
@@ -96,6 +102,19 @@ describe("what a command inherits", () => {
       Buffer.from(shell.args.at(-1) ?? "", "base64").toString("utf16le"),
     ).toStartWith("$ProgressPreference = 'SilentlyContinue';");
     expect(commandShell("echo hi", "linux", {}).executable).toBe("/bin/bash");
+  });
+  test("Windows leaves the console code page to native programs and writes its own output as UTF-8", () => {
+    const script = Buffer.from(
+      commandShell("hostname", "win32", { SystemRoot: "C:\\Windows" }).args.at(
+        -1,
+      ) ?? "",
+      "base64",
+    ).toString("utf16le");
+    // Setting it to UTF-8 made PowerShell decode hostname.exe's GBK as UTF-8: U+FFFD, seen on a device.
+    expect(script).not.toContain("[Console]::OutputEncoding =");
+    expect(script).toContain("[Console]::SetOut($openbotOut)");
+    expect(script).toContain("[Console]::SetError($openbotErr)");
+    expect(script.indexOf("SetError")).toBeLessThan(script.indexOf("hostname"));
   });
   test("PATH, locale, terminal and proxy variables pass", () => {
     const env = environmentForCommand(source(), workspaceHome);
@@ -479,4 +498,80 @@ describe("what a command cannot do to the computer", () => {
     },
     15_000,
   );
+});
+
+describe("Windows PowerShell's stderr as text", () => {
+  // Exactly as a paired Windows 11 device returned it, beside a successful `Get-Date`.
+  const firstUse =
+    '#< CLIXML\r\n<Objs Version="1.1.0.1" xmlns="http://schemas.microsoft.com/powershell/2004/04"><Obj S="progress" RefId="0"><TN RefId="0"><T>System.Management.Automation.PSCustomObject</T><T>System.Object</T></TN><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>正在准备首次使用模块。</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj></Objs>';
+
+  test("a progress record alone is not an error, so nothing is left", () => {
+    expect(plainPowerShellStderr(firstUse)).toBe("");
+  });
+
+  test("error lines keep their words, with escapes and entities decoded", () => {
+    const stderr =
+      '#< CLIXML\r\n<Objs Version="1.1.0.1" xmlns="http://schemas.microsoft.com/powershell/2004/04"><Obj S="progress" RefId="0"><MS><PR N="Record"><AV>x</AV></PR></MS></Obj><S S="Error">找不到路径“C:\\熊宝”，因为该路径不存在。_x000D__x000A_</S><S S="Error">a &lt;b&gt; &amp; &quot;c&quot;_x000D__x000A_</S></Objs>';
+    expect(plainPowerShellStderr(stderr)).toBe(
+      '找不到路径“C:\\熊宝”，因为该路径不存在。\r\na <b> & "c"\r\n',
+    );
+  });
+
+  test("text before the header stays, and plain stderr is untouched", () => {
+    expect(plainPowerShellStderr(`native warning\n${firstUse}`)).toBe(
+      "native warning\n",
+    );
+    expect(plainPowerShellStderr("plain error\n")).toBe("plain error\n");
+  });
+
+  test("anything it does not recognise comes back exactly as it was", () => {
+    const cut = firstUse.slice(0, 120);
+    expect(plainPowerShellStderr(cut)).toBe(cut);
+    const unknown = '#< CLIXML\r\n<Objs><Obj S="information"><X/></Obj></Objs>';
+    expect(plainPowerShellStderr(unknown)).toBe(unknown);
+  });
+});
+
+describe("Windows command output, a line at a time", () => {
+  const gbk熊宝 = [0xd0, 0xdc, 0xb1, 0xa6];
+  const utf8 = (text: string) => new TextEncoder().encode(text);
+
+  test("PowerShell's UTF-8 lines and a native program's GBK lines both arrive as text", () => {
+    const decoder = windowsOutputDecoder(936);
+    const bytes = new Uint8Array([
+      ...utf8("ABC中文\r\n"),
+      ...gbk熊宝,
+      0x0d,
+      0x0a,
+      ...utf8("尾"),
+    ]);
+    expect(decoder.write(bytes) + decoder.end()).toBe("ABC中文\r\n熊宝\r\n尾");
+  });
+
+  test("a multi-byte character split across chunks is not misread", () => {
+    const decoder = windowsOutputDecoder(936);
+    const bytes = utf8("熊宝员工\n");
+    let text = "";
+    for (const byte of bytes) text += decoder.write(new Uint8Array([byte]));
+    expect(text + decoder.end()).toBe("熊宝员工\n");
+    const native = windowsOutputDecoder(936);
+    expect(
+      native.write(new Uint8Array(gbk熊宝.slice(0, 1))) +
+        native.write(new Uint8Array([...gbk熊宝.slice(1), 0x0a])),
+    ).toBe("熊宝\n");
+  });
+
+  test("the Western OEM code pages decode without a TextDecoder label", () => {
+    const decoder = windowsOutputDecoder(437);
+    expect(decoder.write(new Uint8Array([0x81, 0x0a]))).toBe("ü\n");
+    expect(windowsOutputDecoder(850).write(new Uint8Array([0x9b, 0x0a]))).toBe(
+      "ø\n",
+    );
+  });
+
+  test("an unknown code page still yields text, never throws", () => {
+    const decoder = windowsOutputDecoder(undefined);
+    expect(decoder.write(new Uint8Array([0xd0, 0x0a]))).toBe("\uFFFD\n");
+    expect(windowsOutputDecoder(65001).end()).toBe("");
+  });
 });

@@ -55,6 +55,69 @@ assert(
   "Unicode output is preserved",
   unicode,
 );
+// Native programs print in the machine's OEM code page (GBK on a Chinese Windows). The console has to
+// keep that code page for PowerShell to decode them, while PowerShell's own text still leaves as UTF-8.
+const codePageOutcome = await execute({
+  action: "exec",
+  payload: { command: "[Console]::OutputEncoding.CodePage" },
+});
+const codePage = Number(
+  String(successfulOutput(codePageOutcome).stdout).trim(),
+);
+assert(
+  Number.isSafeInteger(codePage) && codePage !== 65001,
+  "the console keeps the machine's own code page",
+  codePageOutcome,
+);
+const inCodePage: Record<number, { bytes: number[]; text: string }> = {
+  437: { bytes: [0x81], text: "ü" },
+  850: { bytes: [0x81], text: "ü" },
+  936: { bytes: [0xd0, 0xdc], text: "熊" },
+};
+const sample = inCodePage[codePage];
+if (sample) {
+  const nodeExe = (process.argv[3] ?? "node.exe").replace(/'/g, "''");
+  const write = `process.stdout.write(Buffer.from([${sample.bytes.join(",")}]))`;
+  for (const [label, command] of [
+    ["captured", `(& '${nodeExe}' -e "${write}") -join ''`],
+    ["direct", `& '${nodeExe}' -e "${write}"`],
+  ] as const) {
+    const native = await execute({ action: "exec", payload: { command } });
+    assert(
+      String(successfulOutput(native).stdout).includes(sample.text),
+      `a native program's code-page output arrives as text (${label})`,
+      native,
+    );
+  }
+} else {
+  console.log(
+    JSON.stringify({ check: "native code-page output", skipped: codePage }),
+  );
+}
+const progress = await execute({
+  action: "exec",
+  payload: {
+    command:
+      "$ProgressPreference = 'Continue'; Write-Progress -Activity 'probe' -Status 'step'; Write-Output 'after-progress'",
+  },
+});
+assert(
+  String(successfulOutput(progress).stdout).includes("after-progress") &&
+    !String(successfulOutput(progress).stderr).includes("CLIXML"),
+  "progress records never reach stderr as CLIXML",
+  progress,
+);
+const failure = await execute({
+  action: "exec",
+  payload: { command: "Write-Error '熊宝错误'" },
+});
+assert(
+  String(successfulOutput(failure).stderr).includes("熊宝错误") &&
+    !String(successfulOutput(failure).stderr).includes("<Objs") &&
+    successfulOutput(failure).exitCode !== 0,
+  "an error reaches stderr as readable text",
+  failure,
+);
 const code = await execute({ action: "exec", payload: { command: "exit 7" } });
 assert(successfulOutput(code).exitCode === 7, "nonzero exit code is preserved");
 assert(

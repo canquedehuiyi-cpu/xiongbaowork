@@ -18,7 +18,7 @@
 | 8 打 tag | **已完成（正式版）** | `v0.2.0` → 「熊宝发布」运行 41989346546 全绿，正式 Release `v0.2.0` 已发，镜像 `ghcr.io/canquedehuiyi-cpu/xiongbaowork@sha256:b76702a4…6686b1`。此前预发布 `v0.2.0-rc.1`（运行 41952108367） |
 | 9 GHCR 公开 | 已完成 | 发布的 digest 能匿名取到 manifest（HTTP 200） |
 | 10 G7 | Linux 已完成（CI 与真实服务器），Windows 待做 | `v0.2.0` 发布运行 41989346546 里 `g7-linux` 内置库、外部库两个 job 都通过。2026-11-06 在京东云 Ubuntu 22.04 上用正式镜像 `v0.2.0` 单容器部署：健康检查 200，注册并用 `grant-admin.ts` 设首位管理员（命令已在 #274 修正），部署级模型接 DeepSeek 后「我的分身」正常回答。踩到的坑写进 `openbot/docs/deployment-qoderwake.md` §5.1（#277）。Windows 需要一台 Win10/11 真机：手头的 Windows Server 2025 云主机不支持 WSL2/Docker |
-| 11 G5 真机 | 进行中（第 1、2、5 项通过；第 3、4 项拒绝通过、批准待 v0.2.1 复测；第 6 项待测） | 设备端 `device-v0.2.0-rc.2` 装在 Windows 11 25H2（「峰哥工作站」）上，配对到京东云 v0.2.0 部署；逐项记录见第 11 节「2026-11-06 实测」 |
+| 11 G5 真机 | 进行中（第 1–5 项通过，含 v0.2.1 上的批准执行；第 6 项待测） | 设备端 `device-v0.2.0-rc.2` 装在 Windows 11 25H2（「峰哥工作站」）上，先配对到京东云 v0.2.0，2026-11-07 升级到 v0.2.1 复测；逐项记录见第 11 节「2026-11-06 实测」与「2026-11-07 v0.2.1 复测」 |
 | 12 F2 设备端 | 未签名内测版已发；全新机器安装检查已在 CI 自动通过；签名与真人电脑证据待人工 | `device-v0.2.0-rc.1` 的 Windows job 失败，已由 canquedehuiyi-cpu/xiongbaowork#250 修复；`device-v0.2.0-rc.2` → 「熊宝设备端发布」运行 41963394570 全绿，预发布「熊宝数字员工 设备端 0.2.0（未签名内测版）」含 Windows 安装包、Linux deb 和 `SHA256SUMS`（下载复核通过）。签名身份（D3，12.2/12.4）和两台干净机器证据（12.6）待人工。全新托管机器（Ubuntu、Windows）上的安装、配对、启动退出、卸载检查已在 #266 的 CI 上首次实跑通过，此后每个 PR 和每次设备端发布都会跑 |
 | 13 百度网盘来源 | 待做 | 代码已加（本 PR，目录条目 `baidu-netdisk`）；需要人在百度网盘开放平台建应用，并把 AppKey/SecretKey 登记到「插件」页，见第 13 节。Google Drive 已决定暂不启用（2026-11-06） |
 
@@ -133,6 +133,18 @@ git push origin v0.2.0-rc.1
 | 4 敏感文件审批 | 拒绝通过；批准待复测 | `Get-Content C:\xiongbao-test\.env` 先弹审批，拒绝后未读出内容。批准后读取同第 3 项，待 v0.2.1 |
 | 5 离线排队 | 通过 | 设备离线时命令返回 `queued: true`；回线后 32 秒内取出执行一次（`work_items` 记录 finished、attempts=1）。所选的 `C:\xiongbao-queue.txt` 因 Windows 不允许普通用户在 C 盘根目录建文件而失败（退出码 1、UnauthorizedAccess），属测试路径选择问题。体验缺口：排队结果不回到对话 |
 | 6 信息来源 | 待测 | — |
+
+### 2026-11-07 v0.2.1 复测（京东云 v0.2.1 + 同一台 Windows 11 设备）
+
+服务器从南京大学镜像 `ghcr.nju.edu.cn` 拉取 v0.2.1（摘要 `sha256:b82fe0c7…ad7d`），重建容器后 `/health` 返回 200。
+
+| 项 | 结果 | 证据与发现 |
+| --- | --- | --- |
+| 默认会话 | 通过 | 「我的分身」默认会话直接用本人设备执行 `hostname`，不再报 `general-assistant does not belong to a tenant with machines`（#283 起） |
+| 3 危险命令批准 | 通过 | `Remove-Item -LiteralPath 'C:\xiongbao-test' -Recurse -Force` 弹审批，点「允许」后执行一次并回到对话，`Test-Path` 为 `False`（#282） |
+| 4 敏感文件批准 | 通过 | `Get-Content -LiteralPath 'C:\xiongbao-test2\.env' -Raw` 弹审批，点「允许」后读出 `DEMO=1` |
+| 5 排队结果回对话 | 通过 | 设备离线时 `Get-Date`、`echo ping` 和建目录命令排队；回线后逐条执行，结果以「之前排队的命令…已在设备重新连上后执行完成」回到原对话（#292） |
+| 中文输出 | 已修，待设备端更新后复测 | 诊断：`[Console]::OutputEncoding.CodePage` 为 65001，脚本里的中文正常，`(hostname)` 却含 4 个 U+FFFD：内置程序按 GBK 输出，被当成 UTF-8 解码。另见每条命令 stderr 仍带 `#< CLIXML` 的「正在准备首次使用模块」。canquedehuiyi-cpu/xiongbaowork#295 修复两处，WIN1 探针在 Windows 上实测 |
 
 ## 12. F2 设备端：签名身份、发布和第 7 道门
 
