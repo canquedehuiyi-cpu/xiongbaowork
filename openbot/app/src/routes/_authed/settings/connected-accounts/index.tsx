@@ -28,6 +28,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import {
+  appKeyOf,
   connectionsQueryOptions,
   type PluginServer,
   pluginsPageQueryOptions,
@@ -88,7 +89,14 @@ function RouteComponent() {
   const connected = new Set(
     (connections.data?.connections ?? []).map((row) => row.serverId),
   );
-  const added = new Set((plugins.data?.servers ?? []).map((s) => s.id));
+  /*
+   * Catalogue key to the row it was added as. Not the same string since G01-E: a curated connector
+   * is the team's row `team:<catalogue key>`, and a connection names the row while the catalogue
+   * names the key.
+   */
+  const added = new Map(
+    (plugins.data?.servers ?? []).map((s) => [appKeyOf(s), s.id]),
+  );
 
   /*
    * Only vendors reached as a person, and only ones an administrator has enabled.
@@ -128,6 +136,7 @@ function RouteComponent() {
       const Mark = markFor(entry.key);
       return {
         key: entry.key,
+        serverId: added.get(entry.key) ?? entry.key,
         title: entry.title,
         summary: entry.summary,
         mark: <Mark className="size-4" />,
@@ -135,6 +144,7 @@ function RouteComponent() {
     }),
     ...brokered.map((server) => ({
       key: server.id,
+      serverId: server.id,
       title: server.title,
       summary: server.summary || `连接你的 ${server.title} 账号。`,
       mark: <PluginLogo logo={server.logo} />,
@@ -145,16 +155,16 @@ function RouteComponent() {
     `${account.title} ${account.summary}`.toLocaleLowerCase().includes(query),
   );
   const connectedCount = accounts.filter((account) =>
-    connected.has(account.key),
+    connected.has(account.serverId),
   ).length;
   const sections = [
     {
       title: "已连接",
-      accounts: matching.filter((account) => connected.has(account.key)),
+      accounts: matching.filter((account) => connected.has(account.serverId)),
     },
     {
       title: "未连接",
-      accounts: matching.filter((account) => !connected.has(account.key)),
+      accounts: matching.filter((account) => !connected.has(account.serverId)),
     },
   ];
 
@@ -257,7 +267,7 @@ function RouteComponent() {
                           </ItemDescription>
                         </ItemContent>
                         <ItemActions className="shrink-0">
-                          {connected.has(account.key) ? (
+                          {connected.has(account.serverId) ? (
                             <span className="flex items-center gap-1 text-xs text-muted-foreground">
                               <IconCheck
                                 aria-hidden="true"

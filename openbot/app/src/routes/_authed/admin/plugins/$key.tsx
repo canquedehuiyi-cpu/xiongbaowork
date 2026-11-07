@@ -57,6 +57,7 @@ import {
   replaceServerTokenMutationOptions,
 } from "@/lib/plugins/mutations";
 import {
+  appKeyOf,
   type CatalogueItem,
   connectionsQueryOptions,
   type PluginServer,
@@ -193,12 +194,23 @@ function RouteComponent() {
    */
   const crews = useQuery(wakerGroupsQueryOptions());
   /*
+   * Either name finds the server: the route carries the catalogue key while a curated connector's row
+   * is the team's `team:<catalogue key>` since G01-E, and an old link may carry the row id. The
+   * catalogue entry is then looked up by the key that row stands for, and a connection row, which
+   * names the ROW, by the row's own id.
+   */
+  const server = plugins.data?.servers.find(
+    (item) => item.id === key || appKeyOf(item) === key,
+  );
+  const appKey = server ? appKeyOf(server) : key;
+  const entry = plugins.data?.catalogue.find((item) => item.key === appKey);
+  /*
    * The row itself rather than whether there is one, because the brokered row below wants what the
    * last re-check found and that is written on this same row. Asking a second time for it would be
    * a second answer to a question this read already carried.
    */
   const connection = (connections.data?.connections ?? []).find(
-    (row) => row.serverId === key,
+    (row) => row.serverId === (server?.id ?? key),
   );
   const youConnected = connection !== undefined;
   /*
@@ -304,8 +316,6 @@ function RouteComponent() {
       window.location.href = authorizationUrl;
     },
   });
-  const entry = plugins.data?.catalogue.find((item) => item.key === key);
-  const server = plugins.data?.servers.find((item) => item.id === key);
   /*
    * Everybody on the roster, and anybody hidden from it who holds one of this app's grants,
    * withdrawn ones included: see `grantRoster`. Named from the roster rows themselves, because the
@@ -378,10 +388,10 @@ function RouteComponent() {
     try {
       const credentialId =
         auth === "deployment-bearer"
-          ? await storeMcpToken(key, token || undefined)
+          ? await storeMcpToken(appKey, token || undefined)
           : undefined;
       await addCurated.mutateAsync({
-        key,
+        key: appKey,
         instanceHost: instanceHost || undefined,
         credentialId,
       });
@@ -436,7 +446,10 @@ function RouteComponent() {
       return;
     }
     try {
-      await addCurated.mutateAsync({ key, instanceHost: instanceHost.trim() });
+      await addCurated.mutateAsync({
+        key: appKey,
+        instanceHost: instanceHost.trim(),
+      });
       setInstanceHost("");
       setDialog(null);
     } catch (thrown) {
@@ -824,7 +837,8 @@ function RouteComponent() {
                           disabled={connectSelf.isPending}
                           onClick={() => {
                             setError(null);
-                            connectSelf.mutate(key);
+                            // The catalogue key: the consent route looks the vendor up by it.
+                            connectSelf.mutate(appKey);
                           }}
                           size="sm"
                           type="button"

@@ -84,7 +84,10 @@ function RouteComponent() {
     onError: (thrown: Error) => setError(thrown.message),
   });
 
-  const server = plugins.data?.servers.find((row) => row.id === key);
+  // Either name: the route may carry the catalogue key or, from an old link, the row id.
+  const server = plugins.data?.servers.find(
+    (row) => row.id === key || appKeyOf(row) === key,
+  );
   /*
    * The app's name as a listing and a grant spell it, not the route's row id: a curated connector is
    * the team's row `team:<catalogue key>`, and a listing stored under that would match no grant ref.

@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/item";
 import { Separator } from "@/components/ui/separator";
 import {
+  appKeyOf,
   type CatalogueItem,
   connectionsQueryOptions,
   type PluginServer,
@@ -99,11 +100,15 @@ function RouteComponent() {
   const connected = new Set(
     (connections.data?.connections ?? []).map((row) => row.serverId),
   );
-  const added = new Set((plugins.data?.servers ?? []).map((s) => s.id));
+  /*
+   * By catalogue key, not row id: since G01-E a curated connector is the team's row
+   * `team:<catalogue key>`, and matching on `s.id` left an added entry under discover as well.
+   */
+  const added = new Set((plugins.data?.servers ?? []).map(appKeyOf));
   const explore = (plugins.data?.catalogue ?? []).filter(
     (entry) => !added.has(entry.key),
   );
-  /** Keyed by catalogue key, which is also the server id, so a row can ask how it is reached. */
+  /** Keyed by catalogue key, so a row can ask how it is reached through `appKeyOf`. */
   const authByKey = new Map(
     (plugins.data?.catalogue ?? []).map((entry) => [entry.key, entry.auth]),
   );
@@ -129,7 +134,8 @@ function RouteComponent() {
             ) : (
               <PageRows>
                 {plugins.data?.servers.map((server, index) => {
-                  const Mark = markFor(server.id);
+                  const key = appKeyOf(server);
+                  const Mark = markFor(key);
                   return (
                     <React.Fragment key={server.id}>
                       {/*
@@ -140,10 +146,7 @@ function RouteComponent() {
                       <Item
                         data-testid={`plugin-${server.id}`}
                         render={
-                          <Link
-                            params={{ key: server.id }}
-                            to="/admin/plugins/$key"
-                          />
+                          <Link params={{ key }} to="/admin/plugins/$key" />
                         }
                         size="sm"
                       >
@@ -169,7 +172,7 @@ function RouteComponent() {
                           <span className="text-muted-foreground text-xs">
                             {summaryFor(
                               server,
-                              authByKey.get(server.id),
+                              authByKey.get(key),
                               connected.has(server.id),
                             )}
                           </span>
