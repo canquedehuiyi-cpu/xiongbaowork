@@ -16,6 +16,7 @@
 //! placeholders until the brand owner decides. Whatever they become, the identifier must not be
 //! the upstream `ai.copilotkit.*` (a test below holds that line).
 
+mod apps;
 mod autostart;
 mod process_tree;
 mod roots;
@@ -262,6 +263,52 @@ async fn remove_root(app: AppHandle, reference: String) -> Result<Vec<roots::Roo
     folders(&app, roots::RootCommand::Remove { reference })
 }
 
+/// The local MCP apps, changed by running the sidecar once (see apps.rs). Commands and keys stay in
+/// the runner's file on this computer; the runner prints env values masked.
+fn app_reply(app: &AppHandle, command: apps::AppCommand) -> Result<serde_json::Value, String> {
+    let program = sidecar::sidecar_path().map_err(|error| error.to_string())?;
+    apps::run(&program, &app.state::<Device>().paths.data_dir, &command)
+}
+
+#[tauri::command]
+async fn list_apps(app: AppHandle) -> Result<Vec<serde_json::Value>, String> {
+    app_reply(&app, apps::AppCommand::List).map(|reply| apps::apps_of(&reply))
+}
+
+#[tauri::command]
+async fn add_app(app: AppHandle, definition: serde_json::Value) -> Result<Vec<serde_json::Value>, String> {
+    apps::validate_app(&definition)?;
+    app_reply(&app, apps::AppCommand::Add(definition)).map(|reply| apps::apps_of(&reply))
+}
+
+#[tauri::command]
+async fn remove_app(app: AppHandle, target: String) -> Result<Vec<serde_json::Value>, String> {
+    let target = apps::validate_target(&target)?;
+    app_reply(&app, apps::AppCommand::Remove(target)).map(|reply| apps::apps_of(&reply))
+}
+
+/// Start the app once and list its tools. Returns `{ tools, count }`.
+#[tauri::command]
+async fn test_app(app: AppHandle, target: String) -> Result<serde_json::Value, String> {
+    let target = apps::validate_target(&target)?;
+    app_reply(&app, apps::AppCommand::Test(target))
+}
+
+#[tauri::command]
+async fn set_app_enabled(
+    app: AppHandle,
+    target: String,
+    enabled: bool,
+) -> Result<Vec<serde_json::Value>, String> {
+    let target = apps::validate_target(&target)?;
+    let command = if enabled {
+        apps::AppCommand::Enable(target)
+    } else {
+        apps::AppCommand::Disable(target)
+    };
+    app_reply(&app, command).map(|reply| apps::apps_of(&reply))
+}
+
 /// The window, opened at its folder section, for the tray's 「添加本地文件夹…」.
 fn show_folders(app: &AppHandle) {
     show_window(app);
@@ -406,7 +453,12 @@ fn main() {
             restart,
             list_roots,
             add_root,
-            remove_root
+            remove_root,
+            list_apps,
+            add_app,
+            remove_app,
+            test_app,
+            set_app_enabled
         ])
         // Closing the window hides it; the app lives in the tray and Quit is there.
         .on_window_event(|window, event| {
