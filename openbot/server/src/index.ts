@@ -164,7 +164,7 @@ import { createThreadIdentity } from "./channels/thread-identity";
 import { createChannelTitler } from "./channels/titler";
 import { createSandboxedStore } from "./components/sandboxed";
 import { createComponentStore } from "./components/store";
-import { createComputerGateway } from "./computer/gateway";
+import { createComputerGateway, localAppsAllowed } from "./computer/gateway";
 import {
   createHeadlessComputerTools,
   HeadlessToolSuspension,
@@ -1048,12 +1048,17 @@ await startupLifecycle.run(async (startup) => {
       ? ("device" as const)
       : ("workspace" as const);
   /**
-   * Whether a coworker gets the local-app tools (device MCP bridge §4.1): device mode, and a Bot with
-   * an owner whose paired machine they are on. A catalogue Bot has no owner, so none.
+   * Whether a coworker gets the local-app tools (device MCP bridge §4.1): device mode, and a run that
+   * is the Bot owner's own, since the apps are on the owner's paired machine. A teammate using a
+   * shared Bot, an admin, or a catalogue Bot (no owner) gets none; the gateway refuses them too.
    */
-  const usesDeviceApps = async (agentId: string) =>
+  const usesDeviceApps = async (agentId: string, actorId: string) =>
     computerMachine === "device" &&
-    (await ownerTenantOfBot(database, agentId).catch(() => null)) !== null;
+    localAppsAllowed({
+      machine: computerMachine,
+      owner: await ownerTenantOfBot(database, agentId).catch(() => null),
+      actorId,
+    });
   const computerGateway = computerProvider
     ? createComputerGateway({
         provider: computerProvider,
@@ -2299,7 +2304,7 @@ await startupLifecycle.run(async (startup) => {
         auditStore: bootAuditStore,
         ...(signInService ? { signIn: signInService } : {}),
         machine: computerMachine,
-        apps: await usesDeviceApps(agentId),
+        apps: await usesDeviceApps(agentId, actor.id),
         disabled: await approvalService.disabledTools(actor.id, agentId),
       });
     },
@@ -2590,7 +2595,7 @@ await startupLifecycle.run(async (startup) => {
                     auditStore: bootAuditStore,
                     ...(signInService ? { signIn: signInService } : {}),
                     machine: computerMachine,
-                    apps: await usesDeviceApps(context.agentId),
+                    apps: await usesDeviceApps(context.agentId, actor.id),
                     disabled: await approvalService.disabledTools(actor.id, context.agentId),
                   })
                 : [];
@@ -2757,7 +2762,7 @@ await startupLifecycle.run(async (startup) => {
           auditStore: bootAuditStore,
           ...(signInService ? { signIn: signInService } : {}),
           machine: computerMachine,
-          apps: await usesDeviceApps(agentId),
+          apps: await usesDeviceApps(agentId, actor.id),
         })
       : [];
   };
@@ -3474,7 +3479,7 @@ await startupLifecycle.run(async (startup) => {
           auditStore: bootAuditStore,
           ...(signInService ? { signIn: signInService } : {}),
           machine: computerMachine,
-          apps: await usesDeviceApps(agentId),
+          apps: await usesDeviceApps(agentId, actor.id),
           disabled: await approvalService.disabledTools(actor.id, agentId),
         });
       },
@@ -3568,7 +3573,7 @@ await startupLifecycle.run(async (startup) => {
           auditStore: bootAuditStore,
           ...(signInService ? { signIn: signInService } : {}),
           machine: computerMachine,
-          apps: await usesDeviceApps(agentId),
+          apps: await usesDeviceApps(agentId, actor.id),
           disabled: await approvalService.disabledTools(actor.id, agentId),
         });
       },

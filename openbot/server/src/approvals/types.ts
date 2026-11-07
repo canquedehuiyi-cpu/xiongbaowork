@@ -126,6 +126,13 @@ export type ApprovalCandidate = {
   scope: string;
   args: unknown;
   target?: unknown;
+  /**
+   * What the card shows besides the action and is not part of it: saved with the request, never in
+   * its digest or its equivalence. A local app tool's description lives here, because the device
+   * reports it afresh each time (or not at all while it is away), and an approved call must still
+   * be the same action when it runs.
+   */
+  display?: { description?: string };
   subject?: ApprovalSubject;
   continuation?: ApprovalContinuation;
 };
@@ -410,6 +417,8 @@ export function parseApprovalContinuation(
     ...(input.initiator ? { initiator: input.initiator } : {}),
   };
 }
+/** The tool that calls a local app's MCP tool on a paired machine (device MCP bridge). */
+const APP_CALL_TOOL = "computer_app_call";
 function canonical(value: unknown): string {
   if (value === null || typeof value !== "object")
     return JSON.stringify(value) ?? "null";
@@ -447,7 +456,15 @@ export function approvalAction(candidate: ApprovalCandidate): ApprovalAction {
         actorId: candidate.actorId,
         botId: candidate.botId,
         toolRef: candidate.toolRef,
-        effect: candidate.effect,
+        /*
+         * A local app's tool is read or write by what its device lists at the moment (device MCP
+         * bridge §3.4): unknown while the device is away or its list is older than five minutes,
+         * known again once it is back. The action approved is which tool of which app with which
+         * arguments, so its effect is not part of what it is; otherwise an approval asked while the
+         * device was away could never run once it returned.
+         */
+        effect:
+          candidate.toolRef === APP_CALL_TOOL ? APP_CALL_TOOL : candidate.effect,
         scope: candidate.scope,
         args: candidate.args,
         target: candidate.target,
@@ -498,15 +515,17 @@ const APP_ARGS_PREVIEW_BYTES = 2048;
 /**
  * An action's arguments as a card shows them: {@link approvalPreview}, except for a local app's
  * call, which shows the app and tool (the gateway's own names), the tool's description from the
- * device's list, and the tool's arguments masked by `approvalPreview` first and then as JSON cut to
- * 2 KB. Display only: what is approved and run is the whole call, bound by the action digest.
+ * device's list (`display`), and the tool's arguments masked by `approvalPreview` first and then as
+ * JSON cut to 2 KB. Display only: what is approved and run is the whole call, bound by the action
+ * digest.
  */
 export function approvalArgsPreview(action: {
   toolRef: string;
   args: unknown;
   target?: unknown;
+  display?: unknown;
 }): unknown {
-  if (action.toolRef !== "computer_app_call")
+  if (action.toolRef !== APP_CALL_TOOL)
     return approvalPreview(action.args);
   const field = (value: unknown, key: string) =>
     value && typeof value === "object" && !Array.isArray(value)
@@ -522,7 +541,8 @@ export function approvalArgsPreview(action: {
           .decode(bytes.slice(0, APP_ARGS_PREVIEW_BYTES - 3))
           .replace(/\uFFFD+$/, "")}…`
       : json;
-  const description = field(action.target, "description");
+  const description =
+    field(action.display, "description") ?? field(action.target, "description");
   return {
     app: approvalPreview(field(action.target, "app") ?? field(action.args, "app")),
     tool: approvalPreview(

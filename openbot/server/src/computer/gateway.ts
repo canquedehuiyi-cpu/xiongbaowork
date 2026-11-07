@@ -245,6 +245,8 @@ export type ComputerGatewayOptions = {
    * the gate still decides in full.
    */
   approvalRefusal?: (candidate: ApprovalCandidate) => Promise<string | undefined>;
+  /** The clock a device's cached tool list is aged by. Tests hand in their own. */
+  now?: () => number;
   provider: ComputerProvider;
   auditStore: AuditStore;
   /** Absent denies everything. See evaluateActionPolicy. */
@@ -1013,6 +1015,7 @@ export function createComputerGateway(
             : subject.command
               ? "workspace"
               : hostOf(pageUrl) || "browser",
+        ...(app?.description ? { display: { description: app.description } } : {}),
         args: continuation?.args ?? {
           ...subject,
           signal: undefined,
@@ -1022,12 +1025,13 @@ export function createComputerGateway(
           app: undefined,
           resolveApp: undefined,
         },
+        /*
+         * A local app's tool is named by the app and the tool alone. Its description is for the card
+         * only (`display`): the device reports it afresh each time, and not at all while it is away,
+         * so it is not part of the action an approval binds.
+         */
         target: app
-          ? {
-              app: app.name,
-              tool: app.tool,
-              ...(app.description ? { description: app.description } : {}),
-            }
+          ? { app: app.name, tool: app.tool }
           : {
               pageUrl,
               ...(element ? { element, snapshotId } : {}),
@@ -1260,14 +1264,21 @@ export function createComputerGateway(
    * cannot be fetched counts as "not read-only".
    */
   const appTools = new Map<string, { tools: AppTool[]; at: number }>();
+  const now = options.now ?? Date.now;
 
-  /** The machine this Bot's local apps are on, and the apps it reported. Refuses a Bot with none. */
-  async function appsOf(botId: string) {
+  /**
+   * The machine this Bot's local apps are on, and the apps it reported. Refuses a Bot with none, and
+   * anyone but its owner: the machine is the owner's (its tenant is the owner's own), and so are the
+   * apps on it. The tools are not offered to anyone else either; this is the second lock.
+   */
+  async function appsOf(botId: string, actor: ActionActor) {
     if (!options.resolveDevice || !options.deviceApps) {
       throw new ComputerUnavailableError(NO_LOCAL_APPS);
     }
     const machine = await options.resolveDevice(botId);
     if (!machine) throw new ComputerUnavailableError(NO_LOCAL_APPS);
+    if (machine.tenantId !== actor.id)
+      throw new ActionRefusedError(OWNER_ONLY, APP_UNAVAILABLE_RULE);
     return { machine, apps: await options.deviceApps(machine) };
   }
 
@@ -1301,7 +1312,7 @@ export function createComputerGateway(
     const tools = readAppTools(listed);
     const key = `${machine.tenantId}/${machine.deviceId}/${ref}`;
     appTools.delete(key);
-    appTools.set(key, { tools, at: Date.now() });
+    appTools.set(key, { tools, at: now() });
     // Insertion order is age order: the oldest entries go first once there are too many.
     for (const old of appTools.keys()) {
       if (appTools.size <= APP_TOOLS_CACHE_LIMIT) break;
@@ -1318,7 +1329,7 @@ export function createComputerGateway(
     signal?: AbortSignal,
   ): Promise<AppTool[] | undefined> {
     const cached = appTools.get(`${machine.tenantId}/${machine.deviceId}/${ref}`);
-    if (cached && Date.now() - cached.at < APP_TOOLS_TTL_MS) return cached.tools;
+    if (cached && now() - cached.at < APP_TOOLS_TTL_MS) return cached.tools;
     try {
       return await fetchAppTools(machine, botId, ref, signal);
     } catch (error) {
@@ -1935,7 +1946,7 @@ export function createComputerGateway(
       input: { app?: string },
       signal?: AbortSignal,
     ) {
-      const { machine, apps } = await appsOf(botId);
+      const { machine, apps } = await appsOf(botId, actor);
       const named =
         input.app === undefined ? undefined : findApp(apps, input.app);
       const refusal =
@@ -1990,7 +2001,7 @@ export function createComputerGateway(
       input: { app: string; tool: string; args?: Record<string, unknown> },
       signal?: AbortSignal,
     ) {
-      const { machine, apps } = await appsOf(botId);
+      const { machine, apps } = await appsOf(botId, actor);
       const app = findApp(apps, input.app);
       const refusal = app ? undefined : noSuchApp(input.app, apps);
       const resolveApp = async (known: { ref: string; name: string }) => {
@@ -2039,15 +2050,40 @@ export function createComputerGateway(
   };
 }
 
+/**
+ * Whether a run may use a Bot's local apps (device MCP bridge §4.1): on a device, and only when the
+ * run is the Bot owner's own, since the apps are on the owner's computer and hold the owner's keys.
+ * A teammate using a shared Bot, an admin, or a catalogue Bot (no owner) gets neither app tool, as a
+ * 分身's local folders are the person's own (`folderFor` in avatar-sources.ts).
+ */
+export function localAppsAllowed(input: {
+  machine: "device" | "workspace";
+  owner: string | null;
+  actorId: string;
+}): boolean {
+  return (
+    input.machine === "device" &&
+    input.owner !== null &&
+    input.owner === input.actorId
+  );
+}
+
+/** Why someone other than the Bot's owner cannot use the owner's local apps. */
+const OWNER_ONLY =
+  "本机应用在员工主人自己的电脑上，只有员工的主人本人才能让员工使用。";
+
 /** Why a Bot has no local apps to use: not device mode, or no owner's machine to use them on. */
 const NO_LOCAL_APPS =
   "本机应用只能在员工主人自己配对的电脑上使用，这个员工现在用不了。";
 /** The device's tool lists are trusted for this long (device MCP bridge §3.4). */
 const APP_TOOLS_TTL_MS = 300_000;
 const APP_TOOLS_CACHE_LIMIT = 1000;
-/* Backstops that outlast the runner's own deadlines: start 20s + list 20s, start 20s + call 120s. */
+/*
+ * Backstops that outlast the runner's own deadlines: start 20s + list 20s for a list; for a call on a
+ * fresh connection start 20s + list 20s + call 120s, with room to spare.
+ */
 const APP_LIST_BACKSTOP_MS = 45_000;
-const APP_CALL_BACKSTOP_MS = 150_000;
+export const APP_CALL_BACKSTOP_MS = 170_000;
 
 /** At most `limit` bytes of UTF-8, never ending in half a character. */
 function cutUtf8(text: string, limit: number): string {
