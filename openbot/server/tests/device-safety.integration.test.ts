@@ -133,7 +133,7 @@ test("a lost acknowledgement leaves unknown work and never repeats a real append
       () => execute(item),
       1000,
     ),
-  ).rejects.toThrow("may already have run");
+  ).rejects.toThrow("可能已经执行");
   expect(await readFile(join(root, "proof.txt"), "utf8")).toBe("one\n");
 });
 
@@ -167,7 +167,7 @@ test("a crashed owner's expired durable claim is not a fresh action", async () =
       },
       1000,
     ),
-  ).rejects.toThrow("may already have run");
+  ).rejects.toThrow("可能已经执行");
   expect(calls).toBe(0);
   expect(await queue.receipt(target, item.key)).toMatchObject({
     state: "unknown",
@@ -211,7 +211,7 @@ test("unknown online outcomes block fresh identities across replicas until the o
       1000,
       "fresh-model-toolcall",
     ),
-  ).rejects.toThrow("paused");
+  ).rejects.toThrow("已暂停");
   const replica = createDeviceQueue(database);
   await expect(
     replica.executeOnce(
@@ -220,10 +220,10 @@ test("unknown online outcomes block fresh identities across replicas until the o
       () => execute(item),
       1000,
     ),
-  ).rejects.toThrow("paused");
+  ).rejects.toThrow("已暂停");
   await expect(
     replica.enqueue(target, { ...item, key: "offline-fresh" }),
-  ).rejects.toThrow("paused");
+  ).rejects.toThrow("已暂停");
   expect(
     channel.settle(target, { id: firstFrameId, ok: true, output: {} }),
   ).toBeFalse();
@@ -303,7 +303,7 @@ test("unknown online outcomes block fresh identities across replicas until the o
   });
   await expect(
     replica.executeOnce(target, item, () => execute(item)),
-  ).rejects.toThrow("may already have run");
+  ).rejects.toThrow("可能已经执行");
   await channel.dispatch(
     target,
     item.action,
