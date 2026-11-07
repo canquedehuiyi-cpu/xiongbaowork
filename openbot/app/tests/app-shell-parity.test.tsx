@@ -771,3 +771,21 @@ test("no element in the shell is labelled with an employee's bare name", async (
   await userEvent.click(await view.findByRole("tab", { name: "群组 (1)" }));
   expect(labelled()).toEqual([]);
 });
+
+test("the footer reads the plan once on its own, so its name shows before /plans was ever opened", async () => {
+  const quotaRequests = () => requests.filter((url) => url === "/api/quota");
+  respond = async (url) =>
+    url === "/api/quota"
+      ? Response.json({
+          plan: { id: "pro", name: "专业版" },
+          limits: { wakers: 10, tasksPerMonth: 100, devices: 3 },
+          usage: { wakers: 2, tasks: 4, devices: 1 },
+          tokens: null,
+        })
+      : Response.json({});
+  const { view } = renderShell("/tasks", { plan: null });
+  const footer = await view.findByRole("region", { name: "账户" });
+  expect(await within(footer).findByText("专业版")).toBeTruthy();
+  // One read, and no polling: the plans screen is where the numbers are kept fresh.
+  expect(quotaRequests()).toHaveLength(1);
+});

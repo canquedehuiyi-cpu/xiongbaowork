@@ -103,7 +103,8 @@ export function ResourceTabs({
   onValueChange,
 }: {
   value: ResourceTab;
-  onValueChange: (value: ResourceTab) => void;
+  /** `keyboard` is true for arrow/Home/End moves, which should replace history rather than push. */
+  onValueChange: (value: ResourceTab, change: { keyboard: boolean }) => void;
 }) {
   const refs = useRef(new Map<ResourceTab, HTMLButtonElement>());
 
@@ -127,7 +128,7 @@ export function ResourceTabs({
     event.preventDefault();
     const tab = ALL[next];
     if (!tab) return;
-    onValueChange(tab.value);
+    onValueChange(tab.value, { keyboard: true });
     refs.current.get(tab.value)?.focus();
   };
 
@@ -137,7 +138,7 @@ export function ResourceTabs({
       "aria-controls": resourcePanelId(tab),
       "aria-selected": selected,
       id: resourceTabId(tab),
-      onClick: () => onValueChange(tab),
+      onClick: () => onValueChange(tab, { keyboard: false }),
       onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) =>
         move(event, index),
       ref: (node: HTMLButtonElement | null) => {
@@ -153,7 +154,7 @@ export function ResourceTabs({
   return (
     <div aria-label="能力与资源" className="mt-[24px]" role="tablist">
       <div
-        className="grid grid-cols-3 gap-[12px] xl:grid-cols-6"
+        className="grid grid-cols-2 gap-[12px] sm:grid-cols-3 xl:grid-cols-6"
         data-slot="resource-entry-cards"
       >
         {RESOURCE_TABS.map((tab, index) => {

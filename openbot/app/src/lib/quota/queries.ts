@@ -124,6 +124,25 @@ export function quotaSummaryQueryOptions() {
   });
 }
 
+/**
+ * The sidebar footer's plan name: read once when the app opens, then left alone.
+ *
+ * The footer shows which plan this account is on, as the reference product's sidebar does. A plan
+ * name changes about never, so one read per session is all it needs — no polling, no refetch on
+ * focus; the plans screen (`quotaQueryOptions`) is where the numbers are kept fresh, into the same
+ * cache entry.
+ */
+export function planSummaryQueryOptions() {
+  return queryOptions({
+    queryKey: quotaKeys.usage(),
+    queryFn: readQuota,
+    staleTime: Infinity,
+    refetchInterval: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
+}
+
 export function tiersQueryOptions() {
   return queryOptions({
     queryKey: quotaKeys.tiers(),

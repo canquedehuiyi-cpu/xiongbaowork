@@ -7,6 +7,7 @@ import { SegmentedTabs } from "@/components/layout/segmented-tabs";
 import { BearMascot } from "@/components/layout/workbench-empty";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useSearchDraft } from "@/lib/use-search-draft";
 import { cn } from "@/lib/utils";
 import {
   type ChatRow,
@@ -323,6 +324,7 @@ export function ConnectedChats({
   loading: boolean;
   actions: ChatActions;
 }) {
+  const [query, setQuery] = useSearchDraft(search.q ?? "");
   const models = new Map<string, string>();
   for (const row of rows)
     if (row.modelKey) models.set(row.modelKey, row.modelName);
@@ -411,9 +413,12 @@ export function ConnectedChats({
         <SearchBox
           className="w-full bg-card sm:w-[218px]"
           label="搜索已接入聊天"
-          onValueChange={(q) => onSearch({ q: q || undefined })}
+          onValueChange={(q) => {
+            setQuery(q);
+            onSearch({ q: q || undefined });
+          }}
           placeholder="搜索聊天、员工或 WakerFlow"
-          value={search.q ?? ""}
+          value={query}
         />
         <LabeledSelect
           className="min-w-[190px] bg-card"

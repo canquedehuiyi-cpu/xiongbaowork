@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { signOutMutationOptions } from "@/lib/auth/mutations";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
-import { quotaSummaryQueryOptions } from "@/lib/quota/queries";
+import { planSummaryQueryOptions } from "@/lib/quota/queries";
 import { cn } from "@/lib/utils";
 
 const menuItemClassName = "gap-2 px-2 py-1.5 text-[13px]";
@@ -50,12 +50,12 @@ function AccountAvatar({ label }: { label: string }) {
  * The foot of the sidebar, as the reference has it: who is signed in and on which plan, a gauge that
  * opens 套餐与用量, and a gear that opens the account menu upward.
  *
- * The plan comes from the same cache the plans screen fills (`quotaSummaryQueryOptions` never asks on
- * its own), so before anybody has opened /plans the second line falls back to the account's email.
+ * The plan is read once per session (`planSummaryQueryOptions`) into the cache the plans screen
+ * keeps fresh; until that read answers, or if it fails, the second line falls back to the email.
  */
 export function SidebarAccount() {
   const { data: currentUser } = useQuery(currentUserQueryOptions());
-  const plan = useQuery(quotaSummaryQueryOptions()).data?.plan?.name;
+  const plan = useQuery(planSummaryQueryOptions()).data?.plan?.name;
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const signOut = useMutation(signOutMutationOptions(queryClient));
