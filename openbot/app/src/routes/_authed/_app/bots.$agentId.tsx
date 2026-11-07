@@ -1,30 +1,17 @@
-import { useQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
-import { BotProfile } from "@/components/bot-profile/profile";
-import { PageShell } from "@/components/layout/page-shell";
-import { wakersBackLink } from "@/components/wakers/wakers-search";
-import { agentQueryOptions } from "@/lib/agents/queries";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
+/*
+ * Archived (user decision: 合并成一个详情页). The employee's profile — 对你, activity, tool
+ * permissions, update routing — now lives on its one detail page under 员工管理. The path stays so
+ * bookmarks, notifications and links in old messages still arrive; `replace` keeps Back from
+ * bouncing through it.
+ */
 export const Route = createFileRoute("/_authed/_app/bots/$agentId")({
-  component: BotProfilePage,
+  beforeLoad: ({ params }) => {
+    throw redirect({
+      to: "/wakers/$agentId",
+      params: { agentId: params.agentId },
+      replace: true,
+    });
+  },
 });
-
-function BotProfilePage() {
-  const { agentId } = Route.useParams();
-  const agent = useQuery(agentQueryOptions(agentId));
-  return (
-    <PageShell
-      backButton={{ label: "员工管理", linkProps: wakersBackLink() }}
-      description="这位员工在为你做什么，以及它怎么运行。"
-      title={agent.data?.name ?? "员工"}
-    >
-      {agent.isPending ? null : agent.error ? (
-        <p className="mt-6 text-destructive text-sm" role="alert">
-          你联系不到这位员工。
-        </p>
-      ) : (
-        <BotProfile agent={agent.data} />
-      )}
-    </PageShell>
-  );
-}

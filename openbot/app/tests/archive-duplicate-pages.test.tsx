@@ -36,7 +36,7 @@ import { settleReactWork } from "./settle-react-work";
  *   (`?agent=<id>`) now open on `/wakers` under the same parameters, and the old address redirects
  *   with those parameters carried over.
  * - `/bots` (Bot 会话) → `/wakers`: what each employee needs from the person is on its card, and the
- *   card links to the employee's `/bots/$agentId` profile, which stays.
+ *   card opens the employee's one detail page (`/bots/$agentId` redirects there too).
  * - `/routines` (定时任务) → `/autonomous?trigger=schedule`: the unified list narrowed to schedules,
  *   with the "nothing is firing" warning the old page carried.
  *
@@ -389,11 +389,13 @@ test("what each employee needs from the person is on its card, which links to it
     ["Backend Engineer", "agent-1"],
     ["Code Reviewer", "agent-2"],
   ] as const) {
+    // The old /bots profile is part of the one detail page now: the card opens it, and there is
+    // no second link to a separate profile.
+    const card = cardOf(screen, name);
     expect(
-      within(cardOf(screen, name))
-        .getByRole("link", { name: `${name} 的动态` })
-        .getAttribute("href"),
-    ).toBe(`/bots/${id}`);
+      within(card).queryByRole("link", { name: `${name} 的动态` }),
+    ).toBeNull();
+    expect(card.querySelector(`a[href="/wakers/${id}"]`)).not.toBeNull();
   }
 });
 

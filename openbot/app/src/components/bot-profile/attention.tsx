@@ -88,7 +88,7 @@ export function BotAttentionList() {
               render={(props) => (
                 <Link
                   {...props}
-                  to="/bots/$agentId"
+                  to="/wakers/$agentId"
                   params={{ agentId: bot.agentId }}
                   activeProps={{ className: "bg-foreground/5" }}
                 />

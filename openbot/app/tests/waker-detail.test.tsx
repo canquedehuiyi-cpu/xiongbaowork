@@ -310,7 +310,7 @@ test("the detail page shows duties, running tasks, skill grants and the audit tr
   ).toBe(`/assemble/${agentId}`);
 
   // 进行中任务: the board, asked for this executor and for running work only.
-  const running = section(screen, "进行中任务");
+  const running = section(screen, "看板上的进行中任务");
   await waitFor(() =>
     expect(running.getByText("给 orders 表加索引")).toBeTruthy(),
   );
@@ -432,7 +432,7 @@ test("a section whose read fails says so on its own, and the other sections stil
   const screen = draw(answers);
 
   const running = await waitFor(() => {
-    const found = section(screen, "进行中任务");
+    const found = section(screen, "看板上的进行中任务");
     expect(found.getByText("读不到进行中任务：看板坏了")).toBeTruthy();
     return found;
   });
@@ -483,7 +483,7 @@ test("each section shows its own loading state while its read is outstanding", a
     expect(section(screen, "技能授权").getByText("仔细评审")).toBeTruthy(),
   );
   expect(
-    section(screen, "进行中任务").getByLabelText("正在读取进行中任务"),
+    section(screen, "看板上的进行中任务").getByLabelText("正在读取进行中任务"),
   ).toBeTruthy();
   expect(
     section(screen, "最近审计").getByLabelText("正在读取审计记录"),

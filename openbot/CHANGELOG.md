@@ -36,6 +36,9 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   - `/skills`, `/knowledge` and `/memory` go to `/resources?tab=skills|knowledge|sources`. Those tabs now
     hold the full pages, not summaries.
   - 更多 in the sidebar keeps only 组团流程, 团队 Bot and 审批.
+  - `/bots/<id>` goes to `/wakers/<id>`, which is now the only detail page for an employee. That page
+    gains the old profile's sections: 对你 (pause, notifications, message, reset), its activity
+    (in progress, scheduled, done), tool permissions and where updates go.
 - **No API or data changes.** Entries without a backend contract, such as 自动接入 and 接入申请, are
   shown disabled with an explanation.
 

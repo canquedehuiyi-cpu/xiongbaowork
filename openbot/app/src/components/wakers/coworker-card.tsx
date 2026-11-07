@@ -81,9 +81,8 @@ export type CardStats = { stats: TaskStats; truncated: boolean } | null;
  * It also carries what the two archived pages said about the same employee: the old 员工列表
  * (`/agents`) told pinned and shared-with-you employees apart and opened each one's edit dialog, so
  * the card wears 已置顶 / 共享给你 and offers 编辑 (`/wakers?agent=<id>`); the old Bot 会话 (`/bots`)
- * said what each one needs from the person, so the card says that too and links to its
- * `/bots/$agentId` profile (动态), which holds the activity feed and the notification settings the
- * detail page does not.
+ * said what each one needs from the person, so the card says that too. Its profile (activity,
+ * notifications, reset) is part of the one detail page the card opens.
  *
  * The whole card opens the detail page: the name is the link, and its `::after` stretches over the
  * card, so the card is one tab stop with a visible focus ring and the actions sit above it on their
@@ -314,15 +313,6 @@ export function CoworkerCard({
             to="/wakers"
           >
             编辑
-          </Link>
-          {/* The employee's own Bot profile: its activity, notifications and reset. */}
-          <Link
-            aria-label={`${agent.name} 的动态`}
-            className={buttonVariants({ size: "xs", variant: "ghost" })}
-            params={{ agentId: agent.id }}
-            to="/bots/$agentId"
-          >
-            动态
           </Link>
         </ItemActions>
       </div>

@@ -73,12 +73,13 @@
 | --- | --- | --- | --- |
 | `/agents`（员工列表） | `/wakers`（员工管理）；新建/编辑弹窗、置顶/共享标记、编辑入口迁到卡片 | `new`、`agent` 原样 | `archive-duplicate-pages.test.tsx`、`agent-roster-error.test.tsx` |
 | `/bots`（Bot 会话列表） | `/wakers`；卡片显示"需要你：…"并链接 `/bots/$agentId` | 无 | 同上 |
+| `/bots/$agentId`（员工动态页） | `/wakers/$agentId`（唯一的员工详情页）：对你、动态（进行中/已排期/已完成）、权限、消息发到哪里并入；看板任务区改名「看板上的进行中任务」 | `agentId` | `employee-detail-merged.test.tsx`、`waker-detail.test.tsx` |
 | `/routines`（定时任务） | `/autonomous` 统一列表 | 固定加 `trigger=schedule` | 同上 |
 | `/skills` | `/resources?tab=skills`（完整技能页） | `new`、`edit` | `archive-resource-pages.test.tsx` |
 | `/knowledge` | `/resources?tab=knowledge`（完整知识库页） | 无 | 同上、`knowledge-screen.test.tsx` |
 | `/memory` | `/resources?tab=sources`（完整信息源与记忆页） | 无 | 同上 |
 
-未归档（有独有功能）：`/responsibilities`（职责的新建与编辑；侧栏入口已移除，归自主工作点亮）、`/pipelines`、`/team-bots`、`/approvals`。员工的两个详情页 `/bots/$agentId`（动态、开关、消息路由）与 `/wakers/$agentId`（信息源、项目、职责、技能授权、审计）内容不同，未合并，待定。`/routines` 原页面的单条完整运行记录与删除确认仍在 `/assemble/$agentId`。
+未归档（有独有功能）：`/responsibilities`（职责的新建与编辑；侧栏入口已移除，归自主工作点亮）、`/pipelines`、`/team-bots`、`/approvals`。员工的两个详情页已按用户决定合并为 `/wakers/$agentId`。`/routines` 原页面的单条完整运行记录与删除确认仍在 `/assemble/$agentId`。
 
 ## 下游页面（本轮未实查参考）
 
