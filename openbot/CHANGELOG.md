@@ -8,6 +8,8 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+## 0.2.3
+
 - **Connecting a curated app by its `team:<key>` id works again.** The connect route, its OAuth
   callback and the memory-source check now resolve the catalogue entry from the row's
   `catalogue_key` (or the tool ref's app key), so `POST /api/plugins/servers/team%3A<key>/connect`
