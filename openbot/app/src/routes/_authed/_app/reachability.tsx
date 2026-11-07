@@ -1,83 +1,129 @@
-import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
+import {
+  IconBolt,
+  IconMessagePlus,
+  IconRobot,
+  IconUserCheck,
+} from "@tabler/icons-react";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { type ComponentType, useState } from "react";
 import { PageShell } from "@/components/layout/page-shell";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { QueryError } from "@/components/layout/query-error";
+import {
+  chatRows,
+  filterRows,
+  type ReachabilitySearch,
+  reachabilitySearch,
+} from "@/components/reachability/chats";
+import { ConnectedChats } from "@/components/reachability/connected-chats";
+import {
+  BotsAccountsDialog,
+  UnavailableEntryDialog,
+} from "@/components/reachability/entry-dialogs";
+import {
+  LinkConversationDialog,
+  useLinkFlow,
+} from "@/components/reachability/link-conversation-dialog";
+import { RecentDeliveries } from "@/components/reachability/recent-deliveries";
+import { WakerScene } from "@/components/reachability/waker-scene";
 import { agentListQueryOptions } from "@/lib/agents/queries";
-import { conversationLabel } from "@/lib/channels/label";
 import { channelListQueryOptions } from "@/lib/channels/queries";
 import {
-  confirmSms,
   deliveryKey,
   deliveryQueryOptions,
   removeDeliveryBinding,
   removePushDevice,
-  startChatLink,
-  startSms,
 } from "@/lib/delivery";
-import { queryClient } from "@/query-client";
+import { modelLibraryQueryOptions } from "@/lib/models/queries";
+import { cn } from "@/lib/utils";
 
 /**
- * The phone verification waiting for its code, kept for the tab.
+ * @Waker (the reference's `/at-waker`): where a conversation is carried on outside this app.
  *
- * Only the challenge id lives in the page, and the text with the code arrives on the person's
- * phone a moment after they may have looked away: leaving and coming back used to drop the box to
- * type it into, with no way to confirm the code they had just been sent.
+ * The path stays `/reachability`, which existing links and bookmarks use. `?view=cards`, `?q=`,
+ * `?type=`, `?model=` and `?status=` narrow the connected chats and are omitted at their defaults.
  */
-const PENDING_SMS = "openbot.reachability.pendingSms";
-function readPending(): string {
-  try {
-    return sessionStorage.getItem(PENDING_SMS) ?? "";
-  } catch {
-    return "";
-  }
-}
-function writePending(id: string) {
-  try {
-    if (id) sessionStorage.setItem(PENDING_SMS, id);
-    else sessionStorage.removeItem(PENDING_SMS);
-  } catch {
-    /* A browser that keeps nothing still confirms within the visit. */
-  }
-}
-
 export const Route = createFileRoute("/_authed/_app/reachability")({
   component: ReachabilityPage,
+  validateSearch: (search: Record<string, unknown>): ReachabilitySearch =>
+    reachabilitySearch(search),
 });
+
+type Entry = "im" | "accounts" | "auto" | "requests";
+
+function EntryTile({
+  icon: Icon,
+  title,
+  hint,
+  badge,
+  muted,
+  onClick,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  title: string;
+  hint: string;
+  badge?: string;
+  muted?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      className="flex min-h-[64px] items-start gap-3 rounded-lg border bg-card px-3 py-2.5 text-left outline-none transition-colors hover:bg-foreground/[0.04] focus-visible:ring-2 focus-visible:ring-ring/60"
+      onClick={onClick}
+      type="button"
+    >
+      <span
+        className={cn(
+          "mt-0.5 flex size-[32px] shrink-0 items-center justify-center rounded-md",
+          muted
+            ? "bg-foreground/[0.06] text-muted-foreground"
+            : "bg-primary/15 text-primary",
+        )}
+      >
+        <Icon className="size-4" />
+      </span>
+      <span className="grid min-w-0 gap-0.5">
+        <span className="flex flex-wrap items-center gap-2 text-[13px] font-medium">
+          {title}
+          {badge && (
+            <span
+              className={cn(
+                "rounded px-1.5 text-[11px] font-normal leading-[18px]",
+                muted
+                  ? "bg-foreground/[0.06] text-muted-foreground"
+                  : "bg-primary/15 text-primary",
+              )}
+            >
+              {badge}
+            </span>
+          )}
+        </span>
+        <span className="text-[12px] text-muted-foreground">{hint}</span>
+      </span>
+    </button>
+  );
+}
+
 function ReachabilityPage() {
+  const queryClient = useQueryClient();
+  const search = Route.useSearch();
+  const navigate = Route.useNavigate();
   const reach = useQuery(deliveryQueryOptions());
   const channels = useInfiniteQuery(channelListQueryOptions());
   const bots = useQuery(agentListQueryOptions());
+  const library = useQuery(modelLibraryQueryOptions());
+  const flow = useLinkFlow();
+  const [entry, setEntry] = useState<Entry | null>(null);
   // People read Bots by name; the id is what the list used to show.
   const botName = (id: string) =>
     bots.data?.find((bot) => bot.id === id)?.name ?? id;
-  const [channelId, setChannelId] = useState("");
-  const [agentId, setAgentId] = useState("");
-  const [phone, setPhone] = useState("");
-  const [copied, setCopied] = useState(false);
-  const [challengeId, setChallengeId] = useState(readPending);
-  useEffect(() => writePending(challengeId), [challengeId]);
-  const [code, setCode] = useState("");
   const refresh = () =>
     queryClient.invalidateQueries({ queryKey: deliveryKey });
-  const link = useMutation({
-    mutationFn: (platform: "slack" | "teams") =>
-      startChatLink({ channelId, agentId, platform }),
-    onSuccess: () => setCopied(false),
-  });
-  const sms = useMutation({
-    mutationFn: () => startSms({ channelId, agentId, phone }),
-    onSuccess: setChallengeId,
-  });
-  const confirm = useMutation({
-    mutationFn: () => confirmSms(challengeId, code),
-    onSuccess: async () => {
-      setChallengeId("");
-      setCode("");
-      await refresh();
-    },
-  });
   const remove = useMutation({
     mutationFn: removeDeliveryBinding,
     onSuccess: refresh,
@@ -86,245 +132,143 @@ function ReachabilityPage() {
     mutationFn: removePushDevice,
     onSuccess: refresh,
   });
-  const selected = channels.data?.find((channel) => channel.id === channelId);
-  const error =
-    reach.error ??
-    channels.error ??
-    link.error ??
-    sms.error ??
-    confirm.error ??
-    remove.error ??
-    deviceRemove.error;
+
+  const rows = reach.data
+    ? chatRows({
+        reach: reach.data,
+        channels: channels.data,
+        agents: bots.data,
+        library: library.data,
+      })
+    : [];
+  const visible = filterRows(rows, search);
+  const onSearch = (next: Partial<ReachabilitySearch>) =>
+    navigate({
+      search: (prev) => reachabilitySearch({ ...prev, ...next }),
+      replace: true,
+    });
+  const writeError = remove.error ?? deviceRemove.error;
+  const close = (open: boolean) => {
+    if (!open) setEntry(null);
+  };
+
   return (
-    <PageShell
-      width="workbench"
-      title="可达性"
-      description="在 Slack、Microsoft Teams、短信或你的手机上把一段对话接下去。提问与审批请求，找的是这段对话同一个主人。"
-    >
-      <div className="grid gap-5">
-        {error && (
-          <p role="alert" className="text-destructive">
-            {error.message}
+    <PageShell width="workbench" title="@Waker">
+      <div className="mt-[20px] grid gap-8">
+        <div className="grid items-center gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,380px)]">
+          <div className="grid gap-4">
+            <p className="text-pretty text-[13px] text-muted-foreground">
+              让员工走出这个应用：在 Slack、Microsoft
+              Teams、短信或你的手机上把一段对话接下去。
+            </p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <EntryTile
+                badge={flow.challengeId ? "待输入验证码" : undefined}
+                hint="关联 Slack、Teams 或手机号"
+                icon={IconMessagePlus}
+                onClick={() => setEntry("im")}
+                title="接入 IM 聊天"
+              />
+              <EntryTile
+                hint="可用的聊天机器人、号码与设备"
+                icon={IconRobot}
+                onClick={() => setEntry("accounts")}
+                title="机器人与账号"
+              />
+              <EntryTile
+                badge="未开放"
+                hint="新会话无需逐个关联"
+                icon={IconBolt}
+                muted
+                onClick={() => setEntry("auto")}
+                title="自动接入"
+              />
+              <EntryTile
+                badge="未开放"
+                hint="他人申请与你的员工对话"
+                icon={IconUserCheck}
+                muted
+                onClick={() => setEntry("requests")}
+                title="接入申请"
+              />
+            </div>
+          </div>
+          <WakerScene className="mx-auto max-w-[380px]" />
+        </div>
+
+        {reach.error && (
+          <QueryError
+            error={reach.error}
+            label={
+              reach.data ? "刷新失败，下面是上次读取的结果" : "无法读取接入状态"
+            }
+            onRetry={() => reach.refetch()}
+            retrying={reach.isFetching}
+          />
+        )}
+        {channels.error && !channels.data && (
+          <QueryError
+            error={channels.error}
+            label="无法读取会话名称"
+            onRetry={() => channels.refetch()}
+            retrying={channels.isFetching}
+          />
+        )}
+        {writeError && (
+          <p role="alert" className="text-[13px] text-destructive">
+            {writeError.message}
           </p>
         )}
-        <div className="grid gap-3 rounded-lg border p-4">
-          <h2 className="font-semibold">关联一段对话</h2>
-          <label className="grid gap-1 text-sm">
-            会话
-            <select
-              className="h-9 rounded border bg-background px-3"
-              value={channelId}
-              onChange={(event) => {
-                setChannelId(event.target.value);
-                setAgentId("");
-              }}
-            >
-              <option value="">选择一段对话</option>
-              {channels.data
-                ?.filter((channel) => channel.active)
-                .map((channel) => (
-                  <option key={channel.id} value={channel.id}>
-                    {conversationLabel(channel)}
-                  </option>
-                ))}
-            </select>
-          </label>
-          <label className="grid gap-1 text-sm">
-            员工
-            <select
-              className="h-9 rounded border bg-background px-3"
-              value={agentId}
-              onChange={(event) => setAgentId(event.target.value)}
-            >
-              <option value="">选择一位员工</option>
-              {selected?.agentIds.map((id) => (
-                <option key={id} value={id}>
-                  {botName(id)}
-                </option>
-              ))}
-            </select>
-          </label>
-          {channels.hasNextPage && (
-            <Button variant="outline" onClick={() => channels.fetchNextPage()}>
-              加载更早的会话
-            </Button>
-          )}
-          <div className="flex flex-wrap gap-2">
-            <Button
-              disabled={
-                !agentId || !reach.data?.available.slack || link.isPending
-              }
-              onClick={() => link.mutate("slack")}
-            >
-              关联 Slack
-            </Button>
-            <Button
-              variant="outline"
-              disabled={
-                !agentId || !reach.data?.available.teams || link.isPending
-              }
-              onClick={() => link.mutate("teams")}
-            >
-              关联 Microsoft Teams
-            </Button>
-          </div>
-          {link.data && (
-            <div className="grid gap-2 rounded border bg-muted/40 p-3 text-sm">
-              <p>
-                请在 {link.data.expiresInMinutes} 分钟内，把这条消息发给{" "}
-                {link.data.platform === "teams" ? "Microsoft Teams" : "Slack"}{" "}
-                里的本应用。它会把那个账号关联到这段对话和员工。
-              </p>
-              <div className="flex items-center gap-2">
-                <code className="min-w-0 flex-1 break-all rounded bg-background px-2 py-1">
-                  {link.data.command}
-                </code>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={async () => {
-                    await navigator.clipboard.writeText(
-                      link.data?.command ?? "",
-                    );
-                    setCopied(true);
-                  }}
-                >
-                  {copied ? "已复制" : "复制"}
-                </Button>
-              </div>
-            </div>
-          )}
-          <p className="text-sm text-muted-foreground">
-            在别人也看得见的频道里，员工会改用私信回你，而不是在群里答。
-          </p>
-          {reach.data && !reach.data.available.slack && (
-            <p className="text-sm text-muted-foreground">
-              需要管理员先把本产品与 OpenTag 配对，才能关联 Slack 或 Teams。
-            </p>
-          )}
-          <form
-            className="grid gap-3 border-t pt-3"
-            onSubmit={(event) => {
-              event.preventDefault();
-              sms.mutate();
+
+        {(reach.data || reach.isPending) && (
+          <ConnectedChats
+            actions={{
+              onRemove: (row) =>
+                row.kind === "device"
+                  ? deviceRemove.mutate(row.id)
+                  : remove.mutate(row.id),
+              removing: remove.isPending || deviceRemove.isPending,
             }}
-          >
-            <label htmlFor="delivery-phone" className="grid gap-1 text-sm">
-              手机号
-              <Input
-                id="delivery-phone"
-                type="tel"
-                value={phone}
-                onChange={(event) => setPhone(event.target.value)}
-                placeholder="+15551234567"
-                required
-                pattern="\+[1-9][0-9]{7,14}"
-              />
-            </label>
-            <Button
-              type="submit"
-              disabled={!agentId || !reach.data?.available.sms || sms.isPending}
-            >
-              发送验证码
-            </Button>
-          </form>
-          {challengeId && (
-            <form
-              className="flex gap-2"
-              onSubmit={(event) => {
-                event.preventDefault();
-                confirm.mutate();
-              }}
-            >
-              <Input
-                aria-label="验证码"
-                autoComplete="one-time-code"
-                value={code}
-                onChange={(event) => setCode(event.target.value)}
-                required
-              />
-              <Button type="submit" disabled={confirm.isPending}>
-                确认手机号
-              </Button>
-            </form>
-          )}
-        </div>
-        <section className="grid gap-3 rounded-lg border p-4">
-          <h2 className="font-semibold">已连接的接收端</h2>
-          {reach.isPending ? (
-            <p>正在读取连接…</p>
-          ) : (
-            reach.data?.bindings
-              .filter((binding) => binding.enabled)
-              .map((binding) => (
-                <div
-                  key={binding.id}
-                  className="flex items-center justify-between gap-2"
-                >
-                  <p className="text-sm">
-                    {binding.transport === "slack"
-                      ? "Slack"
-                      : binding.transport === "teams"
-                        ? "Microsoft Teams"
-                        : binding.optedOutAt
-                          ? `${binding.address}（已回复 STOP；发送 START 可恢复）`
-                          : binding.address}{" "}
-                    · {botName(binding.agentId)}
-                  </p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={remove.isPending}
-                    onClick={() => remove.mutate(binding.id)}
-                  >
-                    断开连接
-                  </Button>
-                </div>
-              ))
-          )}
-          {reach.data?.bindings.every((binding) => !binding.enabled) && (
-            <p className="text-sm text-muted-foreground">
-              还没有连接任何接收端。
-            </p>
-          )}
-        </section>
-        <section className="grid gap-3 rounded-lg border p-4">
-          <h2 className="font-semibold">原生设备</h2>
-          <p className="text-sm text-muted-foreground">
-            登录本产品的原生应用并开启通知，就会注册这台设备。
-          </p>
-          {reach.data?.devices.map((device) => (
-            <div key={device.id} className="flex items-center justify-between">
-              <p>{device.platform}</p>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={deviceRemove.isPending}
-                onClick={() => deviceRemove.mutate(device.id)}
-              >
-                移除设备
-              </Button>
-            </div>
-          ))}
-        </section>
-        <section className="grid gap-2 rounded-lg border p-4">
-          <h2 className="font-semibold">最近送达</h2>
-          {reach.data?.deliveries.map((delivery) => (
-            <div key={delivery.id} className="border-t pt-2 text-sm">
-              <p>
-                {delivery.transport} · {delivery.kind} · {delivery.state} ·{" "}
-                {new Date(delivery.createdAt).toLocaleString()}
-              </p>
-              {delivery.error && (
-                <p className="text-destructive">{delivery.error}</p>
-              )}
-            </div>
-          ))}
-          {reach.data?.deliveries.length === 0 && (
-            <p className="text-sm text-muted-foreground">还没有投递记录。</p>
-          )}
-        </section>
+            loading={reach.isPending}
+            onConnect={() => setEntry("im")}
+            onSearch={onSearch}
+            rows={rows}
+            search={search}
+            visible={visible}
+          />
+        )}
+
+        <RecentDeliveries deliveries={reach.data?.deliveries} />
       </div>
+
+      <LinkConversationDialog
+        botName={botName}
+        flow={flow}
+        onOpenChange={close}
+        open={entry === "im"}
+        reach={reach.data}
+      />
+      <BotsAccountsDialog
+        onOpenChange={close}
+        open={entry === "accounts"}
+        reach={reach.data}
+      />
+      <UnavailableEntryDialog
+        action="开启自动接入"
+        description="让新的 IM 会话不必逐个关联，就自动接到你的员工。"
+        onOpenChange={close}
+        open={entry === "auto"}
+        reason="这个部署还没有自动接入的接口。目前每一条接入都由对话主人逐段发起：Slack、Teams 发一次性关联码，手机号收验证码。"
+        title="自动接入"
+      />
+      <UnavailableEntryDialog
+        action="查看接入申请"
+        description="IM 里的其他人申请与你的员工对话，由你逐条批准或拒绝。"
+        onOpenChange={close}
+        open={entry === "requests"}
+        reason="这个部署还没有接入申请的记录或审批接口。接入只能由对话主人本人发起，别人无法申请。"
+        title="接入申请"
+      />
     </PageShell>
   );
 }
