@@ -122,13 +122,14 @@ export function createRunnerExecutor(
   /**
    * An app action's failure, in the words the owner and the model read.
    *
-   * Only a call can have acted: a call that timed out, lost its connection or was stopped on the way
-   * may have changed something in the app, so it is "outcome unknown" and pauses the device until its
-   * owner looks. A call refused before it was sent, and every list, did nothing.
+   * Only a call can have acted: a call that timed out, lost its connection or was stopped once it
+   * was sent may have changed something in the app, so it is "outcome unknown" and pauses the device
+   * until its owner looks. A call refused or stopped before it was sent (the host marks that abort
+   * `sent: false`), one whose app was not even listening (`unreachable`), and every list did nothing.
    */
   function appFailure(error: unknown, calling: boolean): ActionOutcome {
     if (error instanceof Error && error.name === "AbortError") {
-      return calling
+      return calling && (error as { sent?: boolean }).sent !== false
         ? { ok: false, error: "已在设备上停止。", outcomeUnknown: true }
         : { ok: false, error: "已在设备上停止。" };
     }

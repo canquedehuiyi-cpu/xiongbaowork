@@ -12,7 +12,9 @@ import type { AppEntry } from "./apps";
  * What goes wrong is reported as a `McpAppError` whose `kind` says where, so the caller can word it
  * for the owner (the messages here are for logs, not for people):
  *   start         the child could not be started, or exited before the handshake finished
- *   connect       the app could not be reached (http), or went away after the handshake
+ *   unreachable   the request never reached the app: nothing listens at its loopback address
+ *                 (the app is closed) or the address could not be dialled (http only)
+ *   connect       the app went away after the request may have reached it
  *   timeout       no answer within the configured time
  *   protocol      the app answered, but not with something this client can use
  *   unknown_tool  the app has no tool of that name
@@ -49,7 +51,13 @@ export interface McpConnection {
 }
 
 export class McpAppError extends Error {
-  kind: "start" | "connect" | "timeout" | "protocol" | "unknown_tool";
+  kind:
+    | "start"
+    | "unreachable"
+    | "connect"
+    | "timeout"
+    | "protocol"
+    | "unknown_tool";
   stderrTail?: string;
   constructor(kind: McpAppError["kind"], message: string, stderrTail?: string) {
     super(message);
@@ -423,6 +431,46 @@ class StdioTransport implements Transport {
 // Streamable HTTP transport
 // ---------------------------------------------------------------------------------------------
 
+/**
+ * Failures that happen before a connection to the app exists, so the request cannot have reached it:
+ * nothing listening (the app is closed), or an address that could not be dialled. A reset or a drop
+ * once connected is not here: by then the app may have read the request.
+ */
+const NEVER_CONNECTED = new Set([
+  "ECONNREFUSED",
+  "ConnectionRefused",
+  "FailedToOpenSocket",
+  "ENOTFOUND",
+  "EAI_AGAIN",
+  "EADDRNOTAVAIL",
+  "EAFNOSUPPORT",
+  "EHOSTUNREACH",
+  "ENETUNREACH",
+]);
+
+const LOOPBACK_HOSTS = ["127.0.0.1", "localhost", "::1", "[::1]"];
+
+/**
+ * Exempts the loopback hosts from any HTTP(S)_PROXY for this process's own requests. Bun's fetch
+ * sends even `127.0.0.1` through a configured proxy unless NO_PROXY says otherwise, and has no
+ * per-request way out; it reads NO_PROXY on every request, so adding the loopback hosts here is
+ * enough. Nothing else changes: a request to any other host is proxied exactly as before. Both
+ * spellings are set because which one is read differs between platforms.
+ */
+export function bypassProxyForLoopback(
+  env: Record<string, string | undefined> = process.env,
+): void {
+  for (const name of ["NO_PROXY", "no_proxy"]) {
+    const entries = (env[name] ?? "")
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+    if (entries.includes("*")) continue;
+    const missing = LOOPBACK_HOSTS.filter((host) => !entries.includes(host));
+    if (missing.length) env[name] = [...entries, ...missing].join(",");
+  }
+}
+
 class HttpTransport implements Transport {
   private closing = false;
   private lost = false;
@@ -455,18 +503,24 @@ class HttpTransport implements Transport {
 
   private async post(body: Json, signal: AbortSignal) {
     let response: Response;
+    bypassProxyForLoopback();
     try {
       response = await fetch(this.url, {
         method: "POST",
         headers: this.headers(),
         body: JSON.stringify(body),
         signal,
+        // A redirect would post the same body somewhere else: it is an answer this client refuses.
+        redirect: "manual",
       });
     } catch (error) {
       if (signal.aborted) throw error;
       this.lost = true;
+      const code = (error as { code?: unknown }).code;
       throw new McpAppError(
-        "connect",
+        typeof code === "string" && NEVER_CONNECTED.has(code)
+          ? "unreachable"
+          : "connect",
         `Could not reach the app: ${(error as Error).message}`,
       );
     }
@@ -562,10 +616,12 @@ class HttpTransport implements Transport {
       // Best effort: tell the app the session is over.
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 1000);
+      bypassProxyForLoopback();
       await fetch(this.url, {
         method: "DELETE",
         headers: { "Mcp-Session-Id": this.sessionId },
         signal: controller.signal,
+        redirect: "manual",
       })
         .then((response) => response.body?.cancel())
         .catch(() => {});

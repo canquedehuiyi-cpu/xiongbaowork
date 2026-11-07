@@ -29,8 +29,10 @@ import {
  * ERRORS. A failure is thrown as an `AppHostError` whose `userMessage` is Chinese and fit to show as
  * it stands. `kind` and `phase` tell the caller what happened and when, and `cause` is the original
  * error, so the layer above can tell a call whose outcome is unknown (kind `timeout` or `connect`,
- * phase `call`) from one that never reached the app. A caller's own abort is NOT wrapped: it passes
- * through as the AbortError it is.
+ * phase `call`) from one that never reached the app (kind `unreachable`: nothing was listening, so
+ * the request was never delivered). A caller's own abort is NOT wrapped: it passes through as the
+ * AbortError it is, marked `sent: false` when it came before `tools/call` was sent (while the call
+ * waited its turn, connected or listed), since such a call cannot have done anything.
  */
 
 export const IDLE_MS = 600_000;
@@ -43,7 +45,8 @@ const DEFAULT_TIMEOUTS = { initMs: 20_000, listMs: 20_000, callMs: 120_000 };
 export type AppHostErrorKind =
   | "unavailable" // not registered, or disabled
   | "start" // could not be started, or exited before the handshake finished
-  | "connect" // could not be reached, or went away
+  | "unreachable" // the request never reached the app (nothing listening at its address)
+  | "connect" // went away after the request may have reached it
   | "timeout"
   | "protocol" // answered with something unusable
   | "unknown_tool" // refused here, never sent to the app
@@ -112,6 +115,11 @@ function isAbort(error: unknown): boolean {
   return error instanceof Error && error.name === "AbortError";
 }
 
+/** An abort that came before `tools/call` was sent: the call cannot have had any effect. */
+function unsentAbort(): Error & { sent: false } {
+  return Object.assign(abortError(), { sent: false as const });
+}
+
 export function createAppHost(
   registry: ReturnType<typeof createAppRegistry>,
   opts?: {
@@ -160,6 +168,11 @@ export function createAppHost(
         return {
           kind: "start",
           text: tail ? `「${name}」启动失败：${tail}` : `「${name}」启动失败。`,
+        };
+      case "unreachable":
+        return {
+          kind: "unreachable",
+          text: `连不上「${name}」的本机地址，请确认软件已打开。`,
         };
       case "connect":
         if (entry.kind === "http") {
@@ -313,8 +326,10 @@ export function createAppHost(
         list(conn, state, signal),
       ),
 
-    call: (ref, tool, args, signal) =>
-      run(ref, "list", signal, async (conn, entry, state) => {
+    call: (ref, tool, args, signal) => {
+      // Whether `tools/call` has been handed to the app: before that, a Stop did nothing there.
+      let sent = false;
+      return run(ref, "list", signal, async (conn, entry, state) => {
         const tools = state.tools ?? (await list(conn, state, signal));
         if (!tools.some((known) => known.name === tool)) {
           const names = tools.map((known) => known.name).join("、");
@@ -324,13 +339,18 @@ export function createAppHost(
             `「${entry.name}」没有名为「${tool}」的工具（已有：${names}）。`,
           );
         }
+        if (signal?.aborted) throw abortError();
         // From here the call is on its way to the app: a failure now may have had an effect.
+        sent = true;
         try {
           return await conn.callTool(tool, args, signal);
         } catch (error) {
           throw wrap(entry, "call", error);
         }
-      }),
+      }).catch((error: unknown) => {
+        throw isAbort(error) && !sent ? unsentAbort() : error;
+      });
+    },
 
     async closeAll() {
       closed = true;
