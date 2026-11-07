@@ -92,6 +92,13 @@ function handle(message: {
     const respond = () => {
       if (text === "__hang__") return;
       if (text === "__big__") return reply(textResult("x".repeat(2_000_000)));
+      if (text === "__structured__") {
+        return reply({
+          content: [{ type: "text", text: "y".repeat(900_000) }],
+          structuredContent: { blob: "z".repeat(900_000) },
+        });
+      }
+      if (text === "__exit__") process.exit(3);
       if (text === "__media__") {
         return reply({
           content: [

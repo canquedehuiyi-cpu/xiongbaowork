@@ -179,7 +179,7 @@ type Pending = {
 };
 
 class StdioTransport implements Transport {
-  closed = false;
+  private closing = false;
   private child: ChildProcessWithoutNullStreams;
   private nextId = 1;
   private pending = new Map<number, Pending>();
@@ -211,17 +211,29 @@ class StdioTransport implements Transport {
         );
         resolve();
       });
-      this.child.once("error", (error) => {
+      this.child.on("error", (error) => {
         this.fail("start", `The app could not be started: ${error.message}`);
         resolve();
       });
     });
     this.child.stdin.on("error", () => {});
+    this.child.stdout.on("error", () => {});
+    this.child.stderr.on("error", () => {});
     this.child.stdout.on("data", (chunk: Buffer) => this.onStdout(chunk));
     this.child.stderr.on("data", (chunk: Buffer) => {
       const all = Buffer.concat([this.stderr, chunk]);
-      this.stderr = all.subarray(Math.max(0, all.length - STDERR_LIMIT_BYTES));
+      let start = Math.max(0, all.length - STDERR_LIMIT_BYTES);
+      // Do not begin in the middle of a multi-byte character.
+      while (start < all.length && ((all[start] ?? 0) & 0xc0) === 0x80) {
+        start += 1;
+      }
+      this.stderr = all.subarray(start);
     });
+  }
+
+  /** True once closed, and also once the child has gone: a dead connection must not be reused. */
+  get closed() {
+    return this.closing || this.dead !== undefined;
   }
 
   markReady() {
@@ -361,21 +373,27 @@ class StdioTransport implements Transport {
   }
 
   async close() {
-    if (!this.closed) {
-      this.closed = true;
+    if (!this.closing) {
+      this.closing = true;
       this.fail("connect", "The connection was closed.");
       this.stop();
     }
+    let timer: ReturnType<typeof setTimeout> | undefined;
     await Promise.race([
       this.exited,
-      new Promise((resolve) => setTimeout(resolve, 3000)),
+      new Promise((resolve) => {
+        timer = setTimeout(resolve, 3000);
+      }),
     ]);
+    clearTimeout(timer);
   }
 
   /** The whole process tree: a group kill on POSIX, `taskkill /T /F` on Windows. */
   private stop() {
     const { pid } = this.child;
     if (pid === undefined || this.stopping) return;
+    // Already exited: its pid may belong to someone else by now.
+    if (this.child.exitCode !== null || this.child.signalCode !== null) return;
     this.stopping = true;
     if (process.platform === "win32") {
       const systemRoot =
@@ -406,12 +424,18 @@ class StdioTransport implements Transport {
 // ---------------------------------------------------------------------------------------------
 
 class HttpTransport implements Transport {
-  closed = false;
+  private closing = false;
+  private lost = false;
   private nextId = 1;
   private sessionId: string | undefined;
-  private inflight = new Set<AbortController>();
+  private inflight = new Set<() => void>();
 
   constructor(private url: string) {}
+
+  /** True once closed, and once the app has proved unreachable. */
+  get closed() {
+    return this.closing || this.lost;
+  }
 
   markReady() {}
 
@@ -440,6 +464,7 @@ class HttpTransport implements Transport {
       });
     } catch (error) {
       if (signal.aborted) throw error;
+      this.lost = true;
       throw new McpAppError(
         "connect",
         `Could not reach the app: ${(error as Error).message}`,
@@ -468,12 +493,13 @@ class HttpTransport implements Transport {
     if (callerSignal?.aborted) throw abortError();
     const id = this.nextId++;
     const controller = new AbortController();
-    this.inflight.add(controller);
     let reason: "timeout" | "abort" | "close" | undefined;
     const stopWith = (why: typeof reason) => {
-      reason = why;
+      reason ??= why;
       controller.abort();
     };
+    const stopForClose = () => stopWith("close");
+    this.inflight.add(stopForClose);
     const timer = setTimeout(() => stopWith("timeout"), timeoutMs);
     const onAbort = () => stopWith("abort");
     callerSignal?.addEventListener("abort", onAbort, { once: true });
@@ -511,7 +537,7 @@ class HttpTransport implements Transport {
     } finally {
       clearTimeout(timer);
       callerSignal?.removeEventListener("abort", onAbort);
-      this.inflight.delete(controller);
+      this.inflight.delete(stopForClose);
     }
   }
 
@@ -529,9 +555,9 @@ class HttpTransport implements Transport {
   }
 
   async close() {
-    if (this.closed) return;
-    this.closed = true;
-    for (const controller of this.inflight) controller.abort();
+    if (this.closing) return;
+    this.closing = true;
+    for (const stop of [...this.inflight]) stop();
     if (this.sessionId) {
       // Best effort: tell the app the session is over.
       const controller = new AbortController();
@@ -649,8 +675,20 @@ function toOutcome(result: unknown): McpCallOutcome {
   }
   const raw = result as Json;
   const items = Array.isArray(raw.content) ? raw.content : [];
-  let budget = RESULT_LIMIT_BYTES;
   let truncated = false;
+  // One cap for the whole result: structuredContent is measured first and, if it fits, what is
+  // left is the text's budget; if it alone is over the cap it is dropped.
+  let structured: unknown;
+  let budget = RESULT_LIMIT_BYTES;
+  if (raw.structuredContent !== undefined) {
+    const size = Buffer.byteLength(JSON.stringify(raw.structuredContent) ?? "");
+    if (size <= RESULT_LIMIT_BYTES) {
+      structured = raw.structuredContent;
+      budget -= size;
+    } else {
+      truncated = true;
+    }
+  }
   const content: McpCallOutcome["content"] = [];
   for (const item of items) {
     const text = describe(item);
@@ -668,14 +706,7 @@ function toOutcome(result: unknown): McpCallOutcome {
     isError: raw.isError === true,
     truncated,
   };
-  if (raw.structuredContent !== undefined) {
-    const json = JSON.stringify(raw.structuredContent) ?? "";
-    if (Buffer.byteLength(json) <= RESULT_LIMIT_BYTES) {
-      outcome.structuredContent = raw.structuredContent;
-    } else {
-      outcome.truncated = true;
-    }
-  }
+  if (structured !== undefined) outcome.structuredContent = structured;
   return outcome;
 }
 

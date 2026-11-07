@@ -3,7 +3,7 @@
  * `Mcp-Session-Id` on initialize and refuses (400) any later request that does not carry it. With
  * `sse` it answers every request as an event stream that first carries unrelated events.
  */
-export function startFakeHttpMcp(options: { sse: boolean }) {
+export function startFakeHttpMcp(options: { sse: boolean; delayMs?: number }) {
   const sessionId = `sess-${Math.random().toString(36).slice(2)}`;
   const requests: Array<{ method: string; sessionId: string | null }> = [];
   const server = Bun.serve({
@@ -25,6 +25,9 @@ export function startFakeHttpMcp(options: { sse: boolean }) {
       requests.push({ method: body.method, sessionId: got });
       if (body.method !== "initialize" && got !== sessionId) {
         return new Response("missing session", { status: 400 });
+      }
+      if (body.method === "tools/call" && options.delayMs) {
+        await new Promise((resolve) => setTimeout(resolve, options.delayMs));
       }
       if (body.id === undefined) return new Response(null, { status: 202 });
       let result: unknown;

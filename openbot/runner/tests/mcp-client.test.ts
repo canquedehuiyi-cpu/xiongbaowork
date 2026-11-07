@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterAll, afterEach, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -21,6 +21,8 @@ const fixture = join(import.meta.dir, "fixtures", "fake-mcp-stdio.ts");
 const open: McpConnection[] = [];
 const stops: Array<() => void> = [];
 const scratch = mkdtempSync(join(tmpdir(), "openbot-runner-mcp-"));
+
+afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 
 afterEach(async () => {
   for (const connection of open.splice(0)) await connection.close();
@@ -292,4 +294,44 @@ test("childEnv drops XIONGBAO_* from the parent and lets the entry override the 
     OVER: "new",
     XIONGBAO_MINE: "ok",
   });
+});
+
+test("stdio: a total cap applies to text plus structuredContent", async () => {
+  const connection = await connect({ FAKE_MCP_MODE: "ok" });
+  const outcome = await connection.callTool("echo", { text: "__structured__" });
+  expect(outcome.truncated).toBe(true);
+  const total =
+    outcome.content.reduce(
+      (sum, item) => sum + Buffer.byteLength(item.text),
+      0,
+    ) + Buffer.byteLength(JSON.stringify(outcome.structuredContent ?? null));
+  expect(total).toBeLessThanOrEqual(1_000_000);
+});
+
+test("stdio: connection.closed becomes true once the child has exited, and close() afterwards is safe", async () => {
+  const connection = await connect({ FAKE_MCP_MODE: "ok" });
+  const error = await rejection(
+    connection.callTool("echo", { text: "__exit__" }),
+  );
+  expect(error.kind).toBe("connect");
+  expect(connection.closed).toBe(true);
+  await connection.close();
+});
+
+test("http: close() with a request in flight rejects with kind connect", async () => {
+  const server = startFakeHttpMcp({ sse: false, delayMs: 2000 });
+  stops.push(server.stop);
+  const connection = await connectApp({
+    ref: "app_bbbbbbbbbbbbbbbbbbbbbb",
+    name: "web",
+    kind: "http",
+    url: server.url,
+    enabled: true,
+  });
+  open.push(connection);
+  const pending = rejection(connection.callTool("echo", { text: "x" }));
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  await connection.close();
+  expect((await pending).kind).toBe("connect");
+  expect(connection.closed).toBe(true);
 });
