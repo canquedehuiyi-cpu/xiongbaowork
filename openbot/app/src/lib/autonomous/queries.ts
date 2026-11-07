@@ -77,7 +77,7 @@ export function autonomousOverviewQueryOptions(enabled: boolean) {
     enabled,
     queryFn: () =>
       client<AutonomousSummary[]>("/api/agents/autonomous/all", "autonomous", {
-        fallback: "Could not load what the coworkers do on their own.",
+        fallback: "全部员工的自主工作加载失败，请稍后再试。",
       }),
     refetchInterval: 300_000,
   });

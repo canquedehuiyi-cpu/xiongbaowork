@@ -19,7 +19,7 @@ import {
   createRouter,
   RouterProvider,
 } from "@tanstack/react-router";
-import { cleanup, render } from "@testing-library/react";
+import { act, cleanup, render } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AppSidebar, channelTab } from "@/components/app-sidebar/app-sidebar";
 import { SidebarProvider } from "@/components/ui/sidebar";
@@ -123,6 +123,7 @@ beforeAll(() => {
   );
 });
 beforeEach(() => {
+  window.localStorage.clear();
   requests.length = 0;
   respond = async () => {
     throw new Error("Unexpected request");
@@ -160,6 +161,10 @@ function channel(id: string, agentIds: string[] = []): ChannelSummary {
 function renderSidebar(
   path = "/",
   rows: ChannelSummary[] = [channel("Recent conversation")],
+  {
+    nextCursor = null,
+    agents = [],
+  }: { nextCursor?: string | null; agents?: unknown[] } = {},
 ) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
@@ -175,7 +180,7 @@ function renderSidebar(
     role: "user",
     onboarding: null,
   });
-  queryClient.setQueryData(agentKeys.list(false), []);
+  queryClient.setQueryData(agentKeys.list(false), agents);
   // The sidebar's attention list polls on its own schedule; this test counts channel requests only.
   queryClient.setQueryDefaults(botLifecycleKeys.attention, {
     staleTime: Number.POSITIVE_INFINITY,
@@ -183,7 +188,7 @@ function renderSidebar(
   });
   queryClient.setQueryData(botLifecycleKeys.attention, []);
   queryClient.setQueryData(channelKeys.list(), {
-    pages: [{ channels: rows, nextCursor: null }],
+    pages: [{ channels: rows, nextCursor }],
     pageParams: [""],
   });
   const routeTree = createRootRoute({
@@ -290,4 +295,48 @@ test("the footer carries the 小管家 entry, settings and the account menu", as
   );
   expect(hrefOf(view.getByRole("link", { name: "设置" }))).toBe("/settings");
   expect(view.getByRole("button", { name: /user@example\.com/ })).toBeTruthy();
+});
+
+test("a 群组 tab with nothing among the loaded pages says so, offers more, and does not page on its own", async () => {
+  const view = renderSidebar("/", [channel("和客服小熊的会话", ["a"])], {
+    nextCursor: "older/page",
+  });
+  await view.findByText("和客服小熊的会话");
+  await userEvent.click(view.getByRole("tab", { name: "群组" }));
+  expect(await view.findByText("已加载的会话里没有群组会话")).toBeTruthy();
+  expect(view.queryByText("还没有群组会话")).toBeNull();
+  expect(view.getByRole("button", { name: "加载更早的会话" })).toBeTruthy();
+  // Filtering by tab must not walk the whole history by itself: no observer is armed.
+  act(() => {
+    for (const observer of ScrollObserver.active) observer.intersect();
+  });
+  expect(requests).toEqual([]);
+});
+
+test("Team Bots an administrator assigned to this person stay visible with 更多 folded", async () => {
+  const view = renderSidebar("/", undefined, {
+    agents: [
+      {
+        id: "bot-legal",
+        name: "法务助手",
+        assignedToMe: true,
+        hidden: false,
+        pinned: false,
+      },
+    ],
+  });
+  const more = await view.findByRole("button", { name: "更多" });
+  expect(more.getAttribute("aria-expanded")).toBe("false");
+  const link = view.getByRole("link", { name: /法务助手/ });
+  expect(link.getAttribute("href")).toBe("/channel/new?agent=bot-legal");
+});
+
+test("on a page that lives under 更多, the section opens and marks it current", async () => {
+  const view = renderSidebar("/approvals");
+  const more = await view.findByRole("button", { name: "更多" });
+  expect(more.getAttribute("aria-expanded")).toBe("true");
+  const region = view.getByRole("navigation", { name: "更多入口" });
+  expect(
+    region.querySelector('[aria-current="page"]')?.textContent?.trim(),
+  ).toBe("审批");
 });

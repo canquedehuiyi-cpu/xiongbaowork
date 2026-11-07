@@ -33,10 +33,11 @@ import {
   type LinkOptions,
   useNavigate,
   useParams,
+  useRouterState,
 } from "@tanstack/react-router";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import type * as React from "react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChannelAvatar } from "@/components/channels/avatar";
 import {
   type SegmentedTab,
@@ -344,13 +345,32 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   useChannelEvents();
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<ConversationTab>("wakers");
-  const [moreOpen, setMoreOpen] = useState(readMoreOpen);
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
+  /*
+   * A page that lives under 更多 opens the section, so the current place is always marked: folded
+   * away, a person on /approvals would see no entry lit at all.
+   */
+  const inMore = MORE_NAV.some(
+    (item) => pathname === item.to || pathname.startsWith(`${item.to}/`),
+  );
+  const [moreOpen, setMoreOpen] = useState(() => readMoreOpen() || inMore);
+  useEffect(() => {
+    if (inMore) setMoreOpen(true);
+  }, [inMore]);
   const scrollRoot = useRef<HTMLDivElement>(null);
   const searching = search.trim().length > 0;
   const tabChannels = channels.data?.filter(
     (channel) => channelTab(channel) === tab,
   );
   const visibleChannels = pinnedFirst(matchingChannels(tabChannels, search));
+  /*
+   * Nothing of this tab among the pages loaded so far is not the same as nothing at all, and it is
+   * no reason to walk the whole history unasked either: a person with a long run of one-to-one
+   * conversations would otherwise watch every page load in search of a group. The button stays.
+   */
+  const tabEmptySoFar = !searching && tabChannels?.length === 0;
   /*
    * FILTERING DOES NOT ANIMATE. Rows exit and relayout on every keystroke otherwise, which is a
    * list thrashing under somebody who is still typing — and the moving target is the very thing
@@ -403,6 +423,32 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </SidebarMenu>
           </nav>
         </SidebarGroup>
+        {/* Team Bots an administrator assigned to this person: always here, never folded away. */}
+        {assignedTeamBots.length > 0 ? (
+          <SidebarGroup className="px-2 py-0">
+            <nav aria-label="指派给我的团队 Bot">
+              <SidebarMenu className="gap-0.5">
+                {assignedTeamBots.map((bot) => (
+                  <SidebarMenuItem key={bot.id}>
+                    <SidebarMenuButton
+                      className={navRowClassName}
+                      render={(props) => (
+                        <Link
+                          {...props}
+                          search={{ agent: bot.id }}
+                          to="/channel/new"
+                        />
+                      )}
+                    >
+                      <ChannelAvatar participantIds={[bot.id]} size={16} />
+                      <span className="truncate">{bot.name}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </nav>
+          </SidebarGroup>
+        ) : null}
         {/* Segment two: this product's own destinations, folded. */}
         <SidebarGroup className="px-2 py-0">
           <SidebarMenu className="gap-0.5">
@@ -426,24 +472,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               <SidebarMenu className="gap-0.5 pt-0.5">
                 {MORE_NAV.map((item) => (
                   <NavRow key={item.to} {...item} />
-                ))}
-                {/* Team Bots an administrator assigned to this person: always here, never hidden. */}
-                {assignedTeamBots.map((bot) => (
-                  <SidebarMenuItem key={bot.id}>
-                    <SidebarMenuButton
-                      className={navRowClassName}
-                      render={(props) => (
-                        <Link
-                          {...props}
-                          search={{ agent: bot.id }}
-                          to="/channel/new"
-                        />
-                      )}
-                    >
-                      <ChannelAvatar participantIds={[bot.id]} size={16} />
-                      <span className="truncate">{bot.name}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
                 ))}
               </SidebarMenu>
             </nav>
@@ -512,17 +540,25 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 </Empty>
               </div>
             ) : null}
-            {!searching && tabChannels?.length === 0 ? (
+            {tabEmptySoFar ? (
               <div className="py-4">
                 <Empty className="border border-dashed min-h-[30dvh]">
                   <EmptyHeader>
                     <EmptyTitle>
-                      {tab === "groups" ? "还没有群组会话" : "你还没有会话"}
+                      {channels.hasNextPage
+                        ? tab === "groups"
+                          ? "已加载的会话里没有群组会话"
+                          : "已加载的会话里没有员工会话"
+                        : tab === "groups"
+                          ? "还没有群组会话"
+                          : "你还没有会话"}
                     </EmptyTitle>
                     <EmptyDescription className="text-pretty">
-                      {tab === "groups"
-                        ? "把几位员工拉进同一段对话，群组会话就会出现在这里。"
-                        : "开始和员工对话，你的会话就会出现在这里。"}
+                      {channels.hasNextPage
+                        ? "加载更早的会话，看看更早的历史里有没有。"
+                        : tab === "groups"
+                          ? "把几位员工拉进同一段对话，群组会话就会出现在这里。"
+                          : "开始和员工对话，你的会话就会出现在这里。"}
                     </EmptyDescription>
                   </EmptyHeader>
                 </Empty>
@@ -542,7 +578,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <ChannelPagination
               query={channels}
               scrollRoot={scrollRoot}
-              searching={searching}
+              searching={searching || tabEmptySoFar}
             />
           </SidebarMenu>
         </SidebarGroup>
