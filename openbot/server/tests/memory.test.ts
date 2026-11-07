@@ -219,3 +219,56 @@ test("the due-source sweep syncs each source in its own tenant and refuses unown
     ["sync:erin-source", "erin"],
   ]);
 });
+
+/**
+ * A source on a curated app whose row is called `team:<key>` (G01-E).
+ *
+ * The catalogue entry is the app the tool ref names, never the row's id: read off `team:notion` it
+ * named no entry, so a person-OAuth app was taken for a deployment-token one and the "reconnect"
+ * precheck never ran — the vendor was called and the person got a vaguer failure instead.
+ */
+test("a source on a team row checks the person's own connection before calling the app", async () => {
+  const failures: string[] = [];
+  const called: string[] = [];
+  const source = {
+    id: "source-1",
+    ownerUserId: "person",
+    agentId: "bot-1",
+    toolRef: "notion/search",
+    args: {},
+  };
+  const ingestion = createMemoryIngestion({
+    store: {
+      getSource: async () => source,
+      claimSync: async () => source,
+      failSync: async (_owner: string, _id: string, message: string) => {
+        failures.push(message);
+      },
+    } as unknown as MemoryStore,
+    plugins: {
+      agentOwner: async () => "person",
+      listForAgent: async () => ({ tools: [{ ref: "notion/search" }] }),
+      listServers: async () => [
+        {
+          id: "team:notion",
+          provenance: "first-party",
+          url: "https://mcp.notion.com/mcp",
+          authScheme: null,
+          tools: [{ ref: "notion/search", effect: "read", destructive: false }],
+        },
+      ],
+      connectionsFor: async () => [],
+      brokeredConnectionsFor: async () => [],
+      callTool: async (input: { ref: string }) => {
+        called.push(input.ref);
+        return { isError: true, text: "" };
+      },
+    } as unknown as PluginStore,
+  });
+
+  await expect(ingestion.sync("person", "source-1")).rejects.toThrow(
+    "Reconnect this app to use its memories.",
+  );
+  expect(failures).toEqual(["Reconnect this app to use its memories."]);
+  expect(called).toEqual([]);
+});

@@ -66,11 +66,13 @@ function app(input: {
    * that nothing above it was ever going to catch.
    */
   oauthClientFor?: () => Promise<{ clientId: string; clientSecret: string }>;
+  /** The row an address resolves to. No row by default. */
+  serverAddress?: (serverId: string) => Promise<unknown>;
 }) {
   const store = {
     // The brokered read the connect handler makes before anything about the consent flow. This
     // deployment has no brokered rows, so it answers nothing and the flow below is untouched.
-    serverAddress: async () => undefined,
+    serverAddress: input.serverAddress ?? (async () => undefined),
     oauthClientFor:
       input.oauthClientFor ??
       (async () => ({ clientId: "dyn-1", clientSecret: "" })),
@@ -162,6 +164,75 @@ describe("a consent that came back the way it left", () => {
     );
     // And it was never on the callback URL in a form anybody reading that URL could use.
     expect(state).not.toContain(verifier);
+  });
+});
+
+/**
+ * A consent started from a curated row's `team:<key>` id (G01-E).
+ *
+ * The sealed state carries the address the person connected with, and the callback has to find the
+ * same catalogue entry connect found: the row's `catalogue_key`, not its id. Read off the id,
+ * `team:notion` named no entry and the person was sent back with a failure after consenting.
+ */
+describe("a consent started from a team row id", () => {
+  const teamNotion = async (serverId: string) =>
+    serverId === "team:notion"
+      ? {
+          id: "team:notion",
+          catalogueKey: "notion",
+          title: "Notion",
+          url: "https://mcp.notion.com/mcp",
+          authScheme: null,
+        }
+      : undefined;
+
+  test("connect and callback agree on the entry, and the connection is recorded", async () => {
+    const recorded: Recorded[] = [];
+    const hono = app({ recorded, serverAddress: teamNotion });
+
+    const started = await hono.request(
+      "http://t/api/plugins/servers/team%3Anotion/connect",
+      { method: "POST" },
+    );
+    expect(started.status).toBe(200);
+    const { authorizationUrl } = (await started.json()) as {
+      authorizationUrl: string;
+    };
+    const state = new URL(authorizationUrl).searchParams.get("state") ?? "";
+
+    await withWillingVendor(async () => {
+      const response = await hono.request(callbackUrl(state));
+      expect(response.headers.get("location")).toBe(
+        "https://app.example/settings/connected-accounts/team%3Anotion",
+      );
+    });
+    expect(recorded).toEqual([
+      {
+        serverId: "team:notion",
+        userId: "user-1",
+        refreshToken: "rt-1",
+        scope: "read",
+      },
+    ]);
+  });
+
+  test("a state sealed with the team id is redeemed, not refused", async () => {
+    const recorded: Recorded[] = [];
+    const hono = app({ recorded, serverAddress: teamNotion });
+    const state = await sealConnectState(
+      { userId: "user-1", serverId: "team:notion", verifier: "v-1" },
+      KEY,
+    );
+
+    const requests = await withWillingVendor(async (requests) => {
+      const response = await hono.request(callbackUrl(state));
+      expect(response.headers.get("location")).not.toBe(FAILED);
+      return requests;
+    });
+    expect(requests.length).toBe(1);
+    expect(recorded.map((connection) => connection.serverId)).toEqual([
+      "team:notion",
+    ]);
   });
 });
 

@@ -222,6 +222,13 @@ export type ServerRecord = {
  */
 export type ServerAddress = {
   id: string;
+  /**
+   * The catalogue entry this row instantiates, or null for a row that is its own thing (a URL an
+   * administrator typed, a brokered app). Since G01-E a curated row's id is `team:<key>`, which no
+   * catalogue entry is spelled as, so a reader resolving the entry reads `catalogueKey ?? id` — the
+   * same rule as {@link serverKeyOfToolRow} — and never the address it was called with.
+   */
+  catalogueKey: string | null;
   title: string;
   url: string;
   /**
@@ -4953,6 +4960,7 @@ export function createPluginStore(options: PluginStoreOptions) {
       const [row] = await database
         .select({
           id: mcpServers.id,
+          catalogueKey: mcpServers.catalogueKey,
           title: mcpServers.title,
           url: mcpServers.url,
           authScheme: mcpServers.authScheme,
