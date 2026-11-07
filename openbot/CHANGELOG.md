@@ -8,6 +8,28 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+## 0.2.2
+
+- **Coworkers can use MCP tools offered by apps on the owner's own computer.** In the device app's
+  new 「本机应用（MCP）」 section a person registers a local MCP server: a command the runner starts
+  (stdio) or a loopback address (`127.0.0.1`, `localhost`, `[::1]` only). The command, its arguments,
+  environment and address stay on that machine (`runner-apps.json`, owner-only); the server is told
+  only the name and an opaque reference, on the heartbeat. Two new device-mode tools,
+  `computer_apps` (list apps and their tools) and `computer_app_call`, reach those apps through the
+  existing device gateway: only the Bot owner's own device, only in runs the owner started, offline
+  calls queue and post their result to the conversation, uncertain outcomes pause the device for
+  review. Approval: a tool runs without asking only when the device's own listing marks it read-only
+  and not destructive; anything else asks, and the team's "commands on a paired computer" cap applies
+  (never also stops listing apps). Approval cards mask secret-looking fields and are capped at 2 KB.
+  New migration `0143_device_apps` (one column on `registered_devices`). Needs device app
+  `device-v0.2.2` or later; older runners simply report no apps.
+- **Windows devices print Chinese correctly.** Built-in programs (`hostname`, `ipconfig`, …) write in
+  the machine's OEM code page; their output is now decoded line by line in that code page instead of
+  turning into U+FFFD, and PowerShell's CLIXML progress records are stripped from stderr.
+  (Shipped first in `device-v0.2.1-rc.1`.)
+- **Device pause and offline messages are in Chinese** and point the owner to 「设置 › 我的设备 ›
+  核查并恢复」. The review screen names an action it has no label for.
+
 ## 0.2.1
 
 - **Approved actions now run, exactly once.** Before, an action a person approved (a dangerous
