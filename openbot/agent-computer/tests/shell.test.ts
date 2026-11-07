@@ -7,6 +7,7 @@ import {
   createShell,
   environmentForCommand,
   plainPowerShellStderr,
+  windowsOutputDecoder,
 } from "../src/shell";
 
 /**
@@ -528,5 +529,49 @@ describe("Windows PowerShell's stderr as text", () => {
     expect(plainPowerShellStderr(cut)).toBe(cut);
     const unknown = '#< CLIXML\r\n<Objs><Obj S="information"><X/></Obj></Objs>';
     expect(plainPowerShellStderr(unknown)).toBe(unknown);
+  });
+});
+
+describe("Windows command output, a line at a time", () => {
+  const gbk熊宝 = [0xd0, 0xdc, 0xb1, 0xa6];
+  const utf8 = (text: string) => new TextEncoder().encode(text);
+
+  test("PowerShell's UTF-8 lines and a native program's GBK lines both arrive as text", () => {
+    const decoder = windowsOutputDecoder(936);
+    const bytes = new Uint8Array([
+      ...utf8("ABC中文\r\n"),
+      ...gbk熊宝,
+      0x0d,
+      0x0a,
+      ...utf8("尾"),
+    ]);
+    expect(decoder.write(bytes) + decoder.end()).toBe("ABC中文\r\n熊宝\r\n尾");
+  });
+
+  test("a multi-byte character split across chunks is not misread", () => {
+    const decoder = windowsOutputDecoder(936);
+    const bytes = utf8("熊宝员工\n");
+    let text = "";
+    for (const byte of bytes) text += decoder.write(new Uint8Array([byte]));
+    expect(text + decoder.end()).toBe("熊宝员工\n");
+    const native = windowsOutputDecoder(936);
+    expect(
+      native.write(new Uint8Array(gbk熊宝.slice(0, 1))) +
+        native.write(new Uint8Array([...gbk熊宝.slice(1), 0x0a])),
+    ).toBe("熊宝\n");
+  });
+
+  test("the Western OEM code pages decode without a TextDecoder label", () => {
+    const decoder = windowsOutputDecoder(437);
+    expect(decoder.write(new Uint8Array([0x81, 0x0a]))).toBe("ü\n");
+    expect(windowsOutputDecoder(850).write(new Uint8Array([0x9b, 0x0a]))).toBe(
+      "ø\n",
+    );
+  });
+
+  test("an unknown code page still yields text, never throws", () => {
+    const decoder = windowsOutputDecoder(undefined);
+    expect(decoder.write(new Uint8Array([0xd0, 0x0a]))).toBe("\uFFFD\n");
+    expect(windowsOutputDecoder(65001).end()).toBe("");
   });
 });
