@@ -109,7 +109,7 @@ const attentionRow = (agent: AgentProfile, paused: boolean): BotAttention => ({
 
 const crew: WakerGroup = {
   id: "crew-1",
-  name: "编程小组",
+  name: "编程群组",
   description: null,
   members: [
     { agentId: "agent-1", position: 0 },
@@ -271,7 +271,7 @@ test("the status line says what the board says, and 暂停 is the bot lifecycle,
   );
   // Working because a task card is running now, not because a status column said so; the crew it
   // belongs to is named on the card.
-  expect(screen.getByText("正在处理一个任务。 · 编程小组")).toBeTruthy();
+  expect(screen.getByText("正在处理一个任务。 · 编程群组")).toBeTruthy();
   // Paused because the person paused it, and the card says who did.
   expect(screen.getByText(/你已暂停它/)).toBeTruthy();
   expect(screen.getByText("当前没有运行中的任务。")).toBeTruthy();
@@ -506,7 +506,7 @@ test("the groups tab edits a crew by sending the whole roster", async () => {
   const screen = draw();
   await openGroupsTab(screen);
 
-  expect(await screen.findByText("编程小组")).toBeTruthy();
+  expect(await screen.findByText("编程群组")).toBeTruthy();
   // The order a person put them in is shown, because a pipeline crew reads as a sequence.
   expect(
     screen.getByText("顺序：Backend Engineer → Code Reviewer"),
@@ -550,7 +550,7 @@ test("a new crew is created by name, and its purpose is optional", async () => {
         String(input).includes("/api/tasks") ? { tasks: [] } : { groups: [] },
       );
     return Response.json({
-      group: { id: "crew-2", name: "值班小组", members: [] },
+      group: { id: "crew-2", name: "值班群组", members: [] },
     });
   }) as typeof fetch;
 
@@ -564,14 +564,14 @@ test("a new crew is created by name, and its purpose is optional", async () => {
   );
   await userEvent.type(
     await screen.findByPlaceholderText("群组名称"),
-    "值班小组",
+    "值班群组",
   );
   await userEvent.click(screen.getByRole("button", { name: "创建" }));
 
   await waitFor(() => expect(writes()).toHaveLength(1));
   expect(writes()[0]?.method).toBe("POST");
   expect(writes()[0]?.path).toBe("/api/waker-groups");
-  expect(writes()[0]?.body).toEqual({ name: "值班小组", description: "" });
+  expect(writes()[0]?.body).toEqual({ name: "值班群组", description: "" });
 });
 
 test("a name the workspace already used comes back as the server's own sentence", async () => {
@@ -592,7 +592,7 @@ test("a name the workspace already used comes back as the server's own sentence"
   );
   await userEvent.type(
     await screen.findByPlaceholderText("群组名称"),
-    "编程小组",
+    "编程群组",
   );
   await userEvent.click(screen.getByRole("button", { name: "创建" }));
 

@@ -272,16 +272,16 @@ test("a conversation with two or more coworkers is a group; everything else belo
 test("the 员工 and 群组 tabs split the conversations and retarget the new-conversation button", async () => {
   const view = renderSidebar("/", [
     channel("和客服小熊的会话", ["a"]),
-    channel("周报小组", ["a", "b"]),
+    channel("周报群组", ["a", "b"]),
   ]);
   expect(await view.findByText("和客服小熊的会话")).toBeTruthy();
-  expect(view.queryByText("周报小组")).toBeNull();
+  expect(view.queryByText("周报群组")).toBeNull();
   expect(hrefOf(view.getByRole("link", { name: "新建会话" }))).toBe(
     "/channel/new",
   );
 
   await userEvent.click(view.getByRole("tab", { name: "群组" }));
-  expect(await view.findByText("周报小组")).toBeTruthy();
+  expect(await view.findByText("周报群组")).toBeTruthy();
   expect(view.queryByText("和客服小熊的会话")).toBeNull();
   expect(hrefOf(view.getByRole("link", { name: "新建群聊" }))).toBe(
     "/group/new",

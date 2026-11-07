@@ -134,7 +134,7 @@ export function startRunMutationOptions(queryClient: QueryClient) {
       templateId: string;
       task: string;
     }): Promise<{ runId: string; parentTaskId: string }> => {
-      const fallback = "小组没能接下这个任务。";
+      const fallback = "群组没能接下这个任务。";
       const response = await tryClient(
         `/api/group-pipelines/templates/${input.templateId}/runs`,
         { method: "POST", body: { task: input.task } },
@@ -228,7 +228,7 @@ export function resumeRunMutationOptions(queryClient: QueryClient) {
             ...(input.output === undefined ? {} : { output: input.output }),
             ...(input.error === undefined ? {} : { error: input.error }),
           },
-          fallback: "小组没有接着这一步跑下去。",
+          fallback: "群组没有接着这一步跑下去。",
         },
       ),
     onSuccess: (_done, input) =>

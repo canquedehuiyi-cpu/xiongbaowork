@@ -73,7 +73,7 @@ await runAsTenant(tenant, async () => {
   await database.insert(wakerGroups).values({
     id: groupId,
     tenantId: tenant,
-    name: `编程小组-${suite}`,
+    name: `编程群组-${suite}`,
   });
   // Both step agents are in the crew, because that is the only thing a template may be written for.
   await database.insert(wakerGroupMembers).values(
@@ -384,7 +384,7 @@ test("another workspace's template, or no template at all, is a 404 to edit or d
     await database.insert(wakerGroups).values({
       id: otherGroupId,
       tenantId: otherTenant,
-      name: `别人的小组-${suite}`,
+      name: `别人的群组-${suite}`,
     });
     await database.insert(groupTaskTemplates).values({
       id: theirs,

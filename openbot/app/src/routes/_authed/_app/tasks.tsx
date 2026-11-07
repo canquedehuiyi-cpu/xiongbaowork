@@ -1112,7 +1112,7 @@ export const executorOptions = (
   ...crews.map((group) => ({
     kind: "group" as const,
     value: `group:${group.id}`,
-    label: `小组 · ${group.name}`,
+    label: `群组 · ${group.name}`,
   })),
 ];
 
@@ -1589,7 +1589,7 @@ function TasksPage() {
               onClick={() => patch({ crew: "" })}
               className={choiceClass(false)}
             >
-              只看该小组 · 清除
+              只看该群组 · 清除
             </button>
           ) : null}
         </div>

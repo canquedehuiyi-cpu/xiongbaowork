@@ -79,7 +79,7 @@ const writer: AgentProfile = {
 
 const crew: WakerGroup = {
   id: "crew-1",
-  name: "编程小组",
+  name: "编程群组",
   description: null,
   members: [
     { agentId: "agent-dev", position: 0 },
@@ -208,7 +208,7 @@ test("编辑 opens the saved plan in the editor and 保存修改 rewrites it in 
 test("a name the crew already uses is refused in the server's words and the edit stays open", async () => {
   serve({
     status: 409,
-    error: "这个小组里已经有一条同名的流程了，换个名字再保存。",
+    error: "这个群组里已经有一条同名的流程了，换个名字再保存。",
   });
   const view = draw(seed());
 
@@ -216,7 +216,7 @@ test("a name the crew already uses is refused in the server's words and the edit
   await userEvent.click(await view.findByRole("button", { name: "保存修改" }));
 
   expect((await view.findByRole("alert")).textContent).toBe(
-    "这个小组里已经有一条同名的流程了，换个名字再保存。",
+    "这个群组里已经有一条同名的流程了，换个名字再保存。",
   );
   expect(view.getByText("编辑流程：编程任务")).toBeDefined();
   expect((view.getByLabelText("流程名称") as HTMLInputElement).value).toBe(

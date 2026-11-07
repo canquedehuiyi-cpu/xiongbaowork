@@ -108,12 +108,12 @@ function RouteComponent() {
 
   return (
     <PageShell
-      description="把小组的工作写成一条流程：谁先做、做什么、然后交给谁。流程跑起来时每一步都会在看板上留下自己的任务卡。"
+      description="把群组的工作写成一条流程：谁先做、做什么、然后交给谁。流程跑起来时每一步都会在看板上留下自己的任务卡。"
       title="组团流程"
     >
       {crews.isError ? (
         <QueryError
-          label="小组加载失败"
+          label="群组加载失败"
           error={crews.error}
           retrying={crews.isFetching}
           onRetry={() => void crews.refetch()}
@@ -128,21 +128,21 @@ function RouteComponent() {
         />
       ) : null}
       {crews.isPending ? (
-        <p className="text-muted-foreground text-sm">正在加载小组…</p>
+        <p className="text-muted-foreground text-sm">正在加载群组…</p>
       ) : null}
       {crews.data === undefined ? null : crews.data.length === 0 ? (
         <Empty>
           <EmptyHeader>
-            <EmptyTitle>还没有小组</EmptyTitle>
+            <EmptyTitle>还没有群组</EmptyTitle>
             <EmptyDescription>
-              流程的步骤只能交给组里的员工。先到「员工 ›
-              小组」建一个组，再来这里排流程。
+              流程的步骤只能交给群组里的员工。先到「Waker 管理 ›
+              群组」建一个群组，再来这里排流程。
             </EmptyDescription>
           </EmptyHeader>
         </Empty>
       ) : (
         <>
-          <PageSection title="选一个小组">
+          <PageSection title="选一个群组">
             <PageRows>
               <div className="flex flex-wrap gap-2">
                 {(crews.data ?? []).map((crew) => (
@@ -308,7 +308,7 @@ function TemplateEditor(props: {
         />
         {props.coworkers.length === 0 ? (
           <p className="text-muted-foreground text-sm">
-            这个小组里还没有员工。先到「员工 › 小组」把人加进来 ——
+            这个群组里还没有员工。先到「Waker 管理 › 群组」把人加进来 ——
             流程的步骤只能交给组里的员工。
           </p>
         ) : steps.length === 0 ? (
@@ -623,7 +623,7 @@ function RunPanel(props: {
         />
       ) : null}
       {run.isPending ? (
-        <p className="text-muted-foreground text-sm">正在问小组跑到哪了…</p>
+        <p className="text-muted-foreground text-sm">正在问群组跑到哪了…</p>
       ) : null}
       {data ? (
         <div className="flex flex-col gap-3">

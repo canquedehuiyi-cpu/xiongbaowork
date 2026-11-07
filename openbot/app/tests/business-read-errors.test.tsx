@@ -100,7 +100,7 @@ const agent = {
 };
 const crew = {
   id: "business-crew",
-  name: "业务小组",
+  name: "业务群组",
   members: [],
   description: null,
 };
@@ -157,12 +157,12 @@ test("a failed group read says it failed instead of claiming there are no groups
   const api = serve("/api/waker-groups", 500);
   const view = draw(PipelinesRoute, "/pipelines");
   expect((await view.findByRole("alert")).textContent).toContain(
-    "小组加载失败",
+    "群组加载失败",
   );
-  expect(view.queryByText("还没有小组")).toBeNull();
+  expect(view.queryByText("还没有群组")).toBeNull();
   api.recover();
   await userEvent.click(view.getByRole("button", { name: "重试" }));
-  expect(await view.findByRole("button", { name: "业务小组" })).toBeTruthy();
+  expect(await view.findByRole("button", { name: "业务群组" })).toBeTruthy();
   await waitFor(() => expect(view.queryByRole("alert")).toBeNull());
 });
 

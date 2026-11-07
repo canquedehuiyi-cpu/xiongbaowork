@@ -37,7 +37,7 @@ export type GroupFlowOption = {
 
 /**
  * One option per template rather than per crew: a crew with two flows is two different answers to
- * "派给这个小组", and picking one should not be a guess. The flow's name rides along only when its crew
+ * "派给这个群组", and picking one should not be a guess. The flow's name rides along only when its crew
  * has more than one, so the common single-flow crew reads as just the crew. A template whose crew this
  * person cannot see is not offered -- the server would refuse it, and the list should not promise it.
  */
@@ -62,7 +62,7 @@ export function groupFlowOptions(
 }
 
 /**
- * 派给小组 on the board (spec I2): hand a crew's flow a task without leaving the board.
+ * 派给群组 on the board (spec I2): hand a crew's flow a task without leaving the board.
  *
  * The press goes through the same `startRunMutationOptions` the template page and the group chat use,
  * so the server's pre-dispatch check (spec I6) answers here exactly as it does there: a 403 naming the
@@ -118,7 +118,7 @@ export function DispatchToGroup() {
    */
   const readError =
     templates.error?.message ??
-    (crews.error ? "小组读不出来，请稍后重试。" : null);
+    (crews.error ? "群组读不出来，请稍后重试。" : null);
   const canSend =
     Boolean(selected) && task.trim().length > 0 && !start.isPending;
 
@@ -161,7 +161,7 @@ export function DispatchToGroup() {
         size="sm"
         variant="outline"
       >
-        派给小组
+        派给群组
       </Button>
       <Dialog
         onOpenChange={(next) => {
@@ -172,9 +172,9 @@ export function DispatchToGroup() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>派给小组</DialogTitle>
+            <DialogTitle>派给群组</DialogTitle>
             <DialogDescription>
-              选一个小组流程，写下任务。小组会按流程逐步执行，每一步都会作为子任务出现在看板上。
+              选一个群组流程，写下任务。群组会按流程逐步执行，每一步都会作为子任务出现在看板上。
             </DialogDescription>
           </DialogHeader>
           {started ? (
@@ -198,11 +198,11 @@ export function DispatchToGroup() {
                 </p>
               ) : loading ? (
                 <p className="text-muted-foreground text-sm">
-                  正在读取小组流程…
+                  正在读取群组流程…
                 </p>
               ) : options.length === 0 ? (
                 <p className="text-muted-foreground text-sm">
-                  还没有可以派活的小组流程。
+                  还没有可以派活的群组流程。
                   <Link className="underline" to="/pipelines">
                     去建一个
                   </Link>
@@ -210,7 +210,7 @@ export function DispatchToGroup() {
               ) : (
                 <>
                   <select
-                    aria-label="小组流程"
+                    aria-label="群组流程"
                     className="rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
                     onChange={(event) => {
                       setChosen(event.target.value);
@@ -228,7 +228,7 @@ export function DispatchToGroup() {
                   <Textarea
                     aria-label="任务内容"
                     onChange={(event) => setTask(event.target.value)}
-                    placeholder="要小组完成什么？"
+                    placeholder="要群组完成什么？"
                     value={task}
                   />
                 </>

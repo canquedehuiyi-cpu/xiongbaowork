@@ -282,7 +282,7 @@ test("groups are cards with their members, ending in a create card", async () =>
     crews: [
       {
         id: "crew-1",
-        name: "编程小组",
+        name: "编程群组",
         description: "写代码和评审",
         members: [
           { agentId: "agent-1", position: 0 },
@@ -293,7 +293,7 @@ test("groups are cards with their members, ending in a create card", async () =>
   });
   const { screen } = draw("/wakers?tab=groups");
   const card = await screen.findByTestId("crew-card");
-  expect(within(card).getByText("编程小组")).toBeTruthy();
+  expect(within(card).getByText("编程群组")).toBeTruthy();
   expect(within(card).getByText("写代码和评审")).toBeTruthy();
   expect(within(card).getByText("2 名员工")).toBeTruthy();
   expect(

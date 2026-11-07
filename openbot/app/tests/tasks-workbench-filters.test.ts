@@ -85,7 +85,7 @@ describe("boardSearch", () => {
   test("all the axes survive together rather than one replacing another", () => {
     const shared: ReturnType<typeof boardSearch> = {
       machineId: "d-1",
-      crew: "增长小组",
+      crew: "增长群组",
       executor: "agent-a",
       group: "group-1",
       status: "needs_action",
@@ -107,14 +107,14 @@ describe("boardSearch", () => {
   });
 
   test("clearing one axis leaves the other shared axis alone", () => {
-    const both = { machineId: "d-1", crew: "增长小组" };
+    const both = { machineId: "d-1", crew: "增长群组" };
     expect(boardSearch({ ...both, crew: "" })).toEqual({
       ...EMPTY,
       machineId: "d-1",
     });
     expect(boardSearch({ ...both, machineId: "" })).toEqual({
       ...EMPTY,
-      crew: "增长小组",
+      crew: "增长群组",
     });
   });
 });
@@ -234,7 +234,7 @@ describe("the Waker/Group dropdown (A4)", () => {
         { id: "pkg,agent", name: "包里的员工" },
       ],
       [
-        { id: "group-1", name: "编程小组" },
+        { id: "group-1", name: "编程群组" },
         // No members today, but its runs are still its work.
         { id: "group-empty", name: "空组" },
       ],
@@ -242,8 +242,8 @@ describe("the Waker/Group dropdown (A4)", () => {
     expect(options).toEqual([
       { kind: "waker", value: "waker:agent-a", label: "阿开" },
       { kind: "waker", value: "waker:pkg,agent", label: "包里的员工" },
-      { kind: "group", value: "group:group-1", label: "小组 · 编程小组" },
-      { kind: "group", value: "group:group-empty", label: "小组 · 空组" },
+      { kind: "group", value: "group:group-1", label: "群组 · 编程群组" },
+      { kind: "group", value: "group:group-empty", label: "群组 · 空组" },
     ]);
   });
 

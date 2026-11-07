@@ -200,7 +200,7 @@ const ALL_AGENTS = [...AGENTS, ...HIDDEN_AGENTS];
 const GROUPS: WakerGroup[] = [
   {
     id: "group-ops",
-    name: "运营小组",
+    name: "运营群组",
     description: "负责日常运营：数据、客服与文案。",
     members: [
       { agentId: "agent-analyst", position: 0 },
@@ -210,7 +210,7 @@ const GROUPS: WakerGroup[] = [
   },
   {
     id: "group-research",
-    name: "研究小组",
+    name: "研究群组",
     description: null,
     members: [
       { agentId: "agent-research", position: 0 },

@@ -509,7 +509,7 @@ test("the Waker/Group dropdown asks for one coworker as executor and a crew as g
               groups: [
                 {
                   id: "group-1",
-                  name: "编程小组",
+                  name: "编程群组",
                   members: [{ agentId: "pkg,agent", position: "0" }],
                 },
               ],

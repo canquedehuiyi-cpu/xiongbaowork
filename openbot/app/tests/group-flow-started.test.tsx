@@ -13,7 +13,7 @@ import { FlowStartedNotice } from "@/components/channels/group-chat";
 import { settleReactWork } from "./settle-react-work";
 
 /**
- * What a person sees after "@小组 做X" in a group (WP-2.4).
+ * What a person sees after "@群组 做X" in a group (WP-2.4).
  *
  * Starting a crew posts nothing into the transcript, by design: the steps are not lines in this
  * conversation. Checked live on 2026-10-09, the composer simply emptied and nothing else moved, which
@@ -36,7 +36,7 @@ afterAll(async () => {
 function draw(onDismiss: () => void) {
   const root = createRootRoute({
     component: () => (
-      <FlowStartedNotice label="研发小组" onDismiss={onDismiss} runId="run-7" />
+      <FlowStartedNotice label="研发群组" onDismiss={onDismiss} runId="run-7" />
     ),
   });
   const router = createRouter({
@@ -57,7 +57,7 @@ test("it names the crew that took the task and links to that run", async () => {
   const view = draw(() => {});
 
   const status = await view.findByRole("status");
-  expect(status.textContent).toContain("已交给「研发小组」开始流程");
+  expect(status.textContent).toContain("已交给「研发群组」开始流程");
   expect(
     view.getByRole("link", { name: "查看这次运行" }).getAttribute("href"),
   ).toBe("/pipelines?run=run-7");

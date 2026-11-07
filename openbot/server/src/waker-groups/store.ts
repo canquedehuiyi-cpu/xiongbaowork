@@ -13,7 +13,7 @@ import { currentTenant } from "../tenant/context";
  *
  * A crew is a name over an ordered set of coworkers, and that is all it is allowed to be: it holds no
  * credential, grants no capability, and decides nothing on its own. What it buys is the ability to say
- * `@编程小组` instead of typing three names, and to point a board filter at the same three.
+ * `@编程群组` instead of typing three names, and to point a board filter at the same three.
  */
 export type WakerGroupMember = { agentId: string; position: number };
 

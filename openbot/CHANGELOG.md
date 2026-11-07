@@ -21,7 +21,10 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
     sort filters.
   - /resources has nine tabs (`?tab=plugins|skills|…|models`). Links to the model library now land on
     `?tab=models`.
-- **No server or data changes.** Entries without a backend contract, such as 自动接入 and 接入申请, are
+- **One word for a named set of coworkers: 群组.** The screens and the server's messages used to say
+  小组 in some places. Now they say 群组 everywhere, including the hints that point to
+  「Waker 管理 › 群组」. Only the copy changes; the API and data are the same.
+- **No API or data changes.** Entries without a backend contract, such as 自动接入 and 接入申请, are
   shown disabled with an explanation.
 
 ## 0.2.1

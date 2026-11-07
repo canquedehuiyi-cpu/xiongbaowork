@@ -69,7 +69,7 @@ export function pipelineTemplatesQueryOptions(groupId?: string) {
       client<PipelineTemplate[]>(
         `/api/group-pipelines/templates${groupId ? `?groupId=${groupId}` : ""}`,
         "templates",
-        { fallback: "小组的流程读不出来。" },
+        { fallback: "群组的流程读不出来。" },
       ),
   });
 }

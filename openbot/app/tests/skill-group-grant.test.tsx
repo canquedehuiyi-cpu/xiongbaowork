@@ -49,7 +49,7 @@ const agent = (id: string, name: string, mine: boolean): AgentProfile =>
 
 const crew: WakerGroup = {
   id: "crew-1",
-  name: "编程小组",
+  name: "编程群组",
   description: null,
   // One member already holding the skill, one this person can grant to, one belonging to somebody else.
   members: [
@@ -106,16 +106,16 @@ test("the chip counts the members a person may actually grant to", async () => {
   const view = draw();
   // 3 members, 1 already holding it, 1 owned by somebody else: the number is the write it will do.
   const chip = await view.findByRole("button", {
-    name: "把 /weekly-report 交给编程小组",
+    name: "把 /weekly-report 交给编程群组",
   });
-  expect(chip.textContent).toBe("编程小组 · 1");
+  expect(chip.textContent).toBe("编程群组 · 1");
 });
 
 test("one click on the group writes one grant per grantable member", async () => {
   const view = draw();
   await userEvent.click(
     await view.findByRole("button", {
-      name: "把 /weekly-report 交给编程小组",
+      name: "把 /weekly-report 交给编程群组",
     }),
   );
 
@@ -127,7 +127,7 @@ test("one click on the group writes one grant per grantable member", async () =>
     agentId: "agent-review",
   });
   expect(
-    await view.findByText("编程小组：全部 1 位员工都已拿到 /weekly-report。"),
+    await view.findByText("编程群组：全部 1 位员工都已拿到 /weekly-report。"),
   ).toBeTruthy();
 });
 
@@ -136,7 +136,7 @@ test("a refused grant is said, with the server's own reason", async () => {
   const view = draw();
   await userEvent.click(
     await view.findByRole("button", {
-      name: "把 /weekly-report 交给编程小组",
+      name: "把 /weekly-report 交给编程群组",
     }),
   );
 

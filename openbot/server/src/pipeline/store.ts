@@ -133,7 +133,7 @@ export class PipelineValidationError extends Error {
  */
 export class PipelineNameTakenError extends Error {
   constructor() {
-    super("这个小组里已经有一条同名的流程了，换个名字再保存。");
+    super("这个群组里已经有一条同名的流程了，换个名字再保存。");
     this.name = "PipelineNameTakenError";
   }
 }
@@ -763,7 +763,7 @@ export function createPipelineStore(options: {
     }
     if (!isUuid(input.groupId)) {
       throw new PipelineValidationError(
-        "流程要写给一个小组，得先从「员工 › 小组」里挑一个。",
+        "流程要写给一个群组，得先从「Waker 管理 › 群组」里挑一个。",
       );
     }
     const [flowOwned] = await runAsTenant(input.tenantId, async () =>
@@ -775,7 +775,7 @@ export function createPipelineStore(options: {
     );
     if (flowOwned) {
       throw new PipelineValidationError(
-        "这个小组属于 WakerFlow 内部，只能在 WakerFlow 里编辑它的流程。",
+        "这个群组属于 WakerFlow 内部，只能在 WakerFlow 里编辑它的流程。",
       );
     }
     /*
@@ -792,7 +792,7 @@ export function createPipelineStore(options: {
     );
     if (roster.length === 0) {
       throw new PipelineValidationError(
-        "这个小组里还没有员工。先到「员工 › 小组」把人加进去，再来排流程。",
+        "这个群组里还没有员工。先到「Waker 管理 › 群组」把人加进去，再来排流程。",
       );
     }
     if (
@@ -801,7 +801,7 @@ export function createPipelineStore(options: {
       )
     ) {
       throw new PipelineValidationError(
-        "流程里有步骤交给了组外的员工。每一步的员工都得在这个小组里。",
+        "流程里有步骤交给了组外的员工。每一步的员工都得在这个群组里。",
       );
     }
     return name;
@@ -941,7 +941,7 @@ export function createPipelineStore(options: {
     /**
      * The templates this workspace can run, newest first.
      *
-     * Read per group because the crew page is where a person picks one: "编程小组 有三个流程" is the
+     * Read per group because the crew page is where a person picks one: "编程群组 有三个流程" is the
      * question, and a deployment-wide list would answer a different one.
      */
     async listTemplates(input: { tenantId: string; groupId?: string }): Promise<
