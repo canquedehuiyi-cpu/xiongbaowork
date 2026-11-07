@@ -6,7 +6,6 @@ import {
   type ReactNode,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from "react";
 import { AgentDialog } from "@/components/agents/agent-dialog";
@@ -28,6 +27,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CARD_SURFACE, GRID } from "@/components/wakers/card-chrome";
 import {
   type CardStats,
   CoworkerCard,
@@ -35,7 +35,6 @@ import {
   type DeviceLine,
   STATUS_WORD,
 } from "@/components/wakers/coworker-card";
-import { CARD_SURFACE, GRID } from "@/components/wakers/card-chrome";
 import { CreateCrewDialog, CrewTab } from "@/components/wakers/crews";
 import {
   isNarrowed,
@@ -60,6 +59,7 @@ import {
   presenceWord,
 } from "@/lib/devices/presence";
 import { devicesQueryOptions } from "@/lib/devices/queries";
+import { useSearchDraft } from "@/lib/use-search-draft";
 import {
   monthTaskStatsQueryOptions,
   runningTasksQueryOptions,
@@ -139,34 +139,6 @@ const SORT_OPTIONS: readonly LabeledSelectOption<"default" | WakerSort>[] = [
   { value: "recent", label: "按最近运行" },
   { value: "tasks", label: "按任务数" },
 ];
-
-/**
- * The search box's own text. It is mirrored into `?q=`, but drawn from local state: the router
- * commits a navigation asynchronously, and an input controlled by the address alone would be reset
- * to the previous value between keystrokes and drop characters. An address that changes for any
- * other reason (Back, 清除筛选) is taken over.
- */
-function useSearchDraft(fromUrl: string) {
-  const [draft, setDraft] = useState(fromUrl);
-  const draftRef = useRef(fromUrl);
-  const written = useRef(new Set<string>());
-  useEffect(() => {
-    if (fromUrl === draftRef.current) {
-      written.current.clear();
-      return;
-    }
-    if (written.current.has(fromUrl)) return;
-    written.current.clear();
-    draftRef.current = fromUrl;
-    setDraft(fromUrl);
-  }, [fromUrl]);
-  const write = (next: string) => {
-    written.current.add(next);
-    draftRef.current = next;
-    setDraft(next);
-  };
-  return [draft, write] as const;
-}
 
 function RouteComponent() {
   const queryClient = useQueryClient();

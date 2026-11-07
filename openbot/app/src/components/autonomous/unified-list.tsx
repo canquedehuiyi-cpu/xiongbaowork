@@ -48,8 +48,8 @@ import {
   filterEntries,
   metricsOf,
   SORT_LABEL,
-  type SortKey,
   SOURCE_LABEL,
+  type SortKey,
   STATUS_FILTER_LABEL,
   type StatusFilter,
   sortEntries,
@@ -65,6 +65,7 @@ import {
   setRoutineEnabledMutationOptions,
 } from "@/lib/routines/mutations";
 import { nothingIsFiring, routinesQueryOptions } from "@/lib/routines/queries";
+import { useSearchDraft } from "@/lib/use-search-draft";
 import { cn } from "@/lib/utils";
 
 type Routine = AutonomousSummary["routines"][number];
@@ -410,8 +411,7 @@ function Toolbar({
   onChange: (patch: Partial<AutonomousSearch>) => void;
 }) {
   // Typed locally and mirrored into the URL, so a keystroke never waits on a navigation.
-  const [text, setText] = useState(search.q ?? "");
-  useEffect(() => setText(search.q ?? ""), [search.q]);
+  const [text, setText] = useSearchDraft(search.q ?? "");
   /*
    * 运行中 and 需要关注 are not panel cells in the reference, but they are what a person most needs
    * to find, so their counts ride on the options that find them.
