@@ -84,6 +84,22 @@ test("the list says which machines are here now", async () => {
   expect(view.getByText(/最后在线 /)).toBeTruthy();
 });
 
+test("a device with apps shows 本机应用：Excel、Blender, and one without shows none", async () => {
+  const { view } = draw([
+    {
+      ...studio,
+      apps: [
+        { ref: "app_AAAAAAAAAAAAAAAAAAAAAA", name: "Excel" },
+        { ref: "app_BBBBBBBBBBBBBBBBBBBBBB", name: "Blender" },
+      ],
+    },
+    laptop,
+  ]);
+
+  expect(await view.findByText(/本机应用：Excel、Blender/)).toBeTruthy();
+  expect(view.queryAllByText(/本机应用：/)).toHaveLength(1);
+});
+
 test("pairing mints a code and shows the desktop app's two fields, with the command as a fallback", async () => {
   const { view } = draw([]);
 
