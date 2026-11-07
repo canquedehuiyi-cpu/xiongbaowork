@@ -207,25 +207,24 @@ function badgeOf(screen: ReturnType<typeof draw>, name: string) {
 
 /**
  * The 运行状态 dropdown's options, each with its count. Parity plan F2 moved the status filter from a
- * row of buttons into the toolbar's dropdown; the words and the counts are the same ones.
+ * row of buttons into the toolbar's dropdown; the words and the counts are the same ones. The
+ * reference round made it the shared labelled native select (「运行状态 全部」), whose "all" option
+ * says 全部 — the total is the count at the toolbar's right.
  */
 async function statusOptions(screen: ReturnType<typeof draw>) {
-  const user = userEvent.setup({ document });
-  await user.click(screen.getByRole("combobox", { name: "运行状态" }));
-  const list = await within(document.body).findByRole("listbox");
-  const names = within(list)
-    .getAllByRole("option")
-    .map((option) => option.textContent);
-  await user.keyboard("{Escape}");
-  return names;
+  const select = screen.getByRole("combobox", {
+    name: "运行状态",
+  }) as HTMLSelectElement;
+  return [...select.options].map((option) => option.textContent);
 }
 
 /** Choose one status in the 运行状态 dropdown. */
 async function pickStatus(screen: ReturnType<typeof draw>, option: string) {
   const user = userEvent.setup({ document });
-  await user.click(screen.getByRole("combobox", { name: "运行状态" }));
-  await within(document.body).findByRole("listbox");
-  await user.click(within(document.body).getByRole("option", { name: option }));
+  await user.selectOptions(
+    screen.getByRole("combobox", { name: "运行状态" }),
+    option,
+  );
 }
 
 /** Open the 群组 tab (parity plan F2: the tab is a SegmentedTabs tab, labelled 群组). */
@@ -289,7 +288,7 @@ test("the status line says what the board says, and 暂停 is the bot lifecycle,
 
   // Spec D1/D4: one vocabulary on the card and on the filter -- 在线 / 休息 / 暂停 (CONTEXT.md).
   expect(await statusOptions(screen)).toEqual([
-    "全部状态 (4)",
+    "全部",
     "在线 (2)",
     "休息 (1)",
     "暂停 (1)",
@@ -307,7 +306,12 @@ test("each card shows its avatar, its role, and links to its assembly and detail
   // Spec D1: the avatar is announced once, by the coworker's name.
   expect(screen.getByRole("img", { name: "Backend Engineer" })).toBeTruthy();
   expect(screen.getByRole("img", { name: "Code Reviewer" })).toBeTruthy();
-  expect(screen.getAllByText("Writes the migration")).toHaveLength(2);
+  // On each card, as its role tag (the 角色 filter lists the same title as an option).
+  expect(
+    screen
+      .getAllByText("Writes the migration")
+      .filter((node) => node.closest("[data-testid=waker-card]")),
+  ).toHaveLength(2);
 
   // Spec D7: one tap from the card to the coworker's own assembly screen.
   const assemble = screen
@@ -323,7 +327,9 @@ test("each card shows its avatar, its role, and links to its assembly and detail
 
   // Spec D2: creating a coworker is a create dialog over this wall, deep-linked (the archived
   // `/agents?new=true` redirects here).
-  const create = screen.getByText("新建员工").closest("a");
+  const create = within(screen.getByTestId("wakers-header-actions"))
+    .getByText("新建员工")
+    .closest("a");
   expect(create?.getAttribute("href")).toBe("/wakers?new=true");
 });
 
@@ -354,7 +360,7 @@ test("the status filter narrows the wall to the coworkers in that state", async 
     expect(screen.getByText("没有符合这个筛选条件的员工。")).toBeTruthy(),
   );
 
-  await pickStatus(screen, "全部状态 (3)");
+  await pickStatus(screen, "全部");
   await waitFor(() => expect(screen.getByText("QA Engineer")).toBeTruthy());
 });
 
@@ -588,8 +594,11 @@ test("a name the workspace already used comes back as the server's own sentence"
 
   const screen = draw();
   await openGroupsTab(screen);
+  // The header's 新建群组 (the grid's create card opens the same dialog).
   await userEvent.click(
-    await screen.findByRole("button", { name: "新建群组" }),
+    (
+      await screen.findAllByRole("button", { name: "新建群组" })
+    )[0] as HTMLElement,
   );
   await userEvent.type(
     await screen.findByPlaceholderText("群组名称"),
@@ -699,7 +708,7 @@ test("each card says whether the machine its work runs on is online", async () =
   const lineOf = (name: string) =>
     screen
       .getByText(name)
-      .closest("[data-slot=item]")
+      .closest("[data-testid=waker-card]")
       ?.querySelector("[data-device-line]");
 
   // Its running task is bound to the laptop, which is away.

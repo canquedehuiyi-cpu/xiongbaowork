@@ -1,3 +1,4 @@
+import { IconPlus } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
@@ -10,9 +11,15 @@ import {
 } from "react";
 import { AgentDialog } from "@/components/agents/agent-dialog";
 import { CreateAgentDialog } from "@/components/agents/create-agent-dialog";
+import {
+  LabeledSelect,
+  type LabeledSelectOption,
+} from "@/components/layout/labeled-select";
 import { PageShell } from "@/components/layout/page-shell";
 import { QueryError } from "@/components/layout/query-error";
+import { SearchBox } from "@/components/layout/search-box";
 import { SegmentedTabs } from "@/components/layout/segmented-tabs";
+import { BearMascot } from "@/components/layout/workbench-empty";
 import { Button } from "@/components/ui/button";
 import {
   Empty,
@@ -20,7 +27,6 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "@/components/ui/empty";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   type CardStats,
@@ -29,11 +35,8 @@ import {
   type DeviceLine,
   STATUS_WORD,
 } from "@/components/wakers/coworker-card";
-import { CreateCrewDialog, CrewTab, GRID } from "@/components/wakers/crews";
-import {
-  type ToolbarOption,
-  ToolbarSelect,
-} from "@/components/wakers/toolbar-select";
+import { CARD_SURFACE, GRID } from "@/components/wakers/card-chrome";
+import { CreateCrewDialog, CrewTab } from "@/components/wakers/crews";
 import {
   isNarrowed,
   parseWakersSearch,
@@ -116,13 +119,21 @@ const STATUS_ORDER: readonly WakerStatus[] = [
   "unknown",
 ];
 
-const ENV_OPTIONS: readonly ToolbarOption<"all" | WakerEnv>[] = [
+/** The card's environment tag in the same words: 本地 = one of this person's machines. */
+const ENV_OPTIONS: readonly LabeledSelectOption<"all" | WakerEnv>[] = [
   { value: "all", label: "全部环境" },
-  { value: "device", label: "设备" },
-  { value: "unbound", label: "未绑定设备" },
+  { value: "device", label: "本地" },
+  { value: "unbound", label: "未绑定" },
 ];
 
-const SORT_OPTIONS: readonly ToolbarOption<"default" | WakerSort>[] = [
+/**
+ * Each filter box as wide as its chosen value, as the reference draws 「运行状态 全部」 at 128px,
+ * rather than as wide as its longest option (a native select's default). Browsers without
+ * `field-sizing` fall back to the default.
+ */
+const FILTER = "[&_select]:field-sizing-content";
+
+const SORT_OPTIONS: readonly LabeledSelectOption<"default" | WakerSort>[] = [
   { value: "default", label: "默认排序" },
   { value: "name", label: "按名称" },
   { value: "recent", label: "按最近运行" },
@@ -202,6 +213,8 @@ function RouteComponent() {
     avatarSources.data && avatarSources.data.configuredAt === null
       ? avatarSources.data.agentId
       : null;
+  /** The person's own 分身, whose card wears 个人分身 as the reference's does. */
+  const avatarAgentId = avatarSources.data?.agentId ?? null;
   /*
    * Spec F4's device line on a coworker's card, which is also its 环境. A running task bound to a
    * machine names THAT machine and whether it is online (the task's own `deviceId`). Without one
@@ -336,7 +349,11 @@ function RouteComponent() {
     <PageShell
       action={
         tab === "coworkers" ? (
-          <div className="flex gap-2">
+          <div
+            // Level with the reference's 新建 button, which sits lower than the title's centre.
+            className="relative top-[7px] flex gap-2"
+            data-testid="wakers-header-actions"
+          >
             {/* Story ROLE1: the role templates new and existing coworkers are made from. */}
             <Button
               className="h-[32px]"
@@ -352,21 +369,33 @@ function RouteComponent() {
                 <Link search={{ ...wall, new: true }} to="/wakers" {...props} />
               )}
             >
+              <IconPlus aria-hidden="true" />
               新建员工
             </Button>
           </div>
         ) : (
-          <Button className="h-[32px]" onClick={() => setCreatingCrew(true)}>
+          <Button
+            className="relative top-[7px] h-[32px]"
+            onClick={() => setCreatingCrew(true)}
+          >
+            <IconPlus aria-hidden="true" />
             新建群组
           </Button>
         )
       }
+      description="选择员工开始任务，或者新建一个开始工作。"
       title="员工管理"
       width="workbench"
     >
-      <div className="flex flex-col gap-4 pt-4 pb-8">
+      {/*
+        Measured off the reference (CSS px at 1696 wide): the pill's top at y=140, the toolbar 24px
+        under it (y=197), the cards 24px under that (y=253). 27px of top padding is what lands the
+        pill at 140 under the shared PageShell header.
+      */}
+      <div className="flex flex-col gap-[24px] pt-[27px] pb-8">
         <SegmentedTabs
-          className="self-start"
+          // The reference's pill: 218 × 33 CSS px, two equal halves, 4px inset.
+          className="grid h-[33px] w-[218px] grid-cols-2 gap-0 bg-foreground/[0.08] p-[4px] dark:[&>[aria-selected=true]]:bg-foreground/[0.14] [&>[role=tab]]:h-[25px]"
           label="员工与群组"
           onValueChange={(next) =>
             void patch({ tab: next === "groups" ? "groups" : undefined }, false)
@@ -380,26 +409,26 @@ function RouteComponent() {
 
         {tab === "coworkers" ? (
           <>
-            <div className="flex flex-wrap items-center gap-2">
-              <Input
-                aria-label="搜索名称或角色"
-                className="h-[32px] w-[240px] text-[13px]"
-                onChange={(event) => {
-                  const next = event.target.value;
+            <div className="flex flex-wrap items-center gap-[8px]">
+              <SearchBox
+                className="w-[220px]"
+                label="搜索名称或角色"
+                onValueChange={(next) => {
                   setQuery(next);
                   void patch({ q: next || undefined });
                 }}
-                placeholder="搜索名称或角色"
-                type="search"
+                placeholder="搜索名称或角色..."
                 value={query}
               />
-              <ToolbarSelect
+              <LabeledSelect
+                className={FILTER}
                 label="运行状态"
                 onValueChange={(next) =>
                   void patch({ status: next === "all" ? undefined : next })
                 }
                 options={[
-                  { value: "all", label: `全部状态 (${roster.length})` },
+                  // The total is the count at the right; each state carries its own.
+                  { value: "all", label: "全部" },
                   ...STATUS_ORDER.map((key) => ({
                     value: key,
                     label: `${STATUS_WORD[key]} (${counts[key]})`,
@@ -407,7 +436,8 @@ function RouteComponent() {
                 ]}
                 value={search.status ?? "all"}
               />
-              <ToolbarSelect
+              <LabeledSelect
+                className={FILTER}
                 label="角色"
                 onValueChange={(next) =>
                   void patch({ role: next === "\u0000" ? undefined : next })
@@ -424,7 +454,8 @@ function RouteComponent() {
                 ]}
                 value={search.role ?? "\u0000"}
               />
-              <ToolbarSelect
+              <LabeledSelect
+                className={FILTER}
                 label="环境"
                 onValueChange={(next) =>
                   void patch({ env: next === "all" ? undefined : next })
@@ -432,8 +463,9 @@ function RouteComponent() {
                 options={ENV_OPTIONS}
                 value={search.env ?? "all"}
               />
-              <ToolbarSelect
-                label="排序"
+              <LabeledSelect
+                className={FILTER}
+                label="排序字段"
                 onValueChange={(next) =>
                   void patch({ sort: next === "default" ? undefined : next })
                 }
@@ -514,6 +546,7 @@ function RouteComponent() {
                     crews={crews}
                     device={deviceLineOf(agent)}
                     editSearch={{ ...wall, agent: agent.id }}
+                    isAvatar={agent.id === avatarAgentId}
                     key={agent.id}
                     pauseKnown={pausedIds !== null}
                     pauseUnreadable={attention.isError}
@@ -568,7 +601,7 @@ function RouteComponent() {
   );
 }
 
-/** The employee grid with its loading, failed, empty and no-match states, ending in the create card. */
+/** The employee grid with its loading, failed, empty and no-match states, opening with the create card. */
 function CoworkerWall({
   createSearch,
   error,
@@ -609,7 +642,7 @@ function CoworkerWall({
     return (
       <div className={GRID}>
         {[0, 1, 2].map((key) => (
-          <Skeleton className="h-[148px]" key={key} />
+          <Skeleton className="h-[212px]" key={key} />
         ))}
       </div>
     );
@@ -629,15 +662,20 @@ function CoworkerWall({
     );
   }
   return (
-    <>
+    <div className={GRID} data-testid="waker-grid">
+      {/* First, as the reference has it: the way to add one is where the eye starts. */}
+      <CreateCoworkerCard search={createSearch} />
       {roster.length === 0 ? (
-        <p className="text-muted-foreground text-sm">这里还没有员工。</p>
+        // A cell of its own, so the grid starts where it always does.
+        <div
+          className={`${CARD_SURFACE} h-[212px] items-center justify-center gap-3 border-dashed px-6`}
+        >
+          <BearMascot size={48} />
+          <p className="text-muted-foreground text-sm">这里还没有员工。</p>
+        </div>
       ) : null}
-      <div className={GRID} data-testid="waker-grid">
-        {roster.map(render)}
-        <CreateCoworkerCard search={createSearch} />
-      </div>
-    </>
+      {roster.map(render)}
+    </div>
   );
 }
 

@@ -210,15 +210,17 @@ const cardNames = (screen: ReturnType<typeof render>) =>
     .getAllByTestId("waker-card")
     .map((card) => card.querySelector("[data-card-name]")?.textContent);
 
+/** Choose an option in one of the toolbar's labelled native selects (「运行状态 全部 ▾」). */
 async function pick(
   screen: ReturnType<typeof render>,
   label: string,
   option: string,
 ) {
   const user = userEvent.setup({ document });
-  await user.click(screen.getByRole("combobox", { name: label }));
-  await within(document.body).findByRole("listbox");
-  await user.click(within(document.body).getByRole("option", { name: option }));
+  await user.selectOptions(
+    screen.getByRole("combobox", { name: label }),
+    option,
+  );
 }
 
 test("the header names the page, and 员工 / 群组 is one tablist mirrored to ?tab=groups", async () => {
@@ -236,7 +238,9 @@ test("the header names the page, and 员工 / 群组 is one tablist mirrored to 
   // The employees tab is the default, so it carries no parameter.
   expect(router.state.location.search).toEqual({});
   // On the employees tab the header's primary action creates an employee.
-  const create = screen.getByText("新建员工").closest("a");
+  const create = within(screen.getByTestId("wakers-header-actions"))
+    .getByText("新建员工")
+    .closest("a");
   expect(create?.getAttribute("href")).toBe("/wakers?new=true");
 
   const user = userEvent.setup({ document });
@@ -322,19 +326,19 @@ test("every employee card shows status, environment, avatar, name, role, task co
   expect(backend.getByText("在线")).toBeTruthy();
   expect(backend.getByText("后端开发")).toBeTruthy();
   expect(backend.getByText("设备：studio · 在线")).toBeTruthy();
-  expect(backend.getByText("任务 1")).toBeTruthy();
+  expect(backend.getByText("任务数 1")).toBeTruthy();
   expect(backend.getByText(/^最近运行 /).textContent).toContain("1小时");
 
   const reviewerCard = card("Code Reviewer");
   expect(reviewerCard.getByText("暂停")).toBeTruthy();
   // Somebody else's coworker, nothing running on a machine: not on one of this person's devices.
   expect(reviewerCard.getByText("未绑定设备")).toBeTruthy();
-  expect(reviewerCard.getByText("任务 3")).toBeTruthy();
+  expect(reviewerCard.getByText("任务数 3")).toBeTruthy();
   expect(reviewerCard.getByText(/^最近运行 /).textContent).toContain("5分钟");
 
   // No board row this month: zero tasks, and no last run rather than a made-up one.
   const atlas = card("Atlas Analyst");
-  expect(atlas.getByText("任务 0")).toBeTruthy();
+  expect(atlas.getByText("任务数 0")).toBeTruthy();
   expect(atlas.getByText("最近运行 —")).toBeTruthy();
 
   // The name opens the detail page; 进对话 and 装配 stay one tap away; the card link is focusable.
@@ -352,17 +356,21 @@ test("every employee card shows status, environment, avatar, name, role, task co
   ).toBeTruthy();
 });
 
-test("the last cell is a dashed create card wired to the new-employee flow", async () => {
+// The reference puts the create card FIRST (docs/acceptance/qoderwake-reference/wakers.png).
+test("the first cell is a dashed create card wired to the new-employee flow", async () => {
   seed();
   const { screen } = draw();
   await waitFor(() =>
     expect(screen.getByText("Backend Engineer")).toBeTruthy(),
   );
   const grid = screen.getByTestId("waker-grid");
-  const last = grid.lastElementChild as HTMLElement;
-  expect(last.getAttribute("data-testid")).toBe("waker-create-card");
-  expect(last.getAttribute("href")).toBe("/wakers?new=true");
-  expect(last.className).toContain("border-dashed");
+  const first = grid.firstElementChild as HTMLElement;
+  expect(first.getAttribute("data-testid")).toBe("waker-create-card");
+  expect(first.getAttribute("href")).toBe("/wakers?new=true");
+  expect(first.className).toContain("border-dashed");
+  expect(grid.querySelectorAll("[data-testid=waker-create-card]")).toHaveLength(
+    1,
+  );
 });
 
 test("the search narrows by name or role, and the count says how many of how many", async () => {
@@ -406,13 +414,13 @@ test("运行状态, 角色 and 环境 narrow the wall and write themselves into 
   expect(router.state.location.search).toEqual({ status: "paused" });
   expect(screen.getByTestId("waker-count").textContent).toBe("1 / 3 名员工");
 
-  await pick(screen, "运行状态", "全部状态 (3)");
+  await pick(screen, "运行状态", "全部");
   await pick(screen, "角色", "数据分析");
   await waitFor(() => expect(cardNames(screen)).toEqual(["Atlas Analyst"]));
   expect(router.state.location.search).toEqual({ role: "数据分析" });
 
   await pick(screen, "角色", "全部角色");
-  await pick(screen, "环境", "设备");
+  await pick(screen, "环境", "本地");
   await waitFor(() => expect(cardNames(screen)).toEqual(["Backend Engineer"]));
   expect(router.state.location.search).toEqual({ env: "device" });
 });
@@ -441,7 +449,7 @@ test("排序 orders the wall by name, by last run, or by task count", async () =
     "Atlas Analyst",
   ]);
 
-  await pick(screen, "排序", "按名称");
+  await pick(screen, "排序字段", "按名称");
   await waitFor(() =>
     expect(cardNames(screen)).toEqual([
       "Atlas Analyst",
@@ -451,7 +459,7 @@ test("排序 orders the wall by name, by last run, or by task count", async () =
   );
   expect(router.state.location.search).toEqual({ sort: "name" });
 
-  await pick(screen, "排序", "按最近运行");
+  await pick(screen, "排序字段", "按最近运行");
   await waitFor(() =>
     expect(cardNames(screen)).toEqual([
       "Code Reviewer",
@@ -460,7 +468,7 @@ test("排序 orders the wall by name, by last run, or by task count", async () =
     ]),
   );
 
-  await pick(screen, "排序", "按任务数");
+  await pick(screen, "排序字段", "按任务数");
   await waitFor(() =>
     expect(cardNames(screen)).toEqual([
       "Code Reviewer",
@@ -482,7 +490,7 @@ test("a month read that fails says so once and shows — instead of counts", asy
   await waitFor(() =>
     expect(screen.getByText(/任务数和最近运行读不到/)).toBeTruthy(),
   );
-  expect(screen.getAllByText("任务 —")).toHaveLength(3);
+  expect(screen.getAllByText("任务数 —")).toHaveLength(3);
   expect(screen.getAllByText("最近运行 —")).toHaveLength(3);
   expect(screen.getByRole("button", { name: "重新读取" })).toBeTruthy();
 });

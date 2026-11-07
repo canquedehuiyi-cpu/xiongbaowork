@@ -251,7 +251,10 @@ test("on /wakers the header's 新建员工 and the create card open the create d
   const { screen, router, user } = draw("/wakers");
   await screen.findByText("Backend Engineer");
 
-  const header = screen.getByText("新建员工").closest("a") as HTMLElement;
+  // The header's (the create card says 新建员工 too).
+  const header = within(screen.getByTestId("wakers-header-actions"))
+    .getByText("新建员工")
+    .closest("a") as HTMLElement;
   expect(header.getAttribute("href")).toBe("/wakers?new=true");
   expect(screen.getByTestId("waker-create-card").getAttribute("href")).toBe(
     "/wakers?new=true",

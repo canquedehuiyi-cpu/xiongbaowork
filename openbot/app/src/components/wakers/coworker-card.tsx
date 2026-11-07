@@ -1,4 +1,4 @@
-import { IconPlus } from "@tabler/icons-react";
+import { IconDeviceDesktop, IconId } from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import {
@@ -6,17 +6,17 @@ import {
   needsInput,
 } from "@/components/bot-profile/attention";
 import { Button, buttonVariants } from "@/components/ui/button";
-import {
-  Item,
-  ItemActions,
-  ItemContent,
-  ItemDescription,
-  ItemTitle,
-} from "@/components/ui/item";
 import { type AgentProfile, isSharedWithYou } from "@/lib/agents/queries";
 import type { BotAttention } from "@/lib/bot-lifecycle/queries";
 import { relativeTime } from "@/lib/relative-time";
+import { cn } from "@/lib/utils";
 import type { TaskStats, WakerGroup } from "@/lib/waker-groups/queries";
+import {
+  CARD_SURFACE,
+  CardFooter,
+  CREATE_CARD,
+  CreateCardFace,
+} from "./card-chrome";
 import type { WakersSearch, WakerStatus } from "./wakers-search";
 
 /**
@@ -32,15 +32,22 @@ export const STATUS_WORD: Record<WakerStatus, string> = {
   unknown: "状态未知",
 };
 
-const STATUS_BADGE_STYLE: Record<WakerStatus, string> = {
-  working: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-  resting: "bg-foreground/5 text-muted-foreground",
-  paused: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
-  unknown:
-    "border border-dashed border-muted-foreground/40 text-muted-foreground",
+/** The dot before the word, as the reference draws 「● 在线」. Unknown is hollow and dashed. */
+const STATUS_DOT: Record<WakerStatus, string> = {
+  working: "bg-emerald-400",
+  resting: "bg-muted-foreground/60",
+  paused: "bg-amber-400",
+  unknown: "border border-dashed border-muted-foreground",
 };
 
-/** The sentence under a card's name, which says why the badge says what it says. */
+const STATUS_TEXT: Record<WakerStatus, string> = {
+  working: "text-muted-foreground",
+  resting: "text-muted-foreground",
+  paused: "text-amber-600 dark:text-amber-400",
+  unknown: "text-muted-foreground",
+};
+
+/** The sentence that says why the status reads what it reads; in the card's revealed row. */
 function statusSentence(
   status: WakerStatus,
   pauseKnown: boolean,
@@ -74,20 +81,27 @@ export type DeviceLine = {
  */
 export type CardStats = { stats: TaskStats; truncated: boolean } | null;
 
+const TAG =
+  "inline-flex h-[18px] shrink-0 items-center rounded px-1.5 text-[11px] font-normal";
+
 /**
- * One employee on the 员工管理 wall (parity plan F2): status, environment, avatar, name, role, task
- * count and last run, with 进对话 / 装配 / 暂停·恢复 one tap away.
+ * One employee on the 员工管理 wall, drawn the way the reference draws its card
+ * (docs/acceptance/qoderwake-reference/wakers.png): a 330 × 212 cell with the avatar centred on top,
+ * 「● 在线」 and the environment tag at the top right, the name with a small role tag, one grey line
+ * of description, and a footer of 任务数 | 最近运行 under a hairline.
  *
- * It also carries what the two archived pages said about the same employee: the old 员工列表
- * (`/agents`) told pinned and shared-with-you employees apart and opened each one's edit dialog, so
- * the card wears 已置顶 / 共享给你 and offers 编辑 (`/wakers?agent=<id>`); the old Bot 会话 (`/bots`)
- * said what each one needs from the person, so the card says that too. Its profile (activity,
- * notifications, reset) is part of the one detail page the card opens.
+ * Everything else the card used to spell out — what the employee needs from the person (the archived
+ * Bot 会话 list), why the status reads what it reads, its groups, its machine, and the 暂停/恢复 ·
+ * 进对话 · 装配 · 编辑 actions — is one row that slides over the lower half when the card is hovered
+ * or anything inside it has keyboard focus. On a touch screen, where there is no hover, the row is
+ * simply part of the card. A refused pause keeps the row open so its sentence is never hidden.
+ *
+ * The tags the archived 员工列表 told employees apart by (已置顶 / 共享给你 / 已隐藏) and the 分身's
+ * 待配置 sit at the top left, so the face stays the reference's shape when none applies.
  *
  * The whole card opens the detail page: the name is the link, and its `::after` stretches over the
- * card, so the card is one tab stop with a visible focus ring and the actions sit above it on their
- * own layer instead of being nested inside a link (which would be invalid and unreachable by
- * keyboard).
+ * card, so the card is one tab stop with a visible focus ring, and the actions sit above it on their
+ * own layer instead of being nested inside a link.
  */
 export function CoworkerCard({
   agent,
@@ -96,6 +110,7 @@ export function CoworkerCard({
   crews,
   device,
   editSearch,
+  isAvatar = false,
   onTogglePause,
   pauseKnown,
   pauseUnreadable,
@@ -113,6 +128,8 @@ export function CoworkerCard({
   device: DeviceLine | null;
   /** The wall's address plus `agent`: 编辑 opens the edit dialog over the same narrowed wall. */
   editSearch: WakersSearch;
+  /** This is the person's own 分身 (`GET /api/me/avatar/sources` names it): tagged 个人分身. */
+  isAvatar?: boolean;
   onTogglePause: () => void;
   /** The pause read answered, so the card can offer the one action that is actually its next. */
   pauseKnown: boolean;
@@ -134,84 +151,186 @@ export function CoworkerCard({
     : "—";
   const waiting = attention ? attentionSummary(attention) : "";
   const asks = attention ? needsInput(attention) : 0;
+  const role = isAvatar ? "个人分身" : agent.title.trim();
+  const description =
+    agent.roleDescription.trim() ||
+    (role !== agent.title.trim() ? agent.title.trim() : "") ||
+    "还没写职责。";
   return (
-    <Item
-      className="relative flex-col items-stretch gap-3 bg-card p-4 hover:border-foreground/20"
+    <div
+      className={cn(
+        CARD_SURFACE,
+        "h-[212px] items-center px-[16px] pt-[19px] hover:border-foreground/20 pointer-coarse:h-auto",
+      )}
       data-testid="waker-card"
-      variant="outline"
     >
-      <div className="flex items-start gap-3">
-        <AbstractAvatar name={agent.name} seed={agent.avatarSeed} size={40} />
-        <ItemContent className="min-w-0 gap-0.5">
-          <ItemTitle className="max-w-full flex-wrap">
-            {/*
-              Spec D5: the coworker's own detail page — its duties, running tasks, skill grants and
-              recent audit trail. That page only reads; changing what it holds stays on the
-              assembly screen linked below, so neither forks where a setting is made.
-            */}
-            <Link
-              className="truncate rounded-sm outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:after:ring-2 focus-visible:after:ring-ring/60"
-              data-card-name=""
-              params={{ agentId: agent.id }}
-              to="/wakers/$agentId"
-            >
-              {agent.name}
-            </Link>
+      <AbstractAvatar name={agent.name} seed={agent.avatarSeed} size={48} />
+      {/*
+        The title row. The two corner clusters live inside it so a screen reader hears the status and
+        the tags with the name, but they are positioned against the card (nothing between is
+        positioned), where the reference puts them.
+      */}
+      <div
+        className="mt-[16px] flex max-w-full items-center justify-center gap-2"
+        data-slot="item-title"
+      >
+        {/*
+          Spec D5: the coworker's own detail page — its duties, running tasks, skill grants and
+          recent audit trail.
+        */}
+        <Link
+          className="truncate rounded-sm font-semibold text-[16px] leading-[24px] outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:after:ring-2 focus-visible:after:ring-ring/60"
+          data-card-name=""
+          params={{ agentId: agent.id }}
+          to="/wakers/$agentId"
+        >
+          {agent.name}
+        </Link>
+        {role ? (
+          <span
+            className="inline-flex shrink-0 items-center gap-1 text-[12px] text-muted-foreground"
+            data-role-tag=""
+          >
+            <IconId aria-hidden="true" className="size-[13px]" />
+            {role}
+          </span>
+        ) : null}
+        <span className="absolute top-3 right-3 z-[1] flex items-center gap-2">
+          <span
+            className={cn(
+              "inline-flex items-center gap-1 text-[12px]",
+              STATUS_TEXT[status],
+            )}
+            data-status={status}
+          >
             <span
-              className={`rounded px-1.5 py-0.5 text-xs font-normal ${STATUS_BADGE_STYLE[status]}`}
-              data-status={status}
+              aria-hidden="true"
+              className={cn("size-[6px] rounded-full", STATUS_DOT[status])}
+            />
+            {STATUS_WORD[status]}
+          </span>
+          {device ? (
+            <span
+              className={cn(
+                TAG,
+                "gap-1",
+                device.online === false
+                  ? "bg-red-500/15 text-red-600 dark:text-red-400"
+                  : "bg-blue-500/15 text-blue-600 dark:text-blue-400",
+              )}
+              data-env-tag="device"
+              title={device.text}
             >
-              {STATUS_WORD[status]}
+              <IconDeviceDesktop aria-hidden="true" className="size-[12px]" />
+              本地
             </span>
-            {agent.hidden ? (
-              <span
-                className="rounded border px-1.5 py-0.5 text-xs font-normal text-muted-foreground"
-                data-hidden="true"
-              >
-                已隐藏
-              </span>
-            ) : null}
-            {agent.pinned ? (
-              <span
-                className="rounded border px-1.5 py-0.5 text-xs font-normal text-muted-foreground"
-                data-pinned="true"
-              >
-                已置顶
-              </span>
-            ) : null}
-            {isSharedWithYou(agent) ? (
-              <span
-                className="rounded border px-1.5 py-0.5 text-xs font-normal text-muted-foreground"
-                data-shared="true"
-                title="别人创建并公开的员工，你可以使用。"
-              >
-                共享给你
-              </span>
-            ) : null}
-            {unconfigured ? (
-              <span
-                className="rounded border border-dashed border-amber-500/60 px-1.5 py-0.5 text-xs font-normal text-amber-600 dark:text-amber-400"
-                data-unconfigured="true"
-                title="还没有登记信息来源，可以在详情页配置。"
-              >
-                待配置
-              </span>
-            ) : null}
-          </ItemTitle>
-          <ItemDescription className="line-clamp-1 text-[13px]">
-            {agent.title || agent.roleDescription || "还没写职责。"}
-          </ItemDescription>
-        </ItemContent>
+          ) : (
+            <span
+              className={cn(TAG, "bg-foreground/5 text-muted-foreground")}
+              data-env-tag="unbound"
+              title="没有进行中的任务绑定到你的设备，它也不是在你的设备上干活的员工。"
+            >
+              未绑定
+            </span>
+          )}
+        </span>
+        <span className="absolute top-3 left-3 z-[1] flex max-w-[45%] flex-wrap items-center gap-1">
+          {asks > 0 ? (
+            <span
+              aria-hidden="true"
+              className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 font-medium text-[11px] text-primary-foreground tabular-nums"
+              data-attention-dot=""
+              title={`需要你：${waiting}`}
+            >
+              {asks}
+            </span>
+          ) : null}
+          {agent.hidden ? (
+            <span
+              className={cn(TAG, "border text-muted-foreground")}
+              data-hidden="true"
+            >
+              已隐藏
+            </span>
+          ) : null}
+          {agent.pinned ? (
+            <span
+              className={cn(TAG, "border text-muted-foreground")}
+              data-pinned="true"
+            >
+              已置顶
+            </span>
+          ) : null}
+          {isSharedWithYou(agent) ? (
+            <span
+              className={cn(TAG, "border text-muted-foreground")}
+              data-shared="true"
+              title="别人创建并公开的员工，你可以使用。"
+            >
+              共享给你
+            </span>
+          ) : null}
+          {unconfigured ? (
+            <span
+              className={cn(
+                TAG,
+                "border border-amber-500/60 border-dashed text-amber-600 dark:text-amber-400",
+              )}
+              data-unconfigured="true"
+              title="还没有登记信息来源，可以在详情页配置。"
+            >
+              待配置
+            </span>
+          ) : null}
+        </span>
       </div>
+      <p className="mt-1 w-full truncate text-[12px] text-muted-foreground leading-[18px]">
+        {description}
+      </p>
 
-      <div className="flex flex-col gap-1">
+      <CardFooter
+        className="mx-0 w-full"
+        left={
+          <span
+            data-task-count=""
+            title={
+              stats?.truncated
+                ? "近 30 天的任务超过一页，这是至少的数目。"
+                : "近 30 天由它执行的任务卡。"
+            }
+          >
+            任务数 {count}
+          </span>
+        }
+        right={
+          <span className="truncate" data-last-run="">
+            最近运行 {lastRun}
+          </span>
+        }
+      />
+
+      {/*
+        The revealed row. Hidden (and not clickable) until the card is hovered or something in it has
+        focus; Tab from the card's link lands on its first button, which reveals it. A refused
+        pause holds it open.
+      */}
+      <div
+        className={cn(
+          "absolute inset-x-0 bottom-0 z-10 flex flex-col gap-1.5 border-border border-t bg-card px-4 pt-3 pb-2.5 text-left text-xs",
+          "pointer-events-none opacity-0 transition-opacity group-focus-within/card:pointer-events-auto group-focus-within/card:opacity-100 group-hover/card:pointer-events-auto group-hover/card:opacity-100",
+          "data-[open]:pointer-events-auto data-[open]:opacity-100",
+          "pointer-coarse:pointer-events-auto pointer-coarse:static pointer-coarse:-mx-[16px] pointer-coarse:mt-2 pointer-coarse:w-[calc(100%+32px)] pointer-coarse:opacity-100",
+        )}
+        data-card-actions=""
+        data-open={problem ? "" : undefined}
+      >
         {waiting ? (
           /*
            * What the archived Bot 会话 list said per employee: questions, approvals and stalled
            * hand-offs only the person can move, plus unread messages. Absent on a quiet card.
            */
           <p
-            className="flex items-center gap-1.5 text-foreground text-xs"
+            className="flex items-center gap-1.5 text-foreground"
             data-attention={String(asks)}
           >
             {asks > 0 ? (
@@ -225,7 +344,7 @@ export function CoworkerCard({
             需要你：{waiting}
           </p>
         ) : null}
-        <p className="text-muted-foreground text-xs">
+        <p className="line-clamp-2 text-muted-foreground">
           {statusSentence(status, pauseKnown, pauseUnreadable)}
           {crews.length > 0
             ? ` · ${crews.map((crew) => crew.name).join(", ")}`
@@ -233,43 +352,27 @@ export function CoworkerCard({
         </p>
         {device ? (
           <p
-            className={`text-xs ${
-              device.online === false ? "text-red-500" : "text-muted-foreground"
-            }`}
+            className={cn(
+              "truncate",
+              device.online === false
+                ? "text-red-500"
+                : "text-muted-foreground",
+            )}
             data-device-line={device.kind}
             data-device-online={
               device.online === null ? "unknown" : String(device.online)
             }
             data-environment="device"
+            title={device.text}
           >
             {device.text}
           </p>
         ) : (
-          <p
-            className="text-muted-foreground text-xs"
-            data-environment="unbound"
-            title="没有进行中的任务绑定到你的设备，它也不是在你的设备上干活的员工。"
-          >
+          <p className="text-muted-foreground" data-environment="unbound">
             未绑定设备
           </p>
         )}
-      </div>
-
-      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 border-t pt-3">
-        <div className="flex min-w-0 gap-3 whitespace-nowrap text-muted-foreground text-xs tabular-nums">
-          <span
-            data-task-count=""
-            title={
-              stats?.truncated
-                ? "近 30 天的任务超过一页，这是至少的数目。"
-                : "近 30 天由它执行的任务卡。"
-            }
-          >
-            任务 {count}
-          </span>
-          <span data-last-run="">最近运行 {lastRun}</span>
-        </div>
-        <ItemActions className="relative z-10 ml-auto shrink-0 gap-1">
+        <div className="flex flex-wrap items-center justify-end gap-1">
           {/*
             Pause and resume are offered only once the pause read answered: without it the screen
             does not know which of the two is the next step, and guessing would send a resume to a
@@ -314,31 +417,30 @@ export function CoworkerCard({
           >
             编辑
           </Link>
-        </ItemActions>
+        </div>
+        {problem ? (
+          <p className="text-destructive" role="alert">
+            {problem}
+          </p>
+        ) : null}
       </div>
-      {problem ? (
-        <p className="text-destructive text-xs" role="alert">
-          {problem}
-        </p>
-      ) : null}
-    </Item>
+    </div>
   );
 }
 
 /**
- * The wall's last cell: a dashed card that opens the create dialog (spec D2) over this wall, the
- * same deep link as the header's 新建员工.
+ * The wall's FIRST cell, as in the reference: a dashed card that opens the create dialog (spec D2)
+ * over this wall, the same deep link as the header's 新建员工.
  */
 export function CreateCoworkerCard({ search }: { search: WakersSearch }) {
   return (
     <Link
-      className="flex min-h-[148px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border text-muted-foreground text-sm outline-none transition-colors hover:border-foreground/30 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60"
+      className={CREATE_CARD}
       data-testid="waker-create-card"
       search={search}
       to="/wakers"
     >
-      <IconPlus aria-hidden="true" className="size-5" />
-      创建员工
+      <CreateCardFace label="新建员工" />
     </Link>
   );
 }

@@ -1,9 +1,8 @@
-import { IconPlus } from "@tabler/icons-react";
 import { useMutation, type useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -12,21 +11,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from "@/components/ui/empty";
+import { WorkbenchEmpty } from "@/components/layout/workbench-empty";
 import { Input } from "@/components/ui/input";
-import {
-  Item,
-  ItemActions,
-  ItemContent,
-  ItemDescription,
-  ItemTitle,
-} from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { AgentProfile } from "@/lib/agents/queries";
 import {
@@ -34,7 +20,15 @@ import {
   retireCrewMutationOptions,
   setCrewMembersMutationOptions,
 } from "@/lib/waker-groups/mutations";
+import { cn } from "@/lib/utils";
 import type { WakerGroup } from "@/lib/waker-groups/queries";
+import {
+  CARD_SURFACE,
+  CardFooter,
+  CREATE_CARD,
+  CreateCardFace,
+  GRID,
+} from "./card-chrome";
 
 type QueryClient = ReturnType<typeof useQueryClient>;
 
@@ -123,7 +117,7 @@ export function CreateCrewDialog({
 }
 
 /**
- * The 群组 tab: one card per group, ending in a dashed create card, or a real empty state that says
+ * The 群组 tab: a create card first, then one card per group, or a real empty state that says
  * what a group is and offers to make one.
  */
 export function CrewTab({
@@ -164,7 +158,7 @@ export function CrewTab({
     return (
       <div className={GRID}>
         {[0, 1, 2].map((key) => (
-          <Skeleton className="h-[148px]" key={key} />
+          <Skeleton className="h-[212px]" key={key} />
         ))}
       </div>
     );
@@ -172,21 +166,32 @@ export function CrewTab({
 
   if (crews.length === 0) {
     return (
-      <Empty className="border py-16" data-testid="crews-empty">
-        <EmptyHeader>
-          <EmptyTitle>还没有群组</EmptyTitle>
-          <EmptyDescription>{CREW_MEANING}</EmptyDescription>
-        </EmptyHeader>
-        <EmptyContent>
-          <Button onClick={onCreate}>新建群组</Button>
-        </EmptyContent>
-      </Empty>
+      <div
+        className="rounded-lg border border-border bg-card"
+        data-testid="crews-empty"
+      >
+        <WorkbenchEmpty
+          action={<Button onClick={onCreate}>新建群组</Button>}
+          className="py-16"
+          description={CREW_MEANING}
+          title="还没有群组"
+        />
+      </div>
     );
   }
 
   return (
     <>
       <div className={GRID}>
+        {/* First, as on the employees tab and in the reference. */}
+        <button
+          className={CREATE_CARD}
+          data-testid="crew-create-card"
+          onClick={onCreate}
+          type="button"
+        >
+          <CreateCardFace label="新建群组" />
+        </button>
         {crews.map((crew) => (
           <CrewCard
             busy={members.isPending}
@@ -204,15 +209,6 @@ export function CrewTab({
             rosterLoading={rosterLoading}
           />
         ))}
-        <button
-          className={CREATE_CARD}
-          data-testid="crew-create-card"
-          onClick={onCreate}
-          type="button"
-        >
-          <IconPlus aria-hidden="true" className="size-5" />
-          创建群组
-        </button>
       </div>
       {problem ? (
         <p className="mt-4 text-destructive text-sm" role="alert">
@@ -222,13 +218,6 @@ export function CrewTab({
     </>
   );
 }
-
-/** The wall's grid, shared by both tabs so the cards line up the same way. */
-export const GRID =
-  "grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-[12px]";
-
-const CREATE_CARD =
-  "flex min-h-[148px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border text-muted-foreground text-sm outline-none transition-colors hover:border-foreground/30 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60";
 
 function CrewCard({
   busy,
@@ -258,60 +247,64 @@ function CrewCard({
   const ordered = [...crew.members].sort((a, b) => a.position - b.position);
 
   return (
-    <Item
-      className="flex-col items-stretch gap-3 bg-card p-4"
+    /*
+     * The employees tab's card language: members' avatars centred on top, the name, one line of
+     * purpose and the order, and a 成员 | 看板 footer under a hairline. Editing (管理成员 / 解散) is
+     * a small row of its own, because on this tab it is the thing a person comes to do.
+     */
+    <div
+      className={cn(CARD_SURFACE, "items-center px-4 pt-[16px]")}
       data-testid="crew-card"
-      variant="outline"
     >
-      <div className="flex items-start gap-3">
-        <div className="flex shrink-0 -space-x-2">
-          {ordered.slice(0, 3).map((member) => {
-            const agent = roster.find((entry) => entry.id === member.agentId);
-            return (
-              <span
-                className="rounded-full ring-2 ring-card"
-                key={member.agentId}
-              >
-                <AbstractAvatar
-                  name={agent?.name ?? member.agentId}
-                  seed={agent?.avatarSeed ?? member.agentId}
-                  size={32}
-                />
-              </span>
-            );
-          })}
-          {ordered.length === 0 ? (
-            <span className="size-8 rounded-full border border-dashed" />
-          ) : null}
-        </div>
-        <ItemContent className="min-w-0 gap-0.5">
-          <ItemTitle className="max-w-full">
-            <span className="truncate">{crew.name}</span>
-          </ItemTitle>
-          {crew.description ? (
-            <ItemDescription className="line-clamp-1 text-[13px]">
-              {crew.description}
-            </ItemDescription>
-          ) : null}
-          <p className="text-muted-foreground text-xs">
-            {crew.members.length} 名员工
-          </p>
-        </ItemContent>
+      <div className="flex h-[44px] shrink-0 items-center -space-x-3">
+        {ordered.slice(0, 4).map((member) => {
+          const agent = roster.find((entry) => entry.id === member.agentId);
+          return (
+            <span
+              className="rounded-full ring-2 ring-card"
+              key={member.agentId}
+            >
+              <AbstractAvatar
+                name={agent?.name ?? member.agentId}
+                seed={agent?.avatarSeed ?? member.agentId}
+                size={40}
+              />
+            </span>
+          );
+        })}
+        {ordered.length > 4 ? (
+          <span className="z-[1] inline-flex size-[40px] items-center justify-center rounded-full bg-muted text-[12px] text-muted-foreground ring-2 ring-card tabular-nums">
+            +{ordered.length - 4}
+          </span>
+        ) : null}
+        {ordered.length === 0 ? (
+          <span className="size-[40px] rounded-full border border-dashed" />
+        ) : null}
       </div>
-
+      <p className="mt-[12px] max-w-full truncate font-semibold text-[16px] leading-[24px]">
+        {crew.name}
+      </p>
+      {crew.description ? (
+        <p className="mt-1 w-full truncate text-[12px] text-muted-foreground leading-[18px]">
+          {crew.description}
+        </p>
+      ) : null}
       {ordered.length > 0 ? (
         // The order a person put them in, because a pipeline crew reads as a sequence.
-        <p className="text-muted-foreground text-xs">
+        <p
+          className="mt-0.5 w-full truncate text-[12px] text-muted-foreground leading-[18px]"
+          title={ordered.map((member) => nameOf(member.agentId)).join(" → ")}
+        >
           顺序：{ordered.map((member) => nameOf(member.agentId)).join(" → ")}
         </p>
       ) : (
-        <p className="text-muted-foreground text-xs">
+        <p className="mt-0.5 text-[12px] text-muted-foreground leading-[18px]">
           还没有成员，点「管理成员」挑选。
         </p>
       )}
 
       {managing && !rosterLoading ? (
-        <div className="flex flex-wrap gap-1">
+        <div className="mt-3 flex flex-wrap justify-center gap-1">
           {roster.map((agent) => {
             const inside = crew.members.some(
               (member) => member.agentId === agent.id,
@@ -337,7 +330,7 @@ function CrewCard({
         </div>
       ) : null}
 
-      <ItemActions className="flex-wrap gap-1 border-t pt-3">
+      <div className="mt-1 flex flex-wrap items-center justify-center gap-1">
         <Button
           aria-expanded={managing}
           onClick={() => setManaging((open) => !open)}
@@ -346,23 +339,6 @@ function CrewCard({
         >
           {managing ? "完成" : "管理成员"}
         </Button>
-        {/*
-         * The board, narrowed to this crew. A group is only worth naming if the work can be looked at
-         * through it, and the filter carries the roster rather than the group id so the cards stay the
-         * same ones a person could reach member by member.
-         */}
-        {crew.members.length > 0 ? (
-          <Link
-            className={buttonVariants({ size: "xs", variant: "ghost" })}
-            search={{
-              crew: crew.members.map((member) => member.agentId).join(","),
-            }}
-            to="/tasks"
-          >
-            在看板上看
-          </Link>
-        ) : null}
-        <span className="flex-1" />
         {confirming ? (
           <>
             <Button
@@ -394,7 +370,32 @@ function CrewCard({
             解散
           </Button>
         )}
-      </ItemActions>
-    </Item>
+      </div>
+
+      <CardFooter
+        className="mx-0 w-full"
+        left={<span>{crew.members.length} 名员工</span>}
+        right={
+          /*
+           * The board, narrowed to this crew. A group is only worth naming if the work can be looked
+           * at through it, and the filter carries the roster rather than the group id so the cards
+           * stay the same ones a person could reach member by member.
+           */
+          crew.members.length > 0 ? (
+            <Link
+              className="rounded-sm outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60"
+              search={{
+                crew: crew.members.map((member) => member.agentId).join(","),
+              }}
+              to="/tasks"
+            >
+              在看板上看
+            </Link>
+          ) : (
+            <span>看板：还没有成员</span>
+          )
+        }
+      />
+    </div>
   );
 }
