@@ -9,6 +9,7 @@ import {
   createRunnerBrowser,
   type RunnerBrowser,
 } from "./browser";
+import { AppHostError, type createAppHost } from "./app-host";
 import { createGit, type Git } from "./git";
 import { isRootRef, PROJECTS_DIR, type RootRegistry } from "./roots";
 
@@ -39,6 +40,8 @@ export type RunnerExecutor = ((
 ) => Promise<ActionOutcome>) & {
   /** Hand every browser back before this process dies, so their profiles are flushed. */
   closeBrowser: () => Promise<void>;
+  /** Close every local app's connection (and its child process) before this process dies. */
+  closeApps: () => Promise<void>;
 };
 
 /**
@@ -100,6 +103,8 @@ export function createRunnerExecutor(
   roots?: RootRegistry,
   /** `git`, for a Git project's clone and branch list. Tests hand in their own. */
   git: Git = createGit(),
+  /** The owner's local MCP apps. Absent means this machine offers none. */
+  apps?: ReturnType<typeof createAppHost>,
 ): RunnerExecutor {
   const workspace = createWorkspace(workspaceDir);
   const shell = createShell(workspaceDir);
@@ -113,6 +118,31 @@ export function createRunnerExecutor(
   const owned =
     browser ??
     createRunnerBrowser({ profileRoot: browserProfileRootFor(workspaceDir) });
+
+  /**
+   * An app action's failure, in the words the owner and the model read.
+   *
+   * Only a call can have acted: a call that timed out, lost its connection or was stopped on the way
+   * may have changed something in the app, so it is "outcome unknown" and pauses the device until its
+   * owner looks. A call refused before it was sent, and every list, did nothing.
+   */
+  function appFailure(error: unknown, calling: boolean): ActionOutcome {
+    if (error instanceof Error && error.name === "AbortError") {
+      return calling
+        ? { ok: false, error: "已在设备上停止。", outcomeUnknown: true }
+        : { ok: false, error: "已在设备上停止。" };
+    }
+    if (error instanceof AppHostError) {
+      const unknown =
+        calling &&
+        error.phase === "call" &&
+        (error.kind === "timeout" || error.kind === "connect");
+      return unknown
+        ? { ok: false, error: error.userMessage, outcomeUnknown: true }
+        : { ok: false, error: error.userMessage };
+    }
+    return { ok: false, error: "本机应用这次没有成功。" };
+  }
 
   async function execute({
     action,
@@ -316,6 +346,51 @@ export function createRunnerExecutor(
             ),
           };
         }
+        case "apps.tools": {
+          if (!apps || typeof body.app !== "string" || !body.app) {
+            return { ok: false, error: "这台电脑上没有这个本机应用，或它已停用。" };
+          }
+          try {
+            return {
+              ok: true,
+              output: { tools: await apps.tools(body.app, signal) },
+            };
+          } catch (error) {
+            return appFailure(error, false);
+          }
+        }
+        case "apps.call": {
+          if (!apps || typeof body.app !== "string" || !body.app) {
+            return { ok: false, error: "这台电脑上没有这个本机应用，或它已停用。" };
+          }
+          if (typeof body.tool !== "string" || !body.tool) {
+            return { ok: false, error: "没有指明要调用本机应用的哪个工具。" };
+          }
+          /*
+           * What runs must be what the approval card showed: an array, a string or a number is never
+           * quietly turned into empty arguments. Only an absent `args` means "none".
+           */
+          if (
+            body.args !== undefined &&
+            (body.args === null ||
+              typeof body.args !== "object" ||
+              Array.isArray(body.args))
+          ) {
+            return {
+              ok: false,
+              error: "本机应用的参数格式不对，应为一个 JSON 对象。",
+            };
+          }
+          const args = (body.args ?? {}) as Record<string, unknown>;
+          try {
+            return {
+              ok: true,
+              output: await apps.call(body.app, body.tool, args, signal),
+            };
+          } catch (error) {
+            return appFailure(error, true);
+          }
+        }
         default:
           return {
             ok: false,
@@ -339,5 +414,8 @@ export function createRunnerExecutor(
     }
   }
 
-  return Object.assign(execute, { closeBrowser: () => owned.close() });
+  return Object.assign(execute, {
+    closeBrowser: () => owned.close(),
+    closeApps: () => apps?.closeAll() ?? Promise.resolve(),
+  });
 }
