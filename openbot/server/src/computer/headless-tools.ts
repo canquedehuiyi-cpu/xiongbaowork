@@ -392,9 +392,10 @@ export function createHeadlessComputerTools(options: {
    */
   machine?: "workspace" | "device";
   /**
-   * The Bot has an owner whose paired machine's local apps it may use (device MCP bridge §4.1): adds
-   * `computer_apps` and `computer_app_call` on a device. A catalogue Bot has no owner, so no machine
-   * and no app tools; the gateway refuses them for it as well.
+   * This run may use the local apps on the Bot owner's paired machine (device MCP bridge §4.1): the
+   * run is the owner's own (`localAppsAllowed`). Adds `computer_apps` and `computer_app_call` on a
+   * device. A catalogue Bot has no owner and a teammate is not the owner, so neither gets the app
+   * tools; the gateway refuses them as well.
    */
   apps?: boolean;
 }): HeadlessTool[] {

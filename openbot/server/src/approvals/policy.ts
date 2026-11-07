@@ -743,9 +743,20 @@ function isRunnerCommand(candidate: ApprovalCandidate): boolean {
 }
 
 /**
+ * Listing a paired machine's local apps starts each of them there (a stdio app is a program), so the
+ * team's cap of `never` refuses that too. Only `never`: under `ask` a listing changes nothing and is
+ * not asked about; the call that follows it is.
+ */
+function isRunnerAppListing(candidate: ApprovalCandidate): boolean {
+  return (
+    candidate.subject?.runner === true && candidate.toolRef === "computer_apps"
+  );
+}
+
+/**
  * Step 2 of {@link decideAction} on its own: a disabled tool (a `deny` in any layer), or the team's
- * host-command cap of `never` for a command or app call on a paired computer. Either refuses the
- * action outright, whatever else is true of it.
+ * host-command cap of `never` for a command, an app call or an app listing on a paired computer.
+ * Either refuses the action outright, whatever else is true of it.
  */
 export function refusedOutright(input: {
   candidate: ApprovalCandidate;
@@ -773,7 +784,10 @@ export function refusedOutright(input: {
       ruleId: matched.rule.id,
       reason: TOOL_DISABLED,
     };
-  if (isRunnerCommand(input.candidate) && input.hostCommandsCap === "never")
+  if (
+    (isRunnerCommand(input.candidate) || isRunnerAppListing(input.candidate)) &&
+    input.hostCommandsCap === "never"
+  )
     return {
       behaviour: "deny",
       source: "host_command_cap",

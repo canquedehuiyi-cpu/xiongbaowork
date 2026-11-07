@@ -1649,6 +1649,83 @@ describe("device apps: the app-tool floor", () => {
     ).toMatchObject({ behaviour: "deny", reason: TOOL_DISABLED });
     expect(refusedOutright({ ...base, candidate: call, hostCommandsCap: "ask" })).toBeUndefined();
   });
+  test("an app call's identity is the tool, the app and the arguments: not the device's verdict or description", () => {
+    const continuation = {
+      runId: "run",
+      threadId: "thread",
+      toolCallId: "call",
+      toolName: "computer_app_call",
+      args: {},
+      messages: [],
+      state: {},
+      context: [],
+      forwardedProps: {},
+    };
+    const target = { app: "Notes", tool: "echo" };
+    // Asked while the device was away: no list, so not read-only and no description.
+    const asked = approvalAction({ ...appCall(undefined), target, continuation });
+    // Run once it is back: the list now says read-only and describes the tool.
+    const run = approvalAction({
+      ...appCall({ readOnly: true }),
+      target,
+      display: { description: "Echo text back" },
+      continuation,
+    });
+    expect(run.actionDigest).toBe(asked.actionDigest);
+    // The description is still saved, for the card.
+    expect(run.display).toEqual({ description: "Echo text back" });
+    // Other arguments are another action.
+    expect(
+      approvalAction({
+        ...appCall(undefined, { app: "Notes", tool: "echo", args: { text: "other" } }),
+        target,
+        continuation,
+      }).actionDigest,
+    ).not.toBe(asked.actionDigest);
+    // Every other tool keeps its effect in its identity.
+    expect(
+      approvalAction({ ...candidate({ effect: "read" }), continuation }).actionDigest,
+    ).not.toBe(approvalAction({ ...candidate(), continuation }).actionDigest);
+  });
+  test("the card shows the tool's description from the display-only field", () => {
+    expect(
+      approvalArgsPreview({
+        toolRef: "computer_app_call",
+        args: { app: "Notes", tool: "write_note", args: { note: "x" } },
+        target: { app: "Notes", tool: "write_note" },
+        display: { description: "Write a note" },
+      }),
+    ).toEqual({
+      app: "Notes",
+      tool: "write_note",
+      description: "Write a note",
+      args: JSON.stringify({ note: "x" }),
+    });
+  });
+  test("with the cap at never, listing local apps is refused outright too: listing starts them", async () => {
+    const listing = (runner: boolean) =>
+      candidate({
+        toolRef: "computer_apps",
+        effect: "read",
+        scope: "browser",
+        args: {},
+        subject: { runner },
+      });
+    expect(
+      refusedOutright({ ...base, candidate: listing(true), hostCommandsCap: "never" }),
+    ).toMatchObject({ behaviour: "deny", source: "host_command_cap" });
+    expect(
+      await decideAction({ ...base, candidate: listing(true), hostCommandsCap: "never" }),
+    ).toMatchObject({ behaviour: "deny", source: "host_command_cap" });
+    // Only never: a listing is not asked about under ask, and nothing changes off a paired machine.
+    expect(
+      (await decideAction({ ...base, candidate: listing(true), hostCommandsCap: "ask" }))
+        .behaviour,
+    ).toBe("allow");
+    expect(
+      refusedOutright({ ...base, candidate: listing(false), hostCommandsCap: "never" }),
+    ).toBeUndefined();
+  });
   test("team cap never denies computer_app_call; ask asks", async () => {
     expect(
       await decideAction({

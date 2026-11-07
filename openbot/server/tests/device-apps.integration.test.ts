@@ -11,13 +11,23 @@ import { createRunnerDispatcher } from "../../runner/src/dispatch";
 import { createRunnerExecutor } from "../../runner/src/execute";
 import { createActionJournal } from "../../runner/src/journal";
 import { TOOL_DISABLED } from "../src/approvals/policy";
-import { createApprovalService } from "../src/approvals/service";
+import {
+  type ApprovalResumeDependencies,
+  createApprovalService,
+} from "../src/approvals/service";
 import { createApprovalStore } from "../src/approvals/store";
 import {
+  type ApprovalAction,
   type ApprovalContinuation,
+  parseApprovalContinuation,
   withApprovalContext,
 } from "../src/approvals/types";
-import { ActionRefusedError, createComputerGateway } from "../src/computer/gateway";
+import {
+  ActionRefusedError,
+  APP_CALL_BACKSTOP_MS,
+  createComputerGateway,
+  localAppsAllowed,
+} from "../src/computer/gateway";
 import {
   createHeadlessComputerTools,
   HeadlessToolSuspension,
@@ -82,7 +92,11 @@ async function poll(check: () => Promise<boolean> | boolean, timeoutMs = 8000) {
 }
 
 async function pairedDevice(
-  options: { hostCommandsCap?: "allow" | "ask" | "never" } = {},
+  options: {
+    hostCommandsCap?: "allow" | "ask" | "never";
+    /** The gateway's clock, for the five-minute life of a device's tool list. */
+    now?: () => number;
+  } = {},
 ) {
   const tenant = `dapps-${suite}-${tenants.length}`;
   tenants.push(tenant);
@@ -233,7 +247,10 @@ async function pairedDevice(
       hostCommandsCap: options.hostCommandsCap as "allow" | "ask" | "never",
     });
   }
-  const service = createApprovalService(store);
+  // As index.ts composes it: the server carries out an approved action itself, on the approval row.
+  const service = createApprovalService(store, undefined, undefined, {
+    settlement: "database",
+  });
   const takeovers = createDeviceTakeovers();
   const catalogueBot = `${tenant}-catalogue`;
   const selector = createDeviceSelector({
@@ -264,6 +281,7 @@ async function pairedDevice(
     approvalGate: service.gate,
     approvalRefusal: service.refusal,
     deviceTakeovers: takeovers,
+    ...(options.now ? { now: options.now } : {}),
   });
   const actor = { id: tenant, userId: tenant };
   const tools = createHeadlessComputerTools({
@@ -298,6 +316,34 @@ async function pairedDevice(
       ),
     );
   }
+  /** The approved action carried out again, as the resume worker in index.ts does. */
+  function executeApproved(action: ApprovalAction) {
+    const continuation = parseApprovalContinuation(action.continuation);
+    const tool = tools.find(
+      (candidate) => candidate.definition.name === continuation.toolName,
+    );
+    if (!tool) throw new Error(`No tool ${continuation.toolName}.`);
+    return withApprovalContext(continuation, () =>
+      tool.execute(continuation.args, {
+        toolCallId: continuation.toolCallId,
+        signal: new AbortController().signal,
+      }),
+    );
+  }
+  /** The person's answer carried out through the real resume path; what the Bot is told. */
+  async function resume(id: string) {
+    const continued: { content: string; error?: string }[] = [];
+    const dependencies: ApprovalResumeDependencies = {
+      validate: (action) =>
+        service.validateReentry(action, () => executeApproved(action)),
+      execute: executeApproved,
+      continue: async (input) => {
+        continued.push(input.result);
+      },
+    };
+    await runAsTenant(tenant, () => service.resume(tenant, id, dependencies));
+    return continued;
+  }
   const sent = (action: string) =>
     frames.filter((frame) => frame.action === action);
   const requests = () => runAsTenant(tenant, () => store.list(tenant));
@@ -321,6 +367,7 @@ async function pairedDevice(
     queue,
     service,
     call,
+    resume,
     sent,
     requests,
     connect,
@@ -743,6 +790,127 @@ test("a socket drop while listing tools asks instead and never pauses the device
   expect(await device.queuedRows("apps.tools")).toBe(0);
   expect(device.sent("apps.call")).toHaveLength(0);
 }, 20_000);
+
+/** The request a call opened, by its tool call id. */
+async function requestFor(
+  device: Awaited<ReturnType<typeof pairedDevice>>,
+  toolCallId: string,
+) {
+  const request = (await device.requests()).find(
+    (candidate) => candidate.action.toolCallId === toolCallId,
+  );
+  if (!request) throw new Error(`No request for ${toolCallId}.`);
+  return request;
+}
+
+async function approve(
+  device: Awaited<ReturnType<typeof pairedDevice>>,
+  toolCallId: string,
+) {
+  const request = await requestFor(device, toolCallId);
+  await runAsTenant(device.tenant, () =>
+    device.service.decide(device.tenant, request.id, "allow_once"),
+  );
+  return request.id;
+}
+
+test("approved while the device was away with no tool list, the call runs once it is back", async () => {
+  const device = await pairedDevice();
+  await device.disconnect();
+  // No list can be had: not read-only, so both ask, with no description on the card.
+  for (const [toolCallId, tool, args] of [
+    ["away-echo", "echo", { text: "回来了" }],
+    ["away-write", "write_note", { note: "买牛奶" }],
+  ] as const)
+    await expect(
+      device.call("computer_app_call", { app: "Notes", tool, args }, toolCallId),
+    ).rejects.toBeInstanceOf(HeadlessToolSuspension);
+  const echo = await approve(device, "away-echo");
+  const write = await approve(device, "away-write");
+  await device.connect();
+  // Now the list says echo is read-only and describes both tools: still the same actions.
+  const echoed = await device.resume(echo);
+  expect(echoed).toHaveLength(1);
+  expect(echoed[0]?.error).toBeUndefined();
+  expect(echoed[0]?.content).toContain("回来了");
+  const written = await device.resume(write);
+  expect(written[0]?.error).toBeUndefined();
+  expect(written[0]?.content).not.toContain("Not done");
+  expect(device.sent("apps.call")).toHaveLength(2);
+  // Spent: a second resume runs nothing.
+  await device.resume(echo);
+  expect(device.sent("apps.call")).toHaveLength(2);
+}, 30_000);
+
+test("approved after the tool list expired and the device went away, the call is queued and runs on return", async () => {
+  let clock = Date.now();
+  const device = await pairedDevice({ now: () => clock });
+  // Asked online: the list (with the tool's description) is fresh and cached.
+  await expect(
+    device.call(
+      "computer_app_call",
+      { app: "Notes", tool: "write_note", args: { note: "过期" } },
+      "ttl-write",
+    ),
+  ).rejects.toBeInstanceOf(HeadlessToolSuspension);
+  const card = (
+    await runAsTenant(device.tenant, () => device.service.inbox(device.tenant))
+  ).requests.find((candidate) => candidate.action.toolCallId === "ttl-write");
+  expect(
+    (card?.action.args as { description?: string } | undefined)?.description,
+  ).toBe("Write a note");
+  // More than five minutes later, with the device away: no list, no description.
+  clock += 301_000;
+  await device.disconnect();
+  const id = await approve(device, "ttl-write");
+  const told = await device.resume(id);
+  expect(told).toHaveLength(1);
+  expect(told[0]?.error).toBeUndefined();
+  expect(told[0]?.content).toContain("queued");
+  expect(device.sent("apps.call")).toHaveLength(0);
+  await device.connect();
+  await poll(() => device.sent("apps.call").length === 1);
+  expect(
+    (device.sent("apps.call")[0]?.payload as { args?: unknown } | undefined)?.args,
+  ).toEqual({ note: "过期" });
+}, 30_000);
+
+test("with the team's cap at never, listing local apps is refused before any app is started", async () => {
+  const capped = await pairedDevice({ hostCommandsCap: "never" });
+  await expect(capped.call("computer_apps", {})).rejects.toThrow("set to never run");
+  await expect(capped.call("computer_apps", { app: "Notes" })).rejects.toThrow(
+    "set to never run",
+  );
+  expect(capped.sent("apps.tools")).toHaveLength(0);
+}, 20_000);
+
+test("only the Bot's owner may use the owner's local apps", async () => {
+  const device = await pairedDevice();
+  // The tools are offered only to a run whose actor is the owner, and only on a device.
+  expect(localAppsAllowed({ machine: "device", owner: device.tenant, actorId: device.tenant })).toBeTrue();
+  expect(localAppsAllowed({ machine: "device", owner: device.tenant, actorId: "teammate" })).toBeFalse();
+  expect(localAppsAllowed({ machine: "device", owner: null, actorId: device.tenant })).toBeFalse();
+  expect(localAppsAllowed({ machine: "workspace", owner: device.tenant, actorId: device.tenant })).toBeFalse();
+  // And the gateway refuses anyone else, before anything reaches the machine.
+  const teammate = { id: `${device.tenant}-teammate`, userId: `${device.tenant}-teammate` };
+  await expect(device.gateway.listApps(device.botId, teammate, {})).rejects.toThrow(
+    "只有员工的主人本人",
+  );
+  await expect(
+    device.gateway.callApp(device.botId, teammate, {
+      app: "Notes",
+      tool: "echo",
+      args: { text: "x" },
+    }),
+  ).rejects.toThrow("只有员工的主人本人");
+  expect(device.sent("apps.tools")).toHaveLength(0);
+  expect(device.sent("apps.call")).toHaveLength(0);
+  expect(await device.requests()).toEqual([]);
+}, 20_000);
+
+test("a call's backstop outlasts a fresh connection: start, list and call", () => {
+  expect(APP_CALL_BACKSTOP_MS).toBeGreaterThanOrEqual(20_000 + 20_000 + 120_000 + 5_000);
+});
 
 afterAll(async () => {
   for (const cleanup of cleanups) await cleanup().catch(() => undefined);
