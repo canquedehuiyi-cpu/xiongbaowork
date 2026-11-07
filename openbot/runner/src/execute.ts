@@ -360,19 +360,28 @@ export function createRunnerExecutor(
           }
         }
         case "apps.call": {
-          if (
-            !apps ||
-            typeof body.app !== "string" ||
-            !body.app ||
-            typeof body.tool !== "string" ||
-            !body.tool
-          ) {
+          if (!apps || typeof body.app !== "string" || !body.app) {
             return { ok: false, error: "这台电脑上没有这个本机应用，或它已停用。" };
           }
-          const args =
-            body.args && typeof body.args === "object" && !Array.isArray(body.args)
-              ? (body.args as Record<string, unknown>)
-              : {};
+          if (typeof body.tool !== "string" || !body.tool) {
+            return { ok: false, error: "没有指明要调用本机应用的哪个工具。" };
+          }
+          /*
+           * What runs must be what the approval card showed: an array, a string or a number is never
+           * quietly turned into empty arguments. Only an absent `args` means "none".
+           */
+          if (
+            body.args !== undefined &&
+            (body.args === null ||
+              typeof body.args !== "object" ||
+              Array.isArray(body.args))
+          ) {
+            return {
+              ok: false,
+              error: "本机应用的参数格式不对，应为一个 JSON 对象。",
+            };
+          }
+          const args = (body.args ?? {}) as Record<string, unknown>;
           try {
             return {
               ok: true,

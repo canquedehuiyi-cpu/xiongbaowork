@@ -802,7 +802,8 @@ async function shutDown(reason: string): Promise<void> {
   const budget = new Promise((wait) => setTimeout(wait, SHUTDOWN_BUDGET_MS));
   try {
     await Promise.race([
-      Promise.all([
+      // allSettled: a browser that fails to close must not stop the apps' process trees being killed.
+      Promise.allSettled([
         running?.closeBrowser() ?? Promise.resolve(),
         running?.closeApps() ?? Promise.resolve(),
       ]),

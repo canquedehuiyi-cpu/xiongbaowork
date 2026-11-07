@@ -17,7 +17,9 @@ afterEach(async () => {
     rmSync(dir, { recursive: true, force: true });
 });
 
-function setup() {
+function setup(
+  options: { env?: Record<string, string>; callMs?: number } = {},
+) {
   const base = mkdtempSync(join(tmpdir(), "apps-exec-"));
   dirs.push(base);
   const workspace = join(base, "ws");
@@ -28,9 +30,12 @@ function setup() {
     name: "假应用",
     command: process.execPath,
     args: [FIXTURE],
-    env: {},
+    env: options.env ?? {},
   });
-  const host = createAppHost(registry);
+  const host = createAppHost(
+    registry,
+    options.callMs ? { timeouts: { callMs: options.callMs } } : undefined,
+  );
   const execute = createRunnerExecutor(
     workspace,
     undefined,
@@ -103,5 +108,76 @@ test("apps.call aborted mid-call answers outcomeUnknown", async () => {
 test("a missing app name in the payload is refused without touching the host", async () => {
   const { execute } = setup();
   const outcome = await execute({ action: "apps.call", payload: {} });
+  expect(outcome).toEqual({
+    ok: false,
+    error: "这台电脑上没有这个本机应用，或它已停用。",
+  });
+});
+
+test("a missing tool name gets its own error, not the missing-app one", async () => {
+  const { entry, execute } = setup();
+  for (const tool of [undefined, "", 7]) {
+    const outcome = await execute({
+      action: "apps.call",
+      payload: { app: entry.ref, tool },
+    });
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    expect(outcome.error).toContain("哪个工具");
+    expect(outcome.error).not.toContain("没有这个本机应用");
+  }
+});
+
+test("args that are not a plain object are refused, never run as empty arguments", async () => {
+  const { entry, execute } = setup();
+  for (const args of [[1, 2], "text", 5, null, true]) {
+    const outcome = await execute({
+      action: "apps.call",
+      payload: { app: entry.ref, tool: "echo", args },
+    });
+    expect(outcome).toEqual({
+      ok: false,
+      error: "本机应用的参数格式不对，应为一个 JSON 对象。",
+    });
+  }
+  // Absent args still means "none".
+  const none = await execute({
+    action: "apps.call",
+    payload: { app: entry.ref, tool: "echo" },
+  });
+  expect(none.ok).toBe(true);
+});
+
+test("a call that times out answers outcomeUnknown", async () => {
+  const { entry, execute } = setup({ callMs: 300 });
+  const outcome = await execute({
+    action: "apps.call",
+    payload: { app: entry.ref, tool: "echo", args: { text: "__hang__" } },
+  });
   expect(outcome.ok).toBe(false);
+  if (outcome.ok) return;
+  expect(outcome.outcomeUnknown).toBe(true);
+  expect(outcome.error).toContain("没有返回");
+});
+
+test("failures before the call was sent are not outcomeUnknown", async () => {
+  const dead = setup({ env: { FAKE_MCP_MODE: "exit" } });
+  const started = await dead.execute({
+    action: "apps.call",
+    payload: { app: dead.entry.ref, tool: "echo", args: {} },
+  });
+  expect(started.ok).toBe(false);
+  expect(
+    (started as { outcomeUnknown?: boolean }).outcomeUnknown,
+  ).toBeUndefined();
+
+  const { entry, execute } = setup();
+  const unknownTool = await execute({
+    action: "apps.call",
+    payload: { app: entry.ref, tool: "nope", args: {} },
+  });
+  expect(unknownTool.ok).toBe(false);
+  expect(
+    (unknownTool as { outcomeUnknown?: boolean }).outcomeUnknown,
+  ).toBeUndefined();
 });
