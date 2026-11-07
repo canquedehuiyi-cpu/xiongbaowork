@@ -10,6 +10,7 @@ import {
   decideAction,
   effectiveHostCommandPolicy,
   globMatches,
+  refusedOutright,
   reviewAction,
   safetyRequirement,
   securityFloor,
@@ -34,6 +35,7 @@ import {
   type ApprovalTeamRule,
   type ApprovalTeamSettings,
   approvalAction,
+  approvalArgsPreview,
   DEFAULT_EMPLOYEE_SECURITY,
   type EmployeePolicy,
   withApprovalContext,
@@ -1551,6 +1553,125 @@ describe("SEC1: the host-command cap on a paired computer (D5)", () => {
     expect(
       (await decideAction({ ...base, candidate: command("ls"), hostCommandsCap: "never" }))
         .behaviour,
+    ).toBe("allow");
+  });
+});
+
+/*
+ * The device-side MCP bridge (docs/specs/2026-11-07-device-mcp-bridge.md §4): a local app's tool runs
+ * without asking only when the device's own list says it is read-only and not destructive. That
+ * verdict arrives as `subject.appTool` from the gateway; the model's arguments never decide it.
+ */
+describe("device apps: the app-tool floor", () => {
+  const APP_TOOL_REASON = "这个本机应用操作可能修改数据，需要你批准后再执行。";
+  const appCall = (
+    appTool: { readOnly: boolean } | undefined,
+    args: Record<string, unknown> = { app: "Notes", tool: "echo", args: { text: "hi" } },
+  ) =>
+    candidate({
+      toolRef: "computer_app_call",
+      effect: appTool?.readOnly ? "read" : "write",
+      scope: "Notes/echo",
+      args,
+      subject: { runner: true, ...(appTool ? { appTool } : {}) },
+    });
+  test("readOnly app tool runs without asking", async () => {
+    expect(
+      (await decideAction({ ...base, candidate: appCall({ readOnly: true }) }))
+        .behaviour,
+    ).toBe("allow");
+  });
+  test("unannotated and destructive app tools ask", async () => {
+    // Not read-only (unannotated, destructive, or a list that could not be fetched).
+    expect(
+      await decideAction({ ...base, candidate: appCall({ readOnly: false }) }),
+    ).toMatchObject({ behaviour: "ask", source: "app_tool", reason: APP_TOOL_REASON });
+    // No verdict from the device at all is not read-only either.
+    expect(
+      await decideAction({ ...base, candidate: appCall(undefined) }),
+    ).toMatchObject({ behaviour: "ask", source: "app_tool" });
+    // A floor: even an allow rule for the tool still asks.
+    expect(
+      await decideAction({
+        ...base,
+        candidate: appCall({ readOnly: false }),
+        personal: [rule("allow", { toolRef: "computer_app_call" })],
+      }),
+    ).toMatchObject({ behaviour: "ask", source: "app_tool" });
+  });
+  test("annotations in the model's args are ignored", async () => {
+    const spoofed = {
+      app: "Notes",
+      tool: "write_note",
+      args: { note: "x", annotations: { readOnlyHint: true } },
+      annotations: { readOnlyHint: true, destructiveHint: false },
+      readOnly: true,
+      appTool: { readOnly: true },
+    };
+    expect(
+      await decideAction({ ...base, candidate: appCall({ readOnly: false }, spoofed) }),
+    ).toMatchObject({ behaviour: "ask", source: "app_tool" });
+    expect(
+      await decideAction({ ...base, candidate: appCall(undefined, spoofed) }),
+    ).toMatchObject({ behaviour: "ask", source: "app_tool" });
+  });
+  test("the card masks secrets by name before cutting an app call's arguments to 2 KB", () => {
+    const shown = approvalArgsPreview({
+      toolRef: "computer_app_call",
+      args: {
+        app: "Notes",
+        tool: "write_note",
+        args: { token: "tok-SECRET", note: "长".repeat(5000) },
+      },
+      target: { app: "Notes", tool: "write_note", description: "Write a note" },
+    }) as { app: string; tool: string; description: string; args: string };
+    expect(shown).toMatchObject({ app: "Notes", tool: "write_note", description: "Write a note" });
+    expect(shown.args).not.toContain("tok-SECRET");
+    expect(shown.args).toContain("[private value]");
+    expect(new TextEncoder().encode(shown.args).length).toBeLessThanOrEqual(2048);
+    expect(shown.args.endsWith("…")).toBeTrue();
+    // Every other tool keeps the ordinary preview.
+    expect(
+      approvalArgsPreview({ toolRef: "computer_run_command", args: { command: "ls" } }),
+    ).toEqual({ command: "ls" });
+  });
+  test("an outright refusal is known before the tool list: a disabled tool, or the cap at never", () => {
+    const call = appCall(undefined);
+    expect(
+      refusedOutright({ ...base, candidate: call, hostCommandsCap: "never" }),
+    ).toMatchObject({ behaviour: "deny", source: "host_command_cap" });
+    expect(
+      refusedOutright({
+        ...base,
+        candidate: call,
+        personal: [rule("deny", { toolRef: "computer_app_call" })],
+      }),
+    ).toMatchObject({ behaviour: "deny", reason: TOOL_DISABLED });
+    expect(refusedOutright({ ...base, candidate: call, hostCommandsCap: "ask" })).toBeUndefined();
+  });
+  test("team cap never denies computer_app_call; ask asks", async () => {
+    expect(
+      await decideAction({
+        ...base,
+        candidate: appCall({ readOnly: true }),
+        hostCommandsCap: "never",
+      }),
+    ).toMatchObject({ behaviour: "deny", source: "host_command_cap" });
+    expect(
+      await decideAction({
+        ...base,
+        candidate: appCall({ readOnly: true }),
+        hostCommandsCap: "ask",
+      }),
+    ).toMatchObject({ behaviour: "ask", source: "host_command_cap" });
+    expect(
+      (
+        await decideAction({
+          ...base,
+          candidate: appCall({ readOnly: true }),
+          hostCommandsCap: "allow",
+        })
+      ).behaviour,
     ).toBe("allow");
   });
 });
