@@ -65,6 +65,21 @@
 | 能力与资源 · 市场一键安装/卡片授权 | 安装需令牌、授权配置或 Composio 启用；授权流程在账户设置 | `src/lib/plugins/mutations.ts`、`routes/_authed/admin/plugins/*` | 维持跳转，或新增一步安装契约 |
 | 能力与资源 · 插件分类 | `CatalogueItem`/`PluginServer` 无分类字段 | `src/lib/plugins/queries.ts` | 目录分类字段 |
 
+## 已归档的重复页面
+
+用户决定"所有重复的都归档"：与五个一级入口重复的页面，内容并入一级入口，旧地址改为带参数映射的跳转（`replace`，后退不回弹）。
+
+| 旧地址 | 并入 | 参数映射 | 测试 |
+| --- | --- | --- | --- |
+| `/agents`（员工列表） | `/wakers`（员工管理）；新建/编辑弹窗、置顶/共享标记、编辑入口迁到卡片 | `new`、`agent` 原样 | `archive-duplicate-pages.test.tsx`、`agent-roster-error.test.tsx` |
+| `/bots`（Bot 会话列表） | `/wakers`；卡片显示"需要你：…"并链接 `/bots/$agentId` | 无 | 同上 |
+| `/routines`（定时任务） | `/autonomous` 统一列表 | 固定加 `trigger=schedule` | 同上 |
+| `/skills` | `/resources?tab=skills`（完整技能页） | `new`、`edit` | `archive-resource-pages.test.tsx` |
+| `/knowledge` | `/resources?tab=knowledge`（完整知识库页） | 无 | 同上、`knowledge-screen.test.tsx` |
+| `/memory` | `/resources?tab=sources`（完整信息源与记忆页） | 无 | 同上 |
+
+未归档（有独有功能）：`/responsibilities`（职责的新建与编辑；侧栏入口已移除，归自主工作点亮）、`/pipelines`、`/team-bots`、`/approvals`。员工的两个详情页 `/bots/$agentId`（动态、开关、消息路由）与 `/wakers/$agentId`（信息源、项目、职责、技能授权、审计）内容不同，未合并，待定。`/routines` 原页面的单条完整运行记录与删除确认仍在 `/assemble/$agentId`。
+
 ## 下游页面（本轮未实查参考）
 
 | 参考 | 我方 | 本轮处理 | 状态 |

@@ -27,6 +27,15 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 - **One word for a coworker: 员工.** 唤醒者, 数字员工 and the 「Waker 管理」 label are gone from the
   screens and the server's messages. The brand 熊宝数字员工 and the feature names @Waker and WakerFlow
   stay.
+- **Duplicate pages are archived into the five workbench pages.** Their old addresses redirect, and
+  their parameters carry over:
+  - `/agents` goes to `/wakers`. `?new=true` and `?agent=<id>` open the create and edit dialogs there.
+  - `/bots` goes to `/wakers`. Each employee card now shows what the employee needs from you and links
+    to its `/bots/<id>` profile.
+  - `/routines` goes to `/autonomous?trigger=schedule`.
+  - `/skills`, `/knowledge` and `/memory` go to `/resources?tab=skills|knowledge|sources`. Those tabs now
+    hold the full pages, not summaries.
+  - 更多 in the sidebar keeps only 组团流程, 团队 Bot and 审批.
 - **No API or data changes.** Entries without a backend contract, such as 自动接入 and 接入申请, are
   shown disabled with an explanation.
 
