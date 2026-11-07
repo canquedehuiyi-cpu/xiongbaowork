@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Message } from "@ag-ui/client";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { createAppHost } from "../../runner/src/app-host";
 import { createAppRegistry } from "../../runner/src/apps";
 import { createRunnerDispatcher } from "../../runner/src/dispatch";
@@ -25,6 +25,7 @@ import {
 import { createRunnerTransport } from "../src/computer/runner-transport";
 import { createDatabase } from "../src/db/client";
 import {
+  auditEvents,
   devicePairCodes,
   registeredDevices,
   threadRuns,
@@ -33,7 +34,7 @@ import {
   workItems,
 } from "../src/db/schema";
 import { createDeviceChannel } from "../src/devices/channel";
-import { createDeviceQueue } from "../src/devices/queue";
+import { createDeviceQueue, DEVICE_PAUSED } from "../src/devices/queue";
 import {
   createQueuedResultNotices,
   createThreadResultPoster,
@@ -661,6 +662,19 @@ test("with the team's cap at never, or the tool disabled, the app is never start
   ).rejects.toThrow("set to never run");
   expect(capped.sent("apps.tools")).toHaveLength(0);
   expect(capped.sent("apps.call")).toHaveLength(0);
+  // Refused before the list, and still on the approval decision log.
+  const logged = await runAsTenant(capped.tenant, () =>
+    database
+      .select({ payload: auditEvents.payload })
+      .from(auditEvents)
+      .where(
+        and(
+          eq(auditEvents.actorUserId, capped.tenant),
+          eq(auditEvents.eventType, "approval.evaluated"),
+        ),
+      ),
+  );
+  expect(JSON.stringify(logged)).toContain("host_command_cap");
 
   const disabled = await pairedDevice();
   await runAsTenant(disabled.tenant, () =>
@@ -687,6 +701,26 @@ test("while a person has taken over the machine, the app is never started for it
   ).rejects.toBeInstanceOf(HeadlessToolSuspension);
   expect(device.sent("apps.tools")).toHaveLength(0);
   expect(device.sent("apps.call")).toHaveLength(0);
+}, 20_000);
+
+test("a paused device is not asked for a tool list: the call is told it is paused", async () => {
+  const device = await pairedDevice();
+  // An action whose reply was lost: the device is paused until its owner checks it.
+  await device.queue.enqueue(device.target, {
+    key: "lost-reply",
+    action: "exec",
+    payload: { command: "true" },
+  });
+  await device.queue.drain(device.target, "test-owner", async () => {
+    throw new Error("reply lost after the run");
+  });
+  expect(await device.queue.uncertain(device.target)).toBe(1);
+  await expect(
+    device.call("computer_app_call", { app: "Notes", tool: "echo", args: { text: "x" } }),
+  ).rejects.toThrow(DEVICE_PAUSED);
+  expect(device.sent("apps.tools")).toHaveLength(0);
+  expect(device.sent("apps.call")).toHaveLength(0);
+  expect(await device.requests()).toEqual([]);
 }, 20_000);
 
 test("a socket drop while listing tools asks instead and never pauses the device", async () => {

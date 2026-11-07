@@ -30,6 +30,7 @@ import {
   recordAuditEvent,
 } from "../audit";
 import { isRunnerAddress, runnerAddress } from "../devices/channel";
+import { DeviceDeliveryError } from "../devices/queue";
 import type { ProjectRoot } from "../projects/context";
 import {
   DEVICE_HUMAN_HAS_CONTROL,
@@ -1321,8 +1322,9 @@ export function createComputerGateway(
     try {
       return await fetchAppTools(machine, botId, ref, signal);
     } catch (error) {
-      // The person's Stop is a stop, not a missing list to ask about.
-      if (signal?.aborted) throw error;
+      // The person's Stop is a stop, and a paused device is paused: neither is a missing list to ask
+      // about, and the model is told which it was.
+      if (signal?.aborted || error instanceof DeviceDeliveryError) throw error;
       return undefined;
     }
   }

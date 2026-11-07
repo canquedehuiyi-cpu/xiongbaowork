@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { computerActionOrigin } from "../computer/action-identity";
 import {
   actionFingerprint,
+  DEVICE_PAUSED,
   DeviceDeliveryError,
   type DeviceQueue,
 } from "./queue";
@@ -405,8 +406,16 @@ export function createDeviceChannel(options?: {
       if (mode?.durable === false) {
         if (!self.isReachable(target))
           return Promise.reject(new DeviceOfflineError(target.deviceId));
-        // `sendDirect` asks `authorize` itself before writing the frame.
-        return sendDirect<T>(target, action, payload, timeoutMs, key, caller);
+        return (async () => {
+          /*
+           * A paused device takes nothing new, not even a read: the person has not checked the
+           * action whose outcome is unknown yet, and a read can still start a program there.
+           */
+          if (queue && (await queue.uncertain(target)) > 0)
+            throw new DeviceDeliveryError(DEVICE_PAUSED, false);
+          // `sendDirect` asks `authorize` itself before writing the frame.
+          return sendDirect<T>(target, action, payload, timeoutMs, key, caller);
+        })();
       }
       const offer = (): Promise<T> => {
         if (!self.isReachable(target)) {
