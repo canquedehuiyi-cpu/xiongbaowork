@@ -97,6 +97,7 @@ function ReachabilityPage() {
     deviceRemove.error;
   return (
     <PageShell
+      width="workbench"
       title="可达性"
       description="在 Slack、Microsoft Teams、短信或你的手机上把一段对话接下去。提问与审批请求，找的是这段对话同一个主人。"
     >

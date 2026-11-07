@@ -1,11 +1,14 @@
 import {
+  IconAt,
   IconBolt,
   IconBook,
   IconBox,
   IconBoxSeam,
   IconBrain,
   IconChecks,
-  IconDeviceMobile,
+  IconChevronDown,
+  IconDots,
+  IconLayoutKanban,
   IconLogout,
   IconPlus,
   IconRobot,
@@ -13,7 +16,9 @@ import {
   IconSearch,
   IconSettings,
   IconShieldLock,
+  IconSparkles,
   IconTargetArrow,
+  IconUserCircle,
   IconUsers,
   IconUsersGroup,
 } from "@tabler/icons-react";
@@ -33,6 +38,10 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import type * as React from "react";
 import { useRef, useState } from "react";
 import { ChannelAvatar } from "@/components/channels/avatar";
+import {
+  type SegmentedTab,
+  SegmentedTabs,
+} from "@/components/layout/segmented-tabs";
 import { UsagePanel } from "@/components/quota/usage-panel";
 import {
   DropdownMenu,
@@ -50,7 +59,6 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
@@ -68,12 +76,13 @@ import { useChannelEvents } from "@/lib/channels/use-channel-events";
 import { appConfig } from "@/lib/generated/application-config";
 import { EASE_OUT, ENTRANCE_SECONDS } from "@/lib/motion";
 import { relativeTime } from "@/lib/relative-time";
+import { cn } from "@/lib/utils";
 import {
   type MessageListEmphasis,
   useMessageListEmphasis,
 } from "@/lib/settings/message-list";
 import { BotAttentionList } from "../bot-profile/attention";
-import { Button } from "../ui/button";
+import { buttonVariants } from "../ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "../ui/empty";
 import { Channel } from "./channel";
 import { ChannelPagination } from "./channel-pagination";
@@ -229,6 +238,97 @@ function ChannelRow({
   );
 }
 
+/** Which roster tab a conversation belongs to: two or more coworkers is a group conversation. */
+export function channelTab(channel: ChannelSummary): ConversationTab {
+  return channel.agentIds.length > 1 ? "groups" : "wakers";
+}
+
+type ConversationTab = "wakers" | "groups";
+
+const CONVERSATION_TABS = [
+  { value: "wakers", label: "员工" },
+  { value: "groups", label: "群组" },
+] as const satisfies readonly SegmentedTab<ConversationTab>[];
+
+/*
+ * The reference product's workbench: five primary entries, in this order, above everything else.
+ * Paths are this product's own (docs/plans/2026-11-07-qoderwake-cn-frontend-parity.md maps
+ * /work-management → /tasks, /at-waker → /reachability, /autonomous-work → /autonomous,
+ * /management → /wakers, /resources/plugins → /resources); the existing URLs are a compatibility
+ * contract, so the labels move and the links do not.
+ */
+const PRIMARY_NAV = [
+  { to: "/tasks", label: "任务看板", icon: IconLayoutKanban },
+  { to: "/reachability", label: "@Waker", icon: IconAt },
+  { to: "/autonomous", label: "自主工作", icon: IconBolt },
+  { to: "/wakers", label: "Waker 管理", icon: IconUsers },
+  { to: "/resources", label: "能力与资源", icon: IconBoxSeam },
+] as const;
+
+/*
+ * Everything this product had in its sidebar before the workbench layout, kept one click away.
+ * None of these are in the reference's primary navigation, and every one of them is a route
+ * somebody may have bookmarked or be used to — so they fold away rather than disappear.
+ */
+const MORE_NAV = [
+  { to: "/pipelines", label: "组团流程", icon: IconRoute },
+  { to: "/bots", label: "Bot 会话", icon: IconRobot },
+  { to: "/skills", label: "技能", icon: IconBox },
+  { to: "/agents", label: "员工列表", icon: IconUserCircle },
+  { to: "/team-bots", label: "团队 Bot", icon: IconUsersGroup },
+  { to: "/responsibilities", label: "职责", icon: IconTargetArrow },
+  { to: "/memory", label: "记忆", icon: IconBrain },
+  { to: "/knowledge", label: "知识库", icon: IconBook },
+  { to: "/approvals", label: "审批", icon: IconChecks },
+] as const;
+
+const MORE_STORAGE_KEY = "openbot-sidebar-more";
+
+function readMoreOpen(): boolean {
+  try {
+    return window.localStorage.getItem(MORE_STORAGE_KEY) === "open";
+  } catch {
+    return false;
+  }
+}
+
+function writeMoreOpen(open: boolean) {
+  try {
+    window.localStorage.setItem(MORE_STORAGE_KEY, open ? "open" : "closed");
+  } catch {
+    // A browser that refuses storage still gets a working disclosure; it just will not remember.
+  }
+}
+
+/*
+ * One nav row. 32 CSS px tall — the reference's sidebar link height — written in px rather than
+ * Tailwind's rem steps because this app's root font size is 15px, where `h-8` comes out at 30.
+ */
+const navRowClassName =
+  "h-[32px] gap-2.5 px-2.5 text-[13px] text-sidebar-foreground/75 hover:bg-foreground/5 hover:text-sidebar-foreground data-[status=active]:bg-foreground/[0.07] data-[status=active]:font-medium data-[status=active]:text-sidebar-foreground [&>svg]:size-[16px]";
+
+function NavRow({
+  to,
+  label,
+  icon: Icon,
+}: {
+  to: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+}) {
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        className={navRowClassName}
+        render={(props) => <Link {...props} to={to} />}
+      >
+        <Icon />
+        <span className="truncate">{label}</span>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  );
+}
+
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const emphasis = useMessageListEmphasis();
   const { data: currentUser } = useQuery(currentUserQueryOptions());
@@ -243,9 +343,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   // One socket for the app, opened where the roster is kept live.
   useChannelEvents();
   const [search, setSearch] = useState("");
+  const [tab, setTab] = useState<ConversationTab>("wakers");
+  const [moreOpen, setMoreOpen] = useState(readMoreOpen);
   const scrollRoot = useRef<HTMLDivElement>(null);
   const searching = search.trim().length > 0;
-  const visibleChannels = pinnedFirst(matchingChannels(channels.data, search));
+  const tabChannels = channels.data?.filter(
+    (channel) => channelTab(channel) === tab,
+  );
+  const visibleChannels = pinnedFirst(matchingChannels(tabChannels, search));
   /*
    * FILTERING DOES NOT ANIMATE. Rows exit and relayout on every keystroke otherwise, which is a
    * list thrashing under somebody who is still typing — and the moving target is the very thing
@@ -254,64 +359,122 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
    */
   const animateOrder =
     !searching && (channels.data?.length ?? 0) <= MAX_ANIMATED_ROWS;
+  const newConversation =
+    tab === "groups"
+      ? { to: "/group/new", label: "新建群聊", icon: IconUsersGroup }
+      : { to: "/channel/new", label: "新建会话", icon: IconPlus };
 
   const handleSignOut = async () => {
     await signOut.mutateAsync();
     await navigate({ to: "/sign" });
   };
 
+  const toggleMore = () => {
+    setMoreOpen((open) => {
+      writeMoreOpen(!open);
+      return !open;
+    });
+  };
+
   return (
     <Sidebar {...props}>
-      <SidebarHeader className="h-12 p-2">
-        <SidebarMenu>
-          <SidebarMenuItem className="flex flex-row gap-1.5">
-            <SidebarMenuButton
-              className="font-semibold text-[14px] tracking-tighter h-full leading-tight"
-              render={(props) => (
-                <Link {...appLinkOptions} {...props}>
-                  {appConfig.brand.productName}
-                </Link>
-              )}
-            />
-            <Button
-              size="icon"
-              variant="ghost"
-              render={(props) => (
-                <Link
-                  {...props}
-                  to="/channel/new"
-                  activeProps={{
-                    className: "bg-foreground/5",
-                  }}
-                />
-              )}
-            >
-              <IconPlus />
-            </Button>
-            <Button
-              aria-label="新建群聊"
-              size="icon"
-              variant="ghost"
-              render={(props) => (
-                <Link
-                  {...props}
-                  to="/group/new"
-                  activeProps={{
-                    className: "bg-foreground/5",
-                  }}
-                />
-              )}
-            >
-              <IconUsersGroup />
-            </Button>
-          </SidebarMenuItem>
-        </SidebarMenu>
+      <SidebarHeader className="h-12 justify-center px-3 py-0">
+        <Link
+          {...appLinkOptions}
+          className="flex h-[32px] items-center gap-2 rounded-md px-1 font-semibold text-[14px] tracking-tight outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+        >
+          <span
+            aria-hidden="true"
+            className="flex size-[22px] items-center justify-center rounded-md bg-primary font-bold text-[12px] text-primary-foreground"
+          >
+            {appConfig.brand.productName.slice(0, 1)}
+          </span>
+          <span className="truncate">{appConfig.brand.productName}</span>
+        </Link>
       </SidebarHeader>
-      <SidebarContent ref={scrollRoot} className="scroll-fade-b">
-        <SidebarMenu>
-          <SidebarGroup className="gap-px">
+      <SidebarContent ref={scrollRoot} className="scroll-fade-b gap-0">
+        {/* Segment one: the workbench. */}
+        <SidebarGroup className="px-2 py-1">
+          <nav aria-label="主导航">
+            <SidebarMenu className="gap-0.5">
+              {PRIMARY_NAV.map((item) => (
+                <NavRow key={item.to} {...item} />
+              ))}
+            </SidebarMenu>
+          </nav>
+        </SidebarGroup>
+        {/* Segment two: this product's own destinations, folded. */}
+        <SidebarGroup className="px-2 py-0">
+          <SidebarMenu className="gap-0.5">
             <SidebarMenuItem>
-              <InputGroup className="bg-background text-sm rounded-lg h-9">
+              <SidebarMenuButton
+                aria-controls="sidebar-more-nav"
+                aria-expanded={moreOpen}
+                className={navRowClassName}
+                onClick={toggleMore}
+              >
+                <IconDots />
+                <span className="flex-1 truncate">更多</span>
+                <IconChevronDown
+                  className={moreOpen ? "rotate-180" : undefined}
+                />
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+          {moreOpen ? (
+            <nav aria-label="更多入口" id="sidebar-more-nav">
+              <SidebarMenu className="gap-0.5 pt-0.5">
+                {MORE_NAV.map((item) => (
+                  <NavRow key={item.to} {...item} />
+                ))}
+                {/* Team Bots an administrator assigned to this person: always here, never hidden. */}
+                {assignedTeamBots.map((bot) => (
+                  <SidebarMenuItem key={bot.id}>
+                    <SidebarMenuButton
+                      className={navRowClassName}
+                      render={(props) => (
+                        <Link
+                          {...props}
+                          search={{ agent: bot.id }}
+                          to="/channel/new"
+                        />
+                      )}
+                    >
+                      <ChannelAvatar participantIds={[bot.id]} size={16} />
+                      <span className="truncate">{bot.name}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </nav>
+          ) : null}
+        </SidebarGroup>
+        <div className="mx-4 my-2 border-sidebar-border border-t" />
+        <SidebarGroup className="gap-1 px-2 pt-0">
+          <div className="flex items-center justify-between gap-2 px-1">
+            <SegmentedTabs
+              label="会话类型"
+              onValueChange={setTab}
+              size="sm"
+              tabs={CONVERSATION_TABS}
+              value={tab}
+            />
+            <Link
+              activeProps={{ className: "bg-foreground/5" }}
+              aria-label={newConversation.label}
+              className={cn(
+                buttonVariants({ size: "icon", variant: "ghost" }),
+                "size-[28px]",
+              )}
+              title={newConversation.label}
+              to={newConversation.to}
+            >
+              <newConversation.icon />
+            </Link>
+          </div>
+          <SidebarMenu className="gap-px">
+            <SidebarMenuItem className="px-1 pb-1">
+              <InputGroup className="h-[32px] rounded-lg bg-background text-[13px]">
                 <InputGroupInput
                   aria-label="搜索会话"
                   onChange={(event) => setSearch(event.target.value)}
@@ -323,7 +486,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 </InputGroupAddon>
               </InputGroup>
             </SidebarMenuItem>
-            <div className="w-full h-2" />
             {/* Bots that need you, or that you paused. See bot-profile/attention.tsx. */}
             <BotAttentionList />
             {/*
@@ -334,7 +496,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
              */}
             {searching && visibleChannels.length === 0 ? (
               <div className="py-4">
-                <Empty className="border border-dashed min-h-[40dvh]">
+                <Empty className="border border-dashed min-h-[30dvh]">
                   <EmptyHeader>
                     <EmptyTitle>
                       {channels.hasNextPage
@@ -350,19 +512,24 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 </Empty>
               </div>
             ) : null}
-            {!searching && channels.data?.length === 0 ? (
+            {!searching && tabChannels?.length === 0 ? (
               <div className="py-4">
-                <Empty className="border border-dashed min-h-[40dvh]">
+                <Empty className="border border-dashed min-h-[30dvh]">
                   <EmptyHeader>
-                    <EmptyTitle>你还没有会话</EmptyTitle>
+                    <EmptyTitle>
+                      {tab === "groups" ? "还没有群组会话" : "你还没有会话"}
+                    </EmptyTitle>
                     <EmptyDescription className="text-pretty">
-                      开始和员工对话，你的会话就会出现在这里。
+                      {tab === "groups"
+                        ? "把几位员工拉进同一段对话，群组会话就会出现在这里。"
+                        : "开始和员工对话，你的会话就会出现在这里。"}
                     </EmptyDescription>
                   </EmptyHeader>
                 </Empty>
               </div>
             ) : null}
-            <AnimatePresence initial={false}>
+            {/* Keyed by tab: switching views swaps the list outright, like filtering does. */}
+            <AnimatePresence initial={false} key={tab}>
               {visibleChannels.map((channel) => (
                 <ChannelRow
                   emphasis={emphasis}
@@ -377,306 +544,30 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               scrollRoot={scrollRoot}
               searching={searching}
             />
-          </SidebarGroup>
-        </SidebarMenu>
+          </SidebarMenu>
+        </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter>
+      <SidebarFooter className="gap-1.5 px-2 pb-2">
         {/*
-         * The plan and its usage, above the navigation that closes the footer: it is the one number a
-         * person reads just before something is refused, and it has to be somewhere they already look.
+         * The plan and its usage, above the account row: it is the one number a person reads just
+         * before something is refused, and it has to be somewhere they already look.
          */}
         <UsagePanel />
-        {/*
-         * Spec A1: "工作管理 > 任务看板". The heading names the group the board opens, so the way in
-         * reads the same as the spec and the reference product's navigation.
-         */}
-        <SidebarGroupLabel>工作管理</SidebarGroupLabel>
-        <SidebarMenu className="gap-px">
-          <SidebarMenuItem>
-            {/* The board first: it is the way in from "things", not from "chats". */}
-            <SidebarMenuButton
-              className="hover:bg-foreground/5 h-10"
-              render={(props) => (
-                <Link
-                  {...props}
-                  to="/tasks"
-                  activeProps={{ className: "bg-foreground/5" }}
-                />
-              )}
-            >
-              <div className="size-[28px] flex items-center justify-center">
-                <IconBox />
-              </div>
-              <span className="text-sm">任务看板</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            {/* The crew view: which coworkers are answering, and which of them answer to one name. */}
-            <SidebarMenuButton
-              className="hover:bg-foreground/5 h-10"
-              render={(props) => (
-                <Link
-                  {...props}
-                  to="/wakers"
-                  activeProps={{ className: "bg-foreground/5" }}
-                />
-              )}
-            >
-              <div className="size-[28px] flex items-center justify-center">
-                <IconUsers />
-              </div>
-              <span className="text-sm">员工</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            {/* A crew's plans: who does what first, and where a run got to (ticket 021). */}
-            <SidebarMenuButton
-              className="hover:bg-foreground/5 h-10"
-              render={(props) => (
-                <Link
-                  {...props}
-                  to="/pipelines"
-                  activeProps={{ className: "bg-foreground/5" }}
-                />
-              )}
-            >
-              <div className="size-[28px] flex items-center justify-center">
-                <IconRoute />
-              </div>
-              <span className="text-sm">组团流程</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            {/* What the coworkers do unattended: the schedules, the goals, the check-ins. */}
-            <SidebarMenuButton
-              className="hover:bg-foreground/5 h-10"
-              render={(props) => (
-                <Link
-                  {...props}
-                  to="/autonomous"
-                  activeProps={{ className: "bg-foreground/5" }}
-                />
-              )}
-            >
-              <div className="size-[28px] flex items-center justify-center">
-                <IconBolt />
-              </div>
-              <span className="text-sm">自主工作</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              className="hover:bg-foreground/5 h-10"
-              render={(props) => (
-                <Link
-                  {...props}
-                  to="/bots"
-                  activeProps={{ className: "bg-foreground/5" }}
-                />
-              )}
-            >
-              <div className="size-[28px] flex items-center justify-center">
-                <IconRobot />
-              </div>
-              <span className="text-sm">Bot 会话</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            {/*
-             * One screen for everything a coworker can be given. The question is asked as one
-             * question — "what can my developer use?" — and answering it from four screens, one of
-             * which is behind the administrator's door and none of which is models, is how a person
-             * ends up certain a capability does not exist.
-             */}
-            <SidebarMenuButton
-              className="hover:bg-foreground/5 h-10"
-              render={(props) => (
-                <Link
-                  {...props}
-                  to="/resources"
-                  activeProps={{ className: "bg-foreground/5" }}
-                />
-              )}
-            >
-              <div className="size-[28px] flex items-center justify-center">
-                <IconBoxSeam />
-              </div>
-              <span className="text-sm">能力与资源</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            {/* Beside Agents rather than inside Admin: writing a skill is something anybody does. */}
-            <SidebarMenuButton
-              className="hover:bg-foreground/5 h-10"
-              render={(props) => (
-                <Link
-                  {...props}
-                  to="/skills"
-                  activeProps={{
-                    className: "bg-foreground/5",
-                  }}
-                />
-              )}
-            >
-              <div className="size-[28px] flex items-center justify-center">
-                <IconBox />
-              </div>
-              <span className="text-sm trackint-tight">技能</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              className="hover:bg-foreground/5 h-10"
-              render={(props) => (
-                <Link
-                  {...props}
-                  to="/agents"
-                  activeProps={{
-                    className: "bg-foreground/5",
-                  }}
-                />
-              )}
-            >
-              <div className="size-[28px] flex items-center justify-center">
-                <IconBolt />
-              </div>
-              <span className="text-sm trackint-tight">员工</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              className="hover:bg-foreground/5 h-10"
-              render={(props) => (
-                <Link
-                  {...props}
-                  to="/team-bots"
-                  activeProps={{ className: "bg-foreground/5" }}
-                />
-              )}
-            >
-              <div className="size-[28px] flex items-center justify-center">
-                <IconUsers />
-              </div>
-              <span className="text-sm">团队 Bot</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          {/* Team Bots an administrator assigned to this person: always here, never hidden. */}
-          {assignedTeamBots.map((bot) => (
-            <SidebarMenuItem key={bot.id}>
-              <SidebarMenuButton
-                className="hover:bg-foreground/5 h-10"
-                render={(props) => (
-                  <Link
-                    {...props}
-                    search={{ agent: bot.id }}
-                    to="/channel/new"
-                  />
-                )}
-              >
-                <div className="size-[28px] flex items-center justify-center">
-                  <ChannelAvatar participantIds={[bot.id]} size={22} />
-                </div>
-                <span className="text-sm">{bot.name}</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          ))}
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              className="hover:bg-foreground/5 h-10"
-              render={(props) => (
-                <Link
-                  {...props}
-                  to="/reachability"
-                  activeProps={{ className: "bg-foreground/5" }}
-                />
-              )}
-            >
-              <div className="size-[28px] flex items-center justify-center">
-                <IconDeviceMobile />
-              </div>
-              <span className="text-sm">可达性</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          {/* Routines live on each coworker's own dialog now, not as a nav destination: the
-              question "what does this Bot do on a schedule" is asked while looking at the Bot.
-              The /routines route still answers a direct link. */}
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              className="hover:bg-foreground/5 h-10"
-              render={(props) => (
-                <Link
-                  {...props}
-                  to="/responsibilities"
-                  activeProps={{ className: "bg-foreground/5" }}
-                />
-              )}
-            >
-              <div className="size-[28px] flex items-center justify-center">
-                <IconTargetArrow />
-              </div>
-              <span className="text-sm">职责</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              className="hover:bg-foreground/5 h-10"
-              render={(props) => (
-                <Link
-                  {...props}
-                  to="/memory"
-                  activeProps={{ className: "bg-foreground/5" }}
-                />
-              )}
-            >
-              <div className="size-[28px] flex items-center justify-center">
-                <IconBrain />
-              </div>
-              <span className="text-sm">记忆</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              className="hover:bg-foreground/5 h-10"
-              render={(props) => (
-                <Link
-                  {...props}
-                  to="/knowledge"
-                  activeProps={{ className: "bg-foreground/5" }}
-                />
-              )}
-            >
-              <div className="size-[28px] flex items-center justify-center">
-                <IconBook />
-              </div>
-              <span className="text-sm">知识库</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              className="hover:bg-foreground/5 h-10"
-              render={(props) => (
-                <Link
-                  {...props}
-                  to="/approvals"
-                  activeProps={{ className: "bg-foreground/5" }}
-                />
-              )}
-            >
-              <div className="size-[28px] flex items-center justify-center">
-                <IconChecks />
-              </div>
-              <span className="text-sm">审批</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
+        <SidebarMenu className="gap-0.5">
+          {/*
+           * The reference's small butler at the foot of the sidebar, mapped onto what this product
+           * already has: the default assistant at /bot.
+           */}
+          <NavRow icon={IconSparkles} label="小管家" to="/bot" />
+          <SidebarMenuItem className="flex items-center gap-1">
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={
-                  <SidebarMenuButton className="hover:bg-foreground/5 h-10" />
+                  <SidebarMenuButton className="h-[36px] min-w-0 flex-1 gap-2 px-1.5 hover:bg-foreground/5" />
                 }
               >
                 <UserAvatar />
-                <span className="text-sm trackint-tight">
+                <span className="truncate text-[13px]">
                   {currentUser?.name || currentUser?.email}
                 </span>
               </DropdownMenuTrigger>
@@ -701,7 +592,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   render={<Link {...settingsLinkOptions} />}
                 >
                   <IconSettings />
-                  设置
+                  账户设置
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className={userMenuItemClassName}
@@ -714,6 +605,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            <Link
+              {...settingsLinkOptions}
+              activeProps={{ className: "bg-foreground/5" }}
+              aria-label="设置"
+              className={cn(
+                buttonVariants({ size: "icon", variant: "ghost" }),
+                "size-[32px] shrink-0",
+              )}
+              title="设置"
+            >
+              <IconSettings />
+            </Link>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>

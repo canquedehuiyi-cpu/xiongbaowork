@@ -185,6 +185,7 @@ function RouteComponent() {
 
   return (
     <PageShell
+      width="workbench"
       action={
         <div className="flex gap-2">
           {/* Story ROLE1: the role templates new and existing coworkers are made from. */}

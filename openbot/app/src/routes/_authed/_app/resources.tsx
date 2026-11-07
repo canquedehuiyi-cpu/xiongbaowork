@@ -90,6 +90,7 @@ export const Route = createFileRoute("/_authed/_app/resources")({
 function ResourcesPage() {
   return (
     <PageShell
+      width="workbench"
       description="你的员工能被赋予的东西：它们用来回答的模型、它们持有的技能与连接器、它们读取的来源，以及它们直接给出的界面。"
       title="能力与资源"
     >

@@ -142,6 +142,7 @@ function RouteComponent() {
 
   return (
     <PageShell
+      width="workbench"
       description="这位数字员工自己安排的定时任务、长期职责与主动巡检，以及它们上一次的结果。"
       title="自主工作"
     >
