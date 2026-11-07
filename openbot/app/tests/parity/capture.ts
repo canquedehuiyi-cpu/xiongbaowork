@@ -40,18 +40,12 @@ export const ROUTES: RouteSpec[] = [
   { path: "/reachability", main: true },
   { path: "/autonomous", main: true },
   { path: "/wakers", main: true },
-  {
-    // The 员工/小组 switch is component state, not a search param, so it is clicked rather than linked.
-    path: "/wakers",
-    slug: "wakers-groups",
-    prepare: async (page) => {
-      await page
-        .locator("main")
-        .getByRole("button", { name: "小组", exact: true })
-        .click();
-    },
-  },
+  // The reference's `/management?tab=groups`; ours deep-links the same way.
+  { path: "/wakers?tab=groups", slug: "wakers-groups" },
   { path: "/resources", main: true },
+  { path: "/resources?tab=skills", slug: "resources-skills" },
+  { path: "/resources?tab=wakerflows", slug: "resources-wakerflows" },
+  { path: "/autonomous?view=agents", slug: "autonomous-agents" },
   { path: "/skills" },
   { path: "/knowledge" },
   { path: "/wakerflows" },

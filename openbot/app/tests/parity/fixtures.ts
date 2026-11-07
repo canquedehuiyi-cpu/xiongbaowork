@@ -18,7 +18,7 @@ import type {
   EmployeePermissions,
 } from "@/lib/approvals";
 import type { AuthenticatedUser } from "@/lib/auth/queries";
-import type { Automation } from "@/lib/automations/queries";
+import type { Automation, AutomationTrigger } from "@/lib/automations/queries";
 import type { AutonomousSummary } from "@/lib/autonomous/queries";
 import type { AvatarSourceState } from "@/lib/avatar/sources";
 import type {
@@ -1111,6 +1111,51 @@ const AUTOMATIONS: Automation[] = [
   },
 ];
 
+/** Each automation's triggers, as `GET /api/automations/:id` answers them. */
+const AUTOMATION_TRIGGERS: Record<string, AutomationTrigger[]> = {
+  "automation-01": [
+    {
+      id: "trigger-01",
+      automationId: "automation-01",
+      config: {
+        kind: "schedule",
+        cron: "30 8 * * 1-5",
+        timezone: "Asia/Shanghai",
+      },
+      enabled: true,
+      nextRunAt: at(150),
+      hasSecret: false,
+      lastError: null,
+    },
+  ],
+  "automation-02": [
+    {
+      id: "trigger-02",
+      automationId: "automation-02",
+      config: { kind: "webhook" },
+      enabled: false,
+      nextRunAt: null,
+      hasSecret: true,
+      lastError: "连续 3 次执行失败，已熔断",
+    },
+  ],
+  "automation-03": [
+    {
+      id: "trigger-03",
+      automationId: "automation-03",
+      config: {
+        kind: "schedule",
+        cron: "0 17 * * 5",
+        timezone: "Asia/Shanghai",
+      },
+      enabled: true,
+      nextRunAt: at(160),
+      hasSecret: false,
+      lastError: null,
+    },
+  ],
+};
+
 const FLOWS: WakerFlow[] = [
   {
     id: "flow-weekly",
@@ -2063,6 +2108,17 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
     "GET",
     /^\/api\/automations$/,
     (c) => ok({ automations: list(c, AUTOMATIONS) }),
+  ],
+  [
+    "GET",
+    /^\/api\/automations\/([^/]+)$/,
+    (c) => {
+      const id = decodeURIComponent(c.match[1]!);
+      const found = list(c, AUTOMATIONS).find((entry) => entry.id === id);
+      return found
+        ? ok({ automation: found, triggers: AUTOMATION_TRIGGERS[id] ?? [] })
+        : { status: 404, body: { error: "没有这条自动任务" } };
+    },
   ],
   ["GET", /^\/api\/wakerflows$/, (c) => ok({ flows: list(c, FLOWS) })],
   [

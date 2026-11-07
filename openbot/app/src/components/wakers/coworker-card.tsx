@@ -199,8 +199,8 @@ export function CoworkerCard({
         )}
       </div>
 
-      <div className="flex items-center justify-between gap-2 border-t pt-3">
-        <div className="flex min-w-0 gap-3 text-muted-foreground text-xs tabular-nums">
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 border-t pt-3">
+        <div className="flex min-w-0 gap-3 whitespace-nowrap text-muted-foreground text-xs tabular-nums">
           <span
             data-task-count=""
             title={
@@ -213,7 +213,7 @@ export function CoworkerCard({
           </span>
           <span data-last-run="">最近运行 {lastRun}</span>
         </div>
-        <ItemActions className="relative z-10 shrink-0 gap-1">
+        <ItemActions className="relative z-10 ml-auto shrink-0 gap-1">
           {/*
             Pause and resume are offered only once the pause read answered: without it the screen
             does not know which of the two is the next step, and guessing would send a resume to a
