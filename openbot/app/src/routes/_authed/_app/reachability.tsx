@@ -1,8 +1,8 @@
 import {
-  IconBolt,
-  IconMessagePlus,
+  IconListCheck,
+  IconPlugConnected,
+  IconPlus,
   IconRobot,
-  IconUserCheck,
 } from "@tabler/icons-react";
 import {
   useInfiniteQuery,
@@ -31,6 +31,7 @@ import {
 } from "@/components/reachability/link-conversation-dialog";
 import { RecentDeliveries } from "@/components/reachability/recent-deliveries";
 import { WakerScene } from "@/components/reachability/waker-scene";
+import { Button } from "@/components/ui/button";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import { channelListQueryOptions } from "@/lib/channels/queries";
 import {
@@ -40,7 +41,6 @@ import {
   removePushDevice,
 } from "@/lib/delivery";
 import { modelLibraryQueryOptions } from "@/lib/models/queries";
-import { cn } from "@/lib/utils";
 
 /**
  * @Waker (the reference's `/at-waker`): where a conversation is carried on outside this app.
@@ -56,56 +56,65 @@ export const Route = createFileRoute("/_authed/_app/reachability")({
 
 type Entry = "im" | "accounts" | "auto" | "requests";
 
-function EntryTile({
+/**
+ * The hero's headline, three lines, and the page's one h1.
+ *
+ * The reference has no page title above its hero: the headline IS the heading. `PageShell` always
+ * draws its title as the h1, so the headline is passed as that title and {@link HERO_FRAME}
+ * restyles it in place — rather than hiding PageShell's h1 and drawing a second one.
+ */
+const HEADLINE = "@员工\n将员工接入群聊或私聊\n在 IM 中持续承接团队工作";
+
+/*
+ * The hero, measured against docs/acceptance/qoderwake-reference/reachability.png (1696×850, CSS
+ * px): the scene's card spans y 40–320 with its right edge on the column's; the headline is 32px
+ * bold on a 36px line, its first line green; the entry buttons sit 42px under it; the text block is
+ * centred against the scene. PageShell lays its header out first, the scene second, the rest after,
+ * so from 1100px wide the frame becomes a two-column grid with the rest spanning both columns.
+ * The selectors reach into PageShell's header (header > div > h1, its title row) because that
+ * component is shared and takes no props for this.
+ */
+const HERO_FRAME = [
+  "pt-[40px]",
+  "min-[1100px]:grid min-[1100px]:grid-cols-[minmax(0,1fr)_minmax(0,624px)] min-[1100px]:gap-x-[40px]",
+  "[&>header]:self-center",
+  "[&>header>div]:flex-col [&>header>div]:items-start [&>header>div]:justify-start [&>header>div]:gap-[42px]",
+  "[&>header_h1]:whitespace-pre-line [&>header_h1]:font-bold [&>header_h1]:tracking-normal",
+  // A phone keeps each line whole: 26px fits 将员工接入群聊或私聊 in 310px.
+  "[&>header_h1]:text-[26px] [&>header_h1]:leading-[32px] sm:[&>header_h1]:text-[32px] sm:[&>header_h1]:leading-[36px]",
+  "[&>header_h1::first-line]:text-primary",
+].join(" ");
+
+function EntryButton({
   icon: Icon,
-  title,
-  hint,
+  label,
   badge,
-  muted,
+  primary,
+  title,
   onClick,
 }: {
   icon: ComponentType<{ className?: string }>;
-  title: string;
-  hint: string;
+  label: string;
   badge?: string;
-  muted?: boolean;
+  primary?: boolean;
+  title?: string;
   onClick: () => void;
 }) {
   return (
-    <button
-      className="flex min-h-[64px] items-start gap-3 rounded-lg border bg-card px-3 py-2.5 text-left outline-none transition-colors hover:bg-foreground/[0.04] focus-visible:ring-2 focus-visible:ring-ring/60"
+    <Button
+      className="h-[32px] gap-1.5 rounded-md px-3 font-medium text-[13px]"
       onClick={onClick}
-      type="button"
+      title={title}
+      variant={primary ? "default" : "outline"}
     >
-      <span
-        className={cn(
-          "mt-0.5 flex size-[32px] shrink-0 items-center justify-center rounded-md",
-          muted
-            ? "bg-foreground/[0.06] text-muted-foreground"
-            : "bg-primary/15 text-primary",
-        )}
-      >
-        <Icon className="size-4" />
-      </span>
-      <span className="grid min-w-0 gap-0.5">
-        <span className="flex flex-wrap items-center gap-2 text-[13px] font-medium">
-          {title}
-          {badge && (
-            <span
-              className={cn(
-                "rounded px-1.5 text-[11px] font-normal leading-[18px]",
-                muted
-                  ? "bg-foreground/[0.06] text-muted-foreground"
-                  : "bg-primary/15 text-primary",
-              )}
-            >
-              {badge}
-            </span>
-          )}
+      <Icon className="size-4" />
+      {label}
+      {badge && (
+        <span className="rounded bg-primary-foreground/15 px-1.5 font-normal text-[11px] leading-[18px]">
+          {badge}
         </span>
-        <span className="text-[12px] text-muted-foreground">{hint}</span>
-      </span>
-    </button>
+      )}
+    </Button>
   );
 }
 
@@ -153,71 +162,70 @@ function ReachabilityPage() {
   };
 
   return (
-    <PageShell width="workbench" title="@Waker">
-      <div className="mt-[20px] grid gap-8">
-        <div className="grid items-center gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,380px)]">
-          <div className="grid gap-4">
-            <p className="text-pretty text-[13px] text-muted-foreground">
-              让员工走出这个应用：在 Slack、Microsoft
-              Teams、短信或你的手机上把一段对话接下去。
-            </p>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <EntryTile
-                badge={flow.challengeId ? "待输入验证码" : undefined}
-                hint="关联 Slack、Teams 或手机号"
-                icon={IconMessagePlus}
-                onClick={() => setEntry("im")}
-                title="接入 IM 聊天"
-              />
-              <EntryTile
-                hint="可用的聊天机器人、号码与设备"
-                icon={IconRobot}
-                onClick={() => setEntry("accounts")}
-                title="机器人与账号"
-              />
-              <EntryTile
-                badge="未开放"
-                hint="新会话无需逐个关联"
-                icon={IconBolt}
-                muted
-                onClick={() => setEntry("auto")}
-                title="自动接入"
-              />
-              <EntryTile
-                badge="未开放"
-                hint="他人申请与你的员工对话"
-                icon={IconUserCheck}
-                muted
-                onClick={() => setEntry("requests")}
-                title="接入申请"
-              />
-            </div>
-          </div>
-          <WakerScene className="mx-auto max-w-[380px]" />
+    <PageShell
+      action={
+        <div className="flex flex-wrap items-center gap-[9px]">
+          <EntryButton
+            badge={flow.challengeId ? "待输入验证码" : undefined}
+            icon={IconPlus}
+            label="接入 IM 聊天"
+            onClick={() => setEntry("im")}
+            primary
+          />
+          <EntryButton
+            icon={IconRobot}
+            label="机器人与账号"
+            onClick={() => setEntry("accounts")}
+          />
+          <EntryButton
+            icon={IconPlugConnected}
+            label="自动接入"
+            onClick={() => setEntry("auto")}
+            title="未开放：点击查看原因"
+          />
+          <EntryButton
+            icon={IconListCheck}
+            label="接入申请"
+            onClick={() => setEntry("requests")}
+            title="未开放：点击查看原因"
+          />
         </div>
+      }
+      className={HERO_FRAME}
+      title={HEADLINE}
+      width="workbench"
+    >
+      <WakerScene className="mt-8 justify-self-end min-[1100px]:mt-0 min-[1100px]:-mr-[12px]" />
 
-        {reach.error && (
-          <QueryError
-            error={reach.error}
-            label={
-              reach.data ? "刷新失败，下面是上次读取的结果" : "无法读取接入状态"
-            }
-            onRetry={() => reach.refetch()}
-            retrying={reach.isFetching}
-          />
-        )}
-        {channels.error && !channels.data && (
-          <QueryError
-            error={channels.error}
-            label="无法读取会话名称"
-            onRetry={() => channels.refetch()}
-            retrying={channels.isFetching}
-          />
-        )}
-        {writeError && (
-          <p role="alert" className="text-[13px] text-destructive">
-            {writeError.message}
-          </p>
+      <div className="mt-[23px] grid grid-cols-[minmax(0,1fr)] gap-10 min-[1100px]:col-span-2">
+        {(reach.error || (channels.error && !channels.data) || writeError) && (
+          <div className="grid gap-3">
+            {reach.error && (
+              <QueryError
+                error={reach.error}
+                label={
+                  reach.data
+                    ? "刷新失败，下面是上次读取的结果"
+                    : "无法读取接入状态"
+                }
+                onRetry={() => reach.refetch()}
+                retrying={reach.isFetching}
+              />
+            )}
+            {channels.error && !channels.data && (
+              <QueryError
+                error={channels.error}
+                label="无法读取会话名称"
+                onRetry={() => channels.refetch()}
+                retrying={channels.isFetching}
+              />
+            )}
+            {writeError && (
+              <p role="alert" className="text-[13px] text-destructive">
+                {writeError.message}
+              </p>
+            )}
+          </div>
         )}
 
         {(reach.data || reach.isPending) && (
@@ -230,7 +238,6 @@ function ReachabilityPage() {
               removing: remove.isPending || deviceRemove.isPending,
             }}
             loading={reach.isPending}
-            onConnect={() => setEntry("im")}
             onSearch={onSearch}
             rows={rows}
             search={search}
@@ -239,36 +246,36 @@ function ReachabilityPage() {
         )}
 
         <RecentDeliveries deliveries={reach.data?.deliveries} />
-      </div>
 
-      <LinkConversationDialog
-        botName={botName}
-        flow={flow}
-        onOpenChange={close}
-        open={entry === "im"}
-        reach={reach.data}
-      />
-      <BotsAccountsDialog
-        onOpenChange={close}
-        open={entry === "accounts"}
-        reach={reach.data}
-      />
-      <UnavailableEntryDialog
-        action="开启自动接入"
-        description="让新的 IM 会话不必逐个关联，就自动接到你的员工。"
-        onOpenChange={close}
-        open={entry === "auto"}
-        reason="这个部署还没有自动接入的接口。目前每一条接入都由对话主人逐段发起：Slack、Teams 发一次性关联码，手机号收验证码。"
-        title="自动接入"
-      />
-      <UnavailableEntryDialog
-        action="查看接入申请"
-        description="IM 里的其他人申请与你的员工对话，由你逐条批准或拒绝。"
-        onOpenChange={close}
-        open={entry === "requests"}
-        reason="这个部署还没有接入申请的记录或审批接口。接入只能由对话主人本人发起，别人无法申请。"
-        title="接入申请"
-      />
+        <LinkConversationDialog
+          botName={botName}
+          flow={flow}
+          onOpenChange={close}
+          open={entry === "im"}
+          reach={reach.data}
+        />
+        <BotsAccountsDialog
+          onOpenChange={close}
+          open={entry === "accounts"}
+          reach={reach.data}
+        />
+        <UnavailableEntryDialog
+          action="开启自动接入"
+          description="让新的 IM 会话不必逐个关联，就自动接到你的员工。"
+          onOpenChange={close}
+          open={entry === "auto"}
+          reason="这个部署还没有自动接入的接口。目前每一条接入都由对话主人逐段发起：Slack、Teams 发一次性关联码，手机号收验证码。"
+          title="自动接入"
+        />
+        <UnavailableEntryDialog
+          action="查看接入申请"
+          description="IM 里的其他人申请与你的员工对话，由你逐条批准或拒绝。"
+          onOpenChange={close}
+          open={entry === "requests"}
+          reason="这个部署还没有接入申请的记录或审批接口。接入只能由对话主人本人发起，别人无法申请。"
+          title="接入申请"
+        />
+      </div>
     </PageShell>
   );
 }
