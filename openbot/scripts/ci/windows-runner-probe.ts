@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import {
   createRunnerExecutor,
@@ -11,6 +11,8 @@ import {
 } from "../../agent-computer/src/shell.ts";
 import { createActionJournal } from "../../runner/src/journal.ts";
 import { createRunnerDispatcher } from "../../runner/src/dispatch.ts";
+import { createAppHost } from "../../runner/src/app-host.ts";
+import { createAppRegistry } from "../../runner/src/apps.ts";
 
 const root = process.argv[2];
 if (!root || process.platform !== "win32")
@@ -281,4 +283,64 @@ for (const mode of ["abort", "timeout", "protocol"]) {
     assert(alive.status === 0, mode + ": descendant " + pid + " is gone");
   }
 }
+// Local MCP apps (device MCP bridge): a stdio app started directly, and one started through a `.cmd`
+// shim, which is how `npx` and `bunx` really start on Windows and so must go through cmd.exe.
+const appsDir = join(root, "apps-data");
+mkdirSync(appsDir, { recursive: true });
+const fixture = resolve(
+  import.meta.dir,
+  "../../runner/tests/fixtures/fake-mcp-stdio.ts",
+);
+const shim = join(appsDir, "fake-mcp.cmd");
+writeFileSync(shim, `@"${process.execPath}" "${fixture}" %*\r\n`);
+const appRegistry = createAppRegistry({ dataDir: appsDir });
+const direct = appRegistry.add({
+  kind: "stdio",
+  name: "direct",
+  command: process.execPath,
+  args: [fixture],
+  env: {},
+});
+const shimmed = appRegistry.add({
+  kind: "stdio",
+  name: "shim",
+  command: shim,
+  args: [],
+  env: {},
+});
+const appExecute = createRunnerExecutor(
+  root,
+  undefined,
+  undefined,
+  undefined,
+  createAppHost(appRegistry),
+);
+for (const [label, entry] of [
+  ["direct", direct],
+  ["cmd shim", shimmed],
+] as const) {
+  const tools = await appExecute({
+    action: "apps.tools",
+    payload: { app: entry.ref },
+  });
+  assert(
+    (
+      successfulOutput(tools).tools as { name: string }[]
+    )
+      .map((tool) => tool.name)
+      .join(",") === "echo,write_note,wipe",
+    `apps.tools lists the fake server's tools (${label})`,
+    tools,
+  );
+}
+const echoed = await appExecute({
+  action: "apps.call",
+  payload: { app: direct.ref, tool: "echo", args: { text: "熊宝-echo" } },
+});
+assert(
+  JSON.stringify(successfulOutput(echoed)).includes("熊宝-echo"),
+  "apps.call echo returns the text",
+  echoed,
+);
+await appExecute.closeApps();
 console.log("WINDOWS_PROBE_PASS");

@@ -15,6 +15,8 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { hostname, platform } from "node:os";
 import { join, resolve, sep } from "node:path";
+import { APP_REF, type AppEntry, type AppInput, createAppRegistry } from "./apps";
+import { createAppHost } from "./app-host";
 import { createRunnerBrowser, type RunnerBrowser } from "./browser";
 import {
   type CredentialStore,
@@ -247,6 +249,18 @@ export type RootCommand =
   | { kind: "remove"; target: string }
   | { kind: "list" };
 
+/** The flags that are an app command rather than a run (spec §3.1), and the one that takes no value. */
+const APP_FLAGS = new Set([
+  "list-apps",
+  "add-app",
+  "remove-app",
+  "test-app",
+  "enable-app",
+  "disable-app",
+]);
+const MIXED_FLAGS =
+  "Folder flags (--add-root, --remove-root, --list-roots) and app flags (--list-apps, --add-app, --remove-app, --test-app, --enable-app, --disable-app) cannot be used together.";
+
 /** The flags that are a root command rather than a run, and the one of them that takes no value. */
 const ROOT_FLAGS = new Set(["add-root", "remove-root", "list-roots"]);
 
@@ -269,6 +283,9 @@ export function parseRootCommand(
   | null {
   if (!argv.some((entry) => ROOT_FLAGS.has(entry.replace(/^--/, "")))) {
     return null;
+  }
+  if (argv.some((entry) => APP_FLAGS.has(entry.replace(/^--/, "")))) {
+    return MIXED_FLAGS;
   }
   const args = new Map<string, string>();
   for (let index = 0; index < argv.length; index += 1) {
@@ -363,6 +380,148 @@ export function runRootCommand(
   }
 }
 
+/** One change to, or check of, this machine's local MCP apps, asked for on the command line. */
+export type AppCommand =
+  | { kind: "list" }
+  | { kind: "add"; input: AppInput }
+  | { kind: "remove"; target: string }
+  | { kind: "test"; target: string }
+  | { kind: "enable"; target: string }
+  | { kind: "disable"; target: string };
+
+/**
+ * An app command and where its registry lives, null when the arguments are not one, or the sentence
+ * that says what was wrong. Like a root command it needs no `--server`, and it never mixes with a
+ * root command in one invocation.
+ */
+export function parseAppCommand(
+  argv: string[],
+  env: Record<string, string | undefined> = process.env,
+  cwd: string = process.cwd(),
+): { command: AppCommand; dataDir: string } | string | null {
+  if (!argv.some((entry) => APP_FLAGS.has(entry.replace(/^--/, "")))) {
+    return null;
+  }
+  if (argv.some((entry) => ROOT_FLAGS.has(entry.replace(/^--/, "")))) {
+    return MIXED_FLAGS;
+  }
+  const args = new Map<string, string>();
+  for (let index = 0; index < argv.length; index += 1) {
+    const entry = argv[index];
+    if (!entry?.startsWith("--")) return `Unknown argument: ${entry ?? ""}`;
+    const name = entry.slice(2);
+    if (name === "list-apps") {
+      args.set(name, "");
+      continue;
+    }
+    args.set(name, argv[index + 1] ?? "");
+    index += 1;
+  }
+  const asked = [...APP_FLAGS].filter((flag) => args.has(flag));
+  if (asked.length > 1)
+    return "Pass one of --list-apps, --add-app, --remove-app, --test-app, --enable-app or --disable-app.";
+  const paths = runnerPaths(args, env, cwd);
+  if (typeof paths === "string") return paths;
+  const flag = asked[0] ?? "";
+  const value = args.get(flag)?.trim() ?? "";
+  let command: AppCommand;
+  if (flag === "add-app") {
+    let input: unknown;
+    try {
+      input = JSON.parse(args.get(flag) ?? "");
+    } catch {
+      return '--add-app needs the app as a JSON object, for example \'{"kind":"stdio","name":"笔记","command":"npx","args":["-y","some-mcp"],"env":{}}\'.';
+    }
+    if (!input || typeof input !== "object" || Array.isArray(input))
+      return "--add-app needs the app as a JSON object.";
+    command = { kind: "add", input: input as AppInput };
+  } else if (flag === "list-apps") {
+    command = { kind: "list" };
+  } else {
+    if (!value) return `--${flag} needs the app's name or reference.`;
+    command = {
+      kind: flag.replace("-app", "") as "remove" | "test" | "enable" | "disable",
+      target: value,
+    };
+  }
+  return { command, dataDir: paths.dataDir };
+}
+
+/** Every environment value hidden: what is printed is read on screen, and a key must not be. */
+function maskedApp(app: AppEntry): AppEntry {
+  if (app.kind !== "stdio") return app;
+  return {
+    ...app,
+    env: Object.fromEntries(Object.keys(app.env).map((key) => [key, "••••"])),
+  };
+}
+
+/** Carry out an app command and print one JSON line, as `runRootCommand` does. */
+export async function runAppCommand(
+  parsed: { command: AppCommand; dataDir: string },
+  print: (line: string) => void = (line) => console.log(line),
+): Promise<number> {
+  const registry = createAppRegistry({ dataDir: parsed.dataDir });
+  const apps = () => registry.list().map(maskedApp);
+  try {
+    const { command } = parsed;
+    if (command.kind === "add") {
+      const app = maskedApp(registry.add(command.input));
+      print(JSON.stringify({ ok: true, app, apps: apps() }));
+      return 0;
+    }
+    if (command.kind === "remove") {
+      if (!registry.remove(command.target)) {
+        print(JSON.stringify({ ok: false, error: "没有找到这个应用。" }));
+        return 2;
+      }
+      print(JSON.stringify({ ok: true, apps: apps() }));
+      return 0;
+    }
+    if (command.kind === "enable" || command.kind === "disable") {
+      registry.setEnabled(command.target, command.kind === "enable");
+      print(JSON.stringify({ ok: true, apps: apps() }));
+      return 0;
+    }
+    if (command.kind === "test") {
+      const app = APP_REF.test(command.target)
+        ? registry.byRef(command.target)
+        : registry.byName(command.target);
+      if (!app) {
+        print(JSON.stringify({ ok: false, error: "没有找到这个应用。" }));
+        return 2;
+      }
+      const host = createAppHost(registry);
+      try {
+        const tools = await host.tools(app.ref);
+        print(
+          JSON.stringify({
+            ok: true,
+            tools: tools.map((tool) => tool.name),
+            count: tools.length,
+          }),
+        );
+        return 0;
+      } finally {
+        await host.closeAll();
+      }
+    }
+    print(JSON.stringify({ ok: true, apps: apps() }));
+    return 0;
+  } catch (error) {
+    print(
+      JSON.stringify({
+        ok: false,
+        error:
+          error instanceof Error && error.message
+            ? error.message
+            : "操作没有成功。",
+      }),
+    );
+    return 2;
+  }
+}
+
 export function parseArgs(
   argv: string[],
   env: Record<string, string | undefined> = process.env,
@@ -428,8 +587,15 @@ async function pair(options: Options, deviceId: string): Promise<string> {
  * Carried on every beat rather than once, so a folder added or removed with `--add-root` while this
  * runs reaches the owner's screen within one interval, without a restart.
  */
-export function heartbeatFrame(roots: Pick<RootRegistry, "reported">): string {
-  return JSON.stringify({ type: "heartbeat", roots: roots.reported() });
+export function heartbeatFrame(
+  roots: Pick<RootRegistry, "reported">,
+  apps?: Pick<ReturnType<typeof createAppRegistry>, "reported">,
+): string {
+  return JSON.stringify({
+    type: "heartbeat",
+    roots: roots.reported(),
+    ...(apps ? { apps: apps.reported() } : {}),
+  });
 }
 
 /**
@@ -447,6 +613,7 @@ function connect(
   dispatch: ReturnType<typeof createRunnerDispatcher>,
   browser: RunnerBrowser,
   roots: RootRegistry,
+  apps: ReturnType<typeof createAppRegistry>,
 ): Promise<void> {
   return new Promise((resolve) => {
     const url = `${options.server.replace(/^http/, "ws")}/api/runner/ws?token=${encodeURIComponent(token)}`;
@@ -485,10 +652,10 @@ function connect(
     socket.addEventListener("open", () => {
       open = true;
       console.log(`runner: connected as ${deviceId}`);
-      socket.send(heartbeatFrame(roots));
+      socket.send(heartbeatFrame(roots, apps));
       beat = setInterval(() => {
         try {
-          socket.send(heartbeatFrame(roots));
+          socket.send(heartbeatFrame(roots, apps));
         } catch {
           stop();
         }
@@ -531,6 +698,12 @@ export async function main(
     return 2;
   }
   if (rootCommand) return runRootCommand(rootCommand);
+  const appCommand = parseAppCommand(argv);
+  if (typeof appCommand === "string") {
+    console.error(appCommand);
+    return 2;
+  }
+  if (appCommand) return runAppCommand(appCommand);
   const parsed = parseArgs(argv);
   if (typeof parsed === "string") {
     console.error(parsed);
@@ -581,7 +754,15 @@ export async function main(
     dataDir: paths.dataDir,
     privatePaths: runnerPrivatePaths(paths, parsed.browser.profileRoot),
   });
-  const executor = createRunnerExecutor(paths.workspaceDir, browser, roots);
+  // The owner's local MCP apps: registered with --add-app, started only when a call needs one.
+  const apps = createAppRegistry({ dataDir: paths.dataDir });
+  const executor = createRunnerExecutor(
+    paths.workspaceDir,
+    browser,
+    roots,
+    undefined,
+    createAppHost(apps),
+  );
   running = executor;
 
   // Backoff between dials, capped: a deployment that is down should cost one request every half
@@ -590,7 +771,7 @@ export async function main(
   const dispatch = createRunnerDispatcher(journal, executor);
   let delay = 1_000;
   for (;;) {
-    await connect(parsed, token, deviceId, dispatch, browser, roots);
+    await connect(parsed, token, deviceId, dispatch, browser, roots, apps);
     await new Promise((resolve) => setTimeout(resolve, delay));
     delay = Math.min(delay * 2, 30_000);
   }
@@ -620,7 +801,14 @@ async function shutDown(reason: string): Promise<void> {
   );
   const budget = new Promise((wait) => setTimeout(wait, SHUTDOWN_BUDGET_MS));
   try {
-    await Promise.race([running?.closeBrowser() ?? Promise.resolve(), budget]);
+    await Promise.race([
+      // allSettled: a browser that fails to close must not stop the apps' process trees being killed.
+      Promise.allSettled([
+        running?.closeBrowser() ?? Promise.resolve(),
+        running?.closeApps() ?? Promise.resolve(),
+      ]),
+      budget,
+    ]);
   } catch {
     // Best effort. A browser that would not close is not a reason to stay alive.
   }
