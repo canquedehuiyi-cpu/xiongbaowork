@@ -209,7 +209,9 @@ export async function testApp(target, invoke) {
     const reply = /** @type {{ count: number, tools: string[] }} */ (
       await invoke("test_app", { target })
     );
-    const tools = reply.tools.length ? `：${reply.tools.join("、")}` : "";
+    const tools = (reply.tools ?? []).length
+      ? `：${(reply.tools ?? []).join("、")}`
+      : "";
     return { message: `连接成功，找到 ${reply.count} 个工具${tools}` };
   } catch (error) {
     return { error: String(error) };

@@ -237,10 +237,13 @@ $("app-form").addEventListener("submit", async (event) => {
       : { kind: "http", name: $("app-name").value, url: $("app-url").value },
     invoke,
   );
+  // The keys are write-only: gone from the field whether or not the add worked.
+  $("app-env").value = "";
   if ("error" in result) {
     $("app-error").textContent = result.error;
     return;
   }
+  $("app-status").textContent = "";
   for (const id of ["app-name", "app-command", "app-args", "app-env", "app-cwd", "app-url"]) {
     $(id).value = "";
   }
