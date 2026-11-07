@@ -22,6 +22,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
+import { wakersBackLink } from "@/components/wakers/wakers-search";
 import { type AgentProfile, agentQueryOptions } from "@/lib/agents/queries";
 import { avatarSourcesQueryOptions } from "@/lib/avatar/sources";
 import { agentRunningTasksQueryOptions } from "@/lib/bot-lifecycle/queries";
@@ -87,7 +88,10 @@ function WakerDetailPage() {
       agent.error instanceof RequestError && agent.error.status === 404;
     return (
       <PageShell
-        backButton={{ label: "数字员工", linkProps: { to: "/wakers" } }}
+        backButton={{
+          label: "Waker 管理",
+          linkProps: wakersBackLink(),
+        }}
         title="员工详情"
       >
         {missing ? (
@@ -126,7 +130,10 @@ function WakerDetailPage() {
           装配
         </Button>
       }
-      backButton={{ label: "数字员工", linkProps: { to: "/wakers" } }}
+      backButton={{
+        label: "Waker 管理",
+        linkProps: wakersBackLink(),
+      }}
       description={profile.title || undefined}
       title={profile.name}
     >
