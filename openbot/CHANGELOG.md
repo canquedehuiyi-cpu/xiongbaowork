@@ -10,6 +10,12 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## 0.2.3
 
+- **The MCP allowlist approves a curated connector again.** Admin > Enterprise controls saved the
+  server row id (`team:<key>`), while a tool call names the app (`<key>/<tool>`), so with 只用已批准的服务器
+  on, an approved curated connector was still refused by `mcp_allowlist`. The boundary now reads an
+  entry as approving the app it names or the app its row instantiates (from `catalogue_key`), so
+  lists already saved keep working; the screen lists one entry per app by its key and shows a saved
+  `team:<key>` as approved.
 - **Connecting a curated app by its `team:<key>` id works again.** The connect route, its OAuth
   callback and the memory-source check now resolve the catalogue entry from the row's
   `catalogue_key` (or the tool ref's app key), so `POST /api/plugins/servers/team%3A<key>/connect`
