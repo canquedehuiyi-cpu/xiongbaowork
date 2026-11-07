@@ -435,7 +435,7 @@ function PluginCardView({
         onClick={onOpen}
         type="button"
       >
-        <span className="sr-only">详情</span>
+        <span className="sr-only">详情：{card.title}</span>
       </button>
       <div className="absolute top-[12px] right-[12px] z-10 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100">
         <PluginAction card={card} isAdmin={isAdmin} status={status} />

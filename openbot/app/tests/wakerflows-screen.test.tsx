@@ -550,3 +550,12 @@ test("planning switched off on the server is a refusal, not a lost answer to cha
       .value,
   ).toBe("整理周报");
 });
+
+test("the way back from WakerFlow returns to its own tab of 能力与资源, not the first one", async () => {
+  serve();
+  const { view } = draw("/wakerflows");
+  const back = await view.findByText("能力与资源");
+  expect(back.closest("a")?.getAttribute("href")).toBe(
+    "/resources?tab=wakerflows",
+  );
+});

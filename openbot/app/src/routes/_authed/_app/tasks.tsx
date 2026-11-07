@@ -898,7 +898,11 @@ function TaskCard({
           <span className="opacity-70">
             连续失败 {breaker.failures} 次，{breakerSubject(breaker)}
           </span>
-          <Link className="underline opacity-80" to="/autonomous">
+          <Link
+            className="underline opacity-80"
+            search={{ status: "failed" }}
+            to="/autonomous"
+          >
             去自主工作页处理
           </Link>
         </div>

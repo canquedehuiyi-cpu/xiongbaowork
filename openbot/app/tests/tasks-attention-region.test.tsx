@@ -358,7 +358,8 @@ test("a breaker-closed failure shows 已熔断·已自动停用 with a link to �
   expect(view.getByText(/连续失败 10 次/)).toBeTruthy();
   const links = view.getAllByRole("link", { name: "去自主工作页处理" });
   expect(links).toHaveLength(1);
-  expect(links[0]?.getAttribute("href")).toBe("/autonomous");
+  // Straight to the 需要关注 rows on 自主工作, where the tripped one is, not to the whole list.
+  expect(links[0]?.getAttribute("href")).toBe("/autonomous?status=failed");
   // It is still a failure to file away: 归档 is offered, so it leaves only when a person archives it.
   const archive = view.getAllByRole("button", { name: "归档" });
   expect(archive).toHaveLength(3);

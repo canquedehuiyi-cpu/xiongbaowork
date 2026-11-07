@@ -472,21 +472,28 @@ test("knowledge bases say how many employees each is authorised to; the memory s
   await (await panel(sources.view)).findByText("飞书文档同步");
 });
 
-/** Each zone's read, the words its alert opens with when that read fails, and the tabs it takes down. */
-const failures: { path: string; label: string; down: string[] }[] = [
-  { path: "/api/models", label: "读不到模型库", down: ["模型"] },
+/**
+ * Each zone's read, and for every tab it takes down the words that tab's alert opens with. Each tab
+ * names its own loss — 「读不到技能」, not a bare 「读不到」 that any alert on the page would match.
+ */
+const failures: { path: string; down: Record<string, string> }[] = [
+  { path: "/api/models", down: { 模型: "读不到模型库" } },
   // Skills and connectors are both drawn from `/api/plugins`, so that read failing is both tabs'.
-  { path: "/api/plugins", label: "读不到", down: ["技能", "连接器"] },
-  { path: "/api/knowledge/notebooks", label: "读不到知识库", down: ["知识库"] },
-  { path: "/api/memory/sources", label: "读不到信息源", down: ["信息源"] },
-  { path: "/api/components", label: "读不到组件", down: ["组件"] },
+  {
+    path: "/api/plugins",
+    down: { 技能: "读不到技能", 连接器: "读不到连接器" },
+  },
+  { path: "/api/knowledge/notebooks", down: { 知识库: "读不到知识库" } },
+  { path: "/api/memory/sources", down: { 信息源: "读不到信息源" } },
+  { path: "/api/components", down: { 组件: "读不到组件" } },
 ];
 
-for (const { path, label, down } of failures) {
+for (const { path, down } of failures) {
   test(`${path} failing is an alert with a retry in its own tab, and every other tab is drawn`, async () => {
     for (const [name, { tab, check }] of Object.entries(healthy)) {
       const { view } = draw({ fail: [path], tab });
-      if (down.includes(name)) {
+      const label = down[name];
+      if (label) {
         const alerts = await view.findAllByRole("alert");
         const alert = alerts.find((node) => node.textContent?.includes(label));
         expect(alert).toBeTruthy();

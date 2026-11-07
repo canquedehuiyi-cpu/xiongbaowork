@@ -313,9 +313,10 @@ test("this fork's own entries are a compact secondary row under the cards that s
   ).toBe("true");
 });
 
-test("arrow keys move across all nine entries and write ?tab=", async () => {
+test("arrow keys move across all nine entries and write ?tab= without stacking history", async () => {
   const { view, router, user } = draw();
   const plugins = await view.findByRole("tab", { name: "插件" });
+  const before = router.history.length;
   plugins.focus();
   await user.keyboard("{ArrowRight}");
   await waitFor(() =>
@@ -329,6 +330,13 @@ test("arrow keys move across all nine entries and write ?tab=", async () => {
   expect(document.activeElement).toBe(
     view.getByRole("tab", { name: "信息源与记忆" }),
   );
+  // Three arrow presses replaced the entry each time; a click is still a step Back returns to.
+  expect(router.history.length).toBe(before);
+  await user.click(view.getByRole("tab", { name: "技能" }));
+  await waitFor(() =>
+    expect(router.state.location.search).toEqual({ tab: "skills" }),
+  );
+  expect(router.history.length).toBe(before + 1);
 });
 
 test("插件 has underline tabs, a rail with the search on top and 全部 first, and a heading with the count", async () => {
@@ -430,4 +438,14 @@ test("many pages collapse the middle into an ellipsis", async () => {
     .map((button) => button.getAttribute("aria-label") ?? button.textContent);
   expect(labels).toEqual(["上一页", "1", "2", "3", "7", "下一页"]);
   expect(pager.textContent).toContain("…");
+});
+
+test("each plugin card's detail button names its plugin", async () => {
+  const { view } = draw();
+  await view.findByRole("tab", { name: "插件" });
+  const names = (await view.findAllByRole("button", { name: /^详情/ })).map(
+    (button) => button.textContent?.trim(),
+  );
+  expect(names.length).toBeGreaterThan(1);
+  expect(new Set(names).size).toBe(names.length);
 });
