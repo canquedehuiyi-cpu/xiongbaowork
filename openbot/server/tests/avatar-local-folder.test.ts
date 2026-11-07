@@ -26,7 +26,11 @@ import {
 import { createDeviceChannel } from "../src/devices/channel";
 import { createDeviceRoutes, createRunnerRoutes } from "../src/devices/routes";
 import { runnerMessage } from "../src/devices/socket";
-import { createDeviceStore, reportedRoots } from "../src/devices/store";
+import {
+  createDeviceStore,
+  reportedApps,
+  reportedRoots,
+} from "../src/devices/store";
 import { runAsTenant } from "../src/tenant/context";
 import { avatarAgentId, provisionTenant } from "../src/tenant/provisioning";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
@@ -232,6 +236,72 @@ describe("what a machine reports", () => {
     await beat(JSON.stringify({ type: "heartbeat", roots: [] }));
     expect(await rootsOf()).toEqual([]);
     expect(reportedRoots("nope")).toBeUndefined();
+  });
+});
+
+describe("the local apps a machine reports", () => {
+  const appRef = (c: string) => `app_${c.repeat(22)}`;
+
+  test("a heartbeat's apps are stored and listed for the owner", async () => {
+    const { deviceId, beat } = await machine(personA, []);
+    const appsOf = async () =>
+      (await devices.list(personA)).find((d) => d.deviceId === deviceId)?.apps;
+    await beat(
+      JSON.stringify({
+        type: "heartbeat",
+        apps: [{ ref: appRef("A"), name: "  记账本  " }],
+      }),
+    );
+    expect(await appsOf()).toEqual([{ ref: appRef("A"), name: "记账本" }]);
+    const listed = await call<{
+      devices: Array<{ deviceId: string; apps: unknown }>;
+    }>(deviceRoutes(personA), "GET", "/");
+    expect(
+      listed.body.devices.find((d) => d.deviceId === deviceId)?.apps,
+    ).toEqual([{ ref: appRef("A"), name: "记账本" }]);
+  });
+
+  test("malformed apps (bad ref, 41-char name, 21st entry, duplicate) are dropped", async () => {
+    const { deviceId, beat } = await machine(personA, []);
+    const good = Array.from({ length: 20 }, (_, i) => ({
+      ref: `app_${String(i).padStart(22, "x")}`,
+      name: `应用${i}`,
+    }));
+    await beat(
+      JSON.stringify({
+        type: "heartbeat",
+        apps: [
+          { ref: "app_short", name: "坏引用" },
+          { ref: appRef("B"), name: "名".repeat(41) },
+          good[0],
+          { ref: good[0]?.ref, name: "重复" },
+          ...good.slice(1),
+          { ref: appRef("C"), name: "第二十一个" },
+          "not an object",
+        ],
+      }),
+    );
+    const apps = (await devices.list(personA)).find(
+      (d) => d.deviceId === deviceId,
+    )?.apps;
+    expect(apps).toEqual(good);
+    expect(reportedApps("nope")).toBeUndefined();
+  });
+
+  test("an older runner without apps keeps []", async () => {
+    const { deviceId, beat } = await machine(personA, []);
+    await beat(JSON.stringify({ type: "heartbeat", roots: [] }));
+    const appsOf = async () =>
+      (await devices.list(personA)).find((d) => d.deviceId === deviceId)?.apps;
+    expect(await appsOf()).toEqual([]);
+    await beat(
+      JSON.stringify({
+        type: "heartbeat",
+        apps: [{ ref: appRef("D"), name: "x" }],
+      }),
+    );
+    await beat(JSON.stringify({ type: "heartbeat" }));
+    expect(await appsOf()).toEqual([{ ref: appRef("D"), name: "x" }]);
   });
 });
 

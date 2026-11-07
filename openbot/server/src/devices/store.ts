@@ -2,6 +2,7 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
 import {
+  type DeviceApp,
   type DeviceRoot,
   devicePairCodes,
   OFFLINE_AFTER_MS,
@@ -37,6 +38,8 @@ export type DeviceRecord = {
   online: boolean;
   /** The read-only folders the machine offers (story F1, stage 2): a reference and a name, no path. */
   roots: DeviceRoot[];
+  /** The local apps (MCP) the machine offers: a reference and a name, no command or path. */
+  apps: DeviceApp[];
 };
 
 /**
@@ -89,6 +92,33 @@ export function reportedRoots(
   return kept;
 }
 
+/** At most this many apps are kept from one report. */
+export const DEVICE_APP_LIMIT = 20;
+/** The runner's app reference shape: `app_` and 128 random bits in base64url. */
+const APP_REF = /^app_[A-Za-z0-9_-]{22}$/;
+
+/**
+ * A runner's report of its local apps, as this server keeps it, or undefined when the frame carried
+ * none (an older runner), which leaves what is stored alone. Untrusted input from a device: an entry
+ * is kept only with a reference of the runner's shape and a name of 1 to 40 characters, a reference
+ * named twice is kept once, at most 20 are kept, and anything else is dropped, not failed.
+ */
+export function reportedApps(value: unknown): DeviceApp[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const kept: DeviceApp[] = [];
+  for (const entry of value) {
+    if (kept.length >= DEVICE_APP_LIMIT) break;
+    const { ref, name } = (entry ?? {}) as { ref?: unknown; name?: unknown };
+    if (typeof ref !== "string" || !APP_REF.test(ref)) continue;
+    if (typeof name !== "string") continue;
+    const shown = name.trim();
+    if (!shown || [...shown].length > 40) continue;
+    if (kept.some((app) => app.ref === ref)) continue;
+    kept.push({ ref, name: shown });
+  }
+  return kept;
+}
+
 export type DeviceStore = {
   /** A code for the person's screen, minted under their own tenant. */
   mintPairCode: (
@@ -130,6 +160,7 @@ export type DeviceStore = {
     tenantId: string,
     deviceId: string,
     roots?: DeviceRoot[],
+    apps?: DeviceApp[],
   ) => Promise<void>;
   remove: (tenantId: string, id: string) => Promise<boolean>;
 };
@@ -217,6 +248,7 @@ const record = (row: {
   platform: string | null;
   lastSeenAt: Date | null;
   roots?: DeviceRoot[] | null;
+  apps?: DeviceApp[] | null;
   createdAt?: Date;
 }): DeviceRecord => ({
   id: row.id,
@@ -225,6 +257,7 @@ const record = (row: {
   platform: row.platform,
   lastSeenAt: row.lastSeenAt,
   roots: reportedRoots(row.roots) ?? [],
+  apps: reportedApps(row.apps) ?? [],
   online:
     row.lastSeenAt !== null &&
     Date.now() - row.lastSeenAt.getTime() < OFFLINE_AFTER_MS,
@@ -443,7 +476,7 @@ export function createDeviceStore(
       return Boolean(row);
     },
 
-    async heartbeat(tenantId, deviceId, roots) {
+    async heartbeat(tenantId, deviceId, roots, apps) {
       await runAsTenant(tenantId, () =>
         database
           .update(registeredDevices)
@@ -451,6 +484,7 @@ export function createDeviceStore(
             lastSeenAt: new Date(),
             updatedAt: new Date(),
             ...(roots ? { roots } : {}),
+            ...(apps ? { apps } : {}),
           })
           .where(
             and(

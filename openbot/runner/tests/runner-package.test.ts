@@ -95,6 +95,8 @@ function memoryDeviceStore() {
         online: false,
         // The read-only folders the machine offers (F1 stage 2); a fresh pairing offers none.
         roots: [],
+        // The local apps (MCP) it offers; a fresh pairing offers none.
+        apps: [],
         tokenHash: hash(token),
       };
       devices.set(`${tenantId}/${input.deviceId}`, device);
