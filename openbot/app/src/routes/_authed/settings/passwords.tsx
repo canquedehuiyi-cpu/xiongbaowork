@@ -36,6 +36,7 @@ function PasswordsPage() {
   const remove = useMutation(deleteSavedLoginMutationOptions(queryClient));
   return (
     <PageShell
+      width="workbench"
       title="密码"
       description="你在帮员工登录网站时保存的登录信息。员工永远看不到它们，每次使用都需要你确认。"
     >

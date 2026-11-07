@@ -54,6 +54,8 @@ export const ROUTES: RouteSpec[] = [
   { path: "/wakers/agent-analyst" },
   { path: "/wakerflows/flow-weekly" },
   { path: "/channel/new" },
+  // The conversation workspace column beside a new conversation addressed to one employee.
+  { path: "/channel/new?agent=agent-analyst", slug: "channel-new-analyst" },
 ];
 
 export const VIEWPORTS = [

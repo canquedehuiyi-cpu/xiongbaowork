@@ -1,7 +1,9 @@
 /*
  * The workbench shell (docs/plans/2026-11-07-qoderwake-cn-frontend-parity.md, F1): the five primary
- * entries in the reference product's order at the top of the sidebar, conversations split into
- * 员工 and 群组, and every route this product had before still one click away under 更多.
+ * entries in the reference product's order at the top of the sidebar, an employee / group roster
+ * under 员工 and 群组, conversations in the workspace column beside an open one, and every route
+ * this product had before still one click away under 更多. The finer reference measurements are in
+ * app-shell-parity.test.tsx.
  */
 import {
   afterAll,
@@ -19,15 +21,17 @@ import {
   createRouter,
   RouterProvider,
 } from "@tanstack/react-router";
-import { act, cleanup, render } from "@testing-library/react";
+import { act, cleanup, render, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AppSidebar, channelTab } from "@/components/app-sidebar/app-sidebar";
+import { ConversationWorkspace } from "@/components/app-sidebar/conversation-workspace";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { agentKeys } from "@/lib/agents/queries";
 import { authKeys } from "@/lib/auth/queries";
 import { botLifecycleKeys } from "@/lib/bot-lifecycle/queries";
 import { type ChannelSummary, channelKeys } from "@/lib/channels/queries";
 import { userPreferencesQueryOptions } from "@/lib/settings/message-list";
+import { wakerGroupKeys } from "@/lib/waker-groups/queries";
 
 // Keep the sidebar's live-update socket offline; these tests exercise HTTP pagination.
 class OfflineWebSocket extends EventTarget implements WebSocket {
@@ -187,6 +191,7 @@ function renderSidebar(
     refetchInterval: false,
   });
   queryClient.setQueryData(botLifecycleKeys.attention, []);
+  queryClient.setQueryData(wakerGroupKeys.list(), []);
   queryClient.setQueryData(channelKeys.list(), {
     pages: [{ channels: rows, nextCursor }],
     pageParams: [""],
@@ -195,6 +200,7 @@ function renderSidebar(
     component: () => (
       <SidebarProvider>
         <AppSidebar />
+        <ConversationWorkspace />
       </SidebarProvider>
     ),
   });
@@ -291,44 +297,59 @@ test("a conversation with two or more coworkers is a group; everything else belo
   expect(channelTab(channel("crew", ["a", "b"]))).toBe("groups");
 });
 
-test("the 员工 and 群组 tabs split the conversations and retarget the new-conversation button", async () => {
-  const view = renderSidebar("/", [
-    channel("和客服小熊的会话", ["a"]),
-    channel("周报群组", ["a", "b"]),
-  ]);
-  expect(await view.findByText("和客服小熊的会话")).toBeTruthy();
-  expect(view.queryByText("周报群组")).toBeNull();
-  expect(hrefOf(view.getByRole("link", { name: "新建会话" }))).toBe(
-    "/channel/new",
-  );
-
-  await userEvent.click(view.getByRole("tab", { name: "群组" }));
-  expect(await view.findByText("周报群组")).toBeTruthy();
-  expect(view.queryByText("和客服小熊的会话")).toBeNull();
-  expect(hrefOf(view.getByRole("link", { name: "新建群聊" }))).toBe(
-    "/group/new",
-  );
-});
-
-test("the footer carries the 小管家 entry, settings and the account menu", async () => {
-  const view = renderSidebar();
-  expect(hrefOf(await view.findByRole("link", { name: "小管家" }))).toBe(
-    "/bot",
-  );
-  expect(hrefOf(view.getByRole("link", { name: "设置" }))).toBe("/settings");
-  expect(view.getByRole("button", { name: /user@example\.com/ })).toBeTruthy();
-});
-
-test("a 群组 tab with nothing among the loaded pages says so, offers more, and does not page on its own", async () => {
+test("the 员工 and 群组 tabs switch between the roster and the groups, and retarget the new button", async () => {
   const view = renderSidebar("/", [channel("和客服小熊的会话", ["a"])], {
-    nextCursor: "older/page",
+    agents: [{ id: "a", name: "客服小熊", hidden: false, pinned: false }],
   });
-  await view.findByText("和客服小熊的会话");
-  await userEvent.click(view.getByRole("tab", { name: "群组" }));
-  expect(await view.findByText("已加载的会话里没有群组会话")).toBeTruthy();
-  expect(view.queryByText("还没有群组会话")).toBeNull();
+  const employees = await view.findByRole("list", { name: "员工" });
+  expect(employees.textContent).toContain("客服小熊");
+  // Conversations are not listed in the sidebar any more: they live beside an open conversation.
+  expect(view.queryByText("和客服小熊的会话")).toBeNull();
+  expect(hrefOf(view.getByRole("link", { name: "新建员工" }))).toBe(
+    "/wakers?new=true",
+  );
+
+  await userEvent.click(view.getByRole("tab", { name: "群组 (0)" }));
+  expect(view.queryByRole("list", { name: "员工" })).toBeNull();
+  expect(await view.findByText("还没有群组")).toBeTruthy();
+  expect(hrefOf(view.getByRole("link", { name: "新建群组" }))).toBe(
+    "/wakers?tab=groups",
+  );
+});
+
+test("the footer carries the account, usage and the settings menu; 小管家 floats on the page instead", async () => {
+  const view = renderSidebar();
+  const footer = await view.findByRole("region", { name: "账户" });
+  expect(footer.textContent).toContain("user@example.com");
+  expect(hrefOf(view.getByRole("link", { name: "套餐与用量" }))).toBe("/plans");
+  await userEvent.click(view.getByRole("button", { name: "设置" }));
+  expect(hrefOf(await view.findByRole("menuitem", { name: "设置" }))).toBe(
+    "/settings",
+  );
+  expect(view.getByRole("menuitem", { name: "退出登录" })).toBeTruthy();
+  expect(view.queryByRole("link", { name: "小管家" })).toBeNull();
+});
+
+test("an employee with nothing among the loaded pages says so, offers more, and does not page on its own", async () => {
+  const view = renderSidebar(
+    "/channel/new?agent=b",
+    [channel("和客服小熊的会话", ["a"])],
+    {
+      nextCursor: "older/page",
+      agents: [
+        { id: "a", name: "客服小熊", hidden: false, pinned: false },
+        { id: "b", name: "周报员", hidden: false, pinned: false },
+      ],
+    },
+  );
+  const column = await view.findByRole("complementary", {
+    name: "周报员的对话",
+  });
+  expect(column.textContent).toContain("已加载的会话里没有和周报员的对话");
+  expect(view.queryByText("还没有和周报员的对话")).toBeNull();
+  expect(view.queryByText("和客服小熊的会话")).toBeNull();
   expect(view.getByRole("button", { name: "加载更早的会话" })).toBeTruthy();
-  // Filtering by tab must not walk the whole history by itself: no observer is armed.
+  // Filtering by employee must not walk the whole history by itself: no observer is armed.
   act(() => {
     for (const observer of ScrollObserver.active) observer.intersect();
   });
@@ -349,7 +370,9 @@ test("Team Bots an administrator assigned to this person stay visible with 更�
   });
   const more = await view.findByRole("button", { name: "更多" });
   expect(more.getAttribute("aria-expanded")).toBe("false");
-  const link = view.getByRole("link", { name: /法务助手/ });
+  // On the employee roster, which is never folded; with no conversation yet it starts one.
+  const roster = view.getByRole("list", { name: "员工" });
+  const link = within(roster).getByRole("link", { name: /法务助手/ });
   expect(link.getAttribute("href")).toBe("/channel/new?agent=bot-legal");
 });
 

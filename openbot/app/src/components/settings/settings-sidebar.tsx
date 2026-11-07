@@ -7,18 +7,6 @@ import {
 } from "@tabler/icons-react";
 import { Link, type LinkOptions } from "@tanstack/react-router";
 import type * as React from "react";
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarGroup,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarRail,
-} from "@/components/ui/sidebar";
-
-const appLinkOptions = { to: "/" } satisfies LinkOptions;
 
 const ITEMS: {
   /**
@@ -62,54 +50,41 @@ const ITEMS: {
   },
 ];
 
-export function SettingsSidebar({
-  ...props
-}: React.ComponentProps<typeof Sidebar>) {
+/** The app sidebar's row, at the settings column's 13px. */
+const rowClassName =
+  "flex h-[32px] items-center gap-[10px] rounded-md px-[10px] text-[13px] text-foreground/70 outline-none hover:bg-foreground/5 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 data-[status=active]:bg-sidebar-accent data-[status=active]:font-medium data-[status=active]:text-sidebar-accent-foreground [&>svg]:size-[16px] [&>svg]:shrink-0";
+
+/**
+ * Settings' own column (description (7) of the parity brief): ~245px on the card surface, between
+ * the app sidebar — which stays — and the settings page. 「← 返回」 on top, then this product's
+ * settings entries in the app sidebar's row style.
+ */
+export function SettingsNav() {
   return (
-    <Sidebar {...props}>
-      {/* Matched to the app sidebar's header, as Admin's is. See admin-sidebar.tsx. */}
-      <SidebarHeader className="h-12 p-2">
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              render={(props) => (
-                <Link {...appLinkOptions} {...props}>
-                  <IconArrowLeft className="mr-2 h-4 w-4" />
-                  返回应用
-                </Link>
-              )}
-            />
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarHeader>
-      <SidebarContent>
-        {/*
-         * Group outside menu, as Admin has it. The other way round nests a list item inside a div
-         * inside the `ul`, which is not markup a list is allowed to be made of.
-         */}
-        <SidebarGroup>
-          <SidebarMenu className="gap-px">
-            {ITEMS.map((option) => (
-              <SidebarMenuItem key={option.title}>
-                <SidebarMenuButton
-                  render={(props) => (
-                    <Link
-                      {...option.linkOptions}
-                      activeOptions={{ exact: option.exact ?? false }}
-                      activeProps={{ className: "bg-foreground/5" }}
-                      {...props}
-                    >
-                      <option.icon className="mr-2 h-4 w-4" />
-                      {option.title}
-                    </Link>
-                  )}
-                />
-              </SidebarMenuItem>
-            ))}
-          </SidebarMenu>
-        </SidebarGroup>
-      </SidebarContent>
-      <SidebarRail />
-    </Sidebar>
+    <nav
+      aria-label="设置导航"
+      className="flex w-[148px] shrink-0 flex-col gap-[4px] overflow-y-auto border-border border-r bg-card px-[8px] py-[8px] md:w-[245px] md:px-[12px]"
+    >
+      <Link
+        activeOptions={{ exact: true }}
+        activeProps={{}}
+        className={`${rowClassName} mb-[8px] text-muted-foreground`}
+        to="/"
+      >
+        <IconArrowLeft />
+        返回
+      </Link>
+      {ITEMS.map((option) => (
+        <Link
+          {...option.linkOptions}
+          activeOptions={{ exact: option.exact ?? false }}
+          className={rowClassName}
+          key={option.title}
+        >
+          <option.icon />
+          {option.title}
+        </Link>
+      ))}
+    </nav>
   );
 }

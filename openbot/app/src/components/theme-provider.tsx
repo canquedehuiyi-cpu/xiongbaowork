@@ -41,6 +41,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * The theme, or null outside a provider. For the sidebar's account menu, which renders in harnesses
+ * that mount the shell alone: there the theme choices are drawn disabled rather than throwing.
+ */
+export function useOptionalTheme(): ThemeContextValue | null {
+  return useContext(ThemeContext);
+}
+
 export function useTheme() {
   const value = useContext(ThemeContext);
 
