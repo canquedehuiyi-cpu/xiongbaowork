@@ -457,3 +457,41 @@ test("closeAll while a call is in flight and one is queued: the queued one does 
   expect(made.length).toBe(1);
   expect(made[0]?.closeCount).toBe(1);
 });
+
+test("a Stop before tools/call was sent is marked sent: false; a Stop after it is not", async () => {
+  const controller = new AbortController();
+  const { host, entry } = setup({
+    // Listing is slow: the Stop lands while the call is still finding out its tools.
+    connect: async () => ({
+      closed: false,
+      listTools: async () => {
+        controller.abort();
+        return [{ name: "draw" }];
+      },
+      callTool: async () => ok("never"),
+      close: async () => {},
+    }),
+  });
+  const early = await host
+    .call(entry.ref, "draw", {}, controller.signal)
+    .catch((error: unknown) => error);
+  expect(early).toHaveProperty("name", "AbortError");
+  expect(early).toHaveProperty("sent", false);
+  await host.closeAll();
+
+  const late = new AbortController();
+  const sent = setup({
+    call: async () => {
+      late.abort();
+      const error = new Error("aborted");
+      error.name = "AbortError";
+      throw error;
+    },
+  });
+  const after = await sent.host
+    .call(sent.entry.ref, "draw", {}, late.signal)
+    .catch((error: unknown) => error);
+  expect(after).toHaveProperty("name", "AbortError");
+  expect((after as { sent?: boolean }).sent).toBeUndefined();
+  await sent.host.closeAll();
+});

@@ -233,7 +233,7 @@ test("http: json and sse responses both parse; the session id is echoed on later
   }
 });
 
-test('http: connection refused rejects with kind "connect"', async () => {
+test('http: connection refused rejects with kind "unreachable"', async () => {
   const server = startFakeHttpMcp({ sse: false });
   const url = server.url;
   server.stop();
@@ -246,7 +246,91 @@ test('http: connection refused rejects with kind "connect"', async () => {
       enabled: true,
     }),
   );
-  expect(error.kind).toBe("connect");
+  expect(error.kind).toBe("unreachable");
+});
+
+test('http: an app closed after the handshake rejects the next call with kind "unreachable", never "connect"', async () => {
+  const server = startFakeHttpMcp({ sse: false });
+  const connection = await connectApp({
+    ref: "app_bbbbbbbbbbbbbbbbbbbbbb",
+    name: "web",
+    kind: "http",
+    url: server.url,
+    enabled: true,
+  });
+  open.push(connection);
+  expect((await connection.listTools())[0]?.name).toBe("echo");
+  server.stop();
+  // The request never reached the app: nothing can have happened there.
+  const error = await rejection(connection.callTool("echo", { text: "x" }));
+  expect(error.kind).toBe("unreachable");
+  // Not reused: the next use connects afresh.
+  expect(connection.closed).toBe(true);
+});
+
+test("http: a redirect is not followed, so the body is never posted anywhere else", async () => {
+  let elsewhere = 0;
+  const other = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    fetch: () => {
+      elsewhere += 1;
+      return new Response("{}", { headers: { "Content-Type": "application/json" } });
+    },
+  });
+  stops.push(() => other.stop(true));
+  const redirecting = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    fetch: () =>
+      new Response(null, {
+        status: 307,
+        headers: { Location: `http://127.0.0.1:${other.port}/mcp` },
+      }),
+  });
+  stops.push(() => redirecting.stop(true));
+  const error = await rejection(
+    connectApp({
+      ref: "app_bbbbbbbbbbbbbbbbbbbbbb",
+      name: "web",
+      kind: "http",
+      url: `http://127.0.0.1:${redirecting.port}/mcp`,
+      enabled: true,
+    }),
+  );
+  expect(error.kind).toBe("protocol");
+  expect(elsewhere).toBe(0);
+});
+
+test("http: a loopback app is reached directly, whatever HTTP_PROXY says", async () => {
+  const saved: Record<string, string | undefined> = {};
+  const names = ["HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy", "NO_PROXY", "no_proxy"];
+  for (const name of names) saved[name] = process.env[name];
+  // A proxy nobody answers on, and nothing exempted from it.
+  process.env.HTTP_PROXY = "http://127.0.0.1:9";
+  process.env.http_proxy = "http://127.0.0.1:9";
+  process.env.HTTPS_PROXY = "http://127.0.0.1:9";
+  process.env.https_proxy = "http://127.0.0.1:9";
+  process.env.NO_PROXY = "";
+  process.env.no_proxy = "";
+  try {
+    const server = startFakeHttpMcp({ sse: false });
+    stops.push(server.stop);
+    const connection = await connectApp({
+      ref: "app_bbbbbbbbbbbbbbbbbbbbbb",
+      name: "web",
+      kind: "http",
+      url: server.url.replace("127.0.0.1", "localhost"),
+      enabled: true,
+    });
+    open.push(connection);
+    expect((await connection.listTools())[0]?.name).toBe("echo");
+  } finally {
+    for (const name of names) {
+      if (saved[name] === undefined) delete process.env[name];
+      else process.env[name] = saved[name];
+    }
+  }
 });
 
 test('windows command shim: on win32 a bare command such as npx or bunx is launched as cmd.exe /d /s /c "npx ..."', () => {

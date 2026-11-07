@@ -5,6 +5,7 @@ import { join, resolve } from "node:path";
 import { createAppHost } from "../src/app-host";
 import { createAppRegistry } from "../src/apps";
 import { createRunnerExecutor } from "../src/execute";
+import { startFakeHttpMcp } from "./fixtures/fake-mcp-http";
 
 /* The two app actions through the real executor, against the real fake stdio MCP server. */
 
@@ -180,4 +181,65 @@ test("failures before the call was sent are not outcomeUnknown", async () => {
   expect(
     (unknownTool as { outcomeUnknown?: boolean }).outcomeUnknown,
   ).toBeUndefined();
+});
+
+test("an abort while the call still waits its turn is not outcomeUnknown: nothing was sent", async () => {
+  const { entry, execute } = setup({ callMs: 3000 });
+  // The app is busy with an earlier call, so the next one waits behind it.
+  const first = execute({
+    action: "apps.call",
+    payload: { app: entry.ref, tool: "echo", args: { text: "__hang__" } },
+  });
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+  const controller = new AbortController();
+  const queued = execute({
+    action: "apps.call",
+    payload: { app: entry.ref, tool: "echo", args: { text: "later" } },
+    signal: controller.signal,
+  });
+  setTimeout(() => controller.abort(), 200);
+  const outcome = await queued;
+  expect(outcome.ok).toBe(false);
+  if (outcome.ok) return;
+  expect(outcome.error).toContain("已在设备上停止");
+  expect(outcome.outcomeUnknown).toBeUndefined();
+  // The one that was sent and never answered is still unknown.
+  const sent = await first;
+  expect((sent as { outcomeUnknown?: boolean }).outcomeUnknown).toBe(true);
+}, 10_000);
+
+test("a loopback app the owner closed is unreachable, not outcomeUnknown, and is reconnected once it is back", async () => {
+  const base = mkdtempSync(join(tmpdir(), "apps-exec-http-"));
+  dirs.push(base);
+  const workspace = join(base, "ws");
+  mkdirSync(workspace);
+  const server = startFakeHttpMcp({ sse: false });
+  const registry = createAppRegistry({ dataDir: base });
+  const entry = registry.add({ kind: "http", name: "Blender", url: server.url });
+  const execute = createRunnerExecutor(
+    workspace,
+    undefined,
+    undefined,
+    undefined,
+    createAppHost(registry),
+  );
+  closers.push(() => execute.closeApps());
+  const listed = await execute({ action: "apps.tools", payload: { app: entry.ref } });
+  expect(listed.ok).toBe(true);
+  server.stop();
+  const closed = await execute({
+    action: "apps.call",
+    payload: { app: entry.ref, tool: "echo", args: { text: "x" } },
+  });
+  expect(closed).toEqual({
+    ok: false,
+    error: "连不上「Blender」的本机地址，请确认软件已打开。",
+  });
+  const back = startFakeHttpMcp({ sse: false, port: server.port });
+  closers.push(async () => back.stop());
+  const again = await execute({
+    action: "apps.call",
+    payload: { app: entry.ref, tool: "echo", args: { text: "又好了" } },
+  });
+  expect(again.ok).toBe(true);
 });
