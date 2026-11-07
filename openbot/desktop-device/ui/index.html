@@ -39,7 +39,7 @@
       h1 { font-size: 18px; margin: 0 0 4px; }
       p { margin: 0 0 16px; color: var(--muted); }
       label { display: block; margin: 12px 0 4px; font-weight: 600; }
-      input {
+      input, select {
         width: 100%;
         padding: 8px 10px;
         font: inherit;
@@ -101,6 +101,33 @@
         color: var(--bad);
         background: transparent;
         border: 1px solid var(--line);
+      }
+      #app-list { list-style: none; margin: 0 0 8px; padding: 0; }
+      #app-list li {
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 6px 10px;
+        margin-bottom: 6px;
+      }
+      #app-list .detail, #app-list .env { display: block; font-size: 12px; color: var(--muted); word-break: break-all; }
+      #app-list .actions { display: flex; gap: 8px; margin-top: 6px; }
+      #app-list button {
+        margin: 0;
+        padding: 4px 10px;
+        color: var(--fg);
+        background: transparent;
+        border: 1px solid var(--line);
+      }
+      #app-list button.danger { color: var(--bad); }
+      #app-env { -webkit-text-security: disc; }
+      #app-form textarea {
+        width: 100%;
+        padding: 8px 10px;
+        font: inherit;
+        color: inherit;
+        background: transparent;
+        border: 1px solid var(--line);
+        border-radius: 6px;
       }
       [data-tone="ok"] { color: var(--ok); font-weight: 600; }
       [data-tone="wait"] { color: var(--wait); }
@@ -167,6 +194,42 @@
         <div class="hint">添加后不能直接更改权限：要更改，请移除后重新添加，并在熊宝的项目里重新选择这个文件夹。</div>
         <button type="submit">添加文件夹</button>
         <div id="folder-error" class="error" role="alert"></div>
+      </form>
+    </section>
+
+    <section id="apps" hidden>
+      <h2>本机应用（MCP）</h2>
+      <p>这里填的命令和密钥只保存在这台电脑上；服务器只知道名称。</p>
+      <p class="hint" data-tone="wait">添加 MCP 等于把它能访问的内容交给你的员工：请只添加你信任、并且愿意让员工使用的程序。</p>
+      <ul id="app-list"></ul>
+      <p id="app-empty" class="hint"></p>
+      <div id="app-status" class="hint" role="status"></div>
+      <form id="app-form">
+        <label for="app-kind">添加方式</label>
+        <select id="app-kind">
+          <option value="stdio">启动命令</option>
+          <option value="http">本机地址</option>
+        </select>
+        <label for="app-name">名称</label>
+        <input id="app-name" maxlength="60" placeholder="例如：Excel" autocomplete="off" />
+        <div id="app-stdio-fields">
+          <label for="app-command">命令</label>
+          <input id="app-command" placeholder="例如：npx" autocomplete="off" spellcheck="false" />
+          <label for="app-args">参数（一行一个）</label>
+          <textarea id="app-args" rows="3" spellcheck="false" placeholder="-y&#10;some-mcp"></textarea>
+          <label for="app-env">环境变量（一行一个 KEY=VALUE）</label>
+          <textarea id="app-env" rows="2" spellcheck="false" autocomplete="off" placeholder="API_KEY=..."></textarea>
+          <div class="hint">添加后环境变量的值只显示为 ••••，不会再显示出来。</div>
+          <label for="app-cwd">工作目录（可选）</label>
+          <input id="app-cwd" autocomplete="off" spellcheck="false" />
+        </div>
+        <div id="app-http-fields" hidden>
+          <label for="app-url">本机地址</label>
+          <input id="app-url" placeholder="http://127.0.0.1:3845/mcp" autocomplete="off" spellcheck="false" />
+          <div class="hint">只能是这台电脑上已经在运行的程序（127.0.0.1、localhost 或 [::1]）。</div>
+        </div>
+        <button type="submit">添加应用</button>
+        <div id="app-error" class="error" role="alert"></div>
       </form>
     </section>
 
