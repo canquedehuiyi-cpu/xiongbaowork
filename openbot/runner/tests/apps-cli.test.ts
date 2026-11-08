@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createAppRegistry } from "../src/apps";
+import { CANDIDATE_EXPIRED } from "../src/discover";
 import { createRootRegistry } from "../src/roots";
 import {
   heartbeatFrame,
@@ -255,6 +256,81 @@ test("--discover-apps prints one JSON line with candidates and installed and no 
     });
   }
 });
+
+test("--enable-candidate enables a discovered app and prints masked apps", async () => {
+  const dataDir = fresh();
+  const appData = "C:\\Users\\me\\AppData\\Roaming";
+  const config = JSON.stringify({
+    mcpServers: {
+      假应用: {
+        command: process.execPath,
+        args: [FIXTURE],
+        env: { FIXTURE_TOKEN: "sk-test-secret" },
+      },
+    },
+  });
+  const deps = {
+    platform: "win32" as const,
+    env: { APPDATA: appData, USERPROFILE: "C:\\Users\\me" },
+    readText: (path: string) =>
+      path === `${appData}\\Claude\\claude_desktop_config.json`
+        ? config
+        : undefined,
+    readInstalled: async () => [],
+    resolveCommand: (command: string) => command,
+  };
+  const runWith = async (flags: string[]) => {
+    const parsed = parseAppCommand(
+      ["--data-dir", dataDir, ...flags],
+      {},
+      dataDir,
+    );
+    if (parsed === null || typeof parsed === "string")
+      throw new Error(`not an app command: ${String(parsed)}`);
+    const lines: string[] = [];
+    const code = await runAppCommand(
+      parsed,
+      (line) => lines.push(line),
+      undefined,
+      deps,
+    );
+    return { code, lines, json: JSON.parse(lines[0] ?? "null") };
+  };
+  const discovered = await runWith(["--discover-apps"]);
+  const ref = discovered.json.candidates[0].ref as string;
+
+  const enabled = await runWith(["--enable-candidate", ref]);
+  expect(enabled.code).toBe(0);
+  expect(enabled.lines).toHaveLength(1);
+  const [entry] = createAppRegistry({ dataDir }).list();
+  if (!entry) throw new Error("nothing was registered");
+  expect(enabled.json).toEqual({
+    ok: true,
+    app: { ref: entry.ref, name: "假应用" },
+    tools: ["echo", "write_note", "wipe"],
+    apps: [{ ...entry, env: { FIXTURE_TOKEN: "••••" } }],
+  });
+  expect(enabled.lines[0]).not.toContain("sk-test-secret");
+  // The file keeps the real value.
+  expect(entry).toMatchObject({ env: { FIXTURE_TOKEN: "sk-test-secret" } });
+
+  // A reference that names nothing: one JSON line, nothing written.
+  const stale = await runWith(["--enable-candidate", "cand_nonsense"]);
+  expect(stale.code).toBe(2);
+  expect(stale.json).toEqual({ ok: false, error: CANDIDATE_EXPIRED });
+  expect(createAppRegistry({ dataDir }).list()).toEqual([entry]);
+  // It needs a value, and it does not mix with another app flag.
+  expect(
+    parseAppCommand(["--data-dir", dataDir, "--enable-candidate"], {}, dataDir),
+  ).toBe("--enable-candidate needs the candidate's reference.");
+  expect(
+    parseAppCommand(
+      ["--data-dir", dataDir, "--enable-candidate", ref, "--list-apps"],
+      {},
+      dataDir,
+    ),
+  ).toContain("--enable-candidate");
+}, 20_000);
 
 test("--discover-apps cannot be combined with another app flag", () => {
   const dir = fresh();
