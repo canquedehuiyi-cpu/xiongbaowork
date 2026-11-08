@@ -162,6 +162,17 @@ export type DeviceStore = {
     roots?: DeviceRoot[],
     apps?: DeviceApp[],
   ) => Promise<void>;
+  // --- app discovery (sub-project 3) ---
+  /**
+   * One app the machine just enabled, added to what it reported, so it can be used before the next
+   * heartbeat (which reports the machine's whole list again and replaces this one).
+   */
+  rememberApp: (
+    tenantId: string,
+    deviceId: string,
+    app: DeviceApp,
+  ) => Promise<void>;
+  // --- end app discovery ---
   remove: (tenantId: string, id: string) => Promise<boolean>;
 };
 
@@ -494,6 +505,35 @@ export function createDeviceStore(
           ),
       );
     },
+
+    // --- app discovery (sub-project 3) ---
+    async rememberApp(tenantId, deviceId, app) {
+      /*
+       * Not locked against a heartbeat: one composed before the enable and written after this puts
+       * the old list back until the next heartbeat (within 20 seconds), which reports the new app.
+       */
+      await runAsTenant(tenantId, async () => {
+        const where = and(
+          eq(registeredDevices.tenantId, tenantId),
+          eq(registeredDevices.deviceId, deviceId),
+        );
+        const [row] = await database
+          .select({ apps: registeredDevices.apps })
+          .from(registeredDevices)
+          .where(where)
+          .limit(1);
+        if (!row) return;
+        const stored = reportedApps(row.apps) ?? [];
+        if (stored.some((known) => known.ref === app.ref)) return;
+        // Checked like a report: a bad reference or name is dropped, and at most 20 are kept.
+        const apps = reportedApps([...stored, app]) ?? stored;
+        await database
+          .update(registeredDevices)
+          .set({ apps, updatedAt: new Date() })
+          .where(where);
+      });
+    },
+    // --- end app discovery ---
 
     async remove(tenantId, id) {
       const [removed] = await runAsTenant(tenantId, () =>

@@ -24,6 +24,9 @@ import { computerActionIdentity } from "./action-identity";
 // --- desktop control (sub-project 2) ---
 import { desktopTools } from "./desktop-tools";
 // --- end desktop control ---
+// --- app discovery (sub-project 3) ---
+import { CANDIDATE_REF } from "./app-discovery";
+// --- end app discovery ---
 import {
   type ActionActor,
   type ComputerGateway,
@@ -652,6 +655,17 @@ function headlessComputerTools(options: {
           ...(await gateway.callApp(botId, actor, input, signal)),
         }),
       ),
+      // --- app discovery (sub-project 3) ---
+      tool(
+        "computer_app_enable",
+        "Enable one app found on the person's own paired computer, listed under available by computer_apps, so its tools can be called. Pass its candidate exactly as listed. The person must approve; if refused say so rather than retrying. A candidate older than 10 minutes must be listed again with computer_apps.",
+        z.strictObject({ candidate: z.string().regex(CANDIDATE_REF) }),
+        async (input, { signal }) => ({
+          ok: true,
+          ...(await gateway.enableApp(botId, actor, input, signal)),
+        }),
+      ),
+      // --- end app discovery ---
     );
   // --- desktop control (sub-project 2) ---
   // Read only, and on the same terms as the local apps: the owner's own run on their paired machine.

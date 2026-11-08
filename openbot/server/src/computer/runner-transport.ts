@@ -75,8 +75,10 @@ export function createRunnerTransport(
                 : // --- app discovery (sub-project 3) ---
                   bare === "apps/discover"
                   ? "apps.discover"
-                  : // --- end app discovery ---
-                    bare;
+                  : bare === "apps/enable"
+                    ? "apps.enable"
+                    : // --- end app discovery ---
+                      bare;
   };
 
   /**
@@ -146,7 +148,15 @@ export function createRunnerTransport(
      * now, and it changes nothing: sent straight to the connected machine, never parked in the queue
      * and never given a receipt, so a lost answer cannot pause the device (device MCP bridge §3.4).
      */
-    if (action === "apps.tools" || action === "apps.discover") {
+    if (
+      action === "apps.tools" ||
+      // --- app discovery (sub-project 3) ---
+      // Discovery only reads. An enable is asked for while the person waits: it happens now or is
+      // refused as offline, never parked; enabling the same candidate twice answers the same app.
+      action === "apps.discover" ||
+      action === "apps.enable"
+      // --- end app discovery ---
+    ) {
       return channel.dispatch<T>(
         target,
         action,
