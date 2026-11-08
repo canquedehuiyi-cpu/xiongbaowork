@@ -68,7 +68,11 @@ export function createRunnerTransport(
               ? "apps.tools"
               : bare === "apps/call"
                 ? "apps.call"
-                : bare;
+                : // --- app discovery (sub-project 3) ---
+                  bare === "apps/discover"
+                  ? "apps.discover"
+                  : // --- end app discovery ---
+                    bare;
   };
 
   /**
@@ -120,7 +124,7 @@ export function createRunnerTransport(
      * now, and it changes nothing: sent straight to the connected machine, never parked in the queue
      * and never given a receipt, so a lost answer cannot pause the device (device MCP bridge §3.4).
      */
-    if (action === "apps.tools") {
+    if (action === "apps.tools" || action === "apps.discover") {
       return channel.dispatch<T>(
         target,
         action,
