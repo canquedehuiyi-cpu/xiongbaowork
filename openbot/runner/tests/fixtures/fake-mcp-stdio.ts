@@ -7,7 +7,8 @@
  *   exit    writes a long stderr and exits with 1 before answering anything
  *   paged   tools/list never stops returning a nextCursor
  * `echo` also has a few test hooks keyed on its `text`: "__big__" (2 MB result), "__media__"
- * (image + resource content), "__env__:NAME" (the child's own env value), "__hang__" (never answers).
+ * (image + resource content), "__env__:NAME" (the child's own env value), "__cwd__" (its working
+ * folder), "__hang__" (never answers).
  * Every notification the client sends is appended to FAKE_MCP_LOG (when set) as one JSON line.
  */
 import { appendFileSync } from "node:fs";
@@ -111,6 +112,7 @@ function handle(message: {
           ],
         });
       }
+      if (text === "__cwd__") return reply(textResult(process.cwd()));
       if (text.startsWith("__env__:")) {
         return reply(textResult(process.env[text.slice(8)] ?? "<unset>"));
       }
