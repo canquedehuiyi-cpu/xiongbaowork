@@ -428,14 +428,35 @@ jobs:
       # runner/src/browser imports agent-computer/src/aria-snapshot, which needs yaml from the root.
       - name: Install root workspaces from the frozen lockfile (no lifecycle scripts)
         run: bun install --frozen-lockfile --ignore-scripts
-      - name: DIAG import timing
+      - name: DIAG launch
         run: |
-          Set-Content -Path imp.mjs -Value 'await import("playwright-core"); console.log("loaded");'
+          $chrome = Join-Path $env:ProgramFiles 'Google\Chrome\Application\chrome.exe'
+          $js = @'
+          import { chromium } from "playwright-core";
+          const headless = process.argv[2] === "headless";
+          const t = Date.now();
+          try {
+            const c = await chromium.launchPersistentContext(process.argv[3], { headless, executablePath: process.argv[4], timeout: 30000, chromiumSandbox: true, ignoreDefaultArgs: ["--password-store=basic", "--use-mock-keychain"] });
+            const p = c.pages()[0] ?? await c.newPage();
+            await p.goto("about:blank");
+            console.log("LAUNCHED", headless, Date.now() - t, "ms");
+            await c.close();
+          } catch (e) { console.log("LAUNCH FAILED", headless, Date.now() - t, "ms", String(e).slice(0, 1500)); }
+          process.exit(0);
+          '@
+          Set-Content -Path launch.mjs -Value $js
+          $env:DEBUG = 'pw:browser*'
           foreach ($rt in 'bun','node') {
-            $sw = [Diagnostics.Stopwatch]::StartNew()
-            $p = Start-Process $rt -ArgumentList 'imp.mjs' -NoNewWindow -PassThru
-            if (-not $p.WaitForExit(90000)) { $p.Kill($true); "$rt TIMEOUT 90s" } else { "$rt exit $($p.ExitCode) in $($sw.Elapsed.TotalSeconds)s" }
+            foreach ($mode in 'headed','headless') {
+              $dir = Join-Path $env:RUNNER_TEMP "diag-$rt-$mode"
+              "=== $rt $mode"
+              $p = Start-Process $rt -ArgumentList 'launch.mjs',$mode,$dir,$chrome -NoNewWindow -PassThru -RedirectStandardOutput "$dir.out" -RedirectStandardError "$dir.err"
+              if (-not $p.WaitForExit(60000)) { $p.Kill($true); "$rt $mode TIMEOUT 60s" }
+              Get-Content "$dir.out" -ErrorAction SilentlyContinue | Select-Object -Last 15
+              Get-Content "$dir.err" -ErrorAction SilentlyContinue | Select-Object -First 25
+            }
           }
+          Remove-Item Env:DEBUG
       - name: Real browser probe (the runner image's Chrome, headed, nothing downloaded)
         run: |
           [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
