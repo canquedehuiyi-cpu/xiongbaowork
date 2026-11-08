@@ -124,7 +124,14 @@ export function AutomationRow({
   agentName: (id: string) => string;
 }) {
   const queryClient = useQueryClient();
-  const detail = useQuery(automationDetailQueryOptions(automation.id));
+  /*
+   * Current servers put each automation's triggers on the list; then the row draws from it and asks
+   * for nothing. An older server's list has none, and the row reads its own detail.
+   */
+  const detail = useQuery({
+    ...automationDetailQueryOptions(automation.id),
+    enabled: automation.triggers === undefined,
+  });
   const toggle = useMutation(setAutomationEnabledMutationOptions(queryClient));
   const remove = useMutation(deleteAutomationMutationOptions(queryClient));
   const rotate = useMutation(rotateTriggerSecretMutationOptions());
@@ -132,7 +139,7 @@ export function AutomationRow({
   const [fresh, setFresh] = useState<{ triggerId: string; secret: string }>();
 
   const state = automationState(automation);
-  const triggers = detail.data?.triggers ?? [];
+  const triggers = automation.triggers ?? detail.data?.triggers ?? [];
   const hooks = triggers.filter(
     (trigger) => trigger.config.kind === "webhook" && trigger.enabled,
   );
