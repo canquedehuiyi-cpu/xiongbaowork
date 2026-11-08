@@ -1,4 +1,10 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import {
@@ -308,6 +314,36 @@ const shimmed = appRegistry.add({
   args: [],
   env: {},
 });
+// The real `npx` case: a bare name found on PATH, whose shim finds its own script beside it through
+// `%~dp0` (as npx.cmd finds node_modules\npm\bin\npx-cli.js), started from another folder. cmd.exe
+// reads `%~dp0` as the current folder for a quoted name it looked up itself, so this only works when
+// the runner hands cmd the shim's absolute path.
+const pathBin = join(root, "path bin 熊宝");
+mkdirSync(join(pathBin, "lib"), { recursive: true });
+copyFileSync(fixture, join(pathBin, "lib", "fake-mcp-stdio.ts"));
+writeFileSync(
+  join(pathBin, "xb-probe-npx.cmd"),
+  `@"${process.execPath}" "%~dp0lib\\fake-mcp-stdio.ts" %*\r\n`,
+);
+// The parent's own spelling, so the child gets one PATH variable, not `Path` and `PATH`.
+const pathKey =
+  Object.keys(process.env).find((key) => key.toUpperCase() === "PATH") ??
+  "Path";
+const onPath = appRegistry.add({
+  kind: "stdio",
+  name: "path shim",
+  command: "xb-probe-npx",
+  args: [],
+  env: { [pathKey]: `${pathBin};${process.env[pathKey] ?? ""}` },
+  cwd: appsDir,
+});
+const missing = appRegistry.add({
+  kind: "stdio",
+  name: "missing",
+  command: "xb-probe-not-installed",
+  args: [],
+  env: {},
+});
 const appExecute = createRunnerExecutor(
   root,
   undefined,
@@ -315,9 +351,21 @@ const appExecute = createRunnerExecutor(
   undefined,
   createAppHost(appRegistry),
 );
+const notFound = await appExecute({
+  action: "apps.tools",
+  payload: { app: missing.ref },
+});
+assert(
+  !notFound.ok &&
+    notFound.error.includes("找不到命令 xb-probe-not-installed") &&
+    !notFound.outcomeUnknown,
+  "a command not on PATH fails to start with a clear reason",
+  notFound,
+);
 for (const [label, entry] of [
   ["direct", direct],
   ["cmd shim", shimmed],
+  ["cmd shim found on PATH, %~dp0 from another folder", onPath],
 ] as const) {
   const tools = await appExecute({
     action: "apps.tools",

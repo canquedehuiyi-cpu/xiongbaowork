@@ -1,4 +1,6 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
+import { statSync } from "node:fs";
+import { homedir } from "node:os";
 import { win32 } from "node:path";
 import type { AppEntry } from "./apps";
 
@@ -59,11 +61,19 @@ export class McpAppError extends Error {
     | "protocol"
     | "unknown_tool";
   stderrTail?: string;
-  constructor(kind: McpAppError["kind"], message: string, stderrTail?: string) {
+  /** Chinese and fit to show the owner, when this client knows the reason better than the app does. */
+  hint?: string;
+  constructor(
+    kind: McpAppError["kind"],
+    message: string,
+    stderrTail?: string,
+    hint?: string,
+  ) {
     super(message);
     this.name = "McpAppError";
     this.kind = kind;
     if (stderrTail !== undefined) this.stderrTail = stderrTail;
+    if (hint !== undefined) this.hint = hint;
   }
 }
 
@@ -151,29 +161,139 @@ function quoteForCmd(arg: string): string {
   return `"${escaped}"`;
 }
 
+/** cmd.exe's own list, used when the environment has no PATHEXT. */
+const DEFAULT_PATHEXT = ".COM;.EXE;.BAT;.CMD";
+
+/**
+ * A variable as a Windows child sees it. Names are case-insensitive there, and a plain object can
+ * hold both `Path` (from the parent) and `PATH` (from the entry): the last one is taken, which is
+ * the entry's, since `childEnv` lays the entry's variables after the parent's.
+ */
+function winEnvValue(
+  env: Record<string, string | undefined>,
+  name: string,
+): string | undefined {
+  let found: string | undefined;
+  for (const [key, value] of Object.entries(env)) {
+    if (value !== undefined && key.toUpperCase() === name) found = value;
+  }
+  return found;
+}
+
+function isFileOnDisk(path: string): boolean {
+  try {
+    return statSync(path).isFile();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The absolute path of what a bare Windows command name such as `npx` runs: the first folder of the
+ * child's PATH holding the name, tried as written when it already has an extension, then with each
+ * PATHEXT extension (`npx.cmd`). A command with a folder in it (absolute, `.\bin\x`, `C:x`) is the
+ * owner's own choice and comes back exactly as written. `undefined` when nothing on PATH matches.
+ * Neither the current folder nor a relative PATH folder is searched: only what is installed counts.
+ */
+export function resolveWindowsCommand(
+  command: string,
+  env: Record<string, string | undefined>,
+  isFile: (path: string) => boolean,
+): string | undefined {
+  if (/[\\/]/.test(command) || /^[A-Za-z]:/.test(command)) return command;
+  const extensions = (winEnvValue(env, "PATHEXT") ?? DEFAULT_PATHEXT)
+    .split(";")
+    .map((ext) => ext.trim())
+    .filter((ext) => ext.startsWith("."))
+    // Windows names are case-insensitive; `.cmd` is how npm and most installers spell their shims.
+    .map((ext) => ext.toLowerCase());
+  const names = [
+    ...(win32.extname(command) ? [command] : []),
+    ...extensions.map((ext) => command + ext),
+  ];
+  for (const raw of (winEnvValue(env, "PATH") ?? "").split(";")) {
+    const dir = raw.trim().replace(/^"(.*)"$/, "$1");
+    // A relative PATH folder would depend on where the app starts: not a place anything is installed.
+    if (!win32.isAbsolute(dir)) continue;
+    for (const name of names) {
+      const candidate = win32.join(dir, name);
+      if (isFile(candidate)) return candidate;
+    }
+  }
+  return undefined;
+}
+
+/** What to install for the commands people usually give, so a missing one can be named. */
+const INSTALLED_BY: Record<string, string> = {
+  node: "Node.js",
+  npm: "Node.js",
+  npx: "Node.js",
+  uv: "uv",
+  uvx: "uv",
+  bun: "Bun",
+  bunx: "Bun",
+  python: "Python",
+  py: "Python",
+  docker: "Docker Desktop",
+};
+
+function commandNotFound(command: string): McpAppError {
+  const product = INSTALLED_BY[command.replace(/\.[^.]*$/, "").toLowerCase()];
+  const hint = product
+    ? `找不到命令 ${command}，请确认已安装（例如 ${product}），并重启设备端。`
+    : `找不到命令 ${command}，请确认已安装并已加入 PATH，然后重启设备端。`;
+  return new McpAppError(
+    "start",
+    `${command} was not found on PATH.`,
+    undefined,
+    hint,
+  );
+}
+
 /**
  * How to start a stdio app. On Windows the usual commands (`npx`, `bunx`, `uvx`) are `.cmd` shims
  * that `spawn` cannot run directly (ENOENT), so the whole command goes through
  * `cmd.exe /d /s /c "<each part quoted>"`. With `/s`, cmd drops the first and last quote of that
  * line and runs the rest, hence the extra outer pair; `windowsVerbatimArguments` stops Node from
  * quoting that line a second time. Elsewhere the command and its arguments are used as they are.
- * Pure: the platform and the environment are passed in so both branches can be tested anywhere.
+ *
+ * On Windows a bare command is first turned into its absolute path on the child's PATH
+ * (`resolveWindowsCommand`). cmd.exe must never be left to find a shim itself: for a batch file it
+ * found through PATH under a quoted name, `%~dp0` reads as the CURRENT folder instead of the shim's
+ * own, so npx.cmd, npm.cmd, pnpm.cmd... look for their scripts in the wrong place ("Cannot find
+ * module ...\node_modules\npm\bin\npx-cli.js"). A command not found there fails as `start`, with a
+ * Chinese `hint` naming it.
+ *
+ * Pure: the platform, the child's environment and the file check are passed in so every branch can
+ * be tested anywhere.
  */
 export function launchSpec(
   entry: AppEntry,
   platform: NodeJS.Platform,
   env: Record<string, string | undefined>,
+  isFile: (path: string) => boolean = isFileOnDisk,
 ): { command: string; args: string[]; windowsVerbatimArguments?: boolean } {
   if (entry.kind !== "stdio") throw new Error("Only a stdio app is launched.");
   if (platform !== "win32") {
     return { command: entry.command, args: entry.args };
   }
-  const line = [entry.command, ...entry.args].map(quoteForCmd).join(" ");
+  const command = resolveWindowsCommand(entry.command, env, isFile);
+  if (command === undefined) throw commandNotFound(entry.command);
+  const line = [command, ...entry.args].map(quoteForCmd).join(" ");
   return {
-    command: env.ComSpec ?? env.COMSPEC ?? "cmd.exe",
+    command: winEnvValue(env, "COMSPEC") ?? "cmd.exe",
     args: ["/d", "/s", "/c", `"${line}"`],
     windowsVerbatimArguments: true,
   };
+}
+
+/**
+ * The folder a stdio app starts in: its own `cwd`, else the owner's home folder. Never the runner's
+ * working folder, which for the device app is its private data folder and means nothing to the
+ * owner (and an app given a relative path should find it where the owner would look).
+ */
+export function childCwd(entry: AppEntry, home: string): string {
+  return entry.kind === "stdio" && entry.cwd ? entry.cwd : home;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -200,11 +320,13 @@ class StdioTransport implements Transport {
   private stopping = false;
 
   constructor(entry: AppEntry) {
-    const spec = launchSpec(entry, process.platform, process.env);
     if (entry.kind !== "stdio") throw new Error("stdio entry expected");
+    // The command is looked up in the PATH the child will have, which the entry may extend.
+    const env = childEnv(process.env, entry.env);
+    const spec = launchSpec(entry, process.platform, env);
     this.child = spawn(spec.command, spec.args, {
-      cwd: entry.cwd,
-      env: childEnv(process.env, entry.env),
+      cwd: childCwd(entry, homedir()),
+      env,
       stdio: "pipe",
       windowsHide: true,
       // A group of its own on POSIX, so closing can take the whole tree down.
