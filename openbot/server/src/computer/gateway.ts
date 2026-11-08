@@ -1070,9 +1070,12 @@ export function createComputerGateway(
          * A local app's tool is its own target, so a rule or an "always allow" names one tool of one
          * app rather than every tool the app has.
          */
-        // --- desktop control (sub-project 2): a window is named by its process ---
+        // --- desktop control (sub-project 2): a window by its process, the listing as `desktop` ---
         scope: subject.desktop
           ? `desktop/${subject.desktop.process}`
+          : toolName === "computer_desktop_windows"
+          ? "desktop"
+          // --- end desktop control ---
           : app
           ? `${app.name}/${app.tool}`
           : filePath
@@ -1107,6 +1110,7 @@ export function createComputerGateway(
               },
               screenshot: subject.desktop.screenshot,
             }
+          // --- end desktop control ---
           : app
           ? { app: app.name, tool: app.tool }
           : {

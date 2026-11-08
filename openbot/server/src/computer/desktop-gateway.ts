@@ -78,11 +78,37 @@ export type DesktopPost = <T>(
   address: string,
 ) => Promise<T>;
 
-/** A machine's answer, kept to an array: anything else is an empty list. */
+/**
+ * A machine's answer, kept to the windows this server can judge. Untrusted input: an entry whose
+ * `windowId` is not a window id, or whose `title` or `process` is not a string, is dropped, so a
+ * malformed one never reaches the sensitive-word check, the approval scope or a row. Anything that
+ * is not an array is an empty list.
+ */
 function windowsOf(result: { windows?: unknown }): DesktopWindow[] {
-  return Array.isArray(result?.windows)
-    ? (result.windows as DesktopWindow[])
-    : [];
+  if (!Array.isArray(result?.windows)) return [];
+  return result.windows.flatMap((entry: unknown): DesktopWindow[] => {
+    if (!entry || typeof entry !== "object") return [];
+    const { windowId, title, process, focused, minimized } = entry as Record<
+      string,
+      unknown
+    >;
+    if (
+      typeof windowId !== "string" ||
+      !DESKTOP_WINDOW_ID.test(windowId) ||
+      typeof title !== "string" ||
+      typeof process !== "string"
+    )
+      return [];
+    return [
+      {
+        windowId,
+        title,
+        process,
+        focused: focused === true,
+        minimized: minimized === true,
+      },
+    ];
+  });
 }
 
 export function createDesktopMethods(deps: {

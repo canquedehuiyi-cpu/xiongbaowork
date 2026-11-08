@@ -178,8 +178,35 @@ test("listing posts desktop/windows to the owner's machine, caches it, and marks
     action: "computer_desktop_windows",
     decision: { allowed: true },
   });
-  // A listing is a read: the gate is asked, with the effect `read`.
+  // A listing is a read: the gate is asked, with the effect `read`, about the desktop as a whole,
+  // never about whatever page the Bot's browser happens to have open.
   expect(h.candidates[0]?.effect).toBe("read");
+  expect(h.candidates[0]?.scope).toBe("desktop");
+});
+
+test("a malformed window from the device is dropped and never reaches the gate", async () => {
+  const malformed = [
+    { windowId: "w4004-99", title: 42, process: "evil", focused: false },
+    { windowId: "w5005-11", title: "坏进程", process: { x: 1 } },
+    { windowId: "not-an-id", title: "伪造", process: "fake" },
+    null,
+    "w6006-12",
+  ] as unknown as DesktopWindow[];
+  const h = harness({ windows: [[NOTEPAD, ...malformed]] });
+  const listed = await h.gateway.listDesktopWindows("bot-1", ACTOR);
+  expect(listed.windows).toEqual([NOTEPAD]);
+  const attempt = h.gateway.snapshotDesktop("bot-1", ACTOR, {
+    windowId: "w4004-99",
+  });
+  await expect(attempt).rejects.toThrow(desktopMessage("no_window"));
+  // The listing above and the one refetch; never a read of the malformed window.
+  expect(h.paths()).toEqual(["/desktop/windows", "/desktop/windows"]);
+  expect(
+    h.candidates.filter((c) => c.toolRef === "computer_desktop_snapshot"),
+  ).toHaveLength(0);
+  expect(h.candidates.every((c) => !String(c.scope).includes("evil"))).toBe(
+    true,
+  );
 });
 
 test("a snapshot of a listed window uses the cached title: one listing, one read", async () => {
