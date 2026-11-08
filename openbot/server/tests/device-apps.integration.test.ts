@@ -906,11 +906,23 @@ test("while a person has taken over the machine, the app is never started for it
   expect(device.sent("apps.call")).toHaveLength(0);
 }, 20_000);
 
-test("a paused device is not asked for a tool list: the call is told it is paused", async () => {
-  const device = await pairedDevice();
-  // An action whose reply was lost: the device is paused until its owner checks it.
+/**
+ * Pause the device the way production does: an action was carried to the machine and its reply was
+ * lost with the connection, so its outcome is unknown until the owner checks it.
+ *
+ * Done while the runner is away. With it connected, the channel's own flush (started on attach and
+ * after every heartbeat, without being awaited) can deliver the queued action to the runner, which
+ * runs it and answers, before the drain below gets to it; the action then completes, nothing is
+ * uncertain, and the device is not paused. Away, no flush can reach the machine; back, every flush
+ * finds the uncertain action and stops there.
+ */
+async function pauseWithLostReply(
+  device: Awaited<ReturnType<typeof pairedDevice>>,
+  key: string,
+) {
+  await device.disconnect();
   await device.queue.enqueue(device.target, {
-    key: "lost-reply",
+    key,
     action: "exec",
     payload: { command: "true" },
   });
@@ -918,6 +930,13 @@ test("a paused device is not asked for a tool list: the call is told it is pause
     throw new Error("reply lost after the run");
   });
   expect(await device.queue.uncertain(device.target)).toBe(1);
+  await device.connect();
+  expect(await device.queue.uncertain(device.target)).toBe(1);
+}
+
+test("a paused device is not asked for a tool list: the call is told it is paused", async () => {
+  const device = await pairedDevice();
+  await pauseWithLostReply(device, "lost-reply");
   await expect(
     device.call("computer_app_call", { app: "Notes", tool: "echo", args: { text: "x" } }),
   ).rejects.toThrow(DEVICE_PAUSED);
@@ -928,15 +947,7 @@ test("a paused device is not asked for a tool list: the call is told it is pause
 
 test("a paused device still lists the enabled apps, with a discoveryError", async () => {
   const device = await pairedDevice();
-  await device.queue.enqueue(device.target, {
-    key: "lost-reply-2",
-    action: "exec",
-    payload: { command: "true" },
-  });
-  await device.queue.drain(device.target, "test-owner", async () => {
-    throw new Error("reply lost after the run");
-  });
-  expect(await device.queue.uncertain(device.target)).toBe(1);
+  await pauseWithLostReply(device, "lost-reply-2");
   const listed = (await device.call("computer_apps", {})) as {
     apps: { name: string; error?: string }[];
     available?: unknown;
