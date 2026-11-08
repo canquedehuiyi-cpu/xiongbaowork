@@ -9,6 +9,7 @@ import { createAppHost } from "../../runner/src/app-host";
 import { createAppRegistry } from "../../runner/src/apps";
 import { createRunnerDispatcher } from "../../runner/src/dispatch";
 import { createRunnerExecutor } from "../../runner/src/execute";
+import { createDiscoverActions } from "../../runner/src/discover-actions";
 import { createActionJournal } from "../../runner/src/journal";
 import { TOOL_DISABLED } from "../src/approvals/policy";
 import {
@@ -78,6 +79,7 @@ const FIXTURE = new URL(
   "../../runner/tests/fixtures/fake-mcp-stdio.ts",
   import.meta.url,
 ).pathname;
+const DISCOVER_APPDATA = "C:\\Users\\me\\AppData\\Roaming";
 const tenants: string[] = [];
 const cleanups: (() => Promise<void>)[] = [];
 const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -96,6 +98,8 @@ async function pairedDevice(
     hostCommandsCap?: "allow" | "ask" | "never";
     /** The gateway's clock, for the five-minute life of a device's tool list. */
     now?: () => number;
+    /** False: a runner from before app discovery, which does not handle `apps.discover`. */
+    discovery?: boolean;
   } = {},
 ) {
   const tenant = `dapps-${suite}-${tenants.length}`;
@@ -144,12 +148,48 @@ async function pairedDevice(
     args: [FIXTURE],
     env: {},
   });
+  // The machine discovery reads: a Windows one, with a Claude desktop config, by injection.
+  const discoveryFiles: Record<string, unknown> = {
+    [`${DISCOVER_APPDATA}\\Claude\\claude_desktop_config.json`]: {
+      mcpServers: {
+        Figma: {
+          command: "C:\\Users\\me\\tools\\figma-mcp.exe",
+          args: ["--root", "C:\\Users\\me\\secret-project"],
+          env: { FIGMA_TOKEN: "sk-figma-secret-value" },
+        },
+      },
+    },
+  };
+  const discovery =
+    options.discovery === false
+      ? undefined
+      : createDiscoverActions({
+          dataDir: join(root, "runner-data"),
+          registry,
+          deps: {
+            platform: "win32",
+            env: { APPDATA: DISCOVER_APPDATA, USERPROFILE: "C:\\Users\\me" },
+            readText: (path) =>
+              discoveryFiles[path] === undefined
+                ? undefined
+                : JSON.stringify(discoveryFiles[path]),
+            readInstalled: async () =>
+              [
+                { DisplayName: "Notes" },
+                { DisplayName: "微信" },
+                { DisplayName: "Photoshop" },
+              ] as never,
+            resolveCommand: (command) =>
+              command.endsWith(".exe") ? command : undefined,
+          },
+        });
   const execute = createRunnerExecutor(
     join(root, "ws"),
     undefined,
     undefined,
     undefined,
     createAppHost(registry),
+    discovery ? { discovery } : undefined,
   );
   const journal = createActionJournal(join(root, "actions.sqlite"));
   const dispatch = createRunnerDispatcher(journal, execute);
@@ -427,6 +467,62 @@ test("computer_apps lists the owner's device apps and their tools", async () => 
     expect(Object.keys(frame.payload as object)).toEqual(["app"]);
   await expect(device.call("computer_apps", { app: "Excel" })).rejects.toThrow(
     "这台电脑上没有名为「Excel」的本机应用（已有：Notes）",
+  );
+}, 20_000);
+
+test("computer_apps lists enabled, available and installed groups, and the result carries no command, path or env value", async () => {
+  const device = await pairedDevice();
+  const listed = (await device.call("computer_apps", {})) as {
+    apps: { name: string }[];
+    available?: { candidate: string; name: string; source: string; status: string }[];
+    installed?: string[];
+    hints?: { available: string; installed: string };
+    discoveryError?: string;
+  };
+  expect(listed.discoveryError).toBeUndefined();
+  expect(listed.apps.map((app) => app.name)).toEqual(["Notes"]);
+  expect(listed.available).toHaveLength(1);
+  expect(listed.available?.[0]).toMatchObject({
+    name: "Figma",
+    status: "ready",
+    kind: "stdio",
+  });
+  expect(listed.available?.[0]?.candidate).toMatch(/^cand_/);
+  // Notes is already an enabled app: it is not "installed without an app".
+  expect([...(listed.installed ?? [])].sort()).toEqual(["Photoshop", "微信"].sort());
+  expect(listed.hints?.available).toContain("本机应用");
+  expect(listed.hints?.installed).toContain("桌面操控");
+  const text = JSON.stringify(listed);
+  for (const secret of ["sk-figma-secret-value", "secret-project", "figma-mcp.exe", "AppData", "FIGMA_TOKEN"])
+    expect(text).not.toContain(secret);
+  expect(device.sent("apps.discover")).toHaveLength(1);
+}, 20_000);
+
+test("computer_apps with app lists that one app and sends no apps.discover frame", async () => {
+  const device = await pairedDevice();
+  const one = (await device.call("computer_apps", { app: "Notes" })) as {
+    apps: unknown[];
+    available?: unknown;
+    installed?: unknown;
+  };
+  expect(one.apps).toHaveLength(1);
+  expect(one.available).toBeUndefined();
+  expect(one.installed).toBeUndefined();
+  expect(device.sent("apps.discover")).toHaveLength(0);
+}, 20_000);
+
+test("a runner without discovery still lists enabled apps and says the device app needs updating", async () => {
+  const device = await pairedDevice({ discovery: false });
+  const listed = (await device.call("computer_apps", {})) as {
+    apps: { name: string; tools?: unknown[] }[];
+    available?: unknown;
+    discoveryError?: string;
+  };
+  expect(listed.apps.map((app) => app.name)).toEqual(["Notes"]);
+  expect(listed.apps[0]?.tools).toHaveLength(3);
+  expect(listed.available).toBeUndefined();
+  expect(listed.discoveryError).toBe(
+    "主人电脑上的设备端版本较旧，更新后才能查看可启用的应用。",
   );
 }, 20_000);
 
@@ -882,6 +978,7 @@ test("with the team's cap at never, listing local apps is refused before any app
     "set to never run",
   );
   expect(capped.sent("apps.tools")).toHaveLength(0);
+  expect(capped.sent("apps.discover")).toHaveLength(0);
 }, 20_000);
 
 test("only the Bot's owner may use the owner's local apps", async () => {
@@ -903,6 +1000,7 @@ test("only the Bot's owner may use the owner's local apps", async () => {
       args: { text: "x" },
     }),
   ).rejects.toThrow("只有员工的主人本人");
+  expect(device.sent("apps.discover")).toHaveLength(0);
   expect(device.sent("apps.tools")).toHaveLength(0);
   expect(device.sent("apps.call")).toHaveLength(0);
   expect(await device.requests()).toEqual([]);
