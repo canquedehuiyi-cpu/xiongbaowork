@@ -19,6 +19,7 @@ import { createActionJournal } from "../../runner/src/journal.ts";
 import { createRunnerDispatcher } from "../../runner/src/dispatch.ts";
 import { createAppHost } from "../../runner/src/app-host.ts";
 import { createAppRegistry } from "../../runner/src/apps.ts";
+import { probeDesktop } from "./windows-desktop-probe.ts";
 
 const root = process.argv[2];
 if (!root || process.platform !== "win32")
@@ -391,4 +392,5 @@ assert(
   echoed,
 );
 await appExecute.closeApps();
+await probeDesktop(assert, root, execute);
 console.log("WINDOWS_PROBE_PASS");
