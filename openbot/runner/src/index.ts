@@ -531,6 +531,8 @@ export async function runAppCommand(
           dataDir: parsed.dataDir,
           registry,
           host,
+          // Printed for the device window on this machine only: why it failed, in full.
+          detailedErrors: true,
           ...(discoverDeps ? { deps: discoverDeps } : {}),
         })("apps.enable", { candidate: command.candidate });
         if (!outcome.ok) {

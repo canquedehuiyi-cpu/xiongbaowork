@@ -1788,6 +1788,37 @@ describe("device app discovery: enabling a local app", () => {
     ).toMatchObject({ behaviour: "ask", source: "app_enable", reason });
     expect(appEnableReason("Figma", "内置清单")).toBe(reason);
   });
+  // --- app discovery (sub-project 3) ---
+  test("the owner's ask-before-changes default and the team's cap of ask still say 允许员工使用本机应用「Figma」？来源：…", async () => {
+    const reason = "允许员工使用本机应用「Figma」？来源：在你的电脑上找到";
+    // Asked because of the person's own default: still that source, so turning it off withdraws it.
+    expect(
+      await decideAction({
+        ...base,
+        candidate: enable("在你的电脑上找到"),
+        askBeforeChanges: true,
+      }),
+    ).toMatchObject({ behaviour: "ask", source: "default", reason });
+    expect(
+      await decideAction({
+        ...base,
+        candidate: enable("在你的电脑上找到"),
+        hostCommandsCap: "ask",
+      }),
+    ).toMatchObject({ behaviour: "ask", source: "host_command_cap", reason });
+    // A rule's own ask keeps its own reason.
+    expect(
+      await decideAction({
+        ...base,
+        candidate: enable("在你的电脑上找到"),
+        personal: [rule("ask", { toolRef: "computer_app_enable" })],
+      }),
+    ).toMatchObject({
+      behaviour: "ask",
+      reason: "A rule asks before this kind of action.",
+    });
+  });
+  // --- end app discovery ---
   test("team cap never and a disabled tool deny computer_app_enable", async () => {
     expect(
       await decideAction({ ...base, candidate: enable(), hostCommandsCap: "never" }),

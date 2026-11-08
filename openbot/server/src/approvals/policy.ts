@@ -747,15 +747,36 @@ export async function decideAction(input: {
   const decided = await decideByRules(input, matched);
   // A floor only raises: an action the rules let through still asks; one already asked about or
   // handed off keeps the stricter answer it had.
-  if (floor && decided.behaviour === "allow")
+  const outcome: ApprovalPolicyOutcome =
+    floor && decided.behaviour === "allow"
+      ? {
+          behaviour: "ask",
+          source: floor.source,
+          reason: floor.reason,
+          ...(decided.ruleId ? { ruleId: decided.ruleId } : {}),
+          ...(decided.review ? { review: decided.review } : {}),
+        }
+      : decided;
+  // --- app discovery (sub-project 3) ---
+  /*
+   * Enabling an app asked about only because of the person's "ask before changes" default or the
+   * team's cap of `ask`: the card still says which app and where it was found (spec §4). The source
+   * stays, so turning the default off still withdraws a request it alone asked.
+   */
+  if (
+    candidate.toolRef === APP_ENABLE_TOOL &&
+    outcome.behaviour === "ask" &&
+    (outcome.source === "default" || outcome.source === "host_command_cap")
+  )
     return {
-      behaviour: "ask",
-      source: floor.source,
-      reason: floor.reason,
-      ...(decided.ruleId ? { ruleId: decided.ruleId } : {}),
-      ...(decided.review ? { review: decided.review } : {}),
+      ...outcome,
+      reason: appEnableReason(
+        enableTargetName(candidate.target),
+        candidate.display?.description ?? "本机",
+      ),
     };
-  return decided;
+  // --- end app discovery ---
+  return outcome;
 }
 
 /**
