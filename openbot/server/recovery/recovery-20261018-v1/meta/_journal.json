@@ -995,6 +995,13 @@
       "when": 1793636700000,
       "tag": "0144_portraits",
       "breakpoints": true
+    },
+    {
+      "idx": 145,
+      "version": "7",
+      "when": 1793637000000,
+      "tag": "0145_text_translations",
+      "breakpoints": true
     }
   ]
 }

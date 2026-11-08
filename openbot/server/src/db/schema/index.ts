@@ -30,6 +30,7 @@ export * from "./roles";
 export * from "./scim";
 export * from "./tasks";
 export * from "./team-bots";
+export * from "./text-translations";
 export * from "./threads";
 export * from "./voice";
 export * from "./waker-groups";
