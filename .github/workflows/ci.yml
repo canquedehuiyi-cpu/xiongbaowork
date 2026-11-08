@@ -428,6 +428,13 @@ jobs:
       # runner/src/browser imports agent-computer/src/aria-snapshot, which needs yaml from the root.
       - name: Install root workspaces from the frozen lockfile (no lifecycle scripts)
         run: bun install --frozen-lockfile --ignore-scripts
+      - name: DIAG import timing
+        run: |
+          foreach ($rt in 'bun','node') {
+            $sw = [Diagnostics.Stopwatch]::StartNew()
+            $p = Start-Process $rt -ArgumentList '-e','import("playwright-core").then(()=>console.log("loaded"))' -NoNewWindow -PassThru
+            if (-not $p.WaitForExit(90000)) { $p.Kill($true); "$rt TIMEOUT 90s" } else { "$rt exit $($p.ExitCode) in $($sw.Elapsed.TotalSeconds)s" }
+          }
       - name: Real browser probe (the runner image's Chrome, headed, nothing downloaded)
         run: |
           [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
