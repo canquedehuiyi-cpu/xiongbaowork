@@ -34,6 +34,7 @@ import {
   installListingsQueryOptions,
   pluginsPageQueryOptions,
 } from "@/lib/plugins/queries";
+import { useZh } from "@/lib/translations/queries";
 import { cn } from "@/lib/utils";
 import {
   grantedSentence,
@@ -389,6 +390,7 @@ function PluginCardView({
   isAdmin: boolean;
   onOpen: () => void;
 }) {
+  const zh = useZh();
   const titleId = `plugin-card-${card.key}-${card.server?.id ?? "entry"}`;
   return (
     /*
@@ -411,14 +413,14 @@ function PluginCardView({
           data-slot="plugin-card-title"
           id={titleId}
         >
-          {card.title}
+          {zh(card.title)}
         </span>
       </div>
       <p
         className="line-clamp-3 min-h-[60px] text-[13px] text-muted-foreground leading-[20px]"
         data-slot="plugin-card-summary"
       >
-        {card.summary || "这个插件没有提供说明。"}
+        {zh(card.summary) || "这个插件没有提供说明。"}
       </p>
       <div
         className="mt-auto flex min-w-0 items-center gap-[6px] text-[12px] text-muted-foreground"
@@ -435,7 +437,7 @@ function PluginCardView({
         onClick={onOpen}
         type="button"
       >
-        <span className="sr-only">详情：{card.title}</span>
+        <span className="sr-only">详情：{zh(card.title)}</span>
       </button>
       <div className="absolute top-[12px] right-[12px] z-10 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100">
         <PluginAction card={card} isAdmin={isAdmin} status={status} />
@@ -463,6 +465,7 @@ function PluginDetails({
   isAdmin: boolean;
   onClose: () => void;
 }) {
+  const zh = useZh();
   const how = card?.catalogue
     ? AUTH_SENTENCE[card.catalogue.auth]
     : card?.server?.provenance === "composio"
@@ -486,7 +489,7 @@ function PluginDetails({
                   <PluginLogo logo={card.logo} />
                 </span>
                 <div className="flex min-w-0 flex-col">
-                  <SheetTitle>{card.title}</SheetTitle>
+                  <SheetTitle>{zh(card.title)}</SheetTitle>
                   <SheetDescription>{card.vendor}</SheetDescription>
                 </div>
               </div>
@@ -496,7 +499,7 @@ function PluginDetails({
                 <Tag tone={statusTone(status)}>{status.label}</Tag>
                 {card.listed ? <Tag>可自助安装</Tag> : null}
               </div>
-              {card.summary ? <p>{card.summary}</p> : null}
+              {card.summary ? <p>{zh(card.summary)}</p> : null}
               {card.server?.lastError ? (
                 <p className="text-destructive">{card.server.lastError}</p>
               ) : null}
@@ -533,7 +536,7 @@ function PluginDetails({
                           </span>
                           {tool.description ? (
                             <span className="text-[12px] text-muted-foreground">
-                              {tool.description}
+                              {zh(tool.description)}
                             </span>
                           ) : null}
                         </li>

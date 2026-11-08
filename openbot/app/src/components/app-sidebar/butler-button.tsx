@@ -11,7 +11,7 @@ const WORKBENCH_PATHS = new Set([
 ]);
 
 /**
- * 小管家: a round button with our own mascot, floating at the bottom centre of the main area on the
+ * 小管家: a round button with 熊宝 in the 帅气 ("我最棒!") expression, floating at the bottom centre of the main area on the
  * five workbench pages, where the reference floats its own helper. It opens this product's default
  * assistant at /bot — what the sidebar footer's 小管家 row used to link to.
  *
@@ -26,11 +26,11 @@ export function ButlerButton() {
   return (
     <Link
       aria-label="小管家"
-      className="absolute bottom-[24px] left-1/2 z-20 flex size-[48px] -translate-x-1/2 items-center justify-center rounded-full bg-card shadow-lg ring-1 ring-border outline-none transition-transform hover:scale-105 focus-visible:ring-2 focus-visible:ring-ring/60"
+      className="absolute bottom-[24px] left-1/2 z-20 flex size-[48px] -translate-x-1/2 items-center justify-center rounded-full bg-card shadow-lg ring-1 ring-brand-gold/60 outline-none transition-transform hover:scale-105 focus-visible:ring-2 focus-visible:ring-ring/60"
       title="小管家"
       to="/bot"
     >
-      <BearMascot size={44} />
+      <BearMascot className="shadow-none ring-0" mood="cool" size={46} />
     </Link>
   );
 }

@@ -292,6 +292,9 @@ tests/policy-dry-run.test.ts
 tests/policy-durability.integration.test.ts
 tests/policy-fanout.integration.test.ts
 tests/policy-store-tenant.integration.test.ts
+tests/portrait-coworker-access.test.ts
+tests/portrait-image.test.ts
+tests/portraits.test.ts
 tests/private-share-group.test.ts
 tests/proactive-store.integration.test.ts
 tests/proactive.test.ts
@@ -429,6 +432,7 @@ tests/tenant-package.test.ts
 tests/tenant-rls.test.ts
 tests/tenant-transaction-frame.integration.test.ts
 tests/test-database-url.integration.test.ts
+tests/text-translations.test.ts
 tests/thread-identity.test.ts
 tests/thread-routes.test.ts
 tests/thread-status.test.ts

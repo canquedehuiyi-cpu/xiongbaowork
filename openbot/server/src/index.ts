@@ -361,6 +361,15 @@ import {
 import { createProjectContext } from "./projects/context";
 import { createProjectRoutes } from "./projects/routes";
 import { createProjectStore } from "./projects/store";
+import { coworkerFaceAccess } from "./portraits/coworker-access";
+import { createPortraitRoutes } from "./portraits/routes";
+import { createPortraitStore } from "./portraits/store";
+import { createTranslationRoutes } from "./translations/routes";
+import {
+  createTranslationStore,
+  translatePending,
+} from "./translations/store";
+import { createTranslator } from "./translations/translator";
 import { createUserPreferencesStore } from "./user-preferences";
 import { createVoiceSessionStore } from "./voice/sessions";
 import { createVoiceSummarizer } from "./voice/summary";
@@ -4069,6 +4078,43 @@ await startupLifecycle.run(async (startup) => {
   );
 
   /*
+   * 中文 for skills and plugins that arrived in English: their names, summaries, tool descriptions and
+   * instructions as the screens show them (migration 0145). Reads queue what has no translation yet;
+   * this loop asks the deployment's model for a few at a time. Display only: what a model is given
+   * stays the original. A deployment with no model key simply keeps showing the originals.
+   */
+  const textTranslationStore = createTranslationStore(database);
+  const translateToChinese = createTranslator(
+    createModelCompleter({
+      model: runtimeModel,
+      resolveApiKey: resolveRuntimeModelApiKey,
+      timeoutMs: 60_000,
+      maxTokens: 4096,
+    }),
+  );
+  startup.acquireSync(
+    () =>
+      repeatAfterEach(async () => {
+        try {
+          const report = await runAsTenant("platform", () =>
+            translatePending(textTranslationStore, translateToChinese),
+          );
+          if (report.translated > 0 || report.failed > 0) {
+            console.info(
+              JSON.stringify({ type: "text-translations", ...report }),
+            );
+          }
+        } catch (error) {
+          console.warn(
+            "[translations] skills and plugins could not be translated:",
+            error instanceof Error ? error.message : error,
+          );
+        }
+      }, 15_000),
+    (resource) => resource.stop(),
+  );
+
+  /*
    * Naming conversations, in the API process rather than `worker/`, which the single-image container
    * does not run. Its own loop, so a slow model never delays a hop.
    */
@@ -4523,6 +4569,29 @@ await startupLifecycle.run(async (startup) => {
     "/api/waker-groups",
     createWakerGroupRoutes(
       createWakerGroupStore(database),
+      config.singleUser
+        ? createDevRequireUser()
+        : createRequireUser(auth as AuthService, roleRepository),
+    ),
+  );
+
+  // 头像: the faces people chose for coworkers and groups (migration 0144).
+  app.route(
+    "/api/portraits",
+    createPortraitRoutes(
+      createPortraitStore(database),
+      coworkerFaceAccess(agentProfileStore),
+      config.singleUser
+        ? createDevRequireUser()
+        : createRequireUser(auth as AuthService, roleRepository),
+    ),
+  );
+
+  app.route(
+    "/api/translations",
+    createTranslationRoutes(
+      textTranslationStore,
+      pluginStore,
       config.singleUser
         ? createDevRequireUser()
         : createRequireUser(auth as AuthService, roleRepository),

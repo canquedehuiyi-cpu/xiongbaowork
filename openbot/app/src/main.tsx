@@ -10,7 +10,9 @@ import "./styles.css";
 
 // The tab says whose product this is. `index.html` carries the delivery brand before this runs;
 // a custom tenant package supplies its own product name once the application starts.
-document.title = appConfig.brand.productName;
+document.title = appConfig.brand.englishName
+  ? `${appConfig.brand.productName} · ${appConfig.brand.englishName}`
+  : appConfig.brand.productName;
 
 const rootElement = document.getElementById("root");
 

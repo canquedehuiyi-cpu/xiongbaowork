@@ -485,7 +485,9 @@ test("C1: on 自主工作, 全部员工 shows the automations beside every cowor
   const root = createRootRoute({ component: () => <Outlet /> });
   const router = createRouter({
     context: {},
-    history: createMemoryHistory({ initialEntries: ["/autonomous?view=agents"] }),
+    history: createMemoryHistory({
+      initialEntries: ["/autonomous?view=agents"],
+    }),
     routeTree: root.addChildren([
       AutonomousRoute.update({
         getParentRoute: () => root,
@@ -508,4 +510,27 @@ test("C1: on 自主工作, 全部员工 shows the automations beside every cowor
   await user.click(view.getByRole("button", { name: "全部员工" }));
   expect(await view.findByText("自动任务")).toBeTruthy();
   expect(await view.findByText("每日简报")).toBeTruthy();
+});
+
+/*
+ * A server whose list carries each automation's triggers (`GET /api/automations` → triggers) needs no
+ * per-row detail read: the 按员工 view's rows draw their chips from the list, as the unified list
+ * does, and only an older server's list without them sends each row to `GET /api/automations/:id`.
+ */
+test("when the list carries triggers, the rows draw their chips without reading any detail", async () => {
+  serve(
+    [running, tripped].map((entry) => ({
+      ...entry,
+      triggers: TRIGGERS[entry.id] ?? [],
+    })),
+  );
+  const { view } = draw();
+  const live = await rowOf(view, "每日简报");
+  const chips = await within(live).findAllByRole("listitem");
+  expect(chips.map((chip) => chip.textContent)).toContain(
+    "Hook / API · 外部调用",
+  );
+  expect(
+    calls.filter((call) => /^\/api\/automations\/[^/]+$/.test(call.path)),
+  ).toEqual([]);
 });

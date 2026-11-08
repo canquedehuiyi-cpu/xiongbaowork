@@ -33,6 +33,7 @@ import { type ChannelSummary, channelKeys } from "@/lib/channels/queries";
 import { quotaKeys } from "@/lib/quota/queries";
 import { userPreferencesQueryOptions } from "@/lib/settings/message-list";
 import { wakerGroupKeys } from "@/lib/waker-groups/queries";
+import { portraitKeys } from "@/lib/portraits/queries";
 
 // Keep the sidebar's live-update socket offline; these tests exercise HTTP pagination.
 class OfflineWebSocket extends EventTarget implements WebSocket {
@@ -200,6 +201,8 @@ function renderSidebar(
   });
   queryClient.setQueryData(botLifecycleKeys.attention, []);
   queryClient.setQueryData(wakerGroupKeys.list(), []);
+  // Nobody has chosen a 头像 here; seeded so the faces draw without a read the test did not plan.
+  queryClient.setQueryData(portraitKeys.all, []);
   queryClient.setQueryData(channelKeys.list(), {
     pages: [{ channels: rows, nextCursor }],
     pageParams: [""],

@@ -106,17 +106,23 @@ export function UnifiedAutomations({
   const automations = useQuery(automationListQueryOptions());
   const list = automations.data ?? [];
   /*
-   * The list endpoint carries no triggers, so each automation's detail is read once (a server-side
-   * `?include=triggers` would remove even that). Here it is never polled: a detail is read again
-   * only when the list shows that automation changed — it ran, or it was switched — see below.
+   * The list carries each automation's triggers (current servers), so nothing more is read: the
+   * detail cache is seeded from it, and opening 详情 has them at once. An older server's list has
+   * none; then each detail is read once, never polled, and read again only when the list shows that
+   * automation changed — it ran, or it was switched — see `useRefreshChangedDetails`.
    */
+  const listCarriesTriggers =
+    list.length > 0 &&
+    list.every((automation) => Array.isArray(automation.triggers));
+  useSeedDetailsFromList(list, listCarriesTriggers);
   const details = useQueries({
     queries: list.map((automation) => ({
       ...automationDetailQueryOptions(automation.id),
       refetchInterval: false as const,
+      enabled: !listCarriesTriggers,
     })),
   });
-  useRefreshChangedDetails(list);
+  useRefreshChangedDetails(listCarriesTriggers ? [] : list);
   const routines = useQuery(routinesQueryOptions());
   // The /responsibilities page polls every 10s for live progress; a row's status here can wait.
   const responsibilities = useQuery({
@@ -139,13 +145,13 @@ export function UnifiedAutomations({
   const triggers = new Map(
     list.map((automation, index) => [
       automation.id,
-      details[index]?.data?.triggers,
+      automation.triggers ?? details[index]?.data?.triggers,
     ]),
   );
   const detailErrors = new Map(
     list.map((automation, index) => [
       automation.id,
-      details[index]?.error ?? null,
+      listCarriesTriggers ? null : (details[index]?.error ?? null),
     ]),
   );
   // Read defensively: older fixtures and servers answer a bare array or nothing for these joins.
@@ -1013,4 +1019,26 @@ function useRefreshChangedDetails(list: readonly Automation[]) {
       }
     }
   }, [list, queryClient]);
+}
+
+/**
+ * Put each listed automation's triggers where its detail panel looks for them, so 详情 opens with
+ * them already there instead of asking for what the list just answered.
+ */
+function useSeedDetailsFromList(
+  list: readonly Automation[],
+  carriesTriggers: boolean,
+) {
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    if (!carriesTriggers) return;
+    for (const automation of list) {
+      const { triggers, breakerTripped: _tripped, ...rest } = automation;
+      if (!triggers) continue;
+      queryClient.setQueryData(automationKeys.detail(automation.id), {
+        automation: rest,
+        triggers,
+      });
+    }
+  }, [list, carriesTriggers, queryClient]);
 }

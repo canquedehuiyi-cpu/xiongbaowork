@@ -2,6 +2,9 @@ import { useMutation, type useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
+import { WorkbenchEmpty } from "@/components/layout/workbench-empty";
+import { PortraitPicker } from "@/components/portraits/portrait-picker";
+import { usePortraitSrc } from "@/components/portraits/use-portrait";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -11,16 +14,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { WorkbenchEmpty } from "@/components/layout/workbench-empty";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { AgentProfile } from "@/lib/agents/queries";
+import { cn } from "@/lib/utils";
 import {
   createCrewMutationOptions,
   retireCrewMutationOptions,
   setCrewMembersMutationOptions,
 } from "@/lib/waker-groups/mutations";
-import { cn } from "@/lib/utils";
 import type { WakerGroup } from "@/lib/waker-groups/queries";
 import {
   CARD_SURFACE,
@@ -174,6 +176,7 @@ export function CrewTab({
           action={<Button onClick={onCreate}>新建群组</Button>}
           className="py-16"
           description={CREW_MEANING}
+          mood="cute"
           title="还没有群组"
         />
       </div>
@@ -237,6 +240,8 @@ function CrewCard({
   rosterLoading: boolean;
 }) {
   const [managing, setManaging] = useState(false);
+  const [choosingFace, setChoosingFace] = useState(false);
+  const face = usePortraitSrc("group", crew.id);
   /*
    * Disbanding drops the roster and the order somebody assembled, and nothing brings them back, so
    * the button that does it asks once before it does it.
@@ -257,7 +262,18 @@ function CrewCard({
       data-testid="crew-card"
     >
       <div className="flex h-[44px] shrink-0 items-center -space-x-3">
-        {ordered.slice(0, 4).map((member) => {
+        {face ? (
+          // A face somebody chose for the group stands in for its members' faces.
+          <img
+            alt={`群组头像：${crew.name}`}
+            className="size-[44px] rounded-full object-cover ring-2 ring-card"
+            data-portrait=""
+            height={44}
+            src={face}
+            width={44}
+          />
+        ) : null}
+        {(face ? [] : ordered.slice(0, 4)).map((member) => {
           const agent = roster.find((entry) => entry.id === member.agentId);
           return (
             <span
@@ -267,17 +283,18 @@ function CrewCard({
               <AbstractAvatar
                 name={agent?.name ?? member.agentId}
                 seed={agent?.avatarSeed ?? member.agentId}
+                portrait={{ kind: "coworker", id: member.agentId }}
                 size={40}
               />
             </span>
           );
         })}
-        {ordered.length > 4 ? (
+        {!face && ordered.length > 4 ? (
           <span className="z-[1] inline-flex size-[40px] items-center justify-center rounded-full bg-muted text-[12px] text-muted-foreground ring-2 ring-card tabular-nums">
             +{ordered.length - 4}
           </span>
         ) : null}
-        {ordered.length === 0 ? (
+        {!face && ordered.length === 0 ? (
           <span className="size-[40px] rounded-full border border-dashed" />
         ) : null}
       </div>
@@ -339,6 +356,19 @@ function CrewCard({
         >
           {managing ? "完成" : "管理成员"}
         </Button>
+        <Button onClick={() => setChoosingFace(true)} size="xs" variant="ghost">
+          更换头像
+        </Button>
+        {choosingFace ? (
+          <PortraitPicker
+            id={crew.id}
+            kind="group"
+            name={crew.name}
+            onOpenChange={setChoosingFace}
+            open={choosingFace}
+            seed={crew.id}
+          />
+        ) : null}
         {confirming ? (
           <>
             <Button

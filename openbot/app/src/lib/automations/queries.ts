@@ -43,6 +43,11 @@ export type Automation = {
   createdAt: string;
   /** Present on the list: the circuit breaker is what switched it off (C3). */
   breakerTripped?: boolean;
+  /**
+   * Present on the list from servers that carry them: its triggers, as `GET /api/automations/:id`
+   * reads them. Absent from older servers, where each detail is read on its own.
+   */
+  triggers?: AutomationTrigger[];
 };
 
 export type AutomationTrigger = {

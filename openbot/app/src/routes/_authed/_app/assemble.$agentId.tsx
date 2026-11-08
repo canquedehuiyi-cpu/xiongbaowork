@@ -107,6 +107,7 @@ function AssemblePage() {
         <AbstractAvatar
           name={profile.name}
           seed={profile.avatarSeed}
+          portrait={{ kind: "coworker", id: profile.id }}
           size={40}
         />
         <div className="min-w-0">

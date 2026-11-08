@@ -17,6 +17,7 @@ import {
   type SegmentedTab,
   SegmentedTabs,
 } from "@/components/layout/segmented-tabs";
+import { usePortraitSrc } from "@/components/portraits/use-portrait";
 import { Button } from "@/components/ui/button";
 import { type AgentProfile, agentListQueryOptions } from "@/lib/agents/queries";
 import { setBotPausedMutationOptions } from "@/lib/bot-lifecycle/mutations";
@@ -185,6 +186,7 @@ function EmployeeRow({
           decorative
           name={agent.name}
           seed={agent.avatarSeed}
+          portrait={{ kind: "coworker", id: agent.id }}
           size={32}
         />
       </span>
@@ -320,9 +322,29 @@ function MemberStack({
   group: WakerGroup;
   agentsById: Map<string, AgentProfile>;
 }) {
+  const custom = usePortraitSrc("group", group.id);
   const shown = [...group.members]
     .sort((a, b) => a.position - b.position)
     .slice(0, 3);
+  if (custom) {
+    // A face somebody chose for the group stands in for its members' faces.
+    return (
+      <span
+        aria-label={`群组头像：${group.name}`}
+        className="inline-flex size-[32px] shrink-0 overflow-hidden rounded-full"
+        role="img"
+      >
+        <img
+          alt=""
+          className="size-full object-cover"
+          data-portrait=""
+          height={32}
+          src={custom}
+          width={32}
+        />
+      </span>
+    );
+  }
   if (shown.length === 0) {
     return (
       <span className="flex size-[32px] shrink-0 items-center justify-center rounded-full bg-foreground/[0.08] text-[12px] text-muted-foreground">
@@ -354,6 +376,7 @@ function MemberStack({
               decorative
               name={agent?.name ?? "员工"}
               seed={agent?.avatarSeed ?? member.agentId}
+              portrait={{ kind: "coworker", id: member.agentId }}
               size={shown.length === 1 ? 32 : 18}
             />
           </span>

@@ -33,6 +33,7 @@ import {
   type PluginSkill,
   pluginsPageQueryOptions,
 } from "@/lib/plugins/queries";
+import { useZh } from "@/lib/translations/queries";
 
 /**
  * 能力与资源 › 技能: the whole skills screen, the one place a person writes, edits and deletes their
@@ -72,6 +73,7 @@ export function SkillsScreen({
   onEdit: (slug: string) => void;
   onClose: () => void;
 }) {
+  const zh = useZh();
   const queryClient = useQueryClient();
   const plugins = useQuery(pluginsPageQueryOptions());
   const me = useQuery(currentUserQueryOptions());
@@ -87,7 +89,14 @@ export function SkillsScreen({
   const skills = plugins.data?.skills ?? [];
   const meId = me.data?.id;
   const visible = skills.filter((skill) =>
-    textMatch(query, skill.title, skill.summary, skill.slug),
+    textMatch(
+      query,
+      skill.title,
+      skill.summary,
+      skill.slug,
+      zh(skill.title),
+      zh(skill.summary),
+    ),
   );
   const isMine = (skill: PluginSkill) =>
     skill.ownerUserId !== null && skill.ownerUserId === meId;
@@ -153,13 +162,13 @@ export function SkillsScreen({
           <code className="font-mono text-foreground/80 text-xs">
             /{skill.slug}
           </code>
-          {skill.summary ? ` · ${skill.summary}` : null}
+          {skill.summary ? ` · ${zh(skill.summary)}` : null}
         </>
       }
       key={skill.id}
       title={
         <>
-          {skill.title}
+          {zh(skill.title)}
           {!own && listed.has(skill.slug) ? <Tag>可自助安装</Tag> : null}
         </>
       }

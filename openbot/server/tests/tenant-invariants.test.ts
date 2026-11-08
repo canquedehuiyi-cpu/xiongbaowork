@@ -187,7 +187,10 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   "src/delivery/router.ts": { 'runAsTenant("platform"': 3 },
   "src/delivery/store.ts": { 'runAsTenant("platform"': 3 },
   "src/devices/store.ts": { 'runAsTenant("platform"': 4 },
-  "src/index.ts": { 'runAsTenant("platform"': 2 },
+  // The third is the background translator (migration 0145): it reads and writes only
+  // `text_translations`, a deployment-wide cache with no tenant column and no row security, and
+  // touches no tenant's rows.
+  "src/index.ts": { 'runAsTenant("platform"': 3 },
   "src/memory/ingestion.ts": { 'runAsTenant("platform"': 2 },
   "src/pipeline/reap.ts": { 'runAsTenant("platform"': 1 },
   // Which run holds an approval (I3), and WF7's restart sweep for parents waiting on an ended child;

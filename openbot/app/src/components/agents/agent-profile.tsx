@@ -72,6 +72,7 @@ export function AgentProfile({ agentId }: { agentId: string }) {
         <AbstractAvatar
           name={profile.name}
           seed={profile.avatarSeed}
+          portrait={{ kind: "coworker", id: profile.id }}
           size={80}
         />
         <div className="flex w-full flex-col items-center gap-0.5">

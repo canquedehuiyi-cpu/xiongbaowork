@@ -11,7 +11,12 @@ import type { RuntimeModel } from "../copilot";
 export function createModelCompleter(deps: {
   model: RuntimeModel;
   resolveApiKey: () => Promise<string | null>;
+  /** How long one answer may take; a router has to be quick, a translation of a page need not be. */
+  timeoutMs?: number;
+  /** Anthropic's answer limit; a router's answer is one small object, a translation is longer. */
+  maxTokens?: number;
 }): (prompt: string, signal?: AbortSignal) => Promise<string> {
+  const timeoutMs = deps.timeoutMs ?? 10_000;
   return async (prompt: string, signal?: AbortSignal) => {
     signal?.throwIfAborted();
     const key = await deps.resolveApiKey();
@@ -47,13 +52,13 @@ export function createModelCompleter(deps: {
            * and the confidence floor still sends an unsure match to the default.
            */
           ...(anthropic
-            ? { max_tokens: 1024 }
+            ? { max_tokens: deps.maxTokens ?? 1024 }
             : { response_format: { type: "json_object" } }),
           messages: [{ role: "user", content: prompt }],
         }),
         signal: signal
-          ? AbortSignal.any([signal, AbortSignal.timeout(10_000)])
-          : AbortSignal.timeout(10_000),
+          ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)])
+          : AbortSignal.timeout(timeoutMs),
       },
     );
     if (!response.ok)

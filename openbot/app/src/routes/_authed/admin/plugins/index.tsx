@@ -29,6 +29,7 @@ import {
   type PluginServer,
   pluginsPageQueryOptions,
 } from "@/lib/plugins/queries";
+import { useZh } from "@/lib/translations/queries";
 
 /**
  * What this deployment can reach, as one list per state.
@@ -94,6 +95,7 @@ function summaryFor(
 }
 
 function RouteComponent() {
+  const zh = useZh();
   const plugins = useQuery(pluginsPageQueryOptions());
   const connections = useQuery(connectionsQueryOptions());
 
@@ -154,7 +156,7 @@ function RouteComponent() {
                           <Mark className="size-4" />
                         </RowMark>
                         <ItemContent>
-                          <ItemTitle>{server.title}</ItemTitle>
+                          <ItemTitle>{zh(server.title)}</ItemTitle>
                           {/*
                            * The vendor's last failure takes the description's place when there is
                            * one. A server with no tools and no explanation reads as a server that
@@ -165,7 +167,7 @@ function RouteComponent() {
                               server.lastError ? "text-destructive" : undefined
                             }
                           >
-                            {server.lastError ?? server.summary}
+                            {server.lastError ?? zh(server.summary)}
                           </ItemDescription>
                         </ItemContent>
                         <ItemActions>
@@ -215,8 +217,8 @@ function RouteComponent() {
                           <Mark className="size-4" />
                         </RowMark>
                         <ItemContent>
-                          <ItemTitle>{entry.title}</ItemTitle>
-                          <ItemDescription>{entry.summary}</ItemDescription>
+                          <ItemTitle>{zh(entry.title)}</ItemTitle>
+                          <ItemDescription>{zh(entry.summary)}</ItemDescription>
                         </ItemContent>
                         <ItemActions>
                           <span className="text-muted-foreground text-xs">

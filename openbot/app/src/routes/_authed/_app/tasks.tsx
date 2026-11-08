@@ -843,6 +843,7 @@ function TaskCard({
       <AbstractAvatar
         name={executor.name}
         seed={executor.avatarSeed}
+        portrait={{ kind: "coworker", id: executor.id }}
         size={16}
       />
       {executor.name}

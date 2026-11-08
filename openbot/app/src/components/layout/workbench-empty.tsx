@@ -1,75 +1,39 @@
 import type { ReactNode } from "react";
+import { PRESET_IMAGES } from "@/components/portraits/preset-images";
+import type { PortraitPreset } from "@/lib/portraits/queries";
 import { cn } from "@/lib/utils";
 
+/** 调皮 · 可爱 · 帅气 · 开心 · 卖萌, as the character sheet names them. */
+export type BearMood = PortraitPreset;
+
 /**
- * 熊宝, the product's own mascot: a round bear face drawn here, in our colours, for empty states.
- * The reference product puts its own character in the same place; ours is our brand's, not a copy.
+ * 熊宝, the product's own mascot: the 京剧脸谱 panda of the logo, in one of the character sheet's
+ * expressions, as a round portrait ringed in the logo's gold. Each empty state picks the expression
+ * that fits what it says; `happy` (开心) is the default.
  */
 export function BearMascot({
   size = 64,
+  mood = "happy",
   className,
 }: {
   size?: number;
+  mood?: BearMood;
   className?: string;
 }) {
   return (
-    <svg
-      aria-label="熊宝"
-      className={cn("shrink-0", className)}
+    <img
+      alt="熊宝"
+      className={cn(
+        "shrink-0 select-none rounded-full bg-card shadow-sm ring-1 ring-brand-gold/60",
+        className,
+      )}
+      data-mood={mood}
+      decoding="async"
+      draggable={false}
       height={size}
-      role="img"
-      viewBox="0 0 64 64"
+      src={PRESET_IMAGES[mood]}
       width={size}
-    >
-      <circle
-        cx="32"
-        cy="32"
-        fill="var(--card)"
-        r="31"
-        stroke="var(--border)"
-      />
-      <circle cx="19" cy="21" fill="var(--primary)" r="7" />
-      <circle cx="45" cy="21" fill="var(--primary)" r="7" />
-      <circle
-        cx="19"
-        cy="21"
-        fill="var(--primary-foreground)"
-        opacity="0.35"
-        r="3.5"
-      />
-      <circle
-        cx="45"
-        cy="21"
-        fill="var(--primary-foreground)"
-        opacity="0.35"
-        r="3.5"
-      />
-      <ellipse cx="32" cy="35" fill="var(--primary)" rx="17" ry="15" />
-      <circle cx="25.5" cy="32" fill="var(--primary-foreground)" r="2.2" />
-      <circle cx="38.5" cy="32" fill="var(--primary-foreground)" r="2.2" />
-      <ellipse
-        cx="32"
-        cy="40"
-        fill="var(--card)"
-        opacity="0.85"
-        rx="7"
-        ry="5"
-      />
-      <ellipse
-        cx="32"
-        cy="38.2"
-        fill="var(--primary-foreground)"
-        rx="2.4"
-        ry="1.7"
-      />
-      <path
-        d="M29.5 42.2 Q32 44.2 34.5 42.2"
-        fill="none"
-        stroke="var(--primary-foreground)"
-        strokeLinecap="round"
-        strokeWidth="1.3"
-      />
-    </svg>
+    />
   );
 }
 
@@ -78,11 +42,14 @@ export function WorkbenchEmpty({
   title,
   description,
   action,
+  mood,
   className,
 }: {
   title: string;
   description?: ReactNode;
   action?: ReactNode;
+  /** Which of 熊宝's expressions greets the empty list; 开心 unless the page says otherwise. */
+  mood?: BearMood;
   className?: string;
 }) {
   return (
@@ -92,7 +59,7 @@ export function WorkbenchEmpty({
         className,
       )}
     >
-      <BearMascot />
+      <BearMascot mood={mood} />
       <p className="mt-2 font-medium text-[14px]">{title}</p>
       {description ? (
         <p className="max-w-md text-pretty text-[12px] text-muted-foreground">

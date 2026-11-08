@@ -8,6 +8,39 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+- **Skills and plugins that arrive in English are shown in Chinese.** Whether a person or the
+  platform added it, a skill's name, summary and instructions, and a plugin's or MCP connector's
+  name, summary and tool descriptions are translated in the background by the deployment's model and
+  shown in Chinese on the Plugins, Connectors and Skills screens and the admin plugin pages. Display
+  only: the stored text, what an editor edits and what a model is given stay the original. Texts that
+  are already Chinese are left alone; a deployment with no model key keeps showing the originals.
+  New deployment-wide cache `text_translations` (recovery overlay 0145) and
+  `GET /api/translations/plugins`.
+
+- **Coworkers and groups can be given their own 头像.** A coworker's manager, or anybody for a
+  group, picks one of 熊宝's five expressions or uploads a picture; it replaces the drawn face
+  everywhere that coworker or group appears (sidebar, cards, detail page, task board). The browser
+  squares and re-encodes the picture to at most 256×256; the server accepts only PNG, JPEG, WebP and
+  GIF read from the file's own bytes (never SVG), at most 256 KiB, and shows a coworker's face only to
+  those who may see that coworker. New table `portraits` (recovery overlay 0144), routes under
+  `/api/portraits`. Change a coworker's face from its detail page; a group's from 更换头像 on its card.
+
+- **The workbench takes its colours from the logo, as iOS-style glass.** The primary action is the
+  京剧脸谱 red of 熊宝's mask, focus rings and highlights are the logo frame's gold, and the grounds are
+  warm black (dark) or warm paper (light), lit by a red and a gold glow. Cards, popovers and the
+  sidebar are translucent and blur what is behind them. The layout is unchanged. The logo replaces
+  the letter mark in the sidebar and on the 小管家 button, is the favicon, and the empty-state mascot
+  is redrawn after the character sheet. A tenant package may now give `tenant.english_name`; the
+  sidebar and the tab title show it beside the product name (熊宝数字员工 · xiongbao work).
+- **熊宝 greets empty lists in the character sheet's five expressions.** 调皮, 可爱, 帅气, 开心 and
+  卖萌 are cut from the brand's character sheet as round portraits; each empty state picks one, and
+  the 小管家 button wears 帅气. The logo now comes from the transparent original.
+
+- **The automation list carries each automation's triggers.** `GET /api/automations` now returns
+  `triggers` on every item. These are the same rows `GET /api/automations/:id` returns. /autonomous
+  draws from the list and no longer requests each automation's detail. The field is additive, so
+  older clients are unaffected.
+
 ## 0.2.4
 
 - **Ask the employee what apps your computer has.** With no app named, `computer_apps` now also
@@ -51,6 +84,7 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   the command up in the app's PATH (with PATHEXT) and starts it by its absolute path; a command that
   is not installed says so (「找不到命令 npx，请确认已安装（例如 Node.js），并重启设备端。」). An app with
   no working folder now starts in the owner's home folder instead of the device app's own.
+
 - **Workbench follow-ups.**
   - /autonomous no longer re-reads every automation's detail every five minutes. It re-reads one
     only when the list shows that automation changed, and it refreshes 长期职责 every 60s instead of

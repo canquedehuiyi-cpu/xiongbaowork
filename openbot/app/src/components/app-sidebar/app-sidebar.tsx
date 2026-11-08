@@ -16,6 +16,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import type * as React from "react";
 import { useEffect, useId, useState } from "react";
 import { useAttentionNotifications } from "@/components/bot-profile/attention";
+import { BrandLogo } from "@/components/layout/brand-logo";
 import { Button } from "@/components/ui/button";
 import {
   Sidebar,
@@ -139,11 +140,11 @@ function writeMoreOpen(open: boolean) {
 /*
  * One nav row, measured on the reference at 1696px: 32px tall on a 36px pitch, the row box inset
  * 12px from the sidebar's edges, a 16px icon 10px in, the 14px label at x 48, and the open entry on
- * #363636 (`sidebar-accent`) in white with everything else muted. Written in px rather than
+ * `sidebar-accent` edged in the logo's gold, with everything else muted. Written in px rather than
  * Tailwind's rem steps because this app's root font size is 15px.
  */
 const navRowClassName =
-  "h-[32px] gap-[10px] rounded-md px-[10px] text-[14px] text-sidebar-foreground/55 hover:bg-foreground/5 hover:text-sidebar-foreground data-[status=active]:bg-sidebar-accent data-[status=active]:font-medium data-[status=active]:text-sidebar-accent-foreground data-[status=active]:shadow-[0_0_0_1px_rgb(0_0_0/0.35)] [&_svg]:size-[16px]";
+  "h-[32px] gap-[10px] rounded-md px-[10px] text-[14px] text-sidebar-foreground/55 hover:bg-foreground/5 hover:text-sidebar-foreground data-[status=active]:bg-sidebar-accent data-[status=active]:font-medium data-[status=active]:text-sidebar-accent-foreground data-[status=active]:shadow-[0_0_0_1px_color-mix(in_oklab,var(--brand-gold)_40%,transparent)] [&_svg]:size-[16px]";
 
 /** A group label: 12px, dim, 8px in from the row box (x 20), 5px above its first row. */
 const groupLabelClassName =
@@ -192,7 +193,7 @@ function NavGroup({ label, items }: { label: string; items: NavItem[] }) {
   );
 }
 
-/** 48px: our mark and name on the left, the collapse button on the right (x 211–225 on the reference). */
+/** 48px: our logo with the Chinese and English names on the left, the collapse button on the right (x 211–225 on the reference). */
 function SidebarBrand() {
   const { toggleSidebar } = useSidebar();
   return (
@@ -201,13 +202,17 @@ function SidebarBrand() {
         className="flex h-[32px] min-w-0 items-center gap-[8px] rounded-md font-semibold text-[14px] tracking-tight outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
         to="/"
       >
-        <span
-          aria-hidden="true"
-          className="flex size-[21px] shrink-0 items-center justify-center rounded-[5px] bg-primary font-bold text-[12px] text-primary-foreground"
-        >
-          {appConfig.brand.productName.slice(0, 1)}
+        <BrandLogo className="rounded-[6px]" size={26} />
+        <span className="flex min-w-0 flex-col">
+          <span className="truncate leading-[16px]">
+            {appConfig.brand.productName}
+          </span>
+          {appConfig.brand.englishName ? (
+            <span className="truncate font-medium text-[10px] text-brand-gold-ink leading-[12px] tracking-[0.08em]">
+              {appConfig.brand.englishName}
+            </span>
+          ) : null}
         </span>
-        <span className="truncate">{appConfig.brand.productName}</span>
       </Link>
       <Button
         aria-label="隐藏侧栏"

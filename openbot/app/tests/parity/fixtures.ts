@@ -1868,6 +1868,32 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
     },
   ],
   ["GET", /^\/api\/waker-groups$/, (c) => ok({ groups: list(c, GROUPS) })],
+  // The fixture's plugins and skills are written in Chinese already, so there is nothing to translate.
+  ["GET", /^\/api\/translations\/plugins$/, () => ok({ zh: {} })],
+  // 头像: two faces somebody chose (an expression for a coworker and for a group); none when empty.
+  [
+    "GET",
+    /^\/api\/portraits$/,
+    (c) =>
+      ok({
+        portraits: list(c, [
+          {
+            kind: "coworker",
+            id: "agent-support",
+            preset: "cute",
+            imageUrl: null,
+            updatedAt: "2026-11-07T08:00:00.000Z",
+          },
+          {
+            kind: "group",
+            id: "group-ops",
+            preset: "happy",
+            imageUrl: null,
+            updatedAt: "2026-11-07T08:00:00.000Z",
+          },
+        ]),
+      }),
+  ],
 
   // Bots
   ["GET", /^\/api\/bots\/attention$/, (c) => ok({ bots: list(c, ATTENTION) })],
@@ -2107,7 +2133,14 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
   [
     "GET",
     /^\/api\/automations$/,
-    (c) => ok({ automations: list(c, AUTOMATIONS) }),
+    (c) =>
+      // Current servers carry each automation's triggers on the list.
+      ok({
+        automations: list(c, AUTOMATIONS).map((entry) => ({
+          ...entry,
+          triggers: AUTOMATION_TRIGGERS[entry.id] ?? [],
+        })),
+      }),
   ],
   [
     "GET",

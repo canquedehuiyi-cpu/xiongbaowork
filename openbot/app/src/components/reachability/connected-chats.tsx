@@ -257,7 +257,7 @@ function BodyMessage({
         {description}
       </p>
       {action ? <div className="mt-3">{action}</div> : null}
-      {mascot ? <BearMascot className="mt-[38px]" /> : null}
+      {mascot ? <BearMascot className="mt-[38px]" mood="naughty" /> : null}
     </div>
   );
 }
