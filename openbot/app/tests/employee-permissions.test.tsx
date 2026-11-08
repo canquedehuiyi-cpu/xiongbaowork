@@ -140,6 +140,20 @@ test("the two local-app tools can be set like any other (device MCP bridge §4.2
   );
 });
 
+test("the two desktop tools can be set like any other: 列出桌面窗口 and 查看桌面", async () => {
+  const view = draw();
+  await view.findByRole("radiogroup", { name: "「列出桌面窗口」的权限" });
+  await view.findByRole("radiogroup", { name: "「查看桌面」的权限" });
+  fireEvent.click(choice(view, "查看桌面", "禁用"));
+  await waitFor(() =>
+    expect(sent).toContainEqual({
+      path: "/api/approvals/employees/desk/tools",
+      method: "PUT",
+      body: { toolRef: "computer_desktop_snapshot", mode: "disabled" },
+    }),
+  );
+});
+
 test("the permissions page lists 启用本机应用", async () => {
   const view = draw();
   await view.findByRole("radiogroup", { name: "「启用本机应用」的权限" });

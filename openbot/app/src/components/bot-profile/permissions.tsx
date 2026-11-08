@@ -36,6 +36,9 @@ const BUILT_IN_TOOLS: { ref: string; label: string }[] = [
   { ref: "computer_apps", label: "查看本机应用" },
   { ref: "computer_app_call", label: "使用本机应用" },
   { ref: "computer_app_enable", label: "启用本机应用" },
+  // Looking at the owner's desktop, read only (device-side desktop viewing, Phase 1).
+  { ref: "computer_desktop_windows", label: "列出桌面窗口" },
+  { ref: "computer_desktop_snapshot", label: "查看桌面" },
   { ref: "host/read_file", label: "读取你电脑上的文件" },
   { ref: "host/write_file", label: "写入你电脑上的文件" },
   { ref: "host/list_files", label: "列出你电脑上的文件" },

@@ -21,6 +21,9 @@ import {
   recordAuditEvent,
 } from "../audit";
 import { computerActionIdentity } from "./action-identity";
+// --- desktop control (sub-project 2) ---
+import { desktopTools } from "./desktop-tools";
+// --- end desktop control ---
 // --- app discovery (sub-project 3) ---
 import { CANDIDATE_REF } from "./app-discovery";
 // --- end app discovery ---
@@ -664,6 +667,11 @@ function headlessComputerTools(options: {
       ),
       // --- end app discovery ---
     );
+  // --- desktop control (sub-project 2) ---
+  // Read only, and on the same terms as the local apps: the owner's own run on their paired machine.
+  if (onDevice && options.apps)
+    tools.push(...desktopTools(tool, { gateway, botId, actor }));
+  // --- end desktop control ---
   if (signIn)
     tools.push(
       tool(
