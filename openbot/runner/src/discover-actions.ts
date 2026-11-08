@@ -22,7 +22,7 @@ import {
   readInstalledWindows,
 } from "./discover-installed";
 import type { ActionOutcome } from "./execute";
-import { resolveWindowsCommand } from "./mcp-client";
+import { McpAppError, resolveWindowsCommand } from "./mcp-client";
 
 /**
  * The device actions of app discovery (spec §3): what the server's `apps.discover` and `apps.enable`
@@ -36,8 +36,9 @@ import { resolveWindowsCommand } from "./mcp-client";
  * ONLY NAMES LEAVE. The output is `discoverApps`'s own (names, fixed source labels, status, refs) and
  * the installed programs' names; for an enabled app, its reference, name and tools. The command, its
  * arguments, environment values and working folder are written only to `runner-apps.json`. A failure
- * is a fixed Chinese sentence, the registry's own refusal or the host's: an fs error would name the
- * data folder, and with it the owner's account.
+ * is a fixed Chinese sentence or the registry's own refusal: an fs error would name the data folder,
+ * and with it the owner's account, and a program's stderr can name any folder at all. Only the
+ * host's sentences that name nothing but the app are passed on (see `enableFailure`).
  */
 
 export const DISCOVER_ACTIONS: ReadonlySet<string> = new Set([
@@ -93,10 +94,49 @@ function appInputOf(name: string, spec: DiscoveredSpec): AppInput {
       };
 }
 
-/** What a failed connection test says: the host's own Chinese sentence, else a fixed one. */
-function enableFailure(error: unknown): string {
+/** Where the owner sees why an app would not start: the device window, which shows it locally. */
+const SEE_DEVICE_WINDOW =
+  "请在设备端窗口「本机应用（MCP）› 发现的应用」里打开它的开关查看原因。";
+/** The host kinds whose sentence is fixed and names only the app: shown as they are. */
+const FIXED_KINDS: ReadonlySet<string> = new Set([
+  "timeout",
+  "unreachable",
+  "protocol",
+  "unavailable",
+  "failed",
+]);
+
+/**
+ * What a failed connection test says (spec §5.2). For the server, a fixed Chinese sentence naming
+ * only the app: never what the program printed (its stderr can name the owner's folders), a hint
+ * built from that, or the command (`找不到命令 C:\…`). The device window's own `--enable-candidate`
+ * shows only on this machine, so it may keep the host's detailed sentence (`detailed`).
+ */
+function enableFailure(
+  error: unknown,
+  app: AppEntry,
+  detailed: boolean,
+): string {
   if (error instanceof Error && error.name === "AbortError") return STOPPED;
-  return error instanceof AppHostError ? error.userMessage : DISCOVER_FAILED;
+  if (!(error instanceof AppHostError)) return DISCOVER_FAILED;
+  if (detailed || FIXED_KINDS.has(error.kind)) return error.userMessage;
+  const name = app.name;
+  if (error.kind === "start") {
+    // This client's own reason: the device's runtime missing, or a command not on PATH.
+    if (error.cause instanceof McpAppError && error.cause.hint !== undefined) {
+      return app.kind === "stdio" && app.runtime === "bundled"
+        ? `「${name}」启动失败：设备端自带的运行时不可用，请重新安装设备端。`
+        : `「${name}」启动失败：找不到它的启动命令。请确认相应的软件已经安装，然后重启设备端。`;
+    }
+    return `「${name}」启动失败，${SEE_DEVICE_WINDOW}`;
+  }
+  if (error.kind === "connect") {
+    return app.kind === "http"
+      ? `连不上「${name}」的本机地址，请确认软件已打开。`
+      : `「${name}」启动后意外退出，${SEE_DEVICE_WINDOW}`;
+  }
+  // unknown_tool, or a kind added later: fixed, whatever the host said.
+  return `「${name}」没能启用，${SEE_DEVICE_WINDOW}`;
 }
 
 function readTextFile(path: string): string | undefined {
@@ -123,6 +163,12 @@ export function createDiscoverActions(opts: {
   /** The running host, for `apps.enable` (phase 2). Discovery itself starts nothing. */
   host?: ReturnType<typeof createAppHost>;
   deps?: Partial<DiscoverDeps>;
+  /**
+   * A failed enable answers the host's detailed sentence (what the program printed, the command it
+   * could not find). Only for the device window's own `--enable-candidate`, whose answer is shown on
+   * this machine and goes nowhere else; never for what the server asks.
+   */
+  detailedErrors?: boolean;
 }): DiscoverActions {
   const env = opts.deps?.env ?? process.env;
   const deps: DiscoverDeps = {
@@ -245,7 +291,10 @@ export function createDiscoverActions(opts: {
         // Only then: while the app is still on, asking again would start it again.
         await host.tools(app.ref).catch(() => {});
       }
-      return { ok: false, error: enableFailure(error) };
+      return {
+        ok: false,
+        error: enableFailure(error, app, opts.detailedErrors === true),
+      };
     }
   }
 

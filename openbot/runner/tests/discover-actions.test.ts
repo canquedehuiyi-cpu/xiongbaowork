@@ -5,6 +5,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, win32 } from "node:path";
@@ -31,7 +32,7 @@ import { INSTALLED_LIMIT } from "../src/discover-installed";
 import { createRunnerDispatcher } from "../src/dispatch";
 import { createRunnerExecutor } from "../src/execute";
 import { createActionJournal } from "../src/journal";
-import { McpAppError, type McpConnection } from "../src/mcp-client";
+import { launchSpec, McpAppError, type McpConnection } from "../src/mcp-client";
 
 /*
  * `apps.discover` through the real executor: discovery answers what this machine could offer, by
@@ -66,6 +67,8 @@ function setup(
     hostOf?: (
       registry: ReturnType<typeof createAppRegistry>,
     ) => ReturnType<typeof createAppHost>;
+    /** As the device window's own `--enable-candidate`: the host's detailed sentence, shown locally. */
+    detailedErrors?: boolean;
   } = {},
   files: Record<string, unknown> = {
     [CLAUDE_DESKTOP]: {
@@ -95,13 +98,14 @@ function setup(
   const registry = createAppRegistry({ dataDir: base });
   let now = T0;
   const reads = { installed: 0 };
-  const { installed, hostOf, ...deps } = over;
+  const { installed, hostOf, detailedErrors, ...deps } = over;
   const host = (hostOf ?? createAppHost)(registry);
   hosts.push(host);
   const discovery = createDiscoverActions({
     dataDir: base,
     registry,
     host,
+    ...(detailedErrors ? { detailedErrors } : {}),
     deps: {
       platform: "win32",
       env: { APPDATA, USERPROFILE },
@@ -844,3 +848,181 @@ test("with 20 apps registered the registry's 中文 refusal comes back and nothi
   expect(appsFile(base)).toBe(before);
   expect(connected).toEqual([]);
 });
+
+// --- app discovery (sub-project 3): a failed enable says nothing the program printed (spec §5.2) ---
+
+/** What a failed start tells the server: the app's name and where to look, nothing else. */
+const startFailed = (name: string) =>
+  `「${name}」启动失败，请在设备端窗口「本机应用（MCP）› 发现的应用」里打开它的开关查看原因。`;
+
+test("a program that prints a path to stderr and exits: the enable error carries neither the path nor anything it printed", async () => {
+  const base = mkdtempSync(join(tmpdir(), "discover-leak-"));
+  dirs.push(base);
+  const script = join(base, "leaky.ts");
+  writeFileSync(
+    script,
+    String.raw`console.error("Error accessing directory C:\\Users\\me\\secret-proj: ENOENT"); process.exit(1);`,
+  );
+  const { execute, registry } = setup(
+    { resolveCommand: resolveFixture },
+    desktop({ 文件: { command: process.execPath, args: [script] } }),
+  );
+  const failed = await execute({
+    action: "apps.enable",
+    payload: { candidate: await refOf(execute, "文件") },
+  });
+  expect(failed).toEqual({ ok: false, error: startFailed("文件") });
+  const text = JSON.stringify(failed);
+  for (const leak of [
+    "secret-proj",
+    "C:",
+    "Users",
+    "Error accessing",
+    "ENOENT",
+    "leaky",
+  ])
+    expect(text).not.toContain(leak);
+  expect(registry.list()).toEqual([]);
+}, 20_000);
+
+test("the fixture's long stderr before exiting is not in the enable error either", async () => {
+  const { execute } = setup(
+    { resolveCommand: resolveFixture },
+    desktop({
+      会退出: {
+        command: process.execPath,
+        args: [FIXTURE],
+        env: { FAKE_MCP_MODE: "exit" },
+      },
+    }),
+  );
+  const failed = await execute({
+    action: "apps.enable",
+    payload: { candidate: await refOf(execute, "会退出") },
+  });
+  expect(failed).toEqual({ ok: false, error: startFailed("会退出") });
+  expect(JSON.stringify(failed)).not.toContain("FATAL-END");
+  expect(JSON.stringify(failed)).not.toContain("aaaa");
+}, 20_000);
+
+/**
+ * A host that starts its apps the way Windows would, with nothing on PATH and no file found: a bare
+ * command is refused before anything starts; an absolute one goes to cmd.exe, which says on stderr
+ * that it is not there and exits.
+ */
+function notFoundHost(registry: ReturnType<typeof createAppRegistry>) {
+  return createAppHost(registry, {
+    connect: async (entry) => {
+      launchSpec(entry, "win32", { PATH: "" }, () => false);
+      throw new McpAppError(
+        "start",
+        "The app exited before the handshake.",
+        `'${entry.kind === "stdio" ? entry.command : ""}' is not recognized as an internal or external command`,
+      );
+    },
+  });
+}
+
+/** A program found when discovery looked, and gone from PATH by the time it is started. */
+const vanished = () =>
+  setup(
+    { hostOf: notFoundHost, resolveCommand: (command) => command },
+    desktop({
+      仓库: {
+        command: "C:\\Users\\me\\tools\\acme-mcp",
+        args: ["--root", "C:\\Users\\me\\proj"],
+      },
+      工具: { command: "acme-tool", args: ["--root", "C:\\Users\\me\\proj"] },
+    }),
+  );
+
+test("a command not found when enabling: the error names no path and no command", async () => {
+  const { execute, registry } = vanished();
+  const failed = await execute({
+    action: "apps.enable",
+    payload: { candidate: await refOf(execute, "工具") },
+  });
+  expect(failed).toEqual({
+    ok: false,
+    error:
+      "「工具」启动失败：找不到它的启动命令。请确认相应的软件已经安装，然后重启设备端。",
+  });
+  const text = JSON.stringify(failed);
+  for (const leak of ["C:", "acme", "proj", "PATH"])
+    expect(text).not.toContain(leak);
+  expect(registry.list()).toEqual([]);
+
+  // An absolute command that is gone: what cmd.exe printed, path and all, stays here too.
+  const absolute = await execute({
+    action: "apps.enable",
+    payload: { candidate: await refOf(execute, "仓库") },
+  });
+  expect(absolute).toEqual({ ok: false, error: startFailed("仓库") });
+  for (const leak of ["C:", "acme", "proj", "not recognized"])
+    expect(JSON.stringify(absolute)).not.toContain(leak);
+  expect(registry.list()).toEqual([]);
+});
+
+test("an app that exits after the handshake: the enable error carries none of its stderr", async () => {
+  const { execute } = setup({
+    hostOf: (registry) =>
+      createAppHost(registry, {
+        connect: async () => ({
+          closed: false,
+          listTools: async () => {
+            throw new McpAppError(
+              "connect",
+              "The app exited.",
+              String.raw`fatal: cannot open C:\Users\me\secret-proj`,
+            );
+          },
+          callTool: async () => ({
+            content: [],
+            isError: false,
+            truncated: false,
+          }),
+          close: async () => {},
+        }),
+      }),
+  });
+  const failed = await execute({
+    action: "apps.enable",
+    payload: { candidate: await refOf(execute, "笔记") },
+  });
+  expect(failed).toEqual({
+    ok: false,
+    error:
+      "「笔记」启动后意外退出，请在设备端窗口「本机应用（MCP）› 发现的应用」里打开它的开关查看原因。",
+  });
+  expect(JSON.stringify(failed)).not.toContain("secret-proj");
+  expect(JSON.stringify(failed)).not.toContain("fatal");
+});
+
+test("the device window's own --enable-candidate keeps the host's detailed sentence, shown only on this machine", async () => {
+  const { execute } = setup(
+    {
+      hostOf: notFoundHost,
+      resolveCommand: (command) => command,
+      detailedErrors: true,
+    },
+    desktop({
+      仓库: { command: String.raw`C:\Users\me\tools\acme-mcp`, args: [] },
+      工具: { command: "acme-tool", args: [] },
+    }),
+  );
+  const bare = await execute({
+    action: "apps.enable",
+    payload: { candidate: await refOf(execute, "工具") },
+  });
+  if (bare.ok) throw new Error("expected a failure");
+  expect(bare.error).toStartWith("「工具」启动失败：找不到命令 acme-tool");
+  const absolute = await execute({
+    action: "apps.enable",
+    payload: { candidate: await refOf(execute, "仓库") },
+  });
+  if (absolute.ok) throw new Error("expected a failure");
+  expect(absolute.error).toBe(
+    `「仓库」启动失败：${String.raw`'C:\Users\me\tools\acme-mcp' is not recognized as an internal or external command`}`,
+  );
+});
+// --- end app discovery ---

@@ -2352,19 +2352,6 @@ export function createComputerGateway(
       // Always asked: with nobody to ask, nothing is enabled.
       if (!options.approvalGate)
         throw new ComputerUnavailableError(NO_ENABLE_APPROVAL);
-      // A disabled tool or the team's cap of `never`: refused before the machine is asked anything.
-      const continuation = currentApprovalContext();
-      const refused = await options.approvalRefusal?.({
-        actorId: actor.id,
-        botId,
-        toolRef: APP_ENABLE_TOOL,
-        effect: "write",
-        scope: input.candidate,
-        args: continuation?.args ?? {},
-        subject: { runner: true },
-        ...(continuation ? { continuation } : {}),
-      });
-      if (refused) throw new ApprovalRefusedError(refused);
       /** Refused and recorded, before the card: nothing is sent. */
       const refuse = (
         refusal: string,
@@ -2384,9 +2371,38 @@ export function createComputerGateway(
             throw new ActionRefusedError(refusal, APP_UNAVAILABLE_RULE);
           },
         );
+      let found = candidates.find(machine, input.candidate);
+      /*
+       * A disabled tool or the team's cap of `never`: refused, and recorded like any refusal, before
+       * the machine is asked anything (not even to look the candidate up). Asked by the app's name,
+       * as the gate asks, when the listing already named it; otherwise by the reference, which only
+       * a rule for every app matches, and a rule on the name is the gate's to apply before the
+       * enable is sent.
+       */
+      const continuation = currentApprovalContext();
+      const refused = await options.approvalRefusal?.({
+        actorId: actor.id,
+        botId,
+        toolRef: APP_ENABLE_TOOL,
+        effect: "write",
+        scope: found?.name ?? input.candidate,
+        args: continuation?.args ?? {},
+        subject: { runner: true },
+        ...(continuation ? { continuation } : {}),
+      });
+      if (refused)
+        return refuse(
+          refused,
+          found
+            ? {
+                candidate: found.candidate,
+                name: found.name,
+                source: found.source,
+              }
+            : undefined,
+        );
       if (options.deviceReachable?.(machine) === false)
         return refuse(DEVICE_OFFLINE_ENABLE);
-      let found = candidates.find(machine, input.candidate);
       if (!found) {
         const looked = await lookUpCandidate(
           machine,

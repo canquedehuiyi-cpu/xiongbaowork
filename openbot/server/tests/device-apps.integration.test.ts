@@ -11,7 +11,7 @@ import { createRunnerDispatcher } from "../../runner/src/dispatch";
 import { createRunnerExecutor } from "../../runner/src/execute";
 import { createDiscoverActions } from "../../runner/src/discover-actions";
 import { createActionJournal } from "../../runner/src/journal";
-import { TOOL_DISABLED } from "../src/approvals/policy";
+import { HOST_COMMANDS_NEVER, TOOL_DISABLED } from "../src/approvals/policy";
 import type { AuditEventInput } from "../src/audit";
 import {
   type ApprovalResumeDependencies,
@@ -1265,6 +1265,8 @@ test("team cap never or the tool disabled: refused before any frame reaches the 
   expect(capped.sent("apps.discover")).toHaveLength(0);
   expect(capped.sent("apps.enable")).toHaveLength(0);
   expect(await capped.requests()).toEqual([]);
+  // Refused before any frame, and on the trail.
+  expect(enableRefusals(capped)).toEqual([HOST_COMMANDS_NEVER]);
 
   const disabled = await pairedDevice();
   await runAsTenant(disabled.tenant, () =>
@@ -1282,6 +1284,61 @@ test("team cap never or the tool disabled: refused before any frame reaches the 
   expect(disabled.sent("apps.discover")).toHaveLength(0);
   expect(disabled.sent("apps.enable")).toHaveLength(0);
   expect(await disabled.requests()).toEqual([]);
+  expect(enableRefusals(disabled)).toEqual([TOOL_DISABLED]);
+}, 20_000);
+
+/** The reasons on the refused rows `computer_app_enable` wrote. */
+function enableRefusals(device: Awaited<ReturnType<typeof pairedDevice>>) {
+  return device.audits
+    .filter(
+      (row) =>
+        row.eventType === "computer.action_refused" &&
+        (row.payload as { action?: string }).action === "computer_app_enable",
+    )
+    .map((row) => (row.payload as { refusal?: string }).refusal);
+}
+
+test("a deny rule on the app's name refuses a listed candidate before anything is sent, on the trail with its name and source", async () => {
+  const device = await pairedDevice();
+  const fixture = await listedFixture(device);
+  await runAsTenant(device.tenant, () =>
+    device.service.createRule(device.tenant, {
+      botId: device.botId,
+      toolRef: "computer_app_enable",
+      effect: "*",
+      scope: "fixture",
+      behaviour: "deny",
+    }),
+  );
+  const discovered = device.sent("apps.discover").length;
+  await expect(
+    device.call("computer_app_enable", { candidate: fixture.candidate }),
+  ).rejects.toThrow(TOOL_DISABLED);
+  expect(device.sent("apps.discover")).toHaveLength(discovered);
+  expect(device.sent("apps.enable")).toHaveLength(0);
+  expect(await device.requests()).toEqual([]);
+  expect(enableRefusals(device)).toEqual([TOOL_DISABLED]);
+  const refused = device.audits.find(
+    (row) =>
+      row.eventType === "computer.action_refused" &&
+      (row.payload as { action?: string }).action === "computer_app_enable",
+  );
+  expect((refused?.payload as { app?: unknown } | undefined)?.app).toEqual({
+    name: "fixture",
+    source: "Claude Desktop 的配置",
+  });
+  // Decided by the app's name, as the card and the gate name it; never by the candidate reference.
+  const evaluated = await runAsTenant(device.tenant, () =>
+    database
+      .select({ payload: auditEvents.payload })
+      .from(auditEvents)
+      .where(eq(auditEvents.actorUserId, device.tenant)),
+  );
+  const scopes = evaluated
+    .map((row) => row.payload as { tool?: string; scope?: string })
+    .filter((payload) => payload.tool === "computer_app_enable")
+    .map((payload) => payload.scope);
+  expect(scopes).toEqual(["fixture"]);
 }, 20_000);
 
 test("a teammate cannot enable the owner's apps", async () => {
