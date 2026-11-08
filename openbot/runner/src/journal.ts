@@ -4,6 +4,21 @@ import { dirname } from "node:path";
 import { actionFingerprint } from "../../shared/runner-actions";
 import type { ActionOutcome, RunnerAction } from "./execute";
 
+/**
+ * What the journal keeps of a result. A desktop screenshot is large and sensitive and is never
+ * needed to answer a replay, so its bytes are dropped (its size stays); everything else is kept.
+ */
+function journaled(action: string, outcome: ActionOutcome): ActionOutcome {
+  if (!action.startsWith("desktop.") || !outcome.ok) return outcome;
+  const output = outcome.output;
+  if (typeof output !== "object" || output === null) return outcome;
+  const image = (output as { image?: unknown }).image;
+  if (typeof image !== "object" || image === null || !("base64" in image))
+    return outcome;
+  const { base64: _bytes, ...rest } = image as Record<string, unknown>;
+  return { ok: true, output: { ...output, image: rest } };
+}
+
 /** The claim is flushed before touching the machine. Restarting never replays an unfinished claim. */
 export function createActionJournal(path: string) {
   mkdirSync(dirname(path), { recursive: true });
@@ -61,7 +76,12 @@ export function createActionJournal(path: string) {
       const result = (async () => {
         try {
           const outcome = await execute(action);
-          finish.run("completed", JSON.stringify(outcome), scope, key);
+          finish.run(
+            "completed",
+            JSON.stringify(journaled(action.action, outcome)),
+            scope,
+            key,
+          );
           return outcome;
         } catch {
           finish.run("unknown", null, scope, key);
