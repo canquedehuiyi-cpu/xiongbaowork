@@ -1,5 +1,6 @@
 import type { Message } from "@ag-ui/client";
 import { z } from "zod";
+import { desktopFloor } from "./desktop-policy";
 import {
   type ApprovalCandidate,
   type ApprovalPolicyOutcome,
@@ -703,6 +704,9 @@ export async function decideAction(input: {
     // --- app discovery (sub-project 3) ---
     | { source: "host_command_cap" | "app_tool" | "app_enable"; reason: string }
     // --- end app discovery ---
+    // --- desktop control (sub-project 2) ---
+    | { source: "desktop_window"; reason: string }
+    // --- end desktop control ---
     | undefined =
     securityFloor(
       candidate,
@@ -735,8 +739,11 @@ export async function decideAction(input: {
             candidate.display?.description ?? "本机",
           ),
         }
-      : undefined);
+      : undefined) ??
   // --- end app discovery ---
+    // --- desktop control (sub-project 2) ---
+    desktopFloor(candidate);
+  // --- end desktop control ---
   const decided = await decideByRules(input, matched);
   // A floor only raises: an action the rules let through still asks; one already asked about or
   // handed off keeps the stricter answer it had.

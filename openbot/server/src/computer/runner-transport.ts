@@ -56,6 +56,10 @@ export function createRunnerTransport(
   /** The paths the gateway posts to, in the words the runner answers to. */
   const actionFor = (path: string): string => {
     const bare = path.replace(/^\//, "").split("?")[0];
+    // --- desktop control (sub-project 2) ---
+    if (bare.startsWith("desktop/"))
+      return `desktop.${bare.slice("desktop/".length)}`;
+    // --- end desktop control ---
     return bare === "exec"
       ? "exec"
       : bare === "files/list"
@@ -119,6 +123,24 @@ export function createRunnerTransport(
     idempotencyKey?: string,
     caller?: AbortSignal,
   ): Promise<T> {
+    // --- desktop control (sub-project 2) ---
+    /*
+     * The desktop is read as it is on screen now: sent only to a connected machine (refused with
+     * DeviceOfflineError otherwise), never queued and never given a receipt. No employee identity is
+     * stamped on it, because the desktop is the owner's one screen, not a per-employee profile.
+     */
+    if (action.startsWith("desktop.")) {
+      return channel.dispatch<T>(
+        target,
+        action,
+        payload,
+        timeoutMs,
+        idempotencyKey,
+        caller,
+        { durable: false },
+      );
+    }
+    // --- end desktop control ---
     /*
      * A local app's tool list decides whether a call asks first, so it has to be the machine's answer
      * now, and it changes nothing: sent straight to the connected machine, never parked in the queue
