@@ -242,6 +242,8 @@ function draw(
     automations?: Automation[];
     /** Leave the automation list unread, so the page asks the server for it. */
     unreadAutomations?: boolean;
+    /** Pre-fill each automation's detail; off to see what the page reads by itself. */
+    seedDetails?: boolean;
   } = {},
 ) {
   const queryClient = new QueryClient({
@@ -253,7 +255,7 @@ function draw(
   queryClient.setQueryData(autonomousOverviewKey, options.overview ?? OVERVIEW);
   if (!options.unreadAutomations)
     queryClient.setQueryData(automationKeys.list(), automations);
-  for (const entry of automations) {
+  for (const entry of options.seedDetails === false ? [] : automations) {
     queryClient.setQueryData(automationKeys.detail(entry.id), {
       automation: entry,
       triggers: TRIGGERS[entry.id] ?? [],
@@ -729,4 +731,32 @@ test("the row switches are drawn small but hit 44×44", async () => {
     expect(control.className).toContain("after:-inset-x-[10px]");
     expect(control.className).toContain("after:-inset-y-[15px]");
   }
+});
+
+/*
+ * A server whose list carries each automation's triggers (`GET /api/automations` → triggers) needs
+ * no per-automation detail read at all: the rows draw from the list, and the detail cache is seeded
+ * from it so opening 详情 has the triggers at once.
+ */
+test("when the list carries triggers, no automation detail is requested", async () => {
+  serve();
+  const withTriggers = AUTOMATIONS.map((entry) => ({
+    ...entry,
+    triggers: TRIGGERS[entry.id] ?? [],
+  }));
+  const { view, queryClient } = draw({
+    automations: withTriggers,
+    seedDetails: false,
+  });
+  await view.findByRole("heading", { level: 1, name: "自主工作" });
+  await waitFor(() =>
+    expect(view.getAllByText(/Hook \/ API/).length).toBeGreaterThan(0),
+  );
+  expect(
+    calls.filter((call) => /^\/api\/automations\/[^/]+$/.test(call.path)),
+  ).toEqual([]);
+  const seeded = queryClient.getQueryData(
+    automationKeys.detail(withTriggers[1]!.id),
+  ) as { triggers: unknown[] } | undefined;
+  expect(seeded?.triggers).toEqual(TRIGGERS[withTriggers[1]!.id] ?? []);
 });

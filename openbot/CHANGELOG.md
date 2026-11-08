@@ -8,6 +8,11 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+- **The automation list carries each automation's triggers.** `GET /api/automations` now returns
+  `triggers` on every item. These are the same rows `GET /api/automations/:id` returns. /autonomous
+  draws from the list and no longer requests each automation's detail. The field is additive, so
+  older clients are unaffected.
+
 - **Workbench follow-ups.**
   - /autonomous no longer re-reads every automation's detail every five minutes. It re-reads one
     only when the list shows that automation changed, and it refreshes 长期职责 every 60s instead of

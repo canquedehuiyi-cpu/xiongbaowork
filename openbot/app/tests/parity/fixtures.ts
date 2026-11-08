@@ -2107,7 +2107,14 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
   [
     "GET",
     /^\/api\/automations$/,
-    (c) => ok({ automations: list(c, AUTOMATIONS) }),
+    (c) =>
+      // Current servers carry each automation's triggers on the list.
+      ok({
+        automations: list(c, AUTOMATIONS).map((entry) => ({
+          ...entry,
+          triggers: AUTOMATION_TRIGGERS[entry.id] ?? [],
+        })),
+      }),
   ],
   [
     "GET",
