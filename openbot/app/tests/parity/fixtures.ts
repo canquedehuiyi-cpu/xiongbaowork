@@ -1868,6 +1868,8 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
     },
   ],
   ["GET", /^\/api\/waker-groups$/, (c) => ok({ groups: list(c, GROUPS) })],
+  // The fixture's plugins and skills are written in Chinese already, so there is nothing to translate.
+  ["GET", /^\/api\/translations\/plugins$/, () => ok({ zh: {} })],
   // 头像: two faces somebody chose (an expression for a coworker and for a group); none when empty.
   [
     "GET",

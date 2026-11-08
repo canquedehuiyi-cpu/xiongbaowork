@@ -18,6 +18,7 @@ import {
   type PluginsPage,
   pluginsPageQueryOptions,
 } from "@/lib/plugins/queries";
+import { useZh } from "@/lib/translations/queries";
 import {
   CardGrid,
   grantedSentence,
@@ -112,6 +113,7 @@ export function ConnectorsTab({
   query: string;
   onQuery: (value: string) => void;
 }) {
+  const zh = useZh();
   const plugins = useQuery(pluginsPageQueryOptions());
   const connections = useQuery(connectionsQueryOptions());
   const servers = plugins.data?.servers ?? [];
@@ -166,7 +168,7 @@ export function ConnectorsTab({
                     {accountState(server)}
                   </span>
                 }
-                description={server.summary}
+                description={zh(server.summary)}
                 key={server.id}
                 media={
                   <span className="flex size-[32px] items-center justify-center rounded-md bg-muted">
@@ -176,7 +178,7 @@ export function ConnectorsTab({
                 meta={grantedSentence(
                   new Set(server.tools.flatMap((tool) => tool.grantedTo)).size,
                 )}
-                title={server.title}
+                title={zh(server.title)}
               />
             ))}
           </CardGrid>

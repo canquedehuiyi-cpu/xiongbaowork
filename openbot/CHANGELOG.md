@@ -8,6 +8,15 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+- **Skills and plugins that arrive in English are shown in Chinese.** Whether a person or the
+  platform added it, a skill's name, summary and instructions, and a plugin's or MCP connector's
+  name, summary and tool descriptions are translated in the background by the deployment's model and
+  shown in Chinese on the Plugins, Connectors and Skills screens and the admin plugin pages. Display
+  only: the stored text, what an editor edits and what a model is given stay the original. Texts that
+  are already Chinese are left alone; a deployment with no model key keeps showing the originals.
+  New deployment-wide cache `text_translations` (recovery overlay 0145) and
+  `GET /api/translations/plugins`.
+
 - **Coworkers and groups can be given their own 头像.** A coworker's manager, or anybody for a
   group, picks one of 熊宝's five expressions or uploads a picture; it replaces the drawn face
   everywhere that coworker or group appears (sidebar, cards, detail page, task board). The browser

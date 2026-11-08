@@ -63,6 +63,7 @@ import {
   type PluginServer,
   pluginsPageQueryOptions,
 } from "@/lib/plugins/queries";
+import { useZh } from "@/lib/translations/queries";
 import { wakerGroupsQueryOptions } from "@/lib/waker-groups/queries";
 
 /**
@@ -171,6 +172,7 @@ function ConnectionStateUnreadable() {
 }
 
 function RouteComponent() {
+  const zh = useZh();
   const { key } = useParams({ from: "/_authed/admin/plugins/$key" });
   const queryClient = useQueryClient();
   const plugins = useQuery(pluginsPageQueryOptions());
@@ -335,7 +337,7 @@ function RouteComponent() {
   }));
 
   const auth = connectionKindFor(server, entry?.auth);
-  const title = entry?.title ?? server?.title ?? key;
+  const title = zh(entry?.title ?? server?.title ?? key);
 
   /* Bound once because the brokered row below is told it twice — once inside the whole
      disconnected sentence and once on its own — and two copies of it would drift. */
@@ -558,7 +560,7 @@ function RouteComponent() {
   return (
     <PageShell
       backButton={{ label: "插件", linkProps: { to: "/admin/plugins" } }}
-      description={entry?.summary ?? server?.summary}
+      description={zh(entry?.summary ?? server?.summary ?? "") || undefined}
       title={title}
     >
       {error ? (
@@ -1001,7 +1003,7 @@ function RouteComponent() {
                       <ItemTitle className="font-mono text-xs">
                         {tool.name}
                       </ItemTitle>
-                      <ItemDescription>{tool.description}</ItemDescription>
+                      <ItemDescription>{zh(tool.description)}</ItemDescription>
                     </ItemContent>
                     <ItemActions>
                       {/*
