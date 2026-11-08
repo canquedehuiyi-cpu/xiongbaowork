@@ -33,6 +33,12 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   Only the Bot's owner gets these tools; the permissions page gains 「列出桌面窗口」「查看桌面」.
   Audit rows keep the window title and program, never the window's contents. **The employee still
   cannot click, type or press keys on the desktop.** A device that is not Windows says so.
+  Limits to know: the sensitive-title words are Chinese only for now (an English title such as
+  "PayPal" or "1Password" is read without asking); a screenshot can include an always-on-top window
+  over the one being read; when the owner approves reading a sensitive window, what was read is kept
+  with the approval record on the server so the conversation can resume, and the device app keeps
+  its own local log of each read. Desktop reads need the device app from this release — an older
+  one answers that it does not handle the action.
 - **The browser works on a Windows device.** Running the G5 browser probe on Windows showed that
   the Bun the device app was built with (1.3.14) could not drive Chrome through Playwright there:
   Chrome started, but neither the pipe nor the CDP connection completed. The device app is now built
