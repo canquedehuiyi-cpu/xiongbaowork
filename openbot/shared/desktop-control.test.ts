@@ -67,7 +67,20 @@ describe("desktop-control protocol", () => {
   });
 
   test("sensitiveWord finds 银行 in 招商银行 - Google Chrome and nothing in 无标题 - 记事本", () => {
-    expect(DESKTOP_WINDOW_WORDS).toEqual(["密码", "银行", "支付"]);
+    expect(DESKTOP_WINDOW_WORDS).toEqual([
+      "密码",
+      "银行",
+      "支付",
+      "password",
+      "bank",
+      "paypal",
+    ]);
+    for (const title of [
+      "1Password - Vault",
+      "Bank of America - Chrome",
+      "PayPal: Log in",
+    ])
+      expect(sensitiveWord(title, DESKTOP_WINDOW_WORDS)).toBeDefined();
     expect(
       sensitiveWord("招商银行 - Google Chrome", DESKTOP_WINDOW_WORDS),
     ).toBe("银行");
