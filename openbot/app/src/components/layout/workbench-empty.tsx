@@ -1,16 +1,10 @@
 import type { ReactNode } from "react";
-import cool from "@/assets/brand/xiongbao-cool.png";
-import cute from "@/assets/brand/xiongbao-cute.png";
-import happy from "@/assets/brand/xiongbao-happy.png";
-import naughty from "@/assets/brand/xiongbao-naughty.png";
-import sweet from "@/assets/brand/xiongbao-sweet.png";
+import { PRESET_IMAGES } from "@/components/portraits/preset-images";
+import type { PortraitPreset } from "@/lib/portraits/queries";
 import { cn } from "@/lib/utils";
 
-/** The five expressions on the brand's character sheet (表情特写), each cut to a round portrait. */
-const MOODS = { naughty, cute, cool, happy, sweet } as const;
-
 /** 调皮 · 可爱 · 帅气 · 开心 · 卖萌, as the character sheet names them. */
-export type BearMood = keyof typeof MOODS;
+export type BearMood = PortraitPreset;
 
 /**
  * 熊宝, the product's own mascot: the 京剧脸谱 panda of the logo, in one of the character sheet's
@@ -37,7 +31,7 @@ export function BearMascot({
       decoding="async"
       draggable={false}
       height={size}
-      src={MOODS[mood]}
+      src={PRESET_IMAGES[mood]}
       width={size}
     />
   );
