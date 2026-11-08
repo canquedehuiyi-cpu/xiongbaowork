@@ -18,6 +18,22 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   on Windows and needs the device app from this release; an older device app still lists its
   enabled apps and the employee says the device app needs updating. A paused device or a failed
   discovery leaves the enabled apps listed and says why in `discoveryError`.
+- **Enable a found app in one sentence.** The new `computer_app_enable` tool takes a candidate
+  from the 可启用 group; the owner always approves (「允许员工使用本机应用「名称」？来源：…」 — no
+  rule, auto review or run-directly default skips it; a team cap of 从不 or a disabled tool refuses
+  it before the device is asked). After approval the device writes the app, tests it and the
+  employee can call its tools at once. npm-style apps run on the device app's own bundled Bun, so
+  Node.js is not needed. Enabling is never queued: an offline device is refused at once. The
+  permissions page gains 「启用本机应用」. The device app window lists the found apps with a switch
+  each; the old manual form moves into a collapsed 「高级：手动添加」.
+- **The employee can look at the owner's Windows desktop (read-only).** `computer_desktop_windows`
+  lists the visible windows; `computer_desktop_snapshot` reads one window as a tree of its
+  controls, with a screenshot on request (long edge at most 1280 px). A window whose title mentions
+  passwords, banking or payment (「密码」「银行」「支付」…) waits for the owner's approval first.
+  Only the Bot's owner gets these tools; the permissions page gains 「列出桌面窗口」「查看桌面」.
+  Audit rows keep the window title and program, never the window's contents. **The employee still
+  cannot click, type or press keys on the desktop.** A device that is not Windows says so.
+- **The browser probe now also runs on Windows** (headed Chrome on `windows-latest`) in CI.
 - **A local app started with `npx` (or `npm`, `pnpm`, `uvx`...) works on Windows.** The device
   handed cmd.exe the bare quoted name, and for a shim it finds on PATH that way cmd reads `%~dp0`
   as the current folder, so npx.cmd looked for its scripts in the device app's own folder and 测试连接
