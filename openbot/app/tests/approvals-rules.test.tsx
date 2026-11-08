@@ -356,7 +356,7 @@ test("a sensitive-window request names its source 敏感窗口", async () => {
   }
 });
 
-test("SEC1: 禁用 is shown as its own behaviour,and a request set by the Bot's owner names that layer", async () => {
+test("SEC1: 禁用 is shown as its own behaviour, and a request set by the Bot's owner names that layer", async () => {
   inbox.requests.push(ownerAsked as unknown as (typeof inbox.requests)[number]);
   inbox.teamRules.unshift({
     id: "locked-off",
