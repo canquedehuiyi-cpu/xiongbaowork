@@ -31,7 +31,7 @@ import { INSTALLED_LIMIT } from "../src/discover-installed";
 import { createRunnerDispatcher } from "../src/dispatch";
 import { createRunnerExecutor } from "../src/execute";
 import { createActionJournal } from "../src/journal";
-import type { McpConnection } from "../src/mcp-client";
+import { McpAppError, type McpConnection } from "../src/mcp-client";
 
 /*
  * `apps.discover` through the real executor: discovery answers what this machine could offer, by
@@ -428,8 +428,15 @@ async function refOf(
   return found.ref;
 }
 
-/** A host whose apps answer one tool without starting anything; it records each entry it connects. */
-function fakeHost(connected: AppEntry[]) {
+/**
+ * A host whose apps answer one tool without starting anything; it records each entry it connects
+ * and the ref of each connection closed. With `failList`, listing the tools fails the way a
+ * garbled answer does, leaving the connection open.
+ */
+function fakeHost(
+  connected: AppEntry[],
+  opts: { failList?: boolean; closedRefs?: string[] } = {},
+) {
   return (registry: ReturnType<typeof createAppRegistry>) =>
     createAppHost(registry, {
       connect: async (entry): Promise<McpConnection> => {
@@ -439,7 +446,10 @@ function fakeHost(connected: AppEntry[]) {
           get closed() {
             return closed;
           },
-          listTools: async () => [{ name: "read_note" }],
+          listTools: async () => {
+            if (opts.failList) throw new McpAppError("protocol", "garbled");
+            return [{ name: "read_note" }];
+          },
           callTool: async () => ({
             content: [],
             isError: false,
@@ -447,6 +457,7 @@ function fakeHost(connected: AppEntry[]) {
           }),
           close: async () => {
             closed = true;
+            opts.closedRefs?.push(entry.ref);
           },
         };
       },
@@ -745,6 +756,73 @@ test("an expired, forged or needs_uv candidate writes nothing and says why", asy
     await execute({ action: "apps.enable", payload: { candidate: notes } }),
   ).toEqual({ ok: false, error: CANDIDATE_EXPIRED });
   expect(appsFile(base)).toBe("");
+});
+
+test("a connection test that fails without closing leaves no connection open once rolled back", async () => {
+  const connected: AppEntry[] = [];
+  const closedRefs: string[] = [];
+  const { execute, registry } = setup({
+    hostOf: fakeHost(connected, { failList: true, closedRefs }),
+  });
+  const ref = await refOf(execute, "笔记");
+  const failed = await execute({
+    action: "apps.enable",
+    payload: { candidate: ref },
+  });
+  expect(failed).toEqual({
+    ok: false,
+    error: "「笔记」返回了无法识别的内容。",
+  });
+  expect(registry.list()).toEqual([]);
+  // The one connection the test opened is closed now, not left to the 10-minute idle timer.
+  expect(connected).toHaveLength(1);
+  expect(closedRefs).toEqual([connected[0]?.ref ?? ""]);
+
+  // The same for an app that was off and is switched off again.
+  const off = registry.add({
+    kind: "stdio",
+    name: "我的",
+    command: "npx",
+    args: ["-y", "@acme/notes-mcp"],
+    env: {},
+    enabled: false,
+  });
+  const again = await execute({
+    action: "apps.enable",
+    payload: { candidate: ref },
+  });
+  expect(again).toEqual({
+    ok: false,
+    error: "「我的」返回了无法识别的内容。",
+  });
+  expect(registry.list()).toEqual([off]);
+  expect(connected.map((app) => app.ref)).toEqual([
+    connected[0]?.ref ?? "",
+    off.ref,
+  ]);
+  expect(closedRefs).toEqual(connected.map((app) => app.ref));
+});
+
+test("with 名称 through 名称（9） all taken the registry's duplicate-name refusal comes back and nothing is written", async () => {
+  const connected: AppEntry[] = [];
+  const { execute, registry, base } = setup({ hostOf: fakeHost(connected) });
+  for (const name of [
+    "笔记",
+    ...[2, 3, 4, 5, 6, 7, 8, 9].map((n) => `笔记（${n}）`),
+  ]) {
+    registry.add({ kind: "http", name, url: "http://127.0.0.1:9" });
+  }
+  const before = appsFile(base);
+  const outcome = await execute({
+    action: "apps.enable",
+    payload: { candidate: await refOf(execute, "笔记") },
+  });
+  expect(outcome).toEqual({
+    ok: false,
+    error: "已经有一个叫「笔记」的应用了（重名）。",
+  });
+  expect(appsFile(base)).toBe(before);
+  expect(connected).toEqual([]);
 });
 
 test("with 20 apps registered the registry's 中文 refusal comes back and nothing is written", async () => {

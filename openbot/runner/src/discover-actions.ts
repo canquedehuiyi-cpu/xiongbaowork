@@ -231,8 +231,20 @@ export function createDiscoverActions(opts: {
         output: { app: { ref: app.ref, name: app.name }, tools },
       };
     } catch (error) {
-      // A new app is removed again, one switched on is switched off again.
-      restore?.();
+      let restored = false;
+      try {
+        // A new app is removed again, one switched on is switched off again.
+        restore?.();
+        restored = restore !== undefined;
+      } catch {
+        // The registry could not be put back: the host's own sentence still says what failed.
+      }
+      if (restored) {
+        // Asked once more now that the app is gone or off, the host closes the connection the
+        // failed test may have left open (a list that timed out or was stopped does not close it).
+        // Only then: while the app is still on, asking again would start it again.
+        await host.tools(app.ref).catch(() => {});
+      }
       return { ok: false, error: enableFailure(error) };
     }
   }
