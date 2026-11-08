@@ -32,6 +32,14 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   draws from the list and no longer requests each automation's detail. The field is additive, so
   older clients are unaffected.
 
+- **A local app started with `npx` (or `npm`, `pnpm`, `uvx`...) works on Windows.** The device
+  handed cmd.exe the bare quoted name, and for a shim it finds on PATH that way cmd reads `%~dp0`
+  as the current folder, so npx.cmd looked for its scripts in the device app's own folder and 测试连接
+  failed with `Cannot find module ...\runner\node_modules\npm\bin\npx-cli.js`. The runner now looks
+  the command up in the app's PATH (with PATHEXT) and starts it by its absolute path; a command that
+  is not installed says so (「找不到命令 npx，请确认已安装（例如 Node.js），并重启设备端。」). An app with
+  no working folder now starts in the owner's home folder instead of the device app's own.
+
 - **Workbench follow-ups.**
   - /autonomous no longer re-reads every automation's detail every five minutes. It re-reads one
     only when the list shows that automation changed, and it refreshes 长期职责 every 60s instead of

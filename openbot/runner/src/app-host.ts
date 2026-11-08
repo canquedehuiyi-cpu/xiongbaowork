@@ -164,11 +164,16 @@ export function createAppHost(
     const name = entry.name;
     const tail = error.stderrTail?.trim();
     switch (error.kind) {
-      case "start":
+      case "start": {
+        // The client's own reason (a command not on PATH) beats whatever the app printed.
+        const reason = error.hint ?? tail;
         return {
           kind: "start",
-          text: tail ? `「${name}」启动失败：${tail}` : `「${name}」启动失败。`,
+          text: reason
+            ? `「${name}」启动失败：${reason}`
+            : `「${name}」启动失败。`,
         };
+      }
       case "unreachable":
         return {
           kind: "unreachable",

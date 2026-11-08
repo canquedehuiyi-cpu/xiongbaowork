@@ -239,6 +239,21 @@ test("errors are worded in Chinese and keep the original as cause", async () => 
   expect(startError.kind).toBe("start");
   expect(startError.cause).toBe(start);
 
+  // A start failure that comes with its own Chinese reason (a command not on PATH) says that.
+  const missing = new McpAppError(
+    "start",
+    "npx was not found on PATH.",
+    undefined,
+    "找不到命令 npx，请确认已安装（例如 Node.js），并重启设备端。",
+  );
+  const m = failing(missing);
+  const missingError = await m.host.tools(m.entry.ref).catch((e) => e);
+  expect(missingError.userMessage).toBe(
+    "「画图」启动失败：找不到命令 npx，请确认已安装（例如 Node.js），并重启设备端。",
+  );
+  expect(missingError.kind).toBe("start");
+  expect(missingError.phase).toBe("connect");
+
   // http connect failure
   const dataDir = mkdtempSync(join(tmpdir(), "app-host-"));
   dirs.push(dataDir);
