@@ -264,12 +264,28 @@ function renderDiscovered(reply) {
   $("discover-empty").textContent = described.empty ?? "";
 }
 
+let lastDiscovered;
+let scanSeq = 0;
+let scansInFlight = 0;
 async function refreshDiscovered(keepStatus) {
   if (!keepStatus) $("discover-status").textContent = "";
+  const mine = ++scanSeq;
+  scansInFlight += 1;
+  $("discover-refresh").disabled = true;
   try {
-    renderDiscovered(await invoke("discover_apps"));
+    const reply = await invoke("discover_apps");
+    // A newer scan has been started since: its answer is the one to show.
+    if (mine === scanSeq) {
+      lastDiscovered = reply;
+      renderDiscovered(reply);
+    }
   } catch (error) {
     $("discover-status").textContent = String(error);
+    // Redraw from the last good answer so no switch stays greyed out.
+    if (mine === scanSeq) renderDiscovered(lastDiscovered);
+  } finally {
+    scansInFlight -= 1;
+    if (scansInFlight === 0) $("discover-refresh").disabled = false;
   }
 }
 $("discover-refresh").addEventListener("click", () => refreshDiscovered());
@@ -325,6 +341,7 @@ await refresh();
 await refreshFolders();
 await refreshApps();
 // --- app discovery (sub-project 3) ---
-await refreshDiscovered();
+// Not awaited: a slow scan must not hold up the status polling below.
+refreshDiscovered();
 // --- end app discovery ---
 setInterval(refresh, 1000);

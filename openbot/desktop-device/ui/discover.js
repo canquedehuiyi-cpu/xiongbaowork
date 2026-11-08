@@ -31,7 +31,8 @@ export function describeCandidates(reply) {
       name: candidate.name,
       source: candidate.sourceLabel ?? "",
       on: candidate.enabled === true,
-      disabled: candidate.status !== "ready",
+      // An enabled one can always be switched off, even if it is no longer ready.
+      disabled: candidate.status !== "ready" && candidate.enabled !== true,
       note: candidate.note ?? "",
     })),
     installedCount,

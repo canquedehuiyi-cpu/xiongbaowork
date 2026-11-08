@@ -43,6 +43,13 @@ test("describeCandidates: a needs_uv candidate is greyed out with 需要先安�
     disabled: true,
     note: "需要先安装 uv",
   });
+  const stale = describeCandidates({
+    platform: "win32",
+    candidates: [
+      { ...base, ref: "c3", name: "旧", sourceLabel: "x", status: "missing_command", enabled: true, app: "app_C" },
+    ],
+  });
+  expect(stale.items[0]).toMatchObject({ on: true, disabled: false });
   expect(described.items[1]).toMatchObject({
     app: "app_AAAAAAAAAAAAAAAAAAAAAA",
     on: true,
