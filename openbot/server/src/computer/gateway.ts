@@ -38,13 +38,19 @@ import {
 } from "../devices/takeover";
 import { withUntrustedNotice } from "../untrusted-content";
 // --- app discovery (sub-project 3) ---
+import { APP_ENABLE_TOOL } from "../approvals/policy";
+import { DeviceOfflineError } from "../devices/channel";
 import {
   AVAILABLE_HINT,
+  CANDIDATE_EXPIRED,
+  createCandidateCache,
+  DEVICE_OFFLINE_ENABLE,
   type DiscoveredCandidate,
   discoveryGroups,
   INSTALLED_HINT,
   OLD_RUNNER,
   readDiscovery,
+  readEnabled,
 } from "./app-discovery";
 // --- end app discovery ---
 import {
@@ -221,6 +227,21 @@ export type ComputerGatewayOptions = {
     tenantId: string;
     deviceId: string;
   }) => Promise<{ ref: string; name: string }[]>;
+  // --- app discovery (sub-project 3) ---
+  /**
+   * Whether a frame can be written to the machine from this process now. False refuses an enable
+   * before anything is asked; absent, the transport's own answer is the only one.
+   */
+  deviceReachable?: (machine: {
+    tenantId: string;
+    deviceId: string;
+  }) => boolean;
+  /** The app an enable just made, added to the machine's record until its next heartbeat. */
+  rememberDeviceApp?: (
+    machine: { tenantId: string; deviceId: string },
+    app: { ref: string; name: string },
+  ) => Promise<void>;
+  // --- end app discovery ---
   /**
    * The person's read-only folders on their own machines (story F1, stage 2).
    *
@@ -379,6 +400,15 @@ export interface ComputerGateway {
     input: { app: string; tool: string; args?: Record<string, unknown> },
     signal?: AbortSignal,
   ): Promise<AppCallResult>;
+  // --- app discovery (sub-project 3) ---
+  /** One app found on the owner's paired machine made usable, always with the owner's approval. */
+  enableApp(
+    botId: string,
+    actor: ActionActor,
+    input: { candidate: string },
+    signal?: AbortSignal,
+  ): Promise<{ enabled: { name: string; tools: AppTool[] }; next: string }>;
+  // --- end app discovery ---
   control(botId: string, requestId?: string): Promise<ControlState>;
   requestHelp(
     botId: string,
@@ -786,6 +816,13 @@ export function createComputerGateway(
        * gate, and before the gate decides. May refuse (a tool the list does not have).
        */
       resolveApp?: () => Promise<{ readOnly: boolean; description?: string }>;
+      // --- app discovery (sub-project 3) ---
+      /**
+       * A discovered app this call enables: its candidate reference, name and where it was found.
+       * Always a write, asked about by the app's name; the source is for the card and the row.
+       */
+      enable?: { candidate: string; name: string; source: string };
+      // --- end app discovery ---
     },
     run: (address?: string) => Promise<T>,
   ): Promise<T> {
@@ -822,7 +859,11 @@ export function createComputerGateway(
     // Which app and tool, on every row this action writes; never the arguments.
     const appRow = subject.app
       ? { app: { name: subject.app.name, tool: subject.app.tool } }
-      : {};
+      : // --- app discovery (sub-project 3) ---
+        subject.enable
+        ? { app: { name: subject.enable.name, source: subject.enable.source } }
+        : // --- end app discovery ---
+          {};
     // --- desktop control (sub-project 2) ---
     // Which window, by its title and process; never what was read from it.
     const desktopRow = subject.desktop
@@ -1092,6 +1133,9 @@ export function createComputerGateway(
           refusalRule: undefined,
           app: undefined,
           resolveApp: undefined,
+          // --- app discovery (sub-project 3) ---
+          enable: undefined,
+          // --- end app discovery ---
           // --- desktop control (sub-project 2) ---
           desktop: undefined,
           // --- end desktop control ---
@@ -1143,6 +1187,24 @@ export function createComputerGateway(
             : {}),
           // --- end desktop control ---
         },
+        // --- app discovery (sub-project 3) ---
+        /*
+         * Enabling a discovered app: a write on the owner's machine, named by the app. The candidate
+         * is part of the action an approval binds; where it was found is for the card only.
+         */
+        ...(subject.enable
+          ? {
+              effect: "write",
+              scope: subject.enable.name,
+              display: { description: subject.enable.source },
+              target: {
+                candidate: subject.enable.candidate,
+                name: subject.enable.name,
+              },
+              subject: { runner: true },
+            }
+          : {}),
+        // --- end app discovery ---
         continuation,
       });
       /*
@@ -1438,6 +1500,9 @@ export function createComputerGateway(
   }
 
   // --- app discovery (sub-project 3) ---
+  /** What each machine's last listing found, for the enable that follows it. */
+  const candidates = createCandidateCache(now);
+
   /** The apps the machine could offer and the software it has no app for. Never fails the listing. */
   async function discoverGroups(
     machine: { tenantId: string; deviceId: string },
@@ -1458,6 +1523,7 @@ export function createComputerGateway(
       );
       if (!read)
         return { discoveryError: DISCOVERY_FAILED("没有收到有效的回答") };
+      candidates.remember(machine, read.candidates);
       const groups = discoveryGroups(
         read,
         apps.map((app) => app.name),
@@ -1479,6 +1545,62 @@ export function createComputerGateway(
           ? OLD_RUNNER
           : DISCOVERY_FAILED(reason || "原因不明"),
       };
+    }
+  }
+
+  /**
+   * One candidate as the machine's config says now, asked of the machine when no listing here still
+   * holds it. Undefined: the machine does not know it (expired, or never issued). A failure to ask
+   * is a refusal with the reason, cut; only the person's Stop is thrown as it is.
+   */
+  async function lookUpCandidate(
+    machine: { tenantId: string; deviceId: string },
+    botId: string,
+    ref: string,
+    signal?: AbortSignal,
+  ): Promise<
+    { found?: DiscoveredCandidate & { enabled: boolean } } | { refusal: string }
+  > {
+    try {
+      const read = readDiscovery(
+        await transport.post<unknown>(
+          runnerAddress(machine),
+          botId,
+          "/apps/discover",
+          { candidate: ref },
+          signal,
+          DISCOVER_BACKSTOP_MS,
+        ),
+      );
+      if (!read) return { refusal: DISCOVERY_FAILED("没有收到有效的回答") };
+      return {
+        found: read.candidates.find((candidate) => candidate.candidate === ref),
+      };
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      if (error instanceof DeviceOfflineError)
+        return { refusal: DEVICE_OFFLINE_ENABLE };
+      const reason = cutUtf8(error instanceof Error ? error.message : "", 200);
+      return {
+        refusal: reason.startsWith("Nothing on this machine handles")
+          ? OLD_RUNNER
+          : DISCOVERY_FAILED(reason || "原因不明"),
+      };
+    }
+  }
+
+  /** A tool list the machine just gave, kept as `fetchAppTools` keeps one. */
+  function keepAppTools(
+    machine: { tenantId: string; deviceId: string },
+    ref: string,
+    tools: AppTool[],
+  ) {
+    const key = `${machine.tenantId}/${machine.deviceId}/${ref}`;
+    appTools.delete(key);
+    appTools.set(key, { tools, at: now() });
+    for (const old of appTools.keys()) {
+      if (appTools.size <= APP_TOOLS_CACHE_LIMIT) break;
+      appTools.delete(old);
     }
   }
   // --- end app discovery ---
@@ -2211,6 +2333,149 @@ export function createComputerGateway(
             "structuredContent",
           ]);
     },
+
+    // --- app discovery (sub-project 3) ---
+    /**
+     * One app found on the owner's machine, enabled there (app discovery, spec §3). Always asked
+     * about; nothing before the card is sent anywhere but the machine itself, and a step that fails
+     * opens no card and queues nothing. The frame carries the candidate reference and nothing else;
+     * the card, the rows and the answer carry the app's name and where it was found, never its
+     * command, arguments or environment, which never leave the machine.
+     */
+    async enableApp(
+      botId: string,
+      actor: ActionActor,
+      input: { candidate: string },
+      signal?: AbortSignal,
+    ) {
+      const { machine } = await appsOf(botId, actor);
+      // Always asked: with nobody to ask, nothing is enabled.
+      if (!options.approvalGate)
+        throw new ComputerUnavailableError(NO_ENABLE_APPROVAL);
+      // A disabled tool or the team's cap of `never`: refused before the machine is asked anything.
+      const continuation = currentApprovalContext();
+      const refused = await options.approvalRefusal?.({
+        actorId: actor.id,
+        botId,
+        toolRef: APP_ENABLE_TOOL,
+        effect: "write",
+        scope: input.candidate,
+        args: continuation?.args ?? {},
+        subject: { runner: true },
+        ...(continuation ? { continuation } : {}),
+      });
+      if (refused) throw new ApprovalRefusedError(refused);
+      /** Refused and recorded, before the card: nothing is sent. */
+      const refuse = (
+        refusal: string,
+        enable?: { candidate: string; name: string; source: string },
+      ) =>
+        govern<never>(
+          APP_ENABLE_TOOL,
+          botId,
+          actor,
+          {
+            device: machine,
+            refusal,
+            refusalRule: APP_UNAVAILABLE_RULE,
+            ...(enable ? { enable } : {}),
+          },
+          async () => {
+            throw new ActionRefusedError(refusal, APP_UNAVAILABLE_RULE);
+          },
+        );
+      if (options.deviceReachable?.(machine) === false)
+        return refuse(DEVICE_OFFLINE_ENABLE);
+      let found = candidates.find(machine, input.candidate);
+      if (!found) {
+        const looked = await lookUpCandidate(
+          machine,
+          botId,
+          input.candidate,
+          signal,
+        );
+        if ("refusal" in looked) return refuse(looked.refusal);
+        found = looked.found;
+      }
+      if (!found) return refuse(CANDIDATE_EXPIRED);
+      const enable = {
+        candidate: found.candidate,
+        name: found.name,
+        source: found.source,
+      };
+      if (found.status !== "ready")
+        return refuse(
+          found.note
+            ? `「${found.name}」暂时不能启用：${found.note}`
+            : `「${found.name}」暂时不能启用。`,
+          enable,
+        );
+      if (found.enabled)
+        return refuse(
+          `「${found.name}」已经启用了，可以直接用 computer_app_call 调用。`,
+          enable,
+        );
+      const result = await govern(
+        APP_ENABLE_TOOL,
+        botId,
+        actor,
+        { device: machine, enable, ...(signal ? { signal } : {}) },
+        async () => {
+          let output: unknown;
+          try {
+            output = await transport.post<unknown>(
+              runnerAddress(machine),
+              botId,
+              "/apps/enable",
+              { candidate: input.candidate },
+              signal,
+              APP_ENABLE_BACKSTOP_MS,
+            );
+          } catch (error) {
+            if (error instanceof DeviceOfflineError)
+              throw new ComputerUnavailableError(DEVICE_OFFLINE_ENABLE);
+            // A runner from before enabling (it lists, but has no `apps.enable`): said in Chinese.
+            if (
+              error instanceof Error &&
+              error.message.startsWith("Nothing on this machine handles")
+            )
+              throw new ComputerUnavailableError(OLD_RUNNER_ENABLE);
+            throw error;
+          }
+          const read = readEnabled(output);
+          if (!read)
+            throw new ComputerUnavailableError(
+              "设备没有返回有效的启用结果，请稍后用 computer_apps 再查看一次。",
+            );
+          candidates.markEnabled(machine, input.candidate);
+          /*
+           * Usable at once rather than after the next heartbeat. A record that cannot be written now
+           * is caught up by that heartbeat, and does not undo an app the machine already enabled.
+           */
+          await options
+            .rememberDeviceApp?.(machine, read.app)
+            .catch((error: unknown) => {
+              console.warn(
+                JSON.stringify({
+                  type: "device-app-remember-failed",
+                  tenantId: machine.tenantId,
+                  deviceId: machine.deviceId,
+                  error: cutUtf8(String(error), 500),
+                }),
+              );
+            });
+          const tools = readAppTools(read.tools);
+          keepAppTools(machine, read.app.ref, tools);
+          return {
+            enabled: { name: read.app.name, tools },
+            next: `现在可以用 computer_app_call 调用「${read.app.name}」的工具了。`,
+          };
+        },
+      );
+      // Tool names and descriptions are whatever the app says they are.
+      return withUntrustedNotice(result, "local app", ["enabled"]);
+    },
+    // --- end app discovery ---
   };
 }
 
@@ -2249,6 +2514,11 @@ const APP_TOOLS_CACHE_LIMIT = 1000;
 const APP_LIST_BACKSTOP_MS = 45_000;
 // --- app discovery (sub-project 3) ---
 const DISCOVER_BACKSTOP_MS = 30_000;
+/** The runner's own deadlines for an enable: start 20s + list 20s, with room to spare. */
+const APP_ENABLE_BACKSTOP_MS = 60_000;
+const OLD_RUNNER_ENABLE =
+  "主人电脑上的设备端版本较旧，更新后才能启用本机应用。";
+const NO_ENABLE_APPROVAL = "这里没有可以请主人批准的地方，不能启用本机应用。";
 const DISCOVERY_FAILED = (reason: string) =>
   `这次没能查看主人电脑上的其他应用：${reason}`;
 // --- end app discovery ---
@@ -2389,6 +2659,11 @@ export function intentOf(
       return "read";
     case "computer_app_call":
       return "app_call";
+    // --- app discovery (sub-project 3) ---
+    // Enabling an app starts a program there too: a rule against app calls covers enabling one.
+    case "computer_app_enable":
+      return "app_call";
+    // --- end app discovery ---
     // --- desktop control (sub-project 2) ---
     // Listing the windows and reading one change nothing on the desktop.
     case "computer_desktop_windows":
@@ -2423,8 +2698,11 @@ async function write(
     stopped?: boolean;
     /** Why the action could not be carried out at all, said in the row (story RES2, D9). */
     refusal?: string;
-    /** The local app and tool a `computer_app_call` named; never its arguments. */
-    app?: { name: string; tool: string };
+    /**
+     * The local app and tool a `computer_app_call` named, never its arguments; or the app and its
+     * source an enable named (app discovery), never its command.
+     */
+    app?: { name: string; tool?: string; source?: string };
     // --- desktop control (sub-project 2) ---
     /** The desktop window a read was for, by title and process; never what was read from it. */
     desktop?: {

@@ -128,6 +128,8 @@ function memoryDeviceStore() {
       const device = devices.get(`${tenantId}/${deviceId}`);
       if (device) device.lastSeenAt = new Date();
     },
+    // Enabling an app writes it on the device record; this probe enables none.
+    async rememberApp() {},
     async remove(tenantId, id) {
       for (const [key, device] of devices) {
         if (device.tenantId === tenantId && device.id === id) {
