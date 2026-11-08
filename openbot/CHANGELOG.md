@@ -33,12 +33,11 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   Only the Bot's owner gets these tools; the permissions page gains 「列出桌面窗口」「查看桌面」.
   Audit rows keep the window title and program, never the window's contents. **The employee still
   cannot click, type or press keys on the desktop.** A device that is not Windows says so.
-- **Known issue: the browser on a Windows device.** Running the G5 browser probe on Windows showed
-  that the Bun runtime the device app is built with (1.3.14) cannot drive Chrome through
-  Playwright there: Chrome starts, but neither the pipe nor the CDP connection completes, while the
-  same calls under Node work. So browser actions on a Windows device are expected to time out until
-  the runtime is changed; Linux devices and the cloud browser are unaffected. The Windows probe job
-  stays out of CI until that is fixed.
+- **The browser works on a Windows device.** Running the G5 browser probe on Windows showed that
+  the Bun the device app was built with (1.3.14) could not drive Chrome through Playwright there:
+  Chrome started, but neither the pipe nor the CDP connection completed. The device app is now built
+  with Bun 1.4.4, where both work and the whole headed probe passes on `windows-latest`; that probe
+  now runs in CI. The server keeps Bun 1.3.14.
 - **A local app started with `npx` (or `npm`, `pnpm`, `uvx`...) works on Windows.** The device
   handed cmd.exe the bare quoted name, and for a shim it finds on PATH that way cmd reads `%~dp0`
   as the current folder, so npx.cmd looked for its scripts in the device app's own folder and 测试连接
