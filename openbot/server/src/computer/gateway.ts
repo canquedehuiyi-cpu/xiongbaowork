@@ -2403,7 +2403,12 @@ export function createComputerGateway(
         );
       if (options.deviceReachable?.(machine) === false)
         return refuse(DEVICE_OFFLINE_ENABLE);
-      if (!found) {
+      /*
+       * Asked of the device when the listing has nothing on it, and again when the listing says it
+       * is enabled: the owner may have switched it off in the device window since, and "already
+       * enabled" is only said on a fresh answer.
+       */
+      if (!found || found.enabled) {
         const looked = await lookUpCandidate(
           machine,
           botId,
