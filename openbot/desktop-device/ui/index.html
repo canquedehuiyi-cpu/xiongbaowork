@@ -119,6 +119,25 @@
         border: 1px solid var(--line);
       }
       #app-list button.danger { color: var(--bad); }
+      /* app discovery (sub-project 3) */
+      #discover-list { list-style: none; margin: 0 0 8px; padding: 0; }
+      #discover-list li {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 6px 10px;
+        margin-bottom: 6px;
+      }
+      #discover-list .text { flex: 1; }
+      #discover-list .source, #discover-list .note { display: block; font-size: 12px; color: var(--muted); }
+      #discover-list li[data-disabled="true"] { opacity: 0.6; }
+      #discover-list input { width: auto; margin: 0; }
+      #discover-refresh { margin: 0 0 12px; }
+      #app-advanced { margin-top: 8px; }
+      #app-advanced summary { cursor: pointer; margin-bottom: 8px; }
+      /* end app discovery */
       #app-env { -webkit-text-security: disc; }
       #app-form textarea {
         width: 100%;
@@ -201,6 +220,16 @@
       <h2>本机应用（MCP）</h2>
       <p>这里填的命令和密钥只保存在这台电脑上；服务器只知道名称。</p>
       <p class="hint" data-tone="wait">添加 MCP 等于把它能访问的内容交给你的员工：请只添加你信任、并且愿意让员工使用的程序。</p>
+      <!-- app discovery (sub-project 3) -->
+      <h3>发现的应用</h3>
+      <p class="hint">这些是在这台电脑上找到的应用。打开开关，你的员工就可以使用它；关掉即停用。</p>
+      <ul id="discover-list"></ul>
+      <p id="discover-empty" class="hint"></p>
+      <div id="discover-status" class="hint" role="status"></div>
+      <button type="button" id="discover-refresh">重新查看</button>
+      <details id="app-advanced">
+      <summary>高级：手动添加</summary>
+      <!-- end app discovery -->
       <ul id="app-list"></ul>
       <p id="app-empty" class="hint"></p>
       <div id="app-status" class="hint" role="status"></div>
@@ -231,6 +260,9 @@
         <button type="submit">添加应用</button>
         <div id="app-error" class="error" role="alert"></div>
       </form>
+      <!-- app discovery (sub-project 3) -->
+      </details>
+      <!-- end app discovery -->
     </section>
 
     <script type="module" src="main.js"></script>

@@ -5,6 +5,9 @@ import {
   setAppEnabled,
   testApp,
 } from "./apps.js";
+// --- app discovery (sub-project 3) ---
+import { describeCandidates, toggleCandidate } from "./discover.js";
+// --- end app discovery ---
 import {
   addFolder,
   describeFolders,
@@ -213,6 +216,65 @@ async function refreshApps() {
   }
 }
 
+// --- app discovery (sub-project 3) ---
+/** The 发现的应用 list. Names, source labels, a switch and a note: nothing else comes from the runner. */
+function renderDiscovered(reply) {
+  const described = describeCandidates(reply);
+  $("discover-list").replaceChildren(
+    ...described.items.map((item) => {
+      const row = document.createElement("li");
+      row.dataset.disabled = String(item.disabled);
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.checked = item.on;
+      box.disabled = item.disabled;
+      box.id = `discover-${item.ref}`;
+      box.setAttribute("role", "switch");
+      const text = document.createElement("label");
+      text.className = "text";
+      text.htmlFor = box.id;
+      const name = document.createElement("strong");
+      name.textContent = item.name;
+      const source = document.createElement("span");
+      source.className = "source";
+      source.textContent = item.source;
+      text.append(name, source);
+      if (item.note) {
+        const note = document.createElement("span");
+        note.className = "note";
+        note.textContent = item.note;
+        text.append(note);
+      }
+      box.addEventListener("change", async () => {
+        box.disabled = true;
+        $("discover-status").textContent = box.checked
+          ? "正在启用并测试，请稍候…"
+          : "";
+        const result = await toggleCandidate(item, box.checked, invoke);
+        $("discover-status").textContent =
+          "error" in result ? result.error : result.message;
+        // What the runner now says is the truth: redraw both lists from it.
+        await refreshDiscovered("keep-status");
+        await refreshApps();
+      });
+      row.append(box, text);
+      return row;
+    }),
+  );
+  $("discover-empty").textContent = described.empty ?? "";
+}
+
+async function refreshDiscovered(keepStatus) {
+  if (!keepStatus) $("discover-status").textContent = "";
+  try {
+    renderDiscovered(await invoke("discover_apps"));
+  } catch (error) {
+    $("discover-status").textContent = String(error);
+  }
+}
+$("discover-refresh").addEventListener("click", () => refreshDiscovered());
+// --- end app discovery ---
+
 function renderAppKind() {
   const stdio = $("app-kind").value === "stdio";
   $("app-stdio-fields").hidden = !stdio;
@@ -262,4 +324,7 @@ $("restart").addEventListener("click", async () => {
 await refresh();
 await refreshFolders();
 await refreshApps();
+// --- app discovery (sub-project 3) ---
+await refreshDiscovered();
+// --- end app discovery ---
 setInterval(refresh, 1000);
