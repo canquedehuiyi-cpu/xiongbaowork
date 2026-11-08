@@ -1,8 +1,10 @@
 import { expect, test } from "bun:test";
 import {
   CANDIDATE_REF,
+  createCandidateCache,
   discoveryGroups,
   readDiscovery,
+  readEnabled,
 } from "../src/computer/app-discovery";
 
 const REF = "cand_abc123_AAAAAAAAAAAAAAAAAAAAAA";
@@ -99,4 +101,73 @@ test("caps: 50 candidates, 200 installed names", () => {
   const read = readDiscovery({ candidates, installed });
   expect(read?.candidates).toHaveLength(50);
   expect(read?.installed).toHaveLength(200);
+});
+
+test("the candidate cache finds a ref for 10 minutes, per machine, and forgets the oldest past 1000 machines", () => {
+  let clock = 1_000_000;
+  const cache = createCandidateCache(() => clock);
+  const here = { tenantId: "t1", deviceId: "studio" };
+  const there = { tenantId: "t1", deviceId: "laptop" };
+  const candidate = {
+    candidate: REF,
+    name: "笔记",
+    source: "Claude 桌面版",
+    kind: "stdio" as const,
+    status: "ready" as const,
+    enabled: false,
+  };
+  cache.remember(here, [candidate]);
+  expect(cache.find(here, REF)).toEqual(candidate);
+  // Another machine of the same tenant does not see it, nor another tenant's machine of that name.
+  expect(cache.find(there, REF)).toBeUndefined();
+  expect(
+    cache.find({ tenantId: "t2", deviceId: "studio" }, REF),
+  ).toBeUndefined();
+  expect(cache.find(here, REF2)).toBeUndefined();
+  clock += 599_999;
+  expect(cache.find(here, REF)?.name).toBe("笔记");
+  clock += 1;
+  expect(cache.find(here, REF)).toBeUndefined();
+  // A fresh listing starts the ten minutes again.
+  cache.remember(here, [candidate]);
+  expect(cache.find(here, REF)?.name).toBe("笔记");
+  // 1000 more machines: the oldest (here) is forgotten; the newest are kept.
+  for (let i = 0; i < 1000; i += 1)
+    cache.remember({ tenantId: "t1", deviceId: `m${i}` }, [
+      { ...candidate, name: `m${i}` },
+    ]);
+  expect(cache.find(here, REF)).toBeUndefined();
+  expect(cache.find({ tenantId: "t1", deviceId: "m0" }, REF)?.name).toBe("m0");
+  expect(cache.find({ tenantId: "t1", deviceId: "m999" }, REF)?.name).toBe(
+    "m999",
+  );
+  // Remembered again, a machine goes to the back of the line: m1 is the oldest now.
+  cache.remember({ tenantId: "t1", deviceId: "m0" }, [candidate]);
+  cache.remember(there, [candidate]);
+  expect(cache.find({ tenantId: "t1", deviceId: "m0" }, REF)).toBeDefined();
+  expect(cache.find({ tenantId: "t1", deviceId: "m1" }, REF)).toBeUndefined();
+});
+
+test("readEnabled drops a bad app ref or name", () => {
+  const ref = "app_AAAAAAAAAAAAAAAAAAAAAA";
+  const tools = [{ name: "echo" }];
+  expect(
+    readEnabled({ app: { ref, name: " 笔记 ", command: "C:\\x.exe" }, tools }),
+  ).toEqual({ app: { ref, name: "笔记" }, tools });
+  for (const bad of [
+    { app: { ref: "app_short", name: "笔记" }, tools },
+    { app: { ref: REF, name: "笔记" }, tools },
+    { app: { ref, name: "" }, tools },
+    { app: { ref, name: "  " }, tools },
+    { app: { ref, name: "长".repeat(41) }, tools },
+    { app: { ref, name: 5 }, tools },
+    { app: { ref, name: "笔记" }, tools: "not a list" },
+    { app: { ref, name: "笔记" } },
+    { app: "笔记", tools },
+    { queued: true, key: "parked" },
+    null,
+    "x",
+    [],
+  ])
+    expect(readEnabled(bad)).toBeUndefined();
 });

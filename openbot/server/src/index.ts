@@ -1072,6 +1072,15 @@ await startupLifecycle.run(async (startup) => {
                 (await deviceStore.list(machine.tenantId)).find(
                   (device) => device.deviceId === machine.deviceId,
                 )?.apps ?? [],
+              // --- app discovery (sub-project 3) ---
+              deviceReachable: (machine) => deviceChannel.isReachable(machine),
+              rememberDeviceApp: (machine, app) =>
+                deviceStore.rememberApp(
+                  machine.tenantId,
+                  machine.deviceId,
+                  app,
+                ),
+              // --- end app discovery ---
               deviceTakeovers,
               // RES2: the frame's root is the coworker's current project, never the model's.
               projects: { resolve: projectContext.resolve },

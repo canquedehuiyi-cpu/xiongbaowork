@@ -22,7 +22,12 @@ export type DiscoveryRead = {
 };
 
 export const AVAILABLE_HINT =
-  "这些是在主人电脑上发现、但还没启用的应用。可以请主人在设备端窗口的「本机应用」里打开它的开关。";
+  "这些是在主人电脑上发现、但还没启用的应用。要用其中一个，调用 computer_app_enable 并传入它的 candidate；主人批准后就能调用它的工具。";
+export const DEVICE_OFFLINE_ENABLE =
+  "设备不在线，无法启用本机应用。请等主人的电脑连上后再试。";
+/** What the runner says of a candidate it no longer knows (its `CANDIDATE_EXPIRED`), word for word. */
+export const CANDIDATE_EXPIRED =
+  "这个候选应用已过期或不存在，请重新查看本机应用。";
 export const INSTALLED_HINT =
   "这些软件已安装，但没有本机 MCP。需要操作它们时，可以考虑用桌面操控。";
 export const OLD_RUNNER =
@@ -109,4 +114,91 @@ export function discoveryGroups(
       (name) => !known.has(name.trim().toLowerCase()),
     ),
   };
+}
+
+/** A candidate's reference lives this long on the runner; the cache keeps it no longer. */
+const CANDIDATE_TTL_MS = 600_000;
+const CANDIDATE_CACHE_LIMIT = 1000;
+
+type Machine = { tenantId: string; deviceId: string };
+
+/**
+ * The candidates each machine's last listing named, so `computer_app_enable` can name the app and its
+ * source on the approval card without asking the machine again. Per tenant and machine, ten minutes
+ * (the life of a reference), at most 1000 machines, the oldest listing forgotten first. A miss is
+ * not a refusal: the machine is asked about that one candidate instead.
+ */
+export function createCandidateCache(now: () => number): {
+  remember(machine: Machine, candidates: DiscoveryRead["candidates"]): void;
+  find(
+    machine: Machine,
+    ref: string,
+  ): (DiscoveredCandidate & { enabled: boolean }) | undefined;
+  /** The candidate became an app: a later enable from the same listing is told it already is. */
+  markEnabled(machine: Machine, ref: string): void;
+} {
+  const listings = new Map<
+    string,
+    {
+      at: number;
+      byRef: Map<string, DiscoveryRead["candidates"][number]>;
+    }
+  >();
+  const keyOf = (machine: Machine) =>
+    JSON.stringify([machine.tenantId, machine.deviceId]);
+  const fresh = (machine: Machine) => {
+    const listing = listings.get(keyOf(machine));
+    return listing && now() - listing.at < CANDIDATE_TTL_MS
+      ? listing
+      : undefined;
+  };
+  return {
+    remember(machine, candidates) {
+      const key = keyOf(machine);
+      listings.delete(key);
+      listings.set(key, {
+        at: now(),
+        byRef: new Map(
+          candidates.map((candidate) => [
+            candidate.candidate,
+            { ...candidate },
+          ]),
+        ),
+      });
+      // Insertion order is age order: the oldest listings go first once there are too many.
+      for (const old of listings.keys()) {
+        if (listings.size <= CANDIDATE_CACHE_LIMIT) break;
+        listings.delete(old);
+      }
+    },
+    find(machine, ref) {
+      const found = fresh(machine)?.byRef.get(ref);
+      return found ? { ...found } : undefined;
+    },
+    markEnabled(machine, ref) {
+      const found = fresh(machine)?.byRef.get(ref);
+      if (found) found.enabled = true;
+    },
+  };
+}
+
+/** The runner's app reference shape: `app_` and 128 random bits in base64url. */
+const APP_REF = /^app_[A-Za-z0-9_-]{22}$/;
+
+/**
+ * What the device's `apps.enable` answered: the app's reference and name, and its tool list as the
+ * device gave it (read further by the gateway). Undefined when the reference is not of the runner's
+ * shape, the name is not 1..40 characters, or the tools are not a list.
+ */
+export function readEnabled(
+  output: unknown,
+): { app: { ref: string; name: string }; tools: unknown[] } | undefined {
+  if (!isRecord(output) || !isRecord(output.app)) return undefined;
+  const { ref, name } = output.app;
+  if (typeof ref !== "string" || !APP_REF.test(ref)) return undefined;
+  // Trimmed first, as the device store keeps a reported app's name.
+  const shown = typeof name === "string" ? text(name.trim(), 40) : undefined;
+  if (!shown) return undefined;
+  if (!Array.isArray(output.tools)) return undefined;
+  return { app: { ref, name: shown }, tools: output.tools };
 }

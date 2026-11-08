@@ -12,6 +12,7 @@ import { createRunnerExecutor } from "../../runner/src/execute";
 import { createDiscoverActions } from "../../runner/src/discover-actions";
 import { createActionJournal } from "../../runner/src/journal";
 import { TOOL_DISABLED } from "../src/approvals/policy";
+import type { AuditEventInput } from "../src/audit";
 import {
   type ApprovalResumeDependencies,
   createApprovalService,
@@ -80,6 +81,16 @@ const FIXTURE = new URL(
   import.meta.url,
 ).pathname;
 const DISCOVER_APPDATA = "C:\\Users\\me\\AppData\\Roaming";
+const FIXTURE_SECRET_DIR = "C:\\Users\\me\\fixture-secret-dir";
+const FIXTURE_SECRET = "sk-fixture-secret-value";
+/** What the fixture candidate's command, arguments and env hold, none of which may leave the device. */
+const FIXTURE_LEAKS = [
+  FIXTURE_SECRET,
+  "FIXTURE_TOKEN",
+  "fixture-secret-dir",
+  "fake-mcp-stdio",
+  process.execPath,
+];
 const tenants: string[] = [];
 const cleanups: (() => Promise<void>)[] = [];
 const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -157,16 +168,26 @@ async function pairedDevice(
           args: ["--root", "C:\\Users\\me\\secret-project"],
           env: { FIGMA_TOKEN: "sk-figma-secret-value" },
         },
+        // A candidate that really runs once enabled: the same fake MCP server, other arguments.
+        fixture: {
+          command: process.execPath,
+          args: [FIXTURE, "--profile", FIXTURE_SECRET_DIR],
+          env: { FIXTURE_TOKEN: FIXTURE_SECRET },
+        },
       },
     },
   };
+  const appHost = createAppHost(registry);
   const discovery =
     options.discovery === false
       ? undefined
       : createDiscoverActions({
           dataDir: join(root, "runner-data"),
           registry,
+          host: appHost,
           deps: {
+            // The runner's clock too, so a candidate's ten minutes run out with the gateway's.
+            ...(options.now ? { now: options.now } : {}),
             platform: "win32",
             env: { APPDATA: DISCOVER_APPDATA, USERPROFILE: "C:\\Users\\me" },
             readText: (path) =>
@@ -180,7 +201,9 @@ async function pairedDevice(
                 { DisplayName: "Photoshop" },
               ] as never,
             resolveCommand: (command) =>
-              command.endsWith(".exe") ? command : undefined,
+              command.endsWith(".exe") || command === process.execPath
+                ? command
+                : undefined,
           },
         });
   const execute = createRunnerExecutor(
@@ -188,7 +211,7 @@ async function pairedDevice(
     undefined,
     undefined,
     undefined,
-    createAppHost(registry),
+    appHost,
     discovery ? { discovery } : undefined,
   );
   const journal = createActionJournal(join(root, "actions.sqlite"));
@@ -293,6 +316,12 @@ async function pairedDevice(
   });
   const takeovers = createDeviceTakeovers();
   const catalogueBot = `${tenant}-catalogue`;
+  const deviceApps = async (t: { tenantId: string; deviceId: string }) =>
+    (await deviceStore.list(t.tenantId)).find(
+      (device) => device.deviceId === t.deviceId,
+    )?.apps ?? [];
+  /** The gateway's own audit rows, as `recordAuditEvent` hands them to the store. */
+  const audits: AuditEventInput[] = [];
   const selector = createDeviceSelector({
     ownerOf: async (bot) => (bot === botId ? tenant : null),
     devicesOf: (t) => deviceStore.list(t),
@@ -312,11 +341,16 @@ async function pairedDevice(
     },
     transport: createRunnerTransport(channel),
     resolveDevice: (bot) => selector.forBot(bot),
-    deviceApps: async (t) =>
-      (await deviceStore.list(t.tenantId)).find(
-        (device) => device.deviceId === t.deviceId,
-      )?.apps ?? [],
-    auditStore: { insert: async () => undefined },
+    deviceApps,
+    // As index.ts composes them.
+    deviceReachable: (machine) => channel.isReachable(machine),
+    rememberDeviceApp: (machine, app) =>
+      deviceStore.rememberApp(machine.tenantId, machine.deviceId, app),
+    auditStore: {
+      insert: async (event) => {
+        audits.push(event);
+      },
+    },
     policy: () => ({ mode: "enforce", allow: ["true"], deny: [] }),
     approvalGate: service.gate,
     approvalRefusal: service.refusal,
@@ -413,6 +447,10 @@ async function pairedDevice(
     connect,
     disconnect,
     takeovers,
+    registry,
+    audits,
+    /** The apps the server's device record holds for this machine now. */
+    recordedApps: () => deviceApps(target),
     /** Answer `apps.tools` frames from the test (undefined: no answer); unset: the real runner. */
     answerListing: (
       answer:
@@ -481,7 +519,10 @@ test("computer_apps lists enabled, available and installed groups, and the resul
   };
   expect(listed.discoveryError).toBeUndefined();
   expect(listed.apps.map((app) => app.name)).toEqual(["Notes"]);
-  expect(listed.available).toHaveLength(1);
+  expect(listed.available?.map((candidate) => candidate.name)).toEqual([
+    "Figma",
+    "fixture",
+  ]);
   expect(listed.available?.[0]).toMatchObject({
     name: "Figma",
     status: "ready",
@@ -490,10 +531,10 @@ test("computer_apps lists enabled, available and installed groups, and the resul
   expect(listed.available?.[0]?.candidate).toMatch(/^cand_/);
   // Notes is already an enabled app: it is not "installed without an app".
   expect([...(listed.installed ?? [])].sort()).toEqual(["Photoshop", "微信"].sort());
-  expect(listed.hints?.available).toContain("本机应用");
+  expect(listed.hints?.available).toContain("computer_app_enable");
   expect(listed.hints?.installed).toContain("桌面操控");
   const text = JSON.stringify(listed);
-  for (const secret of ["sk-figma-secret-value", "secret-project", "figma-mcp.exe", "AppData", "FIGMA_TOKEN"])
+  for (const secret of ["sk-figma-secret-value", "secret-project", "figma-mcp.exe", "AppData", "FIGMA_TOKEN", ...FIXTURE_LEAKS])
     expect(text).not.toContain(secret);
   expect(device.sent("apps.discover")).toHaveLength(1);
 }, 20_000);
@@ -1035,6 +1076,233 @@ test("only the Bot's owner may use the owner's local apps", async () => {
 test("a call's backstop outlasts a fresh connection: start, list and call", () => {
   expect(APP_CALL_BACKSTOP_MS).toBeGreaterThanOrEqual(20_000 + 20_000 + 120_000 + 5_000);
 });
+
+// --- app discovery (sub-project 3): computer_app_enable ---
+
+/** The fixture candidate, as `computer_apps` lists it (which also leaves it in the gateway's cache). */
+async function listedFixture(device: Awaited<ReturnType<typeof pairedDevice>>) {
+  const listed = (await device.call("computer_apps", {})) as {
+    available?: { candidate: string; name: string; source: string }[];
+  };
+  const fixture = listed.available?.find((candidate) => candidate.name === "fixture");
+  if (!fixture) throw new Error("The fixture candidate was not listed.");
+  return fixture;
+}
+
+const UNKNOWN_CANDIDATE = "cand_abc123_AAAAAAAAAAAAAAAAAAAAAA";
+
+test("computer_app_enable asks with 允许员工使用本机应用「fixture」？来源：Claude Desktop 的配置; after approve the app is written, tested and callable at once", async () => {
+  const device = await pairedDevice();
+  const fixture = await listedFixture(device);
+  expect(fixture.source).toBe("Claude Desktop 的配置");
+  const held = await device
+    .call("computer_app_enable", { candidate: fixture.candidate }, "enable-me")
+    .catch((error: unknown) => error);
+  expect(held).toBeInstanceOf(HeadlessToolSuspension);
+  expect(device.sent("apps.enable")).toHaveLength(0);
+  const request = await requestFor(device, "enable-me");
+  expect(request.action.policy).toMatchObject({
+    behaviour: "ask",
+    source: "app_enable",
+    reason: "允许员工使用本机应用「fixture」？来源：Claude Desktop 的配置",
+  });
+  expect(request.action.scope).toBe("fixture");
+  // The card names the app and where it was found; never its command.
+  const card = (
+    await runAsTenant(device.tenant, () => device.service.inbox(device.tenant))
+  ).requests.find((candidate) => candidate.id === request.id);
+  expect(card?.action.args).toEqual({
+    app: "fixture",
+    source: "Claude Desktop 的配置",
+  });
+
+  const id = await approve(device, "enable-me");
+  const told = await device.resume(id);
+  expect(told).toHaveLength(1);
+  expect(told[0]?.error).toBeUndefined();
+  expect(told[0]?.content).toContain("现在可以用 computer_app_call 调用「fixture」的工具了。");
+  expect(device.sent("apps.enable")).toHaveLength(1);
+  expect(Object.keys(device.sent("apps.enable")[0]?.payload as object)).toEqual([
+    "candidate",
+  ]);
+  // Written on the device, and on the server's record of it without waiting for a heartbeat.
+  expect(device.registry.list().map((app) => app.name)).toEqual([
+    "Notes",
+    "fixture",
+  ]);
+  expect((await device.recordedApps()).map((app) => app.name)).toEqual([
+    "Notes",
+    "fixture",
+  ]);
+  // Callable at once, on the tool list the enable already brought back.
+  const toolsAsked = device.sent("apps.tools").length;
+  const echoed = (await device.call("computer_app_call", {
+    app: "fixture",
+    tool: "echo",
+    args: { text: "启用了" },
+  })) as { content: { text: string }[]; isError: boolean };
+  expect(echoed.content[0]?.text).toBe("启用了");
+  expect(echoed.isError).toBeFalse();
+  expect(device.sent("apps.tools")).toHaveLength(toolsAsked);
+  // Never through the device queue.
+  expect(await device.queuedRows("apps.enable")).toBe(0);
+  // Already enabled now: said so, nothing asked or sent.
+  await expect(
+    device.call("computer_app_enable", { candidate: fixture.candidate }),
+  ).rejects.toThrow("「fixture」已经启用了，可以直接用 computer_app_call 调用。");
+  expect(device.sent("apps.enable")).toHaveLength(1);
+}, 30_000);
+
+test("rejected: nothing is written on the device", async () => {
+  const device = await pairedDevice();
+  const fixture = await listedFixture(device);
+  await expect(
+    device.call("computer_app_enable", { candidate: fixture.candidate }, "deny-me"),
+  ).rejects.toBeInstanceOf(HeadlessToolSuspension);
+  const request = await requestFor(device, "deny-me");
+  await runAsTenant(device.tenant, () =>
+    device.service.decide(device.tenant, request.id, "deny"),
+  );
+  await expect(
+    device.call("computer_app_enable", { candidate: fixture.candidate }, "deny-me"),
+  ).rejects.toThrow();
+  expect(device.sent("apps.enable")).toHaveLength(0);
+  expect(device.registry.list().map((app) => app.name)).toEqual(["Notes"]);
+  expect((await device.recordedApps()).map((app) => app.name)).toEqual(["Notes"]);
+}, 20_000);
+
+test("offline device: 设备不在线, no approval card, nothing queued", async () => {
+  const device = await pairedDevice();
+  const fixture = await listedFixture(device);
+  await device.disconnect();
+  await expect(
+    device.call("computer_app_enable", { candidate: fixture.candidate }),
+  ).rejects.toThrow("设备不在线，无法启用本机应用。请等主人的电脑连上后再试。");
+  expect(await device.requests()).toEqual([]);
+  expect(await device.queuedRows("apps.enable")).toBe(0);
+  expect(device.sent("apps.enable")).toHaveLength(0);
+}, 20_000);
+
+test("approved, then the device went away before it ran: 设备不在线, nothing queued, the device is not paused", async () => {
+  const device = await pairedDevice();
+  const fixture = await listedFixture(device);
+  await expect(
+    device.call("computer_app_enable", { candidate: fixture.candidate }, "away"),
+  ).rejects.toBeInstanceOf(HeadlessToolSuspension);
+  await approve(device, "away");
+  await device.disconnect();
+  await expect(
+    device.call("computer_app_enable", { candidate: fixture.candidate }, "away"),
+  ).rejects.toThrow("设备不在线");
+  expect(await device.queuedRows("apps.enable")).toBe(0);
+  expect(await device.queue.uncertain(device.target)).toBe(0);
+  expect(device.sent("apps.enable")).toHaveLength(0);
+  // Back again, the person's approval still holds and the app is enabled once.
+  await device.connect();
+  await expect(
+    device.call("computer_app_enable", { candidate: fixture.candidate }, "away"),
+  ).resolves.toMatchObject({ enabled: { name: "fixture" } });
+  expect(device.sent("apps.enable")).toHaveLength(1);
+}, 30_000);
+
+test("an expired or unknown candidate: 请重新查看本机应用, no card", async () => {
+  let clock = Date.now();
+  const device = await pairedDevice({ now: () => clock });
+  // Not listed here: the device is asked about it, and knows no such candidate.
+  await expect(
+    device.call("computer_app_enable", { candidate: UNKNOWN_CANDIDATE }),
+  ).rejects.toThrow("这个候选应用已过期或不存在，请重新查看本机应用。");
+  expect(device.sent("apps.discover")).toHaveLength(1);
+  expect(device.sent("apps.discover")[0]?.payload).toEqual({
+    candidate: UNKNOWN_CANDIDATE,
+  });
+  // Listed, then more than ten minutes pass: neither the cache nor the device takes it.
+  const fixture = await listedFixture(device);
+  clock += 601_000;
+  await expect(
+    device.call("computer_app_enable", { candidate: fixture.candidate }),
+  ).rejects.toThrow("请重新查看本机应用");
+  expect(device.sent("apps.discover")).toHaveLength(3);
+  expect(await device.requests()).toEqual([]);
+  expect(device.sent("apps.enable")).toHaveLength(0);
+}, 20_000);
+
+test("team cap never or the tool disabled: refused before any frame reaches the device", async () => {
+  const capped = await pairedDevice({ hostCommandsCap: "never" });
+  await expect(
+    capped.call("computer_app_enable", { candidate: UNKNOWN_CANDIDATE }),
+  ).rejects.toThrow("set to never run");
+  expect(capped.sent("apps.discover")).toHaveLength(0);
+  expect(capped.sent("apps.enable")).toHaveLength(0);
+  expect(await capped.requests()).toEqual([]);
+
+  const disabled = await pairedDevice();
+  await runAsTenant(disabled.tenant, () =>
+    disabled.service.createRule(disabled.tenant, {
+      botId: disabled.botId,
+      toolRef: "computer_app_enable",
+      effect: "*",
+      scope: "*",
+      behaviour: "deny",
+    }),
+  );
+  await expect(
+    disabled.call("computer_app_enable", { candidate: UNKNOWN_CANDIDATE }),
+  ).rejects.toThrow(TOOL_DISABLED);
+  expect(disabled.sent("apps.discover")).toHaveLength(0);
+  expect(disabled.sent("apps.enable")).toHaveLength(0);
+  expect(await disabled.requests()).toEqual([]);
+}, 20_000);
+
+test("a teammate cannot enable the owner's apps", async () => {
+  const device = await pairedDevice();
+  const teammate = { id: `${device.tenant}-teammate`, userId: `${device.tenant}-teammate` };
+  await expect(
+    device.gateway.enableApp(device.botId, teammate, {
+      candidate: UNKNOWN_CANDIDATE,
+    }),
+  ).rejects.toThrow("只有员工的主人本人");
+  expect(device.sent("apps.discover")).toHaveLength(0);
+  expect(device.sent("apps.enable")).toHaveLength(0);
+  expect(await device.requests()).toEqual([]);
+}, 20_000);
+
+test("the enable's audit rows carry the app name and source and no command, path or env value", async () => {
+  const device = await pairedDevice();
+  const fixture = await listedFixture(device);
+  await expect(
+    device.call("computer_app_enable", { candidate: fixture.candidate }, "audited"),
+  ).rejects.toBeInstanceOf(HeadlessToolSuspension);
+  await device.resume(await approve(device, "audited"));
+  expect(device.sent("apps.enable")).toHaveLength(1);
+  const rows = device.audits.filter(
+    (row) => (row.payload as { action?: string }).action === "computer_app_enable",
+  );
+  // Asked once, then carried out on the approval.
+  expect(rows.length).toBeGreaterThanOrEqual(2);
+  for (const row of rows)
+    expect((row.payload as { app?: unknown }).app).toEqual({
+      name: "fixture",
+      source: "Claude Desktop 的配置",
+    });
+  expect(rows.map((row) => row.eventType)).not.toContain("computer.action_failed");
+  // Nor does anything the approval wrote: the request, its card or the decision log.
+  const decisions = await runAsTenant(device.tenant, () =>
+    database
+      .select({ payload: auditEvents.payload })
+      .from(auditEvents)
+      .where(eq(auditEvents.actorUserId, device.tenant)),
+  );
+  const written = JSON.stringify([
+    rows,
+    decisions,
+    await device.requests(),
+    await runAsTenant(device.tenant, () => device.service.inbox(device.tenant)),
+  ]);
+  expect(written).toContain("fixture");
+  for (const leak of FIXTURE_LEAKS) expect(written).not.toContain(leak);
+}, 30_000);
+// --- end app discovery ---
 
 afterAll(async () => {
   for (const cleanup of cleanups) await cleanup().catch(() => undefined);
