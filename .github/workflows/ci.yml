@@ -433,19 +433,32 @@ jobs:
           $chrome = Join-Path $env:ProgramFiles 'Google\Chrome\Application\chrome.exe'
           $js = @'
           import { chromium } from "playwright-core";
+          import { spawn } from "node:child_process";
+          import { readFileSync } from "node:fs";
           const headless = process.argv[2] === "headless";
+          const dir = process.argv[3];
           const t = Date.now();
           try {
-            const c = await chromium.launchPersistentContext(process.argv[3], { headless, executablePath: process.argv[4], timeout: 30000, chromiumSandbox: true, ignoreDefaultArgs: ["--password-store=basic", "--use-mock-keychain"] });
+            const args = ["--remote-debugging-port=0", `--user-data-dir=${dir}`, "--no-first-run", "--no-default-browser-check", "about:blank"];
+            if (headless) args.push("--headless=new");
+            const child = spawn(process.argv[4], args, { stdio: "ignore", windowsHide: false });
+            let port;
+            for (let i = 0; i < 100 && !port; i++) {
+              await new Promise((r) => setTimeout(r, 200));
+              try { port = readFileSync(`${dir}/DevToolsActivePort`, "utf8").split("\n")[0]; } catch {}
+            }
+            console.log("PORT", port, Date.now() - t, "ms");
+            const b = await chromium.connectOverCDP(`http://127.0.0.1:${port}`, { timeout: 20000 });
+            const c = b.contexts()[0];
             const p = c.pages()[0] ?? await c.newPage();
             await p.goto("about:blank");
-            console.log("LAUNCHED", headless, Date.now() - t, "ms");
-            await c.close();
-          } catch (e) { console.log("LAUNCH FAILED", headless, Date.now() - t, "ms", String(e).slice(0, 1500)); }
+            console.log("CONNECTED", headless, c.pages().length, Date.now() - t, "ms");
+            await b.close();
+            child.kill();
+          } catch (e) { console.log("FAILED", headless, Date.now() - t, "ms", String(e).slice(0, 1500)); }
           process.exit(0);
           '@
           Set-Content -Path launch.mjs -Value $js
-          $env:DEBUG = 'pw:browser*'
           foreach ($rt in 'bun','node') {
             foreach ($mode in 'headed','headless') {
               $dir = Join-Path $env:RUNNER_TEMP "diag-$rt-$mode"
