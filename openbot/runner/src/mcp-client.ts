@@ -3,6 +3,9 @@ import { statSync } from "node:fs";
 import { homedir } from "node:os";
 import { win32 } from "node:path";
 import type { AppEntry } from "./apps";
+// --- app discovery (sub-project 3) ---
+import { type BundledRuntime, bundledRuntime } from "./bundled-runtime";
+// --- end app discovery ---
 
 /**
  * A minimal MCP client for the device-side local MCP bridge (spec §3.2). Zero dependencies: the MCP
@@ -272,8 +275,35 @@ export function launchSpec(
   platform: NodeJS.Platform,
   env: Record<string, string | undefined>,
   isFile: (path: string) => boolean = isFileOnDisk,
-): { command: string; args: string[]; windowsVerbatimArguments?: boolean } {
+  // --- app discovery (sub-project 3) ---
+  runtimeOf: () => BundledRuntime | undefined = () => bundledRuntime(),
+  // --- end app discovery ---
+): {
+  command: string;
+  args: string[];
+  env?: Record<string, string>;
+  windowsVerbatimArguments?: boolean;
+} {
   if (entry.kind !== "stdio") throw new Error("Only a stdio app is launched.");
+  // --- app discovery (sub-project 3) ---
+  // The device's own Bun: started directly, never through cmd.exe, and with the environment it needs.
+  if (entry.runtime === "bundled") {
+    const rt = runtimeOf();
+    if (rt === undefined) {
+      throw new McpAppError(
+        "start",
+        "The bundled runtime is not available.",
+        undefined,
+        "设备端自带的运行时不可用，请重新安装设备端。",
+      );
+    }
+    return {
+      command: rt.command,
+      args: [...rt.prefix, ...entry.args],
+      env: rt.env,
+    };
+  }
+  // --- end app discovery ---
   if (platform !== "win32") {
     return { command: entry.command, args: entry.args };
   }
@@ -324,6 +354,10 @@ class StdioTransport implements Transport {
     // The command is looked up in the PATH the child will have, which the entry may extend.
     const env = childEnv(process.env, entry.env);
     const spec = launchSpec(entry, process.platform, env);
+    // --- app discovery (sub-project 3) ---
+    // The runtime's own variables (BUN_BE_BUN) go over the entry's: without them it is not bun.
+    if (spec.env) Object.assign(env, spec.env);
+    // --- end app discovery ---
     this.child = spawn(spec.command, spec.args, {
       cwd: childCwd(entry, homedir()),
       env,

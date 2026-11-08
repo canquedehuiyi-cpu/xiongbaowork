@@ -283,7 +283,9 @@ test("http: a redirect is not followed, so the body is never posted anywhere els
     port: 0,
     fetch: () => {
       elsewhere += 1;
-      return new Response("{}", { headers: { "Content-Type": "application/json" } });
+      return new Response("{}", {
+        headers: { "Content-Type": "application/json" },
+      });
     },
   });
   stops.push(() => other.stop(true));
@@ -312,7 +314,14 @@ test("http: a redirect is not followed, so the body is never posted anywhere els
 
 test("http: a loopback app is reached directly, whatever HTTP_PROXY says", async () => {
   const saved: Record<string, string | undefined> = {};
-  const names = ["HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy", "NO_PROXY", "no_proxy"];
+  const names = [
+    "HTTP_PROXY",
+    "http_proxy",
+    "HTTPS_PROXY",
+    "https_proxy",
+    "NO_PROXY",
+    "no_proxy",
+  ];
   for (const name of names) saved[name] = process.env[name];
   // A proxy nobody answers on, and nothing exempted from it.
   process.env.HTTP_PROXY = "http://127.0.0.1:9";
@@ -383,6 +392,54 @@ function launchFailure(
   }
   throw new Error("expected launchSpec to throw");
 }
+
+test("launchSpec: a bundled entry starts the bundled runtime with x --bun on win32 and linux, never through cmd.exe, and carries its env", () => {
+  const entry = {
+    ...winEntry("bunx", ["@scope/server", "a b"]),
+    runtime: "bundled" as const,
+  };
+  const runtime = {
+    command: "C:\\Device\\openbot-runner.exe",
+    prefix: ["x", "--bun"],
+    env: { BUN_BE_BUN: "1" },
+  };
+  for (const platform of ["win32", "linux"] as const) {
+    // No PATH, no shims: the bundled runtime needs nothing from the owner's machine.
+    const spec = launchSpec(
+      entry,
+      platform,
+      {},
+      () => false,
+      () => runtime,
+    );
+    expect(spec).toEqual({
+      command: "C:\\Device\\openbot-runner.exe",
+      args: ["x", "--bun", "@scope/server", "a b"],
+      env: { BUN_BE_BUN: "1" },
+    });
+    expect(spec.windowsVerbatimArguments).toBeUndefined();
+  }
+  // Without a runtime it fails as a start error in Chinese, not as a missing command.
+  let failure: unknown;
+  try {
+    launchSpec(
+      entry,
+      "win32",
+      {},
+      () => false,
+      () => undefined,
+    );
+  } catch (error) {
+    failure = error;
+  }
+  expect(failure).toBeInstanceOf(McpAppError);
+  expect((failure as McpAppError).kind).toBe("start");
+  expect((failure as McpAppError).hint).toBe(
+    "设备端自带的运行时不可用，请重新安装设备端。",
+  );
+  // The real thing resolves to this very process under test.
+  expect(launchSpec(entry, "linux", {}).command).toBe(process.execPath);
+});
 
 test('windows command shim: on win32 a bare command such as npx or bunx is launched as cmd.exe /d /s /c "<its absolute path> ..."', () => {
   const entry = winEntry("npx", [
