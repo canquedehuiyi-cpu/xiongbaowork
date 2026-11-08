@@ -35,6 +35,7 @@ const BUILT_IN_TOOLS: { ref: string; label: string }[] = [
   // Local apps (MCP) on the owner's paired machine (device MCP bridge §4.2).
   { ref: "computer_apps", label: "查看本机应用" },
   { ref: "computer_app_call", label: "使用本机应用" },
+  { ref: "computer_app_enable", label: "启用本机应用" },
   { ref: "host/read_file", label: "读取你电脑上的文件" },
   { ref: "host/write_file", label: "写入你电脑上的文件" },
   { ref: "host/list_files", label: "列出你电脑上的文件" },
