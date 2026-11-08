@@ -15,6 +15,16 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   the command up in the app's PATH (with PATHEXT) and starts it by its absolute path; a command that
   is not installed says so (「找不到命令 npx，请确认已安装（例如 Node.js），并重启设备端。」). An app with
   no working folder now starts in the owner's home folder instead of the device app's own.
+- **Workbench follow-ups.**
+  - /autonomous no longer re-reads every automation's detail every five minutes. It re-reads one
+    only when the list shows that automation changed, and it refreshes 长期职责 every 60s instead of
+    every 10s.
+  - Search boxes on /autonomous and @Waker keep fast keystrokes.
+  - Arrow keys move between tabs on 员工管理 and 能力与资源 without adding a Back step per tab.
+  - The workbench pages fit a 320px screen.
+  - Signing out clears the filters the 员工管理 back link remembered.
+  - The sidebar shows the plan name without first opening /plans. It reads `/api/quota` once per
+    session.
 
 ## 0.2.3
 

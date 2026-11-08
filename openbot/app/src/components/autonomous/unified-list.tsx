@@ -5,7 +5,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { AutomationRow } from "@/components/automations/automations-section";
 import {
   describe,
@@ -28,6 +28,7 @@ import { agentListQueryOptions } from "@/lib/agents/queries";
 import {
   type Automation,
   automationDetailQueryOptions,
+  automationKeys,
   automationListQueryOptions,
   setAutomationEnabledMutationOptions,
   updateAutomationMutationOptions,
@@ -47,8 +48,8 @@ import {
   filterEntries,
   metricsOf,
   SORT_LABEL,
-  type SortKey,
   SOURCE_LABEL,
+  type SortKey,
   STATUS_FILTER_LABEL,
   type StatusFilter,
   sortEntries,
@@ -64,6 +65,7 @@ import {
   setRoutineEnabledMutationOptions,
 } from "@/lib/routines/mutations";
 import { nothingIsFiring, routinesQueryOptions } from "@/lib/routines/queries";
+import { useSearchDraft } from "@/lib/use-search-draft";
 import { cn } from "@/lib/utils";
 
 type Routine = AutonomousSummary["routines"][number];
@@ -103,13 +105,24 @@ export function UnifiedAutomations({
   const overview = useQuery(autonomousOverviewQueryOptions(true));
   const automations = useQuery(automationListQueryOptions());
   const list = automations.data ?? [];
+  /*
+   * The list endpoint carries no triggers, so each automation's detail is read once (a server-side
+   * `?include=triggers` would remove even that). Here it is never polled: a detail is read again
+   * only when the list shows that automation changed — it ran, or it was switched — see below.
+   */
   const details = useQueries({
-    queries: list.map((automation) =>
-      automationDetailQueryOptions(automation.id),
-    ),
+    queries: list.map((automation) => ({
+      ...automationDetailQueryOptions(automation.id),
+      refetchInterval: false as const,
+    })),
   });
+  useRefreshChangedDetails(list);
   const routines = useQuery(routinesQueryOptions());
-  const responsibilities = useQuery(responsibilitiesQueryOptions());
+  // The /responsibilities page polls every 10s for live progress; a row's status here can wait.
+  const responsibilities = useQuery({
+    ...responsibilitiesQueryOptions(),
+    refetchInterval: 60_000,
+  });
   const hasFlow = list.some(
     (automation) => automation.target.kind === "wakerflow",
   );
@@ -398,8 +411,7 @@ function Toolbar({
   onChange: (patch: Partial<AutonomousSearch>) => void;
 }) {
   // Typed locally and mirrored into the URL, so a keystroke never waits on a navigation.
-  const [text, setText] = useState(search.q ?? "");
-  useEffect(() => setText(search.q ?? ""), [search.q]);
+  const [text, setText] = useSearchDraft(search.q ?? "");
   /*
    * 运行中 and 需要关注 are not panel cells in the reference, but they are what a person most needs
    * to find, so their counts ride on the options that find them.
@@ -581,6 +593,8 @@ function EntryRow({
             variant="ghost"
           >
             详情
+            {/* Every row has one: the name tells a screen reader which. */}
+            <span className="sr-only">：{entry.name}</span>
           </Button>
         </div>
       </div>
@@ -978,4 +992,25 @@ function RoutineDetail({ routine }: { routine: Routine }) {
       ) : null}
     </div>
   );
+}
+
+/**
+ * Re-read an automation's detail (its triggers and next run) when the list shows it changed: its run
+ * count moved, or it was switched on or off. Unchanged automations keep their cached detail.
+ */
+function useRefreshChangedDetails(list: readonly Automation[]) {
+  const queryClient = useQueryClient();
+  const seen = useRef(new Map<string, string>());
+  useEffect(() => {
+    for (const automation of list) {
+      const stamp = `${automation.runCount}:${automation.enabled}:${automation.breakerTripped ?? false}`;
+      const before = seen.current.get(automation.id);
+      seen.current.set(automation.id, stamp);
+      if (before !== undefined && before !== stamp) {
+        void queryClient.invalidateQueries({
+          queryKey: automationKeys.detail(automation.id),
+        });
+      }
+    }
+  }, [list, queryClient]);
 }

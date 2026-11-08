@@ -54,7 +54,10 @@ export function WorkRecordBanner({
       <div aria-hidden="true" className={HATCH} />
       <div className="relative flex min-h-[32px] flex-wrap items-center justify-between gap-2">
         <h2 className="font-bold text-[16px] leading-[24px]">工作记录</h2>
-        <div className="flex flex-wrap items-center gap-2">{controls}</div>
+        {/* A device's name can be long: on a phone its box shrinks to the panel instead of overflowing it. */}
+        <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2 [&_[data-slot=labeled-select]]:max-w-full">
+          {controls}
+        </div>
       </div>
       <div className="relative mt-[11px]">{children}</div>
     </section>

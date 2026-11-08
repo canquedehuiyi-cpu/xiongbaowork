@@ -25,10 +25,16 @@ export function SegmentedTabs<T extends string>({
   className,
   size = "default",
   variant = "pill",
+  panelId,
 }: {
   tabs: readonly SegmentedTab<T>[];
   value: T;
-  onValueChange: (value: T) => void;
+  /**
+   * `keyboard` is true for Left/Right/Home/End: moving across tabs with the arrows should replace
+   * the current history entry rather than push one per keystroke, so Back leaves the page instead
+   * of stepping back through every tab passed over.
+   */
+  onValueChange: (value: T, change: { keyboard: boolean }) => void;
   /** The accessible name of the tab list. */
   label: string;
   className?: string;
@@ -39,6 +45,11 @@ export function SegmentedTabs<T extends string>({
    * 员工 / 群组), both as the reference draws them.
    */
   variant?: "pill" | "underline";
+  /**
+   * The id of the panel the tabs switch (render it with `tabPanelProps`): every tab then names it in
+   * `aria-controls`, and the panel is labelled by the selected tab.
+   */
+  panelId?: string;
 }) {
   const refs = useRef(new Map<T, HTMLButtonElement>());
 
@@ -62,7 +73,7 @@ export function SegmentedTabs<T extends string>({
     event.preventDefault();
     const tab = tabs[next];
     if (!tab) return;
-    onValueChange(tab.value);
+    onValueChange(tab.value, { keyboard: true });
     refs.current.get(tab.value)?.focus();
   };
 
@@ -106,7 +117,9 @@ export function SegmentedTabs<T extends string>({
                   ),
             )}
             key={tab.value}
-            onClick={() => onValueChange(tab.value)}
+            aria-controls={panelId}
+            id={panelId ? tabId(panelId, tab.value) : undefined}
+            onClick={() => onValueChange(tab.value, { keyboard: false })}
             onKeyDown={(event) => move(event, index)}
             ref={(node) => {
               if (node) refs.current.set(tab.value, node);
@@ -127,4 +140,17 @@ export function SegmentedTabs<T extends string>({
       })}
     </div>
   );
+}
+
+function tabId(panelId: string, value: string): string {
+  return `${panelId}-tab-${value}`;
+}
+
+/** Props for the panel a `SegmentedTabs` with `panelId` switches: labelled by the selected tab. */
+export function tabPanelProps(panelId: string, selected: string) {
+  return {
+    "aria-labelledby": tabId(panelId, selected),
+    id: panelId,
+    role: "tabpanel" as const,
+  };
 }
