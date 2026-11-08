@@ -263,12 +263,13 @@ const APP_FLAGS = new Set([
   "disable-app",
   // --- app discovery (sub-project 3) ---
   "discover-apps",
+  "enable-candidate",
   // --- end app discovery ---
 ]);
 /** The app flags that take no value. */
 const VALUELESS_APP_FLAGS = new Set(["list-apps", "discover-apps"]);
 const MIXED_FLAGS =
-  "Folder flags (--add-root, --remove-root, --list-roots) and app flags (--list-apps, --add-app, --remove-app, --test-app, --enable-app, --disable-app, --discover-apps) cannot be used together.";
+  "Folder flags (--add-root, --remove-root, --list-roots) and app flags (--list-apps, --add-app, --remove-app, --test-app, --enable-app, --disable-app, --discover-apps, --enable-candidate) cannot be used together.";
 
 /** The flags that are a root command rather than a run, and the one of them that takes no value. */
 const ROOT_FLAGS = new Set(["add-root", "remove-root", "list-roots"]);
@@ -400,7 +401,9 @@ export type AppCommand =
   | { kind: "enable"; target: string }
   | { kind: "disable"; target: string }
   /** `--discover-apps`: what this machine could offer, by name (app discovery). */
-  | { kind: "discover" };
+  | { kind: "discover" }
+  /** `--enable-candidate <ref>`: register (or switch back on) what discovery offered, and test it. */
+  | { kind: "enable-candidate"; candidate: string };
 
 /**
  * An app command and where its registry lives, null when the arguments are not one, or the sentence
@@ -432,7 +435,7 @@ export function parseAppCommand(
   }
   const asked = [...APP_FLAGS].filter((flag) => args.has(flag));
   if (asked.length > 1)
-    return "Pass one of --list-apps, --add-app, --remove-app, --test-app, --enable-app, --disable-app or --discover-apps.";
+    return "Pass one of --list-apps, --add-app, --remove-app, --test-app, --enable-app, --disable-app, --discover-apps or --enable-candidate.";
   const paths = runnerPaths(args, env, cwd);
   if (typeof paths === "string") return paths;
   const flag = asked[0] ?? "";
@@ -450,6 +453,9 @@ export function parseAppCommand(
     command = { kind: "list" };
   } else if (flag === "discover-apps") {
     command = { kind: "discover" };
+  } else if (flag === "enable-candidate") {
+    if (!value) return "--enable-candidate needs the candidate's reference.";
+    command = { kind: "enable-candidate", candidate: value };
   } else {
     if (!value) return `--${flag} needs the app's name or reference.`;
     command = {
@@ -495,7 +501,7 @@ export async function runAppCommand(
   print: (line: string) => void = (line) => console.log(line),
   /** Where `--add-app -` reads the app from. Tests hand in their own. */
   stdin: () => Promise<string> = readStdin,
-  /** What `--discover-apps` reads instead of this machine. Tests hand in their own. */
+  /** What `--discover-apps` and `--enable-candidate` read instead of this machine. Tests hand in their own. */
   discoverDeps?: Partial<DiscoverDeps>,
 ): Promise<number> {
   const registry = createAppRegistry({ dataDir: parsed.dataDir });
@@ -517,6 +523,36 @@ export async function runAppCommand(
         ),
       );
       return outcome.ok ? 0 : 2;
+    }
+    if (command.kind === "enable-candidate") {
+      const host = createAppHost(registry);
+      try {
+        const outcome = await createDiscoverActions({
+          dataDir: parsed.dataDir,
+          registry,
+          host,
+          ...(discoverDeps ? { deps: discoverDeps } : {}),
+        })("apps.enable", { candidate: command.candidate });
+        if (!outcome.ok) {
+          print(JSON.stringify({ ok: false, error: outcome.error }));
+          return 2;
+        }
+        const { app, tools } = outcome.output as {
+          app: { ref: string; name: string };
+          tools: { name: string }[];
+        };
+        print(
+          JSON.stringify({
+            ok: true,
+            app,
+            tools: tools.map((tool) => tool.name),
+            apps: apps(),
+          }),
+        );
+        return 0;
+      } finally {
+        await host.closeAll();
+      }
     }
     // --- end app discovery ---
     if (command.kind === "add-stdin") {
@@ -879,6 +915,9 @@ async function shutDown(reason: string): Promise<void> {
       Promise.allSettled([
         running?.closeBrowser() ?? Promise.resolve(),
         running?.closeApps() ?? Promise.resolve(),
+        // --- desktop control (sub-project 2) ---
+        running?.closeDesktop() ?? Promise.resolve(),
+        // --- end desktop control ---
       ]),
       budget,
     ]);

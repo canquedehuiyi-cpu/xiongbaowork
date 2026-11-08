@@ -1,5 +1,6 @@
 import type { Message } from "@ag-ui/client";
 import { z } from "zod";
+import { desktopFloor } from "./desktop-policy";
 import {
   type ApprovalCandidate,
   type ApprovalPolicyOutcome,
@@ -636,6 +637,13 @@ export const HOST_COMMANDS_NEVER =
 /** Why a local app's tool asks: the device does not list it as read-only (device MCP bridge §4.4). */
 export const APP_TOOL_MAY_CHANGE =
   "这个本机应用操作可能修改数据，需要你批准后再执行。";
+// --- app discovery (sub-project 3) ---
+/** The tool that enables a discovered local app; it always needs the person's approval. */
+export const APP_ENABLE_TOOL = "computer_app_enable";
+export function appEnableReason(name: string, source: string): string {
+  return `允许员工使用本机应用「${name}」？来源：${source}`;
+}
+// --- end app discovery ---
 
 /**
  * The whole decision, layer by layer (SEC1 §4.2). The first layer that settles the action decides,
@@ -693,7 +701,12 @@ export async function decideAction(input: {
     };
   const floor:
     | SecurityFloor
-    | { source: "host_command_cap" | "app_tool"; reason: string }
+    // --- app discovery (sub-project 3) ---
+    | { source: "host_command_cap" | "app_tool" | "app_enable"; reason: string }
+    // --- end app discovery ---
+    // --- desktop control (sub-project 2) ---
+    | { source: "desktop_window"; reason: string }
+    // --- end desktop control ---
     | undefined =
     securityFloor(
       candidate,
@@ -715,7 +728,22 @@ export async function decideAction(input: {
     (candidate.toolRef === "computer_app_call" &&
     candidate.subject?.appTool?.readOnly !== true
       ? { source: "app_tool", reason: APP_TOOL_MAY_CHANGE }
-      : undefined);
+      : undefined) ??
+    // --- app discovery (sub-project 3) ---
+    // Enabling a local app always asks; no setting turns this off.
+    (candidate.toolRef === APP_ENABLE_TOOL
+      ? {
+          source: "app_enable",
+          reason: appEnableReason(
+            enableTargetName(candidate.target),
+            candidate.display?.description ?? "本机",
+          ),
+        }
+      : undefined) ??
+  // --- end app discovery ---
+    // --- desktop control (sub-project 2) ---
+    desktopFloor(candidate);
+  // --- end desktop control ---
   const decided = await decideByRules(input, matched);
   // A floor only raises: an action the rules let through still asks; one already asked about or
   // handed off keeps the stricter answer it had.
@@ -738,9 +766,22 @@ function isRunnerCommand(candidate: ApprovalCandidate): boolean {
   return (
     candidate.subject?.runner === true &&
     (candidate.toolRef === "computer_run_command" ||
-      candidate.toolRef === "computer_app_call")
+      candidate.toolRef === "computer_app_call" ||
+      // --- app discovery (sub-project 3) ---
+      candidate.toolRef === APP_ENABLE_TOOL)
+    // --- end app discovery ---
   );
 }
+
+// --- app discovery (sub-project 3) ---
+function enableTargetName(target: unknown): string {
+  const name =
+    target && typeof target === "object"
+      ? (target as { name?: unknown }).name
+      : undefined;
+  return typeof name === "string" && name ? name : "未知应用";
+}
+// --- end app discovery ---
 
 /**
  * Listing a paired machine's local apps starts each of them there (a stdio app is a program), so the

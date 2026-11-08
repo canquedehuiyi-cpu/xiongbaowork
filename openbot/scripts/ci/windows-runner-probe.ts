@@ -482,9 +482,12 @@ await probeDesktop(assert, root, execute);
     }),
   );
   const discoverDir = join(root, "discover-data");
+  const discoverRegistry = createAppRegistry({ dataDir: discoverDir });
+  const discoverHost = createAppHost(discoverRegistry);
   const discovery = createDiscoverActions({
     dataDir: discoverDir,
-    registry: createAppRegistry({ dataDir: discoverDir }),
+    registry: discoverRegistry,
+    host: discoverHost,
     deps: {
       // Without any other spelling of the two (`AppData`), which would be read first.
       env: {
@@ -498,15 +501,20 @@ await probeDesktop(assert, root, execute);
       },
     },
   });
-  const discovered = await createRunnerExecutor(
+  const discoverExecute = createRunnerExecutor(
     root,
     undefined,
     undefined,
     undefined,
     undefined,
     { discovery },
-  )({ action: "apps.discover", payload: {} });
+  );
+  const discovered = await discoverExecute({
+    action: "apps.discover",
+    payload: {},
+  });
   const candidates = successfulOutput(discovered).candidates as {
+    ref: string;
     name: string;
     status: string;
   }[];
@@ -525,6 +533,47 @@ await probeDesktop(assert, root, execute);
     "apps.discover finds a Claude Desktop app by name, ready, without its path",
     discovered,
   );
+  // Enabling it writes the app, starts it through cmd.exe and answers its tools; enabling it again
+  // answers the same app instead of adding a second one.
+  const fixtureRef = candidates.find(
+    (candidate) => candidate.name === "fixture",
+  )?.ref;
+  try {
+    const enabled = await discoverExecute({
+      action: "apps.enable",
+      payload: { candidate: fixtureRef },
+    });
+    const enabledOutput = successfulOutput(enabled) as {
+      app: { ref: string; name: string };
+      tools: { name: string }[];
+    };
+    const enabledText = JSON.stringify(enabled);
+    assert(
+      enabledOutput.tools.map((tool) => tool.name).join(",") ===
+        "echo,write_note,wipe" &&
+        enabledOutput.app.name === "fixture" &&
+        ![fixture, process.execPath, root].some(
+          (path) =>
+            enabledText.includes(path) ||
+            enabledText.includes(JSON.stringify(path).slice(1, -1)),
+        ) &&
+        !enabledText.includes("fake-mcp-stdio"),
+      "apps.enable registers the fixture candidate and answers its tools, without its path",
+      enabled,
+    );
+    const again = await discoverExecute({
+      action: "apps.enable",
+      payload: { candidate: fixtureRef },
+    });
+    assert(
+      (successfulOutput(again) as { app: { ref: string } }).app.ref ===
+        enabledOutput.app.ref && discoverRegistry.list().length === 1,
+      "apps.enable twice answers the same app",
+      { again, apps: discoverRegistry.list().length },
+    );
+  } finally {
+    await discoverHost.closeAll();
+  }
 }
 // --- end app discovery ---
 // App discovery (sub-project 3): the compiled runner, under BUN_BE_BUN=1, stands in for `bun x`. The

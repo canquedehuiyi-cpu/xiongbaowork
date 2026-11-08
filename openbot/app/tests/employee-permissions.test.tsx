@@ -140,6 +140,11 @@ test("the two local-app tools can be set like any other (device MCP bridge §4.2
   );
 });
 
+test("the permissions page lists 启用本机应用", async () => {
+  const view = draw();
+  await view.findByRole("radiogroup", { name: "「启用本机应用」的权限" });
+});
+
 test("each tool is 直接 / 询问 / 禁用, and a choice writes the matching rule", async () => {
   const view = draw();
   await view.findByRole("radiogroup", { name: "「运行命令」的权限" });
