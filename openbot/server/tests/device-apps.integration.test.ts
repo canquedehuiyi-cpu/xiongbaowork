@@ -1183,6 +1183,24 @@ test("computer_app_enable asks with 允许员工使用本机应用「fixture」�
   expect(device.sent("apps.enable")).toHaveLength(1);
 }, 30_000);
 
+test("an app the owner switched off on the device after it was enabled is asked about again, not called already enabled", async () => {
+  const device = await pairedDevice();
+  const fixture = await listedFixture(device);
+  await expect(
+    device.call("computer_app_enable", { candidate: fixture.candidate }, "enable-me"),
+  ).rejects.toBeInstanceOf(HeadlessToolSuspension);
+  const id = await approve(device, "enable-me");
+  const told = await device.resume(id);
+  expect(told[0]?.error).toBeUndefined();
+  expect(device.sent("apps.enable")).toHaveLength(1);
+  // The owner switches it off in the device window; the gateway's cached listing still says enabled.
+  device.registry.setEnabled("fixture", false);
+  const again = await device
+    .call("computer_app_enable", { candidate: fixture.candidate }, "enable-again")
+    .catch((error: unknown) => error);
+  expect(again).toBeInstanceOf(HeadlessToolSuspension);
+}, 30_000);
+
 test("rejected: nothing is written on the device", async () => {
   const device = await pairedDevice();
   const fixture = await listedFixture(device);
