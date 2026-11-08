@@ -77,7 +77,7 @@ function mintRef(): string {
   return `app_${randomBytes(16).toString("base64url")}`;
 }
 
-function isLoopbackUrl(value: string): boolean {
+export function isLoopbackUrl(value: string): boolean {
   let url: URL;
   try {
     url = new URL(value);
