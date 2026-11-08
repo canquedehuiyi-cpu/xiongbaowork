@@ -83,11 +83,14 @@ function harness(
     owner?: string;
     failWindows?: Error;
     failSnapshot?: Error;
+    browserUrl?: string;
+    policy?: ActionPolicy;
   } = {},
 ) {
   const posts: Posted[] = [];
   const candidates: ApprovalCandidate[] = [];
   const early: ApprovalCandidate[] = [];
+  const completed: unknown[] = [];
   const rows: AuditEventInput[] = [];
   const audit: AuditStore = { insert: async (row) => void rows.push(row) };
   const lists = [...(options.windows ?? [[BANK, NOTEPAD]])];
@@ -123,6 +126,9 @@ function harness(
               depth: 0,
             },
           ],
+          ...((payload as { screenshot?: boolean }).screenshot
+            ? { image: { base64: "SECRETPNG", width: 640, height: 480 } }
+            : {}),
         };
         return snapshot as T;
       }
@@ -141,7 +147,20 @@ function harness(
   const gateway = createComputerGateway({
     provider: createDeviceComputerProvider(),
     auditStore: audit,
-    policy: () => PERMISSIVE,
+    policy: () => options.policy ?? PERMISSIVE,
+    ...(options.browserUrl
+      ? {
+          snapshots: {
+            save: async () => undefined,
+            clear: async () => undefined,
+            load: async () => ({
+              snapshotId: 1,
+              url: options.browserUrl as string,
+              elements: new Map(),
+            }),
+          } as never,
+        }
+      : {}),
     transport,
     resolveDevice: async () =>
       options.owner === undefined
@@ -153,7 +172,9 @@ function harness(
           approvalGate: async (candidate: ApprovalCandidate) => {
             candidates.push(candidate);
             await options.gateAnswer?.(candidate);
-            return undefined;
+            return {
+              complete: async (output: unknown) => void completed.push(output),
+            };
           },
         }),
     approvalRefusal: async (candidate) => {
@@ -164,7 +185,16 @@ function harness(
   const paths = () => posts.map((post) => post.path);
   const payloads = () =>
     rows.map((row) => row.payload as Record<string, unknown>);
-  return { gateway, posts, paths, rows, payloads, candidates, early };
+  return {
+    gateway,
+    posts,
+    paths,
+    rows,
+    payloads,
+    candidates,
+    early,
+    completed,
+  };
 }
 
 test("listing posts desktop/windows to the owner's machine, caches it, and marks titles untrusted", async () => {
@@ -560,4 +590,41 @@ test("the runner transport maps desktop/* to desktop.* and never queues them", a
   expect(dispatched[0]?.payload).not.toHaveProperty("botId");
   expect(dispatched[1]?.action).toBe("desktop.windows");
   expect(dispatched[1]?.mode).toEqual({ durable: false });
+});
+
+test("a desktop row carries no page URL, and a page rule cannot reach a desktop read", async () => {
+  const h = harness({
+    browserUrl: "https://bank.example/login",
+    policy: {
+      mode: "enforce",
+      deny: ['page.host == "bank.example"'],
+      allow: ["true"],
+    },
+  });
+  await h.gateway.listDesktopWindows("bot-1", ACTOR);
+  await h.gateway.snapshotDesktop("bot-1", ACTOR, {
+    windowId: NOTEPAD.windowId,
+  });
+  const row = h
+    .payloads()
+    .find((p) => p.action === "computer_desktop_snapshot");
+  expect(row?.decision).toMatchObject({ allowed: true });
+  expect(row?.page).toBe("");
+  for (const payload of h.payloads()) expect(payload.page).toBe("");
+});
+
+test("an approved snapshot is stored without the screenshot bytes, size kept", async () => {
+  const h = harness();
+  await h.gateway.listDesktopWindows("bot-1", ACTOR);
+  const live = await h.gateway.snapshotDesktop("bot-1", ACTOR, {
+    windowId: NOTEPAD.windowId,
+    screenshot: true,
+  });
+  // The conversation still gets the picture; only what the approval store keeps loses the bytes.
+  expect(live.image?.base64).toBe("SECRETPNG");
+  const stored = h.completed.at(-1) as Record<string, unknown>;
+  expect(JSON.stringify(stored)).not.toContain("SECRETPNG");
+  expect(stored.image).toEqual({ width: 640, height: 480 });
+  expect(stored.imageError).toBe("截图未保存，请重新读取窗口。");
+  expect(stored.elements).toEqual(live.elements);
 });

@@ -4,6 +4,7 @@ import {
   desktopFloor,
 } from "../src/approvals/desktop-policy";
 import { decideAction } from "../src/approvals/policy";
+import { createApprovalService } from "../src/approvals/service";
 import type {
   ApprovalCandidate,
   ApprovalRule,
@@ -166,5 +167,48 @@ describe("desktop window floor", () => {
       }),
     });
     expect(out.behaviour).toBe("allow");
+  });
+});
+
+describe("desktop floor without a policy store", () => {
+  const service = (opened: unknown[]) =>
+    createApprovalService({
+      enabled: async () => true,
+      open: async (action: unknown) => {
+        opened.push(action);
+        return { id: "req-1", status: "pending", action };
+      },
+    } as never);
+
+  test("a sensitive window is held for approval, not let through as a plain read", async () => {
+    const opened: unknown[] = [];
+    await expect(
+      service(opened).gate(
+        candidate({
+          subject: {
+            runner: true,
+            desktop: { title: "招商银行", sensitiveWord: "银行" },
+          },
+        }),
+      ),
+    ).rejects.toThrow("needs your approval");
+  });
+
+  test("a window whose title could not be confirmed is held too", async () => {
+    const opened: unknown[] = [];
+    await expect(
+      service(opened).gate(candidate({ subject: { runner: true } })),
+    ).rejects.toThrow("needs your approval");
+  });
+
+  test("a plain window is still a plain read", async () => {
+    const opened: unknown[] = [];
+    const permit = await service(opened).gate(
+      candidate({
+        subject: { runner: true, desktop: { title: "记事本" } },
+      }),
+    );
+    expect(permit).toBeUndefined();
+    expect(opened).toHaveLength(0);
   });
 });

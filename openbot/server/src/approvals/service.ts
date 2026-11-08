@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { PERSON_INITIATOR } from "../audit";
 import { HeadlessToolSuspension } from "../computer/headless-tools";
+import { desktopFloor } from "./desktop-policy";
 import {
   applicableRules,
   DEFAULT_SENSITIVE_PATHS,
@@ -481,8 +482,10 @@ export function createApprovalService(
         if (outcome.behaviour === "deny")
           throw new ApprovalRefusedError(outcome.reason);
       } else if (
-        candidate.effect === "read" ||
-        !(await store.enabled(candidate.actorId))
+        // No policy to raise the desktop floor: a sensitive (or unconfirmed) window is still asked.
+        candidate.effect === "read"
+          ? !desktopFloor(candidate)
+          : !(await store.enabled(candidate.actorId))
       )
         return;
       const action: ApprovalAction = {

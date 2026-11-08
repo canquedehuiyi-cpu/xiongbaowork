@@ -67,9 +67,10 @@ import {
 } from "./client";
 import { HeadlessToolSuspension } from "./headless-tools";
 // --- desktop control (sub-project 2) ---
-import type {
-  DesktopSnapshot,
-  DesktopWindow,
+import {
+  type DesktopSnapshot,
+  type DesktopWindow,
+  snapshotForStorage,
 } from "../../../shared/desktop-control";
 import { createDesktopMethods, type DesktopSubject } from "./desktop-gateway";
 import { createDesktopWindowCache } from "./desktop-state";
@@ -853,7 +854,10 @@ export function createComputerGateway(
     // For a navigation the relevant page is the one being opened, not the one already loaded. Using
     // the stored URL would mean `page.host == "..."` could never match the destination, which is the
     // only thing a rule about navigation would ever want to say.
-    const pageUrl = subject.targetUrl ?? stored?.url ?? "";
+    // A desktop read is not about the browser: its row and rules never see the page last browsed.
+    const pageUrl = toolName.startsWith("computer_desktop_")
+      ? ""
+      : (subject.targetUrl ?? stored?.url ?? "");
 
     const intent = intentOf(toolName, subject.key);
     // Which app and tool, on every row this action writes; never the arguments.
@@ -1227,7 +1231,11 @@ export function createComputerGateway(
           : origin
             ? await computerActionOrigin.run(origin, () => run(address))
             : await run(address);
-      await approval?.complete(result);
+      await approval?.complete(
+        toolName === "computer_desktop_snapshot"
+          ? snapshotForStorage(result as { image?: unknown })
+          : result,
+      );
     } catch (error) {
       if (error instanceof HeadlessToolSuspension) throw error;
       /**
@@ -2403,7 +2411,12 @@ export function createComputerGateway(
         );
       if (options.deviceReachable?.(machine) === false)
         return refuse(DEVICE_OFFLINE_ENABLE);
-      if (!found) {
+      /*
+       * Asked of the device when the listing has nothing on it, and again when the listing says it
+       * is enabled: the owner may have switched it off in the device window since, and "already
+       * enabled" is only said on a fresh answer.
+       */
+      if (!found || found.enabled) {
         const looked = await lookUpCandidate(
           machine,
           botId,

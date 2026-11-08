@@ -82,7 +82,14 @@ export function desktopMessage(
 }
 
 /** Reading a window whose title has one of these needs the owner's approval first (spec §4.2). */
-export const DESKTOP_WINDOW_WORDS: readonly string[] = ["密码", "银行", "支付"];
+export const DESKTOP_WINDOW_WORDS: readonly string[] = [
+  "密码",
+  "银行",
+  "支付",
+  "password",
+  "bank",
+  "paypal",
+];
 
 /** The first of `words` that `text` contains, ignoring case; an empty word never matches. */
 export function sensitiveWord(
@@ -141,6 +148,26 @@ export type DesktopElement = {
 };
 
 export type DesktopImage = { base64: string; width: number; height: number };
+
+/** What replaces a screenshot the approval store did not keep. */
+export const DESKTOP_IMAGE_NOT_KEPT = "截图未保存，请重新读取窗口。";
+
+/**
+ * A snapshot as the approval store keeps it: the picture's bytes dropped (they can be megabytes, of
+ * exactly the windows that needed approval), its size kept, and a note for whoever replays it.
+ */
+export function snapshotForStorage<
+  T extends { image?: unknown; imageError?: string },
+>(snapshot: T): T {
+  const image = snapshot?.image as Partial<DesktopImage> | undefined;
+  if (!image || typeof image !== "object") return snapshot;
+  const { width, height } = image;
+  return {
+    ...snapshot,
+    image: { width, height },
+    imageError: snapshot.imageError ?? DESKTOP_IMAGE_NOT_KEPT,
+  };
+}
 
 export type DesktopSnapshot = {
   snapshotId: string;
