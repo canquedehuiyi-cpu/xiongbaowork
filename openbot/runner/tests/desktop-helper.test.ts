@@ -47,6 +47,152 @@ const inline = (script: string) => (): HelperLaunchSpec => ({
   args: ["-e", script],
 });
 
+/**
+ * The only native functions helper.cs may call (the brief's list), by their real entry point.
+ * `GetWindowLong` is user32's `GetWindowLongW`.
+ */
+const READ_ONLY_WIN32 = [
+  "EnumWindows",
+  "IsWindow",
+  "IsWindowVisible",
+  "GetWindowTextLengthW",
+  "GetWindowTextW",
+  "GetWindowThreadProcessId",
+  "GetWindow",
+  "GetWindowLongW",
+  "IsIconic",
+  "GetForegroundWindow",
+  "GetWindowRect",
+  "PrintWindow",
+  "SetProcessDPIAware",
+  "DwmGetWindowAttribute",
+  "OpenProcess",
+  "OpenProcessToken",
+  "GetTokenInformation",
+  "GetSidSubAuthority",
+  "GetSidSubAuthorityCount",
+  "CloseHandle",
+] as const;
+
+const NATIVE_LIBRARIES = new Set([
+  "user32.dll",
+  "kernel32.dll",
+  "advapi32.dll",
+  "dwmapi.dll",
+]);
+
+/**
+ * Every P/Invoke in a C# source: the entry point each one really binds (its EntryPoint, else its
+ * method name), and whatever about them cannot be checked. A problem: an EntryPoint that is not one
+ * plain string literal (a name built with `+`, a constant, an ordinal like "#123"), a library outside
+ * the four above, and any `DllImport` or `extern` this parser did not account for.
+ */
+function pinvokes(source: string): { entries: string[]; problems: string[] } {
+  const entries: string[] = [];
+  const problems: string[] = [];
+  const declaration =
+    /\[\s*DllImport\s*\(([^()\]]*)\)\s*\]\s*((?:(?:private|public|internal|protected|static|extern|unsafe)\s+)+)[\w.<>[\]]+\s+(\w+)\s*\(/g;
+  let found = 0;
+  for (const match of source.matchAll(declaration)) {
+    found += 1;
+    const [, args = "", modifiers = "", method = ""] = match;
+    if (!/\bextern\b/.test(modifiers)) problems.push(`${method}: not extern`);
+    const library = /^\s*"([^"]*)"\s*(?:,|$)/.exec(args)?.[1];
+    if (!library || !NATIVE_LIBRARIES.has(library.toLowerCase()))
+      problems.push(`${method}: library ${args}`);
+    const entryPoint = /\bEntryPoint\s*=\s*([^,]*)/.exec(args);
+    if (entryPoint) {
+      const literal = /^\s*"([A-Za-z_]\w*)"\s*$/.exec(entryPoint[1] ?? "");
+      if (!literal?.[1])
+        problems.push(`${method}: EntryPoint ${entryPoint[1]}`);
+      else entries.push(literal[1]);
+    } else entries.push(method);
+  }
+  const imports = source.match(/DllImport/g)?.length ?? 0;
+  const externs = source.match(/\bextern\b/g)?.length ?? 0;
+  if (imports !== found) problems.push(`${imports} DllImport, ${found} parsed`);
+  if (externs !== found) problems.push(`${externs} extern, ${found} parsed`);
+  return { entries, problems };
+}
+
+/**
+ * Names that send input, move focus or windows, change a control, hook, start or end a process, reach
+ * native code another way, or invoke by reflection. Matched with every space taken out of both
+ * sides, so `p . Start ()` is `.Start(`.
+ */
+const BANNED = [
+  // Input, hooks, focus, other windows.
+  "SendInput",
+  "keybd_event",
+  "mouse_event",
+  "SetCursorPos",
+  "Cursor.Position",
+  "BlockInput",
+  "SetWindowsHookEx",
+  "RegisterHotKey",
+  "SetForegroundWindow",
+  "SetActiveWindow",
+  "SetFocus",
+  "BringWindowToTop",
+  "SwitchToThisWindow",
+  "ShowWindow",
+  "SetWindowPos",
+  "MoveWindow",
+  "SetWindowText",
+  "AttachThreadInput",
+  "PostMessage",
+  "SendMessage",
+  "SendKeys",
+  "Clipboard",
+  // UI Automation that acts.
+  "InvokePattern",
+  "TogglePattern",
+  "ExpandCollapsePattern",
+  "SelectionItemPattern",
+  "ScrollPattern",
+  "ScrollItemPattern",
+  "WindowPattern",
+  "TransformPattern",
+  "DockPattern",
+  "VirtualizedItemPattern",
+  "RangeValuePattern",
+  ".SetValue(",
+  ".SetFocus(",
+  ".Select(",
+  ".AddToSelection(",
+  ".ScrollIntoView(",
+  ".Invoke(",
+  ".Close(",
+  // Processes.
+  "Process.Start",
+  "new Process",
+  "ProcessStartInfo",
+  "StartInfo",
+  ".Start(",
+  "ShellExecute",
+  "CreateProcess",
+  "WinExec",
+  "CloseMainWindow",
+  ".Kill(",
+  // Native code or code chosen at run time.
+  "GetDelegateForFunctionPointer",
+  "LoadLibrary",
+  "GetProcAddress",
+  "ComImport",
+  "GetTypeFromProgID",
+  "GetTypeFromCLSID",
+  "InvokeMember",
+  "DynamicInvoke",
+  "Activator",
+  "Assembly.Load",
+  "System.Reflection",
+];
+
+function bannedIn(source: string): string[] {
+  const squeezed = source.replace(/\s+/g, "");
+  return BANNED.filter((name) => squeezed.includes(name.replace(/\s+/g, "")));
+}
+
 async function rejection(promise: Promise<unknown>): Promise<unknown> {
   try {
     await promise;
@@ -132,31 +278,54 @@ describe("helper.cs source", () => {
   });
 
   test("helper.cs declares no input, focus, hook or process-launch API", () => {
-    for (const banned of [
-      "SendInput",
-      "keybd_event",
-      "mouse_event",
-      "SetCursorPos",
-      "SetWindowsHookEx",
-      "RegisterHotKey",
-      "SetForegroundWindow",
-      "AttachThreadInput",
-      "PostMessage",
-      "SendMessage",
-      "SendKeys",
-      "Process.Start",
-      "InvokePattern",
-      "TogglePattern",
-      "ExpandCollapsePattern",
-      "SelectionItemPattern",
-      "ScrollPattern",
-      ".SetValue(",
-      ".SetFocus(",
-    ])
-      expect({ banned, found: HELPER_SOURCE.includes(banned) }).toEqual({
-        banned,
-        found: false,
-      });
+    // Whitespace is no way around it: `.SetValue (` is `.SetValue(`.
+    expect(bannedIn(HELPER_SOURCE)).toEqual([]);
+  });
+
+  test("helper.cs P/Invokes exactly the 20 read-only Win32 functions, by literal name", () => {
+    const { entries, problems } = pinvokes(HELPER_SOURCE);
+    expect(problems).toEqual([]);
+    expect([...new Set(entries)].sort()).toEqual([...READ_ONLY_WIN32].sort());
+  });
+
+  test("the source guard catches what a hard-coded name list would miss", () => {
+    const decl = (attribute: string, method = "Harmless") =>
+      `[${attribute}]\nprivate static extern bool ${method}(IntPtr h);`;
+    // A name built at compile time, an ordinal, an import outside the allow-list, a library outside
+    // the four, an extern without DllImport: each is a problem or a stray entry point.
+    expect(
+      pinvokes(decl('DllImport("user32.dll", EntryPoint = "Send" + "Input")'))
+        .problems.length,
+    ).toBeGreaterThan(0);
+    expect(
+      pinvokes(decl('DllImport("user32.dll", EntryPoint = "#123")')).problems
+        .length,
+    ).toBeGreaterThan(0);
+    expect(
+      pinvokes(decl('DllImport("shell32.dll")', "ShellExecuteW")).problems
+        .length,
+    ).toBeGreaterThan(0);
+    expect(
+      pinvokes(decl('DllImport("user32.dll")', "BlockInput")).entries,
+    ).toEqual(["BlockInput"]);
+    expect(
+      pinvokes("private static extern bool Sneaky(IntPtr h);").problems.length,
+    ).toBeGreaterThan(0);
+    expect(
+      bannedIn(
+        "var p = new Process (); p.StartInfo.FileName = x; p . Start ();",
+      ),
+    ).toEqual(expect.arrayContaining(["new Process", "StartInfo", ".Start("]));
+    expect(
+      bannedIn("element.GetCurrentPattern(ValuePattern.Pattern) .SetValue (v)"),
+    ).toEqual([".SetValue("]);
+    expect(
+      bannedIn(
+        "Marshal.GetDelegateForFunctionPointer(GetProcAddress(LoadLibrary(x), y))",
+      ).sort(),
+    ).toEqual(
+      ["GetDelegateForFunctionPointer", "GetProcAddress", "LoadLibrary"].sort(),
+    );
   });
 
   test("helper.cs stays within C# 5", () => {

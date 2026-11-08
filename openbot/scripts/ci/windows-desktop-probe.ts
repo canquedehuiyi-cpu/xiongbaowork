@@ -147,6 +147,10 @@ async function rawHelperAnswers(lines: string[]): Promise<unknown[]> {
         () => reject(new Error(`no answers in 45 s; got ${buffer}`)),
         45_000,
       );
+      child.once("error", (error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
       child.once("close", (code) => {
         clearTimeout(timer);
         reject(new Error(`the helper exited with ${String(code)}`));
@@ -389,13 +393,16 @@ export async function probeDesktop(
       },
     );
 
-    // The helper reads keys exactly: the op twice, or once in another case, is refused whole.
+    // The helper reads keys exactly: the op twice, once in another case, or once more under a key
+    // JavaScriptSerializer would accept without double quotes, is refused whole.
     const smuggled = await outcome(
       rawHelperAnswers([
         `{"id":1,"op":"windows","Op":"click"}`,
         `{"id":2,"Op":"click","op":"windows"}`,
         `{"id":3,"op":"windows","op":"click"}`,
         `{"id":4,"op":"windows","max":1}`,
+        `{"id":5,"op":"windows",op:"click"}`,
+        `{"id":6,"op":"windows",'op':"click"}`,
       ]),
     );
     const answers = smuggled.ok
@@ -403,7 +410,7 @@ export async function probeDesktop(
       : [];
     const byId = (id: number) => answers.find((answer) => answer.id === id);
     assert(
-      [1, 2, 3].every(
+      [1, 2, 3, 5, 6].every(
         (id) => byId(id)?.ok === false && byId(id)?.code === "unsupported",
       ) && byId(4)?.ok === true,
       "the helper itself refuses a duplicate or case-variant key",

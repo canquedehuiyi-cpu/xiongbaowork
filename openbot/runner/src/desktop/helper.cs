@@ -255,8 +255,8 @@ namespace XiongbaoDesktop
 
             // Before the op is read: a request with the same key twice, or two keys that differ only in
             // case, is refused whole, so no reader can be made to see an op other than the one checked.
-            string clash = KeyClash(json, line);
-            if (clash != null) return Fail(id, "unsupported", "duplicate or case-variant key: " + Clip(clash, 100));
+            string problem = KeyProblem(json, line);
+            if (problem != null) return Fail(id, "unsupported", problem);
 
             object opValue;
             request.TryGetValue("op", out opValue);
@@ -293,11 +293,16 @@ namespace XiongbaoDesktop
             }
         }
 
+        /// <summary>Outside double-quoted strings, standard JSON has nothing but these.</summary>
+        private const string JSON_BARE = " \t\r\n{}[]:,0123456789+-.eEtruefalsn";
+
         /// <summary>
-        /// The first top-level key of a JSON object that repeats another one, exactly or in a different
-        /// case, after JSON escapes are decoded; null when every key is distinct.
+        /// Why a request's keys cannot be trusted, or null when they can. Refused: a top-level key that
+        /// repeats another one, exactly or in a different case, after JSON escapes are decoded; and any
+        /// JSON beyond the standard (an unquoted or single-quoted key, a single-quoted string, a
+        /// constructor), which JavaScriptSerializer would accept and this scan would not see as a key.
         /// </summary>
-        private static string KeyClash(JavaScriptSerializer json, string text)
+        private static string KeyProblem(JavaScriptSerializer json, string text)
         {
             Dictionary<string, bool> seen = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
             int depth = 0;
@@ -306,6 +311,9 @@ namespace XiongbaoDesktop
             while (i < text.Length)
             {
                 char c = text[i];
+                if (JSON_BARE.IndexOf(c) < 0 && c != '"') return "non-standard JSON: unexpected character outside a string";
+                if (depth == 1 && expectKey && c != '"' && c != '}' && !char.IsWhiteSpace(c))
+                    return "non-standard JSON: a key that is not a double-quoted string";
                 if (c == '"')
                 {
                     int start = i;
@@ -319,7 +327,8 @@ namespace XiongbaoDesktop
                     if (depth == 1 && expectKey)
                     {
                         string key = json.Deserialize<string>(text.Substring(start, Math.Min(i, text.Length) - start));
-                        if (key == null || seen.ContainsKey(key)) return key ?? "null";
+                        if (key == null || seen.ContainsKey(key))
+                            return "duplicate or case-variant key: " + Clip(key ?? "null", 100);
                         seen[key] = true;
                         expectKey = false;
                     }
@@ -459,20 +468,28 @@ namespace XiongbaoDesktop
             if (denied || (level >= 0 && ownIntegrity >= 0 && level > ownIntegrity))
                 throw new Refusal("elevated", "the window's process runs with higher rights");
 
-            string title = Title(target.Hwnd);
+            RefuseSensitive(target.Hwnd, request);
+            return target;
+        }
+
+        /// <summary>
+        /// Refused as sensitive when the window's live title holds one of the request's refused words.
+        /// Checked before anything is read, and again once it has been: a title that turned sensitive
+        /// while the tree was walked or the picture taken (a browser switching tabs) loses the result.
+        /// </summary>
+        private static void RefuseSensitive(IntPtr hwnd, Dictionary<string, object> request)
+        {
+            string title = Title(hwnd);
             object wordsValue;
             request.TryGetValue("refuseWords", out wordsValue);
             IEnumerable words = wordsValue as IEnumerable;
-            if (words != null && !(wordsValue is string))
+            if (words == null || wordsValue is string) return;
+            foreach (object item in words)
             {
-                foreach (object item in words)
-                {
-                    string word = item as string;
-                    if (!string.IsNullOrEmpty(word) && title.IndexOf(word, StringComparison.OrdinalIgnoreCase) >= 0)
-                        throw new Refusal("sensitive", Clip(word, 100));
-                }
+                string word = item as string;
+                if (!string.IsNullOrEmpty(word) && title.IndexOf(word, StringComparison.OrdinalIgnoreCase) >= 0)
+                    throw new Refusal("sensitive", Clip(word, 100));
             }
-            return target;
         }
 
         /// <summary>A process's mandatory integrity level (RID), or -1 when it cannot be read; `denied` when its token was refused.</summary>
@@ -557,7 +574,8 @@ namespace XiongbaoDesktop
                 }
                 catch (ElementNotAvailableException)
                 {
-                    // It went away while being read: what was read of it stands.
+                    // It went away while being read: what was read of it stands, and the tree is partial.
+                    Truncated = true;
                     return;
                 }
                 if (child != null && depth >= MaxDepth)
@@ -575,6 +593,7 @@ namespace XiongbaoDesktop
                     }
                     catch (ElementNotAvailableException)
                     {
+                        Truncated = true;
                         return;
                     }
                 }
@@ -670,6 +689,8 @@ namespace XiongbaoDesktop
             walk.Clock = Stopwatch.StartNew();
             walk.Visit(start, 0);
 
+            // Read, but not handed back, and not kept for refs, if the title turned sensitive meanwhile.
+            RefuseSensitive(target.Hwnd, request);
             Save(target.Key, snapshotId, walk.Elements);
 
             Dictionary<string, object> result = new Dictionary<string, object>();
@@ -737,51 +758,72 @@ namespace XiongbaoDesktop
             if (width <= 0 || height <= 0) throw new Refusal("failed", "the window has an empty rectangle");
 
             Bitmap image = Printed(hwnd, outer, frame);
-            if (image == null)
-            {
-                // Copying the screen could pick up whatever lies on top, so only the foreground window
-                // is copied that way, and only what of it is on the primary display.
-                if (GetForegroundWindow() != hwnd) throw new Refusal("failed", "not_visible");
-                Rectangle area = Rectangle.Intersect(new Rectangle(frame.Left, frame.Top, width, height), System.Windows.Forms.Screen.PrimaryScreen.Bounds);
-                if (area.Width <= 0 || area.Height <= 0) throw new Refusal("failed", "not_visible");
-                image = new Bitmap(area.Width, area.Height, PixelFormat.Format32bppRgb);
-                using (Graphics graphics = Graphics.FromImage(image))
-                {
-                    graphics.CopyFromScreen(area.Left, area.Top, 0, 0, area.Size, CopyPixelOperation.SourceCopy);
-                }
-            }
+            if (image == null) image = CopiedFromScreen(hwnd, frame, width, height);
 
+            // Every GDI object made from here on is released on every path, an exception's included:
+            // the helper runs for a long time and must not pile up handles.
+            Bitmap scaled = null;
             try
             {
+                Bitmap final = image;
                 int longEdge = Math.Max(image.Width, image.Height);
                 if (longEdge > maxEdge)
                 {
                     double scale = (double)maxEdge / longEdge;
                     int scaledWidth = Math.Max(1, (int)Math.Round(image.Width * scale));
                     int scaledHeight = Math.Max(1, (int)Math.Round(image.Height * scale));
-                    Bitmap scaled = new Bitmap(scaledWidth, scaledHeight, PixelFormat.Format32bppRgb);
+                    scaled = new Bitmap(scaledWidth, scaledHeight, PixelFormat.Format32bppRgb);
                     using (Graphics graphics = Graphics.FromImage(scaled))
                     {
                         graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
                         graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
                         graphics.DrawImage(image, 0, 0, scaledWidth, scaledHeight);
                     }
-                    image.Dispose();
-                    image = scaled;
+                    final = scaled;
                 }
+                // Taken, but not handed back, if the title turned sensitive meanwhile.
+                RefuseSensitive(hwnd, request);
                 using (MemoryStream png = new MemoryStream())
                 {
-                    image.Save(png, ImageFormat.Png);
+                    final.Save(png, ImageFormat.Png);
                     Dictionary<string, object> result = new Dictionary<string, object>();
                     result["base64"] = Convert.ToBase64String(png.ToArray());
-                    result["width"] = image.Width;
-                    result["height"] = image.Height;
+                    result["width"] = final.Width;
+                    result["height"] = final.Height;
                     return result;
                 }
             }
             finally
             {
+                if (scaled != null) scaled.Dispose();
                 image.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// The window copied off the screen, when PrintWindow drew nothing. The screen could show
+        /// whatever lies on top, so only the foreground window is copied this way, and only what of it
+        /// is on the primary display.
+        /// </summary>
+        private static Bitmap CopiedFromScreen(IntPtr hwnd, RECT frame, int width, int height)
+        {
+            if (GetForegroundWindow() != hwnd) throw new Refusal("failed", "not_visible");
+            Rectangle area = Rectangle.Intersect(new Rectangle(frame.Left, frame.Top, width, height), System.Windows.Forms.Screen.PrimaryScreen.Bounds);
+            if (area.Width <= 0 || area.Height <= 0) throw new Refusal("failed", "not_visible");
+            Bitmap image = new Bitmap(area.Width, area.Height, PixelFormat.Format32bppRgb);
+            bool done = false;
+            try
+            {
+                using (Graphics graphics = Graphics.FromImage(image))
+                {
+                    graphics.CopyFromScreen(area.Left, area.Top, 0, 0, area.Size, CopyPixelOperation.SourceCopy);
+                }
+                done = true;
+                return image;
+            }
+            finally
+            {
+                if (!done) image.Dispose();
             }
         }
 
@@ -792,31 +834,38 @@ namespace XiongbaoDesktop
             int outerHeight = outer.Bottom - outer.Top;
             if (outerWidth <= 0 || outerHeight <= 0) return null;
             Bitmap canvas = new Bitmap(outerWidth, outerHeight, PixelFormat.Format32bppRgb);
-            bool drawn;
-            using (Graphics graphics = Graphics.FromImage(canvas))
+            Bitmap kept = null;
+            try
             {
-                IntPtr hdc = graphics.GetHdc();
-                try
+                bool drawn;
+                using (Graphics graphics = Graphics.FromImage(canvas))
                 {
-                    drawn = PrintWindow(hwnd, hdc, PW_RENDERFULLCONTENT);
+                    IntPtr hdc = graphics.GetHdc();
+                    try
+                    {
+                        drawn = PrintWindow(hwnd, hdc, PW_RENDERFULLCONTENT);
+                    }
+                    finally
+                    {
+                        graphics.ReleaseHdc(hdc);
+                    }
                 }
-                finally
+                if (!drawn || AllBlack(canvas)) return null;
+                Rectangle crop = Rectangle.Intersect(
+                    new Rectangle(frame.Left - outer.Left, frame.Top - outer.Top, frame.Right - frame.Left, frame.Bottom - frame.Top),
+                    new Rectangle(0, 0, outerWidth, outerHeight));
+                if (crop.Width <= 0 || crop.Height <= 0 || (crop.Width == outerWidth && crop.Height == outerHeight))
                 {
-                    graphics.ReleaseHdc(hdc);
+                    kept = canvas;
+                    return canvas;
                 }
+                kept = canvas.Clone(crop, PixelFormat.Format32bppRgb);
+                return kept;
             }
-            if (!drawn || AllBlack(canvas))
+            finally
             {
-                canvas.Dispose();
-                return null;
+                if (kept != canvas) canvas.Dispose();
             }
-            Rectangle crop = Rectangle.Intersect(
-                new Rectangle(frame.Left - outer.Left, frame.Top - outer.Top, frame.Right - frame.Left, frame.Bottom - frame.Top),
-                new Rectangle(0, 0, outerWidth, outerHeight));
-            if (crop.Width <= 0 || crop.Height <= 0 || (crop.Width == outerWidth && crop.Height == outerHeight)) return canvas;
-            Bitmap cut = canvas.Clone(crop, PixelFormat.Format32bppRgb);
-            canvas.Dispose();
-            return cut;
         }
 
         /// <summary>A 16 x 16 grid of samples that are all the same black: PrintWindow drew nothing.</summary>
