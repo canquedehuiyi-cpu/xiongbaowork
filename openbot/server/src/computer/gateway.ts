@@ -37,6 +37,16 @@ import {
   type DeviceTakeovers,
 } from "../devices/takeover";
 import { withUntrustedNotice } from "../untrusted-content";
+// --- app discovery (sub-project 3) ---
+import {
+  AVAILABLE_HINT,
+  type DiscoveredCandidate,
+  discoveryGroups,
+  INSTALLED_HINT,
+  OLD_RUNNER,
+  readDiscovery,
+} from "./app-discovery";
+// --- end app discovery ---
 import {
   computerActionIdentity,
   computerActionOrigin,
@@ -158,6 +168,12 @@ export type AppTool = {
 /** What `computer_apps` answers: each app by name, with its tools or why they could not be listed. */
 export type ListAppsResult = {
   apps: { name: string; tools?: AppTool[]; error?: string }[];
+  // --- app discovery (sub-project 3) ---
+  available?: DiscoveredCandidate[];
+  installed?: string[];
+  hints?: { available: string; installed: string };
+  discoveryError?: string;
+  // --- end app discovery ---
 };
 
 /** What a local app's tool answered, or that the call waits for a machine that is away. */
@@ -1340,6 +1356,52 @@ export function createComputerGateway(
     }
   }
 
+  // --- app discovery (sub-project 3) ---
+  /** The apps the machine could offer and the software it has no app for. Never fails the listing. */
+  async function discoverGroups(
+    machine: { tenantId: string; deviceId: string },
+    botId: string,
+    apps: { name: string }[],
+    signal?: AbortSignal,
+  ): Promise<Partial<ListAppsResult>> {
+    try {
+      const read = readDiscovery(
+        await transport.post<unknown>(
+          runnerAddress(machine),
+          botId,
+          "/apps/discover",
+          {},
+          signal,
+          DISCOVER_BACKSTOP_MS,
+        ),
+      );
+      if (!read)
+        return { discoveryError: DISCOVERY_FAILED("没有收到有效的回答") };
+      const groups = discoveryGroups(
+        read,
+        apps.map((app) => app.name),
+      );
+      if (!groups.available.length && !groups.installed.length) return {};
+      return {
+        ...(groups.available.length ? { available: groups.available } : {}),
+        ...(groups.installed.length ? { installed: groups.installed } : {}),
+        hints: { available: AVAILABLE_HINT, installed: INSTALLED_HINT },
+      };
+    } catch (error) {
+      // Only the person's Stop ends the call. Anything else (a paused device included) is said in
+      // `discoveryError` and leaves the listed apps as they are.
+      if (signal?.aborted) throw error;
+      // The reason may come from the device: cut it.
+      const reason = cutUtf8(error instanceof Error ? error.message : "", 200);
+      return {
+        discoveryError: reason.startsWith("Nothing on this machine handles")
+          ? OLD_RUNNER
+          : DISCOVERY_FAILED(reason || "原因不明"),
+      };
+    }
+  }
+  // --- end app discovery ---
+
   return {
     provider,
     locate,
@@ -1978,11 +2040,22 @@ export function createComputerGateway(
               });
             }
           }
-          return { apps: listed };
+          // --- app discovery (sub-project 3) ---
+          if (named) return { apps: listed };
+          return {
+            apps: listed,
+            ...(await discoverGroups(machine, botId, apps, signal)),
+          };
+          // --- end app discovery ---
         },
       );
       // Tool names and descriptions are whatever the app says they are.
-      return withUntrustedNotice(result, "local app", ["apps"]);
+      return withUntrustedNotice(result, "local app", [
+        "apps",
+        "available",
+        "installed",
+        "discoveryError",
+      ]);
     },
 
     /**
@@ -2083,6 +2156,11 @@ const APP_TOOLS_CACHE_LIMIT = 1000;
  * fresh connection start 20s + list 20s + call 120s, with room to spare.
  */
 const APP_LIST_BACKSTOP_MS = 45_000;
+// --- app discovery (sub-project 3) ---
+const DISCOVER_BACKSTOP_MS = 30_000;
+const DISCOVERY_FAILED = (reason: string) =>
+  `这次没能查看主人电脑上的其他应用：${reason}`;
+// --- end app discovery ---
 export const APP_CALL_BACKSTOP_MS = 170_000;
 
 /** At most `limit` bytes of UTF-8, never ending in half a character. */

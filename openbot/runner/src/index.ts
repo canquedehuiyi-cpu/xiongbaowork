@@ -24,6 +24,10 @@ import {
   deviceIdFor,
 } from "./credentials";
 import { createRunnerDispatcher } from "./dispatch";
+// --- app discovery (sub-project 3) ---
+import type { DiscoverDeps } from "./discover";
+import { createDiscoverActions } from "./discover-actions";
+// --- end app discovery ---
 import {
   browserProfileRootFor,
   createRunnerExecutor,
@@ -257,9 +261,14 @@ const APP_FLAGS = new Set([
   "test-app",
   "enable-app",
   "disable-app",
+  // --- app discovery (sub-project 3) ---
+  "discover-apps",
+  // --- end app discovery ---
 ]);
+/** The app flags that take no value. */
+const VALUELESS_APP_FLAGS = new Set(["list-apps", "discover-apps"]);
 const MIXED_FLAGS =
-  "Folder flags (--add-root, --remove-root, --list-roots) and app flags (--list-apps, --add-app, --remove-app, --test-app, --enable-app, --disable-app) cannot be used together.";
+  "Folder flags (--add-root, --remove-root, --list-roots) and app flags (--list-apps, --add-app, --remove-app, --test-app, --enable-app, --disable-app, --discover-apps) cannot be used together.";
 
 /** The flags that are a root command rather than a run, and the one of them that takes no value. */
 const ROOT_FLAGS = new Set(["add-root", "remove-root", "list-roots"]);
@@ -389,7 +398,9 @@ export type AppCommand =
   | { kind: "remove"; target: string }
   | { kind: "test"; target: string }
   | { kind: "enable"; target: string }
-  | { kind: "disable"; target: string };
+  | { kind: "disable"; target: string }
+  /** `--discover-apps`: what this machine could offer, by name (app discovery). */
+  | { kind: "discover" };
 
 /**
  * An app command and where its registry lives, null when the arguments are not one, or the sentence
@@ -412,7 +423,7 @@ export function parseAppCommand(
     const entry = argv[index];
     if (!entry?.startsWith("--")) return `Unknown argument: ${entry ?? ""}`;
     const name = entry.slice(2);
-    if (name === "list-apps") {
+    if (VALUELESS_APP_FLAGS.has(name)) {
       args.set(name, "");
       continue;
     }
@@ -421,7 +432,7 @@ export function parseAppCommand(
   }
   const asked = [...APP_FLAGS].filter((flag) => args.has(flag));
   if (asked.length > 1)
-    return "Pass one of --list-apps, --add-app, --remove-app, --test-app, --enable-app or --disable-app.";
+    return "Pass one of --list-apps, --add-app, --remove-app, --test-app, --enable-app, --disable-app or --discover-apps.";
   const paths = runnerPaths(args, env, cwd);
   if (typeof paths === "string") return paths;
   const flag = asked[0] ?? "";
@@ -437,6 +448,8 @@ export function parseAppCommand(
     }
   } else if (flag === "list-apps") {
     command = { kind: "list" };
+  } else if (flag === "discover-apps") {
+    command = { kind: "discover" };
   } else {
     if (!value) return `--${flag} needs the app's name or reference.`;
     command = {
@@ -482,11 +495,30 @@ export async function runAppCommand(
   print: (line: string) => void = (line) => console.log(line),
   /** Where `--add-app -` reads the app from. Tests hand in their own. */
   stdin: () => Promise<string> = readStdin,
+  /** What `--discover-apps` reads instead of this machine. Tests hand in their own. */
+  discoverDeps?: Partial<DiscoverDeps>,
 ): Promise<number> {
   const registry = createAppRegistry({ dataDir: parsed.dataDir });
   const apps = () => registry.list().map(maskedApp);
   try {
     let { command } = parsed;
+    // --- app discovery (sub-project 3) ---
+    if (command.kind === "discover") {
+      const outcome = await createDiscoverActions({
+        dataDir: parsed.dataDir,
+        registry,
+        ...(discoverDeps ? { deps: discoverDeps } : {}),
+      })("apps.discover", {});
+      print(
+        JSON.stringify(
+          outcome.ok
+            ? { ok: true, ...(outcome.output as object) }
+            : { ok: false, error: outcome.error },
+        ),
+      );
+      return outcome.ok ? 0 : 2;
+    }
+    // --- end app discovery ---
     if (command.kind === "add-stdin") {
       const input = parseAppInput(await stdin());
       if (typeof input === "string") {
@@ -786,12 +818,23 @@ export async function main(
   });
   // The owner's local MCP apps: registered with --add-app, started only when a call needs one.
   const apps = createAppRegistry({ dataDir: paths.dataDir });
+  // One host for the executor and for discovery, so an app is never started twice.
+  const appHost = createAppHost(apps);
   const executor = createRunnerExecutor(
     paths.workspaceDir,
     browser,
     roots,
     undefined,
-    createAppHost(apps),
+    appHost,
+    // --- app discovery (sub-project 3) ---
+    {
+      discovery: createDiscoverActions({
+        dataDir: paths.dataDir,
+        registry: apps,
+        host: appHost,
+      }),
+    },
+    // --- end app discovery ---
   );
   running = executor;
 

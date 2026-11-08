@@ -628,7 +628,7 @@ function headlessComputerTools(options: {
     tools.push(
       tool(
         "computer_apps",
-        "List the local apps (MCP servers) the person registered on their own paired computer, and the tools each one offers. When software on their computer has a local app here, prefer it over driving the software any other way: call this first to see its tools, then call computer_app_call. Pass app to list only that one.",
+        "List the local apps (MCP servers) the person registered on their own paired computer, and the tools each one offers. When software on their computer has a local app here, prefer it over driving the software any other way: call this first to see its tools, then call computer_app_call. Pass app to list only that one. Without app, it also lists apps found on the computer that are not enabled yet (available) and installed software that has no local app (installed); follow the hints that come with them.",
         z.strictObject({ app: z.string().min(1).max(40).optional() }),
         async (input, { signal }) => ({
           ok: true,

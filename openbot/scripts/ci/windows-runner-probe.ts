@@ -20,6 +20,7 @@ import { createRunnerDispatcher } from "../../runner/src/dispatch.ts";
 import { createAppHost } from "../../runner/src/app-host.ts";
 import { createAppRegistry } from "../../runner/src/apps.ts";
 import { probeDesktop } from "./windows-desktop-probe.ts";
+import { compileRunner, runBunxSpike } from "./bunx-spike.ts";
 
 const root = process.argv[2];
 if (!root || process.platform !== "win32")
@@ -393,4 +394,155 @@ assert(
 );
 await appExecute.closeApps();
 await probeDesktop(assert, root, execute);
+// --- app discovery (sub-project 3) ---
+// The real registry read through PowerShell as UTF-8 (a GBK console would turn 中文 names into
+// mojibake), and a real Claude Desktop config found through APPDATA and answered by name only.
+{
+  const { installedNames, readInstalledWindows } = await import(
+    "../../runner/src/discover-installed.ts"
+  );
+  const { createDiscoverActions } = await import(
+    "../../runner/src/discover-actions.ts"
+  );
+  // Three Uninstall entries of our own under HKCU, removed in `finally`: a Chinese name (spelled
+  // with [char] codes, so the script's own encoding cannot help), a KB patch and a system component.
+  // windows-latest is an en-US machine whose programs are all ASCII, so without these the checks
+  // below could not fail: a 437 console turns 中文 into '?', which is valid text, not U+FFFD.
+  const seedId = `${process.pid}-${Date.now()}`;
+  const seedKey = `HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\XiongbaoProbe-${seedId}`;
+  const chineseName = `\u718A\u5B9D\u63A2\u9488 \u5E94\u7528 ${seedId}`;
+  const patchName = `Xiongbao Probe Security Update (KB5034441) ${seedId}`;
+  const componentName = `Xiongbao Probe Component ${seedId}`;
+  const powershell = (script: string) =>
+    spawnSync(
+      join(
+        process.env.SystemRoot ?? "C:\\Windows",
+        "System32",
+        "WindowsPowerShell",
+        "v1.0",
+        "powershell.exe",
+      ),
+      ["-NoProfile", "-NonInteractive", "-Command", script],
+      { windowsHide: true, encoding: "utf8" },
+    );
+  const seedEntry = (suffix: string, name: string) =>
+    `New-Item -Path '${seedKey}-${suffix}' -Force | Out-Null; ` +
+    `New-ItemProperty -Path '${seedKey}-${suffix}' -Name DisplayName -PropertyType String -Value ${name} -Force | Out-Null`;
+  try {
+    const seeded = powershell(
+      [
+        "$ErrorActionPreference = 'Stop'",
+        `$zh = [string]::new([char[]]@(0x718A, 0x5B9D, 0x63A2, 0x9488, 0x20, 0x5E94, 0x7528)) + ' ${seedId}'`,
+        seedEntry("zh", "$zh"),
+        seedEntry("kb", `'${patchName}'`),
+        seedEntry("sys", `'${componentName}'`),
+        `New-ItemProperty -Path '${seedKey}-sys' -Name SystemComponent -PropertyType DWord -Value 1 -Force | Out-Null`,
+      ].join("; "),
+    );
+    assert(
+      seeded.status === 0,
+      "discovery probe seeded its registry entries",
+      seeded.stderr,
+    );
+    const raw = await readInstalledWindows();
+    const rawNames = raw.map((entry) => entry.DisplayName);
+    const names = installedNames(raw);
+    assert(
+      rawNames.includes(chineseName) &&
+        rawNames.includes(patchName) &&
+        rawNames.includes(componentName),
+      "the registry read returns the seeded entries, the Chinese name exactly",
+      rawNames.filter(
+        (name) => typeof name === "string" && name.includes(seedId),
+      ),
+    );
+    assert(
+      names.includes(chineseName) &&
+        !names.includes(patchName) &&
+        !names.includes(componentName) &&
+        !names.some((name) => /\bKB\d{6,8}\b/i.test(name)) &&
+        !JSON.stringify(names).includes("\uFFFD") &&
+        !names.some((name) => name.includes(seedId) && name.includes("?")),
+      "installed names keep the Chinese name and drop the patch and the system component",
+      names.filter((name) => name.includes(seedId)),
+    );
+  } finally {
+    powershell(
+      `Remove-Item -Path '${seedKey}-*' -Recurse -Force -ErrorAction SilentlyContinue`,
+    );
+  }
+  const appData = join(root, "appdata");
+  mkdirSync(join(appData, "Claude"), { recursive: true });
+  writeFileSync(
+    join(appData, "Claude", "claude_desktop_config.json"),
+    JSON.stringify({
+      mcpServers: {
+        fixture: { command: process.execPath, args: [fixture], env: {} },
+      },
+    }),
+  );
+  const discoverDir = join(root, "discover-data");
+  const discovery = createDiscoverActions({
+    dataDir: discoverDir,
+    registry: createAppRegistry({ dataDir: discoverDir }),
+    deps: {
+      // Without any other spelling of the two (`AppData`), which would be read first.
+      env: {
+        ...Object.fromEntries(
+          Object.entries(process.env).filter(
+            ([key]) => !["APPDATA", "USERPROFILE"].includes(key.toUpperCase()),
+          ),
+        ),
+        APPDATA: appData,
+        USERPROFILE: root,
+      },
+    },
+  });
+  const discovered = await createRunnerExecutor(
+    root,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    { discovery },
+  )({ action: "apps.discover", payload: {} });
+  const candidates = successfulOutput(discovered).candidates as {
+    name: string;
+    status: string;
+  }[];
+  const text = JSON.stringify(discovered);
+  assert(
+    candidates.some(
+      (candidate) =>
+        candidate.name === "fixture" && candidate.status === "ready",
+    ) &&
+      ![fixture, process.execPath, root].some(
+        (path) =>
+          text.includes(path) ||
+          text.includes(JSON.stringify(path).slice(1, -1)),
+      ) &&
+      !text.includes("fake-mcp-stdio"),
+    "apps.discover finds a Claude Desktop app by name, ready, without its path",
+    discovered,
+  );
+}
+// --- end app discovery ---
+// App discovery (sub-project 3): the compiled runner, under BUN_BE_BUN=1, stands in for `bun x`. The
+// binary and the app's folder sit in this workspace, so the path cmd.exe gets has spaces and Chinese.
+const spikeDir = join(root, "bunx spike 熊宝");
+mkdirSync(spikeDir, { recursive: true });
+const spikeRunner = await compileRunner(join(root, "bunx-spike-bin"));
+// Every result is printed before anything is asserted, so a red run still shows all of them, and a
+// `network` failure (npm registry unreachable) reads as "rerun", not as "bun x does not work".
+const spikeResults = await runBunxSpike(spikeRunner, spikeDir);
+for (const result of spikeResults)
+  console.log(JSON.stringify({ spike: true, ...result }));
+const spikeFailed = spikeResults.filter((result) => !result.passed);
+assert(
+  spikeFailed.length === 0,
+  spikeFailed.some((result) => result.failure === "network")
+    ? "bunx spike: the npm registry was unreachable; rerun before reading this as bun x not working"
+    : "bunx spike: the compiled runner stands in for bun x",
+  spikeFailed.map(({ check, failure }) => ({ check, failure })),
+);
 console.log("WINDOWS_PROBE_PASS");
