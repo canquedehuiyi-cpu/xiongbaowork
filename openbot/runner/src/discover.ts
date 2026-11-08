@@ -11,13 +11,26 @@ import { join } from "node:path";
 import { APP_NAME_LIMIT, type AppEntry } from "./apps";
 import { packageRunnerArgs, programOf, toBundledArgs } from "./bundled-runtime";
 import {
+  type CatalogEntry,
+  type CatalogFound,
+  defaultCatalogExists,
+  defaultCatalogProbe,
+  matchCatalog,
+  SHIPPED_CATALOG,
+} from "./discover-catalog";
+import {
   type ConfigSource,
   type DiscoveredSpec,
+  type FoundServer,
   readConfigServers,
   SOURCE_LABELS,
   SOURCE_SHORT,
 } from "./discover-configs";
-import { installedNames, type UninstallEntry } from "./discover-installed";
+import {
+  allInstalledNames,
+  INSTALLED_LIMIT,
+  type UninstallEntry,
+} from "./discover-installed";
 
 /**
  * The apps this Windows machine could offer the owner's 分身 (app discovery, spec §2): what other
@@ -90,6 +103,12 @@ export type DiscoverDeps = {
   /** The program a bare command runs, or undefined when it is not installed. */
   resolveCommand: (command: string) => string | undefined;
   now: () => number;
+  /** The built-in catalogue; the one compiled into the runner unless a test brings its own. */
+  catalog?: CatalogEntry[];
+  /** Whether a file exists, for the catalogue's `paths`. */
+  exists?: (path: string) => boolean;
+  /** Whether a loopback url answers an MCP `initialize`, for the catalogue's `port`. */
+  probe?: (url: string) => Promise<boolean>;
 };
 
 /** A reference may be at most this far ahead of the clock (another process's clock, a tick). */
@@ -276,16 +295,52 @@ function ensureKey(dataDir: string): Buffer {
 /** A name not yet taken (case-insensitively), within the 40 characters an app's name may have. */
 function uniqueName(
   name: string,
-  source: ConfigSource,
+  source: ConfigSource | "catalog",
   taken: Set<string>,
 ): string {
   if (!taken.has(name.toLowerCase())) return name;
+  const short = source === "catalog" ? "内置清单" : SOURCE_SHORT[source];
   for (let n = 1; ; n += 1) {
-    const suffix = `（${SOURCE_SHORT[source]}${n === 1 ? "" : ` ${n}`}）`;
+    const suffix = `（${short}${n === 1 ? "" : ` ${n}`}）`;
     const room = Math.max(1, APP_NAME_LIMIT - [...suffix].length);
     const candidate = `${[...name].slice(0, room).join("")}${suffix}`;
     if (!taken.has(candidate.toLowerCase())) return candidate;
   }
+}
+
+/** The installed programs (all of them, uncapped) and what the catalogue makes of this machine. */
+async function surveyMachine(
+  deps: DiscoverDeps,
+  readInstalledNames: boolean,
+): Promise<{
+  installed: string[];
+  catalog: CatalogFound[];
+  matched: Set<string>;
+}> {
+  let installed: string[] = [];
+  try {
+    if (readInstalledNames) {
+      installed = allInstalledNames(await deps.readInstalled());
+    }
+  } catch {
+    // No list of installed programs: the catalogue can still find what runs or sits at a known path.
+  }
+  let found: CatalogFound[] = [];
+  let matchedNames: string[] = [];
+  try {
+    const matched = await matchCatalog(deps.catalog ?? SHIPPED_CATALOG, {
+      env: deps.env,
+      installed,
+      installedNotRead: !readInstalledNames,
+      exists: deps.exists ?? defaultCatalogExists,
+      probe: deps.probe ?? defaultCatalogProbe,
+    });
+    found = matched.found;
+    matchedNames = matched.matchedInstalled;
+  } catch {
+    // A broken catalogue must not take the config sources down with it.
+  }
+  return { installed, catalog: found, matched: new Set(matchedNames) };
 }
 
 /** Every candidate as issued at `issued` (seconds), with the spec it stands for. */
@@ -293,6 +348,7 @@ function scan(
   deps: DiscoverDeps,
   key: Buffer,
   issued: number,
+  fromCatalog: CatalogFound[],
 ): { candidate: Candidate; spec: DiscoveredSpec; mac: string }[] {
   const registered = new Map<string, AppEntry>();
   let apps: AppEntry[] = [];
@@ -309,10 +365,12 @@ function scan(
   const seen = new Set<string>();
   const taken = new Set<string>();
   const out: { candidate: Candidate; spec: DiscoveredSpec; mac: string }[] = [];
-  for (const found of readConfigServers({
-    env: deps.env,
-    readText: deps.readText,
-  })) {
+  // The configs come first, so an app one of them already runs keeps that source.
+  const everything: (FoundServer | CatalogFound)[] = [
+    ...readConfigServers({ env: deps.env, readText: deps.readText }),
+    ...fromCatalog,
+  ];
+  for (const found of everything) {
     if (out.length >= MAX_CANDIDATES) break;
     const spec = unwrapShell(found.spec);
     const identity = identityOf(spec);
@@ -327,7 +385,10 @@ function scan(
         ref: `cand_${issued.toString(36)}_${mac}`,
         name,
         source: found.source,
-        sourceLabel: SOURCE_LABELS[found.source],
+        sourceLabel:
+          found.source === "catalog"
+            ? found.sourceLabel
+            : SOURCE_LABELS[found.source],
         kind: spec.kind,
         enabled: app?.enabled ?? false,
         ...(app ? { app: app.ref } : {}),
@@ -353,16 +414,16 @@ export async function discoverApps(
     // The fs error names the data folder, and with it the owner's account: it must not leave.
     throw new DiscoverError(DISCOVER_KEY_FAILED);
   }
-  const installed = (async () => {
-    try {
-      return installedNames(await deps.readInstalled());
-    } catch {
-      return [];
-    }
-  })();
+  const survey = await surveyMachine(deps, true);
   const issued = Math.floor(deps.now() / 1000);
-  const candidates = scan(deps, key, issued).map(({ candidate }) => candidate);
-  return { platform: deps.platform, candidates, installed: await installed };
+  const candidates = scan(deps, key, issued, survey.catalog).map(
+    ({ candidate }) => candidate,
+  );
+  // What the catalogue recognised is offered as an app now, so it leaves the plain list.
+  const installed = survey.installed
+    .filter((name) => !survey.matched.has(name))
+    .slice(0, INSTALLED_LIMIT);
+  return { platform: deps.platform, candidates, installed };
 }
 
 /** The candidate a reference was issued for, as this machine's config says now, or why not. */
@@ -391,7 +452,9 @@ export async function findCandidate(
   if (!key) return expired;
   const wanted = Buffer.from(mac);
   let match: { candidate: Candidate; spec: DiscoveredSpec } | undefined;
-  for (const item of scan(deps, key, issued)) {
+  // A lookup by reference never reads the installed programs.
+  const survey = await surveyMachine(deps, false);
+  for (const item of scan(deps, key, issued, survey.catalog)) {
     const actual = Buffer.from(item.mac);
     if (
       actual.length === wanted.length &&
