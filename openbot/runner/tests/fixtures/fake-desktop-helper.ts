@@ -14,6 +14,12 @@
  *   session0  the ready line says `"session":0,"interactive":false`
  *   split     answers with a result holding 熊宝员工, written in two pieces cut inside a character
  *
+ * In ok mode `tree` answers per `hwnd`: a Window, an Edit holding 熊宝员工 and a password Edit that
+ * (on purpose) still carries a value. A `from` whose snapshot id is not that window's latest `tree`
+ * snapshot is `stale`; a refuseWords entry found in the title is `sensitive` (message: the word).
+ * `screenshot` answers a 1x1 PNG, or `failed`/`minimized` when FAKE_DESKTOP_SHOT=minimized.
+ * FAKE_DESKTOP_LONG=1 makes names, values and titles 500 熊.
+ *
  * Test hooks in any answering mode: a request with `fail: "<code>"` is answered
  * `{"ok":false,"code":"<code>","message":"fake failure"}`; one with `exit: true` makes the helper
  * exit with 3 without answering; one with `flood: N` writes N characters with no newline and never
@@ -40,6 +46,68 @@ const WINDOWS = [
     process: "chrome",
   },
 ];
+
+const LONG = process.env.FAKE_DESKTOP_LONG === "1";
+const PNG_1X1 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+/** The latest `tree` snapshot id answered for each window handle. */
+const latestSnapshot = new Map<string, string>();
+
+function titleOf(window: { title: string }): string {
+  return LONG ? "熊".repeat(500) : window.title;
+}
+
+function windowInfo(window: (typeof WINDOWS)[number]) {
+  return {
+    ...window,
+    title: titleOf(window),
+    focused: false,
+    minimized: false,
+  };
+}
+
+function treeReply(id: unknown, request: Record<string, unknown>) {
+  const window = WINDOWS.find((entry) => entry.hwnd === request.hwnd);
+  if (!window)
+    return { id, ok: false, code: "no_window", message: "no such window" };
+  const words = Array.isArray(request.refuseWords)
+    ? (request.refuseWords as string[])
+    : [];
+  const hit = words.find((word) => word !== "" && window.title.includes(word));
+  if (hit) return { id, ok: false, code: "sensitive", message: hit };
+  if (typeof request.from === "string") {
+    const from = request.from.split(":")[0];
+    if (from !== latestSnapshot.get(window.hwnd))
+      return { id, ok: false, code: "stale", message: "stale ref" };
+  }
+  if (typeof request.snapshot === "string")
+    latestSnapshot.set(window.hwnd, request.snapshot);
+  const text = LONG ? "熊".repeat(500) : "熊宝员工";
+  return {
+    id,
+    ok: true,
+    result: {
+      window: windowInfo(window),
+      truncated: false,
+      elements: [
+        { type: "Window", name: titleOf(window), depth: 0 },
+        {
+          type: "Edit",
+          name: LONG ? text : "文本编辑器",
+          depth: 1,
+          value: text,
+        },
+        {
+          type: "Edit",
+          name: "密码",
+          depth: 1,
+          password: true,
+          value: "hunter2",
+        },
+      ],
+    },
+  };
+}
 
 function line(text: string) {
   process.stdout.write(`${text}\n`);
@@ -74,7 +142,18 @@ async function answer(request: Record<string, unknown>) {
   if (typeof request.fail === "string") {
     reply = { id, ok: false, code: request.fail, message: "fake failure" };
   } else if (request.op === "windows") {
-    reply = { id, ok: true, result: { windows: WINDOWS } };
+    reply = { id, ok: true, result: { windows: WINDOWS.map(windowInfo) } };
+  } else if (request.op === "tree" && mode === "ok" && "hwnd" in request) {
+    reply = treeReply(id, request);
+  } else if (
+    request.op === "screenshot" &&
+    mode === "ok" &&
+    "hwnd" in request
+  ) {
+    reply =
+      process.env.FAKE_DESKTOP_SHOT === "minimized"
+        ? { id, ok: false, code: "failed", message: "minimized" }
+        : { id, ok: true, result: { base64: PNG_1X1, width: 1, height: 1 } };
   } else if (mode === "split") {
     reply = { id, ok: true, result: { op: request.op, text: "熊宝员工" } };
   } else {
