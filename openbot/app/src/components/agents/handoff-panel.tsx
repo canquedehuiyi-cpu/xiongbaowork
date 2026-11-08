@@ -136,6 +136,7 @@ export function HandoffPanel({ agentId }: { agentId: string }) {
                 <AbstractAvatar
                   name={candidate.name}
                   seed={candidate.avatarSeed}
+                  portrait={{ kind: "coworker", id: candidate.id }}
                   size={28}
                 />
               </ItemMedia>

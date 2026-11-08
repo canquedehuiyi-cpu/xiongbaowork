@@ -164,7 +164,12 @@ export function CoworkerCard({
       )}
       data-testid="waker-card"
     >
-      <AbstractAvatar name={agent.name} seed={agent.avatarSeed} size={48} />
+      <AbstractAvatar
+        name={agent.name}
+        seed={agent.avatarSeed}
+        portrait={{ kind: "coworker", id: agent.id }}
+        size={48}
+      />
       {/*
         The title row. The two corner clusters live inside it so a screen reader hears the status and
         the tags with the name, but they are positioned against the card (nothing between is

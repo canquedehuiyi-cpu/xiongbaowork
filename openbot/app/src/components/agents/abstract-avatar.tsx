@@ -1,12 +1,8 @@
-import { QueryClientContext, useQuery } from "@tanstack/react-query";
+import { QueryClientContext } from "@tanstack/react-query";
 import Avatar from "boring-avatars";
 import { useContext } from "react";
-import { PRESET_IMAGES } from "@/components/portraits/preset-images";
-import {
-  type PortraitKind,
-  portraitIndex,
-  portraitsQueryOptions,
-} from "@/lib/portraits/queries";
+import { usePortraitSrc } from "@/components/portraits/use-portrait";
+import type { PortraitKind } from "@/lib/portraits/queries";
 
 type FaceProps = {
   name: string;
@@ -39,15 +35,7 @@ export function AbstractAvatar(props: FaceProps) {
 function PortraitFace(
   props: FaceProps & { portrait: { kind: PortraitKind; id: string } },
 ) {
-  const portraits = useQuery(portraitsQueryOptions());
-  const chosen = portraitIndex(portraits.data).get(
-    `${props.portrait.kind}:${props.portrait.id}`,
-  );
-  const src = chosen
-    ? chosen.preset
-      ? PRESET_IMAGES[chosen.preset]
-      : chosen.imageUrl
-    : null;
+  const src = usePortraitSrc(props.portrait.kind, props.portrait.id);
   return <Face {...props} src={src ?? undefined} />;
 }
 

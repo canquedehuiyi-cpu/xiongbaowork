@@ -195,6 +195,7 @@ function AgentDialogBody({ agentId }: { agentId: string }) {
             <AbstractAvatar
               name={profile.name}
               seed={profile.avatarSeed}
+              portrait={{ kind: "coworker", id: profile.id }}
               size={36}
             />
             <div className="flex min-w-0 flex-col">
@@ -238,6 +239,7 @@ function AgentDialogBody({ agentId }: { agentId: string }) {
               <AbstractAvatar
                 name={profile.name}
                 seed={profile.avatarSeed}
+                portrait={{ kind: "coworker", id: profile.id }}
                 size={28}
               />
               <span className="truncate text-sm font-medium">

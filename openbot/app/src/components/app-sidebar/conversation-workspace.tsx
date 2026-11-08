@@ -433,6 +433,7 @@ function WorkspaceHeader({
             decorative
             name={name}
             seed={agent?.avatarSeed ?? agentId}
+            portrait={{ kind: "coworker", id: agentId }}
             size={32}
           />
         </span>

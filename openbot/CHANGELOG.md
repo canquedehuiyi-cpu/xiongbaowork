@@ -8,6 +8,14 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+- **Coworkers and groups can be given their own 头像.** A coworker's manager, or anybody for a
+  group, picks one of 熊宝's five expressions or uploads a picture; it replaces the drawn face
+  everywhere that coworker or group appears (sidebar, cards, detail page, task board). The browser
+  squares and re-encodes the picture to at most 256×256; the server accepts only PNG, JPEG, WebP and
+  GIF read from the file's own bytes (never SVG), at most 256 KiB, and shows a coworker's face only to
+  those who may see that coworker. New table `portraits` (recovery overlay 0144), routes under
+  `/api/portraits`. Change a coworker's face from its detail page; a group's from 更换头像 on its card.
+
 - **The workbench takes its colours from the logo, as iOS-style glass.** The primary action is the
   京剧脸谱 red of 熊宝's mask, focus rings and highlights are the logo frame's gold, and the grounds are
   warm black (dark) or warm paper (light), lit by a red and a gold glow. Cards, popovers and the

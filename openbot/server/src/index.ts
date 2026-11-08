@@ -361,6 +361,9 @@ import {
 import { createProjectContext } from "./projects/context";
 import { createProjectRoutes } from "./projects/routes";
 import { createProjectStore } from "./projects/store";
+import { coworkerFaceAccess } from "./portraits/coworker-access";
+import { createPortraitRoutes } from "./portraits/routes";
+import { createPortraitStore } from "./portraits/store";
 import { createUserPreferencesStore } from "./user-preferences";
 import { createVoiceSessionStore } from "./voice/sessions";
 import { createVoiceSummarizer } from "./voice/summary";
@@ -4514,6 +4517,18 @@ await startupLifecycle.run(async (startup) => {
     "/api/waker-groups",
     createWakerGroupRoutes(
       createWakerGroupStore(database),
+      config.singleUser
+        ? createDevRequireUser()
+        : createRequireUser(auth as AuthService, roleRepository),
+    ),
+  );
+
+  // 头像: the faces people chose for coworkers and groups (migration 0144).
+  app.route(
+    "/api/portraits",
+    createPortraitRoutes(
+      createPortraitStore(database),
+      coworkerFaceAccess(agentProfileStore),
       config.singleUser
         ? createDevRequireUser()
         : createRequireUser(auth as AuthService, roleRepository),

@@ -23,6 +23,7 @@ export * from "./passwords";
 export * from "./pipeline";
 export * from "./plans";
 export * from "./plugins";
+export * from "./portraits";
 export * from "./proactive";
 export * from "./responsibilities";
 export * from "./roles";

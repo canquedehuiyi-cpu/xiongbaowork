@@ -13,6 +13,7 @@ import {
 } from "@/components/bot-profile/profile";
 import { PageSection, PageShell } from "@/components/layout/page-shell";
 import { QueryError } from "@/components/layout/query-error";
+import { EditablePortrait } from "@/components/portraits/portrait-picker";
 import { ProjectPicker } from "@/components/projects/project-picker";
 import { Button } from "@/components/ui/button";
 import {
@@ -145,18 +146,29 @@ function WakerDetailPage() {
       title={profile.name}
     >
       <div className="mt-4 flex items-center gap-3">
-        <AbstractAvatar
-          name={profile.name}
-          seed={profile.avatarSeed}
-          size={40}
-        />
+        {profile.canManage ? (
+          <EditablePortrait
+            id={profile.id}
+            kind="coworker"
+            name={profile.name}
+            seed={profile.avatarSeed}
+            size={40}
+          />
+        ) : (
+          <AbstractAvatar
+            name={profile.name}
+            portrait={{ kind: "coworker", id: profile.id }}
+            seed={profile.avatarSeed}
+            size={40}
+          />
+        )}
         <div className="min-w-0">
           {profile.roleDescription ? (
             <p className="line-clamp-2 text-sm">{profile.roleDescription}</p>
           ) : null}
           <p className="text-muted-foreground text-sm">
             {profile.canManage
-              ? "你是它的主人，可以在装配页修改它。"
+              ? "你是它的主人，点头像可以更换，其它设置在装配页修改。"
               : "这位员工归别人所有，这里只能看。"}
           </p>
         </div>
