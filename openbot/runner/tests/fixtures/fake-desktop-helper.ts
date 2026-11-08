@@ -16,12 +16,19 @@
  *
  * Test hooks in any answering mode: a request with `fail: "<code>"` is answered
  * `{"ok":false,"code":"<code>","message":"fake failure"}`; one with `exit: true` makes the helper
- * exit with 3 without answering. `maxInflight` is the most requests this process has held unanswered
+ * exit with 3 without answering; one with `flood: N` writes N characters with no newline and never
+ * answers; one with `echo: true` first writes the request itself back (an id, but no `ok`).
+ * FAKE_DESKTOP_STDERR_FILL=N makes crash mode write N copies of 错 to stderr before its error.
+ * Every request line received is appended to FAKE_DESKTOP_LOG (when set), as it arrived.
+ * `maxInflight` is the most requests this process has held unanswered
  * at once, so a test can see whether the host ever sent a second request before the first was done.
  * The helper exits when its stdin closes, as the real one does.
  */
 
+import { appendFileSync } from "node:fs";
+
 const mode = process.env.FAKE_DESKTOP_MODE ?? "ok";
+const log = process.env.FAKE_DESKTOP_LOG;
 const delayMs = Number(process.env.FAKE_DESKTOP_DELAY_MS ?? 5000);
 
 const WINDOWS = [
@@ -57,6 +64,11 @@ async function answer(request: Record<string, unknown>) {
   maxInflight = Math.max(maxInflight, inflight);
   if (mode === "slow") await sleep(delayMs);
   if (request.exit === true) process.exit(3);
+  if (typeof request.flood === "number") {
+    process.stdout.write("x".repeat(request.flood));
+    return;
+  }
+  if (request.echo === true) line(JSON.stringify(request));
   const id = request.id;
   let reply: Record<string, unknown>;
   if (typeof request.fail === "string") {
@@ -109,12 +121,14 @@ process.stdin.on("data", (chunk: Buffer) => {
     pending = pending.slice(at + 1);
     at = pending.indexOf("\n");
     if (mode === "crash") {
-      process.stderr.write("Add-Type : 编译错误\n");
+      const fill = Number(process.env.FAKE_DESKTOP_STDERR_FILL ?? 0);
+      process.stderr.write(`${"错".repeat(fill)}Add-Type : 编译错误\n`);
       process.exit(1);
     }
     let request: unknown;
     try {
       request = JSON.parse(text);
+      if (log) appendFileSync(log, `${text}\n`);
     } catch {
       continue;
     }

@@ -23,7 +23,11 @@ import {
  * streaming UTF-8 decoder, so a Chinese character cut across two chunks arrives whole.
  *
  * READ ONLY AT THIS LAYER TOO. Only the ops in `ops` (by default `HELPER_OPS`: windows, tree,
- * screenshot) are ever written to the helper. Anything else is refused here as `unsupported`,
+ * screenshot) are ever written to the helper. The request is frozen into its wire form the moment
+ * `request()` is called (serialised once, copied out of the caller's object), and it is that frozen
+ * copy which is checked and, later, written: a caller cannot change the op after the check by
+ * mutating its object while the request waits, by a getter that answers differently the second
+ * time, or by a `toJSON` of its own. Anything else is refused here as `unsupported`,
  * unsent, without starting a helper. The helper refuses other ops on its own as well; the two locks
  * stand independently.
  *
@@ -56,18 +60,28 @@ export type HelperReady = {
   interactive: boolean;
 };
 
-/** Every op the host will write to the helper. Others are refused here, and no helper is started. */
-export const HELPER_OPS: ReadonlySet<string> = new Set([
+const READ_OPS: readonly string[] = Object.freeze([
   "windows",
   "tree",
   "screenshot",
 ]);
+
+/**
+ * Every op the host will write to the helper. Others are refused here, and no helper is started.
+ * For reading only: each host checks its own private copy, so changing this set changes no host.
+ */
+export const HELPER_OPS: ReadonlySet<string> = new Set(READ_OPS);
 
 const STDERR_TAIL_BYTES = 4096;
 /** Raw stderr kept while it arrives; the tail is cut from this. */
 const STDERR_KEEP_CHARS = 65_536;
 /** How long close() waits for a killed helper to be gone. */
 const CLOSE_WAIT_MS = 3000;
+/**
+ * The longest stdout line kept while waiting for its newline. A 1280 px PNG in base64 is a few MB;
+ * a helper that writes more than this without a newline is broken, and is ended.
+ */
+const MAX_LINE_CHARS = 32 * 1024 * 1024;
 
 const HELPER_CODES: ReadonlySet<string> = new Set<DesktopErrorCode>([
   "not_windows",
@@ -163,6 +177,8 @@ export function createDesktopHost(opts: {
   ops?: ReadonlySet<string>;
   /** Called whenever a helper process has exited, for whatever reason. */
   onExit?: () => void;
+  /** The longest stdout line the host waits for; `MAX_LINE_CHARS` unless a test needs it smaller. */
+  maxLineChars?: number;
 }): {
   request<T>(
     op: { op: string; [key: string]: unknown },
@@ -178,7 +194,9 @@ export function createDesktopHost(opts: {
   const idleMs = opts.idleMs ?? DESKTOP_LIMITS.helperIdleMs;
   const startMs = opts.startMs ?? DESKTOP_LIMITS.startTimeoutMs;
   const defaultTimeoutMs = opts.timeoutMs ?? DESKTOP_LIMITS.requestTimeoutMs;
-  const ops = opts.ops ?? HELPER_OPS;
+  // Copied, so neither a later change to the caller's set nor to `HELPER_OPS` widens this host.
+  const ops: ReadonlySet<string> = new Set(opts.ops ?? READ_OPS);
+  const maxLineChars = opts.maxLineChars ?? MAX_LINE_CHARS;
 
   let current: Helper | undefined;
   /** Set once a helper reported session 0 or no interactive desktop: none ever will. */
@@ -291,6 +309,8 @@ export function createDesktopHost(opts: {
       }
       const pending = helper.pending;
       if (!pending || record.id !== pending.id) return;
+      // An id but no verdict (a request echoed back, say) is not an answer.
+      if (record.ok !== true && record.ok !== false) return;
       helper.pending = undefined;
       if (record.ok === true) {
         pending.resolve(record.result);
@@ -309,15 +329,36 @@ export function createDesktopHost(opts: {
 
     const outDecoder = new TextDecoder("utf-8");
     let partial = "";
+    /** How much of `partial` is known to hold no newline, so a long line is not rescanned. */
+    let scanned = 0;
+    let overflowed = false;
     child.stdout.on("data", (chunk: Buffer) => {
+      if (overflowed) return;
       partial += outDecoder.decode(chunk, { stream: true });
-      let at = partial.indexOf("\n");
+      let at = partial.indexOf("\n", scanned);
       while (at !== -1) {
         const line = partial.slice(0, at);
         partial = partial.slice(at + 1);
         onLine(line);
         at = partial.indexOf("\n");
       }
+      scanned = partial.length;
+      if (partial.length <= maxLineChars) return;
+      overflowed = true;
+      partial = "";
+      const message = `the desktop helper wrote a line longer than ${maxLineChars} characters`;
+      failStart(
+        new DesktopHelperError(
+          "start_failed",
+          message,
+          false,
+          stderrTail(helper),
+        ),
+      );
+      const pending = helper.pending;
+      helper.pending = undefined;
+      pending?.reject(new DesktopHelperError("failed", message, true));
+      stop(helper);
     });
     const errDecoder = new TextDecoder("utf-8");
     child.stderr.on("data", (chunk: Buffer) => {
@@ -390,7 +431,8 @@ export function createDesktopHost(opts: {
   };
 
   const runOne = async <T>(
-    op: { op: string; [key: string]: unknown },
+    /** The frozen request without its id: a serialised JSON object, `{"op":...}`. */
+    body: string,
     signal: AbortSignal | undefined,
     timeoutMs: number,
   ): Promise<T> => {
@@ -458,7 +500,8 @@ export function createDesktopHost(opts: {
         );
         onAbort = () => give(abortError(true));
         signal?.addEventListener("abort", onAbort, { once: true });
-        helper.child.stdin.write(`${JSON.stringify({ ...op, id })}\n`);
+        // The id goes in front of the frozen body; nothing of the caller's is serialised here.
+        helper.child.stdin.write(`{"id":${id},${body.slice(1)}\n`);
       });
     } finally {
       clearTimeout(timer);
@@ -471,6 +514,9 @@ export function createDesktopHost(opts: {
     const helper = current;
     if (!helper) return;
     idle = setTimeout(() => stop(helper), idleMs);
+    // The helper's own pipes keep the runner's event loop alive while it runs, so this does not let
+    // the runner exit early; the runner's shutdown calls close(). It only keeps the timer itself
+    // from being a reason to stay.
     idle.unref?.();
   };
 
@@ -479,14 +525,36 @@ export function createDesktopHost(opts: {
       op: { op: string; [key: string]: unknown },
       requestOpts?: { signal?: AbortSignal; timeoutMs?: number },
     ): Promise<T> {
-      if (!ops.has(op.op))
+      // Frozen now: what is checked below is exactly what will be written.
+      let wire: unknown;
+      try {
+        wire = JSON.parse(JSON.stringify(op));
+      } catch {
         return Promise.reject(
           new DesktopHelperError(
-            "unsupported",
-            `unsupported op: ${op.op}`,
+            "failed",
+            "the desktop request is not JSON",
             false,
           ),
         );
+      }
+      if (
+        typeof wire !== "object" ||
+        wire === null ||
+        Array.isArray(wire) ||
+        typeof (wire as { op?: unknown }).op !== "string" ||
+        !ops.has((wire as { op: string }).op)
+      )
+        return Promise.reject(
+          new DesktopHelperError(
+            "unsupported",
+            `unsupported op: ${String((wire as { op?: unknown } | null)?.op)}`,
+            false,
+          ),
+        );
+      // The host numbers requests itself; a caller's id is never written.
+      const { id: _callerId, ...fields } = wire as Record<string, unknown>;
+      const body = JSON.stringify(fields);
       const signal = requestOpts?.signal;
       if (signal?.aborted) return Promise.reject(abortError(false));
       const timeoutMs = requestOpts?.timeoutMs ?? defaultTimeoutMs;
@@ -508,7 +576,7 @@ export function createDesktopHost(opts: {
             false,
           );
         try {
-          return await runOne<T>(op, signal, timeoutMs);
+          return await runOne<T>(body, signal, timeoutMs);
         } finally {
           scheduleIdle();
         }
