@@ -12,10 +12,14 @@ import { createRunnerDispatcher } from "../../runner/src/dispatch";
 import { createRunnerExecutor } from "../../runner/src/execute";
 import { createActionJournal } from "../../runner/src/journal";
 import { TOOL_DISABLED } from "../src/approvals/policy";
-import { createApprovalService } from "../src/approvals/service";
+import {
+  createApprovalService,
+  DECLINED_BY_PERSON,
+} from "../src/approvals/service";
 import { createApprovalStore } from "../src/approvals/store";
 import {
   type ApprovalContinuation,
+  ApprovalRefusedError,
   withApprovalContext,
 } from "../src/approvals/types";
 import { createAuditStore } from "../src/audit";
@@ -413,14 +417,16 @@ test("the owner's run gets both desktop tools; a teammate and a catalogue Bot ge
       windowId: NOTEPAD,
     }),
   ).rejects.toThrow("只有员工的主人本人");
+  // A catalogue Bot has no owner, so no machine to find: refused before anything is sent.
+  const noMachine = `${device.catalogueBot} does not belong to a tenant with machines of its own.`;
   await expect(
     device.gateway.listDesktopWindows(device.catalogueBot, device.actor),
-  ).rejects.toThrow();
+  ).rejects.toThrow(noMachine);
   await expect(
     device.gateway.snapshotDesktop(device.catalogueBot, device.actor, {
       windowId: NOTEPAD,
     }),
-  ).rejects.toThrow();
+  ).rejects.toThrow(noMachine);
   expect(device.sent("desktop.windows")).toHaveLength(0);
   expect(device.sent("desktop.snapshot")).toHaveLength(0);
   expect(device.helperLog()).toEqual([]);
@@ -536,9 +542,13 @@ test("a window titled 招商银行 waits for approval; approve reads it once, re
   await runAsTenant(device.tenant, () =>
     device.service.decide(device.tenant, rejected?.id as string, "deny"),
   );
-  await expect(
-    device.call("computer_desktop_snapshot", { windowId: BANK }, "reject-bank"),
-  ).rejects.toThrow();
+  const denied = await device
+    .call("computer_desktop_snapshot", { windowId: BANK }, "reject-bank")
+    .catch((error: unknown) => error);
+  // Told it was declined, not left waiting for an answer that has already come.
+  expect(denied).not.toBeInstanceOf(HeadlessToolSuspension);
+  expect(denied).toBeInstanceOf(ApprovalRefusedError);
+  expect((denied as Error).message).toBe(DECLINED_BY_PERSON);
   expect(device.trees()).toHaveLength(1);
 }, 30_000);
 
