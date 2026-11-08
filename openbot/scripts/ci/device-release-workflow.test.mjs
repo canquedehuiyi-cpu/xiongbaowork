@@ -1038,3 +1038,38 @@ test("the browser probe also runs on windows-latest, headed, and must print BROW
   for (const step of job.steps)
     expect(step["continue-on-error"]).toBeUndefined();
 });
+
+// Bun 1.3.14 cannot drive playwright-core on Windows (launch over the pipe and connectOverCDP both
+// time out; Bun 1.4.4 does both). The jobs that build or run what ships on a device therefore use
+// 1.4.4, and everything on the server side stays on the pinned 1.3.14.
+test("device jobs use Bun 1.4.4 and the server side stays on 1.3.14", () => {
+  const bunOf = (doc, name) =>
+    doc.jobs[name].steps
+      .filter((step) => String(step.uses ?? "").startsWith("oven-sh/setup-bun@"))
+      .map((step) => String(step.with["bun-version"]));
+  for (const name of [
+    "win1-windows",
+    "g5-browser-probe",
+    "g5-browser-probe-windows",
+    "device-bundle-linux",
+    "device-bundle-windows",
+    "device-bundle-macos",
+  ])
+    expect(bunOf(ci, name)).toEqual(["1.4.4"]);
+  for (const name of ["linux", "windows", "macos"])
+    expect(bunOf(workflow, name)).toEqual(["1.4.4"]);
+  // The clean-machine jobs run the server (migrate, serve) beside the installed device.
+  for (const name of [
+    "static",
+    "server-test",
+    "app-test",
+    "e2e-wakerflow",
+    "image",
+    "workspaces-test",
+    "desktop-windows",
+    "device-shell",
+    "device-clean-linux",
+  ])
+    expect(bunOf(ci, name)).toEqual(["1.3.14"]);
+  expect(bunOf(workflow, "clean-linux")).toEqual(["1.3.14"]);
+});
