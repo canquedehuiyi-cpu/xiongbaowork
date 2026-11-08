@@ -35,6 +35,15 @@ export const DESKTOP_UNAVAILABLE_RULE = "desktop.unavailable";
 /** Outlasts the runner's own deadlines: helper start 30s plus a request of 15s, with room to spare. */
 export const DESKTOP_BACKSTOP_MS = 90_000;
 
+/** A runner from before desktop viewing answers "Nothing on this machine handles ...". */
+export const DESKTOP_OLD_RUNNER =
+  "设备端版本太旧，不支持查看桌面，请先更新设备端。";
+/** The machine could not be asked for its windows (offline, paused, too slow). */
+export const DESKTOP_LIST_FAILED = desktopMessage(
+  "failed",
+  "没能取得这台电脑的窗口列表，请确认设备在线后再试。",
+);
+
 /** Why someone other than the Bot's owner cannot use the owner's desktop. */
 export const DESKTOP_OWNER_ONLY =
   "桌面操作在员工主人自己的电脑上，只有员工的主人本人才能让员工使用。";
@@ -119,6 +128,20 @@ export function createDesktopMethods(deps: {
   post: DesktopPost;
   windows: DesktopWindowCache;
 }) {
+  /** The machine's answer, with an old runner's English "does not handle this" made Chinese. */
+  const post = async <T>(...args: Parameters<DesktopPost>): Promise<T> => {
+    try {
+      return await deps.post<T>(...args);
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message.startsWith("Nothing on this machine handles")
+      )
+        throw new Error(DESKTOP_OLD_RUNNER);
+      throw error;
+    }
+  };
+
   /**
    * The owner's machine, or a refusal: no machine, or someone other than the owner. The same lock as
    * the local apps: the desktop is the owner's, so nothing is sent for anyone else.
@@ -140,7 +163,7 @@ export function createDesktopMethods(deps: {
     botId: string,
     signal: AbortSignal | undefined,
   ): Promise<{ windows: DesktopWindow[] }> {
-    const result = await deps.post<{ windows?: unknown }>(
+    const result = await post<{ windows?: unknown }>(
       botId,
       "/desktop/windows",
       {},
@@ -222,7 +245,17 @@ export function createDesktopMethods(deps: {
       const key = desktopCacheKey(machine, botId);
       let window = deps.windows.find(key, windowId);
       if (!window) {
-        await fetchWindows(machine, botId, signal);
+        try {
+          await fetchWindows(machine, botId, signal);
+        } catch (error) {
+          // The person's Stop stays a Stop; anything else leaves one refusal row, not nothing.
+          if (signal?.aborted) throw error;
+          return refuse(
+            error instanceof Error && error.message === DESKTOP_OLD_RUNNER
+              ? DESKTOP_OLD_RUNNER
+              : DESKTOP_LIST_FAILED,
+          );
+        }
         window = deps.windows.find(key, windowId);
       }
       if (!window) return refuse(desktopMessage("no_window"));
@@ -250,7 +283,7 @@ export function createDesktopMethods(deps: {
          * machine is told it may read a sensitive window.
          */
         () =>
-          deps.post<DesktopSnapshot>(
+          post<DesktopSnapshot>(
             botId,
             "/desktop/snapshot",
             {
