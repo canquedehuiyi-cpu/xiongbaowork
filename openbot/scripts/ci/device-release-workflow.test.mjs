@@ -1022,3 +1022,19 @@ test("the CI deb is staged under its release name with a SHA256SUMS the sums pha
   expect(stage([]).status).not.toBe(0);
   expect(stage(["a_0.1.0_amd64.deb", "b_0.1.0_amd64.deb"]).status).not.toBe(0);
 });
+
+test("the browser probe also runs on windows-latest, headed, and must print BROWSER_PROBE_PASS", () => {
+  const job = ci.jobs["g5-browser-probe-windows"];
+  expect(job).toBeDefined();
+  expect(job["runs-on"]).toBe("windows-latest");
+  expect(job["continue-on-error"]).toBeUndefined();
+  const probe = job.steps.find((s) =>
+    String(s.run ?? "").includes("runner-browser-probe.ts --run --executable"),
+  );
+  expect(probe).toBeDefined();
+  expect(probe.run).not.toContain("--headless");
+  expect(probe.run).toContain("BROWSER_PROBE_PASS");
+  expect(probe.run).toContain('"passed":false');
+  for (const step of job.steps)
+    expect(step["continue-on-error"]).toBeUndefined();
+});
