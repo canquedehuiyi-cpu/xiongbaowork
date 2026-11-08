@@ -13,6 +13,8 @@ import type { AuditEventInput, AuditStore } from "../src/audit";
 import type { ComputerTransport } from "../src/computer/client";
 import {
   DESKTOP_BACKSTOP_MS,
+  DESKTOP_LIST_FAILED,
+  DESKTOP_OLD_RUNNER,
   DESKTOP_OWNER_ONLY,
   DESKTOP_UNAVAILABLE_RULE,
   desktopNoGate,
@@ -79,6 +81,8 @@ function harness(
     gateAnswer?: (candidate: ApprovalCandidate) => Promise<undefined>;
     refusal?: string;
     owner?: string;
+    failWindows?: Error;
+    failSnapshot?: Error;
   } = {},
 ) {
   const posts: Posted[] = [];
@@ -98,10 +102,12 @@ function harness(
     ): Promise<T> {
       posts.push({ address, botId, path, payload, timeoutMs });
       if (path === "/desktop/windows") {
+        if (options.failWindows) throw options.failWindows;
         const windows = lists.length > 1 ? lists.shift() : lists[0];
         return { windows: windows ?? [] } as T;
       }
       if (path === "/desktop/snapshot") {
+        if (options.failSnapshot) throw options.failSnapshot;
         const { windowId } = payload as { windowId: string };
         const window =
           [BANK, NOTEPAD, OTHER].find((w) => w.windowId === windowId) ?? BANK;
@@ -239,6 +245,67 @@ test("a cache miss lists again once; a window still missing is refused and never
     refusal: desktopMessage("no_window"),
     decision: { allowed: false, rule: DESKTOP_UNAVAILABLE_RULE },
   });
+});
+
+test("a failed relist on a cache miss is audited once as desktop.unavailable and keeps the machine's own error", async () => {
+  const offline = new Error("设备不在线");
+  const h = harness({ failWindows: offline });
+  const attempt = h.gateway.snapshotDesktop("bot-1", ACTOR, {
+    windowId: OTHER.windowId,
+  });
+  // The caller still sees the machine's own answer, of its own type (an offline device stays offline).
+  await expect(attempt).rejects.toBe(offline);
+  expect(h.payloads()).toHaveLength(1);
+  expect(h.payloads()[0]).toMatchObject({
+    action: "computer_desktop_snapshot",
+    refusal: "设备不在线",
+    decision: { allowed: false, rule: DESKTOP_UNAVAILABLE_RULE },
+  });
+});
+
+test("a relist that fails with no message is audited with the generic list failure", async () => {
+  const h = harness({ failWindows: new Error("") });
+  await expect(
+    h.gateway.snapshotDesktop("bot-1", ACTOR, { windowId: OTHER.windowId }),
+  ).rejects.toThrow();
+  expect(h.payloads()).toHaveLength(1);
+  expect(h.payloads()[0]).toMatchObject({ refusal: DESKTOP_LIST_FAILED });
+});
+
+test("a Stop during the relist is not turned into a refusal", async () => {
+  const stop = new Error("aborted");
+  const controller = new AbortController();
+  controller.abort();
+  const h = harness({ failWindows: stop });
+  await expect(
+    h.gateway.snapshotDesktop(
+      "bot-1",
+      ACTOR,
+      { windowId: OTHER.windowId },
+      controller.signal,
+    ),
+  ).rejects.toBe(stop);
+  expect(h.rows).toHaveLength(0);
+});
+
+test("an old runner's answer is the Chinese update hint, for the list and the snapshot", async () => {
+  const old = new Error('Nothing on this machine handles "desktop.windows".');
+  const list = harness({ failWindows: old });
+  await expect(list.gateway.listDesktopWindows("bot-1", ACTOR)).rejects.toThrow(
+    DESKTOP_OLD_RUNNER,
+  );
+  expect(JSON.stringify(list.rows)).not.toContain("Nothing on this machine");
+  const read = harness({ failSnapshot: old });
+  await read.gateway.listDesktopWindows("bot-1", ACTOR);
+  await expect(
+    read.gateway.snapshotDesktop("bot-1", ACTOR, { windowId: BANK.windowId }),
+  ).rejects.toThrow(DESKTOP_OLD_RUNNER);
+  expect(JSON.stringify(read.rows)).not.toContain("Nothing on this machine");
+  // A relist that finds the old runner says so, not the generic failure.
+  const miss = harness({ failWindows: old });
+  await expect(
+    miss.gateway.snapshotDesktop("bot-1", ACTOR, { windowId: OTHER.windowId }),
+  ).rejects.toThrow(DESKTOP_OLD_RUNNER);
 });
 
 test("a cache miss that the second listing finds is read", async () => {

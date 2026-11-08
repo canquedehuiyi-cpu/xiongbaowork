@@ -144,6 +144,12 @@ const BANNED = [
   "SendMessage",
   "SendKeys",
   "Clipboard",
+  // WinForms that pops up, steals focus or clicks (the assembly is only for Screen.PrimaryScreen).
+  ".Show(",
+  "MessageBox",
+  ".Focus(",
+  ".Activate(",
+  ".PerformClick(",
   // UI Automation that acts.
   "InvokePattern",
   "TogglePattern",
@@ -163,6 +169,11 @@ const BANNED = [
   ".ScrollIntoView(",
   ".Invoke(",
   ".Close(",
+  ".Expand(",
+  ".Collapse(",
+  ".Toggle(",
+  "SetCurrentView",
+  "MultipleViewPattern",
   // Processes.
   "Process.Start",
   "new Process",
@@ -325,6 +336,23 @@ describe("helper.cs source", () => {
       ).sort(),
     ).toEqual(
       ["GetDelegateForFunctionPointer", "GetProcAddress", "LoadLibrary"].sort(),
+    );
+    expect(
+      bannedIn(
+        "form . Show (); MessageBox.Show(x); b.PerformClick(); w.Activate(); c.Focus(); e.Expand(); e.Collapse(); e.Toggle(); v.SetCurrentView(1)",
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        ".Show(",
+        "MessageBox",
+        ".PerformClick(",
+        ".Activate(",
+        ".Focus(",
+        ".Expand(",
+        ".Collapse(",
+        ".Toggle(",
+        "SetCurrentView",
+      ]),
     );
   });
 
