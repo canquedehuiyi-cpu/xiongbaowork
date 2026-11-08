@@ -223,6 +223,8 @@ type TenantChannel = {
 export type TenantPackage = {
   tenantId: string;
   productName: string;
+  /** The product's name in English (`tenant.english_name`), drawn beside the Chinese one. Optional. */
+  englishName?: string;
   stylesheet: string | null;
   agents: TenantAgent[];
   /** Remote agents explicitly disabled by a blank endpoint, not arbitrary removed YAML rows. */
@@ -278,6 +280,7 @@ export type ApplicationConfiguration = {
   brand: {
     tenantId: string;
     productName: string;
+    englishName?: string;
   };
 };
 
@@ -296,6 +299,9 @@ export function createApplicationConfiguration(
     brand: {
       tenantId: tenantPackage.tenantId,
       productName: tenantPackage.productName,
+      ...(tenantPackage.englishName
+        ? { englishName: tenantPackage.englishName }
+        : {}),
     },
   };
 }
@@ -680,6 +686,14 @@ export function validateTenantPackage(files: PackageFiles): TenantPackage {
   return {
     tenantId: requiredString(tenant.id, "tenant.id"),
     productName: requiredString(tenant.product_name, "tenant.product_name"),
+    ...(tenant.english_name === undefined
+      ? {}
+      : {
+          englishName: requiredString(
+            tenant.english_name,
+            "tenant.english_name",
+          ),
+        }),
     stylesheet: skin
       ? requiredString(skin.stylesheet, "skin.stylesheet")
       : null,

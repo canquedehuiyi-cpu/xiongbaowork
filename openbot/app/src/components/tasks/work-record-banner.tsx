@@ -29,7 +29,7 @@ const HATCH =
   "pointer-events-none absolute inset-0 [background-image:repeating-linear-gradient(65deg,transparent_0_27px,color-mix(in_oklab,var(--foreground)_6%,transparent)_27px_28px)] [mask-image:repeating-linear-gradient(180deg,black_0_14px,transparent_14px_34px)]";
 
 /**
- * The 工作记录 panel, as the reference draws it: a green-tinted rounded panel, its title top left and
+ * The 工作记录 panel, laid out as the reference draws it: a rounded panel tinted with the logo's gold, its title top left and
  * its own filters top right, then the four cards and the status line under them. The page owns what
  * goes in it; this owns the panel.
  *
@@ -48,7 +48,7 @@ export function WorkRecordBanner({
   return (
     <section
       aria-label="工作记录"
-      className="relative mt-[37px] overflow-hidden rounded-[10px] border border-primary/25 bg-primary/10 px-[14px] pt-[12px] pb-[23px] dark:border-[#263d26] dark:bg-[#1e361e]"
+      className="relative mt-[37px] overflow-hidden rounded-[10px] border border-brand-gold/35 bg-brand-gold/12 px-[14px] pt-[12px] pb-[23px] backdrop-blur-xl dark:border-brand-gold/20 dark:bg-brand-gold/8"
       data-slot="work-record-banner"
     >
       <div aria-hidden="true" className={HATCH} />

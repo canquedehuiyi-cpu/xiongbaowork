@@ -413,6 +413,28 @@ describe("tenant YAML validation", () => {
     });
   });
 
+  test("carries the product's English name to the browser when the package gives one", () => {
+    const configuration = createApplicationConfiguration(
+      validateTenantPackage({
+        brand:
+          "tenant: { id: openbot, product_name: 熊宝数字员工, english_name: xiongbao work }",
+        agents: "agents: []",
+        channels: "channels: []",
+        model:
+          "model: { provider: openai, credential_secret_ref: openai-key, default_model: gpt-5.6-terra }",
+        knowledge: "sources: []",
+        themeCss: "",
+      }),
+    );
+    expect(configuration).toEqual({
+      brand: {
+        tenantId: "openbot",
+        productName: "熊宝数字员工",
+        englishName: "xiongbao work",
+      },
+    });
+  });
+
   test("loads the mounted fintech package without a theme file", async () => {
     const tenantPackage = await loadTenantPackage(
       fileURLToPath(new URL("../../examples/fintech", import.meta.url)),

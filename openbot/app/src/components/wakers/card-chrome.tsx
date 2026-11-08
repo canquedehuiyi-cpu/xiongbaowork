@@ -62,7 +62,7 @@ function StackedCards() {
       <defs>
         <linearGradient id="waker-create-face" x1="0" x2="1" y1="0" y2="1">
           <stop offset="0" stopColor="var(--primary)" />
-          <stop offset="1" stopColor="#5b8def" />
+          <stop offset="1" stopColor="var(--brand-gold)" />
         </linearGradient>
       </defs>
       <g transform="rotate(-14 38 60)">

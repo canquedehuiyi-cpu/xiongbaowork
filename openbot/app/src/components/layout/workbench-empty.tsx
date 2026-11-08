@@ -1,21 +1,36 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
+/* The character's own colours, the same in either theme: he is a character, not a surface. */
+const INK = "oklch(0.16 0.012 40)";
+const MASK_RED = "oklch(0.6 0.22 27)";
+const MASK_WHITE = "oklch(0.99 0.005 80)";
+const MUZZLE = "oklch(0.93 0.035 70)";
+const IRIS = "oklch(0.42 0.09 50)";
+const TONGUE = "oklch(0.74 0.13 10)";
+
 /**
- * 熊宝, the product's own mascot: a round bear face drawn here, in our colours, for empty states.
- * The reference product puts its own character in the same place; ours is our brand's, not a copy.
+ * 熊宝, the product's own mascot, drawn after the brand's character sheet: a panda whose face is a
+ * 京剧脸谱 — a red mask, black eye patches edged in white, a black brow stripe — with black ears, a
+ * cream muzzle and a black nose, sitting on a disc ringed in the logo's gold.
+ *
+ * `mood` picks one of the sheet's expressions: `happy` (开心, both eyes open) or `wink` (调皮, one
+ * eye shut and the tongue out).
  */
 export function BearMascot({
   size = 64,
+  mood = "happy",
   className,
 }: {
   size?: number;
+  mood?: "happy" | "wink";
   className?: string;
 }) {
   return (
     <svg
       aria-label="熊宝"
       className={cn("shrink-0", className)}
+      data-mood={mood}
       height={size}
       role="img"
       viewBox="0 0 64 64"
@@ -26,50 +41,78 @@ export function BearMascot({
         cy="32"
         fill="var(--card)"
         r="31"
-        stroke="var(--border)"
-      />
-      <circle cx="19" cy="21" fill="var(--primary)" r="7" />
-      <circle cx="45" cy="21" fill="var(--primary)" r="7" />
-      <circle
-        cx="19"
-        cy="21"
-        fill="var(--primary-foreground)"
-        opacity="0.35"
-        r="3.5"
+        stroke="var(--brand-gold)"
+        strokeOpacity="0.7"
       />
       <circle
-        cx="45"
-        cy="21"
-        fill="var(--primary-foreground)"
-        opacity="0.35"
-        r="3.5"
+        cx="16.5"
+        cy="18"
+        fill={INK}
+        r="7"
+        stroke="var(--foreground)"
+        strokeOpacity="0.18"
       />
-      <ellipse cx="32" cy="35" fill="var(--primary)" rx="17" ry="15" />
-      <circle cx="25.5" cy="32" fill="var(--primary-foreground)" r="2.2" />
-      <circle cx="38.5" cy="32" fill="var(--primary-foreground)" r="2.2" />
-      <ellipse
-        cx="32"
-        cy="40"
-        fill="var(--card)"
-        opacity="0.85"
-        rx="7"
-        ry="5"
+      <circle
+        cx="47.5"
+        cy="18"
+        fill={INK}
+        r="7"
+        stroke="var(--foreground)"
+        strokeOpacity="0.18"
       />
-      <ellipse
-        cx="32"
-        cy="38.2"
-        fill="var(--primary-foreground)"
-        rx="2.4"
-        ry="1.7"
-      />
+      <circle cx="16.5" cy="18" fill="oklch(0.3 0.02 40)" r="3.4" />
+      <circle cx="47.5" cy="18" fill="oklch(0.3 0.02 40)" r="3.4" />
+      <circle cx="32" cy="35" fill={MASK_RED} r="19.5" />
+      <g stroke={MASK_WHITE} strokeLinejoin="round" strokeWidth="1.6">
+        <path
+          d="M14.8 31 Q18.5 23.5 28 27.5 Q29.4 35 24.2 39.6 Q16.4 38.6 14.8 31Z"
+          fill={INK}
+        />
+        <path
+          d="M49.2 31 Q45.5 23.5 36 27.5 Q34.6 35 39.8 39.6 Q47.6 38.6 49.2 31Z"
+          fill={INK}
+        />
+        <path
+          d="M29.2 16.6 Q32 15 34.8 16.6 L33.5 25.4 Q32 26.6 30.5 25.4Z"
+          fill={INK}
+        />
+      </g>
+      <Eye cx={24} />
+      {mood === "wink" ? (
+        <path
+          d="M36.8 34 Q40 30.8 43.2 34"
+          fill="none"
+          stroke={MASK_WHITE}
+          strokeLinecap="round"
+          strokeWidth="1.7"
+        />
+      ) : (
+        <Eye cx={40} />
+      )}
+      <ellipse cx="32" cy="45" fill={MUZZLE} rx="8.4" ry="6.2" />
+      <ellipse cx="32" cy="41.6" fill={INK} rx="2.9" ry="2" />
+      {mood === "wink" ? (
+        <ellipse cx="32" cy="47.6" fill={TONGUE} rx="1.9" ry="1.7" />
+      ) : null}
       <path
-        d="M29.5 42.2 Q32 44.2 34.5 42.2"
+        d="M29.2 45.6 Q32 47.6 34.8 45.6"
         fill="none"
-        stroke="var(--primary-foreground)"
+        stroke={INK}
         strokeLinecap="round"
-        strokeWidth="1.3"
+        strokeWidth="1.2"
       />
     </svg>
+  );
+}
+
+function Eye({ cx }: { cx: number }) {
+  return (
+    <g>
+      <circle cx={cx} cy="33" fill={MASK_WHITE} r="3.4" />
+      <circle cx={cx} cy="33.3" fill={IRIS} r="2.4" />
+      <circle cx={cx} cy="33.4" fill={INK} r="1.2" />
+      <circle cx={cx - 0.9} cy="32.2" fill={MASK_WHITE} r="0.7" />
+    </g>
   );
 }
 

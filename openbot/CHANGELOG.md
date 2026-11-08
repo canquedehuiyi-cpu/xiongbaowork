@@ -8,6 +8,14 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+- **The workbench takes its colours from the logo, as iOS-style glass.** The primary action is the
+  京剧脸谱 red of 熊宝's mask, focus rings and highlights are the logo frame's gold, and the grounds are
+  warm black (dark) or warm paper (light), lit by a red and a gold glow. Cards, popovers and the
+  sidebar are translucent and blur what is behind them. The layout is unchanged. The logo replaces
+  the letter mark in the sidebar and on the 小管家 button, is the favicon, and the empty-state mascot
+  is redrawn after the character sheet. A tenant package may now give `tenant.english_name`; the
+  sidebar and the tab title show it beside the product name (熊宝数字员工 · xiongbao work).
+
 - **The automation list carries each automation's triggers.** `GET /api/automations` now returns
   `triggers` on every item. These are the same rows `GET /api/automations/:id` returns. /autonomous
   draws from the list and no longer requests each automation's detail. The field is additive, so
