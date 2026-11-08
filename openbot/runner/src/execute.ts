@@ -17,6 +17,10 @@ import {
   type DiscoverActions,
 } from "./discover-actions";
 // --- end app discovery ---
+// --- desktop control (sub-project 2) ---
+import { DESKTOP_ACTION_PREFIX } from "../../shared/desktop-control";
+import { createDesktopActions, type DesktopActions } from "./desktop/actions";
+// --- end desktop control ---
 import { createGit, type Git } from "./git";
 import { isRootRef, PROJECTS_DIR, type RootRegistry } from "./roots";
 
@@ -49,6 +53,10 @@ export type RunnerExecutor = ((
   closeBrowser: () => Promise<void>;
   /** Close every local app's connection (and its child process) before this process dies. */
   closeApps: () => Promise<void>;
+  // --- desktop control (sub-project 2) ---
+  /** Close the desktop helper (and its process) before this process dies. */
+  closeDesktop: () => Promise<void>;
+  // --- end desktop control ---
 };
 
 /**
@@ -114,9 +122,16 @@ export function createRunnerExecutor(
   apps?: ReturnType<typeof createAppHost>,
   // --- app discovery (sub-project 3) ---
   /** Discovery of the apps this machine could offer. Absent means this machine offers none. */
-  extras?: { discovery?: DiscoverActions },
   // --- end app discovery ---
+  // --- desktop control (sub-project 2) ---
+  /** The same object carries the desktop actions; absent means the executor builds its own. */
+  extras?: { discovery?: DiscoverActions; desktop?: DesktopActions },
+  // --- end desktop control ---
 ): RunnerExecutor {
+  // --- desktop control (sub-project 2) ---
+  // Built here, started by nothing: the helper process only exists once a desktop action needs it.
+  const desktop = extras?.desktop ?? createDesktopActions();
+  // --- end desktop control ---
   const workspace = createWorkspace(workspaceDir);
   const shell = createShell(workspaceDir);
   /*
@@ -315,6 +330,11 @@ export function createRunnerExecutor(
         });
         return { ok: true, output };
       }
+      // --- desktop control (sub-project 2) ---
+      // Never throws and never says "outcome unknown": every desktop action here only reads.
+      if (action.startsWith(DESKTOP_ACTION_PREFIX))
+        return await desktop(action, callerPayload(body), signal);
+      // --- end desktop control ---
       // --- app discovery (sub-project 3) ---
       if (extras?.discovery && DISCOVER_ACTIONS.has(action)) {
         try {
@@ -441,5 +461,8 @@ export function createRunnerExecutor(
   return Object.assign(execute, {
     closeBrowser: () => owned.close(),
     closeApps: () => apps?.closeAll() ?? Promise.resolve(),
+    // --- desktop control (sub-project 2) ---
+    closeDesktop: () => desktop.close(),
+    // --- end desktop control ---
   });
 }

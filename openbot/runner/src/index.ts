@@ -915,6 +915,9 @@ async function shutDown(reason: string): Promise<void> {
       Promise.allSettled([
         running?.closeBrowser() ?? Promise.resolve(),
         running?.closeApps() ?? Promise.resolve(),
+        // --- desktop control (sub-project 2) ---
+        running?.closeDesktop() ?? Promise.resolve(),
+        // --- end desktop control ---
       ]),
       budget,
     ]);
