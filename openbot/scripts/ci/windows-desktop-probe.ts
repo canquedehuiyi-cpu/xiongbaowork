@@ -10,8 +10,8 @@
  * It needs an interactive desktop (session 1 or later). If the helper reports session 0 or none, the
  * probe fails with `session0`: per the plan's design decision 14 that is reported, never skipped.
  *
- * Called from windows-runner-probe.ts. `execute` is checked here once the runner's desktop actions
- * exist (Task 4).
+ * Called from windows-runner-probe.ts. With `execute`, the same Notepad is then read through the
+ * runner's own `desktop.*` actions (step 9).
  */
 
 import { spawn, spawnSync } from "node:child_process";
@@ -24,6 +24,13 @@ import {
   HELPER_OPS,
 } from "../../runner/src/desktop/host.ts";
 import type { RunnerExecutor } from "../../runner/src/execute.ts";
+import {
+  DESKTOP_REF,
+  DESKTOP_WINDOW_ID,
+  type DesktopSnapshot,
+  type DesktopWindow,
+  desktopMessage,
+} from "../../shared/desktop-control.ts";
 
 type Assert = (ok: unknown, label: string, seen?: unknown) => void;
 type Host = ReturnType<typeof createDesktopHost>;
@@ -192,10 +199,150 @@ async function rawHelperAnswers(lines: string[]): Promise<unknown[]> {
   }
 }
 
+type Run = (
+  action: string,
+  payload: Record<string, unknown>,
+) => Promise<{ ok: boolean; output?: unknown; error?: string }>;
+
+/** Reads the open Notepad (and a second one with a sensitive title) through `execute`. */
+async function probeExecutor(
+  assert: Assert,
+  root: string,
+  execute: RunnerExecutor,
+  notepadPid: number,
+): Promise<void> {
+  const run: Run = async (action, payload) => {
+    const outcome = await execute({ action, payload });
+    return outcome.ok
+      ? { ok: true, output: outcome.output }
+      : { ok: false, error: outcome.error };
+  };
+  const editOf = (snapshot: DesktopSnapshot) =>
+    snapshot.elements.findIndex(
+      (element) =>
+        (element.type === "Edit" || element.type === "Document") &&
+        (element.value ?? "").includes(TEXT),
+    );
+  let bank: Bun.Subprocess | undefined;
+  let bankPid: number | undefined;
+  try {
+    // 1. The window list names Notepad.
+    let listed: DesktopWindow | undefined;
+    let seen: unknown;
+    for (let attempt = 0; attempt < 60 && !listed; attempt++) {
+      const result = await run("desktop.windows", {});
+      seen = result;
+      listed = (
+        (result.output as { windows?: DesktopWindow[] } | undefined)?.windows ??
+        []
+      ).find(
+        (entry) =>
+          entry.title.includes("熊宝员工") &&
+          entry.process.toLowerCase() === "notepad",
+      );
+      if (!listed && !result.ok) break;
+      if (!listed) await Bun.sleep(250);
+    }
+    assert(
+      listed && DESKTOP_WINDOW_ID.test(listed.windowId),
+      "desktop.windows lists Notepad through the executor",
+      seen,
+    );
+    if (!listed) return;
+    const windowId = listed.windowId;
+
+    // 2. A snapshot with refs and a screenshot.
+    const first = await run("desktop.snapshot", { windowId, screenshot: true });
+    const one = first.output as DesktopSnapshot | undefined;
+    const editAt = one ? editOf(one) : -1;
+    assert(
+      first.ok &&
+        one !== undefined &&
+        editAt >= 0 &&
+        one.elements.every((element) => DESKTOP_REF.test(element.ref)) &&
+        one.image !== undefined &&
+        Math.max(one.image.width, one.image.height) <= 1280,
+      "desktop.snapshot reads Notepad with refs and a screenshot",
+      first.ok
+        ? {
+            count: one?.elements.length,
+            editAt,
+            image: one?.image && {
+              width: one.image.width,
+              height: one.image.height,
+            },
+            imageError: one?.imageError,
+          }
+        : first,
+    );
+    if (!one) return;
+    const editRef = one.elements[editAt]?.ref;
+
+    // 3. A ref from the first snapshot is stale once a second has been read.
+    const second = await run("desktop.snapshot", { windowId });
+    const old = await run("desktop.snapshot", { windowId, from: editRef });
+    assert(
+      second.ok && !old.ok && old.error === desktopMessage("stale"),
+      "desktop.snapshot refuses a ref from an older snapshot",
+      { second: second.ok, old },
+    );
+
+    // 4. A window whose title has a sensitive word is read only when allowed.
+    writeFileSync(join(root, "银行-探针.txt"), `\uFEFF${TEXT}`, "utf8");
+    bank = Bun.spawn(["notepad.exe", join(root, "银行-探针.txt")]);
+    bankPid = bank.pid;
+    let sensitiveId: string | undefined;
+    for (let attempt = 0; attempt < 60 && !sensitiveId; attempt++) {
+      const result = await run("desktop.windows", {});
+      sensitiveId = (
+        (result.output as { windows?: DesktopWindow[] } | undefined)?.windows ??
+        []
+      ).find((entry) => entry.title.includes("银行-探针"))?.windowId;
+      if (!sensitiveId) await Bun.sleep(250);
+    }
+    const refused = sensitiveId
+      ? await run("desktop.snapshot", { windowId: sensitiveId })
+      : undefined;
+    const allowed = sensitiveId
+      ? await run("desktop.snapshot", {
+          windowId: sensitiveId,
+          allowSensitive: true,
+        })
+      : undefined;
+    assert(
+      sensitiveId &&
+        refused &&
+        !refused.ok &&
+        refused.error === desktopMessage("sensitive", "银行") &&
+        allowed?.ok === true,
+      "a sensitive title is read only when allowed",
+      { sensitiveId, refused, allowed: allowed && { ok: allowed.ok } },
+    );
+
+    // 5. A write action is unsupported, and Notepad reads the same afterwards.
+    const click = await run("desktop.click", { windowId });
+    const again = await run("desktop.snapshot", { windowId });
+    const after = again.output as DesktopSnapshot | undefined;
+    assert(
+      !click.ok &&
+        click.error === desktopMessage("unsupported") &&
+        after !== undefined &&
+        after.elements[editOf(after)]?.value === one.elements[editAt]?.value,
+      "desktop.click is unsupported and changes nothing",
+      { click, again: again.ok },
+    );
+  } finally {
+    // 6. Closed.
+    await execute.closeDesktop();
+    taskkill(bankPid);
+    taskkill(notepadPid);
+  }
+}
+
 export async function probeDesktop(
   assert: Assert,
   root: string,
-  _execute?: RunnerExecutor,
+  execute?: RunnerExecutor,
 ): Promise<void> {
   // 1. A Notepad with a Chinese name and Chinese text.
   const file = join(root, "熊宝员工.txt");
@@ -424,6 +571,9 @@ export async function probeDesktop(
       host: host.running,
       raw: raw.running,
     });
+
+    // 9. The same Notepad through the executor.
+    if (execute) await probeExecutor(assert, root, execute, notepad.pid);
   } finally {
     await raw?.close();
     await host.close();

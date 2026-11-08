@@ -15,18 +15,23 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { hostname, platform } from "node:os";
 import { join, resolve, sep } from "node:path";
-import { APP_REF, type AppEntry, type AppInput, createAppRegistry } from "./apps";
 import { createAppHost } from "./app-host";
+import {
+  APP_REF,
+  type AppEntry,
+  type AppInput,
+  createAppRegistry,
+} from "./apps";
 import { createRunnerBrowser, type RunnerBrowser } from "./browser";
 import {
   type CredentialStore,
   createFileCredentialStore,
   deviceIdFor,
 } from "./credentials";
-import { createRunnerDispatcher } from "./dispatch";
 // --- app discovery (sub-project 3) ---
 import type { DiscoverDeps } from "./discover";
 import { createDiscoverActions } from "./discover-actions";
+import { createRunnerDispatcher } from "./dispatch";
 // --- end app discovery ---
 import {
   browserProfileRootFor,
@@ -453,7 +458,11 @@ export function parseAppCommand(
   } else {
     if (!value) return `--${flag} needs the app's name or reference.`;
     command = {
-      kind: flag.replace("-app", "") as "remove" | "test" | "enable" | "disable",
+      kind: flag.replace("-app", "") as
+        | "remove"
+        | "test"
+        | "enable"
+        | "disable",
       target: value,
     };
   }
@@ -879,6 +888,9 @@ async function shutDown(reason: string): Promise<void> {
       Promise.allSettled([
         running?.closeBrowser() ?? Promise.resolve(),
         running?.closeApps() ?? Promise.resolve(),
+        // --- desktop control (sub-project 2) ---
+        running?.closeDesktop() ?? Promise.resolve(),
+        // --- end desktop control ---
       ]),
       budget,
     ]);
