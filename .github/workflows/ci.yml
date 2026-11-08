@@ -450,7 +450,7 @@ jobs:
             foreach ($mode in 'headed','headless') {
               $dir = Join-Path $env:RUNNER_TEMP "diag-$rt-$mode"
               "=== $rt $mode"
-              $p = Start-Process $rt -ArgumentList 'launch.mjs',$mode,$dir,$chrome -NoNewWindow -PassThru -RedirectStandardOutput "$dir.out" -RedirectStandardError "$dir.err"
+              $p = Start-Process $rt -ArgumentList 'launch.mjs',$mode,"`"$dir`"","`"$chrome`"" -NoNewWindow -PassThru -RedirectStandardOutput "$dir.out" -RedirectStandardError "$dir.err"
               if (-not $p.WaitForExit(60000)) { $p.Kill($true); "$rt $mode TIMEOUT 60s" }
               Get-Content "$dir.out" -ErrorAction SilentlyContinue | Select-Object -Last 15
               Get-Content "$dir.err" -ErrorAction SilentlyContinue | Select-Object -First 25
