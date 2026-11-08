@@ -7,8 +7,9 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { join, win32 } from "node:path";
+import { join } from "node:path";
 import { APP_NAME_LIMIT, type AppEntry } from "./apps";
+import { packageRunnerArgs, programOf, toBundledArgs } from "./bundled-runtime";
 import {
   type ConfigSource,
   type DiscoveredSpec,
@@ -100,29 +101,6 @@ const NOTE_FLAGS = "启动参数无法改写为自带运行时，请在「高级
 const NOTE_NEEDS_UV = "需要先安装 uv";
 const NOTE_MISSING = "找不到启动这个应用的程序，请先安装它";
 
-/** `npx`, `NPX.CMD` and `C:\…\npx.cmd` are one program. */
-function programOf(command: string): string {
-  return win32
-    .basename(command.trim())
-    .toLowerCase()
-    .replace(/\.(cmd|exe|bat)$/, "");
-}
-
-/** The arguments after `npx [-y|--yes]…`, `bunx` or `bun x`; undefined for any other command. */
-function packageRunnerArgs(
-  spec: Extract<DiscoveredSpec, { kind: "stdio" }>,
-): string[] | undefined {
-  const program = programOf(spec.command);
-  if (program === "npx") {
-    let i = 0;
-    while (spec.args[i] === "-y" || spec.args[i] === "--yes") i += 1;
-    return spec.args.slice(i);
-  }
-  if (program === "bunx") return spec.args;
-  if (program === "bun" && spec.args[0] === "x") return spec.args.slice(1);
-  return undefined;
-}
-
 /** Switches cmd may take before `/c` that change nothing about what it runs. */
 const CMD_QUIET_SWITCHES = new Set(["/d", "/s", "/q"]);
 
@@ -190,10 +168,9 @@ function statusOf(
   if (strings.some((value) => value.includes("${"))) {
     return { status: "unsupported", note: NOTE_VARIABLES };
   }
-  const packaged = packageRunnerArgs(spec);
-  if (packaged) {
-    // Started with the bundled runtime on enable, which only knows the package and its arguments.
-    return packaged.length > 0 && !packaged[0]?.startsWith("-")
+  if (packageRunnerArgs(spec)) {
+    // Stored with the bundled runtime on enable, which only knows the package and its arguments.
+    return toBundledArgs(spec)
       ? { status: "ready" }
       : { status: "unsupported", note: NOTE_FLAGS };
   }

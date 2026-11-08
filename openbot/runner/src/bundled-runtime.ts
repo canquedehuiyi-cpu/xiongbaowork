@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, win32 } from "node:path";
 
 /*
  * The Bun the device brings with it, so an npm-style local app (`npx -y pkg`, `bunx pkg`) runs
@@ -46,27 +46,42 @@ export function bundledRuntime(
     : undefined;
 }
 
+/** `npx`, `NPX.CMD` and `C:\…\npx.cmd` are one program. */
+export function programOf(command: string): string {
+  return win32
+    .basename(command.trim())
+    .toLowerCase()
+    .replace(/\.(cmd|exe|bat)$/, "");
+}
+
+/** The arguments after `npx [-y|--yes]…`, `bunx` or `bun x`; undefined for any other command. */
+export function packageRunnerArgs(spec: {
+  command: string;
+  args: string[];
+}): string[] | undefined {
+  const program = programOf(spec.command);
+  if (program === "npx") {
+    let i = 0;
+    while (spec.args[i] === "-y" || spec.args[i] === "--yes") i += 1;
+    return spec.args.slice(i);
+  }
+  if (program === "bunx") return spec.args;
+  if (program === "bun" && spec.args[0] === "x") return spec.args.slice(1);
+  return undefined;
+}
+
 /**
- * The package and its arguments when a stored command is one of the npm runners with nothing
- * between it and the package name: `npx -y|--yes pkg ...`, `bunx pkg ...`, `bun x pkg ...`.
- * Anything else (other options such as `npx -p`, other commands) is not ours to rewrite.
+ * The package and its arguments when a command is one of the npm runners with nothing but `-y`
+ * between it and the package name: `npx [-y|--yes]… pkg ...`, `bunx pkg ...`, `bun x pkg ...`, the
+ * program spelled with or without its folder and `.cmd`. Anything else (other options such as
+ * `npx -p`, other commands) is not ours to rewrite. Discovery calls an npm candidate ready exactly
+ * when this answers, so every ready one can be stored with the bundled runtime.
  */
 export function toBundledArgs(spec: {
   command: string;
   args: string[];
 }): string[] | undefined {
-  const { command, args } = spec;
-  let rest: string[];
-  if (command === "npx") {
-    if (args[0] !== "-y" && args[0] !== "--yes") return undefined;
-    rest = args.slice(1);
-  } else if (command === "bunx") {
-    rest = args;
-  } else if (command === "bun" && args[0] === "x") {
-    rest = args.slice(1);
-  } else {
-    return undefined;
-  }
-  if (rest.length === 0 || rest[0]?.startsWith("-")) return undefined;
+  const rest = packageRunnerArgs(spec);
+  if (!rest || rest.length === 0 || rest[0]?.startsWith("-")) return undefined;
   return rest;
 }

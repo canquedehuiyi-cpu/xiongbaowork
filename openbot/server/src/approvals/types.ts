@@ -64,6 +64,10 @@ export type ApprovalPolicyOutcome = {
     | "host_command_cap"
     /** A local app's tool the device does not list as read-only (device MCP bridge §4.4). */
     | "app_tool"
+    // --- app discovery (sub-project 3) ---
+    /** Enabling a discovered local app: always asked. */
+    | "app_enable"
+    // --- end app discovery ---
     // --- desktop control (sub-project 2) ---
     /** 标题含敏感词的桌面窗口，读之前要问（设备端桌面查看 §4.2）。 */
     | "desktop_window"
@@ -536,12 +540,19 @@ export function approvalArgsPreview(action: {
   target?: unknown;
   display?: unknown;
 }): unknown {
-  if (action.toolRef !== APP_CALL_TOOL)
-    return approvalPreview(action.args);
   const field = (value: unknown, key: string) =>
     value && typeof value === "object" && !Array.isArray(value)
       ? (value as Record<string, unknown>)[key]
       : undefined;
+  // --- app discovery (sub-project 3) ---
+  if (action.toolRef === "computer_app_enable")
+    return {
+      app: approvalPreview(field(action.target, "name")),
+      source: approvalPreview(field(action.display, "description")),
+    };
+  // --- end app discovery ---
+  if (action.toolRef !== APP_CALL_TOOL)
+    return approvalPreview(action.args);
   // Masked as an object, so secrets by name are hidden before the JSON is cut.
   const json =
     JSON.stringify(approvalPreview(field(action.args, "args") ?? {})) ?? "{}";
