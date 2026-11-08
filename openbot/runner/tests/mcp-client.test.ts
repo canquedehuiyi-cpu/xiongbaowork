@@ -1,14 +1,22 @@
 import { afterAll, afterEach, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+} from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AppEntry } from "../src/apps";
 import {
+  childCwd,
   childEnv,
   connectApp,
   launchSpec,
   type McpConnection,
   McpAppError,
+  resolveWindowsCommand,
 } from "../src/mcp-client";
 import { startFakeHttpMcp } from "./fixtures/fake-mcp-http";
 
@@ -333,38 +341,183 @@ test("http: a loopback app is reached directly, whatever HTTP_PROXY says", async
   }
 });
 
-test('windows command shim: on win32 a bare command such as npx or bunx is launched as cmd.exe /d /s /c "npx ..."', () => {
-  const entry = {
+/** A Windows machine with Node installed the usual way, for `launchSpec`'s PATH search. */
+const NODE_DIR = "C:\\Program Files\\nodejs";
+const NPM_DIR = "C:\\Users\\u\\AppData\\Roaming\\npm";
+const winEnv = {
+  Path: `C:\\Windows\\System32;"${NODE_DIR}";${NPM_DIR}`,
+  PATHEXT: ".COM;.EXE;.BAT;.CMD",
+};
+const winFiles = new Set(
+  [
+    `${NODE_DIR}\\npx.cmd`,
+    // npm ships a POSIX shell script beside the shim: it is never the one to run.
+    `${NODE_DIR}\\npx`,
+    `${NODE_DIR}\\node.exe`,
+    `${NPM_DIR}\\pnpm.CMD`,
+    "C:\\Windows\\System32\\cmd.exe",
+  ].map((path) => path.toLowerCase()),
+);
+const winIsFile = (path: string) => winFiles.has(path.toLowerCase());
+
+function winEntry(command: string, args: string[] = []) {
+  return {
     ref: "app_aaaaaaaaaaaaaaaaaaaaaa",
     name: "n",
     kind: "stdio" as const,
-    command: "npx",
-    args: ["-y", "@scope/server", "C:\\My Files\\a b", 'say "hi"'],
+    command,
+    args,
     env: {},
     enabled: true,
   };
-  const win = launchSpec(entry, "win32", {});
+}
+
+function launchFailure(
+  command: string,
+  env: Record<string, string>,
+): McpAppError {
+  try {
+    launchSpec(winEntry(command), "win32", env, winIsFile);
+  } catch (error) {
+    return error as McpAppError;
+  }
+  throw new Error("expected launchSpec to throw");
+}
+
+test('windows command shim: on win32 a bare command such as npx or bunx is launched as cmd.exe /d /s /c "<its absolute path> ..."', () => {
+  const entry = winEntry("npx", [
+    "-y",
+    "@scope/server",
+    "C:\\My Files\\a b",
+    'say "hi"',
+  ]);
+  const win = launchSpec(entry, "win32", winEnv, winIsFile);
   expect(win.command).toBe("cmd.exe");
   expect(win.args.slice(0, 3)).toEqual(["/d", "/s", "/c"]);
   expect(win.args).toHaveLength(4);
   expect(win.args[3]).toBe(
-    '""npx" "-y" "@scope/server" "C:\\My Files\\a b" "say \\"hi\\"""',
+    '""C:\\Program Files\\nodejs\\npx.cmd" "-y" "@scope/server" "C:\\My Files\\a b" "say \\"hi\\"""',
   );
   expect(win.windowsVerbatimArguments).toBe(true);
   expect(
-    launchSpec(entry, "win32", { ComSpec: "C:\\Windows\\System32\\cmd.exe" })
-      .command,
+    launchSpec(
+      entry,
+      "win32",
+      { ...winEnv, ComSpec: "C:\\Windows\\System32\\cmd.exe" },
+      winIsFile,
+    ).command,
   ).toBe("C:\\Windows\\System32\\cmd.exe");
   // Trailing backslashes must not swallow the closing quote.
-  const trailing = launchSpec({ ...entry, args: ["C:\\dir\\"] }, "win32", {});
-  expect(trailing.args[3]).toBe('""npx" "C:\\dir\\\\""');
+  const trailing = launchSpec(
+    { ...entry, args: ["C:\\dir\\"] },
+    "win32",
+    winEnv,
+    winIsFile,
+  );
+  expect(trailing.args[3]).toBe(
+    '""C:\\Program Files\\nodejs\\npx.cmd" "C:\\dir\\\\""',
+  );
 
   for (const platform of ["linux", "darwin"] as const) {
-    expect(launchSpec(entry, platform, {})).toEqual({
+    expect(launchSpec(entry, platform, {}, () => false)).toEqual({
       command: "npx",
       args: entry.args,
     });
   }
+});
+
+/*
+ * Why the absolute path: a batch file that cmd.exe found through PATH under a quoted name sees
+ * `%~dp0` as the CURRENT folder, not its own, so npx.cmd looked for node_modules\npm\bin\npx-cli.js
+ * in the runner's folder ("Cannot find module ...\runner\node_modules\npm\bin\npx-cli.js").
+ */
+test("windows command shim: a bare command is looked up in the child's PATH with PATHEXT, in PATH order", () => {
+  expect(resolveWindowsCommand("npx", winEnv, winIsFile)).toBe(
+    `${NODE_DIR}\\npx.cmd`,
+  );
+  expect(resolveWindowsCommand("node", winEnv, winIsFile)).toBe(
+    `${NODE_DIR}\\node.exe`,
+  );
+  // A name that already has its extension, and a shim whose extension is in capitals on disk
+  // (Windows names are case-insensitive, so either spelling runs it).
+  expect(resolveWindowsCommand("npx.cmd", winEnv, winIsFile)).toBe(
+    `${NODE_DIR}\\npx.cmd`,
+  );
+  expect(resolveWindowsCommand("pnpm", winEnv, winIsFile)).toBe(
+    `${NPM_DIR}\\pnpm.cmd`,
+  );
+  // PATHEXT decides which extensions count; without one, cmd's own default list applies.
+  expect(
+    resolveWindowsCommand("npx", { ...winEnv, PATHEXT: ".EXE" }, winIsFile),
+  ).toBeUndefined();
+  expect(resolveWindowsCommand("npx", { Path: winEnv.Path }, winIsFile)).toBe(
+    `${NODE_DIR}\\npx.cmd`,
+  );
+  // A relative PATH folder depends on where the app starts, so it is never searched.
+  expect(
+    resolveWindowsCommand("npx", { ...winEnv, Path: ".;bin" }, (path) =>
+      path.toLowerCase().endsWith("npx.cmd"),
+    ),
+  ).toBeUndefined();
+  // The first PATH folder that has it wins.
+  const withTools = (path: string) =>
+    winIsFile(path) || path.toLowerCase() === "d:\\tools\\npx.bat";
+  expect(
+    resolveWindowsCommand(
+      "npx",
+      { ...winEnv, Path: `D:\\tools;${winEnv.Path}` },
+      withTools,
+    ),
+  ).toBe("D:\\tools\\npx.bat");
+  // The PATH searched is the child's: an entry's own PATH comes after the parent's in the child's
+  // environment, whatever its spelling, and is the one that counts.
+  expect(
+    resolveWindowsCommand("npx", { ...winEnv, PATH: "D:\\tools" }, withTools),
+  ).toBe("D:\\tools\\npx.bat");
+  const child = childEnv(winEnv, { PATH: "D:\\tools" });
+  expect(launchSpec(winEntry("npx"), "win32", child, withTools).args[3]).toBe(
+    '""D:\\tools\\npx.bat""',
+  );
+  // A path, absolute or relative, is the owner's choice and is left exactly as written.
+  for (const command of [
+    `${NODE_DIR}\\npx.cmd`,
+    "D:/tools/server",
+    ".\\bin\\server.cmd",
+    "C:server.cmd",
+  ]) {
+    expect(resolveWindowsCommand(command, {}, () => false)).toBe(command);
+    expect(
+      launchSpec(winEntry(command), "win32", {}, () => false).args[3],
+    ).toBe(`""${command}""`);
+  }
+});
+
+test("windows command shim: a command that is not on PATH fails to start with a clear Chinese reason", () => {
+  const uvx = launchFailure("uvx", winEnv);
+  expect(uvx).toBeInstanceOf(McpAppError);
+  expect(uvx.kind).toBe("start");
+  expect(uvx.hint).toBe(
+    "找不到命令 uvx，请确认已安装（例如 uv），并重启设备端。",
+  );
+  const npx = launchFailure("npx", { PATHEXT: winEnv.PATHEXT });
+  expect(npx.kind).toBe("start");
+  expect(npx.hint).toBe(
+    "找不到命令 npx，请确认已安装（例如 Node.js），并重启设备端。",
+  );
+  expect(launchFailure("my-server", winEnv).hint).toBe(
+    "找不到命令 my-server，请确认已安装并已加入 PATH，然后重启设备端。",
+  );
+});
+
+test("stdio: an app without a working folder starts in the home folder, not the runner's own", async () => {
+  expect(childCwd(stdioEntry(), "/home/u")).toBe("/home/u");
+  expect(childCwd({ ...winEntry("x"), cwd: "/work" }, "/home/u")).toBe("/work");
+  expect(childCwd({ ...winEntry("x"), cwd: "" }, "/home/u")).toBe("/home/u");
+  const connection = await connect();
+  const reply = await connection.callTool("echo", { text: "__cwd__" });
+  expect(realpathSync(reply.content[0]?.text ?? "")).toBe(
+    realpathSync(homedir()),
+  );
 });
 
 test("childEnv drops XIONGBAO_* from the parent and lets the entry override the rest", () => {
