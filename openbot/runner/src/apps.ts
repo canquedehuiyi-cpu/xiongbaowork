@@ -37,6 +37,8 @@ export type AppEntry =
       args: string[];
       env: Record<string, string>;
       cwd?: string;
+      /** "bundled": run through the Bun the device brings with it (see bundled-runtime.ts). */
+      runtime?: "bundled";
       enabled: boolean;
     }
   | { ref: string; name: string; kind: "http"; url: string; enabled: boolean };
@@ -77,7 +79,7 @@ function mintRef(): string {
   return `app_${randomBytes(16).toString("base64url")}`;
 }
 
-function isLoopbackUrl(value: string): boolean {
+export function isLoopbackUrl(value: string): boolean {
   let url: URL;
   try {
     url = new URL(value);
@@ -126,7 +128,8 @@ function readEntry(value: unknown): AppEntry | undefined {
     Array.isArray(raw.args) &&
     raw.args.every((arg) => typeof arg === "string") &&
     isStringRecord(raw.env) &&
-    (raw.cwd === undefined || typeof raw.cwd === "string")
+    (raw.cwd === undefined || typeof raw.cwd === "string") &&
+    (raw.runtime === undefined || raw.runtime === "bundled")
   ) {
     return {
       ref,
@@ -136,6 +139,7 @@ function readEntry(value: unknown): AppEntry | undefined {
       args: raw.args,
       env: raw.env,
       ...(raw.cwd === undefined ? {} : { cwd: raw.cwd }),
+      ...(raw.runtime === undefined ? {} : { runtime: raw.runtime }),
       enabled,
     };
   }
@@ -240,6 +244,11 @@ export function createAppRegistry(opts: { dataDir: string }): {
         if (!isStringRecord(input.env)) {
           throw new AppRegistryError("环境变量需要是「名称: 值」的文字对。");
         }
+        if (input.runtime !== undefined && input.runtime !== "bundled") {
+          throw new AppRegistryError(
+            "应用的运行方式只能是自带运行时（bundled）。",
+          );
+        }
         const cwd = input.cwd?.trim();
         entry = {
           ref: mintRef(),
@@ -249,6 +258,7 @@ export function createAppRegistry(opts: { dataDir: string }): {
           args: [...input.args],
           env: { ...input.env },
           ...(cwd ? { cwd } : {}),
+          ...(input.runtime ? { runtime: input.runtime } : {}),
           enabled,
         };
       } else {

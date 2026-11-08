@@ -1,6 +1,6 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { runnerProbeHandleHasToken } from "./runner-browser-probe-ref";
-import { stopRunnerProbeServer } from "./runner-browser-probe-lifecycle";
+import { removeRunnerProbeRoot, stopRunnerProbeServer } from "./runner-browser-probe-lifecycle";
 import { type RunnerProbePendingAction, type RunnerProbeResultInput, settleRunnerProbeAction } from "./runner-browser-probe-action";
 import { observeRunnerProbeRead } from "./runner-browser-probe-observe";
 import { join } from "node:path";
@@ -511,7 +511,7 @@ try {
   await browser.close().catch(() => undefined);
   await stopRunnerProbeServer(server);
   journal.close();
-  rmSync(probeRoot, { recursive: true, force: true });
+  removeRunnerProbeRoot(probeRoot, rmSync);
 }
 
 console.log(

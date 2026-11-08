@@ -21,6 +21,12 @@ import {
   recordAuditEvent,
 } from "../audit";
 import { computerActionIdentity } from "./action-identity";
+// --- desktop control (sub-project 2) ---
+import { desktopTools } from "./desktop-tools";
+// --- end desktop control ---
+// --- app discovery (sub-project 3) ---
+import { CANDIDATE_REF } from "./app-discovery";
+// --- end app discovery ---
 import {
   type ActionActor,
   type ComputerGateway,
@@ -628,7 +634,7 @@ function headlessComputerTools(options: {
     tools.push(
       tool(
         "computer_apps",
-        "List the local apps (MCP servers) the person registered on their own paired computer, and the tools each one offers. When software on their computer has a local app here, prefer it over driving the software any other way: call this first to see its tools, then call computer_app_call. Pass app to list only that one.",
+        "List the local apps (MCP servers) the person registered on their own paired computer, and the tools each one offers. When software on their computer has a local app here, prefer it over driving the software any other way: call this first to see its tools, then call computer_app_call. Pass app to list only that one. Without app, it also lists apps found on the computer that are not enabled yet (available) and installed software that has no local app (installed); follow the hints that come with them.",
         z.strictObject({ app: z.string().min(1).max(40).optional() }),
         async (input, { signal }) => ({
           ok: true,
@@ -649,7 +655,23 @@ function headlessComputerTools(options: {
           ...(await gateway.callApp(botId, actor, input, signal)),
         }),
       ),
+      // --- app discovery (sub-project 3) ---
+      tool(
+        "computer_app_enable",
+        "Enable one app found on the person's own paired computer, listed under available by computer_apps, so its tools can be called. Pass its candidate exactly as listed. The person must approve; if refused say so rather than retrying. A candidate older than 10 minutes must be listed again with computer_apps.",
+        z.strictObject({ candidate: z.string().regex(CANDIDATE_REF) }),
+        async (input, { signal }) => ({
+          ok: true,
+          ...(await gateway.enableApp(botId, actor, input, signal)),
+        }),
+      ),
+      // --- end app discovery ---
     );
+  // --- desktop control (sub-project 2) ---
+  // Read only, and on the same terms as the local apps: the owner's own run on their paired machine.
+  if (onDevice && options.apps)
+    tools.push(...desktopTools(tool, { gateway, botId, actor }));
+  // --- end desktop control ---
   if (signIn)
     tools.push(
       tool(

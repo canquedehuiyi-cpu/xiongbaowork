@@ -158,3 +158,25 @@ test("a hand-edited non-loopback http url is dropped on load", () => {
   expect(apps.list().map((app) => app.name)).toEqual(["好的"]);
   expect(apps.byName("被改")).toBeUndefined();
 });
+
+test('runtime "bundled" persists across instances; any other runtime value is refused', () => {
+  const { dataDir, apps } = machine();
+  const entry = apps.add({
+    ...stdio("自带"),
+    command: "bunx",
+    args: ["some-mcp"],
+    runtime: "bundled",
+  });
+  expect(entry.kind === "stdio" && entry.runtime).toBe("bundled");
+  expect(createAppRegistry({ dataDir }).list()).toEqual([entry]);
+  expect(() =>
+    apps.add({ ...stdio("别的"), runtime: "node" as unknown as "bundled" }),
+  ).toThrow();
+  // A hand-edited file with another value drops that entry rather than trusting it.
+  const file = join(dataDir, "runner-apps.json");
+  writeFileSync(
+    file,
+    readFileSync(file, "utf8").replace('"bundled"', '"node"'),
+  );
+  expect(createAppRegistry({ dataDir }).list()).toEqual([]);
+});

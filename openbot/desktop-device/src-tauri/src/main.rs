@@ -309,6 +309,21 @@ async fn set_app_enabled(
     app_reply(&app, command).map(|reply| apps::apps_of(&reply))
 }
 
+// --- app discovery (sub-project 3) ---
+/// What this computer could offer, by name. Returns the runner's whole reply (`candidates`, ...).
+#[tauri::command]
+async fn discover_apps(app: AppHandle) -> Result<serde_json::Value, String> {
+    app_reply(&app, apps::AppCommand::Discover)
+}
+
+/// Register a discovered candidate and test it. Returns `{ app, tools, apps }`.
+#[tauri::command]
+async fn enable_candidate(app: AppHandle, candidate: String) -> Result<serde_json::Value, String> {
+    let candidate = apps::validate_target(&candidate)?;
+    app_reply(&app, apps::AppCommand::EnableCandidate(candidate))
+}
+// --- end app discovery ---
+
 /// The window, opened at its folder section, for the tray's 「添加本地文件夹…」.
 fn show_folders(app: &AppHandle) {
     show_window(app);
@@ -458,7 +473,11 @@ fn main() {
             add_app,
             remove_app,
             test_app,
-            set_app_enabled
+            set_app_enabled,
+            // --- app discovery (sub-project 3) ---
+            discover_apps,
+            enable_candidate
+            // --- end app discovery ---
         ])
         // Closing the window hides it; the app lives in the tray and Quit is there.
         .on_window_event(|window, event| {
