@@ -329,7 +329,34 @@ const ownerAsked = {
       },
     };
 
-test("SEC1: 禁用 is shown as its own behaviour, and a request set by the Bot's owner names that layer", async () => {
+test("a sensitive-window request names its source 敏感窗口", async () => {
+  const asked = {
+    ...ownerAsked,
+    id: "request-desktop",
+    action: {
+      ...ownerAsked.action,
+      toolRef: "computer_desktop_snapshot",
+      effect: "read",
+      scope: "desktop/chrome",
+      args: {},
+      toolCallId: "desktop-call",
+      policy: {
+        behaviour: "ask",
+        source: "desktop_window",
+        reason: "窗口「招商银行」的标题含「银行」，读取它之前需要你批准。",
+      },
+    },
+  };
+  inbox.requests.push(asked as unknown as (typeof inbox.requests)[number]);
+  try {
+    const view = draw();
+    expect(await view.findByText(/（来源：敏感窗口）/)).toBeTruthy();
+  } finally {
+    inbox.requests.pop();
+  }
+});
+
+test("SEC1: 禁用 is shown as its own behaviour,and a request set by the Bot's owner names that layer", async () => {
   inbox.requests.push(ownerAsked as unknown as (typeof inbox.requests)[number]);
   inbox.teamRules.unshift({
     id: "locked-off",

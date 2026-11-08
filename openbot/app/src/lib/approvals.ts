@@ -37,6 +37,9 @@ export const POLICY_SOURCE_LABELS: Record<string, string> = {
   sensitive_path: "敏感文件",
   host_command_cap: "团队命令上限",
   app_tool: "本机应用",
+  // --- desktop control (sub-project 2) ---
+  desktop_window: "敏感窗口",
+  // --- end desktop control ---
   auto_review: "自动审查",
   default: "你的偏好",
   person_declined: "你已拒绝过",
