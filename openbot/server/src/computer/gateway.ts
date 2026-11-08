@@ -2314,7 +2314,9 @@ export function createComputerGateway(
       };
       if (found.status !== "ready")
         return refuse(
-          `「${found.name}」暂时不能启用：${found.note ?? ""}`,
+          found.note
+            ? `「${found.name}」暂时不能启用：${found.note}`
+            : `「${found.name}」暂时不能启用。`,
           enable,
         );
       if (found.enabled)
@@ -2341,6 +2343,12 @@ export function createComputerGateway(
           } catch (error) {
             if (error instanceof DeviceOfflineError)
               throw new ComputerUnavailableError(DEVICE_OFFLINE_ENABLE);
+            // A runner from before enabling (it lists, but has no `apps.enable`): said in Chinese.
+            if (
+              error instanceof Error &&
+              error.message.startsWith("Nothing on this machine handles")
+            )
+              throw new ComputerUnavailableError(OLD_RUNNER_ENABLE);
             throw error;
           }
           const read = readEnabled(output);
@@ -2353,15 +2361,18 @@ export function createComputerGateway(
            * Usable at once rather than after the next heartbeat. A record that cannot be written now
            * is caught up by that heartbeat, and does not undo an app the machine already enabled.
            */
-          await options.rememberDeviceApp?.(machine, read.app).catch(() => {
-            console.warn(
-              JSON.stringify({
-                type: "device-app-remember-failed",
-                tenantId: machine.tenantId,
-                deviceId: machine.deviceId,
-              }),
-            );
-          });
+          await options
+            .rememberDeviceApp?.(machine, read.app)
+            .catch((error: unknown) => {
+              console.warn(
+                JSON.stringify({
+                  type: "device-app-remember-failed",
+                  tenantId: machine.tenantId,
+                  deviceId: machine.deviceId,
+                  error: cutUtf8(String(error), 500),
+                }),
+              );
+            });
           const tools = readAppTools(read.tools);
           keepAppTools(machine, read.app.ref, tools);
           return {
@@ -2414,8 +2425,9 @@ const APP_LIST_BACKSTOP_MS = 45_000;
 const DISCOVER_BACKSTOP_MS = 30_000;
 /** The runner's own deadlines for an enable: start 20s + list 20s, with room to spare. */
 const APP_ENABLE_BACKSTOP_MS = 60_000;
-const NO_ENABLE_APPROVAL =
-  "这里没有可以请主人批准的地方，不能启用本机应用。";
+const OLD_RUNNER_ENABLE =
+  "主人电脑上的设备端版本较旧，更新后才能启用本机应用。";
+const NO_ENABLE_APPROVAL = "这里没有可以请主人批准的地方，不能启用本机应用。";
 const DISCOVERY_FAILED = (reason: string) =>
   `这次没能查看主人电脑上的其他应用：${reason}`;
 // --- end app discovery ---
@@ -2556,6 +2568,11 @@ export function intentOf(
       return "read";
     case "computer_app_call":
       return "app_call";
+    // --- app discovery (sub-project 3) ---
+    // Enabling an app starts a program there too: a rule against app calls covers enabling one.
+    case "computer_app_enable":
+      return "app_call";
+    // --- end app discovery ---
     default:
       return undefined;
   }

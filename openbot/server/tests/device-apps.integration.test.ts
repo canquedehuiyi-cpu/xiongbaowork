@@ -111,6 +111,12 @@ async function pairedDevice(
     now?: () => number;
     /** False: a runner from before app discovery, which does not handle `apps.discover`. */
     discovery?: boolean;
+    /** False: a runner that lists candidates but does not handle `apps.enable` yet. */
+    enable?: boolean;
+    /** The deployment's action policy; absent allows everything. */
+    policy?: { allow: string[]; deny: string[] };
+    /** The gateway's reachability check; absent, the channel's own. */
+    deviceReachable?: () => boolean;
   } = {},
 ) {
   const tenant = `dapps-${suite}-${tenants.length}`;
@@ -178,7 +184,7 @@ async function pairedDevice(
     },
   };
   const appHost = createAppHost(registry);
-  const discovery =
+  const discoverActions =
     options.discovery === false
       ? undefined
       : createDiscoverActions({
@@ -206,6 +212,15 @@ async function pairedDevice(
                 : undefined,
           },
         });
+  // A runner from between the two phases answers an enable the way any runner answers an action
+  // it does not know.
+  const discovery: typeof discoverActions =
+    discoverActions && options.enable === false
+      ? async (action, body, signal) =>
+          action === "apps.enable"
+            ? { ok: false, error: `Nothing on this machine handles "${action}".` }
+            : discoverActions(action, body, signal)
+      : discoverActions;
   const execute = createRunnerExecutor(
     join(root, "ws"),
     undefined,
@@ -343,7 +358,8 @@ async function pairedDevice(
     resolveDevice: (bot) => selector.forBot(bot),
     deviceApps,
     // As index.ts composes them.
-    deviceReachable: (machine) => channel.isReachable(machine),
+    deviceReachable:
+      options.deviceReachable ?? ((machine) => channel.isReachable(machine)),
     rememberDeviceApp: (machine, app) =>
       deviceStore.rememberApp(machine.tenantId, machine.deviceId, app),
     auditStore: {
@@ -351,7 +367,10 @@ async function pairedDevice(
         audits.push(event);
       },
     },
-    policy: () => ({ mode: "enforce", allow: ["true"], deny: [] }),
+    policy: () => ({
+      mode: "enforce",
+      ...(options.policy ?? { allow: ["true"], deny: [] }),
+    }),
     approvalGate: service.gate,
     approvalRefusal: service.refusal,
     deviceTakeovers: takeovers,
@@ -1302,6 +1321,57 @@ test("the enable's audit rows carry the app name and source and no command, path
   expect(written).toContain("fixture");
   for (const leak of FIXTURE_LEAKS) expect(written).not.toContain(leak);
 }, 30_000);
+
+test("a deployment rule about intent does not refuse an enable: it still reaches the card", async () => {
+  // The documented "no shell" rule: it names `intent`, which an enable must have bound.
+  const device = await pairedDevice({
+    policy: { allow: ["true"], deny: ['intent == "run_command"'] },
+  });
+  const fixture = await listedFixture(device);
+  await expect(
+    device.call("computer_app_enable", { candidate: fixture.candidate }, "intent"),
+  ).rejects.toBeInstanceOf(HeadlessToolSuspension);
+  expect((await requestFor(device, "intent")).action.policy?.source).toBe(
+    "app_enable",
+  );
+  expect(
+    device.audits.map((row) => row.eventType),
+  ).not.toContain("computer.action_refused");
+}, 20_000);
+
+test("approved, then the device went away while it was being sent: 设备不在线, nothing queued, the device is not paused", async () => {
+  // The gateway's own check still says reachable: only the send finds the machine gone.
+  const device = await pairedDevice({ deviceReachable: () => true });
+  const fixture = await listedFixture(device);
+  await expect(
+    device.call("computer_app_enable", { candidate: fixture.candidate }, "sent-away"),
+  ).rejects.toBeInstanceOf(HeadlessToolSuspension);
+  await approve(device, "sent-away");
+  await device.disconnect();
+  await expect(
+    device.call("computer_app_enable", { candidate: fixture.candidate }, "sent-away"),
+  ).rejects.toThrow("设备不在线，无法启用本机应用。请等主人的电脑连上后再试。");
+  expect(await device.queuedRows("apps.enable")).toBe(0);
+  expect(await device.queue.uncertain(device.target)).toBe(0);
+  expect(device.sent("apps.enable")).toHaveLength(0);
+}, 20_000);
+
+test("a runner that lists candidates but cannot enable them says the device app needs updating, in Chinese", async () => {
+  const device = await pairedDevice({ enable: false });
+  const fixture = await listedFixture(device);
+  await expect(
+    device.call("computer_app_enable", { candidate: fixture.candidate }, "old"),
+  ).rejects.toBeInstanceOf(HeadlessToolSuspension);
+  const id = await approve(device, "old");
+  const told = await device.resume(id);
+  expect(JSON.stringify(told)).toContain(
+    "主人电脑上的设备端版本较旧，更新后才能启用本机应用。",
+  );
+  expect(JSON.stringify(told)).not.toContain("Nothing on this machine handles");
+  expect(device.sent("apps.enable")).toHaveLength(1);
+  expect(device.registry.list().map((app) => app.name)).toEqual(["Notes"]);
+  expect(await device.queue.uncertain(device.target)).toBe(0);
+}, 20_000);
 // --- end app discovery ---
 
 afterAll(async () => {
