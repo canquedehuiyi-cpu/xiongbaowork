@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -7,6 +7,8 @@ import {
   createShell,
   environmentForCommand,
   plainPowerShellStderr,
+  resetWindowsCodePageCache,
+  windowsCodePage,
   windowsOutputDecoder,
 } from "../src/shell";
 
@@ -573,5 +575,67 @@ describe("Windows command output, a line at a time", () => {
     const decoder = windowsOutputDecoder(undefined);
     expect(decoder.write(new Uint8Array([0xd0, 0x0a]))).toBe("\uFFFD\n");
     expect(windowsOutputDecoder(65001).end()).toBe("");
+  });
+});
+
+/**
+ * The machine code page is what lets a native program's OEM-code-page bytes decode as text. A
+ * failed or timed-out first query (a cold runner starting PowerShell slowly) must not be cached
+ * as "unknown" for the life of the process, or every later command mis-decodes.
+ */
+describe("windowsCodePage cache", () => {
+  let dir: string;
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "codepage-"));
+    resetWindowsCodePageCache();
+  });
+  afterEach(async () => {
+    resetWindowsCodePageCache();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  /** A fake "powershell": logs each call, prints `out`, exits with `code`. */
+  async function fake(
+    name: string,
+    out: string,
+    code: number,
+  ): Promise<string> {
+    const path = join(dir, name);
+    await writeFile(
+      path,
+      `#!/bin/sh\necho call >> "${join(dir, `${name}.log`)}"\necho ${out}\nexit ${code}\n`,
+    );
+    await chmod(path, 0o755);
+    return path;
+  }
+  const calls = async (name: string): Promise<number> =>
+    (await readFile(join(dir, `${name}.log`), "utf8").catch(() => ""))
+      .split("\n")
+      .filter(Boolean).length;
+
+  test("a failed query is not cached; the next call asks again", async () => {
+    const bad = await fake("bad", "oops", 1);
+    const good = await fake("good", "437", 0);
+    expect(await windowsCodePage(bad)).toBeUndefined();
+    expect(await windowsCodePage(good)).toBe(437);
+    expect(await calls("bad")).toBe(1);
+    expect(await calls("good")).toBe(1);
+  });
+
+  test("a successful query is cached", async () => {
+    const good = await fake("good", "437", 0);
+    expect(await windowsCodePage(good)).toBe(437);
+    expect(await windowsCodePage(good)).toBe(437);
+    expect(await calls("good")).toBe(1);
+  });
+
+  test("concurrent callers share one in-flight query", async () => {
+    const good = await fake("good", "437", 0);
+    const [a, b] = await Promise.all([
+      windowsCodePage(good),
+      windowsCodePage(good),
+    ]);
+    expect([a, b]).toEqual([437, 437]);
+    expect(await calls("good")).toBe(1);
   });
 });

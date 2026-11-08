@@ -594,14 +594,25 @@ export function windowsOutputDecoder(codePage: number | undefined) {
 
 let machineCodePage: Promise<number | undefined> | undefined;
 
+/** Forget the remembered code page. For tests; nothing in the product calls it. */
+export function resetWindowsCodePageCache(): void {
+  machineCodePage = undefined;
+}
+
 /**
- * The machine's console code page, asked of PowerShell once per process. A command's console keeps
- * it (nothing here changes it), so it is the code page native programs write in.
+ * The machine's console code page, asked of PowerShell and remembered once it is known. A command's
+ * console keeps it (nothing here changes it), so it is the code page native programs write in.
+ *
+ * Only an answer is remembered. A query that fails or times out (a cold runner can be slow to start
+ * PowerShell) resolves `undefined` for the callers waiting on it, then is forgotten so the next
+ * command asks again; remembering "unknown" would leave every later command decoding OEM bytes as
+ * UTF-8.
  */
 export function windowsCodePage(
   executable: string,
 ): Promise<number | undefined> {
-  machineCodePage ??= new Promise((resolve) => {
+  if (machineCodePage) return machineCodePage;
+  const query: Promise<number | undefined> = new Promise((resolve) => {
     execFile(
       executable,
       [
@@ -611,18 +622,23 @@ export function windowsCodePage(
         "-Command",
         "[Console]::OutputEncoding.CodePage",
       ],
-      { windowsHide: true, timeout: 15_000 },
+      { windowsHide: true, timeout: 30_000 },
       (error, stdout) => {
         const value = Number(String(stdout).trim());
-        resolve(
+        const codePage =
           !error && Number.isSafeInteger(value) && value > 0
             ? value
-            : undefined,
-        );
+            : undefined;
+        // Forget a failure, but only if it is still the remembered query (a reset may have replaced it).
+        if (codePage === undefined && machineCodePage === query) {
+          machineCodePage = undefined;
+        }
+        resolve(codePage);
       },
     );
   });
-  return machineCodePage;
+  machineCodePage = query;
+  return query;
 }
 
 const CLIXML_HEADER = "#< CLIXML";
