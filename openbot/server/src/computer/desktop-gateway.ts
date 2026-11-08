@@ -248,13 +248,17 @@ export function createDesktopMethods(deps: {
         try {
           await fetchWindows(machine, botId, signal);
         } catch (error) {
-          // The person's Stop stays a Stop; anything else leaves one refusal row, not nothing.
+          // The person's Stop stays a Stop. Anything else leaves one refusal row, not nothing, and
+          // the caller still gets the machine's own answer (offline, not Windows, too old).
           if (signal?.aborted) throw error;
-          return refuse(
-            error instanceof Error && error.message === DESKTOP_OLD_RUNNER
-              ? DESKTOP_OLD_RUNNER
-              : DESKTOP_LIST_FAILED,
-          );
+          const reason =
+            error instanceof Error && error.message
+              ? error.message
+              : DESKTOP_LIST_FAILED;
+          await refuse(reason).catch((refused: unknown) => {
+            if (!(refused instanceof ActionRefusedError)) throw refused;
+          });
+          throw error instanceof Error ? error : new Error(DESKTOP_LIST_FAILED);
         }
         window = deps.windows.find(key, windowId);
       }

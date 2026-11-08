@@ -247,19 +247,29 @@ test("a cache miss lists again once; a window still missing is refused and never
   });
 });
 
-test("a failed relist on a cache miss is refused and audited once as desktop.unavailable", async () => {
-  const h = harness({ failWindows: new Error("device offline") });
+test("a failed relist on a cache miss is audited once as desktop.unavailable and keeps the machine's own error", async () => {
+  const offline = new Error("设备不在线");
+  const h = harness({ failWindows: offline });
   const attempt = h.gateway.snapshotDesktop("bot-1", ACTOR, {
     windowId: OTHER.windowId,
   });
-  await expect(attempt).rejects.toBeInstanceOf(ActionRefusedError);
-  await expect(attempt).rejects.toThrow(DESKTOP_LIST_FAILED);
+  // The caller still sees the machine's own answer, of its own type (an offline device stays offline).
+  await expect(attempt).rejects.toBe(offline);
   expect(h.payloads()).toHaveLength(1);
   expect(h.payloads()[0]).toMatchObject({
     action: "computer_desktop_snapshot",
-    refusal: DESKTOP_LIST_FAILED,
+    refusal: "设备不在线",
     decision: { allowed: false, rule: DESKTOP_UNAVAILABLE_RULE },
   });
+});
+
+test("a relist that fails with no message is audited with the generic list failure", async () => {
+  const h = harness({ failWindows: new Error("") });
+  await expect(
+    h.gateway.snapshotDesktop("bot-1", ACTOR, { windowId: OTHER.windowId }),
+  ).rejects.toThrow();
+  expect(h.payloads()).toHaveLength(1);
+  expect(h.payloads()[0]).toMatchObject({ refusal: DESKTOP_LIST_FAILED });
 });
 
 test("a Stop during the relist is not turned into a refusal", async () => {
