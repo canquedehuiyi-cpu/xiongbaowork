@@ -123,7 +123,14 @@ export type AutomationFiringOutcome =
  * that tripped the breaker. It is only ever reported for a switched-off automation, so switching it
  * back on clears it, and so does any firing that finishes after that.
  */
-export type AutomationListing = Automation & { breakerTripped: boolean };
+export type AutomationListing = Automation & {
+  breakerTripped: boolean;
+  /**
+   * Its triggers, the same rows in the same order `listTriggers` reads, so a screen that shows what
+   * fires each automation reads the list once rather than one detail per automation.
+   */
+  triggers: AutomationTrigger[];
+};
 
 export type AutomationStore = {
   create(input: AutomationCreateInput): Promise<Automation>;
@@ -601,9 +608,36 @@ export function createAutomationStore(
           }
         }
       }
+      // Every listed automation's triggers in one read, grouped back onto their automation.
+      const triggers = new Map<string, AutomationTrigger[]>();
+      if (rows.length > 0) {
+        const triggerRows = await database
+          .select()
+          .from(automationTriggers)
+          .where(
+            and(
+              eq(automationTriggers.tenantId, tenant),
+              inArray(
+                automationTriggers.automationId,
+                rows.map((row) => row.id),
+              ),
+            ),
+          )
+          .orderBy(
+            sql`${automationTriggers.nextRunAt} asc nulls last`,
+            asc(automationTriggers.id),
+          );
+        for (const row of triggerRows) {
+          const trigger = toTrigger(row);
+          const list = triggers.get(trigger.automationId) ?? [];
+          list.push(trigger);
+          triggers.set(trigger.automationId, list);
+        }
+      }
       return rows.map((row) => ({
         ...toAutomation(row),
         breakerTripped: tripped.has(row.id),
+        triggers: triggers.get(row.id) ?? [],
       }));
     },
 

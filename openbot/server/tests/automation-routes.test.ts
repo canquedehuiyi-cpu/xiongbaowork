@@ -580,3 +580,48 @@ describe("a WakerFlow target with inputs (WF8)", () => {
     });
   });
 });
+
+/*
+ * The management list carries each automation's triggers, so a screen showing what fires each one
+ * reads the list once instead of `GET /:id` per automation. The triggers are the same rows, in the
+ * same order, as the detail answers, and another tenant's never appear.
+ */
+describe("the list carries each automation's triggers", () => {
+  test("every listed automation has its own triggers, as the detail reads them", async () => {
+    const withTwo = await createAs(alice, wakerA);
+    const withNone = await createAs(alice, wakerA);
+    for (const body of [
+      { kind: "schedule", cron: "0 9 * * 1-5", timezone: "Asia/Shanghai" },
+      { kind: "webhook" },
+    ]) {
+      const added = await call(alice, "POST", `/${withTwo.id}/triggers`, body);
+      expect(added.status).toBe(201);
+    }
+    const bobs = await createAs(bob, wakerB);
+    expect(
+      (await call(bob, "POST", `/${bobs.id}/triggers`, { kind: "webhook" }))
+        .status,
+    ).toBe(201);
+
+    const listed = await call(alice, "GET", "/");
+    expect(listed.status).toBe(200);
+    const rows = listed.json.automations as {
+      id: string;
+      triggers: { automationId: string }[];
+    }[];
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    expect(byId.has(bobs.id)).toBe(false);
+
+    const detail = await call(alice, "GET", `/${withTwo.id}`);
+    expect(byId.get(withTwo.id)?.triggers).toEqual(
+      detail.json.triggers as never,
+    );
+    expect(byId.get(withTwo.id)?.triggers).toHaveLength(2);
+    expect(byId.get(withNone.id)?.triggers).toEqual([]);
+    for (const row of rows) {
+      for (const trigger of row.triggers) {
+        expect(trigger.automationId).toBe(row.id);
+      }
+    }
+  });
+});
