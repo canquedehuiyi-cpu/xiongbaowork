@@ -437,6 +437,64 @@ test("compiled with neither: the runner keeps today's layout in the directory it
   ).toMatch(UUID_V4);
 }, 60_000);
 
+/**
+ * The compiled runner started once, to its end, with the same bare environment as `startRunner`
+ * (plus `extraEnv`), and what it printed.
+ */
+async function runOnce(
+  args: string[],
+  cwd: string,
+  extraEnv: Record<string, string> = {},
+) {
+  const child = Bun.spawn([binary, ...args], {
+    cwd,
+    env: { PATH: "/usr/bin:/bin", HOME: cwd, TMPDIR: cwd, ...extraEnv },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  children.push(child);
+  const [code, stdout, stderr] = await Promise.all([
+    child.exited,
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+  ]);
+  return { code, stdout, stderr };
+}
+
+// Device app discovery (sub-project 3) starts npm apps with the runner itself as `bun x`. These are
+// the offline halves of that: Bun's own CLI answers under BUN_BE_BUN=1, and only then. The online
+// half (`x --bun <package>`) is `scripts/ci/bunx-spike.ts`, which needs the npm registry.
+test("BUN_BE_BUN=1 makes the compiled runner act as bun: --version and a script", async () => {
+  const dir = emptyDir("e-be-bun");
+  const script = join(dir, "marker.ts");
+  // TypeScript on purpose: it is Bun's transpiler that runs it, not the runner's own entry point.
+  writeFileSync(
+    script,
+    "const next: number = 41 + 1;\nconsole.log('BE_BUN_MARKER ' + next);\n",
+  );
+
+  const version = await runOnce(["--version"], dir, { BUN_BE_BUN: "1" });
+  expect(version.code, version.stderr).toBe(0);
+  expect(version.stdout).toMatch(/^\d+\.\d+\.\d+/);
+
+  const ran = await runOnce([script], dir, { BUN_BE_BUN: "1" });
+  expect(ran.code, ran.stderr).toBe(0);
+  expect(ran.stdout).toContain("BE_BUN_MARKER 42");
+
+  // Without the variable the same binary is the runner: it reads both as its own (bad) arguments.
+  const asRunner = await runOnce(["--version"], dir);
+  expect(asRunner.code).toBe(2);
+  expect(`${asRunner.stdout}${asRunner.stderr}`).toContain(
+    "Pass --server with the http(s) address of your deployment.",
+  );
+  const scriptAsRunner = await runOnce([script], dir);
+  expect(scriptAsRunner.code).toBe(2);
+  expect(`${scriptAsRunner.stdout}${scriptAsRunner.stderr}`).toContain(
+    `Unknown argument: ${script}`,
+  );
+  expect(scriptAsRunner.stdout).not.toContain("BE_BUN_MARKER");
+}, 60_000);
+
 test("compiled: a dropped connection is reported as such and dialled again", async () => {
   const launch = emptyDir("d-launch");
   const home = emptyDir("d-home");

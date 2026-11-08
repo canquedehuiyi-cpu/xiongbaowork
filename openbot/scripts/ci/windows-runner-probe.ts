@@ -19,6 +19,7 @@ import { createActionJournal } from "../../runner/src/journal.ts";
 import { createRunnerDispatcher } from "../../runner/src/dispatch.ts";
 import { createAppHost } from "../../runner/src/app-host.ts";
 import { createAppRegistry } from "../../runner/src/apps.ts";
+import { compileRunner, runBunxSpike } from "./bunx-spike.ts";
 
 const root = process.argv[2];
 if (!root || process.platform !== "win32")
@@ -391,4 +392,13 @@ assert(
   echoed,
 );
 await appExecute.closeApps();
+// App discovery (sub-project 3): the compiled runner, under BUN_BE_BUN=1, stands in for `bun x`. The
+// binary and the app's folder sit in this workspace, so the path cmd.exe gets has spaces and Chinese.
+const spikeDir = join(root, "bunx spike 熊宝");
+mkdirSync(spikeDir, { recursive: true });
+const spikeRunner = await compileRunner(join(root, "bunx-spike-bin"));
+for (const result of await runBunxSpike(spikeRunner, spikeDir)) {
+  assert(result.passed, `bunx spike: ${result.check}`, result.detail);
+  console.log(JSON.stringify({ check: result.check, detail: result.detail }));
+}
 console.log("WINDOWS_PROBE_PASS");
