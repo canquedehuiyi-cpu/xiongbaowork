@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type BrowserLauncher, createRunnerBrowser } from "../../runner/src/browser";
 import { runnerProbeHandleHasToken } from "../../scripts/ci/runner-browser-probe-ref";
-import { stopRunnerProbeServer } from "../../scripts/ci/runner-browser-probe-lifecycle";
+import { removeRunnerProbeRoot, stopRunnerProbeServer } from "../../scripts/ci/runner-browser-probe-lifecycle";
 import { settleRunnerProbeAction } from "../../scripts/ci/runner-browser-probe-action";
 import { observeRunnerProbeRead } from "../../scripts/ci/runner-browser-probe-observe";
 import { createRunnerDispatcher } from "../../runner/src/dispatch";
@@ -23,6 +23,24 @@ function ownRoot(): string {
 }
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
+});
+
+describe("runner browser probe cleanup", () => {
+  test("removal retries for Windows file locks and a failure is reported, never thrown", () => {
+    const seen: unknown[] = [];
+    const reports: string[] = [];
+    removeRunnerProbeRoot(
+      "x",
+      (_path, options) => {
+        seen.push(options);
+        throw Object.assign(new Error("EBUSY: resource busy or locked"), { code: "EBUSY" });
+      },
+      (message) => reports.push(message),
+    );
+    expect(seen).toEqual([{ recursive: true, force: true, maxRetries: 10, retryDelay: 200 }]);
+    expect(reports).toHaveLength(1);
+    expect(reports[0]).toContain("EBUSY");
+  });
 });
 
 describe("runner browser probe compatibility", () => {
