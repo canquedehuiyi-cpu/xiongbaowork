@@ -8,6 +8,16 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+## 0.2.4
+
+- **Ask the employee what apps your computer has.** With no app named, `computer_apps` now also
+  lists apps found on the owner's computer that are not enabled yet (from the MCP configs of
+  Claude Desktop, Claude Code, Cursor, VS Code and Windsurf) and installed software that has no
+  local app, each group with a hint on what to do next. Only names, a source label, a kind and a
+  status leave the computer; commands, arguments, paths and key values stay on it. Discovery runs
+  on Windows and needs the device app from this release; an older device app still lists its
+  enabled apps and the employee says the device app needs updating. A paused device or a failed
+  discovery leaves the enabled apps listed and says why in `discoveryError`.
 - **A local app started with `npx` (or `npm`, `pnpm`, `uvx`...) works on Windows.** The device
   handed cmd.exe the bare quoted name, and for a shim it finds on PATH that way cmd reads `%~dp0`
   as the current folder, so npx.cmd looked for its scripts in the device app's own folder and 测试连接
