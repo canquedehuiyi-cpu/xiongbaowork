@@ -258,26 +258,30 @@ test("--discover-apps prints one JSON line with candidates and installed and no 
 
 test("--discover-apps cannot be combined with another app flag", () => {
   const dir = fresh();
+  const reason = (argv: string[]) => {
+    const parsed = parseAppCommand(argv, {}, dir);
+    if (typeof parsed !== "string") throw new Error("expected a refusal");
+    return parsed;
+  };
   for (const other of [
     ["--list-apps"],
     ["--enable-app", "笔记"],
     ["--add-app", "{}"],
   ]) {
-    expect(typeof parseAppCommand(["--discover-apps", ...other], {}, dir)).toBe(
-      "string",
-    );
-    expect(typeof parseAppCommand([...other, "--discover-apps"], {}, dir)).toBe(
-      "string",
-    );
+    for (const argv of [
+      ["--discover-apps", ...other],
+      [...other, "--discover-apps"],
+    ]) {
+      expect(reason(argv)).toStartWith("Pass one of ");
+      expect(reason(argv)).toContain("--discover-apps");
+    }
   }
   // It takes no value, and it never mixes with a folder flag either.
-  expect(typeof parseAppCommand(["--discover-apps", "笔记"], {}, dir)).toBe(
-    "string",
+  expect(reason(["--discover-apps", "笔记"])).toBe("Unknown argument: 笔记");
+  const mixed = reason(["--list-roots", "--discover-apps"]);
+  expect(mixed).toContain("cannot be used together");
+  expect(mixed).toContain("--discover-apps");
+  expect(parseRootCommand(["--discover-apps", "--list-roots"], {}, dir)).toBe(
+    mixed,
   );
-  expect(
-    typeof parseRootCommand(["--discover-apps", "--list-roots"], {}, dir),
-  ).toBe("string");
-  expect(
-    typeof parseAppCommand(["--list-roots", "--discover-apps"], {}, dir),
-  ).toBe("string");
 });

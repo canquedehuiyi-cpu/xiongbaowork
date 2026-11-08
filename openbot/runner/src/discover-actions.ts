@@ -36,7 +36,8 @@ export type DiscoverActions = (
 /** A config file larger than this is skipped (`~/.claude.json` can grow to tens of MB). */
 const READ_LIMIT_BYTES = 20 * 1024 * 1024;
 
-const FAILED = "本机应用发现这次没有成功。";
+/** What any unforeseen failure of discovery says: fixed, so no error text (or path) leaves. */
+export const DISCOVER_FAILED = "本机应用发现这次没有成功。";
 const BAD_CANDIDATE = "候选应用的编号格式不对。";
 const STOPPED = "已在设备上停止。";
 
@@ -128,7 +129,7 @@ export function createDiscoverActions(opts: {
     } catch (error) {
       return {
         ok: false,
-        error: error instanceof DiscoverError ? error.message : FAILED,
+        error: error instanceof DiscoverError ? error.message : DISCOVER_FAILED,
       };
     }
   };

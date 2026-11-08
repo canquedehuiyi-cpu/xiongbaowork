@@ -11,7 +11,11 @@ import {
 } from "./browser";
 import { AppHostError, type createAppHost } from "./app-host";
 // --- app discovery (sub-project 3) ---
-import { DISCOVER_ACTIONS, type DiscoverActions } from "./discover-actions";
+import {
+  DISCOVER_ACTIONS,
+  DISCOVER_FAILED,
+  type DiscoverActions,
+} from "./discover-actions";
 // --- end app discovery ---
 import { createGit, type Git } from "./git";
 import { isRootRef, PROJECTS_DIR, type RootRegistry } from "./roots";
@@ -312,8 +316,16 @@ export function createRunnerExecutor(
         return { ok: true, output };
       }
       // --- app discovery (sub-project 3) ---
-      if (extras?.discovery && DISCOVER_ACTIONS.has(action))
-        return extras.discovery(action, body, signal);
+      if (extras?.discovery && DISCOVER_ACTIONS.has(action)) {
+        try {
+          // Awaited here, so a handler that rejects is answered below and never reaches the journal
+          // as "outcome unknown", which would pause the device.
+          return await extras.discovery(action, body, signal);
+        } catch {
+          // Discovery only reads: a failure is never "unknown", and its message may name a path.
+          return { ok: false, error: DISCOVER_FAILED };
+        }
+      }
       // --- end app discovery ---
       switch (action) {
         case "exec": {

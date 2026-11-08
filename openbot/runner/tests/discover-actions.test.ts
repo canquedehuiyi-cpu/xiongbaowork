@@ -11,9 +11,13 @@ import {
 import {
   createDiscoverActions,
   DISCOVER_ACTIONS,
+  DISCOVER_FAILED,
+  type DiscoverActions,
 } from "../src/discover-actions";
 import { INSTALLED_LIMIT } from "../src/discover-installed";
+import { createRunnerDispatcher } from "../src/dispatch";
 import { createRunnerExecutor } from "../src/execute";
+import { createActionJournal } from "../src/journal";
 
 /*
  * `apps.discover` through the real executor: discovery answers what this machine could offer, by
@@ -269,7 +273,8 @@ test("a discovery that cannot run answers its fixed message, never a path and ne
     },
   });
   const failed = await broken("apps.discover", {});
-  expect(failed.ok).toBe(false);
+  expect(failed).toEqual({ ok: false, error: DISCOVER_FAILED });
+  expect(DISCOVER_FAILED).toBe("本机应用发现这次没有成功。");
   expect(JSON.stringify(failed)).not.toContain(base);
   expect("outcomeUnknown" in failed).toBe(false);
 });
@@ -292,4 +297,66 @@ test("off Windows, apps.discover answers empty lists and reads nothing", async (
     output: { platform: "linux", candidates: [], installed: [] },
   });
   expect(reads).toBe(0);
+});
+
+test("a discovery stopped while it runs answers 已在设备上停止。, never outcomeUnknown", async () => {
+  const controller = new AbortController();
+  const { discovery } = setup({
+    readInstalled: async () => {
+      controller.abort();
+      return [];
+    },
+  });
+  const outcome = await discovery("apps.discover", {}, controller.signal);
+  expect(outcome).toEqual({ ok: false, error: "已在设备上停止。" });
+  expect("outcomeUnknown" in outcome).toBe(false);
+});
+
+test("a discovery handler that rejects or throws neither pauses the device nor leaks its message, through the real dispatcher and journal", async () => {
+  const base = mkdtempSync(join(tmpdir(), "discover-actions-"));
+  dirs.push(base);
+  const workspace = join(base, "ws");
+  mkdirSync(workspace);
+  const leak = "C:\\Users\\me\\secret-folder";
+  const handlers: Record<string, DiscoverActions> = {
+    rejects: async () => {
+      throw new Error(`async boom at ${leak}`);
+    },
+    throws: () => {
+      throw new Error(`sync boom at ${leak}`);
+    },
+  };
+  const journal = createActionJournal(join(base, "actions.sqlite"));
+  try {
+    for (const [label, discovery] of Object.entries(handlers)) {
+      const execute = createRunnerExecutor(
+        workspace,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { discovery },
+      );
+      const dispatch = createRunnerDispatcher(journal, execute);
+      const frames: Record<string, unknown>[] = [];
+      await dispatch(
+        "local/device",
+        {
+          type: "action",
+          id: label,
+          key: label,
+          action: "apps.discover",
+          payload: {},
+        },
+        (frame) => frames.push(frame),
+      );
+      expect(frames).toEqual([
+        { type: "result", id: label, ok: false, error: DISCOVER_FAILED },
+      ]);
+      expect(JSON.stringify(frames)).not.toContain("secret-folder");
+      expect(JSON.stringify(frames)).not.toContain("boom");
+    }
+  } finally {
+    journal.close();
+  }
 });

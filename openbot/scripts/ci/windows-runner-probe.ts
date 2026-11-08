@@ -401,14 +401,73 @@ await appExecute.closeApps();
   const { createDiscoverActions } = await import(
     "../../runner/src/discover-actions.ts"
   );
-  const names = installedNames(await readInstalledWindows());
-  assert(
-    names.length >= 1 &&
-      !names.some((name) => /\bKB\d{6,8}\b/i.test(name)) &&
-      !JSON.stringify(names).includes("�"),
-    "discovery reads installed program names from the registry, without patches or mojibake",
-    names,
-  );
+  // Three Uninstall entries of our own under HKCU, removed in `finally`: a Chinese name (spelled
+  // with [char] codes, so the script's own encoding cannot help), a KB patch and a system component.
+  // windows-latest is an en-US machine whose programs are all ASCII, so without these the checks
+  // below could not fail: a 437 console turns 中文 into '?', which is valid text, not U+FFFD.
+  const seedId = `${process.pid}-${Date.now()}`;
+  const seedKey = `HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\XiongbaoProbe-${seedId}`;
+  const chineseName = `\u718A\u5B9D\u63A2\u9488 \u5E94\u7528 ${seedId}`;
+  const patchName = `Xiongbao Probe Security Update (KB5034441) ${seedId}`;
+  const componentName = `Xiongbao Probe Component ${seedId}`;
+  const powershell = (script: string) =>
+    spawnSync(
+      join(
+        process.env.SystemRoot ?? "C:\\Windows",
+        "System32",
+        "WindowsPowerShell",
+        "v1.0",
+        "powershell.exe",
+      ),
+      ["-NoProfile", "-NonInteractive", "-Command", script],
+      { windowsHide: true, encoding: "utf8" },
+    );
+  const seedEntry = (suffix: string, name: string) =>
+    `New-Item -Path '${seedKey}-${suffix}' -Force | Out-Null; ` +
+    `New-ItemProperty -Path '${seedKey}-${suffix}' -Name DisplayName -PropertyType String -Value ${name} -Force | Out-Null`;
+  try {
+    const seeded = powershell(
+      [
+        "$ErrorActionPreference = 'Stop'",
+        `$zh = [string]::new([char[]]@(0x718A, 0x5B9D, 0x63A2, 0x9488, 0x20, 0x5E94, 0x7528)) + ' ${seedId}'`,
+        seedEntry("zh", "$zh"),
+        seedEntry("kb", `'${patchName}'`),
+        seedEntry("sys", `'${componentName}'`),
+        `New-ItemProperty -Path '${seedKey}-sys' -Name SystemComponent -PropertyType DWord -Value 1 -Force | Out-Null`,
+      ].join("; "),
+    );
+    assert(
+      seeded.status === 0,
+      "discovery probe seeded its registry entries",
+      seeded.stderr,
+    );
+    const raw = await readInstalledWindows();
+    const rawNames = raw.map((entry) => entry.DisplayName);
+    const names = installedNames(raw);
+    assert(
+      rawNames.includes(chineseName) &&
+        rawNames.includes(patchName) &&
+        rawNames.includes(componentName),
+      "the registry read returns the seeded entries, the Chinese name exactly",
+      rawNames.filter(
+        (name) => typeof name === "string" && name.includes(seedId),
+      ),
+    );
+    assert(
+      names.includes(chineseName) &&
+        !names.includes(patchName) &&
+        !names.includes(componentName) &&
+        !names.some((name) => /\bKB\d{6,8}\b/i.test(name)) &&
+        !JSON.stringify(names).includes("\uFFFD") &&
+        !names.some((name) => name.includes(seedId) && name.includes("?")),
+      "installed names keep the Chinese name and drop the patch and the system component",
+      names.filter((name) => name.includes(seedId)),
+    );
+  } finally {
+    powershell(
+      `Remove-Item -Path '${seedKey}-*' -Recurse -Force -ErrorAction SilentlyContinue`,
+    );
+  }
   const appData = join(root, "appdata");
   mkdirSync(join(appData, "Claude"), { recursive: true });
   writeFileSync(
@@ -423,7 +482,18 @@ await appExecute.closeApps();
   const discovery = createDiscoverActions({
     dataDir: discoverDir,
     registry: createAppRegistry({ dataDir: discoverDir }),
-    deps: { env: { ...process.env, APPDATA: appData, USERPROFILE: root } },
+    deps: {
+      // Without any other spelling of the two (`AppData`), which would be read first.
+      env: {
+        ...Object.fromEntries(
+          Object.entries(process.env).filter(
+            ([key]) => !["APPDATA", "USERPROFILE"].includes(key.toUpperCase()),
+          ),
+        ),
+        APPDATA: appData,
+        USERPROFILE: root,
+      },
+    },
   });
   const discovered = await createRunnerExecutor(
     root,
