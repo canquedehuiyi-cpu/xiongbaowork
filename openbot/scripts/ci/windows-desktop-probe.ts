@@ -30,6 +30,7 @@ import {
   type DesktopSnapshot,
   type DesktopWindow,
   desktopMessage,
+  parseWindowId,
 } from "../../shared/desktop-control.ts";
 
 type Assert = (ok: unknown, label: string, seen?: unknown) => void;
@@ -225,6 +226,7 @@ async function probeExecutor(
     );
   let bank: Bun.Subprocess | undefined;
   let bankPid: number | undefined;
+  let bankWindowPid: number | undefined;
   try {
     // 1. The window list names Notepad.
     let listed: DesktopWindow | undefined;
@@ -300,6 +302,7 @@ async function probeExecutor(
       ).find((entry) => entry.title.includes("银行-探针"))?.windowId;
       if (!sensitiveId) await Bun.sleep(250);
     }
+    if (sensitiveId) bankWindowPid = parseWindowId(sensitiveId)?.pid;
     const refused = sensitiveId
       ? await run("desktop.snapshot", { windowId: sensitiveId })
       : undefined;
@@ -335,6 +338,7 @@ async function probeExecutor(
     // 6. Closed.
     await execute.closeDesktop();
     taskkill(bankPid);
+    taskkill(bankWindowPid);
     taskkill(notepadPid);
   }
 }

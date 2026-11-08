@@ -136,9 +136,9 @@ function describe(error: DesktopHelperError): string {
         error.stderrTail ? scrub(error.stderrTail) : undefined,
       );
     case "sensitive":
-      return desktopMessage("sensitive", error.message);
+      return desktopMessage("sensitive", scrub(error.message));
     case "failed":
-      return desktopMessage("failed", error.message);
+      return desktopMessage("failed", scrub(error.message));
     default:
       return desktopMessage(code);
   }

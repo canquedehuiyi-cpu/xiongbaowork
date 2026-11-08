@@ -481,16 +481,19 @@ describe("desktop actions", () => {
     expect(host.running).toBe(false);
   });
 
-  test("without extras the executor answers desktop actions itself", async () => {
-    const workspace = mkdtempSync(join(DIR, "ws-"));
-    const execute = createRunnerExecutor(workspace);
-    const outcome = await execute({ action: "desktop.windows", payload: {} });
-    expect(outcome).toEqual({
-      ok: false,
-      error: "这台设备不是 Windows，暂不支持桌面操作。",
-    });
-    await execute.closeDesktop();
-  });
+  test.skipIf(process.platform === "win32")(
+    "without extras the executor answers desktop actions itself",
+    async () => {
+      const workspace = mkdtempSync(join(DIR, "ws-"));
+      const execute = createRunnerExecutor(workspace);
+      const outcome = await execute({ action: "desktop.windows", payload: {} });
+      expect(outcome).toEqual({
+        ok: false,
+        error: "这台设备不是 Windows，暂不支持桌面操作。",
+      });
+      await execute.closeDesktop();
+    },
+  );
 });
 
 /** Actions over a host whose tree works but whose screenshot fails with `failed` / `message`. */
