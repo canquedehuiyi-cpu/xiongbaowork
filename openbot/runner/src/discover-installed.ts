@@ -28,10 +28,18 @@ const UNINSTALL_KEYS = [
   "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*",
 ];
 
-/** The 64-bit and 32-bit machine-wide views and the owner's own installs, as compact UTF-8 JSON. */
+/**
+ * The 64-bit and 32-bit machine-wide views and the owner's own installs, as compact UTF-8 JSON.
+ *
+ * `-ErrorAction SilentlyContinue` hides a non-terminating error (an installer that wrote a malformed
+ * value: "Specified cast is not valid") but still leaves `$?` false, and `-Command` exits with the
+ * last pipeline's `$?`: one bad key would fail a run that printed the whole list. Hence `exit 0`;
+ * a run that really failed prints no JSON, which reads as [] all the same.
+ */
 export const UNINSTALL_SCRIPT: string = [
   "[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)",
   `Get-ItemProperty -Path ${UNINSTALL_KEYS.map((key) => `'${key}'`).join(", ")} -ErrorAction SilentlyContinue | Select-Object DisplayName, SystemComponent, ParentKeyName, ReleaseType | ConvertTo-Json -Compress`,
+  "exit 0",
 ].join("; ");
 
 const TIMEOUT_MS = 15_000;
@@ -129,8 +137,10 @@ export async function readInstalledWindows(
   } catch {
     return [];
   }
-  if (result.code !== 0) return [];
-  const text = result.stdout.replace(/^﻿/, "").trim();
+  // Killed at the timeout: whatever was printed is cut short. Any exit code otherwise: what was
+  // printed is judged by whether it is JSON (a partial error still prints the full list).
+  if (result.code === null) return [];
+  const text = result.stdout.replace(/^\uFEFF/, "").trim();
   if (!text) return [];
   let parsed: unknown;
   try {

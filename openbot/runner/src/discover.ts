@@ -4,6 +4,7 @@ import {
   mkdirSync,
   readFileSync,
   renameSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { join, win32 } from "node:path";
@@ -41,6 +42,17 @@ export const CANDIDATE_REF: RegExp = /^cand_[0-9a-z]{1,10}_[A-Za-z0-9_-]{22}$/;
 export const DISCOVER_KEY_FILE = "runner-discover.key";
 export const CANDIDATE_EXPIRED =
   "这个候选应用已过期或不存在，请重新查看本机应用。";
+/** Why discovery could not run, without the folder it tried (the owner's name is in that path). */
+export const DISCOVER_KEY_FAILED =
+  "本机应用发现暂时无法使用（无法保存签名密钥）。";
+
+/** A refusal whose message may be shown and sent as it stands: fixed Chinese, no local path. */
+export class DiscoverError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "DiscoverError";
+  }
+}
 
 export type CandidateStatus =
   | "ready"
@@ -111,12 +123,35 @@ function packageRunnerArgs(
   return undefined;
 }
 
+/** Switches cmd may take before `/c` that change nothing about what it runs. */
+const CMD_QUIET_SWITCHES = new Set(["/d", "/s", "/q"]);
+
+/**
+ * The command `cmd [/d /s /q] /c|/k <command> <args…>` runs, which is how many Windows configs work
+ * around `spawn npx ENOENT`. Looked through so `cmd /c npx -y pkg` is the same app as `npx -y pkg`:
+ * deduped with it, judged by the same rules, and started with the bundled runtime when enabled.
+ * Anything else, including `cmd` without `/c` or `/k`, is returned as it is.
+ */
+function unwrapShell(spec: DiscoveredSpec): DiscoveredSpec {
+  let current = spec;
+  while (current.kind === "stdio" && programOf(current.command) === "cmd") {
+    let i = 0;
+    while (CMD_QUIET_SWITCHES.has(current.args[i]?.toLowerCase() ?? "")) i += 1;
+    const run = current.args[i]?.toLowerCase();
+    const inner = current.args[i + 1]?.trim();
+    if ((run !== "/c" && run !== "/k") || !inner) return current;
+    current = { ...current, command: inner, args: current.args.slice(i + 2) };
+  }
+  return current;
+}
+
 /**
  * What an app is, for deduplication and for "already registered": a normalised url, or the program
- * and its arguments, with the npm package runners made one. Environment and working folder are not
- * part of it.
+ * and its arguments, with `cmd /c` looked through and the npm package runners made one. Environment
+ * and working folder are not part of it.
  */
-export function identityOf(spec: DiscoveredSpec): string {
+export function identityOf(given: DiscoveredSpec): string {
+  const spec = unwrapShell(given);
   if (spec.kind === "http") {
     try {
       return `url:${new URL(spec.url).href}`;
@@ -206,9 +241,16 @@ function macOf(
   identity: string,
   spec: DiscoveredSpec,
 ): string {
+  // The command as written, folder included: the identity keeps only its file name, and a ref must
+  // not survive the program being swapped for another of the same name.
   const settings =
     spec.kind === "stdio"
-      ? canonicalJson({ cwd: spec.cwd ?? null, env: spec.env })
+      ? canonicalJson({
+          command: spec.command,
+          args: spec.args,
+          cwd: spec.cwd ?? null,
+          env: spec.env,
+        })
       : "";
   return createHmac("sha256", key)
     .update(`${issued}\n${source}\n${identity}\n${settings}`)
@@ -237,13 +279,19 @@ function ensureKey(dataDir: string): Buffer {
   const file = join(dataDir, DISCOVER_KEY_FILE);
   mkdirSync(dataDir, { recursive: true });
   const temporary = `${file}.${randomBytes(6).toString("hex")}.tmp`;
-  writeFileSync(temporary, randomBytes(32), { mode: 0o600 });
   try {
-    chmodSync(temporary, 0o600);
-  } catch {
-    // A filesystem without modes still got a file it created private.
+    // On Windows the mode means little: the file takes the data folder's ACL, like the token's.
+    writeFileSync(temporary, randomBytes(32), { mode: 0o600 });
+    try {
+      chmodSync(temporary, 0o600);
+    } catch {
+      // A filesystem without modes still got a file it created private.
+    }
+    renameSync(temporary, file);
+  } catch (error) {
+    rmSync(temporary, { force: true });
+    throw error;
   }
-  renameSync(temporary, file);
   // Two processes making a key at once: both use whichever landed last.
   return readFileSync(file);
 }
@@ -289,12 +337,13 @@ function scan(
     readText: deps.readText,
   })) {
     if (out.length >= MAX_CANDIDATES) break;
-    const identity = identityOf(found.spec);
+    const spec = unwrapShell(found.spec);
+    const identity = identityOf(spec);
     if (seen.has(identity)) continue;
     seen.add(identity);
     const name = uniqueName(found.name, found.source, taken);
     taken.add(name.toLowerCase());
-    const mac = macOf(key, issued, found.source, identity, found.spec);
+    const mac = macOf(key, issued, found.source, identity, spec);
     const app = registered.get(identity);
     out.push({
       candidate: {
@@ -302,12 +351,12 @@ function scan(
         name,
         source: found.source,
         sourceLabel: SOURCE_LABELS[found.source],
-        kind: found.spec.kind,
+        kind: spec.kind,
         enabled: app?.enabled ?? false,
         ...(app ? { app: app.ref } : {}),
-        ...statusOf(found.spec, deps.resolveCommand),
+        ...statusOf(spec, deps.resolveCommand),
       },
-      spec: found.spec,
+      spec,
       mac,
     });
   }
@@ -320,6 +369,13 @@ export async function discoverApps(
   if (deps.platform !== "win32") {
     return { platform: deps.platform, candidates: [], installed: [] };
   }
+  let key: Buffer;
+  try {
+    key = ensureKey(deps.dataDir);
+  } catch {
+    // The fs error names the data folder, and with it the owner's account: it must not leave.
+    throw new DiscoverError(DISCOVER_KEY_FAILED);
+  }
   const installed = (async () => {
     try {
       return installedNames(await deps.readInstalled());
@@ -327,7 +383,6 @@ export async function discoverApps(
       return [];
     }
   })();
-  const key = ensureKey(deps.dataDir);
   const issued = Math.floor(deps.now() / 1000);
   const candidates = scan(deps, key, issued).map(({ candidate }) => candidate);
   return { platform: deps.platform, candidates, installed: await installed };

@@ -281,7 +281,9 @@ export function serversFromConfig(
 ): FoundServer[] {
   const found: FoundServer[] = [];
   for (const [key, value] of Object.entries(entries)) {
-    const name = [...key.trim()].slice(0, APP_NAME_LIMIT).join("").trim();
+    // A name ends up on approval cards and in the model's context: no line breaks or other controls.
+    const plain = key.replace(/\p{Cc}+/gu, " ").trim();
+    const name = [...plain].slice(0, APP_NAME_LIMIT).join("").trim();
     if (!name) continue;
     const spec = specOf(value);
     if (spec) found.push({ source, name, spec });

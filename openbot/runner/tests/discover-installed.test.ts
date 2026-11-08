@@ -100,11 +100,15 @@ test("readInstalledWindows accepts one object or an array; a failed, timed-out o
   ).toEqual([{ DisplayName: "Only One" }]);
   // Nothing installed: ConvertTo-Json prints nothing.
   expect(await readInstalledWindows(fake({ code: 0, stdout: "" }))).toEqual([]);
+  // A non-terminating error on one key (a malformed value) sets the exit code but still prints the
+  // whole list: what was read counts.
   expect(
     await readInstalledWindows(
       fake({ code: 1, stdout: '[{"DisplayName":"x"}]' }),
     ),
-  ).toEqual([]);
+  ).toEqual([{ DisplayName: "x" }]);
+  // A run that failed outright prints nothing on stdout.
+  expect(await readInstalledWindows(fake({ code: 1, stdout: "" }))).toEqual([]);
   // Killed at the timeout: no exit code.
   expect(
     await readInstalledWindows(
@@ -149,4 +153,6 @@ test("the script reads both HKLM views and HKCU and sets UTF-8 output", () => {
     "Select-Object DisplayName, SystemComponent, ParentKeyName, ReleaseType",
   );
   expect(UNINSTALL_SCRIPT).toContain("ConvertTo-Json -Compress");
+  // `$?` of the last pipeline would otherwise make one unreadable key fail the whole run.
+  expect(UNINSTALL_SCRIPT.trimEnd().endsWith("; exit 0")).toBe(true);
 });

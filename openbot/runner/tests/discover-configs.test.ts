@@ -338,3 +338,12 @@ test("labels name every source in Chinese, and a short form for renaming", () =>
     windsurf: "Windsurf",
   });
 });
+
+test("control characters in a name become spaces", () => {
+  expect(
+    serversFromConfig("cursor", {
+      "\tmy\napp\u0000x\r\n": { url: "http://localhost:1/" },
+      "\n\t": { url: "http://localhost:2/" },
+    }).map((server) => server.name),
+  ).toEqual(["my app x"]);
+});

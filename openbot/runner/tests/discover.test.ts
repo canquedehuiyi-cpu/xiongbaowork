@@ -2,9 +2,11 @@ import { afterAll, expect, test } from "bun:test";
 import {
   existsSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   statSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, win32 } from "node:path";
@@ -14,8 +16,10 @@ import {
   CANDIDATE_REF,
   CANDIDATE_TTL_MS,
   type Candidate,
+  DISCOVER_KEY_FAILED,
   DISCOVER_KEY_FILE,
   type DiscoverDeps,
+  DiscoverError,
   discoverApps,
   findCandidate,
   identityOf,
@@ -516,5 +520,118 @@ test("the key file is created with mode 0o600 and reused by a second discovery",
   const second = await discoverApps(m.deps);
   expect(readFileSync(file).equals(key)).toBe(true);
   expect(second.candidates[0]!.ref).toBe(first.candidates[0]!.ref);
-  expect(existsSync(`${file}.tmp`)).toBe(false);
+  // No temporary file is left beside the key.
+  expect(readdirSync(m.dataDir)).toEqual([DISCOVER_KEY_FILE]);
+});
+
+test("a key that cannot be saved fails with a fixed message that names no local path", async () => {
+  // The data folder is a file: nothing can be made inside it.
+  const blocked = join(scratch, "blocked-用户");
+  writeFileSync(blocked, "not a folder");
+  const m = machine(
+    { [PATHS.cursor]: servers({ a: { command: "node", args: ["a.js"] } }) },
+    { dataDir: blocked },
+  );
+  const failure = await discoverApps(m.deps).then(
+    () => undefined,
+    (error: unknown) => error,
+  );
+  expect(failure).toBeInstanceOf(DiscoverError);
+  const message = (failure as Error).message;
+  expect(message).toBe(DISCOVER_KEY_FAILED);
+  expect(message).not.toContain(blocked);
+  expect(message).not.toContain("blocked");
+  expect(message).not.toContain(DISCOVER_KEY_FILE);
+  expect(message).not.toMatch(/[\\/]/);
+});
+
+test("cmd /c is looked through: cmd /c npx -y pkg is the same app as npx -y pkg, and cmd /c uvx follows the uv rule", async () => {
+  const stdio = (command: string, args: string[]) => ({
+    kind: "stdio" as const,
+    command,
+    args,
+    env: {},
+  });
+  const npx = identityOf(stdio("npx", ["-y", "pkg"]));
+  expect(identityOf(stdio("cmd", ["/c", "npx", "-y", "pkg"]))).toBe(npx);
+  expect(identityOf(stdio("CMD.EXE", ["/C", "npx", "-y", "pkg"]))).toBe(npx);
+  expect(
+    identityOf(stdio("C:\\Windows\\System32\\cmd.exe", ["/k", "bunx", "pkg"])),
+  ).toBe(npx);
+  expect(identityOf(stdio("cmd", ["/d", "/s", "/c", "node", "a.js"]))).toBe(
+    identityOf(stdio("node", ["a.js"])),
+  );
+  // Without /c or /k, cmd is just cmd.
+  expect(identityOf(stdio("cmd", ["npx", "-y", "pkg"]))).not.toBe(npx);
+
+  const m = machine({
+    [PATHS.claudeDesktop]: servers({
+      wrapped: {
+        command: "cmd",
+        args: ["/c", "npx", "-y", "pkg"],
+        env: { K: "v" },
+      },
+      python: { command: "cmd.exe", args: ["/C", "uvx", "mcp-server-time"] },
+      flagged: { command: "cmd", args: ["/c", "npx", "--registry", "r", "p"] },
+    }),
+    [PATHS.cursor]: servers({ plain: { command: "npx", args: ["-y", "pkg"] } }),
+  });
+  const { candidates } = await discoverApps(m.deps);
+  expect(
+    candidates.map(({ name, source, status, note }) => ({
+      name,
+      source,
+      status,
+      note,
+    })),
+  ).toEqual([
+    {
+      name: "wrapped",
+      source: "claude-desktop",
+      status: "ready",
+      note: undefined,
+    },
+    {
+      name: "python",
+      source: "claude-desktop",
+      status: "needs_uv",
+      note: "需要先安装 uv",
+    },
+    {
+      name: "flagged",
+      source: "claude-desktop",
+      status: "unsupported",
+      note: "启动参数无法改写为自带运行时，请在「高级：手动添加」里添加",
+    },
+  ]);
+  // What enabling gets is the command cmd would have run, ready to rewrite to the bundled runtime.
+  expect(await findCandidate(m.deps, candidates[0]!.ref)).toMatchObject({
+    spec: {
+      kind: "stdio",
+      command: "npx",
+      args: ["-y", "pkg"],
+      env: { K: "v" },
+    },
+  });
+});
+
+test("a ref is refused when only the command's folder changed after issue", async () => {
+  const at = (folder: string) => ({
+    [PATHS.claudeDesktop]: servers({
+      tool: { command: `${folder}\\srv.exe`, args: ["--x"] },
+    }),
+  });
+  const m = machine(at("C:\\tools"));
+  const { candidates } = await discoverApps(m.deps);
+  const ref = candidates[0]!.ref;
+  expect(await findCandidate(m.deps, ref)).toMatchObject({
+    spec: { command: "C:\\tools\\srv.exe" },
+  });
+  m.setFiles(at("C:\\evil"));
+  // Still the same app by name and arguments...
+  expect(names((await discoverApps(m.deps)).candidates)).toEqual(["tool"]);
+  // ...but not the one that was offered.
+  expect(await findCandidate(m.deps, ref)).toEqual({
+    error: CANDIDATE_EXPIRED,
+  });
 });
