@@ -424,52 +424,10 @@ jobs:
           persist-credentials: false
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: 1.4.4
+          bun-version: 1.3.14
       # runner/src/browser imports agent-computer/src/aria-snapshot, which needs yaml from the root.
       - name: Install root workspaces from the frozen lockfile (no lifecycle scripts)
         run: bun install --frozen-lockfile --ignore-scripts
-      - name: DIAG launch
-        run: |
-          bun --version
-          $chrome = Join-Path $env:ProgramFiles 'Google\Chrome\Application\chrome.exe'
-          $js = @'
-          import { chromium } from "playwright-core";
-          import { spawn } from "node:child_process";
-          import { readFileSync } from "node:fs";
-          const mode = process.argv[2];
-          const dir = process.argv[3];
-          const t = Date.now();
-          try {
-            if (mode === "pipe") {
-              const c = await chromium.launchPersistentContext(dir, { headless: false, executablePath: process.argv[4], timeout: 30000, chromiumSandbox: true, ignoreDefaultArgs: ["--password-store=basic", "--use-mock-keychain"] });
-              const p = c.pages()[0] ?? await c.newPage();
-              await p.goto("about:blank");
-              console.log("PIPE LAUNCHED", Date.now() - t, "ms");
-              await c.close();
-            } else {
-              const child = spawn(process.argv[4], ["--remote-debugging-port=0", `--user-data-dir=${dir}`, "--no-first-run", "about:blank"], { stdio: "ignore" });
-              let port;
-              for (let i = 0; i < 100 && !port; i++) {
-                await new Promise((r) => setTimeout(r, 200));
-                try { port = readFileSync(`${dir}/DevToolsActivePort`, "utf8").split("\n")[0]; } catch {}
-              }
-              const b = await chromium.connectOverCDP(`http://127.0.0.1:${port}`, { timeout: 20000 });
-              console.log("CDP CONNECTED", b.contexts()[0].pages().length, Date.now() - t, "ms");
-              await b.close();
-              child.kill();
-            }
-          } catch (e) { console.log("FAILED", mode, Date.now() - t, "ms", String(e).slice(0, 600)); }
-          process.exit(0);
-          '@
-          Set-Content -Path launch.mjs -Value $js
-          foreach ($rt in 'bun','node') {
-            foreach ($mode in 'pipe','cdp') {
-              $dir = Join-Path $env:RUNNER_TEMP "diag-$rt-$mode"
-              "=== $rt $mode"
-              $p = Start-Process $rt -ArgumentList 'launch.mjs',$mode,"`"$dir`"","`"$chrome`"" -NoNewWindow -PassThru
-              if (-not $p.WaitForExit(60000)) { $p.Kill($true); "$rt $mode TIMEOUT 60s" }
-            }
-          }
       - name: Real browser probe (the runner image's Chrome, headed, nothing downloaded)
         run: |
           [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
