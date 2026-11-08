@@ -10,6 +10,9 @@ import {
   type RunnerBrowser,
 } from "./browser";
 import { AppHostError, type createAppHost } from "./app-host";
+// --- app discovery (sub-project 3) ---
+import { DISCOVER_ACTIONS, type DiscoverActions } from "./discover-actions";
+// --- end app discovery ---
 import { createGit, type Git } from "./git";
 import { isRootRef, PROJECTS_DIR, type RootRegistry } from "./roots";
 
@@ -105,6 +108,10 @@ export function createRunnerExecutor(
   git: Git = createGit(),
   /** The owner's local MCP apps. Absent means this machine offers none. */
   apps?: ReturnType<typeof createAppHost>,
+  // --- app discovery (sub-project 3) ---
+  /** Discovery of the apps this machine could offer. Absent means this machine offers none. */
+  extras?: { discovery?: DiscoverActions },
+  // --- end app discovery ---
 ): RunnerExecutor {
   const workspace = createWorkspace(workspaceDir);
   const shell = createShell(workspaceDir);
@@ -304,6 +311,10 @@ export function createRunnerExecutor(
         });
         return { ok: true, output };
       }
+      // --- app discovery (sub-project 3) ---
+      if (extras?.discovery && DISCOVER_ACTIONS.has(action))
+        return extras.discovery(action, body, signal);
+      // --- end app discovery ---
       switch (action) {
         case "exec": {
           const command =

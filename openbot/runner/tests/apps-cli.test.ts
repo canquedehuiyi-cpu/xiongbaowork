@@ -180,3 +180,104 @@ test("--add-app - reads the app from stdin, so a key never appears on the comman
   expect(JSON.parse(lines[0] ?? "null")).toMatchObject({ ok: false });
   expect(lines[0]).toContain("JSON");
 }, 20_000);
+
+test("--discover-apps prints one JSON line with candidates and installed and no command or env value", async () => {
+  const dataDir = fresh();
+  const parsed = parseAppCommand(
+    ["--data-dir", dataDir, "--discover-apps"],
+    {},
+    dataDir,
+  );
+  if (parsed === null || typeof parsed === "string")
+    throw new Error(`not an app command: ${String(parsed)}`);
+  expect(parsed.command).toEqual({ kind: "discover" });
+  const appData = "C:\\Users\\me\\AppData\\Roaming";
+  const config = JSON.stringify({
+    mcpServers: {
+      笔记: {
+        command: "C:\\Users\\me\\tools\\notes-server.exe",
+        args: ["--vault", "C:\\Users\\me\\proj"],
+        env: { NOTES_TOKEN: "sk-test-secret" },
+      },
+    },
+  });
+  const lines: string[] = [];
+  const code = await runAppCommand(
+    parsed,
+    (line) => lines.push(line),
+    undefined,
+    {
+      platform: "win32",
+      env: { APPDATA: appData, USERPROFILE: "C:\\Users\\me" },
+      readText: (path) =>
+        path === `${appData}\\Claude\\claude_desktop_config.json`
+          ? config
+          : undefined,
+      readInstalled: async () => [{ DisplayName: "微信" }],
+      resolveCommand: (command) => command,
+    },
+  );
+  expect(code).toBe(0);
+  expect(lines).toHaveLength(1);
+  const json = JSON.parse(lines[0] ?? "null");
+  expect(json).toEqual({
+    ok: true,
+    platform: "win32",
+    candidates: [
+      expect.objectContaining({
+        name: "笔记",
+        source: "claude-desktop",
+        status: "ready",
+      }),
+    ],
+    installed: ["微信"],
+  });
+  for (const secret of [
+    "sk-test-secret",
+    "NOTES_TOKEN",
+    "notes-server",
+    "--vault",
+    "Users",
+    "proj",
+  ]) {
+    expect(lines[0]).not.toContain(secret);
+  }
+
+  // The real default machine: off Windows it reads nothing and answers empty lists.
+  if (process.platform !== "win32") {
+    const plain: string[] = [];
+    expect(await runAppCommand(parsed, (line) => plain.push(line))).toBe(0);
+    expect(JSON.parse(plain[0] ?? "null")).toEqual({
+      ok: true,
+      platform: process.platform,
+      candidates: [],
+      installed: [],
+    });
+  }
+});
+
+test("--discover-apps cannot be combined with another app flag", () => {
+  const dir = fresh();
+  for (const other of [
+    ["--list-apps"],
+    ["--enable-app", "笔记"],
+    ["--add-app", "{}"],
+  ]) {
+    expect(typeof parseAppCommand(["--discover-apps", ...other], {}, dir)).toBe(
+      "string",
+    );
+    expect(typeof parseAppCommand([...other, "--discover-apps"], {}, dir)).toBe(
+      "string",
+    );
+  }
+  // It takes no value, and it never mixes with a folder flag either.
+  expect(typeof parseAppCommand(["--discover-apps", "笔记"], {}, dir)).toBe(
+    "string",
+  );
+  expect(
+    typeof parseRootCommand(["--discover-apps", "--list-roots"], {}, dir),
+  ).toBe("string");
+  expect(
+    typeof parseAppCommand(["--list-roots", "--discover-apps"], {}, dir),
+  ).toBe("string");
+});

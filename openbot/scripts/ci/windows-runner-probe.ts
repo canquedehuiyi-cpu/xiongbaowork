@@ -391,4 +391,67 @@ assert(
   echoed,
 );
 await appExecute.closeApps();
+// --- app discovery (sub-project 3) ---
+// The real registry read through PowerShell as UTF-8 (a GBK console would turn 中文 names into
+// mojibake), and a real Claude Desktop config found through APPDATA and answered by name only.
+{
+  const { installedNames, readInstalledWindows } = await import(
+    "../../runner/src/discover-installed.ts"
+  );
+  const { createDiscoverActions } = await import(
+    "../../runner/src/discover-actions.ts"
+  );
+  const names = installedNames(await readInstalledWindows());
+  assert(
+    names.length >= 1 &&
+      !names.some((name) => /\bKB\d{6,8}\b/i.test(name)) &&
+      !JSON.stringify(names).includes("�"),
+    "discovery reads installed program names from the registry, without patches or mojibake",
+    names,
+  );
+  const appData = join(root, "appdata");
+  mkdirSync(join(appData, "Claude"), { recursive: true });
+  writeFileSync(
+    join(appData, "Claude", "claude_desktop_config.json"),
+    JSON.stringify({
+      mcpServers: {
+        fixture: { command: process.execPath, args: [fixture], env: {} },
+      },
+    }),
+  );
+  const discoverDir = join(root, "discover-data");
+  const discovery = createDiscoverActions({
+    dataDir: discoverDir,
+    registry: createAppRegistry({ dataDir: discoverDir }),
+    deps: { env: { ...process.env, APPDATA: appData, USERPROFILE: root } },
+  });
+  const discovered = await createRunnerExecutor(
+    root,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    { discovery },
+  )({ action: "apps.discover", payload: {} });
+  const candidates = successfulOutput(discovered).candidates as {
+    name: string;
+    status: string;
+  }[];
+  const text = JSON.stringify(discovered);
+  assert(
+    candidates.some(
+      (candidate) =>
+        candidate.name === "fixture" && candidate.status === "ready",
+    ) &&
+      ![fixture, process.execPath, root].some(
+        (path) =>
+          text.includes(path) ||
+          text.includes(JSON.stringify(path).slice(1, -1)),
+      ) &&
+      !text.includes("fake-mcp-stdio"),
+    "apps.discover finds a Claude Desktop app by name, ready, without its path",
+    discovered,
+  );
+}
+// --- end app discovery ---
 console.log("WINDOWS_PROBE_PASS");
