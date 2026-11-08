@@ -60,6 +60,14 @@ import {
   StaleSnapshotError,
 } from "./client";
 import { HeadlessToolSuspension } from "./headless-tools";
+// --- desktop control (sub-project 2) ---
+import type {
+  DesktopSnapshot,
+  DesktopWindow,
+} from "../../../shared/desktop-control";
+import { createDesktopMethods, type DesktopSubject } from "./desktop-gateway";
+import { createDesktopWindowCache } from "./desktop-state";
+// --- end desktop control ---
 import { checkComputerAddress } from "./target";
 
 export {
@@ -430,6 +438,21 @@ export interface ComputerGateway {
   ): Promise<{ cleared: boolean }>;
   /** Move a computer onto the current image, keeping its files and sign-ins. */
   updateComputer(botId: string, actor: ActionActor): Promise<ComputerUpdate>;
+  // --- desktop control (sub-project 2) ---
+  /** The windows on the owner's paired machine (desktop viewing, read only). */
+  listDesktopWindows(
+    botId: string,
+    actor: ActionActor,
+    signal?: AbortSignal,
+  ): Promise<{ untrusted: string; windows: DesktopWindow[] }>;
+  /** One window's control tree, and its screenshot when asked; a sensitive title asks first. */
+  snapshotDesktop(
+    botId: string,
+    actor: ActionActor,
+    input: { windowId: string; from?: string; screenshot?: boolean },
+    signal?: AbortSignal,
+  ): Promise<{ untrusted: string } & DesktopSnapshot>;
+  // --- end desktop control ---
 }
 
 export function createComputerGateway(
@@ -742,6 +765,10 @@ export function createComputerGateway(
       refusal?: string;
       /** The rule that refusal names. Absent: the project rule. */
       refusalRule?: string;
+      // --- desktop control (sub-project 2) ---
+      /** The desktop window a read is for, from the machine's own window list (never the model's). */
+      desktop?: DesktopSubject;
+      // --- end desktop control ---
       /**
        * A local app's tool this call is about (device MCP bridge §3.4): the app's name and the tool.
        * Whether the device's own list marks it read-only and not destructive comes from `resolveApp`,
@@ -796,6 +823,19 @@ export function createComputerGateway(
     const appRow = subject.app
       ? { app: { name: subject.app.name, tool: subject.app.tool } }
       : {};
+    // --- desktop control (sub-project 2) ---
+    // Which window, by its title and process; never what was read from it.
+    const desktopRow = subject.desktop
+      ? {
+          desktop: {
+            windowId: subject.desktop.windowId,
+            title: subject.desktop.title,
+            process: subject.desktop.process,
+            screenshot: subject.desktop.screenshot,
+          },
+        }
+      : {};
+    // --- end desktop control ---
 
     /*
      * Every field is bound, present or not.
@@ -919,6 +959,9 @@ export function createComputerGateway(
         refusal: subject.refusal,
         device: target && target !== "unknown" ? target.deviceId : null,
         ...appRow,
+        // --- desktop control (sub-project 2) ---
+        ...desktopRow,
+        // --- end desktop control ---
       });
       throw new ActionRefusedError(
         subject.refusal,
@@ -946,6 +989,9 @@ export function createComputerGateway(
        */
       device: target && target !== "unknown" ? target.deviceId : null,
       ...appRow,
+      // --- desktop control (sub-project 2) ---
+      ...desktopRow,
+      // --- end desktop control ---
     });
     if (!decision.forward) {
       throw new ActionRefusedError(decision.reason, decision.matched);
@@ -1024,7 +1070,10 @@ export function createComputerGateway(
          * A local app's tool is its own target, so a rule or an "always allow" names one tool of one
          * app rather than every tool the app has.
          */
-        scope: app
+        // --- desktop control (sub-project 2): a window is named by its process ---
+        scope: subject.desktop
+          ? `desktop/${subject.desktop.process}`
+          : app
           ? `${app.name}/${app.tool}`
           : filePath
             ? filePath.split("/").slice(0, -1).join("/") || "workspace"
@@ -1040,13 +1089,25 @@ export function createComputerGateway(
           refusalRule: undefined,
           app: undefined,
           resolveApp: undefined,
+          // --- desktop control (sub-project 2) ---
+          desktop: undefined,
+          // --- end desktop control ---
         },
         /*
          * A local app's tool is named by the app and the tool alone. Its description is for the card
          * only (`display`): the device reports it afresh each time, and not at all while it is away,
          * so it is not part of the action an approval binds.
          */
-        target: app
+        // --- desktop control (sub-project 2): the window's title and process, never its contents ---
+        target: subject.desktop
+          ? {
+              window: {
+                title: subject.desktop.title,
+                process: subject.desktop.process,
+              },
+              screenshot: subject.desktop.screenshot,
+            }
+          : app
           ? { app: app.name, tool: app.tool }
           : {
               pageUrl,
@@ -1064,6 +1125,19 @@ export function createComputerGateway(
           runner: target !== null,
           // The device-list verdict for a local app's tool, for the app-tool floor (§4.4).
           ...(app ? { appTool: { readOnly: app.readOnly === true } } : {}),
+          // --- desktop control (sub-project 2) ---
+          // The window's title and the word it matched, for the desktop-window floor (§4.2).
+          ...(subject.desktop
+            ? {
+                desktop: {
+                  title: subject.desktop.title,
+                  ...(subject.desktop.sensitiveWord
+                    ? { sensitiveWord: subject.desktop.sensitiveWord }
+                    : {}),
+                },
+              }
+            : {}),
+          // --- end desktop control ---
         },
         continuation,
       });
@@ -1120,6 +1194,9 @@ export function createComputerGateway(
         decision,
         failure: error instanceof Error ? error.message : "The action failed.",
         ...appRow,
+        // --- desktop control (sub-project 2) ---
+        ...desktopRow,
+        // --- end desktop control ---
         // A person pressing Stop mid-action is not the computer failing. The message still says so;
         // this keeps the row's type a stop, so a count of failed actions does not read every Stop as
         // an outage.
@@ -1408,6 +1485,16 @@ export function createComputerGateway(
     screenshot,
     snapshot,
     read,
+    // --- desktop control (sub-project 2) ---
+    ...createDesktopMethods({
+      resolveDevice: options.resolveDevice,
+      approvalRefusal: options.approvalRefusal,
+      hasApprovalGate: options.approvalGate !== undefined,
+      govern,
+      post,
+      windows: createDesktopWindowCache({ now }),
+    }),
+    // --- end desktop control ---
 
     status(botId: string): Promise<ComputerStatus> {
       return provider.status(botId);
@@ -2298,6 +2385,12 @@ export function intentOf(
       return "read";
     case "computer_app_call":
       return "app_call";
+    // --- desktop control (sub-project 2) ---
+    // Listing the windows and reading one change nothing on the desktop.
+    case "computer_desktop_windows":
+    case "computer_desktop_snapshot":
+      return "read";
+    // --- end desktop control ---
     default:
       return undefined;
   }
@@ -2328,6 +2421,15 @@ async function write(
     refusal?: string;
     /** The local app and tool a `computer_app_call` named; never its arguments. */
     app?: { name: string; tool: string };
+    // --- desktop control (sub-project 2) ---
+    /** The desktop window a read was for, by title and process; never what was read from it. */
+    desktop?: {
+      windowId: string;
+      title: string;
+      process: string;
+      screenshot: boolean;
+    };
+    // --- end desktop control ---
   },
 ) {
   await recordAuditEvent(auditStore, {
@@ -2397,6 +2499,9 @@ async function write(
       ...(entry.failure ? { failure: entry.failure } : {}),
       ...(entry.refusal ? { refusal: entry.refusal } : {}),
       ...(entry.app ? { app: entry.app } : {}),
+      // --- desktop control (sub-project 2) ---
+      ...(entry.desktop ? { desktop: entry.desktop } : {}),
+      // --- end desktop control ---
       decision: {
         allowed: entry.decision.allowed,
         mode: entry.decision.mode,
