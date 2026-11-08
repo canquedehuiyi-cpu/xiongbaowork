@@ -658,7 +658,7 @@ function CoworkerWall({
         <div
           className={`${CARD_SURFACE} h-[212px] items-center justify-center gap-3 border-dashed px-6`}
         >
-          <BearMascot size={48} />
+          <BearMascot mood="sweet" size={48} />
           <p className="text-muted-foreground text-sm">这里还没有员工。</p>
         </div>
       ) : null}

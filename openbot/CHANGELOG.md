@@ -15,6 +15,9 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   the letter mark in the sidebar and on the 小管家 button, is the favicon, and the empty-state mascot
   is redrawn after the character sheet. A tenant package may now give `tenant.english_name`; the
   sidebar and the tab title show it beside the product name (熊宝数字员工 · xiongbao work).
+- **熊宝 greets empty lists in the character sheet's five expressions.** 调皮, 可爱, 帅气, 开心 and
+  卖萌 are cut from the brand's character sheet as round portraits; each empty state picks one, and
+  the 小管家 button wears 帅气. The logo now comes from the transparent original.
 
 - **The automation list carries each automation's triggers.** `GET /api/automations` now returns
   `triggers` on every item. These are the same rows `GET /api/automations/:id` returns. /autonomous

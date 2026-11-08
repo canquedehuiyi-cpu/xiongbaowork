@@ -2,6 +2,7 @@ import { useMutation, type useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
+import { WorkbenchEmpty } from "@/components/layout/workbench-empty";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -11,16 +12,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { WorkbenchEmpty } from "@/components/layout/workbench-empty";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { AgentProfile } from "@/lib/agents/queries";
+import { cn } from "@/lib/utils";
 import {
   createCrewMutationOptions,
   retireCrewMutationOptions,
   setCrewMembersMutationOptions,
 } from "@/lib/waker-groups/mutations";
-import { cn } from "@/lib/utils";
 import type { WakerGroup } from "@/lib/waker-groups/queries";
 import {
   CARD_SURFACE,
@@ -174,6 +174,7 @@ export function CrewTab({
           action={<Button onClick={onCreate}>新建群组</Button>}
           className="py-16"
           description={CREW_MEANING}
+          mood="cute"
           title="还没有群组"
         />
       </div>

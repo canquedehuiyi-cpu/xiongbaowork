@@ -121,6 +121,20 @@ test("the empty state draws our own mascot and says what is missing", () => {
   expect(view.getByText("当前筛选条件下没有可展示的任务。")).toBeTruthy();
 });
 
+test("the empty state can greet with any of the character sheet's expressions", () => {
+  const view = render(<WorkbenchEmpty mood="cute" title="还没有群组" />);
+  const mascot = view.getByRole("img", { name: "熊宝" });
+  expect(mascot.getAttribute("data-mood")).toBe("cute");
+  expect(mascot.getAttribute("src")).toContain("xiongbao-cute");
+});
+
+test("without a mood the empty state's 熊宝 is the happy one", () => {
+  const view = render(<WorkbenchEmpty title="暂无任务" />);
+  expect(
+    view.getByRole("img", { name: "熊宝" }).getAttribute("data-mood"),
+  ).toBe("happy");
+});
+
 test("tabs say whether a change came from the keyboard, so callers can replace history instead of pushing", async () => {
   const changes: { value: string; keyboard: boolean }[] = [];
   const view = render(
