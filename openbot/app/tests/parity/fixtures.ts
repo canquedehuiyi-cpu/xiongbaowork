@@ -1868,6 +1868,30 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
     },
   ],
   ["GET", /^\/api\/waker-groups$/, (c) => ok({ groups: list(c, GROUPS) })],
+  // 头像: two faces somebody chose (an expression for a coworker and for a group); none when empty.
+  [
+    "GET",
+    /^\/api\/portraits$/,
+    (c) =>
+      ok({
+        portraits: list(c, [
+          {
+            kind: "coworker",
+            id: "agent-support",
+            preset: "cute",
+            imageUrl: null,
+            updatedAt: "2026-11-07T08:00:00.000Z",
+          },
+          {
+            kind: "group",
+            id: "group-ops",
+            preset: "happy",
+            imageUrl: null,
+            updatedAt: "2026-11-07T08:00:00.000Z",
+          },
+        ]),
+      }),
+  ],
 
   // Bots
   ["GET", /^\/api\/bots\/attention$/, (c) => ok({ bots: list(c, ATTENTION) })],
