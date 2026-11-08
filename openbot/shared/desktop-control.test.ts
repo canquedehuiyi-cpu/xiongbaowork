@@ -96,4 +96,20 @@ describe("desktop-control protocol", () => {
       expect(parseWindowId(junk)).toBeUndefined();
     }
   });
+
+  test("a negative window handle, as a 64-bit process writes it, round-trips too", () => {
+    const id = windowIdOf("-2147483000", 77);
+    expect(id).toBe("w-2147483000-77");
+    expect(DESKTOP_WINDOW_ID.test(id)).toBe(true);
+    expect(parseWindowId(id)).toEqual({ hwnd: "-2147483000", pid: 77 });
+    for (const junk of [
+      "w-0-1",
+      "w--12-7",
+      "w-12--7",
+      "w-12-0",
+      "w-12",
+      "w+12-7",
+    ])
+      expect(parseWindowId(junk)).toBeUndefined();
+  });
 });

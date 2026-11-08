@@ -68,6 +68,10 @@ export type ApprovalPolicyOutcome = {
     /** Enabling a discovered local app: always asked. */
     | "app_enable"
     // --- end app discovery ---
+    // --- desktop control (sub-project 2) ---
+    /** 标题含敏感词的桌面窗口，读之前要问（设备端桌面查看 §4.2）。 */
+    | "desktop_window"
+    // --- end desktop control ---
     | "auto_review"
     | "default"
     /** The person already declined this action, or an equivalent, earlier in this conversation. */
@@ -121,6 +125,13 @@ export type ApprovalSubject = {
    * arguments; absent means unknown, which is not read-only.
    */
   appTool?: { readOnly: boolean };
+  // --- desktop control (sub-project 2) ---
+  /**
+   * 要读的桌面窗口（设备端桌面查看第 1 期）：网关从窗口列表里拿到的标题，以及它命中的敏感词。
+   * 只来自调用处，从不来自模型的参数；读窗口时缺了它，按「没能确认标题」处理，要审批。
+   */
+  desktop?: { title: string; sensitiveWord?: string };
+  // --- end desktop control ---
 };
 export type ApprovalCandidate = {
   actorId: string;

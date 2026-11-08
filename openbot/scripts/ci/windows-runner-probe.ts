@@ -19,6 +19,7 @@ import { createActionJournal } from "../../runner/src/journal.ts";
 import { createRunnerDispatcher } from "../../runner/src/dispatch.ts";
 import { createAppHost } from "../../runner/src/app-host.ts";
 import { createAppRegistry } from "../../runner/src/apps.ts";
+import { probeDesktop } from "./windows-desktop-probe.ts";
 import { compileRunner, runBunxSpike } from "./bunx-spike.ts";
 
 const root = process.argv[2];
@@ -392,6 +393,7 @@ assert(
   echoed,
 );
 await appExecute.closeApps();
+await probeDesktop(assert, root, execute);
 // --- app discovery (sub-project 3) ---
 // The real registry read through PowerShell as UTF-8 (a GBK console would turn 中文 names into
 // mojibake), and a real Claude Desktop config found through APPDATA and answered by name only.

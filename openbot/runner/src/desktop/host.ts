@@ -6,6 +6,7 @@ import {
   DESKTOP_LIMITS,
   type DesktopErrorCode,
 } from "../../../shared/desktop-control";
+import HELPER_SOURCE from "./helper.cs" with { type: "text" };
 
 /**
  * Keeps the desktop helper running for `desktop.*` actions (docs/specs/2026-11-07-desktop-control.md
@@ -43,7 +44,16 @@ import {
  * an `AbortError` carrying the same `sent`. A helper that reports session 0, or no interactive
  * desktop, can never see a window: it is ended, and every request from then on is refused as
  * `session0` without starting another.
+ *
+ * THE REAL HELPER (Task 3) is `helper.cs`, compiled on the spot by Windows PowerShell 5.1:
+ * `helperLaunchSpec` starts `powershell.exe -Command -` and writes one ASCII line that sets stderr to
+ * UTF-8, `Add-Type`s the source (in base64, so the line stays ASCII and the console's code page never
+ * touches it; too long for a command line) and calls `[XiongbaoDesktop.Helper]::Run()`, which then
+ * reads and writes raw UTF-8 itself.
  */
+
+/** The C# source of the desktop helper (`helper.cs`), as text. */
+export { HELPER_SOURCE };
 
 export type HelperLaunchSpec = {
   command: string;
@@ -122,6 +132,48 @@ function abortError(sent: boolean): Error & { sent: boolean } {
   return Object.assign(error, { sent });
 }
 
+/** A value as text for a message; never throws, whatever the value is. */
+function textOf(value: unknown): string {
+  try {
+    return String(value);
+  } catch {
+    return `<${typeof value}>`;
+  }
+}
+
+/**
+ * A key that a case-insensitive reader could take for `op` or `id`, other than `op` itself and the
+ * caller's `id` (which is dropped, never written). The helper reads keys exactly and refuses such a
+ * request on its own; the host does not even write one.
+ */
+function caseVariantKey(wire: Record<string, unknown>): string | undefined {
+  return Object.keys(wire).find((key) => {
+    if (key === "op" || key === "id") return false;
+    const lower = key.toLowerCase();
+    return lower === "op" || lower === "id";
+  });
+}
+
+const CLIXML_HEADER = "#< CLIXML";
+
+/**
+ * The last `keep` characters of a stderr that grew too long. Windows PowerShell writes a redirected
+ * stderr as CLIXML: a header, then one element per record. A plain cut loses the header and starts
+ * inside an element, and `plainPowerShellStderr` then hands back raw XML; so the cut moves on to the
+ * next element and the header goes back in front.
+ */
+function keptStderr(text: string, keep: number): string {
+  const cut = text.length - keep;
+  if (cut <= 0) return text;
+  const header = text.indexOf(CLIXML_HEADER);
+  if (header === -1 || header >= cut) return text.slice(cut);
+  const element = /<(?:S|Obj) S="/g;
+  element.lastIndex = cut;
+  const next = element.exec(text);
+  if (!next) return text.slice(cut);
+  return `${CLIXML_HEADER}\r\n${text.slice(next.index)}`;
+}
+
 /** The last `limit` bytes of UTF-8 or fewer, never starting inside a character. */
 function tailBytes(text: string, limit: number): string {
   if (Buffer.byteLength(text) <= limit) return text;
@@ -184,6 +236,11 @@ export function createDesktopHost(opts: {
     op: { op: string; [key: string]: unknown },
     opts?: { signal?: AbortSignal; timeoutMs?: number },
   ): Promise<T>;
+  /**
+   * Starts the helper if none is running and waits for its ready line; `prefix` is set afterwards.
+   * Queued with the requests, so it never overlaps one.
+   */
+  ensure(opts?: { signal?: AbortSignal }): Promise<void>;
   /** This helper process's id prefix (six hex digits); undefined while no helper is running. */
   readonly prefix: string | undefined;
   /** The next snapshot id: `${prefix}-${n}`, n from 1, counting within this helper process only. */
@@ -289,7 +346,10 @@ export function createDesktopHost(opts: {
     }, startMs);
 
     const onLine = (line: string) => {
-      const text = line.endsWith("\r") ? line.slice(0, -1) : line;
+      let text = line.endsWith("\r") ? line.slice(0, -1) : line;
+      // Before it is ready, PowerShell may print something without a newline (a prompt): the ready
+      // line is read from its first brace. An answer must start its own line.
+      if (!helper.info) text = text.slice(Math.max(0, text.indexOf("{")));
       if (!text.startsWith("{")) return;
       let message: unknown;
       try {
@@ -364,7 +424,7 @@ export function createDesktopHost(opts: {
     child.stderr.on("data", (chunk: Buffer) => {
       helper.stderr += errDecoder.decode(chunk, { stream: true });
       if (helper.stderr.length > STDERR_KEEP_CHARS)
-        helper.stderr = helper.stderr.slice(-STDERR_KEEP_CHARS / 2);
+        helper.stderr = keptStderr(helper.stderr, STDERR_KEEP_CHARS / 2);
     });
     // A helper that is gone fails the write; its exit is what settles the request.
     child.stdin.on("error", () => {});
@@ -430,12 +490,10 @@ export function createDesktopHost(opts: {
     return { aborted, cleanup: () => cleanup() };
   };
 
-  const runOne = async <T>(
-    /** The frozen request without its id: a serialised JSON object, `{"op":...}`. */
-    body: string,
+  /** The running helper, started first if there is none, once it is ready. */
+  const readyHelper = async (
     signal: AbortSignal | undefined,
-    timeoutMs: number,
-  ): Promise<T> => {
+  ): Promise<Helper> => {
     if (noDesktop)
       throw new DesktopHelperError(
         "session0",
@@ -470,7 +528,16 @@ export function createDesktopHost(opts: {
         false,
         stderrTail(helper),
       );
+    return helper;
+  };
 
+  const runOne = async <T>(
+    /** The frozen request without its id: a serialised JSON object, `{"op":...}`. */
+    body: string,
+    signal: AbortSignal | undefined,
+    timeoutMs: number,
+  ): Promise<T> => {
+    const helper = await readyHelper(signal);
     const id = ++nextId;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let onAbort: (() => void) | undefined;
@@ -520,6 +587,41 @@ export function createDesktopHost(opts: {
     idle.unref?.();
   };
 
+  /** Runs `work` in its turn, after everything queued before it. */
+  const enqueue = <T>(
+    signal: AbortSignal | undefined,
+    work: () => Promise<T>,
+  ): Promise<T> => {
+    if (signal?.aborted) return Promise.reject(abortError(false));
+    const enqueued = generation;
+    // Waiting for its turn: an abort here leaves the queue without touching the helper.
+    const waiting = abortable(signal, () => {});
+    let skip = false;
+    waiting.aborted.catch(() => {
+      skip = true;
+    });
+    const turn = queue.then(async () => {
+      waiting.cleanup();
+      if (skip || signal?.aborted) throw abortError(false);
+      if (enqueued !== generation)
+        throw new DesktopHelperError(
+          "failed",
+          "the desktop helper was closed before this request ran",
+          false,
+        );
+      try {
+        return await work();
+      } finally {
+        scheduleIdle();
+      }
+    });
+    queue = turn.then(
+      () => {},
+      () => {},
+    );
+    return Promise.race([turn, waiting.aborted]);
+  };
+
   return {
     request<T>(
       op: { op: string; [key: string]: unknown },
@@ -548,7 +650,17 @@ export function createDesktopHost(opts: {
         return Promise.reject(
           new DesktopHelperError(
             "unsupported",
-            `unsupported op: ${String((wire as { op?: unknown } | null)?.op)}`,
+            `unsupported op: ${textOf((wire as { op?: unknown } | null)?.op)}`,
+            false,
+          ),
+        );
+      // "Op", "ID" and the like: a reader that ignores case could take one for the op or the id.
+      const variant = caseVariantKey(wire as Record<string, unknown>);
+      if (variant !== undefined)
+        return Promise.reject(
+          new DesktopHelperError(
+            "unsupported",
+            `unsupported request: a case variant of op or id (${variant})`,
             false,
           ),
         );
@@ -556,36 +668,14 @@ export function createDesktopHost(opts: {
       const { id: _callerId, ...fields } = wire as Record<string, unknown>;
       const body = JSON.stringify(fields);
       const signal = requestOpts?.signal;
-      if (signal?.aborted) return Promise.reject(abortError(false));
       const timeoutMs = requestOpts?.timeoutMs ?? defaultTimeoutMs;
-      const enqueued = generation;
-
-      // Waiting for its turn: an abort here leaves the queue without touching the helper.
-      const waiting = abortable(signal, () => {});
-      let skip = false;
-      waiting.aborted.catch(() => {
-        skip = true;
+      return enqueue(signal, () => runOne<T>(body, signal, timeoutMs));
+    },
+    ensure(ensureOpts?: { signal?: AbortSignal }): Promise<void> {
+      const signal = ensureOpts?.signal;
+      return enqueue(signal, async () => {
+        await readyHelper(signal);
       });
-      const turn = queue.then(async () => {
-        waiting.cleanup();
-        if (skip || signal?.aborted) throw abortError(false);
-        if (enqueued !== generation)
-          throw new DesktopHelperError(
-            "failed",
-            "the desktop helper was closed before this request ran",
-            false,
-          );
-        try {
-          return await runOne<T>(body, signal, timeoutMs);
-        } finally {
-          scheduleIdle();
-        }
-      });
-      queue = turn.then(
-        () => {},
-        () => {},
-      );
-      return Promise.race([turn, waiting.aborted]);
     },
     get prefix() {
       const helper = current;
@@ -617,4 +707,66 @@ export function createDesktopHost(opts: {
       clearTimeout(timer);
     },
   };
+}
+
+/** The .NET Framework assemblies `helper.cs` is compiled against; all ship with Windows. */
+const HELPER_ASSEMBLIES =
+  "UIAutomationClient,UIAutomationTypes,WindowsBase,System.Windows.Forms,System.Drawing,System.Web.Extensions";
+
+/**
+ * How to start the desktop helper on `platform`: Windows PowerShell 5.1 reading its script from stdin,
+ * and the one ASCII line written to it first. The line
+ *   1. turns progress records off (they would land on stderr as CLIXML);
+ *   2. points PowerShell's error stream at a UTF-8 writer, so a compile error is readable on a
+ *      Chinese (GBK) Windows;
+ *   3. compiles `source`, carried in base64 so the line stays ASCII and no code page touches it, and
+ *      exits at once with the reason when that fails, instead of waiting out the start timeout;
+ *   4. runs the helper, which from then on reads and writes raw UTF-8 itself.
+ * Anywhere but Windows there is no desktop to read: refused as `not_windows`.
+ */
+export function helperLaunchSpec(
+  source: string,
+  platform: string,
+  env: NodeJS.ProcessEnv,
+): HelperLaunchSpec {
+  if (platform !== "win32")
+    throw new DesktopHelperError(
+      "not_windows",
+      `the desktop helper runs on Windows only, not ${platform}`,
+      false,
+    );
+  const root = env.SystemRoot ?? env.SYSTEMROOT ?? "C:\\Windows";
+  const base64 = Buffer.from(source, "utf8").toString("base64");
+  const preamble = [
+    "$ProgressPreference='SilentlyContinue'",
+    "$xbErr = [System.IO.StreamWriter]::new([Console]::OpenStandardError(), [System.Text.UTF8Encoding]::new($false))",
+    "$xbErr.AutoFlush = $true",
+    "[Console]::SetError($xbErr)",
+    `try { Add-Type -TypeDefinition ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${base64}'))) -ReferencedAssemblies ${HELPER_ASSEMBLIES} -ErrorAction Stop } catch { [Console]::Error.WriteLine('Add-Type failed: ' + $_.Exception.Message); exit 1 }`,
+    "[XiongbaoDesktop.Helper]::Run()",
+  ].join("; ");
+  return {
+    command: win32.join(
+      root,
+      "System32",
+      "WindowsPowerShell",
+      "v1.0",
+      "powershell.exe",
+    ),
+    args: [
+      "-NoLogo",
+      "-NoProfile",
+      "-NonInteractive",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-Command",
+      "-",
+    ],
+    preamble,
+  };
+}
+
+/** The real helper on this machine: `helper.cs` under this process's platform and environment. */
+export function defaultHelperSpec(): HelperLaunchSpec {
+  return helperLaunchSpec(HELPER_SOURCE, process.platform, process.env);
 }
