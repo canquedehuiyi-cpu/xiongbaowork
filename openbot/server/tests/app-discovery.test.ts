@@ -25,6 +25,7 @@ test("readDiscovery keeps ref, name, source label, kind, status and note; drops 
       { ...good, ref: "not-a-ref" },
       { ...good, ref: REF2, name: "长".repeat(41) },
       { ...good, ref: REF2, name: "" },
+      { ...good, ref: REF2, name: "  \t " },
       { ...good, ref: REF2, sourceLabel: "源".repeat(61) },
       { ...good, ref: REF2, status: "enabled" },
       { ...good, ref: REF2, kind: "sse" },

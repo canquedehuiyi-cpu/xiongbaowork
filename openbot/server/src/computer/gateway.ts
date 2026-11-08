@@ -1381,15 +1381,18 @@ export function createComputerGateway(
         read,
         apps.map((app) => app.name),
       );
+      if (!groups.available.length && !groups.installed.length) return {};
       return {
         ...(groups.available.length ? { available: groups.available } : {}),
         ...(groups.installed.length ? { installed: groups.installed } : {}),
         hints: { available: AVAILABLE_HINT, installed: INSTALLED_HINT },
       };
     } catch (error) {
-      // The person's Stop and a paused device end the call; they are not "no discovery".
-      if (signal?.aborted || error instanceof DeviceDeliveryError) throw error;
-      const reason = error instanceof Error ? error.message : "";
+      // Only the person's Stop ends the call. Anything else (a paused device included) is said in
+      // `discoveryError` and leaves the listed apps as they are.
+      if (signal?.aborted) throw error;
+      // The reason may come from the device: cut it.
+      const reason = cutUtf8(error instanceof Error ? error.message : "", 200);
       return {
         discoveryError: reason.startsWith("Nothing on this machine handles")
           ? OLD_RUNNER
@@ -2051,6 +2054,7 @@ export function createComputerGateway(
         "apps",
         "available",
         "installed",
+        "discoveryError",
       ]);
     },
 

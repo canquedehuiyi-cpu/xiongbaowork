@@ -43,7 +43,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 /** A string of 1..`max` characters (code points), or undefined. */
 function text(value: unknown, max: number): string | undefined {
-  if (typeof value !== "string" || value.length === 0) return undefined;
+  if (typeof value !== "string" || value.trim().length === 0) return undefined;
   return [...value].length <= max ? value : undefined;
 }
 

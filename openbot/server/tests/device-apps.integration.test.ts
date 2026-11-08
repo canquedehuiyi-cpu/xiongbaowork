@@ -866,6 +866,32 @@ test("a paused device is not asked for a tool list: the call is told it is pause
   expect(await device.requests()).toEqual([]);
 }, 20_000);
 
+test("a paused device still lists the enabled apps, with a discoveryError", async () => {
+  const device = await pairedDevice();
+  await device.queue.enqueue(device.target, {
+    key: "lost-reply-2",
+    action: "exec",
+    payload: { command: "true" },
+  });
+  await device.queue.drain(device.target, "test-owner", async () => {
+    throw new Error("reply lost after the run");
+  });
+  expect(await device.queue.uncertain(device.target)).toBe(1);
+  const listed = (await device.call("computer_apps", {})) as {
+    apps: { name: string; error?: string }[];
+    available?: unknown;
+    hints?: unknown;
+    discoveryError?: string;
+  };
+  expect(listed.apps.map((app) => app.name)).toEqual(["Notes"]);
+  expect(listed.apps[0]?.error).toContain("已暂停");
+  expect(listed.discoveryError).toStartWith("这次没能查看主人电脑上的其他应用：");
+  expect(listed.discoveryError).toContain("已暂停");
+  expect(listed.available).toBeUndefined();
+  expect(listed.hints).toBeUndefined();
+  expect(device.sent("apps.discover")).toHaveLength(0);
+}, 20_000);
+
 test("a socket drop while listing tools asks instead and never pauses the device", async () => {
   const device = await pairedDevice();
   let listed: () => void = () => {};
