@@ -102,8 +102,11 @@ export function sensitiveWord(
  */
 export const DESKTOP_REF = /^[0-9a-f]{6}-[1-9]\d{0,8}:\d{1,4}$/;
 
-/** A window id: `w<window handle in decimal>-<process id>`. */
-export const DESKTOP_WINDOW_ID = /^w[1-9]\d{0,19}-[1-9]\d{0,9}$/;
+/**
+ * A window id: `w<window handle in decimal>-<process id>`. The handle is signed: a 64-bit process
+ * sign-extends a window handle, so one with its top bit set reads as negative (`w-2147483000-77`).
+ */
+export const DESKTOP_WINDOW_ID = /^w-?[1-9]\d{0,19}-[1-9]\d{0,9}$/;
 
 export function windowIdOf(hwnd: string, pid: number): string {
   return `w${hwnd}-${pid}`;
@@ -113,7 +116,8 @@ export function parseWindowId(
   id: unknown,
 ): { hwnd: string; pid: number } | undefined {
   if (typeof id !== "string" || !DESKTOP_WINDOW_ID.test(id)) return undefined;
-  const dash = id.indexOf("-");
+  // The process id never has a sign, so the last dash is the separator.
+  const dash = id.lastIndexOf("-");
   return { hwnd: id.slice(1, dash), pid: Number(id.slice(dash + 1)) };
 }
 
