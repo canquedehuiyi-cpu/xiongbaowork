@@ -56,6 +56,11 @@ const KB_NUMBER = /\bKB\d{6,8}\b/i;
 
 /** The names worth showing: no system components, child entries or patches; deduped, sorted, capped. */
 export function installedNames(entries: UninstallEntry[]): string[] {
+  return allInstalledNames(entries).slice(0, INSTALLED_LIMIT);
+}
+
+/** Every name worth showing, deduped and sorted but not capped: to count what the cap left out. */
+export function allInstalledNames(entries: UninstallEntry[]): string[] {
   const seen = new Set<string>();
   const names: string[] = [];
   for (const entry of entries) {
@@ -76,9 +81,7 @@ export function installedNames(entries: UninstallEntry[]): string[] {
     seen.add(key);
     names.push(name);
   }
-  return names
-    .sort((a, b) => a.localeCompare(b, "zh-CN"))
-    .slice(0, INSTALLED_LIMIT);
+  return names.sort((a, b) => a.localeCompare(b, "zh-CN"));
 }
 
 type Run = (
