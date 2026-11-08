@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createAppRegistry } from "../src/apps";
+import { CANDIDATE_EXPIRED } from "../src/discover";
 import { createRootRegistry } from "../src/roots";
 import {
   heartbeatFrame,
@@ -180,3 +181,183 @@ test("--add-app - reads the app from stdin, so a key never appears on the comman
   expect(JSON.parse(lines[0] ?? "null")).toMatchObject({ ok: false });
   expect(lines[0]).toContain("JSON");
 }, 20_000);
+
+test("--discover-apps prints one JSON line with candidates and installed and no command or env value", async () => {
+  const dataDir = fresh();
+  const parsed = parseAppCommand(
+    ["--data-dir", dataDir, "--discover-apps"],
+    {},
+    dataDir,
+  );
+  if (parsed === null || typeof parsed === "string")
+    throw new Error(`not an app command: ${String(parsed)}`);
+  expect(parsed.command).toEqual({ kind: "discover" });
+  const appData = "C:\\Users\\me\\AppData\\Roaming";
+  const config = JSON.stringify({
+    mcpServers: {
+      笔记: {
+        command: "C:\\Users\\me\\tools\\notes-server.exe",
+        args: ["--vault", "C:\\Users\\me\\proj"],
+        env: { NOTES_TOKEN: "sk-test-secret" },
+      },
+    },
+  });
+  const lines: string[] = [];
+  const code = await runAppCommand(
+    parsed,
+    (line) => lines.push(line),
+    undefined,
+    {
+      platform: "win32",
+      env: { APPDATA: appData, USERPROFILE: "C:\\Users\\me" },
+      readText: (path) =>
+        path === `${appData}\\Claude\\claude_desktop_config.json`
+          ? config
+          : undefined,
+      readInstalled: async () => [{ DisplayName: "微信" }],
+      resolveCommand: (command) => command,
+    },
+  );
+  expect(code).toBe(0);
+  expect(lines).toHaveLength(1);
+  const json = JSON.parse(lines[0] ?? "null");
+  expect(json).toEqual({
+    ok: true,
+    platform: "win32",
+    candidates: [
+      expect.objectContaining({
+        name: "笔记",
+        source: "claude-desktop",
+        status: "ready",
+      }),
+    ],
+    installed: ["微信"],
+  });
+  for (const secret of [
+    "sk-test-secret",
+    "NOTES_TOKEN",
+    "notes-server",
+    "--vault",
+    "Users",
+    "proj",
+  ]) {
+    expect(lines[0]).not.toContain(secret);
+  }
+
+  // The real default machine: off Windows it reads nothing and answers empty lists.
+  if (process.platform !== "win32") {
+    const plain: string[] = [];
+    expect(await runAppCommand(parsed, (line) => plain.push(line))).toBe(0);
+    expect(JSON.parse(plain[0] ?? "null")).toEqual({
+      ok: true,
+      platform: process.platform,
+      candidates: [],
+      installed: [],
+    });
+  }
+});
+
+test("--enable-candidate enables a discovered app and prints masked apps", async () => {
+  const dataDir = fresh();
+  const appData = "C:\\Users\\me\\AppData\\Roaming";
+  const config = JSON.stringify({
+    mcpServers: {
+      假应用: {
+        command: process.execPath,
+        args: [FIXTURE],
+        env: { FIXTURE_TOKEN: "sk-test-secret" },
+      },
+    },
+  });
+  const deps = {
+    platform: "win32" as const,
+    env: { APPDATA: appData, USERPROFILE: "C:\\Users\\me" },
+    readText: (path: string) =>
+      path === `${appData}\\Claude\\claude_desktop_config.json`
+        ? config
+        : undefined,
+    readInstalled: async () => [],
+    resolveCommand: (command: string) => command,
+  };
+  const runWith = async (flags: string[]) => {
+    const parsed = parseAppCommand(
+      ["--data-dir", dataDir, ...flags],
+      {},
+      dataDir,
+    );
+    if (parsed === null || typeof parsed === "string")
+      throw new Error(`not an app command: ${String(parsed)}`);
+    const lines: string[] = [];
+    const code = await runAppCommand(
+      parsed,
+      (line) => lines.push(line),
+      undefined,
+      deps,
+    );
+    return { code, lines, json: JSON.parse(lines[0] ?? "null") };
+  };
+  const discovered = await runWith(["--discover-apps"]);
+  const ref = discovered.json.candidates[0].ref as string;
+
+  const enabled = await runWith(["--enable-candidate", ref]);
+  expect(enabled.code).toBe(0);
+  expect(enabled.lines).toHaveLength(1);
+  const [entry] = createAppRegistry({ dataDir }).list();
+  if (!entry) throw new Error("nothing was registered");
+  expect(enabled.json).toEqual({
+    ok: true,
+    app: { ref: entry.ref, name: "假应用" },
+    tools: ["echo", "write_note", "wipe"],
+    apps: [{ ...entry, env: { FIXTURE_TOKEN: "••••" } }],
+  });
+  expect(enabled.lines[0]).not.toContain("sk-test-secret");
+  // The file keeps the real value.
+  expect(entry).toMatchObject({ env: { FIXTURE_TOKEN: "sk-test-secret" } });
+
+  // A reference that names nothing: one JSON line, nothing written.
+  const stale = await runWith(["--enable-candidate", "cand_nonsense"]);
+  expect(stale.code).toBe(2);
+  expect(stale.json).toEqual({ ok: false, error: CANDIDATE_EXPIRED });
+  expect(createAppRegistry({ dataDir }).list()).toEqual([entry]);
+  // It needs a value, and it does not mix with another app flag.
+  expect(
+    parseAppCommand(["--data-dir", dataDir, "--enable-candidate"], {}, dataDir),
+  ).toBe("--enable-candidate needs the candidate's reference.");
+  expect(
+    parseAppCommand(
+      ["--data-dir", dataDir, "--enable-candidate", ref, "--list-apps"],
+      {},
+      dataDir,
+    ),
+  ).toContain("--enable-candidate");
+}, 20_000);
+
+test("--discover-apps cannot be combined with another app flag", () => {
+  const dir = fresh();
+  const reason = (argv: string[]) => {
+    const parsed = parseAppCommand(argv, {}, dir);
+    if (typeof parsed !== "string") throw new Error("expected a refusal");
+    return parsed;
+  };
+  for (const other of [
+    ["--list-apps"],
+    ["--enable-app", "笔记"],
+    ["--add-app", "{}"],
+  ]) {
+    for (const argv of [
+      ["--discover-apps", ...other],
+      [...other, "--discover-apps"],
+    ]) {
+      expect(reason(argv)).toStartWith("Pass one of ");
+      expect(reason(argv)).toContain("--discover-apps");
+    }
+  }
+  // It takes no value, and it never mixes with a folder flag either.
+  expect(reason(["--discover-apps", "笔记"])).toBe("Unknown argument: 笔记");
+  const mixed = reason(["--list-roots", "--discover-apps"]);
+  expect(mixed).toContain("cannot be used together");
+  expect(mixed).toContain("--discover-apps");
+  expect(parseRootCommand(["--discover-apps", "--list-roots"], {}, dir)).toBe(
+    mixed,
+  );
+});

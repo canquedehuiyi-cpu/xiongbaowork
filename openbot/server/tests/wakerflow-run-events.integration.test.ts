@@ -83,6 +83,33 @@ const failure = (promise: Promise<unknown>) =>
     (error: unknown) => error,
   );
 
+/**
+ * A step runner that holds its turn until `release`, and says when a turn has reached it.
+ *
+ * `advance` commits a step's `running` record (and its `step_started` event) before it hands the step to
+ * the runner, and then changes nothing while the turn is out (its heartbeat touches only `updated_at`,
+ * and not for 30 seconds): so once `entered` resolves, the run's row is exactly "step 1 running, the
+ * rest pending" at a revision that holds until `release`. A test that
+ * acts on a run mid-step waits on `entered`, never on a timer: a fixed sleep lets a slow runner still be
+ * opening step 1 when the test acts, and the test then races the driver instead of a parked run.
+ */
+function heldStep(output: string) {
+  let release: () => void = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let reached: () => void = () => {};
+  const entered = new Promise<void>((resolve) => {
+    reached = resolve;
+  });
+  const runner = async () => {
+    reached();
+    await gate;
+    return { status: "done", output } as const;
+  };
+  return { runner, entered, release };
+}
+
 /** A saved three-step Flow: draft reads the topic, review reads the draft, publish reads the review. */
 async function fixture(
   executeStep: (
@@ -243,23 +270,18 @@ describe("run events (spec §3.4)", () => {
   });
 
   test("a change that lost its race leaves no event, and an event that cannot be written undoes its change", async () => {
-    let release: () => void = () => {};
-    const gate = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    const f = await fixture(async () => {
-      await gate;
-      return { status: "done", output: "迟到的结果" };
-    });
+    const held = heldStep("迟到的结果");
+    const f = await fixture(held.runner);
     const request = await f.store.start(f.tenantId, f.tenantId, f.flow.id, {
       requestId: randomUUID(),
       revision: f.flow.revision,
       inputs: { topic: "发布会" },
     });
     const runId = request.runId ?? "";
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    // Step 1 has started and its turn is out: the abort lands on a run parked mid-step.
+    await held.entered;
     await f.store.abortRun(f.tenantId, f.flow.id, runId);
-    release();
+    held.release();
     await f.settle();
     // Step 1's late result lost to the abort: its change never happened, so it has no event.
     expect((await f.allEvents(runId)).map((event) => event.type)).toEqual([
@@ -304,24 +326,25 @@ describe("run events (spec §3.4)", () => {
   });
 
   test("a run closed by restart recovery records each step it closed and run_failed", async () => {
-    let release: () => void = () => {};
-    const gate = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    const f = await fixture(async () => {
-      await gate;
-      return { status: "done", output: "重启前的结果" };
-    });
+    const held = heldStep("重启前的结果");
+    const f = await fixture(held.runner);
     const request = await f.store.start(f.tenantId, f.tenantId, f.flow.id, {
       requestId: randomUUID(),
       revision: f.flow.revision,
       inputs: { topic: "发布会" },
     });
     const runId = request.runId ?? "";
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    /*
+     * Step 1 has started and its turn is out, so the driver writes nothing until `release`: the sweep
+     * reads the run as it will stay. Acting any earlier races the driver's own writes, and the sweep's
+     * revision fence then (correctly) gives way to them and closes nothing.
+     */
+    await held.entered;
     // Stand-in for the restart sweep finding this run past the horizon with no live driver.
-    await recoverInterruptedFlowRuns(database, f.board, { olderThanMs: 0 });
-    release();
+    expect(
+      await recoverInterruptedFlowRuns(database, f.board, { olderThanMs: 0 }),
+    ).toBeGreaterThanOrEqual(1);
+    held.release();
     await f.settle();
     const events = await f.allEvents(runId);
     expect(events.map((event) => event.type)).toEqual([

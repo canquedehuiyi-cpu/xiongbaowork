@@ -25,6 +25,12 @@ pub enum AppCommand {
     Test(String),
     Enable(String),
     Disable(String),
+    // --- app discovery (sub-project 3) ---
+    /// `--discover-apps`: names of what this computer could offer, nothing else.
+    Discover,
+    /// `--enable-candidate <ref>`: register (or switch back on) a discovered candidate and test it.
+    EnableCandidate(String),
+    // --- end app discovery ---
 }
 
 /// The sidecar's arguments for one command.
@@ -54,6 +60,13 @@ pub fn app_args(data_dir: &Path, command: &AppCommand) -> Vec<OsString> {
             args.push("--disable-app".into());
             args.push(target.into());
         }
+        // --- app discovery (sub-project 3) ---
+        AppCommand::Discover => args.push("--discover-apps".into()),
+        AppCommand::EnableCandidate(candidate) => {
+            args.push("--enable-candidate".into());
+            args.push(candidate.into());
+        }
+        // --- end app discovery ---
     }
     args
 }
@@ -109,6 +122,13 @@ pub fn parse_reply(stdout: &str) -> Result<Value, String> {
 pub fn apps_of(reply: &Value) -> Vec<Value> {
     reply["apps"].as_array().cloned().unwrap_or_default()
 }
+
+// --- app discovery (sub-project 3) ---
+/// The `candidates` list of a discovery reply (empty when it has none).
+pub fn candidates_of(reply: &Value) -> Vec<Value> {
+    reply["candidates"].as_array().cloned().unwrap_or_default()
+}
+// --- end app discovery ---
 
 /// Run the sidecar once for `command` and read its reply.
 pub fn run(program: &Path, data_dir: &Path, command: &AppCommand) -> Result<Value, String> {
@@ -208,6 +228,34 @@ printf '{"ok":true,"flag":"%s","value":"%s","input":%s}\n' "$3" "$4" "$input"
         assert_eq!(listed["flag"], "--list-apps");
         std::fs::remove_dir_all(&dir).unwrap();
     }
+
+    // --- app discovery (sub-project 3) ---
+    #[test]
+    fn discover_apps_passes_discover_apps_and_enable_candidate_passes_enable_candidate_with_the_ref_nothing_on_stdin() {
+        let dir = PathBuf::from("/data/runner");
+        assert_eq!(
+            app_args(&dir, &AppCommand::Discover),
+            vec![
+                OsString::from("--data-dir"),
+                "/data/runner".into(),
+                "--discover-apps".into()
+            ]
+        );
+        let enable = AppCommand::EnableCandidate("cand_1_AAAAAAAAAAAAAAAAAAAAAA".into());
+        assert_eq!(
+            app_args(&dir, &enable)[2..],
+            [
+                OsString::from("--enable-candidate"),
+                "cand_1_AAAAAAAAAAAAAAAAAAAAAA".into()
+            ]
+        );
+        assert_eq!(stdin_payload(&AppCommand::Discover), None);
+        assert_eq!(stdin_payload(&enable), None);
+        let reply = parse_reply("{\"ok\":true,\"candidates\":[{\"ref\":\"c\"}]}").unwrap();
+        assert_eq!(candidates_of(&reply).len(), 1);
+        assert!(candidates_of(&json!({"ok":true})).is_empty());
+    }
+    // --- end app discovery ---
 
     #[test]
     fn each_other_command_names_the_data_dir_and_one_app_flag() {

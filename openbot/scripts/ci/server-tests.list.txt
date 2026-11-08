@@ -24,6 +24,7 @@ tests/agent-role-bible.integration.test.ts
 tests/agent-routes.test.ts
 tests/agent-test-connection-headers.test.ts
 tests/agent-tool-call-input.test.ts
+tests/app-discovery.test.ts
 tests/approval-continuation-preparation-transaction.integration.test.ts
 tests/approval-continuation-store.integration.test.ts
 tests/approval-exact-http-owned-input.test.ts
@@ -39,6 +40,7 @@ tests/approval-recovery-port.test.ts
 tests/approvals-continuation-protocol.test.ts
 tests/approvals-continuation-recovery.test.ts
 tests/approvals-database-settlement.integration.test.ts
+tests/approvals-desktop-policy.test.ts
 tests/approvals-employee-permissions.integration.test.ts
 tests/approvals-execute.test.ts
 tests/approvals-frontend.test.ts
@@ -166,6 +168,8 @@ tests/deployment-frames.test.ts
 tests/deployment-model-metering.test.ts
 tests/deployment-route-bot-end-to-end.test.ts
 tests/desktop-connection-failure.test.ts
+tests/desktop-gateway.test.ts
+tests/desktop-tools.integration.test.ts
 tests/dev-actor.integration.test.ts
 tests/device-apps.integration.test.ts
 tests/device-queue.test.ts

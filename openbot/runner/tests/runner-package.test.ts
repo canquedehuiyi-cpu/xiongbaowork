@@ -25,6 +25,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -127,6 +128,8 @@ function memoryDeviceStore() {
       const device = devices.get(`${tenantId}/${deviceId}`);
       if (device) device.lastSeenAt = new Date();
     },
+    // Enabling an app writes it on the device record; this probe enables none.
+    async rememberApp() {},
     async remove(tenantId, id) {
       for (const [key, device] of devices) {
         if (device.tenantId === tenantId && device.id === id) {
@@ -435,6 +438,75 @@ test("compiled with neither: the runner keeps today's layout in the directory it
     JSON.parse(readFileSync(join(launch, "runner-state.json"), "utf8"))
       .deviceId,
   ).toMatch(UUID_V4);
+}, 60_000);
+
+/**
+ * The compiled runner started once, to its end, with the same bare environment as `startRunner`
+ * (plus `extraEnv`), and what it printed. Killed after 20 s, so a binary that waits instead of
+ * answering fails here with what it printed rather than as the test's own timeout.
+ */
+async function runOnce(
+  args: string[],
+  cwd: string,
+  extraEnv: Record<string, string> = {},
+) {
+  const child = Bun.spawn([binary, ...args], {
+    cwd,
+    env: { PATH: "/usr/bin:/bin", HOME: cwd, TMPDIR: cwd, ...extraEnv },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  children.push(child);
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    child.kill("SIGKILL");
+  }, 20_000);
+  const [code, stdout, stderr] = await Promise.all([
+    child.exited,
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+  ]).finally(() => clearTimeout(timer));
+  if (timedOut) {
+    throw new Error(
+      `${args.join(" ")} did not finish within 20s:\n${stdout}${stderr}`,
+    );
+  }
+  return { code, stdout, stderr };
+}
+
+// Device app discovery (sub-project 3) starts npm apps with the runner itself as `bun x`. These are
+// the offline halves of that: Bun's own CLI answers under BUN_BE_BUN=1, and only then. The online
+// half (`x --bun <package>`) is `scripts/ci/bunx-spike.ts`, which needs the npm registry.
+test("BUN_BE_BUN=1 makes the compiled runner act as bun: --version and a script", async () => {
+  const dir = emptyDir("e-be-bun");
+  const script = join(dir, "marker.ts");
+  // TypeScript on purpose: it is Bun's transpiler that runs it, not the runner's own entry point.
+  writeFileSync(
+    script,
+    "const next: number = 41 + 1;\nconsole.log('BE_BUN_MARKER ' + next);\nconsole.log('EXEC_PATH ' + process.execPath);\n",
+  );
+
+  const version = await runOnce(["--version"], dir, { BUN_BE_BUN: "1" });
+  expect(version.code, version.stderr).toBe(0);
+  expect(version.stdout).toMatch(/^\d+\.\d+\.\d+/);
+
+  const ran = await runOnce([script], dir, { BUN_BE_BUN: "1" });
+  expect(ran.code, ran.stderr).toBe(0);
+  expect(ran.stdout).toContain("BE_BUN_MARKER 42");
+  // And it is this binary doing it, not a Bun found somewhere on the machine.
+  const execPath = ran.stdout.match(/^EXEC_PATH (.+)$/m)?.[1] ?? "";
+  expect(realpathSync(execPath)).toBe(realpathSync(binary));
+
+  // Without the variable the same binary is the runner: it reads both as its own (bad) arguments.
+  const asRunner = await runOnce(["--version"], dir);
+  expect(asRunner.code).toBe(2);
+  expect(`${asRunner.stdout}${asRunner.stderr}`).toContain(
+    "Pass --server with the http(s) address of your deployment.",
+  );
+  const scriptAsRunner = await runOnce([script], dir);
+  expect(scriptAsRunner.code).toBe(2);
+  expect(scriptAsRunner.stdout).not.toContain("BE_BUN_MARKER");
 }, 60_000);
 
 test("compiled: a dropped connection is reported as such and dialled again", async () => {
