@@ -635,3 +635,73 @@ test("a ref is refused when only the command's folder changed after issue", asyn
     error: CANDIDATE_EXPIRED,
   });
 });
+
+const CATALOG_SAMPLE = {
+  id: "sample-chat",
+  name: "示例聊天",
+  detect: { installed: "^示例聊天" },
+  launch: { bunx: { package: "sample-chat-mcp@1.2.3" } },
+  verified: "2026-01-01 测试机 示例聊天 4.0",
+};
+
+test("a config source with the same identity wins over the catalogue", async () => {
+  const m = machine(
+    {
+      [PATHS.cursor]: servers({
+        mine: { command: "npx", args: ["-y", "sample-chat-mcp@1.2.3"] },
+      }),
+    },
+    {
+      readInstalled: async () => [{ DisplayName: "示例聊天 4.0" }],
+      catalog: [CATALOG_SAMPLE],
+    },
+  );
+  const result = await discoverApps(m.deps);
+  expect(result.candidates).toHaveLength(1);
+  expect(result.candidates[0]?.source).toBe("cursor");
+  expect(result.candidates[0]?.name).toBe("mine");
+});
+
+test("names matched by the catalogue leave the installed list, and its candidate comes after the config ones", async () => {
+  const m = machine(
+    { [PATHS.cursor]: servers({ a: { command: "node", args: ["a.js"] } }) },
+    {
+      readInstalled: async () => [
+        { DisplayName: "示例聊天 4.0" },
+        { DisplayName: "微信" },
+      ],
+      catalog: [CATALOG_SAMPLE],
+    },
+  );
+  const result = await discoverApps(m.deps);
+  expect(result.installed).toEqual(["微信"]);
+  expect(names(result.candidates)).toEqual(["a", "示例聊天"]);
+  const found = result.candidates[1];
+  expect(found?.source).toBe("catalog");
+  expect(found?.sourceLabel).toBe(
+    "内置清单，检测到已安装 示例聊天，使用前请先打开它",
+  );
+  expect(found?.status).toBe("ready");
+  expect(found?.kind).toBe("stdio");
+  // The candidate can be turned back into its spec by its ref.
+  const again = await findCandidate(m.deps, found?.ref ?? "");
+  expect("candidate" in again && again.spec.kind).toBe("stdio");
+});
+
+test("catalogue candidates count toward MAX_CANDIDATES", async () => {
+  const many = Object.fromEntries(
+    Array.from({ length: MAX_CANDIDATES }, (_, i) => [
+      `app${i}`,
+      { command: "node", args: [`${i}.js`] },
+    ]),
+  );
+  const m = machine(
+    { [PATHS.cursor]: servers(many) },
+    {
+      readInstalled: async () => [{ DisplayName: "示例聊天" }],
+      catalog: [CATALOG_SAMPLE],
+    },
+  );
+  const result = await discoverApps(m.deps);
+  expect(result.candidates).toHaveLength(MAX_CANDIDATES);
+});
