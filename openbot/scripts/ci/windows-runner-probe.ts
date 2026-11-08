@@ -397,8 +397,17 @@ await appExecute.closeApps();
 const spikeDir = join(root, "bunx spike 熊宝");
 mkdirSync(spikeDir, { recursive: true });
 const spikeRunner = await compileRunner(join(root, "bunx-spike-bin"));
-for (const result of await runBunxSpike(spikeRunner, spikeDir)) {
-  assert(result.passed, `bunx spike: ${result.check}`, result.detail);
-  console.log(JSON.stringify({ check: result.check, detail: result.detail }));
-}
+// Every result is printed before anything is asserted, so a red run still shows all of them, and a
+// `network` failure (npm registry unreachable) reads as "rerun", not as "bun x does not work".
+const spikeResults = await runBunxSpike(spikeRunner, spikeDir);
+for (const result of spikeResults)
+  console.log(JSON.stringify({ spike: true, ...result }));
+const spikeFailed = spikeResults.filter((result) => !result.passed);
+assert(
+  spikeFailed.length === 0,
+  spikeFailed.some((result) => result.failure === "network")
+    ? "bunx spike: the npm registry was unreachable; rerun before reading this as bun x not working"
+    : "bunx spike: the compiled runner stands in for bun x",
+  spikeFailed.map(({ check, failure }) => ({ check, failure })),
+);
 console.log("WINDOWS_PROBE_PASS");
