@@ -306,6 +306,10 @@ describe("connecting an app that lists its tools only as a person", () => {
       );
       expect(row?.lastError).toBeTruthy();
       expect(row?.lastError).not.toContain("not attributed to anybody");
+      // 告诉管理员怎么恢复：成员的连接不能替换共享 client，要管理员出手。
+      expect(row?.lastError).toContain(
+        "应用的 OAuth 客户端已失效，需要管理员在应用页面点击「刷新工具」或重新连接。",
+      );
       exchanged.length = 0;
     });
   }
