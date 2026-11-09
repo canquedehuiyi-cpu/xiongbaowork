@@ -156,21 +156,7 @@ export function createApprovalQuestions(
         .where(and(owned(owner), isNull(workItems.finishedAt)))
         .orderBy(desc(workItems.createdAt))
         .limit(100);
-      return rows
-        .map((row) => {
-          const value = questionSchema.safeParse(row.payload);
-          return value.success
-            ? {
-                id: row.key,
-                botId: value.data.botId,
-                threadId: value.data.threadId,
-                question: value.data.question,
-                why: value.data.why,
-                createdAt: row.createdAt,
-              }
-            : null;
-        })
-        .filter((row) => row !== null);
+      return rows.map(listedQuestion).filter((row) => row !== null);
     },
     /**
      * Answer a question. Resumed here, as a queued turn, unless the answer was given in the open

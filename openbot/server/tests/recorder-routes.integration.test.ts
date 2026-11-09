@@ -129,7 +129,8 @@ function build(
   } as never;
   args[2] = roleRepository;
   args[12] = auditStore;
-  args[34] = { recorder };
+  // M3: the fork's createApp takes `coworker` at 33 (upstream's `learning` comes later here).
+  args[33] = { recorder };
   const app = createApp(...args);
   return { app, audits, config, kicked };
 }

@@ -7,6 +7,7 @@ import {
   withApprovalContext,
 } from "../src/approvals/types";
 import { computerActionIdentity } from "../src/computer/action-identity";
+import { personSeat } from "../src/computer/computer-key";
 import { createComputerGateway } from "../src/computer/gateway";
 import { createRunnerTransport } from "../src/computer/runner-transport";
 import { createDatabase } from "../src/db/client";
@@ -131,11 +132,11 @@ function gatewayFor(
   return createComputerGateway({
     provider: {
       name: "unused",
-      isolation: "per-bot",
+      isolation: "per-person",
       locate: async () => {
         throw new Error("A paired machine is never located through the provider.");
       },
-      status: async (id) => ({ botId: id, state: "ready" }),
+      status: async (seat) => ({ botId: seat.botId, state: "ready" }),
       list: async () => [],
       stop: async () => ({ wasRunning: false }),
       reset: async () => ({ cleared: false }),
@@ -169,7 +170,7 @@ function runCommand(
     withApprovalContext(context, () =>
       computerActionIdentity.run(toolCallId, () =>
         gateway.runCommand(
-          input.botId,
+          personSeat(input.tenant, input.botId),
           { id: input.tenant, userId: input.tenant },
           { command },
         ),

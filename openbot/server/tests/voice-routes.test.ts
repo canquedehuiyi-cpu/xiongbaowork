@@ -24,6 +24,9 @@ const profile: AgentProfile = {
   deletedAt: null,
   endpoint: null,
   hasAuth: false,
+  modelRef: null,
+  platformModelRef: null,
+  persona: null,
   hasCallbackToken: false,
   isolated: false,
 };

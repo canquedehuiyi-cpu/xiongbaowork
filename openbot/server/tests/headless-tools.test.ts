@@ -7,9 +7,7 @@ import {
   type RunAgentInput,
 } from "@ag-ui/client";
 import { HeadlessToolsMiddleware } from "@openbot/toolkit/headless-tools";
-import { createTurnRunner, type RunnerLike } from "@openbot/toolkit/run-turn";
 import { Observable } from "rxjs";
-import { serverTurnAdmission } from "../src/agents/turn-admission";
 import { parseApprovalContinuation } from "../src/approvals/types";
 import type { AuditEventInput } from "../src/audit";
 import { botSeat } from "../src/computer/computer-key";
@@ -794,7 +792,7 @@ test("on a paired machine the file and command tools say so; in the deployment's
       headless
         .createHeadlessComputerTools({
           gateway,
-          botId: "bot",
+          seat: botSeat("bot"),
           actor: {
             id: "owner",
             userId: "owner",

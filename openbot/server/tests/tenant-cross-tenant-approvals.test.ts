@@ -96,7 +96,7 @@ const routesFor = (actorId: string) => {
     context,
     next,
   ) => {
-    context.set("actor", { id: actorId, role });
+    context.set("actor", { id: actorId, email: `${actorId}@example.test`, role });
     await runAsTenant(actorId, () => next());
   };
   return createApprovalRoutes(service, requireUser, scope.adminCapability);
@@ -422,7 +422,7 @@ test("an admin with the capability cannot re-stamp a team rule into their own te
   const restamp = createApprovalRoutes(
     service,
     async (context, next) => {
-      context.set("actor", { id: adminA, role: "admin" });
+      context.set("actor", { id: adminA, email: `${adminA}@example.test`, role: "admin" });
       await runAsTenant(adminA, () => next());
     },
     scope.adminCapability,
@@ -555,7 +555,7 @@ test("an admin the database does not know as one gets 403 on a team write, not a
   const routes = createApprovalRoutes(
     service,
     async (context, next) => {
-      context.set("actor", { id: stranger, role: "admin" });
+      context.set("actor", { id: stranger, email: `${stranger}@example.test`, role: "admin" });
       await runAsTenant(stranger, () => next());
     },
     scope.adminCapability,

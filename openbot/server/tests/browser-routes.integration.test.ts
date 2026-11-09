@@ -482,7 +482,7 @@ function build(
     native: config.browser !== undefined,
     allowPrivateHosts: false,
     openbotUrls: [config.publicUrl, config.appUrl],
-    gatewayUrl: config.runtime.intelligence.gatewayWsUrl,
+    gatewayUrl: config.intelligence?.gatewayWsUrl ?? "",
   });
   const provider = withPolicyPushOnWake(
     withPersonBrowsers(
@@ -524,7 +524,8 @@ function build(
     edition: config.edition,
     computers: () => gatewayBrowserComputers(gateway, config.browser?.url),
   });
-  args[34] = {
+  // M3: the fork's createApp takes `coworker` at 33 (upstream's `learning` comes later here).
+  args[33] = {
     recorder,
     browser: {
       ...(options.computers === false ? {} : place),

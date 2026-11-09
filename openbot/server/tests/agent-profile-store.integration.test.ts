@@ -23,11 +23,7 @@ import type {
 } from "../src/agents/profile-types";
 import { createAgentRoutes } from "../src/agents/routes";
 import { createRuntimeAgentLoader } from "../src/agents/runtime-agents";
-import type {
-  type AppVariables,
-  AppVariables,
-  createRoleRepository,
-} from "../src/auth/guards";
+import { type AppVariables, createRoleRepository } from "../src/auth/guards";
 import { createAuditStore } from "../src/audit";
 import { createAdminScope } from "../src/auth/admin-scope";
 import { setRole } from "../src/auth/roles";
@@ -229,7 +225,13 @@ async function createProfileFixture(options: {
    * `team` by the owner, as the store moves it (G01-E P8b). Absent, the caller's frame.
    */
   frame?: string;
-}) {
+}): Promise<{
+  agentId: string;
+  name: string;
+  title: string;
+  roleDescription: string;
+  avatarSeed: string;
+}> {
   if (options.frame !== undefined) {
     const { frame, ...rest } = options;
     return runAsTenant(frame, async () => {

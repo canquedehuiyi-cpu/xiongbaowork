@@ -109,9 +109,8 @@ beforeAll(async () => {
   });
   expect(config.singleUser).toBe(true);
   expect(config.publicUrl).toBeUndefined();
-  expect(config.runtime.intelligence.browserGatewayWsUrl).toBe(
-    INTELLIGENCE_CLIENT_SOCKET_PATH,
-  );
+  // M3: the fork's config has no `runtime.intelligence.browserGatewayWsUrl` (its Intelligence is optional and
+  // INTELLIGENCE_GATEWAY_PROXY is not read), so the page's socket address is not asserted on the config here.
 
   const auditStore = { insert: async (_event: AuditEventInput) => {} };
   const roleRepository: RoleRepository = {
@@ -166,7 +165,8 @@ beforeAll(async () => {
   args[2] = roleRepository;
   args[6] = runtime.handler;
   args[12] = auditStore;
-  args[34] = { recorder };
+  // M3: the fork's createApp takes `coworker` at 33 (upstream's `learning` comes later here).
+  args[33] = { recorder };
   openbot = startHttpServer({
     port,
     config,

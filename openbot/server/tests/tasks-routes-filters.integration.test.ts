@@ -42,7 +42,11 @@ const outsider = `${suite}-outsider`;
 const historian = `${suite}-historian`;
 const millwright = `${suite}-millwright`;
 
-const actor = { id: tenant, role: "user" as const };
+const actor = {
+  id: tenant,
+  email: `${tenant}@example.test`,
+  role: "user" as const,
+};
 const requireUser: MiddlewareHandler<{ Variables: AppVariables }> = async (
   context,
   next,
@@ -273,7 +277,7 @@ const theirs = await runAsTenant(neighbour, async () => {
 const neighbourRoutes = createTaskRoutes(
   database,
   async (context, next) => {
-    context.set("actor", { id: neighbour, role: "user" as const });
+    context.set("actor", { id: neighbour, email: `${neighbour}@example.test`, role: "user" as const });
     await next();
   },
   projector,

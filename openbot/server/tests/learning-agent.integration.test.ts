@@ -36,12 +36,6 @@ function agents(
     undefined,
     undefined,
     undefined,
-    // This fork's buildAgents carries four more seams before learning: personal memory, the model
-    // binding, the 分身's sources and the current project. Learning is appended last (R0).
-    undefined,
-    undefined,
-    undefined,
-    undefined,
     acquire,
   );
 }

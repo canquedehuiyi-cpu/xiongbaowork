@@ -40,7 +40,7 @@ const store = createPluginStore({
     revoke: async () => {
       throw new Error("this suite does not revoke credentials");
     },
-  },
+  } as never,
   encryptionKey: "x".repeat(44),
   policy: () => ({ mode: "enforce", deny: [], allow: ["true"] }),
 });

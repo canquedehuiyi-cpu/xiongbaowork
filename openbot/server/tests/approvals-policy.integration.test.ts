@@ -30,7 +30,6 @@ import {
 import { users } from "../src/db/schema/core";
 import { workItems } from "../src/db/schema/work";
 import { runAsTenant } from "../src/tenant/context";
-import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { bindTestRoleWriter } from "./support/role-writer";
 
@@ -71,7 +70,7 @@ const asTeam = async <T>(work: () => Promise<T>): Promise<T> => {
   app.use(
     "*",
     async (context, next) => {
-      context.set("actor", { id: admin, role: "admin" });
+      context.set("actor", { id: admin, email: `${admin}@example.test`, role: "admin" });
       await runAsTenant(admin, () => next());
     },
     scope.adminCapability,

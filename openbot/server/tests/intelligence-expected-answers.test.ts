@@ -1,13 +1,9 @@
 import { afterAll, afterEach, beforeAll, expect, spyOn, test } from "bun:test";
 import { CopilotKitIntelligence } from "@copilotkit/runtime/v2";
 import { IntelligenceKnowingANewThread } from "@openbot/toolkit/copilotkit/agents";
-import { createActorAgentResolver } from "../src/agents/agent-resolver";
 import { createThreadReader } from "../src/channels/thread-status";
-import { createStallGuard } from "../src/channels/stall-guard";
 import { loadConfig } from "../src/config";
-import { mountCopilotRuntime } from "../src/copilot";
 import { createIntelligenceClient } from "../src/intelligence-client";
-import { createLearningSettingsStore } from "../src/learning/settings";
 import { testEnvironment } from "./support/environment";
 
 /**
@@ -26,7 +22,6 @@ import { testEnvironment } from "./support/environment";
  */
 
 const USER = "dev-local-user";
-const BOT = "general-assistant";
 
 function envelope(code: string, message: string, retryable: boolean) {
   return {
@@ -113,7 +108,6 @@ function intelligence() {
 const platform = intelligence();
 const telemetry = process.env.COPILOTKIT_TELEMETRY_DISABLED;
 let printed: ReturnType<typeof spyOn<Console, "error">>;
-const guard = createStallGuard({ stallMs: 0 });
 
 beforeAll(() => {
   process.env.COPILOTKIT_TELEMETRY_DISABLED = "true";
@@ -123,7 +117,6 @@ afterEach(() => {
 });
 afterAll(() => {
   platform.stop();
-  guard.stop();
   if (telemetry === undefined) delete process.env.COPILOTKIT_TELEMETRY_DISABLED;
   else process.env.COPILOTKIT_TELEMETRY_DISABLED = telemetry;
 });
@@ -137,94 +130,25 @@ const failedReads = () =>
     ),
   );
 
-/** The runtime, mounted the way index.ts mounts it, with Learning on so its selector asks. */
-async function mounted() {
+/** This deployment's Intelligence settings, pointed at the fake platform. */
+function intelligenceSettings() {
   const config = loadConfig(
     testEnvironment({ INTELLIGENCE_API_URL: platform.url }),
   );
-  const learningSettings = createLearningSettingsStore(undefined, {
-    containerId: "openbot",
-  });
-  await learningSettings.write({
-    enabled: true,
-    defaultTarget: { containerId: "openbot" },
-    agents: {},
-  });
-  const copilot = mountCopilotRuntime(
-    config,
-    createActorAgentResolver({
-      model: { provider: "openai", defaultModel: "unused" },
-      loadAgents: async () => [],
-      resolveModelApiKey: async () => null,
-      stallGuard: guard,
-    }),
-    async () => ({ id: USER, name: "Dev" }),
-    async () => ({ id: USER, role: "admin" }),
-    { learningSettings },
-  );
-  return { copilot, intelligence: config.runtime.intelligence };
+  if (!config.intelligence) throw new Error("Expected Intelligence settings.");
+  return config.intelligence;
 }
 
-test("a new conversation opens, is assigned to Learning and runs, and nothing is printed", async () => {
-  printed = spyOn(console, "error").mockImplementation(() => {});
-  const { copilot, intelligence: settings } = await mounted();
-  const threadId = crypto.randomUUID();
-
-  // The browser opening the conversation reads its history: none, and a 200.
-  const history = await copilot.handler.fetch(
-    new Request(
-      `http://127.0.0.1/api/copilotkit/threads/${threadId}/messages?agentId=${BOT}`,
-    ),
-  );
-  expect(history.status).toBe(200);
-  expect(await history.json()).toEqual({ messages: [] });
-
-  // The run's Learning selector asks whether the thread is new: it is, so it is assigned.
-  expect(
-    await copilot.learning?.containerForThread({
-      agentId: BOT,
-      threadId,
-      userId: USER,
-    }),
-  ).toBe("openbot");
-
-  // A hop reading the same new conversation's history, and the browser asking whether it remembers it.
-  expect(await copilot.history({ threadId, actorId: USER })).toEqual([]);
-  const reader = createThreadReader(createIntelligenceClient(settings));
-  expect(await reader(threadId, USER)).toBe("unknown");
-
-  expect(failedReads()).toEqual([]);
-
-  // Then it runs, and every one of those reads now finds it.
-  expect(
-    await copilot.threadLock.acquire({
-      threadId,
-      runId: "run-1",
-      userId: USER,
-      agentId: BOT,
-    }),
-  ).toEqual({ runId: "run-1" });
-  expect(await reader(threadId, USER)).toBe("known");
-  expect(await copilot.history({ threadId, actorId: USER })).toHaveLength(1);
-
-  // A second run while the first still holds it is refused as retryable, asked again until the
-  // first lets go, and gets it; none of the refusals is printed.
-  const letGo = setTimeout(() => platform.release(threadId), 300);
-  expect(
-    await copilot.threadLock.acquire({
-      threadId,
-      runId: "run-2",
-      userId: USER,
-      agentId: BOT,
-    }),
-  ).toEqual({ runId: "run-2" });
-  clearTimeout(letGo);
-  expect(failedReads()).toEqual([]);
-});
+/*
+ * M3: upstream's "a new conversation opens, is assigned to Learning and runs, and nothing is printed"
+ * is not kept. It mounts the runtime on Intelligence's thread store and reads its Learning selector
+ * (`copilot.learning`, `learningSettings`); the fork's runtime keeps its threads in the local runner
+ * (R0) and builds Learning beside it in index.ts, so there is no such runtime to mount here.
+ */
 
 test("a real failure is still the client's to print, once, and still throws", async () => {
   printed = spyOn(console, "error").mockImplementation(() => {});
-  const { intelligence: settings } = await mounted();
+  const settings = intelligenceSettings();
   const threadId = crypto.randomUUID();
   platform.broken.add(threadId);
   const reader = createThreadReader(createIntelligenceClient(settings));

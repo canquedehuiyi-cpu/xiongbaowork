@@ -61,7 +61,7 @@ const actor =
   };
 
 async function call<T>(
-  app: { request: (input: Request) => Promise<Response> },
+  app: { request: (input: Request) => Response | Promise<Response> },
   method: string,
   path: string,
   body?: unknown,

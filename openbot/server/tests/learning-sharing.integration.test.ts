@@ -147,7 +147,8 @@ args[1] = {
 args[2] = roleRepository;
 args[12] = auditStore;
 const skillReads: string[] = [];
-args[34] = {
+// M3: the fork's createApp takes `coworker` at 33 (upstream's `learning` comes later here).
+args[33] = {
   personalLearning: {
     store,
     skillOf: async (userId: string, name: string) => {

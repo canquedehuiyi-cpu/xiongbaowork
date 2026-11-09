@@ -12,6 +12,7 @@ import { createAuditStore } from "../src/audit";
 import { createAdminScope } from "../src/auth/admin-scope";
 import type { AppVariables } from "../src/auth/guards";
 import { reconcileDirectoryState } from "../src/auth/scim";
+import { computerKeyText } from "../src/computer/computer-key";
 import type { ComputerProvider } from "../src/computer/provider";
 import { createDatabase } from "../src/db/client";
 import {
@@ -51,21 +52,23 @@ const person = {
   email: `entf-person-${suite}@acme.test`,
 };
 const bot = `entf-bot-${suite}`;
+/** The Bot's own computer, as a provider and the trail name it (`bot:<id>`). */
+const botComputer = `bot:${bot}`;
 const remoteBot = `entf-remote-${suite}`;
 const stopped: string[] = [];
 const provider: ComputerProvider = {
   name: "fake",
-  isolation: "per-bot",
+  isolation: "per-person",
   locate: async () => "http://unused",
-  status: async (botId) => ({ botId, state: "ready" }),
-  stop: async (botId) => {
-    stopped.push(botId);
+  status: async (seat) => ({ botId: seat.botId, state: "ready" }),
+  stop: async (target) => {
+    stopped.push(computerKeyText(target.key));
     return { wasRunning: true };
   },
   reset: async () => ({ cleared: false }),
   list: async () => [
     {
-      botId: bot,
+      key: { kind: "bot", botId: bot },
       status: "running",
       url: "",
       startedAt: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
@@ -193,8 +196,8 @@ describe("enterprise controls with no frame of their own", () => {
   test("an inactive computer is stopped and the row filed in its owner's trail", async () => {
     stopped.length = 0;
     const result = await controls.terminateInactiveComputers();
-    expect(result?.stopped).toContain(bot);
-    expect(await rowsAbout("computer.terminated_inactive", bot)).toEqual([
+    expect(result?.stopped).toContain(botComputer);
+    expect(await rowsAbout("computer.terminated_inactive", botComputer)).toEqual([
       { tenantId: person.id },
     ]);
   });
@@ -205,8 +208,9 @@ describe("enterprise controls with no frame of their own", () => {
     const result = await runAsTenant(admin, () =>
       controls.terminateMemberComputers(person.id, { id: admin, email: "a@x" }),
     );
-    expect(result.stopped).toEqual([bot]);
-    expect(stopped).toEqual([bot]);
+    // M3: computers are keyed by whose they are now: the member's own, then each Bot of theirs.
+    expect(result.stopped).toEqual([`person:${person.id}`, botComputer]);
+    expect(stopped).toEqual([`person:${person.id}`, botComputer]);
   });
 });
 
@@ -221,7 +225,7 @@ describe("SCIM offboarding", () => {
     expect(
       await eventually(() => rowsAbout("person.deprovisioned", person.id)),
     ).toEqual([{ tenantId: person.id }]);
-    expect(stopped).toContain(bot);
+    expect(stopped).toContain(botComputer);
     // (The administrator's stop above is filed in the administrator's own trail.)
     expect(await rowsAbout("computer.terminated", person.id)).toContainEqual({
       tenantId: person.id,

@@ -31,7 +31,6 @@ import {
   createPersonSpaceStore,
   personalLearningContainerId,
 } from "../src/learning/personal-space";
-import { createLearningSettingsStore } from "../src/learning/settings";
 import { createRecorderExtension } from "../src/recorder/wiring";
 import { createRequestActor } from "../src/request-actor";
 import { skillSnapshot } from "./fixtures/learned-skills";
@@ -61,7 +60,8 @@ const config = loadConfig(
     INTELLIGENCE_BROWSER_GATEWAY_WS_URL: "ws://localhost:7103",
   }),
 );
-const intelligenceApi = config.runtime.intelligence.apiUrl.replace(/\/$/, "");
+// M3: the fork keeps its optional Intelligence at `config.intelligence`, not upstream's `config.runtime.intelligence`.
+const intelligenceApi = (config.intelligence?.apiUrl ?? "").replace(/\/$/, "");
 const roleRepository: RoleRepository = { rolesForUser: async () => ["user"] };
 const getSession = async ({ headers }: { headers: Headers }) => {
   const cookie = headers.get("cookie") ?? "";
@@ -139,12 +139,8 @@ const runtime = mountCopilotRuntime(
   }),
   identifyUser,
   identifyActor,
-  {
-    learningSettings: createLearningSettingsStore(undefined, {
-      containerId: "openbot",
-    }),
-    trajectoryCapture: recorder.trajectoryCapture,
-  },
+  // M3: the fork's runtime takes no `learningSettings` (its Learning is built beside it in index.ts).
+  { trajectoryCapture: recorder.trajectoryCapture },
 );
 /*
  * createApp is positional. Placed by index rather than after a spread of `undefined`s, whose length
@@ -162,7 +158,8 @@ args[1] = {
 args[2] = roleRepository;
 args[6] = runtime.handler;
 args[12] = auditStore;
-args[34] = { recorder };
+// M3: the fork's createApp takes `coworker` at 33 (upstream's `learning` comes later here).
+args[33] = { recorder };
 const app = createApp(...args);
 
 const call = (path: string, init: RequestInit & { json?: unknown } = {}) => {

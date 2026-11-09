@@ -1,8 +1,7 @@
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray } from "drizzle-orm";
 import { FIRING_FRAME, frameFiring } from "@openbot/shared/routine-firing";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import postgres from "postgres";
 import {
   CHANNEL_ACTIVITY_TOPIC,

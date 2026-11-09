@@ -453,7 +453,7 @@ const config = loadConfig(
 const duringRecording = botBrowserNetwork({
   connections,
   openbotUrls: [config.publicUrl, config.appUrl],
-  gatewayUrl: config.runtime.intelligence.gatewayWsUrl,
+  gatewayUrl: config.intelligence?.gatewayWsUrl ?? "",
 });
 const policyForBot = (botId: string) => duringRecording(botId, OWN_POLICY);
 const sharedComputer = createSharedComputerProvider({
@@ -497,7 +497,8 @@ args[7] = gateway;
 args[8] = {} as never;
 args[9] = profiles as never;
 args[12] = auditStore;
-args[34] = {
+// M3: the fork's createApp takes `coworker` at 33 (upstream's `learning` comes later here).
+args[33] = {
   recorder,
   botBrowser: {
     recorder,
@@ -514,10 +515,10 @@ args[34] = {
 const app = createApp(...args);
 /** The same OpenBot where every Bot shares the one computer, as index.ts builds it: Record refused in every Bot's browser. */
 const refusingArgs = [...args] as typeof args;
-refusingArgs[34] = {
-  ...(args[34] as object),
+refusingArgs[33] = {
+  ...(args[33] as object),
   botBrowser: {
-    ...(args[34] as { botBrowser: object }).botBrowser,
+    ...(args[33] as { botBrowser: object }).botBrowser,
     recordRefused: botRecordRefusal(sharedComputer) ?? undefined,
   },
 } as never;

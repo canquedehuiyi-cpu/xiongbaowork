@@ -42,12 +42,12 @@ import {
   type EmployeePolicy,
   withApprovalContext,
 } from "../src/approvals/types";
+import { botSeat } from "../src/computer/computer-key";
 import { createComputerGateway } from "../src/computer/gateway";
 import { createHeadlessComputerTools } from "../src/computer/headless-tools";
 import { createHostAccessBroker } from "../src/host-access/broker";
 import { createPrivateShareCheck } from "../src/proactive/private-share";
 import { runAsTenant } from "../src/tenant/context";
-import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 
 const candidate = (
   over: Partial<ApprovalCandidate> = {},
@@ -288,7 +288,10 @@ describe("built-in safety requirements", () => {
       "composio-gmail/GMAIL_MOVE_TO_TRASH",
       "arcade-Linear/RemoveAttachment",
     ])
-      expect({ toolRef, asked: asked(toolRef) }).toEqual({
+      // M3: upstream's safety requirement carries `behaviour`; the fork's approvals/policy.ts (kept by the
+      // plugins session) does not yet, nor these archive/destructive asks. Typed loosely so the case stays
+      // and fails until that port lands, rather than being dropped.
+      expect({ toolRef, asked: asked(toolRef) }).toEqual<unknown>({
         toolRef,
         asked: {
           id: "deleting",
@@ -315,7 +318,7 @@ describe("built-in safety requirements", () => {
       args: { workspace: "w1" },
       destructive: true,
     });
-    expect(safetyRequirement(destructive)).toEqual({
+    expect(safetyRequirement(destructive)).toEqual<unknown>({
       id: "deleting",
       reason:
         "The app marks this as deleting or overwriting something, so it always asks you first.",
@@ -869,6 +872,7 @@ function memoryStore(options: {
         enforceAutoReview: false,
         customRulesEnabled: true,
         hostCommandsCap: "allow",
+        enforceDangerousCommands: false,
         ...options.team,
       }),
       setTeamSettings: async () => {
@@ -2273,9 +2277,9 @@ describe("SEC1: every gate site leaves a refused or waiting action undone", () =
     const gateway = createComputerGateway({
       provider: {
         name: "test",
-        isolation: "per-bot",
+        isolation: "per-person",
         locate: async () => "http://computer:4100",
-        status: async (botId) => ({ botId, state: "ready" }),
+        status: async (seat) => ({ botId: seat.botId, state: "ready" }),
         list: async () => [],
         stop: async () => ({ wasRunning: true }),
         reset: async () => ({ cleared: true }),
@@ -2283,7 +2287,7 @@ describe("SEC1: every gate site leaves a refused or waiting action undone", () =
       policy: () => ({ mode: "enforce", allow: ["true"], deny: [] }),
       auditStore: { insert: async () => undefined },
       ...(gate ? { approvalGate: gate } : {}),
-      fetchImpl: async (url) => {
+      fetchImpl: (async (url: URL | RequestInfo) => {
         sent.push(new URL(String(url)).pathname);
         return Response.json(
           new URL(String(url)).pathname === "/exec"
@@ -2298,7 +2302,7 @@ describe("SEC1: every gate site leaves a refused or waiting action undone", () =
               }
             : { path: ".env", content: "", bytes: 0 },
         );
-      },
+      }) as typeof fetch,
     });
     return { gateway, sent };
   };
@@ -2314,7 +2318,7 @@ describe("SEC1: every gate site leaves a refused or waiting action undone", () =
       const { gateway, sent } = cloud(service.gate);
       await expect(
         inRun("computer_run_command", { command: "ls" }, () =>
-          gateway.runCommand("bot", { id: "owner" }, { command: "ls" }),
+          gateway.runCommand(botSeat("bot"), { id: "owner" }, { command: "ls" }),
         ),
       ).rejects.toThrow(TOOL_DISABLED);
       expect(sent).toEqual([]);
@@ -2328,14 +2332,14 @@ describe("SEC1: every gate site leaves a refused or waiting action undone", () =
       const { gateway, sent } = cloud(service.gate);
       const remove = () =>
         inRun("computer_run_command", { command: "rm -rf ~" }, () =>
-          gateway.runCommand("bot", { id: "owner" }, { command: "rm -rf ~" }),
+          gateway.runCommand(botSeat("bot"), { id: "owner" }, { command: "rm -rf ~" }),
         );
       await expect(remove()).rejects.toBeInstanceOf(HeadlessToolSuspension);
       await expect(
         inRun(
           "computer_read_file",
           { path: ".env" },
-          () => gateway.readFile("bot", { id: "owner" }, { path: ".env" }),
+          () => gateway.readFile(botSeat("bot"), { id: "owner" }, { path: ".env" }),
           "c2",
         ),
       ).rejects.toBeInstanceOf(HeadlessToolSuspension);
@@ -2359,7 +2363,7 @@ describe("SEC1: every gate site leaves a refused or waiting action undone", () =
       const service = createApprovalService(store);
       const { gateway, sent } = cloud(service.gate);
       await inRun("computer_run_command", { command: "ls" }, () =>
-        gateway.runCommand("bot", { id: "owner" }, { command: "ls" }),
+        gateway.runCommand(botSeat("bot"), { id: "owner" }, { command: "ls" }),
       );
       expect(sent).toEqual(["/exec"]);
     }));
@@ -2462,7 +2466,7 @@ describe("SEC1: disabled tools are not offered to the model (D4)", () => {
       expect(disabled("computer_click")).toBeFalse();
       const tools = createHeadlessComputerTools({
         gateway: {} as never,
-        botId: "bot",
+        seat: botSeat("bot"),
         actor: { id: "member" },
         disabled,
       }).map((tool) => tool.definition.name);
@@ -2471,7 +2475,7 @@ describe("SEC1: disabled tools are not offered to the model (D4)", () => {
       expect(
         createHeadlessComputerTools({
           gateway: {} as never,
-          botId: "bot",
+          seat: botSeat("bot"),
           actor: { id: "member" },
         }).map((tool) => tool.definition.name),
       ).toContain("computer_run_command");

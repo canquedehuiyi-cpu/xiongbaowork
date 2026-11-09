@@ -24,6 +24,7 @@ import {
   parseApprovalContinuation,
   withApprovalContext,
 } from "../src/approvals/types";
+import { personSeat } from "../src/computer/computer-key";
 import {
   ActionRefusedError,
   APP_CALL_BACKSTOP_MS,
@@ -345,11 +346,11 @@ async function pairedDevice(
   const gateway = createComputerGateway({
     provider: {
       name: "device",
-      isolation: "per-bot",
+      isolation: "per-person",
       locate: async () => {
         throw new Error("A paired machine is never located through the provider.");
       },
-      status: async (id) => ({ botId: id, state: "absent" }),
+      status: async (seat) => ({ botId: seat.botId, state: "absent" }),
       list: async () => [],
       stop: async () => ({ wasRunning: false }),
       reset: async () => ({ cleared: false }),
@@ -379,13 +380,13 @@ async function pairedDevice(
   const actor = { id: tenant, userId: tenant };
   const tools = createHeadlessComputerTools({
     gateway,
-    botId,
+    seat: personSeat(actor.id, botId),
     actor,
     machine: "device",
     apps: true,
   });
   /** One tool call, from inside the Bot's run in its thread, as the headless middleware makes it. */
-  function call(name: string, args: Record<string, unknown>, toolCallId = randomUUID()) {
+  function call(name: string, args: Record<string, unknown>, toolCallId: string = randomUUID()) {
     const tool = tools.find((candidate) => candidate.definition.name === name);
     if (!tool) throw new Error(`No tool ${name}.`);
     const continuation: ApprovalContinuation = {
@@ -711,7 +712,7 @@ test("a catalogue Bot (no owner) has no apps tools", async () => {
   const device = await pairedDevice();
   const names = createHeadlessComputerTools({
     gateway: device.gateway,
-    botId: device.catalogueBot,
+    seat: personSeat(device.actor.id, device.catalogueBot),
     actor: device.actor,
     machine: "device",
   }).map((tool) => tool.definition.name);
@@ -722,7 +723,7 @@ test("a catalogue Bot (no owner) has no apps tools", async () => {
   expect(
     createHeadlessComputerTools({
       gateway: device.gateway,
-      botId: device.botId,
+      seat: personSeat(device.actor.id, device.botId),
       actor: device.actor,
       apps: true,
     }).map((tool) => tool.definition.name),

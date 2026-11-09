@@ -6,7 +6,6 @@ import {
 } from "../src/responsibilities/github";
 import {
   type ResponsibilityEvent,
-  ResponsibilityEvent,
   responsibilityEventSchema,
 } from "../src/responsibilities/types";
 import { isTenantFramed, requireTenant } from "../src/tenant/context";

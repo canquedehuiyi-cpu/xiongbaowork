@@ -87,7 +87,8 @@ beforeAll(async () => {
   args[1] = auth as never;
   args[2] = roleRepository;
   args[12] = auditStore;
-  args[34] = { recorder: working };
+  // M3: the fork's createApp takes `coworker` at 33 (upstream's `learning` comes later here).
+  args[33] = { recorder: working };
   app = createApp(...args);
   cookieName = (await auth.$context).authCookies.sessionToken.name;
 });

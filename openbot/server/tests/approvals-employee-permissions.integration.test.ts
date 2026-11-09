@@ -48,7 +48,7 @@ function client(id: string, role: "user" | "admin" = "user") {
     createApprovalRoutes(
       service,
       async (context, next) => {
-        context.set("actor", { id, role });
+        context.set("actor", { id, email: `${id}@example.test`, role });
         await runAsTenant(id, () => next());
       },
       scope.adminCapability,

@@ -55,6 +55,7 @@ describe("testing an address this deployment runs", () => {
       true,
       endpoints[0],
       undefined,
+      undefined,
       { token: TOKEN, endpoints },
     );
   }

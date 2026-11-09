@@ -43,8 +43,6 @@ import { createPrivateShareCheck } from "../src/proactive/private-share";
 import {
   createTeamBots,
 } from "../src/team-bots/team-bots";
-import type { TurnRunner } from "@openbot/toolkit/run-turn";
-import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 import { createTaskProjector } from "../src/tasks/projector";
 import { runAsTenant } from "../src/tenant/context";
 import { createWorkQueue } from "../src/work/queue";
@@ -1175,7 +1173,7 @@ describe("group conversations in PostgreSQL", () => {
       ),
     );
     expect(
-      Array.from(stamps as ArrayLike<{ messageId: string; tenantId: string }>)
+      Array.from(stamps as unknown as ArrayLike<{ messageId: string; tenantId: string }>)
         .map((row) => [row.messageId, row.tenantId])
         .sort(),
     ).toEqual(

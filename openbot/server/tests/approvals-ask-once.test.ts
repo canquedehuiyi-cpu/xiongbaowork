@@ -61,6 +61,9 @@ describe("a Bot OpenBot runs leaves the asking to OpenBot", () => {
   });
 
   // Each action the guidance names, as a button a Bot presses: the policy must ask about every one.
+  // M3: `behaviour` is upstream's (approvals/policy.ts #1175); the fork's policy.ts, kept by the plugins
+  // session, returns only { id, reason } and has no send/delete/share/post/archive asks yet. Asserted
+  // through toMatchObject so these stay and fail until that port lands.
   test.each([
     ["delete", "Delete", "ask"],
     ["send", "Send", "ask"],
@@ -72,7 +75,7 @@ describe("a Bot OpenBot runs leaves the asking to OpenBot", () => {
     "the guidance says OpenBot asks before you %s, and it does",
     (said, button, behaviour) => {
       expect(APPROVAL_GUIDANCE.replace(/\s+/g, " ")).toContain(said);
-      expect(safetyRequirement(click(button))?.behaviour).toBe(behaviour);
+      expect(safetyRequirement(click(button))).toMatchObject({ behaviour });
     },
   );
 
@@ -104,18 +107,14 @@ describe("a Bot OpenBot runs leaves the asking to OpenBot", () => {
         args: { command: "rm -f decline-test-f6.txt && echo deleted" },
       }),
     ).toBeUndefined();
-    expect(safetyRequirement(app("GOOGLEDRIVE_DELETE_FILE"))?.behaviour).toBe(
-      "ask",
-    );
+    expect(safetyRequirement(app("GOOGLEDRIVE_DELETE_FILE"))).toMatchObject({ behaviour: "ask" });
   });
 
   test("the guidance says OpenBot asks before you archive, and it does", () => {
     expect(APPROVAL_GUIDANCE.replace(/\s+/g, " ")).toContain(
       "delete, archive, send",
     );
-    expect(safetyRequirement(app("HUBSPOT_ARCHIVE_CONTACT"))?.behaviour).toBe(
-      "ask",
-    );
+    expect(safetyRequirement(app("HUBSPOT_ARCHIVE_CONTACT"))).toMatchObject({ behaviour: "ask" });
   });
 
   test("a tool its app marks destructive says so on itself, in the words the guidance names, and OpenBot asks", () => {
@@ -127,9 +126,7 @@ describe("a Bot OpenBot runs leaves the asking to OpenBot", () => {
     expect(DESTRUCTIVE_TOOL_NOTE).toContain("Don't ask them first.");
     // Named like nothing, so only the mark can tell the Bot.
     expect(safetyRequirement(app("reset_pipeline"))).toBeUndefined();
-    expect(safetyRequirement(app("reset_pipeline", true))?.behaviour).toBe(
-      "ask",
-    );
+    expect(safetyRequirement(app("reset_pipeline", true))).toMatchObject({ behaviour: "ask" });
   });
 });
 

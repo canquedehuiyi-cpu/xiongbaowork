@@ -16,6 +16,7 @@ import {
   DESKTOP_SNAPSHOT_DESCRIPTION,
   DESKTOP_WINDOWS_DESCRIPTION,
 } from "../src/computer/desktop-tools";
+import { personSeat } from "../src/computer/computer-key";
 import { createComputerGateway } from "../src/computer/gateway";
 import { createHeadlessComputerTools } from "../src/computer/headless-tools";
 import type { PolicyStore } from "../src/computer/policy-store";
@@ -178,7 +179,7 @@ describe("the five tools are the same words and parameters on both sides", () =>
   test("the shared copy matches what the unattended run offers", () => {
     const tools = createHeadlessComputerTools({
       gateway: {} as never,
-      botId: "bot-1",
+      seat: personSeat(OWNER, "bot-1"),
       actor: { id: OWNER },
       machine: "device",
       apps: true,

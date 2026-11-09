@@ -20,7 +20,6 @@ import type {
   ResponsibilityStore,
 } from "../src/responsibilities/types";
 import { ResponsibilityNotFoundError } from "../src/responsibilities/types";
-import type { TurnRunner } from "@openbot/toolkit/run-turn";
 import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 

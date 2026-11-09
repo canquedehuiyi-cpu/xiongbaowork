@@ -336,6 +336,7 @@ describe("G01: whose work a sweep is doing", () => {
       },
       hasSomebodyToAsk: true,
       maxDepth: 2,
+      maxPerRun: 3,
     });
     await runAsTenant(ACTOR, () =>
       tool?.execute({ bot: "Target", task: "when was the outage" }),

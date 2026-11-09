@@ -46,7 +46,7 @@ const requireUser: MiddlewareHandler<{ Variables: AppVariables }> = async (
   next,
 ) => {
   // The person is the tenant whose scope the request runs in (D12: one person, one tenant).
-  context.set("actor", { id: currentTenant(), role: "user" as const });
+  context.set("actor", { id: currentTenant(), email: `${currentTenant()}@example.test`, role: "user" as const });
   await next();
 };
 
