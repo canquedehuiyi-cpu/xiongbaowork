@@ -1343,7 +1343,7 @@ test("a file save the person declines says what was tried, live and when opened 
 
   // Live: what was tried, what it was aimed at, and why it did not happen. Never "Saved a file".
   await waitFor(() =>
-    expect(saveLine(view)).toBe("已拦截：保存文件notes.txt · 你拒绝了这一步。"),
+    expect(saveLine(view)).toBe("已拒绝：保存文件notes.txt · 你拒绝了这一步。"),
   );
 
   // The person writes again, in the same open conversation.
@@ -1363,7 +1363,7 @@ test("a file save the person declines says what was tried, live and when opened 
           message.content !== DECLINED_BY_PERSON,
       ),
   ).toBe(false);
-  expect(saveLine(view)).toBe("已拦截：保存文件notes.txt · 你拒绝了这一步。");
+  expect(saveLine(view)).toBe("已拒绝：保存文件notes.txt · 你拒绝了这一步。");
   cleanup();
 
   // Opened again from the thread: still declined, not drawn as a file that was saved.
@@ -1373,7 +1373,7 @@ test("a file save the person declines says what was tried, live and when opened 
   ).toBeTruthy();
   await waitFor(() =>
     expect(saveLine(again)).toBe(
-      "已拦截：保存文件notes.txt · 你拒绝了这一步。",
+      "已拒绝：保存文件notes.txt · 你拒绝了这一步。",
     ),
   );
 });
