@@ -27,8 +27,8 @@ import { settleReactWork } from "./settle-react-work";
 /**
  * Parity plan, @Waker row (`/at-waker` → our `/reachability`).
  *
- * Seeded reads, because the page's job here is layout and state: the hero with its four entries and
- * the drawn scene, the 已接入聊天 table/cards over the real delivery bindings, its search and three
+ * Seeded reads, because the page's job here is layout and state: the heading with its four entries
+ * and the decorative chat illustration (docs/design/ios-studio/02-Waker.png), the 已接入聊天 table/cards over the real delivery bindings, its search and three
  * filters mirrored into the URL, the empty state's way in, and an entry with no backend contract
  * saying so rather than pretending.
  */
@@ -253,24 +253,34 @@ function tableRows(view: ReturnType<typeof draw>) {
   return within(table).getAllByRole("row").slice(1);
 }
 
-test("the hero headline is the page's only h1, with four entries and a drawn scene", async () => {
+test("the hero headline is the page's only h1, with four entries and a decorative chat", async () => {
   const view = draw();
   const heading = await view.findByRole("heading", {
     level: 1,
-    // Three lines; what separates them is a line break, which a screen reader reads as a pause.
-    name: /^@员工\s+将员工接入群聊或私聊\s+在 IM 中持续承接团队工作$/,
+    /*
+     * docs/design/ios-studio/02-Waker.png sets the headline in two large lines; the page keeps its
+     * own wording (将员工接入群聊或私聊，在 IM 中持续承接团队工作) and the line break between the
+     * two reads as a pause. The @员工 idea is said in the sentence under it.
+     */
+    name: /^将员工接入群聊或私聊，\s+在 IM 中持续承接团队工作$/,
   });
   expect(heading).toBeTruthy();
+  expect(view.getByText("在聊天里 @员工，让数字员工接手工作。")).toBeTruthy();
   // No second page title above the hero: the headline is the heading.
   expect(view.getAllByRole("heading", { level: 1 })).toHaveLength(1);
   for (const name of ["接入 IM 聊天", "机器人与账号", "自动接入", "接入申请"]) {
     expect(view.getByRole("button", { name: new RegExp(name) })).toBeTruthy();
   }
-  const scene = view.getByRole("img", { name: /IM/ });
-  expect(scene.tagName.toLowerCase()).toBe("svg");
-  // The mock chat window carries the @员工 request, in our words, not the reference's.
-  expect(scene.textContent).toContain("@员工");
-  expect(scene.textContent).toContain("整理本周客户反馈，并给出优先级");
+  /*
+   * The design's chat illustration is decoration (02-Waker.png, theme.css `.chat-stage`): hidden
+   * from assistive tech, the heading and entries complete without it. It still draws the @员工
+   * request in our words.
+   */
+  const art = view.container.querySelector("[data-slot=page-art]");
+  expect(art?.getAttribute("aria-hidden")).toBe("true");
+  expect(art?.textContent).toContain("@员工");
+  expect(art?.textContent).toContain("把本周客户反馈按优先级整理");
+  expect(view.queryByRole("img", { name: /IM/ })).toBeNull();
 });
 
 test("the connected chats read as the reference table: columns, toolbar, view switch", async () => {
@@ -282,28 +292,30 @@ test("the connected chats read as the reference table: columns, toolbar, view sw
   const headers = within(table)
     .getAllByRole("columnheader")
     .map((cell) => cell.textContent?.trim());
+  /*
+   * The columns docs/design/ios-studio/02-Waker.png heads the table with. The design draws no
+   * selection column (there is no bulk action) and no 启用 column (every listed chat is enabled:
+   * a disconnected one leaves the list), so neither is promised.
+   */
   expect(headers).toEqual([
-    "",
     "聊天",
     "IM 连接",
     "执行目标",
     "工作目录",
     "模型",
     "聊天状态",
-    "启用",
     "操作",
   ]);
-  // The leading checkbox column says why it cannot select yet.
-  const all = within(table).getByRole("checkbox", { name: /全选/ });
-  expect((all as HTMLInputElement).disabled).toBe(true);
-  // A Slack chat: its conversation, its IM, the coworker it reaches, no working directory, and
-  // an enabled state shown as a fact rather than a switch nobody can flip.
+  expect(within(table).queryByRole("checkbox")).toBeNull();
+  // A Slack chat: its conversation, its IM, the coworker it reaches, its state in words, no
+  // working directory, and no switch nobody can flip.
   const slack = tableRows(view).find((row) =>
     within(row).queryByText("Slack"),
   ) as HTMLElement;
   expect(within(slack).getByText("客服小熊: 退货咨询")).toBeTruthy();
+  expect(within(slack).getByText("客服小熊")).toBeTruthy();
+  expect(within(slack).getByText("已连接")).toBeTruthy();
   expect(within(slack).getByText("—")).toBeTruthy();
-  expect(within(slack).getByText("已启用")).toBeTruthy();
   expect(within(slack).queryByRole("switch")).toBeNull();
   // The toolbar: one search box and three labelled filters reading 全部.
   const box = view.getByRole("searchbox", { name: "搜索已接入聊天" });
@@ -312,8 +324,10 @@ test("the connected chats read as the reference table: columns, toolbar, view sw
     const select = view.getByRole("combobox", { name }) as HTMLSelectElement;
     expect(select.selectedOptions[0]?.textContent).toBe("全部");
   }
-  // The view switch is two icon tabs that still say what they are.
-  expect(view.getByRole("tab", { name: "表格" })).toBeTruthy();
+  // The view switch is the design's 列表 / 卡片 pill (02-Waker.png), each tab named in words.
+  expect(
+    view.getByRole("tab", { name: "列表" }).getAttribute("aria-selected"),
+  ).toBe("true");
   expect(view.getByRole("tab", { name: "卡片" })).toBeTruthy();
 });
 
@@ -475,10 +489,12 @@ test("with nothing connected the table says so in its body and points at 接入 
       "点击「接入 IM 聊天」，选择机器人或账号、具体群聊或私聊，以及负责响应的员工。",
     ),
   ).toBeTruthy();
-  // The hero's own button is the way in.
-  const cta = view.getAllByRole("button", { name: /接入 IM 聊天/ });
-  expect(cta.length).toBe(1);
-  await userEvent.click(cta[0] as HTMLElement);
+  // The hero's entry is the way in, and the empty table offers the same flow again
+  // (02-Waker.png: an outline 接入 IM 聊天 under the empty state).
+  expect(view.getAllByRole("button", { name: /接入 IM 聊天/ })).toHaveLength(2);
+  await userEvent.click(
+    within(table).getByRole("button", { name: /接入 IM 聊天/ }),
+  );
   const dialog = await view.findByRole("dialog");
   expect(within(dialog).getByLabelText("手机号")).toBeTruthy();
 });

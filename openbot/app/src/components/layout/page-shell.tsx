@@ -54,6 +54,7 @@ export function PageShell({
   art,
   children,
   className,
+  crumb,
   description,
   eyebrow,
   title,
@@ -70,6 +71,11 @@ export function PageShell({
   art?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
+  /**
+   * The page's name in the workbench breadcrumb bar, when the heading is a sentence rather than the
+   * name (@Waker's two-line headline). Defaults to `title`.
+   */
+  crumb?: string;
   description?: React.ReactNode;
   /**
    * The small line above a workbench title, e.g. `01 WORK RECORD`: a red dash, the index in white and
@@ -83,6 +89,8 @@ export function PageShell({
     label: string;
   };
 }) {
+  // Asked before any early return, so the hooks run in the same order on every render.
+  const showToggle = useSidebarToggleVisible();
   if (width === "workbench") {
     return (
       <WorkbenchShell
@@ -90,6 +98,7 @@ export function PageShell({
         art={art}
         backButton={backButton}
         className={className}
+        crumb={crumb ?? title}
         description={description}
         eyebrow={eyebrow}
         title={title}
@@ -113,7 +122,6 @@ export function PageShell({
    * on `/assist` and `/link/slack`, which draw PageShell directly under `_authed` with no sidebar
    * provider at all, so there is nothing for a toggle to act on there.
    */
-  const showToggle = useSidebarToggleVisible();
   const bar = showToggle || !!backButton;
 
   return (
@@ -288,6 +296,7 @@ function WorkbenchShell({
   backButton,
   children,
   className,
+  crumb,
   description,
   eyebrow,
   title,
@@ -297,13 +306,14 @@ function WorkbenchShell({
   backButton?: { linkProps: LinkProps; label: string };
   children: React.ReactNode;
   className?: string;
+  crumb: string;
   description?: React.ReactNode;
   eyebrow?: string;
   title: string;
 }) {
   return (
     <>
-      <WorkbenchBar backButton={backButton} title={title} />
+      <WorkbenchBar backButton={backButton} title={crumb} />
       {/* The scroller: see the note in PageShell on why it lives in the frame, not the shell. */}
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div
