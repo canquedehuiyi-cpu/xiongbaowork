@@ -599,27 +599,17 @@ The chart fails the install, naming the value to change, when: there is no datab
 the bundled database's `postgres` superuser is used with no `OPENBOT_RLS_ENFORCE` in `config.extraEnv`;
 nobody could sign in or nobody would be an administrator; an identity provider is configured without
 `secrets.betterAuthSecret` or `config.publicUrl`; `singleUser` is combined with a public URL or a
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
-public LoadBalancer; `secrets.keyEncryptionKey` is not a base64 32-byte value, or is the public example key; there is no
-`secrets.computerToken`; `computers.mode` is `external` with no `computers.url`, or `sandbox` on a
-cluster with no Sandbox CRD; both an Ingress and an HTTPRoute are enabled; both `externalSecrets` and
-an existing Secret are named; an external `database.url` is given without `database.roleWriterUrl` or
-without `database.migrationUrl`; a Bot endpoint is named with no token to call it with; a browser is
-asked for inside more than one API replica; `networkPolicy.enabled` is set with an external database
-and no `networkPolicy.extraEgress`, or with `computers.mode: sandbox` and no
-=======
-public LoadBalancer; with `intelligence.enabled: false`, the Intelligence URLs or
-`secrets.intelligenceApiKey` are missing; with the bundled Intelligence, an Intelligence address or key
-of your own is named beside it, the licence is missing, or the release predates it (no
-`intelligence.enabled` at all);
+public LoadBalancer; with the bundled Intelligence (`intelligence.enabled: true`), an Intelligence
+address or key of your own is named beside it, the licence is missing, or it has no project key for
+OpenBot; the release predates the bundle (no `intelligence.enabled` at all);
 `secrets.keyEncryptionKey` is not a base64 32-byte value, or is the public example key; with a
 database of your own, there is no `secrets.keyEncryptionKey` or no `secrets.computerToken`;
 `computers.mode` is `external` with no `computers.url`, or `sandbox` on a cluster with no Sandbox
 CRD; both an Ingress and an HTTPRoute are enabled; both `externalSecrets` and an existing Secret are
-named; a Bot endpoint is named with no token to call it with; a browser is asked for inside more than
-one API replica; `networkPolicy.enabled` is set with an external database and no
+named; an external `database.url` is given without `database.roleWriterUrl` or without
+`database.migrationUrl`; a Bot endpoint is named with no token to call it with; a browser is asked
+for inside more than one API replica; `networkPolicy.enabled` is set with an external database and no
 `networkPolicy.extraEgress`, or with `computers.mode: sandbox` and no
->>>>>>> v1.0.0
 `networkPolicy.kubernetesApiCidr`; a computer proxy is named that the network policy blocks, or
 `computers.egressProxy` is turned on with policies and no `networkPolicy.computerExtraEgress`, or with
 no `secrets.egressProxyUrl` where this chart writes the Secret; a tag annotation gives CopilotKit's
@@ -627,7 +617,7 @@ AWS tag key a different value (see [AWS usage attribution](#aws-usage-attributio
 `config.model.provider` is anything but `openai` or `anthropic`; `config.learning.model` is not
 `provider/model` or the Learning agent's `env` would never read it, or
 `intelligence.learning.agent.model` names a model beside the one the chart sets (see
-[Automatic Learning](#automatic-learning)). Not on this list, because the chart
+[Automatic Learning](#automatic-learning-optional)). Not on this list, because the chart
 generates them wherever nobody else holds one: the routines worker's secret (see
 [The routines sweep](#the-routines-sweep)), and, with the bundled database, the key encryption key,
 the computer token and the database password.
