@@ -433,12 +433,9 @@ pub const LAYOUT: [&str; 1] = ["docker-compose.yml"];
 /// Legacy entry has no checked stage context and can never mutate a deployment.
 /// Real Install acquisition uses main's explicit context and fetch_staged below.
 pub fn fetch(root: &Path, version: &str) -> Result<(), String> {
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
     let _ = root;
     valid_version(version)?;
     Err("PUBLICATION_UNAVAILABLE: UNVERIFIED_PUBLICATION_CONTEXT".into())
-=======
-    fetch_with(root, version, &get)
 }
 
 /// Downloads the URL it is given. A parameter so laying out real archives can run without a network.
@@ -446,89 +443,26 @@ pub type Download<'a> = &'a dyn Fn(&str) -> Result<Vec<u8>, String>;
 
 /// [`fetch`], downloading through `get`.
 ///
-/// An installed release is never changed here: moving it to another one is Start's upgrade (see
-/// `upgrade`), which keeps the previous version and a database backup to go back to, and lays the
-/// new one out only once the previous one is out of the way. At the same version this still lays
-/// the deployment out again when the stamp shows an app that laid out less, or a path is gone,
-/// which is what Install has always done.
+/// M3: upstream v1.0.0 lays the tag's tarball out in place here, for Install and for Start's
+/// upgrade (`upgrade.rs`). This fork never lays an unverified download out over a deployment (see
+/// [`fetch`] and [`fetch_staged`]), so this fails closed the same way and downloads nothing: an
+/// upgrade's lay-out step fails and the upgrade keeps the previous release.
 pub fn fetch_with(root: &Path, version: &str, get: Download) -> Result<(), String> {
-    let policy = crate::deployment_release::distribution(root)?;
-    // A release from before the server and worker were Compose services cannot run in this app,
-    // so `deployment_release` moves it to the latest release: the whole layout again, as for a new
-    // deployment.
-    let installed = installed(root).filter(|_| !predates_containers(root));
-    if let Some(installed) = installed {
-        if installed.version != version {
-            return Err(format!(
-                "{} is installed here, and only Start moves it to {version}",
-                installed.version
-            ));
-        }
-        if covers(&installed.layout) && LAYOUT.iter().all(|path| root.join(path).exists()) {
-            return fetch_images(root, version, get);
-        }
-    }
-    let source_url = format!(
-        "https://github.com/{}/archive/refs/tags/{version}.tar.gz",
-        policy.repository
-    );
-    let body = get(&source_url).map_err(|error| {
-        format!("could not fetch {version}: {error}. Is that a released version?")
-    })?;
-
-    std::fs::create_dir_all(root)
-        .map_err(|error| format!("could not make {}: {error}", root.display()))?;
-
-    unpack(root, &body)?;
-
-    fetch_images(root, version, get)?;
-
-    record(root, version, false).map_err(|error| format!("could not record the version: {error}"))
-}
-
-/// The tarball GitHub publishes for a commit.
-///
-/// A pinned build lays out the commit its release was cut from, not a tag that could be moved.
-pub fn commit_tarball_url(commit: &str) -> String {
-    format!("https://github.com/CopilotKit/OpenBot/archive/{commit}.tar.gz")
+    let _ = get;
+    fetch(root, version)
 }
 
 /// Lay out the commit a pinned build was cut from, with the images the build was compiled with.
 ///
-/// Nothing is fetched for the image list: the manifest inside the binary is the one that was
-/// tested, so it is written as it is. The stamp is still written last, so an interrupted fetch is
-/// retried rather than half-run.
+/// M3: upstream v1.0.0 downloads the commit's archive and unpacks it in place. That archive has no
+/// digest to check against, so in this fork a pinned build fails closed like [`fetch`]; the pin's
+/// manifest is still checked first, so a broken pin says so.
 pub fn fetch_pinned(root: &Path, pin: &Pin) -> Result<(), String> {
-    fetch_pinned_with(root, pin, get)
-}
-
-/// `fetch_pinned` with the download passed in, so a test can stand in for the network.
-///
-/// The manifest is checked before anything is fetched: a pin that names no image for a service is
-/// refused while it costs nothing, not after a tarball has been downloaded and unpacked.
-fn fetch_pinned_with(
-    root: &Path,
-    pin: &Pin,
-    get: impl Fn(&str) -> Result<Vec<u8>, String>,
-) -> Result<(), String> {
+    let _ = root;
     let manifest: Images = serde_json::from_str(pin.images)
         .map_err(|error| format!("{IMAGES} is not readable: {error}"))?;
     self::pin(&manifest)?;
-
-    let body = get(&commit_tarball_url(&pin.commit))
-        .map_err(|error| format!("could not fetch {} ({}): {error}", pin.version, pin.commit))?;
-
-    std::fs::create_dir_all(root)
-        .map_err(|error| format!("could not make {}: {error}", root.display()))?;
-
-    unpack(root, &body)?;
-
-    std::fs::write(images_path(root), pin.images)
-        .map_err(|error| format!("could not write {IMAGES}: {error}"))?;
-
-    record(root, &pin.version, true)
-        .map_err(|error| format!("could not record the version: {error}"))
->>>>>>> v1.0.0
+    Err("PUBLICATION_UNAVAILABLE: UNVERIFIED_PUBLICATION_CONTEXT".into())
 }
 
 /// Where an archive entry may be written under `root`, or `None` when it is not
@@ -615,19 +549,9 @@ fn unpack(root: &Path, body: &[u8]) -> Result<(), String> {
 ///
 /// Parsed here rather than at start-up so a release missing an image fails while the person is
 /// still looking at a screen that says what is being fetched, not later inside Compose's output.
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
 fn fetch_images(root: &Path, version: &str) -> Result<(), String> {
     valid_version(version)?;
     let body = get(&images_url(version))
-=======
-fn fetch_images(root: &Path, version: &str, get: Download) -> Result<(), String> {
-    let policy = crate::deployment_release::distribution(root)?;
-    let url = format!(
-        "https://github.com/{}/releases/download/{version}/{IMAGES}",
-        policy.repository
-    );
-    let body = get(&url)
->>>>>>> v1.0.0
         .map_err(|error| format!("could not fetch the image list for {version}: {error}"))?;
     save_images(root, version, &body)
 }
