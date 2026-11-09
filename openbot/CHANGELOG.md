@@ -8,6 +8,24 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+- **Composio apps are listed again once after an upgrade.** An app's actions that Composio gives no
+  read-only, destructive, create or update label are now recorded as unclassified, as a fresh
+  install records them, where an upgraded install had kept them as plain writes. Migration 0152
+  adds `mcp_servers.listing_revision`; at each start of a deployment with Composio configured, every
+  Composio app whose tools an older build stored is listed again in the background, without holding
+  up the start. One that cannot be reached keeps its stored actions and is retried with backoff,
+  said once in the log; once the backoff has reached its longest step (5 minutes), three more
+  failures there make this process stop trying it until the next start or Refresh tools. From
+  upstream #1185.
+- **OpenBot's own apps' saved tools are brought up to date at every start.** Routines, Google Drive
+  and 百度网盘 list tools that are this code, but a deployment kept the list the build that added
+  the app saved until an admin pressed Refresh tools. Each start now compares every such app's saved
+  tools with this build's and refreshes only the ones that differ, row by row and as each row's own
+  tenant; an ordinary start writes nothing, and a failure is a warning, not a failed start.
+  Connecting the first account to a per-person OAuth app (Figma, Notion and the like) now lists its
+  tools as that person when the app holds none, instead of leaving it "Connected" with no tools.
+  That listing never registers a new OAuth client: a vendor answering `invalid_client` is recorded
+  in the app's last error. From upstream #1130 and #1073.
 - **A replica that cannot read a connector's OAuth client no longer registers a new one over it.**
   A vault fault or a wrong `KEY_ENCRYPTION_KEY` used to read as "no client", so Connect on a
   self-registering connector (Notion and the like) registered again and replaced the one client

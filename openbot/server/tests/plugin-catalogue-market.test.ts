@@ -12,6 +12,7 @@ import {
   ownerAssemblySource,
   placeCredential,
   resolveServerUrl,
+  reviewedRead,
   serverCredentialKind,
 } from "../src/plugins/catalogue";
 import {
@@ -150,6 +151,99 @@ describe("the MCP market's first batch", () => {
       expect(entry?.ownerAssembly).toBeUndefined();
       expect(ownerAssemblySource(entry)).toBe(false);
     }
+  });
+});
+
+/**
+ * 经过审查、确认只读的工具名单（`readTools`，上游 #929 中的读写模型）。
+ *
+ * 名单是条目注释里记录的 2026-11-09 实测 `tools/list` 结果，一个不多一个不少。条目一旦列出只读名单，
+ * 它就列全了：服务器以后新增的名字在有人审查并列进来之前都是写。没有名单的条目和以前完全一样。
+ */
+const MEASURED_READS: Readonly<Record<string, readonly string[]>> = {
+  context7: ["resolve-library-id", "query-docs"],
+  deepwiki: ["ask_wiki_question", "read_wiki_contents", "read_wiki_structure"],
+  "microsoft-learn": [
+    "microsoft_docs_search",
+    "microsoft_code_sample_search",
+    "microsoft_docs_fetch",
+  ],
+  "aws-knowledge": [
+    "aws___read_documentation",
+    "aws___search_documentation",
+    "aws___list_regions",
+    "aws___get_regional_availability",
+    "aws___retrieve_skill",
+  ],
+  "cloudflare-docs": [
+    "search_cloudflare_documentation",
+    "migrate_pages_to_workers_guide",
+  ],
+};
+
+describe("reviewed read lists", () => {
+  test("each documentation entry names exactly the reads it was measured offering", () => {
+    for (const [key, reads] of Object.entries(MEASURED_READS)) {
+      const entry = catalogueEntry(key);
+      if (!entry) throw new Error(`Missing catalogue entry ${key}.`);
+      expect([...(entry.readTools ?? [])].sort()).toEqual([...reads].sort());
+      expect(Object.isFrozen(entry.readTools)).toBe(true);
+      // A name on both lists would be a contradiction review has to settle, not this code.
+      for (const name of reads) expect(entry.writeTools).not.toContain(name);
+    }
+  });
+
+  test("a listed read is a reviewed read, and still reads for chat", () => {
+    for (const [key, reads] of Object.entries(MEASURED_READS)) {
+      const entry = catalogueEntry(key);
+      for (const name of reads) {
+        expect(reviewedRead(entry, name, { destructive: false })).toBe(true);
+        expect(classifyTool(entry, name, true)).toBe("read");
+      }
+    }
+  });
+
+  test("a name the server adds later is a write until somebody lists it", () => {
+    const context7 = catalogueEntry("context7");
+    expect(
+      reviewedRead(context7, "delete-library", { destructive: false }),
+    ).toBe(false);
+    expect(classifyTool(context7, "delete-library", true)).toBe("write");
+  });
+
+  test("nothing a list says can widen: destructive, unadvertised and recorded writes still win", () => {
+    const aws = catalogueEntry("aws-knowledge");
+    expect(
+      reviewedRead(aws, "aws___read_documentation", { destructive: true }),
+    ).toBe(false);
+    expect(classifyTool(aws, "aws___read_documentation", false)).toBe("write");
+    expect(classifyTool(aws, "aws___read_documentation", true, "write")).toBe(
+      "write",
+    );
+    const entry = catalogueEntry("context7");
+    if (!entry) throw new Error("Missing catalogue entry context7.");
+    // A name on the reviewed write list is a write whatever the read list says.
+    const both = { ...entry, writeTools: ["query-docs"] };
+    expect(reviewedRead(both, "query-docs", { destructive: false })).toBe(
+      false,
+    );
+    expect(classifyTool(both, "query-docs", true)).toBe("write");
+  });
+
+  test("an entry with no read list behaves exactly as it did", () => {
+    const exa = catalogueEntry("exa");
+    expect(exa?.readTools).toBeUndefined();
+    // Nothing was reviewed as a read, so nothing is a reviewed read...
+    expect(reviewedRead(exa, "web_search_exa", { destructive: false })).toBe(
+      false,
+    );
+    expect(reviewedRead(null, "anything", { destructive: false })).toBe(false);
+    // ...and chat answers as before: an advertised name off the write list reads.
+    expect(classifyTool(exa, "some_new_tool", true)).toBe("read");
+    expect(
+      classifyTool(catalogueEntry("notion"), "notion-new-thing", true),
+    ).toBe("read");
+    expect(classifyTool(null, "anything", true)).toBe("write");
   });
 });
 

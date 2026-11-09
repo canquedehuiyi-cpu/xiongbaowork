@@ -462,3 +462,46 @@ test("删除类底线问的动作只给「允许一次 / 拒绝」，收件箱�
     inbox.requests.pop();
   }
 });
+
+test("对外发送底线问的动作同样只给「允许一次 / 拒绝」，来源写成「对外发送」", async () => {
+  const sending = {
+    ...ownerAsked,
+    id: "request-send",
+    action: {
+      ...ownerAsked.action,
+      toolRef: "composio-gmail/GMAIL_SEND_EMAIL",
+      scope: "composio-gmail",
+      args: { to: "client@example.com" },
+      toolCallId: "send-call",
+      policy: {
+        behaviour: "ask",
+        source: "outbound_send",
+        reason: "这个操作可能会把内容发给别人，总是先征得你同意。",
+      },
+    },
+  };
+  inbox.requests.push(sending as unknown as (typeof inbox.requests)[number]);
+  try {
+    const view = draw();
+    await view.findByText(/这个操作可能会把内容发给别人/);
+    expect(view.getByText(/（来源：对外发送）/)).toBeTruthy();
+    expect(view.getAllByRole("button", { name: "允许一次" })).toHaveLength(1);
+    expect(view.queryByRole("button", { name: "在这里总是允许" })).toBeNull();
+    cleanup();
+
+    const inline = render(
+      <QueryClientProvider
+        client={
+          new QueryClient({ defaultOptions: { queries: { retry: false } } })
+        }
+      >
+        <InlineApproval toolCallId="send-call" fallback={<p>Sent</p>} />
+      </QueryClientProvider>,
+    );
+    await inline.findByRole("region", { name: "等你批准" });
+    expect(inline.getByRole("button", { name: "允许一次" })).toBeTruthy();
+    expect(inline.queryByRole("button", { name: "在这里总是允许" })).toBeNull();
+  } finally {
+    inbox.requests.pop();
+  }
+});

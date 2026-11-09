@@ -88,6 +88,8 @@ tests/bot-lifecycle-audit.test.ts
 tests/bot-lifecycle-routes.test.ts
 tests/bot-lifecycle-watcher.test.ts
 tests/bot-lifecycle.integration.test.ts
+tests/brokered-relist.integration.test.ts
+tests/brokered-relist.test.ts
 tests/builtin-routines.test.ts
 tests/bunfig-preload.test.ts
 tests/catalogue-bot-grants.integration.test.ts
@@ -115,7 +117,10 @@ tests/composio-broker-seam.test.ts
 tests/composio-classify.test.ts
 tests/composio-connection-kinds.test.ts
 tests/composio-connections.test.ts
+tests/composio-file-parameters.test.ts
+tests/composio-gmail-listing.test.ts
 tests/composio-live.test.ts
+tests/composio-own-toolkits-hidden.test.ts
 tests/composio-transport.test.ts
 tests/computer-client.test.ts
 tests/computer-culler.integration.test.ts
@@ -248,6 +253,7 @@ tests/otel-export-scrubbing.test.ts
 tests/otel-exporter-compat.test.ts
 tests/otel-sdk-lifecycle.test.ts
 tests/outbound-guard.test.ts
+tests/own-app-tools-refresh.integration.test.ts
 tests/owner-assembly-audit.test.ts
 tests/page-frame-retention.integration.test.ts
 tests/paging.test.ts
@@ -273,6 +279,7 @@ tests/platform-store.test.ts
 tests/plugin-call-args-validation.test.ts
 tests/plugin-catalogue-market.test.ts
 tests/plugin-catalogue.test.ts
+tests/plugin-connect-lists-tools.integration.test.ts
 tests/plugin-connect-route.test.ts
 tests/plugin-credential-binding.integration.test.ts
 tests/plugin-credential-placement.integration.test.ts
@@ -290,6 +297,7 @@ tests/plugin-selection.test.ts
 tests/plugin-self-install.integration.test.ts
 tests/plugin-servers-validation.test.ts
 tests/plugin-share-target.test.ts
+tests/plugin-store-identity-action.test.ts
 tests/plugin-store.integration.test.ts
 tests/plugin-tenant-catalogue-row.test.ts
 tests/plugin-user-credential.integration.test.ts

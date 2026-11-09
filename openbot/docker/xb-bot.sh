@@ -292,6 +292,9 @@ cmd_run() {
   rm -f -- "$tmp"
   tmp=
 
+  # umask 077 for the command: what it creates outside its own directory (/tmp, /dev/shm) is its
+  # alone. Inside its directory the default ACL decides, so the file tools still read and write.
+  umask 077
   # Not exec: the helper stays to end the command's process group, which timeout creates and whose
   # id is timeout's pid. The variable holding the text is unset before the text runs.
   # shellcheck disable=SC2016
