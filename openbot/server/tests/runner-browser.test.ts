@@ -497,7 +497,8 @@ describe("where this browser may be pointed", () => {
       "http://100.100.100.200/",
     ]) {
       const error = await refusal(drive(browser, "navigate", { url }));
-      expect(error.message).toContain("cloud credentials");
+      // Upstream's copy pass (#820) words it as the cloud keys.
+      expect(error.message).toContain("cloud keys");
     }
     expect(fake.launches).toHaveLength(0);
     await browser.close();
@@ -510,7 +511,7 @@ describe("where this browser may be pointed", () => {
     const error = await refusal(
       drive(closed, "navigate", { url: "http://127.0.0.1:8080/login" }),
     );
-    expect(error.message).toContain("inside this deployment's own network");
+    expect(error.message).toContain("inside OpenBot's own network");
     expect(shut.launches).toHaveLength(0);
     await closed.close();
 

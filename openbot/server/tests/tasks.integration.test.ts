@@ -786,7 +786,9 @@ describe("where a task stands", () => {
     ]);
     const id = waiting[0]?.id ?? "";
     await expect(
-      asOwner(owner, () => approvalService.decide(owner.id, id, "allow_always")),
+      asOwner(owner, () =>
+        approvalService.decide(owner.id, id, "allow_always"),
+      ),
     ).rejects.toThrow(
       "Tasks started from a check-in ask before every change. Allow this once, or deny it.",
     );

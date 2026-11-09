@@ -206,9 +206,9 @@ afterAll(async () => {
     .select({ id: deliveryOutbox.id })
     .from(deliveryOutbox)
     .where(eq(deliveryOutbox.ownerUserId, owner));
-  const asked = (
-    await runAsTenant(owner, () => questions.list(owner))
-  ).map((question) => question.id);
+  const asked = (await runAsTenant(owner, () => questions.list(owner))).map(
+    (question) => question.id,
+  );
   const keys = [
     ...outbox.map((row) => row.id),
     ...asked,

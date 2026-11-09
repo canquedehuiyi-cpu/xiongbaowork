@@ -277,13 +277,6 @@ describe("OpenBot database schema", () => {
         hasDefault: false,
         primary: false,
       },
-      // Off unless the owner asked for a computer of its own and is allowed one.
-      {
-        name: "isolated",
-        notNull: true,
-        hasDefault: true,
-        primary: false,
-      },
       /*
        * Which model this coworker answers on, from its owner's own library (ticket 012).
        *
@@ -304,6 +297,14 @@ describe("OpenBot database schema", () => {
         name: "platform_model_ref",
         notNull: false,
         hasDefault: false,
+        primary: false,
+      },
+      // Off unless the owner asked for a computer of its own and is allowed one. Declared after the fork's
+      // model columns (M3).
+      {
+        name: "isolated",
+        notNull: true,
+        hasDefault: true,
         primary: false,
       },
       /*

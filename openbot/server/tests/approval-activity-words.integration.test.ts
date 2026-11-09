@@ -58,25 +58,29 @@ function pending(
 beforeAll(async () => {
   // The person is the platform's row; their approvals are theirs, written in their own tenant.
   await runAsTenant("platform", () =>
-    database.insert(users).values({ id: owner, email: `${owner}@example.test` }),
+    database
+      .insert(users)
+      .values({ id: owner, email: `${owner}@example.test` }),
   );
-  await runAsTenant(owner, () => database.insert(approvalRequests).values([
-    pending(
-      "click",
-      "computer_click",
-      { ref: "f3e43", snapshotId: 4 },
-      { ref: "f3e43", role: "link", name: "Python (programming language)" },
-    ),
-    pending("click-unnamed", "computer_click", { ref: "f9", snapshotId: 4 }),
-    pending("open", "computer_navigate", {
-      url: "https://en.wikipedia.org/wiki/Monty_Python",
-    }),
-    pending("type", "computer_type", {
-      ref: "f7",
-      snapshotId: 4,
-      text: "monty python",
-    }),
-  ]));
+  await runAsTenant(owner, () =>
+    database.insert(approvalRequests).values([
+      pending(
+        "click",
+        "computer_click",
+        { ref: "f3e43", snapshotId: 4 },
+        { ref: "f3e43", role: "link", name: "Python (programming language)" },
+      ),
+      pending("click-unnamed", "computer_click", { ref: "f9", snapshotId: 4 }),
+      pending("open", "computer_navigate", {
+        url: "https://en.wikipedia.org/wiki/Monty_Python",
+      }),
+      pending("type", "computer_type", {
+        ref: "f7",
+        snapshotId: 4,
+        text: "monty python",
+      }),
+    ]),
+  );
 });
 
 afterAll(async () => {
@@ -95,9 +99,7 @@ test("a pending computer approval's Activity row is said in words, with no tool 
   // The Bot's page reads in its person's own tenant.
   const rows = (
     await runAsTenant(owner, () => activity.forBot(owner, bot))
-  ).inProgress.filter(
-    (item) => item.kind === "approval",
-  );
+  ).inProgress.filter((item) => item.kind === "approval");
   const byId = Object.fromEntries(
     rows.map((item) => [item.id.replace(`approval:${suite}-`, ""), item]),
   );

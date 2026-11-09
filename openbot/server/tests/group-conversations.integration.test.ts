@@ -333,6 +333,11 @@ describe("group conversations in PostgreSQL", () => {
 
   test("a person's message that starts with a skill's command states it for each Bot's turn, and a peer's never does", async () => {
     const owner = await person();
+    // The owner's request: in their own frame, as the neighbouring cases run (G01).
+    await as(owner, () => skillCommandCase(owner));
+  });
+
+  async function skillCommandCase(owner: AgentActor) {
     const named = new Map([
       [await bot(owner, "Ada"), "Ada"],
       [await bot(owner, "Grace"), "Grace"],
@@ -374,7 +379,7 @@ describe("group conversations in PostgreSQL", () => {
       undefined,
       undefined,
     ]);
-  });
+  }
 
   test("another person cannot read, post into, or borrow the group's threads", async () => {
     const owner = await person();

@@ -253,7 +253,7 @@ describe("Team Bots in PostgreSQL", () => {
     const owner = await person();
     const teammate = await person();
     const bot = await privateBot(owner);
-    await teamBots.publish(owner, bot, {
+    await publish(owner, bot, {
       audience: "team",
       emails: [],
       groups: [],
@@ -264,14 +264,15 @@ describe("Team Bots in PostgreSQL", () => {
       canIsolate: true,
     });
     // The owner, whose computer it is: their own, and the Bot's profile from before is theirs.
-    expect(await seats.seatFor(bot, owner.id)).toEqual({
+    // Each asked in the frame of the person whose run it is.
+    expect(await as(owner, () => seats.seatFor(bot, owner.id))).toEqual({
       botId: bot,
       key: { kind: "person", personId: owner.id },
       inheritsProfile: true,
     });
     // Teammates still get no computer: the access check above refuses them before any seat is
     // asked for. Were one asked, it would be their own and never inherit the owner's login.
-    expect(await seats.seatFor(bot, teammate.id)).toEqual({
+    expect(await as(teammate, () => seats.seatFor(bot, teammate.id))).toEqual({
       botId: bot,
       key: { kind: "person", personId: teammate.id },
     });

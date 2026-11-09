@@ -702,11 +702,12 @@ describe("dialling a stored agent endpoint", () => {
     });
     await expect(
       dial("https://agent.example.com/ag-ui", runRequest),
-    ).rejects.toThrow(/redirected/i);
+    ).rejects.toThrow(/重定向/);
     expect(calls.length).toBe(1);
     expect(refusals.length).toBe(1);
   });
 
+  // The fork words a redirect refusal in Chinese ("该地址重定向到了 …"), so the cases below match 重定向.
   test("a redirect to the exact managed URL is refused", async () => {
     // The exemption covers the address a run is bound to, not a hop. An outside agent must not be
     // able to steer a run into the deployment's own agent by answering with its address.
@@ -723,12 +724,12 @@ describe("dialling a stored agent endpoint", () => {
     });
     await expect(
       dial("https://agent.example.com/ag-ui", runRequest),
-    ).rejects.toThrow(/redirected/i);
+    ).rejects.toThrow(/重定向/);
     expect(calls.length).toBe(1);
     expect(refusals).toEqual([
       {
         address: "http://127.0.0.1:41706/ag-ui",
-        reason: expect.stringMatching(/redirected/i),
+        reason: expect.stringMatching(/重定向/),
       },
     ]);
   });

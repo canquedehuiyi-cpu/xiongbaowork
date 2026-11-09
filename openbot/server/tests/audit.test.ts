@@ -288,8 +288,9 @@ describe("the admin trail across people", () => {
     );
 
     expect(response.status).toBe(403);
+    // `requireAdmin`'s words since upstream's copy pass (#820).
     await expect(response.json()).resolves.toEqual({
-      error: "Administrator access required.",
+      error: "Only an admin can do this.",
     });
   });
 

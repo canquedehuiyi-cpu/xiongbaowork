@@ -18,7 +18,13 @@ import { recorderConnections } from "../src/db/schema/recorder";
 import { clearDesktopConnectionFailure } from "../src/desktop-connection-failure";
 import { createRecorderExtension } from "../src/recorder/wiring";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
-import { afterAll, afterEach, beforeAll, beforeEach, test } from "./support/platform-frame";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  test,
+} from "./support/platform-frame";
 import { bindTestRoleWriter } from "./support/role-writer";
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);

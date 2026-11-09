@@ -2090,7 +2090,9 @@ describe("connecting a brokered app", () => {
       {
         returnUrl: "https://evil.test/harvest",
         referer: "https://evil.test",
-        origin: "https://evil.test",
+        // The request's own origin, which is the only Origin a request that reaches the route can
+        // carry (upstream v1.0.0 refuses any other first), and is not this deployment's address either.
+        origin: "http://openbot.test",
         "x-forwarded-host": "evil.test",
       },
     );

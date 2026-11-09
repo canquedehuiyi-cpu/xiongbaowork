@@ -1246,8 +1246,13 @@ describe("the computer gateway", () => {
       ) as { deny: string[] };
       expect(policy.deny).toEqual([SHIPPED_NEVER_SUBMIT]);
 
+      // M3: the fork keeps the Boundaries presets in the route itself, not upstream's
+      // app/src/lib/boundaries/rules.ts.
       const presets = readFileSync(
-        new URL("../../app/src/lib/boundaries/rules.ts", import.meta.url),
+        new URL(
+          "../../app/src/routes/_authed/admin/boundaries.tsx",
+          import.meta.url,
+        ),
         "utf8",
       );
       expect(presets).toContain(`rule: '${SHIPPED_NEVER_SUBMIT}',`);

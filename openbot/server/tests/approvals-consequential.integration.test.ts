@@ -14,12 +14,7 @@ import { users } from "../src/db/schema/core";
 import { workItems } from "../src/db/schema/work";
 import { type Edition, setEdition } from "../src/edition";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  test,
-} from "./support/platform-frame";
+import { afterAll, afterEach, beforeAll, test } from "./support/platform-frame";
 
 /**
  * Consequential actions ask whatever the person's "Ask before making changes" says, in both

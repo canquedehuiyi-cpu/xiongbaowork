@@ -639,19 +639,9 @@ describe("which tools wait behind search", () => {
     expect(waiting.size).toBe(277);
   });
 
-  test("a web search tool stays, because the computer's instructions send searching to it", () => {
-    const search: GrantedTool = {
-      name: "web_search_exa",
-      ref: "exa/web_search_exa",
-      searchable: true,
-      description: "",
-      parameters: z.object({}),
-      execute: async () => "ok",
-    };
-    expect(planToolSearch([search, ...tools(279, true)]).has(search.name)).toBe(
-      false,
-    );
-  });
+  // M3: "a web search tool stays, because the computer's instructions send searching to it" is not
+  // kept: it needs upstream's research roles (`researchRoleFor` in plugins/catalogue), which the fork
+  // does not adopt; tool-search.ts answers no role for every tool.
 });
 
 describe("what one step is sent", () => {

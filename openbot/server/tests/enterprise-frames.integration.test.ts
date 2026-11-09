@@ -197,9 +197,9 @@ describe("enterprise controls with no frame of their own", () => {
     stopped.length = 0;
     const result = await controls.terminateInactiveComputers();
     expect(result?.stopped).toContain(botComputer);
-    expect(await rowsAbout("computer.terminated_inactive", botComputer)).toEqual([
-      { tenantId: person.id },
-    ]);
+    expect(
+      await rowsAbout("computer.terminated_inactive", botComputer),
+    ).toEqual([{ tenantId: person.id }]);
   });
 
   test("an administrator stopping a member's computers finds the member's Bots", async () => {

@@ -1509,7 +1509,13 @@ export async function synchronizeTenantPackage(
             [...tenantPackage.agents, ...agents].map((agent) => agent.id),
           ),
         ];
-        if (declaredAgentIds.length > 0) {
+        /*
+         * M3: never for the bundled personal package. Its starter is seeded once and then the
+         * person's (upstream `personalStarterSeed`): an existing installation keeps the Bots it has,
+         * a customized general-assistant from an earlier desktop and a picked Bot left without an
+         * endpoint (which keeps its last connection) among them. There is no brand to switch away from.
+         */
+        if (!bundledPersonal && declaredAgentIds.length > 0) {
           const retiredAt = new Date();
           await transaction
             .update(agentProfiles)

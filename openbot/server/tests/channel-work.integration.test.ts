@@ -127,43 +127,45 @@ async function setup(options: { shared?: boolean } = {}) {
 async function hop(
   owner: AgentActor,
   input: {
-  threadId: string;
-  toBotId?: string;
-  toName?: string;
-  key?: string;
-  answerIn?: string;
-  fromBotId?: string;
-  attempts?: number;
-  claimed?: boolean;
-  finished?: boolean;
-  createdAt?: Date;
+    threadId: string;
+    toBotId?: string;
+    toName?: string;
+    key?: string;
+    answerIn?: string;
+    fromBotId?: string;
+    attempts?: number;
+    claimed?: boolean;
+    finished?: boolean;
+    createdAt?: Date;
   },
 ) {
   const key = input.key ?? `hop:${testPrefix}:${randomUUID()}`;
-  await runAsTenant(owner.id, () => database.insert(workItems).values({
-    kind: HANDOFF_KIND,
-    key,
-    payload: {
-      fromBotId: input.fromBotId ?? "assistant",
-      toBotId: input.toBotId ?? "ana",
-      ...(input.toName ? { toName: input.toName } : {}),
-      actorId: "someone",
-      threadId: input.threadId,
-      runId: "run-1",
-      depth: 1,
-      task: "find the outage window",
-      ...(input.answerIn ? { answerIn: input.answerIn } : {}),
-    },
-    attempts: input.attempts ?? 0,
-    ...(input.claimed
-      ? {
-          claimedBy: "replica-a",
-          leaseUntil: sql`now() + interval '1 minute'`,
-        }
-      : {}),
-    ...(input.finished ? { finishedAt: new Date() } : {}),
-    ...(input.createdAt ? { createdAt: input.createdAt } : {}),
-  }));
+  await runAsTenant(owner.id, () =>
+    database.insert(workItems).values({
+      kind: HANDOFF_KIND,
+      key,
+      payload: {
+        fromBotId: input.fromBotId ?? "assistant",
+        toBotId: input.toBotId ?? "ana",
+        ...(input.toName ? { toName: input.toName } : {}),
+        actorId: "someone",
+        threadId: input.threadId,
+        runId: "run-1",
+        depth: 1,
+        task: "find the outage window",
+        ...(input.answerIn ? { answerIn: input.answerIn } : {}),
+      },
+      attempts: input.attempts ?? 0,
+      ...(input.claimed
+        ? {
+            claimedBy: "replica-a",
+            leaseUntil: sql`now() + interval '1 minute'`,
+          }
+        : {}),
+      ...(input.finished ? { finishedAt: new Date() } : {}),
+      ...(input.createdAt ? { createdAt: input.createdAt } : {}),
+    }),
+  );
   return key;
 }
 
@@ -290,7 +292,11 @@ describe("what a conversation is waiting on", () => {
 
   test("a given-up hop's last attempt, while it is still running", async () => {
     const { owner, channel } = await setup();
-    await hop(owner, { threadId: channel.threadId, attempts: 5, claimed: true });
+    await hop(owner, {
+      threadId: channel.threadId,
+      attempts: 5,
+      claimed: true,
+    });
 
     expect(await workFor(owner, channel)).toHaveLength(1);
   });
@@ -326,7 +332,10 @@ describe("what a conversation is waiting on", () => {
 
   test("not once the answer is being given", async () => {
     const { owner, channel } = await setup();
-    const key = await hop(owner, { threadId: channel.threadId, finished: true });
+    const key = await hop(owner, {
+      threadId: channel.threadId,
+      finished: true,
+    });
     await hop(owner, {
       threadId: channel.threadId,
       key: `relay:${key}`,
@@ -419,8 +428,13 @@ describe("announcing it", () => {
     });
     const listener = await startChannelActivityListener(databaseUrl, hub);
     try {
-      const key = await hop(owner, { threadId: channel.threadId, toName: "Ana" });
-      await runAsTenant(owner.id, () => store.signalBusy(channel.threadId, true));
+      const key = await hop(owner, {
+        threadId: channel.threadId,
+        toName: "Ana",
+      });
+      await runAsTenant(owner.id, () =>
+        store.signalBusy(channel.threadId, true),
+      );
       await database
         .update(workItems)
         .set({ finishedAt: new Date() })
@@ -458,7 +472,9 @@ describe("announcing it", () => {
     const socket = await listen([owner, member]);
     try {
       await hop(owner, { threadId: channel.threadId, toName: "Ana" });
-      await runAsTenant(owner.id, () => store.signalBusy(channel.threadId, true));
+      await runAsTenant(owner.id, () =>
+        store.signalBusy(channel.threadId, true),
+      );
       await runAsTenant(owner.id, () => store.signalWork(channel.threadId));
       await socket.until(
         (heard) =>

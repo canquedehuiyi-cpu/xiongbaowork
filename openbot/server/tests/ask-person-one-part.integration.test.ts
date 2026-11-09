@@ -81,72 +81,75 @@ function coordinationForThisBot() {
 // The run, the inbox and the resume all act for the owner, in the owner's frame.
 test("a question of one decision is put to the person, answered from the inbox, and resumed", () =>
   runAsTenant(owner, async () => {
-  const { coordinationForActor } = coordinationForThisBot();
-  const tools = await coordinationForActor(owner)(botId, {
-    threadId,
-    runId: randomUUID(),
-    messages: [],
-    tools: [],
-    context: [],
-    state: {},
-    forwardedProps: {},
-  });
-  const askPerson = tools.find((tool) => tool.name === "ask_person");
-  if (!askPerson) throw new Error("the run was not offered ask_person");
+    const { coordinationForActor } = coordinationForThisBot();
+    const tools = await coordinationForActor(owner)(botId, {
+      threadId,
+      runId: randomUUID(),
+      messages: [],
+      tools: [],
+      context: [],
+      state: {},
+      forwardedProps: {},
+    });
+    const askPerson = tools.find((tool) => tool.name === "ask_person");
+    if (!askPerson) throw new Error("the run was not offered ask_person");
 
-  const part = {
-    header: "Time zone",
-    question: "Which time zone should the event use?",
-    options: ["Europe/London", "America/New_York", "Asia/Tokyo"],
-  };
-  const said = await askPerson.execute({
-    question: "Which time zone should the event use?",
-    parts: [part],
-  });
+    const part = {
+      header: "Time zone",
+      question: "Which time zone should the event use?",
+      options: ["Europe/London", "America/New_York", "Asia/Tokyo"],
+    };
+    const said = await askPerson.execute({
+      question: "Which time zone should the event use?",
+      parts: [part],
+    });
 
-  // Asked, rather than refused: the answer the chat draws as "Asked you" instead of Blocked.
-  expect(String(said)).toStartWith(PUT_TO);
+    // Asked, rather than refused: the answer the chat draws as "Asked you" instead of Blocked.
+    expect(String(said)).toStartWith(PUT_TO);
 
-  // The person's inbox holds it with its one decision and its options, which the drawer draws.
-  const waiting = (
-    await createApprovalQuestions(database, async () => undefined).list(owner)
-  ).find((entry) => entry.threadId === threadId);
-  if (!waiting) throw new Error("the question was not saved for its person");
-  asked.push(waiting.id);
-  expect(waiting.channelId).toBe(channelId);
-  expect(waiting.parts).toEqual([part]);
+    // The person's inbox holds it with its one decision and its options, which the drawer draws.
+    const waiting = (
+      await createApprovalQuestions(database, async () => undefined).list(owner)
+    ).find((entry) => entry.threadId === threadId);
+    if (!waiting) throw new Error("the question was not saved for its person");
+    asked.push(waiting.id);
+    expect(waiting.channelId).toBe(channelId);
+    expect(waiting.parts).toEqual([part]);
 
-  // Answered the way the drawer sends one: the decision's label, then the option picked.
-  await createApprovalQuestions(database, async () => undefined).respond(
-    owner,
-    waiting.id,
-    "Time zone: Europe/London",
-  );
-  const [response] = await database
-    .select()
-    .from(workItems)
-    .where(
-      and(eq(workItems.kind, "person.response"), eq(workItems.key, waiting.id)),
+    // Answered the way the drawer sends one: the decision's label, then the option picked.
+    await createApprovalQuestions(database, async () => undefined).respond(
+      owner,
+      waiting.id,
+      "Time zone: Europe/London",
     );
-  if (!response) throw new Error("the answer was not queued");
-  const payload = response.payload as { question: unknown; response: string };
-  const question = personQuestionSchema.parse(payload.question);
-  expect(question.parts).toEqual([part]);
+    const [response] = await database
+      .select()
+      .from(workItems)
+      .where(
+        and(
+          eq(workItems.kind, "person.response"),
+          eq(workItems.key, waiting.id),
+        ),
+      );
+    if (!response) throw new Error("the answer was not queued");
+    const payload = response.payload as { question: unknown; response: string };
+    const question = personQuestionSchema.parse(payload.question);
+    expect(question.parts).toEqual([part]);
 
-  // And the Bot's next turn, in the same conversation, opens on that answer.
-  const turns: Parameters<TurnRunner>[0][] = [];
-  await resumePersonQuestion({
-    ownerUserId: owner,
-    question,
-    response: payload.response,
-    messageId: `person-response:${waiting.id}`,
-    runTurn: async (turn) => {
-      turns.push(turn);
-      return { replyText: "Booked for 10:00 Europe/London." };
-    },
-  });
-  expect(turns[0]?.threadId).toBe(threadId);
-  expect(turns[0]?.userMessage?.content).toBe(
-    "In response to your question: Which time zone should the event use?\n\nTime zone: Europe/London",
-  );
+    // And the Bot's next turn, in the same conversation, opens on that answer.
+    const turns: Parameters<TurnRunner>[0][] = [];
+    await resumePersonQuestion({
+      ownerUserId: owner,
+      question,
+      response: payload.response,
+      messageId: `person-response:${waiting.id}`,
+      runTurn: async (turn) => {
+        turns.push(turn);
+        return { replyText: "Booked for 10:00 Europe/London." };
+      },
+    });
+    expect(turns[0]?.threadId).toBe(threadId);
+    expect(turns[0]?.userMessage?.content).toBe(
+      "In response to your question: Which time zone should the event use?\n\nTime zone: Europe/London",
+    );
   }));

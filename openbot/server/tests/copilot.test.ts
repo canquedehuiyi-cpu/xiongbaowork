@@ -3369,9 +3369,9 @@ describe("each coworker runs on the model it was bound to", () => {
       { modelId: "gpt-6" } as never,
     );
 
-    expect(
-      (classic(configuration).model as { modelId: string }).modelId,
-    ).toBe("gpt-6");
+    expect((classic(configuration).model as { modelId: string }).modelId).toBe(
+      "gpt-6",
+    );
     // One credential per request: sending the deployment's key with a model that holds its own would
     // put it in front of the other provider.
     expect("apiKey" in configuration).toBe(false);

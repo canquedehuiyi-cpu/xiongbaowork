@@ -545,10 +545,11 @@ function appWith(input: {
     } as never,
     { rolesForUser: async () => [...person.roles] },
     /*
-     * Positions 4-34 are the other stores; `coworker` is 35. Every parameter from 4 on is optional,
-     * so a wrong count is a silent type-check pass: see onboarding-routes.test.ts.
+     * Positions 4-33 are the other stores; `coworker` is 34 (M3: the fork's createApp takes it at
+     * index 33, one before upstream's). Every parameter from 4 on is optional, so a wrong count is a
+     * silent type-check pass: see onboarding-routes.test.ts.
      */
-    ...(Array.from({ length: 31 }) as never[]),
+    ...(Array.from({ length: 30 }) as never[]),
     { setup } as never,
   );
   return Object.assign(app, { counts, setup });

@@ -10,7 +10,12 @@ import { workItems } from "../src/db/schema/work";
 import { createResponsibilityStore } from "../src/responsibilities/store";
 import { createServerResponsibilityEngine } from "../src/responsibilities/wiring";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
-import { afterAll, beforeAll, beforeEach, test } from "./support/platform-frame";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  test,
+} from "./support/platform-frame";
 
 /**
  * A goal's run started while another run has its conversation.

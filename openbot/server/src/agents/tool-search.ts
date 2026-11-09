@@ -14,14 +14,16 @@ import { markUntrusted } from "../untrusted-content";
  * read tools a Bot's computer instructions route to) and `../plugins/personal-defaults`
  * (`isAlwaysOn`, the apps every Bot holds). The fork's plugins have neither: the catalogue keeps no
  * research roles, and the personal edition's always-on apps are not adopted. So no tool plays a
- * research role here and none is always on, and only what OpenBot gives a Bot itself stays in front
- * of the model past the floor.
+ * research role here. Routines still stays in front, as upstream holds it (the catalogue's
+ * `routines` app, which a Bot needs on every step to schedule without searching); upstream spells
+ * that rule `isAlwaysOn`, so the same name is kept for it here.
  */
 function researchRoleFor(_ref: string): string | null {
   return null;
 }
-function isAlwaysOn(_ref: string): boolean {
-  return false;
+const ROUTINES_APP = "routines";
+function isAlwaysOn(ref: string): boolean {
+  return ref === ROUTINES_APP || ref.startsWith(`${ROUTINES_APP}/`);
 }
 
 export { SEARCH_TOOLS };

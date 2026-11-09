@@ -537,39 +537,6 @@ const ALLOW: Allowed[] = [
     finding: "round 2 — auth-client.test.ts, six sites",
   },
   {
-    file: "app/tests/auth-client.test.ts",
-    shape: "a",
-    context: [
-      '"signInWithEmailDomain"',
-      '"throws what the client said when it refuses"',
-    ],
-    expression:
-      'expect(signInWithEmailDomain("someone@company.com",refuse),).rejects.toThrow("That domain is registered to another tenant.")',
-    finding: "round 2 — auth-client.test.ts, six sites",
-  },
-  {
-    file: "app/tests/auth-client.test.ts",
-    shape: "a",
-    context: [
-      '"signInWithEmailDomain"',
-      '"says no provider is registered when the client says nothing"',
-    ],
-    expression:
-      'expect(signInWithEmailDomain("someone@company.com",refuse),).rejects.toThrow("No identity provider is registered for that address.")',
-    finding: "round 2 — auth-client.test.ts, six sites",
-  },
-  {
-    file: "app/tests/auth-client.test.ts",
-    shape: "a",
-    context: [
-      '"signInWithEmailDomain"',
-      '"resolves quietly when the redirect is under way"',
-    ],
-    expression:
-      'expect(signInWithEmailDomain("someone@company.com",async()=>({error:null,})),).resolves.toBeUndefined()',
-    finding: "round 2 — auth-client.test.ts, six sites",
-  },
-  {
     file: "server/tests/audit-initiator.integration.test.ts",
     shape: "a",
     context: [
@@ -715,26 +682,6 @@ const ALLOW: Allowed[] = [
     finding: "NEW (round 2 did not find this)",
   },
   {
-    file: "server/tests/plugin-user-credential.integration.test.ts",
-    shape: "a",
-    context: [
-      '"a person who has not connected"',
-      '"is refused, and told to connect rather than told it broke"',
-    ],
-    expression:
-      "expect(store.callTool({ref,args:{},botId,actorId:askerId}),).rejects.toThrow(PluginRefusedError)",
-    finding: "round 2 — plugin-user-credential.integration.test.ts:361",
-  },
-  {
-    file: "app/tests/bot-setup.test.tsx",
-    shape: "b",
-    context: [
-      '"a built-in coworker can be renamed on a deployment whose own Bot lives on localhost"',
-    ],
-    expression: "expect(updates[0]?.endpoint).toBeUndefined()",
-    finding: "NEW (round 2 did not find this)",
-  },
-  {
     file: "app/tests/voice-archive.test.ts",
     shape: "b",
     context: [
@@ -780,37 +727,6 @@ const ALLOW: Allowed[] = [
       '"an approved hand-off is re-checked, sent once, and its answer continues the conversation"',
     ],
     expression: "expect(continued[0]?.error).toBeUndefined()",
-    finding: "NEW (round 2 did not find this)",
-  },
-  {
-    file: "server/tests/arcade-adapter-errors.test.ts",
-    shape: "b",
-    context: [
-      '"normalizeArcadeError"',
-      '"a connection failure keeps status undefined"',
-    ],
-    expression:
-      'expect(normalizeArcadeError(newAPIConnectionError({message:"down"}))?.status,).toBeUndefined()',
-    finding: "round 2 — arcade-adapter-errors.test.ts:62-66",
-  },
-  {
-    file: "server/tests/arcade-sibling-collateral.test.ts",
-    shape: "b",
-    context: [
-      '"offboarding a person"',
-      '"records a sibling app as revoked, naming the app whose revoke ended it"',
-    ],
-    expression: "expect(row(t.gmail)?.payload.endedWith).toBeUndefined()",
-    finding: "NEW (round 2 did not find this)",
-  },
-  {
-    file: "server/tests/arcade-sibling-collateral.test.ts",
-    shape: "b",
-    context: [
-      '"offboarding a person"',
-      '"records a sibling app as revoked, naming the app whose revoke ended it"',
-    ],
-    expression: "expect(row(t.slack)?.payload.endedWith).toBeUndefined()",
     finding: "NEW (round 2 did not find this)",
   },
   {
@@ -1040,17 +956,6 @@ const ALLOW: Allowed[] = [
     finding: "NEW (round 2 did not find this)",
   },
   {
-    file: "server/tests/arcade-adapter-errors.test.ts",
-    shape: "c",
-    context: [
-      '"normalizeArcadeError"',
-      '"an error with no body leaves name and message undefined"',
-    ],
-    expression:
-      "expect(normalizeArcadeError(newAPIError(500,undefined,undefined,newHeaders()),),).toEqual({status:500,name:undefined,message:undefined,})",
-    finding: "round 2 — arcade-adapter-errors.test.ts:50-60",
-  },
-  {
     file: "server/tests/composio-adapter.test.ts",
     shape: "c",
     context: [
@@ -1104,53 +1009,222 @@ const ALLOW: Allowed[] = [
     finding: "NEW (round 2 did not find this)",
   },
   {
-    file: "app/tests/connected-accounts-authorized-notice.test.tsx",
-    shape: "d",
+    file: "server/tests/approvals-database-settlement.integration.test.ts",
+    shape: "b",
     context: [
-      '"what ?authorized=%s answers is a sentence or nothing, never a function or an object"',
+      '"approve runs the held command exactly once, through the gateway, and the conversation continues with its result"',
+    ],
+    expression: "expect(first?.result.error).toBeUndefined()",
+    finding: "M3: a fork test, which predates this guard",
+  },
+  {
+    file: "server/tests/approvals-database-settlement.integration.test.ts",
+    shape: "b",
+    context: [
+      '"two workers resuming at once claim the run in the database once: one command, one continuation"',
+    ],
+    expression: "expect(continued[0]?.result.error).toBeUndefined()",
+    finding: "M3: a fork test, which predates this guard",
+  },
+  {
+    file: "server/tests/config.test.ts",
+    shape: "b",
+    context: [
+      '"deployment configuration"',
+      '"leaves GitHub off, and out of the provider list, when it is not configured"',
+    ],
+    expression: "expect(config.auth?.github).toBeUndefined()",
+    finding: "M3: a fork test, which predates this guard",
+  },
+  {
+    file: "server/tests/device-apps.integration.test.ts",
+    shape: "b",
+    context: [
+      '"approved while the device was away with no tool list, the call runs once it is back"',
+    ],
+    expression: "expect(echoed[0]?.error).toBeUndefined()",
+    finding: "M3: a fork test, which predates this guard",
+  },
+  {
+    file: "server/tests/device-apps.integration.test.ts",
+    shape: "b",
+    context: [
+      '"approved while the device was away with no tool list, the call runs once it is back"',
+    ],
+    expression: "expect(written[0]?.error).toBeUndefined()",
+    finding: "M3: a fork test, which predates this guard",
+  },
+  {
+    file: "server/tests/device-apps.integration.test.ts",
+    shape: "b",
+    context: [
+      '"approved after the tool list expired and the device went away, the call is queued and runs on return"',
+    ],
+    expression: "expect(told[0]?.error).toBeUndefined()",
+    finding: "M3: a fork test, which predates this guard",
+  },
+  {
+    file: "server/tests/device-apps.integration.test.ts",
+    shape: "b",
+    context: [
+      '"computer_app_enable asks with 允许员工使用本机应用「fixture」？来源：Claude Desktop 的配置; after approve the app is written, tested and callable at once"',
+    ],
+    expression: "expect(told[0]?.error).toBeUndefined()",
+    finding: "M3: a fork test, which predates this guard",
+  },
+  {
+    file: "server/tests/device-apps.integration.test.ts",
+    shape: "b",
+    context: [
+      '"an app the owner switched off on the device after it was enabled is asked about again, not called already enabled"',
+    ],
+    expression: "expect(told[0]?.error).toBeUndefined()",
+    finding: "M3: a fork test, which predates this guard",
+  },
+  {
+    file: "server/tests/device-queued-results.integration.test.ts",
+    shape: "b",
+    context: [
+      '"a conversation that is mid-run is not interrupted: the result waits and is posted after"',
+    ],
+    expression: "expect((awaitnoticeOf(target))[0]?.notice).toBeUndefined()",
+    finding: "M3: a fork test, which predates this guard",
+  },
+  {
+    file: "server/tests/model-e2e-workflow.test.ts",
+    shape: "b",
+    context: [],
+    expression: "expect(carrier.env?.MODEL_E2E_LOCAL_MOCK).toBeUndefined()",
+    finding: "M3: a fork test, which predates this guard",
+  },
+  {
+    file: "server/tests/plugin-user-credential.integration.test.ts",
+    shape: "a",
+    context: [
+      '"a person who has not connected"',
+      '"is refused, and told to connect rather than told it broke"',
     ],
     expression:
-      'test.each(["no-attempt","toString","constructor","__proto__","something-somebody-made-up",])("what ?authorized=%s answers is a sentence or nothing, never a function or an object",(value)=>{constnotice=authorizationNoticeFor(value);if(notice!==null)expect(typeofnotice).toBe("string");},)',
-    finding: "round 2 — connected-accounts-authorized-notice.test.tsx:103-115",
+      "expect(asPlatform(()=>store.callTool({ref,args:{},botId,actorId:askerId}),),).rejects.toThrow(PluginRefusedError)",
+    finding: "M3: a fork test, which predates this guard",
   },
   {
-    file: "app/tests/connected-account-grants.test.tsx",
-    shape: "e",
-    context: [],
-    expression: "constsiblingReads:string[]=[]",
-    finding: "NEW (round 2 did not find this)",
-  },
-  {
-    file: "server/tests/arcade-disconnect-cascade.test.ts",
-    shape: "e",
-    context: [],
-    expression: "constrevoked:string[]=[]",
-    finding: "round 2 — arcade-disconnect-cascade.test.ts:36,60",
-  },
-  {
-    file: "server/tests/arcade-grants-route.test.ts",
-    shape: "e",
-    context: [],
-    expression: "consttoolkits:string[]=[]",
-    finding: "NEW (round 2 did not find this)",
-  },
-  {
-    file: "server/tests/arcade-grants-route.test.ts",
-    shape: "e",
-    context: [],
-    expression: "constviewers:string[]=[]",
-    finding: "NEW (round 2 did not find this)",
-  },
-  {
-    file: "server/tests/arcade-vendor-error-engine.test.ts",
-    shape: "f",
+    file: "server/tests/project-context.integration.test.ts",
+    shape: "b",
     context: [
-      '"a refusal from Arcade is an Error this deployment wrote"',
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: This is the literal source expression being identified.
-      "`${door} throws an Error carrying no vendor words`",
+      '"where an action runs"',
+      "\"acceptance 1: a bound coworker's write and command reach the machine with the project's root; a root the model forged is dropped\"",
     ],
-    expression: "JSON.stringify(thrown,Object.keys(thrownasobject)),",
-    finding: "round 2 — arcade-vendor-error-engine.test.ts:174",
+    expression: "expect(frames[1]?.payload.writable).toBeUndefined()",
+    finding: "M3: a fork test, which predates this guard",
+  },
+  {
+    file: "server/tests/project-context.integration.test.ts",
+    shape: "b",
+    context: [
+      '"where an action runs"',
+      '"acceptance 2: a coworker with no project works in its workspace, as before"',
+    ],
+    expression: "expect(frames[0]?.payload.root).toBeUndefined()",
+    finding: "M3: a fork test, which predates this guard",
+  },
+  {
+    file: "server/tests/roles.test.ts",
+    shape: "d",
+    context: [
+      '"restricted role writer fail-closed facts (CPU only)"',
+      '"PG17 query includes table/column grant options and MAINTAIN without omitting public object kinds"',
+    ],
+    expression:
+      'test("PG17 query includes table/column grant options and MAINTAIN without omitting public object kinds",async()=>{const{database}=recordingDatabase();constapp=newProxy(database,{get(target,property,receiver){if(property==="execute")returnasync(statement:SQL)=>{constquery=newPgDialect().sqlToQuery(statement).sql;if(query.includes("FROM pg_catalog.pg_roles")){expect(query).toContain("SELECT WITH GRANT OPTION,INSERT WITH GRANT OPTION,DELETE WITH GRANT OPTION",);expect(query).toContain("SELECT WITH GRANT OPTION,INSERT WITH GRANT OPTION\'",);expect(query).toContain("UPDATE WITH GRANT OPTION,REFERENCES WITH GRANT OPTION",);expect(query).toContain("MAINTAIN WITH GRANT OPTION");expect(query).toContain("UPDATE,TRUNCATE,REFERENCES,TRIGGER,MAINTAIN",);for(constinquiryof["has_sequence_privilege","has_function_privilege","has_type_privilege","has_schema_privilege","has_database_privilege",])expect(query).toContain(inquiry);}return[unitRoleFacts];};returnReflect.get(target,property,receiver);},});awaitinitializeRoleWriter(app,withFacts(writerFacts));})',
+    finding: "M3: a fork test, which predates this guard",
+  },
+  {
+    file: "server/tests/routine-runner.test.ts",
+    shape: "b",
+    context: [
+      '"the circuit breaker on the card"',
+      '"the ninth failure closes as a plain failure, with no breaker and no switch-off"',
+    ],
+    expression: "expect(closes[0]?.input.deliverableRef).toBeUndefined()",
+    finding: "M3: a fork test, which predates this guard",
+  },
+  {
+    file: "server/tests/wakerflow-confirm-step.integration.test.ts",
+    shape: "b",
+    context: [
+      '"a confirm step asks a person (WF8 §3.3)"',
+      '"the run parks on step 2 with the filled question: one pending row, no turn, no card, no quota"',
+    ],
+    expression: "expect(parked.steps[1]?.approvalId).toBeUndefined()",
+    finding: "M3: a fork test, which predates this guard",
+  },
+  {
+    file: "server/tests/wakerflow-confirm-step.integration.test.ts",
+    shape: "b",
+    context: [
+      '"a confirm step asks a person (WF8 §3.3)"',
+      '"the run parks on step 2 with the filled question: one pending row, no turn, no card, no quota"',
+    ],
+    expression: "expect(parked.steps[1]?.runRef).toBeUndefined()",
+    finding: "M3: a fork test, which predates this guard",
+  },
+  {
+    file: "server/tests/wakerflow-confirm-step.integration.test.ts",
+    shape: "b",
+    context: [
+      '"a confirm step asks a person (WF8 §3.3)"',
+      '"an answer becomes step 2\'s output, step 3 reads it, and a second answer applies nothing"',
+    ],
+    expression: "expect(run.steps[1]?.question).toBeUndefined()",
+    finding: "M3: a fork test, which predates this guard",
+  },
+  {
+    file: "server/tests/wakerflow-confirm-step.integration.test.ts",
+    shape: "b",
+    context: [
+      '"a confirm step asks a person (WF8 §3.3)"',
+      '"a skip records step 2 as skipped by the person, and step 3 sees no answer"',
+    ],
+    expression: "expect(run.steps[1]?.output).toBeUndefined()",
+    finding: "M3: a fork test, which predates this guard",
+  },
+  {
+    file: "server/tests/wakerflow-restart-recovery.integration.test.ts",
+    shape: "b",
+    context: [
+      '"a Flow run whose step 1 was running at the crash is failed with the restart reason, its cards settle failed, and step 2 is never run"',
+    ],
+    expression: "expect(after.steps[1]?.runRef).toBeUndefined()",
+    finding: "M3: a fork test, which predates this guard",
+  },
+  {
+    file: "server/tests/wakerflow-restart-recovery.integration.test.ts",
+    shape: "b",
+    context: [
+      '"a step card opened just before the crash, which no step record names yet, settles failed with its run"',
+    ],
+    expression:
+      "expect((awaitf.runRow(run.runId)).steps[1]?.runRef).toBeUndefined()",
+    finding: "M3: a fork test, which predates this guard",
+  },
+  {
+    file: "app/tests/agent-dialog-built-in-edit.test.tsx",
+    shape: "b",
+    context: [
+      '"a built-in coworker can be renamed on a deployment whose own Bot lives on localhost"',
+    ],
+    expression: "expect(updates[0]?.endpoint).toBeUndefined()",
+    finding: "M3: a fork test, which predates this guard",
+  },
+  {
+    file: "app/tests/model-test-button.test.ts",
+    shape: "c",
+    context: [
+      '"the connectivity test is sent as a POST to the model\'s own test route"',
+    ],
+    expression: "expect(answer).toEqual({ok:true,error:undefined})",
+    finding: "M3: a fork test, which predates this guard",
   },
 ];
 

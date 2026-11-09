@@ -169,7 +169,8 @@ beforeAll(async () => {
     initialAdminEmails: [],
     // As index.ts passes it: every person's connections read as `platform`, one person's ended as them.
     recorders: {
-      holders: () => runAsTenant("platform", () => working.connections.holders()),
+      holders: () =>
+        runAsTenant("platform", () => working.connections.holders()),
       signOut: (userId, ending) =>
         runAsTenant(userId, () => recorder.signOut(userId, ending)),
     },

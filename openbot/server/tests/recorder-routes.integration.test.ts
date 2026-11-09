@@ -657,7 +657,11 @@ describe("recordings", () => {
     await runAsTenant(busy, () =>
       database
         .insert(recorderTrajectoryBindings)
-        .values({ trajectoryId: theirs, userId: busy, createdAt: new Date(base) }),
+        .values({
+          trajectoryId: theirs,
+          userId: busy,
+          createdAt: new Date(base),
+        }),
     );
     const asked: string[] = [];
     const intelligenceFetch = (async (input: Request | string | URL) => {

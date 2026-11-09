@@ -221,6 +221,9 @@ const plugins = createPluginStore({
   encryptionKey: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
   policy: () => ({ mode: "enforce", deny: [], allow: ["true"] }),
   approvalGate: approvalService.gate,
+  // M3: the notes app is a custom server on 127.0.0.1 over plain http, which the fork's outbound
+  // guard allows only under the development opt-in a local deployment sets.
+  customServerPrivateHosts: true,
 });
 
 /** The threads the platform was asked for, and what each already holds. */
@@ -396,20 +399,13 @@ beforeAll(async () => {
     return new Response(
       body
         ? new ReadableStream({
-            /*
-             * In the person's frame: this relay is in-process, and Bun resumes the run reading this
-             * stream in the context its chunks were pushed from, so a frameless pull would drop the
-             * run's frame mid-turn. A real provider's bytes come over the network and leave the run's
-             * frame as it was (G01-E).
-             */
-            pull: (controller) =>
-              runAsTenant(person, async () => {
-                const { done, value } = await body.read();
-                if (!done) return controller.enqueue(value);
-                // The connection ends a moment after the last event, as a real provider's does.
-                await Bun.sleep(25);
-                controller.close();
-              }),
+            async pull(controller) {
+              const { done, value } = await body.read();
+              if (!done) return controller.enqueue(value);
+              // The connection ends a moment after the last event, as a real provider's does.
+              await Bun.sleep(25);
+              controller.close();
+            },
           })
         : null,
       { status: answered.status, headers: answered.headers },
@@ -488,16 +484,20 @@ beforeAll(async () => {
     .values({ id: person, email: `${person}@example.test`, name: "Dana" });
   // The Bot and its grants are the person's rows; the app is a catalogue row every person reads.
   await runAsTenant(person, async () => {
-    await database
-      .insert(agents)
-      .values({ id: botId, name: "Notes", type: "built_in", configuration: {} });
+    await database.insert(agents).values({
+      id: botId,
+      name: "Notes",
+      type: "built_in",
+      configuration: {},
+    });
   });
+  const notesPort = app.port;
   await runAsTenant("system", async () => {
     await database.insert(mcpServers).values({
       id: SERVER,
       title: "Notes",
       vendor: "Notes",
-      url: `http://127.0.0.1:${app.port}/mcp`,
+      url: `http://127.0.0.1:${notesPort}/mcp`,
       provenance: "custom",
     });
     await database.insert(mcpTools).values([

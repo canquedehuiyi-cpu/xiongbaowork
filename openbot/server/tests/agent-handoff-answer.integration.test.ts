@@ -45,7 +45,12 @@ import {
   type OpenAICompatibleEndpoint,
   startOpenAICompatibleEndpoint,
 } from "./support/openai-compatible-endpoint";
-import { afterAll, afterEach, beforeEach, test } from "./support/platform-frame";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  test,
+} from "./support/platform-frame";
 
 /**
  * One Bot asking another, from the tool call to the answer in the person's conversation, across two
@@ -449,7 +454,12 @@ beforeEach(async () => {
   await runAsTenant(ACTOR, () =>
     database
       .insert(pluginGrants)
-      .values({ kind: "bot", ref: KNOWLEDGE, agentId: ASKER, grantedBy: "test" })
+      .values({
+        kind: "bot",
+        ref: KNOWLEDGE,
+        agentId: ASKER,
+        grantedBy: "test",
+      })
       .onConflictDoNothing(),
   );
 });
@@ -606,20 +616,20 @@ describe("one Bot asking another, on two replicas", () => {
     });
     const handed = await runAsTenant(ACTOR, () =>
       handoffTool({
-          desk,
-          from: {
-            botId: ASKER,
-            actorId: ACTOR,
-            runId: `asking-run-again-${suite}`,
-            threadId: THREAD,
-            depth: 0,
-          },
-          hasSomebodyToAsk: true,
-          maxDepth: 2,
-          maxPerRun: 3,
+        desk,
+        from: {
+          botId: ASKER,
+          actorId: ACTOR,
+          runId: `asking-run-again-${suite}`,
+          threadId: THREAD,
+          depth: 0,
+        },
+        hasSomebodyToAsk: true,
+        maxDepth: 2,
+        maxPerRun: 3,
       })?.execute({
-          bot: KNOWLEDGE,
-          task: "Say what kinds of questions you answer.",
+        bot: KNOWLEDGE,
+        task: "Say what kinds of questions you answer.",
       }),
     );
     expect(String(handed)).toStartWith("Handed to Knowledge");
@@ -690,9 +700,7 @@ describe("one Bot asking another, on two replicas", () => {
     };
     const offered = (
       await runAsTenant(ACTOR, () => coordination.toolsForRun(run))
-    ).find(
-      (tool) => tool.name === "message_bot",
-    );
+    ).find((tool) => tool.name === "message_bot");
     // Offered the names it can ask, so it has nothing to guess: Knowledge, and not Research.
     const schema = z.toJSONSchema(offered?.parameters as z.ZodType);
     expect(schema.properties?.bot).toEqual(
@@ -877,20 +885,20 @@ describe("an answer that comes home while the asking Bot is still finishing", ()
     locks.hold(THREAD, `asking-run-${suite}`);
     const handed = await runAsTenant(ACTOR, () =>
       handoffTool({
-          desk,
-          from: {
-            botId: ASKER,
-            actorId: ACTOR,
-            runId: `asking-run-${suite}`,
-            threadId: THREAD,
-            depth: 0,
-          },
-          hasSomebodyToAsk: true,
-          maxDepth: 2,
-          maxPerRun: 3,
+        desk,
+        from: {
+          botId: ASKER,
+          actorId: ACTOR,
+          runId: `asking-run-${suite}`,
+          threadId: THREAD,
+          depth: 0,
+        },
+        hasSomebodyToAsk: true,
+        maxDepth: 2,
+        maxPerRun: 3,
       })?.execute({
-          bot: KNOWLEDGE,
-          task: "Describe, in exactly two sentences, what kinds of questions you are set up to answer and which sources you can use.",
+        bot: KNOWLEDGE,
+        task: "Describe, in exactly two sentences, what kinds of questions you are set up to answer and which sources you can use.",
       }),
     );
     expect(String(handed)).toStartWith("Handed to Knowledge");

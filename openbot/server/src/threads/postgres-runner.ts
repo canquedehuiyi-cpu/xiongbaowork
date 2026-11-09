@@ -783,7 +783,9 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
     // A person's thread is theirs in the runtime's own scope too; `system`'s stays the server's.
     const writer = ɵGLOBAL_STORE.getOrCreate(
       thread.id,
-      thread.tenantId === SYSTEM_TENANT ? ɵSERVER_THREAD_OWNER : thread.tenantId,
+      thread.tenantId === SYSTEM_TENANT
+        ? ɵSERVER_THREAD_OWNER
+        : thread.tenantId,
     );
     const snapshot = thread.messages as Message[];
     runs.forEach((run, index) => {

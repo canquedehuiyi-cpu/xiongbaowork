@@ -361,6 +361,10 @@ describe("pause", () => {
 });
 
 describe("Activity and attention", () => {
+  // Everything here is the owner's own Bot, goals, routines and runs: each case runs in the owner's
+  // frame, as their Bot page's request does (G01).
+  const ownerTest = (name: string, body: () => Promise<void>) =>
+    test(name, () => as(owner, body));
   const activity = createActivityStore(database);
 
   /*
@@ -368,7 +372,7 @@ describe("Activity and attention", () => {
    * said "2 scheduled" for one routine and that goal. Nothing starts it on its own, so it is on
    * demand; a trigger on it wakes it, and puts it back with what is lined up.
    */
-  test("a goal that runs only when asked is on demand, not scheduled", async () => {
+  ownerTest("a goal that runs only when asked is on demand, not scheduled", async () => {
     const goal = `responsibility:${prefix}-goal-${owner}`;
     const asked = await activity.forBot(owner, bot);
     expect(asked.onDemand).toEqual([
@@ -408,7 +412,7 @@ describe("Activity and attention", () => {
    * the routine that runs it every morning, and its run under Completed as "Goal · succeeded" under
    * the goal's own title, which read as a second goal that had finished.
    */
-  test("a goal a routine runs says when, from its routine, and is lined up with it", async () => {
+  ownerTest("a goal a routine runs says when, from its routine, and is lined up with it", async () => {
     const goal = `responsibility:${prefix}-goal-${owner}`;
     const routine = `${prefix}-routine-runs-goal`;
     const nextRunAt = new Date(Date.now() + 7_200_000);
@@ -453,7 +457,7 @@ describe("Activity and attention", () => {
     }
   });
 
-  test("a goal's run is named as a run of that goal", async () => {
+  ownerTest("a goal's run is named as a run of that goal", async () => {
     await database.insert(responsibilityEvents).values({
       id: `${prefix}-named-run-event`,
       ownerUserId: owner,
@@ -489,7 +493,7 @@ describe("Activity and attention", () => {
     ).toBe("Keep the build green");
   });
 
-  test("sections hold the owner's work and nobody else's", async () => {
+  ownerTest("sections hold the owner's work and nobody else's", async () => {
     for (const result of [
       await as(owner, () => activity.forBot(owner, bot)),
       await asPlatform(() => activity.forBot(owner, bot)),
@@ -529,7 +533,7 @@ describe("Activity and attention", () => {
     }
   });
 
-  test("a routine's schedule reads in words, as the Routines page says it", async () => {
+  ownerTest("a routine's schedule reads in words, as the Routines page says it", async () => {
     // Seen on the Bot page: "Repeats on 0 9 * * * (UTC)", five cron fields shown to a person.
     const result = await activity.forBot(owner, bot);
     const routine = result.scheduled.find(
@@ -538,7 +542,7 @@ describe("Activity and attention", () => {
     expect(routine?.detail).toBe("Every day at 09:00 (UTC)");
   });
 
-  test("a routine's title is its whole instruction, never cut mid-word", async () => {
+  ownerTest("a routine's title is its whole instruction, never cut mid-word", async () => {
     // Seen on the Bot page: "...releases) and post one l", the instruction cut at 120 characters.
     const instruction =
       "Check the latest release of CopilotKit/OpenBot on GitHub (https://github.com/CopilotKit/OpenBot/releases) and post one line in this conversation with its version number (tag) and release date.";
@@ -563,7 +567,7 @@ describe("Activity and attention", () => {
     }
   });
 
-  test("attention counts what waits on this person", async () => {
+  ownerTest("attention counts what waits on this person", async () => {
     for (const frame of [owner, "platform"]) {
       const [row] = (await as(frame, () => activity.attention(owner))).filter(
         (entry) => entry.agentId === bot,
@@ -583,7 +587,7 @@ describe("Activity and attention", () => {
     }
   });
 
-  test("a goal run's summary is the Bot's reply as plain text, the way the sidebar draws a reply", async () => {
+  ownerTest("a goal run's summary is the Bot's reply as plain text, the way the sidebar draws a reply", async () => {
     // The reply a goal run gave on OpenBot Desktop, which the row drew with its backticks and asterisks.
     await database.insert(responsibilityEvents).values({
       id: `${prefix}-goal-event`,
@@ -613,7 +617,7 @@ describe("Activity and attention", () => {
     );
   });
 
-  test("stopping a delegated task finishes only that person's hop", async () => {
+  ownerTest("stopping a delegated task finishes only that person's hop", async () => {
     for (const frame of [other, "platform"])
       expect(
         await as(frame, () =>

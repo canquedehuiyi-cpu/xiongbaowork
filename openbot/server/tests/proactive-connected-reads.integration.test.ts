@@ -234,7 +234,11 @@ beforeAll(async () => {
     await database
       .insert(channels)
       .values(
-        botIds.map((bot) => ({ id: channelOf(bot), name: bot, description: "" })),
+        botIds.map((bot) => ({
+          id: channelOf(bot),
+          name: bot,
+          description: "",
+        })),
       );
   });
   await fixtures.install();
@@ -352,9 +356,7 @@ const fixtures = (() => {
     asOwner(() =>
       database
         .insert(pluginGrants)
-        .values(
-          refs.map((granted) => ({ kind: "mcp", ref: granted, agentId })),
-        )
+        .values(refs.map((granted) => ({ kind: "mcp", ref: granted, agentId })))
         .onConflictDoNothing(),
     );
 

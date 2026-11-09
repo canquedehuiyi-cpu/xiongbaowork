@@ -410,17 +410,25 @@ describe("what the 分身 is told", () => {
 
   test("no sources is no block, byte for byte the prompt it was before", () => {
     expect(avatarSourcesGuidance([])).toBeNull();
-    expect(
-      promptOf(
-        builtInAgentConfiguration(
-          { ...avatar, avatarSources: [] },
-          model,
-          "synthetic-model-key",
-        ),
+    // M3: upstream's prompt now also names the Bot and carries its own guidance and the date, so the
+    // 分身 with no sources is compared with the same 分身 never given a list, byte for byte.
+    const prompt = promptOf(
+      builtInAgentConfiguration(
+        { ...avatar, avatarSources: [] },
+        model,
+        "synthetic-model-key",
       ),
-    ).toBe(
-      `${avatar.systemPrompt}\n\n${PROVENANCE_GUIDANCE}\n\n${UNTRUSTED_GUIDANCE}`,
     );
+    expect(prompt).toBe(
+      promptOf(
+        builtInAgentConfiguration(avatar, model, "synthetic-model-key"),
+      ),
+    );
+    expect(prompt).not.toContain(DECLARED);
+    expect(prompt).toContain(
+      `${avatar.systemPrompt}\n\n${PROVENANCE_GUIDANCE}\n\n`,
+    );
+    expect(prompt).toContain(UNTRUSTED_GUIDANCE);
   });
 
   test("the loader answers the asker's own 分身 only, and follows a removal on the next run", async () => {
@@ -517,6 +525,13 @@ describe("what the 分身 is told", () => {
         undefined,
         undefined,
         undefined,
+        // M3: upstream's recordToolLimitRefusal, holdsTools, pickedModel, botNames and
+        // resolveAgentModel now come before the sources loader.
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
         async () => {
           throw new Error("postgres://fixture:synthetic-secret@db 周报");
         },
@@ -579,7 +594,8 @@ describe("what the 分身 is told", () => {
       "synthetic-model-key",
     ),
     );
-    expect(prompt.startsWith(edited)).toBeTrue();
+    // M3: upstream's prompt opens by naming the Bot; the edited text is what follows it.
+    expect(prompt).toContain(`\n\n${edited}`);
     expect(prompt).toContain('"label":"周报"');
     await clear(personA);
   });

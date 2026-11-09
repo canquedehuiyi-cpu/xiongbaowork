@@ -361,6 +361,8 @@ describe("an unattended firing's card", () => {
         return CHANNEL;
       },
       async recordActivity() {},
+      // The routine runner says the channel is busy while a firing runs (upstream).
+      async signalBusy() {},
     } as unknown as ChannelStore;
     await createRoutineRunner({
       routineStore,
@@ -389,7 +391,9 @@ describe("an unattended firing's card", () => {
       },
     ]);
     // Still the review lane: neither `failed` nor anything else that would change the status rule.
-    expect(finished[0]?.failed).toBeUndefined();
+    const [card] = finished;
+    if (!card) throw new Error("the firing filed no card");
+    expect(card.failed).toBeUndefined();
   });
 
   test("a routine firing that only replied files no deliverable", async () => {
@@ -397,7 +401,9 @@ describe("an unattended firing's card", () => {
       replyText: "无新进展。",
     }));
     expect(finished).toHaveLength(1);
-    expect(finished[0]?.deliverableRef).toBeUndefined();
+    const [card] = finished;
+    if (!card) throw new Error("the firing filed no card");
+    expect(card.deliverableRef).toBeUndefined();
   });
 
   test("a responsibility run files what it drew with its card", async () => {

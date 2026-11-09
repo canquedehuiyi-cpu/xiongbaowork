@@ -92,19 +92,21 @@ mock.module("@copilotkit/runtime/v2", () => ({
   },
   InMemoryAgentRunner: class {
     listThreads(scope?: { ownerId: string }) {
-      return [...stored.keys()].flatMap((id) => {
-        const entry = visible(id, scope);
-        return entry ? [{ id, entry }] : [];
-      }).map(({ id, entry }) => ({
-        id,
-        name: null,
-        agentId: entry.historicRuns[0]?.agentId ?? "unknown",
-        organizationId: "",
-        createdById: entry.ownerId,
-        archived: false,
-        createdAt: new Date(entry.createdAt ?? 0).toISOString(),
-        updatedAt: new Date(entry.createdAt ?? 0).toISOString(),
-      }));
+      return [...stored.keys()]
+        .flatMap((id) => {
+          const entry = visible(id, scope);
+          return entry ? [{ id, entry }] : [];
+        })
+        .map(({ id, entry }) => ({
+          id,
+          name: null,
+          agentId: entry.historicRuns[0]?.agentId ?? "unknown",
+          organizationId: "",
+          createdById: entry.ownerId,
+          archived: false,
+          createdAt: new Date(entry.createdAt ?? 0).toISOString(),
+          updatedAt: new Date(entry.createdAt ?? 0).toISOString(),
+        }));
     }
     getThreadMessages(threadId: string, scope?: { ownerId: string }) {
       return visible(threadId, scope)?.messages ?? [];

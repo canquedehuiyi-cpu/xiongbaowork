@@ -115,7 +115,9 @@ test("two open items with one normalized title cannot both stand for a person an
 
 test("one check-in runs at a time per setting, and only a skipped one carries a reason", async () => {
   const own = settingId;
-  const run = (overrides: Partial<typeof proactiveCheckInRuns.$inferInsert> = {}) => ({
+  const run = (
+    overrides: Partial<typeof proactiveCheckInRuns.$inferInsert> = {},
+  ) => ({
     id: next(),
     settingId: own,
     ownerUserId: owner,

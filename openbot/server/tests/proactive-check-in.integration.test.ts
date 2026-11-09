@@ -96,11 +96,9 @@ const device = `check-in-device-${suite}`;
  * engine itself switches to the platform where it asks what is due. Only the final cleanup, which
  * also removes catalogue rows, runs as the platform.
  */
-const asOwner =
-  (body: () => unknown) =>
-  async (): Promise<void> => {
-    await runAsTenant(owner, body);
-  };
+const asOwner = (body: () => unknown) => async (): Promise<void> => {
+  await runAsTenant(owner, body);
+};
 const test = (name: string, body: () => unknown, timeout?: number) =>
   bunTest(name, asOwner(body), timeout);
 const beforeAll = (body: () => unknown) => bunBeforeAll(asOwner(body));
