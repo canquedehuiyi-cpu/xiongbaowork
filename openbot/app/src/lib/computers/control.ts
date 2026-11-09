@@ -101,22 +101,14 @@ export async function supplySecret(
     const body = (await response.json().catch(() => null)) as {
       error?: string;
     } | null;
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-    return { ok: false, error: body?.error ?? "没能填进去。" };
-  } catch {
     return {
       ok: false,
-      error: "连不上员工的电脑。",
-=======
-    return {
-      ok: false,
-      error: body?.error ?? "Couldn't type that into the page. Try again.",
+      error: body?.error ?? "没能填进页面，请再试一次。",
     };
   } catch {
     return {
       ok: false,
-      error: "Couldn't reach the Bot's computer. Try again.",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+      error: "连不上员工的电脑，请再试一次。",
     };
   }
 }

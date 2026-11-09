@@ -30,33 +30,6 @@ export const ChannelAvatar = memo(function ChannelAvatar({
   size?: number;
   typing?: boolean;
 }) {
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-  const channelSize = participantIds?.length;
-
-  const avatar =
-    channelSize === 1 ? (
-      <Avatar className="size-full" name={participantIds[0]} size={size} />
-    ) : (
-      <div className="flex flex-row items-center size-full">
-        {participantIds.slice(0, 3).map((c, i, shown) => (
-          <div
-            className="shrink-0 border-2 border-sidebar rounded-full flex items-center justify-center"
-            key={c}
-            style={{
-              height: size / (shown.length / 2),
-              width: size / (shown.length / 2),
-              transform: `translateX(${i * -75}%)`,
-            }}
-          >
-            <Avatar
-              className="size-full"
-              name={c}
-              size={size / (shown.length / 2)}
-            />
-          </div>
-        ))}
-      </div>
-=======
   const orbs = useBotLook() === "orb";
   const face = orbs ? orbFace : boringFace;
   const avatar =
@@ -69,7 +42,6 @@ export const ChannelAvatar = memo(function ChannelAvatar({
         participantIds={participantIds}
         size={size}
       />
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     );
 
   return (
@@ -80,8 +52,6 @@ export const ChannelAvatar = memo(function ChannelAvatar({
   );
 });
 
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-=======
 /** Where each face sits in a group's avatar, as fractions of its size, back to front. */
 const LAYOUTS = {
   2: {
@@ -193,7 +163,6 @@ function GroupFaces({
   );
 }
 
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 /**
  * Three bouncing dots in a small badge, ringed in the sidebar's own colour so it sits on the
  * avatar as a badge rather than floating over it. The staggered negative delays start each dot at

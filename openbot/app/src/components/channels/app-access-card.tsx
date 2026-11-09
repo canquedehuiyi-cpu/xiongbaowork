@@ -1,6 +1,15 @@
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
+import type { ConnectPrompt } from "@openbot/shared/connect-prompt";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  AppAccessAction,
+  appAccessSentence,
+} from "@/components/plugins/app-access-action";
+import { PluginLogo } from "@/components/plugins/plugin-logo";
 import { Button } from "@/components/ui/button";
+import { agentQueryOptions } from "@/lib/agents/queries";
+import { type AppAccess, botAppQueryOptions } from "@/lib/app-access/queries";
+import { useDeclaredBotId } from "@/lib/copilot/active-bot";
+import { type CardPlace, useCarryOn } from "@/lib/copilot/carry-on";
 import {
   accessRequestKeys,
   accessRequestQueryOptions,
@@ -12,6 +21,8 @@ import {
   REQUEST_APP_ACCESS_TOOL,
   readAppAccessRequestAnswer,
 } from "../../../../shared/app-access-request";
+import { ConnectAppCard } from "./connect-app-card";
+
 
 /**
  * `request_app_access` 的回答里的卡片，不是这个工具或不是卡片时为 null。
@@ -88,21 +99,6 @@ export function AppAccessRequestCard({ card }: { card: Card }) {
     </div>
   );
 }
-=======
-import type { ConnectPrompt } from "@openbot/shared/connect-prompt";
-import { useQuery } from "@tanstack/react-query";
-import {
-  AppAccessAction,
-  appAccessSentence,
-} from "@/components/plugins/app-access-action";
-import { PluginLogo } from "@/components/plugins/plugin-logo";
-import { Button } from "@/components/ui/button";
-import { agentQueryOptions } from "@/lib/agents/queries";
-import { type AppAccess, botAppQueryOptions } from "@/lib/app-access/queries";
-import { useDeclaredBotId } from "@/lib/copilot/active-bot";
-import { type CardPlace, useCarryOn } from "@/lib/copilot/carry-on";
-import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
-import { ConnectAppCard } from "./connect-app-card";
 
 /**
  * A work app a Bot could not use, in front of the person, with the one thing that would let it.
@@ -171,8 +167,6 @@ function LiveAppAccessCard({
   const name = access?.displayName ?? prompt.title;
   // Only asked for by "Let Research Bot use your Gmail?", the one sentence that names the Bot.
   const bot = useQuery(agentQueryOptions(agentId)).data?.name;
-  const edition =
-    useQuery(deploymentCapabilitiesQueryOptions()).data?.edition ?? "team";
   const { carried, offer } = useCarryOn({
     place,
     ready: access ? access.state === "ready" : null,
@@ -208,16 +202,16 @@ function LiveAppAccessCard({
           {live.isPending ? null : access ? (
             <p className="text-muted-foreground text-sm">
               {access.state !== "ready"
-                ? refusedSentence(access, prompt, bot, edition)
+                ? refusedSentence(access, prompt, bot)
                 : carried || offer
-                  ? `${name} is ready now.`
+                  ? `${name} 现在可以用了。`
                   : prompt.reason !== "access"
-                    ? `${name} is ready now. Ask again and the Bot can use it.`
-                    : refusedSentence(access, prompt, bot, edition)}
+                    ? `${name} 现在可以用了。再说一次，员工就能用它。`
+                    : refusedSentence(access, prompt, bot)}
             </p>
           ) : (
             <p className="text-muted-foreground text-sm" role="alert">
-              {name}'s status couldn't be loaded. Try again in a moment.
+              没能读到 {name} 的状态，请稍后再试。
             </p>
           )}
         </div>
@@ -229,7 +223,7 @@ function LiveAppAccessCard({
       ) : offer ? (
         <div className="flex justify-end">
           <Button onClick={offer} size="sm">
-            Continue
+            继续
           </Button>
         </div>
       ) : null}
@@ -279,14 +273,12 @@ function refusedSentence(
   access: AppAccess,
   prompt: ConnectPrompt,
   bot: string | undefined,
-  edition: "team" | "personal",
 ): string {
   if (
     access.state === "shared_not_connected" &&
     prompt.reason === "shared" &&
     !access.requestKind
   )
-    return `Your organisation's ${access.displayName} account needs reconnecting. Only an admin can reconnect it.`;
-  return appAccessSentence(access, bot, edition);
+    return `组织的 ${access.displayName} 账号需要重新连接，只有管理员能重新连接。`;
+  return appAccessSentence(access, bot);
 }
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b

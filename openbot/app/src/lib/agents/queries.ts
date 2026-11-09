@@ -148,11 +148,7 @@ export function agentCapabilitiesQueryOptions() {
     queryKey: agentKeys.capabilities(),
     queryFn: (): Promise<AgentCapabilities> =>
       client("/api/agents/capabilities", "capabilities", {
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         fallback: "无法加载这个部署支持的功能",
-=======
-        fallback: "Couldn't load what OpenBot supports.",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       }),
     // Deployment configuration, not data: it cannot change without the server restarting.
     staleTime: Number.POSITIVE_INFINITY,
@@ -187,11 +183,7 @@ export function agentListQueryOptions(hidden = false) {
     queryKey: agentKeys.list(hidden),
     queryFn: (): Promise<AgentProfile[]> =>
       client(`/api/agents${hidden ? "?hidden=true" : ""}`, "agents", {
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         fallback: "无法加载员工",
-=======
-        fallback: "Couldn't load your Bots.",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       }),
   });
 }
@@ -206,11 +198,7 @@ export function agentQueryOptions(agentId: string) {
     queryKey: agentKeys.detail(agentId),
     queryFn: (): Promise<AgentProfile> =>
       client(agentApiPath(agentId), "agent", {
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         fallback: "无法加载这位员工",
-=======
-        fallback: "Couldn't load this Bot.",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       }),
   });
 }

@@ -27,29 +27,14 @@ export const agentFormSchema = z.object({
   name: z
     .string()
     .trim()
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     .min(1, "名字为必填项。")
     .max(80, "名字不能超过 80 个字符。"),
-  title: z
-    .string()
-    .trim()
-    .min(1, "头衔为必填项。")
-    .max(120, "头衔不能超过 120 个字符。"),
+  title: z.string().trim().max(120, "头衔不能超过 120 个字符。"),
   roleDescription: z
     .string()
     .trim()
     .min(1, "角色说明为必填项。")
     .max(1000, "角色说明不能超过 1000 个字符。"),
-=======
-    .min(1, "Name is required.")
-    .max(80, "Name must be 80 characters or fewer."),
-  title: z.string().trim().max(120, "Title must be 120 characters or fewer."),
-  roleDescription: z
-    .string()
-    .trim()
-    .min(1, "A description of what it does is required.")
-    .max(1000, "What it does must be 1000 characters or fewer."),
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   visibility: z.enum(["public", "private"]),
   /**
    * The AG-UI endpoint this coworker runs on. Empty means the Bot in the box.
@@ -69,7 +54,6 @@ export const agentFormSchema = z.object({
    */
   authValue: z.string(),
   /**
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
    * Which model in this person's library the coworker answers on.
    *
    * Absent leaves the binding where it is and `null` returns the coworker to the deployment's model —
@@ -85,7 +69,8 @@ export const agentFormSchema = z.object({
   avatarSeed: z
     .string()
     .regex(AVATAR_SEED_PATTERN, "头像种子只能是 1 到 64 个字母、数字或 _ - : .")
-=======
+    .optional(),
+  /**
    * A computer of its own. Optional because only the New Bot sheet and the Setup row ask it: every
    * other form leaves it out, and the server reads absent as "leave it as it is".
    */
@@ -96,9 +81,8 @@ export const agentFormSchema = z.object({
   instructions: z
     .string()
     .trim()
-    .min(1, "Instructions are required.")
-    .max(1000, "Instructions must be 1000 characters or fewer.")
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+    .min(1, "指令为必填项。")
+    .max(1000, "指令不能超过 1000 个字符。")
     .optional(),
 });
 
@@ -133,7 +117,6 @@ export function agentInputFrom(values: AgentFormPatch) {
     ...(values.authValue.trim()
       ? { auth: { header: "Authorization", value: values.authValue.trim() } }
       : {}),
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     // Sent only when this screen knows the person's choice, so a save that never touched the model
     // field leaves the binding alone instead of clearing it.
     ...(values.modelRef === undefined ? {} : { modelRef: values.modelRef }),
@@ -142,11 +125,9 @@ export function agentInputFrom(values: AgentFormPatch) {
     ...(values.avatarSeed === undefined
       ? {}
       : { avatarSeed: values.avatarSeed }),
-=======
     ...(values.isolated === undefined ? {} : { isolated: values.isolated }),
     ...(values.instructions === undefined
       ? {}
       : { instructions: values.instructions }),
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   };
 }

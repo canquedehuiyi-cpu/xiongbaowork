@@ -59,21 +59,13 @@ export function connectScreen(options: Options) {
       options.onReady(false);
       const delay = BACKOFF[attempts++];
       if (delay === undefined) {
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-        options.onProblem("实时屏幕断开了。按“重试”重新连接。");
-        return;
-      }
-      options.onProblem("正在重新连接实时屏幕…");
-=======
         options.onReconnecting?.(false);
         options.onProblem(
-          options.disconnected ??
-            "The live screen is disconnected. Retry to reconnect.",
+          options.disconnected ?? "实时屏幕断开了。按“重试”重新连接。",
         );
         return;
       }
       options.onReconnecting?.(true);
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       cancelTimer = schedule(connect, delay);
     };
     current.onopen = async () => {

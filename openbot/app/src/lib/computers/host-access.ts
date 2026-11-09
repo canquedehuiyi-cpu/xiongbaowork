@@ -87,11 +87,7 @@ export function revokeHostFolderGrantMutationOptions(queryClient: QueryClient) {
         `/api/host-access/grants/${encodeURIComponent(variables.grantId)}`,
         {
           method: "DELETE",
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           fallback: "这台电脑上的文件夹授权没能撤销。",
-=======
-          fallback: "Access to that folder could not be revoked.",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         },
       );
     },
@@ -104,11 +100,7 @@ export function stopHostAccessMutationOptions(queryClient: QueryClient) {
     mutationFn: async () => {
       await client("/api/host-access/stop", {
         method: "POST",
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         fallback: "这台电脑上的文件夹访问没能停止。",
-=======
-        fallback: "Folder access could not be stopped.",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       });
     },
     onSuccess: () => invalidateHostAccess(queryClient),

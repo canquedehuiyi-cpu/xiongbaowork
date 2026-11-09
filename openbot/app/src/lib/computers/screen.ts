@@ -46,13 +46,8 @@ const COMPUTER_STATES: readonly ComputerState[] = [
  */
 export async function readScreenshot(
   computerId: string,
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-): Promise<{ frame?: Screenshot; error?: string }> {
-  const unavailable = "屏幕暂时不可用。";
-=======
 ): Promise<ScreenshotRead> {
-  const unavailable = "The screen is not available right now.";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+  const unavailable = "屏幕暂时不可用。";
   try {
     const response = await tryClient(`/api/computers/${computerId}/screenshot`);
     if (!response.ok) {

@@ -70,29 +70,6 @@ export async function callComputer(
   > | null;
 
   if (!response.ok) {
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-    return {
-      ok: false,
-      reason: (body?.error as string) ?? "That did not work.",
-      // Preserve refusal/stale-ref/control distinctions for the model's next step.
-      ...(response.status === 403
-        ? { refused: true, rule: body?.rule ?? null }
-        : {}),
-      ...(response.status === 409
-        ? body?.humanHasControl === true
-          ? {
-              humanHasControl: true,
-              requestId: body?.requestId,
-              handoff: body?.handoff,
-            }
-          : body?.outcomeUnknown === true
-            ? { outcomeUnknown: true, needsReview: true }
-            : body?.snapshotRequired === true
-              ? { staleRefs: true, snapshotRequired: true }
-              : { staleRefs: true }
-        : {}),
-    };
-=======
     /*
      * A REFUSAL IS AN INTENTION, NOT AN ACTION. 403 is a policy, a capability switch or a network
      * rule saying no, and it says so before the browser is touched: there is nothing on the screen
@@ -102,7 +79,6 @@ export async function callComputer(
     if (response.status === 403 && run !== null)
       withdrawComputerActivity(botId, run);
     return failedComputerCall(response.status, body);
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   }
 
   return { ok: true, ...(body ?? {}) };
@@ -165,9 +141,11 @@ export function failedComputerCall(
             requestId: body?.requestId,
             handoff: body?.handoff,
           }
-        : body?.snapshotRequired === true
-          ? { staleRefs: true, snapshotRequired: true }
-          : { staleRefs: true }
+        : body?.outcomeUnknown === true
+          ? { outcomeUnknown: true, needsReview: true }
+          : body?.snapshotRequired === true
+            ? { staleRefs: true, snapshotRequired: true }
+            : { staleRefs: true }
       : {}),
   };
 }
