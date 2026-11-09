@@ -312,7 +312,7 @@ test("一次 MCP 调用：把内容发给别人的工具在「总是允许」规
     runAsTenant(person, () =>
       approvals.decide(person, request?.id as string, "allow_always"),
     ),
-  ).rejects.toThrow("这个操作会把内容发给别人，每次都要你确认");
+  ).rejects.toThrow("这个操作可能会把内容发给别人，每次都要你确认");
   expect(await runAsTenant(person, () => approvalStore.rules(person))).toEqual(
     rulesBefore,
   );

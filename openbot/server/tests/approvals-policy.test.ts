@@ -2473,13 +2473,19 @@ describe("destructive tools always ask, once at a time", () => {
     ).toMatchObject({ behaviour: "allow" });
   });
 
-  test("a read never asks here, whatever it is called or marked", async () => {
-    expect(
-      await decideAction({
-        ...base,
-        candidate: app("gmail/GMAIL_DELETE_MESSAGE", { effect: "read" }),
-      }),
-    ).toMatchObject({ behaviour: "allow" });
+  test("a deleting name asks even when the tool was classified as a read; the mark alone does not", async () => {
+    /*
+     * 有意为之（阶段 6 评审 I3）：按名字判定的底线不给「读」让路。catalogue 的 writeTools 名单并不
+     * 完整，没列进去的工具会被当成读，名字是这时唯一的兜底。基于 destructive 标记的那部分保持原样。
+     */
+    for (const toolRef of ["gmail/GMAIL_DELETE_MESSAGE", "vendor/delete_x"])
+      expect(
+        await decideAction({
+          ...base,
+          candidate: app(toolRef, { effect: "read" }),
+          personal: allowAll,
+        }),
+      ).toMatchObject({ behaviour: "ask", source: "destructive_tool" });
     expect(
       await decideAction({
         ...base,
@@ -2531,7 +2537,7 @@ describe("outbound sends always ask, once at a time", () => {
 
   test("GMAIL_SEND_EMAIL, GMAIL_REPLY_TO_THREAD and SLACK_POST_MESSAGE ask with the outbound reason", async () => {
     expect(OUTBOUND_SEND_REASON).toBe(
-      "这个操作会把内容发给别人，总是先征得你同意。",
+      "这个操作可能会把内容发给别人，总是先征得你同意。",
     );
     for (const toolRef of [
       "composio-gmail/GMAIL_SEND_EMAIL",
@@ -2560,6 +2566,25 @@ describe("outbound sends always ask, once at a time", () => {
       "invite_member",
       "GMAIL_SEND_DRAFT",
       "sendMessage",
+      // 发送词出现在任意位置（评审 I1、I2）：草稿发送、先建再发、重发、派发。
+      "drafts_send",
+      "gmail_users_drafts_send",
+      "create_and_send_email",
+      "resend_invite",
+      "resendInvite",
+      "EMAIL_DISPATCH",
+      // 新建或定时一条消息、帖子、邮件、短信、推文、评论（评审 I2）。
+      "LINKEDIN_CREATE_LINKED_IN_POST",
+      "DISCORDBOT_CREATE_MESSAGE",
+      "TWILIO_CREATE_MESSAGE",
+      "SLACK_SCHEDULE_MESSAGE",
+      "create_tweet",
+      "compose_email",
+      "new_sms",
+      "GITHUB_CREATE_AN_ISSUE_COMMENT",
+      // 草稿开头、后面是回复：没有豁免，宁可多问。
+      "draft_reply",
+      "GMAIL_DRAFT_REPLY",
     ])
       expect(
         (
@@ -2576,9 +2601,11 @@ describe("outbound sends always ask, once at a time", () => {
       "GMAIL_CREATE_EMAIL_DRAFT",
       "list_sent_messages",
       "get_post",
+      "get_message",
       "create_draft",
-      "draft_reply",
-      "GMAIL_DRAFT_REPLY",
+      "update_draft",
+      "save_email_draft",
+      "create_message_drafts",
       "posts_list",
       "update_post",
       "search_shared_drives",
@@ -2710,14 +2737,40 @@ describe("outbound sends always ask, once at a time", () => {
       ).not.toBe("outbound_send");
   });
 
-  test("a read never asks here, whatever it is called", async () => {
+  test("a sending name asks even when the tool was classified as a read", async () => {
+    // 有意为之（阶段 6 评审 I3）：分类名单不完整，被当成读的发送工具仍要按名字问。
+    for (const toolRef of [
+      "composio-gmail/GMAIL_SEND_EMAIL",
+      "vendor/send_x",
+      "vendor/reply_in_thread",
+    ])
+      expect(
+        await decideAction({
+          ...base,
+          candidate: connector(toolRef, { effect: "read" }),
+          personal: allowAll,
+        }),
+      ).toMatchObject({ behaviour: "ask", source: "outbound_send" });
+    // 名字不说发送的读照常放行。
     expect(
       await decideAction({
         ...base,
-        candidate: connector("composio-gmail/GMAIL_SEND_EMAIL", {
+        candidate: connector("composio-gmail/GMAIL_FETCH_EMAILS", {
           effect: "read",
         }),
       }),
     ).toMatchObject({ behaviour: "allow" });
+  });
+
+  test("a draft is exempt only when nothing in the name sends it", async () => {
+    for (const name of ["create_and_send_draft", "update_draft_and_send"])
+      expect(
+        (
+          await decideAction({
+            ...base,
+            candidate: connector(`gmail/${name}`),
+          })
+        ).source,
+      ).toBe("outbound_send");
   });
 });

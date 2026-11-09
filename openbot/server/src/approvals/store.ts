@@ -212,7 +212,7 @@ export function createApprovalStore(
         if (decision === "allow_always" && !offersStandingRule(request.action))
           throw new ApprovalRefusedError(
             request.action.policy?.source === "outbound_send"
-              ? "这个操作会把内容发给别人，每次都要你确认，只能「允许一次」或拒绝。"
+              ? "这个操作可能会把内容发给别人，每次都要你确认，只能「允许一次」或拒绝。"
               : "这个操作会删除或覆盖内容，每次都要你确认，只能「允许一次」或拒绝。",
           );
         if (decision === "allow_always")

@@ -476,14 +476,14 @@ test("对外发送底线问的动作同样只给「允许一次 / 拒绝」，�
       policy: {
         behaviour: "ask",
         source: "outbound_send",
-        reason: "这个操作会把内容发给别人，总是先征得你同意。",
+        reason: "这个操作可能会把内容发给别人，总是先征得你同意。",
       },
     },
   };
   inbox.requests.push(sending as unknown as (typeof inbox.requests)[number]);
   try {
     const view = draw();
-    await view.findByText(/这个操作会把内容发给别人/);
+    await view.findByText(/这个操作可能会把内容发给别人/);
     expect(view.getByText(/（来源：对外发送）/)).toBeTruthy();
     expect(view.getAllByRole("button", { name: "允许一次" })).toHaveLength(1);
     expect(view.queryByRole("button", { name: "在这里总是允许" })).toBeNull();

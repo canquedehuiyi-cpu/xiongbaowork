@@ -651,7 +651,7 @@ export const DESTRUCTIVE_TOOL_REASON =
 
 /** 应用工具要把内容发给别人（发信、回复、转发、发帖、分享、邀请）时，卡片上写的理由。 */
 export const OUTBOUND_SEND_REASON =
-  "这个操作会把内容发给别人，总是先征得你同意。";
+  "这个操作可能会把内容发给别人，总是先征得你同意。";
 
 /**
  * 没有歧义的删除词：在工具名的任意位置、作为整词出现就按删除处理（参照上游）。资源名在前的命名
@@ -675,20 +675,35 @@ const OTHER_VERBS =
 const FIRST_VERB = new RegExp(`\\b(${FIRST_VERB_DELETING}|${OTHER_VERBS})\\b`);
 const DELETING_FIRST_VERB = new RegExp(`^(${FIRST_VERB_DELETING})$`);
 
-/**
- * 对外发送的动作词：工具名的第一个动词是其中之一，就是把内容发给别人（用户决定，2026-11-09）。
- * `GMAIL_SEND_EMAIL`、`GMAIL_REPLY_TO_THREAD`、`SLACK_POST_MESSAGE` 都算。`posts`、`shares` 这类
- * 复数多半是资源名（`posts_list`），不在此列。
+/*
+ * 对外发送按名字判定，三条规则任一成立就问（用户决定 2026-11-09「对外发送一律先问」，阶段 6 评审
+ * 后扩大）：
+ *  (a) 没有歧义的发送词出现在名字任意位置（整词）：`drafts_send`、`create_and_send_email`、
+ *      `resend_invite`、`EMAIL_DISPATCH`；
+ *  (b) 第一个动词是回复、转发、发帖、发布、分享、邀请：`GMAIL_REPLY_TO_THREAD`、`SLACK_POST_MESSAGE`；
+ *  (c) 第一个动词是新建、定时、撰写，并且后面说的是一条消息、帖子、邮件、短信、推文、评论或聊天：
+ *      `TWILIO_CREATE_MESSAGE`、`SLACK_SCHEDULE_MESSAGE`、`LINKEDIN_CREATE_LINKED_IN_POST`。
+ * 草稿只有一种豁免：名字里没有 (a) 类的词，第一个动词是 create、update、save，并且含有 draft。
  */
-const OUTBOUND_FIRST_VERB =
-  /^(send|sends|reply|replies|forward|post|publish|share|invite)$/;
+/** (a) 出现在任意位置就算发送的词。 */
+const ALWAYS_SENDING = /\b(send|sends|resend|dispatch)\b/;
+/** (b) 作为第一个动词时算发送的词。`posts`、`shares` 这类复数多半是资源名（`posts_list`），不在此列。 */
+const SENDING_FIRST_VERB =
+  /^(reply|replies|forward|post|publish|share|invite)$/;
+/** (c) 作为第一个动词、且后面跟着 {@link SENT_THING} 时算发送的词。 */
+const COMPOSING_FIRST_VERB = /^(create|schedule|compose|new)$/;
+/** (c) 新建或定时出来就是要发给别人的东西。 */
+const SENT_THING =
+  /\b(message|messages|post|email|mail|sms|tweet|comment|chat)\b/;
+/** 草稿豁免要求的第一个动词。 */
+const DRAFTING_FIRST_VERB = /^(create|update|save)$/;
+const DRAFT = /\b(draft|drafts)\b/;
 /**
- * 找对外发送的第一个动词时多认几个词：`replies` 本身就是发送动词；`draft` 是写草稿，排在前面时
- * 后面的 reply 只是草稿的内容（`draft_reply`），不是发出去。只用于这条底线，删除类的
- * {@link FIRST_VERB} 不变。
+ * 找对外发送的第一个动词时用的词表：删除类的 {@link FIRST_VERB} 加上 replies、compose、new、
+ * save、resend、dispatch。只用于这条底线，删除类的词表不变。
  */
 const OUTBOUND_VERB_SCAN = new RegExp(
-  `\\b(${FIRST_VERB_DELETING}|${OTHER_VERBS}|replies|draft|drafts)\\b`,
+  `\\b(${FIRST_VERB_DELETING}|${OTHER_VERBS}|replies|compose|new|save|resend|dispatch)\\b`,
 );
 
 /**
@@ -727,26 +742,36 @@ function deletesByName(toolRef: string): boolean {
  * 删除类底线：一个改动只要满足其一就总是先问，
  *  - 应用把这个工具标为破坏性（`candidate.destructive`，列出应用时记下的），不管它叫什么；
  *  - 工具名说它会删除：没有歧义的删除词出现在名字任意位置，或 remove、archive 是第一个动词。
- * 读操作不在此列；Bot 或主人电脑上的工具不在此列，除非它是经插件调用路径来的。
+ * 名字说删除时，被分类成读也照样问（读的分类名单并不完整）；只有应用标记、没有删除名字的读不问。
+ * Bot 或主人电脑上的工具不在此列，除非它是经插件调用路径来的。
  */
 export function destructiveFloor(
   candidate: ApprovalCandidate,
 ): { source: "destructive_tool"; reason: string } | undefined {
-  if (candidate.effect === "read") return undefined;
   if (
     candidate.subject?.connector !== true &&
     OWN_COMPUTER_TOOLS.test(candidate.toolRef)
   )
     return undefined;
-  return candidate.destructive === true || deletesByName(candidate.toolRef)
+  // 按名字判定的部分不看 effect：分类名单不完整，被当成读的删除工具仍要问。标记那部分照旧只管写。
+  const marked = candidate.destructive === true && candidate.effect !== "read";
+  return marked || deletesByName(candidate.toolRef)
     ? { source: "destructive_tool", reason: DESTRUCTIVE_TOOL_REASON }
     : undefined;
 }
 
-/** 工具名是否说它会把内容发给别人：第一个动词是发送类动词。写草稿不算。 */
+/** 工具名是否说它会（或可能会）把内容发给别人，规则见 {@link ALWAYS_SENDING} 上方。 */
 function sendsByName(toolRef: string): boolean {
-  const first = toolWords(toolRef).match(OUTBOUND_VERB_SCAN)?.[1] ?? "";
-  return OUTBOUND_FIRST_VERB.test(first);
+  const words = toolWords(toolRef);
+  if (ALWAYS_SENDING.test(words)) return true;
+  const scanned = words.match(OUTBOUND_VERB_SCAN);
+  const first = scanned?.[1] ?? "";
+  if (SENDING_FIRST_VERB.test(first)) return true;
+  if (DRAFTING_FIRST_VERB.test(first) && DRAFT.test(words)) return false;
+  if (!COMPOSING_FIRST_VERB.test(first)) return false;
+  // 只看第一个动词之后的词：`message_create` 不是「新建一条消息」的说法。
+  const after = words.slice((scanned?.index ?? 0) + first.length);
+  return SENT_THING.test(after);
 }
 
 /**
@@ -754,12 +779,14 @@ function sendsByName(toolRef: string): boolean {
  * Slack 发消息，总是先问，且只给「允许一次 / 拒绝」（见 types 的 `offersStandingRule`）。
  *
  * 只管应用工具：来源按插件调用路径设置的 `subject.connector` 认定，和删除类底线同一个标记。Bot
- * 自己的工具、`computer_*` 和 `host/` 上的命令都不在此列。读操作不在此列。
+ * 自己的工具、`computer_*` 和 `host/` 上的命令都不在此列。
+ *
+ * 不看 effect：工具被分类成读也照样问。catalogue 的 writeTools 名单并不完整，没列进去的工具会被
+ * 当成读，名字是这时唯一的兜底。
  */
 export function outboundSendFloor(
   candidate: ApprovalCandidate,
 ): { source: "outbound_send"; reason: string } | undefined {
-  if (candidate.effect === "read") return undefined;
   if (candidate.subject?.connector !== true) return undefined;
   return sendsByName(candidate.toolRef)
     ? { source: "outbound_send", reason: OUTBOUND_SEND_REASON }
