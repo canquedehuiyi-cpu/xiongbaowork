@@ -276,7 +276,7 @@ function measureInPage(): {
 const isSocketNoise = (text: string) =>
   /WebSocket|ws:\/\/|wss:\/\//i.test(text);
 
-async function newContext(
+export async function newContext(
   browser: Browser,
   options: Options,
   scenario: Scenario,
@@ -547,12 +547,12 @@ async function main() {
   const routes = options.path
     ? [{ path: options.path }]
     : options.only
-    ? ROUTES.filter(
-        (route) =>
-          route.path.includes(options.only ?? "") ||
-          slugOf(route).includes(options.only ?? ""),
-      )
-    : ROUTES;
+      ? ROUTES.filter(
+          (route) =>
+            route.path.includes(options.only ?? "") ||
+            slugOf(route).includes(options.only ?? ""),
+        )
+      : ROUTES;
   if (routes.length === 0) throw new Error(`no route matches ${options.only}`);
 
   const jobs: (() => Promise<Measurements>)[] = [];
