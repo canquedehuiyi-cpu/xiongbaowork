@@ -371,5 +371,6 @@ export async function grantedSkills(options: {
     title: skill.title,
     summary: skill.summary,
     tools: skill.tools,
+    instructions: skill.instructions,
   }));
 }
