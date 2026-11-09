@@ -117,7 +117,7 @@ export function PortraitPicker({
                     className={cn(
                       "flex flex-col items-center gap-1 rounded-lg p-1.5 text-[12px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/60 disabled:opacity-50",
                       selected
-                        ? "bg-accent text-foreground ring-1 ring-brand-gold"
+                        ? "bg-accent text-foreground ring-1 ring-signal"
                         : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
                     )}
                     disabled={busy}
@@ -232,7 +232,7 @@ export function EditablePortrait({
         />
         <span
           aria-hidden="true"
-          className="absolute -right-0.5 -bottom-0.5 flex size-[18px] items-center justify-center rounded-full bg-brand-gold text-brand-gold-foreground opacity-0 shadow-sm ring-2 ring-background transition-opacity group-hover/portrait:opacity-100 group-focus-visible/portrait:opacity-100 [@media(hover:none)]:opacity-100"
+          className="absolute -right-0.5 -bottom-0.5 flex size-[18px] items-center justify-center rounded-full bg-signal text-signal-foreground opacity-0 shadow-sm ring-2 ring-background transition-opacity group-hover/portrait:opacity-100 group-focus-visible/portrait:opacity-100 [@media(hover:none)]:opacity-100"
         >
           <IconPencil className="size-[11px]" />
         </span>

@@ -24,7 +24,7 @@ export function BearMascot({
     <img
       alt="熊宝"
       className={cn(
-        "shrink-0 select-none rounded-full bg-card shadow-sm ring-1 ring-brand-gold/60",
+        "shrink-0 select-none rounded-[30%] border border-foreground/15 bg-accent shadow-[inset_0_1px_0_rgb(255_255_255/0.07)]",
         className,
       )}
       data-mood={mood}
@@ -55,18 +55,19 @@ export function WorkbenchEmpty({
   return (
     <div
       className={cn(
-        "flex flex-col items-center justify-center gap-2 px-6 py-12 text-center",
+        // docs/design/ios-studio `.empty`: a soft pool of light behind the mascot, the title, one line.
+        "flex min-h-[169px] flex-col items-center justify-center gap-[3px] rounded-[14px] bg-[radial-gradient(ellipse_at_50%_35%,color-mix(in_oklab,var(--foreground)_6%,transparent),transparent_70%)] px-6 py-10 text-center",
         className,
       )}
     >
-      <BearMascot mood={mood} />
-      <p className="mt-2 font-medium text-[14px]">{title}</p>
+      <BearMascot mood={mood} size={45} />
+      <p className="mt-[8px] font-bold text-[15px]">{title}</p>
       {description ? (
-        <p className="max-w-md text-pretty text-[12px] text-muted-foreground">
+        <p className="max-w-md text-pretty text-[12px] text-muted-foreground leading-[1.6]">
           {description}
         </p>
       ) : null}
-      {action ? <div className="mt-2">{action}</div> : null}
+      {action ? <div className="mt-[9px]">{action}</div> : null}
     </div>
   );
 }

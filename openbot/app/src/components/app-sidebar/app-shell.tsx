@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import { SelfHostBanner } from "@/components/layout/self-host-banner";
 import { SidebarShell } from "@/components/layout/sidebar-shell";
 import { AppSidebar } from "./app-sidebar";
-import { ButlerButton } from "./butler-button";
 import { ConversationWorkspace } from "./conversation-workspace";
 
 /**
@@ -23,13 +22,12 @@ export function AppShell({
   return (
     // One viewport, never scrolls: panes scroll inside it. A growable shell lets the transcript's
     // scroller size against the page, grow it, and grow again.
-    <SidebarShell className="h-svh overflow-hidden" width="240px">
+    <SidebarShell className="h-svh overflow-hidden" width="226px">
       <AppSidebar />
       {secondary ?? <ConversationWorkspace />}
       <main className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <SelfHostBanner />
         {children}
-        <ButlerButton />
       </main>
     </SidebarShell>
   );

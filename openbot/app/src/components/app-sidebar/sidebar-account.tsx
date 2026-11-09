@@ -39,7 +39,7 @@ function AccountAvatar({ label }: { label: string }) {
   return (
     <span
       aria-hidden="true"
-      className="flex size-[32px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted-foreground/15 text-[12px] text-foreground/80"
+      className="flex size-[29px] shrink-0 items-center justify-center overflow-hidden rounded-[9px] border border-foreground/[0.13] bg-accent text-[12px] text-foreground/85 shadow-[inset_0_1px_0_rgb(255_255_255/0.07)]"
     >
       {initials}
     </span>
@@ -72,15 +72,15 @@ export function SidebarAccount() {
   return (
     <section
       aria-label="账户"
-      className="flex h-[56px] shrink-0 items-center gap-[8px] border-sidebar-border border-t px-[12px]"
+      className="mx-[15px] flex h-[58px] shrink-0 items-center gap-[9px] border-sidebar-border border-t px-[4px]"
     >
       <AccountAvatar label={name} />
       <div className="min-w-0 flex-1">
-        <div className="truncate font-medium text-[13px] leading-[18px]">
+        <div className="truncate font-semibold text-[12px] leading-[17px]">
           {name}
         </div>
         {secondLine ? (
-          <div className="truncate text-[12px] text-muted-foreground leading-[16px]">
+          <div className="truncate text-[11px] text-faint leading-[15px]">
             {secondLine}
           </div>
         ) : null}

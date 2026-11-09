@@ -64,7 +64,7 @@ function Face({
     return (
       <span
         aria-hidden="true"
-        className="inline-flex shrink-0 overflow-hidden rounded-full"
+        className="inline-flex shrink-0 overflow-hidden rounded-[30%]"
         style={{ height: size, width: size }}
       >
         {drawing}
@@ -75,7 +75,7 @@ function Face({
     <span
       role="img"
       aria-label={name}
-      className="inline-flex shrink-0 overflow-hidden rounded-full"
+      className="inline-flex shrink-0 overflow-hidden rounded-[30%]"
       style={{ height: size, width: size }}
     >
       {/* The drawing carries its own role; hidden so the coworker is announced once, by name. */}

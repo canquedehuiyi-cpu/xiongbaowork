@@ -328,7 +328,7 @@ test("the 员工 and 群组 tabs switch between the roster and the groups, and r
   );
 });
 
-test("the footer carries the account, usage and the settings menu; 小管家 floats on the page instead", async () => {
+test("the footer carries the account, usage and the settings menu; 小管家 sits in the page's bar instead", async () => {
   const view = renderSidebar();
   const footer = await view.findByRole("region", { name: "账户" });
   expect(footer.textContent).toContain("user@example.com");
