@@ -7,6 +7,7 @@ import {
   IconRadar,
 } from "@tabler/icons-react";
 import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { Fragment, useId, useState } from "react";
 import {
   PageEmpty,
@@ -206,10 +207,20 @@ export function ProactiveResearchSettings({
     >
       {blocked ? (
         <p className="mt-1 max-w-prose text-muted-foreground text-sm">
-          {/* M4: 待接入 设置里的「通知」页（上游 /settings/notifications，含 CheckInsSection），接入后这里链过去。 */}
-          {blocked === BLOCKED_BY_YOU
-            ? "你已为所有员工关掉了主动巡检。"
-            : "管理员为你关掉了主动巡检。"}
+          {blocked === BLOCKED_BY_YOU ? (
+            <>
+              你已为所有员工关掉了主动巡检。可以在
+              <Link
+                className="underline underline-offset-4"
+                to="/settings/notifications"
+              >
+                通知
+              </Link>
+              里重新打开。
+            </>
+          ) : (
+            "管理员为你关掉了主动巡检。"
+          )}
         </p>
       ) : null}
       {settings.isPending ? null : settings.error ? (

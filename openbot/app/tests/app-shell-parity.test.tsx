@@ -737,6 +737,7 @@ test("settings keep the app sidebar and add their own column with a way back", a
     .filter((link) => textOf(link) !== "返回");
   expect(entries.map((link) => [textOf(link), hrefOf(link)])).toEqual([
     ["通用", "/settings"],
+    ["通知", "/settings/notifications"],
     ["已连接的账号", "/settings/connected-accounts"],
     ["浏览器", "/settings/browsers"],
     ["学习", "/settings/learning"],

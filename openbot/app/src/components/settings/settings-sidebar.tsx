@@ -1,5 +1,6 @@
 import {
   IconArrowLeft,
+  IconBell,
   IconBrowser,
   IconDeviceDesktop,
   IconKey,
@@ -45,6 +46,12 @@ export const SETTINGS_SIDEBAR_ITEMS: SettingsSidebarItem[] = [
     /* `/settings` prefixes every other route here, and would otherwise light up on all of them. */
     exact: true,
     linkOptions: { to: "/settings" },
+  },
+  {
+    /* Where upstream has it, after 通用. Whether your employees check in for you, for all of them; where updates reach you is linked. */
+    title: "通知",
+    icon: IconBell,
+    linkOptions: { to: "/settings/notifications" },
   },
   {
     /*
