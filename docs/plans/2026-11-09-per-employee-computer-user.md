@@ -97,7 +97,7 @@
     workspaceFor(botId: string): Promise<ReturnType<typeof createWorkspace>>; // 走独立用户时先 ensure，按 botKey 缓存
     homeFor(botId: string): string;
     ensure(botId: string): Promise<void>;  // 调 helper(["ensure", key])，非 0 抛 PerBotUnavailableError；每个 key 只调一次（缓存成功的 Promise，失败的不缓存）
-    status(): Promise<{ enabled: boolean; ready: boolean; reason?: string }>; // enabled 时调 helper(["ensure", botKeyOf("__probe__")]) 一次并缓存结果
+    status(): Promise<{ enabled: boolean; ready: boolean; reason?: string }>; // enabled 时调 helper(["ensure", botKeyOf("__probe__")])；成功结果永久缓存，失败结果只缓存 30 秒，单次探测超时 5 秒；reason 给通用中文说明，细节只写日志
   }
   class PerBotUnavailableError extends Error {} // message 为中文：「员工独立电脑未就绪：<原因>」
   ```
@@ -178,15 +178,21 @@
   - mkdir 并 chown、chmod，执行 `setfacl -m` 和 `setfacl -d -m`（ACL 内容见 Global Constraints）。
   - 建 `.tmp`，最后输出 uid。
   - 幂等。setfacl 失败时退出码非 0。
+  - 整个 ensure 在 `flock /run/xb-bot.lock` 下串行执行，避免并发 useradd 抢锁失败。
 - `run <key> <timeout_s>`：
   - timeout 不是 1–600 的整数，退出码 64；用户不存在，退出码 65。
   - 读 stdin 直到空行，每行 `NAME=VALUE`。NAME 必须匹配 `^[A-Za-z_][A-Za-z0-9_]*$` 且不在 `HOME TMPDIR USER LOGNAME SHELL` 中，否则跳过该行。合法的行用 `set --` 累积。
   - 余下的 stdin 读进 `cmd`。
-  - `cd` 进员工目录后执行：
+  - `cd` 进员工目录后，**不用 exec**，在后台启动：
     ```sh
-    exec timeout --kill-after=5 "$t" runuser -u "xb-$key" -- env -i "$@" HOME="$dir" TMPDIR="$dir/.tmp" USER="xb-$key" LOGNAME="xb-$key" /bin/bash -c "$cmd"
+    timeout --kill-after=5 "$t" runuser -u "xb-$key" -- env -i "$@" HOME="$dir" TMPDIR="$dir/.tmp" USER="xb-$key" LOGNAME="xb-$key" /bin/bash -c "$cmd" &
     ```
+    记下 pid（timeout 会自建进程组，组号就是它的 pid）。
+  - `trap` 捕获 TERM、INT、HUP（sudo 会把调用方的信号转给辅助程序），收到后依次执行：`kill -TERM -- -$pid`，等 3 秒，`kill -KILL -- -$pid`，再执行 `pkill -KILL -u "xb-$key"` 兜底。
+  - `wait $pid` 拿到退出码后，**无论命令是正常结束还是超时**，都执行 `kill -KILL -- -$pid 2>/dev/null || true`，清掉命令留在组里的后台进程（例如 `sleep 1000 &`）。这样后台进程不会一直占着输出管道。说明：命令结束时连同它的后台进程一起结束，不支持常驻进程。
+  - 以命令的退出码退出。超时时 timeout 返回 124 或 137，原样透传。
 - `restore`：
+  - 若 `/run/s6/container_environment` 存在，强制设为 `root:root 0700`（员工用户不得读取容器环境，例如 COMPUTER_TOKEN 和数据库地址）。
   - 只有 `id -u` 为 0 且 `SUDO_USER` 为空时才执行，否则退出码 64。
   - 先按 Global Constraints 强制设定 `/workspace`、`/workspace/bots`、`/profiles` 的属主、权限和 ACL（目录不存在就先创建）。
   - 再对 `/workspace` 下 `bots` 以外的全部条目执行 `chmod -R o-rwx`。
@@ -198,6 +204,10 @@
   - `xb-bot nope` 退出码 64；`xb-bot ensure ABC` 退出码 64；`xb-bot run <key> 0` 退出码 64；未 ensure 的 key 执行 `run` 退出码 65。
   - `ensure` 两次都退出 0，输出的 uid 相同，且在 20000–59999 之间。
   - `printf 'PATH=/usr/bin:/bin\n\nid -u\n' | xb-bot run <keyA> 10` 输出 A 的 uid。
+  - `printf '\necho hi; sleep 1000 &\n' | xb-bot run <keyA> 30`：3 秒内返回，输出含 `hi`，之后 `pgrep -u xb-<keyA> sleep` 为空。
+  - 后台启动 `printf '\nsleep 1000\n' | xb-bot run <keyA> 600`，1 秒后向这个辅助程序进程发 TERM：8 秒内退出，`pgrep -u xb-<keyA>` 为空。
+  - 员工 A 读 `/run/s6/container_environment` 下的文件失败；读 `/proc/1/environ` 失败。
+  - 并发执行 4 次 `xb-bot ensure <keyC>`：全部退出 0，uid 相同。
   - A 写的文件，B 执行 `cat` 失败（Permission denied）。
   - A 执行 `ls /profiles` 失败；A 的 `echo $TMPDIR` 等于 `/workspace/bots/<keyA>/.tmp`。
   - 以 `runuser -u pwuser` 写入 A 目录的文件，A 能 `cat` 也能追加；A 写的文件，pwuser 能 `cat`。
