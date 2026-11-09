@@ -196,6 +196,15 @@ export type CatalogueEntry = {
    */
   writeTools: readonly string[];
   /**
+   * 经过审查、确认只读的工具名单。可选；没有它的条目，行为和以前完全一样。
+   *
+   * 列出它就是列全了：这个条目上不在名单里的工具，{@link classifyTool} 一律算写，所以服务器以后
+   * 新增的工具在有人读过、列进来之前都要先问。它只能让判定更严，不能放宽：写名单、厂商记录的写、
+   * 没有广播过的名字、破坏性标记都仍然优先。{@link reviewedRead} 是「这个工具是否经审查确定只读」的
+   * 唯一答案。名单照条目注释里记录的实测 `tools/list` 抄，不凭工具名猜。
+   */
+  readTools?: readonly string[];
+  /**
    * Which protocol reaches this vendor. Absent means MCP, which is what every entry was.
    *
    * A field rather than an inference, because the answer is not derivable from the host: Google
@@ -287,7 +296,9 @@ export const CATALOGUE: readonly CatalogueEntry[] = Object.freeze([
    * `unlistedAdvertisedTools` in store.ts names nothing for these entries, so the reconciliation it
    * does for Notion is a person's job here: on the first Refresh tools, compare the live listing
    * against the names in each entry's comment, and any tool that was not there on 2026-11-09 is
-   * reviewed before it is granted, and added to `writeTools` if it changes anything. Reads only does
+   * reviewed before it is granted, and added to `writeTools` if it changes anything. 五个纯文档条目
+   * （context7、deepwiki、microsoft-learn、aws-knowledge、cloudflare-docs）还带了 `readTools`，把这一步
+   * 交给代码：清单外新出现的名字直接算写，审查后再列进去。Reads only does
    * not mean ungoverned, either: a grant and the action policy still decide whether a Bot may call
    * each one.
    *
@@ -315,6 +326,8 @@ export const CATALOGUE: readonly CatalogueEntry[] = Object.freeze([
     path: "/mcp",
     auth: { kind: "none" },
     writeTools: Object.freeze([]),
+    // 上面注释里 2026-11-09 实测的清单；新出现的工具在列进来之前都是写。
+    readTools: Object.freeze(["resolve-library-id", "query-docs"]),
     docsUrl: "https://github.com/upstash/context7",
   },
   {
@@ -333,6 +346,12 @@ export const CATALOGUE: readonly CatalogueEntry[] = Object.freeze([
     path: "/mcp",
     auth: { kind: "none" },
     writeTools: Object.freeze([]),
+    // 上面注释里 2026-11-09 实测的清单；新出现的工具在列进来之前都是写。
+    readTools: Object.freeze([
+      "ask_wiki_question",
+      "read_wiki_contents",
+      "read_wiki_structure",
+    ]),
     docsUrl: "https://docs.devin.ai/work-with-devin/deepwiki-mcp",
   },
   {
@@ -349,6 +368,12 @@ export const CATALOGUE: readonly CatalogueEntry[] = Object.freeze([
     path: "/api/mcp",
     auth: { kind: "none" },
     writeTools: Object.freeze([]),
+    // 上面注释里 2026-11-09 实测的清单；新出现的工具在列进来之前都是写。
+    readTools: Object.freeze([
+      "microsoft_docs_search",
+      "microsoft_code_sample_search",
+      "microsoft_docs_fetch",
+    ]),
     docsUrl: "https://learn.microsoft.com/training/support/mcp",
   },
   {
@@ -369,6 +394,14 @@ export const CATALOGUE: readonly CatalogueEntry[] = Object.freeze([
     path: "/",
     auth: { kind: "none" },
     writeTools: Object.freeze([]),
+    // 上面注释里 2026-11-09 实测的清单；新出现的工具在列进来之前都是写。
+    readTools: Object.freeze([
+      "aws___read_documentation",
+      "aws___search_documentation",
+      "aws___list_regions",
+      "aws___get_regional_availability",
+      "aws___retrieve_skill",
+    ]),
     docsUrl: "https://awslabs.github.io/mcp/servers/aws-knowledge-mcp-server",
   },
   {
@@ -387,6 +420,11 @@ export const CATALOGUE: readonly CatalogueEntry[] = Object.freeze([
     path: "/mcp",
     auth: { kind: "none" },
     writeTools: Object.freeze([]),
+    // 上面注释里 2026-11-09 实测的清单；新出现的工具在列进来之前都是写。
+    readTools: Object.freeze([
+      "search_cloudflare_documentation",
+      "migrate_pages_to_workers_guide",
+    ]),
     docsUrl: "https://github.com/cloudflare/mcp-server-cloudflare",
   },
   {
@@ -2034,6 +2072,13 @@ export function classifyTool(
   // The reviewed list outranks the column, and only in this direction: a name a person reviewed as a
   // write stays a write whatever the listing recorded about it.
   if (entry?.writeTools.includes(toolName)) return "write";
+  // 列了只读名单的条目就列全了：名单外它广播的任何名字都是写。只收紧，没有名单的条目不受影响；
+  // 名单里的名字也不在这里定成读，下面厂商记录的写仍然能让它变成写。
+  if (
+    entry?.readTools &&
+    !reviewedRead(entry, toolName, { destructive: false })
+  )
+    return "write";
   // Anything the column holds settles the rest. `typeof` rather than truthiness so the empty string
   // is treated as the value it is instead of as an absence of one.
   if (typeof recorded === "string")
@@ -2044,6 +2089,24 @@ export function classifyTool(
   // Advertised, not on the reviewed write list, and nothing recorded. Two sources had the chance to
   // call it a write and neither did.
   return "read";
+}
+
+/**
+ * 这个工具是否经过审查、确定只读：只有条目的 `readTools` 名单能这么说。
+ *
+ * 服务器自己的 `readOnlyHint`、代理商按描述打的只读标签、写名单里漏掉的名字，都只是「没人说它是写」，
+ * 不是有人确认过它只读。破坏性标记和写名单仍然优先于只读名单。没有名单的条目一律回答 false，所以
+ * 调用方不能拿它替换现有的读判定（那样会改变没有名单的条目的行为），只能拿它把判定收紧，
+ * 例如 {@link classifyTool} 对列了名单的条目那样。
+ */
+export function reviewedRead(
+  entry: CatalogueEntry | null,
+  toolName: string,
+  tool: { destructive: boolean },
+): boolean {
+  if (tool.destructive || !entry?.readTools) return false;
+  if (entry.writeTools.includes(toolName)) return false;
+  return entry.readTools.includes(toolName);
 }
 
 /**
