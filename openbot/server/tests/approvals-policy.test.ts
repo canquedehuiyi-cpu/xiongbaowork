@@ -2243,11 +2243,62 @@ describe("destructive tools always ask, once at a time", () => {
       "unarchive_thread",
       "get_archive_settings",
       "restore_from_trash",
-      "create_trash_rule",
+      "undelete_message",
+      "list_deleted_items",
     ])
       expect(
         await decideAction({ ...base, candidate: app(`gmail/${name}`) }),
       ).toMatchObject({ behaviour: "allow", source: "default" });
+  });
+
+  test("an unambiguous deleting word asks wherever it stands in the name, as a whole word", async () => {
+    for (const name of [
+      "posts_delete",
+      "SHAREPOINT_LIST_ITEM_DELETE",
+      "lists_items_delete",
+      "share-delete",
+      "uploadSessionPurge",
+      "export_wipe",
+      "drafts/discard",
+    ])
+      expect(
+        (await decideAction({ ...base, candidate: app(`vendor/${name}`) }))
+          .source,
+      ).toBe("destructive_tool");
+    // remove and archive are still only the first verb: here they are what is listed.
+    for (const name of ["list_removed_users", "get_archive_remove_policy"])
+      expect(
+        (await decideAction({ ...base, candidate: app(`vendor/${name}`) }))
+          .behaviour,
+      ).toBe("allow");
+  });
+
+  test("a connector tool asks whatever its server is called, memory and host included", async () => {
+    // 管理员可以把自定义 MCP 服务器叫做 memory 或 host：来源由调用路径标明，不看名字前缀。
+    for (const toolRef of ["memory/delete_entities", "host/delete_entities"])
+      expect(
+        await decideAction({
+          ...base,
+          candidate: candidate({
+            toolRef,
+            scope: toolRef.split("/")[0] ?? "",
+            subject: { connector: true },
+          }),
+          personal: allowAll,
+        }),
+      ).toMatchObject({ behaviour: "ask", source: "destructive_tool" });
+    // OpenBot's own tools are not exempt by name either.
+    expect(
+      (
+        await decideAction({
+          ...base,
+          candidate: candidate({
+            toolRef: "bot/delete_everything",
+            scope: "bot",
+          }),
+        })
+      ).source,
+    ).toBe("destructive_tool");
   });
 
   test("a tool the app marks destructive asks whatever it is called", async () => {
@@ -2318,6 +2369,42 @@ describe("destructive tools always ask, once at a time", () => {
     expect(offersStandingRule({ policy: outcome })).toBeFalse();
     expect(offersStandingRule({ policy: { source: "default" } })).toBeTrue();
     expect(offersStandingRule({})).toBeTrue();
+  });
+
+  test("a reason the rules or the reviewer already gave stays on the card beside the destructive one", async () => {
+    const asked = await decideAction({
+      ...base,
+      candidate: app("gmail/GMAIL_DELETE_MESSAGE"),
+      personal: [rule("ask", { toolRef: "*" })],
+    });
+    expect(asked.source).toBe("destructive_tool");
+    expect(asked.reason).toContain(DESTRUCTIVE_TOOL_REASON);
+    expect(asked.reason).toContain("A rule asks before this kind of action.");
+    const reviewed = await decideAction({
+      ...base,
+      candidate: app("gmail/GMAIL_DELETE_MESSAGE"),
+      autoReview: true,
+      model: model({
+        verdict: "needs_approval",
+        preApproved: false,
+        reason: "The person only asked to read this thread.",
+      }),
+    });
+    expect(reviewed.source).toBe("destructive_tool");
+    expect(reviewed.reason).toContain(DESTRUCTIVE_TOOL_REASON);
+    expect(reviewed.reason).toContain(
+      "The person only asked to read this thread.",
+    );
+    // Raised from allow, there is no earlier reason worth keeping: only the floor's own.
+    expect(
+      (
+        await decideAction({
+          ...base,
+          candidate: app("gmail/GMAIL_DELETE_MESSAGE"),
+          personal: [rule("allow", { toolRef: "*" })],
+        })
+      ).reason,
+    ).toBe(DESTRUCTIVE_TOOL_REASON);
   });
 
   test("the stricter answers stay: a disabled tool is refused, a payment and a hand-off rule hand off", async () => {

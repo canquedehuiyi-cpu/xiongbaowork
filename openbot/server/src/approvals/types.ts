@@ -129,6 +129,11 @@ export type ApprovalSubject = {
    * arguments; absent means unknown, which is not read-only.
    */
   appTool?: { readOnly: boolean };
+  /**
+   * 这次调用经插件仓库的调用路径而来（MCP、Composio 授予的工具），由那里设置。删除类底线据此
+   * 认定它是应用工具：服务器 id 由管理员起名，可以叫 `host` 或 `memory`，不能靠 ref 前缀判断。
+   */
+  connector?: true;
   // --- desktop control (sub-project 2) ---
   /**
    * 要读的桌面窗口（设备端桌面查看第 1 期）：网关从窗口列表里拿到的标题，以及它命中的敏感词。

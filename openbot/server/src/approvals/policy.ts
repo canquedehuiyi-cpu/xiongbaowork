@@ -649,49 +649,75 @@ export function appEnableReason(name: string, source: string): string {
 export const DESTRUCTIVE_TOOL_REASON =
   "这个操作会删除或覆盖内容，总是先征得你同意。";
 
-/** 作为工具名第一个动词时按删除处理的词。 */
-const DELETING_VERBS =
-  "delete|deletes|remove|removes|archive|archives|trash|destroy|erase|purge|wipe|discard";
 /**
- * 工具名里常见的其它动作词。只用来找出「第一个动词」：`list_archived_emails` 的第一个动词是 list，
- * `unarchive_thread` 是 unarchive，`get_archive_settings` 是 get，都不是删除。没收进来的词（比如
- * move、empty）会被跳过，所以 `GMAIL_MOVE_TO_TRASH`、`empty_trash` 的第一个动词是 trash。
+ * 没有歧义的删除词：在工具名的任意位置、作为整词出现就按删除处理（参照上游）。资源名在前的命名
+ * 很常见，`posts_delete`、`SHAREPOINT_LIST_ITEM_DELETE` 里删除词前面的是名词。整词匹配，所以
+ * `undelete_message`、`list_deleted_items` 不算。
+ */
+const ALWAYS_DELETING =
+  /\b(delete|deletes|trash|destroy|erase|purge|wipe|discard)\b/;
+/**
+ * 有歧义的删除词：只在它是工具名的第一个动词时才按删除处理。`remove_collaborator` 收回别人的
+ * 访问权限也算（fork 没有单独的分享分类，按删除问一次就够了）；`get_archive_settings` 不算。
+ */
+const FIRST_VERB_DELETING = "remove|removes|archive|archives";
+/**
+ * 工具名里常见的其它动作词，只用来找出「第一个动词」：`list_archived_emails` 的第一个动词是 list，
+ * `unarchive_thread` 是 unarchive，都不是删除。
  */
 const OTHER_VERBS =
   "unarchive|unarchives|untrash|undelete|restore|restores|recover|get|gets|list|lists|fetch|fetches|retrieve|search|find|read|reads|count|lookup|export|download|create|creates|add|adds|insert|update|updates|edit|patch|modify|set|mark|unmark|send|sends|post|posts|reply|forward|write|upload|share|invite|schedule|submit|publish|copy|duplicate|rename";
 /** 参照上游 `FIRST_VERB`：按出现顺序，名字里第一个认得的动作词就是这个工具做的事。 */
-const FIRST_VERB = new RegExp(`\\b(${DELETING_VERBS}|${OTHER_VERBS})\\b`);
-const DELETING = new RegExp(`^(${DELETING_VERBS})$`);
+const FIRST_VERB = new RegExp(`\\b(${FIRST_VERB_DELETING}|${OTHER_VERBS})\\b`);
+const DELETING_FIRST_VERB = new RegExp(`^(${FIRST_VERB_DELETING})$`);
+/** 把东西找回来的动作：`restore_from_trash` 里的 trash 是它的对象，不是它要做的事。 */
+const RESTORING = /^(untrash|undelete|restore|restores|recover)$/;
 
 /**
- * 不是应用工具的：Bot 自己电脑上的操作（`computer_*`）、主人电脑上的命令（`host/`），以及 OpenBot
- * 自己的工具（转交、记忆、私密分享）。它们各有自己的底线，删除类底线不管。
+ * Bot 自己电脑上的操作（`computer_*`）和主人电脑上的命令（`host/`）有自己的底线，删除类底线
+ * 不管它们。只按前缀认不够：管理员可以把自定义 MCP 服务器叫做 `host`，所以经插件调用路径来的
+ * 工具由调用处标明（`subject.connector`），不看名字。
  */
-const NOT_APP_TOOLS = /^(computer_|host\/|bot\/|memory\/|openbot\/)/;
+const OWN_COMPUTER_TOOLS = /^(computer_|host\/)/;
 
-/** 工具名拆成小写单词：`HUBSPOT_ARCHIVE_CONTACT` 是 "hubspot archive contact"。 */
+/**
+ * 工具名拆成小写单词，分隔符是 `_`、`-`、`.`、`/`、空白或大小写边界：
+ * `HUBSPOT_ARCHIVE_CONTACT` 是 "hubspot archive contact"，`postsDelete` 是 "posts delete"。
+ * 只看 ref 里服务器之后的部分。
+ */
 function toolWords(toolRef: string): string {
-  return (toolRef.split("/").pop() ?? "")
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .replace(/[-_.\s]+/g, " ")
+  return toolRef
+    .slice(toolRef.indexOf("/") + 1)
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[-_./\s]+/g, " ")
     .toLowerCase()
     .trim();
 }
 
+/** 工具名是否说它会删除东西。 */
+function deletesByName(toolRef: string): boolean {
+  const words = toolWords(toolRef);
+  const first = words.match(FIRST_VERB)?.[1] ?? "";
+  if (RESTORING.test(first)) return false;
+  return ALWAYS_DELETING.test(words) || DELETING_FIRST_VERB.test(first);
+}
+
 /**
- * 删除类底线：应用工具（MCP、Composio 授予的工具）只要满足其一就总是先问，
- *  - 应用把它标为破坏性（`candidate.destructive`，列出应用时记下的），不管它叫什么；
- *  - 工具名的第一个动词是删除类动词（delete、remove、archive、trash……）。收回别人访问权限的
- *    `remove_collaborator` 也算：fork 没有单独的分享分类，按删除问一次就够了。
- * 读操作不在此列。与 SEC1 的其它底线一样只往严里调，排在它们后面（见 {@link decideAction}）。
+ * 删除类底线：一个改动只要满足其一就总是先问，
+ *  - 应用把这个工具标为破坏性（`candidate.destructive`，列出应用时记下的），不管它叫什么；
+ *  - 工具名说它会删除：没有歧义的删除词出现在名字任意位置，或 remove、archive 是第一个动词。
+ * 读操作不在此列；Bot 或主人电脑上的工具不在此列，除非它是经插件调用路径来的。
  */
 export function destructiveFloor(
   candidate: ApprovalCandidate,
 ): { source: "destructive_tool"; reason: string } | undefined {
   if (candidate.effect === "read") return undefined;
-  if (NOT_APP_TOOLS.test(candidate.toolRef)) return undefined;
-  const verb = toolWords(candidate.toolRef).match(FIRST_VERB)?.[1] ?? "";
-  return candidate.destructive === true || DELETING.test(verb)
+  if (
+    candidate.subject?.connector !== true &&
+    OWN_COMPUTER_TOOLS.test(candidate.toolRef)
+  )
+    return undefined;
+  return candidate.destructive === true || deletesByName(candidate.toolRef)
     ? { source: "destructive_tool", reason: DESTRUCTIVE_TOOL_REASON }
     : undefined;
 }
@@ -707,8 +733,9 @@ export function destructiveFloor(
  *  4. The deterministic floors: a dangerous command or a sensitive path asks at least (§4.3, §4.4),
  *     and so does the team cap of `ask` for a command on a paired computer, and so does a local
  *     app's tool the device does not list as read-only. The cap also covers `computer_app_call`.
- *     删除类底线紧跟在 SEC1 的两条底线之后：删除、归档或应用标为破坏性的应用工具总是先问，规则
- *     问过的也改记为这条底线，卡片因此只给「允许一次 / 拒绝」（见 {@link destructiveFloor}）。
+ *     删除类底线：删除、归档或应用标为破坏性的改动总是先问，规则问过的也改记为这条底线，卡片因此
+ *     只给「允许一次 / 拒绝」（见 {@link destructiveFloor}）。它和上面几条底线管的工具互不相交
+ *     （那几条只看 `computer_*`、`host/` 的命令、路径和本机应用），在链里排第几不影响结果。
  *  5. The strictest rule across the team's, the owner's and the person's own; then the reviewer
  *     where it applies; then the person's own "ask before making changes" default.
  */
@@ -802,16 +829,17 @@ export async function decideAction(input: {
   // --- end desktop control ---
   const decided = await decideByRules(input, matched);
   // A floor only raises: an action the rules let through still asks; one already asked about or
-  // handed off keeps the stricter answer it had. 删除类底线例外的一点：规则或偏好已经要问的，也改记
-  // 为这条底线，这样卡片不会给出一条存下来也永远用不上的「总是允许」。
+  // handed off keeps the stricter answer it had. 删除类底线多做一步：规则、偏好或审查本来就要问的，
+  // 也改记为这条底线，卡片才不会给出一条存了也永远用不上的「总是允许」；原来的理由接在后面保留。
+  const restated = floor === destructive && decided.behaviour === "ask";
   const outcome: ApprovalPolicyOutcome =
-    floor &&
-    (decided.behaviour === "allow" ||
-      (floor === destructive && decided.behaviour === "ask"))
+    floor && (decided.behaviour === "allow" || restated)
       ? {
           behaviour: "ask",
           source: floor.source,
-          reason: floor.reason,
+          reason: restated
+            ? `${floor.reason}（${decided.reason}）`
+            : floor.reason,
           ...(decided.ruleId ? { ruleId: decided.ruleId } : {}),
           ...(decided.review ? { review: decided.review } : {}),
         }
