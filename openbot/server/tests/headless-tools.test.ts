@@ -649,7 +649,9 @@ test("on a paired machine the file and command tools say so; in the deployment's
     // The image has no python3, so only the two installers that are there are named.
     expect(workspace.computer_run_command).toContain("npm install");
     expect(workspace.computer_run_command).toContain("bun add");
-    expect(workspace.computer_run_command).not.toMatch(/pip|python|npm install -g/);
+    expect(workspace.computer_run_command).not.toMatch(
+      /\bpip\b|python|npm install -g/,
+    );
     expect(workspace.computer_list_files).not.toContain("paired machine");
   }
 });

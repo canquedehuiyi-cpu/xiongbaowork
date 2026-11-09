@@ -35,7 +35,7 @@
   - `timeout_s` 是 1–600 的整数。
 - sudoers 只放行以下几条，不放行 `restore`：
   - `pwuser ALL=(root) NOPASSWD: /usr/local/sbin/xb-bot ensure *, /usr/local/sbin/xb-bot run *`
-  - `%xbbots` 不获得任何 sudo 权限（用户决定，2026-11-09）：员工不能 sudo 安装系统包，可以在自己目录里用 `pip --user`、`npm`、`bun` 安装用户级工具；常用系统包预装进镜像。pwuser 原有的包管理 sudo 保留。
+  - `%xbbots` 不获得任何 sudo 权限（用户决定，2026-11-09）：员工不能 sudo 安装系统包，可以在自己目录里用 `npm install`（不带 `-g`）、`bun add` 安装用户级工具（镜像里没有 python3）；常用系统包预装进镜像。pwuser 原有的包管理 sudo 保留。
 - 开关 `COMPUTER_PER_BOT_USERS` 取 `on`/`off`：源码默认 `off`，交付镜像 `ENV COMPUTER_PER_BOT_USERS=on`。只在 Linux 上生效。
 - 开关打开但辅助程序不可用时，`/health` 返回 HTTP 503，`status: "unready"`，并附 `perBotUsers.reason`。非默认员工的 `/exec` 和 `/files/*` 返回 503，**不退回共享模式**。
 - 用户可见文案用中文，提交与注释不写模型名。不加 npm 依赖，不改 lockfile。每个任务（PR）改动不超过 8 个文件（测试另计）。

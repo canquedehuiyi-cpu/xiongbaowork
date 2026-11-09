@@ -698,7 +698,7 @@ export function ComputerTools() {
         "same ones the file tools see. Commands run in bash, so pipes and && work. Long output is " +
         "truncated from the start, and a command that runs too long is stopped. " +
         "Use the tools already installed first. If you need a new one, install it inside your " +
-        "workspace: `pip install --user <package>`, `npm install <package>` or `bun add <package>`. " +
+        "workspace with `npm install <package>` (without -g) or `bun add <package>`. " +
         "Do not use sudo: you are not the root user and cannot install system packages, so if a " +
         "task needs one, say so rather than retrying.",
     parameters: z.object({
@@ -707,7 +707,7 @@ export function ComputerTools() {
         .describe(
           onDevice
             ? "The command to run, written for the paired machine's own system"
-            : "The command to run, such as: pip install --user requests",
+            : "The command to run, such as: npm install marked",
         ),
     }),
     handler: async (

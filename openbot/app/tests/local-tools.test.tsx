@@ -329,7 +329,7 @@ test("in the cloud the shell and file tools keep their own words", async () => {
   // The image has no python3, so only the two installers that are there are named.
   expect(run?.description).toContain("npm install");
   expect(run?.description).toContain("bun add");
-  expect(run?.description).not.toMatch(/pip|python|npm install -g/);
+  expect(run?.description).not.toMatch(/\bpip\b|python|npm install -g/);
   const example = (
     z.toJSONSchema(run?.parameters as z.ZodType) as unknown as {
       properties: { command: { description: string } };
