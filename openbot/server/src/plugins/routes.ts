@@ -42,6 +42,7 @@ import {
   deploymentFaultSentence,
   isDeploymentFault,
   type OAuthClient,
+  OAuthClientReadError,
   type PluginKind,
   PluginRefusedError,
   type PluginStore,
@@ -1788,6 +1789,24 @@ export function createPluginRoutes(
        */
       if (error instanceof PluginRefusedError) {
         return context.json({ error: error.message }, 409);
+      }
+      /*
+       * The deployment holds a client and this replica could not read it: a vault fault, or a key
+       * that will not decrypt it. Nothing was registered over it, because that would replace the
+       * client for every replica that still can. Recorded, and answered as a fault rather than as a
+       * missing client: there is nothing for the person to fix, and nothing of the fault is said.
+       */
+      if (error instanceof OAuthClientReadError) {
+        await store.recordOAuthClientReadFailure({
+          serverId,
+          actorId: context.var.actor.id,
+        });
+        return context.json(
+          {
+            error: `暂时无法连接 ${entry.title}。请稍后重试；如果一直这样，请联系管理员。`,
+          },
+          503,
+        );
       }
       throw error;
     }

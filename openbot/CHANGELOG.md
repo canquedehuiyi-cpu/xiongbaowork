@@ -8,6 +8,21 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+- **A replica that cannot read a connector's OAuth client no longer registers a new one over it.**
+  A vault fault or a wrong `KEY_ENCRYPTION_KEY` used to read as "no client", so Connect on a
+  self-registering connector (Notion and the like) registered again and replaced the one client
+  every replica shares, breaking everybody's connection to it. Now only a missing or revoked client
+  is "none"; a read or decryption fault stops Connect with a 503 「暂时无法连接 …」, writes
+  `mcp.oauth_client_read_failed` (who and which server, never the fault), and logs the fault's name
+  only. From upstream OpenBot #922.
+- **Long tool link fields and vendor refusals are cut between characters.** A cut at 400 that landed
+  inside an emoji left half of it behind; it now drops the half. The credential is still taken out
+  before anything is cut. From upstream #919.
+- **A Composio Gmail send's approval names its recipients.** `GMAIL_SEND_EMAIL` and
+  `GMAIL_REPLY_TO_THREAD` address people as `recipient_email` and `extra_recipients`, which were not
+  read, so an "always allow" for one email covered every later email to anybody. The audience is now
+  the recipients. From upstream #943.
+
 ## 0.2.5
 
 - **The web chat gets the local-app and desktop tools.** Talking to a coworker in the browser now

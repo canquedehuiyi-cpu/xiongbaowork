@@ -54,6 +54,7 @@ import {
   useComposioClient,
 } from "../src/plugins/composio";
 import { redirectUriFor } from "../src/plugins/oauth";
+import { createPluginRoutes } from "../src/plugins/routes";
 import {
   type AccessToken,
   CustomServerRefusedError,
@@ -62,6 +63,7 @@ import {
   INVALID_CLIENT,
   isDeploymentFault,
   type OAuthClient,
+  OAuthClientReadError,
   PluginInvariantError,
   PluginRefusedError,
   type PluginStore,
@@ -2931,6 +2933,296 @@ describe("a dynamic client the vendor has evicted", () => {
       expect(registrations).toEqual([]);
     }));
 
+  /*
+   * A replica that cannot read the deployment's client must not register around it (upstream #922).
+   *
+   * The client is ONE row shared by every replica. Reading "I could not decrypt it" as "there is
+   * none" sends the vendor a fresh registration and points the server row at it, which replaces the
+   * client for every replica that could still read the old one — and every grant issued to the old
+   * one stops working. Missing or revoked is none; a read or decryption fault is a fault.
+   */
+
+  /** Every `mcp.oauth_client_read_failed` row for this server written since the run began. */
+  const readFailureRows = () =>
+    database
+      .select()
+      .from(auditEvents)
+      .where(
+        and(
+          eq(auditEvents.eventType, "mcp.oauth_client_read_failed"),
+          eq(auditEvents.targetId, dynamicServerId),
+          sinceThisRun(),
+        ),
+      );
+
+  /** The Connect route over a given store, signed in as the suite's person (platform frame). */
+  function connectRoutes(over: PluginStore) {
+    const routes = createPluginRoutes(
+      over,
+      async (context, next) => {
+        context.set("actor", {
+          id: dynamicUserId,
+          email: "person@openbot.test",
+          role: "user",
+        } as never);
+        // The suite's server row and client are planted in the platform frame, so that is the frame
+        // the route reads them in. The person-frame write is pinned by its own test below.
+        await asPlatform(() => next());
+      },
+      async () => false,
+      {
+        encryptionKey: DYNAMIC_KEY,
+        publicUrl: "https://openbot.test",
+        appUrl: "https://openbot.test",
+        personHasAccess: async () => true,
+      },
+    );
+    const escaped: unknown[] = [];
+    routes.onError((error) => {
+      escaped.push(error);
+      return new Response("escaped", { status: 500 });
+    });
+    const press = () =>
+      routes.request(`http://openbot.test/servers/${dynamicServerId}/connect`, {
+        method: "POST",
+      });
+    return { press, escaped };
+  }
+
+  /** A store that reads the vault through `vault` with `key`, otherwise the suite's own. */
+  const storeReading = (over: typeof vault, key: string): PluginStore =>
+    createPluginStore({
+      database,
+      auditStore: createAuditStore(database),
+      credentials: over,
+      encryptionKey: key,
+      policy: () => policy,
+      ...seams,
+      redirectUri: REDIRECT_URI,
+    });
+
+  const WRONG_KEY = Buffer.alloc(32, 1).toString("base64");
+
+  test("Connect does not misclassify a vendor registration fault as a client read failure", () =>
+    asPlatform(async () => {
+      await clearClient();
+      registrations.length = 0;
+      const previousIssue = issue;
+      const vendorFailure = new Error("vendor registration unavailable");
+      issue = () => {
+        throw vendorFailure;
+      };
+      const before = await readFailureRows();
+      const { press, escaped } = connectRoutes(dynamicStore);
+      try {
+        const response = await press();
+        expect(response.status).toBe(500);
+        expect(escaped).toEqual([vendorFailure]);
+        expect(registrations).toHaveLength(1);
+        expect(await readFailureRows()).toHaveLength(before.length);
+      } finally {
+        issue = previousIssue;
+        await putClient(EVICTED);
+      }
+    }));
+
+  for (const fault of ["wrong-key", "reader-fault"] as const) {
+    test(`Connect audits a client read fault (${fault}) without replacing or exposing it`, () =>
+      asPlatform(async () => {
+        await putClient(EVICTED);
+        registrations.length = 0;
+        issue = () => FRESH;
+        const sentinel = "private-client-secret-must-not-escape";
+        const beforeEvents = await readFailureRows();
+        const [before] = await database
+          .select({ credentialId: mcpServers.credentialId })
+          .from(mcpServers)
+          .where(eq(mcpServers.id, dynamicServerId));
+        const failingStore = storeReading(
+          fault === "reader-fault"
+            ? {
+                ...vault,
+                readSecret: async () => {
+                  throw new Error(sentinel);
+                },
+              }
+            : vault,
+          fault === "wrong-key" ? WRONG_KEY : DYNAMIC_KEY,
+        );
+        const { press, escaped } = connectRoutes(failingStore);
+        const said: string[] = [];
+        const realError = console.error;
+        console.error = (...args: unknown[]) => {
+          said.push(args.map(String).join(" "));
+        };
+        try {
+          const response = await press();
+          console.error = realError;
+          const body = await response.text();
+          // The operator's only clue is the fault's name, never its message, which can quote the
+          // stored client.
+          expect(
+            said
+              .filter((line) => line.includes("mcp-oauth-client-read-failed"))
+              .map((line) => JSON.parse(line)),
+          ).toEqual([
+            {
+              type: "mcp-oauth-client-read-failed",
+              server: dynamicServerId,
+              error: fault === "wrong-key" ? "OperationError" : "Error",
+            },
+          ]);
+          expect(said.join("\n")).not.toContain(sentinel);
+          expect(response.status).toBe(503);
+          expect(JSON.parse(body)).toEqual({
+            error:
+              "暂时无法连接 Notion。请稍后重试；如果一直这样，请联系管理员。",
+          });
+          expect(escaped).toEqual([]);
+
+          const written = (await readFailureRows()).filter(
+            (event) => !beforeEvents.some((seen) => seen.id === event.id),
+          );
+          expect(written).toHaveLength(1);
+          expect(written[0]).toMatchObject({
+            targetType: "mcp_server",
+            targetId: dynamicServerId,
+            payload: {
+              actor: dynamicUserId,
+              server: dynamicServerId,
+              operation: "connect",
+              reason: "credential_read_failed",
+            },
+          });
+          expect(body + JSON.stringify(written)).not.toContain(sentinel);
+
+          const [after] = await database
+            .select({ credentialId: mcpServers.credentialId })
+            .from(mcpServers)
+            .where(eq(mcpServers.id, dynamicServerId));
+          expect(registrations).toEqual([]);
+          expect(after?.credentialId).toBe(before?.credentialId);
+          expect(await dynamicStore.oauthClientFor(dynamicServerId)).toEqual(
+            EVICTED,
+          );
+        } finally {
+          console.error = realError;
+          await putClient(EVICTED);
+        }
+      }));
+  }
+
+  test("the read-failure row a person's Connect writes is filed in that person's tenant", async () => {
+    await runAsTenant(dynamicUserId, () =>
+      dynamicStore.recordOAuthClientReadFailure({
+        serverId: dynamicServerId,
+        actorId: dynamicUserId,
+      }),
+    );
+    const rows = await asPlatform(() =>
+      database
+        .select({
+          tenantId: auditEvents.tenantId,
+          payload: auditEvents.payload,
+        })
+        .from(auditEvents)
+        .where(
+          and(
+            eq(auditEvents.eventType, "mcp.oauth_client_read_failed"),
+            eq(auditEvents.targetId, dynamicServerId),
+            eq(auditEvents.tenantId, dynamicUserId),
+            sinceThisRun(),
+          ),
+        ),
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.payload).toEqual({
+      actor: dynamicUserId,
+      server: dynamicServerId,
+      operation: "connect",
+      reason: "credential_read_failed",
+    });
+  });
+
+  for (const where of ["before-lock", "under-lock"] as const) {
+    test(`a client decryption fault ${where} does not replace the deployment's client`, () =>
+      asPlatform(async () => {
+        await putClient(EVICTED);
+        registrations.length = 0;
+        issue = () => FRESH;
+        const [before] = await database
+          .select({ credentialId: mcpServers.credentialId })
+          .from(mcpServers)
+          .where(eq(mcpServers.id, dynamicServerId));
+        // The first read can find no row while the read under the lock finds one. Neither may take a
+        // decryption failure as permission to register over the working client.
+        const wrongKeyStore = storeReading(
+          where === "under-lock"
+            ? { ...vault, readSecret: async () => null }
+            : vault,
+          WRONG_KEY,
+        );
+        const realError = console.error;
+        console.error = () => {};
+        try {
+          const outcome = await wrongKeyStore
+            .ensureOAuthClient(dynamicServerId, "someone@openbot.test")
+            .then(
+              () => "returned",
+              (error: unknown) =>
+                error instanceof OAuthClientReadError ? "read-error" : error,
+            );
+          console.error = realError;
+          const [after] = await database
+            .select({ credentialId: mcpServers.credentialId })
+            .from(mcpServers)
+            .where(eq(mcpServers.id, dynamicServerId));
+          expect({
+            outcome,
+            registrations: registrations.length,
+            pointerUnchanged: before?.credentialId === after?.credentialId,
+            client: await dynamicStore.oauthClientFor(dynamicServerId),
+          }).toEqual({
+            outcome: "read-error",
+            registrations: 0,
+            pointerUnchanged: true,
+            client: EVICTED,
+          });
+        } finally {
+          console.error = realError;
+          await putClient(EVICTED);
+        }
+      }));
+  }
+
+  test("a client that decrypts and is not JSON is none, and nothing of it is thrown", () =>
+    asPlatform(async () => {
+      const plaintext = "bare-client-secret-not-json";
+      await clientFixture.retireClients();
+      const [row] = await database
+        .insert(credentials)
+        .values({
+          kind: "mcp_oauth_client",
+          provider: dynamicServerId,
+          keyId: `oauth-client-${dynamicServerId}`,
+          metadata: {},
+          encryptedValue: await encryptSecret(DYNAMIC_KEY, plaintext),
+        })
+        .returning({ id: credentials.id });
+      if (!row) throw new Error("client was not stored");
+      clientFixture.track(row.id);
+      await database
+        .update(mcpServers)
+        .set({ credentialId: row.id })
+        .where(eq(mcpServers.id, dynamicServerId));
+      try {
+        // Missing, revoked and unparseable all answer null; only a fault throws.
+        expect(await dynamicStore.oauthClientFor(dynamicServerId)).toBeNull();
+      } finally {
+        await putClient(EVICTED);
+      }
+    }));
+
   test("a dynamic entry with no client gets one, kept and recorded", () =>
     asPlatform(async () => {
       await clearClient();
@@ -5008,9 +5300,12 @@ test("SEC1: a connector call the gate refuses or holds never reaches the vendor"
         asked.push(candidate);
         if (answer === "refuse") throw new ApprovalRefusedError(TOOL_DISABLED);
         if (answer === "hold")
-          throw new HeadlessToolSuspension("This action is waiting for your approval.", {
-            kind: "approval",
-          });
+          throw new HeadlessToolSuspension(
+            "This action is waiting for your approval.",
+            {
+              kind: "approval",
+            },
+          );
         return undefined;
       },
     });
@@ -5036,7 +5331,9 @@ test("SEC1: a connector call the gate refuses or holds never reaches the vendor"
     await expect(call()).rejects.toBeInstanceOf(HeadlessToolSuspension);
     expect(executed).toBe(0);
     expect(
-      auditStore.recorded().filter((event) => event.eventType === "mcp.call_succeeded"),
+      auditStore
+        .recorded()
+        .filter((event) => event.eventType === "mcp.call_succeeded"),
     ).toEqual([]);
     expect(asked.map((candidate) => candidate.toolRef)).toEqual([
       "gmail/GMAIL_FETCH_EMAILS",
