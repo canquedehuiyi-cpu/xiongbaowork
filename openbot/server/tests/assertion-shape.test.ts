@@ -947,6 +947,25 @@ const ALLOW: Allowed[] = [
     finding: "NEW (round 2 did not find this)",
   },
   {
+    file: "server/tests/plugin-catalogue.test.ts",
+    shape: "b",
+    context: [
+      '"what a check-in may read"',
+      '"a tool nothing labelled is not a check-in read, even where chat infers a read"',
+    ],
+    expression: 'expect(linear?.readTools).toBeUndefined()',
+    finding: "NEW (round 2 did not find this)",
+  },
+  {
+    file: "server/tests/plugin-store.integration.test.ts",
+    shape: "b",
+    context: [
+      '"a tool carrying no label at all is not in a check-in\'s tools, and the store refuses a check-in\'s call to it, though chat still reads it"',
+    ],
+    expression: 'expect(catalogueEntry("linear")?.readTools).toBeUndefined()',
+    finding: "NEW (round 2 did not find this)",
+  },
+  {
     file: "server/tests/shared-computer-run.integration.test.ts",
     shape: "b",
     context: [
