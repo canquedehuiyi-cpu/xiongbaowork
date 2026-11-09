@@ -99,16 +99,16 @@ function uploads(fake: FakeRepo, dir: string) {
 
 test("a stable release gets the signed installer under its own name and its fixed name, and its updater signature, in one upload", () => {
   const fake = repo();
-  const { dir } = job("0.3.0");
-  const result = publish(fake, dir, "v0.3.0");
+  const { dir } = job("0.2.5");
+  const result = publish(fake, dir, "v0.2.5");
   expect(result.code).toBe(0);
-  expect(fake.calls()[0]).toBe("gh release view v0.3.0 -R CopilotKit/OpenBot");
-  expect(fake.calls()[1]).toStartWith("gh release upload v0.3.0 ");
+  expect(fake.calls()[0]).toBe("gh release view v0.2.5 -R CopilotKit/OpenBot");
+  expect(fake.calls()[1]).toStartWith("gh release upload v0.2.5 ");
   expect(fake.calls()[1]).toEndWith(" --clobber");
   expect(uploads(fake, dir)).toEqual([
-    "OpenBot_0.3.0_x64-setup.exe=signed",
+    "OpenBot_0.2.5_x64-setup.exe=signed",
     "OpenBot-windows-x64-setup.exe=signed",
-    "OpenBot_0.3.0_x64-setup.exe.sig=sig-windows",
+    "OpenBot_0.2.5_x64-setup.exe.sig=sig-windows",
     `latest.json=${fake.file("latest.json")}`,
   ]);
 });
@@ -117,13 +117,13 @@ test("a stable release gets the signed installer under its own name and its fixe
 // alone. The installer the updater runs on Windows is the signed -setup.exe itself.
 test("a stable release lists its signed installer in latest.json for Windows", () => {
   const fake = repo();
-  const { dir } = job("0.3.0");
-  expect(publish(fake, dir, "v0.3.0").code).toBe(0);
+  const { dir } = job("0.2.5");
+  expect(publish(fake, dir, "v0.2.5").code).toBe(0);
   const feed = JSON.parse(fake.file("latest.json"));
-  expect(feed.version).toBe("0.3.0");
+  expect(feed.version).toBe("0.2.5");
   expect(feed.platforms).toEqual({
     "windows-x86_64": {
-      url: "https://github.com/CopilotKit/OpenBot/releases/download/v0.3.0/OpenBot_0.3.0_x64-setup.exe",
+      url: "https://github.com/CopilotKit/OpenBot/releases/download/v0.2.5/OpenBot_0.2.5_x64-setup.exe",
       signature: "sig-windows",
     },
   });
@@ -141,12 +141,12 @@ test("Windows signing keeps the Mac archives Mac signing already listed", () => 
   fake.attachFile(
     "latest.json",
     JSON.stringify({
-      ...feedFor("0.3.0", ["darwin-aarch64", "darwin-x86_64"]),
+      ...feedFor("0.2.5", ["darwin-aarch64", "darwin-x86_64"]),
       notes: "mac",
     }),
   );
-  const { dir } = job("0.3.0");
-  expect(publish(fake, dir, "v0.3.0").code).toBe(0);
+  const { dir } = job("0.2.5");
+  expect(publish(fake, dir, "v0.2.5").code).toBe(0);
   const feed = JSON.parse(fake.file("latest.json"));
   expect(Object.keys(feed.platforms).sort()).toEqual([
     "darwin-aarch64",
@@ -154,17 +154,17 @@ test("Windows signing keeps the Mac archives Mac signing already listed", () => 
     "windows-x86_64",
   ]);
   expect(feed.platforms["darwin-x86_64"]).toEqual(
-    feedFor("0.3.0").platforms["darwin-x86_64"],
+    feedFor("0.2.5").platforms["darwin-x86_64"],
   );
 });
 
 test("a feed left from another version keeps none of its platforms", () => {
   const fake = repo();
   fake.attachFile("latest.json", JSON.stringify(feedFor("0.2.9")));
-  const { dir } = job("0.3.0");
-  const result = publish(fake, dir, "v0.3.0");
+  const { dir } = job("0.2.5");
+  const result = publish(fake, dir, "v0.2.5");
   expect(result.code).toBe(0);
-  expect(result.out).toContain("describes version 0.2.9, not 0.3.0");
+  expect(result.out).toContain("describes version 0.2.9, not 0.2.5");
   expect(Object.keys(JSON.parse(fake.file("latest.json")).platforms)).toEqual([
     "windows-x86_64",
   ]);
@@ -172,11 +172,11 @@ test("a feed left from another version keeps none of its platforms", () => {
 
 test("an installer the updater could not verify is not attached", () => {
   const fake = repo();
-  const { dir } = job("0.3.0", undefined, false);
-  const result = publish(fake, dir, "v0.3.0");
+  const { dir } = job("0.2.5", undefined, false);
+  const result = publish(fake, dir, "v0.2.5");
   expect(result.code).toBe(1);
   expect(result.out).toContain(
-    "OpenBot_0.3.0_x64-setup.exe has no updater signature in artifacts.",
+    "OpenBot_0.2.5_x64-setup.exe has no updater signature in artifacts.",
   );
   expect(fake.calls().some((call) => call.includes("upload"))).toBe(false);
 });
@@ -184,15 +184,15 @@ test("an installer the updater could not verify is not attached", () => {
 // The workflow downloads the sign-update job's artifact into a folder of its own.
 test("the updater signature is found where the sign-update job's artifact was downloaded", () => {
   const fake = repo();
-  const { dir } = job("0.3.0", undefined, false);
+  const { dir } = job("0.2.5", undefined, false);
   mkdirSync(join(dir, "artifacts/updater-signature"));
   writeFileSync(
-    join(dir, "artifacts/updater-signature/OpenBot_0.3.0_x64-setup.exe.sig"),
+    join(dir, "artifacts/updater-signature/OpenBot_0.2.5_x64-setup.exe.sig"),
     "sig-windows",
   );
-  expect(publish(fake, dir, "v0.3.0").code).toBe(0);
+  expect(publish(fake, dir, "v0.2.5").code).toBe(0);
   expect(uploads(fake, dir)).toContain(
-    "OpenBot_0.3.0_x64-setup.exe.sig=sig-windows",
+    "OpenBot_0.2.5_x64-setup.exe.sig=sig-windows",
   );
   expect(
     JSON.parse(fake.file("latest.json")).platforms["windows-x86_64"].signature,
@@ -201,8 +201,8 @@ test("the updater signature is found where the sign-update job's artifact was do
 
 test("signing again by hand never moves Latest", () => {
   const fake = repo();
-  const { dir } = job("0.3.0");
-  expect(publish(fake, dir, "v0.3.0").code).toBe(0);
+  const { dir } = job("0.2.5");
+  expect(publish(fake, dir, "v0.2.5").code).toBe(0);
   expect(fake.calls().some((call) => call.startsWith("gh release edit"))).toBe(
     false,
   );
@@ -215,46 +215,46 @@ test("Windows signing that finishes after Mac signing makes the release Latest, 
   const fake = repo();
   fake.attachFile(
     "latest.json",
-    JSON.stringify(feedFor("0.3.0", ["darwin-aarch64", "darwin-x86_64"])),
+    JSON.stringify(feedFor("0.2.5", ["darwin-aarch64", "darwin-x86_64"])),
   );
   fake.attach(
-    "OpenBot_0.3.0_aarch64.dmg",
-    "OpenBot_0.3.0_x64.dmg",
+    "OpenBot_0.2.5_aarch64.dmg",
+    "OpenBot_0.2.5_x64.dmg",
     "OpenBot-mac-arm64.dmg",
     "OpenBot-mac-x64.dmg",
   );
-  const { dir } = job("0.3.0");
-  const result = publish(fake, dir, "v0.3.0", "true");
+  const { dir } = job("0.2.5");
+  const result = publish(fake, dir, "v0.2.5", "true");
   expect(result.code).toBe(0);
   const calls = fake.calls();
   const feedUpload = calls.reduce(
     (last, call, index) =>
       call.startsWith(
-        "gh release upload v0.3.0 -R CopilotKit/OpenBot latest.json",
+        "gh release upload v0.2.5 -R CopilotKit/OpenBot latest.json",
       )
         ? index
         : last,
     -1,
   );
   const promote = calls.indexOf(
-    "gh release edit v0.3.0 -R CopilotKit/OpenBot --latest",
+    "gh release edit v0.2.5 -R CopilotKit/OpenBot --latest",
   );
   expect(feedUpload).toBeGreaterThan(0);
   expect(promote).toBeGreaterThan(feedUpload);
-  expect(fake.latest()).toBe("v0.3.0");
+  expect(fake.latest()).toBe("v0.2.5");
   // What the apps read now lists the Mac archives and this installer.
   expect(result.out).toContain(
-    "serves latest.json for 0.3.0, for every platform.",
+    "serves latest.json for 0.2.5, for every platform.",
   );
 });
 
 test("Windows signing that finishes before Mac signing leaves the release not Latest", () => {
   const fake = repo();
-  const { dir } = job("0.3.0");
-  const result = publish(fake, dir, "v0.3.0", "true");
+  const { dir } = job("0.2.5");
+  const result = publish(fake, dir, "v0.2.5", "true");
   expect(result.code).toBe(0);
   expect(result.out).toContain(
-    "v0.3.0 is not Latest yet: it still needs the signed OpenBot-mac-arm64.dmg OpenBot-mac-x64.dmg.",
+    "v0.2.5 is not Latest yet: it still needs the signed OpenBot-mac-arm64.dmg OpenBot-mac-x64.dmg.",
   );
   expect(fake.calls().some((call) => call.startsWith("gh release edit"))).toBe(
     false,
@@ -264,12 +264,12 @@ test("Windows signing that finishes before Mac signing leaves the release not La
 
 test("a candidate pinned to its own release is attached, with no updater signature and no feed", () => {
   const fake = repo();
-  const { dir } = job("0.3.0-rc.1", "v0.3.0-rc.1");
-  const result = publish(fake, dir, "v0.3.0-rc.1");
+  const { dir } = job("0.2.5-rc.1", "v0.2.5-rc.1");
+  const result = publish(fake, dir, "v0.2.5-rc.1");
   expect(result.code).toBe(0);
-  expect(result.out).toContain("pinned to the images of v0.3.0-rc.1");
+  expect(result.out).toContain("pinned to the images of v0.2.5-rc.1");
   expect(uploads(fake, dir)).toEqual([
-    "OpenBot_0.3.0-rc.1_x64-setup.exe=signed",
+    "OpenBot_0.2.5-rc.1_x64-setup.exe=signed",
     "OpenBot-windows-x64-setup.exe=signed",
   ]);
   expect(fake.assets()).not.toContain("latest.json");
@@ -277,8 +277,8 @@ test("a candidate pinned to its own release is attached, with no updater signatu
 
 test("a build pinned to another release is not attached", () => {
   const fake = repo();
-  const { dir } = job("0.3.0-rc.1", "v0.3.0-rc.2");
-  const result = publish(fake, dir, "v0.3.0-rc.1");
+  const { dir } = job("0.2.5-rc.1", "v0.2.5-rc.2");
+  const result = publish(fake, dir, "v0.2.5-rc.1");
   expect(result.code).toBe(1);
   expect(fake.calls()).toEqual([]);
 });
@@ -286,20 +286,20 @@ test("a build pinned to another release is not attached", () => {
 // A run from a branch builds an internal version, named after its commit.
 test("a build of another version is not attached", () => {
   const fake = repo();
-  const { dir } = job("0.3.0-internal.gabcdef123456");
-  const result = publish(fake, dir, "v0.3.0");
+  const { dir } = job("0.2.5-internal.gabcdef123456");
+  const result = publish(fake, dir, "v0.2.5");
   expect(result.code).toBe(1);
   expect(result.out).toContain(
-    "The signed installer is version 0.3.0-internal.gabcdef123456, not 0.3.0.",
+    "The signed installer is version 0.2.5-internal.gabcdef123456, not 0.2.5.",
   );
   expect(fake.calls()).toEqual([]);
 });
 
 test("anything but exactly one installer is not attached", () => {
   const fake = repo();
-  const { dir, nsis } = job("0.3.0");
-  writeFileSync(join(nsis, "OpenBot_0.3.0_arm64-setup.exe"), "signed");
-  const result = publish(fake, dir, "v0.3.0");
+  const { dir, nsis } = job("0.2.5");
+  writeFileSync(join(nsis, "OpenBot_0.2.5_arm64-setup.exe"), "signed");
+  const result = publish(fake, dir, "v0.2.5");
   expect(result.code).toBe(1);
   expect(result.out).toContain("Expected one signed -setup.exe");
   expect(fake.calls().some((call) => call.includes("upload"))).toBe(false);
