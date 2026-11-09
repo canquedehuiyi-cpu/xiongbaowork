@@ -11,6 +11,7 @@ import { HttpAgent, type Message, type RunAgentInput } from "@ag-ui/client";
 import { LLMock } from "@copilotkit/aimock";
 import { turnInput } from "@openbot/toolkit/run-turn";
 import { of } from "rxjs";
+import { z } from "zod";
 import {
   buildAgents,
   type RegisteredAgent,
@@ -224,6 +225,48 @@ describe("a skill picked for a Bot on OpenBot's own harness", () => {
     expect(
       await sent([said("about coffee")], { [PICKED_SKILL_PROP]: "not-held" }),
     ).not.toContain(MARKER);
+  });
+
+  test("a picked skill that declares a tool SEC1 disabled does not bring it back", async () => {
+    /*
+     * A skill's tools are a declaration, never a grant, and SEC1 (`loadToolsForActor` in
+     * index.ts) filters the disabled ones out of what a run is granted before the agent is built.
+     * Picking the skill adds its instructions and nothing else: the disabled tool is still not
+     * something the model is offered.
+     */
+    const declaring: ToolSelection = {
+      loadSkills: async () => [
+        { ...PIRATE, tools: ["ledger/lookup", "ledger/wipe_everything"] },
+      ],
+      choose: async () => null,
+    };
+    // What SEC1 left: the one tool not disabled for this person and Bot.
+    const allowed = {
+      name: "ledger__lookup",
+      ref: "ledger/lookup",
+      description: "Looks up a ledger line.",
+      parameters: z.object({}),
+      execute: async () => "ok",
+    };
+    const agents = await buildAgents(
+      [builtInBot],
+      model,
+      "synthetic-key",
+      undefined,
+      async () => [allowed] as never,
+      undefined,
+      undefined,
+      undefined,
+      declaring,
+    );
+    const agent = agents[builtInBot.id]?.clone();
+    if (!agent) throw new Error("Bot missing");
+    agent.setMessages([said("/pirate-haiku look up the ledger")]);
+    await agent.runAgent();
+    const sentWire = wire.join("\n");
+    expect(sentWire).toContain(MARKER);
+    expect(sentWire).toContain("ledger__lookup");
+    expect(sentWire).not.toContain("wipe_everything");
   });
 });
 
