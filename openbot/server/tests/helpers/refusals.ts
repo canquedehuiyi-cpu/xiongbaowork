@@ -127,9 +127,6 @@ const TABLE = {
   /** `connectionFields`: a box whose answer could not be sent back, because it has no name. */
   fieldNameMissing: () =>
     /under the name nothing, which cannot be filled in here/,
-<<<<<<< fork
-
-=======
   /**
    * Personal-mode guard: the person asking has not connected their own account for this app.
    *
@@ -154,7 +151,6 @@ const TABLE = {
     new RegExp(
       `This Bot reaches more people than an admin approved for the shared ${app} account\\. An admin has been asked to approve it\\.`,
     ),
->>>>>>> v1.0.0
 };
 
 export type RefusalName = keyof typeof TABLE;
