@@ -62,6 +62,7 @@ import {
 import { readTeamBotConsent } from "@/lib/team-bots";
 import { cn } from "@/lib/utils";
 import { VOICE_CHAT_ACTIVITY, type VoiceChatEntry } from "@/lib/voice/archive";
+import { AppAccessRequestCard, readAppAccessCard } from "./app-access-card";
 import {
   BrowserActivity,
   groupBrowserSteps,
@@ -1359,6 +1360,9 @@ export function ServerToolLine({
   args?: string;
   result?: string;
 }) {
+  // 员工替对方申请访问某个应用：画成卡片，申请人可以在上面撤回（迁移 0153）。
+  const accessRequest = readAppAccessCard(name, result);
+  if (accessRequest) return <AppAccessRequestCard {...accessRequest} />;
   const { label, detail } = readToolName(name);
   /*
    * A refusal is not a result, and must not read like one.
