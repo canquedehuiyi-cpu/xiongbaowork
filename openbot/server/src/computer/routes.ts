@@ -2,30 +2,25 @@ import { downloadHeaders } from "@openbot/shared/file-download";
 import { isPersonBrowserId } from "@openbot/shared/openbot-browser";
 import type { Context, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
 import { z } from "zod";
 import {
   DESKTOP_REF,
   DESKTOP_WINDOW_ID,
 } from "@openbot/shared/desktop-control";
-import { downloadHeaders } from "@openbot/shared/file-download";
 import type { BotAccessCheck } from "../agents/profile-policy";
-import { ApprovalRefusedError } from "../approvals/types";
-=======
-import type { BotAccessCheck } from "../agents/profile-policy";
-import { ApprovalNeedsConversationError } from "../approvals/types";
->>>>>>> v1.0.0
+import {
+  ApprovalNeedsConversationError,
+  ApprovalRefusedError,
+} from "../approvals/types";
 import type { AuditReader } from "../audit";
 import type { AdminScope } from "../auth/admin-scope";
 import type { AppVariables } from "../auth/guards";
 import { requireAdmin } from "../auth/guards";
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
 import { DeviceActionError, DeviceOfflineError } from "../devices/channel";
 import { DeviceDeliveryError } from "../devices/queue";
 import { capabilityFor } from "../tenant/context";
 import { computerActionIdentity } from "./action-identity";
 import { CANDIDATE_REF } from "./app-discovery";
-=======
 import type { BotBrowser } from "../browser/bot-browser";
 import { ownsPersonBrowser } from "../browser/person";
 import { stampNarrationArrival } from "../browser/routes";
@@ -35,7 +30,6 @@ import {
   personSeat,
   seatText,
 } from "./computer-key";
->>>>>>> v1.0.0
 import { DEPLOYMENT_ROUTES } from "./deployment-routes";
 import {
   type ActionActor,
@@ -90,18 +84,16 @@ export function createComputerRoutes(
    */
   auditReader?: AuditReader,
   /**
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
    * The admin capability, for the dry-run's read of the whole trail as `platform` (G01-E P7).
    * Absent (a router built on its own in a test) the read stays in the caller's frame, which sees
    * only that caller's own rows; `createApp` always passes it when it can recognise an administrator.
    */
   adminScope?: Pick<AdminScope, "adminCapability" | "asAdminPlatform">,
-=======
+  /**
    * The bar above a Bot's screen and Record, for the person holding its wheel (browser/bot-browser.ts), at
    * `/:botId/browser`. Absent where this OpenBot has no Recorder: nothing about it is mounted.
    */
   botBrowser?: BotBrowser,
->>>>>>> v1.0.0
 ) {
   const routes = new Hono<{ Variables: AppVariables }>();
   const adminCapability: MiddlewareHandler<{ Variables: AppVariables }> =
@@ -926,6 +918,14 @@ export function createComputerRoutes(
    * A plain route has no conversation to ask in, so whatever the gate would ask about is refused
    * here; the browser sends those through the approval route, which can ask.
    */
+  /*
+   * The local apps and the desktop are a per-Bot option on the Bot owner's paired machine, found by
+   * the Bot alone (`resolveDevice`), so these routes do not ask which computer the Bot is seated on:
+   * the seat they hand on is only the Bot in the path, for the person asking.
+   */
+  const byBot = async (botId: string, personId: string) =>
+    personSeat(personId, botId);
+
   routes.get("/:botId/local-tools", async (context) =>
     context.json({
       allowed: await gateway.localToolsAllowed(
@@ -936,42 +936,42 @@ export function createComputerRoutes(
   );
 
   routes.post("/:botId/apps/list", (context) =>
-    act(context, (botId, actor, body, signal) => {
+    act(context, byBot, (seat, actor, body, signal) => {
       const input = toolInput(LOCAL_TOOL_INPUT.apps, body);
       if (!input.success) return badToolInput;
-      return gateway.listApps(botId, actor, input.data, signal);
+      return gateway.listApps(seat.botId, actor, input.data, signal);
     }),
   );
 
   routes.post("/:botId/apps/call", (context) =>
-    act(context, (botId, actor, body, signal) => {
+    act(context, byBot, (seat, actor, body, signal) => {
       const input = toolInput(LOCAL_TOOL_INPUT.appCall, body);
       if (!input.success) return badToolInput;
-      return gateway.callApp(botId, actor, input.data, signal);
+      return gateway.callApp(seat.botId, actor, input.data, signal);
     }),
   );
 
   routes.post("/:botId/apps/enable", (context) =>
-    act(context, (botId, actor, body, signal) => {
+    act(context, byBot, (seat, actor, body, signal) => {
       const input = toolInput(LOCAL_TOOL_INPUT.appEnable, body);
       if (!input.success) return badToolInput;
-      return gateway.enableApp(botId, actor, input.data, signal);
+      return gateway.enableApp(seat.botId, actor, input.data, signal);
     }),
   );
 
   routes.post("/:botId/desktop/windows", (context) =>
-    act(context, (botId, actor, body, signal) => {
+    act(context, byBot, (seat, actor, body, signal) => {
       const input = toolInput(LOCAL_TOOL_INPUT.desktopWindows, body);
       if (!input.success) return badToolInput;
-      return gateway.listDesktopWindows(botId, actor, signal);
+      return gateway.listDesktopWindows(seat.botId, actor, signal);
     }),
   );
 
   routes.post("/:botId/desktop/snapshot", (context) =>
-    act(context, (botId, actor, body, signal) => {
+    act(context, byBot, (seat, actor, body, signal) => {
       const input = toolInput(LOCAL_TOOL_INPUT.desktopSnapshot, body);
       if (!input.success) return badToolInput;
-      return gateway.snapshotDesktop(botId, actor, input.data, signal);
+      return gateway.snapshotDesktop(seat.botId, actor, input.data, signal);
     }),
   );
 
@@ -1212,21 +1212,14 @@ async function act(
   > | null;
 
   try {
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
     const identity =
       context.req.header("idempotency-key") ??
       (typeof body?.toolCallId === "string" ? body.toolCallId : "");
     if (identity.length > 200)
       return context.json({ error: "The action id is too long." }, 400);
+    const seat = await seatFor(botId, record.id);
     const result = await computerActionIdentity.run(identity, () =>
-      handler(botId, actorOf(record), body, context.req.raw.signal),
-=======
-    const result = await handler(
-      await seatFor(botId, record.id),
-      actorOf(record),
-      body,
-      context.req.raw.signal,
->>>>>>> v1.0.0
+      handler(seat, actorOf(record), body, context.req.raw.signal),
     );
     if (isBadRequest(result)) {
       return context.json(result, 400);

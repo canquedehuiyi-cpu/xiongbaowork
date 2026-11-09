@@ -1679,11 +1679,7 @@ async fn prepare_installation_inner(
         let saved = preparation::saved_engine(&root);
         let address = tauri::async_runtime::block_on(engine_ready(&app, saved))?.pin()?;
         attempt.require_current()?;
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
         tauri::async_runtime::block_on(deployment_ready_for_generation(&app, &root, attempt.generation))?;
-        let picked = harness::picked(harness.as_ref(), &root).map_err(Problem::from)?;
-=======
-        tauri::async_runtime::block_on(deployment_ready(&app, &root))?;
         // Saved once the folder is there, before any image is pulled into the engine. Every later
         // install and start uses this engine: see `preparation::saved_engine`.
         if saved.is_none() {
@@ -1693,7 +1689,6 @@ async fn prepare_installation_inner(
         // before anything is created under it. See `stack::project`.
         stack::project(&address, &root)?;
         harness::picked(harness.as_ref(), &root).map_err(Problem::from)?;
->>>>>>> v1.0.0
         let handle = app.clone();
         let _startup = attempt.lock_current()?;
         if preparation::require(&root, Some(&harness), &address).is_ok() {
@@ -1715,36 +1710,6 @@ async fn prepare_installation_inner(
         if let Some(problem) = stack::deployment_problem(&root) {
             return Err(Problem::from(problem));
         }
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
-        report_running(
-            &handle,
-            "dependencies",
-            "Preparing the app's dependencies.",
-            None,
-        );
-        preparation::install_dependencies_if_needed(&root, || {
-            report_running(
-                &handle,
-                "dependencies",
-                "Preparing the local runtime.",
-                None,
-            );
-            let bun = installation_bun(&root)?;
-            report_running(
-                &handle,
-                "dependencies",
-                "Installing the app's packages.",
-                None,
-            );
-            Ok(bun)
-        })?;
-        report(
-            &handle,
-            "dependencies",
-            true,
-            "The app's dependencies are installed.",
-        );
-=======
         /*
          * NO BUN, NO `bun install`, NO APP BUILD.
          *
@@ -1755,7 +1720,6 @@ async fn prepare_installation_inner(
          * small files it writes. Nothing on the host needs them now: the person's own browser runs
          * on the one computer, from its image, with the Recorder built into that image.
          */
->>>>>>> v1.0.0
         report_running(
             &handle,
             "images",
@@ -2062,9 +2026,9 @@ fn linux_server_user(engine: engine::Engine, uid: u32, gid: u32) -> String {
 
 /// Install the latest published deployment on first use, then keep its recorded version.
 ///
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
-/// Local preparation fetches the manifest needed by both launch and plan sign-in images.
-/// An installed deployment keeps its exact tag without consulting GitHub again.
+/// Local preparation fetches the manifest needed by both launch and plan sign-in images. An
+/// installed deployment keeps its exact release without consulting GitHub again; one that is not
+/// this app's own release is left exactly as it is, for Start to upgrade (see `upgrade`).
 #[cfg(test)]
 async fn deployment_ready<R: tauri::Runtime>(app: &tauri::AppHandle<R>, root: &Path) -> Result<(), Problem> {
     let generation = app.state::<Shell>().start_generation.load(std::sync::atomic::Ordering::SeqCst);
@@ -2073,14 +2037,6 @@ async fn deployment_ready<R: tauri::Runtime>(app: &tauri::AppHandle<R>, root: &P
 
 async fn deployment_ready_for_generation<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>, root: &Path, generation: u64,
-=======
-/// Local preparation fetches the manifest needed by both launch and plan sign-in images. An
-/// installed deployment keeps its exact release without consulting GitHub again; one that is not
-/// this app's own release is left exactly as it is, for Start to upgrade (see `upgrade`).
-async fn deployment_ready<R: tauri::Runtime>(
-    app: &tauri::AppHandle<R>,
-    root: &Path,
->>>>>>> v1.0.0
 ) -> Result<(), Problem> {
     if let Some(planned) = upgrade::due(root, &upgrade::own()) {
         report(
@@ -2135,17 +2091,9 @@ async fn deployment_ready<R: tauri::Runtime>(
                 format!("Downloading OpenBot {version}."),
                 None,
             );
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
             let stage_context = prepared_context.as_ref().ok_or("UNVERIFIED_PUBLICATION_CONTEXT")?;
             deployment::fetch_staged(stage_context, &version, &mut current)?;
             return Err("PUBLICATION_UNAVAILABLE".into());
-=======
-            // A pinned build lays out the commit it was cut from; any other release is a tag.
-            match deployment::pinned().filter(|pin| pin.version == version) {
-                Some(pin) => deployment::fetch_pinned(&target, &pin)?,
-                None => deployment::fetch(&target, &version)?,
-            }
->>>>>>> v1.0.0
         }
         Ok::<_, String>(version)
     })
@@ -6336,21 +6284,6 @@ fn cancel_model_oauth(attempt_id: String) {
     openbot_desktop_lib::provider_oauth::cancel(&attempt_id);
 }
 
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
-/// `bun` from PATH, or the places an installer puts it when PATH has not been reloaded.
-// Explicit Install only. Discovery reads candidate locators, never executes a
-// bare command. The library classifies the exact locator before its first probe.
-fn installation_bun(root: &Path) -> Result<PathBuf, Problem> {
-    let path = std::env::var_os("PATH");
-    let home = std::env::var("HOME")
-        .or_else(|_| std::env::var("USERPROFILE"))
-        .ok()
-        .map(PathBuf::from);
-    let cwd = std::env::current_dir().map_err(|error| {
-        Problem::with("OpenBot could not locate its app runtime safely.", error.to_string())
-    })?;
-    install::ensure_bun_from_search(root, path.as_deref(), home.as_deref(), &cwd)
-=======
 /// One Intelligence CLI call for the local evaluation. Returns only the normalized report or a
 /// static failure category; the CLI's own output never reaches the window. `attempt` names the
 /// call so `cancel_local_eval` can stop it, including before it has started.
@@ -6374,7 +6307,6 @@ async fn run_local_eval(
     .map_err(|_| local_eval::Failure::Spawn)??;
     learn_dashboards(&app, report.stack.iter());
     Ok(report)
->>>>>>> v1.0.0
 }
 
 /// What `run_local_eval` answers the window for one CLI call, from the installed CLI.
@@ -14938,11 +14870,7 @@ fn main() {
         .unwrap();
         assert_eq!(
             settings.get("TENANT_PACKAGE_DIR").map(String::as_str),
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
             Some(openbot_env::DEFAULT_TENANT_PACKAGE_DIR)
-=======
-            Some("../examples/personal")
->>>>>>> v1.0.0
         );
         // The personal edition raises no bundled Bot, so none is advertised, whatever the model.
         assert_eq!(
@@ -14973,12 +14901,7 @@ fn main() {
             serde_json::json!({
                 "case":case, "composeUp":up, "commands":commands, "intentionalMigrationBarrier":true,
                 "publicSettings":settings,
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
-                "defaultPackage":openbot_env::DEFAULT_TENANT_PACKAGE_DIR, "remoteEndpointPersistedAndConsumed":asked,
-                "actualAskIpcResponse":asked.then_some("D53-BYO-REMOTE-ANSWER"),
-=======
-                "defaultPackage":"../examples/fintech",
->>>>>>> v1.0.0
+                "defaultPackage":openbot_env::DEFAULT_TENANT_PACKAGE_DIR,
                 "noHostStartup":true, "nativeGui":false, "realEngineOrDatabase":false,
             })
         );
@@ -15226,69 +15149,10 @@ fn main() {
 
     fn write_installed_deployment(root: &Path) {
         const DEPLOYMENT_VERSION: &str = "v0.0.8";
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
-        std::fs::create_dir_all(root.join("server")).unwrap();
-        std::fs::create_dir_all(root.join("app")).unwrap();
-        std::fs::create_dir_all(root.join("worker")).unwrap();
-        std::fs::create_dir_all(root.join("shared")).unwrap();
-        std::fs::create_dir_all(root.join("toolkit")).unwrap();
-        std::fs::write(root.join("docker-compose.yml"), "services: {}\n").unwrap();
-        std::fs::write(
-            root.join("app/package.json"),
-            r#"{"scripts":{"serve":"vite preview"}}"#,
-        )
-        .unwrap();
-        // A finished fetch: all five stack images, digest-pinned, with the success stamp.
-        test_support::installed_release(root, DEPLOYMENT_VERSION, []);
-        for package in ["", "server", "worker", "shared", "toolkit"] {
-            std::fs::write(root.join(package).join("package.json"), "{}").unwrap();
-        }
-        std::fs::write(root.join("bun.lock"), "synthetic-lock").unwrap();
-        preparation::record_dependencies(root, Path::new("bun")).unwrap();
-=======
         std::fs::create_dir_all(root).unwrap();
         std::fs::write(root.join("docker-compose.yml"), INSTALLED_COMPOSE).unwrap();
-        let images = deployment::Images {
-            version: DEPLOYMENT_VERSION.into(),
-            images: std::collections::BTreeMap::from([
-                (
-                    "server".into(),
-                    deployment::Image {
-                        reference: "localhost/openbot-server@sha256:00".into(),
-                    },
-                ),
-                (
-                    "supervisor".into(),
-                    deployment::Image {
-                        reference: "localhost/openbot-supervisor@sha256:00".into(),
-                    },
-                ),
-                (
-                    "agent-computer".into(),
-                    deployment::Image {
-                        reference: "localhost/openbot-agent-computer@sha256:00".into(),
-                    },
-                ),
-                (
-                    "agent-bot".into(),
-                    deployment::Image {
-                        reference: "localhost/openbot-agent-bot@sha256:00".into(),
-                    },
-                ),
-                (
-                    "agent-langgraph".into(),
-                    deployment::Image {
-                        reference: "localhost/openbot-agent-langgraph@sha256:00".into(),
-                    },
-                ),
-            ]),
-        };
-        std::fs::write(
-            deployment::images_path(root),
-            serde_json::to_string(&images).unwrap(),
-        )
-        .unwrap();
-        deployment::record(root, DEPLOYMENT_VERSION, false).unwrap();
+        // A finished fetch: all five stack images, digest-pinned, with the success stamp.
+        test_support::installed_release(root, DEPLOYMENT_VERSION, []);
         // Installed by this app, so its Compose project is decided and recorded already. Choosing
         // one is `stack::project`'s, tested in `stack`.
         std::fs::write(
@@ -15296,7 +15160,6 @@ fn main() {
             serde_json::json!({ "project": stack::DESKTOP_PROJECT }).to_string(),
         )
         .unwrap();
->>>>>>> v1.0.0
         preparation::record(root, None, vec!["fixture-image".into()]).unwrap();
     }
 
