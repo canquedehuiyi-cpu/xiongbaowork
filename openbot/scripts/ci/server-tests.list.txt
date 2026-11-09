@@ -51,6 +51,7 @@ tests/approval-outcomes-for-person.test.ts
 tests/approval-recovery-port.integration.test.ts
 tests/approval-recovery-port.test.ts
 tests/approvals-ask-once.test.ts
+tests/approvals-confirm-receipt.test.ts
 tests/approvals-consequential.integration.test.ts
 tests/approvals-continuation-protocol.test.ts
 tests/approvals-continuation-recovery.test.ts
@@ -73,6 +74,7 @@ tests/approvals-saved-call.test.ts
 tests/approvals-store.integration.test.ts
 tests/approvals-zh-handoff.test.ts
 tests/approvals.test.ts
+tests/apps-page-wording.test.ts
 tests/ask-person-free-text.integration.test.ts
 tests/ask-person-one-part.integration.test.ts
 tests/assertion-shape.test.ts
@@ -156,6 +158,10 @@ tests/composio-broker-seam.test.ts
 tests/composio-classify.test.ts
 tests/composio-connection-kinds.test.ts
 tests/composio-connections.test.ts
+tests/composio-deployment-client-lapse.integration.test.ts
+tests/composio-deployment-client-routes.test.ts
+tests/composio-deployment-client.integration.test.ts
+tests/composio-deployment-client.test.ts
 tests/composio-file-parameters.test.ts
 tests/composio-gmail-listing.test.ts
 tests/composio-live.test.ts
@@ -303,6 +309,8 @@ tests/intelligence-expected-answers.test.ts
 tests/intelligence-memory.test.ts
 tests/isolated-bots.integration.test.ts
 tests/jsonb-encoding.integration.test.ts
+tests/key-guide-link.test.ts
+tests/key-only-apps.test.ts
 tests/knowledge-base.integration.test.ts
 tests/knowledge-tools.test.ts
 tests/last-sign-in-backfill.integration.test.ts
@@ -392,6 +400,8 @@ tests/personal-edition-defaults.test.ts
 tests/personal-handoff.integration.test.ts
 tests/personal-local-folders.integration.test.ts
 tests/picked-harness-auth.test.ts
+tests/picked-skill-tenancy.integration.test.ts
+tests/picked-skill.test.ts
 tests/pipeline-control.integration.test.ts
 tests/pipeline-decision.test.ts
 tests/pipeline-routes.test.ts
@@ -406,6 +416,7 @@ tests/platform-model-pool-routes.test.ts
 tests/platform-model-pool.integration.test.ts
 tests/platform-store.test.ts
 tests/plugin-call-args-validation.test.ts
+tests/plugin-catalogue-github-reads.test.ts
 tests/plugin-catalogue-market.test.ts
 tests/plugin-catalogue.test.ts
 tests/plugin-connect-lists-tools.integration.test.ts

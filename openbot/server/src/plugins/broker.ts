@@ -1,3 +1,5 @@
+import type { DeploymentClient } from "./deployment-clients";
+
 /**
  * What openbot needs of Composio the BROKER, as against Composio the transport.
  *
@@ -31,6 +33,12 @@ const FIELD_SCHEME_NAMES = [
   "BASIC",
   "BEARER_TOKEN",
   "BASIC_WITH_JWT",
+  /*
+   * A client-credentials grant, typed like the rest (upstream #950): the administrator types the
+   * fields the connection asks for, a store subdomain, and the client itself is the deployment's
+   * (`deployment-clients.ts`). Offered only when that client is held.
+   */
+  "S2S_OAUTH2",
 ] as const;
 
 export type FieldScheme = (typeof FIELD_SCHEME_NAMES)[number];
@@ -290,7 +298,15 @@ export type BrokerConnection =
   | { kind: "self-registering" }
   | { kind: "fields"; authScheme: FieldScheme }
   | { kind: "no-auth" }
-  | { kind: "unsupported"; reason: string };
+  | {
+      kind: "unsupported";
+      reason: string;
+      /**
+       * Set when the app publishes a server-to-server grant and nothing else this deployment can
+       * drive: a client stored for it makes it connectable (`withDeploymentClients`).
+       */
+      awaitsClient?: true;
+    };
 
 /**
  * One app in the catalogue, as much of Composio's toolkit listing as anything here reads.
@@ -335,6 +351,23 @@ export type AuthConfigOutcome = "created" | "standing" | "not-needed";
  * into each of those tests, and the first thing every one of them would do is find a way not to
  * dial.
  */
+/**
+ * Where the broker says an app's key is made (upstream #1297), held BESIDE the broker rather than on
+ * it (review M-6).
+ *
+ * Every method on {@link ComposioBroker} is a door whose failure reaches a person, and the adapter
+ * tests keep a table proving what each failure becomes there. This one's failures reach nobody: the
+ * key form reads any of them, and any delay, as "no link", and the map in `./key-guides` answers
+ * (`tests/key-guide-link.test.ts`). So it is its own object, and the table stays about the doors.
+ * Null where the broker published no link, which is most apps.
+ */
+export type KeyGuideSource = {
+  connectionGuideUrl(request: {
+    toolkit: string;
+    authScheme: FieldScheme;
+  }): Promise<string | null>;
+};
+
 export type ComposioBroker = {
   /** Every app the catalogue offers, which is what an administrator chooses from. */
   listApps(): Promise<BrokerApp[]>;
@@ -378,6 +411,12 @@ export type ComposioBroker = {
      * catalogue row the administrator chose, and a second derivation is a second answer.
      */
     connection: BrokerConnection;
+    /**
+     * This deployment's own OAuth client, for an app connected with a server-to-server grant, read
+     * out of the vault by the caller. The one config that is sent a secret; required for that
+     * scheme and refused without it. See `deployment-clients.ts`.
+     */
+    client?: DeploymentClient;
   }): Promise<AuthConfigOutcome>;
   /**
    * Drop this deployment's own auth configs for the app, which is what removing an app has to do.
@@ -476,7 +515,11 @@ export type ComposioBroker = {
   /**
    * Connect this person with the secret they typed, answering the account it made.
    *
-   * THE ONE CALL WHOSE IMPLEMENTATION MUST RETHROW WITH NO `cause`, WHICH IS AN INVERSION OF THE
+   * ONE OF THE TWO CALLS WHOSE IMPLEMENTATION MUST RETHROW WITH NO `cause` (the other is
+   * {@link ComposioBroker.ensureAuthConfig} for a server-to-server grant, which sends this
+   * deployment's own OAuth client; review M-5).
+   *
+   * THE FIRST CALL WHOSE IMPLEMENTATION HAD TO RETHROW WITH NO `cause`, WHICH IS AN INVERSION OF THE
    * STANDING RULE AND SAYS SO ON PURPOSE. The rule `composio-adapter.ts` states and every path here
    * keeps is that a vendor error is never logged and always carried as `cause`, precisely because
    * the object holds the request it was made for and whoever is reading a log rather than a page

@@ -26,7 +26,6 @@ import type { BotAccessCheck } from "./agents/profile-policy";
 import type { AgentProfileStore } from "./agents/profile-store";
 import { createAgentRoutes } from "./agents/routes";
 import { createApprovalRoutes } from "./approvals/routes";
-import { createAdminScope } from "./auth/admin-scope";
 import type { ApprovalService } from "./approvals/service";
 import {
   type AuditEventType,
@@ -42,6 +41,7 @@ import {
   recordPersonAuditEvent,
   recordPlatformAuditEvent,
 } from "./audit";
+import { createAdminScope } from "./auth/admin-scope";
 import { createDevRequireUser } from "./auth/dev-actor";
 import {
   type AppVariables,
@@ -111,13 +111,13 @@ import { identityRoutes } from "./identity/routes";
 import type { IdentityStore } from "./identity/store";
 import { createCapturePassOrigin } from "./intelligence-gateway-proxy";
 import {
-  createLearningRoutes,
-  type LearningAdminDependencies,
-} from "./learning/routes";
-import {
   type LearningModelEndpoint,
   mountLearningModelEndpoint,
 } from "./learning/model-endpoint";
+import {
+  createLearningRoutes,
+  type LearningAdminDependencies,
+} from "./learning/routes";
 import {
   createPersonalLearningRoutes,
   type PersonalLearningRouteDeps,
@@ -135,7 +135,7 @@ import type { SignInService } from "./passwords/service";
 import type { OnboardingStore } from "./people/onboarding";
 import { createProfileRoutes, type ProfileStore } from "./people/profile";
 import { MAX_PAGE, type PeopleStore } from "./people/store";
-import type { ComposioBroker } from "./plugins/broker";
+import type { ComposioBroker, KeyGuideSource } from "./plugins/broker";
 import { createPluginRoutes } from "./plugins/routes";
 import {
   isDeploymentFault,
@@ -179,8 +179,8 @@ import { createTeamBotRoutes } from "./team-bots/routes";
 import type { TeamBots } from "./team-bots/team-bots";
 import type { ProductTelemetry } from "./telemetry/product";
 import { createProductTelemetryRoutes } from "./telemetry/product-routes";
-import type { PackageStatusReader } from "./tenant-package";
 import { capabilityFor, runAsTenant } from "./tenant/context";
+import type { PackageStatusReader } from "./tenant-package";
 import {
   INSTRUCTIONS_LIMIT,
   InstructionsTooLongError,
@@ -438,7 +438,7 @@ export function createApp(
    * no app directory to offer, rather than one that lists apps nobody can connect.
    */
   // M3: upstream also passes a broker `provider` (Arcade); the fork's plugins keep Composio alone.
-  composio?: { broker: ComposioBroker },
+  composio?: { broker: ComposioBroker; guides?: KeyGuideSource },
   /** Native model OAuth stays server-side; callers hold only a separate local bearer. */
   modelProviderProxy?: ModelProviderProxy,
   userPreferences?: UserPreferencesStore,
