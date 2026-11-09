@@ -674,18 +674,18 @@ jobs:
         run: bun desktop-device/scripts/build-sidecar.ts
       - name: Bundle the unsigned NSIS installer
         working-directory: openbot/desktop-device
-        # Tauri downloads NSIS and nsis_tauri_utils.dll from GitHub Releases on the first bundle, and
-        # that host answers 504 at times. It caches what it fetched, and the compile is cached in
-        # target/, so a retry costs seconds; a real build failure still fails after three attempts.
+        # The bundler downloads NSIS from GitHub releases, which answered 504 intermittently and failed
+        # this job on PRs that touched nothing here. Retry only that failure; any other error throws.
         run: |
-          $attempt = 0
-          while ($true) {
-            $attempt++
-            ../desktop/node_modules/.bin/tauri build --ci --bundles nsis --config src-tauri/tauri.bundle.conf.json
+          for ($attempt = 1; $attempt -le 4; $attempt++) {
+            ../desktop/node_modules/.bin/tauri build --ci --bundles nsis --config src-tauri/tauri.bundle.conf.json 2>&1 | Tee-Object -Variable output
             if ($LASTEXITCODE -eq 0) { break }
-            if ($attempt -ge 3) { throw "tauri build exited $LASTEXITCODE after $attempt attempts" }
-            Write-Host "tauri build exited $LASTEXITCODE on attempt $attempt; retrying in $(15 * $attempt)s"
-            Start-Sleep -Seconds (15 * $attempt)
+            if ($attempt -lt 4 -and ($output | Out-String) -match 'http status: 5\d\d') {
+              Write-Host "NSIS download failed with a 5xx (attempt $attempt); retrying in 30s"
+              Start-Sleep -Seconds 30
+              continue
+            }
+            throw "tauri build exited $LASTEXITCODE"
           }
       - name: Check the installer's payload, product name and version, and that it is unsigned
         working-directory: openbot/desktop-device
