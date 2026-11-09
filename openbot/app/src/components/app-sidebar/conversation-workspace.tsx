@@ -7,6 +7,7 @@ import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import { SearchBox } from "@/components/layout/search-box";
 import { SegmentedTabs } from "@/components/layout/segmented-tabs";
 import { Button } from "@/components/ui/button";
+import { useSidebar } from "@/components/ui/sidebar";
 import {
   Empty,
   EmptyDescription,
@@ -420,10 +421,17 @@ function WorkspaceHeader({
   agentId,
   agent,
   name,
+  scope,
 }: {
   agentId: string | undefined;
   agent: AgentProfile | undefined;
   name: string;
+  /**
+   * Switch between this employee's conversations and every conversation, when there is an employee
+   * to narrow to. The upstream sidebar listed (and searched) every conversation; the column narrowed
+   * that to one employee and left no way back, so this is the way back.
+   */
+  scope?: { all: boolean; onChange: (all: boolean) => void; agentName: string };
 }) {
   return (
     <div className="flex h-[56px] shrink-0 items-center gap-[8px] px-[12px]">
@@ -441,6 +449,21 @@ function WorkspaceHeader({
       <span className="min-w-0 flex-1 truncate font-semibold text-[14px]">
         {name}
       </span>
+      {scope ? (
+        <button
+          aria-pressed={scope.all}
+          className="shrink-0 rounded-sm text-[12px] text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60"
+          onClick={() => scope.onChange(!scope.all)}
+          title={
+            scope.all
+              ? `只看${scope.agentName}的对话`
+              : "看所有员工的对话，并在其中搜索"
+          }
+          type="button"
+        >
+          {scope.all ? `只看${scope.agentName}` : "全部对话"}
+        </button>
+      ) : null}
       {agentId ? (
         <Link
           className="shrink-0 rounded-sm text-[12px] text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60"
@@ -455,32 +478,31 @@ function WorkspaceHeader({
 }
 
 /**
- * The middle column beside a conversation (description (1) of the parity brief): ~240px between the
- * sidebar and the chat, about one employee — its avatar, name and 「管理」 link, a 「对话任务 |
- * 自动任务」 switch, a count with 「+ 新建」, and the list.
- *
- * Whose? The employee a new conversation is addressed to, or the first member of the open one. A
- * conversation with nobody in it (or a roster that has not answered yet) shows every conversation
- * instead, so no conversation is ever unreachable from here.
- *
- * Renders nothing off the conversation routes.
+ * What the workspace column holds, wherever it is drawn: the header, the 「对话任务 | 自动任务」
+ * switch and the list, for one employee or (switched, or with nobody to narrow to) every
+ * conversation.
  */
-export function ConversationWorkspace() {
-  const focus = useConversationFocus();
+function WorkspaceBody({ focusAgentId }: { focusAgentId: string | undefined }) {
   const agents = useQuery(agentListQueryOptions());
   const [tab, setTab] = useState<WorkspaceTab>("chats");
-  if (!focus.active) return null;
-  const agentId = focus.agentId;
-  const agent = agentId
-    ? agents.data?.find((candidate) => candidate.id === agentId)
+  const [all, setAll] = useState(false);
+  const focused = focusAgentId
+    ? agents.data?.find((candidate) => candidate.id === focusAgentId)
     : undefined;
-  const name = agentId ? (agent?.name ?? "员工") : "全部对话";
+  const focusedName = focusAgentId ? (focused?.name ?? "员工") : "";
+  const agentId = all ? undefined : focusAgentId;
+  const agent = agentId ? focused : undefined;
+  const name = agentId ? focusedName : "全部对话";
   return (
-    <aside
-      aria-label={agentId ? `${name}的对话` : "全部对话"}
-      className="hidden w-[240px] shrink-0 flex-col border-border border-r bg-card md:flex"
-    >
-      <WorkspaceHeader agent={agent} agentId={agentId} name={name} />
+    <>
+      <WorkspaceHeader
+        agent={agent}
+        agentId={agentId}
+        name={name}
+        {...(focusAgentId
+          ? { scope: { all, onChange: setAll, agentName: focusedName } }
+          : {})}
+      />
       {agentId ? (
         <div className="px-[12px] pb-2">
           <SegmentedTabs
@@ -498,6 +520,65 @@ export function ConversationWorkspace() {
       ) : (
         <ConversationList agentId={agentId} agentName={name} />
       )}
+    </>
+  );
+}
+
+/**
+ * The middle column beside a conversation (description (1) of the parity brief): ~240px between the
+ * sidebar and the chat, about one employee — its avatar, name and 「管理」 link, a 「对话任务 |
+ * 自动任务」 switch, a count with 「+ 新建」, and the list.
+ *
+ * Whose? The employee a new conversation is addressed to, or the first member of the open one. A
+ * conversation with nobody in it (or a roster that has not answered yet) shows every conversation
+ * instead, so no conversation is ever unreachable from here.
+ *
+ * Renders nothing off the conversation routes.
+ */
+export function ConversationWorkspace() {
+  const focus = useConversationFocus();
+  const agents = useQuery(agentListQueryOptions());
+  if (!focus.active) return null;
+  const agentId = focus.agentId;
+  const name = agentId
+    ? (agents.data?.find((candidate) => candidate.id === agentId)?.name ??
+      "员工")
+    : undefined;
+  return (
+    <aside
+      aria-label={name ? `${name}的对话` : "全部对话"}
+      className="hidden w-[240px] shrink-0 flex-col border-border border-r bg-card md:flex"
+    >
+      {/* Remounted per employee, so switching to 全部对话 for one does not carry to the next. */}
+      <WorkspaceBody focusAgentId={agentId} key={agentId ?? "all"} />
     </aside>
+  );
+}
+
+/**
+ * The same list on a phone, inside the sidebar drawer.
+ *
+ * The column above is `md:flex` only, and on a phone the sidebar is a drawer (`Sheet`), so below
+ * 768px there was no way to reach an earlier conversation, search them, pin or delete one, or load
+ * older pages — all of which the upstream sidebar carried in that drawer. Drawn only on a phone, so
+ * a desktop never renders the list twice; off a conversation it lists every conversation, as the
+ * upstream drawer did. Following a link inside it closes the drawer, like leaving any sheet.
+ */
+export function MobileConversations() {
+  const { isMobile, setOpenMobile } = useSidebar();
+  const focus = useConversationFocus();
+  if (!isMobile) return null;
+  const agentId = focus.active ? focus.agentId : undefined;
+  return (
+    <section
+      aria-label="对话"
+      className="mt-3 flex max-h-[60vh] min-h-[240px] flex-col border-sidebar-border border-t"
+      onClickCapture={(event) => {
+        if ((event.target as HTMLElement).closest("a[href]"))
+          setOpenMobile(false);
+      }}
+    >
+      <WorkspaceBody focusAgentId={agentId} key={agentId ?? "all"} />
+    </section>
   );
 }
