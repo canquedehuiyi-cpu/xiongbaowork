@@ -46,7 +46,7 @@ pub fn initialize<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
         Some(())
     })();
     if initialized.is_none() {
-        eprintln!("[telemetry] local setup telemetry could not initialize");
+        log::warn!("[telemetry] local setup telemetry could not initialize");
         return;
     }
     record(
@@ -115,7 +115,7 @@ pub fn record<R: tauri::Runtime>(app: &tauri::AppHandle<R>, event: telemetry::Ev
         return;
     };
     if state.emitter.record(event).is_err() {
-        eprintln!("[telemetry] setup event could not be saved");
+        log::warn!("[telemetry] setup event could not be saved");
         return;
     }
     let emitter = Arc::clone(&state.emitter);
@@ -123,12 +123,12 @@ pub fn record<R: tauri::Runtime>(app: &tauri::AppHandle<R>, event: telemetry::Ev
         .name("openbot-telemetry".into())
         .spawn(move || {
             if emitter.flush().is_err() {
-                eprintln!("[telemetry] delivery deferred until the next flush");
+                log::warn!("[telemetry] delivery deferred until the next flush");
             }
         })
         .is_err()
     {
-        eprintln!("[telemetry] delivery deferred until the next flush");
+        log::warn!("[telemetry] delivery deferred until the next flush");
     }
 }
 
@@ -196,7 +196,7 @@ pub fn pull_completed<R: tauri::Runtime>(
 pub fn shutdown<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     if let Some(state) = app.try_state::<DesktopTelemetry>() {
         if state.emitter.shutdown().is_err() {
-            eprintln!("[telemetry] pending setup events retained for next launch");
+            log::warn!("[telemetry] pending setup events retained for next launch");
         }
     }
 }
@@ -283,6 +283,46 @@ mod tests {
                 .into_iter()
                 .map(|event| event.data)
                 .collect()
+        }
+    }
+
+    #[test]
+    fn model_telemetry_ipc_accepts_provider_categories_without_private_properties() {
+        let fixture = Fixture::new();
+        for (provider, credential_path) in [
+            ("openai", "subscription"),
+            ("openai", "api_key"),
+            ("anthropic", "subscription"),
+            ("anthropic", "api_key"),
+            ("google", "oauth"),
+            ("xai", "oauth"),
+            ("compatible", "api_key"),
+            ("compatible", "none"),
+            ("none", "none"),
+        ] {
+            let event = serde_json::json!({
+                "kind": "model_chosen",
+                "provider": provider,
+                "credential_path": credential_path,
+                "custom_base_url": provider == "compatible"
+            });
+            let queued_before = fixture.queued().len();
+            fixture.invoke(event.clone());
+            let queued = fixture.queued();
+            assert_eq!(queued.len(), queued_before + 1);
+            assert_eq!(serde_json::to_value(queued.last().unwrap()).unwrap(), event);
+
+            for property in ["apiKey", "token", "model", "baseUrl", "containerBaseUrl"] {
+                let mut private_event = event.clone();
+                private_event[property] = serde_json::json!("synthetic-private-value");
+                fixture.invoke(private_event);
+            }
+            for property in ["provider", "credential_path"] {
+                let mut unknown_event = event.clone();
+                unknown_event[property] = serde_json::json!("private-category");
+                fixture.invoke(unknown_event);
+            }
+            assert_eq!(fixture.queued(), queued);
         }
     }
 

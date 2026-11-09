@@ -107,7 +107,7 @@ describe("a chat turn refused for quota says so on its stream", () => {
 
   test("one RUN_ERROR with the stable code and the 402 body, then a normal close", async () => {
     const runner = {
-      run: () => throwError(() => refusal),
+      run: (_turn: unknown) => throwError(() => refusal),
       hydrate: async () => "hydrated",
     };
     const wrapped = withQuotaRunErrors(runner);
@@ -148,7 +148,7 @@ describe("a chat turn refused for quota says so on its stream", () => {
       runId: "r",
     } as BaseEvent;
     const runner = {
-      run: () =>
+      run: (_turn: unknown) =>
         concat(
           of(started),
           throwError(() => refusal),
@@ -167,7 +167,7 @@ describe("a chat turn refused for quota says so on its stream", () => {
   test("any other failure still fails the stream, untouched", async () => {
     const broken = new Error("database gone");
     const { events, failure } = await drained(
-      withQuotaRunErrors({ run: () => throwError(() => broken) }).run(turn),
+      withQuotaRunErrors({ run: (_turn: unknown) => throwError(() => broken) }).run(turn),
     );
     expect(events).toEqual([]);
     expect(failure).toBe(broken);

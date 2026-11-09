@@ -588,6 +588,8 @@ describe("M1: the key is taken out before anything is cut, so no half of it surv
           })) as unknown as typeof fetch,
       ),
     ).catch((error: Error) => error.message);
+    if (typeof message !== "string")
+      throw new Error("the listing did not fail");
     expect(message).toContain("(403)");
     expect(fragmentOf(message, KEY)).toBeNull();
   });
@@ -609,6 +611,8 @@ describe("M1: the key is taken out before anything is cut, so no half of it surv
           )) as unknown as typeof fetch,
       ),
     ).catch((error: Error) => error.message);
+    if (typeof message !== "string")
+      throw new Error("the listing did not fail");
     expect(message).toContain("(403)");
     expect(fragmentOf(message, KEY)).toBeNull();
     expect(message).toContain(`It said: Invalid key [已隐去]${pad}…`);

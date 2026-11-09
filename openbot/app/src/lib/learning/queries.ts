@@ -1,14 +1,16 @@
 import { queryOptions } from "@tanstack/react-query";
 import { client } from "@/lib/client";
 import type {
+  LearningAutoAssignState,
   LearningDeliveryStatus,
   LearningOverview,
   LearningSettings,
-} from "../../../../shared/learning";
+} from "@openbot/shared/learning";
 
 export const learningKeys = {
   all: ["learning"] as const,
   settings: ["learning", "settings"] as const,
+  automatic: ["learning", "automatic"] as const,
 };
 export function learningSettingsQueryOptions() {
   return queryOptions({
@@ -17,6 +19,19 @@ export function learningSettingsQueryOptions() {
       client("/api/admin/learning/settings", "settings", {
         fallback: "读取自动学习设置失败。",
       }),
+  });
+}
+/** Why no container was assigned automatically, or `null` when the server has nothing to say. */
+export function learningAutomaticQueryOptions() {
+  return queryOptions({
+    queryKey: learningKeys.automatic,
+    retry: false,
+    queryFn: async (): Promise<LearningAutoAssignState | null> =>
+      (await client<LearningAutoAssignState | undefined>(
+        "/api/admin/learning/settings",
+        "automatic",
+        { fallback: "Learning settings could not be loaded." },
+      )) ?? null,
   });
 }
 export function learningOverviewQueryOptions(agentId?: string) {
@@ -42,6 +57,14 @@ export function learningDeliveryQueryOptions(agentId: string) {
         "status",
         { fallback: "读取技能下发状态失败。" },
       ),
+  });
+}
+/** Create the project's container with the deployment's credential, then report what assignment found. */
+export function createLearningContainer(): Promise<LearningAutoAssignState> {
+  return client("/api/admin/learning/container", "automatic", {
+    method: "POST",
+    body: {},
+    fallback: "The Learning container could not be created.",
   });
 }
 export function saveLearningSettings(

@@ -244,6 +244,11 @@ const server = readFileSync(
   join(import.meta.dir, "..", "src", "index.ts"),
   "utf8",
 );
+/** M3: upstream moved the approval resume loop out of index.ts, into approvals/resume-sweep.ts. */
+const resumeSweep = readFileSync(
+  join(import.meta.dir, "..", "src", "approvals", "resume-sweep.ts"),
+  "utf8",
+);
 const cronJob = readFileSync(
   join(import.meta.dir, "..", "scripts", "fire-routines.ts"),
   "utf8",
@@ -266,10 +271,14 @@ test("the CronJob uses the same sweep instead of its own copy", () => {
 });
 
 test("approval resume stays gated: the server never composes a recovery port or an attestation", () => {
-  expect(server).not.toContain("continuationRecovery");
-  expect(server).not.toContain("composeLocalRecovery");
-  expect(server).not.toContain("readVerifiedRelease");
-  expect(server).toContain("error instanceof ApprovalRecoveryBlockedError");
-  expect(server).toContain("reason: APPROVAL_RESUME_GATED_REASON");
+  for (const source of [server, resumeSweep]) {
+    expect(source).not.toContain("continuationRecovery");
+    expect(source).not.toContain("composeLocalRecovery");
+    expect(source).not.toContain("readVerifiedRelease");
+  }
+  expect(resumeSweep).toContain(
+    "error instanceof ApprovalRecoveryBlockedError",
+  );
+  expect(resumeSweep).toContain("reason: APPROVAL_RESUME_GATED_REASON");
   expect(AP_LOCAL_RECOVERY_UNWIRED).toBeNull();
 });

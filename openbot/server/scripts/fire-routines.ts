@@ -13,7 +13,7 @@
  * should mean something worse than that.
  */
 
-import { workOwner } from "../../shared/work-owner";
+import { workOwner } from "@openbot/shared/work-owner";
 import { loadConfig } from "../src/config";
 import { createDatabase } from "../src/db/client";
 import { reapAbandonedPipelineRuns } from "../src/pipeline/reap";

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { createApp } from "../src/app";
@@ -834,6 +834,12 @@ describe("admin credential API", () => {
             revokedAt: null,
           };
         },
+        rotate: async () => {
+          throw new Error("this test only creates");
+        },
+        revoke: async () => {
+          throw new Error("this test only creates");
+        },
       },
     );
 
@@ -1413,4 +1419,8 @@ describe("credential envelopes bound to their row", () => {
       }
     });
   });
+});
+
+afterAll(async () => {
+  await database.$client.close();
 });

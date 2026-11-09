@@ -2,7 +2,7 @@ import { afterAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
-import type { AppVariables } from "../src/app-variables";
+import type { AppVariables } from "../src/auth/guards";
 import { createDatabase } from "../src/db/client";
 import {
   groupTaskRuns,
@@ -42,7 +42,11 @@ const outsider = `${suite}-outsider`;
 const historian = `${suite}-historian`;
 const millwright = `${suite}-millwright`;
 
-const actor = { id: tenant, role: "user" as const };
+const actor = {
+  id: tenant,
+  email: `${tenant}@example.test`,
+  role: "user" as const,
+};
 const requireUser: MiddlewareHandler<{ Variables: AppVariables }> = async (
   context,
   next,
@@ -273,7 +277,11 @@ const theirs = await runAsTenant(neighbour, async () => {
 const neighbourRoutes = createTaskRoutes(
   database,
   async (context, next) => {
-    context.set("actor", { id: neighbour, role: "user" as const });
+    context.set("actor", {
+      id: neighbour,
+      email: `${neighbour}@example.test`,
+      role: "user" as const,
+    });
     await next();
   },
   projector,
@@ -283,6 +291,7 @@ afterAll(async () => {
   await runAsTenant(neighbour, async () => {
     await database.delete(tasks).where(eq(tasks.tenantId, neighbour));
   });
+  await database.$client.close();
 });
 
 test("source takes a comma list: 自主工作 is routine and responsibility, in this tenant only", async () => {

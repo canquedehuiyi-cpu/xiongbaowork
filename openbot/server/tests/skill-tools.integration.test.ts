@@ -178,6 +178,16 @@ describe("a skill declaring the tools it needs", () => {
       expect(await declaredBy(skill)).toEqual([heldRef]);
     }));
 
+  // M3: upstream's "accepts the web research roles" case is not adopted: the fork has no @research
+  // role (no researchRoleFor in plugins/catalogue; plugins session), so every @research ref is refused.
+
+  test("still refuses a research role that does not exist", () =>
+    asAuthor(async () => {
+      await expect(saveSkill(["@research/browse"])).rejects.toBeInstanceOf(
+        PluginRefusedError,
+      );
+    }));
+
   test("duplicates in one save are stored once", () =>
     asAuthor(async () => {
       await saveSkill([heldRef, heldRef]);
@@ -241,4 +251,8 @@ describe("a skill going away", () => {
         .where(eq(skillTools.skillId, otherSkill));
       expect(left).toHaveLength(0);
     }));
+});
+
+afterAll(async () => {
+  await database.$client.close();
 });

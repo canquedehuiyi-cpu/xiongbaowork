@@ -2,8 +2,9 @@
 
 ## Setup
 
-Install Docker, [Bun](https://bun.sh) 1.3+, `lsof`, `openssl`, and `curl`. `scripts/start.sh` uses
-`openssl` to mint the generated secrets on a first run.
+Install Docker, [Bun](https://bun.sh) 1.4+ (the tests need it), `lsof`, `openssl`, and `curl`.
+`scripts/start.sh` uses `openssl` to mint the generated secrets on a first run; connecting the optional
+Intelligence below also needs `npx` (Node).
 
 ```sh
 cp .env.example .env
@@ -12,11 +13,78 @@ bun install
 
 Nothing is provisioned first. Conversations, memory and skills live in this deployment's own
 PostgreSQL, so there is no platform key to mint and no container to create. Add `OPENAI_API_KEY` to
-`.env` — that is what the shipped Bots answer with — then start the stack:
+`.env` — that is what the shipped Bots answer with.
+
+CopilotKit Intelligence is optional (it only adds Admin → 自动学习's published skills). To connect
+one, provision it after `.env` exists:
+
+```sh
+npx --yes copilotkit@latest login
+npx --yes copilotkit@latest project select
+bun scripts/setup-learning.ts
+```
+
+For fresh managed setup, the helper provisions the selected project's key and creates or reuses
+its `openbot` Learning container. It writes `INTELLIGENCE_API_KEY` and
+`CPK_INTELLIGENCE_LEARNING_CONTAINER_ID` to `.env` only after verifying the container. Existing
+keys and custom targets are preserved. For fresh self-hosted setup, set `INTELLIGENCE_API_URL`
+to the deployment's HTTPS API origin and run only `bun scripts/setup-learning.ts`. Install
+Chrome or Edge first: the helper opens an isolated browser window for the deployment's usual
+sign-in, lets you choose an accessible project, and creates or reuses `openbot` before minting
+its runtime key. Local development may use a loopback HTTP origin. Existing key-only setups
+use authenticated Intelligence administration to create a container and assign it in OpenBot Admin.
+There is no managed licence step.
+
+The same CLI sign-in also prepares Composio on the first `bash scripts/start.sh`;
+`bun run setup:composio` runs that step alone, independently of Learning. A failure
+does not stop the start: OpenBot runs with apps unavailable until a retry succeeds. A supplied
+`COMPOSIO_API_KEY` is preserved.
+The helper saves a stable installation UUID privately before any provisioning request,
+then the CLI saves this installation's Composio project key in `.env`. Keep
+`.env.openbot-installation-id` with the installation when restarting or retrying;
+new installations generate their own file. A compatible published CLI and enabled hosted
+provisioning service must be available before adopting this startup flow. See
+[automatic project setup](plugins/composio.md#automatic-project-setup).
+
+Start the stack:
 
 ```sh
 bash scripts/start.sh
 ```
+
+## Windows (WSL 2)
+
+On Windows, run the clone inside WSL 2 with Ubuntu. This was checked on Windows Server 2022 with
+Ubuntu 26.04.
+
+1. Install WSL 2 and Ubuntu with [Microsoft's instructions](https://learn.microsoft.com/windows/wsl/install)
+   (`wsl --install` in an administrator PowerShell), and restart Windows when it asks.
+
+2. In an Ubuntu terminal, install the tools from [Setup](#setup). A new Ubuntu 26.04 had none of them,
+   and Bun's installer stops without `unzip`:
+
+   ```sh
+   sudo apt-get update
+   sudo apt-get install -y ca-certificates curl git lsof openssl unzip nodejs npm
+   curl -fsSL https://bun.sh/install | bash
+   ```
+
+3. Install Docker Engine and its Compose plugin inside Ubuntu with
+   [Docker's Ubuntu instructions](https://docs.docker.com/engine/install/ubuntu/), then let your
+   user run it and open a new Ubuntu terminal:
+
+   ```sh
+   sudo usermod -aG docker $USER
+   ```
+
+4. Clone into your Ubuntu home directory, for example `~/OpenBot`, and follow [Setup](#setup) from
+   there. `npx --yes copilotkit@latest login` opens the sign-in page in your Windows browser.
+
+5. Keep an Ubuntu terminal open while you use OpenBot. WSL stops Ubuntu shortly after its last
+   terminal closes, and the app, the API server and Docker stop with it.
+
+6. Open the app from your Windows browser at <http://127.0.0.1:3010>. WSL forwards the port, and
+   <http://localhost:3010> works too.
 
 ## Running services
 
@@ -85,6 +153,14 @@ registered in the journal, and it is the only migration anybody should be writin
 
 CI enforces two things about this: `drizzle-kit check` for collisions and gaps between migrations,
 and a generate-and-fail-if-dirty probe that refuses a schema change with no migration written for it.
+
+**If `db:migrate` refuses with "the migrator only runs migrations stamped after the row it
+reads"**, your database ran a branch's migrations before that branch was merged. Merging renumbers
+the branch's migrations to sit after the ones it merged in, and those merged-in migrations are now
+stamped older than what your database already recorded — so the migrator would skip them and report
+success over the tables they should have created. Nothing is applied; the refusal names them. Drop
+and recreate the database, which is almost always the right answer for a development one; see
+[deployment.md](deployment.md) for how to repair one you have to keep.
 
 **If `drizzle-kit migrate` hangs and then exits non-zero with no error**, the journal names a
 migration file that is not there. A rebase does this: `meta/_journal.json` is a checked-in file, so

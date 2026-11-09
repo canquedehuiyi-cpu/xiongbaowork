@@ -1276,6 +1276,9 @@ const copilotInfo = (agents: AgentProfile[]): CopilotRuntimeInfo => ({
 const PREFERENCES: UserPreferences = {
   messageListEmphasis: "thread",
   selfHostBannerDismissed: true,
+  narration: null,
+  skin: "openbot",
+  proactive: "on",
 };
 
 const reachability = (scenario: Scenario): Reachability => ({
@@ -1626,6 +1629,7 @@ const CONTROL: ControlState = {
   holder: "bot",
   since: at(100),
   requested: false,
+  recoveryRequired: false,
   transitioning: false,
   resumeSnapshotRequired: false,
 };

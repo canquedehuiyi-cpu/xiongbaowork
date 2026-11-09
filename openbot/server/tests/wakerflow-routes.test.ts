@@ -391,7 +391,11 @@ test("the model picker lists the resolver's choices, and a Flow can be deleted b
   const choices = await f.call(f.owner, "GET", "/model-choices");
   expect(choices.status).toBe(200);
   expect(
-    ((await choices.json()) as { models: { id: string }[] }).models,
+    (
+      (await choices.json()) as {
+        models: { id: string; name: string; label: string }[];
+      }
+    ).models,
   ).toEqual([{ id: "m", name: "custom/m", label: "m" }]);
   const flow = await f.store.create(f.tenantId, { idea: "删掉我" });
   expect(

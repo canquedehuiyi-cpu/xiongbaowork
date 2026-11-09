@@ -1,5 +1,15 @@
 //! Installing an engine, instead of telling somebody to go and get one.
 //!
+//! **Which engine.** A new installation uses, in this order:
+//!
+//! 1. a Docker that answers;
+//! 2. on macOS and Windows, a stopped Docker Desktop that has run before, which is opened (see
+//!    `docker_desktop`);
+//! 3. Podman: the one somebody already has, or one installed here.
+//!
+//! The engine chosen is saved with the installation (`preparation::saved_engine`), and every later
+//! install and start uses it and only it.
+//!
 //! The person this app is for does not have a package manager, has never heard of Podman, and is
 //! not going to read a release page. Every sentence that begins "install ..." is a step where an
 //! install stops for good, so the engine is fetched and installed here.
@@ -34,7 +44,7 @@ use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
 
-use crate::engine::{self, Engine};
+use crate::engine::{self, Engine, StepLine};
 use crate::problem::Problem;
 
 /// The releases this was tested against.
@@ -43,8 +53,6 @@ use crate::problem::Problem;
 /// there, a digest is what was run. Moving these means re-recording the digests below.
 pub const PODMAN: &str = "6.1.1";
 pub const COMPOSE: &str = "5.5.1";
-/// Keep aligned with the repository's packageManager and container runtime.
-pub const BUN: &str = "1.3.14";
 
 /// A file to fetch and the digest it has to have.
 #[derive(Debug, PartialEq, Eq)]
@@ -61,7 +69,7 @@ pub struct Download {
 /// The Intel Mac case is real and not hypothetical: Podman 6.1.1 publishes `arm64` only. Answering
 /// with the arm64 package there would install something that cannot run, so it says so instead.
 pub fn podman_download() -> Result<Download, Problem> {
-    let (file, sha256) = match (std::env::consts::OS, std::env::consts::ARCH) {
+    let (file, sha256) = match (std::env::consts::OS, crate::windows::machine_arch()) {
         ("windows", "x86_64") => (
             "podman-installer-windows-amd64.msi",
             "91d0e8ea0846c0151d531c88c329bb2729387231e4d1e42306a8e3ae9d09fc8a",
@@ -107,7 +115,7 @@ pub fn podman_download() -> Result<Download, Problem> {
 /// One static binary on every platform, which is the whole reason this can be placed beside the
 /// engine rather than installed into the system.
 pub fn compose_download() -> Result<Download, Problem> {
-    let (file, sha256) = match (std::env::consts::OS, std::env::consts::ARCH) {
+    let (file, sha256) = match (std::env::consts::OS, crate::windows::machine_arch()) {
         ("windows", "x86_64") => (
             "docker-compose-windows-x86_64.exe",
             "a3c0c73033eaede90210345d0cc2233edf4fab8fe0282a91dad8fd8436809d2f",
@@ -204,713 +212,188 @@ fn digest_of(bytes: &[u8]) -> String {
         .collect()
 }
 
-/// A fresh account has no developer tools. Acquire the host runtime as that user,
-/// without changing PATH or requiring an administrator. Existing installations remain usable.
-pub fn ensure_bun(cache: &Path, existing: Option<PathBuf>) -> Result<PathBuf, Problem> {
-    let into = ordinary_absolute(&crate::acquire::download_dir(cache).join(format!("bun-{BUN}")))?;
-    let target = into.join(format!("bun{}", std::env::consts::EXE_SUFFIX));
-    ensure_bun_selected(existing, &target, verify_bun, || install_bun(cache))
-}
-
-fn ensure_bun_with(
-    existing: Option<PathBuf>,
-    install: impl FnOnce() -> Result<PathBuf, Problem>,
-) -> Result<PathBuf, Problem> {
-    match existing {
-        Some(path) if verify_bun(&path).is_ok() => Ok(path),
-        _ => install(),
-    }
-}
-
-fn bun_download(os: &str, arch: &str) -> Result<Download, Problem> {
-    // Official bun-v1.3.14/SHASUMS256.txt. The baseline x64 build also supports older CPUs.
-    let (file, sha256) = match (os, arch) {
-        ("windows", "x86_64") => (
-            "bun-windows-x64-baseline.zip",
-            "538f9c846355d9e847b2671bc00c47da4229a0befb24df3282b739770f3b475f",
-        ),
-        ("windows", "aarch64") => (
-            "bun-windows-aarch64.zip",
-            "89841f5a57f2348b67ec0839b718f4bf4ea7d07c371c9ba4b77b6c790f918953",
-        ),
-        ("macos", "x86_64") => (
-            "bun-darwin-x64-baseline.zip",
-            "3e35ad6f53971a9834bf9e6786e2adf72b5f1921cc9a9c5fde073d2972944076",
-        ),
-        ("macos", "aarch64") => (
-            "bun-darwin-aarch64.zip",
-            "d8b96221828ad6f97ac7ac0ab7e95872341af763001e8803e8267652c2652620",
-        ),
-        ("linux", "x86_64") => (
-            "bun-linux-x64-baseline.zip",
-            "a063908ae08b7852ca10939bbdc6ceed3ddabce8fb9402dce83d65d73b36e6c7",
-        ),
-        ("linux", "aarch64") => (
-            "bun-linux-aarch64.zip",
-            "a27ffb63a8310375836e0d6f668ae17fa8d8d18b88c37c821c65331973a19a3b",
-        ),
-        _ => {
-            return Err(Problem::with(
-                "OpenBot cannot install its app runtime on this kind of computer.",
-                format!("no Bun {BUN} build for {os} on {arch}"),
-            ))
-        }
-    };
-    Ok(Download {
-        url: format!("https://github.com/oven-sh/bun/releases/download/bun-v{BUN}/{file}"),
-        sha256,
-        file,
-    })
-}
-
-fn install_bun(cache: &Path) -> Result<PathBuf, Problem> {
-    let download = bun_download(std::env::consts::OS, std::env::consts::ARCH)?;
-    let entry = format!(
-        "{}/bun{}",
-        download.file.trim_end_matches(".zip"),
-        std::env::consts::EXE_SUFFIX,
-    );
-    let into = crate::acquire::download_dir(cache).join(format!("bun-{BUN}"));
-    repair_managed_bun(&into, &download, &entry, &mut NativeBunRepair)
-}
-
-// Managed Bun repair assumes a user-controlled cache, not a hostile same-UID
-// directory replacer. Metadata checks are not an atomic directory-handle CAS.
-fn managed_error(detail: impl Into<String>) -> Problem {
-    Problem::with("OpenBot could not safely repair its local runtime. Return to Install and try again.", detail)
-}
-
-fn ordinary_absolute(path: &Path) -> Result<PathBuf, Problem> {
-    let path = if path.is_absolute() { path.to_path_buf() } else {
-        std::env::current_dir().map_err(|e| managed_error(e.to_string()))?.join(path)
-    };
-    let mut normalized = PathBuf::new();
-    for component in path.components() {
-        match component {
-            std::path::Component::ParentDir => return Err(managed_error("A runtime locator contains '..'; its ownership is unclear.")),
-            std::path::Component::CurDir => {},
-            // A verbatim (`\\?\`) Windows path splits only on '\\', so a spelling such as
-            // `\\?\C:\root\child/../bun` reaches us as one Normal component `child/../bun`. Refuse
-            // a '..' segment under any separator the platform accepts rather than trust that the
-            // name will never be re-parsed without its verbatim prefix. A no-op on Unix.
-            std::path::Component::Normal(name)
-                if name.to_string_lossy().split(std::path::is_separator).any(|segment| segment == "..") =>
-                return Err(managed_error("A runtime locator contains '..'; its ownership is unclear.")),
-            component => normalized.push(component.as_os_str()),
-        }
-    }
-    if !normalized.is_absolute() { return Err(managed_error("A runtime locator is not an absolute ordinary path")); }
-    Ok(normalized)
-}
-
-fn reparse_or_link(metadata: &std::fs::Metadata) -> bool {
-    if metadata.file_type().is_symlink() { return true; }
-    #[cfg(windows)]
-    {
-        use std::os::windows::fs::MetadataExt;
-        if metadata.file_attributes() & 0x400 != 0 { return true; }
-    }
-    false
-}
-
-fn guarded_directories(path: &Path, create: bool) -> Result<(), Problem> {
-    let mut current = PathBuf::new();
-    for component in path.components() {
-        current.push(component.as_os_str());
-        if matches!(component, std::path::Component::Prefix(_)) { continue; }
-        let metadata = match std::fs::symlink_metadata(&current) {
-            Ok(metadata) => metadata,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound && create => {
-                std::fs::create_dir(&current).map_err(|e| managed_error(format!("Could not create {}: {e}", current.display())))?;
-                std::fs::symlink_metadata(&current).map_err(|e| managed_error(e.to_string()))?
-            },
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-            Err(e) => return Err(managed_error(format!("Could not inspect {}: {e}", current.display()))),
-        };
-        if reparse_or_link(&metadata) || !metadata.is_dir() {
-            return Err(managed_error(format!("Managed runtime directory is a link, reparse point or non-directory: {}", current.display())));
-        }
-    }
-    Ok(())
-}
-
-fn guarded_regular(path: &Path) -> Result<Option<std::fs::Metadata>, Problem> {
-    guarded_directories(path.parent().ok_or_else(|| managed_error("Runtime path has no parent"))?, false)?;
-    match std::fs::symlink_metadata(path) {
-        Ok(metadata) if !reparse_or_link(&metadata) && metadata.is_file() => Ok(Some(metadata)),
-        Ok(_) => Err(managed_error(format!("Managed runtime entry is a link, reparse point or special file: {}", path.display()))),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(e) => Err(managed_error(format!("Could not inspect {}: {e}", path.display()))),
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct BunIdentity {
-    digest: String,
-    length: u64,
-    modified: std::time::SystemTime,
-    readonly: bool,
-    #[cfg(unix)]
-    device: u64,
-    #[cfg(unix)]
-    inode: u64,
-    #[cfg(windows)]
-    created: u64,
-}
-
-fn bun_identity(path: &Path) -> Result<Option<BunIdentity>, Problem> {
-    use std::io::Read;
-    let Some(before) = guarded_regular(path)? else { return Ok(None); };
-    let mut file = std::fs::File::open(path).map_err(|e| managed_error(e.to_string()))?;
-    let mut hash = Sha256::new();
-    let mut buffer = [0u8; 65536];
-    loop {
-        let count = file.read(&mut buffer).map_err(|e| managed_error(e.to_string()))?;
-        if count == 0 { break; }
-        hash.update(&buffer[..count]);
-    }
-    let after = file.metadata().map_err(|e| managed_error(e.to_string()))?;
-    let modified = before.modified().map_err(|e| managed_error(e.to_string()))?;
-    if before.len() != after.len() || modified != after.modified().map_err(|e| managed_error(e.to_string()))? {
-        return Err(managed_error("Runtime entry changed during inspection"));
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::MetadataExt;
-        if before.dev() != after.dev() || before.ino() != after.ino() {
-            return Err(managed_error("Runtime entry changed during inspection"));
-        }
-    }
-    Ok(Some(BunIdentity {
-        digest: format!("{:x}", hash.finalize()), length: after.len(), modified,
-        readonly: after.permissions().readonly(),
-        #[cfg(unix)] device: { use std::os::unix::fs::MetadataExt; after.dev() },
-        #[cfg(unix)] inode: { use std::os::unix::fs::MetadataExt; after.ino() },
-        #[cfg(windows)] created: { use std::os::windows::fs::MetadataExt; after.creation_time() },
-    }))
-}
-
-fn same_bun(path: &Path, expected: &BunIdentity) -> Result<bool, Problem> {
-    Ok(bun_identity(path)?.as_ref() == Some(expected))
-}
-
-fn locator_has_link(path: &Path) -> Result<bool, Problem> {
-    let mut current = PathBuf::new();
-    for component in path.components() {
-        current.push(component.as_os_str());
-        if matches!(component, std::path::Component::Prefix(_)) { continue; }
-        let metadata = std::fs::symlink_metadata(&current)
-            .map_err(|e| managed_error(format!("Could not classify runtime locator: {e}")))?;
-        if reparse_or_link(&metadata) { return Ok(true); }
-    }
-    Ok(false)
-}
-
-#[derive(Debug, PartialEq, Eq)]
-enum ExistingBunLocator { Managed, External, ManagedAlias }
-
-fn same_bun_locator(left: &Path, right: &Path) -> Result<bool, Problem> {
-    #[cfg(windows)]
-    {
-        // Compare ordinary spellings, without following the managed entry.
-        // canonicalize may add a verbatim prefix; ASCII case is not path identity
-        // on Windows. Non-UTF8/unresolved spellings remain a classification error.
-        fn key(path: &Path) -> Result<String, Problem> {
-            let text = path.to_str().ok_or_else(|| managed_error("Runtime locator spelling is not classifiable"))?;
-            let text = text.strip_prefix("\\\\?\\").unwrap_or(text);
-            let ordinary = if let Some(unc) = text.strip_prefix("UNC\\") { format!("\\\\{unc}") } else { text.to_string() };
-            Ok(ordinary.to_ascii_lowercase())
-        }
-        Ok(key(left)? == key(right)?)
-    }
-    #[cfg(not(windows))]
-    { Ok(left == right) }
-}
-
-// Preserve raw link components: the bounded walker checks every preceding
-// locator (including managed entries and links) BEFORE consuming ParentDir.
-// User-supplied ordinary locators still reject '..'.
-fn link_locator(path: &Path) -> Result<PathBuf, Problem> {
-    if !path.is_absolute() { return Err(managed_error("Linked runtime locator is not absolute")); }
-    Ok(path.to_path_buf())
-}
-
-fn classify_existing_bun(existing: &Path, target: &Path) -> Result<ExistingBunLocator, Problem> {
-    classify_bun_candidate(existing, target)?
-        .ok_or_else(|| managed_error("The selected runtime locator does not exist"))
-}
-
-// Missing candidates are distinct from unreadable, ambiguous or managed aliases.
-// This same bounded walker serves passive search and the existing direct API.
-fn classify_bun_candidate(existing: &Path, target: &Path) -> Result<Option<ExistingBunLocator>, Problem> {
-    let mut pending = ordinary_absolute(existing)?;
-    if same_bun_locator(&pending, target)? { return Ok(Some(ExistingBunLocator::Managed)); }
-    let mut followed_link = false;
-    let mut hops = 0usize;
-    let mut inspected = 0usize;
-    loop {
-        let components: Vec<_> = pending.components().collect();
-        let mut current = PathBuf::new();
-        let mut replacement = None;
-        for (index, component) in components.iter().enumerate() {
-            inspected += 1;
-            if inspected > 4096 { return Err(managed_error("Runtime locator classification exceeds its component bound")); }
-            match component {
-                std::path::Component::ParentDir => {
-                    // The preceding component has already passed the managed/link
-                    // checks below. Never erase it before observing its identity.
-                    if !matches!(current.components().next_back(), Some(std::path::Component::Normal(_))) || !current.pop() {
-                        return Err(managed_error("Linked runtime locator leaves its root"));
-                    }
-                    continue;
-                },
-                std::path::Component::CurDir => continue,
-                component => current.push(component.as_os_str()),
-            }
-            if matches!(component, std::path::Component::Prefix(_)) { continue; }
-            // Stop BEFORE following even an unhealthy managed entry. Comparing
-            // canonical(target) would reverse a managed link into a good external.
-            if same_bun_locator(&current, target)? {
-                return Ok(Some(if followed_link { ExistingBunLocator::ManagedAlias } else { ExistingBunLocator::Managed }));
-            }
-            let metadata = match std::fs::symlink_metadata(&current) {
-                Ok(metadata) => metadata,
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound && !followed_link => return Ok(None),
-                Err(error) => return Err(managed_error(format!("Could not classify external runtime locator: {error}"))),
-            };
-            // A locator that continues past a non-directory is not an absent candidate. Unix
-            // reports ENOTDIR for the next lookup, but Windows reports ERROR_PATH_NOT_FOUND, which
-            // reads as NotFound above; decide it here from what was observed instead.
-            if !reparse_or_link(&metadata) && !metadata.is_dir()
-                && components[index + 1..].iter().any(|rest| !matches!(rest, std::path::Component::CurDir))
-            {
-                return Err(managed_error(format!("Runtime locator passes through a non-directory: {}", current.display())));
-            }
-            if reparse_or_link(&metadata) {
-                hops += 1;
-                if hops > 32 { return Err(managed_error("Runtime locator classification exceeds its link bound")); }
-                let link = std::fs::read_link(&current)
-                    .map_err(|e| managed_error(format!("Could not classify runtime link/reparse locator: {e}")))?;
-                let mut next = if link.is_absolute() { link } else {
-                    current.parent().ok_or_else(|| managed_error("Linked runtime locator has no parent"))?.join(link)
-                };
-                for rest in &components[index + 1..] { next.push(rest.as_os_str()); }
-                replacement = Some(link_locator(&next)?);
-                followed_link = true;
-                break;
-            }
-        }
-        if let Some(next) = replacement { pending = next; continue; }
-        // Keep the existing canonicalization-failure refusal. This only resolves
-        // the external locator; unrelated managed directories are never inspected.
-        let resolved = std::fs::canonicalize(existing)
-            .map_err(|e| managed_error(format!("Could not establish the external runtime locator: {e}")))?;
-        let resolved = ordinary_absolute(&resolved)?;
-        if same_bun_locator(&resolved, target)? {
-            return Ok(Some(if followed_link { ExistingBunLocator::ManagedAlias } else { ExistingBunLocator::Managed }));
-        }
-        if !same_bun_locator(&resolved, &current)? {
-            return Err(managed_error("Runtime locator has an unresolved non-ordinary alias"));
-        }
-        return Ok(Some(ExistingBunLocator::External));
-    }
-}
-
-fn ensure_bun_selected(
-    existing: Option<PathBuf>, target: &Path,
-    verify: impl FnOnce(&Path) -> Result<(), Problem>,
-    install: impl FnOnce() -> Result<PathBuf, Problem>,
-) -> Result<PathBuf, Problem> {
-    if let Some(existing) = existing {
-        match classify_existing_bun(&existing, target)? {
-            ExistingBunLocator::Managed => {
-                guarded_regular(target)?;
-                return install();
-            },
-            ExistingBunLocator::ManagedAlias => return Err(managed_error("An external runtime alias points at the managed locator; use the direct managed installation instead.")),
-            ExistingBunLocator::External => {
-                if verify(&existing).is_ok() { return Ok(existing); }
-            },
-        }
-    }
-    // Managed preflight belongs to the selected installation path, not to
-    // independent external reuse. The repair coordinator performs that preflight.
-    install()
-}
-
-// New explicit-Install entry; keep ensure_bun's existing public interface.
-// PATH/home/cwd are captured by the caller without launching any process.
-pub fn ensure_bun_from_search(
-    cache: &Path,
-    path: Option<&std::ffi::OsStr>,
-    home: Option<&Path>,
-    cwd: &Path,
-) -> Result<PathBuf, Problem> {
-    let into = ordinary_absolute(&crate::acquire::download_dir(cache).join(format!("bun-{BUN}")))?;
-    let target = into.join(format!("bun{}", std::env::consts::EXE_SUFFIX));
-    ensure_bun_from_search_with(path, home, cwd, &target, probe_bun_candidate, || install_bun(cache))
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum BunCandidateProbe {
-    Supported,
-    // Failed spawn or a non-zero exit permits PATH -> HOME fallback.
-    Failed,
-    // A successful process with a different version must select managed repair.
-    Unsupported,
-}
-
-fn probe_bun_candidate(binary: &Path) -> BunCandidateProbe {
-    match crate::quiet::command(binary).arg("--version").output() {
-        Err(_) => BunCandidateProbe::Failed,
-        Ok(output) if !output.status.success() => BunCandidateProbe::Failed,
-        Ok(output) if String::from_utf8_lossy(&output.stdout).trim() == BUN => BunCandidateProbe::Supported,
-        Ok(_) => BunCandidateProbe::Unsupported,
-    }
-}
-
-// Retain relative PATH components, including link evidence, when making the
-// locator absolute. The classifier, not discovery, adjudicates '..'/aliases.
-fn search_locator(cwd: &Path, path: &Path) -> Result<PathBuf, Problem> {
-    if !cwd.is_absolute() { return Err(managed_error("Runtime search cwd must be absolute")); }
-    Ok(if path.is_absolute() { path.to_path_buf() } else { cwd.join(path) })
-}
-
-fn passive_bun_candidate(
-    candidate: PathBuf, target: &Path,
-) -> Result<Option<(PathBuf, ExistingBunLocator)>, Problem> {
-    match classify_bun_candidate(&candidate, target)? {
-        None => Ok(None),
-        Some(ExistingBunLocator::External) => {
-            // Classification has already observed every link/managed boundary.
-            // Refuse special files/directories rather than attempt a process.
-            let metadata = std::fs::metadata(&candidate)
-                .map_err(|error| managed_error(format!("Could not inspect classified runtime candidate: {error}")))?;
-            if !metadata.is_file() { return Err(managed_error("External runtime candidate is not a regular file")); }
-            Ok(Some((candidate, ExistingBunLocator::External)))
-        },
-        Some(ExistingBunLocator::Managed) => match guarded_regular(&candidate)? {
-            // Passive search must distinguish an absent exact managed entry
-            // from a found candidate, so a later PATH entry remains eligible.
-            None => Ok(None),
-            Some(_) => Ok(Some((candidate, ExistingBunLocator::Managed))),
-        },
-        Some(kind) => Ok(Some((candidate, kind))),
-    }
-}
-
-fn selected_bun_candidate(
-    candidate: (PathBuf, ExistingBunLocator), target: &Path,
-    probe: &mut impl FnMut(&Path) -> BunCandidateProbe,
-) -> Result<(Option<PathBuf>, bool), Problem> {
-    match candidate {
-        (_, ExistingBunLocator::ManagedAlias) => Err(managed_error("An external runtime alias points at the managed locator; use the direct managed installation instead.")),
-        (_, ExistingBunLocator::Managed) => {
-            guarded_regular(target)?;
-            Ok((None, false)) // Direct managed entry goes through guarded repair/reuse.
-        },
-        (locator, ExistingBunLocator::External) => match probe(&locator) {
-            BunCandidateProbe::Supported => Ok((Some(locator), false)),
-            BunCandidateProbe::Failed => Ok((None, true)),
-            BunCandidateProbe::Unsupported => Ok((None, false)),
-        },
-    }
-}
-
-// Production coordinator plus real passive resolver. Only process probing and
-// managed acquisition are injected for inline CPU fixture definitions.
-fn ensure_bun_from_search_with(
-    path: Option<&std::ffi::OsStr>, home: Option<&Path>, cwd: &Path,
-    target: &Path, mut probe: impl FnMut(&Path) -> BunCandidateProbe,
-    acquire: impl FnOnce() -> Result<PathBuf, Problem>,
-) -> Result<PathBuf, Problem> {
-    if let Some(path) = path {
-        for directory in std::env::split_paths(path) {
-            let locator = search_locator(cwd, &directory.join(if cfg!(windows) { "bun.exe" } else { "bun" }))?;
-            if let Some(candidate) = passive_bun_candidate(locator, target)? {
-                let (supported, fallback) = selected_bun_candidate(candidate, target, &mut probe)?;
-                if let Some(locator) = supported { return Ok(locator); }
-                if !fallback { return acquire(); }
-                break; // First located PATH candidate failed; retain HOME fallback order.
-            }
-        }
-    }
-    if let Some(home) = home {
-        for relative in [".bun/bin/bun", ".bun/bin/bun.exe"] {
-            let locator = search_locator(cwd, &home.join(relative))?;
-            if let Some(candidate) = passive_bun_candidate(locator, target)? {
-                let (supported, _) = selected_bun_candidate(candidate, target, &mut probe)?;
-                return match supported { Some(locator) => Ok(locator), None => acquire() };
-            }
-        }
-    }
-    acquire()
-}
-
-trait BunRepairOps {
-    fn archive(&mut self, download: &Download, into: &Path, work: &Path) -> Result<PathBuf, Problem> {
-        guarded_bun_archive(download, into, work)
-    }
-    fn extract(&mut self, archive: &Path, stage: &Path, entry: &str) -> Result<(), Problem> {
-        extract_bun(archive, stage, entry)
-    }
-    fn verify(&mut self, binary: &Path) -> Result<(), Problem> { verify_bun(binary) }
-    fn quarantine(&mut self, source: &Path, target: &Path) -> std::io::Result<()> { std::fs::rename(source, target) }
-    fn link(&mut self, source: &Path, target: &Path) -> std::io::Result<()> { std::fs::hard_link(source, target) }
-    fn remove(&mut self, path: &Path) -> std::io::Result<()> { std::fs::remove_file(path) }
-}
-struct NativeBunRepair;
-impl BunRepairOps for NativeBunRepair {}
-
-fn guarded_bun_archive(download: &Download, into: &Path, work: &Path) -> Result<PathBuf, Problem> {
-    use std::io::Write;
-    let cached = into.join(download.file);
-    if guarded_regular(&cached)?.is_some() {
-        let bytes = std::fs::read(&cached).map_err(|e| managed_error(e.to_string()))?;
-        if digest_of(&bytes) == download.sha256 { return Ok(cached); }
-    }
-    let bytes = crate::deployment::get(&download.url).map_err(managed_error)?;
-    if digest_of(&bytes) != download.sha256 { return Err(managed_error("The managed runtime archive does not match its pinned digest")); }
-    let archive = work.join("archive.zip");
-    if guarded_regular(&archive)?.is_some() { return Err(managed_error("The private archive path is already occupied")); }
-    let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(&archive).map_err(|e| managed_error(e.to_string()))?;
-    file.write_all(&bytes).and_then(|()| file.sync_all()).map_err(|e| managed_error(e.to_string()))?;
-    Ok(archive)
-}
-
-fn remove_owned(ops: &mut impl BunRepairOps, path: &Path, expected: &BunIdentity) -> Result<(), Problem> {
-    if !same_bun(path, expected)? { return Err(managed_error(format!("Owned runtime cleanup identity changed: {}", path.display()))); }
-    ops.remove(path).map_err(|e| managed_error(format!("Could not clean owned runtime entry {}: {e}", path.display())))
-}
-
-struct BunPublication {
-    binary: PathBuf,
-    stage: Option<(PathBuf, BunIdentity)>,
-    recovery: Option<PathBuf>,
-}
-
-fn finish_bun_publication(publication: BunPublication, ops: &mut impl BunRepairOps) -> Result<PathBuf, Problem> {
-    if let Some((stage, identity)) = publication.stage {
-        // Final target check is after owned-lock cleanup. Unknown publication
-        // keeps the independent staged link and quarantine for recovery.
-        if !same_bun(&publication.binary, &identity)? {
-            return Err(managed_error(format!("Final published identity is unknown; recovery retained at {}", publication.recovery.as_ref().unwrap().display())));
-        }
-        guarded_regular(&publication.binary)?.ok_or_else(|| managed_error("Published runtime disappeared"))?;
-        ops.verify(&publication.binary).map_err(|p| managed_error(format!("{}; recovery retained at {}", p.detail.unwrap_or(p.said), publication.recovery.as_ref().unwrap().display())))?;
-        if !same_bun(&publication.binary, &identity)? {
-            return Err(managed_error("Runtime changed during its final verification; staging and quarantine retained"));
-        }
-        // No target deletion or overwrite follows this observation. Failure to
-        // unlink our temporary alias returns Err and never rolls back a healthy target.
-        remove_owned(ops, &stage, &identity)?;
-    }
-    Ok(publication.binary)
-}
-
-fn repair_managed_bun(
-    into: &Path, download: &Download, entry: &str, ops: &mut impl BunRepairOps,
-) -> Result<PathBuf, Problem> {
-    let into = ordinary_absolute(into)?;
-    guarded_directories(&into, true)?;
-    let binary = into.join(format!("bun{}", std::env::consts::EXE_SUFFIX));
-    guarded_regular(&into.join(download.file))?;
-    if guarded_regular(&binary)?.is_some() && ops.verify(&binary).is_ok() { return Ok(binary); }
-    let lock_path = into.join("bun.repair.lock");
-    // create_new never follows an existing lock symlink or guesses a stale lock.
-    let lock = std::fs::OpenOptions::new().write(true).create_new(true).open(&lock_path)
-        .map_err(|e| managed_error(format!("Managed runtime repair is busy or cannot acquire its lock: {e}")))?;
-    let lock_identity = match bun_identity(&lock_path) {
-        Ok(Some(identity)) => identity,
-        _ => { drop(lock); return Err(managed_error(format!("Owned lock identity is unknown; preserved at {}", lock_path.display()))); }
-    };
-    let result = repair_locked_bun(&into, &binary, download, entry, ops);
-    drop(lock);
-    let cleanup = remove_owned(ops, &lock_path, &lock_identity);
-    match (result, cleanup) {
-        (Ok(publication), Ok(())) => finish_bun_publication(publication, ops),
-        (Err(error), Ok(())) => Err(error),
-        (result, Err(cleanup)) => Err(managed_error(format!("{}; {}", result.err().map(|p| p.detail.unwrap_or(p.said)).unwrap_or_else(|| "The healthy published target was retained".into()), cleanup.detail.unwrap_or(cleanup.said)))),
-    }
-}
-
-fn repair_locked_bun(
-    into: &Path, binary: &Path, download: &Download, entry: &str, ops: &mut impl BunRepairOps,
-) -> Result<BunPublication, Problem> {
-    // Recheck after acquiring the cross-process repair lock.
-    let old = bun_identity(binary)?;
-    if old.is_some() && ops.verify(binary).is_ok() {
-        return Ok(BunPublication { binary: binary.to_path_buf(), stage: None, recovery: None });
-    }
-    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    let work = into.join(format!("bun.repair-{}-{}", std::process::id(), NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)));
-    std::fs::create_dir(&work).map_err(|e| managed_error(format!("Could not exclusively create repair staging: {e}")))?;
-    guarded_directories(&work, false)?;
-    let stage = work.join(format!("bun.stage{}", std::env::consts::EXE_SUFFIX));
-    let quarantine = work.join(format!("bun.previous{}", std::env::consts::EXE_SUFFIX));
-    let prepared = (|| {
-        let archive = ops.archive(download, into, &work)?;
-        guarded_regular(&archive)?.ok_or_else(|| managed_error("The verified archive is missing"))?;
-        // Check even injected archive providers: extraction never gets unverified bytes.
-        let bytes = std::fs::read(&archive).map_err(|e| managed_error(e.to_string()))?;
-        if digest_of(&bytes) != download.sha256 { return Err(managed_error("The runtime archive digest is wrong")); }
-        if guarded_regular(&stage)?.is_some() { return Err(managed_error("The private staging target is occupied")); }
-        ops.extract(&archive, &stage, entry)?;
-        guarded_regular(&stage)?.ok_or_else(|| managed_error("The staged runtime is missing"))?;
-        ops.verify(&stage)?;
-        bun_identity(&stage)?.ok_or_else(|| managed_error("The verified staged runtime disappeared"))
-    })();
-    let staged = match prepared {
-        Ok(identity) => identity,
-        Err(error) => return Err(managed_error(format!("{}; old target was not published over; private staging retained at {}", error.detail.unwrap_or(error.said), work.display()))),
-    };
-    guarded_directories(into, false)?;
-    if bun_identity(binary)? != old { return Err(managed_error(format!("Target changed before publication; staging retained at {}", work.display()))); }
-    if let Some(old) = &old {
-        if guarded_regular(&quarantine)?.is_some() { return Err(managed_error("The private quarantine is occupied")); }
-        ops.quarantine(binary, &quarantine).map_err(|e| managed_error(format!("Could not quarantine old runtime; no publish attempted: {e}; recovery directory {}", work.display())))?;
-        if !same_bun(&quarantine, old)? { return Err(managed_error(format!("Quarantine identity is unknown; retained at {}", work.display()))); }
-    }
-    if let Err(error) = ops.link(&stage, binary) {
-        let recovery = (|| {
-            if guarded_regular(binary)?.is_some() { return Ok("target exists; it was neither overwritten nor removed".to_string()); }
-            let Some(old) = &old else { return Ok("fresh target remains absent".into()); };
-            if !same_bun(&quarantine, old)? { return Err(managed_error("quarantine identity changed; no rollback attempted")); }
-            ops.link(&quarantine, binary).map_err(|e| managed_error(format!("create-only rollback failed: {e}")))?;
-            if !same_bun(binary, old)? { return Err(managed_error("rollback target identity is unknown")); }
-            Ok("known bad old runtime restored for explicit retry, not success".into())
-        })();
-        return Err(managed_error(format!("Create-only runtime publication failed: {error}; {}; staging/quarantine retained at {}", recovery.unwrap_or_else(|p: Problem| p.detail.unwrap_or(p.said)), work.display())));
-    }
-    // The target must still be exactly our staged file before reporting success.
-    if !same_bun(binary, &staged)? { return Err(managed_error(format!("Published runtime identity is unknown; retained at {}", work.display()))); }
-    // The successful repair keeps quarantine and private archive as recovery evidence.
-    // Final target verification and owned stage-alias cleanup happen only after
-    // owned-lock cleanup; a lock-cleanup failure retains the staged recovery link.
-    Ok(BunPublication { binary: binary.to_path_buf(), stage: Some((stage, staged)), recovery: Some(work) })
-}
-
-fn install_bun_with(
-    into: &Path,
-    download: &Download,
-    extract: impl FnOnce(&Path, &Path) -> Result<(), Problem>,
-    verify: impl Fn(&Path) -> Result<(), Problem>,
-) -> Result<PathBuf, Problem> {
-    let binary = into.join(format!("bun{}", std::env::consts::EXE_SUFFIX));
-    if binary.is_file() {
-        verify(&binary)?;
-        return Ok(binary);
-    }
-    let archive = fetch_verified(download, into)?;
-    let staged = into.join(format!("bun.download{}", std::env::consts::EXE_SUFFIX));
-    let result = extract(&archive, &staged)
-        .and_then(|()| verify(&staged))
-        .and_then(|()| {
-            std::fs::rename(&staged, &binary)
-                .map_err(|error| unwritable(&binary, &error.to_string()))
-        });
-    if let Err(mut problem) = result {
-        if let Err(error) = std::fs::remove_file(&staged) {
-            if error.kind() != std::io::ErrorKind::NotFound {
-                problem.detail = Some(format!(
-                    "{}; could not remove incomplete runtime {}: {error}",
-                    problem.detail.as_deref().unwrap_or(&problem.said),
-                    staged.display(),
-                ));
-            }
-        }
-        return Err(problem);
-    }
-    Ok(binary)
-}
-
-fn extract_bun(archive: &Path, target: &Path, entry: &str) -> Result<(), Problem> {
-    let unpack_error = |error: &dyn std::fmt::Display| {
-        Problem::with(
-            "OpenBot could not unpack its app runtime. Try again.",
-            format!("{} entry {entry}: {error}", archive.display()),
-        )
-    };
-
-    // Only the named executable is copied to our chosen staging path. Archive paths never
-    // choose output locations, and installation needs no external archive utility or shell.
-    let file = std::fs::File::open(archive).map_err(|error| unpack_error(&error))?;
-    let mut zip = zip::ZipArchive::new(file).map_err(|error| unpack_error(&error))?;
-    let mut executable = zip.by_name(entry).map_err(|error| unpack_error(&error))?;
-    let mut file =
-        std::fs::File::create(target).map_err(|error| unwritable(target, &error.to_string()))?;
-    std::io::copy(&mut executable, &mut file).map_err(|error| unpack_error(&error))?;
-    drop(file);
-
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(target, std::fs::Permissions::from_mode(0o755))
-            .map_err(|error| unwritable(target, &error.to_string()))?;
-    }
-    Ok(())
-}
-
-pub(crate) fn verify_bun(binary: &Path) -> Result<(), Problem> {
-    let output = crate::quiet::command(binary)
-        .arg("--version")
-        .output()
-        .map_err(|error| {
-            Problem::with(
-                "OpenBot could not start its app runtime.",
-                format!("{}: {error}", binary.display()),
-            )
-        })?;
-    if !output.status.success() || String::from_utf8_lossy(&output.stdout).trim() != BUN {
-        return Err(Problem::with(
-            "OpenBot could not verify its app runtime.",
-            format!(
-                "{} --version: {}; expected {BUN}; stdout: {}; stderr: {}",
-                binary.display(),
-                output.status,
-                String::from_utf8_lossy(&output.stdout),
-                String::from_utf8_lossy(&output.stderr)
-            ),
-        ));
-    }
-    Ok(())
-}
-
 /// Put the engine on this machine, and a Compose it can run.
 ///
 /// Both halves, in that order, because the second is invisible until the first has succeeded and
 /// somebody presses Start. Answers with the sentence for the step row, or a failure in both
-/// registers.
-pub fn install_engine(cache: &Path) -> Result<String, Problem> {
-    install_engine_observed(cache, |_| {})
+/// registers. `saved` is the engine the installation was set up on, if it saved one.
+pub fn install_engine(cache: &Path, saved: Option<Engine>) -> Result<String, Problem> {
+    install_engine_observed(cache, saved, |_, _| {}, &mut |_| {}, &|| {}).map(|chosen| chosen.said)
 }
 
-/// Observe an actual Podman installer invocation, excluding existing engines and Compose repair.
+/// The engine the install step settled on, and the sentence for its step row.
+#[derive(Debug, PartialEq, Eq)]
+pub struct EngineChosen {
+    pub engine: Engine,
+    pub said: String,
+}
+
+/// Observe an actual engine install, excluding engines that were already here, starting Docker
+/// Desktop and Compose repair; `progress` is each line for the step row.
+///
+/// `back` brings OpenBot's window to the front again after another app's window took it: Docker
+/// Desktop once it answers, or the system's password prompt once Podman's installer is done.
 pub fn install_engine_observed(
     cache: &Path,
-    installed: impl FnMut(bool),
-) -> Result<String, Problem> {
-    install_engine_with(cache, installed, install_podman, place_compose)
+    saved: Option<Engine>,
+    installed: impl FnMut(Engine, bool),
+    progress: &mut dyn FnMut(StepLine),
+    back: &dyn Fn(),
+) -> Result<EngineChosen, Problem> {
+    // Only one of the two runs, so they share the step row's lines one at a time.
+    let progress = std::cell::RefCell::new(progress);
+    install_engine_with(
+        cache,
+        Found::here(saved),
+        saved,
+        installed,
+        || crate::docker_desktop::start(&mut **progress.borrow_mut(), back),
+        |into| {
+            let line = podman_install_said(std::env::consts::OS);
+            let prompted = line.elsewhere;
+            (progress.borrow_mut())(line);
+            let result = install_podman(into);
+            if prompted {
+                back();
+            }
+            result
+        },
+        place_compose,
+    )
+}
+
+/// The step row's line while Podman installs, naming the prompt the platform raises for it.
+///
+/// macOS asks for the person's password, because the package writes to `/opt/podman`. Windows
+/// asks for nothing here: the MSI installs for this account alone. Linux asks through `pkexec`.
+/// A prompt is a window of the system's own, in front of OpenBot's, so its line is `elsewhere`.
+fn podman_install_said(os: &str) -> StepLine {
+    match os {
+        "macos" => StepLine::elsewhere(
+            "Installing Podman. Enter your Mac password when macOS asks for it.",
+        ),
+        "linux" => StepLine::elsewhere(
+            "Installing Podman. Enter your password when your system asks for it.",
+        ),
+        _ => StepLine::here("Installing Podman."),
+    }
+}
+
+/// What engines this machine has, read once so the choice below can be tested on any machine.
+///
+/// Nothing here asks what product is behind a `docker` command. A Docker that answers is used, a
+/// Docker Desktop that is safe to open is opened, and anything else is a machine without Docker.
+#[derive(Debug, Clone, Copy)]
+struct Found {
+    /// Docker Desktop is how this platform gets Docker: macOS and Windows, not Linux.
+    docker_desktop_platform: bool,
+    docker_answers: bool,
+    docker_app_installed: bool,
+    /// Docker Desktop has run on this machine before, so it opens without its terms. See
+    /// `docker_desktop::used_before`.
+    docker_desktop_used_before: bool,
+    podman_installed: bool,
+}
+
+impl Found {
+    fn here(saved: Option<Engine>) -> Self {
+        // An installation on Podman never looks at Docker, and so never runs `docker` either.
+        let docker = saved != Some(Engine::Podman);
+        let docker_app_installed = docker && crate::docker_desktop::installed_app().is_some();
+        Self {
+            docker_desktop_platform: cfg!(any(target_os = "macos", target_os = "windows")),
+            docker_answers: docker && engine::Address::new(Engine::Docker, None).responds(),
+            docker_app_installed,
+            docker_desktop_used_before: docker_app_installed
+                && crate::docker_desktop::used_before(),
+            podman_installed: engine::program(Engine::Podman).is_some(),
+        }
+    }
+}
+
+/// What the install step does to have an engine answering.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Choice {
+    /// Docker answers now.
+    UseDocker,
+    /// Docker Desktop is installed and stopped, and opening it shows nothing that needs the person.
+    OpenDockerDesktop,
+    /// This installation is on Docker, Docker does not answer, and there is no Docker Desktop to
+    /// open. Only the person can start it.
+    DockerNotRunning,
+    UsePodman,
+    InstallPodman,
+}
+
+/*
+ * DOCKER WHEN IT IS READY, PODMAN OTHERWISE, AND NEVER A MOVE BETWEEN THEM.
+ *
+ * A new installation uses a Docker that answers, then a stopped Docker Desktop that has run before,
+ * then Podman. A Docker Desktop that has never run is not opened: its first window is Docker's
+ * terms, and OpenBot must never put a person in front of them or wait on them. A `docker` command
+ * that does not answer is not a reason to stop either. That machine gets Podman too.
+ *
+ * An installation that saved its engine keeps it. Its images and its database are there, and
+ * the other engine would start it empty. A saved Docker Desktop that is stopped is opened: it
+ * answered for this installation before.
+ *
+ * Linux has no Docker Desktop. An answering Docker is used there, and anything else gets Podman.
+ */
+fn choose(found: Found, saved: Option<Engine>) -> Choice {
+    let can_open_docker_desktop = found.docker_desktop_platform && found.docker_app_installed;
+    let podman = if found.podman_installed {
+        Choice::UsePodman
+    } else {
+        Choice::InstallPodman
+    };
+    match saved {
+        Some(Engine::Podman) => podman,
+        Some(Engine::Docker) if found.docker_answers => Choice::UseDocker,
+        Some(Engine::Docker) if can_open_docker_desktop => Choice::OpenDockerDesktop,
+        Some(Engine::Docker) => Choice::DockerNotRunning,
+        None if found.docker_answers => Choice::UseDocker,
+        None if can_open_docker_desktop && found.docker_desktop_used_before => {
+            Choice::OpenDockerDesktop
+        }
+        None => podman,
+    }
 }
 
 fn install_engine_with(
     cache: &Path,
-    mut installed: impl FnMut(bool),
+    found: Found,
+    saved: Option<Engine>,
+    mut installed: impl FnMut(Engine, bool),
+    start_docker: impl FnOnce() -> Result<String, Problem>,
     install_podman: impl FnOnce(&Path) -> Result<(), Problem>,
     place_compose: impl FnOnce(&Path) -> Result<String, Problem>,
-) -> Result<String, Problem> {
+) -> Result<EngineChosen, Problem> {
     let into = crate::acquire::download_dir(cache);
+    let chosen = |engine, said| EngineChosen { engine, said };
 
-    // engine_ready can start an installed Podman machine, but cannot start Docker. A stopped
-    // Docker CLI must not skip installing the Podman that preparation will then try to run.
-    if engine::program(Engine::Podman).is_some()
-        || engine::Address::new(Engine::Docker, None).responds()
-    {
-        return place_compose(&into);
+    match choose(found, saved) {
+        Choice::UseDocker => return place_compose(&into).map(|said| chosen(Engine::Docker, said)),
+        // Nothing is placed: Docker Desktop ships Compose as a CLI plugin, and `docker compose`
+        // never looks on PATH, where a placed provider goes. `place_compose` asks Podman, which a
+        // Docker-only machine does not have, so it downloaded a provider nothing used. The caller
+        // checks Docker's own Compose once Docker answers.
+        Choice::OpenDockerDesktop => {
+            return start_docker().map(|said| chosen(Engine::Docker, said))
+        }
+        Choice::DockerNotRunning => {
+            return Err(Problem::with(
+                "OpenBot was installed with Docker, and Docker isn't running. Start Docker, then \
+                 try again.",
+                "this installation saved Docker as its engine; docker does not answer and there \
+                 is no Docker Desktop to open",
+            ))
+        }
+        Choice::UsePodman => return place_compose(&into).map(|said| chosen(Engine::Podman, said)),
+        Choice::InstallPodman => {}
     }
 
     let result = install_podman(&into);
-    installed(result.is_ok());
+    installed(Engine::Podman, result.is_ok());
     result?;
 
     // Installed is not found. The MSI extends the *user's* PATH and this process was started with
@@ -929,7 +412,10 @@ fn install_engine_with(
     }
 
     place_compose(&into)?;
-    Ok(format!("Podman {PODMAN} and Compose {COMPOSE} installed."))
+    Ok(chosen(
+        Engine::Podman,
+        format!("Podman {PODMAN} and Compose {COMPOSE} installed."),
+    ))
 }
 
 /// Place the Compose provider where the engine will find it, unless something already provides one.
@@ -1178,65 +664,306 @@ mod tests {
     use super::*;
     use crate::test_support::temp_root;
 
-    #[test]
-    #[cfg(windows)]
-    fn a_stopped_docker_does_not_skip_the_podman_needed_for_setup() {
-        if crate::test_support::isolated_process(
-            "install::tests::a_stopped_docker_does_not_skip_the_podman_needed_for_setup",
-        ) {
-            return;
+    /// A Mac or a PC. `docker_app` is a Docker Desktop that is installed; `used` is one that has
+    /// run before.
+    fn found(docker_answers: bool, docker_app: bool, used: bool, podman: bool) -> Found {
+        Found {
+            docker_desktop_platform: true,
+            docker_answers,
+            docker_app_installed: docker_app,
+            docker_desktop_used_before: used,
+            podman_installed: podman,
         }
-        let root = temp_root("stopped-docker-install");
-        let bin = root.join("bin");
-        std::fs::create_dir_all(&bin).unwrap();
-        let source = root.join("engine.rs");
-        std::fs::write(
-            &source,
-            r#"fn main() {
-                if std::env::var_os("OPENBOT_TEST_DOCKER_RUNNING").is_none() {
-                    std::process::exit(1);
+    }
+
+    fn linux(found: Found) -> Found {
+        Found {
+            docker_desktop_platform: false,
+            ..found
+        }
+    }
+
+    const NOTHING: Found = Found {
+        docker_desktop_platform: true,
+        docker_answers: false,
+        docker_app_installed: false,
+        docker_desktop_used_before: false,
+        podman_installed: false,
+    };
+
+    /// The whole table, for a new installation and for one that saved its engine.
+    #[test]
+    fn the_engine_is_chosen_by_this_table() {
+        use Choice::*;
+        let docker = Some(Engine::Docker);
+        let podman = Some(Engine::Podman);
+        let rows: [(&str, Found, Option<Engine>, Choice); 18] = [
+            // A new installation.
+            (
+                "answering Docker",
+                found(true, false, false, false),
+                None,
+                UseDocker,
+            ),
+            (
+                "answering Docker Desktop beside Podman",
+                found(true, true, true, true),
+                None,
+                UseDocker,
+            ),
+            (
+                "stopped Docker Desktop, used before",
+                found(false, true, true, false),
+                None,
+                OpenDockerDesktop,
+            ),
+            (
+                "stopped Docker Desktop, used before, Podman too",
+                found(false, true, true, true),
+                None,
+                OpenDockerDesktop,
+            ),
+            (
+                "Docker Desktop never used",
+                found(false, true, false, false),
+                None,
+                InstallPodman,
+            ),
+            (
+                "Docker Desktop never used, Podman here",
+                found(false, true, false, true),
+                None,
+                UsePodman,
+            ),
+            // A `docker` command that does not answer, with no Docker Desktop behind it, is no
+            // Docker at all: nothing in `Found` even records that the command is there.
+            (
+                "stopped docker without Docker Desktop",
+                NOTHING,
+                None,
+                InstallPodman,
+            ),
+            (
+                "existing Podman",
+                found(false, false, false, true),
+                None,
+                UsePodman,
+            ),
+            ("nothing", NOTHING, None, InstallPodman),
+            // An installation saved on Docker.
+            (
+                "saved Docker, answering",
+                found(true, true, true, false),
+                docker,
+                UseDocker,
+            ),
+            (
+                "saved Docker, Docker Desktop stopped",
+                found(false, true, true, true),
+                docker,
+                OpenDockerDesktop,
+            ),
+            // It answered for this installation, so it opens even with no disk where Docker
+            // documents it (moved in Docker's settings, say).
+            (
+                "saved Docker, disk moved",
+                found(false, true, false, true),
+                docker,
+                OpenDockerDesktop,
+            ),
+            (
+                "saved Docker, none to open",
+                found(false, false, false, true),
+                docker,
+                DockerNotRunning,
+            ),
+            // An installation saved on Podman never moves to Docker.
+            (
+                "saved Podman, Docker answering",
+                found(true, true, true, true),
+                podman,
+                UsePodman,
+            ),
+            (
+                "saved Podman, Docker Desktop used before",
+                found(false, true, true, true),
+                podman,
+                UsePodman,
+            ),
+            (
+                "saved Podman, Podman removed",
+                found(true, true, true, false),
+                podman,
+                InstallPodman,
+            ),
+            // Linux: unchanged, and no Docker Desktop to open.
+            (
+                "Linux, answering Docker",
+                linux(found(true, false, false, false)),
+                None,
+                UseDocker,
+            ),
+            (
+                "Linux, saved Docker stopped",
+                linux(found(false, true, true, true)),
+                docker,
+                DockerNotRunning,
+            ),
+        ];
+        for (row, found, saved, expected) in rows {
+            assert_eq!(choose(found, saved), expected, "{row}");
+        }
+    }
+
+    #[test]
+    fn a_stopped_docker_desktop_that_has_run_before_is_opened_and_podman_is_never_installed_beside_it(
+    ) {
+        let root = temp_root("stopped-docker-desktop");
+        let mut observed = Vec::new();
+        // Used before, or saved by this installation: Docker Desktop is opened.
+        for (found, saved) in [
+            (found(false, true, true, false), None),
+            (found(false, true, true, true), None),
+            (found(false, true, false, false), Some(Engine::Docker)),
+        ] {
+            let chosen = install_engine_with(
+                &root,
+                found,
+                saved,
+                |engine, ok| observed.push((engine, ok)),
+                || Ok("started".into()),
+                |_| panic!("Podman is never installed beside Docker"),
+                |_| panic!("Docker Desktop ships its own Compose"),
+            )
+            .unwrap();
+            assert_eq!(
+                chosen,
+                EngineChosen {
+                    engine: Engine::Docker,
+                    said: "started".into()
                 }
-                println!("1.44");
-            }"#,
+            );
+        }
+        assert!(observed.is_empty(), "starting is not an install");
+        // A Docker Desktop that does not start is reported as that, and Podman is not tried.
+        let problem = install_engine_with(
+            &root,
+            found(false, true, true, false),
+            None,
+            |_, _| panic!("nothing is installed"),
+            || Err(Problem::plain("no")),
+            |_| panic!("no Podman in Docker's place"),
+            |_| panic!("no Compose without an engine"),
+        )
+        .unwrap_err();
+        assert_eq!(problem.said, "no");
+    }
+
+    /// Run on every desktop platform, and on Linux, where the old behaviour is kept.
+    fn podman_is_installed(found: Found, saved: Option<Engine>) {
+        let root = temp_root("no-engine");
+        let mut observed = Vec::new();
+        // Whether it then finds a podman program depends on the machine running the test: hosted
+        // Ubuntu runners ship one. What matters is that the engine installed was Podman.
+        let _ = install_engine_with(
+            &root,
+            found,
+            saved,
+            |engine, ok| observed.push((engine, ok)),
+            || panic!("no Docker Desktop is opened"),
+            |_| Ok(()),
+            |_| Ok("Compose placed".into()),
+        );
+        assert_eq!(observed, [(Engine::Podman, true)]);
+    }
+
+    #[test]
+    fn a_machine_with_no_docker_gets_podman() {
+        podman_is_installed(NOTHING, None);
+    }
+
+    #[test]
+    fn a_docker_desktop_that_has_never_run_is_not_opened_and_podman_is_installed() {
+        podman_is_installed(found(false, true, false, false), None);
+    }
+
+    #[test]
+    fn linux_keeps_installing_podman() {
+        podman_is_installed(linux(NOTHING), None);
+        // Linux has no Docker Desktop to open, whatever the flags say.
+        podman_is_installed(linux(found(false, true, true, false)), None);
+    }
+
+    #[test]
+    fn an_installation_saved_on_podman_never_moves_to_an_answering_docker() {
+        let root = temp_root("saved-podman");
+        let chosen = install_engine_with(
+            &root,
+            found(true, true, true, true),
+            Some(Engine::Podman),
+            |_, _| panic!("nothing is installed"),
+            || panic!("Docker Desktop is not opened for a Podman installation"),
+            |_| panic!("no install"),
+            |_| Ok("Compose placed".into()),
         )
         .unwrap();
-        crate::test_support::compile_fixture(&source, &bin.join("docker.exe"));
-        std::env::set_var("PATH", &bin);
-        std::env::set_var("LOCALAPPDATA", root.join("Local"));
-        std::env::set_var("ProgramFiles", root.join("Program Files"));
-        std::env::remove_var("OPENBOT_TEST_DOCKER_RUNNING");
+        assert_eq!(chosen.engine, Engine::Podman);
+        // And a Podman that has gone is installed again, not swapped for Docker.
+        podman_is_installed(found(true, true, true, false), Some(Engine::Podman));
+    }
 
-        let found = engine::detect();
-        assert_eq!(found.engine, Some(Engine::Docker));
-        assert!(!found.responding);
-        assert!(engine::program(Engine::Podman).is_none());
-        let mut observed = Vec::new();
-        let result = install_engine_with(
+    #[test]
+    fn an_installation_saved_on_docker_with_none_to_open_asks_for_docker() {
+        let root = temp_root("saved-docker-stopped");
+        let problem = install_engine_with(
             &root,
-            |success| observed.push(success),
-            |_| {
-                // Installation supplies the engine that engine_ready will create/start.
-                std::fs::copy(bin.join("docker.exe"), bin.join("podman.exe")).unwrap();
-                Ok(())
-            },
-            |_| Ok("Compose placed".into()),
-        );
-        result.expect("setup should install its missing Podman");
-        assert_eq!(observed, [true], "the Podman installer must run");
-        assert!(engine::program(Engine::Podman).is_some());
+            found(false, false, false, true),
+            Some(Engine::Docker),
+            |_, _| panic!("nothing is installed"),
+            || panic!("there is no Docker Desktop to open"),
+            |_| panic!("no Podman in Docker's place"),
+            |_| panic!("no Compose without an engine"),
+        )
+        .unwrap_err();
+        assert!(problem.said.contains("Start Docker"), "{}", problem.said);
+    }
 
-        // A responding Docker still supplies the engine; never install a replacement.
-        std::fs::remove_file(bin.join("podman.exe")).unwrap();
-        std::env::set_var("OPENBOT_TEST_DOCKER_RUNNING", "1");
-        assert!(engine::detect().responding);
-        let result = install_engine_with(
+    #[test]
+    fn a_podman_somebody_already_has_is_theirs_and_is_used() {
+        let root = temp_root("existing-podman");
+        let chosen = install_engine_with(
             &root,
-            |_| panic!("no Podman installation should be observed"),
-            |_| panic!("responding Docker must be reused"),
+            found(false, false, false, true),
+            None,
+            |_, _| panic!("nothing is installed"),
+            || panic!("no Docker Desktop to open"),
+            |_| panic!("no install"),
             |_| Ok("Compose placed".into()),
+        )
+        .unwrap();
+        assert_eq!(
+            chosen,
+            EngineChosen {
+                engine: Engine::Podman,
+                said: "Compose placed".into()
+            }
         );
-        assert_eq!(result.unwrap(), "Compose placed");
-        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn an_answering_docker_is_used_as_it_is() {
+        let root = temp_root("answering-docker");
+        let chosen = install_engine_with(
+            &root,
+            found(true, false, false, true),
+            None,
+            |_, _| panic!("nothing is installed"),
+            || panic!("an answering Docker is not started again"),
+            |_| panic!("no install"),
+            |_| Ok("Compose placed".into()),
+        )
+        .unwrap();
+        assert_eq!(chosen.engine, Engine::Docker);
     }
 
     /// Every platform this app runs on has a Compose build, or the stack cannot be raised there.
@@ -1250,18 +977,9 @@ mod tests {
     fn every_pinned_digest_is_a_lowercase_sha256() {
         // The table is written by hand from each release's own checksums, and a digest with a typo
         // in it fails on somebody else's machine at install time rather than here.
-        for download in [
-            compose_download(),
-            podman_download(),
-            bun_download("windows", "x86_64"),
-            bun_download("windows", "aarch64"),
-            bun_download("macos", "x86_64"),
-            bun_download("macos", "aarch64"),
-            bun_download("linux", "x86_64"),
-            bun_download("linux", "aarch64"),
-        ]
-        .into_iter()
-        .flatten()
+        for download in [compose_download(), podman_download()]
+            .into_iter()
+            .flatten()
         {
             assert_eq!(download.sha256.len(), 64, "{download:?}");
             assert!(
@@ -1320,310 +1038,6 @@ mod tests {
         let path = fetch_verified(&pinned, &dir).expect("the file already here should be kept");
         assert_eq!(path, dir.join("kept"));
         let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    fn cached_bun_archive(name: &str) -> (PathBuf, Download) {
-        let dir = temp_root(name);
-        std::fs::create_dir_all(&dir).unwrap();
-        let download = Download {
-            url: "http://127.0.0.1:1/never-reached".into(),
-            sha256: "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
-            file: "bun.zip",
-        };
-        std::fs::write(dir.join(download.file), b"abc").unwrap();
-        (dir, download)
-    }
-
-    fn bun_zip_fixture(name: &str) -> (PathBuf, Download) {
-        use base64::Engine as _;
-
-        // A deflated ZIP containing bun-fixture/bun, a /bin/sh script printing 1.3.14,
-        // and an unrelated traversal entry that must never be extracted. Fixed bytes keep
-        // digest verification and real decompression in this offline regression.
-        let bytes = base64::engine::general_purpose::STANDARD.decode(
-            "UEsDBBQAAAAIAAAAIVwlsF+1HgAAABwAAAAPAAAAYnVuLWZpeHR1cmUvYnVuU1bUT8rM0y/O4CooyswrSVNQN9Qz1jM0iclT5wIAUEsDBBQAAAAIAAAAIVw6VdAHFwAAABUAAAANAAAALi4vdW5leHBlY3RlZMstLS5RyMsvUUhKVUitKClKTC5JTQEAUEsBAhQDFAAAAAgAAAAhXCWwX7UeAAAAHAAAAA8AAAAAAAAAAAAAAIABAAAAAGJ1bi1maXh0dXJlL2J1blBLAQIUAxQAAAAIAAAAIVw6VdAHFwAAABUAAAANAAAAAAAAAAAAAACAAUsAAAAuLi91bmV4cGVjdGVkUEsFBgAAAAACAAIAeAAAAI0AAAAAAA==",
-        ).unwrap();
-        let root = temp_root(name);
-        std::fs::create_dir_all(&root).unwrap();
-        let download = Download {
-            url: "http://127.0.0.1:1/never-reached".into(),
-            sha256: "afeced1e41e23b9a5a7c63fb917f68ee663a3735f02fe717cf859be06b1e29b6",
-            file: "bun-fixture.zip",
-        };
-        std::fs::write(root.join(download.file), bytes).unwrap();
-        (root, download)
-    }
-
-    #[test]
-    fn linux_runtime_downloads_are_pinned_for_both_supported_architectures() {
-        for (arch, file, sha256) in [
-            (
-                "x86_64",
-                "bun-linux-x64-baseline.zip",
-                "a063908ae08b7852ca10939bbdc6ceed3ddabce8fb9402dce83d65d73b36e6c7",
-            ),
-            (
-                "aarch64",
-                "bun-linux-aarch64.zip",
-                "a27ffb63a8310375836e0d6f668ae17fa8d8d18b88c37c821c65331973a19a3b",
-            ),
-        ] {
-            let download = bun_download("linux", arch).unwrap();
-            assert_eq!(download.file, file);
-            assert_eq!(download.sha256, sha256);
-            assert_eq!(
-                download.url,
-                format!("https://github.com/oven-sh/bun/releases/download/bun-v{BUN}/{file}")
-            );
-        }
-        assert!(bun_download("linux", "unsupported").is_err());
-    }
-
-    #[test]
-    fn macos_runtime_downloads_are_pinned_for_both_supported_architectures() {
-        for (arch, file) in [
-            ("aarch64", "bun-darwin-aarch64.zip"),
-            ("x86_64", "bun-darwin-x64-baseline.zip"),
-        ] {
-            let download = bun_download("macos", arch).unwrap();
-            assert_eq!(download.file, file);
-            assert_eq!(
-                download.url,
-                format!("https://github.com/oven-sh/bun/releases/download/bun-v{BUN}/{file}")
-            );
-        }
-        assert!(bun_download("macos", "unsupported").is_err());
-    }
-
-    #[test]
-    #[cfg(unix)]
-    fn bun_installation_works_without_developer_tools() {
-        if crate::test_support::isolated_process(
-            "install::tests::bun_installation_works_without_developer_tools",
-        ) {
-            return;
-        }
-        std::env::set_var("PATH", "/openbot-no-developer-tools");
-        let (root, download) = bun_zip_fixture("bun user's fresh account");
-        let binary = ensure_bun_with(None, || {
-            install_bun_with(
-                &root,
-                &download,
-                |archive, target| extract_bun(archive, target, "bun-fixture/bun"),
-                verify_bun,
-            )
-        })
-        .unwrap();
-        assert_eq!(binary, root.join("bun"));
-        verify_bun(&binary).unwrap();
-        assert!(!root.join("bun.download").exists());
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn bun_extraction_only_writes_the_expected_file() {
-        let (root, download) = bun_zip_fixture("bun extraction paths");
-        let into = root.join("installed");
-        std::fs::create_dir(&into).unwrap();
-        let target = into.join(format!("bun{}", std::env::consts::EXE_SUFFIX));
-        let archive = fetch_verified(&download, &root).unwrap();
-        extract_bun(&archive, &target, "bun-fixture/bun").unwrap();
-        assert_eq!(
-            std::fs::read(&target).unwrap(),
-            b"#!/bin/sh\nprintf '1.3.14\\n'\n"
-        );
-        assert_eq!(std::fs::read_dir(&into).unwrap().count(), 1);
-        assert!(!root.join("unexpected").exists());
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            assert_eq!(
-                std::fs::metadata(target).unwrap().permissions().mode() & 0o777,
-                0o755
-            );
-        }
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn missing_bun_archive_entry_is_not_published_or_run() {
-        let (root, download) = bun_zip_fixture("bun missing entry");
-        let failure = install_bun_with(
-            &root,
-            &download,
-            |archive, target| extract_bun(archive, target, "missing/bun"),
-            |_| panic!("a missing archive entry must not be run"),
-        )
-        .unwrap_err();
-        assert!(failure.detail.unwrap().contains("missing/bun"));
-        assert!(!root
-            .join(format!("bun{}", std::env::consts::EXE_SUFFIX))
-            .exists());
-        assert!(!root
-            .join(format!("bun.download{}", std::env::consts::EXE_SUFFIX))
-            .exists());
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn a_fresh_account_acquires_bun_before_returning_its_executable() {
-        let (dir, download) = cached_bun_archive("bun-fresh-account");
-        let binary = ensure_bun_with(None, || {
-            install_bun_with(
-                &dir,
-                &download,
-                |archive, target| {
-                    assert_eq!(std::fs::read(archive).unwrap(), b"abc");
-                    assert!(!dir
-                        .join(format!("bun{}", std::env::consts::EXE_SUFFIX))
-                        .exists());
-                    std::fs::write(target, b"executable").unwrap();
-                    Ok(())
-                },
-                |target| {
-                    assert_eq!(std::fs::read(target).unwrap(), b"executable");
-                    assert!(
-                        !dir.join(format!("bun{}", std::env::consts::EXE_SUFFIX))
-                            .exists(),
-                        "verify before publishing"
-                    );
-                    Ok(())
-                },
-            )
-        })
-        .unwrap();
-        assert_eq!(
-            binary,
-            dir.join(format!("bun{}", std::env::consts::EXE_SUFFIX))
-        );
-        assert_eq!(std::fs::read(binary).unwrap(), b"executable");
-        assert!(!dir
-            .join(format!("bun.download{}", std::env::consts::EXE_SUFFIX))
-            .exists());
-        let _ = std::fs::remove_dir_all(dir);
-    }
-
-    #[test]
-    fn an_existing_bun_does_not_trigger_installation() {
-        let root = temp_root("existing-pinned-bun");
-        let existing = runtime_version_fixture(&root, BUN);
-        assert_eq!(
-            ensure_bun_with(Some(existing.clone()), || panic!("already installed")).unwrap(),
-            existing
-        );
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    fn runtime_version_fixture(root: &Path, version: &str) -> PathBuf {
-        std::fs::create_dir_all(root).unwrap();
-        let source = root.join("runtime.rs");
-        std::fs::write(&source, format!("fn main() {{ assert_eq!(std::env::args().nth(1).as_deref(), Some(\"--version\")); println!({version:?}); }}")).unwrap();
-        let binary = root.join(format!("bun{}", std::env::consts::EXE_SUFFIX));
-        crate::test_support::compile_fixture(&source, &binary);
-        binary
-    }
-
-    #[test]
-    fn unsupported_existing_bun_acquires_pinned_runtime_without_changing_user_binary() {
-        let root = temp_root("unsupported-existing-bun");
-        let existing = runtime_version_fixture(&root.join("user"), "1.2.15");
-        let pinned = runtime_version_fixture(&root.join("openbot"), BUN);
-        let before = std::fs::read(&existing).unwrap();
-        let chosen = ensure_bun_with(Some(existing.clone()), || Ok(pinned.clone())).unwrap();
-        assert_eq!(
-            chosen, pinned,
-            "an incompatible user runtime must not be selected"
-        );
-        assert_eq!(
-            std::fs::read(existing).unwrap(),
-            before,
-            "the user's runtime is untouched"
-        );
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn an_acquired_bun_is_checked_and_reused_without_extracting_again() {
-        let (dir, download) = cached_bun_archive("bun-reuse");
-        let binary = dir.join(format!("bun{}", std::env::consts::EXE_SUFFIX));
-        std::fs::write(&binary, b"installed").unwrap();
-        std::fs::remove_file(dir.join(download.file)).unwrap();
-        let result = install_bun_with(
-            &dir,
-            &download,
-            |_, _| panic!("must not replace the installed runtime"),
-            |target| {
-                assert_eq!(target, binary);
-                Ok(())
-            },
-        );
-        assert_eq!(result.unwrap(), binary);
-        let _ = std::fs::remove_dir_all(dir);
-    }
-
-    #[test]
-    fn bun_extraction_failure_keeps_the_diagnostic_and_publishes_nothing() {
-        let (dir, download) = cached_bun_archive("bun-extraction-failure");
-        let failure = Problem::with("could not unpack", "PowerShell exit 1: access denied");
-        let result = install_bun_with(
-            &dir,
-            &download,
-            |_, target| {
-                std::fs::write(target, b"partially extracted executable").unwrap();
-                Err(failure.clone())
-            },
-            |_| panic!("failed extraction must not be executed"),
-        );
-        assert_eq!(result, Err(failure));
-        assert!(!dir
-            .join(format!("bun{}", std::env::consts::EXE_SUFFIX))
-            .exists());
-        assert!(!dir
-            .join(format!("bun.download{}", std::env::consts::EXE_SUFFIX))
-            .exists());
-        let _ = std::fs::remove_dir_all(dir);
-    }
-
-    #[test]
-    fn bun_that_cannot_run_is_not_published_and_its_failure_is_preserved() {
-        let (dir, download) = cached_bun_archive("bun-probe-failure");
-        let failure = Problem::with("could not start", "bun --version exited 1");
-        let result = ensure_bun_with(None, || {
-            install_bun_with(
-                &dir,
-                &download,
-                |_, target| {
-                    std::fs::write(target, b"broken executable").unwrap();
-                    Ok(())
-                },
-                |_| Err(failure.clone()),
-            )
-        });
-        assert_eq!(result, Err(failure));
-        assert!(!dir
-            .join(format!("bun{}", std::env::consts::EXE_SUFFIX))
-            .exists());
-        assert!(!dir
-            .join(format!("bun.download{}", std::env::consts::EXE_SUFFIX))
-            .exists());
-        let _ = std::fs::remove_dir_all(dir);
-    }
-
-    #[test]
-    fn an_unverified_bun_archive_is_never_extracted_or_run() {
-        let (dir, download) = cached_bun_archive("bun-wrong-digest");
-        std::fs::write(dir.join(download.file), b"corrupt archive").unwrap();
-        let result = install_bun_with(
-            &dir,
-            &download,
-            |_, _| panic!("an unverified archive must not be extracted"),
-            |_| panic!("an unverified runtime must not be run"),
-        );
-        assert!(result.unwrap_err().detail.is_some());
-        assert!(!dir
-            .join(format!("bun{}", std::env::consts::EXE_SUFFIX))
-            .exists());
-        let _ = std::fs::remove_dir_all(dir);
     }
 
     /// Podman publishes an `arm64` package only, so an Intel Mac has to be told rather than handed
@@ -1863,885 +1277,20 @@ esac
         assert!(quoted.contains("Application Support"), "{quoted}");
         assert!(!quoted.contains("\\\""), "{quoted}");
     }
-    // These exercise the real managed coordinator and real temporary files. The
-    // verifier/extractor fault fixture is not native Windows or a real Bun proof.
-    #[derive(Clone, Copy, PartialEq, Eq)]
-    enum RepairFault { None, Archive, Extract, VerifyStage, Quarantine, Publish, Rollback, LaterTarget, StageCleanup, LockCleanup, PublishAckLost, UnsupportedLink, FinalTargetChange, StageSymlink, QuarantineChange, RollbackArrival }
-    struct RepairFixtureOps {
-        fault: RepairFault,
-        archive_calls: usize,
-        extract_calls: usize,
-        verify_calls: usize,
-        link_calls: usize,
-        real_zip: bool,
-    }
-    impl RepairFixtureOps {
-        fn new(fault: RepairFault) -> Self {
-            Self { fault, archive_calls: 0, extract_calls: 0, verify_calls: 0, link_calls: 0, real_zip: false }
+
+    /// The prompt is named where there is one, and none is promised where there is not.
+    #[test]
+    fn the_podman_install_line_names_the_prompt_each_platform_raises() {
+        // A prompt is the system's own window in front of OpenBot's: the line says so wherever
+        // the person is, and OpenBot comes back once the installer is done.
+        for os in ["macos", "linux"] {
+            let line = podman_install_said(os);
+            assert!(line.said.contains("password"), "{os}");
+            assert!(line.elsewhere, "{os}");
         }
+        assert_eq!(
+            podman_install_said("windows"),
+            StepLine::here("Installing Podman.")
+        );
     }
-    impl BunRepairOps for RepairFixtureOps {
-        fn archive(&mut self, download: &Download, into: &Path, _work: &Path) -> Result<PathBuf, Problem> {
-            self.archive_calls += 1;
-            if self.fault == RepairFault::Archive { return Err(managed_error("injected download failure")); }
-            // No fixture network path: the coordinator still checks its pinned digest.
-            Ok(into.join(download.file))
-        }
-        fn extract(&mut self, archive: &Path, stage: &Path, entry: &str) -> Result<(), Problem> {
-            self.extract_calls += 1;
-            if self.fault == RepairFault::Extract {
-                std::fs::write(stage, b"partial-stage").unwrap();
-                return Err(managed_error("injected extraction failure"));
-            }
-            if self.fault == RepairFault::StageSymlink {
-                #[cfg(unix)]
-                { std::os::unix::fs::symlink(stage.parent().unwrap().parent().unwrap().join("protected-stage-target"), stage).unwrap(); return Ok(()); }
-                #[cfg(not(unix))]
-                { return Err(managed_error("this fixture requires Unix symlink support")); }
-            }
-            if self.real_zip { return extract_bun(archive, stage, entry); }
-            std::fs::write(stage, b"healthy-runtime").map_err(|e| managed_error(e.to_string()))
-        }
-        fn verify(&mut self, path: &Path) -> Result<(), Problem> {
-            self.verify_calls += 1;
-            if self.fault == RepairFault::StageSymlink && path.file_name().unwrap().to_string_lossy().starts_with("bun.stage") {
-                panic!("linked staged runtime must never reach verification");
-            }
-            if self.fault == RepairFault::VerifyStage && path.file_name().unwrap().to_string_lossy().starts_with("bun.stage") {
-                return Err(managed_error("injected stage verification failure"));
-            }
-            match std::fs::read(path) {
-                Ok(bytes) if bytes == b"healthy-runtime" || bytes == b"#!/bin/sh\nprintf '1.3.14\\n'\n" => Ok(()),
-                _ => Err(managed_error("fixture runtime is not healthy")),
-            }
-        }
-        fn quarantine(&mut self, source: &Path, target: &Path) -> std::io::Result<()> {
-            if self.fault == RepairFault::Quarantine { return Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, "injected occupied/readonly rename")); }
-            std::fs::rename(source, target)
-        }
-        fn link(&mut self, source: &Path, target: &Path) -> std::io::Result<()> {
-            self.link_calls += 1;
-            if self.fault == RepairFault::UnsupportedLink {
-                return Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "injected no hard-link support"));
-            }
-            if self.link_calls == 1 && self.fault == RepairFault::QuarantineChange {
-                let previous = source.parent().unwrap().join(format!("bun.previous{}", std::env::consts::EXE_SUFFIX));
-                std::fs::rename(&previous, source.parent().unwrap().join("retained-original"))?;
-                std::fs::write(previous, b"changed-quarantine")?;
-                return Err(std::io::Error::other("injected quarantine identity change"));
-            }
-            if self.link_calls == 1 && self.fault == RepairFault::RollbackArrival {
-                return Err(std::io::Error::other("injected publish failure"));
-            }
-            if self.link_calls == 2 && self.fault == RepairFault::RollbackArrival {
-                std::fs::write(target, b"late-at-rollback")?;
-                return std::fs::hard_link(source, target);
-            }
-            if self.link_calls == 1 && self.fault == RepairFault::PublishAckLost {
-                std::fs::hard_link(source, target)?;
-                return Err(std::io::Error::other("injected publish response loss"));
-            }
-            if self.link_calls == 1 && self.fault == RepairFault::LaterTarget {
-                std::fs::write(target, b"later-owner-target")?;
-                return Err(std::io::Error::new(std::io::ErrorKind::AlreadyExists, "injected later target"));
-            }
-            if self.link_calls == 1 && matches!(self.fault, RepairFault::Publish | RepairFault::Rollback)
-                || self.link_calls == 2 && self.fault == RepairFault::Rollback
-            { return Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, "injected create-only failure")); }
-            std::fs::hard_link(source, target)
-        }
-        fn remove(&mut self, path: &Path) -> std::io::Result<()> {
-            let name = path.file_name().unwrap().to_string_lossy();
-            if self.fault == RepairFault::StageCleanup && name.starts_with("bun.stage")
-                || self.fault == RepairFault::LockCleanup && name == "bun.repair.lock"
-            { return Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, "injected owned cleanup failure")); }
-            std::fs::remove_file(path)?;
-            if self.fault == RepairFault::FinalTargetChange && name == "bun.repair.lock" {
-                let target = path.parent().unwrap().join(format!("bun{}", std::env::consts::EXE_SUFFIX));
-                std::fs::rename(&target, path.parent().unwrap().join("published-moved-by-fixture"))?;
-                std::fs::write(target, b"later-final-target")?;
-            }
-            Ok(())
-        }
-    }
-    fn repair_fixture(label: &str) -> (PathBuf, Download, PathBuf) {
-        let (root, download) = cached_bun_archive(label);
-        let root = std::fs::canonicalize(root).unwrap();
-        let binary = root.join(format!("bun{}", std::env::consts::EXE_SUFFIX));
-        std::fs::write(&binary, b"bad-old-runtime").unwrap();
-        (root, download, binary)
-    }
-    fn previous_runtime(root: &Path) -> PathBuf {
-        std::fs::read_dir(root).unwrap().map(|e| e.unwrap().path())
-            .find(|p| p.file_name().unwrap().to_string_lossy().starts_with("bun.repair-") && p.join(format!("bun.previous{}", std::env::consts::EXE_SUFFIX)).is_file())
-            .unwrap().join(format!("bun.previous{}", std::env::consts::EXE_SUFFIX))
-    }
-
-    #[test]
-    fn managed_bad_runtime_is_repaired_once_then_verified_reuse_has_zero_acquisition() {
-        let (root, download, binary) = repair_fixture("managed-repair-reuse");
-        let mut ops = RepairFixtureOps::new(RepairFault::None);
-        assert_eq!(repair_managed_bun(&root, &download, "fixture", &mut ops).unwrap(), binary);
-        assert_eq!(std::fs::read(&binary).unwrap(), b"healthy-runtime");
-        assert_eq!(std::fs::read(previous_runtime(&root)).unwrap(), b"bad-old-runtime");
-        assert_eq!((ops.archive_calls, ops.extract_calls, ops.link_calls), (1, 1, 1));
-        assert!(!root.join("bun.repair.lock").exists());
-        let mut again = RepairFixtureOps::new(RepairFault::Archive);
-        assert_eq!(repair_managed_bun(&root, &download, "fixture", &mut again).unwrap(), binary);
-        assert_eq!((again.archive_calls, again.extract_calls, again.link_calls), (0, 0, 0));
-        assert_eq!(again.verify_calls, 1);
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn managed_download_extract_or_stage_verify_failure_preserves_old_entry_bytes_and_mode() {
-        for (label, fault) in [("download", RepairFault::Archive), ("extract", RepairFault::Extract), ("verify", RepairFault::VerifyStage)] {
-            let (root, download, binary) = repair_fixture(&format!("managed-prepublish-{label}"));
-            let old = bun_identity(&binary).unwrap();
-            let mut ops = RepairFixtureOps::new(fault);
-            assert!(repair_managed_bun(&root, &download, "fixture", &mut ops).is_err());
-            assert_eq!(bun_identity(&binary).unwrap(), old);
-            assert_eq!(ops.link_calls, 0);
-            assert!(!root.join("bun.repair.lock").exists());
-            std::fs::remove_dir_all(root).unwrap();
-        }
-    }
-
-    #[test]
-    fn managed_wrong_archive_hash_is_refused_before_extract_and_preserves_old_target() {
-        let (root, download, binary) = repair_fixture("managed-hash");
-        std::fs::write(root.join(download.file), b"wrong hash").unwrap();
-        let old = bun_identity(&binary).unwrap(); let mut ops = RepairFixtureOps::new(RepairFault::None);
-        assert!(repair_managed_bun(&root, &download, "fixture", &mut ops).is_err());
-        assert_eq!(ops.extract_calls, 0); assert_eq!(bun_identity(&binary).unwrap(), old);
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn managed_missing_real_zip_entry_cannot_publish_over_old_target() {
-        let (root, download) = bun_zip_fixture("managed-real-zip-missing");
-        let root = std::fs::canonicalize(root).unwrap();
-        let binary = root.join(format!("bun{}", std::env::consts::EXE_SUFFIX));
-        std::fs::write(&binary, b"bad-old-runtime").unwrap();
-        let old = bun_identity(&binary).unwrap(); let mut ops = RepairFixtureOps::new(RepairFault::None); ops.real_zip = true;
-        assert!(repair_managed_bun(&root, &download, "missing/bun", &mut ops).is_err());
-        assert_eq!(ops.link_calls, 0); assert_eq!(bun_identity(&binary).unwrap(), old);
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn managed_quarantine_rename_failure_never_publishes_or_removes_old_target() {
-        let (root, download, binary) = repair_fixture("managed-rename-failure");
-        let old = bun_identity(&binary).unwrap(); let mut ops = RepairFixtureOps::new(RepairFault::Quarantine);
-        assert!(repair_managed_bun(&root, &download, "fixture", &mut ops).is_err());
-        assert_eq!(ops.link_calls, 0); assert_eq!(bun_identity(&binary).unwrap(), old);
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn managed_failed_publication_restores_known_bad_old_file_but_still_returns_error() {
-        let (root, download, binary) = repair_fixture("managed-rollback-success");
-        let old = bun_identity(&binary).unwrap(); let mut ops = RepairFixtureOps::new(RepairFault::Publish);
-        let error = repair_managed_bun(&root, &download, "fixture", &mut ops).unwrap_err();
-        assert!(error.detail.unwrap().contains("known bad old runtime restored"));
-        assert_eq!(ops.link_calls, 2); assert_eq!(bun_identity(&binary).unwrap(), old);
-        assert_eq!(std::fs::read(previous_runtime(&root)).unwrap(), b"bad-old-runtime");
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn managed_failed_rollback_leaves_recoverable_quarantine_and_reports_error() {
-        let (root, download, binary) = repair_fixture("managed-rollback-failure");
-        let mut ops = RepairFixtureOps::new(RepairFault::Rollback);
-        let error = repair_managed_bun(&root, &download, "fixture", &mut ops).unwrap_err();
-        assert!(error.detail.unwrap().contains("rollback failed")); assert_eq!(ops.link_calls, 2);
-        assert!(!binary.exists()); assert_eq!(std::fs::read(previous_runtime(&root)).unwrap(), b"bad-old-runtime");
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn managed_later_target_is_not_overwritten_deleted_or_rolled_back_over() {
-        let (root, download, binary) = repair_fixture("managed-later-target");
-        let mut ops = RepairFixtureOps::new(RepairFault::LaterTarget);
-        assert!(repair_managed_bun(&root, &download, "fixture", &mut ops).is_err());
-        assert_eq!(ops.link_calls, 1); assert_eq!(std::fs::read(binary).unwrap(), b"later-owner-target");
-        assert_eq!(std::fs::read(previous_runtime(&root)).unwrap(), b"bad-old-runtime");
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn managed_publication_ack_loss_keeps_published_file_and_quarantine_but_is_not_success() {
-        let (root, download, binary) = repair_fixture("managed-publish-unknown");
-        let mut ops = RepairFixtureOps::new(RepairFault::PublishAckLost);
-        assert!(repair_managed_bun(&root, &download, "fixture", &mut ops).is_err());
-        assert_eq!(ops.link_calls, 1); assert_eq!(std::fs::read(binary).unwrap(), b"healthy-runtime");
-        assert_eq!(std::fs::read(previous_runtime(&root)).unwrap(), b"bad-old-runtime");
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn managed_busy_lock_is_not_guessed_stale_or_removed() {
-        let (root, download, binary) = repair_fixture("managed-busy");
-        std::fs::write(root.join("bun.repair.lock"), b"owned-by-another-attempt").unwrap();
-        let old = bun_identity(&binary).unwrap(); let mut ops = RepairFixtureOps::new(RepairFault::None);
-        assert!(repair_managed_bun(&root, &download, "fixture", &mut ops).is_err());
-        assert_eq!(ops.archive_calls, 0); assert_eq!(bun_identity(&binary).unwrap(), old);
-        assert_eq!(std::fs::read(root.join("bun.repair.lock")).unwrap(), b"owned-by-another-attempt");
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn managed_owned_cleanup_failures_return_error_without_deleting_healthy_published_target() {
-        for (label, fault) in [("stage", RepairFault::StageCleanup), ("lock", RepairFault::LockCleanup)] {
-            let (root, download, binary) = repair_fixture(&format!("managed-cleanup-{label}"));
-            let mut ops = RepairFixtureOps::new(fault);
-            assert!(repair_managed_bun(&root, &download, "fixture", &mut ops).is_err());
-            assert_eq!(std::fs::read(binary).unwrap(), b"healthy-runtime");
-            assert_eq!(std::fs::read(previous_runtime(&root)).unwrap(), b"bad-old-runtime");
-            if fault == RepairFault::LockCleanup { assert!(root.join("bun.repair.lock").exists()); }
-            std::fs::remove_dir_all(root).unwrap();
-        }
-    }
-
-    #[test]
-    fn managed_same_direct_locator_repairs_while_independent_bad_external_entry_is_untouched() {
-        let (root, download, binary) = repair_fixture("managed-external-boundary");
-        let external = root.join("external-bun"); std::fs::write(&external, b"old-user-runtime").unwrap();
-        let protected = bun_identity(&external).unwrap();
-        let mut ops = RepairFixtureOps::new(RepairFault::None);
-        let result = ensure_bun_selected(Some(external.clone()), &binary, |_| Err(managed_error("unsupported external version")), || repair_managed_bun(&root, &download, "fixture", &mut ops));
-        assert_eq!(result.unwrap(), binary); assert_eq!(bun_identity(&external).unwrap(), protected);
-        std::fs::write(&binary, b"bad-old-runtime").unwrap();
-        let mut again = RepairFixtureOps::new(RepairFault::None);
-        let result = ensure_bun_selected(Some(root.join(".").join(binary.file_name().unwrap())), &binary, |_| panic!("direct managed entry must use guarded verification"), || repair_managed_bun(&root, &download, "fixture", &mut again));
-        assert_eq!(result.unwrap(), binary);
-        assert_eq!(bun_identity(&external).unwrap(), protected);
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn independent_healthy_external_runtime_is_returned_without_acquisition() {
-        let (root, _download, binary) = repair_fixture("managed-healthy-external");
-        let external = root.join("external-bun"); std::fs::write(&external, b"healthy-user-runtime").unwrap();
-        let old = bun_identity(&external).unwrap();
-        assert_eq!(ensure_bun_selected(Some(external.clone()), &binary, |_| Ok(()), || panic!("external runtime must not install")).unwrap(), external);
-        assert_eq!(bun_identity(&external).unwrap(), old);
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn independent_external_hardlink_preserves_old_inode_when_managed_entry_is_replaced() {
-        let (root, download, binary) = repair_fixture("managed-external-hardlink");
-        let external = root.join("external-hardlink"); std::fs::hard_link(&binary, &external).unwrap();
-        let old = bun_identity(&external).unwrap(); let mut ops = RepairFixtureOps::new(RepairFault::None);
-        ensure_bun_selected(Some(external.clone()), &binary, |_| Err(managed_error("bad old external")), || repair_managed_bun(&root, &download, "fixture", &mut ops)).unwrap();
-        assert_eq!(bun_identity(&external).unwrap(), old);
-        assert_eq!(std::fs::read(binary).unwrap(), b"healthy-runtime");
-        assert_eq!(std::fs::read(previous_runtime(&root)).unwrap(), b"bad-old-runtime");
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    #[cfg(unix)]
-    fn managed_target_archive_and_parent_links_are_refused_before_managed_verifier() {
-        use std::os::unix::fs::symlink;
-        for entry in ["target", "archive", "parent"] {
-            let (root, download, binary) = repair_fixture(&format!("managed-link-{entry}"));
-            let protected = root.join("protected"); std::fs::write(&protected, b"do-not-execute-or-write").unwrap();
-            let into = if entry == "parent" {
-                let parent = root.join("linked-parent"); symlink(&root, &parent).unwrap(); parent
-            } else {
-                let target = if entry == "target" { binary.clone() } else { root.join(download.file) };
-                std::fs::remove_file(&target).unwrap(); symlink(&protected, target).unwrap(); root.clone()
-            };
-            let mut ops = RepairFixtureOps::new(RepairFault::None);
-            assert!(repair_managed_bun(&into, &download, "fixture", &mut ops).is_err());
-            assert_eq!(ops.verify_calls, 0); assert_eq!(ops.archive_calls, 0);
-            assert_eq!(std::fs::read(protected).unwrap(), b"do-not-execute-or-write");
-            std::fs::remove_dir_all(root).unwrap();
-        }
-    }
-
-    #[test]
-    #[cfg(unix)]
-    fn external_symlink_to_managed_locator_is_rejected_without_verifying_it() {
-        let (root, _download, binary) = repair_fixture("managed-external-link");
-        let alias = root.join("alias"); std::os::unix::fs::symlink(&binary, &alias).unwrap();
-        assert!(ensure_bun_selected(Some(alias), &binary, |_| panic!("alias must not execute managed binary"), || panic!("alias must not mutate managed binary")).is_err());
-        assert_eq!(std::fs::read(binary).unwrap(), b"bad-old-runtime");
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    #[cfg(windows)]
-    #[ignore = "requires Windows symlink privilege; source definition is not native OS evidence"]
-    fn windows_managed_reparse_entry_is_rejected_before_verification() {
-        use std::os::windows::fs::{symlink_file, MetadataExt};
-        let (root, download, binary) = repair_fixture("managed-windows-reparse");
-        let protected = root.join("protected"); std::fs::write(&protected, b"protected").unwrap();
-        std::fs::remove_file(&binary).unwrap(); symlink_file(&protected, &binary).unwrap();
-        assert_ne!(std::fs::symlink_metadata(&binary).unwrap().file_attributes() & 0x400, 0);
-        let mut ops = RepairFixtureOps::new(RepairFault::None);
-        assert!(repair_managed_bun(&root, &download, "fixture", &mut ops).is_err());
-        assert_eq!(ops.verify_calls, 0); assert_eq!(std::fs::read(protected).unwrap(), b"protected");
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn managed_unsupported_hard_link_never_falls_back_to_overwriting_copy_or_rename() {
-        let (root, download, binary) = repair_fixture("managed-link-unsupported");
-        let mut ops = RepairFixtureOps::new(RepairFault::UnsupportedLink);
-        assert!(repair_managed_bun(&root, &download, "fixture", &mut ops).is_err());
-        assert_eq!(ops.link_calls, 2);
-        assert!(!binary.exists());
-        assert_eq!(std::fs::read(previous_runtime(&root)).unwrap(), b"bad-old-runtime");
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn managed_final_target_change_returns_error_and_keeps_staged_and_old_recovery_links() {
-        let (root, download, binary) = repair_fixture("managed-final-target-change");
-        let mut ops = RepairFixtureOps::new(RepairFault::FinalTargetChange);
-        assert!(repair_managed_bun(&root, &download, "fixture", &mut ops).is_err());
-        assert_eq!(std::fs::read(binary).unwrap(), b"later-final-target");
-        let previous = previous_runtime(&root);
-        let stage = previous.parent().unwrap().join(format!("bun.stage{}", std::env::consts::EXE_SUFFIX));
-        assert_eq!(std::fs::read(stage).unwrap(), b"healthy-runtime");
-        assert_eq!(std::fs::read(previous).unwrap(), b"bad-old-runtime");
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn managed_directory_target_and_parent_traversal_are_not_absence_or_external_ownership() {
-        let (root, download, binary) = repair_fixture("managed-special-target");
-        std::fs::remove_file(&binary).unwrap(); std::fs::create_dir(&binary).unwrap();
-        let mut ops = RepairFixtureOps::new(RepairFault::None);
-        assert!(repair_managed_bun(&root, &download, "fixture", &mut ops).is_err());
-        assert_eq!(ops.verify_calls, 0);
-        // Spell the traversal textually: `Path::join` onto a verbatim (`\\?\`) root, which is what
-        // canonicalize returns on Windows, lexically drops `child/..` before the check could see it.
-        for separator in [std::path::MAIN_SEPARATOR_STR, "/"] {
-            let mut traversal = root.clone().into_os_string();
-            traversal.push(std::path::MAIN_SEPARATOR_STR);
-            traversal.push(["child", "..", "bun"].join(separator));
-            assert!(ordinary_absolute(Path::new(&traversal)).is_err());
-        }
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    #[cfg(unix)]
-    fn managed_staged_link_is_refused_before_the_staged_verifier_runs() {
-        let (root, download, binary) = repair_fixture("managed-stage-link");
-        let protected = root.join("protected-stage-target"); std::fs::write(&protected, b"protected-stage").unwrap();
-        let old = bun_identity(&binary).unwrap(); let mut ops = RepairFixtureOps::new(RepairFault::StageSymlink);
-        assert!(repair_managed_bun(&root, &download, "fixture", &mut ops).is_err());
-        assert_eq!(ops.link_calls, 0); assert_eq!(bun_identity(&binary).unwrap(), old);
-        assert_eq!(std::fs::read(protected).unwrap(), b"protected-stage");
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn managed_changed_quarantine_identity_is_not_used_for_rollback() {
-        let (root, download, binary) = repair_fixture("managed-quarantine-change");
-        let mut ops = RepairFixtureOps::new(RepairFault::QuarantineChange);
-        let error = repair_managed_bun(&root, &download, "fixture", &mut ops).unwrap_err();
-        assert!(error.detail.unwrap().contains("quarantine identity changed"));
-        assert_eq!(ops.link_calls, 1); assert!(!binary.exists());
-        assert_eq!(std::fs::read(previous_runtime(&root)).unwrap(), b"changed-quarantine");
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn managed_rollback_target_arrival_is_not_overwritten_by_create_only_restore() {
-        let (root, download, binary) = repair_fixture("managed-rollback-arrival");
-        let mut ops = RepairFixtureOps::new(RepairFault::RollbackArrival);
-        assert!(repair_managed_bun(&root, &download, "fixture", &mut ops).is_err());
-        assert_eq!(ops.link_calls, 2); assert_eq!(std::fs::read(binary).unwrap(), b"late-at-rollback");
-        assert_eq!(std::fs::read(previous_runtime(&root)).unwrap(), b"bad-old-runtime");
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[derive(Debug, PartialEq, Eq)]
-    struct SelectionEntry {
-        directory: bool,
-        file: bool,
-        link: bool,
-        link_target: Option<PathBuf>,
-        length: u64,
-        readonly: bool,
-        #[cfg(unix)] mode: u32,
-        #[cfg(windows)] attributes: u32,
-    }
-    fn selection_entry(path: &Path) -> SelectionEntry {
-        let metadata = std::fs::symlink_metadata(path).unwrap();
-        SelectionEntry {
-            directory: metadata.is_dir(), file: metadata.is_file(), link: metadata.file_type().is_symlink(),
-            link_target: std::fs::read_link(path).ok(), length: metadata.len(), readonly: metadata.permissions().readonly(),
-            #[cfg(unix)] mode: { use std::os::unix::fs::PermissionsExt; metadata.permissions().mode() },
-            #[cfg(windows)] attributes: { use std::os::windows::fs::MetadataExt; metadata.file_attributes() },
-        }
-    }
-    fn assert_independent_external_reused(existing: &Path, managed: &Path) {
-        let before_external = selection_entry(existing);
-        let before_managed = selection_entry(managed);
-        let bytes = std::fs::read(existing).unwrap();
-        let verify_calls = std::cell::Cell::new(0usize);
-        let install_calls = std::cell::Cell::new(0usize);
-        let selected = ensure_bun_selected(Some(existing.to_path_buf()), managed, |actual| {
-            verify_calls.set(verify_calls.get() + 1);
-            assert_eq!(actual, existing);
-            assert_eq!(std::fs::read(actual).unwrap(), bytes);
-            Ok(())
-        }, || {
-            install_calls.set(install_calls.get() + 1);
-            Err(managed_error("independent external must not acquire/install"))
-        }).unwrap();
-        assert_eq!(selected, existing);
-        assert_eq!(verify_calls.get(), 1);
-        assert_eq!(install_calls.get(), 0);
-        assert_eq!(std::fs::read(existing).unwrap(), bytes);
-        assert_eq!(selection_entry(existing), before_external);
-        assert_eq!(selection_entry(managed), before_managed);
-    }
-
-    #[test]
-    fn healthy_external_reuse_is_independent_of_a_directory_at_managed_target() {
-        let (root, _download, managed) = repair_fixture("selection-managed-directory");
-        std::fs::remove_file(&managed).unwrap(); std::fs::create_dir(&managed).unwrap();
-        let external = root.join("external-healthy"); std::fs::write(&external, b"healthy-external").unwrap();
-        assert_independent_external_reused(&external, &managed);
-        assert_eq!(std::fs::read_dir(&managed).unwrap().count(), 0);
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    #[cfg(unix)]
-    fn healthy_external_reuse_is_independent_of_a_managed_target_symlink() {
-        let (root, _download, managed) = repair_fixture("selection-managed-link");
-        let protected = root.join("managed-link-referent"); std::fs::write(&protected, b"unchanged-managed-referent").unwrap();
-        let before_referent = selection_entry(&protected);
-        std::fs::remove_file(&managed).unwrap(); std::os::unix::fs::symlink(&protected, &managed).unwrap();
-        let external = root.join("external-healthy"); std::fs::write(&external, b"healthy-external").unwrap();
-        assert_independent_external_reused(&external, &managed);
-        assert_eq!(std::fs::read(&protected).unwrap(), b"unchanged-managed-referent");
-        assert_eq!(selection_entry(&protected), before_referent);
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    #[cfg(unix)]
-    fn managed_symlink_back_to_healthy_external_does_not_make_external_managed() {
-        let (root, _download, managed) = repair_fixture("selection-managed-reverse-link");
-        let external = root.join("external-healthy"); std::fs::write(&external, b"healthy-external").unwrap();
-        std::fs::remove_file(&managed).unwrap(); std::os::unix::fs::symlink(&external, &managed).unwrap();
-        assert_independent_external_reused(&external, &managed);
-        assert_eq!(std::fs::read_link(&managed).unwrap(), external);
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    #[cfg(windows)]
-    #[ignore = "requires Windows symlink privilege; not native runtime evidence"]
-    fn healthy_external_reuse_ignores_unrelated_or_reverse_managed_reparse_entry() {
-        use std::os::windows::fs::{symlink_file, MetadataExt};
-        for reverse in [false, true] {
-            let (root, _download, managed) = repair_fixture(if reverse { "selection-windows-reverse" } else { "selection-windows-reparse" });
-            let external = root.join("external-healthy"); std::fs::write(&external, b"healthy-external").unwrap();
-            let referent = if reverse { external.clone() } else { root.join("other-referent") };
-            if !reverse { std::fs::write(&referent, b"unchanged-referent").unwrap(); }
-            let referent_bytes = std::fs::read(&referent).unwrap(); let referent_entry = selection_entry(&referent);
-            std::fs::remove_file(&managed).unwrap(); symlink_file(&referent, &managed).unwrap();
-            assert_ne!(std::fs::symlink_metadata(&managed).unwrap().file_attributes() & 0x400, 0);
-            assert_independent_external_reused(&external, &managed);
-            assert_eq!(std::fs::read(&referent).unwrap(), referent_bytes);
-            assert_eq!(selection_entry(&referent), referent_entry);
-            std::fs::remove_dir_all(root).unwrap();
-        }
-    }
-
-    #[test]
-    fn direct_managed_selection_preflights_before_any_verifier_or_installer() {
-        let (root, _download, managed) = repair_fixture("selection-direct-managed-directory");
-        std::fs::remove_file(&managed).unwrap(); std::fs::create_dir(&managed).unwrap();
-        let before = selection_entry(&managed);
-        assert!(ensure_bun_selected(Some(managed.clone()), &managed,
-            |_| panic!("managed directory must not reach external verifier"),
-            || panic!("managed directory must fail preflight before installer")).is_err());
-        assert_eq!(selection_entry(&managed), before);
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    #[cfg(unix)]
-    fn relative_external_alias_to_managed_is_rejected_even_if_managed_links_to_external() {
-        let (root, _download, managed) = repair_fixture("selection-forward-alias-reverse-managed");
-        let external = root.join("external-healthy"); std::fs::write(&external, b"healthy-external").unwrap();
-        std::fs::remove_file(&managed).unwrap(); std::os::unix::fs::symlink(&external, &managed).unwrap();
-        let links = root.join("aliases"); std::fs::create_dir(&links).unwrap();
-        let alias = links.join("runtime"); std::os::unix::fs::symlink(Path::new("..").join(managed.file_name().unwrap()), &alias).unwrap();
-        let before_alias = selection_entry(&alias); let before_managed = selection_entry(&managed);
-        assert!(ensure_bun_selected(Some(alias.clone()), &managed,
-            |_| panic!("alias into managed locator must not execute"),
-            || panic!("alias into managed locator must not install")).is_err());
-        assert_eq!(selection_entry(&alias), before_alias); assert_eq!(selection_entry(&managed), before_managed);
-        assert_eq!(std::fs::read(external).unwrap(), b"healthy-external");
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    #[cfg(unix)]
-    fn independent_external_link_still_uses_readonly_verifier_with_unrelated_bad_managed_target() {
-        let (root, _download, managed) = repair_fixture("selection-independent-external-link");
-        let external = root.join("external-healthy"); std::fs::write(&external, b"healthy-external").unwrap();
-        let alias = root.join("external-alias"); std::os::unix::fs::symlink(&external, &alias).unwrap();
-        std::fs::remove_file(&managed).unwrap(); std::fs::create_dir(&managed).unwrap();
-        assert_independent_external_reused(&alias, &managed);
-        assert_eq!(std::fs::read(external).unwrap(), b"healthy-external");
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn healthy_external_reuse_does_not_inspect_an_unrelated_non_directory_managed_ancestor() {
-        let (root, _download, _old_managed) = repair_fixture("selection-managed-bad-ancestor");
-        let blocked = root.join("blocked-ancestor"); std::fs::write(&blocked, b"unrelated-managed-ancestor").unwrap();
-        let managed = blocked.join("bun");
-        let external = root.join("external-healthy"); std::fs::write(&external, b"healthy-external").unwrap();
-        let before_external = selection_entry(&external); let before_blocked = selection_entry(&blocked);
-        let calls = std::cell::Cell::new(0usize);
-        let selected = ensure_bun_selected(Some(external.clone()), &managed, |actual| {
-            calls.set(calls.get() + 1);
-            assert_eq!(std::fs::read(actual).unwrap(), b"healthy-external"); Ok(())
-        }, || panic!("independent external must not inspect/acquire managed installation")).unwrap();
-        assert_eq!(selected, external); assert_eq!(calls.get(), 1);
-        assert_eq!(selection_entry(&external), before_external); assert_eq!(selection_entry(&blocked), before_blocked);
-        assert_eq!(std::fs::read(blocked).unwrap(), b"unrelated-managed-ancestor");
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    #[cfg(unix)]
-    fn alias_entering_managed_before_parent_dir_is_rejected_without_execution() {
-        let (root, _download, managed) = repair_fixture("selection-managed-before-parent");
-        let subdir = root.join("subdir"); std::fs::create_dir(&subdir).unwrap();
-        let external = root.join("external"); std::fs::write(&external, b"healthy-external").unwrap();
-        std::fs::remove_file(&managed).unwrap(); std::os::unix::fs::symlink(&subdir, &managed).unwrap();
-        let alias = root.join("alias");
-        let raw = PathBuf::from(managed.file_name().unwrap()).join("..").join("external");
-        std::os::unix::fs::symlink(&raw, &alias).unwrap();
-        assert_eq!(std::fs::canonicalize(&alias).unwrap(), external);
-        let paths = [&managed, &subdir, &external, &alias];
-        let before: Vec<_> = paths.iter().map(|p| selection_entry(p)).collect();
-        let bytes = std::fs::read(&external).unwrap();
-        let verifier = std::cell::Cell::new(0usize); let installer = std::cell::Cell::new(0usize);
-        assert!(ensure_bun_selected(Some(alias.clone()), &managed, |_| {
-            verifier.set(verifier.get() + 1); Ok(())
-        }, || {
-            installer.set(installer.get() + 1); Err(managed_error("unexpected install"))
-        }).is_err());
-        assert_eq!(verifier.get(), 0); assert_eq!(installer.get(), 0);
-        assert_eq!(paths.iter().map(|p| selection_entry(p)).collect::<Vec<_>>(), before);
-        assert_eq!(std::fs::read(&external).unwrap(), bytes);
-        assert_eq!(std::fs::read_link(&alias).unwrap(), raw);
-        assert_eq!(std::fs::read_link(&managed).unwrap(), subdir);
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    #[cfg(unix)]
-    fn ordinary_directory_parent_alias_remains_a_readonly_external_selection() {
-        let (root, _download, managed) = repair_fixture("selection-ordinary-before-parent");
-        let subdir = root.join("subdir"); std::fs::create_dir(&subdir).unwrap();
-        let external = root.join("external"); std::fs::write(&external, b"healthy-external").unwrap();
-        let alias = root.join("alias"); let raw = Path::new("subdir").join("..").join("external");
-        std::os::unix::fs::symlink(&raw, &alias).unwrap();
-        let before_subdir = selection_entry(&subdir); let before_external = selection_entry(&external);
-        assert_eq!(std::fs::canonicalize(&alias).unwrap(), external);
-        assert_independent_external_reused(&alias, &managed);
-        assert_eq!(selection_entry(&subdir), before_subdir); assert_eq!(selection_entry(&external), before_external);
-        assert_eq!(std::fs::read(&external).unwrap(), b"healthy-external");
-        assert_eq!(std::fs::read_link(&alias).unwrap(), raw);
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    // F2c: the same search coordinator called by ensure_bun_from_search and
-    // main's actual Install helper. No ambient PATH/HOME mutation in fixtures.
-    fn search_fixture_candidate(root: &Path, directory: &str, bytes: &[u8]) -> PathBuf {
-        let directory = root.join(directory); std::fs::create_dir_all(&directory).unwrap();
-        let candidate = directory.join(if cfg!(windows) { "bun.exe" } else { "bun" });
-        std::fs::write(&candidate, bytes).unwrap(); candidate
-    }
-    fn fixture_search_path(directory: &Path) -> std::ffi::OsString {
-        std::env::join_paths([directory]).unwrap()
-    }
-
-    #[test]
-    fn install_search_reuses_exact_classified_healthy_external_once_without_acquiring() {
-        let (root, _download, target) = repair_fixture("search-supported-path");
-        let candidate = search_fixture_candidate(&root, "path-bin", b"healthy-external");
-        let path = fixture_search_path(candidate.parent().unwrap());
-        let before_external = selection_entry(&candidate); let before_target = selection_entry(&target);
-        let probes = std::cell::Cell::new(0); let acquires = std::cell::Cell::new(0);
-        let result = ensure_bun_from_search_with(Some(&path), None, &root, &target, |actual| {
-            probes.set(probes.get() + 1); assert_eq!(actual, candidate.as_path());
-            assert_eq!(std::fs::read(actual).unwrap(), b"healthy-external"); BunCandidateProbe::Supported
-        }, || { acquires.set(acquires.get() + 1); Err(managed_error("must reuse")) }).unwrap();
-        assert_eq!(result, candidate); assert_eq!(probes.get(), 1); assert_eq!(acquires.get(), 0);
-        assert_eq!(selection_entry(&candidate), before_external); assert_eq!(selection_entry(&target), before_target);
-        assert_eq!(std::fs::read(&candidate).unwrap(), b"healthy-external"); assert_eq!(std::fs::read(&target).unwrap(), b"bad-old-runtime");
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn install_search_failed_path_probe_falls_back_to_first_home_candidate() {
-        let (root, _download, target) = repair_fixture("search-failed-path-home");
-        let candidate = search_fixture_candidate(&root, "path-bin", b"failed-path");
-        let home = root.join("home"); let home_candidate = search_fixture_candidate(&home, ".bun/bin", b"healthy-home");
-        // HOME's existing order is bun before bun.exe, independent of PATH's platform filename.
-        let first_home = home.join(".bun/bin/bun"); std::fs::write(&first_home, b"healthy-home").unwrap();
-        let path = fixture_search_path(candidate.parent().unwrap()); let mut probes = Vec::new();
-        let result = ensure_bun_from_search_with(Some(&path), Some(&home), &root, &target, |actual| {
-            probes.push(actual.to_path_buf()); if actual == candidate.as_path() { BunCandidateProbe::Failed } else {
-                assert_eq!(actual, first_home.as_path()); BunCandidateProbe::Supported
-            }
-        }, || panic!("healthy HOME must be reused")).unwrap();
-        assert_eq!(result, first_home); assert_eq!(probes, [candidate.clone(), first_home]);
-        assert_eq!(std::fs::read(candidate).unwrap(), b"failed-path"); assert_eq!(std::fs::read(home_candidate).unwrap(), b"healthy-home");
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn install_search_successful_unsupported_path_uses_managed_instead_of_home() {
-        let (root, _download, target) = repair_fixture("search-unsupported-path");
-        let candidate = search_fixture_candidate(&root, "path-bin", b"unsupported-path");
-        let home = root.join("home"); search_fixture_candidate(&home, ".bun/bin", b"healthy-home");
-        let path = fixture_search_path(candidate.parent().unwrap()); let probes = std::cell::Cell::new(0); let acquires = std::cell::Cell::new(0);
-        let result = ensure_bun_from_search_with(Some(&path), Some(&home), &root, &target, |actual| {
-            probes.set(probes.get() + 1); assert_eq!(actual, candidate.as_path()); BunCandidateProbe::Unsupported
-        }, || { acquires.set(acquires.get() + 1); Ok(target.clone()) }).unwrap();
-        assert_eq!(result, target); assert_eq!(probes.get(), 1); assert_eq!(acquires.get(), 1);
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn install_search_missing_path_candidate_passively_uses_home_without_probe() {
-        let (root, _download, target) = repair_fixture("search-missing-path-home");
-        let home = root.join("home"); let candidate = home.join(".bun/bin/bun");
-        std::fs::create_dir_all(candidate.parent().unwrap()).unwrap(); std::fs::write(&candidate, b"home").unwrap();
-        let path = fixture_search_path(&root.join("absent-path")); let probes = std::cell::Cell::new(0);
-        assert_eq!(ensure_bun_from_search_with(Some(&path), Some(&home), &root, &target, |actual| {
-            probes.set(probes.get() + 1); assert_eq!(actual, candidate.as_path()); BunCandidateProbe::Supported
-        }, || panic!("HOME is present")).unwrap(), candidate);
-        assert_eq!(probes.get(), 1); std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn install_search_no_candidates_acquires_once_without_any_probe() {
-        let (root, _download, target) = repair_fixture("search-no-candidates"); let acquires = std::cell::Cell::new(0);
-        let path = fixture_search_path(&root.join("absent"));
-        assert_eq!(ensure_bun_from_search_with(Some(&path), Some(&root.join("missing-home")), &root, &target,
-            |_| panic!("absent entries are not processes"), || { acquires.set(acquires.get() + 1); Ok(target.clone()) }).unwrap(), target);
-        assert_eq!(acquires.get(), 1); std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn install_search_relative_path_keeps_the_exact_absolute_locator_for_probe() {
-        let (root, _download, target) = repair_fixture("search-relative-path");
-        let candidate = search_fixture_candidate(&root, "path-bin", b"relative");
-        let path = fixture_search_path(Path::new("path-bin")); let probes = std::cell::Cell::new(0);
-        assert_eq!(ensure_bun_from_search_with(Some(&path), None, &root, &target, |actual| {
-            probes.set(probes.get() + 1); assert_eq!(actual, candidate.as_path()); BunCandidateProbe::Supported
-        }, || panic!("relative external must be reusable")).unwrap(), candidate);
-        assert_eq!(probes.get(), 1); std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn install_search_direct_managed_file_uses_guarded_coordinator_without_external_probe() {
-        let (root, download, target) = repair_fixture("search-direct-managed-repair");
-        let path = fixture_search_path(&root); let acquires = std::cell::Cell::new(0); let mut ops = RepairFixtureOps::new(RepairFault::None);
-        assert_eq!(ensure_bun_from_search_with(Some(&path), None, &root, &target,
-            |_| panic!("direct managed must not reach external probe"), || {
-                acquires.set(acquires.get() + 1); repair_managed_bun(&root, &download, "fixture", &mut ops)
-            }).unwrap(), target);
-        assert_eq!(acquires.get(), 1); assert_eq!(std::fs::read(&target).unwrap(), b"healthy-runtime");
-        assert_eq!(std::fs::read(previous_runtime(&root)).unwrap(), b"bad-old-runtime");
-        let mut again = RepairFixtureOps::new(RepairFault::None);
-        ensure_bun_from_search_with(Some(&path), None, &root, &target,
-            |_| panic!("managed reuse remains guarded"), || repair_managed_bun(&root, &download, "fixture", &mut again)).unwrap();
-        assert_eq!(again.archive_calls, 0); std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    #[cfg(unix)]
-    fn install_search_managed_link_is_rejected_before_probe_acquire_or_home_fallback() {
-        let (root, _download, target) = repair_fixture("search-direct-managed-link");
-        let external = root.join("external"); std::fs::write(&external, b"healthy").unwrap();
-        std::fs::remove_file(&target).unwrap(); std::os::unix::fs::symlink(&external, &target).unwrap();
-        let home = root.join("home"); search_fixture_candidate(&home, ".bun/bin", b"home");
-        let before = selection_entry(&target); let external_before = selection_entry(&external); let path = fixture_search_path(&root);
-        let probes = std::cell::Cell::new(0); let acquires = std::cell::Cell::new(0);
-        assert!(ensure_bun_from_search_with(Some(&path), Some(&home), &root, &target, |_| {
-            probes.set(probes.get() + 1); BunCandidateProbe::Supported
-        }, || { acquires.set(acquires.get() + 1); Ok(target.clone()) }).is_err());
-        assert_eq!(probes.get(), 0); assert_eq!(acquires.get(), 0); assert_eq!(selection_entry(&target), before);
-        assert_eq!(selection_entry(&external), external_before); assert_eq!(std::fs::read_link(&target).unwrap(), external);
-        assert_eq!(std::fs::read(&external).unwrap(), b"healthy"); std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    #[cfg(unix)]
-    fn install_search_external_alias_to_managed_never_probes_or_falls_back_to_home() {
-        let (root, _download, target) = repair_fixture("search-managed-alias");
-        let bin = root.join("path-bin"); std::fs::create_dir(&bin).unwrap(); let alias = bin.join("bun");
-        std::os::unix::fs::symlink(&target, &alias).unwrap();
-        let home = root.join("home"); search_fixture_candidate(&home, ".bun/bin", b"home");
-        let before_alias = selection_entry(&alias); let before_target = selection_entry(&target); let path = fixture_search_path(&bin);
-        let probes = std::cell::Cell::new(0); let acquires = std::cell::Cell::new(0);
-        assert!(ensure_bun_from_search_with(Some(&path), Some(&home), &root, &target, |_| {
-            probes.set(probes.get() + 1); BunCandidateProbe::Supported
-        }, || { acquires.set(acquires.get() + 1); Ok(target.clone()) }).is_err());
-        assert_eq!(probes.get(), 0); assert_eq!(acquires.get(), 0);
-        assert_eq!(selection_entry(&alias), before_alias); assert_eq!(selection_entry(&target), before_target);
-        assert_eq!(std::fs::read_link(&alias).unwrap(), target); assert_eq!(std::fs::read(&target).unwrap(), b"bad-old-runtime");
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    #[cfg(unix)]
-    fn install_search_relative_path_alias_retains_managed_boundary_evidence() {
-        let (root, _download, target) = repair_fixture("search-relative-managed-alias");
-        let bin = root.join("path-bin"); std::fs::create_dir(&bin).unwrap();
-        let alias = bin.join("bun"); let raw = Path::new("..").join(target.file_name().unwrap());
-        std::os::unix::fs::symlink(&raw, &alias).unwrap(); let path = fixture_search_path(Path::new("path-bin"));
-        let before = selection_entry(&alias);
-        assert!(ensure_bun_from_search_with(Some(&path), None, &root, &target,
-            |_| panic!("raw relative alias must be classified before probe"), || panic!("alias cannot acquire")).is_err());
-        assert_eq!(selection_entry(&alias), before); assert_eq!(std::fs::read_link(&alias).unwrap(), raw);
-        assert_eq!(std::fs::read(&target).unwrap(), b"bad-old-runtime"); std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    #[cfg(unix)]
-    fn install_search_dangling_external_link_is_unknown_not_absent_or_home_eligible() {
-        let (root, _download, target) = repair_fixture("search-dangling-alias");
-        let bin = root.join("path-bin"); std::fs::create_dir(&bin).unwrap();
-        let alias = bin.join("bun"); std::os::unix::fs::symlink(root.join("absent"), &alias).unwrap();
-        let path = fixture_search_path(&bin); let home = root.join("home"); search_fixture_candidate(&home, ".bun/bin", b"home");
-        let before = selection_entry(&alias);
-        assert!(ensure_bun_from_search_with(Some(&path), Some(&home), &root, &target,
-            |_| panic!("unresolved link must not execute"), || panic!("unknown link must not acquire")).is_err());
-        assert_eq!(selection_entry(&alias), before); std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn install_search_metadata_error_and_special_candidate_do_not_mean_absent() {
-        let (root, _download, target) = repair_fixture("search-metadata-error");
-        let not_directory = root.join("not-directory"); std::fs::write(&not_directory, b"unchanged").unwrap();
-        let home = root.join("home"); search_fixture_candidate(&home, ".bun/bin", b"home");
-        let path = fixture_search_path(&not_directory);
-        assert!(ensure_bun_from_search_with(Some(&path), Some(&home), &root, &target,
-            |_| panic!("metadata failure must not execute"), || panic!("metadata failure must not acquire")).is_err());
-        let bin = root.join("path-bin"); std::fs::create_dir(&bin).unwrap();
-        std::fs::create_dir(bin.join(if cfg!(windows) { "bun.exe" } else { "bun" })).unwrap();
-        let path = fixture_search_path(&bin);
-        assert!(ensure_bun_from_search_with(Some(&path), Some(&home), &root, &target,
-            |_| panic!("directory must not execute"), || panic!("special candidate must not acquire")).is_err());
-        assert_eq!(std::fs::read(not_directory).unwrap(), b"unchanged"); std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    #[cfg(windows)]
-    #[ignore = "requires Windows symlink privilege; definitions are not native evidence"]
-    fn install_search_windows_managed_reparse_and_alias_refuse_before_process() {
-        use std::os::windows::fs::{symlink_file, MetadataExt};
-        let (root, _download, target) = repair_fixture("search-windows-reparse");
-        let external = root.join("external.exe"); std::fs::write(&external, b"healthy-external").unwrap();
-        std::fs::remove_file(&target).unwrap(); symlink_file(&external, &target).unwrap();
-        assert_ne!(std::fs::symlink_metadata(&target).unwrap().file_attributes() & 0x400, 0);
-        let bin = root.join("path-bin"); std::fs::create_dir(&bin).unwrap(); let alias = bin.join("bun.exe"); symlink_file(&target, &alias).unwrap();
-        let before_target = selection_entry(&target); let before_alias = selection_entry(&alias);
-        for directory in [&root, &bin] {
-            let path = fixture_search_path(directory); let probes = std::cell::Cell::new(0); let acquires = std::cell::Cell::new(0);
-            assert!(ensure_bun_from_search_with(Some(&path), None, &root, &target, |_| {
-                probes.set(probes.get() + 1); BunCandidateProbe::Supported
-            }, || { acquires.set(acquires.get() + 1); Ok(target.clone()) }).is_err());
-            assert_eq!(probes.get(), 0); assert_eq!(acquires.get(), 0);
-        }
-        assert_eq!(selection_entry(&target), before_target); assert_eq!(selection_entry(&alias), before_alias);
-        assert_eq!(std::fs::read_link(&target).unwrap(), external); assert_eq!(std::fs::read(&external).unwrap(), b"healthy-external");
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    // These two definitions call the exact public entry used by main's
-    // installation_bun (not only the injected coordinator). POSIX fixtures only.
-    #[test]
-    #[cfg(unix)]
-    fn install_public_search_rejects_managed_marker_alias_before_any_process() {
-        use std::os::unix::fs::PermissionsExt;
-        let (root, _download, _old_target) = repair_fixture("search-public-marker-alias");
-        let into = ordinary_absolute(&crate::acquire::download_dir(&root).join(format!("bun-{BUN}"))).unwrap();
-        std::fs::create_dir_all(&into).unwrap(); let target = into.join("bun");
-        let external = root.join("marker-runtime");
-        std::fs::write(&external, b"#!/bin/sh\nprintf entered >> \"$0.marker\"\nprintf '1.3.14\\n'\n").unwrap();
-        std::fs::set_permissions(&external, std::fs::Permissions::from_mode(0o700)).unwrap();
-        std::os::unix::fs::symlink(&external, &target).unwrap();
-        let bin = root.join("path-bin"); std::fs::create_dir(&bin).unwrap(); let alias = bin.join("bun");
-        std::os::unix::fs::symlink(&target, &alias).unwrap();
-        let target_before = selection_entry(&target); let alias_before = selection_entry(&alias);
-        let external_before = selection_entry(&external); let original = std::fs::read(&external).unwrap();
-        let path = fixture_search_path(&bin);
-        assert!(ensure_bun_from_search(&root, Some(&path), None, &root).is_err());
-        assert!(!bin.join("bun.marker").exists()); assert!(!into.join("bun.marker").exists()); assert!(!root.join("marker-runtime.marker").exists());
-        assert_eq!(selection_entry(&target), target_before); assert_eq!(selection_entry(&alias), alias_before);
-        assert_eq!(selection_entry(&external), external_before); assert_eq!(std::fs::read(&external).unwrap(), original);
-        assert_eq!(std::fs::read_link(&target).unwrap(), external); assert_eq!(std::fs::read_link(&alias).unwrap(), target);
-        // No repair work/archive/quarantine or success target could have appeared.
-        assert_eq!(std::fs::read_dir(&into).unwrap().count(), 1);
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    #[cfg(unix)]
-    fn install_public_search_probes_exact_external_marker_once_without_managed_creation() {
-        use std::os::unix::fs::PermissionsExt;
-        let (root, _download, _old_target) = repair_fixture("search-public-external-marker");
-        let external = search_fixture_candidate(&root, "path-bin", b"#!/bin/sh\nprintf entered >> \"$0.marker\"\nprintf '1.3.14\\n'\n");
-        std::fs::set_permissions(&external, std::fs::Permissions::from_mode(0o700)).unwrap();
-        let before = selection_entry(&external); let bytes = std::fs::read(&external).unwrap();
-        let path = fixture_search_path(external.parent().unwrap());
-        let into = crate::acquire::download_dir(&root).join(format!("bun-{BUN}"));
-        assert!(!into.exists());
-        assert_eq!(ensure_bun_from_search(&root, Some(&path), None, &root).unwrap(), external);
-        assert_eq!(std::fs::read(external.with_file_name("bun.marker")).unwrap(), b"entered");
-        assert!(!into.exists()); assert_eq!(selection_entry(&external), before); assert_eq!(std::fs::read(&external).unwrap(), bytes);
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    #[cfg(unix)]
-    fn install_public_search_skips_absent_exact_managed_candidate_for_later_external() {
-        use std::os::unix::fs::PermissionsExt;
-        let (root, _download, old_fixture) = repair_fixture("search-absent-managed-first");
-        let into = ordinary_absolute(&crate::acquire::download_dir(&root).join(format!("bun-{BUN}"))).unwrap();
-        std::fs::create_dir_all(&into).unwrap(); let target = into.join("bun");
-        assert!(!target.exists()); assert_eq!(std::fs::read_dir(&into).unwrap().count(), 0);
-        let external = search_fixture_candidate(&root, "later-external", b"#!/bin/sh\nprintf entered >> \"$0.marker\"\nprintf '1.3.14\\n'\n");
-        std::fs::set_permissions(&external, std::fs::Permissions::from_mode(0o700)).unwrap();
-        let before_external = selection_entry(&external); let bytes = std::fs::read(&external).unwrap();
-        let before_into = selection_entry(&into); let before_old = selection_entry(&old_fixture);
-        let path = std::env::join_paths([into.as_path(), external.parent().unwrap()]).unwrap();
-        // Exact production entry used by main's installation_bun: real passive
-        // resolver/selector/native probe. No injected successful acquisition.
-        assert_eq!(ensure_bun_from_search(&root, Some(&path), None, &root).unwrap(), external);
-        // A single marker means only the later external locator was probed once.
-        assert_eq!(std::fs::read(external.with_file_name("bun.marker")).unwrap(), b"entered");
-        assert!(!target.exists()); assert_eq!(std::fs::read_dir(&into).unwrap().count(), 0);
-        assert_eq!(selection_entry(&into), before_into); assert_eq!(selection_entry(&external), before_external);
-        assert_eq!(selection_entry(&old_fixture), before_old); assert_eq!(std::fs::read(&external).unwrap(), bytes);
-        assert_eq!(std::fs::read(&old_fixture).unwrap(), b"bad-old-runtime");
-        // Managed acquisition returns the managed target and creates repair
-        // entries; neither can satisfy these exact-path/empty-directory checks.
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
 }

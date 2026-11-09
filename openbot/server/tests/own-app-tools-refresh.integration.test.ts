@@ -2,6 +2,10 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, or } from "drizzle-orm";
 import { createAuditStore } from "../src/audit";
+import type {
+  CredentialSecretReader,
+  CredentialStore,
+} from "../src/credentials";
 import { createDatabase } from "../src/db/client";
 import { mcpServers, mcpTools } from "../src/db/schema";
 import { listTools as baiduListing } from "../src/plugins/baidu-netdisk-rest";
@@ -50,7 +54,9 @@ const realFetch = globalThis.fetch;
 const store = createPluginStore({
   database,
   auditStore: createAuditStore(database),
-  credentials: { readSecret: async () => null },
+  credentials: {
+    readSecret: async () => null,
+  } as unknown as CredentialSecretReader & CredentialStore,
   encryptionKey: "x".repeat(44),
   policy: () => ({ mode: "enforce", deny: [], allow: ["true"] }),
 });

@@ -80,6 +80,7 @@ const rivalSkill = `switch-rival-${suite}`;
 /** The first brand: two coworkers, two channels, and one skill shipped with it. */
 const alpha = (): LoadedTenantPackage => ({
   tenantId: tenantKey,
+  formerTenantIds: [],
   productName: "切换测试甲",
   stylesheet: null,
   agents: [alphaAgent(generalAgent), alphaAgent(operationsAgent)],

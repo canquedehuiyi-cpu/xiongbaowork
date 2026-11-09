@@ -133,7 +133,11 @@ export function createRunnerExecutor(
   const desktop = extras?.desktop ?? createDesktopActions();
   // --- end desktop control ---
   const workspace = createWorkspace(workspaceDir);
-  const shell = createShell(workspaceDir);
+  /*
+   * A shell of its own for each command (`oneShot`), not agent-computer's live shell: this runs on a
+   * person's own machine, where a Mac's bash is too old for the live shell and nobody watches it.
+   */
+  const shell = createShell(workspaceDir, process.env, { oneShot: true });
   /*
    * Built here, used only when a browser action arrives.
    *
@@ -222,7 +226,9 @@ export function createRunnerExecutor(
             }
             // The command runs in the project's folder. The file tools stay confined to it whatever
             // the command does; the command itself is the gateway's to allow (SEC1 and the gate).
-            const output = await createShell(folder.path).run({
+            const output = await createShell(folder.path, process.env, {
+              oneShot: true,
+            }).run({
               command,
               signal,
               ...(typeof body.timeoutMs === "number"

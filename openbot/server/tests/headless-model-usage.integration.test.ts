@@ -15,6 +15,7 @@ import {
   recordHeadlessModelUsage,
 } from "../src/admin/controls";
 import { createHandoffDelivery } from "../src/agents/handoff-delivery";
+import { serverTurnAdmission } from "../src/agents/turn-admission";
 import { createAuditStore } from "../src/audit";
 import type { AppVariables } from "../src/auth/guards";
 import type { AgentChannel, ChannelStore } from "../src/channels/routes";
@@ -79,9 +80,12 @@ let controls: EnterpriseControls;
 const board = createTaskProjector(database);
 const routineStore = createRoutineStore(database);
 
-/** A coworker that answers, without a model behind it. */
+/**
+ * A coworker that answers, without a model behind it. Its answer is its own method rather than an
+ * override of `runAgent`, whose signature is the client's; the runner below is the one that calls it.
+ */
 class AnsweringAgent extends AbstractAgent {
-  override async runAgent(
+  async answer(
     input: RunAgentInput,
     handlers: { onEvent: (arg: { event: BaseEvent }) => void },
   ): Promise<void> {
@@ -134,10 +138,11 @@ const runner = {
       next: (event: BaseEvent) => void;
       complete: () => void;
     }) {
-      void request.agent
-        .runAgent(request.input, {
+      // Only this file's coworker reaches this runner (`buildAgentFor` below).
+      void (request.agent as AnsweringAgent)
+        .answer(request.input, {
           onEvent: ({ event }: { event: BaseEvent }) => observer.next(event),
-        } as never)
+        })
         .then(() => {
           request.agent.messages = [
             ...request.agent.messages,
@@ -179,6 +184,8 @@ const routineRunner = createRoutineRunner({
       return channel;
     },
     async recordActivity() {},
+    // The routine runner marks the conversation busy while the firing runs (upstream v1.0.0).
+    async signalBusy() {},
   } as unknown as ChannelStore,
   runTurn,
   board,
@@ -385,6 +392,8 @@ test("a hand-off delivered from the platform-framed work loop records under the 
     { type: "RUN_FINISHED" },
   ] as unknown as BaseEvent[];
   const hop = createHandoffDelivery({
+    // The pause guard and the enterprise controls, as the server wires every hop.
+    admission: serverTurnAdmission,
     agentFor: async () =>
       ({
         threadId: "",

@@ -58,7 +58,7 @@ for (const document of documents) {
  */
 const demands = [
   ...text.matchAll(
-    /secretKeyRef:\s*\n\s*name:\s*(\S+)\s*\n\s*key:\s*([A-Za-z0-9._-]+)(?:\s*\n\s*optional:\s*(true|false))?/g,
+    /secretKeyRef:\s*\n\s*name:\s*(\S+)\s*\n\s*key:\s*(["']?[A-Za-z0-9._-]+["']?)(?:\s*\n\s*optional:\s*(true|false))?/g,
   ),
 ];
 
@@ -112,16 +112,62 @@ for (const [, rawName, rawKey, optional] of demands) {
 }
 
 /**
+ * Whether anything in the render reads `key` from a Secret, written bare or quoted: the bundled
+ * Intelligence's chart quotes the key it reads its gateway token by.
+ */
+const readsKey = (key: string) =>
+  text.includes(`key: ${key}`) || text.includes(`key: "${key}"`);
+
+/**
  * Anything the chart writes and nothing reads.
  *
  * The mirror of the above, and the reason a key gets quietly dropped from an environment: the
  * Secret keeps carrying it and nobody notices the variable went.
+ *
+ * A Secret mounted whole, as a volume with no `items`, is read key by key as files, which is how
+ * Bitnami's PostgreSQL takes the passwords this chart generates for the bundled Intelligence. Every
+ * key of one of those is read.
  */
+const mountedWhole = new Set<string>();
+for (const match of text.matchAll(
+  /secretName:\s*(\S+)\s*\n([^\n]*)\n?([^\n]*)/g,
+)) {
+  const [, rawName, next = "", after = ""] = match;
+  if (!rawName) continue;
+  if (next.trim().startsWith("items:") || after.trim().startsWith("items:"))
+    continue;
+  mountedWhole.add(rawName.replace(/^["']|["']$/g, ""));
+}
 for (const [name, keys] of written) {
+  if (mountedWhole.has(name)) continue;
   for (const key of keys) {
-    if (!text.includes(`key: ${key}`)) {
+    if (!readsKey(key)) {
       problems.push(
         `Secret "${name}" carries "${key}", which nothing in this render reads.`,
+      );
+    }
+  }
+}
+
+/**
+ * The same question of a key a store syncs in.
+ *
+ * An ExternalSecret's `data` is the list of keys that will exist in the Secret it creates, so it can
+ * be compared just as a rendered Secret is. Only the half above was asked, which is how a licence
+ * token synced from a store reached the Secret and never the pod: the server's environment named
+ * `license-token` only when `secrets.licenseToken` was a literal, and nothing compared the two.
+ */
+for (const document of documents) {
+  if (!/^kind:\s*ExternalSecret\s*$/m.test(document)) continue;
+  const name =
+    document.match(/^\s{2}name:\s*(\S+)/m)?.[1]?.replace(/^["']|["']$/g, "") ??
+    "an ExternalSecret";
+  for (const [, key] of document.matchAll(
+    /^\s*(?:-\s+)?secretKey:\s*([a-z0-9-]+)\s*$/gm,
+  )) {
+    if (key && !readsKey(key)) {
+      problems.push(
+        `ExternalSecret "${name}" syncs "${key}", which nothing in this render reads.`,
       );
     }
   }
@@ -156,8 +202,16 @@ if (serverPolicy) {
 
 // A pod no policy selects keeps the cluster default, so on a release that has policies it is the
 // only unfenced one. Asked of rendered objects, because the question is which pods came out.
+//
+// Of THIS chart's objects. A subchart brings policies of its own whatever this chart's
+// `networkPolicy.enabled` says (Bitnami's PostgreSQL and Redis each fence their own pod), and its
+// pods are fenced or not by its own values: the bundled Intelligence's are Intelligence's to decide.
+// Read from the `# Source:` line Helm puts on every document, which names the chart it came from.
+const ownDocuments = documents.filter((document) =>
+  /^# Source: [^/\n]+\/templates\//m.test(document),
+);
 const policyComponents = new Set(
-  documents
+  ownDocuments
     .filter((document) => /^kind:\s*NetworkPolicy\s*$/m.test(document))
     .flatMap((document) => {
       const selector = document.split(/^\s{2}podSelector:\s*$/m)[1] ?? "";
@@ -168,7 +222,7 @@ const policyComponents = new Set(
     }),
 );
 if (policyComponents.size > 0) {
-  const workloads = documents.filter((document) =>
+  const workloads = ownDocuments.filter((document) =>
     /^kind:\s*(Deployment|StatefulSet|CronJob|Job|DaemonSet)\s*$/m.test(
       document,
     ),
@@ -179,8 +233,9 @@ if (policyComponents.size > 0) {
     )?.[1];
     const name = workload.match(/^\s{2}name:\s*(\S+)/m)?.[1] ?? "a workload";
     if (!component) continue;
-    // The migrations Job runs once at install and is torn down; it is not a standing surface.
-    if (component === "migrations") continue;
+    // The migrations Job runs once at install and is torn down; it is not a standing surface. The
+    // Learning setup Job is the same: once per revision, then gone (templates/learning/setup-job.yaml).
+    if (component === "migrations" || component === "learning-setup") continue;
     if (!policyComponents.has(component)) {
       problems.push(
         `This release has NetworkPolicies but none selects ${name} (component: ${component}), so it is the one pod left unfenced while everything around it is restricted. Give it a policy or say in the chart why it needs none.`,

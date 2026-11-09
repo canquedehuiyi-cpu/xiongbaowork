@@ -13,6 +13,7 @@ import { createAuditStore } from "../src/audit";
 import { createAutomationStore } from "../src/automations/store";
 import { AutomationRefusedError } from "../src/automations/types";
 import { ComputerUnavailableError } from "../src/computer/client";
+import { computerKeyText } from "../src/computer/computer-key";
 import type {
   ComputerLocation,
   ComputerProvider,
@@ -73,6 +74,8 @@ const owner = `${suite}-owner`;
 const teammate = `${suite}-teammate`;
 /** Published to the whole team: every person can read it. */
 const teamBot = `${suite}-team-bot`;
+/** The team Bot's own computer, as the culler and the controls key it. */
+const teamComputer = `bot:${teamBot}`;
 /** Stamped `team` but not published: only its owner can read it. */
 const hiddenBot = `${suite}-hidden-bot`;
 /** Stamped `team` with no owner on its profile: nobody's. */
@@ -182,11 +185,11 @@ function providerWith(computers: ComputerLocation[]) {
   const stopped: string[] = [];
   const provider: ComputerProvider = {
     name: "fake",
-    isolation: "per-bot",
+    isolation: "per-person",
     locate: async () => "http://unused",
-    status: async (botId) => ({ botId, state: "ready" }),
-    stop: async (botId) => {
-      stopped.push(botId);
+    status: async (seat) => ({ botId: seat.botId, state: "ready" }),
+    stop: async (target) => {
+      stopped.push(computerKeyText(target.key));
       return { wasRunning: true };
     },
     reset: async () => ({ cleared: false }),
@@ -385,7 +388,7 @@ describe("whose a team Bot is", () => {
   test("the culler offers and suspends a team Bot's computer in its owner's frame", async () => {
     const { provider, stopped } = providerWith([
       {
-        botId: teamBot,
+        key: { kind: "bot", botId: teamBot },
         status: "running",
         url: "http://c",
         startedAt: longAgo,
@@ -399,24 +402,31 @@ describe("whose a team Bot is", () => {
       owner: `${suite}-replica`,
     };
     const offer = await offerIdleComputers(options);
-    expect(offer.offered).toEqual([teamBot]);
+    expect(offer.offered).toEqual([teamComputer]);
     expect(offer.offeredAsPlatform).toEqual([]);
     const items = await asPlatform(() =>
       database
         .select({ tenantId: workItems.tenantId })
         .from(workItems)
-        .where(and(eq(workItems.kind, CULL_KIND), eq(workItems.key, teamBot))),
+        .where(
+          and(eq(workItems.kind, CULL_KIND), eq(workItems.key, teamComputer)),
+        ),
     );
     expect(items).toEqual([{ tenantId: owner }]);
 
     const report = await suspendClaimedComputers(options);
-    expect(report.suspended).toContain(teamBot);
-    expect(stopped).toEqual([teamBot]);
+    expect(report.suspended).toContain(teamComputer);
+    expect(stopped).toEqual([teamComputer]);
   });
 
   test("the controls file a stopped team Bot's computer in its owner's trail", async () => {
     const { provider, stopped } = providerWith([
-      { botId: teamBot, status: "running", url: "", startedAt: longAgo },
+      {
+        key: { kind: "bot", botId: teamBot },
+        status: "running",
+        url: "",
+        startedAt: longAgo,
+      },
     ]);
     controls = await installEnterpriseControls({
       database,
@@ -431,8 +441,8 @@ describe("whose a team Bot is", () => {
       },
     });
     const result = await controls.terminateInactiveComputers();
-    expect(result?.stopped).toEqual([teamBot]);
-    expect(stopped).toEqual([teamBot]);
+    expect(result?.stopped).toEqual([teamComputer]);
+    expect(stopped).toEqual([teamComputer]);
     const rows = await asPlatform(() =>
       database
         .select({ tenantId: auditEvents.tenantId })
@@ -440,7 +450,7 @@ describe("whose a team Bot is", () => {
         .where(
           and(
             eq(auditEvents.eventType, "computer.terminated_inactive"),
-            eq(auditEvents.targetId, teamBot),
+            eq(auditEvents.targetId, teamComputer),
           ),
         ),
     );

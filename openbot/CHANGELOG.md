@@ -8,6 +8,95 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+- **中文的改密码、验证码、付款页面交给你本人做；部署边界规则按规范化的键名判定。** Bot 在网页上往
+  「新密码」「验证码」「支付密码」「银行卡号」「CVV / 安全码」「身份证号」「付款码」这类输入框里填写，点
+  「修改密码」「获取验证码」「提交订单 ¥99」「确认订单并支付」「微信支付」「绑定银行卡」这类按钮，或者在
+  路径带「修改密码」「收银台」的页面上操作，都和英文的同类页面一样交给你本人，「总是允许」规则也不能
+  绕过。「发送消息给张三」「全部回复」「发布回答」「移到已删除邮件」这类按钮总是先问，只给「允许一次」。
+  「查看订单」「支付记录」「已发送」这类只读按钮不受影响；已连接应用的工具参数里写的中文正文不参与判定。
+  部署的边界规则（`AGENT_COMPUTER_POLICY` 和 Boundaries 页面）现在对键名多判一次：`"\r"`、`"\n"`、
+  `NumpadEnter`、`ControlLeft+Enter`、`Shift+Control+Enter` 分别按 `Enter`、`Control+Enter`、
+  `Control+Shift+Enter` 判定，`intent` 也随之判定，所以 `key == "Enter"`、`intent == "activate"` 不能再
+  被换个写法绕过；按原样写的规则照样生效，发给浏览器的键和审计记录不变。注意：只放行某种原样写法的
+  allow 规则（例如只写了 `key == " "`）现在可能多拒，因为同一个键规范化后（`Space`）也要被放行。
+- **分享、公开发布、更多发送方式和网页上的同类按钮，一律先问，只给「允许一次」。** 应用工具的分享、
+  改权限、加协作者（来源「分享与授权」），转发、开直播、发版本、发帖（来源「公开发布」），以及 notify、
+  broadcast、comment、定时群发和写明受邀人或收件人邮箱的调用（来源「对外发送」），在「总是允许」规则之上
+  仍然要问。网页上点 Delete、Send、Comment、Reply、Share、Invite、Post、Publish，或在写消息的输入框里按
+  Enter、Ctrl/Cmd+Enter 同样要问。付款类按名字和按钮交给你做：payout、transfer、pay invoice、下单、工资
+  发放、升降级付费套餐，Pay、Buy now、Place your order、定价页上的 Subscribe；退款也算动钱。另一方面，新闻
+  通稿（Business Wire）不再被当成电汇，留空的字段不再触发安全规则，地址查询串里的 `access_token=` 之类
+  不再让普通页面变成凭据页，Bot 在输入框里打的字按输入框和页面判定、不按内容判定。From upstream #904、
+  #930、#998、#1015、#1109、#1175。
+- **Merged upstream OpenBot up to v1.0.0** (`ac9c16f7`; `UPSTREAM.md` records what was taken and
+  what was not). The interface keeps this fork's screens; upstream's new screens come in the next
+  phase. What a deployment notices:
+  - OpenBot runs on CopilotKit 1.85.0 (`@copilotkit/runtime`; the browser stays on 1.77 until the
+    interface phase). Behind an `OPENAI_BASE_URL` that is not OpenAI or Azure, the built-in Bots
+    reach most `openai/...` models through Chat Completions; a gateway that serves only the
+    Responses API needs `COPILOTKIT_OPENAI_API=responses`.
+  - The Recorder ("teach a Bot"): migration `0162_recorder_extension` adds Recorder connections,
+    connect codes and recording ownership, a person's own learning space, open skills and sharing,
+    each person's rows with `tenant_id` and row security. `OPENBOT_RECORDER_EXTRA_EXTENSION_IDS`
+    trusts other Recorder builds: each 32 letters from a to p, comma separated; any other value
+    stops the server at boot. Upstream connects it from Settings → Browsers, which arrives with the
+    interface phase. Upstream's Recorder replaces the old demonstration recording, whose server
+    routes are gone.
+  - Check-ins (a Bot looking through what you connected, hourly) with their own ledger
+    (`proactive_check_in_runs`, upstream's `proactive_runs` renamed because this fork already has
+    one) and the tasks they start (`/api/bot-tasks`; `/api/tasks` stays the task board). A check-in
+    files a board card and counts against the month's tasks only when it raised something; a quiet
+    one leaves no card, and a person at the month's ceiling is not checked in for (skipped as
+    `quota`).
+  - A Bot can have a computer of its own (`agent_profiles.isolated`); a goal can repeat; a routine
+    has a title and records the goal it runs, and a Bot asked for a goal in a conversation makes one;
+    a conversation can pick the built-in Bot's model; Microsoft Entra sign-in, tenant-isolated.
+  - Not taken (decided with the plugins session): Arcade, owner app grants, shared use and shared
+    or multiple accounts, the personal edition's always-on apps, and per-viewer app state in a
+    Bot's instructions.
+  - Built-in Bots are told again that OpenBot asks before the actions its approval floors cover,
+    so they do not ask first: in Chinese, worded for this deployment's floors (deleting, sending,
+    sharing and publishing in connected apps, the matching buttons and a keyboard send on web pages),
+    with the connected-app part only for a Bot that holds an app's tool. Payments, purchases and
+    password or security changes are left to the person. Remote Bots are not told. A tool its app
+    marks destructive says on itself that OpenBot asks before it runs.
+  - A Bot that holds a browser is told how to search the public web with it (Baidu, then Bing), and
+    its computer guidance no longer forbids a search engine in that case; a check-in is given no
+    computer guidance at all.
+- **Merged upstream OpenBot up to `6fb38c8b`** (#784; `UPSTREAM.md` records what was taken and
+  what was not). What a deployment notices:
+  - **Before upgrading.** Migrations `0146_mcp_tools_unclassified` (shared with the plugin work) and
+    `0147_learning` (R0's `0146_learning`, renumbered) come first, then `0155_identity_links`,
+    `0156_memory_on_intelligence`, `0157_default_opt_outs` and `0158_sign_in_code_step`. The two new per-person tables (`identity_links`, `identity_link_challenges`) and
+    `default_opt_outs` carry `tenant_id` with row security, like every other tenant table. A server
+    and a computer must be upgraded together: an older computer has no `/sign-in/code`. A hosted
+    computer's browser is now headed by default (`COMPUTER_BROWSER_MODE=headless` keeps the old one).
+  - People can link their Slack account (a one-time code sent to the app in a direct message) and
+    their GitHub account (`GITHUB_APP_CLIENT_ID`/`GITHUB_APP_CLIENT_SECRET`) under
+    **设置 → 已连接的账号**. One outside account belongs to one person across the deployment;
+    removing a person retires their links.
+  - Memory sources and background research switch on by default for a person and a Bot once the
+    person talks to that Bot alone (research every four hours, read-only, so expect its model use);
+    a removal is remembered and never undone. `OPENBOT_MEMORY_SOURCE_DEFAULTS=false` and
+    `OPENBOT_PROACTIVE_DEFAULTS=false` stop it.
+  - With Intelligence connected (`INTELLIGENCE_API_KEY`, optional as before): people's reviewed
+    memories are mirrored into it when the deployment is entitled to Intelligence memory; Automatic
+    Learning assigns the project's `openbot` container when nothing is saved
+    (`OPENBOT_LEARNING_AUTO_ASSIGN=false` prevents it), and can create it with
+    `INTELLIGENCE_SERVICE_TOKEN` + `INTELLIGENCE_PROJECT_ID` or a CopilotKit CLI login. Either half of
+    that pair without the API key is refused at boot as half-configured.
+  - A private sign-in asks for the password first and for a verification code only when the site
+    sends one. The waiting card in the open chat offers the sign-in form as soon as the request
+    exists.
+  - Administrators can export the audit trail as CSV (capped at 5,000 rows, and the page says when
+    it stopped early); the export is itself an audit row.
+  - Headless turns (routines, responsibilities, research, wake-ups, group turns, hand-offs) only stop
+    on a lost lock when the platform says the conversation belongs to another run, or when renewals
+    have failed for the lock's whole lifetime; a network blip rides through. A hand-off checks the
+    pause guard and "Use Bots" before it takes the lock.
+  - At boot the server says whether its key can call the configured model, and whether a connected
+    Intelligence will let this deployment use memory.
+
 - **Automatic Learning is back, as an option.** Set `INTELLIGENCE_API_KEY` (and, for a
   self-hosted CopilotKit Intelligence, `INTELLIGENCE_API_URL` and `COPILOTKIT_LICENSE_TOKEN`) and
   **Admin → 自动学习** chooses a default learning container and which coworkers take part; each run
@@ -78,6 +167,31 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   `GMAIL_REPLY_TO_THREAD` address people as `recipient_email` and `extra_recipients`, which were not
   read, so an "always allow" for one email covered every later email to anybody. The audience is now
   the recipients. From upstream #943.
+
+- **Merged upstream OpenBot `6fb38c8b` → v1.0.0** (server side; the web app keeps 熊宝's interface,
+  upstream's new screens follow in the next phase; `UPSTREAM.md` records what was taken and what was
+  not). What a deployment notices:
+  - CopilotKit Intelligence stays **optional**: threads stay in this deployment's PostgreSQL and
+    `INTELLIGENCE_API_KEY` (or `CPK_INTELLIGENCE_API_KEY`, which the CLI writes) only adds 自动学习's
+    skill delivery. Upstream's chart now bundles a self-hosted Intelligence; here it is
+    `intelligence.enabled: false` by default and needs `secrets.licenseToken` when turned on. An
+    install with no Intelligence is not refused. A release upgraded with `--reuse-values` from an
+    earlier chart is refused by name until it says `--set intelligence.enabled=false`.
+  - The chart: with the bundled database it generates and keeps the key encryption key, the computer
+    token, the database password and the routines worker's secret; the API and the scheduled Jobs
+    wait in a `wait-for-database` init container until the database holds every migration; pods roll
+    when a value under `secrets` changes; `config.model.*` sets `BOT_PROVIDER`, `BOT_MODEL` and the
+    provider base URLs. The bundled database still needs `OPENBOT_RLS_ENFORCE` named in
+    `config.extraEnv`.
+  - The image: `/app` is root's and not writable by a Bot's shell; `sudo openbot-apt` installs
+    packages and nothing else; s6 downloads are checksummed (with this fork's longer retries).
+  - A Bot's commands on a hosted computer run in one live terminal a person can watch and take over.
+    On Windows, and wherever a caller asks, a command still runs in a shell of its own (PowerShell on
+    Windows), as before.
+  - `OPENBOT_PROACTIVE_DEFAULTS` now defaults **off**: a Bot offers a check-in in the conversation
+    instead of switching on hourly research; `true` brings the old default back.
+  - An answer from a Bot asked by another lands in the asking conversation under the answering
+    Bot's name. Development and the images move to Bun 1.4.
 
 ## 0.2.5
 

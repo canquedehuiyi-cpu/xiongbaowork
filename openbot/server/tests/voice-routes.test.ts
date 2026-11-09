@@ -20,10 +20,15 @@ const profile: AgentProfile = {
   ownerUserId: null,
   systemOwned: false,
   hidden: false,
+  pinned: false,
   deletedAt: null,
   endpoint: null,
   hasAuth: false,
+  modelRef: null,
+  platformModelRef: null,
+  persona: null,
   hasCallbackToken: false,
+  isolated: false,
 };
 function createVoiceRoutes(...args: Parameters<typeof voiceRoutes>) {
   return voiceRoutes(

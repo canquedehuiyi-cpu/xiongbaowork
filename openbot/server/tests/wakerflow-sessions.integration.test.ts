@@ -500,7 +500,7 @@ describe("a session's turns", () => {
     expect(stored).toHaveLength(2);
     expect(prompt).toContain(stored[1]?.context ?? "missing");
     expect(stored[1]?.kind).toBe("array");
-    expect(stored[1]?.members).toEqual(members);
+    expect(stored[1]?.members).toEqual<unknown>(members);
 
     const history = await call<{
       sessions: { id: string; turnCount: number; active: boolean }[];

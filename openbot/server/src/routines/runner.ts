@@ -22,81 +22,18 @@
  * within a firing never sees the routine that fails cleanly, once, every single night.
  */
 
-import type { Message } from "@ag-ui/client";
+import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
+import type { TurnRunner } from "@openbot/toolkit/run-turn";
 import { BOT_PAUSED_REASON, isBotPaused } from "../agents/lifecycle";
 import type { AgentActor } from "../agents/profile-types";
-import type { ApprovalContinuation } from "../approvals/types";
-import type { AuditInitiator } from "../audit";
 import type { ChannelStore } from "../channels/routes";
-import { HeadlessToolSuspension } from "../computer/headless-tools";
 import { QuotaExceeded, type QuotaService } from "../quota/limits";
 import { deliverableRefOf, type TaskProjector } from "../tasks/projector";
 import { runAsClaimedTenant, runAsTenant } from "../tenant/context";
 import type { RoutineRunContext, RoutineStore } from "./store";
 
-/** Everything a headless turn needs, injectable so tests never dial a model. */
-export type TurnRunner = (input: {
-  ownerUserId: string; // the actor the run asserts — grants and connections resolve to them
-  routineId: string; // what the trail names as having started this turn, rather than the owner
-  agentId: string;
-  threadId: string; // the owner's thread for the routine's channel
-  instruction: string; // the user message of this turn
-  initiator?: AuditInitiator;
-  signal?: AbortSignal;
-  continuation?: {
-    snapshot: ApprovalContinuation;
-    result: { content: string; error?: string };
-    messageId: string;
-  };
-  userMessage?: Message;
-  /** Durable inbound delivery id; reused by lock, runner and emitted events. */
-  runId?: string;
-  /**
-   * The board card this turn answers for, when the caller keyed it by something other than `runId`.
-   *
-   * A routine firing files its card under the firing's own id (`routine_run_…`) and lets the turn mint
-   * a fresh run id for the lock, so the usage row that names the model has to be told which card it
-   * belongs to — the card reads the model back by exactly this reference. Absent, it is `runId`.
-   */
-  runRef?: string;
-  /**
-   * Whose run this is, when the caller does its work outside that tenant's frame.
-   *
-   * A follow-up, a delivery, a proactive run and a resumed question are each claimed by a worker on a
-   * timer, which has no tenant of its own, so the turn's own frame would file the usage row that names
-   * its model under nobody. Such a caller names the tenant of the row it claimed instead. Absent, the
-   * turn's own frame decides, which is right for every caller that already runs inside one.
-   */
-  tenantId?: string;
-  /**
-   * The caller has opened, and will close, this turn's card on the task board.
-   *
-   * Set it at the entry, not at the runner. `PostgresAgentRunner` files a `chat` card for every turn it
-   * is handed, which is right for the turn a person starts in a browser (that is the only card there
-   * is) and wrong for a routine firing, a crew's step, a responsibility run, a group Bot's answer or a
-   * hop: each of those opens its own card first, so an unmarked turn is a second card for the same work
-   * and a second charge against the month (audit N10, ticket WP-1.2).
-   *
-   * An entry that does NOT open a card — background research, a follow-up wake-up, a person's answer
-   * relayed into a conversation that is not on the board yet — leaves this unset and keeps the card the
-   * runner files for it. That is the whole of the distinction, which is why it is asked of the caller
-   * rather than assumed from the fact that a turn is headless.
-   */
-  cardOwnedByCaller?: boolean;
-  /** How deep in a Bot-to-Bot chain this turn is. Absent is a person's own turn, depth zero. */
-  depth?: number;
-  /** The reply so far, each time more of it arrives, for a surface that shows a turn in progress. */
-  onText?: (text: string) => void;
-}) => Promise<{
-  replyText: string;
-  components?: DrawnComponent[];
-  /** Attachment ids the Bot's own messages carried in this turn. */
-  attachments?: string[];
-}>;
-
-/** A display component the Bot drew in a turn and the server allowed, with the props it drew. */
-export type DrawnComponent = { name: string; args: Record<string, unknown> };
-
+/** The turn engine's types live in the toolkit now; re-exported for the server modules that named them here. */
+export type { DrawnComponent, TurnRunner } from "@openbot/toolkit/run-turn";
 export type RoutineRunner = { run(routineRunId: string): Promise<void> };
 
 /**
@@ -237,7 +174,8 @@ export function createRoutineRunner(options: {
       return;
     }
 
-    const { routineId, ownerUserId, agentId, channelId, instruction } = context;
+    const { routineId, ownerUserId, agentId, channelId, instruction, source } =
+      context;
     // Everything below is done AS the owner: their channel, their thread, their grants.
     const owner: AgentActor = { id: ownerUserId, role: "user" };
 
@@ -365,43 +303,126 @@ export function createRoutineRunner(options: {
         );
       }
     }
-    let replyText: string;
-    let produced: Pick<
-      Awaited<ReturnType<TurnRunner>>,
-      "components" | "attachments"
-    > = {};
+    /*
+     * The conversation shown as working while the firing runs, and told it is over once the run
+     * row has its outcome. The run row is what the conversation reads "a routine is running" from
+     * (see channels/working.ts), so the signal that ends it comes after `finishRun`, not after the
+     * turn. Best-effort both ways: a firing is not worth failing over a dot.
+     */
+    await channelStore.signalBusy(channel.threadId, true).catch(() => {});
     try {
-      ({ replyText, ...produced } = await runTurn({
-        ownerUserId,
-        routineId,
-        agentId,
-        threadId: channel.threadId,
-        instruction,
-        // The card's key, so the model this turn ran on is read back onto the card.
-        runRef: routineRunId,
-        // The card opened above is this firing's record; the runner files nothing. When that write
-        // failed, the runner's own card is the only mark the month's work leaves.
-        cardOwnedByCaller: carded,
-      }));
-    } catch (error) {
-      if (error instanceof HeadlessToolSuspension) {
-        await routineStore.finishRun(
-          routineRunId,
-          "waiting",
-          error.message,
-          error.waiting,
-        );
+      await fire(channel.threadId);
+    } finally {
+      await channelStore.signalBusy(channel.threadId, false).catch(() => {});
+    }
+
+    async function fire(threadId: string): Promise<void> {
+      let replyText: string;
+      let produced: Pick<
+        Awaited<ReturnType<TurnRunner>>,
+        "components" | "attachments"
+      > = {};
+      try {
+        ({ replyText, ...produced } = await runTurn({
+          ownerUserId,
+          telemetry: {
+            trigger: source === "run_now" ? "human" : "routine",
+            surface: source === "run_now" ? "web" : "unknown",
+            rootTaskId: routineRunId,
+          },
+          routineId,
+          agentId,
+          threadId,
+          instruction,
+          // The card's key, so the model this turn ran on is read back onto the card.
+          runRef: routineRunId,
+          // The card opened above is this firing's record; the runner files nothing. When that write
+          // failed, the runner's own card is the only mark the month's work leaves.
+          cardOwnedByCaller: carded,
+        }));
+      } catch (error) {
+        if (error instanceof HeadlessToolSuspension) {
+          await routineStore.finishRun(
+            routineRunId,
+            "waiting",
+            error.message,
+            error.waiting,
+          );
+          /*
+           * The card goes to the review lane, which is where a person looks when work needs them.
+           *
+           * Not `needs_action`, deliberately: that transition exists to hold a card against an approval
+           * row, and a headless suspension waits on a durable request id, not an approval. Filing one
+           * under the approval column would produce a card only a signature it does not have can move —
+           * and the run row already carries the real waiting state.
+           */
+          if (carded && board) {
+            await board
+              .finished({ tenantId: context.tenantId, runRef: routineRunId })
+              .catch((boardError) =>
+                console.error(
+                  JSON.stringify({
+                    type: "routine-board-close-failed",
+                    routineId,
+                    routineRunId,
+                    reason: reasonOf(boardError),
+                  }),
+                ),
+              );
+          }
+          await say(error.message);
+          return;
+        }
+        const reason = reasonOf(error);
+        await routineStore.finishRun(routineRunId, "failed", reason);
+
         /*
-         * The card goes to the review lane, which is where a person looks when work needs them.
+         * THE FATIGUE RULE, read after the failure is recorded — the count has to include this
+         * firing, or the tenth failure in a row reads as the ninth and the routine keeps going.
          *
-         * Not `needs_action`, deliberately: that transition exists to hold a card against an approval
-         * row, and a headless suspension waits on a durable request id, not an approval. Filing one
-         * under the approval column would produce a card only a signature it does not have can move —
-         * and the run row already carries the real waiting state.
+         * Read before the card is closed, because the card is where the breaker is shown (spec C3): the
+         * tenth failure's card closes failed carrying `circuit_breaker`, which is what the board draws as
+         * 已熔断·已自动停用. Its own try/catch, around the read and the switching-off: all of it happens
+         * after `finishRun`, and nothing in it is allowed to throw its way out of a firing whose failure
+         * is already on the row — nor to keep the card from closing.
          */
+        let failures: number | null = null;
+        let switchedOff = false;
+        try {
+          failures = await routineStore.consecutiveFailures(routineId);
+          if (failures >= FATIGUE_LIMIT) {
+            // A dead integration should not burn model spend for ever.
+            await routineStore.setEnabled(ownerUserId, routineId, false);
+            switchedOff = true;
+          }
+        } catch (fatigueError) {
+          console.error(
+            JSON.stringify({
+              type: "routine-fatigue-rule-failed",
+              routineId,
+              routineRunId,
+              reason: reasonOf(fatigueError),
+            }),
+          );
+        }
+
         if (carded && board) {
+          /*
+           * The breaker rides the card only once the routine really is off: the badge says 已自动停用,
+           * and a switch-off that failed must not be drawn as one that happened. A discriminated `kind`,
+           * so a later deliverable ref (`{ kind: "deliverable", ... }`) can share the column.
+           */
+          const breaker: CircuitBreakerRef | null =
+            switchedOff && failures !== null
+              ? { kind: "circuit_breaker", failures, routineId }
+              : null;
           await board
-            .finished({ tenantId: context.tenantId, runRef: routineRunId })
+            .finished({
+              tenantId: context.tenantId,
+              runRef: routineRunId,
+              failed: true,
+              ...(breaker ? { deliverableRef: breaker } : {}),
+            })
             .catch((boardError) =>
               console.error(
                 JSON.stringify({
@@ -413,58 +434,34 @@ export function createRoutineRunner(options: {
               ),
             );
         }
-        await say(error.message);
+
+        if (failures === 1) {
+          // Only the first failure after a success. A routine that fails every night at three has
+          // one line in the channel, not one line a night for a month.
+          await say(`This routine failed: ${shorten(reason)}`);
+        } else if (switchedOff) {
+          // Said out loud, because a routine that goes quiet without explaining itself is worse than
+          // one that fails.
+          await say(SWITCHED_OFF);
+        }
+        // In between, nothing is said. The run rows carry it, and the routines page reads them.
         return;
       }
-      const reason = reasonOf(error);
-      await routineStore.finishRun(routineRunId, "failed", reason);
 
       /*
-       * THE FATIGUE RULE, read after the failure is recorded — the count has to include this
-       * firing, or the tenth failure in a row reads as the ninth and the routine keeps going.
-       *
-       * Read before the card is closed, because the card is where the breaker is shown (spec C3): the
-       * tenth failure's card closes failed carrying `circuit_breaker`, which is what the board draws as
-       * 已熔断·已自动停用. Its own try/catch, around the read and the switching-off: all of it happens
-       * after `finishRun`, and nothing in it is allowed to throw its way out of a firing whose failure
-       * is already on the row — nor to keep the card from closing.
+       * The reply, then the outcome. `say` cannot throw, and `finishRun` is finish-once, so neither
+       * order can lose the run row — this one is the browser's order: what was said lands in the
+       * channel, and then the firing is closed.
        */
-      let failures: number | null = null;
-      let switchedOff = false;
-      try {
-        failures = await routineStore.consecutiveFailures(routineId);
-        if (failures >= FATIGUE_LIMIT) {
-          // A dead integration should not burn model spend for ever.
-          await routineStore.setEnabled(ownerUserId, routineId, false);
-          switchedOff = true;
-        }
-      } catch (fatigueError) {
-        console.error(
-          JSON.stringify({
-            type: "routine-fatigue-rule-failed",
-            routineId,
-            routineRunId,
-            reason: reasonOf(fatigueError),
-          }),
-        );
-      }
-
+      await say(replyText);
+      await routineStore.finishRun(routineRunId, "succeeded");
       if (carded && board) {
-        /*
-         * The breaker rides the card only once the routine really is off: the badge says 已自动停用,
-         * and a switch-off that failed must not be drawn as one that happened. A discriminated `kind`,
-         * so a later deliverable ref (`{ kind: "deliverable", ... }`) can share the column.
-         */
-        const breaker: CircuitBreakerRef | null =
-          switchedOff && failures !== null
-            ? { kind: "circuit_breaker", failures, routineId }
-            : null;
         await board
           .finished({
             tenantId: context.tenantId,
             runRef: routineRunId,
-            failed: true,
-            ...(breaker ? { deliverableRef: breaker } : {}),
+            // What the firing drew or handed over, for the person who opens 查收结果 (spec A9).
+            deliverableRef: deliverableRefOf(produced),
           })
           .catch((boardError) =>
             console.error(
@@ -477,45 +474,6 @@ export function createRoutineRunner(options: {
             ),
           );
       }
-
-      if (failures === 1) {
-        // Only the first failure after a success. A routine that fails every night at three has
-        // one line in the channel, not one line a night for a month.
-        await say(`This routine failed: ${shorten(reason)}`);
-      } else if (switchedOff) {
-        // Said out loud, because a routine that goes quiet without explaining itself is worse than
-        // one that fails.
-        await say(SWITCHED_OFF);
-      }
-      // In between, nothing is said. The run rows carry it, and the routines page reads them.
-      return;
-    }
-
-    /*
-     * The reply, then the outcome. `say` cannot throw, and `finishRun` is finish-once, so neither
-     * order can lose the run row — this one is the browser's order: what was said lands in the
-     * channel, and then the firing is closed.
-     */
-    await say(replyText);
-    await routineStore.finishRun(routineRunId, "succeeded");
-    if (carded && board) {
-      await board
-        .finished({
-          tenantId: context.tenantId,
-          runRef: routineRunId,
-          // What the firing drew or handed over, for the person who opens 查收结果 (spec A9).
-          deliverableRef: deliverableRefOf(produced),
-        })
-        .catch((boardError) =>
-          console.error(
-            JSON.stringify({
-              type: "routine-board-close-failed",
-              routineId,
-              routineRunId,
-              reason: reasonOf(boardError),
-            }),
-          ),
-        );
     }
   }
 

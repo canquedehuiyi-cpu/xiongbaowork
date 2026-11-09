@@ -27,6 +27,7 @@ import {
   DESKTOP_SNAPSHOT_DESCRIPTION,
   DESKTOP_WINDOWS_DESCRIPTION,
 } from "../src/computer/desktop-tools";
+import { personSeat } from "../src/computer/computer-key";
 import {
   createComputerGateway,
   localAppsAllowed,
@@ -236,13 +237,13 @@ async function pairedDevice(
   const gateway = createComputerGateway({
     provider: {
       name: "device",
-      isolation: "per-bot",
+      isolation: "per-person",
       locate: async () => {
         throw new Error(
           "A paired machine is never located through the provider.",
         );
       },
-      status: async (id) => ({ botId: id, state: "absent" }),
+      status: async (seat) => ({ botId: seat.botId, state: "absent" }),
       list: async () => [],
       stop: async () => ({ wasRunning: false }),
       reset: async () => ({ cleared: false }),
@@ -263,7 +264,7 @@ async function pairedDevice(
   ) {
     return createHeadlessComputerTools({
       gateway,
-      botId: bot,
+      seat: personSeat(who.id, bot),
       actor: who,
       auditStore,
       machine: "device",
@@ -281,7 +282,7 @@ async function pairedDevice(
   async function call(
     name: string,
     args: Record<string, unknown>,
-    toolCallId = randomUUID(),
+    toolCallId: string = randomUUID(),
   ) {
     const tool = (await toolsFor()).find(
       (candidate) => candidate.definition.name === name,

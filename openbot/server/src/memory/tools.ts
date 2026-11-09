@@ -4,9 +4,10 @@ import {
   Middleware,
   type RunAgentInput,
 } from "@ag-ui/client";
+import type { GrantedTool } from "@openbot/toolkit/granted-tool";
 import { defer, from, type Observable, switchMap } from "rxjs";
 import { z } from "zod";
-import type { GrantedTool } from "../plugins/tools";
+import { type Edition, editionHasMemory } from "../edition";
 import type { MemoryIngestion } from "./ingestion";
 import type { MemoryStore } from "./store";
 import {
@@ -15,6 +16,14 @@ import {
   MemoryRefusedError,
   memoryInputSchema,
 } from "./types";
+
+/**
+ * The server half of every ref OpenBot's own memory tools carry (`memory/recall_personal_memory`).
+ *
+ * M3: upstream keeps this in plugins/plugin-store/model.ts, where adding a custom server under it is
+ * refused; the fork's plugins have no such module yet, so it is spelled here.
+ */
+const MEMORY_TOOLS_SERVER = "memory";
 
 /*
  * What the model is offered for an observed memory. The store's schema coerces `observedAt` to a
@@ -68,12 +77,27 @@ export class PersonalMemoryMiddleware extends Middleware {
     );
   }
 }
-export function memoryTools(options: {
+type MemoryToolOptions = {
   store: MemoryStore;
   ingestion: MemoryIngestion;
   ownerUserId: string;
   agentId: string;
-}): GrantedTool[] {
+};
+
+/**
+ * The memory tools a Bot is offered in this edition: none in the personal edition. OpenBot Desktop
+ * runs a local Intelligence whose licence leaves memory out, and the personal edition's screens show
+ * no memory, so a Bot offering to remember something would promise what the person can never see
+ * or change. Every place a Bot's tools are listed or called asks this, not `memoryTools`.
+ */
+export function offeredMemoryTools(
+  edition: Edition,
+  options: MemoryToolOptions,
+): GrantedTool[] {
+  return editionHasMemory(edition) ? memoryTools(options) : [];
+}
+
+export function memoryTools(options: MemoryToolOptions): GrantedTool[] {
   function tool<T>(
     name: string,
     description: string,
@@ -82,7 +106,7 @@ export function memoryTools(options: {
   ): GrantedTool {
     return {
       name,
-      ref: `memory/${name}`,
+      ref: `${MEMORY_TOOLS_SERVER}/${name}`,
       description,
       parameters,
       async execute(args) {

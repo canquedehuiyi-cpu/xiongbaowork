@@ -51,7 +51,7 @@ async function newTenant(kind: string) {
   return tenant;
 }
 const post = (
-  routes: { request: (r: Request) => Promise<Response> },
+  routes: { request: (r: Request) => Response | Promise<Response> },
   path: string,
   body: unknown,
 ) =>
@@ -93,7 +93,7 @@ test("eight concurrent creates admit two employees and refuse six without orphan
     context,
     next,
   ) => {
-    context.set("actor", { id: tenant, role: "user" });
+    context.set("actor", { id: tenant, email: `${tenant}@example.test`, role: "user" });
     await runAsTenant(tenant, next);
   };
   const routes = createAgentRoutes(
@@ -138,7 +138,7 @@ test("production pool and real HTTP admit two of eight built-in employees withou
     context,
     next,
   ) => {
-    context.set("actor", { id: tenant, role: "user" });
+    context.set("actor", { id: tenant, email: `${tenant}@example.test`, role: "user" });
     await runAsTenant(tenant, next);
   };
   const routes = createAgentRoutes(

@@ -26,12 +26,14 @@ import { queryClient } from "@/query-client";
 const PRESETS: { label: string; rule: string; cost?: string }[] = [
   {
     label: "绝不提交表单",
-    // `key` is guarded by tool name so the clause short-circuits before it on actions that have no
-    // keypress in them. Both tools that can press Enter are named: `computer_type` takes a `submit`
-    // flag that presses it once the text is in, and a rule naming only `computer_key` left that door
-    // open.
-    rule: '(intent == "activate" && contains(element.name, "submit")) || ((tool.name == "computer_key" || tool.name == "computer_type") && key == "Enter")',
-    cost: "也会拦住员工在别处按回车，因为在表单的任意字段里按回车都会提交。",
+    // The keypress clause is guarded by tool name so a click is only refused on a submit button.
+    // Both tools that can press Enter are named: `computer_type` takes a `submit` flag that presses
+    // it once the text is in, and a rule naming only `computer_key` left that door open. It asks for
+    // the activation the gateway reads from the key, not `key == "Enter"`, so Shift+Enter, `\n` and
+    // Space (which press a focused button) are refused as well (upstream v1.0.0; the same rule as
+    // `.env.example`, pinned by server/tests/computer-gateway.test.ts).
+    rule: '(intent == "activate" && contains(element.name, "submit")) || ((tool.name == "computer_key" || tool.name == "computer_type") && intent == "activate")',
+    cost: "也会拦住员工在别处按回车或空格，因为在表单的任意字段里按回车都会提交。",
   },
   {
     label: "绝不在密码框里输入",

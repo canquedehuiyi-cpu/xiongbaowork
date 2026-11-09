@@ -55,7 +55,7 @@ const vendorAccounts: string[] = [];
 const plugins = createPluginStore({
   database,
   auditStore,
-  credentials: { readSecret: async () => null },
+  credentials: { readSecret: async () => null } as never,
   encryptionKey: "x".repeat(44),
   policy: () => ({ mode: "enforce", deny: [], allow: ["true"] }),
   callVendor: async (target) => {

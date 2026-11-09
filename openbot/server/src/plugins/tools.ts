@@ -1,4 +1,5 @@
-import { z } from "zod";
+import { DESTRUCTIVE_TOOL_NOTE } from "@openbot/shared/bot-prompt";
+import { type GrantedTool, parametersFor } from "@openbot/toolkit/granted-tool";
 import { ApprovalRefusedError } from "../approvals/types";
 import type { AuditInitiator } from "../audit";
 import { HeadlessToolSuspension } from "../computer/headless-tools";
@@ -65,37 +66,14 @@ export function vendorAnswer(result: { text: string; isError: boolean }) {
     : markUntrusted(result.text, "connector result");
 }
 
-export type GrantedTool = {
-  name: string;
-  description: string;
-  parameters: z.ZodType;
-  execute: (args: unknown) => Promise<string>;
-  initiator?: AuditInitiator;
-  /**
-   * `<serverId>/<toolName>`, carried alongside the name the model is offered.
-   *
-   * The two spellings exist because a model tool name may not contain a slash, and selection has to
-   * compare a tool against what a skill declared, which is written in the ref spelling because that
-   * is how a grant is written. Carried rather than derived at the comparison, so there is one place
-   * the two forms are converted (`toolNameFor`) and no second parser to drift from it.
-   */
-  ref: string;
-};
-
-/**
- * A vendor's JSON Schema as something the model can be handed.
- *
- * Anything that is not an object schema describes something other than a tool's arguments, and a
- * schema we cannot read must not stop the tool being offered: an open object lets the model call it
- * and lets the vendor be the one to reject a bad argument, which is where that error belongs.
+/*
+ * The tool shape and the schema conversion are the toolkit's (`@openbot/toolkit/granted-tool`), as
+ * upstream has them: one `GrantedTool` for the built-in runtime and the plugins, and one
+ * `parametersFor`, which cuts every app's schema down to what the model providers accept
+ * (`providerSafeSchema` in `@openbot/toolkit/tool-schema`). Re-exported for this module's callers.
  */
-export function parametersFor(inputSchema: Record<string, unknown>): z.ZodType {
-  try {
-    const converted = z.fromJSONSchema(inputSchema as never);
-    if (converted instanceof z.ZodObject) return converted;
-  } catch {}
-  return z.object({}).catchall(z.unknown());
-}
+export type { GrantedTool };
+export { parametersFor };
 
 /**
  * 谁在删除前问主人：OpenBot，不是 Bot。
@@ -111,10 +89,61 @@ export const CONNECTOR_APPROVAL_GUIDANCE =
 
 /**
  * 应用标为破坏性的工具（MCP 的 `destructiveHint`、Composio 的破坏性标签），提供给模型时追加在
- * 描述末尾。它的名字不一定看得出会删除什么，所以在工具本身上写明。
+ * 描述末尾。它的名字不一定看得出会删除什么，所以在工具本身上写明。用上游的那一句
+ * （shared/bot-prompt.ts），内置员工的 `APPROVAL_GUIDANCE` 说的也是这个标记。
  */
-export const DESTRUCTIVE_TOOL_NOTE =
-  "This tool is marked destructive: it deletes or overwrites something, so OpenBot asks the person before it runs. Do not ask them first.";
+export { DESTRUCTIVE_TOOL_NOTE };
+
+/**
+ * 这次运行是否至少持有一个经插件调用路径的应用工具（`mcp__` 开头）。{@link CONNECTOR_APPROVAL_GUIDANCE}
+ * 和内置员工审批引导里「已连接应用的工具」那一条都按它决定说不说：记忆等 OpenBot 内部工具不经审批门。
+ */
+export function holdsAppTools(tools: readonly { name: string }[]): boolean {
+  return tools.some((tool) => refFromToolName(tool.name) !== null);
+}
+
+/** 默认的中文网页搜索地址：百度为主，必应作备选。关键词 URL 编码后接在后面。 */
+export const BAIDU_SEARCH_URL = "https://www.baidu.com/s?wd=";
+export const BING_SEARCH_URL = "https://cn.bing.com/search?q=";
+
+/** 搜索要用到的浏览器工具：打开页面和读页面，两个都有才算能搜。 */
+export const BROWSER_SEARCH_TOOLS = ["computer_navigate", "computer_read"];
+
+/**
+ * 这次运行是否持有浏览器搜索要用的工具，按实际提供给模型的工具名判断。
+ *
+ * 浏览器工具不在 {@link GrantedTool} 里：网页聊天由前端注册（app/src/lib/copilot/computer-tools.tsx），
+ * 无人值守由 headless-tools 提供，两者都随 RunAgentInput.tools 到达。所以看工具名，而不看部署有没有
+ * 电脑说明：纯设备模式（TENANT_RUNTIME=device，没有云端电脑）的聊天没有电脑说明，却照样持有这些工具。
+ */
+export function holdsBrowserSearchTools(names: Iterable<string>): boolean {
+  const held = new Set(names);
+  return BROWSER_SEARCH_TOOLS.every((name) => held.has(name));
+}
+
+/**
+ * 员工持有浏览器时，查公开网页信息怎么搜（2026-11-09 选定的免费方案：不接付费搜索服务）。
+ *
+ * 只管公开网页。已连接系统的规则（不许改用浏览器访问、缺授权如实说、审批门）在
+ * {@link grantedToolGuidance} 里照旧，这段自己也写明不适用于它们。搜索页遇到验证码或登录墙时
+ * 先换另一个搜索引擎；仍被拦，就按电脑说明（shared/bot-prompt.ts 的 COMPUTER_GUIDANCE）已有的规则，
+ * 调用 computer_request_help 请人接管，不另立一条相反的规则。
+ *
+ * `withParallel`：员工同时持有 Parallel 时，写明中文问题先走百度，Parallel 用于英文和国际信息，
+ * 和 Parallel 那段的说法一致。
+ */
+function browserSearchGuidance(withParallel: boolean): string[] {
+  return [
+    `Searching the public web with your browser: when a question needs public information from the web, call computer_navigate on ${BAIDU_SEARCH_URL}<keywords>, with the keywords URL-encoded. If Baidu does not load or its results are poor, use ${BING_SEARCH_URL}<keywords> instead.`,
+    "Read the results page (computer_read), then open one to three of the source pages and check the answer there rather than answering from the result snippets. In your answer give the source links and the date you searched.",
+    withParallel
+      ? "Prefer Baidu for questions in Chinese. Parallel is still there for English-language or international information, but a question in Chinese goes to Baidu in the browser first."
+      : "Prefer Baidu for questions in Chinese.",
+    "Search for public information only. Put only the few keywords the question needs in the search address: never the conversation, the contents of a private document or file, or anything about the person they did not ask you to look up.",
+    "If a search page shows a CAPTCHA, a verification check or a sign-in wall, do not try to get around it: switch to the other search engine and try once more. If that is blocked too, treat it like any page that needs a person: call computer_request_help and say exactly what needs doing, and never ask them to type a password or a code to you.",
+    "This is for public web pages only. It is never a way into a system this deployment connects to: for those, everything said here about connected systems, missing grants and approvals still applies.",
+  ];
+}
 
 /**
  * What this Bot holds, said in its instructions rather than left to be inferred from a tool list.
@@ -145,8 +174,16 @@ export function grantedToolGuidance(
    * connector existed, the Bot simply was not on it, and nothing said so.
    */
   connectedButNotHeld: readonly string[] = [],
+  /**
+   * `browser`：这次运行持有浏览器（`computer_navigate`、`computer_read`，见 {@link holdsBrowserSearchTools}）。为真时加上公开网页搜索引导
+   * （见 {@link browserSearchGuidance}），并把 Parallel 那段改成「中文先百度」的说法；为假或不传时，
+   * 输出与没有这个参数时逐字一致。
+   */
+  options: { browser?: boolean } = {},
 ): string {
-  if (tools.length === 0 && connectedButNotHeld.length === 0) return "";
+  const browser = options.browser === true;
+  if (tools.length === 0 && connectedButNotHeld.length === 0 && !browser)
+    return "";
 
   const bySystem = new Map<string, string[]>();
   for (const tool of tools) {
@@ -198,16 +235,18 @@ export function grantedToolGuidance(
         ]
       : []),
     // 只有内部工具（记忆、跟进等）时不说：它们不经审批门。
-    ...(tools.some((tool) => refFromToolName(tool.name) !== null)
-      ? [CONNECTOR_APPROVAL_GUIDANCE]
-      : []),
+    ...(holdsAppTools(tools) ? [CONNECTOR_APPROVAL_GUIDANCE] : []),
     ...(researchConnector
       ? [
           `Parallel provides public-web search and extraction: ${researchTools.map((tool) => tool.name).join(" and ")} discover sources and read selected pages.`,
           "Parallel searches the public web; it does not connect a person's private account. Send only the research objective, necessary search queries and requested URLs, not a full transcript or private documents. Generate one session_id for the conversation and reuse it on related search/fetch calls. Omit model_name unless the exact configured model identifier is known.",
-          "Cite source URLs and distinguish excerpts from full-page reads. Report provider errors or missing sources; do not invent evidence or quietly bypass a denial. Interactive browser work still uses the authorized computer tools when needed.",
+          browser
+            ? "Cite source URLs and distinguish excerpts from full-page reads. Report provider errors or missing sources; do not invent evidence or quietly bypass a denial. For a question in Chinese, search Baidu in your browser first, as described below; use Parallel for English-language or international information. Interactive browser work uses the authorized computer tools."
+            : "Cite source URLs and distinguish excerpts from full-page reads. Report provider errors or missing sources; do not invent evidence or quietly bypass a denial. Interactive browser work still uses the authorized computer tools when needed.",
         ]
       : []),
+    // 公开网页搜索，放在已连接系统的明确禁令之前，让那段禁令仍是最后读到的。
+    ...(browser ? browserSearchGuidance(Boolean(researchConnector)) : []),
     /*
      * The vendors this deployment connects to and this Bot does not hold.
      *
@@ -219,7 +258,7 @@ export function grantedToolGuidance(
      */
     ...(missing.length > 0
       ? [
-          ...(tools.length > 0 ? [""] : []),
+          ...(tools.length > 0 || browser ? [""] : []),
           `This deployment also connects to: ${missing.join(", ")}. You hold none of their tools.`,
           "If a question needs one of them, say plainly that you have not been granted it and that an",
           "administrator can grant it on that connector. Do NOT browse to its website: that is not the",
@@ -251,6 +290,9 @@ export async function grantedTools(options: {
   return granted.tools.map((tool) => ({
     name: tool.toolName,
     ref: tool.ref,
+    // An app's tools arrive by the hundred, so past the floor they wait behind `search_tools`
+    // (`agents/tool-search.ts`), as upstream offers them.
+    searchable: true as const,
     initiator,
     // 应用标为破坏性的工具，名字不一定看得出来：在描述末尾写明 OpenBot 会先问，Bot 不必再问。
     description: tool.destructive

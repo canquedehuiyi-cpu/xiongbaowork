@@ -1,8 +1,9 @@
 import { execFile, spawn } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import { win32 } from "node:path";
-
 import { egressShellEnvironment, splitProxyCredentials } from "./egress";
+import { createLiveShell, type LiveShell } from "./live-shell";
+import { readableOutput } from "./shell-marks";
 
 /**
  * Running a command on the Bot's computer.
@@ -46,7 +47,10 @@ export type ShellResult = {
   truncated: boolean;
   timedOut: boolean;
   elapsedMs: number;
+  /** Stopped by a person (the signal was aborted) rather than finishing or timing out. */
   stopped?: boolean;
+  /** Never typed: the shell was busy with something a person started. */
+  notRun?: boolean;
 };
 
 /**
@@ -314,63 +318,128 @@ export type RunAs = {
   launcher?: string[];
 };
 
+/** The command a caller hands a shell, and the Stop that ends it. */
+export type CommandInput = {
+  command: string;
+  timeoutMs?: number;
+  signal?: AbortSignal;
+};
+
+export type ShellOptions = {
+  /** The bash the live shell starts, where it is not the one on PATH. */
+  bash?: string;
+  /** Each command in a shell of its own (`runOnce`) instead of the live one. */
+  oneShot?: boolean;
+  /** Run each command as an employee's own Linux user, through the root helper. See below. */
+  runAs?: RunAs;
+};
+
+/**
+ * A shell that only runs commands: no live terminal behind it.
+ *
+ * What `createShell` gives for an employee's own user (`runAs`). The live shell (live-shell.ts) is
+ * one bash in a pseudo-terminal that this process starts, so it runs as this process's user, pwuser,
+ * and the root helper's `run` takes a command and its environment on stdin rather than a terminal.
+ * An employee's live terminal would therefore be pwuser's bash in the employee's directory: every
+ * other employee's files, the browser profiles, and `sudo openbot-apt`. So an employee has no live
+ * terminal at all. Its commands run one at a time through the helper, and the computer refuses the
+ * terminal socket for it (index.ts).
+ */
+export type CommandShell = {
+  run(input: CommandInput): Promise<ShellResult>;
+  /** Never set: the employee's commands have no terminal to watch or take over. */
+  terminal?: undefined;
+  dispose(): void;
+};
+
 /**
  * A shell for one workspace.
  *
+ * Without `runAs`, the Bot's commands are typed into one live shell (live-shell.ts), or with
+ * `oneShot` each runs in a shell of its own.
+ *
  * With `runAs`, the command runs as the employee's own Linux user rather than this process's: it is
  * handed to the root helper as `run <key> <timeout_s>` with the environment and the command on stdin,
- * never in argv. Without it, nothing about the command changes.
+ * never in argv. Always one shell per command, and no live terminal (`CommandShell`), whatever
+ * `oneShot` says.
  */
 export function createShell(
   workspaceDir: string,
+  sourceEnv: NodeJS.ProcessEnv,
+  options: ShellOptions & { runAs: RunAs },
+): CommandShell;
+export function createShell(
+  workspaceDir: string,
+  sourceEnv?: NodeJS.ProcessEnv,
+  options?: ShellOptions & { runAs?: undefined },
+): LiveBackedShell;
+export function createShell(
+  workspaceDir: string,
   sourceEnv: NodeJS.ProcessEnv = process.env,
-  options: { runAs?: RunAs } = {},
-) {
+  options: ShellOptions = {},
+): CommandShell | LiveBackedShell {
   const runAs = options.runAs;
-  // Checked here as well as by the helper, so a caller with the wrong idea of a key finds out at once.
-  if (runAs && !RUN_AS_KEY.test(runAs.key)) {
-    throw new Error(
-      "An employee's key must be twelve lowercase hexadecimal digits.",
-    );
-  }
-  const launcher = runAs?.launcher ?? DEFAULT_RUN_AS_LAUNCHER;
-  return {
-    async run(input: {
-      command: string;
-      timeoutMs?: number;
-      signal?: AbortSignal;
-    }): Promise<ShellResult> {
-      const started = Date.now();
-      if (input.signal?.aborted)
-        return {
-          command: input.command,
-          exitCode: -1,
-          stdout: "",
-          stderr: "The command was stopped before it started.",
-          truncated: false,
-          timedOut: false,
-          stopped: true,
-          elapsedMs: Date.now() - started,
-        };
-      await mkdir(workspaceDir, { recursive: true });
-      /*
-       * Bounded at both ends. Only `Math.min` was applied, so a zero or negative `timeoutMs` from a
-       * caller made `setTimeout` fire immediately: the command was killed before it did anything and
-       * the answer said it had timed out, which is true and useless.
-       *
-       * A non-finite value is the same failure one step earlier: `Math.max(NaN, 1000)` is `NaN`,
-       * and `setTimeout(NaN)` fires immediately too. The HTTP layer rejects those with a 400, so
-       * this is defence in depth for a direct caller — fall back to the default rather than run a
-       * command that is already out of time.
-       */
-      const requested =
-        typeof input.timeoutMs === "number" && Number.isFinite(input.timeoutMs)
-          ? input.timeoutMs
-          : DEFAULT_TIMEOUT_MS;
-      const timeoutMs = Math.min(
-        Math.max(requested, MIN_TIMEOUT_MS),
-        MAX_TIMEOUT_MS,
+  if (runAs) {
+    // Checked here as well as by the helper, so a caller with the wrong idea of a key finds out at once.
+    if (!RUN_AS_KEY.test(runAs.key)) {
+      throw new Error(
+        "An employee's key must be twelve lowercase hexadecimal digits.",
       );
+    }
+    const launcher = runAs.launcher ?? DEFAULT_RUN_AS_LAUNCHER;
+    return {
+      async run(input: CommandInput): Promise<ShellResult> {
+        const started = Date.now();
+        if (input.signal?.aborted) return stoppedBeforeStart(input, started);
+        await mkdir(workspaceDir, { recursive: true });
+        return runOnce({
+          command: input.command,
+          signal: input.signal,
+          workspaceDir,
+          sourceEnv,
+          started,
+          timeoutMs: commandTimeoutMs(input.timeoutMs),
+          runAs: { key: runAs.key, launcher },
+        });
+      },
+      dispose() {},
+    };
+  }
+
+  /*
+   * A command in a shell of its own (`runOnce`) instead of the live one: always on Windows, where
+   * there is no pseudo-terminal bash, and wherever the caller asks for it. The device runner on a
+   * person's own machine asks, because a Mac's own bash is too old for the live shell.
+   */
+  const oneShot = options.oneShot ?? process.platform === "win32";
+  /*
+   * One live shell for this Bot, which its commands are typed into and a person can watch and take
+   * over (live-shell.ts). It used to be a fresh `bash -c` for each command.
+   *
+   * The shell is interactive now, and still never reads a startup file from the workspace: it starts
+   * with one the computer writes elsewhere, because HOME is the workspace and a Bot writes files
+   * there. A `.bash_profile` or `.bashrc` it left behind would otherwise run before every later
+   * command while the audit row recorded only what was asked for. The allow-list above means such a
+   * file can no longer recover a secret, but it could still change what a command does.
+   *
+   * The environment is built when a shell starts, with the egress filter's address last, so a command
+   * cannot be pointed around it.
+   */
+  const live = createLiveShell({
+    cwd: workspaceDir,
+    env: () => ({
+      ...environmentForCommand(sourceEnv, workspaceDir),
+      ...egressShellEnvironment(),
+    }),
+    ...(options.bash ? { bash: options.bash } : {}),
+  });
+
+  return {
+    async run(input: CommandInput): Promise<ShellResult> {
+      const started = Date.now();
+      if (input.signal?.aborted) return stoppedBeforeStart(input, started);
+      await mkdir(workspaceDir, { recursive: true });
+      const timeoutMs = commandTimeoutMs(input.timeoutMs);
 
       /*
        * Through a shell on purpose. A Bot writes `apt-get install -y jq && jq --version`, and pipes,
@@ -381,263 +450,364 @@ export function createShell(
        * safe way to read a command's intent from its text, so nothing here tries. The policy decides
        * whether this Bot may run commands at all and what they may say; the container decides what a
        * command can reach.
-       */
-      /*
-       * `-c`, not `-lc`. A login shell sources `$HOME/.bash_profile`, and HOME is the workspace a Bot
-       * writes with `computer_write_file`. That let a Bot leave a file which every later command ran
-       * first: it could put its own `apt-get` earlier on PATH, and the audit row would still read
-       * `apt-get --version`. The allow-list above means such a file can no longer recover a secret,
-       * but it could still change what a command does. A permissive shell is a decision a deployment
-       * can make. A trail that describes something other than what ran is not.
-       */
-      /*
-       * Its own process group, so stopping it stops what it started.
        *
-       * `child.kill` signals bash alone. `bash -c "sleep 600 | cat"` leaves the sleep and the cat
-       * holding the inherited pipes, so `close` never fires and the await never settles: the command
-       * runs on and the caller waits for the transport to give up instead. Killing the negative pid
-       * signals the whole group.
-       */
-      // The egress filter's address last, so a command cannot be pointed around it.
-      const fullEnv = {
-        ...environmentForCommand(sourceEnv, workspaceDir),
-        ...egressShellEnvironment(),
-      };
-      // sudo resets its own environment; the helper is given the same map on stdin.
-      const commandEnv = runAs ? runAsEnvironment(fullEnv) : fullEnv;
-      const shell = runAs
-        ? {
-            executable: launcher[0] ?? DEFAULT_RUN_AS_LAUNCHER[0],
-            args: [
-              ...launcher.slice(1),
-              "run",
-              runAs.key,
-              String(Math.ceil(timeoutMs / 1000)),
-            ],
-          }
-        : commandShell(input.command, process.platform, sourceEnv);
-      const windows = process.platform === "win32" && !runAs;
-      const codePage = windows
-        ? await windowsCodePage(shell.executable)
-        : undefined;
-      const child = spawn(shell.executable, shell.args, {
-        cwd: workspaceDir,
-        env: commandEnv,
-        detached: process.platform !== "win32",
-        windowsHide: true,
-      });
-      if (runAs) {
-        // A helper that refused before reading all of it closes the pipe; that is its exit code's story.
-        child.stdin?.on("error", () => {});
-        child.stdin?.end(runAsInput(commandEnv, input.command));
-      }
-
-      let timedOut = false;
-
-      /*
-       * Trimmed while it arrives, not at the end.
+       * The deadline starts now, not when the command is typed: a command waiting behind another of
+       * the Bot's own is still inside the time it was given.
        *
-       * `clamp` ran after `close`, so the string grew without limit until then. `cat` of a large file
-       * or `base64 /dev/urandom` allocated until the process died, and that process owns the browser
-       * every Bot on this computer is using.
-       *
-       * Trimming here has to carry the fact that it happened. Clamping at the end could tell, by
-       * looking at the size; a stream that was already trimmed arrives under the limit and looks
-       * complete. Losing the flag would be worse than the allocation: output that quietly ends is
-       * output a model reads as the whole answer.
+       * The person's Stop reaches the command too: the shell presses Ctrl-C for it, then stops its
+       * process group, then the shell, so nothing the command started outlives it.
        */
-      const collect = () => {
-        let text = "";
-        let dropped = false;
-        return {
-          add(chunk: unknown) {
-            text += String(chunk);
-            if (Buffer.byteLength(text, "utf8") <= MAX_OUTPUT_BYTES * 2) return;
-            text = Buffer.from(text, "utf8")
-              .subarray(-MAX_OUTPUT_BYTES)
-              .toString("utf8");
-            dropped = true;
-          },
-          get text() {
-            return text;
-          },
-          get dropped() {
-            return dropped;
-          },
-        };
-      };
-
-      const outBuffer = collect();
-      const errBuffer = collect();
-      const outDecoder = windows ? windowsOutputDecoder(codePage) : undefined;
-      const errDecoder = windows ? windowsOutputDecoder(codePage) : undefined;
-
-      child.stdout.on("data", (chunk) => {
-        outBuffer.add(outDecoder ? outDecoder.write(chunk) : chunk);
-      });
-      child.stderr.on("data", (chunk) => {
-        errBuffer.add(errDecoder ? errDecoder.write(chunk) : chunk);
-      });
-
-      let failStop: (error: Error) => void = () => {};
-      const stopFailure = new Promise<never>((_, reject) => {
-        failStop = reject;
-      });
-      let stopping: Promise<void> | undefined;
-      /*
-       * Running as the employee, the request ends on one of three things: the pipes closing, which is
-       * the ordinary end; the output having drained after the helper exited; or giving up on a helper
-       * that did not end after a timeout or a Stop. The last two stop reading rather than wait.
-       */
-      let stopRequested = false;
-      let finished = false;
-      let exitedWith: number | undefined;
-      let drainTimer: ReturnType<typeof setTimeout> | undefined;
-      let giveUpTimer: ReturnType<typeof setTimeout> | undefined;
-      let abandon: () => void = () => {};
-      const abandoned = new Promise<number>((resolve) => {
-        abandon = () => {
-          child.stdout.destroy();
-          child.stderr.destroy();
-          resolve(exitedWith ?? -1);
-        };
-      });
-      if (runAs) {
-        child.once("exit", (code) => {
-          exitedWith = code ?? -1;
-          if (!finished) drainTimer = setTimeout(abandon, RUN_AS_DRAIN_MS);
+      if (oneShot)
+        return runOnce({
+          command: input.command,
+          signal: input.signal,
+          workspaceDir,
+          sourceEnv,
+          started,
+          timeoutMs,
         });
-      }
-      const stop = () => {
-        const { pid } = child;
-        if (pid === undefined) return;
-        if (stopping) return;
-        if (runAs) {
-          /*
-           * To sudo alone, which relays it to the helper; the helper ends the command's group. The
-           * group is not signalled from here: it is another user's, under a process group of its own.
-           */
-          if (stopRequested) return;
-          stopRequested = true;
-          try {
-            process.kill(pid, "SIGTERM");
-          } catch {
-            // Gone already, or EPERM: the deadline below still ends the request.
-          }
-          giveUpTimer = setTimeout(abandon, RUN_AS_GIVE_UP_MS);
-          return;
-        }
-        if (process.platform === "win32") {
-          stopping = new Promise<void>((resolve, reject) => {
-            const systemRoot =
-              sourceEnv.SystemRoot ?? sourceEnv.SYSTEMROOT ?? "C:\\Windows";
-            const killer = spawn(
-              win32.join(systemRoot, "System32", "taskkill.exe"),
-              ["/PID", String(pid), "/T", "/F"],
-              {
-                windowsHide: true,
-                stdio: "ignore",
-                env: environmentForCommand(sourceEnv, workspaceDir),
-              },
-            );
-            killer.once("error", () =>
-              reject(
-                new Error("The command's process tree could not be stopped."),
-              ),
-            );
-            killer.once("close", (code) => {
-              if (code === 0) resolve();
-              else
-                reject(
-                  new Error(
-                    "The command's process tree could not be confirmed stopped.",
-                  ),
-                );
-            });
-          });
-          // A failed tree kill must not leave the request waiting forever on inherited pipes.
-          void stopping.catch((error: Error) => {
-            child.kill();
-            child.stdout.destroy();
-            child.stderr.destroy();
-            failStop(error);
-          });
-          return;
-        }
-        try {
-          // The group, so nothing the command backgrounded outlives it.
-          process.kill(-pid, "SIGKILL");
-        } catch {
-          // Already gone, or the group went with it. Either way there is nothing left to stop.
-        }
-      };
 
-      const timer = setTimeout(() => {
-        timedOut = true;
-        stop();
-      }, timeoutMs);
+      const outcome = await live.run({
+        command: input.command,
+        deadline: started + timeoutMs,
+        ...(input.signal ? { signal: input.signal } : {}),
+      });
 
-      // The person's Stop reaches the command, not just the request that started it.
-      const onAbort = stop;
-      input.signal?.addEventListener("abort", onAbort, { once: true });
-      // A listener added to an already-aborted signal never fires, so listening alone only honours a
-      // Stop that arrives from here on. The abort can beat the spawn above: the surface aborts, the
-      // server aborts the request it made to this computer, and Bun aborts this one in turn, which
-      // happens before this line whenever the person was quick. Reading the flag is what makes the
-      // Stop mean the same thing whenever it landed.
-      if (input.signal?.aborted) stop();
-
-      let exitCode: number;
-      try {
-        exitCode = await Promise.race([
-          new Promise<number>((resolve, reject) => {
-            child.on("close", (code) => resolve(code ?? -1));
-            child.on("error", (error: NodeJS.ErrnoException) =>
-              reject(
-                new Error(
-                  `The command shell could not start (${error.code ?? "unknown error"}).`,
-                ),
-              ),
-            );
-          }),
-          stopFailure,
-          ...(runAs ? [abandoned] : []),
-        ]);
-        await stopping;
-      } finally {
-        finished = true;
-        clearTimeout(timer);
-        input.signal?.removeEventListener("abort", onAbort);
-        if (drainTimer) clearTimeout(drainTimer);
-        if (giveUpTimer) clearTimeout(giveUpTimer);
-      }
-
-      if (outDecoder) outBuffer.add(outDecoder.end());
-      if (errDecoder) errBuffer.add(errDecoder.end());
-      const out = clamp(outBuffer.text);
-      const err = clamp(
-        windows ? plainPowerShellStderr(errBuffer.text) : errBuffer.text,
-      );
+      /*
+       * One stream, because a terminal has one: stdout and stderr arrive interleaved, as a person
+       * watching sees them, so they come back as `stdout`.
+       */
+      const text = outcome.busy
+        ? ""
+        : readableOutput(outcome.raw) +
+          (outcome.incomplete ? INCOMPLETE_COMMAND : "");
+      const out = clamp(text);
       return {
         command: input.command,
-        exitCode,
+        exitCode: outcome.exitCode,
         stdout: out.text,
-        stderr: err.text,
-        // Either end of the pipe, and either point it was cut: while arriving, or on the way out.
-        truncated:
-          out.truncated ||
-          err.truncated ||
-          outBuffer.dropped ||
-          errBuffer.dropped,
-        timedOut,
-        ...(input.signal?.aborted ? { stopped: true } : {}),
+        stderr: outcome.busy ? SHELL_BUSY : "",
+        // Either point it was cut: while arriving, or on the way out.
+        truncated: out.truncated || outcome.dropped,
+        timedOut: outcome.timedOut,
+        // The device runner reports a person's Stop as such rather than as a failed command.
+        ...(outcome.stopped || input.signal?.aborted ? { stopped: true } : {}),
         elapsedMs: Date.now() - started,
+        ...(outcome.busy ? { notRun: true } : {}),
       };
     },
+    /** What a person watching or driving the shell reaches. See live-shell.ts. */
+    terminal: live,
+    /** End this shell for good. */
+    dispose: () => live.dispose(),
   };
 }
 
-export type Shell = ReturnType<typeof createShell>;
+/** A shell with a live terminal behind it: every Bot's but an employee's own user's. */
+export type LiveBackedShell = {
+  run(input: CommandInput): Promise<ShellResult>;
+  terminal: LiveShell;
+  dispose(): void;
+};
+
+function stoppedBeforeStart(input: CommandInput, started: number): ShellResult {
+  return {
+    command: input.command,
+    exitCode: -1,
+    stdout: "",
+    stderr: "The command was stopped before it started.",
+    truncated: false,
+    timedOut: false,
+    stopped: true,
+    elapsedMs: Date.now() - started,
+  };
+}
+
+/*
+ * Bounded at both ends. Only `Math.min` was applied, so a zero or negative `timeoutMs` from a caller
+ * made the timer fire immediately: the command was killed before it did anything and the answer said
+ * it had timed out, which is true and useless.
+ *
+ * A non-finite value is the same failure one step earlier: `Math.max(NaN, 1000)` is `NaN`. The HTTP
+ * layer rejects those with a 400, so this is defence in depth for a direct caller — fall back to the
+ * default rather than run a command that is already out of time.
+ */
+function commandTimeoutMs(timeoutMs: number | undefined): number {
+  const requested =
+    typeof timeoutMs === "number" && Number.isFinite(timeoutMs)
+      ? timeoutMs
+      : DEFAULT_TIMEOUT_MS;
+  return Math.min(Math.max(requested, MIN_TIMEOUT_MS), MAX_TIMEOUT_MS);
+}
+
+/**
+ * One command in a shell of its own, which ends with it: PowerShell on Windows, `bash -c` elsewhere,
+ * or, with `runAs`, the root helper running it as an employee's own user.
+ *
+ * The live shell (live-shell.ts) needs a pseudo-terminal and bash 4.4 or newer, which a person's
+ * Windows machine does not have and a Mac's own `/bin/bash` (3.2) is not. The device runner on such a
+ * machine runs each command this way, as every command ran before the live shell. So does every
+ * employee with its own user, which the live shell cannot be.
+ */
+async function runOnce(input: {
+  command: string;
+  signal: AbortSignal | undefined;
+  workspaceDir: string;
+  sourceEnv: NodeJS.ProcessEnv;
+  started: number;
+  timeoutMs: number;
+  runAs?: { key: string; launcher: string[] };
+}): Promise<ShellResult> {
+  const { workspaceDir, sourceEnv, started, timeoutMs, runAs } = input;
+  /*
+   * `-c`, not `-lc`. A login shell sources `$HOME/.bash_profile`, and HOME is the workspace a Bot
+   * writes with `computer_write_file`. That let a Bot leave a file which every later command ran
+   * first: it could put its own `apt-get` earlier on PATH, and the audit row would still read
+   * `apt-get --version`. A permissive shell is a decision a deployment can make. A trail that
+   * describes something other than what ran is not.
+   *
+   * Its own process group, so stopping it stops what it started. `child.kill` signals bash alone.
+   * `bash -c "sleep 600 | cat"` leaves the sleep and the cat holding the inherited pipes, so `close`
+   * never fires and the await never settles. Killing the negative pid signals the whole group.
+   */
+  // The egress filter's address last, so a command cannot be pointed around it.
+  const fullEnv = {
+    ...environmentForCommand(sourceEnv, workspaceDir),
+    ...egressShellEnvironment(),
+  };
+  // sudo resets its own environment; the helper is given the same map on stdin.
+  const commandEnv = runAs ? runAsEnvironment(fullEnv) : fullEnv;
+  const shell = runAs
+    ? {
+        executable: runAs.launcher[0] ?? DEFAULT_RUN_AS_LAUNCHER[0],
+        args: [
+          ...runAs.launcher.slice(1),
+          "run",
+          runAs.key,
+          String(Math.ceil(timeoutMs / 1000)),
+        ],
+      }
+    : commandShell(input.command, process.platform, sourceEnv);
+  const windows = process.platform === "win32" && !runAs;
+  const codePage = windows
+    ? await windowsCodePage(shell.executable)
+    : undefined;
+  const child = spawn(shell.executable, shell.args, {
+    cwd: workspaceDir,
+    env: commandEnv,
+    detached: process.platform !== "win32",
+    windowsHide: true,
+  });
+  if (runAs) {
+    // A helper that refused before reading all of it closes the pipe; that is its exit code's story.
+    child.stdin?.on("error", () => {});
+    child.stdin?.end(runAsInput(commandEnv, input.command));
+  }
+
+  let timedOut = false;
+
+  /*
+   * Trimmed while it arrives, not at the end, and carrying the fact that it happened: output that
+   * quietly ends is output a model reads as the whole answer.
+   */
+  const collect = () => {
+    let text = "";
+    let dropped = false;
+    return {
+      add(chunk: unknown) {
+        text += String(chunk);
+        if (Buffer.byteLength(text, "utf8") <= MAX_OUTPUT_BYTES * 2) return;
+        text = Buffer.from(text, "utf8")
+          .subarray(-MAX_OUTPUT_BYTES)
+          .toString("utf8");
+        dropped = true;
+      },
+      get text() {
+        return text;
+      },
+      get dropped() {
+        return dropped;
+      },
+    };
+  };
+
+  const outBuffer = collect();
+  const errBuffer = collect();
+  const outDecoder = windows ? windowsOutputDecoder(codePage) : undefined;
+  const errDecoder = windows ? windowsOutputDecoder(codePage) : undefined;
+
+  child.stdout.on("data", (chunk) => {
+    outBuffer.add(outDecoder ? outDecoder.write(chunk) : chunk);
+  });
+  child.stderr.on("data", (chunk) => {
+    errBuffer.add(errDecoder ? errDecoder.write(chunk) : chunk);
+  });
+
+  let failStop: (error: Error) => void = () => {};
+  const stopFailure = new Promise<never>((_, reject) => {
+    failStop = reject;
+  });
+  let stopping: Promise<void> | undefined;
+  /*
+   * Running as the employee, the request ends on one of three things: the pipes closing, which is
+   * the ordinary end; the output having drained after the helper exited; or giving up on a helper
+   * that did not end after a timeout or a Stop. The last two stop reading rather than wait.
+   */
+  let stopRequested = false;
+  let finished = false;
+  let exitedWith: number | undefined;
+  let drainTimer: ReturnType<typeof setTimeout> | undefined;
+  let giveUpTimer: ReturnType<typeof setTimeout> | undefined;
+  let abandon: () => void = () => {};
+  const abandoned = new Promise<number>((resolve) => {
+    abandon = () => {
+      child.stdout.destroy();
+      child.stderr.destroy();
+      resolve(exitedWith ?? -1);
+    };
+  });
+  if (runAs) {
+    child.once("exit", (code) => {
+      exitedWith = code ?? -1;
+      if (!finished) drainTimer = setTimeout(abandon, RUN_AS_DRAIN_MS);
+    });
+  }
+  const stop = () => {
+    const { pid } = child;
+    if (pid === undefined) return;
+    if (stopping) return;
+    if (runAs) {
+      /*
+       * To sudo alone, which relays it to the helper; the helper ends the command's group. The
+       * group is not signalled from here: it is another user's, under a process group of its own.
+       */
+      if (stopRequested) return;
+      stopRequested = true;
+      try {
+        process.kill(pid, "SIGTERM");
+      } catch {
+        // Gone already, or EPERM: the deadline below still ends the request.
+      }
+      giveUpTimer = setTimeout(abandon, RUN_AS_GIVE_UP_MS);
+      return;
+    }
+    if (process.platform === "win32") {
+      stopping = new Promise<void>((resolve, reject) => {
+        const systemRoot =
+          sourceEnv.SystemRoot ?? sourceEnv.SYSTEMROOT ?? "C:\\Windows";
+        const killer = spawn(
+          win32.join(systemRoot, "System32", "taskkill.exe"),
+          ["/PID", String(pid), "/T", "/F"],
+          {
+            windowsHide: true,
+            stdio: "ignore",
+            env: environmentForCommand(sourceEnv, workspaceDir),
+          },
+        );
+        killer.once("error", () =>
+          reject(new Error("The command's process tree could not be stopped.")),
+        );
+        killer.once("close", (code) => {
+          if (code === 0) resolve();
+          else
+            reject(
+              new Error(
+                "The command's process tree could not be confirmed stopped.",
+              ),
+            );
+        });
+      });
+      // A failed tree kill must not leave the request waiting forever on inherited pipes.
+      void stopping.catch((error: Error) => {
+        child.kill();
+        child.stdout.destroy();
+        child.stderr.destroy();
+        failStop(error);
+      });
+      return;
+    }
+    try {
+      // The group, so nothing the command backgrounded outlives it.
+      process.kill(-pid, "SIGKILL");
+    } catch {
+      // Already gone, or the group went with it. Either way there is nothing left to stop.
+    }
+  };
+
+  const timer = setTimeout(() => {
+    timedOut = true;
+    stop();
+  }, timeoutMs);
+
+  // The person's Stop reaches the command, not just the request that started it.
+  const onAbort = stop;
+  input.signal?.addEventListener("abort", onAbort, { once: true });
+  // A listener added to an already-aborted signal never fires, so listening alone only honours a
+  // Stop that arrives from here on. The abort can beat the spawn above: the surface aborts, the
+  // server aborts the request it made to this computer, and Bun aborts this one in turn, which
+  // happens before this line whenever the person was quick. Reading the flag is what makes the
+  // Stop mean the same thing whenever it landed.
+  if (input.signal?.aborted) stop();
+
+  let exitCode: number;
+  try {
+    exitCode = await Promise.race([
+      new Promise<number>((resolve, reject) => {
+        child.on("close", (code) => resolve(code ?? -1));
+        child.on("error", (error: NodeJS.ErrnoException) =>
+          reject(
+            new Error(
+              `The command shell could not start (${error.code ?? "unknown error"}).`,
+            ),
+          ),
+        );
+      }),
+      stopFailure,
+      ...(runAs ? [abandoned] : []),
+    ]);
+    await stopping;
+  } finally {
+    finished = true;
+    clearTimeout(timer);
+    input.signal?.removeEventListener("abort", onAbort);
+    if (drainTimer) clearTimeout(drainTimer);
+    if (giveUpTimer) clearTimeout(giveUpTimer);
+  }
+
+  if (outDecoder) outBuffer.add(outDecoder.end());
+  if (errDecoder) errBuffer.add(errDecoder.end());
+  const out = clamp(outBuffer.text);
+  const err = clamp(
+    windows ? plainPowerShellStderr(errBuffer.text) : errBuffer.text,
+  );
+  return {
+    command: input.command,
+    exitCode,
+    stdout: out.text,
+    stderr: err.text,
+    // Either end of the pipe, and either point it was cut: while arriving, or on the way out.
+    truncated:
+      out.truncated || err.truncated || outBuffer.dropped || errBuffer.dropped,
+    timedOut,
+    ...(input.signal?.aborted ? { stopped: true } : {}),
+    elapsedMs: Date.now() - started,
+  };
+}
+
+/** Said when the shell was left waiting for the rest of a command the Bot sent. */
+const INCOMPLETE_COMMAND =
+  "\nbash: the command was incomplete (an unclosed quote, bracket or here-document), so it did not run.\n";
+
+/** Said when a person left something running in the shell's foreground and handed it back. */
+const SHELL_BUSY =
+  "The command was not run: the shell is still running something a person started. Ask them to finish it.";
+
+export type Shell = LiveBackedShell;
+
+/** What runs a command and nothing more: a live-backed shell, or an employee's `CommandShell`. */
+export type CommandRunner = {
+  run(input: CommandInput): Promise<ShellResult>;
+};
 
 /** The upper half of the two Western OEM code pages, which have no `TextDecoder` label. */
 const OEM_UPPER_HALF: Record<number, string> = {

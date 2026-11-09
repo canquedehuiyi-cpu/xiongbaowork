@@ -7,13 +7,18 @@ import {
   HttpAgent,
   type RunAgentInput,
 } from "@ag-ui/client";
+import { NOT_SHOWN } from "@openbot/shared/component-markers";
 import { inArray } from "drizzle-orm";
 import { Observable } from "rxjs";
 import { GALLERY } from "../../app/src/components/gallery/charts";
-import { NOT_SHOWN } from "../../shared/component-markers";
-import type { AuditEventInput } from "../src/audit";
-import { createHeadlessComponentTools } from "../src/components/headless";
+import { serverTurnAdmission } from "../src/agents/turn-admission";
+import { type AuditEventInput, type AuditStore, auditSink } from "../src/audit";
+import {
+  createHeadlessComponentTools,
+  headlessComponentCatalog,
+} from "../src/components/headless";
 import { createComponentStore } from "../src/components/store";
+import { botSeat } from "../src/computer/computer-key";
 import { createComputerGateway } from "../src/computer/gateway";
 import { createHeadlessComputerTools } from "../src/computer/headless-tools";
 import { createDatabase } from "../src/db/client";
@@ -47,6 +52,7 @@ function asDeployment<T>(work: () => T): T {
 
 const chartArgs = {
   title: "Stories on the front page by source",
+  basis: "read",
   caption: "Read from the page the routine opened.",
   points: [
     { label: "github.com", value: 4 },
@@ -179,9 +185,9 @@ function harness(agent: AbstractAgent, botId: string) {
   const gateway = createComputerGateway({
     provider: {
       name: "test",
-      isolation: "per-bot",
+      isolation: "per-person",
       locate: async () => "http://computer:4100",
-      status: async (id) => ({ botId: id, state: "ready" }),
+      status: async (seat) => ({ botId: seat.botId, state: "ready" }),
       list: async () => [],
       stop: async () => ({ wasRunning: true }),
       reset: async () => ({ cleared: true }),
@@ -220,6 +226,7 @@ function harness(agent: AbstractAgent, botId: string) {
     stop: async () => true,
   };
   const run = createTurnRunner({
+    admission: serverTurnAdmission,
     intelligence: {
       getOrCreateThread: async () => undefined,
       getThreadMessages: async () => ({ messages: [] }),
@@ -232,10 +239,13 @@ function harness(agent: AbstractAgent, botId: string) {
     toolsForTurn: async ({ ownerUserId, initiator }) =>
       createHeadlessComputerTools({
         gateway,
-        botId,
+        seat: botSeat(botId),
         actor: { id: ownerUserId, userId: ownerUserId, initiator },
       }),
-    components: { store, auditStore },
+    components: headlessComponentCatalog({
+      store,
+      audit: auditSink(auditStore as unknown as AuditStore),
+    }),
   });
   return {
     persisted,
@@ -375,4 +385,8 @@ describe("an unattended routine turn answering with a governed chart", () => {
       await asDeployment(() => store.grant("showBarChart", allowedBot));
     }
   });
+});
+
+afterAll(async () => {
+  await database.$client.close();
 });

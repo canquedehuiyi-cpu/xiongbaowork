@@ -1040,9 +1040,10 @@ test("the browser probe also runs on windows-latest, headed, and must print BROW
 });
 
 // Bun 1.3.14 cannot drive playwright-core on Windows (launch over the pipe and connectOverCDP both
-// time out; Bun 1.4.4 does both). The jobs that build or run what ships on a device therefore use
-// 1.4.4, and everything on the server side stays on the pinned 1.3.14.
-test("device jobs use Bun 1.4.4 and the server side stays on 1.3.14", () => {
+// time out; Bun 1.4.4 does both), so the device jobs moved to 1.4.4 first. Since upstream v1.0.0
+// (M3) the server image itself runs Bun 1.4 (`oven/bun:1.4.3` in the Dockerfile) and the code needs
+// it, so the server side is tested on 1.4.4 too: one Bun for everything CI runs.
+test("device jobs and the server side both use Bun 1.4.4", () => {
   const bunOf = (doc, name) =>
     doc.jobs[name].steps
       .filter((step) => String(step.uses ?? "").startsWith("oven-sh/setup-bun@"))
@@ -1070,6 +1071,6 @@ test("device jobs use Bun 1.4.4 and the server side stays on 1.3.14", () => {
     "device-shell",
     "device-clean-linux",
   ])
-    expect(bunOf(ci, name)).toEqual(["1.3.14"]);
-  expect(bunOf(workflow, "clean-linux")).toEqual(["1.3.14"]);
+    expect(bunOf(ci, name)).toEqual(["1.4.4"]);
+  expect(bunOf(workflow, "clean-linux")).toEqual(["1.4.4"]);
 });

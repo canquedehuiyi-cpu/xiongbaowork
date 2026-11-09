@@ -1,7 +1,13 @@
-import { useState } from "react";
+import { useContext, useState } from "react";
 import { z } from "zod";
 import type { GalleryComponent } from "@/lib/copilot/gallery-registry";
+import { FailedCard, UNREADABLE } from "./failed";
 import { Badge, GalleryFrame } from "./frame";
+import { GalleryMarkdown } from "./markdown";
+import { byPosition } from "./positions";
+import { GalleryStreamingContext } from "./streaming";
+
+const TITLE = "Data table";
 
 export const DataTableProps = z
   .object({
@@ -33,14 +39,44 @@ export const DataTableProps = z
     "Column labels must be unique and every row must have one cell per column",
   );
 
+/**
+ * The table without its last row while that row is still being written.
+ *
+ * The table is validated whole, and a row must have one cell per column, so a row half written made
+ * the whole table invalid: it dropped to "Waiting for complete table data" every time a new row
+ * started, and a table whose last column is a number (held back while it arrives) never drew until
+ * the call ended. Only a short LAST row, and only while the call streams, is set aside: a short row
+ * anywhere else, or in a finished table, is still wrong.
+ */
+function withoutArrivingRow(props: Record<string, unknown>): {
+  table: Record<string, unknown>;
+  arriving: boolean;
+} {
+  const { columns, rows } = props;
+  if (!Array.isArray(columns) || !Array.isArray(rows) || rows.length === 0) {
+    return { table: props, arriving: false };
+  }
+  const last = rows.at(-1) as { cells?: unknown } | undefined;
+  const cells = Array.isArray(last?.cells) ? last.cells.length : 0;
+  if (cells >= columns.length) return { table: props, arriving: false };
+  return { table: { ...props, rows: rows.slice(0, -1) }, arriving: true };
+}
+
 /** A real table: header buttons sort while the native row/column relationships stay intact. */
 export function DataTable(props: Record<string, unknown>) {
   const [sort, setSort] = useState<{
     column: number;
     ascending: boolean;
   } | null>(null);
-  const parsed = DataTableProps.safeParse(props);
+  const streaming = useContext(GalleryStreamingContext);
+  const { table, arriving } = streaming
+    ? withoutArrivingRow(props)
+    : { table: props, arriving: false };
+  const parsed = DataTableProps.safeParse(table);
   if (!parsed.success) {
+    // Only a table still being written is waited for. Once its arguments are final, nothing more
+    // is coming, and waiting would last for good.
+    if (!streaming) return <FailedCard reason={UNREADABLE} title="数据表格" />;
     return (
       <GalleryFrame title="表格">
         <p className="text-sm text-muted-foreground">正在等待完整的表格数据…</p>
@@ -82,9 +118,9 @@ export function DataTable(props: Record<string, unknown>) {
           <caption className="sr-only">{title}。点击列标题即可排序。</caption>
           <thead className="bg-muted/50 text-xs text-muted-foreground">
             <tr>
-              {columns.map((column, index) => (
+              {byPosition(columns).map(({ item: column, key }, index) => (
                 <th
-                  key={column}
+                  key={key}
                   scope="col"
                   aria-sort={
                     sort?.column === index
@@ -128,9 +164,9 @@ export function DataTable(props: Record<string, unknown>) {
                 key={row.position}
                 className="even:bg-muted/20 hover:bg-muted/40"
               >
-                {columns.map((column, index) => (
+                {byPosition(columns).map(({ key }, index) => (
                   <td
-                    key={column}
+                    key={key}
                     className={`min-w-24 max-w-xs break-words px-3 py-2.5 align-top ${typeof row.cells[index] === "number" ? "text-right tabular-nums" : ""}`}
                   >
                     {row.cells[index] === "" ? (
@@ -143,6 +179,8 @@ export function DataTable(props: Record<string, unknown>) {
                         </span>
                         <span className="sr-only">空</span>
                       </>
+                    ) : typeof row.cells[index] === "string" ? (
+                      <GalleryMarkdown>{row.cells[index]}</GalleryMarkdown>
                     ) : (
                       row.cells[index]
                     )}
@@ -150,7 +188,18 @@ export function DataTable(props: Record<string, unknown>) {
                 ))}
               </tr>
             ))}
-            {rows.length === 0 && (
+            {arriving ? (
+              // The row still being written, holding its place rather than the whole table waiting.
+              <tr>
+                <td
+                  colSpan={columns.length}
+                  className="px-3 py-2.5 text-muted-foreground"
+                >
+                  <span aria-hidden="true">…</span>
+                </td>
+              </tr>
+            ) : null}
+            {rows.length === 0 && !arriving && (
               <tr>
                 <td
                   colSpan={columns.length}
@@ -177,10 +226,11 @@ export function DataTable(props: Record<string, unknown>) {
 export const GALLERY: GalleryComponent[] = [
   {
     name: "showTable",
-    title: "Data table",
+    title: TITLE,
     kind: "card",
+    summary: "显示一张可以按任意列排序的表格，方便把多条记录放在一起比较。",
     description:
-      "Show a sortable table to compare records, plans, or other structured facts. Supply up to eight columns and 100 rows, with exactly one cell per column. Use numbers for quantities so sorting is numeric. Show only data you have; do not invent rows.",
+      "Show a sortable table to compare records, plans, or other structured facts. Use when there are enough rows or fields that a Markdown list would be hard to compare. Supply up to eight columns and 100 rows, with exactly one cell per column. Use numbers for quantities so sorting is numeric. Show only data you have; do not invent rows.",
     parameters: DataTableProps,
     Component: DataTable,
     confirmation: "The sortable table is now on screen for the person.",

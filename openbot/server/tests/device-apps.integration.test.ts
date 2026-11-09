@@ -24,6 +24,7 @@ import {
   parseApprovalContinuation,
   withApprovalContext,
 } from "../src/approvals/types";
+import { personSeat } from "../src/computer/computer-key";
 import {
   ActionRefusedError,
   APP_CALL_BACKSTOP_MS,
@@ -345,11 +346,11 @@ async function pairedDevice(
   const gateway = createComputerGateway({
     provider: {
       name: "device",
-      isolation: "per-bot",
+      isolation: "per-person",
       locate: async () => {
         throw new Error("A paired machine is never located through the provider.");
       },
-      status: async (id) => ({ botId: id, state: "absent" }),
+      status: async (seat) => ({ botId: seat.botId, state: "absent" }),
       list: async () => [],
       stop: async () => ({ wasRunning: false }),
       reset: async () => ({ cleared: false }),
@@ -379,13 +380,13 @@ async function pairedDevice(
   const actor = { id: tenant, userId: tenant };
   const tools = createHeadlessComputerTools({
     gateway,
-    botId,
+    seat: personSeat(actor.id, botId),
     actor,
     machine: "device",
     apps: true,
   });
   /** One tool call, from inside the Bot's run in its thread, as the headless middleware makes it. */
-  function call(name: string, args: Record<string, unknown>, toolCallId = randomUUID()) {
+  function call(name: string, args: Record<string, unknown>, toolCallId: string = randomUUID()) {
     const tool = tools.find((candidate) => candidate.definition.name === name);
     if (!tool) throw new Error(`No tool ${name}.`);
     const continuation: ApprovalContinuation = {
@@ -711,7 +712,7 @@ test("a catalogue Bot (no owner) has no apps tools", async () => {
   const device = await pairedDevice();
   const names = createHeadlessComputerTools({
     gateway: device.gateway,
-    botId: device.catalogueBot,
+    seat: personSeat(device.actor.id, device.catalogueBot),
     actor: device.actor,
     machine: "device",
   }).map((tool) => tool.definition.name);
@@ -722,7 +723,7 @@ test("a catalogue Bot (no owner) has no apps tools", async () => {
   expect(
     createHeadlessComputerTools({
       gateway: device.gateway,
-      botId: device.botId,
+      seat: personSeat(device.actor.id, device.botId),
       actor: device.actor,
       apps: true,
     }).map((tool) => tool.definition.name),
@@ -1383,8 +1384,9 @@ test("the enable's audit rows carry the app name and source and no command, path
   const rows = device.audits.filter(
     (row) => (row.payload as { action?: string }).action === "computer_app_enable",
   );
-  // Asked once, then carried out on the approval.
-  expect(rows.length).toBeGreaterThanOrEqual(2);
+  // Asked through the approval gate (its row is among the decisions below), then carried out on the
+  // approval: the attempt is recorded once, when it runs, never before the person was asked (M3).
+  expect(rows.map((row) => row.eventType)).toEqual(["computer.action_allowed"]);
   for (const row of rows)
     expect((row.payload as { app?: unknown }).app).toEqual({
       name: "fixture",
@@ -1398,6 +1400,11 @@ test("the enable's audit rows carry the app name and source and no command, path
       .from(auditEvents)
       .where(eq(auditEvents.actorUserId, device.tenant)),
   );
+  expect(
+    decisions
+      .map((row) => row.payload as { tool?: string })
+      .filter((payload) => payload.tool === "computer_app_enable").length,
+  ).toBeGreaterThanOrEqual(1);
   const written = JSON.stringify([
     rows,
     decisions,

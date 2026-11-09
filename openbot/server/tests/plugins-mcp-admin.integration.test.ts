@@ -249,6 +249,7 @@ afterAll(async () => {
     await database.delete(users).where(inArray(users.id, people));
   });
   await releaseAdmins?.();
+  await database.$client.close();
 });
 
 describe("an administrator's server is the team's, and its secret reaches a member only through the broker", () => {
@@ -543,9 +544,9 @@ describe("only an administrator holding the capability writes a team server or i
         if (!row) throw new Error("the credential is gone");
         return row;
       });
-    expect(await openCredential(ENCRYPTION_KEY, await read())).toBe(
-      tokens.at(-1)?.plaintext,
-    );
+    const latest = tokens.at(-1)?.plaintext;
+    if (latest === undefined) throw new Error("No token was minted.");
+    expect(await openCredential(ENCRYPTION_KEY, await read())).toBe(latest);
     await asPlatform(() =>
       database
         .update(credentials)
@@ -1341,9 +1342,10 @@ describe("an OAuth client is stored only beside a row that will read it, and onl
         ...vault,
         create: async (value, executor) => {
           const stored = await vault.create(value, executor);
-          await (executor as Pick<typeof database, "execute">).execute(
-            sql`select set_config('app.tenant_id', ${member}, true)`,
-          );
+          // The store hands its own transaction, which has `execute`; the type names only what it reads.
+          await (
+            executor as unknown as Pick<typeof database, "execute">
+          ).execute(sql`select set_config('app.tenant_id', ${member}, true)`);
           return stored;
         },
       },

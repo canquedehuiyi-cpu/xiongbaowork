@@ -1,7 +1,10 @@
-import { afterAll, afterEach, beforeAll, expect, mock, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, expect, spyOn, test } from "bun:test";
+import * as ReactCoreV2 from "@copilotkit/react-core/v2";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render } from "@testing-library/react";
+import { observeApprovalAgent } from "@/lib/copilot/approval-context";
+import { useFrontendTool } from "@/lib/copilot/approval-tools";
 import { settleReactWork } from "./settle-react-work";
 
 /**
@@ -13,33 +16,35 @@ import { settleReactWork } from "./settle-react-work";
  * sent every change straight to the computer outside any run; the server then answered "This action
  * needs an authenticated run before it can be approved." This drives the handler the SDK actually
  * kept, captured at first render, with no inbox loaded at all.
+ *
+ * Spies on the module namespace rather than `mock.module`, because bun cannot take a module mock
+ * back off: it would stay installed for every test file walked into the same process afterwards,
+ * and those files would get this fake SDK instead of the real one. These spies are restored below.
  */
 
-const real = await import("@copilotkit/react-core/v2");
-/*
- * A frozen copy of the real exports, taken before the mock below replaces them. `mock.module` is
- * process-wide in bun and outlives this file: left in place, every later file that renders a real
- * channel got this file's two-method stand-in for `useCopilotKit`, and 33 history tests failed in
- * the full run on `copilotkit.applyHeadersToAgent is not a function` while passing on their own.
- * The namespace object itself is a live binding and would read back the mock, so the copy is what
- * `afterAll` puts back.
- */
-const original = { ...real };
-type Registered = Parameters<typeof real.useFrontendTool>[0];
+type Registered = Parameters<typeof ReactCoreV2.useFrontendTool>[0];
 const registered: Registered[] = [];
 const stopped: unknown[] = [];
-mock.module("@copilotkit/react-core/v2", () => ({
-  ...original,
-  useCopilotKit: () => ({
-    copilotkit: { stopAgent: (input: unknown) => stopped.push(input) },
-  }),
-  useFrontendTool: (tool: Registered) => {
-    if (!registered.some((entry) => entry.name === tool.name))
-      registered.push(tool);
-  },
-}));
-const { useFrontendTool } = await import("@/lib/copilot/approval-tools");
-const { observeApprovalAgent } = await import("@/lib/copilot/approval-context");
+const useCopilotKitSpy = spyOn(ReactCoreV2, "useCopilotKit").mockImplementation(
+  () =>
+    ({
+      copilotkit: { stopAgent: (input: unknown) => stopped.push(input) },
+    }) as never,
+);
+function register<T extends Record<string, unknown>>(
+  tool: ReactCoreV2.ReactFrontendTool<T>,
+) {
+  if (!registered.some((entry) => entry.name === tool.name))
+    registered.push(tool as unknown as Registered);
+}
+const useFrontendToolSpy = spyOn(
+  ReactCoreV2,
+  "useFrontendTool",
+).mockImplementation(register);
+afterAll(() => {
+  useCopilotKitSpy.mockRestore();
+  useFrontendToolSpy.mockRestore();
+});
 
 let registeredHere = false;
 beforeAll(() => {
@@ -51,7 +56,6 @@ beforeAll(() => {
 });
 afterEach(cleanup);
 afterAll(async () => {
-  mock.module("@copilotkit/react-core/v2", () => original);
   if (!registeredHere) return;
   await settleReactWork();
   GlobalRegistrator.unregister();

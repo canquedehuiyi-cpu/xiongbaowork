@@ -114,6 +114,7 @@ afterAll(async () => {
     await database.delete(agents).where(eq(agents.id, botId));
   });
   await releaseAdmin?.();
+  await database.$client.close();
 });
 
 test("removing an app takes its grants with it, and adding it back grants nothing", () =>

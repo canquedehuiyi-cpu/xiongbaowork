@@ -2,7 +2,12 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { and, eq, gte, inArray, or, sql } from "drizzle-orm";
 import { createAuditStore } from "../src/audit";
-import { createCredentialStore, encryptSecret } from "../src/credentials";
+import {
+  type CredentialSecretReader,
+  type CredentialStore,
+  createCredentialStore,
+  encryptSecret,
+} from "../src/credentials";
 import { createDatabase } from "../src/db/client";
 import {
   agents,
@@ -79,7 +84,7 @@ const store = createPluginStore({
     revoke: async () => {
       throw new Error("this suite does not revoke credentials");
     },
-  },
+  } as unknown as CredentialSecretReader & CredentialStore,
   encryptionKey: ENCRYPTION_KEY,
   policy: () => ({ mode: "enforce", deny: [], allow: ["true"] }),
   callVendor: async (connection) => {
@@ -300,7 +305,7 @@ const realStore = createPluginStore({
     revoke: async () => {
       throw new Error("this suite does not revoke credentials");
     },
-  },
+  } as unknown as CredentialSecretReader & CredentialStore,
   encryptionKey: ENCRYPTION_KEY,
   policy: () => ({ mode: "enforce", deny: [], allow: ["true"] }),
 });
@@ -494,6 +499,7 @@ describe("a vendor that echoes the key back, through the real transport", () => 
           }),
       );
       const message = await attempt.catch((error: Error) => error.message);
+      if (typeof message !== "string") throw new Error("the call did not fail");
       expect(globalThis.fetch).toBe(originalFetch);
       expect(fragmentOfKey(message)).toBeNull();
     }));
@@ -576,4 +582,9 @@ describe("a DingTalk address", () => {
       ).rejects.toThrow(/还没有录入「钉钉 MCP 专属地址」/);
       expect(sent).toHaveLength(0);
     }));
+});
+
+// The pool closes last, after every cleanup above has run its queries (database-pool-closing).
+afterAll(async () => {
+  await database.$client.close();
 });

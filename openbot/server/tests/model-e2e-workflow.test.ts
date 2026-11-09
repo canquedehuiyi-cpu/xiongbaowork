@@ -90,13 +90,13 @@ test("permissions are read-only contents and runs never overlap", () => {
   expect(group).toBe("model-e2e");
 });
 
-test("actions are pinned to full commit SHAs, Bun is 1.3.14, the lockfile is frozen and no install script runs", () => {
+test("actions are pinned to full commit SHAs, Bun is 1.4.4, the lockfile is frozen and no install script runs", () => {
   const steps = jobs.flatMap((job) => job.steps);
   for (const step of steps) {
     if (step.uses) expect(step.uses).toMatch(/@[0-9a-f]{40}$/);
   }
   const bun = steps.find((step) => step.uses?.startsWith("oven-sh/setup-bun@"));
-  expect(bun?.with?.["bun-version"]).toBe("1.3.14");
+  expect(bun?.with?.["bun-version"]).toBe("1.4.4");
   const installs = steps.filter((step) => step.run?.includes("bun install"));
   expect(installs.length).toBeGreaterThan(0);
   for (const step of installs) {

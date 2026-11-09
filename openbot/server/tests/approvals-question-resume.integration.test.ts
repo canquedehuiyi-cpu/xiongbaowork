@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
+import type { TurnRunner } from "@openbot/toolkit/run-turn";
 import { and, eq, inArray } from "drizzle-orm";
 import {
   PERSON_QUESTION_WAITING,
@@ -19,12 +20,11 @@ import type {
   ResponsibilityStore,
 } from "../src/responsibilities/types";
 import { ResponsibilityNotFoundError } from "../src/responsibilities/types";
-import type { TurnRunner } from "../src/routines/runner";
 import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
- * A responsibility's run asked the person a question; the person answered in Approvals. The answer
+ * A responsibility's run asked the person a question; the person answered on the Bot's page. The answer
  * must resume that responsibility's work, with its tools and initiator, in the same conversation.
  */
 
@@ -72,6 +72,7 @@ const responsibility: Responsibility = {
   instruction: "Ask what I want for lunch and record it.",
   successCriteria: "Lunch choice recorded",
   subscriptions: [],
+  recurring: false,
   status: "active",
   progress: "",
   lastResult: null,
@@ -132,6 +133,8 @@ test("an answer to a responsibility's question resumes it with its own tools, ru
       return responsibility;
     },
     listRuns: async () => [{ id: "run-latest" }, { id: "run-older" }],
+    // Done once: nothing runs it again, so its run may complete it.
+    repeats: async () => null,
     recordProgress: async (...args: unknown[]) => {
       recorded.push(args);
       return { ok: true };
@@ -161,9 +164,9 @@ test("an answer to a responsibility's question resumes it with its own tools, ru
       return async (input) => {
         turn = input;
         const report = tools.find(
-          (tool) => tool.name === "report_responsibility_progress",
+          (tool) => tool.name === "report_goal_progress",
         );
-        if (!report) throw new Error("report_responsibility_progress missing");
+        if (!report) throw new Error("report_goal_progress missing");
         await report.execute({
           id: goal.id,
           summary: "Lunch: ramen",
@@ -279,7 +282,7 @@ test("an answer cannot be pointed at another person's responsibility or another 
       responsibilities: store,
       responsibilityTurn: never,
     }),
-  ).rejects.toThrow("does not belong to this responsibility");
+  ).rejects.toThrow("does not belong to this goal");
 });
 
 test("other questions keep the initiator they were asked under", async () => {

@@ -1,7 +1,7 @@
 import type {
   BrowserChallenge,
   ComputerControlState,
-} from "../../../shared/computer-control";
+} from "@openbot/shared/computer-control";
 /**
  * The computer-use contract.
  *
@@ -133,6 +133,13 @@ export type SnapshotElement = {
   type?: string;
   disabled?: boolean;
   checked?: boolean;
+  /** A native dropdown's choices, by label. A Bot chooses one by typing it into the dropdown. */
+  options?: string[];
+  /**
+   * Where a link goes, absolute, resolved by the browser against the page's base. Present only for a
+   * link on the top page that has an address; a click on such a link opens it (see `ActionResult`).
+   */
+  url?: string;
 };
 
 export type SnapshotResult = {
@@ -190,6 +197,15 @@ export type ActionResult = {
   /** Where the page ended up, which is how a Bot notices that its click navigated. */
   url: string;
   elapsedMs: number;
+  /**
+   * For a click on a link to another page: the address that was opened instead of clicking.
+   *
+   * Following a link is opening its address, so it is done as one: the same navigation, policy and
+   * audit row as `computer_navigate`, with the link still named, and no script on the page runs.
+   */
+  opened?: string;
+  /** Set when the page a followed link opened is asking for a person, exactly as a navigation is. */
+  challenge?: BrowserChallenge;
 };
 
 /** Absent path means the whole workspace. */
@@ -331,14 +347,29 @@ export type SignInFillInput = {
   origin: string;
   username?: string;
   password: string;
-  /** A one-time code the person entered alongside, typed if the site asks for one. */
-  code?: string;
 };
 
 /** What the computer reports. No field here ever carries a credential. */
 export type SignInFillResult = {
   submitted: boolean;
   /** Whether the page still shows a password field after submitting: the plainest sign of a failure. */
+  passwordFieldVisible: boolean;
+  /**
+   * The site accepted the password and now shows a one-time-code field. Never known before the
+   * password is in: a code is only ever asked for after the fact, and then sent with `SignInCodeInput`.
+   */
+  codeRequested: boolean;
+  url: string;
+  error?: string;
+};
+
+/** The verification code a site asked for, typed into the page that is waiting for it. */
+export type SignInCodeInput = { origin: string; code: string };
+
+export type SignInCodeResult = {
+  submitted: boolean;
+  /** Whether a code field still shows after submitting: the plainest sign the code was refused. */
+  codeFieldVisible: boolean;
   passwordFieldVisible: boolean;
   url: string;
   error?: string;

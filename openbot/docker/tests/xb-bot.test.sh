@@ -118,17 +118,24 @@ cat /tmp/a-umask.txt
 ' && fail "B read A's /tmp/a-umask.txt, created with A's default umask: $(cat "$T/out")"
 pass "B cannot read what A writes to /tmp with its default umask"
 
-# Employees may not install system packages; pwuser (the default employee) still may.
+# Employees may not install system packages; pwuser (the default employee) still may, through
+# `openbot-apt` only.
 as "$A" 10 '
 sudo -n apt-get --version
 ' && fail "employee A may sudo apt-get"
 pass "an employee may not sudo apt-get"
+as "$A" 10 '
+sudo -n /usr/local/sbin/openbot-apt update
+' && fail "employee A may sudo openbot-apt"
+pass "an employee may not sudo openbot-apt"
 # Asked of sudo itself, for every command: whatever else might stop sudo later cannot hide a rule.
 sudo -l -U "xb-$A" >"$T/out" 2>&1
 grep -q 'not allowed to run sudo' "$T/out" || fail "sudo -l -U xb-$A lists something: $(cat "$T/out")"
 pass "sudoers grants an employee nothing"
-runuser -u pwuser -- sudo -n apt-get --version >/dev/null 2>"$T/err" || fail "pwuser may no longer sudo apt-get: $(cat "$T/err")"
-pass "pwuser may still sudo apt-get"
+runuser -u pwuser -- sudo -n -l /usr/local/sbin/openbot-apt update >/dev/null 2>"$T/err" || fail "pwuser may no longer sudo openbot-apt: $(cat "$T/err")"
+pass "pwuser may still sudo openbot-apt"
+runuser -u pwuser -- sudo -n apt-get --version >"$T/out" 2>&1 && fail "pwuser may sudo apt-get itself: $(cat "$T/out")"
+pass "pwuser may not sudo apt-get itself"
 
 # What the shell tool tells an employee to do instead: install user-level tools in its own
 # directory. The image has no python3, so npm and bun are the installers; an empty `npm install`

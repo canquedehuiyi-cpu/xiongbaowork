@@ -42,7 +42,7 @@ jobs:
           persist-credentials: false
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: 1.3.14
+          bun-version: 1.4.4
       - run: bun install --frozen-lockfile
       - run: bunx biome lint --error-on-warnings --diagnostic-level=warn .
       - run: bun run typecheck
@@ -103,10 +103,14 @@ jobs:
           fetch-depth: 0
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: 1.3.14
+          bun-version: 1.4.4
       - run: bun install --frozen-lockfile
       # The Bots are not root workspaces and each keeps its own lockfile (as upstream CI installs them).
       # Restored upstream suites spawn agent-bot and import agent-mastra's receiver (R0, learning).
+      # egress-policy-delivery (upstream v1.0.0) starts the real agent-computer, which runs from its own
+      # lockfile (playwright, web-bot-auth, xterm), as the image installs it.
+      - run: bun install --frozen-lockfile --ignore-scripts
+        working-directory: openbot/agent-computer
       - run: bun install --frozen-lockfile
         working-directory: openbot/agent-bot
       - run: bun install --frozen-lockfile
@@ -162,7 +166,7 @@ jobs:
           fetch-depth: 0
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: 1.3.14
+          bun-version: 1.4.4
       - run: bun install --frozen-lockfile
       - run: bash scripts/ci/prepare-baseline.sh
       - name: Baseline app tests
@@ -212,7 +216,7 @@ jobs:
           persist-credentials: false
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: 1.3.14
+          bun-version: 1.4.4
       - run: bun install --frozen-lockfile
       - name: Migrate the job's own database and set the runtime role passwords (server-test recipe)
         run: |
@@ -254,7 +258,7 @@ jobs:
           persist-credentials: false
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: 1.3.14
+          bun-version: 1.4.4
       - run: docker build -f Dockerfile -t openbot:trackb .
       # The per-employee root helper creates users, so it is tested as root inside the image.
       - name: xb-bot helper (per-employee users)
@@ -296,16 +300,25 @@ jobs:
         include:
           # Own bun.lock, outside the root workspaces, so installed and typechecked on their own.
           # supervisor's docker.integration suite runs because the hosted runner has a Docker socket.
+          # Both also need the root install before their tests, as upstream and the image install them:
+          # agent-computer's source reaches `shared` (zod since upstream v1.0.0), and both take
+          # `@types/bun` from the root.
           - pkg: agent-computer
             own-lockfile: true
+            root-install: true
           - pkg: supervisor
             own-lockfile: true
-          # No package.json: imports only bun:test, node:crypto and relative files.
+            root-install: true
+          # Root workspace since upstream v1.0.0 (its own package.json: zod, happy-dom for the
+          # recorder and rule tests), so it needs the root install like worker and runner.
           - pkg: shared
             own-lockfile: false
-          # Root workspace (typechecked by static); its tests import only worker/src and ../shared.
+            root-install: true
+          # Root workspace (typechecked by static). Its source imports `@openbot/shared` by the
+          # workspace name (upstream #784), which only the root install links.
           - pkg: worker
             own-lockfile: false
+            root-install: true
           # Root workspace (typechecked by static). Its tests need the root install: runner/src reaches
           # yaml through agent-computer, and the package test serves the server's own runner routes.
           - pkg: runner
@@ -317,7 +330,7 @@ jobs:
           persist-credentials: false
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: 1.3.14
+          bun-version: 1.4.4
       - name: Install from the package's own frozen lockfile (no lifecycle scripts)
         id: install
         if: matrix.own-lockfile
@@ -478,7 +491,7 @@ jobs:
           persist-credentials: false
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: 1.3.14
+          bun-version: 1.4.4
       - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067
         with:
           toolchain: stable
@@ -492,9 +505,19 @@ jobs:
         run: bun run typecheck
       # Bash (Git Bash on the runner), not pwsh: Bun writes its report to stderr, and pwsh would turn
       # each redirected stderr line into an ErrorRecord before Tee-Object formats it into the log.
+      # The release and signing scripts' tests (upstream v1.0.0) drive bash, tar and xcrun and build
+      # POSIX paths: they are for the macOS and Linux runners that publish, as upstream runs them. They
+      # run in desktop-scripts below; everything else of the desktop runs here, on Windows.
       - name: Bun tests
         shell: bash
-        run: bun test > "$RUNNER_TEMP/desktop-bun.log" 2>&1
+        run: >-
+          bun test
+          --path-ignore-patterns='scripts/cli-bundle.test.ts'
+          --path-ignore-patterns='scripts/prefetch-tauri-tools.test.ts'
+          --path-ignore-patterns='scripts/publish-signed-*.test.ts'
+          --path-ignore-patterns='scripts/release-cli-bundle.test.ts'
+          --path-ignore-patterns='scripts/staple-with-retry.test.ts'
+          > "$RUNNER_TEMP/desktop-bun.log" 2>&1
       - name: Zero-fail gate (head only, no baseline counterpart)
         if: always()
         shell: bash
@@ -522,6 +545,33 @@ jobs:
           name: desktop-windows-logs
           path: ${{ runner.temp }}/desktop-*.log
 
+  desktop-scripts:
+    name: desktop release scripts (ubuntu-latest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: openbot/desktop
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+      - name: Install desktop from its own frozen lockfile (no lifecycle scripts)
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Release and signing script tests (POSIX)
+        run: >-
+          bun test scripts/cli-bundle.test.ts scripts/prefetch-tauri-tools.test.ts
+          scripts/publish-signed-mac.test.ts scripts/publish-signed-windows.test.ts
+          scripts/release-cli-bundle.test.ts scripts/staple-with-retry.test.ts
+          > "$RUNNER_TEMP/desktop-scripts.log" 2>&1
+      - name: Zero-fail gate (head only, no baseline counterpart)
+        if: always()
+        working-directory: openbot
+        run: bun scripts/ci/test-report.mjs "$RUNNER_TEMP/no-baseline.log" "$RUNNER_TEMP/desktop-scripts.log" 'desktop release scripts (head only)'
+
   # F2 stage 1: the device tray app (desktop-device/, 熊宝数字员工 设备端). The Rust supervisor,
   # process-tree and autostart tests run on both systems the stage targets; they need no runner
   # binary (the sidecar is only added to the bundle config) and no secrets.
@@ -543,7 +593,7 @@ jobs:
           persist-credentials: false
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: 1.3.14
+          bun-version: 1.4.4
       - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067
         with:
           toolchain: stable
@@ -925,7 +975,7 @@ jobs:
         run: bash scripts/ci/device-clean-linux.sh selfcheck
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: 1.3.14
+          bun-version: 1.4.4
       - name: Install root workspaces from the frozen lockfile (no lifecycle scripts)
         run: bun install --frozen-lockfile --ignore-scripts
       - id: server

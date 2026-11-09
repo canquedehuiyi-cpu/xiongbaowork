@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
 import { createAgentProfileStore } from "../src/agents/profile-store";
-import type { AppVariables } from "../src/app-variables";
+import type { AppVariables } from "../src/auth/guards";
 import { createAttachmentRoutes } from "../src/channels/attachments";
 import { createChannelStore } from "../src/channels/routes";
 import { createThreadIdentity } from "../src/channels/thread-identity";
@@ -57,7 +57,11 @@ const routesFor = (actorId: string, frameTenant: string = actorId) => {
     context,
     next,
   ) => {
-    context.set("actor", { id: actorId, role: "user" as const });
+    context.set("actor", {
+      id: actorId,
+      email: `${actorId}@example.test`,
+      role: "user" as const,
+    });
     await runAsTenant(frameTenant, () => next());
   };
   return createAttachmentRoutes(database, requireUser);
@@ -148,6 +152,7 @@ afterAll(async () => {
       await database.delete(users).where(eq(users.id, id));
     }
   });
+  await database.$client.close();
 });
 
 test("the uploader reads the file back, and its own revalidation is a 304", async () => {
