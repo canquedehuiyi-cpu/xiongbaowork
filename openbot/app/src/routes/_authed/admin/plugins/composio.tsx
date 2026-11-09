@@ -27,6 +27,7 @@ import {
   type ComposioApp,
   composioAppsQueryOptions,
 } from "@/lib/plugins/queries";
+import { useLookupZh } from "@/lib/translations/queries";
 import { queryClient } from "@/query-client";
 
 /**
@@ -75,6 +76,10 @@ function RouteComponent() {
   }, [search]);
 
   const apps = useQuery(composioAppsQueryOptions(query));
+  // Composio's own descriptions are English; shown in Chinese once translated, as written until then.
+  const zh = useLookupZh(
+    (apps.data?.apps ?? []).map((entry) => entry.description),
+  );
   /*
    * WHAT A FAILED ADD SAID, KEPT WHERE A SECOND ADD CANNOT ERASE IT.
    *
@@ -188,7 +193,7 @@ function RouteComponent() {
                     </ItemMedia>
                     <ItemContent>
                       <ItemTitle>{entry.name}</ItemTitle>
-                      <ItemDescription>{entry.description}</ItemDescription>
+                      <ItemDescription>{zh(entry.description)}</ItemDescription>
                     </ItemContent>
                     <ItemActions>
                       {/* The size of the decision, stated before it is made: an app is not one

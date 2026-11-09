@@ -8,6 +8,13 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+- **The last English corners of skills and plugins read in Chinese too.** The `/` menu in chat
+  describes each skill in Chinese (the chip still carries the skill's original instruction); a
+  skill's edit page and the admin skill dialog show a folded 中文说明 under the original
+  instructions, which stay what is edited and what a model is given; and the admin Composio app
+  directory shows Composio's descriptions in Chinese once translated, through the new
+  administrator-only `POST /api/translations/lookup` (at most 60 texts of 2,000 characters a call).
+
 - **Skills and plugins that arrive in English are shown in Chinese.** Whether a person or the
   platform added it, a skill's name, summary and instructions, and a plugin's or MCP connector's
   name, summary and tool descriptions are translated in the background by the deployment's model and

@@ -2,19 +2,22 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import type { CommandOption } from "@/components/channels/composer";
 import { agentPluginsQueryOptions } from "@/lib/plugins/queries";
+import { useZh } from "@/lib/translations/queries";
 
 /**
  * Granted skills as `/` menu commands. Each one inserts a chip, not composer text.
  */
 export function useSkillCommands(agentId: string): CommandOption[] {
   const { data } = useQuery(agentPluginsQueryOptions(agentId));
+  // The menu line is for the person; the chip still carries the skill's own instruction.
+  const zh = useZh();
 
   return useMemo(
     () =>
       (data?.skills ?? []).map((skill) => ({
         id: skill.slug,
         name: skill.slug,
-        description: skill.summary || skill.title,
+        description: zh(skill.summary || skill.title),
         /*
          * A CHIP, NOT AN EXPANSION. `prompt` used to paste the skill's whole instruction into the
          * box, which meant a person watched a paragraph they did not write appear over the message
@@ -33,6 +36,6 @@ export function useSkillCommands(agentId: string): CommandOption[] {
          */
         prompt: skill.instructions,
       })),
-    [data],
+    [data, zh],
   );
 }
