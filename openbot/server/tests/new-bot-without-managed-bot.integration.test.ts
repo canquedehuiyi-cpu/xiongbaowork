@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import { createApp } from "../src/app";
@@ -6,8 +6,11 @@ import { DEV_ACTOR } from "../src/auth/dev-actor";
 import { loadConfig } from "../src/config";
 import { createDatabase } from "../src/db/client";
 import { agents, users } from "../src/db/schema";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
+// Set-up and tear-down span the person and the deployment: as `platform` (G01).
+import { afterAll, beforeAll } from "./support/platform-frame";
 
 /**
  * Making a Bot with your own instructions on a deployment with no Bot in the box.
@@ -104,10 +107,13 @@ test("a Bot made with no address runs here, on the person's instructions", async
   expect(response.status).toBe(201);
   const { agent } = (await response.json()) as { agent: { id: string } };
   made.push(agent.id);
-  const [row] = await database
-    .select({ type: agents.type, configuration: agents.configuration })
-    .from(agents)
-    .where(eq(agents.id, agent.id));
+  // The person's own Bot, read in their own frame.
+  const [row] = await runAsTenant(DEV_ACTOR.id, () =>
+    database
+      .select({ type: agents.type, configuration: agents.configuration })
+      .from(agents)
+      .where(eq(agents.id, agent.id)),
+  );
   expect(row).toEqual({
     type: "built_in",
     configuration: { systemPrompt: instructions },

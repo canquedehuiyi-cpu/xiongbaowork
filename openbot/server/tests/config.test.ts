@@ -61,8 +61,12 @@ describe("deployment configuration", () => {
 
   test("an empty CLI key preserves legacy-only deployments", () => {
     expect(
-      loadConfig({ ...baseEnvironment, CPK_INTELLIGENCE_API_KEY: "  " })
-        .intelligence?.apiKey,
+      // The fork's base deployment has no Intelligence (R0), so the legacy key is given here.
+      loadConfig({
+        ...baseEnvironment,
+        INTELLIGENCE_API_KEY: "tenant-api-key",
+        CPK_INTELLIGENCE_API_KEY: "  ",
+      }).intelligence?.apiKey,
     ).toBe("tenant-api-key");
   });
 

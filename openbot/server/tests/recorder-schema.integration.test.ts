@@ -1,4 +1,5 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { expect } from "bun:test";
+import { afterAll, beforeAll, test } from "./support/platform-frame";
 import { randomUUID } from "node:crypto";
 import { eq, inArray, sql } from "drizzle-orm";
 import { createDatabase } from "../src/db/client";
@@ -63,7 +64,11 @@ afterAll(async () => {
 
 test("no name in the migration is longer than PostgreSQL keeps", async () => {
   const migration = await Bun.file(
-    new URL("../drizzle/0066_recorder_extension.sql", import.meta.url),
+    // M3: the fork ships upstream's 0066 as its recovery migration 0157.
+    new URL(
+      "../recovery/recovery-20261018-v1/sql/0157_recorder_extension.sql",
+      import.meta.url,
+    ),
   ).text();
   const quoted = [...migration.matchAll(/"([a-z0-9_]+)"/g)].map(
     (match) => match[1] as string,
@@ -149,8 +154,10 @@ test("a trajectory binds to one person, by its UUID, and names no Bot", async ()
     .from(recorderTrajectoryBindings)
     .where(eq(recorderTrajectoryBindings.trajectoryId, trajectoryId));
   expect(row).toMatchObject({ trajectoryId, userId: alice });
+  // The fork stamps every row with its tenant for row security (G01): the only column added.
   expect(Object.keys(row ?? {}).sort()).toEqual([
     "createdAt",
+    "tenantId",
     "trajectoryId",
     "userId",
   ]);
@@ -160,6 +167,7 @@ test("a trajectory binds to one person, by its UUID, and names no Bot", async ()
   )) as unknown as { column_name: string }[];
   expect(columns.map((column) => column.column_name)).toEqual([
     "created_at",
+    "tenant_id",
     "trajectory_id",
     "user_id",
   ]);
@@ -238,7 +246,11 @@ test("one Learning space per person, and no two people share one", async () => {
 
 test("the migration holds only the Recorder's connections and trajectory bindings, and each person's Learning space and sharing", async () => {
   const migration = await Bun.file(
-    new URL("../drizzle/0066_recorder_extension.sql", import.meta.url),
+    // M3: the fork ships upstream's 0066 as its recovery migration 0157.
+    new URL(
+      "../recovery/recovery-20261018-v1/sql/0157_recorder_extension.sql",
+      import.meta.url,
+    ),
   ).text();
   const created = [...migration.matchAll(/CREATE TABLE "([a-z0-9_]+)"/g)].map(
     (match) => match[1],

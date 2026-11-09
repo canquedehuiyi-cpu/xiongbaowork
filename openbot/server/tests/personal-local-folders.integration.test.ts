@@ -31,6 +31,7 @@ import {
 } from "../src/host-access/routes";
 import { hostAccessTools } from "../src/host-access/tools";
 import { REFUSAL_MARKER } from "../src/plugins/tools";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
 
@@ -89,7 +90,8 @@ function folderRoutes(
     next,
   ) => {
     context.set("actor", person);
-    await next();
+    // As the real one does: a signed-in person's request runs in their own frame (G01).
+    await runAsTenant(person.id, () => next());
   };
   const app = new Hono<{ Variables: AppVariables }>();
   app.use("/api/*", createEnterpriseGate(requireUser));

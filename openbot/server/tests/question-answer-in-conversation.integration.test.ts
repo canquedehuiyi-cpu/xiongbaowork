@@ -1,4 +1,9 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import {
+  afterAll as bunAfterAll,
+  beforeAll as bunBeforeAll,
+  expect,
+  test as bunTest,
+} from "bun:test";
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
@@ -13,6 +18,7 @@ import type { AppVariables } from "../src/auth/guards";
 import { createDatabase } from "../src/db/client";
 import { users } from "../src/db/schema/core";
 import { workItems } from "../src/db/schema/work";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -30,6 +36,19 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const prefix = `answer-here-${randomUUID()}`;
 const owner = `${prefix}-owner`;
+
+/**
+ * Everything here is one person's: written and read in their own frame, as their signed-in requests
+ * and the work done for them run. Sweeps still claim as the platform and run each row as the tenant
+ * stamped on it.
+ */
+const asOwner = (body: () => unknown) => async () => {
+  await runAsTenant(owner, body);
+};
+const afterAll = (body: () => unknown) => bunAfterAll(asOwner(body));
+const beforeAll = (body: () => unknown) => bunBeforeAll(asOwner(body));
+const test = (name: string, body: () => unknown, timeout?: number) =>
+  bunTest(name, asOwner(body), timeout);
 const keys: string[] = [];
 
 const service = createApprovalService(

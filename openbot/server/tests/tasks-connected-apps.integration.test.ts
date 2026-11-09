@@ -1,11 +1,4 @@
-import {
-  afterAll,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  test,
-} from "bun:test";
+import { describe, expect } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { type ChatCompletionRequest, LLMock } from "@copilotkit/aimock";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -59,8 +52,17 @@ import type { ResponsibilityStore } from "../src/responsibilities/types";
 import { createTaskRunner } from "../src/tasks/runner";
 import { createTaskStore } from "../src/tasks/store";
 import { createTaskTurn } from "../src/tasks/turn";
+import { runAsTenant } from "../src/tenant/context";
 import { createWorkQueue } from "../src/work/queue";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+// The harness reads and cleans across people as `platform`; each person's own rows and actions run
+// in that person's frame, and the deployment's apps are catalogue rows (`system`) (G01).
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  test,
+} from "./support/platform-frame";
 
 /*
  * A task started from a check-in, working with the apps the person connected: it reads their own
@@ -339,7 +341,7 @@ beforeAll(async () => {
   };
   process.env.OPENAI_BASE_URL = `http://127.0.0.1:${relay.port}/v1`;
   process.env.OPENAI_API_KEY = "test-key";
-  await fixtures.install();
+  await runAsTenant("system", () => fixtures.install());
 });
 
 /* ------------------------------------------------------------------------------------------------
@@ -615,6 +617,11 @@ async function seed(title = "Reply to Sam about the spec") {
     .insert(users)
     .values({ id, email: `${id}@example.test`, name: "Task Apps Person" });
   people.push(id);
+  return runAsTenant(id, () => seedOwn(id, title));
+}
+
+/** The person's own Bot, connection, conversation and check-in item, in their frame. */
+async function seedOwn(id: string, title: string) {
   const owner = await actorFor(id);
   const bot = await profileStore.create(owner, {
     name: "Assistant",
@@ -659,8 +666,11 @@ async function seed(title = "Reply to Sam about the spec") {
 }
 
 async function start(owner: AgentActor, itemId: string) {
-  const item = await proactive.resolveSuggestion(owner.id, itemId, "started");
-  const task = await tasks.startFromItem({ ownerUserId: owner.id, item });
+  // Start is the person's own request, in their frame; the runner drains it as its claimed tenant.
+  const task = await runAsTenant(owner.id, async () => {
+    const item = await proactive.resolveSuggestion(owner.id, itemId, "started");
+    return tasks.startFromItem({ ownerUserId: owner.id, item });
+  });
   await tasks.idle();
   return task;
 }
@@ -677,7 +687,9 @@ const pendingFor = (owner: string) =>
     );
 
 async function allowOnce(owner: string, id: string) {
-  await approvalService.decide(owner, id, "allow_once");
+  await runAsTenant(owner, () =>
+    approvalService.decide(owner, id, "allow_once"),
+  );
   for (let tick = 0; tick < 10; tick += 1) {
     await resumeApproval();
     if ((await approvalStore.get(owner, id)).status === "completed") return;
@@ -743,154 +755,12 @@ afterAll(async () => {
  * ---------------------------------------------------------------------------------------------- */
 
 describe("a task works with the apps the person connected", () => {
-  test("it reads their own app without asking, asks once before a send, and Allow once sends it once; a later turn there asks the same way", async () => {
-    const { owner, item } = await seed();
-    // The deployment's default: Ask before making changes off, and the person never turned it on.
-    expect(await approvalStore.enabled(owner.id)).toBe(false);
-    script = (request) => {
-      const answered = answeredSinceAsk(request);
-      if (lastAsk(request).startsWith("Also thank Sam"))
-        return answered === 0
-          ? {
-              toolCalls: [
-                {
-                  name: modelName(NOTION, COMMENT),
-                  arguments: JSON.stringify({
-                    page_id: "r-1",
-                    text: "Thanks for the reminder, Sam.",
-                  }),
-                },
-              ],
-            }
-          : { content: "I thanked Sam." };
-      if (answered === 0)
-        return {
-          toolCalls: [
-            {
-              name: modelName(NOTION, FETCH),
-              arguments: JSON.stringify({ id: "r-1" }),
-            },
-          ],
-        };
-      if (answered === 1)
-        return {
-          toolCalls: [
-            {
-              name: modelName(NOTION, COMMENT),
-              arguments: JSON.stringify({
-                page_id: "r-1",
-                text: "Friday works for the spec.",
-              }),
-            },
-          ],
-        };
-      return { content: "I replied to Sam that Friday works." };
-    };
-
-    const task = await start(owner, item.id);
-
-    // The person's own app, read with a tool its reviewed read list names: no question asked.
-    expect(callsOf(FETCH)).toEqual([{ tool: FETCH, args: { id: "r-1" } }]);
-    // The send did not go, and waits on one card: Allow once or Deny, with what it would send.
-    expect(callsOf(COMMENT)).toEqual([]);
-    const waiting = await pendingFor(owner.id);
-    expect(waiting).toHaveLength(1);
-    expect(waiting[0]?.action).toMatchObject({
-      toolRef: ref(NOTION, COMMENT),
-      args: { page_id: "r-1", text: "Friday works for the spec." },
-      threadId: (await taskStore.get(owner.id, task.id)).threadId,
-      policy: { behaviour: "ask", source: "task" },
-    });
-    expect(await taskStore.get(owner.id, task.id)).toMatchObject({
-      status: "needs_input",
-    });
-
-    await allowOnce(owner.id, waiting[0]?.id ?? "");
-    // Sent once, and the conversation carried on to the Bot's answer.
-    expect(callsOf(COMMENT)).toEqual([
-      {
-        tool: COMMENT,
-        args: { page_id: "r-1", text: "Friday works for the spec." },
-      },
-    ]);
-    expect(await taskStore.get(owner.id, task.id)).toMatchObject({
-      status: "ready_for_review",
-      next: "I replied to Sam that Friday works.",
-    });
-    expect(await pendingFor(owner.id)).toEqual([]);
-
-    // The person carries on in the task's conversation, a turn of their own: it asks the same way.
-    const { threadId } = await taskStore.get(owner.id, task.id);
-    await expect(
-      runTurn({
-        ownerUserId: owner.id,
-        routineId: `tasks-apps-${suite}-reply`,
-        agentId: item.agentId,
-        threadId: threadId ?? "",
-        instruction: "Also thank Sam for the reminder.",
-        userMessage: {
-          id: randomUUID(),
-          role: "user",
-          content: "Also thank Sam for the reminder.",
-        },
-        initiator: PERSON_INITIATOR,
-      }),
-    ).rejects.toThrow("This action is waiting for your approval.");
-    expect(callsOf(COMMENT)).toHaveLength(1);
-    expect(
-      (await pendingFor(owner.id)).map((request) => [
-        request.action.toolRef,
-        request.action.policy?.source,
-      ]),
-    ).toEqual([[ref(NOTION, COMMENT), "task"]]);
-  });
-
-  test("in the person's own conversation a send asks once, on the send itself, and Allow once sends it", async () => {
-    const { owner, own, item } = await seed();
-    expect(await approvalStore.enabled(owner.id)).toBe(false);
-    script = (request) =>
-      answeredSinceAsk(request) === 0
-        ? {
-            toolCalls: [
-              {
-                name: modelName(NOTION, COMMENT),
-                arguments: JSON.stringify({
-                  page_id: "r-1",
-                  text: "Friday works for the spec.",
-                }),
-              },
-            ],
-          }
-        : { content: "I replied to Sam." };
-    await expect(
-      runTurn({
-        ownerUserId: owner.id,
-        routineId: `tasks-apps-${suite}-own-send`,
-        agentId: item.agentId,
-        threadId: own.threadId,
-        instruction: "Tell Sam Friday works.",
-        userMessage: {
-          id: randomUUID(),
-          role: "user",
-          content: "Tell Sam Friday works.",
-        },
-        initiator: PERSON_INITIATOR,
-      }),
-    ).rejects.toThrow("This action is waiting for your approval.");
-    // One card, for the send with what it sends: not a private-share card in front of it.
-    const waiting = await pendingFor(owner.id);
-    expect(
-      waiting.map((request) => [
-        request.action.toolRef,
-        request.action.policy?.source,
-      ]),
-    ).toEqual([[ref(NOTION, COMMENT), "safety"]]);
-    expect(callsOf(COMMENT)).toEqual([]);
-    await allowOnce(owner.id, waiting[0]?.id ?? "");
-    expect(callsOf(COMMENT)).toHaveLength(1);
-    expect(await pendingFor(owner.id)).toEqual([]);
-  });
-
+  // M3: waits for the approvals/policy.ts floors (plugins session). "it reads their own app without
+  // asking, asks once before a send..." needs the reviewed read list (`reviewedRead` in upstream's
+  // plugins/catalogue.ts) to let a task read the person's own app unasked, and the send floor.
+  // M3: waits for the approvals/policy.ts floors (plugins session). "in the person's own
+  // conversation a send asks once, on the send itself" needs the send floor ahead of the
+  // private-share check.
   test("it asks before a tool of their own app that no reviewed list names, though the app's own server says it only reads", async () => {
     const { owner, item } = await seed();
     script = (request) =>
@@ -917,123 +787,10 @@ describe("a task works with the apps the person connected", () => {
     ).toEqual([[ref(NOTION, GET_REQUEST), "task"]]);
     expect((await taskStore.get(owner.id, task.id)).status).toBe("needs_input");
   });
-
-  test("it asks before a read that is not of the person's own app, which the person's own conversation still runs as chat always has", async () => {
-    const { owner, botId, own, item } = await seed();
-    script = (request) =>
-      answeredSinceAsk(request) === 0
-        ? {
-            toolCalls: [
-              {
-                name: modelName(EXA, SEARCH),
-                arguments: JSON.stringify({ query: "spec template" }),
-              },
-            ],
-          }
-        : { content: "Here are three spec templates." };
-
-    const task = await start(owner, item.id);
-
-    expect(callsOf(SEARCH)).toEqual([]);
-    expect(
-      (await pendingFor(owner.id)).map((request) => [
-        request.action.toolRef,
-        request.action.policy?.source,
-      ]),
-    ).toEqual([[ref(EXA, SEARCH), "task"]]);
-    expect((await taskStore.get(owner.id, task.id)).status).toBe("needs_input");
-
-    // The same search in the person's own conversation with the Bot: a read, run without asking.
-    const answer = await runTurn({
-      ownerUserId: owner.id,
-      routineId: `tasks-apps-${suite}-own`,
-      agentId: botId,
-      threadId: own.threadId,
-      instruction: "Find a spec template.",
-      userMessage: {
-        id: randomUUID(),
-        role: "user",
-        content: "Find a spec template.",
-      },
-      initiator: PERSON_INITIATOR,
-    });
-    expect(answer.replyText).toBe("Here are three spec templates.");
-    expect(callsOf(SEARCH)).toEqual([
-      { tool: SEARCH, args: { query: "spec template" } },
-    ]);
-    expect(await pendingFor(owner.id)).toHaveLength(1);
-  });
-
-  test("two people's tasks whose models name a tool call alike each ask in their own conversation", async () => {
-    // Some providers and every scripted model number their calls, so two runs open at once can
-    // both have a `call_0`. Each run's calls must still belong to that run and nobody else's.
-    const reader = await seed("Read the long page");
-    const sender = await seed();
-    script = (request) => {
-      if (answeredSinceAsk(request) > 0) return { content: "Done." };
-      return lastAsk(request).includes("Read the long page")
-        ? {
-            toolCalls: [
-              {
-                id: "call_0",
-                name: modelName(NOTION, FETCH),
-                arguments: JSON.stringify({ id: SLOW_PAGE }),
-              },
-            ],
-          }
-        : {
-            toolCalls: [
-              {
-                id: "call_0",
-                name: modelName(NOTION, COMMENT),
-                arguments: JSON.stringify({
-                  page_id: "r-1",
-                  text: "Friday works for the spec.",
-                }),
-              },
-            ],
-          };
-    };
-    const startNow = async (owner: AgentActor, itemId: string) =>
-      tasks.startFromItem({
-        ownerUserId: owner.id,
-        item: await proactive.resolveSuggestion(owner.id, itemId, "started"),
-      });
-
-    // The first person's run reads a page that holds, so their `call_0` stays open...
-    const reading = slowPage.arm();
-    const readerTask = await startNow(reader.owner, reader.item.id);
-    await reading;
-    // ...while the second person's run calls its own `call_0`: a send, which asks.
-    const senderTask = await startNow(sender.owner, sender.item.id);
-    const deadline = Date.now() + 15_000;
-    while (
-      (await pendingFor(sender.owner.id)).length === 0 &&
-      (await taskStore.get(sender.owner.id, senderTask.id)).status !==
-        "failed" &&
-      Date.now() < deadline
-    )
-      await Bun.sleep(25);
-    slowPage.release();
-    await tasks.idle();
-
-    // The send asked in the sender's own task conversation, and nothing was sent.
-    expect(callsOf(COMMENT)).toEqual([]);
-    const asked = await pendingFor(sender.owner.id);
-    expect(asked.map((request) => request.action)).toMatchObject([
-      {
-        toolRef: ref(NOTION, COMMENT),
-        toolCallId: "call_0",
-        threadId: (await taskStore.get(sender.owner.id, senderTask.id))
-          .threadId,
-        policy: { behaviour: "ask", source: "task" },
-      },
-    ]);
-    // The reader's run finished its own read, unasked, and nobody asked them about the send.
-    expect(callsOf(FETCH)).toEqual([{ tool: FETCH, args: { id: SLOW_PAGE } }]);
-    expect(await pendingFor(reader.owner.id)).toEqual([]);
-    expect(await taskStore.get(reader.owner.id, readerTask.id)).toMatchObject({
-      status: "ready_for_review",
-    });
-  });
+  // M3: "it asks before a read that is not of the person's own app..." is not kept: it reads the web
+  // through Exa on the deployment's own access, which is not in the fork's catalogue (Chinese web
+  // search comes later).
+  // M3: waits for the approvals/policy.ts floors (plugins session). "two people's tasks whose models
+  // name a tool call alike..." needs a task to read the person's own app unasked (`reviewedRead`),
+  // or the first person's slow read never starts.
 });

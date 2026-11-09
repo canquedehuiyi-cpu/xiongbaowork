@@ -18,9 +18,12 @@ import { createStallGuard } from "../src/channels/stall-guard";
 import type { ComputerGateway } from "../src/computer/gateway";
 import { type DeploymentConfig, loadConfig } from "../src/config";
 import { mountCopilotRuntime } from "../src/copilot";
+import { createDatabase } from "../src/db/client";
 import { startHttpServer } from "../src/http-server";
 import { createRequestActor } from "../src/request-actor";
 import type { RoutineRunner } from "../src/routines/runner";
+import { PostgresAgentRunner } from "../src/threads/postgres-runner";
+import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
 
 /*
@@ -35,6 +38,11 @@ import { testEnvironment } from "./support/environment";
  * same-origin with it.
  */
 
+/**
+ * M3: the fork keeps a person's threads in its own database and refuses to mount the runtime without
+ * that runner (`localRunnerOrRefused` in copilot.ts), so the runtime here is mounted over it.
+ */
+const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const AGENT_TOOL_TOKEN = "request-trust-agent-tool-token";
 const WORKER_SECRET = "request-trust-worker-secret";
 const EVIL = "https://evil.example";
@@ -133,6 +141,7 @@ async function boot(
     }),
     identifyUser,
     identifyActor,
+    { localRunner: new PostgresAgentRunner(database) },
   );
   const turns: string[] = [];
   const routineRuns: string[] = [];
@@ -158,7 +167,8 @@ async function boot(
     },
   } as unknown as RoutineRunner;
   args[28] = async () => ({ text: "called", isError: false });
-  args[34] = {
+  // M3: the fork's `coworker` is parameter 33 (upstream's `learning` comes later here).
+  args[33] = {
     delivery: {
       authenticated: {
         store: {} as never,
@@ -209,6 +219,7 @@ async function boot(
 afterAll(async () => {
   for (const handle of booted) await handle.stop();
   await computer?.stop(true);
+  await database.$client.close();
 });
 
 /**

@@ -163,8 +163,9 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
     "asAdminPlatform(": 2,
     'runAsTenant("platform"': 4,
   },
+  // M3: the second is upstream's prune of everybody's check-in ledger and pings (housekeeping).
   "src/audit-retention.ts": {
-    'runAsTenant("platform"': 1,
+    'runAsTenant("platform"': 2,
     "set_config('app.tenant_id', 'platform'": 1,
   },
   "src/audit.ts": { 'runAsTenant("platform"': 1 },
@@ -184,7 +185,8 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   "src/copilot.ts": { 'runAsTenant("system"': 1 },
   "src/credentials-reseal.ts": { 'runAsTenant("platform"': 2 },
   "src/db/client.ts": { "set_config('app.tenant_id', ${tenant}": 2 },
-  "src/delivery/opentag-agent.ts": { 'runAsTenant("platform"': 2 },
+  // M3: the third finds the binding a chat sender names, then checked against its own tenant.
+  "src/delivery/opentag-agent.ts": { 'runAsTenant("platform"': 3 },
   "src/delivery/router.ts": { 'runAsTenant("platform"': 3 },
   "src/delivery/store.ts": { 'runAsTenant("platform"': 3 },
   "src/devices/store.ts": { 'runAsTenant("platform"': 4 },
@@ -197,7 +199,14 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   "src/identity/store.ts": { 'runAsTenant("platform"': 4 },
   // Learning's container assignment is the deployment's (start, the nudge on read, Admin's check),
   // and the GitHub callback's "is this person still active" reads the deployment's people table.
-  "src/index.ts": { 'runAsTenant("platform"': 3, "asPlatform(": 4 },
+  // M3: upstream's wiring adds "who is this" reads, each commented where it is made: the session,
+  // roles and Entra token of a request not yet framed, a Bot's isolation switch and owner for its
+  // computer seat, people's names and their OpenBot browsers for the admin computer list, Learning's
+  // open sources, withheld skills and people, every live Recorder connection, the boot-time model
+  // check; and the background translator of `text_translations` (no tenant column).
+  "src/index.ts": { 'runAsTenant("platform"': 1, "asPlatform(": 18 },
+  // M3: an administrator's review of everybody's skill-sharing requests, behind the admin gate.
+  "src/learning/routes.ts": { "asPlatform(": 2 },
   "src/memory/ingestion.ts": { 'runAsTenant("platform"': 2 },
   // Whose memories are out of step with Intelligence (upstream #773); each person's are then
   // mirrored in their own frame.
@@ -217,8 +226,16 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   // team server (their tokens, brokered connections and grants for it), after `requireServerWriter`
   // has checked the admin capability (P21).
   "src/plugins/store.ts": { 'runAsTenant("platform"': 3 },
-  "src/proactive/engine.ts": { 'runAsTenant("platform"': 2 },
+  // M3: upstream's engine asks as `platform` what is unoffered, whom to ping, what is stale and
+  // what is due; each setting then runs in the tenant stamped on its own row.
+  "src/proactive/engine.ts": { 'runAsTenant("platform"': 5 },
   "src/quota/routes.ts": { 'runAsTenant("platform"': 1 },
+  // M3: the Recorder (upstream): a connect code is spent before anybody is known, so its refusals,
+  // the code's owner and every live connection are read as `platform`; the connection itself is made
+  // in the owner's frame.
+  "src/recorder/connections.ts": { "asPlatform(": 3 },
+  "src/recorder/routes.ts": { "asPlatform(": 1 },
+  "src/recorder/wiring.ts": { "asPlatform(": 3 },
   "src/recovery/abandoned-work.ts": { 'runAsTenant("platform"': 1 },
   "src/responsibilities/email.ts": { 'runAsTenant("platform"': 1 },
   "src/responsibilities/github.ts": { 'runAsTenant("platform"': 1 },
@@ -229,7 +246,8 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   "src/tasks/projector.ts": { 'runAsTenant("platform"': 1 },
   "src/team-bots/routes.ts": { "adminActAsOwner(": 1, "asAdminPlatform(": 5 },
   // The catalogue sync writes the deployment's own `system` rows (package-declared Bots).
-  "src/tenant-package.ts": { 'runAsTenant("system"': 1 },
+  // M3: the second is `deploymentNameOf`, reading at boot which former package rows the sync keeps.
+  "src/tenant-package.ts": { 'runAsTenant("system"': 2 },
   "src/tenant/access.ts": { 'runAsTenant("platform"': 1 },
   // `asPlatform` itself.
   "src/tenant/context.ts": { 'runAsTenant("platform"': 1 },

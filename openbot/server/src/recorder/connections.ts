@@ -206,10 +206,13 @@ export function createRecorderConnectionStore(
       organizationSession: SealedOrganizationSession | null = null,
     ): Promise<ConnectCodeResponse | null> {
       const created = now();
-      // Outside the lock, which is one person's: these rows are everybody's.
-      await database
-        .delete(recorderConnectCodes)
-        .where(lte(recorderConnectCodes.expiresAt, created));
+      // Outside the lock, which is one person's: these rows are everybody's, so as `platform` (G01). In
+      // the person's own frame only their expired codes, and the sealed sessions in them, would go.
+      await asPlatform(() =>
+        database
+          .delete(recorderConnectCodes)
+          .where(lte(recorderConnectCodes.expiresAt, created)),
+      );
       return database.transaction(async (transaction) => {
         await lock(transaction, `recorder-codes\u001f${userId}`);
         const [live] = await transaction

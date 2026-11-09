@@ -265,17 +265,40 @@ test("a due setting is claimed once and its next run moves forward by its interv
     await proactive.update(owner, setting.id, { enabled: true });
   }));
 
+/** The test database's owner, on the same database the suite uses (`TEST_DATABASE_ADMIN_URL`). */
+function ownerConnection(): Bun.SQL {
+  const raw = process.env.TEST_DATABASE_ADMIN_URL?.trim();
+  if (!raw)
+    throw new Error(
+      "TEST_DATABASE_ADMIN_URL must name the database owner, who makes the stand-in clock.",
+    );
+  const admin = new URL(raw);
+  admin.pathname = new URL(testDatabaseUrl()).pathname;
+  return new Bun.SQL(admin.toString(), { max: 1 });
+}
+
 test("a next check-in is counted on this server's clock, which the sweep decides on, even with the database's clock ahead", () =>
   asOwner(async () => {
     // A database whose `now()` reads a minute ahead of this server: this connection finds a stand-in
     // `now()` before Postgres's own.
     const clock = `clock_ahead_${randomUUID().replaceAll("-", "")}`;
-    await database.execute(sql.raw(`create schema ${clock}`));
-    await database.execute(
-      sql.raw(
+    /*
+     * The fork's suite connects as `openbot_app`, which may not create a schema: the database's owner
+     * (`TEST_DATABASE_ADMIN_URL`, on this same database) makes the stand-in clock and lets the
+     * application role use it.
+     */
+    const appRole = decodeURIComponent(new URL(testDatabaseUrl()).username);
+    const ownerSql = ownerConnection();
+    try {
+      await ownerSql.unsafe(`create schema ${clock}`);
+      await ownerSql.unsafe(
         `create function ${clock}.now() returns timestamptz language sql stable as $$ select pg_catalog.now() + interval '1 minute' $$`,
-      ),
-    );
+      );
+      await ownerSql.unsafe(`grant usage on schema ${clock} to "${appRole}"`);
+    } catch (error) {
+      await ownerSql.close();
+      throw error;
+    }
     const url = new URL(testDatabaseUrl());
     url.searchParams.set("search_path", `${clock},public,pg_catalog`);
     const ahead = createDatabase(url.toString(), { max: 1 });
@@ -309,7 +332,11 @@ test("a next check-in is counted on this server's clock, which the sweep decides
       await store.remove(owner, created.id);
     } finally {
       await ahead.$client.close();
-      await database.execute(sql.raw(`drop schema ${clock} cascade`));
+      try {
+        await ownerSql.unsafe(`drop schema ${clock} cascade`);
+      } finally {
+        await ownerSql.close();
+      }
     }
   }));
 
@@ -451,7 +478,12 @@ test("open items stay open across check-ins until the person starts or hides one
       [secondBot, "Reply to Sam"],
       [secondBot, "Send the invoice"],
     ]);
-    expect(prior.hidden).toEqual([
+    /*
+     * This Bot's hidden item. The first Bot's "Reply to Sam" is hidden too when the earlier race
+     * between starting and hiding it went to the hide, which is either way in this fork's framed
+     * transactions; it is that race's, not this check-in's, so only this Bot's rows are compared.
+     */
+    expect(prior.hidden.filter((row) => row.agentId === secondBot)).toEqual([
       {
         agentId: secondBot,
         title: "Archive old tickets",

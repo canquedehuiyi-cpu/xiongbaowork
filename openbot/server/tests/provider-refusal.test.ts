@@ -1,5 +1,7 @@
 import { afterAll, afterEach, beforeAll, expect, spyOn, test } from "bun:test";
+import { randomUUID } from "node:crypto";
 import type { RunAgentInput } from "@ag-ui/client";
+import { inArray, like } from "drizzle-orm";
 import { createActorAgentResolver } from "../src/agents/agent-resolver";
 import { createAgentFetch } from "../src/agents/endpoint";
 import { loadConfig } from "../src/config";
@@ -10,6 +12,11 @@ import {
   type RuntimeModel,
   registeredAgentFromRow,
 } from "../src/copilot";
+import { createDatabase } from "../src/db/client";
+import { threadRuns, threads } from "../src/db/schema";
+import { runAsTenant } from "../src/tenant/context";
+import { PostgresAgentRunner } from "../src/threads/postgres-runner";
+import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
 
 /**
@@ -185,6 +192,15 @@ const delivered: {
   message?: string;
   code?: string;
 }[] = [];
+/**
+ * M3: the fork keeps a person's threads in its own database and refuses to mount the runtime without
+ * that runner (`localRunnerOrRefused` in copilot.ts), so each run here goes through it, and its
+ * RUN_ERROR comes back on the run's own stream rather than to the platform.
+ */
+const database = createDatabase(testDatabaseUrl(), TEST_POOL);
+const suite = randomUUID().slice(0, 8);
+/** The threads the runs below started, cleared once each run is stored. */
+const started: string[] = [];
 
 let platform: ReturnType<typeof Bun.serve>;
 let provider: ReturnType<typeof Bun.serve>;
@@ -309,10 +325,27 @@ afterEach(() => {
   }
 });
 
-afterAll(() => {
+afterAll(async () => {
   platform.stop(true);
   provider.stop(true);
   harness.stop(true);
+  await runAsTenant("platform", async () => {
+    // Each run is stored after its stream ends: cleared only once it is, or the store trips on it.
+    const deadline = Date.now() + 10_000;
+    while (
+      started.length > 0 &&
+      (
+        await database
+          .select({ id: threadRuns.id })
+          .from(threadRuns)
+          .where(inArray(threadRuns.threadId, started))
+      ).length < started.length &&
+      Date.now() < deadline
+    )
+      await Bun.sleep(10);
+    await database.delete(threads).where(like(threads.id, `thread-%-${suite}`));
+  });
+  await database.$client.close();
 });
 
 /** The RUN_ERROR one run delivered, and what the server logged about it. */
@@ -337,6 +370,7 @@ async function runError(
     }),
     async () => person,
     async () => ({ id: person.id, role: "user" }),
+    { localRunner: new PostgresAgentRunner(database) },
   );
   const logged: string[] = [];
   const log = spyOn(console, "error").mockImplementation((...line) => {
@@ -344,12 +378,13 @@ async function runError(
   });
   try {
     const runId = `run-${crypto.randomUUID()}`;
+    started.push(`thread-${runId}-${suite}`);
     const response = await runtime.handler.fetch(
       new Request(`http://127.0.0.1/api/copilotkit/agent/${bot.id}/run`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          threadId: `thread-${runId}`,
+          threadId: `thread-${runId}-${suite}`,
           runId,
           state: {},
           messages: [{ id: `ask-${runId}`, role: "user", content: "Hello?" }],
@@ -360,18 +395,18 @@ async function runError(
       }),
     );
     expect(response.status).toBe(200);
-    const deadline = Date.now() + 10_000;
-    const failure = () =>
-      delivered.find(
-        (event) => event.runId === runId && event.type === "RUN_ERROR",
+    const streamed = (await response.text())
+      .split("\n")
+      .filter((line) => line.startsWith("data: "))
+      .map(
+        (line) =>
+          JSON.parse(line.slice("data: ".length)) as (typeof delivered)[number],
       );
-    while (!failure()) {
-      if (Date.now() > deadline)
-        throw new Error(
-          `the run never failed: ${JSON.stringify(delivered.filter((event) => event.runId === runId))}`,
-        );
-      await Bun.sleep(10);
-    }
+    const failure = () => streamed.find((event) => event.type === "RUN_ERROR");
+    if (!failure())
+      throw new Error(
+        `the run never failed: ${JSON.stringify(streamed.map(({ type, message }) => ({ type, message })))}`,
+      );
     return {
       message: failure()?.message,
       code: failure()?.code,

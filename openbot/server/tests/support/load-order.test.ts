@@ -41,6 +41,8 @@ test("integration suites obtain database URLs only through the shared test helpe
   const addressTests = new Set([
     "db-client-address.test.ts",
     "test-database-url.integration.test.ts",
+    // Upstream's (M3): plants a database host to check the network guard lets it through.
+    "test-network-guard.test.ts",
   ]);
   const files = readdirSync(testRoot, { recursive: true })
     .map(String)

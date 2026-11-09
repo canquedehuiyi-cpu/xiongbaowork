@@ -182,8 +182,8 @@ export function startRetentionSweeps(
         });
     }
     if (proactive) {
-      void proactive
-        .prune()
+      // Everybody's ledger and pings, in no one person's scope: the platform's housekeeping (G01).
+      void runAsTenant("platform", () => proactive.prune())
         .then(({ runs, pings }) => {
           if (runs === 0 && pings === 0) return;
           console.info(

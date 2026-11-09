@@ -13,6 +13,7 @@ import { type Context, Hono, type MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { type AuditStore, recordAuditEvent } from "../audit";
 import { type AppVariables, requireAdmin } from "../auth/guards";
+import { asPlatform, runAsTenant } from "../tenant/context";
 import { recordApprovalBefore, type SkillApprovalStore } from "./approvals";
 import type { LearningAutoAssign } from "./auto-assign";
 import type { InspectorLearning, InspectorLearningRequest } from "./inspector";
@@ -613,7 +614,10 @@ export function createLearningRoutes(
     const names = new Map(
       (await people()).map((entry) => [entry.userId, entry.name]),
     );
-    const requests: SharingRequest[] = (await approvals.requests()).map(
+    // Everybody's requests: a cross-tenant read, as `platform` behind the admin gate above (G01).
+    const requests: SharingRequest[] = (
+      await asPlatform(() => approvals.requests())
+    ).map(
       (entry) => ({
         userId: entry.userId,
         name: names.get(entry.userId) ?? entry.userId,
@@ -660,17 +664,15 @@ export function createLearningRoutes(
             { error: "Open the request again, then decide." },
             400,
           );
+        // The person's own row, written in their frame where it belongs (G01).
         if (
-          !(await approvals.decideSharing(
-            userId,
-            skillName,
-            decision,
-            requestedAt,
+          !(await runAsTenant(userId, () =>
+            approvals.decideSharing(userId, skillName, decision, requestedAt),
           ))
         ) {
           // A stale `requestedAt` also fails; tell the two apart so the admin knows to open the skill again.
           if (
-            (await approvals.requests()).some(
+            (await asPlatform(() => approvals.requests())).some(
               (entry) =>
                 entry.userId === userId && entry.skillName === skillName,
             )
@@ -736,25 +738,28 @@ export function createLearningRoutes(
               : undefined;
           let review: Awaited<ReturnType<typeof reviewProposal>>;
           try {
-            review = await reviewProposal({
-              manage,
-              containerId,
-              candidateId,
-              action,
-              ...(recordApproval
-                ? {
-                    before: async (
-                      ...args: Parameters<typeof recordApproval>
-                    ) => {
-                      try {
-                        return await recordApproval(...args);
-                      } finally {
-                        dependencies.invalidate?.();
-                      }
-                    },
-                  }
-                : {}),
-            });
+            // The approval it records (and any undo) is the person's own row: in their frame (G01).
+            review = await runAsTenant(userId, () =>
+              reviewProposal({
+                manage,
+                containerId,
+                candidateId,
+                action,
+                ...(recordApproval
+                  ? {
+                      before: async (
+                        ...args: Parameters<typeof recordApproval>
+                      ) => {
+                        try {
+                          return await recordApproval(...args);
+                        } finally {
+                          dependencies.invalidate?.();
+                        }
+                      },
+                    }
+                  : {}),
+              }),
+            );
           } finally {
             dependencies.invalidate?.();
           }

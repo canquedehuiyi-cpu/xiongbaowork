@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
+import { expect } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { RECORDER_EXTENSION_ID } from "@openbot/shared/recorder-extension";
 import { eq, inArray } from "drizzle-orm";
@@ -25,8 +25,16 @@ import { recorderConnections } from "../src/db/schema/recorder";
 import { retireOwnedAccounts } from "../src/identity/retire";
 import { createPeopleStore } from "../src/people/store";
 import { createRecorderExtension } from "../src/recorder/wiring";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { SESSION_LIFETIME_MS, testEnvironment } from "./support/environment";
+// Fixtures and reads span people and the deployment: as `platform` (G01).
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  test,
+} from "./support/platform-frame";
 
 /*
  * The two ways OpenBot itself ends people's sessions, outside Better Auth's own routes, end their Recorders too:
@@ -133,7 +141,8 @@ enterprise.route(
       image: null,
       role: "admin",
     });
-    await next();
+    // As the real `requireUser` does: the request runs as the person it names.
+    await runAsTenant(admin.id, () => next());
   }),
 );
 let controls: EnterpriseControls;
@@ -158,10 +167,11 @@ beforeAll(async () => {
     auditStore,
     env: {},
     initialAdminEmails: [],
-    // As index.ts passes it.
+    // As index.ts passes it: every person's connections read as `platform`, one person's ended as them.
     recorders: {
-      holders: () => working.connections.holders(),
-      signOut: (userId, ending) => recorder.signOut(userId, ending),
+      holders: () => runAsTenant("platform", () => working.connections.holders()),
+      signOut: (userId, ending) =>
+        runAsTenant(userId, () => recorder.signOut(userId, ending)),
     },
   });
 });
@@ -185,7 +195,10 @@ afterAll(async () => {
 });
 
 async function connect(userId: string, installId: string) {
-  const minted = await working.connections.mintCode(userId, "web");
+  // A code is asked for by the signed-in person, in their own frame; the exchange stays `platform`'s.
+  const minted = await runAsTenant(userId, () =>
+    working.connections.mintCode(userId, "web"),
+  );
   return (await working.connections.exchange({
     code: minted!.code,
     label: "Chrome on macOS",

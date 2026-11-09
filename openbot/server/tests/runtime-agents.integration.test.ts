@@ -513,6 +513,7 @@ describe("runtime agent loading", () => {
    */
   test("tells an agent somebody runs the framework they named, after an edit too", async () => {
     const owner = await createUser();
+    await as(owner, async () => {
     const profile = await profileStore.create(owner, {
       name: "Research",
       title: "Finance Operations",
@@ -540,5 +541,6 @@ describe("runtime agent loading", () => {
       visibility: "private",
     });
     expect(await role()).toContain(told);
+    });
   });
 });

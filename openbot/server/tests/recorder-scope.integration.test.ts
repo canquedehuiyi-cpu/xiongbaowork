@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
+import { describe, expect, spyOn } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { CopilotKitIntelligence } from "@copilotkit/runtime/v2";
 import type { ExchangeResponse } from "@openbot/shared/recorder-api";
@@ -21,13 +21,16 @@ import {
   learningSkillSharing,
 } from "../src/db/schema/learning";
 import { skills } from "../src/db/schema/plugins";
+import { threadRuns, threads } from "../src/db/schema/threads";
 import { createSkillApprovalStore } from "../src/learning/approvals";
 import { createLearningSettingsStore } from "../src/learning/settings";
 import { createLearningSharingStore } from "../src/learning/sharing";
 import { createRecorderExtension } from "../src/recorder/wiring";
 import { createRequestActor } from "../src/request-actor";
+import { PostgresAgentRunner } from "../src/threads/postgres-runner";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { SESSION_LIFETIME_MS, testEnvironment } from "./support/environment";
+import { afterAll, beforeAll, test } from "./support/platform-frame";
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const prefix = `recorder-scope-${randomUUID()}`;
@@ -35,6 +38,7 @@ const owner = `${prefix}-owner`;
 const ORIGIN = `chrome-extension://${RECORDER_EXTENSION_ID}`;
 const BOT = `${prefix}-bot`;
 const COOKIE = { cookie: "test-session=owner" };
+const THREAD = `${prefix}-thread`;
 
 const config = loadConfig(testEnvironment());
 const roleRepository: RoleRepository = { rolesForUser: async () => ["user"] };
@@ -103,7 +107,11 @@ const runtime = mountCopilotRuntime(
   }),
   identifyUser,
   identifyActor,
-  { trajectoryCapture: recorder.trajectoryCapture },
+  // M3: the fork refuses to mount the runtime without its own thread runner (copilot.ts).
+  {
+    trajectoryCapture: recorder.trajectoryCapture,
+    localRunner: new PostgresAgentRunner(database),
+  },
 );
 
 /*
@@ -224,6 +232,19 @@ beforeAll(async () => {
 afterAll(async () => {
   for (const spy of spies) spy.mockRestore();
   guard.stop();
+  // The control run is stored after its stream ends: the thread is cleared only once it is.
+  const deadline = Date.now() + 10_000;
+  while (
+    (
+      await database
+        .select({ id: threadRuns.id })
+        .from(threadRuns)
+        .where(eq(threadRuns.threadId, THREAD))
+    ).length === 0 &&
+    Date.now() < deadline
+  )
+    await Bun.sleep(10);
+  await database.delete(threads).where(eq(threads.id, THREAD));
   await database.delete(agents).where(eq(agents.id, BOT));
   await database.delete(users).where(inArray(users.id, [owner]));
   await database.$client.close();
@@ -268,8 +289,8 @@ describe("a recorder bearer works only on the Recorder's own routes", () => {
         method: "POST",
         headers,
         json: {
-          threadId: "t",
-          runId: "r",
+          threadId: THREAD,
+          runId: randomUUID(),
           state: {},
           messages: [],
           tools: [],
@@ -277,14 +298,27 @@ describe("a recorder bearer works only on the Recorder's own routes", () => {
           forwardedProps: {},
         },
       });
+    /*
+     * M3: the fork's runtime keeps threads on its own runner (threads/postgres-runner.ts), not on
+     * Intelligence, so a run starting is the person's thread being stored rather than Intelligence
+     * being asked to open one.
+     */
+    const runsOf = async () =>
+      (
+        await database
+          .select({ owner: threads.tenantId })
+          .from(threads)
+          .where(eq(threads.id, THREAD))
+      ).map((row) => row.owner);
     // The control: the person's own session reaches the Bot and starts a run as them.
-    await run(COOKIE);
+    await (await run(COOKIE)).text();
     expect(loadedFor).toContain(owner);
-    expect(threadsFor).toEqual([owner]);
+    expect(await runsOf()).toEqual([owner]);
     const loaded = loadedFor.length;
     const answer = await run({ authorization: `Bearer ${token}` });
     expect(answer.ok).toBe(false);
-    expect(threadsFor).toEqual([owner]);
+    expect(threadsFor).toEqual([]);
+    expect(await runsOf()).toEqual([owner]);
     expect(loadedFor.slice(loaded)).not.toContain(owner);
     const intelligence = config.intelligence?.apiUrl;
     if (!intelligence) throw new Error("The test environment names an Intelligence.");

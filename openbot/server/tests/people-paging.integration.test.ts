@@ -192,7 +192,7 @@ describe("reading the people in a deployment", () => {
       lastSignedInAt: new Date(base - index * 1000),
     }));
     ids.push(...people.map((one) => one.id));
-    await database.insert(users).values(people);
+    await asPlatform(() => database.insert(users).values(people));
 
     const first = await store.list({ search: `${PREFIX}cap-`, limit: 100_000 });
     expect(first.people.map((one) => one.id)).toEqual(

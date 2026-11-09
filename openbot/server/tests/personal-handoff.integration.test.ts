@@ -1,16 +1,8 @@
-import {
-  afterAll,
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  test,
-} from "bun:test";
+import { describe, expect, test as bunTest } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { HANDED_OVER } from "@openbot/shared/handoff-markers";
 import { eq, inArray, sql } from "drizzle-orm";
 import { wireCoordination } from "../src/agents/coordination-wiring";
-import { createHandoffDesk, HANDOFF_KIND } from "../src/agents/handoff";
+import { createHandoffDesk } from "../src/agents/handoff";
 import { HANDOFF_TOOL } from "../src/agents/handoff-tool";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import { createAuditStore } from "../src/audit";
@@ -25,8 +17,10 @@ import {
 } from "../src/db/schema";
 import { setEdition } from "../src/edition";
 import { createPluginStore } from "../src/plugins/store";
+import { runAsTenant } from "../src/tenant/context";
 import { createWorkQueue } from "../src/work/queue";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { afterAll, afterEach, beforeEach } from "./support/platform-frame";
 
 /**
  * In the personal edition one person's Bot hands work to another of that person's Bots.
@@ -81,7 +75,12 @@ const { coordinationForActor } = wireCoordination({
   config: { handoff: caps } as DeploymentConfig,
   // No approval gate: what is asked of the person is not what this is about. The private-share
   // check is reached only for another person's Bot, and in this edition there is no other person.
-  approvalService: { gate: undefined, store: {} } as never,
+  // The fork also filters out tools the person disabled (SEC1 D4); none are disabled here.
+  approvalService: {
+    gate: undefined,
+    store: {},
+    disabledTools: async () => () => false,
+  } as never,
   agentProfileStore,
   actorFor,
   channelSourceForRun: async () => null,
@@ -111,9 +110,17 @@ async function clean() {
   await database.delete(agents).where(inArray(agents.id, ALL));
 }
 
-/** The two Bots the personal package starts with on Desktop, once a harness is picked. */
+/** Each case is the one person's Bot's run, in that person's tenant frame (G01). */
+const test = (name: string, body: () => Promise<void>) =>
+  bunTest(name, () => runAsTenant(ACTOR, body));
+
+/** The two Bots the personal package starts with on Desktop, once a harness is picked: the person's own. */
 beforeEach(async () => {
   await clean();
+  await runAsTenant(ACTOR, seedBots);
+});
+
+async function seedBots() {
   for (const [id, name, type] of [
     [ASSISTANT, `Personal Assistant ${suite}`, "built_in"],
     [PICKED, `Claude Agent SDK ${suite}`, "remote_ag_ui"],
@@ -127,7 +134,7 @@ beforeEach(async () => {
       visibility: "public",
     });
   }
-});
+}
 
 afterEach(() => setEdition("team"));
 
@@ -159,44 +166,12 @@ function offeredNames(tool: { parameters: unknown }): string[] {
 }
 
 describe("handing work between Bots in the personal edition", () => {
-  test("a Bot is offered message_bot naming the person's other Bot, and the call reaches it", async () => {
-    setEdition("personal");
-
-    const tools = await toolsFor(ASSISTANT);
-    const handoff = tools.find((tool) => tool.name === HANDOFF_TOOL);
-    expect(handoff).toBeDefined();
-    if (!handoff) return;
-    expect(offeredNames(handoff)).toContain(`Claude Agent SDK ${suite}`);
-    expect(offeredNames(handoff)).not.toContain(`Personal Assistant ${suite}`);
-
-    const answer = await handoff.execute({
-      bot: `Claude Agent SDK ${suite}`,
-      task: "Three short bullet points on what a company needs before deploying on Kubernetes.",
-    });
-    expect(answer.startsWith(HANDED_OVER)).toBe(true);
-
-    const hops = await database
-      .select({ payload: workItems.payload })
-      .from(workItems)
-      .where(
-        sql`${workItems.kind} = ${HANDOFF_KIND} and ${workItems.payload}->>'actorId' = ${ACTOR}`,
-      );
-    expect(hops).toHaveLength(1);
-    expect(hops[0]?.payload).toMatchObject({
-      fromBotId: ASSISTANT,
-      toBotId: PICKED,
-    });
-  });
-
-  test("the picked Bot can ask Personal Assistant in return", async () => {
-    setEdition("personal");
-    const tools = await toolsFor(PICKED);
-    const handoff = tools.find((tool) => tool.name === HANDOFF_TOOL);
-    expect(handoff).toBeDefined();
-    if (handoff)
-      expect(offeredNames(handoff)).toContain(`Personal Assistant ${suite}`);
-  });
-
+  /*
+   * M3: "a Bot is offered message_bot naming the person's other Bot, and the call reaches it" and
+   * "the picked Bot can ask Personal Assistant in return" are not kept: in the personal edition
+   * upstream lets every Bot reach every other without a grant (plugin-store `botsReachableFrom`,
+   * beside plugins/personal-defaults), which the fork does not adopt (plugins session).
+   */
   test("a deleted Bot is not offered", async () => {
     setEdition("personal");
     await database

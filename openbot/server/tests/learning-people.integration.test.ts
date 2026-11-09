@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { describe, expect } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { inArray } from "drizzle-orm";
 import { createDatabase } from "../src/db/client";
@@ -6,6 +6,7 @@ import { users } from "../src/db/schema/core";
 import { learningPersonSpaces } from "../src/db/schema/learning";
 import { createLearningPeople } from "../src/learning/people";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { afterAll, beforeAll, test } from "./support/platform-frame";
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const prefix = `learning-people-${randomUUID()}`;

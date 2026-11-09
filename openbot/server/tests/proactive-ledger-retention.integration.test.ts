@@ -1,11 +1,4 @@
-import {
-  afterAll,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  test,
-} from "bun:test";
+import { describe, expect } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { startRetentionSweeps } from "../src/audit-retention";
@@ -18,7 +11,16 @@ import {
   proactiveSuggestions,
 } from "../src/db/schema/proactive";
 import { createProactiveStore } from "../src/proactive/store";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+// Pruning is the platform's housekeeping across everybody's rows; the harness runs as `platform` too
+// and writes the person's own rows in their frame (G01).
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  test,
+} from "./support/platform-frame";
 
 /*
  * The check-in ledger and old pings are pruned on the retention schedule, whatever the audit policy
@@ -34,26 +36,30 @@ const owner = `ledger-owner-${suite}`;
 const bot = `ledger-bot-${suite}`;
 const settingId = `ledger-setting-${suite}`;
 
+/** The person's own rows, written in their frame. */
+const asOwner = <T>(write: () => Promise<T>) => runAsTenant(owner, write);
 const daysAgo = (days: number) => new Date(Date.now() - days * 86_400_000);
 
 beforeAll(async () => {
   await database
     .insert(users)
     .values({ id: owner, email: `${owner}@example.test` });
-  await database.insert(agents).values({
-    id: bot,
-    name: "Ledger Bot",
-    type: "built_in",
-    configuration: {},
-  });
-  await database.insert(proactiveSettings).values({
+  await runAsTenant("system", () =>
+    database.insert(agents).values({
+      id: bot,
+      name: "Ledger Bot",
+      type: "built_in",
+      configuration: {},
+    }),
+  );
+  await asOwner(() => database.insert(proactiveSettings).values({
     id: settingId,
     ownerUserId: owner,
     agentId: bot,
     channelId: `ledger-channel-${suite}`,
     threadId: `ledger-thread-${suite}`,
     nextRunAt: new Date("2100-01-01T00:00:00Z"),
-  });
+  }));
 });
 beforeEach(async () => {
   await database
@@ -73,7 +79,7 @@ afterAll(async () => {
 });
 
 async function run(name: string, days: number, outcome: "quiet" | "running") {
-  await database.insert(proactiveCheckInRuns).values({
+  await asOwner(() => database.insert(proactiveCheckInRuns).values({
     id: `${suite}-${name}`,
     settingId,
     ownerUserId: owner,
@@ -82,10 +88,10 @@ async function run(name: string, days: number, outcome: "quiet" | "running") {
     outcome,
     startedAt: daysAgo(days),
     finishedAt: outcome === "running" ? null : daysAgo(days),
-  });
+  }));
 }
 async function ping(name: string, days: number) {
-  await database.insert(proactivePings).values({
+  await asOwner(() => database.insert(proactivePings).values({
     id: `${suite}-${name}`,
     ownerUserId: owner,
     itemCount: 1,
@@ -93,11 +99,11 @@ async function ping(name: string, days: number) {
     pushBody: "One thing needs you",
     createdAt: daysAgo(days),
     offeredAt: daysAgo(days),
-  });
+  }));
 }
 async function itemOf(pingName: string, status: "open" | "dismissed") {
   const id = `${suite}-item-${pingName}`;
-  await database.insert(proactiveSuggestions).values({
+  await asOwner(() => database.insert(proactiveSuggestions).values({
     id,
     ownerUserId: owner,
     agentId: bot,
@@ -107,7 +113,7 @@ async function itemOf(pingName: string, status: "open" | "dismissed") {
     detail: "Why.",
     status,
     pingId: `${suite}-${pingName}`,
-  });
+  }));
   return id;
 }
 const runIds = async () =>
@@ -155,7 +161,7 @@ describe("pruning the check-in ledger", () => {
       .where(eq(proactiveSuggestions.id, hiddenItem));
     expect(hidden).toMatchObject({ status: "dismissed", pingId: null });
     // The open item still names its ping, so it is never pinged a second time.
-    expect(await store.pings.take(owner)).toBeNull();
+    expect(await asOwner(() => store.pings.take(owner))).toBeNull();
   });
 
   test("a person whose pings are all old keeps their newest", async () => {

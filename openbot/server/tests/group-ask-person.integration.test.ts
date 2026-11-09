@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
+import { test as bunTest, expect } from "bun:test";
 import { randomUUID } from "node:crypto";
 import type { TurnRunner } from "@openbot/toolkit/run-turn";
 import { and, eq, inArray } from "drizzle-orm";
@@ -37,8 +37,10 @@ import { createDeliveryScopes } from "../src/delivery/scope";
 import { createDeliveryStore } from "../src/delivery/store";
 import { createPeopleStore } from "../src/people/store";
 import { createWorkQueue } from "../src/work/queue";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
+import { afterAll, afterEach, beforeAll } from "./support/platform-frame";
 
 /**
  * A Bot's question in a conversation with two Bots.
@@ -53,6 +55,9 @@ import { testEnvironment } from "./support/environment";
  * Through the real stores on PostgreSQL: the coordination tools a run is handed, delivery's own
  * access check and outbox, the approval routes, and the group's transcript and turn queue. Only the
  * model is played, as the group's turn runner.
+ *
+ * Fork (G01): set-up and tear-down run as `platform`; every case runs in the person's own frame,
+ * where their run, their request and their delivery do.
  */
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
@@ -66,6 +71,9 @@ const prefix = `group-ask-${randomUUID()}`;
 const owner = `${prefix}-owner`;
 const stranger = `${prefix}-stranger`;
 const actor: AgentActor = { id: owner, role: "user" };
+/** A case, in the person's own frame. */
+const test = (name: string, body: () => Promise<void>) =>
+  bunTest(name, () => runAsTenant(owner, body));
 const actorFor = async (id: string): Promise<AgentActor> => ({
   id,
   role: "user",
@@ -168,7 +176,8 @@ approvals.route(
         email: `${owner}@example.test`,
         role: "user",
       });
-      await next();
+      // As the real `requireUser` does: the request runs as the person it names.
+      await runAsTenant(owner, () => next());
     },
   ),
 );
@@ -179,13 +188,15 @@ beforeAll(async () => {
     { id: stranger, email: `${stranger}@example.test`, name: "Sam" },
   ]);
   // The person's phone, so a question that reaches them is told to them there too.
-  await createDeliveryStore(database).registerDevice({
-    id: `${prefix}-phone`,
-    ownerUserId: owner,
-    token: `ExponentPushToken[${prefix}]`,
-    projectId: "test-project",
-    platform: "ios",
-  });
+  await runAsTenant(owner, () =>
+    createDeliveryStore(database).registerDevice({
+      id: `${prefix}-phone`,
+      ownerUserId: owner,
+      token: `ExponentPushToken[${prefix}]`,
+      projectId: "test-project",
+      platform: "ios",
+    }),
+  );
 });
 afterEach(() => {
   turns.length = 0;
@@ -195,7 +206,9 @@ afterAll(async () => {
     .select({ id: deliveryOutbox.id })
     .from(deliveryOutbox)
     .where(eq(deliveryOutbox.ownerUserId, owner));
-  const asked = (await questions.list(owner)).map((question) => question.id);
+  const asked = (
+    await runAsTenant(owner, () => questions.list(owner))
+  ).map((question) => question.id);
   const keys = [
     ...outbox.map((row) => row.id),
     ...asked,
@@ -263,7 +276,11 @@ async function askPerson(botId: string, threadId: string) {
       send: async () => ({ ok: false, refusal: "No Bot to hand to." }),
     } as never,
     config: loadConfig(testEnvironment()),
-    approvalService: { store: {} } as never,
+    // No rule disables a tool here (SEC1 D4).
+    approvalService: {
+      store: {},
+      disabledTools: async () => () => false,
+    } as never,
     agentProfileStore: profileStore,
     actorFor,
     // A group Bot's thread is not a channel's own, so only the group lookup finds it.

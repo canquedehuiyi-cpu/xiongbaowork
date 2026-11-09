@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, test as bunTest, expect } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { LearnedSkillsError } from "@copilotkit/runtime/v2";
 import { eq, inArray } from "drizzle-orm";
@@ -14,6 +14,7 @@ import {
   createPersonSpaceStore,
   personalLearningContainerId,
 } from "../src/learning/personal-space";
+import { runAsTenant } from "../src/tenant/context";
 import { skillSnapshot } from "./fixtures/learned-skills";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
@@ -22,12 +23,17 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
  * Intelligence is faked as it behaves: a container id is unique per project, a second create answers 409
  * LEARNING_CONTAINER_ALREADY_EXISTS, and the runtime key's skills read says whether a container exists. Each replica
  * creates through the real service-token path in learning/ensure-container.ts.
+ *
+ * Fork (G01): the person's row is the platform's to write; each case runs in the person's own frame,
+ * as their run asks for their space.
  */
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const person = `personal-space-${randomUUID()}`;
 const SPACE = personalLearningContainerId(person);
 const API = "https://intelligence.customer.example";
+const test = (name: string, body: () => Promise<void>) =>
+  bunTest(name, () => runAsTenant(person, body));
 
 const containers = new Map<string, string>();
 const posts: { id: string; name: string }[] = [];
@@ -106,13 +112,17 @@ function replica() {
 }
 
 beforeAll(async () => {
-  await database
-    .insert(users)
-    .values({ id: person, email: `${person}@example.test` });
+  await runAsTenant("platform", () =>
+    database
+      .insert(users)
+      .values({ id: person, email: `${person}@example.test` }),
+  );
 });
 
 afterAll(async () => {
-  await database.delete(users).where(inArray(users.id, [person]));
+  await runAsTenant("platform", () =>
+    database.delete(users).where(inArray(users.id, [person])),
+  );
   await database.$client.close();
 });
 

@@ -667,10 +667,13 @@ describe("headless turns obey the same switches", () => {
     pickedModels.set(`thread-${suite}`, "gpt-picked");
     try {
       const turn = headlessTurn(bot);
-      await expect(turn.run()).resolves.toMatchObject({ replyText: "Done." });
+      await expect(asMemberTenant(() => turn.run())).resolves.toMatchObject({
+        replyText: "Done.",
+      });
       expect(turn.ran).toEqual([bot]);
       pickedModels.delete(`thread-${suite}`);
-      await expect(headlessTurn(bot).run()).rejects.toThrow(
+      const unpicked = headlessTurn(bot);
+      await expect(asMemberTenant(() => unpicked.run())).rejects.toThrow(
         /isn't an allowed model/,
       );
     } finally {
@@ -948,8 +951,10 @@ describe("offboarding", () => {
 
 describe("Skill sharing", () => {
   test("is off until an administrator turns it on, everywhere a person's change and a run read it, and the change is on the trail", async () => {
+    // A person's change and a run read it in that person's frame.
+    const sharingAllowed = () => asMemberTenant(() => skillSharingAllowed());
     // Off by default: nobody may open their Skills to every Bot, and runs offer nobody else's.
-    expect(await skillSharingAllowed()).toBe(false);
+    expect(await sharingAllowed()).toBe(false);
     expect(skillSharingInSnapshot()).toBe(false);
     expect(
       (
@@ -958,7 +963,7 @@ describe("Skill sharing", () => {
         })
       ).status,
     ).toBe(403);
-    expect(await skillSharingAllowed()).toBe(false);
+    expect(await sharingAllowed()).toBe(false);
 
     const saved = await put(
       asAdmin,
@@ -966,19 +971,21 @@ describe("Skill sharing", () => {
       { value: true },
     );
     expect(saved.status).toBe(200);
-    expect(await skillSharingAllowed()).toBe(true);
+    expect(await sharingAllowed()).toBe(true);
     // The saving replica refreshes its snapshot before answering; the others on the NOTIFY.
     expect(skillSharingInSnapshot()).toBe(true);
-    const [row] = await database
-      .select()
-      .from(auditEvents)
-      .where(
-        and(
-          eq(auditEvents.eventType, "enterprise.setting_changed"),
-          eq(auditEvents.targetId, "skillSharing"),
-          eq(auditEvents.actorUserId, admin.id),
+    const [row] = await asPlatform(() =>
+      database
+        .select()
+        .from(auditEvents)
+        .where(
+          and(
+            eq(auditEvents.eventType, "enterprise.setting_changed"),
+            eq(auditEvents.targetId, "skillSharing"),
+            eq(auditEvents.actorUserId, admin.id),
+          ),
         ),
-      );
+    );
     expect(row?.payload).toMatchObject({
       setting: "skillSharing",
       before: false,
@@ -995,7 +1002,7 @@ describe("Skill sharing", () => {
     await put(asAdmin, "/api/admin/enterprise/settings/skillSharing", {
       value: false,
     });
-    expect(await skillSharingAllowed()).toBe(false);
+    expect(await sharingAllowed()).toBe(false);
     expect(skillSharingInSnapshot()).toBe(false);
   });
 });

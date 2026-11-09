@@ -25,12 +25,18 @@ import { createSubagents } from "../src/agents/subagent";
 import { PERSON_INITIATOR } from "../src/audit";
 import { loadConfig } from "../src/config";
 import { mountCopilotRuntime, registeredAgentFromRow } from "../src/copilot";
+import { inArray } from "drizzle-orm";
+import { createDatabase } from "../src/db/client";
+import { threads } from "../src/db/schema";
 import { createIntelligenceClient } from "../src/intelligence-client";
 import { createProductTelemetry } from "../src/telemetry/product";
 import {
   productHandoffInput,
   productHeadlessBoundary,
 } from "../src/telemetry/product-boundaries";
+import { runAsTenant } from "../src/tenant/context";
+import { PostgresAgentRunner } from "../src/threads/postgres-runner";
+import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
 
 /**
@@ -59,6 +65,14 @@ const runtimeTelemetry = process.env.COPILOTKIT_TELEMETRY_DISABLED;
 const modelBase = process.env.OPENAI_BASE_URL;
 
 const ACTOR = "colleague";
+/**
+ * M3: the fork keeps a person's threads in its own database and refuses to mount the runtime without
+ * that runner (`localRunnerOrRefused` in copilot.ts), so a browser run goes through it rather than
+ * the Intelligence platform, and a Stop reaches it as the runtime's own stop does.
+ */
+const database = createDatabase(testDatabaseUrl(), TEST_POOL);
+const localRunner = new PostgresAgentRunner(database);
+const browserThreads: string[] = [];
 const KEY = "synthetic-privacy-key";
 
 beforeAll(async () => {
@@ -158,6 +172,11 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await runAsTenant("platform", async () => {
+    if (browserThreads.length)
+      await database.delete(threads).where(inArray(threads.id, browserThreads));
+  });
+  await database.$client.close();
   platform.stop(true);
   droppingBot.stop(true);
   await model.stop();
@@ -265,7 +284,7 @@ function mount(product: Telemetry) {
     }),
     async () => ({ id: ACTOR, name: "Colleague" }),
     async () => ({ id: ACTOR, role: "user" }),
-    { productTelemetry: product },
+    { productTelemetry: product, localRunner },
   );
 }
 
@@ -274,6 +293,7 @@ async function browserRun(
   bot: string,
   runId: string,
 ) {
+  browserThreads.push(`thread-${runId}`);
   const response = await runtime.handler.fetch(
     new Request(`http://127.0.0.1/api/copilotkit/agent/${bot}/run`, {
       method: "POST",
@@ -294,16 +314,16 @@ async function browserRun(
 
 test("a person's Stop on a browser run reads cancelled", async () => {
   const product = await telemetry();
+  const asked = model.getRequests().length;
   await browserRun(mount(product), "general-assistant", "run-browser-stop");
   await until(
-    () =>
-      delivered.some(
-        (e) =>
-          e.runId === "run-browser-stop" && e.type === "TEXT_MESSAGE_CONTENT",
-      ),
+    () => model.getRequests().length > asked,
     "the Bot to be answering",
   );
-  relayStop("run-browser-stop");
+  // M3: the person's Stop, as the runtime's stop route hands it to the local runner, in their frame.
+  await runAsTenant(ACTOR, () =>
+    localRunner.stop({ threadId: "thread-run-browser-stop" }),
+  );
   expect(await ending(product, "run-browser-stop")).toEqual([
     { outcome: "cancelled", failure: "none" },
   ]);

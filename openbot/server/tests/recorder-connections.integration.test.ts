@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { describe, expect } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { RECORDER_EXTENSION_ID } from "@openbot/shared/recorder-extension";
 import { and, eq, gt, inArray, isNull } from "drizzle-orm";
@@ -10,10 +10,39 @@ import {
   recorderConnections,
 } from "../src/db/schema/recorder";
 import {
-  createRecorderConnectionStore,
   type RecorderConnectionLifetime,
+  createRecorderConnectionStore as storeOver,
 } from "../src/recorder/connections";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { afterAll, beforeAll, test } from "./support/platform-frame";
+
+/**
+ * The store, called the way the server calls it (G01): what a signed-in person asks for (a code, their
+ * connections, a revoke, a sign-out) in their own frame, as `requireUser` and the sign-out run it; the
+ * rest in the harness's `platform` frame, as the exchange route, the bearer check and the expiry sweep
+ * run it, and as the fixtures read the tables.
+ */
+const PERSONAL = new Set([
+  "mintCode",
+  "list",
+  "revoke",
+  "revokeAll",
+  "reporting",
+  "reportActivity",
+]);
+function createRecorderConnectionStore(...args: Parameters<typeof storeOver>) {
+  const store = storeOver(...args);
+  return new Proxy(store, {
+    get(target, property, receiver) {
+      const value = Reflect.get(target, property, receiver);
+      if (typeof value !== "function" || !PERSONAL.has(String(property)))
+        return value;
+      return (userId: string, ...rest: unknown[]) =>
+        runAsTenant(userId, () => value.call(target, userId, ...rest));
+    },
+  }) as typeof store;
+}
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const prefix = `recorder-connections-${randomUUID()}`;

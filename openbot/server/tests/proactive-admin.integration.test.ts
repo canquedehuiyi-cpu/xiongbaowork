@@ -1,11 +1,4 @@
-import {
-  afterAll,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  test,
-} from "bun:test";
+import { describe, expect } from "bun:test";
 import { randomUUID } from "node:crypto";
 import {
   type BaseEvent,
@@ -31,6 +24,7 @@ import { serverTurnAdmission } from "../src/agents/turn-admission";
 import { createAuditStore } from "../src/audit";
 import type { AppVariables, AuthenticatedActor } from "../src/auth/guards";
 import { createCredentialStore } from "../src/credentials";
+import { setRole } from "../src/auth/roles";
 import { createDatabase } from "../src/db/client";
 import {
   agentProfiles,
@@ -45,7 +39,6 @@ import {
   proactiveCheckInRuns,
   proactiveSettings,
   proactiveSuggestions,
-  userRoles,
   users,
   workItems,
 } from "../src/db/schema";
@@ -65,8 +58,16 @@ import type {
   ProactiveSetting,
   SuggestionStatus,
 } from "../src/proactive/types";
+import { runAsTenant } from "../src/tenant/context";
 import { createWorkQueue } from "../src/work/queue";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { bindTestRoleWriter } from "./support/role-writer";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  test,
+} from "./support/platform-frame";
 
 /*
  * The admin's say over check-ins, through the real path: real Postgres, the real enterprise controls
@@ -106,6 +107,7 @@ const plugins = createPluginStore({
 });
 
 let controls: EnterpriseControls;
+let releaseRoleWriter: (() => Promise<void>) | undefined;
 /** Each person's setting for each Bot, keyed `<person>:<bot>`. */
 const settings = new Map<string, ProactiveSetting>();
 const settingOf = (person: { id: string }, bot: string) =>
@@ -117,32 +119,40 @@ beforeAll(async () => {
     { ...seller, name: "Seller", groups: [`sales-${suite}`] },
     { ...member, name: "Member" },
   ]);
-  await database.insert(userRoles).values({ userId: admin.id, role: "admin" });
-  await database.insert(agents).values([
-    { id: inboxBot, name: "Inbox Bot", type: "built_in", configuration: {} },
-    {
-      id: calendarBot,
-      name: "Calendar Bot",
-      type: "built_in",
-      configuration: {},
-    },
-  ]);
-  await database.insert(agentProfiles).values({
-    agentId: inboxBot,
-    ownerUserId: admin.id,
-    title: "Inbox",
-    roleDescription: "Reads mail",
-    avatarSeed: `inbox-seed-${suite}`,
-    visibility: "private",
+  // Role facts are written through the restricted role writer, as the platform (G01).
+  releaseRoleWriter = await bindTestRoleWriter(database);
+  await setRole(database, admin.id, "admin");
+  // The deployment's two Bots are catalogue rows every person reads (`system`); the admin owns Inbox.
+  await runAsTenant("system", async () => {
+    await database.insert(agents).values([
+      { id: inboxBot, name: "Inbox Bot", type: "built_in", configuration: {} },
+      {
+        id: calendarBot,
+        name: "Calendar Bot",
+        type: "built_in",
+        configuration: {},
+      },
+    ]);
+    await database.insert(agentProfiles).values({
+      agentId: inboxBot,
+      ownerUserId: admin.id,
+      title: "Inbox",
+      roleDescription: "Reads mail",
+      avatarSeed: `inbox-seed-${suite}`,
+      visibility: "private",
+    });
   });
+  // Each person's check-in setting is theirs, made in their own frame.
   for (const person of people)
     for (const bot of [inboxBot, calendarBot])
       settings.set(
         `${person.id}:${bot}`,
-        await store.create(
-          person.id,
-          { agentId: bot, channelId: `ci-channel-${bot}-${person.id}` },
-          `ci-thread-${randomUUID()}`,
+        await runAsTenant(person.id, () =>
+          store.create(
+            person.id,
+            { agentId: bot, channelId: `ci-channel-${bot}-${person.id}` },
+            `ci-thread-${randomUUID()}`,
+          ),
         ),
       );
   controls = await installEnterpriseControls({
@@ -217,6 +227,7 @@ afterAll(async () => {
     .delete(agents)
     .where(inArray(agents.id, [inboxBot, calendarBot]));
   await database.delete(users).where(like(users.email, `%${suite}%`));
+  await releaseRoleWriter?.();
   await database.$client.close();
 });
 
@@ -479,35 +490,39 @@ describe("the ping pass", () => {
     const theirSettings: string[] = [];
     try {
       const hourAgo = Date.now() - 60 * 60_000;
-      for (const [index, person] of refused.entries()) {
-        const setting = await store.create(
-          person.id,
-          { agentId: inboxBot, channelId: `ci-channel-${person.id}` },
-          `ci-thread-${randomUUID()}`,
-        );
-        theirSettings.push(setting.id);
-        await database.insert(proactiveSuggestions).values({
-          id: randomUUID(),
-          ownerUserId: person.id,
-          agentId: inboxBot,
-          settingId: setting.id,
-          runId: `ci-run-${randomUUID()}`,
-          title: `Waiting since before the switch ${index}`,
-          detail: "Raised before check-ins were turned off.",
-          createdAt: new Date(hourAgo - (index + 1) * 60_000),
+      // Each person's setting and waiting item are theirs, written in their own frame (G01).
+      for (const [index, person] of refused.entries())
+        await runAsTenant(person.id, async () => {
+          const setting = await store.create(
+            person.id,
+            { agentId: inboxBot, channelId: `ci-channel-${person.id}` },
+            `ci-thread-${randomUUID()}`,
+          );
+          theirSettings.push(setting.id);
+          await database.insert(proactiveSuggestions).values({
+            id: randomUUID(),
+            ownerUserId: person.id,
+            agentId: inboxBot,
+            settingId: setting.id,
+            runId: `ci-run-${randomUUID()}`,
+            title: `Waiting since before the switch ${index}`,
+            detail: "Raised before check-ins were turned off.",
+            createdAt: new Date(hourAgo - (index + 1) * 60_000),
+          });
         });
-      }
       // The admin is still allowed, and their item is the newest of all.
-      await database.insert(proactiveSuggestions).values({
-        id: randomUUID(),
-        ownerUserId: admin.id,
-        agentId: inboxBot,
-        settingId: settingOf(admin, inboxBot).id,
-        runId: `ci-run-${randomUUID()}`,
-        title: "Reply to Sam",
-        detail: "Sam asked for the spec by Friday.",
-        createdAt: new Date(hourAgo),
-      });
+      await runAsTenant(admin.id, () =>
+        database.insert(proactiveSuggestions).values({
+          id: randomUUID(),
+          ownerUserId: admin.id,
+          agentId: inboxBot,
+          settingId: settingOf(admin, inboxBot).id,
+          runId: `ci-run-${randomUUID()}`,
+          title: "Reply to Sam",
+          detail: "Sam asked for the spec by Friday.",
+          createdAt: new Date(hourAgo),
+        }),
+      );
 
       const { engine } = replica();
       await engine.sweep();
@@ -745,6 +760,8 @@ describe("the numbers", () => {
           off_person: 0,
           paused: 2,
           capped: 1,
+          // The fork's skip for a tenant out of tasks this month (quota/limits).
+          quota: 0,
           unreachable: 0,
           no_sources: 0,
           busy: 0,

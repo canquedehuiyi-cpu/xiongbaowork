@@ -203,9 +203,9 @@ test("a ChatGPT plan with no key chooses too", async () => {
   expect(chosen.offered.map((tool) => tool.ref)).toContain(
     "google-drive/search_files",
   );
-  expect(chosen.offered.map((tool) => tool.ref)).not.toContain(
-    "parallel/web_search",
-  );
+  // M3: upstream also checks parallel/web_search is left out: the web research skill claims it
+  // through its @research role. The fork has no @research roles (plugins/catalogue), so no skill
+  // claims it and, undeclared, it rides along with every selection.
   expect(requests).toHaveLength(1);
 });
 

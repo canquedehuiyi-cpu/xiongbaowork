@@ -1,11 +1,13 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { expect } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { inArray } from "drizzle-orm";
 import { createDatabase } from "../src/db/client";
 import { agents, users } from "../src/db/schema/core";
 import { proactiveCheckInRuns } from "../src/db/schema/proactive";
 import { createProactiveStore } from "../src/proactive/store";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { afterAll, beforeAll, test } from "./support/platform-frame";
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const store = createProactiveStore(database);
@@ -34,15 +36,21 @@ afterAll(async () => {
   await database.$client.close();
 });
 
+/** A person's check-ins are their own rows, read and written in their own frame (G01). */
+const as = <T>(person: string, work: () => T): T => runAsTenant(person, work);
+
 async function setting(subject: string, agentId = bot, person = owner) {
-  return store.create(
-    person,
-    { agentId, channelId: `${prefix}-channel`, subject },
-    randomUUID(),
+  return as(person, () =>
+    store.create(
+      person,
+      { agentId, channelId: `${prefix}-channel`, subject },
+      randomUUID(),
+    ),
   );
 }
 
 test("concurrent acceptance creates one schedule per target, while distinct targets stay separate", async () => {
+  await as(owner, async () => {
   const accepted = await Promise.all(
     Array.from({ length: 8 }, (_, index) =>
       store.create(
@@ -75,6 +83,7 @@ test("concurrent acceptance creates one schedule per target, while distinct targ
   const distinct = await setting("Another subject");
   expect(distinct.id).not.toBe(accepted[0]?.id);
   expect(distinct.id).not.toBe(linked[0]?.id);
+  });
 });
 
 test("daily counts combine a Bot's settings, exclude skipped/old runs and isolate owners and Bots", async () => {
@@ -82,25 +91,27 @@ test("daily counts combine a Bot's settings, exclude skipped/old runs and isolat
   const second = await setting("Count two");
   const anotherBot = await setting("Other Bot", secondBot);
   const anotherOwner = await setting("Other owner", bot, other);
-  await database.insert(proactiveCheckInRuns).values(
-    [
-      { setting: first, outcome: "quiet" as const },
-      { setting: second, outcome: "failed" as const },
-      { setting: second, outcome: "skipped" as const },
-      { setting: anotherBot, outcome: "quiet" as const },
-      { setting: anotherOwner, outcome: "quiet" as const },
-    ].map(({ setting: row, outcome }) => ({
-      id: randomUUID(),
-      settingId: row.id,
-      ownerUserId: row.ownerUserId,
-      agentId: row.agentId,
-      trigger: "schedule" as const,
-      outcome,
-      finishedAt: new Date(),
-      skipReason: outcome === "skipped" ? ("capped" as const) : null,
-    })),
-  );
-  await database.insert(proactiveCheckInRuns).values({
+  // Each run is its person's row, stamped in their own frame.
+  for (const { setting: row, outcome } of [
+    { setting: first, outcome: "quiet" as const },
+    { setting: second, outcome: "failed" as const },
+    { setting: second, outcome: "skipped" as const },
+    { setting: anotherBot, outcome: "quiet" as const },
+    { setting: anotherOwner, outcome: "quiet" as const },
+  ])
+    await as(row.ownerUserId, () =>
+      database.insert(proactiveCheckInRuns).values({
+        id: randomUUID(),
+        settingId: row.id,
+        ownerUserId: row.ownerUserId,
+        agentId: row.agentId,
+        trigger: "schedule" as const,
+        outcome,
+        finishedAt: new Date(),
+        skipReason: outcome === "skipped" ? ("capped" as const) : null,
+      }),
+    );
+  await as(owner, () => database.insert(proactiveCheckInRuns).values({
     id: randomUUID(),
     settingId: first.id,
     ownerUserId: owner,
@@ -109,10 +120,10 @@ test("daily counts combine a Bot's settings, exclude skipped/old runs and isolat
     outcome: "quiet",
     finishedAt: new Date(),
     startedAt: new Date(Date.now() - 25 * 60 * 60_000),
-  });
-  expect(await store.runsToday(owner, bot)).toBe(2);
-  expect(await store.runsToday(owner, secondBot)).toBe(1);
-  expect(await store.runsToday(other, bot)).toBe(1);
+  }));
+  expect(await as(owner, () => store.runsToday(owner, bot))).toBe(2);
+  expect(await as(owner, () => store.runsToday(owner, secondBot))).toBe(1);
+  expect(await as(other, () => store.runsToday(other, bot))).toBe(1);
 });
 
 test("concurrent settings reserve only the remaining daily slot", async () => {
@@ -122,16 +133,16 @@ test("concurrent settings reserve only the remaining daily slot", async () => {
   ]);
   const results = await Promise.all(
     settings.map((row) =>
-      store.beginRun({
+      as(other, () => store.beginRun({
         id: randomUUID(),
         setting: row,
         trigger: "schedule",
         threadId: randomUUID(),
         dailyLimit: 1,
-      }),
+      })),
     ),
   );
   expect(results.filter((result) => result === true)).toHaveLength(1);
   expect(results.filter((result) => result === "capped")).toHaveLength(1);
-  expect(await store.runsToday(other, secondBot)).toBe(1);
+  expect(await as(other, () => store.runsToday(other, secondBot))).toBe(1);
 });

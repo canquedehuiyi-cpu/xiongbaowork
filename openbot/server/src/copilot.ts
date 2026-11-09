@@ -2026,7 +2026,7 @@ async function buildAgent(
         sayingProviderRefusals(
           withModelRun(
             { runId: runInput.runId, threadId: runInput.threadId },
-            observeModelConnection(stream),
+            observeModelConnection(stream, { refusalsSaidByCaller: true }),
           ),
           agent,
           refusingProvider(runModel),
@@ -2893,7 +2893,9 @@ function remoteAgentWithStandingRole(
       // Outside the connection observer, which reads the provider's own words. See
       // `provider-refusal.ts`.
       return sayingProviderRefusals(
-        owned ? observeModelConnection(stream) : stream,
+        owned
+          ? observeModelConnection(stream, { refusalsSaidByCaller: true })
+          : stream,
         agent,
         owned ? ourProvider : undefined,
       );
@@ -3630,12 +3632,22 @@ export function mountCopilotRuntime(
     const watched = runtimeRunner as typeof runtimeRunner & {
       runWithStartupBoundary?: (request: RunRequest) => unknown;
     };
-    const observed = (request: RunRequest) =>
-      observeDetachedRun(
-        request.agent,
-        () => false,
-        () => productTelemetry.markStopped(request.input.runId, "cancelled"),
-      );
+    const observed = (request: RunRequest) => {
+      const stopped = () =>
+        productTelemetry.markStopped(request.input.runId, "cancelled");
+      observeDetachedRun(request.agent, () => false, stopped);
+      /*
+       * M3: the fork's runner is the local one (`PostgresAgentRunner`), which stops a run by aborting
+       * its agent rather than detaching it, so the abort is the Stop it learns of.
+       */
+      const agent = request.agent as { abortRun?: () => void };
+      const abort = agent.abortRun;
+      if (typeof abort === "function")
+        agent.abortRun = () => {
+          stopped();
+          abort.call(agent);
+        };
+    };
     const run = watched.run.bind(watched);
     watched.run = (request) => {
       observed(request);

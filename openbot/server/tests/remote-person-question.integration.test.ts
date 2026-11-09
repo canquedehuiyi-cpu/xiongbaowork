@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
+import { test as bunTest, expect, spyOn } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { EventType, HttpAgent, type RunAgentInput } from "@ag-ui/client";
 import type { HeadlessWaiting } from "@openbot/toolkit/headless-tools";
@@ -26,8 +26,10 @@ import { agents, users } from "../src/db/schema/core";
 import { workItems } from "../src/db/schema/work";
 import { REFUSAL_MARKER } from "../src/plugins/tools";
 import { createResponsibilityStore } from "../src/responsibilities/store";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
+import { afterAll, beforeAll } from "./support/platform-frame";
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const prefix = `remote-question-${randomUUID()}`;
@@ -39,16 +41,25 @@ const store = createResponsibilityStore(database, {
   resolveTarget: async () => ({ threadId }),
 });
 const keys: string[] = [];
+/**
+ * A case, in the person's own frame (G01): their run asks, their goal's run waits, and they answer.
+ * Set-up and tear-down run as `platform`.
+ */
+const test = (name: string, body: () => Promise<void>) =>
+  bunTest(name, () => runAsTenant(owner, body));
 beforeAll(async () => {
   await database
     .insert(users)
     .values({ id: owner, email: `${owner}@example.test` });
-  await database.insert(agents).values({
-    id: botId,
-    name: "Remote",
-    type: "remote_ag_ui",
-    configuration: {},
-  });
+  // The person's own Bot.
+  await runAsTenant(owner, () =>
+    database.insert(agents).values({
+      id: botId,
+      name: "Remote",
+      type: "remote_ag_ui",
+      configuration: {},
+    }),
+  );
 });
 afterAll(async () => {
   if (keys.length)
@@ -70,7 +81,11 @@ async function fixture(
       send: async () => ({ ok: false, refusal: "No Bot to hand to." }),
     },
     config: loadConfig(testEnvironment()),
-    approvalService: { store: {} } as never,
+    // No rule disables a tool here (SEC1 D4).
+    approvalService: {
+      store: {},
+      disabledTools: async () => () => false,
+    } as never,
     agentProfileStore: {
       get: async () => ({ name: "Remote" }),
       list: async () => [],

@@ -562,20 +562,28 @@ describe("a parked crew run, answered", () => {
   });
 
   test("the approval worker asserts the crew's owner and resumes in that frame", async () => {
+    // M3: upstream moved the approval worker out of index.ts into approvals/resume-sweep.ts.
     const source = await Bun.file(
-      new URL("../src/index.ts", import.meta.url),
+      new URL("../src/approvals/resume-sweep.ts", import.meta.url),
     ).text();
-    const lookup = source.indexOf("pipelineStore.runHoldingApproval(");
+    // The owner check every parked run meets: the row's stamp, agreeing with the approval's owner.
+    expect(source).toMatch(
+      /const ownedBy = \([^]*?assertPersonTenant\(parked\.tenantId, ownerUserId\)/,
+    );
+    const lookup = source.indexOf("pipeline?.runHoldingApproval(");
     expect(lookup).toBeGreaterThan(-1);
     const window = source.slice(lookup, lookup + 2500);
     expect(window).toMatch(
-      /assertPersonTenant\(\s*parkedCrew\.tenantId,\s*input\.ownerUserId,?\s*\)/,
+      /ownedBy\(\s*parkedCrew,\s*input\.ownerUserId,\s*"parked-crew-owner-mismatch",/,
     );
-    expect(window).toContain('type: "parked-crew-owner-mismatch"');
     expect(window).toMatch(
-      /runAsTenant\(tenant, \(\) =>\s*pipelineStore\.resume\(\{\s*tenantId: tenant,/,
+      /runAsTenant\(crewTenant, \(\) =>\s*pipeline\.resume\(\{\s*tenantId: crewTenant,/,
     );
-    // The only resume of a parked crew in the worker is the framed one.
-    expect(source.match(/pipelineStore\.resume\(/g)?.length).toBe(1);
+    // The only resume of a parked crew in the worker is the framed one, and index.ts has none.
+    expect(source.match(/pipeline\.resume\(/g)?.length).toBe(1);
+    const index = await Bun.file(
+      new URL("../src/index.ts", import.meta.url),
+    ).text();
+    expect(index).not.toContain("pipelineStore.resume(");
   });
 });

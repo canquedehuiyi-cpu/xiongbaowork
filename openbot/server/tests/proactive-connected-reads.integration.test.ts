@@ -1,11 +1,4 @@
-import {
-  afterAll,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  test,
-} from "bun:test";
+import { describe, expect } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { LLMock } from "@copilotkit/aimock";
 import {
@@ -58,8 +51,15 @@ import { checkInToolsFor, createCheckInScope } from "../src/proactive/scope";
 import { createProactiveStore } from "../src/proactive/store";
 import { type ProactiveSetting, SKIPPED_BECAUSE } from "../src/proactive/types";
 import { UNTRUSTED_GUIDANCE } from "../src/untrusted-content";
+import { runAsTenant } from "../src/tenant/context";
 import { createWorkQueue } from "../src/work/queue";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  test,
+} from "./support/platform-frame";
 
 /*
  * A check-in reads what the person connected with their own account, through the tools that say
@@ -69,6 +69,11 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
  * agent resolver building the real built-in Bot, the real turn runner and the real check-in engine.
  * The model is the only fake: `@copilotkit/aimock`, answering the built-in Bot's own requests the
  * way a model would, and recording what it was offered.
+ *
+ * Fork (G01): the harness runs as `platform`. The catalogue (servers, their tools, the deployment's
+ * OAuth client) is `system`'s; the person's Bots, connections, grants and settings are written in
+ * their own frame, and what the person does (a chat turn, Run now) runs there too. The sweep frames
+ * itself, as it does from its timer.
  */
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
@@ -82,6 +87,8 @@ const allowEverything = (): ActionPolicy => ({
 });
 
 const owner = `connected-owner-${suite}`;
+const asOwner = <T>(work: () => T): T => runAsTenant(owner, work);
+const asSystem = <T>(work: () => T): T => runAsTenant("system", work);
 const desk = `connected-desk-${suite}`;
 const harness = `connected-harness-${suite}`;
 const unconnected = `connected-none-${suite}`;
@@ -206,27 +213,30 @@ beforeAll(async () => {
   await database
     .insert(users)
     .values({ id: owner, email: `${owner}@example.test` });
-  await database.insert(agents).values([
-    { id: desk, name: "Desk Bot", type: "built_in", configuration: {} },
-    {
-      id: harness,
-      name: "Harness Bot",
-      type: "remote_ag_ui",
-      configuration: {},
-    },
-    {
-      id: unconnected,
-      name: "Lookout Bot",
-      type: "built_in",
-      configuration: {},
-    },
-    { id: tasker, name: "Task Bot", type: "built_in", configuration: {} },
-  ]);
-  await database
-    .insert(channels)
-    .values(
-      botIds.map((bot) => ({ id: channelOf(bot), name: bot, description: "" })),
-    );
+  // The person's own Bots and conversations, in their own frame.
+  await asOwner(async () => {
+    await database.insert(agents).values([
+      { id: desk, name: "Desk Bot", type: "built_in", configuration: {} },
+      {
+        id: harness,
+        name: "Harness Bot",
+        type: "remote_ag_ui",
+        configuration: {},
+      },
+      {
+        id: unconnected,
+        name: "Lookout Bot",
+        type: "built_in",
+        configuration: {},
+      },
+      { id: tasker, name: "Task Bot", type: "built_in", configuration: {} },
+    ]);
+    await database
+      .insert(channels)
+      .values(
+        botIds.map((bot) => ({ id: channelOf(bot), name: bot, description: "" })),
+      );
+  });
   await fixtures.install();
 });
 
@@ -300,39 +310,53 @@ const fixtures = (() => {
   let notionClientBefore: string | null = null;
 
   async function server(row: typeof mcpServers.$inferInsert) {
-    const inserted = await database
-      .insert(mcpServers)
-      .values(row)
-      .onConflictDoNothing()
-      .returning({ id: mcpServers.id });
+    const inserted = await asSystem(() =>
+      database
+        .insert(mcpServers)
+        .values(row)
+        .onConflictDoNothing()
+        .returning({ id: mcpServers.id }),
+    );
     if (inserted.length) createdServers.push(row.id);
   }
   async function tool(row: typeof mcpTools.$inferInsert) {
-    const inserted = await database
-      .insert(mcpTools)
-      .values({ inputSchema: {}, ...row })
-      .onConflictDoNothing()
-      .returning({ name: mcpTools.name });
+    const inserted = await asSystem(() =>
+      database
+        .insert(mcpTools)
+        .values({ inputSchema: {}, ...row })
+        .onConflictDoNothing()
+        .returning({ name: mcpTools.name }),
+    );
     if (inserted.length)
       createdTools.push({ serverId: row.serverId, name: row.name });
   }
+  /** A credential, in the tenant whose it is: the deployment's (`system`) or the person's. */
   async function secret(
+    tenant: string,
     row: Omit<typeof credentials.$inferInsert, "encryptedValue">,
     value: string,
   ) {
-    const [stored] = await database
-      .insert(credentials)
-      .values({ ...row, encryptedValue: await encryptSecret(KEY, value) })
-      .returning({ id: credentials.id });
+    const encryptedValue = await encryptSecret(KEY, value);
+    const [stored] = await runAsTenant(tenant, () =>
+      database
+        .insert(credentials)
+        .values({ ...row, encryptedValue })
+        .returning({ id: credentials.id }),
+    );
     if (!stored) throw new Error("credential was not stored");
     createdCredentials.push(stored.id);
     return stored.id;
   }
+  // The person's own configuration of their own Bots.
   const grant = (agentId: string, refs: string[]) =>
-    database
-      .insert(pluginGrants)
-      .values(refs.map((granted) => ({ kind: "mcp", ref: granted, agentId })))
-      .onConflictDoNothing();
+    asOwner(() =>
+      database
+        .insert(pluginGrants)
+        .values(
+          refs.map((granted) => ({ kind: "mcp", ref: granted, agentId })),
+        )
+        .onConflictDoNothing(),
+    );
 
   return {
     async install() {
@@ -350,6 +374,7 @@ const fixtures = (() => {
         .where(eq(mcpServers.id, NOTION));
       notionClientBefore = notion?.credentialId ?? null;
       const client = await secret(
+        "system",
         {
           kind: "mcp_oauth_client",
           provider: NOTION,
@@ -358,11 +383,14 @@ const fixtures = (() => {
         },
         JSON.stringify({ clientId: `client-${suite}`, clientSecret: "" }),
       );
-      await database
-        .update(mcpServers)
-        .set({ credentialId: client })
-        .where(eq(mcpServers.id, NOTION));
+      await asSystem(() =>
+        database
+          .update(mcpServers)
+          .set({ credentialId: client })
+          .where(eq(mcpServers.id, NOTION)),
+      );
       const grantToken = await secret(
+        owner,
         {
           kind: "mcp_user_token",
           provider: NOTION,
@@ -371,12 +399,14 @@ const fixtures = (() => {
         },
         `refresh-${suite}`,
       );
-      await database.insert(mcpUserCredentials).values({
-        serverId: NOTION,
-        userId: owner,
-        credentialId: grantToken,
-        scope: "",
-      });
+      await asOwner(() =>
+        database.insert(mcpUserCredentials).values({
+          serverId: NOTION,
+          userId: owner,
+          credentialId: grantToken,
+          scope: "",
+        }),
+      );
 
       // The same three tools, labelled as a refresh records them, on Notion and on the admin's.
       await server({
@@ -408,10 +438,12 @@ const fixtures = (() => {
       });
       await tool({ serverId: MAIL, name: "MAIL_FETCH_EMAILS", effect: "read" });
       await tool({ serverId: MAIL, name: "MAIL_SEND_EMAIL", effect: "write" });
-      await database.insert(composioConnections).values({
-        toolkit: MAIL_APP,
-        userId: owner,
-      });
+      await asOwner(() =>
+        database.insert(composioConnections).values({
+          toolkit: MAIL_APP,
+          userId: owner,
+        }),
+      );
 
       // M3: upstream's Tasks at Arcade is gone here: this fork does not take Arcade.
 
@@ -647,10 +679,12 @@ const settings = new Map<string, ProactiveSetting>();
 async function settingFor(bot: string) {
   const existing = settings.get(bot);
   if (existing) return existing;
-  const setting = await store.create(
-    owner,
-    { agentId: bot, channelId: channelOf(bot) },
-    `${bot}-thread`,
+  const setting = await asOwner(() =>
+    store.create(
+      owner,
+      { agentId: bot, channelId: channelOf(bot) },
+      `${bot}-thread`,
+    ),
   );
   settings.set(bot, setting);
   return setting;
@@ -745,12 +779,14 @@ describe("a check-in reads what the person connected, through the tools that say
       listed?.tools.find((tool) => tool.name === notionDigest),
     ).toMatchObject({ effect: "write", labelledRead: true });
     gateAsked.length = 0;
-    await plugins.callTool({
-      ref: ref(NOTION, notionDigest),
-      args: {},
-      botId: desk,
-      actorId: owner,
-    });
+    await asOwner(() =>
+      plugins.callTool({
+        ref: ref(NOTION, notionDigest),
+        args: {},
+        botId: desk,
+        actorId: owner,
+      }),
+    );
     expect(gateAsked).toEqual([
       { toolRef: ref(NOTION, notionDigest), effect: "write" },
     ]);
@@ -782,9 +818,9 @@ describe("a check-in reads what the person connected, through the tools that say
   });
 
   test("the same tools on a server an admin connected for everybody are not read, and a Bot holding only those is skipped, saying so", async () => {
-    const pressed = await composio.engine.runNow(
-      owner,
-      (await settingFor(unconnected)).id,
+    const setting = await settingFor(unconnected);
+    const pressed = await asOwner(() =>
+      composio.engine.runNow(owner, setting.id),
     );
     expect(pressed).toEqual({
       queued: false,
@@ -798,13 +834,15 @@ describe("a check-in reads what the person connected, through the tools that say
 
     // Reached any other way, the dispatcher refuses a check-in's call there too, and says so.
     await expect(
-      plugins.callTool({
-        ref: ref(NOTES, notionDigest),
-        args: {},
-        botId: unconnected,
-        actorId: owner,
-        initiator: proactiveInitiator(`direct-${suite}`),
-      }),
+      asOwner(() =>
+        plugins.callTool({
+          ref: ref(NOTES, notionDigest),
+          args: {},
+          botId: unconnected,
+          actorId: owner,
+          initiator: proactiveInitiator(`direct-${suite}`),
+        }),
+      ),
     ).rejects.toBeInstanceOf(PluginRefusedError);
     expect(vendorCalls).toEqual([]);
     const [refusal] = await database
@@ -851,16 +889,18 @@ describe("a check-in reads what the person connected, through the tools that say
     });
 
     // A person's own turn with the same Bot still goes to its endpoint, as it always did.
-    const chat = await composio.resolver.resolveAgentForActor(
-      { id: owner, role: "user" },
-      harness,
-      { initiator: { kind: "person" } },
-    );
-    await chat
-      .runAgent({
-        runId: `chat-${suite}`,
-      })
-      .catch(() => undefined);
+    await asOwner(async () => {
+      const chat = await composio.resolver.resolveAgentForActor(
+        { id: owner, role: "user" },
+        harness,
+        { initiator: { kind: "person" } },
+      );
+      await chat
+        .runAgent({
+          runId: `chat-${suite}`,
+        })
+        .catch(() => undefined);
+    });
     expect(endpointDials).toHaveLength(1);
   });
 
@@ -881,7 +921,7 @@ describe("the memory tools' own id", () => {
   });
 
   test("a server already sitting there is not the person's memory to a check-in", async () => {
-    const reads = await composio.scope(owner, desk);
+    const reads = await asOwner(() => composio.scope(owner, desk));
     expect(reads.has(ref(MEMORY, "recall_personal_memory"))).toBe(false);
     const run = { initiator: proactiveInitiator(`memory-${suite}`) };
     expect(

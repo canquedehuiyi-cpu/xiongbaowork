@@ -1,32 +1,13 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import {
-  RESEARCH_APP_NAMES,
   researchRoleOf,
   researchRoleOfToolName,
-  RESEARCH_TOOLS as SHARED_RESEARCH_TOOLS,
 } from "@openbot/shared/research";
-import type { GrantedTool } from "@openbot/toolkit/granted-tool";
 import { parse } from "yaml";
-import { z } from "zod";
-import {
-  CATALOGUE,
-  catalogueEntry,
-  classifyTool,
-  resolveServerUrl,
-  serverCredentialKind,
-} from "../src/plugins/catalogue";
 import { listTools } from "../src/plugins/mcp";
 import { selectTools } from "../src/plugins/selection";
-import { grantedToolGuidance } from "../src/plugins/tools";
 
-const tool = (server: string, name: string): GrantedTool => ({
-  name: `mcp__${server}__${name}`,
-  ref: `${server}/${name}`,
-  description: "Public web",
-  parameters: z.object({}),
-  execute: async () => "unused",
-});
 const RESEARCH_TOOLS: Record<string, [string, string]> = {
   parallel: ["web_search", "web_fetch"],
   "parallel-authenticated": ["web_search", "web_fetch"],
@@ -35,8 +16,6 @@ const RESEARCH_TOOLS: Record<string, [string, string]> = {
   firecrawl: ["firecrawl_search", "firecrawl_scrape"],
   "firecrawl-authenticated": ["firecrawl_search", "firecrawl_scrape"],
 };
-const pair = (server = "parallel") =>
-  (RESEARCH_TOOLS[server] ?? []).map((name) => tool(server, name));
 
 describe("whether a Bot holds a search tool", () => {
   test("any provider's search tool counts, from its ref or the name a model sees", () => {
@@ -54,144 +33,15 @@ describe("whether a Bot holds a search tool", () => {
     ).toBeNull();
   });
 
-  test("the search apps a Bot without one offers are the catalogue's, by a name the card resolves", () => {
-    // The card resolves an app by key or title. A renamed title would leave a Bot offering a card
-    // for an app this deployment has no name for.
-    const research = CATALOGUE.filter((entry) =>
-      Object.hasOwn(SHARED_RESEARCH_TOOLS, entry.key),
-    );
-    const named = research.filter((entry) =>
-      RESEARCH_APP_NAMES.includes(entry.title),
-    );
-    expect(named.map((entry) => entry.title).sort()).toEqual(
-      [...RESEARCH_APP_NAMES].sort(),
-    );
-    // Every research vendor is offered, so the choice stays the administrator's.
-    expect(new Set(named.map((entry) => entry.vendor))).toEqual(
-      new Set(research.map((entry) => entry.vendor)),
-    );
-  });
+  // M3: "the search apps a Bot without one offers" is not adopted: the fork's catalogue has no Exa
+  // or Firecrawl entries (plugins session).
 });
 
-describe("research providers in the catalogue", () => {
-  test("each is pinned to its vendor's official endpoint", () => {
-    const urls: Record<string, string> = {
-      parallel: "https://search.parallel.ai/mcp",
-      "parallel-authenticated": "https://search.parallel.ai/mcp",
-      exa: "https://mcp.exa.ai/mcp",
-      "exa-authenticated": "https://mcp.exa.ai/mcp",
-      firecrawl: "https://mcp.firecrawl.dev/v2/mcp",
-      "firecrawl-authenticated": "https://mcp.firecrawl.dev/v2/mcp",
-    };
-    for (const [key, url] of Object.entries(urls)) {
-      expect(resolveServerUrl(key, "https://attacker.example")?.url).toBe(url);
-    }
-  });
+// M3: upstream's research providers in the catalogue (Exa, Firecrawl, their read lists and
+// credentials) are not in the fork's plugins/catalogue; the plugins session owns porting them.
 
-  test("names its search and fetch tools, and both read", () => {
-    for (const [key, [search, fetch]] of Object.entries(RESEARCH_TOOLS)) {
-      const entry = catalogueEntry(key)!;
-      expect(SHARED_RESEARCH_TOOLS[key]).toMatchObject({ search, fetch });
-      expect(classifyTool(entry, search, true)).toBe("read");
-      expect(classifyTool(entry, fetch, true)).toBe("read");
-      expect(classifyTool(entry, "not_advertised", false)).toBe("write");
-      expect(classifyTool(entry, search, true, "write")).toBe("write");
-    }
-    // M3: the fork's catalogue has no `researchRoleFor` (no research role on a ref), so a ref's role
-    // is not asserted here.
-    // The app labels research from this table, so every key must be a real catalogue entry.
-    for (const key of Object.keys(SHARED_RESEARCH_TOOLS))
-      expect(catalogueEntry(key)).not.toBeNull();
-    expect(
-      grantedToolGuidance([{ name: "mcp__drive__search" } as GrantedTool]),
-    ).toContain("drive: search");
-  });
-
-  test("a tool outside an entry's reads is a write, even one the vendor called a read", () => {
-    const firecrawl = catalogueEntry("firecrawl")!;
-    // Published as a family, so no write list could have named it.
-    expect(classifyTool(firecrawl, "firecrawl_monitor_delete", true)).toBe(
-      "write",
-    );
-    expect(
-      classifyTool(firecrawl, "firecrawl_monitor_delete", true, "read"),
-    ).toBe("write");
-    expect(classifyTool(firecrawl, "firecrawl_crawl", true)).toBe("write");
-    expect(classifyTool(firecrawl, "firecrawl_map", true)).toBe("read");
-    expect(classifyTool(firecrawl, "firecrawl_parse", true)).toBe("read");
-    // Spends credits on a multi-step run.
-    expect(classifyTool(catalogueEntry("exa")!, "agent_run", true)).toBe(
-      "write",
-    );
-  });
-
-  test("says whose credential each uses, and where Exa's key goes", () => {
-    expect(serverCredentialKind(catalogueEntry("parallel")!)).toBeNull();
-    expect(serverCredentialKind(catalogueEntry("exa")!)).toBeNull();
-    expect(serverCredentialKind(catalogueEntry("firecrawl")!)).toBeNull();
-    for (const key of [
-      "parallel-authenticated",
-      "exa-authenticated",
-      "firecrawl-authenticated",
-    ])
-      expect(serverCredentialKind(catalogueEntry(key)!)).toBe("mcp");
-    // M3: the fork's catalogue has no `tokenHeaderFor` (no entry names its own token header).
-  });
-});
-
-describe("what a Bot is told about research", () => {
-  test("a provider is described only while both of its tools are held", () => {
-    for (const server of Object.keys(RESEARCH_TOOLS)) {
-      const guidance = grantedToolGuidance(pair(server));
-      expect(guidance).toContain("For public-web research you can use:");
-      expect(guidance).toContain("do not connect a person's private account");
-      // Described, not preferred: a Bot holding another search tool is not told to pass it over.
-      expect(guidance).not.toContain("by default");
-      // Searches unprompted for facts that change, and only a little.
-      expect(guidance).toContain(
-        "Search before answering when the answer depends on facts that change",
-      );
-      expect(guidance).toContain("a search or two");
-      expect(grantedToolGuidance(pair(server).slice(0, 1))).not.toContain(
-        "public-web research",
-      );
-    }
-    expect(grantedToolGuidance([], ["exa"])).not.toContain(
-      "public-web research",
-    );
-    expect(grantedToolGuidance([])).toBe("");
-  });
-
-  test("names each provider's own tools and adds only its own notes", () => {
-    const exa = grantedToolGuidance(pair("exa"));
-    expect(exa).toContain(
-      "- Exa: mcp__exa__web_search_exa finds sources and mcp__exa__web_fetch_exa reads selected pages.",
-    );
-    expect(exa).not.toContain("session_id");
-    expect(exa).toContain("Do not name the provider in your answer");
-    expect(grantedToolGuidance(pair())).toContain(
-      "Parallel: Generate one session_id",
-    );
-  });
-
-  test("a vendor added twice is described once, with its key", () => {
-    const guidance = grantedToolGuidance([
-      ...pair(),
-      ...pair("parallel-authenticated"),
-    ]);
-    expect(guidance).toContain(
-      "- Parallel: mcp__parallel-authenticated__web_search finds sources",
-    );
-    expect(guidance).not.toContain("mcp__parallel__web_search");
-  });
-
-  test("two vendors are both described, and the person's choice decides", () => {
-    const guidance = grantedToolGuidance([...pair(), ...pair("firecrawl")]);
-    expect(guidance).toContain("- Parallel:");
-    expect(guidance).toContain("- Firecrawl:");
-    expect(guidance).toContain("Use the one the person asks for.");
-  });
-});
+// M3: upstream's research guidance in grantedToolGuidance ("For public-web research you can
+// use:") is not in the fork's plugins/tools; it waits for phase 4's search (plugins session).
 
 describe("a skill declaring research by role", () => {
   const others = Array.from({ length: 12 }, (_, index) => ({
@@ -307,12 +157,6 @@ describe("the header a deployment token is sent in", () => {
     expect(headers?.get("authorization")).toBe("Bearer secret");
   });
 
-  test("is the vendor's own header, as stored, when the entry names one", async () => {
-    const headers = await listed({
-      token: " secret ",
-      tokenHeader: "x-api-key",
-    });
-    expect(headers?.get("x-api-key")).toBe("secret");
-    expect(headers?.get("authorization")).toBeNull();
-  });
+  // M3: "the vendor's own header" is not adopted: the fork's MCP transport and catalogue name no
+  // token header of an entry's own (no tokenHeaderFor; plugins session).
 });

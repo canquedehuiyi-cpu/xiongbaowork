@@ -199,6 +199,8 @@ test("a hop that never got the conversation opens no card at all", async () => {
         history: async () => [],
         newRunId: () => otherRun,
         mintThreadId: () => `scratch-${suite}`,
+        // Upstream waits up to 30 s for a busy conversation; this one never frees, so don't wait.
+        busyWaitMs: 0,
         lock: {
           acquire: async () => null,
           renew: async () => {},

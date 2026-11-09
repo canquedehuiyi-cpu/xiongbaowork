@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
+import { expect } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { eq, inArray } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
@@ -15,7 +15,14 @@ import {
   type LearningAdminDependencies,
 } from "../src/learning/routes";
 import { createLearningSettingsStore } from "../src/learning/settings";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  test,
+} from "./support/platform-frame";
 import {
   type FakeIntelligence,
   fakeIntelligence,
@@ -87,7 +94,8 @@ function admin(
       name: "Ada",
       role: "admin",
     });
-    await next();
+    // As the real guard does: the admin's request runs in the admin's own frame (G01).
+    await runAsTenant("admin-ada", () => next());
   };
   return createLearningRoutes(
     {
@@ -492,9 +500,12 @@ async function decideCurrent(
   return decide(routes, userId, skill, action, undefined, { requestedAt });
 }
 
+/** What the person does on their own Learning page, in their own frame (G01). */
 async function requestSharing(skillName: string) {
-  await approvals.recordApproval(reviewed, skillName, "person");
-  await approvals.requestSharing(reviewed, skillName);
+  await runAsTenant(reviewed, async () => {
+    await approvals.recordApproval(reviewed, skillName, "person");
+    await approvals.requestSharing(reviewed, skillName);
+  });
 }
 
 test("a sharing request changed after the admin opened it answers 409 and stays requested", async () => {
@@ -506,7 +517,9 @@ test("a sharing request changed after the admin opened it answers 409 and stays 
   const seen = listed.requests.find(
     (entry) => entry.userId === reviewed && entry.skillName === "Edited triage",
   )?.requestedAt as string;
-  await approvals.recordApproval(reviewed, "Edited triage", "person");
+  await runAsTenant(reviewed, () =>
+    approvals.recordApproval(reviewed, "Edited triage", "person"),
+  );
   const stale = await decide(
     routes,
     reviewed,

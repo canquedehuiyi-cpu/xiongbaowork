@@ -49,7 +49,16 @@ const nativeRuns = new AsyncLocalStorage<NativeRun>();
  * instead matched across every person's open runs, and call ids are not unique: two runs numbering
  * their calls alike could fail a call, or ask in another person's conversation.
  */
-export type NativeRunScope = { run?: NativeRun };
+export type NativeRunScope = {
+  run?: NativeRun;
+  /**
+   * Every async context the run started in, re-entered with it (`AsyncLocalStorage.snapshot()`).
+   * The same stream that loses the run loses the host's own context too: OpenBot's tenant frame
+   * (server/src/tenant/context.ts) was gone by the time a tool ran, and every call was refused with
+   * "no tenant frame". Carried the same way as the run, for the same reason.
+   */
+  resume?: <R>(fn: () => R) => R;
+};
 export const nativeRunScope = (): NativeRunScope => ({});
 
 /** A tool's execute, re-entering the run its agent is in when it is called. */
@@ -64,7 +73,8 @@ export function withinNativeRun<A extends unknown[], R>(
       throw new Error(
         "This tool call is not part of a conversation, so it was not run.",
       );
-    return nativeRuns.run(run, () => execute(...args));
+    const call = () => nativeRuns.run(run, () => execute(...args));
+    return scope.resume ? scope.resume(call) : call();
   };
 }
 
@@ -210,7 +220,10 @@ class NativeApprovalMiddleware extends Middleware {
         },
       };
       // Kept after the run ends: a call still arriving belongs to it, and finds it waiting or done.
-      if (this.scope) this.scope.run = run;
+      if (this.scope) {
+        this.scope.run = run;
+        this.scope.resume = AsyncLocalStorage.snapshot();
+      }
       subscription = nativeRuns.run(run, () =>
         this.runNextWithState(input, next).subscribe({
           next({ event, messages, state }) {

@@ -1,11 +1,11 @@
 import {
-  afterAll,
-  afterEach,
-  beforeEach,
+  afterAll as bunAfterAll,
+  afterEach as bunAfterEach,
+  beforeEach as bunBeforeEach,
   describe,
   expect,
   setSystemTime,
-  test,
+  test as bunTest,
 } from "bun:test";
 import { randomUUID } from "node:crypto";
 import type { BaseEvent } from "@ag-ui/client";
@@ -30,12 +30,14 @@ import {
   channels,
   intelligenceChannelMappings,
   mcpServers,
-  mcpTools,
   pluginGrants,
   routines,
   users,
 } from "../src/db/schema";
-import { useRoutineTools } from "../src/plugins/builtin-routines";
+import {
+  listTools as listRoutineTools,
+  useRoutineTools,
+} from "../src/plugins/builtin-routines";
 import { createPluginStore } from "../src/plugins/store";
 import { grantedTools } from "../src/plugins/tools";
 import { createRoutineStore } from "../src/routines/store";
@@ -67,6 +69,20 @@ import {
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const suite = randomUUID().slice(0, 8);
 const OWNER = `routine-conversation-owner-${suite}`;
+
+/**
+ * Everything here is one person's: written and read in their own frame, as their signed-in requests
+ * and the work done for them run. Sweeps still claim as the platform and run each row as the tenant
+ * stamped on it.
+ */
+const asOwner = (body: () => unknown) => async () => {
+  await runAsTenant(OWNER, body);
+};
+const afterAll = (body: () => unknown) => bunAfterAll(asOwner(body));
+const afterEach = (body: () => unknown) => bunAfterEach(asOwner(body));
+const beforeEach = (body: () => unknown) => bunBeforeEach(asOwner(body));
+const test = (name: string, body: () => unknown, timeout?: number) =>
+  bunTest(name, asOwner(body), timeout);
 const BOT = `routine-conversation-general-assistant-${suite}`;
 
 /**
@@ -147,13 +163,16 @@ const pluginStore = createPluginStore({
  */
 const ROUTINES_APP = "routines";
 async function giveRoutines(bot: string) {
+  // The app is the deployment's, added as the platform.
   await runAsTenant("platform", async () => {
     if (!(await pluginStore.serverAddress(ROUTINES_APP)))
       await pluginStore.addServer({ key: ROUTINES_APP, by: "openbot:test" });
-    const listed = await database
-      .select({ name: mcpTools.name })
-      .from(mcpTools)
-      .where(eq(mcpTools.serverId, ROUTINES_APP));
+  });
+  // The app's tools as it lists them: its catalogue row is `team:routines` in the fork (G01-E), and
+  // the grants name the app by its catalogue key.
+  const listed = await listRoutineTools();
+  // Granted in the Bot's owner's frame, where a private Bot's grants belong (G01).
+  await runAsTenant(OWNER, async () => {
     for (const { name } of listed)
       await pluginStore.grant(
         "mcp",
@@ -272,7 +291,11 @@ async function routinesOfOwner() {
     .where(eq(routines.ownerUserId, OWNER));
 }
 
+/** What this file left behind, deployment rows included, so the platform's question (G01). */
 async function clean() {
+  await runAsTenant("platform", cleanAsPlatform);
+}
+async function cleanAsPlatform() {
   await database.delete(routines).where(eq(routines.ownerUserId, OWNER));
   const ids = CONVERSATIONS.map((conversation) => conversation.id);
   await database
@@ -337,7 +360,11 @@ beforeEach(async () => {
   // Routines, added and given to this Bot (see giveRoutines).
   routinesWereAdded =
     routinesWereAdded ||
-    Boolean(await pluginStore.serverAddress(ROUTINES_APP));
+    Boolean(
+      await runAsTenant("platform", () =>
+        pluginStore.serverAddress(ROUTINES_APP),
+      ),
+    );
   await giveRoutines(BOT);
   useRoutineTools(routineStore);
 });
@@ -356,7 +383,9 @@ afterEach(async () => {
 afterAll(async () => {
   await clean();
   if (!routinesWereAdded)
-    await database.delete(mcpServers).where(eq(mcpServers.id, ROUTINES_APP));
+    await runAsTenant("platform", () =>
+      database.delete(mcpServers).where(eq(mcpServers.id, ROUTINES_APP)),
+    );
   await database.$client.end({ timeout: 5 });
 });
 

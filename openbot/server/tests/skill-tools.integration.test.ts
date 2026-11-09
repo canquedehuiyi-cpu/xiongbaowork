@@ -178,15 +178,8 @@ describe("a skill declaring the tools it needs", () => {
       expect(await declaredBy(skill)).toEqual([heldRef]);
     }));
 
-  test("accepts the web research roles, which name no one server's tool", () =>
-    asAuthor(async () => {
-      // What the skill editor offers under Web research, and what a Bot proposes for reading a page.
-      await saveSkill(["@research/fetch", "@research/search"]);
-      expect(await declaredBy(skill)).toEqual([
-        "@research/fetch",
-        "@research/search",
-      ]);
-    }));
+  // M3: upstream's "accepts the web research roles" case is not adopted: the fork has no @research
+  // role (no researchRoleFor in plugins/catalogue; plugins session), so every @research ref is refused.
 
   test("still refuses a research role that does not exist", () =>
     asAuthor(async () => {

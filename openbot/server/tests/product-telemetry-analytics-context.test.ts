@@ -401,6 +401,8 @@ describe("a run tells Intelligence its context, under the contract key", () => {
       runContext: async () => ({
         routineId: "routine_standup",
         ownerUserId: ACTOR,
+        // The tenant the routine is stamped with: its owner's own (G01-C).
+        tenantId: ACTOR,
         agentId: "bot_helper",
         channelId: "channel_standup",
         instruction: "Post the standup summary.",
@@ -550,6 +552,8 @@ describe("a run tells Intelligence its context, under the contract key", () => {
     const claims = [1, 2].map((attempts) => ({
       kind: "proactive.task",
       key: "item-1",
+      // Offered in its person's own tenant, as the claimed row says (G01).
+      tenantId: ACTOR,
       payload: {
         ownerUserId: ACTOR,
         taskId: "task-1",

@@ -1,4 +1,10 @@
-import { afterAll, afterEach, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  afterEach as bunAfterEach,
+  describe,
+  expect,
+  test as bunTest,
+} from "bun:test";
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { Hono, type MiddlewareHandler } from "hono";
@@ -24,6 +30,7 @@ import { useGoalTools } from "../src/responsibilities/chat-tools";
 import { createResponsibilityStore } from "../src/responsibilities/store";
 import { createRoutineRoutes } from "../src/routines/routes";
 import { createRoutineStore } from "../src/routines/store";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -77,6 +84,23 @@ const createdUserIds: string[] = [];
 const createdAgentIds: string[] = [];
 const createdChannelIds: string[] = [];
 
+/**
+ * Each case is one person's: their Bot, conversation, routines and goals, made and read in their own
+ * frame as their signed-in requests and their Bot's run are (G01). The person is named before the
+ * case starts, so the whole case runs in their frame; `setUp` makes them.
+ */
+let person = "";
+const test = (name: string, body: () => unknown) =>
+  bunTest(name, async () => {
+    person = `${prefix}-user-${randomUUID()}`;
+    await runAsTenant(person, body);
+  });
+// Cleanup reaches every person's rows this file made, so it is the platform's question.
+const afterEach = (body: () => unknown) =>
+  bunAfterEach(async () => {
+    await runAsTenant("platform", body);
+  });
+
 afterEach(async () => {
   useRoutineTools(null);
   useGoalTools(null);
@@ -109,7 +133,7 @@ afterAll(async () => {
 
 /** A person, a Bot, the one conversation they share, and the tools installed as the server does. */
 async function setUp() {
-  const id = `${prefix}-user-${randomUUID()}`;
+  const id = person;
   await database.insert(users).values({
     id,
     email: `${id}@example.test`,

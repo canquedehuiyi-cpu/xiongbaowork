@@ -71,6 +71,9 @@ async function runError(model: RuntimeModel): Promise<string> {
   );
   const agent = agents.bot?.clone();
   if (!agent) throw new Error("Bot missing");
+  // M3: the fork tells a provider's refusal as a RUN_ERROR and closes the run normally
+  // (provider-error.ts), so the sentence is the last RUN_ERROR's when the run completes.
+  let told: string | undefined;
   return new Promise<string>((resolve) => {
     agent
       .run({
@@ -83,9 +86,13 @@ async function runError(model: RuntimeModel): Promise<string> {
         forwardedProps: {},
       })
       .subscribe({
+        next: (event: { type: string; message?: unknown }) => {
+          if (event.type === "RUN_ERROR" && typeof event.message === "string")
+            told = event.message;
+        },
         error: (error: unknown) =>
           resolve(error instanceof Error ? error.message : String(error)),
-        complete: () => resolve("completed"),
+        complete: () => resolve(told ?? "completed"),
       });
   });
 }
@@ -99,8 +106,9 @@ test("xAI's spending-limit 403 is told as that, in xAI's words, never as Forbidd
     defaultModel: "grok-4.7",
   });
   expect(message).not.toContain("Forbidden");
-  expect(message).toContain(
-    "the account is out of credit or has reached its spending limit",
+  // M3: in the fork's words (provider-error.ts), with the provider's own after them.
+  expect(message).toStartWith(
+    "模型供应商说账户余额已经用完或达到了消费上限，请充值或调高上限后再试（HTTP 403）。",
   );
   expect(message).toContain(
     "has either used all available credits or reached its monthly spending limit",
@@ -130,8 +138,10 @@ test("Anthropic's credit-balance refusal names Anthropic", async () => {
     provider: "anthropic",
     defaultModel: "claude-sonnet-5-5",
   });
+  // M3: the fork's sentence (provider-error.ts) does not name the provider; the provider's own words,
+  // which do, follow it.
   expect(message).toStartWith(
-    "Anthropic didn't answer: the account is out of credit or has reached its spending limit.",
+    "模型供应商说账户余额已经用完或达到了消费上限，请充值或调高上限后再试（HTTP 400）。",
   );
   expect(message).toContain("Your credit balance is too low");
 });
