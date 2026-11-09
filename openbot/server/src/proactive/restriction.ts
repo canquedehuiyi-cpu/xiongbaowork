@@ -17,38 +17,27 @@
  */
 import type { AuditInitiator } from "../audit";
 import { type GrantedTool, REFUSAL_MARKER } from "../plugins/tools";
+import { isProactiveInitiator } from "./initiator";
 
-export const PROACTIVE_INITIATOR_PREFIX = "proactive:";
+// In `./initiator` so the plugin store can ask the same question without importing this module.
+export {
+  isProactiveInitiator,
+  PROACTIVE_INITIATOR_PREFIX,
+  proactiveInitiator,
+  proactiveRunIdOf,
+} from "./initiator";
 
 /**
- * A proactive run's initiator. Recorded as an unattended routine-kind run, so every policy written
- * for unattended work applies to it too, with an id that names it as proactive.
+ * Memory tools a proactive run may call by name. Writing memory goes through the proactive tool.
+ *
+ * BY NAME AND NEVER BY REF. A connector tool's name is always `mcp__<server>__<tool>` and its ref
+ * `<server>/<tool>`, so no connector can carry one of these names. The ref
+ * `memory/recall_personal_memory` used to be on this list too, and a server sitting at the id
+ * `memory` with a tool of that name would have passed as the person's own memory. That id is
+ * reserved now as well (`addCustomServer` in `plugins/store.ts`).
  */
-export function proactiveInitiator(runId: string): AuditInitiator {
-  return { kind: "routine", id: `${PROACTIVE_INITIATOR_PREFIX}${runId}` };
-}
-
-export function isProactiveInitiator(
-  initiator: AuditInitiator | undefined | null,
-): boolean {
-  return (
-    !!initiator &&
-    "id" in initiator &&
-    typeof initiator.id === "string" &&
-    initiator.id.startsWith(PROACTIVE_INITIATOR_PREFIX)
-  );
-}
-
-export function proactiveRunIdOf(initiator: AuditInitiator | undefined) {
-  return initiator && isProactiveInitiator(initiator) && "id" in initiator
-    ? initiator.id.slice(PROACTIVE_INITIATOR_PREFIX.length)
-    : null;
-}
-
-/** Memory tools a proactive run may call by name. Writing memory goes through the proactive tool. */
 export const PROACTIVE_MEMORY_READS: ReadonlySet<string> = new Set([
   "recall_personal_memory",
-  "memory/recall_personal_memory",
 ]);
 
 type CatalogueReader = {
