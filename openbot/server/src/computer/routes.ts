@@ -1,7 +1,13 @@
 import type { Context, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
+import { z } from "zod";
+import {
+  DESKTOP_REF,
+  DESKTOP_WINDOW_ID,
+} from "../../../shared/desktop-control";
 import { downloadHeaders } from "../../../shared/file-download";
 import type { BotAccessCheck } from "../agents/profile-policy";
+import { ApprovalRefusedError } from "../approvals/types";
 import type { AuditReader } from "../audit";
 import type { AdminScope } from "../auth/admin-scope";
 import type { AppVariables } from "../auth/guards";
@@ -10,6 +16,7 @@ import { DeviceActionError, DeviceOfflineError } from "../devices/channel";
 import { DeviceDeliveryError } from "../devices/queue";
 import { capabilityFor } from "../tenant/context";
 import { computerActionIdentity } from "./action-identity";
+import { CANDIDATE_REF } from "./app-discovery";
 import { DEPLOYMENT_ROUTES } from "./deployment-routes";
 import {
   type ActionActor,
@@ -712,6 +719,65 @@ export function createComputerRoutes(
     }),
   );
 
+  /*
+   * The owner's local apps and desktop, for the web chat's own tool registrations (真机验收
+   * 2026-11-09: the unattended run had these five tools and the chat did not).
+   *
+   * Same shape as every other acting route, and the same calls the unattended tools make: the
+   * arguments are checked against the tools' own schemas here, and everything else (owner only,
+   * device mode only, what is asked about, the sensitive-window floor, the trail) is the gateway's.
+   * A plain route has no conversation to ask in, so whatever the gate would ask about is refused
+   * here; the browser sends those through the approval route, which can ask.
+   */
+  routes.get("/:botId/local-tools", async (context) =>
+    context.json({
+      allowed: await gateway.localToolsAllowed(
+        context.req.param("botId"),
+        actorOf(context.var.actor),
+      ),
+    }),
+  );
+
+  routes.post("/:botId/apps/list", (context) =>
+    act(context, (botId, actor, body, signal) => {
+      const input = toolInput(LOCAL_TOOL_INPUT.apps, body);
+      if (!input.success) return badToolInput;
+      return gateway.listApps(botId, actor, input.data, signal);
+    }),
+  );
+
+  routes.post("/:botId/apps/call", (context) =>
+    act(context, (botId, actor, body, signal) => {
+      const input = toolInput(LOCAL_TOOL_INPUT.appCall, body);
+      if (!input.success) return badToolInput;
+      return gateway.callApp(botId, actor, input.data, signal);
+    }),
+  );
+
+  routes.post("/:botId/apps/enable", (context) =>
+    act(context, (botId, actor, body, signal) => {
+      const input = toolInput(LOCAL_TOOL_INPUT.appEnable, body);
+      if (!input.success) return badToolInput;
+      return gateway.enableApp(botId, actor, input.data, signal);
+    }),
+  );
+
+  routes.post("/:botId/desktop/windows", (context) =>
+    act(context, (botId, actor, body, signal) => {
+      const input = toolInput(LOCAL_TOOL_INPUT.desktopWindows, body);
+      if (!input.success) return badToolInput;
+      return gateway.listDesktopWindows(botId, actor, signal);
+    }),
+  );
+
+  routes.post("/:botId/desktop/snapshot", (context) =>
+    act(context, (botId, actor, body, signal) => {
+      const input = toolInput(LOCAL_TOOL_INPUT.desktopSnapshot, body);
+      if (!input.success) return badToolInput;
+      return gateway.snapshotDesktop(botId, actor, input.data, signal);
+    }),
+  );
+
   /**
    * The policy, readable and writable by an administrator.
    *
@@ -850,6 +916,44 @@ type ComputerContext = Context<{ Variables: AppVariables }>;
 /** A request that was rejected before any decision was needed, because it was not a valid action. */
 type BadRequest = { error: string };
 
+/**
+ * The local-app and desktop tools' arguments, exactly as `headless-tools.ts` and `desktop-tools.ts`
+ * take them, so the same call is the same request whichever way it arrives.
+ */
+const LOCAL_TOOL_INPUT = {
+  apps: z.strictObject({ app: z.string().min(1).max(40).optional() }),
+  appCall: z.strictObject({
+    app: z.string().min(1).max(40),
+    // No `*`: the tool is half of the approval scope, where `*` would match every tool.
+    tool: z
+      .string()
+      .min(1)
+      .max(128)
+      .regex(/^[^*]+$/),
+    args: z.record(z.string(), z.unknown()).optional(),
+  }),
+  appEnable: z.strictObject({ candidate: z.string().regex(CANDIDATE_REF) }),
+  desktopWindows: z.strictObject({}),
+  desktopSnapshot: z.strictObject({
+    windowId: z.string().regex(DESKTOP_WINDOW_ID),
+    from: z.string().regex(DESKTOP_REF).optional(),
+    screenshot: z.boolean().optional(),
+  }),
+};
+
+/** A tool's arguments from a body, less the action id `act` reads from it. */
+function toolInput<T extends z.ZodType>(
+  schema: T,
+  body: Record<string, unknown> | null,
+) {
+  const { toolCallId: _toolCallId, ...rest } = body ?? {};
+  return schema.safeParse(rest);
+}
+
+const badToolInput: BadRequest = {
+  error: "参数与这个工具的要求不符。",
+};
+
 const badRef: BadRequest = {
   error:
     "A ref and the snapshotId it came from are both required. Take a snapshot first.",
@@ -953,6 +1057,13 @@ function actorOf(record: AppVariables["actor"]): ActionActor {
 function actionFailure(context: ComputerContext, error: unknown) {
   if (error instanceof ActionRefusedError) {
     return context.json({ error: error.message, rule: error.rule }, 403);
+  }
+  /*
+   * The approval gate said no: a disabled tool, a declined action, or one that needs asking where a
+   * plain route has nobody to ask. Nothing was carried out, and that is a refusal, not a 500.
+   */
+  if (error instanceof ApprovalRefusedError) {
+    return context.json({ error: error.message }, 403);
   }
   return context.json(errorBody(error), statusFor(error));
 }

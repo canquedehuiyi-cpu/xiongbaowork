@@ -23,6 +23,13 @@ const writes = new Set([
   "computer_key",
   "computer_run_command",
   "computer_write_file",
+  /*
+   * The owner's local apps and desktop: a tool the app does not mark read-only, every enable, and a
+   * window whose title is sensitive are asked about, and only this route has a conversation to ask in.
+   */
+  "computer_app_call",
+  "computer_app_enable",
+  "computer_desktop_snapshot",
 ]);
 
 /**
