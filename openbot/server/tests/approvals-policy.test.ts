@@ -8,6 +8,8 @@ import {
   DEFAULT_SENSITIVE_PATHS,
   DESTRUCTIVE_TOOL_REASON,
   OUTBOUND_SEND_REASON,
+  PUBLISH_POST_REASON,
+  SHARE_ACCESS_REASON,
   dangerousCommand,
   decideAction,
   effectiveHostCommandPolicy,
@@ -2778,5 +2780,1053 @@ describe("outbound sends always ask, once at a time", () => {
           })
         ).source,
       ).toBe("outbound_send");
+  });
+});
+
+/*
+ * 上游审批底线补齐（阶段 2b）：对照上游 #904、#930、#998、#1015、#1109、#1175、#1179、#1187，
+ * 按 fork 的决策顺序移植。新增的底线都只给「允许一次 / 拒绝」，规则设为「总是允许」也照样问；
+ * 应用工具一侧只认 `subject.connector`。
+ */
+describe("upstream floors: app tools", () => {
+  const connector = (
+    toolRef: string,
+    args: unknown = { id: "51" },
+    over: Partial<ApprovalCandidate> = {},
+  ) =>
+    candidate({
+      toolRef,
+      scope: toolRef.split("/")[0] ?? "app",
+      args,
+      subject: { connector: true },
+      ...over,
+    });
+  const allowAll = {
+    personal: [rule("allow", { toolRef: "*" })],
+    team: [team("allow", { toolRef: "*" })],
+  };
+  const sourceOf = async (c: ApprovalCandidate) =>
+    (await decideAction({ ...base, ...allowAll, candidate: c })).source;
+
+  test("safetyRequirement says whether it hands off or asks (behaviour)", () => {
+    expect(
+      safetyRequirement(
+        candidate({
+          toolRef: "computer_type",
+          args: { field: "New password" },
+        }),
+      ),
+    ).toEqual({
+      id: "credentials",
+      reason:
+        "Changing a password, passcode, two-factor setting, recovery code or other credential is always done by the person.",
+      behaviour: "hand_off",
+    });
+    expect(
+      safetyRequirement(connector("composio-hubspot/HUBSPOT_ARCHIVE_CONTACT")),
+    ).toEqual({
+      id: "destructive_tool",
+      reason: DESTRUCTIVE_TOOL_REASON,
+      behaviour: "ask",
+    });
+    expect(
+      safetyRequirement(connector("composio-gmail/GMAIL_SEND_EMAIL")),
+    ).toEqual({
+      id: "outbound_send",
+      reason: OUTBOUND_SEND_REASON,
+      behaviour: "ask",
+    });
+    // 和删除类底线一样，应用标为破坏性的工具被分类成读也照样问。
+    expect(
+      safetyRequirement(
+        connector(
+          "mcp/acme/reset_workspace",
+          { w: "1" },
+          {
+            destructive: true,
+            effect: "read",
+          },
+        ),
+      )?.behaviour,
+    ).toBe("ask");
+    expect(
+      safetyRequirement(connector("composio-gmail/GMAIL_FETCH_EMAILS")),
+    ).toBeUndefined();
+  });
+
+  test("sharing asks with its own source, once at a time, over an always-allow rule", async () => {
+    expect(SHARE_ACCESS_REASON).toBe(
+      "这个操作会把内容分享给别人，或改变谁能访问，总是先征得你同意。",
+    );
+    for (const name of [
+      "GOOGLEDRIVE_ADD_FILE_SHARING_PREFERENCE",
+      "GOOGLEDRIVE_CREATE_PERMISSION",
+      "GITHUB_ADD_A_REPOSITORY_COLLABORATOR",
+      "DROPBOX_CREATE_SHARED_LINK",
+      "NOTION_UPDATE_PAGE_PERMISSIONS",
+      "BOX_GRANT_ACCESS",
+    ]) {
+      const outcome = await decideAction({
+        ...base,
+        ...allowAll,
+        candidate: connector(`vendor/${name}`),
+      });
+      expect({ name, outcome }).toMatchObject({
+        name,
+        outcome: {
+          behaviour: "ask",
+          source: "share_access",
+          reason: SHARE_ACCESS_REASON,
+        },
+      });
+      expect(offersStandingRule({ policy: outcome })).toBeFalse();
+    }
+    // 已有的底线先认：share 作第一个动词仍是对外发送，remove 仍是删除类。
+    expect(await sourceOf(connector("vendor/share_file"))).toBe(
+      "outbound_send",
+    );
+    expect(await sourceOf(connector("vendor/remove_collaborator"))).toBe(
+      "destructive_tool",
+    );
+    // 读权限、搜共享盘不算分享。
+    for (const name of [
+      "GOOGLEDRIVE_LIST_PERMISSIONS",
+      "GITHUB_GET_REPOSITORY_PERMISSIONS_FOR_A_USER",
+    ])
+      expect(
+        await sourceOf(connector(`vendor/${name}`, {}, { effect: "read" })),
+      ).toBe("team_rule");
+    expect(await sourceOf(connector("gmail/search_shared_drives", {}))).toBe(
+      "team_rule",
+    );
+  });
+
+  test("publishing asks with its own source, once at a time, over an always-allow rule", async () => {
+    expect(PUBLISH_POST_REASON).toBe(
+      "这个操作会公开发布内容，总是先征得你同意。",
+    );
+    for (const name of [
+      "TWITTER_RETWEET",
+      "REDDIT_REPOST",
+      "YOUTUBE_GO_LIVE",
+      "GITHUB_CREATE_A_RELEASE",
+      "FACEBOOK_SUBMIT_POST",
+      "TWITTER_POST_A_TWEET",
+    ]) {
+      const outcome = await decideAction({
+        ...base,
+        ...allowAll,
+        candidate: connector(`vendor/${name}`),
+      });
+      expect({ name, source: outcome.source }).toEqual({
+        name,
+        source:
+          name === "TWITTER_POST_A_TWEET" ? "outbound_send" : "publish_post",
+      });
+      expect(outcome.behaviour).toBe("ask");
+      expect(offersStandingRule({ policy: outcome })).toBeFalse();
+    }
+    // 只是提到帖子、不是发布它的，不问。
+    for (const name of [
+      "TWITTER_ADD_POST_TO_BOOKMARKS",
+      "TWITTER_LIKE_TWEET",
+      "SHOPIFY_MARK_COMMENT_AS_SPAM",
+      "LINKEDIN_GET_POST",
+    ])
+      expect({
+        name,
+        source: await sourceOf(connector(`vendor/${name}`)),
+      }).toEqual({ name, source: "team_rule" });
+  });
+
+  test("more sends ask as outbound sends: notify, broadcast, comment, scheduled campaigns, add message", async () => {
+    for (const name of [
+      "notify_users",
+      "SLACK_BROADCAST_MESSAGE",
+      "JIRA_ADD_COMMENT",
+      "MAILCHIMP_SCHEDULE_CAMPAIGN",
+      "slack_add_message",
+      "ZENDESK_RESPOND_TO_TICKET",
+    ])
+      expect({
+        name,
+        source: await sourceOf(connector(`vendor/${name}`)),
+      }).toEqual({ name, source: "outbound_send" });
+  });
+
+  test("an invitation to someone's address asks as an outbound send, whatever the tool is called", async () => {
+    for (const [name, args] of [
+      ["GOOGLECALENDAR_CREATE_EVENT", { attendees: ["sam@example.com"] }],
+      [
+        "GOOGLECALENDAR_UPDATE_EVENT",
+        { attendees: [{ email: "sam@example.com" }] },
+      ],
+      [
+        "OUTLOOK_CALENDAR_CREATE_EVENT",
+        { attendees_info: [{ email: "a@b.co" }] },
+      ],
+      [
+        "ZOOM_CREATE_A_MEETING",
+        { settings__meeting__invitees: [{ email: "a@b.co" }] },
+      ],
+      ["CALENDLY_CREATE_INVITEE", { eventGuests: ["a@b.co"] }],
+      ["CRM_CREATE_TICKET", { cc: "boss@example.com" }],
+    ] as const)
+      expect({
+        name,
+        source: await sourceOf(connector(`vendor/${name}`, args)),
+      }).toEqual({ name, source: "outbound_send" });
+    // 没有地址、只是设置，或只是草稿、读取：不算。
+    for (const [name, args] of [
+      ["GOOGLECALENDAR_CREATE_EVENT", { summary: "Focus", attendees: [] }],
+      ["GOOGLECALENDAR_CREATE_EVENT", { guestsCanModify: true }],
+      ["GMAIL_CREATE_EMAIL_DRAFT", { to: "sam@example.com" }],
+      ["GOOGLECALENDAR_LIST_EVENTS", { attendees: "sam@example.com" }],
+      ["CRM_UPDATE_CONTACT", { to: "sam@example.com" }],
+    ] as const)
+      expect({
+        name,
+        source: await sourceOf(connector(`vendor/${name}`, args)),
+      }).toEqual({ name, source: "team_rule" });
+  });
+
+  test("moving money and buying, by an app tool's name, are handed to the person", async () => {
+    for (const name of [
+      "STRIPE_CREATE_PAYOUT",
+      "WISE_CREATE_TRANSFER",
+      "STRIPE_PAY_INVOICE",
+      "SQUARE_PAY_ORDER",
+      "DEEL_SUBMIT_ON_DEMAND_PAYROLL",
+      "SHOPIFY_CREATE_ORDER",
+      "STRIPE_CREATE_CHARGE",
+    ])
+      expect({
+        name,
+        outcome: await decideAction({
+          ...base,
+          ...allowAll,
+          candidate: connector(`vendor/${name}`, { note: "x" }),
+        }),
+      }).toMatchObject({
+        name,
+        outcome: { behaviour: "hand_off", source: "safety" },
+      });
+    for (const name of [
+      "GITHUB_TRANSFER_A_REPOSITORY",
+      "GUSTO_UPDATE_PAY_SCHEDULE",
+      "SLACK_TRANSFER_OWNERSHIP",
+    ])
+      expect({
+        name,
+        source: await sourceOf(connector(`vendor/${name}`, { note: "x" })),
+      }).toEqual({ name, source: "team_rule" });
+  });
+
+  test("refunds move money; writing an order note does not; a news wire is not a wire of money", () => {
+    const shopify = (toolName: string, args: Record<string, unknown>) =>
+      safetyRequirement(
+        connector(`composio-shopify/${toolName}`, args, {
+          target: {
+            serverId: "composio-shopify",
+            toolName,
+            url: "https://mcp.composio.dev/shopify",
+            effect: "write",
+          },
+        }),
+      )?.id;
+    expect(
+      shopify("SHOPIFY_CREATE_REFUND", {
+        id: 123,
+        refund_line_items: [{ line_item_id: 1 }],
+      }),
+    ).toBe("payments");
+    expect(
+      shopify("SHOPIFY_UPDATE_ORDER", { id: 123, note: "gift wrap" }),
+    ).toBeUndefined();
+    // 留空的字段不是发出去的参数（上游 #930）。
+    expect(
+      shopify("SHOPIFY_UPDATE_ORDER", {
+        id: 123,
+        billing_address: null,
+        note: "gift wrap",
+      }),
+    ).toBeUndefined();
+    expect(
+      shopify("SHOPIFY_UPDATE_ORDER", {
+        id: 123,
+        billing_address: {},
+        note: "",
+      }),
+    ).toBeUndefined();
+    // 填了的仍然算。
+    expect(
+      shopify("SHOPIFY_UPDATE_ORDER", {
+        id: 123,
+        billing_address: { line1: "1 Main St" },
+      }),
+    ).toBe("payments");
+    // 新闻通稿不是电汇；电汇仍是动钱。
+    const crm = (source: string) =>
+      safetyRequirement(
+        connector("composio-hubspot/HUBSPOT_CREATE_COMPANY", { source }),
+      )?.id;
+    expect(crm("Business Wire; LinkedIn")).toBeUndefined();
+    expect(crm("PR Newswire, press wire")).toBeUndefined();
+    expect(crm("news wire")).toBeUndefined();
+    expect(crm("Wire the deposit to the vendor")).toBe("payments");
+    expect(crm("Start a wire transfer")).toBe("payments");
+  });
+
+  test("a field nested past the depth cap still counts by its name", () => {
+    const sent = (args: Record<string, unknown>) =>
+      safetyRequirement(
+        connector("composio-shopify/SHOPIFY_GRAPHQL_MUTATION", args),
+      )?.id;
+    const nested = (leaf: Record<string, unknown>) =>
+      sent({ a: { b: { c: { d: { e: { f: leaf } } } } } });
+    expect(nested({ payment_method: { card: "tok_123" } })).toBe("payments");
+    expect(nested({ billing: [{ line: 1 }] })).toBe("payments");
+    expect(
+      sent({ a: { b: { c: { d: { e: { refund_lines: [{ id: 1 }] } } } } } }),
+    ).toBe("payments");
+    expect(nested({ billing_address: {}, refund: [] })).toBeUndefined();
+  });
+
+  test("an address that carries credential words in its query string is not a credentials page", () => {
+    const acting = (
+      toolRef: "computer_type" | "computer_click",
+      element: { name: string; role: string; type?: string },
+      pageUrl: string,
+    ) =>
+      safetyRequirement(
+        candidate({
+          toolRef,
+          scope: URL.canParse(pageUrl) ? new URL(pageUrl).host : "browser",
+          args:
+            toolRef === "computer_type"
+              ? { ref: "e5", text: "Test Robot", snapshotId: 4 }
+              : { ref: "e5", snapshotId: 4 },
+          target: {
+            element: { ref: "e5", ...element },
+            pageUrl,
+            snapshotId: 4,
+          },
+        }),
+      )?.id;
+    const presigned =
+      "https://garden-club-example.s3.us-east-2.amazonaws.com/f4/garden-signup.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=EXAMPLEKEYID%2F20261107%2Fus-east-2%2Fs3%2Faws4_request&X-Amz-Date=20261107T043445Z&X-Amz-Expires=21600&X-Amz-SignedHeaders=host&X-Amz-Security-Token=EXAMPLE-SESSION-TOKEN&X-Amz-Signature=0123456789abcdef";
+    for (const field of ["Full name", "Email", "Note"])
+      expect(
+        acting("computer_type", { name: field, role: "textbox" }, presigned),
+      ).toBeUndefined();
+    expect(
+      acting("computer_click", { name: "Sign up", role: "button" }, presigned),
+    ).toBeUndefined();
+    expect(
+      acting(
+        "computer_type",
+        { name: "Display name", role: "textbox" },
+        "https://app.example/welcome?code=4%2F0AY&state=xyz&access_token=ya29.a0Af#access_token=ya29.a0Af&token_type=Bearer",
+      ),
+    ).toBeUndefined();
+    expect(
+      acting(
+        "computer_type",
+        { name: "Company", role: "textbox" },
+        "https://crm.example/accounts/new?api_key=sk_live_123&credential=abc",
+      ),
+    ).toBeUndefined();
+    // 凭据字段、按钮、路径照样交给本人。
+    expect(
+      acting(
+        "computer_type",
+        { name: "New password", role: "textbox" },
+        presigned,
+      ),
+    ).toBe("credentials");
+    expect(
+      acting(
+        "computer_type",
+        { name: "PIN", role: "textbox", type: "password" },
+        presigned,
+      ),
+    ).toBe("credentials");
+    expect(
+      acting(
+        "computer_click",
+        { name: "Change password", role: "button" },
+        "https://mail.example/settings?tab=general",
+      ),
+    ).toBe("credentials");
+    expect(
+      acting(
+        "computer_type",
+        { name: "Phone number", role: "textbox" },
+        "https://accounts.example/security/2fa?step=1",
+      ),
+    ).toBe("credentials");
+    expect(
+      acting(
+        "computer_click",
+        { name: "Create", role: "button" },
+        "https://console.cloud.example/apis/credentials?project=demo",
+      ),
+    ).toBe("credentials");
+    // 只有凭据这一条去掉查询串：查询串里的 checkout 仍算付款。
+    expect(
+      acting(
+        "computer_type",
+        { name: "Quantity", role: "textbox" },
+        "https://shop.example/cart?step=checkout",
+      ),
+    ).toBe("payments");
+    // 地址读不出来时整段照旧匹配，不是不匹配。
+    expect(
+      acting(
+        "computer_type",
+        { name: "Name", role: "textbox" },
+        "not a url ?access_token=1",
+      ),
+    ).toBe("credentials");
+  });
+
+  test("only app tools: the Bot's own tools and unmarked refs are not asked about by the new floors", async () => {
+    for (const toolRef of [
+      "bot/share_note",
+      "host/notify_users",
+      "memory/add_comment",
+    ])
+      expect(
+        (
+          await decideAction({
+            ...base,
+            ...allowAll,
+            candidate: candidate({ toolRef, scope: "x", args: {} }),
+          })
+        ).behaviour,
+      ).toBe("allow");
+    // 按名字的付款交给本人也只认应用工具。
+    expect(
+      safetyRequirement(candidate({ toolRef: "bot/create_payout", args: {} })),
+    ).toBeUndefined();
+  });
+
+  test("every once-only source refuses a standing rule and names itself on the card", () => {
+    for (const source of [
+      "destructive_tool",
+      "outbound_send",
+      "share_access",
+      "publish_post",
+    ])
+      expect(offersStandingRule({ policy: { source } })).toBeFalse();
+  });
+});
+
+/*
+ * 上游审批底线补齐（阶段 2b），电脑工具一侧：网页上的按钮、键盘发送、输入框。按 fork 现有的电脑
+ * 工具审批路径：网关给审批门的 `target`（页面地址、元素）和调用处的 `subject.key`。
+ */
+describe("upstream floors: computer tools", () => {
+  const allowAll = {
+    personal: [rule("allow", { toolRef: "*" })],
+    team: [team("allow", { toolRef: "*" })],
+  };
+  const click = (
+    name: string,
+    pageUrl = "https://app.example/inbox",
+  ): ApprovalCandidate =>
+    candidate({
+      toolRef: "computer_click",
+      scope: new URL(pageUrl).host,
+      args: { ref: "e12" },
+      target: { pageUrl, element: { ref: "e12", role: "button", name } },
+    });
+  const press = (
+    key: string,
+    field = "Message body",
+    over: Partial<ApprovalCandidate> = {},
+  ): ApprovalCandidate =>
+    candidate({
+      toolRef: "computer_key",
+      scope: "mail.google.com",
+      args: { key, ref: "f3" },
+      target: {
+        pageUrl: "https://mail.google.com/mail/u/0/#inbox?compose=new",
+        element: { ref: "f3", role: "textbox", name: field },
+      },
+      ...over,
+    });
+  const submit = (field: string): ApprovalCandidate =>
+    candidate({
+      toolRef: "computer_type",
+      scope: "app.slack.com",
+      args: { ref: "f9", text: "Friday works.", submit: true },
+      target: {
+        pageUrl: "https://app.slack.com/client/T1/C1",
+        element: { ref: "f9", role: "textbox", name: field },
+      },
+    });
+
+  test.each([
+    "Meta+Enter",
+    "Control+Enter",
+    "ControlOrMeta+Enter",
+    "Ctrl+Enter",
+    "Cmd+Return",
+  ])("%s sends, as a Send button does", async (key) => {
+    const outcome = await decideAction({
+      ...base,
+      ...allowAll,
+      candidate: press(key),
+    });
+    expect(outcome).toMatchObject({
+      behaviour: "ask",
+      source: "outbound_send",
+      reason: OUTBOUND_SEND_REASON,
+    });
+    expect(offersStandingRule({ policy: outcome })).toBeFalse();
+  });
+
+  test("Enter in a box for writing a message, a reply or a comment sends", () => {
+    expect(safetyRequirement(press("Enter", "Message #general"))).toEqual({
+      id: "outbound_send",
+      reason: OUTBOUND_SEND_REASON,
+      behaviour: "ask",
+    });
+    expect(safetyRequirement(submit("Message #general"))?.id).toBe(
+      "outbound_send",
+    );
+    expect(safetyRequirement(submit("Reply…"))?.id).toBe("outbound_send");
+    expect(safetyRequirement(submit("Add a comment"))?.id).toBe(
+      "outbound_send",
+    );
+    expect(
+      safetyRequirement(press("NumpadEnter", "What's happening?"))?.id,
+    ).toBe("outbound_send");
+  });
+
+  test("Enter in a search box, a plain field or a letter does not send", () => {
+    expect(safetyRequirement(submit("Search messages"))).toBeUndefined();
+    expect(safetyRequirement(submit("Subject"))).toBeUndefined();
+    expect(safetyRequirement(press("Enter", "Subject"))).toBeUndefined();
+    expect(safetyRequirement(press("Shift+Enter"))).toBeUndefined();
+    expect(safetyRequirement(press("a"))).toBeUndefined();
+    expect(safetyRequirement(press("Control+a"))).toBeUndefined();
+  });
+
+  test("the key the call site names wins over the model's arguments", () => {
+    // 网关从调用处给出要按的键（`subject.key`），模型参数里写的不算。
+    expect(
+      safetyRequirement(
+        press("a", "Message #general", { subject: { key: "Enter" } }),
+      )?.id,
+    ).toBe("outbound_send");
+    expect(
+      safetyRequirement(
+        press("Meta+Enter", "Subject", { subject: { key: "a" } }),
+      ),
+    ).toBeUndefined();
+    // computer_type 带 submit 时，网关给的键是 Enter。
+    expect(
+      safetyRequirement(
+        candidate({
+          ...submit("Message #general"),
+          args: { ref: "f9", snapshotId: 2 },
+          subject: { key: "Enter" },
+        }),
+      )?.id,
+    ).toBe("outbound_send");
+  });
+
+  test("a button that deletes, sends, shares or posts asks, once at a time, over an always-allow rule", async () => {
+    for (const [label, source] of [
+      ["Delete", "destructive_tool"],
+      ["Yes, delete", "destructive_tool"],
+      ["Permanently delete", "destructive_tool"],
+      ["Move to trash", "destructive_tool"],
+      ["Empty bin", "destructive_tool"],
+      ["Remove", "destructive_tool"],
+      ["Yes, remove", "destructive_tool"],
+      ["Send", "outbound_send"],
+      ["Send now", "outbound_send"],
+      ["Comment", "outbound_send"],
+      ["Reply", "outbound_send"],
+      ["Share", "share_access"],
+      ["Invite", "share_access"],
+      ["Add people", "share_access"],
+      ["Post", "publish_post"],
+      ["Publish", "publish_post"],
+      ["Tweet", "publish_post"],
+      ["Go live", "publish_post"],
+    ] as const) {
+      const outcome = await decideAction({
+        ...base,
+        ...allowAll,
+        candidate: click(label),
+      });
+      expect({ label, outcome }).toMatchObject({
+        label,
+        outcome: { behaviour: "ask", source },
+      });
+      expect(offersStandingRule({ policy: outcome })).toBeFalse();
+    }
+  });
+
+  test("a folder, a tab or a filter named like an action is browsing, not acting", () => {
+    for (const label of [
+      "Sent",
+      "Posts",
+      "Shared with me",
+      "Remove filter",
+      "Deleted items",
+      "Reply all settings",
+      "Search",
+      "Subscribe",
+    ])
+      expect({ label, asked: safetyRequirement(click(label)) }).toEqual({
+        label,
+        asked: undefined,
+      });
+  });
+
+  test("a button that pays, buys or starts a paid plan is handed to the person", async () => {
+    for (const label of [
+      "Pay",
+      "Buy now",
+      "Place your order",
+      "Confirm purchase",
+      "Send $20",
+      "Transfer",
+      "Upgrade",
+      "Change plan",
+      "Subscribe for $9.99/month",
+    ])
+      expect({
+        label,
+        outcome: await decideAction({
+          ...base,
+          ...allowAll,
+          candidate: click(label, "https://shop.example/account"),
+        }),
+      }).toMatchObject({
+        label,
+        outcome: { behaviour: "hand_off", source: "safety" },
+      });
+    // 定价页上的「订阅」是买付费套餐；频道和免费简报的「订阅」不是。
+    expect(
+      safetyRequirement(click("Subscribe", "https://news.example/pricing"))?.id,
+    ).toBe("payments");
+    expect(
+      safetyRequirement(click("Subscribe", "https://video.example/channel/42")),
+    ).toBeUndefined();
+  });
+
+  test("what a Bot types into a field is content: the field and the page say what the action is", () => {
+    const typing = (text: string, field: string, pageUrl: string) =>
+      safetyRequirement(
+        candidate({
+          toolRef: "computer_type",
+          scope: new URL(pageUrl).host,
+          args: { ref: "f1e145", text, submit: false, snapshotId: 3 },
+          target: {
+            element: { ref: "f1e145", name: field, role: "textbox" },
+            pageUrl,
+            snapshotId: 3,
+          },
+        }),
+      )?.id;
+    const crm = "http://host.docker.internal:4900/accounts/new";
+    expect(
+      typing(
+        "Expanded its AI agents for purchase orders, detention and dock workflows.",
+        "Notes",
+        crm,
+      ),
+    ).toBeUndefined();
+    expect(typing("Business Wire; LinkedIn", "Source", crm)).toBeUndefined();
+    expect(
+      typing("Payments platform for freight billing", "Notes", crm),
+    ).toBeUndefined();
+    expect(typing("my password is hunter2", "Notes", crm)).toBeUndefined();
+    // 付款字段、结账页、密码字段照样交给本人，不管输的是什么。
+    expect(
+      typing(
+        "4111 1111 1111 1111",
+        "Card number",
+        "https://shop.example/account",
+      ),
+    ).toBe("payments");
+    expect(typing("1", "Quantity", "https://shop.example/checkout")).toBe(
+      "payments",
+    );
+    expect(
+      typing("hunter2", "New password", "https://mail.example/settings"),
+    ).toBe("credentials");
+    // 只去掉 computer_type 的输入内容：其它工具的参数照旧全读。
+    expect(
+      safetyRequirement(
+        candidate({
+          toolRef: "computer_key",
+          args: { key: "a", text: "payment" },
+        }),
+      )?.id,
+    ).toBe("payments");
+  });
+
+  test("the computer gateway hands the gate the key a call presses, from the call site", async () => {
+    const seen: ApprovalCandidate[] = [];
+    const gateway = createComputerGateway({
+      provider: {
+        name: "test",
+        isolation: "per-bot",
+        locate: async () => "http://computer:4100",
+        status: async (botId) => ({ botId, state: "ready" }),
+        list: async () => [],
+        stop: async () => ({ wasRunning: true }),
+        reset: async () => ({ cleared: true }),
+      },
+      policy: () => ({ mode: "enforce", allow: ["true"], deny: [] }),
+      auditStore: { insert: async () => undefined },
+      approvalGate: async (c) => {
+        seen.push(c);
+        return undefined;
+      },
+      fetchImpl: async () => Response.json({ ok: true }),
+    });
+    await gateway.key("bot", { id: "owner" }, { key: "Meta+Enter" });
+    await gateway.type(
+      "bot",
+      { id: "owner" },
+      { text: "Friday works.", submit: true },
+    );
+    await gateway.type("bot", { id: "owner" }, { text: "draft" });
+    expect(seen.map((c) => c.subject?.key)).toEqual([
+      "Meta+Enter",
+      "Enter",
+      undefined,
+    ]);
+  });
+});
+
+/*
+ * #398 安全评审的修复（I1–I4、M1、M3、M4、M5）：键盘写法、页面级按键、在按钮上按键、中文按钮和
+ * 输入框，以及几处收窄的边界。都在「全部总是允许」之上跑。
+ */
+describe("upstream floors: review fixes", () => {
+  const allowAll = {
+    personal: [rule("allow", { toolRef: "*" })],
+    team: [team("allow", { toolRef: "*" })],
+  };
+  const decide = (c: ApprovalCandidate) =>
+    decideAction({ ...base, ...allowAll, candidate: c });
+  const key = (
+    pressed: string,
+    element?: { name: string; role: string; type?: string },
+    pageUrl = "https://chat.example/room/1",
+  ): ApprovalCandidate =>
+    candidate({
+      toolRef: "computer_key",
+      scope: new URL(pageUrl).host,
+      args: { key: pressed, ...(element ? { ref: "e4" } : {}) },
+      target: {
+        pageUrl,
+        ...(element
+          ? { element: { ref: "e4", ...element }, snapshotId: 2 }
+          : {}),
+      },
+      subject: { key: pressed, runner: false },
+    });
+  const box = (name: string) => ({ name, role: "textbox" });
+  const button = (name: string) => ({ name, role: "button" });
+  const clickOn = (name: string, pageUrl = "https://weibo.example/home") =>
+    candidate({
+      toolRef: "computer_click",
+      scope: new URL(pageUrl).host,
+      args: { ref: "e8" },
+      target: { pageUrl, element: { ref: "e8", role: "button", name } },
+    });
+
+  test("I1: every way Playwright spells a sending key combination asks", async () => {
+    for (const pressed of [
+      "ControlLeft+Enter",
+      "ControlRight+Enter",
+      "MetaLeft+Enter",
+      "MetaRight+Enter",
+      "Alt+Enter",
+      "AltLeft+Enter",
+      "Shift+Control+Enter",
+      "\n",
+      "\r",
+      "Control+\n",
+      "Meta+\r",
+      "enter",
+      "Return",
+    ])
+      expect({
+        pressed,
+        outcome: await decide(key(pressed, box("Message #general"))),
+      }).toMatchObject({
+        pressed,
+        outcome: { behaviour: "ask", source: "outbound_send" },
+      });
+    // 只按着 Shift 是换行；普通字段里的 Enter 不是发送。
+    for (const pressed of ["Shift+Enter", "ShiftLeft+Enter", "ShiftRight+\n"])
+      expect({
+        pressed,
+        asked: safetyRequirement(key(pressed, box("Message #general"))),
+      }).toEqual({ pressed, asked: undefined });
+    expect(safetyRequirement(key("\n", box("Subject")))).toBeUndefined();
+  });
+
+  test("I2: a page-level Enter or Space, with no element to tell where the focus is, asks", async () => {
+    for (const pressed of [
+      "Enter",
+      "Control+Enter",
+      "\n",
+      "NumpadEnter",
+      "Shift+Enter",
+      "Space",
+      " ",
+    ])
+      expect({ pressed, outcome: await decide(key(pressed)) }).toMatchObject({
+        pressed,
+        outcome: { behaviour: "ask", source: "outbound_send" },
+      });
+    // 其它键不会提交或按下任何东西。
+    for (const pressed of ["Tab", "a", "Escape", "ArrowDown", "Control+a"])
+      expect({ pressed, asked: safetyRequirement(key(pressed)) }).toEqual({
+        pressed,
+        asked: undefined,
+      });
+    // 带 submit 的输入、网关没能解析出元素的时候同样问。
+    expect(
+      safetyRequirement(
+        candidate({
+          toolRef: "computer_type",
+          args: { ref: "e9", text: "hi", submit: true },
+          target: { pageUrl: "https://chat.example/room/1" },
+          subject: { key: "Enter" },
+        }),
+      )?.id,
+    ).toBe("outbound_send");
+  });
+
+  test("I3: Enter or Space on a button is a click on it, for every button floor", async () => {
+    for (const pressed of ["Enter", "Space", " ", "NumpadEnter", "\r"]) {
+      for (const [label, source] of [
+        ["Send", "outbound_send"],
+        ["Delete", "destructive_tool"],
+        ["Share", "share_access"],
+        ["Post", "publish_post"],
+        ["发送", "outbound_send"],
+      ] as const)
+        expect({
+          pressed,
+          label,
+          outcome: await decide(key(pressed, button(label))),
+        }).toMatchObject({
+          pressed,
+          label,
+          outcome: { behaviour: "ask", source },
+        });
+      for (const label of ["Place your order", "Transfer", "立即购买"])
+        expect({
+          pressed,
+          label,
+          outcome: await decide(key(pressed, button(label))),
+        }).toMatchObject({
+          pressed,
+          label,
+          outcome: { behaviour: "hand_off", source: "safety" },
+        });
+    }
+    // 链接也是：定价页上的「Subscribe」交给本人。
+    expect(
+      safetyRequirement(
+        key(
+          "Enter",
+          { name: "Subscribe", role: "link" },
+          "https://news.example/pricing",
+        ),
+      )?.id,
+    ).toBe("payments");
+    // 名字不说动作的按钮和链接照常。
+    expect(safetyRequirement(key("Enter", button("Home")))).toBeUndefined();
+    expect(
+      safetyRequirement(key("Space", { name: "Next", role: "link" })),
+    ).toBeUndefined();
+  });
+
+  test("I4: Chinese buttons ask or hand off as their English counterparts do", async () => {
+    for (const [label, source] of [
+      ["发送", "outbound_send"],
+      ["发送(S)", "outbound_send"],
+      ["立即发送", "outbound_send"],
+      ["回复", "outbound_send"],
+      ["评论", "outbound_send"],
+      ["发表评论", "outbound_send"],
+      ["删除", "destructive_tool"],
+      ["确认删除", "destructive_tool"],
+      ["永久删除", "destructive_tool"],
+      ["移到回收站", "destructive_tool"],
+      ["清空回收站", "destructive_tool"],
+      ["移除", "destructive_tool"],
+      ["分享", "share_access"],
+      ["分享到微信", "share_access"],
+      ["邀请成员", "share_access"],
+      ["添加成员", "share_access"],
+      ["发布", "publish_post"],
+      ["发表", "publish_post"],
+      ["发帖", "publish_post"],
+      ["转发", "publish_post"],
+      ["发布动态", "publish_post"],
+    ] as const)
+      expect({ label, outcome: await decide(clickOn(label)) }).toMatchObject({
+        label,
+        outcome: { behaviour: "ask", source },
+      });
+    for (const label of [
+      "支付",
+      "立即支付",
+      "确认付款",
+      "付款 ¥128.00",
+      "立即购买",
+      "提交订单",
+      "去结算",
+      "立即下单",
+      "转账",
+      "开通会员",
+    ])
+      expect({ label, outcome: await decide(clickOn(label)) }).toMatchObject({
+        label,
+        outcome: { behaviour: "hand_off", source: "safety" },
+      });
+    // 只读、浏览类的按钮和标签页不算。
+    for (const label of [
+      "查看",
+      "搜索",
+      "已发送",
+      "已删除",
+      "移除筛选",
+      "删除线",
+      "发布时间",
+      "分享给我的",
+      "回复全部设置",
+      "购买记录",
+      "支付记录",
+      "评论区",
+    ])
+      expect({ label, asked: safetyRequirement(clickOn(label)) }).toEqual({
+        label,
+        asked: undefined,
+      });
+  });
+
+  test("I4: Enter in a Chinese box for writing a message sends; a search box does not", () => {
+    for (const field of [
+      "输入消息",
+      "发消息",
+      "写评论…",
+      "发表你的评论",
+      "回复 @小明",
+      "说点什么吧",
+      "留言",
+    ])
+      expect({
+        field,
+        asked: safetyRequirement(key("Enter", box(field)))?.id,
+      }).toEqual({ field, asked: "outbound_send" });
+    for (const field of ["搜索消息", "主题", "用户名"])
+      expect({
+        field,
+        asked: safetyRequirement(key("Enter", box(field))),
+      }).toEqual({ field, asked: undefined });
+  });
+
+  test("Add comment and Post comment buttons send, as Comment does", async () => {
+    for (const label of [
+      "Add comment",
+      "Add a comment",
+      "Post comment",
+      "Post reply",
+    ])
+      expect(
+        (await decide(clickOn(label, "https://app.example/x"))).source,
+      ).toBe(label.startsWith("Post") ? "publish_post" : "outbound_send");
+  });
+
+  test("M1: a send hidden behind a read or edit verb, to someone's address, asks", async () => {
+    for (const [name, args] of [
+      ["update_and_notify", { to: "a@evil.com" }],
+      ["mark_and_forward", { to: "a@evil.com" }],
+      ["EXPORT_AND_EMAIL_REPORT", { to: "a@evil.com" }],
+      ["QUERY_AND_MAIL", { recipients: ["a@evil.com"] }],
+    ] as const)
+      expect({
+        name,
+        source: (
+          await decide(
+            candidate({
+              toolRef: `vendor/${name}`,
+              scope: "vendor",
+              args,
+              subject: { connector: true },
+            }),
+          )
+        ).source,
+      }).toEqual({ name, source: "outbound_send" });
+  });
+
+  test("M3: a hash-routed credentials page still counts; a token in the fragment does not", () => {
+    const typing = (pageUrl: string) =>
+      safetyRequirement(
+        candidate({
+          toolRef: "computer_type",
+          args: { ref: "e1", text: "Sam" },
+          target: {
+            pageUrl,
+            element: { ref: "e1", role: "textbox", name: "Display name" },
+          },
+        }),
+      )?.id;
+    expect(typing("https://mail.example.com/#/settings/password")).toBe(
+      "credentials",
+    );
+    expect(typing("https://mail.example.com/#!/security/2fa")).toBe(
+      "credentials",
+    );
+    expect(
+      typing("https://app.example/welcome#access_token=ya29&token_type=Bearer"),
+    ).toBeUndefined();
+  });
+
+  test("M4: a business wire transfer is a wire of money", () => {
+    expect(
+      safetyRequirement(
+        candidate({
+          toolRef: "composio-hubspot/HUBSPOT_CREATE_NOTE",
+          args: { body: "business wire transfer $50,000" },
+          subject: { connector: true },
+        }),
+      )?.id,
+    ).toBe("payments");
+  });
+
+  test("M5: the web and mobile cards share the server's list of allow-once sources", async () => {
+    const { ONCE_ONLY_SOURCES } = await import("../src/approvals/types");
+    const read = (path: string) =>
+      Bun.file(new URL(path, import.meta.url)).text();
+    const web = await read("../../app/src/lib/approvals.ts");
+    const mobile = await read("../../mobile/app/approvals.tsx");
+    for (const source of Object.keys(ONCE_ONLY_SOURCES)) {
+      expect({ source, web: web.includes(`"${source}"`) }).toEqual({
+        source,
+        web: true,
+      });
+      expect({ source, mobile: mobile.includes(`"${source}"`) }).toEqual({
+        source,
+        mobile: true,
+      });
+    }
   });
 });
