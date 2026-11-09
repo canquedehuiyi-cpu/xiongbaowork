@@ -118,6 +118,42 @@ export function latestDirectChannel(
   return latest;
 }
 
+/** A group's members in the order a person put them in: the order they answer in a group chat. */
+export function crewChatAgentIds(crew: {
+  members: readonly { agentId: string; position: number }[];
+}): string[] {
+  return [...crew.members]
+    .sort((left, right) => left.position - right.position)
+    .map((member) => member.agentId);
+}
+
+/**
+ * Where clicking a group goes: the most recent group conversation among the loaded pages whose
+ * coworkers are exactly this group's members, so clicking the same group twice lands in the same
+ * transcript instead of piling up empty ones.
+ *
+ * Exactly the members, not "at least": a conversation that also has someone else, or lacks one of
+ * them, is a different group of coworkers. After the group's roster changes the old transcript no
+ * longer matches, and the caller starts a new one with the roster as it is now. Inactive channels
+ * (a coworker deleted since) are skipped, because nothing more can be said in them.
+ */
+export function latestCrewChannel(
+  channels: readonly ChannelSummary[] | undefined,
+  agentIds: readonly string[],
+): ChannelSummary | undefined {
+  if (agentIds.length < 2) return undefined;
+  const wanted = new Set(agentIds);
+  let latest: ChannelSummary | undefined;
+  for (const channel of channels ?? []) {
+    if (!channel.active) continue;
+    if (channel.agentIds.length !== wanted.size) continue;
+    if (!channel.agentIds.every((id) => wanted.has(id))) continue;
+    if (!latest || lastActivity(channel) > lastActivity(latest))
+      latest = channel;
+  }
+  return latest;
+}
+
 /**
  * The employees the sidebar lists: everyone on the roster except those switched out of the list,
  * unless the person pinned one or an administrator assigned it to them — those stay in reach.

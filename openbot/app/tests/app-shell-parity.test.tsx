@@ -64,7 +64,7 @@ class OfflineWebSocket extends EventTarget implements WebSocket {
 
 let originalFetch: typeof fetch;
 let originalWebSocket: typeof WebSocket;
-let respond: (url: string) => Promise<Response>;
+let respond: (url: string, init?: RequestInit) => Promise<Response>;
 const requests: string[] = [];
 const clients: QueryClient[] = [];
 
@@ -74,9 +74,9 @@ beforeAll(() => {
   originalWebSocket = globalThis.WebSocket;
   globalThis.WebSocket = OfflineWebSocket;
   globalThis.fetch = Object.assign(
-    async (input: RequestInfo | URL) => {
+    async (input: RequestInfo | URL, init?: RequestInit) => {
       requests.push(String(input));
-      return respond(String(input));
+      return respond(String(input), init);
     },
     { preconnect: originalFetch.preconnect },
   );
@@ -243,6 +243,7 @@ function renderShell(path: string, options: Options = {}) {
       leaf("/channel/new"),
       leaf("/channel/$channelId"),
       leaf("/group/$channelId"),
+      leaf("/group/new"),
     ]),
     history: createMemoryHistory({ initialEntries: [path] }),
   });
@@ -429,7 +430,7 @@ test("what an employee needs from you rides on its row: a count badge and a paus
 /* 群组 tab                                                                                          */
 /* ------------------------------------------------------------------------------------------------ */
 
-test("the 群组 tab lists groups with their members and links to the group wall", async () => {
+test("the 群组 tab lists groups with their members, and a group opens its group chat", async () => {
   const { view } = renderShell("/tasks", {
     groups: [
       {
@@ -437,8 +438,8 @@ test("the 群组 tab lists groups with their members and links to the group wall
         name: "周报群",
         description: null,
         members: [
-          { agentId: "agent-analyst", position: 0 },
           { agentId: "agent-writer", position: 1 },
+          { agentId: "agent-analyst", position: 0 },
         ],
       },
     ],
@@ -447,14 +448,83 @@ test("the 群组 tab lists groups with their members and links to the group wall
   expect(hrefOf(view.getByRole("link", { name: "新建群组" }))).toBe(
     "/wakers?tab=groups",
   );
+  // Two or more coworkers without naming a group first: the entry the sidebar rework had dropped.
+  expect(hrefOf(view.getByRole("link", { name: "新建群聊" }))).toBe(
+    "/group/new",
+  );
   const list = view.getByRole("list", { name: "群组" });
   const row = within(list).getByRole("link", { name: /周报群/ });
-  expect(hrefOf(row)).toBe("/wakers?tab=groups");
+  // c-crew holds exactly these two coworkers, so clicking the group is that conversation.
+  expect(hrefOf(row)).toBe("/group/c-crew");
   expect(within(row).getByText("2 名员工")).toBeTruthy();
   // The stacked avatars are named once, as a group, not one name per face.
   expect(
     within(row).getByRole("img", { name: "成员：分析师、写手" }),
   ).toBeTruthy();
+});
+
+test("a group with no conversation yet starts one with its members in order and opens it", async () => {
+  const posted: unknown[] = [];
+  respond = async (url, init) => {
+    if (url === "/api/groups" && init?.method === "POST") {
+      posted.push(JSON.parse(String(init.body)));
+      return Response.json({
+        channel: {
+          id: "c-new-crew",
+          name: "新群聊",
+          agentIds: ["agent-writer", "agent-analyst", "agent-pinned"],
+          threadId: "c-new-crew",
+          active: true,
+          lastMessageAt: null,
+        },
+      });
+    }
+    throw new Error(`Unexpected request ${url}`);
+  };
+  const { view, router } = renderShell("/tasks", {
+    groups: [
+      {
+        id: "g2",
+        name: "写作群",
+        description: null,
+        members: [
+          { agentId: "agent-analyst", position: 1 },
+          { agentId: "agent-writer", position: 0 },
+          { agentId: "agent-pinned", position: 2 },
+        ],
+      },
+    ],
+  });
+  await userEvent.click(await view.findByRole("tab", { name: "群组 (1)" }));
+  const list = view.getByRole("list", { name: "群组" });
+  await userEvent.click(within(list).getByRole("button", { name: /写作群/ }));
+  await waitFor(() =>
+    expect(router.state.location.pathname).toBe("/group/c-new-crew"),
+  );
+  // The group's order is the order they answer in, and no second conversation is started.
+  expect(posted).toEqual([
+    { agentIds: ["agent-writer", "agent-analyst", "agent-pinned"] },
+  ]);
+});
+
+test("a group with fewer than two members goes to the group wall to pick them", async () => {
+  const { view } = renderShell("/tasks", {
+    groups: [
+      {
+        id: "g3",
+        name: "单人群",
+        description: null,
+        members: [{ agentId: "agent-analyst", position: 0 }],
+      },
+    ],
+  });
+  await userEvent.click(await view.findByRole("tab", { name: "群组 (1)" }));
+  const row = within(view.getByRole("list", { name: "群组" })).getByRole(
+    "link",
+    { name: /单人群/ },
+  );
+  expect(hrefOf(row)).toBe("/wakers?tab=groups");
+  expect(within(row).getByText(/至少要有两位员工才能群聊/)).toBeTruthy();
 });
 
 test("the 群组 tab says so when there are none", async () => {

@@ -8,6 +8,13 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+- **A group can be talked to again.** Since the sidebar rework, a group made under 员工管理 › 群组
+  only led back to the group wall, and the 新建群聊 entry for a multi-coworker conversation was gone,
+  so nothing in the interface opened a group conversation. Clicking a group in the sidebar, or 进入群聊
+  on its card, now opens the latest group conversation with exactly its members, or starts one with
+  them in the group's order; a group with fewer than two members says so and sends you to pick them.
+  The sidebar's 群组 tab has 新建群聊 again, for any two or more coworkers without naming a group.
+
 ## 0.2.5
 
 - **The web chat gets the local-app and desktop tools.** Talking to a coworker in the browser now

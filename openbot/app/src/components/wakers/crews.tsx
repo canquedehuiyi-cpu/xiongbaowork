@@ -24,6 +24,7 @@ import {
   setCrewMembersMutationOptions,
 } from "@/lib/waker-groups/mutations";
 import type { WakerGroup } from "@/lib/waker-groups/queries";
+import { CREW_CHAT_NEEDS_TWO, useOpenCrewChat } from "./use-open-crew-chat";
 import {
   CARD_SURFACE,
   CardFooter,
@@ -140,6 +141,7 @@ export function CrewTab({
 }) {
   const members = useMutation(setCrewMembersMutationOptions(queryClient));
   const retire = useMutation(retireCrewMutationOptions(queryClient));
+  const crewChat = useOpenCrewChat();
   const [problem, setProblem] = useState<string | null>(null);
 
   const toggle = (crew: WakerGroup, agentId: string) => {
@@ -200,6 +202,11 @@ export function CrewTab({
             busy={members.isPending}
             crew={crew}
             key={crew.id}
+            onChat={() => {
+              setProblem(null);
+              void crewChat.open(crew);
+            }}
+            opening={crewChat.openingId === crew.id}
             onRetire={() => {
               setProblem(null);
               retire.mutate(crew.id, {
@@ -213,9 +220,9 @@ export function CrewTab({
           />
         ))}
       </div>
-      {problem ? (
+      {problem || crewChat.problem ? (
         <p className="mt-4 text-destructive text-sm" role="alert">
-          {problem}
+          {problem ?? crewChat.problem}
         </p>
       ) : null}
     </>
@@ -225,6 +232,8 @@ export function CrewTab({
 function CrewCard({
   busy,
   crew,
+  onChat,
+  opening,
   onRetire,
   onToggle,
   retiring,
@@ -233,6 +242,9 @@ function CrewCard({
 }: {
   busy: boolean;
   crew: WakerGroup;
+  /** Open this group's group chat, or start one with its members (use-open-crew-chat.ts). */
+  onChat: () => void;
+  opening: boolean;
   onRetire: () => void;
   onToggle: (agentId: string) => void;
   retiring: boolean;
@@ -348,6 +360,18 @@ function CrewCard({
       ) : null}
 
       <div className="mt-1 flex flex-wrap items-center justify-center gap-1">
+        {/*
+         * The reason a group is made: to talk to its members together. Fewer than two members has
+         * nobody to hold a group chat with, and the button says so instead of failing on click.
+         */}
+        <Button
+          disabled={ordered.length < 2 || opening}
+          onClick={onChat}
+          size="xs"
+          title={ordered.length < 2 ? CREW_CHAT_NEEDS_TWO : undefined}
+        >
+          {opening ? "正在打开…" : "进入群聊"}
+        </Button>
         <Button
           aria-expanded={managing}
           onClick={() => setManaging((open) => !open)}

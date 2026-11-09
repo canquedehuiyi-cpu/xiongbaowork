@@ -118,6 +118,7 @@ const crew: WakerGroup = {
 };
 
 let queryClientForDraw = new QueryClient();
+let lastRouter: { state: { location: { pathname: string } } } | undefined;
 
 function seed(
   agents: AgentProfile[],
@@ -190,8 +191,15 @@ function draw() {
         path: "/wakers/$agentId",
         component: () => null,
       } as never),
+      // A group card's 进入群聊 lands in the group conversation.
+      createRoute({
+        getParentRoute: () => root,
+        path: "/group/$channelId",
+        component: () => null,
+      } as never),
     ]),
   });
+  lastRouter = router;
   return render(
     <QueryClientProvider client={queryClientForDraw}>
       <RouterProvider router={router} />
@@ -246,6 +254,24 @@ function serve(answer: (path: string, method: string) => unknown) {
     });
     return Response.json(answer(String(input), method));
   }) as typeof fetch;
+}
+
+/** A conversation row as `GET /api/channels` lists it. */
+function channelRow(id: string, agentIds: string[]) {
+  return {
+    id,
+    name: id,
+    agentIds,
+    threadId: id,
+    active: true,
+    lastMessageAt: null,
+    summary: null,
+    lastMessage: null,
+    lastMessageAgentId: null,
+    createdAt: "2026-11-01T00:00:00Z",
+    pinned: false,
+    lastReadAt: null,
+  };
 }
 
 /*
@@ -539,6 +565,89 @@ test("the groups tab edits a crew by sending the whole roster", async () => {
   expect(writes()[0]?.body).toEqual({
     agentIds: ["agent-1", "agent-2", "agent-3"],
   });
+});
+
+/*
+ * A group is made to be talked to. Its card's 进入群聊 opens the group conversation that has exactly
+ * its members, or starts one with them in the card's order (`POST /api/groups`) when there is none.
+ */
+test("进入群聊 opens the conversation that already has exactly this crew", async () => {
+  queryClientForDraw = seed([base, reviewer, qa], [crew], []);
+  serve((path) =>
+    path.startsWith("/api/channels")
+      ? {
+          channels: [
+            // Same coworkers plus another: a different group of people, not this crew's chat.
+            channelRow("c-wider", ["agent-1", "agent-2", "agent-3"]),
+            channelRow("c-crew", ["agent-2", "agent-1"]),
+          ],
+          nextCursor: null,
+        }
+      : path.includes("/api/tasks")
+        ? { tasks: [] }
+        : { groups: [crew] },
+  );
+  const screen = draw();
+  await openGroupsTab(screen);
+  await userEvent.click(
+    await screen.findByRole("button", { name: "进入群聊" }),
+  );
+  await waitFor(() =>
+    expect(lastRouter?.state.location.pathname).toBe("/group/c-crew"),
+  );
+  expect(writes()).toHaveLength(0);
+});
+
+test("进入群聊 starts a group conversation with the crew in its order when there is none", async () => {
+  const ordered: WakerGroup = {
+    ...crew,
+    members: [
+      { agentId: "agent-2", position: 1 },
+      { agentId: "agent-3", position: 2 },
+      { agentId: "agent-1", position: 0 },
+    ],
+  };
+  queryClientForDraw = seed([base, reviewer, qa], [ordered], []);
+  serve((path, method) =>
+    method === "POST" && path === "/api/groups"
+      ? { channel: channelRow("c-started", ["agent-1", "agent-2", "agent-3"]) }
+      : path.startsWith("/api/channels")
+        ? { channels: [], nextCursor: null }
+        : path.includes("/api/tasks")
+          ? { tasks: [] }
+          : { groups: [ordered] },
+  );
+  const screen = draw();
+  await openGroupsTab(screen);
+  await userEvent.click(
+    await screen.findByRole("button", { name: "进入群聊" }),
+  );
+  await waitFor(() =>
+    expect(lastRouter?.state.location.pathname).toBe("/group/c-started"),
+  );
+  expect(writes()).toEqual([
+    {
+      method: "POST",
+      path: "/api/groups",
+      body: { agentIds: ["agent-1", "agent-2", "agent-3"] },
+    },
+  ]);
+});
+
+test("a crew with fewer than two members cannot be talked to yet, and says why", async () => {
+  const solo: WakerGroup = {
+    ...crew,
+    members: [{ agentId: "agent-1", position: 0 }],
+  };
+  queryClientForDraw = seed([base], [solo], []);
+  serve(() => ({ groups: [solo] }));
+  const screen = draw();
+  await openGroupsTab(screen);
+  const button = (await screen.findByRole("button", {
+    name: "进入群聊",
+  })) as HTMLButtonElement;
+  expect(button.disabled).toBe(true);
+  expect(button.title).toBe("至少要有两位员工才能群聊");
 });
 
 test("a new crew is created by name, and its purpose is optional", async () => {

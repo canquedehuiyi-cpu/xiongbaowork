@@ -36,10 +36,16 @@ import {
 } from "@/lib/waker-groups/queries";
 import {
   channelsOf,
+  crewChatAgentIds,
   hasUnseenActivity,
+  latestCrewChannel,
   latestDirectChannel,
   listedEmployees,
 } from "./roster";
+import {
+  CREW_CHAT_NEEDS_TWO,
+  useOpenCrewChat,
+} from "@/components/wakers/use-open-crew-chat";
 import { useConversationFocus } from "./use-conversation-focus";
 
 type RosterTab = "wakers" | "groups";
@@ -386,10 +392,87 @@ function MemberStack({
   );
 }
 
+/**
+ * One group in the sidebar. Clicking it is talking to it, the way clicking an employee is: its most
+ * recent group conversation when one with exactly these members is loaded, else a new one started
+ * with them in their order. A group with fewer than two members has nobody to hold a group chat
+ * with, so it goes to the group wall, where members are picked.
+ */
+function GroupRow({
+  agentsById,
+  channels,
+  group,
+  onOpen,
+  opening,
+}: {
+  agentsById: Map<string, AgentProfile>;
+  channels: ChannelSummary[] | undefined;
+  group: WakerGroup;
+  onOpen: (group: WakerGroup) => void;
+  opening: boolean;
+}) {
+  const agentIds = crewChatAgentIds(group);
+  const latest = latestCrewChannel(channels, agentIds);
+  const body = (
+    <>
+      <MemberStack agentsById={agentsById} group={group} />
+      <span className="min-w-0 flex-1 text-left">
+        <span className="block truncate font-semibold text-[14px] leading-[20px]">
+          {group.name}
+        </span>
+        <span className="block truncate text-[12px] text-muted-foreground leading-[18px]">
+          {opening
+            ? "正在打开群聊…"
+            : agentIds.length < 2
+              ? `${group.members.length} 名员工 · ${CREW_CHAT_NEEDS_TWO}`
+              : `${group.members.length} 名员工`}
+        </span>
+      </span>
+    </>
+  );
+  return (
+    <li className="flex">
+      {agentIds.length < 2 ? (
+        <Link
+          activeProps={{}}
+          className={rowClassName}
+          search={{ tab: "groups" }}
+          title="去员工管理里给这个群组挑选成员"
+          to="/wakers"
+        >
+          {body}
+        </Link>
+      ) : latest ? (
+        <Link
+          activeProps={{
+            className: "bg-sidebar-accent text-sidebar-accent-foreground",
+          }}
+          className={rowClassName}
+          params={{ channelId: latest.id }}
+          to="/group/$channelId"
+        >
+          {body}
+        </Link>
+      ) : (
+        <button
+          className={rowClassName}
+          disabled={opening}
+          onClick={() => onOpen(group)}
+          type="button"
+        >
+          {body}
+        </button>
+      )}
+    </li>
+  );
+}
+
 function GroupList() {
   const [query, setQuery] = useState("");
   const groups = useQuery(wakerGroupsQueryOptions());
   const agents = useQuery(agentListQueryOptions());
+  const channels = useInfiniteQuery(channelListQueryOptions());
+  const crewChat = useOpenCrewChat();
   const agentsById = useMemo(
     () => new Map((agents.data ?? []).map((agent) => [agent.id, agent])),
     [agents.data],
@@ -401,24 +484,38 @@ function GroupList() {
     <>
       <RosterToolbar
         action={
-          /*
-           * The group wall's create dialog is local state there, with no address to open it by, so
-           * this lands on the 群组 tab and its own 新建群组 button.
-           */
-          <Link
-            className={newRowClassName}
-            search={{ tab: "groups" }}
-            to="/wakers"
-          >
-            <IconPlus aria-hidden="true" />
-            新建群组
-          </Link>
+          <span className="flex min-w-0 flex-1 gap-[6px]">
+            {/*
+             * The group wall's create dialog is local state there, with no address to open it by, so
+             * this lands on the 群组 tab and its own 新建群组 button.
+             */}
+            <Link
+              className={newRowClassName}
+              search={{ tab: "groups" }}
+              to="/wakers"
+            >
+              <IconPlus aria-hidden="true" />
+              新建群组
+            </Link>
+            {/* Any two or more coworkers, without making a named group first. */}
+            <Link className={newRowClassName} to="/group/new">
+              <IconPlus aria-hidden="true" />
+              新建群聊
+            </Link>
+          </span>
         }
         fieldLabel="按名字搜索群组"
         onQueryChange={setQuery}
         query={query}
         searchLabel="搜索群组"
       />
+      {crewChat.problem ? (
+        <RosterNote>
+          <span className="text-destructive" role="alert">
+            {crewChat.problem}
+          </span>
+        </RosterNote>
+      ) : null}
       {groups.isPending ? (
         <RosterNote>正在加载群组…</RosterNote>
       ) : groups.isError && !groups.data ? (
@@ -436,32 +533,21 @@ function GroupList() {
       ) : (groups.data ?? []).length === 0 ? (
         <RosterNote>
           <span className="block font-medium text-foreground">还没有群组</span>
-          在员工管理的「群组」里把几位员工编成一组，它就会出现在这里。
+          在员工管理的「群组」里把几位员工编成一组，它就会出现在这里，点它就能群聊。
         </RosterNote>
       ) : shown.length === 0 ? (
         <RosterNote>没有匹配的群组</RosterNote>
       ) : (
         <ul aria-label="群组" className="mt-[10px] flex flex-col gap-px">
           {shown.map((group) => (
-            <li className="flex" key={group.id}>
-              {/* No group workspace exists to open; the group wall is where a group is managed. */}
-              <Link
-                activeProps={{}}
-                className={rowClassName}
-                search={{ tab: "groups" }}
-                to="/wakers"
-              >
-                <MemberStack agentsById={agentsById} group={group} />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-semibold text-[14px] leading-[20px]">
-                    {group.name}
-                  </span>
-                  <span className="block truncate text-[12px] text-muted-foreground leading-[18px]">
-                    {group.members.length} 名员工
-                  </span>
-                </span>
-              </Link>
-            </li>
+            <GroupRow
+              agentsById={agentsById}
+              channels={channels.data}
+              group={group}
+              key={group.id}
+              onOpen={(next) => void crewChat.open(next)}
+              opening={crewChat.openingId === group.id}
+            />
           ))}
         </ul>
       )}
