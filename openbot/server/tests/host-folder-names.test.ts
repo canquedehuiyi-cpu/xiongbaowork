@@ -58,10 +58,10 @@ test("the card names the file and the folder an edit is in, and the folder a com
   // Found on Windows: the card named the folder ("share") and not the file.
   // In the words its step and its Activity row use, never "write file on notes.txt in folder-test".
   expect(approvalWords(edit)).toEqual({
-    action: "save a file",
-    place: "notes.txt in folder-test",
+    action: "保存文件",
+    place: "notes.txt（在 folder-test 中）",
   });
-  expect(approvalPhrase(edit)).toBe("save a file notes.txt in folder-test");
+  expect(approvalPhrase(edit)).toBe("保存文件 notes.txt（在 folder-test 中）");
   const command = await asked("host_run_command", {
     grantId: GRANT,
     command: "wc -c notes.txt",
@@ -103,7 +103,7 @@ test("a task waiting on a folder edit says where by the folder's name", () => {
       target: { displayName: "folder-test" },
       handOff: false,
     }),
-  ).toBe("Waiting for your approval: save a file in folder-test");
+  ).toBe("Waiting for your approval: 保存文件（在 folder-test 中）");
   expect(
     waitingLine({
       kind: "approval",
@@ -112,5 +112,5 @@ test("a task waiting on a folder edit says where by the folder's name", () => {
       target: { displayName: "folder-test", relativePath: "notes.txt" },
       handOff: false,
     }),
-  ).toBe("Waiting for your approval: save a file notes.txt in folder-test");
+  ).toBe("Waiting for your approval: 保存文件 notes.txt（在 folder-test 中）");
 });

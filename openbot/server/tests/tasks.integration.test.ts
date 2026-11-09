@@ -657,7 +657,7 @@ describe("where a task stands", () => {
     expect(request.action.threadId).toBe(waiting.threadId ?? "");
     // Its next step is what it waits for, in the words of the approval card in its conversation.
     expect(waiting.next).toBe(
-      "Waiting for your approval: send message on Mail",
+      "Waiting for your approval: send message（Mail）",
     );
     // Still that, once the person has said something there, never their own words back to them.
     await channelStore.recordActivity(owner, task.channelId, {
@@ -667,7 +667,7 @@ describe("where a task stands", () => {
     });
     expect(await taskStore.get(owner.id, task.id)).toMatchObject({
       status: "needs_input",
-      next: "Waiting for your approval: send message on Mail",
+      next: "Waiting for your approval: send message（Mail）",
     });
 
     await asOwner(owner, () =>
@@ -737,7 +737,7 @@ describe("where a task stands", () => {
     });
     expect(await taskStore.get(owner.id, task.id)).toMatchObject({
       status: "needs_input",
-      next: "Waiting for your approval: send message on Mail",
+      next: "Waiting for your approval: send message（Mail）",
     });
     // A standing rule would be ignored by the next task, so none is saved from one: once, or no.
     await expect(

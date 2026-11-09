@@ -3,7 +3,7 @@
  *
  * A skill declares `@research/search` and `@research/fetch` instead of one provider's tool names,
  * and the server matches each to that role's tool on every research connector. So a research skill
- * keeps working when a deployment switches provider, and the transcript can say "Search the web"
+ * keeps working when a deployment switches provider, and the transcript can say 「搜索网页」
  * instead of naming whichever vendor answered.
  */
 export type ResearchRole = "search" | "fetch";
@@ -59,7 +59,7 @@ export const RESEARCH_TOOLS: Readonly<Record<string, ResearchTools>> =
 
 /** What a research call is called on screen, whichever provider made it. */
 export const RESEARCH_ROLE_LABELS: Readonly<Record<ResearchRole, string>> =
-  Object.freeze({ search: "Search the web", fetch: "Read web pages" });
+  Object.freeze({ search: "搜索网页", fetch: "读取网页" });
 
 /** The research role a tool on this server plays, or null when it plays none. */
 export function researchRoleOfTool(

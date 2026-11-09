@@ -54,7 +54,7 @@ test("an action reads as what was asked for, in the words a conversation uses fo
   expect(auditActionWords("host/read_file")).toBe("Read a file");
   // Older rows record a computer's action without its namespace.
   expect(auditActionWords("click")).toBe("Click on a page");
-  expect(auditActionWords("parallel/web_search")).toBe("Search the web");
+  expect(auditActionWords("parallel/web_search")).toBe("搜索网页");
   expect(auditActionWords("composio-gmail/GMAIL_SEND_EMAIL")).toBe(
     "Send email",
   );

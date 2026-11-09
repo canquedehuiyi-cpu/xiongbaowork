@@ -643,7 +643,7 @@ test("bound sender runs the canonical turn and an approval becomes an OpenTag ca
     __copilotkit_interrupt_value__: {
       action: "confirm_write",
       args: {
-        action: "Research Bot wants to open a page on example.com",
+        action: "Research Bot wants to 在 example.com 上打开页面",
         fields: [{ label: "URL", value: "https://example.com" }],
         approver: "slack:U1",
         effect: "write",
@@ -672,7 +672,7 @@ test("a check-in task's approval becomes a card without Always allow, and an old
     (e) => e.type === "CUSTOM" && e.name === "on_interrupt",
   );
   expect(card.value.__copilotkit_interrupt_value__.args).toMatchObject({
-    action: "Research Bot wants to open a page on example.com",
+    action: "Research Bot wants to 在 example.com 上打开页面",
     allow_always: false,
   });
   const resumed = await run(f, {
@@ -847,7 +847,7 @@ test("a click waiting in Slack is named in words, with no tool id or page handle
     (e) => e.type === "CUSTOM" && e.name === "on_interrupt",
   );
   expect(card.value.__copilotkit_interrupt_value__.args).toMatchObject({
-    action: "Research Bot wants to click the link “Python” on en.wikipedia.org",
+    action: "Research Bot wants to 在 en.wikipedia.org 上点击链接「Python」",
     fields: [],
   });
   const denied = await run(f, {
@@ -863,7 +863,7 @@ test("a click waiting in Slack is named in words, with no tool id or page handle
     },
   });
   expect(said(denied.events)).toBe(
-    "Denied. Research Bot won't click the link “Python” on en.wikipedia.org.",
+    "Denied. Research Bot won't 在 en.wikipedia.org 上点击链接「Python」.",
   );
   expect(JSON.stringify([asked.events, denied.events])).not.toMatch(
     /computer_click|snapshotId|f3e43/,

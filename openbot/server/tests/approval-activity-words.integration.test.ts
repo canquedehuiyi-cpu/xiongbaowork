@@ -104,14 +104,14 @@ test("a pending computer approval's Activity row is said in words, with no tool 
     rows.map((item) => [item.id.replace(`approval:${suite}-`, ""), item]),
   );
   expect(byId.click).toMatchObject({
-    title: "Click the link “Python (programming language)” on en.wikipedia.org",
+    title: "在 en.wikipedia.org 上点击链接「Python (programming language)」",
     detail: null,
     status: "waiting for you",
     needsYou: true,
   });
-  expect(byId["click-unnamed"]?.title).toBe("Click on en.wikipedia.org");
-  expect(byId.open?.title).toBe("Open a page on en.wikipedia.org");
-  expect(byId.type?.title).toBe("Fill in a field on en.wikipedia.org");
+  expect(byId["click-unnamed"]?.title).toBe("在 en.wikipedia.org 上点击");
+  expect(byId.open?.title).toBe("在 en.wikipedia.org 上打开页面");
+  expect(byId.type?.title).toBe("在 en.wikipedia.org 上填写字段");
   for (const row of rows) {
     expect(row.title).not.toMatch(/computer_|Approve /);
     expect(row.detail).not.toBe("write");
