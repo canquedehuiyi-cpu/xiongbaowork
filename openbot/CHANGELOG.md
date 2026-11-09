@@ -8,6 +8,15 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+- **Composio apps are listed again once after an upgrade.** An app's actions that Composio gives no
+  read-only, destructive, create or update label are now recorded as unclassified, as a fresh
+  install records them, where an upgraded install had kept them as plain writes. Migration 0152
+  adds `mcp_servers.listing_revision`; at each start of a deployment with Composio configured, every
+  Composio app whose tools an older build stored is listed again in the background, without holding
+  up the start. One that cannot be reached keeps its stored actions and is retried with backoff,
+  said once in the log; once the backoff has reached its longest step (5 minutes), three more
+  failures there make this process stop trying it until the next start or Refresh tools. From
+  upstream #1185.
 - **OpenBot's own apps' saved tools are brought up to date at every start.** Routines, Google Drive
   and 百度网盘 list tools that are this code, but a deployment kept the list the build that added
   the app saved until an admin pressed Refresh tools. Each start now compares every such app's saved

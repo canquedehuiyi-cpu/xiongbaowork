@@ -640,6 +640,21 @@ function storableSchema(
 }
 
 /**
+ * 当前这一版对 vendor 清单的读法，每次存下应用工具的刷新都写到这台应用的行上
+ * （`mcpServers.listingRevision`）。同一份清单记下的东西变了就加一，下次启动时，配置了 Composio
+ * 的部署会把每个 broker 应用重新列一次。
+ *
+ * 1：Composio 什么标签都没给的动作记为 `unclassified`，不再是普通写操作（迁移 0146）。
+ */
+export const LISTING_REVISION = 1;
+
+/**
+ * 升级后重新列 broker 应用时，退避到最长一档之后，同一个应用、同一个版本最多再连续失败几次就放弃
+ * （本进程内）。
+ */
+export const RELIST_ATTEMPTS = 3;
+
+/**
  * What a vendor listed, as rows this database will actually take.
  *
  * CRITERION ONE. No two rows carry the same name, whatever the vendor listed.
@@ -3240,6 +3255,12 @@ export function createPluginStore(options: PluginStoreOptions) {
     return schemeKind(await brokeredAppScheme(toolkit));
   }
 
+  /**
+   * 本进程里每个 broker 应用在某个 `listing_revision` 上重新列失败了几次，键是 `行 id@版本`。
+   * 只是本进程的重试上限，不是共享状态：别的副本、下一次启动各自从零开始。
+   */
+  const relistFailures = new Map<string, number>();
+
   return {
     /**
      * Add a server from the catalogue.
@@ -4953,6 +4974,8 @@ export function createPluginStore(options: PluginStoreOptions) {
           .set({
             toolsRefreshedAt: new Date(),
             lastError: null,
+            // 按这一版的清单读法存下的；见 `relistOutdatedBrokeredApps`。
+            listingRevision: LISTING_REVISION,
             updatedAt: new Date(),
           })
           .where(eq(mcpServers.id, rowId)),
@@ -5144,6 +5167,88 @@ export function createPluginStore(options: PluginStoreOptions) {
         reRegister: false,
         writeAs: (work) => runAsTenant("platform", work),
       });
+    },
+
+    /**
+     * 把 broker（Composio）的每个应用里、工具按旧版读法存下的（`mcpServers.listingRevision` 落后于
+     * {@link LISTING_REVISION}），重新列一次。回答仍然落后的行。上游 #1185。
+     *
+     * 标准：升级之后，应用的动作记成和全新安装一样，不需要谁去按「刷新工具」。
+     *
+     * 原因：0146 开始把 Composio 什么标签都没给的动作记为 `unclassified`，之前记的是普通写操作。
+     * 存下的行分不清「标了 create/update」和「什么都没标」，所以不在迁移里改写，而是重新问一次。
+     *
+     * 只有部署配置了 Composio（有 broker）才做：broker 用部署自己的 key 列清单，不需要任何人的账号；
+     * 没配置时 Composio transport 本来就列不出东西。刷新失败时版本不前进，下一次再试；在那之前存下的
+     * 工具照常可用，按原来的方式询问。跨所有租户：调用方要在平台帧里调用（`index.ts` 每一轮都这样）。
+     * 按准确的行 id 刷新（`exactRow`），遍历到哪一行就刷新哪一行。
+     *
+     * 日志：vendor 的失败落在应用的 `lastError`；`refreshTools` 抛出的（部署自己的故障、url 里没有
+     * 应用的 brokered 行）写一行结构化日志，只写错误名，不写 message（可能带语句或 vendor 的原话）。
+     * 放弃：只有 `countFailures` 为 true 的一轮失败才计数，后台循环在退避推进到最长一档之后才这样
+     * 要求（见 `./relist`），所以退避表的每一档都会走到。同一个应用、同一个 `listing_revision`
+     * 计数满 {@link RELIST_ATTEMPTS} 次，本进程里就不再重试，记一条日志，也不再算作落后；下一次
+     * 启动或管理员的「刷新工具」会再试。成功一次就清零。
+     */
+    async relistOutdatedBrokeredApps(
+      options: { countFailures?: boolean } = {},
+    ): Promise<string[]> {
+      if (!broker) return [];
+      requireServerWriter();
+      const outdated = await database
+        .select({ id: mcpServers.id, revision: mcpServers.listingRevision })
+        .from(mcpServers)
+        .where(
+          and(
+            eq(mcpServers.provenance, "composio"),
+            sql`${mcpServers.listingRevision} < ${LISTING_REVISION}`,
+          ),
+        )
+        .orderBy(asc(mcpServers.id));
+      const behind: string[] = [];
+      for (const { id, revision } of outdated) {
+        const attempt = `${id}@${revision}`;
+        if ((relistFailures.get(attempt) ?? 0) >= RELIST_ATTEMPTS) continue;
+        try {
+          await this.refreshTools(id, "", { exactRow: true });
+        } catch (error) {
+          console.warn(
+            JSON.stringify({
+              type: "brokered-app-relist-failed",
+              serverId: id,
+              error: error instanceof Error ? error.name : typeof error,
+            }),
+          );
+        }
+        const [after] = await database
+          .select({ revision: mcpServers.listingRevision })
+          .from(mcpServers)
+          .where(eq(mcpServers.id, id));
+        if (!after || after.revision >= LISTING_REVISION) {
+          relistFailures.delete(attempt);
+          continue;
+        }
+        if (!options.countFailures) {
+          behind.push(id);
+          continue;
+        }
+        const failures = (relistFailures.get(attempt) ?? 0) + 1;
+        relistFailures.set(attempt, failures);
+        if (failures >= RELIST_ATTEMPTS) {
+          console.warn(
+            JSON.stringify({
+              type: "brokered-app-relist-given-up",
+              serverId: id,
+              listingRevision: revision,
+              attempts: failures,
+              note: "Listed again after the upgrade through every backoff step and then failed three times at the longest, so this process stops trying. Its stored actions keep working and ask as before; the next start, or Refresh tools on the app's page, tries again.",
+            }),
+          );
+          continue;
+        }
+        behind.push(id);
+      }
+      return behind;
     },
 
     async listServers(): Promise<ServerRecord[]> {

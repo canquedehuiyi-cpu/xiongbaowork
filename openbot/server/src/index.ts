@@ -273,6 +273,7 @@ import { useComposioClient } from "./plugins/composio";
 import { createComposioClient } from "./plugins/composio-adapter";
 import { backfillComposioLogos } from "./plugins/logos";
 import { redirectUriFor } from "./plugins/oauth";
+import { startBrokeredRelist } from "./plugins/relist";
 import { createPluginStore } from "./plugins/store";
 import {
   grantedSkills,
@@ -1270,6 +1271,25 @@ await startupLifecycle.run(async (startup) => {
       );
     },
   );
+
+  /*
+   * 工具按旧版清单读法存下的 Composio 应用，重新列一次，让升级上来的部署记下和全新安装一样的东西
+   * （见 `relistOutdatedBrokeredApps`）。只有配置了 Composio 才启动。不 await；还有应用落后就按退避
+   * 间隔重试，退避表每一档都走到，在最长一档上连续失败 3 次才放弃；同一个应用只报一次。每一轮跨所有租户读写 `mcp_servers`/`mcp_tools`，所以在平台帧里跑。
+   */
+  if (composio) {
+    startup.acquireSync(
+      () => ({
+        stop: startBrokeredRelist({
+          relistOutdatedBrokeredApps: (options) =>
+            runAsTenant("platform", () =>
+              pluginStore.relistOutdatedBrokeredApps(options),
+            ),
+        }),
+      }),
+      (resource) => resource.stop(),
+    );
+  }
 
   /**
    * Routines, and the one moment its tools are told what to act on.
