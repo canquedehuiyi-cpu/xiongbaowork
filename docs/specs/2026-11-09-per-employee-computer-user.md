@@ -61,7 +61,7 @@
 agent-computer 以 pwuser 运行，不能切换用户。新增 `/usr/local/sbin/xb-bot`（root 所有，0755，POSIX sh），只做两件事：
 
 1. `xb-bot ensure <botKey>`：建用户（若不存在）、建目录、设权限，打印 uid。
-2. `xb-bot run <botKey> <timeout_s>`：从标准输入读取命令，以 `runuser -u xb-<botKey>` 在该员工目录中执行。命令由 root 写进 0600 的临时文件，经 fd 交给员工的 bash（`/bin/bash /dev/fd/3`），启动前删除，不出现在任何 argv 里。环境由调用方经白名单传入：`env -i`，加上 HOME 和 TMPDIR 为员工目录，加上 shell.ts 现有白名单里的变量。
+2. `xb-bot run <botKey> <timeout_s>`：从标准输入读取命令，以 `runuser -u xb-<botKey>` 在该员工目录中执行。命令由 root 写进 root 所有的 0600 临时文件，以 fd 3 打开后删除；员工的 bash 读继承来的 fd、关掉它再执行命令，命令文本不出现在任何 argv 里。环境由调用方经白名单传入：`env -i`，加上 HOME 和 TMPDIR 为员工目录，加上 shell.ts 现有白名单里的变量。
 
 sudoers 只放行这一条，员工用户（`xbbots`）不获得任何 sudo 权限：
 
@@ -114,7 +114,7 @@ pwuser ALL=(root) NOPASSWD: /usr/local/sbin/xb-bot ensure *, /usr/local/sbin/xb-
 
 | 风险 | 缓解 |
 |---|---|
-| sudoers 放行的辅助程序本身成为提权入口 | 参数严格白名单；命令经 stdin 交给辅助程序、再经 fd 交给员工的 bash，不进任何 argv；辅助程序不读环境变量（`env -i` 由它自己设）；锁文件在 root 专属目录；加 shellcheck；专项安全评审 |
+| sudoers 放行的辅助程序本身成为提权入口 | 参数严格白名单；命令经 stdin 交给辅助程序、再经 fd 交给员工的 bash，不进任何 argv；辅助程序只经 s6 with-contenv 读取 `COMPUTER_PER_BOT_USERS`，其余环境变量一律不读（员工命令的环境由它自己 `env -i` 设定）；锁文件在 root 专属目录；加 shellcheck；专项安全评审 |
 | 员工经包管理 sudo 提权到 root | 员工不能 sudo（sudoers 不放行 `%xbbots`）；用户级工具装在员工自己目录里，常用系统包预装进镜像。默认员工（pwuser）仍保留包管理 sudo，它只服务不带员工请求头的调用 |
 | 平台不允许 setuid（`no-new-privileges`） | 开关打开时 `/health` 明确报不就绪；交付文档说明二者互斥 |
 | 旧数据归属 | 默认员工继续使用 `/workspace` 根目录；不搬动、不改属主 |

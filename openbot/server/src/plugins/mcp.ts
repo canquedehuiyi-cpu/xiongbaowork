@@ -213,6 +213,12 @@ export type ListedTool = McpTool & {
   effect?: "read" | "write";
   /** Whether the vendor marked it as destroying something. */
   destructive?: boolean;
+  /**
+   * vendor 对它做什么只字未提：MCP 服务器没有给 `readOnlyHint` 也没有给 `destructiveHint`，或
+   * Composio 没有只读、破坏性、新建、修改中的任何一个标签。记成不算 destructive 的写操作；
+   * catalogue 条目的名单覆盖它时由名单决定，不记（见 store.ts 的 `storableTools`）。
+   */
+  unclassified?: boolean;
   /** The vendor's version string, when calling the action requires one. */
   version?: string;
 };
@@ -558,6 +564,12 @@ export const listNeedsCredential = true;
  * an incoherent listing towards the permissive reading is the one direction that could hurt.
  */
 function declaredEffect(annotations: ToolAnnotations | undefined) {
+  // 两个提示都没给，就是服务器对它做什么只字未提。effect 仍不记，让 catalogue 的名单照旧决定读写。
+  if (
+    annotations?.readOnlyHint === undefined &&
+    annotations?.destructiveHint === undefined
+  )
+    return { unclassified: true } as const;
   if (annotations?.destructiveHint !== true) return {};
   return { effect: "write", destructive: true } as const;
 }

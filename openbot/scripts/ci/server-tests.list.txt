@@ -41,6 +41,7 @@ tests/approvals-continuation-protocol.test.ts
 tests/approvals-continuation-recovery.test.ts
 tests/approvals-database-settlement.integration.test.ts
 tests/approvals-desktop-policy.test.ts
+tests/approvals-destructive-tool.integration.test.ts
 tests/approvals-employee-permissions.integration.test.ts
 tests/approvals-execute.test.ts
 tests/approvals-frontend.test.ts
@@ -195,6 +196,7 @@ tests/entra-profile.test.ts
 tests/github-oauth-signup.test.ts
 tests/google-drive-rest.test.ts
 tests/google-oauth-transport.test.ts
+tests/granted-tools-destructive.test.ts
 tests/group-conversations.integration.test.ts
 tests/group-conversations.test.ts
 tests/guards.test.ts

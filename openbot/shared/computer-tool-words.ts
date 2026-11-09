@@ -23,4 +23,4 @@ export const DEVICE_RUN_COMMAND_DESCRIPTION = `Run a shell command on the person
 
 /** The unattended run's shell description in a cloud container. */
 export const WORKSPACE_RUN_COMMAND_DESCRIPTION =
-  "Run a bash shell command in your workspace. Pipes and && work; long output is truncated and long commands are stopped. For package installation use sudo apt-get; if refused say so rather than retrying.";
+  "Run a bash shell command in your workspace. Pipes and && work; long output is truncated and long commands are stopped. Use the tools already installed first; if you need a new one, install it inside your workspace with pip install --user, npm or bun. Do not use sudo: you cannot install system packages, so if a task needs one, say so rather than retrying.";

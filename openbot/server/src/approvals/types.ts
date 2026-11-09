@@ -72,6 +72,10 @@ export type ApprovalPolicyOutcome = {
     /** 标题含敏感词的桌面窗口，读之前要问（设备端桌面查看 §4.2）。 */
     | "desktop_window"
     // --- end desktop control ---
+    /**
+     * 删除、归档，或应用标为破坏性的工具：总是先问，且只能「允许一次」（见 `offersStandingRule`）。
+     */
+    | "destructive_tool"
     | "auto_review"
     | "default"
     /** The person already declined this action, or an equivalent, earlier in this conversation. */
@@ -125,6 +129,11 @@ export type ApprovalSubject = {
    * arguments; absent means unknown, which is not read-only.
    */
   appTool?: { readOnly: boolean };
+  /**
+   * 这次调用经插件仓库的调用路径而来（MCP、Composio 授予的工具），由那里设置。删除类底线据此
+   * 认定它是应用工具：服务器 id 由管理员起名，可以叫 `host` 或 `memory`，不能靠 ref 前缀判断。
+   */
+  connector?: true;
   // --- desktop control (sub-project 2) ---
   /**
    * 要读的桌面窗口（设备端桌面查看第 1 期）：网关从窗口列表里拿到的标题，以及它命中的敏感词。
@@ -149,8 +158,29 @@ export type ApprovalCandidate = {
    */
   display?: { description?: string };
   subject?: ApprovalSubject;
+  /**
+   * 应用把这个工具标为会删除或覆盖内容：MCP 的 `destructiveHint`，或 Composio 的破坏性标签，在列出
+   * 应用时记进 `mcp_tools.destructive`。不管工具叫什么，都按删除处理，总是先问（见 ./policy 的
+   * `destructiveFloor`）。这是工具本身的事实，不是这次调用的，所以不进动作摘要。
+   */
+  destructive?: true;
   continuation?: ApprovalContinuation;
 };
+
+/**
+ * 这条审批能不能用「在这里总是允许」来回答，也就是存一条长期规则。
+ *
+ * 删除、归档和应用标为破坏性的操作不行：它们在任何规则之后仍然要问（`destructive_tool` 底线），
+ * 存下的规则下次根本用不上，只会误导人。「允许一次」和「拒绝」照常提供。
+ *
+ * 服务端据此拒绝这种规则（./store 的 `decide`），聊天卡片据此不画这个按钮
+ * （delivery/opentag-agent.ts）；网页的审批卡片按同一条件判断（app/src/components/approvals）。
+ */
+export function offersStandingRule(action: {
+  policy?: { source: string } | undefined;
+}): boolean {
+  return action.policy?.source !== "destructive_tool";
+}
 export type ApprovalAction = ApprovalCandidate & {
   runId: string;
   threadId: string;
