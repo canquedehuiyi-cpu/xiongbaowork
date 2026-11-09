@@ -256,6 +256,14 @@ jobs:
         with:
           bun-version: 1.3.14
       - run: docker build -f Dockerfile -t openbot:trackb .
+      # The per-employee root helper creates users, so it is tested as root inside the image.
+      - name: xb-bot helper (per-employee users)
+        run: docker run --rm --user root --entrypoint /bin/sh -v "$PWD/docker/tests:/t:ro" openbot:trackb /t/xb-bot.test.sh
+      # Two employees cannot read each other's files, and a stopped command ends within 10 seconds.
+      - name: per-employee users smoke
+        env:
+          EVIDENCE_DIR: ${{ runner.temp }}/delivery-evidence
+        run: bash scripts/ci/per-bot-users-smoke.sh openbot:trackb
       - name: DoD-2 and DoD-3 (no provider credentials)
         env:
           EVIDENCE_DIR: ${{ runner.temp }}/delivery-evidence
@@ -672,6 +680,33 @@ jobs:
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Compile the runner sidecar
         run: bun desktop-device/scripts/build-sidecar.ts
+      # The bundler downloads NSIS and nsis_tauri_utils.dll itself, once per attempt, and GitHub's release
+      # downloads answered 504 for minutes at a time, outlasting the retry below. Seed the exact cache it
+      # checks first (%LOCALAPPDATA%\tauri\NSIS, the files and SHA-1s pinned by tauri-bundler 2.11.4)
+      # with curl retrying for up to ten minutes per file. If the layout ever stops matching, the
+      # bundler only logs "missing some files" and downloads them as before.
+      - name: Seed Tauri's NSIS toolset (curl with retries, SHA-1 verified)
+        run: |
+          $tools = Join-Path $env:LOCALAPPDATA 'tauri'
+          $nsis = Join-Path $tools 'NSIS'
+          $dll = Join-Path $nsis 'Plugins\x86-unicode\additional\nsis_tauri_utils.dll'
+          function Fetch($url, $out, $sha1) {
+            curl.exe -fsSL --retry 40 --retry-all-errors --retry-delay 15 --retry-max-time 600 -o $out $url
+            if ($LASTEXITCODE -ne 0) { throw "download failed: $url" }
+            $got = (Get-FileHash -Algorithm SHA1 $out).Hash
+            if ($got -ne $sha1) { throw "SHA-1 mismatch for $url ($got)" }
+          }
+          if (-not (Test-Path (Join-Path $nsis 'Bin\makensis.exe'))) {
+            New-Item -ItemType Directory -Force $tools | Out-Null
+            $zip = Join-Path $tools 'nsis-3.11.zip'
+            Fetch 'https://github.com/tauri-apps/binary-releases/releases/download/nsis-3.11/nsis-3.11.zip' $zip 'EF7FF767E5CBD9EDD22ADD3A32C9B8F4500BB10D'
+            if (Test-Path $nsis) { Remove-Item -Recurse -Force $nsis }
+            Expand-Archive -Force $zip $tools
+            Rename-Item (Join-Path $tools 'nsis-3.11') 'NSIS'
+            Remove-Item $zip
+          }
+          New-Item -ItemType Directory -Force (Split-Path $dll) | Out-Null
+          Fetch 'https://github.com/tauri-apps/nsis-tauri-utils/releases/download/nsis_tauri_utils-v0.5.3/nsis_tauri_utils.dll' $dll '75197FEE3C6A814FE035788D1C34EAD39349B860'
       - name: Bundle the unsigned NSIS installer
         working-directory: openbot/desktop-device
         # The bundler downloads NSIS from GitHub releases, which answered 504 intermittently and failed

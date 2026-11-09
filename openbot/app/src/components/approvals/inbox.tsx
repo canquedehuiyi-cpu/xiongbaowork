@@ -10,11 +10,12 @@ import {
   answerPersonQuestion,
   approvalInboxOptions,
   BEHAVIOUR_LABELS,
-  POLICY_SOURCE_LABELS,
   createApprovalRule,
   createTeamApprovalRule,
   decideApproval,
   type HostCommandPolicy,
+  offersStandingRule,
+  POLICY_SOURCE_LABELS,
   type RuleBehaviour,
   revokeApprovalRule,
   revokeTeamApprovalRule,
@@ -25,6 +26,7 @@ import {
   updateTeamApprovalRule,
 } from "@/lib/approvals";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
+import { approvalTargetName } from "./inline-approval";
 
 const HOST_LABELS: Record<HostCommandPolicy, string> = {
   ask: "每次都问",
@@ -255,7 +257,7 @@ export function ApprovalInbox() {
                     .replaceAll("_", " ")}
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  {request.action.scope}
+                  {approvalTargetName(request.action)}
                 </p>
                 {request.action.policy ? (
                   <p className="text-sm">
@@ -265,7 +267,8 @@ export function ApprovalInbox() {
                     {request.action.policy.reason}
                     {POLICY_SOURCE_LABELS[request.action.policy.source] ? (
                       <span className="ml-2 text-muted-foreground">
-                        （来源：{POLICY_SOURCE_LABELS[request.action.policy.source]}）
+                        （来源：
+                        {POLICY_SOURCE_LABELS[request.action.policy.source]}）
                       </span>
                     ) : null}
                   </p>
@@ -304,18 +307,21 @@ export function ApprovalInbox() {
                   >
                     允许一次
                   </Button>
-                  <Button
-                    variant="outline"
-                    disabled={decision.isPending}
-                    onClick={() =>
-                      decision.mutate({
-                        id: request.id,
-                        choice: "allow_always",
-                      })
-                    }
-                  >
-                    在这里总是允许
-                  </Button>
+                  {/* 删除类和对外发送底线问的动作每次都要问，存下的规则用不上，所以不画这个按钮。 */}
+                  {!offersStandingRule(request.action.policy) ? null : (
+                    <Button
+                      variant="outline"
+                      disabled={decision.isPending}
+                      onClick={() =>
+                        decision.mutate({
+                          id: request.id,
+                          choice: "allow_always",
+                        })
+                      }
+                    >
+                      在这里总是允许
+                    </Button>
+                  )}
                   <Button
                     variant="outline"
                     disabled={decision.isPending}

@@ -1016,6 +1016,20 @@
       "when": 1794206900000,
       "tag": "0147_learning",
       "breakpoints": true
+    },
+    {
+      "idx": 152,
+      "version": "7",
+      "when": 1794216434707,
+      "tag": "0152_mcp_servers_listing_revision",
+      "breakpoints": true
+    },
+    {
+      "idx": 153,
+      "version": "7",
+      "when": 1794216450000,
+      "tag": "0153_app_access_requests",
+      "breakpoints": true
     }
   ]
 }
