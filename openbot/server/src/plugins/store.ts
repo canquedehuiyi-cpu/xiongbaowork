@@ -8369,7 +8369,7 @@ export function createPluginStore(options: PluginStoreOptions) {
        */
       if (probed.outcome === "unreachable") {
         throw new PluginRefusedError(
-          `${input.toolkit} could not be checked just now: ${probed.sentence} Nothing here changed — your connection is still recorded exactly as the last check left it — so pressing Re-check again when Composio is answering is the whole of the retry.`,
+          `${input.toolkit} could not be checked just now: ${probed.sentence} Nothing here changed — your connection is still recorded exactly as the last check left it — so pressing Re-check again in a moment is the whole of the retry.`,
           null,
         );
       }

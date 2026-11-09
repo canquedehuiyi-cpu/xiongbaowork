@@ -3333,3 +3333,171 @@ describe("the directory read that is not the vendor's", () => {
     expect(refusal).not.toContain("COMPOSIO_API_KEY");
   });
 });
+
+/**
+ * 只收密钥的应用，在表单出现之前先说明去哪里拿（移植上游 #1297）。
+ *
+ * 第一下按 Connect 时，浏览器带上 `{ "guide": true }`，回答里就多一份 `guide`（该做什么、去哪个
+ * 页面），表单的框也换成人看得懂的标签。框的 `name` 一个不改，所以第二下提交仍然按原样核对。
+ * 不带这个标记的第一下照旧原样返回供应商公布的表单，老的前端不受影响。
+ */
+describe("the key form says where the key comes from", () => {
+  test("asked for the guide, the first press answers it beside the form, relabelled for a person", async () => {
+    const { asked, submitted, connectFields } = brokeredApp();
+
+    const response = await connectFields({ guide: true });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      fields: [
+        { ...PUBLISHED[0], label: "API 密钥" },
+        { ...PUBLISHED[1], label: "网址" },
+      ],
+      guide: {
+        steps: "登录 Firecrawl，在 API Keys 页面复制你的密钥。",
+        url: "https://www.firecrawl.dev/app/api-keys",
+      },
+    });
+    expect(asked).toEqual([{ toolkit: "firecrawl", authScheme: "API_KEY" }]);
+    // Still the first press: nobody is connected by asking.
+    expect(submitted).toEqual([]);
+  });
+
+  test("a submission that also carries the flag is a submission, checked against the names published", async () => {
+    const { submitted, connectFields } = brokeredApp();
+
+    const response = await connectFields({
+      guide: true,
+      values: { api_key: "fc-123" },
+    });
+
+    expect(response.status).not.toBe(500);
+    expect(submitted.map((entry) => Object.keys(entry.values))).toEqual([
+      ["api_key"],
+    ]);
+  });
+});
+
+/**
+ * 用户看到的拒绝文案不点名连接器提供商（移植上游 #1223）。
+ *
+ * 人通过熊宝连接自己的应用，不需要知道背后是哪家公司。broker 层的拒绝原本写给运维，里面点名了
+ * 提供商、让人去它的控制台；人调用的路由（连接、确认、重新检查、断开）把这类句子换成路由自己的
+ * 中文句子，状态码不变，原句写进服务器日志给运维看。
+ */
+describe("a person is never told who the broker is", () => {
+  test("a refusal written for the operator never tells the person who the broker is", async () => {
+    const operatorSentence =
+      "Composio would not mint a connect link for linear. Nobody was sent to a consent screen. Read this app's authorization config in Composio's own dashboard.";
+    const { connect } = brokeredApp(null, AUTHORIZATION_URL, {
+      authorizeThrows: new BrokerRefusalError(operatorSentence),
+    });
+    const said: string[] = [];
+    const realError = console.error;
+    console.error = (...args: unknown[]) => {
+      said.push(args.map(String).join(" "));
+    };
+
+    try {
+      const response = await connect({});
+
+      expect(response.status).toBe(503);
+      const refusal = (await response.json()).error as string;
+      expect(refusal).toBe(
+        "没能开始连接 Linear。请重试；如果一直这样，请联系管理员。",
+      );
+    } finally {
+      console.error = realError;
+    }
+    expect(said.some((line) => line.includes(operatorSentence))).toBe(true);
+  });
+
+  test("a refused key whose sentence names the broker is said in the route's own words", async () => {
+    const { connectFields } = brokeredApp(null, AUTHORIZATION_URL, {
+      storeThrows: new PluginRefusedError(
+        "What you entered for firecrawl did not work, and Composio would not take the account back either.",
+        null,
+      ),
+    });
+    const realError = console.error;
+    console.error = () => {};
+
+    try {
+      const response = await connectFields({ values: { api_key: "wrong" } });
+
+      expect(response.status).toBe(400);
+      const refusal = (await response.json()).error as string;
+      expect(refusal).not.toContain("Composio");
+      expect(refusal).toStartWith("没能用你填写的内容连接");
+    } finally {
+      console.error = realError;
+    }
+  });
+
+  test("a store refusal that names no broker still reaches the person as it was", async () => {
+    const { recheck } = brokeredApp(
+      { connectedAt: "2026-02-02T00:00:00.000Z" },
+      AUTHORIZATION_URL,
+      {
+        storeThrows: new PluginRefusedError(
+          "Linear would not answer with the key it is holding: Invalid API key provided.",
+          null,
+        ),
+      },
+    );
+
+    const response = await recheck();
+
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toBe(
+      "Linear would not answer with the key it is holding: Invalid API key provided.",
+    );
+  });
+
+  test("an unexplained failure on confirm, re-check, disconnect and the form names no broker", async () => {
+    // Confirm and disconnect keep the English sentences the tests above pin ("last answer",
+    // "Disconnect again"); re-check and the form say theirs in Chinese.
+    const realError = console.error;
+    console.error = () => {};
+    try {
+      const failing = brokeredApp(
+        { connectedAt: "2026-02-02T00:00:00.000Z" },
+        AUTHORIZATION_URL,
+        { storeThrows: new Error("socket hang up") },
+      );
+      // The form is asked for by somebody not yet connected: a connected one is told so instead.
+      const form = brokeredApp(null, AUTHORIZATION_URL, {
+        fieldsThrow: new Error("socket hang up"),
+      });
+      for (const response of [
+        await failing.confirm(),
+        await failing.recheck(),
+        await failing.disconnect(),
+        await form.connectFields(),
+      ]) {
+        expect(response.status).toBe(502);
+        const refusal = (await response.json()).error as string;
+        expect(refusal).not.toContain("Composio");
+        expect(refusal).not.toContain("socket hang up");
+      }
+    } finally {
+      console.error = realError;
+    }
+  });
+
+  test("a deployment with no broker tells the person to ask for the setting, without naming the provider", async () => {
+    const { connect, confirm, recheck, disconnect } = brokeredApp(null, null);
+
+    for (const response of [
+      await connect({}),
+      await confirm(),
+      await recheck(),
+      await disconnect(),
+    ]) {
+      expect(response.status).toBe(503);
+      const refusal = (await response.json()).error as string;
+      expect(refusal).toContain("COMPOSIO_API_KEY");
+      expect(refusal).not.toMatch(/\bComposio\b/);
+    }
+  });
+});
