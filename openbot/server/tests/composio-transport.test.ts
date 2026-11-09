@@ -16,6 +16,7 @@ import {
   withheldArguments,
 } from "../src/plugins/composio";
 import { MAX_RESULT_CHARS } from "../src/plugins/mcp";
+import { fitJsonResult } from "../src/plugins/result-fit";
 
 /**
  * The Composio transport's boundary, asserted with no network and no database.
@@ -1104,6 +1105,14 @@ describe("listing an app's actions", () => {
         to: "a@example.com",
         attachment: null,
         message: { subject: "Hi" },
+      }),
+    ).toEqual([]);
+    // An empty list or an empty string is the model saying "no attachment", not a made-up file.
+    expect(
+      withheldArguments(schema, {
+        to: "a@example.com",
+        attachment: [],
+        message: { subject: "Hi", inline: "" },
       }),
     ).toEqual([]);
     // A parameter of the same name somewhere the listing removed nothing is not one it removed.
@@ -3737,5 +3746,57 @@ describe("what a failed call is evidence of", () => {
     );
 
     expect(calls.map((call) => call.connectedAccountId)).toEqual([undefined]);
+  });
+});
+
+/*
+ * 列表被截断时，嵌套在结果里的翻页游标也要去掉（阶段 6 评审 M3）：Slack 把它放在
+ * `response_metadata.next_cursor`，照着它翻页会跳过被截掉的记录。
+ */
+describe("a cut list keeps no cursor that would skip what it left out", () => {
+  const big = (n: number) =>
+    Array.from({ length: n }, (_, index) => ({
+      ts: `${index}`,
+      text: "x".repeat(400),
+    }));
+
+  test("Slack's response_metadata.next_cursor goes with the cut, the rest of the envelope stays", () => {
+    const value = {
+      ok: true,
+      messages: big(120),
+      has_more: true,
+      response_metadata: { next_cursor: "bmV4dF90czox", warnings: ["w"] },
+    };
+    const text = JSON.stringify(value, null, 2);
+    const fitted = fitJsonResult(value, text, "SLACK_FETCH_HISTORY");
+    expect(fitted.truncated).toBe(true);
+    expect(fitted.text).not.toContain("next_cursor");
+    expect(fitted.text).not.toContain("bmV4dF90czox");
+    expect(fitted.text).toContain('"has_more": true');
+    expect(fitted.text).toContain('"warnings"');
+  });
+
+  test("any nested cursor, nextPageToken or next_page_token goes too", () => {
+    const value = {
+      items: big(120),
+      paging: { cursor: "c1", nextPageToken: "t1", next_page_token: "t2" },
+    };
+    const fitted = fitJsonResult(
+      value,
+      JSON.stringify(value, null, 2),
+      "VENDOR_LIST",
+    );
+    expect(fitted.truncated).toBe(true);
+    for (const token of ['"c1"', '"t1"', '"t2"'])
+      expect(fitted.text).not.toContain(token);
+  });
+
+  test("a list that fits keeps its cursor", () => {
+    const value = {
+      messages: big(2),
+      response_metadata: { next_cursor: "keep" },
+    };
+    const text = JSON.stringify(value, null, 2);
+    expect(fitJsonResult(value, text, "SLACK_FETCH_HISTORY").text).toBe(text);
   });
 });

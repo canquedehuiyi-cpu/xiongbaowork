@@ -12,8 +12,8 @@ import captured from "./fixtures/composio-gmail-messages.json";
  *
  * FOUND IN USE. The Bot answered with two picks and said "the broader Gmail result was truncated, so
  * I can't guarantee they're the top two across every email in the past 24 hours". A model asks
- * GMAIL_FETCH_EMAILS for that with `max_results: 50, include_payload: true, verbose: true` (Claude
- * Sonnet 5.5's own arguments for the prompt, asked on 2026-11-07), every message then carries its
+ * GMAIL_FETCH_EMAILS for that with `max_results: 50, include_payload: true, verbose: true` (a
+ * model's own arguments for the prompt, asked on 2026-11-07), every message then carries its
  * raw MIME tree, and OpenBot cut the answer at 20,000 characters: inside the first message's base64
  * HTML, before the page token, ending "[truncated]". The Bot could not read its inbox and could not
  * page to the rest.
@@ -117,7 +117,7 @@ function read(text: string): { data: Record<string, unknown>; note: string } {
 }
 
 /**
- * The Bot asking for the day as Claude Sonnet 5.5 asks for it, then doing only what each answer
+ * The Bot asking for the day as a model asks for it, then doing only what each answer
  * says: follow `nextPageToken`, or call again as a cut's note says. Which messages it never read
  * whole, and how many calls it took.
  */
@@ -328,6 +328,29 @@ describe("one message read by its id", () => {
     expect(data.attachmentList).toEqual(captured.byId.attachmentList);
     // Who else it went to survives the MIME tree.
     expect(Object.keys(data.headers as object)).toEqual(["CC"]);
+    // A body that came through needs no note.
+    expect(data.openbot_note).toBeUndefined();
+  });
+
+  test("a body Composio did not decode is said to be left out, not silently missing", async () => {
+    useComposioClient({
+      listActions: async () => [],
+      execute: async (): Promise<ComposioResult> => ({
+        ...(clone(captured.envelope) as Omit<ComposioResult, "data">),
+        data: { ...(clone(captured.byId) as Message), messageText: "" },
+      }),
+    });
+
+    const result = await callTool(
+      { url: "composio://gmail", actorId: "user_asker" },
+      "GMAIL_FETCH_MESSAGE_BY_MESSAGE_ID",
+      { message_id: "0000000000000000", __version: "20261105_00" },
+    );
+
+    const data = JSON.parse(result.text) as Message;
+    expect(data.payload).toBeUndefined();
+    expect(data.messageText).toBeUndefined();
+    expect(String(data.openbot_note)).toContain("正文未能解码，已省略");
   });
 });
 

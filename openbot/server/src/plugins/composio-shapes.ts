@@ -8,7 +8,7 @@ import type { ListShape } from "./result-fit";
  * action's own defaults are the vendor's, and some of them assume a caller who wants everything.
  * `GMAIL_FETCH_EMAILS` is the one that broke a plain question ("read my emails from the past 24
  * hours and tell me the top 2"): a model asks it for `max_results: 50` with `include_payload: true`
- * and `verbose: true` (Claude Sonnet 5.5 picks exactly those for that prompt), and each message then
+ * and `verbose: true` (a model in testing picked exactly those for that prompt), and each message then
  * carries its raw MIME tree with base64 body parts, 30,000 to 65,000 characters per message as
  * Composio returned them on 2026-11-07. Fifty is a few megabytes, two hundred is refused by
  * Composio as `Upstream_PayloadTooLarge` (413), and the 20,000 characters a result may spend in a
@@ -50,7 +50,7 @@ export const GMAIL_LISTING_PAGE = 20;
  * messages.
  *
  * THE PAGE THAT IS NOT THE LAST SAYS SO IN COUNTS. A token alone, with the same sentence on every
- * page, was not enough: asked about a week of mail on a real mailbox, Claude Sonnet 5.5 read two
+ * page, was not enough: asked about a week of mail on a real mailbox, a model in testing read two
  * pages of about 200 matches and answered. An answer about "my emails" is an answer about all of
  * them, so a page that is not the last says how many it holds of how many, and that the rest are
  * one call per page away.
@@ -127,6 +127,23 @@ export function leanMessage(message: unknown): unknown {
   return lean;
 }
 
+/** 正文没有解码出来时写给模型的说明，免得它把缺失的正文当成一封空信。 */
+export const BODY_LEFT_OUT =
+  "正文未能解码，已省略：Composio 没有给出这封邮件解码后的正文，原始 MIME 也已去掉，这里只有摘要（snippet）和邮件头。不要据此推断正文内容。";
+
+/**
+ * 按 id 或整串读一封邮件时的样子：{@link leanMessage} 之后，正文缺失就加一句 `openbot_note` 说明。
+ * 列表不加，因为列表本来就不要正文。
+ */
+function readMessage(message: unknown): unknown {
+  const lean = leanMessage(message);
+  if (!lean || typeof lean !== "object" || Array.isArray(lean)) return lean;
+  const record = lean as Record<string, unknown>;
+  return record.messageText === undefined
+    ? { openbot_note: BODY_LEFT_OUT, ...record }
+    : record;
+}
+
 const SHAPES: Record<string, ActionShape> = {
   GMAIL_FETCH_EMAILS: {
     request: (args) => ({
@@ -156,7 +173,7 @@ const SHAPES: Record<string, ActionShape> = {
   GMAIL_FETCH_MESSAGE_BY_MESSAGE_ID: {
     answer: (data) =>
       typeof data.messageId === "string"
-        ? (leanMessage(data) as Record<string, unknown>)
+        ? (readMessage(data) as Record<string, unknown>)
         : data,
   },
   /*
@@ -167,7 +184,7 @@ const SHAPES: Record<string, ActionShape> = {
   GMAIL_FETCH_MESSAGE_BY_THREAD_ID: {
     answer: (data) =>
       Array.isArray(data.messages)
-        ? { ...data, messages: data.messages.map(leanMessage) }
+        ? { ...data, messages: data.messages.map(readMessage) }
         : data,
     list: {
       key: "messages",

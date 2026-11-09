@@ -666,7 +666,8 @@ function listsName(list: unknown, name: string): boolean {
  * and what a call to it carries is the vendor's to judge, as it always was.
  *
  * A NULL IS NOT A FILE. Composio documents `null` as "no attachment", so a call that spells the
- * absence that way carries nothing that needs refusing.
+ * absence that way carries nothing that needs refusing. 空数组和空字符串同理：模型用它们表示「没有
+ * 附件」，拒掉只会多花一轮重试，审批之后被拒还会让人批准过的信发不出去。
  */
 export function withheldArguments(
   schema: unknown,
@@ -682,9 +683,19 @@ export function withheldArguments(
         if (!holder || !Object.hasOwn(holder, name)) return false;
         value = holder[name];
       }
-      return value !== undefined && value !== null;
+      return !isNoFile(value);
     })
     .map((path) => path.join("."));
+}
+
+/** 一个文件参数的值是否等于「没有文件」：未给、null、空数组或空字符串。 */
+function isNoFile(value: unknown): boolean {
+  return (
+    value === undefined ||
+    value === null ||
+    value === "" ||
+    (Array.isArray(value) && value.length === 0)
+  );
 }
 
 /**

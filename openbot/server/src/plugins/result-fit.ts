@@ -41,6 +41,23 @@ export type ListShape = {
  */
 const CURSOR_KEY = /^next_?(page_?)?(token|cursor)$/i;
 
+/**
+ * 嵌套在结果里的翻页游标，例如 Slack 的 `response_metadata.next_cursor`。列表被截断时它和顶层的
+ * 一样会跳过被截掉的记录，所以除了列表本身的记录，其它地方按 key 名递归去掉。
+ */
+const NESTED_CURSOR_KEY = /^(cursor|next_?(page_?)?(token|cursor))$/i;
+
+/** 去掉 {@link NESTED_CURSOR_KEY} 命名的键，任意深度；其它内容原样保留。 */
+function withoutCursors(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(withoutCursors);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .filter(([key]) => !NESTED_CURSOR_KEY.test(key))
+      .map(([key, inner]) => [key, withoutCursors(inner)]),
+  );
+}
+
 /** The note that ends a result cut as text. Written for the model that called the action. */
 export function cutNote(toolName: string, length: number): string {
   return `[truncated: ${toolName} returned ${length} characters and only the first ${MAX_RESULT_CHARS} are shown. To read the rest, call it again asking for less: fewer results per call, fewer fields, or a narrower search, then page through what is left.]`;
@@ -102,9 +119,15 @@ export function fitJsonResult(
       const items = list.items.slice(0, count);
       if (list.key === null) return JSON.stringify(items, null, 2);
       const kept = Object.fromEntries(
-        Object.entries(value as Record<string, unknown>).filter(([key]) =>
-          shape ? !shape.dropWhenCut.includes(key) : !CURSOR_KEY.test(key),
-        ),
+        Object.entries(value as Record<string, unknown>)
+          .filter(([key]) =>
+            shape ? !shape.dropWhenCut.includes(key) : !CURSOR_KEY.test(key),
+          )
+          // 列表之外的部分里嵌套的游标也去掉；列表本身的记录不动。
+          .map(([key, inner]) => [
+            key,
+            key === list.key ? inner : withoutCursors(inner),
+          ]),
       );
       return JSON.stringify({ ...kept, [list.key]: items }, null, 2);
     };
