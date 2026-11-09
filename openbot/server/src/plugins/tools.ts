@@ -116,6 +116,33 @@ export const CONNECTOR_APPROVAL_GUIDANCE =
 export const DESTRUCTIVE_TOOL_NOTE =
   "This tool is marked destructive: it deletes or overwrites something, so OpenBot asks the person before it runs. Do not ask them first.";
 
+/** 默认的中文网页搜索地址：百度为主，必应作备选。关键词 URL 编码后接在后面。 */
+export const BAIDU_SEARCH_URL = "https://www.baidu.com/s?wd=";
+export const BING_SEARCH_URL = "https://cn.bing.com/search?q=";
+
+/**
+ * 员工持有浏览器时，查公开网页信息怎么搜（2026-11-09 选定的免费方案：不接付费搜索服务）。
+ *
+ * 只管公开网页。已连接系统的规则（不许改用浏览器访问、缺授权如实说、审批门）在
+ * {@link grantedToolGuidance} 里照旧，这段自己也写明不适用于它们。搜索页遇到验证码或登录墙时
+ * 不交给主人处理：为一次搜索让人去登录或解验证码不值得，换另一个搜索引擎，仍不行就如实说。
+ *
+ * `withParallel`：员工同时持有 Parallel 时，写明中文问题先走百度，Parallel 用于英文和国际信息，
+ * 和 Parallel 那段的说法一致。
+ */
+function browserSearchGuidance(withParallel: boolean): string[] {
+  return [
+    `Searching the public web with your browser: when a question needs public information from the web, call computer_navigate on ${BAIDU_SEARCH_URL}<keywords>, with the keywords URL-encoded. If Baidu does not load or its results are poor, use ${BING_SEARCH_URL}<keywords> instead.`,
+    "Read the results page (computer_read), then open one to three of the source pages and check the answer there rather than answering from the result snippets. In your answer give the source links and the date you searched.",
+    withParallel
+      ? "Prefer Baidu for questions in Chinese. Parallel is still there for English-language or international information, but a question in Chinese goes to Baidu in the browser first."
+      : "Prefer Baidu for questions in Chinese.",
+    "Search for public information only. Put only the few keywords the question needs in the search address: never the conversation, the contents of a private document or file, or anything about the person they did not ask you to look up.",
+    "If a search page shows a CAPTCHA, a verification check or a sign-in wall, do not try to get around it and do not ask the person to sign in or to solve it for you. Try the other search engine once; if that is blocked too, tell the person plainly that the search was blocked and answer from what you have, marked as unverified.",
+    "This is for public web pages only. It is never a way into a system this deployment connects to: for those, everything said here about connected systems, missing grants and approvals still applies.",
+  ];
+}
+
 /**
  * What this Bot holds, said in its instructions rather than left to be inferred from a tool list.
  *
@@ -145,8 +172,16 @@ export function grantedToolGuidance(
    * connector existed, the Bot simply was not on it, and nothing said so.
    */
   connectedButNotHeld: readonly string[] = [],
+  /**
+   * `browser`：员工持有浏览器（`computer_navigate`、`computer_read`）。为真时加上公开网页搜索引导
+   * （见 {@link browserSearchGuidance}），并把 Parallel 那段改成「中文先百度」的说法；为假或不传时，
+   * 输出与没有这个参数时逐字一致。
+   */
+  options: { browser?: boolean } = {},
 ): string {
-  if (tools.length === 0 && connectedButNotHeld.length === 0) return "";
+  const browser = options.browser === true;
+  if (tools.length === 0 && connectedButNotHeld.length === 0 && !browser)
+    return "";
 
   const bySystem = new Map<string, string[]>();
   for (const tool of tools) {
@@ -205,9 +240,13 @@ export function grantedToolGuidance(
       ? [
           `Parallel provides public-web search and extraction: ${researchTools.map((tool) => tool.name).join(" and ")} discover sources and read selected pages.`,
           "Parallel searches the public web; it does not connect a person's private account. Send only the research objective, necessary search queries and requested URLs, not a full transcript or private documents. Generate one session_id for the conversation and reuse it on related search/fetch calls. Omit model_name unless the exact configured model identifier is known.",
-          "Cite source URLs and distinguish excerpts from full-page reads. Report provider errors or missing sources; do not invent evidence or quietly bypass a denial. Interactive browser work still uses the authorized computer tools when needed.",
+          browser
+            ? "Cite source URLs and distinguish excerpts from full-page reads. Report provider errors or missing sources; do not invent evidence or quietly bypass a denial. For a question in Chinese, search Baidu in your browser first, as described below; use Parallel for English-language or international information. Interactive browser work uses the authorized computer tools."
+            : "Cite source URLs and distinguish excerpts from full-page reads. Report provider errors or missing sources; do not invent evidence or quietly bypass a denial. Interactive browser work still uses the authorized computer tools when needed.",
         ]
       : []),
+    // 公开网页搜索，放在已连接系统的明确禁令之前，让那段禁令仍是最后读到的。
+    ...(browser ? browserSearchGuidance(Boolean(researchConnector)) : []),
     /*
      * The vendors this deployment connects to and this Bot does not hold.
      *
@@ -219,7 +258,7 @@ export function grantedToolGuidance(
      */
     ...(missing.length > 0
       ? [
-          ...(tools.length > 0 ? [""] : []),
+          ...(tools.length > 0 || browser ? [""] : []),
           `This deployment also connects to: ${missing.join(", ")}. You hold none of their tools.`,
           "If a question needs one of them, say plainly that you have not been granted it and that an",
           "administrator can grant it on that connector. Do NOT browse to its website: that is not the",

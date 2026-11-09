@@ -623,6 +623,13 @@ export function builtInAgentConfiguration(
   const project = projectGuidance(agent.currentProject);
   const persona = personaGuidance(agent.persona);
   const bible = bibleGuidance(agent.bible);
+  /*
+   * 有电脑说明就有浏览器：同一个条件，所以员工被告知有浏览器时，也被告知查公开网页怎么搜（百度为主、
+   * 必应备选）。没有电脑的部署，这段与原来逐字一致。
+   */
+  const holdings = grantedToolGuidance(tools, connectedVendors, {
+    browser: Boolean(computerGuidance),
+  });
 
   return {
     model: planModel ?? agentModel ?? `${model.provider}/${model.defaultModel}`,
@@ -659,9 +666,7 @@ export function builtInAgentConfiguration(
       PROVENANCE_GUIDANCE,
       // How to read the untrusted-content envelope every outside result arrives in.
       UNTRUSTED_GUIDANCE,
-      ...(grantedToolGuidance(tools, connectedVendors)
-        ? [grantedToolGuidance(tools, connectedVendors)]
-        : []),
+      ...(holdings ? [holdings] : []),
       ...(computerGuidance ? [computerGuidance] : []),
     ].join("\n\n"),
     ...(planModel || agentModel ? {} : { apiKey: apiKey ?? undefined }),

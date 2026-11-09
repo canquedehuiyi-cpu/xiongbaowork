@@ -107,6 +107,17 @@ export function restrictToolsForRun<A extends unknown[]>(
   };
 }
 
+/**
+ * 后台调研的运行没有电脑（见 index.ts 里它的 `toolsForTurn`：只有它自己的两个工具），所以也不告诉它
+ * 有浏览器：电脑说明和随之而来的网页搜索引导一并不给。其他运行照旧。
+ */
+export function computerGuidanceForRun(
+  initiator: AuditInitiator | undefined,
+  guidance: string | undefined,
+): string | undefined {
+  return isProactiveInitiator(initiator) ? undefined : guidance;
+}
+
 /** Handing work to a Bot or asking a person is a message; a proactive run is given neither. */
 export function restrictCoordinationForRun<A extends unknown[], R>(
   initiator: AuditInitiator | undefined,
