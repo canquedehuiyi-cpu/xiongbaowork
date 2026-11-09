@@ -21,13 +21,17 @@ export function offersStandingRule(action: {
 
 /**
  * The sources answered only once. `task` and `safety` as above; `destructive_tool` (deleting,
- * archiving, a tool its app marks destructive) and `outbound_send` (an app tool sending something to
- * other people) are the floors this deployment asks for after every rule, so a saved rule could
+ * archiving, a tool its app marks destructive), `outbound_send` (an app tool sending something to
+ * other people, a send button or a keyboard send on a web page), `share_access` (sharing, changing
+ * permissions, adding collaborators) and `publish_post` (forwarding, going live, publishing a
+ * release, posting) are the floors this deployment asks for after every rule, so a saved rule could
  * never answer one either.
  */
-const ONCE_ONLY_SOURCES: ReadonlySet<string> = new Set([
+export const ONCE_ONLY_SOURCES: ReadonlySet<string> = new Set([
   "task",
   "safety",
   "destructive_tool",
   "outbound_send",
+  "share_access",
+  "publish_post",
 ]);

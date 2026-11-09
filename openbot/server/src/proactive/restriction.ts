@@ -23,7 +23,7 @@ import type { AuditInitiator } from "../audit";
 import { REFUSAL_MARKER } from "../plugins/tools";
 import { isProactiveInitiator } from "./initiator";
 import type { CheckInReads, CheckInScope } from "./scope";
-
+// In `./initiator` so the plugin store can ask the same question without importing this module.
 export {
   isProactiveInitiator,
   PROACTIVE_INITIATOR_PREFIX,
@@ -38,7 +38,8 @@ export {
  * BY NAME AND NEVER BY REF. A connector tool's name is always `mcp__<server>__<tool>` and its ref
  * `<server>/<tool>`, so no connector can carry one of these names. The ref `memory/recall_personal_memory`
  * used to be on this list too, and a server added by URL under the id `memory` with a tool of that
- * name would have passed as the person's own memory. That id is reserved now as well.
+ * name would have passed as the person's own memory. That id is reserved now as well
+ * (`addCustomServer` in `plugins/store.ts`).
  */
 export const PROACTIVE_OWN_READS: ReadonlySet<string> = new Set([
   "recall_personal_memory",
@@ -83,6 +84,17 @@ export function restrictToolsForRun(
         },
       }));
   };
+}
+
+/**
+ * 后台调研的运行没有电脑（它的工具只有 ./scope 的 `checkInToolsFor` 给的那些），所以也不告诉它
+ * 有浏览器：电脑说明和随之而来的网页搜索引导一并不给。其他运行照旧。
+ */
+export function computerGuidanceForRun<G>(
+  initiator: AuditInitiator | undefined,
+  guidance: G | undefined,
+): G | undefined {
+  return isProactiveInitiator(initiator) ? undefined : guidance;
 }
 
 /** Handing work to a Bot or asking a person is a message; a proactive run is given neither. */

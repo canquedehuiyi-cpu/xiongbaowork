@@ -1,4 +1,4 @@
-import type { Message, RunAgentInput } from "@ag-ui/client";
+import type { BaseEvent, Message, RunAgentInput } from "@ag-ui/client";
 import { type AbstractAgent, HttpAgent } from "@ag-ui/client";
 import type {
   BuiltInAgentConfiguration,
@@ -8,6 +8,7 @@ import type {
 import { CopilotRuntime, resolveModel } from "@copilotkit/runtime/v2";
 import { createCopilotHonoHandler } from "@copilotkit/runtime/v2/hono";
 import {
+  approvalGuidance,
   COMPONENT_GUIDANCE,
   type ComputerGuidance,
   frameworkGuidance,
@@ -25,6 +26,7 @@ import { runTimeZone } from "@openbot/shared/person-time-zone";
 import { type Persona, personaGuidance } from "@openbot/shared/persona";
 import { researchRoleOfToolName } from "@openbot/shared/research";
 import {
+  type BuiltInAgentHooks,
   BuiltInAgentWithSaneHistory,
   CloningRemoteAgent,
   RUNTIME_STATE_TOOLS,
@@ -40,7 +42,7 @@ import type { ThreadLock } from "@openbot/toolkit/ports";
 import { observeDetachedRun } from "@openbot/toolkit/run-stop";
 import type { LanguageModel } from "ai";
 import { Hono } from "hono";
-import { defer, from, switchMap } from "rxjs";
+import { defer, from, type Observable, switchMap } from "rxjs";
 import { z } from "zod";
 import {
   type ActorAgentResolver,
@@ -119,11 +121,17 @@ import {
   selectTools,
 } from "./plugins/selection";
 // M3: the fork's plugins directory is kept as-is, so `refFromToolName` comes from its `store.ts`
-// (upstream moved it to `plugin-store/model.ts`), and `grantedToolGuidance` takes the fork's two
-// arguments: upstream's app states (`BotApp`, `loadApps`), its "waiting behind search" wording and
-// `holdsWebSearch` are not in the fork's `plugins/tools.ts` yet.
+// (upstream moved it to `plugin-store/model.ts`), and `grantedToolGuidance` takes the fork's
+// arguments (the tools, the connected vendors, and whether this run holds a browser to search the
+// public web with): upstream's app states (`BotApp`, `loadApps`), its "waiting behind search" wording
+// and `holdsWebSearch` are not in the fork's `plugins/tools.ts` yet.
 import { refFromToolName } from "./plugins/store";
-import { grantedToolGuidance } from "./plugins/tools";
+import {
+  BROWSER_SEARCH_TOOLS,
+  grantedToolGuidance,
+  holdsAppTools,
+  holdsBrowserSearchTools,
+} from "./plugins/tools";
 import { type ProjectForPrompt, projectGuidance } from "./projects/context";
 import { withQuotaRunErrors } from "./quota/limits";
 import { corsOrigin } from "./request-trust";
@@ -920,6 +928,12 @@ export function builtInAgentConfiguration(
    * selection but a different transport with its own endpoint and harness.
    */
   agentModel?: LanguageModel,
+  /**
+   * 这次运行由界面或无人值守那套额外提供给模型的工具名（RunAgentInput.tools）。浏览器工具只从这里
+   * 来，据此决定是否给公开网页搜索引导（见 `holdsBrowserSearchTools`）。不传表示没有。追加在最后，
+   * 原因同上。
+   */
+  runToolNames: readonly string[] = [],
 ): BuiltInAgentConfiguration {
   if (!apiKey && !planModel && !agentModel) {
     return {
@@ -974,6 +988,19 @@ export function builtInAgentConfiguration(
       execute: (args: unknown) => learnedSkills.execute(tool.name, args),
     })) ?? []),
   ];
+  /*
+   * 这次运行实际持有浏览器工具时，才告诉员工查公开网页怎么搜（百度为主、必应备选）。按工具名判断，
+   * 不看 `computerGuidance`：纯设备模式的聊天没有电脑说明，浏览器工具却由前端照常提供。没有浏览器
+   * 工具时，这段与原来逐字一致。
+   */
+  const browserSearch = holdsBrowserSearchTools([
+    ...tools.map((tool) => tool.name),
+    // 只认数组：较早的调用方可能在这个位置多传了一个无关参数。
+    ...(Array.isArray(runToolNames) ? runToolNames : []),
+  ]);
+  const holdings = grantedToolGuidance(tools, connectedVendors, {
+    browser: browserSearch,
+  });
 
   return {
     model:
@@ -1024,23 +1051,21 @@ export function builtInAgentConfiguration(
       // When to give work to subagents. Worded for a run that holds the tool, which most do.
       ORCHESTRATION_GUIDANCE,
       /*
-       * M3: upstream's APPROVAL_GUIDANCE ("OpenBot asks before you delete, archive, send, share or post …
-       * so do not ask them first") is NOT sent yet. It is safe only while approvals/policy.ts really asks
-       * about every one of those, and the fork's policy does not yet (those floors are being built on the
-       * integration branch by the plugins session). Telling a Bot not to ask while the gate does not
-       * either would let a delete or a send run unasked. Restore it with that policy.
+       * OpenBot asks the person before consequential actions, so the Bot does not ask as well. Worded
+       * for this fork's floors (approvals/policy.ts), and the connected-app bullet only for a run that
+       * holds a connected-app tool, as `CONNECTOR_APPROVAL_GUIDANCE` is. See `approvalGuidance`.
        */
+      approvalGuidance({ apps: holdsAppTools(tools) }),
       // How to read the untrusted-content envelope every outside result arrives in.
       UNTRUSTED_GUIDANCE,
-      // M3: the fork's two-argument guidance; see the note on the plugins imports.
-      ...(grantedToolGuidance(tools, connectedVendors)
-        ? [grantedToolGuidance(tools, connectedVendors)]
-        : []),
+      // M3: the fork's guidance; see the note on the plugins imports.
+      ...(holdings ? [holdings] : []),
       ...(computerGuidance
         ? [
             computerGuidance({
               search: holdsWebSearch(tools),
               personal: currentEdition() === "personal",
+              browserSearch,
             }),
           ]
         : []),
@@ -1982,31 +2007,35 @@ async function buildAgent(
         (input?.tools.length ?? 0) +
         RUNTIME_STATE_TOOLS.length,
     });
-    const configuration = builtInAgentConfiguration(
-      agent,
-      runModel,
-      apiKey,
-      tools,
-      computerGuidance,
-      connectedVendors,
-      standingInstructions,
-      model.plan && input
-        ? new PlanModel(
-            model.plan,
-            agent.id,
-            input,
-            new Set(input.tools.map((tool) => tool.name)),
-            signal,
-            planChoice(runModel),
-          )
-        : undefined,
-      learnedSkills,
-      waiting,
-      undefined,
-      timeZone,
-      undefined,
-      runAgentModel,
-    );
+    const configurationFor = (runToolNames?: readonly string[]) =>
+      builtInAgentConfiguration(
+        agent,
+        runModel,
+        apiKey,
+        tools,
+        computerGuidance,
+        connectedVendors,
+        standingInstructions,
+        model.plan && input
+          ? new PlanModel(
+              model.plan,
+              agent.id,
+              input,
+              new Set(input.tools.map((tool) => tool.name)),
+              signal,
+              planChoice(runModel),
+            )
+          : undefined,
+        learnedSkills,
+        waiting,
+        undefined,
+        timeZone,
+        undefined,
+        runAgentModel,
+        runToolNames,
+      );
+    const runToolNames = input?.tools.map((tool) => tool.name);
+    const configuration = configurationFor(runToolNames);
     // What really waits: nothing, when the model could not be wrapped and is sent every tool.
     const held = searchesTools(
       "model" in configuration ? configuration.model : undefined,
@@ -2014,7 +2043,7 @@ async function buildAgent(
       ? waiting
       : new Set<string>();
     const admit = admitTools(held, runModel);
-    return new BuiltInAgentWithSaneHistory(configuration, {
+    const hooks: BuiltInAgentHooks = {
       /*
        * A provider's refusal is told in words, naming the provider, rather than as the SDK's text, a
        * "Forbidden" or a retry count. Out of credit keeps its own sentence, from `model-billing.ts`.
@@ -2052,7 +2081,18 @@ async function buildAgent(
               )
             : messages,
         ),
-    });
+    };
+    /*
+     * 构建时还不知道这次运行带不带浏览器工具（它们随 RunAgentInput.tools 才来），所以备好一份含
+     * 公开网页搜索引导的配置，运行时带了就换用它。已按某次运行构建的（有 input）不需要。
+     */
+    return runToolNames
+      ? new BuiltInAgentWithSaneHistory(configuration, hooks)
+      : new BuiltInAgentSearchingWithBrowser(
+          configuration,
+          configurationFor(BROWSER_SEARCH_TOOLS),
+          hooks,
+        );
   };
 
   const whole = withTools(granted);
@@ -2973,6 +3013,64 @@ function mastraOpenBotContext({
         ]
       : []),
   ];
+}
+
+/**
+ * A built-in Bot built before its run, which switches to the configuration that carries the
+ * public-web search guidance when the run turns out to hold a browser (`computer_navigate` and
+ * `computer_read`). Those tools arrive with `RunAgentInput.tools`, after the Bot is built, so the
+ * choice is made here, at the run. Everything else is the toolkit's `BuiltInAgentWithSaneHistory`.
+ */
+class BuiltInAgentSearchingWithBrowser extends BuiltInAgentWithSaneHistory {
+  /** Held again because the base class keeps its own copies private, and `clone` needs them. */
+  private readonly plainConfiguration: BuiltInAgentConfiguration;
+  /** 这次运行带了浏览器工具时换用的配置：提示词里多了公开网页搜索引导。 */
+  private readonly browserConfiguration: BuiltInAgentConfiguration;
+  private readonly runHooks: BuiltInAgentHooks;
+  /** 换用的那一个，留着让 Stop 能停到它。 */
+  private browserRun: BuiltInAgentWithSaneHistory | undefined;
+
+  constructor(
+    configuration: BuiltInAgentConfiguration,
+    browserConfiguration: BuiltInAgentConfiguration,
+    hooks: BuiltInAgentHooks,
+  ) {
+    super(configuration, hooks);
+    this.plainConfiguration = configuration;
+    this.browserConfiguration = browserConfiguration;
+    this.runHooks = hooks;
+  }
+
+  override run(input: RunAgentInput): Observable<BaseEvent> {
+    if (!holdsBrowserSearchTools(input.tools.map((tool) => tool.name)))
+      return super.run(input);
+    const browserRun = new BuiltInAgentWithSaneHistory(
+      this.browserConfiguration,
+      this.runHooks,
+    );
+    this.browserRun = browserRun;
+    return browserRun.run(input);
+  }
+
+  /** Stop 也要停到换用的那一个。 */
+  override abortRun(): void {
+    this.browserRun?.abortRun();
+    super.abortRun();
+  }
+
+  /** Carried by hand, as the base class's own `clone` is, so the runtime's clone keeps the switch. */
+  override clone(): BuiltInAgentSearchingWithBrowser {
+    const cloned = new BuiltInAgentSearchingWithBrowser(
+      this.plainConfiguration,
+      this.browserConfiguration,
+      this.runHooks,
+    );
+    type WithMiddlewares = { middlewares: unknown[] };
+    (cloned as unknown as WithMiddlewares).middlewares = [
+      ...(this as unknown as WithMiddlewares).middlewares,
+    ];
+    return cloned;
+  }
 }
 
 export async function resolveRuntimeAgents(

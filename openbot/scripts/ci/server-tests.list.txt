@@ -122,6 +122,7 @@ tests/browser-address.test.ts
 tests/browser-egress.test.ts
 tests/browser-real.integration.test.ts
 tests/browser-routes.integration.test.ts
+tests/browser-search-guidance.test.ts
 tests/built-in-tool-labels.test.ts
 tests/builtin-routines.test.ts
 tests/bunfig-preload.test.ts

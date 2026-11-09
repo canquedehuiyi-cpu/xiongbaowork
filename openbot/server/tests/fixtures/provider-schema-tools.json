@@ -1,12 +1,13 @@
 {
-  "note": "Captured read-only on 2026-11-08: Composio rows from GET /api/v3/tools (toolkit_versions=latest), verbatim but for output_parameters; Arcade rows from GET /v1/tools?toolkit=..., verbatim but for output. Vendor catalogue schemas, no account data. Chosen for the constructs a model provider refuses. Regenerate rather than hand-edit.",
   "composio": {
     "hubspot": [
       {
         "slug": "HUBSPOT_GET_COMMUNICATION_STATUS",
         "name": "Get communication status",
         "description": "Retrieves detailed HubSpot communication statuses for an email address.",
-        "available_versions": ["20261104_00"],
+        "available_versions": [
+          "20261104_00"
+        ],
         "version": "20261104_00",
         "toolkit": {
           "slug": "hubspot",
@@ -16,23 +17,31 @@
         "input_parameters": {
           "type": "object",
           "title": "GetCommunicationStatusRequest",
-          "required": ["email_address"],
+          "required": [
+            "email_address"
+          ],
           "properties": {
             "email_address": {
               "type": "string",
               "title": "Email Address",
               "format": "email",
-              "examples": ["contact@example.com"],
+              "examples": [
+                "contact@example.com"
+              ],
               "description": "Email address whose communication statuses to retrieve."
             }
           },
           "description": "Request for an email address's HubSpot communication statuses."
         },
-        "scopes": ["communication_preferences.read_write"],
+        "scopes": [
+          "communication_preferences.read_write"
+        ],
         "scope_requirements": {
           "all_of": [
             {
-              "any_of": ["communication_preferences.read_write"],
+              "any_of": [
+                "communication_preferences.read_write"
+              ],
               "source": [
                 "https://developers.hubspot.com/docs/api-reference/legacy/communication-preferences/v3/get-subscription"
               ]
@@ -52,7 +61,9 @@
         "deprecated": {
           "displayName": "Get communication status",
           "version": "20261104_00",
-          "available_versions": ["20261104_00"],
+          "available_versions": [
+            "20261104_00"
+          ],
           "is_deprecated": false,
           "toolkit": {
             "logo": "https://logos.composio.dev/api/hubspot"
@@ -63,7 +74,9 @@
         "slug": "HUBSPOT_GET_EMAIL_SUBSCRIPTION_STATUS",
         "name": "Get email subscription status",
         "description": "Retrieves legacy overall email delivery and subscription state for an address.",
-        "available_versions": ["20261104_00"],
+        "available_versions": [
+          "20261104_00"
+        ],
         "version": "20261104_00",
         "toolkit": {
           "slug": "hubspot",
@@ -73,23 +86,31 @@
         "input_parameters": {
           "type": "object",
           "title": "GetEmailSubscriptionStatusRequest",
-          "required": ["email_address"],
+          "required": [
+            "email_address"
+          ],
           "properties": {
             "email_address": {
               "type": "string",
               "title": "Email Address",
               "format": "email",
-              "examples": ["contact@example.com"],
+              "examples": [
+                "contact@example.com"
+              ],
               "description": "Email address whose subscription status to retrieve."
             }
           },
           "description": "Request for an email address's legacy HubSpot subscription status."
         },
-        "scopes": ["content"],
+        "scopes": [
+          "content"
+        ],
         "scope_requirements": {
           "all_of": [
             {
-              "any_of": ["content"],
+              "any_of": [
+                "content"
+              ],
               "source": [
                 "https://developers.hubspot.com/docs/api-reference/legacy/communication-preferences/v1/get-subscriptions-email"
               ]
@@ -109,7 +130,9 @@
         "deprecated": {
           "displayName": "Get email subscription status",
           "version": "20261104_00",
-          "available_versions": ["20261104_00"],
+          "available_versions": [
+            "20261104_00"
+          ],
           "is_deprecated": false,
           "toolkit": {
             "logo": "https://logos.composio.dev/api/hubspot"
@@ -120,7 +143,9 @@
         "slug": "HUBSPOT_UPDATE_EMAIL_SUBSCRIPTIONS",
         "name": "Update email subscriptions",
         "description": "IRREVERSIBLY opt out or update email subscription preferences in HubSpot.",
-        "available_versions": ["20261104_00"],
+        "available_versions": [
+          "20261104_00"
+        ],
         "version": "20261104_00",
         "toolkit": {
           "slug": "hubspot",
@@ -130,13 +155,17 @@
         "input_parameters": {
           "type": "object",
           "title": "UpdateEmailSubscriptionsRequest",
-          "required": ["email_address"],
+          "required": [
+            "email_address"
+          ],
           "properties": {
             "email_address": {
               "type": "string",
               "title": "Email Address",
               "format": "email",
-              "examples": ["recipient@example.com"],
+              "examples": [
+                "recipient@example.com"
+              ],
               "description": "Email address whose preferences will be updated. Also provide at least one effective update field."
             },
             "unsubscribe_from_all": {
@@ -149,7 +178,11 @@
               "items": {
                 "type": "object",
                 "title": "SubscriptionStatusUpdate",
-                "required": ["id", "subscribed", "opt_state"],
+                "required": [
+                  "id",
+                  "subscribed",
+                  "opt_state"
+                ],
                 "properties": {
                   "id": {
                     "type": "string",
@@ -158,7 +191,11 @@
                     "description": "Numeric HubSpot email subscription type ID, represented as a string to preserve precision."
                   },
                   "opt_state": {
-                    "enum": ["OPT_IN", "OPT_OUT", "NOT_OPTED"],
+                    "enum": [
+                      "OPT_IN",
+                      "OPT_OUT",
+                      "NOT_OPTED"
+                    ],
                     "type": "string",
                     "title": "Opt State",
                     "description": "Opt state to apply to this subscription type."
@@ -243,7 +280,9 @@
         "deprecated": {
           "displayName": "Update email subscriptions",
           "version": "20261104_00",
-          "available_versions": ["20261104_00"],
+          "available_versions": [
+            "20261104_00"
+          ],
           "is_deprecated": false,
           "toolkit": {
             "logo": "https://logos.composio.dev/api/hubspot"
@@ -255,8 +294,10 @@
       {
         "slug": "GOOGLECALENDAR_REMOVE_ATTENDEE",
         "name": "Remove attendee from event",
-        "description": "Removes an attendee from a specified event in a Google Calendar; the calendar and event must exist. Concurrent calls on the same event can overwrite attendee lists \u2014 apply changes sequentially per event.",
-        "available_versions": ["20261103_00"],
+        "description": "Removes an attendee from a specified event in a Google Calendar; the calendar and event must exist. Concurrent calls on the same event can overwrite attendee lists — apply changes sequentially per event.",
+        "available_versions": [
+          "20261103_00"
+        ],
         "version": "20261103_00",
         "toolkit": {
           "slug": "googlecalendar",
@@ -266,7 +307,10 @@
         "input_parameters": {
           "type": "object",
           "title": "RemoveAttendeeRequest",
-          "required": ["event_id", "attendee_email"],
+          "required": [
+            "event_id",
+            "attendee_email"
+          ],
           "properties": {
             "event_id": {
               "type": "string",
@@ -287,7 +331,9 @@
               "type": "string",
               "title": "Attendee Email",
               "format": "email",
-              "examples": ["john@gmail.com"],
+              "examples": [
+                "john@gmail.com"
+              ],
               "description": "Email address of the attendee to remove. Must match an attendee email present on the event. If no match is found, the attendee was already removed or was never on the event.",
               "human_parameter_name": "Attendee Email",
               "human_parameter_description": "The email address of the person you want to remove from the event. Make sure it matches an attendee already on the event."
@@ -325,7 +371,9 @@
         "deprecated": {
           "displayName": "Remove attendee from event",
           "version": "20261103_00",
-          "available_versions": ["20261103_00"],
+          "available_versions": [
+            "20261103_00"
+          ],
           "is_deprecated": false,
           "toolkit": {
             "logo": "https://logos.composio.dev/api/googlecalendar"
@@ -338,7 +386,9 @@
         "slug": "GMAIL_ADD_LABEL_TO_EMAIL",
         "name": "Modify email labels",
         "description": "Adds and/or removes specified Gmail labels for a message; ensure `message_id` and all `label_ids` are valid (use 'listLabels' for custom label IDs).",
-        "available_versions": ["20261105_00"],
+        "available_versions": [
+          "20261105_00"
+        ],
         "version": "20261105_00",
         "toolkit": {
           "slug": "gmail",
@@ -348,13 +398,18 @@
         "input_parameters": {
           "type": "object",
           "title": "AddLabelToEmailRequest",
-          "required": ["message_id"],
+          "required": [
+            "message_id"
+          ],
           "properties": {
             "user_id": {
               "type": "string",
               "title": "User Id",
               "default": "me",
-              "examples": ["me", "user@example.com"],
+              "examples": [
+                "me",
+                "user@example.com"
+              ],
               "description": "User's email address or 'me' for the authenticated user.",
               "human_parameter_name": "User ID",
               "human_parameter_description": "Provide the email address or identifier of the user whose mailbox you are accessing. Use 'me' if you want to access your own mailbox."
@@ -363,7 +418,10 @@
               "type": "string",
               "title": "Message Id",
               "pattern": "^[0-9a-fA-F]+$",
-              "examples": ["1a2b3c4d5e6f7890", "abcd1234efab5678"],
+              "examples": [
+                "1a2b3c4d5e6f7890",
+                "abcd1234efab5678"
+              ],
               "description": "Immutable ID of the message to modify. Gmail message IDs are hexadecimal strings (e.g., '1a2b3c4d5e6f7890'). IMPORTANT: Do NOT use UUIDs (32-character strings like '093ca4662b214d5eba8f4ceeaad63433'), thread IDs, or internal system IDs - these will cause 'Invalid id value' errors. Obtain valid message IDs from: (1) 'GMAIL_FETCH_EMAILS' response 'messageId' field, (2) 'GMAIL_FETCH_MESSAGE_BY_THREAD_ID' response, or (3) 'GMAIL_LIST_THREADS' and then fetching thread messages.",
               "human_parameter_name": "Message ID",
               "human_parameter_description": "Enter the Gmail message ID (a hexadecimal string like '1a2b3c4d5e6f7890'). Get this from GMAIL_FETCH_EMAILS 'messageId' field. Do NOT use UUIDs or 32-character strings."
@@ -392,7 +450,12 @@
               },
               "title": "Remove Label Ids",
               "default": [],
-              "examples": ["UNREAD", "INBOX", "CATEGORY_UPDATES", "Label_1"],
+              "examples": [
+                "UNREAD",
+                "INBOX",
+                "CATEGORY_UPDATES",
+                "Label_1"
+              ],
               "description": "Label IDs to remove (IDs, not display names). System labels: INBOX, SPAM, TRASH, UNREAD, STARRED, IMPORTANT, CATEGORY_PERSONAL, CATEGORY_SOCIAL, CATEGORY_PROMOTIONS, CATEGORY_UPDATES, CATEGORY_FORUMS. Use full CATEGORY_ prefix (e.g., 'CATEGORY_UPDATES' not 'UPDATES'). Custom labels: call 'listLabels' first to get the ID (format: 'Label_<number>'). SENT, DRAFT, CHAT are immutable and cannot be removed. Common operations: to mark as read, remove 'UNREAD'; to archive, remove 'INBOX'. A label cannot appear in both add_label_ids and remove_label_ids.",
               "human_parameter_name": "Label IDs to remove",
               "human_parameter_description": "List the IDs of labels to remove. Use exact system label IDs (e.g., 'CATEGORY_UPDATES' not 'UPDATES') or custom label IDs from listLabels (e.g., 'Label_1' not the label name). To mark as read, remove 'UNREAD'. To archive, remove 'INBOX'. Note: SENT, DRAFT, and CHAT cannot be modified."
@@ -413,14 +476,20 @@
             }
           ]
         },
-        "tags": ["idempotentHint", "openWorldHint", "updateHint"],
+        "tags": [
+          "idempotentHint",
+          "openWorldHint",
+          "updateHint"
+        ],
         "no_auth": false,
         "human_description": "This action allows you to add or remove labels from a specific email message in Gmail. By providing the user's ID and the message ID, you can modify the labels associated with that email, helping to organize or categorize messages as needed.",
         "is_deprecated": false,
         "deprecated": {
           "displayName": "Modify email labels",
           "version": "20261105_00",
-          "available_versions": ["20261105_00"],
+          "available_versions": [
+            "20261105_00"
+          ],
           "is_deprecated": false,
           "toolkit": {
             "logo": "https://logos.composio.dev/api/gmail"
@@ -431,7 +500,9 @@
         "slug": "GMAIL_FETCH_EMAILS",
         "name": "Fetch emails",
         "description": "Lists Gmail messages with query and label filtering, pagination, and optional message details. Individual detail fetches returning 404, 429, or 503 are skipped, so a page can contain fewer messages than the list result.",
-        "available_versions": ["20261105_00"],
+        "available_versions": [
+          "20261105_00"
+        ],
         "version": "20261105_00",
         "toolkit": {
           "slug": "gmail",
@@ -453,7 +524,7 @@
                 "is:important OR is:starred",
                 "label:work -label:spam"
               ],
-              "description": "Gmail advanced search query (e.g., 'from:user subject:meeting'). Supported operators: 'from:', 'to:', 'subject:', 'label:', 'has:', 'is:', 'in:', 'category:', 'after:YYYY/MM/DD', 'before:YYYY/MM/DD', AND/OR/NOT. IMPORTANT - 'is:' vs 'label:' usage: Use 'is:' for special mail states: is:snoozed, is:unread, is:read, is:starred, is:important. Use 'label:' ONLY for user-created labels (e.g., 'label:work', 'label:projects'). Note: 'muted' may work with both 'is:muted' and 'label:muted' based on community reports. Common mistake: 'label:snoozed' is WRONG - use 'is:snoozed' instead. Use quotes for exact phrases. Omit for no query filter. after:/before: evaluate whole calendar days in UTC; before: is exclusive \u2014 adjust for local timezone to avoid off-by-one-day gaps.",
+              "description": "Gmail advanced search query (e.g., 'from:user subject:meeting'). Supported operators: 'from:', 'to:', 'subject:', 'label:', 'has:', 'is:', 'in:', 'category:', 'after:YYYY/MM/DD', 'before:YYYY/MM/DD', AND/OR/NOT. IMPORTANT - 'is:' vs 'label:' usage: Use 'is:' for special mail states: is:snoozed, is:unread, is:read, is:starred, is:important. Use 'label:' ONLY for user-created labels (e.g., 'label:work', 'label:projects'). Note: 'muted' may work with both 'is:muted' and 'label:muted' based on community reports. Common mistake: 'label:snoozed' is WRONG - use 'is:snoozed' instead. Use quotes for exact phrases. Omit for no query filter. after:/before: evaluate whole calendar days in UTC; before: is exclusive — adjust for local timezone to avoid off-by-one-day gaps.",
               "human_parameter_name": "Search query",
               "human_parameter_description": "Input a search term to filter your emails. Use 'is:' for special states (is:snoozed, is:unread, is:read, is:starred, is:important). Use 'label:' only for user-created labels (exception: 'muted' may work with both)."
             },
@@ -461,7 +532,10 @@
               "type": "string",
               "title": "User Id",
               "default": "me",
-              "examples": ["me", "user@example.com"],
+              "examples": [
+                "me",
+                "user@example.com"
+              ],
               "description": "User's email address or 'me' for the authenticated user. Non-'me' addresses require domain-level delegation; without it, authentication or not-found errors result.",
               "human_parameter_name": "User ID",
               "human_parameter_description": "Provide the email address of the user whose mailbox you want to access. You can use 'me' to refer to your own mailbox."
@@ -470,7 +544,10 @@
               "type": "boolean",
               "title": "Verbose",
               "default": true,
-              "examples": [true, false],
+              "examples": [
+                true,
+                false
+              ],
               "description": "If false, uses optimized concurrent metadata fetching for faster performance (~75% improvement). If true, uses standard detailed message fetching. When false, only essential fields (subject, sender, recipient, time, labels) are guaranteed. Body content and attachment details require verbose=true even when include_payload=true.",
               "human_parameter_name": "Verbose mode?",
               "human_parameter_description": "Select this to get detailed information for each email or to speed up the process and get just the basics."
@@ -479,7 +556,10 @@
               "type": "boolean",
               "title": "Ids Only",
               "default": false,
-              "examples": [true, false],
+              "examples": [
+                true,
+                false
+              ],
               "description": "If true, only returns message IDs from the list API without fetching individual message details. Fastest option for getting just message IDs and thread IDs.",
               "human_parameter_name": "IDs only?",
               "human_parameter_description": "Use this option if you just want the IDs of emails without loading their full details, making the request quicker."
@@ -490,7 +570,11 @@
                 "type": "string"
               },
               "title": "Label Ids",
-              "examples": ["INBOX", "UNREAD", "Label_123456"],
+              "examples": [
+                "INBOX",
+                "UNREAD",
+                "Label_123456"
+              ],
               "description": "Filter by label IDs; only messages with all specified labels are returned (AND logic). Optional - omit or use empty list to fetch all messages without label filtering. System label IDs: 'INBOX', 'SPAM', 'TRASH', 'UNREAD', 'STARRED', 'IMPORTANT', 'CATEGORY_PRIMARY' (alias 'CATEGORY_PERSONAL'), 'CATEGORY_SOCIAL', 'CATEGORY_PROMOTIONS', 'CATEGORY_UPDATES', 'CATEGORY_FORUMS'. For custom/user-created labels, you MUST use the label ID (e.g., 'Label_123456'), NOT the display name. Use the 'listLabels' action to find label IDs for custom labels. Combining label_ids with label: in query applies AND logic across both, which can silently over-restrict results; use one strategy consistently.",
               "human_parameter_name": "Label IDs",
               "human_parameter_description": "List the label IDs to filter which messages to fetch. System labels (INBOX, SPAM, etc.) can be used directly by name. For custom labels, you must use the listLabels action first to get the label ID - do not use the label name you see in Gmail."
@@ -498,7 +582,7 @@
             "page_token": {
               "type": "string",
               "title": "Page Token",
-              "description": "Token for retrieving a specific page, obtained from a previous response's `nextPageToken`. Must be a valid opaque token string from a previous API response. Do not pass arbitrary values. Omit for the first page. Loop calls using nextPageToken until it is absent to avoid silently missing messages. resultSizeEstimate is approximate \u2014 do not use as a stopping condition.",
+              "description": "Token for retrieving a specific page, obtained from a previous response's `nextPageToken`. Must be a valid opaque token string from a previous API response. Do not pass arbitrary values. Omit for the first page. Loop calls using nextPageToken until it is absent to avoid silently missing messages. resultSizeEstimate is approximate — do not use as a stopping condition.",
               "human_parameter_name": "Page token",
               "human_parameter_description": "If you've paginated results, use this token to get the next set of messages. Leave blank for the first page."
             },
@@ -508,7 +592,11 @@
               "default": 1,
               "maximum": 500,
               "minimum": 1,
-              "examples": ["10", "100", "500"],
+              "examples": [
+                "10",
+                "100",
+                "500"
+              ],
               "description": "Maximum number of messages to retrieve per page. Default of 1 retrieves only a single message; set higher for practical use. Hard cap is 500 per page.",
               "human_parameter_name": "Maximum results",
               "human_parameter_description": "Specify how many email messages you want to retrieve in one request, from 1 to 500."
@@ -517,8 +605,11 @@
               "type": "boolean",
               "title": "Include Payload",
               "default": true,
-              "examples": [true, false],
-              "description": "Set to true to include full message payload (headers, body, attachments); false for metadata only. payload may still be null even when true; use GMAIL_FETCH_MESSAGE_BY_MESSAGE_ID for guaranteed complete content. When payload is present, bodies are base64url-encoded in payload.parts; replace '-'\u2192'+' and '_'\u2192'/' and fix padding before decoding, and check both text/plain and text/html parts.",
+              "examples": [
+                true,
+                false
+              ],
+              "description": "Set to true to include full message payload (headers, body, attachments); false for metadata only. payload may still be null even when true; use GMAIL_FETCH_MESSAGE_BY_MESSAGE_ID for guaranteed complete content. When payload is present, bodies are base64url-encoded in payload.parts; replace '-'→'+' and '_'→'/' and fix padding before decoding, and check both text/plain and text/html parts.",
               "human_parameter_name": "Include full payload?",
               "human_parameter_description": "Choose whether to get the full content of each email, including attachments and body, or just the essential metadata."
             },
@@ -526,7 +617,10 @@
               "type": "boolean",
               "title": "Include Spam Trash",
               "default": false,
-              "examples": [true, false],
+              "examples": [
+                true,
+                false
+              ],
               "description": "Set to true to include messages from 'SPAM' and 'TRASH'.",
               "human_parameter_name": "Include spam and trash?",
               "human_parameter_description": "Decide if you want to see emails that are normally filtered into your SPAM or TRASH folders."
@@ -549,14 +643,20 @@
             }
           ]
         },
-        "tags": ["important", "openWorldHint", "readOnlyHint"],
+        "tags": [
+          "important",
+          "openWorldHint",
+          "readOnlyHint"
+        ],
         "no_auth": false,
         "human_description": "This action retrieves a list of email messages from a specified Gmail account. It allows for filtering the messages based on various parameters such as label IDs and search queries, as well as controlling the level of detail returned for each message.",
         "is_deprecated": false,
         "deprecated": {
           "displayName": "Fetch emails",
           "version": "20261105_00",
-          "available_versions": ["20261105_00"],
+          "available_versions": [
+            "20261105_00"
+          ],
           "is_deprecated": false,
           "toolkit": {
             "logo": "https://logos.composio.dev/api/gmail"
@@ -569,7 +669,9 @@
         "slug": "EXA_GET_WEBSET",
         "name": "Get Webset",
         "description": "Retrieve a Webset by ID or external ID, including its status and operations. Set expand to [\"items\"] to include up to the first 100 items. This does not retrieve additional item pages.",
-        "available_versions": ["20261101_00"],
+        "available_versions": [
+          "20261101_00"
+        ],
         "version": "20261101_00",
         "toolkit": {
           "slug": "exa",
@@ -579,7 +681,9 @@
         "input_parameters": {
           "type": "object",
           "title": "GetWebsetRequest",
-          "required": ["id"],
+          "required": [
+            "id"
+          ],
           "properties": {
             "id": {
               "type": "string",
@@ -601,13 +705,19 @@
         },
         "scopes": [],
         "scope_requirements": null,
-        "tags": ["openWorldHint", "readOnlyHint", "Websets"],
+        "tags": [
+          "openWorldHint",
+          "readOnlyHint",
+          "Websets"
+        ],
         "no_auth": false,
         "is_deprecated": false,
         "deprecated": {
           "displayName": "Get Webset",
           "version": "20261101_00",
-          "available_versions": ["20261101_00"],
+          "available_versions": [
+            "20261101_00"
+          ],
           "is_deprecated": false,
           "toolkit": {
             "logo": "https://logos.composio.dev/api/exa"
@@ -620,7 +730,9 @@
         "slug": "GITHUB_CREATE_A_CHECK_RUN",
         "name": "Create a check run",
         "description": "Creates a new check run for a specific commit in a repository, used by external services to report status, detailed feedback, annotations, and images directly within the GitHub UI. NOTE: This endpoint requires GitHub App authentication - OAuth tokens and personal access tokens cannot create check runs.",
-        "available_versions": ["20261104_00"],
+        "available_versions": [
+          "20261104_00"
+        ],
         "version": "20261104_00",
         "toolkit": {
           "slug": "github",
@@ -630,28 +742,39 @@
         "input_parameters": {
           "type": "object",
           "title": "CreateACheckRunRequest",
-          "required": ["owner", "repo", "name", "head_sha"],
+          "required": [
+            "owner",
+            "repo",
+            "name",
+            "head_sha"
+          ],
           "properties": {
             "name": {
               "type": "string",
               "title": "Name",
-              "examples": ["mighty_linter"],
+              "examples": [
+                "mighty_linter"
+              ],
               "description": "The name of the check to be displayed in the GitHub UI. For example, \"Code Coverage\" or \"Linter\".",
               "human_parameter_description": "A short, clear name for this check as it will appear in GitHub (e.g., Linter or Tests). It helps people recognize what the check does."
             },
             "repo": {
               "type": "string",
               "title": "Repo",
-              "examples": ["Hello-World"],
+              "examples": [
+                "Hello-World"
+              ],
               "description": "The name of the repository, without the `.git` extension. This name is not case sensitive.",
               "human_parameter_description": "The repository name where you want to create the check run. This points the action to the correct project."
             },
             "owner": {
               "type": "string",
               "title": "Owner",
-              "examples": ["octocat"],
+              "examples": [
+                "octocat"
+              ],
               "description": "The account owner of the repository. This name is not case sensitive.",
-              "human_parameter_description": "The GitHub username or organization that owns the repository you\u2019re targeting. This ensures the check run is created in the right account."
+              "human_parameter_description": "The GitHub username or organization that owns the repository you’re targeting. This ensures the check run is created in the right account."
             },
             "status": {
               "enum": [
@@ -674,7 +797,11 @@
               "items": {
                 "type": "object",
                 "title": "CheckRunAction",
-                "required": ["label", "identifier", "description"],
+                "required": [
+                  "label",
+                  "identifier",
+                  "description"
+                ],
                 "properties": {
                   "label": {
                     "type": "string",
@@ -706,7 +833,9 @@
             "head_sha": {
               "type": "string",
               "title": "Head Sha",
-              "examples": ["009b8392b1d19195ab1750317ce01ed503788888"],
+              "examples": [
+                "009b8392b1d19195ab1750317ce01ed503788888"
+              ],
               "description": "The SHA of the commit for which the check run is created.",
               "human_parameter_description": "The commit SHA you want to attach this check run to. This tells GitHub which exact commit the results belong to."
             },
@@ -725,27 +854,33 @@
               "title": "ConclusionEnm",
               "description": "**Required if `completed_at` is provided or if `status` is `completed`**. Specifies the final outcome of the check (e.g., 'success', 'failure'). Note: Setting `conclusion` automatically sets `status` to `completed`. GitHub alone can set a conclusion to `stale`.",
               "human_parameter_name": "Check Run Conclusion",
-              "human_parameter_description": "The final outcome of the check (like success or failure) once it\u2019s complete. Set this when you\u2019re marking the run as finished."
+              "human_parameter_description": "The final outcome of the check (like success or failure) once it’s complete. Set this when you’re marking the run as finished."
             },
             "started_at": {
               "type": "string",
               "title": "Started At",
               "format": "date-time",
-              "examples": ["2018-05-04T01:14:52Z"],
+              "examples": [
+                "2018-05-04T01:14:52Z"
+              ],
               "description": "The ISO 8601 timestamp (YYYY-MM-DDTHH:MM:SSZ) indicating when the check run began.",
               "human_parameter_description": "When the check started running. Useful for timelines and duration tracking."
             },
             "details_url": {
               "type": "string",
               "title": "Details Url",
-              "examples": ["https://example.com/build/status"],
+              "examples": [
+                "https://example.com/build/status"
+              ],
               "description": "The URL of the integrator's site providing full details of the check. If omitted, the GitHub App's homepage is used. This URL is available from the check's UI.",
-              "human_parameter_description": "A link people can click to see full results or logs for this check. If you don\u2019t have one, you can leave it blank."
+              "human_parameter_description": "A link people can click to see full results or logs for this check. If you don’t have one, you can leave it blank."
             },
             "external_id": {
               "type": "string",
               "title": "External Id",
-              "examples": ["42"],
+              "examples": [
+                "42"
+              ],
               "description": "A unique identifier for the check run on the integrator's system. This helps in correlating check runs between GitHub and the external system.",
               "human_parameter_description": "An ID from your own system to match this check run back to your records. Useful for tracking and updates later."
             },
@@ -753,7 +888,9 @@
               "type": "string",
               "title": "Completed At",
               "format": "date-time",
-              "examples": ["2018-05-04T01:14:52Z"],
+              "examples": [
+                "2018-05-04T01:14:52Z"
+              ],
               "description": "The ISO 8601 timestamp (YYYY-MM-DDTHH:MM:SSZ) indicating when the check run finished. **Required if `status` is `completed`**.",
               "human_parameter_description": "When the check finished running. Helpful for auditing and understanding how long it took."
             },
@@ -767,17 +904,22 @@
             "output__title": {
               "type": "string",
               "title": "Output  Title",
-              "examples": ["Linter Scan Summary"],
+              "examples": [
+                "Linter Scan Summary"
+              ],
               "description": "A descriptive title for the output of the check run, displayed in the GitHub UI. For example, 'Linter Scan Summary'.",
               "human_parameter_name": "Output Title",
-              "human_parameter_description": "A short title for what this check found or did. It\u2019s the headline users will see in the Checks UI."
+              "human_parameter_description": "A short title for what this check found or did. It’s the headline users will see in the Checks UI."
             },
             "output__images": {
               "type": "array",
               "items": {
                 "type": "object",
                 "title": "CheckRunImage",
-                "required": ["alt", "image_url"],
+                "required": [
+                  "alt",
+                  "image_url"
+                ],
                 "properties": {
                   "alt": {
                     "type": "string",
@@ -806,7 +948,9 @@
             "output__summary": {
               "type": "string",
               "title": "Output  Summary",
-              "examples": ["Found 2 critical issues and 5 warnings."],
+              "examples": [
+                "Found 2 critical issues and 5 warnings."
+              ],
               "description": "A summary of the check run's findings. Supports Markdown. **Maximum length**: 65,535 characters.",
               "human_parameter_name": "Output Summary",
               "human_parameter_description": "A brief summary of the results to help readers quickly understand what happened. You can include key findings or counts."
@@ -865,7 +1009,11 @@
                     "description": "The start column of the annotation. Annotations only support start_column and end_column on the same line."
                   },
                   "annotation_level": {
-                    "enum": ["notice", "warning", "failure"],
+                    "enum": [
+                      "notice",
+                      "warning",
+                      "failure"
+                    ],
                     "type": "string",
                     "title": "Annotation Level",
                     "description": "The level of the annotation (notice, warning, or failure)."
@@ -882,22 +1030,32 @@
           },
           "description": "Request schema to create a new check run on GitHub."
         },
-        "scopes": ["repo"],
+        "scopes": [
+          "repo"
+        ],
         "scope_requirements": {
           "all_of": [
             {
-              "any_of": ["repo"]
+              "any_of": [
+                "repo"
+              ]
             }
           ]
         },
-        "tags": ["checks", "openWorldHint", "createHint"],
+        "tags": [
+          "checks",
+          "openWorldHint",
+          "createHint"
+        ],
         "no_auth": false,
         "human_description": "This action creates a new check run for a specific commit in a repository. It allows external services to report their status, provide detailed feedback, and attach annotations and images directly within the GitHub interface.\n\n**IMPORTANT: Authentication Requirement**\nThis endpoint requires GitHub App authentication with 'checks:write' permission. OAuth tokens and personal access tokens (PAT) cannot create check runs. If you need to report status using a PAT, consider using the 'Create a commit status' action instead.",
         "is_deprecated": false,
         "deprecated": {
           "displayName": "Create a check run",
           "version": "20261104_00",
-          "available_versions": ["20261104_00"],
+          "available_versions": [
+            "20261104_00"
+          ],
           "is_deprecated": false,
           "toolkit": {
             "logo": "https://logos.composio.dev/api/github"
@@ -910,7 +1068,9 @@
         "slug": "BRAZE_IDENTIFY_USERS",
         "name": "Identify Users",
         "description": "Assign external IDs to alias-only, email-only, or phone-only Braze profiles, merging into an existing identified profile when applicable. This is irreversible when a merge occurs: the source alias-only, email-only, or phone-only profile is removed after its data is transferred. Requires users.identify and shares a 20,000 requests/minute rate limit. A 201 success only confirms acceptance: case mismatches, duplicate matches, or prioritization can produce no merge.",
-        "available_versions": ["20261101_00"],
+        "available_versions": [
+          "20261101_00"
+        ],
         "version": "20261101_00",
         "toolkit": {
           "slug": "braze",
@@ -922,17 +1082,23 @@
           "anyOf": [
             {
               "type": "object",
-              "required": ["aliases_to_identify"],
+              "required": [
+                "aliases_to_identify"
+              ],
               "additionalProperties": true
             },
             {
               "type": "object",
-              "required": ["emails_to_identify"],
+              "required": [
+                "emails_to_identify"
+              ],
               "additionalProperties": true
             },
             {
               "type": "object",
-              "required": ["phone_numbers_to_identify"],
+              "required": [
+                "phone_numbers_to_identify"
+              ],
               "additionalProperties": true
             }
           ],
@@ -943,7 +1109,11 @@
               "items": {
                 "type": "object",
                 "title": "EmailToIdentify",
-                "required": ["external_id", "email", "prioritization"],
+                "required": [
+                  "external_id",
+                  "email",
+                  "prioritization"
+                ],
                 "properties": {
                   "email": {
                     "type": "string",
@@ -985,12 +1155,18 @@
               "items": {
                 "type": "object",
                 "title": "AliasToIdentify",
-                "required": ["external_id", "user_alias"],
+                "required": [
+                  "external_id",
+                  "user_alias"
+                ],
                 "properties": {
                   "user_alias": {
                     "type": "object",
                     "title": "User Alias",
-                    "required": ["alias_name", "alias_label"],
+                    "required": [
+                      "alias_name",
+                      "alias_label"
+                    ],
                     "properties": {
                       "alias_name": {
                         "type": "string",
@@ -1027,7 +1203,11 @@
               "items": {
                 "type": "object",
                 "title": "PhoneNumberToIdentify",
-                "required": ["external_id", "phone", "prioritization"],
+                "required": [
+                  "external_id",
+                  "phone",
+                  "prioritization"
+                ],
                 "properties": {
                   "phone": {
                     "type": "string",
@@ -1068,13 +1248,19 @@
         },
         "scopes": [],
         "scope_requirements": null,
-        "tags": ["updateHint", "users", "identifiers"],
+        "tags": [
+          "updateHint",
+          "users",
+          "identifiers"
+        ],
         "no_auth": false,
         "is_deprecated": false,
         "deprecated": {
           "displayName": "Identify Users",
           "version": "20261101_00",
-          "available_versions": ["20261101_00"],
+          "available_versions": [
+            "20261101_00"
+          ],
           "is_deprecated": false,
           "toolkit": {
             "logo": "https://logos.composio.dev/api/braze"
@@ -1086,8 +1272,10 @@
       {
         "slug": "PLAIN_MCP_GET_THREADS",
         "name": "Getthreads",
-        "description": "Fetch threads with flexible filtering options.\n Use this to find first 10 threads by status, status details, assignee, customer, tenant, labels, priority, or date ranges.\n Set isAssigned: false to get unassigned threads.\n Set isAssigned: true to get assigned threads.\n Pass null for isAssigned to get all threads regardless of assignment.\n statusDetails filters by specific status detail types like CREATED, IN_PROGRESS, NEW_REPLY, WAITING_FOR_CUSTOMER, etc.\n Use the `cursor` variable with the endCursor from the previous\n response's pageInfo to fetch the next page. The cursor is an opaque\n token: pass it back unchanged and do not construct, modify, or alter it. Set\n `first` to control page size (default 10).\n\n threadFields filters by custom thread field values. Call `getThreadFieldSchemas`\n first to discover the available field keys and their types. Every entry must include\n `key`, `stringValue`, and `booleanValue`, then set exactly one value family to match\n on and leave the others as null:\n   - STRING/ENUM: stringValue: \"some value\", booleanValue: null\n   - BOOLEAN:     stringValue: null, booleanValue: true\n   - NUMBER:      stringValue: null, booleanValue: null,\n                  number: { value: 5, gte: null, lte: null }   # equality\n                  number: { value: null, gte: 1, lte: 10 }     # range\n   - DATE:        stringValue: null, booleanValue: null,\n                  date: { after: \"2024-01-01T00:00:00Z\", before: null }\n For number/date, every sub-field must be present; null out the ones you are not\n matching on. Multiple entries are combined with OR; thread-field filtering is combined\n with the other filters above using AND. Example:\n   threadFields: [{ key: \"plan_tier\", stringValue: \"enterprise\", booleanValue: null }]\n\n tenantIdentifiers filters by the tenant stamped on the thread. Call `getTenants`\n or `searchTenants` first to discover tenant `id` (starts with `te_`) and\n `externalId`. Each entry must set exactly one of `tenantId` or `externalId`;\n omit the unused field or set it to null. Multiple entries are combined with\n OR. Example:\n   tenantIdentifiers: [{ tenantId: \"te_01...\" }]\n   tenantIdentifiers: [{ tenantId: \"te_01...\", externalId: null }]\n   tenantIdentifiers: [{ externalId: \"acme-prod\" }]\n Threads created before the customer was added to the tenant may be missing.\n For a complete membership-based list, call `getCustomers` with\n `tenantIdentifiers`, then `getThreads` with those customer `id`s.\n\n Thread URL format: https://app.plain.com/workspace/{workspaceId}/thread/{threadId}/\n where {threadId} is the thread `id` field on each result (starts with `th_`)\n and {workspaceId} is fetched via `getMyWorkspace` (starts with `w_`). Do not\n invent IDs \u2014 only use values returned by the MCP tools.",
-        "available_versions": ["20261018_00"],
+        "description": "Fetch threads with flexible filtering options.\n Use this to find first 10 threads by status, status details, assignee, customer, tenant, labels, priority, or date ranges.\n Set isAssigned: false to get unassigned threads.\n Set isAssigned: true to get assigned threads.\n Pass null for isAssigned to get all threads regardless of assignment.\n statusDetails filters by specific status detail types like CREATED, IN_PROGRESS, NEW_REPLY, WAITING_FOR_CUSTOMER, etc.\n Use the `cursor` variable with the endCursor from the previous\n response's pageInfo to fetch the next page. The cursor is an opaque\n token: pass it back unchanged and do not construct, modify, or alter it. Set\n `first` to control page size (default 10).\n\n threadFields filters by custom thread field values. Call `getThreadFieldSchemas`\n first to discover the available field keys and their types. Every entry must include\n `key`, `stringValue`, and `booleanValue`, then set exactly one value family to match\n on and leave the others as null:\n   - STRING/ENUM: stringValue: \"some value\", booleanValue: null\n   - BOOLEAN:     stringValue: null, booleanValue: true\n   - NUMBER:      stringValue: null, booleanValue: null,\n                  number: { value: 5, gte: null, lte: null }   # equality\n                  number: { value: null, gte: 1, lte: 10 }     # range\n   - DATE:        stringValue: null, booleanValue: null,\n                  date: { after: \"2024-01-01T00:00:00Z\", before: null }\n For number/date, every sub-field must be present; null out the ones you are not\n matching on. Multiple entries are combined with OR; thread-field filtering is combined\n with the other filters above using AND. Example:\n   threadFields: [{ key: \"plan_tier\", stringValue: \"enterprise\", booleanValue: null }]\n\n tenantIdentifiers filters by the tenant stamped on the thread. Call `getTenants`\n or `searchTenants` first to discover tenant `id` (starts with `te_`) and\n `externalId`. Each entry must set exactly one of `tenantId` or `externalId`;\n omit the unused field or set it to null. Multiple entries are combined with\n OR. Example:\n   tenantIdentifiers: [{ tenantId: \"te_01...\" }]\n   tenantIdentifiers: [{ tenantId: \"te_01...\", externalId: null }]\n   tenantIdentifiers: [{ externalId: \"acme-prod\" }]\n Threads created before the customer was added to the tenant may be missing.\n For a complete membership-based list, call `getCustomers` with\n `tenantIdentifiers`, then `getThreads` with those customer `id`s.\n\n Thread URL format: https://app.plain.com/workspace/{workspaceId}/thread/{threadId}/\n where {threadId} is the thread `id` field on each result (starts with `th_`)\n and {workspaceId} is fetched via `getMyWorkspace` (starts with `w_`). Do not\n invent IDs — only use values returned by the MCP tools.",
+        "available_versions": [
+          "20261018_00"
+        ],
         "version": "20261018_00",
         "toolkit": {
           "slug": "plain_mcp",
@@ -1267,7 +1455,11 @@
           },
           "definitions": {
             "ThreadStatus": {
-              "enum": ["TODO", "SNOOZED", "DONE"],
+              "enum": [
+                "TODO",
+                "SNOOZED",
+                "DONE"
+              ],
               "type": "string",
               "description": "The lifecycle status of a thread.\n\nValues:\nTODO: The thread requires attention from the support team.\nSNOOZED: The thread is temporarily paused until a timer expires or the customer replies.\nDONE: The support team has finished with the thread for now. It reverts to TODO automatically when new activity arrives."
             },
@@ -1291,7 +1483,9 @@
             },
             "ThreadFieldFilter": {
               "type": "object",
-              "required": ["key"],
+              "required": [
+                "key"
+              ],
               "properties": {
                 "key": {
                   "type": "string"
@@ -1443,13 +1637,17 @@
         },
         "scopes": [],
         "scope_requirements": null,
-        "tags": ["readOnlyHint"],
+        "tags": [
+          "readOnlyHint"
+        ],
         "no_auth": false,
         "is_deprecated": false,
         "deprecated": {
           "displayName": "Getthreads",
           "version": "20261018_00",
-          "available_versions": ["20261018_00"],
+          "available_versions": [
+            "20261018_00"
+          ],
           "is_deprecated": false,
           "toolkit": {
             "logo": "https://logos.composio.dev/api/plain_mcp"
@@ -1462,7 +1660,9 @@
         "slug": "SALESFORCE_GET_RELEVANT_ITEMS",
         "name": "Get relevant items",
         "description": "Get the current user's relevant record IDs grouped by Salesforce object.",
-        "available_versions": ["20261104_00"],
+        "available_versions": [
+          "20261104_00"
+        ],
         "version": "20261104_00",
         "toolkit": {
           "slug": "salesforce",
@@ -1477,7 +1677,9 @@
               "type": "string",
               "const": "MRU",
               "title": "Mode",
-              "examples": ["MRU"],
+              "examples": [
+                "MRU"
+              ],
               "description": "Set MRU for the documented most-recently-used query mode."
             },
             "sobjects": {
@@ -1487,14 +1689,21 @@
                 "pattern": "^[A-Za-z][A-Za-z0-9_]*$"
               },
               "title": "Sobjects",
-              "examples": [["Account", "Contact"]],
+              "examples": [
+                [
+                  "Account",
+                  "Contact"
+                ]
+              ],
               "minItems": 1,
               "description": "Optional case-sensitive object API names to restrict the results."
             },
             "last_updated_id": {
               "type": "string",
               "title": "Last Updated Id",
-              "examples": ["-514895536"],
+              "examples": [
+                "-514895536"
+              ],
               "minLength": 1,
               "description": "Compare the full result set with a previously returned lastUpdatedId."
             },
@@ -1517,22 +1726,34 @@
             }
           }
         },
-        "scopes": ["full", "api"],
+        "scopes": [
+          "full",
+          "api"
+        ],
         "scope_requirements": {
           "all_of": [
             {
-              "any_of": ["full", "api"]
+              "any_of": [
+                "full",
+                "api"
+              ]
             }
           ]
         },
-        "tags": ["openWorldHint", "readOnlyHint", "search_and_query"],
+        "tags": [
+          "openWorldHint",
+          "readOnlyHint",
+          "search_and_query"
+        ],
         "no_auth": false,
         "human_description": "Retrieve relevant record IDs from the user's global search scope and most recently used objects (up to 2,000 records). Optionally filter by object or compare previous result versions. This endpoint does not paginate.",
         "is_deprecated": false,
         "deprecated": {
           "displayName": "Get relevant items",
           "version": "20261104_00",
-          "available_versions": ["20261104_00"],
+          "available_versions": [
+            "20261104_00"
+          ],
           "is_deprecated": false,
           "toolkit": {
             "logo": "https://logos.composio.dev/api/salesforce"
@@ -1545,7 +1766,9 @@
         "slug": "MONGODB_CREATE_GROUP",
         "name": "Create Group",
         "description": "Create One Project. Uses the MongoDB Atlas Administration API.",
-        "available_versions": ["20261101_00"],
+        "available_versions": [
+          "20261101_00"
+        ],
         "version": "20261101_00",
         "toolkit": {
           "slug": "mongodb",
@@ -1555,12 +1778,17 @@
         "input_parameters": {
           "type": "object",
           "title": "CreateGroupRequest",
-          "required": ["body"],
+          "required": [
+            "body"
+          ],
           "properties": {
             "body": {
               "type": "object",
               "title": "Body",
-              "required": ["name", "org_id"],
+              "required": [
+                "name",
+                "org_id"
+              ],
               "properties": {
                 "name": {
                   "type": "string",
@@ -1573,7 +1801,10 @@
                   "items": {
                     "type": "object",
                     "title": "ResourceTag",
-                    "required": ["key", "value"],
+                    "required": [
+                      "key",
+                      "value"
+                    ],
                     "properties": {
                       "key": {
                         "type": "string",
@@ -1640,13 +1871,18 @@
         },
         "scopes": [],
         "scope_requirements": null,
-        "tags": ["createHint", "Atlas Admin API / Projects"],
+        "tags": [
+          "createHint",
+          "Atlas Admin API / Projects"
+        ],
         "no_auth": false,
         "is_deprecated": false,
         "deprecated": {
           "displayName": "Create Group",
           "version": "20261101_00",
-          "available_versions": ["20261101_00"],
+          "available_versions": [
+            "20261101_00"
+          ],
           "is_deprecated": false,
           "toolkit": {
             "logo": "https://logos.composio.dev/api/mongodb"
@@ -1659,7 +1895,9 @@
         "slug": "TIKTOK_ADS_GET_CREATIVE_ASSETS",
         "name": "Get Creative Assets",
         "description": "Return metadata for specified video or image assets in an authorized advertiser's Ads Asset Library.",
-        "available_versions": ["20261103_00"],
+        "available_versions": [
+          "20261103_00"
+        ],
         "version": "20261103_00",
         "toolkit": {
           "slug": "tiktok_ads",
@@ -1671,7 +1909,9 @@
           "allOf": [
             {
               "if": {
-                "required": ["asset_type"],
+                "required": [
+                  "asset_type"
+                ],
                 "properties": {
                   "asset_type": {
                     "const": "VIDEO"
@@ -1690,7 +1930,9 @@
             },
             {
               "if": {
-                "required": ["asset_type"],
+                "required": [
+                  "asset_type"
+                ],
                 "properties": {
                   "asset_type": {
                     "const": "IMAGE"
@@ -1709,7 +1951,11 @@
             }
           ],
           "title": "GetCreativeAssetsRequest",
-          "required": ["advertiser_id", "asset_type", "asset_ids"],
+          "required": [
+            "advertiser_id",
+            "asset_type",
+            "asset_ids"
+          ],
           "properties": {
             "asset_ids": {
               "type": "array",
@@ -1721,7 +1967,10 @@
               "description": "Video or image asset IDs to retrieve. Video requests support at most 60 IDs; image requests support at most 100 IDs."
             },
             "asset_type": {
-              "enum": ["VIDEO", "IMAGE"],
+              "enum": [
+                "VIDEO",
+                "IMAGE"
+              ],
               "type": "string",
               "title": "Asset Type",
               "description": "Type of Ads Asset Library asset to retrieve."
@@ -1736,13 +1985,19 @@
         },
         "scopes": [],
         "scope_requirements": null,
-        "tags": ["readOnlyHint", "creatives", "asset_library"],
+        "tags": [
+          "readOnlyHint",
+          "creatives",
+          "asset_library"
+        ],
         "no_auth": false,
         "is_deprecated": false,
         "deprecated": {
           "displayName": "Get Creative Assets",
           "version": "20261103_00",
-          "available_versions": ["20261103_00"],
+          "available_versions": [
+            "20261103_00"
+          ],
           "is_deprecated": false,
           "toolkit": {
             "logo": "https://logos.composio.dev/api/tiktok_ads"
@@ -1751,371 +2006,5 @@
       }
     ]
   },
-  "arcade": {
-    "Gmail": [
-      {
-        "fully_qualified_name": "Gmail.GetEmail@10.1.2",
-        "qualified_name": "Gmail.GetEmail",
-        "name": "GetEmail",
-        "description": "Read one message by ID without loading the rest of its thread.\n\nReturns parsed sender and recipient headers, the subject, text and HTML bodies,\nlabels, dates, and attachment metadata. Attachment file bytes are not returned.",
-        "toolkit": {
-          "name": "Gmail",
-          "description": "Arcade.dev LLM tools for Gmail",
-          "version": "10.1.2"
-        },
-        "input": {
-          "parameters": [
-            {
-              "name": "email_id",
-              "required": true,
-              "description": "The ID of the message to read.",
-              "value_schema": {
-                "val_type": "string"
-              },
-              "inferrable": true
-            }
-          ]
-        },
-        "requirements": {
-          "met": true,
-          "authorization": {
-            "id": "google-openbot",
-            "provider_id": "google",
-            "provider_type": "oauth2",
-            "oauth2": {
-              "scopes": ["https://www.googleapis.com/auth/gmail.readonly"]
-            },
-            "status": "active"
-          }
-        },
-        "metadata": {
-          "classification": {
-            "service_domains": ["email"]
-          },
-          "behavior": {
-            "operations": ["read"],
-            "read_only": true,
-            "destructive": false,
-            "idempotent": true,
-            "open_world": true
-          }
-        },
-        "index_state": "indexed",
-        "last_indexed_at": "2026-11-05T19:15:23Z"
-      },
-      {
-        "fully_qualified_name": "Gmail.ListEmails@10.1.2",
-        "qualified_name": "Gmail.ListEmails",
-        "name": "ListEmails",
-        "description": "Read emails from a Gmail account.\n\nBy default returns metadata-only rows (no body/html_body) so high-volume\ntriage stays within the context budget. Pass include_body=True when full\nmessage text is needed. Metadata rows still include routing headers\n(to/cc/bcc/from/reply_to) and email_addresses.\n\nObvious automated emails are excluded from results using no-reply sender\npatterns and Gmail's non-primary category filters (promotions, social,\nupdates, forums). Set exclude_automated=False to include all emails\nregardless of source.",
-        "toolkit": {
-          "name": "Gmail",
-          "description": "Arcade.dev LLM tools for Gmail",
-          "version": "10.1.2"
-        },
-        "input": {
-          "parameters": [
-            {
-              "name": "n_emails",
-              "required": false,
-              "description": "Number of emails to read (Min 1, Max 100). Requests above 100 are clamped; the response includes limit_clamped_to_max=True when that happens. Defaults to 25.",
-              "value_schema": {
-                "val_type": "integer"
-              },
-              "inferrable": true
-            },
-            {
-              "name": "page_token",
-              "required": false,
-              "description": "Pagination cursor. Copy pagination.next_page_token from a previous response to continue; blank or whitespace-only values are rejected. Defaults to the first page.",
-              "value_schema": {
-                "val_type": "string"
-              },
-              "inferrable": true
-            },
-            {
-              "name": "exclude_automated",
-              "required": false,
-              "description": "Exclude obvious automated email using no-reply sender patterns and Gmail non-primary categories (promotions, social, updates, forums). Set to False when the user wants automated content like calendar invites, marketing emails, or other filtered categories. Defaults to True.",
-              "value_schema": {
-                "val_type": "boolean"
-              },
-              "inferrable": true
-            },
-            {
-              "name": "include_body",
-              "required": false,
-              "description": "Include the full plain-text and HTML message bodies on each result. When False, rows are metadata-only (id, from/to/cc/bcc/reply_to, subject, snippet, labels, date, email_addresses) and body and html_body are omitted entirely. Set to True only when the agent needs the full message text. Defaults to False.",
-              "value_schema": {
-                "val_type": "boolean"
-              },
-              "inferrable": true
-            }
-          ]
-        },
-        "requirements": {
-          "met": true,
-          "authorization": {
-            "id": "google-openbot",
-            "provider_id": "google",
-            "provider_type": "oauth2",
-            "oauth2": {
-              "scopes": ["https://www.googleapis.com/auth/gmail.readonly"]
-            },
-            "status": "active"
-          }
-        },
-        "metadata": {
-          "classification": {
-            "service_domains": ["email"]
-          },
-          "behavior": {
-            "operations": ["read"],
-            "read_only": true,
-            "destructive": false,
-            "idempotent": true,
-            "open_world": true
-          }
-        },
-        "index_state": "indexed",
-        "last_indexed_at": "2026-11-05T19:15:23Z"
-      }
-    ],
-    "GoogleCalendar": [
-      {
-        "fully_qualified_name": "GoogleCalendar.CreateEvent@4.2.4",
-        "qualified_name": "GoogleCalendar.CreateEvent",
-        "name": "CreateEvent",
-        "description": "Create a new event/meeting/sync/meetup in the specified calendar.\n\nPass `recurrence` to create a repeating event.",
-        "toolkit": {
-          "name": "GoogleCalendar",
-          "description": "Arcade.dev LLM tools for Google Calendar",
-          "version": "4.2.4"
-        },
-        "input": {
-          "parameters": [
-            {
-              "name": "summary",
-              "required": true,
-              "description": "The title of the event",
-              "value_schema": {
-                "val_type": "string"
-              },
-              "inferrable": true
-            },
-            {
-              "name": "start_datetime",
-              "required": true,
-              "description": "When the event starts. For a timed event, a datetime in ISO 8601 format (YYYY-MM-DDTHH:MM:SS). For an all-day event, a date (YYYY-MM-DD); end_datetime must then be a date too.",
-              "value_schema": {
-                "val_type": "string"
-              },
-              "inferrable": true
-            },
-            {
-              "name": "end_datetime",
-              "required": true,
-              "description": "When the event ends. For a timed event, a datetime in ISO 8601 format (YYYY-MM-DDTHH:MM:SS). For an all-day event, a date (YYYY-MM-DD) that is exclusive: the day after the event's last day. A date equal to start_datetime creates a single all-day event on that day.",
-              "value_schema": {
-                "val_type": "string"
-              },
-              "inferrable": true
-            },
-            {
-              "name": "calendar_id",
-              "required": false,
-              "description": "The ID of the calendar to create the event in. Defaults to 'primary'.",
-              "value_schema": {
-                "val_type": "string"
-              },
-              "inferrable": true
-            },
-            {
-              "name": "description",
-              "required": false,
-              "description": "The description of the event. Defaults to no description.",
-              "value_schema": {
-                "val_type": "string"
-              },
-              "inferrable": true
-            },
-            {
-              "name": "location",
-              "required": false,
-              "description": "The location of the event. Defaults to no location.",
-              "value_schema": {
-                "val_type": "string"
-              },
-              "inferrable": true
-            },
-            {
-              "name": "visibility",
-              "required": false,
-              "description": "The visibility of the event. Defaults to default, which uses the calendar's default visibility.",
-              "value_schema": {
-                "val_type": "string",
-                "enum": ["default", "public", "private", "confidential"]
-              },
-              "inferrable": true
-            },
-            {
-              "name": "attendee_emails",
-              "required": false,
-              "description": "The list of attendee emails. Must be valid email addresses e.g., user1@example.com. Defaults to no attendees.",
-              "value_schema": {
-                "val_type": "array",
-                "inner_val_type": "string"
-              },
-              "inferrable": true
-            },
-            {
-              "name": "send_notifications_to_attendees",
-              "required": false,
-              "description": "Which guests Google emails an invitation to. externalOnly emails only guests who do not use Google Calendar. Defaults to all.",
-              "value_schema": {
-                "val_type": "string",
-                "enum": ["nobody", "all", "externalOnly"]
-              },
-              "inferrable": true
-            },
-            {
-              "name": "add_google_meet",
-              "required": false,
-              "description": "Whether to add a Google Meet link to the event. Defaults to False.",
-              "value_schema": {
-                "val_type": "boolean"
-              },
-              "inferrable": true
-            },
-            {
-              "name": "recurrence",
-              "required": false,
-              "description": "Recurrence rules for a repeating event, in RFC 5545 format. Each entry is an RRULE/RDATE/EXDATE line; a bare rule is automatically prefixed with 'RRULE:'. Examples: ['RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR;COUNT=10'] for every Mon/Wed/Fri for 10 occurrences, or ['RRULE:FREQ=DAILY;UNTIL=YYYYMMDDTHHMMSSZ'] for daily until a UTC date-time. Defaults to a one-time event.",
-              "value_schema": {
-                "val_type": "array",
-                "inner_val_type": "string"
-              },
-              "inferrable": true
-            }
-          ]
-        },
-        "requirements": {
-          "met": true,
-          "authorization": {
-            "id": "google-openbot",
-            "provider_id": "google",
-            "provider_type": "oauth2",
-            "oauth2": {
-              "scopes": [
-                "https://www.googleapis.com/auth/calendar.readonly",
-                "https://www.googleapis.com/auth/calendar.events"
-              ]
-            },
-            "status": "active"
-          }
-        },
-        "metadata": {
-          "classification": {
-            "service_domains": ["calendar"]
-          },
-          "behavior": {
-            "operations": ["create"],
-            "read_only": false,
-            "destructive": false,
-            "idempotent": false,
-            "open_world": true
-          }
-        },
-        "index_state": "indexed",
-        "last_indexed_at": "2026-11-05T19:15:23Z"
-      },
-      {
-        "fully_qualified_name": "GoogleCalendar.FindTimeSlotsWhenEveryoneIsFree@4.2.4",
-        "qualified_name": "GoogleCalendar.FindTimeSlotsWhenEveryoneIsFree",
-        "name": "FindTimeSlotsWhenEveryoneIsFree",
-        "description": "Provide time slots when everyone is free within a given date range and time boundaries.",
-        "toolkit": {
-          "name": "GoogleCalendar",
-          "description": "Arcade.dev LLM tools for Google Calendar",
-          "version": "4.2.4"
-        },
-        "input": {
-          "parameters": [
-            {
-              "name": "email_addresses",
-              "required": false,
-              "description": "The list of email addresses from people in the same organization domain (apart from the currently logged in user) to search for free time slots. Defaults to the current user only.",
-              "value_schema": {
-                "val_type": "array",
-                "inner_val_type": "string"
-              },
-              "inferrable": true
-            },
-            {
-              "name": "start_date",
-              "required": false,
-              "description": "The start date to search for time slots in the format 'YYYY-MM-DD'. It will search starting from this date at the time 00:00:00. Defaults to today's date.",
-              "value_schema": {
-                "val_type": "string"
-              },
-              "inferrable": true
-            },
-            {
-              "name": "end_date",
-              "required": false,
-              "description": "The end date to search for time slots in the format 'YYYY-MM-DD'. It will search until this date at the time 23:59:59. Defaults to 7 days from today.",
-              "value_schema": {
-                "val_type": "string"
-              },
-              "inferrable": true
-            },
-            {
-              "name": "start_time_boundary",
-              "required": false,
-              "description": "Will return free slots in any given day starting from this time in the format 'HH:MM'. Defaults to '08:00', which is a usual business hour start time.",
-              "value_schema": {
-                "val_type": "string"
-              },
-              "inferrable": true
-            },
-            {
-              "name": "end_time_boundary",
-              "required": false,
-              "description": "Will return free slots in any given day until this time in the format 'HH:MM'. Defaults to '18:00', which is a usual business hour end time.",
-              "value_schema": {
-                "val_type": "string"
-              },
-              "inferrable": true
-            }
-          ]
-        },
-        "requirements": {
-          "met": true,
-          "authorization": {
-            "id": "google-openbot",
-            "provider_id": "google",
-            "provider_type": "oauth2",
-            "oauth2": {
-              "scopes": ["https://www.googleapis.com/auth/calendar.readonly"]
-            },
-            "status": "active"
-          }
-        },
-        "metadata": {
-          "classification": {
-            "service_domains": ["calendar"]
-          },
-          "behavior": {
-            "operations": ["read"],
-            "read_only": true,
-            "destructive": false,
-            "idempotent": true,
-            "open_world": true
-          }
-        },
-        "index_state": "indexed",
-        "last_indexed_at": "2026-11-05T19:15:23Z"
-      }
-    ]
-  }
+  "note": "Captured read-only on 2026-11-08: Composio rows from GET /api/v3/tools (toolkit_versions=latest), verbatim but for output_parameters; Arcade rows from GET /v1/tools?toolkit=..., verbatim but for output. Vendor catalogue schemas, no account data. Chosen for the constructs a model provider refuses. Regenerate rather than hand-edit."
 }

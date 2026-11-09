@@ -70,6 +70,15 @@ const WITHOUT_SEARCH_LINES = [
   "names but cannot search.",
 ];
 
+/**
+ * For a run told how to search the public web with its browser (`ComputerHolding.browserSearch`):
+ * it follows that guidance, which names the search engines and keeps it to public information.
+ */
+const BROWSER_SEARCH_LINES = [
+  "To look something up on the public web, search as the guidance above on searching with your",
+  "browser says. Do not guess at addresses hoping one of them has the answer.",
+];
+
 /** The same, for the personal edition: one person, no administrator, and the card offers the step. */
 const WITHOUT_SEARCH_PERSONAL_LINES = [
   ...WITHOUT_SEARCH_LINES.slice(0, 6),
@@ -160,6 +169,14 @@ export type ComputerHolding = {
   search: boolean;
   /** The personal edition, which has no administrator to send anybody to. */
   personal?: boolean;
+  /**
+   * This run holds a browser and is told how to search the public web with it (Baidu first, Bing as
+   * the fallback; `browserSearchGuidance` in server/src/plugins/tools.ts, sent before this guidance).
+   * Then the lines that forbid a search engine in the browser are left out, since the two would
+   * contradict each other, and the Bot is pointed at that guidance instead. Built-in Bots only;
+   * remote harnesses do not set it and keep the lines.
+   */
+  browserSearch?: boolean;
 };
 
 /**
@@ -174,11 +191,13 @@ export function computerGuidance(holding: ComputerHolding): string {
   return asParagraphs([
     ...OPENING_A_PAGE_LINES,
     "",
-    ...(holding.search
-      ? WITH_SEARCH_LINES
-      : holding.personal
-        ? WITHOUT_SEARCH_PERSONAL_LINES
-        : WITHOUT_SEARCH_LINES),
+    ...(holding.browserSearch
+      ? BROWSER_SEARCH_LINES
+      : holding.search
+        ? WITH_SEARCH_LINES
+        : holding.personal
+          ? WITHOUT_SEARCH_PERSONAL_LINES
+          : WITHOUT_SEARCH_LINES),
     "",
     ...ACTING_LINES,
   ]);
@@ -332,39 +351,69 @@ export const ORCHESTRATION_GUIDANCE = asParagraphs(
 /**
  * Who asks the person before an action: OpenBot, not the Bot.
  *
- * OpenBot puts a card in front of the person before any delete, archive, send, share or post in their
- * apps or on websites, and before any app tool its app marks destructive, and hands any payment or
- * purchase to them, whatever their settings (`server/src/approvals/policy.ts`). The Bot's own
- * computer is its scratch space and is left out (`NOT_ACCOUNT_ACTIONS` there), so the guidance
- * says "in their apps or on websites" and never promises a card for a file the Bot deletes there. A Bot told by its approval card's description to
- * ask "before sending a message" asked too, so the person was asked twice for one delete. The card
- * OpenBot shows names the exact action, so it is the one that stays. Only for a Bot OpenBot runs,
- * whose every tool goes through that gate: a remote Bot's own tools do not, and nothing here is said
- * to one.
+ * OpenBot puts a card in front of the person before the actions named here, whatever their settings
+ * (`server/src/approvals/policy.ts`: the delete, send, share and publish floors on app tools, the
+ * delete, send and keyboard-send floors on web pages), and hands any payment, purchase or change to
+ * a password, two-step verification, security or sharing setting to the person. A Bot told by its
+ * approval card's description to ask "before sending a message" asked too, so the person was asked
+ * twice for one delete. The card OpenBot shows names the exact action, so it is the one that stays.
+ *
+ * WORDED NARROWLY ON PURPOSE. Each bullet names only what the policy really asks about, as the
+ * policy recognises it: an app tool by its name, its destructive label or an address in its
+ * arguments; a web button by its common Chinese or English text. A button with longer or rarer text
+ * may not be recognised, so for one that sends, deletes, publishes or pays the Bot still asks first.
+ * Telling a Bot not to ask about something the gate does not ask about would let it run unasked.
+ *
+ * Only for a Bot OpenBot runs, whose every tool goes through that gate: a remote Bot's own tools do
+ * not, and nothing here is said to one. The app-tools bullet only for a Bot holding at least one
+ * connected-app tool (`mcp__`), the condition `CONNECTOR_APPROVAL_GUIDANCE` is sent under
+ * (`server/src/plugins/tools.ts`); see {@link approvalGuidance}. The Bot's own computer is its
+ * scratch space and OpenBot's own tools (memory) do not go through the gate, which the last
+ * paragraph says.
  *
  * A tool marked destructive can be called anything ("reset pipeline"), so the Bot can't tell it from
- * its name. Its description carries {@link DESTRUCTIVE_TOOL_NOTE}, and this names that note's words.
- * Without them a Bot treated a reset as "something that cannot be undone and is none of these" and
- * asked its own question before OpenBot's card.
+ * its name. Its description carries {@link DESTRUCTIVE_TOOL_NOTE}, and the app-tools bullet names
+ * that label.
  */
-const APPROVAL_GUIDANCE_LINES = [
-  "OpenBot asks the person itself before you delete, archive, send, share or post anything in their",
-  "apps or on websites, before you use a tool that says it deletes or overwrites something, and before",
-  "you pay for or buy anything, on a card that shows exactly what you are about to do. OpenBot also",
-  "asks before every change when the person has turned that on, and the OpenBot desktop app asks",
-  "before you change a file or run a command in a folder on their own computer. So do not ask them",
-  "first, in words or with an approval card: say what you are going to do and do it, and they are",
-  "asked once, by OpenBot. Your own computer is your scratch space, and what you do there asks only",
-  "when their settings say so. Ask for their decision yourself only when the choice is theirs to",
-  "make, or before something that cannot be undone and is none of these.",
+const APPROVAL_GUIDANCE_OPENING =
+  "以下动作由 OpenBot 在执行前亲自询问对方，卡片上写明你要做的具体内容，所以你不要先问：直接说明你要做什么，然后调用工具。";
+
+/** The app-tools bullet, sent only to a Bot that holds a connected-app (`mcp__`) tool. */
+export const APPROVAL_GUIDANCE_APPS =
+  "- 已连接应用的工具（名字以 mcp__ 开头）：名字表明会删除或归档的；应用标为破坏性的（会删除或覆盖内容）；名字表明会发送、回复、转发、通知、邀请、评论、分享或修改访问权限、发帖或公开发布的；以及参数里写明了收件人或受邀人邮箱的调用。";
+
+const APPROVAL_GUIDANCE_WEB_AND_HANDED_OVER = [
+  "- 网页上：点删除、移除、发送、回复、评论、分享、邀请、发帖、发布、转发这类按钮，也包括用 Enter 或空格按下它们；在写消息、回复或评论的输入框里按 Enter、Ctrl+Enter 或 Cmd+Enter；没有指明元素时在页面上按 Enter 或空格。OpenBot 认得常见的中英文按钮文字（如 Delete、Send、Share、Post，删除、发送、分享、发布、立即购买）；文字更长或少见的按钮未必认得，这类按钮如果会发出、删除、公开或付款，你先问对方。其它按钮，例如 Submit、Save、Continue、提交、保存，不在此列，按平常的方式确认。",
+  "- 付款、购买、转账、升降级付费套餐，以及修改密码、两步验证、安全或分享设置：你不要替对方做，告诉对方需要他本人操作（OpenBot 遇到这些也会交给本人）。",
+  "- 一次发送有时会先后出现两张卡（私密分享确认和发送确认），这是正常的，不要因此改用别的方式发送。",
 ];
 
-export const APPROVAL_GUIDANCE = asParagraphs(APPROVAL_GUIDANCE_LINES);
+const APPROVAL_GUIDANCE_SCRATCH_SPACE =
+  "你自己的电脑是你的草稿空间：在那里删除或修改你自己的文件、运行命令，不在上面这条规则内，按平常的方式确认就行。记忆等 OpenBot 内部工具也不在此列。";
+
+/**
+ * The approval guidance for one built-in Bot's run. `apps`: the run holds at least one connected-app
+ * (`mcp__`) tool, so the app-tools bullet is included.
+ */
+export function approvalGuidance(holding: { apps: boolean }): string {
+  return [
+    [
+      APPROVAL_GUIDANCE_OPENING,
+      ...(holding.apps ? [APPROVAL_GUIDANCE_APPS] : []),
+      ...APPROVAL_GUIDANCE_WEB_AND_HANDED_OVER,
+    ].join("\n"),
+    APPROVAL_GUIDANCE_SCRATCH_SPACE,
+  ].join("\n\n");
+}
+
+/** The whole guidance, as a Bot holding a connected-app tool is told it. See {@link approvalGuidance}. */
+export const APPROVAL_GUIDANCE = approvalGuidance({ apps: true });
 
 /**
  * Added to the description of an app tool its app marks destructive (MCP's `destructiveHint`, a
- * broker's destructive flag), where the Bot is offered it. OpenBot always asks before one runs, so
- * the Bot is told so on the tool itself, in the words {@link APPROVAL_GUIDANCE} names.
+ * broker's destructive flag), where the Bot is offered it. OpenBot always asks before one runs (the
+ * delete floor in `server/src/approvals/policy.ts`), so the Bot is told so on the tool itself, as
+ * {@link APPROVAL_GUIDANCE} says of a tool its app marks destructive.
  */
 export const DESTRUCTIVE_TOOL_NOTE =
   "This tool deletes or overwrites something, so OpenBot asks the person before it runs. Don't ask them first.";

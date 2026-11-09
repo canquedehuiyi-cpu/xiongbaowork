@@ -27,8 +27,8 @@ import { providerSchemaFaults } from "./support/provider-schema-rules";
  * negative lookaheads.
  *
  * THE PATH IS THE ONE A RUN TAKES. Each row below is the vendor's own, captured from its live
- * listing (`fixtures/provider-schema-tools.json`). It goes through the real Composio or Arcade
- * listing, the store's `storableSchema`, `grantedTools`, and `z.toJSONSchema`, which is what the
+ * listing (`fixtures/provider-schema-tools.json`). It goes through the real Composio
+ * listing, `grantedTools`, and `z.toJSONSchema`, which is what the
  * server sends every harness (`copilot.ts`) and what the AI SDK sends a provider for a built-in
  * Bot. What comes out is checked against the providers' documented rules
  * (`support/provider-schema-rules.ts`).
@@ -84,9 +84,7 @@ async function sentToHarness(
         toolName: `mcp__${server}__${tool.name}`,
         ref: `${server}/${tool.name}`,
         description: tool.description,
-        // M3: upstream writes it through the store's `storableSchema`, which the fork's store keeps to
-        // itself; there it only drops U+0000, which none of these captured schemas holds.
-        inputSchema: structuredClone(tool.inputSchema),
+        inputSchema: tool.inputSchema,
       })),
     }),
     callTool: refuse("callTool"),
@@ -131,9 +129,6 @@ describe("what a harness is sent for an app's tools", () => {
         });
     },
   );
-
-  // M3: upstream's "Arcade's %s tools fit what the model providers accept" is not kept: Arcade is
-  // not adopted here.
 
   test("an email address goes out with no lookaround, and says it is an email address", async () => {
     const schemas = await composioSchemas("hubspot");

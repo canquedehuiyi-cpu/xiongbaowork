@@ -378,8 +378,20 @@ describe("reading a file asks Drive what it is first", () => {
    * the refusal above is skipped and `?mimeType=function toString() { [native code] }` is sent to
    * Google in its place.
    */
-  // M3: upstream's "a made-up type borrowed from Object.prototype is not an exportable format" waits for the plugins session's port of
-  // google-drive-rest.ts EXPORTABLE as a Map (a security fix, upstream).
+  test("a made-up type borrowed from Object.prototype is not an exportable format", async () => {
+    for (const mimeType of ["toString", "constructor", "valueOf"]) {
+      const calls = stubFetch({ id: "odd1", name: "Odd", mimeType });
+
+      const result = await callTool(connection, "read_file_content", {
+        fileId: "odd1",
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.text).toContain(mimeType);
+      // One call: the metadata lookup. No export followed it.
+      expect(calls).toHaveLength(1);
+    }
+  });
 });
 
 /*

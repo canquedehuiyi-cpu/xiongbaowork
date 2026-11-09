@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import { offersStandingRule as offersStandingRuleFor } from "@openbot/shared/standing-rule";
 import { client } from "@/lib/client";
 export type ApprovalDecision =
   | "allow_once"
@@ -43,21 +44,21 @@ export const POLICY_SOURCE_LABELS: Record<string, string> = {
   // --- end desktop control ---
   destructive_tool: "删除类操作",
   outbound_send: "对外发送",
+  share_access: "分享与授权",
+  publish_post: "公开发布",
   auto_review: "自动审查",
   default: "你的偏好",
   person_declined: "你已拒绝过",
 };
 /**
- * 这条请求能不能用「在这里总是允许」来回答。删除类和对外发送底线问的动作每次都要问，存下的规则
- * 用不上（服务端也会拒绝），所以不给这个选项。与服务端 approvals/types 的 `offersStandingRule`
- * 同一个条件。
+ * 这条请求能不能用「在这里总是允许」来回答。只给「允许一次」的底线（删除类、对外发送、分享与授权、
+ * 公开发布）和检查任务、安全底线问的动作每次都要问，存下的规则用不上（服务端也会拒绝），所以不给
+ * 这个选项。名单只在 shared/standing-rule.ts 声明一次，服务端读的是同一份。
  */
 export function offersStandingRule(
   policy: { source: string } | undefined,
 ): boolean {
-  return (
-    policy?.source !== "destructive_tool" && policy?.source !== "outbound_send"
-  );
+  return offersStandingRuleFor({ policy });
 }
 export type ApprovalInboxData = {
   enabled: boolean;

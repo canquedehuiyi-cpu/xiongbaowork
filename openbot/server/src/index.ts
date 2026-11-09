@@ -347,7 +347,11 @@ import {
   restrictCoordinationForRun,
   restrictToolsForRun,
 } from "./proactive/restriction";
-import { checkInToolsFor, createCheckInScope } from "./proactive/scope";
+import {
+  checkInCatalogue,
+  checkInToolsFor,
+  createCheckInScope,
+} from "./proactive/scope";
 import { createProactiveStore } from "./proactive/store";
 import { createProjectContext } from "./projects/context";
 import { createProjectRoutes } from "./projects/routes";
@@ -2179,18 +2183,7 @@ await startupLifecycle.run(async (startup) => {
       ].map((connection) => connection.serverId),
     );
   const checkInScope = createCheckInScope({
-    catalogue: {
-      listServers: async () =>
-        (await pluginStore.listServers()).map((server) => ({
-          id: server.id,
-          title: server.title,
-          ownCredential: true,
-          tools: server.tools.map((tool) => ({
-            ref: tool.ref,
-            labelledRead: tool.effect === "read" && !tool.destructive,
-          })),
-        })),
-    },
+    catalogue: checkInCatalogue(pluginStore),
     ownConnections,
     unaskedOwnAccount: (ownerUserId, agentId) =>
       teamBots.unaskedOwnAccount(ownerUserId, agentId),

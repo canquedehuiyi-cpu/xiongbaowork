@@ -152,6 +152,51 @@ describe("proactive read-only restriction", () => {
       )?.text,
     ).toStartWith("Refused.");
   });
+
+  /*
+   * The person's memory is OpenBot's own tool, reached by its bare name. A ref under `memory/` is a
+   * connector's (a server sitting at that id, as a hand edit or an older build left it), and is only
+   * a read if the catalogue says so, like any other connector tool.
+   */
+  test("a server sitting under the memory tools' id is not the person's memory to a check-in", async () => {
+    // M3: the check-in's reads come from its scope (`proactive/scope.ts`), not upstream's
+    // read-only classifier; the server is one the person connected, so only its label decides.
+    const scope = createCheckInScope({
+      catalogue: {
+        listServers: async () => [
+          {
+            id: "memory",
+            title: "Memory",
+            ownCredential: true,
+            tools: [
+              { ref: "memory/recall_personal_memory", labelledRead: false },
+            ],
+          },
+        ],
+      },
+      ownConnections: async () => new Set(["memory"]),
+    });
+    const run = { initiator: proactiveInitiator("memory") };
+    const who = { botId: "bot", actorId: "person" };
+    expect(
+      (await scope("person", "bot")).has("memory/recall_personal_memory"),
+    ).toBe(false);
+    expect(
+      (
+        await guardProactiveCallback(
+          { name: "memory/recall_personal_memory", run, ...who },
+          scope,
+        )
+      )?.text,
+    ).toStartWith("Refused.");
+    // The person's own memory, by the name OpenBot gives it, still reads.
+    expect(
+      await guardProactiveCallback(
+        { name: "recall_personal_memory", run, ...who },
+        scope,
+      ),
+    ).toBeNull();
+  });
 });
 
 /*

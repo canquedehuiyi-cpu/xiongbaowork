@@ -82,6 +82,13 @@ export type ApprovalPolicyOutcome = {
      * （见 `offersStandingRule`）。
      */
     | "outbound_send"
+    /**
+     * 应用工具把内容分享给别人，或改变谁能访问（共享链接、权限、协作者）：总是先问，且只能
+     * 「允许一次」（见 `offersStandingRule`）。
+     */
+    | "share_access"
+    /** 应用工具公开发布（发帖、转发、开直播、发版本）：总是先问，且只能「允许一次」。 */
+    | "publish_post"
     | "auto_review"
     | "default"
     /** The person already declined this action, or an equivalent, earlier in this conversation. */
@@ -133,6 +140,11 @@ export type ApprovalSubject = {
    * 认定它是应用工具：服务器 id 由管理员起名，可以叫 `host` 或 `memory`，不能靠 ref 前缀判断。
    */
   connector?: true;
+  /**
+   * 这次电脑调用要按的键（`computer_key` 的键；`computer_type` 带 `submit` 时是 Enter），由网关从
+   * 调用处给出。键盘发送底线据此判断是不是把写好的东西发了出去（见 ./policy 的 `pressesSend`）。
+   */
+  key?: string;
   // --- desktop control (sub-project 2) ---
   /**
    * 要读的桌面窗口（设备端桌面查看第 1 期）：网关从窗口列表里拿到的标题，以及它命中的敏感词。

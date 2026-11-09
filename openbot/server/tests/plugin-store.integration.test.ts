@@ -14,6 +14,7 @@ import { MCPMock, type MCPToolDefinition } from "@copilotkit/aimock/mcp";
 import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import { and, asc, eq, gte, inArray, sql } from "drizzle-orm";
 import { TOOL_DISABLED } from "../src/approvals/policy";
+import { ALREADY_WAITING } from "../src/approvals/service";
 import {
   type ApprovalCandidate,
   type ApprovalGate,
@@ -72,6 +73,8 @@ import {
   unlistedAdvertisedTools,
 } from "../src/plugins/store";
 import { grantedTools, REFUSAL_MARKER } from "../src/plugins/tools";
+import { proactiveInitiator } from "../src/proactive/restriction";
+import { checkInCatalogue, createCheckInScope } from "../src/proactive/scope";
 import { runAsTenant } from "../src/tenant/context";
 import fileActions from "./fixtures/composio-file-actions.json";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
@@ -4089,6 +4092,30 @@ describe("a custom server may not be named after one of the app's own screens", 
     }));
 });
 
+/*
+ * Nor the id OpenBot's own memory tools are spelled under (upstream proactive-connected-reads).
+ * Their refs are `memory/<tool>`, so a server at `memory` would list a second
+ * `memory/recall_personal_memory` beside the person's own.
+ */
+describe("the memory tools' own id", () => {
+  test("no server can be added under it", () =>
+    asPlatform(async () => {
+      const added = store.addCustomServer({
+        id: "memory",
+        title: "Memory",
+        url: "https://memory.invalid/mcp",
+        by: "admin@example.com",
+      });
+      await expect(added).rejects.toBeInstanceOf(CustomServerRefusedError);
+      await expect(added).rejects.toThrow("memory tools");
+      const rows = await database
+        .select({ id: mcpServers.id })
+        .from(mcpServers)
+        .where(eq(mcpServers.id, "memory"));
+      expect(rows).toHaveLength(0);
+    }));
+});
+
 /**
  * Which credential a custom server is allowed to be pointed at.
  *
@@ -5470,6 +5497,266 @@ test("SEC1: a connector call the gate refuses or holds never reaches the vendor"
     answer = "allow";
     await call();
     expect(executed).toBe(1);
+  }));
+
+/*
+ * A call the approval gate turns away is on the trail as refused (upstream #1106, plugin store). The
+ * row says who was refused and by what, never what was sent: no argument values, and it is filed in
+ * the caller's own tenant frame like the other refusals this method writes. A call already waiting
+ * for the person turns nothing new away and writes nothing.
+ */
+test("a connector call the approval gate turns away is a refused row, with no arguments and in the caller's tenant", () =>
+  asPlatform(async () => {
+    const DECLINED = "The person declined this action, so it was not done.";
+    let answer: "decline" | "waiting" = "decline";
+    const { store, database, auditStore } = await freshStore({
+      approvalGate: async () => {
+        throw new ApprovalRefusedError(
+          answer === "decline" ? DECLINED : ALREADY_WAITING,
+        );
+      },
+    });
+    let executed = 0;
+    useComposioClient({
+      listActions: async () => [],
+      execute: async () => {
+        executed += 1;
+        return vendorAnswered({ messages: [] });
+      },
+    });
+    await seedComposioGmail(database, store);
+    const call = () =>
+      store.callTool({
+        ref: "gmail/GMAIL_FETCH_EMAILS",
+        args: { query: "needle-argument-value-7731" },
+        botId: "bot_helper",
+        actorId: "user_asker",
+      });
+
+    await expect(call()).rejects.toThrow(DECLINED);
+    const refused = () =>
+      auditStore
+        .recorded()
+        .filter((event) => event.eventType === "mcp.call_rejected");
+    expect(refused()).toHaveLength(1);
+    expect(refused()[0]).toMatchObject({
+      targetType: "mcp_tool",
+      targetId: "gmail/GMAIL_FETCH_EMAILS",
+      payload: {
+        actor: "user_asker",
+        bot: "bot_helper",
+        server: "gmail",
+        tool: "GMAIL_FETCH_EMAILS",
+        decision: { carriedOut: false },
+        refusal: "approval",
+        reason: DECLINED,
+      },
+    });
+    expect(JSON.stringify(refused())).not.toContain(
+      "needle-argument-value-7731",
+    );
+
+    const [row] = await database
+      .select({ tenantId: auditEvents.tenantId })
+      .from(auditEvents)
+      .where(
+        and(
+          eq(auditEvents.eventType, "mcp.call_rejected"),
+          eq(sql<string>`${auditEvents.payload} ->> 'refusal'`, "approval"),
+          eq(sql<string>`${auditEvents.payload} ->> 'bot'`, "bot_helper"),
+        ),
+      );
+    // The frame the call ran in (the grant above is the deployment's, so this suite calls as it).
+    expect(row?.tenantId).toBe("platform");
+
+    answer = "waiting";
+    await expect(call()).rejects.toThrow(ALREADY_WAITING);
+    expect(refused()).toHaveLength(1);
+    expect(executed).toBe(0);
+  }));
+
+/*
+ * A check-in only reads (upstream proactive-connected-reads), and the plugin store is the one door
+ * every call passes, so the rule is held there too and not only where a check-in's tools are loaded.
+ *
+ * Seeded the way a refresh records them: a vendor-labelled read; an action Composio said nothing
+ * about (`unclassified`, recorded as a write since 0146); a read the vendor also said destroys
+ * something; a plain write; and a server an administrator added by URL whose tool carries no label
+ * at all.
+ */
+const checkInNotes = `team-notes-${suite}`;
+async function seedCheckInTools(database: Database, store: PluginStore) {
+  await seedComposioGmail(database, store);
+  await database.insert(mcpTools).values([
+    {
+      serverId: "gmail",
+      name: "GMAIL_ARCHIVE",
+      description: "Archive an email.",
+      effect: "write",
+      unclassified: true,
+      version: "20260903_00",
+    },
+    {
+      serverId: "gmail",
+      name: "GMAIL_PURGE",
+      description: "Purge the trash.",
+      effect: "read",
+      destructive: true,
+      version: "20260903_00",
+    },
+    {
+      serverId: "gmail",
+      name: "GMAIL_SEND_EMAIL",
+      description: "Send an email.",
+      effect: "write",
+      version: "20260903_00",
+    },
+  ]);
+  await database.insert(mcpServers).values({
+    id: checkInNotes,
+    title: "Team Notes",
+    vendor: "Acme",
+    url: "https://notes.example.test/mcp",
+    provenance: "custom",
+  });
+  await database.insert(mcpTools).values({
+    serverId: checkInNotes,
+    name: "notes_digest",
+    description: "A digest of the notes.",
+  });
+  for (const granted of [
+    "gmail/GMAIL_ARCHIVE",
+    "gmail/GMAIL_PURGE",
+    "gmail/GMAIL_SEND_EMAIL",
+    `${checkInNotes}/notes_digest`,
+  ])
+    await store.grant("mcp", granted, "bot_helper", "admin@example.com");
+}
+
+test("a tool with no read-only label is not a read to a check-in", () =>
+  asPlatform(async () => {
+    const { store, database } = await freshStore();
+    await seedCheckInTools(database, store);
+    try {
+      // M3: a check-in's reads are its scope (`proactive/scope.ts`) over this store's catalogue, not
+      // upstream's read-only classifier. Both servers count as the person's own here, so only the
+      // labels decide.
+      const reads = await createCheckInScope({
+        catalogue: checkInCatalogue(store),
+        ownConnections: async () => new Set(["gmail", checkInNotes]),
+      })("user_asker", "bot_helper");
+      expect(reads.has("gmail/GMAIL_FETCH_EMAILS")).toBe(true);
+      for (const notARead of [
+        "gmail/GMAIL_ARCHIVE",
+        "gmail/GMAIL_PURGE",
+        "gmail/GMAIL_SEND_EMAIL",
+        `${checkInNotes}/notes_digest`,
+      ])
+        expect(reads.has(notARead)).toBe(false);
+    } finally {
+      await database.delete(mcpServers).where(eq(mcpServers.id, checkInNotes));
+    }
+  }));
+
+test("a check-in calling anything but a labelled read is refused at the store, as check_in_not_a_read, before the vendor", () =>
+  asPlatform(async () => {
+    const { store, database, auditStore } = await freshStore();
+    const executed: string[] = [];
+    useComposioClient({
+      listActions: async () => [],
+      execute: async (call) => {
+        executed.push(call.slug);
+        return vendorAnswered({ messages: [] });
+      },
+    });
+    await seedCheckInTools(database, store);
+    try {
+      const initiator = proactiveInitiator(`check-in-${suite}`);
+
+      for (const refused of [
+        "gmail/GMAIL_ARCHIVE",
+        "gmail/GMAIL_PURGE",
+        "gmail/GMAIL_SEND_EMAIL",
+        `${checkInNotes}/notes_digest`,
+      ]) {
+        await expect(
+          store.callTool({
+            ref: refused,
+            args: {},
+            botId: "bot_helper",
+            actorId: "user_asker",
+            initiator,
+          }),
+        ).rejects.toBeInstanceOf(PluginRefusedError);
+        const [server, tool] = refused.split("/");
+        expect(
+          auditStore
+            .recorded()
+            .filter(
+              (event) =>
+                event.eventType === "mcp.call_rejected" &&
+                event.targetId === refused,
+            ),
+        ).toEqual([
+          expect.objectContaining({
+            targetType: "mcp_tool",
+            initiator,
+            payload: {
+              actor: "user_asker",
+              bot: "bot_helper",
+              server,
+              tool,
+              refusal: "check_in_not_a_read",
+            },
+          }),
+        ]);
+      }
+      expect(executed).toEqual([]);
+
+      // The labelled read still goes through for the check-in.
+      const read = await store.callTool({
+        ref: "gmail/GMAIL_FETCH_EMAILS",
+        args: {},
+        botId: "bot_helper",
+        actorId: "user_asker",
+        initiator,
+      });
+      expect(read.isError).toBe(false);
+      expect(executed).toHaveLength(1);
+    } finally {
+      await database.delete(mcpServers).where(eq(mcpServers.id, checkInNotes));
+    }
+  }));
+
+test("a person's own call to a write is not a check-in's refusal", () =>
+  asPlatform(async () => {
+    const { store, database, auditStore } = await freshStore();
+    useComposioClient({
+      listActions: async () => [],
+      execute: async () => vendorAnswered({ messages: [] }),
+    });
+    await seedCheckInTools(database, store);
+    try {
+      await store
+        .callTool({
+          ref: "gmail/GMAIL_SEND_EMAIL",
+          args: {},
+          botId: "bot_helper",
+          actorId: "user_asker",
+        })
+        .catch(() => undefined);
+      expect(
+        auditStore
+          .recorded()
+          .filter(
+            (event) =>
+              (event.payload as { refusal?: string } | undefined)?.refusal ===
+              "check_in_not_a_read",
+          ),
+      ).toEqual([]);
+    } finally {
+      await database.delete(mcpServers).where(eq(mcpServers.id, checkInNotes));
+    }
   }));
 
 test("a Composio call is recorded as reaching the vendor as the person, not as the deployment", () =>

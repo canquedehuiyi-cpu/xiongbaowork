@@ -25,6 +25,7 @@ import type { LoadPersonalMemory } from "../memory/tools";
 import type { AgentModelResolver } from "../models/runtime-resolver";
 import { NameContextMiddleware } from "../people/name-context";
 import { isProactiveInitiator } from "../proactive/initiator";
+import { computerGuidanceForRun } from "../proactive/restriction";
 import type { ProductTelemetry } from "../telemetry/product";
 import type { AgentActor } from "./profile-types";
 
@@ -168,7 +169,8 @@ export function createActorAgentResolver(
       deps.stallGuard,
       deps.loadToolsForActor?.(actor.id, context?.initiator),
       deps.signRunForActor?.(actor.id, context?.initiator, context?.depth),
-      deps.computerGuidance,
+      // A check-in has no computer, so it is not told it has one, nor how to search with its browser.
+      computerGuidanceForRun(context?.initiator, deps.computerGuidance),
       deps.loadVendors,
       checkIn ? undefined : deps.selectionForActor?.(actor.id),
       deps.agentFetch,

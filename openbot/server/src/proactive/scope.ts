@@ -60,6 +60,36 @@ export type CheckInScope = (
   agentId: string,
 ) => Promise<CheckInReads>;
 
+/**
+ * The plugin store's catalogue as the scope reads it, until the plugins session brings upstream's
+ * `ownCredential` and reviewed read lists: every server counts as the person's own once they hold a
+ * connection to it (`ownConnections` decides that), and a tool reads where it is recorded as a read
+ * and not destructive. An action the broker said nothing about is recorded as a write (0146), so it
+ * is not a read either. The same rule the plugin store holds a check-in's call to (`callTool`).
+ */
+export function checkInCatalogue(store: {
+  listServers(): Promise<
+    {
+      id: string;
+      title: string;
+      tools: { ref: string; effect: "read" | "write"; destructive: boolean }[];
+    }[]
+  >;
+}): CheckInScopeDeps["catalogue"] {
+  return {
+    listServers: async () =>
+      (await store.listServers()).map((server) => ({
+        id: server.id,
+        title: server.title,
+        ownCredential: true,
+        tools: server.tools.map((tool) => ({
+          ref: tool.ref,
+          labelledRead: tool.effect === "read" && !tool.destructive,
+        })),
+      })),
+  };
+}
+
 export function createCheckInScope(deps: CheckInScopeDeps): CheckInScope {
   return async (ownerUserId, agentId) => {
     const [servers, connected, landsInOwn] = await Promise.all([
