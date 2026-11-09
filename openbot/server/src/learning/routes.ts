@@ -617,14 +617,12 @@ export function createLearningRoutes(
     // Everybody's requests: a cross-tenant read, as `platform` behind the admin gate above (G01).
     const requests: SharingRequest[] = (
       await asPlatform(() => approvals.requests())
-    ).map(
-      (entry) => ({
-        userId: entry.userId,
-        name: names.get(entry.userId) ?? entry.userId,
-        skillName: entry.skillName,
-        requestedAt: entry.updatedAt,
-      }),
-    );
+    ).map((entry) => ({
+      userId: entry.userId,
+      name: names.get(entry.userId) ?? entry.userId,
+      skillName: entry.skillName,
+      requestedAt: entry.updatedAt,
+    }));
     return context.json({ requests });
   });
   /** Answer a person's request to open a skill they approved to every Bot. */

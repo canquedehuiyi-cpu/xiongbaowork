@@ -448,7 +448,9 @@ describe("Settings, Learning", () => {
   });
 
   test("a skill the person approved themselves says so, and one with no record counts as an admin's", async () => {
-    await own(grace, () => approvals.recordApproval(grace, "grace-picked", "person"));
+    await own(grace, () =>
+      approvals.recordApproval(grace, "grace-picked", "person"),
+    );
     await own(grace, () => approvals.requestSharing(grace, "grace-picked"));
     try {
       const { skills } = (await read("grace")) as {
@@ -1079,7 +1081,9 @@ describe("the open-Skill index", () => {
       expect(await offered(learningElsewhere, "ada")).toEqual(everything);
 
       // Grace approves a Skill for herself only. No index is told, and neither has aged out.
-      await own(grace, () => approvals.recordApproval(grace, "grace-private", "person"));
+      await own(grace, () =>
+        approvals.recordApproval(grace, "grace-private", "person"),
+      );
       expect(await offered(learning, "ada")).toEqual([
         "ada-only",
         "grace-picked",

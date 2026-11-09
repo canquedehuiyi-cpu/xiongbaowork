@@ -2,14 +2,7 @@ import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 import type { TurnRunner } from "@openbot/toolkit/run-turn";
-import {
-  and,
-  asc,
-  eq,
-  inArray,
-  like,
-  sql,
-} from "drizzle-orm";
+import { and, asc, eq, inArray, like, sql } from "drizzle-orm";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import type { AgentActor } from "../src/agents/profile-types";
 import type { AuditEventInput } from "../src/audit";
@@ -40,9 +33,7 @@ import {
   workItems,
 } from "../src/db/schema";
 import { createPrivateShareCheck } from "../src/proactive/private-share";
-import {
-  createTeamBots,
-} from "../src/team-bots/team-bots";
+import { createTeamBots } from "../src/team-bots/team-bots";
 import { createTaskProjector } from "../src/tasks/projector";
 import { runAsTenant } from "../src/tenant/context";
 import { createWorkQueue } from "../src/work/queue";
@@ -1178,7 +1169,9 @@ describe("group conversations in PostgreSQL", () => {
       ),
     );
     expect(
-      Array.from(stamps as unknown as ArrayLike<{ messageId: string; tenantId: string }>)
+      Array.from(
+        stamps as unknown as ArrayLike<{ messageId: string; tenantId: string }>,
+      )
         .map((row) => [row.messageId, row.tenantId])
         .sort(),
     ).toEqual(

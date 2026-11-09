@@ -15,7 +15,12 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { SESSION_LIFETIME_MS, testEnvironment } from "./support/environment";
 // Sessions and users are the identity layer's, which carry no tenant: the harness reads and writes
 // them as `platform` (G01), as the auth routes do.
-import { afterAll, beforeAll, beforeEach, test } from "./support/platform-frame";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  test,
+} from "./support/platform-frame";
 
 /*
  * A person's sign-in ending ends their Recorders with it, through the real Better Auth routes and the Recorder's own

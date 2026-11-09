@@ -321,7 +321,8 @@ describe("a recorder bearer works only on the Recorder's own routes", () => {
     expect(await runsOf()).toEqual([owner]);
     expect(loadedFor.slice(loaded)).not.toContain(owner);
     const intelligence = config.intelligence?.apiUrl;
-    if (!intelligence) throw new Error("The test environment names an Intelligence.");
+    if (!intelligence)
+      throw new Error("The test environment names an Intelligence.");
     expect(dialled.filter((url) => url.startsWith(intelligence))).toEqual([]);
   });
 

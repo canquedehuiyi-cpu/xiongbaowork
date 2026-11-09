@@ -11,7 +11,6 @@ import {
   channels,
   intelligenceChannelMappings,
   mcpServers,
-  mcpTools,
   pluginGrants,
   responsibilities,
   users,
@@ -159,8 +158,7 @@ beforeEach(async () => {
   await runAsTenant(OWNER, seedOwnerRows);
   // Routines, added and given to this Bot (see giveRoutines).
   routinesWereAdded =
-    routinesWereAdded ||
-    Boolean(await pluginStore.serverAddress(ROUTINES_APP));
+    routinesWereAdded || Boolean(await pluginStore.serverAddress(ROUTINES_APP));
   await giveRoutines(BOT);
   const routineStore = createRoutineStore(database);
   useRoutineTools(routineStore);

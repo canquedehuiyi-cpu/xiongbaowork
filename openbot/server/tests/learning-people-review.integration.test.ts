@@ -17,12 +17,7 @@ import {
 import { createLearningSettingsStore } from "../src/learning/settings";
 import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  test,
-} from "./support/platform-frame";
+import { afterAll, afterEach, beforeAll, test } from "./support/platform-frame";
 import {
   type FakeIntelligence,
   fakeIntelligence,

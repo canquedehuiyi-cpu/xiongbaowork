@@ -92,7 +92,6 @@ async function ensureRoutines(bots: readonly string[]) {
 const test = (name: string, body: () => Promise<void>) =>
   bunTest(name, () => runAsTenant(OWNER, body));
 
-
 const VARIABLES = [
   "OPENAI_BASE_URL",
   "BOT_MODEL",

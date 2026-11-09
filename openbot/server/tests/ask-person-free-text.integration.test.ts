@@ -104,34 +104,37 @@ test.each([
   // A Bot's run, and the person's inbox, are the owner's: both run in the owner's tenant frame.
   (_name, sent, saved) =>
     runAsTenant(owner, async () => {
-    const threadId = `${prefix}-thread-${randomUUID()}`;
-    const askPerson = await askPersonTool(threadId);
+      const threadId = `${prefix}-thread-${randomUUID()}`;
+      const askPerson = await askPersonTool(threadId);
 
-    // The schema the model is shown accepts it too, so a harness that checks a call against that
-    // schema does not refuse it before it reaches the server.
-    const offered = z.fromJSONSchema(
-      z.toJSONSchema(askPerson.parameters) as never,
-    );
-    expect(
-      offered.safeParse({ question: CITY.question, parts: [sent] }).success,
-    ).toBe(true);
+      // The schema the model is shown accepts it too, so a harness that checks a call against that
+      // schema does not refuse it before it reaches the server.
+      const offered = z.fromJSONSchema(
+        z.toJSONSchema(askPerson.parameters) as never,
+      );
+      expect(
+        offered.safeParse({ question: CITY.question, parts: [sent] }).success,
+      ).toBe(true);
 
-    const said = await askPerson.execute({
-      question: CITY.question,
-      parts: [sent],
-    });
+      const said = await askPerson.execute({
+        question: CITY.question,
+        parts: [sent],
+      });
 
-    // Asked, rather than refused: the answer the chat draws as "Asked you" instead of Blocked.
-    expect(String(said)).toStartWith(PUT_TO);
+      // Asked, rather than refused: the answer the chat draws as "Asked you" instead of Blocked.
+      expect(String(said)).toStartWith(PUT_TO);
 
-    // The person's inbox holds it, and an empty list travels as no list: the card draws an answer
-    // field, with the options as choices above it when there are any.
-    const waiting = (
-      await createApprovalQuestions(database, async () => undefined).list(owner)
-    ).find((entry) => entry.threadId === threadId);
-    if (!waiting) throw new Error("the question was not saved for its person");
-    asked.push(waiting.id);
-    expect(waiting.question).toBe(CITY.question);
-    expect(waiting.parts).toEqual([saved]);
+      // The person's inbox holds it, and an empty list travels as no list: the card draws an answer
+      // field, with the options as choices above it when there are any.
+      const waiting = (
+        await createApprovalQuestions(database, async () => undefined).list(
+          owner,
+        )
+      ).find((entry) => entry.threadId === threadId);
+      if (!waiting)
+        throw new Error("the question was not saved for its person");
+      asked.push(waiting.id);
+      expect(waiting.question).toBe(CITY.question);
+      expect(waiting.parts).toEqual([saved]);
     }),
 );

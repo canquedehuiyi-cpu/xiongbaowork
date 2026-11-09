@@ -722,9 +722,7 @@ describe("an app calls OpenBot with a person's Entra token", () => {
     // As the request guard asks it: as `platform`, before anybody is known.
     expect(
       await asPlatform(() =>
-        unlisted.sessionFrom(
-          new Headers({ authorization: `Bearer ${token}` }),
-        ),
+        unlisted.sessionFrom(new Headers({ authorization: `Bearer ${token}` })),
       ),
     ).toBeNull();
     expect(await userId(stranger.upn)).toBeNull();

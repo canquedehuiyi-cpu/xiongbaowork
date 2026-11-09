@@ -52,14 +52,16 @@ beforeAll(async () => {
       configuration: {},
     }),
   );
-  await asOwner(() => database.insert(proactiveSettings).values({
-    id: settingId,
-    ownerUserId: owner,
-    agentId: bot,
-    channelId: `ledger-channel-${suite}`,
-    threadId: `ledger-thread-${suite}`,
-    nextRunAt: new Date("2100-01-01T00:00:00Z"),
-  }));
+  await asOwner(() =>
+    database.insert(proactiveSettings).values({
+      id: settingId,
+      ownerUserId: owner,
+      agentId: bot,
+      channelId: `ledger-channel-${suite}`,
+      threadId: `ledger-thread-${suite}`,
+      nextRunAt: new Date("2100-01-01T00:00:00Z"),
+    }),
+  );
 });
 beforeEach(async () => {
   await database
@@ -79,41 +81,47 @@ afterAll(async () => {
 });
 
 async function run(name: string, days: number, outcome: "quiet" | "running") {
-  await asOwner(() => database.insert(proactiveCheckInRuns).values({
-    id: `${suite}-${name}`,
-    settingId,
-    ownerUserId: owner,
-    agentId: bot,
-    trigger: "schedule",
-    outcome,
-    startedAt: daysAgo(days),
-    finishedAt: outcome === "running" ? null : daysAgo(days),
-  }));
+  await asOwner(() =>
+    database.insert(proactiveCheckInRuns).values({
+      id: `${suite}-${name}`,
+      settingId,
+      ownerUserId: owner,
+      agentId: bot,
+      trigger: "schedule",
+      outcome,
+      startedAt: daysAgo(days),
+      finishedAt: outcome === "running" ? null : daysAgo(days),
+    }),
+  );
 }
 async function ping(name: string, days: number) {
-  await asOwner(() => database.insert(proactivePings).values({
-    id: `${suite}-${name}`,
-    ownerUserId: owner,
-    itemCount: 1,
-    text: "One thing needs you",
-    pushBody: "One thing needs you",
-    createdAt: daysAgo(days),
-    offeredAt: daysAgo(days),
-  }));
+  await asOwner(() =>
+    database.insert(proactivePings).values({
+      id: `${suite}-${name}`,
+      ownerUserId: owner,
+      itemCount: 1,
+      text: "One thing needs you",
+      pushBody: "One thing needs you",
+      createdAt: daysAgo(days),
+      offeredAt: daysAgo(days),
+    }),
+  );
 }
 async function itemOf(pingName: string, status: "open" | "dismissed") {
   const id = `${suite}-item-${pingName}`;
-  await asOwner(() => database.insert(proactiveSuggestions).values({
-    id,
-    ownerUserId: owner,
-    agentId: bot,
-    settingId,
-    runId: `${suite}-run`,
-    title: `Item for ${pingName}`,
-    detail: "Why.",
-    status,
-    pingId: `${suite}-${pingName}`,
-  }));
+  await asOwner(() =>
+    database.insert(proactiveSuggestions).values({
+      id,
+      ownerUserId: owner,
+      agentId: bot,
+      settingId,
+      runId: `${suite}-run`,
+      title: `Item for ${pingName}`,
+      detail: "Why.",
+      status,
+      pingId: `${suite}-${pingName}`,
+    }),
+  );
   return id;
 }
 const runIds = async () =>
