@@ -189,8 +189,11 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   "src/devices/store.ts": { 'runAsTenant("platform"': 4 },
   // The third is the background translator (migration 0145): it reads and writes only
   // `text_translations`, a deployment-wide cache with no tenant column and no row security, and
-  // touches no tenant's rows.
-  "src/index.ts": { 'runAsTenant("platform"': 3 },
+  // touches no tenant's rows. The fourth is the boot refresh of OpenBot's own apps' saved tools
+  // (`refreshOwnListings`, upstream #1130): not awaited, it reads every `mcp_servers` row and rewrites
+  // the `mcp_tools` of a Routines, Google Drive or 百度网盘 row whose saved list differs from this
+  // build's code, each stamped with its own server's tenant. No request reaches it.
+  "src/index.ts": { 'runAsTenant("platform"': 4 },
   "src/memory/ingestion.ts": { 'runAsTenant("platform"': 2 },
   "src/pipeline/reap.ts": { 'runAsTenant("platform"': 1 },
   // Which run holds an approval (I3), and WF7's restart sweep for parents waiting on an ended child;
@@ -205,8 +208,13 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   "src/plugins/routes.ts": { "adminActAsOwner(": 1, "asAdminPlatform(": 1 },
   // Install listings (admin-only), and `removeServer`'s reach over every person's rows tied to one
   // team server (their tokens, brokered connections and grants for it), after `requireServerWriter`
-  // has checked the admin capability (P21).
-  "src/plugins/store.ts": { 'runAsTenant("platform"': 3 },
+  // has checked the admin capability (P21). The fourth is reachable from a member's request on
+  // purpose: `discoverToolsOnConnect` (upstream #1073), from the OAuth callback once the sealed
+  // state's person has been checked and their connection recorded. It refuses unless the frame is
+  // that person's own, resolves the row in that frame, and only when the app holds no tools at all
+  // runs `refreshTools` as `platform` on that row id, listing with the person's own token; the tool
+  // rows are the server's (`team`), which only an administrator or `platform` may write.
+  "src/plugins/store.ts": { 'runAsTenant("platform"': 4 },
   "src/proactive/engine.ts": { 'runAsTenant("platform"': 2 },
   "src/quota/routes.ts": { 'runAsTenant("platform"': 1 },
   "src/recovery/abandoned-work.ts": { 'runAsTenant("platform"': 1 },

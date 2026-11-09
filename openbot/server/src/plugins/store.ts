@@ -4945,6 +4945,103 @@ export function createPluginStore(options: PluginStoreOptions) {
       return { tools: storable.length };
     },
 
+    /**
+     * 把工具清单就是本部署代码的应用（Routines、Google Drive、百度网盘）保存的工具刷新到正在运行的
+     * 这一版。回答刷新了哪些行。上游 #1130。
+     *
+     * 标准：升级之后，Bot 拿到的是它所运行的这一版的工具名、描述和 schema，而不是添加应用那一版的。
+     *
+     * 原因：清单在添加应用时保存，之后只有 {@link refreshTools} 替换它，而它只在添加、按「刷新工具」
+     * 等时候运行。vendor 的应用这样做是对的：问一次要花一个请求，提供什么由 vendor 决定。工具就是
+     * 本代码的应用，保存的清单只是旧版的副本，某一版改了工具名或描述，已有部署永远收不到。
+     *
+     * 只写变了的：逐行比较，普通的一次启动什么都不写，也不留审计。经 `this.refreshTools` 刷新，和
+     * 管理员按「刷新工具」一样：授权按名字记，不受影响。
+     *
+     * 跨所有租户：调用方要在平台帧里调用（启动时由 `index.ts` 打开）。读的是每一台服务器的整行，
+     * 按行 id 刷新，所以工具按这台服务器自己的 tenant 盖戳（`storableTools` 用 `row.tenantId`）。
+     * 列清单不出网、不取凭据：这三个 transport 的清单就是常量。某一行失败只记一条警告，不让启动
+     * 失败：保存的清单照常可用，下次启动再试。
+     */
+    async refreshOwnListings(): Promise<string[]> {
+      const refreshed: string[] = [];
+      const rows = await database
+        .select()
+        .from(mcpServers)
+        .orderBy(asc(mcpServers.id));
+      for (const row of rows) {
+        const entry = catalogueEntry(row.catalogueKey ?? row.id);
+        const kind = entry?.transport;
+        if (!entry || !kind) continue;
+        const transport = transportFor(kind);
+        if (!transport.listIsThisCode) continue;
+        try {
+          const listed = await transport.listTools({
+            url: effectiveUrl(row, entry),
+          });
+          const held = await database
+            .select()
+            .from(mcpTools)
+            .where(eq(mcpTools.serverId, row.id));
+          if (
+            sameListing(
+              held,
+              storableTools(row.id, listed, row.tenantId, entry),
+            )
+          )
+            continue;
+          await this.refreshTools(row.id);
+          refreshed.push(row.id);
+        } catch (error) {
+          console.warn(
+            JSON.stringify({
+              type: "own-app-tools-refresh-failed",
+              serverId: row.id,
+              error: reasonWithoutStatement(error),
+            }),
+          );
+        }
+      }
+      return refreshed;
+    },
+
+    /**
+     * 只能按个人凭据列出工具的应用，在一个工具都没有时，以刚连接的这个人的身份问它提供什么。
+     * 上游 #1073。
+     *
+     * 标准：第一个人连接这类应用之后，它的工具就列出来、提供给 Bot，不需要谁去按「刷新工具」。
+     *
+     * 原因：添加时运行的那次刷新没有人可以代表，只能记下拒绝、一个工具也不存（见
+     * {@link refreshTools}）。连接就是第一个有人可以代表的时刻，过去却什么都没做：应用显示「已连接」，
+     * 每个 Bot 却被告知没有它的工具。
+     *
+     * 只在一个工具都没有时：刷新会替换每个 Bot 拿到的工具，那是管理员的按钮。填满一张空清单不拿走
+     * 任何人的东西；每个成员连接时都替换整张清单，就等于让每个人都成了它的作者。
+     *
+     * 租户帧（fork 特有）：调用方在这个人自己的帧里（连接回调就是）。行在本人帧里解析，所以只会是
+     * 这个人看得见的那一行；工具行属于服务器（`team`），只有管理员或平台帧能写，所以刷新在平台帧里
+     * 跑，按行 id。列工具用的仍然是这个人自己的凭据：`connectionTokenFor` 按 `actorId` 只取这个人的
+     * 连接。只能替自己列：帧不是这个人就拒绝，平台帧不会因为别人的名字被打开。
+     */
+    async discoverToolsOnConnect(
+      serverId: string,
+      userId: string,
+    ): Promise<{ tools: number } | null> {
+      if (!isPersonTenant(userId) || currentTenant() !== userId) {
+        throw new PluginInvariantError(
+          "Listing an app's tools on connect runs as the person who connected, in their own frame.",
+        );
+      }
+      const { row } = await requireServer(serverId);
+      const [held] = await database
+        .select({ name: mcpTools.name })
+        .from(mcpTools)
+        .where(eq(mcpTools.serverId, row.id))
+        .limit(1);
+      if (held) return null;
+      return runAsTenant("platform", () => this.refreshTools(row.id, userId));
+    },
+
     async listServers(): Promise<ServerRecord[]> {
       const rows = await database
         .select()
@@ -8732,3 +8829,39 @@ function withoutEmptyOptionals(
 
 export type PluginStore = ReturnType<typeof createPluginStore>;
 export type { CatalogueEntry };
+
+/**
+ * 一个应用保存的工具，是不是它的清单现在会保存的样子：名字相同，每一个的描述、schema 和分类也相同。
+ * schema 按排好序的键比较，因为 PostgreSQL 的 `jsonb` 按自己的顺序保存键，读回来也是那个顺序。
+ */
+function sameListing(
+  held: (typeof mcpTools.$inferSelect)[],
+  wanted: ReturnType<typeof storableTools>,
+): boolean {
+  if (held.length !== wanted.length) return false;
+  const saved = new Map(held.map((tool) => [tool.name, tool]));
+  return wanted.every((tool) => {
+    const was = saved.get(tool.name);
+    return (
+      was !== undefined &&
+      was.description === tool.description &&
+      sortedJson(was.inputSchema) === sortedJson(tool.inputSchema) &&
+      was.effect === tool.effect &&
+      was.destructive === tool.destructive &&
+      was.unclassified === tool.unclassified &&
+      was.version === tool.version
+    );
+  });
+}
+
+function sortedJson(value: unknown): string {
+  return JSON.stringify(value, (_key, inner: unknown) =>
+    inner && typeof inner === "object" && !Array.isArray(inner)
+      ? Object.fromEntries(
+          Object.entries(inner).sort(([left], [right]) =>
+            left < right ? -1 : left > right ? 1 : 0,
+          ),
+        )
+      : inner,
+  );
+}

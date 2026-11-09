@@ -1257,6 +1257,20 @@ await startupLifecycle.run(async (startup) => {
     });
   }
 
+  /*
+   * 自带应用（Routines、Google Drive、百度网盘）保存的工具，刷新到这一版的代码（见
+   * `refreshOwnListings`）。跨所有租户读 `mcp_servers`、按每台服务器的 tenant 写 `mcp_tools`，所以
+   * 在平台帧里跑。不 await：启动不等它，失败只记日志，保存的清单照常可用，下次启动再试。
+   */
+  void runAsTenant("platform", () => pluginStore.refreshOwnListings()).catch(
+    (error: unknown) => {
+      console.warn(
+        "[plugins] OpenBot's own apps' tools could not be brought up to date:",
+        error instanceof Error ? error.message : error,
+      );
+    },
+  );
+
   /**
    * Routines, and the one moment its tools are told what to act on.
    *

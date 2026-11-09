@@ -63,6 +63,12 @@ export type VendorTransport = {
    * sequence hinted that the middle step was doing no work.
    */
   listNeedsCredential: boolean;
+  /**
+   * 工具清单是不是本部署自己的代码，而不是 vendor 的答复：Routines、Google Drive 和百度网盘是。
+   * 这样的清单每次启动都会刷新到当前版本（`refreshOwnListings`），因为添加应用时保存的那份属于
+   * 添加它的那一版。别人发布的清单不设这个字段，只有「刷新工具」才替换。
+   */
+  listIsThisCode?: boolean;
   listTools(connection: {
     url: string;
     token?: string;
