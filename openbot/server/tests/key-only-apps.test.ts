@@ -89,7 +89,7 @@ describe("an app with a sign-in never asks for a key", () => {
 });
 
 describe("a key-only app's form says where the key comes from", () => {
-  const { broker } = buildComposioClient(
+  const { broker, guides } = buildComposioClient(
     vendorAnswering(captured.details) as never,
   );
 
@@ -118,7 +118,7 @@ describe("a key-only app's form says where the key comes from", () => {
   });
 
   test("the guide for 1Password links to 1Password's own page for making the token", async () => {
-    const published = await broker.connectionGuideUrl?.({
+    const published = await guides.connectionGuideUrl({
       toolkit: "_1password",
       authScheme: "API_KEY",
     });
@@ -134,7 +134,7 @@ describe("a key-only app's form says where the key comes from", () => {
   });
 
   test("a link Composio publishes is used ahead of the map", async () => {
-    const published = await broker.connectionGuideUrl?.({
+    const published = await guides.connectionGuideUrl({
       toolkit: "braze",
       authScheme: "API_KEY",
     });
