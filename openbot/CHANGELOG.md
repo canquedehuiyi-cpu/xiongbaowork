@@ -8,6 +8,16 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+- **The whole web app is redrawn in 熊宝's black, white and red** (docs/design/ios-studio). A near-black
+  canvas with graphite cards and hairlines; white (black on paper) for the primary action and the main
+  text; red only for the selected place, what needs attention, the brand and a few signal lines. The
+  workbench gets a breadcrumb bar with the 熊宝小管家 dock, open headings with an eyebrow, and the five
+  core pages follow the reference: a telemetry panel with a status distribution on 任务看板, the floating
+  chat scene on @Waker, the chip-and-signal art and trigger strip on 自主工作, profile cards (the 分身 in
+  red) on 员工管理, and one continuous entry strip on 能力与资源. Every other route shares the same
+  controls, cards, badges and empty states. Presentation only: routes, queries, permissions and APIs
+  are unchanged. Acceptance notes and screenshots are in docs/design/ios-studio/acceptance.
+
 - **The last English corners of skills and plugins read in Chinese too.** The `/` menu in chat
   describes each skill in Chinese (the chip still carries the skill's original instruction); a
   skill's edit page and the admin skill dialog show a folded 中文说明 under the original
