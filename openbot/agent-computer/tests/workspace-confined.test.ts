@@ -209,3 +209,48 @@ describe("the confined workspace, with nobody racing it", () => {
     expect((await stat(join(mine, "pipe"))).isFIFO()).toBe(true);
   });
 });
+
+/**
+ * Folders a write creates, swapped while they are being created.
+ *
+ * The hook here fires at every step that looks a folder up (creating it, then opening it), so a test
+ * can land its swap between the two.
+ */
+describe("a folder swapped while a write is creating it", () => {
+  function swappingAt(path: string, call: number, swap: () => Promise<void>) {
+    let calls = 0;
+    return createWorkspace(mine, undefined, {
+      confineOpened: true,
+      beforeOpen: async (at) => {
+        if (at !== join(mine, path)) return;
+        calls += 1;
+        if (calls === call) await swap();
+      },
+    });
+  }
+
+  test("a folder just made and swapped for a link to another employee's empty folder: refused, and their folder survives", async () => {
+    const someoneElse = join(base, "bots", "cccccccccccc");
+    await mkdir(someoneElse, { recursive: true });
+    const ws = swappingAt("d/newdir", 2, async () => {
+      await rm(join(mine, "d", "newdir"), { recursive: true });
+      await symlink(someoneElse, join(mine, "d", "newdir"));
+    });
+    await expect(ws.write("d/newdir/f.txt", "planted")).rejects.toBeInstanceOf(
+      WorkspacePathError,
+    );
+    expect((await stat(someoneElse)).isDirectory()).toBe(true);
+    expect(execFileSync("ls", ["-A", someoneElse], { encoding: "utf8" })).toBe(
+      "",
+    );
+  });
+
+  test("a parent swapped before its child is made: nothing is created in their directory", async () => {
+    const ws = swappingAt("d/sub", 1, async () => {
+      await rename(join(mine, "d"), join(mine, "d.real"));
+      await symlink(theirs, join(mine, "d"));
+    });
+    await expect(ws.write("d/sub/f.txt", "planted")).rejects.toThrow();
+    expect(await theirFiles()).toEqual(["x.txt"]);
+  });
+});

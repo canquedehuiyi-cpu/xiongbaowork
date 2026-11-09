@@ -1,7 +1,14 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -9,6 +16,7 @@ import {
   botKeyOf,
   createPerBotComputer,
   type HelperRunner,
+  helperRunner,
   PerBotUnavailableError,
   perBotUsersEnabled,
   usesOwnUser,
@@ -594,5 +602,68 @@ describe("createPerBotComputer, an employee's own files", () => {
     } finally {
       await rm(root, { recursive: true, force: true });
     }
+  });
+});
+
+/**
+ * The helper's own time limit, when whatever it started keeps its output open.
+ *
+ * Killing the launcher is not enough: a child that inherited its stdout keeps the pipe open, `close`
+ * never comes, and an `ensure` that never settles is cached, so every later call for that employee
+ * waits on it too.
+ */
+describe("helperRunner", () => {
+  let root = "";
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), "per-bot-helper-"));
+  });
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  async function launcherWithLingeringChild() {
+    const path = join(root, "fake-xb.sh");
+    await writeFile(
+      path,
+      [
+        "#!/bin/sh",
+        `echo called >> '${root}/calls'`,
+        // A child that holds the inherited pipes for two seconds, and a launcher that waits for it.
+        "sleep 2 &",
+        "wait",
+        "",
+      ].join("\n"),
+    );
+    await chmod(path, 0o755);
+    return path;
+  }
+
+  test("past its limit it answers at once as a failure, not when the pipes finally close", async () => {
+    const run = helperRunner([await launcherWithLingeringChild()]);
+    const started = Date.now();
+    const result = await run(["ensure", "0123456789ab"], { timeoutMs: 100 });
+    expect(Date.now() - started).toBeLessThan(1_000);
+    expect(result.code).not.toBe(0);
+  });
+
+  test("an ensure that ran out of time is not remembered: the next call asks again", async () => {
+    const perBot = createPerBotComputer({
+      workspaceRoot: root,
+      defaultBotId: "shared",
+      enabled: true,
+      helper: helperRunner([await launcherWithLingeringChild()], 100),
+    });
+    const started = Date.now();
+    await expect(perBot.ensure("bot-a")).rejects.toBeInstanceOf(
+      PerBotUnavailableError,
+    );
+    await expect(perBot.ensure("bot-a")).rejects.toBeInstanceOf(
+      PerBotUnavailableError,
+    );
+    expect(Date.now() - started).toBeLessThan(1_500);
+    const calls = (await readFile(join(root, "calls"), "utf8")).trim();
+    expect(calls.split("\n")).toHaveLength(2);
   });
 });

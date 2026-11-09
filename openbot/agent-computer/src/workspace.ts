@@ -31,7 +31,6 @@ import {
   readFile,
   readlink,
   realpath,
-  rmdir,
   stat,
   unlink,
   writeFile,
@@ -117,7 +116,10 @@ export type WorkspaceOptions = {
    * tools, so there is no one to race and nothing to gain.
    */
   confineOpened?: boolean;
-  /** For tests: called with each path just before it is opened in confined mode. */
+  /**
+   * For tests: called in confined mode with each path just before it is looked up: before a file is
+   * opened, and for a folder a write creates, both before it is made and before it is opened.
+   */
   beforeOpen?: (path: string) => void | Promise<void>;
 };
 
@@ -199,9 +201,14 @@ export function createWorkspace(
   }
 
   /**
-   * Create the folders a write needs one at a time, each one opened and checked before the next is
-   * made inside it, so a folder swapped for a link part way down cannot aim the rest elsewhere. One
-   * made here and found outside is removed again, as far as that is possible.
+   * Create the folders a write needs one at a time, each inside the folder before it.
+   *
+   * Each folder is made and opened through the descriptor of the folder above it
+   * (`/proc/self/fd/<fd>/<name>`), so a folder swapped for a link once it was checked cannot aim the
+   * next one somewhere else. What was opened is then checked like any other open. A folder that was
+   * made here and then swapped for a link before it could be opened leads somewhere this employee
+   * chose, possibly another employee's folder, so it is refused and nothing is removed: removing it
+   * would remove theirs.
    */
   async function makeFoldersInside(
     root: string,
@@ -210,40 +217,47 @@ export function createWorkspace(
   ): Promise<void> {
     const rel = relative(root, folder);
     if (rel === "") return;
-    let current = root;
-    for (const part of rel.split(sep)) {
-      const next = join(current, part);
-      await options.beforeOpen?.(next);
-      let made = false;
-      try {
-        await mkdir(next);
-        made = true;
-      } catch (error) {
-        if (errorCode(error) !== "EEXIST")
-          throw new WorkspaceFileError(`${shown} could not be created.`);
-      }
-      let handle: FileHandle;
-      try {
-        handle = await open(next, READ_FLAGS);
-      } catch {
-        throw new WorkspaceFileError(`${shown} could not be created.`);
-      }
-      try {
-        const real = await openedPath(handle);
+    let parent = await openInside(root, root, READ_FLAGS, shown);
+    try {
+      let current = root;
+      for (const part of rel.split(sep)) {
+        const next = join(current, part);
+        const viaParent = `/proc/self/fd/${parent.fd}/${part}`;
+        await options.beforeOpen?.(next);
         try {
-          assertInside(root, real, shown);
-        } catch {
-          if (made) await rmdir(real).catch(() => {});
-          throw changedUnderneath(shown);
+          await mkdir(viaParent);
+        } catch (error) {
+          if (errorCode(error) !== "EEXIST")
+            throw new WorkspaceFileError(`${shown} could not be created.`);
         }
-        if (!(await handle.stat()).isDirectory())
-          throw new WorkspaceFileError(
-            `${relative(root, real)} is a file, not a folder.`,
-          );
-        current = real;
-      } finally {
-        await handle.close().catch(() => {});
+        await options.beforeOpen?.(next);
+        let handle: FileHandle;
+        try {
+          handle = await open(viaParent, READ_FLAGS);
+        } catch {
+          throw new WorkspaceFileError(`${shown} could not be created.`);
+        }
+        try {
+          const real = await openedPath(handle);
+          try {
+            assertInside(root, real, shown);
+          } catch {
+            throw changedUnderneath(shown);
+          }
+          if (!(await handle.stat()).isDirectory())
+            throw new WorkspaceFileError(
+              `${relative(root, real)} is a file, not a folder.`,
+            );
+          current = real;
+        } catch (error) {
+          await handle.close().catch(() => {});
+          throw error;
+        }
+        await parent.close().catch(() => {});
+        parent = handle;
       }
+    } finally {
+      await parent.close().catch(() => {});
     }
   }
 
