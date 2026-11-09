@@ -3409,7 +3409,16 @@ describe("a person is never told who the broker is", () => {
     } finally {
       console.error = realError;
     }
-    expect(said.some((line) => line.includes(operatorSentence))).toBe(true);
+    // The log says a sentence was kept back, where and about which app, and nothing of it (M-8).
+    expect(
+      said.some(
+        (line) =>
+          line.includes("broker-sentence-kept-from-person") &&
+          line.includes("connect.consent") &&
+          line.includes("linear"),
+      ),
+    ).toBe(true);
+    expect(said.join("\n")).not.toContain("mint a connect link");
   });
 
   test("a refused key whose sentence names the broker is said in the route's own words", async () => {
@@ -3427,8 +3436,9 @@ describe("a person is never told who the broker is", () => {
 
       expect(response.status).toBe(400);
       const refusal = (await response.json()).error as string;
-      expect(refusal).not.toContain("Composio");
-      expect(refusal).toStartWith("没能用你填写的内容连接");
+      expect(refusal).not.toMatch(/composio/i);
+      // The store's own facts stay; only the provider's name goes (review M-7).
+      expect(refusal).toContain("What you entered for firecrawl did not work");
     } finally {
       console.error = realError;
     }
@@ -3517,5 +3527,47 @@ describe("the connect route's own refusals name no broker either", () => {
       expect(refusal).toContain("Firecrawl");
       expect(refusal).not.toMatch(/\bComposio\b/);
     }
+  });
+});
+
+describe("a store refusal keeps what it says is true, and loses only the provider's name", () => {
+  test("an account the store left standing is not reported as one never made", async () => {
+    // Review M-7: the store says the account WAS made and is recorded as unchecked. A route that
+    // swapped the whole sentence for "couldn't connect" told the person the opposite.
+    const { connectFields } = brokeredApp(null, AUTHORIZATION_URL, {
+      storeThrows: new PluginRefusedError(
+        "firecrawl was connected, and the check Composio then ran did not come back clean: 401. The account is left standing and recorded as unchecked.",
+        null,
+      ),
+    });
+
+    const response = await connectFields({ values: { api_key: "fc-1" } });
+
+    expect(response.status).toBe(400);
+    const refusal = (await response.json()).error as string;
+    expect(refusal).toContain("left standing and recorded as unchecked");
+    expect(refusal).not.toMatch(/composio/i);
+  });
+
+  test("a re-check's new verdict is kept, and a lower-case spelling of the name goes too", async () => {
+    const { recheck } = brokeredApp(
+      { connectedAt: "2026-02-02T00:00:00.000Z" },
+      AUTHORIZATION_URL,
+      {
+        storeThrows: new PluginRefusedError(
+          "Linear answered the check at composio://linear with 401, so your connection is now recorded as unchecked. Set COMPOSIO_API_KEY is not what this needs.",
+          null,
+        ),
+      },
+    );
+
+    const response = await recheck();
+
+    expect(response.status).toBe(400);
+    const refusal = (await response.json()).error as string;
+    expect(refusal).toContain("now recorded as unchecked");
+    expect(refusal).not.toMatch(/\bcomposio\b/i);
+    // The admin's setting is still named: it is not the provider's name, it is what to ask for.
+    expect(refusal).toContain("COMPOSIO_API_KEY");
   });
 });

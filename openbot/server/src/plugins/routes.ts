@@ -20,6 +20,7 @@ import {
   type ComposioBroker,
   type Decides,
   isFieldScheme,
+  type KeyGuideSource,
   type SchemeKind,
   schemeKind,
 } from "./broker";
@@ -156,30 +157,55 @@ function brokerRefusal(
 }
 
 /**
- * The broker's name, as a sentence written for an operator spells it.
+ * The broker's name, in whatever case a sentence spells it.
  *
  * A person connects their work apps through 熊宝 and is never told which company sits behind it
  * (upstream #1223). Most of the broker layer's sentences were written for an operator who can open
- * that company's dashboard, so they name it; a route a person calls passes each one through
- * {@link forPerson}. Case-sensitive on purpose: `COMPOSIO_API_KEY` is the setting an admin sets,
- * and naming it is how a person knows what to ask for.
+ * that company's dashboard, so they name it. Case-insensitive, so `composio://linear` is caught as
+ * well as "Composio"; `COMPOSIO_API_KEY` is left alone by the word boundary (the underscore is part
+ * of the word), because that is the setting an admin sets and naming it is how a person knows what
+ * to ask for.
  */
-const NAMES_THE_BROKER = /\bComposio\b/;
+const NAMES_THE_BROKER = /\bcomposio\b/i;
+const NAMES_THE_BROKER_EVERYWHERE = /\bcomposio\b/gi;
 
 /**
- * A sentence a person reads, kept free of the broker's name.
+ * A refusal the STORE wrote for the person, with only the broker's name taken out.
  *
- * A sentence that names the broker was written for the operator, and its remedy is somewhere a
- * person cannot go. The person gets the route's own sentence instead, which says what failed and
- * who to ask, and the operator's sentence goes to the log, where the admin who can act on it reads.
- * The status is unchanged: only the words differ.
+ * The store's sentences say what is now true (an account left standing and recorded as unchecked, a
+ * key the app rejected, a check that wrote a new verdict), and that is what the person needs to act
+ * on. Swapping the whole sentence for a route's generic one told somebody whose account was in fact
+ * made that it was not (review M-7), so here the facts stay and the name goes.
  */
-export function forPerson(sentence: string, generic: string): string {
+export function withoutBrokerName(sentence: string): string {
+  return sentence.replace(
+    NAMES_THE_BROKER_EVERYWHERE,
+    "the connection service",
+  );
+}
+
+/**
+ * A broker-layer refusal a person reads, kept free of the broker's name.
+ *
+ * Those sentences were written for the operator, and their remedy is somewhere a person cannot go
+ * (a dashboard, a setting), so the person gets the route's own sentence instead, which says what
+ * failed and who to ask. The status is unchanged: only the words differ.
+ *
+ * NOTHING OF THE ORIGINAL SENTENCE IS LOGGED (review M-8). On the key flow it can carry the vendor's
+ * own words about what was typed, so the log line says only that a sentence was kept back, on which
+ * route, about which app; the operator reproduces the failure from there.
+ */
+export function forPerson(
+  sentence: string,
+  generic: string,
+  where: { route: string; toolkit?: string } = { route: "unknown" },
+): string {
   if (!NAMES_THE_BROKER.test(sentence)) return sentence;
   console.error(
     JSON.stringify({
       type: "broker-sentence-kept-from-person",
-      note: sentence,
+      route: where.route,
+      ...(where.toolkit ? { toolkit: where.toolkit } : {}),
     }),
   );
   return generic;
@@ -189,9 +215,10 @@ export function forPerson(sentence: string, generic: string): string {
 function personRefusal(
   error: unknown,
   generic: string,
+  where?: { route: string; toolkit?: string },
 ): { error: string; status: 502 | 503 } {
   const refusal = brokerRefusal(error, generic);
-  return { ...refusal, error: forPerson(refusal.error, generic) };
+  return { ...refusal, error: forPerson(refusal.error, generic, where) };
 }
 
 /**
@@ -316,7 +343,7 @@ export function createPluginRoutes(
    * trap `connect` documents applies here with one more argument in it — every parameter from that
    * position on is optional, so a misplaced one typechecks and quietly does nothing.
    */
-  composio?: { broker: ComposioBroker },
+  composio?: { broker: ComposioBroker; guides?: KeyGuideSource },
   /**
    * `createAdminScope(...)`: its `adminCapability` is mounted on the grant routes (G01-E P8b) and on
    * every route that writes the deployment's servers, their OAuth clients and their secrets (P10):
@@ -1519,6 +1546,7 @@ export function createPluginRoutes(
           const refusal = personRefusal(
             error,
             `没能查到连接 ${row.title} 需要填写什么。请重试；如果一直这样，请联系管理员。`,
+            { route: "connect.form", toolkit },
           );
           return context.json({ error: refusal.error }, refusal.status);
         }
@@ -1539,7 +1567,7 @@ export function createPluginRoutes(
           return context.json({
             fields: fieldsForPerson(toolkit, published),
             guide: await keyGuideFor({
-              ask: composio.broker.connectionGuideUrl?.bind(composio.broker),
+              ask: composio.guides?.connectionGuideUrl.bind(composio.guides),
               toolkit,
               authScheme,
               title: row.title,
@@ -1809,11 +1837,14 @@ export function createPluginRoutes(
           const generic = `没能用你填写的内容连接 ${row.title}。请重试；如果一直这样，请联系管理员。`;
           if (error instanceof PluginRefusedError) {
             return context.json(
-              { error: forPerson(error.message, generic) },
+              { error: withoutBrokerName(error.message) },
               400,
             );
           }
-          const refusal = personRefusal(error, generic);
+          const refusal = personRefusal(error, generic, {
+            route: "connect.fields",
+            toolkit,
+          });
           return context.json({ error: refusal.error }, refusal.status);
         }
       }
@@ -1927,6 +1958,7 @@ export function createPluginRoutes(
         const refusal = personRefusal(
           error,
           `没能开始连接 ${row.title}。请重试；如果一直这样，请联系管理员。`,
+          { route: "connect.consent", toolkit },
         );
         return context.json({ error: refusal.error }, refusal.status);
       }
@@ -2174,6 +2206,7 @@ export function createPluginRoutes(
            * wording, which names no broker.
            */
           "Couldn't check whether this account is connected. This shows the last answer. Try again, or ask an admin if it keeps happening.",
+          { route: "connection.confirm", toolkit: resolved.toolkit },
         );
         return context.json({ error: refusal.error }, refusal.status);
       }
@@ -2249,17 +2282,17 @@ export function createPluginRoutes(
         const generic =
           "没能检查这个连接是否还能用，这里显示的是上一次检查的结果。请再按一次重新检查；如果一直这样，请联系管理员。";
         if (error instanceof PluginRefusedError) {
-          return context.json(
-            { error: forPerson(error.message, generic) },
-            400,
-          );
+          return context.json({ error: withoutBrokerName(error.message) }, 400);
         }
         /*
          * And a failure this deployment cannot explain says what is on the screen instead of
          * guessing. Nothing was written on the way out of the store here, so the row still carries
          * the last answer anybody earned rather than a verdict invented by a call that failed.
          */
-        const refusal = personRefusal(error, generic);
+        const refusal = personRefusal(error, generic, {
+          route: "connection.recheck",
+          toolkit: resolved.toolkit,
+        });
         return context.json({ error: refusal.error }, refusal.status);
       }
     },
@@ -2321,6 +2354,7 @@ export function createPluginRoutes(
         error,
         // English for the same reason as confirm's: the route's tests pin "Disconnect again".
         "Couldn't disconnect this account. Press Disconnect again. It's safe to repeat. Ask an admin if it keeps happening.",
+        { route: "connection.disconnect", toolkit: resolved.toolkit },
       );
       return context.json({ error: refusal.error }, refusal.status);
     }

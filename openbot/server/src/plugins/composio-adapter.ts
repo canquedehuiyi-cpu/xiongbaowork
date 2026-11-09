@@ -10,6 +10,7 @@ import {
   type FieldScheme,
   flagOf,
   isFieldScheme,
+  type KeyGuideSource,
 } from "./broker";
 import {
   type ComposioAction,
@@ -191,7 +192,7 @@ type VendorToolkitDetail = {
   auth_config_details?: unknown;
   /**
    * The app's own page about connecting it, where Composio publishes one. Read by
-   * {@link ComposioBroker.connectionGuideUrl} alone, and only ever as a link to show a person.
+   * {@link KeyGuideSource.connectionGuideUrl} alone, and only ever as a link to show a person.
    */
   auth_guide_url?: unknown;
 };
@@ -2562,16 +2563,12 @@ function copyOf(apps: Promise<BrokerApp[]>): Promise<BrokerApp[]> {
  * Anything that is not text is read as no link: this is a link shown beside a form, and a shape this
  * file cannot read is no reason to refuse the form a person came for.
  *
- * NOT ONE OF THE SEAM'S DOORS, WHICH IS WHY IT IS ATTACHED BESIDE THEM RATHER THAN AMONG THEM. Every
- * method listed on the broker is a door whose failure reaches a person, and the adapter tests keep a
- * table proving what each failure becomes. This one's failures reach nobody: the key form's route
- * answers any of them, and any delay past its bound, as "no link", and the map in `./key-guides`
- * answers instead (`tests/key-guide-link.test.ts` holds that to every kind of failure). So it is
- * attached to the broker as a non-enumerable property and stays out of that table.
+ * NOT ONE OF THE SEAM'S DOORS, so it is answered beside the broker as `guides` rather than on it;
+ * see {@link KeyGuideSource}.
  */
 function connectionGuideUrlFor(
   vendor: ComposioVendor,
-): NonNullable<ComposioBroker["connectionGuideUrl"]> {
+): KeyGuideSource["connectionGuideUrl"] {
   return async ({ toolkit, authScheme }) => {
     const detail = await askVendor(
       {
@@ -2600,6 +2597,7 @@ export function buildComposioClient(
 ): {
   actions: ComposioActions;
   broker: ComposioBroker;
+  guides: KeyGuideSource;
 } {
   /**
    * This person's accounts for this app, in whichever states the ASKING question is about.
@@ -4817,11 +4815,11 @@ export function buildComposioClient(
     },
   };
 
-  Object.defineProperty(broker, "connectionGuideUrl", {
-    value: connectionGuideUrlFor(vendor),
-    enumerable: false,
-  });
-  return { actions, broker };
+  return {
+    actions,
+    broker,
+    guides: { connectionGuideUrl: connectionGuideUrlFor(vendor) },
+  };
 }
 
 /**
@@ -4861,6 +4859,7 @@ export function buildComposioClient(
 export function createComposioClient(apiKey: string): {
   actions: ComposioActions;
   broker: ComposioBroker;
+  guides: KeyGuideSource;
 } {
   /*
    * THREE ENTRIES, EVERY ONE OF THEM LOAD-BEARING, AND ALL THREE PINNED BY A TEST. What this
