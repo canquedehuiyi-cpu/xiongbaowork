@@ -1404,7 +1404,7 @@ describe("POST /:channelId/attachments", () => {
    * A REFUSAL WITH NOTHING TO NAME MUST NOT PRINT AN EMPTY PAIR OF BRACKETS.
    *
    * `sniffMimeType` hands the claim back when the bytes corroborate nothing and the claim names no
-   * format, and the refusal interpolated it: `'archive' is not a file type this app can read ().`
+   * format, and the refusal interpolated it: `'archive' isn't a file type OpenBot can read ().`
    * The composer shows that sentence verbatim, so it is the only explanation anybody gets, and an
    * empty parenthetical is worse than the generic sentence it replaced.
    *
@@ -1426,18 +1426,9 @@ describe("POST /:channelId/attachments", () => {
 
       expect(response.status).toBe(415);
       const { error } = (await response.json()) as { error: string };
-      expect(error).toBe("'archive' is not a file type this app can read.");
+      expect(error).toBe("'archive' isn't a file type OpenBot can read.");
     });
-<<<<<<< fork
 
-=======
-
-    const response = await upload(app, channelId, file);
-
-    expect(response.status).toBe(415);
-    const { error } = (await response.json()) as { error: string };
-    expect(error).toBe("'archive' isn't a file type OpenBot can read.");
->>>>>>> v1.0.0
   });
 });
 

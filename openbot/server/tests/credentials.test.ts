@@ -938,7 +938,6 @@ describe("admin credential API", () => {
   });
 });
 
-<<<<<<< fork
 /**
  * Audit #9: the live-key index is per tenant, the deployment lookup prefers the deployment's own
  * row, and a credential's envelope is bound to the row it was written for.
@@ -1414,8 +1413,8 @@ describe("credential envelopes bound to their row", () => {
       }
     });
   });
-=======
+});
+
 afterAll(async () => {
   await database.$client.close();
->>>>>>> v1.0.0
 });

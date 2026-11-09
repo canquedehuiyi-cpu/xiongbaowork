@@ -1773,29 +1773,26 @@ describe("pairing a package's coworkers with its skills", () => {
   });
 });
 
-<<<<<<< fork
-test("blank package endpoint disables only its owned agent and restores it when configured again", () =>
-  inCatalogue(async () => {
-    const suffix = randomUUID();
-    const actor = { id: `reader-${suffix}`, role: "user" as const };
-    const asActor = <T>(work: () => T) => runAsTenant(actor.id, work);
-    const original = process.env.MANAGED_AGENT_AG_UI_URL;
-    const originalPicked = process.env.PICKED_HARNESS_URL;
-    let packageId: string | undefined;
-    let otherPackageId: string | undefined;
-    const ownedIds: string[] = [];
-    const historyId = `history-${suffix}`;
-    try {
-      process.env.MANAGED_AGENT_AG_UI_URL = "http://127.0.0.1:4201/ag-ui";
-      process.env.PICKED_HARNESS_URL = "http://127.0.0.1:4206/ag-ui";
-      const source = new URL("../../examples/fintech", import.meta.url)
-        .pathname;
-      const configured = await loadTenantPackage(source);
-      const rename = (id: string) => `${id}-${suffix}`;
-      const isolate = (loaded: LoadedTenantPackage): LoadedTenantPackage => ({
-        ...loaded,
-        tenantId: suffix,
-=======
+/**
+ * Upstream's starter and upgrade suites, run whole in the catalogue partition the way the
+ * blank-endpoint test below is: the package they synchronize lands there, and so do the fixtures
+ * standing in for what a deployment already held.
+ */
+const catalogueTest = Object.assign(
+  (name: string, body: () => unknown, timeout?: number) =>
+    test(name, () => runAsTenant("system", body), timeout),
+  {
+    each:
+      <T>(rows: readonly T[]) =>
+      (name: string, body: (row: T) => unknown, timeout?: number) =>
+        test.each(rows as T[])(
+          name,
+          (row: T) => runAsTenant("system", () => body(row)),
+          timeout,
+        ),
+  },
+);
+
 describe("bundled personal starter", () => {
   const personal = fileURLToPath(
     new URL("../../examples/personal", import.meta.url),
@@ -1882,7 +1879,7 @@ describe("bundled personal starter", () => {
       .sort();
   }
 
-  test.each([claude, langchain])(
+  catalogueTest.each([claude, langchain])(
     "seeds one runnable Personal Assistant at %s",
     async (endpoint) => {
       const loaded = await loadStarter(starterTestTenant(), endpoint);
@@ -1917,7 +1914,7 @@ describe("bundled personal starter", () => {
     },
   );
 
-  test.each(["", claude])(
+  catalogueTest.each(["", claude])(
     "the personal edition permits starter edits through the HTTP capability gate: %s",
     async (endpoint) => {
       setEdition("personal");
@@ -1976,7 +1973,7 @@ describe("bundled personal starter", () => {
     },
   );
 
-  test("restart and provider switch keep one starter and refresh its connection", async () => {
+  catalogueTest("restart and provider switch keep one starter and refresh its connection", async () => {
     const tenantId = starterTestTenant();
     const loaded = await loadStarter(tenantId, claude);
     const pkg = await synchronizeTenantPackage(database, loaded);
@@ -2003,7 +2000,7 @@ describe("bundled personal starter", () => {
     expect(await channelBots()).toEqual(["picked-harness"]);
   });
 
-  test("starter attribution can be removed and stays edited after restart and harness switch", async () => {
+  catalogueTest("starter attribution can be removed and stays edited after restart and harness switch", async () => {
     const tenantId = starterTestTenant();
     await synchronizeTenantPackage(
       database,
@@ -2037,7 +2034,7 @@ describe("bundled personal starter", () => {
    * package's `system_prompt` instead, the header read "You are a personal assistant for one
    * person..." to the person.
    */
-  test.each(["", claude])(
+  catalogueTest.each(["", claude])(
     "a fresh starter says what it does in the package's words for the person, not its instructions: %s",
     async (endpoint) => {
       const loaded = await loadStarter(starterTestTenant(), endpoint);
@@ -2069,7 +2066,7 @@ describe("bundled personal starter", () => {
     },
   );
 
-  test.each(["", claude])(
+  catalogueTest.each(["", claude])(
     "starter instructions are edited apart from what it does: %s",
     async (endpoint) => {
       const tenantId = starterTestTenant();
@@ -2134,7 +2131,7 @@ describe("bundled personal starter", () => {
    * instructions. The next start keeps what the Bot runs on and gives the header the package's
    * sentence, whether or not the person had added to the text.
    */
-  test.each([
+  catalogueTest.each([
     ["Claude Agent SDK, as seeded", claude, ""],
     ["Claude Agent SDK, added to", claude, " I live in Berlin."],
     ["OpenBot, as seeded", "", ""],
@@ -2206,7 +2203,7 @@ describe("bundled personal starter", () => {
     },
   );
 
-  test("the starter's Setup page saves its instructions over HTTP", async () => {
+  catalogueTest("the starter's Setup page saves its instructions over HTTP", async () => {
     const tenantId = starterTestTenant();
     await synchronizeTenantPackage(
       database,
@@ -2258,7 +2255,7 @@ describe("bundled personal starter", () => {
     expect(blank.status).toBe(400);
   });
 
-  test("fresh external starters have no guessed attribution", async () => {
+  catalogueTest("fresh external starters have no guessed attribution", async () => {
     await synchronizeTenantPackage(
       database,
       await loadStarter(
@@ -2272,7 +2269,7 @@ describe("bundled personal starter", () => {
     });
   });
 
-  test("a personally edited connection survives restart and installer harness switches", async () => {
+  catalogueTest("a personally edited connection survives restart and installer harness switches", async () => {
     const tenantId = starterTestTenant();
     await synchronizeTenantPackage(
       database,
@@ -2300,7 +2297,7 @@ describe("bundled personal starter", () => {
     });
   });
 
-  test("renaming the starter on its Setup page keeps it on the installer's harness", async () => {
+  catalogueTest("renaming the starter on its Setup page keeps it on the installer's harness", async () => {
     const tenantId = starterTestTenant();
     await synchronizeTenantPackage(
       database,
@@ -2353,7 +2350,7 @@ describe("bundled personal starter", () => {
     });
   });
 
-  test.each([
+  catalogueTest.each([
     ["follows the installer again", false, langchain],
     ["with a key of its own stays where it is", true, `${claude}/`],
   ])(
@@ -2401,7 +2398,7 @@ describe("bundled personal starter", () => {
     },
   );
 
-  test("the starter's subtitle names the harness it runs on after a switch, around the person's own words", async () => {
+  catalogueTest("the starter's subtitle names the harness it runs on after a switch, around the person's own words", async () => {
     const tenantId = starterTestTenant();
     await synchronizeTenantPackage(
       database,
@@ -2450,7 +2447,7 @@ describe("bundled personal starter", () => {
     });
   });
 
-  test("a connection the person set keeps its subtitle through a harness switch", async () => {
+  catalogueTest("a connection the person set keeps its subtitle through a harness switch", async () => {
     const tenantId = starterTestTenant();
     await synchronizeTenantPackage(
       database,
@@ -2476,7 +2473,7 @@ describe("bundled personal starter", () => {
   });
 
   // Seeded by an earlier desktop, under a name the catalogue gave LangChain then.
-  test.each(["LangGraph", "LangChain (LangGraph)"])(
+  catalogueTest.each(["LangGraph", "LangChain (LangGraph)"])(
     "legacy catalogue name %s follows harness changes without renaming custom Bots",
     async (earlier) => {
       const tenantId = starterTestTenant();
@@ -2525,7 +2522,7 @@ describe("bundled personal starter", () => {
     },
   );
 
-  test("source installs keep the built-in fallback if a harness later appears", async () => {
+  catalogueTest("source installs keep the built-in fallback if a harness later appears", async () => {
     const tenantId = starterTestTenant();
     const pkg = await synchronizeTenantPackage(
       database,
@@ -2546,7 +2543,7 @@ describe("bundled personal starter", () => {
     expect(await channelBots()).toEqual(["personal-assistant"]);
   });
 
-  test("concurrent initializers choose one starter", async () => {
+  catalogueTest("concurrent initializers choose one starter", async () => {
     const tenantId = starterTestTenant();
     const installed = await loadStarter(tenantId, claude);
     const fallback = await loadStarter(tenantId, "");
@@ -2559,7 +2556,7 @@ describe("bundled personal starter", () => {
     expect(await channelBots()).toEqual(ids);
   });
 
-  test.each(["personal-assistant", "general-assistant"])(
+  catalogueTest.each(["personal-assistant", "general-assistant"])(
     "an existing installation keeps its customized %s, picked Bot and conversations",
     async (otherId) => {
       const tenantId = starterTestTenant();
@@ -2657,7 +2654,7 @@ describe("bundled personal starter", () => {
     },
   );
 
-  test("restarting does not restore a deleted picked Bot", async () => {
+  catalogueTest("restarting does not restore a deleted picked Bot", async () => {
     const tenantId = starterTestTenant();
     const pkg = await synchronizeTenantPackage(
       database,
@@ -2678,7 +2675,7 @@ describe("bundled personal starter", () => {
     );
   });
 
-  test("upgrading the former personal package carries its starter without reseeding", async () => {
+  catalogueTest("upgrading the former personal package carries its starter without reseeding", async () => {
     const formerTenantId = "personal";
     createdTenantIds.push(formerTenantId);
     const legacy = await synchronizeTenantPackage(database, {
@@ -2710,7 +2707,7 @@ describe("bundled personal starter", () => {
     expect(await channelBots()).toEqual(["personal-assistant"]);
   });
 
-  test("switching from a copied package preserves its remote Bot across restarts", async () => {
+  catalogueTest("switching from a copied package preserves its remote Bot across restarts", async () => {
     const tenantId = starterTestTenant();
     const customEndpoint = "https://example.test/custom-bot";
     const custom = await loadStarter(tenantId, customEndpoint);
@@ -2730,7 +2727,7 @@ describe("bundled personal starter", () => {
     ).toMatchObject({ type: "remote_ag_ui", endpoint: customEndpoint });
   });
 
-  test("an existing user-owned picked-harness ID is left alone", async () => {
+  catalogueTest("an existing user-owned picked-harness ID is left alone", async () => {
     const tenantId = starterTestTenant();
     const pkg = await createPackage(tenantId);
     const owner = await createUser();
@@ -2763,30 +2760,27 @@ describe("bundled personal starter", () => {
   });
 });
 
-test("blank package endpoint disables only its owned agent and restores it when configured again", async () => {
-  const suffix = randomUUID();
-  const actor = { id: `reader-${suffix}`, role: "user" as const };
-  const original = process.env.MANAGED_AGENT_AG_UI_URL;
-  const originalPicked = process.env.PICKED_HARNESS_URL;
-  let packageId: string | undefined;
-  let otherPackageId: string | undefined;
-  const ownedIds: string[] = [];
-  const historyId = `history-${suffix}`;
-  try {
-    process.env.MANAGED_AGENT_AG_UI_URL = "http://127.0.0.1:4201/ag-ui";
-    process.env.PICKED_HARNESS_URL = "http://127.0.0.1:4206/ag-ui";
-    const source = new URL("../../examples/fintech", import.meta.url).pathname;
-    const configured = await loadTenantPackage(source);
-    const rename = (id: string) => `${id}-${suffix}`;
-    const isolate = (loaded: LoadedTenantPackage): LoadedTenantPackage => ({
-      ...loaded,
-      tenantId: suffix,
-      skills: [],
-      channels: [],
-      agents: loaded.agents.map((agent) => ({
-        ...agent,
-        id: rename(agent.id),
->>>>>>> v1.0.0
+test("blank package endpoint disables only its owned agent and restores it when configured again", () =>
+  inCatalogue(async () => {
+    const suffix = randomUUID();
+    const actor = { id: `reader-${suffix}`, role: "user" as const };
+    const asActor = <T>(work: () => T) => runAsTenant(actor.id, work);
+    const original = process.env.MANAGED_AGENT_AG_UI_URL;
+    const originalPicked = process.env.PICKED_HARNESS_URL;
+    let packageId: string | undefined;
+    let otherPackageId: string | undefined;
+    const ownedIds: string[] = [];
+    const historyId = `history-${suffix}`;
+    try {
+      process.env.MANAGED_AGENT_AG_UI_URL = "http://127.0.0.1:4201/ag-ui";
+      process.env.PICKED_HARNESS_URL = "http://127.0.0.1:4206/ag-ui";
+      const source = new URL("../../examples/fintech", import.meta.url)
+        .pathname;
+      const configured = await loadTenantPackage(source);
+      const rename = (id: string) => `${id}-${suffix}`;
+      const isolate = (loaded: LoadedTenantPackage): LoadedTenantPackage => ({
+        ...loaded,
+        tenantId: suffix,
         skills: [],
         channels: [],
         agents: loaded.agents.map((agent) => ({
@@ -2966,63 +2960,7 @@ test("blank package endpoint disables only its owned agent and restores it when 
         await database.delete(users).where(eq(users.id, actor.id));
       });
     }
-<<<<<<< fork
   }));
-=======
-    process.env.MANAGED_AGENT_AG_UI_URL = "";
-    const omitted = isolate(await loadTenantPackage(source));
-    expect(omitted.agents.some((agent) => agent.id === target)).toBe(false);
-    // Explicitly omitted foreign/user-owned IDs must not acquire package ownership.
-    omitted.omittedAgentIds.push(
-      ...controls.slice(0, 3).map((control) => control.id),
-    );
-    await synchronizeTenantPackage(database, omitted);
-    expect(await profiles.get(actor, target)).toBeNull();
-    expect(
-      (await profiles.list(actor)).some((agent) => agent.id === target),
-    ).toBe(false);
-    expect(
-      (await runtime(actor)).find((agent) => agent.id === target)?.type,
-    ).toBe("unavailable");
-    expect(
-      (
-        await database
-          .select()
-          .from(channelAgents)
-          .where(eq(channelAgents.channelId, historyId))
-      ).length,
-    ).toBe(1);
-    expect(
-      (await database.select().from(agents).where(eq(agents.id, target)))
-        .length,
-    ).toBe(1);
-    expect((await profiles.get(actor, picked))?.deletedAt).toBeNull();
-    for (const control of controls)
-      expect((await profiles.get(actor, control.id))?.deletedAt).toBeNull();
-    await synchronizeTenantPackage(database, enabled);
-    expect((await profiles.get(actor, target))?.deletedAt).toBeNull();
-    expect(
-      (await runtime(actor)).find((agent) => agent.id === target)?.type,
-    ).toBe("remote_ag_ui");
-  } finally {
-    if (original === undefined) delete process.env.MANAGED_AGENT_AG_UI_URL;
-    else process.env.MANAGED_AGENT_AG_UI_URL = original;
-    if (originalPicked === undefined) delete process.env.PICKED_HARNESS_URL;
-    else process.env.PICKED_HARNESS_URL = originalPicked;
-    await database.delete(channels).where(eq(channels.id, historyId));
-    for (const id of ownedIds)
-      await database.delete(agents).where(eq(agents.id, id));
-    if (packageId)
-      await database
-        .delete(deploymentPackages)
-        .where(eq(deploymentPackages.id, packageId));
-    if (otherPackageId)
-      await database
-        .delete(deploymentPackages)
-        .where(eq(deploymentPackages.id, otherPackageId));
-    await database.delete(users).where(eq(users.id, actor.id));
-  }
-});
 
 /**
  * A personal edition set up under v0.3.1, whose package was then called `personal`, upgraded to the
@@ -3036,7 +2974,7 @@ test("blank package endpoint disables only its owned agent and restores it when 
  * real deployment or another test could hold.
  */
 describe("upgrading a deployment set up under a package's former id", () => {
-  test("the shipped personal package names `personal` as its former id", async () => {
+  catalogueTest("the shipped personal package names `personal` as its former id", async () => {
     const shipped = await loadTenantPackage(
       fileURLToPath(new URL("../../examples/personal", import.meta.url)),
     );
@@ -3044,7 +2982,7 @@ describe("upgrading a deployment set up under a package's former id", () => {
     expect(shipped.formerTenantIds).toEqual(["personal"]);
   });
 
-  test("a package may not name its own id as a former one", () => {
+  catalogueTest("a package may not name its own id as a former one", () => {
     expect(() =>
       validateTenantPackage({
         brand:
@@ -3059,7 +2997,7 @@ describe("upgrading a deployment set up under a package's former id", () => {
     ).toThrow('tenant.former_ids names "openbot"');
   });
 
-  test("boots with its Bots, conversations and connections intact, under the name it had", async () => {
+  catalogueTest("boots with its Bots, conversations and connections intact, under the name it had", async () => {
     const suffix = randomUUID().slice(0, 8);
     const rename = (id: string) => `${id}-${suffix}`;
     const shipped = await loadTenantPackage(
@@ -3216,7 +3154,7 @@ describe("upgrading a deployment set up under a package's former id", () => {
       .where(eq(brokeredConnections.userId, userId));
   });
 
-  test("a deployment that never had a former id is named by the package's id", async () => {
+  catalogueTest("a deployment that never had a former id is named by the package's id", async () => {
     const tenantId = `fresh-${randomUUID().slice(0, 8)}`;
     expect(
       await deploymentNameOf(database, {
@@ -3226,4 +3164,3 @@ describe("upgrading a deployment set up under a package's former id", () => {
     ).toBe(tenantId);
   });
 });
->>>>>>> v1.0.0
