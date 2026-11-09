@@ -504,6 +504,34 @@ function runsAsOwnUser(seat: string): boolean {
  * for a command.
  */
 const ownUserTerminals = new Map<string, ReturnType<typeof createLiveShell>>();
+
+/** What the helper accepts (docker/xb-bot.sh `cmd_shell`): it refuses more, and drops a longer one. */
+const TERMINAL_ENV_MAX = 64;
+const TERMINAL_ENV_VALUE_MAX = 4096;
+
+/**
+ * The terminal's environment as `NAME=VALUE` arguments, within what the helper accepts. Past it the
+ * helper would refuse the whole terminal, or quietly drop the value; what is left out here is named
+ * in the log instead, so an operator whose COMPUTER_SHELL_ENV is long can see why.
+ */
+function terminalEnvArguments(env: Record<string, string>): string[] {
+  const kept: string[] = [];
+  const dropped: string[] = [];
+  for (const [name, value] of Object.entries(env)) {
+    const argument = `${name}=${value}`;
+    if (
+      kept.length >= TERMINAL_ENV_MAX ||
+      argument.length > TERMINAL_ENV_VALUE_MAX
+    )
+      dropped.push(name);
+    else kept.push(argument);
+  }
+  if (dropped.length > 0)
+    console.warn(
+      `An employee's live terminal is started without ${dropped.join(", ")}: the root helper takes at most ${TERMINAL_ENV_MAX} variables of at most ${TERMINAL_ENV_VALUE_MAX} characters.`,
+    );
+  return kept;
+}
 async function ownUserTerminal(
   seat: string,
 ): Promise<ReturnType<typeof createLiveShell>> {
@@ -526,7 +554,7 @@ async function ownUserTerminal(
         "shell",
         key,
         Buffer.from(rc, "utf8").toString("base64"),
-        ...Object.entries(env).map(([name, value]) => `${name}=${value}`),
+        ...terminalEnvArguments(env),
       ],
     });
     ownUserTerminals.set(key, shell);
