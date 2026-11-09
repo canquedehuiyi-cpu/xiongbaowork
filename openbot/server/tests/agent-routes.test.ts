@@ -44,6 +44,10 @@ function profile(overrides: Partial<AgentProfile> = {}): AgentProfile {
     hidden: false,
     pinned: false,
     deletedAt: null,
+    endpoint: null,
+    hasAuth: false,
+    hasCallbackToken: false,
+    isolated: false,
     ...overrides,
   };
 }
@@ -130,33 +134,32 @@ describe("agent input parser", () => {
     ["name", 12, "Name must be text between 1 and 80 characters."],
     ["name", "   ", "Name must be text between 1 and 80 characters."],
     ["name", "n".repeat(81), "Name must be text between 1 and 80 characters."],
-    ["title", undefined, "Title must be text between 1 and 120 characters."],
-    ["title", false, "Title must be text between 1 and 120 characters."],
-    ["title", "\n\t", "Title must be text between 1 and 120 characters."],
+    ["title", undefined, "Title must be text of 120 characters or fewer."],
+    ["title", false, "Title must be text of 120 characters or fewer."],
     [
       "title",
       "t".repeat(121),
-      "Title must be text between 1 and 120 characters.",
+      "Title must be text of 120 characters or fewer.",
     ],
     [
       "roleDescription",
       undefined,
-      "Role description must be text between 1 and 1000 characters.",
+      "What it does must be text between 1 and 1000 characters.",
     ],
     [
       "roleDescription",
       {},
-      "Role description must be text between 1 and 1000 characters.",
+      "What it does must be text between 1 and 1000 characters.",
     ],
     [
       "roleDescription",
       "   ",
-      "Role description must be text between 1 and 1000 characters.",
+      "What it does must be text between 1 and 1000 characters.",
     ],
     [
       "roleDescription",
       "r".repeat(1001),
-      "Role description must be text between 1 and 1000 characters.",
+      "What it does must be text between 1 and 1000 characters.",
     ],
     ["visibility", undefined, "Visibility must be public or private."],
     ["visibility", 1, "Visibility must be public or private."],
@@ -172,6 +175,8 @@ describe("agent input parser", () => {
   test.each([
     ["name", "n", "n"],
     ["name", ` ${"n".repeat(80)} `, "n".repeat(80)],
+    ["title", "", ""],
+    ["title", "\n\t", ""],
     ["title", "t", "t"],
     ["title", ` ${"t".repeat(120)} `, "t".repeat(120)],
     ["roleDescription", "r", "r"],
@@ -377,6 +382,14 @@ describe("agent lifecycle routes", () => {
           canManage: true,
           mine: true,
           builtIn: false,
+          endpoint: null,
+          runsOnOpenBotModel: true,
+          keyFromOpenBot: false,
+          hasAuth: false,
+          hasCallbackToken: false,
+          isolated: false,
+          isolationActive: false,
+          isolationOffReason: null,
         },
         {
           id: "agent-2",
@@ -392,6 +405,14 @@ describe("agent lifecycle routes", () => {
           canManage: false,
           mine: false,
           builtIn: false,
+          endpoint: null,
+          runsOnOpenBotModel: true,
+          keyFromOpenBot: false,
+          hasAuth: false,
+          hasCallbackToken: false,
+          isolated: false,
+          isolationActive: false,
+          isolationOffReason: null,
         },
         {
           id: "system-agent",
@@ -407,6 +428,14 @@ describe("agent lifecycle routes", () => {
           canManage: false,
           mine: false,
           builtIn: false,
+          endpoint: null,
+          runsOnOpenBotModel: true,
+          keyFromOpenBot: false,
+          hasAuth: false,
+          hasCallbackToken: false,
+          isolated: false,
+          isolationActive: false,
+          isolationOffReason: null,
         },
       ],
     });
@@ -444,6 +473,39 @@ describe("agent lifecycle routes", () => {
       expect.objectContaining({ id: "ours", canManage: true, mine: true }),
     ]);
   });
+
+  test.each(["", " \n\t "])(
+    "persists an empty title for create and update: %p",
+    async (title) => {
+      const store = fakeStore();
+      const app = appFor(store);
+      for (const [path, method] of [
+        ["/", "POST"],
+        ["/agent-1", "PATCH"],
+      ] as const) {
+        const response = await app.request(`http://openbot.test${path}`, {
+          method,
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ ...validInput, title }),
+        });
+        expect(response.status).toBe(method === "POST" ? 201 : 200);
+      }
+      const expected = {
+        ...validInput,
+        title: "",
+        auth: undefined,
+        endpoint: undefined,
+      };
+      expect(store.calls).toEqual([
+        [
+          "create",
+          actor,
+          { ...expected, systemPrompt: validInput.roleDescription },
+        ],
+        ["update", actor, "agent-1", expected],
+      ]);
+    },
+  );
 
   test("never forwards forged create or update fields", async () => {
     const store = fakeStore();
@@ -511,7 +573,7 @@ describe("agent lifecycle routes", () => {
     });
     expect(partial.status).toBe(400);
     expect(await json(partial)).toEqual({
-      error: "Title must be text between 1 and 120 characters.",
+      error: "Title must be text of 120 characters or fewer.",
     });
     expect(store.calls).toEqual([]);
   });
@@ -522,20 +584,16 @@ describe("agent lifecycle routes", () => {
     const response = await appFor(store).request("http://openbot.test/missing");
 
     expect(response.status).toBe(404);
-    expect(await json(response)).toEqual({ error: "Agent not found." });
+    expect(await json(response)).toEqual({ error: "Couldn't find that Bot." });
   });
 
   test.each([
-    [new AgentNotFoundError("agent-1"), 404, "Agent not found."],
-    [
-      new AgentNotManageableError("agent-1"),
-      403,
-      "You do not have permission to manage this agent.",
-    ],
+    [new AgentNotFoundError("agent-1"), 404, "Couldn't find that Bot."],
+    [new AgentNotManageableError("agent-1"), 403, "You can't manage this Bot."],
     [
       new ProtectedAgentError("agent-1"),
       403,
-      "System-owned agents are protected.",
+      "This Bot is built in and can't be changed.",
     ],
   ])("maps known store errors", async (error, status, message) => {
     const store = fakeStore({

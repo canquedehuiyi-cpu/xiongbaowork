@@ -1,10 +1,8 @@
-import { z } from "zod";
-import { currentApprovalContext } from "../approvals/types";
-import { type AuditStore, recordAuditEvent } from "../audit";
 import {
   type HeadlessTool,
   HeadlessToolSuspension,
 } from "@openbot/toolkit/headless-tools";
+<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
 /** The turn engine's headless-tool types live in the toolkit now; re-exported for this server's callers. */
 export { type HeadlessTool, HeadlessToolSuspension };
 import { computerActionIdentity } from "./action-identity";
@@ -14,9 +12,16 @@ import { desktopTools } from "./desktop-tools";
 // --- app discovery (sub-project 3) ---
 import { CANDIDATE_REF } from "./app-discovery";
 // --- end app discovery ---
+=======
+import { z } from "zod";
+import { currentApprovalContext } from "../approvals/types";
+import { type AuditStore, recordAuditEvent } from "../audit";
+import type { ComputerSeat } from "./computer-key";
+>>>>>>> v1.0.0
 import {
   type ActionActor,
   type ComputerGateway,
+  ComputerStillStartingError,
   HumanHasControlError,
 } from "./gateway";
 import type { ControlState } from "./schema";
@@ -43,7 +48,13 @@ export const SIGN_IN_TOOL_DESCRIPTION =
 /** Shipped browser/file/command tools, with identity bound before the model supplies arguments. */
 export function createHeadlessComputerTools(options: {
   gateway: ComputerGateway;
-  botId: string;
+  /**
+   * The Bot's seat for the person this run acts for: `gateway.seatFor(botId, ownerUserId)`.
+   *
+   * Resolved once per run, so an administrator withdrawing Isolated Bots moves the Bot onto the
+   * person's computer from its next run rather than part way through this one.
+   */
+  seat: ComputerSeat;
   actor: ActionActor;
   auditStore?: AuditStore;
   /** The private sign-in request. Absent leaves the Bot with help and secret requests only. */
@@ -86,11 +97,16 @@ function headlessComputerTools(options: {
   machine?: "workspace" | "device";
   apps?: boolean;
 }): HeadlessTool[] {
+<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
   const { gateway, botId, actor, auditStore, signIn } = options;
   const onDevice = options.machine === "device";
   const where = onDevice
     ? "your workspace folder on the person's own paired machine (not a container of yours)"
     : "your workspace";
+=======
+  const { gateway, seat, actor, auditStore, signIn } = options;
+  const botId = seat.botId;
+>>>>>>> v1.0.0
   const snapshotId = z.number().int().positive();
   const ref = z.string().min(1);
   const text = z.string().min(1);
@@ -121,6 +137,22 @@ function headlessComputerTools(options: {
             execute(input, context),
           );
         } catch (error) {
+          /*
+           * A cold start that outlasted the wait is answered, not thrown.
+           *
+           * Thrown, it reached the model as a bare error string beside every real failure, and a
+           * model reading "error" tends to apologise and give up on a computer that was seconds from
+           * ready. As a result it says the three things that decide the next step: the computer is
+           * starting, this call did nothing, and trying again shortly is the right move.
+           */
+          if (error instanceof ComputerStillStartingError) {
+            return {
+              ok: false,
+              starting: true,
+              notPerformed: true,
+              reason: error.message,
+            };
+          }
           if (error instanceof HumanHasControlError) {
             throw new HeadlessToolSuspension(error.message, {
               kind: "computer_handoff",
@@ -153,7 +185,7 @@ function headlessComputerTools(options: {
       "Open a web page and return its title and readable text. Use the returned content to answer.",
       z.strictObject({ url: text }),
       async ({ url }, { toolCallId }) => {
-        const result = await gateway.navigate(botId, actor, url, toolCallId);
+        const result = await gateway.navigate(seat, actor, url, toolCallId);
         if (result.challenge)
           throw new HeadlessToolSuspension(result.challenge.reason, {
             kind: "computer_handoff",
@@ -168,28 +200,36 @@ function headlessComputerTools(options: {
       "computer_read",
       "Read the currently open browser page without navigating.",
       noArgs,
-      async () => ({ ok: true, ...(await gateway.read(botId)) }),
+      async () => ({ ok: true, ...(await gateway.read(seat)) }),
     ),
     tool(
       "computer_snapshot",
       "List fields, buttons and links with refs. Call before clicking or typing and pass the returned snapshotId with every ref. If refs are stale take a fresh snapshot.",
       noArgs,
-      async () => ({ ok: true, ...(await gateway.snapshot(botId)) }),
+      async () => ({ ok: true, ...(await gateway.snapshot(seat)) }),
     ),
     tool(
       "computer_screenshot",
       "Return an image of the browser currently open on your computer.",
       noArgs,
-      async () => ({ ok: true, ...(await gateway.screenshot(botId)) }),
+      async () => ({ ok: true, ...(await gateway.screenshot(seat)) }),
     ),
     tool(
       "computer_click",
-      "Click an element using its ref and snapshotId from the latest snapshot.",
+      "Click an element using its ref and snapshotId from the latest snapshot. A link to another page is opened at its address.",
       z.strictObject({ ref, snapshotId }),
-      async (input, { signal }) => ({
-        ok: true,
-        ...(await gateway.click(botId, actor, input, signal)),
-      }),
+      async (input, { signal }) => {
+        const result = await gateway.click(seat, actor, input, signal);
+        // A followed link is a navigation, so a page that wants a person stops here as one does.
+        if (result.challenge)
+          throw new HeadlessToolSuspension(result.challenge.reason, {
+            kind: "computer_handoff",
+            botId,
+            requestId: result.challenge.requestId,
+            source: result.challenge.kind,
+          });
+        return { ok: true, ...result };
+      },
     ),
     tool(
       "computer_type",
@@ -202,7 +242,7 @@ function headlessComputerTools(options: {
       }),
       async (input, { signal }) => ({
         ok: true,
-        ...(await gateway.type(botId, actor, input, signal)),
+        ...(await gateway.type(seat, actor, input, signal)),
       }),
     ),
     tool(
@@ -219,7 +259,7 @@ function headlessComputerTools(options: {
         }),
       async (input, { signal }) => ({
         ok: true,
-        ...(await gateway.key(botId, actor, input, signal)),
+        ...(await gateway.key(seat, actor, input, signal)),
       }),
     ),
     tool(
@@ -228,7 +268,7 @@ function headlessComputerTools(options: {
       z.strictObject({ deltaY: z.number().optional() }),
       async (input) => ({
         ok: true,
-        ...(await gateway.scroll(botId, actor, input)),
+        ...(await gateway.scroll(seat, actor, input)),
       }),
     ),
     tool(
@@ -237,7 +277,7 @@ function headlessComputerTools(options: {
       z.strictObject({ path: z.string().optional(), root: folderRoot }),
       async (input) => ({
         ok: true,
-        ...(await gateway.listFiles(botId, actor, input)),
+        ...(await gateway.listFiles(seat, actor, input)),
       }),
     ),
     tool(
@@ -246,7 +286,7 @@ function headlessComputerTools(options: {
       z.strictObject({ path: text, root: folderRoot }),
       async (input) => ({
         ok: true,
-        ...(await gateway.readFile(botId, actor, input)),
+        ...(await gateway.readFile(seat, actor, input)),
       }),
     ),
     tool(
@@ -259,18 +299,22 @@ function headlessComputerTools(options: {
       }),
       async (input) => ({
         ok: true,
-        ...(await gateway.writeFile(botId, actor, input)),
+        ...(await gateway.writeFile(seat, actor, input)),
       }),
     ),
     tool(
       "computer_run_command",
+<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
       onDevice
         ? `Run a shell command on the person's own paired machine, in ${where}: this is how you act on their computer when they ask. The machine may run Windows (PowerShell), macOS or Linux, so write the command for that system. Long output is truncated and long commands are stopped. A command that deletes recursively, formats a drive or names a file that may hold secrets waits for the person's approval; if refused say so rather than retrying.`
         : "Run a bash shell command in your workspace. Pipes and && work; long output is truncated and long commands are stopped. For package installation use sudo apt-get; if refused say so rather than retrying.",
+=======
+      "Run a bash shell command in your workspace. Pipes and && work; long output is truncated and long commands are stopped. For package installation check id -u first: as root (0), use apt-get directly; otherwise use sudo openbot-apt update && sudo openbot-apt install <package>, which takes package names and nothing else, not sudo apt-get. If installation is refused, say so rather than retrying.",
+>>>>>>> v1.0.0
       z.strictObject({ command: text }),
       async (input, { signal }) => ({
         ok: true,
-        ...(await gateway.runCommand(botId, actor, input, signal)),
+        ...(await gateway.runCommand(seat, actor, input, signal)),
       }),
     ),
     tool(
@@ -279,7 +323,7 @@ function headlessComputerTools(options: {
       z.strictObject({ reason: text }),
       async ({ reason }, { toolCallId }) =>
         waiting(
-          await gateway.requestHelp(botId, actor, reason, toolCallId),
+          await gateway.requestHelp(seat, actor, reason, toolCallId),
           reason,
         ),
     ),
@@ -289,7 +333,7 @@ function headlessComputerTools(options: {
       z.strictObject({ label: text, ref, snapshotId }),
       async (input) =>
         waiting(
-          await gateway.requestSecret(botId, actor, input),
+          await gateway.requestSecret(seat, actor, input),
           `The person must enter ${input.label} directly into the page.`,
           "computer_secret",
         ),

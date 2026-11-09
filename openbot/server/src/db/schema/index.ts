@@ -28,6 +28,7 @@ export * from "./plans";
 export * from "./plugins";
 export * from "./portraits";
 export * from "./proactive";
+export * from "./recorder";
 export * from "./responsibilities";
 export * from "./roles";
 export * from "./scim";

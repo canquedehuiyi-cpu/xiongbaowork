@@ -12,6 +12,11 @@ import { randomUUID } from "node:crypto";
 import { and, eq, like, sql } from "drizzle-orm";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import type { AgentActor } from "../src/agents/profile-types";
+import {
+  type ChannelActivityEvent,
+  createChannelEventHub,
+  startChannelActivityListener,
+} from "../src/channels/events";
 import { createChannelStore } from "../src/channels/routes";
 import { createThreadIdentity } from "../src/channels/thread-identity";
 import { createDatabase } from "../src/db/client";
@@ -26,6 +31,7 @@ import {
   users,
   workItems,
 } from "../src/db/schema";
+import { createRoutineRunner } from "../src/routines/runner";
 import { SYSTEM_TENANT, TEAM_TENANT } from "../src/db/schema/tenant";
 import { MINIMUM_INTERVAL_MS } from "../src/routines/schedule";
 import { createRoutineStore } from "../src/routines/store";
@@ -405,6 +411,7 @@ describe("offering the firings that are due", () => {
       },
     };
 
+<<<<<<< fork
     const outcomes = await Promise.all([
       asPlatform(() =>
         offerDueRoutines(sweepOptions({ routineStore: racing })),
@@ -413,17 +420,47 @@ describe("offering the firings that are due", () => {
         offerDueRoutines(sweepOptions({ routineStore: racing })),
       ),
     ]);
+=======
+    // Both sweeps must finish reading the same due stamp before either offers it. Promise.all
+    // alone does not ensure this: a slower reader can see the already-advanced stamp, which is
+    // still due by Postgres's real clock because this fixture deliberately dates its rows to 2001.
+    const dueRoutines = store.dueRoutines.bind(store);
+    const bothRead = Promise.withResolvers<void>();
+    let readers = 0;
+    const read = spyOn(store, "dueRoutines").mockImplementation(
+      async (limit) => {
+        const rows = await dueRoutines(limit);
+        if (++readers === 2) bothRead.resolve();
+        await bothRead.promise;
+        return rows;
+      },
+    );
+    try {
+      const outcomes = await Promise.all([
+        offerDueRoutines(sweepOptions({ now })),
+        offerDueRoutines(sweepOptions({ now })),
+      ]);
+>>>>>>> v1.0.0
 
-    // Both sweeps saw it as due and both offered it, which is the honest report: each did put the
-    // work on the queue. What must be single is the row, and the clock.
-    for (const outcome of outcomes) {
-      expect(outcome.offered).toContain(routine.id);
+      // Both snapshots came from the real database. The real queue and compare-and-set must
+      // still collapse their two offers to one firing and one clock advance.
+      expect(readers).toBe(2);
+      for (const outcome of outcomes) {
+        expect(outcome.offered).toContain(routine.id);
+      }
+      expect(await firingsFor(routine.id)).toHaveLength(1);
+    } finally {
+      read.mockRestore();
     }
+<<<<<<< fork
     const firings = await firingsFor(routine.id);
     expect(firings).toHaveLength(1);
     expect(firings[0]?.key).toBe(
       `${routine.id}:${stamp.toISOString().slice(0, 16)}Z`,
     );
+=======
+
+>>>>>>> v1.0.0
 
     const after = await readRoutine(routine.id);
     expect(after?.nextRunAt.getTime()).toBeGreaterThan(stamp.getTime());
@@ -1674,6 +1711,94 @@ describe("consuming a claimed firing", () => {
     ).toBe(0);
     const [finished] = await firingsFor(routine.id);
     expect(finished?.finishedAt).not.toBeNull();
+  });
+
+  /**
+   * After an upgrade the worker comes back before the server does: Compose starts it once the
+   * server's container has started, not once the server is listening. A routine that fell due during
+   * the restart is fired on the worker's first tick, its dispatch is refused, and the run row that
+   * attempt opened stays open for the reaper. The retry a minute later runs and succeeds.
+   *
+   * The conversation reads "a routine is running" from open run rows, so the refused attempt's row
+   * kept the Bot's working dots lit for minutes after the reply had landed and the Routines page said
+   * the run had succeeded. Found on a desktop install right after an upgrade. Driven here through the
+   * real sweep, the real runner and the real NOTIFY path the browser hears.
+   */
+  test("a firing retried after its dispatch was refused stops showing as running once the retry has run", async () => {
+    const { owner, channel, routine } = await makeRoutine();
+    await offerFiring(
+      routine.id,
+      new Date("2001-01-01T09:25:00Z"),
+      new Date("2001-01-01T09:26:00Z"),
+    );
+
+    // The server is still starting: the first dispatch never reaches it.
+    await dispatchClaimedRoutines(
+      sweepOptions({
+        now: at("2001-01-01T09:26:00Z"),
+        dispatch: async () => {
+          throw new Error(
+            "Unable to connect. Is the computer able to access the url?",
+          );
+        },
+      }),
+    );
+    const [refused] = await runsFor(routine.id);
+    expect(refused?.status).toBeNull();
+    const [row] = await firingsFor(routine.id);
+    await backdate(row?.key as string, {
+      runAt: new Date("2001-01-01T09:27:00Z"),
+    });
+
+    // The server is up. The retry is handed to the real runner, whose turn answers.
+    const runner = createRoutineRunner({
+      routineStore: store,
+      channelStore,
+      runTurn: async () => ({ replyText: "Three receipts are waiting." }),
+    });
+    const heard: ChannelActivityEvent[] = [];
+    const hub = createChannelEventHub();
+    const detach = hub.register(owner.id, (payload) => {
+      heard.push(JSON.parse(payload) as ChannelActivityEvent);
+    });
+    const listener = await startChannelActivityListener(databaseUrl, hub);
+    try {
+      const report = await dispatchClaimedRoutines(
+        sweepOptions({
+          now: at("2001-01-01T09:27:00Z"),
+          dispatch: (routineRunId: string) => runner.run(routineRunId),
+        }),
+      );
+      expect(report.fired).toEqual([routine.id]);
+
+      // The retry's run succeeded; the refused attempt's row is still open, waiting for the reaper.
+      const runs = await runsFor(routine.id);
+      expect(runs.find((run) => run.id === refused?.id)?.status).toBeNull();
+      expect(runs.find((run) => run.id !== refused?.id)?.status).toBe(
+        "succeeded",
+      );
+
+      // What a reload reads: nothing is running in this conversation any more.
+      const work = await channelStore.workIn(owner, [channel]);
+      expect(work.get(channel.id) ?? []).toEqual([]);
+
+      // And what the open roster heard when the run ended: no turn, and nothing still working.
+      const deadline = Date.now() + 5_000;
+      const ended = () =>
+        heard.find((event) => event.busy === false && event.work !== undefined);
+      while (!ended() && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      expect(ended()?.work).toEqual([]);
+      // While the retry ran, one firing was running, not two.
+      const retried = runs.find((run) => run.id !== refused?.id)?.id as string;
+      expect(
+        heard.find((event) => event.busy === true)?.work?.map((w) => w.key),
+      ).toEqual([retried]);
+    } finally {
+      detach();
+      await listener.stop();
+    }
   });
 
   /**

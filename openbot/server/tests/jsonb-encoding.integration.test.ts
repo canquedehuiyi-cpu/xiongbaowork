@@ -76,6 +76,7 @@ describe("what a jsonb column actually stores", () => {
     expect(row?.bot).toBe(marker);
     // Left in place: the trail is append-only, so a test cannot tidy up after itself. One row.
   });
+<<<<<<< fork
 
   test("the whole trail is objects, not strings", async () => {
     // A deployment that has run the migration has no string-shaped payloads left. Written as a sweep
@@ -90,4 +91,10 @@ describe("what a jsonb column actually stores", () => {
     );
     expect(row?.strings).toBe(0);
   });
+=======
+});
+
+afterAll(async () => {
+  await database.$client.close();
+>>>>>>> v1.0.0
 });

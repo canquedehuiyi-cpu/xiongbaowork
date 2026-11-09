@@ -7,7 +7,13 @@ import {
   test,
 } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray, like } from "drizzle-orm";
+import {
+  and,
+  eq,
+  inArray,
+  like,
+} from "drizzle-orm";
+import { computerKeyText } from "../src/computer/computer-key";
 import type {
   ComputerLocation,
   ComputerProvider,
@@ -35,6 +41,7 @@ const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const queue = createWorkQueue(database);
 const suite = randomUUID().slice(0, 8);
 const botOf = (name: string) => `cull-${suite}-${name}`;
+<<<<<<< fork
 /*
  * Two people, for the G01 cases. A computer is its Bot's, and the suspension runs as the tenant on
  * the Bot's own row, so every Bot this suite names is a real `agents` row owned by one of them.
@@ -61,16 +68,23 @@ const nobodysBots = {
   system: botOf("system-bot"),
   platform: botOf("platform-bot"),
 };
+=======
+/**
+ * The computer of a Bot from before computers were per person, which is an isolated Bot's today.
+ * Its rows below name only the Bot, as every row did then, and still count as its computer's use.
+ */
+const botKey = (botId: string) => ({ kind: "bot" as const, botId });
+>>>>>>> v1.0.0
 
 function providerWith(computers: ComputerLocation[]) {
   const stopped: string[] = [];
   const provider: ComputerProvider = {
     name: "fake",
-    isolation: "per-bot",
+    isolation: "per-person",
     locate: async () => "http://unused",
-    status: async (botId) => ({ botId, state: "ready" }),
-    stop: async (botId) => {
-      stopped.push(botId);
+    status: async (seat) => ({ botId: seat.botId, state: "ready" }),
+    stop: async (target) => {
+      stopped.push(computerKeyText(target.key));
       return { wasRunning: true };
     },
     reset: async () => ({ cleared: false }),
@@ -105,7 +119,7 @@ const used = (botId: string, when: Date) =>
  * test run. The keys are this suite's Bot ids, so that is what the sweep matches.
  */
 const mine = () =>
-  and(eq(workItems.kind, CULL_KIND), like(workItems.key, `cull-${suite}-%`));
+  and(eq(workItems.kind, CULL_KIND), like(workItems.key, `%cull-${suite}-%`));
 
 beforeAll(async () => {
   await runAsTenant(tenantA, () =>
@@ -156,7 +170,7 @@ describe("suspending computers nobody is using", () => {
     const botId = botOf("idle");
     await used(botId, minutesAgo(45));
     const { provider, stopped } = providerWith([
-      { botId, status: "running", url: "http://c" },
+      { key: botKey(botId), status: "running", url: "http://c" },
     ]);
     const options = {
       database,
@@ -167,18 +181,20 @@ describe("suspending computers nobody is using", () => {
       now,
     };
 
-    expect((await offerIdleComputers(options)).offered).toEqual([botId]);
+    expect((await offerIdleComputers(options)).offered).toEqual([
+      `bot:${botId}`,
+    ]);
     const report = await suspendClaimedComputers(options);
 
-    expect(report.suspended).toEqual([botId]);
-    expect(stopped).toEqual([botId]);
+    expect(report.suspended).toEqual([`bot:${botId}`]);
+    expect(stopped).toEqual([`bot:${botId}`]);
   });
 
   test("a computer used a minute ago is left alone", async () => {
     const botId = botOf("busy");
     await used(botId, minutesAgo(1));
     const { provider, stopped } = providerWith([
-      { botId, status: "running", url: "http://c" },
+      { key: botKey(botId), status: "running", url: "http://c" },
     ]);
 
     const offered = await offerIdleComputers({
@@ -203,7 +219,7 @@ describe("suspending computers nobody is using", () => {
     const botId = botOf("returned");
     await used(botId, minutesAgo(45));
     const { provider, stopped } = providerWith([
-      { botId, status: "running", url: "http://c" },
+      { key: botKey(botId), status: "running", url: "http://c" },
     ]);
     const options = {
       database,
@@ -227,7 +243,7 @@ describe("suspending computers nobody is using", () => {
     // No audit row and no start time. Suspending on no evidence is how a session disappears.
     const botId = botOf("unknown");
     const { provider, stopped } = providerWith([
-      { botId, status: "running", url: "http://c" },
+      { key: botKey(botId), status: "running", url: "http://c" },
     ]);
 
     const offered = await offerIdleComputers({
@@ -247,7 +263,7 @@ describe("suspending computers nobody is using", () => {
     const botId = botOf("stopped");
     await used(botId, minutesAgo(90));
     const { provider } = providerWith([
-      { botId, status: "stopped", url: "http://c" },
+      { key: botKey(botId), status: "stopped", url: "http://c" },
     ]);
 
     expect(
@@ -271,7 +287,7 @@ describe("suspending computers nobody is using", () => {
     }
     const { provider, stopped } = providerWith(
       ids.map((botId) => ({
-        botId,
+        key: botKey(botId),
         status: "running" as const,
         url: "http://c",
       })),
@@ -285,7 +301,7 @@ describe("suspending computers nobody is using", () => {
     ]);
 
     const all = [...first.suspended, ...second.suspended];
-    expect(all.sort()).toEqual([...ids].sort());
+    expect(all.sort()).toEqual(ids.map((id) => `bot:${id}`).sort());
     // Each exactly once, which is the point of claiming rather than sweeping.
     expect(new Set(stopped).size).toBe(stopped.length);
   });
@@ -302,7 +318,7 @@ describe("suspending computers nobody is using", () => {
   test("a computer used again after it was suspended is suspended again", async () => {
     const botId = botOf("recycled");
     const { provider, stopped } = providerWith([
-      { botId, status: "running", url: "http://c" },
+      { key: botKey(botId), status: "running", url: "http://c" },
     ]);
     const at = (iso: string) => () => new Date(iso);
     const sweep = async (whenIso: string) => {
@@ -330,15 +346,100 @@ describe("suspending computers nobody is using", () => {
       return report;
     };
 
+<<<<<<< fork
     await used(botId, minutesAgo(60));
     expect((await sweep("2026-08-24T12:00:00Z")).suspended).toEqual([botId]);
+=======
+    await database.insert(auditEvents).values(ran(botId, minutesAgo(60)));
+    expect((await sweep("2026-08-24T12:00:00Z")).suspended).toEqual([
+      `bot:${botId}`,
+    ]);
+>>>>>>> v1.0.0
 
     // Somebody comes back at 13:00, and it is quiet again by 14:00.
     await used(botId, new Date("2026-08-24T13:00:00Z"));
     const second = await sweep("2026-08-24T14:00:00Z");
 
-    expect(second.suspended).toEqual([botId]);
-    expect(stopped).toEqual([botId, botId]);
+    expect(second.suspended).toEqual([`bot:${botId}`]);
+    expect(stopped).toEqual([`bot:${botId}`, `bot:${botId}`]);
+  });
+
+  /*
+   * One computer per person, which every Bot of theirs runs on.
+   *
+   * Grouped by Bot, the culler would put a person's computer to sleep under the Bot they are using
+   * because a different Bot of theirs had gone quiet. Each row now names the computer it ran on.
+   */
+  test("a person's computer stays up while any one of their Bots is in use", async () => {
+    const person = `person:${botOf("ada")}`;
+    await database.insert(auditEvents).values([
+      {
+        ...ran(botOf("ada-quiet"), minutesAgo(90)),
+        payload: { bot: botOf("ada-quiet"), computer: person, action: "x" },
+      },
+      {
+        ...ran(botOf("ada-busy"), minutesAgo(1)),
+        payload: { bot: botOf("ada-busy"), computer: person, action: "x" },
+      },
+    ]);
+    const { provider, stopped } = providerWith([
+      {
+        key: { kind: "person", personId: botOf("ada") },
+        status: "running",
+        url: "http://c",
+      },
+    ]);
+
+    const offered = await offerIdleComputers({
+      database,
+      queue,
+      provider,
+      idleAfterMs,
+      owner: "replica-1",
+      now,
+    });
+    expect(offered.offered).toEqual([]);
+    expect(stopped).toEqual([]);
+  });
+
+  test("a person's computer idle across all their Bots is suspended, once", async () => {
+    const personId = botOf("bo");
+    const person = `person:${personId}`;
+    await database.insert(auditEvents).values(
+      ["one", "two"].map((name) => ({
+        ...ran(botOf(`bo-${name}`), minutesAgo(60)),
+        payload: { bot: botOf(`bo-${name}`), computer: person, action: "x" },
+      })),
+    );
+    const { provider, stopped } = providerWith([
+      // The shared computer lists a person's seats, so this one computer appears twice.
+      {
+        key: { kind: "person", personId },
+        botId: "one",
+        status: "running",
+        url: "http://c",
+      },
+      {
+        key: { kind: "person", personId },
+        botId: "two",
+        status: "running",
+        url: "http://c",
+      },
+    ]);
+    const options = {
+      database,
+      queue,
+      provider,
+      idleAfterMs,
+      owner: "replica-1",
+      now,
+    };
+
+    expect((await offerIdleComputers(options)).offered).toEqual([person]);
+    expect((await suspendClaimedComputers(options)).suspended).toEqual([
+      person,
+    ]);
+    expect(stopped).toEqual([person]);
   });
 });
 

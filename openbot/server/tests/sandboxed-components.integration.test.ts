@@ -348,3 +348,7 @@ describe("deleting a name this surface does not own", () => {
       expect(gone).toBeUndefined();
     }));
 });
+
+afterAll(async () => {
+  await database.$client.close();
+});

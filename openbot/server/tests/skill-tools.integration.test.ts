@@ -30,6 +30,7 @@ const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const policy: ActionPolicy = { mode: "enforce", deny: [], allow: ["true"] };
 
 const store = createPluginStore({
+  brokerProvider: "composio",
   database,
   auditStore: createAuditStore(database),
   credentials: { readSecret: async () => null },
@@ -59,6 +60,7 @@ const actor = { id: author, isAdmin: true };
 const asAuthor = <T>(fn: () => Promise<T>) => runAsTenant(author, fn);
 
 beforeAll(async () => {
+<<<<<<< fork
   await runAsTenant("platform", () =>
     database
       .insert(users)
@@ -101,6 +103,42 @@ beforeAll(async () => {
       .insert(agents)
       .values({ id: bot, name: bot, type: "remote_ag_ui", configuration: {} })
       .onConflictDoNothing();
+=======
+  await database
+    .insert(users)
+    .values({ id: author, email: `${author}@example.test`, name: author })
+    .onConflictDoNothing();
+  await database
+    .insert(agents)
+    .values({ id: bot, name: bot, type: "remote_ag_ui", configuration: {} })
+    .onConflictDoNothing();
+  await database
+    .insert(mcpServers)
+    .values({
+      id: server,
+      title: "A test server",
+      vendor: "Test",
+      url: "https://mcp.example.invalid/v1",
+    })
+    .onConflictDoNothing();
+  await database
+    .insert(mcpTools)
+    .values([
+      {
+        serverId: server,
+        name: "search",
+        vendorName: "search",
+        description: "Find things.",
+      },
+      {
+        serverId: server,
+        name: "delete_everything",
+        vendorName: "delete_everything",
+        description: "Do not.",
+      },
+    ])
+    .onConflictDoNothing();
+>>>>>>> v1.0.0
 
     // The Bot holds exactly one of the two.
     await store.grant("mcp", heldRef, bot, "admin@openbot.local");
@@ -178,11 +216,33 @@ describe("a skill declaring the tools it needs", () => {
       expect(await declaredBy(skill)).toEqual([heldRef]);
     }));
 
+<<<<<<< fork
   test("duplicates in one save are stored once", () =>
     asAuthor(async () => {
       await saveSkill([heldRef, heldRef]);
       expect(await declaredBy(skill)).toEqual([heldRef]);
     }));
+=======
+  test("accepts the web research roles, which name no one server's tool", async () => {
+    // What the skill editor offers under Web research, and what a Bot proposes for reading a page.
+    await saveSkill(["@research/fetch", "@research/search"]);
+    expect(await declaredBy(skill)).toEqual([
+      "@research/fetch",
+      "@research/search",
+    ]);
+  });
+
+  test("still refuses a research role that does not exist", async () => {
+    await expect(saveSkill(["@research/browse"])).rejects.toBeInstanceOf(
+      PluginRefusedError,
+    );
+  });
+
+  test("duplicates in one save are stored once", async () => {
+    await saveSkill([heldRef, heldRef]);
+    expect(await declaredBy(skill)).toEqual([heldRef]);
+  });
+>>>>>>> v1.0.0
 });
 
 describe("declaring a tool is not granting it", () => {
@@ -241,4 +301,8 @@ describe("a skill going away", () => {
         .where(eq(skillTools.skillId, otherSkill));
       expect(left).toHaveLength(0);
     }));
+});
+
+afterAll(async () => {
+  await database.$client.close();
 });

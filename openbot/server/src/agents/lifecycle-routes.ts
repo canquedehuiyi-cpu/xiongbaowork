@@ -19,6 +19,11 @@ import {
 import type { AdminScope } from "../auth/admin-scope";
 import type { AppVariables } from "../auth/guards";
 import { capabilityFor } from "../tenant/context";
+import type {
+  AttentionResponse,
+  BotAttentionPayload,
+  TaskService,
+} from "../proactive/contracts";
 import {
   type BotLifecycleStore,
   type BotNotify,
@@ -44,6 +49,8 @@ export type BotLifecycleServices = {
   profiles: {
     get(actor: AgentActor, id: string): Promise<AgentProfile | null>;
   };
+  /** The person's tasks that need them, per Bot (`tasks/*`). Without it, every count is nought. */
+  tasks?: Pick<TaskService, "counts">;
   auditStore?: AuditStore;
   /** Reads one agent's trail for its detail page; absent means the trail answers 503. */
   auditTrail?: AgentTrailReader;
@@ -65,6 +72,7 @@ export function createBotLifecycleRoutes(
     activity,
     wakeUps,
     profiles,
+    tasks,
     auditStore,
     auditTrail,
   } = services;
@@ -107,7 +115,7 @@ export function createBotLifecycleRoutes(
     if (!agentId.trim())
       return context.json({ error: "A Bot id is required." }, 400);
     const agent = await profiles.get(context.var.actor, agentId);
-    if (!agent) return context.json({ error: "Agent not found." }, 404);
+    if (!agent) return context.json({ error: "Couldn't find that Bot." }, 404);
     return agent;
   };
 
@@ -117,22 +125,45 @@ export function createBotLifecycleRoutes(
       unknown
     >;
 
-  /** Every Bot that needs the caller, or has something unread, or is paused by them. */
+  /**
+   * Every Bot that needs the caller, or has something unread, or is paused by them: questions,
+   * approvals, stalled hand-offs, open items from check-ins and tasks that need them. With the
+   * person's newest ping, which the app notifies once for, however many items it carried.
+   */
   routes.get("/attention", requireUser, async (context) => {
     const ownerUserId = context.var.actor.id;
-    const [counts, paused] = await Promise.all([
-      activity.attention(ownerUserId),
-      lifecycle.pausedFor(ownerUserId),
-    ]);
-    const ids = [...new Set([...counts.map((row) => row.agentId), ...paused])];
+    const [counts, paused, taskCounts, lastPingId, waitingIn] =
+      await Promise.all([
+        activity.attention(ownerUserId),
+        lifecycle.pausedFor(ownerUserId),
+        tasks?.counts(ownerUserId) ?? Promise.resolve([]),
+        activity.lastPing(ownerUserId),
+        activity.waitingIn(ownerUserId),
+      ]);
+    const ids = [
+      ...new Set([
+        ...counts.map((row) => row.agentId),
+        ...taskCounts
+          .filter((row) => row.needsInput + row.ready + row.failed > 0)
+          .map((row) => row.agentId),
+        ...paused,
+      ]),
+    ];
     const notify = await lifecycle.notifyFor(ownerUserId, ids);
     const byId = new Map(counts.map((row) => [row.agentId, row]));
+    const tasksById = new Map(taskCounts.map((row) => [row.agentId, row]));
     // Only Bots the caller can still reach: a count about a Bot they lost access to names it.
-    const bots = [];
+    const bots: BotAttentionPayload[] = [];
     for (const agentId of ids) {
       const agent = await profiles.get(context.var.actor, agentId);
       if (!agent) continue;
       const row = byId.get(agentId);
+      const task = tasksById.get(agentId);
+      const asks =
+        (row?.questions ?? 0) +
+        (row?.approvals ?? 0) +
+        (row?.handoffs ?? 0) +
+        (task?.needsInput ?? 0);
       bots.push({
         agentId,
         name: agent.name,
@@ -142,9 +173,16 @@ export function createBotLifecycleRoutes(
         unread: row?.unread ?? 0,
         paused: paused.includes(agentId),
         notify: notify[agentId] ?? "all",
+        items: row?.items ?? 0,
+        tasks: {
+          needsInput: task?.needsInput ?? 0,
+          ready: task?.ready ?? 0,
+          failed: task?.failed ?? 0,
+        },
+        waitingIn: asks > 0 ? (waitingIn.get(agentId) ?? null) : null,
       });
     }
-    return context.json({ bots });
+    return context.json({ bots, lastPingId } satisfies AttentionResponse);
   });
 
   routes.get("/routing", requireUser, async (context) =>

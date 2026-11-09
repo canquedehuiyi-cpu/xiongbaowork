@@ -125,6 +125,21 @@ export function createApprovalRoutes(
   routes.get("/", async (context) =>
     context.json(await service.inbox(context.var.actor.id)),
   );
+  /*
+   * Whether this conversation asks before every step: a task's, started from a check-in. The browser
+   * asks before it sends a Bot's look at a page straight to the computer, since a look sent that way
+   * carries no conversation for the gate to ask in. Answered by the rule the gate itself applies
+   * (`asksEveryChange`), for the asker's own conversations only: anybody else's reads as no.
+   */
+  routes.get("/threads/:threadId", async (context) =>
+    context.json({
+      asksEveryStep:
+        (await service.store.asksEveryChange?.(
+          context.var.actor.id,
+          context.req.param("threadId"),
+        )) === true,
+    }),
+  );
   routes.post("/computer/:botId", async (context) => {
     try {
       return context.json({
@@ -265,13 +280,21 @@ export function createApprovalRoutes(
   );
   routes.post("/questions/:id/respond", async (context) => {
     const input = z
-      .strictObject({ response: z.string().trim().min(1).max(6000) })
+      .strictObject({
+        response: z.string().trim().min(1).max(6000),
+        /*
+         * Sent from the open conversation, which runs the answer as its own next turn when that is
+         * where it belongs, live and stoppable, rather than waiting on a turn run out of its sight.
+         */
+        inConversation: z.boolean().optional(),
+      })
       .parse(await context.req.json());
     return context.json(
       await service.answerQuestion(
         context.var.actor.id,
         context.req.param("id"),
         input.response,
+        { inConversation: input.inConversation ?? false },
       ),
     );
   });
@@ -279,6 +302,14 @@ export function createApprovalRoutes(
   routes.get("/:id", async (context) =>
     context.json(
       await service.request(context.var.actor.id, context.req.param("id")),
+    ),
+  );
+  routes.post("/questions/:id/dismiss", async (context) =>
+    context.json(
+      await service.dismissQuestion(
+        context.var.actor.id,
+        context.req.param("id"),
+      ),
     ),
   );
   routes.post("/:id/decision", async (context) => {

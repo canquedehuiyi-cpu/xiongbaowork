@@ -55,7 +55,7 @@ export const TRIGGER_TOOLS: readonly McpToolShape[] = Object.freeze([
   {
     name: "create_trigger",
     description: [
-      "Add an event trigger to one of this person's responsibilities that you carry out, so an outside",
+      "Add an event trigger to one of this person's goals that you carry out, so an outside",
       "event starts a real run of it. Kinds: `webhook` (any system POSTs to a URL), `github`, `linear`,",
       "`sentry`, `pagerduty` (the vendor's signed webhook), `email` (mail to a dedicated address), `slack`",
       "(messages in Slack channels the person is in).",
@@ -76,9 +76,9 @@ export const TRIGGER_TOOLS: readonly McpToolShape[] = Object.freeze([
     inputSchema: {
       type: "object",
       properties: {
-        responsibilityId: {
+        goalId: {
           type: "string",
-          description: "The responsibility's id, from list_responsibilities.",
+          description: "The goal's id, from list_goals.",
         },
         kind: {
           type: "string",
@@ -112,13 +112,13 @@ export const TRIGGER_TOOLS: readonly McpToolShape[] = Object.freeze([
         reactions: stringList,
         channels: stringList,
       },
-      required: ["responsibilityId", "kind"],
+      required: ["goalId", "kind"],
     },
   },
   {
     name: "list_triggers",
     description:
-      "List the event triggers on this person's responsibilities that you carry out: id, kind, responsibility, what it listens for, whether it is paused, and its URL or address. Keys are never listed.",
+      "List the event triggers on this person's goals that you carry out: id, kind, goal, what it listens for, whether it is paused, and its URL or address. Keys are never listed.",
     inputSchema: { type: "object", properties: {} },
   },
   {
@@ -188,12 +188,11 @@ export async function callTriggerTool(
   };
   if (name === "list_triggers") {
     const all = await deps.triggers.listForAgent(ownerUserId, agentId);
-    if (all.length === 0)
-      return "There are no triggers on your responsibilities for me.";
+    if (all.length === 0) return "There are no triggers on your goals for me.";
     return all
       .map(
         (trigger) =>
-          `- ${trigger.kind} on "${trigger.title}" (responsibility ${trigger.responsibilityId}) · ${
+          `- ${trigger.kind} on "${trigger.title}" (goal ${trigger.responsibilityId}) · ${
             trigger.enabled ? "active" : "paused"
           } · ${where(deps, trigger)} · listens for ${JSON.stringify(
             trigger.config.kind === "slack"
@@ -204,11 +203,10 @@ export async function callTriggerTool(
       .join("\n");
   }
   if (name === "create_trigger") {
-    const responsibilityId = str(args.responsibilityId);
+    // `responsibilityId` is what this argument was called before it said goal.
+    const responsibilityId = str(args.goalId) ?? str(args.responsibilityId);
     if (!responsibilityId)
-      throw new ResponsibilityRefusedError(
-        "Say which responsibility, by its id.",
-      );
+      throw new ResponsibilityRefusedError("Say which goal, by its id.");
     const goal = await deps.responsibilities.get(ownerUserId, responsibilityId);
     if (goal.agentId !== agentId) throw new ResponsibilityNotFoundError();
     const kind = str(args.kind);

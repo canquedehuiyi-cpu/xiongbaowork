@@ -13,8 +13,11 @@ import {
   approvalTeamRules,
   approvalTeamSettings,
 } from "../db/schema/approvals";
+import { intelligenceChannelMappings } from "../db/schema/core";
+import { botTasks } from "../db/schema/tasks";
 import { workItems } from "../db/schema/work";
 import type { TaskProjector } from "../tasks/projector";
+import { currentEdition } from "../edition";
 import {
   validateApprovalRecoveryContext,
   type ApprovalAction,
@@ -28,6 +31,8 @@ import {
   DEFAULT_EMPLOYEE_SECURITY,
   type EmployeePolicy,
   type EmployeeSecuritySettings,
+  offersStandingRule,
+  targetSubject,
 } from "./types";
 
 /**
@@ -39,6 +44,15 @@ const DEFAULT_PREFERENCES: ApprovalPreferences = {
   enabled: false,
   autoReview: false,
   hostCommands: "ask",
+};
+/**
+ * One person on their own machine: a Bot gets on with ordinary changes, and only what the safety
+ * policy names asks first (paying, deleting, sending, sharing, publishing; see `policy.ts`), as in the
+ * team edition. Turning "Ask before making changes" on in Settings is the person's to choose.
+ */
+const PERSONAL_PREFERENCES: ApprovalPreferences = {
+  ...DEFAULT_PREFERENCES,
+  enabled: false,
 };
 const DEFAULT_TEAM: ApprovalTeamSettings = {
   enforceAutoReview: false,
@@ -118,6 +132,21 @@ export function createApprovalStore(
 ): ApprovalStore {
   const owned = (owner: string, id: string) =>
     and(eq(approvalRequests.ownerUserId, owner), eq(approvalRequests.id, id));
+  const ruleScope = (action: ApprovalAction) =>
+    and(
+      eq(approvalRules.ownerUserId, action.actorId),
+      eq(approvalRules.botId, action.botId),
+      eq(approvalRules.toolRef, action.toolRef),
+      eq(approvalRules.effect, action.effect),
+      eq(approvalRules.scope, action.scope),
+      // One mailbox's saved rule never answers for another, and a call naming none is answered only
+      // by a rule that names none.
+      action.account
+        ? eq(approvalRules.account, action.account)
+        : isNull(approvalRules.account),
+      eq(approvalRules.behaviour, "allow"),
+      isNull(approvalRules.revokedAt),
+    );
   async function get(owner: string, id: string): Promise<ApprovalRecord> {
     const [row] = await database
       .select()
@@ -151,7 +180,12 @@ export function createApprovalStore(
         .from(approvalPreferences)
         .where(eq(approvalPreferences.ownerUserId, owner))
         .limit(1);
-      return row?.enabled === true;
+      // The same default the policy decides with, so the switch shows what actually happens.
+      if (!row)
+        return currentEdition() === "personal"
+          ? PERSONAL_PREFERENCES.enabled
+          : DEFAULT_PREFERENCES.enabled;
+      return row.enabled === true;
     },
     async setEnabled(owner, enabled) {
       await database
@@ -207,6 +241,10 @@ export function createApprovalStore(
           throw new ApprovalRefusedError(
             "Only an action handed to you can be marked done by you.",
           );
+        if (decision === "allow_always" && !offersStandingRule(request.action))
+          throw new ApprovalRefusedError(
+            "Tasks started from a check-in ask before every change. Allow this once, or deny it.",
+          );
         if (decision === "allow_always")
           await tx.insert(approvalRules).values({
             id: crypto.randomUUID(),
@@ -215,6 +253,7 @@ export function createApprovalStore(
             toolRef: request.action.toolRef,
             effect: request.action.effect,
             scope: request.action.scope,
+            account: request.action.account ?? null,
           });
         const [updated] = await tx
           .update(approvalRequests)
@@ -226,7 +265,8 @@ export function createApprovalStore(
           .where(owned(owner, id))
           .returning();
         if (!updated) throw new ApprovalNotFoundError();
-        await recordAuditEvent(createAuditStore(tx as unknown as Database), {
+        const trail = createAuditStore(tx as unknown as Database);
+        await recordAuditEvent(trail, {
           eventType: "approval.person_decided",
           targetType: "approval",
           targetId: id,
@@ -237,8 +277,16 @@ export function createApprovalStore(
             bot: request.action.botId,
             tool: request.action.toolRef,
             scope: request.action.scope,
+            ...targetSubject(request.action.target),
           },
         });
+        /*
+         * The action's own row for a denial, beside the decision and in the same transaction, so it
+         * is written once. Without it the trail held only the decision: the action itself read as
+         * nothing, or, from the code that asked, as allowed, and the Blocked view never showed it.
+         */
+        if (decision === "deny" && request.action.declined)
+          await recordAuditEvent(trail, request.action.declined);
         await tx
           .insert(workItems)
           .values({
@@ -328,6 +376,33 @@ export function createApprovalStore(
         .orderBy(desc(approvalRules.createdAt));
     },
     policy: createPolicyStore(database),
+    /*
+     * A check-in task's conversation, found by the thread an action names: the task's own turn, the
+     * turn an approval carries on, and the person replying there all run in that thread. Started from
+     * a check-in, so it is work the person did not write out themselves, and every step in it asks
+     * but a read of their own connected app (see `gate` in approvals/service.ts).
+     */
+    async asksEveryChange(owner, threadId) {
+      const [row] = await database
+        .select({ id: botTasks.id })
+        .from(botTasks)
+        .innerJoin(
+          intelligenceChannelMappings,
+          and(
+            eq(intelligenceChannelMappings.channelId, botTasks.channelId),
+            eq(intelligenceChannelMappings.userId, owner),
+          ),
+        )
+        .where(
+          and(
+            eq(botTasks.ownerUserId, owner),
+            eq(botTasks.origin, "check_in"),
+            eq(intelligenceChannelMappings.threadId, threadId),
+          ),
+        )
+        .limit(1);
+      return Boolean(row);
+    },
     async revoke(owner, id) {
       const rows = await database
         .update(approvalRules)
@@ -394,9 +469,13 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
           autoReview: row.autoReview,
           hostCommands: row.hostCommands,
         }
-      : { ...DEFAULT_PREFERENCES };
+      : currentEdition() === "personal"
+        ? { ...PERSONAL_PREFERENCES }
+        : { ...DEFAULT_PREFERENCES };
   };
   const teamSettings = async (): Promise<ApprovalTeamSettings> => {
+    // No team, and no screen for these: a team deployment's values are not read.
+    if (currentEdition() === "personal") return { ...DEFAULT_TEAM };
     const [row] = await database
       .select()
       .from(approvalTeamSettings)
@@ -465,6 +544,7 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
       return next;
     },
     async teamRules() {
+      if (currentEdition() === "personal") return [];
       return database
         .select()
         .from(approvalTeamRules)
@@ -592,7 +672,7 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
         .limit(1);
       return row;
     },
-    async withdrawPending(owner, reason, match) {
+    async withdrawPending(owner, reason, match, options = {}) {
       const pending = await database
         .select()
         .from(approvalRequests)
@@ -621,6 +701,7 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
             )
             .returning({ id: approvalRequests.id });
           if (!rows.length) return false;
+          if (options.resume === false) return true;
           // The waiting conversation resumes with the reason as its result; nothing is executed.
           await tx
             .insert(workItems)
@@ -724,6 +805,7 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
           tool: input.toolRef,
           effect: input.effect,
           scope: input.scope,
+          ...targetSubject(input.target),
           outcome: input.outcome,
         },
       });

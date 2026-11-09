@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import type { TurnRunner } from "@openbot/toolkit/run-turn";
 import type { AgentActor } from "../src/agents/profile-types";
 import type {
   AgentChannel,
@@ -61,8 +62,13 @@ type Recorded = {
   }[];
   enabled: { ownerUserId: string; id: string; enabled: boolean }[];
   turns: Parameters<TurnRunner>[0][];
+<<<<<<< fork
   /** What the firing told the task board (ticket 020), in the order it said it. */
   board: { opened: Record<string, unknown>[]; finished: string[] };
+=======
+  /** Each busy signal, with how many run rows had been closed when it was sent. */
+  busy: { threadId: string; busy: boolean; finishedBefore: number }[];
+>>>>>>> v1.0.0
 };
 
 /**
@@ -102,12 +108,16 @@ function harness(options: {
   failures?: number;
   runTurn?: TurnRunner;
   recordActivity?: () => Promise<void>;
+<<<<<<< fork
   /** The month's ceiling already spent (ticket 022): the firing must not dial the model at all. */
   overQuota?: boolean;
   /** The fatigue count cannot be read (spec C3: the card must still close). */
   failuresError?: Error;
   /** The switch-off cannot be written (spec C3: the card must not claim it happened). */
   setEnabledError?: Error;
+=======
+  signalBusy?: () => Promise<void>;
+>>>>>>> v1.0.0
 }) {
   const closes: Close[] = [];
   const recorded: Recorded = {
@@ -115,11 +125,24 @@ function harness(options: {
     activity: [],
     enabled: [],
     turns: [],
+<<<<<<< fork
     board: { opened: [], finished: [] },
+=======
+    busy: [],
+>>>>>>> v1.0.0
   };
 
   const routineStore: RoutineStore = {
     create: () => unreachable("create"),
+    conversationFor: () => unreachable("conversationFor"),
+    linkGoal: () => unreachable("linkGoal"),
+    startManualRun: () => unreachable("startManualRun"),
+    listRuns: () => unreachable("listRuns"),
+    routineForFiring: () => unreachable("routineForFiring"),
+    reapAbandonedRuns: () => unreachable("reapAbandonedRuns"),
+    recordSweep: () => unreachable("recordSweep"),
+    lastSweptAt: () => unreachable("lastSweptAt"),
+    markUnschedulable: () => unreachable("markUnschedulable"),
     listFor: () => unreachable("listFor"),
     update: () => unreachable("update"),
     remove: () => unreachable("remove"),
@@ -158,6 +181,10 @@ function harness(options: {
     setPinned: () => unreachable("channels.setPinned"),
     markRead: () => unreachable("channels.markRead"),
     softDelete: () => unreachable("channels.softDelete"),
+    direct: () => unreachable("channels.direct"),
+    signalChannelBusy: () => unreachable("channels.signalChannelBusy"),
+    signalWork: () => unreachable("channels.signalWork"),
+    workIn: () => unreachable("channels.workIn"),
 
     async get(actor, channelId) {
       expect(actor).toEqual(OWNER);
@@ -167,6 +194,14 @@ function harness(options: {
     async recordActivity(actor, channelId, activity) {
       recorded.activity.push({ actor, channelId, activity });
       if (options.recordActivity) await options.recordActivity();
+    },
+    async signalBusy(threadId, busy) {
+      recorded.busy.push({
+        threadId,
+        busy,
+        finishedBefore: recorded.finished.length,
+      });
+      if (options.signalBusy) await options.signalBusy();
     },
   };
 
@@ -210,6 +245,11 @@ describe("createRoutineRunner", () => {
         ownerUserId: CONTEXT.ownerUserId,
         // Carried so the turn's audit rows say a routine ran this, not that the owner did.
         routineId: CONTEXT.routineId,
+        telemetry: {
+          trigger: "routine",
+          surface: "unknown",
+          rootTaskId: RUN_ID,
+        },
         agentId: CONTEXT.agentId,
         threadId: CHANNEL.threadId,
         instruction: CONTEXT.instruction,
@@ -319,7 +359,11 @@ describe("createRoutineRunner", () => {
       activity: [],
       enabled: [],
       turns: [],
+<<<<<<< fork
       board: { opened: [], finished: [] },
+=======
+      busy: [],
+>>>>>>> v1.0.0
     });
   });
 
@@ -400,6 +444,54 @@ describe("createRoutineRunner", () => {
     expect(recorded.activity[0]?.activity.text).toBe(
       "This routine failed: not an Error object",
     );
+  });
+  /*
+   * The conversation reads "a routine is running" from the open run row, so the signal that says
+   * it is over has to come after the row is closed. Sent before, the event would still list the
+   * routine and the row would stay on screen until something else happened in the conversation.
+   */
+  test("shows the conversation working while it fires, and clears it after the run is closed", async () => {
+    const { runner, recorded } = harness({});
+
+    await runner.run(RUN_ID);
+
+    expect(recorded.busy).toEqual([
+      { threadId: CHANNEL.threadId, busy: true, finishedBefore: 0 },
+      { threadId: CHANNEL.threadId, busy: false, finishedBefore: 1 },
+    ]);
+  });
+
+  test("clears the working signal when the turn fails", async () => {
+    const { runner, recorded } = harness({
+      runTurn: throwingTurn,
+      failures: 2,
+    });
+
+    await runner.run(RUN_ID);
+
+    expect(recorded.busy.map((signal) => signal.busy)).toEqual([true, false]);
+    expect(recorded.busy.at(-1)?.finishedBefore).toBe(1);
+  });
+
+  test("still runs and records the firing when the working signal cannot be sent", async () => {
+    const { runner, recorded } = harness({
+      signalBusy: async () => {
+        throw new Error("the socket is down");
+      },
+    });
+
+    await runner.run(RUN_ID);
+
+    expect(recorded.turns).toHaveLength(1);
+    expect(recorded.finished).toEqual([{ runId: RUN_ID, status: "succeeded" }]);
+  });
+
+  test("signals nothing for a firing that never runs", async () => {
+    const { runner, recorded } = harness({ channel: null });
+
+    await runner.run(RUN_ID);
+
+    expect(recorded.busy).toEqual([]);
   });
 });
 

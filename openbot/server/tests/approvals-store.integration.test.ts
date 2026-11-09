@@ -6,9 +6,9 @@ import type { AppVariables } from "../src/app-variables";
 import { createApprovalService } from "../src/approvals/service";
 import { createApprovalStore } from "../src/approvals/store";
 import {
-  approvalAction,
-  ApprovalNotFoundError,
   type ApprovalCandidate,
+  ApprovalNotFoundError,
+  approvalAction,
 } from "../src/approvals/types";
 import { createAdminScope } from "../src/auth/admin-scope";
 import { createRoleRepository } from "../src/auth/guards";

@@ -4,7 +4,11 @@ import {
   createGithubResponsibilityRoutes,
   type GithubResponsibilityBinding,
 } from "../src/responsibilities/github";
-import type { ResponsibilityEvent } from "../src/responsibilities/types";
+import {
+  type ResponsibilityEvent,
+  ResponsibilityEvent,
+  responsibilityEventSchema,
+} from "../src/responsibilities/types";
 import { isTenantFramed, requireTenant } from "../src/tenant/context";
 
 const secret = "fixture-only-github-secret";
@@ -103,6 +107,7 @@ test("the same signed event replayed with a fresh X-GitHub-Delivery dedupes", as
   expect(events).toHaveLength(2);
   expect(events[0]?.externalId).toBe(events[1]?.externalId as string);
 });
+<<<<<<< fork
 test("the binding is read as platform and the event ingested in the binding's own tenant (G01)", async () => {
   const { routes, events, frames } = fixture();
   const response = await routes.fetch(
@@ -132,4 +137,50 @@ test("a binding stamped as nobody's, or with somebody other than its owner, is u
     expect(response.status).toBe(404);
     expect(events).toHaveLength(0);
   }
+=======
+test("a pull request event larger than 32 KiB is accepted and fitted to the ledger cap", async () => {
+  const { routes, events } = fixture();
+  // A real `pull_request` delivery for an OpenBot PR is 26–57 KB: the PR object alone repeats the
+  // repository under `head` and `base`. Before, every one over 32 KiB was answered 503.
+  const body = JSON.stringify({
+    action: "synchronize",
+    number: 949,
+    pull_request: { title: "A change", body: "x".repeat(40_000) },
+    repository: { full_name: "openbot/demo" },
+  });
+  expect(body.length).toBeGreaterThan(32_768);
+  const delivery = request(body);
+  delivery.headers.set("x-github-event", "pull_request");
+  const response = await routes.fetch(delivery);
+  expect(response.status).toBe(202);
+  const event = events[0];
+  expect(event?.type).toBe("pull_request.synchronize");
+  expect(event?.payload).toMatchObject({ truncated: true, number: 949 });
+  // What the Bot is handed still names the pull request.
+  expect(String(event?.payload.excerpt)).toContain('"title":"A change"');
+  // The engine refuses a payload over 32 KiB; what the route hands it must pass that check.
+  expect(responsibilityEventSchema.safeParse(event).success).toBe(true);
+});
+test("a body over the route limit is refused as too large, not as an outage", async () => {
+  const { routes, events } = fixture();
+  const body = JSON.stringify({
+    repository: { full_name: "openbot/demo" },
+    pull_request: { body: "x".repeat(300 * 1024) },
+  });
+  expect((await routes.fetch(request(body))).status).toBe(413);
+  expect(events).toHaveLength(0);
+});
+test("a pull request event under 32 KiB is handed on whole", async () => {
+  const { routes, events } = fixture();
+  const payload = {
+    action: "opened",
+    number: 7,
+    pull_request: { title: "Small", body: "x".repeat(20_000) },
+    repository: { full_name: "openbot/demo" },
+  };
+  expect((await routes.fetch(request(JSON.stringify(payload)))).status).toBe(
+    202,
+  );
+  expect(events[0]?.payload).toEqual(payload);
+>>>>>>> v1.0.0
 });

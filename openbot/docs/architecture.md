@@ -75,9 +75,11 @@ startup.
 
 `agent-computer` requires `COMPUTER_TOKEN` and permits only `/health` without it. Docker Compose binds it to `127.0.0.1:4100`.
 
+A computer made for one person or one isolated Bot, by the supervisor or as a Sandbox, never holds the deployment's `COMPUTER_TOKEN`. It holds its own, `HMAC-SHA256(COMPUTER_TOKEN, "openbot computer token v1\n<kind>:<id>")` for whose computer it is, and the server derives the same value whenever it calls that computer. A Bot can run anything on its own person's computer, root included, and can read the token that computer was started with; that token opens that computer and no other. A computer created before this, holding the deployment's token, is replaced with its volumes kept the next time it is used. The one shared computer is not a boundary between people and keeps the deployment's token.
+
 Compose puts it on a different network from PostgreSQL. A Bot has a shell, and a shell reaches whatever its container reaches, so the database is on a `data` network carrying only itself and `migrate`, and everything else is on `default`. A deployment that runs the API server inside Compose rather than on the host joins it to both, which is the one place the two meet.
 
-With `COMPUTER_SUPERVISOR_URL`, each Bot gets its own computer container, workspace volume, and browser profile. Without it, all Bots share `AGENT_COMPUTER_URL`.
+With `COMPUTER_SUPERVISOR_URL`, each person gets a computer container of their own, and every Bot they use has its own folder and browser profile in it; a Bot marked Isolated gets a container of its own instead. Without it, all Bots share `AGENT_COMPUTER_URL`, still with a profile and folder for each person and Bot.
 
 Each computer also filters its own outbound connections. The browser and shell commands go through a filter proxy that applies the Bot's network policy (`allow_all`, `defaults_plus_allowlist`, `allowlist_only` or `deny_all`, which is what a Bot gets when its owner's Cloud network access is switched off). The server pushes the policy before the computer acts and whenever it wakes, and until one arrives nothing may leave. `EGRESS_POLICY_REQUIRED=0` is for a computer run with no API server. Cloud metadata addresses are refused in every mode. A process that ignores the proxy variables and opens a raw socket is not stopped by this; that is a Kubernetes NetworkPolicy's job.
 
@@ -153,7 +155,7 @@ Secret entry is separate from chat content. The audit trail records that a secre
 
 ## Watching a Bot work
 
-Two surfaces beside the conversation. The screen is the live browser, proxied over a websocket and gated on the same question as every other route about that Bot. The Activity tab is what the Bot did away from the browser: every command with its output and exit code, every file read, write and listing, newest first.
+Two surfaces beside the conversation. The screen is the live browser, proxied over a websocket and gated on the same question as every other route about that Bot. The Activity list under it is what the Bot did away from the browser: every command with its output and exit code, every file read, write and listing, newest first.
 
 Activity is held in the browser for the open conversation and is gone on reload. It is a window rather than a record; the record is the audit trail, which is server-side, survives restarts, and is what an investigation reads. A saved file contributes its path and size and never its contents, matching the write route, which declines to echo them because a Bot may be saving something it was told in confidence.
 
@@ -167,7 +169,16 @@ A coworker is a durable Bot profile:
 
 A channel is a conversation with one coworker and a thread mapping. Starting a new channel creates a new thread.
 
+<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
 A group conversation holds several Bots. A thread admits exactly one agent, so each Bot gets a thread of its own in the group (`group_bot_threads`), and what the people in it read is a shared transcript (`group_messages`) with every reply attributed to its speaker. A Bot that names a peer as `@Name` hands the conversation to it under the same grant, caps and audit rows as any other hop.
+=======
+For a message with no named Bot, the intent router chooses from the person's roster. If it cannot
+choose confidently, a unique app holder may receive the message instead of the default Bot. When
+different named apps point to different unique holders, that fallback is ambiguous and the default
+stays selected; roster order does not decide which Bot owns the conversation.
+
+A group conversation holds several Bots. An Intelligence thread admits exactly one agent, so each Bot gets a thread of its own in the group (`group_bot_threads`), and what the people in it read is a shared transcript (`group_messages`) with every reply attributed to its speaker. A Bot that names a peer as `@Name` hands the conversation to it under the same grant, caps and audit rows as any other hop.
+>>>>>>> v1.0.0
 
 Who may reach one is decided by membership: every channel route resolves the caller in
 `channel_memberships` and refuses without a row. `channels.allowed_groups` is declared in the
@@ -236,16 +247,25 @@ Four things are decided by the deployment and never by the model:
 The second Bot runs as the same person, with its own role and its own grants, so it sees what that
 person may see and no more.
 
+<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
 **The answer lands in that Bot's own conversation with the person.** Not the conversation that asked,
 and this is a property of a thread rather than a choice: a thread is owned by
 exactly one agent. So the conversation that asked says where the work went, and the one that answers
 moves to the top of the roster with an unread mark. The person gets both halves.
+=======
+**The answer lands in the conversation that asked, under the answering Bot's name.** An Intelligence
+thread is owned by exactly one agent, so the second Bot cannot run in the first Bot's thread. It runs
+in a scratch thread of its own that no channel shows, and its words then come home as a second hop:
+the deployment writes them, word for word, into the asking conversation as a message whose id names
+the Bot that said them (`bot-answer:<bot>:<run>`), and the transcript draws that message under the
+answering Bot's face and name. No model runs for that second hop, and the asking Bot does not say the
+answer over in its own voice.
+>>>>>>> v1.0.0
 
-What the answering conversation keeps is one line saying who asked and what for, not the envelope.
-Those are two texts with two readers: the model needs the task, the constraints and the shape of a
-good answer, while a person scrolling needs to know why that Bot suddenly spoke. The asking
-conversation's history is read by the addressed Bot as context and is not repeated into the
-transcript.
+The addressed Bot is told which Bot it is and who asked, and reads the asking conversation as context
+set out inside the ask, each turn attributed to whoever said it. It is never handed that conversation
+as turns of its own: every word in it was said to the asking Bot, and read as its own, a person's
+"ask Knowledge, do not answer it yourself" tells Knowledge not to answer.
 
 **A hop that fails for good is said out loud.** When one runs out of attempts, the asking Bot is sent
 back into the conversation the person is watching to say plainly that nothing came back. Otherwise a
@@ -306,15 +326,17 @@ MCP servers and skills share the plugin grant table, but they have different own
 - MCP tools are admin-governed because they can reach external systems with stored credentials.
 - Skills are reusable instructions. A person can create personal skills and attach them only to Bots they own. Administrators create deployment skills.
 
-The curated MCP catalogue contains Parallel Search (anonymous, or with this deployment's API key; see [parallel-research.md](parallel-research.md)), Google Drive, Notion, and the built-in Routines server. Custom MCP servers must pass URL checks; unknown tools and custom-server tools are treated as writes unless positively classified as reads.
+The curated MCP catalogue contains the public-web research providers Parallel, Exa and Firecrawl (see [web-research.md](web-research.md)), Google Drive, Notion, and the built-in Routines server. Custom MCP servers must pass URL checks; unknown tools and custom-server tools are treated as writes unless positively classified as reads.
 
 A catalogue entry says whose credential a Bot reaches it with, which is a different question from whether it is reachable at all. A deployment-wide token answers the same for everybody; Google Drive and Notion are both `user-oauth`, so a Bot reaches them as the person asking and sees only what that person can see. An administrator enabling the connector and a person connecting their own account are two decisions, and neither can be made for the other. See [Google Drive](plugins/google-drive.md) and [Notion](plugins/notion.md).
 
 Every MCP call checks the grant first, then evaluates the same action policy engine with MCP context, then audits the result.
 
+Whether a person can use an app through a Bot is answered once, on the server, from those same facts — the app's row, the Bot's grants, the person's own connection, a Shared app's team account — as one of six states: `ready`, `not_connected`, `reconnect`, `shared_not_connected`, `disabled` or `not_granted` (`server/src/plugins/app-access.ts`). The last three are an administrator's to fix, so a person can file a request (`app_access_requests`) for exactly what the state is missing, and approving one performs it — switching the app on, granting it to the Bot — through the same code paths the admin screens use. See [Composio](plugins/composio.md#what-an-app-is-for-one-person-on-one-bot).
+
 ### Writing a skill in a conversation
 
-A skill can be written from the composer as well as from `/skills`. The deployment ships a skill called `skill-creator` whose instruction is how to interview somebody about the skill they want; a Bot holding it is also offered four tools the app registers — `list_skills`, `read_skill`, `list_skill_tools`, and `save_skill`, which suspends the run on a card showing the command, the title and the whole instruction. Nothing is written until the person presses the button.
+A skill can be written from the composer as well as from `/capabilities/skills`. The deployment ships a skill called `skill-creator` whose instruction is how to interview somebody about the skill they want; a Bot holding it is also offered four tools the app registers — `list_skills`, `read_skill`, `list_skill_tools`, and `save_skill`, which suspends the run on a card showing the command, the title and the whole instruction. Nothing is written until the person presses the button.
 
 The grant is the gate. Those four tools are offered only while the Bot holds `skill-creator`, because four extra tools on every run costs the narrowing above what it exists to buy, and a Bot for looking up transactions has no business drafting skills.
 
@@ -331,6 +353,16 @@ Skills come from two places: a person writes one, or the tenant package ships on
 A skill declares the tools it needs (`skill_tools`). Before the run starts, the deployment asks its own model which skills the message needs, and the Bot is built with those skills' tools plus every granted tool no skill claims. A declaration grants nothing: the offer is always intersected with what the Bot was already granted, so writing a skill can never hand anybody a tool.
 
 This narrows the offer. It is not a boundary, and it never substitutes for one. The grant, the policy and the audit row decide what may happen; this decides only what the model can see. Every way it can fail — no skills declared, a model that cannot answer, a message that matches nothing, twelve tools or fewer — leaves the whole catalogue offered, because a narrowing that failed closed would remove capability an administrator granted, silently. `mcp.tools_discovered` records what was offered, out of how much, and why.
+
+### Holding more tools than one request carries
+
+Offered is not always sent. One app approval can grant a Bot hundreds of tools (Shopify brought 239), and every tool sent on every step costs context and worsens the model's choice; Chat Completions refuses a request with more than 128, and the Responses API caps the compiled size of the strict schemas in one request. So past fifty tools, an app's offered tools wait behind one ordinary tool, `search_tools` (`server/src/agents/tool-search.ts`), unless a chosen skill asked for them or they find sources on the web. The Bot's own tools stay in front of the model on every step.
+
+The model searches in a few words, and the tools a search names are sent from its next step on, under their real names, for the next few turns. Which tools those are is read back from the search answers in the conversation itself, so nothing is held between steps or on any one replica. The runtime fixes a run's tools when it starts, so this is done by wrapping the model (`withToolSearch`): every step passes through it, and it decides which tool definitions go up.
+
+Like narrowing, this is not a boundary. Every granted tool stays registered with the runtime and executes through the plugin store's `callTool`, so a waiting tool is checked, evaluated and audited exactly as a shown one is, and a search ranks only what the Bot was granted. The providers' own tool search (`tool_search`, `defer_loading`) is not used: replayed through the runtime it breaks a conversation from its second turn, and it exists only on some models and APIs.
+
+Before the model call, a run is counted (`toolNamesSent`, without what waits). A run that would still send more than Chat Completions accepts, or more than search allows, is refused with a sentence, and the audit trail records `agent.tool_limit_refused`.
 
 ## Personal memory
 
@@ -372,7 +404,7 @@ Required package files:
 Optional: `skills.yaml`, `theme.css`, and an `agents/` directory holding a coworker per file, read
 alongside `agents.yaml`. See [configuration.md](configuration.md#agents).
 
-The server validates the package at startup. Channel agent IDs must match declared agents. Knowledge sources currently support Google Drive and Microsoft OneDrive declarations.
+The server validates the package at startup. Channel agent IDs must match declared agents. `knowledge.yaml` accepts Google Drive and Microsoft OneDrive declarations and is validated, but nothing reads it yet; see [configuration.md](configuration.md#knowledgeyaml).
 
 Connector credentials are stored through the credential vault and referenced by id, not stored inline in YAML.
 
@@ -387,7 +419,7 @@ Connector credentials are stored through the credential vault and referenced by 
 - Signing in, being refused, and being granted the administrator role by configuration each write an audit row. They are the only record that somebody who can edit `INITIAL_ADMIN_EMAILS` promoted themselves, and the only evidence a revoked person was ever here, since revoking them deletes their sessions.
 - Removing somebody deletes their sessions and denies their address, because deleting the user row alone is not removal: the next sign-in through the provider recreates it.
 - With no identity provider configured, the deployment refuses to start unless `OPENBOT_SINGLE_USER=true` says every request may be one fixed administrator. That flag is the only thing that permits it; `NODE_ENV` does not. The flag alone is not enough on a public address: if `OPENBOT_PUBLIC_URL`, `OPENBOT_APP_URL` or any `TRUSTED_ORIGINS` entry resolves to an address the public internet routes to, the deployment refuses to start anyway, because no sign-in there means every visitor is the administrator. Loopback is silent, and a private address (a home LAN, a Tailnet, a VPN, a `.local` name) is allowed with a warning naming it, since that is the deployment the flag exists for.
-- `KEY_ENCRYPTION_KEY` must be a base64-encoded 32-byte value. The example key is refused with `NODE_ENV=production`.
+- `KEY_ENCRYPTION_KEY` must be a base64-encoded 32-byte value. The example key is refused with `NODE_ENV=production`. A vault read or decryption fault stops an OAuth client lookup without registering a replacement, so a misconfigured replica cannot replace a client still usable by the others. Connect records `mcp.oauth_client_read_failed` with the authenticated person and server before returning a safe 503; raw vault errors and causes are neither retained nor included in the audit payload.
 - Credential plaintext is encrypted at rest, never returned by APIs, and redacted from audit events.
 - Browser navigation allows `http` and `https`; cloud metadata addresses are refused under every configuration.
 - `POST /api/model-provider/v1/chat/completions` exists only when `OPENBOT_MODEL_OAUTH_FILE` names a model credential file, which the desktop app sets and nothing else does. It answers a Chat Completions request using a stored Google or xAI OAuth grant. It does not use the session guard: the caller presents a separate local bearer taken from that file and compared in constant time, and the provider's own refresh token never leaves the server. The credential file is refused unless it is a regular file under 64KB with no group or other permission bits, and the upstream host, path and headers are fixed so a caller cannot redirect the request.

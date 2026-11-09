@@ -1,3 +1,4 @@
+import type { HeadlessWaiting } from "@openbot/toolkit/headless-tools";
 import {
   boolean,
   index,
@@ -17,7 +18,6 @@ import type {
   ResponsibilitySource,
   ResponsibilitySubscription,
 } from "../../responsibilities/types";
-import type { HeadlessWaiting } from "@openbot/toolkit/headless-tools";
 import { agents, credentials, users } from "./core";
 import { jsonb } from "./json";
 import { tenantId } from "./tenant";
@@ -58,6 +58,8 @@ export const responsibilities = pgTable(
       .$type<ResponsibilitySubscription[]>()
       .notNull()
       .default([]),
+    /** Done again and again, and never completed by one of its runs. See `GoalRepeats`. */
+    recurring: boolean("recurring").notNull().default(false),
     completedAt: timestamp("completed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

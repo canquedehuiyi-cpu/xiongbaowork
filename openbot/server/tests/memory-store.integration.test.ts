@@ -1,8 +1,15 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
+import { connectAppRefusal } from "@openbot/shared/connect-prompt";
+import {
+  and,
+  eq,
+  inArray,
+  like,
+} from "drizzle-orm";
+import { createBotReset } from "../src/agents/lifecycle-reset";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { and, eq, inArray, like } from "drizzle-orm";
 import { createAuditStore } from "../src/audit";
 import { createCredentialStore } from "../src/credentials";
 import { createDatabase } from "../src/db/client";
@@ -13,7 +20,10 @@ import { mcpServers, mcpTools } from "../src/db/schema/plugins";
 import { createMemoryIngestion } from "../src/memory/ingestion";
 import { createMemoryStore } from "../src/memory/store";
 import { MemoryNotFoundError, MemoryRefusedError } from "../src/memory/types";
-import { createPluginStore } from "../src/plugins/store";
+import {
+  createPluginStore,
+  PluginRefusedError,
+} from "../src/plugins/store";
 import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
@@ -36,8 +46,11 @@ const asOther = <T>(fn: () => Promise<T>) => runAsTenant(other, fn);
 let vendorText =
   '[{"id":"doc1","text":"Project launch is Tuesday","title":"Roadmap"}]';
 let vendorError = false;
+/** Thrown by the vendor instead of answering, when set: how a refused call reaches a sync. */
+let vendorThrows: Error | null = null;
 const calls: { actorId?: string; botId?: string }[] = [];
 const plugins = createPluginStore({
+  brokerProvider: "composio",
   database,
   auditStore: createAuditStore(database),
   credentials: createCredentialStore(database),
@@ -45,6 +58,7 @@ const plugins = createPluginStore({
   policy: () => ({ mode: "enforce", deny: [], allow: ["true"] }),
   callVendor: async (connection) => {
     calls.push(connection);
+    if (vendorThrows) throw vendorThrows;
     return { text: vendorText, isError: vendorError };
   },
 });
@@ -119,6 +133,28 @@ beforeAll(async () => {
     await plugins.grant("mcp", ref, bot, owner);
     await plugins.grant("mcp", `${server}/write_document`, bot, owner);
   });
+<<<<<<< fork
+
+=======
+  await database.insert(mcpTools).values([
+    {
+      serverId: server,
+      name: "read_documents",
+      vendorName: "read_documents",
+      effect: "read",
+      inputSchema: {},
+    },
+    {
+      serverId: server,
+      name: "write_document",
+      vendorName: "write_document",
+      effect: "write",
+      inputSchema: {},
+    },
+  ]);
+  await plugins.grant("mcp", ref, bot, owner);
+  await plugins.grant("mcp", `${server}/write_document`, bot, owner);
+>>>>>>> v1.0.0
 });
 afterAll(async () => {
   await runAsTenant("platform", async () => {
@@ -229,6 +265,7 @@ test("deleted imported fact cannot resurrect during the next sync", () =>
     const value = await source();
     const fact = (await store.list(owner)).find(
       (row) => row.sourceId === value.id,
+<<<<<<< fork
     );
     if (!fact) throw new Error("Expected imported memory.");
     await store.remove(owner, fact.id);
@@ -337,6 +374,51 @@ test("a resync of a healthy source keeps its facts in recall while it runs", () 
     ).toBe(true);
     // A source whose last sync failed stays hidden while it retries, as above.
     await store.failSync(owner, value.id, "Vendor unavailable");
+=======
+    ),
+  ).toBe(false);
+  expect((await store.getSource(owner, value.id)).syncStatus).toBe("error");
+  vendorError = false;
+});
+test("a refusal carrying an app card is said for the sources page, not stored raw", async () => {
+  const value = await source();
+  vendorThrows = new PluginRefusedError(
+    connectAppRefusal({
+      serverId: server,
+      title: "Docs",
+      message:
+        "Your Docs account is no longer connected at the vendor. Reconnect it and ask again.",
+      reason: "reconnect",
+    }),
+    null,
+  );
+  try {
+    await expect(ingestion.sync(owner, value.id)).rejects.toBeInstanceOf(
+      PluginRefusedError,
+    );
+    const { syncError } = await store.getSource(owner, value.id);
+    expect(syncError).toBe(
+      "Your Docs account needs reconnecting. Reconnect it under Connections, then sync again.",
+    );
+    expect(syncError).not.toContain("[connect-app]");
+  } finally {
+    vendorThrows = null;
+  }
+});
+test("source leases prevent competing connector calls", async () => {
+  const value = await source();
+  const results = await Promise.all([
+    store.claimSync(owner, value.id),
+    store.claimSync(owner, value.id),
+  ]);
+  expect(results.filter(Boolean)).toHaveLength(1);
+  await store.failSync(owner, value.id, "Test lease released");
+});
+test("removing a source deletes its imported records", async () => {
+  const value = await source();
+  await store.removeSource(owner, value.id);
+  expect(
+>>>>>>> v1.0.0
     await database
       .update(memorySources)
       .set({ nextSyncAt: new Date(0) })
@@ -539,4 +621,106 @@ test("migration 0115 restamps routines, sources, their imported facts and respon
         .where(like(memorySources.id, `${realm}-%`)),
     ),
   ).toEqual([]);
+});
+
+test("the same fact formed by two Bots is kept for each, and each recalls only its own", async () => {
+  const content = `Two-Bot fact ${randomUUID()}`;
+  try {
+    const first = await store.formMemory(owner, {
+      agentId: bot,
+      content,
+      sourceApp: "Docs",
+    });
+    const second = await store.formMemory(owner, {
+      agentId: otherBot,
+      content,
+      sourceApp: "Docs",
+    });
+    expect(first.duplicate).toBe(false);
+    expect(second).toMatchObject({ duplicate: false, forgotten: false });
+    expect(second.id).not.toBe(first.id);
+    // The same Bot forming it again is still a duplicate of its own row.
+    expect(
+      await store.formMemory(owner, {
+        agentId: otherBot,
+        content,
+        sourceApp: "Docs",
+      }),
+    ).toEqual({ id: second.id, duplicate: true, forgotten: false });
+    const term = content.slice(-12);
+    expect(
+      (await ingestion.recall(owner, bot, term)).map((row) => row.id),
+    ).toEqual([first.id]);
+    expect(
+      (await ingestion.recall(owner, otherBot, term)).map((row) => row.id),
+    ).toEqual([second.id]);
+  } finally {
+    await database
+      .delete(personalMemories)
+      .where(eq(personalMemories.content, content));
+  }
+});
+
+test("a fact the person forgot from one Bot is not formed again by another", async () => {
+  const content = `Forgotten fact ${randomUUID()}`;
+  const later = `Forgotten later ${randomUUID()}`;
+  const formed: string[] = [];
+  const form = async (agentId: string, text: string) => {
+    const result = await store.formMemory(owner, {
+      agentId,
+      content: text,
+      sourceApp: "Docs",
+    });
+    formed.push(result.id);
+    return result;
+  };
+  try {
+    const first = await form(bot, content);
+    await store.remove(owner, first.id);
+    expect(await form(otherBot, content)).toEqual({
+      id: first.id,
+      duplicate: true,
+      forgotten: true,
+    });
+    // Also when the other Bot had already formed it before the person forgot the first copy.
+    const mine = await form(bot, later);
+    await form(otherBot, later);
+    await store.remove(owner, mine.id);
+    expect(await form(otherBot, later)).toEqual({
+      id: mine.id,
+      duplicate: true,
+      forgotten: true,
+    });
+  } finally {
+    // A forgotten row keeps no content, so it is found by id.
+    await database
+      .delete(personalMemories)
+      .where(inArray(personalMemories.id, formed));
+  }
+});
+
+test("resetting one Bot leaves another Bot's copy of the same fact", async () => {
+  const content = `Reset fact ${randomUUID()}`;
+  const reset = createBotReset({ database, softDeleteChannel: async () => {} });
+  try {
+    await store.formMemory(owner, { agentId: bot, content, sourceApp: "Docs" });
+    const kept = await store.formMemory(owner, {
+      agentId: otherBot,
+      content,
+      sourceApp: "Docs",
+    });
+    await reset.execute({ id: owner, role: "user" }, bot);
+    const rows = await database
+      .select({
+        id: personalMemories.id,
+        agentId: personalMemories.formedByAgentId,
+      })
+      .from(personalMemories)
+      .where(eq(personalMemories.content, content));
+    expect(rows).toEqual([{ id: kept.id, agentId: otherBot }]);
+  } finally {
+    await database
+      .delete(personalMemories)
+      .where(eq(personalMemories.content, content));
+  }
 });

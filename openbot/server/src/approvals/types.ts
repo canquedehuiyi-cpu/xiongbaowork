@@ -1,12 +1,13 @@
 import type { ContinuationReceipt } from "./continuation-protocol";
 import { createHash } from "node:crypto";
 import { RunAgentInputSchema } from "@ag-ui/core/schemas";
-import type { AuditInitiator } from "../audit";
 import {
   type ApprovalContinuation,
   currentApprovalContext,
   withApprovalContext,
 } from "@openbot/toolkit/continuation";
+import type { AuditEventInput, AuditInitiator } from "../audit";
+import { cutAtCodeUnits } from "../channels/text";
 
 /** `handled` answers a hand-off: the person did it themselves, so it is never executed for them. */
 export type ApprovalDecision =
@@ -75,7 +76,13 @@ export type ApprovalPolicyOutcome = {
     | "auto_review"
     | "default"
     /** The person already declined this action, or an equivalent, earlier in this conversation. */
-    | "person_declined";
+    | "person_declined"
+    /**
+     * A task started from a check-in item: every change it makes asks first, whatever the person's
+     * "Ask before making changes" says (tasks/turn.ts). Kept apart from `default` so turning that
+     * switch off, or saving an allow rule, never withdraws what a task is waiting on.
+     */
+    | "task";
   reason: string;
   ruleId?: string;
   review?: {
@@ -137,6 +144,33 @@ export type ApprovalCandidate = {
   display?: { description?: string };
   subject?: ApprovalSubject;
   continuation?: ApprovalContinuation;
+  /**
+   * A reviewed read of the person's own app: a tool on an app they connected with their own account,
+   * named on a reviewed read list (`reviewedRead` in plugins/catalogue.ts). Chat goes on judging a
+   * call by `effect`; in a task's conversation this is the one kind of call that runs without asking.
+   * Not part of what the person approves, so not in the action's digest.
+   */
+  ownConnectionRead?: true;
+  /**
+   * The app marks this tool as destroying something: MCP's `destructiveHint`, or a broker's
+   * destructive flag, as recorded when the app was listed (`mcpTools.destructive`). It asks as
+   * deleting does, whatever the tool is called (see `safetyRequirement` in ./policy). A fact about
+   * the tool, not about this call, so not in the action's digest.
+   */
+  destructive?: true;
+  /**
+   * The row the trail records for this action if the person denies it, built by the code that would
+   * have carried it out, so a denial reads like that surface's other refusals and lands in the
+   * Blocked view. Written once, with the decision, in the transaction that saves it. Not part of what
+   * the person approves, so not in the action's digest.
+   */
+  declined?: AuditEventInput;
+  /**
+   * Which of the person's accounts at an app the call runs in, by the address the person knows it
+   * by, where they hold more than one. Part of what makes two actions the same action: a call to one
+   * mailbox is never answered by an approval, a denial or a saved rule about another.
+   */
+  account?: string;
 };
 export type ApprovalAction = ApprovalCandidate & {
   runId: string;
@@ -177,6 +211,8 @@ export type ApprovalRule = {
   effect: string;
   scope: string;
   behaviour: RuleBehaviour;
+  /** The one account the rule is for, or null for the app whichever account; see `ruleMatches`. */
+  account?: string | null;
   revokedAt: Date | null;
   createdAt: Date;
 };
@@ -283,11 +319,15 @@ export type ApprovalPolicyStore = {
   /**
    * Close this person's pending requests that `match` selects without executing them: the waiting
    * conversation is resumed with `reason` as the result, and each is audited.
+   *
+   * `resume: false` closes them and carries nothing on, for a run that has already ended and been
+   * answered another way: a subagent's, which handed its action back to the Bot that started it.
    */
   withdrawPending(
     ownerUserId: string,
     reason: string,
     match: (action: ApprovalAction) => boolean,
+    options?: { resume?: boolean },
   ): Promise<string[]>;
   /**
    * The owner's side of one Bot (SEC1 D9): its owner, the owner's rules and its security floors,
@@ -312,6 +352,8 @@ export type ApprovalPolicyStore = {
     scope: string;
     outcome: ApprovalPolicyOutcome;
     initiator?: AuditInitiator;
+    /** What the action was aimed at, so the row can name the file or page it was about. */
+    target?: unknown;
   }): Promise<void>;
 };
 export type ApprovalPermit = {
@@ -346,12 +388,46 @@ export type ApprovalStore = {
   finish(ownerUserId: string, id: string): Promise<void>;
   rules(ownerUserId: string): Promise<ApprovalRule[]>;
   revoke(ownerUserId: string, id: string): Promise<void>;
+  /**
+   * Whether this thread is the conversation of a task the person started from a check-in item,
+   * where every change asks first. Absent where there are no tasks.
+   */
+  asksEveryChange?(ownerUserId: string, threadId: string): Promise<boolean>;
   policy?: ApprovalPolicyStore;
 };
+/** Whether an approval may be answered with "Always allow here". Shared with the browser. */
+export { offersStandingRule } from "@openbot/shared/standing-rule";
 export class ApprovalRefusedError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "ApprovalRefusedError";
+  }
+}
+/**
+ * The policy wants to ask, and the call arrived with no conversation to ask in.
+ *
+ * A browser sends a Bot's look at a page (a navigation, a snapshot) straight to the computer; only its
+ * changes travel through the approval route that carries the conversation. A rule can still ask about
+ * a look. Marked apart from other refusals so the computer routes can say so, and the browser can send
+ * the same call again through that route, where the person is asked, instead of handing the Bot a
+ * refusal it can only apologise for.
+ */
+export class ApprovalNeedsConversationError extends ApprovalRefusedError {
+  constructor() {
+    super(
+      "This action needs your approval, but it was not started from a conversation that can ask you. Nothing was done. Ask for it in a chat with this Bot, or change your rules in Settings → Approvals.",
+    );
+    this.name = "ApprovalNeedsConversationError";
+  }
+}
+/**
+ * This same call was answered already: it was denied, it failed, or its approval was used. What it
+ * got then is what it gets now. Nothing new was turned away, so the action's code records nothing new.
+ */
+export class ApprovalAlreadyAnsweredError extends ApprovalRefusedError {
+  constructor(message: string) {
+    super(message);
+    this.name = "ApprovalAlreadyAnsweredError";
   }
 }
 export class ApprovalNotFoundError extends Error {
@@ -359,6 +435,47 @@ export class ApprovalNotFoundError extends Error {
     super("This approval could not be found.");
     this.name = "ApprovalNotFoundError";
   }
+}
+/**
+ * The file or page an action was aimed at, for its approval rows on the trail: without it a decision
+ * names a tool and a folder, and nobody can tell which of the actions beside it it was about.
+ */
+export function targetSubject(target: unknown): {
+  file?: string;
+  page?: string;
+  command?: string;
+  folder?: string;
+} {
+  if (!target || typeof target !== "object") return {};
+  const { filePath, pageUrl, grantId, displayName, relativePath, command } =
+    target as {
+      filePath?: unknown;
+      pageUrl?: unknown;
+      grantId?: unknown;
+      displayName?: unknown;
+      relativePath?: unknown;
+      command?: unknown;
+    };
+  /*
+   * A folder on the person's computer (`host-access/broker.ts`): the file in it, the command, and
+   * the folder by its name. Without them the row named only its scope, the grant's id, and Activity
+   * read "Save a file  host-grant-15407-1794112361547002000".
+   */
+  const folder = typeof grantId === "string";
+  return {
+    ...(typeof filePath === "string" && filePath ? { file: filePath } : {}),
+    ...(folder &&
+    typeof relativePath === "string" &&
+    relativePath &&
+    relativePath !== "."
+      ? { file: relativePath }
+      : {}),
+    ...(typeof pageUrl === "string" && pageUrl ? { page: pageUrl } : {}),
+    ...(folder && typeof command === "string" && command ? { command } : {}),
+    ...(folder && typeof displayName === "string" && displayName
+      ? { folder: displayName }
+      : {}),
+  };
 }
 export function parseApprovalResult(value: unknown): {
   content: string;
@@ -437,9 +554,7 @@ export function approvalAction(candidate: ApprovalCandidate): ApprovalAction {
     !continuation.threadId ||
     !continuation.toolCallId
   )
-    throw new ApprovalRefusedError(
-      "This action needs your approval, but it was not started from a conversation that can ask you. Nothing was done. Ask for it in a chat with this Bot, or change your rules in Settings → Approvals.",
-    );
+    throw new ApprovalNeedsConversationError();
   if (
     ![
       candidate.actorId,
@@ -470,6 +585,8 @@ export function approvalAction(candidate: ApprovalCandidate): ApprovalAction {
         scope: candidate.scope,
         args: candidate.args,
         target: candidate.target,
+        // Only where there is one, so a request opened before accounts were named keeps its digest.
+        ...(candidate.account ? { account: candidate.account } : {}),
       }),
     )
     .digest("hex");
@@ -502,7 +619,7 @@ export function approvalPreview(args: unknown, depth = 0): unknown {
         ]),
     );
   if (typeof args === "string")
-    return (args.length > 2000 ? `${args.slice(0, 1999)}…` : args)
+    return (args.length > 2000 ? `${cutAtCodeUnits(args, 1999)}…` : args)
       .replace(
         /((?:password|token|secret|api[_-]?key)\s*[=:]\s*)[^\s;]+/gi,
         "$1[private value]",

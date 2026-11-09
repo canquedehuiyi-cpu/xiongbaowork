@@ -24,6 +24,7 @@ const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const policy: ActionPolicy = { mode: "enforce", deny: [], allow: ["true"] };
 
 const store = createPluginStore({
+  brokerProvider: "composio",
   database,
   auditStore: createAuditStore(database),
   credentials: { readSecret: async () => null },
@@ -104,6 +105,7 @@ beforeAll(async () => {
   await runAsTenant("system", () => write(deploymentSkill, null));
 });
 
+<<<<<<< fork
 afterAll(() =>
   runAsTenant("platform", async () => {
     await database
@@ -122,6 +124,25 @@ afterAll(() =>
     await database.delete(users).where(inArray(users.id, [alice, bob]));
   }),
 );
+=======
+afterAll(async () => {
+  await database
+    .delete(skills)
+    .where(
+      inArray(skills.slug, [
+        aliceSkill,
+        bobSkill,
+        deploymentSkill,
+        `written-${suite}`,
+        `catalogue-${suite}`,
+      ]),
+    );
+  await database
+    .delete(agents)
+    .where(inArray(agents.id, [aliceBot, sharedBot]));
+  await database.delete(users).where(inArray(users.id, [alice, bob]));
+});
+>>>>>>> v1.0.0
 
 describe("what a person sees", () => {
   test("their own skills and the deployment's, and nobody else's", () =>
@@ -188,8 +209,50 @@ describe("editing keeps ownership", () => {
         by: bob,
       });
 
+<<<<<<< fork
       expect(await store.skillOwner(aliceSkill)).toBe(alice);
     }));
+=======
+    expect(await store.skillOwner(aliceSkill)).toBe(alice);
+  });
+
+  /*
+   * A SHIPPED SKILL SOMEBODY EDITED IS NO LONGER THE CATALOGUE'S. `origin = 'catalogue'` is what the
+   * package seed overwrites at every boot, so a re-save that left it standing handed the edit to the
+   * next boot to throw away. Seeded the way `tenant-package.ts` seeds it, then saved the way the
+   * route saves it — which names no origin.
+   */
+  test("saving over a catalogue skill makes it the deployment's own", async () => {
+    const slug = `catalogue-${suite}`;
+    await database.insert(skills).values({
+      id: slug,
+      slug,
+      ownerUserId: null,
+      title: "Shipped",
+      summary: "",
+      instructions: "As shipped.",
+      origin: "catalogue",
+      installedBy: null,
+    });
+
+    await store.installSkill({
+      slug,
+      title: "Edited here",
+      summary: "",
+      instructions: "As an administrator rewrote it.",
+      ownerUserId: null,
+      by: "admin@example.test",
+    });
+
+    const [row] = await database
+      .select({ origin: skills.origin, installedBy: skills.installedBy })
+      .from(skills)
+      .where(inArray(skills.slug, [slug]));
+    expect(row?.origin).toBe("yours");
+    // Who first installed it is a first-write fact, and a re-save does not rewrite it.
+    expect(row?.installedBy).toBeNull();
+  });
+>>>>>>> v1.0.0
 });
 
 /**
@@ -341,4 +404,8 @@ describe("what a person may do over HTTP", () => {
       expect(slugs).toContain(deploymentSkill);
       expect(slugs).not.toContain(bobSkill);
     }));
+});
+
+afterAll(async () => {
+  await database.$client.close();
 });

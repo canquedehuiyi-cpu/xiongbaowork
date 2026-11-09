@@ -70,7 +70,16 @@ function fakeStore(
   overrides: Partial<ChannelStore> = {},
 ): ChannelStore & { calls: StoreCall[] } {
   const calls: StoreCall[] = [];
+  const unexpected = async (): Promise<never> => {
+    throw new Error("Unexpected channel store call in this test");
+  };
   const base: ChannelStore = {
+    direct: unexpected,
+    list: unexpected,
+    recordActivity: unexpected,
+    signalBusy: unexpected,
+    signalChannelBusy: unexpected,
+    signalWork: unexpected,
     async create(receivedActor, agentIds) {
       calls.push(["create", receivedActor, agentIds]);
       return channel({ agentIds });
@@ -87,6 +96,11 @@ function fakeStore(
     },
     async softDelete(receivedActor, id) {
       calls.push(["softDelete", receivedActor, id]);
+      return true;
+    },
+    // A read beside the one the route was asked for, so it is not a call worth asserting on.
+    async workIn() {
+      return new Map();
     },
   };
 
@@ -157,6 +171,114 @@ describe("channel input parser", () => {
         active: false,
       }),
     ).toEqual({ ok: true, value: { agentIds: ["agent-1", "agent-2"] } });
+  });
+});
+
+/*
+ * What a conversation is waiting on comes back with the read, so a reload shows it. It used to live
+ * on the socket and nowhere else, and a refresh in the middle of a hop forgot it.
+ */
+describe("what a channel is waiting on", () => {
+  const since = new Date("2026-10-26T09:00:00.000Z");
+  const waiting = new Map([
+    [
+      "channel-1",
+      [
+        {
+          kind: "handoff" as const,
+          key: "hop-1",
+          botId: "ana",
+          botName: "Ana",
+          since,
+        },
+      ],
+    ],
+  ]);
+
+  test("the channel read carries the list", async () => {
+    const store = fakeStore({ workIn: async () => waiting });
+
+    const fetched = await appFor(store).request(
+      "http://openbot.test/channel-1",
+    );
+
+    expect(await json(fetched)).toEqual({
+      channel: {
+        ...channel(),
+        work: [
+          {
+            kind: "handoff",
+            key: "hop-1",
+            botId: "ana",
+            botName: "Ana",
+            since: since.toISOString(),
+          },
+        ],
+      },
+    });
+  });
+
+  test("the roster carries it too, and lights only the rows that have some", async () => {
+    const summary = (id: string) => ({
+      ...channel({ id }),
+      summary: null,
+      opening: null,
+      lastMessage: null,
+      lastMessageAgentId: null,
+      createdAt: since,
+      pinned: false,
+      lastReadAt: null,
+      task: false,
+    });
+    const store = fakeStore({
+      list: async () => ({
+        channels: [summary("channel-1"), summary("channel-2")],
+        nextCursor: null,
+      }),
+      workIn: async () => waiting,
+    });
+
+    const response = await appFor(store).request("http://openbot.test/");
+    const body = (await response.json()) as {
+      channels: Array<{ id: string; busy?: boolean; work: unknown[] }>;
+    };
+
+    expect(body.channels[0]).toMatchObject({ id: "channel-1", busy: true });
+    expect(body.channels[0]?.work).toHaveLength(1);
+    // Absent rather than false: a person's own run in another tab is not on any row this reads.
+    expect(body.channels[1]).toBeDefined();
+    expect(body.channels[1]).not.toHaveProperty("busy");
+    expect(body.channels[1]?.work).toEqual([]);
+  });
+
+  test("the roster says which conversation is a task's own", async () => {
+    const summary = (id: string, task: boolean) => ({
+      ...channel({ id }),
+      summary: null,
+      opening: null,
+      lastMessage: null,
+      lastMessageAgentId: null,
+      createdAt: since,
+      pinned: false,
+      lastReadAt: null,
+      task,
+    });
+    const store = fakeStore({
+      list: async () => ({
+        channels: [summary("own", false), summary("task", true)],
+        nextCursor: null,
+      }),
+      workIn: async () => new Map(),
+    });
+
+    const response = await appFor(store).request("http://openbot.test/");
+    const body = (await response.json()) as {
+      channels: Array<{ id: string; task: boolean }>;
+    };
+    expect(body.channels.map(({ id, task }) => ({ id, task }))).toEqual([
+      { id: "own", task: false },
+      { id: "task", task: true },
+    ]);
   });
 });
 
@@ -284,7 +406,9 @@ describe("channel routes", () => {
       },
     });
     expect(fetched.status).toBe(200);
-    expect(await json(fetched)).toEqual({ channel: channel() });
+    expect(await json(fetched)).toEqual({
+      channel: { ...channel(), work: [] },
+    });
   });
 
   /**
@@ -309,7 +433,11 @@ describe("channel routes", () => {
 
     expect(fetched.status).toBe(200);
     expect(await json(fetched)).toEqual({
-      channel: { ...channel(), lastMessageAt: spokenAt.toISOString() },
+      channel: {
+        ...channel(),
+        lastMessageAt: spokenAt.toISOString(),
+        work: [],
+      },
     });
   });
 
@@ -339,12 +467,24 @@ describe("channel routes", () => {
     const response = await appFor(store).request("http://openbot.test/missing");
 
     expect(response.status).toBe(404);
-    expect(await json(response)).toEqual({ error: "Channel not found." });
+    expect(await json(response)).toEqual({
+      error: "Couldn't find that conversation.",
+    });
   });
 
   test.each([
-    ["create", new AgentNotFoundError("agent-1"), 404, "Agent not found."],
-    ["get", new ChannelNotFoundError("channel-1"), 404, "Channel not found."],
+    [
+      "create",
+      new AgentNotFoundError("agent-1"),
+      404,
+      "Couldn't find that Bot.",
+    ],
+    [
+      "get",
+      new ChannelNotFoundError("channel-1"),
+      404,
+      "Couldn't find that conversation.",
+    ],
   ] as const)(
     "maps known store errors from %s",
     async (method, error, status, message) => {
@@ -472,7 +612,9 @@ describe("channel routes", () => {
     );
 
     expect(response.status).toBe(404);
-    expect(await json(response)).toEqual({ error: "Channel not found." });
+    expect(await json(response)).toEqual({
+      error: "Couldn't find that conversation.",
+    });
   });
 
   test("keeps authentication in front of marking read", async () => {
@@ -512,8 +654,7 @@ describe("channel routes", () => {
 
     expect(response.status).toBe(409);
     expect(await json(response)).toEqual({
-      error:
-        "This channel is defined by the deployment package, so it cannot be deleted here.",
+      error: "This conversation is built in and can't be deleted.",
     });
   });
 
@@ -975,7 +1116,9 @@ describe("channel store integration", () => {
       `http://openbot.test/${created.id}`,
     );
     expect(response.status).toBe(404);
-    expect(await json(response)).toEqual({ error: "Channel not found." });
+    expect(await json(response)).toEqual({
+      error: "Couldn't find that conversation.",
+    });
   });
 
   test("reads linked agent IDs in lexicographic order", async () => {
@@ -1002,6 +1145,48 @@ describe("channel store integration", () => {
         [earlierAgentId, laterAgentId].sort(),
       );
     });
+  });
+
+  test("a conversation is called by its Bot's new name after the Bot is renamed", async () => {
+    const actor = await createPersistentUser();
+    const renamed = await createPersistentAgent({
+      name: "Personal Assistant",
+      owner: actor,
+    });
+    const other = await createPersistentAgent({
+      name: "Researcher",
+      owner: actor,
+    });
+    const direct = await persistentStore.create(actor, [renamed]);
+    const group = await persistentStore.create(actor, [other, renamed]);
+    createdChannelIds.push(direct.id, group.id);
+    const profile = await profileStore.get(actor, renamed);
+    if (!profile) throw new Error("Missing profile");
+    await profileStore.update(actor, renamed, {
+      name: "Personal Assistant F5",
+      title: profile.title,
+      roleDescription: profile.roleDescription,
+      visibility: profile.visibility,
+    });
+
+    // What the conversation header and the sidebar read.
+    const app = appFor(persistentStore, async (context, next) => {
+      context.set("actor", { ...actor, email: `${actor.id}@example.test` });
+      await next();
+    });
+    const opened = await json(
+      await app.request(`http://openbot.test/${direct.id}`),
+    );
+    expect(opened.channel.name).toBe("Personal Assistant F5");
+    const listed = await json(await app.request("http://openbot.test/"));
+    const names = Object.fromEntries(
+      (listed.channels as { id: string; name: string }[]).map(
+        ({ id, name }) => [id, name],
+      ),
+    );
+    expect(names[direct.id]).toBe("Personal Assistant F5");
+    // The group's other Bot keeps its place, and the renamed one follows it.
+    expect(names[group.id]).toBe("Researcher, Personal Assistant F5");
   });
 
   test("keeps a historical channel readable but inactive after a linked profile is deleted", async () => {

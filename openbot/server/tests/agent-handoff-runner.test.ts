@@ -46,6 +46,7 @@ function runner(options?: {
   }) => Promise<void>;
   /** What the delivery says the Bot answered. Null — nothing worth relaying — unless a test cares. */
   answer?: string | null;
+  onSettled?: () => Promise<void>;
 }) {
   const calls: Array<{ verb: string; key: string; owner?: string }> = [];
   const events: string[] = [];
@@ -56,12 +57,19 @@ function runner(options?: {
   const delivered: Array<{ message: string; assertion: string }> = [];
   const offered: HandoffWork[] = [];
   const delays: number[] = [];
+<<<<<<< fork
   /** The tenant each outside effect ran as: the claimed row's, or nobody's. */
   const tenants = {
     deliver: [] as string[],
     audit: [] as string[],
     offer: [] as string[],
   };
+=======
+  const released: { uncounted: boolean; payload?: Record<string, unknown> }[] =
+    [];
+  /** Each time the asking conversation was told the queue moved, with what the queue had seen by then. */
+  const settled: Array<{ threadId: string; after: string[] }> = [];
+>>>>>>> v1.0.0
 
   const queue = {
     claim: async () =>
@@ -77,13 +85,18 @@ function runner(options?: {
       key,
       owner,
       delayMs,
+      uncounted,
+      payload,
     }: {
       key: string;
       owner: string;
       delayMs: number;
+      uncounted?: boolean;
+      payload?: Record<string, unknown>;
     }) => {
       calls.push({ verb: "release", key, owner });
       delays.push(delayMs);
+      released.push({ uncounted: uncounted === true, payload });
       return true;
     },
     offer: async ({
@@ -117,13 +130,25 @@ function runner(options?: {
     delivered,
     offered,
     delays,
+<<<<<<< fork
     tenants,
+=======
+    released,
+    settled,
+>>>>>>> v1.0.0
     runner: createHandoffRunner({
       queue,
       owner: "replica-a",
       sign: (work, claim) =>
         signHandoffDeliveryRun(work, KEY, "delivery-run", claim),
       auditStore,
+      onSettled: async (work) => {
+        settled.push({
+          threadId: work.threadId,
+          after: calls.map((call) => call.verb),
+        });
+        await options?.onSettled?.();
+      },
       delivery: {
         deliver: async ({ work, message, shown, assertion }) => {
           delivered.push({ message, assertion });
@@ -238,15 +263,20 @@ describe("delivering a hop", () => {
     expect(events).toContain("agent.handoff_failed");
   });
 
-  test("an answer that finds the asking Bot still talking is retried in seconds, then a minute", async () => {
-    const first = runner({
-      deliver: async () => {
-        throw new ThreadBusyError("thread-1 is busy with another run");
-      },
-    });
+  test("an answer that finds its conversation busy spends no attempt and backs off to a minute", async () => {
+    const busy = async () => {
+      throw new ThreadBusyError("thread-1 is busy with another run");
+    };
+    const first = runner({ deliver: busy });
     await first.runner.sweep();
     expect(first.delays).toEqual([5_000]);
+    expect(first.released).toEqual([
+      { uncounted: true, payload: { busyRetries: 1 } },
+    ]);
+    // Waiting is not failing.
+    expect(first.events).not.toContain("agent.handoff_failed");
 
+<<<<<<< fork
     const later = runner({
       claimed: [
         { kind: "bot.message", tenantId: "user-1", key: "run-1:abc", payload: WORK, attempts: 2 },
@@ -257,7 +287,27 @@ describe("delivering a hop", () => {
     });
     await later.runner.sweep();
     expect(later.delays).toEqual([60_000]);
+=======
+    const waits = [];
+    for (const busyRetries of [1, 2, 3, 4, 9]) {
+      const later = runner({
+        claimed: [
+          {
+            kind: "bot.message",
+            key: "run-1:abc",
+            payload: { ...WORK, busyRetries },
+            attempts: 1,
+          },
+        ] as unknown as WorkItem[],
+        deliver: busy,
+      });
+      await later.runner.sweep();
+      waits.push(...later.delays);
+    }
+    expect(waits).toEqual([10_000, 20_000, 40_000, 60_000, 60_000]);
+>>>>>>> v1.0.0
 
+    // A real failure still spends an attempt, a minute apart, and is recorded as one.
     const other = runner({
       deliver: async () => {
         throw new Error("the gateway was unreachable");
@@ -265,6 +315,8 @@ describe("delivering a hop", () => {
     });
     await other.runner.sweep();
     expect(other.delays).toEqual([60_000]);
+    expect(other.released).toEqual([{ uncounted: false }]);
+    expect(other.events).toContain("agent.handoff_failed");
   });
 
   /*
@@ -418,6 +470,33 @@ describe("a hop that failed for good", () => {
     });
     expect(offered).toHaveLength(1);
     expect(offered[0]?.task).toContain("Use Bots is turned off");
+  });
+
+  test("a hop to an address this deployment will not dial ends on its first try", async () => {
+    const {
+      runner: sweeper,
+      offered,
+      calls,
+    } = runner({
+      // As it arrives: the AG-UI client rebuilds the refusal from its RUN_ERROR, so only the
+      // message survives.
+      deliver: async () => {
+        throw new Error(
+          "This deployment will not dial http://localhost:4201/ag-ui: that address is inside OpenBot's own network, so an agent may not live there.",
+        );
+      },
+    });
+
+    await sweeper.sweep();
+
+    expect(calls.filter((call) => call.verb === "release")).toEqual([]);
+    expect(calls).toContainEqual({
+      verb: "finish",
+      key: "run-1:abc",
+      owner: "replica-a",
+    });
+    expect(offered).toHaveLength(1);
+    expect(offered[0]?.task).toContain("will not dial");
   });
 
   /*
@@ -680,6 +759,7 @@ describe("what a notice shows", () => {
   });
 });
 
+<<<<<<< fork
 /**
  * G01: a hop runs as the person whose row it is.
  *
@@ -874,3 +954,50 @@ describe("the tenant guard", () => {
     expect(failedAs).toBe("tenant-a");
   });
 });
+=======
+/*
+ * The asking conversation reads what it is waiting on from the queue, so it is told after the queue
+ * moved and not before. Told from inside the delivery, the row would still say the hop was in
+ * flight, and "Asking Ana…" would stay on screen for a hop that had finished.
+ */
+describe("telling the asking conversation", () => {
+  test("after a delivered hop is finished and its answer is on its way back", async () => {
+    const { runner: sweep, settled } = runner({
+      answer: "Tuesday 02:00 to 04:00.",
+    });
+
+    await sweep.sweep();
+
+    expect(settled).toEqual([
+      { threadId: WORK.threadId, after: ["finish", "offer"] },
+    ]);
+  });
+
+  test("after a failed delivery is released for another try", async () => {
+    const { runner: sweep, settled } = runner({
+      deliver: async () => {
+        throw new Error("the model stopped");
+      },
+    });
+
+    await sweep.sweep();
+
+    expect(settled).toEqual([{ threadId: WORK.threadId, after: ["release"] }]);
+  });
+
+  test("a conversation that cannot be told does not fail the hop", async () => {
+    const { runner: sweep, calls } = runner({
+      onSettled: async () => {
+        throw new Error("the socket is down");
+      },
+    });
+
+    const report = await sweep.sweep();
+
+    expect(report.delivered).toEqual(["researcher"]);
+    expect(calls).toEqual([
+      { verb: "finish", key: "run-1:abc", owner: "replica-a" },
+    ]);
+  });
+});
+>>>>>>> v1.0.0

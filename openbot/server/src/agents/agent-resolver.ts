@@ -1,15 +1,21 @@
 import type { AbstractAgent } from "@ag-ui/client";
+import type { ComputerGuidance } from "@openbot/shared/bot-prompt";
 import type { AuditInitiator } from "../audit";
 import type { AgentFetch, StallGuard } from "../channels/stall-guard";
 import {
   type HandoffForRun,
+  type HoldsTools,
   type LoadAgentsForActor,
   type LoadAttachment,
   type LoadAvatarSources,
   type LoadCurrentProject,
   type LoadInstructions,
+  type LoadAppsForBot,
   type LoadToolsForBot,
   type MarkAttachmentsSent,
+  onOpenBotRunner,
+  type PickedModel,
+  type RecordToolLimitRefusal,
   type RuntimeModel,
   resolveRuntimeAgents,
   type SignRun,
@@ -17,12 +23,28 @@ import {
 } from "../copilot";
 import type { AcquireLearnedSkills } from "../learning/runtime";
 import type { LoadPersonalMemory } from "../memory/tools";
+<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
 import type { AgentModelResolver } from "../models/runtime-resolver";
+=======
+import { NameContextMiddleware } from "../people/name-context";
+import { isProactiveInitiator } from "../proactive/initiator";
+import type { ProductTelemetry } from "../telemetry/product";
+>>>>>>> v1.0.0
 import type { AgentActor } from "./profile-types";
 
 export type AgentResolutionContext = {
   initiator?: AuditInitiator;
   depth?: number;
+  /**
+   * A subagent's run (agents/subagent.ts): the same Bot with no coordination at all, so it can
+   * neither start a subagent of its own nor reach past itself to another Bot or a person.
+   */
+  subagent?: boolean;
+  /**
+   * Which runs on the Bots built may hold their tools. Absent means every run does. Set only for the
+   * runtime's own map, which it also runs for itself (`isAskedRun` in copilot.ts).
+   */
+  holdsTools?: HoldsTools;
 };
 
 export class CoworkerUnavailableError extends Error {}
@@ -30,6 +52,7 @@ export class CoworkerUnavailableError extends Error {}
 export type ActorAgentResolver = {
   resolveAgentsForActor(
     actor: AgentActor,
+    context?: AgentResolutionContext,
   ): Promise<Record<string, AbstractAgent>>;
   resolveAgentForActor(
     actor: AgentActor,
@@ -39,6 +62,8 @@ export type ActorAgentResolver = {
 };
 
 export type ActorAgentResolverDependencies = {
+  productTelemetry?: Pick<ProductTelemetry, "middleware">;
+  loadNameForActor?: (actorId: string) => Promise<string | null>;
   loadAgents: LoadAgentsForActor;
   model: RuntimeModel;
   resolveModelApiKey: () => Promise<string | null>;
@@ -47,12 +72,14 @@ export type ActorAgentResolverDependencies = {
     actorId: string,
     initiator?: AuditInitiator,
   ) => LoadToolsForBot;
+  /** The apps each Bot holds, as they stand for whoever is asking. See `LoadAppsForBot`. */
+  loadAppsForActor?: (actorId: string) => LoadAppsForBot;
   signRunForActor?: (
     actorId: string,
     initiator?: AuditInitiator,
     depth?: number,
   ) => SignRun;
-  computerGuidance?: string;
+  computerGuidance?: ComputerGuidance;
   loadVendors?: () => Promise<readonly string[]>;
   selectionForActor?: (actorId: string) => ToolSelection;
   agentFetch?: AgentFetch;
@@ -71,6 +98,7 @@ export type ActorAgentResolverDependencies = {
   loadAttachmentForActor?: (actorId: string) => LoadAttachment;
   markAttachmentsSentForActor?: (actorId: string) => MarkAttachmentsSent;
   loadPersonalMemoryForActor?: (actorId: string) => LoadPersonalMemory;
+<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
   /**
    * Which model a built-in coworker was bound to in this tenant's model library. Not per actor: the
    * binding is the coworker's, and the request's row-level-security frame decides whose library the
@@ -86,6 +114,15 @@ export type ActorAgentResolverDependencies = {
    * Intelligence (R0, optional); absent, every Bot is built exactly as without learning.
    */
   acquireLearnedSkills?: AcquireLearnedSkills;
+=======
+  /** The model a person picked for the conversation a run answers in. Absent, the deployment's. */
+  pickedModelForActor?: (actorId: string) => PickedModel;
+  /** Writes the row for a run refused for sending more tools than its model accepts. */
+  recordToolLimitRefusalForActor?: (
+    actorId: string,
+    initiator?: AuditInitiator,
+  ) => RecordToolLimitRefusal;
+>>>>>>> v1.0.0
 };
 
 /**
@@ -109,9 +146,29 @@ export function createActorAgentResolver(
      */
     onlyAgentId?: string,
     context?: AgentResolutionContext,
-  ) =>
-    resolveRuntimeAgents(
-      () => Promise.resolve(registered),
+  ) => {
+    /*
+     * Learned Skills for this person's run: the Bot's own, plus the person's own Learning space and every Skill another
+     * person opened (learning/runtime.ts). Bound here, where the person is known, so every path that builds a Bot for
+     * them (a turn, a hop, a routine, a remote Bot) asks for the same set.
+     */
+    const acquire = deps.acquireLearnedSkills;
+    const acquireForActor: AcquireLearnedSkills | undefined = acquire
+      ? (agentId, signal) => acquire(agentId, signal, actor.id)
+      : undefined;
+    /*
+     * A CHECK-IN RUNS EVERY BOT ON OPENBOT'S OWN RUNNER, and offers it everything it may read.
+     *
+     * A Bot on another framework is built as OpenBot would build it (`onOpenBotRunner`), so its own
+     * endpoint, and any tool that endpoint holds out of OpenBot's sight, is never called while nobody
+     * is watching. And its tools are not narrowed by skill: narrowing picks tools from the latest
+     * message, which for a check-in is OpenBot's own instruction, and its reads are already only what
+     * the person connected (`proactive/scope.ts`), so a narrowing could only drop an app.
+     */
+    const checkIn = isProactiveInitiator(context?.initiator);
+    const runnable = checkIn ? registered.map(onOpenBotRunner) : registered;
+    return resolveRuntimeAgents(
+      () => Promise.resolve(runnable),
       deps.model,
       deps.resolveModelApiKey,
       deps.stallGuard,
@@ -119,23 +176,59 @@ export function createActorAgentResolver(
       deps.signRunForActor?.(actor.id, context?.initiator, context?.depth),
       deps.computerGuidance,
       deps.loadVendors,
-      deps.selectionForActor?.(actor.id),
+      checkIn ? undefined : deps.selectionForActor?.(actor.id),
       deps.agentFetch,
-      deps.handoffForActor?.(actor.id, context?.initiator, context?.depth),
+      context?.subagent
+        ? undefined
+        : deps.handoffForActor?.(actor.id, context?.initiator, context?.depth),
       onlyAgentId,
       deps.loadInstructionsForActor?.(actor.id),
       context?.initiator,
       deps.loadAttachmentForActor?.(actor.id),
       deps.markAttachmentsSentForActor?.(actor.id),
+<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
       deps.loadPersonalMemoryForActor?.(actor.id),
       deps.resolveAgentModel,
       deps.loadAvatarSourcesForActor?.(actor.id),
       deps.loadCurrentProjectForActor?.(actor.id),
       deps.acquireLearnedSkills,
     );
+=======
+      acquireForActor,
+      deps.loadPersonalMemoryForActor?.(actor.id),
+      deps.recordToolLimitRefusalForActor?.(actor.id, context?.initiator),
+      context?.holdsTools,
+      deps.pickedModelForActor?.(actor.id),
+      deps.loadAppsForActor?.(actor.id),
+    ).then((agents) => {
+      const loadName = deps.loadNameForActor;
+      if (loadName) {
+        for (const registeredAgent of runnable) {
+          if (registeredAgent.type !== "built_in") continue;
+          agents[registeredAgent.id]?.use(
+            new NameContextMiddleware(() => loadName(actor.id)),
+          );
+        }
+      }
+      if (deps.productTelemetry)
+        for (const agent of Object.values(agents)) {
+          agent.use(deps.productTelemetry.middleware(actor.id));
+        }
+      return agents;
+    });
+  };
+>>>>>>> v1.0.0
 
-  const resolveAgentsForActor = async (actor: AgentActor) =>
-    resolveRegisteredAgents(actor, await deps.loadAgents(actor));
+  const resolveAgentsForActor = async (
+    actor: AgentActor,
+    context?: AgentResolutionContext,
+  ) =>
+    resolveRegisteredAgents(
+      actor,
+      await deps.loadAgents(actor),
+      undefined,
+      context,
+    );
 
   return {
     resolveAgentsForActor,

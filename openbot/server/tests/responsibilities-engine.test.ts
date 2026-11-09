@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 import { createResponsibilityEngine } from "../src/responsibilities/engine";
 import {
   parseResponsibilityEvent,
@@ -6,7 +7,6 @@ import {
   type ResponsibilityRunContext,
   type ResponsibilityRunOutcome,
 } from "../src/responsibilities/types";
-import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 import type { WorkItem } from "../src/work/queue";
 
 function runContext(): ResponsibilityRunContext {
@@ -54,6 +54,9 @@ function fixture(
       async settleRun(_id, outcome) {
         outcomes.push(outcome);
       },
+      async requeueRun() {
+        return false;
+      },
     },
     queue: {
       async claim() {
@@ -65,6 +68,9 @@ function fixture(
       async finish(input) {
         finished.push(input.key);
         return true;
+      },
+      async release() {
+        return false;
       },
     },
     runTurn,

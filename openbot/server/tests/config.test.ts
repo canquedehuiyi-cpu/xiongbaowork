@@ -46,6 +46,25 @@ const {
 } = baseEnvironment;
 
 describe("deployment configuration", () => {
+  test.each([undefined, "", "stale-legacy-key"])(
+    "uses the CLI runtime key with legacy value %s",
+    (legacy) => {
+      const config = loadConfig({
+        ...baseEnvironment,
+        INTELLIGENCE_API_KEY: legacy,
+        CPK_INTELLIGENCE_API_KEY: "  cpk-current-project  ",
+      });
+      expect(config.runtime.intelligence.apiKey).toBe("cpk-current-project");
+    },
+  );
+
+  test("an empty CLI key preserves legacy-only deployments", () => {
+    expect(
+      loadConfig({ ...baseEnvironment, CPK_INTELLIGENCE_API_KEY: "  " }).runtime
+        .intelligence.apiKey,
+    ).toBe("tenant-api-key");
+  });
+
   test("organization authority disables the standalone actor without requiring local provider secrets", () => {
     const config = loadConfig({
       ...withoutSignIn,
@@ -94,6 +113,7 @@ describe("deployment configuration", () => {
     },
   );
 
+<<<<<<< fork
   test("local mode is accepted explicitly, and is the same answer as unset", () => {
     const explicit = loadConfig({
       ...baseEnvironment,
@@ -107,6 +127,119 @@ describe("deployment configuration", () => {
    * local mode gets no silent preference for either, and nothing about its threads changes.
    */
   test("ignores a platform address that is still set in the environment", () => {
+=======
+    expect(() => loadConfig(environment)).toThrow(
+      `CopilotKit Intelligence is required and is not configured. Missing: ${name === "INTELLIGENCE_API_KEY" ? "CPK_INTELLIGENCE_API_KEY (or INTELLIGENCE_API_KEY)" : name}`,
+    );
+  });
+
+  test("starts without COPILOTKIT_LICENSE_TOKEN, because managed Intelligence no longer issues one", () => {
+    const environment: Record<string, string | undefined> = {
+      ...baseEnvironment,
+    };
+    delete environment.COPILOTKIT_LICENSE_TOKEN;
+
+    const config = loadConfig(environment);
+
+    if (config.runtime.mode !== "intelligence") {
+      throw new Error("expected the Intelligence runtime");
+    }
+    expect(config.runtime.intelligence.licenseToken).toBeUndefined();
+    expect(config.runtime.intelligence.apiKey).toBe(
+      baseEnvironment.INTELLIGENCE_API_KEY,
+    );
+  });
+
+  // The browser opens the gateway itself, at the address `/info` gives it. A server in a container
+  // reaches local Intelligence somewhere the browser on the host cannot, so it may name both.
+  test("keeps the browser's gateway address apart from the server's, when one is given", () => {
+    const config = loadConfig({
+      ...baseEnvironment,
+      INTELLIGENCE_GATEWAY_WS_URL: "ws://host.docker.internal:14401",
+      INTELLIGENCE_BROWSER_GATEWAY_WS_URL: "ws://localhost:14401",
+    });
+    if (config.runtime.mode !== "intelligence") {
+      throw new Error("expected the Intelligence runtime");
+    }
+    expect(config.runtime.intelligence.gatewayWsUrl).toBe(
+      "ws://host.docker.internal:14401",
+    );
+    expect(config.runtime.intelligence.browserGatewayWsUrl).toBe(
+      "ws://localhost:14401",
+    );
+
+    const without = loadConfig(baseEnvironment);
+    if (without.runtime.mode !== "intelligence") {
+      throw new Error("expected the Intelligence runtime");
+    }
+    expect(without.runtime.intelligence.browserGatewayWsUrl).toBeUndefined();
+
+    expect(() =>
+      loadConfig({
+        ...baseEnvironment,
+        INTELLIGENCE_BROWSER_GATEWAY_WS_URL: "not a url",
+      }),
+    ).toThrow("INTELLIGENCE_BROWSER_GATEWAY_WS_URL must be a valid URL");
+  });
+
+  // Intelligence installed in the cluster beside OpenBot has no address a browser can reach, and the
+  // browser opens the gateway's socket itself. With the proxy on, the browser is told OpenBot's own
+  // address for it: a path, resolved against the page, or on the public URL when there is one.
+  test("tells the browser OpenBot's own address for the gateway when the server carries its socket", () => {
+    const proxied = loadConfig({
+      ...baseEnvironment,
+      INTELLIGENCE_GATEWAY_WS_URL:
+        "ws://openbot-intelligence-realtime-gateway:4401",
+      INTELLIGENCE_GATEWAY_PROXY: "on",
+    });
+    if (proxied.runtime.mode !== "intelligence") {
+      throw new Error("expected the Intelligence runtime");
+    }
+    expect(proxied.runtime.intelligence.gatewayProxy).toBe(true);
+    expect(proxied.runtime.intelligence.browserGatewayWsUrl).toBe(
+      "/api/intelligence/client",
+    );
+    // The server still reaches the gateway where it is.
+    expect(proxied.runtime.intelligence.gatewayWsUrl).toBe(
+      "ws://openbot-intelligence-realtime-gateway:4401",
+    );
+
+    const published = loadConfig({
+      ...baseEnvironment,
+      INTELLIGENCE_GATEWAY_PROXY: "on",
+      OPENBOT_PUBLIC_URL: "https://openbot.example.com/",
+    });
+    if (published.runtime.mode !== "intelligence") {
+      throw new Error("expected the Intelligence runtime");
+    }
+    expect(published.runtime.intelligence.browserGatewayWsUrl).toBe(
+      "wss://openbot.example.com/api/intelligence/client",
+    );
+
+    const off = loadConfig({
+      ...baseEnvironment,
+      INTELLIGENCE_GATEWAY_PROXY: "off",
+    });
+    if (off.runtime.mode !== "intelligence") {
+      throw new Error("expected the Intelligence runtime");
+    }
+    expect(off.runtime.intelligence.gatewayProxy).toBeUndefined();
+    expect(off.runtime.intelligence.browserGatewayWsUrl).toBeUndefined();
+
+    expect(() =>
+      loadConfig({
+        ...baseEnvironment,
+        INTELLIGENCE_GATEWAY_PROXY: "on",
+        INTELLIGENCE_BROWSER_GATEWAY_WS_URL: "ws://localhost:14401",
+      }),
+    ).toThrow("Set one of them");
+    expect(() =>
+      loadConfig({ ...baseEnvironment, INTELLIGENCE_GATEWAY_PROXY: "yes" }),
+    ).toThrow('INTELLIGENCE_GATEWAY_PROXY must be "on" or "off"');
+  });
+
+  test("still forwards a licence token when a deployment sets one", () => {
+>>>>>>> v1.0.0
     const config = loadConfig({
       ...baseEnvironment,
       INTELLIGENCE_API_URL: "http://localhost:7100",
@@ -373,8 +506,39 @@ describe("deployment configuration", () => {
       clientId: "entra-client-id",
       clientSecret: "entra-client-secret",
       tenantId: "common",
+      apiScope: "api://entra-client-id/.default",
+      // No app may call OpenBot with a person's token until one is named.
+      allowedClients: [],
     });
     expect(configuredAuthProviders(config.auth)).toEqual(["microsoft"]);
+  });
+
+  test("takes the apps that may call with a person's Entra token by client id, and refuses anything else", () => {
+    const entra = {
+      ...withoutSignIn,
+      ...SESSION,
+      MICROSOFT_OAUTH_CLIENT_ID: "entra-client-id",
+      MICROSOFT_OAUTH_CLIENT_SECRET: "entra-client-secret",
+      MICROSOFT_OAUTH_TENANT_ID: "8f2c1e40-0000-0000-0000-000000000000",
+    };
+    // Compared as Entra writes `azp`, lower case, whatever case the portal was copied in.
+    expect(
+      loadConfig({
+        ...entra,
+        MICROSOFT_OAUTH_ALLOWED_CLIENTS:
+          "6E74172B-BE56-4843-9FF4-E66A39BB12E3, 1b4f7c2d-0000-4000-8000-000000000001",
+      }).auth?.microsoft?.allowedClients,
+    ).toEqual([
+      "6e74172b-be56-4843-9ff4-e66a39bb12e3",
+      "1b4f7c2d-0000-4000-8000-000000000001",
+    ]);
+    // The app's API URI is the likely paste, and no token's `azp` is ever one.
+    expect(() =>
+      loadConfig({
+        ...entra,
+        MICROSOFT_OAUTH_ALLOWED_CLIENTS: "api://hr-portal",
+      }),
+    ).toThrow("MICROSOFT_OAUTH_ALLOWED_CLIENTS names `api://hr-portal`");
   });
 
   test("narrows Microsoft to one directory when given a tenant", () => {
@@ -555,6 +719,15 @@ describe("deployment configuration", () => {
       { TRUSTED_ORIGINS: "http://localhost:3010,https://openbot.example.com" },
     ],
     ["an address that is not a URL at all", { OPENBOT_PUBLIC_URL: "openbot" }],
+    [
+      "a public URL missing its scheme",
+      { OPENBOT_PUBLIC_URL: "example.com:3010" },
+    ],
+    ["an app URL missing its scheme", { OPENBOT_APP_URL: "example.com:3010" }],
+    [
+      "a trusted origin missing its scheme",
+      { TRUSTED_ORIGINS: "http://localhost:3010,example.com:3010" },
+    ],
   ])("refuses no sign-in combined with %s", (_label, published) => {
     expect(() =>
       loadConfig({ ...withoutSignIn, ...OPEN, ...published }),
@@ -1133,23 +1306,29 @@ describe("automatic Learning container assignment", () => {
 });
 
 describe("memory sources and background research", () => {
-  test("are on by default for a fresh deployment", () => {
+  test("memory sources are on by default; background research is asked for in a conversation", () => {
     expect(loadConfig(baseEnvironment).memoryDefaults).toEqual({
       sources: true,
-      research: true,
+      research: false,
     });
   });
 
-  test.each(["false", "0"])("each switches off on its own with %p", (value) => {
+  test.each(["false", "0"])("memory sources switch off with %p", (value) => {
     expect(
       loadConfig({ ...baseEnvironment, OPENBOT_MEMORY_SOURCE_DEFAULTS: value })
         .memoryDefaults,
-    ).toEqual({ sources: false, research: true });
-    expect(
-      loadConfig({ ...baseEnvironment, OPENBOT_PROACTIVE_DEFAULTS: value })
-        .memoryDefaults,
-    ).toEqual({ sources: true, research: false });
+    ).toEqual({ sources: false, research: false });
   });
+
+  test.each(["true", "1"])(
+    "research by default comes back only with %p",
+    (value) => {
+      expect(
+        loadConfig({ ...baseEnvironment, OPENBOT_PROACTIVE_DEFAULTS: value })
+          .memoryDefaults,
+      ).toEqual({ sources: true, research: true });
+    },
+  );
 });
 
 /**
@@ -1271,6 +1450,7 @@ test("a Composio key is read when set and absent when not", () => {
   ).toBe("ak_example");
 });
 
+<<<<<<< fork
 /*
  * Where a coworker's actions are carried out (ticket 017), and the axis the whole 025 walkthrough
  * still has to be repeated on: `cloud` runs them in the deployment's own container, `device` sends
@@ -1399,5 +1579,102 @@ describe("the model name a deployment actually reads", () => {
   test("stays quiet when nobody wrote the inert one", () => {
     const lines = warningsWith({ BOT_MODEL: "deepseek-flash" });
     expect(lines.some((line) => line.includes("OPENAI_MODEL"))).toBe(false);
+=======
+test("an Arcade key and a broker provider are read, and an unknown provider is refused", () => {
+  const unset = loadConfig(baseEnvironment);
+  expect(unset).toHaveProperty("arcadeApiKey", undefined);
+  expect(unset).toHaveProperty("brokerProvider", undefined);
+  const set = loadConfig({
+    ...baseEnvironment,
+    ARCADE_API_KEY: "  arc_example  ",
+    OPENBOT_BROKER_PROVIDER: " arcade ",
+  });
+  expect(set.arcadeApiKey).toBe("arc_example");
+  expect(set.brokerProvider).toBe("arcade");
+  expect(() =>
+    loadConfig({ ...baseEnvironment, OPENBOT_BROKER_PROVIDER: "zapier" }),
+  ).toThrow(/OPENBOT_BROKER_PROVIDER must be "composio" or "arcade"/);
+});
+
+/**
+ * The personal edition: one person on their own machine, with no sign-in and the one shared
+ * computer. Each refusal names the variable to change, because the combinations it refuses are the
+ * ones somebody gets by copying a team deployment's `.env`.
+ */
+describe("edition", () => {
+  const personalEnvironment = {
+    ...withoutSignIn,
+    OPENBOT_EDITION: "personal",
+    OPENBOT_SINGLE_USER: "true",
+    AGENT_COMPUTER_URL: "http://127.0.0.1:7000",
+  };
+
+  test("defaults to team", () => {
+    expect(loadConfig(baseEnvironment).edition).toBe("team");
+    expect(
+      loadConfig({ ...baseEnvironment, OPENBOT_EDITION: "" }).edition,
+    ).toBe("team");
+  });
+
+  test("personal edition loads with single user and a shared computer", () => {
+    const config = loadConfig(personalEnvironment);
+    expect(config.edition).toBe("personal");
+    expect(config.computer?.provider).toBe("shared");
+  });
+
+  // What OpenBot Desktop writes, so an app connected over its own OAuth has an address to come
+  // back to. Loopback is this machine, so single-user mode stays on and stays this machine's.
+  test("personal edition takes the app's own loopback address as its public URL", () => {
+    const config = loadConfig({
+      ...personalEnvironment,
+      OPENBOT_IN_CONTAINER: "true",
+      OPENBOT_PUBLIC_URL: "http://127.0.0.1:3010",
+      TRUSTED_ORIGINS:
+        "http://localhost:3010,http://127.0.0.1:3010,http://[::1]:3010",
+    });
+    expect(config.publicUrl).toBe("http://127.0.0.1:3010");
+    expect(config.singleUser).toBe(true);
+    expect(config.edition).toBe("personal");
+    expect(config.browserOrigins).toContain("http://127.0.0.1:3010");
+    expect(config.browserOrigins).toContain("http://[::1]:3010");
+  });
+
+  test("refuses an unknown value", () => {
+    expect(() =>
+      loadConfig({ ...personalEnvironment, OPENBOT_EDITION: "consumer" }),
+    ).toThrow(/OPENBOT_EDITION.*"team".*"personal"/);
+  });
+
+  test("personal edition refuses without single-user mode", () => {
+    const { OPENBOT_SINGLE_USER: _, ...environment } = personalEnvironment;
+    expect(() => loadConfig(environment)).toThrow("OPENBOT_SINGLE_USER=true");
+  });
+
+  test("personal edition refuses an identity provider", () => {
+    expect(() =>
+      loadConfig({
+        ...personalEnvironment,
+        GOOGLE_OAUTH_CLIENT_ID: "google-client-id",
+        GOOGLE_OAUTH_CLIENT_SECRET: "google-client-secret",
+        BETTER_AUTH_SECRET: baseEnvironment.BETTER_AUTH_SECRET,
+        BETTER_AUTH_URL: baseEnvironment.BETTER_AUTH_URL,
+        INITIAL_ADMIN_EMAILS: baseEnvironment.INITIAL_ADMIN_EMAILS,
+      }),
+    ).toThrow("GOOGLE_OAUTH_CLIENT_ID");
+  });
+
+  test("personal edition refuses the Docker supervisor", () => {
+    expect(() =>
+      loadConfig({
+        ...personalEnvironment,
+        COMPUTER_SUPERVISOR_URL: "http://127.0.0.1:7001",
+      }),
+    ).toThrow(/COMPUTER_SUPERVISOR_URL.*AGENT_COMPUTER_URL/);
+  });
+
+  test("personal edition refuses a deployment with no computer", () => {
+    const { AGENT_COMPUTER_URL: _, ...environment } = personalEnvironment;
+    expect(() => loadConfig(environment)).toThrow("AGENT_COMPUTER_URL");
+>>>>>>> v1.0.0
   });
 });

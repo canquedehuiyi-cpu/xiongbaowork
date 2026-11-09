@@ -492,6 +492,7 @@ describe("the tool-call route a callback token guards", () => {
       undefined,
       undefined,
       {
+        brokerProvider: "composio" as const,
         callTool: async () => {
           throw thrown;
         },
@@ -659,6 +660,7 @@ describe("the tool-call route a callback token guards", () => {
    */
   function storeAnswering(result: { text: string; isError: boolean }) {
     return {
+      brokerProvider: "composio" as const,
       callTool: async () => ({ ...result, truncated: false }),
       listForAgent: async () => ({
         tools: [

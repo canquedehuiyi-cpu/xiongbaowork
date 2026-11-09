@@ -1,14 +1,14 @@
 import { afterAll, afterEach, describe, expect, spyOn, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { and, eq, isNull, sql } from "drizzle-orm";
-import type { MiddlewareHandler } from "hono";
-import { Hono } from "hono";
 import {
   attachmentUrl,
   MAX_ATTACHMENTS_PER_MESSAGE,
   MAX_FILE_BYTES,
   MAX_IMAGE_BYTES,
 } from "@openbot/shared/attachments";
+import { and, eq, isNull, sql } from "drizzle-orm";
+import type { MiddlewareHandler } from "hono";
+import { Hono } from "hono";
 import { createApp, UPLOAD_BODY_LIMIT_BYTES } from "../src/app";
 import type { AppVariables } from "../src/auth/guards";
 import { resolveAttachmentParts } from "../src/channels/attachment-parts";
@@ -443,11 +443,8 @@ const BLOCKED_SESSION_DEADLINE_MS = BLOCKED_SESSION_TIMEOUT_MS / 3;
 async function waitForBlockedSession(
   applicationName: string,
   settled: () => boolean,
-  // Overridden by the test that pins the message below, and by nothing else: waiting the real
-  // deadline out to watch it fire would put seven seconds on the suite to observe a string.
-  deadlineMs: number = BLOCKED_SESSION_DEADLINE_MS,
 ): Promise<boolean> {
-  const deadline = Date.now() + deadlineMs;
+  const deadline = Date.now() + BLOCKED_SESSION_DEADLINE_MS;
   while (Date.now() < deadline) {
     // The server's own activity view, which belongs to no person.
     const blocked = await runAsTenant("system", () =>
@@ -1431,6 +1428,16 @@ describe("POST /:channelId/attachments", () => {
       const { error } = (await response.json()) as { error: string };
       expect(error).toBe("'archive' is not a file type this app can read.");
     });
+<<<<<<< fork
+
+=======
+
+    const response = await upload(app, channelId, file);
+
+    expect(response.status).toBe(415);
+    const { error } = (await response.json()) as { error: string };
+    expect(error).toBe("'archive' isn't a file type OpenBot can read.");
+>>>>>>> v1.0.0
   });
 });
 
@@ -1524,9 +1531,29 @@ describe("GET /:id", () => {
    *
    * So the assertion is about the EVENT LOOP rather than about the body: a 1ms interval samples
    * how long the thread went unavailable while the request ran. The threshold is 40ms against a
-   * measured 62-87ms fault and a measured sub-millisecond healthy path — roughly half the fault
-   * and a wide multiple of the healthy case, which is the margin that keeps a loaded machine or a
-   * garbage collection from failing this while still catching a return to the iterator path.
+   * measured 62-87ms fault and a healthy path measured at a few milliseconds — roughly half the
+   * fault and a wide multiple of the healthy case.
+   *
+   * WHAT IS SAMPLED IS THE THREAD'S OWN CPU TIME BETWEEN TICKS, NOT THE WALL CLOCK BETWEEN THEM.
+   * The wall-clock gap also counts every millisecond the operating system had this thread off the
+   * CPU, and on a shared CI runner that is the larger number: this test failed on CI at 65ms, in a
+   * run where the whole test took 262ms against its usual 85-105ms, so the machine was slow for
+   * the length of the test and not only for the request. Measured with this repo's Bun 1.4.3 on
+   * Linux, one CPU shared with six busy loops: wall gaps of 81-89ms with 0-2ms of this thread's
+   * CPU inside them, from nothing but waiting for a turn. A process starved like that is not one
+   * this route blocked, and a wall-clock reading cannot tell the two apart. The fault is the other
+   * way round: walking the file is work the thread has to do itself, so it costs the same CPU
+   * however long the wait for the CPU is — on the same Linux setup, `Uint8Array.from` over an 8 MiB
+   * `Buffer` was 156ms of thread CPU with the CPU to itself and 154ms starved (1191ms of wall
+   * clock). So `process.threadCpuUsage()` keeps the whole of the fault and none of the waiting.
+   *
+   * AND THE GARBAGE IS COLLECTED BEFORE THE WINDOW OPENS, NOT INSIDE IT. By the time this test
+   * runs, `bun test` has run hundreds of files in this one process, and what they left for the
+   * collector is not this route's work. With the collector's own threads starved, it was done on
+   * this thread inside the window: on the same Linux setup with two CPUs and three busy loops,
+   * thread CPU alone still failed 3 runs in 100, at 52-59ms, each in a run that took 1.8-4.5s.
+   * Collected first, it failed none in 300 and none in 200 more with four busy loops, while the
+   * iterator path still failed every run, idle and loaded alike.
    *
    * `MAX_IMAGE_BYTES` and not something smaller, because the cost is linear in the file and the
    * ceiling is the size this route is documented to serve.
@@ -1584,6 +1611,53 @@ describe("GET /:id", () => {
         longestPause < 40 ? "under 40ms" : `${Math.round(longestPause)}ms`,
       ).toBe("under 40ms");
     });
+<<<<<<< fork
+
+=======
+    const app = attachmentApp(db, member);
+    // Warmed, so the first request's own module and pool costs are not counted as a stall.
+    expect((await app.request(`http://test/${id}`)).status).toBe(200);
+
+    /** Milliseconds of CPU this thread — the one running the event loop — has spent so far. */
+    const threadCpuMs = () => {
+      const { user, system } = process.threadCpuUsage();
+      return (user + system) / 1000;
+    };
+    // Everything earlier files left behind, collected now rather than inside the window.
+    Bun.gc(true);
+    let longestPause = 0;
+    let previousTick = threadCpuMs();
+    const sampler = setInterval(() => {
+      const now = threadCpuMs();
+      longestPause = Math.max(longestPause, now - previousTick);
+      previousTick = now;
+    }, 1);
+    let response: Response;
+    try {
+      previousTick = threadCpuMs();
+      response = await app.request(`http://test/${id}`);
+      /*
+       * ONE TURN OF THE LOOP BEFORE THE SAMPLER IS TAKEN AWAY, and without it this test cannot
+       * fail. A timer is a macrotask and an awaited promise resumes on the microtask queue, so the
+       * line above continues BEFORE the interval that would observe the stall gets to run: clearing
+       * the sampler here measured 2.5ms against a fault that really did block for 62-87ms. The
+       * gap that spans the blocked stretch is recorded by the first tick after it, so that tick
+       * has to be allowed to happen.
+       */
+      await new Promise((resume) => setTimeout(resume, 5));
+    } finally {
+      clearInterval(sampler);
+    }
+
+    expect(response.status).toBe(200);
+    expect((await response.arrayBuffer()).byteLength).toBe(MAX_IMAGE_BYTES);
+    // Compared as a sentence rather than with `toBeLessThan`, so a failure names the pause it
+    // measured: "62ms" against "under 40ms" says which fault came back, where "false is not true"
+    // would leave the next person to re-measure it.
+    expect(
+      longestPause < 40 ? "under 40ms" : `${Math.round(longestPause)}ms`,
+    ).toBe("under 40ms");
+>>>>>>> v1.0.0
   }, 30_000);
 
   /*
@@ -2230,7 +2304,7 @@ describe("GET /:id", () => {
       "application/json",
     );
     expect((await result.fetched.json()) as { error: string }).toEqual({
-      error: "That attachment could not be read just now. Try again.",
+      error: "Couldn't open that attachment. Try again.",
     });
     // Both reads are written down, naming the row and the asker, because that is what it would take
     // to act on either.
@@ -3478,6 +3552,7 @@ describe("markAttachmentsSent", () => {
         consoleError.mockRestore();
       }
 
+<<<<<<< fork
       expect(raised).toBeInstanceOf(Error);
       // A sentence somebody can act on, naming the file and saying the turn did not run — this leaves
       // through the run as an AG-UI error and is shown to the person who was waiting.
@@ -3491,6 +3566,20 @@ describe("markAttachmentsSent", () => {
       // Still staged: still withdrawable, still countable against the cap, still stampable by a retry.
       expect(await attachedAtOf(db, id)).toBeNull();
     });
+=======
+    expect(raised).toBeInstanceOf(Error);
+    // A sentence somebody can act on, naming the file and saying the turn did not run — this leaves
+    // through the run as an AG-UI error and is shown to the person who was waiting.
+    expect((raised as Error).message).toContain(id);
+    expect((raised as Error).message).toContain("wasn't sent");
+    expect((raised as Error).message).toContain("Attach the files again");
+    // And named for whoever has to act on it from the other side. Every consequence of a missing
+    // stamp is about a specific person and a specific row.
+    expect(logged.join(" ")).toContain(memberId);
+    expect(logged.join(" ")).toContain(id);
+    // Still staged: still withdrawable, still countable against the cap, still stampable by a retry.
+    expect(await attachedAtOf(db, id)).toBeNull();
+>>>>>>> v1.0.0
   });
 
   /*
@@ -3715,27 +3804,6 @@ describe("markAttachmentsSent", () => {
         [],
       ),
     ).resolves.toBeUndefined();
-  });
-
-  /*
-   * THE HELPER'S OWN DIAGNOSTIC, WHICH USED TO BE UNREACHABLE.
-   *
-   * `waitForBlockedSession` gave itself 5s and Bun gives a test 5s by default, with no override
-   * anywhere, so the runner always won: the message naming the session that never blocked could not
-   * be printed, and both races failed as a bare "timed out after 5000ms" instead. The constants are
-   * compared here because that relationship is the fault, and the message is provoked with a short
-   * deadline because waiting the real one out would cost the suite seven seconds to observe a
-   * string.
-   */
-  test("the wait for a blocked session says which session it gave up on", async () => {
-    expect(BLOCKED_SESSION_DEADLINE_MS).toBeLessThan(
-      BLOCKED_SESSION_TIMEOUT_MS,
-    );
-
-    const applicationName = `never_blocks_${randomUUID()}`;
-    await expect(
-      waitForBlockedSession(applicationName, () => false, 50),
-    ).rejects.toThrow(applicationName);
   });
 });
 

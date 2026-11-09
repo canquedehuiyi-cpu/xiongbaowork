@@ -3,9 +3,20 @@ import { currentTenant } from "../tenant/context";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
-import { PERSON_INITIATOR } from "../audit";
+import {
+  ALREADY_WAITING,
+  DECLINED_BY_PERSON,
+  HANDLED_BY_PERSON,
+  NOT_DONE,
+  notCarriedOut,
+  notDoneOnRecheck,
+  OUTCOME_UNKNOWN,
+  WITHDRAWN_APPROVALS_OFF,
+  WITHDRAWN_RULE_ALLOWS,
+} from "@openbot/shared/approval-outcomes";
 import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 import { desktopFloor } from "./desktop-policy";
+import { PERSON_INITIATOR } from "../audit";
 import {
   applicableRules,
   DEFAULT_SENSITIVE_PATHS,
@@ -24,6 +35,7 @@ import {
   type ApprovalRecoveryOutcome,
   validateApprovalRecoveryContext,
   type ApprovalAction,
+  ApprovalAlreadyAnsweredError,
   type ApprovalCandidate,
   type ApprovalContinuation,
   type ApprovalDecision,
@@ -49,19 +61,19 @@ import {
   withApprovalContext,
 } from "./types";
 
-/**
- * What the Bot is told when the person says no. Plain, and distinct from a policy or boundary
- * refusal, so the model reports it truthfully and does not go looking for another way round it.
- */
-export const DECLINED_BY_PERSON =
-  "The person declined this action when you asked for their approval, so it was not done. This was their decision, not a policy or a boundary. Do not try this action, or anything equivalent, again in this conversation unless the person asks you to in words; tell them you did not do it because they declined.";
-/** What a Bot retrying an action that is still waiting is told, instead of opening a second request. */
-export const ALREADY_WAITING =
-  "An identical request is already waiting for the person's decision on the Bot's page in OpenBot, so this was not done and no second request was made. Do not repeat it; wait for their answer.";
-export const WITHDRAWN_APPROVALS_OFF =
-  "Not done: this request was withdrawn because the person switched off asking before changes. Try the action again if it is still needed.";
-export const WITHDRAWN_RULE_ALLOWS =
-  "Not done: this request was withdrawn because a rule the person saved now allows it without asking. Try the action again if it is still needed.";
+// The sentences a Bot is told about a step it did not carry out live with their person-facing
+// versions (shared/approval-outcomes.ts), so the app translates exactly what is sent here.
+export {
+  ALREADY_WAITING,
+  DECLINED_BY_PERSON,
+  HANDLED_BY_PERSON,
+  OUTCOME_UNKNOWN,
+  WITHDRAWN_APPROVALS_OFF,
+  WITHDRAWN_RULE_ALLOWS,
+};
+/** Why a change in a check-in task waits for the person, on its card where they decide it. */
+export const TASK_ASKS =
+  "Tasks started from a check-in ask before every change.";
 
 /** Snapshot ids and element refs change on every page read; the action they point at does not. */
 const VOLATILE = new Set(["snapshotId", "ref", "toolCallId", "signal"]);
@@ -89,6 +101,8 @@ export function equivalenceOf(candidate: ApprovalCandidate): string {
         // alone made every later call to that tool "the same" as one the person declined.
         stable(candidate.target),
         stable(candidate.args),
+        // Which mailbox: a denial of a send from one account says nothing about another.
+        ...(candidate.account ? [candidate.account] : []),
       ]),
     )
     .digest("hex");
@@ -99,14 +113,10 @@ const userTurnsOf = (continuation: ApprovalContinuation | undefined) =>
 
 /**
  * What the Bot is told when an approved action was started and the process running it stopped
- * before its result was saved (结果不明). It is never run a second time.
+ * before its result was saved (结果不明). It is never run a second time. The sentence itself now
+ * lives with its person-facing version in shared/approval-outcomes.ts.
  */
-export const APPROVAL_OUTCOME_UNKNOWN =
-  "This action was started but its outcome is unknown. It was not repeated. Check whether it happened before asking the person again.";
-/** What a hand-off answers the Bot with once the person has done it themselves. */
-export const HANDLED_BY_PERSON =
-  "The person did this themselves. Do not repeat it; continue from what they have done.";
-
+export const APPROVAL_OUTCOME_UNKNOWN = OUTCOME_UNKNOWN;
 const executionAuthority = new AsyncLocalStorage<{
   approvalId: string;
   digest: string;
@@ -352,6 +362,7 @@ export function createApprovalService(
         effect: candidate.effect,
         scope: candidate.scope,
         outcome,
+        target: candidate.target,
         ...(continuation?.initiator
           ? { initiator: continuation.initiator }
           : {}),
@@ -439,8 +450,27 @@ export function createApprovalService(
        */
       const policy = store.policy;
       const continuation = candidate.continuation ?? currentApprovalContext();
+      /*
+       * A TASK STARTED FROM A CHECK-IN ASKS BEFORE EVERYTHING BUT A TRUSTED READ, whatever the
+       * person's own switch or rules would allow: the work came from something a Bot noticed, not
+       * something the person wrote out, so they see each step before it happens. The one thing it
+       * does unasked is read an app the person connected with their own account, with a tool a
+       * reviewed read list names (`ownConnectionRead`). A tool only labelled a read, by its server or
+       * a broker, asks; so does a read chat would run freely (a page, a search on the deployment's
+       * key). A stricter answer (a hand-off, a refusal) still stands.
+       */
+      const inTask =
+        continuation?.threadId !== undefined &&
+        (await store.asksEveryChange?.(
+          candidate.actorId,
+          continuation.threadId,
+        )) === true;
+      const trustedRead = inTask && candidate.ownConnectionRead === true;
+      const taskAsks = inTask && !trustedRead;
       const equivalence =
-        policy && candidate.effect !== "read" && continuation?.threadId
+        policy &&
+        (candidate.effect !== "read" || taskAsks) &&
+        continuation?.threadId
           ? equivalenceOf(candidate)
           : undefined;
       const userTurns = userTurnsOf(continuation);
@@ -468,6 +498,7 @@ export function createApprovalService(
               source: "person_declined",
               reason: DECLINED_BY_PERSON,
             },
+            target: candidate.target,
             ...(continuation.initiator
               ? { initiator: continuation.initiator }
               : {}),
@@ -475,7 +506,33 @@ export function createApprovalService(
           throw new ApprovalRefusedError(DECLINED_BY_PERSON);
         }
       }
-      const outcome = await evaluate(candidate);
+      /*
+       * A trusted read in a task is judged as the read it is, the way a check-in judges it: the
+       * person's and the team's rules about reads still apply, and the switch that asks before
+       * changes does not, though chat classifies the tool as a change.
+       */
+      const evaluated = await evaluate(
+        trustedRead ? { ...candidate, effect: "read" } : candidate,
+      );
+      /*
+       * EVERY ASK IN A TASK IS THE TASK'S, whichever layer would have asked anyway. An ask the
+       * person's own switch or rule raised would otherwise keep `default` or `personal_rule`, and
+       * those are exactly what "Always allow here", turning the switch off and saving an allow rule
+       * answer: the card would offer a rule the next task ignores, and the switch or the rule would
+       * withdraw what the task is waiting on. Only a stricter answer, a hand-off or a refusal,
+       * keeps its own source.
+       */
+      const outcome: ApprovalPolicyOutcome | undefined =
+        taskAsks &&
+        evaluated?.behaviour !== "hand_off" &&
+        evaluated?.behaviour !== "deny"
+          ? {
+              behaviour: "ask",
+              source: "task",
+              reason: TASK_ASKS,
+              ...(evaluated?.review ? { review: evaluated.review } : {}),
+            }
+          : evaluated;
       if (outcome) {
         if (outcome.behaviour === "allow") return;
         // Disabled: refused here, after its audit row, with nothing opened and nothing to approve.
@@ -485,11 +542,12 @@ export function createApprovalService(
         // No policy to raise the desktop floor: a sensitive (or unconfirmed) window is still asked.
         candidate.effect === "read"
           ? !desktopFloor(candidate)
-          : !(await store.enabled(candidate.actorId))
+          : trustedRead || !(await store.enabled(candidate.actorId))
       )
         return;
+      const { ownConnectionRead: _trust, ...asked } = candidate;
       const action: ApprovalAction = {
-        ...approvalAction(candidate),
+        ...approvalAction(asked),
         ...(outcome ? { policy: outcome } : {}),
         ...(equivalence ? { equivalence, userTurns } : {}),
       };
@@ -498,7 +556,7 @@ export function createApprovalService(
         return { replay: HANDLED_BY_PERSON, complete: async () => undefined };
       if (request.result) {
         if (request.result.error)
-          throw new ApprovalRefusedError(request.result.error);
+          throw new ApprovalAlreadyAnsweredError(request.result.error);
         let replay: unknown;
         try {
           replay = JSON.parse(request.result.content);
@@ -508,7 +566,7 @@ export function createApprovalService(
         return { replay, complete: async () => undefined };
       }
       if (request.status === "denied")
-        throw new ApprovalRefusedError(DECLINED_BY_PERSON);
+        throw new ApprovalAlreadyAnsweredError(DECLINED_BY_PERSON);
       if (
         request.status === "approved" &&
         (await store.consume(action.actorId, request.id, action.actionDigest))
@@ -526,7 +584,7 @@ export function createApprovalService(
           },
         };
       if (request.status !== "pending")
-        throw new ApprovalRefusedError(
+        throw new ApprovalAlreadyAnsweredError(
           "This approval has already been used or revoked. The action was not repeated.",
         );
       const handOff = request.action.policy?.behaviour === "hand_off";
@@ -551,12 +609,24 @@ export function createApprovalService(
       return store.decide(ownerUserId, id, decision);
     },
     revoke: (ownerUserId: string, id: string) => store.revoke(ownerUserId, id),
-    async answerQuestion(ownerUserId: string, id: string, response: string) {
+    async answerQuestion(
+      ownerUserId: string,
+      id: string,
+      response: string,
+      options?: { inConversation?: boolean },
+    ) {
       if (!questions)
         throw new ApprovalRefusedError(
           "Questions are unavailable in this deployment.",
         );
-      return questions.respond(ownerUserId, id, response);
+      return questions.respond(ownerUserId, id, response, options);
+    },
+    async dismissQuestion(ownerUserId: string, id: string) {
+      if (!questions)
+        throw new ApprovalRefusedError(
+          "Questions are unavailable in this deployment.",
+        );
+      return questions.dismiss(ownerUserId, id);
     },
     /**
      * One of this person's own requests, in the inbox's shape, or ApprovalNotFoundError. The inbox
@@ -987,14 +1057,14 @@ export function createApprovalService(
           } catch (error) {
             if (!(error instanceof ApprovalRefusedError) && !isPermanent(error))
               throw error;
-            refusal = `Not done: ${
+            refusal = notDoneOnRecheck(
               error instanceof ApprovalRefusedError
                 ? error.message
-                : permanentReason(error)
-            } Ask the person again if it is still needed.`;
+                : permanentReason(error),
+            );
           }
           if (refusal !== undefined || !current) {
-            const reason = refusal ?? "Not done.";
+            const reason = refusal ?? NOT_DONE;
             result = { content: reason, error: reason };
           } else {
             const approved = current;
@@ -1116,6 +1186,8 @@ function publicApproval(request: ApprovalRecord) {
       toolCallId: action.toolCallId,
       args: approvalArgsPreview(action),
       target: approvalPreview(action.target),
+      // The account the card names: "send email from dana@work.example on Gmail".
+      ...(action.account ? { account: action.account } : {}),
       ...(action.policy
         ? {
             policy: {

@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { MCPMock } from "@copilotkit/aimock/mcp";
 import { and, eq } from "drizzle-orm";
 import { createAuditStore } from "../src/audit";
+import type { ActionPolicy } from "../src/computer/policy";
 import { createDatabase } from "../src/db/client";
 import {
   agents,
@@ -50,6 +51,7 @@ const asAdmin = <T>(fn: () => Promise<T>) => runAsTenant(admin, fn);
 let policy: ActionPolicy = { mode: "enforce", deny: [], allow: ["true"] };
 
 const store = createPluginStore({
+  brokerProvider: "composio",
   database,
   auditStore: createAuditStore(database),
   credentials: { readSecret: async () => null },
@@ -76,6 +78,7 @@ beforeAll(() =>
 
     mock.addTool({
       name: toolName,
+      vendorName: toolName,
       description: "Search the notes.",
       inputSchema: {
         type: "object",
@@ -227,4 +230,8 @@ describe("the tools a Bot is handed on the server", () => {
         policy = { mode: "enforce", deny: [], allow: ["true"] };
       }
     }));
+});
+
+afterAll(async () => {
+  await database.$client.close();
 });

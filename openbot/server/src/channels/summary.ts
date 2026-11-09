@@ -16,6 +16,7 @@
  */
 import { and, asc, eq, isNull, notExists, notInArray, sql } from "drizzle-orm";
 import { readFiring } from "@openbot/shared/routine-firing";
+import { and, asc, eq, isNull, notExists, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { NOBODY_TENANTS } from "../db/schema/tenant";
 import {
@@ -32,7 +33,7 @@ import {
 } from "../tenant/context";
 import { DEFAULT_MAX_ATTEMPTS, type WorkQueue } from "../work/queue";
 import { CHANNEL_ACTIVITY_TOPIC, type ChannelActivityEvent } from "./events";
-import { oneLine } from "./text";
+import { MAX_TITLE_GRAPHEMES, oneLine, plainLine } from "./text";
 
 export const CHANNEL_SUMMARY_KIND = "channel.summary";
 
@@ -41,6 +42,11 @@ export const SUMMARY_TENANT_UNRESOLVED = "no trusted tenant";
 
 /** A title long enough to truncate says no more than the preview it replaced. */
 const MAX_SUMMARY_GRAPHEMES = 60;
+/**
+ * More words than a sidebar title holds. An answer this long is the model replying to the
+ * conversation, not naming it, and is not written as its name.
+ */
+const MAX_TITLE_WORDS = 8;
 
 /** How much of the opening exchange the model is shown. Enough to see the topic, not the whole run. */
 const MAX_EXCERPT_GRAPHEMES = 600;
@@ -353,7 +359,7 @@ async function summariseOne(
   const answer = await options.title(excerpt);
   if (!answer) return "nothing to name it with";
 
-  const title = oneLine(stripWrappingQuotes(answer), MAX_SUMMARY_GRAPHEMES);
+  const title = titleFrom(answer);
   if (!title) return "nothing to name it with";
 
   return await options.database.transaction<Attempt>(
@@ -362,11 +368,24 @@ async function summariseOne(
       const applied = await transaction
         .update(channels)
         .set({ summary: title, summaryAt: new Date(), updatedAt: new Date() })
-        .where(and(eq(channels.id, channelId), isNull(channels.summary)))
+        .where(
+          and(
+            eq(channels.id, channelId),
+            isNull(channels.summary),
+            isNull(channels.deletedAt),
+          ),
+        )
         .returning({ id: channels.id });
-      // Somebody else named it between the claim and this write. Their title stands, and this work
-      // is done rather than still owed.
-      if (applied.length === 0) return "written";
+      if (applied.length === 0) {
+        // Another writer's title stands, but a conversation deleted while the model worked is gone.
+        // Both settle the queue item; only a surviving conversation counts as named.
+        const [remaining] = await transaction
+          .select({ id: channels.id })
+          .from(channels)
+          .where(and(eq(channels.id, channelId), isNull(channels.deletedAt)))
+          .limit(1);
+        return remaining ? "written" : "nothing to name it with";
+      }
 
       const members = await transaction
         .select({ userId: channelMemberships.userId })
@@ -397,10 +416,19 @@ async function openingOf(
   transcript: ThreadTranscript,
   owner: { threadId: string; userId: string },
 ): Promise<string | null> {
-  const history = await transcript.getThreadMessages({
-    threadId: owner.threadId,
-    userId: owner.userId,
-  });
+  let history: Awaited<ReturnType<ThreadTranscript["getThreadMessages"]>>;
+  try {
+    history = await transcript.getThreadMessages({
+      threadId: owner.threadId,
+      userId: owner.userId,
+    });
+  } catch (error) {
+    // A channel holds its thread id from the moment it is created; Intelligence creates the thread
+    // only when the first run starts. A sweep on any replica can get there first and be told 404,
+    // which is the same "not yet" as an empty history. Duck-typed as in thread-status.ts.
+    if ((error as { status?: unknown } | null)?.status === 404) return null;
+    throw error;
+  }
   const question = history.messages.find((message) => message.role === "user");
   if (!question) return null;
   const answer = history.messages.find(
@@ -433,6 +461,20 @@ function textOf(content: unknown): string {
     )
     .join(" ")
     .trim();
+}
+
+/**
+ * The model's answer as a sidebar title, or null when it is not one.
+ *
+ * Plain, because the model writes Markdown as readily as a Bot does, and the roster draws text, not
+ * Markdown. Refused when it runs to more than a title's words: that is the model answering the
+ * conversation, a status report in the format the person asked the Bot for, say, and written as the
+ * name it would stay the name. Refused, the conversation keeps its opening.
+ */
+function titleFrom(answer: string): string | null {
+  const title = plainLine(stripWrappingQuotes(answer), MAX_TITLE_GRAPHEMES);
+  if (!title || title.split(" ").length > MAX_TITLE_WORDS) return null;
+  return title;
 }
 
 /* Only a matched pair wrapping the whole answer: a title containing a quote keeps it. */

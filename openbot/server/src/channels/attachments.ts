@@ -1,4 +1,11 @@
 import {
+  classifyAttachment,
+  MAX_ATTACHMENTS_PER_MESSAGE,
+  MAX_FILE_BYTES,
+  MAX_IMAGE_BYTES,
+  namesNoFormat,
+} from "@openbot/shared/attachments";
+import {
   and,
   eq,
   exists,
@@ -440,8 +447,8 @@ export async function markAttachmentsSent(
 
   const named = unrecorded.map((id) => `"${id}"`).join(", ");
   throw new Error(
-    `This turn was not run, because ${unrecorded.length === 1 ? "an attachment on your message" : "attachments on your message"} could not be recorded as sent (${named}). ` +
-      "A file withdrawn while the turn was being prepared is the usual cause. Nothing was sent to the Bot — attach the file again and resend.",
+    `Your message wasn't sent because ${unrecorded.length === 1 ? "an attachment on it" : "attachments on it"} couldn't be saved (${named}). ` +
+      "Attach the files again and resend.",
   );
 }
 
@@ -774,16 +781,13 @@ export function createChannelAttachmentRoutes(
 
     if (!membership) {
       return context.json(
-        { error: "That file could not be stored just now. Try again." },
+        { error: "Couldn't upload that file. Try again." },
         503,
       );
     }
 
     if (membership.length === 0) {
-      return context.json(
-        { error: "You are not a member of this channel." },
-        403,
-      );
+      return context.json({ error: "You're not in this conversation." }, 403);
     }
 
     /*
@@ -820,15 +824,15 @@ export function createChannelAttachmentRoutes(
     if (kind === "unsupported-image") {
       const error =
         mimeType === "image/svg+xml"
-          ? `'${name}' is an SVG, which can carry scripts and is not accepted.`
-          : `'${name}' is an ${mimeType} image, which this app cannot read.`;
+          ? `'${name}' can't be attached. SVG files aren't accepted.`
+          : `'${name}' can't be attached. OpenBot can't read ${mimeType} images.`;
       return context.json({ error }, 415);
     }
 
     if (kind === "unsupported") {
       return context.json(
         {
-          error: `'${name}' is not a file type this app can read${describeType(mimeType)}.`,
+          error: `'${name}' isn't a file type OpenBot can read${describeType(mimeType)}.`,
         },
         415,
       );
@@ -1045,7 +1049,7 @@ export function createChannelAttachmentRoutes(
 
     if ("unavailable" in outcome) {
       return context.json(
-        { error: "That file could not be stored just now. Try again." },
+        { error: "Couldn't upload that file. Try again." },
         503,
       );
     }
@@ -1053,10 +1057,7 @@ export function createChannelAttachmentRoutes(
     // The same sentence and the same status as the check at the top of the handler, because from
     // the uploader's side it is the same refusal — it just became true later than that check ran.
     if ("forbidden" in outcome) {
-      return context.json(
-        { error: "You are not a member of this channel." },
-        403,
-      );
+      return context.json({ error: "You're not in this conversation." }, 403);
     }
 
     /*
@@ -1111,7 +1112,7 @@ export function createChannelAttachmentRoutes(
     if ("held" in outcome) {
       return context.json(
         {
-          error: `You have ${outcome.held} files waiting to send across your channels, which is as many as one person can hold unsent. Send or remove some before attaching more; any in a channel you can no longer open have to be cleared by whoever runs this deployment.`,
+          error: `You have ${outcome.held} files waiting to send across your conversations, which is the limit. Send or remove some first. Files in a conversation you can't open anymore have to be cleared by an admin.`,
         },
         409,
       );
@@ -1334,7 +1335,7 @@ function noSuchAttachment(context: AttachmentContext) {
  */
 function couldNotReadAttachment(context: AttachmentContext) {
   return context.json(
-    { error: "That attachment could not be read just now. Try again." },
+    { error: "Couldn't open that attachment. Try again." },
     503,
   );
 }
@@ -1747,7 +1748,7 @@ export function createAttachmentRoutes(
     if (!removed) {
       return context.json(
         {
-          error: "That attachment could not be withdrawn just now. Try again.",
+          error: "Couldn't remove that attachment. Try again.",
         },
         503,
       );
@@ -1812,7 +1813,7 @@ export function createAttachmentRoutes(
     if (!rows) {
       return context.json(
         {
-          error: "That attachment could not be withdrawn just now. Try again.",
+          error: "Couldn't remove that attachment. Try again.",
         },
         503,
       );
