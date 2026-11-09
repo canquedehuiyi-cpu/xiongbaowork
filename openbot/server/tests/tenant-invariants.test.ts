@@ -209,7 +209,10 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   "src/platform/routes.ts": { "adminActAsOwner(": 1, "asAdminPlatform(": 2 },
   "src/platform/store.ts": { 'runAsTenant("platform"': 3 },
   "src/plugins/logos.ts": { 'runAsTenant("platform"': 2 },
-  "src/plugins/routes.ts": { "adminActAsOwner(": 1, "asAdminPlatform(": 1 },
+  // 授予时进入 Bot 主人的帧（asBotOwner），以及申请访问的收件箱（迁移 0153）：持有 capability 的管理员
+  // 在 platform 帧里列出所有人的 pending 申请、按 id 读一条，处理结果经 adminActAsOwner 写回申请人的帧。
+  // 申请人自己的读、撤回都在本人的帧里，不经过这些入口。
+  "src/plugins/routes.ts": { "adminActAsOwner(": 2, "asAdminPlatform(": 3 },
   // Install listings (admin-only), and `removeServer`'s reach over every person's rows tied to one
   // team server (their tokens, brokered connections and grants for it), after `requireServerWriter`
   // has checked the admin capability (P21). The fourth is reachable from a member's request on
