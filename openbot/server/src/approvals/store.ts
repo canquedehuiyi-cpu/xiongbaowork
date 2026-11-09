@@ -28,6 +28,7 @@ import {
   DEFAULT_EMPLOYEE_SECURITY,
   type EmployeePolicy,
   type EmployeeSecuritySettings,
+  ONCE_ONLY_SOURCES,
   offersStandingRule,
 } from "./types";
 
@@ -208,12 +209,12 @@ export function createApprovalStore(
           throw new ApprovalRefusedError(
             "Only an action handed to you can be marked done by you.",
           );
-        // 删除类和对外发送底线问的动作在任何规则之后都还要问，存一条「总是允许」只会误导人。
+        // 只给「允许一次」的底线（删除类、对外发送、分享、公开发布）问的动作在任何规则之后都还要
+        // 问，存一条「总是允许」只会误导人。
         if (decision === "allow_always" && !offersStandingRule(request.action))
           throw new ApprovalRefusedError(
-            request.action.policy?.source === "outbound_send"
-              ? "这个操作可能会把内容发给别人，每次都要你确认，只能「允许一次」或拒绝。"
-              : "这个操作会删除或覆盖内容，每次都要你确认，只能「允许一次」或拒绝。",
+            ONCE_ONLY_SOURCES[request.action.policy?.source ?? ""] ??
+              ONCE_ONLY_SOURCES.destructive_tool,
           );
         if (decision === "allow_always")
           await tx.insert(approvalRules).values({

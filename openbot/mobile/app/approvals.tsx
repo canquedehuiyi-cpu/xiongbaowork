@@ -11,6 +11,14 @@ import {
 import { type ApprovalInbox, api } from "../src/api";
 import { authClient } from "../src/auth";
 import { useLoad } from "../src/use-load";
+
+/** 只给「允许一次」的底线，与服务端 approvals/types 的 `offersStandingRule` 同一个名单。 */
+const ONCE_ONLY_SOURCES: ReadonlySet<string> = new Set([
+  "destructive_tool",
+  "outbound_send",
+  "share_access",
+  "publish_post",
+]);
 export default function ApprovalsScreen() {
   const { requestId } = useLocalSearchParams<{ requestId?: string }>();
   const { data: session, isPending } = authClient.useSession();
@@ -112,9 +120,10 @@ export default function ApprovalsScreen() {
                 void decide(request.id, "allow_once");
               }}
             />
-            {/* 删除类和对外发送底线问的动作每次都要问，存下的规则用不上，服务端也会拒绝，所以不画。 */}
-            {request.action?.policy?.source === "destructive_tool" ||
-            request.action?.policy?.source === "outbound_send" ? null : (
+            {/* 只给「允许一次」的底线（删除类、对外发送、分享、公开发布）问的动作每次都要问，存下的规则用不上，服务端也会拒绝，所以不画。 */}
+            {ONCE_ONLY_SOURCES.has(
+              request.action?.policy?.source ?? "",
+            ) ? null : (
               <Button
                 disabled={Boolean(busy)}
                 title="Always allow this scope"

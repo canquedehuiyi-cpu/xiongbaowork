@@ -8,6 +8,8 @@ import {
   DEFAULT_SENSITIVE_PATHS,
   DESTRUCTIVE_TOOL_REASON,
   OUTBOUND_SEND_REASON,
+  PUBLISH_POST_REASON,
+  SHARE_ACCESS_REASON,
   dangerousCommand,
   decideAction,
   effectiveHostCommandPolicy,
@@ -2778,5 +2780,444 @@ describe("outbound sends always ask, once at a time", () => {
           })
         ).source,
       ).toBe("outbound_send");
+  });
+});
+
+/*
+ * 上游审批底线补齐（阶段 2b）：对照上游 #904、#930、#998、#1015、#1109、#1175、#1179、#1187，
+ * 按 fork 的决策顺序移植。新增的底线都只给「允许一次 / 拒绝」，规则设为「总是允许」也照样问；
+ * 应用工具一侧只认 `subject.connector`。
+ */
+describe("upstream floors: app tools", () => {
+  const connector = (
+    toolRef: string,
+    args: unknown = { id: "51" },
+    over: Partial<ApprovalCandidate> = {},
+  ) =>
+    candidate({
+      toolRef,
+      scope: toolRef.split("/")[0] ?? "app",
+      args,
+      subject: { connector: true },
+      ...over,
+    });
+  const allowAll = {
+    personal: [rule("allow", { toolRef: "*" })],
+    team: [team("allow", { toolRef: "*" })],
+  };
+  const sourceOf = async (c: ApprovalCandidate) =>
+    (await decideAction({ ...base, ...allowAll, candidate: c })).source;
+
+  test("safetyRequirement says whether it hands off or asks (behaviour)", () => {
+    expect(
+      safetyRequirement(
+        candidate({
+          toolRef: "computer_type",
+          args: { field: "New password" },
+        }),
+      ),
+    ).toEqual({
+      id: "credentials",
+      reason:
+        "Changing a password, passcode, two-factor setting, recovery code or other credential is always done by the person.",
+      behaviour: "hand_off",
+    });
+    expect(
+      safetyRequirement(connector("composio-hubspot/HUBSPOT_ARCHIVE_CONTACT")),
+    ).toEqual({
+      id: "destructive_tool",
+      reason: DESTRUCTIVE_TOOL_REASON,
+      behaviour: "ask",
+    });
+    expect(
+      safetyRequirement(connector("composio-gmail/GMAIL_SEND_EMAIL")),
+    ).toEqual({
+      id: "outbound_send",
+      reason: OUTBOUND_SEND_REASON,
+      behaviour: "ask",
+    });
+    // 和删除类底线一样，应用标为破坏性的工具被分类成读也照样问。
+    expect(
+      safetyRequirement(
+        connector(
+          "mcp/acme/reset_workspace",
+          { w: "1" },
+          {
+            destructive: true,
+            effect: "read",
+          },
+        ),
+      )?.behaviour,
+    ).toBe("ask");
+    expect(
+      safetyRequirement(connector("composio-gmail/GMAIL_FETCH_EMAILS")),
+    ).toBeUndefined();
+  });
+
+  test("sharing asks with its own source, once at a time, over an always-allow rule", async () => {
+    expect(SHARE_ACCESS_REASON).toBe(
+      "这个操作会把内容分享给别人，或改变谁能访问，总是先征得你同意。",
+    );
+    for (const name of [
+      "GOOGLEDRIVE_ADD_FILE_SHARING_PREFERENCE",
+      "GOOGLEDRIVE_CREATE_PERMISSION",
+      "GITHUB_ADD_A_REPOSITORY_COLLABORATOR",
+      "DROPBOX_CREATE_SHARED_LINK",
+      "NOTION_UPDATE_PAGE_PERMISSIONS",
+      "BOX_GRANT_ACCESS",
+    ]) {
+      const outcome = await decideAction({
+        ...base,
+        ...allowAll,
+        candidate: connector(`vendor/${name}`),
+      });
+      expect({ name, outcome }).toMatchObject({
+        name,
+        outcome: {
+          behaviour: "ask",
+          source: "share_access",
+          reason: SHARE_ACCESS_REASON,
+        },
+      });
+      expect(offersStandingRule({ policy: outcome })).toBeFalse();
+    }
+    // 已有的底线先认：share 作第一个动词仍是对外发送，remove 仍是删除类。
+    expect(await sourceOf(connector("vendor/share_file"))).toBe(
+      "outbound_send",
+    );
+    expect(await sourceOf(connector("vendor/remove_collaborator"))).toBe(
+      "destructive_tool",
+    );
+    // 读权限、搜共享盘不算分享。
+    for (const name of [
+      "GOOGLEDRIVE_LIST_PERMISSIONS",
+      "GITHUB_GET_REPOSITORY_PERMISSIONS_FOR_A_USER",
+    ])
+      expect(
+        await sourceOf(connector(`vendor/${name}`, {}, { effect: "read" })),
+      ).toBe("team_rule");
+    expect(await sourceOf(connector("gmail/search_shared_drives", {}))).toBe(
+      "team_rule",
+    );
+  });
+
+  test("publishing asks with its own source, once at a time, over an always-allow rule", async () => {
+    expect(PUBLISH_POST_REASON).toBe(
+      "这个操作会公开发布内容，总是先征得你同意。",
+    );
+    for (const name of [
+      "TWITTER_RETWEET",
+      "REDDIT_REPOST",
+      "YOUTUBE_GO_LIVE",
+      "GITHUB_CREATE_A_RELEASE",
+      "FACEBOOK_SUBMIT_POST",
+      "TWITTER_POST_A_TWEET",
+    ]) {
+      const outcome = await decideAction({
+        ...base,
+        ...allowAll,
+        candidate: connector(`vendor/${name}`),
+      });
+      expect({ name, source: outcome.source }).toEqual({
+        name,
+        source:
+          name === "TWITTER_POST_A_TWEET" ? "outbound_send" : "publish_post",
+      });
+      expect(outcome.behaviour).toBe("ask");
+      expect(offersStandingRule({ policy: outcome })).toBeFalse();
+    }
+    // 只是提到帖子、不是发布它的，不问。
+    for (const name of [
+      "TWITTER_ADD_POST_TO_BOOKMARKS",
+      "TWITTER_LIKE_TWEET",
+      "SHOPIFY_MARK_COMMENT_AS_SPAM",
+      "LINKEDIN_GET_POST",
+    ])
+      expect({
+        name,
+        source: await sourceOf(connector(`vendor/${name}`)),
+      }).toEqual({ name, source: "team_rule" });
+  });
+
+  test("more sends ask as outbound sends: notify, broadcast, comment, scheduled campaigns, add message", async () => {
+    for (const name of [
+      "notify_users",
+      "SLACK_BROADCAST_MESSAGE",
+      "JIRA_ADD_COMMENT",
+      "MAILCHIMP_SCHEDULE_CAMPAIGN",
+      "slack_add_message",
+      "ZENDESK_RESPOND_TO_TICKET",
+    ])
+      expect({
+        name,
+        source: await sourceOf(connector(`vendor/${name}`)),
+      }).toEqual({ name, source: "outbound_send" });
+  });
+
+  test("an invitation to someone's address asks as an outbound send, whatever the tool is called", async () => {
+    for (const [name, args] of [
+      ["GOOGLECALENDAR_CREATE_EVENT", { attendees: ["sam@example.com"] }],
+      [
+        "GOOGLECALENDAR_UPDATE_EVENT",
+        { attendees: [{ email: "sam@example.com" }] },
+      ],
+      [
+        "OUTLOOK_CALENDAR_CREATE_EVENT",
+        { attendees_info: [{ email: "a@b.co" }] },
+      ],
+      [
+        "ZOOM_CREATE_A_MEETING",
+        { settings__meeting__invitees: [{ email: "a@b.co" }] },
+      ],
+      ["CALENDLY_CREATE_INVITEE", { eventGuests: ["a@b.co"] }],
+      ["CRM_CREATE_TICKET", { cc: "boss@example.com" }],
+    ] as const)
+      expect({
+        name,
+        source: await sourceOf(connector(`vendor/${name}`, args)),
+      }).toEqual({ name, source: "outbound_send" });
+    // 没有地址、只是设置，或只是草稿、读取：不算。
+    for (const [name, args] of [
+      ["GOOGLECALENDAR_CREATE_EVENT", { summary: "Focus", attendees: [] }],
+      ["GOOGLECALENDAR_CREATE_EVENT", { guestsCanModify: true }],
+      ["GMAIL_CREATE_EMAIL_DRAFT", { to: "sam@example.com" }],
+      ["GOOGLECALENDAR_LIST_EVENTS", { attendees: "sam@example.com" }],
+      ["CRM_UPDATE_CONTACT", { to: "sam@example.com" }],
+    ] as const)
+      expect({
+        name,
+        source: await sourceOf(connector(`vendor/${name}`, args)),
+      }).toEqual({ name, source: "team_rule" });
+  });
+
+  test("moving money and buying, by an app tool's name, are handed to the person", async () => {
+    for (const name of [
+      "STRIPE_CREATE_PAYOUT",
+      "WISE_CREATE_TRANSFER",
+      "STRIPE_PAY_INVOICE",
+      "SQUARE_PAY_ORDER",
+      "DEEL_SUBMIT_ON_DEMAND_PAYROLL",
+      "SHOPIFY_CREATE_ORDER",
+      "STRIPE_CREATE_CHARGE",
+    ])
+      expect({
+        name,
+        outcome: await decideAction({
+          ...base,
+          ...allowAll,
+          candidate: connector(`vendor/${name}`, { note: "x" }),
+        }),
+      }).toMatchObject({
+        name,
+        outcome: { behaviour: "hand_off", source: "safety" },
+      });
+    for (const name of [
+      "GITHUB_TRANSFER_A_REPOSITORY",
+      "GUSTO_UPDATE_PAY_SCHEDULE",
+      "SLACK_TRANSFER_OWNERSHIP",
+    ])
+      expect({
+        name,
+        source: await sourceOf(connector(`vendor/${name}`, { note: "x" })),
+      }).toEqual({ name, source: "team_rule" });
+  });
+
+  test("refunds move money; writing an order note does not; a news wire is not a wire of money", () => {
+    const shopify = (toolName: string, args: Record<string, unknown>) =>
+      safetyRequirement(
+        connector(`composio-shopify/${toolName}`, args, {
+          target: {
+            serverId: "composio-shopify",
+            toolName,
+            url: "https://mcp.composio.dev/shopify",
+            effect: "write",
+          },
+        }),
+      )?.id;
+    expect(
+      shopify("SHOPIFY_CREATE_REFUND", {
+        id: 123,
+        refund_line_items: [{ line_item_id: 1 }],
+      }),
+    ).toBe("payments");
+    expect(
+      shopify("SHOPIFY_UPDATE_ORDER", { id: 123, note: "gift wrap" }),
+    ).toBeUndefined();
+    // 留空的字段不是发出去的参数（上游 #930）。
+    expect(
+      shopify("SHOPIFY_UPDATE_ORDER", {
+        id: 123,
+        billing_address: null,
+        note: "gift wrap",
+      }),
+    ).toBeUndefined();
+    expect(
+      shopify("SHOPIFY_UPDATE_ORDER", {
+        id: 123,
+        billing_address: {},
+        note: "",
+      }),
+    ).toBeUndefined();
+    // 填了的仍然算。
+    expect(
+      shopify("SHOPIFY_UPDATE_ORDER", {
+        id: 123,
+        billing_address: { line1: "1 Main St" },
+      }),
+    ).toBe("payments");
+    // 新闻通稿不是电汇；电汇仍是动钱。
+    const crm = (source: string) =>
+      safetyRequirement(
+        connector("composio-hubspot/HUBSPOT_CREATE_COMPANY", { source }),
+      )?.id;
+    expect(crm("Business Wire; LinkedIn")).toBeUndefined();
+    expect(crm("PR Newswire, press wire")).toBeUndefined();
+    expect(crm("news wire")).toBeUndefined();
+    expect(crm("Wire the deposit to the vendor")).toBe("payments");
+    expect(crm("Start a wire transfer")).toBe("payments");
+  });
+
+  test("a field nested past the depth cap still counts by its name", () => {
+    const sent = (args: Record<string, unknown>) =>
+      safetyRequirement(
+        connector("composio-shopify/SHOPIFY_GRAPHQL_MUTATION", args),
+      )?.id;
+    const nested = (leaf: Record<string, unknown>) =>
+      sent({ a: { b: { c: { d: { e: { f: leaf } } } } } });
+    expect(nested({ payment_method: { card: "tok_123" } })).toBe("payments");
+    expect(nested({ billing: [{ line: 1 }] })).toBe("payments");
+    expect(
+      sent({ a: { b: { c: { d: { e: { refund_lines: [{ id: 1 }] } } } } } }),
+    ).toBe("payments");
+    expect(nested({ billing_address: {}, refund: [] })).toBeUndefined();
+  });
+
+  test("an address that carries credential words in its query string is not a credentials page", () => {
+    const acting = (
+      toolRef: "computer_type" | "computer_click",
+      element: { name: string; role: string; type?: string },
+      pageUrl: string,
+    ) =>
+      safetyRequirement(
+        candidate({
+          toolRef,
+          scope: URL.canParse(pageUrl) ? new URL(pageUrl).host : "browser",
+          args:
+            toolRef === "computer_type"
+              ? { ref: "e5", text: "Test Robot", snapshotId: 4 }
+              : { ref: "e5", snapshotId: 4 },
+          target: {
+            element: { ref: "e5", ...element },
+            pageUrl,
+            snapshotId: 4,
+          },
+        }),
+      )?.id;
+    const presigned =
+      "https://garden-club-example.s3.us-east-2.amazonaws.com/f4/garden-signup.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=EXAMPLEKEYID%2F20261107%2Fus-east-2%2Fs3%2Faws4_request&X-Amz-Date=20261107T043445Z&X-Amz-Expires=21600&X-Amz-SignedHeaders=host&X-Amz-Security-Token=EXAMPLE-SESSION-TOKEN&X-Amz-Signature=0123456789abcdef";
+    for (const field of ["Full name", "Email", "Note"])
+      expect(
+        acting("computer_type", { name: field, role: "textbox" }, presigned),
+      ).toBeUndefined();
+    expect(
+      acting("computer_click", { name: "Sign up", role: "button" }, presigned),
+    ).toBeUndefined();
+    expect(
+      acting(
+        "computer_type",
+        { name: "Display name", role: "textbox" },
+        "https://app.example/welcome?code=4%2F0AY&state=xyz&access_token=ya29.a0Af#access_token=ya29.a0Af&token_type=Bearer",
+      ),
+    ).toBeUndefined();
+    expect(
+      acting(
+        "computer_type",
+        { name: "Company", role: "textbox" },
+        "https://crm.example/accounts/new?api_key=sk_live_123&credential=abc",
+      ),
+    ).toBeUndefined();
+    // 凭据字段、按钮、路径照样交给本人。
+    expect(
+      acting(
+        "computer_type",
+        { name: "New password", role: "textbox" },
+        presigned,
+      ),
+    ).toBe("credentials");
+    expect(
+      acting(
+        "computer_type",
+        { name: "PIN", role: "textbox", type: "password" },
+        presigned,
+      ),
+    ).toBe("credentials");
+    expect(
+      acting(
+        "computer_click",
+        { name: "Change password", role: "button" },
+        "https://mail.example/settings?tab=general",
+      ),
+    ).toBe("credentials");
+    expect(
+      acting(
+        "computer_type",
+        { name: "Phone number", role: "textbox" },
+        "https://accounts.example/security/2fa?step=1",
+      ),
+    ).toBe("credentials");
+    expect(
+      acting(
+        "computer_click",
+        { name: "Create", role: "button" },
+        "https://console.cloud.example/apis/credentials?project=demo",
+      ),
+    ).toBe("credentials");
+    // 只有凭据这一条去掉查询串：查询串里的 checkout 仍算付款。
+    expect(
+      acting(
+        "computer_type",
+        { name: "Quantity", role: "textbox" },
+        "https://shop.example/cart?step=checkout",
+      ),
+    ).toBe("payments");
+    // 地址读不出来时整段照旧匹配，不是不匹配。
+    expect(
+      acting(
+        "computer_type",
+        { name: "Name", role: "textbox" },
+        "not a url ?access_token=1",
+      ),
+    ).toBe("credentials");
+  });
+
+  test("only app tools: the Bot's own tools and unmarked refs are not asked about by the new floors", async () => {
+    for (const toolRef of [
+      "bot/share_note",
+      "host/notify_users",
+      "memory/add_comment",
+    ])
+      expect(
+        (
+          await decideAction({
+            ...base,
+            ...allowAll,
+            candidate: candidate({ toolRef, scope: "x", args: {} }),
+          })
+        ).behaviour,
+      ).toBe("allow");
+    // 按名字的付款交给本人也只认应用工具。
+    expect(
+      safetyRequirement(candidate({ toolRef: "bot/create_payout", args: {} })),
+    ).toBeUndefined();
+  });
+
+  test("every once-only source refuses a standing rule and names itself on the card", () => {
+    for (const source of [
+      "destructive_tool",
+      "outbound_send",
+      "share_access",
+      "publish_post",
+    ])
+      expect(offersStandingRule({ policy: { source } })).toBeFalse();
   });
 });
