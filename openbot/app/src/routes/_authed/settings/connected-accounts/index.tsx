@@ -1,4 +1,3 @@
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 import {
   IconBrandGoogleDrive,
   IconBrandNotion,
@@ -40,22 +39,17 @@ import {
   type PluginServer,
   pluginsPageQueryOptions,
 } from "@/lib/plugins/queries";
-=======
-import { createFileRoute, redirect } from "@tanstack/react-router";
-import { searchTextEntry } from "@/lib/search-text";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 
 /**
- * Connected accounts moved from Settings to their own page, Connections.
+ * The services a Bot reads as you.
  *
- * Kept as a redirect, carrying `?connected=`, `?authorized=` and `?linked=`, because a consent
- * somebody began before an upgrade still comes back here: the vendor holds the return address it was
- * given at the time. Each is read as text whatever the router parsed it into, for the reason the
- * page it lands on gives (`searchText`): a report that happens to be digits must not be dropped on
- * the way through.
+ * Yours, not the deployment's. An administrator decides which vendors this deployment may reach at
+ * all; this is the other half of that decision, and it is one nobody can make for you — there is no
+ * endpoint for an administrator to connect an account on somebody's behalf. A Bot calling one of
+ * these runs on your own grant, so it sees exactly what you can see and nothing else.
  */
+// M4: 待接入 上游把已连接账户搬到了 /connections（_app/connections.*.tsx，含按应用的连接页、Composio 目录），并把这里改成重定向；fork 保留设置里的这一页（服务端 OAuth 仍回到 /settings/connected-accounts）
 export const Route = createFileRoute("/_authed/settings/connected-accounts/")({
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   component: RouteComponent,
   /*
    * `?connected=` is how the OAuth callback reports back, carrying a server key on success and
@@ -67,24 +61,15 @@ export const Route = createFileRoute("/_authed/settings/connected-accounts/")({
    * The key is omitted rather than set to undefined. Present-but-undefined makes `search` a required
    * prop on every Link to this route, which is a lot of ripple for a parameter only the callback sets.
    */
-=======
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   validateSearch: (
     search: Record<string, unknown>,
-  ): { connected?: string; authorized?: string; linked?: string } => ({
-    ...searchTextEntry("connected", search.connected),
-    ...searchTextEntry("authorized", search.authorized),
-    ...searchTextEntry("linked", search.linked),
+  ): { connected?: string; linked?: string } => ({
+    ...(typeof search.connected === "string"
+      ? { connected: search.connected }
+      : {}),
+    ...(typeof search.linked === "string" ? { linked: search.linked } : {}),
   }),
-  beforeLoad: ({ search }) => {
-    throw redirect({
-      to: "/connections",
-      search,
-      replace: true,
-    });
-  },
 });
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 
 /** The same marks the admin connector list uses: these are the same vendors seen from your side. */
 const MARKS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -345,5 +330,3 @@ function RouteComponent() {
     </PageShell>
   );
 }
-=======
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b

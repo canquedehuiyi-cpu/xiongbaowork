@@ -3,6 +3,7 @@ import {
   mutationOptions,
   type QueryClient,
 } from "@tanstack/react-query";
+import { botLifecycleKeys } from "@/lib/bot-lifecycle/queries";
 import { client, tryClient } from "@/lib/client";
 import { settingsKeys } from "@/lib/settings/queries";
 import { type AgentChannel, type ChannelPage, channelKeys } from "./queries";
@@ -18,11 +19,7 @@ export function createChannelMutationOptions(queryClient: QueryClient) {
       const response = await client("/api/channels", {
         method: "POST",
         body: { agentIds },
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         fallback: "无法开始会话",
-=======
-        fallback: "Couldn't start a conversation.",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       });
       return ((await response.json()) as { channel: AgentChannel }).channel;
     },
@@ -94,11 +91,7 @@ export function setChannelPinnedMutationOptions(queryClient: QueryClient) {
       await client(`/api/channels/${variables.channelId}/pin`, {
         method: "PUT",
         body: { pinned: variables.pinned },
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         fallback: "无法置顶这段会话",
-=======
-        fallback: "Couldn't pin this conversation.",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       });
     },
     onSuccess: () =>
@@ -110,22 +103,22 @@ export function setChannelPinnedMutationOptions(queryClient: QueryClient) {
  * Stamp a channel read for this member, patching the cache before the wire answers.
  *
  * Patched in onMutate rather than refetched on success: the dot must clear the instant the channel
- * opens, not a round-trip later. No rollback on failure and no invalidation — a mark-read that did
- * not land is a dot that returns on the next refetch, which is the truth reasserting itself, and a
- * refetch here would race the socket's own patches for nothing.
+ * opens, not a round-trip later. No rollback on failure and no roster invalidation — a mark-read
+ * that did not land is a dot that returns on the next refetch, which is the truth reasserting
+ * itself, and a roster refetch here would race the socket's own patches for nothing. The Bots
+ * badge counts unread on the server, so once the mark lands its count is asked for again rather
+ * than left lit until its next poll.
  */
 export function markChannelReadMutationOptions(queryClient: QueryClient) {
   return mutationOptions({
     mutationFn: async (channelId: string) => {
       await client(`/api/channels/${channelId}/read`, {
         method: "PUT",
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         fallback: "无法把这段会话标为已读",
-=======
-        fallback: "Couldn't mark this conversation as read.",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       });
     },
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: botLifecycleKeys.attention }),
     onMutate: (channelId) => {
       const now = new Date().toISOString();
       queryClient.setQueryData(
@@ -165,20 +158,13 @@ export function deleteChannelMutationOptions(
 ) {
   return mutationOptions({
     mutationFn: async (channelId: string) => {
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-      await client(`/api/channels/${channelId}`, {
-        method: "DELETE",
-        fallback: "无法删除这段会话",
-      });
-=======
       await client(
         `/api/channels/${channelId}${discardFailedStart ? "?discardFailedStart=true" : ""}`,
         {
           method: "DELETE",
-          fallback: "Couldn't delete this conversation.",
+          fallback: "无法删除这段会话",
         },
       );
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     },
     // The roster only. The open channel's detail query would refetch into the fresh 404 and
     // flash an error before the navigate-home lands; left alone, it keeps its cache and the

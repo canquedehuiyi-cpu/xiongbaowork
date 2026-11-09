@@ -20,7 +20,7 @@ import {
 } from "@tanstack/react-router";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import * as NewBotSheetModule from "@/components/agents/new-bot-sheet";
+import * as CreateAgentDialogModule from "@/components/agents/create-agent-dialog";
 import * as SidebarToggleModule from "@/components/layout/sidebar-toggle";
 import { type AgentProfile, agentKeys } from "@/lib/agents/queries";
 import {
@@ -40,21 +40,22 @@ beforeAll(() => GlobalRegistrator.register());
 
 // The shared preload supplies the Vite-only marks module before importing the real sheet.
 // Namespace spies can be restored; mock.module would leak these handoff stubs into later suites.
-const realNewBotSheet = NewBotSheetModule.NewBotSheet;
+const realCreateAgentDialog = CreateAgentDialogModule.CreateAgentDialog;
 const realSidebarToggle = SidebarToggleModule.SidebarToggle;
 let restoreComponents = () => {};
 
 beforeEach(() => {
-  const newBotSheetSpy = spyOn(
-    NewBotSheetModule,
-    "NewBotSheet",
+  // The picker opens the fork's new-employee wizard; the stub has the same open/onClose/onCreated.
+  const createAgentDialogSpy = spyOn(
+    CreateAgentDialogModule,
+    "CreateAgentDialog",
   ).mockImplementation(NewBotCreationStub);
   const sidebarToggleSpy = spyOn(
     SidebarToggleModule,
     "SidebarToggle",
   ).mockImplementation(SidebarToggleStub);
   restoreComponents = () => {
-    newBotSheetSpy.mockRestore();
+    createAgentDialogSpy.mockRestore();
     sidebarToggleSpy.mockRestore();
   };
 });
@@ -64,7 +65,9 @@ afterEach(() => {
     cleanup();
   } finally {
     restoreComponents();
-    expect(NewBotSheetModule.NewBotSheet).toBe(realNewBotSheet);
+    expect(CreateAgentDialogModule.CreateAgentDialog).toBe(
+      realCreateAgentDialog,
+    );
     expect(SidebarToggleModule.SidebarToggle).toBe(realSidebarToggle);
   }
 });
@@ -258,15 +261,8 @@ const SEVERAL_BOTS = [
 test("/channel/new reports a failed initial roster load", async () => {
   const view = renderChannelNew(queryClientWithFailingAgents());
 
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   expect((await view.findByRole("alert")).textContent).toBe("读不到员工列表。");
   expect(view.queryByText("没有找到员工。")).toBeNull();
-=======
-  expect((await view.findByRole("alert")).textContent).toBe(
-    "Couldn't load your Bots. Reload the page.",
-  );
-  expect(view.queryByText("No agents found.")).toBeNull();
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   await expectMessageComposerDisabled(view, true);
 });
 
@@ -278,15 +274,8 @@ test("/channel/new reports a failed URL-selected hidden detail load", async () =
     "/channel/new?agent=hidden-bot",
   );
 
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   expect((await view.findByRole("alert")).textContent).toBe("读不到这位员工。");
   expect(view.queryByText("没有找到员工。")).toBeNull();
-=======
-  expect((await view.findByRole("alert")).textContent).toBe(
-    "Couldn't load that Bot. Reload the page.",
-  );
-  expect(view.queryByText("No agents found.")).toBeNull();
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   await expectMessageComposerDisabled(view, true);
 });
 
@@ -309,9 +298,7 @@ test("/channel/new in the team edition with several Bots leaves the To: field em
   );
 
   await expectSendHeldForABot(view);
-  expect(
-    view.queryByRole("button", { hidden: true, name: /^Remove / }),
-  ).toBeNull();
+  await expectRecipient(view, "");
 });
 
 test("/channel/new keeps a successful visible recipient enabled", async () => {
@@ -378,24 +365,24 @@ test("/channel/new keeps a usable hidden detail when a background refetch fails"
   await expectMessageComposerDisabled(view, false);
 });
 
-test("New Bot is a fixed action outside the auto-highlighted recipient options", async () => {
+test("New employee is a fixed action outside the auto-highlighted recipient options", async () => {
   const view = renderChannelNew(queryClientWithAgents(SEVERAL_BOTS));
   const create = await view.findByRole("button", {
-    name: "New Bot Create a new Bot",
+    name: "新建员工 招一位新员工",
   });
-  expect(view.queryByRole("option", { name: /New Bot/ })).toBeNull();
+  expect(view.queryByRole("option", { name: /新建员工/ })).toBeNull();
   expect(create.hasAttribute("data-highlighted")).toBe(false);
   const input = view.getByRole("combobox");
   await userEvent.setup({ document }).type(input, "no matching recipient");
-  await view.findByText("No Bots found.");
+  await view.findByText("没有找到员工。");
   expect(
-    view.getByRole("button", { name: "New Bot Create a new Bot" }),
+    view.getByRole("button", { name: "新建员工 招一位新员工" }),
   ).toBeTruthy();
   fireEvent.click(create);
   expect(await view.findByRole("dialog", { name: "New Bot" })).toBeTruthy();
 });
 
-test("creating a Bot preserves existing recipients and selects the created Bot", async () => {
+test("creating an employee from To: makes it the recipient", async () => {
   const query = queryClientWithAgents([GENERAL_ASSISTANT]);
   query.setQueryData(
     agentKeys.detail("created-bot"),
@@ -405,18 +392,28 @@ test("creating a Bot preserves existing recipients and selects the created Bot",
   const input = await view.findByRole("combobox");
   fireEvent.keyDown(input, { key: "ArrowDown" });
   fireEvent.click(
-    await view.findByRole("button", { name: "New Bot Create a new Bot" }),
+    await view.findByRole("button", { name: "新建员工 招一位新员工" }),
   );
   fireEvent.click(await view.findByRole("button", { name: "Finish creation" }));
-  await waitFor(() => {
-    expect(
-      view.getByRole("button", { name: "Remove General Assistant" }),
-    ).toBeTruthy();
-    expect(
-      view.getByRole("button", { name: "Remove Created Bot" }),
-    ).toBeTruthy();
-  });
+  await waitFor(() =>
+    expect(view.router.state.location.search).toEqual({
+      agent: "created-bot",
+    }),
+  );
+  await expectRecipient(view, "Created Bot");
 });
+
+/** The one employee in To:, as the picker's input shows it: their name, or nothing. */
+async function expectRecipient(
+  view: ReturnType<typeof renderChannelNew>,
+  name: string,
+) {
+  await waitFor(() =>
+    expect(
+      (view.getByRole("combobox", { hidden: true }) as HTMLInputElement).value,
+    ).toBe(name),
+  );
+}
 
 /** What the sidebar's + does: a plain link to `/channel/new`, no recipient, no state. */
 async function pressPlus(view: ReturnType<typeof renderChannelNew>) {
@@ -429,7 +426,7 @@ async function typeDraft(
 ) {
   const editor = await view.findByRole("textbox", {
     hidden: true,
-    name: "Message",
+    name: "消息",
   });
   const user = userEvent.setup({ document });
   await user.click(editor);
@@ -446,9 +443,7 @@ test("+ while composing a new conversation with a Bot picked starts a fresh one"
   fireEvent.click(
     await view.findByRole("option", { name: /General Assistant/ }),
   );
-  expect(
-    await view.findByRole("button", { name: "Remove General Assistant" }),
-  ).toBeTruthy();
+  await expectRecipient(view, "General Assistant");
   expect(view.router.state.location.search).toEqual({
     agent: "general-assistant",
   });
@@ -460,55 +455,41 @@ test("+ while composing a new conversation with a Bot picked starts a fresh one"
   expect(view.router.state.location.href).toBe("/channel/new");
   // And the caret is back in To:, where the new conversation starts, not left in the old message.
   await expectPickerOpenAndFocused(view);
-  await waitFor(() =>
-    expect(
-      view.queryByRole("button", {
-        hidden: true,
-        name: "Remove General Assistant",
-      }),
-    ).toBeNull(),
-  );
+  await expectRecipient(view, "");
   expect(
     (view.getByRole("combobox", { hidden: true }) as HTMLInputElement)
       .placeholder,
-  ).toBe("Choose a Bot…");
+  ).toBe("选择一位员工…");
   const editor = await view.findByRole("textbox", {
     hidden: true,
-    name: "Message",
+    name: "消息",
   });
   expect(editor.textContent).toBe("");
   await expectSendHeldForABot(view);
 });
 
-test("picking and removing Bots keeps the conversation being written", async () => {
+test("picking another employee keeps the conversation being written", async () => {
   const second = agent({ id: "second-bot", name: "Second Bot" });
   const view = renderChannelNew(
     queryClientWithAgents([GENERAL_ASSISTANT, second]),
     "/channel/new?agent=general-assistant",
   );
-  await typeDraft("for both of you", view);
+  await typeDraft("for you instead", view);
   const input = await view.findByRole("combobox", { hidden: true });
-  await userEvent.setup({ document }).type(input, "Second");
+  const user = userEvent.setup({ document });
+  await user.clear(input);
+  await user.type(input, "Second");
   fireEvent.click(await view.findByRole("option", { name: /Second Bot/ }));
-  await view.findByRole("button", { hidden: true, name: "Remove Second Bot" });
-  fireEvent.click(
-    view.getByRole("button", {
-      hidden: true,
-      name: "Remove General Assistant",
-    }),
-  );
 
-  // The page's own navigation moved the first Bot in the URL; nothing was thrown away.
+  // The page's own navigation moved the Bot in the URL; nothing was thrown away.
   await waitFor(() =>
     expect(view.router.state.location.search).toEqual({ agent: "second-bot" }),
   );
+  await expectRecipient(view, "Second Bot");
   expect(
-    view.getByRole("button", { hidden: true, name: "Remove Second Bot" }),
-  ).toBeTruthy();
-  expect(
-    (await view.findByRole("textbox", { hidden: true, name: "Message" }))
+    (await view.findByRole("textbox", { hidden: true, name: "消息" }))
       .textContent,
-  ).toBe("for both of you");
+  ).toBe("for you instead");
 });
 
 /** The To: picker is open and the caret is in it, ready for a Bot's name: what one + press gives. */
@@ -562,9 +543,9 @@ async function expectSendHeldForABot(
   await expectMessageComposerDisabled(view, false);
   await typeDraftToNobody("for whoever", view);
   await userEvent.setup({ document }).keyboard("{Enter}");
-  expect(await view.findByText("Choose a Bot first.")).toBeTruthy();
+  expect(await view.findByText("先选一位员工。")).toBeTruthy();
   expect(
-    (await view.findByRole("textbox", { hidden: true, name: "Message" }))
+    (await view.findByRole("textbox", { hidden: true, name: "消息" }))
       .textContent,
   ).toBe("for whoever");
 }
@@ -604,7 +585,7 @@ test("+ while writing to nobody yet starts a fresh conversation", async () => {
 
   await expectPickerOpenAndFocused(view);
   expect(
-    (await view.findByRole("textbox", { hidden: true, name: "Message" }))
+    (await view.findByRole("textbox", { hidden: true, name: "消息" }))
       .textContent,
   ).toBe("");
 });
@@ -615,14 +596,14 @@ test("Enter with no Bot chosen keeps the message, says so, and opens the To: pic
 
   await userEvent.setup({ document }).keyboard("{Enter}");
 
-  const hint = await view.findByText("Choose a Bot first.");
+  const hint = await view.findByText("先选一位员工。");
   expect(hint.getAttribute("role")).toBe("status");
   // Inset to the composer's text, not flush with the column's edge.
   expect(hint.className).toContain("px-3.5");
   await expectPickerOpenAndFocused(view);
   const editor = await view.findByRole("textbox", {
     hidden: true,
-    name: "Message",
+    name: "消息",
   });
   expect(editor.textContent).toBe("hello there");
 
@@ -633,13 +614,8 @@ test("Enter with no Bot chosen keeps the message, says so, and opens the To: pic
       name: /General Assistant/,
     }),
   );
-  await view.findByRole("button", {
-    hidden: true,
-    name: "Remove General Assistant",
-  });
-  await waitFor(() =>
-    expect(view.queryByText("Choose a Bot first.")).toBeNull(),
-  );
+  await expectRecipient(view, "General Assistant");
+  await waitFor(() => expect(view.queryByText("先选一位员工。")).toBeNull());
   expect(editor.textContent).toBe("hello there");
   await waitFor(() => expect(document.activeElement).toBe(editor));
   await expectMessageComposerDisabled(view, false);
@@ -661,9 +637,7 @@ test("+ in the personal edition opens To: empty with the Bot menu open, and pick
   expect(
     view.getByRole("option", { hidden: true, name: /Errand Helper/ }),
   ).toBeTruthy();
-  expect(
-    view.queryByRole("button", { hidden: true, name: /^Remove / }),
-  ).toBeNull();
+  await expectRecipient(view, "");
   expect(view.router.state.location.href).toBe("/channel/new");
 });
 
@@ -705,9 +679,7 @@ test("+ with only one Bot still opens the menu with it, and the Bot picked there
       queryClientWithEdition([GENERAL_ASSISTANT], "team"),
     );
     await expectPickerOpenAndFocused(view);
-    expect(
-      view.queryByRole("button", { hidden: true, name: /^Remove / }),
-    ).toBeNull();
+    await expectRecipient(view, "");
 
     fireEvent.click(
       await view.findByRole("option", {
@@ -715,17 +687,14 @@ test("+ with only one Bot still opens the menu with it, and the Bot picked there
         name: /General Assistant/,
       }),
     );
-    await view.findByRole("button", {
-      hidden: true,
-      name: "Remove General Assistant",
-    });
+    await expectRecipient(view, "General Assistant");
     await typeDraft("what changed in the latest release?", view);
     await userEvent.setup({ document }).keyboard("{Enter}");
 
     await waitFor(() =>
       expect(created).toEqual([{ agentIds: [GENERAL_ASSISTANT.id] }]),
     );
-    expect(view.queryByText("Choose a Bot first.")).toBeNull();
+    expect(view.queryByText("先选一位员工。")).toBeNull();
   } finally {
     globalThis.fetch = originalFetch;
   }

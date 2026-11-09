@@ -1,13 +1,13 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { useState } from "react";
 import {
   type BotBrowserApiState,
   botBrowserApiPaths,
 } from "@openbot/shared/bot-browser";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { cleanup, render, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { BotRecordPanel } from "@/components/computer/bot-browser";
 import { LiveScreen } from "@/components/computer/live-screen";
 import { queryClient } from "@/query-client";
@@ -15,19 +15,11 @@ import { queryClient } from "@/query-client";
 /**
  * This page's own fields while a person drives a Bot's browser.
  *
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
- * LiveScreen takes every keystroke on the window while someone holds the wheel, because the canvas
- * cannot hold focus. The full-size view also carries fields of its own, the recorder's workflow name
- * and the secret box, and taking their keys left them dead: typing into "流程名称" did nothing,
- * and every letter went to the Bot's browser instead. And the recorder's button, a Base UI Button,
- * defaults to type="button", so pressing it never submitted the form and no recording ever started.
-=======
  * LiveScreen used to take every keystroke on the window while someone held the wheel, because its canvas could not
  * hold focus. The full-size view also carries fields of its own, the name of a task to record and the secret box, and
  * taking their keys left them dead: typing into the name did nothing, and every letter went to the Bot's browser
  * instead. The screen now takes only the keys aimed at it, once a click (or Tab) has given it the focus. And Record, a
  * Base UI Button, defaults to type="button", so pressing it never submitted the form and no recording ever started.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
  */
 
 class SocketDouble {
@@ -127,11 +119,7 @@ function Field() {
   const [value, setValue] = useState("");
   return (
     <input
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       aria-label="流程名称"
-=======
-      aria-label="Task name"
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       value={value}
       onChange={(event) => setValue(event.target.value)}
     />
@@ -157,11 +145,7 @@ async function driving(extra?: React.ReactNode) {
 
 test("typing into a field on this page while driving fills it and sends nothing", async () => {
   const { socket, view, user } = await driving(<Field />);
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   const field = view.getByLabelText("流程名称") as HTMLInputElement;
-=======
-  const field = view.getByLabelText("Task name") as HTMLInputElement;
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 
   await user.click(field);
   await user.keyboard("Find an invoice");
@@ -172,11 +156,7 @@ test("typing into a field on this page while driving fills it and sends nothing"
 
 test("a paste into a field on this page stays in the field", async () => {
   const { socket, view } = await driving(<Field />);
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   const field = view.getByLabelText("流程名称");
-=======
-  const field = view.getByLabelText("Task name");
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   const paste = new Event("paste", { bubbles: true, cancelable: true });
   Object.defineProperty(paste, "clipboardData", {
     value: { getData: () => "invoice" },
@@ -241,11 +221,6 @@ test("naming a task and pressing Record starts a recording", async () => {
     <BotRecordPanel botId="fields-test" state={held} />,
   );
 
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-  await user.click(view.getByLabelText("流程名称"));
-  await user.keyboard("Find an invoice");
-  await user.click(view.getByRole("button", { name: "录制你的步骤" }));
-=======
   await waitFor(() =>
     expect(
       requests.some((request) => request.url === "/api/settings/preferences"),
@@ -254,7 +229,6 @@ test("naming a task and pressing Record starts a recording", async () => {
   await user.click(view.getByLabelText("Task name"));
   await user.keyboard("Find an invoice");
   await user.click(view.getByRole("button", { name: "Record" }));
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 
   await waitFor(() =>
     expect(

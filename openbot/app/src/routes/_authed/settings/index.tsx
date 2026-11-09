@@ -7,13 +7,9 @@ import {
   PageShell,
 } from "@/components/layout/page-shell";
 import { MessageListPreference } from "@/components/settings/message-list-preference";
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 import { MyDevices } from "@/components/settings/my-devices";
-import { StandingInstructions } from "@/components/settings/standing-instructions";
-=======
 import { NameRow } from "@/components/settings/profile";
 import { StandingInstructionsRow } from "@/components/settings/standing-instructions";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 import { useTheme } from "@/components/theme-provider";
 import {
   Item,
@@ -45,29 +41,22 @@ function RouteComponent() {
    */
   return (
     <PageShell
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       width="workbench"
-      description="应用在你这里的外观和行为。消息列表偏好会随账号同步；主题只保存在这个浏览器里。"
+      description="你的名字、应用在你这里的外观，以及所有员工都会遵循的长期指令。消息列表偏好会随账号同步；主题只保存在这个浏览器里。"
       title="偏好设置"
-    >
-      <PageSection title="通用">
-=======
-      description="Set your name, how OpenBot looks, and the instructions every Bot follows."
-      title="General"
     >
       {/*
        * What OpenBot and every Bot know of the person, first: their name and how they want things done. Both are free
        * text, so both are a summary that opens a dialog.
        */}
-      <PageSection title="About you">
+      <PageSection title="关于你">
         <PageRows>
           <NameRow />
           <Separator />
           <StandingInstructionsRow />
         </PageRows>
       </PageSection>
-      <PageSection title="Appearance">
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+      <PageSection title="外观">
         <PageRows>
           <Item size="sm">
             <ItemMedia variant="icon">
@@ -91,20 +80,12 @@ function RouteComponent() {
         <MessageListPreference />
       </PageSection>
       {/*
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-       * Above the shortcuts and below the appearance preferences, because it is the only thing on this
-       * screen that changes what a coworker says rather than what this browser looks like.
-       */}
-      <StandingInstructions />
-      {/*
        * The one section here that is not about this account's own settings. A machine is paired once
        * and then runs unattended, so it belongs with the other things a person configures and then
        * leaves alone — and pairing needs the person signed in, which is what this screen already is.
        */}
       <MyDevices />
       {/*
-=======
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
        * Drawn from the same registry the listeners match against, so this list is what the keys
        * actually do rather than what somebody remembered they did. Read-only on purpose: these
        * are not rebindable, and a row with nothing to click says so by having nothing to click.

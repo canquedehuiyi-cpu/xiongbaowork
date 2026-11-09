@@ -2,33 +2,70 @@ import {
   afterAll,
   afterEach,
   beforeAll,
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   beforeEach,
-=======
   describe,
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   expect,
   test,
 } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import {
+  type ConnectPrompt,
+  connectAppRefusal,
+  SHOW_APP_ACCESS_TOOL,
+} from "@openbot/shared/connect-prompt";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+  Outlet,
+  RouterProvider,
+} from "@tanstack/react-router";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  waitFor,
+} from "@testing-library/react";
+import type { ReactNode } from "react";
+import {
+  AppAccessCard,
   AppAccessRequestCard,
   readAppAccessCard,
 } from "@/components/channels/app-access-card";
 import { ServerToolLine } from "@/components/channels/chat-transcript";
+import type { AppAccess } from "@/lib/app-access/queries";
+import { ActiveBotProvider, useActiveBot } from "@/lib/copilot/active-bot";
+import { carryOnMessage } from "@/lib/copilot/carry-on";
+import { ConversationProvider } from "@/lib/copilot/conversation";
+import { REFUSAL_MARKER } from "@/lib/plugins/tool-result";
 import { writeAppAccessRequestAnswer } from "../../shared/app-access-request";
+import { appAccess } from "./app-access-fixture";
+import { settleReactWork } from "./settle-react-work";
 
 /**
- * 对话里的「申请访问」卡片：员工调用 `request_app_access` 后，对话记录把它的回答画成一张卡片，写明应用名和
- * 「已向管理员申请访问」或「已有待处理的申请」。申请人可以撤回自己还在等的申请；别人看这段对话时（读不到
- * 这条申请）只看到卡片，没有撤回按钮。
+ * The card a conversation draws when a Bot could not use an app, for every way that happens: the
+ * person has not connected, a Shared app has no team account, the vendor lost the account, and the
+ * `show_app_access` tool a Bot calls for an app it holds nothing for (switched off, not granted).
+ *
+ * The card never draws what the refusal said: it asks the server what the app is for this person
+ * on the Bot that refused, and draws that. The one exception is an account the vendor lost, which
+ * the server cannot know about — drawn as Reconnect over a live `ready`, until a connection newer
+ * than the refusal says it has been put back.
+ *
+ * 另有对话里的「申请访问」卡片：员工调用 `request_app_access` 后，对话记录把它的回答画成一张卡片，写明
+ * 应用名和「已向管理员申请访问」或「已有待处理的申请」。申请人可以撤回自己还在等的申请；别人看这段对话时
+ * （读不到这条申请）只看到卡片，没有撤回按钮。
  */
+
 beforeAll(() => GlobalRegistrator.register());
 afterEach(cleanup);
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(async () => {
+  await settleReactWork();
+  GlobalRegistrator.unregister();
+});
 
 const originalFetch = global.fetch;
 let status: "pending" | "cancelled" | "approved" | "dismissed" | null =
@@ -56,64 +93,10 @@ beforeEach(() => {
     { preconnect: originalFetch.preconnect },
   );
 });
-=======
-import {
-  type ConnectPrompt,
-  connectAppRefusal,
-  SHOW_APP_ACCESS_TOOL,
-} from "@openbot/shared/connect-prompt";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  createMemoryHistory,
-  createRootRoute,
-  createRoute,
-  createRouter,
-  Outlet,
-  RouterProvider,
-} from "@tanstack/react-router";
-import {
-  act,
-  cleanup,
-  fireEvent,
-  render,
-  waitFor,
-} from "@testing-library/react";
-import type { ReactNode } from "react";
-import { AppAccessCard } from "@/components/channels/app-access-card";
-import { ServerToolLine } from "@/components/channels/chat-transcript";
-import type { AppAccess } from "@/lib/app-access/queries";
-import { ActiveBotProvider, useActiveBot } from "@/lib/copilot/active-bot";
-import { carryOnMessage } from "@/lib/copilot/carry-on";
-import { ConversationProvider } from "@/lib/copilot/conversation";
-import { REFUSAL_MARKER } from "@/lib/plugins/tool-result";
-import { appAccess } from "./app-access-fixture";
-import { settleReactWork } from "./settle-react-work";
-
-/**
- * The card a conversation draws when a Bot could not use an app, for every way that happens: the
- * person has not connected, a Shared app has no team account, the vendor lost the account, and the
- * `show_app_access` tool a Bot calls for an app it holds nothing for (switched off, not granted).
- *
- * The card never draws what the refusal said: it asks the server what the app is for this person
- * on the Bot that refused, and draws that. The one exception is an account the vendor lost, which
- * the server cannot know about — drawn as Reconnect over a live `ready`, until a connection newer
- * than the refusal says it has been put back.
- */
-
-beforeAll(() => GlobalRegistrator.register());
-afterEach(cleanup);
-afterAll(async () => {
-  await settleReactWork();
-  GlobalRegistrator.unregister();
-});
-
-const originalFetch = global.fetch;
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 afterEach(() => {
   global.fetch = originalFetch;
 });
 
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 const answer = (cardStatus: "created" | "existing") =>
   writeAppAccessRequestAnswer(
     {
@@ -218,7 +201,6 @@ test("an approved listing says the Bot's owner still installs it before it can b
     view.getByText("应用已上架，员工的主人在装配页安装后即可使用。"),
   ).toBeTruthy();
 });
-=======
 /** Answers the live read with `live`, and records which Bot and app it was asked about. */
 function serving(live: AppAccess | null) {
   const asked: string[] = [];
@@ -303,7 +285,7 @@ test("connected since the refusal: says so and offers nothing stale", async () =
   const view = mount(<AppAccessCard prompt={prompt()} />);
   const drawn = await card(view);
   expect(drawn.textContent).toContain(
-    "Gmail is ready now. Ask again and the Bot can use it.",
+    "Gmail 现在可以用了。再说一次，员工就能用它。",
   );
   expect(view.queryByRole("button")).toBeNull();
 });
@@ -373,7 +355,7 @@ test("a team account the vendor lost: says an admin has to reconnect it, with no
   const view = mount(<AppAccessCard prompt={prompt({ reason: "shared" })} />);
   const drawn = await card(view);
   expect(drawn.textContent).toContain(
-    "Your organisation's Gmail account needs reconnecting. Only an admin can reconnect it.",
+    "组织的 Gmail 账号需要重新连接，只有管理员能重新连接。",
   );
   expect(view.queryByRole("button")).toBeNull();
 });
@@ -491,7 +473,7 @@ test("a live read that fails says so in the person's words, never the model's", 
   );
   const alert = await view.findByRole("alert");
   expect(alert.textContent).toBe(
-    "Gmail's status couldn't be loaded. Try again in a moment.",
+    "没能读到 Gmail 的状态，请稍后再试。",
   );
   expect(view.container.textContent).not.toContain("Do not browse");
 });
@@ -608,13 +590,13 @@ describe("carrying the task on once the app is ready", () => {
     state.live = appAccess({ state: "ready" });
     await act(() => view.client.invalidateQueries());
     await waitFor(() => expect(view.asked).toEqual([carryOnMessage("Gmail")]));
-    expect((await card(view)).textContent).toContain("Gmail is ready now.");
-    expect(view.container.textContent).not.toContain("Ask again");
+    expect((await card(view)).textContent).toContain("Gmail 现在可以用了。");
+    expect(view.container.textContent).not.toContain("再说一次");
     // Read again and drawn again: still the one message.
     await act(() => view.client.invalidateQueries());
     await settleReactWork();
     expect(view.asked).toHaveLength(1);
-    expect(view.queryByRole("button", { name: "Continue" })).toBeNull();
+    expect(view.queryByRole("button", { name: "继续" })).toBeNull();
   });
 
   test("a card the conversation has moved on from only says the app is ready", async () => {
@@ -635,7 +617,7 @@ describe("carrying the task on once the app is ready", () => {
     await settleReactWork();
     expect(view.asked).toEqual([]);
     expect((await card(view)).textContent).toContain(
-      "Gmail is ready now. Ask again and the Bot can use it.",
+      "Gmail 现在可以用了。再说一次，员工就能用它。",
     );
   });
 
@@ -645,18 +627,18 @@ describe("carrying the task on once the app is ready", () => {
     const view = inConversation(
       <AppAccessCard place={place} prompt={prompt()} />,
     );
-    fireEvent.click(await view.findByRole("button", { name: "Continue" }));
+    fireEvent.click(await view.findByRole("button", { name: "继续" }));
     expect(view.asked).toEqual([carryOnMessage("Gmail")]);
     await waitFor(() =>
-      expect(view.queryByRole("button", { name: "Continue" })).toBeNull(),
+      expect(view.queryByRole("button", { name: "继续" })).toBeNull(),
     );
     cleanup();
     // The same card drawn again, here or in another tab, has nothing left to offer.
     const again = inConversation(
       <AppAccessCard place={place} prompt={prompt()} />,
     );
-    expect((await card(again)).textContent).toContain("Gmail is ready now.");
-    expect(again.queryByRole("button", { name: "Continue" })).toBeNull();
+    expect((await card(again)).textContent).toContain("Gmail 现在可以用了。");
+    expect(again.queryByRole("button", { name: "继续" })).toBeNull();
     expect(again.asked).toEqual([]);
   });
 
@@ -679,7 +661,7 @@ describe("carrying the task on once the app is ready", () => {
       );
       await card(view);
       await settleReactWork();
-      expect(view.queryByRole("button", { name: "Continue" }) !== null).toBe(
+      expect(view.queryByRole("button", { name: "继续" }) !== null).toBe(
         offered,
       );
       expect(view.asked).toEqual([]);
@@ -695,9 +677,8 @@ describe("carrying the task on once the app is ready", () => {
       />,
     );
     expect((await card(view)).textContent).toContain(
-      "Ask again and the Bot can use it.",
+      "再说一次，员工就能用它。",
     );
-    expect(view.queryByRole("button", { name: "Continue" })).toBeNull();
+    expect(view.queryByRole("button", { name: "继续" })).toBeNull();
   });
 });
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b

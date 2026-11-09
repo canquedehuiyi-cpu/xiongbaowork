@@ -1,7 +1,12 @@
-import { IconDownload, IconRefresh } from "@tabler/icons-react";
-import { useQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { IconDownload, IconRefresh, IconX } from "@tabler/icons-react";
+import { useInfiniteQuery } from "@tanstack/react-query";
+import {
+  createFileRoute,
+  useNavigate,
+  useSearch,
+} from "@tanstack/react-router";
 import { useState } from "react";
+import { z } from "zod";
 import {
   PageEmpty,
   PageSection,
@@ -20,12 +25,27 @@ import { silenceOf } from "@/lib/audit/silence";
 import { client } from "@/lib/client";
 
 /**
- * Read surface for policy, computer, component, MCP, and credential audit events.
+ * Read surface for policy, computer, component, MCP, and credential audit events. `bot` narrows it
+ * to one Bot, which is how a Bot's own activity links here (upstream #1108).
+ *
+ * Kept as the fork's page rather than upstream's `components/manage/audit-page.tsx`; the bot filter
+ * and the "older events" paging (#1326) are carried over from it.
  */
-// M4: 待接入 上游 manage/audit-page.tsx 的 ?bot= 按员工筛选（员工活动页可链接到它做过的每个动作，#1108）、翻过最新 50 条（#1326）；上游把操作录制（RecordingSection）放在本页
+// M4: 待接入 上游 manage/audit-page.tsx 的事件搜索框、按动作合并行（oneRowPerAction），以及放在本页的操作录制分区（RecordingSection，fork 仍在企业管控页）
 export const Route = createFileRoute("/_authed/admin/audit")({
+  validateSearch: z.object({ bot: z.string().optional() }),
   component: AuditPage,
 });
+
+/** A saved view's query with one Bot's rows asked for too, for the table and the export alike. */
+function withBot(search: string, bot: string | undefined): string {
+  if (!bot) return search;
+  const params = new URLSearchParams(
+    search.startsWith("?") ? search.slice(1) : search,
+  );
+  params.set("bot", bot);
+  return `?${params.toString()}`;
+}
 
 /** One row as the API returns it. */
 type AuditEvent = {
@@ -64,9 +84,18 @@ const FILTERS = [
 ] as const;
 
 function AuditPage() {
-  const [search, setSearch] = useState<string>(FILTERS[0].search);
-  const events = useQuery(auditEventsQueryOptions(search));
-  const rows = (events.data?.events ?? []) as AuditEvent[];
+  /*
+   * Read without `strict`, so the page also renders where it is mounted on a route of another name,
+   * as the audit tests do. The route's own `validateSearch` has already checked it.
+   */
+  const { bot } = useSearch({ strict: false }) as { bot?: string };
+  const navigate = useNavigate();
+  const [view, setView] = useState<string>(FILTERS[0].search);
+  const search = withBot(view, bot);
+  // A page at a time, newest first; "更早的记录" under the last row asks for the next.
+  const events = useInfiniteQuery(auditEventsQueryOptions(search));
+  const rows = (events.data?.pages.flatMap((page) => page.events) ??
+    []) as AuditEvent[];
   const nameFor = useBotNames();
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
@@ -138,14 +167,26 @@ function AuditPage() {
     >
       <PageSection>
         <div className="flex flex-wrap gap-2">
+          {bot ? (
+            <Button
+              aria-label={`显示所有员工，而不只是 ${nameFor(bot)}`}
+              onClick={() => void navigate({ to: "/admin/audit" })}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              只看 {nameFor(bot)}
+              <IconX />
+            </Button>
+          ) : null}
           {FILTERS.map((filter) => (
             <Button
               key={filter.label}
-              onClick={() => setSearch(filter.search)}
+              onClick={() => setView(filter.search)}
               size="sm"
               type="button"
               /* The fill is the state, as on every other set of switches in the app. */
-              variant={search === filter.search ? "default" : "outline"}
+              variant={view === filter.search ? "default" : "outline"}
             >
               {filter.label}
             </Button>
@@ -190,6 +231,23 @@ function AuditPage() {
             </table>
           </div>
         )}
+        {events.hasNextPage ? (
+          <div className="mt-4 flex items-center justify-center gap-3">
+            {events.isFetchNextPageError ? (
+              <p className="text-destructive text-sm" role="alert">
+                读不到更早的记录，请重试。
+              </p>
+            ) : null}
+            <Button
+              disabled={events.isFetchingNextPage}
+              onClick={() => void events.fetchNextPage()}
+              size="sm"
+              variant="outline"
+            >
+              {events.isFetchingNextPage ? "正在加载…" : "更早的记录"}
+            </Button>
+          </div>
+        ) : null}
       </PageSection>
     </PageShell>
   );

@@ -71,14 +71,10 @@ function serve() {
         endpoint: null,
         hasAuth: false,
         hasCallbackToken: false,
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         // This fork's coworkers also carry a model binding and a persona; none here.
         modelRef: null,
         platformModelRef: null,
         persona: null,
-=======
-        isolated: false,
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       })),
   } as unknown as AgentProfileStore;
   const router = {

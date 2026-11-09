@@ -71,17 +71,10 @@ async function loadExplicitBot(agentId: string): Promise<BotDetailLookup> {
     `/api/agents/${encodeURIComponent(agentId)}`,
   );
   if (response.status === 404) return { status: "missing" };
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   if (!response.ok) throw new Error("读不到这位员工。");
 
   const body: unknown = await response.json().catch(() => null);
   if (!isAgentEnvelope(body)) throw new Error("读不到这位员工。");
-=======
-  if (!response.ok) throw new Error("Couldn't load this Bot.");
-
-  const body: unknown = await response.json().catch(() => null);
-  if (!isAgentEnvelope(body)) throw new Error("Couldn't load this Bot.");
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   return { bot: body.agent, status: "found" };
 }
 
@@ -117,11 +110,7 @@ function RouteComponent() {
     return (
       <div className="flex h-screen items-center justify-center p-6">
         <p className="text-destructive text-sm" role="alert">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           读不到员工列表。
-=======
-          Couldn't load your Bots. Reload the page.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         </p>
       </div>
     );
@@ -130,11 +119,7 @@ function RouteComponent() {
     return (
       <div className="flex h-screen items-center justify-center p-6">
         <p className="text-destructive text-sm" role="alert">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           读不到这位员工。
-=======
-          Couldn't load this Bot. Reload the page.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         </p>
       </div>
     );
@@ -144,13 +129,8 @@ function RouteComponent() {
       <div className="flex h-screen items-center justify-center p-6">
         <p className="text-muted-foreground text-sm">
           {agent
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
             ? `这个部署没有叫「${agent}」的员工。`
             : "这个部署还没有员工。"}
-=======
-            ? `There's no Bot called "${agent}".`
-            : "There are no Bots yet."}
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         </p>
       </div>
     );
@@ -245,11 +225,7 @@ function BotChat({ agentId, name }: { agentId: string; name: string }) {
             data-testid="bot-chat-history-unavailable"
             role="alert"
           >
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
             这段对话更早的消息没能加载，员工在没有这些消息的情况下回答。
-=======
-            Couldn't load earlier messages. The Bot is answering without them.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
           </p>
         ) : null}
         {/*

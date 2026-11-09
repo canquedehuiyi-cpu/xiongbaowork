@@ -1,8 +1,5 @@
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-import { useQuery } from "@tanstack/react-query";
-=======
 import { outcomeForPerson } from "@openbot/shared/approval-outcomes";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import { ToolLine } from "@/components/channels/tool-line";
 import {
@@ -10,14 +7,9 @@ import {
   TerminalBlock,
 } from "@/components/computer/terminal-block";
 import { ComputerView } from "@/components/computer/computer-view";
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-import { client, tryClient } from "@/lib/client";
-import { noteBrowsed, recordActivity } from "@/lib/computers/activity";
-=======
 import { HelpRequestCard } from "@/components/computer/help-request-card";
-import { tryClient } from "@/lib/client";
+import { client, tryClient } from "@/lib/client";
 import { noteBrowsed, outputOf, readOutcome } from "@/lib/computers/activity";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 import { callComputer, type ToolOutcome } from "@/lib/computers/call";
 import { type ControlState, readControl } from "@/lib/computers/control";
 import {
@@ -26,7 +18,12 @@ import {
   runNavigation,
 } from "@/lib/computers/handoff";
 import {
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
+  type ToolCallContext,
+  useActiveBotHolder,
+  useBotOfCall,
+  useDeclaredBotId,
+} from "./active-bot";
+import {
   type ComputerMachine,
   computerToolPlace,
   DEVICE_RUN_COMMAND_DESCRIPTION,
@@ -39,13 +36,6 @@ import {
   CANDIDATE_REF,
   LOCAL_TOOL_DESCRIPTIONS,
 } from "../../../../shared/local-tools";
-import { useActiveBotHolder, useDeclaredBotId } from "./active-bot";
-=======
-  type ToolCallContext,
-  useActiveBotHolder,
-  useBotOfCall,
-} from "./active-bot";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 import { useFrontendTool } from "./approval-tools";
 import { type OfferRule, useOfferedTo } from "./bot-offer";
 import {
@@ -153,11 +143,7 @@ function labelOf(result: string | undefined): string | undefined {
  */
 function ActionLine({
   label,
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-  blockedLabel,
-=======
   attempted,
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   detail,
   running,
   refused,
@@ -166,13 +152,8 @@ function ActionLine({
   byYou,
 }: {
   label: string;
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   /** 被拦截时的未完成说法，见 `ToolLine` 的同名属性。 */
-  blockedLabel: string;
-=======
-  /** What was tried, said when the step was refused. See `ToolLine`. */
   attempted?: string;
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   detail?: string;
   running?: boolean;
   /** A policy or a boundary said no. Final: nothing the Bot does differently will help. */
@@ -186,14 +167,9 @@ function ActionLine({
 }) {
   return (
     <ToolLine
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-      blockedLabel={blockedLabel}
-      detail={detail}
-=======
       attempted={attempted}
       byYou={byYou}
       detail={notYet ? STILL_STARTING_DETAIL : detail}
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       failed={failed}
       label={label}
       notYet={notYet}
@@ -204,7 +180,7 @@ function ActionLine({
 }
 
 /** What a line says about a call that waited on a computer still starting. */
-const STILL_STARTING_DETAIL = "The computer is still starting.";
+const STILL_STARTING_DETAIL = "电脑还在启动。";
 
 /**
  * What a refused step's line says after its words: what it was aimed at, then why it did not
@@ -273,15 +249,10 @@ export function ComputerTools() {
    */
   const botOf = useBotOfCall();
   const bot = useActiveBotHolder();
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-  // Not offered to a Team Bot's teammates; see useComputerAvailable.
-  const available = useComputerAvailable();
   const { allowed: localTools, machine } = useLocalTools();
   const onDevice = machine === "device";
   const place = computerToolPlace(machine);
-=======
   useOfferedTo(OFFERED);
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 
   useFrontendTool({
     name: "computer_navigate",
@@ -382,7 +353,7 @@ export function ComputerTools() {
         <ActionLine
           running={status !== "complete"}
           label="读取了页面"
-          blockedLabel="读取页面"
+          attempted="读取页面"
           detail={
             elements.length
               ? `${elements.length} thing${elements.length === 1 ? "" : "s"} it can act on`
@@ -431,15 +402,9 @@ export function ComputerTools() {
     render: ({ args, result, status }) => (
       <ActionLine
         running={status !== "complete"}
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         label="填写了"
-        blockedLabel="填写"
-        detail={
-=======
-        label="Filled in"
-        attempted="Fill in"
+        attempted="填写"
         detail={(() => {
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
           // Never show typed values; identify only the target field.
           const field =
             labelOf(result) ??
@@ -487,13 +452,8 @@ export function ComputerTools() {
       return (
         <ActionLine
           running={status !== "complete"}
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           label="点击了"
-          blockedLabel="点击"
-=======
-          label="Clicked"
-          attempted="Click"
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+          attempted="点击"
           detail={
             // A refusal names the element only by the label the server resolved, never its ref.
             outcome.refused === true
@@ -543,13 +503,8 @@ export function ComputerTools() {
     render: ({ args, result, status }) => (
       <ActionLine
         running={status !== "complete"}
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         label="按下了"
-        blockedLabel="按键"
-        detail={typeof args?.key === "string" ? args.key : undefined}
-=======
-        label="Pressed"
-        attempted="Press"
+        attempted="按键"
         detail={
           outcomeOf(result).refused === true
             ? refusedDetail(
@@ -560,7 +515,6 @@ export function ComputerTools() {
               ? args.key
               : undefined
         }
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         refused={outcomeOf(result).refused === true}
         failed={didNotWork(outcomeOf(result))}
         notYet={stillStarting(outcomeOf(result))}
@@ -725,13 +679,8 @@ export function ComputerTools() {
       return (
         <ActionLine
           running={status !== "complete"}
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           label="列出了文件"
-          blockedLabel="列出文件"
-=======
-          label="Listed files"
-          attempted="List files"
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+          attempted="列出文件"
           detail={
             outcome.refused === true || didNotWork(outcome)
               ? outcomeForPerson(String(outcome.reason ?? ""))
@@ -772,13 +721,8 @@ export function ComputerTools() {
       return (
         <ActionLine
           running={status !== "complete"}
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           label="读取了文件"
-          blockedLabel="读取文件"
-=======
-          label="Read file"
-          attempted="Read file"
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+          attempted="读取文件"
           detail={
             outcome.refused === true
               ? refusedDetail(
@@ -800,7 +744,6 @@ export function ComputerTools() {
 
   useFrontendTool({
     name: "computer_run_command",
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     description: onDevice
       ? DEVICE_RUN_COMMAND_DESCRIPTION
       : "Run a shell command on your own computer. Use this for anything the browser cannot do: " +
@@ -808,34 +751,18 @@ export function ComputerTools() {
         "directory is your workspace, so paths are relative to it and files you write here are the " +
         "same ones the file tools see. Commands run in bash, so pipes and && work. Long output is " +
         "truncated from the start, and a command that runs too long is stopped. " +
-        "Use the tools already installed first. If you need a new one, prefer installing it inside " +
-        "your workspace: `npm install <package>` (without -g), `bun add <package>`, or " +
-        "`python3 -m venv .venv` and then `.venv/bin/pip install <package>`. If you are told you " +
-        "have no sudo permission, do not try to escalate; say so rather than retrying.",
-=======
-    description:
-      "Run a shell command on your own computer. Use this for anything the browser cannot do: " +
-      "installing a tool you need, processing a file you saved, running a script. The working " +
-      "directory is your workspace, so paths are relative to it and files you write here are the " +
-      "same ones the file tools see. Commands run in bash, so pipes and && work. Long output is " +
-      "truncated from the start, and a command that runs too long is stopped. " +
-      "For package installation, check `id -u` first. As root (0), use " +
-      "`apt-get update && apt-get install -y <package>` directly; otherwise use " +
-      "`sudo openbot-apt update && sudo openbot-apt install <package>`, which takes package " +
-      "names and nothing else, not `sudo apt-get`. If installation is refused, say so rather " +
-      "than retrying.",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+        "For package installation, check `id -u` first. As root (0), use " +
+        "`apt-get update && apt-get install -y <package>` directly; otherwise use " +
+        "`sudo openbot-apt update && sudo openbot-apt install <package>`, which takes package " +
+        "names and nothing else, not `sudo apt-get`. If installation is refused, say so rather " +
+        "than retrying.",
     parameters: z.object({
       command: z
         .string()
         .describe(
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           onDevice
             ? "The command to run, written for the paired machine's own system"
-            : "The command to run, such as: npm install marked",
-=======
-          "The command to run, such as: apt-get install -y jq (as root)",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+            : "The command to run, such as: apt-get install -y jq (as root)",
         ),
     }),
     /*
@@ -867,18 +794,6 @@ export function ComputerTools() {
       const byYou = byPerson(outcome);
       const refused = outcome.refused === true;
       return (
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-        <ToolLine
-          running={status !== "complete"}
-          label="执行了命令"
-          blockedLabel="执行命令"
-          detail={
-            outcome.refused === true
-              ? String(outcome.reason ?? "")
-              : typeof args?.command === "string"
-                ? args.command
-                : undefined
-=======
         <TerminalBlock
           command={typeof args?.command === "string" ? args.command : ""}
           computerId={bot.current}
@@ -888,7 +803,6 @@ export function ComputerTools() {
               : stillStarting(outcome)
                 ? STILL_STARTING_DETAIL
                 : outputOf(outcome as ToolOutcome)
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
           }
           status={commandStatus({
             running: status !== "complete",
@@ -944,14 +858,9 @@ export function ComputerTools() {
       return (
         <ActionLine
           running={status !== "complete"}
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-          label={args?.append === true ? "追加到文件" : "保存了文件"}
-          blockedLabel={args?.append === true ? "追加到文件" : "保存文件"}
-=======
           // The words the approval card and Activity use for the same action.
-          label={args?.append === true ? "Added to a file" : "Saved a file"}
-          attempted={args?.append === true ? "Add to a file" : "Save a file"}
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+          label={args?.append === true ? "追加到文件" : "保存了文件"}
+          attempted={args?.append === true ? "追加到文件" : "保存文件"}
           // Show the path, never file contents.
           detail={
             outcome.refused === true
@@ -998,13 +907,8 @@ export function ComputerTools() {
     render: ({ result, status }) => (
       <ActionLine
         running={status !== "complete"}
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         label="滚动了"
-        blockedLabel="滚动"
-=======
-        label="Scrolled"
-        attempted="Scroll"
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+        attempted="滚动"
         refused={outcomeOf(result).refused === true}
         failed={didNotWork(outcomeOf(result))}
         notYet={stillStarting(outcomeOf(result))}
@@ -1076,6 +980,7 @@ function localDetail(
  * sends those through the approval route, as it does a command. The desktop is read only: nothing
  * here clicks, types, presses a key or launches anything.
  */
+// M4: 待接入 本机应用与桌面工具仍按屏幕上的员工（`bot.current`）调用，也未声明 `useOfferedTo` 规则；上游的电脑工具已改为按调用所属员工（`useBotOfCall`）执行、按员工决定是否提供。
 function LocalTools() {
   const bot = useActiveBotHolder();
 
@@ -1099,7 +1004,7 @@ function LocalTools() {
         <ActionLine
           running={status !== "complete"}
           label="查看了本机应用"
-          blockedLabel="查看本机应用"
+          attempted="查看本机应用"
           detail={localDetail(outcome, () => {
             const names = (outcome.apps ?? [])
               .map((app) => app?.name)
@@ -1142,7 +1047,7 @@ function LocalTools() {
         <ActionLine
           running={status !== "complete"}
           label="调用了本机应用"
-          blockedLabel="调用本机应用"
+          attempted="调用本机应用"
           detail={localDetail(outcome, () =>
             typeof args?.app === "string" && typeof args?.tool === "string"
               ? `${args.app} · ${args.tool}`
@@ -1175,7 +1080,7 @@ function LocalTools() {
         <ActionLine
           running={status !== "complete"}
           label="启用了本机应用"
-          blockedLabel="启用本机应用"
+          attempted="启用本机应用"
           detail={localDetail(outcome, () =>
             typeof outcome.enabled?.name === "string"
               ? outcome.enabled.name
@@ -1208,7 +1113,7 @@ function LocalTools() {
         <ActionLine
           running={status !== "complete"}
           label="查看了桌面窗口"
-          blockedLabel="查看桌面窗口"
+          attempted="查看桌面窗口"
           detail={localDetail(outcome, () =>
             Array.isArray(outcome.windows)
               ? `${outcome.windows.length} 个窗口`
@@ -1245,7 +1150,7 @@ function LocalTools() {
         <ActionLine
           running={status !== "complete"}
           label="读取了桌面窗口"
-          blockedLabel="读取桌面窗口"
+          attempted="读取桌面窗口"
           detail={localDetail(outcome, () =>
             typeof outcome.window?.title === "string"
               ? outcome.window.title

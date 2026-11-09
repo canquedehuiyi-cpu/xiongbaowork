@@ -1,13 +1,9 @@
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-import { queryOptions } from "@tanstack/react-query";
-=======
 import {
   mutationOptions,
   type QueryClient,
   queryOptions,
 } from "@tanstack/react-query";
 import { botLifecycleKeys } from "@/lib/bot-lifecycle/queries";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 import { client } from "@/lib/client";
 import { taskKeys } from "@/lib/tasks/queries";
 
@@ -189,8 +185,6 @@ export const resolveSuggestion = (id: string, action: "start" | "dismiss") =>
         ? "Couldn't start this. Try again."
         : "Couldn't hide this. Try again.",
   });
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-=======
 
 /** A setting's check-ins produce items, so a change to either refreshes both. */
 const settleProactive = (queryClient: QueryClient) => () =>
@@ -258,4 +252,3 @@ export const changeProactiveSettingMutationOptions = (
     },
     onSuccess: settleProactive(queryClient),
   });
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b

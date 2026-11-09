@@ -71,7 +71,7 @@ function CommandEntry({
         }
         command={entry.subject}
         computerId={computerId}
-        label={entry.declined === true ? "Declined" : "Ran"}
+        label={entry.declined === true ? "已拒绝" : "执行了"}
         output={entry.output}
         status={commandStatus({
           running: false,
@@ -103,7 +103,7 @@ function Entry({ entry }: { entry: ComputerActivity }) {
           }`}
         />
         <span className="shrink-0 text-muted-foreground text-xs">
-          {entry.declined === true ? "Declined" : LABELS[entry.kind]}
+          {entry.declined === true ? "已拒绝" : LABELS[entry.kind]}
         </span>
         {/*
           The command wraps rather than truncating. In the transcript one line per call is what keeps
@@ -129,7 +129,7 @@ function Entry({ entry }: { entry: ComputerActivity }) {
         </p>
       ) : entry.doneByPerson === true ? (
         <p className="mt-1 pl-5 text-muted-foreground text-xs">
-          {entry.output || "You did it yourself."}
+          {entry.output || "这是你自己操作的。"}
         </p>
       ) : (
         <div className="mt-1 max-h-64 overflow-auto pl-5">

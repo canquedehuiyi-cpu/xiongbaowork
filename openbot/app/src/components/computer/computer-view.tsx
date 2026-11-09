@@ -215,9 +215,7 @@ function NothingToSee({
         <>
           <span className="font-medium">现在看不到屏幕</span>
           <span>{problem}</span>
-          <span>
-            员工可能仍在工作。如果一直这样，请让管理员检查它的电脑。
-          </span>
+          <span>员工可能仍在工作。如果一直这样，请让管理员检查它的电脑。</span>
         </>
       ) : waiting === "starting" ? (
         <span role="status">
@@ -457,9 +455,7 @@ export function ComputerView({
   const liveStreamOpen =
     expanded &&
     !settled &&
-    (driving ||
-      Boolean(onDevice) ||
-      (shot !== null && !isBlankBrowser(shot)));
+    (driving || Boolean(onDevice) || (shot !== null && !isBlankBrowser(shot)));
   const polling = visualVisible && !liveStreamOpen;
 
   /*
@@ -868,8 +864,7 @@ export function ComputerView({
         {!driving && !settled && control?.requested ? (
           <div className="flex items-start justify-between gap-3 border-t bg-amber-500/10 px-3 py-2 text-sm">
             <span>
-              <strong className="font-medium">员工需要你。</strong>{" "}
-              {reason}
+              <strong className="font-medium">员工需要你。</strong> {reason}
             </span>
           </div>
         ) : null}

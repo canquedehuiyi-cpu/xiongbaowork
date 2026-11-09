@@ -39,7 +39,6 @@ import {
   type BotActivity,
   botActivityQueryOptions,
 } from "@/lib/bot-lifecycle/queries";
-import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
 import { relativeTime } from "@/lib/relative-time";
 import { cn } from "@/lib/utils";
 import { queryClient } from "@/query-client";
@@ -54,7 +53,6 @@ const ICONS: Record<ActivityKind, typeof IconBell> = {
 };
 
 const KIND_LABEL: Record<ActivityKind, string> = {
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   routine: "定时任务",
   responsibility: "长期职责",
   handoff: "交接的任务",
@@ -82,14 +80,6 @@ const STATUS_LABEL: Record<string, string> = {
   skipped: "已跳过",
   stopped: "已停止",
   cancelled: "已取消",
-=======
-  routine: "Routine",
-  responsibility: "Goal",
-  handoff: "Delegated task",
-  approval: "Approval",
-  question: "Question",
-  follow_up: "Follow-up",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 };
 
 /** Where an item opens: its conversation when it has one, otherwise the screen that owns its kind. */
@@ -266,7 +256,7 @@ export function BotActivityGlance({ agentId }: { agentId: string }) {
   const upcoming = upcomingOf(activity.data);
   if (activity.isPending || upcoming.length === 0) return null;
   return (
-    <PageSection title="Activity">
+    <PageSection title="动态">
       <PageRows>
         {upcoming.map(({ item, live }) => (
           <Fragment key={item.id}>
@@ -294,7 +284,7 @@ export function BotActivityRow({ agentId }: { agentId: string }) {
       <AllActivityItem
         activity={activity.data}
         agentId={agentId}
-        title="Activity"
+        title="动态"
         withIcon
       />
     </>
@@ -304,7 +294,7 @@ export function BotActivityRow({ agentId }: { agentId: string }) {
 function AllActivityItem({
   activity,
   agentId,
-  title = "All activity",
+  title = "全部动态",
   withIcon = false,
 }: {
   activity: BotActivity | undefined;
@@ -327,7 +317,7 @@ function AllActivityItem({
         <ItemDescription>
           {activity
             ? activitySummary(activity)
-            : "Couldn't load this Bot's activity."}
+            : "读不到这位员工的动态。"}
         </ItemDescription>
       </ItemContent>
       <ItemActions>
@@ -346,15 +336,15 @@ export function activitySummary(activity: BotActivity): string {
   const onDemand = activity.onDemand?.length ?? 0;
   const parts = [
     activity.inProgress.length
-      ? `${activity.inProgress.length} in progress`
+      ? `${activity.inProgress.length} 项进行中`
       : null,
-    activity.scheduled.length ? `${activity.scheduled.length} scheduled` : null,
-    onDemand ? `${onDemand} on demand` : null,
+    activity.scheduled.length ? `${activity.scheduled.length} 项已排期` : null,
+    onDemand ? `${onDemand} 项按需` : null,
   ].filter(Boolean);
   if (parts.length) return parts.join(" · ");
   return activity.completed.length
-    ? "Nothing running or scheduled"
-    : "No tasks, routines or goals yet";
+    ? "没有在进行或已排期的事"
+    : "还没有任务、定时任务或长期职责";
 }
 
 /** In progress, Scheduled and Completed, read from the ledgers the work already lives in. */
@@ -365,11 +355,7 @@ export function BotActivitySections({ agentId }: { agentId: string }) {
     return (
       <PageSection title="动态">
         <p className="mt-4 text-destructive text-sm" role="alert">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           读不到这位员工的动态。
-=======
-          Couldn't load this Bot's activity. Reload the page.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         </p>
       </PageSection>
     );
@@ -379,12 +365,8 @@ export function BotActivitySections({ agentId }: { agentId: string }) {
         agentId={agentId}
         empty="没有在进行或等你处理的事。"
         items={activity.data.inProgress}
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-        title="进行中"
-=======
         live
-        title="In progress"
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+        title="进行中"
       />
       <ActivitySection
         agentId={agentId}
@@ -398,16 +380,12 @@ export function BotActivitySections({ agentId }: { agentId: string }) {
           agentId={agentId}
           empty=""
           items={activity.data.onDemand}
-          title="On demand"
+          title="按需"
         />
       ) : null}
       <ActivitySection
         agentId={agentId}
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         empty="还没有做完的事。"
-=======
-        empty="No tasks, routines or goals have finished yet."
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         items={activity.data.completed}
         title="已完成"
       />
@@ -417,7 +395,8 @@ export function BotActivitySections({ agentId }: { agentId: string }) {
 }
 
 /**
- * Where this Bot's actions are: the audit trail, narrowed to it.
+ * Where this Bot's actions are: the audit trail, narrowed to it. Admin › Audit only: upstream's
+ * personal edition (Settings › Activity) is not part of this deployment.
  *
  * The lists above are tasks, routines and goals. A file saved, a page opened or an app called in a
  * conversation is none of those, so a Bot could work all day and this page said nothing had
@@ -426,31 +405,22 @@ export function BotActivitySections({ agentId }: { agentId: string }) {
  * can open the trail: Settings › Activity in the personal edition, Admin › Audit for an admin.
  */
 function BotActionsSection({ agentId }: { agentId: string }) {
-  const personal =
-    useQuery(deploymentCapabilitiesQueryOptions()).data?.edition === "personal";
   const admin = useQuery(currentUserQueryOptions()).data?.role === "admin";
-  if (!personal && !admin) return null;
+  if (!admin) return null;
   return (
-    <PageSection title="Actions">
+    <PageSection title="动作">
       <PageRows>
         <Item
-          render={
-            personal ? (
-              <Link search={{ bot: agentId }} to="/settings/activity" />
-            ) : (
-              <Link search={{ bot: agentId }} to="/admin/audit" />
-            )
-          }
+          render={<Link search={{ bot: agentId }} to="/admin/audit" />}
           size="sm"
         >
           <ItemMedia variant="icon">
             <IconListDetails />
           </ItemMedia>
           <ItemContent>
-            <ItemTitle>Every action this Bot took</ItemTitle>
+            <ItemTitle>这位员工做过的每个动作</ItemTitle>
             <ItemDescription>
-              See the files, pages and apps it used, and which were allowed,
-              blocked or didn't happen.
+              看它用过的文件、网页和应用，以及哪些被放行、被拦下或没有发生。
             </ItemDescription>
           </ItemContent>
           <ItemActions>

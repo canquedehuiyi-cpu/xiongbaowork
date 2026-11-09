@@ -3,31 +3,26 @@ import {
   useCopilotKit,
   useFrontendTool as useSDKFrontendTool,
 } from "@copilotkit/react-core/v2";
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  type QueryClient,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { InlineApproval } from "@/components/approvals/inline-approval";
 import {
   disabledToolRefs,
   employeePermissionsOptions,
+  threadAsksEveryStepQueryOptions,
   toolIsDisabled,
 } from "@/lib/approvals";
 import { tryClient } from "@/lib/client";
-import { useActiveBotHolder, useDeclaredBotId } from "./active-bot";
-import { frontendApprovalSnapshot } from "./approval-context";
-=======
-import { type QueryClient, useQueryClient } from "@tanstack/react-query";
-import type { ReactNode } from "react";
-import { InlineApproval } from "@/components/approvals/inline-approval";
-import { threadAsksEveryStepQueryOptions } from "@/lib/approvals";
-import { tryClient } from "@/lib/client";
 import { failedComputerCall } from "@/lib/computers/call";
-import { useBotOfCall } from "./active-bot";
+import { useBotOfCall, useDeclaredBotId } from "./active-bot";
 import {
   frontendApprovalSnapshot,
   WAITING_FOR_PERSON,
 } from "./approval-context";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 
 type RenderProps = { toolCallId: string; [key: string]: unknown };
 
@@ -110,8 +105,7 @@ export function useFrontendTool<T extends Record<string, unknown>>(
   const { copilotkit } = useCopilotKit();
   // Stable for the provider's life, so the SDK's once-registered handler may keep it.
   const queryClient = useQueryClient();
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-  const bot = useActiveBotHolder();
+  const botOf = useBotOfCall();
   /*
    * A tool the active Bot's permissions disable is not offered to the model (SEC1 D4). Hidden with
    * the SDK's `available`, so it stays registered and comes back the moment it is enabled again; the
@@ -127,15 +121,8 @@ export function useFrontendTool<T extends Record<string, unknown>>(
   useSDKFrontendTool({
     ...tool,
     ...(hidden ? { available: false } : {}),
-    ...(writes.has(tool.name)
-=======
-  const botOf = useBotOfCall();
-  const render = tool.render;
-  useSDKFrontendTool({
-    ...tool,
     // Every computer tool, not only changes: a look a rule asks about waits on the same card.
     ...(tool.name.startsWith("computer_")
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       ? {
           // A component, so the approval card can use hooks; the SDK keeps this function forever.
           render: (props: RenderProps) => {

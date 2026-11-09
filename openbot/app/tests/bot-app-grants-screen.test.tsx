@@ -129,13 +129,6 @@ function server(overrides: Partial<PluginServer> & { id: string }) {
     lastError: null,
     addedBy: null,
     dynamicClient: false,
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-=======
-    accountMode: null,
-    sharedVendorConnected: false,
-    ownerGrants: "admin",
-    ownerGrantsChosen: null,
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     // Not brokered unless a case says otherwise, which is what a null means here.
     authScheme: null,
     tools: [],
@@ -265,33 +258,18 @@ function renderScreen(queryClient: QueryClient) {
 test("a failed plugin read reports the failure instead of claiming the app is not enabled", async () => {
   const view = renderScreen(failingQueryClient());
 
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   expect(await view.findByText("读不到插件。")).toBeTruthy();
 
   // The whole point: an app that may be enabled, with grants on it right now, must never be
   // reported as absent on the evidence of a request that never came back.
   expect(view.queryByText("这个部署没有启用叫这个名字的应用。")).toBeNull();
   expect(view.queryByText("这里没有可以授予的东西。")).toBeNull();
-=======
-  expect(
-    await view.findByText("Couldn't load plugins. Reload the page."),
-  ).toBeTruthy();
-
-  // The whole point: an app that may be enabled, with grants on it right now, must never be
-  // reported as absent on the evidence of a request that never came back.
-  expect(view.queryByText("No app with that name is turned on.")).toBeNull();
-  expect(view.queryByText("Nothing to give a Bot here.")).toBeNull();
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 });
 
 test("a failed plugin read draws no switches, so nothing reads as a Bot holding nothing", async () => {
   const view = renderScreen(failingQueryClient());
 
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   await view.findByText("读不到插件。");
-=======
-  await view.findByText("Couldn't load plugins. Reload the page.");
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 
   expect(view.container.querySelectorAll('[role="switch"]').length).toBe(0);
   expect(view.queryByText("打开所有只读动作")).toBeNull();
@@ -310,17 +288,9 @@ test("an answer that genuinely lacks the app still says the app is not enabled",
   await waitForFailedRefetch(queryClient);
 
   expect(
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     await view.findByText("这个部署没有启用叫这个名字的应用。"),
   ).toBeTruthy();
   expect(view.queryByText("读不到插件。")).toBeNull();
-=======
-    await view.findByText("No app with that name is turned on."),
-  ).toBeTruthy();
-  expect(
-    view.queryByText("Couldn't load plugins. Reload the page."),
-  ).toBeNull();
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 });
 
 test("a failed REFETCH keeps the grant list it already had, not the error", async () => {
@@ -339,15 +309,8 @@ test("a failed REFETCH keeps the grant list it already had, not the error", asyn
   await waitForFailedRefetch(queryClient);
 
   expect(await view.findByText("list_channels")).toBeTruthy();
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   expect(view.queryByText("读不到插件。")).toBeNull();
   expect(view.queryByText("这个部署没有启用叫这个名字的应用。")).toBeNull();
-=======
-  expect(
-    view.queryByText("Couldn't load plugins. Reload the page."),
-  ).toBeNull();
-  expect(view.queryByText("No app with that name is turned on.")).toBeNull();
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 });
 
 /*

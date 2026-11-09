@@ -105,10 +105,8 @@ export type ChannelActivityEvent = {
    * indicator without disturbing the preview or the order.
    */
   busy?: boolean;
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   /** The tenant's task board changed somewhere; the tasks cache refetches. */
   taskUpdated?: true;
-=======
   /**
    * Everything the channel is waiting on now, replacing what the row held. Absent on an ordinary
    * activity event. Rides on every busy event, and alone on the one the server sends when a hop
@@ -121,7 +119,6 @@ export type ChannelActivityEvent = {
    * held is ignored. See `newerWork`.
    */
   workAt?: string;
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 };
 
 /** The infinite query's cache, which holds pages rather than one array. */

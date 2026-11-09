@@ -1,10 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-import { useEffect, useRef, useState } from "react";
-=======
-import { useEffect, useLayoutEffect, useRef } from "react";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
 import {
   QuestionNotice,
@@ -28,11 +24,8 @@ import { currentUserQueryOptions } from "@/lib/auth/queries";
 import {
   addGroupMemberMutationOptions,
   type GroupMessage,
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   type GroupPerson,
-=======
   groupKeys,
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   groupQueryOptions,
   removeGroupMemberMutationOptions,
   sendGroupMessageMutationOptions,
@@ -191,10 +184,6 @@ export function GroupChat({ channelId }: { channelId: string }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-4 py-6">
-=======
       <div
         className="min-h-0 flex-1 overflow-y-auto"
         onScroll={(event) => {
@@ -203,10 +192,9 @@ export function GroupChat({ channelId }: { channelId: string }) {
         ref={viewportRef}
       >
         <div
-          className="mx-auto flex w-full max-w-3xl flex-col gap-5 py-6"
+          className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-4 py-6"
           data-transcript-column
         >
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
           {messages.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               跟{bots.map((bot) => bot.name).join("和")}说点什么。
@@ -240,7 +228,6 @@ export function GroupChat({ channelId }: { channelId: string }) {
             {send.error.message}
           </p>
         ) : null}
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         {startRun.error ? (
           <p className="pb-2 text-sm text-destructive" role="alert">
             {startRun.error.message}
@@ -259,14 +246,6 @@ export function GroupChat({ channelId }: { channelId: string }) {
           people={group.data?.people ?? []}
         />
         <AddPerson channelId={channelId} />
-        <Composer
-          /*
-           * Groups expand into their members (spec B1), but only the members who are in this
-           * conversation: `@` here addresses one of its Bots, and a coworker outside it has no thread
-           * here to answer in.
-           */
-          agents={withGroupMembers(roster, toGroupOptions(crews.data, roster))}
-=======
         {answer.error ? (
           <p className="pb-2 text-sm text-destructive" role="alert">
             {answer.error.message}
@@ -281,7 +260,7 @@ export function GroupChat({ channelId }: { channelId: string }) {
             <QuestionNotice
               avatarSeed={asker?.avatarSeed || (askerId ?? question.id)}
               botName={
-                (askerId && names.get(askerId)) || asker?.name || "A Bot"
+                (askerId && names.get(askerId)) || asker?.name || "一位员工"
               }
               onAnswered={(text) => answerTo(text, question)}
               question={question}
@@ -289,9 +268,13 @@ export function GroupChat({ channelId }: { channelId: string }) {
           </div>
         ) : null}
         <Composer
-          agents={toAgentOptions(bots)}
+          /*
+           * Groups expand into their members (spec B1), but only the members who are in this
+           * conversation: `@` here addresses one of its Bots, and a coworker outside it has no thread
+           * here to answer in.
+           */
+          agents={withGroupMembers(roster, toGroupOptions(crews.data, roster))}
           className="relative mt-auto w-full"
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
           commands={[]}
           disabled={bots.length === 0}
           pending={send.isPending || answer.isPending || working}
@@ -318,14 +301,11 @@ export function GroupChat({ channelId }: { channelId: string }) {
               return;
             }
             if (!draft.text) return;
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
             setStarted(null);
-=======
             if (question && (!draft.agentId || draft.agentId === askerId)) {
               await answerTo(draft.text, question);
               return;
             }
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
             await send.mutateAsync({
               id: newId(),
               text: draft.text,
@@ -339,7 +319,6 @@ export function GroupChat({ channelId }: { channelId: string }) {
 }
 
 /**
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
  * The one sentence a person gets back for starting a crew: which crew took it, and where the run is.
  *
  * `role="status"` rather than an alert — nothing went wrong, the work simply happens somewhere else.
@@ -372,7 +351,9 @@ export function FlowStartedNotice({
       </button>
     </p>
   );
-=======
+}
+
+/**
  * The newest open question a Bot asked in this group, from an inbox read. Each Bot here asks from a
  * thread of its own, so it is found by the conversation, not by a thread.
  */
@@ -381,7 +362,6 @@ export function groupQuestion(
   channelId: string,
 ): WaitingQuestion | undefined {
   return inbox?.questions.find((question) => question.channelId === channelId);
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 }
 
 /** One attributed line: a person's bubble, and a Bot's named reply on the left. */
@@ -454,11 +434,7 @@ function GroupLine({
           )
         ) : message.status === "failed" ? (
           <p className="text-sm text-destructive" role="alert">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
             {message.text || "这位员工没能回答。"}
-=======
-            {message.text || "This Bot couldn't answer."}
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
           </p>
         ) : (
           <Bubble
@@ -483,7 +459,6 @@ function GroupLine({
   );
 }
 
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 /** Invite another person who has signed in here. They see this whole conversation. */
 function AddPerson({ channelId }: { channelId: string }) {
   const [open, setOpen] = useState(false);
@@ -580,7 +555,8 @@ function People({
       ) : null}
     </div>
   );
-=======
+}
+
 /**
  * Whether a scrolled element is close enough to its end to count as reading the newest line.
  *
@@ -614,5 +590,4 @@ export function shouldFollowGroup({
   newestIsMine: boolean;
 }): boolean {
   return !landed || atBottom || newestIsMine;
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 }

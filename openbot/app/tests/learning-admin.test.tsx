@@ -159,29 +159,17 @@ test.each([
   [
     { enabled: true, defaultTarget: null, agents: {} },
     { state: "absent", containerId: "openbot" },
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     "这个 Intelligence 项目里还没有「openbot」学习容器",
-=======
-    'This project has no "openbot" Learning container yet',
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   ],
   [
     { enabled: true, defaultTarget: { containerId: "openbot" }, agents: {} },
     { state: "assigned", containerId: "openbot" },
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     "熊宝已自动使用这个 Intelligence 项目里的「openbot」容器",
-=======
-    'OpenBot assigned this project\'s "openbot" container automatically',
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   ],
   [
     { enabled: true, defaultTarget: null, agents: {} },
     { state: "not_entitled" },
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     "套餐不含自动学习",
-=======
-    "plan doesn't include Learning",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   ],
 ] as const)(
   "the page says what automatic assignment found (%#)",
@@ -546,7 +534,7 @@ describe("reviewing proposed skills", () => {
     await waitFor(() =>
       expect(
         view.getByRole("button", { name: /Refund triage/ }).textContent,
-      ).toContain("Published"),
+      ).toContain("已发布"),
     );
   });
 
@@ -953,8 +941,8 @@ describe("reviewing proposed skills", () => {
         : undefined,
     );
     const view = shared();
-    await view.findByText("The back end has no model set up for Learning yet.");
-    expect(view.getByText("The run failed.")).not.toBeNull();
+    await view.findByText("Intelligence 里还没有为学习配置模型。");
+    expect(view.getByText("这次分析失败了。")).not.toBeNull();
     expect(view.queryByText("LEARNING_MODEL_NOT_CONFIGURED")).toBeNull();
     cleanup();
     queryClient.clear();
@@ -965,9 +953,9 @@ describe("reviewing proposed skills", () => {
         : undefined,
     );
     const none = shared();
-    await none.findByText("Analysis runs");
-    await none.findByText("No container");
-    expect(none.queryByText("No analysis runs yet")).toBeNull();
+    await none.findByText("分析记录");
+    await none.findByText("没有容器");
+    expect(none.queryByText("还没有分析记录")).toBeNull();
   });
 
   test("runs are polled while one is queued or running, and not otherwise", () => {
@@ -1106,7 +1094,7 @@ describe("reviewing proposed skills", () => {
       ),
     );
     fireEvent.click(
-      view.getByRole("button", { name: "Save Learning settings" }),
+      view.getByRole("button", { name: "保存设置" }),
     );
     await waitFor(() =>
       expect(puts.some((put) => put.path.endsWith("/settings"))).toBe(true),
@@ -1120,7 +1108,7 @@ describe("reviewing proposed skills", () => {
   test("Published skills lists the container's skills and opens one", async () => {
     intelligence();
     const view = shared();
-    await view.findByText("Published skills");
+    await view.findByText("已发布的技能");
     fireEvent.click(
       await view.findByRole("button", { name: /Invoice lookup/ }),
     );
@@ -1131,8 +1119,8 @@ describe("reviewing proposed skills", () => {
     const posts = intelligence();
     const view = shared();
     await view.findByRole("button", { name: /Refund triage/ });
-    fireEvent.click(view.getByRole("button", { name: "Learn now" }));
-    await view.findByText("Learning started.", { exact: false });
+    fireEvent.click(view.getByRole("button", { name: "立即学习" }));
+    await view.findByText("已开始学习。", { exact: false });
     expect([...posts]).toEqual(["/api/admin/learning/runs"]);
   });
 
@@ -1179,12 +1167,12 @@ describe("reviewing proposed skills", () => {
       { preconnect: originalFetch.preconnect },
     );
     const view = shared();
-    await view.findByText("Analysis runs");
-    await view.findByText("The back end has no model set up for Learning yet.");
+    await view.findByText("分析记录");
+    await view.findByText("Intelligence 里还没有为学习配置模型。");
     expect(view.queryByText("LEARNING_MODEL_NOT_CONFIGURED")).toBeNull();
-    expect(view.getByText("Finished · Manual")).not.toBeNull();
-    expect(view.getByText("Failed · Automatic")).not.toBeNull();
-    await view.findByText("Manage Learning in the back end dashboard");
+    expect(view.getByText("已完成 · 手动")).not.toBeNull();
+    expect(view.getByText("失败 · 自动")).not.toBeNull();
+    await view.findByText("在 Intelligence 里管理学习");
     const anchors = Array.from(view.container.querySelectorAll("a"));
     expect(anchors.some((a) => a.getAttribute("href") === runsLink)).toBe(
       false,
@@ -1210,10 +1198,10 @@ describe("reviewing proposed skills", () => {
     const without = shared();
     await without.findByText("OpenBot (openbot)");
     expect(
-      without.queryByText("Manage Learning in the back end dashboard"),
+      without.queryByText("在 Intelligence 里管理学习"),
     ).toBeNull();
-    expect(without.queryByText("Threads ready")).toBeNull();
-    expect(without.getByText("Candidates to review")).not.toBeNull();
+    expect(without.queryByText("待分析的对话")).toBeNull();
+    expect(without.getByText("待审核的技能")).not.toBeNull();
     cleanup();
     queryClient.clear();
     intelligence({
@@ -1230,10 +1218,10 @@ describe("reviewing proposed skills", () => {
     const managed = shared();
     expect(
       (
-        await managed.findByText("Manage Learning in the back end dashboard")
+        await managed.findByText("在 Intelligence 里管理学习")
       ).getAttribute("href"),
     ).toBe("https://app.intelligence.example/o/acme/support/learning");
-    expect(managed.getByText("Threads ready")).not.toBeNull();
+    expect(managed.getByText("待分析的对话")).not.toBeNull();
   });
 });
 
@@ -1243,10 +1231,10 @@ test("an Intelligence with Learning switched off says so, not that it can't be r
     automatic: { state: "learning_off" },
   });
   const view = page();
-  await view.findByText("Learning is switched off in the back end", {
+  await view.findByText("Intelligence 里关闭了学习", {
     exact: false,
   });
   expect(
-    view.queryByText("Couldn't reach the back end", { exact: false }),
+    view.queryByText("熊宝没能向 Intelligence 查询", { exact: false }),
   ).toBeNull();
 });

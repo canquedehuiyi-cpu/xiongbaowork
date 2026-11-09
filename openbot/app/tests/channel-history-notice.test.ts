@@ -72,11 +72,7 @@ describe("channel history notice", () => {
       unreadable: 0,
     });
 
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     expect(notice).toContain("暂时读不到");
-=======
-    expect(notice).toContain("Couldn't load earlier messages");
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     expect(notice).not.toContain("different CopilotKit project");
     expect(notice).not.toContain("fresh history");
   });
@@ -90,11 +86,7 @@ describe("channel history notice", () => {
       unreadable: 1,
     });
 
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     expect(notice).toContain("有一条更早的消息读不出来");
-=======
-    expect(notice).toContain("One earlier message couldn't be read");
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     expect(notice).not.toContain("different CopilotKit project");
   });
 
@@ -109,11 +101,7 @@ describe("channel history notice", () => {
         );
 
         expect((await view.findByRole("status")).textContent).toContain(
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           "更早的消息暂时读不到",
-=======
-          "Couldn't load earlier messages",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         );
         expect(view.queryByText(/different CopilotKit project/)).toBeNull();
       },
@@ -146,11 +134,7 @@ describe("channel history notice", () => {
       unreadable: 0,
     });
 
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     expect(notice).toContain("暂时读不到");
-=======
-    expect(notice).toContain("Couldn't load earlier messages");
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     expect(notice).not.toContain("different CopilotKit project");
   });
 
@@ -175,10 +159,6 @@ describe("channel history notice", () => {
         unreadable: 1,
         historyReadFailed: true,
       }),
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     ).toContain("暂时读不到");
-=======
-    ).toContain("Couldn't load earlier messages");
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   });
 });

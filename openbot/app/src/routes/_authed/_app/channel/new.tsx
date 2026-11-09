@@ -2,24 +2,15 @@ import type { Message } from "@ag-ui/core";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useRef, useState } from "react";
-import { NewBotSheet } from "@/components/agents/new-bot-sheet";
+import { CreateAgentDialog } from "@/components/agents/create-agent-dialog";
 import AgentOrb from "@/components/agents/orb/agent-orb";
 import { ChannelAvatar } from "@/components/channels/avatar";
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 import { canSend, type Recipient } from "@/components/channels/compose-state";
-=======
-import {
-  canSend,
-  type Recipient,
-  startsGroup,
-  toFieldChange,
-} from "@/components/channels/compose-state";
 import {
   type ComposerDraft,
   toAgentOptions,
 } from "@/components/channels/composer";
 import { ModelPicker } from "@/components/channels/composer/model-picker";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 import { ConversationView } from "@/components/channels/conversation-view";
 import { seedMessage } from "@/components/channels/transcript-messages";
 import { SidebarToggle } from "@/components/layout/sidebar-toggle";
@@ -165,11 +156,7 @@ function NewConversation({ composition }: { composition: string }) {
   const urlAgentDetailFailed = needsUrlAgentDetail && detailError && !fetched;
   const loadError =
     rosterError && profiles === undefined
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       ? "读不到员工列表。"
-=======
-      ? "Couldn't load your Bots. Reload the page."
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       : urlAgentDetailFailed
         ? /*
            * The server's 404 sentence (agents/routes.ts `mapStoreError`) means this person cannot see
@@ -177,66 +164,33 @@ function NewConversation({ composition }: { composition: string }) {
            * other failure is a load that can be retried, and says so.
            */
           detailFailure?.message === AGENT_NOT_FOUND
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           ? "你用不了这位员工。它可能还没发布、没有共享给你，或者还没写好说明。"
           : "读不到这位员工。"
         : null;
-  const recipients: Recipient[] = chosen
-    ? [{ id: chosen.id, name: chosen.name }]
-    : [];
-  const skillCommands = useSkillCommands(chosen?.id ?? "");
-=======
-          ? "This Bot isn't available to you. It may be unpublished or not shared with you."
-          : "Couldn't load that Bot. Reload the page."
-        : null;
-  /** Bots picked in the To: field, in the order they will answer; the URL's Bot until one is picked. */
-  const [picked, setPicked] = useState<AgentProfile[] | null>(null);
-  const selected = picked ?? (chosen ? [chosen] : []);
-  const anchor = useComboboxAnchor();
+  /*
+   * One recipient. Upstream's To: takes several Bots and starts a group from them; this deployment
+   * starts a group (群组) from its own group pages instead, so `compose-state` holds one.
+   */
+  const selected = chosen ? [chosen] : [];
   const recipients: Recipient[] = selected.map((profile) => ({
     id: profile.id,
     name: profile.name,
   }));
-  const group = startsGroup(recipients);
   /*
-   * A model can be picked before the first message when the conversation is with one Bot that runs
+   * A model can be picked before the first message when the conversation is with a Bot that runs
    * on OpenBot's own model. The pick is saved with the conversation, before the message runs.
    */
-  const pickable =
-    !group && selected.length === 1 && selected[0]?.runsOnOpenBotModel === true;
+  const pickable = selected[0]?.runsOnOpenBotModel === true;
   const models = useQuery({
     ...modelCatalogueQueryOptions(),
     enabled: pickable,
   });
   const draftModel = useDraftModel(pickable ? models.data : undefined);
-  // A group's first message goes to all of its Bots, so no one Bot's commands are offered.
-  const skillCommands = useSkillCommands(
-    group ? "" : (recipients[0]?.id ?? ""),
-  );
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+  const skillCommands = useSkillCommands(recipients[0]?.id ?? "");
 
   const submit = async (draft: ComposerDraft) => {
     const recipient = recipients[0];
     if (!recipient || !canSend(recipients, draft.text)) return;
-    if (group) {
-      setError(null);
-      try {
-        // An `@` addresses one Bot, as it does in every later message of the group.
-        await startGroup(
-          recipients.map((entry) => entry.id),
-          draft.text,
-          draft.agentId,
-        );
-      } catch (caught) {
-        setError(
-          caught instanceof Error
-            ? caught.message
-            : "Couldn't start the group. Try again.",
-        );
-        throw caught;
-      }
-      return;
-    }
 
     setError(null);
     setSent(seedMessage(draft.text, newId()));
@@ -253,7 +207,7 @@ function NewConversation({ composition }: { composition: string }) {
       setError(
         caught instanceof Error
           ? caught.message
-          : "Couldn't start the conversation. Try again.",
+          : "对话没能开始。",
       );
       throw caught;
     }
@@ -280,73 +234,29 @@ function NewConversation({ composition }: { composition: string }) {
           }
           itemToStringLabel={(item: AgentProfile) => item.name}
           itemToStringValue={(item: AgentProfile) => item.id}
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-          onValueChange={(next) => {
+          onValueChange={(next: AgentProfile | null) => {
+            setAskedForBot(false);
             // Recipient changes are not separate navigation history entries.
             void navigate({
               replace: true,
               search: next ? { agent: next.id } : {},
-=======
-          onValueChange={(next: AgentProfile[], details) => {
-            const kept = toFieldChange(selected, next, details.reason);
-            setPicked(kept);
-            setAskedForBot(false);
-            // The first Bot stays in the URL so a reload keeps the conversation's recipient; the
-            // rest of a group lives in the page. Not a separate navigation history entry.
-            void navigate({
-              replace: true,
-              search: kept[0] ? { agent: kept[0].id } : {},
               state: ownedBy(composition),
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
             });
           }}
           value={chosen ?? null}
         >
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           <ComboboxInput
+            ref={pickerInput}
             // The popup opening is not enough on its own: typing filters through this input, so
-            // the caret starts here whenever the recipient question is still open. Same condition
-            // as `defaultOpen` — a recipient from the URL means the composer takes focus instead.
+            // the caret starts here whenever the recipient question is still open. A recipient
+            // already chosen means the composer takes focus instead.
             autoFocus={!chosen}
             placeholder="选择一位员工…"
             // InputGroup owns focus rings via `has-[…:focus-visible]`; disable that wrapper ring here.
             className="border-none w-full bg-transparent! text-sm has-[[data-slot=input-group-control]:focus-visible]:ring-0"
           />
           {/* Allow max-w to constrain the popup even though its anchor is full-width. */}
-          <ComboboxContent className="min-w-0 max-w-lg" sideOffset={12}>
-            <ComboboxEmpty>没有找到员工。</ComboboxEmpty>
-            <ComboboxList>
-=======
-          <ComboboxChips
-            ref={anchor}
-            className="flex-1 border-none bg-transparent! focus-within:ring-0 dark:bg-transparent!"
-          >
-            {selected.map((profile) => (
-              <ComboboxChip
-                className="gap-1.5 pl-1"
-                key={profile.id}
-                removeLabel={`Remove ${profile.name}`}
-              >
-                <ChannelAvatar participantIds={[profile.id]} size={16} />
-                {profile.name}
-              </ComboboxChip>
-            ))}
-            <ComboboxChipsInput
-              ref={pickerInput}
-              // The popup opening is not enough on its own: typing filters through this input, so
-              // the caret starts here whenever the recipient question is still open. A recipient
-              // already chosen means the composer takes focus instead.
-              autoFocus={!chosen}
-              placeholder={
-                selected.length
-                  ? "Add another Bot for a group…"
-                  : "Choose a Bot…"
-              }
-            />
-          </ComboboxChips>
-          {/* Allow max-w to constrain the popup even though its anchor is full-width. */}
           <ComboboxContent
-            anchor={anchor}
             className="flex min-w-0 max-w-lg flex-col"
             sideOffset={12}
           >
@@ -360,13 +270,12 @@ function NewConversation({ composition }: { composition: string }) {
                 }}
               >
                 <AgentOrb size="24px" state="idle" />
-                <span className="font-medium">New Bot</span>
-                <span className="text-muted-foreground">Create a new Bot</span>
+                <span className="font-medium">新建员工</span>
+                <span className="text-muted-foreground">招一位新员工</span>
               </button>
             </div>
-            <ComboboxEmpty>No Bots found.</ComboboxEmpty>
+            <ComboboxEmpty>没有找到员工。</ComboboxEmpty>
             <ComboboxList className="min-h-0">
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
               {(item: AgentProfile) => (
                 <ComboboxItem key={item.id} value={item} className="h-10">
                   <ChannelAvatar participantIds={[item.id]} size={24} />
@@ -380,31 +289,27 @@ function NewConversation({ composition }: { composition: string }) {
           </ComboboxContent>
         </Combobox>
       </div>
-      <NewBotSheet
+      {/*
+       * The fork's own new-employee wizard (the one 员工管理 opens), rather than upstream's New Bot
+       * sheet, so an employee made here has the same persona, model and portrait steps.
+       */}
+      <CreateAgentDialog
         open={creatingBot}
         onClose={() => setCreatingBot(false)}
         onCreated={(agentId) => {
           setCreatingBot(false);
           void queryClient
             .fetchQuery(agentQueryOptions(agentId))
-            .then((profile) => {
-              setPicked((current) => {
-                const existing = current ?? selected;
-                return existing.some((bot) => bot.id === profile.id)
-                  ? existing
-                  : [...existing, profile];
+            .then(() => {
+              setAskedForBot(false);
+              void navigate({
+                replace: true,
+                search: { agent: agentId },
+                state: ownedBy(composition),
               });
-              if (selected.length === 0)
-                void navigate({
-                  replace: true,
-                  search: { agent: agentId },
-                  state: ownedBy(composition),
-                });
             })
             .catch(() => {
-              setError(
-                "Your Bot was created, but could not be selected. Choose it from the recipient list.",
-              );
+              setError("员工已经建好，但没能选中它。请在收件人列表里选它。");
             });
         }}
       />
@@ -447,7 +352,7 @@ function NewConversation({ composition }: { composition: string }) {
           : {})}
         messages={sent ? [sent] : []}
         starterSuggestions={
-          !group && !sent ? (
+          !sent ? (
             <StarterSuggestions
               agentId={recipients[0]?.id}
               disabled={pending || Boolean(loadError) || waitingForUrlAgent}
@@ -473,34 +378,11 @@ function NewConversation({ composition }: { composition: string }) {
               className="px-3.5 pb-2 text-sm text-muted-foreground"
               role="status"
             >
-              Choose a Bot first.
+              先选一位员工。
             </p>
           ) : null
         }
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-        onSubmit={async (draft) => {
-          const recipient = recipients[0];
-          if (!recipient || !canSend(recipients, draft.text)) return;
-
-          setError(null);
-          setSent(seedMessage(draft.text, newId()));
-
-          try {
-            // Recorded, then started: a coworker picked here is as much a choice as an `@` on the
-            // home screen, and the trail has to say so for both.
-            await startChosen(recipient.id, draft.text);
-          } catch (caught) {
-            // Preserve the unsent draft when channel creation fails.
-            setSent(null);
-            setError(
-              caught instanceof Error ? caught.message : "对话没能开始。",
-            );
-            throw caught;
-          }
-        }}
-=======
         onSubmit={submit}
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         pending={pending}
       />
     </div>

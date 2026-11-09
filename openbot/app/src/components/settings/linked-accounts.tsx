@@ -164,7 +164,8 @@ export function connectGithubPending(mutation: {
 export function LinkedAccountSection({
   provider,
 }: {
-  provider: LinkableProvider;
+  /** Left out, every provider this deployment can link: the fork's settings page draws them together. */
+  provider?: LinkableProvider;
 }) {
   const links = useQuery(linkedAccountsQueryOptions());
   const providers = useQuery(identityProvidersQueryOptions());
@@ -200,11 +201,12 @@ export function LinkedAccountSection({
     providersError: providers.error,
   });
   if (!state) {
+    if (!provider) return null;
     return (
-      <PageSection title="Your account">
-        <PageEmpty icon={IconLink} title="Not set up yet">
-          You can't link a {linkableProviderTitle(provider)} account yet. An
-          admin has to set it up first.
+      <PageSection title="你的账号">
+        <PageEmpty icon={IconLink} title="还没有设置">
+          现在还不能关联 {linkableProviderTitle(provider)}{" "}
+          账号，需要管理员先完成设置。
         </PageEmpty>
       </PageSection>
     );
@@ -224,11 +226,7 @@ export function LinkedAccountSection({
     },
   };
   return (
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-    <PageSection title="关联的外部账号">
-=======
-    <PageSection title="Your account">
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+    <PageSection title={provider ? "你的账号" : "关联的外部账号"}>
       {state.entries.length > 0 ? (
         <PageRows>
           {state.entries.map((entry, index) => (
@@ -252,39 +250,22 @@ export function LinkedAccountSection({
       ) : null}
       {state.error ? (
         <p className="mt-2 text-destructive text-sm" role="alert">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           读取关联的账号失败：{state.error}
-=======
-          Couldn't load your account: {state.error}
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         </p>
       ) : null}
       {state.providersError ? (
         <p className="mt-2 text-destructive text-sm" role="alert">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           无法确认哪些账号可以关联：{state.providersError}
-=======
-          Couldn't check whether you can link this account:{" "}
-          {state.providersError}
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         </p>
       ) : null}
       {issueCode.error ? (
         <p className="mt-2 text-destructive text-sm" role="alert">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           生成 Slack 关联码失败：{issueCode.error.message}
-=======
-          Couldn't create a Slack code: {issueCode.error.message}
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         </p>
       ) : null}
       {connectGithub.error ? (
         <p className="mt-2 text-destructive text-sm" role="alert">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           连接 GitHub 失败：{connectGithub.error.message}
-=======
-          Couldn't connect GitHub: {connectGithub.error.message}
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         </p>
       ) : null}
       <Dialog
@@ -410,11 +391,7 @@ function LinkedAccountRow({ account }: { account: LinkedAccount }) {
       </Item>
       {unlink.error ? (
         <p className="px-3 pb-2 text-destructive text-sm" role="alert">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           断开 {account.title} 失败：{unlink.error.message}
-=======
-          Couldn't disconnect {account.title}: {unlink.error.message}
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         </p>
       ) : null}
     </>
@@ -425,6 +402,11 @@ function LinkedAccountRow({ account }: { account: LinkedAccount }) {
  * Write text to the clipboard, answering whether it landed. The clipboard is missing on plain-http
  * hosts and a write is refused when permission is denied; both are a "no", not an exception.
  */
+/** Every account this person can link, together: the fork's settings page (connected accounts). */
+export function LinkedAccountsSection() {
+  return <LinkedAccountSection />;
+}
+
 export async function copyText(
   text: string,
   clipboard: Pick<Clipboard, "writeText"> | undefined,

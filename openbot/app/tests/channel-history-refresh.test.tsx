@@ -67,16 +67,9 @@ const local: Message = {
   content: "Local message stays",
 };
 const broken = { id: "broken", role: "user", content: null };
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 const unavailable = "更早的消息暂时读不到，你可以继续使用这段对话。";
 const oneHole =
   "有一条更早的消息读不出来，没有显示。这段对话的其余部分是完整的。";
-=======
-const unavailable =
-  "Couldn't load earlier messages. You can keep using this conversation.";
-const oneHole =
-  "One earlier message couldn't be read, so it isn't shown. Everything else is here.";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 let originalFetch: typeof fetch;
 let history: (threadId: string) => Promise<Response>;
 let historyReads: string[];

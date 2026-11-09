@@ -38,6 +38,7 @@ export const Channel = memo(function Channel({
   name,
   summary,
   untitled,
+  lastMessage,
   lastMessageAt,
   pinned,
   unread,
@@ -51,6 +52,8 @@ export const Channel = memo(function Channel({
   summary?: string;
   /** Used as the thread title until the conversation has been named. See `untitledLine`. */
   untitled?: string;
+  /** The fork's older name for `untitled`, still passed by `conversation-workspace.tsx`. */
+  lastMessage?: string;
   lastMessageAt?: string;
   pinned: boolean;
   unread: boolean;
@@ -68,13 +71,10 @@ export const Channel = memo(function Channel({
   });
   /* Types in only on arrival; an already-named row draws it outright. */
   const revealed = useTypedReveal(summary);
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-  const threadTitle = revealed.text || lastMessage || "新会话";
-  const title = summary || lastMessage || "新会话";
+  const untitledTitle = untitled || lastMessage;
+  const threadTitle = revealed.text || untitledTitle || "新会话";
+  const title = summary || untitledTitle || "新会话";
   const group = participantIds.length > 1;
-=======
-  const threadTitle = revealed.text || untitled || "New conversation";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   const setPinned = useMutation(setChannelPinnedMutationOptions(queryClient));
   const [confirming, setConfirming] = useState(false);
   /**
@@ -96,16 +96,11 @@ export const Channel = memo(function Channel({
             to={group ? "/group/$channelId" : "/channel/$channelId"}
             params={{ channelId }}
             type="button"
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
             className="flex w-full flex-row items-center gap-2 rounded-lg px-2.5 py-2 hover:bg-foreground/5 [contain-intrinsic-size:auto_3rem] [content-visibility:auto]"
-=======
-            className="flex flex-row py-2 px-2.5 gap-2 items-center w-full hover:bg-foreground/5 rounded-lg [contain-intrinsic-size:auto_3.25rem] [content-visibility:auto]"
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
             activeProps={{
               className: "bg-sidebar",
             }}
           >
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
                 <span
@@ -152,20 +147,6 @@ export const Channel = memo(function Channel({
                 <span className="size-1 animate-bounce rounded-full bg-primary" />
               </span>
             ) : null}
-=======
-            <ChannelItemContent
-              participantIds={participantIds}
-              name={name}
-              title={summary || untitled || "New conversation"}
-              displayedTitle={threadTitle}
-              lastMessageAt={lastMessageAt}
-              emphasis={emphasis}
-              busy={busy}
-              unread={unread}
-              pinned={pinned}
-              revealing={revealed.typing}
-            />
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
           </Link>
         </ContextMenuTrigger>
         <ContextMenuContent>
@@ -179,22 +160,14 @@ export const Channel = memo(function Channel({
             }}
           >
             {pinned ? <IconPinnedOff /> : <IconPin />}
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
             {pinned ? "取消置顶" : "置顶会话"}
-=======
-            {pinned ? "Unpin conversation" : "Pin conversation"}
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
           </ContextMenuItem>
           <ContextMenuItem
             variant="destructive"
             onClick={() => setConfirming(true)}
           >
             <IconTrash />
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
             删除会话…
-=======
-            Delete conversation…
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
@@ -210,44 +183,7 @@ export const Channel = memo(function Channel({
         name={name}
         onOpenChange={setConfirming}
         open={confirming}
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>删除「{name}」？</DialogTitle>
-            <DialogDescription>
-              会话里的所有人都将不再看到这段会话。
-            </DialogDescription>
-          </DialogHeader>
-          {deleteChannel.error ? (
-            <p className="text-destructive text-sm">
-              {deleteChannel.error.message}
-            </p>
-          ) : null}
-          <DialogFooter>
-            <Button
-              onClick={() => setConfirming(false)}
-              size="sm"
-              variant="ghost"
-            >
-              取消
-            </Button>
-            <Button
-              disabled={deleteChannel.isPending}
-              onClick={() => {
-                void confirmDelete();
-              }}
-              size="sm"
-              variant="destructive"
-            >
-              {deleteChannel.isPending ? "正在删除…" : "删除"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-=======
       />
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     </>
   );
 });

@@ -50,12 +50,9 @@ const runtimeTimers = {
 GlobalRegistrator.register();
 /* `@base-ui/utils` is not a dependency of this package; the react package that owns it is. */
 await import("@base-ui/react/dialog");
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 Object.assign(globalThis, runtimeTimers);
 await import("react-dom/client");
-=======
 printNodesShortly(globalThis.Node);
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 GlobalRegistrator.unregister();
 
 /** The longest stretch of a node's markup a failed assertion prints. */

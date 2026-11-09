@@ -80,11 +80,7 @@ function RouteComponent() {
     return (
       <PageShell backButton={BACK} title="组件展示">
         <p className="mt-8 text-destructive text-sm" role="alert">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           读不到组件。
-=======
-          Couldn't load components. Reload the page.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         </p>
       </PageShell>
     );
@@ -102,23 +98,14 @@ function RouteComponent() {
     return (
       <PageShell
         backButton={BACK}
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         description="这里没有叫这个名字的组件。"
         title="没有这个组件"
-=======
-        description="There's no component with that name."
-        title="No such component"
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       >
         <Empty className="mt-12 min-h-[30dvh] border border-dashed">
           <EmptyHeader>
             <EmptyTitle>{name}</EmptyTitle>
             <EmptyDescription className="text-pretty">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
               它可能已被撤下，或者这个部署已不再自带它。
-=======
-              It may have been removed or unpublished.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
             </EmptyDescription>
           </EmptyHeader>
           <Button
@@ -136,18 +123,13 @@ function RouteComponent() {
   return (
     <PageShell
       backButton={BACK}
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-      description={component.publishedDescription ?? undefined}
-      title={componentDisplayTitle(component)}
-=======
       // What it shows, in the person's words; see the gallery's own page for why not the model's.
       description={
         galleryComponent(component.name)?.summary ??
         component.publishedDescription ??
         undefined
       }
-      title={component.title}
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+      title={componentDisplayTitle(component)}
     >
       <div className="relative mt-8 aspect-[2/1] overflow-hidden rounded-lg border border-border bg-card">
         <div className="absolute inset-0">

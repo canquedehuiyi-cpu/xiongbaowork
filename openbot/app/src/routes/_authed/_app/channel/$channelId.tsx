@@ -7,13 +7,11 @@ import {
 } from "@tanstack/react-query";
 import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { motion, useReducedMotion } from "motion/react";
+import { useEffect } from "react";
 import { z } from "zod";
 import { AgentProfile } from "@/components/agents/agent-profile";
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-import { hasUnseenActivity } from "@/components/app-sidebar/app-sidebar";
-=======
+import { hasUnseenActivity } from "@/components/app-sidebar/roster";
 import { ConversationApprovals } from "@/components/approvals/inline-approval";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 import { BotPausedBanner } from "@/components/bot-profile/pause-banner";
 import { ChannelAvatar } from "@/components/channels/avatar";
 import { ChannelChat } from "@/components/channels/channel-chat";
@@ -24,19 +22,13 @@ import { useAutoWatchScreen } from "@/components/computer/use-auto-watch-screen"
 import { DetailPanel } from "@/components/layout/detail-panel";
 import { SidebarToggle } from "@/components/layout/sidebar-toggle";
 import { Button } from "@/components/ui/button";
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 import { markChannelReadMutationOptions } from "@/lib/channels/mutations";
 import {
   type AgentChannel,
   channelListQueryOptions,
   channelQueryOptions,
 } from "@/lib/channels/queries";
-import { onComputerActivity } from "@/lib/copilot/computer-activity";
-=======
-import { useMarkOpenChannelRead } from "@/lib/channels/mark-read";
-import { type AgentChannel, channelQueryOptions } from "@/lib/channels/queries";
 import { useOpenComputerOnRequest } from "@/lib/computers/panel-view";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 
 const chatSearchSchema = z.object({
   settings: z.boolean().optional(),
@@ -138,16 +130,12 @@ function RouteComponent() {
       onClose={() => show(null)}
       open={(isSettingsOpen || isWatching) && agentId !== undefined}
       detailWidth={isWatching ? SCREEN_PANEL_WIDTH : undefined}
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       title={isWatching ? "电脑" : undefined}
-=======
-      title={isWatching ? "Computer" : undefined}
       waiting={
         channel.data ? (
           <ConversationApprovals threadId={channel.data.threadId} />
         ) : null
       }
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       detail={
         agentId === undefined ? null : isWatching ? (
           // Manual watch remains active even when there is no current browser action.
@@ -219,11 +207,7 @@ function RouteComponent() {
               onOpenChange={(open) => show(open ? "watch" : null)}
             />
             <Button
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
               aria-label="会话里的员工"
-=======
-              aria-label="This conversation's Bot"
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
               aria-pressed={isSettingsOpen}
               className={isSettingsOpen ? "bg-foreground/5" : undefined}
               disabled={agentId === undefined}
@@ -266,11 +250,7 @@ function ChannelBody({
   if (hasError || !channel) {
     return (
       <p className="p-8 text-sm text-destructive" role="alert">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         读不到这段会话。
-=======
-        Couldn't load this conversation. Reload the page.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       </p>
     );
   }

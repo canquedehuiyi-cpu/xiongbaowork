@@ -1,9 +1,3 @@
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
-import { stashFirstMessage } from "@/components/channels/transcript-messages";
-import { createChannelMutationOptions } from "./mutations";
-=======
 import {
   MutationObserver,
   useMutation,
@@ -23,7 +17,6 @@ import {
   deleteChannelMutationOptions,
 } from "./mutations";
 import { pendingStartPath, settlePendingStart } from "./pending-start";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 import { channelKeys } from "./queries";
 import { routeMessage } from "./route";
 
@@ -54,8 +47,6 @@ export async function startWithChosen(input: {
 }
 
 /**
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-=======
  * Start a group from a just-submitted first message: create it with the Bots in the order they were
  * picked, give it the message, then open it. Pure so the order can be tested; nothing is sent or
  * opened when the group could not be made.
@@ -115,7 +106,6 @@ export async function startWithModel(input: {
 }
 
 /**
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
  * Start a channel from a just-submitted first message, then navigate there.
  *
  * Ordering matters: create, seed the channel cache, stash the first message, then navigate. That
@@ -132,14 +122,11 @@ export function useStartChannel() {
   const navigate = useNavigate();
   const router = useRouter();
   const createChannel = useMutation(createChannelMutationOptions(queryClient));
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-=======
   const createGroup = useMutation(createGroupMutationOptions(queryClient));
   const deleteChannel = useMutation(deleteChannelMutationOptions(queryClient));
   const discardFailedStart = useMutation(
     deleteChannelMutationOptions(queryClient, true),
   );
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 
   const start = (
     agentId: string,
@@ -176,8 +163,6 @@ export function useStartChannel() {
       },
     });
 
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-=======
   const startGroup = (
     agentIds: string[],
     text: string,
@@ -210,9 +195,10 @@ export function useStartChannel() {
         }),
     });
 
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   return {
-    pending: createChannel.isPending,
+    pending: createChannel.isPending || createGroup.isPending,
+    /** Two or more Bots: a group, answering in the order given. */
+    startGroup,
     start,
     /** `start`, for a coworker the person chose: the choice is recorded first. */
     startChosen: (

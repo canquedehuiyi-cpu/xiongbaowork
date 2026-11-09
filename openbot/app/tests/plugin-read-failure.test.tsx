@@ -18,9 +18,9 @@ import {
 } from "@tanstack/react-router";
 import { cleanup, render, waitFor } from "@testing-library/react";
 import { type PluginsPage, pluginKeys } from "@/lib/plugins/queries";
-import { Route as ConnectedAccountRoute } from "@/routes/_authed/_app/connections.$key";
 import { Route as AdminAppRoute } from "@/routes/_authed/admin/plugins/$key";
 import { Route as AdminToolRoute } from "@/routes/_authed/admin/plugins/$key_.tools.$tool";
+import { Route as ConnectedAccountRoute } from "@/routes/_authed/settings/connected-accounts/$key";
 
 /**
  * A connector's own pages, when `GET /api/plugins` fails.
@@ -166,7 +166,7 @@ function renderAdmin(client: QueryClient, at: string) {
   );
 }
 
-/** `/connections/$key`, at the id its `useParams` reads. */
+/** `/settings/connected-accounts/$key`, at the id its `useParams` reads. */
 function renderAccount(client: QueryClient) {
   const rootRoute = createRootRoute({ component: Outlet });
   const authedRoute = createRoute({
@@ -174,38 +174,30 @@ function renderAccount(client: QueryClient) {
     getParentRoute: () => rootRoute,
     component: Outlet,
   });
-  const appRoute = createRoute({
-    id: "/_app",
+  const settingsRoute = createRoute({
+    path: "/settings",
     getParentRoute: () => authedRoute,
     component: Outlet,
   });
-  const connectionsRoute = createRoute({
-    path: "/connections",
-    getParentRoute: () => appRoute,
-    component: Outlet,
-  });
   const indexRoute = createRoute({
-    path: "/",
-    getParentRoute: () => connectionsRoute,
+    path: "/connected-accounts/",
+    getParentRoute: () => settingsRoute,
     component: () => null,
   });
   const account = (ConnectedAccountRoute as unknown as Updatable).update({
-    id: "/$key",
-    path: "/$key",
-    getParentRoute: () => connectionsRoute,
+    id: "/connected-accounts/$key",
+    path: "/connected-accounts/$key",
+    getParentRoute: () => settingsRoute,
   });
   const tree = rootRoute.addChildren([
     authedRoute.addChildren([
-      appRoute.addChildren([
-        connectionsRoute.addChildren([indexRoute, account as never]),
-      ]),
+      settingsRoute.addChildren([indexRoute, account as never]),
     ]),
   ]);
   const router = createRouter({
     routeTree: tree,
     history: createMemoryHistory({
-      // An app's key: `slack` is the Slack link's own page under Connections, which reads no plugins.
-      initialEntries: ["/connections/notion"],
+      initialEntries: [`/settings/connected-accounts/${APP_KEY}`],
     }),
   });
   return render(
@@ -226,17 +218,9 @@ test("a connector's admin page says the plugin list failed, not that there is no
   const view = renderAdmin(client, `/admin/plugins/${APP_KEY}`);
   await waitForFailedRead(client);
 
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   expect(await view.findByText("读不到插件。")).toBeTruthy();
   expect(view.queryByText("不是插件")).toBeNull();
   expect(view.queryByText("没有可配置的。")).toBeNull();
-=======
-  expect(
-    await view.findByText("Couldn't load plugins. Reload the page."),
-  ).toBeTruthy();
-  expect(view.queryByText("Not a plugin")).toBeNull();
-  expect(view.queryByText("Nothing to configure.")).toBeNull();
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 });
 
 test("a list that genuinely lacks the connector still says it is not a plugin", async () => {
@@ -244,15 +228,8 @@ test("a list that genuinely lacks the connector still says it is not a plugin", 
   const view = renderAdmin(client, `/admin/plugins/${APP_KEY}`);
   await waitForFailedRead(client);
 
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   expect(await view.findByText("不是插件")).toBeTruthy();
   expect(view.queryByText("读不到插件。")).toBeNull();
-=======
-  expect(await view.findByText("Not a plugin")).toBeTruthy();
-  expect(
-    view.queryByText("Couldn't load plugins. Reload the page."),
-  ).toBeNull();
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 });
 
 test("a tool's admin page says the plugin list failed, not that the connector is off", async () => {
@@ -263,19 +240,9 @@ test("a tool's admin page says the plugin list failed, not that the connector is
   );
   await waitForFailedRead(client);
 
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   expect(await view.findByText("读不到插件。")).toBeTruthy();
   expect(view.queryByText("这个部署没有启用那个连接器。")).toBeNull();
   expect(view.queryByText("这个连接器没有提供叫这个名字的工具。")).toBeNull();
-=======
-  expect(
-    await view.findByText("Couldn't load plugins. Reload the page."),
-  ).toBeTruthy();
-  expect(view.queryByText("This connector isn't turned on.")).toBeNull();
-  expect(
-    view.queryByText("This connector has no tool with that name."),
-  ).toBeNull();
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 });
 
 test("a list that genuinely lacks the connector still says it is not enabled, on the tool page", async () => {
@@ -286,15 +253,8 @@ test("a list that genuinely lacks the connector still says it is not enabled, on
   );
   await waitForFailedRead(client);
 
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   expect(await view.findByText("这个部署没有启用那个连接器。")).toBeTruthy();
   expect(view.queryByText("读不到插件。")).toBeNull();
-=======
-  expect(await view.findByText("This connector is off")).toBeTruthy();
-  expect(
-    view.queryByText("Couldn't load plugins. Reload the page."),
-  ).toBeNull();
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 });
 
 test("a connected account's page says the plugin list failed, not that it is not a service to connect", async () => {
@@ -303,9 +263,5 @@ test("a connected account's page says the plugin list failed, not that it is not
   await waitForFailedRead(client);
 
   expect(await view.findByRole("alert")).toBeTruthy();
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   expect(view.queryByText("这不是需要你自己连接的服务。")).toBeNull();
-=======
-  expect(view.queryByText("You don't connect this app yourself.")).toBeNull();
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 });

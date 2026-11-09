@@ -7,17 +7,8 @@ import {
 } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 import { Fragment, useState } from "react";
 import { PageRows, PageSection } from "@/components/layout/page-shell";
-=======
-import type * as React from "react";
-import { AbstractAvatar } from "@/components/agents/abstract-avatar";
-import { PageRows, PageSection } from "@/components/layout/page-shell";
-import { BotNeedsYou } from "@/components/needs-you/board";
-import { DoneTasks, useNeedsYou } from "@/components/needs-you/needs-you";
-import { SharedAppNotice } from "@/components/plugins/shared-app-notice";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -60,11 +51,6 @@ import {
   useNotificationPermission,
 } from "@/lib/notifications/permission";
 import { queryClient } from "@/query-client";
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-=======
-import { BotActivityGlance, BotActivityRow } from "./activity";
-import { BotPausedBanner } from "./pause-banner";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 
 const NOTIFY_LABEL: Record<BotNotify, string> = {
   all: "全部",
@@ -72,7 +58,6 @@ const NOTIFY_LABEL: Record<BotNotify, string> = {
   none: "不提醒（只显示角标）",
 };
 
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 const KIND_LABEL: Record<UpdateKind, { title: string; description: string }> = {
   progress: {
     title: "进展",
@@ -116,13 +101,6 @@ function resetLines(plan: ResetPlan): string[] {
 }
 
 function ResetDialog({
-=======
-/**
- * A Bot's own page: what it needs from you, its state for you, what it is doing, the tasks you marked
- * done this week, its settings, and what can be done to it.
- */
-export function BotProfile({
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   agent,
   onOpenChange,
   open,
@@ -285,22 +263,15 @@ export function UpdateRoutingSection() {
  * reset. One section of the employee's detail page (/wakers/$agentId); the activity feed, tool
  * permissions and update routing that used to share a page with it are their own exports.
  */
+// M4: 待接入 上游员工页的「需要你」看板（needs-you/board.tsx 的 BotNeedsYou）、动态速览（activity.tsx 的 BotActivityGlance/BotActivityRow）与本周已完成任务（DoneTasks），可接到 wakers_.$agentId.tsx
 export function BotControls({ agent }: { agent: AgentProfile }) {
   const lifecycle = useQuery(botLifecycleQueryOptions(agent.id));
-  const { done } = useNeedsYou(agent.id);
   const pause = useMutation(setBotPausedMutationOptions(queryClient));
   const notify = useMutation(setBotNotifyMutationOptions(queryClient));
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   const [resetOpen, setResetOpen] = useState(false);
-  const [permission, setPermission] = useState<string>(() => {
-    try {
-      return typeof Notification === "undefined"
-        ? "unsupported"
-        : Notification.permission;
-    } catch {
-      return "unsupported";
-    }
-  });
+  // The browser's answer, shared with the prompt a conversation offers, so a yes there shows here
+  // (upstream: one reading for the browser and OpenBot Desktop alike).
+  const permission = useNotificationPermission();
 
   return (
     <>
@@ -308,39 +279,6 @@ export function BotControls({ agent }: { agent: AgentProfile }) {
         {lifecycle.isPending ? null : lifecycle.error ? (
           <p className="mt-4 text-destructive text-sm" role="alert">
             读不到这位员工的状态。
-=======
-  // The browser's answer, shared with the prompt a conversation offers, so a yes there shows here.
-  const permission = useNotificationPermission();
-
-  return (
-    <>
-      <div className="mt-6 flex items-center gap-3">
-        <AbstractAvatar name={agent.name} seed={agent.avatarSeed} size={40} />
-        <div className="min-w-0">
-          {agent.title && <p className="truncate font-medium">{agent.title}</p>}
-          <p className="line-clamp-2 text-muted-foreground text-sm">
-            {agent.roleDescription}
-          </p>
-        </div>
-      </div>
-      <div className="mt-4">
-        <BotPausedBanner agentId={agent.id} />
-      </div>
-
-      {/* Its questions and approvals, its tasks, and what its check-ins found, in one card. */}
-      <BotNeedsYou agentId={agent.id} />
-
-      <PageSection title="For you">
-        {/* Whether this Bot's Shared-app calls are being refused right now, with the button that
-            asks an administrator. About its present reach, so it lives here, not only where
-            publishing happens. */}
-        {agent.canManage ? (
-          <SharedAppNotice botId={agent.id} reason="publish" />
-        ) : null}
-        {lifecycle.isPending ? null : lifecycle.error ? (
-          <p className="mt-4 text-destructive text-sm" role="alert">
-            Couldn't load this Bot's settings. Reload the page.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
           </p>
         ) : (
           <PageRows>
@@ -352,13 +290,8 @@ export function BotControls({ agent }: { agent: AgentProfile }) {
                 <ItemTitle>暂停</ItemTitle>
                 <ItemDescription>
                   {lifecycle.data.paused
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
                     ? "不会再为你启动定时任务、长期职责、交接或跟进，正在跑的也已停下。"
                     : "为你运行它的定时任务、长期职责、交接和跟进。"}
-=======
-                    ? "Paused. Nothing runs for you until you turn it back on."
-                    : "Works on its goals, routines, hand-offs and follow-ups for you."}
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
                 </ItemDescription>
               </ItemContent>
               <ItemActions>
@@ -459,19 +392,11 @@ export function BotControls({ agent }: { agent: AgentProfile }) {
                 </ItemDescription>
               </ItemContent>
             </Item>
-            <BotActivityRow agentId={agent.id} />
           </PageRows>
         )}
       </PageSection>
 
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       <ResetDialog agent={agent} onOpenChange={setResetOpen} open={resetOpen} />
-=======
-      <BotActivityGlance agentId={agent.id} />
-      <DoneTasks done={done} />
-      {settings}
-      {manage}
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     </>
   );
 }

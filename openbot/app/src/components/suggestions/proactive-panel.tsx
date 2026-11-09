@@ -1,7 +1,3 @@
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
-import { useId, useState } from "react";
-=======
 import {
   IconBulb,
   IconChevronDown,
@@ -18,11 +14,18 @@ import {
   PageRows,
   PageSection,
 } from "@/components/layout/page-shell";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-=======
 import {
   Item,
   ItemActions,
@@ -39,22 +42,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import { conversationLabel } from "@/lib/channels/label";
 import { channelListQueryOptions } from "@/lib/channels/queries";
 import {
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-  createProactiveSetting,
-  type ProactiveSetting,
-  proactiveKeys,
-  proactiveSettingsQueryOptions,
-  proactiveSuggestionsQueryOptions,
-  removeProactiveSetting,
-  resolveSuggestion,
-  runProactiveNow,
-  updateProactiveSetting,
-=======
   changeProactiveSettingMutationOptions,
   createProactiveSettingMutationOptions,
   type LastCheckIn,
@@ -62,7 +53,6 @@ import {
   proactiveAllowedQueryOptions,
   proactiveSettingsQueryOptions,
   proactiveSuggestionsQueryOptions,
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 } from "@/lib/proactive";
 import { relativeTime } from "@/lib/relative-time";
 import { useUserPreferences } from "@/lib/settings/message-list";
@@ -70,25 +60,12 @@ import { cn } from "@/lib/utils";
 import { queryClient } from "@/query-client";
 import { SuggestionRow } from "./suggestion-row";
 
-const field = "grid gap-1 text-sm";
-const select = "h-9 rounded-md border bg-background px-3 text-sm";
 const intervals = [
   { minutes: 60, label: "每小时" },
   { minutes: 240, label: "每 4 小时" },
   { minutes: 720, label: "每天两次" },
   { minutes: 1440, label: "每天一次" },
 ];
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-async function refresh() {
-  await Promise.all([
-    queryClient.invalidateQueries({ queryKey: proactiveKeys.settings }),
-    queryClient.invalidateQueries({ queryKey: proactiveKeys.suggestions }),
-  ]);
-}
-
-/** Next steps a Bot proposed from background research: start one as a task, or dismiss it. */
-export function SuggestionsInbox() {
-=======
 /** The label map, so a closed trigger says "Every 4 hours" rather than 240. */
 const intervalItems = intervals.map((interval) => ({
   value: interval.minutes,
@@ -96,7 +73,10 @@ const intervalItems = intervals.map((interval) => ({
 }));
 const intervalLabel = (minutes: number) =>
   intervals.find((interval) => interval.minutes === minutes)?.label ??
-  `Every ${minutes} minutes`;
+  `每 ${minutes} 分钟`;
+/** Why no Bot checks in: an admin turned check-ins off, or the person did for all their Bots. */
+const BLOCKED_BY_ADMIN = "管理员已关闭";
+const BLOCKED_BY_YOU = "已为所有员工关闭";
 /** How many suggestions show before the rest fold behind "Show more". */
 const SUGGESTIONS_SHOWN = 3;
 
@@ -111,21 +91,14 @@ export function SuggestionsInbox({
   /** Only this Bot's suggestions, and nothing at all when it has none. */
   agentId?: string;
 } = {}) {
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   const suggestions = useQuery(proactiveSuggestionsQueryOptions());
+  const shown = (suggestions.data ?? []).filter(
+    (suggestion) => agentId === undefined || suggestion.agentId === agentId,
+  );
   const bots = useQuery(agentListQueryOptions());
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-  const act = useMutation({
-    mutationFn: ({ id, action }: { id: string; action: "start" | "dismiss" }) =>
-      resolveSuggestion(id, action),
-    onSuccess: refresh,
-  });
-  const botName = (id: string) =>
-    bots.data?.find((bot) => bot.id === id)?.name ?? "你的员工";
-=======
   const [expanded, setExpanded] = useState(false);
   const botName = (id: string) =>
-    bots.data?.find((bot) => bot.id === id)?.name ?? "Your Bot";
+    bots.data?.find((bot) => bot.id === id)?.name ?? "你的员工";
   if (agentId !== undefined && shown.length === 0) return null;
   /*
    * The newest few, the rest a click away. Each suggestion is a paragraph with two buttons, and a
@@ -134,91 +107,12 @@ export function SuggestionsInbox({
    */
   const hidden = expanded ? 0 : Math.max(0, shown.length - SUGGESTIONS_SHOWN);
   const visible = hidden ? shown.slice(0, SUGGESTIONS_SHOWN) : shown;
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   return (
-    <section className="grid gap-3">
-      <h2 className="font-semibold">建议的下一步</h2>
-      {suggestions.isPending ? (
-        <p>正在读取建议…</p>
-      ) : suggestions.error ? (
-        <p role="alert" className="text-destructive">
+    <PageSection title="建议的下一步">
+      {suggestions.isPending ? null : suggestions.error ? (
+        <p role="alert" className="mt-4 text-destructive text-sm">
           {suggestions.error.message}
         </p>
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-      ) : suggestions.data?.length ? (
-        suggestions.data.map((suggestion) => (
-          <article
-            key={suggestion.id}
-            className="grid gap-2 rounded-lg border p-4"
-          >
-            <div className="flex flex-wrap justify-between gap-2">
-              <strong>{suggestion.title}</strong>
-              <span className="text-xs text-muted-foreground">
-                {botName(suggestion.agentId)} ·{" "}
-                {new Date(suggestion.createdAt).toLocaleString()}
-              </span>
-            </div>
-            <p className="text-sm whitespace-pre-wrap">{suggestion.detail}</p>
-            {(suggestion.sourceApp || suggestion.sourceLink) && (
-              <p className="text-xs text-muted-foreground">
-                来自 {suggestion.sourceApp ?? "已连接的应用"}
-                {suggestion.sourceLink && (
-                  <>
-                    {" · "}
-                    <a
-                      className="underline"
-                      href={suggestion.sourceLink}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      查看记录
-                    </a>
-                  </>
-                )}
-              </p>
-            )}
-            <div className="flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                disabled={act.isPending}
-                onClick={() =>
-                  act.mutate({ id: suggestion.id, action: "start" })
-                }
-              >
-                转成任务
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={act.isPending}
-                onClick={() =>
-                  act.mutate({ id: suggestion.id, action: "dismiss" })
-                }
-              >
-                忽略
-              </Button>
-            </div>
-          </article>
-        ))
-      ) : (
-        <p className="text-muted-foreground">
-          现在还没有建议。开了后台调研的员工会把下一步建议写在这里。
-        </p>
-      )}
-      {act.error && (
-        <p role="alert" className="text-destructive">
-          {act.error.message}
-        </p>
-      )}
-    </section>
-  );
-}
-
-/** Opt a Bot in to read-only background research of the apps it can already read. */
-export function ProactiveResearchSettings() {
-  const settings = useQuery(proactiveSettingsQueryOptions());
-  const bots = useQuery(agentListQueryOptions());
-=======
       ) : shown.length ? (
         <PageRows>
           {visible.map((suggestion, index) => (
@@ -240,7 +134,7 @@ export function ProactiveResearchSettings() {
               >
                 <ItemContent>
                   <ItemTitle className="text-muted-foreground">
-                    Show {hidden} more
+                    再显示 {hidden} 条
                   </ItemTitle>
                 </ItemContent>
                 <ItemActions>
@@ -251,9 +145,8 @@ export function ProactiveResearchSettings() {
           ) : null}
         </PageRows>
       ) : (
-        <PageEmpty icon={IconBulb} title="Nothing needs you right now">
-          When a Bot's check-in finds something that needs you, it shows up
-          here.
+        <PageEmpty icon={IconBulb} title="现在没有需要你处理的事">
+          员工主动巡检时发现需要你处理的事，会出现在这里。
         </PageEmpty>
       )}
     </PageSection>
@@ -267,8 +160,8 @@ export function ProactiveResearchSettings() {
 function useCheckInsBlocked(): string | null {
   const allowed = useQuery(proactiveAllowedQueryOptions());
   const preferences = useUserPreferences();
-  if (allowed.data === false) return "Turned off by your admin";
-  if (preferences.data?.proactive === "off") return "Off for all your Bots";
+  if (allowed.data === false) return BLOCKED_BY_ADMIN;
+  if (preferences.data?.proactive === "off") return BLOCKED_BY_YOU;
   return null;
 }
 
@@ -305,28 +198,28 @@ export function ProactiveResearchSettings({
         canAdd ? (
           <Button onClick={() => setAdding(true)} size="sm" variant="ghost">
             <IconPlus />
-            Turn on check-ins
+            开启主动巡检
           </Button>
         ) : null
       }
-      description="A Bot offers a check-in when you look at something together that keeps changing, like a document or your inbox. It reads that once a day, or as often as you choose, and tells you when something there needs you. It can only read: it can't send messages, change anything in an app, or use a browser or computer."
-      title="Check-ins"
+      description="你和员工一起看一样会不断变化的东西（比如一份文档或你的收件箱）时，它会提出主动巡检：每天读一次，或按你选的频率读，有需要你处理的事就告诉你。它只能读：不能发消息、不能改动任何应用，也不使用浏览器或电脑。"
+      title="主动巡检"
     >
       {blocked ? (
         <p className="mt-1 max-w-prose text-muted-foreground text-sm">
-          {blocked === "Off for all your Bots" ? (
+          {blocked === BLOCKED_BY_YOU ? (
             <>
-              You turned off check-ins for all your Bots in{" "}
+              你已在
               <Link
                 className="underline underline-offset-4"
                 to="/settings/notifications"
               >
-                Notifications
+                通知
               </Link>
-              .
+              里为所有员工关掉了主动巡检。
             </>
           ) : (
-            "Your admin turned off check-ins for you."
+            "管理员为你关掉了主动巡检。"
           )}
         </p>
       ) : null}
@@ -339,11 +232,11 @@ export function ProactiveResearchSettings({
           action={
             <Button onClick={() => setAdding(true)} size="sm" variant="outline">
               <IconPlus />
-              Turn on check-ins
+              开启主动巡检
             </Button>
           }
           icon={IconRadar}
-          title="No check-ins yet"
+          title="还没有主动巡检"
         />
       ) : (
         <PageRows>
@@ -391,9 +284,9 @@ function TurnOnResearchDialog({
       (bot) => !settings.data?.some((setting) => setting.agentId === bot.id),
     ),
   };
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   const channels = useInfiniteQuery(channelListQueryOptions());
-  const [agentId, setAgentId] = useState("");
+  const [pickedBot, setAgentId] = useState("");
+  const agentId = fixedBot ?? pickedBot;
   const [channelId, setChannelId] = useState("");
   const [focus, setFocus] = useState("");
   // Hourly, the most often a Bot checks and the default for a new Bot.
@@ -403,132 +296,14 @@ function TurnOnResearchDialog({
     (channel) =>
       channel.active && !channel.task && channel.agentIds.includes(agentId),
   );
-  const add = useMutation({
-    mutationFn: createProactiveSetting,
-    onSuccess: async () => {
-      setFocus("");
-      await refresh();
-    },
-  });
+  const add = useMutation(createProactiveSettingMutationOptions(queryClient));
   return (
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-    <section className="grid gap-3">
-      <h2 className="font-semibold">后台调研</h2>
-      <p className="text-sm text-muted-foreground">
-        你和某位员工单独开始对话后，它的后台调研就默认开启：每四小时翻阅一次它已经读得到的应用，
-        整理成待你复核的记忆，并给出下一步建议。它只能读：不能发消息、不能改动任何应用，也不使用浏览器或电脑。
-        你关掉或移除之后，它就一直保持关闭。
-      </p>
-      <form
-        className="grid gap-3 rounded-lg border p-4"
-        onSubmit={(event) => {
-          event.preventDefault();
-          add.mutate({ agentId, channelId, focus, intervalMinutes });
-        }}
-      >
-        <div className="grid gap-3 sm:grid-cols-3">
-          <label className={field}>
-            员工
-            <select
-              required
-              className={select}
-              value={agentId}
-              onChange={(event) => {
-                setAgentId(event.target.value);
-                setChannelId("");
-              }}
-            >
-              <option value="">选一位员工</option>
-              {bots.data?.map((bot) => (
-                <option key={bot.id} value={bot.id}>
-                  {bot.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={field}>
-            建议送达到
-            <select
-              required
-              className={select}
-              value={channelId}
-              onChange={(event) => setChannelId(event.target.value)}
-            >
-              <option value="">选一个频道</option>
-              {eligibleChannels.map((channel) => (
-                <option key={channel.id} value={channel.id}>
-                  {conversationLabel(channel)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={field}>
-            调研频率
-            <select
-              className={select}
-              value={intervalMinutes}
-              onChange={(event) =>
-                setIntervalMinutes(Number(event.target.value))
-              }
-            >
-              {intervals.map((interval) => (
-                <option key={interval.minutes} value={interval.minutes}>
-                  {interval.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        <label className={field} htmlFor={`${id}-focus`}>
-          想让它找什么（可留空）
-          <Input
-            id={`${id}-focus`}
-            maxLength={1000}
-            value={focus}
-            onChange={(event) => setFocus(event.target.value)}
-            placeholder="把派给我的待办和我该答的提问整理出来"
-          />
-        </label>
-        <Button
-          type="submit"
-          className="justify-self-start"
-          disabled={add.isPending || !agentId || !channelId}
-        >
-          开启后台调研
-        </Button>
-        {add.error && (
-          <p role="alert" className="text-destructive">
-            {add.error.message}
-          </p>
-        )}
-      </form>
-      {settings.error && (
-        <p role="alert" className="text-destructive">
-          {settings.error.message}
-        </p>
-      )}
-      {settings.data?.map((setting) => (
-        <SettingRow
-          key={setting.id}
-          setting={setting}
-          botName={
-            bots.data?.find((bot) => bot.id === setting.agentId)?.name ??
-            setting.agentId
-          }
-        />
-      ))}
-    </section>
-  );
-}
-
-=======
     <Dialog onOpenChange={(next) => !next && onClose()} open>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Turn on check-ins</DialogTitle>
+          <DialogTitle>开启主动巡检</DialogTitle>
           <DialogDescription>
-            It reads the apps it can use in this conversation and tells you when
-            something needs you.
+            它会读这段对话里它能用的应用，有需要你处理的事就告诉你。
           </DialogDescription>
         </DialogHeader>
         <DialogBody className="mt-4 overflow-y-auto">
@@ -547,7 +322,7 @@ function TurnOnResearchDialog({
             <FieldGroup>
               {fixedBot === undefined ? (
                 <Field>
-                  <FieldLabel htmlFor={`${id}-bot`}>Bot</FieldLabel>
+                  <FieldLabel htmlFor={`${id}-bot`}>员工</FieldLabel>
                   <Select
                     items={bots.data?.map((bot) => ({
                       value: bot.id,
@@ -561,7 +336,7 @@ function TurnOnResearchDialog({
                     value={agentId || null}
                   >
                     <SelectTrigger className="w-full" id={`${id}-bot`}>
-                      <SelectValue placeholder="Choose a Bot" />
+                      <SelectValue placeholder="选一位员工" />
                     </SelectTrigger>
                     <SelectContent>
                       {bots.data?.map((bot) => (
@@ -574,7 +349,7 @@ function TurnOnResearchDialog({
                 </Field>
               ) : null}
               <Field>
-                <FieldLabel htmlFor={`${id}-channel`}>Conversation</FieldLabel>
+                <FieldLabel htmlFor={`${id}-channel`}>对话</FieldLabel>
                 <Select
                   items={eligibleChannels.map((channel) => ({
                     value: channel.id,
@@ -585,7 +360,7 @@ function TurnOnResearchDialog({
                   value={channelId || null}
                 >
                   <SelectTrigger className="w-full" id={`${id}-channel`}>
-                    <SelectValue placeholder="Choose a conversation" />
+                    <SelectValue placeholder="选一段对话" />
                   </SelectTrigger>
                   <SelectContent>
                     {eligibleChannels.map((channel) => (
@@ -597,7 +372,7 @@ function TurnOnResearchDialog({
                 </Select>
               </Field>
               <Field>
-                <FieldLabel htmlFor={`${id}-interval`}>How often</FieldLabel>
+                <FieldLabel htmlFor={`${id}-interval`}>巡检频率</FieldLabel>
                 <Select
                   items={intervalItems}
                   onValueChange={(value) => {
@@ -622,14 +397,14 @@ function TurnOnResearchDialog({
               </Field>
               <Field>
                 <FieldLabel htmlFor={`${id}-focus`}>
-                  What to look for (optional)
+                  想让它找什么（可留空）
                 </FieldLabel>
                 <Input
                   id={`${id}-focus`}
                   maxLength={1000}
                   value={focus}
                   onChange={(event) => setFocus(event.target.value)}
-                  placeholder="Open issues assigned to me and questions waiting on me"
+                  placeholder="把派给我的待办和我该答的提问整理出来"
                 />
               </Field>
             </FieldGroup>
@@ -642,7 +417,7 @@ function TurnOnResearchDialog({
         </DialogBody>
         <DialogFooter className="mt-4">
           <Button onClick={onClose} size="sm" variant="outline">
-            Cancel
+            取消
           </Button>
           <Button
             disabled={add.isPending || !agentId || !channelId}
@@ -650,7 +425,7 @@ function TurnOnResearchDialog({
             size="sm"
             type="submit"
           >
-            Turn on check-ins
+            开启主动巡检
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -664,17 +439,17 @@ function TurnOnResearchDialog({
  */
 function checkInStatus(setting: ProactiveSetting, blocked: string | null) {
   return !setting.enabled
-    ? "Off"
+    ? "已关闭"
     : blocked
       ? blocked
       : setting.lastStatus === "running"
-        ? "Checking now"
-        : `Next ${new Date(setting.nextRunAt).toLocaleString()}`;
+        ? "正在巡检"
+        : `下次 ${new Date(setting.nextRunAt).toLocaleString("zh-CN")}`;
 }
 
 /** When a check-in happened, as its line says it: "just now" for the moment after a Run now. */
 const sinceThen = (iso: string) =>
-  Date.now() - Date.parse(iso) < 60_000 ? "just now" : relativeTime(iso);
+  Date.now() - Date.parse(iso) < 60_000 ? "刚刚" : relativeTime(iso);
 
 /**
  * What the Bot's last check-in did, in a sentence: found nothing, found something, was skipped and
@@ -686,15 +461,15 @@ export function lastCheckInLine(run: LastCheckIn | null | undefined) {
   const when = sinceThen(run.startedAt);
   switch (run.outcome) {
     case "running":
-      return `Started ${when}.`;
+      return `${when}开始。`;
     case "quiet":
-      return `Checked ${when}. Nothing needed you.`;
+      return `${when}巡检过，没有需要你处理的事。`;
     case "raised":
-      return `Checked ${when}. Found ${run.itemsRaised === 1 ? "1 thing" : `${run.itemsRaised} things`} for you.`;
+      return `${when}巡检过，为你找到 ${run.itemsRaised} 件事。`;
     case "failed":
-      return `Checked ${when}. ${run.why ?? "Couldn't finish."}`;
+      return `${when}巡检过。${run.why ?? "没能做完。"}`;
     case "skipped":
-      return run.why ? `Skipped ${when}. ${run.why}` : `Skipped ${when}.`;
+      return run.why ? `${when}跳过。${run.why}` : `${when}跳过。`;
   }
 }
 
@@ -707,7 +482,6 @@ export function lastCheckInLine(run: LastCheckIn | null | undefined) {
  * was skipped or couldn't finish says why on a line of its own, since that is something to act on,
  * and the focus, in the person's own words and often long, comes last on one line.
  */
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 function SettingRow({
   setting,
   botName,
@@ -717,101 +491,6 @@ function SettingRow({
   botName: string;
   blocked: string | null;
 }) {
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-  const change = useMutation({
-    mutationFn: (
-      action:
-        | { kind: "toggle" }
-        | { kind: "run" }
-        | { kind: "remove" }
-        | { kind: "interval"; minutes: number },
-    ) =>
-      action.kind === "run"
-        ? runProactiveNow(setting.id)
-        : action.kind === "remove"
-          ? removeProactiveSetting(setting.id)
-          : updateProactiveSetting(
-              setting.id,
-              action.kind === "toggle"
-                ? { enabled: !setting.enabled }
-                : { intervalMinutes: action.minutes },
-            ),
-    onSuccess: refresh,
-  });
-  return (
-    <article className="grid gap-2 rounded-lg border p-4">
-      <div className="flex flex-wrap justify-between gap-2">
-        <strong>{botName}</strong>
-        <span className="text-sm text-muted-foreground">
-          {!setting.enabled
-            ? "已关闭"
-            : setting.lastStatus === "running"
-              ? "正在调研"
-              : `下次 ${new Date(setting.nextRunAt).toLocaleString("zh-CN")}`}
-        </span>
-      </div>
-      {setting.focus && <p className="text-sm">{setting.focus}</p>}
-      {setting.lastRunAt && (
-        <p className="text-xs text-muted-foreground">
-          上次运行 {new Date(setting.lastRunAt).toLocaleString()}
-          {setting.lastStatus === "succeeded" ? "" : ` (${setting.lastStatus})`}
-        </p>
-      )}
-      {setting.lastError && (
-        <p role="alert" className="text-destructive">
-          {setting.lastError}
-        </p>
-      )}
-      <div className="flex flex-wrap items-center gap-2">
-        <select
-          aria-label="调研频率"
-          className={select}
-          value={setting.intervalMinutes}
-          onChange={(event) =>
-            change.mutate({
-              kind: "interval",
-              minutes: Number(event.target.value),
-            })
-          }
-        >
-          {intervals.map((interval) => (
-            <option key={interval.minutes} value={interval.minutes}>
-              {interval.label}
-            </option>
-          ))}
-        </select>
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={!setting.enabled || change.isPending}
-          onClick={() => change.mutate({ kind: "run" })}
-        >
-          立即运行
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={change.isPending}
-          onClick={() => change.mutate({ kind: "toggle" })}
-        >
-          {setting.enabled ? "停用" : "启用"}
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={change.isPending}
-          onClick={() => change.mutate({ kind: "remove" })}
-        >
-          移除
-        </Button>
-      </div>
-      {change.error && (
-        <p role="alert" className="text-destructive">
-          {change.error.message}
-        </p>
-      )}
-    </article>
-=======
   const [open, setOpen] = useState(false);
   const id = useId();
   const change = useMutation(
@@ -862,7 +541,7 @@ function SettingRow({
           ) : null}
           {setting.focus ? (
             <ItemDescription className="line-clamp-1">
-              Looks for: {setting.focus}
+              要找：{setting.focus}
             </ItemDescription>
           ) : null}
         </ItemContent>
@@ -873,7 +552,7 @@ function SettingRow({
       <Dialog onOpenChange={setOpen} open={open}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Check-ins</DialogTitle>
+            <DialogTitle>主动巡检</DialogTitle>
             <DialogDescription>
               {[botName, setting.subject, setting.focus]
                 .filter(Boolean)
@@ -889,7 +568,7 @@ function SettingRow({
                 <ItemTitle>{checkInStatus(setting, blocked)}</ItemTitle>
                 {onItsWay ? (
                   <ItemDescription>
-                    Queued. It checks in within a minute.
+                    已排队，一分钟内开始巡检。
                   </ItemDescription>
                 ) : last ? (
                   <ItemDescription
@@ -904,7 +583,7 @@ function SettingRow({
               </ItemContent>
             </Item>
             <Field>
-              <FieldLabel htmlFor={`${id}-interval`}>How often</FieldLabel>
+              <FieldLabel htmlFor={`${id}-interval`}>巡检频率</FieldLabel>
               {/* Writes on pick: one value, no draft worth holding. */}
               <Select
                 disabled={change.isPending}
@@ -948,7 +627,7 @@ function SettingRow({
                 )
               }
             >
-              Remove
+              移除
             </Button>
             <Button
               size="sm"
@@ -958,7 +637,7 @@ function SettingRow({
                 change.mutate({ setting, change: { kind: "toggle" } })
               }
             >
-              {setting.enabled ? "Turn off" : "Turn on"}
+              {setting.enabled ? "关闭" : "开启"}
             </Button>
             <Button
               size="sm"
@@ -968,13 +647,12 @@ function SettingRow({
               }
             >
               {change.isPending && change.variables.change.kind === "run"
-                ? "Starting…"
-                : "Run now"}
+                ? "正在开始…"
+                : "立即运行"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </>
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   );
 }

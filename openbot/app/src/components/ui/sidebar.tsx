@@ -400,10 +400,6 @@ function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
       data-slot="sidebar-rail"
       aria-label="切换侧栏"
       tabIndex={-1}
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-      onClick={toggleSidebar}
-      title="切换侧栏"
-=======
       onPointerDown={(event) => {
         if (!resize || isMobile || state !== "expanded" || event.button !== 0)
           return;
@@ -455,8 +451,7 @@ function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
         }
         toggleSidebar();
       }}
-      title="Drag to resize, click to hide"
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+      title="拖动调整宽度，点击隐藏"
       className={cn(
         "absolute inset-y-0 z-20 hidden w-4 transition-all ease-linear group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:start-1/2 after:w-[2px] hover:after:bg-sidebar-border sm:flex ltr:-translate-x-1/2 rtl:-translate-x-1/2",
         "in-data-[side=left]:cursor-w-resize in-data-[side=right]:cursor-e-resize",

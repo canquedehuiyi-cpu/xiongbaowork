@@ -22,17 +22,3 @@ export const Route = createFileRoute("/_authed/_app/routines")({
     });
   },
 });
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-=======
-
-function RoutinesPage() {
-  return (
-    <PageShell
-      description="Ask a Bot to create or change a scheduled routine. You can review and stop routines here."
-      title="Routines"
-    >
-      <RoutinesList />
-    </PageShell>
-  );
-}
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b

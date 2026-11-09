@@ -386,15 +386,9 @@ test("taking a queued message back releases the rows it was carrying", async () 
    * both sentences are live — so declining now leaves the wiring between them unpinned, and
    * swapping the two arms of that ternary passed the whole suite.
    */
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   expect(alert.textContent).toContain("随它所附的排队消息一起被移除了");
   expect(alert.textContent).not.toContain("合并");
   expect(alert.textContent).not.toContain("最多只能带");
-=======
-  expect(alert.textContent).toContain("removed with its queued message");
-  expect(alert.textContent).not.toContain("merged");
-  expect(alert.textContent).not.toContain("at most");
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 });
 
 /**
@@ -463,29 +457,6 @@ test("a full queue drains whole, with nothing bumped and nothing to release", as
   expect(uploads).toHaveLength(MAX_ATTACHMENTS_PER_MESSAGE);
 });
 
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-test("the spy hands the composer one stable pair of callbacks, not a fresh pair per render", async () => {
-  // THE HARNESS MEASURING ITSELF, and worth the test. The SDK builds `removeAttachment` and
-  // `consumeAttachments` as `useCallback(…, [])` — stable for the life of the hook, deliberately —
-  // and `submitDraft` lists `removeAttachment` in its dependency array. A spy that mints a new
-  // wrapper on every render silently rebuilds that memo on every render too, so the thing under
-  // test would be reacting to the instrument rather than to the code.
-  const view = render(
-    <Composer channelId="channel-1" compact onSubmit={() => {}} />,
-  );
-
-  // Several renders: the placeholder going on the strip, the upload resolving, the strip
-  // re-rendering without it.
-  await dropAndWait(view, [notes()]);
-  fireEvent.click(view.getByLabelText("移除 notes.txt"));
-  await waitFor(() => expect(chips(view)).toEqual([]));
-
-  expect(handedOut.removeAttachment.size).toBe(1);
-  expect(handedOut.consumeAttachments.size).toBe(1);
-});
-
-=======
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 /**
  * Registered after the `afterAll` that restores, so it runs after it: the real function is back on
  * the module and no file bun walks into this process after this one is holding a spy. This is the

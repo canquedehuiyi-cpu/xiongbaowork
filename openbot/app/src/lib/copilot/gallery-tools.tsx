@@ -1,9 +1,3 @@
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-import { useFrontendTool, useHumanInTheLoop } from "@copilotkit/react-core/v2";
-import { NOT_SHOWN, NOT_SHOWN_TAIL } from "@openbot/shared/component-markers";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useContext, useEffect, useMemo, useState } from "react";
-=======
 import { useCopilotKit, useFrontendTool } from "@copilotkit/react-core/v2";
 import { NOT_SHOWN, NOT_SHOWN_TAIL } from "@openbot/shared/component-markers";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -17,7 +11,6 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 import {
   FailedCard,
   UNREADABLE,
@@ -48,51 +41,6 @@ import {
   type GalleryComponent,
   galleryManifest,
 } from "@/lib/copilot/gallery-registry";
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-import { settledArgs } from "@/lib/copilot/settled-args";
-import { browserCallFailed } from "@/lib/plugins/tool-result";
-
-/**
- * 一次已经结束的 gallery 调用为什么什么都没画出来；它不是这种情况就是 undefined。
- *
- * 失败的常常是参数：Claude Code 会在浏览器执行调用之前拒绝不是合法 JSON 的参数。照那些参数去画，
- * 表格就一直「正在等待完整的表格数据…」，重新打开对话也一样。结果说它失败了，而结果正是重新打开时
- * 保留下来的东西。还在流式输出或执行中的调用不算。
- *
- * 决策类组件只在参数读不懂时才算：等待时被停掉的决策也会以失败结果结束，但它的参数没问题，
- * 卡片上那个问题仍然是主人被问到的问题，照常画。
- */
-export function galleryCallFailure(
-  spec: GalleryComponent,
-  call: { status?: unknown; args?: unknown; result?: unknown },
-): string | undefined {
-  if (call.status !== "complete") return undefined;
-  /*
-   * 假设：卡片类调用成功时的结果（`spec.confirmation` 或默认确认）和拒绝（`NOT_SHOWN` 开头）都不以
-   * `Error: ` 开头。`browserCallFailed` 把 `Error: ` 开头的结果算作 CopilotKit 跑不了的调用；哪天某个
-   * 组件的确认文案以它开头，这里就会把成功画成「没能显示」。
-   */
-  if (
-    !browserCallFailed(
-      typeof call.result === "string" ? call.result : undefined,
-    )
-  )
-    return undefined;
-  const fit = argumentsFit(spec, call.args);
-  if (spec.kind === "decision") return fit === false ? UNREADABLE : undefined;
-  return fit === false ? UNREADABLE : WENT_WRONG;
-}
-
-/** 调用的参数是不是组件要的；schema 不能当场回答时为 undefined。只对已结束的调用问。 */
-function argumentsFit(
-  spec: GalleryComponent,
-  args: unknown,
-): boolean | undefined {
-  const verdict = spec.parameters?.["~standard"]?.validate(args ?? {});
-  if (!verdict || verdict instanceof Promise) return undefined;
-  return !verdict.issues;
-}
-=======
 import {
   cardState,
   COULDNT_CHECK,
@@ -102,7 +50,6 @@ import {
 } from "@/lib/copilot/grant-store";
 import { settledArgs } from "@/lib/copilot/settled-args";
 import { browserCallFailed } from "@/lib/plugins/tool-result";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 
 /**
  * Register compiled gallery components once per name. Which run is offered which is decided per run,
@@ -188,28 +135,9 @@ function GrantedTool({
   store: GrantStore;
 }) {
   const description = held.get(spec.name);
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-  const isHeld = description !== undefined;
-
-  /**
-   * Refusals decided by the server, keyed by the call they refused.
-   *
-   * Per-call keys preserve the original render for calls made before a grant was revoked.
-   */
-  const [refusals, setRefusals] = useState<ReadonlyMap<string, string>>(
-    new Map(),
-  );
-
-  // Rebuilt only when what it draws from changes: the SDK remounts a card when this identity changes.
-  const render = useMemo(
-    () => makeGalleryRender(spec, isHeld, refusals),
-    [spec, isHeld, refusals],
-  );
-=======
   // Created ONCE: the SDK rebuilds a card whenever this identity changes. See `makeGalleryRender`.
   const [render] = useState(() => makeGalleryRender(spec, store));
   const botOf = useBotOfCall();
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 
   useFrontendTool({
     name: spec.name,
@@ -249,30 +177,6 @@ function GrantedTool({
 }
 
 /**
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
- * The card a gallery tool call draws, for one component, its grant and the refusals so far.
- *
- * A factory rather than a hook's callback, because the SDK draws what it returns as a component
- * type, and that component reads the streaming contexts the transcript may provide.
- */
-function makeGalleryRender(
-  spec: GalleryComponent,
-  isHeld: boolean,
-  refusals: ReadonlyMap<string, string>,
-) {
-  const Component = spec.Component;
-  return function GalleryRender(props: {
-    toolCallId?: string;
-    status?: string;
-    args?: Record<string, unknown>;
-    result?: string;
-  }) {
-    // Read before any early return: the SDK draws this as a component type.
-    const arriving = useContext(ArgumentsArrivingContext);
-    const turnRunning = useContext(TurnInFlightContext);
-    const refusal = props.toolCallId
-      ? refusals.get(props.toolCallId)
-=======
  * The card a gallery tool call draws, made once per component.
  *
  * ONCE, AND THAT IS THE POINT. The SDK hands this function to `ToolCallRenderer` as the component
@@ -298,7 +202,6 @@ export function makeGalleryRender(spec: GalleryComponent, store: GrantStore) {
     const turnRunning = useContext(TurnInFlightContext);
     const refusal = props.toolCallId
       ? snapshot.refusals.get(props.toolCallId)
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       : undefined;
     if (refusal) {
       return <RefusedCard reason={refusal} title={spec.title} />;
@@ -317,39 +220,21 @@ export function makeGalleryRender(spec: GalleryComponent, store: GrantStore) {
       ).replace(NOT_SHOWN_TAIL, "");
       return <RefusedCard reason={reason} title={spec.title} />;
     }
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-    const failure = galleryCallFailure(spec, props);
-    if (failure) return <FailedCard reason={failure} title={spec.title} />;
-    // Render from the polled grant snapshot so revocations show before a new call starts.
-    if (!isHeld) {
-      return (
-        <RefusedCard
-          reason={`${spec.title} is not available to this Bot at the moment. An administrator grants components per Bot, and can unpublish one for every Bot at once.`}
-=======
     /*
      * A call that failed drew nothing, and what failed is often its arguments: Claude Code refuses
      * arguments that aren't JSON before the browser ever runs the call. Drawn from those arguments,
      * a table waited "for complete table data" for good, and again after a reload. The result says
-     * it failed, and the result is what a reload keeps.
+     * it failed, and the result is what a reload keeps. See `galleryCallFailure`.
      */
-    if (props.status === "complete" && browserCallFailed(props.result)) {
+    const failure = galleryCallFailure(spec, props);
+    if (failure) {
       return (
         <FailedCard
-          reason={
-            argumentsFit(spec, props.args) === false ? UNREADABLE : WENT_WRONG
-          }
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+          reason={failure}
           title={spec.title}
         />
       );
     }
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-    /*
-     * A number, link or colour still arriving is held back; see `settledArgs`. Only while the
-     * arguments are streaming (`inProgress`, not `executing`) in a row that can still receive them.
-     * This fork's transcript provides neither context, so their defaults apply: arguments may be
-     * arriving while `inProgress`, and nothing is waiting on a decision.
-=======
     // From the polled grants, so a revocation shows before a new call starts. Unknown draws.
     const state = cardState(snapshot, spec.name, spec.title, props.toolCallId);
     if (typeof state === "object") {
@@ -358,7 +243,6 @@ export function makeGalleryRender(spec: GalleryComponent, store: GrantStore) {
     /*
      * A number, link or colour still arriving is held back; see `settledArgs`. Only while the
      * arguments are streaming (`inProgress`, not `executing`) in a row that can still receive them.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
      */
     const complete = !(arriving && props.status === "inProgress");
     // Still being decided: the call has no answer yet in a turn that is still running.
@@ -373,8 +257,37 @@ export function makeGalleryRender(spec: GalleryComponent, store: GrantStore) {
   };
 }
 
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-=======
+/**
+ * 一次已经结束的 gallery 调用为什么什么都没画出来；它不是这种情况就是 undefined。
+ *
+ * 失败的常常是参数：Claude Code 会在浏览器执行调用之前拒绝不是合法 JSON 的参数。照那些参数去画，
+ * 表格就一直「正在等待完整的表格数据…」，重新打开对话也一样。结果说它失败了，而结果正是重新打开时
+ * 保留下来的东西。还在流式输出或执行中的调用不算。
+ *
+ * 决策类组件只在参数读不懂时才算：等待时被停掉的决策也会以失败结果结束，但它的参数没问题，
+ * 卡片上那个问题仍然是主人被问到的问题，照常画。
+ */
+export function galleryCallFailure(
+  spec: GalleryComponent,
+  call: { status?: unknown; args?: unknown; result?: unknown },
+): string | undefined {
+  if (call.status !== "complete") return undefined;
+  /*
+   * 假设：卡片类调用成功时的结果（`spec.confirmation` 或默认确认）和拒绝（`NOT_SHOWN` 开头）都不以
+   * `Error: ` 开头。`browserCallFailed` 把 `Error: ` 开头的结果算作 CopilotKit 跑不了的调用；哪天某个
+   * 组件的确认文案以它开头，这里就会把成功画成「没能显示」。
+   */
+  if (
+    !browserCallFailed(
+      typeof call.result === "string" ? call.result : undefined,
+    )
+  )
+    return undefined;
+  const fit = argumentsFit(spec, call.args);
+  if (spec.kind === "decision") return fit === false ? UNREADABLE : undefined;
+  return fit === false ? UNREADABLE : WENT_WRONG;
+}
+
 /**
  * Whether a call's arguments are what the component takes, or `undefined` when its schema can't say
  * at once. Asked only of a call that is over, to say why it drew nothing.
@@ -388,7 +301,6 @@ function argumentsFit(
   return !verdict.issues;
 }
 
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 function GrantedDecision({
   spec,
   held,
@@ -402,25 +314,6 @@ function GrantedDecision({
   return null;
 }
 
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-  /** Stable component type so in-progress decision cards do not remount. */
-  const Render = useMemo(
-    () =>
-      function DecisionRender(props: Record<string, unknown>) {
-        const failure = galleryCallFailure(spec, props);
-        if (failure) return <FailedCard reason={failure} title={spec.title} />;
-        if (isHeld) return <Component {...props} />;
-        return (
-          <RefusedDecision
-            respond={
-              props.respond as ((result: unknown) => Promise<void>) | undefined
-            }
-            title={spec.title}
-          />
-        );
-      },
-    [Component, isHeld, spec],
-=======
 type FrontendTool = Parameters<typeof useFrontendTool>[0];
 
 /**
@@ -474,7 +367,6 @@ export function useDecisionTool(
   // The calls waiting for an answer, by tool call id: how to answer each, and how to stop listening.
   const waitingRef = useRef(
     new Map<string, { resolve: (result: unknown) => void; stop: () => void }>(),
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   );
 
   const respond = useCallback(async (result: unknown, toolCallId = "") => {
@@ -554,15 +446,8 @@ export function makeDecisionRender(
      * Only then. A decision stopped while it waited also ends in a failed result, and its card,
      * drawn from arguments that were fine, is still what the person was asked.
      */
-    if (
-      props.status === "complete" &&
-      browserCallFailed(
-        typeof props.result === "string" ? props.result : undefined,
-      ) &&
-      argumentsFit(spec, props.args) === false
-    ) {
-      return <FailedCard reason={UNREADABLE} title={spec.title} />;
-    }
+    const failure = galleryCallFailure(spec, props);
+    if (failure) return <FailedCard reason={failure} title={spec.title} />;
     const state = cardState(snapshot, spec.name, spec.title);
     if (state === "draw") return <Component {...props} respond={answer} />;
     if (state === "wait-for-grant") {

@@ -1,10 +1,29 @@
+import { IconKey, IconTrash } from "@tabler/icons-react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { PasswordsPage } from "@/components/passwords/passwords-page";
+import {
+  PageEmpty,
+  PageRows,
+  PageSection,
+  PageShell,
+} from "@/components/layout/page-shell";
+import { Button } from "@/components/ui/button";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemMedia,
+  ItemTitle,
+} from "@/components/ui/item";
+import { Separator } from "@/components/ui/separator";
+import { deleteSavedLoginMutationOptions } from "@/lib/passwords/mutations";
+import { savedLoginsQueryOptions } from "@/lib/passwords/queries";
+import { queryClient } from "@/query-client";
 
 export const Route = createFileRoute("/_authed/settings/passwords")({
   component: PasswordsPage,
 });
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 
 /**
  * The logins you saved from a private sign-in form.
@@ -77,5 +96,3 @@ function PasswordsPage() {
     </PageShell>
   );
 }
-=======
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b

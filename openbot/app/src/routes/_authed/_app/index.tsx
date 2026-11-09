@@ -1,18 +1,4 @@
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
-import { AgentCard } from "@/components/agents/agent-card";
-import {
-  Composer,
-  toAgentOptions,
-  toGroupOptions,
-  withGroupMembers,
-} from "@/components/channels/composer";
-import { SidebarToggleBar } from "@/components/layout/sidebar-toggle";
-=======
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 import {
   createFileRoute,
   Link,
@@ -27,16 +13,17 @@ import {
   Composer,
   type ComposerDraft,
   toAgentOptions,
+  toGroupOptions,
+  withGroupMembers,
 } from "@/components/channels/composer";
 import { WorkingNow } from "@/components/channels/working-now";
-import { BusinessLink } from "@/components/edition/business-link";
 import { SidebarToggleBar } from "@/components/layout/sidebar-toggle";
 import { StarterSuggestions } from "@/components/starter-tour/starter-suggestions";
 import { Empty, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
 import { defaultAgentProfile } from "@/lib/agents/default-agent";
 import { agentListQueryOptions, isSharedWithYou } from "@/lib/agents/queries";
-import { firstConversationGreeting } from "@/lib/auth/greeting";
+import type { AuthenticatedUser } from "@/lib/auth/queries";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
 import {
   beginPendingStart,
@@ -52,18 +39,13 @@ import {
   routeMessage,
 } from "@/lib/channels/route";
 import { useStartChannel } from "@/lib/channels/start";
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 import { appConfig } from "@/lib/generated/application-config";
-import { wakerGroupsQueryOptions } from "@/lib/waker-groups/queries";
-=======
-import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
-import { editionOf } from "@/lib/edition-guard";
 import { newId } from "@/lib/new-id";
 import { useAnyBotSkillCommands } from "@/lib/plugins/skill-commands";
+import { wakerGroupsQueryOptions } from "@/lib/waker-groups/queries";
 
 /** How many Bots the home page shows before pointing to the rest. Two rows of two. */
 const EXPLORE_SHOWN = 4;
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 
 export const Route = createFileRoute("/_authed/_app/")({
   /*
@@ -71,13 +53,23 @@ export const Route = createFileRoute("/_authed/_app/")({
    * box: nothing is sent until the person sends it.
    */
   validateSearch: z.object({ ask: z.string().max(2000).optional() }),
-  // The edition decides whether there is an Explore section at all, so it is read before the page draws and the
-  // composer never moves when it arrives.
-  beforeLoad: async ({ context }) => {
-    await editionOf(context.queryClient);
-  },
   component: RouteComponent,
 });
+
+/**
+ * The home page's heading. The first time somebody with a name arrives, it greets them by it; after
+ * that, or without a name worth using, it is the plain prompt. Upstream's `firstConversationGreeting`
+ * (`lib/auth/greeting.ts`) with the same rule, said in Chinese.
+ */
+function homeGreeting(
+  user: AuthenticatedUser | null | undefined,
+  noConversations: boolean,
+): string {
+  const name = user?.name?.trim();
+  if (!noConversations || !name || user?.needsName || name === user?.email)
+    return "开始新对话";
+  return `${name}，你好！今天想做点什么？`;
+}
 
 function RouteComponent() {
   const { data: user } = useQuery(currentUserQueryOptions());
@@ -88,19 +80,9 @@ function RouteComponent() {
     isError: failed,
   } = useQuery(agentListQueryOptions());
   const explore = agents?.filter(isSharedWithYou);
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   // Groups expand into their members in the `@` menu (spec B1); a failed read just lists no Groups.
   const groups = useQuery(wakerGroupsQueryOptions()).data;
   const roster = toAgentOptions(agents);
-=======
-  const capabilities = useQuery(deploymentCapabilitiesQueryOptions());
-  /*
-   * The personal edition has nobody to share a Bot with. Its Explore lists the Bots included with
-   * OpenBot, and when there are none it shows nothing: "Nobody has shared a Bot with you yet" was
-   * not true of it. A Bots list that fails to load is said under the composer already.
-   */
-  const personal = capabilities.data?.edition === "personal";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   const { start, startChosen, pending } = useStartChannel();
   const router = useRouter();
   const navigate = useNavigate();
@@ -180,7 +162,7 @@ function RouteComponent() {
         agentId = fallback?.id;
       }
       if (!agentId)
-        throw new Error("There's no Bot to send this to. Reload the page.");
+        throw new Error("没有可以接收这条消息的员工，请刷新页面。");
       await start(agentId, draft.text, undefined, pendingId);
     } catch (caught) {
       stashFailedStart({
@@ -188,7 +170,7 @@ function RouteComponent() {
         error:
           caught instanceof Error
             ? caught.message
-            : "Couldn't start the conversation. Try again.",
+            : "对话没能开始。",
       });
       if (router.state.location.pathname === pendingStartPath(pendingId))
         await navigate({ replace: true, to: "/" });
@@ -199,26 +181,19 @@ function RouteComponent() {
 
   return (
     <>
-      <SidebarToggleBar>
-        <BusinessLink />
-      </SidebarToggleBar>
+      <SidebarToggleBar />
       <div className="flex-1 flex flex-col items-center justify-center w-full p-4 mt-8">
         {/* No product-name label above the greeting: the sidebar already names the product, and a
             second heading over the first made the page open on a word that says nothing. */}
         <div className="flex flex-col items-center">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           <h2 className="text-sm uppercase text-muted-foreground font-medium tracking-tight text-center">
             {appConfig.brand.productName}
           </h2>
-          <h1 className="text-2xl font-bold tracking-tight mt-1.5 text-center">
-            开始新对话
-=======
-          <h1 className="text-2xl font-semibold tracking-tight text-center">
-            {firstConversationGreeting(
+          <h1 className="text-2xl font-semibold tracking-tight mt-1.5 text-center">
+            {homeGreeting(
               user,
               channels.isSuccess && channels.data.length === 0,
             )}
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
           </h1>
         </div>
         <div
@@ -239,12 +214,8 @@ function RouteComponent() {
             }}
           />
           <Composer
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
             agents={withGroupMembers(roster, toGroupOptions(groups, roster))}
-=======
-            agents={toAgentOptions(agents)}
             commands={skillCommands}
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
             className="w-full max-w-2xl"
             disabled={!fallback}
             // The box reads its words once, when it mounts; a start that fails while this page is
@@ -260,31 +231,6 @@ function RouteComponent() {
               // picked and the channel made behind it; see `pending-start.ts`. Waiting here for
               // both is what kept send looking dead for seconds.
               setError(null);
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-              try {
-                if (draft.agentId) {
-                  // Recorded and started as one sequence, shared with `/channel/new`: the person
-                  // already decided, and the trail has to say so wherever they decided it.
-                  await startChosen(draft.agentId, draft.text);
-                  return;
-                }
-                let agentId: string | undefined;
-                try {
-                  agentId = (await routeMessage(draft.text)).agentId;
-                } catch (caught) {
-                  if (caught instanceof CoworkerRoutingRefusedError)
-                    throw caught;
-                  agentId = fallback?.id;
-                }
-                if (!agentId) return;
-                await start(agentId, draft.text);
-              } catch (caught) {
-                setError(
-                  caught instanceof Error ? caught.message : "对话没能开始。",
-                );
-                throw caught;
-              }
-=======
               const pendingId = newId();
               beginPendingStart(pendingId, {
                 text: draft.text,
@@ -295,18 +241,13 @@ function RouteComponent() {
                 to: "/start/$startId",
               });
               void startBehind(pendingId, draft);
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
             }}
           />
           {fallback ? (
             // Said out loud: a message that silently reaches somebody you did not choose is the
             // kind of surprise that costs trust the first time it happens.
             <p className="mt-2 w-full max-w-2xl text-xs text-muted-foreground text-center">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
               会自动交给对应的员工。输入 <code>@</code> 可以自己选。
-=======
-              OpenBot picks the right Bot. Type <code>@</code> to choose one.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
             </p>
           ) : null}
           {error ? (
@@ -328,12 +269,7 @@ function RouteComponent() {
               className="mt-2 w-full max-w-2xl text-sm text-destructive"
               role="alert"
             >
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
               读不到你的员工，所以暂时没有人可以接收这条消息。
-=======
-              Couldn't load your Bots, so there's no one to send this to. Reload
-              the page.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
             </p>
           ) : null}
         </div>
@@ -344,15 +280,10 @@ function RouteComponent() {
          * reserves the same two rows, so the composer above it does not move when the list settles.
          */}
         <div className="mt-10 w-full max-w-2xl">
-          {loading || capabilities.isPending ? (
+          {loading ? (
             <>
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-              <h2 className="font-bold text-lg">发现员工</h2>
-              <Skeleton className="mt-4 h-[180px]" />
-=======
-              <h2 className="font-semibold text-base">Explore Bots</h2>
+              <h2 className="font-semibold text-base">发现员工</h2>
               <Skeleton className="mt-4 h-[140px]" />
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
             </>
           ) : explore?.length ? (
             // Wins over `failed`: a failed background refetch does not clear TanStack Query's
@@ -360,23 +291,18 @@ function RouteComponent() {
             // nothing to explore, which would be false while this list is still populated.
             <section aria-labelledby="explore-agents-heading">
               <div className="flex flex-row items-center justify-between gap-4">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-                <h2 id="explore-agents-heading" className="font-bold text-lg">
-                  发现员工
-=======
                 <h2
                   id="explore-agents-heading"
                   className="font-semibold text-base"
                 >
-                  Explore Bots
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+                  发现员工
                 </h2>
                 {explore.length > EXPLORE_SHOWN ? (
                   <Link
                     className="text-muted-foreground text-sm hover:text-foreground"
-                    to="/bots"
+                    to="/wakers"
                   >
-                    All Bots
+                    全部员工
                   </Link>
                 ) : null}
               </div>
@@ -390,7 +316,7 @@ function RouteComponent() {
                 ))}
               </ul>
             </section>
-          ) : personal ? null : failed && agents === undefined ? (
+          ) : failed && agents === undefined ? (
             // `agents === undefined` narrows this to "the query has never once returned
             // successfully" — not merely "the last request errored". `?.length` alone can't
             // tell that apart from a slice that loaded and is genuinely empty: TanStack Query
@@ -400,19 +326,11 @@ function RouteComponent() {
             // card there would say the opposite of what a populated composer beside it (still
             // working off that same, successfully loaded `agents`) proves.
             <>
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-              <h2 className="font-bold text-lg">发现员工</h2>
-              <Empty className="mt-4 h-[180px] border border-dashed border-destructive">
-                <EmptyHeader>
-                  <EmptyTitle className="text-destructive">
-                    读不到共享给你的员工。
-=======
-              <h2 className="font-semibold text-base">Explore Bots</h2>
+              <h2 className="font-semibold text-base">发现员工</h2>
               <Empty className="mt-4 h-[140px] border border-dashed border-destructive">
                 <EmptyHeader>
                   <EmptyTitle className="text-destructive">
-                    Couldn't load the Bots shared with you.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+                    读不到共享给你的员工。
                   </EmptyTitle>
                 </EmptyHeader>
               </Empty>
@@ -422,19 +340,11 @@ function RouteComponent() {
             // when it failed but `agents` is defined — a loaded, empty slice either way. Same
             // plain copy for both: an empty roster is a fact, not an error.
             <>
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-              <h2 className="font-bold text-lg">发现员工</h2>
-              <Empty className="mt-4 h-[180px] border border-dashed">
-                <EmptyHeader>
-                  <EmptyTitle className="text-muted-foreground">
-                    还没有人把员工共享给你。
-=======
-              <h2 className="font-semibold text-base">Explore Bots</h2>
+              <h2 className="font-semibold text-base">发现员工</h2>
               <Empty className="mt-4 h-[140px] border border-dashed">
                 <EmptyHeader>
                   <EmptyTitle className="text-muted-foreground">
-                    Nobody has shared a Bot with you yet.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+                    还没有人把员工共享给你。
                   </EmptyTitle>
                 </EmptyHeader>
               </Empty>

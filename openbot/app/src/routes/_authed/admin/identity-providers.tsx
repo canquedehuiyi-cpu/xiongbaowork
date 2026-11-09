@@ -1,12 +1,7 @@
 import { IconBuildingBank, IconTrash } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 import { useState } from "react";
-=======
-import { useId, useState } from "react";
-import { SignInSection } from "@/components/admin/controls/sign-in-section";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 import {
   PageEmpty,
   PageRows,
@@ -109,21 +104,12 @@ function IdentityProvidersPage() {
           添加身份提供方
         </Button>
       }
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       description="公司自己的身份提供方，走 SAML 或 OpenID Connect。用户输入邮箱后，按域名决定把他们送到哪一个。"
       title="身份提供方"
     >
       <PageSection
         description="Google、Microsoft 和 Okta 在环境变量里配置，不会出现在这里。"
         title="已登记"
-=======
-      description="Configure your company’s SAML or OpenID Connect provider. Email domains determine which provider people use to sign in."
-      title="Identity providers"
-    >
-      <PageSection
-        description="Google, Microsoft and Okta are set in the environment. They don't show here."
-        title="Registered"
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       >
         {failure ? (
           <p className="mt-4 text-destructive text-sm" role="alert">
@@ -132,27 +118,19 @@ function IdentityProvidersPage() {
         ) : null}
         {providers.isPending ? null : providers.error ? (
           <p className="mt-4 text-destructive text-sm" role="alert">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
             读不到身份提供方。
-          </p>
-        ) : providers.data?.length === 0 ? (
-          <PageEmpty>
-            还没有登记任何身份提供方。用身份团队提供的元数据添加一个。
-=======
-            Couldn't load identity providers. Reload the page.
           </p>
         ) : providers.data?.length === 0 ? (
           <PageEmpty
             action={
               <Button onClick={() => setOpen(true)} size="sm" variant="outline">
-                Add a provider
+                添加身份提供方
               </Button>
             }
             icon={IconBuildingBank}
-            title="No identity providers yet"
+            title="还没有登记任何身份提供方"
           >
-            Use the metadata from your identity team.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+            用身份团队提供的元数据添加一个。
           </PageEmpty>
         ) : (
           <PageRows>
@@ -187,7 +165,10 @@ function IdentityProvidersPage() {
           </PageRows>
         )}
       </PageSection>
-      <SignInSection />
+      {/*
+       * Upstream draws its Sign-in section (require SSO) here. This deployment keeps that switch on
+       * the Enterprise controls page (/admin/enterprise), so it is not drawn twice.
+       */}
 
       <Dialog onOpenChange={setOpen} open={open}>
         <DialogContent>
@@ -238,12 +219,7 @@ function IdentityProvidersPage() {
                 />
                 {/* Said out loud because it is the field that decides who this applies to. */}
                 <p className="text-muted-foreground text-xs">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
                   用这个域名的邮箱登录的人都会被送到这里。多个域名用逗号分隔。
-=======
-                  Anybody with an address at this domain signs in here. Separate
-                  several with commas.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
                 </p>
               </div>
 
@@ -290,12 +266,7 @@ function IdentityProvidersPage() {
                       value={draft.metadata}
                     />
                     <p className="text-muted-foreground text-xs">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
                       身份团队提供的文档，里面带有签名证书。
-=======
-                      The file from your identity team. It includes the signing
-                      certificate.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
                     </p>
                   </div>
                 </>

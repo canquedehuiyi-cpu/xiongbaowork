@@ -59,11 +59,7 @@ function lastRunLabel(lastRun: RoutineRecord["lastRun"]): {
 } {
   if (lastRun === null) {
     return {
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       text: "还没运行过",
-=======
-      text: "Hasn't run yet",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       className: "text-muted-foreground",
       dot: "bg-muted-foreground/40",
     };
@@ -198,11 +194,7 @@ function RoutineRuns({ routine }: { routine: RoutineRecord }) {
                 params={{ channelId: routine.channel.id }}
                 to="/channel/$channelId"
               >
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
                 打开对话
-=======
-                Open conversation
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
               </Link>
             )}
             {run.error ? (
@@ -257,7 +249,6 @@ export function RoutinesList({
       ) : null}
 
       {noWorker ? (
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         <Item
           variant="muted"
           className="mb-2 border-amber-500/40 bg-amber-500/5"
@@ -274,22 +265,11 @@ export function RoutinesList({
             </ItemDescription>
           </ItemContent>
         </Item>
-=======
-        <p className="mt-4 text-muted-foreground text-sm" role="alert">
-          <span className="font-medium text-amber-600 dark:text-amber-500">
-            Routines aren't running.
-          </span>{" "}
-          {sweep?.lastSweptAt
-            ? `OpenBot last checked them ${relativeTime(sweep.lastSweptAt)}. None will run until it starts again. Ask an admin if this keeps happening.`
-            : "OpenBot hasn't started running routines yet, so none of these will run. Ask an admin to set this up."}
-        </p>
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       ) : null}
 
       {/* Pending renders nothing: the empty-state sentence would otherwise flash for the fetch. */}
       {routines.isPending ? null : routines.error ? (
         <p className="mt-4 text-destructive text-sm" role="alert">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           读不到你的定时任务。
         </p>
       ) : rows.length === 0 ? (
@@ -305,34 +285,33 @@ export function RoutinesList({
             </EmptyDescription>
           </EmptyHeader>
         </Empty>
-=======
-          Couldn't load your routines. Reload the page.
-        </p>
-      ) : rows.length === 0 ? (
-        <PageEmpty
-          icon={IconClock}
-          title={agentId ? "No routines for this Bot yet" : "No routines yet"}
-        >
-          {agentId
-            ? 'Ask it something like "every weekday at 9, send me…" and it shows up here.'
-            : 'Ask a Bot something like "every weekday at 9, send me…" and it shows up here.'}
-        </PageEmpty>
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       ) : (
         <div className="flex flex-col gap-2">
           {rows.map((routine) => {
             const lastRun = lastRunLabel(routine.lastRun);
             return (
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
               <Item key={routine.id} variant="muted">
                 {/* Paused reads at a glance: the content dims, and a chip below says the word. */}
                 <ItemContent className={routine.enabled ? "" : "opacity-60"}>
-                  <ItemTitle>
-                    {routine.schedule}
-                    <span className="font-normal text-muted-foreground text-xs">
-                      {routine.timezone}
-                    </span>
-                  </ItemTitle>
+                  {/*
+                   * Named by the person, the name heads the row and the schedule takes a line of
+                   * its own under it, so a narrow window never squeezes the name to fit it.
+                   */}
+                  {routine.title ? (
+                    <>
+                      <ItemTitle>{routine.title}</ItemTitle>
+                      <p className="text-muted-foreground text-xs">
+                        {routine.schedule} · {routine.timezone}
+                      </p>
+                    </>
+                  ) : (
+                    <ItemTitle>
+                      {routine.schedule}
+                      <span className="font-normal text-muted-foreground text-xs">
+                        {routine.timezone}
+                      </span>
+                    </ItemTitle>
+                  )}
                   <ItemDescription className="line-clamp-2">
                     {routine.instruction}
                   </ItemDescription>
@@ -342,68 +321,6 @@ export function RoutinesList({
                       {routine.channel.gone ? (
                         <Chip className="border-destructive/40 text-destructive">
                           这个频道已不在
-=======
-              <Fragment key={routine.id}>
-                {index > 0 ? <Separator /> : null}
-                <Item size="sm">
-                  <ItemMedia variant="icon">
-                    {routine.enabled ? <IconClock /> : <IconPlayerPause />}
-                  </ItemMedia>
-                  {/* Paused reads at a glance: the content dims, and a chip below says the word. */}
-                  <ItemContent className={routine.enabled ? "" : "opacity-60"}>
-                    {/*
-                     * Named by the person, the name heads the row and the schedule takes a line of
-                     * its own under it, so a narrow window never squeezes the name to fit it.
-                     */}
-                    {routine.title ? (
-                      <>
-                        <ItemTitle>{routine.title}</ItemTitle>
-                        <p className="text-muted-foreground text-xs">
-                          {routine.schedule} · {routine.timezone}
-                        </p>
-                      </>
-                    ) : (
-                      <ItemTitle>
-                        {routine.schedule}
-                        <span className="font-normal text-muted-foreground text-xs">
-                          {routine.timezone}
-                        </span>
-                      </ItemTitle>
-                    )}
-                    <ItemDescription>{routine.instruction}</ItemDescription>
-                  </ItemContent>
-                  <ItemActions>
-                    {/*
-                     * Binary and immediate: it takes effect when switched, there is no save.
-                     * Disabled only while its own write is in flight, so switching one routine
-                     * does not freeze the rest of the list — the same idiom the per-tool plugins
-                     * page uses for its per-Bot grant switches.
-                     */}
-                    <Switch
-                      aria-label={`Enable the routine scheduled ${routine.schedule}`}
-                      checked={routine.enabled}
-                      disabled={
-                        setEnabled.isPending &&
-                        setEnabled.variables?.id === routine.id
-                      }
-                      onCheckedChange={(next) =>
-                        setEnabled.mutate({ id: routine.id, enabled: next })
-                      }
-                    />
-                  </ItemActions>
-                  {/* Two sets — where it stands, and what can be done to it — so they wrap onto a
-                      line of their own rather than crowding the title. */}
-                  <ItemFooter className="flex-wrap">
-                    <div
-                      className={cn(
-                        "flex flex-wrap items-center gap-1.5",
-                        routine.enabled ? "" : "opacity-60",
-                      )}
-                    >
-                      {routine.channel.gone ? (
-                        <Chip className="border-destructive/40 text-destructive">
-                          Conversation deleted
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
                         </Chip>
                       ) : (
                         // Where it posts is a place, so the chip goes there.
@@ -412,11 +329,7 @@ export function RoutinesList({
                           to="/channel/$channelId"
                         >
                           <Chip className="text-muted-foreground transition-colors hover:text-foreground">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-                            {routine.channel.name ?? "未命名频道"}
-=======
-                            {routine.channel.title ?? "Untitled conversation"}
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+                            {routine.channel.title ?? routine.channel.name ?? "未命名频道"}
                           </Chip>
                         </Link>
                       )}
@@ -450,67 +363,6 @@ export function RoutinesList({
                         </Chip>
                       )}
                     </div>
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-=======
-                    <div className="flex items-center gap-1">
-                      {/*
-                       * Run now is the Test button, and it does real work: the Bot carries out the
-                       * instruction in the channel right away. Offered only while the routine is
-                       * on, because a paused routine never runs.
-                       */}
-                      <Button
-                        aria-label={`Run the routine scheduled ${routine.schedule} now`}
-                        disabled={
-                          !routine.enabled ||
-                          (runNow.isPending && runNow.variables === routine.id)
-                        }
-                        onClick={() =>
-                          runNow.mutate(routine.id, {
-                            onSuccess: () => setHistoryId(routine.id),
-                          })
-                        }
-                        size="sm"
-                        title={
-                          routine.enabled
-                            ? "Runs it now, for real. The Bot does the work and posts in the conversation."
-                            : "This routine is paused. Turn it on first."
-                        }
-                        type="button"
-                        variant="outline"
-                      >
-                        <IconPlayerPlay />
-                        Run now
-                      </Button>
-                      <Button
-                        aria-expanded={historyId === routine.id}
-                        aria-label={`Run history for the routine scheduled ${routine.schedule}`}
-                        onClick={() =>
-                          setHistoryId(
-                            historyId === routine.id ? null : routine.id,
-                          )
-                        }
-                        size="sm"
-                        type="button"
-                        variant="ghost"
-                      >
-                        <IconHistory />
-                        History
-                      </Button>
-                      <Button
-                        aria-label={`Delete the routine scheduled ${routine.schedule}`}
-                        onClick={() => {
-                          deleteRoutine.reset();
-                          setConfirmingId(routine.id);
-                        }}
-                        size="sm"
-                        type="button"
-                        variant="ghost"
-                      >
-                        <IconTrash />
-                        Delete
-                      </Button>
-                    </div>
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
                   </ItemFooter>
                   {historyId === routine.id ? (
                     <div className="mt-2 border-border border-t pt-2">
@@ -613,11 +465,7 @@ export function RoutinesList({
           <DialogHeader>
             <DialogTitle>删除「{confirming?.schedule}」？</DialogTitle>
             <DialogDescription>
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
               这条常设指令会永久停止，此后不会再按这个计划运行，无法撤销。
-=======
-              This routine stops for good. You can't undo this.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
             </DialogDescription>
           </DialogHeader>
           {deleteRoutine.error ? (

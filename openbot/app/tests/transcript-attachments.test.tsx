@@ -1000,11 +1000,7 @@ test("a goal's turn is drawn as a compact line with the model's message behind D
   const { container, getByText } = renderTranscript([message]);
   await settleReactWork();
 
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   expect(getByText("长期职责运行了。")).toBeTruthy();
-=======
-  expect(getByText("Worked on a goal.")).toBeTruthy();
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   expect(getByText(instruction)).toBeTruthy();
   expect(container.textContent).toContain("Trigger: manual");
   const details = container.querySelector("details");

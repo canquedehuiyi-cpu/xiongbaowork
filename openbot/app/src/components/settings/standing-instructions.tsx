@@ -1,6 +1,7 @@
 import { IconChevronRight, IconNotes } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { PageSection } from "@/components/layout/page-shell";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -36,7 +37,7 @@ import { queryClient } from "@/query-client";
  * to write a job description here and get it applied to every coworker at once.
  */
 const DESCRIPTION =
-  "Applies to every Bot in every conversation. A Bot's role says what it does. This says how you want it done, like your writing style.";
+  "对所有频道里的所有员工都生效。员工的角色说明写它做什么；这里写你希望事情怎么做，比如写作风格，或者怎么介绍你的公司。";
 
 /**
  * The standing instructions as a row on General: what they say, cut to two lines, and a dialog to write them. A free
@@ -56,11 +57,11 @@ export function StandingInstructionsRow() {
           <IconNotes />
         </ItemMedia>
         <ItemContent>
-          <ItemTitle>Standing instructions</ItemTitle>
+          <ItemTitle>长期指令</ItemTitle>
           <ItemDescription>
             {stored.error
-              ? "Couldn't load your instructions."
-              : written || "None yet. Tell every Bot how you want things done."}
+              ? "长期指令没能加载。"
+              : written || "还没有。告诉所有员工你希望事情怎么做。"}
           </ItemDescription>
         </ItemContent>
         <ItemActions>
@@ -70,7 +71,7 @@ export function StandingInstructionsRow() {
       <Dialog onOpenChange={setOpen} open={open}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Standing instructions</DialogTitle>
+            <DialogTitle>长期指令</DialogTitle>
             <DialogDescription>{DESCRIPTION}</DialogDescription>
           </DialogHeader>
           <DialogBody className="mt-4">
@@ -79,6 +80,18 @@ export function StandingInstructionsRow() {
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+/**
+ * The fork's settings page draws the instructions as a section of their own rather than as upstream's
+ * row and dialog; both are kept so the page can use either.
+ */
+export function StandingInstructions() {
+  return (
+    <PageSection description={DESCRIPTION} title="长期指令">
+      <StandingInstructionsEditor />
+    </PageSection>
   );
 }
 

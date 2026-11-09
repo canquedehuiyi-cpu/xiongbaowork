@@ -70,13 +70,8 @@ function setup() {
 
 test("loads preferences from the account and renders the saved emphasis", async () => {
   const { view } = setup();
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   const agent = await view.findByText("我的分身");
-  expect(agent.className).toContain("text-[0.9rem]");
-=======
-  const agent = await view.findByText("General Assistant");
   expect(agent.className).toContain("text-sm");
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   expect(requests).toEqual([
     { path: "/api/settings/preferences", method: "GET", body: undefined },
   ]);
@@ -94,11 +89,7 @@ test("shows loading and read errors without enabling a save", async () => {
   expect((await view.findByRole("alert")).textContent).toBe(
     "Storage unavailable",
   );
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   expect(view.getByRole("button", { name: "重试" })).toBeTruthy();
-=======
-  expect(view.getByRole("button", { name: "Try again" })).toBeTruthy();
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 });
 
 test("successful writes update only the current account cache; failures preserve saved values", async () => {
@@ -109,11 +100,7 @@ test("successful writes update only the current account cache; failures preserve
     messageListEmphasis: "agent",
     selfHostBannerDismissed: false,
     narration: null,
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-    skin: "openbot",
-=======
     skin: "opendots",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     proactive: "on",
   });
   const mutation = client
@@ -131,13 +118,7 @@ test("successful writes update only the current account cache; failures preserve
     });
   await mutation.execute({ messageListEmphasis: "thread" });
   await waitFor(() =>
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-    expect(view.getByText("规划下周").className).toContain(
-      "text-[0.9rem]",
-    ),
-=======
-    expect(view.getByText("Plan next week").className).toContain("text-sm"),
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+    expect(view.getByText("规划下周").className).toContain("text-sm"),
   );
   expect(requests.at(-1)).toEqual({
     path: "/api/settings/preferences",
@@ -148,11 +129,7 @@ test("successful writes update only the current account cache; failures preserve
     messageListEmphasis: "agent",
     selfHostBannerDismissed: false,
     narration: null,
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-    skin: "openbot",
-=======
     skin: "opendots",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     proactive: "on",
   });
   response = async () =>

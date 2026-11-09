@@ -34,7 +34,6 @@ export function stoppedReason(reported: unknown): string {
 }
 
 /**
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
  * The sentence for a turn's `RUN_ERROR`, in either chat surface.
  *
  * A turn refused for quota (story K4) opens the one guidance dialog — what ran out, and how to
@@ -45,7 +44,9 @@ export function runErrorReason(event: unknown): string {
   const quota = reportIfQuotaRunError(event);
   if (quota) return `${quota.title}。${quota.sentence}。${quota.hint}`;
   return stoppedReason((event as { message?: unknown } | undefined)?.message);
-=======
+}
+
+/**
  * How the last run in a thread's history ended, heard while the history is replayed.
  *
  * THE FAILURE IS NOT IN THE MESSAGES. A run that fails ends with a RUN_ERROR, which is an event, and
@@ -105,7 +106,6 @@ export function followLastRun(agent: Pick<AbstractAgent, "subscribe">): {
     running: () => !broken && running,
     stop: () => subscription.unsubscribe(),
   };
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 }
 
 /**

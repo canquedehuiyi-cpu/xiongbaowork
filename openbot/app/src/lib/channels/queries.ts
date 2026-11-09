@@ -130,11 +130,7 @@ export function channelListQueryOptions() {
         ? `?cursor=${encodeURIComponent(pageParam as string)}`
         : "";
       const response = await client(`/api/channels${suffix}`, {
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         fallback: "无法加载会话列表",
-=======
-        fallback: "Couldn't load your conversations.",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       });
       return (await response.json()) as ChannelPage;
     },
@@ -149,11 +145,7 @@ export function channelQueryOptions(channelId: string) {
     queryKey: channelKeys.detail(channelId),
     queryFn: async (): Promise<AgentChannel> => {
       return client(`/api/channels/${channelId}`, "channel", {
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         fallback: "无法加载这段会话",
-=======
-        fallback: "Couldn't load this conversation.",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       });
     },
   });

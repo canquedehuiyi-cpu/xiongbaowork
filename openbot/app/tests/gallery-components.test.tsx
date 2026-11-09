@@ -288,9 +288,9 @@ test("invalid form arguments release the suspended run once so the Bot can repai
  */
 test("a notice's badge says what its tone means, never the tone's own name", () => {
   const said = {
-    positive: "Good news",
-    caution: "Heads up",
-    negative: "Problem",
+    positive: "好消息",
+    caution: "请注意",
+    negative: "有问题",
   } as const;
   for (const [tone, words] of Object.entries(said)) {
     const view = render(

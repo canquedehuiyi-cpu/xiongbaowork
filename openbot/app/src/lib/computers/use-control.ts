@@ -90,8 +90,7 @@ function createControlStore(computerId: string): ControlStore {
     if (action !== "take" && !requestId) {
       publish({
         ...snapshot,
-        problem:
-          "无法识别这次交接请求。请重新连接。",
+        problem: "无法识别这次交接请求。请重新连接。",
       });
       return false;
     }
@@ -113,9 +112,7 @@ function createControlStore(computerId: string): ControlStore {
       publish({
         control: next ?? control,
         busy: false,
-        problem: next
-          ? null
-          : "操作权没能切换。请检查连接后重试。",
+        problem: next ? null : "操作权没能切换。请检查连接后重试。",
       });
       return next !== null;
     } catch {

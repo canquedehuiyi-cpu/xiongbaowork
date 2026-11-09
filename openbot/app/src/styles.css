@@ -5,8 +5,10 @@
 @import "prompt-area/tailwind.css";
 @import "@fontsource-variable/inter";
 @import "./theme.css";
-/* OpenBot's own frame: the orb's colours behind a frosted sidebar. Remove for the solid frame theme.css draws. */
-@import "./frame.css";
+/*
+ * 上游这里还引入了 ./frame.css（OpenBot 自己的彩色玻璃外框）。熊宝用自己的红金玻璃底，不引入；
+ * 皮肤各自画自己的外框，不受影响。
+ */
 /* OpenBot's own typeface, the one open.bot is set in. Remove for theme.css's Inter. */
 @import "./typeface.css";
 @import "./skins/skins.css";
@@ -17,32 +19,18 @@
  * of the spacing that makes it readable. The path is relative to this file.
  */
 @source "../node_modules/streamdown/dist/*.js";
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
+/* Its code plugin, which Streamdown's docs say to scan the same way. */
+@source "../node_modules/@streamdown/code/dist/*.js";
 
 /*
- * OpenBot Desktop on macOS has no separate title bar over this page: the window's buttons sit over
- * the top-left corner and the sidebar runs to the top edge, as in Mac apps with a sidebar. The
- * desktop marks the page (`data-desktop-titlebar`) and makes the sidebar's header the drag handle;
- * here the header makes room for the buttons above its own row. With the sidebar collapsed the
- * buttons are over the main column instead, so that moves down. The main column is the shell's own
- * `<main>`; the primitive's `SidebarInset`, which an earlier rule aimed at, is used by no shell.
- * Outside the desktop nothing changes.
+ * 熊宝的品牌层，叠在上游 theme.css（shadcn 令牌）之上：同名令牌在这里重新声明，排在 theme.css 之后，
+ * 所以熊宝的配色生效；上游新加、这里没有的令牌（如 `--empty-pattern*`）照用 theme.css 的。
+ * `@custom-variant dark` 已在 theme.css 里声明，这里不再重复。
+ *
+ * The root is 15px, as this app's px-measured layouts assume. theme.css instead keeps a 16px root and
+ * scales `--text-*` by 15/16; both together would shrink every size twice, so the `@theme` below puts
+ * Tailwind's own text scale back.
  */
-:root[data-desktop-titlebar="overlay"] [data-slot="sidebar-header"] {
-  height: auto;
-  padding-top: 36px;
-}
-
-:root[data-desktop-titlebar="overlay"]
-  [data-slot="sidebar-wrapper"]:has(
-    > [data-slot="sidebar"][data-state="collapsed"]
-  )
-  > main {
-  padding-top: 28px;
-}
-
-@custom-variant dark (&:is(.dark *));
-
 html {
   font-size: 15px;
 }
@@ -172,10 +160,6 @@ body {
   color: var(--foreground);
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
 }
-=======
-/* Its code plugin, which Streamdown's docs say to scan the same way. */
-@source "../node_modules/@streamdown/code/dist/*.js";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 
 /*
  * OpenBot Desktop on macOS has no separate title bar over this page: the window's buttons sit over
@@ -186,11 +170,32 @@ body {
  * `<main>`; the primitive's `SidebarInset`, which an earlier rule aimed at, is used by no shell.
  * Outside the desktop nothing changes.
  */
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
+:root[data-desktop-titlebar="overlay"] [data-slot="sidebar-header"] {
+  height: auto;
+  padding-top: 36px;
+}
+
+:root[data-desktop-titlebar="overlay"]
+  [data-slot="sidebar-wrapper"]:has(
+    > [data-slot="sidebar"][data-state="collapsed"]
+  )
+  > main {
+  padding-top: 28px;
+}
 
 @theme inline {
+  /* Tailwind's own text scale, on the 15px root (see the note above `html`). */
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+  --text-4xl: 2.25rem;
   --font-heading: var(--font-sans);
-  --font-sans: "Inter Variable", sans-serif;
+  /* 中文回退字体必须保留：苹方与微软雅黑。 */
+  --font-sans: "Inter Variable", "PingFang SC", "Microsoft YaHei", sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -250,30 +255,18 @@ body {
   }
 }
 
-@layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
-  html {
-    @apply font-sans;
-  }
-=======
-:root[data-desktop-titlebar="overlay"] [data-slot="sidebar-header"] {
-  height: auto;
-  padding-top: 36px;
+/*
+ * 上游 typeface.css 给 OpenBot 自己的外观（没有皮肤时）换成 Atkinson Hyperlegible Next，但它的字体栈没有
+ * 中文字体。同样的选择器、排在它后面，补上苹方与微软雅黑作为中文回退；皮肤仍用各自的字体。
+ */
+:root:not([data-skin]),
+:root:not([data-skin]) body,
+:root:not([data-skin]) .font-sans,
+:root:not([data-skin]) .font-heading {
+  font-family:
+    "Atkinson Hyperlegible Next Variable", "PingFang SC", "Microsoft YaHei",
+    ui-sans-serif, system-ui, sans-serif;
 }
-
-:root[data-desktop-titlebar="overlay"]
-  [data-slot="sidebar-wrapper"]:has(
-    > [data-slot="sidebar"][data-state="collapsed"]
-  )
-  > main {
-  padding-top: 28px;
-}
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 
 /* While the sidebar's edge is dragged, it follows the pointer rather than easing after it. */
 [data-slot="sidebar-wrapper"][data-resizing] [data-slot="sidebar-container"],

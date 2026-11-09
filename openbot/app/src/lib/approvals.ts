@@ -1,14 +1,10 @@
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 import { offersStandingRule as offersStandingRuleFor } from "@openbot/shared/standing-rule";
-import { queryOptions } from "@tanstack/react-query";
-=======
 import {
   mutationOptions,
   type QueryClient,
   queryOptions,
 } from "@tanstack/react-query";
 import { botLifecycleKeys } from "@/lib/bot-lifecycle/queries";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 import { client } from "@/lib/client";
 export type ApprovalDecision =
   | "allow_once"
@@ -118,6 +114,8 @@ export type ApprovalInboxData = {
   questions: {
     id: string;
     botId: string;
+    /** The Bot whose conversation this belongs to: for a hand-off, the Bot that handed it on. */
+    conversationBotId?: string;
     threadId: string;
     /** The conversation it was asked in, which is where it is answered. */
     channelId?: string;
@@ -139,7 +137,7 @@ export const approvalInboxOptions = () =>
     },
     refetchInterval: 10_000,
   });
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
+
 /** One request as the inbox lists it. */
 export type ApprovalRequestData = ApprovalInboxData["requests"][number];
 
@@ -158,7 +156,8 @@ export const approvalRequestOptions = (id: string) =>
       );
       return response.json();
     },
-=======
+  });
+
 /**
  * A request the person has decided and the server has not finished carrying on from.
  *
@@ -211,10 +210,9 @@ export const threadAsksEveryStepQueryOptions = (threadId: string) =>
       client(
         `/api/approvals/threads/${encodeURIComponent(threadId)}`,
         "asksEveryStep",
-        { fallback: "This conversation's approvals could not be checked." },
+        { fallback: "读不到这段对话的审批设置。" },
       ),
     staleTime: Number.POSITIVE_INFINITY,
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   });
 export const decideApproval = (id: string, decision: ApprovalDecision) =>
   client(`/api/approvals/${encodeURIComponent(id)}/decision`, {
@@ -283,18 +281,13 @@ export const answerPersonQuestion = async (
     {
       method: "POST",
       body: inConversation ? { response, inConversation } : { response },
-      fallback: "Your answer could not be saved.",
+      fallback: "你的回答没能保存。",
     },
   )) === true;
 export const dismissPersonQuestion = (id: string) =>
   client(`/api/approvals/questions/${encodeURIComponent(id)}/dismiss`, {
     method: "POST",
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-    body: { response },
-    fallback: "你的回答没能保存。",
-=======
-    fallback: "Couldn't dismiss that question.",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+    fallback: "没能放下这个问题。",
   });
 export const updateApprovalRule = (
   id: string,
@@ -313,6 +306,108 @@ export const updateTeamApprovalRule = (
     method: "PATCH",
     body: input,
     fallback: "这条团队规则没能修改。",
+  });
+
+const approvalsKey = ["approvals"] as const;
+const settle = (queryClient: QueryClient) => () =>
+  queryClient.invalidateQueries({ queryKey: approvalsKey });
+
+export const approvalPreferencesMutationOptions = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: setApprovalPreferences,
+    onSettled: settle(queryClient),
+  });
+export const createApprovalRuleMutationOptions = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: createApprovalRule,
+    onSettled: settle(queryClient),
+  });
+export const updateApprovalRuleMutationOptions = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({ id, behaviour }: { id: string; behaviour: RuleBehaviour }) =>
+      updateApprovalRule(id, { behaviour }),
+    onSettled: settle(queryClient),
+  });
+export const revokeApprovalRuleMutationOptions = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: revokeApprovalRule,
+    onSettled: settle(queryClient),
+  });
+export const teamApprovalSettingsMutationOptions = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: setTeamApprovalSettings,
+    onSettled: settle(queryClient),
+  });
+export const createTeamApprovalRuleMutationOptions = (
+  queryClient: QueryClient,
+) =>
+  mutationOptions({
+    mutationFn: createTeamApprovalRule,
+    onSettled: settle(queryClient),
+  });
+export const updateTeamApprovalRuleMutationOptions = (
+  queryClient: QueryClient,
+) =>
+  mutationOptions({
+    mutationFn: ({ id, behaviour }: { id: string; behaviour: RuleBehaviour }) =>
+      updateTeamApprovalRule(id, { behaviour }),
+    onSettled: settle(queryClient),
+  });
+export const revokeTeamApprovalRuleMutationOptions = (
+  queryClient: QueryClient,
+) =>
+  mutationOptions({
+    mutationFn: revokeTeamApprovalRule,
+    onSettled: settle(queryClient),
+  });
+/** Allow once, always allow, deny, or "I did it myself" on one waiting action. */
+export const decideApprovalMutationOptions = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({ id, choice }: { id: string; choice: ApprovalDecision }) =>
+      decideApproval(id, choice),
+    onSuccess: settle(queryClient),
+  });
+/** Answer a question a Bot asked mid-run; the run resumes with the answer. */
+export const answerPersonQuestionMutationOptions = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({
+      id,
+      response,
+      inConversation,
+    }: {
+      id: string;
+      response: string;
+      inConversation?: boolean;
+    }) => answerPersonQuestion(id, response, inConversation),
+    /*
+     * Answered is answered, whatever the turn that carries the answer comes to: the question's card
+     * goes at once, and the badge that counted it is read again rather than on its next poll.
+     */
+    onSuccess: (_continueHere, { id }) => {
+      queryClient.setQueryData<ApprovalInboxData>(approvalsKey, (inbox) =>
+        inbox
+          ? {
+              ...inbox,
+              questions: inbox.questions.filter(
+                (question) => question.id !== id,
+              ),
+            }
+          : inbox,
+      );
+      void queryClient.invalidateQueries({
+        queryKey: botLifecycleKeys.attention,
+      });
+      return settle(queryClient)();
+    },
+  });
+
+/** Put a question down unanswered. Everything is read again: a task waiting on it moves on too. */
+export const dismissPersonQuestionMutationOptions = (
+  queryClient: QueryClient,
+) =>
+  mutationOptions({
+    mutationFn: ({ id }: { id: string }) => dismissPersonQuestion(id),
+    onSuccess: () => queryClient.invalidateQueries(),
   });
 
 /** A tool's mode on a Bot's permissions page (SEC1 §4.5): 直接, 询问 or 禁用. */
@@ -379,66 +474,6 @@ export const setEmployeeSecurity = (
     body: input,
     fallback: "这位员工的安全设置没能保存。",
   });
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-=======
-export const revokeTeamApprovalRuleMutationOptions = (
-  queryClient: QueryClient,
-) =>
-  mutationOptions({
-    mutationFn: revokeTeamApprovalRule,
-    onSettled: settle(queryClient),
-  });
-/** Allow once, always allow, deny, or "I did it myself" on one waiting action. */
-export const decideApprovalMutationOptions = (queryClient: QueryClient) =>
-  mutationOptions({
-    mutationFn: ({ id, choice }: { id: string; choice: ApprovalDecision }) =>
-      decideApproval(id, choice),
-    onSuccess: settle(queryClient),
-  });
-/** Answer a question a Bot asked mid-run; the run resumes with the answer. */
-export const answerPersonQuestionMutationOptions = (queryClient: QueryClient) =>
-  mutationOptions({
-    mutationFn: ({
-      id,
-      response,
-      inConversation,
-    }: {
-      id: string;
-      response: string;
-      inConversation?: boolean;
-    }) => answerPersonQuestion(id, response, inConversation),
-    /*
-     * Answered is answered, whatever the turn that carries the answer comes to: the question's card
-     * goes at once, and the badge that counted it is read again rather than on its next poll.
-     */
-    onSuccess: (_continueHere, { id }) => {
-      queryClient.setQueryData<ApprovalInboxData>(approvalsKey, (inbox) =>
-        inbox
-          ? {
-              ...inbox,
-              questions: inbox.questions.filter(
-                (question) => question.id !== id,
-              ),
-            }
-          : inbox,
-      );
-      void queryClient.invalidateQueries({
-        queryKey: botLifecycleKeys.attention,
-      });
-      return settle(queryClient)();
-    },
-  });
-
-/** Put a question down unanswered. Everything is read again: a task waiting on it moves on too. */
-export const dismissPersonQuestionMutationOptions = (
-  queryClient: QueryClient,
-) =>
-  mutationOptions({
-    mutationFn: ({ id }: { id: string }) => dismissPersonQuestion(id),
-    onSuccess: () => queryClient.invalidateQueries(),
-  });
-
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 /**
  * The tools a Bot's permissions disable outright: a 禁用 mode, or a team row disabling the tool for
  * every action and target. The server leaves them out of what the model is offered and refuses them
@@ -464,4 +499,17 @@ export function toolIsDisabled(disabled: ReadonlySet<string>, ref: string) {
     if (new RegExp(`^${source}$`, "s").test(ref)) return true;
   }
   return false;
+}
+
+/**
+ * Whether a rule's Bot field covers this Bot, matched the way the server matches it (`policy.ts`):
+ * `*` is anything, and a `*` inside a value is any run of characters.
+ */
+export function ruleCoversBot(pattern: string, agentId: string): boolean {
+  if (pattern === "*") return true;
+  const source = pattern
+    .split("*")
+    .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&"))
+    .join(".*");
+  return new RegExp(`^${source}$`, "s").test(agentId);
 }

@@ -10,13 +10,13 @@ import { GALLERY as ACTIVITY } from "@/components/gallery/activity";
 import { GALLERY as CARDS } from "@/components/gallery/cards";
 import { GALLERY as CHARTS } from "@/components/gallery/charts";
 import { GALLERY as DECISIONS } from "@/components/gallery/decisions";
-import { GALLERY as FORMS } from "@/components/gallery/form";
-import { GALLERY as QUOTES } from "@/components/gallery/quote";
 import {
   UNREADABLE as FAILED_UNREADABLE,
   WENT_WRONG as FAILED_WENT_WRONG,
   FailedCard,
 } from "@/components/gallery/failed";
+import { GALLERY as FORMS } from "@/components/gallery/form";
+import { GALLERY as QUOTES } from "@/components/gallery/quote";
 import { GALLERY as TABLES } from "@/components/gallery/table";
 import type { GalleryComponent } from "@/lib/copilot/gallery-registry";
 import {
@@ -236,9 +236,7 @@ test("a table whose call failed after it was sent whole says it went wrong", asy
   const view = draw(turn("showTable", table, CLAUDE_CODE_REFUSED));
 
   expect(await view.findByText(failure("Data table"))).toBeTruthy();
-  expect(
-    view.getByText(FAILED_WENT_WRONG),
-  ).toBeTruthy();
+  expect(view.getByText(FAILED_WENT_WRONG)).toBeTruthy();
   // The table the Bot was told failed is not drawn as if it worked.
   expect(view.queryByRole("table")).toBeNull();
 });

@@ -67,11 +67,7 @@ export function AgentProfile({
   if (agent.error || !agent.data) {
     return (
       <p className="p-8 text-sm text-destructive" role="alert">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         读不到这位员工。
-=======
-        Couldn't load this Bot.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       </p>
     );
   }
@@ -106,11 +102,7 @@ export function AgentProfile({
 
       <section className="grid gap-2">
         <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           角色
-=======
-          What it does
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         </h2>
         <p className="text-sm whitespace-pre-wrap text-pretty">
           {profile.roleDescription}
@@ -124,11 +116,7 @@ export function AgentProfile({
             void navigate({ search: { agent: agentId }, to: "/channel/new" })
           }
         >
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           开始新对话
-=======
-          New conversation
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         </Button>
         <Button
           className="w-full text-sm!"
@@ -138,21 +126,18 @@ export function AgentProfile({
           管理员工
         </Button>
       </div>
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 
       <AgentDialog
         agentId={agentId}
         onClose={() => setManaging(false)}
         open={managing}
       />
-=======
       {footer ? (
         <>
           <Separator />
           {footer}
         </>
       ) : null}
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     </div>
   );
 }

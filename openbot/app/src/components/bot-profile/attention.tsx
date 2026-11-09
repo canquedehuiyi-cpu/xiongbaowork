@@ -1,7 +1,4 @@
 import { useEffect, useRef } from "react";
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-import type { BotAttention } from "@/lib/bot-lifecycle/queries";
-=======
 import {
   type BotAttention,
   botAttentionQueryOptions,
@@ -15,7 +12,6 @@ import {
   type ProactiveSuggestion,
   proactiveSuggestionsQueryOptions,
 } from "@/lib/proactive";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 
 /**
  * Questions, approvals and stalled hand-offs: the things only the person can move forward, answered
@@ -48,41 +44,23 @@ export function waitingOnYou(bot: BotAttention): number {
   return asksOf(bot) + bot.tasks.ready + bot.tasks.failed;
 }
 
-const count = (total: number, one: string, many: string) =>
-  `${total} ${total === 1 ? one : many}`;
+/** "2 个提问": a number and what it counts, the same words for one and for many. */
+const count = (total: number, what: string) => `${total} ${what}`;
 
 /** What the badge says, in words, for the row's accessible name and its tooltip. */
 export function attentionSummary(bot: BotAttention): string {
   const parts: string[] = [];
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-  if (bot.questions) parts.push(`${bot.questions} 个提问`);
-  if (bot.approvals) parts.push(`${bot.approvals} 个审批`);
-  if (bot.handoffs) parts.push(`${bot.handoffs} 个卡住的交接`);
+  if (bot.questions) parts.push(count(bot.questions, "个提问"));
+  if (bot.approvals) parts.push(count(bot.approvals, "个审批"));
+  if (bot.handoffs) parts.push(count(bot.handoffs, "个卡住的交接"));
+  if (bot.tasks.needsInput)
+    parts.push(count(bot.tasks.needsInput, "个任务等你处理"));
+  // What its check-ins found, counted in the badge's words: "2 件事需要你".
+  if (bot.items) parts.push(count(bot.items, "件事需要你"));
+  if (bot.tasks.ready) parts.push(count(bot.tasks.ready, "个任务待你查看"));
+  if (bot.tasks.failed) parts.push(count(bot.tasks.failed, "个任务失败"));
   if (bot.unread) parts.push(`${bot.unread} 条未读`);
   return parts.join("、");
-=======
-  if (bot.questions) parts.push(count(bot.questions, "question", "questions"));
-  if (bot.approvals) parts.push(count(bot.approvals, "approval", "approvals"));
-  if (bot.handoffs)
-    parts.push(count(bot.handoffs, "stalled hand-off", "stalled hand-offs"));
-  if (bot.tasks.needsInput)
-    parts.push(
-      count(
-        bot.tasks.needsInput,
-        "task waiting on you",
-        "tasks waiting on you",
-      ),
-    );
-  // What its check-ins found, counted in the badge's words: "2 things need you".
-  if (bot.items)
-    parts.push(count(bot.items, "thing needs you", "things need you"));
-  if (bot.tasks.ready)
-    parts.push(count(bot.tasks.ready, "task to review", "tasks to review"));
-  if (bot.tasks.failed)
-    parts.push(count(bot.tasks.failed, "failed task", "failed tasks"));
-  if (bot.unread) parts.push(`${bot.unread} unread`);
-  return parts.join(", ");
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 }
 
 /** A push body is cut here too, so the browser says what the phone says. */
@@ -118,20 +96,17 @@ export function pingNotice(
   });
   if (once.length === 0)
     return {
-      title: "Something needs you",
-      body: "Open Bots to see what's waiting.",
+      title: "有事需要你",
+      body: "打开员工列表看看在等什么。",
     };
   const lines = once.slice(0, PING_LISTED).map((item) => {
     const bot = botName(item.agentId);
     return bot ? `${bot}: ${item.title}` : item.title;
   });
   const more = once.length - PING_LISTED;
-  const body = [...lines, ...(more > 0 ? [`and ${more} more`] : [])].join("\n");
+  const body = [...lines, ...(more > 0 ? [`还有 ${more} 件`] : [])].join("\n");
   return {
-    title:
-      once.length === 1
-        ? "One thing needs you"
-        : `${once.length} things need you`,
+    title: once.length === 1 ? "有一件事需要你" : `${once.length} 件事需要你`,
     body:
       body.length > PING_BODY_LIMIT
         ? `${body.slice(0, PING_BODY_LIMIT - 1).trimEnd()}…`
@@ -171,23 +146,6 @@ export function useAttentionNotifications(bots: BotAttention[] | undefined) {
     seen.current = new Map(bots.map((bot) => [bot.agentId, asksOf(bot)]));
     // The first answer is the state on arrival, not news.
     if (!previous) return;
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-    let permitted = false;
-    try {
-      permitted =
-        typeof Notification !== "undefined" &&
-        Notification.permission === "granted";
-    } catch {
-      permitted = false;
-    }
-    if (!permitted) return;
-    for (const bot of bots) {
-      const now = needsInput(bot);
-      if (bot.notify === "none" || now <= (previous.get(bot.agentId) ?? 0))
-        continue;
-      try {
-        new Notification(`${bot.name} 需要你`, {
-=======
     const rose = bots.filter(
       (bot) =>
         bot.notify !== "none" && asksOf(bot) > (previous.get(bot.agentId) ?? 0),
@@ -198,8 +156,7 @@ export function useAttentionNotifications(bots: BotAttention[] | undefined) {
       if (!allowed || inSight()) return;
       for (const bot of rose)
         showNotice({
-          title: `${bot.name} needs you`,
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+          title: `${bot.name} 需要你`,
           body: attentionSummary(bot),
           // The conversation's tag when it waits in one: its reply notice, if any, is replaced by this.
           tag: bot.waitingIn
@@ -210,8 +167,6 @@ export function useAttentionNotifications(bots: BotAttention[] | undefined) {
     });
   }, [bots]);
 }
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-=======
 
 /**
  * One browser notification per ping, never one per item: each time the person's newest ping
@@ -280,7 +235,7 @@ export function BotsNavBadge() {
   if (waiting > 0) {
     return (
       <span
-        aria-label={`${waiting} ${waiting === 1 ? "thing needs" : "things need"} you`}
+        aria-label={`${waiting} 件事需要你`}
         className="ml-auto rounded-full bg-primary px-1.5 text-[11px] font-medium text-primary-foreground tabular-nums"
         role="img"
       >
@@ -293,8 +248,8 @@ export function BotsNavBadge() {
       <span
         aria-label={
           bots.some((bot) => bot.unread > 0)
-            ? "Unread messages"
-            : "Your check-ins found something"
+            ? "有未读消息"
+            : "主动巡检发现了新情况"
         }
         className="ml-auto size-2 rounded-full bg-primary"
         role="img"
@@ -303,4 +258,3 @@ export function BotsNavBadge() {
   }
   return null;
 }
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
