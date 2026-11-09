@@ -8,6 +8,7 @@ import {
   isDeploymentFault,
   PluginRefusedError,
   type PluginStore,
+  refFromToolName,
 } from "./store";
 
 /**
@@ -97,6 +98,25 @@ export function parametersFor(inputSchema: Record<string, unknown>): z.ZodType {
 }
 
 /**
+ * 谁在删除前问主人：OpenBot，不是 Bot。
+ *
+ * 应用工具的删除、归档，以及应用标为破坏性的工具，删除类底线总是先问（approvals/policy.ts 的
+ * `destructiveFloor`）。Bot 自己再问一遍，主人就要为一次删除回答两次；OpenBot 的卡片写明了具体
+ * 动作，留它就够了。只在 Bot 至少持有一个经插件调用路径的应用工具（`mcp__` 开头）时才说，并且
+ * 只说应用工具：记忆等 OpenBot 内部工具不经审批门，`computer_*` 和主人电脑上的命令也不归这条
+ * 底线管，Bot 对它们该怎么确认还怎么确认。
+ */
+export const CONNECTOR_APPROVAL_GUIDANCE =
+  "For the tools of connected apps (their names start with mcp__), OpenBot itself asks the person before you delete or archive anything and before you use a tool marked destructive, on a card that shows exactly what you are about to do. So for those, do not ask them first: say what you are going to do and call the tool, and they are asked once, by OpenBot. This covers connected-app tools only: not your memory tools, and not commands or files on a computer.";
+
+/**
+ * 应用标为破坏性的工具（MCP 的 `destructiveHint`、Composio 的破坏性标签），提供给模型时追加在
+ * 描述末尾。它的名字不一定看得出会删除什么，所以在工具本身上写明。
+ */
+export const DESTRUCTIVE_TOOL_NOTE =
+  "This tool is marked destructive: it deletes or overwrites something, so OpenBot asks the person before it runs. Do not ask them first.";
+
+/**
  * What this Bot holds, said in its instructions rather than left to be inferred from a tool list.
  *
  * A tool array tells a model a tool exists. It does not tell it that the tool is the right way to
@@ -177,6 +197,10 @@ export function grantedToolGuidance(
           "access, and the thing that is missing is yours, not theirs.",
         ]
       : []),
+    // 只有内部工具（记忆、跟进等）时不说：它们不经审批门。
+    ...(tools.some((tool) => refFromToolName(tool.name) !== null)
+      ? [CONNECTOR_APPROVAL_GUIDANCE]
+      : []),
     ...(researchConnector
       ? [
           `Parallel provides public-web search and extraction: ${researchTools.map((tool) => tool.name).join(" and ")} discover sources and read selected pages.`,
@@ -228,7 +252,12 @@ export async function grantedTools(options: {
     name: tool.toolName,
     ref: tool.ref,
     initiator,
-    description: tool.description,
+    // 应用标为破坏性的工具，名字不一定看得出来：在描述末尾写明 OpenBot 会先问，Bot 不必再问。
+    description: tool.destructive
+      ? [tool.description.trim(), DESTRUCTIVE_TOOL_NOTE]
+          .filter(Boolean)
+          .join("\n\n")
+      : tool.description,
     parameters: parametersFor(tool.inputSchema),
     execute: async (args: unknown) => {
       try {

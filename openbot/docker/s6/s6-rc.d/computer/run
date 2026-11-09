@@ -25,7 +25,7 @@ for name in \
   http_proxy https_proxy no_proxy all_proxy ftp_proxy \
   BUN_INSTALL PLAYWRIGHT_BROWSERS_PATH SPIFFE_ENDPOINT_SOCKET \
   COMPUTER_TOKEN COMPUTER_BOT_ID COMPUTER_BROWSER_MODE COMPUTER_MAX_BROWSERS \
-  COMPUTER_BROWSER_IDLE_MS COMPUTER_SANDBOX COMPUTER_SHELL_ENV COMPUTER_STOPPED \
+  COMPUTER_BROWSER_IDLE_MS COMPUTER_SANDBOX COMPUTER_SHELL_ENV COMPUTER_STOPPED COMPUTER_PER_BOT_USERS \
   ACTION_TIMEOUT_MS NAVIGATION_TIMEOUT_MS AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS
 do
   eval "isset=\${$name+x}"
@@ -49,6 +49,20 @@ if [ -n "${COMPUTER_SHELL_ENV:-}" ]; then
   done
   IFS=$oldifs
 fi
+
+# NO EMPLOYEE PROCESS OUTLIVES THE COMPUTER. An employee (uid 20000-59999, xb-bot) can leave a
+# process outside its command's group with setsid. While the computer is down, such a process could
+# take port 4100 first, or read the argv below, and catch COMPUTER_TOKEN. So every employee process
+# is ended here, as root, before the computer (re)starts; nothing can start one again until it is up,
+# because only the computer asks the helper to run a command.
+n=0
+while [ "$n" -lt 10 ]; do
+  pids=$(ps -e -o pid= -o ruid= -o stat= | awk '$2 >= 20000 && $2 <= 59999 && $3 !~ /^Z/ { print $1 }')
+  [ -n "$pids" ] || break
+  # shellcheck disable=SC2086
+  kill -s KILL $pids 2>/dev/null || true
+  n=$((n + 1))
+done
 
 exec s6-setuidgid pwuser env -i "$@" \
   HOME=/home/pwuser PORT=4100 WORKSPACE_DIR=/workspace PROFILES_DIR="${PROFILES_DIR:-/profiles}" \

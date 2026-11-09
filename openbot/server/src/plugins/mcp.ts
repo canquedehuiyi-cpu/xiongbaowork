@@ -3,6 +3,13 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import { cutAtCodeUnits } from "../channels/text";
 import { createGuardedFetch, type OutboundPolicy } from "../net/outbound-guard";
+import {
+  type CredentialPlacement,
+  CredentialPlacementRefusedError,
+  placeCredential,
+  withoutSecrets,
+  withoutSecretsDeep,
+} from "./catalogue";
 
 /**
  * The only place in this deployment that speaks MCP to somebody else's server.
@@ -76,7 +83,7 @@ function resourceLinkText(item: {
     typeof value === "string" && value.trim() !== "" ? value : null;
   const bounded = (value: string) =>
     value.length > LINK_FIELD_CHARS
-      ? `${value.slice(0, LINK_FIELD_CHARS)}…`
+      ? `${cutAtCodeUnits(value, LINK_FIELD_CHARS)}…`
       : value;
   const lines: string[] = [];
   const uri = field(item.uri);
@@ -93,12 +100,20 @@ function resourceLinkText(item: {
 }
 
 export function resultText(
-  content: unknown,
-  structuredContent?: unknown,
+  rawContent: unknown,
+  rawStructuredContent?: unknown,
+  /**
+   * Strings no part of the result may carry: the credential this call went out with, in every
+   * spelling. Taken out of the vendor's whole answer FIRST, before any field is cut to length below
+   * — a cut that lands inside a key leaves a prefix no full spelling matches any more.
+   */
+  secrets: readonly string[] = [],
 ): {
   text: string;
   truncated: boolean;
 } {
+  const content = withoutSecretsDeep(rawContent, secrets);
+  const structuredContent = withoutSecretsDeep(rawStructuredContent, secrets);
   const parts = Array.isArray(content) ? content : [];
   let joined = parts
     .map((part) => {
@@ -198,6 +213,12 @@ export type ListedTool = McpTool & {
   effect?: "read" | "write";
   /** Whether the vendor marked it as destroying something. */
   destructive?: boolean;
+  /**
+   * vendor 对它做什么只字未提：MCP 服务器没有给 `readOnlyHint` 也没有给 `destructiveHint`，或
+   * Composio 没有只读、破坏性、新建、修改中的任何一个标签。记成不算 destructive 的写操作；
+   * catalogue 条目的名单覆盖它时由名单决定，不记（见 store.ts 的 `storableTools`）。
+   */
+  unclassified?: boolean;
   /** The vendor's version string, when calling the action requires one. */
   version?: string;
 };
@@ -221,6 +242,18 @@ type Connection = {
    * Absent for a catalogue-pinned server, whose host is a reviewed constant.
    */
   outbound?: OutboundPolicy;
+  /**
+   * Where `token` goes, for a catalogue entry whose vendor does not take it as a bearer token: a
+   * pinned query parameter, a pinned vendor header, or an address that is itself the credential.
+   *
+   * Present, it REPLACES the Authorization header rather than adding to it, and three more things
+   * hold: no token is a refusal rather than an anonymous dial; `url` must be the entry's pinned base
+   * exactly; and every request goes through the outbound guard — with `outbound` when a test injects
+   * one, with the strict default otherwise — so a redirect is refused rather than followed and a
+   * key in a URL or a vendor header (which `fetch` does not strip across origins the way it strips
+   * Authorization) is never carried to another host. See `placeCredential` in catalogue.ts.
+   */
+  placement?: CredentialPlacement;
 };
 
 /**
@@ -231,8 +264,12 @@ type Connection = {
  * the explanation as text under `isError`. Both are worth surfacing; the tool list, which arrives in
  * the same position under a 403, is not.
  */
-function reasonFrom(error: unknown): string | null {
-  const message = error instanceof Error ? error.message : String(error);
+function reasonFrom(error: unknown, secrets: readonly string[]): string | null {
+  // Scrubbed while still whole, before `trimmed` below can cut through a key.
+  const message = withoutSecrets(
+    error instanceof Error ? error.message : String(error),
+    secrets,
+  );
   const body = message.slice(message.indexOf("{"));
   if (!body.startsWith("{")) return null;
 
@@ -268,7 +305,7 @@ function reasonFrom(error: unknown): string | null {
 
 /** Long enough for a sentence and a URL, short enough not to be the wall of JSON this replaced. */
 const trimmed = (value: string) =>
-  value.length > 400 ? `${value.slice(0, 400)}…` : value;
+  value.length > 400 ? `${cutAtCodeUnits(value, 400)}…` : value;
 
 /**
  * A vendor's failure, as one sentence an operator can act on.
@@ -286,7 +323,7 @@ const trimmed = (value: string) =>
  * where there is one, because that is where Google says which API is not enabled — and each Workspace
  * product is two APIs, so nothing else can tell "I enabled it" from "it is enabled".
  */
-function vendorFailure(error: unknown): string {
+function vendorFailure(error: unknown, secrets: readonly string[]): string {
   const status =
     typeof error === "object" && error !== null && "code" in error
       ? (error as { code?: unknown }).code
@@ -313,7 +350,7 @@ function vendorFailure(error: unknown): string {
      * with a full, valid list under a 403 — and a wall of JSON is what made the original error
      * unreadable.
      */
-    const detail = reasonFrom(error);
+    const detail = reasonFrom(error, secrets);
     return detail
       ? `The vendor accepted the credential and refused the request (403). It said: ${detail}`
       : "The vendor accepted the credential and refused the request (403). The account may lack access, or the API may not be enabled for this project.";
@@ -321,7 +358,10 @@ function vendorFailure(error: unknown): string {
   if (typeof status === "number") {
     return `The vendor answered ${status}.`;
   }
-  return error instanceof Error ? error.message : String(error);
+  return withoutSecrets(
+    error instanceof Error ? error.message : String(error),
+    secrets,
+  );
 }
 
 /**
@@ -387,29 +427,97 @@ async function connectWithinDeadline(
   }
 }
 
-async function withClient<T>(
-  connection: Connection,
-  use: (client: Client) => Promise<T>,
-): Promise<T> {
-  const transport = new StreamableHTTPClientTransport(new URL(connection.url), {
+/**
+ * The request a connection becomes: where to send it, what headers, which fetch, and which strings
+ * no message about it may carry.
+ *
+ * A placed credential is decided entirely in `placeCredential`, before any transport exists, so a
+ * refusal there is a sentence with nothing sent. Everything else dials exactly as it always has.
+ */
+function dialFor(connection: Connection): {
+  url: string;
+  requestInit: RequestInit | undefined;
+  fetch: typeof fetch | undefined;
+  secrets: string[];
+} {
+  if (connection.placement) {
+    const placed = placeCredential(
+      connection.placement,
+      connection.url,
+      connection.token,
+    );
+    return {
+      url: placed.url,
+      requestInit:
+        Object.keys(placed.headers).length > 0
+          ? { headers: placed.headers }
+          : undefined,
+      // Always guarded: see `Connection.placement`.
+      fetch: createGuardedFetch(connection.outbound ?? {}),
+      secrets: [...placed.secrets, ...scrubbableBearer(connection.token)],
+    };
+  }
+  return {
+    url: connection.url,
     requestInit: connection.token
       ? { headers: { Authorization: authorizationHeader(connection.token) } }
       : undefined,
     // The SDK sends every POST, GET and DELETE through this when given; see `Connection.outbound`.
-    ...(connection.outbound
-      ? { fetch: createGuardedFetch(connection.outbound) }
-      : {}),
+    fetch: connection.outbound
+      ? createGuardedFetch(connection.outbound)
+      : undefined,
+    secrets: scrubbableBearer(connection.token),
+  };
+}
+
+/**
+ * A bearer or OAuth token to scrub from what leaves the transport, or none.
+ *
+ * Placed credentials are format-checked at entry (at least twelve characters of `[A-Za-z0-9_-]`),
+ * so scrubbing them can never hit ordinary text. A bearer or OAuth token is not: an administrator
+ * may have typed a short test token, and scrubbing a four-letter word would replace it all through
+ * tool results and schemas and hide every tool whose name contains it. Below eight characters a
+ * token is not a credential worth that cost, and it was never scrubbed before placed credentials
+ * brought scrubbing in.
+ */
+function scrubbableBearer(token: string | undefined): string[] {
+  return token && token.length >= BEARER_SCRUB_MIN ? [token] : [];
+}
+const BEARER_SCRUB_MIN = 8;
+
+async function withClient<T>(
+  connection: Connection,
+  use: (client: Client, secrets: readonly string[]) => Promise<T>,
+): Promise<T> {
+  let dial: ReturnType<typeof dialFor>;
+  try {
+    dial = dialFor(connection);
+  } catch (error) {
+    // A placement refusal names no value; anything else thrown while placing is not trusted to.
+    throw new McpServerError(
+      error instanceof CredentialPlacementRefusedError
+        ? error.message
+        : "无法为这台服务器构造请求，未发送任何内容。",
+    );
+  }
+  const transport = new StreamableHTTPClientTransport(new URL(dial.url), {
+    requestInit: dial.requestInit,
+    ...(dial.fetch ? { fetch: dial.fetch } : {}),
   });
   const client = new Client({ name: "openbot", version: "1.0.0" });
 
   try {
     await connectWithinDeadline(client, transport);
-    return await use(client);
+    return await use(client, dial.secrets);
   } catch (error) {
     // Rewrapped so a caller never has to care whether the failure came from the transport, the
     // handshake or the call, and so the message that reaches an audit row and an admin page is one
-    // sentence rather than a stack.
-    throw new McpServerError(vendorFailure(error));
+    // sentence rather than a stack. Every spelling of the credential is taken out first: this
+    // message is written into `last_error`, an audit row and a model's context, and a transport
+    // error that quotes the URL it dialled would otherwise quote a key placed in it.
+    throw new McpServerError(
+      withoutSecrets(vendorFailure(error, dial.secrets), dial.secrets),
+    );
   } finally {
     await client.close().catch(() => {
       // A server that will not say goodbye is not a failure of the work that just succeeded.
@@ -456,22 +564,42 @@ export const listNeedsCredential = true;
  * an incoherent listing towards the permissive reading is the one direction that could hurt.
  */
 function declaredEffect(annotations: ToolAnnotations | undefined) {
+  // 两个提示都没给，就是服务器对它做什么只字未提。effect 仍不记，让 catalogue 的名单照旧决定读写。
+  if (
+    annotations?.readOnlyHint === undefined &&
+    annotations?.destructiveHint === undefined
+  )
+    return { unclassified: true } as const;
   if (annotations?.destructiveHint !== true) return {};
   return { effect: "write", destructive: true } as const;
 }
 
 /** What this server says it offers, right now. */
 export async function listTools(connection: Connection): Promise<ListedTool[]> {
-  return withClient(connection, async (client) => {
+  return withClient(connection, async (client, secrets) => {
     const result = await client.listTools(undefined, {
       timeout: LIST_TIMEOUT_MS,
     });
-    return result.tools.map((tool) => ({
-      name: tool.name,
-      description: tool.description ?? "",
-      inputSchema: (tool.inputSchema ?? {}) as Record<string, unknown>,
-      ...declaredEffect(tool.annotations),
-    }));
+    return (
+      result.tools
+        /*
+         * A tool whose NAME carries the credential is not listed at all. A name is an identifier a
+         * grant, a policy rule and a call are all written against, so scrubbing it would list a tool
+         * nobody can call under the name shown — and leaving it would store the key as a tool name.
+         */
+        .filter((tool) => withoutSecrets(tool.name, secrets) === tool.name)
+        .map((tool) => ({
+          name: tool.name,
+          // Stored and shown on the Plugins page, and handed to a model: a vendor echoing the key
+          // into a description, a schema's default, an example or a property name puts it nowhere.
+          description: withoutSecrets(tool.description ?? "", secrets),
+          inputSchema: withoutSecretsDeep(
+            (tool.inputSchema ?? {}) as Record<string, unknown>,
+            secrets,
+          ),
+          ...declaredEffect(tool.annotations),
+        }))
+    );
   });
 }
 
@@ -496,17 +624,24 @@ export async function callTool(
   toolName: string,
   args: Record<string, unknown>,
 ): Promise<McpCallResult> {
-  return withClient(connection, async (client) => {
+  return withClient(connection, async (client, secrets) => {
     const result = await client.callTool(
       { name: toolName, arguments: args },
       undefined,
       { timeout: CALL_TIMEOUT_MS },
     );
 
+    // The secrets go INTO `resultText`, so the answer is scrubbed whole before it is cut to length.
     const { text, truncated } = resultText(
       result.content,
       "structuredContent" in result ? result.structuredContent : undefined,
+      secrets,
     );
-    return { text, isError: result.isError === true, truncated };
+    // A model reads this, and an `isError` text is copied into the audit row; neither gets the key.
+    return {
+      text: withoutSecrets(text, secrets),
+      isError: result.isError === true,
+      truncated,
+    };
   });
 }

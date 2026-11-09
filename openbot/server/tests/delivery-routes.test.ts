@@ -32,6 +32,8 @@ function fixture(
     bound?: boolean;
     /** The tenant stamped on the binding and on the link challenge. */
     stamp?: string;
+    /** 待批请求上记下的决策层，比如删除类底线 `destructive_tool`。 */
+    policySource?: string;
   } = {},
 ) {
   const calls: unknown[] = [];
@@ -132,6 +134,15 @@ function fixture(
               effect: "write",
               threadId: "canonical",
               args: { url: "https://example.com" },
+              ...(options.policySource
+                ? {
+                    policy: {
+                      behaviour: "ask",
+                      source: options.policySource,
+                      reason: "这个操作会删除或覆盖内容，总是先征得你同意。",
+                    },
+                  }
+                : {}),
             },
           };
         },
@@ -410,6 +421,43 @@ test("card resume decides through the approvals service as the binding owner onl
   expect(f.decisions).toHaveLength(1);
   await resume({ confirmed: false, by: "slack:T1:U1" });
   expect(f.decisions[1]).toEqual(["owner", APPROVAL, "deny"]);
+});
+test("a deleting action's card offers no Always allow, and an always answer from an old card is taken as once", async () => {
+  const f = fixture({
+    policySource: "destructive_tool",
+    converse: {
+      kind: "waiting",
+      binding: bound,
+      inboxId: "in1",
+      replyText: "",
+      extras: { approvals: [APPROVAL], questions: [] },
+    },
+  });
+  const result = await run(f, {
+    context: [sender()],
+    messages: [{ id: "m9", role: "user", content: "<@UBOT> archive it" }],
+  });
+  const card = result.events.find(
+    (e) => e.type === "CUSTOM" && e.name === "on_interrupt",
+  );
+  expect(card.value.__copilotkit_interrupt_value__.args.allow_always).toBe(
+    false,
+  );
+  const answered = await run(f, {
+    forwardedProps: {
+      command: {
+        resume: {
+          "0f8fad5bd9cb469fa16570867728950e": {
+            confirmed: true,
+            always: true,
+            by: "slack:T1:U1",
+          },
+        },
+      },
+    },
+  });
+  expect(said(answered.events)).toContain("Allowed once");
+  expect(f.decisions).toEqual([["owner", APPROVAL, "allow_once"]]);
 });
 test("SMS STOP and START record opt-out without a turn or a second reply", async () => {
   const f = fixture();

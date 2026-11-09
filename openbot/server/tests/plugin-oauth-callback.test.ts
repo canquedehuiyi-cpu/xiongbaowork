@@ -68,6 +68,14 @@ function app(input: {
   oauthClientFor?: () => Promise<{ clientId: string; clientSecret: string }>;
   /** The row an address resolves to. No row by default. */
   serverAddress?: (serverId: string) => Promise<unknown>;
+  /**
+   * 连接写下之后，以本人身份列出应用的工具。默认什么都不列：真实 store 上的行为由集成测试
+   * `plugin-connect-lists-tools` 覆盖。
+   */
+  discoverToolsOnConnect?: (
+    serverId: string,
+    userId: string,
+  ) => Promise<{ tools: number } | null>;
 }) {
   const store = {
     // The brokered read the connect handler makes before anything about the consent flow. This
@@ -82,6 +90,7 @@ function app(input: {
       (async (connection: Recorded) => {
         input.recorded.push(connection);
       }),
+    discoverToolsOnConnect: input.discoverToolsOnConnect ?? (async () => null),
   };
   const routes = createPluginRoutes(
     store as never,
@@ -706,5 +715,105 @@ describe("a callback whose own checks failed", () => {
     }
 
     expect(recorded).toEqual([]);
+  });
+});
+
+/**
+ * 连接写下之后，以刚连接的这个人的身份问应用有哪些工具（上游 #1073）。
+ *
+ * 只能按个人凭据列出工具的应用，添加时谁都还没连接，所以一个工具也没有；连接回调是第一个有人
+ * 可以代表的时刻。问的结果不影响连接本身：连接已经写下，列工具失败只记日志。
+ */
+describe("listing the app's tools as the person who just connected", () => {
+  test("asks once, after the connection is recorded, as the state's person", async () => {
+    const order: string[] = [];
+    const recorded: Recorded[] = [];
+    const hono = app({
+      recorded,
+      recordConnection: async (connection) => {
+        order.push(`record:${requireTenant()}`);
+        recorded.push(connection);
+      },
+      discoverToolsOnConnect: async (serverId, userId) => {
+        order.push(`discover:${serverId}:${userId}:${requireTenant()}`);
+        return { tools: 2 };
+      },
+    });
+    const state = await sealConnectState(
+      { userId: "user-1", serverId: "notion", verifier: "v-1" },
+      KEY,
+    );
+
+    await withWillingVendor(async () => {
+      const response = await runAsTenant("user-2", () =>
+        hono.request(callbackUrl(state)),
+      );
+      expect(response.headers.get("location")).toBe(
+        "https://app.example/settings/connected-accounts/notion",
+      );
+    });
+    expect(order).toEqual(["record:user-1", "discover:notion:user-1:user-1"]);
+  });
+
+  test("a listing that throws leaves the recorded connection a success, and is logged", async () => {
+    const recorded: Recorded[] = [];
+    const hono = app({
+      recorded,
+      discoverToolsOnConnect: async () => {
+        throw new Error("the vendor would not list");
+      },
+    });
+    const state = await sealConnectState(
+      { userId: "user-1", serverId: "notion", verifier: "v-1" },
+      KEY,
+    );
+    const said: string[] = [];
+    const realError = console.error;
+    console.error = (line: unknown) => {
+      said.push(String(line));
+    };
+    try {
+      await withWillingVendor(async () => {
+        const response = await hono.request(callbackUrl(state));
+        expect(response.headers.get("location")).toBe(
+          "https://app.example/settings/connected-accounts/notion",
+        );
+      });
+    } finally {
+      console.error = realError;
+    }
+    expect(recorded.map((connection) => connection.userId)).toEqual(["user-1"]);
+    expect(
+      said.find((line) => line.includes("oauth-connection-tools-not-listed")),
+    ).toBeDefined();
+  });
+
+  test("a connection that could not be recorded lists nothing", async () => {
+    const asked: string[] = [];
+    const hono = app({
+      recorded: [],
+      recordConnection: async () => {
+        throw new Error("the vault would not take it");
+      },
+      discoverToolsOnConnect: async (serverId) => {
+        asked.push(serverId);
+        return null;
+      },
+    });
+    const state = await sealConnectState(
+      { userId: "user-1", serverId: "notion", verifier: "v-1" },
+      KEY,
+    );
+    const realError = console.error;
+    console.error = () => {};
+    try {
+      await withWillingVendor(async () => {
+        const response = await hono.request(callbackUrl(state));
+        expect(response.headers.get("location")).toBe(FAILED);
+      });
+    } finally {
+      console.error = realError;
+    }
+    expect(asked).toEqual([]);
   });
 });

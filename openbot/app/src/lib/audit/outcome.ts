@@ -84,6 +84,14 @@ export const DID_NOT_HAPPEN_EVENT_TYPES = [
    * had been.
    */
   "component.function_failed",
+  /*
+   * A Connect that stopped because this deployment holds an OAuth client for the connector and could
+   * not read it: the vault read failed, or the key would not decrypt it. Nothing was refused, and no
+   * replacement was registered over the shared client, so nobody got connected. It is the row an
+   * administrator comes looking for when nobody can connect a connector, and drawn as "Allowed" it
+   * would say the opposite.
+   */
+  "mcp.oauth_client_read_failed",
 ] as const;
 
 export type AuditOutcome = "refused" | "did-not-happen" | "allowed";
