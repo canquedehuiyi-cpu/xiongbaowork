@@ -7,7 +7,7 @@ import {
   ToolMessage,
 } from "@langchain/core/messages";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
-import { COMPUTER_GUIDANCE } from "../../shared/bot-prompt";
+import { computerGuidance } from "../../shared/bot-prompt";
 import { NO_ANSWER_CAME, toLangChainMessages } from "../src/history";
 
 /**
@@ -25,6 +25,27 @@ import { NO_ANSWER_CAME, toLangChainMessages } from "../src/history";
  */
 const input = (messages: unknown[]): RunAgentInput =>
   ({ messages }) as unknown as RunAgentInput;
+
+describe("the computer guidance this Bot is given", () => {
+  // Decided by the tool names the run offers, the only view this Bot has of its grants.
+  const offered = (...names: string[]) =>
+    ({
+      messages: [{ id: "u1", role: "user", content: "Search for X." }],
+      tools: names.map((name) => ({ name, description: "", parameters: {} })),
+    }) as unknown as RunAgentInput;
+
+  test("leaves searching to a search tool the run offers", () => {
+    const [system] = toLangChainMessages(
+      offered("show_app_access", "mcp__parallel__web_search"),
+    );
+    expect(String(system?.content)).toBe(computerGuidance({ search: true }));
+  });
+
+  test("never searches in the browser when no search tool is offered", () => {
+    const [system] = toLangChainMessages(offered("show_app_access"));
+    expect(String(system?.content)).toBe(computerGuidance({ search: false }));
+  });
+});
 
 const assistantAsking = {
   role: "assistant",
@@ -144,6 +165,37 @@ describe("history with a tool call nobody answered", () => {
 });
 
 /**
+ * A tool result is not guaranteed to arrive after the call it belongs to.
+ *
+ * Read back from the durable thread store it arrives the other way round, result first, which is a
+ * payload no provider accepts: a tool message with no preceding call, and then a call with nothing
+ * following it. The model answers that with silence rather than an error. The shape below is the one
+ * the sibling adapter's own test was written from; this adapter had the same gap.
+ */
+describe("a history that arrives out of order", () => {
+  test("pairs each call with its result, whatever order they arrived in", () => {
+    const messages = toLangChainMessages(
+      input([
+        { role: "user", content: "What is in the PRD?" },
+        { role: "tool", toolCallId: "call_1", content: "the document text" },
+        assistantAsking,
+      ]),
+    );
+
+    const asked = messages.findIndex((message) => message instanceof AIMessage);
+    expect(messages[asked + 1]).toBeInstanceOf(ToolMessage);
+    const answer = messages[asked + 1] as ToolMessage;
+    expect(answer.tool_call_id).toBe("call_1");
+    expect(String(answer.content)).toBe("the document text");
+
+    // The result is not also left where it arrived: no tool message precedes the call it belongs to.
+    expect(
+      messages.findIndex((message) => message instanceof ToolMessage),
+    ).toBe(asked + 1);
+  });
+});
+
+/**
  * A message somebody attached a file to.
  *
  * The composer sends it as a list of parts rather than a string: what the person typed, then the
@@ -242,7 +294,7 @@ describe("a provider that takes one system prompt", () => {
       expect(system).toHaveLength(1);
       expect(messages[0]).toBe(system[0] as SystemMessage);
       const prompt = String(system[0]?.content);
-      expect(prompt.startsWith(COMPUTER_GUIDANCE)).toBe(true);
+      expect(prompt.startsWith(computerGuidance({ search: false }))).toBe(true);
       const at = instructions.map((text) => prompt.indexOf(text));
       expect(at.every((index) => index > 0)).toBe(true);
       expect(at).toEqual([...at].sort((a, b) => a - b));

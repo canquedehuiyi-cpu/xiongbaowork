@@ -94,7 +94,7 @@ describe("a provider's refusal becomes a readable RUN_ERROR", () => {
     );
     expect(billing.errored).toBeUndefined();
     expect(
-      (billing.events[billing.events.length - 1] as { message: string })
+      (billing.events[billing.events.length - 1] as unknown as { message: string })
         .message,
     ).toContain("余额");
 
@@ -104,7 +104,7 @@ describe("a provider's refusal becomes a readable RUN_ERROR", () => {
       ),
     );
     expect(
-      (limited.events[limited.events.length - 1] as { message: string })
+      (limited.events[limited.events.length - 1] as unknown as { message: string })
         .message,
     ).toContain("限流");
   });
@@ -121,7 +121,7 @@ describe("a provider's refusal becomes a readable RUN_ERROR", () => {
         ),
       ),
     );
-    const message = (events[events.length - 1] as { message: string }).message;
+    const message = (events[events.length - 1] as unknown as { message: string }).message;
     // The card carries this into the board, and the transcript into a person's window — neither wants
     // a four-kilobyte blob, and least of all one that might contain the deployment's own credential.
     expect(Array.from(message).length).toBeLessThanOrEqual(600);
@@ -154,7 +154,7 @@ describe("a provider's refusal becomes a readable RUN_ERROR", () => {
     const wrapper = new Error("agent run failed");
     Object.assign(wrapper, { cause: inner });
     const { events } = await drain(providerFailureAsRunError(failing(wrapper)));
-    const refusal = events[events.length - 1] as {
+    const refusal = events[events.length - 1] as unknown as {
       message: string;
       code: string;
     };

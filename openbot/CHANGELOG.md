@@ -28,6 +28,110 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   通稿（Business Wire）不再被当成电汇，留空的字段不再触发安全规则，地址查询串里的 `access_token=` 之类
   不再让普通页面变成凭据页，Bot 在输入框里打的字按输入框和页面判定、不按内容判定。From upstream #904、
   #930、#998、#1015、#1109、#1175。
+- **Merged upstream OpenBot up to v1.0.0** (`ac9c16f7`; `UPSTREAM.md` records what was taken and
+  what was not). The interface keeps this fork's screens; upstream's new screens come in the next
+  phase. What a deployment notices:
+  - OpenBot runs on CopilotKit 1.85.0 (`@copilotkit/runtime`; the browser stays on 1.77 until the
+    interface phase). Behind an `OPENAI_BASE_URL` that is not OpenAI or Azure, the built-in Bots
+    reach most `openai/...` models through Chat Completions; a gateway that serves only the
+    Responses API needs `COPILOTKIT_OPENAI_API=responses`.
+  - The Recorder ("teach a Bot"): migration `0162_recorder_extension` adds Recorder connections,
+    connect codes and recording ownership, a person's own learning space, open skills and sharing,
+    each person's rows with `tenant_id` and row security. `OPENBOT_RECORDER_EXTRA_EXTENSION_IDS`
+    trusts other Recorder builds: each 32 letters from a to p, comma separated; any other value
+    stops the server at boot. Upstream connects it from Settings → Browsers, which arrives with the
+    interface phase. Upstream's Recorder replaces the old demonstration recording, whose server
+    routes are gone.
+  - Check-ins (a Bot looking through what you connected, hourly) with their own ledger
+    (`proactive_check_in_runs`, upstream's `proactive_runs` renamed because this fork already has
+    one) and the tasks they start (`/api/bot-tasks`; `/api/tasks` stays the task board). A check-in
+    files a board card and counts against the month's tasks only when it raised something; a quiet
+    one leaves no card, and a person at the month's ceiling is not checked in for (skipped as
+    `quota`).
+  - A Bot can have a computer of its own (`agent_profiles.isolated`); a goal can repeat; a routine
+    has a title and records the goal it runs, and a Bot asked for a goal in a conversation makes one;
+    a conversation can pick the built-in Bot's model; Microsoft Entra sign-in, tenant-isolated.
+  - Not taken (decided with the plugins session): Arcade, owner app grants, shared use and shared
+    or multiple accounts, the personal edition's always-on apps, and per-viewer app state in a
+    Bot's instructions.
+  - Built-in Bots are told again that OpenBot asks before the actions its approval floors cover,
+    so they do not ask first: in Chinese, worded for this deployment's floors (deleting, sending,
+    sharing and publishing in connected apps, the matching buttons and a keyboard send on web pages),
+    with the connected-app part only for a Bot that holds an app's tool. Payments, purchases and
+    password or security changes are left to the person. Remote Bots are not told. A tool its app
+    marks destructive says on itself that OpenBot asks before it runs.
+  - A Bot that holds a browser is told how to search the public web with it (Baidu, then Bing), and
+    its computer guidance no longer forbids a search engine in that case; a check-in is given no
+    computer guidance at all.
+- **Merged upstream OpenBot up to `6fb38c8b`** (#784; `UPSTREAM.md` records what was taken and
+  what was not). What a deployment notices:
+  - **Before upgrading.** Migrations `0146_mcp_tools_unclassified` (shared with the plugin work) and
+    `0147_learning` (R0's `0146_learning`, renumbered) come first, then `0155_identity_links`,
+    `0156_memory_on_intelligence`, `0157_default_opt_outs` and `0158_sign_in_code_step`. The two new per-person tables (`identity_links`, `identity_link_challenges`) and
+    `default_opt_outs` carry `tenant_id` with row security, like every other tenant table. A server
+    and a computer must be upgraded together: an older computer has no `/sign-in/code`. A hosted
+    computer's browser is now headed by default (`COMPUTER_BROWSER_MODE=headless` keeps the old one).
+  - People can link their Slack account (a one-time code sent to the app in a direct message) and
+    their GitHub account (`GITHUB_APP_CLIENT_ID`/`GITHUB_APP_CLIENT_SECRET`) under
+    **设置 → 已连接的账号**. One outside account belongs to one person across the deployment;
+    removing a person retires their links.
+  - Memory sources and background research switch on by default for a person and a Bot once the
+    person talks to that Bot alone (research every four hours, read-only, so expect its model use);
+    a removal is remembered and never undone. `OPENBOT_MEMORY_SOURCE_DEFAULTS=false` and
+    `OPENBOT_PROACTIVE_DEFAULTS=false` stop it.
+  - With Intelligence connected (`INTELLIGENCE_API_KEY`, optional as before): people's reviewed
+    memories are mirrored into it when the deployment is entitled to Intelligence memory; Automatic
+    Learning assigns the project's `openbot` container when nothing is saved
+    (`OPENBOT_LEARNING_AUTO_ASSIGN=false` prevents it), and can create it with
+    `INTELLIGENCE_SERVICE_TOKEN` + `INTELLIGENCE_PROJECT_ID` or a CopilotKit CLI login. Either half of
+    that pair without the API key is refused at boot as half-configured.
+  - A private sign-in asks for the password first and for a verification code only when the site
+    sends one. The waiting card in the open chat offers the sign-in form as soon as the request
+    exists.
+  - Administrators can export the audit trail as CSV (capped at 5,000 rows, and the page says when
+    it stopped early); the export is itself an audit row.
+  - Headless turns (routines, responsibilities, research, wake-ups, group turns, hand-offs) only stop
+    on a lost lock when the platform says the conversation belongs to another run, or when renewals
+    have failed for the lock's whole lifetime; a network blip rides through. A hand-off checks the
+    pause guard and "Use Bots" before it takes the lock.
+  - At boot the server says whether its key can call the configured model, and whether a connected
+    Intelligence will let this deployment use memory.
+
+- **Automatic Learning is back, as an option.** Set `INTELLIGENCE_API_KEY` (and, for a
+  self-hosted CopilotKit Intelligence, `INTELLIGENCE_API_URL` and `COPILOTKIT_LICENSE_TOKEN`) and
+  **Admin → 自动学习** chooses a default learning container and which coworkers take part; each run
+  then loads the skills published in Intelligence (built-in coworkers get the catalog and the
+  reader tools, remote ones a verified snapshot). Without the key nothing changes, and the admin
+  page says Intelligence is not connected. A URL or licence set without the key is refused at boot
+  as half-configured. Conversations stay in this deployment's PostgreSQL, so they are **not** sent
+  to Intelligence as learning evidence: skills are produced and published in Intelligence itself.
+  Migration `0154_learning` recreates `learning_settings` (deployment-wide) and
+  `learning_thread_bindings` (per person, with `tenant_id` and row security). The self-host bar
+  also hides itself for a deployment that pays for a connected Intelligence.
+
+- **Merged upstream OpenBot 0.1.1 and 0.1.2** (CopilotKit/openbot `63f99cf` → `bbd882c8`; the
+  synced point is recorded in `UPSTREAM.md`). What a deployment notices:
+  - CopilotKit 1.77.0 (`@copilotkit/runtime`, `react-core`, `a2ui-renderer`, from 1.73.1) and AG-UI
+    1.0 (`@ag-ui/core` and `@ag-ui/client` 1.0.1, from 0.0.59). Bots on their own endpoint keep
+    working; a tool result's `error` field is gone from `TOOL_CALL_RESULT` (the refusal stays in the
+    result's text).
+  - A message that addresses a coworker by its full name — opening with it, `@`-naming it, or "ask
+    <name> to …" — is routed straight to that coworker without a model call, recorded as
+    `viaNameMatch: true`. Two coworkers addressed, or two sharing the name, is refused with distinct
+    labels and the composer keeps the draft. With no name in the message, the default is still the
+    asker's own 分身 first.
+  - `?sslmode=require` on `DATABASE_URL` turns TLS on instead of being sent to Postgres;
+    `verify-full` checks the certificate on Bun 1.4+; `verify-ca`, `prefer` and `allow` are refused.
+  - A Bot's computer refuses the metadata address written through the NAT64 prefix
+    (`64:ff9b::a9fe:a9fe`); its browser refuses names under `.localhost`; `curl -uuser:pass`,
+    `--user=` and JSON `"password"` fields are redacted from recorded shell commands;
+    `OPENBOT_SINGLE_USER` is refused for a public name that merely starts with `127.`.
+  - A conversation title is no longer cut inside an emoji; the LangGraph Bot pairs a tool result with
+    the call it answers when the store returns them out of order.
+  - Every surface now builds a Bot through one resolver (`agents/agent-resolver.ts`) — chat, hop
+    delivery and headless turns — so they cannot hold different tools, grants, model binding or
+    role. Built-in Bots are told how the computer tools go together whenever the deployment has a
+    computer to drive, a paired device included, on the chat path as well as headless.
 - **Composio apps are listed again once after an upgrade.** An app's actions that Composio gives no
   read-only, destructive, create or update label are now recorded as unclassified, as a fresh
   install records them, where an upgraded install had kept them as plain writes. Migration 0152
@@ -63,6 +167,31 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   `GMAIL_REPLY_TO_THREAD` address people as `recipient_email` and `extra_recipients`, which were not
   read, so an "always allow" for one email covered every later email to anybody. The audience is now
   the recipients. From upstream #943.
+
+- **Merged upstream OpenBot `6fb38c8b` → v1.0.0** (server side; the web app keeps 熊宝's interface,
+  upstream's new screens follow in the next phase; `UPSTREAM.md` records what was taken and what was
+  not). What a deployment notices:
+  - CopilotKit Intelligence stays **optional**: threads stay in this deployment's PostgreSQL and
+    `INTELLIGENCE_API_KEY` (or `CPK_INTELLIGENCE_API_KEY`, which the CLI writes) only adds 自动学习's
+    skill delivery. Upstream's chart now bundles a self-hosted Intelligence; here it is
+    `intelligence.enabled: false` by default and needs `secrets.licenseToken` when turned on. An
+    install with no Intelligence is not refused. A release upgraded with `--reuse-values` from an
+    earlier chart is refused by name until it says `--set intelligence.enabled=false`.
+  - The chart: with the bundled database it generates and keeps the key encryption key, the computer
+    token, the database password and the routines worker's secret; the API and the scheduled Jobs
+    wait in a `wait-for-database` init container until the database holds every migration; pods roll
+    when a value under `secrets` changes; `config.model.*` sets `BOT_PROVIDER`, `BOT_MODEL` and the
+    provider base URLs. The bundled database still needs `OPENBOT_RLS_ENFORCE` named in
+    `config.extraEnv`.
+  - The image: `/app` is root's and not writable by a Bot's shell; `sudo openbot-apt` installs
+    packages and nothing else; s6 downloads are checksummed (with this fork's longer retries).
+  - A Bot's commands on a hosted computer run in one live terminal a person can watch and take over.
+    On Windows, and wherever a caller asks, a command still runs in a shell of its own (PowerShell on
+    Windows), as before.
+  - `OPENBOT_PROACTIVE_DEFAULTS` now defaults **off**: a Bot offers a check-in in the conversation
+    instead of switching on hourly research; `true` brings the old default back.
+  - An answer from a Bot asked by another lands in the asking conversation under the answering
+    Bot's name. Development and the images move to Bun 1.4.
 
 ## 0.2.5
 
@@ -421,6 +550,60 @@ that image; the 0.2.4 entries written at release time follow them.
   the connection before reporting the refusal. The unread body could be as large as the whole
   download budget, so a computer reached through a proxy that re-chunks left a transfer running and a
   connection checked out of the pool on every attempt.
+
+
+
+- A conversation title cut at 60 characters no longer ends in half an emoji. `slice` counts UTF-16
+  code units and an emoji is two of them, so a title cut between the halves rendered a replacement
+  character in the sidebar and the picker, where the character itself should have been.
+
+- A tool result that arrives before the call it answers is now paired with that call by the LangGraph
+  Bot, as the sibling Bots already did. Read back from the durable thread store the result arrives
+  first, which is a payload no provider accepts: a tool message with no preceding call, then a call
+  with nothing following it. The model answers that with silence rather than an error, so the Bot
+  stopped responding for the rest of the conversation.
+
+- Pressing Stop now stops the computer even when the desktop worker never collects the instruction.
+  A stop was queued with no timeout and the worker was the only thing that could ever remove it, so a
+  worker that stopped polling left the entry in memory for the life of the process and the Host
+  access panel showed an operation that could never finish, growing by one per press. Pressing Stop a
+  second time also withdrew the first Stop before the desktop could collect it, and rejected a request
+  that nobody was waiting for, which the server treats as fatal. A desktop that reconnects within the
+  operation timeout is still told to stop.
+
+### A computer refuses the cloud metadata address written through the NAT64 prefix
+
+A Bot's computer is now refused the cloud metadata address when it is written through the NAT64
+prefix (`64:ff9b::a9fe:a9fe` is 169.254.169.254), under every network policy including allow-all.
+Only the plain and IPv4-mapped spellings were refused, so on a network with a NAT64 gateway the
+metadata endpoint was one rewrite away. Browsing already refused this spelling; the computer's
+filter now agrees.
+
+### `?sslmode=require` on `DATABASE_URL` now connects to a managed database
+
+A deployment pointed at RDS, Cloud SQL or Azure Database could not start. The server sent
+`sslmode` to Postgres as a connection parameter instead of turning TLS on, so the connection went
+out unencrypted and was refused with `no pg_hba.conf entry for host ... no encryption`, the very
+error the Helm chart's README says `?sslmode=require` avoids. Migrations were unaffected, which is
+why a deployment got as far as a migrated database and then crash-looped. `sslmode=require` now
+encrypts the connection, and `sslmode=disable` turns TLS off. `sslmode=verify-full`, with an
+optional `sslrootcert`, checks the certificate on Bun 1.4 and later and is refused on Bun 1.3,
+which connects to any certificate. `verify-ca`, `prefer` and `allow` are refused with a message
+naming the modes that work.
+
+### A coworker the message speaks to is routed to without asking a model
+
+Addressing a coworker by name went to the intent router like any other message, so the deployment
+paid a model call to be told what the person had already said, and sometimes was told something
+else. A message that speaks to a coworker by its full name now routes straight to them: it opens
+with the name ("Risk Analyst, please check this"), names it with `@`, or asks it ("ask Risk Analyst
+to review this"). It is recorded as `matched a coworker’s name in the message` with
+`viaNameMatch: true` on the same `channel.routed` row. A name in passing ("don't send this to Risk
+Analyst") and a word that only ends a name ("review this contract", "my meeting notes") still go
+to the router. When the message addresses more than one coworker, or two share the addressed name,
+it is refused with distinct labels, and the composer keeps the draft and asks the person to choose
+instead of starting the default coworker. Explicit picker choices still use `viaMention: true`.
+
 ### A Bot's turn in a group is no longer offered coordination tools it cannot call
 
 A Bot answering another Bot in a group conversation was offered `ask_person`, and `message_bot`

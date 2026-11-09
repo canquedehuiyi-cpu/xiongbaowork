@@ -5,7 +5,7 @@
  * too (a check-in may only read, there as well as in `restriction.ts`) without depending on the
  * rest of the check-in code.
  */
-import type { AuditInitiator } from "../audit";
+import type { AuditInitiator } from "@openbot/toolkit/initiator";
 
 export const PROACTIVE_INITIATOR_PREFIX = "proactive:";
 

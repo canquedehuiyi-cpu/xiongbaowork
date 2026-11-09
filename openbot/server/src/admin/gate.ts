@@ -17,7 +17,7 @@ import { agents } from "../db/schema";
 import { boundModelName } from "../models/runtime-resolver";
 import { currentTenant, isTenantFramed, runAsTenant } from "../tenant/context";
 import { type Capability, capabilityRefusal } from "./capabilities";
-import { enterpriseControls } from "./controls";
+import { builtInModelFor, enterpriseControls } from "./controls";
 
 type Ctx = Context<{ Variables: AppVariables }>;
 
@@ -86,6 +86,12 @@ export const GATED_ROUTES: Rule[] = [
   {
     method: "POST",
     path: /^\/api\/agents\/[^/]+\/duplicate$/,
+    needs: async () => ["useBots"],
+  },
+  // Picking the model a Bot answers on is part of using Bots.
+  {
+    method: "PUT",
+    path: /^\/api\/channels\/[^/]+\/model$/,
     needs: async () => ["useBots"],
   },
   {
@@ -273,8 +279,10 @@ async function governRun(
   const allowlist = controls.snapshot()?.settings.modelAllowlist;
   const isAllowed = (model: string) =>
     !allowlist?.enabled || allowlist.models.includes(model);
+  // A built-in Bot answers on the model bound to it, else on the person's pick for this
+  // conversation, else on the deployment's.
   const configured = builtIn
-    ? (bound ?? controls.deps.builtInModel)
+    ? (bound ?? (await builtInModelFor(controls.deps, actor.id, threadId)))
     : undefined;
   const configuredSource: "configured" | "bound" = bound
     ? "bound"
@@ -315,7 +323,7 @@ async function governRun(
     }).catch(() => undefined);
     return context.json(
       {
-        error: `This Bot runs on ${configured}, which is not on this deployment's model allowlist. An administrator can add it.`,
+        error: `This Bot uses ${configured}, which isn't an allowed model. Ask an admin to allow it.`,
       },
       403,
     );

@@ -91,3 +91,7 @@ describe("what a jsonb column actually stores", () => {
     expect(row?.strings).toBe(0);
   });
 });
+
+afterAll(async () => {
+  await database.$client.close();
+});

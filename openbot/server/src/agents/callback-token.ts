@@ -229,7 +229,30 @@ function readInitiator(value: unknown): AuditInitiator {
   )
     return PERSON_INITIATOR;
   const id = (value as { id?: unknown }).id;
-  return typeof id === "string" && id ? { kind, id } : PERSON_INITIATOR;
+  if (typeof id !== "string" || !id) return PERSON_INITIATOR;
+  if (kind === "handoff") {
+    const origin = readOrigin((value as { origin?: unknown }).origin);
+    return origin ? { kind, id, origin } : { kind, id };
+  }
+  return { kind, id };
+}
+
+/**
+ * Where a hop's run started, read STRICTLY.
+ *
+ * `readInitiator` turns anything it cannot read into a person, which is right for the Audit screen
+ * and wrong here: an origin decides whether outside input is steering a run, and "unreadable" read as
+ * "a person" would hide exactly that. Unreadable is `undefined`, and a hop with no origin is refused
+ * wherever one is needed.
+ */
+export function readOrigin(value: unknown): AuditInitiator | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const kind = (value as { kind?: unknown }).kind;
+  if (kind === "person" || kind === "deployment") return { kind };
+  if (kind !== "routine" && kind !== "responsibility" && kind !== "memory")
+    return undefined;
+  const id = (value as { id?: unknown }).id;
+  return typeof id === "string" && id ? { kind, id } : undefined;
 }
 
 /**

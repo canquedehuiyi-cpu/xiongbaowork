@@ -2,7 +2,7 @@ import { afterAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
-import type { AppVariables } from "../src/app-variables";
+import type { AppVariables } from "../src/auth/guards";
 import { createDatabase } from "../src/db/client";
 import {
   agents,
@@ -44,7 +44,7 @@ const stranger = `rc-stranger-${suite}`;
 const mine = `${suite}-my-bot`;
 const theirs = `${suite}-their-bot`;
 
-const actor = { id: tenant, role: "user" as const };
+const actor = { id: tenant, email: `${tenant}@example.test`, role: "user" as const };
 const requireUser: MiddlewareHandler<{ Variables: AppVariables }> = async (
   context,
   next,
@@ -59,6 +59,19 @@ const canUseBot = async (who: { id: string }, agentId: string) =>
 
 const routes = createRoutineRoutes(store, requireUser, { canUseBot });
 
+/** What the route answers: the routine it made, or a refusal. Null when the body is not JSON. */
+type Answer = {
+  error?: string;
+  routine: {
+    id: string;
+    instruction: string;
+    schedule: string;
+    channel: { id: string };
+    nextRunAt: string;
+    enabled: boolean;
+  };
+};
+
 async function post(body: Record<string, unknown>) {
   return runAsTenant(tenant, async () => {
     const response = await routes.request(
@@ -71,13 +84,13 @@ async function post(body: Record<string, unknown>) {
     const text = await response.text();
     // A route that is not mounted answers with Hono's plain "404 Not Found", and the assertion worth
     // making is about the status — so an unparseable body reads as null rather than as a syntax error.
-    let parsed: Record<string, unknown> | null = null;
+    let parsed: Answer | null = null;
     try {
       parsed = text ? JSON.parse(text) : null;
     } catch {
       parsed = null;
     }
-    return { status: response.status, body: parsed };
+    return { status: response.status, body: parsed as Answer };
   });
 }
 

@@ -1,8 +1,15 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
+import { connectAppRefusal } from "@openbot/shared/connect-prompt";
+import {
+  and,
+  eq,
+  inArray,
+  like,
+} from "drizzle-orm";
+import { createBotReset } from "../src/agents/lifecycle-reset";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { and, eq, inArray, like } from "drizzle-orm";
 import { createAuditStore } from "../src/audit";
 import { createCredentialStore } from "../src/credentials";
 import { createDatabase } from "../src/db/client";
@@ -13,7 +20,10 @@ import { mcpServers, mcpTools } from "../src/db/schema/plugins";
 import { createMemoryIngestion } from "../src/memory/ingestion";
 import { createMemoryStore } from "../src/memory/store";
 import { MemoryNotFoundError, MemoryRefusedError } from "../src/memory/types";
-import { createPluginStore } from "../src/plugins/store";
+import {
+  createPluginStore,
+  PluginRefusedError,
+} from "../src/plugins/store";
 import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
@@ -36,6 +46,8 @@ const asOther = <T>(fn: () => Promise<T>) => runAsTenant(other, fn);
 let vendorText =
   '[{"id":"doc1","text":"Project launch is Tuesday","title":"Roadmap"}]';
 let vendorError = false;
+/** Thrown by the vendor instead of answering, when set: how a refused call reaches a sync. */
+let vendorThrows: Error | null = null;
 const calls: { actorId?: string; botId?: string }[] = [];
 const plugins = createPluginStore({
   database,
@@ -45,6 +57,7 @@ const plugins = createPluginStore({
   policy: () => ({ mode: "enforce", deny: [], allow: ["true"] }),
   callVendor: async (connection) => {
     calls.push(connection);
+    if (vendorThrows) throw vendorThrows;
     return { text: vendorText, isError: vendorError };
   },
 });
@@ -119,6 +132,7 @@ beforeAll(async () => {
     await plugins.grant("mcp", ref, bot, owner);
     await plugins.grant("mcp", `${server}/write_document`, bot, owner);
   });
+
 });
 afterAll(async () => {
   await runAsTenant("platform", async () => {
@@ -300,6 +314,32 @@ test("vendor failure hides stale source facts and records a visible error", () =
     expect((await store.getSource(owner, value.id)).syncStatus).toBe("error");
     vendorError = false;
   }));
+test("a refusal carrying an app card is said for the sources page, not stored raw", () =>
+  asOwner(async () => {
+    const value = await source();
+    vendorThrows = new PluginRefusedError(
+      connectAppRefusal({
+        serverId: server,
+        title: "Docs",
+        message:
+          "Your Docs account is no longer connected at the vendor. Reconnect it and ask again.",
+        reason: "reconnect",
+      }),
+      null,
+    );
+    try {
+      await expect(ingestion.sync(owner, value.id)).rejects.toBeInstanceOf(
+        PluginRefusedError,
+      );
+      const { syncError } = await store.getSource(owner, value.id);
+      expect(syncError).toBe(
+        "Your Docs account needs reconnecting. Reconnect it under Connections, then sync again.",
+      );
+      expect(syncError).not.toContain("[connect-app]");
+    } finally {
+      vendorThrows = null;
+    }
+  }));
 test("source leases prevent competing connector calls", () =>
   asOwner(async () => {
     const value = await source();
@@ -422,121 +462,227 @@ test("the same fact formed at once by two runs is stored once", () =>
  * have FORCE RLS, so this runs the file itself as this NOBYPASSRLS role from the empty frame a
  * migrator arrives with, inside a transaction that is rolled back so no other test's rows move.
  */
-test("migration 0115 restamps routines, sources, their imported facts and responsibilities of nobody's to their owner, and only those", async () => {
-  const migration = readFileSync(
-    join(
-      import.meta.dir,
-      "..",
-      "recovery",
-      "recovery-20261018-v1",
-      "sql",
-      "0115_routine_memory_owner_tenant.sql",
-    ),
-    "utf8",
-  );
-  const realm = `${prefix}-0115`;
-  // Nobody's three ways, and one stamped with a person who is not the owner: a conflict, not a legacy default.
-  const stamps = ["system", "platform", "", other];
-  const rollback = new Error("rollback the migration fixture");
-  let seen:
-    | {
-        frame: unknown;
-        routines: unknown[];
-        sources: unknown[];
-        memories: unknown[];
-        responsibilities: unknown[];
-        triggers: unknown[];
-      }
-    | undefined;
-  await expect(
-    database.$client.begin(async (tx) => {
-      await tx`select set_config('app.tenant_id', 'platform', true)`;
-      for (const [index, stamp] of stamps.entries()) {
-        await tx`insert into routines (tenant_id, id, owner_user_id, agent_id, channel_id, instruction, cron, next_run_at) values (${stamp}, ${`${realm}-routine-${index}`}, ${owner}, ${bot}, ${`${realm}-channel`}, 'Summarise', '0 9 * * *', now())`;
-        await tx`insert into memory_sources (tenant_id, id, owner_user_id, agent_id, tool_ref, title) values (${stamp}, ${`${realm}-source-${index}`}, ${owner}, ${bot}, ${ref}, 'Project files')`;
-        await tx`insert into responsibilities (tenant_id, id, owner_user_id, agent_id, channel_id, thread_id, title, instruction, success_criteria) values (${stamp}, ${`${realm}-goal-${index}`}, ${owner}, ${bot}, ${`${realm}-channel`}, ${`${realm}-thread`}, 'Triage', 'Triage new issues', 'Every issue labelled')`;
-        await tx`insert into responsibility_triggers (tenant_id, id, owner_user_id, responsibility_id, kind, config) values (${stamp}, ${`${realm}-trigger-${index}`}, ${owner}, ${`${realm}-goal-${index}`}, 'slack', ${JSON.stringify({ kind: "slack", teamId: "T0115", events: ["message"] })}::jsonb)`;
-        // Every imported fact was written as nobody's, whatever its source carries now.
-        await tx`insert into personal_memories (tenant_id, id, owner_user_id, source_id, external_id, content, provenance, formed_by) values ('system', ${`${realm}-memory-${index}`}, ${owner}, ${`${realm}-source-${index}`}, 'doc1', 'Imported fact', 'Project files: doc1', 'import')`;
-      }
-      // A fact with no source is not the migration's to move.
-      await tx`insert into personal_memories (tenant_id, id, owner_user_id, content, provenance) values ('system', ${`${realm}-memory-free`}, ${owner}, 'A fact of nobody', 'person')`;
-      await tx`select set_config('app.tenant_id', '', true)`;
-      await tx.unsafe(migration);
-      const [frame] =
-        await tx`select current_setting('app.tenant_id', true) as tenant`;
-      await tx`select set_config('app.tenant_id', 'platform', true)`;
-      const routineRows =
-        await tx`select id, tenant_id from routines where id like ${`${realm}-%`} order by id`;
-      const sourceRows =
-        await tx`select id, tenant_id from memory_sources where id like ${`${realm}-%`} order by id`;
-      const memoryRows =
-        await tx`select id, tenant_id from personal_memories where id like ${`${realm}-%`} order by id`;
-      const responsibilityRows =
-        await tx`select id, tenant_id from responsibilities where id like ${`${realm}-%`} order by id`;
-      const triggerRows =
-        await tx`select id, tenant_id from responsibility_triggers where id like ${`${realm}-%`} order by id`;
-      seen = {
-        frame: (frame as { tenant: unknown }).tenant,
-        routines: Array.from(routineRows as ArrayLike<unknown>),
-        sources: Array.from(sourceRows as ArrayLike<unknown>),
-        memories: Array.from(memoryRows as ArrayLike<unknown>),
-        responsibilities: Array.from(responsibilityRows as ArrayLike<unknown>),
-        triggers: Array.from(triggerRows as ArrayLike<unknown>),
-      };
-      throw rollback;
-    }),
-  ).rejects.toBe(rollback);
-  // The frame the migration found is the frame it leaves, so a later migration in the same run does not inherit `platform`.
-  expect(seen?.frame).toBe("");
-  expect(seen?.routines).toEqual([
-    { id: `${realm}-routine-0`, tenant_id: owner },
-    { id: `${realm}-routine-1`, tenant_id: owner },
-    { id: `${realm}-routine-2`, tenant_id: owner },
-    { id: `${realm}-routine-3`, tenant_id: other },
-  ]);
-  expect(seen?.sources).toEqual([
-    { id: `${realm}-source-0`, tenant_id: owner },
-    { id: `${realm}-source-1`, tenant_id: owner },
-    { id: `${realm}-source-2`, tenant_id: owner },
-    { id: `${realm}-source-3`, tenant_id: other },
-  ]);
-  // Facts follow a source that is now its owner's; under the conflicting source, or with no source, they stay.
-  expect(seen?.memories).toEqual([
-    { id: `${realm}-memory-0`, tenant_id: owner },
-    { id: `${realm}-memory-1`, tenant_id: owner },
-    { id: `${realm}-memory-2`, tenant_id: owner },
-    { id: `${realm}-memory-3`, tenant_id: "system" },
-    { id: `${realm}-memory-free`, tenant_id: "system" },
-  ]);
-  // A Slack trigger of nobody's is refused from G01-B4 on, and its responsibility is locked in the owner's frame.
-  expect(seen?.responsibilities).toEqual([
-    { id: `${realm}-goal-0`, tenant_id: owner },
-    { id: `${realm}-goal-1`, tenant_id: owner },
-    { id: `${realm}-goal-2`, tenant_id: owner },
-    { id: `${realm}-goal-3`, tenant_id: other },
-  ]);
-  expect(seen?.triggers).toEqual([
-    { id: `${realm}-trigger-0`, tenant_id: owner },
-    { id: `${realm}-trigger-1`, tenant_id: owner },
-    { id: `${realm}-trigger-2`, tenant_id: owner },
-    { id: `${realm}-trigger-3`, tenant_id: other },
-  ]);
-  // Rolled back: nothing of the fixture is left for anybody.
-  expect(
-    await runAsTenant("platform", () =>
-      database
-        .select({ id: routines.id })
-        .from(routines)
-        .where(like(routines.id, `${realm}-%`)),
-    ),
-  ).toEqual([]);
-  expect(
-    await runAsTenant("platform", () =>
-      database
-        .select({ id: memorySources.id })
-        .from(memorySources)
-        .where(like(memorySources.id, `${realm}-%`)),
-    ),
-  ).toEqual([]);
-});
+test("migration 0115 restamps routines, sources, their imported facts and responsibilities of nobody's to their owner, and only those", () =>
+  asOwner(async () => {
+    const migration = readFileSync(
+      join(
+        import.meta.dir,
+        "..",
+        "recovery",
+        "recovery-20261018-v1",
+        "sql",
+        "0115_routine_memory_owner_tenant.sql",
+      ),
+      "utf8",
+    );
+    const realm = `${prefix}-0115`;
+    // Nobody's three ways, and one stamped with a person who is not the owner: a conflict, not a legacy default.
+    const stamps = ["system", "platform", "", other];
+    const rollback = new Error("rollback the migration fixture");
+    let seen:
+      | {
+          frame: unknown;
+          routines: unknown[];
+          sources: unknown[];
+          memories: unknown[];
+          responsibilities: unknown[];
+          triggers: unknown[];
+        }
+      | undefined;
+    await expect(
+      database.$client.begin(async (tx) => {
+        await tx`select set_config('app.tenant_id', 'platform', true)`;
+        for (const [index, stamp] of stamps.entries()) {
+          await tx`insert into routines (tenant_id, id, owner_user_id, agent_id, channel_id, instruction, cron, next_run_at) values (${stamp}, ${`${realm}-routine-${index}`}, ${owner}, ${bot}, ${`${realm}-channel`}, 'Summarise', '0 9 * * *', now())`;
+          await tx`insert into memory_sources (tenant_id, id, owner_user_id, agent_id, tool_ref, title) values (${stamp}, ${`${realm}-source-${index}`}, ${owner}, ${bot}, ${ref}, 'Project files')`;
+          await tx`insert into responsibilities (tenant_id, id, owner_user_id, agent_id, channel_id, thread_id, title, instruction, success_criteria) values (${stamp}, ${`${realm}-goal-${index}`}, ${owner}, ${bot}, ${`${realm}-channel`}, ${`${realm}-thread`}, 'Triage', 'Triage new issues', 'Every issue labelled')`;
+          await tx`insert into responsibility_triggers (tenant_id, id, owner_user_id, responsibility_id, kind, config) values (${stamp}, ${`${realm}-trigger-${index}`}, ${owner}, ${`${realm}-goal-${index}`}, 'slack', ${JSON.stringify({ kind: "slack", teamId: "T0115", events: ["message"] })}::jsonb)`;
+          // Every imported fact was written as nobody's, whatever its source carries now.
+          await tx`insert into personal_memories (tenant_id, id, owner_user_id, source_id, external_id, content, provenance, formed_by) values ('system', ${`${realm}-memory-${index}`}, ${owner}, ${`${realm}-source-${index}`}, 'doc1', 'Imported fact', 'Project files: doc1', 'import')`;
+        }
+        // A fact with no source is not the migration's to move.
+        await tx`insert into personal_memories (tenant_id, id, owner_user_id, content, provenance) values ('system', ${`${realm}-memory-free`}, ${owner}, 'A fact of nobody', 'person')`;
+        await tx`select set_config('app.tenant_id', '', true)`;
+        await tx.unsafe(migration);
+        const [frame] =
+          await tx`select current_setting('app.tenant_id', true) as tenant`;
+        await tx`select set_config('app.tenant_id', 'platform', true)`;
+        const routineRows =
+          await tx`select id, tenant_id from routines where id like ${`${realm}-%`} order by id`;
+        const sourceRows =
+          await tx`select id, tenant_id from memory_sources where id like ${`${realm}-%`} order by id`;
+        const memoryRows =
+          await tx`select id, tenant_id from personal_memories where id like ${`${realm}-%`} order by id`;
+        const responsibilityRows =
+          await tx`select id, tenant_id from responsibilities where id like ${`${realm}-%`} order by id`;
+        const triggerRows =
+          await tx`select id, tenant_id from responsibility_triggers where id like ${`${realm}-%`} order by id`;
+        seen = {
+          frame: (frame as { tenant: unknown }).tenant,
+          routines: Array.from(routineRows as ArrayLike<unknown>),
+          sources: Array.from(sourceRows as ArrayLike<unknown>),
+          memories: Array.from(memoryRows as ArrayLike<unknown>),
+          responsibilities: Array.from(responsibilityRows as ArrayLike<unknown>),
+          triggers: Array.from(triggerRows as ArrayLike<unknown>),
+        };
+        throw rollback;
+      }),
+    ).rejects.toBe(rollback);
+    // The frame the migration found is the frame it leaves, so a later migration in the same run does not inherit `platform`.
+    expect(seen?.frame).toBe("");
+    expect(seen?.routines).toEqual([
+      { id: `${realm}-routine-0`, tenant_id: owner },
+      { id: `${realm}-routine-1`, tenant_id: owner },
+      { id: `${realm}-routine-2`, tenant_id: owner },
+      { id: `${realm}-routine-3`, tenant_id: other },
+    ]);
+    expect(seen?.sources).toEqual([
+      { id: `${realm}-source-0`, tenant_id: owner },
+      { id: `${realm}-source-1`, tenant_id: owner },
+      { id: `${realm}-source-2`, tenant_id: owner },
+      { id: `${realm}-source-3`, tenant_id: other },
+    ]);
+    // Facts follow a source that is now its owner's; under the conflicting source, or with no source, they stay.
+    expect(seen?.memories).toEqual([
+      { id: `${realm}-memory-0`, tenant_id: owner },
+      { id: `${realm}-memory-1`, tenant_id: owner },
+      { id: `${realm}-memory-2`, tenant_id: owner },
+      { id: `${realm}-memory-3`, tenant_id: "system" },
+      { id: `${realm}-memory-free`, tenant_id: "system" },
+    ]);
+    // A Slack trigger of nobody's is refused from G01-B4 on, and its responsibility is locked in the owner's frame.
+    expect(seen?.responsibilities).toEqual([
+      { id: `${realm}-goal-0`, tenant_id: owner },
+      { id: `${realm}-goal-1`, tenant_id: owner },
+      { id: `${realm}-goal-2`, tenant_id: owner },
+      { id: `${realm}-goal-3`, tenant_id: other },
+    ]);
+    expect(seen?.triggers).toEqual([
+      { id: `${realm}-trigger-0`, tenant_id: owner },
+      { id: `${realm}-trigger-1`, tenant_id: owner },
+      { id: `${realm}-trigger-2`, tenant_id: owner },
+      { id: `${realm}-trigger-3`, tenant_id: other },
+    ]);
+    // Rolled back: nothing of the fixture is left for anybody.
+    expect(
+      await runAsTenant("platform", () =>
+        database
+          .select({ id: routines.id })
+          .from(routines)
+          .where(like(routines.id, `${realm}-%`)),
+      ),
+    ).toEqual([]);
+    expect(
+      await runAsTenant("platform", () =>
+        database
+          .select({ id: memorySources.id })
+          .from(memorySources)
+          .where(like(memorySources.id, `${realm}-%`)),
+      ),
+    ).toEqual([]);
+  }));
+
+test("the same fact formed by two Bots is kept for each, and each recalls only its own", () =>
+  asOwner(async () => {
+    const content = `Two-Bot fact ${randomUUID()}`;
+    try {
+      const first = await store.formMemory(owner, {
+        agentId: bot,
+        content,
+        sourceApp: "Docs",
+      });
+      const second = await store.formMemory(owner, {
+        agentId: otherBot,
+        content,
+        sourceApp: "Docs",
+      });
+      expect(first.duplicate).toBe(false);
+      expect(second).toMatchObject({ duplicate: false, forgotten: false });
+      expect(second.id).not.toBe(first.id);
+      // The same Bot forming it again is still a duplicate of its own row.
+      expect(
+        await store.formMemory(owner, {
+          agentId: otherBot,
+          content,
+          sourceApp: "Docs",
+        }),
+      ).toEqual({ id: second.id, duplicate: true, forgotten: false });
+      const term = content.slice(-12);
+      expect(
+        (await ingestion.recall(owner, bot, term)).map((row) => row.id),
+      ).toEqual([first.id]);
+      expect(
+        (await ingestion.recall(owner, otherBot, term)).map((row) => row.id),
+      ).toEqual([second.id]);
+    } finally {
+      await database
+        .delete(personalMemories)
+        .where(eq(personalMemories.content, content));
+    }
+  }));
+
+test("a fact the person forgot from one Bot is not formed again by another", () =>
+  asOwner(async () => {
+    const content = `Forgotten fact ${randomUUID()}`;
+    const later = `Forgotten later ${randomUUID()}`;
+    const formed: string[] = [];
+    const form = async (agentId: string, text: string) => {
+      const result = await store.formMemory(owner, {
+        agentId,
+        content: text,
+        sourceApp: "Docs",
+      });
+      formed.push(result.id);
+      return result;
+    };
+    try {
+      const first = await form(bot, content);
+      await store.remove(owner, first.id);
+      expect(await form(otherBot, content)).toEqual({
+        id: first.id,
+        duplicate: true,
+        forgotten: true,
+      });
+      // Also when the other Bot had already formed it before the person forgot the first copy.
+      const mine = await form(bot, later);
+      await form(otherBot, later);
+      await store.remove(owner, mine.id);
+      expect(await form(otherBot, later)).toEqual({
+        id: mine.id,
+        duplicate: true,
+        forgotten: true,
+      });
+    } finally {
+      // A forgotten row keeps no content, so it is found by id.
+      await database
+        .delete(personalMemories)
+        .where(inArray(personalMemories.id, formed));
+    }
+  }));
+
+test("resetting one Bot leaves another Bot's copy of the same fact", () =>
+  asOwner(async () => {
+    const content = `Reset fact ${randomUUID()}`;
+    const reset = createBotReset({ database, softDeleteChannel: async () => {} });
+    try {
+      await store.formMemory(owner, { agentId: bot, content, sourceApp: "Docs" });
+      const kept = await store.formMemory(owner, {
+        agentId: otherBot,
+        content,
+        sourceApp: "Docs",
+      });
+      await reset.execute({ id: owner, role: "user" }, bot);
+      const rows = await database
+        .select({
+          id: personalMemories.id,
+          agentId: personalMemories.formedByAgentId,
+        })
+        .from(personalMemories)
+        .where(eq(personalMemories.content, content));
+      expect(rows).toEqual([{ id: kept.id, agentId: otherBot }]);
+    } finally {
+      await database
+        .delete(personalMemories)
+        .where(eq(personalMemories.content, content));
+    }
+  }));

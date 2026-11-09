@@ -198,7 +198,8 @@ pub struct CommandPrompt {
     pub bot_id: String,
     pub bot_name: Option<String>,
     pub root: PathBuf,
-    pub working_directory: Option<String>,
+    /// The folder on this computer the command runs in, when it is not the approved folder itself.
+    pub working_directory: Option<PathBuf>,
     pub command: String,
     pub writable: bool,
     /// The member's OpenBot setting after the team cap, as the server sent it.
@@ -240,7 +241,8 @@ impl CommandPolicy {
 pub enum CommandApproval {
     /// Refused on this machine too, whatever the server let through.
     Refuse,
-    /// The person chose "always allow" for this Bot in this folder on this computer.
+    /// The person chose "always allow" for this Bot in this folder on this computer, and the
+    /// command leaves the folder read-only.
     Proceed,
     /// Show the dialog. `offer_always` adds "Always allow in this folder".
     Ask { offer_always: bool },
@@ -248,9 +250,18 @@ pub enum CommandApproval {
 
 /// The member's server setting gates the local one: a folder the person always allowed here is
 /// only honoured while their setting (after the team cap) is still "always allow".
-pub fn command_approval(policy: CommandPolicy, allowed_here: bool) -> CommandApproval {
+///
+/// "Always allow" covers read-only commands. A command that can edit the folder asks every time.
+pub fn command_approval(
+    policy: CommandPolicy,
+    allowed_here: bool,
+    writable: bool,
+) -> CommandApproval {
     match policy {
         CommandPolicy::Never => CommandApproval::Refuse,
+        CommandPolicy::Allow if writable => CommandApproval::Ask {
+            offer_always: false,
+        },
         CommandPolicy::Allow if allowed_here => CommandApproval::Proceed,
         CommandPolicy::Allow => CommandApproval::Ask { offer_always: true },
         CommandPolicy::Ask => CommandApproval::Ask {
@@ -514,7 +525,7 @@ fn broker_loop(inner: Arc<Inner>) {
     let client = match Client::builder().timeout(Duration::from_secs(15)).build() {
         Ok(client) => client,
         Err(error) => {
-            eprintln!("host access broker could not create HTTP client: {error}");
+            log::error!("[host access] could not create its HTTP client: {error}");
             return;
         }
     };
@@ -523,9 +534,9 @@ fn broker_loop(inner: Arc<Inner>) {
             Ok(Some(operation)) => inner.spawn_operation(client.clone(), operation),
             Ok(None) => thread::sleep(inner.config.poll_interval),
             Err(error) => {
-                eprintln!("host access broker poll failed and revoked local leases: {error}");
+                log::warn!("[host access] poll failed and revoked local leases: {error}");
                 if let Err(cleanup) = inner.revoke_all_and_stop() {
-                    eprintln!("host access broker cleanup after poll failure failed: {cleanup}");
+                    log::error!("[host access] cleanup after a failed poll failed: {cleanup}");
                 }
                 thread::sleep(inner.config.poll_interval);
             }
@@ -666,7 +677,7 @@ impl Inner {
             .json(&body)
             .send()
         {
-            eprintln!("host access broker could not post refusal: {error}");
+            log::warn!("[host access] could not post a refusal: {error}");
         }
     }
 
@@ -685,9 +696,12 @@ impl Inner {
                 error: None,
             },
             Err(error) => {
-                eprintln!(
-                    "host access operation {} failed: {error}",
-                    operation.operation_id
+                // What the server is told, not the error itself: that can carry a path or the
+                // output of a command a Bot ran.
+                log::warn!(
+                    "[host access] operation {} failed: {}",
+                    operation.operation_id,
+                    public_error_message(&error)
                 );
                 DesktopResult {
                     operation_id: operation.operation_id.clone(),
@@ -705,7 +719,7 @@ impl Inner {
             .json(&body)
             .send()
         {
-            eprintln!("host access broker could not post result: {error}");
+            log::warn!("[host access] could not post a result: {error}");
         }
     }
 
@@ -914,7 +928,7 @@ impl Inner {
             bot_id: operation.bot_id.clone(),
             bot_name: grant.bot_name.clone(),
             root: grant.root.clone(),
-            working_directory: operation.relative_path.clone(),
+            working_directory: working_directory.clone(),
             command: command.into(),
             writable,
             command_policy,
@@ -1765,23 +1779,49 @@ mod command_policy_tests {
     #[test]
     fn local_always_allow_only_counts_while_the_server_setting_allows() {
         assert_eq!(
-            command_approval(CommandPolicy::Never, true),
+            command_approval(CommandPolicy::Never, true, false),
             CommandApproval::Refuse
         );
         assert_eq!(
-            command_approval(CommandPolicy::Allow, true),
+            command_approval(CommandPolicy::Allow, true, false),
             CommandApproval::Proceed
         );
         assert_eq!(
-            command_approval(CommandPolicy::Allow, false),
+            command_approval(CommandPolicy::Allow, false, false),
             CommandApproval::Ask { offer_always: true }
         );
         // An admin cap of "ask" pauses a folder the person always allowed.
         assert_eq!(
-            command_approval(CommandPolicy::Ask, true),
+            command_approval(CommandPolicy::Ask, true, false),
             CommandApproval::Ask {
                 offer_always: false
             }
+        );
+    }
+
+    #[test]
+    fn a_command_that_can_edit_the_folder_asks_even_where_always_allowed() {
+        assert_eq!(
+            command_approval(CommandPolicy::Allow, true, true),
+            CommandApproval::Ask {
+                offer_always: false
+            }
+        );
+        assert_eq!(
+            command_approval(CommandPolicy::Allow, false, true),
+            CommandApproval::Ask {
+                offer_always: false
+            }
+        );
+        assert_eq!(
+            command_approval(CommandPolicy::Ask, true, true),
+            CommandApproval::Ask {
+                offer_always: false
+            }
+        );
+        assert_eq!(
+            command_approval(CommandPolicy::Never, true, true),
+            CommandApproval::Refuse
         );
     }
 

@@ -828,7 +828,7 @@ describe("reviewed read lists for Notion and the built-in apps", () => {
     [
       "routines",
       async () => (await routineTools()).map((tool) => tool.name),
-      ["list_routines"],
+      ["list_routines", "list_goals"],
       // 只读，但列出的 webhook 地址和邮件入站地址能触发任务，作用接近凭据，所以故意不列进读名单：
       // 聊天里按写处理（先问人），check-in 读不到。
       ["list_triggers"],

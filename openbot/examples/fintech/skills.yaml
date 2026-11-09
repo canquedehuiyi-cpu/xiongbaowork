@@ -22,21 +22,17 @@
 skills:
   - slug: research-public-web
     title: Research the public web
-    summary: Search current public sources with Parallel and write a cited brief.
+    summary: Search current public sources and write a cited brief.
     instructions: >-
-      Use Parallel to discover relevant public sources and read
-      selected pages before answering. Use the authenticated connector when it is granted;
-      otherwise use the anonymous connector when granted. Honor an explicit user choice of another
-      authorized provider. Keep search objectives specific and queries concise. Use one session_id
-      per conversation across related search and fetch calls. Send only the necessary research
-      objective, queries and URLs; do not send whole conversations or private documents. Cite the
-      source URLs and state missing evidence or provider errors. A missing grant requires an
-      administrator; never work around a denial.
+      Use the public-web research tools you hold to discover relevant sources and read selected
+      pages before answering. Honor an explicit user choice of another authorized provider. Keep
+      search objectives specific and queries concise. Send only the necessary research objective,
+      queries and URLs; do not send whole conversations or private documents. Cite the source URLs
+      and state missing evidence or provider errors. A missing grant requires an administrator;
+      never work around a denial.
     tools:
-      - parallel/web_search
-      - parallel/web_fetch
-      - parallel-authenticated/web_search
-      - parallel-authenticated/web_fetch
+      - "@research/search"
+      - "@research/fetch"
 
   - slug: find-a-document
     title: Find a document
@@ -106,7 +102,7 @@ skills:
   # ever narrows MCP tools; these are offered whenever the grant is there.
   - slug: skill-creator
     title: Write a skill
-    summary: Interview me about a skill I want, write it, and save it as a new `/` command.
+    summary: Interview me about a skill I want, then write it and save it as a new skill.
     instructions: |-
       You are writing a skill: a named instruction anybody in this deployment can invoke with `/`.
       Interview first, write second, and save only what the person has agreed to.
@@ -203,8 +199,8 @@ skills:
   # browser, and offered to whichever Bot holds this slug. `tools:` here is intersected with a Bot's
   # MCP GRANTS, so naming them would name nothing. The grant of this skill is the whole gate.
   - slug: bot-creator
-    title: Make a coworker
-    summary: Work out what a new coworker should be, then put it in front of you to create.
+    title: Make a Bot
+    summary: Work out what a new Bot should be, then put it in front of you to create.
     instructions: >-
       You are working out what a new coworker should be, and the interview matters more than the
       speed: what you write becomes standing instructions handed to a model on every turn in every

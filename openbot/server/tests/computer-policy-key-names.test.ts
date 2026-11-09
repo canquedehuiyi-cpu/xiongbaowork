@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { AuditEvent, AuditEventInput, AuditStore } from "../src/audit";
+import { botSeat } from "../src/computer/computer-key";
 import { createComputerGateway } from "../src/computer/gateway";
 import type { ActionPolicy } from "../src/computer/policy";
 import { dryRunAgainstHistory } from "../src/computer/policy-dry-run";
@@ -33,9 +34,9 @@ async function gatewayWith(policy: ActionPolicy) {
   };
   const provider: ComputerProvider = {
     name: "test",
-    isolation: "per-bot",
+    isolation: "per-person",
     locate: async () => "http://agent-computer:4100",
-    status: async (botId) => ({ botId, state: "ready" }),
+    status: async (seat) => ({ botId: seat.botId, state: "ready" }),
     stop: async () => ({ wasRunning: true }),
     reset: async () => ({ cleared: true }),
     list: async () => [],
@@ -60,7 +61,7 @@ async function gatewayWith(policy: ActionPolicy) {
     auditStore,
     policy: () => policy,
   });
-  await gateway.snapshot("bot-1");
+  await gateway.snapshot(botSeat("bot-1"));
   return { gateway, calls, sentKeys, rows };
 }
 
@@ -75,7 +76,7 @@ const denying = (...deny: string[]): ActionPolicy => ({
 async function press(policy: ActionPolicy, key: string, ref = "e1") {
   const { gateway, calls, sentKeys, rows } = await gatewayWith(policy);
   const reached = await gateway
-    .key("bot-1", ACTOR, { ref, snapshotId: 7, key })
+    .key(botSeat("bot-1"), ACTOR, { ref, snapshotId: 7, key })
     .then(
       () => true,
       () => false,

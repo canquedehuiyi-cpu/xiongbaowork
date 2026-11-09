@@ -55,7 +55,7 @@ const brokeredRef = `${brokeredServer}/${slug.toUpperCase()}_FETCH`;
 const revoked: { userId: string; toolkit: string }[] = [];
 const broker: ComposioBroker = {
   listApps: async () => [],
-  ensureAuthConfig: async () => undefined,
+  ensureAuthConfig: async () => "standing",
   deleteAuthConfig: async () => undefined,
   authorize: async () => {
     throw new Error("the removal path asked the broker to begin a connection");
@@ -64,6 +64,16 @@ const broker: ComposioBroker = {
   revoke: async (input) => {
     revoked.push({ userId: input.userId, toolkit: input.toolkit });
     return true;
+  },
+  // Removal never draws a connect form, connects with typed fields or undoes one account.
+  connectionFields: async () => {
+    throw new Error("the removal path asked the broker for a connect form");
+  },
+  connectWithFields: async () => {
+    throw new Error("the removal path asked the broker to connect");
+  },
+  revokeAccount: async () => {
+    throw new Error("the removal path asked the broker to undo one account");
   },
 };
 
@@ -191,6 +201,7 @@ afterAll(async () => {
     await database.delete(users).where(eq(users.id, person));
   });
   await releaseAdmin?.();
+  await database.$client.close();
 });
 
 test("removing a token server revokes every person's token and releases every person's grant", async () => {

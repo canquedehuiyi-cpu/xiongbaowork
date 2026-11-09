@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray, like, or } from "drizzle-orm";
+import { and, eq, inArray, like, or, } from "drizzle-orm";
 import { createAuditStore } from "../src/audit";
 import { createCredentialStore } from "../src/credentials";
 import { createDatabase } from "../src/db/client";
@@ -131,7 +131,47 @@ const settingInput = {
   intervalMinutes: 60,
 };
 
-test("settings are owner scoped, one per Bot, and bounded in frequency", () =>
+test("a Bot watches several things, each once, and an offer accepted again turns it back on", () =>
+  asOwner(async () => {
+    const brief = {
+      ...settingInput,
+      agentId: secondBot,
+      subject: "Launch brief in Notion",
+      sourceLink: "https://www.notion.so/launch-brief",
+      intervalMinutes: 1440,
+    };
+    const inbox = {
+      ...settingInput,
+      agentId: secondBot,
+      subject: "Your Gmail inbox",
+      intervalMinutes: 1440,
+    };
+    const first = await proactive.create(owner, brief, `${prefix}-b1`);
+    const second = await proactive.create(owner, inbox, `${prefix}-b2`);
+    expect(second.id).not.toBe(first.id);
+    expect(first).toMatchObject({
+      subject: "Launch brief in Notion",
+      sourceLink: "https://www.notion.so/launch-brief",
+    });
+    await proactive.update(owner, first.id, { enabled: false });
+    const again = await proactive.create(
+      owner,
+      { ...brief, subject: "The launch brief", intervalMinutes: 240 },
+      `${prefix}-b3`,
+    );
+    expect(again).toMatchObject({
+      id: first.id,
+      enabled: true,
+      intervalMinutes: 240,
+    });
+    const mine = (await proactive.list(owner)).filter(
+      (row) => row.agentId === secondBot,
+    );
+    expect(mine).toHaveLength(2);
+    for (const row of mine) await proactive.remove(owner, row.id);
+  }));
+
+test("settings are owner scoped, one per thing a Bot watches, and bounded in frequency", () =>
   asOwner(async () => {
     const setting = await proactive.create(owner, settingInput, `${prefix}-t`);
     expect(setting).toMatchObject({
@@ -139,9 +179,10 @@ test("settings are owner scoped, one per Bot, and bounded in frequency", () =>
       intervalMinutes: 60,
       lastStatus: "idle",
     });
-    await expect(
-      proactive.create(owner, settingInput, `${prefix}-t2`),
-    ).rejects.toBeInstanceOf(ProactiveRefusedError);
+    // The same thing again is the same check-in, not a second one.
+    expect((await proactive.create(owner, settingInput, `${prefix}-t2`)).id).toBe(
+      setting.id,
+    );
     await expect(
       proactive.create(
         owner,
@@ -165,8 +206,7 @@ test("settings are owner scoped, one per Bot, and bounded in frequency", () =>
         (error: unknown) => error,
       );
     expect(
-      (refusal as { cause?: { constraint?: string } } | null)?.cause
-        ?.constraint,
+      (refusal as { cause?: { constraint?: string } } | null)?.cause?.constraint,
     ).toBe("proactive_settings_interval_check");
     expect((await proactive.list(other)).length).toBe(0);
     await expect(proactive.get(other, setting.id)).rejects.toBeInstanceOf(
@@ -196,16 +236,14 @@ test("a due setting is claimed once and its next run moves forward by its interv
       asDeployment(() => proactive.claimDue(10)),
       asDeployment(() => proactive.claimDue(10)),
     ]);
-    const claimed = [...first, ...second].filter(
-      (row) => row.id === setting.id,
-    );
+    const claimed = [...first, ...second].filter((row) => row.id === setting.id);
     expect(claimed).toHaveLength(1);
     const next = claimed[0]?.nextRunAt.getTime() ?? 0;
     expect(next - Date.now()).toBeGreaterThan(55 * 60_000);
     expect(
       (await asDeployment(() => proactive.claimDue(10))).some(
-        (row) => row.id === setting.id,
-      ),
+          (row) => row.id === setting.id,
+        ),
     ).toBe(false);
     await proactive.recordRun(setting.id, "running");
     await proactive.recordRun(setting.id, "error", "x".repeat(900));
@@ -221,10 +259,85 @@ test("a due setting is claimed once and its next run moves forward by its interv
       .where(eq(proactiveSettings.id, setting.id));
     expect(
       (await asDeployment(() => proactive.claimDue(10))).some(
-        (row) => row.id === setting.id,
-      ),
+          (row) => row.id === setting.id,
+        ),
     ).toBe(false);
     await proactive.update(owner, setting.id, { enabled: true });
+  }));
+
+/** The test database's owner, on the same database the suite uses (`TEST_DATABASE_ADMIN_URL`). */
+function ownerConnection(): Bun.SQL {
+  const raw = process.env.TEST_DATABASE_ADMIN_URL?.trim();
+  if (!raw)
+    throw new Error(
+      "TEST_DATABASE_ADMIN_URL must name the database owner, who makes the stand-in clock.",
+    );
+  const admin = new URL(raw);
+  admin.pathname = new URL(testDatabaseUrl()).pathname;
+  return new Bun.SQL(admin.toString(), { max: 1 });
+}
+
+test("a next check-in is counted on this server's clock, which the sweep decides on, even with the database's clock ahead", () =>
+  asOwner(async () => {
+    // A database whose `now()` reads a minute ahead of this server: this connection finds a stand-in
+    // `now()` before Postgres's own.
+    const clock = `clock_ahead_${randomUUID().replaceAll("-", "")}`;
+    /*
+     * The fork's suite connects as `openbot_app`, which may not create a schema: the database's owner
+     * (`TEST_DATABASE_ADMIN_URL`, on this same database) makes the stand-in clock and lets the
+     * application role use it.
+     */
+    const appRole = decodeURIComponent(new URL(testDatabaseUrl()).username);
+    const ownerSql = ownerConnection();
+    try {
+      await ownerSql.unsafe(`create schema ${clock}`);
+      await ownerSql.unsafe(
+        `create function ${clock}.now() returns timestamptz language sql stable as $$ select pg_catalog.now() + interval '1 minute' $$`,
+      );
+      await ownerSql.unsafe(`grant usage on schema ${clock} to "${appRole}"`);
+    } catch (error) {
+      await ownerSql.close();
+      throw error;
+    }
+    const url = new URL(testDatabaseUrl());
+    url.searchParams.set("search_path", `${clock},public,pg_catalog`);
+    const ahead = createDatabase(url.toString(), { max: 1 });
+    const store = createProactiveStore(ahead);
+    const minutesOut = (row: { nextRunAt: Date }) =>
+      (row.nextRunAt.getTime() - Date.now()) / 60_000;
+    try {
+      const created = await store.create(
+        owner,
+        { ...settingInput, subject: "The clock", intervalMinutes: 240 },
+        `${prefix}-clock`,
+      );
+      expect(minutesOut(created)).toBeLessThanOrEqual(240);
+      const changed = await store.update(owner, created.id, {
+        intervalMinutes: 120,
+      });
+      expect(minutesOut(changed)).toBeLessThanOrEqual(120);
+      await store.update(owner, created.id, { enabled: false });
+      expect(
+        minutesOut(await store.update(owner, created.id, { enabled: true })),
+      ).toBeLessThanOrEqual(120);
+      await ahead
+        .update(proactiveSettings)
+        .set({ nextRunAt: new Date(Date.now() - 1000) })
+        .where(eq(proactiveSettings.id, created.id));
+      const [claimed] = (await asDeployment(() => store.claimDue(10))).filter(
+        (row) => row.id === created.id,
+      );
+      if (!claimed) throw new Error("the due check-in was not claimed");
+      expect(minutesOut(claimed)).toBeLessThanOrEqual(120);
+      await store.remove(owner, created.id);
+    } finally {
+      await ahead.$client.close();
+      try {
+        await ownerSql.unsafe(`drop schema ${clock} cascade`);
+      } finally {
+        await ownerSql.close();
+      }
+    }
   }));
 
 test("a run's reads come from its own successful audit rows only", () =>
@@ -260,7 +373,7 @@ test("a run's reads come from its own successful audit rows only", () =>
     expect(reads[0]?.at).toBeInstanceOf(Date);
   }));
 
-test("suggestions are delivered once, listed to their owner, and resolved once", () =>
+test("items carry their normalized title, are listed to their owner, and are resolved once", () =>
   asOwner(async () => {
     const [setting] = await proactive.list(owner);
     if (!setting) throw new Error("setting missing");
@@ -288,11 +401,11 @@ test("suggestions are delivered once, listed to their owner, and resolved once",
       sourceLink: null,
     });
     expect(await proactive.countSuggestions(runId)).toBe(2);
-    expect(await proactive.undelivered(runId)).toHaveLength(2);
-    await proactive.markDelivered(suggestion.id);
-    expect(
-      (await proactive.undelivered(runId)).map((row) => row.title),
-    ).toEqual(["Second"]);
+    expect(suggestion).toMatchObject({
+      dedupeKey: "reply to sam",
+      pingId: null,
+      status: "open",
+    });
     expect(
       (await proactive.suggestions(owner)).some(
         (row) => row.id === suggestion.id,
@@ -317,6 +430,82 @@ test("suggestions are delivered once, listed to their owner, and resolved once",
         (row) => row.id === suggestion.id,
       ),
     ).toBe(false);
+  }));
+
+test("open items stay open across check-ins until the person starts or hides one, or a check-in clears it", () =>
+  asOwner(async () => {
+    const setting = await proactive.create(
+      owner,
+      { ...settingInput, agentId: secondBot },
+      `${prefix}-history`,
+    );
+    const add = (runId: string, title: string) =>
+      proactive.addSuggestion({
+        ownerUserId: owner,
+        agentId: secondBot,
+        settingId: setting.id,
+        runId,
+        title,
+        detail: `${title}.`,
+        sourceApp: "Issue tracker",
+        sourceRef: ref,
+        sourceLink: null,
+      });
+    const earlier = randomUUID();
+    const kept = await add(earlier, "Reply to Sam");
+    const hidden = await add(earlier, "Archive old tickets");
+    const started = await add(earlier, "Book the venue");
+    const cleared = await add(earlier, "Answer the supplier");
+    await proactive.resolveSuggestion(owner, hidden.id, "dismissed");
+    await proactive.resolveSuggestion(owner, started.id, "started");
+    expect(
+      (await proactive.clearSuggestion(setting.id, cleared.id))?.status,
+    ).toBe("superseded");
+    // A later check-in's items sit beside the earlier ones: nothing is replaced wholesale.
+    const latest = randomUUID();
+    const fresh = await add(latest, "Send the invoice");
+    const open = (await proactive.suggestions(owner)).filter(
+      (row) => row.settingId === setting.id,
+    );
+    expect(open.map((row) => row.id).sort()).toEqual([kept.id, fresh.id].sort());
+    /*
+     * What the next check-in refuses against: the person's own decisions, on every one of their Bots,
+     * each naming its Bot ("Second" is the first Bot's, still open). Started is this Bot's alone.
+     */
+    const prior = await proactive.priorItems(owner, secondBot);
+    expect(prior.open.map((row) => [row.agentId, row.title]).sort()).toEqual([
+      [bot, "Second"],
+      [secondBot, "Reply to Sam"],
+      [secondBot, "Send the invoice"],
+    ]);
+    /*
+     * This Bot's hidden item. The first Bot's "Reply to Sam" is hidden too when the earlier race
+     * between starting and hiding it went to the hide, which is either way in this fork's framed
+     * transactions; it is that race's, not this check-in's, so only this Bot's rows are compared.
+     */
+    expect(prior.hidden.filter((row) => row.agentId === secondBot)).toEqual([
+      {
+        agentId: secondBot,
+        title: "Archive old tickets",
+        sourceLink: null,
+        sourceApp: "Issue tracker",
+      },
+    ]);
+    expect(prior.started).toEqual([{ title: "Book the venue" }]);
+    expect(await proactive.priorItems(other, secondBot)).toEqual({
+      open: [],
+      tasks: [],
+      hidden: [],
+      started: [],
+    });
+    // Cleared once; a second clear, or one of another setting's, finds nothing.
+    expect(await proactive.clearSuggestion(setting.id, cleared.id)).toBeNull();
+    const [first] = await proactive
+      .list(owner)
+      .then((rows) => rows.filter((row) => row.agentId === bot));
+    expect(
+      await proactive.clearSuggestion(first?.id as string, kept.id),
+    ).toBeNull();
   }));
 
 test("Bot-formed memories carry provenance, await review, and never come back once forgotten", () =>
@@ -423,10 +612,10 @@ test("a Bot-formed memory reaches only its Bot, only while it holds the source a
   }));
 
 /**
- * G01: background research runs as the tenant stamped on its setting, against the real policies.
+ * G01: a background check-in runs as the tenant stamped on its setting, against the real policies.
  *
  * The sweep is a timer with no tenant. Before this it asked what was due as `system`, which sees only
- * the platform's own settings, and anything it did run filed its suggestions as `system`, which every
+ * the platform's own settings, and anything it did run filed its items as `system`, which every
  * tenant can read. Now "what is due" is the platform's question, each run is offered and done as
  * the setting's person, and a setting stamped as nobody's, or naming somebody else, is never run.
  */
@@ -492,6 +681,13 @@ describe("G01: whose research the sweep is doing", () => {
         `${prefix}-alice-thread`,
       ),
     );
+    // A new check-in is first due one interval out; this one is due now.
+    await runAsTenant(alice, () =>
+      database
+        .update(proactiveSettings)
+        .set({ nextRunAt: new Date(Date.now() - 1000) })
+        .where(eq(proactiveSettings.id, mine.id)),
+    );
     // Stamped as nobody's: written as `system`, the stamp a write from no frame used to get (G01-E:
     // an unframed write is now an error, so the frame is named).
     const nobodys = randomUUID();
@@ -548,6 +744,16 @@ describe("G01: whose research the sweep is doing", () => {
       runTurn: async (turn) => {
         turns.push({ agentId: turn.agentId, as: currentTenant() });
         if (turn.agentId !== aliceBot) return { replyText: "" };
+        // What the check-in read, as the audit trail records a read the turn made in its own frame:
+        // an item needs a source it read in this run.
+        await auditStore.insert({
+          eventType: "mcp.call_succeeded",
+          targetType: "mcp_tool",
+          targetId: ref,
+          actorUserId: alice,
+          initiator: proactiveInitiator(String(turn.runId)),
+          payload: {},
+        });
         const tools = await engine.toolsForTurn({
           ownerUserId: turn.ownerUserId,
           agentId: turn.agentId,
@@ -556,7 +762,11 @@ describe("G01: whose research the sweep is doing", () => {
         await tools
           .find((tool) => tool.definition.name === "suggest_next_step")
           ?.execute(
-            { title: "Reply to Sam", detail: "Sam asked for the spec." },
+            {
+              title: "Reply to Sam",
+              detail: "Sam asked for the spec.",
+              sourceTool: ref,
+            },
             { toolCallId: "call", signal: new AbortController().signal },
           );
         return { replyText: "Summary." };
@@ -567,8 +777,7 @@ describe("G01: whose research the sweep is doing", () => {
         agentId,
         threadId: `${channelId}-thread`,
       }),
-      notify: async () => undefined,
-      startTask: async () => undefined,
+      attention: { notifyAttention: async () => undefined },
       catalogue: { listServers: async () => [] },
       mintThreadId: () => randomUUID(),
     });

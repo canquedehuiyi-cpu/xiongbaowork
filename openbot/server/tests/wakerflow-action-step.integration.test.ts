@@ -491,21 +491,27 @@ test("ADR-0001 lock: the deployment runs worker steps only through createPipelin
   expect(wiring).toContain("guardTurn: (input) => guardBotTurn(input),");
   expect(wiring).toContain("refusal: (input) => headlessTurnRefusal(input),");
   // The approval worker asserts an action run's owner and resumes it in that frame (G01-E R10, R14),
-  // beside the crew resume it leaves exactly as it was.
-  const lookup = source.indexOf("pipelineStore.actionHoldingApproval(");
+  // beside the crew resume it leaves exactly as it was. M3: upstream moved that worker out of
+  // index.ts into approvals/resume-sweep.ts, where the owner check is its `ownedBy`.
+  const sweep = readFileSync(
+    new URL("../src/approvals/resume-sweep.ts", import.meta.url),
+    "utf8",
+  );
+  expect(sweep).toMatch(
+    /const ownedBy = \([\s\S]{0,300}return assertPersonTenant\(parked\.tenantId, ownerUserId\);/,
+  );
+  const lookup = sweep.indexOf("pipeline?.actionHoldingApproval(");
   expect(lookup).toBeGreaterThan(-1);
-  expect(lookup).toBeLessThan(
-    source.indexOf("pipelineStore.runHoldingApproval("),
-  );
-  const window = source.slice(lookup, lookup + 2500);
+  expect(lookup).toBeLessThan(sweep.indexOf("pipeline?.runHoldingApproval("));
+  const window = sweep.slice(lookup, lookup + 2500);
   expect(window).toMatch(
-    /assertPersonTenant\(\s*parkedAction\.tenantId,\s*input\.ownerUserId,?\s*\)/,
+    /ownedBy\(\s*parkedAction,\s*input\.ownerUserId,\s*"parked-action-owner-mismatch",/,
   );
-  expect(window).toContain('type: "parked-action-owner-mismatch"');
   expect(window).toMatch(
-    /runAsTenant\(tenant, \(\) =>\s*pipelineStore\.resumeAction\(\{\s*tenantId: tenant,/,
+    /runAsTenant\(actionTenant, \(\) =>\s*pipeline\.resumeAction\(\{\s*tenantId: actionTenant,/,
   );
-  expect(source.match(/pipelineStore\.resumeAction\(/g)?.length).toBe(1);
+  expect(sweep.match(/\.resumeAction\(/g)?.length).toBe(1);
+  expect(source.match(/\.resumeAction\(/g)).toBeNull();
   // The orchestrator hands a worker step to `executeStep` and an action step to `actions`, nothing else.
   const pipeline = readFileSync(
     new URL("../src/pipeline/store.ts", import.meta.url),

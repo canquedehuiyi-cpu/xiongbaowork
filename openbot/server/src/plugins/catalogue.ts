@@ -1639,8 +1639,11 @@ export const CATALOGUE: readonly CatalogueEntry[] = Object.freeze([
      *
      * `list_triggers` 虽然也只做 select，但故意不列：它列出的 webhook 地址和邮件入站地址能触发任务，
      * 作用接近凭据，不能让无人值守的 check-in 读到。代价是聊天里它按写处理，要先问人。
+     *
+     * `list_goals`（M3 随上游 v1.0.0 收入的目标工具）只读本人交给这个 Bot 的目标（`responsibilities/
+     * tools.ts` 里 `store.list(ownerUserId)` 再按 Bot 过滤），没有地址或凭据，列为读。
      */
-    readTools: Object.freeze(["list_routines"]),
+    readTools: Object.freeze(["list_routines", "list_goals"]),
     docsUrl: "https://github.com/CopilotKit/OpenBot/blob/main/docs/routines.md",
   },
 ]);

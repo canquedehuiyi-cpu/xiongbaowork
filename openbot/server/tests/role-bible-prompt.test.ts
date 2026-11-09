@@ -202,7 +202,11 @@ describe("the Bible from the database to the runtime", () => {
         createRuntimeAgentLoader(database)(actor),
       )
     ).find((agent) => agent.id === created.id);
-    if (!registered || registered.type === "built_in") {
+    if (
+      !registered ||
+      registered.type === "built_in" ||
+      registered.type === "unavailable"
+    ) {
       throw new Error("expected a remote coworker");
     }
     const content = registered.standingMessage.content;

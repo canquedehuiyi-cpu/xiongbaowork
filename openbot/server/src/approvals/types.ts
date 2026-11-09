@@ -1,12 +1,13 @@
-import type { ContinuationReceipt } from "./continuation-protocol";
-import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash } from "node:crypto";
+import { RunAgentInputSchema } from "@ag-ui/core/schemas";
 import {
-  type Message,
-  type RunAgentInput,
-  RunAgentInputSchema,
-} from "@ag-ui/client";
+  type ApprovalContinuation,
+  currentApprovalContext,
+  withApprovalContext,
+} from "@openbot/toolkit/continuation";
 import type { AuditEventInput, AuditInitiator } from "../audit";
+import { cutAtCodeUnits } from "../channels/text";
+import type { ContinuationReceipt } from "./continuation-protocol";
 
 /** `handled` answers a hand-off: the person did it themselves, so it is never executed for them. */
 export type ApprovalDecision =
@@ -91,7 +92,13 @@ export type ApprovalPolicyOutcome = {
     | "auto_review"
     | "default"
     /** The person already declined this action, or an equivalent, earlier in this conversation. */
-    | "person_declined";
+    | "person_declined"
+    /**
+     * A task started from a check-in item: every change it makes asks first, whatever the person's
+     * "Ask before making changes" says (tasks/turn.ts). Kept apart from `default` so turning that
+     * switch off, or saving an allow rule, never withdraws what a task is waiting on.
+     */
+    | "task";
   reason: string;
   ruleId?: string;
   review?: {
@@ -103,24 +110,11 @@ export type ApprovalPolicyOutcome = {
     failedClosed?: boolean;
   };
 };
-export type ApprovalContinuation = {
-  runId: string;
-  threadId: string;
-  toolCallId: string;
-  toolName: string;
-  args: unknown;
-  messages: Message[];
-  state: unknown;
-  context: RunAgentInput["context"];
-  forwardedProps: unknown;
-  initiator?: AuditInitiator;
+export {
+  type ApprovalContinuation,
+  currentApprovalContext,
+  withApprovalContext,
 };
-const actionContext = new AsyncLocalStorage<ApprovalContinuation>();
-export const withApprovalContext = <T>(
-  context: ApprovalContinuation,
-  run: () => Promise<T>,
-): Promise<T> => actionContext.run(context, run);
-export const currentApprovalContext = () => actionContext.getStore();
 
 /**
  * What the action will actually run or touch, as the call site holds it rather than as the model
@@ -183,46 +177,21 @@ export type ApprovalCandidate = {
   destructive?: true;
   continuation?: ApprovalContinuation;
   /**
+   * A reviewed read of the person's own app: a tool on an app they connected with their own account,
+   * named on a reviewed read list (`reviewedRead` in plugins/catalogue.ts). Chat goes on judging a
+   * call by `effect`; in a task's conversation this is the one kind of call that runs without asking.
+   * Not part of what the person approves, so not in the action's digest.
+   */
+  ownConnectionRead?: true;
+  /**
    * The row the trail records for this action if the person denies it, built by the code that would
    * have carried it out, so a denial reads like that surface's other refusals and lands in the
-   * Blocked view. Written once, with the decision, in the transaction that saves it (./store
-   * `decide`). Never holds the arguments. Not part of what the person approves, so not in the
-   * action's digest.
+   * Blocked view. Written once, with the decision, in the transaction that saves it. Not part of what
+   * the person approves, so not in the action's digest.
    */
   declined?: AuditEventInput;
 };
 
-/**
- * 只能「允许一次」的底线：它们在任何规则之后仍然要问。值是有人仍然按「总是允许」时服务端回的话
- * （./store 的 `decide`）。
- */
-export const ONCE_ONLY_SOURCES: Readonly<Record<string, string>> = {
-  destructive_tool:
-    "这个操作会删除或覆盖内容，每次都要你确认，只能「允许一次」或拒绝。",
-  outbound_send:
-    "这个操作可能会把内容发给别人，每次都要你确认，只能「允许一次」或拒绝。",
-  share_access:
-    "这个操作会分享内容或改变谁能访问，每次都要你确认，只能「允许一次」或拒绝。",
-  publish_post:
-    "这个操作会公开发布内容，每次都要你确认，只能「允许一次」或拒绝。",
-};
-
-/**
- * 这条审批能不能用「在这里总是允许」来回答，也就是存一条长期规则。
- *
- * 删除、归档和应用标为破坏性的操作不行：它们在任何规则之后仍然要问（`destructive_tool` 底线），
- * 存下的规则下次根本用不上，只会误导人。把内容发给别人（`outbound_send`）、分享或改动访问权限
- * （`share_access`）、公开发布（`publish_post`）同理。
- * 「允许一次」和「拒绝」照常提供。
- *
- * 服务端据此拒绝这种规则（./store 的 `decide`），聊天卡片据此不画这个按钮
- * （delivery/opentag-agent.ts）；网页的审批卡片按同一条件判断（app/src/components/approvals）。
- */
-export function offersStandingRule(action: {
-  policy?: { source: string } | undefined;
-}): boolean {
-  return !Object.hasOwn(ONCE_ONLY_SOURCES, action.policy?.source ?? "");
-}
 export type ApprovalAction = ApprovalCandidate & {
   runId: string;
   threadId: string;
@@ -290,11 +259,12 @@ export type ApprovalTeamSettings = {
 /** The three modes a Bot's tool can be set to on its permissions page (SEC1 §4.5). */
 export type EmployeeToolMode = "direct" | "ask" | "disabled";
 /** Each mode is one rule behaviour: 直接 is allow, 询问 is ask, 禁用 is deny. */
-export const EMPLOYEE_TOOL_BEHAVIOUR: Record<EmployeeToolMode, RuleBehaviour> = {
-  direct: "allow",
-  ask: "ask",
-  disabled: "deny",
-};
+export const EMPLOYEE_TOOL_BEHAVIOUR: Record<EmployeeToolMode, RuleBehaviour> =
+  {
+    direct: "allow",
+    ask: "ask",
+    disabled: "deny",
+  };
 /** A floor's switch on one Bot: off, or ask before acting. */
 export type SecurityFloorMode = "off" | "ask";
 /**
@@ -368,11 +338,15 @@ export type ApprovalPolicyStore = {
   /**
    * Close this person's pending requests that `match` selects without executing them: the waiting
    * conversation is resumed with `reason` as the result, and each is audited.
+   *
+   * `resume: false` closes them and carries nothing on, for a run that has already ended and been
+   * answered another way: a subagent's, which handed its action back to the Bot that started it.
    */
   withdrawPending(
     ownerUserId: string,
     reason: string,
     match: (action: ApprovalAction) => boolean,
+    options?: { resume?: boolean },
   ): Promise<string[]>;
   /**
    * The owner's side of one Bot (SEC1 D9): its owner, the owner's rules and its security floors,
@@ -397,6 +371,8 @@ export type ApprovalPolicyStore = {
     scope: string;
     outcome: ApprovalPolicyOutcome;
     initiator?: AuditInitiator;
+    /** What the action was aimed at, so the row can name the file or page it was about. */
+    target?: unknown;
   }): Promise<void>;
 };
 export type ApprovalPermit = {
@@ -431,12 +407,36 @@ export type ApprovalStore = {
   finish(ownerUserId: string, id: string): Promise<void>;
   rules(ownerUserId: string): Promise<ApprovalRule[]>;
   revoke(ownerUserId: string, id: string): Promise<void>;
+  /**
+   * Whether this thread is the conversation of a task the person started from a check-in item,
+   * where every change asks first. Absent where there are no tasks.
+   */
+  asksEveryChange?(ownerUserId: string, threadId: string): Promise<boolean>;
   policy?: ApprovalPolicyStore;
 };
+/** Whether an approval may be answered with "Always allow here". Shared with the browser. */
+export { offersStandingRule } from "@openbot/shared/standing-rule";
 export class ApprovalRefusedError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "ApprovalRefusedError";
+  }
+}
+/**
+ * The policy wants to ask, and the call arrived with no conversation to ask in.
+ *
+ * A browser sends a Bot's look at a page (a navigation, a snapshot) straight to the computer; only its
+ * changes travel through the approval route that carries the conversation. A rule can still ask about
+ * a look. Marked apart from other refusals so the computer routes can say so, and the browser can send
+ * the same call again through that route, where the person is asked, instead of handing the Bot a
+ * refusal it can only apologise for.
+ */
+export class ApprovalNeedsConversationError extends ApprovalRefusedError {
+  constructor() {
+    super(
+      "This action needs your approval, but it was not started from a conversation that can ask you. Nothing was done. Ask for it in a chat with this Bot, or change your rules in Settings → Approvals.",
+    );
+    this.name = "ApprovalNeedsConversationError";
   }
 }
 /**
@@ -455,6 +455,47 @@ export class ApprovalNotFoundError extends Error {
     super("This approval could not be found.");
     this.name = "ApprovalNotFoundError";
   }
+}
+/**
+ * The file or page an action was aimed at, for its approval rows on the trail: without it a decision
+ * names a tool and a folder, and nobody can tell which of the actions beside it it was about.
+ */
+export function targetSubject(target: unknown): {
+  file?: string;
+  page?: string;
+  command?: string;
+  folder?: string;
+} {
+  if (!target || typeof target !== "object") return {};
+  const { filePath, pageUrl, grantId, displayName, relativePath, command } =
+    target as {
+      filePath?: unknown;
+      pageUrl?: unknown;
+      grantId?: unknown;
+      displayName?: unknown;
+      relativePath?: unknown;
+      command?: unknown;
+    };
+  /*
+   * A folder on the person's computer (`host-access/broker.ts`): the file in it, the command, and
+   * the folder by its name. Without them the row named only its scope, the grant's id, and Activity
+   * read "Save a file  host-grant-15407-1794112361547002000".
+   */
+  const folder = typeof grantId === "string";
+  return {
+    ...(typeof filePath === "string" && filePath ? { file: filePath } : {}),
+    ...(folder &&
+    typeof relativePath === "string" &&
+    relativePath &&
+    relativePath !== "."
+      ? { file: relativePath }
+      : {}),
+    ...(typeof pageUrl === "string" && pageUrl ? { page: pageUrl } : {}),
+    ...(folder && typeof command === "string" && command ? { command } : {}),
+    ...(folder && typeof displayName === "string" && displayName
+      ? { folder: displayName }
+      : {}),
+  };
 }
 export function parseApprovalResult(value: unknown): {
   content: string;
@@ -533,9 +574,7 @@ export function approvalAction(candidate: ApprovalCandidate): ApprovalAction {
     !continuation.threadId ||
     !continuation.toolCallId
   )
-    throw new ApprovalRefusedError(
-      "This action needs your approval, but it was not started from a conversation that can ask you. Nothing was done. Ask for it in a chat with this Bot, or change your rules in Approvals.",
-    );
+    throw new ApprovalNeedsConversationError();
   if (
     ![
       candidate.actorId,
@@ -562,7 +601,9 @@ export function approvalAction(candidate: ApprovalCandidate): ApprovalAction {
          * device was away could never run once it returned.
          */
         effect:
-          candidate.toolRef === APP_CALL_TOOL ? APP_CALL_TOOL : candidate.effect,
+          candidate.toolRef === APP_CALL_TOOL
+            ? APP_CALL_TOOL
+            : candidate.effect,
         scope: candidate.scope,
         args: candidate.args,
         target: candidate.target,
@@ -598,7 +639,7 @@ export function approvalPreview(args: unknown, depth = 0): unknown {
         ]),
     );
   if (typeof args === "string")
-    return (args.length > 2000 ? `${args.slice(0, 1999)}…` : args)
+    return (args.length > 2000 ? `${cutAtCodeUnits(args, 1999)}…` : args)
       .replace(
         /((?:password|token|secret|api[_-]?key)\s*[=:]\s*)[^\s;]+/gi,
         "$1[private value]",
@@ -634,8 +675,7 @@ export function approvalArgsPreview(action: {
       source: approvalPreview(field(action.display, "description")),
     };
   // --- end app discovery ---
-  if (action.toolRef !== APP_CALL_TOOL)
-    return approvalPreview(action.args);
+  if (action.toolRef !== APP_CALL_TOOL) return approvalPreview(action.args);
   // Masked as an object, so secrets by name are hidden before the JSON is cut.
   const json =
     JSON.stringify(approvalPreview(field(action.args, "args") ?? {})) ?? "{}";
@@ -649,7 +689,9 @@ export function approvalArgsPreview(action: {
   const description =
     field(action.display, "description") ?? field(action.target, "description");
   return {
-    app: approvalPreview(field(action.target, "app") ?? field(action.args, "app")),
+    app: approvalPreview(
+      field(action.target, "app") ?? field(action.args, "app"),
+    ),
     tool: approvalPreview(
       field(action.target, "tool") ?? field(action.args, "tool"),
     ),

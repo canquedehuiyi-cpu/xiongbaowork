@@ -179,6 +179,9 @@ function renderSidebar(
   queryClient.setQueryData(userPreferencesQueryOptions("user").queryKey, {
     messageListEmphasis: "thread",
     selfHostBannerDismissed: false,
+    narration: null,
+    skin: "openbot",
+    proactive: "on",
   });
   // The footer reads the plan once on its own; these tests count channel requests only.
   queryClient.setQueryData(quotaKeys.usage(), {

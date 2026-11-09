@@ -77,6 +77,11 @@ const GROUPS: {
         linkOptions: { to: "/admin/skills" },
       },
       {
+        title: "自动学习",
+        icon: IconFileText,
+        linkOptions: { to: "/admin/learning" },
+      },
+      {
         title: "界面组件",
         icon: IconLayoutGrid,
         linkOptions: { to: "/admin/components" },

@@ -78,10 +78,10 @@ import {
 } from "../src/plugins/store";
 import { grantedTools, REFUSAL_MARKER } from "../src/plugins/tools";
 import {
-  createReadOnlyClassifier,
   proactiveInitiator,
   restrictToolsForRun,
 } from "../src/proactive/restriction";
+import { checkInCatalogue, createCheckInScope } from "../src/proactive/scope";
 import { runAsTenant } from "../src/tenant/context";
 import fileActions from "./fixtures/composio-file-actions.json";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
@@ -5462,9 +5462,12 @@ test("SEC1: a connector call the gate refuses or holds never reaches the vendor"
         asked.push(candidate);
         if (answer === "refuse") throw new ApprovalRefusedError(TOOL_DISABLED);
         if (answer === "hold")
-          throw new HeadlessToolSuspension("This action is waiting for your approval.", {
-            kind: "approval",
-          });
+          throw new HeadlessToolSuspension(
+            "This action is waiting for your approval.",
+            {
+              kind: "approval",
+            },
+          );
         return undefined;
       },
     });
@@ -5490,7 +5493,9 @@ test("SEC1: a connector call the gate refuses or holds never reaches the vendor"
     await expect(call()).rejects.toBeInstanceOf(HeadlessToolSuspension);
     expect(executed).toBe(0);
     expect(
-      auditStore.recorded().filter((event) => event.eventType === "mcp.call_succeeded"),
+      auditStore
+        .recorded()
+        .filter((event) => event.eventType === "mcp.call_succeeded"),
     ).toEqual([]);
     expect(asked.map((candidate) => candidate.toolRef)).toEqual([
       "gmail/GMAIL_FETCH_EMAILS",
@@ -5628,7 +5633,9 @@ test("a connector call hands the approval gate the refused row for the person's 
         reason: DECLINED_BY_PERSON,
       },
     });
-    expect(JSON.stringify(declined)).not.toContain("needle-argument-value-5529");
+    expect(JSON.stringify(declined)).not.toContain(
+      "needle-argument-value-5529",
+    );
     // Handing it over writes nothing: the row is the approval store's to write, on denial.
     const refused = () =>
       auditStore
@@ -5705,7 +5712,13 @@ test("a tool with no read-only label is not a read to a check-in", () =>
     const { store, database } = await freshStore();
     await seedCheckInTools(database, store);
     try {
-      const reads = await createReadOnlyClassifier(store)();
+      // M3: a check-in's reads are its scope (`proactive/scope.ts`) over this store's catalogue, not
+      // upstream's read-only classifier. Both servers count as the person's own here, so only the
+      // labels decide.
+      const reads = await createCheckInScope({
+        catalogue: checkInCatalogue(store),
+        ownConnections: async () => new Set(["gmail", checkInNotes]),
+      })("user_asker", "bot_helper");
       expect(reads.has("gmail/GMAIL_FETCH_EMAILS")).toBe(true);
       for (const notARead of [
         "gmail/GMAIL_ARCHIVE",
@@ -5887,21 +5900,38 @@ async function seedNotionForCheckIn(database: Database, store: PluginStore) {
     await store.grant("mcp", granted, "bot_helper", "admin@example.com");
 }
 
+/**
+ * M3: a check-in's reads are its scope (`proactive/scope.ts`) over this store's catalogue, as index.ts
+ * wires it, not upstream's read-only classifier. Every server counts as the person's own here, so only
+ * the labels decide, which is what these cases are about.
+ */
+function checkInScopeOf(store: PluginStore) {
+  return createCheckInScope({
+    catalogue: checkInCatalogue(store),
+    ownConnections: async () =>
+      new Set((await store.listServers()).map((server) => server.id)),
+  });
+}
+function createReadOnlyClassifier(store: PluginStore) {
+  return () => checkInScopeOf(store)("user_asker", "bot_helper");
+}
+
 /** 一次 check-in 拿到的工具：`grantedTools` 经 `restrictToolsForRun` 收窄，和 index.ts 一样。 */
 async function checkInToolRefs(store: PluginStore, runId: string) {
   const initiator = proactiveInitiator(runId);
   const load = restrictToolsForRun(
     initiator,
-    () =>
+    "user_asker",
+    (botId) =>
       grantedTools({
         store,
-        botId: "bot_helper",
+        botId,
         actorId: "user_asker",
         initiator,
       }),
-    createReadOnlyClassifier(store),
+    checkInScopeOf(store),
   );
-  return (await load()).map((tool) => tool.ref).sort();
+  return (await load("bot_helper")).map((tool) => tool.ref).sort();
 }
 
 /** 以 check-in 的身份调用，确认在 store 门被拒，写的是 check_in_not_a_read。 */
@@ -7268,7 +7298,11 @@ test("a catalogue entry declaring the broker's transport is refused, not dialled
 
   expect(() =>
     accessFor(
-      { provenance: "first-party", url: "https://mcp.example.com/mcp" },
+      {
+        provenance: "first-party",
+        url: "https://mcp.example.com/mcp",
+        authScheme: null,
+      },
       brokered,
     ),
   ).toThrow(CatalogueTransportUnroutableError);
@@ -7277,7 +7311,11 @@ test("a catalogue entry declaring the broker's transport is refused, not dialled
   // per-person vendor does, so what is refused is the value and not the fixture.
   expect(
     accessFor(
-      { provenance: "first-party", url: "https://mcp.example.com/mcp" },
+      {
+        provenance: "first-party",
+        url: "https://mcp.example.com/mcp",
+        authScheme: null,
+      },
       { ...brokered, transport: undefined },
     ),
   ).toEqual({
@@ -8168,6 +8206,9 @@ test("enabling an app writes a brokered row, and asks for its auth config first"
       authorize: unasked("begin somebody's connection"),
       isConnected: unasked("check somebody's connection"),
       revoke: unasked("withdraw somebody's grant"),
+      connectionFields: unasked("draw a connect form"),
+      connectWithFields: unasked("connect with typed fields"),
+      revokeAccount: unasked("undo one account"),
     };
 
     const { store, database, auditStore } = await freshStore({ broker });
@@ -9265,12 +9306,11 @@ describe("a vault read that fails on a query of this deployment's own", () => {
    * read. Its own policy rather than the file's mutable `policy`, so a describe that ran earlier and
    * left it somewhere else cannot decide whether this call gets as far as the vault.
    */
+  const faultVault = createDatabase(unreachableVault(), TEST_POOL);
   const faultStore = createPluginStore({
     database,
     auditStore: createAuditStore(database),
-    credentials: createCredentialStore(
-      createDatabase(unreachableVault(), TEST_POOL),
-    ),
+    credentials: createCredentialStore(faultVault),
     encryptionKey: "x".repeat(44),
     policy: () => ({ mode: "enforce", deny: [], allow: ["true"] }),
     // Loud rather than silent: the token is read before the vendor is dialled, so a call that gets
@@ -9362,6 +9402,9 @@ describe("a vault read that fails on a query of this deployment's own", () => {
       }
     }),
   );
+  afterAll(async () => {
+    await faultVault.$client.close();
+  });
 
   test("is refused as this deployment's own fault, never as a withdrawn credential", () =>
     asPlatform(async () => {
@@ -9476,4 +9519,8 @@ describe("a Composio action whose only file is optional", () => {
         JSON.stringify(stored.map((row) => row.inputSchema)),
       ).not.toContain("file_uploadable");
     }));
+});
+
+afterAll(async () => {
+  await database.$client.close();
 });

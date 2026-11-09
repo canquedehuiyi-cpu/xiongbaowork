@@ -16,11 +16,25 @@ function envFileArgument(envPath: string): string {
 
 async function runProductionEntry(withRoleWriter: boolean) {
   let databaseConnections = 0;
+  let listening = true;
+  const stopListening = () =>
+    new Promise<void>((resolve, reject) => {
+      if (!listening) return resolve();
+      listening = false;
+      boundary.close((error) => (error ? reject(error) : resolve()));
+    });
   // Observe a real transport attempt, then close it. This is no PostgreSQL
   // protocol implementation and returns no role/UID facts or readiness success.
+  //
+  // The listener stops after the first attempt, so every retry after it is refused. Bun 1.4's SQL
+  // client retries a connection the server closed until its 30 second connect timeout, and the
+  // shutdown waits for that startup step, so a listener that kept accepting held the entry past
+  // the kill below. A refused port fails at once on every Bun, which is what the upstream version of
+  // this test relies on; the first attempt is still observed and counted here.
   const boundary = createServer((socket) => {
     databaseConnections += 1;
     socket.destroy();
+    void stopListening();
   });
   await new Promise<void>((resolve, reject) => {
     boundary.once("error", reject);
@@ -84,9 +98,7 @@ async function runProductionEntry(withRoleWriter: boolean) {
       clearTimeout(timeout);
     }
   } finally {
-    await new Promise<void>((resolve, reject) =>
-      boundary.close((error) => (error ? reject(error) : resolve())),
-    );
+    await stopListening();
     if (proofDir) await rm(proofDir, { recursive: true, force: true });
   }
 }

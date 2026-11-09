@@ -16,7 +16,7 @@ import {
 import { authKeys } from "@/lib/auth/queries";
 import { deploymentKeys } from "@/lib/deployment/queries";
 import { userPreferencesQueryOptions } from "@/lib/settings/message-list";
-import type { UserPreferences } from "../../shared/user-preferences";
+import type { UserPreferences } from "@openbot/shared/user-preferences";
 import { settleReactWork } from "./settle-react-work";
 
 const originalFetch = globalThis.fetch;
@@ -31,6 +31,9 @@ beforeEach(() => {
       preferences: {
         messageListEmphasis: "thread",
         selfHostBannerDismissed: true,
+        narration: null,
+        skin: "openbot",
+        proactive: "on",
       },
     });
   globalThis.fetch = Object.assign(
@@ -85,6 +88,9 @@ function setup({
   const preferences: UserPreferences = {
     messageListEmphasis: "thread",
     selfHostBannerDismissed: dismissed,
+    narration: null,
+    skin: "openbot",
+    proactive: "on",
   };
   client.setQueryData(
     userPreferencesQueryOptions("alice").queryKey,

@@ -17,6 +17,7 @@ import {
   parseApprovalContinuation,
   withApprovalContext,
 } from "../src/approvals/types";
+import { personSeat } from "../src/computer/computer-key";
 import { createComputerGateway } from "../src/computer/gateway";
 import {
   createHeadlessComputerTools,
@@ -55,9 +56,9 @@ let machineEntered: (() => void) | undefined;
 const gateway = createComputerGateway({
   provider: {
     name: "test",
-    isolation: "per-bot",
+    isolation: "per-person",
     locate: async () => "http://computer:4100",
-    status: async (id) => ({ botId: id, state: "ready" }),
+    status: async (seat) => ({ botId: seat.botId, state: "ready" }),
     list: async () => [],
     stop: async () => ({ wasRunning: true }),
     reset: async () => ({ cleared: true }),
@@ -65,7 +66,7 @@ const gateway = createComputerGateway({
   auditStore: { insert: async () => undefined },
   policy: () => ({ mode: "enforce", allow: ["true"], deny: [] }),
   approvalGate: (candidate) => currentService.gate(candidate),
-  fetchImpl: async (url, init) => {
+  fetchImpl: (async (url: string | URL | Request, init?: RequestInit) => {
     const path = new URL(String(url)).pathname;
     if (path !== "/exec") throw new Error(`Unexpected ${path}`);
     const { command } = JSON.parse(String(init?.body)) as { command: string };
@@ -81,7 +82,7 @@ const gateway = createComputerGateway({
       timedOut: false,
       elapsedMs: 1,
     });
-  },
+  }) as typeof fetch,
 });
 
 let currentService = createApprovalService(realStore, undefined, undefined, {
@@ -94,7 +95,7 @@ const serviceOver = (store: ApprovalStore) =>
 const runTool = (snapshot: ApprovalContinuation, actorId: string, bot: string) => {
   const tool = createHeadlessComputerTools({
     gateway,
-    botId: bot,
+    seat: personSeat(actorId, bot),
     actor: { id: actorId, userId: actorId, initiator: { kind: "person" } },
   }).find((candidate) => candidate.definition.name === snapshot.toolName);
   if (!tool) throw new Error("no tool");
@@ -366,7 +367,9 @@ test("the result is saved before it is published: a failed continuation is retri
 
   await asOwner(() => currentService.resume(owner, id, worker(continued)));
   expect(commands).toEqual([DANGEROUS]);
-  expect(continued.map((input) => input.result)).toEqual([saved.result]);
+  expect(continued.map((input) => input.result)).toEqual([
+    saved.result as NonNullable<typeof saved.result>,
+  ]);
   expect((await row(id)).status).toBe("completed");
 });
 

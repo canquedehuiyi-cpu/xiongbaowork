@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 
-import { createShell, type Shell } from "./shell";
+import { type CommandRunner, createShell } from "./shell";
 import { createWorkspace, DEFAULT_WORKSPACE_LIMITS } from "./workspace";
 
 /**
@@ -251,7 +251,7 @@ export function createPerBotComputer(options: {
   // directory rather than two.
   const sharedShell = createShell(workspaceRoot);
   const workspaces = new Map<string, ReturnType<typeof createWorkspace>>();
-  const shells = new Map<string, Shell>();
+  const shells = new Map<string, CommandRunner>();
   const ensured = new Map<string, Promise<void>>();
   // Ready is remembered for good; a failure until `failedAt + PROBE_FAILURE_TTL_MS`.
   let ready = false;
@@ -352,9 +352,10 @@ export function createPerBotComputer(options: {
     },
     /**
      * The shell an employee's commands run in: the shared one for the default employee, otherwise
-     * one that hands each command to the helper to run as the employee's own user.
+     * one that hands each command to the helper to run as the employee's own user. That one has no
+     * live terminal (`CommandShell` in shell.ts): the live shell is this process's bash, pwuser's.
      */
-    async shellFor(botId: string): Promise<Shell> {
+    async shellFor(botId: string): Promise<CommandRunner> {
       if (!usesOwnUser(botId, defaultBotId, enabled)) return sharedShell;
       await ensure(botId);
       const key = botKeyOf(botId);

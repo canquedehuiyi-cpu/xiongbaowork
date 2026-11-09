@@ -8955,6 +8955,12 @@ export function createPluginStore(options: PluginStoreOptions) {
        * reaching its owner's account (team-bots/team-bots.ts). Every gate is still the asker's.
        */
       credentialActorId?: string;
+      /**
+       * The conversation the call is made in, when the caller knows it (a conversation's own run says
+       * it through the approval context instead). Routines and goals use it to post where they were
+       * asked, rather than asking which conversation (upstream #1159, #1161).
+       */
+      threadId?: string;
     }): Promise<{ text: string; isError: boolean }> {
       const [serverId, ...rest] = input.ref.split("/");
       const toolName = rest.join("/");
@@ -9361,6 +9367,13 @@ export function createPluginStore(options: PluginStoreOptions) {
             ...(placement ? { placement } : {}),
             actorId: input.credentialActorId ?? input.actorId,
             botId: input.botId,
+            // The conversation the call was made in: Routines and goals post where they were asked.
+            ...((input.threadId ?? currentApprovalContext()?.threadId)
+              ? {
+                  threadId:
+                    input.threadId ?? currentApprovalContext()?.threadId,
+                }
+              : {}),
             ...tenantChosenOutbound(
               entry,
               access.transport,

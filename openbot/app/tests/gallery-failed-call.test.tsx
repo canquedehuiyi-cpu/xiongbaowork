@@ -4,10 +4,10 @@ import { cleanup, render } from "@testing-library/react";
 import { GALLERY as CHARTS } from "@/components/gallery/charts";
 import { GALLERY as DECISIONS } from "@/components/gallery/decisions";
 import {
-  FAILED_UNREADABLE,
-  FAILED_WENT_WRONG,
+  UNREADABLE as FAILED_UNREADABLE,
+  WENT_WRONG as FAILED_WENT_WRONG,
   FailedCard,
-} from "@/components/gallery/refused";
+} from "@/components/gallery/failed";
 import { GALLERY as TABLES } from "@/components/gallery/table";
 import { galleryCallFailure } from "@/lib/copilot/gallery-tools";
 

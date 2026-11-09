@@ -85,6 +85,10 @@ describe("runner browser probe compatibility", () => {
           pressKey: async () => {},
           insertText: async () => {},
           wheel: async () => {},
+          // Nothing here watches the page.
+          screencastClient: async () => {
+            throw new Error("the probe never opens a screencast");
+          },
         };
         return { pages: () => [page], close: async () => {}, onClose: () => {} };
       };
@@ -143,7 +147,7 @@ describe("runner browser probe compatibility", () => {
       expect(result.type).toBe("result");
       expect(result.id).toBe(key);
       expect(result.ok).toBe(false);
-      expect(String(result.error)).toContain("cloud credentials");
+      expect(String(result.error)).toContain("cloud keys");
       expect(launches).toBe(0);
       expect(await settleRunnerProbeAction(pending)).toEqual(result);
     } finally {

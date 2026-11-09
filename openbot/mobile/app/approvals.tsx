@@ -12,8 +12,10 @@ import { type ApprovalInbox, api } from "../src/api";
 import { authClient } from "../src/auth";
 import { useLoad } from "../src/use-load";
 
-/** 只给「允许一次」的底线，与服务端 approvals/types 的 `offersStandingRule` 同一个名单。 */
+/** Approvals answered only once: the same sources `offersStandingRule` (shared/standing-rule.ts) refuses a standing rule for. */
 const ONCE_ONLY_SOURCES: ReadonlySet<string> = new Set([
+  "task",
+  "safety",
   "destructive_tool",
   "outbound_send",
   "share_access",
@@ -120,7 +122,11 @@ export default function ApprovalsScreen() {
                 void decide(request.id, "allow_once");
               }}
             />
-            {/* 只给「允许一次」的底线（删除类、对外发送、分享、公开发布）问的动作每次都要问，存下的规则用不上，服务端也会拒绝，所以不画。 */}
+            {/*
+             * Not for a check-in task's approval: tasks ask before every change, rules or not. Nor for
+             * one the safety policy raised. 删除类、对外发送、分享与授权、公开发布底线问的动作每次都要问，存下的规则用不上，
+             * 服务端也会拒绝，所以不画。Mirrors `offersStandingRule` (shared/standing-rule.ts).
+             */}
             {ONCE_ONLY_SOURCES.has(
               request.action?.policy?.source ?? "",
             ) ? null : (

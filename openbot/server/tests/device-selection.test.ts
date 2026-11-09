@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { AuditStore } from "../src/audit";
+import { personSeat } from "../src/computer/computer-key";
 import { createComputerGateway } from "../src/computer/gateway";
 import type { ActionPolicy } from "../src/computer/policy";
 import type { ComputerProvider } from "../src/computer/provider";
@@ -62,6 +63,8 @@ function memoryQueue() {
       }
       return ran;
     },
+    claimNotices: async () => [],
+    settleNotice: async () => false,
   };
   return { queue, items };
 }
@@ -134,14 +137,14 @@ describe("device mode builds a computer gateway", () => {
         return new Response("{}", { status: 500 });
       }) as unknown as typeof fetch,
     });
-    const result = await gateway.runCommand("bot-1", ACTOR, {
+    const result = await gateway.runCommand(personSeat(ACTOR.id, "bot-1"), ACTOR, {
       command: "pwd",
     });
     expect(result).toMatchObject({ exitCode: 0 });
     expect(frames.map((frame) => frame.action)).toEqual(["exec"]);
     expect(fetched).toEqual([]);
     // The lifecycle answers are truthful for a machine the deployment does not host.
-    expect(await gateway.status("bot-1")).toMatchObject({ state: "absent" });
+    expect(await gateway.status(personSeat(ACTOR.id, "bot-1"))).toMatchObject({ state: "absent" });
   });
 });
 
@@ -229,7 +232,7 @@ describe("a machine that is away", () => {
       resolveDevice: (botId) => selector.forBot(botId),
     });
 
-    const result = await gateway.runCommand("bot-1", ACTOR, {
+    const result = await gateway.runCommand(personSeat(ACTOR.id, "bot-1"), ACTOR, {
       command: "make report",
     });
     expect(result).toMatchObject({ queued: true });

@@ -17,6 +17,7 @@ import type { AuditEventInput } from "../src/audit";
 import type { AppVariables, AuthenticatedActor } from "../src/auth/guards";
 import { CANDIDATE_REF } from "../src/computer/app-discovery";
 import type { ComputerTransport } from "../src/computer/client";
+import { personSeat } from "../src/computer/computer-key";
 import {
   DESKTOP_SNAPSHOT_DESCRIPTION,
   DESKTOP_WINDOWS_DESCRIPTION,
@@ -183,7 +184,7 @@ describe("the five tools are the same words and parameters on both sides", () =>
   test("the shared copy matches what the unattended run offers", () => {
     const tools = createHeadlessComputerTools({
       gateway: {} as never,
-      botId: "bot-1",
+      seat: personSeat(OWNER, "bot-1"),
       actor: { id: OWNER },
       machine: "device",
       apps: true,
@@ -440,7 +441,7 @@ describe("where the shell and file tools say they act", () => {
     new Map(
       createHeadlessComputerTools({
         gateway: {} as never,
-        botId: "bot-1",
+        seat: personSeat(OWNER, "bot-1"),
         actor: { id: OWNER },
         machine,
       }).map((tool) => [tool.definition.name, tool.definition.description]),

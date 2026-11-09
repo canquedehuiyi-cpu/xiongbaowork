@@ -8,14 +8,19 @@ import {
   decideFromSnapshot,
   type EnterpriseControls,
   guardDeliveryStore,
+  guardHostAccess,
   installEnterpriseControls,
+  skillSharingAllowed,
+  skillSharingInSnapshot,
 } from "../src/admin/controls";
 import { createEnterpriseGate } from "../src/admin/gate";
 import { createEnterpriseAdminRoutes } from "../src/admin/routes";
 import { createHandoffDelivery } from "../src/agents/handoff-delivery";
+import { serverTurnAdmission } from "../src/agents/turn-admission";
 import { addAuditTap, createAuditStore, recordAuditEvent } from "../src/audit";
 import { createAuth } from "../src/auth";
 import type { AppVariables } from "../src/auth/guards";
+import { computerKeyText } from "../src/computer/computer-key";
 import type { PolicyContext } from "../src/computer/policy";
 import type { ComputerProvider } from "../src/computer/provider";
 import type { DeploymentConfig } from "../src/config";
@@ -37,6 +42,11 @@ import {
   teamBotPublications,
   users,
 } from "../src/db/schema";
+import {
+  createHostAccessBroker,
+  HostAccessRefusedError,
+} from "../src/host-access/broker";
+import { hostAccessTools } from "../src/host-access/tools";
 import { TEAM_TENANT } from "../src/db/schema/tenant";
 import { createTurnRunner } from "../src/routines/run-turn";
 import { createTeamBots } from "../src/team-bots/team-bots";
@@ -66,17 +76,17 @@ const bot = `ent-bot-${suite}`;
 const stopped: string[] = [];
 const provider: ComputerProvider = {
   name: "fake",
-  isolation: "per-bot",
+  isolation: "per-person",
   locate: async () => "http://unused",
-  status: async (botId) => ({ botId, state: "ready" }),
-  stop: async (botId) => {
-    stopped.push(botId);
+  status: async (seat) => ({ botId: seat.botId, state: "ready" }),
+  stop: async (target) => {
+    stopped.push(computerKeyText(target.key));
     return { wasRunning: true };
   },
   reset: async () => ({ cleared: false }),
   list: async () => [
     {
-      botId: bot,
+      key: { kind: "bot", botId: bot },
       status: "running",
       url: "",
       startedAt: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
@@ -85,6 +95,7 @@ const provider: ComputerProvider = {
 };
 
 let controls: EnterpriseControls;
+const pickedModels = new Map<string, string>();
 
 /**
  * The deployment's settings, the identity rows, and every read or cleanup that spans tenants (an
@@ -107,6 +118,14 @@ async function clean() {
       .where(like(modelUsage.agentId, `ent-%${suite}%`));
   });
 }
+
+/** A Bot a person is recording in the browser of, as far as the controls are told (browser/bot-browser.ts). */
+const recordingBot = `ent-recording-${suite}`;
+const RECORDER_RULE = {
+  type: "domain" as const,
+  value: "openbot.acme.test",
+  ports: "443",
+};
 
 beforeAll(async () => {
   releaseRoleWriter = await bindTestRoleWriter(database);
@@ -145,6 +164,12 @@ beforeAll(async () => {
     auditStore,
     provider,
     builtInModel: "openai/gpt-test",
+    pickedModel: async (actorId, threadId) =>
+      actorId === member.id ? pickedModels.get(threadId) : undefined,
+    duringRecording: async (botId, policy) =>
+      botId === recordingBot
+        ? { ...policy, rules: [...policy.rules, RECORDER_RULE] }
+        : policy,
     env: {},
   });
 });
@@ -572,6 +597,7 @@ function headlessTurn(agentId: string) {
     stop: async () => true,
   };
   const runTurn = createTurnRunner({
+    admission: serverTurnAdmission,
     // biome-ignore lint/suspicious/noExplicitAny: narrow structural fakes, on purpose.
     intelligence: intelligence as any,
     // biome-ignore lint/suspicious/noExplicitAny: narrow structural fakes, on purpose.
@@ -620,7 +646,7 @@ describe("headless turns obey the same switches", () => {
     try {
       const turn = headlessTurn(bot);
       await expect(asMemberTenant(() => turn.run())).rejects.toThrow(
-        /allowlist/,
+        /isn't an allowed model/,
       );
       expect(turn.ran).toEqual([]);
     } finally {
@@ -634,9 +660,34 @@ describe("headless turns obey the same switches", () => {
     });
   });
 
+  test("headless admission judges the conversation's pick instead of the default", async () => {
+    await put(asAdmin, "/api/admin/enterprise/settings/modelAllowlist", {
+      value: { enabled: true, models: ["openai/gpt-picked"] },
+    });
+    pickedModels.set(`thread-${suite}`, "gpt-picked");
+    try {
+      const turn = headlessTurn(bot);
+      await expect(asMemberTenant(() => turn.run())).resolves.toMatchObject({
+        replyText: "Done.",
+      });
+      expect(turn.ran).toEqual([bot]);
+      pickedModels.delete(`thread-${suite}`);
+      const unpicked = headlessTurn(bot);
+      await expect(asMemberTenant(() => unpicked.run())).rejects.toThrow(
+        /isn't an allowed model/,
+      );
+    } finally {
+      pickedModels.clear();
+      await put(asAdmin, "/api/admin/enterprise/settings/modelAllowlist", {
+        value: { enabled: false, models: [] },
+      });
+    }
+  });
+
   test("a Bot-to-Bot hand-off meets the same switches", async () => {
     let ran = 0;
     const hop = createHandoffDelivery({
+      admission: serverTurnAdmission,
       deadlineMs: 5_000,
       agentFor: async () =>
         ({
@@ -695,7 +746,7 @@ describe("headless turns obey the same switches", () => {
         asMemberTenant(() =>
           hop.deliver({ work, message: "m", shown: "s", assertion: "a" }),
         ),
-      ).rejects.toThrow(/allowlist/);
+      ).rejects.toThrow(/isn't an allowed model/);
     } finally {
       await put(asAdmin, "/api/admin/enterprise/settings/modelAllowlist", {
         value: { enabled: false, models: [] },
@@ -850,15 +901,33 @@ describe("network policy", () => {
       rules: [{ type: "cidr", value: "10.0.0.0/8", ports: "443" }],
     });
   });
+
+  test("a Bot someone records in is pushed its policy as the recording needs it, and other Bots theirs", async () => {
+    // Every push of a Bot's policy reads this one function, the periodic push and the push on wake alike, so neither
+    // can take the Recorder's way out away mid-recording.
+    const quiet = await controls.policyForBot(`ent-quiet-${suite}`);
+    expect(quiet.rules).not.toContainEqual(RECORDER_RULE);
+    expect(await controls.policyForBot(recordingBot)).toEqual({
+      ...quiet,
+      rules: [...quiet.rules, RECORDER_RULE],
+    });
+  });
 });
 
 describe("offboarding", () => {
   test("terminating a member's computers stops their Bots and is audited", async () => {
+    stopped.length = 0;
     const response = await asAdmin.request(
       `/api/admin/enterprise/people/${member.id}/terminate-computers`,
       { method: "POST" },
     );
-    expect((await response.json()).stopped).toEqual([bot]);
+    // Their own computer, which every Bot they used runs on, and the computer of the Bot they own,
+    // which would be its own were it isolated.
+    expect((await response.json()).stopped).toEqual([
+      `person:${member.id}`,
+      `bot:${bot}`,
+    ]);
+    expect(stopped).toEqual([`person:${member.id}`, `bot:${bot}`]);
     const [row] = await asPlatform(() =>
       database
         .select()
@@ -876,7 +945,65 @@ describe("offboarding", () => {
   test("the inactive sweep stops a computer idle past the window", async () => {
     stopped.length = 0;
     const result = await controls.terminateInactiveComputers();
-    expect(result?.stopped).toEqual([bot]);
+    expect(result?.stopped).toEqual([`bot:${bot}`]);
+  });
+});
+
+describe("Skill sharing", () => {
+  test("is off until an administrator turns it on, everywhere a person's change and a run read it, and the change is on the trail", async () => {
+    // A person's change and a run read it in that person's frame.
+    const sharingAllowed = () => asMemberTenant(() => skillSharingAllowed());
+    // Off by default: nobody may open their Skills to every Bot, and runs offer nobody else's.
+    expect(await sharingAllowed()).toBe(false);
+    expect(skillSharingInSnapshot()).toBe(false);
+    expect(
+      (
+        await put(asMember, "/api/admin/enterprise/settings/skillSharing", {
+          value: true,
+        })
+      ).status,
+    ).toBe(403);
+    expect(await sharingAllowed()).toBe(false);
+
+    const saved = await put(
+      asAdmin,
+      "/api/admin/enterprise/settings/skillSharing",
+      { value: true },
+    );
+    expect(saved.status).toBe(200);
+    expect(await sharingAllowed()).toBe(true);
+    // The saving replica refreshes its snapshot before answering; the others on the NOTIFY.
+    expect(skillSharingInSnapshot()).toBe(true);
+    const [row] = await asPlatform(() =>
+      database
+        .select()
+        .from(auditEvents)
+        .where(
+          and(
+            eq(auditEvents.eventType, "enterprise.setting_changed"),
+            eq(auditEvents.targetId, "skillSharing"),
+            eq(auditEvents.actorUserId, admin.id),
+          ),
+        ),
+    );
+    expect(row?.payload).toMatchObject({
+      setting: "skillSharing",
+      before: false,
+      after: true,
+    });
+
+    expect(
+      (
+        await put(asAdmin, "/api/admin/enterprise/settings/skillSharing", {
+          value: "yes",
+        })
+      ).status,
+    ).toBe(400);
+    await put(asAdmin, "/api/admin/enterprise/settings/skillSharing", {
+      value: false,
+    });
+    expect(await sharingAllowed()).toBe(false);
+    expect(skillSharingInSnapshot()).toBe(false);
   });
 });
 
@@ -926,6 +1053,65 @@ describe("action recording", () => {
     ]);
     // Past Bun's 5 s default, so a row that never arrives fails the assertion above, not the clock.
   }, 15_000);
+
+  test("a command on the person's own computer is recorded once, as local", async () => {
+    // Its Activity row is a computer action too now, which the recording tap reads; the guard
+    // around the broker records it, so the tap must not record it a second time.
+    await put(asAdmin, "/api/admin/enterprise/settings/actionRecording", {
+      value: true,
+    });
+    const broker = guardHostAccess(
+      createHostAccessBroker(),
+      (message) => new HostAccessRefusedError(message),
+    );
+    const grantId = `ent-grant-${suite}`;
+    broker.rememberGrant({
+      id: grantId,
+      botId: bot,
+      actorId: admin.id,
+      displayName: "Project",
+      revoked: false,
+    });
+    broker.nextDesktopOperation();
+    const tool = hostAccessTools({
+      broker,
+      botId: bot,
+      actorId: admin.id,
+      auditStore,
+    }).find((candidate) => candidate.name === "host_run_command");
+    // In the acting person's own frame, as their turn runs the tool.
+    const answer = runAsTenant(admin.id, async () =>
+      tool?.execute({ grantId, command: "ls -la" }),
+    );
+    for (let attempt = 0; attempt < 50; attempt++) {
+      const operation = broker.nextDesktopOperation()?.operations[0];
+      if (operation) {
+        broker.resolveDesktopOperation({
+          operationId: operation.operationId,
+          ok: true,
+          result: { stdout: "" },
+        });
+        break;
+      }
+      await Bun.sleep(5);
+    }
+    await answer;
+    await Bun.sleep(100);
+    const rows = await asPlatform(() =>
+      database
+        .select()
+        .from(actionRecords)
+        .where(
+          and(
+            eq(actionRecords.botId, bot),
+            eq(actionRecords.toolName, "host/run_command"),
+          ),
+        ),
+    );
+    expect(rows.map((row) => [row.surface, row.outcome, row.command])).toEqual([
+      ["local", "allowed", "ls -la"],
+    ]);
+  });
 });
 
 describe("OpenTelemetry export", () => {

@@ -231,7 +231,9 @@ test("three steps run in order and become three cards under one parent", async (
   for (const row of rows.slice(1)) {
     expect(row.parentTaskId).toBe(started.parentTaskId);
     expect(row.status).toBe("awaiting_review");
-    expect(STEPS.map((step) => step.agentId)).toContain(row.executorAgentId);
+    expect(
+      STEPS.map((step): string | null => step.agentId),
+    ).toContain(row.executorAgentId);
   }
 
   /*
@@ -879,6 +881,7 @@ test("a step parked on an approval is answerable from the board, and one answer 
   });
   expect(parked.status).toBe("awaiting_action");
   const stepRunRef = parked.steps[1]?.runRef;
+  if (!stepRunRef) throw new Error("The parked step carries no run reference.");
   expect(asked).not.toBe("");
 
   /*

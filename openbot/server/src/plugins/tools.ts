@@ -1,9 +1,9 @@
-import { z } from "zod";
+import { DESTRUCTIVE_TOOL_NOTE } from "@openbot/shared/bot-prompt";
+import { type GrantedTool, parametersFor } from "@openbot/toolkit/granted-tool";
 import { ApprovalRefusedError } from "../approvals/types";
 import type { AuditInitiator } from "../audit";
 import { HeadlessToolSuspension } from "../computer/headless-tools";
 import { markUntrusted } from "../untrusted-content";
-import { providerSafeSchema } from "./provider-schema";
 import type { SelectableSkill } from "./selection";
 import {
   isDeploymentFault,
@@ -66,41 +66,14 @@ export function vendorAnswer(result: { text: string; isError: boolean }) {
     : markUntrusted(result.text, "connector result");
 }
 
-export type GrantedTool = {
-  name: string;
-  description: string;
-  parameters: z.ZodType;
-  execute: (args: unknown) => Promise<string>;
-  initiator?: AuditInitiator;
-  /**
-   * `<serverId>/<toolName>`, carried alongside the name the model is offered.
-   *
-   * The two spellings exist because a model tool name may not contain a slash, and selection has to
-   * compare a tool against what a skill declared, which is written in the ref spelling because that
-   * is how a grant is written. Carried rather than derived at the comparison, so there is one place
-   * the two forms are converted (`toolNameFor`) and no second parser to drift from it.
-   */
-  ref: string;
-};
-
-/**
- * A vendor's JSON Schema as something the model can be handed.
- *
- * Anything that is not an object schema describes something other than a tool's arguments, and a
- * schema we cannot read must not stop the tool being offered: an open object lets the model call it
- * and lets the vendor be the one to reject a bad argument, which is where that error belongs.
+/*
+ * The tool shape and the schema conversion are the toolkit's (`@openbot/toolkit/granted-tool`), as
+ * upstream has them: one `GrantedTool` for the built-in runtime and the plugins, and one
+ * `parametersFor`, which cuts every app's schema down to what the model providers accept
+ * (`providerSafeSchema` in `@openbot/toolkit/tool-schema`). Re-exported for this module's callers.
  */
-export function parametersFor(inputSchema: Record<string, unknown>): z.ZodType {
-  try {
-    // 每个应用工具的 schema 都经过这里才到内置运行时和各个远程 harness，所以在这里一次性裁成
-    // 模型供应商接受的样子（见 ./provider-schema）。
-    const converted = z.fromJSONSchema(
-      providerSafeSchema(inputSchema) as never,
-    );
-    if (converted instanceof z.ZodObject) return converted;
-  } catch {}
-  return z.object({}).catchall(z.unknown());
-}
+export type { GrantedTool };
+export { parametersFor };
 
 /**
  * 谁在删除前问主人：OpenBot，不是 Bot。
@@ -116,10 +89,18 @@ export const CONNECTOR_APPROVAL_GUIDANCE =
 
 /**
  * 应用标为破坏性的工具（MCP 的 `destructiveHint`、Composio 的破坏性标签），提供给模型时追加在
- * 描述末尾。它的名字不一定看得出会删除什么，所以在工具本身上写明。
+ * 描述末尾。它的名字不一定看得出会删除什么，所以在工具本身上写明。用上游的那一句
+ * （shared/bot-prompt.ts），内置员工的 `APPROVAL_GUIDANCE` 说的也是这个标记。
  */
-export const DESTRUCTIVE_TOOL_NOTE =
-  "This tool is marked destructive: it deletes or overwrites something, so OpenBot asks the person before it runs. Do not ask them first.";
+export { DESTRUCTIVE_TOOL_NOTE };
+
+/**
+ * 这次运行是否至少持有一个经插件调用路径的应用工具（`mcp__` 开头）。{@link CONNECTOR_APPROVAL_GUIDANCE}
+ * 和内置员工审批引导里「已连接应用的工具」那一条都按它决定说不说：记忆等 OpenBot 内部工具不经审批门。
+ */
+export function holdsAppTools(tools: readonly { name: string }[]): boolean {
+  return tools.some((tool) => refFromToolName(tool.name) !== null);
+}
 
 /** 默认的中文网页搜索地址：百度为主，必应作备选。关键词 URL 编码后接在后面。 */
 export const BAIDU_SEARCH_URL = "https://www.baidu.com/s?wd=";
@@ -254,9 +235,7 @@ export function grantedToolGuidance(
         ]
       : []),
     // 只有内部工具（记忆、跟进等）时不说：它们不经审批门。
-    ...(tools.some((tool) => refFromToolName(tool.name) !== null)
-      ? [CONNECTOR_APPROVAL_GUIDANCE]
-      : []),
+    ...(holdsAppTools(tools) ? [CONNECTOR_APPROVAL_GUIDANCE] : []),
     ...(researchConnector
       ? [
           `Parallel provides public-web search and extraction: ${researchTools.map((tool) => tool.name).join(" and ")} discover sources and read selected pages.`,
@@ -311,6 +290,9 @@ export async function grantedTools(options: {
   return granted.tools.map((tool) => ({
     name: tool.toolName,
     ref: tool.ref,
+    // An app's tools arrive by the hundred, so past the floor they wait behind `search_tools`
+    // (`agents/tool-search.ts`), as upstream offers them.
+    searchable: true as const,
     initiator,
     // 应用标为破坏性的工具，名字不一定看得出来：在描述末尾写明 OpenBot 会先问，Bot 不必再问。
     description: tool.destructive

@@ -4,7 +4,7 @@ import { eq, inArray } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import { createAgentRoutes } from "../src/agents/routes";
-import type { AppVariables } from "../src/app-variables";
+import type { AppVariables } from "../src/auth/guards";
 import { createDatabase } from "../src/db/client";
 import { agentProfiles, agents, users } from "../src/db/schema";
 import { runAsTenant } from "../src/tenant/context";
@@ -57,7 +57,11 @@ const routesFor = (actorId: string) => {
     context,
     next,
   ) => {
-    context.set("actor", { id: actorId, role: "user" as const });
+    context.set("actor", {
+      id: actorId,
+      email: `${actorId}@example.test`,
+      role: "user" as const,
+    });
     await next();
   };
   return createAgentRoutes(store, requireUser);
@@ -132,6 +136,7 @@ afterAll(async () => {
   await runAsTenant(stranger, () =>
     database.delete(users).where(eq(users.id, stranger)),
   );
+  await database.$client.close();
 });
 
 let privateAgentId = "";
@@ -225,7 +230,10 @@ test("a coworker public inside its own tenant is still invisible to a stranger",
   );
   const [stamped] = await runAsTenant(owner, () =>
     database
-      .select({ tenantId: agentProfiles.tenantId, visibility: agentProfiles.visibility })
+      .select({
+        tenantId: agentProfiles.tenantId,
+        visibility: agentProfiles.visibility,
+      })
       .from(agentProfiles)
       .where(eq(agentProfiles.agentId, coworker.id)),
   );
@@ -260,6 +268,10 @@ test("a coworker made public through the store is shared with every person (team
   expect(listed.agents.map((entry) => entry.id)).toContain(coworker.id);
 
   // Visible is not writable: the stranger still cannot edit or delete it.
-  expect([403, 404]).toContain((await call(stranger, coworker.id, "PATCH", edit)).status);
-  expect([403, 404]).toContain((await call(stranger, coworker.id, "DELETE")).status);
+  expect([403, 404]).toContain(
+    (await call(stranger, coworker.id, "PATCH", edit)).status,
+  );
+  expect([403, 404]).toContain(
+    (await call(stranger, coworker.id, "DELETE")).status,
+  );
 });

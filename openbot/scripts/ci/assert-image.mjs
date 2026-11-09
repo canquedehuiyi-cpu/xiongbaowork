@@ -23,12 +23,21 @@ for (const path of [
   "/api/agents/general-assistant/autonomous",
 ]) {
   const api = await fetch(`${origin}${path}`);
+  const contentType = api.headers.get("content-type") ?? "";
+  const body = await api.text();
+  const ok = api.status === 200 && contentType.includes("application/json");
+  // On a failure, say what came back instead: the evidence directory is not always downloadable.
   check(
-    api.status === 200 &&
-      api.headers.get("content-type")?.includes("application/json"),
-    `${path} 200 JSON`,
+    ok,
+    ok
+      ? `${path} 200 JSON`
+      : `${path} 200 JSON (got ${api.status} ${contentType}: ${body.slice(0, 200)})`,
   );
-  check(Boolean(await api.json().catch(() => null)), `${path} parses as JSON`);
+  let parsed = null;
+  try {
+    parsed = JSON.parse(body);
+  } catch {}
+  check(Boolean(parsed), `${path} parses as JSON`);
 }
 for (const path of ["/api", "/api/missing-delivery-route"]) {
   check((await fetch(`${origin}${path}`)).status === 404, `${path} stays 404`);

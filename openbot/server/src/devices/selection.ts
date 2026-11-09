@@ -153,13 +153,14 @@ export function createDeviceSelector(
 export function createDeviceComputerProvider(): ComputerProvider {
   return {
     name: "device",
-    isolation: "per-bot",
+    // Each person's own machines: every coworker they run acts on them, as on a computer of their own.
+    isolation: "per-person",
     locate: async () => {
       throw new ComputerUnavailableError(
         "This deployment runs coworkers on the tenant's own machines and hosts no computer of its own.",
       );
     },
-    status: async (botId) => ({ botId, state: "absent" }),
+    status: async (seat) => ({ botId: seat.botId, state: "absent" }),
     stop: async () => ({ wasRunning: false }),
     reset: async () => ({ cleared: false }),
     list: async () => [],

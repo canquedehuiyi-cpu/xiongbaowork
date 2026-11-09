@@ -15,7 +15,15 @@
  *
  *     bun scripts/check-new-values-keys.ts <ci-values.yaml> [--since v0.0.4]
  */
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { parse, parseAllDocuments } from "yaml";
+import {
+  dependencyKeys,
+  underDependency,
+  withoutChartDefault,
+} from "./chart-reuse-values";
 
 const [valuesFile, ...rest] = process.argv.slice(2);
 if (!valuesFile) {
@@ -112,13 +120,16 @@ if (added.length === 0) {
 }
 
 /** Render, and say what came out. */
-function render(extra: string[]): { ok: boolean; out: string; err: string } {
+function render(
+  extra: string[],
+  chart = "charts/openbot",
+): { ok: boolean; out: string; err: string } {
   const result = Bun.spawnSync(
     [
       "helm",
       "template",
       "ci",
-      "charts/openbot",
+      chart,
       "--values",
       valuesFile,
       "--set-string",
@@ -186,9 +197,46 @@ if (!baseline.ok) {
 }
 const alreadyEmpty = emptyKeys(baseline.out);
 
+/*
+ * Keys whose absence is refused, by name, rather than survived.
+ *
+ * `intelligence` is a subchart's whole values block, and Helm switches a dependency ON when its
+ * condition key is missing, so a release from before it would install an Intelligence on that
+ * chart's bare defaults beside the one it already uses, and render cleanly doing it. There is no
+ * absent-safe reading of that, so validation.yaml refuses it with a message saying what to set. What
+ * is asserted is that the refusal is that one, and not some nil dereference on the way.
+ */
+const refusedWhenAbsent: Record<string, string> = {
+  intelligence: "this release's values have no `intelligence` key",
+};
+
+/*
+ * A key under a dependency's block is taken out of a copy of values.yaml rather than nulled, so the
+ * dependency's own default stays beneath it, as it does on an upgrade (chart-reuse-values.ts).
+ */
+const dependencies = dependencyKeys(
+  await Bun.file("charts/openbot/Chart.yaml").text(),
+);
+
 let bad = 0;
 for (const path of added) {
-  const attempt = render(["--set", `${path}=null`]);
+  const attempt = underDependency(path, dependencies)
+    ? await withoutChartDefault("charts/openbot", path, (copy) =>
+        render([], copy),
+      )
+    : render(["--set", `${path}=null`]);
+  const refusal = refusedWhenAbsent[path];
+  if (refusal !== undefined) {
+    if (attempt.ok || !attempt.err.includes(refusal)) {
+      console.error(
+        `::error::Rendering without ${path} should be refused with "${refusal}", and was not. ${attempt.err.trim().split("\n").slice(-1).join(" ")}`,
+      );
+      bad += 1;
+    } else {
+      console.log(`refuses without ${path}, by name`);
+    }
+    continue;
+  }
   if (!attempt.ok) {
     const why = attempt.err.trim().split("\n").slice(-3).join(" ");
     console.error(
@@ -267,15 +315,10 @@ for (const { path, variable } of offSwitches) {
 /**
  * What has to be switched on for the workload carrying this fallback to render at all.
  *
- * The culler only needs the sandbox mode it belongs to. Routines additionally need the credential
- * the worker presents, and WHERE that lives differs per target: three of the five read secrets from
- * a cloud store, where naming `secrets.workerSharedSecret` is not enough and `externalSecrets.data`
- * has to name it too. Appended after whatever the target already declares rather than turning the
- * store off, so this still renders the target as shipped.
+ * The culler only needs the sandbox mode it belongs to. Routines need nothing: they are on by
+ * default and the chart writes the worker's secret itself wherever nobody else holds one, so every
+ * target renders the sweep as shipped.
  */
-const targetValues = parse(await Bun.file(valuesFile).text()) as {
-  externalSecrets?: { enabled?: boolean; data?: unknown[] };
-};
 function enableFor(component: string): string[] {
   // On by default and needing nothing but the database, so nothing has to be switched on for it.
   if (component === "attachments-culler") return [];
@@ -292,22 +335,7 @@ function enableFor(component: string): string[] {
       "--set",
       "networkPolicy.kubernetesApiCidr=10.96.0.0/12",
     ];
-  const on = ["--set", "routines.enabled=true"];
-  if (!targetValues.externalSecrets?.enabled) {
-    return [
-      ...on,
-      "--set-string",
-      "secrets.workerSharedSecret=for-rendering-only",
-    ];
-  }
-  const next = targetValues.externalSecrets.data?.length ?? 0;
-  return [
-    ...on,
-    "--set",
-    `externalSecrets.data[${next}].secretKey=worker-shared-secret`,
-    "--set",
-    `externalSecrets.data[${next}].remoteRef.key=openbot/worker-shared-secret`,
-  ];
+  return [];
 }
 
 /** One step of a dotted path through parsed YAML, without asserting a shape it may not have. */
@@ -460,5 +488,80 @@ for (const { path, variable } of offSwitches) {
     continue;
   }
   console.log(`${path}=0 stays zero`);
+}
+
+/*
+ * The computer's own settings, which the chart passes through only when somebody set them, so a
+ * blank leaves the computer's own default in force. Two things have gone wrong with that shape.
+ *
+ * ZERO. Each of these switches something off at zero, and `with` reads zero as empty, so a
+ * deployment that wrote `0` got nothing rendered and the default left on.
+ *
+ * A WHOLE NUMBER FROM A VALUES FILE. Helm reads values files through JSON, so `tabIdleMs: 1200000`
+ * arrives as a float and renders as `1.2e+06`. The computer reads digits only and falls back to its
+ * default without a word. `--set` parses an integer, which is why this needs a file of its own.
+ *
+ * Only where the chart runs the shared computer, which is the workload that carries them.
+ */
+const computerSettings: Array<{
+  path: string;
+  variable: string;
+  whole: number;
+}> = [
+  {
+    path: "computers.memoryHighPercent",
+    variable: "COMPUTER_MEMORY_HIGH_PERCENT",
+    whole: 90,
+  },
+  {
+    path: "computers.tabIdleMs",
+    variable: "COMPUTER_TAB_IDLE_MS",
+    whole: 1_200_000,
+  },
+  // Older than this check: an hour rendered as `3.6e+06`, and `0` ("keep browsers resident") as nothing.
+  {
+    path: "computers.browserIdleMs",
+    variable: "COMPUTER_BROWSER_IDLE_MS",
+    whole: 3_600_000,
+  },
+];
+if (!baseline.out.includes("name: COMPUTER_SEPARATE_WORKSPACES")) {
+  console.log(
+    `${valuesFile} runs no shared computer, so its settings are not checked here`,
+  );
+} else {
+  const scratch = await mkdtemp(join(tmpdir(), "openbot-values-"));
+  try {
+    for (const { path, variable, whole } of computerSettings) {
+      const zero = render(["--set", `${path}=0`]);
+      const zeroGot = zero.ok ? renderedValue(zero.out, variable) : undefined;
+      if (zeroGot !== "0") {
+        console.error(
+          `::error::Setting ${path}=0 rendered ${variable}=${zeroGot ?? "nothing"} rather than 0. A zero is an off switch, not an absent value.`,
+        );
+        bad += 1;
+      } else {
+        console.log(`${path}=0 stays zero`);
+      }
+
+      const leaf = path.slice(path.lastIndexOf(".") + 1);
+      const file = join(scratch, `${leaf}.yaml`);
+      await Bun.write(file, `computers:\n  ${leaf}: ${whole}\n`);
+      const fromFile = render(["--values", file]);
+      const fileGot = fromFile.ok
+        ? renderedValue(fromFile.out, variable)
+        : undefined;
+      if (fileGot !== String(whole)) {
+        console.error(
+          `::error::${leaf}: ${whole} in a values file rendered ${variable}=${fileGot ?? "nothing"}, which the computer does not read as ${whole}.`,
+        );
+        bad += 1;
+      } else {
+        console.log(`${path} from a values file renders as ${fileGot}`);
+      }
+    }
+  } finally {
+    await rm(scratch, { recursive: true, force: true });
+  }
 }
 process.exit(bad === 0 ? 0 : 1);

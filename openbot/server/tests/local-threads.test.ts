@@ -33,25 +33,36 @@ type StoredRun = {
   createdAt: number;
 };
 
-/** The stand-in store: one Map, because the real one is a process singleton too. */
-const stored = new Map<
-  string,
-  {
-    historicRuns: StoredRun[];
-    messages: unknown[];
-    createdAt: number | null;
-    isRunning: boolean;
-  }
->();
+/**
+ * The stand-in store: one Map, because the real one is a process singleton too. Each entry keeps the
+ * owner it was created for, and each read is scoped to one owner, as runtime 1.85's store is.
+ */
+type StoredEntry = {
+  ownerId: string;
+  historicRuns: StoredRun[];
+  messages: unknown[];
+  createdAt: number | null;
+  isRunning: boolean;
+};
+const stored = new Map<string, StoredEntry>();
 
 // Keep the module's other exports (BuiltInAgent, CopilotRuntime, …): Bun's module mock outlives this
 // file in the shard process, and later files import src/copilot.ts, which needs them.
 const realRuntime = { ...(await import("@copilotkit/runtime/v2")) };
+const SERVER_OWNER = realRuntime.ɵSERVER_THREAD_OWNER;
+/** The entry, when `scope`'s owner may see it: only its own owner may, and no scope is the server. */
+const visible = (threadId: string, scope?: { ownerId: string }) => {
+  const entry = stored.get(threadId);
+  return entry && entry.ownerId === (scope?.ownerId ?? SERVER_OWNER)
+    ? entry
+    : undefined;
+};
 mock.module("@copilotkit/runtime/v2", () => ({
   ...realRuntime,
   ɵGLOBAL_STORE: {
-    getOrCreate(threadId: string) {
+    getOrCreate(threadId: string, ownerId = SERVER_OWNER) {
       const entry = stored.get(threadId) ?? {
+        ownerId,
         historicRuns: [],
         messages: [],
         createdAt: null,
@@ -63,11 +74,15 @@ mock.module("@copilotkit/runtime/v2", () => ({
     peek(threadId: string) {
       return stored.get(threadId);
     },
-    appendRun(threadId: string, run: StoredRun) {
-      // `BoundedThreadStore.appendRun` drops a run for a thread it holds no entry for (G01-E P18):
-      // a replay that does not create the entry first loads nothing, so this stand-in drops it too.
+    ownerOf(threadId: string) {
+      return stored.get(threadId)?.ownerId;
+    },
+    appendRun(threadId: string, writer: StoredEntry, run: StoredRun) {
+      // `BoundedThreadStore.appendRun` drops a run for a thread it holds no entry for (G01-E P18),
+      // and one whose writer is no longer the entry: a replay that does not create the entry first
+      // loads nothing, so this stand-in drops it too.
       const entry = stored.get(threadId);
-      if (!entry) return;
+      if (!entry || entry !== writer) return;
       entry.createdAt ??= run.createdAt;
       entry.historicRuns.push(run);
       // `BoundedThreadStore.appendRun` hoists the LAST run's messages to the thread level, which is
@@ -76,24 +91,30 @@ mock.module("@copilotkit/runtime/v2", () => ({
     },
   },
   InMemoryAgentRunner: class {
-    listThreads() {
-      return [...stored.entries()].map(([id, entry]) => ({
-        id,
-        name: null,
-        agentId: entry.historicRuns[0]?.agentId ?? "unknown",
-        organizationId: "",
-        createdById: "",
-        archived: false,
-        createdAt: new Date(entry.createdAt ?? 0).toISOString(),
-        updatedAt: new Date(entry.createdAt ?? 0).toISOString(),
-      }));
+    listThreads(scope?: { ownerId: string }) {
+      return [...stored.keys()]
+        .flatMap((id) => {
+          const entry = visible(id, scope);
+          return entry ? [{ id, entry }] : [];
+        })
+        .map(({ id, entry }) => ({
+          id,
+          name: null,
+          agentId: entry.historicRuns[0]?.agentId ?? "unknown",
+          organizationId: "",
+          createdById: entry.ownerId,
+          archived: false,
+          createdAt: new Date(entry.createdAt ?? 0).toISOString(),
+          updatedAt: new Date(entry.createdAt ?? 0).toISOString(),
+        }));
     }
-    getThreadMessages(threadId: string) {
-      return stored.get(threadId)?.messages ?? [];
+    getThreadMessages(threadId: string, scope?: { ownerId: string }) {
+      return visible(threadId, scope)?.messages ?? [];
     }
-    getThreadEvents(threadId: string) {
+    getThreadEvents(threadId: string, scope?: { ownerId: string }) {
       return (
-        stored.get(threadId)?.historicRuns.flatMap((run) => run.events) ?? []
+        visible(threadId, scope)?.historicRuns.flatMap((run) => run.events) ??
+        []
       );
     }
     run() {
@@ -106,8 +127,10 @@ mock.module("@copilotkit/runtime/v2", () => ({
 // evaluated once, at load. If an earlier file in this shard process (copilot.test.ts, say) already
 // loaded postgres-runner against the real runtime, the cached class keeps the real base class and the
 // mock above never reaches it; the query makes Bun evaluate the module again against the mock.
+// Through a variable: the query is Bun's, and TypeScript resolves only the literal path it names.
+const freshRunner = "../src/threads/postgres-runner.ts?local-threads";
 const { PostgresAgentRunner } = (await import(
-  "../src/threads/postgres-runner.ts?local-threads"
+  freshRunner
 )) as typeof import("../src/threads/postgres-runner");
 
 // The explicit test URL survives earlier pools deleting DATABASE_URL. Never read the application's

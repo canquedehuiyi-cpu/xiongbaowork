@@ -16,6 +16,11 @@ describe("navigation targets", () => {
   // the whole reason a browser running inside the deployment needs a floor under it.
   test.each([
     ["http://localhost:5432", "loopback by name"],
+    ["http://admin.localhost:5432", "loopback by a name under .localhost"],
+    [
+      "http://a.b.localhost./",
+      "loopback by a deep .localhost name with a root dot",
+    ],
     ["http://127.0.0.1/admin", "loopback by address"],
     ["http://10.0.0.5/", "RFC1918 10/8"],
     ["http://192.168.1.1/", "RFC1918 192.168/16"],
@@ -25,7 +30,7 @@ describe("navigation targets", () => {
 
     expect(verdict.allowed).toBe(false);
     expect(verdict.allowed === false && verdict.reason).toContain(
-      "inside this deployment's own network",
+      "inside OpenBot's own network",
     );
   });
 
@@ -40,7 +45,7 @@ describe("navigation targets", () => {
 
       expect(verdict.allowed).toBe(false);
       expect(verdict.allowed === false && verdict.reason).toContain(
-        "cloud credentials",
+        "cloud keys",
       );
     }
   });
@@ -69,7 +74,7 @@ describe("navigation targets", () => {
 
       expect(verdict.allowed).toBe(false);
       expect(verdict.allowed === false && verdict.reason).toContain(
-        "cloud credentials",
+        "cloud keys",
       );
     }
   });
@@ -85,7 +90,7 @@ describe("navigation targets", () => {
 
     expect(verdict.allowed).toBe(false);
     expect(verdict.allowed === false && verdict.reason).toContain(
-      "inside this deployment's own network",
+      "inside OpenBot's own network",
     );
   });
 

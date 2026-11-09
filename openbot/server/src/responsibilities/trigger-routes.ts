@@ -72,7 +72,7 @@ export async function deliverToTrigger(
   if (trigger.responsibilityStatus !== "active")
     return {
       status: "inactive",
-      reason: `The responsibility is ${trigger.responsibilityStatus}.`,
+      reason: `The goal is ${trigger.responsibilityStatus}.`,
     };
   if (!filterPasses)
     return { status: "ignored", reason: "The trigger's filter did not match." };
@@ -216,7 +216,7 @@ export function createTriggerIngressRoutes(deps: TriggerIngressDeps) {
       return context.json(
         {
           error:
-            "This trigger is waiting for its signing secret. Paste it on the responsibility.",
+            "This trigger is waiting for its signing secret. Paste it on the goal.",
         },
         503,
       );

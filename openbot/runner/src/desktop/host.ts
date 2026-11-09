@@ -1,3 +1,4 @@
+/// <reference path="./cs.d.ts" />
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { win32 } from "node:path";

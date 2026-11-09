@@ -154,6 +154,28 @@ describe.skipIf(!linux)(
       },
     );
 
+    test("an employee's live terminal is refused: the live shell would run as the computer's own user", async () => {
+      const socket = new WebSocket(
+        `${computer!.base.replace("http:", "ws:")}/terminal?bot=bot-a&token=${TOKEN}`,
+      );
+      const message = await new Promise<{
+        type: string;
+        error?: string;
+        fatal?: boolean;
+      }>((resolve, reject) => {
+        socket.addEventListener("message", (event) => {
+          if (typeof event.data === "string") resolve(JSON.parse(event.data));
+        });
+        socket.addEventListener("error", () =>
+          reject(new Error("The terminal socket failed.")),
+        );
+      });
+      socket.close();
+      expect(message.type).toBe("error");
+      expect(message.fatal).toBe(true);
+      expect(message.error).toContain("runs commands as its own user");
+    });
+
     test("/files/download for an employee is a 503", async () => {
       const response = await call(computer!, "/files/download?path=notes.txt", {
         bot: "bot-a",

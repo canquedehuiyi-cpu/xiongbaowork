@@ -26,6 +26,7 @@ import {
   type PageFrameStore,
 } from "./computer/page-frames";
 import { runAsTenant } from "./tenant/context";
+import type { ProactiveStore } from "./proactive/store";
 
 /**
  * The advisory lock this takes, as an arbitrary but fixed number.
@@ -139,10 +140,21 @@ export function startRetentionSweeps(
   retentionDays: number | undefined,
   // Swept whatever the audit policy is: their only other caller runs in `computers.mode: sandbox` alone.
   pageFrames?: PageFrameStore,
-  options: { intervalMs?: number; firstRunMs?: number } = {},
+  options: {
+    intervalMs?: number;
+    firstRunMs?: number;
+    /**
+     * The check-in ledger and old pings (proactive/store.ts), also swept whatever the audit policy
+     * is: they are working state, not a trail, and an hourly check-in per person and Bot writes 24
+     * ledger rows a day that nothing reads after a month.
+     */
+    proactive?: Pick<ProactiveStore, "prune">;
+  } = {},
 ): RetentionSweeper {
   const sweepsAudit = Boolean(retentionDays && retentionDays >= 1);
-  if (!sweepsAudit && !pageFrames) return { stop: () => undefined };
+  const { proactive } = options;
+  if (!sweepsAudit && !pageFrames && !proactive)
+    return { stop: () => undefined };
 
   const intervalMs = options.intervalMs ?? 60 * 60_000;
   const firstRunMs = options.firstRunMs ?? 60_000;
@@ -164,6 +176,25 @@ export function startRetentionSweeps(
             JSON.stringify({
               type: "page-frames-sweep-failed",
               note: "Old turn screenshots were not removed. Nothing is broken; the table is larger than it should be.",
+              error: String(error),
+            }),
+          );
+        });
+    }
+    if (proactive) {
+      // Everybody's ledger and pings, in no one person's scope: the platform's housekeeping (G01).
+      void runAsTenant("platform", () => proactive.prune())
+        .then(({ runs, pings }) => {
+          if (runs === 0 && pings === 0) return;
+          console.info(
+            JSON.stringify({ type: "proactive-ledger-swept", runs, pings }),
+          );
+        })
+        .catch((error) => {
+          console.error(
+            JSON.stringify({
+              type: "proactive-ledger-sweep-failed",
+              note: "Old check-in runs and pings were not removed. Nothing is broken; the tables are larger than they need to be.",
               error: String(error),
             }),
           );

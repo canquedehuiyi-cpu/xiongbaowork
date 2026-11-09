@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { COMPUTER_GUIDANCE } from "../../shared/bot-prompt";
+import { computerGuidance } from "../../shared/bot-prompt";
 import type { PluginStore } from "../src/plugins/store";
 import {
   CONNECTOR_APPROVAL_GUIDANCE,
@@ -84,5 +84,10 @@ test("a Bot holding connected-app tools is told OpenBot asks before their delete
   ).toContain(CONNECTOR_APPROVAL_GUIDANCE);
   expect(CONNECTOR_APPROVAL_GUIDANCE).toContain("memory");
   // Nor is it in the computer guidance, beside commands this rule does not cover.
-  expect(COMPUTER_GUIDANCE).not.toContain("OpenBot itself asks");
+  // Upstream made the computer guidance a function of what the Bot holds; every combination is checked.
+  for (const search of [false, true])
+    for (const personal of [false, true])
+      expect(computerGuidance({ search, personal })).not.toContain(
+        "OpenBot itself asks",
+      );
 });

@@ -181,6 +181,9 @@ function renderShell(path: string, options: Options = {}) {
   queryClient.setQueryData(userPreferencesQueryOptions("user").queryKey, {
     messageListEmphasis: "thread",
     selfHostBannerDismissed: true,
+    narration: null,
+    skin: "openbot",
+    proactive: "on",
   });
   queryClient.setQueryData(authKeys.currentUser(), {
     id: "user",

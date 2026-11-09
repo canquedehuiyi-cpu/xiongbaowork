@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import postgres from "postgres";
 import type { Database } from "../db/client";
 import { runAsTenant } from "../tenant/context";
+import type { ChannelWorkWire } from "./working";
 
 /**
  * Live channel activity, from whoever ran an agent to everybody else in the channel.
@@ -29,8 +30,15 @@ export type ChannelActivityEvent = {
   lastMessage: string | null;
   lastMessageAt: string | null;
   lastMessageAgentId: string | null;
+  /**
+   * A Bot's reply, its first line as plain text: what a notification says when the reply lands while
+   * OpenBot is out of sight. `lastMessage` runs every line into one. Only on a Bot's message.
+   */
+  firstLine?: string;
   /** Newly written summary, on its own event: the sweep runs seconds after the activity it follows. */
   summary?: string;
+  /** A person's first words, newly written, on its own event: the row's name until `summary`. */
+  opening?: string;
   /** The channel is hidden from every member's roster. Absent on an ordinary activity event. */
   deleted?: true;
   /**
@@ -56,6 +64,21 @@ export type ChannelActivityEvent = {
    * another within the second, without either window owning the truth.
    */
   taskUpdated?: true;
+  /**
+   * Everything this channel is waiting on right now: a Bot it asked, a routine firing into it.
+   * Absent on an ordinary activity event.
+   *
+   * The WHOLE list, never a change to it, so the newest event is the answer and a missed one is
+   * corrected by the next. Read from the queue and the run history at the moment of sending, which
+   * is also what the roster and the channel read return. See `working.ts`.
+   */
+  work?: ChannelWorkWire[];
+  /**
+   * When `work` was read, by the database's clock: ISO-8601 in UTC to the microsecond, fixed width
+   * so two compare as strings. Present whenever `work` is. Events
+   * can arrive out of order across replicas, so a browser keeps the list with the latest stamp.
+   */
+  workAt?: string;
 };
 
 /**

@@ -1,4 +1,6 @@
+import { declaredHarness } from "@openbot/shared/harnesses";
 import { and, desc, eq, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
+import { capabilityRefusal } from "../admin/capabilities";
 import type { CredentialStore } from "../credentials";
 import type { Database } from "../db/client";
 import {
@@ -32,6 +34,8 @@ import {
   mintCallbackToken,
   sameToken,
 } from "./callback-token";
+import { frameworkOf } from "./framework";
+import { mayIsolate } from "./isolation";
 import { canManageAgent } from "./profile-policy";
 import type {
   AgentActor,
@@ -162,11 +166,77 @@ export class ProtectedAgentError extends Error {
   }
 }
 
+/**
+ * A Bot was asked to have a computer of its own and may not.
+ *
+ * `capability`: the person asking does not hold "Isolated Bots". `unowned`: the Bot belongs to the
+ * deployment rather than a person (a tenant package's Bot, or one whose owner was removed), and the
+ * switch is a person's, so there is nobody it could be granted to. The route records both on the trail.
+ */
+export class IsolationRefusedError extends Error {
+  /**
+   * `forOwner`: the switch refused is the Bot's owner's, asked while somebody else (an administrator) edits it, so the
+   * sentence names the owner rather than telling the editor their own switch is off.
+   */
+  constructor(
+    readonly reason: "capability" | "unowned",
+    options: { forOwner?: boolean } = {},
+  ) {
+    super(
+      reason === "unowned"
+        ? "This Bot doesn't belong to a person, so it can't have a computer of its own."
+        : options.forOwner
+          ? "An admin has turned off \"Isolated Bots\" for this Bot's owner, so it can't have a computer of its own."
+          : capabilityRefusal("isolatedComputers"),
+    );
+    this.name = "IsolationRefusedError";
+  }
+}
+
+/**
+ * Refuse a Bot of its own to somebody without "Isolated Bots".
+ *
+ * Here rather than only at the route, so every caller of the store meets it, as publishing a Team Bot
+ * does. Asked only of a request that turns isolation ON: turning it off is always allowed, and an
+ * absent field changes nothing.
+ *
+ * Before any transaction opens. The answer reads the switches on a pooled connection of its own, and
+ * borrowing a second one while a transaction holds the first is how `getWithin`'s deadlock happens.
+ */
+async function requireMayIsolate(actor: AgentActor) {
+  if (!(await mayIsolate(actor.id))) {
+    throw new IsolationRefusedError("capability");
+  }
+}
+
+/**
+ * Refuse a computer of its own to a Bot whose OWNER lacks "Isolated Bots", whoever is editing it.
+ *
+ * The owner's switch is the one that decides at run time (`runsIsolated` in isolation.ts), so it is the one asked here:
+ * asking the editor let an administrator tick Isolated on somebody's Bot whose owner lacks the switch, the save
+ * succeeded, and the Bot never ran isolated. Read before the transaction, for the reason `requireMayIsolate` gives. An
+ * unknown Bot, and one that belongs to nobody, are refused inside, each for its own reason.
+ */
+async function requireOwnerMayIsolate(
+  database: Database,
+  actor: AgentActor,
+  agentId: string,
+) {
+  const [row] = await database
+    .select({ ownerUserId: agentProfiles.ownerUserId })
+    .from(agentProfiles)
+    .where(eq(agentProfiles.agentId, agentId))
+    .limit(1);
+  const owner = row?.ownerUserId;
+  if (!owner || (await mayIsolate(owner))) return;
+  throw new IsolationRefusedError("capability", {
+    forOwner: owner !== actor.id,
+  });
+}
+
 export class ManagedAgentUnavailableError extends Error {
   constructor() {
-    super(
-      "This deployment has no managed Bot. Give the coworker its own AG-UI endpoint.",
-    );
+    super("OpenBot has no managed Bot. Give this Bot its own AG-UI endpoint.");
     this.name = "ManagedAgentUnavailableError";
   }
 }
@@ -264,11 +334,11 @@ const joinedProjection = {
   bible: agentProfiles.bible,
   roleTemplateId: agentProfiles.roleTemplateId,
   roleTemplateVersion: agentProfiles.roleTemplateVersion,
-  // Whether an edit of the role description moves the prompt it runs on; the type is not published.
-  type: agents.type,
+  isolated: agentProfiles.isolated,
   /* The hash, only so a surface can say whether one exists. It never leaves this module. */
   callbackTokenHash: agentProfiles.callbackTokenHash,
   configuration: agents.configuration,
+  type: agents.type,
 };
 
 function joinedProfiles(executor: DatabaseExecutor, actor: AgentActor) {
@@ -314,12 +384,17 @@ function mapProfile(
     avatarSeed: row.avatarSeed,
     visibility: row.visibility,
     ownerUserId: row.ownerUserId,
-    systemOwned: row.packageId !== null,
+    // Fresh personal starters are editable defaults, even though the package seeded them.
+    systemOwned:
+      row.packageId !== null &&
+      (row.configuration as { personalStarter?: boolean } | null)
+        ?.personalStarter !== true,
     hasCallbackToken: row.callbackTokenHash !== null,
     hidden: row.hiddenAt !== null,
     pinned: row.pinnedAt !== null,
     assignedToMe: Boolean(row.assignedToMe),
     deletedAt: row.deletedAt,
+    isolated: row.isolated,
     endpoint: endpointOf(row.configuration),
     modelRef: row.modelRef,
     platformModelRef: row.platformModelRef,
@@ -333,7 +408,40 @@ function mapProfile(
     // Whether a key is set, never which. The form needs to show "a key is set" so a person does not
     // wipe one by saving an unrelated edit; showing the value would put a secret in a screenshot.
     hasAuth: authFromConfiguration(row.configuration) !== null,
+    instructions: starterInstructionsOf(row),
+    ...frameworkField(row),
   };
+}
+
+/** What runs it, by name, when OpenBot knows. See `AgentProfile.framework`. */
+function frameworkField(row: {
+  type: "built_in" | "remote_ag_ui" | "remote_mastra";
+  configuration: unknown;
+}): { framework?: string } {
+  const framework = frameworkOf(row);
+  return framework ? { framework } : {};
+}
+
+/**
+ * Where a personal starter keeps its instructions: the prompt a Bot that runs here runs on, or the
+ * instructions OpenBot sends a remote one in its standing role, after what it does.
+ */
+export function starterInstructionsKey(
+  type: "built_in" | "remote_ag_ui" | "remote_mastra",
+): "systemPrompt" | "standingInstructions" {
+  return type === "built_in" ? "systemPrompt" : "standingInstructions";
+}
+
+/** A personal starter's instructions, or null for any other Bot. See `AgentProfile.instructions`. */
+function starterInstructionsOf(row: {
+  type: "built_in" | "remote_ag_ui" | "remote_mastra";
+  configuration: unknown;
+}): string | null {
+  const configuration = row.configuration as {
+    personalStarter?: unknown;
+  } | null;
+  if (configuration?.personalStarter !== true) return null;
+  return promptOf(configuration, starterInstructionsKey(row.type));
 }
 
 /**
@@ -365,6 +473,24 @@ function endpointOf(configuration: unknown): string | null {
   return typeof endpoint === "string" ? endpoint : null;
 }
 
+/**
+ * Whether an edit's endpoint is the address the Bot already has.
+ *
+ * Compared as URLs, not as text. The edit form sends the stored address back unchanged, and the
+ * route stores what `new URL` makes of it, which adds a "/" to an address with no path: the
+ * installer's `http://agent-harness:4212` came back as `http://agent-harness:4212/`. Compared as
+ * text, renaming the personal starter repointed it at that copy and counted it as the person's own
+ * connection, so the next provider change left it dialling a harness that no longer runs.
+ */
+function sameAddress(edited: string, stored: string | null): boolean {
+  if (stored === null) return false;
+  try {
+    return new URL(edited).toString() === new URL(stored).toString();
+  } catch {
+    return edited === stored;
+  }
+}
+
 /** Which agent on a Mastra server this Bot means, when the row names one. */
 function remoteAgentIdOf(configuration: unknown): string | null {
   if (!configuration || typeof configuration !== "object") return null;
@@ -373,16 +499,19 @@ function remoteAgentIdOf(configuration: unknown): string | null {
 }
 
 /**
- * The instruction a Bot in the box runs on, read back out of its stored configuration.
+ * The instruction a Bot runs on, read back out of its stored configuration.
  *
  * The mirror of {@link endpointOf}, and needed for the same reason: a copy has to be made of what
  * the original actually was, and for a `built_in` coworker the prompt IS the coworker. Trimmed and
  * required to be non-empty, matching `registeredAgentFromRow`, which will not build a Bot from a
  * blank one either.
  */
-function systemPromptOf(configuration: unknown): string | null {
+function promptOf(
+  configuration: unknown,
+  key: "systemPrompt" | "standingInstructions",
+): string | null {
   if (!configuration || typeof configuration !== "object") return null;
-  const prompt = (configuration as { systemPrompt?: unknown }).systemPrompt;
+  const prompt = (configuration as Record<string, unknown>)[key];
   if (typeof prompt !== "string") return null;
   const trimmed = prompt.trim();
   return trimmed.length > 0 ? trimmed : null;
@@ -429,7 +558,7 @@ export function runForDuplicate(
   },
   managed: Record<string, unknown> | undefined,
 ): AgentRun | null {
-  const systemPrompt = systemPromptOf(source.configuration);
+  const systemPrompt = promptOf(source.configuration, "systemPrompt");
   if (source.type === "built_in" && systemPrompt) {
     return { type: "built_in", configuration: { systemPrompt } };
   }
@@ -446,16 +575,30 @@ export function runForDuplicate(
      * and a copy that forgets the name falls back to a different agent, or refuses. See
      * `pickFromRoster`.
      */
-    if (source.type === "remote_mastra") {
-      const remoteAgentId = remoteAgentIdOf(source.configuration);
-      return {
-        type: "remote_mastra",
-        configuration: remoteAgentId
-          ? { endpoint, remoteAgentId }
-          : { endpoint },
-      };
-    }
-    return { type: "remote_ag_ui", configuration: { endpoint } };
+    const standingInstructions = promptOf(
+      source.configuration,
+      "standingInstructions",
+    );
+    const remoteAgentId =
+      source.type === "remote_mastra"
+        ? remoteAgentIdOf(source.configuration)
+        : null;
+    const harness =
+      source.configuration && typeof source.configuration === "object"
+        ? declaredHarness(
+            (source.configuration as Record<string, unknown>).harness,
+          )?.id
+        : undefined;
+    return {
+      type: source.type === "remote_mastra" ? "remote_mastra" : "remote_ag_ui",
+      configuration: {
+        endpoint,
+        ...(remoteAgentId ? { remoteAgentId } : {}),
+        ...(standingInstructions ? { standingInstructions } : {}),
+        // The same agent at the same address runs on the same framework. See `frameworkOf`.
+        ...(harness ? { harness } : {}),
+      },
+    };
   }
 
   return managed ? { type: "remote_ag_ui", configuration: managed } : null;
@@ -804,10 +947,8 @@ async function findByTokenHash(
 
 /** Hiding a Team Bot an administrator assigned to this person, which they cannot do. */
 export class AgentAssignedError extends Error {
-  constructor(id: string) {
-    super(
-      `Agent ${id} was assigned to you by an administrator and cannot be hidden.`,
-    );
+  constructor(_id: string) {
+    super("This Bot was assigned to you by an admin and can't be hidden.");
     this.name = "AgentAssignedError";
   }
 }
@@ -848,7 +989,8 @@ export function createAgentProfileStore(
       return findAccessibleProfile(executor, actor, id);
     },
 
-    create(actor, input, admit) {
+    async create(actor, input, admit) {
+      if (input.isolated === true) await requireMayIsolate(actor);
       return database.transaction(async (transaction) => {
         await admit?.(transaction);
         const id = newAgentId();
@@ -869,6 +1011,10 @@ export function createAgentProfileStore(
             // auth-header.ts for why a bearer token must not sit next to the endpoint.
             configuration: {
               ...endpoint,
+              // The framework they named, for an address they gave. See `frameworkOf`.
+              ...(input.endpoint && input.harness
+                ? { harness: input.harness }
+                : {}),
               ...(input.auth && vault
                 ? {
                     auth: await storeAgentAuth({
@@ -921,6 +1067,7 @@ export function createAgentProfileStore(
           ...(input.roleTemplate
             ? await roleTemplateSource(transaction, input.roleTemplate)
             : {}),
+          isolated: input.isolated === true,
         });
         // Both rows took this frame's stamp; a public Bot then moves to `team` in the same transaction.
         await settleStamp(
@@ -937,12 +1084,24 @@ export function createAgentProfileStore(
       });
     },
 
-    update(actor, id, input) {
+    async update(actor, id, input) {
+      if (input.isolated === true)
+        await requireOwnerMayIsolate(database, actor, id);
       return database.transaction(
         async (transaction) => {
           await lockProfileMutationRows(transaction, id);
           const profile = await findAccessibleProfile(transaction, actor, id);
           if (!profile) throw new AgentNotFoundError(id);
+          /*
+           * Before the manage check, so a tenant package's Bot is refused for what was asked of it
+           * rather than with the general "built in and can't be changed", and the trail can say so.
+           */
+          if (
+            input.isolated === true &&
+            (profile.systemOwned || profile.ownerUserId === null)
+          ) {
+            throw new IsolationRefusedError("unowned");
+          }
           requireManageable(actor, profile);
 
           const updatedAt = new Date();
@@ -990,21 +1149,40 @@ export function createAgentProfileStore(
            * Only for `built_in`, and that matters. A remote Bot has no `systemPrompt` and must not
            * acquire one — its instruction travels as the standing role message instead — and the
            * tenant package's Bots, whose `system_prompt` is deliberately not their
-           * `role_description`, cannot reach this code at all: `requireManageable` above throws
-           * `ProtectedAgentError` for anything the package owns.
+           * `role_description`, remain protected except for the editable personal starter.
+           *
+           * NOT FOR THE PERSONAL STARTER EITHER. It is seeded from the package, so what it does and
+           * what it is told are two texts, as they are for every package Bot: its description is
+           * what a conversation's header shows, and its instructions are edited on their own
+           * (`input.instructions`). Moving its description into its prompt would leave it running on
+           * one sentence written for a person.
            */
           /*
            * And only when the role description actually changed (ROLE1). A save that leaves it as it
            * was — the Bible written by hand, say — has nothing to move, and the 分身, whose
            * systemPrompt was never its role description, keeps the prompt it runs on.
            */
-          const configuration = {
+          const starter = previous.personalStarter === true;
+          const described = input.roleDescription !== profile.roleDescription;
+          const instructed =
+            starter &&
+            row !== undefined &&
+            input.instructions !== undefined &&
+            input.instructions !== profile.instructions;
+          // An edit that sends the address the Bot already has leaves the stored one as it is.
+          const repointed =
+            input.endpoint !== undefined &&
+            input.endpoint !== "" &&
+            !sameAddress(input.endpoint, profile.endpoint);
+          const configuration: Record<string, unknown> = {
             ...previous,
-            ...(row?.type === "built_in" &&
-            input.roleDescription !== profile.roleDescription
+            ...(!starter && row?.type === "built_in" && described
               ? { systemPrompt: input.roleDescription }
               : {}),
-            ...(input.endpoint ? { endpoint: input.endpoint } : {}),
+            ...(instructed
+              ? { [starterInstructionsKey(row.type)]: input.instructions }
+              : {}),
+            ...(repointed ? { endpoint: input.endpoint } : {}),
             ...(input.auth && vault
               ? {
                   auth: await storeAgentAuth({
@@ -1024,6 +1202,18 @@ export function createAgentProfileStore(
                 }
               : {}),
           };
+
+          // A connection edited in the profile belongs to the person, not installer setup.
+          if (
+            previous.personalStarter === true &&
+            (repointed || (input.auth && vault))
+          ) {
+            configuration.personalConnection = true;
+          }
+
+          if (!starter && row?.type !== "built_in" && described) {
+            delete configuration.standingInstructions;
+          }
 
           /*
            * The key this one replaces is already retired, by the rotation above.
@@ -1111,6 +1301,10 @@ export function createAgentProfileStore(
                 : { persona: input.persona }),
               // The same three-way: absent leaves it, null clears it. Never copied into systemPrompt.
               ...(input.bible === undefined ? {} : { bible: input.bible }),
+              // Absent leaves it alone; see `CreateAgentInput.isolated`.
+              ...(input.isolated === undefined
+                ? {}
+                : { isolated: input.isolated }),
               updatedAt,
             })
             .where(eq(agentProfiles.agentId, id))
@@ -1134,7 +1328,13 @@ export function createAgentProfileStore(
       );
     },
 
-    duplicate(actor, id, admit) {
+    async duplicate(actor, id, admit) {
+      /*
+       * A copy is the duplicator's Bot, so it keeps a computer of its own only if they may give it
+       * one. Asked up front for the reason `requireMayIsolate` gives, and answered for every
+       * duplicate rather than only an isolated source's, because the source is read inside.
+       */
+      const mayKeepIsolated = await mayIsolate(actor.id);
       return database.transaction(async (transaction) => {
         await admit?.(transaction);
         const source = await findAccessibleProfile(transaction, actor, id);
@@ -1188,6 +1388,7 @@ export function createAgentProfileStore(
                 roleTemplateVersion: source.roleTemplate.version,
               }
             : {}),
+          isolated: source.isolated && mayKeepIsolated,
         });
 
         const duplicate = await findAccessibleProfile(

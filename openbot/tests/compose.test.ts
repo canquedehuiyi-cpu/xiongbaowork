@@ -9,10 +9,50 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { parse } from "yaml";
 
 function composeFile() {
   return readFileSync(
     join(import.meta.dir, "..", "docker-compose.yml"),
+    "utf8",
+  );
+}
+
+/** The file as Compose reads it before interpolation: every `${...}` is still text. */
+function composeServices() {
+  return (
+    parse(composeFile()) as {
+      services: Record<
+        string,
+        {
+          profiles?: string[];
+          image?: string;
+          build?: { context: string; dockerfile: string };
+          command?: string[];
+          env_file?: Array<{ path: string; required: boolean }>;
+          environment?: Record<string, string>;
+          depends_on?: Record<string, { condition: string }>;
+          restart?: string;
+          networks?: string[];
+          user?: string;
+          volumes?: Array<
+            | string
+            | {
+                type: string;
+                source: string;
+                target: string;
+                bind?: { create_host_path?: boolean };
+              }
+          >;
+        }
+      >;
+    }
+  ).services;
+}
+
+function serverDockerfile() {
+  return readFileSync(
+    join(import.meta.dir, "..", "server", "Dockerfile"),
     "utf8",
   );
 }
@@ -63,6 +103,10 @@ function runLangGraphAguiModelProbe(
         "tools = ModuleType('src.tool_runtime')",
         "tools.ToolAwareAgent = LangGraphAgent",
         "tools.bind_tools = tools.execute_tools = tools.next_step = lambda *args: None",
+        "tools.billing_refusal = tools.provider_message = tools.provider_refusal = lambda *args, **kwargs: None",
+        "from types import SimpleNamespace",
+        // No run chose a model or effort, so the deployment's own configuration applies.
+        "tools.current_tools = lambda: SimpleNamespace(model='', effort='')",
         "tools.model_messages = lambda messages: messages",
         "sys.modules['src.tool_runtime'] = tools",
         "from src import main",
@@ -137,6 +181,17 @@ function runLangGraphAguiModelProbe(
       join(dir, "langgraph", "checkpoint", "memory.py"),
       ["class MemorySaver:", "    pass", ""].join("\n"),
     );
+    // The ChatGPT plan's model list (`chatgpt_models`) imports httpx at module level. The probe
+    // only builds a model, so a stand-in is enough, like the packages above.
+    writeFileSync(
+      join(dir, "httpx.py"),
+      [
+        "class AsyncClient:",
+        "    def __init__(self, *_args, **_kwargs):",
+        "        pass",
+        "",
+      ].join("\n"),
+    );
 
     const env: NodeJS.ProcessEnv = {
       ...process.env,
@@ -180,6 +235,8 @@ function runComposeConfig(env: Record<string, string>) {
       "/dev/null",
       "--profile",
       "harness",
+      "--profile",
+      "openbot",
       "config",
       "--format",
       "json",
@@ -239,6 +296,9 @@ test("publishes every service on a settable port with the documented default", (
     ["SUPERVISOR_PORT", "4500", "4300"],
     ["BOT_PORT", "4200", "4200"],
     ["LANGGRAPH_PORT", "4201", "4201"],
+    // One process behind both: the server serves the built app on its own port.
+    ["APP_PORT", "3010", "3001"],
+    ["SERVER_PORT", "3001", "3001"],
   ] as const;
 
   for (const [name, host, container] of published) {
@@ -269,6 +329,8 @@ test("publishes every service that holds a secret on loopback only", () => {
     "BOT_PORT",
     "LANGGRAPH_PORT",
     "PICKED_HARNESS_PORT",
+    "APP_PORT",
+    "SERVER_PORT",
   ]) {
     const published = [
       ...compose.matchAll(
@@ -399,7 +461,8 @@ test("passes the selected Anthropic provider and model into the picked harness",
     OPENAI_API_KEY: "sk-openai-synthetic",
     OPENAI_BASE_URL: "https://openai-compatible.example/v1",
     BOT_PROVIDER: "openai",
-    BOT_MODEL: "gpt-5.5",
+    // Unset arrives as unset: the server, not a stand-in here, decides the model.
+    BOT_MODEL: "",
     ANTHROPIC_API_KEY: "",
     ANTHROPIC_BASE_URL: "",
   });
@@ -442,12 +505,12 @@ test("enables pgvector before creating vector columns", () => {
   expect(firstVectorColumn).toBeGreaterThan(extension);
 });
 
-test("runs migrations after PostgreSQL becomes healthy", () => {
-  const compose = composeFile();
-
-  expect(compose).toContain("migrate:");
-  expect(compose).toContain("condition: service_healthy");
-  expect(compose).toContain('"drizzle-kit", "migrate"');
+test("runs the server migrator after PostgreSQL becomes healthy", () => {
+  const services = composeServices();
+  expect(services.migrate.command).toEqual(["bun", "scripts/migrate.ts"]);
+  expect(services.migrate.depends_on?.postgres).toEqual({
+    condition: "service_healthy",
+  });
 });
 
 test("builds the deployment image with Playwright's Chromium payload only", () => {
@@ -466,7 +529,7 @@ test("builds the deployment image with Playwright's Chromium payload only", () =
       'bunx --bun "playwright@' +
         "$" +
         "{PLAYWRIGHT_VERSION}" +
-        '" install --with-deps chromium',
+        '" install --with-deps --no-shell chromium',
     );
     expect(dockerfile).not.toMatch(/\bnodejs\b|\bnpm\b/);
     expect(dockerfile).not.toMatch(
@@ -539,6 +602,57 @@ test("carries per-Bot egress into the computer and the supervisor", () => {
   expect(compose).toContain("required: false");
 });
 
+/**
+ * The personal edition's one computer is its one person's (scripts/start.sh sets `COMPUTER_PERSON_ID`), so Record runs
+ * in their Bots' browsers there. Anywhere else it is unset, and the shared computer stays nobody's.
+ */
+test("starts the shared computer as one person's only when told whose it is", () => {
+  expect(
+    runComposeConfig({ COMPUTER_PERSON_ID: "personal" }).services[
+      "agent-computer"
+    ]?.environment.COMPUTER_PERSON_ID,
+  ).toBe("personal");
+  expect(
+    runComposeConfig({}).services["agent-computer"]?.environment
+      .COMPUTER_PERSON_ID,
+  ).toBe("");
+});
+
+/**
+ * The personal edition's one computer runs the person's own browser beside their Bots, which it knows from the edition
+ * (agent-computer's person-access.ts): the edition in `.env` has to reach it, as it reaches the server.
+ */
+/**
+ * A Recorder in the shared computer is handed the laptop's loopback addresses for OpenBot and a local gateway, which in
+ * that container are the container: OpenBot Desktop names where each is reached instead, and the computer relays them
+ * (agent-computer's loopback-relay.ts). The setting, and the host the gateway's relay names, have to reach it.
+ */
+test("hands the shared computer the loopback addresses it relays, and this machine by name", () => {
+  const computer = runComposeConfig({
+    COMPUTER_LOOPBACK_RELAYS:
+      "3010=server:3001,14401=host.docker.internal:14401",
+  }).services["agent-computer"];
+  expect(computer?.environment.COMPUTER_LOOPBACK_RELAYS).toBe(
+    "3010=server:3001,14401=host.docker.internal:14401",
+  );
+  expect(computer?.extra_hosts).toEqual(["host.docker.internal=host-gateway"]);
+  expect(
+    runComposeConfig({}).services["agent-computer"]?.environment
+      .COMPUTER_LOOPBACK_RELAYS,
+  ).toBe("");
+});
+
+test("tells the shared computer which edition it runs in", () => {
+  expect(
+    runComposeConfig({ OPENBOT_EDITION: "personal" }).services["agent-computer"]
+      ?.environment.OPENBOT_EDITION,
+  ).toBe("personal");
+  expect(
+    runComposeConfig({}).services["agent-computer"]?.environment
+      .OPENBOT_EDITION,
+  ).toBe("");
+});
+
 test("gives the selected harness the same governed callback as the framework Bot", () => {
   const config = runComposeConfig({
     OPENBOT_TOOL_URL: "http://callback.example/api/agent-tools/call",
@@ -553,4 +667,209 @@ test("gives the selected harness the same governed callback as the framework Bot
       "host.docker.internal=host-gateway",
     );
   }
+});
+
+/**
+ * Rootless Podman on Linux gives `host-gateway` an address that is not this machine's loopback, where
+ * the person's browser and a local Intelligence listen. OpenBot Desktop sets `OPENBOT_HOST_GATEWAY`
+ * there, to the address its Podman configuration maps to loopback, and every service that calls the
+ * host by name takes it.
+ */
+test("sends host.docker.internal where OPENBOT_HOST_GATEWAY says", () => {
+  const config = runComposeConfig({ OPENBOT_HOST_GATEWAY: "10.0.2.2" });
+  for (const service of [
+    "server",
+    "agent-harness",
+    "agent-langgraph",
+  ] as const) {
+    expect(config.services[service].extra_hosts).toContain(
+      "host.docker.internal=10.0.2.2",
+    );
+  }
+});
+
+/**
+ * OpenBot's own server and worker, for an installed OpenBot, and out of a developer's way.
+ *
+ * `scripts/start.sh` runs both on the host, so a plain `docker compose up -d` that also started them
+ * would put a second server on port 3001 and a second worker on the routines. The profile is what
+ * keeps that from happening; naming the service is still enough to start it.
+ */
+test("keeps OpenBot's own server and worker behind a profile", () => {
+  const services = composeServices();
+
+  for (const name of ["server", "worker"]) {
+    expect(services[name].profiles).toEqual(["openbot"]);
+  }
+});
+
+test("runs the server and the worker from the image migrations already use", () => {
+  const services = composeServices();
+
+  for (const name of ["server", "worker"]) {
+    expect(services[name].image).toBe(services.migrate.image);
+    expect(services[name].build).toEqual(services.migrate.build);
+    expect(services[name].depends_on?.migrate).toEqual({
+      condition: "service_completed_successfully",
+    });
+    // Restarted by Docker, because nothing on the host is watching them any more.
+    expect(services[name].restart).toBe("unless-stopped");
+  }
+  expect(services.worker.command).toEqual(["bun", "../worker/src/index.ts"]);
+});
+
+test("ships the worker in the server image", () => {
+  const dockerfile = serverDockerfile();
+
+  expect(dockerfile).toContain("COPY worker/src worker/src");
+  // The isolated install's link to `@openbot/shared`. Without it the worker's first import fails.
+  expect(dockerfile).toContain(
+    "COPY --from=deps /app/worker/node_modules worker/node_modules",
+  );
+});
+
+/**
+ * Every address the server is given names a service on its network.
+ *
+ * `.env` says `127.0.0.1` and `localhost`, which is right for a server on the host and means the
+ * container itself inside one. The settings in `environment:` win over that file, so these are what
+ * the server actually uses.
+ */
+test("gives the server container addresses, not the host's loopback", () => {
+  const server = composeServices().server;
+  const environment = server.environment ?? {};
+
+  expect(server.env_file).toEqual([{ path: "./.env", required: false }]);
+  expect(environment).toMatchObject({
+    PORT: "3001",
+    SERVER_PORT: "3001",
+    DATABASE_URL: "postgres://openbot:openbot@postgres:5432/openbot",
+    AGENT_COMPUTER_URL: "http://agent-computer:4100",
+  });
+  for (const [name, value] of Object.entries(environment)) {
+    expect(`${name}=${value}`).not.toMatch(/localhost|127\.0\.0\.1|\[::1\]/);
+  }
+  // Production refuses `AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS`, which a local OpenBot needs.
+  expect(environment.NODE_ENV).toBe("");
+});
+
+/**
+ * The supervisor by name unless the deployment says there is none.
+ *
+ * Unset is every deployment that predates the setting. Set empty is OpenBot Desktop, which runs the
+ * personal edition on one computer, and that edition refuses to start with a supervisor.
+ */
+test("gives the server the supervisor unless the deployment empties it", () => {
+  expect(
+    runComposeConfig({}).services.server?.environment.COMPUTER_SUPERVISOR_URL,
+  ).toBe("http://supervisor:4300");
+  const none = runComposeConfig({ COMPUTER_SUPERVISOR_CONTAINER_URL: "" })
+    .services.server?.environment;
+  expect(none?.COMPUTER_SUPERVISOR_URL ?? "").toBe("");
+  expect(none?.AGENT_COMPUTER_URL).toBe("http://agent-computer:4100");
+});
+
+test("puts the server beside the database and the Bots, and the worker beside the database only", () => {
+  const services = composeServices();
+
+  expect(services.server.networks).toEqual(["data", "default"]);
+  expect(services.worker.networks).toEqual(["data"]);
+  expect(Object.keys(services.worker.environment ?? {}).sort()).toEqual([
+    "DATABASE_URL",
+    "SERVER_INTERNAL_URL",
+    "WORKER_SHARED_SECRET",
+  ]);
+  expect(services.worker.environment?.SERVER_INTERNAL_URL).toBe(
+    "http://server:3001",
+  );
+});
+
+test("hands the desktop's host-access token to the server and nothing else", () => {
+  const holders = Object.entries(composeServices())
+    .filter(([, service]) =>
+      Object.keys(service.environment ?? {}).includes(
+        "OPENBOT_DESKTOP_HOST_TOKEN",
+      ),
+    )
+    .map(([name]) => name);
+
+  expect(holders).toEqual(["server"]);
+});
+
+test("addresses the server's Bots and endpoints from inside the network", () => {
+  const withBots = runComposeConfig({
+    MANAGED_AGENT_AG_UI_URL: "http://127.0.0.1:4201/ag-ui",
+    PICKED_HARNESS_URL: "http://127.0.0.1:4202/run",
+    PICKED_HARNESS_CONTAINER_URL: "http://agent-harness:4202/run",
+    OPENAI_BASE_URL: "http://127.0.0.1:3001/api/model-provider/v1",
+    OPENAI_CONTAINER_BASE_URL:
+      "http://host.docker.internal:3001/api/model-provider/v1",
+    INTELLIGENCE_GATEWAY_WS_URL: "ws://localhost:14401",
+    INTELLIGENCE_CONTAINER_GATEWAY_WS_URL: "ws://host.docker.internal:14401",
+    OPENBOT_THIS_MACHINE_CONTAINER_HOST: "host.docker.internal",
+  });
+  expect(withBots.services.server.environment).toMatchObject({
+    // How the server reaches an agent the person registered on their own loopback.
+    OPENBOT_THIS_MACHINE_HOST: "host.docker.internal",
+    MANAGED_AGENT_AG_UI_URL: "http://agent-langgraph:4201/ag-ui",
+    PICKED_HARNESS_URL: "http://agent-harness:4202/run",
+    OPENAI_BASE_URL: "http://host.docker.internal:3001/api/model-provider/v1",
+    // The server's own way to the gateway, and the browser's, which is on the host.
+    INTELLIGENCE_GATEWAY_WS_URL: "ws://host.docker.internal:14401",
+    INTELLIGENCE_BROWSER_GATEWAY_WS_URL: "ws://localhost:14401",
+  });
+
+  // No managed Bot stays no managed Bot, and a remote harness keeps its own address.
+  const without = runComposeConfig({
+    MANAGED_AGENT_AG_UI_URL: "",
+    PICKED_HARNESS_URL: "https://agents.example/run",
+  });
+  expect(without.services.server.environment).toMatchObject({
+    OPENBOT_THIS_MACHINE_HOST: "",
+    MANAGED_AGENT_AG_UI_URL: "",
+    PICKED_HARNESS_URL: "https://agents.example/run",
+  });
+});
+
+/**
+ * A Google or xAI sign-in is a file the server renews itself, so it reaches the container as the
+ * folder it sits in: the renewal writes a sibling and renames it over the original.
+ */
+test("mounts the model sign-in folder into the server, and only there", () => {
+  const services = composeServices();
+  const server = services.server;
+
+  expect(server.volumes).toContainEqual({
+    type: "bind",
+    source: "./.openbot",
+    target: "/openbot",
+    bind: { create_host_path: false },
+  });
+  expect(server.environment?.OPENBOT_MODEL_OAUTH_FILE).toBe(
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: the unexpanded placeholder is what is asserted.
+    "${OPENBOT_MODEL_OAUTH_FILE:+/openbot/model-oauth.json}",
+  );
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: the unexpanded placeholder is what is asserted.
+  expect(server.user).toBe("${OPENBOT_SERVER_USER:-1001:1001}");
+  for (const [name, service] of Object.entries(services)) {
+    if (name === "server") continue;
+    expect(JSON.stringify(service.volumes ?? [])).not.toContain(".openbot");
+  }
+});
+
+/*
+ * A Bot's shell runs `ping` on its computer. iputils' ping carries the `cap_net_raw` file
+ * capability, and a process cannot exec a file whose capabilities are outside the container's
+ * bounding set. Docker's default set has NET_RAW; Podman's (the Desktop's engine on Windows and the
+ * default everywhere) does not, so on Windows `ping 8.8.8.8` answered "Operation not permitted",
+ * even as root. The computer asks for NET_RAW itself, so both engines give it the same.
+ */
+test("the computer is given NET_RAW, so ping works on Podman as on Docker", () => {
+  const computer = (
+    parse(composeFile()) as {
+      services: Record<string, { cap_add?: string[]; cap_drop?: string[] }>;
+    }
+  ).services["agent-computer"];
+  expect(computer?.cap_add ?? []).toContain("NET_RAW");
+  expect(computer?.cap_drop ?? []).not.toContain("NET_RAW");
 });
