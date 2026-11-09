@@ -103,6 +103,16 @@ import {
   VERSION_ARG,
 } from "./composio";
 import { inspectToolArguments } from "./content-governance";
+import {
+  adminConnectOnly,
+  adminConnectOnlySentence,
+  DEPLOYMENT_CLIENT_PROVIDER,
+  DEPLOYMENT_CLIENT_SCHEME,
+  type DeploymentClient,
+  deploymentClientFrom,
+  deploymentClientKey,
+  toolkitOfDeploymentClientKey,
+} from "./deployment-clients";
 import { type ListedTool, McpServerError } from "./mcp";
 import { registerDynamicClient } from "./oauth";
 import { shareTargetOf } from "./share-target";
@@ -225,6 +235,15 @@ export type ServerRecord = {
    * Null is not an older brokered row. It is a row that is not brokered at all.
    */
   authScheme: string | null;
+  /**
+   * Whether only an administrator may connect this app (upstream #950's `sharedOnly`, reshaped for a
+   * fork with no shared accounts). True for an app connected on this deployment's own OAuth client,
+   * a server-to-server grant: what a person would type is a store subdomain and the credential is
+   * the deployment's, so a person's account would be the organization's access under their name.
+   * Read off the recorded scheme by `adminConnectOnly`, so a screen decides what to offer from this
+   * and never from the app's name. The connect route and the store refuse whatever a screen draws.
+   */
+  adminConnectOnly: boolean;
   tools: ToolRecord[];
   /**
    * Grants on tools this server no longer advertises.
@@ -2814,6 +2833,61 @@ export function createPluginStore(options: PluginStoreOptions) {
   }
 
   /**
+   * The vault key one brokered app's deployment client is stored under, sealed to `team` (upstream
+   * #950, `deployment-clients.ts`). `team` because it is the deployment's and not anybody's: every
+   * administrator holding the capability reaches it, and no member's frame can select it.
+   */
+  const deploymentClientVaultKey = (toolkit: string) => ({
+    ...deploymentClientKey(toolkit),
+    target: TEAM_TENANT as typeof TEAM_TENANT,
+  });
+
+  /**
+   * This deployment's own OAuth client for one brokered app, opened out of the vault, or null when
+   * none is stored. Read in the caller's frame, so only an administrator holding the capability
+   * finds one; a fault opening it is the same {@link OAuthClientReadError} a catalogue client's is,
+   * and carries nothing of the value.
+   */
+  async function readDeploymentClient(
+    toolkit: string,
+  ): Promise<DeploymentClient | null> {
+    const live = await credentials.findLiveByKey(
+      deploymentClientVaultKey(toolkit),
+    );
+    if (!live) return null;
+    try {
+      const [held] = await database
+        .select({
+          encryptedValue: credentialRows.encryptedValue,
+          revokedAt: credentialRows.revokedAt,
+          id: credentialRows.id,
+          tenantId: credentialRows.tenantId,
+          kind: credentialRows.kind,
+        })
+        .from(credentialRows)
+        .where(eq(credentialRows.id, live.id))
+        .limit(1);
+      if (!held || held.revokedAt) return null;
+      const plaintext = await openCredential(encryptionKey, held);
+      try {
+        return deploymentClientFrom(JSON.parse(plaintext));
+      } catch {
+        // Never rethrown: `JSON.parse` reports failure by quoting its input, which is the client.
+        return null;
+      }
+    } catch (error) {
+      console.error(
+        JSON.stringify({
+          type: "composio-deployment-client-read-failed",
+          toolkit,
+          error: error instanceof Error ? error.name : "UnknownError",
+        }),
+      );
+      throw new OAuthClientReadError();
+    }
+  }
+
+  /**
    * The two writes that store a client, on one transaction: the vault row, and the pointer to it.
    *
    * One transaction because they are one decision. Separately, a failure between them leaves
@@ -3977,6 +4051,170 @@ export function createPluginStore(options: PluginStoreOptions) {
     },
 
     /**
+     * The brokered apps this deployment holds its own OAuth client for (upstream #950).
+     *
+     * Read in the caller's frame: an administrator holding the capability finds every one, and a
+     * member finds none, which leaves those apps `unsupported` in what a member browses. Only the
+     * app names come back; nothing of any client is read.
+     */
+    async deploymentClientToolkits(): Promise<Set<string>> {
+      const rows = await database
+        .select({ keyId: credentialRows.keyId })
+        .from(credentialRows)
+        .where(
+          and(
+            eq(credentialRows.tenantId, TEAM_TENANT),
+            eq(credentialRows.kind, "mcp_oauth_client"),
+            eq(credentialRows.provider, DEPLOYMENT_CLIENT_PROVIDER),
+            isNull(credentialRows.revokedAt),
+          ),
+        );
+      return new Set(
+        rows
+          .map((row) => toolkitOfDeploymentClientKey(row.keyId))
+          .filter((toolkit): toolkit is string => toolkit !== null),
+      );
+    },
+
+    /**
+     * What an administrator's page shows about the clients this deployment holds: the app, the
+     * client id (not a secret, and copied into the row's metadata so naming it decrypts nothing),
+     * and when it was stored. Never the secret.
+     */
+    async listDeploymentClients(): Promise<
+      { toolkit: string; clientId: string | null; storedAt: string | null }[]
+    > {
+      requireServerWriter();
+      const rows = await database
+        .select({
+          keyId: credentialRows.keyId,
+          metadata: credentialRows.metadata,
+          updatedAt: credentialRows.updatedAt,
+        })
+        .from(credentialRows)
+        .where(
+          and(
+            eq(credentialRows.tenantId, TEAM_TENANT),
+            eq(credentialRows.kind, "mcp_oauth_client"),
+            eq(credentialRows.provider, DEPLOYMENT_CLIENT_PROVIDER),
+            isNull(credentialRows.revokedAt),
+          ),
+        )
+        .orderBy(asc(credentialRows.keyId));
+      return rows.flatMap((row) => {
+        const toolkit = toolkitOfDeploymentClientKey(row.keyId);
+        if (!toolkit) return [];
+        const clientId = (row.metadata as { clientId?: unknown } | null)
+          ?.clientId;
+        return [
+          {
+            toolkit,
+            clientId: typeof clientId === "string" ? clientId : null,
+            storedAt: iso(row.updatedAt),
+          },
+        ];
+      });
+    },
+
+    /**
+     * Store this deployment's own OAuth client for one brokered app, replacing any it held.
+     *
+     * Into the vault, sealed to `team` with an envelope bound to its row, and nowhere else: the id is
+     * copied into metadata for the page to name, the secret is in the envelope alone, and the trail
+     * row names the app, the client id and who stored it. Replacing revokes the previous row rather
+     * than orphaning it, so "what does this deployment hold" keeps one answer per app.
+     *
+     * A config already standing at Composio keeps the client it was created with: rotating the client
+     * an enabled app uses means removing the app and enabling it again after this.
+     */
+    async storeDeploymentClient(input: {
+      toolkit: string;
+      client: DeploymentClient;
+      by: string;
+    }): Promise<{ replaced: boolean }> {
+      requireServerWriter();
+      const url = `composio://${input.toolkit}`;
+      if (toolkitOf(url) !== input.toolkit) {
+        throw new CustomServerRefusedError(
+          `${input.toolkit} 不是一个应用能用的名字。应用名只能包含字母、数字、下划线和连字符。`,
+        );
+      }
+      const key = deploymentClientVaultKey(input.toolkit);
+      const { replaced } = await withOAuthClientLock(
+        `composio-s2s:${input.toolkit}`,
+        async (transaction) => {
+          const value = {
+            ...key,
+            metadata: {
+              toolkit: input.toolkit,
+              clientId: input.client.client_id,
+            },
+            seal: (binding: CredentialBinding) =>
+              sealCredential(
+                encryptionKey,
+                binding,
+                JSON.stringify(input.client),
+              ),
+          };
+          const live = await credentials.findLiveByKey(key, transaction);
+          if (live) {
+            await credentials.rotate(
+              { ...value, previousCredentialId: live.id },
+              transaction,
+            );
+          } else {
+            await credentials.create(value, transaction);
+          }
+          return { replaced: live !== null };
+        },
+      );
+      await recordAuditEvent(auditStore, {
+        // The same event a catalogue server's client is filed under: this is the same act.
+        eventType: "mcp.oauth_client_registered",
+        targetType: "composio_app",
+        targetId: input.toolkit,
+        payload: {
+          actor: input.by,
+          toolkit: input.toolkit,
+          // The id, never the secret: what somebody checks against the vendor's console.
+          clientId: input.client.client_id,
+          replaced,
+        },
+      });
+      return { replaced };
+    },
+
+    /**
+     * Retire this deployment's own OAuth client for one brokered app. A config already standing at
+     * Composio keeps its copy until the app is removed; what this stops is the next enable using it.
+     */
+    async removeDeploymentClient(input: {
+      toolkit: string;
+      by: string;
+    }): Promise<{ removed: boolean }> {
+      requireServerWriter();
+      const key = deploymentClientVaultKey(input.toolkit);
+      const removed = await withOAuthClientLock(
+        `composio-s2s:${input.toolkit}`,
+        async (transaction) => {
+          const live = await credentials.findLiveByKey(key, transaction);
+          if (!live) return false;
+          await credentials.revoke(live.id, transaction, TEAM_TENANT);
+          return true;
+        },
+      );
+      if (removed) {
+        await recordAuditEvent(auditStore, {
+          eventType: "credential.revoked",
+          targetType: "composio_app",
+          targetId: input.toolkit,
+          payload: { actor: input.by, toolkit: input.toolkit },
+        });
+      }
+      return { removed };
+    },
+
+    /**
      * Enable one app of the broker's catalogue, which is a third way for a server to arrive.
      *
      * NO URL IS TAKEN FROM A CALLER, WHICH IS WHY THERE IS NO HOST RULE HERE. `addCustomServer`
@@ -4044,10 +4282,22 @@ export function createPluginStore(options: PluginStoreOptions) {
        */
       const recorded = await brokeredAppScheme(input.slug);
 
+      /*
+       * A server-to-server grant's config carries this deployment's own client, read out of the vault
+       * here and handed to the broker, which refuses the enable by name when there is none
+       * (upstream #950; `deployment-clients.ts`). Every other kind is sent no secret at all.
+       */
+      const client =
+        input.connection.kind === "fields" &&
+        input.connection.authScheme === DEPLOYMENT_CLIENT_SCHEME
+          ? await readDeploymentClient(input.slug)
+          : null;
+
       const configured = await broker.ensureAuthConfig({
         toolkit: input.slug,
         name: input.title,
         connection: input.connection,
+        ...(client ? { client } : {}),
       });
 
       /*
@@ -5493,6 +5743,9 @@ export function createPluginStore(options: PluginStoreOptions) {
           authScheme: toolkitOf(row.url)
             ? (brokeredApps.get(row.url)?.authScheme ?? null)
             : row.authScheme,
+          adminConnectOnly:
+            toolkitOf(row.url) !== null &&
+            adminConnectOnly(brokeredApps.get(row.url)?.authScheme ?? null),
           tools: tools
             .filter((tool) => tool.serverId === row.id)
             .map((tool) => {
@@ -7881,6 +8134,11 @@ export function createPluginStore(options: PluginStoreOptions) {
       toolkit: string;
       userId: string;
       values: Record<string, string>;
+      /**
+       * Whether the person connecting is an administrator. Read only for an app on this deployment's
+       * own OAuth client, which nobody else may connect (`adminConnectOnly`); absent is not one.
+       */
+      byAdmin?: boolean;
     }): Promise<{ connected: true; verified: boolean; probe: string | null }> {
       // First, and for `confirmBrokeredConnection`'s reason: a deployment with no key has nobody to
       // connect anybody at, and the refusal must happen before the values are touched at all.
@@ -7921,6 +8179,19 @@ export function createPluginStore(options: PluginStoreOptions) {
       if (!isFieldScheme(authScheme)) {
         throw new BrokerRefusalError(
           `${input.toolkit} is not an app this deployment connects with values somebody types, so nothing was sent. Open the app on the Plugins page and connect it the way it asks for; if it is not listed there at all, an administrator has to enable it first.`,
+        );
+      }
+
+      /*
+       * AND A PERSON IS NEVER CONNECTED ON THE DEPLOYMENT'S OWN CLIENT (upstream #950). The connect
+       * route refuses this before the form is drawn; it is asked again here, before the values
+       * travel, because this method is callable without that route and what it would make is the
+       * organization's access filed as one person's account (see `adminConnectOnly`).
+       */
+      if (adminConnectOnly(authScheme) && input.byAdmin !== true) {
+        throw new PluginRefusedError(
+          adminConnectOnlySentence(input.toolkit),
+          null,
         );
       }
 

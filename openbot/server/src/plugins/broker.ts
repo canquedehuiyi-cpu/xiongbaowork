@@ -1,3 +1,5 @@
+import type { DeploymentClient } from "./deployment-clients";
+
 /**
  * What openbot needs of Composio the BROKER, as against Composio the transport.
  *
@@ -31,6 +33,12 @@ const FIELD_SCHEME_NAMES = [
   "BASIC",
   "BEARER_TOKEN",
   "BASIC_WITH_JWT",
+  /*
+   * A client-credentials grant, typed like the rest (upstream #950): the administrator types the
+   * fields the connection asks for, a store subdomain, and the client itself is the deployment's
+   * (`deployment-clients.ts`). Offered only when that client is held.
+   */
+  "S2S_OAUTH2",
 ] as const;
 
 export type FieldScheme = (typeof FIELD_SCHEME_NAMES)[number];
@@ -290,7 +298,15 @@ export type BrokerConnection =
   | { kind: "self-registering" }
   | { kind: "fields"; authScheme: FieldScheme }
   | { kind: "no-auth" }
-  | { kind: "unsupported"; reason: string };
+  | {
+      kind: "unsupported";
+      reason: string;
+      /**
+       * Set when the app publishes a server-to-server grant and nothing else this deployment can
+       * drive: a client stored for it makes it connectable (`withDeploymentClients`).
+       */
+      awaitsClient?: true;
+    };
 
 /**
  * One app in the catalogue, as much of Composio's toolkit listing as anything here reads.
@@ -378,6 +394,12 @@ export type ComposioBroker = {
      * catalogue row the administrator chose, and a second derivation is a second answer.
      */
     connection: BrokerConnection;
+    /**
+     * This deployment's own OAuth client, for an app connected with a server-to-server grant, read
+     * out of the vault by the caller. The one config that is sent a secret; required for that
+     * scheme and refused without it. See `deployment-clients.ts`.
+     */
+    client?: DeploymentClient;
   }): Promise<AuthConfigOutcome>;
   /**
    * Drop this deployment's own auth configs for the app, which is what removing an app has to do.
