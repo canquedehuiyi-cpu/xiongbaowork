@@ -14,6 +14,12 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   on its card, now opens the latest group conversation with exactly its members, or starts one with
   them in the group's order; a group with fewer than two members says so and sends you to pick them.
   The sidebar's 群组 tab has 新建群聊 again, for any two or more coworkers without naming a group.
+- **Earlier conversations are reachable on a phone again, and every conversation can be listed and
+  searched.** The conversation column beside a chat is desktop-only, and since the sidebar rework it
+  was the only place the list lived, so below 768px there was no way to open an earlier
+  conversation, search, pin or delete one, or load older pages. The sidebar drawer on a phone now
+  carries the same list (every conversation when no chat is open). On any screen, 全部对话 in the
+  column's header widens it from one employee to every conversation, and searches across them.
 
 ## 0.2.5
 

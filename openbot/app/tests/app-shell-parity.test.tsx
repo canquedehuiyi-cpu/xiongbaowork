@@ -621,6 +621,80 @@ test("a group conversation shows the workspace of its first member", async () =>
   expect(row.getAttribute("aria-current")).toBe("page");
 });
 
+test("全部对话 widens the column to every conversation, and searches across employees", async () => {
+  const writerOnly = channel("c-writer", ["agent-writer"], {
+    summary: "新品文案",
+    lastMessageAt: "2026-11-04T09:00:00Z",
+  });
+  const { view } = renderShell("/channel/c-analyst-new", {
+    channels: [...CHANNELS, writerOnly],
+  });
+  const column = await view.findByRole("complementary", {
+    name: "分析师的对话",
+  });
+  // Narrowed to the employee, the writer's own conversation is not listed.
+  expect(within(column).queryByRole("link", { name: /新品文案/ })).toBeNull();
+  await userEvent.click(
+    within(column).getByRole("button", { name: "全部对话" }),
+  );
+  expect(within(column).getByText("共4个任务")).toBeTruthy();
+  expect(hrefOf(within(column).getByRole("link", { name: /新品文案/ }))).toBe(
+    "/channel/c-writer",
+  );
+  // The employee's switch and 管理 belong to one employee, so they leave with the narrowing.
+  expect(within(column).queryByRole("tab", { name: "自动任务" })).toBeNull();
+  await userEvent.click(
+    within(column).getByRole("button", { name: "搜索对话" }),
+  );
+  await userEvent.type(
+    within(column).getByRole("searchbox", { name: "搜索会话" }),
+    "文案",
+  );
+  await waitFor(() =>
+    expect(
+      within(column)
+        .getAllByRole("link", { name: /聊天|群聊/ })
+        .map((row) => hrefOf(row)),
+    ).toEqual(["/channel/c-writer"]),
+  );
+  // And back.
+  await userEvent.click(
+    within(column).getByRole("button", { name: "只看分析师" }),
+  );
+  expect(within(column).getByRole("tab", { name: "自动任务" })).toBeTruthy();
+});
+
+test("on a phone the sidebar drawer carries the conversation list the column cannot show", async () => {
+  const width = window.innerWidth;
+  Object.defineProperty(window, "innerWidth", {
+    configurable: true,
+    value: 390,
+  });
+  try {
+    const { view } = renderShell("/channel/c-analyst-new");
+    // The 240px column is desktop only; on a phone the drawer is where the list lives. The page
+    // header's toggle opens it; the shell under test has no page, so the shortcut stands in.
+    await view.findByRole("complementary", { name: "分析师的对话" });
+    expect(view.queryByRole("region", { name: "对话" })).toBeNull();
+    await userEvent.setup({ document }).keyboard("{Control>}b{/Control}");
+    const section = await view.findByRole("region", { name: "对话" });
+    const rows = within(section).getAllByRole("link", { name: /聊天|群聊/ });
+    expect(rows.map((row) => hrefOf(row))).toEqual([
+      "/channel/c-analyst-new",
+      "/group/c-crew",
+      "/channel/c-analyst-old",
+    ]);
+    expect(
+      within(section).getByRole("button", { name: "搜索对话" }),
+    ).toBeTruthy();
+  } finally {
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: width,
+    });
+  }
+});
+
 test("the workspace searches what it has loaded", async () => {
   const { view } = renderShell("/channel/c-analyst-new");
   const column = await view.findByRole("complementary", {

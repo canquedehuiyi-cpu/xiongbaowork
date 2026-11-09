@@ -32,6 +32,7 @@ import { botAttentionQueryOptions } from "@/lib/bot-lifecycle/queries";
 import { useChannelEvents } from "@/lib/channels/use-channel-events";
 import { appConfig } from "@/lib/generated/application-config";
 import { SidebarAccount } from "./sidebar-account";
+import { MobileConversations } from "./conversation-workspace";
 import { SidebarRoster } from "./sidebar-roster";
 
 /*
@@ -269,6 +270,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           ))}
         </nav>
         <SidebarRoster />
+        <MobileConversations />
       </SidebarContent>
       {/*
        * This product's own destinations, folded, same row style — at the foot, above the account,
