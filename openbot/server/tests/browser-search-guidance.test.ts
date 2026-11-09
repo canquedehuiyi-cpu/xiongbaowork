@@ -392,6 +392,10 @@ describe("技能 web-search-guide", () => {
     );
     expect(instructions).toContain("浏览器");
     expect(instructions).toContain("来源");
+    // 验证码、登录墙：先换必应，仍被拦就按电脑说明的规则请人接管，不另立「不要让用户去登录」。
+    expect(instructions).toContain("换另一个搜索引擎");
+    expect(instructions).toContain("computer_request_help");
+    expect(instructions).not.toContain("不要让用户去登录");
     // 电脑工具是内置工具，不是 serverId/toolName，填进 tools 加载会报错。
     expect(skill?.tools).toEqual([]);
   });
