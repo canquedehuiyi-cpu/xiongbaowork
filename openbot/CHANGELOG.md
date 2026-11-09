@@ -66,8 +66,8 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 - **Merged upstream OpenBot up to `6fb38c8b`** (#784; `UPSTREAM.md` records what was taken and
   what was not). What a deployment notices:
   - **Before upgrading.** Migrations `0146_mcp_tools_unclassified` (shared with the plugin work) and
-    `0147_learning` (R0's `0146_learning`, renumbered) come first, then `0148_identity_links`,
-    `0149_memory_on_intelligence`, `0150_default_opt_outs` and `0151_sign_in_code_step`. The two new per-person tables (`identity_links`, `identity_link_challenges`) and
+    `0147_learning` (R0's `0146_learning`, renumbered) come first, then `0155_identity_links`,
+    `0156_memory_on_intelligence`, `0157_default_opt_outs` and `0158_sign_in_code_step`. The two new per-person tables (`identity_links`, `identity_link_challenges`) and
     `default_opt_outs` carry `tenant_id` with row security, like every other tenant table. A server
     and a computer must be upgraded together: an older computer has no `/sign-in/code`. A hosted
     computer's browser is now headed by default (`COMPUTER_BROWSER_MODE=headless` keeps the old one).
@@ -105,7 +105,7 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   page says Intelligence is not connected. A URL or licence set without the key is refused at boot
   as half-configured. Conversations stay in this deployment's PostgreSQL, so they are **not** sent
   to Intelligence as learning evidence: skills are produced and published in Intelligence itself.
-  Migration `0147_learning` recreates `learning_settings` (deployment-wide) and
+  Migration `0154_learning` recreates `learning_settings` (deployment-wide) and
   `learning_thread_bindings` (per person, with `tenant_id` and row security). The self-host bar
   also hides itself for a deployment that pays for a connected Intelligence.
 

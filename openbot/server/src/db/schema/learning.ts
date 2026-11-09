@@ -24,7 +24,7 @@ import {
 const tenantScope = sql`tenant_id = current_setting('app.tenant_id', true) OR current_setting('app.tenant_id', true) = 'platform'`;
 
 /**
- * 自动学习的部署级设置（recovery overlay 0147，上游 0046 重建）。
+ * 自动学习的部署级设置（recovery overlay 0154，上游 0046 重建）。
  *
  * 只有接入 CopilotKit Intelligence 的部署会读写；与 `text_translations` 一样不带租户列、不开行级
  * 安全，写入口只有管理员路由。
@@ -49,7 +49,7 @@ export const learningSettings = pgTable(
 /**
  * 一段对话第一次运行时分到的学习容器。一段对话不会换容器；null 记录的是明确“不分配”的第一次运行。
  *
- * 按人的数据：带 `tenant_id`，本人的帧读写自己的行，platform 帧读写全部（0147）。
+ * 按人的数据：带 `tenant_id`，本人的帧读写自己的行，platform 帧读写全部（0154）。
  */
 export const learningThreadBindings = pgTable(
   "learning_thread_bindings",

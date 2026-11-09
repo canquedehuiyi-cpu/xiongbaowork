@@ -33,7 +33,7 @@ export type DefaultFeature = "memory_source" | "proactive_research";
 export const defaultOptOuts = pgTable(
   "default_opt_outs",
   {
-    // Each person's own row (recovery overlay 0150).
+    // Each person's own row (recovery overlay 0157).
     tenantId: tenantId(),
     ownerUserId: text("owner_user_id")
       .notNull()
