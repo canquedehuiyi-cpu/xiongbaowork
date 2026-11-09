@@ -30,6 +30,7 @@ import {
 } from "../src/db/schema";
 import { createIntentRouter } from "../src/routing/classify";
 import { createRoutingRoutes } from "../src/routing/routes";
+import { createCoworkerRoutingService } from "../src/routing/service";
 import { runAsTenant } from "../src/tenant/context";
 import {
   AVATAR_ROLE_DESCRIPTION,
@@ -599,16 +600,18 @@ describe("what the router is told the 分身 is for", () => {
 
     const prompts: string[] = [];
     const routes = createRoutingRoutes(
-      createAgentProfileStore(database, undefined),
-      createIntentRouter({
-        complete: async (prompt) => {
-          prompts.push(prompt);
-          return JSON.stringify({
-            agentId: avatarAgentId(personB),
-            reason: "personal",
-            confidence: 0.9,
-          });
-        },
+      createCoworkerRoutingService({
+        store: createAgentProfileStore(database, undefined),
+        router: createIntentRouter({
+          complete: async (prompt) => {
+            prompts.push(prompt);
+            return JSON.stringify({
+              agentId: avatarAgentId(personB),
+              reason: "personal",
+              confidence: 0.9,
+            });
+          },
+        }),
       }),
       requireUserFor(personB),
     );

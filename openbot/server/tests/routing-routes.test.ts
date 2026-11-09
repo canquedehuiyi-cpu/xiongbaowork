@@ -10,6 +10,7 @@ import {
   createRoutingRoutes,
   defaultRoutingProfile,
 } from "../src/routing/routes";
+import { createCoworkerRoutingService } from "../src/routing/service";
 
 /**
  * Why a conversation went where it went, for every conversation.
@@ -70,6 +71,7 @@ function profile(input: {
     hasAuth: false,
     hasCallbackToken: false,
     hidden: false,
+    pinned: false,
     id: input.id,
     name: input.name,
     ownerUserId: ACTOR.id,
@@ -108,7 +110,7 @@ function app(
 
   const roster = options.roster ?? ROSTER;
   const store = {
-    list: async () => roster,
+    list: async () => roster.map(profile),
   } as unknown as AgentProfileStore;
 
   const router = {
@@ -135,7 +137,10 @@ function app(
   const server = new Hono<{ Variables: AppVariables }>();
   server.route(
     "/api/route",
-    createRoutingRoutes(store, router, asActor, auditStore),
+    createRoutingRoutes(
+      createCoworkerRoutingService({ store, router, auditStore }),
+      asActor,
+    ),
   );
   return { server, written, asked, defaults };
 }
@@ -394,4 +399,15 @@ describe("recording why a message was not routed", () => {
       undecided: null,
     });
   });
+});
+
+test("the HTTP adapter refuses oversized routing input with 400", async () => {
+  const { server, asked, written } = app();
+  const response = await post(server, { text: "x".repeat(10001) });
+  expect(response.status).toBe(400);
+  expect(await response.json()).toEqual({
+    error: "A message of at most 10000 characters is required.",
+  });
+  expect(asked).toEqual([]);
+  expect(written).toEqual([]);
 });

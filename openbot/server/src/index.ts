@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
+import type { AbstractAgent } from "@ag-ui/client";
 import { serve } from "bun";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -16,6 +17,10 @@ import {
   headlessTurnRefusal,
   installEnterpriseControls,
 } from "./admin/controls";
+import {
+  CoworkerUnavailableError,
+  createActorAgentResolver,
+} from "./agents/agent-resolver";
 import { ownerTenantOfBot } from "./agents/bot-owner";
 import {
   mintRunAssertion,
@@ -195,7 +200,6 @@ import {
   type LoadCurrentProject,
   mountCopilotRuntime,
   normalizeModelBaseUrls,
-  resolveRuntimeAgents,
   runtimeModelForEnvironment,
   type ToolSelection,
 } from "./copilot";
@@ -681,16 +685,11 @@ await startupLifecycle.run(async (startup) => {
     config.managedAgent,
   );
   /*
-   * A routine's Bot is built from this: its owner's roster, read in its owner's frame. Scoped here on
-   * the actor the caller already passes, so the scope cannot disagree with the actor. Without it every
-   * row the owner's own workspace created is invisible, and addressing one of their own Bots answers
-   * "Agent not found" with no run, no message stored and nothing on screen.
-   *
-   * The runtime is handed the loader itself instead: `mountCopilotRuntime` opens the asker's frame
-   * around each whole request, and reads this roster in it, or in the catalogue frame for nobody.
+   * Unscoped on purpose: whoever builds a Bot opens the frame of the person it is for — the runtime
+   * around each whole request (or the catalogue frame for nobody), a hop around its `agentFor`, and
+   * `buildAgentFor` around a routine's owner. Read outside a frame, a person's own Bots are invisible
+   * and addressing one answers "Agent not found" with nothing on screen.
    */
-  const loadAgentsForActor: typeof runtimeAgentsForActor = (actor) =>
-    runAsTenant(actor.id, () => runtimeAgentsForActor(actor));
   await startup.step(() =>
     synchronizeTenantPackage(
       database,
@@ -1515,16 +1514,7 @@ await startupLifecycle.run(async (startup) => {
       }),
   });
 
-  /*
-   * WHY THESE ARE NAMED CONSTANTS RATHER THAN ARGUMENTS WRITTEN INLINE.
-   *
-   * Two callers now build a Bot: a person's chat request, through `mountCopilotRuntime` below, and a
-   * routine's headless turn, through `buildAgentFor` further down. They have to build the SAME Bot. A
-   * routine that resolved its tools, its run assertion or its endpoint dialling through a second,
-   * slightly different set of collaborators would be a Bot that behaves one way when a person asks and
-   * another way at three in the morning, with nothing to point at. So each of these is written once and
-   * passed to both.
-   */
+  // Named collaborators are bound once in actorAgentResolver for chat, hops, and headless turns.
 
   /** The deployment's model key, resolved per call so a credential rotated a moment ago is used next. */
   const resolveRuntimeModelApiKey = () =>
@@ -2185,48 +2175,18 @@ await startupLifecycle.run(async (startup) => {
     depth?: number;
   }) => {
     const actor = await actorFor(ownerUserId);
-    const agents = await resolveRuntimeAgents(
-      () => loadAgentsForActor(actor),
-      runtimeModel,
-      resolveRuntimeModelApiKey,
-      stallGuard,
-      restrictToolsForRun(
-        initiator,
-        loadToolsForActor(actor.id, initiator),
-        proactiveReadOnlyRefs,
-      ),
-      signRunForActor(actor.id, initiator, depth),
-      computerProvider ? COMPUTER_GUIDANCE : undefined,
-      loadVendors,
-      selectionForActor(actor.id),
-      agentFetch,
-      restrictCoordinationForRun(
-        initiator,
-        coordinationForActor(actor.id, initiator, depth),
-      ),
-      // Only the Bot this routine names. Same reason as the hop delivery: the roster is still read in
-      // full so a Bot this owner cannot see is still absent, but the other Bots are neither built nor
-      // asked what they hold.
-      agentId,
-      // The owner's own standing instructions. A routine is their work done while they are asleep, so
-      // it is written the way they asked for it to be written, exactly as their chat turn would be.
-      loadInstructionsForActor(actor.id),
-      initiator,
-      // The same reader the request path gets, bound to the owner the routine runs as, so a file
-      // attached in a channel reads the same way on a routine's turn as it does on the person's own —
-      // and is refused the same way when the owner is not in that channel.
-      loadAttachmentForActor(actor.id),
-      // And the same recorder, so the files on a routine's own message stop counting as staged the
-      // moment it sends them, exactly as a person's do.
-      markAttachmentsSentForActor(actor.id),
-      loadPersonalMemoryForActor(actor.id),
-      resolveAgentModel,
-      // And the owner's 分身's declared sources, exactly as their chat turn is told them.
-      loadAvatarSourcesForActor(actor.id),
-      // And the coworker's current project, as their chat turn is told it (RES2).
-      loadCurrentProjectForActor(actor.id),
-    );
-    const agent = agents[agentId];
+    let agent: AbstractAgent | undefined;
+    try {
+      // In the owner's frame, the whole build: the roster, what the Bot holds, its model binding.
+      agent = await runAsTenant(actor.id, () =>
+        actorAgentResolver.resolveAgentForActor(actor, agentId, {
+          initiator,
+          depth,
+        }),
+      );
+    } catch (error) {
+      if (!(error instanceof CoworkerUnavailableError)) throw error;
+    }
     if (!agent) {
       /*
        * Named, and raised rather than swallowed. The routine's Bot was deleted, or made private by
@@ -2516,52 +2476,76 @@ await startupLifecycle.run(async (startup) => {
    * invisible: it runs, and quietly holds different tools or a different role from the one the person
    * is talking to.
    */
-  const copilotRuntime = mountCopilotRuntime(
-    config,
-    runtimeModel,
-    // Unscoped: the runtime reads it in the frame of whoever each request (or hop) is for.
-    runtimeAgentsForActor,
-    resolveRuntimeModelApiKey,
-    identifyUser,
-    identifyActor,
+  /*
+   * The one way a Bot is built for a person (upstream f4bc60b, "stop building a Bot four ways"): a
+   * person's chat request, a hop's delivery and a routine's or responsibility's headless turn all ask
+   * this, so the Bot a person talks to and the Bot that works at three in the morning cannot hold
+   * different tools, grants, model or role.
+   *
+   * The roster loader is unscoped: every caller opens the frame of the person it is for — the runtime
+   * around each whole request (or the catalogue frame for nobody), a hop around its `agentFor`, and
+   * `buildAgentFor` above around the owner.
+   */
+  const actorAgentResolver = createActorAgentResolver({
+    loadAgents: runtimeAgentsForActor,
+    model: runtimeModel,
+    resolveModelApiKey: resolveRuntimeModelApiKey,
     stallGuard,
-    loadToolsForActor,
+    // Restricted by who started the run: a proactive check-in reads only, as it always did headless.
+    // A person's own turn is not restricted, so the request path holds exactly what it held before.
+    loadToolsForActor: (actorId, initiator) =>
+      restrictToolsForRun(
+        initiator,
+        loadToolsForActor(actorId, initiator),
+        proactiveReadOnlyRefs,
+      ),
     signRunForActor,
-    undefined,
+    // Whenever this deployment has a computer to drive — a container or, with TENANT_RUNTIME=device,
+    // the person's paired machine — every built-in Bot is told how its tools go together.
+    computerGuidance: computerProvider ? COMPUTER_GUIDANCE : undefined,
     loadVendors,
     selectionForActor,
     agentFetch,
     /*
-     * What a Bot may reach past itself for: another Bot, and a person. Made per run and per person.
-     *
-     * Per person because which Bots may be reached is decided against the roster that person can
-     * see: a Bot must never be able to address one they cannot, or this becomes a way around agent
-     * visibility. Per run because the caps need to know how deep the chain already is and where an
-     * answer belongs, and both of those are the deployment's own statement about the run rather than
-     * anything the model can edit.
+     * What a Bot may reach past itself for: another Bot, and a person. Made per run and per person:
+     * which Bots may be reached is decided against the roster that person can see, and the caps need
+     * to know how deep the chain already is and where an answer belongs.
      */
-    coordinationForActor,
-    // A run started or ended on a thread; light the channel it belongs to. Fire-and-forget, keyed by
-    // thread, and a scratch thread maps to no channel and signals nowhere.
-    (input) => {
-      void channelStore.signalBusy(input.threadId, input.busy).catch(() => {});
-    },
+    handoffForActor: (actorId, initiator, depth) =>
+      restrictCoordinationForRun(
+        initiator,
+        coordinationForActor(actorId, initiator, depth),
+      ),
     // What this person has told every coworker of theirs, in every channel. See user-instructions.ts.
     loadInstructionsForActor,
-    // The files on a message, put in front of the model rather than left as links it cannot follow —
-    // and only the ones the person whose run this is could open themselves.
+    // The files on a message, and that they went out in a send — only the person's own.
     loadAttachmentForActor,
-    // And that those files went out in a send, written by the person who sent them and only for rows
-    // they uploaded. See markAttachmentsSentForActor.
     markAttachmentsSentForActor,
     loadPersonalMemoryForActor,
-    // The thread store, and the runtime's runner: one object, `threads/postgres-runner.ts`.
-    localThreadRunner,
     resolveAgentModel,
     // What a person declared about where their material is, told to their own 分身 only (story F1).
     loadAvatarSourcesForActor,
     // The project each coworker works in on the person's machine (story RES2).
     loadCurrentProjectForActor,
+  });
+
+  /**
+   * The runtime, and the two things beside it a hop needs. `agentFor` builds the addressed Bot through
+   * the same resolver, and `history` reads the conversation through the same store.
+   */
+  const copilotRuntime = mountCopilotRuntime(
+    config,
+    actorAgentResolver,
+    identifyUser,
+    identifyActor,
+    {
+      // A run started or ended on a thread; light the channel it belongs to. Fire-and-forget.
+      onRunBusy: (input) => {
+        void channelStore.signalBusy(input.threadId, input.busy).catch(() => {});
+      },
+      // The thread store, and the runtime's runner: one object, `threads/postgres-runner.ts`.
+      localRunner: localThreadRunner,
+    },
   );
 
   const responsibilityQueue = createWorkQueue(database);

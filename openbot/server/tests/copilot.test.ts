@@ -8,6 +8,7 @@ import { BuiltInAgent } from "@copilotkit/runtime/v2";
 import { EMPTY, lastValueFrom } from "rxjs";
 import { z } from "zod";
 import { PROVENANCE_GUIDANCE } from "../../shared/bot-prompt";
+import { createActorAgentResolver } from "../src/agents/agent-resolver";
 import { MAX_INLINED_BYTES_PER_RUN } from "../src/channels/attachment-parts";
 import { loadConfig } from "../src/config";
 import type { LoadAttachment } from "../src/copilot";
@@ -82,6 +83,9 @@ test("remote runs receive coordination tools and preserve the signed delivery sc
           name: "Risk",
           type: "remote_ag_ui",
           endpoint: "https://risk.test/ag-ui",
+          // Every registered remote agent carries one (`registeredAgentFromRow`); without it this
+          // fixture handed the AG-UI client an undefined message, which 1.0 no longer tolerates.
+          standingMessage: standingRoleMessage(riskRow),
         },
       ],
       { provider: "openai", defaultModel: "test" },
@@ -761,12 +765,14 @@ describe("standing agent roles", () => {
         seen.request = request;
         return { id: "user-7", role: "user" as const };
       },
-      async (actor) => {
-        seen.actors.push(actor);
-        return [remoteAgent("http://coworker.internal/ag-ui")];
-      },
-      { provider: "openai", defaultModel: "gpt-5.6-terra" },
-      async () => null,
+      createActorAgentResolver({
+        loadAgents: async (actor) => {
+          seen.actors.push(actor);
+          return [remoteAgent("http://coworker.internal/ag-ui")];
+        },
+        model: { provider: "openai", defaultModel: "gpt-5.6-terra" },
+        resolveModelApiKey: async () => null,
+      }),
     );
 
     const request = new Request("http://openbot.test/api/copilotkit");
@@ -795,9 +801,13 @@ describe("standing agent roles", () => {
     let roleDescription = "Review receipts.";
     const factory = createRequestAgents(
       async () => ({ id: "user-7", role: "user" as const }),
-      async () => [remoteAgent(endpoint.url, { roleDescription })],
-      { provider: "openai", defaultModel: "gpt-5.6-terra" },
-      async () => null,
+      createActorAgentResolver({
+        loadAgents: async () => [
+          remoteAgent(endpoint.url, { roleDescription }),
+        ],
+        model: { provider: "openai", defaultModel: "gpt-5.6-terra" },
+        resolveModelApiKey: async () => null,
+      }),
     );
     const request = new Request("http://openbot.test/api/copilotkit");
 
@@ -1448,21 +1458,15 @@ describe("a person's standing instructions", () => {
     const asked: string[] = [];
     const factory = createRequestAgents(
       async () => ({ id: "user-7", role: "user" as const }),
-      async () => [assistant],
-      model,
-      async () => "openai-secret",
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      (actorId) => async () => {
-        asked.push(actorId);
-        return "Write in British English.";
-      },
+      createActorAgentResolver({
+        loadAgents: async () => [assistant],
+        model,
+        resolveModelApiKey: async () => "openai-secret",
+        loadInstructionsForActor: (actorId) => async () => {
+          asked.push(actorId);
+          return "Write in British English.";
+        },
+      }),
     );
 
     await factory({
@@ -2655,22 +2659,13 @@ describe("each coworker runs on the model it was bound to", () => {
       );
       const factory = createRequestAgents(
         async () => ({ id: "user-9", role: "user" as const }),
-        async () => [developer, reviewer],
-        model,
-        async () => "synthetic-deployment-key",
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        async (agentId) => (agentId === developer.id ? bound : null),
+        createActorAgentResolver({
+          loadAgents: async () => [developer, reviewer],
+          model,
+          resolveModelApiKey: async () => "synthetic-deployment-key",
+          resolveAgentModel: async (agentId) =>
+            agentId === developer.id ? bound : null,
+        }),
       );
 
       const agents = await factory({

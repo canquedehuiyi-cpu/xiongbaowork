@@ -4,6 +4,7 @@ import { buildAGUITextResponse } from "@copilotkit/aimock";
 import { AGUIMock } from "@copilotkit/aimock/agui";
 import { ɵGLOBAL_STORE } from "@copilotkit/runtime/v2";
 import { eq, inArray } from "drizzle-orm";
+import { createActorAgentResolver } from "../src/agents/agent-resolver";
 import { createRuntimeAgentLoader } from "../src/agents/runtime-agents";
 import { createApp } from "../src/app";
 import { createAuditStore } from "../src/audit";
@@ -179,17 +180,24 @@ function mountApp(runner: PostgresAgentRunner): ReturnType<typeof createApp> {
   });
   const mounted = mountCopilotRuntime(
     config,
-    { provider: "openai", defaultModel: "gpt-frames-test" },
-    // The loader exactly as index.ts builds it, scoped by nothing but the runtime itself.
-    createRuntimeAgentLoader(database),
-    () =>
-      resolveModelApiKey({
-        encryptionKey: ENCRYPTION_KEY,
-        reader: credentialStore,
-        provider: "openai",
-        keyId: `rtf-deployment-key-${suite}`,
-        environment: {},
-      }),
+    createActorAgentResolver({
+      model: { provider: "openai", defaultModel: "gpt-frames-test" },
+      // The loader exactly as index.ts builds it, scoped by nothing but the runtime itself.
+      loadAgents: createRuntimeAgentLoader(database),
+      resolveModelApiKey: () =>
+        resolveModelApiKey({
+          encryptionKey: ENCRYPTION_KEY,
+          reader: credentialStore,
+          provider: "openai",
+          keyId: `rtf-deployment-key-${suite}`,
+          environment: {},
+        }),
+      stallGuard: createStallGuard({ stallMs: 0 }),
+      // What each Bot holds, read through the plugin store as index.ts reads it.
+      loadToolsForActor: (actorId) => async (botId) =>
+        grantedTools({ store: pluginStore, botId, actorId }),
+      loadVendors: async () => [],
+    }),
     async (request) => {
       const actor = await identifyActor(request);
       if (!actor.id)
@@ -197,22 +205,7 @@ function mountApp(runner: PostgresAgentRunner): ReturnType<typeof createApp> {
       return { id: actor.id, name: actor.id };
     },
     identifyActor,
-    createStallGuard({ stallMs: 0 }),
-    // What each Bot holds, read through the plugin store as index.ts reads it.
-    (actorId) => async (botId) =>
-      grantedTools({ store: pluginStore, botId, actorId }),
-    undefined,
-    undefined,
-    async () => [],
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    runner,
+    { localRunner: runner },
   );
   const args: Parameters<typeof createApp> = [
     config,

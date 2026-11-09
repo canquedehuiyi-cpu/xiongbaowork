@@ -20,6 +20,7 @@ tests/agent-model-binding.test.ts
 tests/agent-profile-policy.test.ts
 tests/agent-profile-store.integration.test.ts
 tests/agent-registry.test.ts
+tests/agent-resolver.test.ts
 tests/agent-role-bible.integration.test.ts
 tests/agent-routes.test.ts
 tests/agent-test-connection-headers.test.ts
@@ -375,6 +376,7 @@ tests/routing-classify.test.ts
 tests/routing-limits-validation.test.ts
 tests/routing-model-url.test.ts
 tests/routing-routes.test.ts
+tests/routing-service.test.ts
 tests/run-built-agent-cancellation.test.ts
 tests/runner-browser-probe.test.ts
 tests/runner-browser.test.ts
