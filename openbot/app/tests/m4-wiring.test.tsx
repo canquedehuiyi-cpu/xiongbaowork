@@ -20,6 +20,7 @@ import { join } from "node:path";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
+  type AnyRoute,
   createMemoryHistory,
   createRootRoute,
   createRoute,
@@ -80,16 +81,25 @@ function serve(answers: Record<string, unknown>) {
 /** One page under the real path it has in the app, with stubs for the addresses it links to. */
 function drawAt(
   path: string,
-  page: { path: string; component: () => ReactNode },
+  page:
+    | { path: string; component: () => ReactNode }
+    | { path: string; route: { update: (options: never) => AnyRoute } },
   stubs: string[] = [],
 ) {
   const root = createRootRoute({ component: () => <Outlet /> });
   const routes = [
-    createRoute({
-      getParentRoute: () => root,
-      path: page.path,
-      component: page.component,
-    } as never),
+    // 页面自己的文件路由放进这棵树：它用 `Route.useSearch()` 按自己的路由 id 读查询参数，
+    // 别的测试文件先导入 routeTree.gen 时这个 id 已经定成应用里的那个，另建一个路由就对不上了。
+    "route" in page
+      ? page.route.update({
+          getParentRoute: () => root,
+          path: page.path,
+        } as never)
+      : createRoute({
+          getParentRoute: () => root,
+          path: page.path,
+          component: page.component,
+        } as never),
     ...stubs.map((stub) =>
       createRoute({
         getParentRoute: () => root,
@@ -244,7 +254,7 @@ describe("长期职责按员工筛选", () => {
     serve(answers);
     return drawAt(path, {
       path: "/responsibilities",
-      component: ResponsibilitiesRoute.options.component as () => ReactNode,
+      route: ResponsibilitiesRoute,
     });
   }
 
