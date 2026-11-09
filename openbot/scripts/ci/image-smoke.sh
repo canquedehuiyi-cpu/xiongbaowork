@@ -70,7 +70,10 @@ if [ "$healthy" = true ]; then
   check test "$(docker exec "$name" sh -c 'url=$(cat /run/s6/container_environment/DATABASE_URL); /usr/lib/postgresql/16/bin/psql "$url" -At -v ON_ERROR_STOP=1 -c "select current_user, rolsuper, rolbypassrls from pg_roles where rolname=current_user"')" = 'openbot_app|f|f'
   check docker exec "$name" sh -c 'PGPASSWORD=openbot /usr/lib/postgresql/16/bin/psql -h 127.0.0.1 -U openbot_app -d openbot -c "select 1" >/dev/null 2>&1; test "$?" -ne 0'
   check docker exec -u apiuser "$name" sh -c 'test ! -r /run/s6/container_environment/MIGRATION_DATABASE_URL'
-  check docker exec "$name" sh -c 'test -z "$(find /app ! -user pwuser -print -quit)"'
+  # /app is root's and read-only to everyone else (see the Dockerfile): neither the API's user nor a
+  # Bot's can rewrite the code the API runs or the app it serves.
+  check docker exec "$name" sh -c 'test -z "$(find /app ! -user root -print -quit)" && test -z "$(find /app -perm /022 ! -type l -print -quit)"'
+  check docker exec -u pwuser "$name" sh -c 'test ! -w /app/server/src/index.ts && test ! -w /app/app/dist/index.html'
   # Recreate against the same volume: both credentials and stored data survive.
   check docker exec "$name" sh -c '
     sha256sum /var/lib/postgresql/pgpassword /var/lib/postgresql/pgpassword-app > /var/lib/postgresql/.trackb-hashes
