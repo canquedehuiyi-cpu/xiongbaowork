@@ -616,6 +616,12 @@ export const CATALOGUE: readonly CatalogueEntry[] = Object.freeze([
       param: "key",
       credentialLabel: "快递100 授权 Key",
       credentialHint: "在快递100 API 开放平台的账号信息里复制授权 key。",
+      /*
+       * Kuaidi100's 授权 key is shorter than the default floor of sixteen: the platform issues
+       * twelve letters and digits. Lowered to exactly that, which is also the floor nothing may go
+       * under; every other entry here keeps sixteen.
+       */
+      credentialMinLength: 12,
     },
     writeTools: Object.freeze([
       "place_order",

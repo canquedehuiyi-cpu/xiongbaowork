@@ -536,6 +536,16 @@ describe("the MCP market's third batch", () => {
     }
     expect(placementOf("amap").label).toBe("高德 Web 服务 Key");
     expect(placementOf("dingtalk").label).toBe("钉钉 MCP 专属地址");
+    // Sixteen characters unless the vendor's own format is shorter; Kuaidi100's key is twelve.
+    for (const { key } of THIRD_BATCH) {
+      expect(placementOf(key).minLength).toBe(key === "kuaidi100" ? 12 : 16);
+    }
+    expect(
+      credentialFormatRefusal(placementOf("kuaidi100"), "ABCDefgh1234"),
+    ).toBeNull();
+    expect(
+      credentialFormatRefusal(placementOf("amap"), "ABCDefgh1234"),
+    ).toMatch(/格式不对/);
   });
 
   test("no entry carries anything that could be a credential", () => {
