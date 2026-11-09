@@ -3355,7 +3355,8 @@ export function createPluginStore(options: PluginStoreOptions) {
   async function closeAppAccessRequest(
     id: string,
     status: "approved" | "dismissed" | "cancelled",
-    by: string,
+    /** 处理人；申请人自己撤回时为 null，`cancelled` 本身就说明了是谁。 */
+    by: string | null,
     narrower?: ReturnType<typeof eq>,
   ): Promise<AppAccessRequestRecord | null> {
     if (!isUuid(id)) return null;
@@ -6207,13 +6208,20 @@ export function createPluginStore(options: PluginStoreOptions) {
      */
     async findAppForRequest(
       app: string,
-    ): Promise<{ serverId: string; appKey: string; title: string } | null> {
+    ): Promise<{
+      serverId: string;
+      appKey: string;
+      title: string;
+      /** 这一行是调用者自己添加的（盖的是调用者的租户章），不是本部署的应用。 */
+      own: boolean;
+    } | null> {
       const wanted = app.trim().toLowerCase();
       if (!wanted) return null;
       const byKey = sql`(lower(${mcpServers.id}) = ${wanted} or lower(${mcpServers.catalogueKey}) = ${wanted})`;
       const [row] = await database
         .select({
           id: mcpServers.id,
+          tenantId: mcpServers.tenantId,
           catalogueKey: mcpServers.catalogueKey,
           title: mcpServers.title,
         })
@@ -6230,6 +6238,7 @@ export function createPluginStore(options: PluginStoreOptions) {
             serverId: row.id,
             appKey: row.catalogueKey ?? row.id,
             title: row.title,
+            own: row.tenantId === currentTenant(),
           }
         : null;
     },
@@ -6341,7 +6350,7 @@ export function createPluginStore(options: PluginStoreOptions) {
       const closed = await closeAppAccessRequest(
         input.id,
         "cancelled",
-        input.requesterUserId,
+        null,
         eq(appAccessRequests.requesterUserId, input.requesterUserId),
       );
       if (closed)
