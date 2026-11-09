@@ -183,10 +183,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && mkdir -p /var/lib/postgresql/data /var/run/postgresql \
   && chown -R postgres:postgres /var/lib/postgresql /var/run/postgresql
 
-# A Bot can install what a task needs, and nothing else as root.
+# The default employee (pwuser) may run the package managers as root, and nothing else as root.
 #
-# `sudo` without a password, because a package manager that cannot install is not one, and "install a
-# tool then use it" is the whole point of giving a Bot a shell.
+# WHO THIS IS FOR. Only commands that run as pwuser: the default employee, with no employee header,
+# and every Bot when COMPUTER_PER_BOT_USERS is off. With the switch on (the default below) each real
+# employee runs as its own user and may not sudo at all (user decision, 2026-11-09). Bots are told
+# to use the tools already here and to install new ones in their own workspace (npm install without
+# -g, bun add), never with sudo; system packages a task commonly needs belong in this image.
 #
 # THE PACKAGE MANAGERS, NOT ALL. This was `NOPASSWD: ALL`, and the comment below it explained what
 # that cost: a Bot could become root inside its container. It then named the two conditions that make
@@ -195,14 +198,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # `EMBEDDED_POSTGRES=on` is a documented way to run it. So root here read another Bot's workspace, the
 # API's environment, and the audit database that records what it did.
 #
-# Naming the commands keeps the feature and removes that. `apt-get install` still works, which is what
-# the tool description tells a model to run. `sudo cat /proc/1/environ` does not.
+# Naming the commands keeps the feature and removes that. `apt-get install` still works for pwuser;
+# `sudo cat /proc/1/environ` does not.
 #
 # WHAT THIS IS NOT. It is a floor, not a boundary. Root is one CVE away and a shared container is not
 # an isolation story for code a model wrote: that needs a computer per Bot and a sandbox under it,
-# which is why per-Bot computers and gVisor are not optional extras next to this feature. Run the
-# image with `--security-opt no-new-privileges` where the platform allows, which turns setuid off
-# entirely for anything not named here.
+# which is why per-Bot computers and gVisor are not optional extras next to this feature.
+#
+# NOT WITH `--security-opt no-new-privileges` WHILE COMPUTER_PER_BOT_USERS=on (the default below). It
+# turns setuid off, so pwuser cannot reach the helper that runs each employee as its own user, and
+# /health then reports the per-employee computer not ready. Use it only with the switch off.
 RUN apt-get update && apt-get install -y --no-install-recommends sudo \
   && rm -rf /var/lib/apt/lists/* \
   && printf '%s\n' \
@@ -212,9 +217,41 @@ RUN apt-get update && apt-get install -y --no-install-recommends sudo \
   && chmod 0440 /etc/sudoers.d/pwuser \
   && visudo -cf /etc/sudoers.d/pwuser
 
+# EACH EMPLOYEE ITS OWN LINUX USER. An employee's commands run as `xb-<botKey>` (a uid in
+# 20000-59999), in `/workspace/bots/<botKey>`, through the narrow root helper `xb-bot`: pwuser may
+# sudo its `ensure` and `run` and nothing else of it. `restore`, which s6 runs as root at start
+# (`computer-users`), is not in sudoers. Each employee has a primary group of its own (gid = uid
+# where free, hence the SYS_GID range) and `xbbots` beside it; pwuser is alone in `xbcomp`, the group
+# of every employee directory, so the file tools reach them all.
+#
+# EMPLOYEES DO NOT SUDO. Not even the package managers pwuser keeps above: apt-get or dpkg as root is
+# root, and root reads every other employee's directory, the browser profiles and the container's
+# environment. An employee installs user-level tools in its own directory (npm install, bun add);
+# system packages it needs belong in this image.
+#
+# `acl` for the default ACLs that let the file tools and the employee's commands write each other's
+# files; `procps` for `ps`/`pgrep`, which the helper's tests use.
+COPY docker/xb-bot.sh /usr/local/sbin/xb-bot
+RUN apt-get update && apt-get install -y --no-install-recommends acl procps \
+  && rm -rf /var/lib/apt/lists/* \
+  && chown root:root /usr/local/sbin/xb-bot \
+  && chmod 0755 /usr/local/sbin/xb-bot \
+  && groupadd xbcomp \
+  && groupadd xbbots \
+  && usermod -aG xbcomp pwuser \
+  && sed -i -E '/^#?[[:space:]]*SYS_[UG]ID_(MIN|MAX)[[:space:]]/d' /etc/login.defs \
+  && printf '%s\n' 'SYS_UID_MIN 20000' 'SYS_UID_MAX 59999' 'SYS_GID_MIN 20000' 'SYS_GID_MAX 59999' >> /etc/login.defs \
+  && printf '%s\n' \
+    'pwuser ALL=(root) NOPASSWD: /usr/local/sbin/xb-bot ensure *, /usr/local/sbin/xb-bot run *' \
+    > /etc/sudoers.d/xb-bot \
+  && chmod 0440 /etc/sudoers.d/xb-bot \
+  && visudo -cf /etc/sudoers.d/xb-bot
+ENV COMPUTER_PER_BOT_USERS=on
+
 # THE PACKAGE MANAGER AND THE SHELL STAY. Both were removed here once as hardening, which was
-# backwards: a Bot being able to open a shell and install what a task needs is a requested feature,
-# not an oversight. Removing them hardens the image by deleting the product.
+# backwards: a Bot being able to open a shell and use the tools it needs is a requested feature, not
+# an oversight. Removing them hardens the image by deleting the product. What an employee may not
+# do is become root to install one: it installs user-level tools in its own workspace instead.
 #
 # What makes that safe is not their absence. It is that a Bot reaches them the same way it reaches
 # anything else, through the gateway: resolve, decide against the policy, write the audit row, then

@@ -27,7 +27,8 @@
 4. 配了 supervisor 的形态（每员工一个容器）行为不变。
 
 **非目标**
-- 不防内核漏洞，也不防 root 提权。容器内仍允许 `sudo apt-get` 这类包管理命令，装的软件对所有员工可见（系统级共享）。需要更强隔离的部署，仍应使用 supervisor 加 gVisor。
+- 不防内核漏洞。需要更强隔离的部署，仍应使用 supervisor 加 gVisor。
+- 员工不能 sudo 安装系统包（用户决定，2026-11-09：经 sudo 跑包管理器就等于拿到 root，员工之间的隔离会被打穿）。员工可以在自己目录里用 `npm install`（不带 `-g`）、`bun add` 安装用户级工具（镜像里没有 python3，所以不提供 Python 的安装方式）；常用系统包预装进镜像。默认员工（pwuser）保留原有的包管理 sudo。
 - 设备模式（`TENANT_RUNTIME=device`，命令跑在主人自己的电脑上）不在本规格内。另起一项：设备端给每个员工一个独立工作文件夹。
 - 不做网络隔离：各员工共用出站代理和出站策略。
 
@@ -37,7 +38,7 @@
 
 - 用户名：`xb-` 加 `sha256(botId)` 的前 12 位十六进制（满足 Linux 用户名 ≤ 32 字符和字符集要求；botId 本身可能超长或含大写）。
 - uid 由 `useradd --system` 自动分配，范围 20000–59999（写入 `/etc/login.defs` 的 `SYS_UID_MIN/MAX`）。
-- 不登录，shell 为 `/usr/sbin/nologin`，不加入 sudo 以外的任何组。
+- 不登录，shell 为 `/usr/sbin/nologin`。主组是自己的私有组 `xb-<botKey>`（gid 尽量与 uid 相同），附加组只有 `xbbots`；不能 sudo。
 - 员工用户映射持久化在 `/workspace/.xb-users`（root 600）。员工用户对 `/workspace` 没有写权限，改不了它。pwuser 是 agent-computer 服务本身，属于可信方，本规格不防它：它本来就能经 `xbcomp` 组读写所有员工目录。服务端的每次调用都带真实员工 id 的请求头，所以以 pwuser 运行的「默认员工」只服务于不带请求头的调用（如健康检查），不对应任何真实员工。容器重建后，辅助程序按映射重建用户，保证 uid 不变，文件属主随之不变。恢复时校验每个 uid 都在 20000–59999 之间，范围外的行跳过并记日志。
 
 ### 3.2 目录与权限
@@ -60,12 +61,12 @@
 agent-computer 以 pwuser 运行，不能切换用户。新增 `/usr/local/sbin/xb-bot`（root 所有，0755，POSIX sh），只做两件事：
 
 1. `xb-bot ensure <botKey>`：建用户（若不存在）、建目录、设权限，打印 uid。
-2. `xb-bot run <botKey> <timeout_s>`：从标准输入读取命令，以 `runuser -u xb-<botKey>` 在该员工目录中执行。环境由调用方经白名单传入：`env -i`，加上 HOME 和 TMPDIR 为员工目录，加上 shell.ts 现有白名单里的变量。
+2. `xb-bot run <botKey> <timeout_s>`：从标准输入读取命令，以 `runuser -u xb-<botKey>` 在该员工目录中执行。命令由 root 写进 root 所有的 0600 临时文件，以 fd 3 打开后删除；员工的 bash 读继承来的 fd、关掉它再执行命令，命令文本不出现在任何 argv 里。环境由调用方经白名单传入：`env -i`，加上 HOME 和 TMPDIR 为员工目录，加上 shell.ts 现有白名单里的变量。
 
-sudoers 只放行这一条：
+sudoers 只放行这一条，员工用户（`xbbots`）不获得任何 sudo 权限：
 
 ```
-pwuser ALL=(root) NOPASSWD: /usr/local/sbin/xb-bot
+pwuser ALL=(root) NOPASSWD: /usr/local/sbin/xb-bot ensure *, /usr/local/sbin/xb-bot run *
 ```
 
 辅助程序的参数校验：
@@ -91,6 +92,8 @@ pwuser ALL=(root) NOPASSWD: /usr/local/sbin/xb-bot
 
   开关关闭时 restore 照样执行，因为收紧 `/profiles` 无论开关如何都是对的。
 
+  收紧失败时 restore 不阻断容器启动：开关关闭只告警；开关打开时写入 root 所有的标记 `/run/xb-bot/unready`（内容为原因），`ensure` 见到它就以 `xb-bot: 未就绪：<原因>`（退出码 64）拒绝，于是 `/health` 返回 503，API 和默认员工照常服务。
+
 ## 4. 测试
 
 - **agent-computer 单测**
@@ -111,8 +114,8 @@ pwuser ALL=(root) NOPASSWD: /usr/local/sbin/xb-bot
 
 | 风险 | 缓解 |
 |---|---|
-| sudoers 放行的辅助程序本身成为提权入口 | 参数严格白名单；命令只经 stdin 传给 `runuser`，不拼进 argv；辅助程序不读环境变量（`env -i` 由它自己设）；加 shellcheck；专项安全评审 |
-| 包管理 sudo 仍可提权到 root | 已知，属于非目标；文档写明更强隔离要用 supervisor 加 gVisor |
+| sudoers 放行的辅助程序本身成为提权入口 | 参数严格白名单；命令经 stdin 交给辅助程序、再经 fd 交给员工的 bash，不进任何 argv；辅助程序只经 s6 with-contenv 读取 `COMPUTER_PER_BOT_USERS`，其余环境变量一律不读（员工命令的环境由它自己 `env -i` 设定）；锁文件在 root 专属目录；加 shellcheck；专项安全评审 |
+| 员工经包管理 sudo 提权到 root | 员工不能 sudo（sudoers 不放行 `%xbbots`）；用户级工具装在员工自己目录里，常用系统包预装进镜像。默认员工（pwuser）仍保留包管理 sudo，它只服务不带员工请求头的调用 |
 | 平台不允许 setuid（`no-new-privileges`） | 开关打开时 `/health` 明确报不就绪；交付文档说明二者互斥 |
 | 旧数据归属 | 默认员工继续使用 `/workspace` 根目录；不搬动、不改属主 |
 
