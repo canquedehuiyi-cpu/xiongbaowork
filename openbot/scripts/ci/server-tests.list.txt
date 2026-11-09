@@ -115,7 +115,10 @@ tests/composio-broker-seam.test.ts
 tests/composio-classify.test.ts
 tests/composio-connection-kinds.test.ts
 tests/composio-connections.test.ts
+tests/composio-file-parameters.test.ts
+tests/composio-gmail-listing.test.ts
 tests/composio-live.test.ts
+tests/composio-own-toolkits-hidden.test.ts
 tests/composio-transport.test.ts
 tests/computer-client.test.ts
 tests/computer-culler.integration.test.ts
@@ -290,6 +293,7 @@ tests/plugin-selection.test.ts
 tests/plugin-self-install.integration.test.ts
 tests/plugin-servers-validation.test.ts
 tests/plugin-share-target.test.ts
+tests/plugin-store-identity-action.test.ts
 tests/plugin-store.integration.test.ts
 tests/plugin-tenant-catalogue-row.test.ts
 tests/plugin-user-credential.integration.test.ts

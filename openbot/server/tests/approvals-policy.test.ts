@@ -7,6 +7,7 @@ import {
 import {
   DEFAULT_SENSITIVE_PATHS,
   DESTRUCTIVE_TOOL_REASON,
+  OUTBOUND_SEND_REASON,
   dangerousCommand,
   decideAction,
   effectiveHostCommandPolicy,
@@ -2472,20 +2473,32 @@ describe("destructive tools always ask, once at a time", () => {
     ).toMatchObject({ behaviour: "allow" });
   });
 
-  test("a read never asks here, whatever it is called or marked", async () => {
-    expect(
-      await decideAction({
-        ...base,
-        candidate: app("gmail/GMAIL_DELETE_MESSAGE", { effect: "read" }),
-      }),
-    ).toMatchObject({ behaviour: "allow" });
-    expect(
-      await decideAction({
-        ...base,
-        candidate: app("crm/reset_pipeline", {
-          effect: "read",
-          destructive: true,
+  test("a deleting name or the app's destructive mark asks even when the tool was classified as a read", async () => {
+    /*
+     * 有意为之（阶段 6 评审 I3）：删除类底线不给「读」让路。catalogue 的 writeTools 名单并不完整，
+     * 没列进去的工具会被当成读，名字是这时的兜底；应用自己标了破坏性的，以应用的标记为准。
+     */
+    for (const toolRef of ["gmail/GMAIL_DELETE_MESSAGE", "vendor/delete_x"])
+      expect(
+        await decideAction({
+          ...base,
+          candidate: app(toolRef, { effect: "read" }),
+          personal: allowAll,
         }),
+      ).toMatchObject({ behaviour: "ask", source: "destructive_tool" });
+    for (const toolRef of ["crm/reset_pipeline", "vendor/list_items"])
+      expect(
+        await decideAction({
+          ...base,
+          candidate: app(toolRef, { effect: "read", destructive: true }),
+          personal: allowAll,
+        }),
+      ).toMatchObject({ behaviour: "ask", source: "destructive_tool" });
+    // 没有标记、名字也不说删除的读照常放行。
+    expect(
+      await decideAction({
+        ...base,
+        candidate: app("vendor/list_items", { effect: "read" }),
       }),
     ).toMatchObject({ behaviour: "allow" });
   });
@@ -2511,5 +2524,259 @@ describe("destructive tools always ask, once at a time", () => {
       continuation: context,
     });
     expect(marked.actionDigest).toBe(plain.actionDigest);
+  });
+});
+
+/*
+ * 对外发送（用户决定，2026-11-09）：应用工具把内容发给别人，例如发信、回复、在频道里发消息，一律先问，
+ * 且只给「允许一次 / 拒绝」。来源沿用删除类底线的 `subject.connector` 标记，只管应用工具。
+ */
+describe("outbound sends always ask, once at a time", () => {
+  const connector = (toolRef: string, over: Partial<ApprovalCandidate> = {}) =>
+    candidate({
+      toolRef,
+      scope: toolRef.split("/")[0] ?? "app",
+      subject: { connector: true },
+      ...over,
+    });
+  const allowAll = [rule("allow", { toolRef: "*" })];
+
+  test("GMAIL_SEND_EMAIL, GMAIL_REPLY_TO_THREAD and SLACK_POST_MESSAGE ask with the outbound reason", async () => {
+    expect(OUTBOUND_SEND_REASON).toBe(
+      "这个操作可能会把内容发给别人，总是先征得你同意。",
+    );
+    for (const toolRef of [
+      "composio-gmail/GMAIL_SEND_EMAIL",
+      "composio-gmail/GMAIL_REPLY_TO_THREAD",
+      "composio-slack/SLACK_POST_MESSAGE",
+    ])
+      expect(
+        await decideAction({ ...base, candidate: connector(toolRef) }),
+      ).toMatchObject({
+        behaviour: "ask",
+        source: "outbound_send",
+        reason: OUTBOUND_SEND_REASON,
+      });
+  });
+
+  test("each outbound verb, as the first verb, asks", async () => {
+    for (const name of [
+      "send_message",
+      "sends_invoice",
+      "reply_to_comment",
+      "replies_create",
+      "forward_email",
+      "post_tweet",
+      "publish_page",
+      "share_file",
+      "invite_member",
+      "GMAIL_SEND_DRAFT",
+      "sendMessage",
+      // 发送词出现在任意位置（评审 I1、I2）：草稿发送、先建再发、重发、派发。
+      "drafts_send",
+      "gmail_users_drafts_send",
+      "create_and_send_email",
+      "resend_invite",
+      "resendInvite",
+      "EMAIL_DISPATCH",
+      // 新建或定时一条消息、帖子、邮件、短信、推文、评论（评审 I2）。
+      "LINKEDIN_CREATE_LINKED_IN_POST",
+      "DISCORDBOT_CREATE_MESSAGE",
+      "TWILIO_CREATE_MESSAGE",
+      "SLACK_SCHEDULE_MESSAGE",
+      "create_tweet",
+      "compose_email",
+      "new_sms",
+      "GITHUB_CREATE_AN_ISSUE_COMMENT",
+      // 草稿开头、后面是回复：没有豁免，宁可多问。
+      "draft_reply",
+      "GMAIL_DRAFT_REPLY",
+    ])
+      expect(
+        (
+          await decideAction({
+            ...base,
+            candidate: connector(`vendor/${name}`),
+          })
+        ).source,
+      ).toBe("outbound_send");
+  });
+
+  test("drafts, sent-mail listings and reading a post do not ask", async () => {
+    for (const name of [
+      "GMAIL_CREATE_EMAIL_DRAFT",
+      "list_sent_messages",
+      "get_post",
+      "get_message",
+      "create_draft",
+      "update_draft",
+      "save_email_draft",
+      "create_message_drafts",
+      "posts_list",
+      "update_post",
+      "search_shared_drives",
+    ])
+      expect(
+        await decideAction({ ...base, candidate: connector(`gmail/${name}`) }),
+      ).toMatchObject({ behaviour: "allow", source: "default" });
+  });
+
+  test("an always-allow rule, a pre-approval or the reviewer's go-ahead cannot lower it", async () => {
+    expect(
+      await decideAction({
+        ...base,
+        candidate: connector("composio-gmail/GMAIL_SEND_EMAIL"),
+        personal: allowAll,
+        team: [team("allow", { toolRef: "*" })],
+      }),
+    ).toMatchObject({
+      behaviour: "ask",
+      source: "outbound_send",
+      reason: OUTBOUND_SEND_REASON,
+    });
+    expect(
+      await decideAction({
+        ...base,
+        candidate: connector("composio-slack/SLACK_POST_MESSAGE"),
+        personal: [rule("pre_approved", { toolRef: "*" })],
+        messages: said("Post the release notes in #general."),
+        model: model({
+          verdict: "proceed",
+          preApproved: true,
+          reason: "Asked for.",
+        }),
+      }),
+    ).toMatchObject({ behaviour: "ask", source: "outbound_send" });
+    expect(
+      await decideAction({
+        ...base,
+        candidate: connector("composio-gmail/GMAIL_REPLY_TO_THREAD"),
+        autoReview: true,
+        model: model({
+          verdict: "proceed",
+          preApproved: false,
+          reason: "Fine.",
+        }),
+      }),
+    ).toMatchObject({ behaviour: "ask", source: "outbound_send" });
+  });
+
+  test("an action already asked about takes the outbound source, so its card offers only allow-once", async () => {
+    const outcome = await decideAction({
+      ...base,
+      candidate: connector("composio-gmail/GMAIL_SEND_EMAIL"),
+      personal: [rule("ask", { toolRef: "*" })],
+    });
+    expect(outcome.source).toBe("outbound_send");
+    expect(outcome.reason).toContain(OUTBOUND_SEND_REASON);
+    expect(outcome.reason).toContain("A rule asks before this kind of action.");
+    expect(offersStandingRule({ policy: outcome })).toBeFalse();
+    expect(
+      offersStandingRule({
+        policy: await decideAction({
+          ...base,
+          candidate: connector("composio-gmail/GMAIL_SEND_EMAIL"),
+          askBeforeChanges: true,
+        }),
+      }),
+    ).toBeFalse();
+  });
+
+  test("the stricter answers stay: a disabled tool is refused, a hand-off rule hands off", async () => {
+    expect(
+      await decideAction({
+        ...base,
+        candidate: connector("composio-gmail/GMAIL_SEND_EMAIL"),
+        personal: [rule("deny", { toolRef: "*" })],
+      }),
+    ).toMatchObject({ behaviour: "deny" });
+    expect(
+      await decideAction({
+        ...base,
+        candidate: connector("composio-gmail/GMAIL_SEND_EMAIL"),
+        personal: [rule("hand_off", { toolRef: "*" })],
+      }),
+    ).toMatchObject({ behaviour: "hand_off", source: "personal_rule" });
+  });
+
+  test("a tool that both deletes and sends is asked about as a deletion", async () => {
+    expect(
+      (
+        await decideAction({
+          ...base,
+          candidate: connector("vendor/send_and_delete"),
+        })
+      ).source,
+    ).toBe("destructive_tool");
+  });
+
+  test("only app tools: computer_*, host/ and the Bot's own tools are not affected", async () => {
+    expect(
+      await decideAction({
+        ...base,
+        candidate: candidate({
+          toolRef: "computer_run_command",
+          scope: "workspace",
+          args: { command: "echo send" },
+        }),
+        personal: [rule("allow", { toolRef: "computer_run_command" })],
+      }),
+    ).toMatchObject({ behaviour: "allow" });
+    for (const toolRef of [
+      "computer_send_keys",
+      "host/send_notification",
+      "host/post_message",
+      "bot/send_message",
+      "mcp/gmail/send_email",
+    ])
+      expect(
+        (
+          await decideAction({
+            ...base,
+            candidate: candidate({
+              toolRef,
+              scope: toolRef.split("/")[0] ?? "",
+            }),
+            personal: allowAll,
+          })
+        ).source,
+      ).not.toBe("outbound_send");
+  });
+
+  test("a sending name asks even when the tool was classified as a read", async () => {
+    // 有意为之（阶段 6 评审 I3）：分类名单不完整，被当成读的发送工具仍要按名字问。
+    for (const toolRef of [
+      "composio-gmail/GMAIL_SEND_EMAIL",
+      "vendor/send_x",
+      "vendor/reply_in_thread",
+    ])
+      expect(
+        await decideAction({
+          ...base,
+          candidate: connector(toolRef, { effect: "read" }),
+          personal: allowAll,
+        }),
+      ).toMatchObject({ behaviour: "ask", source: "outbound_send" });
+    // 名字不说发送的读照常放行。
+    expect(
+      await decideAction({
+        ...base,
+        candidate: connector("composio-gmail/GMAIL_FETCH_EMAILS", {
+          effect: "read",
+        }),
+      }),
+    ).toMatchObject({ behaviour: "allow" });
+  });
+
+  test("a draft is exempt only when nothing in the name sends it", async () => {
+    for (const name of ["create_and_send_draft", "update_draft_and_send"])
+      expect(
+        (
+          await decideAction({
+            ...base,
+            candidate: connector(`gmail/${name}`),
+          })
+        ).source,
+      ).toBe("outbound_send");
   });
 });

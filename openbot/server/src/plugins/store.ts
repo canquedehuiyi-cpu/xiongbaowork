@@ -1168,8 +1168,12 @@ const CLIENT_REREGISTRATION_BACKOFF_MS = 5 * 60_000;
  *
  * Anchored at the end, because these are suffixes of a prefixed action name — `STRIPE_GET_ME`,
  * `LINEAR_GET_ME` — and an unanchored match would take `SLACK_PROFILE_SET` for an identity read.
+ *
+ * 商店类应用的身份就是商店本身（`SHOPIFY_GET_SHOP_DETAILS`）：探测它不需要额外权限范围。否则按字母
+ * 顺序会挑到 `SHOPIFY_COUNT_BLOGS`，它要 `read_content`，只授了订单和商品范围的商店会被误判为密钥无效。
  */
-const IDENTITY_ACTION = /(_GET_ME|_PROFILE|_CURRENT_USER|_USER_INFO|_WHOAMI)$/;
+export const IDENTITY_ACTION =
+  /(_GET_ME|_PROFILE|_CURRENT_USER|_USER_INFO|_WHOAMI|_GET_SHOP_DETAILS)$/;
 
 /** What a vendor's token endpoint gave back for a refresh token. */
 export type AccessToken = {
