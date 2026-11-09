@@ -686,6 +686,12 @@ const OWN_TOOLS: Record<string, OwnTool> = {
     done: "Read a window on your computer",
   },
 
+  // Asking an admin for an app the Bot cannot use yet (migration 0153).
+  request_app_access: {
+    running: "Asking for access to an app",
+    done: "Asked for access to an app",
+  },
+
   // Notebooks the person let the Bot read.
   list_knowledge: { running: "Checking notebooks", done: "Checked notebooks" },
   search_knowledge: {

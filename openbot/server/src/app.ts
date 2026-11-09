@@ -2292,6 +2292,8 @@ export function createApp(
             ...(credentialActorId === verdict.actorId
               ? {}
               : { credentialActorId }),
+            // The conversation the signed run is in, so a routine asked for there posts there.
+            ...(verdict.run.threadId ? { threadId: verdict.run.threadId } : {}),
           });
           // Worded by the helper the in-process door uses, so a framework Bot's model reads a vendor's
           // error as the vendor's and not as a result. Neither Bot words it on its way through.
