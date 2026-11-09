@@ -91,37 +91,65 @@ export class PerBotUnavailableError extends Error {
 /** How long one `ensure` may take. Creating a user and three directories is well under a second. */
 const HELPER_TIMEOUT_MS = 30_000;
 
-/** `sudo -n`: never a password prompt, which nobody is there to answer. */
-export const sudoHelper: HelperRunner = (args, options = {}) =>
-  new Promise((resolve) => {
-    const child = spawn("sudo", ["-n", XB_BOT_HELPER, ...args], {
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (chunk) => {
-      stdout += String(chunk);
-    });
-    child.stderr.on("data", (chunk) => {
-      stderr += String(chunk);
-    });
-    const timer = setTimeout(
-      () => child.kill("SIGKILL"),
-      options.timeoutMs ?? HELPER_TIMEOUT_MS,
-    );
-    child.once("error", (error) => {
-      clearTimeout(timer);
-      resolve({ code: -1, stdout, stderr: stderr || error.message });
-    });
-    child.once("close", (code, signal) => {
-      clearTimeout(timer);
-      resolve({
-        code: code ?? -1,
-        stdout,
-        stderr: stderr || (signal ? `辅助程序被信号 ${signal} 终止` : ""),
+/**
+ * A helper reached by running `command` with the helper's arguments after it. `defaultTimeoutMs`
+ * bounds a call that does not name its own limit.
+ */
+export function helperRunner(
+  command: string[],
+  defaultTimeoutMs = HELPER_TIMEOUT_MS,
+): HelperRunner {
+  const [executable = "sudo", ...leading] = command;
+  return (args, options = {}) =>
+    new Promise((resolve) => {
+      const child = spawn(executable, [...leading, ...args], {
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      let stdout = "";
+      let stderr = "";
+      child.stdout.on("data", (chunk) => {
+        stdout += String(chunk);
+      });
+      child.stderr.on("data", (chunk) => {
+        stderr += String(chunk);
+      });
+      const limit = options.timeoutMs ?? defaultTimeoutMs;
+      /*
+       * Answered at the limit, not when the pipes close. Something the helper started can hold them
+       * open after the helper is killed, and an answer that waits for `close` then never comes: the
+       * caller caches that pending `ensure`, and every later call for the employee waits on it too.
+       */
+      const timer = setTimeout(() => {
+        child.kill("SIGKILL");
+        child.stdout.destroy();
+        child.stderr.destroy();
+        resolve({
+          code: -1,
+          stdout,
+          stderr: `辅助程序超时（${limit} 毫秒）`,
+        });
+      }, limit);
+      child.once("error", (error) => {
+        clearTimeout(timer);
+        resolve({ code: -1, stdout, stderr: stderr || error.message });
+      });
+      child.once("close", (code, signal) => {
+        clearTimeout(timer);
+        resolve({
+          code: code ?? -1,
+          stdout,
+          stderr: stderr || (signal ? `辅助程序被信号 ${signal} 终止` : ""),
+        });
       });
     });
-  });
+}
+
+/** `sudo -n`: never a password prompt, which nobody is there to answer. */
+export const sudoHelper: HelperRunner = helperRunner([
+  "sudo",
+  "-n",
+  XB_BOT_HELPER,
+]);
 
 /** What the helper said, as one line a person can act on. */
 function helperReason(result: { code: number; stderr: string }): string {
