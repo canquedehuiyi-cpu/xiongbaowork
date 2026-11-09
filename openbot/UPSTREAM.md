@@ -50,9 +50,10 @@ git merge-tree --write-tree --merge-base=<上次同步点> <本仓库 openbot �
   验证码在密码之后再问（#780）、审计导出 CSV（#751）、提案重名提示（#778）、等待中卡片的私密登录（#777）、
   “每个可写文件夹的命令都要先问”（#759）。凡是依赖 Intelligence 的，都只在配置了 `INTELLIGENCE_API_KEY`
   时生效。
-- 迁移：上游 0053–0056 改编为 overlay `0148_identity_links`、`0149_memory_on_intelligence`、
-  `0150_default_opt_outs`、`0151_sign_in_code_step`；R0 的 `0146_learning` 顺延为 `0147_learning`
-  （0146 是 MCP 会话的 `0146_mcp_tools_unclassified`，按字节一致收入本分支以保持 journal 连续）。
+- 迁移：上游 0053–0056 改编为 overlay `0155_identity_links`、`0156_memory_on_intelligence`、
+  `0157_default_opt_outs`、`0158_sign_in_code_step`；R0 的自动学习迁移为 `0154_learning`
+  （0146、0152、0153 是 MCP 会话的迁移，按字节一致收入。main 与 v0.2.5 已带着 0152、0153 发布，所以 R0、M2
+  的迁移编号排在 0153 之后，when 也更大，否则在已升级的库上会被跳过）。
 
 **有意不收或改写的部分**
 

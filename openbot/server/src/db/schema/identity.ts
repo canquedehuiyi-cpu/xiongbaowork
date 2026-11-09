@@ -28,7 +28,7 @@ const at = (name: string) =>
 export const identityLinks = pgTable(
   "identity_links",
   {
-    // Each person's own row (recovery overlay 0148): the identity index above stays deployment-wide.
+    // Each person's own row (recovery overlay 0155): the identity index above stays deployment-wide.
     tenantId: tenantId(),
     id: text("id").primaryKey(),
     provider: text("provider").notNull(),
