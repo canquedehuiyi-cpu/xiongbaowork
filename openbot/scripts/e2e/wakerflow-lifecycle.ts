@@ -726,8 +726,8 @@ try {
     await p.goto(`${ORIGIN}/wakerflows/new`);
     await p.getByLabel("描述你想要的流程").fill(IDEA);
     await p.getByLabel("规划模型").selectOption({ label: "G4 模拟模型" });
-    await p.getByLabel("G4 撰稿人").check();
-    await p.getByLabel("G4 复核人").check();
+    await p.getByRole("checkbox", { name: "G4 撰稿人", exact: true }).check();
+    await p.getByRole("checkbox", { name: "G4 复核人", exact: true }).check();
     await p.getByRole("button", { name: "生成计划" }).click();
     await p
       .getByText("计划已生成，可以在下方修改后保存。")
