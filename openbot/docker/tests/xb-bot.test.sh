@@ -450,6 +450,7 @@ grep -qx "$DIRA" "$T/out" || fail "the shell did not start in $DIRA: $(cat "$T/o
 grep -q 'xb> ' "$T/err" || fail "the startup file was not applied: $(head -c 300 "$T/err")"
 pass "shell runs an interactive bash as the employee, in its directory, with the given environment and nothing of the caller's"
 none_left "-u xb-$A -f bash.*--rcfile" || fail "the terminal's bash of xb-$A was left after exit: $(ps -o pid,args -u "xb-$A" | tr '\n' ';')"
+none_left "-f while.kill.-0" || fail "the helper's watcher outlived a normal exit: $(pgrep -af 'while kill -0' | tr '\n' ';')"
 pass "shell leaves nothing of the employee's running once the person exits"
 
 # A background job the person left behind ends with the terminal, not with the computer's restart.
@@ -459,24 +460,31 @@ none_left "-u xb-$A -f sleep.200[12]" || fail "a background job of xb-$A outlive
 pass "shell ends the employee's background jobs with the terminal"
 
 # The caller killed (sudo, when the computer stops the terminal): what runs in it ends within seconds,
-# even a job that ignores the hang-up.
-FIFO=$T/shell-in
-mkfifo "$FIFO"
-# The trailing `:` keeps sh from exec-ing the helper, so sh stays its parent, as sudo is.
-sh -c '"$0" shell "$1" "$2" PATH=/usr/bin:/bin; :' "$XB" "$A" "$RC" <"$FIFO" >"$T/out" 2>"$T/err" &
-caller=$!
-exec 7>"$FIFO"
-printf "trap '' HUP; sleep 2003\n" >&7
+# a background job and a job that ignores the hang-up included. Through real `sudo -n` on a
+# pseudo-terminal, as agent-computer starts it: with use_pty, sudo's monitor sends HUP, TERM and KILL
+# to the helper's process group, so a watcher in that group would die before it could clean up.
+python3 -I - "$XB" "$A" "$RC" <<'PY'
+import os, pty, sys, time
+xb, key, rc = sys.argv[1:4]
+pid, fd = pty.fork()
+if pid == 0:
+    os.execvp("sudo", ["sudo", "-n", xb, "shell", key, rc, "PATH=/usr/bin:/bin"])
+time.sleep(1.5)
+os.write(fd, b"sleep 2004 &\n")
+time.sleep(0.3)
+os.write(fd, b"trap '' HUP; (trap '' HUP TERM; exec sleep 2005)\n")
+time.sleep(1.5)
+os.kill(pid, 9)
+time.sleep(0.2)
+os.close(fd)
+PY
+started=$(pgrep -u "xb-$A" -f 'sleep 200[45]' | wc -l)
+[ "$started" = 2 ] || fail "both jobs in the terminal should be running when sudo is killed, $started are: $(ps -o pid,args -u "xb-$A" | tr '\n' ';')"
 n=0
-until pgrep -u "xb-$A" -f sleep.2003 >/dev/null 2>&1 || [ "$n" -ge 50 ]; do sleep 0.1; n=$((n + 1)); done
-pgrep -u "xb-$A" -f sleep.2003 >/dev/null 2>&1 || fail "the job in the terminal never started: $(cat "$T/err")"
-kill -KILL "$caller" 2>/dev/null
-exec 7>&-
-n=0
-until none_left "-u xb-$A -f sleep.2003" || [ "$n" -ge 50 ]; do sleep 0.2; n=$((n + 1)); done
-none_left "-u xb-$A -f sleep.2003" || fail "xb-$A's processes outlived the caller: $(ps -o pid,ppid,args -u "xb-$A" | tr '\n' ';')"
-pass "shell ends the employee's processes when its caller is killed, a hang-up-proof job included"
-rm -f "$FIFO"
+until none_left "-u xb-$A -f sleep.200[45]" || [ "$n" -ge 50 ]; do sleep 0.2; n=$((n + 1)); done
+none_left "-u xb-$A -f sleep.200[45]" || fail "xb-$A's jobs outlived the killed sudo (started: $started): $(ps -o pid,ppid,args -u "xb-$A" | tr '\n' ';')"
+none_left "-f while.kill.-0" || fail "the helper's watcher outlived its work: $(pgrep -af 'while kill -0' | tr '\n' ';')"
+pass "shell ends the employee's processes when sudo is killed on a pseudo-terminal, a hang-up-proof job included"
 
 expect_code 64 "shell with a startup file that is not base64 is refused" -- "$XB" shell "$A" 'not base64!'
 expect_code 64 "shell with an empty startup file argument is refused" -- "$XB" shell "$A" ''

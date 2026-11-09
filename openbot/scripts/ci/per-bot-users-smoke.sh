@@ -223,6 +223,20 @@ if [ "$healthy" = true ]; then
     pass "no process of pwuser's runs in $A's directory"
   fi
   rm -f "$T_TERM"
+  # Stopping A's computer ends its terminal: nothing the terminal started is left as $userA.
+  call "$A" /computers/stop '{}' >/dev/null
+  left_term=""
+  started=$SECONDS
+  while [ $((SECONDS-started)) -le 10 ]; do
+    left_term=$(docker exec "$name" pgrep -u "$userA" -f -- '--rcfile /dev/fd/' 2>/dev/null || true)
+    [ -z "$left_term" ] && break
+    sleep 0.5
+  done
+  if [ -n "$term_pid" ] && [ -z "$left_term" ]; then
+    pass "stopping $A's computer ends its live terminal within 10s"
+  else
+    fail "stopping $A's computer ends its live terminal within 10s (still: ${left_term:-none}; started: ${term_pid:-none})"
+  fi
 
   # A process an employee leaves outside its command's group (setsid) survives the command, so the
   # computer ends every employee process before it (re)starts: otherwise one could take port 4100

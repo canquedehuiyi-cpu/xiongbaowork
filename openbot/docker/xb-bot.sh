@@ -505,18 +505,25 @@ cmd_shell() {
   }
   # The caller gone (sudo killed when the terminal is stopped) is the terminal closed: end what the
   # employee runs in it even if the bash itself is held up by a job that ignores the hang-up.
+  #
+  # IN A SESSION OF ITS OWN, DEAF TO SIGNALS. With sudo's use_pty (the image's default) this helper's
+  # parent is sudo's monitor, and when sudo is killed the monitor sends HUP, then TERM, then KILL to
+  # this helper's whole process group. A watcher in that group dies with it before it can clean up,
+  # and this helper's own trap waits for runuser to return, which it may never do. So the watcher
+  # leaves the group (setsid; a child started with `&` is not a group leader, so setsid does not fork
+  # again and $! is the watcher), ignores those signals, and acts once the monitor is gone.
   parent=$PPID
-  (
-    trap '' HUP
-    while kill -0 "$parent" 2>/dev/null; do sleep 1; done
-    pkill -KILL -s "$sid" -u "$user" 2>/dev/null || true
-  ) </dev/null >/dev/null 2>&1 &
+  setsid sh -c '
+    trap "" HUP TERM INT
+    while kill -0 "$1" 2>/dev/null; do sleep 1; done
+    pkill -KILL -s "$2" -u "$3" 2>/dev/null || true
+  ' sh "$parent" "$sid" "$user" </dev/null >/dev/null 2>&1 &
   watcher=$!
   on_signal() {
     trap '' TERM INT HUP
     said=1
     end_session
-    kill "$watcher" 2>/dev/null || true
+    kill -KILL "$watcher" 2>/dev/null || true
     exit 129
   }
   trap on_signal TERM INT HUP
@@ -531,7 +538,7 @@ cmd_shell() {
     /bin/bash -c '__xb_rc=$(cat <&3); exec 3<&-; exec /bin/bash --noprofile --rcfile <(printf "%s\n" "$__xb_rc") -i' || rc=$?
   exec 3<&-
   end_session
-  kill "$watcher" 2>/dev/null || true
+  kill -KILL "$watcher" 2>/dev/null || true
   trap - TERM INT HUP
   exit "$rc"
 }
