@@ -3,6 +3,7 @@ import { ApprovalRefusedError } from "../approvals/types";
 import type { AuditInitiator } from "../audit";
 import { HeadlessToolSuspension } from "../computer/headless-tools";
 import { markUntrusted } from "../untrusted-content";
+import { providerSafeSchema } from "./provider-schema";
 import type { SelectableSkill } from "./selection";
 import {
   isDeploymentFault,
@@ -91,7 +92,11 @@ export type GrantedTool = {
  */
 export function parametersFor(inputSchema: Record<string, unknown>): z.ZodType {
   try {
-    const converted = z.fromJSONSchema(inputSchema as never);
+    // 每个应用工具的 schema 都经过这里才到内置运行时和各个远程 harness，所以在这里一次性裁成
+    // 模型供应商接受的样子（见 ./provider-schema）。
+    const converted = z.fromJSONSchema(
+      providerSafeSchema(inputSchema) as never,
+    );
     if (converted instanceof z.ZodObject) return converted;
   } catch {}
   return z.object({}).catchall(z.unknown());

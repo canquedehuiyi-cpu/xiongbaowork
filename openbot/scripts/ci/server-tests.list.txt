@@ -320,6 +320,7 @@ tests/project-context.integration.test.ts
 tests/provider-error-run-error.test.ts
 tests/provider-oauth-lock-helper.test.ts
 tests/provider-oauth.test.ts
+tests/provider-tool-schemas.test.ts
 tests/qoderwake-package.test.ts
 tests/quota-concurrency.integration.test.ts
 tests/quota-error-contract.test.ts
