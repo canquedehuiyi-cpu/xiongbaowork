@@ -15,6 +15,7 @@ import {
   createTeamApprovalRule,
   decideApproval,
   type HostCommandPolicy,
+  offersStandingRule,
   type RuleBehaviour,
   revokeApprovalRule,
   revokeTeamApprovalRule,
@@ -304,9 +305,8 @@ export function ApprovalInbox() {
                   >
                     允许一次
                   </Button>
-                  {/* 删除类底线问的动作每次都要问，存下的规则用不上，所以不画这个按钮。 */}
-                  {request.action.policy?.source ===
-                  "destructive_tool" ? null : (
+                  {/* 删除类和对外发送底线问的动作每次都要问，存下的规则用不上，所以不画这个按钮。 */}
+                  {!offersStandingRule(request.action.policy) ? null : (
                     <Button
                       variant="outline"
                       disabled={decision.isPending}
