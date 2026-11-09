@@ -28,6 +28,7 @@ import {
   DEFAULT_EMPLOYEE_SECURITY,
   type EmployeePolicy,
   type EmployeeSecuritySettings,
+  offersStandingRule,
 } from "./types";
 
 /**
@@ -206,6 +207,11 @@ export function createApprovalStore(
         if (!handOff && decision === "handled")
           throw new ApprovalRefusedError(
             "Only an action handed to you can be marked done by you.",
+          );
+        // 删除类底线问的动作在任何规则之后都还要问，存一条「总是允许」只会误导人。
+        if (decision === "allow_always" && !offersStandingRule(request.action))
+          throw new ApprovalRefusedError(
+            "这个操作会删除或覆盖内容，每次都要你确认，只能「允许一次」或拒绝。",
           );
         if (decision === "allow_always")
           await tx.insert(approvalRules).values({

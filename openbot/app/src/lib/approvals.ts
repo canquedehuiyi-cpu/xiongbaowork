@@ -41,6 +41,7 @@ export const POLICY_SOURCE_LABELS: Record<string, string> = {
   // --- desktop control (sub-project 2) ---
   desktop_window: "敏感窗口",
   // --- end desktop control ---
+  destructive_tool: "删除类操作",
   auto_review: "自动审查",
   default: "你的偏好",
   person_declined: "你已拒绝过",
