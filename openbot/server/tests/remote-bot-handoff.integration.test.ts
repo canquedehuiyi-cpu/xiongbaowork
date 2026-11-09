@@ -48,7 +48,6 @@ const broker: ComposioBroker = {
 
 const auditStore = createAuditStore(database);
 const store = createPluginStore({
-  brokerProvider: "composio",
   database,
   auditStore,
   credentials: {

@@ -17,10 +17,10 @@ import { createDatabase } from "../src/db/client";
 import {
   agentProfiles,
   agents,
-  brokeredConnections,
   channelAgents,
   channelMemberships,
   channels,
+  composioConnections,
   deploymentPackages,
   pluginGrants,
   skills as skillsTable,
@@ -3075,14 +3075,11 @@ describe("upgrading a deployment set up under a package's former id", () => {
         .insert(channelMemberships)
         .values({ channelId: conversation.id, userId });
     }
-    // An app the person connected.
-    await database.insert(brokeredConnections).values({
-      provider: "composio",
-      app: `gmail-${suffix}`,
-      holder: "person",
+    // An app the person connected. (This tree's connections are Composio's alone: upstream's
+    // `brokered_connections` and its other brokers are not taken.)
+    await database.insert(composioConnections).values({
+      toolkit: `gmail-${suffix}`,
       userId,
-      vendorUserId: `person-${suffix}`,
-      connectedBy: userId,
       verified: true,
     });
 
@@ -3107,12 +3104,11 @@ describe("upgrading a deployment set up under a package's former id", () => {
       connections: (
         await database
           .select({
-            app: brokeredConnections.app,
-            vendorUserId: brokeredConnections.vendorUserId,
-            verified: brokeredConnections.verified,
+            app: composioConnections.toolkit,
+            verified: composioConnections.verified,
           })
-          .from(brokeredConnections)
-          .where(eq(brokeredConnections.userId, userId))
+          .from(composioConnections)
+          .where(eq(composioConnections.userId, userId))
       ).sort((a, b) => a.app.localeCompare(b.app)),
     });
     const before = await snapshot();
@@ -3150,8 +3146,8 @@ describe("upgrading a deployment set up under a package's former id", () => {
     expect(await snapshot()).toEqual(before);
 
     await database
-      .delete(brokeredConnections)
-      .where(eq(brokeredConnections.userId, userId));
+      .delete(composioConnections)
+      .where(eq(composioConnections.userId, userId));
   });
 
   catalogueTest("a deployment that never had a former id is named by the package's id", async () => {

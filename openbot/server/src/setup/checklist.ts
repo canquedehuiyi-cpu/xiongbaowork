@@ -1,11 +1,10 @@
 import { Hono, type MiddlewareHandler } from "hono";
 import type { AppVariables } from "../auth/guards";
-import type { DeploymentConfig } from "../config";
+import type { BrokerProvider, DeploymentConfig } from "../config";
 import type { CredentialStatusReader } from "../credentials";
 import type { Edition } from "../edition";
 import { entitlementWarning } from "../intelligence-entitlement-check";
 import type { ModelCheckOutcome } from "../model-availability-check";
-import type { BrokerProvider } from "../plugins/access";
 import type { RuntimeEntitlementResponse } from "../self-host-banner";
 
 /**

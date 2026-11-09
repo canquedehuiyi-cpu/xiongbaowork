@@ -26,9 +26,16 @@ import {
 } from "./dictation/config";
 import { type Edition, parseEdition } from "./edition";
 import { proxiedClientSocketUrl } from "./intelligence-gateway-proxy";
-import type { BrokerProvider } from "./plugins/access";
 import { type VoiceConfig, voiceConfig } from "./voice/config";
 import { type WebBotAuth, webBotAuthFromEnv } from "./web-bot-auth";
+
+/**
+ * Which broker a deployment's people connect apps through.
+ *
+ * M3: upstream defines this in plugins/access.ts, beside the transports. The fork's plugins keep
+ * Composio alone and have no such type yet, so it is spelled here, where the configuration reads it.
+ */
+export type BrokerProvider = "composio" | "arcade";
 
 /**
  * Where a conversation's durable history lives: this deployment's own
@@ -1882,6 +1889,7 @@ const PROVIDER_VARIABLE: Record<AuthProviderId, string> = {
   google: "GOOGLE_OAUTH_CLIENT_ID",
   microsoft: "MICROSOFT_OAUTH_CLIENT_ID",
   okta: "OKTA_OAUTH_CLIENT_ID",
+  github: "GITHUB_OAUTH_CLIENT_ID",
 };
 
 /**

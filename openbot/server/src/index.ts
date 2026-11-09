@@ -13,6 +13,7 @@ import {
   guardHostAccess,
   headlessTurnRefusal,
   installEnterpriseControls,
+  modelNamedIn,
   proactiveAdmin,
   skillSharingAllowed,
   skillSharingInSnapshot,
@@ -378,7 +379,12 @@ import { useTriggerTools } from "./responsibilities/trigger-tools";
 import { createTriggerStore } from "./responsibilities/triggers";
 import type { Responsibility } from "./responsibilities/types";
 import { createServerResponsibilityEngine } from "./responsibilities/wiring";
-import { createTurnRunner, type RunnerLike } from "./routines/run-turn";
+import {
+  createTurnRunner,
+  type RunnerLike,
+  serverTurnAnswered,
+  serverTurnScope,
+} from "./routines/run-turn";
 import { createRoutineRunner } from "./routines/runner";
 import { createRoutineStore } from "./routines/store";
 import { createIntentRouter } from "./routing/classify";
@@ -444,11 +450,7 @@ import {
 } from "./wakerflows/routes";
 import { createWakerFlowStore, flowRunEventWriter } from "./wakerflows/store";
 import { repeatAfterEach } from "./work/loop";
-import {
-  createWorkQueue,
-  startWorkOfferedListener,
-  type WorkOfferedListener,
-} from "./work/queue";
+import { createWorkQueue, startWorkOfferedListener } from "./work/queue";
 
 const config = loadConfig();
 // Before anything resolves a capability or reads an enterprise setting. See edition.ts.
@@ -725,6 +727,15 @@ await startupLifecycle.run(async (startup) => {
           },
         })
       : undefined;
+  const learningPeople = createLearningPeople(database);
+  /** Reads one named skill from a container; throws when Learning or the read is unavailable, null when absent. */
+  const skillIn = async (containerId: string, name: string) => {
+    const read = await learning?.containerSkills(containerId);
+    if (!read || "unavailable" in read) {
+      throw new Error("Skills are unavailable.");
+    }
+    return read.skills.find((skill) => skill.name === name) ?? null;
+  };
   const agentVault = {
     store: credentialStore,
     reader: credentialStore,
@@ -1940,17 +1951,97 @@ await startupLifecycle.run(async (startup) => {
   );
   // A person's knowledge base (D08): read by their bound Wakers through two tools, edited at /api/knowledge.
   const knowledgeStore = createKnowledgeStore(database);
-  const demonstrationStore = createDemonstrationStore(database);
-  const demonstrationRecorder = createDemonstrationRecorder({
-    store: demonstrationStore,
-    // Teaching a shared deployment Bot is allowed as well as an owned one; the skill is the owner's.
-    ownsBot: async (owner, bot) =>
-      (await pluginStore.agentOwner(bot)) === owner ||
-      (await agentProfileStore.get(await actorFor(owner), bot)) !== null,
-    ownsSkill: async (owner, slug) =>
-      (await pluginStore.skillOwner(slug)) === owner,
-    routines: routineStore,
+  /*
+   * The Recorder extension (recorder/wiring.ts): a person's browser connected to OpenBot, its capture
+   * pass and its routes. Each person's recordings join their own Learning space (above).
+   */
+  const recorderExtension = createRecorderExtension({
+    config,
+    database,
+    organizationAuth,
+    roleRepository,
+    peopleStore,
+    personalSpaces: personalLearningSpaces,
+    auditStore: bootAuditStore,
+    ...(betterAuth
+      ? { sessionLifetimeMs: await sessionLifetimeMs(betterAuth) }
+      : {}),
+    // A connection is made or ended exactly when its row is written: both in one transaction.
+    auditFor: (executor) => createAuditStore(executor),
   });
+  /*
+   * Connections whose lifetime has run out already resolve to nobody; this ends them for good, with
+   * the sealed organization session any of them still held, and writes their rows. Every replica runs
+   * it, and each row is ended once. Every person's connections, so as `platform` (the loop's frame).
+   */
+  startup.acquireSync(
+    () =>
+      repeatAfterEach(async () => {
+        try {
+          await recorderExtension.connections.expire();
+        } catch (error) {
+          console.error(
+            JSON.stringify({
+              type: "recorder-expiry-sweep-error",
+              error: error instanceof Error ? error.name : "UnknownError",
+              timestamp: new Date().toISOString(),
+            }),
+          );
+        }
+      }, 60_000),
+    (resource) => resource.stop(),
+  );
+  /*
+   * The personal edition has one reviewer, who is DEV_ACTOR (it requires single-user mode, which admits
+   * every request as DEV_ACTOR), so what its Bots learn is approved for them while automatic approval
+   * is on: once shortly after boot, so what waited while the app was closed doesn't wait another 15
+   * minutes, then every 15 minutes. Only with Intelligence, which is where Learning's proposals are.
+   * The approvals are DEV_ACTOR's own rows, so the sweep runs as them (G01).
+   */
+  const autoApprover =
+    intelligenceClient && learningSettings
+      ? createAutoApprover({
+          manage: intelligenceClient.experimental.learning,
+          enabled: async () =>
+            currentEdition() === "personal" &&
+            ((await learningSettings.read()).autoApprove ?? true),
+          sources: async () =>
+            learningScopes({
+              edition: "personal",
+              userId: DEV_ACTOR.id,
+              settings: await learningSettings.read(),
+            }),
+          approvals: skillApprovalStore,
+          userId: DEV_ACTOR.id,
+          audit: bootAuditStore,
+        })
+      : undefined;
+  if (autoApprover && currentEdition() === "personal") {
+    const sweepAutoApprovals = () =>
+      void runAsTenant(DEV_ACTOR.id, () => autoApprover.sweep()).catch(
+        (error) =>
+          console.error(
+            JSON.stringify({
+              type: "learning-auto-approve-sweep-error",
+              error: error instanceof Error ? error.name : "UnknownError",
+              timestamp: new Date().toISOString(),
+            }),
+          ),
+      );
+    startup.acquireSync(
+      () => {
+        const first = setTimeout(sweepAutoApprovals, 10_000);
+        first.unref?.();
+        const every = setInterval(sweepAutoApprovals, 15 * 60_000);
+        every.unref?.();
+        return { first, every };
+      },
+      ({ first, every }) => {
+        clearTimeout(first);
+        clearInterval(every);
+      },
+    );
+  }
   const memoryIngestion = createMemoryIngestion({
     store: personalMemoryStore,
     plugins: pluginStore,
@@ -1958,8 +2049,6 @@ await startupLifecycle.run(async (startup) => {
       (await pluginStore.agentOwner(bot)) === owner ||
       (await agentProfileStore.get(await actorFor(owner), bot)) !== null,
   });
-  // Proactive research may only read; see proactive/restriction.ts. Read from the catalogue per call.
-  const proactiveReadOnlyRefs = createReadOnlyClassifier(pluginStore);
   /*
    * Memory sources and background research, on by default for each person and Bot, and never switched
    * back on once the person turns one down. See memory/defaults.ts. Each entry runs as the person it
@@ -1970,6 +2059,7 @@ await startupLifecycle.run(async (startup) => {
     ingestion: memoryIngestion,
     sources: config.memoryDefaults.sources,
     research: config.memoryDefaults.research,
+    edition: config.edition,
     channelBots: async (ownerUserId, channelId) =>
       (await channelStore.get(await actorFor(ownerUserId), channelId))
         ?.agentIds ?? null,
@@ -1985,45 +2075,24 @@ await startupLifecycle.run(async (startup) => {
     runAsTenant(ownerUserId, () =>
       memoryDefaults.personSpoke(ownerUserId, channelId),
     );
-  const loadPersonalMemoryForActor =
-    (ownerUserId: string) => (botId: string) => {
-      // Apps connected since this Bot's last turn become its memory sources. Never waits.
-      runAsTenant(ownerUserId, () =>
-        memoryDefaults.botTurn(ownerUserId, botId),
-      );
-      return memoryIngestion.contextFor(ownerUserId, botId);
-    };
+  /*
+   * Nothing of it in the personal edition: no memory in a turn, no sync. See memory/runtime.ts. A
+   * Bot's turn switches on its memory sources as the person it is for (G01); the sweep runs as
+   * `platform` and each person's rows are synced and mirrored as that person (memory/store.ts).
+   */
+  const memoryRuntime = createMemoryRuntime({
+    edition: config.edition,
+    defaults: {
+      botTurn: (ownerUserId, botId) =>
+        runAsTenant(ownerUserId, () =>
+          memoryDefaults.botTurn(ownerUserId, botId),
+        ),
+    },
+    ingestion: memoryIngestion,
+    store: personalMemoryStore,
+  });
   startup.acquireSync(
-    () =>
-      repeatAfterEach(async () => {
-        try {
-          await memoryIngestion.syncDue();
-        } catch (error) {
-          console.error(
-            JSON.stringify({
-              type: "memory-sweep-error",
-              error: error instanceof Error ? error.name : "UnknownError",
-              context: { operation: "syncDue" },
-              timestamp: new Date().toISOString(),
-            }),
-          );
-        }
-        // Mirror to Intelligence what is out of step: the backfill on the first passes after a
-        // deployment becomes entitled, and afterwards whatever an outage left behind. A no-op without
-        // Intelligence. Each person's rows are mirrored as that person (memory/store.ts).
-        try {
-          await personalMemoryStore.mirrorPending();
-        } catch (error) {
-          console.error(
-            JSON.stringify({
-              type: "memory-sweep-error",
-              error: error instanceof Error ? error.name : "UnknownError",
-              context: { operation: "mirrorPending" },
-              timestamp: new Date().toISOString(),
-            }),
-          );
-        }
-      }, 60_000),
+    () => repeatAfterEach(memoryRuntime.sweep, 60_000),
     (resource) => resource.stop(),
   );
   // Follow-ups a Bot schedules for itself, on the shared work queue. See agents/wake-up.ts.
@@ -2040,6 +2109,42 @@ await startupLifecycle.run(async (startup) => {
           ...(await pluginStore.brokeredConnectionsFor(userId)),
         ].map((connection) => connection.serverId),
       ),
+  });
+  /*
+   * What a check-in may read: the apps each person connected with their own account, through the
+   * tools that say they only read, and never another person's account through a Team Bot. See
+   * proactive/scope.ts and proactive/restriction.ts. Read afresh per question, so a connection
+   * withdrawn or a label changed applies on the next call.
+   *
+   * M3: upstream's plugin store says per server whose credential it runs on (`ownCredential`) and per
+   * tool whether its catalogue labels it a read (`labelledRead`), and lists a person's own connections
+   * (`ownConnections`). Until the plugins session brings those, they are read from what this store
+   * has: a server is the person's own where they hold a connection to it (their OAuth grant or their
+   * brokered account), and a tool reads where it is recorded as a read and not destructive.
+   */
+  const ownConnections = async (userId: string) =>
+    new Set(
+      [
+        ...(await pluginStore.connectionsFor(userId)),
+        ...(await pluginStore.brokeredConnectionsFor(userId)),
+      ].map((connection) => connection.serverId),
+    );
+  const checkInScope = createCheckInScope({
+    catalogue: {
+      listServers: async () =>
+        (await pluginStore.listServers()).map((server) => ({
+          id: server.id,
+          title: server.title,
+          ownCredential: true,
+          tools: server.tools.map((tool) => ({
+            ref: tool.ref,
+            labelledRead: tool.effect === "read" && !tool.destructive,
+          })),
+        })),
+    },
+    ownConnections,
+    unaskedOwnAccount: (ownerUserId, agentId) =>
+      teamBots.unaskedOwnAccount(ownerUserId, agentId),
   });
 
   /*
@@ -2067,11 +2172,24 @@ await startupLifecycle.run(async (startup) => {
       agentId: botId,
       initiator,
     }),
-    ...memoryTools({
+    ...offeredMemoryTools(config.edition, {
       store: personalMemoryStore,
       ingestion: memoryIngestion,
       ownerUserId: actorId,
       agentId: botId,
+    }),
+    // M3: upstream gives every Bot `appAccessTools` here (plugins/app-access-tool.ts), how it puts an
+    // app it cannot reach in front of the person; the fork's plugins do not have it.
+    /*
+     * Held by every Bot: offering a check-in on what the person just looked at, which the card turns
+     * on only if they accept. A read; see the file. The engine is made further down, and a tool is
+     * only ever built for a run, long after.
+     */
+    ...checkInOfferTools({
+      ownerUserId: actorId,
+      agentId: botId,
+      allowed: (owner) => proactiveEngine.allowed(owner),
+      list: (owner) => proactiveStore.list(owner),
     }),
     ...(await knowledgeTools({
       store: knowledgeStore,
@@ -2254,11 +2372,17 @@ await startupLifecycle.run(async (startup) => {
    * Google's sign-in page and asked a person to sign in to an account the deployment had already
    * connected. Naming them lets it say which one it has not been granted instead.
    *
+   * Only the ones whose tools were listed: an app whose sign-in never finished is not connected, and
+   * was being named to every Bot as one an administrator could grant (upstream `connectedSystems`,
+   * which the fork's plugins/tools.ts does not have yet, so the same filter is written out here).
+   *
    * Read per request rather than held, because a connector added a minute ago has to count.
    * Let failures reach buildAgents, which reports the missing guidance once and keeps the run usable.
    */
   const loadVendors = async () =>
-    (await pluginStore.listServers()).map((server) => server.id);
+    (await pluginStore.listServers())
+      .filter((server) => server.tools.length > 0)
+      .map((server) => server.id);
 
   /*
    * How a run's tools are narrowed to the ones it is about.
@@ -2292,6 +2416,8 @@ await startupLifecycle.run(async (startup) => {
           granted: selection.granted,
           offered: selection.offered.length,
           skills: selection.skills,
+          // M3: upstream also records `limit`, when the offer was cut to what one request may carry
+          // (`fitToolLimit`); the fork's plugins/selection.ts does not cut it yet.
         },
       });
     },
@@ -2305,6 +2431,16 @@ await startupLifecycle.run(async (startup) => {
     allowPrivateHosts: config.computer?.allowPrivateHosts === true,
     // Named addresses are reachable on every hop, not only the one that was registered.
     allowedHosts: config.agentEndpointAllowedHosts,
+    // The deployment's own agent, at exactly its configured addresses: a local deployment keeps it
+    // on loopback, which the private-network check would otherwise refuse on every run.
+    managedEndpoints: [
+      config.managedAgent?.endpoint,
+      config.managedAgent?.alsoRun,
+    ].filter((url): url is URL => url !== undefined),
+    // An agent the person runs on their own loopback, reached from this server's container.
+    ...(config.thisMachineHost
+      ? { thisMachineHost: config.thisMachineHost }
+      : {}),
     // The refusal is what the run already knows; this is what the deployment knows. Written here
     // rather than in `endpoint.ts` so that file keeps deciding and nothing else, the way the
     // target check it reuses does.
@@ -2382,225 +2518,26 @@ await startupLifecycle.run(async (startup) => {
       (run.handoff ? (sources[0] ?? null) : null)
     );
   };
-  const personQuestions = createWorkQueue(database);
-  const coordination = createCoordinationTools({
-    desk: handoffDesk,
-    caps: config.handoff,
-    approvalGate: approvalService.gate,
-    privateShare: {
-      check: createPrivateShareCheck({ approvals: approvalService.store }),
-      // Resolved the way the desk resolves it: an id wins, then a single visible name. Null for the
-      // owner's own Bot or a deployment Bot, since nobody else reads that work.
-      audienceFor: async (from, target) => {
-        const roster = await agentProfileStore.list(
-          await actorFor(from.actorId),
-        );
-        const wanted = target.trim().toLowerCase();
-        const found =
-          roster.find((candidate) => candidate.id.toLowerCase() === wanted) ??
-          roster.find(
-            (candidate) =>
-              !candidate.hidden &&
-              candidate.deletedAt === null &&
-              candidate.name.toLowerCase() === wanted,
-          );
-        if (!found?.ownerUserId || found.ownerUserId === from.actorId)
-          return null;
-        return {
-          kind: "handoff",
-          id: found.ownerUserId,
-          recipientUserIds: [found.ownerUserId],
-          label: found.name,
-        };
-      },
-      // A question from a conversation other people are in reaches them too, so it is held like a
-      // handoff to another person. Only the owner reading it is the ordinary, unheld case.
-      questionAudience: async (from) => {
-        const channel = await channelSourceForRun(from);
-        const group = channel ? null : await groupSourceForRun(database, from);
-        const source = channel ?? group;
-        if (!source) return null;
-        const members = (
-          await database
-            .select({ userId: channelMemberships.userId })
-            .from(channelMemberships)
-            .where(eq(channelMemberships.channelId, source.channelId))
-        ).map((row) => row.userId);
-        if (members.every((userId) => userId === from.actorId)) return null;
-        return {
-          audience: {
-            kind: group ? "group" : "channel",
-            id: source.channelId,
-            recipientUserIds: members,
-          },
-          // A channel thread is the conversation itself; a group Bot's own thread also holds context
-          // only its owner has seen.
-          origin: channel
-            ? { kind: "shared_conversation", sharedWithUserIds: members }
-            : { kind: "private_conversation" },
-        };
-      },
-    },
-    botsReachableFrom: (botId) => pluginStore.botsReachableFrom(botId),
-    auditStore: bootAuditStore,
-    authoriseRun: (run) =>
-      authoriseCoordinationRun(run, {
-        canUseBot: async (scope) => {
-          const person = await peopleStore.find(scope.actorId);
-          if (!person || person.revoked) return false;
-          return (
-            (await agentProfileStore.get(
-              await actorFor(scope.actorId),
-              scope.botId,
-            )) !== null
-          );
-        },
-        sourceThread: sourceForCoordinationRun,
-        delegationFor: (claim) => readCoordinationHandoffClaim(database, claim),
-      }),
-    route: async (question) => {
-      const source = await sourceForCoordinationRun(question);
-      if (!source)
-        return {
-          refusal: "That question could not reach its source conversation.",
-        };
-      const key = createHash("sha256")
-        .update(
-          JSON.stringify([
-            question.actorId,
-            question.botId,
-            question.runId,
-            question.question,
-          ]),
-        )
-        .digest("hex");
-      const queued = await personQuestions.offer({
-        kind: "person.question",
-        key,
-        payload: {
-          ...question,
-          sourceBotId: source.botId,
-          channelId: source.channelId,
-          mode: "completed_question",
-          toolName: "ask_person",
-          args: {
-            question: question.question,
-            ...(question.why ? { why: question.why } : {}),
-          },
-        },
-      });
-      if (queued === "refused")
-        return { refusal: "The question could not be saved for its person." };
-      await channelStore.recordActivity(
-        await actorFor(question.actorId),
-        source.channelId,
-        {
-          text: `A question needs your answer: ${question.question}`,
-          agentId: source.botId,
-          at: new Date(),
-        },
-        { id: `question:${key}` },
-      );
-      if (question.threadId) {
-        // A person reads this in Slack or on their phone, where "general-assistant" is an id, not a name.
-        const botName =
-          (
-            await agentProfileStore
-              .get(await actorFor(question.actorId), question.botId)
-              .catch(() => null)
-          )?.name ?? question.botId;
-        await deliveryNotifications(
-          {
-            ownerUserId: question.actorId,
-            channelId: source.channelId,
-            agentId: source.botId,
-            threadId: question.threadId,
-          },
-          {
-            id: key,
-            text: `${botName} asks: ${question.question}`,
-            kind: "question",
-            requestId: key,
-          },
-        );
-      }
-      return {
-        reached:
-          "the person in the source conversation; the question is saved awaiting their reply",
-      };
-    },
+  /*
+   * Bots coordinating with each other and with people: handing work on, asking a person a question,
+   * and the per-run tools a Bot is given for both (agents/coordination-wiring.ts).
+   */
+  const { coordination, coordinationForActor } = wireCoordination({
+    handoffDesk,
+    config,
+    approvalService,
+    agentProfileStore,
+    actorFor,
+    channelSourceForRun,
+    database,
+    pluginStore,
+    bootAuditStore,
+    peopleStore,
+    sourceForCoordinationRun,
+    channelStore,
+    // Assigned further down, once delivery is wired.
+    notify: (scope, input) => deliveryNotifications(scope, input),
   });
-  const coordinationForActor =
-    (
-      actorId: string,
-      initiator: AuditInitiator = PERSON_INITIATOR,
-      baseDepth = 0,
-    ) =>
-    async (botId: string, input: import("@ag-ui/client").RunAgentInput) => {
-      const assertion = readRunAssertion(
-        input.forwardedProps?.openbotRun,
-        config.keyEncryptionKey,
-      );
-      if (
-        assertion &&
-        (assertion.botId !== botId || assertion.actorId !== actorId)
-      )
-        throw new Error("The run assertion does not match this Bot and owner.");
-      const run: RunAssertion = assertion?.handoff
-        ? assertion
-        : {
-            botId,
-            actorId,
-            runId: input.runId,
-            threadId: input.threadId,
-            depth: assertion?.depth ?? baseDepth,
-            initiator: assertion?.initiator ?? initiator,
-          };
-      // Handing work on and asking a person are tools too: disabled ones are not offered (SEC1 D4).
-      const [offered, disabled] = await Promise.all([
-        coordination.toolsForRun(run),
-        approvalService.disabledTools(actorId, botId),
-      ]);
-      const tools = offered.filter((tool) => !disabled(tool.ref));
-      return tools.map((tool) => ({
-        ...tool,
-        execute: async (args: unknown) => {
-          if (!args || typeof args !== "object" || Array.isArray(args))
-            return `${REFUSAL_MARKER} Tool arguments must be an object.`;
-          const result = await coordination.call({
-            name: tool.name,
-            args: args as Record<string, unknown>,
-            run,
-          });
-          if (!result)
-            throw new Error("A coordination tool was not dispatched.");
-          /*
-           * A responsibility's question pauses its run, the way an approval does.
-           *
-           * Left running, the run ended "succeeded" the moment the question was saved, and the answer
-           * came back to a run that was already over: the Bot read it, and then the store refused its
-           * progress because it was not from the responsibility's current run, so the goal stayed
-           * open for ever. Suspended, the run waits, and the answer resumes that same run as this
-           * tool's result, with the right to record progress and finish.
-           */
-          const snapshot = currentApprovalContext();
-          if (
-            tool.name === "ask_person" &&
-            run.initiator?.kind === "responsibility" &&
-            snapshot &&
-            !result.text.startsWith(REFUSAL_MARKER)
-          )
-            throw new HeadlessToolSuspension(
-              "This responsibility is waiting for the person's answer.",
-              {
-                kind: PERSON_QUESTION_WAITING,
-                continuation: snapshot,
-              },
-            );
-          return result.text;
-        },
-      }));
-    };
 
   /**
    * One Bot, built for a routine's turn, as its owner.
@@ -2616,11 +2553,14 @@ await startupLifecycle.run(async (startup) => {
     agentId,
     initiator,
     depth,
+    subagent,
   }: {
     ownerUserId: string;
     agentId: string;
     initiator: AuditInitiator;
     depth?: number;
+    /** A subagent's run: the same Bot with no coordination. See agents/subagent.ts. */
+    subagent?: boolean;
   }) => {
     const actor = await actorFor(ownerUserId);
     let agent: AbstractAgent | undefined;
@@ -2630,6 +2570,7 @@ await startupLifecycle.run(async (startup) => {
         actorAgentResolver.resolveAgentForActor(actor, agentId, {
           initiator,
           depth,
+          ...(subagent ? { subagent } : {}),
         }),
       );
     } catch (error) {
@@ -2712,6 +2653,8 @@ await startupLifecycle.run(async (startup) => {
    * A second copy of this wiring would be a place where one of those could be quietly missing.
    */
   const unattendedTurnRunner = createTurnRunner({
+    prepareRunInput: prepareProductRunInput,
+    onKnownStop: productTelemetry.stopKnown,
     intelligence: routineIntelligence,
     runner: routineAgentRunner,
     components: headlessComponents,
@@ -2725,7 +2668,7 @@ await startupLifecycle.run(async (startup) => {
       if (!canUseComputer(profile, actor)) return [];
       return createHeadlessComputerTools({
         gateway: computerGateway,
-        botId: agentId,
+        seat: await computerGateway.seatFor(agentId, actor.id),
         actor: { id: actor.id, userId: actor.id, initiator },
         auditStore: bootAuditStore,
         ...(signInService ? { signIn: signInService } : {}),
@@ -2749,6 +2692,43 @@ await startupLifecycle.run(async (startup) => {
     // consults `revoked_access` — the session and page layers do, a clock does not.
     accessRevokedOf: (userId: string) => isAccessRevoked(database, userId),
     runTurn: unattendedTurnRunner,
+  });
+
+  /**
+   * Subagents: every Bot's way to give part of its work to a fresh run of itself (agents/subagent.ts).
+   *
+   * A subagent's turn is a background turn like a routine's, on the same runner and with the same
+   * computer, built as a subagent so it holds no coordination. Its approval requests are withdrawn
+   * without resuming its thread, because the action goes back to the conversation instead. It runs in
+   * the frame of the run that asked, which is the person's.
+   */
+  const subagents = createSubagents({
+    turn: {
+      prepareRunInput: prepareProductRunInput,
+      onKnownStop: productTelemetry.stopKnown,
+      admission: serverTurnAdmission,
+      // The server's own ports, as every other headless turn has them (routines/run-turn.ts).
+      modelNamedIn,
+      answered: serverTurnAnswered,
+      scope: serverTurnScope,
+      intelligence: routineIntelligence,
+      runner: routineAgentRunner,
+      toolsForTurn: ({ ownerUserId, agentId, initiator }) =>
+        approvalComputerTools(ownerUserId, agentId, initiator),
+    },
+    buildAgentFor: (input) => buildAgentFor({ ...input, subagent: true }),
+    withdrawApprovals: async (ownerUserId, runId) =>
+      approvalService.store.policy?.withdrawPending(
+        ownerUserId,
+        SUBAGENT_HANDED_BACK,
+        (action) => action.runId === runId,
+        { resume: false },
+      ),
+    asksEveryStep: async (ownerUserId, threadId) =>
+      (await approvalService.store.asksEveryChange?.(
+        ownerUserId,
+        threadId,
+      )) === true,
   });
 
   /*
@@ -2936,41 +2916,75 @@ await startupLifecycle.run(async (startup) => {
    */
 
   const actorAgentResolver = createActorAgentResolver({
+    productTelemetry,
     loadAgents: runtimeAgentsForActor,
     model: runtimeModel,
     resolveModelApiKey: resolveRuntimeModelApiKey,
+    // The model the person picked for this conversation, or the catalogue's default.
+    pickedModelForActor: (actorId) => (input) =>
+      modelChoices.forRun(actorId, input.threadId),
     stallGuard,
-    // Restricted by who started the run: a proactive check-in reads only, as it always did headless.
-    // A person's own turn is not restricted, so the request path holds exactly what it held before.
+    /*
+     * Restricted by who started the run: a check-in reads only what the person connected (scope.ts).
+     * A person's own turn is not restricted. A goal's run holds the goal's own tools; the Routines
+     * copies would be a second set.
+     */
     loadToolsForActor: (actorId, initiator) =>
       restrictToolsForRun(
         initiator,
-        loadToolsForActor(actorId, initiator),
-        proactiveReadOnlyRefs,
+        actorId,
+        withoutGoalCopiesInGoalRun(
+          initiator,
+          loadToolsForActor(actorId, initiator),
+        ),
+        checkInScope,
       ),
+    // M3: upstream also passes `loadAppsForActor` (which apps each Bot can use for this person, from
+    // the plugin store's `appAccessForBot`); the resolver here does not take it.
     signRunForActor,
     // Whenever this deployment has a computer to drive — a container or, with TENANT_RUNTIME=device,
     // the person's paired machine — every built-in Bot is told how its tools go together.
-    computerGuidance: computerProvider ? COMPUTER_GUIDANCE : undefined,
+    computerGuidance: computerProvider ? computerGuidance : undefined,
     loadVendors,
     selectionForActor,
     agentFetch,
     /*
-     * What a Bot may reach past itself for: another Bot, and a person. Made per run and per person:
-     * which Bots may be reached is decided against the roster that person can see, and the caps need
-     * to know how deep the chain already is and where an answer belongs.
+     * What a Bot may reach past itself for: another Bot, and a person, then a subagent of its own,
+     * offered on every run. Made per run and per person: which Bots may be reached is decided against
+     * the roster that person can see, and the caps need to know how deep the chain already is and
+     * where an answer belongs.
      */
     handoffForActor: (actorId, initiator, depth) =>
-      restrictCoordinationForRun(
-        initiator,
-        coordinationForActor(actorId, initiator, depth),
-      ),
+      restrictCoordinationForRun(initiator, async (botId, input) => [
+        ...(await coordinationForActor(actorId, initiator, depth)(
+          botId,
+          input,
+        )),
+        subagents.toolForRun({
+          actorId,
+          botId,
+          threadId: input.threadId,
+          runId: input.runId,
+          // The subagent carries on the asking run's task, on the asking run's surface.
+          ...productTelemetry.lineageOf(actorId, input.forwardedProps),
+          initiator: initiator ?? PERSON_INITIATOR,
+          ...(depth ? { depth } : {}),
+        }),
+      ]),
     // What this person has told every coworker of theirs, in every channel. See user-instructions.ts.
     loadInstructionsForActor,
+    // What a Bot calls the person, once they have told OpenBot their name.
+    loadNameForActor: async (actorId) => {
+      const profile = await profileStore.read(actorId);
+      return profile.needsName ? null : profile.name;
+    },
     // The files on a message, and that they went out in a send — only the person's own.
     loadAttachmentForActor,
     markAttachmentsSentForActor,
-    loadPersonalMemoryForActor,
+    ...(memoryRuntime.loadForActor
+      ? { loadPersonalMemoryForActor: memoryRuntime.loadForActor }
+      : {}),
+    recordToolLimitRefusalForActor: toolLimitRecorder(bootAuditStore),
     resolveAgentModel,
     // What a person declared about where their material is, told to their own 分身 only (story F1).
     loadAvatarSourcesForActor,
@@ -2990,6 +3004,9 @@ await startupLifecycle.run(async (startup) => {
     identifyUser,
     identifyActor,
     {
+      productTelemetry,
+      // The cards a Bot asks with in the conversation, saved while they wait on the person.
+      decisionWaits: createDecisionWaits(database),
       // A run started or ended on a thread; light the channel it belongs to. Fire-and-forget.
       onRunBusy: (input) => {
         void channelStore
@@ -2998,133 +3015,43 @@ await startupLifecycle.run(async (startup) => {
       },
       // The thread store, and the runtime's runner: one object, `threads/postgres-runner.ts`.
       localRunner: localThreadRunner,
+      // The Recorder's capture pass: only a connected browser gets through (recorder/wiring.ts).
+      trajectoryCapture: recorderExtension.trajectoryCapture,
     },
   );
 
-  const responsibilityQueue = createWorkQueue(database);
-  const responsibilityEngine: ResponsibilityEngine = createResponsibilityEngine(
-    {
-      store: responsibilityStore,
-      queue: responsibilityQueue,
-      // An event that woke a coworker is board work too (ticket 020): same projector, same ceiling,
-      // same machine resolution as every other unattended firing.
-      board: taskProjector,
-      quota,
-      deviceIdOf: deviceIdForBot,
-      // Spec J5, the same freeze on the event side: a responsibility woken by a webhook for a banned
-      // workspace stays in place until the ban is lifted, rather than spending that workspace's models.
-      accessRevokedOf: (userId: string) => isAccessRevoked(database, userId),
-      runTurn: async (context) => {
-        const initiator: AuditInitiator = {
-          kind: "responsibility",
-          id: context.responsibilityId,
-        };
-        const tools = responsibilityTools({
-          store: responsibilityStore,
-          engine: responsibilityEngine,
-          ownerUserId: context.ownerUserId,
-          agentId: context.agentId,
-          channelId: context.channelId,
-          responsibilityRunId: context.runId,
-        });
-        const runner = createTurnRunner({
-          intelligence: routineIntelligence,
-          runner: routineAgentRunner,
-          components: headlessComponents,
-          buildAgentFor: (input) => buildAgentFor({ ...input, initiator }),
-          toolsForTurn: async () => {
-            const actor = await actorFor(context.ownerUserId);
-            // A Team Bot's teammate uses the Bot, not its owner's signed-in computer.
-            const computer =
-              computerGateway &&
-              canUseComputer(
-                await agentProfileStore
-                  .get(actor, context.agentId)
-                  .catch(() => null),
-                actor,
-              )
-                ? createHeadlessComputerTools({
-                    gateway: computerGateway,
-                    botId: context.agentId,
-                    actor: { id: actor.id, userId: actor.id, initiator },
-                    auditStore: bootAuditStore,
-                    ...(signInService ? { signIn: signInService } : {}),
-                    machine: computerMachine,
-                    apps: await usesDeviceApps(context.agentId, actor.id),
-                    disabled: await approvalService.disabledTools(
-                      actor.id,
-                      context.agentId,
-                    ),
-                  })
-                : [];
-            return [
-              ...computer,
-              ...tools.map((tool) => ({
-                definition: {
-                  name: tool.name,
-                  description: tool.description,
-                  parameters: z.toJSONSchema(tool.parameters),
-                },
-                execute: (args: unknown) => tool.execute(args),
-              })),
-            ];
-          },
-        });
-        const saved = context.continuation;
-        const snapshot = saved
-          ? parseApprovalContinuation(saved.waiting.continuation)
-          : undefined;
-        const toolResult = saved
-          ? parseApprovalResult(saved.response)
-          : undefined;
-        return runner({
-          ownerUserId: context.ownerUserId,
-          routineId: context.responsibilityId,
-          agentId: context.agentId,
-          threadId: context.threadId,
-          initiator,
-          signal: context.signal,
-          ...(snapshot && toolResult
-            ? {
-                continuation: {
-                  snapshot,
-                  result: toolResult,
-                  messageId: `responsibility-result:${context.runId}:${snapshot.toolCallId}`,
-                },
-              }
-            : {}),
-          instruction: buildResponsibilityTurn({
-            instruction: context.instruction,
-            successCriteria: context.successCriteria,
-            progress: context.progress,
-            trigger: context.event,
-            eventData: markUntrusted(
-              JSON.stringify(context.event.payload),
-              `${context.event.source} event`,
-            ),
-            responsibilityId: context.responsibilityId,
-          }),
-        });
-      },
-      onReply: async (context, text) => {
-        await channelStore.recordActivity(
-          await actorFor(context.ownerUserId),
-          context.channelId,
-          { text, agentId: context.agentId, at: new Date() },
-          { id: `responsibility:${context.runId}` },
-        );
-        await deliveryNotifications(
-          {
-            ownerUserId: context.ownerUserId,
-            channelId: context.channelId,
-            agentId: context.agentId,
-            threadId: context.threadId,
-          },
-          { id: `responsibility:${context.runId}`, kind: "reply", text },
-        );
-      },
-    },
-  );
+  /*
+   * The deployment's responsibility engine (responsibilities/wiring.ts): a goal's turn, with the
+   * computer when the Bot may use it and the goal's own tools, its reply posted to the channel it
+   * watches. An event that woke a coworker is board work too (ticket 020): same projector, same
+   * ceiling, same machine resolution as every other unattended firing; and a goal woken for a banned
+   * workspace stays in place until the ban is lifted (spec J5).
+   */
+  const responsibilityEngine = createServerResponsibilityEngine({
+    productTelemetry,
+    database,
+    responsibilityStore,
+    routineIntelligence,
+    routineAgentRunner,
+    componentCatalog: headlessComponents,
+    buildAgentFor,
+    actorFor,
+    computerGateway,
+    agentProfileStore,
+    bootAuditStore,
+    signInService,
+    channelStore,
+    // Assigned further down, once delivery is wired.
+    notify: (scope, input) => deliveryNotifications(scope, input),
+    board: taskProjector,
+    quota,
+    deviceIdOf: deviceIdForBot,
+    accessRevokedOf: (userId: string) => isAccessRevoked(database, userId),
+    machine: computerMachine,
+    appsFor: usesDeviceApps,
+    disabledFor: (actorId, agentId) =>
+      approvalService.disabledTools(actorId, agentId),
+  });
   /**
    * A turn for a responsibility that is not one of the engine's own firings: a person answering the
    * question its run asked. Same tools, same initiator and the same run to report progress against,
@@ -3150,6 +3077,8 @@ await startupLifecycle.run(async (startup) => {
       ...(responsibilityRunId ? { responsibilityRunId } : {}),
     });
     return createTurnRunner({
+      prepareRunInput: prepareProductRunInput,
+      onKnownStop: productTelemetry.stopKnown,
       intelligence: routineIntelligence,
       runner: routineAgentRunner,
       components: headlessComponents,
@@ -3182,7 +3111,8 @@ await startupLifecycle.run(async (startup) => {
           if (
             report.succeeded.length ||
             report.failed.length ||
-            report.waiting.length
+            report.waiting.length ||
+            report.busy.length
           )
             console.info(
               JSON.stringify({ type: "responsibility-dispatch", ...report }),
@@ -3215,7 +3145,7 @@ await startupLifecycle.run(async (startup) => {
     return computerGateway && canUseComputer(profile, actor)
       ? createHeadlessComputerTools({
           gateway: computerGateway,
-          botId: agentId,
+          seat: await computerGateway.seatFor(agentId, actor.id),
           actor: { id: actor.id, userId: actor.id, initiator },
           auditStore: bootAuditStore,
           ...(signInService ? { signIn: signInService } : {}),
@@ -3255,6 +3185,8 @@ await startupLifecycle.run(async (startup) => {
     executors: automationTargets,
   });
   const approvalContinuationRunner = createTurnRunner({
+    prepareRunInput: prepareProductRunInput,
+    onKnownStop: productTelemetry.stopKnown,
     intelligence: routineIntelligence,
     runner: routineAgentRunner,
     components: headlessComponents,
@@ -3262,364 +3194,45 @@ await startupLifecycle.run(async (startup) => {
     toolsForTurn: async ({ ownerUserId, agentId, initiator }) =>
       approvalComputerTools(ownerUserId, agentId, initiator),
   });
+  /*
+   * The approval resume loop (approvals/resume-sweep.ts): claim a decided approval, carry it out in
+   * its owner's frame, and pick the waiting turn back up — a goal run, a group conversation, a crew's
+   * step or a routine run — then tell the channel, once the reply is there to read.
+   */
   startup.acquireSync(
     () =>
-      repeatAfterEach(async () => {
-        try {
-          const [item] = await approvalQueue.claim({
-            kind: "approval.resume",
-            owner: approvalOwner,
-            leaseMs: 15 * 60_000,
-            limit: 1,
-          });
-          if (!item) return;
-          /*
-           * WHOSE DECISION OR ANSWER THIS IS comes from the row the queue handed out, never from
-           * the payload (G01). The route the person decided or answered through offered it inside
-           * their own frame, so the database stamped their tenant on it; the payload's owner may
-           * only agree. A row stamped as nobody's, or naming somebody else, is ended here and never
-           * runs: running it would act, and file the continued turn, the channel reply and the
-           * notifications, as whoever the payload claims.
-           */
-          const claimed = await runAsClaimedTenant(
-            item,
-            item.payload.ownerUserId,
-            async () => {
-              // Set once the item is understood, so its last failed try can still tell the Bot.
-              let abandon: ((reason: string) => Promise<void>) | undefined;
-              try {
-                const input = z
-                  .object({
-                    ownerUserId: z.string().min(1),
-                    approvalId: z.string().min(1),
-                  })
-                  .parse(item.payload);
-                /*
-                 * WF7: an action step of a crew run parked on this approval is carried on by the
-                 * pipeline itself, which calls the tool again with the identity it asked with, so the
-                 * gate consumes the decision once (or refuses it). It has no conversation to resume.
-                 * In this owner's frame only, as the crew resume below (G01-E R10, R14).
-                 */
-                const parkedAction = await pipelineStore.actionHoldingApproval({
-                  approvalId: input.approvalId,
-                });
-                let actionTenant: string | undefined;
-                if (parkedAction) {
-                  try {
-                    actionTenant = assertPersonTenant(
-                      parkedAction.tenantId,
-                      input.ownerUserId,
-                    );
-                  } catch (error) {
-                    if (!(error instanceof TenantContextError)) throw error;
-                    console.warn(
-                      JSON.stringify({
-                        type: "parked-action-owner-mismatch",
-                        approvalId: input.approvalId,
-                        runId: parkedAction.runId,
-                      }),
-                    );
-                  }
-                }
-                if (parkedAction && actionTenant) {
-                  const tenant = actionTenant;
-                  const resumed = await runAsTenant(tenant, () =>
-                    pipelineStore.resumeAction({
-                      tenantId: tenant,
-                      runId: parkedAction.runId,
-                      approvalId: input.approvalId,
-                    }),
-                  );
-                  if (resumed) {
-                    if (
-                      !(await approvalQueue.finish({
-                        kind: item.kind,
-                        key: item.key,
-                        owner: approvalOwner,
-                      }))
-                    )
-                      throw new Error(
-                        "The approval work lease was lost before completion.",
-                      );
-                    return;
-                  }
-                }
-                const resumeDependencies: ApprovalResumeDependencies = {
-                  // Asked before the action runs: with Use Bots off, or the Bot's model off the allowlist,
-                  // nothing is carried out and the refusal is final rather than retried.
-                  refusal: (action) =>
-                    headlessTurnRefusal({
-                      ownerUserId: action.actorId,
-                      agentId: action.botId,
-                    }),
-                  validate: (action) =>
-                    approvalService.validateReentry(action, () =>
-                      executeApprovedAction(action),
-                    ),
-                  execute: executeApprovedAction,
-                  continue: async ({
-                    continuation: snapshot,
-                    result,
-                    messageId,
-                    approvalId,
-                  }) => {
-                    const [waitingRun] = await database
-                      .select({ id: responsibilityRuns.id })
-                      .from(responsibilityRuns)
-                      .where(
-                        and(
-                          eq(responsibilityRuns.status, "waiting"),
-                          sql`${responsibilityRuns.waiting}->>'approvalId' = ${approvalId}`,
-                        ),
-                      )
-                      .limit(1);
-                    if (waitingRun) {
-                      await responsibilityStore.resumeWaiting(
-                        input.ownerUserId,
-                        waitingRun.id,
-                        result,
-                      );
-                      return;
-                    }
-                    const request = await approvalService.store.get(
-                      input.ownerUserId,
-                      approvalId,
-                    );
-                    // A group turn's approval also writes the resumed reply into the shared transcript.
-                    const outcome = await groupConversations.continueWaiting(
-                      approvalId,
-                      () =>
-                        approvalContinuationRunner({
-                          ownerUserId: input.ownerUserId,
-                          routineId: "approval",
-                          agentId: request.action.botId,
-                          threadId: snapshot.threadId,
-                          instruction: "",
-                          initiator: snapshot.initiator ?? PERSON_INITIATOR,
-                          continuation: { snapshot, result, messageId },
-                        }),
-                    );
-                    const [source] = await database
-                      .select({
-                        channelId: intelligenceChannelMappings.channelId,
-                      })
-                      .from(intelligenceChannelMappings)
-                      .where(
-                        and(
-                          eq(
-                            intelligenceChannelMappings.userId,
-                            input.ownerUserId,
-                          ),
-                          eq(
-                            intelligenceChannelMappings.threadId,
-                            snapshot.threadId,
-                          ),
-                        ),
-                      )
-                      .limit(1);
-                    if (source && outcome.replyText)
-                      await channelStore.recordActivity(
-                        await actorFor(input.ownerUserId),
-                        source.channelId,
-                        {
-                          text: outcome.replyText,
-                          agentId: request.action.botId,
-                          at: new Date(),
-                        },
-                        { id: messageId },
-                      );
-                    // A decision made in Slack, SMS or the phone gets its result back there too.
-                    if (source && outcome.replyText)
-                      await deliveryNotifications(
-                        {
-                          ownerUserId: input.ownerUserId,
-                          channelId: source.channelId,
-                          agentId: request.action.botId,
-                          threadId: snapshot.threadId,
-                        },
-                        {
-                          id: messageId,
-                          text: outcome.replyText,
-                          kind: "reply",
-                        },
-                      );
-                    /*
-                     * A crew's step that stopped to ask is told the answer (ticket 021, spec I3).
-                     *
-                     * The person decided in the approvals region, which knows nothing about pipelines: without
-                     * this the coworker's resumed turn would finish inside its own thread while the run it
-                     * stopped in stayed `awaiting_action`, and the rest of the plan would never be looked at.
-                     * What that turn finally said IS the step's output, so the sequence is handed the answer
-                     * rather than asking the coworker a second time for work it has just done.
-                     */
-                    const parkedCrew = await pipelineStore.runHoldingApproval({
-                      approvalId,
-                    });
-                    /*
-                     * In the crew owner's frame, and only for this approval's owner (G01-E R10, R14). The
-                     * lookup ran as `platform` and can name any person's run; an approval answered by one
-                     * person must never drive another person's crew, so a run stamped for somebody else is
-                     * left parked and logged rather than resumed.
-                     */
-                    let crewTenant: string | undefined;
-                    if (parkedCrew) {
-                      try {
-                        crewTenant = assertPersonTenant(
-                          parkedCrew.tenantId,
-                          input.ownerUserId,
-                        );
-                      } catch (error) {
-                        if (!(error instanceof TenantContextError)) throw error;
-                        console.warn(
-                          JSON.stringify({
-                            type: "parked-crew-owner-mismatch",
-                            approvalId,
-                            runId: parkedCrew.runId,
-                          }),
-                        );
-                      }
-                    }
-                    if (parkedCrew && crewTenant) {
-                      const tenant = crewTenant;
-                      await runAsTenant(tenant, () =>
-                        pipelineStore.resume({
-                          tenantId: tenant,
-                          runId: parkedCrew.runId,
-                          output: outcome.replyText,
-                        }),
-                      );
-                    }
-                    await database
-                      .update(routineRuns)
-                      .set({
-                        status: "succeeded",
-                        finishedAt: new Date(),
-                        error: null,
-                        waiting: null,
-                      })
-                      .where(
-                        and(
-                          eq(routineRuns.status, "waiting"),
-                          sql`${routineRuns.waiting}->>'approvalId' = ${approvalId}`,
-                        ),
-                      );
-                    /*
-                     * An automation firing that stopped for this approval (D06) is settled the same
-                     * way, allowed or declined: the turn has now continued with the person's answer.
-                     * The firing is named by the snapshot's initiator, and settled in this owner's
-                     * frame, so another person's firing id matches nothing.
-                     */
-                    const waitingFiring = firingOfInitiator(snapshot.initiator);
-                    if (waitingFiring)
-                      await automationStore.settleWaitingFiring(waitingFiring);
-                  },
-                };
-                abandon = (reason) =>
-                  approvalService.abandon(
-                    input.ownerUserId,
-                    input.approvalId,
-                    reason,
-                    resumeDependencies,
-                  );
-                await approvalService.resume(
-                  input.ownerUserId,
-                  input.approvalId,
-                  resumeDependencies,
-                );
-                if (
-                  !(await approvalQueue.finish({
-                    kind: item.kind,
-                    key: item.key,
-                    owner: approvalOwner,
-                  }))
-                )
-                  throw new Error(
-                    "The approval work lease was lost before completion.",
-                  );
-              } catch (error) {
-                const reason =
-                  error instanceof Error ? error.message : String(error);
-                // The queue will not hand this item out again, so the conversation hears now or never.
-                if (abandon && item.attempts >= DEFAULT_MAX_ATTEMPTS) {
-                  try {
-                    await abandon(reason);
-                    await approvalQueue.finish({
-                      kind: item.kind,
-                      key: item.key,
-                      owner: approvalOwner,
-                    });
-                    return;
-                  } catch (failure) {
-                    console.error(
-                      JSON.stringify({
-                        type: "approval-abandon-error",
-                        error:
-                          failure instanceof Error
-                            ? failure.message
-                            : String(failure),
-                        timestamp: new Date().toISOString(),
-                      }),
-                    );
-                  }
-                }
-                await approvalQueue.release({
-                  kind: item.kind,
-                  key: item.key,
-                  owner: approvalOwner,
-                  delayMs: 10_000,
-                  reason,
-                });
-                throw error;
-              }
-            },
-          );
-          if (!claimed.ran) {
-            await approvalQueue.finish({
-              kind: item.kind,
-              key: item.key,
-              owner: approvalOwner,
-            });
-            /*
-             * Ended, not retried: no frame would ever make this row a person's. Every path that
-             * decides or answers runs in the owner's frame (the app's routes, and OpenTag as the
-             * binding's tenant), so this is a legacy or misfiled row, reported where an operator
-             * looks rather than run as whoever its payload names.
-             */
-            console.error(
-              JSON.stringify({
-                type: "approval-resume-untrusted-tenant",
-                key: item.key,
-                reason: claimed.reason,
-              }),
-            );
-          }
-        } catch (error) {
-          /*
-           * Named, so an operator can tell this from a fault. The server settles approved actions on
-           * the approval row itself (`settlement: "database"` above), so this is no longer the normal
-           * outcome: it is raised only when a row's tenant, owner or run binding does not match the
-           * frame that claimed it, and that row is never run. The Root-attested local continuation
-           * port (`approvals/local-recovery-composition.ts`) is still never fabricated here.
-           */
-          if (error instanceof ApprovalRecoveryBlockedError) {
-            console.warn(
-              JSON.stringify({
-                type: "approval-resume-gated",
-                reason: APPROVAL_RESUME_GATED_REASON,
-                timestamp: new Date().toISOString(),
-              }),
-            );
-            return;
-          }
-          console.error(
-            JSON.stringify({
-              type: "approval-resume-error",
-              error: error instanceof Error ? error.message : String(error),
-              timestamp: new Date().toISOString(),
-            }),
-          );
-        }
-      }, 2_000),
+      repeatAfterEach(
+        createApprovalResumeTick({
+          approvalQueue,
+          approvalOwner,
+          approvalService,
+          executeApprovedAction,
+          database,
+          responsibilityStore,
+          // Read when an approval is resumed, long after the group conversations below are made.
+          groupConversations: {
+            continueWaiting: (approvalId, run) =>
+              groupConversations.continueWaiting(approvalId, run),
+          },
+          approvalContinuationRunner,
+          channelStore,
+          actorFor,
+          // Assigned further down, once delivery is wired.
+          notify: (scope, input) => deliveryNotifications(scope, input),
+          transcriptHolds: waitForReplyInTranscript({
+            read: async ({ ownerUserId, threadId }) =>
+              (
+                await routineIntelligence.getThreadMessages({
+                  threadId,
+                  userId: ownerUserId,
+                })
+              ).messages,
+          }),
+          pipeline: pipelineStore,
+          automations: automationStore,
+        }),
+        2_000,
+      ),
     (resource) => resource.stop(),
   );
   const deliveryStore = createDeliveryStore(database);
@@ -3634,31 +3247,26 @@ await startupLifecycle.run(async (startup) => {
       ? deliveryProviders.slack.isMember(input)
       : Promise.resolve(false),
   );
-  const deliveryScopeFor: DeliveryScopeResolver = async (
-    ownerUserId,
-    channelId,
-    agentId,
-  ) => {
-    const person = await peopleStore.find(ownerUserId);
-    if (!person || person.revoked) return null;
-    const actor = await actorFor(ownerUserId);
-    const [channel, bot] = await Promise.all([
-      channelStore.get(actor, channelId),
-      agentProfileStore.get(actor, agentId),
-    ]);
-    return channel?.active && bot && channel.agentIds.includes(agentId)
-      ? { ownerUserId, channelId, agentId, threadId: channel.threadId }
-      : null;
-  };
-  const authoriseDeliveryScope = async (scope: DeliveryScope) =>
-    (await deliveryScopeFor(scope.ownerUserId, scope.channelId, scope.agentId))
-      ?.threadId === scope.threadId;
+  /*
+   * The person's conversation with a Bot, as delivery addresses it, and whether a scope still names
+   * one they can reach: the channel's own thread, or that Bot's own thread in a group. See
+   * delivery/scope.ts.
+   */
+  const { scopeFor: deliveryScopeFor, authorise: authoriseDeliveryScope } =
+    createDeliveryScopes({
+      database,
+      people: peopleStore,
+      actorFor,
+      channels: channelStore,
+      bots: agentProfileStore,
+    });
   const deliveryRouter = createDeliveryRouter({
     store: deliveryStore,
     queue: createWorkQueue(database),
     owner: workOwner("delivery"),
     providers: deliveryProviders,
     authoriseScope: authoriseDeliveryScope,
+    scopeFor: deliveryScopeFor,
     notifyEvent: (event) => responsibilityEngine.ingest(event),
     runTurn: async (input) => {
       if (!(await authoriseDeliveryScope(input)))
@@ -3688,6 +3296,7 @@ await startupLifecycle.run(async (startup) => {
             content: input.text,
           },
           initiator: PERSON_INITIATOR,
+          telemetry: deliveryLineage(input.source, input.runId),
           signal: input.signal,
         });
         if (result.replyText)
@@ -3722,62 +3331,87 @@ await startupLifecycle.run(async (startup) => {
   deliveryNotifications = (scope, input) => deliveryRouter.notify(scope, input);
 
   /*
-   * Proactive research: an opted-in Bot reading its owner's apps in the background, restricted to
-   * reads by its initiator (see proactive/restriction.ts), through the same headless turn runner and
-   * work queue as routines. Suggestions go to the web inbox and the owner's delivery routing.
+   * Started work: an item a check-in raised, started by the person, runs as a task in a conversation
+   * of its own with the item's Bot, as the person's own turn through the approval continuation runner,
+   * so every send or change meets the approval gate. See tasks/runner.ts. Its turns are claimed off
+   * the shared work queue and run in the tenant stamped on the claimed row (G01).
+   */
+  const taskStore = createTaskStore(database);
+  const taskRunner = createTaskRunner({
+    database,
+    store: taskStore,
+    channels: channelStore,
+    actorFor,
+    queue: createWorkQueue(database),
+    owner: workOwner("tasks"),
+    scopeFor: deliveryScopeFor,
+    runTask: createTaskTurn({
+      channels: channelStore,
+      actorFor,
+      runTurn: approvalContinuationRunner,
+    }),
+  });
+  // The backstop for a task's turn a crash or a restart left behind; Start runs one at once.
+  startup.acquireSync(
+    () =>
+      repeatAfterEach(async () => {
+        try {
+          await taskRunner.sweep();
+        } catch (error) {
+          console.error(
+            JSON.stringify({
+              type: "task-sweep-error",
+              error: error instanceof Error ? error.name : "UnknownError",
+              timestamp: new Date().toISOString(),
+            }),
+          );
+        }
+      }, 60_000),
+    (resource) => resource.stop(),
+  );
+
+  /*
+   * Check-ins: a Bot reading its owner's apps quietly in the background, restricted to reads by its
+   * initiator (see proactive/restriction.ts), through the same headless turn runner and work queue as
+   * routines. What one raises is listed in the app at once and reaches the person in a ping, at most
+   * one an hour, folding every Bot's items (proactive/ping.ts). Started items run as tasks (above).
+   *
+   * Each check-in files its own card on the board (story C2); see `ProactiveEngineDeps.board`.
+   * M3: product decision pending on whether an hourly check-in should open a card and charge quota.
    */
   const proactiveEngine = createProactiveEngine({
     store: proactiveStore,
-    memory: personalMemoryStore,
+    // A check-in forms memories only where there is memory.
+    ...(editionHasMemory(config.edition) ? { memory: personalMemoryStore } : {}),
     queue: createWorkQueue(database),
     owner: workOwner("proactive"),
-    // Each research run files its own card (story C2); see `ProactiveEngineDeps.board`.
     board: taskProjector,
     runTurn: createTurnRunner({
+      prepareRunInput: prepareProductRunInput,
+      onKnownStop: productTelemetry.stopKnown,
       intelligence: routineIntelligence,
       runner: routineAgentRunner,
       buildAgentFor,
-      // Only the run's own two tools and refusals: no computer, no components.
+      // Only the run's own tools and refusals: no computer, no components.
       toolsForTurn: (input) => proactiveEngine.toolsForTurn(input),
       turnTimeoutMs: 3 * 60_000,
     }),
     resolveScope: deliveryScopeFor,
-    notify: (scope, input) => deliveryNotifications(scope, input),
-    startTask: async (scope, input) => {
-      const actor = await actorFor(scope.ownerUserId);
-      await channelStore.recordActivity(
-        actor,
-        scope.channelId,
-        { text: input.text, agentId: null, at: new Date() },
-        { id: `${input.runId}:input` },
-      );
-      const result = await approvalContinuationRunner({
-        ...scope,
-        tenantId: input.tenantId,
-        routineId: input.runId,
-        instruction: input.text,
-        userMessage: { id: input.runId, role: "user", content: input.text },
-        initiator: PERSON_INITIATOR,
-        signal: input.signal,
-      });
-      if (result.replyText)
-        await channelStore.recordActivity(
-          actor,
-          scope.channelId,
-          { text: result.replyText, agentId: scope.agentId, at: new Date() },
-          { id: `${input.runId}:reply` },
-        );
-    },
+    // The organization's Check-ins switch and per-Bot daily cap, read fresh on every check.
+    admin: proactiveAdmin,
+    // A ping: push once to each phone, one message per chat platform, the app list at once.
+    attention: deliveryRouter,
+    tasks: taskRunner,
+    /*
+     * Nothing the person connected that this Bot can read means a check-in could find nothing: it
+     * never reaches the model. Otherwise these are the apps its instruction names, and every other
+     * tool the Bot holds is answered with a refusal if the model calls it anyway.
+     */
+    ...checkInToolsFor(
+      (ownerUserId) => loadToolsForActor(ownerUserId),
+      checkInScope,
+    ),
     catalogue: pluginStore,
-    deniedToolNames: async (ownerUserId, agentId) => {
-      const [tools, allowed] = await Promise.all([
-        loadToolsForActor(ownerUserId)(agentId),
-        proactiveReadOnlyRefs(),
-      ]);
-      return tools
-        .filter((tool) => !allowed.has(tool.ref) && !allowed.has(tool.name))
-        .map((tool) => tool.name);
-    },
     mintThreadId: () => threadIdentity.mint(),
   });
   startup.acquireSync(
@@ -3917,6 +3551,8 @@ await startupLifecycle.run(async (startup) => {
     actorFor,
     channels: channelStore,
     runTurn: createTurnRunner({
+      prepareRunInput: prepareProductRunInput,
+      onKnownStop: productTelemetry.stopKnown,
       intelligence: routineIntelligence,
       runner: routineAgentRunner,
       components: headlessComponents,
@@ -3931,7 +3567,7 @@ await startupLifecycle.run(async (startup) => {
         if (!canUseComputer(profile, actor)) return [];
         return createHeadlessComputerTools({
           gateway: computerGateway,
-          botId: agentId,
+          seat: await computerGateway.seatFor(agentId, actor.id),
           actor: { id: actor.id, userId: actor.id, initiator },
           auditStore: bootAuditStore,
           ...(signInService ? { signIn: signInService } : {}),
@@ -4011,6 +3647,8 @@ await startupLifecycle.run(async (startup) => {
       return bots;
     },
     runTurn: createTurnRunner({
+      prepareRunInput: prepareProductRunInput,
+      onKnownStop: productTelemetry.stopKnown,
       intelligence: routineIntelligence,
       runner: routineAgentRunner,
       components: headlessComponents,
@@ -4025,7 +3663,7 @@ await startupLifecycle.run(async (startup) => {
         if (!canUseComputer(profile, actor)) return [];
         return createHeadlessComputerTools({
           gateway: computerGateway,
-          botId: agentId,
+          seat: await computerGateway.seatFor(agentId, actor.id),
           actor: { id: actor.id, userId: actor.id, initiator },
           auditStore: bootAuditStore,
           ...(signInService ? { signIn: signInService } : {}),
@@ -4143,161 +3781,29 @@ await startupLifecycle.run(async (startup) => {
     (resource) => resource.stop(),
   );
 
+  /*
+   * A person's answer to a Bot's question (approvals/person-response-sweep.ts): claimed, checked
+   * against where it was asked, the turn that asked resumed in the answer's own tenant, and the reply
+   * posted back to the channel the question came from. The card that asked goes on to review (I3).
+   */
   startup.acquireSync(
     () =>
-      repeatAfterEach(async () => {
-        try {
-          const [item] = await approvalQueue.claim({
-            kind: "person.response",
-            owner: personResponseOwner,
-            leaseMs: 10 * 60_000,
-            limit: 1,
-            maxAttempts: 1,
-          });
-          if (!item) return;
-          /*
-           * WHOSE DECISION OR ANSWER THIS IS comes from the row the queue handed out, never from
-           * the payload (G01). The route the person decided or answered through offered it inside
-           * their own frame, so the database stamped their tenant on it; the payload's owner may
-           * only agree. A row stamped as nobody's, or naming somebody else, is ended here and never
-           * runs: running it would act, and file the continued turn, the channel reply and the
-           * notifications, as whoever the payload claims.
-           */
-          const claimed = await runAsClaimedTenant(
-            item,
-            item.payload.ownerUserId,
-            async () => {
-              try {
-                const payload = z
-                  .object({
-                    ownerUserId: z.string().min(1),
-                    // The saved question, initiator included, so the answer resumes the turn that asked.
-                    question: personQuestionSchema,
-                    response: z.string().min(1).max(6000),
-                  })
-                  .parse(item.payload);
-                if (payload.ownerUserId !== payload.question.actorId)
-                  throw new ApprovalRefusedError(
-                    "The saved question owner does not match.",
-                  );
-                await authoriseQuestion(payload.question);
-                /*
-                 * The answer's own tenant, as stamped when the person sent it: this loop claims it on
-                 * a timer and has none, so the resumed turn is told whose it is (see `TurnRunner`).
-                 */
-                const { tenantId } = item;
-                const outcome = await resumePersonQuestion({
-                  ownerUserId: payload.ownerUserId,
-                  question: payload.question,
-                  response: payload.response,
-                  messageId: `person-response:${item.key}`,
-                  runTurn: (turn) =>
-                    approvalContinuationRunner({ ...turn, tenantId }),
-                  responsibilities: responsibilityStore,
-                  responsibilityTurn: (goal) => {
-                    const run = responsibilityAnswerTurn(goal);
-                    return (turn) => run({ ...turn, tenantId });
-                  },
-                });
-                /*
-                 * Spec I3: the card that asked was moved back to 进行中 when the person answered; the
-                 * turn the answer started has now replied, so the card goes on to the review lane. A
-                 * responsibility's own run closes its own card when it finishes, so it is left to do
-                 * that. The tenant is the claimed work row's, not a default.
-                 */
-                if (!outcome.responsibilityId)
-                  await taskProjector
-                    .finished({
-                      tenantId,
-                      runRef: payload.question.runId,
-                      onlyUnsettled: true,
-                    })
-                    .catch((error) =>
-                      console.error("task projection failed", error),
-                    );
-                const source = await sourceForCoordinationRun({
-                  ...payload.question,
-                  botId: questionConversationBot(payload.question),
-                  depth: 0,
-                });
-                if (source && outcome.replyText)
-                  await channelStore.recordActivity(
-                    await actorFor(payload.ownerUserId),
-                    source.channelId,
-                    {
-                      text: outcome.replyText,
-                      agentId: questionConversationBot(payload.question),
-                      at: new Date(),
-                    },
-                    { id: `person-response:${item.key}` },
-                  );
-                if (source && outcome.replyText)
-                  await deliveryNotifications(
-                    {
-                      ownerUserId: payload.ownerUserId,
-                      channelId: source.channelId,
-                      agentId: questionConversationBot(payload.question),
-                      threadId: payload.question.threadId,
-                    },
-                    {
-                      id: `person-response:${item.key}`,
-                      text: outcome.replyText,
-                      kind: "reply",
-                    },
-                  );
-                if (
-                  !(await approvalQueue.finish({
-                    kind: item.kind,
-                    key: item.key,
-                    owner: personResponseOwner,
-                  }))
-                )
-                  throw new Error(
-                    "The question response lease was lost before completion.",
-                  );
-              } catch (error) {
-                await approvalQueue.release({
-                  kind: item.kind,
-                  key: item.key,
-                  owner: personResponseOwner,
-                  delayMs: 0,
-                  reason:
-                    error instanceof Error ? error.message : String(error),
-                });
-                throw error;
-              }
-            },
-          );
-          if (!claimed.ran) {
-            await approvalQueue.finish({
-              kind: item.kind,
-              key: item.key,
-              owner: personResponseOwner,
-            });
-            /*
-             * Ended, not retried: no frame would ever make this row a person's. Every path that
-             * decides or answers runs in the owner's frame (the app's routes, and OpenTag as the
-             * binding's tenant), so this is a legacy or misfiled row, reported where an operator
-             * looks rather than run as whoever its payload names.
-             */
-            console.error(
-              JSON.stringify({
-                type: "person-response-untrusted-tenant",
-                key: item.key,
-                reason: claimed.reason,
-              }),
-            );
-          }
-        } catch (error) {
-          console.error(
-            JSON.stringify({
-              type: "person-response-error",
-              error: error instanceof Error ? error.message : String(error),
-              timestamp: new Date().toISOString(),
-            }),
-          );
-        }
-      }, 2_000),
+      repeatAfterEach(
+        createPersonResponseTick({
+          approvalQueue,
+          personResponseOwner,
+          authoriseQuestion,
+          approvalContinuationRunner,
+          responsibilityStore,
+          responsibilityAnswerTurn,
+          sourceForCoordinationRun,
+          channelStore,
+          actorFor,
+          notify: (scope, input) => deliveryNotifications(scope, input),
+          board: taskProjector,
+        }),
+        2_000,
+      ),
     (resource) => resource.stop(),
   );
 
@@ -4327,149 +3833,22 @@ await startupLifecycle.run(async (startup) => {
    */
 
   if (config.handoff.maxDepth > 0 && config.handoff.maxPerRun > 0) {
-    const runner = createHandoffRunner({
-      queue: createWorkQueue(database),
-      owner: workOwner("handoff"),
-      auditStore: bootAuditStore,
-      /*
-       * The signed statement of the run the addressed Bot is about to start, carrying how deep the
-       * chain has gone. Minted here, where the key lives, and one deeper than the run that asked.
-       */
-      sign: (work, claim) =>
-        signHandoffDeliveryRun(work, config.keyEncryptionKey, undefined, claim),
-      delivery: createHandoffDelivery({
-        // The pause guard and the enterprise controls, before the hop takes any lock.
-        admission: serverTurnAdmission,
-        // The hop is board work under the run that asked for it (ticket 020).
-        board: taskProjector,
-        // ...and board work the plan pays for, asked here because the hop's card is the hop's charge.
-        quota,
-        /*
-         * Built as the person, WITH THEIR ROLE. The desk resolved it to decide the hop was allowed; a
-         * delivery that then rebuilt them as an ordinary user could not find the Bot the desk had just
-         * agreed to, and the person was told it never answered.
-         */
-        agentFor: async ({ actorId, botId, fromBotId, initiator }) => {
-          const actor = await actorFor(actorId).catch(() => null);
-          if (!actor) {
-            throw new Error(
-              "who this is for could not be confirmed, so the Bot was not run",
-            );
-          }
-          return copilotRuntime.agentFor({
-            actor,
-            botId,
-            // The root of the chain rides along, so a hop knows who it ultimately acts for.
-            initiator: handoffInitiator(fromBotId, initiator),
-          });
-        },
-        history: copilotRuntime.history,
-        lock: copilotRuntime.threadLock,
-        /*
-         * A scratch thread of the addressed Bot's own, one per hop.
-         *
-         * An Intelligence thread has exactly one agent, so a second Bot cannot answer inside the first
-         * Bot's conversation however it asks. Its turn runs here instead, unmapped to any channel, and
-         * what it said comes back to the conversation that asked through the relay — in the asking
-         * Bot's voice, which is the only voice that thread admits. Minted with the deployment's own
-         * identity, like every thread this deployment starts.
-         */
-        mintThreadId: () => threadIdentity.mint(),
-        /*
-         * The roster, told that a relayed answer landed. The delivery knows only the thread it ran
-         * in; this resolves which channel shows that thread — a scratch thread maps to nothing and
-         * announces nowhere, which is the point of a scratch thread.
-         */
-        announce: async (input) => {
-          const [mapped] = await database
-            .select({ channelId: intelligenceChannelMappings.channelId })
-            .from(intelligenceChannelMappings)
-            .where(eq(intelligenceChannelMappings.threadId, input.threadId))
-            .limit(1);
-          // A Bot's group thread maps to no channel; its answer goes to the shared transcript.
-          if (!mapped) {
-            await groupConversations.announceHandoff(input);
-            return;
-          }
-          const actor = await actorFor(input.actorId).catch(() => null);
-          if (!actor) return;
-          await channelStore.recordActivity(actor, mapped.channelId, {
-            text: input.text,
-            agentId: input.agentId,
-            at: new Date(),
-          });
-        },
-        // The asking conversation shown as working while a hop runs in it. Keyed by thread, resolved
-        // to its channel by the store; a scratch thread maps to none and signals nowhere.
-        setBusy: (input) => channelStore.signalBusy(input.threadId, input.busy),
-        newRunId: () => randomUUID(),
-        // Managed mode: the same address and the same token the runtime uses, taken from the client the
-        // mount holds. Assembling either from configuration produced a runner every join was refused
-        // for, because the thread's active run is a lock the platform issues rather than something an
-        // API key can claim. Local mode: the deployment's own runner, which is what the mounted runtime
-        // is running a person's turns through, so the hop writes to the same store.
-        runner: copilotRuntime.threadRunner() as never,
-      }),
+    // The runner, its delivery, and the loop and queue wake-up that drive them (agents/handoff-wiring.ts),
+    // owned by the startup scope so a stopped server gives their connection back.
+    await startHandoffDelivery({
+      productTelemetry,
+      config,
+      database,
+      bootAuditStore,
+      actorFor,
+      copilotRuntime,
+      threadIdentity,
+      groupConversations,
+      channelStore,
+      board: taskProjector,
+      quota,
+      startup,
     });
-
-    const sweep = async () => {
-      try {
-        const report = await runner.sweep();
-        if (report.delivered.length > 0 || report.skipped.length > 0) {
-          console.info(JSON.stringify({ type: "bot-handoff", ...report }));
-        }
-      } catch (error) {
-        // A sweep that failed must not take the loop with it: the next one may find the database back.
-        console.warn(
-          "[handoff] a sweep could not run:",
-          error instanceof Error ? error.message : error,
-        );
-      }
-    };
-
-    /*
-     * ONE SWEEP AT A TIME ON THIS REPLICA, from both callers below. A sweep poked while one is
-     * running is remembered rather than started, and runs once the current one ends — a wake-up
-     * that arrived mid-sweep may be for a hop the running sweep's claim already missed.
-     */
-    let sweeping = false;
-    let sweepAgain = false;
-    const kick = async () => {
-      if (sweeping) {
-        sweepAgain = true;
-        return;
-      }
-      sweeping = true;
-      try {
-        do {
-          sweepAgain = false;
-          await sweep();
-        } while (sweepAgain);
-      } finally {
-        sweeping = false;
-      }
-    };
-
-    /*
-     * Woken by the queue itself, from any replica: a person is waiting through every hop, and the
-     * poll below would spend up to two seconds per leg doing nothing. The poll stays as the
-     * backstop — a notification is a latency optimisation, and one lost in transit costs one
-     * interval, never the work. See repeatAfterEach for why an interval must not be used: an
-     * interval would start another sweep every two seconds while a five-minute delivery runs, each
-     * claiming a different batch, and this replica's concurrent agent runs would grow with the
-     * backlog rather than stopping at the limit it was asked for.
-     */
-    await startup.acquire(
-      () =>
-        startWorkOfferedListener(config.databaseUrl, (kind) => {
-          if (kind === HANDOFF_KIND) void kick();
-        }),
-      (listener) => listener.stop(),
-    );
-    startup.acquireSync(
-      () => repeatAfterEach(kick, 2_000),
-      (resource) => resource.stop(),
-    );
   }
 
   /*
@@ -4565,7 +3944,9 @@ await startupLifecycle.run(async (startup) => {
     queue: createWorkQueue(database),
     transcript: routineIntelligence,
     title: createChannelTitler({
+      provider: runtimeModel.provider,
       model: runtimeModel.defaultModel,
+      ...(runtimeModel.plan ? { plan: runtimeModel.plan } : {}),
       resolveApiKey: resolveRuntimeModelApiKey,
     }),
     owner: workOwner("summariser"),
@@ -4610,6 +3991,14 @@ await startupLifecycle.run(async (startup) => {
         database,
         databaseUrl: config.databaseUrl,
         auditStore: bootAuditStore,
+        personBrowserPolicy,
+        // While a person records in a Bot's browser, the Recorder there reaches OpenBot and the
+        // gateway; the Bot does not.
+        duringRecording: botBrowserNetwork({
+          connections: recorderExtension.connections,
+          openbotUrls: [config.publicUrl, config.appUrl],
+          gatewayUrl: config.intelligence?.gatewayWsUrl ?? "",
+        }),
         ...(computerProvider ? { provider: computerProvider } : {}),
         ...(config.computer?.token
           ? { computerToken: config.computer.token }
@@ -4620,8 +4009,19 @@ await startupLifecycle.run(async (startup) => {
         // model a run actually speaks — the deployment's, once a binding's key is revoked.
         agentModelName: async (agentId) =>
           (await resolveNamedAgentModel(agentId))?.name ?? null,
+        // The run gate records and judges the model a built-in run will use: the person's pick, or the
+        // default the catalogue chose.
+        pickedModel: async (actorId, threadId) =>
+          (await modelChoices.forRun(actorId, threadId)).model,
         people: peopleStore,
         initialAdminEmails: config.auth?.initialAdminEmails ?? [],
+        // Every person's live Recorder connections are read as `platform`; ending one person's runs
+        // as them (see `signOutRecorders`).
+        recorders: {
+          holders: () =>
+            asPlatform(() => recorderExtension.connections.holders()),
+          signOut: signOutRecorders,
+        },
       }),
     (controls) => controls.stop(),
   );
@@ -4722,7 +4122,7 @@ await startupLifecycle.run(async (startup) => {
     async (input) => {
       const proactiveRefusal = await guardProactiveCallback(
         input,
-        proactiveReadOnlyRefs,
+        checkInScope,
       );
       if (proactiveRefusal) return proactiveRefusal;
       const coordinated = await coordination.call(input);
@@ -4738,7 +4138,7 @@ await startupLifecycle.run(async (startup) => {
         return { text, isError: text.startsWith(REFUSAL_MARKER) };
       }
       const { name, args, botId, actorId, initiator } = input;
-      const memory = memoryTools({
+      const memory = offeredMemoryTools(config.edition, {
         store: personalMemoryStore,
         ingestion: memoryIngestion,
         ownerUserId: actorId,
@@ -4796,12 +4196,115 @@ await startupLifecycle.run(async (startup) => {
       channels: channelStore,
     },
     {
+      productTelemetry,
       approvals: approvalService,
+      // M3: upstream also passes `shared: { modes, use }` (shared use and shared accounts); not adopted.
       ...(signInService ? { passwords: signInService } : {}),
-      demonstrations: {
-        store: demonstrationStore,
-        recorder: demonstrationRecorder,
-      },
+      recorder: recorderExtension,
+      // A Bot's browser, worked by the person holding its wheel: its bar and Record, wherever Bots
+      // have computers.
+      ...(computerGateway
+        ? {
+            botBrowser: {
+              recorder: recorderExtension,
+              openbotUrl: openbotAddress(config),
+              /*
+               * The Bot's policy, which `botBrowserNetwork` widens while a recording runs, to the
+               * computer of the seat the recording is on: the person's own, or the isolated Bot's.
+               * Under that computer's own token.
+               */
+              pushPolicy: async (seat) => {
+                const policy = await enterpriseControls()?.policyForBot(
+                  seat.botId,
+                );
+                if (!policy) return;
+                const token = computerGateway.tokenFor(seat);
+                await pushEgressPolicy(
+                  await computerGateway.locate(seat),
+                  seat.botId,
+                  policy,
+                  {
+                    ...(token ? { token } : {}),
+                    ...(config.webBotAuth
+                      ? { webBotAuth: config.webBotAuth }
+                      : {}),
+                  },
+                );
+              },
+              singleUser: config.singleUser,
+              // Where every Bot shares one computer, Record is refused in all their browsers.
+              ...(recordRefused ? { recordRefused } : {}),
+            },
+          }
+        : {}),
+      /*
+       * Only where a person's browser can run: a host-side computer of people's browsers, computers
+       * Bots run on that give each its own, or the personal edition's one computer. Where every Bot
+       * shares one, the routes have no computers and say why (browser/host.ts).
+       */
+      ...(computerGateway || config.browser
+        ? {
+            browser: {
+              ...personBrowserPlace({
+                provider: computerProvider,
+                browserUrl: config.browser?.url,
+                edition: config.edition,
+                computers: () =>
+                  computerGateway
+                    ? gatewayBrowserComputers(
+                        computerGateway,
+                        config.browser?.url,
+                      )
+                    : directBrowserComputers({
+                        browserUrl: (config.browser as { url: string }).url,
+                        policy: personBrowserPolicy,
+                        ...(config.browser?.token
+                          ? { token: config.browser.token }
+                          : {}),
+                      }),
+              }),
+              recorder: recorderExtension,
+              openbotUrl: openbotAddress(config),
+              // On a single-user OpenBot the person is its admin: a setup failure is theirs to see to.
+              singleUser: config.singleUser,
+            },
+          }
+        : {}),
+      ...(learningModelEndpoint
+        ? { learningModel: learningModelEndpoint }
+        : {}),
+      /*
+       * Settings, Learning: who else's Bots use a person's own learned Skills. Only with the optional
+       * Intelligence, which is where Learning is.
+       */
+      ...(learning && learningSettings && intelligenceClient
+        ? {
+            personalLearning: {
+              store: learningSharingStore,
+              ...(learningModelEndpoint?.calls
+                ? { modelCalls: learningModelEndpoint.calls }
+                : {}),
+              approvals: skillApprovalStore,
+              ...(autoApprover ? { autoApprover } : {}),
+              skillsOf: (userId: string) => learning.personalSkills(userId),
+              skillOf: (userId: string, name: string) =>
+                skillIn(personalLearningSpaces.containerFor(userId), name),
+              containerSkills: (id: string) => learning.containerSkills(id),
+              invalidate: () => openSkillIndex.invalidate(),
+              sharingAllowed: skillSharingAllowed,
+              manage: intelligenceClient.experimental.learning,
+              modelUnavailable: learningModelUnavailable(process.env),
+              recordingTitles: recorderExtension.recordingTitles,
+              settings: learningSettings,
+              scopesFor: async (actor: { id: string }) =>
+                learningScopes({
+                  edition: currentEdition(),
+                  userId: actor.id,
+                  settings: await learningSettings.read(),
+                }),
+            },
+          }
+        : {}),
       delivery: {
         authenticated: {
           store: deliveryStore,
@@ -4830,6 +4333,8 @@ await startupLifecycle.run(async (startup) => {
       },
       memory: { store: personalMemoryStore, ingestion: memoryIngestion },
       proactive: { store: proactiveStore, engine: proactiveEngine },
+      // Upstream's started work, at `/api/bot-tasks` (`/api/tasks` is the board, mounted below).
+      tasks: { store: taskStore, runner: taskRunner },
       responsibilities: {
         store: responsibilityStore,
         engine: responsibilityEngine,
@@ -4850,21 +4355,74 @@ await startupLifecycle.run(async (startup) => {
         activity: createActivityStore(database),
         wakeUps: wakeUpStore,
         profiles: agentProfileStore,
+        tasks: taskRunner,
         auditStore: bootAuditStore,
         auditTrail: createAgentTrailReader(database),
       },
+      // Upstream's model catalogue, at `/api/model-catalogue` (`/api/models` is the library, below).
+      models: modelCatalogue,
+      modelChoices,
+      // The checklist onboarding ends on. Facts and verdicts about this configuration, never values.
+      setup: createSetupSources({
+        productName: tenantPackage.productName,
+        config,
+        environment: process.env,
+        model: {
+          provider: runtimeModel.provider,
+          keyId: tenantPackage.model.credentialSecretRef,
+          defaultModel: runtimeModel.defaultModel,
+          plan: Boolean(runtimeModel.plan),
+          check: checkModelAvailability,
+        },
+        credentials: credentialStore,
+        modelCheckAtBoot,
+        entitlements: () =>
+          intelligenceClient
+            ? intelligenceClient.getRuntimeEntitlements()
+            : Promise.reject(new Error("Intelligence is not connected.")),
+        computer: Boolean(config.computer),
+        computerCheck: createComputerCheck({
+          provider: computerProvider,
+          controls: enterpriseControls,
+          ...(config.computer?.token ? { token: config.computer.token } : {}),
+          ...(config.webBotAuth ? { webBotAuth: config.webBotAuth } : {}),
+        }),
+        apps: {
+          configured: Boolean(composio),
+          provider: config.brokerProvider ?? "composio",
+        },
+        chat: Boolean(deliveryProviders.slack),
+      }),
     },
     // "Is this conversation still here", answered from this deployment's own `threads` table.
     createLocalThreadReader(database),
     // The plan ceilings, so a coworker created over them is refused by the write path (ticket 022).
     quota,
     // Automatic Learning's admin page, only with a connected Intelligence (R0).
-    learningSettings
+    learningSettings && intelligenceClient
       ? {
           store: learningSettings,
           ...(learningAutoAssign ? { autoAssign: learningAutoAssign } : {}),
           status: learning?.status,
-          inspect: learning?.inspect,
+          // Read directly: the runtime client refuses a snapshot without dashboard links.
+          ...(config.intelligence
+            ? {
+                inspect: createInspectorLearningReader({
+                  apiUrl: intelligenceClient.ɵgetApiUrl(),
+                  apiKey: config.intelligence.apiKey,
+                }),
+              }
+            : {}),
+          manage: intelligenceClient.experimental.learning,
+          modelUnavailable: learningModelUnavailable(process.env),
+          skills: learning?.containerSkills,
+          approvals: skillApprovalStore,
+          // Everyone who has a space, for an administrator's review: across people, so as `platform`.
+          people: () => asPlatform(() => learningPeople()),
+          personSkill: (userId: string, name: string) =>
+            skillIn(personalLearningSpaces.containerFor(userId), name),
+          invalidate: () => openSkillIndex.invalidate(),
+          recordingTitles: recorderExtension.recordingTitles,
         }
       : undefined,
     // The self-host bar: the operator's switch, and hidden for a deployment paying for Intelligence.
@@ -4876,6 +4434,7 @@ await startupLifecycle.run(async (startup) => {
     }),
     identityStore,
     identityGithubCallback,
+    profileStore,
   );
 
   /*
@@ -5164,289 +4723,26 @@ await startupLifecycle.run(async (startup) => {
     ),
   );
 
-  /**
-   * The live screen, proxied.
-   *
-   * Proxied rather than connected directly. `agent-computer` authenticates its callers with a
-   * shared token, not with a person's session, and it must never be reachable from a browser. So the
-   * socket terminates here, behind the same session guard as every other route, and this process opens
-   * a second socket inward carrying the token.
-   *
-   * Not a Hono route because an upgrade is not a request/response: Bun hands it over before Hono sees a
-   * body, so it is handled in `fetch` ahead of the app.
+  /*
+   * The front door (http-server.ts): one Bun server for the app, the live screen and terminal
+   * proxies, the channel sockets, and the tenant's own machines' runner and screen sockets.
    */
-  const toStreamUrl = (baseUrl: string, botId: string) =>
-    // The Bot travels in the query, because a websocket upgrade carries no custom header for the
-    // computer to read and every call it serves is per Bot. The secret travels the same way and for the
-    // same reason, this socket is the one a person can type into, so it is the last thing that should
-    // be reachable without it.
-    `${baseUrl.replace(/^http/, "ws").replace(/\/$/, "")}/stream?bot=${encodeURIComponent(botId)}&token=${encodeURIComponent(config.computer?.token ?? "")}`;
-
-  /** What each proxied socket carries: where to connect inward, and the socket once opened. */
-  type StreamData = {
-    upstream: string;
-    ownerUserId: string;
-    botId: string;
-    recordingId?: string;
-    inward?: WebSocket;
-  };
-
-  /**
-   * Bun takes exactly one WebSocket handler for the server, and two features need one: the app proxies
-   * the computer stream, and it pushes channel activity through Hono's adapter. So this one
-   * dispatches on what the upgrade attached, a proxy socket carries `upstream`, a Hono socket does
-   * not, rather than either feature quietly taking the slot and breaking the other on connect.
-   */
-  type ChannelSocket = Parameters<typeof channelSocket.open>[0];
-  type SocketData =
-    | StreamData
-    | ChannelSocket["data"]
-    | RunnerSocket
-    | DeviceScreenSocketData;
-
-  const isProxiedStream = (data: SocketData): data is StreamData =>
-    typeof (data as StreamData).upstream === "string";
-
-  /**
-   * A runner's socket: which machine it is, and whose.
-   *
-   * Attached at upgrade, after the device token was checked — the only credential a runner ever
-   * presents, because a websocket upgrade carries no session cookie to guard it with.
-   */
-  type RunnerSocket = {
-    runner: DeviceOwner;
-  };
-  const isRunnerSocket = (data: SocketData): data is RunnerSocket =>
-    typeof (data as RunnerSocket).runner === "object" &&
-    (data as RunnerSocket).runner !== null;
-  /** A person watching a coworker on a tenant's own machine; see `handleComputerStreamUpgrade`. */
-  const isDeviceScreen = (data: SocketData): data is DeviceScreenSocketData =>
-    typeof (data as DeviceScreenSocketData).screen === "object" &&
-    (data as DeviceScreenSocketData).screen !== null;
-
-  // Hono owns the socket's data once it has upgraded it; this hands its own back to it.
-  const asChannelSocket = (ws: { data: SocketData }) =>
-    ws as unknown as ChannelSocket;
-
   startup.acquireSync(
     () =>
-      serve<SocketData>({
+      startHttpServer({
         port,
-        async fetch(request, server) {
-          const url = new URL(request.url);
-          if (url.pathname === "/api/audio/transcriptions") {
-            server.timeout(request, DICTATION_HTTP_IDLE_SECONDS);
-          }
-          if (url.pathname === "/api/voice/calls") server.timeout(request, 30);
-          if (url.pathname === "/api/voice/sessions")
-            server.timeout(request, 30);
-          if (url.pathname === "/api/runner/ws") {
-            // The device token, from the query: an upgrade carries no custom header for the guard to read,
-            // which is the same reason the stream Bot above travels in the query too.
-            const owner = await deviceStore.deviceForToken(
-              url.searchParams.get("token") ?? "",
-            );
-            if (!owner) {
-              return new Response("Not a registered device.", { status: 401 });
-            }
-            const upgraded = server.upgrade(request, {
-              data: {
-                runner: {
-                  tenantId: owner.tenantId,
-                  deviceId: owner.deviceId,
-                  id: owner.id,
-                  credentialVersion: owner.credentialVersion,
-                },
-              } as SocketData,
-            });
-            if (!upgraded) {
-              return new Response("Expected a WebSocket upgrade.", {
-                status: 400,
-              });
-            }
-            return undefined as unknown as Response;
-          }
-          const streamBotId = streamPathBotId(url.pathname);
-          if (
-            streamBotId !== null &&
-            request.headers.get("upgrade")?.toLowerCase() === "websocket"
-          ) {
-            // In the signed-in person's frame: see `handleComputerStreamUpgrade` (G01-E P4).
-            const answer = await handleComputerStreamUpgrade(
-              {
-                // A device-mode deployment has a computer for every coworker: the tenant's own machine.
-                computerConfigured:
-                  Boolean(config.computer) || config.tenantRuntime === "device",
-                resolveRequestActor,
-                accessCheck: computerAccessCheck(agentProfileStore),
-                locate: computerGateway
-                  ? (botId) => computerGateway.locate(botId)
-                  : undefined,
-                toStreamUrl,
-                activeRecording: (ownerUserId, botId) =>
-                  demonstrationStore.active(ownerUserId, botId),
-              },
-              request,
-              server,
-            );
-            return answer ?? (undefined as unknown as Response);
-          }
-          return app.fetch(request, { server });
+        config,
+        resolveRequestActor,
+        agentProfileStore,
+        computerGateway,
+        devices: {
+          store: deviceStore,
+          channel: deviceChannel,
+          screens: deviceScreens,
         },
-        websocket: {
-          open(ws) {
-            if (isRunnerSocket(ws.data)) {
-              // Alive from the moment it arrives, so the owner's screen stops spinning at once rather than
-              // after the first beat — and registered as reachable, so an action can be sent to it.
-              void runnerOpen(
-                ws as unknown as Parameters<typeof runnerOpen>[0],
-                deviceStore,
-                deviceChannel,
-                deviceScreens,
-              ).catch(() =>
-                ws.close(1008, "Device access could not be verified."),
-              );
-              return;
-            }
-            if (isDeviceScreen(ws.data)) {
-              try {
-                deviceScreens.subscribe(ws, ws.data.screen);
-              } catch (error) {
-                ws.send(
-                  JSON.stringify({
-                    type: "error",
-                    error:
-                      error instanceof Error
-                        ? error.message
-                        : "The screen could not be started.",
-                  }),
-                );
-                ws.close();
-              }
-              return;
-            }
-            if (!isProxiedStream(ws.data)) {
-              channelSocket.open(asChannelSocket(ws));
-              return;
-            }
-            const stream = ws.data;
-            const inward = new WebSocket(stream.upstream);
-            stream.inward = inward;
-            // Frames outward, input inward. Buffered by neither side: a frame the browser is too slow for
-            // should be dropped, not queued, because a stale frame is worse than a missing one.
-            inward.onmessage = (event) => {
-              if (stream.recordingId) {
-                let recorded: unknown;
-                try {
-                  recorded = JSON.parse(String(event.data));
-                } catch {
-                  recorded = null;
-                }
-                if (
-                  recorded &&
-                  typeof recorded === "object" &&
-                  "type" in recorded &&
-                  recorded.type === "demonstration.action"
-                ) {
-                  const data = stream;
-                  const message = recorded as {
-                    recordingId?: unknown;
-                    action?: unknown;
-                  };
-                  if (message.recordingId !== data.recordingId) {
-                    ws.send(
-                      JSON.stringify({
-                        type: "error",
-                        error:
-                          "The recording identity changed. Stop and restart recording.",
-                      }),
-                    );
-                    return;
-                  }
-                  // In the owner's frame: Bun runs this handler outside the upgrade's frame.
-                  captureInFrame(data, message.action, (...args) =>
-                    demonstrationRecorder.capture(...args),
-                  ).catch((error) => {
-                    console.error(
-                      JSON.stringify({
-                        type: "demonstration-capture-error",
-                        error:
-                          error instanceof Error ? error.name : "UnknownError",
-                        context: { recordingId: data.recordingId },
-                        timestamp: new Date().toISOString(),
-                      }),
-                    );
-                    try {
-                      ws.send(
-                        JSON.stringify({
-                          type: "error",
-                          error:
-                            "A browser step could not be saved. Stop and review the demonstration before continuing.",
-                        }),
-                      );
-                    } catch {
-                      /* A closed viewer cannot receive the already logged failure. */
-                    }
-                  });
-                  return;
-                }
-              }
-              try {
-                ws.send(String(event.data));
-              } catch {
-                inward.close();
-              }
-            };
-            inward.onclose = () => ws.close();
-            inward.onerror = () => ws.close();
-          },
-          message(ws, raw) {
-            if (isRunnerSocket(ws.data)) {
-              void runnerMessage(
-                ws as unknown as Parameters<typeof runnerMessage>[0],
-                deviceStore,
-                deviceChannel,
-                raw,
-                deviceScreens,
-              );
-              return;
-            }
-            if (isDeviceScreen(ws.data)) {
-              deviceScreens.input(ws, raw);
-              return;
-            }
-            if (!isProxiedStream(ws.data)) {
-              channelSocket.message(asChannelSocket(ws), raw);
-              return;
-            }
-            if (ws.data.inward?.readyState === 1)
-              ws.data.inward.send(String(raw));
-          },
-          close(ws, code, reason) {
-            if (isRunnerSocket(ws.data)) {
-              // Nothing to record for presence: a device that stops being heard from is offline a minute
-              // later, and a close event that arrived or not would be a second, less reliable answer to
-              // that. The dispatch channel is different — an entry left behind would accept actions that
-              // can never be answered — so its registration is released.
-              runnerClose(
-                ws as unknown as Parameters<typeof runnerClose>[0],
-                deviceChannel,
-              );
-              return;
-            }
-            if (isDeviceScreen(ws.data)) {
-              deviceScreens.unsubscribe(ws);
-              return;
-            }
-            if (!isProxiedStream(ws.data)) {
-              channelSocket.close(asChannelSocket(ws), code, reason);
-              return;
-            }
-            ws.data.inward?.close();
-          },
-        },
+        app,
       }),
-    (resource) => resource.stop(true),
+    (server) => server.stop(true),
   );
 
   if (config.singleUser) {

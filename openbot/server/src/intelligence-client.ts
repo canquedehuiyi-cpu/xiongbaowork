@@ -124,7 +124,8 @@ export function observeIntelligenceAuthentication<
  * `retryable`, when nothing answered at all. A 401 is observed here as the client's would be.
  */
 export async function runtimeEntitlementStatus(
-  settings: Pick<IntelligenceSettings, "apiUrl" | "apiKey">,
+  // The address the client resolved (`ɵgetApiUrl`), so never absent here.
+  settings: { apiUrl: string; apiKey: string },
   timeoutMs = 5_000,
 ): Promise<number> {
   let response: Response;

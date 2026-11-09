@@ -7,9 +7,22 @@ import {
 } from "@openbot/shared/tool-search";
 import type { GrantedTool } from "@openbot/toolkit/granted-tool";
 import { z } from "zod";
-import { researchRoleFor } from "../plugins/catalogue";
-import { isAlwaysOn } from "../plugins/personal-defaults";
 import { markUntrusted } from "../untrusted-content";
+
+/*
+ * M3: upstream reads these two from `../plugins/catalogue` (`researchRoleFor`, the web search and
+ * read tools a Bot's computer instructions route to) and `../plugins/personal-defaults`
+ * (`isAlwaysOn`, the apps every Bot holds). The fork's plugins have neither: the catalogue keeps no
+ * research roles, and the personal edition's always-on apps are not adopted. So no tool plays a
+ * research role here and none is always on, and only what OpenBot gives a Bot itself stays in front
+ * of the model past the floor.
+ */
+function researchRoleFor(_ref: string): string | null {
+  return null;
+}
+function isAlwaysOn(_ref: string): boolean {
+  return false;
+}
 
 export { SEARCH_TOOLS };
 

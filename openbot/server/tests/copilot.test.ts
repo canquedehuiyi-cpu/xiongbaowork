@@ -3220,7 +3220,8 @@ describe("each coworker runs on the model it was bound to", () => {
       undefined,
       undefined,
       undefined,
-      // recordToolLimitRefusal, holdsTools, pickedModel and botNames, upstream's, come before it.
+      // loadPersonalMemory, recordToolLimitRefusal, holdsTools, pickedModel and botNames come before it.
+      undefined,
       undefined,
       undefined,
       undefined,

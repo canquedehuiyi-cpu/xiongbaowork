@@ -200,31 +200,7 @@ const suspends = (promise: Promise<unknown>) =>
   );
 
 test("personal and team rules layer, the strictest wins, and switching custom rules off keeps team rules", async () => {
-<<<<<<< fork
   await asOwner(() =>
-=======
-  await service.createRule(owner, {
-    botId: "*",
-    toolRef: "mcp/gmail/*",
-    effect: "*",
-    scope: "*",
-    behaviour: "allow",
-  });
-  await expect(service.gate(candidate())).resolves.toBeUndefined();
-
-  const locked = await service.createTeamRule(admin, {
-    botId: "*",
-    toolRef: "mcp/gmail/create_*",
-    effect: "write",
-    scope: "*",
-    behaviour: "ask",
-  });
-  teamRuleIds.push(locked.id);
-  expect(await suspends(service.gate(candidate()))).toBeTrue();
-
-  await service.setTeamSettings(admin, { customRulesEnabled: false });
-  await expect(
->>>>>>> v1.0.0
     service.createRule(owner, {
       botId: "*",
       toolRef: "mcp/gmail/*",
@@ -240,7 +216,7 @@ test("personal and team rules layer, the strictest wins, and switching custom ru
   const locked = await asTeam(() =>
     service.createTeamRule(admin, {
       botId: "*",
-      toolRef: "mcp/gmail/send_*",
+      toolRef: "mcp/gmail/create_*",
       effect: "write",
       scope: "*",
       behaviour: "ask",
@@ -305,12 +281,11 @@ test("a safety hand-off is stored, cannot be allowed, and is marked done by the 
     });
   }));
 
-<<<<<<< fork
 test("'Always allow here' saves a personal allow rule that the gate then honours", () =>
   asOwner(async () => {
     await store.policy?.setPreferences(owner, { enabled: true });
     await store.setEnabled(owner, true);
-    const first = candidate({ toolRef: "mcp/drive/share", scope: "drive" });
+    const first = candidate({ toolRef: "mcp/drive/rename_file", scope: "drive" });
     expect(await suspends(service.gate(first))).toBeTrue();
     const [request] = (await store.list(owner)).filter(
       (row) => row.action.toolCallId === first.continuation?.toolCallId,
@@ -320,41 +295,15 @@ test("'Always allow here' saves a personal allow rule that the gate then honours
     const rules = await store.rules(owner);
     expect(rules).toContainEqual(
       expect.objectContaining({
-        toolRef: "mcp/drive/share",
+        toolRef: "mcp/drive/rename_file",
         behaviour: "allow",
       }),
     );
     await expect(
-      service.gate(candidate({ toolRef: "mcp/drive/share", scope: "drive" })),
+      service.gate(candidate({ toolRef: "mcp/drive/rename_file", scope: "drive" })),
     ).resolves.toBeUndefined();
     await store.setEnabled(owner, false);
   }));
-=======
-test("'Always allow here' saves a personal allow rule that the gate then honours", async () => {
-  await store.policy?.setPreferences(owner, { enabled: true });
-  await store.setEnabled(owner, true);
-  const first = candidate({ toolRef: "mcp/drive/rename_file", scope: "drive" });
-  expect(await suspends(service.gate(first))).toBeTrue();
-  const [request] = (await store.list(owner)).filter(
-    (row) => row.action.toolCallId === first.continuation?.toolCallId,
-  );
-  expect(request?.action.policy?.behaviour).toBe("ask");
-  await service.decide(owner, request?.id as string, "allow_always");
-  const rules = await store.rules(owner);
-  expect(rules).toContainEqual(
-    expect.objectContaining({
-      toolRef: "mcp/drive/rename_file",
-      behaviour: "allow",
-    }),
-  );
-  await expect(
-    service.gate(
-      candidate({ toolRef: "mcp/drive/rename_file", scope: "drive" }),
-    ),
-  ).resolves.toBeUndefined();
-  await store.setEnabled(owner, false);
-});
->>>>>>> v1.0.0
 
 test("every non-trivial verdict is on the audit trail with its initiator", async () => {
   const rows = await asOwner(() =>

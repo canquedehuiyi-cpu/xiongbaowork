@@ -71,7 +71,8 @@ export class InspectorLearningError extends Error {
  * when it has a dashboard, so the read is then made again without it.
  */
 export function createInspectorLearningReader(
-  settings: Pick<IntelligenceSettings, "apiUrl" | "apiKey">,
+  // The address the client resolved (`ɵgetApiUrl`): INTELLIGENCE_API_URL is optional in this fork.
+  settings: { apiUrl: string; apiKey: string },
 ) {
   const get = (input: InspectorLearningRequest, linksOptional: boolean) => {
     const url = new URL(
