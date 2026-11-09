@@ -95,5 +95,9 @@ git merge-tree --write-tree --merge-base=<上次同步点> <本仓库 openbot �
   都不收；上游 `server/src/plugins/**` 的拆分仍交给 MCP 会话。相关上游测试未收入。
 - Intelligence 仍为可选：Helm chart 的 `intelligence.enabled` 默认 `false`；上游的托管 Intelligence 运行时、
   网关代理与浏览器网关不收（对话线程仍在本地 PostgreSQL）。
+- 审批底线（#904、#930、#998、#1015、#1109、#1175、#1179、#1187、#1298）：`approvals/policy.ts` 归 MCP 会话，
+  本阶段沿用分叉版；上游「删除、归档、发送、分享、发布一律先问」「键盘发送算发送」「退款算动钱」等底线待并入
+  他们的审批底线。在此之前不对员工下发上游的 `APPROVAL_GUIDANCE`（「OpenBot 会替你问，你不要先问」），
+  以免员工不问、网关也不问；依赖这些底线的上游用例留 `M3:` 注释暂缓。
 - 员工主动提醒默认每小时运行一次，每次都会开一张看板卡片、计入当月额度；是否改为「只有提出事情时才开卡、计费」待定。
 
