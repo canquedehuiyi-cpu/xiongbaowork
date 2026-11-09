@@ -150,6 +150,7 @@ function ActionLine({
   failed,
   notYet,
   byYou,
+  declined,
 }: {
   label: string;
   /** 被拦截时的未完成说法，见 `ToolLine` 的同名属性。 */
@@ -164,11 +165,14 @@ function ActionLine({
   notYet?: boolean;
   /** It was handed to the person, who did it themselves. See `ToolLine`. */
   byYou?: boolean;
+  /** 拒绝它的是主人自己，不是策略或边界：行上写「已拒绝」而不是「已拦截」。 */
+  declined?: boolean;
 }) {
   return (
     <ToolLine
       attempted={attempted}
       byYou={byYou}
+      declined={declined}
       detail={notYet ? STILL_STARTING_DETAIL : detail}
       failed={failed}
       label={label}
@@ -413,6 +417,7 @@ export function ComputerTools() {
             ? refusedDetail(field, outcomeOf(result))
             : field;
         })()}
+        declined={outcomeOf(result).declined === true}
         refused={outcomeOf(result).refused === true}
         failed={didNotWork(outcomeOf(result))}
         notYet={stillStarting(outcomeOf(result))}
@@ -461,6 +466,7 @@ export function ComputerTools() {
               : (labelOf(result) ??
                 (typeof args?.ref === "string" ? args.ref : undefined))
           }
+          declined={outcome.declined === true}
           refused={outcome.refused === true}
           failed={didNotWork(outcome)}
           notYet={stillStarting(outcome)}
@@ -515,6 +521,7 @@ export function ComputerTools() {
               ? args.key
               : undefined
         }
+        declined={outcomeOf(result).declined === true}
         refused={outcomeOf(result).refused === true}
         failed={didNotWork(outcomeOf(result))}
         notYet={stillStarting(outcomeOf(result))}
@@ -690,6 +697,7 @@ export function ComputerTools() {
                   ? `${entries.length} item${entries.length === 1 ? "" : "s"} in the workspace`
                   : "nothing saved yet"
           }
+          declined={outcome.declined === true}
           refused={outcome.refused === true}
           failed={didNotWork(outcome)}
           notYet={stillStarting(outcome)}
@@ -733,6 +741,7 @@ export function ComputerTools() {
                 ? args.path
                 : undefined
           }
+          declined={outcome.declined === true}
           refused={outcome.refused === true}
           failed={didNotWork(outcome)}
           notYet={stillStarting(outcome)}
@@ -871,6 +880,7 @@ export function ComputerTools() {
                 ? args.path
                 : undefined
           }
+          declined={outcome.declined === true}
           refused={outcome.refused === true}
           failed={didNotWork(outcome)}
           notYet={stillStarting(outcome)}
@@ -908,6 +918,7 @@ export function ComputerTools() {
         running={status !== "complete"}
         label="滚动了"
         attempted="滚动"
+        declined={outcomeOf(result).declined === true}
         refused={outcomeOf(result).refused === true}
         failed={didNotWork(outcomeOf(result))}
         notYet={stillStarting(outcomeOf(result))}
@@ -1010,6 +1021,7 @@ function LocalTools() {
               .filter((name): name is string => typeof name === "string");
             return names.length ? names.join("、") : "还没有本机应用";
           })}
+          declined={outcome.declined === true}
           refused={outcome.refused === true}
           failed={didNotWork(outcome)}
         />
@@ -1052,6 +1064,7 @@ function LocalTools() {
               ? `${args.app} · ${args.tool}`
               : undefined,
           )}
+          declined={outcome.declined === true}
           refused={outcome.refused === true}
           failed={didNotWork(outcome)}
         />
@@ -1085,6 +1098,7 @@ function LocalTools() {
               ? outcome.enabled.name
               : undefined,
           )}
+          declined={outcome.declined === true}
           refused={outcome.refused === true}
           failed={didNotWork(outcome)}
         />
@@ -1118,6 +1132,7 @@ function LocalTools() {
               ? `${outcome.windows.length} 个窗口`
               : undefined,
           )}
+          declined={outcome.declined === true}
           refused={outcome.refused === true}
           failed={didNotWork(outcome)}
         />
@@ -1157,6 +1172,7 @@ function LocalTools() {
                 ? args.windowId
                 : undefined,
           )}
+          declined={outcome.declined === true}
           refused={outcome.refused === true}
           failed={didNotWork(outcome)}
         />

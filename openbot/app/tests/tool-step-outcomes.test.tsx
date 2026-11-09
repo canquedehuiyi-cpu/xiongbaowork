@@ -89,6 +89,28 @@ test("every computer step names, for a blocked line, what it tried", () => {
   }
 });
 
+/*
+ * 主人在对话卡片上拒绝员工电脑上的一步时，结果带 `declined: true`。电脑工具的每一行都要把它交给
+ * ToolLine，不然主人自己的拒绝读成「已拦截」，像是策略拦下的。漏传一处，这条就会失败。
+ */
+test("every computer step that can be refused also says when the person declined it", () => {
+  const source = readFileSync(
+    new URL("../src/lib/copilot/computer-tools.tsx", import.meta.url),
+    "utf8",
+  );
+  const refusals = [
+    ...source.matchAll(
+      /refused=\{(outcomeOf\(result\)|outcome)\.refused === true\}/g,
+    ),
+  ];
+  expect(refusals.length).toBeGreaterThan(0);
+  for (const refusal of refusals) {
+    const at = refusal.index ?? 0;
+    const near = source.slice(Math.max(0, at - 200), at);
+    expect(near).toContain(`declined={${refusal[1]}.declined === true}`);
+  }
+});
+
 test("a declined line says the person declined it, not that it was blocked", () => {
   const text = render(<ToolLine declined label="写入文件" refused />).container
     .textContent;

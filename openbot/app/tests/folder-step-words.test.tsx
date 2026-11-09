@@ -222,19 +222,19 @@ const saveStep: Extract<VisibleChatItem, { kind: "tool" }> = {
 test("an opened Check your folders step names the folders, never JSON or a grant id", () => {
   const view = line("host_list_folders", "{}", listing);
   const text = view.container.textContent ?? "";
-  expect(text).toContain("Folders it can read: share.");
+  expect(text).toContain("它能读的文件夹：share。");
   expect(text).not.toContain("{");
   expect(text).not.toContain("host-grant");
   view.unmount();
 
-  expect(stepDetails(listStep).output).toBe("Folders it can read: share.");
+  expect(stepDetails(listStep).output).toBe("它能读的文件夹：share。");
   const offline = line(
     "host_list_folders",
     "{}",
     JSON.stringify({ connected: false, folders: [] }),
   );
   expect(offline.container.textContent).toContain(
-    "No folders are shared with this Bot. OpenBot Desktop isn't running.",
+    "还没有和这位员工共享任何文件夹。熊宝桌面端没有在运行。",
   );
 });
 

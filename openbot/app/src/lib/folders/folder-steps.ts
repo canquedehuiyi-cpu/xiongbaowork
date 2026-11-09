@@ -108,10 +108,10 @@ export function folderStepBody(
     const names = listing.folders.map((folder) => folder.name);
     return [
       names.length > 0
-        ? `Folders it can read: ${names.join(", ")}.`
-        : "No folders are shared with this Bot.",
-      ...(listing.connected ? [] : ["OpenBot Desktop isn't running."]),
-    ].join(" ");
+        ? `它能读的文件夹：${names.join("、")}。`
+        : "还没有和这位员工共享任何文件夹。",
+      ...(listing.connected ? [] : ["熊宝桌面端没有在运行。"]),
+    ].join("");
   }
   const trimmed = body.trim();
   return trimmed.startsWith("{") || trimmed.startsWith("[") ? undefined : body;
