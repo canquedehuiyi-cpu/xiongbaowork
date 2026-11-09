@@ -432,6 +432,7 @@ test("删除类底线问的动作只给「允许一次 / 拒绝」，收件箱�
   try {
     const view = draw();
     await view.findByText(/这个操作会删除或覆盖内容/);
+    expect(view.getByText(/（来源：删除类操作）/)).toBeTruthy();
     expect(view.getAllByRole("button", { name: "允许一次" })).toHaveLength(1);
     expect(view.queryByRole("button", { name: "在这里总是允许" })).toBeNull();
     cleanup();
