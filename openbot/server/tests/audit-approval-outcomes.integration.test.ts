@@ -1,4 +1,5 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { expect } from "bun:test";
+import { afterAll, beforeAll, test } from "./support/platform-frame";
 import { randomUUID } from "node:crypto";
 import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
@@ -35,6 +36,7 @@ import {
 import { users } from "../src/db/schema/core";
 import { createPluginStore } from "../src/plugins/store";
 import { workItems } from "../src/db/schema/work";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -97,9 +99,15 @@ const run = (snapshot: ApprovalContinuation, botId: string) => {
     signal: new AbortController().signal,
   });
 };
-const service = createApprovalService(store, undefined, (_actor, bot, snap) =>
-  run(snap, bot),
+// The fork settles an approved action on the approval row itself, as index.ts composes it.
+const service = createApprovalService(
+  store,
+  undefined,
+  (_actor, bot, snap) => run(snap, bot),
+  { settlement: "database" },
 );
+/** The owner's own rows are read and written as the owner, the way their signed-in requests are. */
+const asOwner = <T>(work: () => T) => runAsTenant(owner, work);
 const execute = (action: ApprovalAction) =>
   run(parseApprovalContinuation(action.continuation), action.botId);
 
@@ -116,11 +124,13 @@ app.route(
   }),
 );
 const post = (path: string, body: unknown) =>
-  app.request(`/api/approvals${path}`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  asOwner(() =>
+    app.request(`/api/approvals${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  );
 
 function call(
   toolName: string,
@@ -156,14 +166,16 @@ function call(
 
 const resume = async (id: string) => {
   const continued: { content: string; error?: string }[] = [];
-  await service.resume(owner, id, {
-    validate: (action) =>
-      service.validateReentry(action, () => execute(action)),
-    execute,
-    continue: async ({ result }) => {
-      continued.push(result);
-    },
-  });
+  await asOwner(() =>
+    service.resume(owner, id, {
+      validate: (action) =>
+        service.validateReentry(action, () => execute(action)),
+      execute,
+      continue: async ({ result }) => {
+        continued.push(result);
+      },
+    }),
+  );
   return continued;
 };
 
@@ -190,7 +202,7 @@ beforeAll(async () => {
   await database
     .insert(users)
     .values({ id: owner, email: `${owner}@example.test` });
-  await store.setEnabled(owner, true);
+  await asOwner(() => store.setEnabled(owner, true));
 });
 afterAll(async () => {
   await database.delete(mcpServers).where(eq(mcpServers.id, APP));

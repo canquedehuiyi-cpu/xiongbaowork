@@ -1384,8 +1384,9 @@ test("the enable's audit rows carry the app name and source and no command, path
   const rows = device.audits.filter(
     (row) => (row.payload as { action?: string }).action === "computer_app_enable",
   );
-  // Asked once, then carried out on the approval.
-  expect(rows.length).toBeGreaterThanOrEqual(2);
+  // Asked through the approval gate (its row is among the decisions below), then carried out on the
+  // approval: the attempt is recorded once, when it runs, never before the person was asked (M3).
+  expect(rows.map((row) => row.eventType)).toEqual(["computer.action_allowed"]);
   for (const row of rows)
     expect((row.payload as { app?: unknown }).app).toEqual({
       name: "fixture",
@@ -1399,6 +1400,11 @@ test("the enable's audit rows carry the app name and source and no command, path
       .from(auditEvents)
       .where(eq(auditEvents.actorUserId, device.tenant)),
   );
+  expect(
+    decisions
+      .map((row) => row.payload as { tool?: string })
+      .filter((payload) => payload.tool === "computer_app_enable").length,
+  ).toBeGreaterThanOrEqual(1);
   const written = JSON.stringify([
     rows,
     decisions,

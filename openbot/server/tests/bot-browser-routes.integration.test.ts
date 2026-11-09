@@ -4,7 +4,7 @@
 // narrates someone's recording, and the Bot's network lets the Recorder out only while a recording runs. The computer is
 // a stand-in that answers its routes exactly as the contract types them (shared/bot-browser.ts): slice 1 builds the real
 // ones.
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { describe, expect } from "bun:test";
 import { randomUUID } from "node:crypto";
 import {
   BOT_BROWSER_VIA,
@@ -57,6 +57,7 @@ import { createRecorderConnectionStore } from "../src/recorder/connections";
 import { createRecorderExtension } from "../src/recorder/wiring";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { SESSION_LIFETIME_MS, testEnvironment } from "./support/environment";
+import { afterAll, beforeAll, test } from "./support/platform-frame";
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const connections = createRecorderConnectionStore(database);

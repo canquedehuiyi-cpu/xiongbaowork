@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { describe, expect } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { Hono } from "hono";
 import {
@@ -13,6 +13,7 @@ import { users } from "../src/db/schema/core";
 import { createHostAccessBroker } from "../src/host-access/broker";
 import { createHostAccessRoutes } from "../src/host-access/routes";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { afterAll, beforeAll, test } from "./support/platform-frame";
 
 /**
  * Two rows Settings > Activity showed in the personal edition that a person could not read.

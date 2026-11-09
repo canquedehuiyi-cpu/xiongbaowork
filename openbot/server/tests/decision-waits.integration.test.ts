@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { describe, expect } from "bun:test";
 import { randomUUID } from "node:crypto";
 import {
   AbstractAgent,
@@ -27,6 +27,7 @@ import {
 } from "../src/db/schema/core";
 import { workItems } from "../src/db/schema/work";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { afterAll, beforeAll, test } from "./support/platform-frame";
 
 /**
  * A card a Bot asks with in the conversation (the form, the choice, the approval card) puts the Bot

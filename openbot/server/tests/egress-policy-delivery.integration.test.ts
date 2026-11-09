@@ -23,6 +23,7 @@ import {
 } from "../src/computer/provider";
 import { createDatabase } from "../src/db/client";
 import { networkPolicies } from "../src/db/schema";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -195,7 +196,8 @@ adminRoutes.route(
   "/api/admin/enterprise",
   createEnterpriseAdminRoutes(async (context, next) => {
     context.set("actor", admin);
-    await next();
+    // As the real `requireUser` does: the request runs as the person it names.
+    await runAsTenant(admin.id, () => next());
   }),
 );
 const setOrganizationPolicy = async (body: unknown) => {
@@ -207,15 +209,18 @@ const setOrganizationPolicy = async (body: unknown) => {
   expect(response.status).toBe(200);
 };
 
+/** The deployment's own settings, written and cleared as the platform (G01). */
 const removeOrganizationPolicy = () =>
-  database
-    .delete(networkPolicies)
-    .where(
-      and(
-        eq(networkPolicies.scopeKind, "organization"),
-        eq(networkPolicies.scopeId, ""),
+  runAsTenant("platform", () =>
+    database
+      .delete(networkPolicies)
+      .where(
+        and(
+          eq(networkPolicies.scopeKind, "organization"),
+          eq(networkPolicies.scopeId, ""),
+        ),
       ),
-    );
+  );
 
 beforeAll(async () => {
   console.info = capture("info");
@@ -223,19 +228,21 @@ beforeAll(async () => {
   console.error = capture("error");
   await removeOrganizationPolicy();
   // The administrator's policy: this one place, and nowhere else.
-  await database.insert(networkPolicies).values({
-    scopeKind: "organization",
-    scopeId: "",
-    mode: "allowlist_only",
-    rules: {
-      entries: [
-        { type: "cidr", value: "127.0.0.1/32", ports: String(ORIGIN_PORT) },
-      ],
-    },
-    locked: false,
-    updatedBy: admin.email,
-    updatedAt: new Date(),
-  });
+  await runAsTenant("platform", () =>
+    database.insert(networkPolicies).values({
+      scopeKind: "organization",
+      scopeId: "",
+      mode: "allowlist_only",
+      rules: {
+        entries: [
+          { type: "cidr", value: "127.0.0.1/32", ports: String(ORIGIN_PORT) },
+        ],
+      },
+      locked: false,
+      updatedBy: admin.email,
+      updatedAt: new Date(),
+    }),
+  );
   // The server first, as on a first install: nothing answers at the computer's address yet.
   controls = await installEnterpriseControls({
     database,

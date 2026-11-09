@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
+import { randomUUID } from "node:crypto";
 import type { RunAgentInput } from "@ag-ui/client";
+import { inArray, like } from "drizzle-orm";
 import { createActorAgentResolver } from "../src/agents/agent-resolver";
 import {
   agentAuthHeaders,
@@ -9,6 +11,11 @@ import { createAgentFetch } from "../src/agents/endpoint";
 import { loadConfig } from "../src/config";
 import { mountCopilotRuntime, registeredAgentFromRow } from "../src/copilot";
 import { encryptSecret } from "../src/credentials";
+import { createDatabase } from "../src/db/client";
+import { threadRuns, threads } from "../src/db/schema";
+import { runAsTenant } from "../src/tenant/context";
+import { PostgresAgentRunner } from "../src/threads/postgres-runner";
+import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
 
 /**
@@ -29,6 +36,12 @@ import { testEnvironment } from "./support/environment";
  */
 
 const ENCRYPTION_KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+/**
+ * M3: the fork keeps a person's threads in its own database and refuses to mount the runtime without
+ * that runner (`localRunnerOrRefused` in copilot.ts), so the runs here go through it.
+ */
+const database = createDatabase(testDatabaseUrl(), TEST_POOL);
+const suite = randomUUID().slice(0, 8);
 const LEAKED_BEARER = "Bearer leak-me";
 
 /** The headers a Bot's endpoint saw, one entry per request, keyed by which Bot it was. */
@@ -132,9 +145,13 @@ beforeAll(() => {
   });
 });
 
-afterAll(() => {
+afterAll(async () => {
   endpoint.stop(true);
   platform.stop(true);
+  await runAsTenant("platform", () =>
+    database.delete(threads).where(like(threads.id, `thread-%-${suite}`)),
+  );
+  await database.$client.close();
 });
 
 /**
@@ -185,6 +202,7 @@ function mount(bots: Awaited<ReturnType<typeof remoteBot>>[]) {
     }),
     async () => person,
     async () => ({ id: person.id, role: "user" }),
+    { localRunner: new PostgresAgentRunner(database) },
   );
 }
 
@@ -198,7 +216,7 @@ function inbound(path: string, runId: string) {
       "x-leak": "1",
     },
     body: JSON.stringify({
-      threadId: `thread-${runId}`,
+      threadId: `thread-${runId}-${suite}`,
       runId,
       state: {},
       messages: [{ id: `ask-${runId}`, role: "user", content: "Hello?" }],
@@ -207,17 +225,6 @@ function inbound(path: string, runId: string) {
       forwardedProps: {},
     } satisfies RunAgentInput),
   });
-}
-
-async function until(done: () => boolean, what: string) {
-  const deadline = Date.now() + 10_000;
-  while (!done()) {
-    if (Date.now() > deadline)
-      throw new Error(
-        `Timed out waiting for ${what}. Unanswered platform calls: ${unanswered.join(", ") || "none"}`,
-      );
-    await Bun.sleep(10);
-  }
 }
 
 test("a run sends a remote Bot its own key, and none of the request's headers", async () => {
@@ -232,13 +239,25 @@ test("a run sends a remote Bot its own key, and none of the request's headers", 
       inbound(`/agent/${bot}/run`, runId),
     );
     expect(response.status).toBe(200);
-    await until(
-      () =>
-        delivered.some(
-          (event) => event.runId === runId && event.type === "RUN_FINISHED",
-        ),
-      `${bot}'s run to finish`,
-    );
+    // M3: the fork's local runner streams the run back on the response itself, rather than to the
+    // Intelligence platform, so reading it to the end is the run.
+    expect(await response.text()).toContain("RUN_FINISHED");
+  }
+  // And each run is stored with its thread before the threads are cleared at the end.
+  const stored = ["keyed", "bearer"].map((bot) => `thread-run-${bot}-${suite}`);
+  const deadline = Date.now() + 10_000;
+  while (
+    (
+      await runAsTenant("platform", () =>
+        database
+          .select({ id: threadRuns.id })
+          .from(threadRuns)
+          .where(inArray(threadRuns.threadId, stored)),
+      )
+    ).length < stored.length
+  ) {
+    if (Date.now() > deadline) throw new Error("The runs were never stored.");
+    await Bun.sleep(10);
   }
 
   const keyed = seen.filter((request) => request.bot === "keyed");

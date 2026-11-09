@@ -33,6 +33,7 @@ import {
   users,
   workItems,
 } from "../src/db/schema";
+import { runAsTenant } from "../src/tenant/context";
 import { createWorkQueue } from "../src/work/queue";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
@@ -70,7 +71,12 @@ const createdUserIds: string[] = [];
 const createdAgentIds: string[] = [];
 const createdChannelIds: string[] = [];
 
-afterEach(async () => {
+const asPlatform = <T>(fn: () => T): T => runAsTenant("platform", fn);
+
+// Cleanup reaches every person's rows this file made, so it is the platform's question.
+afterEach(() => asPlatform(clearCreated));
+
+async function clearCreated() {
   for (const channelId of createdChannelIds.splice(0)) {
     await database.delete(workItems).where(eq(workItems.key, channelId));
     await database
@@ -87,7 +93,7 @@ afterEach(async () => {
   for (const userId of createdUserIds.splice(0)) {
     await database.delete(users).where(eq(users.id, userId));
   }
-});
+}
 
 afterAll(async () => {
   await database.$client.close();
@@ -153,7 +159,8 @@ function browserFor(actor: AuthenticatedActor) {
     next,
   ) => {
     context.set("actor", actor);
-    await next();
+    // A signed-in request runs in its person's own frame.
+    await runAsTenant(actor.id, () => next());
   };
   const app = new Hono<{ Variables: AppVariables }>();
   app.route("/api/channels", createChannelRoutes(store, requireUser));
@@ -203,26 +210,32 @@ function sidebarLine(row: {
 
 async function personWithBot() {
   const id = `${suite}-user-${randomUUID()}`;
-  await database.insert(users).values({
-    id,
-    email: `${id}@example.test`,
-    name: "Conversation Title Test User",
-  });
+  await runAsTenant(id, () =>
+    database.insert(users).values({
+      id,
+      email: `${id}@example.test`,
+      name: "Conversation Title Test User",
+    }),
+  );
   createdUserIds.push(id);
   const person: AuthenticatedActor = {
     id,
     email: `${id}@example.test`,
     role: "user",
   };
-  const bot = await profileStore.create(person, {
-    name: "General Assistant",
-    title: "Assistant",
-    roleDescription: "Help with anything.",
-    visibility: "private",
+  // The person's Bot and conversation are their own rows, made in their own frame.
+  const { bot, channel } = await runAsTenant(id, async () => {
+    const bot = await profileStore.create(person, {
+      name: "General Assistant",
+      title: "Assistant",
+      roleDescription: "Help with anything.",
+      visibility: "private",
+    });
+    createdAgentIds.push(bot.id);
+    const channel = await store.create(person, [bot.id]);
+    createdChannelIds.push(channel.id);
+    return { bot, channel };
   });
-  createdAgentIds.push(bot.id);
-  const channel = await store.create(person, [bot.id]);
-  createdChannelIds.push(channel.id);
   return { person, botId: bot.id, channel };
 }
 
@@ -265,7 +278,17 @@ async function nameIt(
   transcript: ThreadTranscript,
   title: ChannelTitler,
 ) {
-  await queue.offer({ kind: CHANNEL_SUMMARY_KIND, key: channelId });
+  // Offered from the conversation's own tenant, as the real offer does, so the row is that person's.
+  const [row] = await asPlatform(() =>
+    database
+      .select({ tenantId: channels.tenantId })
+      .from(channels)
+      .where(eq(channels.id, channelId)),
+  );
+  if (!row) throw new Error(`nameIt: no conversation ${channelId}`);
+  await runAsTenant(row.tenantId, () =>
+    queue.offer({ kind: CHANNEL_SUMMARY_KIND, key: channelId }),
+  );
   return await summariseClaimedChannels({
     database,
     queue,

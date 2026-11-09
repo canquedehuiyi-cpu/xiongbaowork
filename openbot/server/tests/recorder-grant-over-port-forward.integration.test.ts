@@ -10,7 +10,7 @@
 // Real paths: the real HTTP server, the app with the runtime and the Recorder's wiring mounted as
 // index.ts mounts them, a real database, and one real server standing in for Intelligence, answering
 // its trajectory join over HTTP and its gateway's `/client/websocket` as a socket.
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { beforeAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import {
   type ExchangeResponse,
@@ -23,7 +23,7 @@ import { createActorAgentResolver } from "../src/agents/agent-resolver";
 import type { AgentProfileStore } from "../src/agents/profile-store";
 import { createApp } from "../src/app";
 import type { AuditEventInput } from "../src/audit";
-import { DEV_ACTOR, initializeDevActorUser } from "../src/auth/dev-actor";
+import { initializeDevActorUser } from "../src/auth/dev-actor";
 import type { RoleRepository } from "../src/auth/guards";
 import { createStallGuard } from "../src/channels/stall-guard";
 import { loadConfig } from "../src/config";
@@ -34,12 +34,13 @@ import {
   recorderTrajectoryBindings,
 } from "../src/db/schema/recorder";
 import { startHttpServer } from "../src/http-server";
-import { INTELLIGENCE_CLIENT_SOCKET_PATH } from "../src/intelligence-gateway-proxy";
 import { personalLearningContainerId } from "../src/learning/personal-space";
 import { createRecorderExtension } from "../src/recorder/wiring";
 import { createRequestActor } from "../src/request-actor";
 import { ownOriginOnThisMachine } from "../src/request-trust";
+import { PostgresAgentRunner } from "../src/threads/postgres-runner";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { afterAll } from "./support/platform-frame";
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const RECORDER_ORIGIN = `chrome-extension://${RECORDER_EXTENSION_ID}`;
@@ -152,7 +153,11 @@ beforeAll(async () => {
     }),
     identifyUser,
     identifyActor,
-    { trajectoryCapture: recorder.trajectoryCapture },
+    // M3: the fork refuses to mount the runtime without its own thread runner (copilot.ts).
+    {
+      trajectoryCapture: recorder.trajectoryCapture,
+      localRunner: new PostgresAgentRunner(database),
+    },
   );
   /*
    * createApp is positional. Placed by index rather than after a spread of `undefined`s, whose length
@@ -245,57 +250,10 @@ function pass(headers: Record<string, string> = {}) {
 }
 
 describe("the Recorder's capture pass over a port-forward, with no public URL", () => {
-  test("names the gateway socket as a whole address on OpenBot, as the Recorder reached it", async () => {
-    const answer = await pass();
-
-    expect(answer.status).toBe(200);
-    const grant = (await answer.json()) as {
-      joinToken: string;
-      realtime: { clientUrl: string; topic: string };
-    };
-    expect(grant.realtime.clientUrl).toBe(
-      `ws://127.0.0.1:${port}${INTELLIGENCE_CLIENT_SOCKET_PATH}`,
-    );
-    expect(joins.at(-1)?.appUserId).toBe(DEV_ACTOR.id);
-  });
-
-  test("and that address carries the Recorder's socket through to the gateway", async () => {
-    const grant = (await (await pass()).json()) as {
-      joinToken: string;
-      realtime: { clientUrl: string; topic: string };
-    };
-    gatewaySockets.length = 0;
-    gatewayHeard.length = 0;
-    // As Phoenix opens it: `/websocket` after the address it was given, the join token in the query.
-    const socket = new WebSocket(
-      `${grant.realtime.clientUrl}/websocket?vsn=2.0.0&join_token=${grant.joinToken}`,
-      { headers: { origin: RECORDER_ORIGIN } } as unknown as string[],
-    );
-    const join = JSON.stringify([
-      "1",
-      "1",
-      grant.realtime.topic,
-      "phx_join",
-      {},
-    ]);
-    const echoed = await new Promise<string>((resolve, reject) => {
-      socket.onopen = () => socket.send(join);
-      socket.onmessage = (event) => resolve(String(event.data));
-      socket.onerror = () => reject(new Error("the socket failed"));
-      setTimeout(() => reject(new Error("timed out")), 5_000);
-    });
-    socket.close();
-
-    expect(echoed).toBe(join);
-    expect(gatewaySockets).toEqual([
-      {
-        path: "/client/websocket",
-        search: `?vsn=2.0.0&join_token=${grant.joinToken}`,
-      },
-    ]);
-    expect(gatewayHeard).toEqual([join]);
-  });
-
+  // M3: "names the gateway socket as a whole address on OpenBot" and "that address carries the
+  // Recorder's socket through to the gateway" are not kept: they need the Intelligence gateway proxy
+  // (INTELLIGENCE_GATEWAY_PROXY) and a runtime on Intelligence, which the fork does not adopt (its
+  // runtime runs on its own thread runner, so the capture pass answers INTELLIGENCE_RUNTIME_REQUIRED).
   test("never makes the address out of a name this machine does not answer to", async () => {
     const answer = await pass({ host: "openbot.attacker.example" });
 
@@ -303,15 +261,8 @@ describe("the Recorder's capture pass over a port-forward, with no public URL", 
     expect(await answer.text()).not.toContain("attacker");
   });
 
-  test("leaves the page's address a path, which the page resolves against itself", async () => {
-    const info = await fetch(`http://127.0.0.1:${port}/api/copilotkit/info`);
-
-    expect(info.status).toBe(200);
-    expect(
-      ((await info.json()) as { intelligence?: { wsUrl?: string } })
-        .intelligence?.wsUrl,
-    ).toBe(INTELLIGENCE_CLIENT_SOCKET_PATH);
-  });
+  // M3: "leaves the page's address a path" is not kept: the page's socket path comes from the
+  // Intelligence gateway proxy, which the fork does not adopt.
 });
 
 describe("OpenBot's own origin, as a caller on this machine reached it", () => {

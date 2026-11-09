@@ -1,11 +1,4 @@
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  describe,
-  expect,
-  test,
-} from "bun:test";
+import { describe, expect } from "bun:test";
 import { randomUUID } from "node:crypto";
 import {
   CALLS_RECORDED_AS_CHANGES,
@@ -22,6 +15,12 @@ import { dataFunction } from "../src/components/functions";
 import { createDatabase } from "../src/db/client";
 import { setEdition } from "../src/edition";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  test,
+} from "./support/platform-frame";
 
 /**
  * The Activity report counts what the person's Activity page shows. Seen on Windows (personal

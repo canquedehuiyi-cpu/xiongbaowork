@@ -1,4 +1,4 @@
-import { afterAll, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { and, inArray } from "drizzle-orm";
 import { z } from "zod";
@@ -8,8 +8,10 @@ import { createApprovalQuestions } from "../src/approvals/questions";
 import { loadConfig } from "../src/config";
 import { createDatabase } from "../src/db/client";
 import { workItems } from "../src/db/schema/work";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
+import { afterAll } from "./support/platform-frame";
 
 /**
  * A question the person answers in their own words.
@@ -49,7 +51,11 @@ async function askPersonTool(threadId: string) {
       send: async () => ({ ok: false, refusal: "No Bot to hand to." }),
     } as never,
     config: loadConfig(testEnvironment()),
-    approvalService: { store: {} } as never,
+    // The fork filters out tools the person disabled (SEC1 D4); none are disabled here.
+    approvalService: {
+      store: {},
+      disabledTools: async () => () => false,
+    } as never,
     agentProfileStore: {
       get: async () => ({ name: "General Assistant" }),
       list: async () => [],
@@ -95,7 +101,9 @@ test.each([
   ],
 ])(
   "a decision with %s is put to the person and saved for the card",
-  async (_name, sent, saved) => {
+  // A Bot's run, and the person's inbox, are the owner's: both run in the owner's tenant frame.
+  (_name, sent, saved) =>
+    runAsTenant(owner, async () => {
     const threadId = `${prefix}-thread-${randomUUID()}`;
     const askPerson = await askPersonTool(threadId);
 
@@ -125,5 +133,5 @@ test.each([
     asked.push(waiting.id);
     expect(waiting.question).toBe(CITY.question);
     expect(waiting.parts).toEqual([saved]);
-  },
+    }),
 );

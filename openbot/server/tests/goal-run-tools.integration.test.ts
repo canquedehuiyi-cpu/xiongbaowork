@@ -1,11 +1,4 @@
-import {
-  afterAll,
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  test,
-} from "bun:test";
+import { describe, expect, test as bunTest } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
@@ -31,11 +24,13 @@ import { grantedTools } from "../src/plugins/tools";
 import { withoutGoalCopiesInGoalRun } from "../src/responsibilities/chat-tools";
 import { responsibilityTools } from "../src/responsibilities/tools";
 import { loadTenantPackage } from "../src/tenant-package";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import {
   type OpenAICompatibleEndpoint,
   startOpenAICompatibleEndpoint,
 } from "./support/openai-compatible-endpoint";
+import { afterAll, afterEach, beforeEach } from "./support/platform-frame";
 
 /**
  * The tools a goal's own run puts in front of the model, one per job.
@@ -80,15 +75,22 @@ async function ensureRoutines(bots: readonly string[]) {
     await pluginStore.addServer({ key: ALWAYS_ON_APP, by: "boot" });
   await pluginStore.refreshTools(ALWAYS_ON_APP);
   const tools = await listRoutineTools();
-  for (const bot of bots)
-    for (const tool of tools)
-      await pluginStore.grant(
-        "mcp",
-        `${ALWAYS_ON_APP}/${tool.name}`,
-        bot,
-        "boot",
-      );
+  // Granted in the Bots' owner's frame, where a private Bot's grants belong (G01).
+  await runAsTenant(OWNER, async () => {
+    for (const bot of bots)
+      for (const tool of tools)
+        await pluginStore.grant(
+          "mcp",
+          `${ALWAYS_ON_APP}/${tool.name}`,
+          bot,
+          "boot",
+        );
+  });
 }
+
+/** Each case is the owner's Bot's run: it runs in the owner's tenant frame (G01). */
+const test = (name: string, body: () => Promise<void>) =>
+  bunTest(name, () => runAsTenant(OWNER, body));
 
 
 const VARIABLES = [
@@ -184,18 +186,21 @@ beforeEach(async () => {
     email: `${OWNER}@example.test`,
     name: "Goal Run Tools Test User",
   });
-  await database.insert(agents).values({
-    id: BOT,
-    name: "Personal Assistant",
-    type: "built_in",
-    configuration: { systemPrompt: "You are a personal assistant." },
-  });
-  await database.insert(agentProfiles).values({
-    agentId: BOT,
-    title: "",
-    roleDescription: "",
-    avatarSeed: BOT,
-    visibility: "private",
+  // The owner's private Bot, written in the owner's frame.
+  await runAsTenant(OWNER, async () => {
+    await database.insert(agents).values({
+      id: BOT,
+      name: "Personal Assistant",
+      type: "built_in",
+      configuration: { systemPrompt: "You are a personal assistant." },
+    });
+    await database.insert(agentProfiles).values({
+      agentId: BOT,
+      title: "",
+      roleDescription: "",
+      avatarSeed: BOT,
+      visibility: "private",
+    });
   });
   routinesWereAdded =
     routinesWereAdded ||

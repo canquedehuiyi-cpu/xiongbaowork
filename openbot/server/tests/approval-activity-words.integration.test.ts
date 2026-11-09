@@ -5,6 +5,7 @@ import { createActivityStore } from "../src/activity/activity";
 import { createDatabase } from "../src/db/client";
 import { approvalRequests } from "../src/db/schema/approvals";
 import { users } from "../src/db/schema/core";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -55,10 +56,11 @@ function pending(
 }
 
 beforeAll(async () => {
-  await database
-    .insert(users)
-    .values({ id: owner, email: `${owner}@example.test` });
-  await database.insert(approvalRequests).values([
+  // The person is the platform's row; their approvals are theirs, written in their own tenant.
+  await runAsTenant("platform", () =>
+    database.insert(users).values({ id: owner, email: `${owner}@example.test` }),
+  );
+  await runAsTenant(owner, () => database.insert(approvalRequests).values([
     pending(
       "click",
       "computer_click",
@@ -74,19 +76,26 @@ beforeAll(async () => {
       snapshotId: 4,
       text: "monty python",
     }),
-  ]);
+  ]));
 });
 
 afterAll(async () => {
-  await database
-    .delete(approvalRequests)
-    .where(eq(approvalRequests.ownerUserId, owner));
-  await database.delete(users).where(inArray(users.id, [owner]));
+  await runAsTenant(owner, () =>
+    database
+      .delete(approvalRequests)
+      .where(eq(approvalRequests.ownerUserId, owner)),
+  );
+  await runAsTenant("platform", () =>
+    database.delete(users).where(inArray(users.id, [owner])),
+  );
   await database.$client.end({ timeout: 5 });
 });
 
 test("a pending computer approval's Activity row is said in words, with no tool id or effect", async () => {
-  const rows = (await activity.forBot(owner, bot)).inProgress.filter(
+  // The Bot's page reads in its person's own tenant.
+  const rows = (
+    await runAsTenant(owner, () => activity.forBot(owner, bot))
+  ).inProgress.filter(
     (item) => item.kind === "approval",
   );
   const byId = Object.fromEntries(

@@ -373,23 +373,26 @@ export function createRecorderConnectionStore(
     /**
      * The live connections stored under one install id and made `via` this, whoever they belong to, oldest first: a Bot's
      * browser holds one for each person recording in it (browser/bot-browser.ts), and the Bot's browser, not any one
-     * person, is what is asked about.
+     * person, is what is asked about. Read as `platform` (G01): whoever reads the Bot's browser must see everybody's
+     * connections there, or another person's left-behind one would be invisible to them and never ended.
      */
     async atInstall(
       installId: string,
       via: RecorderConnectVia,
     ): Promise<(RecorderConnection & { userId: string })[]> {
-      const rows = await database
-        .select()
-        .from(recorderConnections)
-        .where(
-          and(
-            eq(recorderConnections.installId, installId),
-            eq(recorderConnections.via, via),
-            live(now()),
-          ),
-        )
-        .orderBy(asc(recorderConnections.createdAt));
+      const rows = await asPlatform(() =>
+        database
+          .select()
+          .from(recorderConnections)
+          .where(
+            and(
+              eq(recorderConnections.installId, installId),
+              eq(recorderConnections.via, via),
+              live(now()),
+            ),
+          )
+          .orderBy(asc(recorderConnections.createdAt)),
+      );
       return rows.map((row) => ({
         ...connectionView(row),
         userId: row.userId,

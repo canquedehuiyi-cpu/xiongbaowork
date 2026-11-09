@@ -1,12 +1,4 @@
-import {
-  afterAll,
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  spyOn,
-  test,
-} from "bun:test";
+import { describe, expect, spyOn } from "bun:test";
 import { randomUUID } from "node:crypto";
 import type { AbstractAgent, BaseEvent } from "@ag-ui/client";
 import { answeredBy, answerMessageId } from "@openbot/shared/handoff-markers";
@@ -46,12 +38,14 @@ import {
 } from "../src/db/schema";
 import { observeIntelligenceAuthentication } from "../src/intelligence-client";
 import { loadTenantPackage } from "../src/tenant-package";
+import { runAsTenant } from "../src/tenant/context";
 import { createWorkQueue } from "../src/work/queue";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import {
   type OpenAICompatibleEndpoint,
   startOpenAICompatibleEndpoint,
 } from "./support/openai-compatible-endpoint";
+import { afterAll, afterEach, beforeEach, test } from "./support/platform-frame";
 
 /**
  * One Bot asking another, from the tool call to the answer in the person's conversation, across two
@@ -428,30 +422,36 @@ async function clean() {
 
 beforeEach(async () => {
   await clean();
-  for (const [id, name] of [
-    [ASKER, "General Assistant"],
-    [KNOWLEDGE, "Knowledge"],
-    [RESEARCH, "Research"],
-  ]) {
-    await database
-      .insert(agents)
-      .values({ id, name, type: "built_in", configuration: {} })
-      .onConflictDoNothing();
-    await database
-      .insert(agentProfiles)
-      .values({
-        agentId: id,
-        title: "",
-        roleDescription: "",
-        avatarSeed: id,
-        visibility: "public",
-      })
-      .onConflictDoNothing();
-  }
-  await database
-    .insert(pluginGrants)
-    .values({ kind: "bot", ref: KNOWLEDGE, agentId: ASKER, grantedBy: "test" })
-    .onConflictDoNothing();
+  // Built-in Bots are the deployment's catalogue (`system`), which every person's run must read.
+  await runAsTenant("system", async () => {
+    for (const [id, name] of [
+      [ASKER, "General Assistant"],
+      [KNOWLEDGE, "Knowledge"],
+      [RESEARCH, "Research"],
+    ]) {
+      await database
+        .insert(agents)
+        .values({ id, name, type: "built_in", configuration: {} })
+        .onConflictDoNothing();
+      await database
+        .insert(agentProfiles)
+        .values({
+          agentId: id,
+          title: "",
+          roleDescription: "",
+          avatarSeed: id,
+          visibility: "public",
+        })
+        .onConflictDoNothing();
+    }
+  });
+  // The grant is configuration made in the person's own tenant, where every hop here is asked.
+  await runAsTenant(ACTOR, () =>
+    database
+      .insert(pluginGrants)
+      .values({ kind: "bot", ref: KNOWLEDGE, agentId: ASKER, grantedBy: "test" })
+      .onConflictDoNothing(),
+  );
 });
 
 const stops: (() => void)[] = [];
@@ -513,14 +513,17 @@ describe("one Bot asking another, on two replicas", () => {
       maxDepth: 2,
       maxPerRun: 3,
     });
-    const handed = await tool?.execute({
-      bot: KNOWLEDGE,
-      task: "Describe, in exactly two sentences, what kinds of questions you are set up to answer and which sources you can use.",
-      constraints:
-        "Do not answer any other question. Keep it concise and factual.",
-      expecting:
-        "Exactly two sentences suitable to relay directly to the person.",
-    });
+    // Inside the person's own tenant, which is where a Bot's run always is.
+    const handed = await runAsTenant(ACTOR, () =>
+      tool?.execute({
+        bot: KNOWLEDGE,
+        task: "Describe, in exactly two sentences, what kinds of questions you are set up to answer and which sources you can use.",
+        constraints:
+          "Do not answer any other question. Keep it concise and factual.",
+        expecting:
+          "Exactly two sentences suitable to relay directly to the person.",
+      }),
+    );
     expect(String(handed)).toStartWith("Handed to Knowledge");
 
     // The hop on one replica, the answer going home on the other.
@@ -601,22 +604,24 @@ describe("one Bot asking another, on two replicas", () => {
         botNames: botNamesFrom(database),
       }),
     });
-    const handed = await handoffTool({
-      desk,
-      from: {
-        botId: ASKER,
-        actorId: ACTOR,
-        runId: `asking-run-again-${suite}`,
-        threadId: THREAD,
-        depth: 0,
-      },
-      hasSomebodyToAsk: true,
-      maxDepth: 2,
-      maxPerRun: 3,
-    })?.execute({
-      bot: KNOWLEDGE,
-      task: "Say what kinds of questions you answer.",
-    });
+    const handed = await runAsTenant(ACTOR, () =>
+      handoffTool({
+          desk,
+          from: {
+            botId: ASKER,
+            actorId: ACTOR,
+            runId: `asking-run-again-${suite}`,
+            threadId: THREAD,
+            depth: 0,
+          },
+          hasSomebodyToAsk: true,
+          maxDepth: 2,
+          maxPerRun: 3,
+      })?.execute({
+          bot: KNOWLEDGE,
+          task: "Say what kinds of questions you answer.",
+      }),
+    );
     expect(String(handed)).toStartWith("Handed to Knowledge");
     expect((await delivery.sweep()).delivered).toContain(KNOWLEDGE);
 
@@ -683,7 +688,9 @@ describe("one Bot asking another, on two replicas", () => {
       threadId: THREAD,
       depth: 0,
     };
-    const offered = (await coordination.toolsForRun(run)).find(
+    const offered = (
+      await runAsTenant(ACTOR, () => coordination.toolsForRun(run))
+    ).find(
       (tool) => tool.name === "message_bot",
     );
     // Offered the names it can ask, so it has nothing to guess: Knowledge, and not Research.
@@ -693,15 +700,17 @@ describe("one Bot asking another, on two replicas", () => {
     );
 
     // The call the model made in the run that found this, through the same dispatch a run uses.
-    const handed = await coordination.call({
-      name: "message_bot",
-      args: {
-        bot: "Knowledge Bot",
-        task: "Describe, in exactly two sentences, what kinds of questions you are set up to answer and which sources you can use.",
-        expecting: "Exactly two sentences for the person.",
-      },
-      run,
-    });
+    const handed = await runAsTenant(ACTOR, () =>
+      coordination.call({
+        name: "message_bot",
+        args: {
+          bot: "Knowledge Bot",
+          task: "Describe, in exactly two sentences, what kinds of questions you are set up to answer and which sources you can use.",
+          expecting: "Exactly two sentences for the person.",
+        },
+        run,
+      }),
+    );
     expect(handed).toMatchObject({ isError: false });
     expect(handed?.text).toStartWith("Handed to Knowledge");
 
@@ -866,22 +875,24 @@ describe("an answer that comes home while the asking Bot is still finishing", ()
       });
     // General Assistant's run, which holds its conversation until it has finished saying it asked.
     locks.hold(THREAD, `asking-run-${suite}`);
-    const handed = await handoffTool({
-      desk,
-      from: {
-        botId: ASKER,
-        actorId: ACTOR,
-        runId: `asking-run-${suite}`,
-        threadId: THREAD,
-        depth: 0,
-      },
-      hasSomebodyToAsk: true,
-      maxDepth: 2,
-      maxPerRun: 3,
-    })?.execute({
-      bot: KNOWLEDGE,
-      task: "Describe, in exactly two sentences, what kinds of questions you are set up to answer and which sources you can use.",
-    });
+    const handed = await runAsTenant(ACTOR, () =>
+      handoffTool({
+          desk,
+          from: {
+            botId: ASKER,
+            actorId: ACTOR,
+            runId: `asking-run-${suite}`,
+            threadId: THREAD,
+            depth: 0,
+          },
+          hasSomebodyToAsk: true,
+          maxDepth: 2,
+          maxPerRun: 3,
+      })?.execute({
+          bot: KNOWLEDGE,
+          task: "Describe, in exactly two sentences, what kinds of questions you are set up to answer and which sources you can use.",
+      }),
+    );
     expect(String(handed)).toStartWith("Handed to Knowledge");
     return { intelligence, locks, replica };
   }

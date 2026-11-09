@@ -25,7 +25,13 @@ import { testDatabaseUrl } from "./support/database";
  * fifty-odd real ones twice per case.
  */
 
-const server = new URL(testDatabaseUrl());
+/*
+ * The fork's suite connects as `openbot_app`, which may not create databases or tables. A throwaway
+ * database is made, migrated and dropped as the owner (`TEST_DATABASE_ADMIN_URL`), who runs the real
+ * migrations too; without one this falls back to the test URL's own credentials, as upstream does.
+ */
+const owner = process.env.TEST_DATABASE_ADMIN_URL?.trim();
+const server = new URL(owner || testDatabaseUrl());
 const administrative = new URL(server.href);
 administrative.pathname = "/postgres";
 

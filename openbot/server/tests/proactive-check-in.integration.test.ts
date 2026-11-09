@@ -1,10 +1,9 @@
 import {
-  afterAll,
-  beforeAll,
-  beforeEach,
+  beforeAll as bunBeforeAll,
+  beforeEach as bunBeforeEach,
+  test as bunTest,
   describe,
   expect,
-  test,
 } from "bun:test";
 import { randomUUID } from "node:crypto";
 import {
@@ -62,6 +61,8 @@ import {
 import { CHECK_IN_OPENING } from "../src/proactive/window";
 import { createWorkQueue } from "../src/work/queue";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { runAsTenant } from "../src/tenant/context";
+import { afterAll } from "./support/platform-frame";
 
 /*
  * Check-ins and pings through the real path: real Postgres, the real proactive and delivery stores,
@@ -88,6 +89,22 @@ const inboxChannel = `check-in-inbox-channel-${suite}`;
 const calendarChannel = `check-in-calendar-channel-${suite}`;
 const taskChannel = `check-in-task-channel-${suite}`;
 const device = `check-in-device-${suite}`;
+
+/*
+ * The fixtures and every case run as the person the check-ins are for (G01): a setting, item or
+ * ping written in any other frame is stamped as nobody's, and the engine refuses to run it. The
+ * engine itself switches to the platform where it asks what is due. Only the final cleanup, which
+ * also removes catalogue rows, runs as the platform.
+ */
+const asOwner =
+  (body: () => unknown) =>
+  async (): Promise<void> => {
+    await runAsTenant(owner, body);
+  };
+const test = (name: string, body: () => unknown, timeout?: number) =>
+  bunTest(name, asOwner(body), timeout);
+const beforeAll = (body: () => unknown) => bunBeforeAll(asOwner(body));
+const beforeEach = (body: () => unknown) => bunBeforeEach(asOwner(body));
 
 const auditStore = createAuditStore(database);
 const plugins = createPluginStore({
@@ -142,36 +159,39 @@ beforeAll(async () => {
       description: "",
     })),
   );
-  await database.insert(mcpServers).values([
-    {
-      id: mail,
-      title: "Mail",
-      vendor: "Fixture",
-      url: "https://mail.example.test/mcp",
-      provenance: "custom",
-    },
-    {
-      id: diary,
-      title: "Calendar",
-      vendor: "Fixture",
-      url: "https://calendar.example.test/mcp",
-      provenance: "custom",
-    },
-  ]);
-  await database.insert(mcpTools).values([
-    {
-      serverId: mail,
-      name: "list_messages",
-      effect: "read",
-      inputSchema: {},
-    },
-    {
-      serverId: diary,
-      name: "list_events",
-      effect: "read",
-      inputSchema: {},
-    },
-  ]);
+  // The apps are catalogue rows, which every person reads: written as the system's.
+  await runAsTenant("system", async () => {
+    await database.insert(mcpServers).values([
+      {
+        id: mail,
+        title: "Mail",
+        vendor: "Fixture",
+        url: "https://mail.example.test/mcp",
+        provenance: "custom",
+      },
+      {
+        id: diary,
+        title: "Calendar",
+        vendor: "Fixture",
+        url: "https://calendar.example.test/mcp",
+        provenance: "custom",
+      },
+    ]);
+    await database.insert(mcpTools).values([
+      {
+        serverId: mail,
+        name: "list_messages",
+        effect: "read",
+        inputSchema: {},
+      },
+      {
+        serverId: diary,
+        name: "list_events",
+        effect: "read",
+        inputSchema: {},
+      },
+    ]);
+  });
   await deliveries.registerDevice({
     id: device,
     ownerUserId: owner,

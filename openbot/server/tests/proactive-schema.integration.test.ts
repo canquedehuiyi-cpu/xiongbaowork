@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { expect } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { eq, inArray } from "drizzle-orm";
 import { createDatabase } from "../src/db/client";
@@ -12,6 +12,7 @@ import {
 } from "../src/db/schema/proactive";
 import { botTasks } from "../src/db/schema/tasks";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { afterAll, beforeAll, test } from "./support/platform-frame";
 
 /*
  * The database half of check-ins: the backstops that hold when two replicas race, which no code

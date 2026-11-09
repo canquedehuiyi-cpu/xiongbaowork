@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { randomUUID } from "node:crypto";
 import type { RunAgentInput } from "@ag-ui/client";
+import { inArray, like } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
 import { createActorAgentResolver } from "../src/agents/agent-resolver";
 import { createAgentFetch, onThisMachine } from "../src/agents/endpoint";
@@ -7,6 +9,11 @@ import { createAgentRoutes } from "../src/agents/routes";
 import type { AppVariables } from "../src/auth/guards";
 import { loadConfig } from "../src/config";
 import { mountCopilotRuntime, registeredAgentFromRow } from "../src/copilot";
+import { createDatabase } from "../src/db/client";
+import { threadRuns, threads } from "../src/db/schema";
+import { runAsTenant } from "../src/tenant/context";
+import { PostgresAgentRunner } from "../src/threads/postgres-runner";
+import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
 
 /**
@@ -29,6 +36,14 @@ import { testEnvironment } from "./support/environment";
  */
 
 const SETTING = "OPENBOT_THIS_MACHINE_HOST";
+/**
+ * M3: the fork keeps a person's threads in its own database and refuses to mount the runtime without
+ * that runner (`localRunnerOrRefused` in copilot.ts), so the runs here go through it.
+ */
+const database = createDatabase(testDatabaseUrl(), TEST_POOL);
+const suite = randomUUID().slice(0, 8);
+/** The threads the runs below started, cleared once each run is stored. */
+const started: string[] = [];
 
 /** The `Host` each request to the agent arrived with. */
 const hosts: string[] = [];
@@ -125,9 +140,26 @@ beforeAll(() => {
   });
 });
 
-afterAll(() => {
+afterAll(async () => {
   agent.stop(true);
   platform.stop(true);
+  await runAsTenant("platform", async () => {
+    // Each run is stored after its stream ends: cleared only once it is, or the store trips on it.
+    const deadline = Date.now() + 10_000;
+    while (
+      started.length > 0 &&
+      (
+        await database
+          .select({ id: threadRuns.id })
+          .from(threadRuns)
+          .where(inArray(threadRuns.threadId, started))
+      ).length < started.length &&
+      Date.now() < deadline
+    )
+      await Bun.sleep(10);
+    await database.delete(threads).where(like(threads.id, `thread-%-${suite}`));
+  });
+  await database.$client.close();
 });
 
 /** The deployment's configuration, with or without the Desktop's setting. */
@@ -229,7 +261,8 @@ describe("testing an agent on the person's own machine", () => {
       `http://127.0.0.1:${agent.port}/ag-ui`,
     );
     expect(moved.ok).toBe(false);
-    expect(moved.reason).toContain("may not live there");
+    // The fork's sentence for it, in Chinese: an employee's service may not live there.
+    expect(moved.reason).toContain("这里不能放员工的服务");
     expect(hosts).toEqual([]);
   });
 });
@@ -263,14 +296,16 @@ describe("running a Bot whose agent is on the person's own machine", () => {
       }),
       async () => person,
       async () => ({ id: person.id, role: "user" }),
+      { localRunner: new PostgresAgentRunner(database) },
     );
     const runId = `run-${crypto.randomUUID()}`;
+    started.push(`thread-${runId}-${suite}`);
     const response = await runtime.handler.fetch(
       new Request("http://127.0.0.1/api/copilotkit/agent/mine/run", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          threadId: `thread-${runId}`,
+          threadId: `thread-${runId}-${suite}`,
           runId,
           state: {},
           messages: [{ id: `ask-${runId}`, role: "user", content: "Hello?" }],
@@ -281,15 +316,9 @@ describe("running a Bot whose agent is on the person's own machine", () => {
       }),
     );
     expect(response.status).toBe(200);
-    const deadline = Date.now() + 8_000;
-    while (
-      !delivered.some(
-        (event) => event.runId === runId && event.type === "RUN_FINISHED",
-      )
-    ) {
-      if (Date.now() > deadline) throw new Error("the run never finished");
-      await Bun.sleep(10);
-    }
+    // M3: the fork's local runner streams the run back on the response itself, so reading it to
+    // the end is the run.
+    expect(await response.text()).toContain("RUN_FINISHED");
   }
 
   test("with the setting, the run reaches the agent through the name it gives", async () => {

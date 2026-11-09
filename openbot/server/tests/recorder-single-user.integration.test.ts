@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { expect } from "bun:test";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { ExchangeResponse } from "@openbot/shared/recorder-api";
 import { RECORDER_EXTENSION_ID } from "@openbot/shared/recorder-extension";
@@ -14,6 +14,7 @@ import { personalLearningContainerId } from "../src/learning/personal-space";
 import { RECORDER_BEARER } from "../src/recorder/guard";
 import { createRecorderExtension } from "../src/recorder/wiring";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { afterAll, beforeAll, test } from "./support/platform-frame";
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const other = `recorder-single-${randomUUID()}-other`;

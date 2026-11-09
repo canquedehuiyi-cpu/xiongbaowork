@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, test } from "bun:test";
+import { describe, expect } from "bun:test";
 import { randomUUID } from "node:crypto";
 import {
   type BaseEvent,
@@ -56,6 +56,7 @@ import { createTaskStore } from "../src/tasks/store";
 import { createTaskTurn } from "../src/tasks/turn";
 import { createWorkQueue } from "../src/work/queue";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { afterAll, test } from "./support/platform-frame";
 
 /**
  * Tasks through the paths a person's Start takes: the real stores, the real work queue, the real

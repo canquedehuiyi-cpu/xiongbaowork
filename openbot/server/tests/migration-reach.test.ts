@@ -358,32 +358,7 @@ describe("the migrations this repository ships", () => {
     ).toEqual([]);
   });
 
-  test("do not reach a database that ran the arcade branch before it was merged", async () => {
-    /*
-     * The incident, pinned, because it is the only shape of this failure anybody has actually met.
-     *
-     * Before the merge, the arcade work shipped as `0053_adorable_frank_castle` (1791773482676) and
-     * `0054_spicy_wallflower` (1791774497487). The merge renumbered it to `0057_arcade_provider`
-     * (1791908858814, since squashed and restamped) and put main's `0053_identity_links` (1791547580808) in its place — a stamp
-     * OLDER than what such a database had already recorded. Everything up to `0052` is byte for
-     * byte the same file on both sides of the merge, so those rows are built from this folder.
-     *
-     * The expected answer is one name, and it is the migration whose two tables were missing from
-     * the reproduction: `identity_links` and `identity_link_challenges`.
-     */
-    const folder = await readMigrationFolder(
-      new URL("../drizzle/", import.meta.url).pathname,
-    );
-    const asShipped = [
-      ...folder
-        .filter((entry) => entry.when <= 1791396757748)
-        .map((entry) => applied(entry.hash, entry.when)),
-      applied("0053_adorable_frank_castle", 1791773482676),
-      applied("0054_spicy_wallflower", 1791774497487),
-    ];
-
-    expect(
-      migrationsOutOfReach(folder, asShipped).map((entry) => entry.tag),
-    ).toEqual(["0053_identity_links"]);
-  });
+  // M3: upstream's arcade-branch incident (a database that ran upstream's pre-merge arcade
+  // migrations) cannot happen to this fork, which never shipped Arcade, and the fork's own 0074..0080
+  // carry stamps older than that branch's, so the pinned answer is upstream's folder only.
 });

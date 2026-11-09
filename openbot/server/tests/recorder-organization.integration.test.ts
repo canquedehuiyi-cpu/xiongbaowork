@@ -1,11 +1,4 @@
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  beforeEach,
-  expect,
-  test,
-} from "bun:test";
+import { expect } from "bun:test";
 import { randomUUID } from "node:crypto";
 import {
   type ExchangeResponse,
@@ -25,6 +18,8 @@ import { recorderConnections } from "../src/db/schema/recorder";
 import { clearDesktopConnectionFailure } from "../src/desktop-connection-failure";
 import { createRecorderExtension } from "../src/recorder/wiring";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { afterAll, afterEach, beforeAll, beforeEach, test } from "./support/platform-frame";
+import { bindTestRoleWriter } from "./support/role-writer";
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const prefix = `recorder-organization-${randomUUID()}`;
@@ -145,7 +140,10 @@ beforeEach(() => {
 });
 afterEach(clearOrganizationFailure);
 
-beforeAll(() => {
+/** Signing in through the organization writes the person's role, which only the role writer may. */
+let releaseRoleWriter: (() => Promise<void>) | undefined;
+beforeAll(async () => {
+  releaseRoleWriter = await bindTestRoleWriter(database);
   Date.now = () => realNow() + skewMs;
   const organizationAuth = createOrganizationAuth({
     authorityUrl: config.organizationAuthUrl as string,
@@ -184,6 +182,7 @@ afterAll(async () => {
   Date.now = realNow;
   authority.stop(true);
   await database.delete(users).where(eq(users.email, person.email));
+  await releaseRoleWriter?.();
   await database.$client.close();
 });
 

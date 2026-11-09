@@ -1,4 +1,4 @@
-import { afterAll, afterEach, describe, expect, test } from "bun:test";
+import { describe, expect } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { CopilotKitIntelligence } from "@copilotkit/runtime/v2";
 import { eq, inArray } from "drizzle-orm";
@@ -12,6 +12,7 @@ import { createLearningRuntime } from "../src/learning/runtime";
 import { createLearningSettingsStore } from "../src/learning/settings";
 import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { afterAll, afterEach, test } from "./support/platform-frame";
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const threads: string[] = [];

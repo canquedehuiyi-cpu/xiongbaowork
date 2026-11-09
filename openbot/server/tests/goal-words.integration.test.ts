@@ -1,4 +1,10 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import {
+  afterAll as bunAfterAll,
+  beforeAll as bunBeforeAll,
+  describe,
+  expect,
+  test as bunTest,
+} from "bun:test";
 import { randomUUID } from "node:crypto";
 import { buildResponsibilityTurn } from "@openbot/shared/responsibility-turn";
 import { readToolName } from "@openbot/shared/tool-name";
@@ -10,6 +16,7 @@ import { markUntrusted } from "../src/untrusted-content";
 import { createResponsibilityStore } from "../src/responsibilities/store";
 import { responsibilityTools } from "../src/responsibilities/tools";
 import { TRIGGER_TOOLS } from "../src/responsibilities/trigger-tools";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -28,6 +35,19 @@ const SAYS_RESPONSIBILITY = /responsibilit/i;
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const prefix = `goal-words-${randomUUID()}`;
 const ownerId = `${prefix}-owner`;
+
+/**
+ * Everything here is one person's: written and read in their own frame, as their signed-in requests
+ * and the work done for them run. Sweeps still claim as the platform and run each row as the tenant
+ * stamped on it.
+ */
+const asOwner = (body: () => unknown) => async () => {
+  await runAsTenant(ownerId, body);
+};
+const afterAll = (body: () => unknown) => bunAfterAll(asOwner(body));
+const beforeAll = (body: () => unknown) => bunBeforeAll(asOwner(body));
+const test = (name: string, body: () => unknown, timeout?: number) =>
+  bunTest(name, asOwner(body), timeout);
 const botId = `${prefix}-bot`;
 const channelId = `${prefix}-channel`;
 const store = createResponsibilityStore(database, {
@@ -149,7 +169,8 @@ describe("a goal's triggers, in a conversation", () => {
   test("are offered in a goal's words, pointing at the Goals page", () => {
     const offered = JSON.stringify(TRIGGER_TOOLS);
     expect(offered).not.toMatch(SAYS_RESPONSIBILITY);
-    expect(offered).toContain("the Bot's Goals page");
+    // M3: the fork's goals live on one Goals page (长期职责), not on each Bot's own page.
+    expect(offered).toContain("the Goals page");
   });
 });
 

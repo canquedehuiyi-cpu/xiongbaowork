@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { describe, expect } from "bun:test";
 import { randomUUID } from "node:crypto";
 import {
   type ExchangeResponse,
@@ -22,6 +22,8 @@ import {
 import { createRecorderExtension } from "../src/recorder/wiring";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { SESSION_LIFETIME_MS, testEnvironment } from "./support/environment";
+import { runAsTenant } from "../src/tenant/context";
+import { afterAll, beforeAll, test } from "./support/platform-frame";
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const prefix = `recorder-routes-${randomUUID()}`;
@@ -642,14 +644,21 @@ describe("recordings", () => {
     const mine = Array.from({ length: 51 }, () => randomUUID());
     const theirs = randomUUID();
     const base = Date.parse("2026-01-01T00:00:00.000Z");
-    await database.insert(recorderTrajectoryBindings).values([
-      ...mine.map((trajectoryId, index) => ({
-        trajectoryId,
-        userId: owner,
-        createdAt: new Date(base + index * 1_000),
-      })),
-      { trajectoryId: theirs, userId: busy, createdAt: new Date(base) },
-    ]);
+    // Each person's bindings are written in their own frame, as the Recorder writes them (G01).
+    await runAsTenant(owner, () =>
+      database.insert(recorderTrajectoryBindings).values(
+        mine.map((trajectoryId, index) => ({
+          trajectoryId,
+          userId: owner,
+          createdAt: new Date(base + index * 1_000),
+        })),
+      ),
+    );
+    await runAsTenant(busy, () =>
+      database
+        .insert(recorderTrajectoryBindings)
+        .values({ trajectoryId: theirs, userId: busy, createdAt: new Date(base) }),
+    );
     const asked: string[] = [];
     const intelligenceFetch = (async (input: Request | string | URL) => {
       const url = String(input);

@@ -1,11 +1,13 @@
-import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { inArray } from "drizzle-orm";
 import { createApprovalStore } from "../src/approvals/store";
 import { createDatabase } from "../src/db/client";
 import { users } from "../src/db/schema/core";
 import { setEdition } from "../src/edition";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { afterAll, afterEach, beforeAll } from "./support/platform-frame";
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const prefix = `approval-edition-${randomUUID()}`;
@@ -33,9 +35,12 @@ afterAll(async () => {
 });
 
 // Only what the safety policy names asks first (approvals/policy.ts); ordinary changes just happen.
+// Each person's preferences are read and written in that person's own tenant frame.
+const as = <T>(person: string, fn: () => Promise<T>) => runAsTenant(person, fn);
+
 test("the personal edition does not ask before ordinary changes for somebody who has chosen nothing", async () => {
   setEdition("personal");
-  expect(await policy.preferences(fresh)).toEqual({
+  expect(await as(fresh, () => policy.preferences(fresh))).toEqual({
     enabled: false,
     autoReview: false,
     hostCommands: "ask",
@@ -43,22 +48,24 @@ test("the personal edition does not ask before ordinary changes for somebody who
 });
 
 test("nor does the team edition", async () => {
-  expect((await policy.preferences(fresh)).enabled).toBe(false);
+  expect((await as(fresh, () => policy.preferences(fresh))).enabled).toBe(
+    false,
+  );
 });
 
 test("a saved choice beats the personal edition's default", async () => {
   setEdition("personal");
-  await policy.setPreferences(chose, { enabled: true });
-  expect((await policy.preferences(chose)).enabled).toBe(true);
-  expect(await store.enabled(chose)).toBe(true);
+  await as(chose, () => policy.setPreferences(chose, { enabled: true }));
+  expect((await as(chose, () => policy.preferences(chose))).enabled).toBe(true);
+  expect(await as(chose, () => store.enabled(chose))).toBe(true);
 });
 
 // The switch on Settings → Approvals reads this; it must say what the policy above decides.
 test("the personal edition's switch shows asking first as off for somebody who chose nothing", async () => {
   setEdition("personal");
-  expect(await store.enabled(fresh)).toBe(false);
+  expect(await as(fresh, () => store.enabled(fresh))).toBe(false);
   setEdition("team");
-  expect(await store.enabled(fresh)).toBe(false);
+  expect(await as(fresh, () => store.enabled(fresh))).toBe(false);
 });
 
 /** A database that fails the test if the personal edition reads a stored value at all. */

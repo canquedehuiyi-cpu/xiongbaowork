@@ -1,10 +1,10 @@
 import {
-  afterAll,
-  beforeAll,
-  beforeEach,
+  afterAll as bunAfterAll,
+  beforeAll as bunBeforeAll,
+  beforeEach as bunBeforeEach,
   describe,
   expect,
-  test,
+  test as bunTest,
 } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -49,6 +49,7 @@ import { createProactiveStore } from "../src/proactive/store";
 import type { ProactiveSetting } from "../src/proactive/types";
 import { createWorkQueue } from "../src/work/queue";
 import { notificationDestination } from "../../mobile/src/links";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /*
@@ -79,6 +80,19 @@ const botOf: Record<string, string> = {
   [researchChannel]: researchBot,
 };
 const threadOf = (channelId: string) => `${channelId}-thread`;
+
+/**
+ * Everything here is one person's: their Bots, conversations, accounts, check-ins and pings, written
+ * and read in their own frame as the ping pass and their signed-in requests do. The router's sweep
+ * still claims as the platform and runs each delivery as the tenant stamped on its row.
+ */
+const asOwner = (body: () => unknown) => async () => {
+  await runAsTenant(owner, body);
+};
+const test = (name: string, body: () => unknown) => bunTest(name, asOwner(body));
+const beforeAll = (body: () => unknown) => bunBeforeAll(asOwner(body));
+const beforeEach = (body: () => unknown) => bunBeforeEach(asOwner(body));
+const afterAll = (body: () => unknown) => bunAfterAll(asOwner(body));
 
 const proactive = createProactiveStore(database);
 const deliveries = createDeliveryStore(database);

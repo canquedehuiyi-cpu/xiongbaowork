@@ -1,4 +1,4 @@
-import { afterAll, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import type { TurnRunner } from "@openbot/toolkit/run-turn";
 import { and, eq, inArray } from "drizzle-orm";
@@ -12,8 +12,10 @@ import {
 import { loadConfig } from "../src/config";
 import { createDatabase } from "../src/db/client";
 import { workItems } from "../src/db/schema/work";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
+import { afterAll } from "./support/platform-frame";
 
 /**
  * A Bot asking the person one thing, with the answers it expects.
@@ -55,7 +57,11 @@ function coordinationForThisBot() {
       send: async () => ({ ok: false, refusal: "No Bot to hand to." }),
     } as never,
     config: loadConfig(testEnvironment()),
-    approvalService: { store: {} } as never,
+    // The fork drops tools the person disabled (SEC1 D4); nothing is disabled here.
+    approvalService: {
+      store: {},
+      disabledTools: async () => () => false,
+    } as never,
     agentProfileStore: {
       get: async () => ({ name: "General Assistant" }),
       list: async () => [],
@@ -72,7 +78,9 @@ function coordinationForThisBot() {
   });
 }
 
-test("a question of one decision is put to the person, answered from the inbox, and resumed", async () => {
+// The run, the inbox and the resume all act for the owner, in the owner's frame.
+test("a question of one decision is put to the person, answered from the inbox, and resumed", () =>
+  runAsTenant(owner, async () => {
   const { coordinationForActor } = coordinationForThisBot();
   const tools = await coordinationForActor(owner)(botId, {
     threadId,
@@ -141,4 +149,4 @@ test("a question of one decision is put to the person, answered from the inbox, 
   expect(turns[0]?.userMessage?.content).toBe(
     "In response to your question: Which time zone should the event use?\n\nTime zone: Europe/London",
   );
-});
+  }));

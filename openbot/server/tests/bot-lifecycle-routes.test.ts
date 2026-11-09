@@ -478,7 +478,9 @@ describe("follow-up runner", () => {
           {
             kind: "bot.wakeup",
             // The stamp on the row is the trusted tenant; the payload's owner only has to agree.
-            tenantId: claimed.tenantId ?? payload.ownerUserId,
+            // An explicit undefined is a row stamped as nobody's, not the default stamp.
+            tenantId:
+              "tenantId" in claimed ? claimed.tenantId : payload.ownerUserId,
             key: "w1",
             payload,
             attempts: 1,

@@ -1,5 +1,5 @@
 import type { LearningSharingMode } from "@openbot/shared/learning";
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
 import {
   learningOpenSkills,
@@ -31,25 +31,26 @@ export function createLearningSharingStore(database: Database) {
     async read(
       userId: string,
     ): Promise<{ mode: LearningSharingMode; openSkills: string[] }> {
-      return database.transaction(
-        async (transaction) => {
-          const [row] = await transaction
-            .select({ mode: learningSkillSharing.mode })
-            .from(learningSkillSharing)
-            .where(eq(learningSkillSharing.userId, userId))
-            .limit(1);
-          const opened = await transaction
-            .select({ name: learningOpenSkills.skillName })
-            .from(learningOpenSkills)
-            .where(eq(learningOpenSkills.userId, userId))
-            .orderBy(learningOpenSkills.skillName);
-          return {
-            mode: row?.mode ?? "closed",
-            openSkills: opened.map((skill) => skill.name),
-          };
-        },
-        { isolationLevel: "repeatable read", accessMode: "read only" },
+      /*
+       * One statement, so one snapshot. Not a `repeatable read` transaction: every transaction here
+       * opens by setting its tenant frame (db/client.ts), and Postgres refuses a non-default
+       * isolation level once a statement has run in it.
+       */
+      const [row] = await database.execute<{
+        mode: LearningSharingMode | null;
+        open_skills: string[];
+      }>(
+        sql`select
+              (select ${learningSkillSharing.mode} from ${learningSkillSharing}
+                where ${learningSkillSharing.userId} = ${userId} limit 1) as mode,
+              (select coalesce(array_agg(${learningOpenSkills.skillName} order by ${learningOpenSkills.skillName}), '{}')
+                from ${learningOpenSkills}
+                where ${learningOpenSkills.userId} = ${userId}) as open_skills`,
       );
+      return {
+        mode: row?.mode ?? "closed",
+        openSkills: [...(row?.open_skills ?? [])],
+      };
     },
 
     /** Saves the choice and says what it was before. Two saves at once are taken in turn, so each `from` is true. */

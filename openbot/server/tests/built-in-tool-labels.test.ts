@@ -52,7 +52,8 @@ describe("the tools OpenBot offers a Bot", () => {
     // One per way a name is written, so a scan that stopped reading one of them cannot pass quietly.
     for (const name of [
       "list_bots", // a literal, in a browser tool
-      "show_app_access", // a constant from another package
+      // M3: show_app_access belongs to owner app grants, which this fork does not adopt.
+      "offer_check_in", // a constant from another package
       "remember_personal_fact", // a helper's parameter, followed to its calls
       "pause_goal", // a template literal over a for...of
       "computer_screenshot", // a headless computer tool's definition

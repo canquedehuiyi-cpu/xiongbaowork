@@ -1,11 +1,4 @@
-import {
-  afterAll,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  test,
-} from "bun:test";
+import { test as bunTest, describe, expect } from "bun:test";
 import { randomUUID } from "node:crypto";
 import type { Message } from "@ag-ui/client";
 import { type ChatCompletionRequest, LLMock } from "@copilotkit/aimock";
@@ -47,6 +40,8 @@ import {
 import { createPluginStore } from "../src/plugins/store";
 import { grantedTools, REFUSAL_MARKER } from "../src/plugins/tools";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { runAsTenant } from "../src/tenant/context";
+import { afterAll, beforeAll, beforeEach } from "./support/platform-frame";
 
 /*
  * A Bot giving part of its work to a subagent, through the real path a person's chat turn takes: real
@@ -195,6 +190,20 @@ const subagentCall = (task: string, answer = "One sentence.") => ({
   name: SUBAGENT_TOOL,
   arguments: JSON.stringify({ task, answer }),
 });
+
+/*
+ * Each case is the person's own chat turn, so it runs in the person's frame, as the runtime runs a
+ * signed-in person's request (G01-E); the subagent it starts must carry that frame on. Fixtures and
+ * cleanup run as the platform.
+ */
+const test = (name: string, body: () => unknown, timeout?: number) =>
+  bunTest(
+    name,
+    async () => {
+      await runAsTenant(person, body);
+    },
+    timeout,
+  );
 
 const realFetch = globalThis.fetch;
 let environmentBefore: Record<string, string | undefined> = {};
@@ -371,33 +380,41 @@ beforeAll(async () => {
   relay = Bun.serve({
     hostname: "127.0.0.1",
     port: 0,
-    async fetch(request) {
-      const url = new URL(request.url);
-      const answered = await realFetch(
-        new URL(`${url.pathname}${url.search}`, model),
-        {
-          method: request.method,
-          headers: request.headers,
-          body: await request.text(),
-        },
-      );
-      const body = answered.body?.getReader();
-      return new Response(
-        body
-          ? new ReadableStream({
-              async pull(controller) {
+    fetch: relayed,
+  });
+  async function relayed(request: Request) {
+    const url = new URL(request.url);
+    const answered = await realFetch(
+      new URL(`${url.pathname}${url.search}`, model),
+      {
+        method: request.method,
+        headers: request.headers,
+        body: await request.text(),
+      },
+    );
+    const body = answered.body?.getReader();
+    return new Response(
+      body
+        ? new ReadableStream({
+            /*
+             * In the person's frame: this relay is in-process, and Bun resumes the run reading this
+             * stream in the context its chunks were pushed from, so a frameless pull would drop the
+             * run's frame mid-turn. A real provider's bytes come over the network and leave the run's
+             * frame as it was (G01-E).
+             */
+            pull: (controller) =>
+              runAsTenant(person, async () => {
                 const { done, value } = await body.read();
                 if (!done) return controller.enqueue(value);
                 // The connection ends a moment after the last event, as a real provider's does.
                 await Bun.sleep(25);
                 controller.close();
-              },
-            })
-          : null,
-        { status: answered.status, headers: answered.headers },
-      );
-    },
-  });
+              }),
+          })
+        : null,
+      { status: answered.status, headers: answered.headers },
+    );
+  }
   app = Bun.serve({
     hostname: "127.0.0.1",
     port: 0,
@@ -469,58 +486,65 @@ beforeAll(async () => {
   await database
     .insert(users)
     .values({ id: person, email: `${person}@example.test`, name: "Dana" });
-  await database
-    .insert(agents)
-    .values({ id: botId, name: "Notes", type: "built_in", configuration: {} });
-  await database.insert(mcpServers).values({
-    id: SERVER,
-    title: "Notes",
-    vendor: "Notes",
-    url: `http://127.0.0.1:${app.port}/mcp`,
-    provenance: "custom",
+  // The Bot and its grants are the person's rows; the app is a catalogue row every person reads.
+  await runAsTenant(person, async () => {
+    await database
+      .insert(agents)
+      .values({ id: botId, name: "Notes", type: "built_in", configuration: {} });
   });
-  await database.insert(mcpTools).values([
-    {
-      serverId: SERVER,
-      name: SEARCH,
-      description: "Search the team's notes.",
-      inputSchema: {
-        type: "object",
-        properties: { query: { type: "string" } },
-        required: ["query"],
+  await runAsTenant("system", async () => {
+    await database.insert(mcpServers).values({
+      id: SERVER,
+      title: "Notes",
+      vendor: "Notes",
+      url: `http://127.0.0.1:${app.port}/mcp`,
+      provenance: "custom",
+    });
+    await database.insert(mcpTools).values([
+      {
+        serverId: SERVER,
+        name: SEARCH,
+        description: "Search the team's notes.",
+        inputSchema: {
+          type: "object",
+          properties: { query: { type: "string" } },
+          required: ["query"],
+        },
+        // M3: upstream also marks it `declaredRead`; the fork's mcp_tools has no such column, and
+        // `effect` is what says it reads.
+        effect: "read",
       },
-      // M3: upstream also marks it `declaredRead`; the fork's mcp_tools has no such column, and
-      // `effect` is what says it reads.
-      effect: "read",
-    },
-    {
-      serverId: SERVER,
-      name: POST,
-      description: "Post a note the whole team reads.",
-      inputSchema: {
-        type: "object",
-        properties: { text: { type: "string" } },
-        required: ["text"],
+      {
+        serverId: SERVER,
+        name: POST,
+        description: "Post a note the whole team reads.",
+        inputSchema: {
+          type: "object",
+          properties: { text: { type: "string" } },
+          required: ["text"],
+        },
+        effect: "write",
+        destructive: true,
       },
-      effect: "write",
-      destructive: true,
-    },
-    {
-      serverId: SERVER,
-      name: UNGRANTED,
-      description: "Delete every note.",
-      inputSchema: { type: "object", properties: {} },
-      effect: "write",
-      destructive: true,
-    },
-  ]);
-  await database.insert(pluginGrants).values(
-    [SEARCH, POST].map((tool) => ({
-      kind: "mcp" as const,
-      ref: `${SERVER}/${tool}`,
-      agentId: botId,
-    })),
-  );
+      {
+        serverId: SERVER,
+        name: UNGRANTED,
+        description: "Delete every note.",
+        inputSchema: { type: "object", properties: {} },
+        effect: "write",
+        destructive: true,
+      },
+    ]);
+  });
+  await runAsTenant(person, async () => {
+    await database.insert(pluginGrants).values(
+      [SEARCH, POST].map((tool) => ({
+        kind: "mcp" as const,
+        ref: `${SERVER}/${tool}`,
+        agentId: botId,
+      })),
+    );
+  });
   roster.set(botId, {
     id: botId,
     name: "Notes",

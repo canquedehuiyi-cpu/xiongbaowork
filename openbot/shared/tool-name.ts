@@ -662,6 +662,37 @@ const OWN_TOOLS: Record<string, OwnTool> = {
     attempted: "Run a command",
   },
 
+  // Apps and windows on the person's own paired computer.
+  computer_apps: {
+    running: "Checking apps on your computer",
+    done: "Checked apps on your computer",
+  },
+  computer_app_call: {
+    running: "Using an app on your computer",
+    done: "Used an app on your computer",
+    attempted: "Use an app on your computer",
+  },
+  computer_app_enable: {
+    running: "Turning on an app on your computer",
+    done: "Turned on an app on your computer",
+    attempted: "Turn on an app on your computer",
+  },
+  computer_desktop_windows: {
+    running: "Checking windows on your computer",
+    done: "Checked windows on your computer",
+  },
+  computer_desktop_snapshot: {
+    running: "Reading a window on your computer",
+    done: "Read a window on your computer",
+  },
+
+  // Notebooks the person let the Bot read.
+  list_knowledge: { running: "Checking notebooks", done: "Checked notebooks" },
+  search_knowledge: {
+    running: "Searching notebooks",
+    done: "Searched notebooks",
+  },
+
   // Asking the person, from the computer.
   computer_request_help: {
     running: "Asking you for help",

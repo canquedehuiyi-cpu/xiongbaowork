@@ -1181,44 +1181,8 @@ describe("what a Bot is told it holds", () => {
     );
   });
 
-  /*
-   * THE CARD TOOL. Every Bot holds `show_app_access`, and the sentences that used to end on "an
-   * administrator can grant it" now tell the Bot to call it — which puts a card with Request access
-   * in front of the person, where the sentence put the name of a role.
-   */
-  const card = { name: "show_app_access" } as never;
-
-  test("tells a Bot to show the card for a connected vendor it holds nothing for", () => {
-    const guidance = grantedToolGuidance([card], ["composio-gmail"])
-      .toLowerCase()
-      .replace(/\s+/g, " ");
-    expect(guidance).toContain("composio-gmail");
-    expect(guidance).toContain("you hold none of their tools");
-    expect(guidance).toContain("call show_app_access with its name");
-    expect(guidance).not.toContain(
-      "administrator can grant it on that connector",
-    );
-    expect(guidance).toContain("do not browse to its website");
-  });
-
-  test("tells a Bot to show the card for an app this deployment does not connect at all", () => {
-    const guidance = grantedToolGuidance([card])
-      .toLowerCase()
-      .replace(/\s+/g, " ");
-    expect(guidance).toContain("not named here at all");
-    expect(guidance).toContain("show_app_access");
-    expect(guidance).toContain("ask an administrator");
-  });
-
-  test("never lists the card tool as a system the Bot can reach", () => {
-    // Listed beside the vendors, it would read as one more system reached "as the person asking".
-    const guidance = grantedToolGuidance([...drive, card]);
-    expect(guidance).not.toMatch(/^- .*show_app_access/m);
-    expect(guidance).toContain("search_files");
-    expect(grantedToolGuidance([card])).not.toContain(
-      "You can reach these systems directly",
-    );
-  });
+  // M3: the show_app_access card (owner app grants / app access) is not adopted in this fork, so the
+  // three cases on what a Bot holding the card is told are not here.
 
   test("a Bot not offered the card is still told to name the administrator, as before", () => {
     const guidance = grantedToolGuidance([], ["google-drive"])

@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
@@ -37,8 +37,11 @@ import {
 } from "../src/plugins/store";
 import { grantedTools, REFUSAL_MARKER } from "../src/plugins/tools";
 import { createRequestActor } from "../src/request-actor";
+import { asPlatform, runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
+import { afterAll, beforeAll } from "./support/platform-frame";
+import { bindTestRoleWriter } from "./support/role-writer";
 
 /**
  * A company system behind Microsoft Entra, reached as the signed-in person.
@@ -446,10 +449,13 @@ const BOT = `obo-bot-${tag}`;
 const DEPLOYMENT_CREDENTIAL = randomUUID();
 
 async function userId(address: string) {
-  const [row] = await database
-    .select({ id: users.id })
-    .from(users)
-    .where(eq(users.email, address));
+  // Who an address is belongs to nobody's tenant: asked as `platform` (G01).
+  const [row] = await asPlatform(() =>
+    database
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, address)),
+  );
   return row?.id ?? null;
 }
 
@@ -516,7 +522,11 @@ async function backgroundCall(
   return String(await tool.execute({}));
 }
 
+/** A first sign-in writes the person's role through the restricted role writer, as index.ts binds it. */
+let releaseRoleWriter: (() => Promise<void>) | undefined;
+
 beforeAll(async () => {
+  releaseRoleWriter = await bindTestRoleWriter(database);
   const pair = await generateKeyPair("RS256", { extractable: true });
   signingKey = pair.privateKey;
   // As Entra publishes its keys: a kid and a use, and no `alg`.
@@ -559,19 +569,23 @@ beforeAll(async () => {
     return realFetch(new Request(local, request));
   }) as typeof fetch;
 
-  await database
-    .insert(agents)
-    .values({ id: BOT, name: BOT, type: "remote_ag_ui", configuration: {} });
-  await database.insert(credentials).values({
-    id: DEPLOYMENT_CREDENTIAL,
-    kind: "mcp",
-    provider: PLAIN,
-    keyId: `mcp-${PLAIN}`,
-    encryptedValue: await encryptSecret(
-      config.keyEncryptionKey,
-      `deployment-token-${tag}`,
-    ),
-    metadata: {},
+  // The deployment's Bot and its shared credential are catalogue rows every person reads (`system`).
+  const deploymentToken = await encryptSecret(
+    config.keyEncryptionKey,
+    `deployment-token-${tag}`,
+  );
+  await runAsTenant("system", async () => {
+    await database
+      .insert(agents)
+      .values({ id: BOT, name: BOT, type: "remote_ag_ui", configuration: {} });
+    await database.insert(credentials).values({
+      id: DEPLOYMENT_CREDENTIAL,
+      kind: "mcp",
+      provider: PLAIN,
+      keyId: `mcp-${PLAIN}`,
+      encryptedValue: deploymentToken,
+      metadata: {},
+    });
   });
 });
 
@@ -588,6 +602,7 @@ afterAll(async () => {
   await database
     .delete(revokedAccess)
     .where(like(revokedAccess.email, `%-${tag}@obo.test`));
+  await releaseRoleWriter?.();
   await database.$client.end({ timeout: 5 });
 });
 
@@ -608,21 +623,27 @@ describe("an app calls OpenBot with a person's Entra token", () => {
     const again = await api("/me", await tokenToOpenBot(ada));
     expect(again.status).toBe(200);
     // Signing her in left no session behind: the token is what each request runs on.
-    const signedIn = await database
-      .select({ id: sessions.id })
-      .from(sessions)
-      .where(eq(sessions.userId, (await userId(ADMIN)) ?? ""));
+    const adminId = (await userId(ADMIN)) ?? "";
+    // Read back across tenants, as the platform (G01).
+    const signedIn = await asPlatform(() =>
+      database
+        .select({ id: sessions.id })
+        .from(sessions)
+        .where(eq(sessions.userId, adminId)),
+    );
     expect(signedIn).toHaveLength(0);
     // The sign-in itself is still on the trail.
-    const trail = await database
-      .select({ id: auditEvents.id })
-      .from(auditEvents)
-      .where(
-        and(
-          eq(auditEvents.eventType, "session.signed_in"),
-          eq(auditEvents.actorUserId, (await userId(ADMIN)) ?? ""),
+    const trail = await asPlatform(() =>
+      database
+        .select({ id: auditEvents.id })
+        .from(auditEvents)
+        .where(
+          and(
+            eq(auditEvents.eventType, "session.signed_in"),
+            eq(auditEvents.actorUserId, adminId),
+          ),
         ),
-      );
+    );
     expect(trail).toHaveLength(1);
   });
 
@@ -630,8 +651,11 @@ describe("an app calls OpenBot with a person's Entra token", () => {
     const door = withEntraBearer(betterAuth, signIn);
     const { resolveRequestActor } = createRequestActor({
       singleUser: false,
-      getSession: (headers) => door.api.getSession({ headers }),
-      rolesForUser: (id) => createRoleRepository(database).rolesForUser(id),
+      // Framed as index.ts frames them: who a request is, asked as `platform`.
+      getSession: async (headers) =>
+        (await asPlatform(() => door.api.getSession({ headers }))) ?? null,
+      rolesForUser: (id) =>
+        asPlatform(() => createRoleRepository(database).rolesForUser(id)),
     });
     const actor = await resolveRequestActor(
       new Request("http://127.0.0.1:7480/api/copilotkit", {
@@ -694,11 +718,13 @@ describe("an app calls OpenBot with a person's Entra token", () => {
   test("a deployment that lists no app takes no app's token", async () => {
     const unlisted = newEntra({ ...microsoft, allowedClients: [] });
     const stranger = person("unlisted");
+    const token = await tokenToOpenBot(stranger);
+    // As the request guard asks it: as `platform`, before anybody is known.
     expect(
-      await unlisted.sessionFrom(
-        new Headers({
-          authorization: `Bearer ${await tokenToOpenBot(stranger)}`,
-        }),
+      await asPlatform(() =>
+        unlisted.sessionFrom(
+          new Headers({ authorization: `Bearer ${token}` }),
+        ),
       ),
     ).toBeNull();
     expect(await userId(stranger.upn)).toBeNull();

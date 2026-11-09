@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, test } from "bun:test";
+import { describe, expect, test as bunTest } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
 import { createAuditStore } from "../src/audit";
@@ -16,7 +16,10 @@ import {
   responsibilities,
   users,
 } from "../src/db/schema";
-import { useRoutineTools } from "../src/plugins/builtin-routines";
+import {
+  listTools as listRoutineTools,
+  useRoutineTools,
+} from "../src/plugins/builtin-routines";
 import { createPluginStore } from "../src/plugins/store";
 import { grantedTools } from "../src/plugins/tools";
 import { useGoalTools } from "../src/responsibilities/chat-tools";
@@ -24,6 +27,7 @@ import { createResponsibilityStore } from "../src/responsibilities/store";
 import { createRoutineStore } from "../src/routines/store";
 import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { afterAll, beforeEach } from "./support/platform-frame";
 
 /**
  * A goal asked for in a conversation, from the Bot's tool to the goal on the Bot's Goals page.
@@ -77,10 +81,12 @@ async function giveRoutines(bot: string) {
   await runAsTenant("platform", async () => {
     if (!(await pluginStore.serverAddress(ROUTINES_APP)))
       await pluginStore.addServer({ key: ROUTINES_APP, by: "openbot:test" });
-    const listed = await database
-      .select({ name: mcpTools.name })
-      .from(mcpTools)
-      .where(eq(mcpTools.serverId, ROUTINES_APP));
+  });
+  // The app's tools as it lists them: its catalogue row is `team:routines` in the fork (G01-E), and
+  // the grants name the app by its catalogue key.
+  const listed = await listRoutineTools();
+  // Granted by the Bot's owner, in the owner's frame, where the Bot's grants belong (G01).
+  await runAsTenant(OWNER, async () => {
     for (const { name } of listed)
       await pluginStore.grant(
         "mcp",
@@ -111,6 +117,9 @@ const goalStore = createResponsibilityStore(database, {
     return row ? { threadId: row.threadId } : null;
   },
 });
+/** Each case is the owner's conversation: it runs in the owner's tenant frame, as their Bot's run does (G01). */
+const test = (name: string, body: () => Promise<void>) =>
+  bunTest(name, () => runAsTenant(OWNER, body));
 const ingested: unknown[] = [];
 let routinesWereAdded = false;
 
@@ -146,6 +155,28 @@ beforeEach(async () => {
     email: `${OWNER}@example.test`,
     name: "Goal Conversation Test User",
   });
+  // The owner's private Bot and conversations are the owner's rows, written in the owner's frame.
+  await runAsTenant(OWNER, seedOwnerRows);
+  // Routines, added and given to this Bot (see giveRoutines).
+  routinesWereAdded =
+    routinesWereAdded ||
+    Boolean(await pluginStore.serverAddress(ROUTINES_APP));
+  await giveRoutines(BOT);
+  const routineStore = createRoutineStore(database);
+  useRoutineTools(routineStore);
+  useGoalTools({
+    store: goalStore,
+    engine: {
+      ingest: async (event) => {
+        ingested.push(event);
+        return { duplicate: false } as never;
+      },
+    },
+    conversationFor: routineStore.conversationFor,
+  });
+});
+
+async function seedOwnerRows() {
   await database.insert(agents).values({
     id: BOT,
     name: "Personal Assistant",
@@ -183,24 +214,7 @@ beforeEach(async () => {
       threadId: conversation.threadId,
     });
   }
-  // Routines, added and given to this Bot (see giveRoutines).
-  routinesWereAdded =
-    routinesWereAdded ||
-    Boolean(await pluginStore.serverAddress(ROUTINES_APP));
-  await giveRoutines(BOT);
-  const routineStore = createRoutineStore(database);
-  useRoutineTools(routineStore);
-  useGoalTools({
-    store: goalStore,
-    engine: {
-      ingest: async (event) => {
-        ingested.push(event);
-        return { duplicate: false } as never;
-      },
-    },
-    conversationFor: routineStore.conversationFor,
-  });
-});
+}
 
 afterAll(async () => {
   useRoutineTools(null);

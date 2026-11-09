@@ -8,7 +8,9 @@ import {
   type AgentRunnerStopRequest,
   InMemoryAgentRunner,
   type InMemoryThread,
+  type LocalThreadEndpointScope,
   ɵGLOBAL_STORE,
+  ɵSERVER_THREAD_OWNER,
 } from "@copilotkit/runtime/v2";
 import { asc, desc, eq, inArray, or, sql } from "drizzle-orm";
 import {
@@ -71,6 +73,36 @@ const LOAD_CHUNK = 50;
 function ownedBy(threadId: string, tenant: string): boolean {
   const owner = threadOwners.get(threadId);
   return owner === tenant || owner === SYSTEM_TENANT;
+}
+
+/**
+ * The runtime's own owner of a thread the index above has already let this caller reach.
+ *
+ * Since runtime 1.85 the in-memory runner scopes every thread to the identity whose run created it
+ * (`identifyUser`'s id, or the server owner for a run started server-side) and answers nothing to
+ * any other scope. The tenant index is this deployment's rule and it is wider on purpose: a person
+ * reads their own threads whoever started the run (a routine, a wake-up, a hop), and `system`'s
+ * threads too. So once the index has said yes, the parent is asked as the thread's own owner, and
+ * its scope never narrows or widens what the index decided.
+ */
+function storeScope(threadId: string): LocalThreadEndpointScope {
+  return { ownerId: ɵGLOBAL_STORE.ownerOf(threadId) ?? ɵSERVER_THREAD_OWNER };
+}
+
+/**
+ * A run on a thread the runtime already holds goes in as that thread's own owner (see
+ * {@link storeScope}); a new one is owned by the person it runs for, so the runtime's own scope
+ * and the tenant index agree on it. `claim` has already decided whether the caller may run here.
+ */
+function asStoreOwner<T extends { threadId: string; ownerId?: string }>(
+  request: T,
+  tenant: string,
+): T {
+  const owner =
+    ɵGLOBAL_STORE.ownerOf(request.threadId) ??
+    request.ownerId ??
+    (isPersonTenant(tenant) ? tenant : undefined);
+  return owner === undefined ? request : { ...request, ownerId: owner };
 }
 
 /**
@@ -350,7 +382,7 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
   protected continuationStream(
     request: AgentRunnerRunRequest,
   ): Observable<BaseEvent> {
-    return super.run(request);
+    return super.run(asStoreOwner(request, currentTenant()));
   }
 
   override run(request: AgentRunnerRunRequest): Observable<BaseEvent> {
@@ -546,7 +578,7 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
         .catch((error) => console.error("task projection failed", error));
     };
     const stream = () =>
-      super.run(request).pipe(
+      super.run(asStoreOwner(request, tenant)).pipe(
         tap({
           next: (event) => events.push(event),
           complete: () => {
@@ -633,7 +665,7 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
    * this reads the store the parent just committed to, for the tenant that owns it.
    */
   private peekMessages(threadId: string): Message[] {
-    return super.getThreadMessages(threadId);
+    return super.getThreadMessages(threadId, storeScope(threadId));
   }
 
   /**
@@ -748,7 +780,11 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
     if (runs.length === 0) return;
     if ((ɵGLOBAL_STORE.peek(thread.id)?.historicRuns.length ?? 0) > 0) return;
     // The entry the runs are appended to: the store drops a run whose writer is no longer the entry.
-    const writer = ɵGLOBAL_STORE.getOrCreate(thread.id);
+    // A person's thread is theirs in the runtime's own scope too; `system`'s stays the server's.
+    const writer = ɵGLOBAL_STORE.getOrCreate(
+      thread.id,
+      thread.tenantId === SYSTEM_TENANT ? ɵSERVER_THREAD_OWNER : thread.tenantId,
+    );
     const snapshot = thread.messages as Message[];
     runs.forEach((run, index) => {
       ɵGLOBAL_STORE.appendRun(thread.id, writer, {
@@ -791,17 +827,45 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
    */
   override listThreads(): InMemoryThread[] {
     const tenant = currentTenant();
-    return super.listThreads().filter((thread) => ownedBy(thread.id, tenant));
+    // The parent lists one owner's threads per call (see `storeScope`): asked once per owner of a
+    // thread the index gives this tenant, and filtered by the index again.
+    const owners = new Set<string>();
+    for (const [threadId] of threadOwners)
+      if (ownedBy(threadId, tenant)) owners.add(storeScope(threadId).ownerId);
+    const listed = new Map<string, InMemoryThread>();
+    for (const ownerId of owners)
+      for (const thread of super.listThreads({ ownerId }))
+        if (ownedBy(thread.id, tenant)) listed.set(thread.id, thread);
+    return [...listed.values()].sort(
+      (left, right) =>
+        new Date(right.updatedAt).getTime() -
+        new Date(left.updatedAt).getTime(),
+    );
   }
 
   override getThreadMessages(threadId: string): Message[] {
     if (!ownedBy(threadId, currentTenant())) return [];
-    return super.getThreadMessages(threadId);
+    return super.getThreadMessages(threadId, storeScope(threadId));
   }
 
   override getThreadEvents(threadId: string): BaseEvent[] {
     if (!ownedBy(threadId, currentTenant())) return [];
-    return super.getThreadEvents(threadId);
+    return super.getThreadEvents(threadId, storeScope(threadId));
+  }
+
+  /**
+   * Whether the caller may run on this thread id, asked by the runtime before a run starts. The
+   * tenant index decides where it knows the thread — only its own tenant may write to it, never
+   * `system`'s — and the parent's record where it does not. `claim` asks again against the row.
+   */
+  override isThreadAccessible(
+    threadId: string,
+    scope: LocalThreadEndpointScope,
+  ): boolean {
+    const owner = threadOwners.get(threadId);
+    if (owner !== undefined)
+      return isTenantFramed() && owner === currentTenant();
+    return super.isThreadAccessible(threadId, scope);
   }
 
   /**
@@ -811,14 +875,14 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
    */
   override connect(request: AgentRunnerConnectRequest): Observable<BaseEvent> {
     if (!ownedBy(request.threadId, currentTenant())) return EMPTY;
-    return super.connect(request);
+    return super.connect({ ...request, ...storeScope(request.threadId) });
   }
 
   /** Whether somebody else's thread is mid-turn is not this caller's to learn. */
   override isRunning(request: AgentRunnerIsRunningRequest): Promise<boolean> {
     if (!ownedBy(request.threadId, currentTenant()))
       return Promise.resolve(false);
-    return super.isRunning(request);
+    return super.isRunning({ ...request, ...storeScope(request.threadId) });
   }
 
   /**
@@ -831,7 +895,7 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
     const owner = threadOwners.get(request.threadId);
     if (owner !== undefined && (!isTenantFramed() || owner !== currentTenant()))
       return Promise.resolve(false);
-    return super.stop(request);
+    return super.stop({ ...request, ...storeScope(request.threadId) });
   }
   /**
    * `/threads/clear`: the caller's own conversations out of the in-memory store, and nobody else's.

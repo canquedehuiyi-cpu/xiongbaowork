@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
+import { expect } from "bun:test";
 import { createHmac, randomUUID } from "node:crypto";
 import { RECORDER_EXTENSION_ID } from "@openbot/shared/recorder-extension";
 import { eq, inArray } from "drizzle-orm";
@@ -10,8 +10,12 @@ import { loadConfig } from "../src/config";
 import { createDatabase } from "../src/db/client";
 import { sessions, users } from "../src/db/schema/core";
 import { createRecorderExtension } from "../src/recorder/wiring";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { SESSION_LIFETIME_MS, testEnvironment } from "./support/environment";
+// Sessions and users are the identity layer's, which carry no tenant: the harness reads and writes
+// them as `platform` (G01), as the auth routes do.
+import { afterAll, beforeAll, beforeEach, test } from "./support/platform-frame";
 
 /*
  * A person's sign-in ending ends their Recorders with it, through the real Better Auth routes and the Recorder's own
@@ -127,7 +131,10 @@ async function signIn(
 
 /** A browser connected as this person, the way the Recorder connects one. */
 async function connect(userId: string, installId: string) {
-  const minted = await working.connections.mintCode(userId, "web");
+  // Minted on the person's own request, in their frame, where the code's row belongs (G01).
+  const minted = await runAsTenant(userId, () =>
+    working.connections.mintCode(userId, "web"),
+  );
   const made = await working.connections.exchange({
     code: minted!.code,
     label: "Chrome on macOS",

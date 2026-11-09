@@ -178,12 +178,22 @@ async function logFailure(cancel: () => Promise<unknown>) {
   }
 }
 
-/** Spends a live Reachability code without binding anyone; true when one was cancelled. */
+/**
+ * Spends a live Reachability code without binding anyone; true when one was cancelled. Read as the
+ * platform and spent as its issuer, as the mentioned path does (G01); an untrusted stamp is left to
+ * expire.
+ */
 async function cancelReachabilityCode(deps: OpenTagAgentDeps, code: string) {
-  const challenge = await deps.store.readChallenge(code);
+  const challenge = await runAsTenant("platform", () =>
+    deps.store.readChallenge(code),
+  );
+  if (!challenge) return false;
+  const issuer = trustedTenant(challenge.tenantId, challenge.ownerUserId);
+  if (!issuer) return false;
   return Boolean(
-    challenge &&
-      (await deps.store.consumeChallenge(code, challenge.ownerUserId)),
+    await runAsTenant(issuer, () =>
+      deps.store.consumeChallenge(code, challenge.ownerUserId),
+    ),
   );
 }
 

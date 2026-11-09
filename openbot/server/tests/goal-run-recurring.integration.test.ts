@@ -1,4 +1,10 @@
-import { afterAll, beforeEach, describe, expect, test } from "bun:test";
+import {
+  afterAll as bunAfterAll,
+  beforeEach as bunBeforeEach,
+  describe,
+  expect,
+  test as bunTest,
+} from "bun:test";
 import { randomUUID } from "node:crypto";
 import {
   type AbstractAgent,
@@ -40,6 +46,7 @@ import { RESPONSIBILITY_RUN_KIND } from "../src/responsibilities/engine";
 import { createResponsibilityStore } from "../src/responsibilities/store";
 import { createServerResponsibilityEngine } from "../src/responsibilities/wiring";
 import { createRoutineStore } from "../src/routines/store";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -61,6 +68,19 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const suite = randomUUID().slice(0, 8);
 const OWNER = `goal-recurring-owner-${suite}`;
+
+/**
+ * Everything here is one person's: written and read in their own frame, as their signed-in requests
+ * and the work done for them run. Sweeps still claim as the platform and run each row as the tenant
+ * stamped on it.
+ */
+const asOwner = (body: () => unknown) => async () => {
+  await runAsTenant(OWNER, body);
+};
+const afterAll = (body: () => unknown) => bunAfterAll(asOwner(body));
+const beforeEach = (body: () => unknown) => bunBeforeEach(asOwner(body));
+const test = (name: string, body: () => unknown, timeout?: number) =>
+  bunTest(name, asOwner(body), timeout);
 const BOT = `goal-recurring-assistant-${suite}`;
 const CONVERSATION = {
   id: `goal-recurring-conversation-${suite}`,
@@ -86,18 +106,24 @@ const pluginStore = createPluginStore({
  */
 const ALWAYS_ON_APP = "routines";
 async function ensureRoutines(bots: readonly string[]) {
-  if (!(await pluginStore.serverAddress(ALWAYS_ON_APP)))
-    await pluginStore.addServer({ key: ALWAYS_ON_APP, by: "boot" });
-  await pluginStore.refreshTools(ALWAYS_ON_APP);
+  // The app is the deployment's, added by boot as the platform.
+  await runAsTenant("platform", async () => {
+    if (!(await pluginStore.serverAddress(ALWAYS_ON_APP)))
+      await pluginStore.addServer({ key: ALWAYS_ON_APP, by: "boot" });
+    await pluginStore.refreshTools(ALWAYS_ON_APP);
+  });
   const tools = await listRoutineTools();
-  for (const bot of bots)
-    for (const tool of tools)
-      await pluginStore.grant(
-        "mcp",
-        `${ALWAYS_ON_APP}/${tool.name}`,
-        bot,
-        "boot",
-      );
+  // Granted in the Bots' owner's frame, where a private Bot's grants belong (G01).
+  await runAsTenant(OWNER, async () => {
+    for (const bot of bots)
+      for (const tool of tools)
+        await pluginStore.grant(
+          "mcp",
+          `${ALWAYS_ON_APP}/${tool.name}`,
+          bot,
+          "boot",
+        );
+  });
 }
 
 const goalStore = createResponsibilityStore(database, {
@@ -355,7 +381,11 @@ async function routineFor(goalId: string) {
   expect(routine.isError).toBe(false);
 }
 
+/** What this file left behind, deployment rows included, so the platform's question (G01). */
 async function clean() {
+  await runAsTenant("platform", cleanAsPlatform);
+}
+async function cleanAsPlatform() {
   const owned = await goals();
   const runs = owned.length
     ? await database
@@ -435,7 +465,11 @@ beforeEach(async () => {
   // Routines, added and given to this Bot exactly as boot does it for every Bot.
   routinesWereAdded =
     routinesWereAdded ||
-    Boolean(await pluginStore.serverAddress(ALWAYS_ON_APP));
+    Boolean(
+      await runAsTenant("platform", () =>
+        pluginStore.serverAddress(ALWAYS_ON_APP),
+      ),
+    );
   await ensureRoutines([BOT]);
   useRoutineTools(routineStore);
   useGoalTools({
@@ -451,7 +485,9 @@ afterAll(async () => {
   useGoalTools(null);
   await clean();
   if (!routinesWereAdded)
-    await database.delete(mcpServers).where(eq(mcpServers.id, ALWAYS_ON_APP));
+    await runAsTenant("platform", () =>
+      database.delete(mcpServers).where(eq(mcpServers.id, ALWAYS_ON_APP)),
+    );
   await database.$client.end({ timeout: 5 });
 });
 

@@ -261,6 +261,7 @@ describe("channel activity delivery", () => {
    */
   test("a Bot's reply carries its first line as plain text, and a person's message carries none", async () => {
     const owner = await createTestUser("Channel Events Test User");
+    await as(owner, async () => {
     const profile = await profileStore.create(owner, {
       name: "Expense Manager",
       title: "Finance Operations",
@@ -310,6 +311,7 @@ describe("channel activity delivery", () => {
     expect(bot).toMatchObject({
       lastMessage: "Categorized three expenses. The receipts are in Drive.",
       firstLine: "Categorized three expenses.",
+    });
     });
   });
 });

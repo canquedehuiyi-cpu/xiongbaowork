@@ -520,10 +520,12 @@ describe("naming a claimed conversation", () => {
       channelId: channel.id,
       reason: "not readable yet",
     });
-    const [item] = await database
-      .select({ finishedAt: workItems.finishedAt, runAt: workItems.runAt })
-      .from(workItems)
-      .where(eq(workItems.key, channel.id));
+    const [item] = await asPlatform(() =>
+      database
+        .select({ finishedAt: workItems.finishedAt, runAt: workItems.runAt })
+        .from(workItems)
+        .where(eq(workItems.key, channel.id)),
+    );
     expect(item?.finishedAt).toBeNull();
     expect(item?.runAt.getTime()).toBeLessThan(Date.now() + 30_000);
   });
@@ -582,14 +584,23 @@ describe("naming a claimed conversation", () => {
         });
         await started.promise;
         if (kind === "soft")
-          expect(await store.softDelete(owner, channel.id)).toBe(true);
-        else await database.delete(channels).where(eq(channels.id, channel.id));
+          expect(
+            await runAsTenant(owner.id, () =>
+              store.softDelete(owner, channel.id),
+            ),
+          ).toBe(true);
+        else
+          await asPlatform(() =>
+            database.delete(channels).where(eq(channels.id, channel.id)),
+          );
         resume.resolve();
         const report = await work;
         // NOTIFY is commit-ordered. This marker follows the completed worker transaction, so
         // observing it also observes any summary announcement that worker could have committed.
-        await database.execute(
-          sql`select pg_notify(${CHANNEL_ACTIVITY_TOPIC}, ${barrier})`,
+        await asPlatform(() =>
+          database.execute(
+            sql`select pg_notify(${CHANNEL_ACTIVITY_TOPIC}, ${barrier})`,
+          ),
         );
         await observed.promise;
         expect(summaries).toEqual([]);
@@ -599,10 +610,12 @@ describe("naming a claimed conversation", () => {
           expect(row?.summaryAt).toBeNull();
         } else expect(row).toBeUndefined();
         expect(report.written).not.toContain(channel.id);
-        const [item] = await database
-          .select({ finishedAt: workItems.finishedAt })
-          .from(workItems)
-          .where(eq(workItems.key, channel.id));
+        const [item] = await asPlatform(() =>
+          database
+            .select({ finishedAt: workItems.finishedAt })
+            .from(workItems)
+            .where(eq(workItems.key, channel.id)),
+        );
         expect(item?.finishedAt).not.toBeNull();
       } finally {
         resume.resolve();

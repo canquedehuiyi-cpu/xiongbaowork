@@ -3,7 +3,8 @@
 // replaces the last, organization mode seals the session from the request, and nobody else (an admin included) reaches
 // the browser or its live screen. The computer is a stand-in that answers its routes exactly as the contract types them
 // (shared/openbot-browser.ts): slice 1 builds the real ones.
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { describe, expect } from "bun:test";
+import { afterAll, beforeAll, test } from "./support/platform-frame";
 import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -70,8 +71,10 @@ import {
 import { startHttpServer } from "../src/http-server";
 import { createRecorderConnectionStore } from "../src/recorder/connections";
 import { createRecorderExtension } from "../src/recorder/wiring";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { SESSION_LIFETIME_MS, testEnvironment } from "./support/environment";
+import { bindTestRoleWriter } from "./support/role-writer";
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const prefix = `browser-routes-${randomUUID()}`;
@@ -1463,11 +1466,13 @@ describe("opening a person's own browser", () => {
 
   test("a person who already holds ten unused codes is told to wait, and the refusal is on the trail", async () => {
     const codes = createRecorderConnectionStore(database);
+    // Ben's codes are Ben's rows, minted in his own frame as his signed-in requests do.
+    const asBen = <T>(work: () => T) => runAsTenant(ben.id, work);
     // No connection of Ben's stands, so his open has to make one.
-    await codes.revokeAll(ben.id, "signed_out");
+    await asBen(() => codes.revokeAll(ben.id, "signed_out"));
     try {
       for (let index = 0; index < 10; index += 1) {
-        expect(await codes.mintCode(ben.id, "web")).not.toBeNull();
+        expect(await asBen(() => codes.mintCode(ben.id, "web"))).not.toBeNull();
       }
       const refused = await call(openbot, "/api/browser/open", {
         method: "POST",
@@ -2953,7 +2958,15 @@ describe("organization mode", () => {
         ? Response.json({ user: person })
         : new Response(null, { status: 401 }),
   });
-  afterAll(() => authority.stop(true));
+  // Signing in by the organization writes the person's role, which goes through the role writer.
+  let releaseRoleWriter: (() => Promise<void>) | undefined;
+  beforeAll(async () => {
+    releaseRoleWriter = await bindTestRoleWriter(database);
+  });
+  afterAll(async () => {
+    authority.stop(true);
+    await releaseRoleWriter?.();
+  });
 
   test("open seals the person's organization session from this request, as the connect-code route does", async () => {
     // The guard keeps the organization's answer for a minute on the clock it was built with, so the clock that moves

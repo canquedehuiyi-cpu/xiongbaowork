@@ -31,6 +31,7 @@ import type {
   RecorderConnectionStore,
 } from "../recorder/connections";
 import type { RecorderExtensionDeps } from "../recorder/wiring";
+import { runAsTenant } from "../tenant/context";
 import { recorderOriginRules, withRecorderOrigins } from "./egress";
 import {
   BrowserCallError,
@@ -523,7 +524,10 @@ export function createBotBrowser(deps: BotBrowserRouteDeps): BotBrowser {
     reason: BotBrowserRevokeReason,
   ) {
     try {
-      await connections.revoke(connection.userId, connection.id, reason);
+      // In the connection's person's frame (G01): the reader may be somebody else at the wheel.
+      await runAsTenant(connection.userId, () =>
+        connections.revoke(connection.userId, connection.id, reason),
+      );
     } catch (error) {
       console.error(
         JSON.stringify({

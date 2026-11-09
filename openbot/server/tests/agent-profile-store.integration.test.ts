@@ -394,6 +394,7 @@ async function agentRow(agentId: string): Promise<{
 describe("agent profile store integration", () => {
   test("editing a duplicate replaces its copied standing instructions", async () => {
     const owner = await createUser();
+    await as(owner, async () => {
     const source = await createProfileFixture({ owner });
     await database
       .update(agents)
@@ -427,6 +428,7 @@ describe("agent profile store integration", () => {
     expect(after.standingMessage.content).not.toContain(
       "Handle email and calendars.",
     );
+    });
   });
 
   test("refuses to create a coworker with no endpoint when this deployment has no managed Bot", async () => {
@@ -1872,6 +1874,7 @@ describe("a coworker's chosen avatar seed", () => {
     delete process.env.PICKED_HARNESS_SOURCE;
     try {
       const owner = await createUser();
+      await as(owner, async () => {
       const picked = await createProfileFixture({
         owner,
         title: "Everyday life.",
@@ -1896,6 +1899,7 @@ describe("a coworker's chosen avatar seed", () => {
       expect((await detail(picked.agentId)).framework).toBe("LangChain");
       // An agent connected by address with no framework named: OpenBot doesn't know, so it says none.
       expect(await detail(unnamed.agentId)).not.toHaveProperty("framework");
+      });
     } finally {
       for (const [name, value] of Object.entries(saved)) {
         if (value === undefined) delete process.env[name];
