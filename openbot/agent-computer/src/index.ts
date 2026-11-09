@@ -34,7 +34,11 @@ import {
   TAKE_CONTROL_FIRST,
 } from "./control";
 import { keyForOpenList } from "./dropdown-list";
-import { handleEgressPolicyRequest, startEgressFilter } from "./egress";
+import {
+  egressShellEnvironment,
+  handleEgressPolicyRequest,
+  startEgressFilter,
+} from "./egress";
 import { enterText, FieldValueError } from "./enter-text";
 import { identity } from "./identity";
 import { createInputQueue, type InputQueue } from "./input-queue";
@@ -491,7 +495,8 @@ function runsAsOwnUser(seat: string): boolean {
  * An employee with its own Linux user: its live terminal, for the person watching.
  *
  * A bash started through the root helper as the employee (`sudo -n xb-bot shell <key> <dir>`,
- * docker/xb-bot.sh), in the employee's directory, with the environment its commands get. What the
+ * docker/xb-bot.sh), in the employee's directory, with the environment its commands get (egress
+ * filter included). What the
  * person types runs as the employee, never as pwuser. Only the person's: the employee's own commands
  * still go one at a time through `run` (`commandsFor`), so they are not typed into this shell and the
  * terminal shows what the person did here. Prepared like a command is (`ensure`), so the first thing
@@ -508,14 +513,20 @@ async function ownUserTerminal(
   if (!shell) {
     shell = createLiveShell({
       cwd: "/",
-      env: () => environmentForCommand(process.env, "/"),
-      command: (directory) => [
+      // What the employee's commands get (shell.ts runAs), egress filter last, so what a person types
+      // here goes out through the same policy and the same per-employee identity as a command does.
+      env: () => ({
+        ...environmentForCommand(process.env, "/"),
+        ...egressShellEnvironment(),
+      }),
+      command: ({ rc, env }) => [
         "sudo",
         "-n",
         XB_BOT_HELPER,
         "shell",
         key,
-        directory,
+        Buffer.from(rc, "utf8").toString("base64"),
+        ...Object.entries(env).map(([name, value]) => `${name}=${value}`),
       ],
     });
     ownUserTerminals.set(key, shell);
@@ -1646,6 +1657,13 @@ serve<StreamData & TerminalSocketData>({
           ?.terminal.restart(
             "The computer stopped, so the shell ended. A new one starts when it's next used.",
           );
+        // An employee with its own user: its terminal is the helper's, kept apart (`ownUserTerminal`).
+        if (runsAsOwnUser(botId))
+          ownUserTerminals
+            .get(botKeyOf(botId))
+            ?.restart(
+              "The computer stopped, so the shell ended. A new one starts when it's next used.",
+            );
         await botBrowser.settled(botId);
         return json({ stopped: true, wasRunning });
       }
@@ -1690,6 +1708,13 @@ serve<StreamData & TerminalSocketData>({
           ?.terminal.restart(
             "The computer was reset, so the shell ended. A new one starts when it's next used.",
           );
+        // An employee with its own user: its terminal is the helper's, kept apart (`ownUserTerminal`).
+        if (runsAsOwnUser(botId))
+          ownUserTerminals
+            .get(botKeyOf(botId))
+            ?.restart(
+              "The computer was reset, so the shell ended. A new one starts when it's next used.",
+            );
         await botBrowser.settled(botId);
         /*
          * And a new run, because the browser this session described is gone.

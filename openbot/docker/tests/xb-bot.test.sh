@@ -435,46 +435,58 @@ COMPUTER_PER_BOT_USERS=on "$XB" restore 2>"$T/err" || fail "restore exited $?"
 pass "restore removes stale command files"
 
 # shell: the employee's live terminal, an interactive bash as the employee (agent-computer's
-# ownUserTerminal). Root stands in for the caller here, so the terminal directory is root's and
-# SUDO_UID says 0, as sudo would say pwuser's uid.
+# ownUserTerminal). The startup file arrives base64 and the environment as NAME=VALUE arguments:
+# the helper reads no path the caller names.
 "$XB" ensure "$A" >/dev/null 2>"$T/err" || fail "ensure of A before shell exited $?: $(cat "$T/err")"
-SH=$(mktemp -d /tmp/.openbot-shell-XXXXXX)
-printf 'PS1="xb> "\n' >"$SH/bashrc"
-printf 'PATH=/usr/local/bin:/usr/bin:/bin\nHOME=/root\nUSER=root\nXB_TEST_VAR=from-env\n' >"$SH/env"
-chmod 600 "$SH/bashrc" "$SH/env"
+RC=$(printf 'PS1="xb> "\n' | base64 -w0)
 printf 'id -un; echo "home=$HOME var=$XB_TEST_VAR token=${COMPUTER_TOKEN:-none}"; umask; pwd; exit\n' |
-  SUDO_UID=0 COMPUTER_TOKEN=leak "$XB" shell "$A" "$SH" >"$T/out" 2>"$T/err"
+  COMPUTER_TOKEN=leak "$XB" shell "$A" "$RC" PATH=/usr/local/bin:/usr/bin:/bin HOME=/root USER=root XB_TEST_VAR=from-arg 'BAD-NAME=x' >"$T/out" 2>"$T/err"
 code=$?
 [ "$code" = 0 ] || fail "shell for A exited $code: $(cat "$T/err")"
 grep -qx "xb-$A" "$T/out" || fail "the shell did not run as xb-$A: $(cat "$T/out")"
-grep -qx "home=$DIRA var=from-env token=none" "$T/out" || fail "the shell's environment is wrong: $(cat "$T/out")"
+grep -qx "home=$DIRA var=from-arg token=none" "$T/out" || fail "the shell's environment is wrong: $(cat "$T/out")"
 grep -qx "0077" "$T/out" || fail "the shell's umask is not 077: $(cat "$T/out")"
 grep -qx "$DIRA" "$T/out" || fail "the shell did not start in $DIRA: $(cat "$T/out")"
-pass "shell runs an interactive bash as the employee, in its directory, with the env file and nothing of the caller's"
-none_left "-u xb-$A -x bash" || fail "a bash of xb-$A was left running after exit"
-pass "shell leaves nothing running once the person exits"
+grep -q 'xb> ' "$T/err" || fail "the startup file was not applied: $(head -c 300 "$T/err")"
+pass "shell runs an interactive bash as the employee, in its directory, with the given environment and nothing of the caller's"
+none_left "-u xb-$A -f bash.*--rcfile" || fail "the terminal's bash of xb-$A was left after exit: $(ps -o pid,args -u "xb-$A" | tr '\n' ';')"
+pass "shell leaves nothing of the employee's running once the person exits"
 
-expect_code 64 "shell outside /tmp/.openbot-shell-* is refused" -- env SUDO_UID=0 "$XB" shell "$A" /tmp
-expect_code 64 "shell with a path below the terminal directory is refused" -- env SUDO_UID=0 "$XB" shell "$A" "$SH/x"
-expect_code 64 "shell with .. in the path is refused" -- env SUDO_UID=0 "$XB" shell "$A" "$SH/.."
-expect_code 64 "shell without SUDO_UID is refused" -- env -u SUDO_UID "$XB" shell "$A" "$SH"
-expect_code 64 "shell for a directory the caller does not own is refused" -- env SUDO_UID=12345 "$XB" shell "$A" "$SH"
-LINK=/tmp/.openbot-shell-link$$
-ln -s "$SH" "$LINK"
-expect_code 64 "shell through a symlinked terminal directory is refused" -- env SUDO_UID=0 "$XB" shell "$A" "$LINK"
-rm -f "$LINK"
-chmod 755 "$SH"
-expect_code 64 "shell with a terminal directory others can read is refused" -- env SUDO_UID=0 "$XB" shell "$A" "$SH"
-chmod 700 "$SH"
-rm -f "$SH/env"
-expect_code 64 "shell without the env file is refused" -- env SUDO_UID=0 "$XB" shell "$A" "$SH"
-printf 'PATH=/usr/bin:/bin\n' >"$SH/env"
-chmod 600 "$SH/env"
-expect_code 65 "shell for an employee that was never prepared is 65" -- env SUDO_UID=0 "$XB" shell abcdefabcdef "$SH"
-expect_code 64 "shell with a bad key is 64" -- env SUDO_UID=0 "$XB" shell ABC "$SH"
+# A background job the person left behind ends with the terminal, not with the computer's restart.
+printf 'sleep 2001 &\nsleep 2002 </dev/null >/dev/null 2>&1 &\nexit\n' |
+  "$XB" shell "$A" "$RC" PATH=/usr/bin:/bin >"$T/out" 2>"$T/err"
+none_left "-u xb-$A -f sleep.200[12]" || fail "a background job of xb-$A outlived the terminal: $(ps -o pid,args -u "xb-$A" | tr '\n' ';')"
+pass "shell ends the employee's background jobs with the terminal"
+
+# The caller killed (sudo, when the computer stops the terminal): what runs in it ends within seconds,
+# even a job that ignores the hang-up.
+FIFO=$T/shell-in
+mkfifo "$FIFO"
+# The trailing `:` keeps sh from exec-ing the helper, so sh stays its parent, as sudo is.
+sh -c '"$0" shell "$1" "$2" PATH=/usr/bin:/bin; :' "$XB" "$A" "$RC" <"$FIFO" >"$T/out" 2>"$T/err" &
+caller=$!
+exec 7>"$FIFO"
+printf "trap '' HUP; sleep 2003\n" >&7
+n=0
+until pgrep -u "xb-$A" -f sleep.2003 >/dev/null 2>&1 || [ "$n" -ge 50 ]; do sleep 0.1; n=$((n + 1)); done
+pgrep -u "xb-$A" -f sleep.2003 >/dev/null 2>&1 || fail "the job in the terminal never started: $(cat "$T/err")"
+kill -KILL "$caller" 2>/dev/null
+exec 7>&-
+n=0
+until none_left "-u xb-$A -f sleep.2003" || [ "$n" -ge 50 ]; do sleep 0.2; n=$((n + 1)); done
+none_left "-u xb-$A -f sleep.2003" || fail "xb-$A's processes outlived the caller: $(ps -o pid,ppid,args -u "xb-$A" | tr '\n' ';')"
+pass "shell ends the employee's processes when its caller is killed, a hang-up-proof job included"
+rm -f "$FIFO"
+
+expect_code 64 "shell with a startup file that is not base64 is refused" -- "$XB" shell "$A" 'not base64!'
+expect_code 64 "shell with an empty startup file argument is refused" -- "$XB" shell "$A" ''
+expect_code 64 "shell with an overlong startup file is refused" -- "$XB" shell "$A" "$(head -c 70000 /dev/zero | tr '\0' 'A')"
+expect_code 64 "shell with too many environment arguments is refused" -- "$XB" shell "$A" "$RC" $(seq 1 70 | sed 's/^/V/; s/$/=x/')
+expect_code 65 "shell for an employee that was never prepared is 65" -- "$XB" shell abcdefabcdef "$RC"
+expect_code 64 "shell with a bad key is 64" -- "$XB" shell ABC "$RC"
+expect_code 64 "shell without a startup file is 64" -- "$XB" shell "$A"
 [ -z "$(ls /run/xb-bot/rc.* 2>/dev/null)" ] || fail "shell left a startup file in /run/xb-bot"
 pass "shell leaves no startup file behind"
-rm -rf "$SH"
 
 rm -rf "$T"
 echo "all xb-bot tests passed"

@@ -193,6 +193,7 @@ if [ "$healthy" = true ]; then
 
   # The live terminal of an employee with its own user: a bash as that employee, never pwuser's
   # (agent-computer ownUserTerminal, `xb-bot shell`). Opening the terminal socket starts it.
+  T_TERM=$(mktemp)
   docker exec "$name" sh -c '
     token=$(cat /run/s6/container_environment/COMPUTER_TOKEN)
     cd /tmp && OPENBOT_SMOKE_TOKEN=$token timeout 20 bun -e "
@@ -203,16 +204,25 @@ if [ "$healthy" = true ]; then
       setTimeout(() => { console.log(said.join(\"\\n\")); ws.close(); process.exit(0); }, 5000);
     "
   ' sh "$A" > "$T_TERM" 2>&1 || true
-  if docker exec "$name" pgrep -u "$userA" -x bash >/dev/null 2>&1; then
-    pass "$A's live terminal runs a bash as $userA"
+  if grep -q '"type":"ready"' "$T_TERM" && ! grep -q '"type":"error"' "$T_TERM"; then
+    pass "$A's live terminal opened"
   else
-    fail "$A's live terminal runs a bash as $userA (socket said: $(tr '\n' ' ' < "$T_TERM" | head -c 300); $(docker exec "$name" ps -o user,pid,args -A 2>/dev/null | grep -E 'bash|xb-bot|sudo' | grep -v grep | tr '\n' ';'))"
+    fail "$A's live terminal opened (socket said: $(tr '\n' ' ' < "$T_TERM" | head -c 300))"
   fi
-  if grep -q '"fatal":true' "$T_TERM"; then
-    fail "$A's live terminal was refused: $(tr '\n' ' ' < "$T_TERM" | head -c 300)"
+  # The terminal's own bash (started with its startup file on a pipe), as the employee, under runuser.
+  term_pid=$(docker exec "$name" pgrep -u "$userA" -f -- '--rcfile /dev/fd/' 2>/dev/null | head -n 1 || true)
+  term_parent=$( [ -n "$term_pid" ] && docker exec "$name" ps -o args= -p "$(docker exec "$name" ps -o ppid= -p "$term_pid" | tr -d ' ')" 2>/dev/null || true)
+  if [ -n "$term_pid" ] && printf '%s' "$term_parent" | grep -q "runuser -u $userA"; then
+    pass "$A's live terminal runs a bash as $userA, under runuser"
   else
-    pass "$A's live terminal was not refused"
+    fail "$A's live terminal runs a bash as $userA, under runuser (pid ${term_pid:-none}, parent: ${term_parent:-none}; $(docker exec "$name" ps -o user,pid,ppid,args -A 2>/dev/null | grep -E 'bash|xb-bot|sudo|runuser' | grep -v grep | tr '\n' ';'))"
   fi
+  if docker exec "$name" pgrep -u pwuser -f -- "bots/$keyA" >/dev/null 2>&1; then
+    fail "no process of pwuser's runs in $A's directory"
+  else
+    pass "no process of pwuser's runs in $A's directory"
+  fi
+  rm -f "$T_TERM"
 
   # A process an employee leaves outside its command's group (setsid) survives the command, so the
   # computer ends every employee process before it (re)starts: otherwise one could take port 4100

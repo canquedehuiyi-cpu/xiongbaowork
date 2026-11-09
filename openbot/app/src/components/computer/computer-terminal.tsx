@@ -66,7 +66,7 @@ export function ComputerTerminal({ computerId }: { computerId: string }) {
         {driving ? (
           <span className="text-sm">
             <strong className="font-medium">终端和屏幕现在由你操作。</strong>
-            点击终端就能输入。你交还之前，员工会一直等着。
+            点击终端就能输入。你交还之前，员工会一直等着。终端里的命令以员工的身份运行，员工之后也能看到你在这里留下的东西，不要在这里输入密码或密钥。
           </span>
         ) : (
           <span className="text-muted-foreground text-xs">

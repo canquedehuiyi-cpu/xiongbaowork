@@ -139,15 +139,16 @@ export type LiveShellOptions = {
   /** The bash to run. Found on PATH when absent; see `findBash`. */
   bash?: string;
   /**
-   * Start the shell some other way than this process's own bash: the argv to run, given the private
-   * directory holding `bashrc` (the prompt marks) and `env` (the environment, one NAME=VALUE a line).
+   * Start the shell some other way than this process's own bash: the argv to run, given the startup
+   * file's text (the prompt marks) and the environment the shell should have.
    *
-   * For an employee with its own Linux user (`sudo -n xb-bot shell <key> <dir>`, docker/xb-bot.sh),
-   * whose shell must not be this process's user. The program is expected to read both files and start
-   * an interactive bash with them. Stopping it is a hang-up first, which bash and sudo both pass on and
-   * end with, and a kill only after a grace period, so nothing is left running as the employee.
+   * For an employee with its own Linux user (`sudo -n xb-bot shell <key> <rc> NAME=VALUE...`,
+   * docker/xb-bot.sh), whose shell must not be this process's user. Both travel in the argv, never as
+   * a path for the program to read: a path is something it could be made to read something else
+   * through. Stopping it is a kill of what was started (sudo), at once; the helper sees its caller
+   * gone and ends the employee's processes in that terminal itself.
    */
-  command?: (directory: string) => string[];
+  command?: (start: { rc: string; env: Record<string, string> }) => string[];
 };
 
 /**
@@ -443,18 +444,16 @@ export function createLiveShell(options: LiveShellOptions) {
     });
     promptWaiters.push(readyResolve);
 
-    if (options.command)
-      writeFileSync(
-        join(directory, "env"),
-        Object.entries(env)
-          .filter(([, value]) => !value.includes("\n"))
-          .map(([name, value]) => `${name}=${value}`)
-          .join("\n"),
-        { mode: 0o600 },
-      );
     const child = Bun.spawn(
       options.command
-        ? options.command(directory)
+        ? options.command({
+            rc: startupFile(turnFile),
+            env: Object.fromEntries(
+              Object.entries(env).filter(
+                ([, value]) => !value.includes("\n") && !value.includes("\0"),
+              ),
+            ),
+          })
         : [options.bash ?? findBash(), "--noprofile", "--rcfile", rcFile, "-i"],
       {
         cwd: options.cwd,
@@ -516,27 +515,6 @@ export function createLiveShell(options: LiveShellOptions) {
     const current = running;
     if (!current) return;
     endingReason = reason;
-    if (options.command) {
-      /*
-       * Through sudo, a kill ends sudo and nothing else: the employee's bash would carry on. A hang-up
-       * is what a closed terminal sends, and sudo, runuser and bash all pass it on and end with it.
-       * The kill is the fallback for one that will not.
-       */
-      try {
-        current.process.kill("SIGHUP");
-      } catch {
-        return;
-      }
-      const fallback = setTimeout(() => {
-        try {
-          current.process.kill("SIGKILL");
-        } catch {
-          // Already gone.
-        }
-      }, INTERRUPT_GRACE_MS);
-      (fallback as { unref?: () => void }).unref?.();
-      return;
-    }
     try {
       current.process.kill("SIGKILL");
     } catch {

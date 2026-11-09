@@ -6,7 +6,7 @@
 #
 #   xb-bot ensure <key>             create xb-<key>, its directory and ACLs; print its uid
 #   xb-bot run <key> <timeout_s>    stdin: NAME=VALUE lines, an empty line, then the command
-#   xb-bot shell <key> <dir>         an interactive bash as the employee, for its live terminal
+#   xb-bot shell <key> <rc_b64> [NAME=VALUE...]  an interactive bash as the employee, its live terminal
 #   xb-bot restore                  tighten the top directories and recreate users from the map
 #
 # Exit 64: arguments refused, or the helper is not ready (see restore). Exit 65 (run): the employee's
@@ -436,14 +436,24 @@ cmd_restore() {
 # commands still go through `run`, one at a time. What the person types runs as the employee, in the
 # employee's directory, with the same reset environment and umask as `run` — never as pwuser or root.
 #
-# <dir> is the directory agent-computer's live shell made for this terminal (`mkdtemp` under /tmp):
-# `bashrc` (the prompt marks, live-shell.ts `startupFile`) and `env` (NAME=VALUE lines, as `run`
-# reads them from stdin, which here is the terminal). Both are read by root and handed over, never
-# opened by the employee: the directory is the caller's alone (0700), so it has to be the caller's,
-# a real directory, and not a link, or a link planted in /tmp could make root read something else.
+#   xb-bot shell <key> <rc_base64> [NAME=VALUE ...]
+#
+# NOTHING IS READ FROM A PATH THE CALLER NAMES. The startup file (live-shell.ts `startupFile`, the
+# prompt marks) arrives base64 in an argument and the environment as NAME=VALUE arguments, filtered
+# exactly as `run` filters its lines. An earlier version read both from a directory the caller named
+# after checking it, and the caller could swap a file in that directory for a link between the check
+# and the read, so root read any file on the machine into the employee's shell. Neither is secret:
+# the startup file is the same for everyone, and the environment is what every employee's commands
+# get. Bounded, so an argument cannot make root write without end into /run.
+#
+# ENDING. The helper stays (no exec) and waits. When the bash ends, and when the caller goes (the
+# terminal closed: agent-computer kills sudo, and a watcher here sees its parent gone), every process
+# of the employee's in this terminal's session ends with it, background jobs included. One the
+# employee moved to a session of its own (setsid) survives until the computer restarts, as from `run`.
 cmd_shell() {
   key=$1
-  src=$2
+  rc_b64=$2
+  shift 2
   fail_code=64
   trap on_exit EXIT
   user=xb-$key
@@ -451,28 +461,15 @@ cmd_shell() {
   dir=$BOTS/$key
   cd "$dir" 2>/dev/null || die 65 "员工目录 $dir 不存在"
 
-  case $src in
-    /tmp/.openbot-shell-*) ;;
-    *) die 64 "终端目录必须在 /tmp/.openbot-shell-* 下" ;;
+  case $rc_b64 in
+    '' | *[!A-Za-z0-9+/=]*) die 64 "启动脚本必须是 base64" ;;
   esac
-  case $src in
-    /tmp/.openbot-shell-*/* | *[!A-Za-z0-9/._-]* | */.. | */../* | */./* | */. | *//*) die 64 "终端目录路径不合法" ;;
-  esac
-  caller=${SUDO_UID:-}
-  case $caller in
-    '' | *[!0-9]*) die 64 "只能经 sudo 调用" ;;
-  esac
-  [ -d "$src" ] && [ ! -L "$src" ] || die 64 "终端目录不存在"
-  [ "$(stat -c %u -- "$src")" = "$caller" ] || die 64 "终端目录不属于调用方"
-  [ "$(stat -c %a -- "$src")" = 700 ] || die 64 "终端目录权限必须是 0700"
-  for f in bashrc env; do
-    [ -f "$src/$f" ] && [ ! -L "$src/$f" ] || die 64 "终端目录里缺少 $f"
-    [ "$(stat -c %u -- "$src/$f")" = "$caller" ] || die 64 "$f 不属于调用方"
-  done
+  [ "${#rc_b64}" -le 65536 ] || die 64 "启动脚本过长"
+  [ $# -le 64 ] || die 64 "环境变量过多"
 
-  # NAME=VALUE lines, filtered exactly as `run` filters them.
-  set --
-  while IFS= read -r line || [ -n "$line" ]; do
+  # NAME=VALUE arguments, filtered exactly as `run` filters its lines; an overlong one is dropped.
+  for line in "$@"; do
+    shift
     case $line in
       *=*) ;;
       *) continue ;;
@@ -482,32 +479,65 @@ cmd_shell() {
       '' | [0-9]* | *[!A-Za-z0-9_]*) continue ;;
       HOME | TMPDIR | USER | LOGNAME | SHELL) continue ;;
     esac
+    [ "${#line}" -le 4096 ] || continue
     set -- "$@" "$line"
-  done <"$src/env"
+  done
 
   # The startup file goes over as fd 3 of a root-owned 0600 file already unlinked, as `run` hands over
   # its command. The employee's bash reads it from the fd and gives the real shell a pipe of its own
   # (`<( )`), which it may reopen as /dev/fd/N; a root-owned file or pipe it could not.
   lockdir_ready || die 64 "准备 $LOCKDIR 失败"
   tmp=$( (umask 077 && mktemp "$LOCKDIR/rc.XXXXXX") 2>/dev/null) || die 64 "无法创建临时文件"
-  cat -- "$src/bashrc" 2>/dev/null >"$tmp" || die 64 "无法读取启动脚本"
+  printf '%s' "$rc_b64" | base64 -d 2>/dev/null >"$tmp" || die 64 "启动脚本不是有效的 base64"
   true 2>/dev/null <"$tmp" || die 64 "无法打开临时文件"
   exec 3<"$tmp"
   rm -f -- "$tmp"
   tmp=
 
+  sid=$(ps -o sid= -p $$ 2>/dev/null | tr -d ' ')
+  case $sid in
+    '' | *[!0-9]*) die 64 "读不到终端会话" ;;
+  esac
+  # Every process of the employee's in this terminal's session. Root's (this helper, sudo, runuser,
+  # the watcher) are not the employee's and are left to end on their own.
+  end_session() {
+    pkill -KILL -s "$sid" -u "$user" 2>/dev/null || true
+  }
+  # The caller gone (sudo killed when the terminal is stopped) is the terminal closed: end what the
+  # employee runs in it even if the bash itself is held up by a job that ignores the hang-up.
+  parent=$PPID
+  (
+    trap '' HUP
+    while kill -0 "$parent" 2>/dev/null; do sleep 1; done
+    pkill -KILL -s "$sid" -u "$user" 2>/dev/null || true
+  ) </dev/null >/dev/null 2>&1 &
+  watcher=$!
+  on_signal() {
+    trap '' TERM INT HUP
+    said=1
+    end_session
+    kill "$watcher" 2>/dev/null || true
+    exit 129
+  }
+  trap on_signal TERM INT HUP
+
   umask 077
   trap - EXIT
   fail_code=
-  # exec, so sudo's signals (HUP when the terminal goes, TERM) reach runuser, which passes them on.
+  rc=0
   # shellcheck disable=SC2016
-  exec runuser -u "$user" -- env -i "$@" \
+  runuser -u "$user" -- env -i "$@" \
     HOME="$dir" TMPDIR="$dir/.tmp" USER="$user" LOGNAME="$user" SHELL=/bin/bash \
-    /bin/bash -c '__xb_rc=$(cat <&3); exec 3<&-; exec /bin/bash --noprofile --rcfile <(printf "%s\n" "$__xb_rc") -i'
+    /bin/bash -c '__xb_rc=$(cat <&3); exec 3<&-; exec /bin/bash --noprofile --rcfile <(printf "%s\n" "$__xb_rc") -i' || rc=$?
+  exec 3<&-
+  end_session
+  kill "$watcher" 2>/dev/null || true
+  trap - TERM INT HUP
+  exit "$rc"
 }
 
 if [ $# -lt 1 ]; then
-  die 64 "用法：xb-bot ensure <key> | run <key> <timeout_s> | shell <key> <dir> | restore"
+  die 64 "用法：xb-bot ensure <key> | run <key> <timeout_s> | shell <key> <rc_base64> [NAME=VALUE ...] | restore"
 fi
 case $1 in
   ensure)
@@ -519,8 +549,9 @@ case $1 in
     cmd_run "$2" "$3"
     ;;
   shell)
-    [ $# -eq 3 ] && valid_key "$2" || die 64 "用法：xb-bot shell <key> <dir>（key 为 12 位小写十六进制）"
-    cmd_shell "$2" "$3"
+    [ $# -ge 3 ] && valid_key "$2" || die 64 "用法：xb-bot shell <key> <rc_base64> [NAME=VALUE ...]（key 为 12 位小写十六进制）"
+    shift
+    cmd_shell "$@"
     ;;
   restore)
     [ $# -eq 1 ] || die 64 "用法：xb-bot restore"
