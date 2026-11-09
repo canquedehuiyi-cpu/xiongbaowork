@@ -760,7 +760,8 @@ as before. Users are created through the root helper `/usr/local/sbin/xb-bot`; a
 files across a recreated container.
 
 An employee cannot `sudo`, not even the package managers `pwuser` may run: it installs user-level
-tools in its own directory (`pip --user`, `npm`, `bun`), and system packages belong in the image.
+tools in its own directory (`npm install` without `-g`, `bun add`; the image has no python3), and
+system packages belong in the image.
 
 When the switch is on and the helper cannot be used, the computer's `/health` answers HTTP 503 with
 `status: "unready"` and `perBotUsers.reason`, and `/exec` and `/files/*` for non-default Bots answer

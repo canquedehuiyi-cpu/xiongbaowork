@@ -459,7 +459,7 @@ OneDrive 不在平台目录里，这一步只涉及百度网盘。
 **交付镜像默认开启**（`COMPUTER_PER_BOT_USERS=on`），升级镜像后不需要另加配置。注意：
 
 - 不要给容器加 `--security-opt no-new-privileges`，它和本功能互斥，加了以后员工电脑会报未就绪。确实需要它时，同时设 `-e COMPUTER_PER_BOT_USERS=off`，回到所有员工共用一个用户的旧行为。
-- **员工不能再用 sudo 装系统包**（`sudo apt-get install` 会失败）。员工可以在自己目录里用 `pip install --user`、`npm`、`bun` 装用户级工具；常用的系统包需要预装进镜像，有缺的请提需求。
+- **员工不能再用 sudo 装系统包**（`sudo apt-get install` 会失败）。员工可以在自己目录里用 `npm install`（不带 `-g`）、`bun add` 装用户级工具（镜像里没有 python3，不提供 Python 的安装方式）；常用的系统包需要预装进镜像，有缺的请提需求。
 - 已有数据卷照常挂载。容器每次启动都会收紧 `/workspace`、`/workspace/bots`、`/profiles` 的权限，并按 `/workspace/.xb-users` 恢复员工用户，同一员工的 uid 和文件归属不变。
 
 **升级后确认已生效**（任选其一）：
