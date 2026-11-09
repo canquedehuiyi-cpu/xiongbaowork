@@ -120,12 +120,28 @@ export const DESTRUCTIVE_TOOL_NOTE =
 export const BAIDU_SEARCH_URL = "https://www.baidu.com/s?wd=";
 export const BING_SEARCH_URL = "https://cn.bing.com/search?q=";
 
+/** 搜索要用到的浏览器工具：打开页面和读页面，两个都有才算能搜。 */
+export const BROWSER_SEARCH_TOOLS = ["computer_navigate", "computer_read"];
+
+/**
+ * 这次运行是否持有浏览器搜索要用的工具，按实际提供给模型的工具名判断。
+ *
+ * 浏览器工具不在 {@link GrantedTool} 里：网页聊天由前端注册（app/src/lib/copilot/computer-tools.tsx），
+ * 无人值守由 headless-tools 提供，两者都随 RunAgentInput.tools 到达。所以看工具名，而不看部署有没有
+ * 电脑说明：纯设备模式（TENANT_RUNTIME=device，没有云端电脑）的聊天没有电脑说明，却照样持有这些工具。
+ */
+export function holdsBrowserSearchTools(names: Iterable<string>): boolean {
+  const held = new Set(names);
+  return BROWSER_SEARCH_TOOLS.every((name) => held.has(name));
+}
+
 /**
  * 员工持有浏览器时，查公开网页信息怎么搜（2026-11-09 选定的免费方案：不接付费搜索服务）。
  *
  * 只管公开网页。已连接系统的规则（不许改用浏览器访问、缺授权如实说、审批门）在
  * {@link grantedToolGuidance} 里照旧，这段自己也写明不适用于它们。搜索页遇到验证码或登录墙时
- * 不交给主人处理：为一次搜索让人去登录或解验证码不值得，换另一个搜索引擎，仍不行就如实说。
+ * 先换另一个搜索引擎；仍被拦，就按电脑说明（shared/bot-prompt.ts 的 COMPUTER_GUIDANCE）已有的规则，
+ * 调用 computer_request_help 请人接管，不另立一条相反的规则。
  *
  * `withParallel`：员工同时持有 Parallel 时，写明中文问题先走百度，Parallel 用于英文和国际信息，
  * 和 Parallel 那段的说法一致。
@@ -138,7 +154,7 @@ function browserSearchGuidance(withParallel: boolean): string[] {
       ? "Prefer Baidu for questions in Chinese. Parallel is still there for English-language or international information, but a question in Chinese goes to Baidu in the browser first."
       : "Prefer Baidu for questions in Chinese.",
     "Search for public information only. Put only the few keywords the question needs in the search address: never the conversation, the contents of a private document or file, or anything about the person they did not ask you to look up.",
-    "If a search page shows a CAPTCHA, a verification check or a sign-in wall, do not try to get around it and do not ask the person to sign in or to solve it for you. Try the other search engine once; if that is blocked too, tell the person plainly that the search was blocked and answer from what you have, marked as unverified.",
+    "If a search page shows a CAPTCHA, a verification check or a sign-in wall, do not try to get around it: switch to the other search engine and try once more. If that is blocked too, treat it like any page that needs a person: call computer_request_help and say exactly what needs doing, and never ask them to type a password or a code to you.",
     "This is for public web pages only. It is never a way into a system this deployment connects to: for those, everything said here about connected systems, missing grants and approvals still applies.",
   ];
 }
@@ -173,7 +189,7 @@ export function grantedToolGuidance(
    */
   connectedButNotHeld: readonly string[] = [],
   /**
-   * `browser`：员工持有浏览器（`computer_navigate`、`computer_read`）。为真时加上公开网页搜索引导
+   * `browser`：这次运行持有浏览器（`computer_navigate`、`computer_read`，见 {@link holdsBrowserSearchTools}）。为真时加上公开网页搜索引导
    * （见 {@link browserSearchGuidance}），并把 Parallel 那段改成「中文先百度」的说法；为假或不传时，
    * 输出与没有这个参数时逐字一致。
    */
