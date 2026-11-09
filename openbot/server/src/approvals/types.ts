@@ -76,6 +76,11 @@ export type ApprovalPolicyOutcome = {
      * 删除、归档，或应用标为破坏性的工具：总是先问，且只能「允许一次」（见 `offersStandingRule`）。
      */
     | "destructive_tool"
+    /**
+     * 应用工具要把内容发给别人（发信、回复、发帖等）：总是先问，且只能「允许一次」
+     * （见 `offersStandingRule`）。
+     */
+    | "outbound_send"
     | "auto_review"
     | "default"
     /** The person already declined this action, or an equivalent, earlier in this conversation. */
@@ -167,11 +172,18 @@ export type ApprovalCandidate = {
   continuation?: ApprovalContinuation;
 };
 
+/** 只能「允许一次」的底线：它们在任何规则之后仍然要问。 */
+const ONCE_ONLY_SOURCES: ReadonlySet<string> = new Set([
+  "destructive_tool",
+  "outbound_send",
+]);
+
 /**
  * 这条审批能不能用「在这里总是允许」来回答，也就是存一条长期规则。
  *
  * 删除、归档和应用标为破坏性的操作不行：它们在任何规则之后仍然要问（`destructive_tool` 底线），
- * 存下的规则下次根本用不上，只会误导人。「允许一次」和「拒绝」照常提供。
+ * 存下的规则下次根本用不上，只会误导人。应用工具把内容发给别人（`outbound_send` 底线）同理。
+ * 「允许一次」和「拒绝」照常提供。
  *
  * 服务端据此拒绝这种规则（./store 的 `decide`），聊天卡片据此不画这个按钮
  * （delivery/opentag-agent.ts）；网页的审批卡片按同一条件判断（app/src/components/approvals）。
@@ -179,7 +191,7 @@ export type ApprovalCandidate = {
 export function offersStandingRule(action: {
   policy?: { source: string } | undefined;
 }): boolean {
-  return action.policy?.source !== "destructive_tool";
+  return !ONCE_ONLY_SOURCES.has(action.policy?.source ?? "");
 }
 export type ApprovalAction = ApprovalCandidate & {
   runId: string;

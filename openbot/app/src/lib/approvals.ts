@@ -42,10 +42,23 @@ export const POLICY_SOURCE_LABELS: Record<string, string> = {
   desktop_window: "敏感窗口",
   // --- end desktop control ---
   destructive_tool: "删除类操作",
+  outbound_send: "对外发送",
   auto_review: "自动审查",
   default: "你的偏好",
   person_declined: "你已拒绝过",
 };
+/**
+ * 这条请求能不能用「在这里总是允许」来回答。删除类和对外发送底线问的动作每次都要问，存下的规则
+ * 用不上（服务端也会拒绝），所以不给这个选项。与服务端 approvals/types 的 `offersStandingRule`
+ * 同一个条件。
+ */
+export function offersStandingRule(
+  policy: { source: string } | undefined,
+): boolean {
+  return (
+    policy?.source !== "destructive_tool" && policy?.source !== "outbound_send"
+  );
+}
 export type ApprovalInboxData = {
   enabled: boolean;
   requests: {

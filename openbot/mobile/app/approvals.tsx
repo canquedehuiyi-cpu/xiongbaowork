@@ -112,8 +112,9 @@ export default function ApprovalsScreen() {
                 void decide(request.id, "allow_once");
               }}
             />
-            {/* 删除类底线问的动作每次都要问，存下的规则用不上，服务端也会拒绝，所以不画。 */}
-            {request.action?.policy?.source === "destructive_tool" ? null : (
+            {/* 删除类和对外发送底线问的动作每次都要问，存下的规则用不上，服务端也会拒绝，所以不画。 */}
+            {request.action?.policy?.source === "destructive_tool" ||
+            request.action?.policy?.source === "outbound_send" ? null : (
               <Button
                 disabled={Boolean(busy)}
                 title="Always allow this scope"
