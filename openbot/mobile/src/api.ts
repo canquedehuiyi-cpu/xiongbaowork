@@ -58,6 +58,8 @@ export type ApprovalInbox = {
       scope: string;
       args: unknown;
       target?: unknown;
+      /** 由哪一层要问的；删除类底线（`destructive_tool`）问的只能「允许一次」。 */
+      policy?: { behaviour: string; source: string; reason: string };
     };
   }[];
   questions?: {

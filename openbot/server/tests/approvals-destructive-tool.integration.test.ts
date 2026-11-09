@@ -43,6 +43,11 @@ const email = `${person}@destructive.test`;
 const server = `dtool${suite}`;
 /** 名字里看不出会删除什么，只有应用自己的标注说它会。 */
 const RESET = `${server}/reset_pipeline`;
+/**
+ * 管理员按 URL 添加、起名撞上内部前缀的自定义服务器（官方参考实现 server-memory 就叫 memory）。
+ * id 就是这两个字面值，所以开跑前先确认库里没有同名的行，免得删到别人的。
+ */
+const LOOKALIKES = ["memory", "host"] as const;
 
 const approvalStore = createApprovalStore(database);
 const approvals = createApprovalService(approvalStore);
@@ -86,9 +91,37 @@ await runAsTenant("platform", async () => {
     destructive: true,
   });
 });
-await runAsTenant("platform", () =>
-  plugins.addInstallListing("mcp", server, "ops@destructive.test"),
-);
+await runAsTenant("platform", async () => {
+  const taken = await database
+    .select({ id: mcpServers.id })
+    .from(mcpServers)
+    .where(inArray(mcpServers.id, [...LOOKALIKES]));
+  if (taken.length)
+    throw new Error(
+      `this database already has servers called ${taken.map((row) => row.id).join(", ")}; refusing to reuse them`,
+    );
+  for (const id of LOOKALIKES) {
+    await database.insert(mcpServers).values({
+      id,
+      tenantId: "team",
+      title: `${id}（测试）`,
+      vendor: "Test",
+      url: `https://${id}-${suite}.example.test/mcp`,
+      provenance: "custom",
+    });
+    await database.insert(mcpTools).values({
+      tenantId: "team",
+      serverId: id,
+      name: "delete_entities",
+      description: "Delete entities from the knowledge graph.",
+      effect: "write",
+    });
+  }
+});
+for (const id of [server, ...LOOKALIKES])
+  await runAsTenant("platform", () =>
+    plugins.addInstallListing("mcp", id, "ops@destructive.test"),
+  );
 await runAsTenant(person, () =>
   plugins.recordConnection({
     serverId: server,
@@ -97,11 +130,12 @@ await runAsTenant(person, () =>
     scope: "write",
   }),
 );
-await runAsTenant(person, () =>
-  plugins.grant("mcp", RESET, avatarAgentId(person), email, {
-    selfService: true,
-  }),
-);
+for (const ref of [RESET, ...LOOKALIKES.map((id) => `${id}/delete_entities`)])
+  await runAsTenant(person, () =>
+    plugins.grant("mcp", ref, avatarAgentId(person), email, {
+      selfService: true,
+    }),
+  );
 
 afterAll(async () => {
   await runAsTenant(person, async () => {
@@ -122,11 +156,14 @@ afterAll(async () => {
       .delete(approvalRules)
       .where(eq(approvalRules.ownerUserId, person));
   });
+  for (const id of [server, ...LOOKALIKES])
+    await runAsTenant("platform", () =>
+      plugins.removeInstallListing("mcp", id, "ops@destructive.test"),
+    );
   await runAsTenant("platform", () =>
-    plugins.removeInstallListing("mcp", server, "ops@destructive.test"),
-  );
-  await runAsTenant("platform", () =>
-    database.delete(mcpServers).where(eq(mcpServers.id, server)),
+    database
+      .delete(mcpServers)
+      .where(inArray(mcpServers.id, [server, ...LOOKALIKES])),
   );
   await runAsTenant(person, async () => {
     await database.delete(credentials).where(eq(credentials.keyId, person));
@@ -206,4 +243,42 @@ test("一次 MCP 调用：应用标为破坏性的工具在「总是允许」规
     approvals.decide(person, request?.id as string, "allow_once"),
   );
   expect(once).toMatchObject({ decision: "allow_once", status: "approved" });
+});
+
+test("一个叫 memory 或 host 的 MCP 服务器上的 delete_entities 同样要问：按调用路径认应用工具，不看名字", async () => {
+  for (const id of LOOKALIKES) {
+    const ref = `${id}/delete_entities`;
+    const toolCallId = randomUUID();
+    const thrown = await runAsTenant(person, () =>
+      withApprovalContext(
+        {
+          runId: randomUUID(),
+          threadId: `${person}-thread-${id}`,
+          toolCallId,
+          toolName: ref,
+          args: {},
+          messages: [{ id: "u1", role: "user", content: "把这些实体删掉。" }],
+          state: {},
+          context: [],
+          forwardedProps: {},
+        },
+        () =>
+          plugins.callTool({
+            ref,
+            args: {},
+            botId: avatarAgentId(person),
+            actorId: person,
+          }),
+      ),
+    ).catch((error: unknown) => error);
+    expect(thrown).toBeInstanceOf(HeadlessToolSuspension);
+    const [request] = (
+      await runAsTenant(person, () => approvalStore.list(person))
+    ).filter((row) => row.action.toolCallId === toolCallId);
+    expect(request?.action.policy).toMatchObject({
+      behaviour: "ask",
+      source: "destructive_tool",
+    });
+  }
+  expect(vendorCalls).toEqual([]);
 });

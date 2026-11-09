@@ -8590,6 +8590,8 @@ export function createPluginStore(options: PluginStoreOptions) {
         target: { serverId, toolName, url: row.url, effect },
         // 列出应用时它把这个工具标成了破坏性：不管叫什么，都按删除处理，总是先问。
         ...(advertised[0]?.destructive ? { destructive: true as const } : {}),
+        // 标明它来自插件调用路径：删除类底线按来源认应用工具，不看服务器叫什么。
+        subject: { connector: true },
         continuation: currentApprovalContext(),
       });
       if (approval && "replay" in approval)
