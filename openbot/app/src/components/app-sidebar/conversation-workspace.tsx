@@ -26,6 +26,7 @@ import {
   type MessageListEmphasis,
   useMessageListEmphasis,
 } from "@/lib/settings/message-list";
+import { cn } from "@/lib/utils";
 import { Channel } from "./channel";
 import { ChannelPagination } from "./channel-pagination";
 import {
@@ -48,6 +49,15 @@ const WORKSPACE_TABS = [
   { value: "chats", label: "对话任务" },
   { value: "automations", label: "自动任务" },
 ] as const;
+
+/*
+ * The open conversation, marked the way the sidebar marks the current page (docs/design/ios-studio):
+ * a lighter plate with a hairline edge and a short red bar at its left. Written against the row's
+ * own link from here, because the row (`./channel`) is shared with the sidebar and its link already
+ * says `data-status="active"` (and `aria-current="page"`, which is what a screen reader is told).
+ */
+const ACTIVE_ROW =
+  "[&_a[data-status=active]]:relative [&_a[data-status=active]]:bg-accent [&_a[data-status=active]]:shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--foreground)_7%,transparent)] [&_a[data-status=active]]:before:absolute [&_a[data-status=active]]:before:top-1/2 [&_a[data-status=active]]:before:left-0 [&_a[data-status=active]]:before:h-[16px] [&_a[data-status=active]]:before:w-[3px] [&_a[data-status=active]]:before:-translate-y-1/2 [&_a[data-status=active]]:before:rounded-r-[3px] [&_a[data-status=active]]:before:bg-signal";
 
 const newLinkClassName =
   "flex h-[24px] shrink-0 items-center gap-1 rounded-md px-1.5 text-[12px] text-muted-foreground outline-none hover:bg-foreground/5 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 [&>svg]:size-[13px]";
@@ -225,7 +235,10 @@ function ConversationList({
         </div>
       ) : null}
       <div
-        className="min-h-0 flex-1 overflow-y-auto px-[6px] pb-3"
+        className={cn(
+          "min-h-0 flex-1 overflow-y-auto px-[6px] pb-3",
+          ACTIVE_ROW,
+        )}
         data-slot="workspace-list"
         ref={scrollRoot}
       >

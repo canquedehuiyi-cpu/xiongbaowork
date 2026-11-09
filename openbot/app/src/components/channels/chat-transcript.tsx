@@ -87,6 +87,11 @@ type ChatTranscriptProps = {
   /** History has been asked for and has not arrived. Drawn only when there is nothing else to draw. */
   restoring?: boolean;
   /**
+   * What an empty conversation shows instead of a blank pane — a welcome on the compose screen.
+   * Drawn only while there is nothing at all to draw: no turns, nothing restoring, queued or stopped.
+   */
+  empty?: React.ReactNode;
+  /**
    * Why the last turn ended without an answer, if it did.
    *
    * A sentence rather than a flag, because the reasons are not interchangeable: a Bot that refused,
@@ -196,12 +201,18 @@ function Thinking() {
  */
 function Stopped({ reason }: { reason: string }) {
   return (
+    // Needs attention, so it carries the redesign's attention treatment: red ink on a soft red
+    // ground, with an icon so it does not rest on colour alone.
     <p
-      className="text-destructive text-sm"
+      className="flex items-start gap-2 rounded-[12px] border border-signal/30 bg-signal-soft px-3 py-2 text-[13px] text-signal-ink leading-relaxed"
       data-testid="transcript-stopped"
       role="alert"
     >
-      {reason}
+      <IconAlertTriangle
+        aria-hidden
+        className="mt-[3px] size-[14px] shrink-0"
+      />
+      <span className="min-w-0">{reason}</span>
     </p>
   );
 }
@@ -326,7 +337,7 @@ function Queued({
          * message sent by mistake rather than as a file waiting its turn.
          */}
         {text ? (
-          <Bubble align="end" className="opacity-60" variant="muted">
+          <Bubble align="end" className="opacity-60" variant="user">
             <BubbleContent>
               {/* Shown exactly as typed, for the same reason a sent message is. */}
               <span className="whitespace-pre-wrap">{text}</span>
@@ -656,10 +667,14 @@ const TranscriptMessage = memo(function TranscriptMessage({
             inside it — a fenced code block, a table — should span the transcript rather than
             shrink to its own text. A person's bubble keeps fitting what they said.
           */}
+          {/*
+            docs/design/ios-studio: the person's words in the pale bubble, the coworker's answer on
+            a graphite card with a hairline border, so who said what reads before what was said.
+          */}
           <Bubble
             align={align}
-            variant={isUser ? "muted" : "ghost"}
-            className={isUser ? undefined : "w-full"}
+            variant={isUser ? "user" : "card"}
+            className={isUser ? undefined : "w-full max-w-full"}
           >
             <BubbleContent className={isUser ? undefined : "w-full"}>
               {isUser ? (
@@ -670,7 +685,7 @@ const TranscriptMessage = memo(function TranscriptMessage({
                 // transcript shows a skill was used rather than a slash that was typed.
                 <span className="whitespace-pre-wrap">
                   {origin && (
-                    <span className="mr-1.5 inline-flex items-center rounded bg-foreground/10 px-1.5 py-0.5 align-middle text-foreground/70 text-xs">
+                    <span className="mr-1.5 inline-flex items-center rounded bg-current/10 px-1.5 py-0.5 align-middle text-xs opacity-80">
                       来自 {origin.via}
                     </span>
                   )}
@@ -682,7 +697,7 @@ const TranscriptMessage = memo(function TranscriptMessage({
                        * `align-middle` rather than a block: this sits mid-sentence, and a badge that
                        * breaks the line it is in reads as a separate message.
                        */}
-                      <span className="mr-1 inline-flex items-center gap-1 rounded bg-foreground/10 px-1.5 py-0.5 align-middle font-mono text-foreground/80 text-xs">
+                      <span className="mr-1 inline-flex items-center gap-1 rounded bg-current/10 px-1.5 py-0.5 align-middle font-mono text-xs">
                         <IconBox className="size-3 shrink-0" />/{invoked.chip}
                       </span>
                       {invoked.rest}
@@ -1021,10 +1036,10 @@ function SentAttachmentTile({ attachment }: { attachment: SentAttachment }) {
        * name — is what says the file is gone when the reader reaches it.
        */
       <div
-        className="flex h-32 w-44 flex-col justify-center gap-2 rounded-xl border border-destructive border-dashed p-3 text-destructive"
+        className="flex h-32 w-44 flex-col justify-center gap-2 rounded-[14px] border border-signal/40 border-dashed bg-signal-soft p-3 text-signal-ink"
         role="note"
       >
-        <IconAlertTriangle className="size-6" />
+        <IconAlertTriangle aria-hidden className="size-6" />
         <p className="text-sm">{unavailableSentence(filename)}</p>
       </div>
     );
@@ -1032,14 +1047,31 @@ function SentAttachmentTile({ attachment }: { attachment: SentAttachment }) {
 
   if (modality === "document") {
     return (
-      <div className="flex h-32 w-44 flex-col justify-between rounded-xl border border-border bg-muted/40 p-3">
-        <IconFile className="size-6 text-muted-foreground" />
+      // docs/design/ios-studio: a graphite file card — the type in a small icon tile, the name in
+      // the main text colour, "附件" as the quiet caption.
+      <div className="flex h-32 w-44 flex-col justify-between rounded-[14px] border border-border bg-card p-3 shadow-[inset_0_1px_0_rgb(255_255_255/0.03)]">
+        <span className="flex items-center gap-2">
+          <span className="flex size-[34px] items-center justify-center rounded-[10px] border border-border bg-accent">
+            <IconFile
+              aria-hidden
+              className="size-[18px] text-muted-foreground"
+            />
+          </span>
+          {extensionOf(filename) ? (
+            <span
+              aria-hidden
+              className="font-mono text-[10px] text-faint uppercase tracking-[0.08em]"
+            >
+              {extensionOf(filename)}
+            </span>
+          ) : null}
+        </span>
         <div className="min-w-0">
           {/* `title` because the tile is fixed-width and a long name is cut, not wrapped. */}
-          <p className="truncate font-medium text-sm" title={filename}>
+          <p className="truncate font-medium text-[13px]" title={filename}>
             {filename ?? "未命名文件"}
           </p>
-          <p className="text-muted-foreground text-xs">附件</p>
+          <p className="text-faint text-xs">附件</p>
         </div>
       </div>
     );
@@ -1049,7 +1081,7 @@ function SentAttachmentTile({ attachment }: { attachment: SentAttachment }) {
     <AttachmentLightbox filename={filename} url={url}>
       <img
         alt={filename ? `附件：${filename}` : "附件"}
-        className="size-32 rounded-xl object-cover"
+        className="size-32 rounded-[14px] border border-border object-cover"
         onError={() => setFailedToLoad(true)}
         src={url}
       />
@@ -1067,6 +1099,12 @@ function SentAttachmentTile({ attachment }: { attachment: SentAttachment }) {
  * A file with no name still gets a sentence rather than a blank: the reader clicked on something,
  * and "this attachment" is the honest way to refer to a thing whose name we never had.
  */
+/** `report.pdf` → `pdf`, for the small type label on a file card; nothing for a name without one. */
+function extensionOf(filename?: string): string | null {
+  const match = filename ? /\.([a-z0-9]{1,5})$/i.exec(filename) : null;
+  return match ? (match[1] ?? null) : null;
+}
+
 function unavailableSentence(filename?: string): string {
   return filename ? `${filename} 不可用。` : "这个附件不可用。";
 }
@@ -1176,7 +1214,7 @@ function AttachmentLightbox({
         // A button, not a link: it opens something on this page, and a middle-click offering a new
         // tab to a raw image file is not the promise this makes. `block` so the tile is not sitting
         // on a text baseline with a stray gap under it.
-        className="block cursor-zoom-in overflow-hidden rounded-xl"
+        className="block cursor-zoom-in overflow-hidden rounded-[14px] outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
         render={<button aria-label={`打开 ${label}`} type="button" />}
       >
         {children}
@@ -1500,6 +1538,7 @@ function useSmoothSendScroll(
 export function ChatTranscript({
   busy = false,
   commandNames = "",
+  empty,
   messages,
   onRemoveQueued,
   queued = EMPTY_QUEUE,
@@ -1658,6 +1697,13 @@ export function ChatTranscript({
               ))}
             </div>
             {items.length === 0 && restoring ? <RestoringTranscript /> : null}
+            {items.length === 0 &&
+            !restoring &&
+            !busy &&
+            !stopped &&
+            queued.length === 0
+              ? empty
+              : null}
             {items.map((item, index) =>
               item.kind === "browser" ? (
                 <MessageScrollerItem key={item.id} messageId={item.id}>

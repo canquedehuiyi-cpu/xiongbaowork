@@ -4,11 +4,11 @@ import Avatar from "boring-avatars";
 import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import * as React from "react";
 import useMeasure from "react-use-measure";
-import AgentOrb from "@/components/agents/orb/agent-orb";
 import { SourcesStep } from "@/components/avatar/avatar-sources";
 import { Composer } from "@/components/channels/composer";
 import { DesktopIllustration } from "@/components/computer/desktop-illustration";
 import { ComputerPlaceholder } from "@/components/computer/placeholder";
+import { BearMascot } from "@/components/layout/workbench-empty";
 import { ModelLibraryGuide } from "@/components/onboarding/model-library-guide";
 import { Button } from "@/components/ui/button";
 import { type AgentProfile, agentListQueryOptions } from "@/lib/agents/queries";
@@ -36,11 +36,15 @@ export const Route = createFileRoute("/_authed/onboarding")({
 function WelcomeStep() {
   return (
     <div className="w-full flex flex-col items-center justify-center">
-      <h1 className="text-3xl font-semibold tracking-tight max-w-md text-center">
+      {/* 熊宝 greets first (docs/design/ios-studio), above an open heading — no card. */}
+      <BearMascot mood="happy" size={72} />
+      <h1 className="mt-6 max-w-md text-center font-bold text-[28px] leading-[1.15] tracking-tight">
         欢迎来到{appConfig.brand.productName}
       </h1>
-      <div className="h-32" />
-      <AgentOrb size="72px" />
+      <p className="mt-2 max-w-sm text-center text-[13px] text-muted-foreground leading-relaxed">
+        几步就好：告诉分身你的资料在哪，看看员工怎么干活，再挑几位开始。
+      </p>
+      <div className="h-10" />
       {/*
        * A POSTER OF A COMPOSER, AND `pointer-events-none` IS WHAT MAKES IT ONE. Nothing here is
        * meant to be typed in, clicked or dropped on: it is a picture of the thing the person is
@@ -71,11 +75,11 @@ function WelcomeStep() {
 function ComputerUseStep() {
   return (
     <div className="w-full flex flex-col items-center justify-center">
-      <h1 className="text-3xl font-semibold tracking-tight max-w-md text-center">
+      <h1 className="max-w-md text-center font-bold text-[28px] leading-[1.15] tracking-tight">
         每位员工都有自己的电脑
       </h1>
       <div className="h-8" />
-      <div className="relative aspect-5/3 w-full max-w-lg rounded-2xl overflow-hidden border border-border">
+      <div className="relative aspect-5/3 w-full max-w-lg overflow-hidden rounded-[18px] border border-border shadow-[inset_0_1px_0_rgb(255_255_255/0.03)]">
         <ComputerPlaceholder className="absolute inset-0 h-full w-full" />
         <DesktopIllustration />
       </div>
@@ -120,7 +124,7 @@ function RosterStep() {
 
   return (
     <div className="w-full flex flex-col items-center justify-center">
-      <h1 className="text-3xl font-semibold tracking-tight max-w-md text-center">
+      <h1 className="max-w-md text-center font-bold text-[28px] leading-[1.15] tracking-tight">
         从多种员工里挑选，或者创建你自己的
       </h1>
       <div className="h-8" />
@@ -130,7 +134,7 @@ function RosterStep() {
             <div
               key={a.id}
               // Dimmed and labelled, so an invented name never reads as a Bot this deployment has.
-              className={`bg-card p-4 rounded-lg flex flex-row gap-4 items-center ${a.example ? "opacity-70" : ""}`}
+              className={`flex flex-row items-center gap-4 rounded-[14px] border border-border bg-card p-4 shadow-[inset_0_1px_0_rgb(255_255_255/0.03)] ${a.example ? "opacity-70" : ""}`}
             >
               <Avatar name={a.avatarSeed} size={40} />
               <div className="flex min-w-0 flex-col">
@@ -144,7 +148,7 @@ function RosterStep() {
             </div>
           );
         })}
-        <div className="bg-card p-4 rounded-lg flex flex-row gap-4 items-center">
+        <div className="flex flex-row items-center gap-4 rounded-[14px] border border-border border-dashed p-4">
           <div className="rounded-full size-[40px] border border-foreground/30 border-dashed" />
           <h3 className="line-clamp-1 text-base font-medium tracking-tight text-foreground/70">
             你自己的员工
@@ -160,22 +164,25 @@ function RosterStep() {
  * step saves or skips, and writes the step itself), so the shared 继续 is not shown under it.
  */
 const STEPS: Array<{
+  /** A stable name for the step, for the progress marks' keys. */
+  id: string;
   render: (moveTo: (step: number) => void, index: number) => React.ReactNode;
   ownActions?: boolean;
 }> = [
-  { render: () => <WelcomeStep /> },
+  { id: "welcome", render: () => <WelcomeStep /> },
   /*
    * Story F1: right after the welcome, the 分身's information sources. Skippable (spec D3): the
    * 分身 then stays 待配置 and is configured from its own detail page.
    */
   {
+    id: "sources",
     render: (moveTo, index) => (
       <SourcesStep nextStep={index + 1} onAdvanced={() => moveTo(index + 1)} />
     ),
     ownActions: true,
   },
-  { render: () => <ComputerUseStep /> },
-  { render: () => <RosterStep /> },
+  { id: "computer", render: () => <ComputerUseStep /> },
+  { id: "roster", render: () => <RosterStep /> },
 ];
 
 /** A pane arrives from the side the journey is moving toward, and leaves out the other. */
@@ -279,7 +286,10 @@ function RouteComponent() {
               />
 
               {complete.error || advance.error ? (
-                <p className="mt-4 text-destructive text-sm" role="alert">
+                <p
+                  className="mt-4 rounded-[12px] border border-signal/30 bg-signal-soft px-3 py-2 text-[13px] text-signal-ink"
+                  role="alert"
+                >
                   {(complete.error ?? advance.error)?.message}
                 </p>
               ) : null}
@@ -288,6 +298,26 @@ function RouteComponent() {
                 className="mt-20 flex flex-col items-center justify-center max-w-xs gap-4 w-full mx-auto"
                 layout
               >
+                {/*
+                 * Where this is in the walk-through: a short red mark on the current step (the
+                 * redesign's "selected" signal), grey dots for the others, and the count in words.
+                 */}
+                <div
+                  aria-label={`第 ${step + 1} 步，共 ${STEPS.length} 步`}
+                  className="flex items-center gap-1.5"
+                  role="img"
+                >
+                  {STEPS.map((entry, index) => (
+                    <span
+                      className={
+                        index === step
+                          ? "h-[4px] w-[16px] rounded-full bg-signal"
+                          : "size-[4px] rounded-full bg-foreground/25"
+                      }
+                      key={entry.id}
+                    />
+                  ))}
+                </div>
                 {current?.ownActions ? null : (
                   <Button
                     className="w-full"
@@ -314,7 +344,7 @@ function RouteComponent() {
                   <Button
                     className="w-full"
                     onClick={() => go(step - 1)}
-                    variant="secondary"
+                    variant="outline"
                     size="lg"
                   >
                     返回

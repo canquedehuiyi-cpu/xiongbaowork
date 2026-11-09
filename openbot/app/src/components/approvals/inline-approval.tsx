@@ -48,9 +48,9 @@ export function InlineApproval({
   return (
     <section
       aria-label="等你批准"
-      className="space-y-2 rounded-lg border p-3 text-sm"
+      className="space-y-2 rounded-[14px] border border-signal/30 bg-signal-soft p-3 text-sm"
     >
-      <p className="font-medium">
+      <p className="font-medium text-signal-ink">
         {handOff ? "需要你来做" : "等你批准"}：
         {request.action.toolRef
           .replace(/^computer_|^host\//, "")

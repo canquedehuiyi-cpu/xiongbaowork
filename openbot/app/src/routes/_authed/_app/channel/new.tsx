@@ -7,6 +7,7 @@ import { canSend, type Recipient } from "@/components/channels/compose-state";
 import { ConversationView } from "@/components/channels/conversation-view";
 import { seedMessage } from "@/components/channels/transcript-messages";
 import { SidebarToggle } from "@/components/layout/sidebar-toggle";
+import { WorkbenchEmpty } from "@/components/layout/workbench-empty";
 import {
   Combobox,
   ComboboxContent,
@@ -98,9 +99,11 @@ function RouteComponent() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="h-12 border-b border-border sticky top-0 flex flex-row px-2 items-center">
+      <div className="h-12 shrink-0 border-b border-border sticky top-0 flex flex-row px-2 items-center">
         <SidebarToggle className="mr-1" />
-        <span className="text-sm text-muted-foreground">发给：</span>
+        <span className="shrink-0 whitespace-nowrap pl-1 text-[13px] text-muted-foreground">
+          发给：
+        </span>
         <Combobox
           // Do not auto-open when the recipient came from the URL; the field is already answered.
           defaultOpen={!chosen && !loadError && !waitingForUrlAgent}
@@ -155,10 +158,27 @@ function RouteComponent() {
         disabled={
           Boolean(loadError) || waitingForUrlAgent || recipients.length === 0
         }
+        // A welcome in the empty pane (docs/design/ios-studio): who this will reach, or what to do
+        // first when nobody is chosen yet.
+        empty={
+          <WorkbenchEmpty
+            className="mt-[12vh]"
+            description={
+              chosen
+                ? chosen.title || "说说要做的事，附件和 @ 都可以用。"
+                : "在上面的「发给」里选一位员工，再写下要做的事。"
+            }
+            mood={chosen ? "happy" : "cute"}
+            title={chosen ? `给${chosen.name}发第一条消息` : "先选一位员工"}
+          />
+        }
         messages={sent ? [sent] : []}
         notice={
           loadError || error ? (
-            <p className="pb-2 text-sm text-destructive" role="alert">
+            <p
+              className="mb-2 rounded-[12px] border border-signal/30 bg-signal-soft px-3 py-2 text-[13px] text-signal-ink"
+              role="alert"
+            >
               {loadError ?? error}
             </p>
           ) : null

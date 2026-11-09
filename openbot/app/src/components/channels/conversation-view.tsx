@@ -37,6 +37,7 @@ export function ConversationView({
   stoppable,
   queueWhileBusy = false,
   restoring = false,
+  empty,
   onSubmit,
   onStop,
   voiceCall,
@@ -94,6 +95,8 @@ export function ConversationView({
   queueWhileBusy?: boolean;
   /** History has been asked for and has not arrived. Drawn as placeholder rows; see `ChatTranscript`. */
   restoring?: boolean;
+  /** Shown in place of an empty transcript; see `ChatTranscript`. */
+  empty?: ReactNode;
   onSubmit: (draft: ComposerDraft) => void | Promise<void>;
   /** Stop the Bot mid-answer; forwarded to turn the send button into a stop button. */
   onStop?: () => void;
@@ -426,6 +429,7 @@ export function ConversationView({
          */}
         <ChatTranscript
           busy={busy}
+          empty={empty}
           commandNames={(commands ?? [])
             .map((command) => command.name)
             .join(",")}
@@ -438,7 +442,7 @@ export function ConversationView({
           {...(stopped ? { stopped } : {})}
         />
       </div>
-      <div className="max-w-2xl mx-auto w-full px-0 pb-4 shrink-0">
+      <div className="max-w-2xl mx-auto w-full px-[13px] md:px-0 pb-4 shrink-0">
         {notice}
         <Composer
           agents={agents}

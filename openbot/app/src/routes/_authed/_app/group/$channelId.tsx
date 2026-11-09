@@ -20,9 +20,9 @@ function RouteComponent() {
         <SidebarToggle />
         <ChannelAvatar
           participantIds={channel.data?.agentIds ?? []}
-          size={22}
+          size={24}
         />
-        <span className="min-w-0 truncate text-sm tracking-tight">
+        <span className="min-w-0 truncate font-medium text-[14px] tracking-tight">
           {channel.data?.name ?? "群聊"}
         </span>
       </div>

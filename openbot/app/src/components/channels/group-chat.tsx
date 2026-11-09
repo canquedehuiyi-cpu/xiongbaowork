@@ -2,6 +2,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
+import {
+  BearMascot,
+  WorkbenchEmpty,
+} from "@/components/layout/workbench-empty";
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -90,6 +94,13 @@ export function GroupChat({ channelId }: { channelId: string }) {
   const bots = group.data?.bots ?? [];
   const roster = toAgentOptions(bots);
   const names = new Map(bots.map((bot) => [bot.id, bot.name]));
+  // A colleague's line is signed with the name the group already lists for them.
+  const people = new Map(
+    (group.data?.people ?? []).map((person) => [
+      person.userId,
+      person.name ?? person.email,
+    ]),
+  );
   const messages = group.data?.messages ?? [];
   const working = messages.some(
     (message) => message.status === "running" || message.status === "queued",
@@ -105,9 +116,12 @@ export function GroupChat({ channelId }: { channelId: string }) {
   if (group.isPending) return null;
   if (group.isError)
     return (
-      <p className="p-8 text-sm text-destructive" role="alert">
-        {group.error.message}
-      </p>
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
+        <BearMascot mood="naughty" size={45} />
+        <p className="font-medium text-[14px] text-signal-ink" role="alert">
+          {group.error.message}
+        </p>
+      </div>
     );
 
   return (
@@ -115,10 +129,10 @@ export function GroupChat({ channelId }: { channelId: string }) {
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-4 py-6">
           {messages.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              跟{bots.map((bot) => bot.name).join("和")}说点什么。
-              每位员工都会依次回答；想只问其中一位，就 @它的名字。
-            </p>
+            <WorkbenchEmpty
+              description="每位员工都会依次回答；想只问其中一位，就 @它的名字。"
+              title={`跟${bots.map((bot) => bot.name).join("和")}说点什么`}
+            />
           ) : null}
           {messages.map((message) => (
             <GroupLine
@@ -129,7 +143,7 @@ export function GroupChat({ channelId }: { channelId: string }) {
                   ? (names.get(message.agentId) ?? "一位已不在本群的员工")
                   : message.ownerUserId === me?.id
                     ? "你"
-                    : "一位同事"
+                    : (people.get(message.ownerUserId) ?? "一位同事")
               }
               answeredBy={
                 message.answeredBy
@@ -160,12 +174,15 @@ export function GroupChat({ channelId }: { channelId: string }) {
             onDismiss={() => setStarted(null)}
           />
         ) : null}
-        <People
-          channelId={channelId}
-          me={me?.id}
-          people={group.data?.people ?? []}
-        />
-        <AddPerson channelId={channelId} />
+        {/* Who is in the room and the way to add someone, on one line above the composer. */}
+        <div className="flex flex-wrap items-center justify-between gap-x-3 [&>*]:min-w-0">
+          <People
+            channelId={channelId}
+            me={me?.id}
+            people={group.data?.people ?? []}
+          />
+          <AddPerson channelId={channelId} />
+        </div>
         <Composer
           /*
            * Groups expand into their members (spec B1), but only the members who are in this
@@ -177,6 +194,9 @@ export function GroupChat({ channelId }: { channelId: string }) {
           disabled={bots.length === 0}
           pending={send.isPending || working}
           autoFocus
+          // The same compact frame a one-to-one conversation uses.
+          compact
+          className="w-full"
           crews={crewOptions}
           onSubmit={async (draft) => {
             /*
@@ -268,7 +288,14 @@ function GroupLine({
               {name}
             </MessageHeader>
           )}
-          <Bubble align={mine ? "end" : "start"} variant="muted">
+          {/* Mine in the pale bubble; a colleague's on the quieter accent ground, left. */}
+          <Bubble
+            align={mine ? "end" : "start"}
+            className={
+              mine ? undefined : "*:data-[slot=bubble-content]:bg-accent"
+            }
+            variant={mine ? "user" : "muted"}
+          >
             <BubbleContent>
               <span className="whitespace-pre-wrap">{message.text}</span>
             </BubbleContent>
@@ -282,7 +309,7 @@ function GroupLine({
         <ChannelAvatar participantIds={[message.agentId]} size={24} />
       </div>
       <MessageContent>
-        <MessageHeader className="text-xs font-medium text-muted-foreground">
+        <MessageHeader className="px-0 font-medium text-[12px] text-muted-foreground">
           {name}
           {answeredBy ? ` · 由${answeredBy}代答` : null}
         </MessageHeader>
@@ -295,9 +322,14 @@ function GroupLine({
             思考中
           </p>
         ) : message.status === "waiting" ? (
-          <p className="text-sm text-muted-foreground">
-            {message.reason ?? "等你回应。"}{" "}
-            <Link className="underline" to="/approvals">
+          // Waiting on a person: the attention treatment, with the way to act on it beside the reason.
+          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-[12px] border border-signal/30 bg-signal-soft px-3 py-2 text-[13px] leading-relaxed">
+            <span className="font-medium text-signal-ink">需要你处理</span>
+            <span className="min-w-0">{message.reason ?? "等你回应。"}</span>{" "}
+            <Link
+              className="font-medium underline underline-offset-2"
+              to="/approvals"
+            >
               去审批
             </Link>
           </p>
@@ -316,15 +348,18 @@ function GroupLine({
             </p>
           )
         ) : message.status === "failed" ? (
-          <p className="text-sm text-destructive" role="alert">
+          <p
+            className="rounded-[12px] border border-signal/30 bg-signal-soft px-3 py-2 text-[13px] text-signal-ink"
+            role="alert"
+          >
             {message.text || "这位员工没能回答。"}
           </p>
         ) : (
           <Bubble
             align="start"
             aria-busy={message.status === "running"}
-            variant="ghost"
-            className="w-full"
+            variant="card"
+            className="w-full max-w-full"
           >
             <BubbleContent className="w-full">
               <Streamdown components={markdownComponents}>
@@ -345,7 +380,7 @@ function AddPerson({ channelId }: { channelId: string }) {
   const add = useMutation(addGroupMemberMutationOptions(channelId));
   if (!open)
     return (
-      <div className="flex justify-end pb-2">
+      <div className="ml-auto flex justify-end pb-2">
         <Button onClick={() => setOpen(true)} size="sm" variant="ghost">
           添加成员
         </Button>
@@ -353,7 +388,7 @@ function AddPerson({ channelId }: { channelId: string }) {
     );
   return (
     <form
-      className="flex items-center gap-2 pb-2"
+      className="flex w-full items-center gap-2 pb-2"
       onSubmit={(event) => {
         event.preventDefault();
         add.mutate(email, {

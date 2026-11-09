@@ -2,10 +2,13 @@ import { CopilotChat } from "@copilotkit/react-core/v2";
 import { IconPlus } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
+import type { ReactNode } from "react";
+import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import { ComputerChatControls } from "@/components/computer/computer-controls";
 import { ComputerViewPanel } from "@/components/computer/computer-panel";
 import { DetailPanel } from "@/components/layout/detail-panel";
 import { SidebarToggleBar } from "@/components/layout/sidebar-toggle";
+import { BearMascot } from "@/components/layout/workbench-empty";
 import { Button } from "@/components/ui/button";
 import { defaultAgentId } from "@/lib/agents/default-agent";
 import {
@@ -67,6 +70,68 @@ async function loadExplicitBot(agentId: string): Promise<BotDetailLookup> {
   return { bot: body.agent, status: "found" };
 }
 
+/**
+ * The packaged chat's own words, in the language the rest of the app speaks. Only the strings a
+ * person reads on this screen; anything left out keeps the package's default.
+ */
+const BOT_CHAT_LABELS = {
+  chatInputPlaceholder: "有什么需要，尽管说",
+  chatInputToolbarAddButtonLabel: "添加附件",
+  chatInputToolbarStartTranscribeButtonLabel: "语音输入",
+  chatInputToolbarCancelTranscribeButtonLabel: "取消语音输入",
+  chatInputToolbarFinishTranscribeButtonLabel: "完成语音输入",
+  chatInputToolbarToolsButtonLabel: "工具",
+  assistantMessageToolbarCopyCodeLabel: "复制代码",
+  assistantMessageToolbarCopyCodeCopiedLabel: "已复制",
+  assistantMessageToolbarCopyMessageLabel: "复制",
+  assistantMessageToolbarThumbsUpLabel: "有帮助",
+  assistantMessageToolbarThumbsDownLabel: "没帮助",
+  assistantMessageToolbarReadAloudLabel: "朗读",
+  assistantMessageToolbarRegenerateLabel: "重新回答",
+  userMessageToolbarCopyMessageLabel: "复制",
+  userMessageToolbarEditMessageLabel: "编辑",
+  chatDisclaimerText: "员工也会出错，重要信息请再核对。",
+  welcomeMessageText: "有什么可以帮你？",
+};
+
+/*
+ * The transcript in the redesign's two voices (docs/design/ios-studio), the same as a channel's: the
+ * person's words in the pale #e9e9e9 bubble with dark ink, the coworker's answer on a graphite card
+ * with a hairline border. The package draws with its own prefixed stylesheet, so these are marked
+ * important to win over it rather than relying on which stylesheet happened to load last.
+ */
+const BOT_CHAT_VIEW = {
+  messageView: {
+    userMessage: {
+      messageRenderer:
+        "bg-secondary! text-secondary-foreground! dark:bg-[#e9e9e9]! dark:text-[#161617]! rounded-[16px]!",
+    },
+    assistantMessage: {
+      markdownRenderer:
+        "rounded-[14px] border border-border bg-card px-4 py-3 text-card-foreground shadow-[inset_0_1px_0_rgb(255_255_255/0.03)] *:first:mt-0 *:last:mb-0",
+    },
+  },
+};
+
+/** A whole-screen sentence (a read that failed, a Bot this deployment does not have), with 熊宝. */
+function BotNotice({
+  children,
+  mood,
+}: {
+  children: ReactNode;
+  mood: "naughty" | "cute";
+}) {
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <SidebarToggleBar />
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+        <BearMascot mood={mood} size={45} />
+        {children}
+      </div>
+    </div>
+  );
+}
+
 function RouteComponent() {
   const search = Route.useSearch();
   const agent = search.agent === "" ? undefined : search.agent;
@@ -97,31 +162,31 @@ function RouteComponent() {
   if (isPending || (shouldLoadExplicitBot && isDetailPending)) return null;
   if (isError && agents === undefined) {
     return (
-      <div className="flex h-screen items-center justify-center p-6">
-        <p className="text-destructive text-sm" role="alert">
+      <BotNotice mood="naughty">
+        <p className="font-medium text-[14px] text-signal-ink" role="alert">
           读不到员工列表。
         </p>
-      </div>
+      </BotNotice>
     );
   }
   if (shouldLoadExplicitBot && isDetailError) {
     return (
-      <div className="flex h-screen items-center justify-center p-6">
-        <p className="text-destructive text-sm" role="alert">
+      <BotNotice mood="naughty">
+        <p className="font-medium text-[14px] text-signal-ink" role="alert">
           读不到这位员工。
         </p>
-      </div>
+      </BotNotice>
     );
   }
   if (!agentId || !known) {
     return (
-      <div className="flex h-screen items-center justify-center p-6">
-        <p className="text-muted-foreground text-sm">
+      <BotNotice mood="cute">
+        <p className="font-medium text-[14px]">
           {agent
             ? `这个部署没有叫「${agent}」的员工。`
             : "这个部署还没有员工。"}
         </p>
-      </div>
+      </BotNotice>
     );
   }
 
@@ -167,15 +232,37 @@ function BotChat({ agentId, name }: { agentId: string; name: string }) {
     >
       <div className="flex h-full min-h-0 flex-col">
         <SidebarToggleBar />
-        <header className="border-b px-6 py-3">
+        {/*
+         * An open heading on the canvas (docs/design/ios-studio): the coworker's face, its name and
+         * one line of what this screen is for, with the screen's controls on the same row and a
+         * hairline under it — no card, so the conversation below is the content.
+         */}
+        <header className="border-border border-b px-[13px] pb-3 md:px-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            {/*
-             * The Bot this screen is actually showing. A name written into the markup is wrong on
-             * every deployment whose package did not happen to use it, which is the same defect the
-             * route default above was fixed for: this screen called whichever Bot you opened
-             * "Browser Bot", including the one named something else two lines of state away.
-             */}
-            <h1 className="text-lg font-semibold">{name}</h1>
+            <div className="flex min-w-0 items-center gap-3">
+              <AbstractAvatar
+                decorative
+                name={name}
+                portrait={{ kind: "coworker", id: agentId }}
+                seed={agentId}
+                size={38}
+              />
+              <div className="min-w-0">
+                {/*
+                 * The Bot this screen is actually showing. A name written into the markup is wrong
+                 * on every deployment whose package did not happen to use it, which is the same
+                 * defect the route default above was fixed for: this screen called whichever Bot
+                 * you opened "Browser Bot", including the one named something else two lines of
+                 * state away.
+                 */}
+                <h1 className="truncate font-bold text-[18px] leading-tight tracking-tight">
+                  {name}
+                </h1>
+                <p className="mt-0.5 text-[12px] text-muted-foreground">
+                  让它打开一个页面，看着它干活。
+                </p>
+              </div>
+            </div>
             {/*
              * Labelled rather than the bare icon button the sidebar uses for its own "start
              * something new" control: that one opens an empty screen, but this one throws away
@@ -194,9 +281,6 @@ function BotChat({ agentId, name }: { agentId: string; name: string }) {
               </Button>
             </div>
           </div>
-          <p className="text-sm text-muted-foreground">
-            让它打开一个页面，看着它干活。
-          </p>
         </header>
         {/*
          * Both banners render as plain siblings in this fixed order, never one nested inside the
@@ -205,7 +289,7 @@ function BotChat({ agentId, name }: { agentId: string; name: string }) {
          */}
         {history === "unavailable" ? (
           <p
-            className="border-b bg-destructive/10 px-6 py-2 text-destructive text-sm"
+            className="border-signal/25 border-b bg-signal-soft px-[13px] py-2 text-[13px] text-signal-ink md:px-6"
             data-testid="bot-chat-history-unavailable"
             role="alert"
           >
@@ -222,14 +306,18 @@ function BotChat({ agentId, name }: { agentId: string; name: string }) {
          */}
         {stopped ? (
           <p
-            className="border-b bg-destructive/10 px-6 py-2 text-destructive text-sm"
+            className="border-signal/25 border-b bg-signal-soft px-[13px] py-2 text-[13px] text-signal-ink md:px-6"
             data-testid="bot-chat-stopped"
             role="alert"
           >
             {stopped}
           </p>
         ) : null}
-        <div className="min-h-0 flex-1">
+        {/*
+         * The package's input pill, framed like every composer in the app: graphite, a hairline that
+         * brightens on focus, no drop shadow. Reached by the package's own stable class name.
+         */}
+        <div className="min-h-0 flex-1 [&_.copilotKitInput:focus-within]:border-foreground/30 [&_.copilotKitInput]:rounded-[16px]! [&_.copilotKitInput]:border [&_.copilotKitInput]:border-border [&_.copilotKitInput]:bg-card! [&_.copilotKitInput]:shadow-[inset_0_1px_0_rgb(255_255_255/0.03)]!">
           {/*
            * Keyed on the thread as well as the agent. Switching agents was already handled by
            * `agentId`, but `startNew` changes only the thread while the agent stays put, and the
@@ -242,7 +330,9 @@ function BotChat({ agentId, name }: { agentId: string; name: string }) {
           {threadId ? (
             <CopilotChat
               agentId={agentId}
+              chatView={BOT_CHAT_VIEW}
               key={`${agentId}:${threadId}`}
+              labels={BOT_CHAT_LABELS}
               threadId={threadId}
             />
           ) : null}

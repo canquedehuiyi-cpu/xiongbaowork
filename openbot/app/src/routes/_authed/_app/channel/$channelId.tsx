@@ -18,6 +18,7 @@ import { ComputerChatControls } from "@/components/computer/computer-controls";
 import { ComputerViewPanel } from "@/components/computer/computer-panel";
 import { DetailPanel } from "@/components/layout/detail-panel";
 import { SidebarToggle } from "@/components/layout/sidebar-toggle";
+import { BearMascot } from "@/components/layout/workbench-empty";
 import { Button } from "@/components/ui/button";
 import { markChannelReadMutationOptions } from "@/lib/channels/mutations";
 import {
@@ -150,7 +151,7 @@ function RouteComponent() {
             >
               <ChannelAvatar
                 participantIds={channel.data?.agentIds ?? []}
-                size={22}
+                size={24}
               />
             </motion.div>
             <motion.span
@@ -159,7 +160,7 @@ function RouteComponent() {
                   ? { opacity: 1 }
                   : { opacity: 1, transform: "translateY(0px)" }
               }
-              className="min-w-0 text-sm tracking-tight truncate"
+              className="min-w-0 truncate font-medium text-[14px] tracking-tight"
               initial={
                 prefersReducedMotion
                   ? { opacity: 0 }
@@ -223,9 +224,15 @@ function ChannelBody({
   if (isPending) return null;
   if (hasError || !channel) {
     return (
-      <p className="p-8 text-sm text-destructive" role="alert">
-        读不到这段会话。
-      </p>
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
+        <BearMascot mood="naughty" size={45} />
+        <p className="font-medium text-[14px] text-signal-ink" role="alert">
+          读不到这段会话。
+        </p>
+        <p className="text-[12px] text-muted-foreground">
+          刷新页面再试一次；如果仍然打不开，它可能已被删除。
+        </p>
+      </div>
     );
   }
 

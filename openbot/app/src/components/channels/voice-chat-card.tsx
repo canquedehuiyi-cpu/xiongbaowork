@@ -17,10 +17,16 @@ export function VoiceChatCard({ call }: { call: VoiceChatEntry }) {
       "0",
     )}:${(call.durationSeconds % 60).toString().padStart(2, "0")}`;
   return (
-    <div className="rounded-xl bg-muted/60 px-3 py-2 text-sm">
+    // A graphite card with a hairline border, like every other event card in the transcript.
+    <div className="rounded-[14px] border border-border bg-card px-3.5 py-2.5 text-sm shadow-[inset_0_1px_0_rgb(255_255_255/0.03)]">
       <details className="group">
         <summary className="flex cursor-pointer list-none items-center gap-2 rounded-sm text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
-          <IconWaveform className="size-3.5" />
+          <span
+            aria-hidden="true"
+            className="flex size-[22px] items-center justify-center rounded-[7px] border border-border bg-accent"
+          >
+            <IconWaveform className="size-3.5" />
+          </span>
           <span className="flex-1 font-medium">语音对话</span>
           {saving && (
             <IconLoader2

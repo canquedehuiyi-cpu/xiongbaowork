@@ -1592,7 +1592,8 @@ export function Composer({
       {tooManyStagedNotice}
       <form
         aria-busy={isBusy}
-        className="overflow-hidden rounded-2xl border border-border bg-card"
+        // The same frame as the compact composer: graphite, a hairline that brightens on focus.
+        className="overflow-hidden rounded-[16px] border border-border bg-card shadow-[inset_0_1px_0_rgb(255_255_255/0.03)] transition-colors focus-within:border-foreground/30 motion-reduce:transition-none"
         onSubmit={handleFormSubmit}
       >
         <DictationSurface
