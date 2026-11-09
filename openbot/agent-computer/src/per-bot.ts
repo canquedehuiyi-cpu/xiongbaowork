@@ -181,14 +181,28 @@ const HELPER_UNAVAILABLE = "员工独立电脑的辅助程序不可用";
 const WRONG_WORKSPACE = `每员工模式要求工作目录为 ${XB_BOT_WORKSPACE}`;
 
 /**
- * The helper's own refusals from `run`, before any command starts. A command that exits 64 or 65
- * itself reads the same way; the helper's protocol has no other signal, and a refusal mistaken for a
- * command's answer is the worse error of the two.
+ * The helper's own refusals from `run`, before any command starts. The exit code alone is not
+ * enough: a command may exit 64 or 65 itself. The helper also writes one line starting
+ * `xb-bot: ` to stderr before anything else, so a refusal is both the code and that first line.
  */
 const HELPER_REFUSED: Record<number, string> = {
   64: "辅助程序拒绝了这次调用（退出码 64：参数不合法）",
   65: "员工的系统用户不存在（退出码 65）",
 };
+
+/** How every error of the helper's own begins on stderr. */
+const HELPER_ERROR_PREFIX = "xb-bot: ";
+
+/** Whether a `run` result is the helper refusing, rather than the command's own exit code. */
+function helperRefusal(result: {
+  exitCode: number;
+  stderr: string;
+}): string | undefined {
+  const refused = HELPER_REFUSED[result.exitCode];
+  if (refused === undefined) return undefined;
+  const firstLine = result.stderr.split("\n", 1)[0] ?? "";
+  return firstLine.startsWith(HELPER_ERROR_PREFIX) ? refused : undefined;
+}
 
 export type PerBotStatus = {
   enabled: boolean;
@@ -353,7 +367,7 @@ export function createPerBotComputer(options: {
           async run(input) {
             const result = await runAs.run(input);
             if (result.timedOut || result.stopped) return result;
-            const refused = HELPER_REFUSED[result.exitCode];
+            const refused = helperRefusal(result);
             if (refused === undefined) return result;
             // The user is gone, so the next call prepares it again rather than trusting the cache.
             if (result.exitCode === 65) ensured.delete(key);

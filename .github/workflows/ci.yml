@@ -248,6 +248,9 @@ jobs:
         with:
           bun-version: 1.3.14
       - run: docker build -f Dockerfile -t openbot:trackb .
+      # The per-employee root helper creates users, so it is tested as root inside the image.
+      - name: xb-bot helper (per-employee users)
+        run: docker run --rm --user root --entrypoint /bin/sh -v "$PWD/docker/tests:/t:ro" openbot:trackb /t/xb-bot.test.sh
       - name: DoD-2 and DoD-3 (no provider credentials)
         env:
           EVIDENCE_DIR: ${{ runner.temp }}/delivery-evidence

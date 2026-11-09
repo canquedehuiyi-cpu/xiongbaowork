@@ -18,7 +18,7 @@
 
 - 用户名格式为 `xb-<botKey>`，其中 `botKey` 取 `sha256(botId)` 十六进制的前 12 位，满足 `^[0-9a-f]{12}$`。
 - uid 范围 20000–59999（`SYS_UID_MIN`、`SYS_UID_MAX`），由 `useradd --system` 分配。
-- 员工用户统一加入 `xbbots` 组；pwuser 是 `xbcomp` 组的唯一成员。
+- 员工用户各有私有主组 `xb-<botKey>`，统一以附加组加入 `xbbots`；pwuser 是 `xbcomp` 组的唯一成员。
 - 目录：
   - `/workspace/bots/<botKey>`：属主 `xb-<botKey>:xbcomp`，权限 `2770`。
   - `/workspace/bots/<botKey>/.tmp`：属主 `xb-<botKey>`，权限 `0700`。
@@ -35,7 +35,7 @@
   - `timeout_s` 是 1–600 的整数。
 - sudoers 只放行以下几条，不放行 `restore`：
   - `pwuser ALL=(root) NOPASSWD: /usr/local/sbin/xb-bot ensure *, /usr/local/sbin/xb-bot run *`
-  - `%xbbots` 获得与 pwuser 相同的包管理命令清单（apt-get、apt、dpkg、apt-key、apt-cache）。
+  - `%xbbots` 不获得任何 sudo 权限（用户决定，2026-11-09）：员工不能 sudo 安装系统包，可以在自己目录里用 `npm install`（不带 `-g`）、`bun add` 安装用户级工具（镜像里没有 python3）；常用系统包预装进镜像。pwuser 原有的包管理 sudo 保留。
 - 开关 `COMPUTER_PER_BOT_USERS` 取 `on`/`off`：源码默认 `off`，交付镜像 `ENV COMPUTER_PER_BOT_USERS=on`。只在 Linux 上生效。
 - 开关打开但辅助程序不可用时，`/health` 返回 HTTP 503，`status: "unready"`，并附 `perBotUsers.reason`。非默认员工的 `/exec` 和 `/files/*` 返回 503，**不退回共享模式**。
 - 用户可见文案用中文，提交与注释不写模型名。不加 npm 依赖，不改 lockfile。每个任务（PR）改动不超过 8 个文件（测试另计）。
@@ -158,10 +158,10 @@
 
 **Files：**
 - 新建：`openbot/docker/xb-bot.sh`，安装为 `/usr/local/sbin/xb-bot`
-- 新建：`openbot/docker/s6/s6-rc.d/computer-users/type`（内容为 `oneshot`）和 `up`（`/usr/local/sbin/xb-bot restore`）
+- 新建：`openbot/docker/s6/s6-rc.d/computer-users/type`（内容为 `oneshot`）和 `up`（`/command/with-contenv /usr/local/sbin/xb-bot restore`，经 with-contenv 才能读到开关）
 - 新建：`openbot/docker/s6/s6-rc.d/user/contents.d/computer-users`（空文件）
 - 新建：`openbot/docker/s6/s6-rc.d/computer/dependencies.d/computer-users`（空文件）
-- 修改：`openbot/Dockerfile`。内容：安装 `acl`；`groupadd xbcomp`、`groupadd xbbots`；`usermod -aG xbcomp pwuser`；在 login.defs 中设置 `SYS_UID_MIN 20000`、`SYS_UID_MAX 59999`；COPY 辅助程序并 `chmod 0755`；写 sudoers 文件 `/etc/sudoers.d/xb-bot`（0440，`visudo -cf` 校验）；`ENV COMPUTER_PER_BOT_USERS=on`。
+- 修改：`openbot/Dockerfile`。内容：安装 `acl` 和 `procps`；`groupadd xbcomp`、`groupadd xbbots`；`usermod -aG xbcomp pwuser`；在 login.defs 中设置 `SYS_UID_MIN 20000`、`SYS_UID_MAX 59999`，以及 `SYS_GID_MIN 20000`、`SYS_GID_MAX 59999`（私有主组的 gid 尽量与 uid 相同）；COPY 辅助程序并 `chmod 0755`；写 sudoers 文件 `/etc/sudoers.d/xb-bot`（0440，`visudo -cf` 校验，只放行 pwuser 的 ensure 和 run）；`ENV COMPUTER_PER_BOT_USERS=on`。
 - 修改：`openbot/docker/s6/s6-rc.d/computer/run`，在透传名单中加入 `COMPUTER_PER_BOT_USERS`。
 - 测试：新建 `openbot/docker/tests/xb-bot.test.sh`，在 CI 中以 root 运行。
 
@@ -170,37 +170,41 @@
 - 产出：辅助程序的三个子命令，行为见下。
 
 **辅助程序行为：**
-- 全程 `set -eu`，`PATH=/usr/sbin:/usr/bin:/sbin:/bin`，不读取调用方的环境变量。
+- 全程 `set -eu`，`PATH=/usr/sbin:/usr/bin:/sbin:/bin`，不读取调用方的环境变量。唯一的例外是 `restore` 经 s6 with-contenv 读取 `COMPUTER_PER_BOT_USERS`。
 - 第一个参数不在 `ensure|run|restore` 中，或 key 不匹配 `^[0-9a-f]{12}$`，退出码 64。
 - 辅助程序自身的任何错误（退出码 64、65，以及 ensure 或 restore 失败）都向 stderr 输出一行以 `xb-bot: ` 开头的说明。agent-computer 只在「退出码为 64 或 65，且 stderr 首行以 `xb-bot: ` 开头」时，才判定是辅助程序拒绝并返回 503；否则当作命令自身的退出码。这一条同时修改 `openbot/agent-computer/src/shell.ts` 中 M4 的判定，并补对应测试。
 - 用 dash 的写法给进程组发信号：`kill -s TERM -- "-$pid"`。dash 不接受 `kill -TERM -- -$pid`，会静默失败。测试必须断言进程确实已被清掉。
 - `ensure <key>`：
   - 映射中已有 uid 就用 `-u <uid>`。
-  - 用户不存在时执行 `useradd --system --gid xbbots --home-dir /workspace/bots/<key> --no-create-home --shell /usr/sbin/nologin xb-<key>`，并把 uid 追加进映射。
+  - 用户不存在时执行 `useradd --system -U -G xbbots --home-dir /workspace/bots/<key> --no-create-home --shell /usr/sbin/nologin xb-<key>`（私有主组，gid 尽量与 uid 相同），并把 uid 追加进映射。
   - mkdir 并 chown、chmod，执行 `setfacl -m` 和 `setfacl -d -m`（ACL 内容见 Global Constraints）。
   - 建 `.tmp`，最后输出 uid。
   - 幂等。setfacl 失败时退出码非 0。
-  - 整个 ensure 在 `flock /run/xb-bot.lock` 下串行执行，避免并发 useradd 抢锁失败。
+  - 整个 ensure 在 `flock /run/xb-bot/lock` 下串行执行，避免并发 useradd 抢锁失败。`/run/xb-bot/` 为 root 0700、锁文件 0600，员工打不开锁，也就卡不住别人的 ensure。
 - `run <key> <timeout_s>`：
   - timeout 不是 1–600 的整数，退出码 64；用户不存在，退出码 65。
   - 读 stdin 直到空行，每行 `NAME=VALUE`。NAME 必须匹配 `^[A-Za-z_][A-Za-z0-9_]*$` 且不在 `HOME TMPDIR USER LOGNAME SHELL` 中，否则跳过该行。合法的行用 `set --` 累积。
-  - 余下的 stdin 读进 `cmd`。
+  - 余下的 stdin 由 root 写进 `/run/xb-bot/` 下的 0600 临时文件（root 所有），以 fd 3 打开后立即删除。命令文本不进任何 argv。
   - `cd` 进员工目录后，**不用 exec**，在后台启动：
     ```sh
-    timeout --kill-after=5 "$t" runuser -u "xb-$key" -- env -i "$@" HOME="$dir" TMPDIR="$dir/.tmp" USER="xb-$key" LOGNAME="xb-$key" /bin/bash -c "$cmd" &
+    timeout --kill-after=5 "$t" runuser -u "xb-$key" -- env -i "$@" HOME="$dir" TMPDIR="$dir/.tmp" USER="xb-$key" LOGNAME="xb-$key" \
+      /bin/bash -c '__xb_cmd=$(cat <&3); exec 3<&-; eval "unset __xb_cmd; $__xb_cmd"' &
     ```
-    记下 pid（timeout 会自建进程组，组号就是它的 pid）。
-  - `trap` 捕获 TERM、INT、HUP（sudo 会把调用方的信号转给辅助程序），收到后依次执行：`kill -s TERM -- "-$pid"`，等 3 秒，`kill -s KILL -- "-$pid"`，再执行 `pkill -KILL -u "xb-$key"` 兜底。
+    记下 pid（timeout 会自建进程组，组号就是它的 pid）。员工的 bash 读继承来的 fd 3（不再做权限检查），关掉它再执行命令，所以 `$0` 是 `/bin/bash`，报错前缀与默认员工一致。
+  - 命令启动之前的任何失败（准备临时文件等）都以 `xb-bot: ` 开头的一行说明、退出码 64 结束。
+  - `trap` 捕获 TERM、INT、HUP（sudo 会把调用方的信号转给辅助程序），收到后依次执行：`kill -s TERM -- "-$pid"`，等 3 秒，`kill -s KILL -- "-$pid"`，只清理本次命令的进程组，不用 `pkill -u`（会误杀同一员工的其他命令）；用 `${pid:-${!:-}}` 补上信号落在 `&` 与 `pid=$!` 之间的窗口。
   - `wait $pid` 拿到退出码后，**无论命令是正常结束还是超时**，都执行 `kill -s KILL -- "-$pid" 2>/dev/null || true`，清掉命令留在组里的后台进程（例如 `sleep 1000 &`）。这样后台进程不会一直占着输出管道。说明：命令结束时连同它的后台进程一起结束，不支持常驻进程。
   - 以命令的退出码退出。超时时 timeout 返回 124 或 137，原样透传。
 - `restore`：
   - 若 `/run/s6/container_environment` 存在，强制设为 `root:root 0700`（员工用户不得读取容器环境，例如 COMPUTER_TOKEN 和数据库地址）。
   - 只有 `id -u` 为 0 且 `SUDO_USER` 为空时才执行，否则退出码 64。
+  - 在锁下清掉 `/run/xb-bot/cmd.*` 残留（被 KILL 的辅助程序没来得及删除的命令文件）。
   - 先按 Global Constraints 强制设定 `/workspace`、`/workspace/bots`、`/profiles` 的属主、权限和 ACL（目录不存在就先创建）。
-  - 再对 `/workspace` 下 `bots` 以外的全部条目执行 `chmod -R o-rwx`。
+  - 再对 `/workspace` 下 `bots` 以外、带 other 位的条目执行 `chmod o-rwx`（`find … -perm /o=rwx`，不跟随符号链接）。
   - 映射文件不存在时到此退出 0。
   - 对映射中每一行：uid 不在 20000–59999 内，或 key 不合法，就跳过并向 stderr 记一行；用户不存在时按记录的 uid 重新 `useradd`。
-  - 开关关闭时 `restore` 照样执行（s6 不看开关）。
+  - 开关关闭时 `restore` 照样执行。开关按 agent-computer 的规则读取：去掉首尾空白、转小写后与 `on` 比较。
+  - 收紧失败时不让容器退出：开关关闭只告警，exit 0；开关打开时把原因写进 root 所有的 `/run/xb-bot/unready`，exit 0。`ensure` 见到这个标记就以 `xb-bot: 未就绪：<原因>`、退出码 64 拒绝，于是 `/health` 返回 503，API 和默认员工照常服务。只有开关打开而标记写不进去时，restore 才以 1 退出。
 
 - [ ] **Step 1：写失败测试** `docker/tests/xb-bot.test.sh`（POSIX sh，任一断言失败即 `exit 1`），断言：
   - `xb-bot nope` 退出码 64；`xb-bot ensure ABC` 退出码 64；`xb-bot run <key> 0` 退出码 64；未 ensure 的 key 执行 `run` 退出码 65。
