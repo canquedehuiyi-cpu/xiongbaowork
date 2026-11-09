@@ -37,6 +37,7 @@ import {
   sealConnectState,
 } from "./oauth";
 import {
+  type AppAccessRequestRecord,
   CatalogueEntryUnknownError,
   CustomServerRefusedError,
   deploymentFaultSentence,
@@ -3136,6 +3137,199 @@ export function createPluginRoutes(
       );
     }
   });
+
+  /**
+   * 申请访问（迁移 0153，上游 #814 的收件箱部分）。
+   *
+   * 申请由员工在对话里调用 `request_app_access` 提出，行属于申请人的租户。申请人在自己的帧里看、撤回自己的
+   * 申请；管理员经 `asAdminPlatform` 列出所有人的 pending 申请，处理结果经 `adminActAsOwner` 写回申请人的帧，
+   * 轨迹也归申请人。
+   *
+   * 批准不新增授权路径：`enable` 调用现有的上架（`addInstallListing`，和 POST /listings 同一个），之后员工的
+   * 主人按 D08 自己装；`grant` 走现有的授予（`asBotOwner` + `enablementDecision` + `store.grant`，和 POST
+   * /grants 同一套），只授予应用标为只读、非破坏性的动作，写操作仍由管理员在插件页逐个授予。任一步失败时
+   * 申请保持 pending，并返回中文原因。
+   */
+  const NO_SUCH_REQUEST = "没有这条申请。";
+  const ALREADY_DECIDED = "这条申请已经处理过了。";
+
+  /**
+   * 能处理申请的人：现有的插件管理权限，也就是管理员角色加上 `adminCapability` 重新读过角色后给的
+   * capability。角色被收回的管理员拿不到 capability，同样被拒。
+   */
+  const decisionRefusal = (context: { var: AppVariables }): string | null =>
+    context.var.actor?.role === "admin" &&
+    adminScope &&
+    capabilityFor(currentTenant()) === "admin"
+      ? null
+      : "只有拥有插件管理权限的管理员可以处理访问申请。";
+
+  /** 管理员读一条申请，跨租户，所以在 platform 帧里读；调用前已确认持有 capability。 */
+  const requestForAdmin = (context: { var: AppVariables }, id: string) =>
+    (adminScope as NonNullable<typeof adminScope>).asAdminPlatform(
+      context.var.actor,
+      () => store.appAccessRequest(id),
+    );
+
+  /** 把处理结果写回申请人的帧（I6）：这次改动和它的轨迹都归申请人。 */
+  const decideAsRequester = (
+    context: { var: AppVariables },
+    request: AppAccessRequestRecord,
+    status: "approved" | "dismissed",
+  ) =>
+    (adminScope as NonNullable<typeof adminScope>).adminActAsOwner(
+      context.var.actor,
+      request.tenantId,
+      () =>
+        store.decideAppAccessRequest({
+          id: request.id,
+          status,
+          by: actorEmail(context),
+        }),
+    );
+
+  /** 申请人自己的 pending 申请，最新的在前。 */
+  routes.get("/access-requests/mine", requireUser, async (context) =>
+    context.json({
+      requests: await store.pendingAppAccessRequests({
+        requesterUserId: context.var.actor.id,
+      }),
+    }),
+  );
+
+  /** 所有人的 pending 申请，给管理员收件箱。 */
+  routes.get("/access-requests", signedInWithCapability, async (context) => {
+    const refusal = decisionRefusal(context);
+    if (refusal) return context.json({ error: refusal }, 403);
+    const requests = await (
+      adminScope as NonNullable<typeof adminScope>
+    ).asAdminPlatform(context.var.actor, () =>
+      store.pendingAppAccessRequests(),
+    );
+    return context.json({ requests });
+  });
+
+  /** 申请人自己的一条申请，卡片据此显示当前状态。别人的和不存在的一样答 404。 */
+  routes.get("/access-requests/:id", requireUser, async (context) => {
+    const request = await store.appAccessRequest(context.req.param("id"));
+    if (!request || request.requesterUserId !== context.var.actor.id)
+      return context.json({ error: NO_SUCH_REQUEST }, 404);
+    return context.json({ request });
+  });
+
+  /** 申请人撤回自己的一条 pending 申请。别人的读起来和不存在的一样，从这里看不出谁申请了什么。 */
+  routes.delete("/access-requests/:id", requireUser, async (context) => {
+    const id = context.req.param("id");
+    const cancelled = await store.cancelAppAccessRequest({
+      id,
+      requesterUserId: context.var.actor.id,
+    });
+    if (cancelled) return context.json({ request: cancelled });
+    const existing = await store.appAccessRequest(id);
+    if (existing && existing.requesterUserId === context.var.actor.id)
+      return context.json({ error: ALREADY_DECIDED }, 409);
+    return context.json({ error: NO_SUCH_REQUEST }, 404);
+  });
+
+  routes.post(
+    "/access-requests/:id/approve",
+    signedInWithCapability,
+    async (context) => {
+      const refusal = decisionRefusal(context);
+      if (refusal) return context.json({ error: refusal }, 403);
+      const request = await requestForAdmin(context, context.req.param("id"));
+      if (!request) return context.json({ error: NO_SUCH_REQUEST }, 404);
+      if (request.status !== "pending")
+        return context.json({ error: ALREADY_DECIDED }, 409);
+      const title = request.appTitle;
+      let granted: string[] = [];
+
+      if (request.kind === "enable") {
+        // 和 POST /listings 一样的检查：上架的是应用，必须是目录里的条目或本部署已添加的应用。
+        if (
+          catalogueEntry(request.appKey) === null &&
+          !(await store.serverExists(request.appKey))
+        )
+          return context.json(
+            { error: `「${title}」已经不是本部署的应用，无法上架。` },
+            409,
+          );
+        await store.addInstallListing(
+          "mcp",
+          request.appKey,
+          actorEmail(context),
+        );
+      } else {
+        const outcome = await asBotOwner(context, request.botId, async () => {
+          const server = (await store.listServers()).find(
+            (candidate) => candidate.id === request.serverId,
+          );
+          if (!server)
+            return {
+              error: `「${title}」已经不是本部署的应用，无法授予。`,
+              status: 409 as const,
+            };
+          if (server.tools.length === 0)
+            return {
+              error: `「${title}」还没有列出任何工具。请先在插件页刷新它的工具，再批准这条申请。`,
+              status: 409 as const,
+            };
+          const refs = server.tools
+            .filter((tool) => tool.effect === "read" && !tool.destructive)
+            .map((tool) => tool.ref);
+          if (refs.length === 0)
+            return {
+              error: `「${title}」没有标为只读的动作，在这里批准什么也授予不了。请在插件页为这位员工逐个选择可以使用的动作，再处理这条申请。`,
+              status: 409 as const,
+            };
+          for (const ref of refs) {
+            const decision = await enablementDecision(
+              context,
+              "mcp",
+              ref,
+              request.botId,
+              "grant",
+            );
+            if (decision.refusal !== null)
+              return { error: decision.refusal, status: 403 as const };
+          }
+          try {
+            for (const ref of refs)
+              await store.grant("mcp", ref, request.botId, actorEmail(context));
+          } catch (error) {
+            if (error instanceof PluginRefusedError)
+              return { error: error.message, status: 403 as const };
+            throw error;
+          }
+          return { refs };
+        });
+        if ("error" in outcome)
+          return context.json({ error: outcome.error }, outcome.status);
+        granted = outcome.refs;
+      }
+
+      const decided = await decideAsRequester(context, request, "approved");
+      if (!decided) return context.json({ error: ALREADY_DECIDED }, 409);
+      return context.json({ request: decided, granted });
+    },
+  );
+
+  /** 驳回：只关掉这条申请，别的什么也不改。 */
+  routes.post(
+    "/access-requests/:id/dismiss",
+    signedInWithCapability,
+    async (context) => {
+      const refusal = decisionRefusal(context);
+      if (refusal) return context.json({ error: refusal }, 403);
+      const request = await requestForAdmin(context, context.req.param("id"));
+      if (!request) return context.json({ error: NO_SUCH_REQUEST }, 404);
+      if (request.status !== "pending")
+        return context.json({ error: ALREADY_DECIDED }, 409);
+      const decided = await decideAsRequester(context, request, "dismissed");
+      if (!decided) return context.json({ error: ALREADY_DECIDED }, 409);
+      return context.json({ request: decided });
+    },
+  );
 
   return routes;
 }
