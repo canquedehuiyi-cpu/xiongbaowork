@@ -402,7 +402,7 @@ test("a help request is drawn in the conversation, and after the hand-back the B
   expect(card?.textContent).toBe(
     `Taken over and handed backThe Bot asked: “${ASKED}”`,
   );
-  expect(view.queryByRole("button", { name: "Carry on" })).toBeNull();
+  expect(view.queryByRole("button", { name: "继续" })).toBeNull();
 });
 
 test("a Bot that answers the hand-back with no words leaves a step that says so, and Carry on asks it to go on", async () => {
@@ -428,11 +428,11 @@ test("a Bot that answers the hand-back with no words leaves a step that says so,
       `Taken over and handed backThe Bot asked: “${ASKED}” The Bot stopped here without saying what it does next.Carry on`,
     ),
   );
-  await user.click(view.getByRole("button", { name: "Carry on" }));
+  await user.click(view.getByRole("button", { name: "继续" }));
   await waitFor(() => expect(runs).toHaveLength(3));
   expect(runs[2]?.messages.at(-1)).toMatchObject({
     role: "user",
-    content: "Please carry on.",
+    content: "请继续。",
   });
 });
 

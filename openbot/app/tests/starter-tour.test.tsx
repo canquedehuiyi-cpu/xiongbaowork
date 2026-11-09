@@ -138,38 +138,38 @@ for (const agentId of ["picked-harness", "personal-assistant"]) {
 test("the starters tour search with a chart, the Bot's browser, Gmail and an interactive budget", async () => {
   server();
   const view = draw({ agentId: "personal-assistant" });
-  await view.findByRole("region", { name: "Starter tasks" });
+  await view.findByRole("region", { name: "入门任务" });
   const shown = (await view.findAllByRole("button")).map(
     (button) => button.textContent,
   );
   expect(shown).toEqual([
-    "Chart Hacker News",
-    "Browse Google Maps",
-    "Triage my inbox",
-    "Build a trip budget",
+    "把 Hacker News 做成图表",
+    "用 Google 地图查路线",
+    "整理我的收件箱",
+    "做一份出行预算",
   ]);
   expect(
     STARTER_SUGGESTIONS.map(({ title, message }) => ({ title, message })),
   ).toEqual([
     {
-      title: "Chart Hacker News",
+      title: "把 Hacker News 做成图表",
       message:
-        "Use web search to find the top 10 stories on the Hacker News front page right now. Show me a bar chart of them by points, then list them with their points and links.",
+        "用网页搜索找出 Hacker News 首页现在排名前 10 的文章。按得分给我画一张柱状图，再列出每篇的得分和链接。",
     },
     {
-      title: "Browse Google Maps",
+      title: "用 Google 地图查路线",
       message:
-        "Use your browser to open Google Maps and check the British Museum's Saturday opening hours. Then get walking directions from King's Cross station, list them step by step, and tell me when to leave to arrive at opening time. Don't sign in or change anything.",
+        "用你的浏览器打开 Google 地图，查一下大英博物馆周六的开放时间。再查从国王十字车站步行过去的路线，一步一步列出来，并告诉我几点出发能在开门时到达。不要登录，也不要改动任何东西。",
     },
     {
-      title: "Triage my inbox",
+      title: "整理我的收件箱",
       message:
-        "Use Gmail to read my emails from the past 24 hours and tell me the top 2 that need my attention, and why. Don't mark anything as read or change anything. If Gmail isn't connected, help me connect it here, then continue this request.",
+        "用 Gmail 读一下我过去 24 小时的邮件，告诉我最需要我处理的 2 封以及原因。不要把任何邮件标为已读，也不要改动任何东西。如果 Gmail 还没连接，先在这里帮我连接，然后继续这个请求。",
     },
     {
-      title: "Build a trip budget",
+      title: "做一份出行预算",
       message:
-        "Build an interactive weekend trip budget in this conversation. Start with transport $100, lodging $200 and food $80. Let me edit each cost and see the total update immediately. Use clearly labeled sample amounts, not live prices.",
+        "在这段对话里做一份可交互的周末出行预算。先填交通 100 元、住宿 200 元、餐饮 80 元。让我能修改每一项费用，并立刻看到总额更新。用清楚标明的示例金额，不要用实时价格。",
     },
   ]);
 });
@@ -178,15 +178,13 @@ test("unrelated Bots never render the starter tasks", async () => {
   server();
   const view = draw({ agentId: "custom-bot" });
   await settleReactWork();
-  expect(view.queryByRole("region", { name: "Starter tasks" })).toBeNull();
+  expect(view.queryByRole("region", { name: "入门任务" })).toBeNull();
 });
 
 test("a claimed tour is shown only in its saved channel, never home or a later channel", async () => {
   server({ starterTourChannelId: "first-channel" });
   const saved = draw({ agentId: "picked-harness", channelId: "first-channel" });
-  expect(
-    await saved.findByRole("region", { name: "Starter tasks" }),
-  ).toBeTruthy();
+  expect(await saved.findByRole("region", { name: "入门任务" })).toBeTruthy();
   saved.unmount();
   for (const channelId of [undefined, "later-channel"]) {
     const view = draw(
@@ -194,7 +192,7 @@ test("a claimed tour is shown only in its saved channel, never home or a later c
       saved.client,
     );
     await settleReactWork();
-    expect(view.queryByRole("region", { name: "Starter tasks" })).toBeNull();
+    expect(view.queryByRole("region", { name: "入门任务" })).toBeNull();
     view.unmount();
   }
 });
@@ -208,7 +206,7 @@ test("a claimed tour is shown only in its saved channel, never home or a later c
 test("the starter tasks are inset like the composer and stand clear of it", async () => {
   server();
   const view = draw({ agentId: "picked-harness" });
-  const row = await view.findByRole("region", { name: "Starter tasks" });
+  const row = await view.findByRole("region", { name: "入门任务" });
   const classes = row.className.split(/\s+/);
   expect(classes).toContain("px-3");
   expect(classes).toContain("mb-3");
@@ -218,7 +216,7 @@ test("the starter tasks are inset like the composer and stand clear of it", asyn
 test("starter tasks have no dismiss control", async () => {
   server();
   const view = draw({ agentId: "picked-harness" });
-  await view.findByRole("region", { name: "Starter tasks" });
+  await view.findByRole("region", { name: "入门任务" });
   expect(view.queryByRole("button", { name: "Hide starter tasks" })).toBeNull();
   expect(view.getAllByRole("button")).toHaveLength(STARTER_SUGGESTIONS.length);
 });
@@ -235,9 +233,7 @@ test("one user's claimed conversation does not hide tasks for a second user in t
   state.userId = "second";
   first.client.removeQueries({ queryKey: authKeys.currentUser() });
   const second = draw({ agentId: "personal-assistant" }, first.client);
-  expect(
-    await second.findByRole("region", { name: "Starter tasks" }),
-  ).toBeTruthy();
+  expect(await second.findByRole("region", { name: "入门任务" })).toBeTruthy();
 });
 
 test("busy and repeated presses do not send another message", async () => {
@@ -289,7 +285,7 @@ test("a failed selection leaves an error and permits retry", async () => {
     name: STARTER_SUGGESTIONS[0].title,
   });
   fireEvent.click(button);
-  expect((await view.findByRole("alert")).textContent).toContain("Try again");
+  expect((await view.findByRole("alert")).textContent).toContain("再试一次");
   fireEvent.click(button);
   await waitFor(() => expect(sends).toBe(2));
   await waitFor(() => expect(view.queryByRole("alert")).toBeNull());
@@ -312,7 +308,7 @@ test("disabled interactive answers explain the limitation without an irrelevant 
   );
   fireEvent.click(button);
   expect((await view.findByRole("alert")).textContent).toContain(
-    "disabled for this installation",
+    "关闭了交互式回答",
   );
   expect(view.queryByRole("link", { name: "Check setup" })).toBeNull();
   expect(sent).toEqual([]);

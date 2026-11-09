@@ -112,9 +112,7 @@ function renderPage() {
 
 async function checkForUpdates() {
   const view = renderPage();
-  fireEvent.click(
-    await view.findByRole("button", { name: "Check for updates" }),
-  );
+  fireEvent.click(await view.findByRole("button", { name: "检查更新" }));
   return view;
 }
 
@@ -122,7 +120,7 @@ test("on the newest release it says this version is up to date", async () => {
   found = { found: "upToDate", current: "0.3.2" };
   const view = await checkForUpdates();
   expect((await view.findByRole("status")).textContent).toBe(
-    "OpenBot 0.3.2 is up to date.",
+    "熊宝 0.3.2 已是最新版本。",
   );
   expect(commands).toContain("plugin:openbot-desktop|check_update");
 });
@@ -131,9 +129,9 @@ test("a newer version is offered with Update and restart, which installs it", as
   found = { found: "available", version: "0.3.3", current: "0.3.2" };
   const view = await checkForUpdates();
   expect((await view.findByRole("status")).textContent).toBe(
-    "OpenBot 0.3.3 is available.",
+    "熊宝 0.3.3 已发布。",
   );
-  fireEvent.click(view.getByRole("button", { name: "Update and restart" }));
+  fireEvent.click(view.getByRole("button", { name: "更新并重启" }));
   await waitFor(() =>
     expect(commands).toContain("plugin:openbot-desktop|install_update"),
   );
@@ -141,8 +139,8 @@ test("a newer version is offered with Update and restart, which installs it", as
   // (TanStack reads the module as server-side), so this is the next of those asks.
   await queryClient.invalidateQueries({ queryKey: desktopKeys.appUpdate });
   await waitFor(() =>
-    expect(view.getByRole("button", { name: /Downloading/ }).textContent).toBe(
-      "Downloading… 25%",
+    expect(view.getByRole("button", { name: /正在下载/ }).textContent).toBe(
+      "正在下载… 25%",
     ),
   );
 });
@@ -154,7 +152,7 @@ test("a check that fails says what to do", async () => {
   expect((await view.findByRole("alert")).textContent).toBe(
     "OpenBot couldn't check for updates. Check your internet connection and try again.",
   );
-  expect(view.getByRole("button", { name: "Check for updates" })).toBeTruthy();
+  expect(view.getByRole("button", { name: "检查更新" })).toBeTruthy();
 });
 
 test("a build that doesn't update itself says so up front, with no button", async () => {
@@ -168,18 +166,16 @@ test("a build that doesn't update itself says so up front, with no button", asyn
   await view.findByText(
     "This version of OpenBot doesn't update itself. Install a released version of OpenBot to get updates.",
   );
-  await view.findByText("Version 0.3.2");
+  await view.findByText("版本 0.3.2");
   // Nothing to click: the setup window, the tray and the menus offer no check on this build either.
-  expect(view.queryByRole("button", { name: "Check for updates" })).toBeNull();
-  expect(view.queryByRole("button", { name: "Update and restart" })).toBeNull();
+  expect(view.queryByRole("button", { name: "检查更新" })).toBeNull();
+  expect(view.queryByRole("button", { name: "更新并重启" })).toBeNull();
   expect(commands).not.toContain("plugin:openbot-desktop|check_update");
 });
 
 test("a release build keeps Check for updates and doesn't say it can't update", async () => {
   const view = renderPage();
-  expect(
-    await view.findByRole("button", { name: "Check for updates" }),
-  ).toBeTruthy();
+  expect(await view.findByRole("button", { name: "检查更新" })).toBeTruthy();
   expect(view.container.textContent).not.toContain(DOESNT_UPDATE_ITSELF);
 });
 

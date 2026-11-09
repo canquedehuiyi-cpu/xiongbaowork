@@ -2,7 +2,7 @@
  * Settings → This computer: the Logs row and Open log folder. OpenBot Desktop writes a log file on
  * this computer, and this is how a person finds it to share it. These tests stand in for the IPC
  * Tauri injects into the Desktop window, answering as the shell's `openbot-desktop` plugin does
- * (desktop/src-tauri/src/desktop_page.rs: `status` and `open_logs`); the page, its queries and its
+ * (desktop/src-tauri/src/desktop_page.rs: `status` 和 `open_logs`); the page, its queries and its
  * mutations are the real ones. The opener is the stub: it records the call instead of opening a
  * file manager.
  */
@@ -93,7 +93,7 @@ function renderPage() {
 
 test("Open log folder opens the desktop app's log folder", async () => {
   const view = renderPage();
-  fireEvent.click(await view.findByRole("button", { name: "Open log folder" }));
+  fireEvent.click(await view.findByRole("button", { name: "打开日志文件夹" }));
   await waitFor(() => expect(opened).toEqual([LOG_FOLDER]));
   // The page asks; it never hands the desktop app a path to open.
   expect(
@@ -102,7 +102,7 @@ test("Open log folder opens the desktop app's log folder", async () => {
   expect(view.getByText(LOG_FOLDER)).toBeTruthy();
   expect(
     view.getByText(
-      "Logs stay on this computer and leave out your keys and messages. Share them when you ask for help.",
+      "日志只保存在这台电脑上，不含你的密钥和消息。求助时可以把它发给对方。",
     ),
   ).toBeTruthy();
   expect(view.queryByRole("alert")).toBeNull();
@@ -111,9 +111,9 @@ test("Open log folder opens the desktop app's log folder", async () => {
 test("a folder that couldn't be opened says where to find it", async () => {
   openFails = true;
   const view = renderPage();
-  fireEvent.click(await view.findByRole("button", { name: "Open log folder" }));
+  fireEvent.click(await view.findByRole("button", { name: "打开日志文件夹" }));
   expect((await view.findByRole("alert")).textContent).toBe(
-    "Couldn't open the log folder. Find it at the path above.",
+    "没能打开日志文件夹。请按上面的路径找到它。",
   );
   expect(view.getByText(LOG_FOLDER)).toBeTruthy();
 });
@@ -122,7 +122,7 @@ test("a desktop app older than the log offers no Open log folder", async () => {
   const { logFolder: _, ...older } = STATUS;
   status = older;
   const view = renderPage();
-  await view.findByText("Installed in");
-  expect(view.queryByRole("button", { name: "Open log folder" })).toBeNull();
-  expect(view.queryByText("Logs")).toBeNull();
+  await view.findByText("安装位置");
+  expect(view.queryByRole("button", { name: "打开日志文件夹" })).toBeNull();
+  expect(view.queryByText("日志")).toBeNull();
 });

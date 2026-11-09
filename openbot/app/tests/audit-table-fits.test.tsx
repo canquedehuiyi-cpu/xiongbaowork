@@ -111,7 +111,7 @@ test("five columns, not seven: what it acted on sits under the action, and who s
     );
   expect(cell(refused, "what")).toEqual(["保存文件", "reports/refused.txt"]);
   expect(cell(refused, "bot")).toEqual(["Claude Agent SDK", "由某个人发起"]);
-  expect(cell(routine, "bot")).toEqual(["Claude Agent SDK", "由例行任务发起"]);
+  expect(cell(routine, "bot")).toEqual(["Claude Agent SDK", "由定时任务发起"]);
 });
 
 test("a long reason wraps inside Decision instead of setting its width", async () => {
@@ -135,7 +135,7 @@ test("the Started by filter still narrows the rows, though it is no longer a col
   const user = userEvent.setup({ document });
   await user.click(view.getByRole("button", { name: /发起方/ }));
   await user.click(
-    await view.findByRole("menuitemcheckbox", { name: /例行任务/ }),
+    await view.findByRole("menuitemcheckbox", { name: /定时任务/ }),
   );
   await waitFor(() =>
     expect(view.container.querySelectorAll("tbody tr")).toHaveLength(1),

@@ -144,10 +144,10 @@ function draw() {
 
 test("lists the pending proposals with what each does", async () => {
   const view = draw();
-  await view.findByText("Waiting for an admin");
-  expect(await view.findByText("New skill")).toBeTruthy();
-  expect(view.getByText("Update to Close ticket")).toBeTruthy();
-  expect(view.getByText("Remove Old skill")).toBeTruthy();
+  await view.findByText("等管理员审核");
+  expect(await view.findByText("新技能")).toBeTruthy();
+  expect(view.getByText("更新「Close ticket」")).toBeTruthy();
+  expect(view.getByText("删除「Old skill」")).toBeTruthy();
   expect(view.queryByText("Done skill")).toBeNull();
 });
 
@@ -155,25 +155,23 @@ test("with admins approving, a person's pending proposal opens read-only", async
   const view = draw();
   fireEvent.click(await view.findByText("Refund order"));
   await view.findByText("Look up the order.");
-  expect(view.queryByText("Approve and publish")).toBeNull();
-  expect(view.getByText("Done")).toBeTruthy();
-  expect(view.getByText(/An admin reviews these/)).toBeTruthy();
+  expect(view.queryByText("批准并发布")).toBeNull();
+  expect(view.getByText("完成")).toBeTruthy();
+  expect(view.getByText(/这些由管理员审核/)).toBeTruthy();
 });
 
 test("with people approving, a person approves from the dialog", async () => {
   review = body(true);
   const view = draw();
   fireEvent.click(await view.findByText("Refund order"));
-  fireEvent.click(await view.findByText("Approve and publish"));
+  fireEvent.click(await view.findByText("批准并发布"));
   await waitFor(() =>
     expect(posts).toEqual([
       "/api/settings/learning/proposals/p1/approve?container=user-1",
     ]),
   );
   expect(
-    await view.findByText(
-      "Published. Your Bots use it from their next conversation.",
-    ),
+    await view.findByText("已发布。你的员工从下一段对话起就会用它。"),
   ).toBeTruthy();
 });
 
@@ -193,9 +191,7 @@ test("says so when proposals couldn't be read", async () => {
   };
   const view = draw();
   const alert = await view.findByRole("alert");
-  expect(alert.textContent).toBe(
-    "Couldn't read your proposed skills. Reload the page.",
-  );
+  expect(alert.textContent).toBe("读不到为你建议的技能。请刷新页面。");
 });
 
 test("says some were unreadable when another source was read", async () => {
@@ -221,17 +217,15 @@ test("says some were unreadable when another source was read", async () => {
   };
   const view = draw();
   const alert = await view.findByRole("alert");
-  expect(alert.textContent).toContain("Couldn't read some of your");
+  expect(alert.textContent).toContain("有些为你建议的技能读不到");
 });
 
 test("on a team, says what to expect when nothing is waiting", async () => {
   review = { canReview: true, autoApprove: null, sources: [] };
   const view = draw();
-  expect(await view.findByText("Nothing to review")).toBeTruthy();
+  expect(await view.findByText("没有待审核的内容")).toBeTruthy();
   expect(
-    await view.findByText(
-      "New proposals show up here after Learning analyses your recordings.",
-    ),
+    await view.findByText("学习分析完你的录制后，新建议会出现在这里。"),
   ).toBeTruthy();
 });
 
@@ -239,9 +233,7 @@ test("in the personal edition the empty state mentions conversations", async () 
   review = { canReview: true, autoApprove: false, sources: [] }; // personal: autoApprove is a boolean
   const view = draw();
   expect(
-    await view.findByText(
-      "New proposals show up here after Learning analyses your recordings and conversations.",
-    ),
+    await view.findByText("学习分析完你的录制和对话后，新建议会出现在这里。"),
   ).toBeTruthy();
 });
 
@@ -261,13 +253,13 @@ test("with people approving, the latest run shows and Learn now starts one", asy
       completedAt: null,
     };
   const view = draw();
-  expect(await view.findByText("Latest run finished.")).toBeTruthy();
-  fireEvent.click(await view.findByRole("button", { name: "Learn now" }));
+  expect(await view.findByText("最近一次运行：已完成。")).toBeTruthy();
+  fireEvent.click(await view.findByRole("button", { name: "立即学习" }));
   await waitFor(() =>
     expect(posts).toEqual(["/api/settings/learning/runs?container=user-1"]),
   );
   const busy = await view.findByRole("button", {
-    name: "Learning in progress…",
+    name: "正在学习…",
   });
   expect((busy as HTMLButtonElement).disabled).toBe(true);
   expect(view.queryByText(/Learning started/)).toBeNull();
@@ -292,7 +284,7 @@ test("a failed run says why, not only that it failed", async () => {
       completedAt: null,
     };
   const view = draw();
-  expect(await view.findByText(`Latest run failed. ${why}`)).toBeTruthy();
+  expect(await view.findByText(`最近一次运行：失败。 ${why}`)).toBeTruthy();
 });
 
 const run = (id: string, createdAt: string) => ({
@@ -333,9 +325,9 @@ test("turning automatic approval off shows proposals from recordings and from co
   expect(view.getByText("From your conversations")).toBeTruthy();
   expect(view.getByText("Refund order")).toBeTruthy();
   expect(view.getByText("Reply politely")).toBeTruthy();
-  expect(view.getByText("No run yet.")).toBeTruthy();
-  expect(view.getByText("Latest run finished.")).toBeTruthy();
-  const buttons = view.getAllByRole("button", { name: "Learn now" });
+  expect(view.getByText("还没运行过。")).toBeTruthy();
+  expect(view.getByText("最近一次运行：已完成。")).toBeTruthy();
+  const buttons = view.getAllByRole("button", { name: "立即学习" });
   expect(buttons).toHaveLength(2);
   fireEvent.click(buttons[1] as HTMLElement);
   await waitFor(() =>
@@ -361,15 +353,15 @@ test("sources with the same label make one group with one Learn now", async () =
   expect(await view.findByText("Skill a")).toBeTruthy();
   expect(view.getAllByText("From your conversations")).toHaveLength(1);
   fireEvent.click(view.getByText("Skill b"));
-  fireEvent.click(await view.findByText("Approve and publish"));
+  fireEvent.click(await view.findByText("批准并发布"));
   await waitFor(() =>
     expect(posts).toEqual([
       "/api/settings/learning/proposals/p-b/approve?container=bot-b",
     ]),
   );
   posts.length = 0;
-  fireEvent.click(await view.findByText("Done"));
-  fireEvent.click(await view.findByRole("button", { name: "Learn now" }));
+  fireEvent.click(await view.findByText("完成"));
+  fireEvent.click(await view.findByRole("button", { name: "立即学习" }));
   await waitFor(() =>
     expect(posts).toEqual([
       "/api/settings/learning/runs?container=bot-a",
@@ -405,7 +397,7 @@ test("Learn now starts every source in the group even when one fails", async () 
     { preconnect: originalFetch.preconnect },
   );
   const view = draw();
-  fireEvent.click(await view.findByRole("button", { name: "Learn now" }));
+  fireEvent.click(await view.findByRole("button", { name: "立即学习" }));
   await waitFor(() =>
     expect(posts).toEqual([
       "/api/settings/learning/runs?container=bot-a",
@@ -417,9 +409,9 @@ test("Learn now starts every source in the group even when one fails", async () 
 
 test("with admins approving, there is no Learn now", async () => {
   const view = draw();
-  await view.findByText("Waiting for an admin");
-  expect(view.queryByRole("button", { name: "Learn now" })).toBeNull();
-  expect(view.queryByText(/Latest run/)).toBeNull();
+  await view.findByText("等管理员审核");
+  expect(view.queryByRole("button", { name: "立即学习" })).toBeNull();
+  expect(view.queryByText(/最近一次运行/)).toBeNull();
 });
 
 test("evidence names the recording by its title", async () => {
@@ -442,8 +434,8 @@ test("evidence names the recording by its title", async () => {
   const view = draw();
   fireEvent.click(await view.findByText("Refund order"));
   expect(await view.findByText("Refund an order")).toBeTruthy();
-  expect(view.getByText("A recording")).toBeTruthy();
-  expect(view.getAllByText("Open the order, Click Refund")).toHaveLength(2);
+  expect(view.getByText("一段录制")).toBeTruthy();
+  expect(view.getAllByText("Open the order、Click Refund")).toHaveLength(2);
 });
 
 test("the personal edition shows Learning with automatic approval on and no sharing", async () => {
@@ -459,13 +451,13 @@ test("the personal edition shows Learning with automatic approval on and no shar
     </QueryClientProvider>,
   );
   const approve = await view.findByRole("switch", {
-    name: "Approve new skills automatically",
+    name: "自动批准新技能",
   });
   expect(approve.getAttribute("aria-checked")).toBe("true");
-  await view.findByText("Your skills");
-  expect(view.queryByText("Who else's Bots use your skills")).toBeNull();
-  expect(view.getByRole("button", { name: "Learn now" })).toBeTruthy();
-  expect(view.queryByText("Nothing to review")).toBeNull();
+  await view.findByText("你的技能");
+  expect(view.queryByText("还有谁的员工能用你的技能")).toBeNull();
+  expect(view.getByRole("button", { name: "立即学习" })).toBeTruthy();
+  expect(view.queryByText("没有待审核的内容")).toBeNull();
   fireEvent.click(approve);
   await waitFor(() =>
     expect(puts).toEqual([
@@ -494,12 +486,10 @@ test("a source Learning is off for says so plainly, without the read failure ale
   };
   const view = draw();
   expect(
-    await view.findByText(
-      "Learning isn't available in the back end, so nothing is proposed here.",
-    ),
+    await view.findByText("后端没有提供学习功能，所以这里不会有建议。"),
   ).toBeTruthy();
   expect(view.queryByRole("alert")).toBeNull();
-  expect(view.queryByText("Nothing to review")).toBeNull();
+  expect(view.queryByText("没有待审核的内容")).toBeNull();
 });
 
 test("when only some sources are unavailable, the empty state is hidden and the notice names them", async () => {
@@ -527,10 +517,10 @@ test("when only some sources are unavailable, the empty state is hidden and the 
   const view = draw();
   expect(
     await view.findByText(
-      "Learning isn't available for From your recordings, so nothing is proposed there.",
+      "From your recordings没有提供学习功能，所以那里不会有建议。",
     ),
   ).toBeTruthy();
-  expect(view.queryByText("Nothing to review")).toBeNull();
+  expect(view.queryByText("没有待审核的内容")).toBeNull();
 });
 
 test("a Learn now failure in one group does not show in another", async () => {
@@ -558,14 +548,14 @@ test("a Learn now failure in one group does not show in another", async () => {
     { preconnect: originalFetch.preconnect },
   );
   const view = draw();
-  const buttons = await view.findAllByRole("button", { name: "Learn now" });
+  const buttons = await view.findAllByRole("button", { name: "立即学习" });
   fireEvent.click(buttons[0] as HTMLElement);
   expect((await view.findByRole("alert")).textContent).toBe("Nope");
-  fireEvent.click(view.getAllByRole("button", { name: "Learn now" })[1]!);
-  await view.findByRole("button", { name: "Learning in progress…" });
+  fireEvent.click(view.getAllByRole("button", { name: "立即学习" })[1]!);
+  await view.findByRole("button", { name: "正在学习…" });
   // Group b's start does not wipe or borrow group a's failure, and a's button comes back.
   expect(view.getByRole("alert").textContent).toBe("Nope");
-  expect(view.getAllByRole("button", { name: "Learn now" })).toHaveLength(1);
+  expect(view.getAllByRole("button", { name: "立即学习" })).toHaveLength(1);
 });
 
 test("Learn now stays disabled until the run it started has finished", async () => {
@@ -573,8 +563,8 @@ test("Learn now stays disabled until the run it started has finished", async () 
   const first = review.sources[0];
   if (first) first.latestRun = run("run-1", "2026-11-01T00:00:00Z");
   const view = draw();
-  fireEvent.click(await view.findByRole("button", { name: "Learn now" }));
-  await view.findByRole("button", { name: "Learning in progress…" });
+  fireEvent.click(await view.findByRole("button", { name: "立即学习" }));
+  await view.findByRole("button", { name: "正在学习…" });
   const next = review.sources[0];
   if (next)
     next.latestRun = {
@@ -582,19 +572,19 @@ test("Learn now stays disabled until the run it started has finished", async () 
       status: "batching",
     };
   await queryClient.invalidateQueries({ queryKey: ["learning", "review"] });
-  await view.findByText("Latest run analyzing.");
+  await view.findByText("最近一次运行：正在分析。");
   expect(
     (
       view.getByRole("button", {
-        name: "Learning in progress…",
+        name: "正在学习…",
       }) as HTMLButtonElement
     ).disabled,
   ).toBe(true);
   if (next) next.latestRun = run("run-2", "2026-11-02T00:00:00Z");
   await queryClient.invalidateQueries({ queryKey: ["learning", "review"] });
-  await view.findByText("Latest run finished.");
+  await view.findByText("最近一次运行：已完成。");
   expect(
-    (view.getByRole("button", { name: "Learn now" }) as HTMLButtonElement)
+    (view.getByRole("button", { name: "立即学习" }) as HTMLButtonElement)
       .disabled,
   ).toBe(false);
 });
@@ -609,7 +599,7 @@ test("a run already going shows Learning in progress, disabled", async () => {
     };
   const view = draw();
   const busy = await view.findByRole("button", {
-    name: "Learning in progress…",
+    name: "正在学习…",
   });
   expect((busy as HTMLButtonElement).disabled).toBe(true);
 });
@@ -631,7 +621,7 @@ test("a source that failed to read still alerts next to one that is unavailable"
   };
   const view = draw();
   expect((await view.findByRole("alert")).textContent).toBe(
-    "Couldn't read your proposed skills. Reload the page.",
+    "读不到为你建议的技能。请刷新页面。",
   );
 });
 
@@ -723,14 +713,12 @@ test("a removal proposal says approve removal, then removed", async () => {
   detailOperation = "remove";
   const view = draw();
   fireEvent.click(await view.findByText("Old skill"));
-  expect(view.queryByText("Approve and publish")).toBeNull();
-  fireEvent.click(await view.findByText("Approve removal"));
+  expect(view.queryByText("批准并发布")).toBeNull();
+  fireEvent.click(await view.findByText("批准删除"));
   expect(
-    await view.findByText(
-      "Removed. Bots stop using it from their next conversation.",
-    ),
+    await view.findByText("已删除。员工从下一段对话起不再用它。"),
   ).toBeTruthy();
-  expect(view.queryByText(/Published/)).toBeNull();
+  expect(view.queryByText(/已发布/)).toBeNull();
 });
 
 test("a recording without named steps says 1 step, then 2 steps", async () => {
@@ -753,6 +741,6 @@ test("a recording without named steps says 1 step, then 2 steps", async () => {
   review = body(false);
   const view = draw();
   fireEvent.click(await view.findByText("Refund order"));
-  expect(await view.findByText("1 step")).toBeTruthy();
-  expect(view.getByText("2 steps")).toBeTruthy();
+  expect(await view.findByText("1 个步骤")).toBeTruthy();
+  expect(view.getByText("2 个步骤")).toBeTruthy();
 });

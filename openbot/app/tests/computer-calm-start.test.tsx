@@ -32,7 +32,7 @@ test("a call turned away by a computer still starting reads as not done yet, not
  * The panel used to call the first frameless screenshot a problem, so every cold start opened on
  * "Can't show the screen right now… ask an admin", and every blip in the live stream covered the
  * screen with a Retry panel. What a person should see instead is a sentence saying the computer is
- * starting, a small "Reconnecting…" while the stream comes back, and a problem only when there
+ * starting, a small "正在重新连接…" while the stream comes back, and a problem only when there
  * really is one.
  */
 
@@ -271,7 +271,7 @@ test("a live stream that drops shows a quiet badge, not the Retry panel", async 
     SocketDouble.all[0]?.onclose?.();
   });
 
-  expect(view.getByText("Reconnecting…")).toBeDefined();
+  expect(view.getByText("正在重新连接…")).toBeDefined();
   expect(view.queryByText("Retry")).toBeNull();
 });
 

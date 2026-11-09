@@ -262,7 +262,7 @@ const WHAT_IT_RECORDS =
 /** What a saved recording held: its actions, and its narrated phrases when there were any. */
 function heldIn(stopped: Stopped): string {
   return stopped.phrases > 0
-    ? `${actionCount(stopped.actions)}和${phraseCount(stopped.phrases)}`
+    ? `${actionCount(stopped.actions)}和 ${phraseCount(stopped.phrases)}`
     : actionCount(stopped.actions);
 }
 

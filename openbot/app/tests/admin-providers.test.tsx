@@ -192,14 +192,10 @@ test("one person on their own machine is offered every model, and nothing can na
   exposure = "all";
   const view = await draw(ProvidersPage);
   expect(await view.findByText("所有列出的模型")).toBeTruthy();
-  expect(
-    view.getByText("3 个模型，随提供方的列表保持更新。"),
-  ).toBeTruthy();
+  expect(view.getByText("3 个模型，随提供方的列表保持更新。")).toBeTruthy();
   // No allowlist and no switch to narrow it.
   expect(view.queryByRole("button", { name: /允许的模型/ })).toBeNull();
-  expect(
-    view.queryByRole("switch", { name: "只用允许的模型" }),
-  ).toBeNull();
+  expect(view.queryByRole("switch", { name: "只用允许的模型" })).toBeNull();
   expect(
     view.queryByRole("switch", { name: "Let people choose a model" }),
   ).toBeNull();
@@ -229,9 +225,7 @@ test("Providers names what actually serves the models, with a vendor's mark only
     expect(row.querySelector("img[data-mark]")?.getAttribute("data-mark")).toBe(
       mark ?? undefined,
     );
-    expect(row.textContent).toContain(
-      "默认 gpt-5.6-terra · 列出了 3 个模型",
-    );
+    expect(row.textContent).toContain("默认 gpt-5.6-terra · 列出了 3 个模型");
     view.unmount();
   }
 });

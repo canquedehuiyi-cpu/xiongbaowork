@@ -93,7 +93,7 @@ test("an opened web search shows the pages it found, never the provider's JSON",
   expect(text).not.toContain("\\n");
   expect(text).not.toContain("session_id");
 
-  const results = view.getByRole("region", { name: "Search results" });
+  const results = view.getByRole("region", { name: "搜索结果" });
   const link = view.getByRole("link", {
     name: /World Economic Outlook Database, April 2025/,
   });
@@ -137,7 +137,7 @@ test("an opened page read shows the pages it read the same way", () => {
     ),
   );
   expect(view.container.textContent).not.toContain("extract_id");
-  expect(view.getByRole("region", { name: "Pages read" })).toBeDefined();
+  expect(view.getByRole("region", { name: "读过的网页" })).toBeDefined();
   expect(
     view.getByRole("link", { name: /About the IMF/ }).getAttribute("href"),
   ).toBe("https://www.imf.org/en/about");
@@ -157,7 +157,7 @@ test("a web search on its own line opens to the same results, never the provider
   const text = view.container.textContent ?? "";
   expect(text).not.toContain("search_id");
   expect(text).not.toContain("\\n");
-  expect(view.getByRole("region", { name: "Search results" })).toBeDefined();
+  expect(view.getByRole("region", { name: "搜索结果" })).toBeDefined();
   expect(
     view
       .getByRole("link", { name: /World Economic Outlook Database/ })
@@ -261,7 +261,7 @@ test("a search the server cut at its result cap still opens to the pages it foun
   expect(text).not.toContain("search_id");
   expect(text).not.toContain("[truncated");
   expect(text).not.toContain("untrusted");
-  expect(view.getByRole("region", { name: "Search results" })).toBeDefined();
+  expect(view.getByRole("region", { name: "搜索结果" })).toBeDefined();
   expect(
     view.getByRole("link", { name: /Bun 1\.4\.3 Ships bun check/ }),
   ).toBeDefined();

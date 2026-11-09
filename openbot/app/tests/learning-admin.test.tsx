@@ -522,14 +522,14 @@ describe("reviewing proposed skills", () => {
     await view.findByText("Read the order date from the conversation.");
     expect(view.getByText("Can I get a refund on order 1182?")).not.toBeNull();
     expect(view.getByText("references/policy.md")).not.toBeNull();
-    fireEvent.click(view.getByRole("button", { name: "Approve and publish" }));
-    await view.findByText("Published. Bots on this container use it", {
+    fireEvent.click(view.getByRole("button", { name: "批准并发布" }));
+    await view.findByText("已发布。这个学习空间里的员工", {
       exact: false,
     });
     expect([...posts]).toEqual([
       `/api/admin/learning/proposals/${PROPOSAL}/approve`,
     ]);
-    fireEvent.click(view.getByRole("button", { name: "Done" }));
+    fireEvent.click(view.getByRole("button", { name: "完成" }));
     // The list refreshed from the server, not from a guess.
     await waitFor(() =>
       expect(
@@ -543,13 +543,13 @@ describe("reviewing proposed skills", () => {
     const view = shared();
     const row = await view.findByRole("button", { name: /Quote follow-up/ });
     expect(row.textContent).toContain("Dana Reyes");
-    await view.findByText("Couldn't read Sam Ortiz's skills.", {
+    await view.findByText("读不到Sam Ortiz的技能。", {
       exact: false,
     });
     fireEvent.click(row);
     await view.findByText("Read the order date from the conversation.");
-    fireEvent.click(view.getByRole("button", { name: "Approve and publish" }));
-    await view.findByText("Their Bots use it from their next conversation.", {
+    fireEvent.click(view.getByRole("button", { name: "批准并发布" }));
+    await view.findByText("对方的员工从下一段对话起就会用它。", {
       exact: false,
     });
     expect([...posts]).toEqual([
@@ -564,7 +564,7 @@ describe("reviewing proposed skills", () => {
     expect(row.textContent).toContain("Dana Reyes");
     fireEvent.click(row);
     await view.findByText("Ask whether the quote still fits.");
-    fireEvent.click(view.getByRole("button", { name: "Approve sharing" }));
+    fireEvent.click(view.getByRole("button", { name: "批准共享" }));
     await waitFor(() =>
       expect([...posts]).toEqual([
         `/api/admin/learning/sharing-requests/${PERSON}/quote-follow-up/approve`,
@@ -596,7 +596,7 @@ describe("reviewing proposed skills", () => {
       await view.findByRole("button", { name: /Quote follow up/ }),
     );
     await view.findByText("Ask whether the quote still fits.");
-    fireEvent.click(view.getByRole("button", { name: "Decline" }));
+    fireEvent.click(view.getByRole("button", { name: "拒绝" }));
     await waitFor(() => expect([...posts]).toEqual([`${SHARING}/decline`]));
     expect(JSON.parse(String(posts.bodies.at(-1)))).toEqual({
       requestedAt: "2026-11-05T09:00:00.000Z",
@@ -639,7 +639,7 @@ describe("reviewing proposed skills", () => {
       await view.findByRole("button", { name: /Quote follow up/ }),
     );
     await view.findByText("Ask whether the quote still fits.");
-    fireEvent.click(view.getByRole("button", { name: "Approve sharing" }));
+    fireEvent.click(view.getByRole("button", { name: "批准共享" }));
     const alert = await view.findByRole("alert");
     expect(alert.textContent).toBe(CHANGED);
     expect(
@@ -649,12 +649,12 @@ describe("reviewing proposed skills", () => {
       expect(
         (
           view.getByRole("button", {
-            name: "Approve sharing",
+            name: "批准共享",
           }) as HTMLButtonElement
         ).disabled,
       ).toBe(false),
     );
-    fireEvent.click(view.getByRole("button", { name: "Approve sharing" }));
+    fireEvent.click(view.getByRole("button", { name: "批准共享" }));
     await waitFor(() =>
       expect(sent).toEqual([
         "2026-11-05T09:00:00.000Z",
@@ -688,9 +688,9 @@ describe("reviewing proposed skills", () => {
       await view.findByRole("button", { name: /Quote follow up/ }),
     );
     const approve = await view.findByRole("button", {
-      name: "Approve sharing",
+      name: "批准共享",
     });
-    const decline = view.getByRole("button", { name: "Decline" });
+    const decline = view.getByRole("button", { name: "拒绝" });
     expect((approve as HTMLButtonElement).disabled).toBe(true);
     expect((decline as HTMLButtonElement).disabled).toBe(true);
     release(
@@ -726,12 +726,12 @@ describe("reviewing proposed skills", () => {
     expect(
       (
         view.getByRole("button", {
-          name: "Approve sharing",
+          name: "批准共享",
         }) as HTMLButtonElement
       ).disabled,
     ).toBe(true);
     expect(
-      (view.getByRole("button", { name: "Decline" }) as HTMLButtonElement)
+      (view.getByRole("button", { name: "拒绝" }) as HTMLButtonElement)
         .disabled,
     ).toBe(true);
     expect([...posts]).toEqual([]);
@@ -742,8 +742,8 @@ describe("reviewing proposed skills", () => {
     const view = shared();
     fireEvent.click(await view.findByRole("button", { name: /Refund triage/ }));
     await view.findByText("Read the order date from the conversation.");
-    fireEvent.click(view.getByRole("button", { name: "Reject" }));
-    await view.findByText("Rejected. It won't be published.");
+    fireEvent.click(view.getByRole("button", { name: "驳回" }));
+    await view.findByText("已驳回。它不会被发布。");
     expect([...posts]).toEqual([
       `/api/admin/learning/proposals/${PROPOSAL}/reject`,
     ]);
@@ -762,12 +762,10 @@ describe("reviewing proposed skills", () => {
     const view = shared();
     fireEvent.click(await view.findByRole("button", { name: /Refund triage/ }));
     await view.findByText("Read the order date from the conversation.");
-    fireEvent.click(view.getByRole("button", { name: "Approve and publish" }));
+    fireEvent.click(view.getByRole("button", { name: "批准并发布" }));
     await view.findByText("Couldn't publish this skill.");
-    expect(
-      view.queryByRole("button", { name: "Approve and publish" }),
-    ).not.toBeNull();
-    expect(view.queryByRole("button", { name: "Reject" })).not.toBeNull();
+    expect(view.queryByRole("button", { name: "批准并发布" })).not.toBeNull();
+    expect(view.queryByRole("button", { name: "驳回" })).not.toBeNull();
   });
 
   test("an admin rejects a person's proposal", async () => {
@@ -777,8 +775,8 @@ describe("reviewing proposed skills", () => {
       await view.findByRole("button", { name: /Quote follow-up/ }),
     );
     await view.findByText("Read the order date from the conversation.");
-    fireEvent.click(view.getByRole("button", { name: "Reject" }));
-    await view.findByText("Rejected. It won't be published.");
+    fireEvent.click(view.getByRole("button", { name: "驳回" }));
+    await view.findByText("已驳回。它不会被发布。");
     expect([...posts]).toEqual([
       `/api/admin/learning/people/${PERSON}/proposals/${PERSON_PROPOSAL}/reject`,
     ]);
@@ -800,11 +798,9 @@ describe("reviewing proposed skills", () => {
       await view.findByRole("button", { name: /Quote follow-up/ }),
     );
     await view.findByText("Read the order date from the conversation.");
-    fireEvent.click(view.getByRole("button", { name: "Approve and publish" }));
+    fireEvent.click(view.getByRole("button", { name: "批准并发布" }));
     await view.findByText("Couldn't publish this skill.");
-    expect(
-      view.queryByRole("button", { name: "Approve and publish" }),
-    ).not.toBeNull();
+    expect(view.queryByRole("button", { name: "批准并发布" })).not.toBeNull();
   });
 
   test("when settings fail to load, each approval section says so instead of vanishing", async () => {
@@ -822,9 +818,9 @@ describe("reviewing proposed skills", () => {
     const view = shared();
     // The app's query client retries a failed read once, a second later.
     const slow = { timeout: 3000 };
-    await view.findByText("Approval", {}, slow);
-    await view.findByText("From people's recordings", {}, slow);
-    await view.findByText("Sharing requests", {}, slow);
+    await view.findByText("审核", {}, slow);
+    await view.findByText("来自个人录制", {}, slow);
+    await view.findByText("共享申请", {}, slow);
     expect(
       view.getAllByText("Learning settings could not be accessed.").length,
     ).toBeGreaterThanOrEqual(4);
@@ -842,10 +838,10 @@ describe("reviewing proposed skills", () => {
         : undefined,
     );
     const view = shared();
-    await view.findByText("Couldn't read Sam Ortiz's skills.", {
+    await view.findByText("读不到Sam Ortiz的技能。", {
       exact: false,
     });
-    expect(view.queryByText("Nothing to review")).toBeNull();
+    expect(view.queryByText("没有待审核的内容")).toBeNull();
   });
 
   test("Who approves cannot be closed while it saves, so the result stays in view", async () => {
@@ -864,18 +860,18 @@ describe("reviewing proposed skills", () => {
     const view = shared();
     fireEvent.click(
       await view.findByRole("button", {
-        name: /Who approves skills learned from people's recordings/,
+        name: /谁来审核从个人录制里学到的技能/,
       }),
     );
     fireEvent.click(
       await view.findByRole("button", {
-        name: /Each person, for their own Bots/,
+        name: /每个人自己审核，只用于自己的员工/,
       }),
     );
-    fireEvent.click(view.getByRole("button", { name: "Save" }));
-    await view.findByRole("button", { name: "Saving…" });
+    fireEvent.click(view.getByRole("button", { name: "保存" }));
+    await view.findByRole("button", { name: "正在保存…" });
     const cancel = view.getByRole("button", {
-      name: "Cancel",
+      name: "取消",
     }) as HTMLButtonElement;
     expect(cancel.disabled).toBe(true);
     release(
@@ -979,8 +975,8 @@ describe("reviewing proposed skills", () => {
       { preconnect: originalFetch.preconnect },
     );
     const view = shared();
-    await view.findByText("Sharing requests");
-    await view.findByText("Couldn't load sharing requests. Try again.");
+    await view.findByText("共享申请");
+    await view.findByText("读不到共享申请。请再试一次。");
   });
 
   test("people's proposals are not listed once each person approves their own", async () => {
@@ -1004,7 +1000,7 @@ describe("reviewing proposed skills", () => {
     const view = shared();
     await view.findByRole("button", { name: /Refund triage/ });
     expect(view.queryByRole("button", { name: /Quote follow-up/ })).toBeNull();
-    await view.findByText("Sharing requests");
+    await view.findByText("共享申请");
     expect(posts.gets).not.toContain("/api/admin/learning/people/proposals");
   });
 
@@ -1027,16 +1023,16 @@ describe("reviewing proposed skills", () => {
     );
     const view = shared();
     const row = await view.findByRole("button", {
-      name: /Who approves skills learned from people's recordings/,
+      name: /谁来审核从个人录制里学到的技能/,
     });
-    expect(row.textContent).toContain("Admins");
+    expect(row.textContent).toContain("管理员");
     fireEvent.click(row);
     fireEvent.click(
       await view.findByRole("button", {
-        name: /Each person, for their own Bots/,
+        name: /每个人自己审核，只用于自己的员工/,
       }),
     );
-    fireEvent.click(view.getByRole("button", { name: "Save" }));
+    fireEvent.click(view.getByRole("button", { name: "保存" }));
     await waitFor(() =>
       expect(puts).toEqual([
         {
@@ -1079,15 +1075,15 @@ describe("reviewing proposed skills", () => {
     fireEvent.click(await view.findByLabelText(/启用自动学习与技能下发/));
     fireEvent.click(
       await view.findByRole("button", {
-        name: /Who approves skills learned from people's recordings/,
+        name: /谁来审核从个人录制里学到的技能/,
       }),
     );
     fireEvent.click(
       await view.findByRole("button", {
-        name: /Each person, for their own Bots/,
+        name: /每个人自己审核，只用于自己的员工/,
       }),
     );
-    fireEvent.click(view.getByRole("button", { name: "Save" }));
+    fireEvent.click(view.getByRole("button", { name: "保存" }));
     await waitFor(() =>
       expect(puts.map((put) => put.path)).toContain(
         "/api/admin/learning/personal-review",

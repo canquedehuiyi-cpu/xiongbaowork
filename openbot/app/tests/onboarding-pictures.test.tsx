@@ -72,9 +72,7 @@ test("the intro reel plays three scenes, starting with the welcome, captioned in
   const scene = view.container.querySelector("[data-scene]");
   expect(scene?.getAttribute("data-scene")).toBe("welcome");
   expect(
-    view.getByText(
-      "Ask in plain words. A Bot does the work and tells you when it's done.",
-    ),
+    view.getByText("用平常的话提要求。员工会把活干完，做好了告诉你。"),
   ).toBeTruthy();
   // A picture and its caption: nothing in the reel to press.
   expect(

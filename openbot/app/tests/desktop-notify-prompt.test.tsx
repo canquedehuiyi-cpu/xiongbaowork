@@ -50,7 +50,7 @@ afterAll(async () => {
   GlobalRegistrator.unregister();
 });
 
-const OFFER = "Get notified when your Bot finishes or needs your approval.";
+const OFFER = "员工做完或需要你批准时，通知你。";
 
 /** A launch of OpenBot Desktop: the window's scripts, then a page that has read nothing yet. */
 function launch() {
@@ -168,7 +168,7 @@ test("the first question after OpenBot Desktop starts raises its notice, though 
 
   await aBotStartsNeedingThePerson();
   // The badge shows the question before the desktop app has answered.
-  await within(document.body).findByRole("img", { name: "1 thing needs you" });
+  await within(document.body).findByRole("img", { name: "1 件事需要你" });
   await act(settleReactWork);
   expect(desktop.toDesktopNotify()).toEqual([]);
   desktop.answer();

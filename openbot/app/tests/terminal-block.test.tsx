@@ -40,13 +40,13 @@ test("a command reads as a terminal: the prompt and the command, the end of its 
   );
   const text = view.container.textContent ?? "";
   expect(text).toContain("$nmap 127.0.0.1");
-  expect(text).toContain("Exit 0");
+  expect(text).toContain("退出码 0");
   // Folded to its last lines, with the rest one click away.
   expect(text).toContain("line 12");
   expect(text).not.toContain("line 1\n");
-  expect(text).toContain("8 earlier lines");
+  expect(text).toContain("前面还有 8 行");
   const showAll = [...view.container.querySelectorAll("button")].find(
-    (button) => button.textContent?.includes("Show all 12 lines"),
+    (button) => button.textContent?.includes("显示全部 12 行"),
   ) as HTMLButtonElement;
   act(() => showAll.click());
   expect(view.container.textContent).toContain("line 1\nline 2");
@@ -62,7 +62,7 @@ test("a failure shows its exit code as a status, not a sentence", () => {
     />,
   );
   const text = view.container.textContent ?? "";
-  expect(text).toContain("Exit 1");
+  expect(text).toContain("退出码 1");
   expect(text).not.toContain("didn't work");
 });
 
@@ -93,7 +93,7 @@ test("a command still running says so, and a blocked one says it did not run", (
       status={commandStatus({ running: true })}
     />,
   );
-  expect(running.container.textContent).toContain("Running");
+  expect(running.container.textContent).toContain("正在运行");
   cleanup();
   const blocked = render(
     <TerminalBlock
@@ -102,7 +102,7 @@ test("a command still running says so, and a blocked one says it did not run", (
       status={commandStatus({ running: false, refused: true })}
     />,
   );
-  expect(blocked.container.textContent).toContain("Blocked");
+  expect(blocked.container.textContent).toContain("已拦下");
 });
 
 test("the Activity pane draws a command as the same terminal block", () => {
@@ -120,7 +120,7 @@ test("the Activity pane draws a command as the same terminal block", () => {
   const view = render(<ActivityLog computerId="activity-bot" />);
   const block = view.container.querySelector("section");
   expect(block?.textContent).toContain("$nmap 127.0.0.1");
-  expect(block?.textContent).toContain("Exit 0");
+  expect(block?.textContent).toContain("退出码 0");
   expect(block?.textContent).toContain("Nmap done");
   // In the terminal's own dark ground, not plain text on the page.
   expect(

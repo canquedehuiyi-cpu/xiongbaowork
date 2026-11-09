@@ -274,7 +274,7 @@ test("a Bot's reply while OpenBot is out of sight shows one notice, naming the B
 
   expect(shown.map(({ title, options }) => ({ title, ...options }))).toEqual([
     {
-      title: "Expenses replied",
+      title: "Expenses回复了",
       body: "Categorized three expenses.",
       // The conversation's tag, which its "needs you" notice shares: one notice per conversation.
       tag: "openbot-march-receipts",
@@ -299,7 +299,7 @@ test("a tab that is visible but behind another app still shows it", async () => 
   act(() => socket.say(reply()));
 
   await waitFor(() =>
-    expect(shown.map((notice) => notice.title)).toEqual(["Expenses replied"]),
+    expect(shown.map((notice) => notice.title)).toEqual(["Expenses回复了"]),
   );
 });
 
@@ -380,12 +380,12 @@ test("a Bot the attention list does not name is named from the Bots list, and sa
   act(() => socket.say(reply()));
 
   await waitFor(() =>
-    expect(shown.map((notice) => notice.title)).toEqual(["Expenses replied"]),
+    expect(shown.map((notice) => notice.title)).toEqual(["Expenses回复了"]),
   );
 });
 
 const DESKTOP_REPLY = {
-  title: "Expenses replied",
+  title: "Expenses回复了",
   body: "Categorized three expenses.",
   // The page a click opens, from the notification centre too.
   path: "/channel/march-receipts",
@@ -490,7 +490,7 @@ test("a reply already announced, reported again in a later moment, gives no seco
   aTurn(socket, ASKED);
   await settle();
 
-  expect(shown.map((notice) => notice.title)).toEqual(["Expenses replied"]);
+  expect(shown.map((notice) => notice.title)).toEqual(["Expenses回复了"]);
 });
 
 test("a turn's replies give one notice, the last thing it said, once the turn has ended", async () => {

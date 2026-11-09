@@ -155,7 +155,7 @@ test("Activity names the data a component was given, and a Bot's routine once, u
   const openbot = ["-", "由熊宝发起"];
   expect(drawn(view.container)).toEqual([
     {
-      what: ["创建例行任务"],
+      what: ["创建定时任务"],
       who: ["Personal Assistant", "由某个人发起"],
     },
     {
@@ -179,7 +179,7 @@ test("Activity names the data a component was given, and a Bot's routine once, u
 test("Admin names the functions as stored", async () => {
   const view = await renderPage("team", { "": ROWS });
   expect(drawn(view.container).map((one) => one.what)).toEqual([
-    ["创建例行任务"],
+    ["创建定时任务"],
     ["允许组件读取数据", "showActivityReport · botActivity, recentRefusals"],
     ["允许组件读取数据", "showActivityReport · botActivity"],
     ["允许组件读取数据", "showActivityReport · recentRefusals"],

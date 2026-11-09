@@ -12,9 +12,9 @@ const user: AuthenticatedUser = {
 };
 test("greets by the saved name only with a confirmed empty conversation list", () => {
   expect(firstConversationGreeting(user, true)).toBe(
-    "Hi Sam Julien, what would you like to work on?",
+    "Sam Julien，你好！今天想做点什么？",
   );
-  expect(firstConversationGreeting(user, false)).toBe("Start a conversation");
+  expect(firstConversationGreeting(user, false)).toBe("开始一段对话");
 });
 test("does not greet with a missing or placeholder name", () => {
   for (const value of [
@@ -24,6 +24,6 @@ test("does not greet with a missing or placeholder name", () => {
     { ...user, needsName: true },
     { ...user, name: user.email },
   ]) {
-    expect(firstConversationGreeting(value, true)).toBe("Start a conversation");
+    expect(firstConversationGreeting(value, true)).toBe("开始一段对话");
   }
 });

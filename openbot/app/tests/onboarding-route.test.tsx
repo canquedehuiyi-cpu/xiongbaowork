@@ -255,7 +255,7 @@ const openSteps = async (view: ReturnType<typeof render>) => {
       return found as HTMLElement;
     }),
   );
-  return view.findByRole("navigation", { name: "Onboarding steps" });
+  return view.findByRole("navigation", { name: "新手引导步骤" });
 };
 /** The names in the list of steps, without the marks' words. */
 const stepNames = (list: HTMLElement) =>
@@ -333,7 +333,7 @@ test("Continue adds a step to the address and to history, and saves it", async (
 
   fireEvent.click(await continueButton(view));
 
-  await heading(view, "What should we call you?");
+  await heading(view, "我们该怎么称呼你？");
   expect(searchOf(view).step).toBe("name");
   expect(view.history.length).toBe(2);
   await waitFor(() => expect(saves).toContain(3));
@@ -346,7 +346,7 @@ test("an organization's person has two steps: Welcome, then the name", async () 
 
   expect(stepNames(await openSteps(view))).toEqual([
     "Welcome to OpenBot",
-    "What should we call you?",
+    "我们该怎么称呼你？",
   ]);
 });
 
@@ -363,7 +363,7 @@ test("somebody trying OpenBot alone has three steps: Welcome, Book a demo, then 
   expect(stepNames(await openSteps(view))).toEqual([
     "Welcome to OpenBot",
     "Book a demo",
-    "What should we call you?",
+    "我们该怎么称呼你？",
   ]);
 });
 
@@ -391,14 +391,14 @@ test("on every step, its name in the list of steps is its heading", async () => 
     fireEvent.keyDown(list, { key: "Escape" });
     await waitFor(() =>
       expect(
-        view.queryByRole("navigation", { name: "Onboarding steps" }),
+        view.queryByRole("navigation", { name: "新手引导步骤" }),
       ).toBeNull(),
     );
     if (searchOf(view).step === "name") break;
     const step = searchOf(view).step;
     fireEvent.click(
       step === "selfhost"
-        ? view.getByRole("button", { name: "Not now" })
+        ? view.getByRole("button", { name: "以后再说" })
         : await continueButton(view),
     );
     await waitFor(() => expect(searchOf(view).step).not.toBe(step));
@@ -406,7 +406,7 @@ test("on every step, its name in the list of steps is its heading", async () => 
   expect(seen).toEqual([
     "Welcome to OpenBot",
     "Book a demo",
-    "What should we call you?",
+    "我们该怎么称呼你？",
   ]);
 });
 
@@ -419,7 +419,7 @@ test("Welcome asks to set up permissions, with Always ask before making changes 
   });
   expect(permissions.tagName).toBe("H2");
   const ask = await view.findByRole("switch", {
-    name: "Always ask before making changes",
+    name: "做任何改动前都先问我",
   });
   // A real control: with the words, and nowhere inside the inert illustration.
   expect(ask.closest("[data-onboarding-intro]")).not.toBeNull();
@@ -441,13 +441,13 @@ test("Welcome says what always asks before the switch, and the switch says it co
   await heading(view, "Welcome to OpenBot");
 
   const ask = await view.findByRole("switch", {
-    name: "Always ask before making changes",
+    name: "做任何改动前都先问我",
   });
   const always = view.getByText(
     /^Bots always ask for your approval before deleting, sending, sharing, or posting content in your apps or on websites\./,
   );
   expect(always.textContent).toContain(
-    "Bots leave payments and account security changes for you to do yourself.",
+    "付款和账号安全设置的改动，员工会留给你亲自处理。",
   );
   // Above the switch in the reading order, not under it.
   expect(
@@ -455,9 +455,9 @@ test("Welcome says what always asks before the switch, and the switch says it co
   ).toBeTruthy();
 
   const row = ask.closest("[data-slot='item']");
-  expect(row?.textContent).toContain("Always ask before making changes");
+  expect(row?.textContent).toContain("做任何改动前都先问我");
   expect(row?.textContent).toContain(
-    "Require your approval for every change to your apps, websites, and files, including routine edits and updates.",
+    "对你的应用、网站和文件的每一处改动都要先经你同意，日常的编辑和更新也不例外。",
   );
   expect(row?.textContent).not.toContain(
     "Review a Bot's changes to websites, connected apps, and files.",
@@ -482,7 +482,7 @@ test("switching Always ask before making changes on Welcome saves it, and moves 
   await heading(view, "Welcome to OpenBot");
 
   const ask = await view.findByRole("switch", {
-    name: "Always ask before making changes",
+    name: "做任何改动前都先问我",
   });
   await waitFor(() => expect(ask.hasAttribute("data-disabled")).toBe(false));
   expect(ask.getAttribute("aria-checked")).toBe("false");
@@ -493,7 +493,7 @@ test("switching Always ask before making changes on Welcome saves it, and moves 
   await waitFor(() =>
     expect(
       view
-        .getByRole("switch", { name: "Always ask before making changes" })
+        .getByRole("switch", { name: "做任何改动前都先问我" })
         .getAttribute("aria-checked"),
     ).toBe("true"),
   );
@@ -526,7 +526,7 @@ test("Continue and Back start the new step's picture at the top of its pane", as
 
   fireEvent.click(await continueButton(view));
 
-  const name = await heading(view, "What should we call you?");
+  const name = await heading(view, "我们该怎么称呼你？");
   await waitFor(() => expect(document.activeElement).toBe(name));
   expect(pane().scrollTop).toBe(0);
 
@@ -541,7 +541,7 @@ test("browser Back goes to the step before, not out of onboarding", async () => 
   const view = open("/onboarding?step=welcome");
   await heading(view, "Welcome to OpenBot");
   fireEvent.click(await continueButton(view));
-  await heading(view, "What should we call you?");
+  await heading(view, "我们该怎么称呼你？");
 
   await act(async () => view.history.back());
 
@@ -553,19 +553,19 @@ test("Back after Continue returns through history, so Forward still works", asyn
   const view = open("/onboarding?step=welcome");
   await heading(view, "Welcome to OpenBot");
   fireEvent.click(await continueButton(view));
-  await heading(view, "What should we call you?");
+  await heading(view, "我们该怎么称呼你？");
 
   fireEvent.click(back(view));
 
   expect(await heading(view, "Welcome to OpenBot")).toBeTruthy();
   expect(view.history.canGoBack()).toBe(false);
   await act(async () => view.history.forward());
-  expect(await heading(view, "What should we call you?")).toBeTruthy();
+  expect(await heading(view, "我们该怎么称呼你？")).toBeTruthy();
 });
 
 test("Back on a step opened by reload replaces it with the step before", async () => {
   const view = open("/onboarding?step=name");
-  await heading(view, "What should we call you?");
+  await heading(view, "我们该怎么称呼你？");
 
   fireEvent.click(back(view));
 
@@ -597,7 +597,7 @@ test("on a desktop, a step already passed can be picked from the list", async ()
 test("a reload stays on the step in the address", async () => {
   const view = open("/onboarding?step=name");
 
-  expect(await heading(view, "What should we call you?")).toBeTruthy();
+  expect(await heading(view, "我们该怎么称呼你？")).toBeTruthy();
   expect(searchOf(view).step).toBe("name");
 });
 
@@ -621,14 +621,14 @@ test("after a reload, Back still returns through history, not a second entry", a
   const first = open("/onboarding?step=welcome");
   await heading(first, "Welcome to OpenBot");
   fireEvent.click(await continueButton(first));
-  await heading(first, "What should we call you?");
+  await heading(first, "我们该怎么称呼你？");
   const history = first.history;
   first.unmount();
   queryClient.clear();
 
   // The same history, a new page: what a reload keeps.
   const reloaded = open("/onboarding?step=name", history);
-  await heading(reloaded, "What should we call you?");
+  await heading(reloaded, "我们该怎么称呼你？");
   fireEvent.click(back(reloaded));
 
   expect(await heading(reloaded, "Welcome to OpenBot")).toBeTruthy();
@@ -639,7 +639,7 @@ test("after a reload, Back still returns through history, not a second entry", a
 // Saving the name makes it known: the name step stays until onboarding ends, never Welcome again.
 test("Get started on the name step saves the name, finishes, plays the orb's finish, then opens the app", async () => {
   const view = open("/onboarding?step=name");
-  await heading(view, "What should we call you?");
+  await heading(view, "我们该怎么称呼你？");
   // The frame's primary is the name form's Get started, not a Continue.
   expect(view.queryByRole("button", { name: "Continue" })).toBeNull();
   // Under the orb: on a phone the picture comes first.
@@ -647,8 +647,8 @@ test("Get started on the name step saves the name, finishes, plays the orb's fin
     view.container.querySelector("[data-onboarding-demo]")?.className,
   ).toContain("row-start-2");
 
-  await userEvent.setup({ document }).type(view.getByLabelText("Name"), "Maya");
-  fireEvent.click(view.getByRole("button", { name: "Get started" }));
+  await userEvent.setup({ document }).type(view.getByLabelText("名字"), "Maya");
+  fireEvent.click(view.getByRole("button", { name: "开始使用" }));
 
   await waitFor(() =>
     expect(
@@ -662,7 +662,7 @@ test("Get started on the name step saves the name, finishes, plays the orb's fin
   expect(view.queryByText("Home")).toBeNull();
   // While the orb finishes, the button says what has happened.
   expect(
-    view.getByRole("button", { name: "All set" }).hasAttribute("data-done"),
+    view.getByRole("button", { name: "好了" }).hasAttribute("data-done"),
   ).toBe(true);
   await waitFor(() => expect(view.getByText("Home")).toBeTruthy(), {
     timeout: 3000,
@@ -681,14 +681,14 @@ test("somebody trying OpenBot alone gets Book a demo before the name, with the b
     expect(calendar(view).getAttribute("src")).toBe(BOOKING_CALENDAR);
 
     // Before a booking there is one way on, and it says it skips: no Continue that reads as booking.
-    expect(footerButtons(view)).toEqual(["Back", "Not now"]);
+    expect(footerButtons(view)).toEqual(["Back", "以后再说"]);
     expect(
       view.container.querySelector("[data-onboarding-primary]"),
     ).toBeNull();
     expect(view.queryByRole("button", { name: "Continue" })).toBeNull();
 
-    fireEvent.click(view.getByRole("button", { name: "Not now" }));
-    expect(await heading(view, "What should we call you?")).toBeTruthy();
+    fireEvent.click(view.getByRole("button", { name: "以后再说" }));
+    expect(await heading(view, "我们该怎么称呼你？")).toBeTruthy();
     expect(opened).toEqual([]);
     expect(completed).toBe(false);
   });
@@ -711,13 +711,13 @@ test("when the calendar can't load, Book a demo shows its picture and Book a cal
     expect(
       view.container.querySelector('[data-demo="self-host"]'),
     ).toBeTruthy();
-    expect(footerButtons(view)).toEqual(["Back", "Book a call", "Not now"]);
+    expect(footerButtons(view)).toEqual(["Back", "Book a call", "以后再说"]);
 
     fireEvent.click(view.getByRole("button", { name: "Book a call" }));
     expect(opened).toEqual([
       [OPENBOT_FOR_BUSINESS, "_blank", "noopener,noreferrer"],
     ]);
-    expect(await heading(view, "What should we call you?")).toBeTruthy();
+    expect(await heading(view, "我们该怎么称呼你？")).toBeTruthy();
   });
 });
 
@@ -755,7 +755,7 @@ test("a booking made in the calendar turns Not now into Continue; a message from
       }),
     );
   });
-  expect(footerButtons(view)).toEqual(["Back", "Not now"]);
+  expect(footerButtons(view)).toEqual(["Back", "以后再说"]);
 
   act(() => {
     window.dispatchEvent(
@@ -775,7 +775,7 @@ test("a booking made in the calendar turns Not now into Continue; a message from
   ).toBeNull();
 
   fireEvent.click(view.getByRole("button", { name: "Continue" }));
-  expect(await heading(view, "What should we call you?")).toBeTruthy();
+  expect(await heading(view, "我们该怎么称呼你？")).toBeTruthy();
 });
 
 test("Not now on Book a demo moves on without opening anything", async () => {
@@ -784,9 +784,9 @@ test("Not now on Book a demo moves on without opening anything", async () => {
     const view = open("/onboarding?step=selfhost");
     await heading(view, "Book a demo");
 
-    fireEvent.click(view.getByRole("button", { name: "Not now" }));
+    fireEvent.click(view.getByRole("button", { name: "以后再说" }));
 
-    expect(await heading(view, "What should we call you?")).toBeTruthy();
+    expect(await heading(view, "我们该怎么称呼你？")).toBeTruthy();
     expect(opened).toEqual([]);
   });
 });
@@ -797,7 +797,7 @@ test("an organization's people never see the self-hosting step", async () => {
 
   fireEvent.click(await continueButton(view));
 
-  expect(await heading(view, "What should we call you?")).toBeTruthy();
+  expect(await heading(view, "我们该怎么称呼你？")).toBeTruthy();
   expect(view.queryByRole("heading", { name: "Book a demo" })).toBeNull();
 });
 
@@ -827,10 +827,10 @@ test("until the deployment answers, Welcome's Continue waits; a failure says so 
 
   capabilitiesFail = false;
   const asked = capabilitiesAsked;
-  fireEvent.click(view.getByRole("button", { name: "Try again" }));
+  fireEvent.click(view.getByRole("button", { name: "再试一次" }));
   await waitFor(() => expect(capabilitiesAsked).toBeGreaterThan(asked));
   fireEvent.click(await continueButton(view));
-  expect(await heading(view, "What should we call you?")).toBeTruthy();
+  expect(await heading(view, "我们该怎么称呼你？")).toBeTruthy();
   expect(
     view.queryByText("Couldn't load your setup. Try again to continue."),
   ).toBeNull();
@@ -845,7 +845,7 @@ test.each([
     saved = stored;
     const view = open(path);
 
-    expect(await heading(view, "What should we call you?")).toBeTruthy();
+    expect(await heading(view, "我们该怎么称呼你？")).toBeTruthy();
     await waitFor(() => expect(searchOf(view).step).toBe("name"));
     await waitFor(() => expect(saved).toBe(3));
     expect(saves).not.toContain(2);
@@ -862,8 +862,8 @@ test("an organization's person whose name is known sees only Welcome, and Get st
   const view = open("/onboarding?step=welcome");
   await heading(view, "Welcome to OpenBot");
 
-  const start = await ready(view, "Get started");
-  expect(footerButtons(view)).toEqual(["Get started"]);
+  const start = await ready(view, "开始使用");
+  expect(footerButtons(view)).toEqual(["开始使用"]);
   // One step: nothing to say where somebody is.
   expect(view.container.querySelector("[data-onboarding-steps]")).toBeNull();
   expect(view.queryByRole("progressbar")).toBeNull();
@@ -884,9 +884,9 @@ test("a name step in the address, once the name is known, opens the last step th
 
   expect(await heading(view, "Welcome to OpenBot")).toBeTruthy();
   await waitFor(() => expect(searchOf(view).step).toBe("welcome"));
-  expect(
-    view.queryByRole("heading", { name: "What should we call you?" }),
-  ).toBe(null);
+  expect(view.queryByRole("heading", { name: "我们该怎么称呼你？" })).toBe(
+    null,
+  );
 });
 
 test("somebody trying OpenBot alone whose name is known ends on Book a demo, where Not now opens the app", async () => {
@@ -902,9 +902,9 @@ test("somebody trying OpenBot alone whose name is known ends on Book a demo, whe
     );
     fireEvent.click(await continueButton(view));
     await heading(view, "Book a demo");
-    expect(footerButtons(view)).toEqual(["Back", "Not now"]);
+    expect(footerButtons(view)).toEqual(["Back", "以后再说"]);
 
-    fireEvent.click(view.getByRole("button", { name: "Not now" }));
+    fireEvent.click(view.getByRole("button", { name: "以后再说" }));
 
     await waitFor(() => expect(completed).toBe(true));
     await waitFor(() => expect(view.getByText("Home")).toBeTruthy(), {
@@ -940,7 +940,7 @@ test("a completion that fails on the last step says so, stays, and can be presse
   const view = open("/onboarding?step=welcome");
   await heading(view, "Welcome to OpenBot");
 
-  fireEvent.click(await ready(view, "Get started"));
+  fireEvent.click(await ready(view, "开始使用"));
 
   expect(
     (
@@ -951,7 +951,7 @@ test("a completion that fails on the last step says so, stays, and can be presse
   expect(view.queryByText("Home")).toBeNull();
 
   completeFail = false;
-  fireEvent.click(await ready(view, "Get started"));
+  fireEvent.click(await ready(view, "开始使用"));
   await waitFor(() => expect(view.getByText("Home")).toBeTruthy(), {
     timeout: 3000,
   });

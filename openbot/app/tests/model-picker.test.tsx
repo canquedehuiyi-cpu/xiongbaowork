@@ -26,7 +26,7 @@ const { ModelPicker } = await import(
 /*
  * The composer's model and thinking effort picker, and the pick a conversation keeps on the server.
  *
- * THE HARNESS IS THIS REPOSITORY'S: `GlobalRegistrator` in `beforeAll`/`afterAll` and `cleanup` in
+ * THE HARNESS IS THIS REPOSITORY'S: `GlobalRegistrator` in `beforeAll`/`afterAll` 和 `cleanup` in
  * `afterEach`, as `composer-collapse.test.tsx` explains. `fetch` is a fake of
  * `GET`/`PUT /api/channels/:id/model` holding one `{ model, effort }` per conversation, and it
  * refuses what the server refuses: a model the catalogue does not offer, and an effort the model
@@ -147,7 +147,7 @@ async function openPicker(name: RegExp) {
 
 /** The labelled group of efforts in the open popup, or null when the model takes none. */
 function thinking(popup: HTMLElement) {
-  return within(popup).queryByRole("group", { name: "Thinking" });
+  return within(popup).queryByRole("group", { name: "思考强度" });
 }
 
 test("the trigger is a CPU icon, and names a model that takes no effort on its own", () => {
@@ -158,7 +158,7 @@ test("the trigger is a CPU icon, and names a model that takes no effort on its o
       value={{ model: "gpt-4o", effort: null }}
     />,
   );
-  const trigger = getByRole("combobox", { name: "Model: GPT-4o" });
+  const trigger = getByRole("combobox", { name: "模型：GPT-4o" });
   // No name and no maker's mark in the row: the CPU icon and a chevron, named for screen readers.
   expect(trigger.textContent).toBe("");
   expect(trigger.querySelector("img")).toBeNull();
@@ -185,7 +185,7 @@ test("a model whose maker has no mark vendored gets the app's plain model icon i
       value={{ model: "fast", effort: null }}
     />,
   );
-  const popup = await openStandalone(view, "Model: fast");
+  const popup = await openStandalone(view, "模型：fast");
   const row = within(popup).getByRole("option", { name: "fast" });
   // No brand mark is invented for it, and the app's own icon holds the place.
   expect(row.querySelector("img")).toBeNull();
@@ -211,7 +211,7 @@ test("Google and xAI models carry their makers' marks in the list", async () => 
       value={{ model: "grok-4.7", effort: null }}
     />,
   );
-  const popup = await openStandalone(view, "Model: Grok 4.7");
+  const popup = await openStandalone(view, "模型：Grok 4.7");
   for (const label of ["Grok 4.7", "Gemini 3.8 Flash"])
     expect(
       within(popup)
@@ -231,7 +231,7 @@ test("the trigger names the chosen effort beside the model", () => {
   );
   expect(
     getByRole("combobox", {
-      name: "Model: GPT-6.1 Terra, thinking: Extra high",
+      name: "模型：GPT-6.1 Terra，思考强度：很高",
     }),
   ).toBeTruthy();
 });
@@ -245,7 +245,7 @@ test("with no effort chosen, the trigger names the model's own default", () => {
     />,
   );
   expect(
-    getByRole("combobox", { name: "Model: GPT-6.1 Terra, thinking: Medium" }),
+    getByRole("combobox", { name: "模型：GPT-6.1 Terra，思考强度：中" }),
   ).toBeTruthy();
 });
 
@@ -257,7 +257,7 @@ test("with no effort chosen and no default known, the trigger names the model al
       value={{ model: "gpt-6-sol", effort: null }}
     />,
   );
-  expect(getByRole("combobox", { name: "Model: GPT-6 Sol" })).toBeTruthy();
+  expect(getByRole("combobox", { name: "模型：GPT-6 Sol" })).toBeTruthy();
 });
 
 test("there is no picker when there is nothing to pick", () => {
@@ -283,8 +283,8 @@ test("the Default tag is the same quiet text on a model row and an effort row", 
   saved["conversation-a"] = { model: "gpt-5.5", effort: null };
   const { popup } = await openPicker(/GPT-5\.5/);
   const tags = within(popup)
-    .getAllByText("Default")
-    .filter((tag) => tag.closest("[role=option]")?.textContent !== "Default");
+    .getAllByText("默认")
+    .filter((tag) => tag.closest("[role=option]")?.textContent !== "默认");
   // The default model's row, and its default effort's row.
   expect(tags).toHaveLength(2);
   const [model, effort] = tags.map((tag) => tag.className);
@@ -303,15 +303,15 @@ test("choosing an effort saves the model with it, and the trigger names it", asy
     within(efforts as HTMLElement)
       .getAllByRole("option")
       .map((option) => option.textContent),
-  ).toEqual(["None", "Low", "MediumDefault", "High", "Extra high"]);
+  ).toEqual(["不思考", "低", "中默认", "高", "很高"]);
   // Nothing chosen yet, so the model's own default is the one in use.
   expect(
     within(efforts as HTMLElement)
-      .getByRole("option", { name: /^Medium/ })
+      .getByRole("option", { name: /^中/ })
       .getAttribute("aria-selected"),
   ).toBe("true");
 
-  await user.click(within(popup).getByRole("option", { name: "High" }));
+  await user.click(within(popup).getByRole("option", { name: "高" }));
   await waitFor(() =>
     expect(writes).toEqual([
       { channelId: "conversation-a", model: "gpt-6.1-terra", effort: "high" },
@@ -319,7 +319,7 @@ test("choosing an effort saves the model with it, and the trigger names it", asy
   );
   expect(
     await view.findByRole("combobox", {
-      name: "Model: GPT-6.1 Terra, thinking: High",
+      name: "模型：GPT-6.1 Terra，思考强度：高",
     }),
   ).toBeTruthy();
   expect(saved["conversation-a"]).toEqual({
@@ -330,8 +330,8 @@ test("choosing an effort saves the model with it, and the trigger names it", asy
 
 test("choosing the effort marked Default saves none, so the model's own default follows", async () => {
   saved["conversation-a"] = { model: "gpt-6.1-terra", effort: "high" };
-  const { user, popup } = await openPicker(/thinking: High/);
-  await user.click(within(popup).getByRole("option", { name: /^Medium/ }));
+  const { user, popup } = await openPicker(/思考强度：高/);
+  await user.click(within(popup).getByRole("option", { name: /^中/ }));
   await waitFor(() =>
     expect(writes).toEqual([
       { channelId: "conversation-a", model: "gpt-6.1-terra", effort: null },
@@ -341,27 +341,27 @@ test("choosing the effort marked Default saves none, so the model's own default 
 
 test("a model whose default effort is unknown offers Default first, and it saves none", async () => {
   saved["conversation-a"] = { model: "gpt-6-sol", effort: "high" };
-  const { view, user, popup } = await openPicker(/GPT-6 Sol, thinking: High/);
+  const { view, user, popup } = await openPicker(/GPT-6 Sol，思考强度：高/);
   expect(
     within(thinking(popup) as HTMLElement)
       .getAllByRole("option")
       .map((option) => option.textContent),
-  ).toEqual(["Default", "Low", "Medium", "High"]);
+  ).toEqual(["默认", "低", "中", "高"]);
 
-  await user.click(within(popup).getByRole("option", { name: "Default" }));
+  await user.click(within(popup).getByRole("option", { name: "默认" }));
   await waitFor(() =>
     expect(writes).toEqual([
       { channelId: "conversation-a", model: "gpt-6-sol", effort: null },
     ]),
   );
   expect(
-    await view.findByRole("combobox", { name: "Model: GPT-6 Sol" }),
+    await view.findByRole("combobox", { name: "模型：GPT-6 Sol" }),
   ).toBeTruthy();
 });
 
 test("switching to a model that does not take the effort resets it to the model's own", async () => {
   saved["conversation-a"] = { model: "gpt-6.1-terra", effort: "xhigh" };
-  const { view, user, popup } = await openPicker(/Extra high/);
+  const { view, user, popup } = await openPicker(/很高/);
   await user.click(within(popup).getByRole("option", { name: "GPT-6 Sol" }));
   // Sol takes no "xhigh", so none is sent: the server would refuse it.
   await waitFor(() =>
@@ -370,14 +370,14 @@ test("switching to a model that does not take the effort resets it to the model'
     ]),
   );
   expect(
-    await view.findByRole("combobox", { name: "Model: GPT-6 Sol" }),
+    await view.findByRole("combobox", { name: "模型：GPT-6 Sol" }),
   ).toBeTruthy();
   expect(saved["conversation-a"]).toEqual({ model: "gpt-6-sol", effort: null });
 });
 
 test("switching to a model that takes the effort keeps it", async () => {
   saved["conversation-a"] = { model: "gpt-6.1-terra", effort: "high" };
-  const { view, user, popup } = await openPicker(/thinking: High/);
+  const { view, user, popup } = await openPicker(/思考强度：高/);
   await user.click(within(popup).getByRole("option", { name: /^GPT-5\.5/ }));
   // GPT-5.5 is OpenBot's own model, so it is saved as null; the effort goes with it.
   await waitFor(() =>
@@ -387,28 +387,28 @@ test("switching to a model that takes the effort keeps it", async () => {
   );
   expect(
     await view.findByRole("combobox", {
-      name: "Model: GPT-5.5, thinking: High",
+      name: "模型：GPT-5.5，思考强度：高",
     }),
   ).toBeTruthy();
 });
 
 test("a model that takes no effort shows no thinking control", async () => {
   saved["conversation-a"] = { model: "gpt-4o", effort: null };
-  const { popup } = await openPicker(/^Model: GPT-4o$/);
+  const { popup } = await openPicker(/^模型：GPT-4o$/);
   expect(thinking(popup)).toBeNull();
   expect(
     within(popup)
       .getAllByRole("option")
       .map((option) => option.textContent),
-  ).toEqual(["GPT-6.1 Terra", "GPT-6 Sol", "GPT-5.5Default", "GPT-4o"]);
+  ).toEqual(["GPT-6.1 Terra", "GPT-6 Sol", "GPT-5.5默认", "GPT-4o"]);
 });
 
 test("a search looks only for models, and the efforts stay in their column", async () => {
   saved["conversation-a"] = { model: "gpt-6.1-terra", effort: null };
   const { user, popup } = await openPicker(/GPT-6\.1 Terra/);
-  await user.type(within(popup).getByPlaceholderText("Search models"), "sol");
+  await user.type(within(popup).getByPlaceholderText("搜索模型"), "sol");
   const models = () =>
-    within(within(popup).getByRole("group", { name: "Models" }))
+    within(within(popup).getByRole("group", { name: "模型" }))
       .getAllByRole("option")
       .map((option) => option.textContent);
   await waitFor(() => expect(models()).toEqual(["GPT-6 Sol"]));
@@ -419,10 +419,10 @@ test("a search no model matches says so", async () => {
   saved["conversation-a"] = { model: "gpt-6.1-terra", effort: null };
   const { user, popup } = await openPicker(/GPT-6\.1 Terra/);
   await user.type(
-    within(popup).getByPlaceholderText("Search models"),
+    within(popup).getByPlaceholderText("搜索模型"),
     "nothing like it",
   );
-  expect(await within(popup).findByText("No models match.")).toBeTruthy();
+  expect(await within(popup).findByText("没有匹配的模型。")).toBeTruthy();
 });
 
 test("a conversation shows the pick the server holds for it", async () => {
@@ -573,15 +573,15 @@ test("picking a model that thinks leaves the popup open on its efforts, and pick
     within(thinking(open) as HTMLElement)
       .getAllByRole("option")
       .map((option) => option.textContent),
-  ).toEqual(["Default", "Low", "Medium", "High"]);
+  ).toEqual(["默认", "低", "中", "高"]);
   // Every model is still listed: picking one did not turn the search into its name.
   expect(
-    within(within(open).getByRole("group", { name: "Models" })).getAllByRole(
+    within(within(open).getByRole("group", { name: "模型" })).getAllByRole(
       "option",
     ),
   ).toHaveLength(4);
 
-  await user.click(within(open).getByRole("option", { name: "High" }));
+  await user.click(within(open).getByRole("option", { name: "高" }));
   await waitFor(() => expect(writes).toHaveLength(2));
   await waitFor(() => expect(view.queryByRole("dialog")).toBeNull());
 });

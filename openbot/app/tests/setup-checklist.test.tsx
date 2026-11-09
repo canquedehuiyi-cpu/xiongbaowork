@@ -157,39 +157,37 @@ test("Ready and Needs setup rows come from the server's answer", async () => {
   serving(ADMIN);
   const view = draw();
 
-  await view.findByRole("list", { name: "Setup" });
+  await view.findByRole("list", { name: "设置项" });
   expect(
     Array.from(view.container.querySelectorAll("[data-setup-row]")).map((row) =>
       row.getAttribute("data-setup-row"),
     ),
   ).toEqual(["intelligence", "model", "computer", "apps", "chat"]);
-  expect(rowOf(view, "intelligence").getByText("Ready")).not.toBeNull();
-  expect(rowOf(view, "model").getByText("Needs setup")).not.toBeNull();
-  expect(rowOf(view, "model").getByText("Required")).not.toBeNull();
+  expect(rowOf(view, "intelligence").getByText("就绪")).not.toBeNull();
+  expect(rowOf(view, "model").getByText("需要设置")).not.toBeNull();
+  expect(rowOf(view, "model").getByText("必需")).not.toBeNull();
   expect(
     rowOf(view, "model").getByText(
       "Without a model key, OpenBot can't answer.",
     ),
   ).not.toBeNull();
   expect(
-    view.getByText(
-      "3 things need setup, and 1 is required. Set up the required one first.",
-    ),
+    view.getByText("有 3 项需要设置，其中 1 项是必需的。请先设置必需项。"),
   ).not.toBeNull();
 });
 
 test("a required gap is red, an optional one amber, and Ready green", async () => {
   serving(ADMIN);
   const view = draw();
-  await view.findByRole("list", { name: "Setup" });
+  await view.findByRole("list", { name: "设置项" });
 
-  expect(rowOf(view, "model").getByText("Needs setup").className).toContain(
+  expect(rowOf(view, "model").getByText("需要设置").className).toContain(
     "text-destructive",
   );
-  expect(rowOf(view, "chat").getByText("Needs setup").className).toContain(
+  expect(rowOf(view, "chat").getByText("需要设置").className).toContain(
     "text-amber-600",
   );
-  expect(rowOf(view, "apps").getByText("Ready").className).toContain(
+  expect(rowOf(view, "apps").getByText("就绪").className).toContain(
     "text-emerald-600",
   );
 });
@@ -197,11 +195,11 @@ test("a required gap is red, an optional one amber, and Ready green", async () =
 test("an admin is shown the variable to set, the page, and the guide", async () => {
   serving(ADMIN);
   const view = draw();
-  await view.findByRole("list", { name: "Setup" });
+  await view.findByRole("list", { name: "设置项" });
 
   const model = rowOf(view, "model");
   expect(model.getByText("OPENAI_API_KEY")).not.toBeNull();
-  const guide = model.getByRole("link", { name: "Setup guide" });
+  const guide = model.getByRole("link", { name: "设置指南" });
   expect(guide.getAttribute("href")).toBe(
     "https://github.com/CopilotKit/openbot#quick-start",
   );
@@ -218,7 +216,7 @@ test("an admin is shown the variable to set, the page, and the guide", async () 
 test("a fix's links show a full-strength focus ring", async () => {
   serving(ADMIN);
   const view = draw();
-  await view.findByRole("list", { name: "Setup" });
+  await view.findByRole("list", { name: "设置项" });
 
   for (const link of rowOf(view, "model").getAllByRole("link")) {
     expect(link.className).toContain("focus-visible:ring-ring");
@@ -229,34 +227,34 @@ test("a fix's links show a full-strength focus ring", async () => {
 test("a member sees their admin sets it up, and no variable names", async () => {
   serving(MEMBER);
   const view = draw();
-  await view.findByRole("list", { name: "Setup" });
+  await view.findByRole("list", { name: "设置项" });
 
   const model = rowOf(view, "model");
   expect(model.getByText("Your admin sets this up.")).not.toBeNull();
   expect(view.container.textContent).not.toContain("OPENAI_API_KEY");
   expect(view.container.textContent).not.toContain("OPENTAG");
-  expect(view.queryByRole("link", { name: "Setup guide" })).toBeNull();
+  expect(view.queryByRole("link", { name: "设置指南" })).toBeNull();
   expect(view.queryByRole("link")).toBeNull();
 });
 
 test("a member's gaps are one neutral line: no amber or red pill, no Required, no counts", async () => {
   serving(MEMBER);
   const view = draw();
-  await view.findByRole("list", { name: "Setup" });
+  await view.findByRole("list", { name: "设置项" });
 
   for (const id of ["model", "computer", "chat"]) {
     const row = rowOf(view, id);
-    expect(row.queryByText("Needs setup")).toBeNull();
-    expect(row.queryByText("Required")).toBeNull();
+    expect(row.queryByText("需要设置")).toBeNull();
+    expect(row.queryByText("必需")).toBeNull();
     expect(row.getByText("Your admin sets this up.")).not.toBeNull();
   }
-  const list = view.getByRole("list", { name: "Setup" });
+  const list = view.getByRole("list", { name: "设置项" });
   expect(list.innerHTML).not.toContain("text-destructive");
   expect(list.innerHTML).not.toContain("text-amber-600");
   // What works still says so.
-  expect(rowOf(view, "intelligence").getByText("Ready")).not.toBeNull();
+  expect(rowOf(view, "intelligence").getByText("就绪")).not.toBeNull();
   expect(view.getByRole("status").textContent).toBe(
-    "Your admin sets up anything that isn't ready yet.",
+    "还没就绪的部分由管理员负责设置。",
   );
 });
 
@@ -275,15 +273,15 @@ test("while the answer is on its way, the checklist draws nothing", async () => 
   const view = draw();
 
   expect(view.queryByRole("status")).toBeNull();
-  expect(view.queryByRole("list", { name: "Setup" })).toBeNull();
+  expect(view.queryByRole("list", { name: "设置项" })).toBeNull();
   release();
-  await view.findByRole("list", { name: "Setup" });
+  await view.findByRole("list", { name: "设置项" });
 });
 
 test("Check again asks the server to check again, and draws its answer", async () => {
   serving(ADMIN);
   const view = draw();
-  await view.findByRole("list", { name: "Setup" });
+  await view.findByRole("list", { name: "设置项" });
 
   onCheck = () => {
     serving({
@@ -296,9 +294,9 @@ test("Check again asks the server to check again, and draws its answer", async (
       })),
     });
   };
-  fireEvent.click(view.getByRole("button", { name: "Check again" }));
+  fireEvent.click(view.getByRole("button", { name: "再检查一遍" }));
 
-  expect(await view.findByText("Everything is set up.")).not.toBeNull();
+  expect(await view.findByText("全部设置好了。")).not.toBeNull();
   expect(requests).toContainEqual({ path: "/api/setup/check", method: "POST" });
 });
 
@@ -318,12 +316,12 @@ test("a key nobody has checked reads Not checked, never Ready", async () => {
     ),
   });
   const view = draw();
-  await view.findByRole("list", { name: "Setup" });
+  await view.findByRole("list", { name: "设置项" });
 
   const model = rowOf(view, "model");
-  expect(model.getByText("Not checked")).not.toBeNull();
-  expect(model.queryByText("Ready")).toBeNull();
-  expect(view.getByText("1 thing isn't checked yet.")).not.toBeNull();
+  expect(model.getByText("未检查")).not.toBeNull();
+  expect(model.queryByText("就绪")).toBeNull();
+  expect(view.getByText("还有 1 项没检查。")).not.toBeNull();
 });
 
 test("optional gaps alone say OpenBot is ready, and that each says how to add it", async () => {
@@ -337,7 +335,7 @@ test("optional gaps alone say OpenBot is ready, and that each says how to add it
 
   expect(
     await view.findByText(
-      "OpenBot is ready to use. 2 optional features aren't set up yet. Each says how to add it.",
+      "熊宝数字员工已经可以使用。有 2 项可选功能还没设置，每项都写了怎么加。",
     ),
   ).not.toBeNull();
 });
@@ -346,13 +344,13 @@ test("the summary counts in the singular and the plural", () => {
   const gap = (id: SetupRow["id"], required = false) =>
     ROW({ id, required, ready: false, status: "needs_setup" });
   expect(summaryOf([gap("chat")])).toBe(
-    "OpenBot is ready to use. 1 optional feature isn't set up yet. Each says how to add it.",
+    "熊宝数字员工已经可以使用。有 1 项可选功能还没设置，每项都写了怎么加。",
   );
   expect(summaryOf([gap("model", true), gap("intelligence", true)])).toBe(
-    "2 things need setup, and 2 are required. Set up the required ones first.",
+    "有 2 项需要设置，其中 2 项是必需的。请先设置必需项。",
   );
   expect(summaryOf([gap("model", true)])).toBe(
-    "1 thing needs setup, and 1 is required. Set up the required one first.",
+    "有 1 项需要设置，其中 1 项是必需的。请先设置必需项。",
   );
 });
 
@@ -361,7 +359,7 @@ test("a check that fails says so, and Check again stays", async () => {
   const view = draw();
 
   expect(
-    await view.findByText("Couldn't check your setup. Check again."),
+    await view.findByText("没能检查你的设置。请再检查一遍。"),
   ).not.toBeNull();
-  expect(view.getByRole("button", { name: "Check again" })).not.toBeNull();
+  expect(view.getByRole("button", { name: "再检查一遍" })).not.toBeNull();
 });

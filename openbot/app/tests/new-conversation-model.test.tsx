@@ -31,7 +31,7 @@ import { settleReactWork } from "./settle-react-work";
  *
  * Everything below the HTTP boundary is real: the route, its composer and picker, the start
  * sequence, the hand-over to `ChannelChat` and the run request. Only `fetch` is a fixture, and its
- * model endpoints answer and refuse as `GET`/`PUT /api/channels/:id/model` and `GET /api/models` do.
+ * model endpoints answer and refuse as `GET`/`PUT /api/channels/:id/model` 和 `GET /api/models` do.
  */
 
 const NativeResponse = globalThis.Response;
@@ -270,7 +270,7 @@ test("a model and effort picked before the first message are both saved before i
   // OpenBot's own model, at its own default effort, until the person picks.
   await user.click(
     await view.findByRole("combobox", {
-      name: "Model: GPT-5.5, thinking: Medium",
+      name: "模型：GPT-5.5，思考强度：中",
     }),
   );
   await user.click(
@@ -281,17 +281,17 @@ test("a model and effort picked before the first message are both saved before i
   // The popup stays open on the model's efforts, so the effort is picked in the same go.
   expect(
     await view.findByRole("combobox", {
-      name: "Model: GPT-6.1 Terra, thinking: Medium",
+      name: "模型：GPT-6.1 Terra，思考强度：中",
     }),
   ).toBeTruthy();
   await user.click(
     within(await view.findByRole("dialog")).getByRole("option", {
-      name: "Extra high",
+      name: "很高",
     }),
   );
   expect(
     await view.findByRole("combobox", {
-      name: "Model: GPT-6.1 Terra, thinking: Extra high",
+      name: "模型：GPT-6.1 Terra，思考强度：很高",
     }),
   ).toBeTruthy();
   // Nothing is saved while the conversation does not exist.

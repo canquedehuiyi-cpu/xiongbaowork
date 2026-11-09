@@ -140,30 +140,26 @@ const choices = (view: ReturnType<typeof draw>) =>
 
 test("three choices, each with one plain line saying who sees what", async () => {
   const view = draw();
-  await view.findByText("Who else's Bots use your skills");
+  await view.findByText("还有谁的员工能用你的技能");
   expect(choices(view)).toHaveLength(3);
   for (const choice of SHARING_CHOICES) {
     expect(view.getByText(choice.title)).toBeTruthy();
     expect(view.getByText(choice.description)).toBeTruthy();
   }
-  expect(
-    view.getByText("Only the Bots you use draw on your skills."),
-  ).toBeTruthy();
-  expect(
-    view.getByText("Every Bot on OpenBot draws on all of your skills."),
-  ).toBeTruthy();
+  expect(view.getByText("只有你用的员工会用到你的技能。")).toBeTruthy();
+  expect(view.getByText("熊宝上的每位员工都会用到你的全部技能。")).toBeTruthy();
 });
 
 test("closed is the default: Only my Bots is checked and your skills are listed without switches", async () => {
   const view = draw();
-  await view.findByText("Only my Bots");
-  expect(choice(view, "Only my Bots").getAttribute("aria-pressed")).toBe(
+  await view.findByText("只给我的员工");
+  expect(choice(view, "只给我的员工").getAttribute("aria-pressed")).toBe(
     "true",
   );
-  expect(choice(view, "Everyone's Bots").getAttribute("aria-pressed")).toBe(
+  expect(choice(view, "所有人的员工").getAttribute("aria-pressed")).toBe(
     "false",
   );
-  expect(view.getByText("Your skills")).toBeTruthy();
+  expect(view.getByText("你的技能")).toBeTruthy();
   expect(view.getByText("Refund order")).toBeTruthy();
   expect(view.queryByRole("switch")).toBeNull();
 });
@@ -173,7 +169,7 @@ test("Your skills shows in every sharing mode", async () => {
     queryClient.clear();
     answer = { ...answer, mode };
     const view = draw();
-    await view.findByText("Your skills");
+    await view.findByText("你的技能");
     expect(view.getByText("Refund order")).toBeTruthy();
     expect(view.getByText("Close ticket")).toBeTruthy();
     expect(view.queryAllByRole("switch")).toHaveLength(
@@ -183,8 +179,8 @@ test("Your skills shows in every sharing mode", async () => {
       view.getByText("Closes a ticket.", { exact: mode !== "choose" }),
     ).toBeTruthy();
     if (mode !== "choose") {
-      expect(view.queryByText(/Every Bot may use it/)).toBeNull();
-      expect(view.queryByText(/Only your Bots use it/)).toBeNull();
+      expect(view.queryByText(/所有员工都可以用它/)).toBeNull();
+      expect(view.queryByText(/只有你的员工会用它/)).toBeNull();
     }
     cleanup();
   }
@@ -192,8 +188,8 @@ test("Your skills shows in every sharing mode", async () => {
 
 test("choosing Everyone's Bots saves open at once", async () => {
   const view = draw();
-  await view.findByText("Only my Bots");
-  fireEvent.click(choice(view, "Everyone's Bots"));
+  await view.findByText("只给我的员工");
+  fireEvent.click(choice(view, "所有人的员工"));
   await waitFor(() =>
     expect(sent).toContainEqual({
       path: "/api/settings/learning/mode",
@@ -202,7 +198,7 @@ test("choosing Everyone's Bots saves open at once", async () => {
     }),
   );
   await waitFor(() =>
-    expect(choice(view, "Everyone's Bots").getAttribute("aria-pressed")).toBe(
+    expect(choice(view, "所有人的员工").getAttribute("aria-pressed")).toBe(
       "true",
     ),
   );
@@ -210,8 +206,8 @@ test("choosing Everyone's Bots saves open at once", async () => {
 
 test("pressing the choice already made saves nothing", async () => {
   const view = draw();
-  await view.findByText("Only my Bots");
-  fireEvent.click(choice(view, "Only my Bots"));
+  await view.findByText("只给我的员工");
+  fireEvent.click(choice(view, "只给我的员工"));
   await new Promise((resolve) => setTimeout(resolve, 20));
   expect(sent).toEqual([]);
 });
@@ -219,21 +215,19 @@ test("pressing the choice already made saves nothing", async () => {
 test("under The skills I choose, each skill in your space has a switch that opens it to everyone", async () => {
   answer = { ...answer, mode: "choose" };
   const view = draw();
-  await view.findByText("Your skills");
+  await view.findByText("你的技能");
   const refund = view.getByRole("switch", {
-    name: "Open Refund order to everyone",
+    name: "向所有人公开「Refund order」",
   });
   const close = view.getByRole("switch", {
-    name: "Open Close ticket to everyone",
+    name: "向所有人公开「Close ticket」",
   });
   expect(refund.getAttribute("aria-checked")).toBe("false");
   expect(close.getAttribute("aria-checked")).toBe("true");
   expect(
-    view.getByText(/Only your Bots use it\. Refunds an order\./),
+    view.getByText(/只有你的员工会用它。 Refunds an order\./),
   ).toBeTruthy();
-  expect(
-    view.getByText(/Every Bot may use it\. Closes a ticket\./),
-  ).toBeTruthy();
+  expect(view.getByText(/所有员工都可以用它。 Closes a ticket\./)).toBeTruthy();
   fireEvent.click(refund);
   await waitFor(() =>
     expect(sent).toContainEqual({
@@ -245,7 +239,7 @@ test("under The skills I choose, each skill in your space has a switch that open
   await waitFor(() =>
     expect(
       view
-        .getByRole("switch", { name: "Open Refund order to everyone" })
+        .getByRole("switch", { name: "向所有人公开「Refund order」" })
         .getAttribute("aria-checked"),
     ).toBe("true"),
   );
@@ -255,7 +249,7 @@ test("a space with no skills yet says so plainly", async () => {
   answer = { mode: "choose", sharingAllowed: true, skills: [] };
   const view = draw();
   await view.findByText(
-    "No Skills learned from your recordings yet. Once there are, each one you open here reaches every Bot.",
+    "还没有从你的录制里学到技能。学到之后，你在这里公开的每一项都会提供给所有员工。",
   );
   expect(view.queryByRole("switch")).toBeNull();
 });
@@ -269,9 +263,9 @@ test("Skills Intelligence did not deliver show a plain unavailable line, and the
   };
   const view = draw();
   await view.findByText(
-    "Couldn't read your Skills from the back end just now. Your choice above still applies to them.",
+    "刚才没能从后端读到你的技能。你在上面的选择对它们仍然有效。",
   );
-  fireEvent.click(choice(view, "Only my Bots"));
+  fireEvent.click(choice(view, "只给我的员工"));
   await waitFor(() =>
     expect(sent).toContainEqual({
       path: "/api/settings/learning/mode",
@@ -289,19 +283,17 @@ test("Automatic learning off says no skills are learned", async () => {
     unavailable: "off",
   };
   const view = draw();
-  await view.findByText(
-    "An admin has turned off automatic learning, so no skills are learned from your recordings.",
-  );
+  await view.findByText("管理员关闭了自动学习，所以不会从你的录制里学习技能。");
 });
 
 test("until an admin turns on skill sharing, it says so plainly and only Only my Bots can be chosen", async () => {
   answer = { ...answer, sharingAllowed: false };
   const view = draw();
   await view.findByText(
-    "An admin hasn't turned on sharing skills with every Bot, so only the Bots you use draw on yours.",
+    "管理员还没开启向所有员工共享技能，所以只有你用的员工会用到你的技能。",
   );
-  expect(choice(view, "Only my Bots").hasAttribute("disabled")).toBe(false);
-  for (const title of ["Everyone's Bots", "The skills I choose"]) {
+  expect(choice(view, "只给我的员工").hasAttribute("disabled")).toBe(false);
+  for (const title of ["所有人的员工", "我挑选的技能"]) {
     expect(choice(view, title).hasAttribute("disabled")).toBe(true);
     fireEvent.click(choice(view, title));
   }
@@ -313,13 +305,13 @@ test("a choice made before sharing was turned off says it applies again, and an 
   answer = { ...answer, mode: "choose", sharingAllowed: false };
   const view = draw();
   await view.findByText(
-    "An admin hasn't turned on sharing skills with every Bot, so only the Bots you use draw on yours. Your choice below applies again if an admin turns it on.",
+    "管理员还没开启向所有员工共享技能，所以只有你用的员工会用到你的技能。管理员开启后，你在下面的选择会重新生效。",
   );
   const refund = view.getByRole("switch", {
-    name: "Open Refund order to everyone",
+    name: "向所有人公开「Refund order」",
   });
   const close = view.getByRole("switch", {
-    name: "Open Close ticket to everyone",
+    name: "向所有人公开「Close ticket」",
   });
   expect(refund.hasAttribute("data-disabled")).toBe(true);
   expect(close.hasAttribute("data-disabled")).toBe(false);
@@ -339,26 +331,24 @@ test("a choice made before sharing was turned off says it applies again, and an 
 test("a read that fails says so, and a save that fails says why", async () => {
   failRead = true;
   const failed = draw();
-  await failed.findByText(
-    "Couldn't load your Learning settings. Reload the page.",
-  );
+  await failed.findByText("读不到你的学习设置。请刷新页面。");
   cleanup();
   queryClient.clear();
   failRead = false;
   failWrite = true;
   const view = draw();
-  await view.findByText("Only my Bots");
-  fireEvent.click(choice(view, "Everyone's Bots"));
+  await view.findByText("只给我的员工");
+  fireEvent.click(choice(view, "所有人的员工"));
   await view.findByText("Your Learning settings could not be saved.");
 });
 
 test("each of Your skills opens its SKILL.md", async () => {
   answer = { ...answer, mode: "choose" };
   const view = draw();
-  await view.findByText("Your skills");
+  await view.findByText("你的技能");
   // Toggling the switch does not open the Skill.
   fireEvent.click(
-    view.getByRole("switch", { name: "Open Refund order to everyone" }),
+    view.getByRole("switch", { name: "向所有人公开「Refund order」" }),
   );
   await waitFor(() => expect(sent).toHaveLength(1));
   expect(fetched).toEqual([]);
@@ -372,7 +362,7 @@ test("each of Your skills opens its SKILL.md", async () => {
 test("pressing a Your skills row opens its SKILL.md where there is no switch", async () => {
   answer = { ...answer, mode: "closed" };
   const view = draw();
-  await view.findByText("Your skills");
+  await view.findByText("你的技能");
   expect(view.queryByRole("switch")).toBeNull();
   fireEvent.click(view.getByRole("button", { name: /Refund order/ }));
   await view.findByText(/Step one: look up the order/);
@@ -428,17 +418,17 @@ test("under Everyone's Bots, a skill waiting for an admin has one control: Ask t
   const view = draw();
   await view.findByText("Refund order");
   expect(view.queryAllByRole("switch")).toHaveLength(0);
-  expect(view.getAllByRole("button", { name: "Ask to share" })).toHaveLength(1);
-  expect(view.getByText("Asked to share")).toBeTruthy();
+  expect(view.getAllByRole("button", { name: "申请共享" })).toHaveLength(1);
+  expect(view.getByText("已申请共享")).toBeTruthy();
   const refundRow = view.getByText("Refund order").closest("button");
-  expect(refundRow?.textContent).toContain("Only your Bots use it.");
+  expect(refundRow?.textContent).toContain("只有你的员工会用它。");
   // Scoped to the row itself: the title div's own closest("div") would be the title.
   const reopenRow = view
     .getByText("Reopen ticket")
     .closest('[data-slot="item"]') as HTMLElement;
   expect(reopenRow.textContent).toContain("Reopens a ticket.");
-  expect(reopenRow.textContent).not.toContain("Only your Bots use it.");
-  fireEvent.click(view.getByRole("button", { name: "Ask to share" }));
+  expect(reopenRow.textContent).not.toContain("只有你的员工会用它。");
+  fireEvent.click(view.getByRole("button", { name: "申请共享" }));
   await waitFor(() =>
     expect(posts).toEqual([
       "/api/settings/learning/skills/refund-order/share-request",
@@ -465,10 +455,10 @@ test("under The skills I choose, every skill keeps its switch, including ones wa
   const view = draw();
   await view.findByText("Refund order");
   expect(view.getAllByRole("switch")).toHaveLength(3);
-  expect(view.queryByRole("button", { name: "Ask to share" })).toBeNull();
-  expect(view.getByText("Asked to share")).toBeTruthy();
-  expect(view.queryByText(/Every Bot may use it/)).toBeNull();
-  expect(view.getAllByText(/Only your Bots use it/)).toHaveLength(3);
+  expect(view.queryByRole("button", { name: "申请共享" })).toBeNull();
+  expect(view.getByText("已申请共享")).toBeTruthy();
+  expect(view.queryByText(/所有员工都可以用它/)).toBeNull();
+  expect(view.getAllByText(/只有你的员工会用它/)).toHaveLength(3);
 });
 
 test("an open skill waiting for an admin can be closed", async () => {
@@ -479,7 +469,7 @@ test("an open skill waiting for an admin can be closed", async () => {
   };
   const view = draw();
   const toggle = await view.findByRole("switch", {
-    name: "Open Close ticket to everyone",
+    name: "向所有人公开「Close ticket」",
   });
   expect(toggle.getAttribute("aria-checked")).toBe("true");
   fireEvent.click(toggle);
@@ -503,7 +493,7 @@ test("switching on a skill waiting for an admin opens it and asks to share", asy
   const posts = recordPosts();
   const view = draw();
   fireEvent.click(
-    await view.findByRole("switch", { name: "Open Refund order to everyone" }),
+    await view.findByRole("switch", { name: "向所有人公开「Refund order」" }),
   );
   await waitFor(() =>
     expect(posts).toEqual([
@@ -528,7 +518,7 @@ test("a skill already asked about is switched on without a second request", asyn
   const posts = recordPosts();
   const view = draw();
   fireEvent.click(
-    await view.findByRole("switch", { name: "Open Refund order to everyone" }),
+    await view.findByRole("switch", { name: "向所有人公开「Refund order」" }),
   );
   await waitFor(() => expect(sent).toHaveLength(1));
   await new Promise((resolve) => setTimeout(resolve, 20));
@@ -540,15 +530,13 @@ test("while an admin has sharing off, Your skills says only your Bots use them, 
     queryClient.clear();
     answer = { ...answer, mode, sharingAllowed: false };
     const view = draw();
-    await view.findByText("Your skills");
-    expect(
-      view.getByText("Only the Bots you use draw on these skills."),
-    ).toBeTruthy();
+    await view.findByText("你的技能");
+    expect(view.getByText("只有你用的员工会用到这些技能。")).toBeTruthy();
     expect(view.queryByText(/Every Bot on OpenBot draws on these/)).toBeNull();
-    expect(view.queryByText(/Open a skill to let every Bot/)).toBeNull();
-    expect(view.queryByText(/Every Bot may use it/)).toBeNull();
+    expect(view.queryByText(/公开一项技能，熊宝上的每位员工/)).toBeNull();
+    expect(view.queryByText(/所有员工都可以用它/)).toBeNull();
     if (mode === "choose")
-      expect(view.getAllByText(/Only your Bots use it/)).toHaveLength(2);
+      expect(view.getAllByText(/只有你的员工会用它/)).toHaveLength(2);
     cleanup();
   }
 });
@@ -576,12 +564,12 @@ test("the personal edition lists Your skills with no sharing choice and no switc
     ],
   };
   const view = draw();
-  await view.findByText("Your skills");
+  await view.findByText("你的技能");
   await view.findByText("Refund order");
-  expect(view.queryByText("Who else's Bots use your skills")).toBeNull();
+  expect(view.queryByText("还有谁的员工能用你的技能")).toBeNull();
   expect(choices(view)).toHaveLength(0);
   expect(view.queryAllByRole("switch")).toHaveLength(0);
-  expect(view.queryByRole("button", { name: "Ask to share" })).toBeNull();
+  expect(view.queryByRole("button", { name: "申请共享" })).toBeNull();
   expect(view.queryByText(/Bots use it|Every Bot|Asked to share/)).toBeNull();
   expect(
     view.queryByText(/Only the Bots you use|Open a skill to let/),

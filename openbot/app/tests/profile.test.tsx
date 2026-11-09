@@ -52,13 +52,11 @@ test("settings saves only the display name and refreshes the current user", asyn
     </QueryClientProvider>,
   );
   const user = userEvent.setup({ document });
-  await user.clear(view.getByLabelText("Name"));
-  await user.type(view.getByLabelText("Name"), " Samuel ");
-  fireEvent.click(view.getByRole("button", { name: "Save name" }));
+  await user.clear(view.getByLabelText("名字"));
+  await user.type(view.getByLabelText("名字"), " Samuel ");
+  fireEvent.click(view.getByRole("button", { name: "保存名字" }));
   await waitFor(() =>
-    expect(view.getByRole("status").textContent).toBe(
-      "Your name has been saved.",
-    ),
+    expect(view.getByRole("status").textContent).toBe("名字已保存。"),
   );
   expect(sent).toEqual({ name: "Samuel" });
   expect(query.getQueryState(authKeys.currentUser())?.isInvalidated).toBe(true);
@@ -75,13 +73,13 @@ test("failed saves show an error and preserve the draft for retry", async () => 
       <ProfileNameForm initialName="Sam" />
     </QueryClientProvider>,
   );
-  fireEvent.click(view.getByRole("button", { name: "Save name" }));
+  fireEvent.click(view.getByRole("button", { name: "保存名字" }));
   await waitFor(() =>
     expect(view.getByRole("alert").textContent).toContain(
       "Could not save your profile.",
     ),
   );
-  expect((view.getByLabelText("Name") as HTMLInputElement).value).toBe("Sam");
+  expect((view.getByLabelText("名字") as HTMLInputElement).value).toBe("Sam");
 });
 
 test("an untouched settings form reflects a name saved by the welcome dialog", () => {
@@ -96,7 +94,7 @@ test("an untouched settings form reflects a name saved by the welcome dialog", (
       <ProfileNameForm initialName="Sam" />
     </QueryClientProvider>,
   );
-  expect((view.getByLabelText("Name") as HTMLInputElement).value).toBe("Sam");
+  expect((view.getByLabelText("名字") as HTMLInputElement).value).toBe("Sam");
 });
 
 test("a profile refetch does not overwrite an unsaved draft", async () => {
@@ -107,13 +105,13 @@ test("a profile refetch does not overwrite an unsaved draft", async () => {
     </QueryClientProvider>,
   );
   const user = userEvent.setup({ document });
-  await user.type(view.getByLabelText("Name"), " Julien");
+  await user.type(view.getByLabelText("名字"), " Julien");
   view.rerender(
     <QueryClientProvider client={query}>
       <ProfileNameForm initialName="Samuel" />
     </QueryClientProvider>,
   );
-  expect((view.getByLabelText("Name") as HTMLInputElement).value).toBe(
+  expect((view.getByLabelText("名字") as HTMLInputElement).value).toBe(
     "Sam Julien",
   );
 });

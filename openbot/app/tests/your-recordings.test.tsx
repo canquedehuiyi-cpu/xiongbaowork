@@ -94,19 +94,19 @@ test("recordings show title, date and how each ended", async () => {
     </QueryClientProvider>,
   );
   await view.findAllByText("Refund an order");
-  expect(view.getByText("Untitled recording")).toBeTruthy();
+  expect(view.getByText("未命名录制")).toBeTruthy();
   expect(
     view.getAllByText(new Date("2026-11-02T14:30:00.000Z").toLocaleString())
       .length,
   ).toBe(7);
-  expect(view.getByText("Still sending")).toBeTruthy();
+  expect(view.getByText("仍在发送")).toBeTruthy();
   // Never reads as a success: an outcome that never arrived says so.
-  expect(view.getByText("No result")).toBeTruthy();
-  expect(view.getByText("Not in the back end")).toBeTruthy();
-  expect(view.getByText("Stopped early: signed out")).toBeTruthy();
-  expect(view.getByText("Stopped early: browser closed")).toBeTruthy();
-  expect(view.getByText("Stopped early: disconnected")).toBeTruthy();
-  expect(view.queryByText("Show more")).toBeNull();
+  expect(view.getByText("没有结果")).toBeTruthy();
+  expect(view.getByText("后端里没有")).toBeTruthy();
+  expect(view.getByText("提前停止：已退出登录")).toBeTruthy();
+  expect(view.getByText("提前停止：浏览器已关闭")).toBeTruthy();
+  expect(view.getByText("提前停止：连接断开")).toBeTruthy();
+  expect(view.queryByText("显示更多")).toBeNull();
 });
 
 test("no recordings shows one empty line", async () => {
@@ -116,9 +116,7 @@ test("no recordings shows one empty line", async () => {
       <YourRecordings />
     </QueryClientProvider>,
   );
-  await view.findByText(
-    "No recordings yet. Each task you record shows up here.",
-  );
+  await view.findByText("还没有录制。你录下的每个任务都会出现在这里。");
 });
 
 test("an Intelligence without recordings says so in one line", async () => {
@@ -132,9 +130,7 @@ test("an Intelligence without recordings says so in one line", async () => {
       <YourRecordings />
     </QueryClientProvider>,
   );
-  await view.findByText(
-    "The back end isn't available, so your recordings can't be listed.",
-  );
+  await view.findByText("后端不可用，所以列不出你的录制。");
   expect(view.queryByText(/No recordings yet/)).toBeNull();
 });
 
@@ -149,7 +145,7 @@ test("an unavailable back end says so instead of listing rows", async () => {
       <YourRecordings />
     </QueryClientProvider>,
   );
-  await view.findByText(/Couldn't reach the back end/);
+  await view.findByText(/连不上后端/);
   expect(view.queryByText(/No recordings yet/)).toBeNull();
 });
 
@@ -165,10 +161,10 @@ test("Show more loads the next page", async () => {
     </QueryClientProvider>,
   );
   await view.findByText("Refund an order");
-  fireEvent.click(view.getByText("Show more"));
+  fireEvent.click(view.getByText("显示更多"));
   await view.findByText("Close a ticket");
   expect(view.getByText("Refund an order")).toBeTruthy();
-  await waitFor(() => expect(view.queryByText("Show more")).toBeNull());
+  await waitFor(() => expect(view.queryByText("显示更多")).toBeNull());
   expect(asked).toContain("/api/recorder/recordings?cursor=c2");
 });
 
@@ -185,17 +181,17 @@ test("a later page that cannot be reached says so below the rows, and Show more 
     </QueryClientProvider>,
   );
   await view.findByText("Refund an order");
-  fireEvent.click(view.getByText("Show more"));
-  await view.findByText(/Couldn't reach the back end/);
+  fireEvent.click(view.getByText("显示更多"));
+  await view.findByText(/连不上后端/);
   expect(view.getByText("Refund an order")).toBeTruthy();
-  expect(view.getByText("Show more")).toBeTruthy();
+  expect(view.getByText("显示更多")).toBeTruthy();
   pages.c2 = {
     recordings: [row({ id: "r2", title: "Close a ticket" })],
     nextCursor: null,
   };
-  fireEvent.click(view.getByText("Show more"));
+  fireEvent.click(view.getByText("显示更多"));
   await view.findByText("Close a ticket");
-  expect(view.queryByText(/Couldn't reach the back end/)).toBeNull();
+  expect(view.queryByText(/连不上后端/)).toBeNull();
   expect(view.getByText("Refund an order")).toBeTruthy();
 });
 
@@ -210,9 +206,9 @@ test("a first page with no rows still offers Show more when older ones exist", a
       <YourRecordings />
     </QueryClientProvider>,
   );
-  await view.findByText("Show more");
+  await view.findByText("显示更多");
   expect(view.queryByText(/No recordings yet/)).toBeNull();
-  fireEvent.click(view.getByText("Show more"));
+  fireEvent.click(view.getByText("显示更多"));
   await view.findByText("Close a ticket");
 });
 
@@ -225,9 +221,9 @@ test("a failed Show more keeps the rows already loaded and Show more retries it"
     </QueryClientProvider>,
   );
   await view.findByText("Refund an order");
-  fireEvent.click(view.getByText("Show more"));
+  fireEvent.click(view.getByText("显示更多"));
   await view.findByText(
-    "Couldn't load more recordings. Try again.",
+    "没能加载更多录制。请再试一次。",
     {},
     { timeout: 4000 },
   );
@@ -237,11 +233,9 @@ test("a failed Show more keeps the rows already loaded and Show more retries it"
     recordings: [row({ id: "r2", title: "Close a ticket" })],
     nextCursor: null,
   };
-  fireEvent.click(view.getByText("Show more"));
+  fireEvent.click(view.getByText("显示更多"));
   await view.findByText("Close a ticket");
-  expect(
-    view.queryByText("Couldn't load more recordings. Try again."),
-  ).toBeNull();
+  expect(view.queryByText("没能加载更多录制。请再试一次。")).toBeNull();
   expect(view.getByText("Refund an order")).toBeTruthy();
 });
 
@@ -255,11 +249,7 @@ test("a failed refresh keeps the rows on screen", async () => {
   await view.findByText("Refund an order");
   failing.add("");
   await queryClient.invalidateQueries({ queryKey: recorderKeys.recordings() });
-  await view.findByText(
-    "Couldn't refresh your recordings.",
-    {},
-    { timeout: 4000 },
-  );
+  await view.findByText("没能刷新你的录制。", {}, { timeout: 4000 });
   expect(view.getByText("Refund an order")).toBeTruthy();
   expect(view.queryByRole("alert")).toBeNull();
 });

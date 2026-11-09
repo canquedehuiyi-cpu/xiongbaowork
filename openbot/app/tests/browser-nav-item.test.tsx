@@ -219,9 +219,9 @@ for (const shows of ["native", "screen", undefined] as const) {
     const { shows: _unsaid, ...older } = closedState("native");
     state = shows ? closedState(shows) : older;
     const { view, router } = draw();
-    const link = await view.findByRole("link", { name: "Teach a Bot" });
+    const link = await view.findByRole("link", { name: "教员工做事" });
     expect(link.getAttribute("href")).toBe("/browser");
-    expect(view.queryByRole("button", { name: "Teach a Bot" })).toBeNull();
+    expect(view.queryByRole("button", { name: "教员工做事" })).toBeNull();
     const user = userEvent.setup({ document });
     await user.click(link);
     await waitFor(() =>
@@ -255,7 +255,7 @@ test("the sidebar has no Teach a Bot link where OpenBot cannot run a browser, or
       "success",
     ),
   );
-  expect(view.queryByRole("link", { name: "Teach a Bot" })).toBeNull();
+  expect(view.queryByRole("link", { name: "教员工做事" })).toBeNull();
   cleanup();
 
   queryClient.clear();
@@ -268,14 +268,14 @@ test("the sidebar has no Teach a Bot link where OpenBot cannot run a browser, or
       ),
     { timeout: 4000 },
   );
-  expect(failed.view.queryByRole("link", { name: "Teach a Bot" })).toBeNull();
+  expect(failed.view.queryByRole("link", { name: "教员工做事" })).toBeNull();
 });
 
 for (const shows of ["native", "screen"] as const) {
   test(`a Record pressed in the browser itself puts a red dot named for the recording on Teach a Bot within two seconds where the browser shows as ${shows}, and Stop takes it away`, async () => {
     state = openState(shows);
     const { view } = draw();
-    await view.findByRole("link", { name: "Teach a Bot" });
+    await view.findByRole("link", { name: "教员工做事" });
     expect(dots(view)).toEqual([]);
 
     // Record, pressed in the Recorder's own toolbar button: the only place OpenBot hears of it is the state it reads.
@@ -283,14 +283,14 @@ for (const shows of ["native", "screen"] as const) {
     state = recording("recording", shows);
     const dot = await view.findByRole(
       "img",
-      { name: /^Recording: Submit the receipt, 1:2\d$/ },
+      { name: /^正在录制：Submit the receipt，1:2\d$/ },
       { timeout: 2000 },
     );
     expect(reads()).toBeGreaterThan(asked);
     // The link carries the recording's name with its own, for a screen reader.
     expect(
       view.getByRole("link", {
-        name: /^Teach a Bot Recording: Submit the receipt, 1:2\d$/,
+        name: /^教员工做事 正在录制：Submit the receipt，1:2\d$/,
       }),
     ).toBeTruthy();
     expect(dot.querySelector(".bg-destructive")).not.toBeNull();
@@ -300,7 +300,7 @@ for (const shows of ["native", "screen"] as const) {
     expect(
       await view.findByRole(
         "img",
-        { name: "Recording: Submit the receipt, stopping" },
+        { name: "正在录制：Submit the receipt，正在停止" },
         { timeout: 2000 },
       ),
     ).toBeTruthy();
@@ -316,26 +316,24 @@ test("the red dot shows while a recording starts as well, and its tooltip names 
   const { view } = draw();
   expect(
     await view.findByRole("img", {
-      name: "Recording: Submit the receipt, starting",
+      name: "正在录制：Submit the receipt，正在开始",
     }),
   ).toBeTruthy();
   state = recording("recording");
   await view.findByRole(
     "img",
-    { name: /^Recording: Submit the receipt, 1:2\d$/ },
+    { name: /^正在录制：Submit the receipt，1:2\d$/ },
     { timeout: 2000 },
   );
   const user = userEvent.setup({ document });
-  await user.hover(view.getByRole("link", { name: /^Teach a Bot Recording/ }));
+  await user.hover(view.getByRole("link", { name: /^教员工做事 正在录制/ }));
   // Base UI's tooltip is drawn for sight alone, so it says what the dot's name says.
   await waitFor(() =>
     expect(
       [...document.querySelectorAll("[data-slot=tooltip-content]")].map(
         (tooltip) => tooltip.textContent,
       ),
-    ).toEqual([
-      expect.stringMatching(/^Recording: Submit the receipt, 1:2\d$/),
-    ]),
+    ).toEqual([expect.stringMatching(/^正在录制：Submit the receipt，1:2\d$/)]),
   );
 });
 
@@ -344,7 +342,7 @@ test("a recording in the person's everyday browser puts the red dot on Teach a B
   state = { ...closedState("native"), activity: receipt("recording") };
   const { view } = draw();
   const dot = await view.findByRole("img", {
-    name: /^Recording: Submit the receipt, 1:2\d$/,
+    name: /^正在录制：Submit the receipt，1:2\d$/,
   });
   expect(dot.querySelector(".bg-destructive")).not.toBeNull();
   expect(state.recorder).toBeUndefined();
@@ -360,7 +358,7 @@ test("the dot is the server's activity, not the OpenBot browser's own report: on
   const { activity: _folded, ...unfolded } = recording("recording");
   state = unfolded;
   const { view } = draw();
-  await view.findByRole("link", { name: "Teach a Bot" });
+  await view.findByRole("link", { name: "教员工做事" });
   await waitFor(() => expect(reads()).toBe(1));
   expect(dots(view)).toEqual([]);
 });

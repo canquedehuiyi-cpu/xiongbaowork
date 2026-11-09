@@ -453,7 +453,7 @@ export function startedByText(
 ): string {
   switch (initiatorKindOf(event)) {
     case "routine":
-      return "例行任务";
+      return "定时任务";
     case "handoff":
       return event.initiatorId
         ? `由${spaced(nameFor(event.initiatorId))}转交`
@@ -839,7 +839,7 @@ export function StartedByCell({
 }
 
 /**
- * Under the Bot's name, so it says what it is: 「由例行任务发起」「由 Scout 转交」「由熊宝发起」.
+ * Under the Bot's name, so it says what it is: 「由定时任务发起」「由 Scout 转交」「由熊宝发起」.
  * A hand-off already says it as a sentence.
  */
 export function startedByLine(text: string): string {

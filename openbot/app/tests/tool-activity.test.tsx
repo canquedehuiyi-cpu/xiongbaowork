@@ -89,17 +89,15 @@ test("a subtask folds into the same line as the searches beside it, even though 
   const steps = items.slice(0, 3).map((item) => stepDetails(item as ToolItem));
   expect(steps[0]).toMatchObject({
     kind: "subtask",
-    label: "Subtask",
+    label: "子任务",
     detail: "Find five logistics companies.",
     output: "Five companies.",
     failed: false,
   });
-  expect(summarise(steps)).toBe(
-    "Searched the web, read 1 page and ran a subtask",
-  );
+  expect(summarise(steps)).toBe("搜索了网络，读了 1 个网页，执行了一个子任务");
   expect(
     summarise([steps[0], steps[0]].filter((step) => step !== undefined)),
-  ).toBe("Ran 2 subtasks");
+  ).toBe("执行了 2 个子任务");
 });
 
 test("browsing one site names the site; pages on several sites are counted", () => {
@@ -115,19 +113,19 @@ test("browsing one site names the site; pages on several sites are counted", () 
     inputs: [],
   });
   expect(summarise([page("a", "https://www.example.com/")])).toBe(
-    "Browsed example.com",
+    "浏览了 example.com",
   );
   expect(
     summarise([page("a", "https://gov.uk/a"), page("b", "https://gov.uk/b")]),
-  ).toBe("Browsed 2 pages on gov.uk");
+  ).toBe("在 gov.uk 上浏览了 2 个网页");
   expect(
     summarise([
       page("a", "https://a.example/"),
       page("b", "https://b.example/"),
     ]),
-  ).toBe("Browsed 2 pages");
+  ).toBe("浏览了 2 个网页");
   // A page with no address on record is still counted.
-  expect(summarise([page("a")])).toBe("Browsed 1 page");
+  expect(summarise([page("a")])).toBe("浏览了 1 个网页");
 });
 
 test("one connector call keeps its own line, and anything the app draws stays where it is", () => {
@@ -185,7 +183,7 @@ test("a tool step is named in words and counted as tools", () => {
     .map((n) => call(n, "run_command", { command: "echo 5" }, '"5"'))
     .map(stepDetails);
   expect(steps[0]).toMatchObject({ kind: "tool", label: "Run command" });
-  expect(summarise(steps)).toBe("Used 5 tools");
+  expect(summarise(steps)).toBe("用了 5 个工具");
   expect(
     summarise(
       [
@@ -194,7 +192,7 @@ test("a tool step is named in words and counted as tools", () => {
         call("u", "read_file", {}, '"x"'),
       ].map(stepDetails),
     ),
-  ).toBe("Searched the web and used 2 tools");
+  ).toBe("搜索了网络，用了 2 个工具");
 });
 
 test("the tools CopilotKit has a renderer for are the ones the app draws", () => {
@@ -304,7 +302,7 @@ test("the summary says what was done, never which provider searched", () => {
     search(),
     fetch(["https://imf.org/a", "https://worldbank.org/b"]),
   ].map(stepDetails);
-  expect(summarise(steps)).toBe("Searched the web and read 2 pages");
+  expect(summarise(steps)).toBe("搜索了网络，读了 2 个网页");
   expect(JSON.stringify(steps.map((step) => step.label))).not.toContain("exa");
   expect(steps[0]?.detail).toBe("top 5 GDP 2025");
   expect(steps[1]?.detail).toBe("imf.org and 1 more");
@@ -316,14 +314,14 @@ test("the summary says what was done, never which provider searched", () => {
         call("n", "mcp__notion__search", {}, '"x"'),
       ].map(stepDetails),
     ),
-  ).toBe("Used 2 connectors");
+  ).toBe("用了 2 个连接器");
   expect(
     summarise(
       [call("d", "mcp__google-drive__search_files", {}, '"x"')].map(
         stepDetails,
       ),
     ),
-  ).toBe("Used Google Drive");
+  ).toBe("用了 Google Drive");
 });
 
 test("a brokered app is summarised as the app, never with its broker's name", () => {
@@ -331,7 +329,7 @@ test("a brokered app is summarised as the app, never with its broker's name", ()
     call("l", "mcp__composio-airtable__AIRTABLE_LIST_BASES", {}, '"x"'),
     call("s", "mcp__composio-airtable__AIRTABLE_GET_BASE_SCHEMA", {}, '"x"'),
   ].map(stepDetails);
-  expect(summarise(steps)).toBe("Used Airtable");
+  expect(summarise(steps)).toBe("用了 Airtable");
   expect(steps.map((step) => step.label)).toEqual([
     "List bases",
     "Get base schema",
@@ -340,7 +338,7 @@ test("a brokered app is summarised as the app, never with its broker's name", ()
     summarise(
       [call("a", "mcp__arcade-Gmail__ListEmails", {}, '"x"')].map(stepDetails),
     ),
-  ).toBe("Used Gmail");
+  ).toBe("用了 Gmail");
 });
 
 test("a refusal and a failure each count as an issue on the folded line", () => {
@@ -357,9 +355,9 @@ test("a refusal and a failure each count as an issue on the folded line", () => 
       <ToolActivity group={group} active={false} />
     </QueryClientProvider>,
   );
-  expect(view.getByText("2 issues")).toBeDefined();
-  expect(view.getByText("Blocked")).toBeDefined();
-  expect(view.getByText("Didn't work")).toBeDefined();
+  expect(view.getByText("2 个问题")).toBeDefined();
+  expect(view.getByText("已拦下")).toBeDefined();
+  expect(view.getByText("没成功")).toBeDefined();
 });
 
 test("the computer asking the Bot to look again after a handback never reaches the transcript", () => {
@@ -389,8 +387,8 @@ test("the computer asking the Bot to look again after a handback never reaches t
     </QueryClientProvider>,
   );
   expect(view.queryByText(/fresh browser snapshot/)).toBeNull();
-  expect(view.queryByText("Didn't work")).toBeNull();
-  expect(view.queryByText(/issue/)).toBeNull();
+  expect(view.queryByText("没成功")).toBeNull();
+  expect(view.queryByText(/个问题/)).toBeNull();
   expect(view.getAllByText("Opened page")).toHaveLength(1);
   expect(view.getByText("The Internet")).toBeDefined();
 

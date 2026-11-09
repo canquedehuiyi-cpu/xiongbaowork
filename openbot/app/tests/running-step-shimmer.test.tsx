@@ -145,7 +145,7 @@ test("the step still running shimmers, and stops when its answer arrives", async
 test("once every step has its answer and the model is still going, the transcript says it is thinking", async () => {
   const view = render(transcript(run(true), true));
 
-  expect(await view.findByText("Used Gmail")).toBeTruthy();
+  expect(await view.findByText("用了 Gmail")).toBeTruthy();
   const thinking = view.getByText("Thinking");
   expect(thinking.getAttribute("role")).toBe("status");
   expect(thinking.classList.contains(SHIMMER)).toBe(true);

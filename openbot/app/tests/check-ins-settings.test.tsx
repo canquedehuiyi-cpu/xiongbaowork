@@ -119,11 +119,11 @@ test("turning check-ins off for all Bots saves it and says so", async () => {
   serving();
   const view = await draw(<CheckInsSection />);
   const toggle = await view.findByRole("switch", {
-    name: "Check-ins for all your Bots",
+    name: "为你的所有员工开启主动巡检",
   });
   expect(toggle.getAttribute("aria-checked")).toBe("true");
   expect(
-    view.getByText("On. Each Bot's own check-ins are on its Memory page."),
+    view.getByText("已开启。每位员工自己的巡检设置在它的「记忆」页。"),
   ).toBeTruthy();
   fireEvent.click(toggle);
   await waitFor(() =>
@@ -135,7 +135,7 @@ test("turning check-ins off for all Bots saves it and says so", async () => {
     ]),
   );
   expect(
-    await view.findByText("Off. None of your Bots check in for you."),
+    await view.findByText("已关闭。你的员工都不会为你巡检。"),
   ).toBeTruthy();
   expect(toggle.getAttribute("aria-checked")).toBe("false");
 });
@@ -151,20 +151,18 @@ test("in the personal edition, each Bot's own check-ins are on its What it can d
   });
   const view = await draw(<CheckInsSection />);
   expect(
-    await view.findByText(
-      "On. Each Bot's own check-ins are on its What it can do page.",
-    ),
+    await view.findByText("已开启。每位员工自己的巡检设置在它的「能力」页。"),
   ).toBeTruthy();
-  expect(view.queryByText(/Memory page/)).toBeNull();
+  expect(view.queryByText(/「记忆」页/)).toBeNull();
 });
 
 test("turned off by an admin, the switch says who and can't be turned back on", async () => {
   allowed = false;
   serving();
   const view = await draw(<CheckInsSection />);
-  expect(await view.findByText("Turned off by your admin.")).toBeTruthy();
+  expect(await view.findByText("已被管理员关闭。")).toBeTruthy();
   const toggle = view.getByRole("switch", {
-    name: "Check-ins for all your Bots",
+    name: "为你的所有员工开启主动巡检",
   });
   expect(toggle.getAttribute("aria-checked")).toBe("false");
   expect(toggle.hasAttribute("data-disabled")).toBe(true);

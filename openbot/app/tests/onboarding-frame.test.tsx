@@ -49,7 +49,7 @@ function draw(props: Partial<Parameters<typeof OnboardingWizard>[0]> = {}) {
 }
 
 const progress = (view: ReturnType<typeof render>) =>
-  view.getByRole("progressbar", { name: "Onboarding progress" });
+  view.getByRole("progressbar", { name: "新手引导进度" });
 
 const dashes = (view: ReturnType<typeof render>) =>
   Array.from(progress(view).querySelectorAll("span"));
@@ -98,7 +98,7 @@ const stepsButton = (view: ReturnType<typeof render>) => {
 /** The list of steps, opened over the page. */
 const stepList = (view: ReturnType<typeof render>) => {
   fireEvent.click(stepsButton(view));
-  return view.getByRole("navigation", { name: "Onboarding steps" });
+  return view.getByRole("navigation", { name: "新手引导步骤" });
 };
 
 test("the first step has no Back, and the dashes say step 1", () => {
@@ -106,7 +106,9 @@ test("the first step has no Back, and the dashes say step 1", () => {
 
   expect(phoneBack(view)).toBeNull();
   expect(desktopBack(view)).toBeNull();
-  expect(progress(view).getAttribute("aria-valuetext")).toBe("Step 1 of 3");
+  expect(progress(view).getAttribute("aria-valuetext")).toBe(
+    "第 1 步，共 3 步",
+  );
   expect(dashes(view)).toHaveLength(3);
   expect(dashes(view).map((dash) => dash.hasAttribute("data-current"))).toEqual(
     [true, false, false],
@@ -118,7 +120,7 @@ test("on a phone, Back sits in the top bar and the button is pinned below the st
 
   expect(phoneBack(view)?.closest("header")).not.toBeNull();
   expect(progress(view).closest("header")).not.toBeNull();
-  expect(primary(view).textContent).toBe("Continue");
+  expect(primary(view).textContent).toBe("继续");
   // Below the step's words and its picture in document order, which is where it sits on screen.
   const heading = view.getByRole("heading", { name: "Two" });
   const picture = view.getByText("Picture of Two");
@@ -129,7 +131,7 @@ test("on a phone, Back sits in the top bar and the button is pinned below the st
     ).toBeTruthy();
   }
   // No step here is optional, so nothing offers to skip it.
-  expect(view.queryByRole("button", { name: "Not now" })).toBeNull();
+  expect(view.queryByRole("button", { name: "以后再说" })).toBeNull();
 });
 
 test("the step's words and its picture sit in their own panes, words first", () => {
@@ -181,7 +183,9 @@ test("Continue moves on, the dashes follow, and focus lands on the new heading",
   fireEvent.click(primary(view));
 
   const heading = await view.findByRole("heading", { name: "Two" });
-  expect(progress(view).getAttribute("aria-valuetext")).toBe("Step 2 of 3");
+  expect(progress(view).getAttribute("aria-valuetext")).toBe(
+    "第 2 步，共 3 步",
+  );
   expect(dashes(view).map((dash) => dash.hasAttribute("data-current"))).toEqual(
     [false, true, false],
   );
@@ -195,7 +199,9 @@ test("Back returns, and hides again on the first step", async () => {
   fireEvent.click(phoneBack(view) as HTMLButtonElement);
 
   await view.findByRole("heading", { name: "One" });
-  expect(progress(view).getAttribute("aria-valuetext")).toBe("Step 1 of 3");
+  expect(progress(view).getAttribute("aria-valuetext")).toBe(
+    "第 1 步，共 3 步",
+  );
   expect(phoneBack(view)).toBeNull();
 });
 
@@ -223,7 +229,9 @@ test("a step that joins the list later does not move somebody off theirs", () =>
   );
 
   expect(view.getByRole("heading", { name: "Two" })).not.toBeNull();
-  expect(progress(view).getAttribute("aria-valuetext")).toBe("Step 2 of 4");
+  expect(progress(view).getAttribute("aria-valuetext")).toBe(
+    "第 2 步，共 4 步",
+  );
 });
 
 /** Three steps where the second is optional, the way Talk to us is. */
@@ -231,7 +239,7 @@ const OPTIONAL: OnboardingStep[] = [
   plain("one", "One"),
   {
     ...plain("apps", "Connect your apps"),
-    secondary: { label: "Not now" },
+    secondary: { label: "以后再说" },
     footnote: "You can connect more apps later.",
   },
   plain("three", "Three"),
@@ -242,8 +250,8 @@ test("an optional step says Continue, with Not now beside it, the same size", ()
 
   const [continueButton, notNow] = footerButtons(view);
   expect(footerButtons(view)).toHaveLength(2);
-  expect(continueButton?.textContent).toBe("Continue");
-  expect(notNow?.textContent).toBe("Not now");
+  expect(continueButton?.textContent).toBe("继续");
+  expect(notNow?.textContent).toBe("以后再说");
   // Under the primary on a phone, in the same column, and drawn the same height and shape.
   expect(continueButton?.parentElement).toBe(notNow?.parentElement ?? null);
   expect(
@@ -271,12 +279,12 @@ test("the footnote sits just above the buttons", () => {
 
 test("Continue and Not now both move on", async () => {
   const continued = draw({ initialStepId: "apps", steps: OPTIONAL });
-  fireEvent.click(continued.getByRole("button", { name: "Continue" }));
+  fireEvent.click(continued.getByRole("button", { name: "继续" }));
   expect(await continued.findByRole("heading", { name: "Three" })).toBeTruthy();
   cleanup();
 
   const skipped = draw({ initialStepId: "apps", steps: OPTIONAL });
-  fireEvent.click(skipped.getByRole("button", { name: "Not now" }));
+  fireEvent.click(skipped.getByRole("button", { name: "以后再说" }));
   expect(await skipped.findByRole("heading", { name: "Three" })).toBeTruthy();
 });
 
@@ -320,7 +328,7 @@ test("a move handed out on one step does nothing once somebody has left it", asy
     ],
   });
 
-  fireEvent.click(view.getByRole("button", { name: "Continue" }));
+  fireEvent.click(view.getByRole("button", { name: "继续" }));
   fireEvent.click(phoneBack(view) as HTMLButtonElement);
   await view.findByRole("heading", { name: "One" });
   act(() => (handed as unknown as () => void)());
@@ -379,7 +387,7 @@ test("a waiting primary shows a spinner, says it is busy, and can't be pressed a
         ...plain("apps", "Get notified"),
         primaryLabel: "Turn on notifications",
         primaryPending: true,
-        secondary: { label: "Not now" },
+        secondary: { label: "以后再说" },
       },
       OPTIONAL[2] as OnboardingStep,
     ],
@@ -413,7 +421,7 @@ test("a step with a form submits it from the frame's primary, with Back beside i
           />
         ),
         primaryForm: "three-form",
-        primaryLabel: "Get started",
+        primaryLabel: "开始使用",
       },
     ],
   });
@@ -442,7 +450,7 @@ test("held by its caller, it asks to move and draws whatever step it is handed",
     />,
   );
 
-  fireEvent.click(view.getByRole("button", { name: "Continue" }));
+  fireEvent.click(view.getByRole("button", { name: "继续" }));
   fireEvent.click(phoneBack(view) as HTMLButtonElement);
   expect(asked).toEqual([
     ["three", "forward"],
@@ -471,17 +479,15 @@ test("held by its caller, it asks to move and draws whatever step it is handed",
 test("on a desktop, where somebody is takes one line, and opens the list of steps", () => {
   const view = draw({ initialStepId: "two" });
 
-  expect(stepsButton(view).textContent).toBe("Step 2 of 3");
+  expect(stepsButton(view).textContent).toBe("第 2 步，共 3 步");
   // Shut until asked for.
-  expect(view.queryByRole("navigation", { name: "Onboarding steps" })).toBe(
-    null,
-  );
+  expect(view.queryByRole("navigation", { name: "新手引导步骤" })).toBe(null);
   const items = within(stepList(view)).getAllByRole("listitem");
   // What the ticks and the numbers show is said in words: done, and not yet available.
   expect(items.map((item) => item.textContent?.replace(/^\d/, ""))).toEqual([
-    "One, done",
+    "One，已完成",
     "Two",
-    "Three, not yet available",
+    "Three，暂不可用",
   ]);
   const current = view.container.ownerDocument.querySelector(
     '[aria-current="step"]',
@@ -538,14 +544,12 @@ test("a step already reached can be picked from the list; one ahead cannot", asy
   expect(list.queryByRole("button", { name: /Three/ })).toBeNull();
   expect(list.queryByRole("button", { name: /Two/ })).toBeNull();
 
-  fireEvent.click(list.getByRole("button", { name: /^One\W+done$/ }));
+  fireEvent.click(list.getByRole("button", { name: /^One\W+已完成$/ }));
   const heading = await view.findByRole("heading", { name: "One" });
   await waitFor(() => expect(document.activeElement).toBe(heading));
   // Picking closes the list.
   await waitFor(() =>
-    expect(
-      view.queryByRole("navigation", { name: "Onboarding steps" }),
-    ).toBeNull(),
+    expect(view.queryByRole("navigation", { name: "新手引导步骤" })).toBeNull(),
   );
 
   // Two has been seen now, so it is a way back; Three still is not.
@@ -566,7 +570,7 @@ test("held by its caller, a pick from the list is asked for like Back", () => {
   );
 
   fireEvent.click(
-    within(stepList(view)).getByRole("button", { name: /^One\W+done$/ }),
+    within(stepList(view)).getByRole("button", { name: /^One\W+已完成$/ }),
   );
   expect(asked).toEqual([["one", "back"]]);
 });
@@ -576,7 +580,7 @@ test("on a desktop, Back sits beside Continue, before it, and Back on a phone is
 
   const back = desktopBack(view);
   expect(back?.closest("footer")).not.toBeNull();
-  expect(back?.textContent).toBe("Back");
+  expect(back?.textContent).toBe("返回");
   expect(back?.className).toContain("hidden");
   expect(back?.className).toContain("lg:inline-flex");
   expect(back?.className).toContain("lg:order-first");
@@ -591,7 +595,7 @@ test("focus rings on the step list, the phone's Back and the checklist's links a
 
   const rings = [
     phoneBack(view)?.className,
-    within(stepList(view)).getByRole("button", { name: /^One\W+done$/ })
+    within(stepList(view)).getByRole("button", { name: /^One\W+已完成$/ })
       .className,
   ];
   for (const ring of rings) {

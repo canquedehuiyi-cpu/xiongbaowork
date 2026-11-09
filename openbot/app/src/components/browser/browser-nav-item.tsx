@@ -115,7 +115,7 @@ function useRecordingLabel(
           ? null
           : elapsed(seconds);
   return {
-    label: progress ? `${named}, ${progress}` : named,
+    label: progress ? `${named}，${progress}` : named,
     live: phase === "recording",
   };
 }

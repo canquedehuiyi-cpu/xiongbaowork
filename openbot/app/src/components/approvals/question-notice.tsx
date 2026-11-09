@@ -204,7 +204,7 @@ function QuestionParts({
         ) : null}
         <QuestionnaireNext size="sm">下一步</QuestionnaireNext>
         <QuestionnaireSubmit disabled={sending} size="sm">
-          {sending ? "正在发送…" : "发送回答"}
+          {sending ? "正在发送…" : several ? "发送全部回答" : "发送回答"}
         </QuestionnaireSubmit>
       </QuestionnaireActions>
       {error ? (

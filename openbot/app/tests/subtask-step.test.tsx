@@ -132,21 +132,21 @@ function open(line: HTMLElement) {
 
 /** The subtask's own row, opened, from inside the turn's folded work line. */
 async function subtaskRow(view: Awaited<ReturnType<typeof draw>>) {
-  const row = (await view.findByText("Subtask")).closest("li") as HTMLElement;
+  const row = (await view.findByText("子任务")).closest("li") as HTMLElement;
   open(row.querySelector("summary") as HTMLElement);
   return within(row);
 }
 
 test("a subtask is one step of the turn's work line, not a card of its own", async () => {
   const view = await draw(answered, { settled: true, busy: false });
-  expect(await view.findByText("Ran a subtask")).toBeTruthy();
+  expect(await view.findByText("执行了一个子任务")).toBeTruthy();
   expect(view.container.querySelector("figure")).toBeNull();
   // Its own line says what it was asked and how many steps it took.
   const line = within(
-    view.getByText("Subtask").closest("summary") as HTMLElement,
+    view.getByText("子任务").closest("summary") as HTMLElement,
   );
   expect(line.getByText(/For customer account Birch Labs/)).toBeTruthy();
-  expect(line.getByText("2 steps")).toBeTruthy();
+  expect(line.getByText("2 个步骤")).toBeTruthy();
 });
 
 test("while it works, the line says so, and the row opens to each step as the subagent takes it", async () => {
@@ -154,12 +154,12 @@ test("while it works, the line says so, and the row opens to each step as the su
   const view = await draw(answered, { settled: false, busy: true }, [
     ...answered.subagent.slice(0, 2),
   ]);
-  expect(await view.findByText("Working on a subtask…")).toBeTruthy();
+  expect(await view.findByText("正在处理一个子任务…")).toBeTruthy();
   const row = await subtaskRow(view);
-  expect(row.getByText("Working")).toBeTruthy();
+  expect(row.getByText("工作中")).toBeTruthy();
   expect(await row.findByText("Get account")).toBeTruthy();
   expect(row.getByText("List open tickets")).toBeTruthy();
-  expect(row.getAllByText("In progress")).toHaveLength(2);
+  expect(row.getAllByText("进行中")).toHaveLength(2);
 });
 
 test("when it is done, its row opens to the answer and the steps it took", async () => {
@@ -170,26 +170,24 @@ test("when it is done, its row opens to the answer and the steps it took", async
   expect(await row.findByText("Get account")).toBeTruthy();
   expect(row.getByText("List open tickets")).toBeTruthy();
   // Finished steps do not say they are in progress.
-  expect(row.queryByText("In progress")).toBeNull();
+  expect(row.queryByText("进行中")).toBeNull();
 });
 
 test("an action it handed back is said plainly, and nothing asks for an approval it cannot give", async () => {
   const view = await draw(handedBack, { settled: true, busy: false });
-  expect(await view.findByText("Handed back")).toBeTruthy();
+  expect(await view.findByText("已交还")).toBeTruthy();
   expect(view.queryByText("Needs your approval")).toBeNull();
   const row = await subtaskRow(view);
-  const notice = within(row.getByRole("region", { name: "Handed back" }));
-  expect(
-    notice.getByText(/the Bot asks you in this conversation/),
-  ).toBeTruthy();
-  expect(notice.getByText("List open tickets on accounts")).toBeTruthy();
+  const notice = within(row.getByRole("region", { name: "已交还" }));
+  expect(notice.getByText(/员工会在这段对话里问你/)).toBeTruthy();
+  expect(notice.getByText("List open tickets（accounts）")).toBeTruthy();
   expect(notice.getByText("Acme Robotics")).toBeTruthy();
 });
 
 test("a subtask its turn left behind says it never finished, and one the server refused says so", async () => {
   const stopped = await draw(answered, { settled: false, busy: false });
-  expect(await stopped.findByText("Not completed")).toBeTruthy();
-  expect(stopped.queryByText("Working")).toBeNull();
+  expect(await stopped.findByText("未完成")).toBeTruthy();
+  expect(stopped.queryByText("工作中")).toBeNull();
   cleanup();
 
   const refused = await draw(
@@ -201,7 +199,7 @@ test("a subtask its turn left behind says it never finished, and one the server 
     },
     { settled: true, busy: false },
   );
-  expect(await refused.findByText("Blocked")).toBeTruthy();
+  expect(await refused.findByText("已拦下")).toBeTruthy();
 });
 
 test("subtasks started together share one line that counts them while their turn runs", async () => {
@@ -238,8 +236,8 @@ test("subtasks started together share one line that counts them while their turn
       />,
     ),
   );
-  expect(await view.findByText("Working on 2 subtasks…")).toBeTruthy();
-  expect(view.getAllByText("Subtask")).toHaveLength(2);
-  expect(view.getAllByText("Working")).toHaveLength(2);
-  expect(view.queryByText("Not completed")).toBeNull();
+  expect(await view.findByText("正在处理 2 个子任务…")).toBeTruthy();
+  expect(view.getAllByText("子任务")).toHaveLength(2);
+  expect(view.getAllByText("工作中")).toHaveLength(2);
+  expect(view.queryByText("未完成")).toBeNull();
 });

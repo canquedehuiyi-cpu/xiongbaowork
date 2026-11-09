@@ -369,7 +369,7 @@ test("the Bot's work on an answer streams in the conversation, and Stop stops it
   const user = userEvent.setup({ document: view.container.ownerDocument });
   // The Bot is waiting on the person, and says so above the composer.
   await view.findByRole("region", {
-    name: `${channel.name} is waiting on your answer`,
+    name: `${channel.name}在等你的回答`,
   });
   await view.findByText("Find weekend plans");
 
@@ -403,7 +403,7 @@ test("the Bot's work on an answer streams in the conversation, and Stop stops it
   await waitFor(() =>
     expect(
       view.queryByRole("region", {
-        name: `${channel.name} is waiting on your answer`,
+        name: `${channel.name}在等你的回答`,
       }),
     ).toBeNull(),
   );
@@ -454,7 +454,7 @@ test("an answer given the moment the Bot asks closes the question, even when its
   await queryClient.refetchQueries();
   expect(
     view.queryByRole("region", {
-      name: `${channel.name} is waiting on your answer`,
+      name: `${channel.name}在等你的回答`,
     }),
   ).toBeNull();
   expect(view.queryByRole("img", { name: /needs? you/ })).toBeNull();

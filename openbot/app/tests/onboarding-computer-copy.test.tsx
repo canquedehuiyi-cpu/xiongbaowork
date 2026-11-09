@@ -16,8 +16,6 @@ const reel = readFileSync(
 );
 
 test("onboarding says what every Bot gets, not a computer of its own", () => {
-  expect(reel).toContain(
-    "Bots use a browser and files of their own, apart from yours.",
-  );
+  expect(reel).toContain("员工用自己的浏览器和文件，和你的分开。");
   expect(reel).not.toMatch(/its own computer/);
 });

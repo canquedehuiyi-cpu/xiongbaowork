@@ -173,9 +173,7 @@ function draw(screen = <ThisBrowser />) {
 
 test("without the Recorder the row says so and offers no button or link", async () => {
   const view = draw();
-  await view.findByText(
-    "The OpenBot Recorder isn't installed in this browser.",
-  );
+  await view.findByText("当前浏览器还没装 OpenBot 录制器。");
   expect(view.queryByRole("button")).toBeNull();
   expect(view.queryByRole("link")).toBeNull();
 });
@@ -186,10 +184,8 @@ test("Connect sends the code to the detected Recorder and asks for confirmation 
     connect: { ok: true, awaitingConfirmation: true },
   };
   const view = draw();
-  fireEvent.click(
-    await view.findByRole("button", { name: "Connect this browser" }),
-  );
-  await view.findByText("Confirm in the OpenBot Recorder tab that opened.");
+  fireEvent.click(await view.findByRole("button", { name: "连接当前浏览器" }));
+  await view.findByText("请在刚打开的 OpenBot 录制器标签页里确认。");
   expect(sent).toContainEqual({
     path: "/api/recorder/connect-codes",
     method: "POST",
@@ -208,30 +204,22 @@ test("once the person approves on the Connect page, the install id the Recorder 
     connect: { ok: true, awaitingConfirmation: true },
   };
   const view = draw();
-  fireEvent.click(
-    await view.findByRole("button", { name: "Connect this browser" }),
-  );
-  await view.findByText("Confirm in the OpenBot Recorder tab that opened.");
+  fireEvent.click(await view.findByRole("button", { name: "连接当前浏览器" }));
+  await view.findByText("请在刚打开的 OpenBot 录制器标签页里确认。");
   // The person clicks Connect on the Recorder's page: the connection is OpenBot's, and the Recorder's ping says which
   // copy made it.
   connections = [connection()];
   recorder.ping = { ok: true, version: "1", installId: THIS_COPY };
-  await view.findByText("Connected", {}, { timeout: 4000 });
+  await view.findByText("已连接", {}, { timeout: 4000 });
   expect(view.queryByRole("button")).toBeNull();
 });
 
 for (const [how, sentence] of [
-  [
-    "cancelled",
-    "You cancelled in the OpenBot Recorder tab. Nothing was connected.",
-  ],
-  [
-    "closed",
-    "The OpenBot Recorder tab closed before you confirmed. Nothing was connected.",
-  ],
+  ["cancelled", "你在 OpenBot 录制器标签页里取消了，没有连接任何东西。"],
+  ["closed", "你确认之前 OpenBot 录制器标签页就关了，没有连接任何东西。"],
 ] as const)
   test(`once the person ${how === "cancelled" ? "cancels on" : "closes"} the Connect page, the row says so within a second, with Connect back`, async () => {
-    // After a Cancel, Settings used to go on saying "Confirm in the OpenBot Recorder tab that opened." for up to five
+    // After a Cancel, Settings used to go on saying "请在刚打开的 OpenBot 录制器标签页里确认。" for up to five
     // minutes: nothing told it the person had cancelled.
     recorder = {
       ping: { ok: true },
@@ -239,22 +227,22 @@ for (const [how, sentence] of [
     };
     const view = draw();
     fireEvent.click(
-      await view.findByRole("button", { name: "Connect this browser" }),
+      await view.findByRole("button", { name: "连接当前浏览器" }),
     );
-    await view.findByText("Confirm in the OpenBot Recorder tab that opened.");
+    await view.findByText("请在刚打开的 OpenBot 录制器标签页里确认。");
     recorder.wait = how;
     const at = Date.now();
     await view.findByText(sentence, {}, { timeout: 1500 });
     expect(Date.now() - at).toBeLessThan(1500);
-    const again = view.getByRole("button", { name: "Connect this browser" });
+    const again = view.getByRole("button", { name: "连接当前浏览器" });
     expect((again as HTMLButtonElement).disabled).toBe(false);
     // Connect again starts afresh: the wait before it is not read for this one.
     recorder.wait = "waiting";
     fireEvent.click(again);
-    await view.findByText("Confirm in the OpenBot Recorder tab that opened.");
+    await view.findByText("请在刚打开的 OpenBot 录制器标签页里确认。");
     await new Promise((resolve) => setTimeout(resolve, 1200));
     expect(
-      view.getByText("Confirm in the OpenBot Recorder tab that opened."),
+      view.getByText("请在刚打开的 OpenBot 录制器标签页里确认。"),
     ).toBeTruthy();
   });
 
@@ -276,15 +264,13 @@ test("a trusted OpenBot's connect, answered connected with no Connect page, read
     subtree: true,
     characterData: true,
   });
-  fireEvent.click(
-    await view.findByRole("button", { name: "Connect this browser" }),
-  );
+  fireEvent.click(await view.findByRole("button", { name: "连接当前浏览器" }));
   // Well inside the 2 s the row asks in while it waits on a Connect page: it was never waiting on one.
-  await view.findByText("Connected", {}, { timeout: 1000 });
+  await view.findByText("已连接", {}, { timeout: 1000 });
   watch.disconnect();
   expect(
     said.some((text) =>
-      text.includes("Confirm in the OpenBot Recorder tab that opened."),
+      text.includes("请在刚打开的 OpenBot 录制器标签页里确认。"),
     ),
   ).toBe(false);
   expect(view.queryByRole("button")).toBeNull();
@@ -297,14 +283,12 @@ test("a connection from another copy (Chrome connected, this is Edge) neither sh
     connect: { ok: true, awaitingConfirmation: true },
   };
   const view = draw();
-  fireEvent.click(
-    await view.findByRole("button", { name: "Connect this browser" }),
-  );
-  await view.findByText("Confirm in the OpenBot Recorder tab that opened.");
+  fireEvent.click(await view.findByRole("button", { name: "连接当前浏览器" }));
+  await view.findByText("请在刚打开的 OpenBot 录制器标签页里确认。");
   await new Promise((resolve) => setTimeout(resolve, 2500));
-  expect(view.queryByText("Connected")).toBeNull();
+  expect(view.queryByText("已连接")).toBeNull();
   expect(
-    view.getByText("Confirm in the OpenBot Recorder tab that opened."),
+    view.getByText("请在刚打开的 OpenBot 录制器标签页里确认。"),
   ).toBeTruthy();
 });
 
@@ -315,7 +299,7 @@ test("a copy that answers the ping with its install id and a matching connection
     connect: { ok: true },
   };
   const view = draw();
-  await view.findByText("Connected");
+  await view.findByText("已连接");
 });
 
 test("a pinned-elsewhere refusal shows its sentence", async () => {
@@ -324,12 +308,8 @@ test("a pinned-elsewhere refusal shows its sentence", async () => {
     connect: { ok: false, error: "pinned-elsewhere" },
   };
   const view = draw();
-  fireEvent.click(
-    await view.findByRole("button", { name: "Connect this browser" }),
-  );
-  await view.findByText(
-    "Your organization set the Recorder to another OpenBot.",
-  );
+  fireEvent.click(await view.findByRole("button", { name: "连接当前浏览器" }));
+  await view.findByText("你的组织把录制器设成了连接另一个熊宝。");
 });
 
 test("a throttled connect says plainly when to try again, not that another request is under way", async () => {
@@ -339,40 +319,30 @@ test("a throttled connect says plainly when to try again, not that another reque
   };
   const view = draw();
   const button = await view.findByRole("button", {
-    name: "Connect this browser",
+    name: "连接当前浏览器",
   });
   fireEvent.click(button);
-  await view.findByText(
-    "Too many connect requests in a short time. Try again in 7 minutes.",
-  );
+  await view.findByText("短时间内连接请求太多。请 7 分钟后再试。");
   expect(view.queryByText(/finishing another connect request/)).toBeNull();
 
   // Under a minute left reads as one minute, never zero.
   recorder.connect = { ok: false, error: "throttled", retryAfterMs: 20_000 };
   fireEvent.click(button);
-  await view.findByText(
-    "Too many connect requests in a short time. Try again in 1 minute.",
-  );
+  await view.findByText("短时间内连接请求太多。请 1 分钟后再试。");
 });
 
 test("a connect the Recorder is still finishing keeps its own sentence", async () => {
   recorder = { ping: { ok: true }, connect: { ok: false, error: "busy" } };
   const view = draw();
-  fireEvent.click(
-    await view.findByRole("button", { name: "Connect this browser" }),
-  );
-  await view.findByText(
-    "The Recorder is finishing another connect request. Try again in a moment.",
-  );
+  fireEvent.click(await view.findByRole("button", { name: "连接当前浏览器" }));
+  await view.findByText("录制器正在处理另一个连接请求。请稍后再试。");
 });
 
 test("an answer with no sentence of its own still gets one", async () => {
   recorder = { ping: { ok: true }, connect: { ok: false, error: "invalid" } };
   const view = draw();
-  fireEvent.click(
-    await view.findByRole("button", { name: "Connect this browser" }),
-  );
-  await view.findByText("The Recorder didn't accept the request. Try again.");
+  fireEvent.click(await view.findByRole("button", { name: "连接当前浏览器" }));
+  await view.findByText("录制器没有接受这个请求。请再试一次。");
 });
 
 test("the OpenBot browser's connection says it is the person's OpenBot browser", async () => {
@@ -390,9 +360,7 @@ test("the OpenBot browser's connection says it is the person's OpenBot browser",
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(String(connections[0]?.createdAt)));
-  expect(
-    view.getByText(`Your OpenBot browser, connected ${at}, never used`),
-  ).toBeTruthy();
+  expect(view.getByText(`你的熊宝浏览器，${at} 连接，从未使用`)).toBeTruthy();
 });
 
 test("a browser recording now says so instead of when it was last used, and the list keeps itself current while open", async () => {
@@ -419,7 +387,7 @@ test("a browser recording now says so instead of when it was last used, and the 
       dateStyle: "medium",
       timeStyle: "short",
     }).format(new Date(String(connections[0]?.createdAt)));
-    await view.findByText(/^Connected .* from OpenBot, last used /);
+    await view.findByText(/^.* 连接，来自熊宝网页，最近使用：/);
     // The browser starts recording; the screen hears of it on its next ask, with no reload.
     connections = [connection({ lastUsedAt, recording: true })];
     expect(polls.length).toBeGreaterThan(0);
@@ -427,9 +395,9 @@ test("a browser recording now says so instead of when it was last used, and the 
     act(() => {
       for (const poll of polls) poll();
     });
-    await view.findByText(`Connected ${at} from OpenBot, recording now`);
+    await view.findByText(`${at} 连接，来自熊宝网页，正在录制`);
     expect(connectionsFetches).toBeGreaterThan(asked);
-    expect(view.queryByText(/last used/)).toBeNull();
+    expect(view.queryByText(/最近使用/)).toBeNull();
   } finally {
     globalThis.setInterval = realSetInterval;
   }
@@ -443,23 +411,19 @@ test("Disconnect sends the DELETE and the row disappears", async () => {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(String(connections[0]?.createdAt)));
-  expect(
-    view.getByText(`Connected ${at} from OpenBot, never used`),
-  ).toBeTruthy();
-  fireEvent.click(
-    view.getByRole("button", { name: "Disconnect Chrome on Mac" }),
-  );
+  expect(view.getByText(`${at} 连接，来自熊宝网页，从未使用`)).toBeTruthy();
+  fireEvent.click(view.getByRole("button", { name: "断开Chrome on Mac" }));
   // Asked first: it signs that browser out and stops a recording running there.
   const dialog = await view.findByRole("dialog", {
-    name: "Disconnect Chrome on Mac?",
+    name: "断开Chrome on Mac？",
   });
   // Named as the row is: it is not known to be this browser, so the dialog does not say it is.
   expect(dialog.textContent).toContain(
-    "OpenBot signs the Recorder in Chrome on Mac out. It records nothing for you until you connect it again, and a recording running there stops.",
+    "熊宝会让Chrome on Mac里的录制器退出登录。重新连接之前，它不会再为你录制任何内容，正在那里进行的录制也会停止。",
   );
-  expect(dialog.textContent).not.toContain("this browser");
+  expect(dialog.textContent).not.toContain("当前浏览器");
   expect(sent).toEqual([]);
-  fireEvent.click(within(dialog).getByRole("button", { name: "Disconnect" }));
+  fireEvent.click(within(dialog).getByRole("button", { name: "断开" }));
   await waitFor(() =>
     expect(sent).toContainEqual({
       path: "/api/recorder/connections/conn-1",
@@ -467,7 +431,7 @@ test("Disconnect sends the DELETE and the row disappears", async () => {
       body: undefined,
     }),
   );
-  await view.findByText("No browsers connected yet.");
+  await view.findByText("还没有连接任何浏览器。");
   expect(view.queryByText("Chrome on Mac")).toBeNull();
   expect(view.queryByRole("dialog")).toBeNull();
 });
@@ -476,19 +440,17 @@ test("Cancel disconnects nothing, and a refused Disconnect says why in the dialo
   connections = [connection()];
   const view = draw(<ConnectedBrowsers />);
   fireEvent.click(
-    await view.findByRole("button", { name: "Disconnect Chrome on Mac" }),
+    await view.findByRole("button", { name: "断开Chrome on Mac" }),
   );
   let dialog = await view.findByRole("dialog");
-  fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+  fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
   await waitFor(() => expect(view.queryByRole("dialog")).toBeNull());
   expect(sent).toEqual([]);
 
   refusedDelete = "That browser is already disconnected.";
-  fireEvent.click(
-    view.getByRole("button", { name: "Disconnect Chrome on Mac" }),
-  );
+  fireEvent.click(view.getByRole("button", { name: "断开Chrome on Mac" }));
   dialog = await view.findByRole("dialog");
-  fireEvent.click(within(dialog).getByRole("button", { name: "Disconnect" }));
+  fireEvent.click(within(dialog).getByRole("button", { name: "断开" }));
   expect((await within(dialog).findByRole("alert")).textContent).toBe(
     "That browser is already disconnected.",
   );
@@ -515,18 +477,18 @@ test("the Disconnect dialog says this browser only on this browser's row, and na
     fireEvent.click(await view.findByRole("button", { name: button }));
     const dialog = await view.findByRole("dialog");
     const text = dialog.querySelector("p")?.textContent ?? "";
-    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
     await waitFor(() => expect(view.queryByRole("dialog")).toBeNull());
     return text;
   };
-  expect(await said("Disconnect Chrome on Mac · This browser")).toStartWith(
-    "OpenBot signs the Recorder in this browser out.",
+  expect(await said("断开Chrome on Mac · 当前浏览器")).toStartWith(
+    "熊宝会让当前浏览器里的录制器退出登录。",
   );
-  expect(await said("Disconnect Edge on Windows")).toStartWith(
-    "OpenBot signs the Recorder in Edge on Windows out.",
+  expect(await said("断开Edge on Windows")).toStartWith(
+    "熊宝会让Edge on Windows里的录制器退出登录。",
   );
-  expect(await said("Disconnect OpenBot browser")).toStartWith(
-    "OpenBot signs the Recorder in your OpenBot browser out.",
+  expect(await said("断开OpenBot browser")).toStartWith(
+    "熊宝会让你的熊宝浏览器里的录制器退出登录。",
   );
   expect(sent).toEqual([]);
 });
@@ -549,11 +511,11 @@ test("disconnecting one browser leaves every other row's Disconnect as it was", 
   );
   const view = draw(<ConnectedBrowsers />);
   fireEvent.click(
-    await view.findByRole("button", { name: "Disconnect Chrome on Mac" }),
+    await view.findByRole("button", { name: "断开Chrome on Mac" }),
   );
   fireEvent.click(
     within(await view.findByRole("dialog")).getByRole("button", {
-      name: "Disconnect",
+      name: "断开",
     }),
   );
   // The dialog stays open while it disconnects, so the rows behind it are out of reach: read them all the same.
@@ -561,7 +523,7 @@ test("disconnecting one browser leaves every other row's Disconnect as it was", 
     expect(
       (
         view.getByRole("button", {
-          name: "Disconnect Chrome on Mac",
+          name: "断开Chrome on Mac",
           hidden: true,
         }) as HTMLButtonElement
       ).disabled,
@@ -570,7 +532,7 @@ test("disconnecting one browser leaves every other row's Disconnect as it was", 
   expect(
     (
       view.getByRole("button", {
-        name: "Disconnect Edge on Windows",
+        name: "断开Edge on Windows",
         hidden: true,
       }) as HTMLButtonElement
     ).disabled,
@@ -583,7 +545,7 @@ test("disconnecting one browser leaves every other row's Disconnect as it was", 
   expect(
     (
       view.getByRole("button", {
-        name: "Disconnect Edge on Windows",
+        name: "断开Edge on Windows",
       }) as HTMLButtonElement
     ).disabled,
   ).toBe(false);
@@ -600,10 +562,8 @@ test("in Chrome without the Recorder, This browser offers its store page in a ne
         <Toaster />
       </QueryClientProvider>,
     );
-    await view.findByText(
-      "The OpenBot Recorder isn't installed in this browser.",
-    );
-    const link = view.getByRole("link", { name: "Add to Chrome" });
+    await view.findByText("当前浏览器还没装 OpenBot 录制器。");
+    const link = view.getByRole("link", { name: "添加到 Chrome" });
     expect(link.getAttribute("href")).toBe(
       `https://chromewebstore.google.com/detail/${"s".repeat(32)}`,
     );
@@ -626,7 +586,7 @@ test("Settings, Browsers says everything the Recorder collects before the first 
   };
   const view = draw(<BrowserSections />);
   const connect = await view.findByRole("button", {
-    name: "Connect this browser",
+    name: "连接当前浏览器",
   });
   const lead = view.getByText(RECORDER_DISCLOSURE);
   for (const { title, description } of RECORDER_COLLECTS) {
@@ -655,7 +615,7 @@ async function browsersPage(edition: "team" | "personal") {
   };
   queryClient.setQueryData(deploymentKeys.capabilities(), { edition });
   const view = draw(<BrowserSections />);
-  await view.findByRole("button", { name: "Connect this browser" });
+  await view.findByRole("button", { name: "连接当前浏览器" });
   return view;
 }
 
@@ -688,7 +648,7 @@ test("when the connections cannot be loaded This browser says it cannot tell, an
   connectionsFail = true;
   const view = draw();
   await view.findByText(
-    "Couldn't check whether this browser is connected. Reload the page.",
+    "没能确认当前浏览器是否已连接。请刷新页面。",
     {},
     { timeout: 4000 },
   );
@@ -718,9 +678,9 @@ test("a connect request nobody confirms expires after five minutes and stops pol
   try {
     const view = draw();
     fireEvent.click(
-      await view.findByRole("button", { name: "Connect this browser" }),
+      await view.findByRole("button", { name: "连接当前浏览器" }),
     );
-    await view.findByText("Confirm in the OpenBot Recorder tab that opened.");
+    await view.findByText("请在刚打开的 OpenBot 录制器标签页里确认。");
     expect(expiries.length).toBeGreaterThan(0);
     const polling = connectionsFetches;
     await new Promise((resolve) => realSetTimeout(resolve, 2500));
@@ -728,7 +688,7 @@ test("a connect request nobody confirms expires after five minutes and stops pol
     act(() => {
       for (const fire of expiries) fire();
     });
-    await view.findByText("The request expired. Try again.");
+    await view.findByText("请求已过期。请再试一次。");
     const stopped = connectionsFetches;
     await new Promise((resolve) => realSetTimeout(resolve, 2500));
     expect(connectionsFetches).toBe(stopped);
@@ -770,16 +730,16 @@ test("the copy in this browser is marked among connected browsers that share a n
     connect: { ok: true },
   };
   const view = draw(<BrowserSections />);
-  await view.findByText("Google Chrome on macOS · This browser");
+  await view.findByText("Google Chrome on macOS · 当前浏览器");
   expect(view.getAllByText("Google Chrome on macOS")).toHaveLength(2);
   expect(
     view.getByRole("button", {
-      name: "Disconnect Google Chrome on macOS · This browser",
+      name: "断开Google Chrome on macOS · 当前浏览器",
     }),
   ).toBeTruthy();
   // Two copies connected two hours ago, a minute apart, read differently.
   const descriptions = view
-    .getAllByText(/^Connected .* from OpenBot, last used /)
+    .getAllByText(/^.* 连接，来自熊宝网页，最近使用：/)
     .map((element) => element.textContent);
   expect(new Set(descriptions).size).toBe(3);
 });

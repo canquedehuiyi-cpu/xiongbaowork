@@ -169,19 +169,19 @@ test("lists who asked for what, for which Bot, and when — and nothing about an
     ],
   });
   const view = draw(() => <AccessRequestsSection app="composio-gmail" />);
-  expect(await view.findByText("Give Gmail to Expenses")).toBeTruthy();
-  expect(view.getByText("Turn on Gmail for Expenses")).toBeTruthy();
-  expect(view.getByText("Connect the shared Gmail account")).toBeTruthy();
-  expect(view.getAllByText(/Ada asked 5 minutes ago/)).toHaveLength(2);
+  expect(await view.findByText("把 Gmail 交给Expenses")).toBeTruthy();
+  expect(view.getByText("为Expenses打开 Gmail")).toBeTruthy();
+  expect(view.getByText("连接共享的 Gmail 账号")).toBeTruthy();
+  expect(view.getAllByText(/Ada于5分钟前申请/)).toHaveLength(2);
   // No name on the request falls back to the address they asked from.
-  expect(view.getByText(/ada@example\.test asked/)).toBeTruthy();
+  expect(view.getByText(/ada@example\.test于/)).toBeTruthy();
   expect(view.queryByText(/connected/i)).toBeNull();
 });
 
 test("approve does what was asked through the approve route", async () => {
   const sent = serving({ requests: [request()] });
   const view = draw(() => <AccessRequestsSection app="composio-gmail" />);
-  fireEvent.click(await view.findByRole("button", { name: "Approve" }));
+  fireEvent.click(await view.findByRole("button", { name: "批准" }));
   await waitFor(() =>
     expect(sent).toContain("POST /api/plugins/access-requests/req_1/approve"),
   );
@@ -199,28 +199,28 @@ test("an approval the server cannot complete says why, on the request, and leave
     },
   });
   const view = draw(() => <AccessRequestsSection app="composio-gmail" />);
-  fireEvent.click(await view.findByRole("button", { name: "Approve" }));
+  fireEvent.click(await view.findByRole("button", { name: "批准" }));
   const row = within(
     (await view.findByRole("alert")).closest("[data-request]") as HTMLElement,
   );
   expect(row.getByRole("alert").textContent).toMatch(
     /^The shared Gmail account is not connected yet\./,
   );
-  expect(row.getByRole("button", { name: "Approve" })).toBeTruthy();
+  expect(row.getByRole("button", { name: "批准" })).toBeTruthy();
 });
 
 test("a grant says approving gives the Bot read-only actions, and links to where the others are chosen", async () => {
   serving({ requests: [request()] });
   const view = draw(() => <AccessRequestsSection app="composio-gmail" />);
-  const element = (await view.findByText("Give Gmail to Expenses")).closest(
+  const element = (await view.findByText("把 Gmail 交给Expenses")).closest(
     "[data-request]",
   ) as HTMLElement;
   const row = within(element);
   expect(element.textContent).toContain(
-    "Approving gives Expenses only Gmail's read-only actions. Choose any others on the Bot's page under Gmail.",
+    "批准后，Expenses只会得到 Gmail 的只读操作。其他操作可以在员工主页的 Gmail 分区里选择。",
   );
   const page = row.getByRole("link", {
-    name: "the Bot's page under Gmail",
+    name: "员工主页的 Gmail 分区",
   });
   expect(page.getAttribute("href")).toBe(
     "/admin/plugins/composio-gmail/bots/expenses",
@@ -231,13 +231,13 @@ test("switching an app on for a Bot says the same, with no link to a page the ap
   serving({ requests: [request({ kind: "enable" })] });
   const view = draw(() => <AccessRequestsSection app="composio-gmail" />);
   const row = within(
-    (await view.findByText("Turn on Gmail for Expenses")).closest(
+    (await view.findByText("为Expenses打开 Gmail")).closest(
       "[data-request]",
     ) as HTMLElement,
   );
   expect(
     row.getByText(
-      /Approving gives Expenses only Gmail's read-only actions\. Choose any others on the Bot's page under Gmail\./,
+      /批准后，Expenses只会得到 Gmail 的只读操作。其他操作可以在员工主页的 Gmail 分区里选择。/,
     ),
   ).toBeTruthy();
   expect(row.queryByRole("link")).toBeNull();
@@ -246,8 +246,8 @@ test("switching an app on for a Bot says the same, with no link to a page the ap
 test("connecting the shared account says nothing about actions", async () => {
   serving({ requests: [request({ kind: "connect_shared" })] });
   const view = draw(() => <AccessRequestsSection app="composio-gmail" />);
-  await view.findByText("Connect the shared Gmail account");
-  expect(view.queryByText(/read-only/)).toBeNull();
+  await view.findByText("连接共享的 Gmail 账号");
+  expect(view.queryByText(/只读/)).toBeNull();
 });
 
 test("an app with no read-only actions is refused on the row, which stays", async () => {
@@ -262,17 +262,17 @@ test("an app with no read-only actions is refused on the row, which stays", asyn
     },
   });
   const view = draw(() => <AccessRequestsSection app="composio-gmail" />);
-  fireEvent.click(await view.findByRole("button", { name: "Approve" }));
+  fireEvent.click(await view.findByRole("button", { name: "批准" }));
   expect((await view.findByRole("alert")).textContent).toMatch(
     /^Gmail has no read-only actions to grant\./,
   );
-  expect(view.getByText("Give Gmail to Expenses")).toBeTruthy();
+  expect(view.getByText("把 Gmail 交给Expenses")).toBeTruthy();
 });
 
 test("dismiss goes to the dismiss route", async () => {
   const sent = serving({ requests: [request()] });
   const view = draw(() => <AccessRequestsSection app="composio-gmail" />);
-  fireEvent.click(await view.findByRole("button", { name: "Dismiss" }));
+  fireEvent.click(await view.findByRole("button", { name: "忽略" }));
   await waitFor(() =>
     expect(sent).toContain("POST /api/plugins/access-requests/req_1/dismiss"),
   );
@@ -287,7 +287,7 @@ test("nothing waiting draws no section at all", async () => {
     ),
   );
   await settleReactWork();
-  expect(view.queryByText("Requests")).toBeNull();
+  expect(view.queryByText("申请")).toBeNull();
 });
 
 test("the Plugins list puts every request first and counts them on each app's row", async () => {
@@ -306,8 +306,8 @@ test("the Plugins list puts every request first and counts them on each app's ro
   });
   const Page = PluginsIndexRoute.options.component as () => ReactNode;
   const view = draw(Page);
-  expect(await view.findByText("Requests")).toBeTruthy();
-  expect(view.getByText("Turn on Slack for Expenses")).toBeTruthy();
+  expect(await view.findByText("申请")).toBeTruthy();
+  expect(view.getByText("为Expenses打开 Slack")).toBeTruthy();
   const gmail = within(await view.findByTestId("plugin-composio-gmail"));
   expect(gmail.getByText("2 requests")).toBeTruthy();
   const notion = within(view.getByTestId("plugin-notion"));

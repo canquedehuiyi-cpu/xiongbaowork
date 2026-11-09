@@ -69,12 +69,10 @@ test("the Back end says what it keeps without mentioning memory", async () => {
       <Page />
     </QueryClientProvider>,
   );
-  const heading = await view.findByRole("heading", { name: "Back end" });
+  const heading = await view.findByRole("heading", { name: "后端" });
   const section = heading.closest("section") as HTMLElement;
   expect(
-    within(section).getByText(
-      "Keeps your Bots' conversations and skills. OpenBot uses it while it runs.",
-    ),
+    within(section).getByText("保存员工的对话和技能。熊宝运行时会用到它。"),
   ).toBeTruthy();
   expect(
     await within(section).findByText("Conversations and learning"),

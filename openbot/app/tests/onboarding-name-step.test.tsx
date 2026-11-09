@@ -92,17 +92,17 @@ test("it starts empty for a placeholder profile, and Get started waits for a nam
   const view = draw(async () => {});
 
   expect(
-    view.getByRole("heading", { name: "What should we call you?" }),
+    view.getByRole("heading", { name: "我们该怎么称呼你？" }),
   ).toBeTruthy();
-  expect((view.getByLabelText("Name") as HTMLInputElement).value).toBe("");
-  expect(primary(view).textContent).toBe("Get started");
+  expect((view.getByLabelText("名字") as HTMLInputElement).value).toBe("");
+  expect(primary(view).textContent).toBe("开始使用");
   expect(primary(view).disabled).toBe(true);
 });
 
 test("a saved name is kept when the step is revisited", () => {
   const view = draw(async () => {}, false);
 
-  expect((view.getByLabelText("Name") as HTMLInputElement).value).toBe("Sam");
+  expect((view.getByLabelText("名字") as HTMLInputElement).value).toBe("Sam");
   expect(primary(view).disabled).toBe(false);
 });
 
@@ -134,12 +134,12 @@ test("Get started saves first, then finishes, and reads All set while the orb fi
   }, false);
 
   fireEvent.click(primary(view));
-  await waitFor(() => expect(primary(view).textContent).toBe("Saving…"));
+  await waitFor(() => expect(primary(view).textContent).toBe("正在保存…"));
   expect(primary(view).disabled).toBe(true);
   expect(finishes).toBe(0);
 
   release(Response.json({ profile: { name: "Sam", needsName: false } }));
-  await waitFor(() => expect(primary(view).textContent).toBe("All set"));
+  await waitFor(() => expect(primary(view).textContent).toBe("好了"));
   // Done, not a disabled Saving…: green with a check while the orb plays.
   expect(primary(view).hasAttribute("data-done")).toBe(true);
   expect(primary(view).disabled).toBe(false);
@@ -167,8 +167,8 @@ test("a save that fails is said under the field, and the step stays", async () =
 
   expect((await view.findByRole("alert")).textContent).toBe("Save failed");
   expect(finishes).toBe(0);
-  expect(primary(view).textContent).toBe("Get started");
-  expect((view.getByLabelText("Name") as HTMLInputElement).value).toBe("Sam");
+  expect(primary(view).textContent).toBe("开始使用");
+  expect((view.getByLabelText("名字") as HTMLInputElement).value).toBe("Sam");
 });
 
 test("a completion that fails is said under the field too", async () => {
@@ -182,7 +182,7 @@ test("a completion that fails is said under the field too", async () => {
   expect((await view.findByRole("alert")).textContent).toBe(
     "Onboarding could not be saved",
   );
-  expect(primary(view).textContent).toBe("Get started");
+  expect(primary(view).textContent).toBe("开始使用");
 });
 
 test("the orb is OpenBot's own, listening, and settles into done when onboarding ends", () => {

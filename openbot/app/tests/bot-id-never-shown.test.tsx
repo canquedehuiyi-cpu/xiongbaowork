@@ -122,7 +122,7 @@ test("a Bot hidden from the sidebar is still named, and a deleted one is not its
   );
   const { result } = renderHook(() => useBotNames(), { wrapper });
   expect(result.current(ID)).toBe(NAME);
-  expect(result.current("deleted-bot")).toBe("A Bot no longer here");
+  expect(result.current("deleted-bot")).toBe("已不在的员工");
 });
 
 test("before the Bots load, a Bot is named nothing rather than its id", () => {

@@ -90,9 +90,5 @@ test("once somebody has asked for something, notifications are offered above the
   const offer = prompt(view);
   expect(offer).not.toBeNull();
   expect(offer?.closest('[data-slot="composer-column"]')).not.toBeNull();
-  expect(
-    view.getByText(
-      "Get notified when your Bot finishes or needs your approval.",
-    ),
-  ).toBeTruthy();
+  expect(view.getByText("员工做完或需要你批准时，通知你。")).toBeTruthy();
 });

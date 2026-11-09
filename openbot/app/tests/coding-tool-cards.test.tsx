@@ -103,7 +103,7 @@ function cards(view: ReturnType<typeof draw>): (string | null)[] {
     .queryAllByRole("region")
     .map((region) => region.getAttribute("aria-label"))
     .filter((label) =>
-      /^(Ran a command|Edited a file|Wrote a file)$/.test(label ?? ""),
+      /^(执行了命令|编辑了文件|写入了文件)$/.test(label ?? ""),
     );
 }
 
@@ -129,47 +129,47 @@ const reloaded = (call: RecordedCall) => draw(turn([call], [call.history]));
 
 test("a command shows what it ran and what it printed", async () => {
   const view = live(recorded.run);
-  const command = await card(view, "Ran a command");
+  const command = await card(view, "执行了命令");
   expect(
     command.getByText("python3 /private/tmp/claude-harness-run/work4/greet.py"),
   );
   expect(command.getByText(/Hi, World!\s+Bye, World!/)).toBeTruthy();
   // Done says nothing beside the command: the output is the answer.
-  expect(command.queryByText("Running")).toBeNull();
-  expect(command.queryByText(/Exit code/)).toBeNull();
+  expect(command.queryByText("正在运行")).toBeNull();
+  expect(command.queryByText(/退出码/)).toBeNull();
 });
 
 test("a command still running says so, and one its turn left behind says it never finished", async () => {
   const running = draw(turn([recorded.run], [undefined]), true);
   expect(
-    (await card(running, "Ran a command")).getByText("Running"),
+    (await card(running, "执行了命令")).getByText("正在运行"),
   ).toBeTruthy();
   cleanup();
 
   const stopped = draw(turn([recorded.run], [undefined]), false);
-  const command = await card(stopped, "Ran a command");
-  expect(command.getByText("Not completed")).toBeTruthy();
-  expect(command.queryByText("Running")).toBeNull();
+  const command = await card(stopped, "执行了命令");
+  expect(command.getByText("未完成")).toBeTruthy();
+  expect(command.queryByText("正在运行")).toBeNull();
 });
 
 test("long output shows its first lines and opens to the rest", async () => {
   const view = live(recorded.longOutput);
-  const command = await card(view, "Ran a command");
+  const command = await card(view, "执行了命令");
   expect(shownLines(view)).toEqual(["1", "2", "3", "4", "5", "6"]);
 
-  fireEvent.click(command.getByRole("button", { name: "Show 34 more lines" }));
+  fireEvent.click(command.getByRole("button", { name: "再显示 34 行" }));
   expect(shownLines(view)).toHaveLength(40);
   expect(shownLines(view).at(-1)).toBe("40");
 
-  fireEvent.click(command.getByRole("button", { name: "Show less" }));
+  fireEvent.click(command.getByRole("button", { name: "收起" }));
   expect(shownLines(view)).toHaveLength(6);
 });
 
 test("a failed command shows its exit code, live and after a reload", async () => {
   for (const draw of [live, reloaded]) {
     const view = draw(recorded.failedCommand);
-    const command = await card(view, "Ran a command");
-    expect(command.getByText("Exit code 1")).toBeTruthy();
+    const command = await card(view, "执行了命令");
+    expect(command.getByText("退出码 1")).toBeTruthy();
     expect(
       command.getByText("ls: /definitely/not/here: No such file or directory"),
     ).toBeTruthy();
@@ -181,9 +181,9 @@ test("a command that printed JSON with an error field still worked", async () =>
   const view = draw(
     turn([constructed.apiError], [constructed.apiError.result]),
   );
-  const command = await card(view, "Ran a command");
-  expect(command.queryByText("Didn't work")).toBeNull();
-  expect(command.queryByText(/Exit code/)).toBeNull();
+  const command = await card(view, "执行了命令");
+  expect(command.queryByText("没成功")).toBeNull();
+  expect(command.queryByText(/退出码/)).toBeNull();
   expect(
     command.getByText('{"error": true, "message": "rate limited"}'),
   ).toBeTruthy();
@@ -191,7 +191,7 @@ test("a command that printed JSON with an error field still worked", async () =>
 
 test("an edit is a diff of what it replaced, in red, and what it put in, in green", async () => {
   const view = live(recorded.edit);
-  const edit = await card(view, "Edited a file");
+  const edit = await card(view, "编辑了文件");
   expect(edit.getByText("greet.py").getAttribute("title")).toBe(
     "/private/tmp/claude-harness-run/work4/greet.py",
   );
@@ -209,35 +209,33 @@ test("an edit that replaced every occurrence says so", async () => {
   const view = draw(
     turn([constructed.replaceAll], [constructed.replaceAll.result]),
   );
-  const edit = await card(view, "Edited a file");
-  expect(edit.getByText("All occurrences")).toBeTruthy();
+  const edit = await card(view, "编辑了文件");
+  expect(edit.getByText("全部替换")).toBeTruthy();
   cleanup();
 
   // One that replaced a single occurrence says nothing about it.
   const single = live(recorded.edit);
-  expect(
-    (await card(single, "Edited a file")).queryByText("All occurrences"),
-  ).toBeNull();
+  expect((await card(single, "编辑了文件")).queryByText("全部替换")).toBeNull();
 });
 
 test("an edit Claude Code refused says it didn't work, live and after a reload", async () => {
   for (const draw of [live, reloaded]) {
     const view = draw(recorded.refusedEdit);
-    const edit = await card(view, "Edited a file");
-    expect(edit.getByText("Didn't work")).toBeTruthy();
+    const edit = await card(view, "编辑了文件");
+    expect(edit.getByText("没成功")).toBeTruthy();
     cleanup();
   }
 });
 
 test("a written file is all added lines, folded after the first few", async () => {
   const view = live(recorded.write);
-  const write = await card(view, "Wrote a file");
+  const write = await card(view, "写入了文件");
   // 38 lines and a final newline.
   expect(write.getByText("+38")).toBeTruthy();
   expect(write.queryByText("Removed:")).toBeNull();
   expect(write.getAllByText("Added:")).toHaveLength(12);
 
-  fireEvent.click(write.getByRole("button", { name: "Show 26 more lines" }));
+  fireEvent.click(write.getByRole("button", { name: "再显示 26 行" }));
   expect(write.getAllByText("Added:")).toHaveLength(38);
 });
 
@@ -245,7 +243,7 @@ test("several edits to one file are one diff, counted together", async () => {
   const view = draw(
     turn([documented.multiEdit], [documented.multiEdit.result]),
   );
-  const edit = await card(view, "Edited a file");
+  const edit = await card(view, "编辑了文件");
   expect(edit.getByText("+2")).toBeTruthy();
   expect(edit.getByText("−2")).toBeTruthy();
   expect(edit.getAllByText("Removed:")).toHaveLength(2);
@@ -270,18 +268,18 @@ test("a run of reads and searches is one line, as Claude Code folds it, that ope
       ],
     ),
   );
-  const line = await view.findByText("Read 1 file and searched for 4 patterns");
+  const line = await view.findByText("读了 1 个文件，搜索了 4 个模式");
   // One row for the run, not five.
   expect(cards(view)).toEqual([]);
   (line.closest("details") as HTMLDetailsElement).open = true;
   // Each step says what it found, as it would standing alone. Read numbers the empty line after the
   // final newline too.
   expect(readableLines(view.container, "ol > li details > summary")).toEqual([
-    "Read 39 linesgreet.py",
-    'Found 2 files"def " in workspace',
-    'Found 2 matches"def " in greet.py',
-    'Found no matches"class "',
-    "Found 2 files**/*.py",
+    "读取了 39 行greet.py",
+    "找到 2 个文件「def 」，在 workspace 中",
+    "找到 2 处匹配「def 」，在 greet.py 中",
+    "没找到匹配「class 」",
+    "找到 2 个文件**/*.py",
   ]);
 });
 
@@ -304,16 +302,12 @@ test("a coding turn folds only its reads and searches, and keeps every change an
       calls.map((call) => call.history),
     ),
   );
-  await view.findByText("To-dos");
-  expect(cards(view)).toEqual([
-    "Wrote a file",
-    "Edited a file",
-    "Ran a command",
-  ]);
+  await view.findByText("待办");
+  expect(cards(view)).toEqual(["写入了文件", "编辑了文件", "执行了命令"]);
   // A lone read keeps its own line; the two listings fold into one, which says both didn't work.
-  expect(view.getByText("Read 39 lines")).toBeTruthy();
-  expect(view.getByText("Listed 2 directories")).toBeTruthy();
-  expect(view.getByText("2 issues")).toBeTruthy();
+  expect(view.getByText("读取了 39 行")).toBeTruthy();
+  expect(view.getByText("列出了 2 个目录")).toBeTruthy();
+  expect(view.getByText("2 个问题")).toBeTruthy();
 });
 
 test("a tool that shares a Claude Code name but not its arguments is drawn as any other tool", async () => {
@@ -321,28 +315,28 @@ test("a tool that shares a Claude Code name but not its arguments is drawn as an
   const other = { name: "Bash", arguments: JSON.stringify({ cmd: "ls" }) };
   const view = draw(turn([other], ["greet.py"]));
   await view.findByText("Bash");
-  expect(view.queryByRole("region", { name: "Ran a command" })).toBeNull();
+  expect(view.queryByRole("region", { name: "执行了命令" })).toBeNull();
   cleanup();
 
   // And folds with its neighbours, as a tool the app has no component for does.
   const two = draw(turn([other, other], ["greet.py", "greet.py"]));
-  expect(await two.findByText("Used 2 tools")).toBeTruthy();
+  expect(await two.findByText("用了 2 个工具")).toBeTruthy();
   expect(cards(two)).toEqual([]);
 });
 
 test("a plan is a checklist of done, in progress and not started", async () => {
   const view = live(recorded.todoProgress);
   const plan = within(
-    (await view.findByText("To-dos")).closest("figure") as HTMLElement,
+    (await view.findByText("待办")).closest("figure") as HTMLElement,
   );
-  expect(plan.getByText("2 of 4")).toBeTruthy();
+  expect(plan.getByText("2 / 4")).toBeTruthy();
   // The tick drawn in the box is decoration; the state is said in words.
   const items = readableLines(plan.getByRole("list"), "li");
   expect(items).toEqual([
-    "Write greet.py module, Done",
-    "Edit and modify greet.py, Done",
-    "Test greet.py using Grep and Glob tools, In progress",
-    "Run greet.py and other bash commands, Not started",
+    "Write greet.py module, 已完成",
+    "Edit and modify greet.py, 已完成",
+    "Test greet.py using Grep and Glob tools, 进行中",
+    "Run greet.py and other bash commands, 未开始",
   ]);
 });
 

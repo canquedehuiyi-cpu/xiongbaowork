@@ -188,7 +188,7 @@ export function TeachSteps({ state }: { state: BrowserApiState }) {
             {recording.starting ? "正在打开…" : OPEN_AND_RECORD}
           </Button>
           <span className="max-w-[90%] truncate rounded-full bg-background px-3 py-1 text-muted-foreground text-xs shadow-sm">
-            「{recording.title.trim()}」 · 讲解
+            「{recording.title.trim()}」 · 讲解：
             {choice.narration === "on" ? "开" : "关"}
           </span>
         </div>

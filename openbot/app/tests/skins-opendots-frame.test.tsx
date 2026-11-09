@@ -527,9 +527,7 @@ describe("OpenDots frame", () => {
     );
     // No second screen: the frame's own pane stays shut where the page has one.
     expect(view.queryByTestId("opendots-computer-pane")).toBeNull();
-    await user.click(
-      await view.findByRole("button", { name: "隐藏电脑" }),
-    );
+    await user.click(await view.findByRole("button", { name: "隐藏电脑" }));
     await waitFor(() =>
       expect(
         (router.state.location.search as { watch?: boolean }).watch,
@@ -549,18 +547,14 @@ describe("OpenDots frame", () => {
     expect(
       within(pane).getByRole("region", { name: "Computer sidebar" }),
     ).toBeTruthy();
-    await user.click(
-      within(pane).getByRole("button", { name: "关闭电脑" }),
-    );
+    await user.click(within(pane).getByRole("button", { name: "关闭电脑" }));
     expect(view.queryByTestId("opendots-computer-pane")).toBeNull();
   });
 
   test("the Bot on screen can be paused and resumed from the top bar", async () => {
     const { view, user } = draw("/channel/new?agent=ada");
     await user.click(await view.findByRole("button", { name: "暂停Ada" }));
-    expect(
-      await view.findByRole("button", { name: "恢复Ada" }),
-    ).toBeTruthy();
+    expect(await view.findByRole("button", { name: "恢复Ada" })).toBeTruthy();
     expect(requests).toContainEqual({
       method: "POST",
       path: "/api/bots/ada/pause",
@@ -683,7 +677,7 @@ describe("OpenDots skin wears the deployment's brand", () => {
     expect(read).not.toContain("OpenDots");
     expect(read).not.toMatch(/\bDots?\b/);
     expect(view.getByText("我的员工")).toBeTruthy();
-    expect(view.getByText("Bots", { selector: "span" })).toBeTruthy();
+    expect(view.getByText("员工", { selector: "span" })).toBeTruthy();
     // No plush, no monogram: nothing of OpenDots' own identity is drawn.
     expect(view.container.querySelector('img[src*="/skins/"]')).toBeNull();
   });

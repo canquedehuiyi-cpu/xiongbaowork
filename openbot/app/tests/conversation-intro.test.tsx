@@ -30,21 +30,19 @@ const expenseReview = {
 
 test("shows the Bot's name, what it does, and that it is private", () => {
   const view = draw(<ConversationIntro agent={expenseReview} />);
-  expect(view.getByRole("heading", { level: 1 }).textContent).toBe(
-    "Expense Review",
-  );
+  expect(view.getByRole("heading", { level: 1 }).textContent).toBe("Expense Review");
   view.getByText(
     "Finance Operations · Reads every expense claim against the travel policy.",
   );
-  view.getByText("Private");
-  expect(view.queryByText("Public")).toBeNull();
+  view.getByText("仅自己");
+  expect(view.queryByText("公开")).toBeNull();
 });
 
 test("a public Bot says so", () => {
   const view = draw(
     <ConversationIntro agent={{ ...expenseReview, visibility: "public" }} />,
   );
-  view.getByText("Public");
+  view.getByText("公开");
 });
 
 test("a Bot with no role shows its title alone", () => {
@@ -88,8 +86,8 @@ test.each(["public", "private"] as const)(
       <ConversationIntro agent={{ ...expenseReview, visibility }} />,
       "personal",
     );
-    expect(view.queryByText("Public")).toBeNull();
-    expect(view.queryByText("Private")).toBeNull();
+    expect(view.queryByText("公开")).toBeNull();
+    expect(view.queryByText("仅自己")).toBeNull();
     expect(view.getByRole("heading", { name: "Expense Review" })).toBeTruthy();
   },
 );

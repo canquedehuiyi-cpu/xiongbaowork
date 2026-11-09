@@ -174,30 +174,28 @@ async function draw() {
 test("each Bot shows how often people started what it raised, and its breakdown counts only, skips by reason", async () => {
   const view = await draw();
   const row = await view.findByRole("button", { name: /Inbox Bot/ });
-  expect(row.textContent).toContain("11 people · 1,276 check-ins · 47 items");
-  expect(row.textContent).toContain("76% started");
+  expect(row.textContent).toContain("11 人 · 巡检 1,276 次 · 47 项");
+  expect(row.textContent).toContain("已开始 76%");
   // Nothing answered yet is not 0%.
   expect(
     (await view.findByRole("button", { name: /General Assistant/ }))
       .textContent,
-  ).toContain("No answers yet");
-  expect(view.getByText("2.2 items in each, on average")).toBeTruthy();
+  ).toContain("还没有反馈");
+  expect(view.getByText("平均每条含 2.2 项")).toBeTruthy();
 
   fireEvent.click(row);
   const dialog = await view.findByRole("dialog");
-  expect(dialog.textContent).toContain(
-    "Last 7 days. 11 people have check-ins on now.",
-  );
-  expect(dialog.textContent).toContain("Skipped before looking6");
-  expect(dialog.textContent).toContain("Bot paused4");
-  expect(dialog.textContent).toContain("Over the daily limit2");
+  expect(dialog.textContent).toContain("最近 7 天。目前有 11 人开着主动巡检。");
+  expect(dialog.textContent).toContain("查看前就跳过6");
+  expect(dialog.textContent).toContain("员工已暂停4");
+  expect(dialog.textContent).toContain("超出每日上限2");
   // A reason nothing was skipped for is left out.
-  expect(dialog.textContent).not.toContain("Turned off by an admin");
+  expect(dialog.textContent).not.toContain("被管理员关闭");
 });
 
 test("the switch turns check-ins off for the organization, and the limit saves only a whole number from 1 to 1440", async () => {
   const view = await draw();
-  const toggle = await view.findByRole("switch", { name: "Check-ins" });
+  const toggle = await view.findByRole("switch", { name: "主动巡检" });
   expect(toggle.getAttribute("aria-checked")).toBe("true");
   fireEvent.click(toggle);
   await waitFor(() =>
@@ -211,13 +209,11 @@ test("the switch turns check-ins off for the organization, and the limit saves o
       },
     }),
   );
-  await view.findByText("Off. No Bot checks in for anybody.");
+  await view.findByText("已关闭。员工不会为任何人做主动巡检。");
 
-  fireEvent.click(view.getByRole("button", { name: /Daily limit/ }));
-  const field = await view.findByLabelText(
-    "Check-ins a day per Bot, for each person",
-  );
-  const save = view.getByRole("button", { name: "Save" });
+  fireEvent.click(view.getByRole("button", { name: /每日上限/ }));
+  const field = await view.findByLabelText("每位员工每天为每个人巡检的次数");
+  const save = view.getByRole("button", { name: "保存" });
   /*
    * Typed, not set: the box is a Base UI input, which reads keystrokes, so `fireEvent.change` would
    * move the DOM value and leave the dialog's own state where it was.
@@ -238,5 +234,5 @@ test("the switch turns check-ins off for the organization, and the limit saves o
       body: { value: 12 },
     }),
   );
-  await view.findByText("Up to 12 check-ins a day per Bot for each person");
+  await view.findByText("每位员工每天为每个人最多巡检 12 次");
 });

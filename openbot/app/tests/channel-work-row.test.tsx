@@ -51,7 +51,7 @@ test("says who was asked, with their avatar and no clock", () => {
   const view = render(<ChannelWorkRows work={[asking()]} />);
 
   const row = view.getByTestId("progress-row");
-  expect(row.textContent).toBe("Asking Ana…");
+  expect(row.textContent).toBe("正在问Ana…");
   expect(row.getAttribute("role")).toBe("status");
   // The avatar is decoration beside a label that already names the Bot, so it is announced once.
   const avatar = row.querySelector("[aria-hidden='true'] [role='img']");
@@ -76,7 +76,7 @@ test("prefers the name and avatar the person knows the Bot by", () => {
     "progress-row",
   ).innerHTML;
 
-  expect(known).toContain("Asking Ana Research…");
+  expect(known).toContain("正在问Ana Research…");
   // Drawn from the Bot's own seed, so it is the same face the Bot has everywhere else.
   expect(known.replace("Ana Research", "Ana")).not.toBe(unknown);
 });
@@ -101,11 +101,7 @@ test("one row for each Bot asked, and one for a routine", () => {
 
   expect(
     view.getAllByTestId("progress-row").map((row) => row.textContent),
-  ).toEqual([
-    "Asking Ana…",
-    "Asking another Bot…",
-    "Assistant is running a routine…",
-  ]);
+  ).toEqual(["正在问Ana…", "正在问另一位员工…", "Assistant正在执行定时任务…"]);
 });
 
 test("goes when the list empties", () => {
@@ -153,7 +149,7 @@ test("comes back from the channel read after a reload", async () => {
   );
 
   await waitFor(() => {
-    expect(view.getByTestId("progress-row").textContent).toBe("Asking Ana…");
+    expect(view.getByTestId("progress-row").textContent).toBe("正在问Ana…");
   });
 
   // The socket then says the answer is being given, and the row goes.

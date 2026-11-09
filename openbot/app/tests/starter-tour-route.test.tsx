@@ -383,7 +383,7 @@ for (const path of ["/", `/channel/new?agent=${BOT}`]) {
       });
     });
     await view.findByRole("textbox", { name: "Message" });
-    expect(view.queryByRole("region", { name: "Starter tasks" })).toBeNull();
+    expect(view.queryByRole("region", { name: "入门任务" })).toBeNull();
     const user = userEvent.setup({ document });
     await user.type(
       view.getByRole("textbox", { name: "Message" }),
@@ -392,7 +392,7 @@ for (const path of ["/", `/channel/new?agent=${BOT}`]) {
     await waitFor(() => expect(runs).toHaveLength(3), { timeout: 5000 });
     expect(creates).toHaveLength(2);
     expect(runs[2]?.threadId).toBe("tour-thread-2");
-    expect(view.queryByRole("region", { name: "Starter tasks" })).toBeNull();
+    expect(view.queryByRole("region", { name: "入门任务" })).toBeNull();
   });
 }
 
@@ -400,7 +400,7 @@ test("new conversation model save failure discards the claim and lets the starte
   const view = draw(`/channel/new?agent=${BOT}`);
   const user = userEvent.setup({ document });
   await user.click(
-    await view.findByRole("combobox", { name: /Model: Default model/ }),
+    await view.findByRole("combobox", { name: /模型：Default model/ }),
   );
   await user.click(
     within(await view.findByRole("dialog")).getByRole("option", {
@@ -445,7 +445,7 @@ for (const failed of [false, true]) {
     failModel = failed;
     const user = userEvent.setup({ document });
     await user.click(
-      await view.findByRole("combobox", { name: /Model: Default model/ }),
+      await view.findByRole("combobox", { name: /模型：Default model/ }),
     );
     await user.click(
       within(await view.findByRole("dialog")).getByRole("option", {
@@ -486,8 +486,6 @@ test("a failed in-conversation starter turn reports its error only in the transc
   await waitFor(() => expect(suggestion.disabled).toBe(false));
   expect(view.getAllByText("Starter task failed once")).toHaveLength(1);
   expect(
-    within(view.getByRole("region", { name: "Starter tasks" })).queryByRole(
-      "alert",
-    ),
+    within(view.getByRole("region", { name: "入门任务" })).queryByRole("alert"),
   ).toBeNull();
 });

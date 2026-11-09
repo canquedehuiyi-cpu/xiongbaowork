@@ -73,14 +73,14 @@ test("each decision is shown in turn, and the last sends them all as one answer"
 
   expect(view.getByText("Question 1 of 2")).toBeTruthy();
   fireEvent.click(view.getByRole("radio", { name: /Pro/ }));
-  fireEvent.click(view.getByRole("button", { name: "Next" }));
+  fireEvent.click(view.getByRole("button", { name: "下一步" }));
 
   await view.findByText("Question 2 of 2");
   await userEvent.type(
-    view.getByRole("textbox", { name: "Thursday, in your own words" }),
+    view.getByRole("textbox", { name: "Thursday，用你自己的话回答" }),
     "OpenBot 1.0 only",
   );
-  fireEvent.click(view.getByRole("button", { name: "Send answers" }));
+  fireEvent.click(view.getByRole("button", { name: "发送全部回答" }));
 
   await waitFor(() =>
     expect(sent).toEqual(["Tier name: Pro\nThursday: OpenBot 1.0 only"]),
@@ -119,9 +119,9 @@ test("a question of one decision is answered as one question, with its options",
 
   // No "Question 1 of 1", no Next: one answer to give and one to send.
   expect(view.queryByText("Question 1 of 1")).toBeNull();
-  expect(view.queryByRole("button", { name: "Send answers" })).toBeNull();
+  expect(view.queryByRole("button", { name: "发送全部回答" })).toBeNull();
   fireEvent.click(view.getByRole("radio", { name: /Europe\/London/ }));
-  fireEvent.click(view.getByRole("button", { name: "Send answer" }));
+  fireEvent.click(view.getByRole("button", { name: "发送回答" }));
 
   await waitFor(() => expect(sent).toEqual(["Time zone: Europe/London"]));
 });

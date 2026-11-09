@@ -58,16 +58,14 @@ afterEach(() => {
   refreshNotificationPermission();
 });
 
-const OFFER = "Get notified when your Bot finishes or needs your approval.";
+const OFFER = "员工做完或需要你批准时，通知你。";
 
 test("a browser not yet asked is offered notifications, with Not now beside it", () => {
   const view = render(<NotifyPrompt />);
 
   expect(view.getByText(OFFER)).toBeTruthy();
-  expect(view.getByRole("button", { name: "Not now" })).toBeTruthy();
-  expect(
-    view.getByRole("button", { name: "Enable notifications" }),
-  ).toBeTruthy();
+  expect(view.getByRole("button", { name: "以后再说" })).toBeTruthy();
+  expect(view.getByRole("button", { name: "打开通知" })).toBeTruthy();
 });
 
 for (const answer of ["granted", "denied"] as const) {
@@ -93,7 +91,7 @@ test("a browser that can't show notifications is never offered them", () => {
 test("Not now hides it, asks the browser nothing, and it stays hidden next time", () => {
   const view = render(<NotifyPrompt />);
 
-  fireEvent.click(view.getByRole("button", { name: "Not now" }));
+  fireEvent.click(view.getByRole("button", { name: "以后再说" }));
 
   expect(view.queryByText(OFFER)).toBeNull();
   expect(asked).toBe(0);
@@ -108,7 +106,7 @@ test("Enable notifications asks the browser, and a yes hides it", async () => {
   const view = render(<NotifyPrompt />);
 
   await act(async () => {
-    fireEvent.click(view.getByRole("button", { name: "Enable notifications" }));
+    fireEvent.click(view.getByRole("button", { name: "打开通知" }));
   });
 
   expect(asked).toBe(1);
@@ -120,7 +118,7 @@ test("a browser prompt closed without an answer still hides it", async () => {
   const view = render(<NotifyPrompt />);
 
   await act(async () => {
-    fireEvent.click(view.getByRole("button", { name: "Enable notifications" }));
+    fireEvent.click(view.getByRole("button", { name: "打开通知" }));
   });
 
   expect(asked).toBe(1);

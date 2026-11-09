@@ -236,8 +236,8 @@ function Picker({
             <ComboboxPrimitive.Trigger
               aria-label={
                 effortText
-                  ? `Model: ${selected.label}, thinking: ${effortText}`
-                  : `Model: ${selected.label}`
+                  ? `模型：${selected.label}，思考强度：${effortText}`
+                  : `模型：${selected.label}`
               }
               className={cn(
                 "h-8 shrink-0 gap-1 px-2 font-normal text-muted-foreground",

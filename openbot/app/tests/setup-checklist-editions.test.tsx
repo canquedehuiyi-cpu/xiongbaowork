@@ -136,7 +136,7 @@ async function draw() {
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
-  await view.findByRole("list", { name: "Setup" });
+  await view.findByRole("list", { name: "设置项" });
   const row = (id: string) => {
     const found = view.container.querySelector<HTMLElement>(
       `[data-setup-row="${id}"]`,

@@ -97,7 +97,7 @@ afterAll(async () => {
   await GlobalRegistrator.unregister();
 });
 
-const banner = { name: "OpenBot update" } as const;
+const banner = { name: "熊宝更新" } as const;
 
 function show() {
   return render(
@@ -111,9 +111,9 @@ test("inside Desktop, a newer version is offered with Update and restart and a w
   inDesktop();
   const view = show();
   const bar = await view.findByRole("complementary", banner);
-  expect(bar.textContent).toContain("OpenBot 0.3.2 is available.");
-  expect(view.getByRole("button", { name: "Update and restart" })).toBeTruthy();
-  expect(view.getByRole("button", { name: "Dismiss" })).toBeTruthy();
+  expect(bar.textContent).toContain("熊宝 0.3.2 已发布。");
+  expect(view.getByRole("button", { name: "更新并重启" })).toBeTruthy();
+  expect(view.getByRole("button", { name: "关闭" })).toBeTruthy();
   // The page asked the shell; it reached nothing on the network.
   expect(calls.map((call) => call.command)).toEqual([
     "plugin:openbot-desktop|update_offer",
@@ -132,7 +132,7 @@ test("nothing newer, or a version this person closed, draws nothing", async () =
 test("closing it tells the shell which version, and it stays closed", async () => {
   inDesktop();
   const view = show();
-  fireEvent.click(await view.findByRole("button", { name: "Dismiss" }));
+  fireEvent.click(await view.findByRole("button", { name: "关闭" }));
   await waitFor(() =>
     expect(view.queryByRole("complementary", banner)).toBeNull(),
   );
@@ -155,21 +155,19 @@ test("a reload after closing it asks the shell again and still draws nothing, un
   const later = show();
   expect(
     (await later.findByRole("complementary", banner)).textContent,
-  ).toContain("OpenBot 0.3.3 is available.");
+  ).toContain("熊宝 0.3.3 已发布。");
 });
 
 test("Update and restart asks the shell, then shows its progress in place of the buttons", async () => {
   inDesktop();
   const view = show();
-  fireEvent.click(
-    await view.findByRole("button", { name: "Update and restart" }),
-  );
-  expect((await view.findByRole("status")).textContent).toBe("Downloading…");
+  fireEvent.click(await view.findByRole("button", { name: "更新并重启" }));
+  expect((await view.findByRole("status")).textContent).toBe("正在下载…");
   expect(calls).toContainEqual({
     command: "plugin:openbot-desktop|install_update",
     args: undefined,
   });
-  expect(view.queryByRole("button", { name: "Dismiss" })).toBeNull();
+  expect(view.queryByRole("button", { name: "关闭" })).toBeNull();
 
   offer = {
     ...offer,
@@ -177,7 +175,7 @@ test("Update and restart asks the shell, then shows its progress in place of the
   };
   await queryClient.refetchQueries();
   await waitFor(() =>
-    expect(view.getByRole("status").textContent).toBe("Downloading… 25%"),
+    expect(view.getByRole("status").textContent).toBe("正在下载… 25%"),
   );
   offer = {
     ...offer,
@@ -185,7 +183,7 @@ test("Update and restart asks the shell, then shows its progress in place of the
   };
   await queryClient.refetchQueries();
   await waitFor(() =>
-    expect(view.getByRole("status").textContent).toBe("Restarting…"),
+    expect(view.getByRole("status").textContent).toBe("正在重启…"),
   );
 });
 
@@ -193,13 +191,11 @@ test("an install that fails says why and offers it again", async () => {
   inDesktop();
   installFailure = "signature verification failed";
   const view = show();
-  fireEvent.click(
-    await view.findByRole("button", { name: "Update and restart" }),
-  );
+  fireEvent.click(await view.findByRole("button", { name: "更新并重启" }));
   expect((await view.findByRole("alert")).textContent).toBe(
-    "Couldn't install the update: signature verification failed",
+    "没能安装更新：signature verification failed",
   );
-  expect(view.getByRole("button", { name: "Update and restart" })).toBeTruthy();
+  expect(view.getByRole("button", { name: "更新并重启" })).toBeTruthy();
 });
 
 test("an older Desktop app without the command draws nothing, and is asked once", async () => {

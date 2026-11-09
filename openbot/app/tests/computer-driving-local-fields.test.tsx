@@ -226,7 +226,7 @@ test("naming a task and pressing Record starts a recording", async () => {
       requests.some((request) => request.url === "/api/settings/preferences"),
     ).toBe(true),
   );
-  await user.click(view.getByLabelText("Task name"));
+  await user.click(view.getByLabelText("任务名称"));
   await user.keyboard("Find an invoice");
   await user.click(view.getByRole("button", { name: "Record" }));
 

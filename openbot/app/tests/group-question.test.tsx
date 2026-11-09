@@ -205,7 +205,7 @@ test("a Bot's question waits in the group, and answering it there clears the bad
 
   // The question is in the conversation it was asked in, with why it was asked.
   const card = await view.findByRole("region", {
-    name: "Errand Helper is waiting on your answer",
+    name: "Errand Helper在等你的回答",
   });
   expect(card.textContent).toContain(QUESTION);
   expect(card.textContent).toContain(WHY);
@@ -224,7 +224,7 @@ test("a Bot's question waits in the group, and answering it there clears the bad
   await waitFor(() =>
     expect(
       view.queryByRole("region", {
-        name: "Errand Helper is waiting on your answer",
+        name: "Errand Helper在等你的回答",
       }),
     ).toBeNull(),
   );

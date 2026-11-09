@@ -70,16 +70,14 @@ function draw() {
 
 test("the name is a row that states it and opens a dialog to change it", async () => {
   const view = draw();
-  const row = view.getByRole("button", { name: /^Name/ });
+  const row = view.getByRole("button", { name: /^名字/ });
   expect(row.textContent).toContain("Ada");
   await userEvent.setup({ document }).click(row);
   const dialog = await view.findByRole("dialog");
   expect(
-    (within(dialog).getByLabelText("Name") as HTMLInputElement).value,
+    (within(dialog).getByLabelText("名字") as HTMLInputElement).value,
   ).toBe("Ada");
-  expect(
-    within(dialog).getByRole("button", { name: "Save name" }),
-  ).toBeTruthy();
+  expect(within(dialog).getByRole("button", { name: "保存名字" })).toBeTruthy();
 });
 
 test("standing instructions are a row that says what they are, or that there are none yet", async () => {

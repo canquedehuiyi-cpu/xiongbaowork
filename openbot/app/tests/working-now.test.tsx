@@ -63,7 +63,7 @@ test("while a Bot works, home says so and links to that conversation", async () 
     channel({ busy: true }),
   ]);
   const link = await view.findByRole("link", {
-    name: /Personal Assistant is working/,
+    name: /Personal Assistant正在工作/,
   });
   expect(link.getAttribute("href")).toBe("/channel/channel_a");
   expect(link.textContent).toContain("Plan the Lisbon trip budget");

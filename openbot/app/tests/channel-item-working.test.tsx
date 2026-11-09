@@ -7,7 +7,7 @@ import { agentListQueryOptions } from "@/lib/agents/queries";
 import { settleReactWork } from "./settle-react-work";
 
 /**
- * A conversation in the sidebar says "Working" while its Bot works on it, where its time goes, and shows its time
+ * A conversation in the sidebar says "工作中" while its Bot works on it, where its time goes, and shows its time
  * again once the work is done.
  */
 
@@ -39,12 +39,12 @@ function row(busy: boolean) {
 
 test("a conversation whose Bot is working says Working where its time goes", () => {
   const view = row(true);
-  expect(view.getByText("Working")).toBeTruthy();
+  expect(view.getByText("工作中")).toBeTruthy();
   expect(view.queryByText("2m")).toBeNull();
 });
 
 test("once the Bot is done, the conversation shows its time again", () => {
   const view = row(false);
   expect(view.getByText("2m")).toBeTruthy();
-  expect(view.queryByText("Working")).toBeNull();
+  expect(view.queryByText("工作中")).toBeNull();
 });

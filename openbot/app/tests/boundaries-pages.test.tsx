@@ -152,7 +152,7 @@ test("the list shows each rule by its name, a template's own name, or as a custo
   expect(await view.findByText("Stop everything")).toBeTruthy();
   expect(view.getByText("All of it.")).toBeTruthy();
   expect(view.getByText(template.name)).toBeTruthy();
-  expect(view.getByText("Custom rule")).toBeTruthy();
+  expect(view.getByText("自定义规则")).toBeTruthy();
   expect(view.getByText(custom)).toBeTruthy();
 });
 
@@ -161,7 +161,7 @@ test("adding from a template saves the rule with its name and returns to the lis
   const { view, router } = open("/admin/boundaries/new");
 
   fireEvent.click(await view.findByText(template.name));
-  fireEvent.click(view.getByRole("button", { name: "Add rule" }));
+  fireEvent.click(view.getByRole("button", { name: "添加规则" }));
 
   await waitFor(() => expect(saved).toHaveLength(1));
   expect(saved[0]).toEqual({
@@ -189,9 +189,9 @@ test("removing a rule is confirmed, and takes its name with it", async () => {
   });
   const { view } = open("/admin/boundaries/1");
 
-  fireEvent.click(await view.findByRole("button", { name: "Remove rule" }));
+  fireEvent.click(await view.findByRole("button", { name: "删除规则" }));
   expect(saved).toHaveLength(0);
-  fireEvent.click(await view.findByRole("button", { name: "Remove" }));
+  fireEvent.click(await view.findByRole("button", { name: "删除" }));
 
   await waitFor(() => expect(saved).toHaveLength(1));
   expect(saved[0]?.deny).toEqual([template.rule]);

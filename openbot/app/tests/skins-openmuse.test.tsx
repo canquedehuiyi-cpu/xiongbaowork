@@ -586,9 +586,9 @@ describe("the frame", () => {
         tabs.getByRole("link", { name: "对话" }).getAttribute("href"),
       ).toBe("/channel/c-muse"),
     );
-    expect(
-      tabs.getByRole("link", { name: "动态" }).getAttribute("href"),
-    ).toBe("/s/activity");
+    expect(tabs.getByRole("link", { name: "动态" }).getAttribute("href")).toBe(
+      "/s/activity",
+    );
     expect(tabs.getByRole("link", { name: "建议" }).getAttribute("href")).toBe(
       "/s/ideas",
     );

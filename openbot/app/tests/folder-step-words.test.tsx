@@ -81,7 +81,7 @@ test("a file change that happened keeps its past tense, and names the file too",
   const text = view.container.textContent ?? "";
   expect(text).toContain("Saved a file");
   expect(text).toContain("todo.txt");
-  expect(text).not.toContain("Blocked");
+  expect(text).not.toContain("已拦下");
 });
 
 test("in a folded run, a blocked folder step is named for what was tried beside Blocked", () => {
@@ -133,7 +133,7 @@ test("a folder change declined on the conversation's card reads as declined, not
   );
   expect(command.container.textContent).toContain("Blocked: Run a command");
   expect(command.container.textContent).toContain("You declined it.");
-  expect(command.container.textContent).not.toContain("Ran a command");
+  expect(command.container.textContent).not.toContain("执行了命令");
 });
 
 test("in a folded run, a folder step declined on the card is Blocked, named for what was tried", () => {
