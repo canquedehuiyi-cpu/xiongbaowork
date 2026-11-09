@@ -742,7 +742,7 @@ function deletesByName(toolRef: string): boolean {
  * 删除类底线：一个改动只要满足其一就总是先问，
  *  - 应用把这个工具标为破坏性（`candidate.destructive`，列出应用时记下的），不管它叫什么；
  *  - 工具名说它会删除：没有歧义的删除词出现在名字任意位置，或 remove、archive 是第一个动词。
- * 名字说删除时，被分类成读也照样问（读的分类名单并不完整）；只有应用标记、没有删除名字的读不问。
+ * 被分类成读也照样问：读的分类名单并不完整，应用自己标了破坏性的以应用为准。
  * Bot 或主人电脑上的工具不在此列，除非它是经插件调用路径来的。
  */
 export function destructiveFloor(
@@ -753,9 +753,8 @@ export function destructiveFloor(
     OWN_COMPUTER_TOOLS.test(candidate.toolRef)
   )
     return undefined;
-  // 按名字判定的部分不看 effect：分类名单不完整，被当成读的删除工具仍要问。标记那部分照旧只管写。
-  const marked = candidate.destructive === true && candidate.effect !== "read";
-  return marked || deletesByName(candidate.toolRef)
+  // 不看 effect：分类名单不完整，被当成读的删除工具仍要问；应用标了破坏性的以应用为准。
+  return candidate.destructive === true || deletesByName(candidate.toolRef)
     ? { source: "destructive_tool", reason: DESTRUCTIVE_TOOL_REASON }
     : undefined;
 }

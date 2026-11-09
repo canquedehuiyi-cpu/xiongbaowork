@@ -2473,10 +2473,10 @@ describe("destructive tools always ask, once at a time", () => {
     ).toMatchObject({ behaviour: "allow" });
   });
 
-  test("a deleting name asks even when the tool was classified as a read; the mark alone does not", async () => {
+  test("a deleting name or the app's destructive mark asks even when the tool was classified as a read", async () => {
     /*
-     * 有意为之（阶段 6 评审 I3）：按名字判定的底线不给「读」让路。catalogue 的 writeTools 名单并不
-     * 完整，没列进去的工具会被当成读，名字是这时唯一的兜底。基于 destructive 标记的那部分保持原样。
+     * 有意为之（阶段 6 评审 I3）：删除类底线不给「读」让路。catalogue 的 writeTools 名单并不完整，
+     * 没列进去的工具会被当成读，名字是这时的兜底；应用自己标了破坏性的，以应用的标记为准。
      */
     for (const toolRef of ["gmail/GMAIL_DELETE_MESSAGE", "vendor/delete_x"])
       expect(
@@ -2486,13 +2486,19 @@ describe("destructive tools always ask, once at a time", () => {
           personal: allowAll,
         }),
       ).toMatchObject({ behaviour: "ask", source: "destructive_tool" });
+    for (const toolRef of ["crm/reset_pipeline", "vendor/list_items"])
+      expect(
+        await decideAction({
+          ...base,
+          candidate: app(toolRef, { effect: "read", destructive: true }),
+          personal: allowAll,
+        }),
+      ).toMatchObject({ behaviour: "ask", source: "destructive_tool" });
+    // 没有标记、名字也不说删除的读照常放行。
     expect(
       await decideAction({
         ...base,
-        candidate: app("crm/reset_pipeline", {
-          effect: "read",
-          destructive: true,
-        }),
+        candidate: app("vendor/list_items", { effect: "read" }),
       }),
     ).toMatchObject({ behaviour: "allow" });
   });
