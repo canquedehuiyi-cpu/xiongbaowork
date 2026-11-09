@@ -251,6 +251,11 @@ jobs:
       # The per-employee root helper creates users, so it is tested as root inside the image.
       - name: xb-bot helper (per-employee users)
         run: docker run --rm --user root --entrypoint /bin/sh -v "$PWD/docker/tests:/t:ro" openbot:trackb /t/xb-bot.test.sh
+      # Two employees cannot read each other's files, and a stopped command ends within 10 seconds.
+      - name: per-employee users smoke
+        env:
+          EVIDENCE_DIR: ${{ runner.temp }}/delivery-evidence
+        run: bash scripts/ci/per-bot-users-smoke.sh openbot:trackb
       - name: DoD-2 and DoD-3 (no provider credentials)
         env:
           EVIDENCE_DIR: ${{ runner.temp }}/delivery-evidence
