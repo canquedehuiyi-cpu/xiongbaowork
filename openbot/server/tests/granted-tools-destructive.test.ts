@@ -69,6 +69,20 @@ test("a Bot holding connected-app tools is told OpenBot asks before their delete
   expect(grantedToolGuidance([], ["gmail"])).not.toContain(
     CONNECTOR_APPROVAL_GUIDANCE,
   );
+  // 只持有 OpenBot 自己的记忆等内部工具时也不说：它们不经审批门，说了反而让 Bot 不再自己确认。
+  const internal = [
+    "recall_personal_memory",
+    "forget_personal_memory",
+    "cancel_follow_up",
+  ].map((name) => ({ ...tools[0], name, ref: `memory/${name}` }));
+  const onlyInternal = grantedToolGuidance(internal as unknown as typeof tools);
+  expect(onlyInternal).toContain("forget_personal_memory");
+  expect(onlyInternal).not.toContain(CONNECTOR_APPROVAL_GUIDANCE);
+  // 和应用工具一起持有时才说，并写明记忆类工具不在此列。
+  expect(
+    grantedToolGuidance([...(internal as unknown as typeof tools), ...tools]),
+  ).toContain(CONNECTOR_APPROVAL_GUIDANCE);
+  expect(CONNECTOR_APPROVAL_GUIDANCE).toContain("memory");
   // Nor is it in the computer guidance, beside commands this rule does not cover.
   expect(COMPUTER_GUIDANCE).not.toContain("OpenBot itself asks");
 });
