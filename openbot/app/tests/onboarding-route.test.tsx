@@ -241,9 +241,7 @@ const stepNames = (list: HTMLElement) =>
   within(list)
     .getAllByRole("listitem")
     .map((item) =>
-      item.textContent
-        ?.replace(/^\d/, "")
-        .replace(/，(已完成|暂不可用)$/, ""),
+      item.textContent?.replace(/^\d/, "").replace(/，(已完成|暂不可用)$/, ""),
     );
 /** A footer button by name, once the deployment's answer has let it be pressed. */
 const ready = async (view: ReturnType<typeof render>, name: string) => {
@@ -251,16 +249,10 @@ const ready = async (view: ReturnType<typeof render>, name: string) => {
   await waitFor(() => expect(button.hasAttribute("disabled")).toBe(false));
   return button;
 };
-const continueButton = (view: ReturnType<typeof render>) =>
-  ready(view, "继续");
+const continueButton = (view: ReturnType<typeof render>) => ready(view, "继续");
 /** 你的资料's own way on without registering anything. */
 const skipSources = (view: ReturnType<typeof render>) =>
   ready(view, "跳过，稍后在分身详情页配置");
-/** The footer's buttons, in order. */
-const footerButtons = (view: ReturnType<typeof render>) =>
-  Array.from(view.container.querySelectorAll("footer button")).map(
-    (button) => button.textContent,
-  );
 /** How many scenes the intro's reel plays, read from its dots. */
 const reelScenes = (view: ReturnType<typeof render>) =>
   view.container.querySelectorAll("[data-intro-reel] > [aria-hidden] > span")
@@ -332,9 +324,7 @@ test("on every step, its name in the list of steps is its heading", async () => 
     if (searchOf(view).step === "name") break;
     const step = searchOf(view).step;
     fireEvent.click(
-      step === "sources"
-        ? await skipSources(view)
-        : await continueButton(view),
+      step === "sources" ? await skipSources(view) : await continueButton(view),
     );
     await waitFor(() => expect(searchOf(view).step).not.toBe(step));
   }
@@ -632,10 +622,9 @@ test("somebody whose name is known has Welcome then their material, and skipping
   await heading(view, WELCOME);
 
   expect(stepNames(await openSteps(view))).toEqual([WELCOME, SOURCES]);
-  fireEvent.keyDown(
-    view.getByRole("navigation", { name: "新手引导步骤" }),
-    { key: "Escape" },
-  );
+  fireEvent.keyDown(view.getByRole("navigation", { name: "新手引导步骤" }), {
+    key: "Escape",
+  });
   fireEvent.click(await continueButton(view));
   await heading(view, SOURCES);
   // The step carries its own ways on: no frame button that would finish behind its back.

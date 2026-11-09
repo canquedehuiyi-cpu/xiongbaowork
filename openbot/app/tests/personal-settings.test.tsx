@@ -12,7 +12,6 @@ import {
   createMemoryHistory,
   createRootRoute,
   createRouter,
-  isRedirect,
   RouterProvider,
 } from "@tanstack/react-router";
 import { cleanup, render, within } from "@testing-library/react";
@@ -130,7 +129,6 @@ describe("the Computer page", () => {
     await view.findByRole("heading", { name: /^Computers?$/ });
     return view;
   }
-
 
   /**
    * Teach a Bot's browser, as GET /api/computers/fleet lists it beside the Bots' browsers on the personal edition's one

@@ -455,9 +455,7 @@ describe("OpenDots frame", () => {
         name: "工作区导航",
       });
       await waitFor(() =>
-        expect(
-          within(rail).queryByRole("link", { name: "设置" }),
-        ).toBeTruthy(),
+        expect(within(rail).queryByRole("link", { name: "设置" })).toBeTruthy(),
       );
       if (signedIn.role === "admin") {
         await waitFor(() =>
@@ -547,9 +545,7 @@ describe("OpenDots frame", () => {
     const pane = await view.findByTestId("opendots-computer-pane");
     expect(within(pane).getByText("Cass的电脑")).toBeTruthy();
     // OpenBot's own panel, not a copy of it.
-    expect(
-      within(pane).getByRole("region", { name: "电脑侧栏" }),
-    ).toBeTruthy();
+    expect(within(pane).getByRole("region", { name: "电脑侧栏" })).toBeTruthy();
     await user.click(within(pane).getByRole("button", { name: "关闭电脑" }));
     expect(view.queryByTestId("opendots-computer-pane")).toBeNull();
   });
@@ -593,7 +589,9 @@ describe("OpenDots screens", () => {
     );
     expect(await view.findByRole("heading", { name: "记忆" })).toBeTruthy();
     expect(await view.findByText("还没有任何记忆。")).toBeTruthy();
-    expect(view.getByRole("heading", { name: "让它记住一条事实" })).toBeTruthy();
+    expect(
+      view.getByRole("heading", { name: "让它记住一条事实" }),
+    ).toBeTruthy();
     expect(view.getByRole("button", { name: "记住" })).toBeTruthy();
   });
 });
