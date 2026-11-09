@@ -72,6 +72,10 @@ import type {
 } from "@/lib/wakerflows";
 import type { OpenTarget } from "@/routes/_authed/_app/tasks";
 import type { UserPreferences } from "../../../shared/user-preferences";
+import { EXTRA as ADMIN_EXTRA } from "./extra/admin";
+import { EXTRA as CONVERSATION_EXTRA } from "./extra/conversations";
+import { EXTRA as PEOPLE_EXTRA } from "./extra/people";
+import { EXTRA as WORKFLOW_EXTRA } from "./extra/workflows";
 
 export type Scenario = "data" | "empty";
 export const SCENARIOS: readonly Scenario[] = ["data", "empty"];
@@ -1823,6 +1827,14 @@ const notFound = (error: string): FixtureResponse => ({
 const list = <T>(context: Context, items: T[]): T[] =>
   context.data ? items : [];
 
+/** Each area's own additions (tests/parity/extra), consulted after this file's routes. */
+const EXTRA_ROUTES = [
+  ...CONVERSATION_EXTRA,
+  ...PEOPLE_EXTRA,
+  ...WORKFLOW_EXTRA,
+  ...ADMIN_EXTRA,
+] as [method: string, pattern: RegExp, handler: Handler][];
+
 const routes: [method: string, pattern: RegExp, handler: Handler][] = [
   // Identity and deployment
   ["GET", /^\/api\/me$/, () => ok({ user: USER })],
@@ -2228,7 +2240,7 @@ export function resolveFixture(
 ): FixtureResponse | undefined {
   const url = new URL(pathnameWithSearch, "http://parity.local");
   const upper = method.toUpperCase();
-  for (const [routeMethod, pattern, handler] of routes) {
+  for (const [routeMethod, pattern, handler] of [...routes, ...EXTRA_ROUTES]) {
     if (routeMethod !== upper) continue;
     const match = url.pathname.match(pattern);
     if (!match) continue;

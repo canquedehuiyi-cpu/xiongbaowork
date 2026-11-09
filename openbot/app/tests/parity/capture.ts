@@ -3,6 +3,7 @@
  *
  *   bun tests/parity/capture.ts [--base http://127.0.0.1:3910] [--out <dir>]
  *     [--scenario data|empty|all] [--theme dark|light|all] [--only <route substring>]
+ *     [--path <any app path, captured on its own, e.g. /channel/c-1>]
  *     [--viewport 1440x900] [--concurrency 3]
  *
  * Every `/api/**` request is answered from `fixtures.ts`; nothing reaches a backend. For each
@@ -123,6 +124,8 @@ type Options = {
   scenarios: Scenario[];
   themes: Theme[];
   only: string | undefined;
+  /** One ad-hoc path to capture instead of the route list. */
+  path: string | undefined;
   viewports: { width: number; height: number }[];
   concurrency: number;
 };
@@ -147,6 +150,7 @@ function parseArgs(argv: string[]): Options {
     scenarios: scenario === "all" ? [...SCENARIOS] : [scenario as Scenario],
     themes: theme === "all" ? ["dark", "light"] : [theme as Theme],
     only: value("--only"),
+    path: value("--path"),
     viewports: viewport
       ? [
           {
@@ -540,7 +544,9 @@ function summarise(results: Measurements[], options: Options): string {
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
-  const routes = options.only
+  const routes = options.path
+    ? [{ path: options.path }]
+    : options.only
     ? ROUTES.filter(
         (route) =>
           route.path.includes(options.only ?? "") ||
