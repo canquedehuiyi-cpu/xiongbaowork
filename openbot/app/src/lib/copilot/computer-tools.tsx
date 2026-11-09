@@ -707,10 +707,10 @@ export function ComputerTools() {
         "directory is your workspace, so paths are relative to it and files you write here are the " +
         "same ones the file tools see. Commands run in bash, so pipes and && work. Long output is " +
         "truncated from the start, and a command that runs too long is stopped. " +
-        "Use the tools already installed first. If you need a new one, install it inside your " +
-        "workspace with `npm install <package>` (without -g) or `bun add <package>`. " +
-        "Do not use sudo: you are not the root user and cannot install system packages, so if a " +
-        "task needs one, say so rather than retrying.",
+        "Use the tools already installed first. If you need a new one, prefer installing it inside " +
+        "your workspace: `npm install <package>` (without -g), `bun add <package>`, or " +
+        "`python3 -m venv .venv` and then `.venv/bin/pip install <package>`. If you are told you " +
+        "have no sudo permission, do not try to escalate; say so rather than retrying.",
     parameters: z.object({
       command: z
         .string()

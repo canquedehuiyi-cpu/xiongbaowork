@@ -760,8 +760,14 @@ as before. Users are created through the root helper `/usr/local/sbin/xb-bot`; a
 files across a recreated container.
 
 An employee cannot `sudo`, not even the package managers `pwuser` may run: it installs user-level
-tools in its own directory (`npm install` without `-g`, `bun add`; the image has no python3), and
-system packages belong in the image.
+tools in its own directory (`npm install` without `-g`, `bun add`, or `python3 -m venv .venv` and
+then `.venv/bin/pip install`), and system packages belong in the image, which carries git, jq,
+python3 and python3-venv for that reason.
+
+Files already in `/workspace` before the upgrade stay there, for the default Bot (calls without an
+`x-openbot-bot-id` header); real employees start from their own empty directory and do not see
+them. To hand some of them to one employee, move them into `/workspace/bots/<botKey>/` as root and
+`chown` them to `xb-<botKey>:xbcomp` (see `docs/acceptance/HUMAN-STEPS.md`, section 17).
 
 When the switch is on and the helper cannot be used, the computer's `/health` answers HTTP 503 with
 `status: "unready"` and `perBotUsers.reason`, and `/exec` and `/files/*` for non-default Bots answer
