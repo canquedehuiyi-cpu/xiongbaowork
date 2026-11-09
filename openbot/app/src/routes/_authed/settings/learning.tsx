@@ -14,11 +14,11 @@ export function LearningSettingsPage() {
   const personal = capabilities?.edition === "personal";
   return (
     <PageShell
-      title="Learning"
+      title="学习"
       description={
         personal
-          ? "Your recordings and conversations teach your Bots new skills. Review what they learned here."
-          : "Every recording you make goes into your own Learning space, and the Skills learned there reach every Bot you use. Choose who else's Bots may use them too."
+          ? "你的录制和对话会教员工新技能。在这里查看它们学到了什么。"
+          : "你的每次录制都会进入你自己的学习空间，从中学到的技能会用到你使用的每位员工身上。选择还有谁的员工也可以用它们。"
       }
     >
       <LearningReview />

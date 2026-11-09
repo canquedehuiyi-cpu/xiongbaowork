@@ -130,7 +130,7 @@ export function BotsSheet({ onClose }: { onClose: () => void }) {
           <LinkRow
             detail="Yours, shared with you, and your team's"
             icon={IconBolt}
-            render={<Link onClick={onClose} to="/bots" />}
+            render={<Link onClick={onClose} to="/wakers" />}
             tint="plain"
             title="All Bots"
           />
@@ -138,7 +138,7 @@ export function BotsSheet({ onClose }: { onClose: () => void }) {
             detail="Describe what it should do"
             icon={IconPlus}
             render={
-              <Link onClick={onClose} search={{ new: true }} to="/bots" />
+              <Link onClick={onClose} search={{ new: true }} to="/wakers" />
             }
             tint="plain"
             title="New Bot"

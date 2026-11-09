@@ -30,8 +30,8 @@ function SetupSettingsPage() {
   const navigate = useNavigate();
   return (
     <PageShell
-      description="See what's ready and what still needs setting up. After you change a setting and restart OpenBot, check again here."
-      title="Setup"
+      description="看看哪些已经就绪、哪些还要设置。改完设置并重启后，回到这里再检查一遍。"
+      title="部署设置"
     >
       <SetupChecklist openPage={(target) => navigate({ to: target.path })} />
     </PageShell>

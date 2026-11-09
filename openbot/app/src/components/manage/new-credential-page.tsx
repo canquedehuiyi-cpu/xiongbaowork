@@ -31,7 +31,7 @@ import {
 import { useManagePaths } from "@/lib/manage-paths";
 
 /** Without `items` the trigger draws the raw value, so the type read "model" in lower case. */
-const KIND_LABEL = { model: "Model", connector: "Connector" } as const;
+const KIND_LABEL = { model: "模型", connector: "连接器" } as const;
 
 /**
  * Adding a credential, on a screen of its own rather than in a dialog over the list.
@@ -71,8 +71,8 @@ export function NewCredentialPage() {
   return (
     <PageShell
       backButton={back}
-      description={`Save a credential for ${paths.deploymentName}. You won’t be able to view the secret after saving it.`}
-      title="Add credential"
+      description={`为${paths.deploymentName}保管一个凭据。保存后不会再显示密钥值。`}
+      title="添加凭据"
     >
       <form
         noValidate
@@ -88,7 +88,7 @@ export function NewCredentialPage() {
                 render={(props) => <Link {...props} {...paths.credentials()} />}
                 variant="outline"
               >
-                Cancel
+                取消
               </Button>
               <form.Subscribe
                 selector={(state) => [state.canSubmit, state.isSubmitting]}
@@ -101,8 +101,8 @@ export function NewCredentialPage() {
                     type="submit"
                   >
                     {isSubmitting || createCredential.isPending
-                      ? "Saving…"
-                      : "Save credential"}
+                      ? "正在保存…"
+                      : "保存凭据"}
                   </Button>
                 )}
               </form.Subscribe>
@@ -116,9 +116,9 @@ export function NewCredentialPage() {
                   field.state.meta.isTouched && !field.state.meta.isValid;
                 return (
                   <Field data-invalid={isInvalid}>
-                    <FieldLabel htmlFor={field.name}>Type</FieldLabel>
+                    <FieldLabel htmlFor={field.name}>类型</FieldLabel>
                     <FieldDescription>
-                      A model provider's key, or one a connector signs in with.
+                      模型提供方的密钥，或连接器登录用的密钥。
                     </FieldDescription>
                     <Select
                       items={KIND_LABEL}
@@ -136,8 +136,8 @@ export function NewCredentialPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectGroup>
-                          <SelectItem value="model">Model</SelectItem>
-                          <SelectItem value="connector">Connector</SelectItem>
+                          <SelectItem value="model">模型</SelectItem>
+                          <SelectItem value="connector">连接器</SelectItem>
                         </SelectGroup>
                       </SelectContent>
                     </Select>
@@ -154,7 +154,7 @@ export function NewCredentialPage() {
                   field.state.meta.isTouched && !field.state.meta.isValid;
                 return (
                   <Field data-invalid={isInvalid}>
-                    <FieldLabel htmlFor={field.name}>Provider</FieldLabel>
+                    <FieldLabel htmlFor={field.name}>提供方</FieldLabel>
                     <Input
                       aria-invalid={isInvalid}
                       id={field.name}
@@ -179,9 +179,9 @@ export function NewCredentialPage() {
                   field.state.meta.isTouched && !field.state.meta.isValid;
                 return (
                   <Field data-invalid={isInvalid}>
-                    <FieldLabel htmlFor={field.name}>Key ID</FieldLabel>
+                    <FieldLabel htmlFor={field.name}>密钥 ID</FieldLabel>
                     <FieldDescription>
-                      Tells this key apart from others for the same provider.
+                      用来区分同一提供方的不同密钥。
                     </FieldDescription>
                     <Input
                       aria-invalid={isInvalid}
@@ -207,7 +207,7 @@ export function NewCredentialPage() {
                   field.state.meta.isTouched && !field.state.meta.isValid;
                 return (
                   <Field data-invalid={isInvalid}>
-                    <FieldLabel htmlFor={field.name}>Secret</FieldLabel>
+                    <FieldLabel htmlFor={field.name}>密钥</FieldLabel>
                     <Input
                       aria-invalid={isInvalid}
                       autoComplete="off"
@@ -247,15 +247,14 @@ export function NewCredentialPage() {
             {([kind, provider, keyId]) =>
               liveCredentialFor(credentials.data, kind, provider, keyId) ? (
                 <p className="mt-5 text-amber-600 text-sm dark:text-amber-500">
-                  This key already has an active credential. Saving replaces it
-                  and revokes the old one.
+                  这个密钥 ID 已有一个生效的凭据。保存会替换它，并吊销旧的那个。
                 </p>
               ) : null
             }
           </form.Subscribe>
           {createCredential.error ? (
             <p className="mt-5 text-destructive text-sm" role="alert">
-              Couldn't save the credential. Try again.
+              凭据没能保存，请再试一次。
             </p>
           ) : null}
         </PageCard>

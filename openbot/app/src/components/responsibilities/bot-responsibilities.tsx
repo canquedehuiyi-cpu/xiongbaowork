@@ -1,4 +1,8 @@
-import { IconChevronRight, IconPlus, IconTargetArrow } from "@tabler/icons-react";
+import {
+  IconChevronRight,
+  IconPlus,
+  IconTargetArrow,
+} from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Fragment } from "react";
@@ -36,11 +40,7 @@ export function BotResponsibilities({ agentId }: { agentId?: string }) {
     (goal) => agentId === undefined || goal.agentId === agentId,
   );
   const add = (
-    <Button
-      render={<Link to="/responsibilities" />}
-      size="sm"
-      variant="ghost"
-    >
+    <Button render={<Link to="/responsibilities" />} size="sm" variant="ghost">
       <IconPlus />
       新建长期职责
     </Button>

@@ -35,8 +35,8 @@ import { Input } from "@/components/ui/input";
 import { type AgentProfile, agentListQueryOptions } from "@/lib/agents/queries";
 import { groupRoster } from "@/lib/agents/roster";
 import { signOutMutationOptions } from "@/lib/auth/mutations";
-import { useSignOutOffered } from "@/lib/auth/sign-out-offered";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
+import { useSignOutOffered } from "@/lib/auth/sign-out-offered";
 import { untitledLine } from "@/lib/channels/label";
 import { setChannelPinnedMutationOptions } from "@/lib/channels/mutations";
 import {
@@ -182,7 +182,7 @@ function BotsSection({
             label="Create Bot"
             onClick={onNavigate}
             render={(props) => (
-              <Link {...props} search={{ new: true }} to="/bots" />
+              <Link {...props} search={{ new: true }} to="/wakers" />
             )}
           >
             <IconPlus />

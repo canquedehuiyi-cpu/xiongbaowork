@@ -1,6 +1,6 @@
+import type { Message } from "@ag-ui/core";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Navigate } from "@tanstack/react-router";
-import type { Message } from "@ag-ui/core";
 import { useLayoutEffect, useState } from "react";
 import { ChannelAvatar } from "@/components/channels/avatar";
 import {
@@ -99,7 +99,7 @@ function RouteComponent() {
               agentId ? null : "text-muted-foreground",
             )}
           >
-            {agentId ? (bot?.name ?? "") : "Picking a Bot"}
+            {agentId ? (bot?.name ?? "") : "正在挑选员工"}
           </span>
         </div>
       </div>

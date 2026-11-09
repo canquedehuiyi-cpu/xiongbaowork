@@ -69,8 +69,7 @@ export function appAccessSentence(
     return `${name} 还没连接。`;
   switch (access.state) {
     case "ready":
-      if (owners)
-        return `可以用了。这位员工用的是它主人的 ${name} 账号。`;
+      if (owners) return `可以用了。这位员工用的是它主人的 ${name} 账号。`;
       if (access.asksFirst)
         return `可以用你自己的 ${name} 账号了。第一次用时会先问你是否允许。`;
       return "可以用了。";
@@ -216,9 +215,7 @@ function AdminAction({
       (access.unavailable === null || access.unavailable === "absent"));
   if (oneClick) {
     const disabled = access.state === "disabled";
-    const label = disabled
-      ? `开启并交给${bot}`
-      : `交给${bot}`;
+    const label = disabled ? `开启并交给${bot}` : `交给${bot}`;
     // The card names the app beside the button; on its own, the button has to.
     const spoken = disabled
       ? `开启 ${name} 并交给${bot}`
@@ -268,9 +265,7 @@ function AdminAction({
    * none; the team edition's `/admin/plugins/composio` happens to be that directory already.
    */
   const target =
-    page === "composio"
-      ? paths.brokerDirectory(page)
-      : paths.plugin(page);
+    page === "composio" ? paths.brokerDirectory(page) : paths.plugin(page);
   return (
     <Button
       render={<Link {...target} rel="noreferrer" target="_blank" />}
@@ -342,7 +337,12 @@ function OwnerGiveAction({
   )
     return (
       <Button
-        render={<Link params={{ key: access.key }} to="/settings/connected-accounts/$key" />}
+        render={
+          <Link
+            params={{ key: access.key }}
+            to="/settings/connected-accounts/$key"
+          />
+        }
         aria-label={`连接 ${name}`}
         size="sm"
         variant="outline"
@@ -469,7 +469,12 @@ function PersonalConnectAction({
   if (access.connect === "key" || tab.needsKey)
     return (
       <Button
-        render={<Link params={{ key: access.key }} to="/settings/connected-accounts/$key" />}
+        render={
+          <Link
+            params={{ key: access.key }}
+            to="/settings/connected-accounts/$key"
+          />
+        }
         aria-label={`设置 ${name}`}
         size="sm"
       >
@@ -583,7 +588,12 @@ function ConnectAction({
   if (viaSettings)
     return (
       <Button
-        render={<Link params={{ key: access.key }} to="/settings/connected-accounts/$key" />}
+        render={
+          <Link
+            params={{ key: access.key }}
+            to="/settings/connected-accounts/$key"
+          />
+        }
         aria-label={`${label} ${access.displayName}`}
         size="sm"
         variant="outline"
@@ -718,9 +728,7 @@ function RequestAction({
       ) : (
         <Button
           aria-label={
-            request.isPending
-              ? undefined
-              : `申请使用 ${access.displayName}`
+            request.isPending ? undefined : `申请使用 ${access.displayName}`
           }
           disabled={request.isPending}
           onClick={() => {

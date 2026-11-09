@@ -188,9 +188,7 @@ function RequestRow({
         </ItemDescription>
         {request.action.policy ? (
           <p className="text-sm">
-            {request.action.policy.behaviour === "hand_off"
-              ? "交给你："
-              : ""}
+            {request.action.policy.behaviour === "hand_off" ? "交给你：" : ""}
             {request.action.policy.reason}
           </p>
         ) : null}

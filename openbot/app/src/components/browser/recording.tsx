@@ -402,7 +402,7 @@ export function RecordingMark({ live }: { live: boolean }) {
 
 /** The line under a recording's name: how long it has run and how many actions it holds. */
 function progressLine(recording: Recording): string {
-  if (recording.phase === "starting") return "Starting…";
+  if (recording.phase === "starting") return "正在开始…";
   if (recording.stopping) return "Stopping…";
   return `${elapsed(recording.seconds)} · ${actionCount(recording.actions)}`;
 }
@@ -415,7 +415,7 @@ function progressLine(recording: Recording): string {
 export function RecordingRow({
   recording,
   placeholder = "Name the task, like Submit an expense report",
-  recordLabel = "Record",
+  recordLabel = "录制",
   whileRecording,
 }: {
   recording: Recording;
@@ -481,7 +481,7 @@ export function RecordingRow({
       <ItemActions>
         {/* Base UI's Button defaults to type="button", which never submits the form. */}
         <Button disabled={!recording.canRecord} size="sm" type="submit">
-          {recording.starting ? "Starting…" : recordLabel}
+          {recording.starting ? "正在开始…" : recordLabel}
         </Button>
       </ItemActions>
     </Item>
@@ -539,7 +539,7 @@ export function RecordingBar({
           className="text-red-500"
           data-icon="inline-start"
         />
-        {recording.starting ? "Starting…" : "Record"}
+        {recording.starting ? "正在开始…" : "录制"}
       </PopoverTrigger>
       <PopoverContent
         align="end"

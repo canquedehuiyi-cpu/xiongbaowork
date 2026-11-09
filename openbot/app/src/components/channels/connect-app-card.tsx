@@ -116,8 +116,8 @@ export function ConnectAppCard({
             to="/settings/connected-accounts/$key"
           >
             {title} 的页面
-          </Link>
-          {" "}填好，然后再问一次。
+          </Link>{" "}
+          填好，然后再问一次。
         </p>
       ) : (
         <div className="flex flex-wrap items-center gap-3">

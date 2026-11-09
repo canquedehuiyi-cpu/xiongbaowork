@@ -32,8 +32,8 @@ import {
 } from "@/components/ui/sheet";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import { signOutMutationOptions } from "@/lib/auth/mutations";
-import { useSignOutOffered } from "@/lib/auth/sign-out-offered";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
+import { useSignOutOffered } from "@/lib/auth/sign-out-offered";
 import { botAttentionQueryOptions } from "@/lib/bot-lifecycle/queries";
 import { untitledLine } from "@/lib/channels/label";
 import { setChannelPinnedMutationOptions } from "@/lib/channels/mutations";

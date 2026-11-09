@@ -19,19 +19,32 @@ export function managePaths(edition: "team" | "personal") {
       pluginsLabel: "已连接的账号",
       plugins: () => linkOptions({ to: "/settings/connected-accounts" }),
       plugin: (key: string) =>
-        linkOptions({ to: "/settings/connected-accounts/$key", params: { key } }),
+        linkOptions({
+          to: "/settings/connected-accounts/$key",
+          params: { key },
+        }),
       // The app's own page for both: there is no page for one tool or one Bot of a connected account.
       pluginTool: (key: string, _tool: string) =>
-        linkOptions({ to: "/settings/connected-accounts/$key", params: { key } }),
+        linkOptions({
+          to: "/settings/connected-accounts/$key",
+          params: { key },
+        }),
       pluginBot: (key: string, _agentId: string) =>
-        linkOptions({ to: "/settings/connected-accounts/$key", params: { key } }),
+        linkOptions({
+          to: "/settings/connected-accounts/$key",
+          params: { key },
+        }),
       brokerDirectory: (_directory: BrokerDirectory) =>
         linkOptions({ to: "/settings/connected-accounts" }),
-      skills: () => linkOptions({ to: "/resources", search: { tab: "skills" } }),
+      skills: () =>
+        linkOptions({ to: "/resources", search: { tab: "skills" } }),
       newSkill: () =>
         linkOptions({ to: "/resources", search: { tab: "skills", new: true } }),
       skill: (slug: string) =>
-        linkOptions({ to: "/resources", search: { tab: "skills", edit: slug } }),
+        linkOptions({
+          to: "/resources",
+          search: { tab: "skills", edit: slug },
+        }),
       credentialsLabel: "密钥",
       credentials: () => linkOptions({ to: "/settings" }),
       newCredential: () => linkOptions({ to: "/settings" }),

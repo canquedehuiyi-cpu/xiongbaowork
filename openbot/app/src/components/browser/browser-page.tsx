@@ -19,7 +19,7 @@ import { recordingOnItsWay, YourRecordings } from "./your-recordings";
 
 const TITLE = TEACH_A_BOT;
 const DESCRIPTION =
-  "Show your Bots how to do a task. Press Record, name the task, and do it once in the browser.";
+  "教员工怎么做一件事：点「录制」，给任务起个名字，然后在浏览器里亲自做一遍。";
 
 /**
  * The way from what was taught to what it became: the skills a Bot learned from recordings are in Settings, Learning,
@@ -31,7 +31,7 @@ function LearnedLink() {
       className="text-muted-foreground text-sm underline-offset-4 hover:text-foreground hover:underline"
       to="/settings/learning"
     >
-      See what your Bots learned
+      看看员工学到了什么
     </Link>
   );
 }
@@ -84,7 +84,7 @@ export function BrowserPage() {
     return (
       <PageShell title={TITLE}>
         <p className="mt-6 text-destructive text-sm" role="alert">
-          Couldn't load your browser. Reload the page.
+          你的浏览器没能加载，请刷新页面。
         </p>
         <YourRecordings action={<LearnedLink />} />
       </PageShell>
@@ -95,8 +95,7 @@ export function BrowserPage() {
     return (
       <PageShell title={TITLE}>
         <PageEmpty>
-          {state.data.note ??
-            "OpenBot isn't set up to run a browser for you. Ask an admin."}
+          {state.data.note ?? "这个部署还不能为你运行浏览器，请联系管理员。"}
         </PageEmpty>
         <YourRecordings action={<LearnedLink />} />
       </PageShell>
@@ -153,7 +152,7 @@ function OpenedBrowser({ state }: { state: BrowserApiState }) {
         {recordingsOnly && !said ? (
           <div className="mt-6">
             <Button onClick={() => open.mutate()} size="sm" variant="outline">
-              Open browser
+              打开浏览器
             </Button>
           </div>
         ) : null}
@@ -164,7 +163,7 @@ function OpenedBrowser({ state }: { state: BrowserApiState }) {
             </p>
             {open.error ? (
               <Button onClick={() => open.mutate()} size="sm" variant="outline">
-                Try again
+                再试一次
               </Button>
             ) : null}
           </div>

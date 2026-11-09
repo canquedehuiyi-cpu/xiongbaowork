@@ -72,7 +72,7 @@ export function SkillPage({ slug }: { slug: string }) {
   const saveSkill = useMutation(saveSkillMutationOptions(queryClient));
   const removeSkill = useMutation(removeSkillMutationOptions(queryClient));
 
-  const back = { label: "Skills", linkProps: paths.skills() };
+  const back = { label: "技能", linkProps: paths.skills() };
   const skill = plugins.data?.skills.find(
     (candidate) => candidate.slug === slug,
   );
@@ -80,7 +80,7 @@ export function SkillPage({ slug }: { slug: string }) {
   /* Nothing rather than a placeholder, so no sentence asserts anything while the fetch is open. */
   if (plugins.isPending) {
     return (
-      <PageShell backButton={back} title="Skill">
+      <PageShell backButton={back} title="技能">
         {null}
       </PageShell>
     );
@@ -89,9 +89,9 @@ export function SkillPage({ slug }: { slug: string }) {
   /* A list that could not be read is not a missing skill: `isPending` goes false on a failure too. */
   if (!plugins.data) {
     return (
-      <PageShell backButton={back} title="Skill">
+      <PageShell backButton={back} title="技能">
         <p className="text-destructive text-sm" role="alert">
-          Couldn't load this skill. Reload the page.
+          这个技能没能加载，请刷新页面。
         </p>
       </PageShell>
     );
@@ -99,9 +99,9 @@ export function SkillPage({ slug }: { slug: string }) {
 
   if (!skill) {
     return (
-      <PageShell backButton={back} title="Skill">
-        <PageEmpty icon={IconFileOff} title="Skill not found">
-          It may have been deleted. Go back to Skills to see the ones there are.
+      <PageShell backButton={back} title="技能">
+        <PageEmpty icon={IconFileOff} title="找不到这个技能">
+          它可能已被删除。回到技能列表看看现有的技能。
         </PageEmpty>
       </PageShell>
     );
@@ -132,11 +132,11 @@ export function SkillPage({ slug }: { slug: string }) {
             <code>/</code>. It takes effect at once.
           </>
         }
-        title="Bots"
+        title="员工"
       >
         {bots.length === 0 ? (
-          <PageEmpty icon={IconBolt} title="No Bots yet">
-            Create a Bot to offer this skill.
+          <PageEmpty icon={IconBolt} title="还没有员工">
+            先创建一位员工来提供这个技能。
           </PageEmpty>
         ) : (
           <PageRows>
@@ -148,10 +148,8 @@ export function SkillPage({ slug }: { slug: string }) {
                     <ItemContent>
                       <ItemTitle>{bot.name}</ItemTitle>
                       <ItemDescription>
-                        {bot.hidden ? "Hidden from your roster. " : ""}
-                        {held
-                          ? "Offers this skill."
-                          : "Doesn't offer this skill."}
+                        {bot.hidden ? "已从你的名单里隐藏。" : ""}
+                        {held ? "提供这个技能。" : "不提供这个技能。"}
                       </ItemDescription>
                     </ItemContent>
                     <ItemActions>
@@ -161,7 +159,7 @@ export function SkillPage({ slug }: { slug: string }) {
                        * not freeze the rest of the list.
                        */}
                       <Switch
-                        aria-label={`${bot.name} offers ${skill.title}`}
+                        aria-label={`${bot.name} 提供 ${skill.title}`}
                         checked={held}
                         disabled={
                           setGrant.isPending &&
@@ -203,14 +201,14 @@ export function SkillPage({ slug }: { slug: string }) {
         key={`${skill.title}\u0000${skill.summary}\u0000${skill.instructions}`}
         onSubmit={async (values) => {
           await saveSkill.mutateAsync({ ...values, global: true });
-          toast.add({ title: "Skill saved", type: "success" });
+          toast.add({ title: "技能已保存", type: "success" });
         }}
         slugLocked
-        submitLabel="Save changes"
+        submitLabel="保存修改"
       />
 
       {/* A row that opens the confirmation, as deleting a Bot is on its own page. */}
-      <PageSection title="Manage">
+      <PageSection title="管理">
         <PageRows>
           <Item
             render={<button onClick={() => setRemoving(true)} type="button" />}
@@ -220,10 +218,9 @@ export function SkillPage({ slug }: { slug: string }) {
               <IconTrash />
             </ItemMedia>
             <ItemContent>
-              <ItemTitle>Delete</ItemTitle>
+              <ItemTitle>删除</ItemTitle>
               <ItemDescription>
-                People can't run it any more, and no Bot offers it. You can't
-                undo this.
+                删除后没人能再运行它，也没有员工会提供它。此操作无法撤销。
               </ItemDescription>
             </ItemContent>
             <ItemActions>
@@ -236,10 +233,9 @@ export function SkillPage({ slug }: { slug: string }) {
       <Dialog onOpenChange={setRemoving} open={removing}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete {skill.title}?</DialogTitle>
+            <DialogTitle>删除 {skill.title}？</DialogTitle>
             <DialogDescription>
-              People can't run it any more, and no Bot offers it. You can't undo
-              this.
+              删除后没人能再运行它，也没有员工会提供它。此操作无法撤销。
             </DialogDescription>
           </DialogHeader>
           {removeSkill.error ? (
@@ -253,7 +249,7 @@ export function SkillPage({ slug }: { slug: string }) {
               size="sm"
               variant="ghost"
             >
-              Cancel
+              取消
             </Button>
             <Button
               disabled={removeSkill.isPending}
@@ -265,7 +261,7 @@ export function SkillPage({ slug }: { slug: string }) {
               size="sm"
               variant="destructive"
             >
-              {removeSkill.isPending ? "Deleting…" : "Delete"}
+              {removeSkill.isPending ? "正在删除…" : "删除"}
             </Button>
           </DialogFooter>
         </DialogContent>

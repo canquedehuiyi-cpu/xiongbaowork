@@ -11,7 +11,7 @@ import { elapsed, RecordingMark, useSecondsSince } from "./recording";
 
 const BUTTON_CLASS = "hover:bg-foreground/5 h-10";
 /** What the sidebar and the page call the place where a person teaches their Bots a task. */
-export const TEACH_A_BOT = "Teach a Bot";
+export const TEACH_A_BOT = "教员工做事";
 
 /**
  * The sidebar's Teach a Bot link, beside Bots, Capabilities and Connections. It takes the person to the page where they

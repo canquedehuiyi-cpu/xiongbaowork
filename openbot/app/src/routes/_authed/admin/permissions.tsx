@@ -10,8 +10,8 @@ export const Route = createFileRoute("/_authed/admin/permissions")({
 export function PermissionsPage() {
   return (
     <PageShell
-      description="Each switch applies to everybody. A role can override it, and a directory group can get a permission the organization has off. All changes appear in Audit."
-      title="Permissions"
+      description="每个开关都对所有人生效。角色可以覆盖它，目录分组也可以拿到组织关掉的权限。所有改动都会记入审计。"
+      title="权限"
     >
       <CapabilitiesSection />
     </PageShell>

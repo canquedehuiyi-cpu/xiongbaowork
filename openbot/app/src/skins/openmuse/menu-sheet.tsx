@@ -25,8 +25,8 @@ import { navigationRender } from "@/components/layout/navigation-target";
 import { Item, ItemContent, ItemTitle } from "@/components/ui/item";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import { signOutMutationOptions } from "@/lib/auth/mutations";
-import { useSignOutOffered } from "@/lib/auth/sign-out-offered";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
+import { useSignOutOffered } from "@/lib/auth/sign-out-offered";
 import { untitledLine } from "@/lib/channels/label";
 import { setChannelPinnedMutationOptions } from "@/lib/channels/mutations";
 import {

@@ -379,12 +379,6 @@ export type PluginConnections = {
 };
 
 /**
- * The signed-in person's own connections.
- *
- * There is no version of this scoped to anybody else: the endpoint answers for whoever is asking,
- * so a page cannot accidentally render somebody else's.
- */
-/**
  * The rows that are the person's own connection, for a screen asking "is this mine".
  *
  * Upstream filters out rows held by the deployment for everybody (shared accounts, #757). This
@@ -398,6 +392,12 @@ export function personalConnections(
   return rows;
 }
 
+/**
+ * The signed-in person's own connections.
+ *
+ * There is no version of this scoped to anybody else: the endpoint answers for whoever is asking,
+ * so a page cannot accidentally render somebody else's.
+ */
 export function connectionsQueryOptions() {
   return queryOptions({
     queryKey: pluginKeys.connections(),

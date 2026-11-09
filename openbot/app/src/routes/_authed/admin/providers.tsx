@@ -1,13 +1,13 @@
-import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { createFileRoute } from "@tanstack/react-router";
 import {
   ModelAllowlistSection,
   ModelChoiceSection,
   ModelUsageSection,
   ProviderSection,
 } from "@/components/admin/controls/model-sections";
-import { availableModelsQueryOptions } from "@/lib/models/queries";
 import { PageShell } from "@/components/layout/page-shell";
+import { availableModelsQueryOptions } from "@/lib/models/queries";
 
 export const Route = createFileRoute("/_authed/admin/providers")({
   component: ProvidersPage,
@@ -28,10 +28,10 @@ export function ProvidersPage() {
     <PageShell
       description={
         team
-          ? "See which provider serves your Bots' models, and choose which models people may pick. All changes appear in Audit."
-          : "See which provider serves your Bots' models and what they ran on."
+          ? "查看员工的模型由哪个提供方提供，并选择大家可以挑选哪些模型。所有改动都会记入审计。"
+          : "查看员工的模型由哪个提供方提供，以及它们用的是什么。"
       }
-      title="Providers"
+      title="模型提供方"
     >
       <ProviderSection />
       <ModelChoiceSection />

@@ -26,13 +26,13 @@ export function NewSkillPage() {
 
   return (
     <PageShell
-      backButton={{ label: "Skills", linkProps: paths.skills() }}
+      backButton={{ label: "技能", linkProps: paths.skills() }}
       description={
         personal
-          ? "Write instructions a Bot follows when you pick the skill from the / menu. Your Bots offer it as soon as you save."
-          : "Write instructions a Bot follows when someone picks the skill from the / menu. After saving, choose which Bots offer it."
+          ? "写下你在 / 菜单里选中这个技能时员工要遵循的说明。保存后你的员工就会提供它。"
+          : "写下有人在 / 菜单里选中这个技能时员工要遵循的说明。保存后再选择由哪些员工提供它。"
       }
-      title="New skill"
+      title="新建技能"
     >
       <SkillFields
         sections={{
@@ -42,7 +42,7 @@ export function NewSkillPage() {
               render={(props) => <Link {...props} {...paths.skills()} />}
               variant="outline"
             >
-              Cancel
+              取消
             </Button>
           ),
         }}
@@ -53,7 +53,7 @@ export function NewSkillPage() {
           await saveSkill.mutateAsync({ ...values, global: true });
           await navigate(paths.skill(values.slug.trim()));
         }}
-        submitLabel="Save skill"
+        submitLabel="保存技能"
       />
     </PageShell>
   );
