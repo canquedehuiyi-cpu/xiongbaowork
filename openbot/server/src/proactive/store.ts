@@ -5,7 +5,7 @@ import { auditEvents, users } from "../db/schema/core";
 import { botLifecycle } from "../db/schema/lifecycle";
 import {
   proactivePings,
-  proactiveRuns,
+  proactiveCheckInRuns,
   proactiveSettings,
   proactiveSuggestions,
 } from "../db/schema/proactive";
@@ -368,13 +368,13 @@ export function createProactiveStore(database: Database) {
   ): Promise<number> {
     const [row] = await executor
       .select({ count: sql<number>`count(*)::int` })
-      .from(proactiveRuns)
+      .from(proactiveCheckInRuns)
       .where(
         and(
-          eq(proactiveRuns.ownerUserId, ownerUserId),
-          eq(proactiveRuns.agentId, agentId),
-          ne(proactiveRuns.outcome, "skipped"),
-          gte(proactiveRuns.startedAt, sql`now() - interval '24 hours'`),
+          eq(proactiveCheckInRuns.ownerUserId, ownerUserId),
+          eq(proactiveCheckInRuns.agentId, agentId),
+          ne(proactiveCheckInRuns.outcome, "skipped"),
+          gte(proactiveCheckInRuns.startedAt, sql`now() - interval '24 hours'`),
         ),
       );
     return row?.count ?? 0;
@@ -695,7 +695,7 @@ export function createProactiveStore(database: Database) {
      */
     async closeStaleRuns(leaseMs: number): Promise<number> {
       const closed = await database
-        .update(proactiveRuns)
+        .update(proactiveCheckInRuns)
         .set({
           outcome: "failed",
           error: STOPPED_BEFORE_FINISHING,
@@ -703,14 +703,14 @@ export function createProactiveStore(database: Database) {
         })
         .where(
           and(
-            eq(proactiveRuns.outcome, "running"),
+            eq(proactiveCheckInRuns.outcome, "running"),
             lte(
-              proactiveRuns.startedAt,
+              proactiveCheckInRuns.startedAt,
               sql`now() - make_interval(secs => ${leaseMs / 1000})`,
             ),
           ),
         )
-        .returning({ id: proactiveRuns.id });
+        .returning({ id: proactiveCheckInRuns.id });
       return closed.length;
     },
     /** A check-in a gate stopped before the model, and why. */
@@ -720,7 +720,7 @@ export function createProactiveStore(database: Database) {
       trigger: ProactiveRunTrigger;
       reason: ProactiveSkipReason;
     }) {
-      await database.insert(proactiveRuns).values({
+      await database.insert(proactiveCheckInRuns).values({
         id: input.id,
         settingId: input.setting.id,
         ownerUserId: input.setting.ownerUserId,
@@ -758,7 +758,7 @@ export function createProactiveStore(database: Database) {
             )) >= input.dailyLimit
           )
             return "capped";
-          await transaction.insert(proactiveRuns).values({
+          await transaction.insert(proactiveCheckInRuns).values({
             id: input.id,
             settingId: input.setting.id,
             ownerUserId: input.setting.ownerUserId,
@@ -769,7 +769,7 @@ export function createProactiveStore(database: Database) {
           return true;
         });
       } catch (error) {
-        if (violates(error, "proactive_runs_one_running_idx")) return false;
+        if (violates(error, "proactive_check_in_runs_one_running_idx")) return false;
         throw error;
       }
     },
@@ -787,7 +787,7 @@ export function createProactiveStore(database: Database) {
       },
     ) {
       await database
-        .update(proactiveRuns)
+        .update(proactiveCheckInRuns)
         .set({
           outcome: result.outcome,
           itemsRaised: result.itemsRaised,
@@ -796,7 +796,7 @@ export function createProactiveStore(database: Database) {
           finishedAt: sql`now()`,
         })
         .where(
-          and(eq(proactiveRuns.id, id), eq(proactiveRuns.outcome, "running")),
+          and(eq(proactiveCheckInRuns.id, id), eq(proactiveCheckInRuns.outcome, "running")),
         );
     },
     /**
@@ -807,16 +807,16 @@ export function createProactiveStore(database: Database) {
      */
     async windowStart(settingId: string): Promise<Date | null> {
       const [row] = await database
-        .select({ startedAt: proactiveRuns.startedAt })
-        .from(proactiveRuns)
+        .select({ startedAt: proactiveCheckInRuns.startedAt })
+        .from(proactiveCheckInRuns)
         .where(
           and(
-            eq(proactiveRuns.settingId, settingId),
-            inArray(proactiveRuns.outcome, ["quiet", "raised"]),
-            isNull(proactiveRuns.error),
+            eq(proactiveCheckInRuns.settingId, settingId),
+            inArray(proactiveCheckInRuns.outcome, ["quiet", "raised"]),
+            isNull(proactiveCheckInRuns.error),
           ),
         )
-        .orderBy(desc(proactiveRuns.startedAt))
+        .orderBy(desc(proactiveCheckInRuns.startedAt))
         .limit(1);
       return row?.startedAt ?? null;
     },
@@ -824,17 +824,17 @@ export function createProactiveStore(database: Database) {
     async lastCheckIn(settingId: string): Promise<LastCheckIn | null> {
       const [row] = await database
         .select({
-          outcome: proactiveRuns.outcome,
-          startedAt: proactiveRuns.startedAt,
+          outcome: proactiveCheckInRuns.outcome,
+          startedAt: proactiveCheckInRuns.startedAt,
         })
-        .from(proactiveRuns)
+        .from(proactiveCheckInRuns)
         .where(
           and(
-            eq(proactiveRuns.settingId, settingId),
-            inArray(proactiveRuns.outcome, ["quiet", "raised", "failed"]),
+            eq(proactiveCheckInRuns.settingId, settingId),
+            inArray(proactiveCheckInRuns.outcome, ["quiet", "raised", "failed"]),
           ),
         )
-        .orderBy(desc(proactiveRuns.startedAt))
+        .orderBy(desc(proactiveCheckInRuns.startedAt))
         .limit(1);
       return row ? (row as LastCheckIn) : null;
     },
@@ -842,9 +842,9 @@ export function createProactiveStore(database: Database) {
     async latestRun(settingId: string): Promise<ProactiveRunRow | null> {
       const [row] = await database
         .select()
-        .from(proactiveRuns)
-        .where(eq(proactiveRuns.settingId, settingId))
-        .orderBy(desc(proactiveRuns.startedAt))
+        .from(proactiveCheckInRuns)
+        .where(eq(proactiveCheckInRuns.settingId, settingId))
+        .orderBy(desc(proactiveCheckInRuns.startedAt))
         .limit(1);
       return row ?? null;
     },
@@ -854,10 +854,10 @@ export function createProactiveStore(database: Database) {
      */
     async latestRuns(owner: string): Promise<Map<string, ProactiveRunRow>> {
       const rows = await database
-        .selectDistinctOn([proactiveRuns.settingId])
-        .from(proactiveRuns)
-        .where(eq(proactiveRuns.ownerUserId, owner))
-        .orderBy(proactiveRuns.settingId, desc(proactiveRuns.startedAt));
+        .selectDistinctOn([proactiveCheckInRuns.settingId])
+        .from(proactiveCheckInRuns)
+        .where(eq(proactiveCheckInRuns.ownerUserId, owner))
+        .orderBy(proactiveCheckInRuns.settingId, desc(proactiveCheckInRuns.startedAt));
       return new Map(rows.map((row) => [row.settingId, row]));
     },
     /** Whether a check-in for this setting is on the queue and has not been run yet. */
@@ -899,23 +899,23 @@ export function createProactiveStore(database: Database) {
       };
       const runs = await batches(() =>
         database
-          .delete(proactiveRuns)
+          .delete(proactiveCheckInRuns)
           .where(
             inArray(
-              proactiveRuns.id,
+              proactiveCheckInRuns.id,
               database
-                .select({ id: proactiveRuns.id })
-                .from(proactiveRuns)
+                .select({ id: proactiveCheckInRuns.id })
+                .from(proactiveCheckInRuns)
                 .where(
                   and(
-                    ne(proactiveRuns.outcome, "running"),
-                    lte(proactiveRuns.startedAt, cutoff),
+                    ne(proactiveCheckInRuns.outcome, "running"),
+                    lte(proactiveCheckInRuns.startedAt, cutoff),
                   ),
                 )
                 .limit(PRUNE_BATCH),
             ),
           )
-          .returning({ id: proactiveRuns.id }),
+          .returning({ id: proactiveCheckInRuns.id }),
       );
       const pings = await batches(() =>
         database
@@ -944,9 +944,9 @@ export function createProactiveStore(database: Database) {
     async runs(settingId: string): Promise<ProactiveRunRow[]> {
       return database
         .select()
-        .from(proactiveRuns)
-        .where(eq(proactiveRuns.settingId, settingId))
-        .orderBy(desc(proactiveRuns.startedAt))
+        .from(proactiveCheckInRuns)
+        .where(eq(proactiveCheckInRuns.settingId, settingId))
+        .orderBy(desc(proactiveCheckInRuns.startedAt))
         .limit(50);
     },
     async suggestions(owner: string): Promise<ProactiveSuggestion[]> {

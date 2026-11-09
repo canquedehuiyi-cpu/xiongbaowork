@@ -6,7 +6,7 @@ import { agents, channels, users } from "../src/db/schema/core";
 import {
   proactivePeople,
   proactivePings,
-  proactiveRuns,
+  proactiveCheckInRuns,
   proactiveSettings,
   proactiveSuggestions,
 } from "../src/db/schema/proactive";
@@ -114,7 +114,7 @@ test("two open items with one normalized title cannot both stand for a person an
 
 test("one check-in runs at a time per setting, and only a skipped one carries a reason", async () => {
   const own = settingId;
-  const run = (overrides: Partial<typeof proactiveRuns.$inferInsert> = {}) => ({
+  const run = (overrides: Partial<typeof proactiveCheckInRuns.$inferInsert> = {}) => ({
     id: next(),
     settingId: own,
     ownerUserId: owner,
@@ -123,42 +123,42 @@ test("one check-in runs at a time per setting, and only a skipped one carries a 
     ...overrides,
   });
   const running = run({ threadId: next() });
-  await database.insert(proactiveRuns).values(running);
+  await database.insert(proactiveCheckInRuns).values(running);
   // A second replica, or Run now, finds the first still running.
   await rejects(
-    database.insert(proactiveRuns).values(run({ trigger: "run_now" })),
-    /proactive_runs_one_running_idx/,
+    database.insert(proactiveCheckInRuns).values(run({ trigger: "run_now" })),
+    /proactive_check_in_runs_one_running_idx/,
   );
   await database
-    .update(proactiveRuns)
+    .update(proactiveCheckInRuns)
     .set({ outcome: "quiet", finishedAt: new Date() })
-    .where(eq(proactiveRuns.id, running.id));
-  await database.insert(proactiveRuns).values(run());
+    .where(eq(proactiveCheckInRuns.id, running.id));
+  await database.insert(proactiveCheckInRuns).values(run());
 
   const finished = new Date();
   await database
-    .insert(proactiveRuns)
+    .insert(proactiveCheckInRuns)
     .values(
       run({ outcome: "skipped", skipReason: "capped", finishedAt: finished }),
     );
   await rejects(
     database
-      .insert(proactiveRuns)
+      .insert(proactiveCheckInRuns)
       .values(run({ outcome: "skipped", finishedAt: finished })),
-    /proactive_runs_skip_reason_check/,
+    /proactive_check_in_runs_skip_reason_check/,
   );
   await rejects(
     database
-      .insert(proactiveRuns)
+      .insert(proactiveCheckInRuns)
       .values(
         run({ outcome: "failed", skipReason: "busy", finishedAt: finished }),
       ),
-    /proactive_runs_skip_reason_check/,
+    /proactive_check_in_runs_skip_reason_check/,
   );
   // A finished outcome has a finish time; a running one does not.
   await rejects(
-    database.insert(proactiveRuns).values(run({ outcome: "raised" })),
-    /proactive_runs_finished_check/,
+    database.insert(proactiveCheckInRuns).values(run({ outcome: "raised" })),
+    /proactive_check_in_runs_finished_check/,
   );
 });
 

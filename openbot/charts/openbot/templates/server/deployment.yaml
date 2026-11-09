@@ -43,7 +43,6 @@ spec:
           the old values, and the deployment looks upgraded while behaving exactly as it did.
         */}}
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
         {{- if .Values.postgresql.enabled }}
         {{- /*
           The bundled role writer's password. The migrations Job ALTERs the role to whatever was
@@ -52,9 +51,7 @@ spec:
         */}}
         checksum/role-writer: {{ include "openbot.roleWriterChecksum" . }}
         {{- end }}
-=======
         checksum/secrets: {{ include "openbot.secretsChecksum" . }}
->>>>>>> v1.0.0
         {{- if eq .Values.computers.mode "sandbox" }}
         {{- /*
           The shape of a computer, which the server reads once and keeps.

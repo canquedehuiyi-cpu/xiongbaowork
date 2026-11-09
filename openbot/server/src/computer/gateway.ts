@@ -1932,18 +1932,22 @@ export function createComputerGateway(
    * seat of the machine's owner (`deviceSeat`), which the desktop's own lock has already made the
    * person asking.
    */
-  const desktopGovern: DesktopGovern = (toolName, botId, actor, subject, run) =>
-    govern(toolName, deviceSeat(subject.device, botId), actor, subject, run);
-  const desktopPost: DesktopPost = (
-    botId,
-    path,
-    payload,
-    signal,
-    timeoutMs,
-    address,
-  ) => {
+  function desktopGovern<T>(
+    ...[toolName, botId, actor, subject, run]: Parameters<DesktopGovern>
+  ): Promise<T> {
+    return govern<T>(
+      toolName,
+      deviceSeat(subject.device, botId),
+      actor,
+      subject,
+      run as () => Promise<T>,
+    );
+  }
+  function desktopPost<T>(
+    ...[botId, path, payload, signal, timeoutMs, address]: Parameters<DesktopPost>
+  ): Promise<T> {
     const machine = parseRunnerAddress(address);
-    return post(
+    return post<T>(
       machine ? deviceSeat(machine, botId) : botSeat(botId),
       path,
       payload,
@@ -1951,7 +1955,7 @@ export function createComputerGateway(
       timeoutMs,
       address,
     );
-  };
+  }
   // --- end desktop control ---
 
   return {

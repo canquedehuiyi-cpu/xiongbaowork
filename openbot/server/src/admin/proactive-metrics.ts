@@ -24,7 +24,7 @@ import {
   agents,
   botLifecycle,
   proactivePings,
-  proactiveRuns,
+  proactiveCheckInRuns,
   proactiveSettings,
   proactiveSuggestions,
   users,
@@ -161,23 +161,23 @@ export async function proactiveMetrics(
   // How the window's check-ins ended. One still running has not ended, so it is in none of them.
   const runs = await database
     .select({
-      agentId: proactiveRuns.agentId,
-      outcome: proactiveRuns.outcome,
-      skipReason: proactiveRuns.skipReason,
+      agentId: proactiveCheckInRuns.agentId,
+      outcome: proactiveCheckInRuns.outcome,
+      skipReason: proactiveCheckInRuns.skipReason,
       count: count(),
     })
-    .from(proactiveRuns)
+    .from(proactiveCheckInRuns)
     .where(
       and(
-        inArray(proactiveRuns.agentId, agentIds),
-        ne(proactiveRuns.outcome, "running"),
-        gt(proactiveRuns.startedAt, since),
+        inArray(proactiveCheckInRuns.agentId, agentIds),
+        ne(proactiveCheckInRuns.outcome, "running"),
+        gt(proactiveCheckInRuns.startedAt, since),
       ),
     )
     .groupBy(
-      proactiveRuns.agentId,
-      proactiveRuns.outcome,
-      proactiveRuns.skipReason,
+      proactiveCheckInRuns.agentId,
+      proactiveCheckInRuns.outcome,
+      proactiveCheckInRuns.skipReason,
     );
   for (const row of runs) {
     const bot = byBot.get(row.agentId);

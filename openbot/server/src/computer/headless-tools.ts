@@ -2,7 +2,10 @@ import {
   type HeadlessTool,
   HeadlessToolSuspension,
 } from "@openbot/toolkit/headless-tools";
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
+import { z } from "zod";
+import { currentApprovalContext } from "../approvals/types";
+import { type AuditStore, recordAuditEvent } from "../audit";
+import type { ComputerSeat } from "./computer-key";
 /** The turn engine's headless-tool types live in the toolkit now; re-exported for this server's callers. */
 export { type HeadlessTool, HeadlessToolSuspension };
 import { computerActionIdentity } from "./action-identity";
@@ -12,12 +15,6 @@ import { desktopTools } from "./desktop-tools";
 // --- app discovery (sub-project 3) ---
 import { CANDIDATE_REF } from "./app-discovery";
 // --- end app discovery ---
-=======
-import { z } from "zod";
-import { currentApprovalContext } from "../approvals/types";
-import { type AuditStore, recordAuditEvent } from "../audit";
-import type { ComputerSeat } from "./computer-key";
->>>>>>> v1.0.0
 import {
   type ActionActor,
   type ComputerGateway,
@@ -90,23 +87,19 @@ export function createHeadlessComputerTools(options: {
 
 function headlessComputerTools(options: {
   gateway: ComputerGateway;
-  botId: string;
+  seat: ComputerSeat;
   actor: ActionActor;
   auditStore?: AuditStore;
   signIn?: HeadlessSignInRequester;
   machine?: "workspace" | "device";
   apps?: boolean;
 }): HeadlessTool[] {
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
-  const { gateway, botId, actor, auditStore, signIn } = options;
+  const { gateway, seat, actor, auditStore, signIn } = options;
+  const botId = seat.botId;
   const onDevice = options.machine === "device";
   const where = onDevice
     ? "your workspace folder on the person's own paired machine (not a container of yours)"
     : "your workspace";
-=======
-  const { gateway, seat, actor, auditStore, signIn } = options;
-  const botId = seat.botId;
->>>>>>> v1.0.0
   const snapshotId = z.number().int().positive();
   const ref = z.string().min(1);
   const text = z.string().min(1);
@@ -304,13 +297,9 @@ function headlessComputerTools(options: {
     ),
     tool(
       "computer_run_command",
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
       onDevice
         ? `Run a shell command on the person's own paired machine, in ${where}: this is how you act on their computer when they ask. The machine may run Windows (PowerShell), macOS or Linux, so write the command for that system. Long output is truncated and long commands are stopped. A command that deletes recursively, formats a drive or names a file that may hold secrets waits for the person's approval; if refused say so rather than retrying.`
-        : "Run a bash shell command in your workspace. Pipes and && work; long output is truncated and long commands are stopped. For package installation use sudo apt-get; if refused say so rather than retrying.",
-=======
-      "Run a bash shell command in your workspace. Pipes and && work; long output is truncated and long commands are stopped. For package installation check id -u first: as root (0), use apt-get directly; otherwise use sudo openbot-apt update && sudo openbot-apt install <package>, which takes package names and nothing else, not sudo apt-get. If installation is refused, say so rather than retrying.",
->>>>>>> v1.0.0
+        : "Run a bash shell command in your workspace. Pipes and && work; long output is truncated and long commands are stopped. For package installation check id -u first: as root (0), use apt-get directly; otherwise use sudo openbot-apt update && sudo openbot-apt install <package>, which takes package names and nothing else, not sudo apt-get. If installation is refused, say so rather than retrying.",
       z.strictObject({ command: text }),
       async (input, { signal }) => ({
         ok: true,

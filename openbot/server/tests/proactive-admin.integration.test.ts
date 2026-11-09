@@ -42,7 +42,7 @@ import {
   modelUsage,
   proactivePeople,
   proactivePings,
-  proactiveRuns,
+  proactiveCheckInRuns,
   proactiveSettings,
   proactiveSuggestions,
   userRoles,
@@ -184,8 +184,8 @@ async function reset() {
     ),
   );
   await database
-    .delete(proactiveRuns)
-    .where(inArray(proactiveRuns.settingId, settingIds()));
+    .delete(proactiveCheckInRuns)
+    .where(inArray(proactiveCheckInRuns.settingId, settingIds()));
   await database
     .delete(botLifecycle)
     .where(inArray(botLifecycle.agentId, [inboxBot, calendarBot]));
@@ -608,7 +608,7 @@ describe("the numbers", () => {
     setting: ProactiveSetting,
     runs: [ProactiveRunOutcome, ProactiveSkipReason | null, number][],
   ) {
-    await database.insert(proactiveRuns).values(
+    await database.insert(proactiveCheckInRuns).values(
       runs.map(([outcome, skipReason, agoMinutes]) => ({
         id: `ci-run-${randomUUID()}`,
         settingId: setting.id,

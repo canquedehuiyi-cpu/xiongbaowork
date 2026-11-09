@@ -13,7 +13,7 @@ import { createDatabase } from "../src/db/client";
 import { agents, users } from "../src/db/schema/core";
 import {
   proactivePings,
-  proactiveRuns,
+  proactiveCheckInRuns,
   proactiveSettings,
   proactiveSuggestions,
 } from "../src/db/schema/proactive";
@@ -63,8 +63,8 @@ beforeEach(async () => {
     .delete(proactivePings)
     .where(eq(proactivePings.ownerUserId, owner));
   await database
-    .delete(proactiveRuns)
-    .where(eq(proactiveRuns.ownerUserId, owner));
+    .delete(proactiveCheckInRuns)
+    .where(eq(proactiveCheckInRuns.ownerUserId, owner));
 });
 afterAll(async () => {
   await database.delete(users).where(eq(users.id, owner));
@@ -73,7 +73,7 @@ afterAll(async () => {
 });
 
 async function run(name: string, days: number, outcome: "quiet" | "running") {
-  await database.insert(proactiveRuns).values({
+  await database.insert(proactiveCheckInRuns).values({
     id: `${suite}-${name}`,
     settingId,
     ownerUserId: owner,
@@ -113,9 +113,9 @@ async function itemOf(pingName: string, status: "open" | "dismissed") {
 const runIds = async () =>
   (
     await database
-      .select({ id: proactiveRuns.id })
-      .from(proactiveRuns)
-      .where(eq(proactiveRuns.ownerUserId, owner))
+      .select({ id: proactiveCheckInRuns.id })
+      .from(proactiveCheckInRuns)
+      .where(eq(proactiveCheckInRuns.ownerUserId, owner))
   )
     .map((row) => row.id.slice(suite.length + 1))
     .sort();

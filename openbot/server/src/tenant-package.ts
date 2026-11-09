@@ -1900,7 +1900,9 @@ export async function synchronizeTenantPackage(
           // What to write this boot, and everything the package declares (which a person's copies
           // are kept against): the personal starter's channel is declared but seeded only once.
           channels,
-          declaredChannelIds: tenantPackage.channels.map((channel) => channel.id),
+          declaredChannelIds: tenantPackage.channels.map(
+            (channel) => channel.id,
+          ),
           avatarSkillIds: (tenantPackage.avatarSkills ?? []).flatMap((slug) => {
             const id = ownedSkills.get(slug);
             return id ? [id] : [];
@@ -2132,10 +2134,18 @@ export async function deploymentNameOf(
   tenantPackage: Pick<TenantPackage, "tenantId" | "formerTenantIds">,
 ): Promise<string> {
   if (tenantPackage.formerTenantIds.length === 0) return tenantPackage.tenantId;
-  const rows = await database
-    .select({ tenantId: deploymentPackages.tenantId })
-    .from(deploymentPackages)
-    .where(inArray(deploymentPackages.tenantId, tenantPackage.formerTenantIds));
+  /*
+   * In the catalogue's own `system` frame, as the synchronise writes these rows: asked once at boot,
+   * where there is no frame, and every statement needs one (G01-E). `deployment_packages` is exempt
+   * from row-level security (migration 0062), so the frame decides nothing about which rows answer.
+   */
+  const formerIds = tenantPackage.formerTenantIds;
+  const rows = await runAsTenant(SYSTEM_TENANT, () =>
+    database
+      .select({ tenantId: deploymentPackages.tenantId })
+      .from(deploymentPackages)
+      .where(inArray(deploymentPackages.tenantId, formerIds)),
+  );
   const present = new Set(rows.map((row) => row.tenantId));
   return (
     tenantPackage.formerTenantIds.find((id) => present.has(id)) ??

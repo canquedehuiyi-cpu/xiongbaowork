@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { inArray } from "drizzle-orm";
 import { createDatabase } from "../src/db/client";
 import { agents, users } from "../src/db/schema/core";
-import { proactiveRuns } from "../src/db/schema/proactive";
+import { proactiveCheckInRuns } from "../src/db/schema/proactive";
 import { createProactiveStore } from "../src/proactive/store";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
@@ -82,7 +82,7 @@ test("daily counts combine a Bot's settings, exclude skipped/old runs and isolat
   const second = await setting("Count two");
   const anotherBot = await setting("Other Bot", secondBot);
   const anotherOwner = await setting("Other owner", bot, other);
-  await database.insert(proactiveRuns).values(
+  await database.insert(proactiveCheckInRuns).values(
     [
       { setting: first, outcome: "quiet" as const },
       { setting: second, outcome: "failed" as const },
@@ -100,7 +100,7 @@ test("daily counts combine a Bot's settings, exclude skipped/old runs and isolat
       skipReason: outcome === "skipped" ? ("capped" as const) : null,
     })),
   );
-  await database.insert(proactiveRuns).values({
+  await database.insert(proactiveCheckInRuns).values({
     id: randomUUID(),
     settingId: first.id,
     ownerUserId: owner,

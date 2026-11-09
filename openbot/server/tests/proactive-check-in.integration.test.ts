@@ -32,7 +32,7 @@ import { mcpServers, mcpTools } from "../src/db/schema/plugins";
 import {
   proactivePeople,
   proactivePings,
-  proactiveRuns,
+  proactiveCheckInRuns,
   proactiveSettings,
   proactiveSuggestions,
 } from "../src/db/schema/proactive";
@@ -233,8 +233,8 @@ async function reset() {
     .delete(proactivePeople)
     .where(eq(proactivePeople.ownerUserId, owner));
   await database
-    .delete(proactiveRuns)
-    .where(eq(proactiveRuns.ownerUserId, owner));
+    .delete(proactiveCheckInRuns)
+    .where(eq(proactiveCheckInRuns.ownerUserId, owner));
   await database
     .delete(botLifecycle)
     .where(eq(botLifecycle.ownerUserId, owner));
@@ -575,7 +575,7 @@ async function seedRuns(
   }[],
 ) {
   if (!runs.length) return;
-  await database.insert(proactiveRuns).values(
+  await database.insert(proactiveCheckInRuns).values(
     runs.map((run) => {
       const startedAt = new Date(Date.now() - run.hoursAgo * 3_600_000);
       return {
@@ -599,9 +599,9 @@ async function seedRuns(
 async function ranHoursAgo(run: { id: string } | undefined, hoursAgo: number) {
   const startedAt = new Date(Date.now() - hoursAgo * 3_600_000);
   await database
-    .update(proactiveRuns)
+    .update(proactiveCheckInRuns)
     .set({ startedAt, finishedAt: new Date(startedAt.getTime() + 30_000) })
-    .where(eq(proactiveRuns.id, run?.id as string));
+    .where(eq(proactiveCheckInRuns.id, run?.id as string));
   return Math.floor(startedAt.getTime() / 1000);
 }
 const afterOf = (instruction: string | undefined) =>
@@ -919,7 +919,7 @@ describe("the gates, before any model call", () => {
 
   test("a check-in already running is skipped as busy, and one a stopped replica left running is closed after its lease", async () => {
     const stuck = randomUUID();
-    await database.insert(proactiveRuns).values({
+    await database.insert(proactiveCheckInRuns).values({
       id: stuck,
       settingId: inbox.id,
       ownerUserId: owner,
@@ -936,9 +936,9 @@ describe("the gates, before any model call", () => {
 
     // Eleven minutes on, the replica that started it is plainly gone.
     await database
-      .update(proactiveRuns)
+      .update(proactiveCheckInRuns)
       .set({ startedAt: new Date(Date.now() - 11 * 60_000) })
-      .where(eq(proactiveRuns.id, stuck));
+      .where(eq(proactiveCheckInRuns.id, stuck));
     await due(inbox);
     const next = replica();
     await next.engine.sweep();
@@ -985,9 +985,9 @@ describe("the gates, before any model call", () => {
       expect(setting?.lastStatus).toBe("error");
       // Not "This Bot is checking in now": Run now is free to ask for the next one.
       await database
-        .update(proactiveRuns)
+        .update(proactiveCheckInRuns)
         .set({ startedAt: new Date(Date.now() - 11 * 60_000) })
-        .where(eq(proactiveRuns.settingId, inbox.id));
+        .where(eq(proactiveCheckInRuns.settingId, inbox.id));
       expect(await broken.engine.runNow(owner, inbox.id)).toEqual({
         queued: true,
       });
@@ -1574,9 +1574,9 @@ describe("the ping", () => {
     };
     const model: Model = async (input, afterTools) => {
       const [run] = await database
-        .select({ agentId: proactiveRuns.agentId })
-        .from(proactiveRuns)
-        .where(eq(proactiveRuns.id, input.runId));
+        .select({ agentId: proactiveCheckInRuns.agentId })
+        .from(proactiveCheckInRuns)
+        .where(eq(proactiveCheckInRuns.id, input.runId));
       return (byBot[run?.agentId ?? ""] ?? quiet)(input, afterTools);
     };
     const first = replica({ model });
@@ -2128,9 +2128,9 @@ describe("what a check-in costs and how it is asked", () => {
     expect(asked).toContain("naming the tool you read the evidence with");
 
     await database
-      .update(proactiveRuns)
+      .update(proactiveCheckInRuns)
       .set({ startedAt: new Date(Date.now() - 11 * 60_000) })
-      .where(eq(proactiveRuns.settingId, inbox.id));
+      .where(eq(proactiveCheckInRuns.settingId, inbox.id));
     const pressed = replica();
     await pressed.engine.runNow(owner, inbox.id);
     await pressed.engine.sweep();

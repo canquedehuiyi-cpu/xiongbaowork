@@ -702,12 +702,26 @@ and in whatever holds the release, which is not where `KEY_ENCRYPTION_KEY` belon
 {{- end }}
 {{- /*
   CopilotKit Intelligence is OPTIONAL in this fork (R0): every variable below is written only when it
-  was configured, and the server runs on its own PostgreSQL without any of them.
+  was configured, or when this chart installs Intelligence itself (`intelligence.enabled: true`, off
+  by default), and the server runs on its own PostgreSQL without any of them.
 */}}
 {{- $intelligence := .Values.config.intelligence | default dict }}
+{{- if include "openbot.intelligenceBundled" . }}
+- name: INTELLIGENCE_API_URL
+  value: {{ include "openbot.intelligenceApiUrl" . | quote }}
+- name: INTELLIGENCE_GATEWAY_WS_URL
+  value: {{ include "openbot.intelligenceGatewayWsUrl" . | quote }}
+{{ include "openbot.intelligenceApiKeyEnv" . }}
+{{- /*
+  The bundled Intelligence has no address a browser can reach, only Services in this cluster, and
+  the browser opens the gateway's socket itself. So the server carries it, on its own address, and
+  tells the browser that address (server/src/intelligence-gateway-proxy.ts).
+*/}}
+- name: INTELLIGENCE_GATEWAY_PROXY
+  value: "on"
+{{- else }}
 {{- with $intelligence.apiUrl }}
 - name: INTELLIGENCE_API_URL
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
   value: {{ . | quote }}
 {{- end }}
 {{- with $intelligence.gatewayWsUrl }}
@@ -724,20 +738,7 @@ and in whatever holds the release, which is not where `KEY_ENCRYPTION_KEY` belon
       {{- if eq $intelligenceKey "unknown" }}
       optional: true
       {{- end }}
-=======
-  value: {{ include "openbot.intelligenceApiUrl" . | quote }}
-- name: INTELLIGENCE_GATEWAY_WS_URL
-  value: {{ include "openbot.intelligenceGatewayWsUrl" . | quote }}
-{{ include "openbot.intelligenceApiKeyEnv" . }}
-{{- if include "openbot.intelligenceBundled" . }}
-{{- /*
-  The bundled Intelligence has no address a browser can reach, only Services in this cluster, and
-  the browser opens the gateway's socket itself. So the server carries it, on its own address, and
-  tells the browser that address (server/src/intelligence-gateway-proxy.ts).
-*/}}
-- name: INTELLIGENCE_GATEWAY_PROXY
-  value: "on"
->>>>>>> v1.0.0
+{{- end }}
 {{- end }}
 {{- /* From a store or an existingSecret too: emitted for the literal alone, a synced token reached
      the Secret and never the pod, and a self-hosted Intelligence ran unlicensed. */}}

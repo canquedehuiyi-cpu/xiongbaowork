@@ -36,7 +36,7 @@ import {
 import {
   proactivePeople,
   proactivePings,
-  proactiveRuns,
+  proactiveCheckInRuns,
   proactiveSettings,
   proactiveSuggestions,
 } from "../src/db/schema/proactive";
@@ -250,8 +250,8 @@ beforeEach(async () => {
     .delete(proactivePeople)
     .where(eq(proactivePeople.ownerUserId, owner));
   await database
-    .delete(proactiveRuns)
-    .where(eq(proactiveRuns.ownerUserId, owner));
+    .delete(proactiveCheckInRuns)
+    .where(eq(proactiveCheckInRuns.ownerUserId, owner));
   await database
     .update(proactiveSettings)
     .set({ nextRunAt: FAR, lastRunAt: null, lastStatus: "idle" })
