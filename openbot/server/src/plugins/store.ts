@@ -785,6 +785,10 @@ export function deploymentFaultSentence(error: Error): string {
  * person to read: rewording the sentence — translating it, dropping the parenthesis — would have
  * turned self-registration off with every test still green. A field cannot be reworded by accident.
  */
+/** 成员连接时遇到 vendor 逐出 OAuth client（`invalid_client`），写进 `lastError` 的那句说明。 */
+export const EVICTED_CLIENT_NOTE =
+  "应用的 OAuth 客户端已失效，需要管理员在应用页面点击「刷新工具」或重新连接。";
+
 export class TokenRefusedError extends McpServerError {
   constructor(
     message: string,
@@ -2362,7 +2366,23 @@ export function createPluginStore(options: PluginStoreOptions) {
          * Rethrows anything that is not the vendor disowning our client, which is every ordinary
          * failure: a withdrawn grant, a vendor being down, a disconnect mid-queue.
          */
-        if (options.reRegister === false) throw error;
+        if (options.reRegister === false) {
+          /*
+           * vendor 把 client 逐出了，而这条路径不能替换它。原话后面接一句面向管理员的说明，
+           * 落在应用的 `lastError` 里：只有管理员在自己的请求里刷新或重新连接，才会重新注册。
+           * 只截 vendor 原话，说明完整保留（`lastError` 最多 400 字）。
+           */
+          if (
+            error instanceof TokenRefusedError &&
+            error.code === INVALID_CLIENT
+          ) {
+            throw new TokenRefusedError(
+              `${reasonWithoutStatement(error).slice(0, 400 - EVICTED_CLIENT_NOTE.length - 1)} ${EVICTED_CLIENT_NOTE}`,
+              error.code,
+            );
+          }
+          throw error;
+        }
         return await refuseAndReplaceEvictedClient({
           error,
           clientRegisteredAt: stored.registeredAt,
