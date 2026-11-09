@@ -23,8 +23,8 @@ import {
   agentProfiles,
   agents,
   botLifecycle,
-  proactivePings,
   proactiveCheckInRuns,
+  proactivePings,
   proactiveSettings,
   proactiveSuggestions,
   users,
@@ -59,6 +59,7 @@ const SKIP_REASONS: ProactiveSkipReason[] = [
   "unreachable",
   "no_sources",
   "busy",
+  "quota",
 ];
 
 /** A Bot with nothing counted yet. Its picture is drawn from its id when it has no profile. */

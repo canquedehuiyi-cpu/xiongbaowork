@@ -1,5 +1,6 @@
 /*
  * 上游 0071（#929，员工主动提醒）：check-in 的人、提醒、运行记录与由提醒开始的任务。上游的 `proactive_runs` 与本仓库 0107 恢复导入的同名表冲突，这里建为 `proactive_check_in_runs`。四张新表都是按人的数据，带 `tenant_id` 与行级安全。
+ * 跳过原因比上游多一个 `quota`：这个人已用完当月任务额度时，check-in 不再调研（提出事情的 check-in 才开看板卡片、计入额度）。
  */
 CREATE TABLE "proactive_people" (
 	"tenant_id" text DEFAULT current_setting('app.tenant_id', true) NOT NULL,
@@ -38,7 +39,7 @@ CREATE TABLE "proactive_check_in_runs" (
 	"finished_at" timestamp with time zone,
 	CONSTRAINT "proactive_check_in_runs_trigger_check" CHECK ("proactive_check_in_runs"."trigger" IN ('schedule', 'run_now')),
 	CONSTRAINT "proactive_check_in_runs_outcome_check" CHECK ("proactive_check_in_runs"."outcome" IN ('running', 'quiet', 'raised', 'failed', 'skipped')),
-	CONSTRAINT "proactive_check_in_runs_skip_reason_check" CHECK (("proactive_check_in_runs"."outcome" = 'skipped' AND "proactive_check_in_runs"."skip_reason" IS NOT NULL AND "proactive_check_in_runs"."skip_reason" IN ('off_admin', 'off_person', 'paused', 'capped', 'unreachable', 'no_sources', 'busy')) OR ("proactive_check_in_runs"."outcome" <> 'skipped' AND "proactive_check_in_runs"."skip_reason" IS NULL)),
+	CONSTRAINT "proactive_check_in_runs_skip_reason_check" CHECK (("proactive_check_in_runs"."outcome" = 'skipped' AND "proactive_check_in_runs"."skip_reason" IS NOT NULL AND "proactive_check_in_runs"."skip_reason" IN ('off_admin', 'off_person', 'paused', 'capped', 'unreachable', 'no_sources', 'busy', 'quota')) OR ("proactive_check_in_runs"."outcome" <> 'skipped' AND "proactive_check_in_runs"."skip_reason" IS NULL)),
 	CONSTRAINT "proactive_check_in_runs_finished_check" CHECK (("proactive_check_in_runs"."outcome" = 'running') = ("proactive_check_in_runs"."finished_at" IS NULL))
 );
 --> statement-breakpoint

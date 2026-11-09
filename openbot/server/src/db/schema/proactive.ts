@@ -1,6 +1,4 @@
-import {
-  sql,
-} from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import {
   boolean,
   check,
@@ -22,13 +20,10 @@ import type {
   SuggestionStatus,
 } from "../../proactive/types";
 import { agents, users } from "./core";
-import {
-  tenantId,
-} from "./tenant";
+import { tenantId } from "./tenant";
 
 /* The two scopes every tenant table has had since 0072: the owner's frame, and the platform's. */
 const tenantScope = sql`tenant_id = current_setting('app.tenant_id', true) OR current_setting('app.tenant_id', true) = 'platform'`;
-
 
 /**
  * Background research by one of a person's Bots.
@@ -276,7 +271,7 @@ export const proactiveCheckInRuns = pgTable(
      */
     check(
       "proactive_check_in_runs_skip_reason_check",
-      sql`(${table.outcome} = 'skipped' AND ${table.skipReason} IS NOT NULL AND ${table.skipReason} IN ('off_admin', 'off_person', 'paused', 'capped', 'unreachable', 'no_sources', 'busy')) OR (${table.outcome} <> 'skipped' AND ${table.skipReason} IS NULL)`,
+      sql`(${table.outcome} = 'skipped' AND ${table.skipReason} IS NOT NULL AND ${table.skipReason} IN ('off_admin', 'off_person', 'paused', 'capped', 'unreachable', 'no_sources', 'busy', 'quota')) OR (${table.outcome} <> 'skipped' AND ${table.skipReason} IS NULL)`,
     ),
     // Only a running check-in is unfinished.
     check(
@@ -295,20 +290,22 @@ export const proactiveCheckInRuns = pgTable(
  * condition against the row a winner just wrote, so two replicas finishing check-ins in the same
  * second send one ping. A person with no row has never been pinged.
  */
-export const proactivePeople = pgTable("proactive_people", {
+export const proactivePeople = pgTable(
+  "proactive_people",
+  {
     tenantId: tenantId(),
-  ownerUserId: text("owner_user_id")
-    .primaryKey()
-    .references(() => users.id, { onDelete: "cascade" }),
-  /** When the last ping went out. Null until the first. */
-  lastPingedAt: timestamp("last_pinged_at", { withTimezone: true }),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-},
+    ownerUserId: text("owner_user_id")
+      .primaryKey()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** When the last ping went out. Null until the first. */
+    lastPingedAt: timestamp("last_pinged_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
   (table) => [
     index("proactive_people_tenant_idx").on(table.tenantId),
     pgPolicy("tenant_isolation", {
@@ -336,7 +333,8 @@ export const proactivePeople = pgTable("proactive_people", {
       to: "public",
       using: tenantScope,
     }),
-  ],);
+  ],
+);
 
 /**
  * One message to a person that something needs them, folding every open item no ping had carried

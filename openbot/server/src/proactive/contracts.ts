@@ -48,7 +48,9 @@ export type ProactiveSkipReason =
   | "capped"
   | "unreachable"
   | "no_sources"
-  | "busy";
+  | "busy"
+  /** The person is at the month's task ceiling (a check-in that raises something files a task card). */
+  | "quota";
 
 /* ------------------------------------------------------------------------------------------------
  * `/api/proactive` (proactive engine).

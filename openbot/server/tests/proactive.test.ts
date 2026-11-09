@@ -23,6 +23,7 @@ import type {
 } from "../src/proactive/store";
 import { linkKey, titleKey } from "../src/proactive/types";
 import { checkInWindow, researchInstruction } from "../src/proactive/window";
+import { QuotaExceeded } from "../src/quota/limits";
 import type { TaskProjector } from "../src/tasks/projector";
 import { currentTenant, runAsTenant } from "../src/tenant/context";
 import type { WorkItem, WorkQueue } from "../src/work/queue";
@@ -553,6 +554,10 @@ describe("G01: whose check-in a sweep is running", () => {
     queued?: Queued[];
     board?: Pick<TaskProjector, "opened" | "finished">;
     turnFails?: boolean;
+    /** How many suggestions the run raised. */
+    raised?: number;
+    /** The month's task ceiling is reached. */
+    atCeiling?: boolean;
   }) {
     const settings = input.settings;
     const queued: Queued[] = [...(input.queued ?? [])];
@@ -563,6 +568,7 @@ describe("G01: whose check-in a sweep is running", () => {
       turns: [] as { owner: string; tenantId?: string; as: string }[],
       cardOwnedByCaller: [] as (boolean | undefined)[],
       order: [] as string[],
+      skipped: [] as string[],
     };
     const find = (id: string) =>
       settings.find((row) => row.id === id && visible(row.tenantId)) ?? null;
@@ -590,10 +596,17 @@ describe("G01: whose check-in a sweep is running", () => {
         seen.begun.push({ id, as: currentTenant() });
         return true;
       },
-      skipRun: async () => undefined,
+      skipRun: async ({ reason }: { reason: string }) => {
+        seen.skipped.push(reason);
+      },
       finishRun: async () => undefined,
-      priorItems: async () => ({ open: [], tasks: [], hidden: [], started: [] }),
-      countSuggestions: async () => 0,
+      priorItems: async () => ({
+        open: [],
+        tasks: [],
+        hidden: [],
+        started: [],
+      }),
+      countSuggestions: async () => input.raised ?? 0,
       readsFor: async () => [],
       failedReadsFor: async () => [],
     } as unknown as ProactiveStore;
@@ -633,6 +646,15 @@ describe("G01: whose check-in a sweep is running", () => {
       queue,
       owner: "worker",
       board: input.board,
+      ...(input.atCeiling
+        ? {
+            quota: {
+              assertCapacity: async () => {
+                throw new QuotaExceeded("tasksPerMonth", 30, 30, "free");
+              },
+            },
+          }
+        : {}),
       runTurn: async (turn) => {
         seen.turns.push({
           owner: turn.ownerUserId,
@@ -735,10 +757,11 @@ describe("G01: whose check-in a sweep is running", () => {
   });
 
   /*
-   * Story C2: every autonomous trigger files a card of its own. A check-in is one, so it opens a
-   * `routine` card marked `proactive`, in the tenant the claimed setting proved, tells the turn runner
-   * the card is taken (so no second `chat` card is filed for the same work), and closes it when the
-   * run ends.
+   * Story C2, as decided for check-ins (M3): a check-in files a `routine` card marked `proactive`, in
+   * the tenant the claimed setting proved, ONLY WHEN IT RAISED SOMETHING, and only once the run is
+   * over. A quiet hourly check-in is no task of the person's: it leaves no card and costs no task.
+   * The turn runner is told the card is the caller's either way, so it never files a `chat` card of
+   * its own for a check-in.
    */
   function recordingBoard(
     order: () => string[],
@@ -764,7 +787,26 @@ describe("G01: whose check-in a sweep is running", () => {
     return { board, opened, finished };
   }
 
-  test("C2: a check-in opens its own proactive card in the setting's tenant and closes it for review", async () => {
+  test("C2: a quiet check-in leaves no card and costs no task, and the runner files none either", async () => {
+    let order: string[] = [];
+    const recorded = recordingBoard(() => order);
+    const { engine, seen } = harness({
+      settings: [stamp("alice", "alice", "a")],
+      board: recorded.board,
+    });
+    order = seen.order;
+
+    await engine.sweep();
+
+    expect(seen.turns).toEqual([
+      { owner: "alice", tenantId: "alice", as: "alice" },
+    ]);
+    expect(seen.cardOwnedByCaller).toEqual([true]);
+    expect(recorded.opened).toEqual([]);
+    expect(recorded.finished).toEqual([]);
+  });
+
+  test("C2: a check-in that raised something files its proactive card in the setting's tenant after the run, for review", async () => {
     let order: string[] = [];
     const recorded = recordingBoard(() => order);
     const { engine, queued, seen } = harness({
@@ -774,6 +816,7 @@ describe("G01: whose check-in a sweep is running", () => {
         stamp("alice", "bob", "foreign"),
       ],
       board: recorded.board,
+      raised: 2,
     });
     order = seen.order;
 
@@ -794,12 +837,12 @@ describe("G01: whose check-in a sweep is running", () => {
         as: "alice",
       },
     ]);
-    // The runner is told the card is taken, so it files no `chat` card of its own.
+    // The runner is told the card is the caller's, so it files no `chat` card of its own.
     expect(seen.cardOwnedByCaller).toEqual([true]);
-    // Opened before the turn, closed after it, to the review lane.
+    // Filed once the run is over, and closed to the review lane.
     expect(seen.order).toEqual([
-      `opened:${runId}`,
       `turn:${runId}`,
+      `opened:${runId}`,
       `finished:${runId}`,
     ]);
     expect(recorded.finished).toEqual([
@@ -807,13 +850,14 @@ describe("G01: whose check-in a sweep is running", () => {
     ]);
   });
 
-  test("C2: the card names the check-in's focus, and a failed run closes its card as failed", async () => {
+  test("C2: the card names the check-in's focus, and a run that failed after raising closes its card as failed", async () => {
     let order: string[] = [];
     const recorded = recordingBoard(() => order);
     const { engine, queued, seen } = harness({
       settings: [{ ...stamp("alice", "alice", "a"), focus: "客户续约" }],
       board: recorded.board,
       turnFails: true,
+      raised: 1,
     });
     order = seen.order;
 
@@ -831,12 +875,13 @@ describe("G01: whose check-in a sweep is running", () => {
     ]);
   });
 
-  test("C2: a board that cannot be written does not stop the check-in, and the runner keeps its own card", async () => {
+  test("C2: a board that cannot be written does not stop the check-in", async () => {
     let order: string[] = [];
     const recorded = recordingBoard(() => order, { openFails: true });
     const { engine, seen } = harness({
       settings: [stamp("alice", "alice", "a")],
       board: recorded.board,
+      raised: 1,
     });
     order = seen.order;
 
@@ -845,13 +890,28 @@ describe("G01: whose check-in a sweep is running", () => {
     expect(seen.turns).toEqual([
       { owner: "alice", tenantId: "alice", as: "alice" },
     ]);
-    // Not taken: the turn runner's own card is the run's only mark.
-    expect(seen.cardOwnedByCaller).toEqual([false]);
     expect(seen.runs.filter((row) => row.id === "a").at(-1)?.status).toBe(
       "succeeded",
     );
     // Nothing to close: no card was opened.
     expect(recorded.finished).toEqual([]);
+  });
+
+  test("a person at the month's task ceiling is not checked in for: no turn, skipped as quota", async () => {
+    const recorded = recordingBoard(() => []);
+    const { engine, seen } = harness({
+      settings: [stamp("alice", "alice", "a")],
+      board: recorded.board,
+      raised: 1,
+      atCeiling: true,
+    });
+
+    await engine.sweep();
+
+    expect(seen.turns).toEqual([]);
+    expect(seen.begun).toEqual([]);
+    expect(seen.skipped).toEqual(["quota"]);
+    expect(recorded.opened).toEqual([]);
   });
 });
 

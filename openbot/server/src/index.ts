@@ -82,26 +82,6 @@ import {
   recordPlatformAuditEvent,
 } from "./audit";
 import { startRetentionSweeps } from "./audit-retention";
-import {
-  createAutomationHookDirectory,
-  createAutomationHookRoutes,
-} from "./automations/ingress-routes";
-import { createAutomationRoutes } from "./automations/routes";
-import {
-  type AutomationFiring,
-  createAutomationStore,
-} from "./automations/store";
-import {
-  AUTOMATION_FIRE_KIND,
-  type AutomationEvent,
-  dispatchClaimedAutomations,
-  offerDueAutomations,
-} from "./automations/sweep";
-import {
-  createWakerAutomationExecutor,
-  wakerflowAutomationTarget,
-} from "./automations/waker-executor";
-import { createAutomationTargetRegistry } from "./automations/types";
 import { createAuth, sessionLifetimeMs } from "./auth";
 import { createAdminScope } from "./auth/admin-scope";
 import {
@@ -125,8 +105,33 @@ import {
   resolveRlsEnforcementMode,
 } from "./auth/role-writer-lifecycle";
 import { initializeRoleWriter, stopRoleWriter } from "./auth/roles";
+import {
+  createAutomationHookDirectory,
+  createAutomationHookRoutes,
+} from "./automations/ingress-routes";
+import { createAutomationRoutes } from "./automations/routes";
+import {
+  type AutomationFiring,
+  createAutomationStore,
+} from "./automations/store";
+import {
+  AUTOMATION_FIRE_KIND,
+  type AutomationEvent,
+  dispatchClaimedAutomations,
+  offerDueAutomations,
+} from "./automations/sweep";
+import { createAutomationTargetRegistry } from "./automations/types";
+import {
+  createWakerAutomationExecutor,
+  wakerflowAutomationTarget,
+} from "./automations/waker-executor";
 import { createAutonomousRoutes } from "./autonomous/routes";
 import { createAutonomousStore } from "./autonomous/store";
+import {
+  avatarSourcesForActor,
+  createAvatarSourceRoutes,
+  createAvatarSourceStore,
+} from "./avatar-sources";
 import { openbotAddress } from "./browser/address";
 import { botBrowserNetwork } from "./browser/bot-browser";
 import { personBrowserEgressPolicy } from "./browser/egress";
@@ -166,8 +171,8 @@ import {
 } from "./channels/summary";
 import { createThreadIdentity } from "./channels/thread-identity";
 import { createChannelTitler } from "./channels/titler";
-import { createSandboxedStore } from "./components/sandboxed";
 import { headlessComponentCatalog } from "./components/headless";
+import { createSandboxedStore } from "./components/sandboxed";
 import { createComponentStore } from "./components/store";
 import {
   botOwnership,
@@ -229,25 +234,25 @@ import {
 } from "./devices/queued-results";
 import { createDeviceRoutes, createRunnerRoutes } from "./devices/routes";
 import { createDeviceScreens } from "./devices/screen";
-import { createDeviceTakeovers } from "./devices/takeover";
 import { computerProviderFor, createDeviceSelector } from "./devices/selection";
 import { createDeviceStore } from "./devices/store";
+import { createDeviceTakeovers } from "./devices/takeover";
 import { currentEdition, editionHasMemory, setEdition } from "./edition";
 import {
   createHostAccessBroker,
   HostAccessRefusedError,
 } from "./host-access/broker";
 import { hostAccessTools } from "./host-access/tools";
+import { startHttpServer } from "./http-server";
 import { githubCallbackRoutes } from "./identity/github-callback";
 import { retireIdentityLinks, retireOwnedAccounts } from "./identity/retire";
 import { slackCodeRedeemer } from "./identity/slack-redeem";
 import { createIdentityStore } from "./identity/store";
+import { createIntelligenceClient } from "./intelligence-client";
+import { reportIntelligenceEntitlement } from "./intelligence-entitlement-check";
 import { createKnowledgeRoutes } from "./knowledge/routes";
 import { createKnowledgeStore } from "./knowledge/store";
 import { KNOWLEDGE_TOOL_NAMES, knowledgeTools } from "./knowledge/tools";
-import { startHttpServer } from "./http-server";
-import { createIntelligenceClient } from "./intelligence-client";
-import { reportIntelligenceEntitlement } from "./intelligence-entitlement-check";
 import { createSkillApprovalStore } from "./learning/approvals";
 import { createAutoApprover } from "./learning/auto-approve";
 import {
@@ -309,12 +314,9 @@ import { createProfileStore } from "./people/profile";
 import { createPeopleStore } from "./people/store";
 import { createPersonaRoutes } from "./personas/routes";
 import { createPersonaTemplateStore } from "./personas/store";
-import { createRoleGenerator } from "./roles/generator";
-import { createRoleTemplateRoutes } from "./roles/routes";
-import { createRoleTemplateStore, officialTemplatesFrom } from "./roles/store";
+import { createActionStepRunner } from "./pipeline/action-step";
 import { createPipelineRoutes } from "./pipeline/routes";
 import { createPipelineStore } from "./pipeline/store";
-import { createActionStepRunner } from "./pipeline/action-step";
 import { createPipelineStepRunner } from "./pipeline/turn-channel";
 import { createPlatformRoutes } from "./platform/routes";
 import { useRoutineTools } from "./plugins/builtin-routines";
@@ -329,6 +331,9 @@ import {
   REFUSAL_MARKER,
   vendorAnswer,
 } from "./plugins/tools";
+import { coworkerFaceAccess } from "./portraits/coworker-access";
+import { createPortraitRoutes } from "./portraits/routes";
+import { createPortraitStore } from "./portraits/store";
 import { createProactiveEngine } from "./proactive/engine";
 import { checkInOfferTools } from "./proactive/offer-tool";
 import {
@@ -342,6 +347,9 @@ import {
 } from "./proactive/restriction";
 import { checkInToolsFor, createCheckInScope } from "./proactive/scope";
 import { createProactiveStore } from "./proactive/store";
+import { createProjectContext } from "./projects/context";
+import { createProjectRoutes } from "./projects/routes";
+import { createProjectStore } from "./projects/store";
 import { createProviderOAuthProxy } from "./provider-oauth";
 import { createQuotaService } from "./quota/limits";
 import { createQuotaRoutes } from "./quota/routes";
@@ -377,6 +385,9 @@ import { useTriggerTools } from "./responsibilities/trigger-tools";
 import { createTriggerStore } from "./responsibilities/triggers";
 import type { Responsibility } from "./responsibilities/types";
 import { createServerResponsibilityEngine } from "./responsibilities/wiring";
+import { createRoleGenerator } from "./roles/generator";
+import { createRoleTemplateRoutes } from "./roles/routes";
+import { createRoleTemplateStore, officialTemplatesFrom } from "./roles/store";
 import {
   createTurnRunner,
   type RunnerLike,
@@ -419,21 +430,10 @@ import {
   type ThreadPlatform,
 } from "./threads/local-platform";
 import { PostgresAgentRunner } from "./threads/postgres-runner";
-import { createUserInstructionsStore } from "./user-instructions";
-import {
-  avatarSourcesForActor,
-  createAvatarSourceRoutes,
-  createAvatarSourceStore,
-} from "./avatar-sources";
-import { createProjectContext } from "./projects/context";
-import { createProjectRoutes } from "./projects/routes";
-import { createProjectStore } from "./projects/store";
-import { coworkerFaceAccess } from "./portraits/coworker-access";
-import { createPortraitRoutes } from "./portraits/routes";
-import { createPortraitStore } from "./portraits/store";
 import { createTranslationRoutes } from "./translations/routes";
 import { createTranslationStore, translatePending } from "./translations/store";
 import { createTranslator } from "./translations/translator";
+import { createUserInstructionsStore } from "./user-instructions";
 import { createUserPreferencesStore } from "./user-preferences";
 import { createVoiceSessionStore } from "./voice/sessions";
 import { createVoiceSummarizer } from "./voice/summary";
@@ -3401,6 +3401,8 @@ await startupLifecycle.run(async (startup) => {
     queue: createWorkQueue(database),
     owner: workOwner("proactive"),
     board: taskProjector,
+    // Only a check-in that raises something files a card and counts against the month.
+    quota,
     runTurn: createTurnRunner({
       prepareRunInput: prepareProductRunInput,
       onKnownStop: productTelemetry.stopKnown,

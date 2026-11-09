@@ -33,6 +33,7 @@ import { recordHeadlessUsage } from "../admin/controls";
 import type { AuditInitiator } from "../audit";
 import type { MemoryStore } from "../memory/store";
 import { REFUSAL_MARKER } from "../plugins/tools";
+import { QuotaExceeded, type QuotaService } from "../quota/limits";
 import type { TaskProjector } from "../tasks/projector";
 import {
   assertPersonTenant,
@@ -137,11 +138,18 @@ export type ProactiveEngineDeps = {
   owner: string;
   runTurn: TurnRunner;
   /**
-   * The task board (story C2): every check-in that goes to the model is autonomous work the person
-   * did not start, so it files its own card as `routine` with trigger source `proactive` and closes
-   * it when the run ends. Absent, the turn runner's own card is the run's only mark, as before.
+   * The task board (story C2). A check-in files a card, as `routine` with trigger source `proactive`,
+   * ONLY WHEN IT RAISED SOMETHING: a quiet hourly check-in is no task of the person's, so it leaves no
+   * card and is not counted against the month (product decision, M3). The card is opened and closed
+   * once the run is over, and the turn runner files none of its own either way. Absent, the turn
+   * runner's own card is the run's only mark, as before.
    */
   board?: Pick<TaskProjector, "opened" | "finished">;
+  /**
+   * The month's task ceiling. Asked before a check-in goes to the model, so a person at the ceiling is
+   * not researched for at all (the card a raised check-in files counts against it). Absent, no ceiling.
+   */
+  quota?: Pick<QuotaService, "assertCapacity">;
   /** The person's conversation with this Bot, or null when they can no longer reach either. */
   resolveScope(
     ownerUserId: string,
@@ -568,6 +576,13 @@ export function createProactiveEngine(deps: ProactiveEngineDeps) {
     if (await deps.store.paused(setting.ownerUserId, setting.agentId))
       return { skip: "paused" };
     if (!(await allowed(setting.ownerUserId))) return { skip: "off_admin" };
+    if (deps.quota)
+      try {
+        await deps.quota.assertCapacity(setting.ownerUserId, "tasksPerMonth");
+      } catch (error) {
+        if (error instanceof QuotaExceeded) return { skip: "quota" };
+        throw error;
+      }
     if (
       (await deps.store.runsToday(setting.ownerUserId, setting.agentId)) >=
       (await dailyRuns(setting.agentId))
@@ -647,15 +662,14 @@ export function createProactiveEngine(deps: ProactiveEngineDeps) {
     let status: "succeeded" | "error" = "error";
     let lastError: string | null = STOPPED_BEFORE_FINISHING;
     /*
-     * THE RUN'S OWN CARD (story C2), opened once the run is admitted and keyed by this run's id. A
-     * check-in a gate stopped never reaches here and files no card.
+     * THE RUN'S OWN CARD (story C2) is filed only once the run is over, and only when it raised
+     * something (see `board`): the turn runner is told the card is the caller's, so it files none.
+     * The ledger is the record of every run either way.
      *
      * The tenant is the one the claimed queue row proved and the setting's own row agreed with above,
-     * never the payload's or a default. A board that cannot be written is logged and the check-in
-     * goes ahead without its card: the ledger stays the record, and the turn runner then files its
-     * own card, so the run still leaves a mark (and still meets the month's task ceiling there).
+     * never the payload's or a default.
      */
-    const carded = await openCard(tenant, setting, runId);
+    let raisedCount = 0;
     try {
       await deps.store.recordRun(setting.id, "running");
       const prior = await deps.store.priorItems(
@@ -696,8 +710,8 @@ export function createProactiveEngine(deps: ProactiveEngineDeps) {
           initiator: proactiveInitiator(runId),
           runId,
           signal,
-          // The card opened above is this run's record; the runner files none of its own.
-          cardOwnedByCaller: carded,
+          // Any card is this run's own, filed below; the runner files none.
+          cardOwnedByCaller: deps.board !== undefined,
         });
       } catch (error) {
         thrown = error;
@@ -729,6 +743,7 @@ export function createProactiveEngine(deps: ProactiveEngineDeps) {
         error,
       });
       closed = true;
+      raisedCount = raised;
       status = outcome === "failed" ? "error" : "succeeded";
       lastError = error;
       await deps.store.recordRun(setting.id, status, lastError);
@@ -754,8 +769,12 @@ export function createProactiveEngine(deps: ProactiveEngineDeps) {
         await deps.store
           .recordRun(setting.id, status, lastError)
           .catch(logged("proactive-run-close-error"));
-      // Quiet or raised goes to the review lane (查收结果); a failed or broken-off run reads as failed.
-      if (carded) await closeCard(tenant, runId, status === "error");
+      /*
+       * Only a check-in that raised something is a card: it goes to the review lane (查收结果), or
+       * reads as failed when the run broke off after raising. A quiet one leaves none and costs no task.
+       */
+      if (raisedCount > 0 && (await openCard(tenant, setting, runId)))
+        await closeCard(tenant, runId, status === "error");
     }
   }
 

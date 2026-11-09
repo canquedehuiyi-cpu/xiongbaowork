@@ -127,6 +127,7 @@ export const SKIPPED_BECAUSE: Record<ProactiveSkipReason, string> = {
   no_sources:
     "Nothing to check: this Bot can't read anything you've connected. Connect an app with your own account.",
   busy: "Another check-in was still running.",
+  quota: "You've used this month's tasks, so this Bot didn't check in.",
 };
 
 export const suggestionInputSchema = z
