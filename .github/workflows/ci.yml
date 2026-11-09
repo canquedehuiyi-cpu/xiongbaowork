@@ -107,6 +107,10 @@ jobs:
       - run: bun install --frozen-lockfile
       # The Bots are not root workspaces and each keeps its own lockfile (as upstream CI installs them).
       # Restored upstream suites spawn agent-bot and import agent-mastra's receiver (R0, learning).
+      # egress-policy-delivery (upstream v1.0.0) starts the real agent-computer, which runs from its own
+      # lockfile (playwright, web-bot-auth, xterm), as the image installs it.
+      - run: bun install --frozen-lockfile --ignore-scripts
+        working-directory: openbot/agent-computer
       - run: bun install --frozen-lockfile
         working-directory: openbot/agent-bot
       - run: bun install --frozen-lockfile
