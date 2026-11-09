@@ -3,10 +3,14 @@ import { checkOutboundUrl } from "../src/net/outbound-guard";
 import {
   CATALOGUE,
   type CatalogueAuth,
+  CredentialPlacementRefusedError,
   catalogueEntry,
   classifyTool,
+  credentialFormatRefusal,
+  credentialPlacement,
   customUrlRefusal,
   ownerAssemblySource,
+  placeCredential,
   resolveServerUrl,
   serverCredentialKind,
 } from "../src/plugins/catalogue";
@@ -428,5 +432,259 @@ describe("token requests ask for JSON", () => {
       globalThis.fetch = realFetch;
     }
     expect(accepts).toEqual(["application/json", "application/json"]);
+  });
+});
+
+/**
+ * The third batch: five mainland servers, each reached with one deployment credential placed where
+ * the vendor wants it rather than in a bearer header.
+ *
+ * Pinned here: which slot each key goes into, that the pinned address is still one an administrator
+ * could have typed (the key is not part of it), that the placed request stays on the pinned host and
+ * path, that DingTalk's per-customer address cannot leave its prefix, and that nothing in an entry is
+ * a credential. The mechanism itself is asserted in plugin-credential-placement.test.ts.
+ */
+const THIRD_BATCH: readonly {
+  key: string;
+  auth: "deployment-query" | "deployment-address";
+  base: string;
+  param: string;
+  fixed?: Record<string, string>;
+}[] = [
+  {
+    key: "amap",
+    auth: "deployment-query",
+    base: "https://mcp.amap.com/mcp",
+    param: "key",
+  },
+  {
+    key: "baidu-map",
+    auth: "deployment-query",
+    base: "https://mcp.map.baidu.com/mcp",
+    param: "ak",
+  },
+  {
+    key: "tencent-map",
+    auth: "deployment-query",
+    base: "https://mcp.map.qq.com/mcp",
+    param: "key",
+    fixed: { format: "0" },
+  },
+  {
+    key: "kuaidi100",
+    auth: "deployment-query",
+    base: "https://api.kuaidi100.com/mcp/streamable",
+    param: "key",
+  },
+  {
+    key: "dingtalk",
+    auth: "deployment-address",
+    base: "https://mcp-gw.dingtalk.com/server",
+    param: "key",
+  },
+];
+
+const SAMPLE_KEY = "0123456789abcdef0123456789abcdef";
+
+function entryOf(key: string) {
+  const entry = catalogueEntry(key);
+  if (!entry) throw new Error(`${key} is not in the catalogue`);
+  return entry;
+}
+
+function placementOf(key: string) {
+  const placement = credentialPlacement(entryOf(key));
+  if (!placement) throw new Error(`${key} has no placement`);
+  return placement;
+}
+
+describe("the MCP market's third batch", () => {
+  test("every key is entered once, and Feishu is not entered at all", () => {
+    for (const { key } of THIRD_BATCH) {
+      expect(CATALOGUE.filter((entry) => entry.key === key)).toHaveLength(1);
+    }
+    // Its tokens expire within hours; see the batch comment in catalogue.ts.
+    for (const absent of ["feishu", "lark"]) {
+      expect(catalogueEntry(absent)).toBeNull();
+    }
+  });
+
+  test("each is a deployment credential in its pinned slot, with Chinese words to ask for it", () => {
+    for (const { key, auth, param, fixed } of THIRD_BATCH) {
+      const entry = entryOf(key);
+      expect(entry.auth.kind).toBe(auth);
+      expect(serverCredentialKind(entry)).toBe("mcp");
+      expect(ownerAssemblySource(entry)).toBe(false);
+      expect(entry.ownerAssembly).toBeUndefined();
+      expect(entry.transport).toBeUndefined();
+      if (
+        entry.auth.kind !== "deployment-query" &&
+        entry.auth.kind !== "deployment-address"
+      ) {
+        throw new Error(`${key} has the wrong auth kind`);
+      }
+      expect(entry.auth.param).toBe(param);
+      if (entry.auth.kind === "deployment-query") {
+        expect(entry.auth.fixedParams ?? {}).toEqual(fixed ?? {});
+        // A fixed parameter can never be the credential's own slot.
+        expect(Object.keys(entry.auth.fixedParams ?? {})).not.toContain(param);
+      }
+      expect(entry.auth.credentialLabel).toMatch(/[一-鿿]/);
+      expect(entry.auth.credentialHint).toMatch(/[一-鿿]/);
+      expect(entry.title).toMatch(/[一-鿿]/);
+      expect(entry.summary).toMatch(/[一-鿿]/);
+    }
+    expect(placementOf("amap").label).toBe("高德 Web 服务 Key");
+    expect(placementOf("dingtalk").label).toBe("钉钉 MCP 专属地址");
+  });
+
+  test("no entry carries anything that could be a credential", () => {
+    for (const { key } of THIRD_BATCH) {
+      // Everything but the tool names, which are long camelCase words rather than secrets.
+      const { writeTools: _tools, ...rest } = entryOf(key);
+      const text = JSON.stringify(rest);
+      // A long unbroken run of letters with digits in it is what every one of these vendors' keys is.
+      expect(text).not.toMatch(/(?=[A-Za-z0-9]*[0-9])[A-Za-z0-9]{20,}/);
+      // DingTalk's hint shows the address's shape, with a placeholder and never a value.
+      expect(text).not.toMatch(/[?&](key|ak)=(?!<)/);
+    }
+  });
+
+  test("the pinned address is a bare https origin and path, and passes the outbound refusals", () => {
+    for (const { key, base, fixed } of THIRD_BATCH) {
+      const entry = entryOf(key);
+      expect(entry.host).not.toBeNull();
+      const origin = new URL(entry.host as string);
+      expect(origin.protocol).toBe("https:");
+      expect(`${origin.origin}`).toBe(entry.host as string);
+      // An instance host offered by a caller changes nothing.
+      expect(resolveServerUrl(key, "https://evil.example")?.url).toBe(base);
+      expect(placementOf(key).base).toBe(base);
+      // The address as an administrator would see it, fixed parameters included and no key: the same
+      // static refusals a typed URL meets, and the outbound guard's check.
+      const shown = new URL(base);
+      for (const [name, value] of Object.entries(fixed ?? {})) {
+        shown.searchParams.set(name, value);
+      }
+      expect(customUrlRefusal(shown.href)).toBeNull();
+      expect(checkOutboundUrl(shown.href).allowed).toBe(true);
+    }
+  });
+
+  test("the placed request stays on the pinned host and path, and passes the outbound guard", () => {
+    for (const { key, base, param, fixed, auth } of THIRD_BATCH) {
+      const placement = placementOf(key);
+      const secret =
+        auth === "deployment-address"
+          ? `${base}/srv-01?key=${SAMPLE_KEY}`
+          : SAMPLE_KEY;
+      const placed = placeCredential(placement, base, secret);
+      const url = new URL(placed.url);
+      expect(url.origin).toBe(new URL(base).origin);
+      expect(
+        auth === "deployment-address"
+          ? url.pathname
+          : `${url.origin}${url.pathname}`,
+      ).toBe(auth === "deployment-address" ? "/server/srv-01" : base);
+      expect(url.searchParams.get(param)).toBe(SAMPLE_KEY);
+      for (const [name, value] of Object.entries(fixed ?? {})) {
+        expect(url.searchParams.get(name)).toBe(value);
+      }
+      expect(placed.headers).toEqual({});
+      expect(checkOutboundUrl(placed.url).allowed).toBe(true);
+      // Pointed anywhere else, the key does not go.
+      expect(() =>
+        placeCredential(placement, "https://evil.example/mcp", secret),
+      ).toThrow(CredentialPlacementRefusedError);
+    }
+  });
+
+  test("without a credential, each refuses in Chinese rather than dialling anonymously", () => {
+    for (const { key, base } of THIRD_BATCH) {
+      expect(() => placeCredential(placementOf(key), base, undefined)).toThrow(
+        /还没有录入「/,
+      );
+    }
+  });
+
+  test("a DingTalk address off its host or prefix is refused, and the refusal does not repeat it", () => {
+    const placement = placementOf("dingtalk");
+    for (const bad of [
+      `https://mcp-gw.dingtalk.com.evil.example/server/srv?key=${SAMPLE_KEY}`,
+      `https://evil.example/server/srv?key=${SAMPLE_KEY}`,
+      `https://mcp.dingtalk.com/server/srv?key=${SAMPLE_KEY}`,
+      `https://mcp-gw.dingtalk.com/admin/srv?key=${SAMPLE_KEY}`,
+      `https://mcp-gw.dingtalk.com/server/srv/extra?key=${SAMPLE_KEY}`,
+      `https://mcp-gw.dingtalk.com/server/../oapi?key=${SAMPLE_KEY}`,
+      `https://mcp-gw.dingtalk.com:444/server/srv?key=${SAMPLE_KEY}`,
+      `http://mcp-gw.dingtalk.com/server/srv?key=${SAMPLE_KEY}`,
+      `https://mcp-gw.dingtalk.com/server/srv?key=${SAMPLE_KEY}&url=https://evil.example`,
+      SAMPLE_KEY,
+    ]) {
+      const refusal = credentialFormatRefusal(placement, bad);
+      expect(refusal).toMatch(/格式不对/);
+      expect(refusal).not.toContain(SAMPLE_KEY);
+      expect(refusal).not.toContain("evil.example");
+      expect(refusal).toContain(
+        "https://mcp-gw.dingtalk.com/server/<服务 ID>?key=<密钥>",
+      );
+    }
+    expect(
+      credentialFormatRefusal(
+        placement,
+        `https://mcp-gw.dingtalk.com/server/srv_01-a?key=${SAMPLE_KEY}`,
+      ),
+    ).toBeNull();
+  });
+
+  test("write lists are frozen, unduplicated, and win over whatever a listing records", () => {
+    for (const { key } of THIRD_BATCH) {
+      const entry = entryOf(key);
+      expect(Object.isFrozen(entry.writeTools)).toBe(true);
+      expect(new Set(entry.writeTools).size).toBe(entry.writeTools.length);
+      for (const tool of entry.writeTools) {
+        expect(classifyTool(entry, tool, true, "read")).toBe("write");
+      }
+    }
+    // The lookups each vendor documents stay reads once advertised.
+    expect(classifyTool(entryOf("amap"), "maps_geo", true)).toBe("read");
+    expect(classifyTool(entryOf("kuaidi100"), "query_trace", true)).toBe(
+      "read",
+    );
+    // Opening ride-hailing, and every DingTalk send, change and recall, are writes.
+    expect(entryOf("amap").writeTools).toContain("maps_schema_take_taxi");
+    const dingtalk = entryOf("dingtalk").writeTools;
+    for (const tool of [
+      "sendMessageToGroupByRobot",
+      "batchSendMessageToUsersByRobot",
+      "sendDINGMessageByRobot",
+      "sendNotice",
+      "createEvent",
+      "updateEvent",
+      "deleteEvent",
+      "createTask",
+      "insertNotableRecords",
+      "createReport",
+    ]) {
+      expect(dingtalk).toContain(tool);
+    }
+    // And anything never advertised is a write whatever it is called.
+    expect(classifyTool(entryOf("baidu-map"), "map_geocode", false)).toBe(
+      "write",
+    );
+  });
+});
+
+describe("every placed entry in the catalogue", () => {
+  test("pins a host, uses MCP, and names a vendor X- header where it names one", () => {
+    for (const entry of CATALOGUE) {
+      const placement = credentialPlacement(entry);
+      if (!placement) continue;
+      expect(entry.host).not.toBeNull();
+      expect(entry.transport).toBeUndefined();
+      if (placement.kind === "header") {
+        expect(placement.header).toMatch(/^X-[A-Za-z0-9-]+$/);
+      }
+    }
   });
 });
