@@ -167,6 +167,29 @@ if [ "$healthy" = true ]; then
   else
     fail "$A's sleep is gone within 10s after curl timed out (after ${elapsed}s: $(docker exec "$name" ps -o user,pid,ppid,pgid,stat,args -A 2>/dev/null | grep -E 'sleep|xb-bot|sudo|timeout|runuser' | grep -v grep | tr '\n' ';'))"
   fi
+
+  # Nothing of the stopped command is left on the root side either: sudo and the helper (both carry
+  # `xb-bot run` in their arguments), runuser for this employee, and the timeout in front of it.
+  # pgrep run directly by docker exec, not through a shell, so it never matches itself.
+  leftovers() {
+    local pattern
+    for pattern in 'xb-bot run' "runuser -u $userA " "^timeout .* runuser -u $userA "; do
+      if docker exec "$name" pgrep -f -- "$pattern" >/dev/null 2>&1; then echo "$pattern"; fi
+    done
+  }
+  left=""
+  started=$SECONDS
+  while [ $((SECONDS-started)) -le 10 ]; do
+    left=$(leftovers)
+    [ -z "$left" ] && break
+    sleep 0.5
+  done
+  elapsed=$((SECONDS-started))
+  if [ "$seen" = true ] && [ -z "$left" ]; then
+    pass "no xb-bot run, runuser or timeout of $userA left ${elapsed}s after the sleep went (limit 10s)"
+  else
+    fail "no xb-bot run, runuser or timeout of $userA left within 10s (still matching: $(printf '%s' "$left" | tr '\n' '|'); $(docker exec "$name" ps -o user,pid,ppid,pgid,stat,args -A 2>/dev/null | grep -E 'sleep|xb-bot|sudo|timeout|runuser' | grep -v grep | tr '\n' ';'))"
+  fi
 fi
 
 echo "PER-BOT USERS failed checks=$failures"
