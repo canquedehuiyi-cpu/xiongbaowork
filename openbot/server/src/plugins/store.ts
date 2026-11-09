@@ -3125,6 +3125,26 @@ export function createPluginStore(options: PluginStoreOptions) {
        * here now rather than in the review that re-adds one.
        */
       const credentialId = input.credentialId?.trim() || undefined;
+      /*
+       * A PLACED CREDENTIAL IS NEVER ATTACHED BY ID, only stored through `replaceServerToken`.
+       *
+       * CRITERION. Adding a placed entry with a `credentialId` is refused before anything is
+       * written; its key reaches the vault only through the door that checks its shape first.
+       *
+       * REASON. An id names a credential that was sealed elsewhere — by the generic credentials
+       * route, which knows nothing of placements — so a DingTalk address on another host, or a key
+       * with a line in it, would be in the vault and pointed at before anything had looked at it,
+       * and refused only on the first dial, in `last_error`. Decrypting it here to check would be a
+       * second reader of a team secret on a path that never needed one. So the add takes no key at
+       * all, and `replaceServerToken` (which runs `credentialFormatRefusal` before it seals) is how
+       * the first key arrives as well as every later one — the same check, refused at the form.
+       */
+      const placement = credentialPlacement(resolved.entry);
+      if (credentialId && placement) {
+        throw new CustomServerRefusedError(
+          `${resolved.entry.title}的「${placement.label}」不能按凭据 ID 绑定。请先启用插件，再在「插件 › 凭据」里录入，录入时会先校验格式。`,
+        );
+      }
       if (credentialId) {
         await requireCredentialOfKind(
           resolved.entry.title,

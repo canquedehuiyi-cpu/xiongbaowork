@@ -390,12 +390,21 @@ function RouteComponent() {
     checkable: connection?.checkable ?? false,
   });
 
+  /*
+   * Whether this vendor's credential is placed somewhere other than a bearer header (a key in a
+   * query parameter, a per-customer address). Its key is never stored through the generic
+   * credentials route: the server refuses to attach one by id, and takes it only through
+   * `POST /servers/:id/token`, which checks its shape before anything is sealed — so a malformed
+   * key is refused at the form on the first add exactly as on every replacement.
+   */
+  const placedCredential = entry?.credentialLabel !== undefined;
+
   /** Adding is two writes when a token was typed: the credential, then the record pointing at it. */
   const add = async () => {
     setError(null);
     try {
       const credentialId =
-        auth === "deployment-bearer"
+        auth === "deployment-bearer" && !placedCredential
           ? await storeMcpToken(appKey, token || undefined)
           : undefined;
       await addCurated.mutateAsync({
@@ -403,6 +412,11 @@ function RouteComponent() {
         instanceHost: instanceHost || undefined,
         credentialId,
       });
+      if (placedCredential && token.trim()) {
+        // Through the checked door, after the server exists. A refusal throws into the catch
+        // below, so the dialog stays open with the server's sentence and nothing was sealed.
+        await replaceServerToken.mutateAsync({ serverId: key, token });
+      }
       if (auth === "user-oauth" && client.clientId && client.clientSecret) {
         await registerClient.mutateAsync({ serverId: key, ...client });
       }

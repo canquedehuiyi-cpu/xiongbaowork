@@ -46,6 +46,12 @@ import type { CuratedTransportKind } from "./transport";
 type CredentialCopy = {
   credentialLabel: string;
   credentialHint: string;
+  /**
+   * The shortest key this vendor issues, when that is shorter than the default floor of sixteen.
+   * Taken from the vendor's own published format and never below twelve (see `MIN_PLACED_FLOOR`):
+   * a short key is a weak one, and a scrub has to be able to recognise it in a message.
+   */
+  credentialMinLength?: number;
 };
 
 export type CatalogueAuth =
@@ -1303,14 +1309,22 @@ export type CredentialPlacement =
       param: string;
       fixedParams: Readonly<Record<string, string>>;
       label: string;
+      minLength: number;
     }
-  | { kind: "header"; base: string; header: string; label: string }
+  | {
+      kind: "header";
+      base: string;
+      header: string;
+      label: string;
+      minLength: number;
+    }
   | {
       kind: "address";
       base: string;
       segmentPattern: string;
       param: string;
       label: string;
+      minLength: number;
     };
 
 /**
@@ -1349,6 +1363,7 @@ export function credentialPlacement(
   }
   const base = `${entry.host}${entry.path === "/" ? "" : entry.path}`;
   const label = auth.credentialLabel;
+  const minLength = auth.credentialMinLength ?? DEFAULT_PLACED_LENGTH;
   if (auth.kind === "deployment-query") {
     return {
       kind: "query",
@@ -1356,10 +1371,11 @@ export function credentialPlacement(
       param: auth.param,
       fixedParams: auth.fixedParams ?? {},
       label,
+      minLength,
     };
   }
   if (auth.kind === "deployment-header") {
-    return { kind: "header", base, header: auth.header, label };
+    return { kind: "header", base, header: auth.header, label, minLength };
   }
   return {
     kind: "address",
@@ -1367,6 +1383,7 @@ export function credentialPlacement(
     segmentPattern: auth.segmentPattern,
     param: auth.param,
     label,
+    minLength,
   };
 }
 
@@ -1385,14 +1402,34 @@ export class CredentialPlacementRefusedError extends Error {
 }
 
 /**
- * The characters a placed key may hold: letters, digits and `. _ ~ + / = : -`, at most 512.
+ * The characters a placed key may hold: letters, digits, `_` and `-`. Nothing else.
  *
- * Every key these vendors issue is hex, alphanumeric with dashes, or base64-ish. Refusing the rest
- * means a pasted value with a line break cannot split a header, and a value carrying `&`, `#`, `?`
- * or a space is refused rather than relied on to be encoded — encoding would make it harmless, and
- * refusing makes a paste of the wrong thing (a whole URL, a sentence) visible at the form.
+ * Every key these vendors issue is hex or alphanumeric with dashes. Refusing the rest means a pasted
+ * value with a line break cannot split a header, a value carrying `&`, `#`, `?` or a space is
+ * refused rather than relied on to be encoded, and — the reason the set is this narrow rather than
+ * base64's — a key made of these characters has exactly one spelling under every encoding a vendor
+ * might echo it back in (percent, form, JSON, double), so {@link withoutSecrets} cannot miss one.
  */
-const PLACED_VALUE = /^[A-Za-z0-9._~+/=:-]{1,512}$/;
+const PLACED_CHARACTERS = /^[A-Za-z0-9_-]+$/;
+/** The length a placed key must have unless its entry names a vendor's shorter official format. */
+const DEFAULT_PLACED_LENGTH = 16;
+/** No entry may lower the floor below this, whatever it names. */
+const MIN_PLACED_FLOOR = 12;
+const MAX_PLACED_LENGTH = 512;
+
+/** The shortest key this placement admits: its own floor, never below {@link MIN_PLACED_FLOOR}. */
+function placedFloor(placement: CredentialPlacement): number {
+  return Math.max(placement.minLength, MIN_PLACED_FLOOR);
+}
+
+/** Whether this is a key a placement may hold: the characters above, and a length in range. */
+function placedValueOk(placement: CredentialPlacement, value: string): boolean {
+  return (
+    PLACED_CHARACTERS.test(value) &&
+    value.length >= placedFloor(placement) &&
+    value.length <= MAX_PLACED_LENGTH
+  );
+}
 
 /** The address an administrator pasted, broken into the two parts the dial may use. */
 function parsedAddress(
@@ -1424,7 +1461,7 @@ function parsedAddress(
   const names = [...url.searchParams.keys()];
   if (names.length !== 1 || names[0] !== placement.param) return null;
   const key = url.searchParams.get(placement.param) ?? "";
-  if (!PLACED_VALUE.test(key)) return null;
+  if (!placedValueOk(placement, key)) return null;
   return { segment, key };
 }
 
@@ -1445,12 +1482,12 @@ export function credentialFormatRefusal(
   }
   if (placement.kind === "address") {
     return parsedAddress(placement, value) === null
-      ? `「${placement.label}」的格式不对：必须是 ${placement.base}/<服务 ID>?${placement.param}=<密钥> 这样的完整 https 地址，主机和路径前缀不能改，也不能带其他参数。`
+      ? `「${placement.label}」的格式不对：必须是 ${placement.base}/<服务 ID>?${placement.param}=<密钥> 这样的完整 https 地址，主机和路径前缀不能改，也不能带其他参数；密钥只能由英文字母、数字、_ 和 - 组成，至少 ${placedFloor(placement)} 位。`
       : null;
   }
-  return PLACED_VALUE.test(value)
+  return placedValueOk(placement, value)
     ? null
-    : `「${placement.label}」的格式不对：只能由英文字母、数字和 . _ ~ + / = : - 组成，不能有空格，长度不超过 512。`;
+    : `「${placement.label}」的格式不对：只能由英文字母、数字、_ 和 - 组成，长度 ${placedFloor(placement)} 到 ${MAX_PLACED_LENGTH} 位。`;
 }
 
 /**
@@ -1552,13 +1589,39 @@ export function placeCredential(
 }
 
 /**
+ * Every spelling of one secret a message might carry it in.
+ *
+ * As typed; percent-encoded once and twice (`encodeURIComponent`, and that again, which is what a
+ * vendor quoting an already-encoded URL produces); form-encoded, which writes a space as `+`; and
+ * JSON-escaped, with and without the `\/` escape PHP's `json_encode` uses by default.
+ */
+function spellingsOf(secret: string): string[] {
+  const once = encodeURIComponent(secret);
+  const json = JSON.stringify(secret).slice(1, -1);
+  return [
+    secret,
+    once,
+    encodeURIComponent(once),
+    new URLSearchParams({ v: secret }).toString().slice(2),
+    json,
+    json.replaceAll("/", "\\/"),
+  ];
+}
+
+/**
  * Text with every spelling of these secrets taken out.
  *
- * A key put into a URL can come back in an error three ways: as typed, percent-encoded by
- * `encodeURIComponent`, and form-encoded by `URLSearchParams` (which writes a space as `+`). All
- * three are removed, longest first so a URL holding a key is removed whole. Values shorter than four
- * characters are left alone: they cannot be a vendor key, and removing them would shred ordinary
- * words.
+ * Matched WITHOUT REGARD TO CASE, which covers in one rule a percent escape in either case (`%2F`
+ * and `%2f`), a URL lower-cased by whatever logged it, and a key a vendor upper-cased. Longest first,
+ * so a URL holding a key is removed whole rather than leaving its address around a gap.
+ *
+ * NO SECRET IS TOO SHORT. There used to be a floor below which a value was left alone, so that a
+ * three-character token could not shred ordinary words; the floor is now on what may be STORED (a
+ * placed key is at least twelve characters), and the scrub takes out whatever it is given. Only the
+ * empty string is skipped, because it is not a secret and would match everywhere.
+ *
+ * Callers take a secret out BEFORE anything is cut to length: a cut that lands inside a key leaves a
+ * prefix no full spelling matches, so that order is the whole of the guarantee.
  */
 export function withoutSecrets(
   text: string,
@@ -1566,16 +1629,43 @@ export function withoutSecrets(
 ): string {
   const spellings = new Set<string>();
   for (const secret of secrets) {
-    if (!secret || secret.length < 4) continue;
-    spellings.add(secret);
-    spellings.add(encodeURIComponent(secret));
-    spellings.add(new URLSearchParams({ v: secret }).toString().slice(2));
+    if (!secret) continue;
+    for (const spelling of spellingsOf(secret)) spellings.add(spelling);
   }
-  let out = text;
-  for (const spelling of [...spellings].sort((a, b) => b.length - a.length)) {
-    out = out.split(spelling).join("[已隐去]");
-  }
-  return out;
+  if (spellings.size === 0) return text;
+  const pattern = [...spellings]
+    .sort((a, b) => b.length - a.length)
+    .map((spelling) => spelling.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("|");
+  return text.replace(new RegExp(pattern, "gi"), "[已隐去]");
+}
+
+/**
+ * {@link withoutSecrets} over every string in a value: object keys, array items and nested values.
+ *
+ * For what a vendor hands back as structure rather than as text — a tool's input schema, a call's
+ * structured content — where a key echoed into a `default`, an `example` or a property name would
+ * otherwise be stored and shown as it came.
+ */
+export function withoutSecretsDeep<T>(
+  value: T,
+  secrets: readonly (string | undefined)[],
+): T {
+  if (!secrets.some(Boolean)) return value;
+  const walk = (node: unknown): unknown => {
+    if (typeof node === "string") return withoutSecrets(node, secrets);
+    if (Array.isArray(node)) return node.map(walk);
+    if (node && typeof node === "object") {
+      return Object.fromEntries(
+        Object.entries(node).map(([name, inner]) => [
+          withoutSecrets(name, secrets),
+          walk(inner),
+        ]),
+      );
+    }
+    return node;
+  };
+  return walk(value) as T;
 }
 
 export function catalogueEntry(key: string): CatalogueEntry | null {

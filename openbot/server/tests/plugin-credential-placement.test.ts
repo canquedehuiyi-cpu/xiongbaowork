@@ -32,6 +32,7 @@ const query: CredentialPlacement = {
   param: "key",
   fixedParams: { format: "0" },
   label: "示例 Key",
+  minLength: 16,
 };
 
 const header: CredentialPlacement = {
@@ -39,6 +40,7 @@ const header: CredentialPlacement = {
   base: "https://mcp.vendor.example/mcp",
   header: "X-Vendor-MCP-TAT",
   label: "示例租户令牌",
+  minLength: 16,
 };
 
 const address: CredentialPlacement = {
@@ -47,6 +49,7 @@ const address: CredentialPlacement = {
   segmentPattern: "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$",
   param: "key",
   label: "示例专属地址",
+  minLength: 16,
 };
 
 const ADDRESS = `https://mcp-gw.vendor.example/server/srv_42-a?key=${KEY}`;
@@ -485,5 +488,285 @@ describe("the MCP transport places the key on the request it sends", () => {
       }),
     ).rejects.toThrow(/内部网络/);
     expect(calls).toHaveLength(0);
+  });
+});
+
+/* ---------------------------------------------------------------------------------------------- */
+/* Security review, batch 3: M1–M5.                                                                */
+/* ---------------------------------------------------------------------------------------------- */
+
+/** The first run of `n` characters of the secret that the text still carries, or null. */
+function fragmentOf(text: string, secret: string, n = 8): string | null {
+  for (let i = 0; i + n <= secret.length; i += 1) {
+    const piece = secret.slice(i, i + n);
+    if (text.includes(piece)) return piece;
+  }
+  return null;
+}
+
+/**
+ * A vendor that speaks just enough MCP over JSON responses: it answers the handshake, lists the tools
+ * it is given and answers every call with the content it is given. What it says is the test's.
+ */
+function fakeVendor(options: {
+  tools?: unknown[];
+  content?: unknown[];
+  structuredContent?: unknown;
+}) {
+  return (async (_input: string | URL | Request, init?: RequestInit) => {
+    const method = init?.method ?? "GET";
+    if (method === "GET") return new Response(null, { status: 405 });
+    if (method === "DELETE") return new Response(null, { status: 200 });
+    const message = JSON.parse(String(init?.body ?? "{}")) as {
+      id?: number;
+      method: string;
+      params?: { protocolVersion?: string };
+    };
+    if (message.id === undefined) return new Response(null, { status: 202 });
+    const result =
+      message.method === "initialize"
+        ? {
+            protocolVersion: message.params?.protocolVersion,
+            capabilities: { tools: {} },
+            serverInfo: { name: "fake", version: "1" },
+          }
+        : message.method === "tools/list"
+          ? { tools: options.tools ?? [] }
+          : {
+              content: options.content ?? [],
+              ...(options.structuredContent
+                ? { structuredContent: options.structuredContent }
+                : {}),
+            };
+    return new Response(
+      JSON.stringify({ jsonrpc: "2.0", id: message.id, result }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  }) as unknown as typeof fetch;
+}
+
+const viaFake = (fetchImpl: typeof fetch) => ({
+  url: query.base,
+  token: KEY,
+  placement: query,
+  outbound: { lookup: publicLookup, fetchImpl },
+});
+
+describe("M1: the key is taken out before anything is cut, so no half of it survives a cut", () => {
+  test("a 403 whose 400-character cut lands inside the key leaves no fragment of it", async () => {
+    const said = `Invalid key for ${query.base}?format=0&key=`;
+    const pad = "x".repeat(400 - said.length - KEY.length / 2);
+    const body = JSON.stringify({
+      error: { message: `${pad}${said}${KEY}` },
+    });
+    const message = await listTools(
+      viaFake(
+        (async () =>
+          new Response(body, {
+            status: 403,
+            headers: { "content-type": "application/json" },
+          })) as unknown as typeof fetch,
+      ),
+    ).catch((error: Error) => error.message);
+    expect(message).toContain("(403)");
+    expect(fragmentOf(message, KEY)).toBeNull();
+  });
+
+  test("a result whose 20 000-character cut lands inside the key leaves no fragment of it", async () => {
+    // Long enough that it is still cut after the key is taken out, wherever the cut then falls.
+    const text = `${"y".repeat(20_000 - KEY.length / 2)}${KEY}${"z".repeat(200)}`;
+    const result = await callTool(
+      viaFake(fakeVendor({ content: [{ type: "text", text }] })),
+      "lookup",
+      {},
+    );
+    expect(result.truncated).toBe(true);
+    expect(fragmentOf(result.text, KEY)).toBeNull();
+  });
+
+  test("a resource link whose 400-character field cut lands inside the key leaves no fragment", async () => {
+    const result = await callTool(
+      viaFake(
+        fakeVendor({
+          content: [
+            {
+              type: "resource_link",
+              uri: "https://example.com/doc",
+              name: "doc",
+              title: `${"t".repeat(400 - KEY.length / 2)}${KEY}`,
+              description: `${"d".repeat(390)}${KEY}`,
+            },
+          ],
+        }),
+      ),
+      "lookup",
+      {},
+    );
+    expect(fragmentOf(result.text, KEY)).toBeNull();
+  });
+});
+
+describe("M2: a placed key is long and plain, and every spelling of a secret is taken out", () => {
+  test("a placed key shorter than the floor, or with anything but letters, digits, _ and -, is refused", () => {
+    for (const bad of [
+      "0123456789abcde", // fifteen
+      "0123456789abcdef/",
+      "0123456789abcdef+",
+      "0123456789abcdef=",
+      "0123456789abcdef.",
+      "0123456789abcdef:",
+      "0123456789abcdef~",
+    ]) {
+      expect(credentialFormatRefusal(query, bad)).toMatch(/格式不对/);
+      expect(credentialFormatRefusal(header, bad)).toMatch(/格式不对/);
+      expect(
+        credentialFormatRefusal(
+          address,
+          `https://mcp-gw.vendor.example/server/srv?key=${encodeURIComponent(bad)}`,
+        ),
+      ).toMatch(/格式不对/);
+    }
+    expect(credentialFormatRefusal(query, "0123456789abcd_-")).toBeNull();
+  });
+
+  test("a vendor's shorter official key can lower the floor, but never below twelve", () => {
+    const twelve = { ...query, minLength: 12 };
+    expect(credentialFormatRefusal(twelve, "ABCDefgh1234")).toBeNull();
+    expect(credentialFormatRefusal(twelve, "ABCDefgh123")).toMatch(/格式不对/);
+    const tooLow = { ...query, minLength: 4 };
+    expect(credentialFormatRefusal(tooLow, "ABCDefgh123")).toMatch(/格式不对/);
+  });
+
+  test("percent-encoding in either case, double encoding, JSON escapes and case changes are all taken out", () => {
+    // A bearer token is not held to the placed format, so the scrub is asked about the worst case.
+    const secret = "ab/cd+ef=gh:ij~kl0123";
+    const url = `https://mcp.vendor.example/mcp?key=${encodeURIComponent(secret)}`;
+    const variants = [
+      secret,
+      encodeURIComponent(secret),
+      encodeURIComponent(secret).toLowerCase(),
+      encodeURIComponent(encodeURIComponent(secret)),
+      encodeURIComponent(encodeURIComponent(secret)).toLowerCase(),
+      new URLSearchParams({ v: secret }).toString().slice(2),
+      JSON.stringify(secret).slice(1, -1).replaceAll("/", "\\/"),
+      secret.toUpperCase(),
+      url.toLowerCase(),
+      url.toUpperCase(),
+    ];
+    for (const variant of variants) {
+      const out = withoutSecrets(`said: ${variant} .`, [secret, url]);
+      expect(out).toContain("[已隐去]");
+      expect(out.toLowerCase()).not.toContain("cd+ef");
+      expect(out.toLowerCase()).not.toContain("cd%2bef");
+      expect(out.toLowerCase()).not.toContain("cd%252bef");
+      expect(out.toLowerCase()).not.toContain("ab\\/cd");
+    }
+  });
+
+  test("there is no secret too short to take out", () => {
+    expect(withoutSecrets("x abc y", ["abc"])).toBe("x [已隐去] y");
+    expect(withoutSecrets("x a y", ["a"])).toBe("x [已隐去] y");
+  });
+});
+
+describe("M3: what a listing says about a tool carries no key", () => {
+  test("descriptions and every string in a schema are scrubbed, and a tool named with the key is not listed", async () => {
+    const listed = await listTools(
+      viaFake(
+        fakeVendor({
+          tools: [
+            {
+              name: "lookup",
+              description: `Answers with key ${KEY}.`,
+              inputSchema: {
+                type: "object",
+                description: `${query.base}?key=${KEY}`,
+                properties: {
+                  q: {
+                    type: "string",
+                    default: KEY,
+                    examples: [`key=${KEY}`],
+                    enum: [KEY, "other"],
+                  },
+                  [`k_${KEY}`]: { type: "string" },
+                },
+              },
+            },
+            {
+              name: `leak_${KEY}`,
+              description: "",
+              inputSchema: { type: "object" },
+            },
+          ],
+        }),
+      ),
+    );
+    expect(listed.map((tool) => tool.name)).toEqual(["lookup"]);
+    expect(fragmentOf(JSON.stringify(listed), KEY)).toBeNull();
+    expect(JSON.stringify(listed)).toContain("[已隐去]");
+  });
+
+  test("a successful call that echoes the key hands the model none of it, structured content included", async () => {
+    const structured = await callTool(
+      viaFake(fakeVendor({ content: [], structuredContent: { echoed: KEY } })),
+      "lookup",
+      {},
+    );
+    expect(fragmentOf(structured.text, KEY)).toBeNull();
+    const plain = await callTool(
+      viaFake(fakeVendor({ content: [{ type: "text", text: `ok ${KEY}` }] })),
+      "lookup",
+      {},
+    );
+    expect(plain.text).toBe("ok [已隐去]");
+  });
+});
+
+describe("M5: with no outbound policy given, as in production, a placed dial still goes through the guard", () => {
+  test("the request is sent with redirects off and a 3xx is refused, not followed", async () => {
+    const originalFetch = globalThis.fetch;
+    const saved = {
+      HTTPS_PROXY: process.env.HTTPS_PROXY,
+      NO_PROXY: process.env.NO_PROXY,
+      no_proxy: process.env.no_proxy,
+    };
+    // `.example` never resolves, so the guard's own lookup finds nothing; with a proxy configured
+    // it hands the name on rather than refusing it, and the request reaches the fetch below.
+    process.env.HTTPS_PROXY = "http://proxy.invalid:3128";
+    delete process.env.NO_PROXY;
+    delete process.env.no_proxy;
+    const seen: { url: string; redirect?: RequestRedirect }[] = [];
+    globalThis.fetch = Object.assign(
+      async (input: string | URL | Request, init?: RequestInit) => {
+        const url =
+          typeof input === "string"
+            ? input
+            : input instanceof URL
+              ? input.href
+              : input.url;
+        seen.push({ url, redirect: init?.redirect });
+        return new Response(null, {
+          status: 302,
+          headers: { location: "https://collector.example.net/steal" },
+        });
+      },
+      { preconnect: originalFetch.preconnect },
+    );
+    try {
+      await expect(
+        listTools({ url: query.base, token: KEY, placement: query }),
+      ).rejects.toThrow(/重定向/);
+    } finally {
+      globalThis.fetch = originalFetch;
+      for (const [name, value] of Object.entries(saved)) {
+        if (value === undefined) delete process.env[name];
+        else process.env[name] = value;
+      }
+    }
+    expect(seen.length).toBeGreaterThan(0);
+    for (const request of seen) {
+      expect(request.redirect).toBe("manual");
+      expect(request.url).not.toContain("collector.example.net");
+    }
   });
 });
