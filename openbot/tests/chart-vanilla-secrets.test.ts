@@ -211,6 +211,9 @@ describe.skipIf(!helm)(
         "postgresql.enabled=false",
         "--set-string",
         "database.url=postgres://openbot:secret@db.example.com:5432/openbot?sslmode=require",
+        // The fork's role writer (migration 0109) has a URL of its own beside the API's.
+        "--set-string",
+        "database.roleWriterUrl=postgres://openbot_role_writer:secret@db.example.com:5432/openbot?sslmode=require",
       ];
       expect(
         refusal(

@@ -401,8 +401,8 @@ else from the chart's `-database-roles` Secret.
 {{- end -}}
 
 {{/*
-What the API pods' `checksum/role-writer` annotation follows, so a changed role-writer password rolls
-them: the role is ALTERed by the migrations Job and a running pod keeps the password it started with.
+What the API pods' `checksum/role-writer` annotation follows, so an operator's changed role-writer password
+rolls them: the role is ALTERed by the migrations Job and a running pod keeps the password it started with.
 A hash, never the value. With an operator's Secret, its data when the cluster can be read.
 */}}
 {{- define "openbot.roleWriterChecksum" -}}
@@ -410,8 +410,15 @@ A hash, never the value. With an operator's Secret, its data when the cluster ca
 {{- if $database.roleWriterPasswordExistingSecret -}}
 {{- $existing := lookup "v1" "Secret" .Release.Namespace $database.roleWriterPasswordExistingSecret -}}
 {{- printf "%s/%v" $database.roleWriterPasswordExistingSecret (($existing).data | default dict) | sha256sum -}}
+{{- else if $database.roleWriterPassword -}}
+{{- $database.roleWriterPassword | sha256sum -}}
 {{- else -}}
-{{- include "openbot.roleWriterPassword" . | sha256sum -}}
+{{- /*
+A generated password never changes once it is in the cluster (it is read back on every upgrade), so
+there is nothing to roll for: a constant keeps `helm template` (which cannot read it back) and a real
+upgrade from rolling the pods on every render.
+*/ -}}
+{{- "generated" | sha256sum -}}
 {{- end -}}
 {{- end -}}
 

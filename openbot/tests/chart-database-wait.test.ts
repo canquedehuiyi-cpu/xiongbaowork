@@ -199,6 +199,9 @@ describe.skipIf(!helm)("every database reader waits for the database", () => {
       [
         "--set-string",
         "database.url=postgres://openbot:pw@db.example:5432/openbot?sslmode=require",
+        // The fork's role writer (migration 0109) has a URL of its own beside the API's.
+        "--set-string",
+        "database.roleWriterUrl=postgres://openbot_role_writer:pw@db.example:5432/openbot?sslmode=require",
       ],
       ["--set-string", "database.existingSecret=my-database"],
     ]) {

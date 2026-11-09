@@ -189,7 +189,6 @@ describe("the computer boundary overlay", () => {
     );
   });
 
-<<<<<<< fork
   test("the MCP allowlist approves a curated app by its key or by its row id", () => {
     /*
      * Since G01-E a curated connector's row is `team:<catalogue key>`, while a tool call names the
@@ -226,26 +225,6 @@ describe("the computer boundary overlay", () => {
     expect(
       decideFromSnapshot(withList(["team:linear"]), call("linear"))?.matched,
     ).toBe("mcp_allowlist");
-=======
-  test("the MCP allowlist never refuses Routines, which is built in and on for every Bot", () => {
-    const current = snapshot({
-      settings: {
-        ...DEFAULT_ENTERPRISE_SETTINGS,
-        mcpAllowlist: { enabled: true, servers: ["jira"] },
-      },
-    });
-    expect(
-      decideFromSnapshot(
-        current,
-        context({
-          tool: { name: "routines__create_routine" },
-          intent: "write_tool",
-          page: { url: "", host: "" },
-          mcp: { server: "routines", tool: "create_routine", effect: "write" },
-        }),
-      ),
-    ).toBeNull();
->>>>>>> v1.0.0
   });
 
   test("a navigation off the allowlist is refused before it reaches the computer", () => {

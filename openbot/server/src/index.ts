@@ -1789,57 +1789,28 @@ await startupLifecycle.run(async (startup) => {
     auditStore: bootAuditStore,
   });
 
+  // Before anything reads the model environment: blank base URLs removed, Anthropic given its `/v1`.
   normalizeModelBaseUrls();
   const runtimeModel = runtimeModelForEnvironment(tenantPackage.model);
-
-  // Said once at boot: whether the key can call the model the Bots run on. A key without access to it
-  // otherwise passes every start-up check and fails at the first message, in front of whoever sent it.
-  void reportModelAvailability({
-    provider: runtimeModel.provider,
-    model: runtimeModel.defaultModel,
-    apiKey: () =>
-      resolveModelApiKey({
-        encryptionKey: config.keyEncryptionKey,
-        reader: credentialStore,
-        provider: runtimeModel.provider,
-        keyId: tenantPackage.model.credentialSecretRef,
-        environment: process.env,
-      }),
-  });
-
-  const intentRouter = createIntentRouter({
-    complete: createModelCompleter({
-      model: runtimeModel,
-      resolveApiKey: () =>
-        resolveModelApiKey({
-          encryptionKey: config.keyEncryptionKey,
-          reader: credentialStore,
-          provider: runtimeModel.provider,
-          keyId: tenantPackage.model.credentialSecretRef,
-          environment: process.env,
-        }),
-    }),
-  });
-
   /**
-   * Pass one of tool selection: which skills a message needs, on the deployment's own model.
-   *
-   * Built once rather than per request, because it holds nothing about a person: the key is resolved
-   * on every call, so a credential rotated a moment ago is used by the next run.
+   * Where local Intelligence's Learning thinks on the person's plan, with a record of what became of
+   * each call so Settings can say why a run failed. Absent off a plan or without Desktop's secret.
    */
-  const chooseSkills = createModelCompleter({
-    model: runtimeModel,
-    resolveApiKey: () =>
-      resolveModelApiKey({
-        encryptionKey: config.keyEncryptionKey,
-        reader: credentialStore,
-        provider: runtimeModel.provider,
-        keyId: tenantPackage.model.credentialSecretRef,
-        environment: process.env,
+  const learningModelEndpoint = learningModelEndpointFor(
+    runtimeModel.plan,
+    process.env.OPENBOT_LEARNING_MODEL_TOKEN,
+    createLearningModelCalls(),
+  );
+  // And before any Bot's model is resolved: behind a gateway, the API that model takes tools on (chooseOpenAIApi).
+  if (chooseOpenAIApi(runtimeModel) === "responses")
+    console.info(
+      JSON.stringify({
+        type: "openai-api",
+        api: "responses",
+        model: runtimeModel.defaultModel,
+        message: `${runtimeModel.defaultModel} takes tools only through the Responses API, so the built-in Bots call /responses at OPENAI_BASE_URL. Set COPILOTKIT_OPENAI_API=chat to call /chat/completions instead.`,
       }),
-  });
-
-  // Named collaborators are bound once in actorAgentResolver for chat, hops, and headless turns.
+    );
 
   /** The deployment's model key, resolved per call so a credential rotated a moment ago is used next. */
   const resolveRuntimeModelApiKey = () =>
@@ -1850,6 +1821,101 @@ await startupLifecycle.run(async (startup) => {
       keyId: tenantPackage.model.credentialSecretRef,
       environment: process.env,
     });
+
+  /*
+   * Kept, with a stamp naming the key it asked about, so the setup checklist can repeat the answer
+   * for that key and say "not checked yet" for any other: whether the key can call the model the Bots
+   * run on. A key without access to it otherwise passes every start-up check and fails at the first
+   * message, in front of whoever sent it. The checklist's "Check again" asks again through the same
+   * function. Never rejects: a failed read reads as not checked.
+   */
+  const checkModelAvailability = () =>
+    reportModelAvailability({
+      provider: runtimeModel.provider,
+      model: runtimeModel.defaultModel,
+      apiKey: resolveRuntimeModelApiKey,
+    });
+  // At boot there is nobody to act as: the deployment's own key is read as `platform` (G01).
+  const modelCheckAtBoot = asPlatform(async () => {
+    const { stamp } = await modelKeyOf({
+      plan: Boolean(runtimeModel.plan),
+      provider: runtimeModel.provider,
+      keyId: tenantPackage.model.credentialSecretRef,
+      credentials: credentialStore,
+      environment: process.env,
+    });
+    return { outcome: await checkModelAvailability(), stamp };
+  }).catch(() => undefined);
+
+  const intentRouter = createIntentRouter({
+    complete: createModelCompleter({
+      model: runtimeModel,
+      /*
+       * Picking a Bot sits between send and the conversation opening; see `routingModelFor`. Never a
+       * model the admin's allowlist leaves out: the router then stays on the deployment's own model,
+       * which the allowlist already governs for every run.
+       */
+      fastModel: () => {
+        const fast = routingModelFor(runtimeModel, process.env);
+        const allowlist =
+          enterpriseControls()?.snapshot()?.settings.modelAllowlist;
+        return fast &&
+          (!allowlist?.enabled ||
+            allowlist.models.includes(`${runtimeModel.provider}/${fast}`))
+          ? fast
+          : undefined;
+      },
+      resolveApiKey: resolveRuntimeModelApiKey,
+    }),
+  });
+
+  /**
+   * Pass one of tool selection, on the model the built-in Bots run on: their key, or their plan's
+   * harness. See `createSkillChooser`. Built once rather than per request, because it holds nothing
+   * about a person.
+   */
+  const chooseSkills = createSkillChooser(
+    runtimeModel,
+    resolveRuntimeModelApiKey,
+  );
+
+  /**
+   * The approval reviewer's model: the deployment's own, with its key or on its plan's harness (see
+   * `createModelCompleter`). It fails closed on an error or a timeout (`reviewAction`).
+   */
+  const reviewActions = createModelCompleter({
+    model: runtimeModel,
+    resolveApiKey: resolveRuntimeModelApiKey,
+  });
+
+  /**
+   * The models a person may pick for a Bot's run, and how hard each can think, asked of whatever
+   * serves the model: the provider, the gateway in OPENAI_BASE_URL, or a signed-in plan's own listing.
+   * One person on their own machine picks from all of them; in a team, people pick among the models an
+   * admin allowed (Admin, Providers), and get the default until there are any. Read now and then every
+   * few hours in the background, and early when a provider refuses a model; never per message.
+   */
+  const modelCatalogue = createModelCatalogue({
+    model: runtimeModel,
+    apiKey: resolveRuntimeModelApiKey,
+    ...(config.singleUser
+      ? {}
+      : {
+          allowlist: () =>
+            enterpriseControls()?.snapshot()?.settings.modelAllowlist,
+        }),
+  });
+  startup.acquireSync(
+    () => modelCatalogue.start(),
+    (stop) => stop(),
+  );
+
+  /** Each person's pick per conversation, saved through `/api/channels/:id/model` and read per run. */
+  const modelChoices = createModelChoices({
+    database,
+    model: runtimeModel,
+    catalogue: modelCatalogue,
+  });
 
   const hostAccessBroker = createHostAccessBroker(Date.now, {
     approvalGate: approvalService.gate,
