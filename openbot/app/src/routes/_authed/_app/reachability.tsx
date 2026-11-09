@@ -54,7 +54,7 @@ type Entry = "im" | "accounts" | "auto" | "requests";
 /**
  * The heading, two lines of large type, and the page's one h1 (docs/design/ios-studio/02-Waker.png).
  *
- * The design's slogan is 「在聊天里，让数字员工接手工作」; the page keeps its own business wording —
+ * The design's slogan is 「在聊天里，让员工接手工作」; the page keeps its own business wording —
  * what the page does, in the words it has always used — set as the design sets its headline, and
  * the slogan's idea goes in the sentence under it.
  */
@@ -186,7 +186,7 @@ function ReachabilityPage() {
       }
       art={<ChatStage />}
       className={HERO_FRAME}
-      description="在聊天里 @员工，让数字员工接手工作。"
+      description="在聊天里 @员工，让员工接手工作。"
       eyebrow="02 @WAKER / IM WORKSPACE"
       crumb="@Waker"
       title={HEADLINE}

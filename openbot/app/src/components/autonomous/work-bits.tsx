@@ -1,17 +1,119 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import {
   setProactiveEnabledMutationOptions,
   setResponsibilityEnabledMutationOptions,
 } from "@/lib/autonomous/mutations";
 import type { LastRun } from "@/lib/autonomous/queries";
 import { relativeTime } from "@/lib/relative-time";
+import { cn } from "@/lib/utils";
 
 /**
  * The small pieces both views of 自主工作 draw: the switch, the strip of recent runs, and the words
  * for a run's outcome. Moved here from the route unchanged so the per-employee view and the unified
  * list say the same thing about the same row.
  */
+
+/**
+ * The graphite plate every 自主工作 panel sits on (docs/design/ios-studio `.glass`): a hairline, the
+ * card's matte face and a faint top highlight. Rounded 14px for lists, 18px for the overview.
+ */
+export const PANEL =
+  "rounded-[14px] border border-border bg-card shadow-[inset_0_1px_0_rgb(255_255_255/0.03)]";
+
+/** A section heading as the reference sets it (`.section-head h2`): 17px, heavy, a little tight. */
+export const SECTION_TITLE =
+  "flex items-center gap-[7px] font-bold text-[17px] leading-[1.4] tracking-[-0.02em]";
+
+/**
+ * A titled group on 自主工作 (docs/design/ios-studio `.section` / `.section-head`): the 17px heading
+ * with an optional quiet line under it, the section's own verb at the right, then its content.
+ */
+export function WorkSection({
+  title,
+  description,
+  action,
+  children,
+  className,
+}: {
+  title: string;
+  description?: ReactNode;
+  action?: ReactNode;
+  children?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <section className={cn("mt-[22px]", className)}>
+      <div className="mb-[11px] flex flex-wrap items-center justify-between gap-[10px]">
+        <div className="min-w-0">
+          <h2 className={SECTION_TITLE}>{title}</h2>
+          {description ? (
+            <p className="mt-[2px] max-w-[70ch] text-pretty text-[12px] text-muted-foreground leading-[1.6]">
+              {description}
+            </p>
+          ) : null}
+        </div>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/**
+ * Rows (`<Item>`s) on one graphite plate, a hairline between them (`.row-stack`). The rows give up
+ * their own outline and corners so the plate reads as one card.
+ */
+export function WorkRows({ children }: { children: ReactNode }) {
+  return (
+    <div
+      className={cn(
+        PANEL,
+        "overflow-hidden px-[4px] [&>[data-slot=item]+[data-slot=item]]:border-t-border [&>[data-slot=item]]:rounded-none [&>[data-slot=item]]:border-transparent",
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** What a section says when it has nothing to list: one quiet sentence on the plate. */
+export function WorkNote({ children }: { children: ReactNode }) {
+  return (
+    <p
+      className={cn(
+        PANEL,
+        "px-[15px] py-[14px] text-[13px] text-muted-foreground leading-[1.6]",
+      )}
+    >
+      {children}
+    </p>
+  );
+}
+
+/**
+ * The 33px icon square of the reference (`.symbol`): a graphite tile with a hairline, the glyph in
+ * the text colour. Decorative; whatever it sits beside names the thing.
+ */
+export function IconTile({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        "inline-grid size-[33px] shrink-0 place-items-center rounded-[9px] border border-foreground/10 bg-muted text-foreground/90 dark:bg-[linear-gradient(145deg,#29292b,#1e1e20)] [&_svg]:size-[18px]",
+        className,
+      )}
+    >
+      {children}
+    </span>
+  );
+}
 
 /**
  * A schedule's newest firings, newest first (at most five), as the server sends them beside `lastRun`.
@@ -53,7 +155,7 @@ export function ToggleSwitch({
       title={reason}
       type="button"
     >
-      <span className="pointer-events-none block size-3 rounded-full bg-background transition-transform duration-150 ease-out group-aria-checked/switch:translate-x-[calc(100%-2px)] dark:bg-foreground dark:group-aria-checked/switch:bg-primary-foreground" />
+      <span className="pointer-events-none block size-3 rounded-full bg-background transition-transform duration-150 ease-out motion-reduce:transition-none group-aria-checked/switch:translate-x-[calc(100%-2px)] dark:bg-foreground dark:group-aria-checked/switch:bg-primary-foreground" />
     </button>
   );
 }
@@ -131,14 +233,20 @@ export function WorkSwitch({
   );
 }
 
+/*
+ * Black, white and red (docs/design/ios-studio): a success is a solid light mark, a failure the
+ * signal red, a run in flight a light mark that breathes (still under reduced motion), a wait a
+ * hollow mark, and a skip or queue a dim one. Shape and brightness differ as well as hue, and each
+ * mark names its outcome on hover and to a screen reader.
+ */
 const RUN_TONE: Record<string, string> = {
-  succeeded: "bg-emerald-500",
-  failed: "bg-red-500",
-  running: "bg-sky-500",
-  waiting: "bg-amber-500",
-  waiting_for_input: "bg-amber-500",
-  skipped: "bg-foreground/30",
-  queued: "bg-foreground/30",
+  succeeded: "bg-foreground/75",
+  failed: "bg-signal",
+  running: "bg-foreground motion-safe:animate-pulse",
+  waiting: "border border-foreground/60 bg-transparent",
+  waiting_for_input: "border border-signal bg-transparent",
+  skipped: "bg-foreground/25",
+  queued: "bg-foreground/25",
 };
 
 /**

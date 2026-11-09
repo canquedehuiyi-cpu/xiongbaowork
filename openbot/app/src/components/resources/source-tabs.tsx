@@ -31,7 +31,6 @@ export function WakerFlowsTab({ query, onQuery }: SearchProps) {
   const newButton = (
     <Button
       render={(props) => <Link search={{}} to="/wakerflows/new" {...props} />}
-      size="sm"
     >
       <IconPlus />
       新建
@@ -45,7 +44,6 @@ export function WakerFlowsTab({ query, onQuery }: SearchProps) {
             {rows.length > 0 ? newButton : null}
             <Button
               render={(props) => <Link to="/wakerflows" {...props} />}
-              size="sm"
               variant="outline"
             >
               打开 WakerFlow 页
@@ -67,7 +65,7 @@ export function WakerFlowsTab({ query, onQuery }: SearchProps) {
         ) : visible.length === 0 ? (
           <NoMatch onClear={() => onQuery("")} title="没有匹配的 WakerFlow" />
         ) : (
-          <CardGrid className="mt-4" label="WakerFlow 列表">
+          <CardGrid className="mt-[12px]" label="WakerFlow 列表">
             {visible.map((flow) => (
               <ResourceCard
                 actions={
@@ -126,7 +124,7 @@ export function ComponentsTab({ query, onQuery }: SearchProps) {
         ) : visible.length === 0 ? (
           <NoMatch onClear={() => onQuery("")} title="没有匹配的组件" />
         ) : (
-          <CardGrid className="mt-4" label="组件列表">
+          <CardGrid className="mt-[12px]" label="组件列表">
             {visible.map((component) => (
               <ResourceCard
                 description={

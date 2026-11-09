@@ -42,12 +42,18 @@ export function WorkbenchEmpty({
   title,
   description,
   action,
+  icon,
   mood,
   className,
 }: {
   title: string;
   description?: ReactNode;
   action?: ReactNode;
+  /**
+   * A symbol in place of 熊宝, for a list whose emptiness is about a thing rather than a person (自主工作's
+   * lightning). Drawn in the reference's 45px graphite signal tile.
+   */
+  icon?: ReactNode;
   /** Which of 熊宝's expressions greets the empty list; 开心 unless the page says otherwise. */
   mood?: BearMood;
   className?: string;
@@ -60,7 +66,16 @@ export function WorkbenchEmpty({
         className,
       )}
     >
-      <BearMascot mood={mood} size={45} />
+      {icon ? (
+        <span
+          aria-hidden="true"
+          className="flex size-[45px] items-center justify-center rounded-[14px] border border-foreground/15 bg-accent text-foreground shadow-[inset_0_1px_0_rgb(255_255_255/0.07)] [&_svg]:size-[23px]"
+        >
+          {icon}
+        </span>
+      ) : (
+        <BearMascot mood={mood} size={45} />
+      )}
       <p className="mt-[8px] font-bold text-[15px]">{title}</p>
       {description ? (
         <p className="max-w-md text-pretty text-[12px] text-muted-foreground leading-[1.6]">

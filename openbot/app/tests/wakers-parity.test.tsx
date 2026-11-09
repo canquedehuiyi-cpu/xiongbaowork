@@ -233,7 +233,12 @@ test("the header names the page, and 员工 / 群组 is one tablist mirrored to 
   expect(screen.getByRole("heading", { name: "员工管理" })).toBeTruthy();
   const tablist = screen.getByRole("tablist", { name: "员工与群组" });
   const tabs = within(tablist).getAllByRole("tab");
-  expect(tabs.map((tab) => tab.textContent)).toEqual(["员工", "群组"]);
+  // docs/design/ios-studio/04-员工管理.png: each side of the pill carries its count after the word.
+  expect(tabs.map((tab) => tab.textContent?.replace(/\d+$/, ""))).toEqual([
+    "员工",
+    "群组",
+  ]);
+  expect(tabs[0]?.textContent).toBe("员工3");
   expect(tabs[0]?.getAttribute("aria-selected")).toBe("true");
   // The employees tab is the default, so it carries no parameter.
   expect(router.state.location.search).toEqual({});
@@ -255,11 +260,11 @@ test("the header names the page, and 员工 / 群组 is one tablist mirrored to 
   expect(screen.queryByText("新建员工")).toBeNull();
 
   // Keyboard: Left moves back to 员工 and drops the parameter.
-  (screen.getByRole("tab", { name: "群组" }) as HTMLElement).focus();
+  (screen.getByRole("tab", { name: /^群组/ }) as HTMLElement).focus();
   await user.keyboard("{ArrowLeft}");
   await waitFor(() => expect(router.state.location.search).toEqual({}));
   expect(
-    screen.getByRole("tab", { name: "员工" }).getAttribute("aria-selected"),
+    screen.getByRole("tab", { name: /^员工/ }).getAttribute("aria-selected"),
   ).toBe("true");
 });
 
@@ -268,7 +273,7 @@ test("a deep link to ?tab=groups opens the groups tab, whose empty state offers 
   const { screen } = draw("/wakers?tab=groups");
   await waitFor(() =>
     expect(
-      screen.getByRole("tab", { name: "群组" }).getAttribute("aria-selected"),
+      screen.getByRole("tab", { name: /^群组/ }).getAttribute("aria-selected"),
     ).toBe("true"),
   );
   const empty = screen.getByTestId("crews-empty");
@@ -314,32 +319,37 @@ test("every employee card shows status, environment, avatar, name, role, task co
   await waitFor(() =>
     expect(screen.getByText("Backend Engineer")).toBeTruthy(),
   );
-  const card = (name: string) =>
-    within(
-      screen
-        .getAllByTestId("waker-card")
-        .find((node) => node.textContent?.includes(name)) as HTMLElement,
-    );
+  const cardNode = (name: string) =>
+    screen
+      .getAllByTestId("waker-card")
+      .find((node) => node.textContent?.includes(name)) as HTMLElement;
+  const card = (name: string) => within(cardNode(name));
+  /*
+   * docs/design/ios-studio/04-员工管理.png bolds each footer value, so 「任务数 1」 is a label and a
+   * <b>: read the fact's whole text rather than one text node.
+   */
+  const fact = (name: string, key: "task-count" | "last-run") =>
+    cardNode(name).querySelector(`[data-${key}]`)?.textContent ?? "";
 
   const backend = card("Backend Engineer");
   expect(backend.getByRole("img", { name: "Backend Engineer" })).toBeTruthy();
   expect(backend.getByText("在线")).toBeTruthy();
   expect(backend.getByText("后端开发")).toBeTruthy();
   expect(backend.getByText("设备：studio · 在线")).toBeTruthy();
-  expect(backend.getByText("任务数 1")).toBeTruthy();
-  expect(backend.getByText(/^最近运行 /).textContent).toContain("1小时");
+  expect(fact("Backend Engineer", "task-count")).toBe("任务数 1");
+  expect(fact("Backend Engineer", "last-run")).toStartWith("最近运行 ");
+  expect(fact("Backend Engineer", "last-run")).toContain("1小时");
 
   const reviewerCard = card("Code Reviewer");
   expect(reviewerCard.getByText("暂停")).toBeTruthy();
   // Somebody else's coworker, nothing running on a machine: not on one of this person's devices.
   expect(reviewerCard.getByText("未绑定设备")).toBeTruthy();
-  expect(reviewerCard.getByText("任务数 3")).toBeTruthy();
-  expect(reviewerCard.getByText(/^最近运行 /).textContent).toContain("5分钟");
+  expect(fact("Code Reviewer", "task-count")).toBe("任务数 3");
+  expect(fact("Code Reviewer", "last-run")).toContain("5分钟");
 
   // No board row this month: zero tasks, and no last run rather than a made-up one.
-  const atlas = card("Atlas Analyst");
-  expect(atlas.getByText("任务数 0")).toBeTruthy();
-  expect(atlas.getByText("最近运行 —")).toBeTruthy();
+  expect(fact("Atlas Analyst", "task-count")).toBe("任务数 0");
+  expect(fact("Atlas Analyst", "last-run")).toBe("最近运行 —");
 
   // The name opens the detail page; 进对话 and 装配 stay one tap away; the card link is focusable.
   const open = backend.getByRole("link", { name: "Backend Engineer" });
@@ -356,18 +366,19 @@ test("every employee card shows status, environment, avatar, name, role, task co
   ).toBeTruthy();
 });
 
-// The reference puts the create card FIRST (docs/acceptance/qoderwake-reference/wakers.png).
-test("the first cell is a dashed create card wired to the new-employee flow", async () => {
+// docs/design/ios-studio/04-员工管理.png numbers the profiles from the first cell (PROFILE / 01), so
+// the create card is the dashed slot AFTER the last profile.
+test("the cell after the last profile is a dashed create card wired to the new-employee flow", async () => {
   seed();
   const { screen } = draw();
   await waitFor(() =>
     expect(screen.getByText("Backend Engineer")).toBeTruthy(),
   );
   const grid = screen.getByTestId("waker-grid");
-  const first = grid.firstElementChild as HTMLElement;
-  expect(first.getAttribute("data-testid")).toBe("waker-create-card");
-  expect(first.getAttribute("href")).toBe("/wakers?new=true");
-  expect(first.className).toContain("border-dashed");
+  const last = grid.lastElementChild as HTMLElement;
+  expect(last.getAttribute("data-testid")).toBe("waker-create-card");
+  expect(last.getAttribute("href")).toBe("/wakers?new=true");
+  expect(last.className).toContain("border-dashed");
   expect(grid.querySelectorAll("[data-testid=waker-create-card]")).toHaveLength(
     1,
   );
@@ -449,7 +460,7 @@ test("排序 orders the wall by name, by last run, or by task count", async () =
     "Atlas Analyst",
   ]);
 
-  await pick(screen, "排序字段", "按名称");
+  await pick(screen, "排序", "按名称");
   await waitFor(() =>
     expect(cardNames(screen)).toEqual([
       "Atlas Analyst",
@@ -459,7 +470,7 @@ test("排序 orders the wall by name, by last run, or by task count", async () =
   );
   expect(router.state.location.search).toEqual({ sort: "name" });
 
-  await pick(screen, "排序字段", "按最近运行");
+  await pick(screen, "排序", "按最近运行");
   await waitFor(() =>
     expect(cardNames(screen)).toEqual([
       "Code Reviewer",
@@ -468,7 +479,7 @@ test("排序 orders the wall by name, by last run, or by task count", async () =
     ]),
   );
 
-  await pick(screen, "排序字段", "按任务数");
+  await pick(screen, "排序", "按任务数");
   await waitFor(() =>
     expect(cardNames(screen)).toEqual([
       "Code Reviewer",
@@ -490,8 +501,13 @@ test("a month read that fails says so once and shows — instead of counts", asy
   await waitFor(() =>
     expect(screen.getByText(/任务数和最近运行读不到/)).toBeTruthy(),
   );
-  expect(screen.getAllByText("任务数 —")).toHaveLength(3);
-  expect(screen.getAllByText("最近运行 —")).toHaveLength(3);
+  // Each footer value is a <b> after its label (docs/design/ios-studio), so read the whole fact.
+  const facts = (key: string) =>
+    [...screen.container.querySelectorAll(`[data-${key}]`)].map(
+      (node) => node.textContent,
+    );
+  expect(facts("task-count")).toEqual(["任务数 —", "任务数 —", "任务数 —"]);
+  expect(facts("last-run")).toEqual(["最近运行 —", "最近运行 —", "最近运行 —"]);
   expect(screen.getByRole("button", { name: "重新读取" })).toBeTruthy();
 });
 

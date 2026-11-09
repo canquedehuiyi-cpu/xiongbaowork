@@ -746,6 +746,34 @@ const PLUGINS_PAGE: PluginsPage = {
       auth: "none",
       perInstance: false,
     },
+    // Three more market entries, so the 插件市场 grid fills the 3 × 2 the design draws.
+    {
+      key: "web-search",
+      title: "联网搜索",
+      vendor: "示例供应商",
+      summary: "搜索公开网页并提取来源。",
+      docsUrl: "https://docs.example.com/web-search",
+      auth: "builtin",
+      perInstance: false,
+    },
+    {
+      key: "cloud-drive",
+      title: "云盘文件",
+      vendor: "示例供应商",
+      summary: "读取提问者已授权的云盘文件。",
+      docsUrl: "https://docs.example.com/cloud-drive",
+      auth: "user-oauth",
+      perInstance: false,
+    },
+    {
+      key: "tickets",
+      title: "工单系统",
+      vendor: "示例供应商",
+      summary: "查询与更新客服工单的处理进度。",
+      docsUrl: "https://docs.example.com/tickets",
+      auth: "deployment-bearer",
+      perInstance: false,
+    },
   ],
   servers: PLUGIN_SERVERS,
   skills: SKILLS,
@@ -1301,6 +1329,17 @@ const reachability = (scenario: Scenario): Reachability => ({
             enabled: false,
             optedOutAt: at(90),
           },
+          // A chat whose last delivery failed: the table's 送达失败 state.
+          {
+            id: "binding-03",
+            transport: "slack",
+            channelId: "channel-support",
+            agentId: "agent-support",
+            address: "#售后支持",
+            mentionId: null,
+            enabled: true,
+            optedOutAt: null,
+          },
         ]
       : [],
   devices:
@@ -1325,6 +1364,15 @@ const reachability = (scenario: Scenario): Reachability => ({
             state: "failed",
             error: "号码已退订",
             createdAt: at(91),
+          },
+          {
+            id: "delivery-03",
+            transport: "slack",
+            kind: "reply",
+            state: "failed",
+            error: "机器人已被移出该频道",
+            createdAt: at(60),
+            bindingId: "binding-03",
           },
         ]
       : [],

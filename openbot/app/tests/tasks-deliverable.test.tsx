@@ -11,6 +11,9 @@ import {
 
 /**
  * Spec A9 on the board: a card in 查收结果 says what its run produced, and 查收 is the button beside
+ *
+ * The tabs are named 「需要操作 N / 查收结果 N」, the pill switch of docs/design/ios-studio/01-任务看板.png
+ * (the counts lost their brackets in the redesign; what they count is unchanged).
  * it. The chip is drawn for a `deliverable` record only — any other shape in the same column (a
  * circuit breaker's note, an old free-form ref) is not an output and must not be offered as one.
  *
@@ -136,7 +139,7 @@ test("a card in 查收结果 shows what it produced, and 查收 asks to close th
     </QueryClientProvider>,
   );
 
-  await userEvent.click(view.getByRole("tab", { name: "查收结果 (3)" }));
+  await userEvent.click(view.getByRole("tab", { name: "查收结果 3" }));
   expect(view.getByText("收入图")).toBeTruthy();
   // One chip, on the one card whose ref is a deliverable.
   const chips = view.container.querySelectorAll("[data-deliverable]");

@@ -1,7 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { AutomationForm } from "@/components/automations/automation-form";
-import { PageRows, PageSection } from "@/components/layout/page-shell";
+import {
+  PANEL,
+  WorkNote,
+  WorkRows,
+  WorkSection,
+} from "@/components/autonomous/work-bits";
 import { QueryError } from "@/components/layout/query-error";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,13 +34,18 @@ import {
   TRIGGER_KIND_LABEL,
 } from "@/lib/automations/queries";
 import { relativeTime } from "@/lib/relative-time";
+import { cn } from "@/lib/utils";
 
+/*
+ * docs/design/ios-studio `.badge`: black, white and red. A live automation is the bright pill, a
+ * stopped one the quiet pill, and a tripped breaker the alert pill; the label always says which.
+ */
 const STATE_TONE: Record<AutomationState, string> = {
-  running: "border-emerald-500/40 text-emerald-700 dark:text-emerald-400",
-  paused: "text-muted-foreground",
-  expired: "text-muted-foreground",
-  max_runs: "text-muted-foreground",
-  breaker: "border-destructive/50 text-destructive",
+  running: "bg-foreground/[0.1] text-foreground",
+  paused: "bg-foreground/[0.05] text-muted-foreground",
+  expired: "bg-foreground/[0.05] text-muted-foreground",
+  max_runs: "bg-foreground/[0.05] text-muted-foreground",
+  breaker: "bg-signal-soft text-signal-ink",
 };
 
 function formatInstant(iso: string): string {
@@ -57,7 +67,7 @@ export function SecretOnce({
 }) {
   return (
     <div
-      className="flex flex-col gap-1 rounded-md border border-amber-500/50 p-2 text-xs"
+      className="flex flex-col gap-1 rounded-[12px] border border-signal/40 bg-signal-soft p-[10px] text-xs"
       role="status"
     >
       <p>
@@ -102,7 +112,7 @@ function TriggerChip({
       : "";
   return (
     <li
-      className="rounded-full border px-2 py-0.5 text-xs"
+      className="rounded-full bg-foreground/[0.06] px-[8px] py-[3px] text-[11px] text-foreground/85"
       title={trigger.nextRunAt ?? undefined}
     >
       {TRIGGER_KIND_LABEL[config.kind]} · {detail}
@@ -110,7 +120,7 @@ function TriggerChip({
       {trigger.enabled ? "" : " · 已停用"}
       {/* Why the server switched it off (a missed one-off, an unreadable rule), when it says. */}
       {trigger.lastError ? (
-        <span className="text-destructive"> · {trigger.lastError}</span>
+        <span className="text-signal-ink"> · {trigger.lastError}</span>
       ) : null}
     </li>
   );
@@ -157,7 +167,10 @@ export function AutomationRow({
         <ItemTitle>
           {automation.name}
           <span
-            className={`rounded-full border px-2 py-0.5 font-normal text-xs ${STATE_TONE[state]}`}
+            className={cn(
+              "rounded-full px-[8px] py-[3px] font-semibold text-[11px]",
+              STATE_TONE[state],
+            )}
           >
             {AUTOMATION_STATE_LABEL[state]}
           </span>
@@ -274,7 +287,7 @@ export function AutomationsSection() {
   );
 
   return (
-    <PageSection
+    <WorkSection
       action={
         <Button
           aria-expanded={creating}
@@ -289,15 +302,17 @@ export function AutomationsSection() {
       title="自动任务"
     >
       {creating ? (
-        <AutomationForm
-          onCreated={(result) => {
-            setCreating(false);
-            setCreated(result);
-          }}
-        />
+        <div className={cn(PANEL, "mb-[10px] p-[14px]")}>
+          <AutomationForm
+            onCreated={(result) => {
+              setCreating(false);
+              setCreated(result);
+            }}
+          />
+        </div>
       ) : null}
       {created && secrets.length > 0 ? (
-        <div className="mb-4 flex flex-col gap-2">
+        <div className="mb-[10px] flex flex-col gap-2">
           <p className="text-sm">「{created.automation.name}」已建立。</p>
           {secrets.map((entry) => (
             <SecretOnce
@@ -328,14 +343,12 @@ export function AutomationsSection() {
           retrying={list.isFetching}
         />
       ) : null}
-      {list.isPending ? <Skeleton className="h-16" /> : null}
+      {list.isPending ? <Skeleton className="h-16 rounded-[14px]" /> : null}
       {list.isSuccess && list.data.length === 0 ? (
-        <p className="text-muted-foreground text-sm">
-          还没有自动任务。点「新建自动任务」建一个。
-        </p>
+        <WorkNote>还没有自动任务。点「新建自动任务」建一个。</WorkNote>
       ) : null}
       {list.isSuccess && list.data.length > 0 ? (
-        <PageRows>
+        <WorkRows>
           {list.data.map((automation) => (
             <AutomationRow
               agentName={agentName}
@@ -343,8 +356,8 @@ export function AutomationsSection() {
               key={automation.id}
             />
           ))}
-        </PageRows>
+        </WorkRows>
       ) : null}
-    </PageSection>
+    </WorkSection>
   );
 }

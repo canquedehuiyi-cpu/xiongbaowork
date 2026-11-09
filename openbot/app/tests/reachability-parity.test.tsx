@@ -265,7 +265,7 @@ test("the hero headline is the page's only h1, with four entries and a decorativ
     name: /^将员工接入群聊或私聊，\s+在 IM 中持续承接团队工作$/,
   });
   expect(heading).toBeTruthy();
-  expect(view.getByText("在聊天里 @员工，让数字员工接手工作。")).toBeTruthy();
+  expect(view.getByText("在聊天里 @员工，让员工接手工作。")).toBeTruthy();
   // No second page title above the hero: the headline is the heading.
   expect(view.getAllByRole("heading", { level: 1 })).toHaveLength(1);
   for (const name of ["接入 IM 聊天", "机器人与账号", "自动接入", "接入申请"]) {

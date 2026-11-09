@@ -37,6 +37,7 @@ type RouteSpec = {
 
 export const ROUTES: RouteSpec[] = [
   { path: "/tasks", main: true },
+  { path: "/tasks?view=lanes", slug: "tasks-lanes" },
   { path: "/reachability", main: true },
   { path: "/autonomous", main: true },
   { path: "/wakers", main: true },
