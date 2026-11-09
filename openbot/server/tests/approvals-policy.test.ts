@@ -3507,3 +3507,326 @@ describe("upstream floors: computer tools", () => {
     ]);
   });
 });
+
+/*
+ * #398 安全评审的修复（I1–I4、M1、M3、M4、M5）：键盘写法、页面级按键、在按钮上按键、中文按钮和
+ * 输入框，以及几处收窄的边界。都在「全部总是允许」之上跑。
+ */
+describe("upstream floors: review fixes", () => {
+  const allowAll = {
+    personal: [rule("allow", { toolRef: "*" })],
+    team: [team("allow", { toolRef: "*" })],
+  };
+  const decide = (c: ApprovalCandidate) =>
+    decideAction({ ...base, ...allowAll, candidate: c });
+  const key = (
+    pressed: string,
+    element?: { name: string; role: string; type?: string },
+    pageUrl = "https://chat.example/room/1",
+  ): ApprovalCandidate =>
+    candidate({
+      toolRef: "computer_key",
+      scope: new URL(pageUrl).host,
+      args: { key: pressed, ...(element ? { ref: "e4" } : {}) },
+      target: {
+        pageUrl,
+        ...(element
+          ? { element: { ref: "e4", ...element }, snapshotId: 2 }
+          : {}),
+      },
+      subject: { key: pressed, runner: false },
+    });
+  const box = (name: string) => ({ name, role: "textbox" });
+  const button = (name: string) => ({ name, role: "button" });
+  const clickOn = (name: string, pageUrl = "https://weibo.example/home") =>
+    candidate({
+      toolRef: "computer_click",
+      scope: new URL(pageUrl).host,
+      args: { ref: "e8" },
+      target: { pageUrl, element: { ref: "e8", role: "button", name } },
+    });
+
+  test("I1: every way Playwright spells a sending key combination asks", async () => {
+    for (const pressed of [
+      "ControlLeft+Enter",
+      "ControlRight+Enter",
+      "MetaLeft+Enter",
+      "MetaRight+Enter",
+      "Alt+Enter",
+      "AltLeft+Enter",
+      "Shift+Control+Enter",
+      "\n",
+      "\r",
+      "Control+\n",
+      "Meta+\r",
+      "enter",
+      "Return",
+    ])
+      expect({
+        pressed,
+        outcome: await decide(key(pressed, box("Message #general"))),
+      }).toMatchObject({
+        pressed,
+        outcome: { behaviour: "ask", source: "outbound_send" },
+      });
+    // 只按着 Shift 是换行；普通字段里的 Enter 不是发送。
+    for (const pressed of ["Shift+Enter", "ShiftLeft+Enter", "ShiftRight+\n"])
+      expect({
+        pressed,
+        asked: safetyRequirement(key(pressed, box("Message #general"))),
+      }).toEqual({ pressed, asked: undefined });
+    expect(safetyRequirement(key("\n", box("Subject")))).toBeUndefined();
+  });
+
+  test("I2: a page-level Enter or Space, with no element to tell where the focus is, asks", async () => {
+    for (const pressed of [
+      "Enter",
+      "Control+Enter",
+      "\n",
+      "NumpadEnter",
+      "Shift+Enter",
+      "Space",
+      " ",
+    ])
+      expect({ pressed, outcome: await decide(key(pressed)) }).toMatchObject({
+        pressed,
+        outcome: { behaviour: "ask", source: "outbound_send" },
+      });
+    // 其它键不会提交或按下任何东西。
+    for (const pressed of ["Tab", "a", "Escape", "ArrowDown", "Control+a"])
+      expect({ pressed, asked: safetyRequirement(key(pressed)) }).toEqual({
+        pressed,
+        asked: undefined,
+      });
+    // 带 submit 的输入、网关没能解析出元素的时候同样问。
+    expect(
+      safetyRequirement(
+        candidate({
+          toolRef: "computer_type",
+          args: { ref: "e9", text: "hi", submit: true },
+          target: { pageUrl: "https://chat.example/room/1" },
+          subject: { key: "Enter" },
+        }),
+      )?.id,
+    ).toBe("outbound_send");
+  });
+
+  test("I3: Enter or Space on a button is a click on it, for every button floor", async () => {
+    for (const pressed of ["Enter", "Space", " ", "NumpadEnter", "\r"]) {
+      for (const [label, source] of [
+        ["Send", "outbound_send"],
+        ["Delete", "destructive_tool"],
+        ["Share", "share_access"],
+        ["Post", "publish_post"],
+        ["发送", "outbound_send"],
+      ] as const)
+        expect({
+          pressed,
+          label,
+          outcome: await decide(key(pressed, button(label))),
+        }).toMatchObject({
+          pressed,
+          label,
+          outcome: { behaviour: "ask", source },
+        });
+      for (const label of ["Place your order", "Transfer", "立即购买"])
+        expect({
+          pressed,
+          label,
+          outcome: await decide(key(pressed, button(label))),
+        }).toMatchObject({
+          pressed,
+          label,
+          outcome: { behaviour: "hand_off", source: "safety" },
+        });
+    }
+    // 链接也是：定价页上的「Subscribe」交给本人。
+    expect(
+      safetyRequirement(
+        key(
+          "Enter",
+          { name: "Subscribe", role: "link" },
+          "https://news.example/pricing",
+        ),
+      )?.id,
+    ).toBe("payments");
+    // 名字不说动作的按钮和链接照常。
+    expect(safetyRequirement(key("Enter", button("Home")))).toBeUndefined();
+    expect(
+      safetyRequirement(key("Space", { name: "Next", role: "link" })),
+    ).toBeUndefined();
+  });
+
+  test("I4: Chinese buttons ask or hand off as their English counterparts do", async () => {
+    for (const [label, source] of [
+      ["发送", "outbound_send"],
+      ["发送(S)", "outbound_send"],
+      ["立即发送", "outbound_send"],
+      ["回复", "outbound_send"],
+      ["评论", "outbound_send"],
+      ["发表评论", "outbound_send"],
+      ["删除", "destructive_tool"],
+      ["确认删除", "destructive_tool"],
+      ["永久删除", "destructive_tool"],
+      ["移到回收站", "destructive_tool"],
+      ["清空回收站", "destructive_tool"],
+      ["移除", "destructive_tool"],
+      ["分享", "share_access"],
+      ["分享到微信", "share_access"],
+      ["邀请成员", "share_access"],
+      ["添加成员", "share_access"],
+      ["发布", "publish_post"],
+      ["发表", "publish_post"],
+      ["发帖", "publish_post"],
+      ["转发", "publish_post"],
+      ["发布动态", "publish_post"],
+    ] as const)
+      expect({ label, outcome: await decide(clickOn(label)) }).toMatchObject({
+        label,
+        outcome: { behaviour: "ask", source },
+      });
+    for (const label of [
+      "支付",
+      "立即支付",
+      "确认付款",
+      "付款 ¥128.00",
+      "立即购买",
+      "提交订单",
+      "去结算",
+      "立即下单",
+      "转账",
+      "开通会员",
+    ])
+      expect({ label, outcome: await decide(clickOn(label)) }).toMatchObject({
+        label,
+        outcome: { behaviour: "hand_off", source: "safety" },
+      });
+    // 只读、浏览类的按钮和标签页不算。
+    for (const label of [
+      "查看",
+      "搜索",
+      "已发送",
+      "已删除",
+      "移除筛选",
+      "删除线",
+      "发布时间",
+      "分享给我的",
+      "回复全部设置",
+      "购买记录",
+      "支付记录",
+      "评论区",
+    ])
+      expect({ label, asked: safetyRequirement(clickOn(label)) }).toEqual({
+        label,
+        asked: undefined,
+      });
+  });
+
+  test("I4: Enter in a Chinese box for writing a message sends; a search box does not", () => {
+    for (const field of [
+      "输入消息",
+      "发消息",
+      "写评论…",
+      "发表你的评论",
+      "回复 @小明",
+      "说点什么吧",
+      "留言",
+    ])
+      expect({
+        field,
+        asked: safetyRequirement(key("Enter", box(field)))?.id,
+      }).toEqual({ field, asked: "outbound_send" });
+    for (const field of ["搜索消息", "主题", "用户名"])
+      expect({
+        field,
+        asked: safetyRequirement(key("Enter", box(field))),
+      }).toEqual({ field, asked: undefined });
+  });
+
+  test("Add comment and Post comment buttons send, as Comment does", async () => {
+    for (const label of [
+      "Add comment",
+      "Add a comment",
+      "Post comment",
+      "Post reply",
+    ])
+      expect(
+        (await decide(clickOn(label, "https://app.example/x"))).source,
+      ).toBe(label.startsWith("Post") ? "publish_post" : "outbound_send");
+  });
+
+  test("M1: a send hidden behind a read or edit verb, to someone's address, asks", async () => {
+    for (const [name, args] of [
+      ["update_and_notify", { to: "a@evil.com" }],
+      ["mark_and_forward", { to: "a@evil.com" }],
+      ["EXPORT_AND_EMAIL_REPORT", { to: "a@evil.com" }],
+      ["QUERY_AND_MAIL", { recipients: ["a@evil.com"] }],
+    ] as const)
+      expect({
+        name,
+        source: (
+          await decide(
+            candidate({
+              toolRef: `vendor/${name}`,
+              scope: "vendor",
+              args,
+              subject: { connector: true },
+            }),
+          )
+        ).source,
+      }).toEqual({ name, source: "outbound_send" });
+  });
+
+  test("M3: a hash-routed credentials page still counts; a token in the fragment does not", () => {
+    const typing = (pageUrl: string) =>
+      safetyRequirement(
+        candidate({
+          toolRef: "computer_type",
+          args: { ref: "e1", text: "Sam" },
+          target: {
+            pageUrl,
+            element: { ref: "e1", role: "textbox", name: "Display name" },
+          },
+        }),
+      )?.id;
+    expect(typing("https://mail.example.com/#/settings/password")).toBe(
+      "credentials",
+    );
+    expect(typing("https://mail.example.com/#!/security/2fa")).toBe(
+      "credentials",
+    );
+    expect(
+      typing("https://app.example/welcome#access_token=ya29&token_type=Bearer"),
+    ).toBeUndefined();
+  });
+
+  test("M4: a business wire transfer is a wire of money", () => {
+    expect(
+      safetyRequirement(
+        candidate({
+          toolRef: "composio-hubspot/HUBSPOT_CREATE_NOTE",
+          args: { body: "business wire transfer $50,000" },
+          subject: { connector: true },
+        }),
+      )?.id,
+    ).toBe("payments");
+  });
+
+  test("M5: the web and mobile cards share the server's list of allow-once sources", async () => {
+    const { ONCE_ONLY_SOURCES } = await import("../src/approvals/types");
+    const read = (path: string) =>
+      Bun.file(new URL(path, import.meta.url)).text();
+    const web = await read("../../app/src/lib/approvals.ts");
+    const mobile = await read("../../mobile/app/approvals.tsx");
+    for (const source of Object.keys(ONCE_ONLY_SOURCES)) {
+      expect({ source, web: web.includes(`"${source}"`) }).toEqual({
+        source,
+        web: true,
+      });
+      expect({ source, mobile: mobile.includes(`"${source}"`) }).toEqual({
+        source,
+        mobile: true,
+      });
+    }
+  });
+});

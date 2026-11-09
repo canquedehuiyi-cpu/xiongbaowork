@@ -146,6 +146,13 @@ export function applicableRules(input: {
 /** 按钮上动词前面的确认词：「Yes, delete」「Confirm transfer」（参照上游 `CONFIRMING`）。 */
 const CONFIRMING =
   "(?:(?:yes|ok|okay|confirm|continue and|i want to|permanently)[,\\s]+)?";
+/**
+ * 中文按钮前面的确认词（「确认删除」「确定」「是，删除」），以及按钮文字末尾可有可无的快捷键提示
+ * （「发送(S)」「发送（Ctrl+Enter）」）。中文没有 `\b` 词边界，所以中文按钮都整段锚定：开头一个
+ * 动作词，后面只许跟一个明确的宾语，再到结尾。「删除线」「发布时间」「购买记录」因此不算。
+ */
+const CN_CONFIRMING = "(?:(?:确认|确定|是的?)[，,\\s]*)?";
+const CN_END = "\\s*(?:[（(][^）)]*[）)])?$";
 
 /**
  * Built-in safety requirements. These always hand the action to the person, before and regardless of
@@ -169,6 +176,8 @@ const SAFETY_REQUIREMENTS: readonly {
   tool?: RegExp;
   /** 只匹配网页上点击的按钮的文字（见 {@link actionName}）。 */
   click?: RegExp;
+  /** 同上，按钮文字的中文写法。 */
+  clickZh?: RegExp;
 }[] = [
   {
     id: "credentials",
@@ -195,8 +204,8 @@ const SAFETY_REQUIREMENTS: readonly {
     reason: "Paying, purchasing or moving money is always done by the person.",
     pattern:
       // 退款也是动钱（上游 #904）。电汇是动钱，新闻通稿（Business Wire、news wire、press wire）不是：
-      // Bot 填资料来源时写上它，不该因此交给本人（上游）。
-      /payment|refund|\bpay(ing)?\b|pay[-_ ]?now|checkout|purchase|place[-_ ]?order|buy[-_ ]?now|(?<!\b(business|news|press)[-_ ]?)\bwire\b|bank[-_ ]?transfer|transfer[-_ ]?(money|funds)|send[-_ ]?money|credit[-_ ]?card|card[-_ ]?number|\bcvv\b|\biban\b|routing[-_ ]?number|billing/i,
+      // Bot 填资料来源时写上它，不该因此交给本人（上游）。wire transfer 不管前面是什么都算。
+      /payment|refund|\bpay(ing)?\b|pay[-_ ]?now|checkout|purchase|place[-_ ]?order|buy[-_ ]?now|(?<!\b(business|news|press)[-_ ]?)\bwire\b|\bwire[-_ ]?transfer\b|bank[-_ ]?transfer|transfer[-_ ]?(money|funds)|send[-_ ]?money|credit[-_ ]?card|card[-_ ]?number|\bcvv\b|\biban\b|routing[-_ ]?number|billing/i,
     /*
      * 按应用工具的名字认出的动钱和购买（上游 #998、#1015）：转账、提现、付款单、下单、工资发放、
      * 升降级付费套餐。这些在参数里不会出现，只在名字里，所以只看名字：备注里写了 transfer、buy 仍是
@@ -210,6 +219,10 @@ const SAFETY_REQUIREMENTS: readonly {
     // 网页上的付款、购买、带金额的发送和升降级套餐按钮。
     click: new RegExp(
       `^${CONFIRMING}(transfer|withdraw|pay|buy|send money)\\b|^${CONFIRMING}(send|pay|transfer|donate|tip)\\b.*[$€£¥₹]\\s?\\d|\\b(place (your )?order|(complete|confirm|submit) (your )?(purchase|order)|order now|buy now|buy it now)\\b|^${CONFIRMING}(upgrade|downgrade|(change|switch) (your |my |the )?plan|start (my |your )?(subscription|membership))\\b`,
+    ),
+    // 同一批按钮的中文写法：支付、付款、立即购买、提交订单、去结算、转账、开通会员……
+    clickZh: new RegExp(
+      `^${CN_CONFIRMING}(?:立即|马上|去)?(?:支付|付款|购买|下单|结算|充值|转账|汇款|提现|打赏)(?:\\s*[¥￥$]?\\s*[\\d.,]+\\s*元?)?${CN_END}|^(?:提交|确认)订单${CN_END}|^(?:立即|马上)?(?:开通|升级|续费)(?:会员|套餐|vip|高级版|专业版)?${CN_END}`,
     ),
   },
 ];
@@ -273,6 +286,10 @@ function plainlyEmpty(value: unknown): boolean {
 /**
  * 目标里页面地址只留来源和路径，去掉查询串和片段（上游 #1109）。没有页面，或地址解析不了，原样
  * 返回：读不懂的地址照旧整段匹配，而不是不匹配。
+ *
+ * 片段以 `#/` 或 `#!/` 开头时是单页应用的路由，它就是路径，保留下来（片段里自己的查询串照样去掉）：
+ * `https://mail.example.com/#/settings/password` 仍是改密码的页面。其它片段（OAuth 回跳带的
+ * `#access_token=…`）照旧去掉。
  */
 function pageWithoutQuery(target: unknown): unknown {
   if (target === null || typeof target !== "object" || Array.isArray(target))
@@ -281,7 +298,8 @@ function pageWithoutQuery(target: unknown): unknown {
   if (typeof page !== "string") return target;
   try {
     const url = new URL(page);
-    return { ...target, pageUrl: `${url.origin}${url.pathname}` };
+    const route = /^#!?\//.test(url.hash) ? url.hash.split("?")[0] : "";
+    return { ...target, pageUrl: `${url.origin}${url.pathname}${route}` };
   } catch {
     return target;
   }
@@ -365,9 +383,10 @@ function handOffRequirement(
       (entry) =>
         entry.pattern.test(entry.pagePathOnly ? pathWords : words) ||
         (named !== undefined &&
-          (named.kind === "tool" ? entry.tool : entry.click)?.test(
-            named.name,
-          ) === true),
+          (named.kind === "tool"
+            ? entry.tool?.test(named.name) === true
+            : entry.click?.test(named.name) === true ||
+              entry.clickZh?.test(named.name) === true)),
     ) ??
     (paysToSubscribe(candidate, named)
       ? SAFETY_REQUIREMENTS.find((entry) => entry.id === "payments")
@@ -416,9 +435,124 @@ function actionName(
 ): { kind: "tool" | "click"; name: string } | undefined {
   if (candidate.subject?.connector === true)
     return { kind: "tool", name: toolWords(candidate.toolRef) };
-  if (candidate.toolRef !== "computer_click") return undefined;
+  if (candidate.toolRef !== "computer_click" && !pressesElement(candidate))
+    return undefined;
   const label = elementName(candidate).replace(/\s+/g, " ").trim();
   return label ? { kind: "click", name: label } : undefined;
+}
+
+/**
+ * 在按钮、链接这类元素上按 Enter 或空格，就是点它（网关的 `intentOf` 也把这几个键记为 activate）。
+ * 所以 `computer_key` 带着解析出来的元素、按的是 Enter 或空格（不论修饰键），并且元素不是输入框时，
+ * 按点击这个元素处理，走同一套按钮底线，包括交给本人的付款按钮。输入框里的 Enter 由
+ * {@link pressesSend} 判断。
+ */
+function pressesElement(candidate: ApprovalCandidate): boolean {
+  if (candidate.toolRef !== "computer_key") return false;
+  const pressed = pressedKey(candidate);
+  if (pressed?.main !== "enter" && pressed?.main !== "space") return false;
+  const element = (candidate.target as { element?: unknown } | undefined)
+    ?.element;
+  return (
+    element !== null &&
+    typeof element === "object" &&
+    !entersText(element as { role?: unknown; type?: unknown })
+  );
+}
+
+/** 能往里写字的元素：输入框、文本域、可编辑区域。按钮、链接、菜单项都不是。 */
+const TEXT_ROLES = new Set([
+  "textbox",
+  "searchbox",
+  "combobox",
+  "textarea",
+  "spinbutton",
+]);
+const NON_TEXT_INPUTS = new Set([
+  "submit",
+  "button",
+  "image",
+  "reset",
+  "checkbox",
+  "radio",
+  "file",
+  "color",
+  "range",
+]);
+function entersText(element: { role?: unknown; type?: unknown }): boolean {
+  const role =
+    typeof element.role === "string" ? element.role.toLowerCase() : "";
+  const type =
+    typeof element.type === "string" ? element.type.toLowerCase() : "";
+  if (TEXT_ROLES.has(role)) return true;
+  return role === "input" && !NON_TEXT_INPUTS.has(type);
+}
+
+/** 修饰键的各种写法，规范成 Playwright 的四个：control、meta、alt、shift。 */
+const MODIFIER_NAMES: Record<string, string> = {
+  control: "control",
+  ctrl: "control",
+  meta: "meta",
+  cmd: "meta",
+  command: "meta",
+  os: "meta",
+  win: "meta",
+  super: "meta",
+  alt: "alt",
+  option: "alt",
+  altgraph: "alt",
+  shift: "shift",
+  controlormeta: "control",
+};
+
+/**
+ * 这次调用按的键，按 Playwright 的键名规则规范化（电脑端的按键由 Playwright 执行）：
+ *  - 用 `+` 拆成修饰键和主键，`Shift++` 的主键是 `+`；
+ *  - `"\n"`、`"\r"` 是 Enter 的别名，Return、NumpadEnter 也是 Enter；`" "`、Space 是空格；
+ *  - 修饰键去掉 Left、Right 后缀再认（ControlLeft 就是 Control），Ctrl、Cmd、Option 这类别名
+ *    也认；
+ *  - 大小写不论。
+ * 要按的键优先取调用处给的（`subject.key`，网关从工具的输入里取，`computer_type` 带 `submit` 时是
+ * Enter），没有时才看参数。不是 `computer_key` 或 `computer_type` 时返回 undefined。
+ */
+function pressedKey(
+  candidate: ApprovalCandidate,
+): { main: string; modifiers: string[] } | undefined {
+  if (
+    candidate.toolRef !== "computer_key" &&
+    candidate.toolRef !== "computer_type"
+  )
+    return undefined;
+  const args = (
+    candidate.args !== null && typeof candidate.args === "object"
+      ? candidate.args
+      : {}
+  ) as { key?: unknown; submit?: unknown };
+  const fromArgs =
+    candidate.toolRef === "computer_key"
+      ? typeof args.key === "string"
+        ? args.key
+        : ""
+      : args.submit === true
+        ? "Enter"
+        : "";
+  const key = candidate.subject?.key ?? fromArgs;
+  const parts = key.split(/\+(?=[\s\S])/).map(normalisedKey);
+  return {
+    main: parts.at(-1) ?? "",
+    modifiers: parts
+      .slice(0, -1)
+      .map((part) => MODIFIER_NAMES[part.replace(/(left|right)$/, "")] ?? part),
+  };
+}
+
+function normalisedKey(part: string): string {
+  if (part === "\n" || part === "\r") return "enter";
+  if (part === " ") return "space";
+  const name = part.trim().toLowerCase();
+  if (name === "return" || name === "numpadenter") return "enter";
+  if (name === "spacebar") return "space";
+  return name;
 }
 
 /** 网关交给审批门的元素名字（`target.element.name`），小写；没有就是空串。 */
@@ -1124,14 +1258,18 @@ const INVITED = /(^|_)(attendees?|invitees?|guests?)(_|$)/;
 const READ_WORD =
   /\b(get|gets|list|lists|fetch|fetches|retrieve|search|find|read|reads|count|lookup|export|download|query)\b/;
 const EDIT_WORD = /\b(update|updates|edit|patch|modify|set|mark|unmark)\b/;
+/** 名字里另有发送类动作时，读、编辑的排除不算数：`update_and_notify`、`export_and_email_report`。 */
+const SENDING_WORD =
+  /\b(send|notify|forward|reply|respond|broadcast|invite|email|mail|sms|dm)\b/;
 
 /**
  * 应用工具的调用写明了要发给谁的邮箱地址（上游 `addressesPeople`）：带受邀人的日历活动会给他们
  * 发邀请，不管工具叫什么。只看顶层参数，只认地址，所以指向文件夹的 `to` 不算。
  *
  * 比上游多两道排除，都是 fork 现有测试划定的：名字里有读的动作（`list_sent_messages` 按收件人
- * 筛选）不算；收件人类参数（to、cc、bcc）配上编辑动作（`update_post`）不算。受邀人参数配编辑照样
- * 算：改日历活动加了人，也会发邀请。草稿不算。
+ * 筛选）不算；收件人类参数（to、cc、bcc）配上编辑动作（`update_post`）不算。名字里另有发送类动作
+ * 时两道排除都不算（`update_and_notify`、`query_and_mail`）。受邀人参数配编辑照样算：改日历活动
+ * 加了人，也会发邀请。草稿不算。
  */
 function addressesPeople(candidate: ApprovalCandidate): boolean {
   if (candidate.subject?.connector !== true) return false;
@@ -1139,8 +1277,10 @@ function addressesPeople(candidate: ApprovalCandidate): boolean {
   if (args === null || typeof args !== "object" || Array.isArray(args))
     return false;
   const name = toolWords(candidate.toolRef);
-  if (/\bdrafts?\b/.test(name) || READ_WORD.test(name)) return false;
-  const editing = EDIT_WORD.test(name);
+  if (/\bdrafts?\b/.test(name)) return false;
+  const sending = SENDING_WORD.test(name);
+  if (READ_WORD.test(name) && !sending) return false;
+  const editing = EDIT_WORD.test(name) && !sending;
   return Object.entries(args as Record<string, unknown>).some(
     ([key, value]) => {
       const invited = INVITED.test(
@@ -1195,27 +1335,40 @@ export function onceOnlyFloor(
 /**
  * 网页上的按钮（上游 #998、#1015）：动词在按钮文字的开头才算（「Delete」「Send」「Post」），所以
  * 叫「Sent」的文件夹、叫「Posts」的标签页、「Shared with me」列表是在浏览，不是在动作。Remove、
- * Comment、Reply 只认整个按钮文字：「Remove filter」「Reply all settings」不算。
+ * Comment、Reply 只认整个按钮文字（以及 Add comment 这类整段说法）：「Remove filter」「Reply all
+ * settings」不算。
+ *
+ * 中文按钮整段锚定（见 {@link CN_END}）：「删除」「发送(S)」「分享到微信」「发布动态」算，「删除线」
+ * 「已发送」「分享给我的」「发布时间」「评论区」不算。
  */
 const CLICK_FLOORS: readonly { floor: OnceOnlyFloor; click: RegExp }[] = [
   {
     floor: { source: "destructive_tool", reason: DESTRUCTIVE_TOOL_REASON },
     click: new RegExp(
-      `^${CONFIRMING}(delete|permanently delete|move to (the )?(trash|bin)|trash|empty (the )?(trash|bin)|discard|erase|destroy)\\b|^${CONFIRMING}remove( permanently)?$`,
+      `^${CONFIRMING}(delete|permanently delete|move to (the )?(trash|bin)|trash|empty (the )?(trash|bin)|discard|erase|destroy)\\b|^${CONFIRMING}remove( permanently)?$` +
+        `|^${CN_CONFIRMING}(?:永久|彻底)?(?:删除|移到回收站|移至回收站|放入回收站|清空回收站|移除|丢弃)(?:文件|邮件|消息|记录|评论|帖子|账号|账户|此项|该项|全部|所选)?${CN_END}`,
     ),
   },
   {
     floor: { source: "outbound_send", reason: OUTBOUND_SEND_REASON },
-    click: new RegExp(`^${CONFIRMING}(send\\b|(comment|reply)$)`),
+    click: new RegExp(
+      `^${CONFIRMING}(send\\b|(comment|reply)$|(add|leave|write) (a |your )?(comment|reply)$)` +
+        `|^${CN_CONFIRMING}(?:立即)?(?:发送(?:消息|邮件|短信|私信|评论)?|回复|评论|发表(?:评论|回复))${CN_END}`,
+    ),
   },
   {
     floor: { source: "share_access", reason: SHARE_ACCESS_REASON },
-    click: new RegExp(`^${CONFIRMING}(share|invite|add people)\\b`),
+    click: new RegExp(
+      `^${CONFIRMING}(share|invite|add people)\\b` +
+        `|^${CN_CONFIRMING}(?:立即)?(?:分享|共享)(?:到\\S{1,8}|给(?:好友|朋友|他人|成员|同事))?${CN_END}` +
+        `|^${CN_CONFIRMING}(?:邀请(?:成员|好友|协作者|同事)?|添加(?:成员|协作者|同事))${CN_END}`,
+    ),
   },
   {
     floor: { source: "publish_post", reason: PUBLISH_POST_REASON },
     click: new RegExp(
-      `^${CONFIRMING}(post|publish|tweet|repost|retweet|go live)\\b`,
+      `^${CONFIRMING}(post|publish|tweet|repost|retweet|go live)\\b` +
+        `|^${CN_CONFIRMING}(?:立即)?(?:发布|发表|发帖|转发|发微博|发动态)(?:动态|文章|帖子|视频|笔记|微博|评论|作品)?${CN_END}`,
     ),
   },
 ];
@@ -1229,64 +1382,44 @@ function browserActionFloor(
   candidate: ApprovalCandidate,
 ): OnceOnlyFloor | undefined {
   const named = actionName(candidate);
-  if (named?.kind === "click")
-    return CLICK_FLOORS.find((entry) => entry.click.test(named.name))?.floor;
+  const clicked =
+    named?.kind === "click"
+      ? CLICK_FLOORS.find((entry) => entry.click.test(named.name))?.floor
+      : undefined;
+  if (clicked) return clicked;
   return pressesSend(candidate)
     ? { source: "outbound_send", reason: OUTBOUND_SEND_REASON }
     : undefined;
 }
 
-const SEND_MODIFIERS = new Set([
-  "control",
-  "ctrl",
-  "meta",
-  "cmd",
-  "command",
-  "controlormeta",
-]);
+/** 写消息、回复、评论的输入框，英文和中文；搜索框不算。 */
+const MESSAGE_FIELD =
+  /\b(message|reply|comment|chat|compose|tweet|post)\b|what'?s happening|消息|回复|评论|留言|私信|聊天|说点什么|写点什么|说说|发表|弹幕/;
+const SEARCH_FIELD = /\bsearch\b|搜索|查找/;
 
 /**
- * 一次按键是不是把页面上写的东西发出去了（上游 #998）：Cmd+Enter 或 Ctrl+Enter，多数邮件和聊天
- * 应用用它发送；或者在写消息、回复、评论的输入框里按 Enter。带 `submit` 的 `computer_type` 在输完
- * 后按 Enter，所以也算 Enter。Shift+Enter 在那里是换行，不算。Ctrl+Enter 在有些编辑器里是插入分页
- * 符，问一次只多一次点击。
- *
- * 要按的键优先取调用处给的（`subject.key`，网关从工具的输入里取，`computer_type` 带 `submit` 时是
- * Enter），没有时才看参数。
+ * 一次按键是不是把页面上写的东西发出去了（上游 #998，按 #398 评审补全）：
+ *  - 按键先按 Playwright 的规则规范化（见 {@link pressedKey}）；
+ *  - 看不出焦点在哪（没有解析出元素：不带 ref 的页面级按键，或者网关没有这一页的快照）时，Enter
+ *    和空格都按发送问：焦点可能正在刚写好的消息框或者一个发送按钮上；
+ *  - 焦点在输入框上：带 Shift 以外修饰键的 Enter（Ctrl、Cmd、Alt，左右都算）一律算发送；只按着
+ *    Shift 是换行，不算；不带修饰键的 Enter 只在写消息、回复、评论的输入框里算（中英文）。
+ * 带 `submit` 的 `computer_type` 在输完后按 Enter，所以也算 Enter。按钮、链接上的 Enter 和空格见
+ * {@link pressesElement}。Ctrl+Enter 在有些编辑器里是插入分页符，问一次只多一次点击。
  */
 function pressesSend(candidate: ApprovalCandidate): boolean {
-  if (
-    candidate.toolRef !== "computer_key" &&
-    candidate.toolRef !== "computer_type"
-  )
-    return false;
-  const args = (
-    candidate.args !== null && typeof candidate.args === "object"
-      ? candidate.args
-      : {}
-  ) as { key?: unknown; submit?: unknown };
-  const fromArgs =
-    candidate.toolRef === "computer_key"
-      ? typeof args.key === "string"
-        ? args.key
-        : ""
-      : args.submit === true
-        ? "Enter"
-        : "";
-  const key = candidate.subject?.key ?? fromArgs;
-  const parts = key.split(/\+(?=.)/).map((part) => part.trim().toLowerCase());
-  const main = parts.at(-1) ?? "";
-  if (main !== "enter" && main !== "numpadenter" && main !== "return")
-    return false;
-  if (parts.slice(0, -1).some((part) => SEND_MODIFIERS.has(part))) return true;
+  const pressed = pressedKey(candidate);
+  if (pressed === undefined) return false;
+  const element = (candidate.target as { element?: unknown } | undefined)
+    ?.element;
+  if (element === null || typeof element !== "object")
+    return pressed.main === "enter" || pressed.main === "space";
+  if (pressed.main !== "enter") return false;
+  if (pressed.modifiers.some((modifier) => modifier !== "shift")) return true;
   // Shift+Enter 在写消息的输入框里是换行。
-  if (parts.length > 1) return false;
+  if (pressed.modifiers.length > 0) return false;
   const field = elementName(candidate);
-  return (
-    /\b(message|reply|comment|chat|compose|tweet|post)\b|what'?s happening/.test(
-      field,
-    ) && !/\bsearch\b/.test(field)
-  );
+  return MESSAGE_FIELD.test(field) && !SEARCH_FIELD.test(field);
 }
 
 /**

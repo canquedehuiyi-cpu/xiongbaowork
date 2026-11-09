@@ -213,8 +213,7 @@ export function createApprovalStore(
         // 问，存一条「总是允许」只会误导人。
         if (decision === "allow_always" && !offersStandingRule(request.action))
           throw new ApprovalRefusedError(
-            ONCE_ONLY_SOURCES[request.action.policy?.source ?? ""] ??
-              ONCE_ONLY_SOURCES.destructive_tool,
+            ONCE_ONLY_SOURCES[request.action.policy?.source ?? ""],
           );
         if (decision === "allow_always")
           await tx.insert(approvalRules).values({
