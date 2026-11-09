@@ -19,12 +19,12 @@ import type {
   ResponsibilityStore,
 } from "../src/responsibilities/types";
 import { ResponsibilityNotFoundError } from "../src/responsibilities/types";
-import type { TurnRunner } from "../src/routines/runner";
+import type { TurnRunner } from "@openbot/toolkit/run-turn";
 import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
- * A responsibility's run asked the person a question; the person answered in Approvals. The answer
+ * A responsibility's run asked the person a question; the person answered on the Bot's page. The answer
  * must resume that responsibility's work, with its tools and initiator, in the same conversation.
  */
 

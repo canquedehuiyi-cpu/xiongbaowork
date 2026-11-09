@@ -1,9 +1,12 @@
 import type { ContinuationReceipt } from "./continuation-protocol";
-import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash } from "node:crypto";
-import type { Message, RunAgentInput } from "@ag-ui/client";
 import { RunAgentInputSchema } from "@ag-ui/core/schemas";
 import type { AuditInitiator } from "../audit";
+import {
+  type ApprovalContinuation,
+  currentApprovalContext,
+  withApprovalContext,
+} from "@openbot/toolkit/continuation";
 
 /** `handled` answers a hand-off: the person did it themselves, so it is never executed for them. */
 export type ApprovalDecision =
@@ -84,24 +87,11 @@ export type ApprovalPolicyOutcome = {
     failedClosed?: boolean;
   };
 };
-export type ApprovalContinuation = {
-  runId: string;
-  threadId: string;
-  toolCallId: string;
-  toolName: string;
-  args: unknown;
-  messages: Message[];
-  state: unknown;
-  context: RunAgentInput["context"];
-  forwardedProps: unknown;
-  initiator?: AuditInitiator;
+export {
+  type ApprovalContinuation,
+  currentApprovalContext,
+  withApprovalContext,
 };
-const actionContext = new AsyncLocalStorage<ApprovalContinuation>();
-export const withApprovalContext = <T>(
-  context: ApprovalContinuation,
-  run: () => Promise<T>,
-): Promise<T> => actionContext.run(context, run);
-export const currentApprovalContext = () => actionContext.getStore();
 
 /**
  * What the action will actually run or touch, as the call site holds it rather than as the model
@@ -448,7 +438,7 @@ export function approvalAction(candidate: ApprovalCandidate): ApprovalAction {
     !continuation.toolCallId
   )
     throw new ApprovalRefusedError(
-      "This action needs your approval, but it was not started from a conversation that can ask you. Nothing was done. Ask for it in a chat with this Bot, or change your rules in Approvals.",
+      "This action needs your approval, but it was not started from a conversation that can ask you. Nothing was done. Ask for it in a chat with this Bot, or change your rules in Settings → Approvals.",
     );
   if (
     ![

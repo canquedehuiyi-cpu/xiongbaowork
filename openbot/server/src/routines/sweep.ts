@@ -27,6 +27,7 @@ import {
   runAsTenant,
   TenantContextError,
 } from "../tenant/context";
+import { TURN_LIMITS } from "@openbot/toolkit/limits";
 import { DEFAULT_MAX_ATTEMPTS, type WorkQueue } from "../work/queue";
 import { RoutineRefusedError, type RoutineStore } from "./store";
 
@@ -67,19 +68,15 @@ export const DEFAULT_GRACE_MS = 10 * 60_000;
  *
  * A server that dies mid-turn strands its run row for ever: the queue item was finished on the 202,
  * so no retry comes back for it, and nothing else writes that row — the routines page reads
- * "running now" for a run no process is running. Twice the server's own turn timeout
- * (`DEFAULT_TURN_TIMEOUT_MS` in `./run-turn`, five minutes), so a slow-but-alive turn is never
- * closed out from under the server still running it. A local constant rather than an import because
- * the sweep runs as a CronJob and must not drag the runtime's import graph — the Intelligence
- * client and everything behind it — into that process.
- */
-/**
- * How long before an unfinished firing is taken as abandoned.
+ * "running now" for a run no process is running. Twice the turn timeout, so a slow-but-alive turn is
+ * never closed out from under the server still running it. Derived rather than copied, so raising the
+ * turn timeout cannot quietly make the sweep close turns that are still running. `limits` has no
+ * imports, so the CronJob still does not drag the runtime's import graph into its process.
  *
  * Exported because the task card a firing opens has to expire on the same clock as the run row:
  * two horizons would mean a run reaped while its card still says "running".
  */
-export const ABANDONED_RUN_MS = 10 * 60_000;
+export const ABANDONED_RUN_MS = 2 * TURN_LIMITS.turnTimeoutMs;
 
 export type RoutineSweepOptions = {
   routineStore: RoutineStore;

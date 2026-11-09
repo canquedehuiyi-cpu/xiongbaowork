@@ -3,12 +3,14 @@
   "version": "0.2.5",
   "license": "MIT",
   "private": true,
-  "packageManager": "bun@1.3.14",
+  "packageManager": "bun@1.4.3",
   "workspaces": [
     "app",
     "server",
     "worker",
-    "runner"
+    "runner",
+    "shared",
+    "toolkit"
   ],
   "scripts": {
     "build": "bun run generate:app-config && bun run --filter '*' build",

@@ -6,7 +6,7 @@
 #
 # Multi-stage so the build's dependencies do not ship. Non-root because nothing here needs to be.
 
-FROM oven/bun:1.3.14 AS deps
+FROM oven/bun:1.4.3 AS deps
 
 WORKDIR /app
 
@@ -23,6 +23,8 @@ COPY worker/package.json worker/package.json
 # `bun.lock`, and `bun install --frozen-lockfile` refuses the whole install when a workspace in the
 # lockfile has no manifest on disk. The manifest alone is enough.
 COPY runner/package.json runner/package.json
+COPY shared/package.json shared/package.json
+COPY toolkit/package.json toolkit/package.json
 RUN bun install --frozen-lockfile
 
 
@@ -33,6 +35,7 @@ FROM deps AS app-build
 COPY app app
 COPY scripts scripts
 COPY shared shared
+COPY toolkit toolkit
 # The server's source too: `generate-app-config` reads the tenant package through
 # `server/src/tenant-package`, so the app cannot be built without it.
 COPY server server
@@ -40,7 +43,7 @@ COPY examples examples
 RUN bun run --cwd app build
 
 
-FROM oven/bun:1.3.14 AS runtime
+FROM oven/bun:1.4.3 AS runtime
 
 # Not root. The API opens a socket and talks to Postgres; neither needs privileges, and a Chromium
 # container is a separate image with its own reasons.
@@ -53,9 +56,11 @@ COPY --from=deps /app/node_modules node_modules
 COPY --from=deps /app/package.json package.json
 COPY --from=deps /app/bun.lock bun.lock
 COPY --from=deps /app/server/node_modules server/node_modules
+COPY --from=deps /app/toolkit/node_modules toolkit/node_modules
 
 COPY server server
 COPY shared shared
+COPY toolkit toolkit
 COPY examples examples
 
 # The built app, served by the process below. `APP_DIST_DIR` is what turns that on, so an image

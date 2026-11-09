@@ -28,14 +28,22 @@ function packagesStartedBy(script: string, workspaces: string[]): string[] {
 }
 
 describe("OpenBot workspace", () => {
-  test("defines the app, server, worker, and runner packages", () => {
+  test("defines the app, server, worker, runner, shared and toolkit packages", () => {
     const manifest = rootManifest();
+    const names: Record<string, string> = {
+      app: "app",
+      server: "server",
+      worker: "worker",
+      runner: "runner",
+      shared: "@openbot/shared",
+      toolkit: "@openbot/toolkit",
+    };
 
-    expect(manifest.workspaces).toEqual(["app", "server", "worker", "runner"]);
+    expect(manifest.workspaces).toEqual(Object.keys(names));
 
-    for (const packageName of manifest.workspaces) {
-      expect(existsSync(join(repositoryRoot, packageName))).toBe(true);
-      expect(packageManifest(packageName).name).toBe(packageName);
+    for (const workspace of manifest.workspaces) {
+      expect(existsSync(join(repositoryRoot, workspace))).toBe(true);
+      expect(packageManifest(workspace).name).toBe(names[workspace] ?? "");
     }
   });
 

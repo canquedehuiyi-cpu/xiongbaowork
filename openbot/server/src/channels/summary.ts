@@ -15,7 +15,7 @@
  * somebody other than the tenant it is filed under.
  */
 import { and, asc, eq, isNull, notExists, notInArray, sql } from "drizzle-orm";
-import { readFiring } from "../../../shared/routine-firing";
+import { readFiring } from "@openbot/shared/routine-firing";
 import type { Database } from "../db/client";
 import { NOBODY_TENANTS } from "../db/schema/tenant";
 import {

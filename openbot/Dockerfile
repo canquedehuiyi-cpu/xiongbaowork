@@ -18,7 +18,7 @@
 # image. Keep this version matched to `agent-computer/package.json`: bump both or neither.
 
 FROM node:24.18.1-bookworm-slim AS node-toolchain
-FROM oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 AS bun-toolchain
+FROM oven/bun:1.4.3@sha256:ec06c3b6cea04192ae6770c434f668ca41d343ad19fa6472216c7b48be39c598 AS bun-toolchain
 
 FROM ubuntu:24.04 AS base
 
@@ -59,6 +59,8 @@ COPY worker/package.json worker/package.json
 # `bun install --frozen-lockfile` refuses the whole install when a workspace named by the lockfile
 # has no manifest on disk. So the manifest is copied even though nothing from `runner/` is.
 COPY runner/package.json runner/package.json
+COPY shared/package.json shared/package.json
+COPY toolkit/package.json toolkit/package.json
 RUN bun install --frozen-lockfile
 
 # The lockfile travels with the manifest, because `--frozen-lockfile` with no lockfile in the context
@@ -72,11 +74,13 @@ RUN cd agent-computer && bun install --frozen-lockfile
 # A second tree with the build-time dependencies left out, for the runtime stage to take. Vite,
 # biome and the test tooling are a gigabyte that nothing in a running container imports.
 RUN mkdir -p /prod && cp package.json bun.lock /prod/ \
-  && cd /prod && mkdir -p app server worker runner \
+  && cd /prod && mkdir -p app server worker runner shared toolkit \
   && cp /src/app/package.json app/package.json \
   && cp /src/server/package.json server/package.json \
   && cp /src/worker/package.json worker/package.json \
   && cp /src/runner/package.json runner/package.json \
+  && cp /src/shared/package.json shared/package.json \
+  && cp /src/toolkit/package.json toolkit/package.json \
   && bun install --frozen-lockfile --production
 
 
@@ -89,6 +93,7 @@ ENV TENANT_PACKAGE_DIR=${TENANT_PACKAGE_DIR}
 COPY app app
 COPY scripts scripts
 COPY shared shared
+COPY toolkit toolkit
 # The server's source as well: the app's prebuild step reads the tenant package through
 # `server/src/tenant-package`, so the app cannot be built without it.
 COPY server server
@@ -136,6 +141,7 @@ WORKDIR /app
 # present and broken.
 COPY --chown=pwuser:pwuser --from=deps /prod/node_modules node_modules
 COPY --chown=pwuser:pwuser --from=deps /prod/server/node_modules server/node_modules
+COPY --chown=pwuser:pwuser --from=deps /prod/toolkit/node_modules toolkit/node_modules
 COPY --chown=pwuser:pwuser --from=deps /src/package.json package.json
 COPY --chown=pwuser:pwuser --from=deps /src/bun.lock bun.lock
 # The browser's tree is a separate install root with its own lockfile rather than a workspace of the
@@ -145,6 +151,7 @@ COPY --chown=pwuser:pwuser --from=deps /src/agent-computer/node_modules agent-co
 
 COPY --chown=pwuser:pwuser server server
 COPY --chown=pwuser:pwuser shared shared
+COPY --chown=pwuser:pwuser toolkit toolkit
 COPY --chown=pwuser:pwuser examples examples
 COPY --chown=pwuser:pwuser agent-computer/src agent-computer/src
 COPY --chown=pwuser:pwuser agent-computer/package.json agent-computer/package.json

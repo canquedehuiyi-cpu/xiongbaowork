@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import {
+  createLearningContainer,
+  learningAutomaticQueryOptions,
   learningDeliveryQueryOptions,
   learningKeys,
   learningOverviewQueryOptions,
@@ -13,14 +15,35 @@ import {
   saveLearningSettings,
 } from "@/lib/learning/queries";
 import type {
+  LearningAutoAssignState,
   LearningSettings,
   LearningTarget,
-} from "../../../../../shared/learning";
+} from "@openbot/shared/learning";
 
 export const Route = createFileRoute("/_authed/admin/learning")({
   component: LearningPage,
 });
 const selectClass = "w-full rounded-md border bg-background px-3 py-2 text-sm";
+
+/** What automatic assignment found, in words, or nothing when there is nothing to say. */
+function automaticMessage(
+  automatic: LearningAutoAssignState | null | undefined,
+  settings: LearningSettings,
+): string | undefined {
+  if (!automatic) return undefined;
+  if (
+    automatic.state === "assigned" &&
+    settings.defaultTarget?.containerId === automatic.containerId
+  )
+    return `熊宝已自动使用这个 Intelligence 项目里的「${automatic.containerId}」容器，随时可以在这里改。`;
+  if (automatic.state === "absent")
+    return `这个 Intelligence 项目里还没有「${automatic.containerId}」学习容器，所以暂时什么都不收集。`;
+  if (automatic.state === "not_entitled")
+    return "这个 Intelligence 项目的套餐不含自动学习，所以没有分配容器。";
+  if (automatic.state === "unavailable")
+    return "熊宝没能向 Intelligence 查询这个项目的学习容器，会自动重试。";
+  return undefined;
+}
 
 function TargetFields({
   target,
@@ -73,9 +96,60 @@ function TargetFields({
   );
 }
 
+/**
+ * The missing container, and how it gets made: a button when this deployment holds a credential that
+ * can create it, and always the exact steps for an operator, since the runtime key cannot.
+ */
+function ContainerSetup({
+  automatic,
+}: {
+  automatic: Extract<LearningAutoAssignState, { state: "absent" }>;
+}) {
+  const queryClient = useQueryClient();
+  const create = useMutation({
+    mutationFn: createLearningContainer,
+    onSuccess: async (next) => {
+      queryClient.setQueryData(learningKeys.automatic, next);
+      await queryClient.invalidateQueries({ queryKey: learningKeys.all });
+    },
+  });
+  return (
+    <div className="grid gap-2 rounded-md border p-3 text-sm">
+      {automatic.canCreate && (
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            type="button"
+            disabled={create.isPending}
+            onClick={() => create.mutate()}
+          >
+            {create.isPending
+              ? "正在创建…"
+              : `创建 ${automatic.containerId} 容器`}
+          </Button>
+          <span className="text-muted-foreground">
+            使用部署时配置的凭据，不会使用运行时密钥。
+          </span>
+        </div>
+      )}
+      {(create.error || automatic.createError) && (
+        <p role="alert" className="text-destructive">
+          {create.error?.message ?? automatic.createError}
+        </p>
+      )}
+      {automatic.instructions && (
+        <p>
+          <span className="font-medium">创建方法：</span>
+          {automatic.instructions}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function LearningPage() {
   const queryClient = useQueryClient();
   const settingsQuery = useQuery(learningSettingsQueryOptions());
+  const automatic = useQuery(learningAutomaticQueryOptions());
   const agents = useQuery(agentListQueryOptions());
   const hiddenAgents = useQuery(agentListQueryOptions(true));
   const roster = [...(agents.data ?? []), ...(hiddenAgents.data ?? [])];
@@ -87,6 +161,11 @@ export function LearningPage() {
   );
   const delivery = useQuery(learningDeliveryQueryOptions(selected));
   const settings = draft ?? settingsQuery.data;
+  // About what is saved, so it steps aside while an edit is in progress.
+  const automaticNote =
+    settingsQuery.data && !draft
+      ? automaticMessage(automatic.data, settingsQuery.data)
+      : undefined;
   const save = useMutation({
     mutationFn: saveLearningSettings,
     onSuccess: async (next) => {
@@ -118,7 +197,7 @@ export function LearningPage() {
     >
       <PageSection
         title="哪些员工参与"
-        description="学习容器必须已在同一个 Intelligence 项目里建好。改动只影响之后的运行。"
+        description="学习容器必须已在同一个 Intelligence 项目里建好。改动只影响之后的运行。这里还没保存任何设置时，会自动使用该项目里名为 openbot 的容器。"
       >
         {settingsQuery.isPending && <p role="status">正在读取自动学习设置…</p>}
         {settingsQuery.error && (
@@ -151,6 +230,14 @@ export function LearningPage() {
                 change({ ...settings, defaultTarget })
               }
             />
+            {automaticNote && (
+              <p role="status" className="text-sm">
+                {automaticNote}
+              </p>
+            )}
+            {!draft && automatic.data?.state === "absent" && (
+              <ContainerSetup automatic={automatic.data} />
+            )}
             <p className="text-muted-foreground text-sm">
               默认容器留空时，没有单独设置的员工不参与。容器 ID 由 1–64
               个小写字母、数字和单个连字符组成。修订号留空则始终使用最新发布的技能。

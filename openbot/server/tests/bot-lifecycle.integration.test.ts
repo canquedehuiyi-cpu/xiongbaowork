@@ -31,6 +31,7 @@ import {
 } from "../src/db/schema/core";
 import { agentProfiles, routines } from "../src/db/schema/coworker";
 import { groupMessages } from "../src/db/schema/group";
+import { defaultOptOuts } from "../src/db/schema/defaults";
 import { memorySources, personalMemories } from "../src/db/schema/memory";
 import {
   proactiveSettings,
@@ -282,7 +283,9 @@ afterAll(async () => {
       .delete(channels)
       .where(inArray(channels.id, [direct, shared, othersDirect]));
     await database.delete(agents).where(inArray(agents.id, [bot, helper]));
-    await database.delete(users).where(inArray(users.id, [owner, other]));
+    await database
+      .delete(users)
+      .where(inArray(users.id, [owner, other, `${prefix}-chooser`]));
   });
 });
 
@@ -876,6 +879,70 @@ describe("reset", () => {
       formedMemories: 1,
       backgroundResearch: 1,
       standingApprovals: 1,
+    });
+  });
+
+  // Turning a default off protects the person, so starting fresh keeps it off rather than handing
+  // the Bot back what they took away (memory/defaults.ts adopts again on their next turn).
+  test("a reset keeps the person's no to a default, and only the no", async () => {
+    // As the platform, like the resets above: the fixture is another person's rows.
+    await asPlatform(async () => {
+      const person = `${prefix}-chooser`;
+      await database
+        .insert(users)
+        .values({ id: person, email: `${person}@example.test` });
+      await database.insert(memorySources).values([
+        {
+          id: `${prefix}-off-source`,
+          ownerUserId: person,
+          agentId: bot,
+          toolRef: "mail/search",
+          title: "Mail",
+          enabled: false,
+        },
+        {
+          id: `${prefix}-on-source`,
+          ownerUserId: person,
+          agentId: bot,
+          toolRef: "calendar/list",
+          title: "Calendar",
+        },
+      ]);
+      await database.insert(proactiveSettings).values({
+        id: `${prefix}-off-research`,
+        ownerUserId: person,
+        agentId: bot,
+        channelId: direct,
+        threadId: `${prefix}-off-research-thread`,
+        enabled: false,
+      });
+
+      await reset.execute({ id: person, role: "user" }, bot);
+
+      const declined = await database
+        .select({
+          feature: defaultOptOuts.feature,
+          scope: defaultOptOuts.scope,
+        })
+        .from(defaultOptOuts)
+        .where(
+          and(
+            eq(defaultOptOuts.ownerUserId, person),
+            eq(defaultOptOuts.agentId, bot),
+          ),
+        );
+      expect(
+        declined.sort((a, b) => a.feature.localeCompare(b.feature)),
+      ).toEqual([
+        { feature: "memory_source", scope: "mail" },
+        { feature: "proactive_research", scope: "" },
+      ]);
+      expect(
+        await database
+          .select({ id: memorySources.id })
+          .from(memorySources)
+          .where(eq(memorySources.ownerUserId, person)),
+      ).toEqual([]);
     });
   });
 });

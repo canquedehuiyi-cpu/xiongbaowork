@@ -20,10 +20,9 @@ import { z } from "zod";
 import type { AuditInitiator, AuditStore } from "../audit";
 import { recordAuditEvent } from "../audit";
 import type { AgentChannel } from "../channels/routes";
-import { HeadlessToolSuspension } from "../computer/headless-tools";
 import type { Database } from "../db/client";
 import { workItems } from "../db/schema/work";
-import type { GrantedTool } from "../plugins/tools";
+import type { GrantedTool } from "@openbot/toolkit/granted-tool";
 import { REFUSAL_MARKER } from "../plugins/tools";
 import {
   assertPersonTenant,
@@ -32,6 +31,7 @@ import {
   TenantContextError,
 } from "../tenant/context";
 import { fileRunnerCardAs } from "../threads/postgres-runner";
+import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 import type { WorkQueue } from "../work/queue";
 import { BotPausedError } from "./lifecycle";
 import type { AgentActor } from "./profile-types";

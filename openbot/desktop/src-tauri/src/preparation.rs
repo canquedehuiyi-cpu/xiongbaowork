@@ -11,7 +11,7 @@ pub const REQUIRED: &str = "Finish installing OpenBot's local software before si
 pub const FILE: &str = ".openbot-prepared.json";
 const DEPENDENCIES: &str = ".openbot-dependencies.json";
 const LAUNCH: &str = ".openbot-launched.json";
-const PACKAGES: [&str; 4] = ["", "server", "app", "worker"];
+const PACKAGES: [&str; 6] = ["", "server", "app", "worker", "shared", "toolkit"];
 
 #[derive(Serialize, Deserialize)]
 struct Dependencies {
@@ -378,7 +378,7 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args == ["--version"] {
         let version = std::env::current_exe().unwrap().parent().unwrap().join("runtime-version");
-        println!("{}", std::fs::read_to_string(version).unwrap_or_else(|_| "1.3.14".into()));
+        println!("{}", std::fs::read_to_string(version).unwrap_or_else(|_| "1.4.3".into()));
         return;
     }
     assert_eq!(args, ["install", "--frozen-lockfile", "--ignore-scripts"]);

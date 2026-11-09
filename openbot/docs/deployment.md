@@ -119,6 +119,9 @@ and the fix would not be available.
 | an identity provider | `GOOGLE_OAUTH_*`, `MICROSOFT_OAUTH_*` or `OKTA_OAUTH_*`, with `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET` and `INITIAL_ADMIN_EMAILS`. See the README |
 | `EMBEDDED_POSTGRES` | `on` to run the database inside the container. Off by default |
 | `KEY_ENCRYPTION_KEY` | base64 32 bytes. `openssl rand -base64 32`. The example key is refused in production |
+| `INTELLIGENCE_API_KEY` | optional. Connects CopilotKit Intelligence for Automatic Learning's skill delivery; empty runs without it |
+| `INTELLIGENCE_API_URL`, `INTELLIGENCE_GATEWAY_WS_URL` | optional, with the key, for a self-hosted Intelligence |
+| `COPILOTKIT_LICENSE_TOKEN` | optional. Only a self-hosted Intelligence has one, and it needs the same licence on its own deployment too |
 | a model key | `OPENAI_API_KEY`, or the provider you configured |
 
 `COMPUTER_TOKEN` is generated at start if you do not set one. Both processes that need it are inside

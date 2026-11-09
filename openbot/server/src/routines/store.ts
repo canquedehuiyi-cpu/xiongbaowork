@@ -33,7 +33,6 @@ import {
   ne,
   sql,
 } from "drizzle-orm";
-import type { HeadlessWaiting } from "../computer/headless-tools";
 import type { Database } from "../db/client";
 import {
   channelAgents,
@@ -44,6 +43,7 @@ import {
   routines,
 } from "../db/schema";
 import { runAsTenant } from "../tenant/context";
+import type { HeadlessWaiting } from "@openbot/toolkit/headless-tools";
 import { describeCron, nextOccurrence, ScheduleRefusedError } from "./schedule";
 
 const SWEEP_ID = "routines";

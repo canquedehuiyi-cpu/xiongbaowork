@@ -42,13 +42,11 @@ import {
   withApprovalContext,
 } from "../src/approvals/types";
 import { createComputerGateway } from "../src/computer/gateway";
-import {
-  createHeadlessComputerTools,
-  HeadlessToolSuspension,
-} from "../src/computer/headless-tools";
+import { createHeadlessComputerTools } from "../src/computer/headless-tools";
 import { createHostAccessBroker } from "../src/host-access/broker";
 import { createPrivateShareCheck } from "../src/proactive/private-share";
 import { runAsTenant } from "../src/tenant/context";
+import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 
 const candidate = (
   over: Partial<ApprovalCandidate> = {},

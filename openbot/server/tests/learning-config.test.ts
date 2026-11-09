@@ -74,6 +74,9 @@ test("an address or licence without the key is a half-configured Intelligence, r
     "INTELLIGENCE_API_URL",
     "INTELLIGENCE_GATEWAY_WS_URL",
     "COPILOTKIT_LICENSE_TOKEN",
+    // The credential that creates the Learning container (upstream #776) is Intelligence too.
+    "INTELLIGENCE_SERVICE_TOKEN",
+    "INTELLIGENCE_PROJECT_ID",
   ] as const) {
     expect(() =>
       loadConfig({

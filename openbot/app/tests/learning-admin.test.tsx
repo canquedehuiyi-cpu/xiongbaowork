@@ -9,7 +9,7 @@ import {
 } from "@tanstack/react-router";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { LearningPage } from "@/routes/_authed/admin/learning";
-import type { LearningSettings } from "../../shared/learning";
+import type { LearningSettings } from "@openbot/shared/learning";
 
 beforeAll(() => GlobalRegistrator.register());
 afterAll(() => GlobalRegistrator.unregister());
@@ -127,4 +127,118 @@ test("active and hidden Bots both have participation controls", async () => {
   const view = page();
   await view.findByLabelText("hidden-bot是否参与");
   expect(view.queryByLabelText("active-bot是否参与")).not.toBeNull();
+});
+
+function serve(body: unknown) {
+  global.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path.endsWith("/settings")) return Response.json(body);
+      if (path.includes("/api/agents")) return Response.json({ agents: [] });
+      return Response.json({ error: "unavailable" }, { status: 502 });
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+}
+
+test.each([
+  [
+    { enabled: true, defaultTarget: null, agents: {} },
+    { state: "absent", containerId: "openbot" },
+    "这个 Intelligence 项目里还没有「openbot」学习容器",
+  ],
+  [
+    { enabled: true, defaultTarget: { containerId: "openbot" }, agents: {} },
+    { state: "assigned", containerId: "openbot" },
+    "熊宝已自动使用这个 Intelligence 项目里的「openbot」容器",
+  ],
+  [
+    { enabled: true, defaultTarget: null, agents: {} },
+    { state: "not_entitled" },
+    "套餐不含自动学习",
+  ],
+] as const)(
+  "the page says what automatic assignment found (%#)",
+  async (settings, automatic, expected) => {
+    serve({ settings, automatic });
+    const view = page();
+    await view.findByText(expected, { exact: false });
+  },
+);
+
+test("a deployment that chose its own container hears nothing about automatic assignment", async () => {
+  serve({
+    settings: {
+      enabled: true,
+      defaultTarget: { containerId: "support" },
+      agents: {},
+    },
+    automatic: { state: "saved" },
+  });
+  const view = page();
+  await view.findByLabelText("默认的学习容器 ID");
+  await waitFor(() =>
+    expect(view.queryByText("正在读取自动学习设置…")).toBeNull(),
+  );
+  expect(view.queryByText("熊宝已自动使用", { exact: false })).toBeNull();
+  expect(view.queryByText("学习容器，所以暂时", { exact: false })).toBeNull();
+});
+
+test("a missing container shows exactly what to run, and a Create button only when the deployment can", async () => {
+  const instructions =
+    "Sign in once with npx --yes copilotkit@latest login, then run bun scripts/setup-learning.ts.";
+  serve({
+    settings: { enabled: true, defaultTarget: null, agents: {} },
+    automatic: { state: "absent", containerId: "openbot", instructions },
+  });
+  const cannot = page();
+  await cannot.findByText(instructions, { exact: false });
+  expect(
+    cannot.queryByRole("button", { name: "创建 openbot 容器" }),
+  ).toBeNull();
+  cleanup();
+
+  let created = 0;
+  const settings = { enabled: true, defaultTarget: null, agents: {} };
+  global.fetch = Object.assign(
+    async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/container") && init?.method === "POST") {
+        created++;
+        return Response.json({
+          automatic: { state: "assigned", containerId: "openbot" },
+        });
+      }
+      if (path.endsWith("/settings"))
+        return Response.json({
+          settings:
+            created > 0
+              ? { ...settings, defaultTarget: { containerId: "openbot" } }
+              : settings,
+          automatic:
+            created > 0
+              ? { state: "assigned", containerId: "openbot" }
+              : {
+                  state: "absent",
+                  containerId: "openbot",
+                  instructions,
+                  canCreate: true,
+                },
+        });
+      if (path.includes("/api/agents")) return Response.json({ agents: [] });
+      return Response.json({ error: "unavailable" }, { status: 502 });
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const can = page();
+  fireEvent.click(
+    await can.findByRole("button", { name: "创建 openbot 容器" }),
+  );
+  await can.findByText("熊宝已自动使用", { exact: false });
+  expect(created).toBe(1);
+  // Let the refetch the creation started settle before the DOM is torn down.
+  await waitFor(() =>
+    expect(can.queryByRole("button", { name: "创建 openbot 容器" })).toBeNull(),
+  );
+  await new Promise((resolve) => setTimeout(resolve, 50));
 });

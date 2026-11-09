@@ -4,8 +4,8 @@ import { z } from "zod";
 import {
   DESKTOP_REF,
   DESKTOP_WINDOW_ID,
-} from "../../../shared/desktop-control";
-import { downloadHeaders } from "../../../shared/file-download";
+} from "@openbot/shared/desktop-control";
+import { downloadHeaders } from "@openbot/shared/file-download";
 import type { BotAccessCheck } from "../agents/profile-policy";
 import { ApprovalRefusedError } from "../approvals/types";
 import type { AuditReader } from "../audit";

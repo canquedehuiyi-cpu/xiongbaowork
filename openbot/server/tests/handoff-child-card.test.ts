@@ -4,6 +4,7 @@ import type { AbstractAgent, BaseEvent } from "@ag-ui/client";
 import { asc, eq } from "drizzle-orm";
 import { Observable } from "rxjs";
 import { createHandoffDelivery } from "../src/agents/handoff-delivery";
+import { serverTurnAdmission } from "../src/agents/turn-admission";
 import type { HandoffWork } from "../src/agents/handoff-runner";
 import { createDatabase } from "../src/db/client";
 import { tasks } from "../src/db/schema";
@@ -56,6 +57,7 @@ function stubAgent(): AbstractAgent {
  */
 function harness(events: BaseEvent[], lockHeld = true, runId = hopRunId) {
   return createHandoffDelivery({
+    admission: serverTurnAdmission,
     board,
     agentFor: async () => stubAgent(),
     history: async () => [],
@@ -191,6 +193,7 @@ test("a hop that never got the conversation opens no card at all", async () => {
   await expect(
     runAsTenant(person, () =>
       createHandoffDelivery({
+        admission: serverTurnAdmission,
         board,
         agentFor: async () => stubAgent(),
         history: async () => [],

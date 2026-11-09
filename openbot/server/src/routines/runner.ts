@@ -22,81 +22,18 @@
  * within a firing never sees the routine that fails cleanly, once, every single night.
  */
 
-import type { Message } from "@ag-ui/client";
 import { BOT_PAUSED_REASON, isBotPaused } from "../agents/lifecycle";
 import type { AgentActor } from "../agents/profile-types";
-import type { ApprovalContinuation } from "../approvals/types";
-import type { AuditInitiator } from "../audit";
 import type { ChannelStore } from "../channels/routes";
-import { HeadlessToolSuspension } from "../computer/headless-tools";
+import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
+import type { TurnRunner } from "@openbot/toolkit/run-turn";
 import { QuotaExceeded, type QuotaService } from "../quota/limits";
 import { deliverableRefOf, type TaskProjector } from "../tasks/projector";
 import { runAsClaimedTenant, runAsTenant } from "../tenant/context";
 import type { RoutineRunContext, RoutineStore } from "./store";
 
-/** Everything a headless turn needs, injectable so tests never dial a model. */
-export type TurnRunner = (input: {
-  ownerUserId: string; // the actor the run asserts — grants and connections resolve to them
-  routineId: string; // what the trail names as having started this turn, rather than the owner
-  agentId: string;
-  threadId: string; // the owner's thread for the routine's channel
-  instruction: string; // the user message of this turn
-  initiator?: AuditInitiator;
-  signal?: AbortSignal;
-  continuation?: {
-    snapshot: ApprovalContinuation;
-    result: { content: string; error?: string };
-    messageId: string;
-  };
-  userMessage?: Message;
-  /** Durable inbound delivery id; reused by lock, runner and emitted events. */
-  runId?: string;
-  /**
-   * The board card this turn answers for, when the caller keyed it by something other than `runId`.
-   *
-   * A routine firing files its card under the firing's own id (`routine_run_…`) and lets the turn mint
-   * a fresh run id for the lock, so the usage row that names the model has to be told which card it
-   * belongs to — the card reads the model back by exactly this reference. Absent, it is `runId`.
-   */
-  runRef?: string;
-  /**
-   * Whose run this is, when the caller does its work outside that tenant's frame.
-   *
-   * A follow-up, a delivery, a proactive run and a resumed question are each claimed by a worker on a
-   * timer, which has no tenant of its own, so the turn's own frame would file the usage row that names
-   * its model under nobody. Such a caller names the tenant of the row it claimed instead. Absent, the
-   * turn's own frame decides, which is right for every caller that already runs inside one.
-   */
-  tenantId?: string;
-  /**
-   * The caller has opened, and will close, this turn's card on the task board.
-   *
-   * Set it at the entry, not at the runner. `PostgresAgentRunner` files a `chat` card for every turn it
-   * is handed, which is right for the turn a person starts in a browser (that is the only card there
-   * is) and wrong for a routine firing, a crew's step, a responsibility run, a group Bot's answer or a
-   * hop: each of those opens its own card first, so an unmarked turn is a second card for the same work
-   * and a second charge against the month (audit N10, ticket WP-1.2).
-   *
-   * An entry that does NOT open a card — background research, a follow-up wake-up, a person's answer
-   * relayed into a conversation that is not on the board yet — leaves this unset and keeps the card the
-   * runner files for it. That is the whole of the distinction, which is why it is asked of the caller
-   * rather than assumed from the fact that a turn is headless.
-   */
-  cardOwnedByCaller?: boolean;
-  /** How deep in a Bot-to-Bot chain this turn is. Absent is a person's own turn, depth zero. */
-  depth?: number;
-  /** The reply so far, each time more of it arrives, for a surface that shows a turn in progress. */
-  onText?: (text: string) => void;
-}) => Promise<{
-  replyText: string;
-  components?: DrawnComponent[];
-  /** Attachment ids the Bot's own messages carried in this turn. */
-  attachments?: string[];
-}>;
-
-/** A display component the Bot drew in a turn and the server allowed, with the props it drew. */
-export type DrawnComponent = { name: string; args: Record<string, unknown> };
-
+/** The turn engine's types live in the toolkit now; re-exported for the server modules that named them here. */
+export type { DrawnComponent, TurnRunner } from "@openbot/toolkit/run-turn";
 export type RoutineRunner = { run(routineRunId: string): Promise<void> };
 
 /**

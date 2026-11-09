@@ -12,17 +12,16 @@
  * the work over, the second says it answered, and no row anywhere agrees.
  */
 import type { AbstractAgent, BaseEvent } from "@ag-ui/client";
+import { THREAD_LOCK_TTL_SECONDS } from "@openbot/toolkit/copilotkit/thread-lock";
+import { keepLease } from "@openbot/toolkit/lease";
+import type { ThreadLock, TurnAdmission } from "@openbot/toolkit/ports";
 import type { Observable } from "rxjs";
-import {
-  headlessTurnRefusal,
-  modelNamedIn,
-  recordHeadlessModelUsage,
-} from "../admin/controls";
+import { modelNamedIn, recordHeadlessModelUsage } from "../admin/controls";
+import type { AuditInitiator } from "../audit";
 import type { QuotaService } from "../quota/limits";
 import type { TaskProjector } from "../tasks/projector";
 import { suppressRunnerCard } from "../threads/unattended-card";
 import type { HandoffDelivery } from "./handoff-runner";
-import { guardBotTurn } from "./lifecycle";
 import { textOf } from "./message-text";
 
 /** Whatever runs an agent against a thread and records what it did. */
@@ -50,38 +49,6 @@ export type ThreadRunner = {
   stop?: (input: { threadId: string; runId: string }) => Promise<unknown>;
 };
 
-/**
- * The conversation's run lock.
- *
- * ONE RUN AT A TIME PER CONVERSATION, taken before anything is streamed. The platform hands the lock
- * out through an ordinary authenticated call and hands back the token that proves it: a run that
- * skips this and starts streaming is refused, because it is claiming to be a run nobody was told
- * about. That is what every delivery did before this existed, and the refusal read like a platform
- * limitation rather than a missing step.
- *
- * Taken with `NX`, so a conversation somebody else is already running in refuses rather than queues.
- * That is the right answer and the hop simply waits its turn: it is released back to the queue and
- * tried again, which is a wait rather than a failure.
- */
-export type ThreadLock = {
-  /**
-   * The run id the platform issued, or null when somebody else is running in this conversation.
-   *
-   * ITS OWN ID, NOT THE ONE ASKED FOR. That id is what the gateway checks every streamed event
-   * against, so a run that used the local one would be claiming to be a run nobody was told about.
-   */
-  acquire: (input: {
-    threadId: string;
-    runId: string;
-    userId: string;
-    agentId: string;
-  }) => Promise<{ runId: string } | null>;
-  /** Keep it while the addressed Bot works. The lock expires on its own otherwise. */
-  renew: (input: { threadId: string; runId: string }) => Promise<void>;
-  /** Give it back, so the next run does not wait out the whole expiry. */
-  release: (input: { threadId: string; runId: string }) => Promise<void>;
-};
-
 export function createHandoffDelivery(options: {
   /**
    * The addressed Bot, built for the person whose conversation this is.
@@ -95,6 +62,8 @@ export function createHandoffDelivery(options: {
     botId: string;
     /** The Bot that handed the work on, so the trail says a hop ran this and not the person. */
     fromBotId: string;
+    /** What started the original run, so a Bot built for a hop still knows who it ultimately acts for. */
+    initiator?: AuditInitiator;
   }) => Promise<AbstractAgent | null>;
   /**
    * The conversation so far, so the addressed Bot is not answering out of context.
@@ -185,8 +154,21 @@ export function createHandoffDelivery(options: {
    * conversation it was asked in locked against them for as long as the process lives.
    */
   deadlineMs?: number;
+  /** How often the lock is renewed while the Bot works. Overridden by tests; see `LOCK_RENEW_EVERY_MS`. */
+  renewEveryMs?: number;
+  /**
+   * How long the lock lives without a renewal. Renewals failing for longer than this mean it has
+   * lapsed, and the hop stops. Overridden by tests; the platform applies its own 120 seconds.
+   */
+  lockLifetimeMs?: number;
+  /**
+   * The same admission every headless turn meets: the pause guard and the enterprise controls. See
+   * `serverTurnAdmission` in turn-admission.ts.
+   */
+  admission: TurnAdmission;
 }): HandoffDelivery {
   const {
+    admission,
     agentFor,
     history,
     runner,
@@ -198,14 +180,30 @@ export function createHandoffDelivery(options: {
     board,
     quota,
     deadlineMs = DEFAULT_DELIVERY_DEADLINE_MS,
+    renewEveryMs = LOCK_RENEW_EVERY_MS,
+    lockLifetimeMs = THREAD_LOCK_TTL_SECONDS * 1000,
   } = options;
 
   return {
     async deliver({ work, message, shown, assertion }) {
+      /*
+       * Admitted before anything else, as every headless turn is: refused if the person paused the
+       * Bot while this hop waited, or if "Use Bots" or the model allowlist refuse it, before the Bot
+       * is built, the history read or the conversation locked. A refused hop used to take the lock
+       * first, so a paused Bot's relay held the person's own channel for a moment on every retry.
+       * The signal it returns aborts if they pause the Bot while it works, on this replica at once
+       * and from any other through the watcher. The runner's check before claiming is not enough on
+       * its own, because a hop runs for minutes.
+       */
+      const paused = await admission({
+        ownerUserId: work.actorId,
+        agentId: work.toBotId,
+      });
       const agent = await agentFor({
         actorId: work.actorId,
         botId: work.toBotId,
         fromBotId: work.fromBotId,
+        ...(work.initiator ? { initiator: work.initiator } : {}),
       });
       if (!agent) {
         /*
@@ -382,35 +380,21 @@ export function createHandoffDelivery(options: {
          * Renewed while the addressed Bot works, because the lock expires on its own. A run is minutes
          * and the platform's window is short; a lock that lapses mid-answer lets a second run into the
          * conversation, which is the thing it exists to prevent.
+         *
+         * A renewal refused as a conflict means somebody else now holds this conversation — on a
+         * relay, most likely the person, having typed in their own channel. The run is stopped as a
+         * pause would stop it and the hop fails into a retry, rather than writing this Bot's answer
+         * into their run. A renewal that merely failed is skipped; see `keepLease`.
          */
-        const heartbeat = setInterval(() => {
-          void lock.renew({ threadId: where.threadId, runId }).catch(() => {});
-        }, LOCK_RENEW_EVERY_MS);
+        const lockLost = new AbortController();
+        const heartbeat = keepLease({
+          renew: () => lock.renew({ threadId: where.threadId, runId }),
+          everyMs: renewEveryMs,
+          lifetimeMs: lockLifetimeMs,
+          onLost: (error) => lockLost.abort(error),
+        });
 
         try {
-          /*
-           * The same pause guard every other turn takes: refused if the person paused the Bot while
-           * this hop waited, and stopped if they pause it while it works, on this replica at once and
-           * from any other through the watcher. The runner's check before claiming is not enough on
-           * its own, because a hop runs for minutes.
-           */
-          const paused = await guardBotTurn({
-            ownerUserId: work.actorId,
-            agentId: work.toBotId,
-          });
-          // "Use Bots" and the model allowlist, as every other headless turn meets them in the turn
-          // runner. A hop builds its agent and runs it here, so without this one a chain that began on
-          // a remote Bot reached a built-in Bot on a model off the allowlist, or ran for a person with
-          // Use Bots off.
-          const refused = await headlessTurnRefusal({
-            ownerUserId: work.actorId,
-            agentId: work.toBotId,
-          });
-          if (refused) {
-            const error = new Error(refused);
-            error.name = "CapabilityRefusedError";
-            throw error;
-          }
           /*
            * The month is asked before the hop is filed, the way a firing asks it (`routines/runner.ts`):
            * over quota means this hop does not happen, not that it happens and is not charged. Raised
@@ -421,12 +405,12 @@ export function createHandoffDelivery(options: {
           /*
            * A HOP IS BOARD WORK, OPENED ONLY ONCE IT IS REALLY RUNNING.
            *
-           * This sits after the pause guard and the capability refusal rather than at the top of the
-           * delivery, and that ordering is the whole point: a hop that was dropped because the person
-           * paused the Bot, or refused because they may not use it, never happened, and a card for it
-           * would be a claim of work nobody did. Keyed by this attempt's own run id, filed under the run
-           * that asked (ticket 020's parent chain), so the person watching the asking conversation sees
-           * the hop as one card among the turns they can already read.
+           * This sits after the admission and the lock rather than at the top of the delivery, and that
+           * ordering is the whole point: a hop that was dropped because the person paused the Bot, or
+           * refused because they may not use it, never happened, and a card for it would be a claim of
+           * work nobody did. Keyed by this attempt's own run id, filed under the run that asked (ticket
+           * 020's parent chain), so the person watching the asking conversation sees the hop as one card
+           * among the turns they can already read.
            */
           card = await board?.opened({
             tenantId: work.actorId,
@@ -488,7 +472,7 @@ export function createHandoffDelivery(options: {
                 },
               }),
               deadlineMs,
-              paused,
+              AbortSignal.any([paused, lockLost.signal]),
               () => {
                 void runner
                   .stop?.({ threadId: where.threadId, runId })
@@ -552,7 +536,7 @@ export function createHandoffDelivery(options: {
               })
               .catch(() => {});
           }
-          clearInterval(heartbeat);
+          heartbeat.stop();
           /*
            * Given back whatever happened. Left held, the conversation is unusable by anybody until the
            * lock expires: the person cannot ask a follow-up and the next hop is refused, which turns
@@ -649,7 +633,10 @@ const DEFAULT_DELIVERY_DEADLINE_MS = 5 * 60_000;
 function settled(
   events: Observable<BaseEvent>,
   deadlineMs: number,
-  /** Aborts when the person pauses the Bot; the run is stopped and the hop fails with the reason. */
+  /**
+   * Aborts when the person pauses the Bot or the conversation's lock is lost; the run is stopped and
+   * the hop fails with the reason.
+   */
   paused: AbortSignal,
   stop: () => void,
   /** Written when the deadline passes, so it can say how far the run had got by then. */

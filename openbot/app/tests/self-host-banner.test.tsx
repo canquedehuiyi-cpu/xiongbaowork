@@ -16,7 +16,7 @@ import {
 import { authKeys } from "@/lib/auth/queries";
 import { deploymentKeys } from "@/lib/deployment/queries";
 import { userPreferencesQueryOptions } from "@/lib/settings/message-list";
-import type { UserPreferences } from "../../shared/user-preferences";
+import type { UserPreferences } from "@openbot/shared/user-preferences";
 import { settleReactWork } from "./settle-react-work";
 
 const originalFetch = globalThis.fetch;

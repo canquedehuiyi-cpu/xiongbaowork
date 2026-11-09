@@ -157,9 +157,10 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   "src/agents/routes.ts": { "adminActAsOwner(": 1, "asAdminPlatform(": 3 },
   "src/agents/wake-up.ts": { 'runAsTenant("platform"': 2 },
   // The fourth is the signed-out /api/capabilities count of identity providers (deployment rows).
+  // The second `asAdminPlatform` is the audit trail's CSV export (upstream #751), read as the list is.
   "src/app.ts": {
     "adminActAsOwner(": 1,
-    "asAdminPlatform(": 1,
+    "asAdminPlatform(": 2,
     'runAsTenant("platform"': 4,
   },
   "src/audit-retention.ts": {
@@ -190,8 +191,17 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   // The third is the background translator (migration 0145): it reads and writes only
   // `text_translations`, a deployment-wide cache with no tenant column and no row security, and
   // touches no tenant's rows.
-  "src/index.ts": { 'runAsTenant("platform"': 3 },
+  // Linked accounts (upstream #763): who an outside account is, which person a code was issued to,
+  // cancelling an exposed code — each about a sender nobody knows yet — and clearing codes a day
+  // dead. Every other write runs as the person the row belongs to.
+  "src/identity/store.ts": { 'runAsTenant("platform"': 4 },
+  // Learning's container assignment is the deployment's (start, the nudge on read, Admin's check),
+  // and the GitHub callback's "is this person still active" reads the deployment's people table.
+  "src/index.ts": { 'runAsTenant("platform"': 3, "asPlatform(": 4 },
   "src/memory/ingestion.ts": { 'runAsTenant("platform"': 2 },
+  // Whose memories are out of step with Intelligence (upstream #773); each person's are then
+  // mirrored in their own frame.
+  "src/memory/store.ts": { 'runAsTenant("platform"': 1 },
   "src/pipeline/reap.ts": { 'runAsTenant("platform"': 1 },
   // Which run holds an approval (I3), and WF7's restart sweep for parents waiting on an ended child;
   // each run found is then settled in the tenant on its own row.

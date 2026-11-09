@@ -5,9 +5,10 @@ import type {
   ChannelActivity,
   ChannelStore,
 } from "../src/channels/routes";
-import { HeadlessToolSuspension } from "../src/computer/headless-tools";
+import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
+import type { TurnRunner } from "@openbot/toolkit/run-turn";
 import { QuotaExceeded } from "../src/quota/limits";
-import { createRoutineRunner, type TurnRunner } from "../src/routines/runner";
+import { createRoutineRunner } from "../src/routines/runner";
 import type {
   RoutineRunContext,
   RoutineRunOutcome,

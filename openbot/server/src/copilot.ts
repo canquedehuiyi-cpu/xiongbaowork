@@ -1,19 +1,26 @@
-import type { BaseEvent, Message, RunAgentInput } from "@ag-ui/client";
-import { AbstractAgent, HttpAgent } from "@ag-ui/client";
+import type { Message, RunAgentInput } from "@ag-ui/client";
+import { type AbstractAgent, HttpAgent } from "@ag-ui/client";
 import type { BuiltInAgentConfiguration } from "@copilotkit/runtime/v2";
-import {
-  BuiltInAgent,
-  CopilotRuntime,
-  resolveModel,
-} from "@copilotkit/runtime/v2";
+import { CopilotRuntime, resolveModel } from "@copilotkit/runtime/v2";
 import { createCopilotHonoHandler } from "@copilotkit/runtime/v2/hono";
 import type { LanguageModel } from "ai";
 import { Hono } from "hono";
-import type { Observable } from "rxjs";
-import { defer, finalize, from, fromEvent, switchMap, takeUntil } from "rxjs";
+import { defer, from, switchMap } from "rxjs";
 import { z } from "zod";
-import { PROVENANCE_GUIDANCE } from "../../shared/bot-prompt";
-import { type Persona, personaGuidance } from "../../shared/persona";
+import { PROVENANCE_GUIDANCE } from "@openbot/shared/bot-prompt";
+import { defaultModelFor } from "@openbot/shared/model-providers";
+import { type Persona, personaGuidance } from "@openbot/shared/persona";
+import {
+  BuiltInAgentWithSaneHistory,
+  CloningRemoteAgent,
+  RunBuiltAgent,
+  UnavailableAgent,
+} from "@openbot/toolkit/copilotkit/agents";
+import type { GrantedTool } from "@openbot/toolkit/granted-tool";
+import { parametersFor } from "@openbot/toolkit/granted-tool";
+import { HeadlessToolsMiddleware } from "@openbot/toolkit/headless-tools";
+import { sanitizeSeededHistory } from "@openbot/toolkit/history-sanitize";
+import { executeNativeApprovalTool } from "@openbot/toolkit/native-approval";
 import {
   type ActorAgentResolver,
   CoworkerUnavailableError,
@@ -24,19 +31,14 @@ import {
   LEARNED_SKILL_TOOL_NAMES,
   type LearnedSkillInvocation,
 } from "./learning/runtime";
-import type { ThreadLock, ThreadRunner } from "./agents/handoff-delivery";
-import { sanitizeSeededHistory } from "./agents/history-sanitize";
+import type { ThreadLock } from "@openbot/toolkit/ports";
+import type { ThreadRunner } from "./agents/handoff-delivery";
 import {
-  PLAN_RUN_COMPLETED,
   PlanModel,
   type PlanModelConfig,
   planModelForEnvironment,
 } from "./agents/plan-model";
 import type { AgentActor } from "./agents/profile-types";
-import {
-  executeNativeApprovalTool,
-  nativeApprovalRun,
-} from "./approvals/native-context";
 import type { AuditInitiator } from "./audit";
 import {
   attachmentIdsIn,
@@ -45,7 +47,6 @@ import {
   type StoredAttachment,
 } from "./channels/attachment-parts";
 import type { AgentFetch, StallGuard } from "./channels/stall-guard";
-import { HeadlessToolsMiddleware } from "./computer/headless-tools";
 import type { DeploymentConfig } from "./config";
 import { SYSTEM_TENANT } from "./db/schema/tenant";
 import { observeModelConnection } from "./desktop-connection-failure";
@@ -66,8 +67,7 @@ import {
   SELECTION_FLOOR,
   selectTools,
 } from "./plugins/selection";
-import type { GrantedTool } from "./plugins/tools";
-import { grantedToolGuidance, parametersFor } from "./plugins/tools";
+import { grantedToolGuidance } from "./plugins/tools";
 import {
   isPersonTenant,
   runAsTenant,
@@ -167,8 +167,6 @@ type AgentRunInput = Parameters<AbstractAgent["run"]>[0];
 type AgentMessage = AgentRunInput["messages"][number];
 type AgentContext = NonNullable<AgentRunInput["context"]>[number];
 export type StandingRoleMessage = Extract<AgentMessage, { role: "system" }>;
-type AgentHeaders = Record<string, string>;
-type HeaderBearingAgent = AbstractAgent & { headers?: AgentHeaders };
 
 /** The durable part of a coworker: who it is and what its standing job is. */
 export type AgentStandingProfile = {
@@ -262,6 +260,18 @@ export function normalizeModelBaseUrls(
   }
 }
 
+/**
+ * The OpenAI model the built-in Bot falls back to when someone switches it to OpenAI and names none.
+ *
+ * DELIBERATELY NOT `defaultModelFor("openai")`, which is `gpt-5.5`. That default is for the remote
+ * Bots: `agent-bot` and several framework Bots speak `/v1/chat/completions`, where the 5.6 models
+ * refuse function tools (`agent-bot/src/index.ts`, and `docker-compose.yml` on `AGENT_BOT_MODEL`).
+ * The built-in Bot speaks the Responses API, so it can run the newer model, and matches the tenant
+ * package's own default (`examples/fintech/model.yaml`). The Anthropic fallback has no such split and
+ * is read from the shared spec.
+ */
+const BUILT_IN_OPENAI_FALLBACK_MODEL = "gpt-5.6-terra";
+
 export function runtimeModelForEnvironment(
   packageModel: RuntimeModel,
   environment: Record<string, string | undefined> = process.env,
@@ -280,8 +290,8 @@ export function runtimeModelForEnvironment(
     provider === packageModel.provider
       ? packageModel.defaultModel
       : provider === "anthropic"
-        ? "claude-sonnet-4-5"
-        : "gpt-5.6-terra";
+        ? defaultModelFor("anthropic")
+        : BUILT_IN_OPENAI_FALLBACK_MODEL;
   const selectedModelApplies =
     provider === "anthropic" ||
     ((!selectedProvider || selectedProvider === "openai") &&
@@ -1030,7 +1040,7 @@ export type MarkAttachmentsSent = (
  *
  * OLDER MESSAGES DEGRADE INSTEAD. This maps over the WHOLE history, and history is replayed on every
  * turn, so one vanished row failing here would fail this channel's every future turn for ever — the
- * same geometry as the dangling tool call in `agents/history-sanitize.ts`, which opens by recording
+ * same geometry as the dangling tool call in `toolkit/history-sanitize.ts`, which opens by recording
  * that exact failure found in production twice: a permanent failure grown out of transient damage,
  * and nothing the person did wrong. It is reachable the same way, too: a send whose run is stopped
  * before the load never stamps `attachedAt`, and the sweeper deletes the row a day later. So an
@@ -1345,8 +1355,25 @@ async function buildAgent(
         agentModel,
         learnedSkills,
       ),
-      loadAttachment,
-      markAttachmentsSent,
+      {
+        // The run's ids reach the metered model through this scope; see `models/token-metering`.
+        observe: (run, input) =>
+          withModelRun(
+            { runId: input.runId, threadId: input.threadId },
+            observeModelConnection(run),
+          ),
+        ...(loadAttachment
+          ? {
+              inline: (messages: AgentRunInput["messages"], threadId: string) =>
+                inlineAttachments(
+                  messages,
+                  loadAttachment,
+                  threadId,
+                  markAttachmentsSent,
+                ),
+            }
+          : {}),
+      },
     );
 
   const whole = withTools(granted);
@@ -1895,306 +1922,6 @@ function mastraOpenBotContext({
         ]
       : []),
   ];
-}
-
-class CloningRemoteAgent extends AbstractAgent {
-  headers?: AgentHeaders;
-  private readonly remote: HeaderBearingAgent;
-
-  constructor(
-    remote: AbstractAgent,
-    private readonly attachOpenBotMiddleware: (target: AbstractAgent) => void,
-  ) {
-    super({
-      agentId: remote.agentId,
-      description: remote.description,
-      threadId: remote.threadId,
-      initialMessages: remote.messages,
-      initialState: remote.state,
-      debug: remote.debug,
-    });
-    this.remote = remote as HeaderBearingAgent;
-    if (this.remote.headers) {
-      this.headers = { ...this.remote.headers };
-    }
-    this.attachOpenBotMiddleware(this);
-  }
-
-  run(input: RunAgentInput): Observable<BaseEvent> {
-    if (this.headers) {
-      this.remote.headers = { ...this.headers };
-    }
-    return this.remote.run(input);
-  }
-
-  async getCapabilities() {
-    return this.remote.getCapabilities?.() ?? {};
-  }
-
-  abortRun(): void {
-    this.remote.abortRun();
-    super.abortRun();
-  }
-
-  clone() {
-    const clonedRemote = this.remote.clone() as AbstractAgent;
-    const clone = new CloningRemoteAgent(
-      clonedRemote,
-      this.attachOpenBotMiddleware,
-    );
-    if (this.headers) {
-      clone.headers = { ...this.headers };
-    }
-    return clone;
-  }
-}
-
-/**
- * A built-in Bot that will not hand the model provider a conversation it is going to refuse.
- *
- * FOUND LIVE, ON CHAT. One person's next three messages each failed with
- * `AI_MissingToolResultsError: Tool result is missing for tool call chatcmpl-tool-8dd56dc7497c5ea9`,
- * thrown out of the AI SDK's `convertToLanguageModelPrompt`. A frontend tool handler had been torn
- * down while its call was open, so the agent's live messages in the browser carried an assistant
- * message whose tool call never got a result. The durable store did not have it, nothing was going
- * to answer it, and every retry sent it straight back up as `input.messages`. The conversation was
- * finished until the person worked out for themselves to start another one.
- *
- * The guard has to be on this side of `run`. `BuiltInAgent.run` converts `input.messages` itself,
- * with no seam in between, so wrapping the agent is the only place left to stand. The reasoning for
- * why a dangling call is DROPPED rather than repaired, and why ids are never changed, is in
- * `agents/history-sanitize.ts`, where the routines path found the same failure first.
- *
- * A RESUMED CALL IS NOT A DANGLE. `run` appends a tool result for each `input.resume` entry by
- * `interruptId` AFTER converting the messages, so a call that a resume is about to answer must
- * survive this pass or the appended result lands on nothing.
- */
-class BuiltInAgentWithSaneHistory extends BuiltInAgent {
-  /**
-   * The configuration, held a second time because the base class keeps its own copy private and
-   * {@link clone} has to build another one of THIS class rather than of the base.
-   */
-  private readonly configuration: BuiltInAgentConfiguration;
-  /**
-   * How this Bot's attached files are inlined, or absent to leave them alone.
-   *
-   * Held for the same reason {@link configuration} is: {@link clone} builds another one of THIS
-   * class and everything the run depends on has to survive that.
-   */
-  private readonly loadAttachment: LoadAttachment | undefined;
-  /**
-   * How this Bot records that the files on the message it is answering were sent, or absent to
-   * record nothing. Held for the reason {@link loadAttachment} is: {@link clone} builds another one
-   * of THIS class, and a seam lost in a clone is a seam that never runs.
-   */
-  private readonly markAttachmentsSent: MarkAttachmentsSent | undefined;
-
-  constructor(
-    configuration: BuiltInAgentConfiguration,
-    loadAttachment?: LoadAttachment,
-    markAttachmentsSent?: MarkAttachmentsSent,
-  ) {
-    super(configuration);
-    this.configuration = configuration;
-    this.loadAttachment = loadAttachment;
-    this.markAttachmentsSent = markAttachmentsSent;
-  }
-
-  run(input: RunAgentInput): Observable<BaseEvent> {
-    const answeredByResume = new Set(
-      (input.resume ?? []).map((entry) => entry.interruptId),
-    );
-    const history = sanitizeSeededHistory(input.messages, answeredByResume);
-    const load = this.loadAttachment;
-    /*
-     * ALONGSIDE THE GUARD ABOVE, NOT INSTEAD OF IT. One drops a conversation the model provider is
-     * going to refuse; this replaces the stored reference a person's attachment arrives as with the
-     * bytes themselves, because `BuiltInAgent.run` converts `input.messages` with no seam in
-     * between and a `/api/attachments/<id>` URL is not something a model provider will go and fetch.
-     *
-     * Nothing to load means nothing to inline, and the run goes up exactly as it did before any of
-     * this existed.
-     */
-    if (!load)
-      return nativeApprovalRun({ ...input, messages: history }, () =>
-        // The run's ids reach the metered model through this scope; see `models/token-metering`.
-        withModelRun(
-          { runId: input.runId, threadId: input.threadId },
-          observeModelConnection(super.run({ ...input, messages: history })),
-        ),
-      );
-    /*
-     * Deferred, because `run` has to answer with a stream straight away and reading the bytes is a
-     * database round trip. `defer` puts that read on the subscription, which is where the run
-     * actually begins, so nothing is fetched until somebody is listening.
-     */
-    return defer(() =>
-      from(
-        inlineAttachments(
-          history,
-          load,
-          // As above: the run's own conversation, not the actor's channels at large.
-          input.threadId,
-          this.markAttachmentsSent,
-        ),
-      ).pipe(
-        switchMap((messages) =>
-          nativeApprovalRun({ ...input, messages }, () =>
-            withModelRun(
-              { runId: input.runId, threadId: input.threadId },
-              observeModelConnection(super.run({ ...input, messages })),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  /**
-   * Carried by hand, for the same reason {@link RunBuiltAgent.clone} is.
-   *
-   * The runtime clones an agent before every run, and the base class's clone hard-codes
-   * `new BuiltInAgent(this.config)`: inherited unchanged, the very first message anybody sends
-   * would go through an agent that does none of the above. The middleware list is copied because
-   * the base clone copies it, and it is reached through a cast because `AbstractAgent` declares it
-   * private. Nothing registers middleware on a built-in Bot today, and this is here so that the day
-   * something does, it is not lost in a clone.
-   */
-  clone(): BuiltInAgentWithSaneHistory {
-    const cloned = new BuiltInAgentWithSaneHistory(
-      this.configuration,
-      this.loadAttachment,
-      this.markAttachmentsSent,
-    );
-    type WithMiddlewares = { middlewares: unknown[] };
-    (cloned as unknown as WithMiddlewares).middlewares = [
-      ...(this as unknown as WithMiddlewares).middlewares,
-    ];
-    return cloned;
-  }
-}
-
-/**
- * An agent whose tools are decided when the run starts, because that is the first moment anybody
- * knows what the run is about, and who is asking on whose behalf.
- *
- * WHY A WRAPPER AND NOT A NARROWER `loadTools`. Tools are resolved per request, and a request is
- * earlier than a run: at that point there is a Bot and a person and no message, so there is nothing
- * to select against. `run(input)` is the first place the message exists. Both underlying agents take
- * their tools at construction — a built-in one in its configuration, a remote one in the middleware
- * that sends them — so the only way to hand either a set chosen from the message is to build it
- * after the message arrives. That is all this does: it defers `build` to the first subscription and
- * then gets out of the way.
- *
- * The deferral is per subscription, so a retried run reselects rather than reusing a decision made
- * for a message that is no longer the last one.
- */
-class RunBuiltAgent extends AbstractAgent {
-  /**
-   * Stop must reach the pending build as well as the eventual model. Keep both in one per-run
-   * record so a late build or teardown cannot replace the next run's cancellation target.
-   */
-  private active?: { controller: AbortController; inner?: AbstractAgent };
-  /** The same Bot with nothing narrowed, kept to answer questions that are not about one run. */
-  private whole: AbstractAgent;
-  private build: (
-    input: RunAgentInput,
-    signal: AbortSignal,
-  ) => Promise<AbstractAgent>;
-
-  constructor(
-    identity: { agentId: string; description: string },
-    whole: AbstractAgent,
-    build: (
-      input: RunAgentInput,
-      signal: AbortSignal,
-    ) => Promise<AbstractAgent>,
-  ) {
-    super(identity);
-    this.whole = whole;
-    this.build = build;
-  }
-
-  run(input: RunAgentInput): Observable<BaseEvent> {
-    return defer(() => {
-      const active: NonNullable<RunBuiltAgent["active"]> = {
-        controller: new AbortController(),
-      };
-      this.active = active;
-      const { signal } = active.controller;
-      return defer(() => this.build(input, signal)).pipe(
-        switchMap((agent) => {
-          signal.throwIfAborted();
-          active.inner = agent;
-          return agent.run(input);
-        }),
-        // Settle Stop even if a collaborator ignores the signal or rejects after cancellation.
-        takeUntil(fromEvent(signal, "abort")),
-        finalize(() => {
-          if (this.active === active) this.active = undefined;
-          active.controller.abort(PLAN_RUN_COMPLETED);
-        }),
-      );
-    });
-  }
-
-  /**
-   * What the Bot can do, answered from the un-narrowed agent.
-   *
-   * Capabilities are asked for outside a run, where there is no message and so nothing to select
-   * against. They are also a fact about the Bot rather than about one turn: a deployment that
-   * narrowed this run to three tools has not stopped supporting whatever the underlying agent
-   * supports.
-   */
-  getCapabilities() {
-    return this.whole.getCapabilities?.() ?? Promise.resolve({});
-  }
-
-  /**
-   * Carried by hand, because `AbstractAgent.clone` does not know this class exists.
-   *
-   * It builds a bare object on the prototype and copies a fixed list of base fields onto it, so
-   * every field declared here arrives `undefined`. The runtime clones an agent before every run
-   * (`agents[agentId].clone()`), which means the omission is not a corner case: without this, the
-   * first message anybody sends fails on a `build` that is not a function.
-   */
-  clone(): RunBuiltAgent {
-    const cloned = super.clone() as RunBuiltAgent;
-    cloned.whole = this.whole;
-    cloned.build = this.build;
-    // A clone owns its cancellation state, including while its build is pending.
-    cloned.active = undefined;
-    return cloned;
-  }
-
-  abortRun(): void {
-    const active = this.active;
-    active?.controller.abort();
-    active?.inner?.abortRun();
-    super.abortRun();
-  }
-}
-
-class UnavailableAgent extends AbstractAgent {
-  private reason: string;
-
-  constructor(agent: RegisteredUnavailableAgent) {
-    super({ agentId: agent.id, description: agent.name });
-    this.reason = agent.reason;
-  }
-
-  clone(): UnavailableAgent {
-    const cloned = super.clone() as UnavailableAgent;
-    // The runtime clones before running; the base clone only carries base-class fields.
-    cloned.reason = this.reason;
-    return cloned;
-  }
-
-  // Refused here rather than at the endpoint: a deleted coworker has no endpoint worth contacting,
-  // and the person is owed the reason rather than a transport error.
-  run(): never {
-    throw new Error(this.reason);
-  }
 }
 
 export async function resolveRuntimeAgents(

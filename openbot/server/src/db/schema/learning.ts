@@ -8,7 +8,7 @@ import {
   text,
   timestamp,
 } from "drizzle-orm/pg-core";
-import type { LearningSettings } from "../../../../shared/learning";
+import type { LearningSettings } from "@openbot/shared/learning";
 import { jsonb } from "./json";
 import { tenantId } from "./tenant";
 

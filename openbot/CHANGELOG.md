@@ -8,6 +8,40 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+- **Merged upstream OpenBot up to `6fb38c8b`** (#784; `UPSTREAM.md` records what was taken and
+  what was not). What a deployment notices:
+  - **Before upgrading.** Migrations `0146_mcp_tools_unclassified` (shared with the plugin work) and
+    `0147_learning` (R0's `0146_learning`, renumbered) come first, then `0148_identity_links`,
+    `0149_memory_on_intelligence`, `0150_default_opt_outs` and `0151_sign_in_code_step`. The two new per-person tables (`identity_links`, `identity_link_challenges`) and
+    `default_opt_outs` carry `tenant_id` with row security, like every other tenant table. A server
+    and a computer must be upgraded together: an older computer has no `/sign-in/code`. A hosted
+    computer's browser is now headed by default (`COMPUTER_BROWSER_MODE=headless` keeps the old one).
+  - People can link their Slack account (a one-time code sent to the app in a direct message) and
+    their GitHub account (`GITHUB_APP_CLIENT_ID`/`GITHUB_APP_CLIENT_SECRET`) under
+    **设置 → 已连接的账号**. One outside account belongs to one person across the deployment;
+    removing a person retires their links.
+  - Memory sources and background research switch on by default for a person and a Bot once the
+    person talks to that Bot alone (research every four hours, read-only, so expect its model use);
+    a removal is remembered and never undone. `OPENBOT_MEMORY_SOURCE_DEFAULTS=false` and
+    `OPENBOT_PROACTIVE_DEFAULTS=false` stop it.
+  - With Intelligence connected (`INTELLIGENCE_API_KEY`, optional as before): people's reviewed
+    memories are mirrored into it when the deployment is entitled to Intelligence memory; Automatic
+    Learning assigns the project's `openbot` container when nothing is saved
+    (`OPENBOT_LEARNING_AUTO_ASSIGN=false` prevents it), and can create it with
+    `INTELLIGENCE_SERVICE_TOKEN` + `INTELLIGENCE_PROJECT_ID` or a CopilotKit CLI login. Either half of
+    that pair without the API key is refused at boot as half-configured.
+  - A private sign-in asks for the password first and for a verification code only when the site
+    sends one. The waiting card in the open chat offers the sign-in form as soon as the request
+    exists.
+  - Administrators can export the audit trail as CSV (capped at 5,000 rows, and the page says when
+    it stopped early); the export is itself an audit row.
+  - Headless turns (routines, responsibilities, research, wake-ups, group turns, hand-offs) only stop
+    on a lost lock when the platform says the conversation belongs to another run, or when renewals
+    have failed for the lock's whole lifetime; a network blip rides through. A hand-off checks the
+    pause guard and "Use Bots" before it takes the lock.
+  - At boot the server says whether its key can call the configured model, and whether a connected
+    Intelligence will let this deployment use memory.
+
 - **Automatic Learning is back, as an option.** Set `INTELLIGENCE_API_KEY` (and, for a
   self-hosted CopilotKit Intelligence, `INTELLIGENCE_API_URL` and `COPILOTKIT_LICENSE_TOKEN`) and
   **Admin → 自动学习** chooses a default learning container and which coworkers take part; each run

@@ -16,7 +16,6 @@ import {
 import { createAdminScope } from "../src/auth/admin-scope";
 import { createRoleRepository } from "../src/auth/guards";
 import { setRole } from "../src/auth/roles";
-import { HeadlessToolSuspension } from "../src/computer/headless-tools";
 import { createDatabase } from "../src/db/client";
 import {
   agentProfiles,
@@ -30,6 +29,7 @@ import {
 import { users } from "../src/db/schema/core";
 import { workItems } from "../src/db/schema/work";
 import { runAsTenant } from "../src/tenant/context";
+import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { bindTestRoleWriter } from "./support/role-writer";
 

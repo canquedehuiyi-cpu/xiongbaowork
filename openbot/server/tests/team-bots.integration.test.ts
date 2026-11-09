@@ -264,6 +264,13 @@ describe("Team Bots in PostgreSQL", () => {
     });
     expect(await get(teammate)).not.toBeNull();
     expect(await get(engineer)).not.toBeNull();
+    // Somebody else's to a teammate, so their accounts need consent; never to its owner.
+    expect(
+      await as(teammate, () => teamBots.publishedByAnother(teammate.id, bot)),
+    ).toBe(true);
+    expect(
+      await as(owner, () => teamBots.publishedByAnother(owner.id, bot)),
+    ).toBe(false);
     // Published, the Bot and its publication live in `team` (G01-E P9).
     expect(await stampsOf(bot)).toEqual({
       agent: TEAM_TENANT,
@@ -292,6 +299,9 @@ describe("Team Bots in PostgreSQL", () => {
 
     await as(owner, () => teamBots.unpublish(owner, bot));
     expect(await get(engineer)).toBeNull();
+    expect(
+      await as(teammate, () => teamBots.publishedByAnother(teammate.id, bot)),
+    ).toBe(false);
     // Unpublished, a private Bot goes back to its owner, with nothing of the roster left behind.
     expect(await stampsOf(bot)).toEqual({
       agent: owner.id,

@@ -80,7 +80,9 @@ import {
 } from "./approvals/types";
 import {
   type AuditInitiator,
+  auditSink,
   createAgentTrailReader,
+  handoffInitiator,
   createAuditReader,
   createAuditStore,
   DEPLOYMENT_INITIATOR,
@@ -157,7 +159,7 @@ import {
   createGroupStore,
   groupSourceForRun,
 } from "./channels/group";
-import { createChannelStore } from "./channels/routes";
+import { type ChannelStore, createChannelStore } from "./channels/routes";
 import { websocket as channelSocket } from "./channels/socket";
 import { createStallGuard } from "./channels/stall-guard";
 import {
@@ -168,12 +170,11 @@ import {
 import { createThreadIdentity } from "./channels/thread-identity";
 import { createChannelTitler } from "./channels/titler";
 import { createSandboxedStore } from "./components/sandboxed";
+import { headlessComponentCatalog } from "./components/headless";
 import { createComponentStore } from "./components/store";
 import { createComputerGateway, localAppsAllowed } from "./computer/gateway";
-import {
-  createHeadlessComputerTools,
-  HeadlessToolSuspension,
-} from "./computer/headless-tools";
+import { createHeadlessComputerTools } from "./computer/headless-tools";
+import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 import { createPageFrameStore } from "./computer/page-frames";
 import { startPolicyListener } from "./computer/policy-listener";
 import { withPolicyPushOnWake } from "./computer/policy-network";
@@ -245,17 +246,37 @@ import {
   HostAccessRefusedError,
 } from "./host-access/broker";
 import { hostAccessTools } from "./host-access/tools";
+import { githubCallbackRoutes } from "./identity/github-callback";
+import { retireIdentityLinks, retireOwnedAccounts } from "./identity/retire";
+import { slackCodeRedeemer } from "./identity/slack-redeem";
+import { createIdentityStore } from "./identity/store";
 import { createKnowledgeRoutes } from "./knowledge/routes";
 import { createKnowledgeStore } from "./knowledge/store";
 import { KNOWLEDGE_TOOL_NAMES, knowledgeTools } from "./knowledge/tools";
 import { createIntelligenceClient } from "./intelligence-client";
+import { reportIntelligenceEntitlement } from "./intelligence-entitlement-check";
+import {
+  createLearningAutoAssign,
+  probeLearningContainer,
+  withLearningAutoAssign,
+} from "./learning/auto-assign";
+import {
+  cliLoginPresent,
+  ensureLearningContainer,
+  intelligenceApiOrigin,
+  keyIntelligence,
+  learningSetupInstructions,
+} from "./learning/ensure-container";
 import {
   clearLearningRevisionFallback,
   createLearningRuntime,
 } from "./learning/runtime";
 import { createLearningSettingsStore } from "./learning/settings";
 import { createMemoryIngestion } from "./memory/ingestion";
+import { createMemoryDefaults } from "./memory/defaults";
+import { createIntelligenceMemory } from "./memory/intelligence";
 import { createMemoryStore } from "./memory/store";
+import { reportModelAvailability } from "./model-availability-check";
 import { memoryTools } from "./memory/tools";
 import { createModelRoutes } from "./models/routes";
 import {
@@ -335,6 +356,7 @@ import { createTriggerIngressRoutes } from "./responsibilities/trigger-routes";
 import { useTriggerTools } from "./responsibilities/trigger-tools";
 import { createTriggerStore } from "./responsibilities/triggers";
 import type { Responsibility } from "./responsibilities/types";
+import { serverTurnAdmission } from "./agents/turn-admission";
 import { createTurnRunner, type RunnerLike } from "./routines/run-turn";
 import { createRoutineRunner } from "./routines/runner";
 import { createRoutineStore } from "./routines/store";
@@ -346,6 +368,7 @@ import { createSelfHostBanner } from "./self-host-banner";
 import { createTeamBots } from "./team-bots/team-bots";
 import { isAccessRevoked } from "./tenant/access";
 import {
+  asPlatform,
   assertPersonTenant,
   runAsClaimedTenant,
   runAsTenant,
@@ -547,6 +570,18 @@ await startupLifecycle.run(async (startup) => {
   // The vault, built before the agent store because a customer's agent may sit behind a key and that
   // key belongs here rather than on the agent row. See agents/auth-header.ts.
   const credentialStore = createCredentialStore(database);
+  // People's linked Slack and GitHub accounts (upstream #763), each person's own rows (G01).
+  const identityStore = createIdentityStore(database, credentialStore);
+  /*
+   * CopilotKit Intelligence, only when this deployment is connected to one (R0, optional). It serves
+   * Automatic Learning's published skills to each Bot's run, and keeps people's memory when the
+   * deployment is entitled to it; threads stay in this database either way. Without
+   * `INTELLIGENCE_API_KEY` none of this exists and every Bot is built as before. Built here, ahead of
+   * the memory store that reads it; the constructor opens nothing.
+   */
+  const intelligenceClient = config.intelligence
+    ? createIntelligenceClient(config.intelligence)
+    : undefined;
   const agentVault = {
     store: credentialStore,
     reader: credentialStore,
@@ -661,11 +696,25 @@ await startupLifecycle.run(async (startup) => {
   const threadIdentity = createThreadIdentity(
     config.deploymentId ?? tenantPackage.tenantId,
   );
-  const channelStore = createChannelStore(
+  const baseChannelStore = createChannelStore(
     database,
     agentProfileStore,
     threadIdentity,
   );
+  /**
+   * A person spoke in one of their conversations. Bound once memory defaults exist (memory/defaults.ts):
+   * a conversation with one Bot switches on that Bot's research and memory sources for this person.
+   */
+  let personSpoke:
+    | ((ownerUserId: string, channelId: string) => void)
+    | undefined;
+  const channelStore: ChannelStore = {
+    ...baseChannelStore,
+    async recordActivity(actor, channelId, activity, source) {
+      await baseChannelStore.recordActivity(actor, channelId, activity, source);
+      if (activity.agentId === null) personSpoke?.(actor.id, channelId);
+    },
+  };
   const channelEvents = createChannelEventHub();
   /**
    * Which components each Bot may answer with.
@@ -716,14 +765,32 @@ await startupLifecycle.run(async (startup) => {
     database,
     config.auth?.initialAdminEmails ?? [],
     /*
-     * Removing somebody retires the credentials they granted this deployment.
+     * Removing somebody retires what they connected: their plugin credentials and connections, and
+     * their linked outside accounts (which keep resolving to them, now refused; the tokens are revoked
+     * and every link needs reconnecting). Both halves run whichever fails, and the failure is rethrown
+     * after (see retireOwnedAccounts).
      *
-     * A closure rather than the method itself, because the plugin store is built further down: this
-     * has to exist before `auth` does, and that one needs the vault and the policy. Nothing calls this
-     * during module initialisation — it runs when an administrator removes somebody, over HTTP — so by
-     * then the binding is there.
+     * A closure, because `pluginStore` is built further down: this has to exist before `auth` does,
+     * and that one needs the vault and the policy. `pluginStore` is read only when the closure runs —
+     * an administrator or the directory removing somebody, never during module initialisation — so by
+     * then the binding is there. The linked-account half writes its audit rows through a store made
+     * on its own transaction, so it reads no later binding (`bootAuditStore` included). It runs as
+     * the removed person, whose rows the links and their trail are (G01).
      */
-    (userId, by) => pluginStore.retireConnectionsFor(userId, by),
+    (userId, by) =>
+      retireOwnedAccounts({
+        plugins: () => pluginStore.retireConnectionsFor(userId, by),
+        identities: () =>
+          runAsTenant(userId, () =>
+            retireIdentityLinks(
+              database,
+              credentialStore,
+              (executor) => createAuditStore(executor),
+              userId,
+              by,
+            ),
+          ),
+      }),
   );
   const identityProviderStore = createIdentityProviderStore(database);
   /*
@@ -754,6 +821,7 @@ await startupLifecycle.run(async (startup) => {
       ? withPolicyPushOnWake(createComputerProvider(config.computer), {
           policyForBot: (botId) => enterpriseControls()?.policyForBot(botId),
           ...(config.computer.token ? { token: config.computer.token } : {}),
+          ...(config.webBotAuth ? { webBotAuth: config.webBotAuth } : {}),
         })
       : undefined,
   );
@@ -792,6 +860,11 @@ await startupLifecycle.run(async (startup) => {
    * unavailable, and the row is a note for a reader rather than something the server depends on.
    */
   const bootAuditStore = createAuditStore(database);
+  // The display components a Bot can draw in a turn with no browser, as the toolkit's turn reads them.
+  const headlessComponents = headlessComponentCatalog({
+    store: componentStore,
+    audit: auditSink(bootAuditStore),
+  });
   // One store: the gateway writes through it, a route reads it, and the sweep below takes the old ones out.
   const pageFrameStore = createPageFrameStore(database);
   let deliveryNotifications: (
@@ -1486,6 +1559,21 @@ await startupLifecycle.run(async (startup) => {
   normalizeModelBaseUrls();
   const runtimeModel = runtimeModelForEnvironment(tenantPackage.model);
 
+  // Said once at boot: whether the key can call the model the Bots run on. A key without access to it
+  // otherwise passes every start-up check and fails at the first message, in front of whoever sent it.
+  void reportModelAvailability({
+    provider: runtimeModel.provider,
+    model: runtimeModel.defaultModel,
+    apiKey: () =>
+      resolveModelApiKey({
+        encryptionKey: config.keyEncryptionKey,
+        reader: credentialStore,
+        provider: runtimeModel.provider,
+        keyId: tenantPackage.model.credentialSecretRef,
+        environment: process.env,
+      }),
+  });
+
   const intentRouter = createIntentRouter({
     complete: createModelCompleter({
       model: runtimeModel,
@@ -1539,7 +1627,18 @@ await startupLifecycle.run(async (startup) => {
   // grant, the policy and the audit row are exactly where they were. Host-folder tools are also
   // server-dispatched: the selected Bot and the signed-in owner are bound here, then the desktop worker
   // receives only opaque grant ids and relative paths.
-  const personalMemoryStore = createMemoryStore(database);
+  // Memory lives in CopilotKit Intelligence when this deployment is connected and entitled to it, and in
+  // OpenBot's own tables when it is not; see memory/store.ts.
+  const personalMemoryStore = createMemoryStore(
+    database,
+    intelligenceClient
+      ? {
+          intelligence: createIntelligenceMemory({
+            client: intelligenceClient,
+          }),
+        }
+      : {},
+  );
   // A person's knowledge base (D08): read by their bound Wakers through two tools, edited at /api/knowledge.
   const knowledgeStore = createKnowledgeStore(database);
   const demonstrationStore = createDemonstrationStore(database);
@@ -1562,8 +1661,39 @@ await startupLifecycle.run(async (startup) => {
   });
   // Proactive research may only read; see proactive/restriction.ts. Read from the catalogue per call.
   const proactiveReadOnlyRefs = createReadOnlyClassifier(pluginStore);
-  const loadPersonalMemoryForActor = (ownerUserId: string) => (botId: string) =>
-    memoryIngestion.contextFor(ownerUserId, botId);
+  /*
+   * Memory sources and background research, on by default for each person and Bot, and never switched
+   * back on once the person turns one down. See memory/defaults.ts. Each entry runs as the person it
+   * is for, whose rows the defaults are (G01).
+   */
+  const memoryDefaults = createMemoryDefaults({
+    database,
+    ingestion: memoryIngestion,
+    sources: config.memoryDefaults.sources,
+    research: config.memoryDefaults.research,
+    channelBots: async (ownerUserId, channelId) =>
+      (await channelStore.get(await actorFor(ownerUserId), channelId))
+        ?.agentIds ?? null,
+    // The same rule research delivery uses, read when a person speaks (long after it is defined).
+    canDeliver: async (ownerUserId, channelId, agentId) =>
+      (await deliveryScopeFor(ownerUserId, channelId, agentId)) !== null,
+    mintThreadId: () => threadIdentity.mint(),
+    // Read when a Bot turn starts, long after `teamBots` below is defined.
+    publishedByAnother: (ownerUserId, agentId) =>
+      teamBots.publishedByAnother(ownerUserId, agentId),
+  });
+  personSpoke = (ownerUserId, channelId) =>
+    runAsTenant(ownerUserId, () =>
+      memoryDefaults.personSpoke(ownerUserId, channelId),
+    );
+  const loadPersonalMemoryForActor =
+    (ownerUserId: string) => (botId: string) => {
+      // Apps connected since this Bot's last turn become its memory sources. Never waits.
+      runAsTenant(ownerUserId, () =>
+        memoryDefaults.botTurn(ownerUserId, botId),
+      );
+      return memoryIngestion.contextFor(ownerUserId, botId);
+    };
   startup.acquireSync(
     () =>
       repeatAfterEach(async () => {
@@ -1575,6 +1705,21 @@ await startupLifecycle.run(async (startup) => {
               type: "memory-sweep-error",
               error: error instanceof Error ? error.name : "UnknownError",
               context: { operation: "syncDue" },
+              timestamp: new Date().toISOString(),
+            }),
+          );
+        }
+        // Mirror to Intelligence what is out of step: the backfill on the first passes after a
+        // deployment becomes entitled, and afterwards whatever an outage left behind. A no-op without
+        // Intelligence. Each person's rows are mirrored as that person (memory/store.ts).
+        try {
+          await personalMemoryStore.mirrorPending();
+        } catch (error) {
+          console.error(
+            JSON.stringify({
+              type: "memory-sweep-error",
+              error: error instanceof Error ? error.name : "UnknownError",
+              context: { operation: "mirrorPending" },
               timestamp: new Date().toISOString(),
             }),
           );
@@ -2270,7 +2415,7 @@ await startupLifecycle.run(async (startup) => {
   const unattendedTurnRunner = createTurnRunner({
     intelligence: routineIntelligence,
     runner: routineAgentRunner,
-    components: { store: componentStore, auditStore: bootAuditStore },
+    components: headlessComponents,
     buildAgentFor,
     toolsForTurn: async ({ ownerUserId, agentId, initiator }) => {
       if (!computerGateway) return [];
@@ -2491,16 +2636,80 @@ await startupLifecycle.run(async (startup) => {
    * `buildAgentFor` above around the owner.
    */
   /*
-   * CopilotKit Intelligence, only when this deployment is connected to one (R0, optional). It serves
-   * Automatic Learning's published skills to each Bot's run; threads stay in this database either
-   * way. Without `INTELLIGENCE_API_KEY` none of this exists and every Bot is built as before.
+   * Automatic Learning, only with a connected Intelligence (R0). Its settings are the deployment's,
+   * and the `openbot` container is assigned automatically when nobody has chosen one (upstream #774):
+   * never with the runtime key — with a service token the operator configured, or a CopilotKit CLI
+   * login on this machine; neither, and the log and Admin say exactly what to run instead.
    */
-  const intelligenceClient = config.intelligence
-    ? createIntelligenceClient(config.intelligence)
-    : undefined;
-  const learningSettings = intelligenceClient
+  const learningSettingsStore = intelligenceClient
     ? createLearningSettingsStore(database, config.learning)
     : undefined;
+  const learningAutoAssign = (() => {
+    if (!intelligenceClient || !learningSettingsStore || !config.intelligence)
+      return undefined;
+    const intelligence = config.intelligence;
+    // Only with INTELLIGENCE_API_URL named: without it there is no origin to send anybody to.
+    const apiOrigin = (() => {
+      if (!intelligence.apiUrl) return undefined;
+      try {
+        return intelligenceApiOrigin(intelligence.apiUrl);
+      } catch {
+        return undefined;
+      }
+    })();
+    const canCreate =
+      apiOrigin !== undefined &&
+      (config.learningSetup !== undefined || cliLoginPresent());
+    const assign = createLearningAutoAssign({
+      enabled: config.learningAutoAssign,
+      store: learningSettingsStore,
+      probe: (containerId) =>
+        probeLearningContainer(intelligenceClient, containerId),
+      ...(apiOrigin
+        ? { instructions: learningSetupInstructions(apiOrigin) }
+        : {}),
+      ...(canCreate && apiOrigin
+        ? {
+            create: () =>
+              ensureLearningContainer({
+                directory: process.cwd(),
+                apiUrl: apiOrigin,
+                nonInteractive: true,
+                key: keyIntelligence(
+                  apiOrigin,
+                  intelligence.apiKey,
+                  intelligence.gatewayWsUrl,
+                ),
+                cliLogin: cliLoginPresent(),
+                ...(config.learningSetup
+                  ? {
+                      serviceToken: {
+                        token: config.learningSetup.serviceToken,
+                        projectId: config.learningSetup.projectId,
+                      },
+                    }
+                  : {}),
+              }),
+          }
+        : {}),
+      audit: createAuditStore(database),
+    });
+    /*
+     * The assignment is the deployment's, whoever's read nudged it and whichever timer runs it, so it
+     * always runs as `platform` (G01): the audit row it writes is nobody's.
+     */
+    return {
+      ...assign,
+      start: () => asPlatform(() => assign.start()),
+      kick: () => asPlatform(() => assign.kick()),
+      check: () => asPlatform(() => assign.check()),
+    };
+  })();
+  const learningSettings =
+    learningSettingsStore && learningAutoAssign
+      ? withLearningAutoAssign(learningSettingsStore, learningAutoAssign)
+      : learningSettingsStore;
+  learningAutoAssign?.start();
   const learning =
     intelligenceClient && learningSettings
       ? createLearningRuntime({
@@ -2604,7 +2813,7 @@ await startupLifecycle.run(async (startup) => {
         const runner = createTurnRunner({
           intelligence: routineIntelligence,
           runner: routineAgentRunner,
-          components: { store: componentStore, auditStore: bootAuditStore },
+          components: headlessComponents,
           buildAgentFor: (input) => buildAgentFor({ ...input, initiator }),
           toolsForTurn: async () => {
             const actor = await actorFor(context.ownerUserId);
@@ -2726,7 +2935,7 @@ await startupLifecycle.run(async (startup) => {
     return createTurnRunner({
       intelligence: routineIntelligence,
       runner: routineAgentRunner,
-      components: { store: componentStore, auditStore: bootAuditStore },
+      components: headlessComponents,
       buildAgentFor: (input) => buildAgentFor({ ...input, initiator }),
       toolsForTurn: async () => [
         ...(await approvalComputerTools(
@@ -2831,7 +3040,7 @@ await startupLifecycle.run(async (startup) => {
   const approvalContinuationRunner = createTurnRunner({
     intelligence: routineIntelligence,
     runner: routineAgentRunner,
-    components: { store: componentStore, auditStore: bootAuditStore },
+    components: headlessComponents,
     buildAgentFor,
     toolsForTurn: async ({ ownerUserId, agentId, initiator }) =>
       approvalComputerTools(ownerUserId, agentId, initiator),
@@ -3494,7 +3703,7 @@ await startupLifecycle.run(async (startup) => {
     runTurn: createTurnRunner({
       intelligence: routineIntelligence,
       runner: routineAgentRunner,
-      components: { store: componentStore, auditStore: bootAuditStore },
+      components: headlessComponents,
       buildAgentFor,
       toolsForTurn: async ({ ownerUserId, agentId, initiator }) => {
         if (!computerGateway) return [];
@@ -3588,7 +3797,7 @@ await startupLifecycle.run(async (startup) => {
     runTurn: createTurnRunner({
       intelligence: routineIntelligence,
       runner: routineAgentRunner,
-      components: { store: componentStore, auditStore: bootAuditStore },
+      components: headlessComponents,
       buildAgentFor,
       toolsForTurn: async ({ ownerUserId, agentId, initiator }) => {
         if (!computerGateway) return [];
@@ -3913,6 +4122,8 @@ await startupLifecycle.run(async (startup) => {
       sign: (work, claim) =>
         signHandoffDeliveryRun(work, config.keyEncryptionKey, undefined, claim),
       delivery: createHandoffDelivery({
+        // The pause guard and the enterprise controls, before the hop takes any lock.
+        admission: serverTurnAdmission,
         // The hop is board work under the run that asked for it (ticket 020).
         board: taskProjector,
         // ...and board work the plan pays for, asked here because the hop's card is the hop's charge.
@@ -3922,7 +4133,7 @@ await startupLifecycle.run(async (startup) => {
          * delivery that then rebuilt them as an ordinary user could not find the Bot the desk had just
          * agreed to, and the person was told it never answered.
          */
-        agentFor: async ({ actorId, botId, fromBotId }) => {
+        agentFor: async ({ actorId, botId, fromBotId, initiator }) => {
           const actor = await actorFor(actorId).catch(() => null);
           if (!actor) {
             throw new Error(
@@ -3932,7 +4143,8 @@ await startupLifecycle.run(async (startup) => {
           return copilotRuntime.agentFor({
             actor,
             botId,
-            initiator: { kind: "handoff", id: fromBotId },
+            // The root of the chain rides along, so a hop knows who it ultimately acts for.
+            initiator: handoffInitiator(fromBotId, initiator),
           });
         },
         history: copilotRuntime.history,
@@ -4186,6 +4398,7 @@ await startupLifecycle.run(async (startup) => {
         ...(config.computer?.token
           ? { computerToken: config.computer.token }
           : {}),
+        ...(config.webBotAuth ? { webBotAuth: config.webBotAuth } : {}),
         builtInModel: `${runtimeModel.provider}/${runtimeModel.defaultModel}`,
         // The bound model by the resolver's own decision, so the allowlist and the usage row name the
         // model a run actually speaks — the deployment's, once a binding's key is revoked.
@@ -4206,6 +4419,32 @@ await startupLifecycle.run(async (startup) => {
     (message) => new HostAccessRefusedError(message),
   );
   auditRoutineStore(routineStore, bootAuditStore);
+
+  // Said once, at boot, whether Intelligence will let this deployment use what it is licensed for. A
+  // self-hosted Intelligence without a licence refuses memory quietly; this is the line that says why.
+  if (intelligenceClient)
+    void reportIntelligenceEntitlement({
+      entitlements: () => intelligenceClient.getRuntimeEntitlements(),
+    });
+
+  const identityGithubCallback =
+    config.githubApp && config.publicUrl
+      ? githubCallbackRoutes({
+          clientId: config.githubApp.clientId,
+          clientSecret: config.githubApp.clientSecret,
+          publicUrl: config.publicUrl,
+          appUrl: config.appUrl,
+          encryptionKey: config.keyEncryptionKey,
+          // The people table is the deployment's: read as `platform`, as the request guard does (G01).
+          personIsActive: async (userId) => {
+            const person = await asPlatform(() => peopleStore.find(userId));
+            return person !== undefined && !person.revoked;
+          },
+          credentials: credentialStore,
+          identity: identityStore,
+          auditStore: bootAuditStore,
+        })
+      : undefined;
 
   const app = createApp(
     config,
@@ -4370,6 +4609,7 @@ await startupLifecycle.run(async (startup) => {
           scopeFor: deliveryScopeFor,
           slack: deliveryProviders.slack,
           twilio: deliveryProviders.sms,
+          identity: slackCodeRedeemer(identityStore, bootAuditStore),
         },
       },
       memory: { store: personalMemoryStore, ingestion: memoryIngestion },
@@ -4406,6 +4646,7 @@ await startupLifecycle.run(async (startup) => {
     learningSettings
       ? {
           store: learningSettings,
+          ...(learningAutoAssign ? { autoAssign: learningAutoAssign } : {}),
           status: learning?.status,
           inspect: learning?.inspect,
         }
@@ -4417,6 +4658,8 @@ await startupLifecycle.run(async (startup) => {
         ? { entitlements: () => intelligenceClient.getRuntimeEntitlements() }
         : {}),
     }),
+    identityStore,
+    identityGithubCallback,
   );
 
   /*

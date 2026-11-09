@@ -3,7 +3,7 @@
  *
  * An Intelligence thread admits exactly one agent, so a channel with two Bots cannot be one thread
  * with two speakers. Each Bot gets a thread of its own in the group (`group_bot_threads`), and every
- * turn runs through the ordinary headless AG-UI path (`routines/run-turn.ts`) into that thread, so
+ * turn runs through the ordinary headless AG-UI path (`toolkit/run-turn.ts`) into that thread, so
  * learning, governance, approvals and analytics apply to a group turn exactly as they do to a routine.
  * What the people in the channel read is `group_messages`: the shared transcript, one row per person
  * message and one per Bot reply, each attributed to its speaker.
@@ -28,11 +28,11 @@ import type { ApprovalContinuation } from "../approvals/types";
 import {
   type AuditInitiator,
   type AuditStore,
+  handoffInitiator,
   PERSON_INITIATOR,
   recordAuditEvent,
 } from "../audit";
 import type { AppVariables } from "../auth/guards";
-import { HeadlessToolSuspension } from "../computer/headless-tools";
 import type { Database } from "../db/client";
 import {
   channelMemberships,
@@ -48,7 +48,8 @@ import {
 import { TEAM_TENANT } from "../db/schema/tenant";
 import { workItems } from "../db/schema/work";
 import type { CheckPrivateShare } from "../proactive/private-share";
-import type { TurnRunner } from "../routines/runner";
+import type { TurnRunner } from "@openbot/toolkit/run-turn";
+import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 import type { TaskProjector } from "../tasks/projector";
 import { currentTenant, runAsClaimedTenant } from "../tenant/context";
 import type { WorkQueue } from "../work/queue";
@@ -922,7 +923,7 @@ export function createGroupConversations(deps: {
     const depth = turn.depth ?? 0;
     const initiator: AuditInitiator =
       turn.fromAgentId !== undefined
-        ? { kind: "handoff", id: turn.fromAgentId }
+        ? handoffInitiator(turn.fromAgentId, PERSON_INITIATOR)
         : PERSON_INITIATOR;
     const peers = mentionedPeers(reply, bots, speaker.id);
     for (const [index, peer] of peers.entries()) {
@@ -1230,7 +1231,7 @@ export function createGroupConversations(deps: {
           exclude,
         ),
         initiator: turn.fromAgentId
-          ? { kind: "handoff", id: turn.fromAgentId }
+          ? handoffInitiator(turn.fromAgentId, PERSON_INITIATOR)
           : PERSON_INITIATOR,
       });
       await writing;

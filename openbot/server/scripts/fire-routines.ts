@@ -13,7 +13,6 @@
  * should mean something worse than that.
  */
 
-import { workOwner } from "../../shared/work-owner";
 import { loadConfig } from "../src/config";
 import { createDatabase } from "../src/db/client";
 import { reapAbandonedPipelineRuns } from "../src/pipeline/reap";
@@ -31,6 +30,7 @@ import { createTaskProjector } from "../src/tasks/projector";
 import { runAsTenant } from "../src/tenant/context";
 import { recoverInterruptedFlowRuns } from "../src/wakerflows/recovery";
 import { createWorkQueue } from "../src/work/queue";
+import { workOwner } from "@openbot/shared/work-owner";
 
 const config = loadConfig(process.env);
 

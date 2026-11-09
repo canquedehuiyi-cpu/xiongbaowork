@@ -18,7 +18,6 @@ import {
   createChannelStore,
 } from "../src/channels/routes";
 import { createThreadIdentity } from "../src/channels/thread-identity";
-import { HeadlessToolSuspension } from "../src/computer/headless-tools";
 import { createDatabase } from "../src/db/client";
 import {
   agentProfiles,
@@ -32,7 +31,8 @@ import {
   workItems,
 } from "../src/db/schema";
 import { createPrivateShareCheck } from "../src/proactive/private-share";
-import type { TurnRunner } from "../src/routines/runner";
+import type { TurnRunner } from "@openbot/toolkit/run-turn";
+import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 import { createTaskProjector } from "../src/tasks/projector";
 import { createTeamBots } from "../src/team-bots/team-bots";
 import { runAsTenant } from "../src/tenant/context";
@@ -270,7 +270,11 @@ describe("group conversations in PostgreSQL", () => {
       expect(String(calls[1]?.userMessage?.content)).toContain(
         `"speaker":"${A}"`,
       );
-      expect(calls[2]?.initiator).toEqual({ kind: "handoff", id: ada });
+      expect(calls[2]?.initiator).toEqual({
+        kind: "handoff",
+        id: ada,
+        origin: { kind: "person" },
+      });
       expect(String(calls[2]?.userMessage?.content)).toContain(
         `${A} addressed you`,
       );

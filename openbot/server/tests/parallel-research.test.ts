@@ -8,7 +8,8 @@ import {
   resolveServerUrl,
   serverCredentialKind,
 } from "../src/plugins/catalogue";
-import { type GrantedTool, grantedToolGuidance } from "../src/plugins/tools";
+import type { GrantedTool } from "@openbot/toolkit/granted-tool";
+import { grantedToolGuidance } from "../src/plugins/tools";
 
 const tool = (server: string, name: string): GrantedTool => ({
   name: `mcp__${server}__${name}`,
@@ -86,7 +87,7 @@ describe("Parallel public-web research", () => {
     const desk = parse(
       readFileSync(
         new URL(
-          "../../examples/fintech/agents/research-desk.yaml",
+          "../../examples/fintech/catalog/research-desk.yaml",
           import.meta.url,
         ),
         "utf8",
