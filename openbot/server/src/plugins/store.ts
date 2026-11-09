@@ -640,6 +640,15 @@ function storableSchema(
 }
 
 /**
+ * 当前这一版对 vendor 清单的读法，每次存下应用工具的刷新都写到这台应用的行上
+ * （`mcpServers.listingRevision`）。同一份清单记下的东西变了就加一，下次启动时，配置了 Composio
+ * 的部署会把每个 broker 应用重新列一次。
+ *
+ * 1：Composio 什么标签都没给的动作记为 `unclassified`，不再是普通写操作（迁移 0146）。
+ */
+export const LISTING_REVISION = 1;
+
+/**
  * What a vendor listed, as rows this database will actually take.
  *
  * CRITERION ONE. No two rows carry the same name, whatever the vendor listed.
@@ -4868,6 +4877,8 @@ export function createPluginStore(options: PluginStoreOptions) {
         .set({
           toolsRefreshedAt: new Date(),
           lastError: null,
+          // 按这一版的清单读法存下的；见 `relistOutdatedBrokeredApps`。
+          listingRevision: LISTING_REVISION,
           updatedAt: new Date(),
         })
         .where(eq(mcpServers.id, rowId));
@@ -5040,6 +5051,48 @@ export function createPluginStore(options: PluginStoreOptions) {
         .limit(1);
       if (held) return null;
       return runAsTenant("platform", () => this.refreshTools(row.id, userId));
+    },
+
+    /**
+     * 把 broker（Composio）的每个应用里、工具按旧版读法存下的（`mcpServers.listingRevision` 落后于
+     * {@link LISTING_REVISION}），重新列一次。回答仍然落后的行。上游 #1185。
+     *
+     * 标准：升级之后，应用的动作记成和全新安装一样，不需要谁去按「刷新工具」。
+     *
+     * 原因：0146 开始把 Composio 什么标签都没给的动作记为 `unclassified`，之前记的是普通写操作。
+     * 存下的行分不清「标了 create/update」和「什么都没标」，所以不在迁移里改写，而是重新问一次。
+     *
+     * 只有部署配置了 Composio（有 broker）才做：broker 用部署自己的 key 列清单，不需要任何人的账号；
+     * 没配置时 Composio transport 本来就列不出东西。刷新失败时版本不前进，下一次再试；在那之前存下的
+     * 工具照常可用，按原来的方式询问。跨所有租户：调用方要在平台帧里调用（`index.ts` 每一轮都这样）。
+     * 失败不在这里记日志，由调用方按行只报一次（见 `./relist`）。
+     */
+    async relistOutdatedBrokeredApps(): Promise<string[]> {
+      if (!broker) return [];
+      const outdated = await database
+        .select({ id: mcpServers.id })
+        .from(mcpServers)
+        .where(
+          and(
+            eq(mcpServers.provenance, "composio"),
+            sql`${mcpServers.listingRevision} < ${LISTING_REVISION}`,
+          ),
+        )
+        .orderBy(asc(mcpServers.id));
+      const behind: string[] = [];
+      for (const { id } of outdated) {
+        try {
+          await this.refreshTools(id);
+        } catch {
+          // 版本没有前进，下面会把它算作落后；为什么失败，见应用的 `lastError` 或下一次的重试。
+        }
+        const [after] = await database
+          .select({ revision: mcpServers.listingRevision })
+          .from(mcpServers)
+          .where(eq(mcpServers.id, id));
+        if (after && after.revision < LISTING_REVISION) behind.push(id);
+      }
+      return behind;
     },
 
     async listServers(): Promise<ServerRecord[]> {

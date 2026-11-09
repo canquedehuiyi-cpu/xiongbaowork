@@ -88,6 +88,8 @@ tests/bot-lifecycle-audit.test.ts
 tests/bot-lifecycle-routes.test.ts
 tests/bot-lifecycle-watcher.test.ts
 tests/bot-lifecycle.integration.test.ts
+tests/brokered-relist.integration.test.ts
+tests/brokered-relist.test.ts
 tests/builtin-routines.test.ts
 tests/bunfig-preload.test.ts
 tests/catalogue-bot-grants.integration.test.ts

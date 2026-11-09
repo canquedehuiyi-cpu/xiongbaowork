@@ -192,8 +192,12 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   // touches no tenant's rows. The fourth is the boot refresh of OpenBot's own apps' saved tools
   // (`refreshOwnListings`, upstream #1130): not awaited, it reads every `mcp_servers` row and rewrites
   // the `mcp_tools` of a Routines, Google Drive or 百度网盘 row whose saved list differs from this
-  // build's code, each stamped with its own server's tenant. No request reaches it.
-  "src/index.ts": { 'runAsTenant("platform"': 4 },
+  // build's code, each stamped with its own server's tenant. No request reaches it. The fifth is each
+  // round of the broker relist (`relistOutdatedBrokeredApps`, upstream #1185), started only when
+  // Composio is configured: it re-lists the Composio apps whose `listing_revision` is behind, through
+  // the ordinary `refreshTools`, each app's tools stamped with its own row's tenant. No request
+  // reaches it either.
+  "src/index.ts": { 'runAsTenant("platform"': 5 },
   "src/memory/ingestion.ts": { 'runAsTenant("platform"': 2 },
   "src/pipeline/reap.ts": { 'runAsTenant("platform"': 1 },
   // Which run holds an approval (I3), and WF7's restart sweep for parents waiting on an ended child;
