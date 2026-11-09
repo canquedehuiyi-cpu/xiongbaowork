@@ -326,7 +326,9 @@ function WorkbenchShell({
                * the page's verbs at the bottom right. 164px tall on a desktop, the eyebrow 25px
                * under the bar, as the reference measures it.
                */
-              "relative isolate flex flex-wrap items-end justify-between gap-x-[18px] gap-y-3 pt-[20px] pb-[16px] md:min-h-[164px] md:pt-[25px] md:pb-[23px]",
+              "relative isolate flex flex-wrap items-end justify-between gap-x-[18px] gap-y-3 pt-[20px] pb-[16px] md:pt-[25px] md:pb-[23px]",
+              // The 164px open heading is the core pages'; a compact one only takes the room it needs.
+              eyebrow ? "md:min-h-[164px]" : null,
               art ? "md:min-h-[206px] md:items-center" : null,
             )}
           >
@@ -434,7 +436,7 @@ export function PageRows({
      */
     <div
       className={cn(
-        "mt-4 overflow-hidden rounded-lg border border-border bg-card dark:border-transparent",
+        "mt-4 overflow-hidden rounded-[14px] border border-border bg-card shadow-[inset_0_1px_0_rgb(255_255_255/0.03)]",
         "[&_[data-slot=item]]:rounded-none",
         className,
       )}

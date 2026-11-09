@@ -9,12 +9,6 @@ import {
 } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Fragment } from "react";
-import {
-  PageEmpty,
-  PageRows,
-  PageSection,
-} from "@/components/layout/page-shell";
 import { Button } from "@/components/ui/button";
 import {
   Item,
@@ -24,7 +18,6 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
-import { Separator } from "@/components/ui/separator";
 import {
   cancelFollowUpMutationOptions,
   stopHandoffMutationOptions,
@@ -36,6 +29,12 @@ import {
 } from "@/lib/bot-lifecycle/queries";
 import { relativeTime } from "@/lib/relative-time";
 import { queryClient } from "@/query-client";
+import {
+  ProfileAlert,
+  ProfileEmpty,
+  ProfilePanel,
+  ProfileSection,
+} from "./profile-kit";
 
 const ICONS: Record<ActivityKind, typeof IconBell> = {
   routine: IconCalendarRepeat,
@@ -135,9 +134,12 @@ function ActivityRow({
         <ItemTitle>{item.title}</ItemTitle>
         <ItemDescription>
           {KIND_LABEL[item.kind]} ·{" "}
-          {item.needsYou
-            ? "等你处理"
-            : (STATUS_LABEL[item.status] ?? item.status)}
+          {item.needsYou ? (
+            // The one word on this page that asks for the person: said, and in the signal red.
+            <span className="font-medium text-signal-ink">等你处理</span>
+          ) : (
+            (STATUS_LABEL[item.status] ?? item.status)
+          )}
           {when ? ` · ${when}` : ""}
           {item.detail ? ` · ${item.detail}` : ""}
         </ItemDescription>
@@ -183,20 +185,26 @@ function ActivitySection({
   title: string;
 }) {
   return (
-    <PageSection title={title}>
+    <ProfileSection
+      action={
+        items.length > 0 ? (
+          <span className="font-mono text-[11px] text-muted-foreground tabular-nums">
+            {items.length} 项
+          </span>
+        ) : null
+      }
+      title={title}
+    >
       {items.length === 0 ? (
-        <PageEmpty>{empty}</PageEmpty>
+        <ProfileEmpty>{empty}</ProfileEmpty>
       ) : (
-        <PageRows>
-          {items.map((item, index) => (
-            <Fragment key={item.id}>
-              {index > 0 ? <Separator /> : null}
-              <ActivityRow agentId={agentId} item={item} />
-            </Fragment>
+        <ProfilePanel>
+          {items.map((item) => (
+            <ActivityRow agentId={agentId} item={item} key={item.id} />
           ))}
-        </PageRows>
+        </ProfilePanel>
       )}
-    </PageSection>
+    </ProfileSection>
   );
 }
 
@@ -206,11 +214,9 @@ export function BotActivitySections({ agentId }: { agentId: string }) {
   if (activity.isPending) return null;
   if (activity.error)
     return (
-      <PageSection title="动态">
-        <p className="mt-4 text-destructive text-sm" role="alert">
-          读不到这位员工的动态。
-        </p>
-      </PageSection>
+      <ProfileSection title="动态">
+        <ProfileAlert>读不到这位员工的动态。</ProfileAlert>
+      </ProfileSection>
     );
   return (
     <>

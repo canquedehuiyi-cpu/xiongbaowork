@@ -19,7 +19,12 @@ function RouteComponent() {
   return (
     <SidebarShell width="300px">
       <AdminSidebar />
-      <main className="flex-1">
+      {/*
+       * `min-w-0`: a flex item will not shrink below its content by default, so a wide table (the
+       * audit log) used to stretch the whole pane past a phone's width instead of scrolling inside
+       * its own panel.
+       */}
+      <main className="min-w-0 flex-1">
         <Outlet />
       </main>
     </SidebarShell>

@@ -7,8 +7,7 @@ import {
 } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Fragment, useState } from "react";
-import { PageRows, PageSection } from "@/components/layout/page-shell";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -28,7 +27,6 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
-import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import type { AgentProfile } from "@/lib/agents/queries";
 import {
@@ -47,6 +45,7 @@ import {
   updateRoutingQueryOptions,
 } from "@/lib/bot-lifecycle/queries";
 import { queryClient } from "@/query-client";
+import { ProfileAlert, ProfilePanel, ProfileSection } from "./profile-kit";
 
 const NOTIFY_LABEL: Record<BotNotify, string> = {
   all: "全部",
@@ -76,7 +75,9 @@ const TRANSPORTS: { id: UpdateTransport; label: string }[] = [
   { id: "sms", label: "短信" },
 ];
 
-const selectClass = "h-8 rounded-md border bg-background px-2 text-sm";
+/** The workbench's 32px select (LabeledSelect's face), kept native for its keyboard and a11y. */
+const selectClass =
+  "h-[32px] max-w-full rounded-[9px] border border-border bg-background px-[9px] text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-ring/60 disabled:opacity-60";
 
 /** Each count the notice lists, in the words the person reads, skipping the kinds with nothing. */
 function resetLines(plan: ResetPlan): string[] {
@@ -187,69 +188,62 @@ export function UpdateRoutingSection() {
   const routing = useQuery(updateRoutingQueryOptions());
   const save = useMutation(setUpdateRoutingMutationOptions(queryClient));
   return (
-    <PageSection
+    <ProfileSection
       description="你没在看时，每类消息发到哪里。网页上始终显示全部。对你所有的员工生效。"
       title="消息发到哪里"
     >
       {routing.isPending ? null : routing.error ? (
-        <p className="mt-4 text-destructive text-sm" role="alert">
-          读不到你的消息去向设置。
-        </p>
+        <ProfileAlert>读不到你的消息去向设置。</ProfileAlert>
       ) : (
-        <PageRows>
-          {(Object.keys(KIND_LABEL) as UpdateKind[]).map((kind, index) => {
+        <ProfilePanel>
+          {(Object.keys(KIND_LABEL) as UpdateKind[]).map((kind) => {
             const current = routing.data[kind];
             const allowed = (transport: UpdateTransport) =>
               current === "all" || current.includes(transport);
             return (
-              <Fragment key={kind}>
-                {index > 0 ? <Separator /> : null}
-                <Item size="sm">
-                  <ItemMedia variant="icon">
-                    <IconRoute />
-                  </ItemMedia>
-                  <ItemContent>
-                    <ItemTitle>{KIND_LABEL[kind].title}</ItemTitle>
-                    <ItemDescription>
-                      {KIND_LABEL[kind].description}
-                    </ItemDescription>
-                  </ItemContent>
-                  <ItemFooter className="gap-4 pl-8">
-                    {TRANSPORTS.map((transport) => (
-                      <div
-                        className="flex items-center gap-2 text-sm"
-                        key={transport.id}
-                      >
-                        <Switch
-                          aria-label={`${KIND_LABEL[kind].title}：${transport.label}`}
-                          checked={allowed(transport.id)}
-                          disabled={save.isPending}
-                          onCheckedChange={(checked) => {
-                            const next = TRANSPORTS.map((t) => t.id).filter(
-                              (id) =>
-                                id === transport.id ? checked : allowed(id),
-                            );
-                            save.mutate({
-                              kind,
-                              transports:
-                                next.length === TRANSPORTS.length
-                                  ? "all"
-                                  : next,
-                            });
-                          }}
-                          size="sm"
-                        />
-                        {transport.label}
-                      </div>
-                    ))}
-                  </ItemFooter>
-                </Item>
-              </Fragment>
+              <Item key={kind} size="sm">
+                <ItemMedia variant="icon">
+                  <IconRoute />
+                </ItemMedia>
+                <ItemContent>
+                  <ItemTitle>{KIND_LABEL[kind].title}</ItemTitle>
+                  <ItemDescription>
+                    {KIND_LABEL[kind].description}
+                  </ItemDescription>
+                </ItemContent>
+                <ItemFooter className="flex-wrap justify-start gap-x-[16px] gap-y-[8px] pl-8">
+                  {TRANSPORTS.map((transport) => (
+                    <div
+                      className="flex items-center gap-[7px] text-[13px]"
+                      key={transport.id}
+                    >
+                      <Switch
+                        aria-label={`${KIND_LABEL[kind].title}：${transport.label}`}
+                        checked={allowed(transport.id)}
+                        disabled={save.isPending}
+                        onCheckedChange={(checked) => {
+                          const next = TRANSPORTS.map((t) => t.id).filter(
+                            (id) =>
+                              id === transport.id ? checked : allowed(id),
+                          );
+                          save.mutate({
+                            kind,
+                            transports:
+                              next.length === TRANSPORTS.length ? "all" : next,
+                          });
+                        }}
+                        size="sm"
+                      />
+                      {transport.label}
+                    </div>
+                  ))}
+                </ItemFooter>
+              </Item>
             );
           })}
-        </PageRows>
+        </ProfilePanel>
       )}
-    </PageSection>
+    </ProfileSection>
   );
 }
 
@@ -276,13 +270,11 @@ export function BotControls({ agent }: { agent: AgentProfile }) {
 
   return (
     <>
-      <PageSection title="对你">
+      <ProfileSection title="对你">
         {lifecycle.isPending ? null : lifecycle.error ? (
-          <p className="mt-4 text-destructive text-sm" role="alert">
-            读不到这位员工的状态。
-          </p>
+          <ProfileAlert>读不到这位员工的状态。</ProfileAlert>
         ) : (
-          <PageRows>
+          <ProfilePanel>
             <Item size="sm">
               <ItemMedia variant="icon">
                 <IconPlayerPause />
@@ -306,7 +298,6 @@ export function BotControls({ agent }: { agent: AgentProfile }) {
                 />
               </ItemActions>
             </Item>
-            <Separator />
             <Item size="sm">
               <ItemMedia variant="icon">
                 <IconBell />
@@ -339,37 +330,33 @@ export function BotControls({ agent }: { agent: AgentProfile }) {
               </ItemActions>
             </Item>
             {permission === "default" ? (
-              <>
-                <Separator />
-                <Item size="sm">
-                  <ItemMedia variant="icon">
-                    <IconBell />
-                  </ItemMedia>
-                  <ItemContent>
-                    <ItemTitle>浏览器通知</ItemTitle>
-                    <ItemDescription>
-                      这个浏览器里是关着的。打开后，员工需要你时会提醒你。
-                    </ItemDescription>
-                  </ItemContent>
-                  <ItemActions>
-                    <Button
-                      onClick={async () => {
-                        try {
-                          setPermission(await Notification.requestPermission());
-                        } catch {
-                          setPermission("unsupported");
-                        }
-                      }}
-                      size="sm"
-                      variant="outline"
-                    >
-                      打开
-                    </Button>
-                  </ItemActions>
-                </Item>
-              </>
+              <Item size="sm">
+                <ItemMedia variant="icon">
+                  <IconBell />
+                </ItemMedia>
+                <ItemContent>
+                  <ItemTitle>浏览器通知</ItemTitle>
+                  <ItemDescription>
+                    这个浏览器里是关着的。打开后，员工需要你时会提醒你。
+                  </ItemDescription>
+                </ItemContent>
+                <ItemActions>
+                  <Button
+                    onClick={async () => {
+                      try {
+                        setPermission(await Notification.requestPermission());
+                      } catch {
+                        setPermission("unsupported");
+                      }
+                    }}
+                    size="sm"
+                    variant="outline"
+                  >
+                    打开
+                  </Button>
+                </ItemActions>
+              </Item>
             ) : null}
-            <Separator />
             <Item
               render={<Link to="/channel/new" search={{ agent: agent.id }} />}
               size="sm"
@@ -382,7 +369,6 @@ export function BotControls({ agent }: { agent: AgentProfile }) {
                 <ItemDescription>开始一段对话。</ItemDescription>
               </ItemContent>
             </Item>
-            <Separator />
             <Item
               render={
                 <button onClick={() => setResetOpen(true)} type="button" />
@@ -399,9 +385,9 @@ export function BotControls({ agent }: { agent: AgentProfile }) {
                 </ItemDescription>
               </ItemContent>
             </Item>
-          </PageRows>
+          </ProfilePanel>
         )}
-      </PageSection>
+      </ProfileSection>
 
       <ResetDialog agent={agent} onOpenChange={setResetOpen} open={resetOpen} />
     </>

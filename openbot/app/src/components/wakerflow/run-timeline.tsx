@@ -74,19 +74,22 @@ export function RunTimeline(props: {
   }, [load, version]);
 
   return (
-    <section aria-label="运行时间线" className="flex flex-col gap-1 text-xs">
-      <h4 className="font-medium text-sm">时间线</h4>
+    <section
+      aria-label="运行时间线"
+      className="flex flex-col gap-[6px] text-[12px]"
+    >
+      <h4 className="font-semibold text-[13px]">时间线</h4>
       {events.length === 0 && !loading && !failure ? (
         <p className="text-muted-foreground">还没有记录。</p>
       ) : null}
-      <ul className="flex flex-col gap-1">
+      <ul className="flex flex-col gap-[3px] border-border border-l pl-[10px]">
         {events.map((event) => (
           <li
             className="flex flex-row gap-2"
             data-event-type={event.type}
             key={event.sequence}
           >
-            <span className="shrink-0 text-muted-foreground tabular-nums">
+            <span className="shrink-0 font-mono text-[11px] text-faint tabular-nums leading-[18px]">
               {timeOf(event.createdAt)}
             </span>
             <span>{runEventLabel(event)}</span>
@@ -94,7 +97,7 @@ export function RunTimeline(props: {
         ))}
       </ul>
       {failure ? (
-        <p className="text-destructive" role="alert">
+        <p className="text-signal-ink" role="alert">
           {failure}
         </p>
       ) : null}

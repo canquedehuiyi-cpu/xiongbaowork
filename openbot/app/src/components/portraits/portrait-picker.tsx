@@ -115,7 +115,7 @@ export function PortraitPicker({
                   <button
                     aria-pressed={selected}
                     className={cn(
-                      "flex flex-col items-center gap-1 rounded-lg p-1.5 text-[12px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/60 disabled:opacity-50",
+                      "flex flex-col items-center gap-1 rounded-[12px] p-1.5 text-[12px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/60 disabled:opacity-50",
                       selected
                         ? "bg-accent text-foreground ring-1 ring-signal"
                         : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",

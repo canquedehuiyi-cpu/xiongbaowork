@@ -186,6 +186,13 @@ const AGENTS: AgentProfile[] = [
     mine: false,
     canManage: true,
   }),
+  // The person's own 分身 (`AVATAR_SOURCES.agentId`), as docs/design/ios-studio shows it on the roster.
+  agent({
+    id: "agent-avatar",
+    name: "我的分身",
+    title: "个人分身",
+    roleDescription: "收集、整理和跟进与你有关的工作。",
+  }),
 ];
 
 /** The switched-off coworkers (`GET /api/agents?hidden=true`). */
@@ -1937,6 +1944,13 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
     (c) =>
       ok({
         portraits: list(c, [
+          {
+            kind: "coworker",
+            id: "agent-avatar",
+            preset: "naughty",
+            imageUrl: null,
+            updatedAt: "2026-11-07T08:00:00.000Z",
+          },
           {
             kind: "coworker",
             id: "agent-support",

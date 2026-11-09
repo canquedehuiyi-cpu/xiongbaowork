@@ -184,6 +184,13 @@ function PeoplePage() {
                       >
                         {person.revoked ? "恢复" : "移除"}
                       </Button>
+                      {/* The switch's name, said on screen too; its accessible name stays per person. */}
+                      <span
+                        aria-hidden="true"
+                        className="text-[12px] text-muted-foreground"
+                      >
+                        管理员
+                      </span>
                       <Switch
                         aria-label={`管理员：${person.email}`}
                         checked={person.role === "admin"}

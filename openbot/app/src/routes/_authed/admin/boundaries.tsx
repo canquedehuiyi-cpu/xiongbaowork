@@ -154,11 +154,11 @@ function BoundariesPage() {
             <Button
               key={mode}
               aria-pressed={policy.mode === mode}
-              className={policy.mode === mode ? "bg-foreground/5" : undefined}
               disabled={saving}
               onClick={() => void save({ ...policy, mode })}
               size="sm"
-              variant="outline"
+              /* The fill is the state, as on every other set of switches in the app. */
+              variant={policy.mode === mode ? "default" : "outline"}
             >
               {mode === "enforce" ? "拦下动作" : "记录并放行"}
             </Button>
@@ -194,10 +194,10 @@ function BoundariesPage() {
             没有规则。每个动作都会放行并记录。
           </p>
         ) : (
-          <ul className="mt-2 divide-y divide-border rounded-md border border-border">
+          <ul className="mt-3 divide-y divide-border overflow-hidden rounded-[14px] border border-border bg-card shadow-[inset_0_1px_0_rgb(255_255_255/0.03)]">
             {policy.deny.map((rule) => (
               <li
-                className="flex items-center justify-between gap-4 px-3 py-2"
+                className="flex items-center justify-between gap-4 px-4 py-2"
                 key={rule}
               >
                 <code className="min-w-0 break-all font-mono text-xs">
@@ -221,13 +221,13 @@ function BoundariesPage() {
           </ul>
         )}
 
-        <div className="mt-3 flex gap-2">
+        <div className="mt-3 flex flex-wrap gap-2">
           <Input
             aria-label="一条用 CEL 写的规则"
             autoCapitalize="off"
             autoCorrect="off"
             spellCheck={false}
-            className="min-w-0 flex-1 font-mono text-xs"
+            className="min-w-[min(100%,240px)] flex-1 font-mono text-xs"
             onChange={(event) => {
               setDraft(event.target.value);
               setSaved(false);
@@ -286,13 +286,23 @@ function BoundariesPage() {
         description="兜底规则，作用于禁止列表没拦住的一切。它不是摆设：这里为空就表示什么都不允许，所以清空它的部署会拒绝所有动作，而不是放行所有动作。"
         title="除此之外它可以"
       >
-        <ul className="mt-2 space-y-1">
-          {policy.allow.map((rule) => (
-            <li className="font-mono text-xs text-muted-foreground" key={rule}>
-              {rule === "true" ? "true，即上面没拒绝的都可以" : rule}
-            </li>
-          ))}
-        </ul>
+        {policy.allow.length === 0 ? (
+          /* An empty bordered box would read as "failed to load"; this list being empty is a decision. */
+          <p className="mt-2 text-sm text-muted-foreground">
+            没有兜底规则：禁止列表没拦住的动作也一律拒绝。
+          </p>
+        ) : (
+          <ul className="mt-3 divide-y divide-border overflow-hidden rounded-[14px] border border-border bg-card shadow-[inset_0_1px_0_rgb(255_255_255/0.03)]">
+            {policy.allow.map((rule) => (
+              <li
+                className="break-all px-4 py-[9px] font-mono text-muted-foreground text-xs"
+                key={rule}
+              >
+                {rule === "true" ? "true，即上面没拒绝的都可以" : rule}
+              </li>
+            ))}
+          </ul>
+        )}
       </PageSection>
 
       <p className="mt-8 text-muted-foreground text-xs">
@@ -333,7 +343,7 @@ function DryRunResult({ report }: { report: DryRunReport }) {
           : `用最近 ${report.scanned} 条操作记录测试：这条规则会拒绝其中 ${report.wouldRefuse} 条。`}
       </p>
       {report.changes.length > 0 ? (
-        <ul className="mt-2 divide-y divide-border rounded-md border border-border">
+        <ul className="mt-2 divide-y divide-border overflow-hidden rounded-[12px] border border-border bg-card">
           {report.changes.map((change) => (
             <li className="px-3 py-2" key={change.id}>
               <p className="text-xs">

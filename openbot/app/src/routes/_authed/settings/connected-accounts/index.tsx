@@ -3,7 +3,6 @@ import {
   IconBrandNotion,
   IconCheck,
   IconPlug,
-  IconSearch,
 } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -14,12 +13,8 @@ import {
   PageShell,
 } from "@/components/layout/page-shell";
 import { RowMark } from "@/components/layout/row-mark";
+import { SearchBox } from "@/components/layout/search-box";
 import { PluginLogo } from "@/components/plugins/plugin-logo";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-} from "@/components/ui/input-group";
 import {
   Item,
   ItemActions,
@@ -213,17 +208,13 @@ function RouteComponent() {
           <p className="mt-5 text-xs text-muted-foreground">
             已连接 {connectedCount} 个 · 共 {accounts.length} 个可用
           </p>
-          <InputGroup className="mt-3 h-9 border-transparent bg-muted/60 shadow-none dark:bg-muted/60">
-            <InputGroupAddon>
-              <IconSearch aria-hidden="true" className="size-4" />
-            </InputGroupAddon>
-            <InputGroupInput
-              aria-label="搜索应用"
-              placeholder="搜索应用"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-          </InputGroup>
+          <SearchBox
+            className="mt-3 h-[36px] max-w-[420px]"
+            label="搜索应用"
+            onValueChange={setSearch}
+            placeholder="搜索应用"
+            value={search}
+          />
           {matching.length === 0 ? (
             <p className="mt-8 text-sm text-muted-foreground" role="status">
               没有匹配“{search.trim()}”的应用。
@@ -237,14 +228,17 @@ function RouteComponent() {
                   key={section.title}
                   aria-label={section.title}
                 >
-                  <h2 className="mb-3 px-2 text-xs font-medium text-muted-foreground">
+                  <h2 className="mb-3 font-medium text-[12px] text-muted-foreground">
                     {section.title}
+                    <span className="ml-1.5 font-mono text-faint">
+                      {section.accounts.length}
+                    </span>
                   </h2>
-                  <div className="grid grid-cols-1 gap-x-6 gap-y-2 @min-[36rem]:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-[11px] @min-[36rem]:grid-cols-2">
                     {section.accounts.map((account) => (
                       <Item
                         key={account.key}
-                        className="min-w-0 flex-nowrap gap-3 px-2 py-3"
+                        className="min-w-0 flex-nowrap gap-3 rounded-[14px] border border-border bg-card px-[13px] py-3 shadow-[inset_0_1px_0_rgb(255_255_255/0.03)] hover:border-ring/50"
                         data-testid={`account-${account.key}`}
                         render={
                           <Link
@@ -276,7 +270,7 @@ function RouteComponent() {
                               已连接
                             </span>
                           ) : (
-                            <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium">
+                            <span className="rounded-[9px] border border-border bg-muted px-3 py-1 font-medium text-xs">
                               连接
                             </span>
                           )}

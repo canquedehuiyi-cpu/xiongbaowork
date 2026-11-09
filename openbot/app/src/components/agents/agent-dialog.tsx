@@ -1188,7 +1188,7 @@ export function ModelItem({
             }}
             value={current}
           >
-            <SelectTrigger aria-label="模型" className="w-44">
+            <SelectTrigger aria-label="模型" className="w-56 max-w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

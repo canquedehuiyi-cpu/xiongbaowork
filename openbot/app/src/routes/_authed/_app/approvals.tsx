@@ -9,6 +9,7 @@ function ApprovalsPage() {
     <PageShell
       title="审批"
       description="决定员工可以做什么，以及查看在等你的那些动作。"
+      width="workbench"
     >
       <ApprovalInbox />
     </PageShell>

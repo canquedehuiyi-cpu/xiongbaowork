@@ -89,7 +89,14 @@ function lanesOf(jumps: Edge[]): Map<Edge, number> {
   return lanes;
 }
 
-/** How a step's state is drawn: its look and the words beside it. */
+/**
+ * How a step's state is drawn: its look and the words beside it.
+ *
+ * Drawn to docs/design/ios-studio: graphite nodes on a hairline, the lines thin and grey. Red is the
+ * signal, so it marks only the step that has the run's attention — the one going now, the one
+ * waiting on a person, the one that failed. Every state also says itself in words, so none of them
+ * reads by colour alone.
+ */
 function stateLook(entry: FlowchartState | undefined): {
   key: string;
   className: string;
@@ -100,25 +107,25 @@ function stateLook(entry: FlowchartState | undefined): {
     case "done":
       return {
         key: "done",
-        className: "border-emerald-600 dark:border-emerald-400",
+        className: "border-foreground/25",
         text: "已完成",
       };
     case "running":
       return {
         key: "running",
-        className: "border-sky-600 dark:border-sky-400",
+        className: "border-signal/80",
         text: "进行中",
       };
     case "awaiting_action":
       return {
         key: "awaiting_action",
-        className: "border-amber-600 dark:border-amber-400",
+        className: "border-signal/80 bg-signal-soft",
         text: "等待处理",
       };
     case "failed":
       return {
         key: "failed",
-        className: "border-destructive text-destructive",
+        className: "border-signal bg-signal-soft text-signal-ink",
         text: "失败",
       };
     case "skipped":
@@ -147,6 +154,9 @@ function stateLook(entry: FlowchartState | undefined): {
       };
   }
 }
+
+/** The states that have the run's attention, and draw the diamond's outline red too. */
+const SIGNAL_STATES = new Set(["running", "awaiting_action", "failed"]);
 
 export function Flowchart(props: {
   steps: FlowchartStep[];
@@ -182,7 +192,7 @@ export function Flowchart(props: {
     >
       <svg
         aria-hidden="true"
-        className="absolute top-0 left-0 text-muted-foreground"
+        className="absolute top-0 left-0 text-faint"
         height={height}
         width={width}
       >
@@ -210,7 +220,7 @@ export function Flowchart(props: {
               key={`${edge.from}-${edge.to}-${edge.label ?? ""}`}
               markerEnd={`url(#${marker})`}
               stroke="currentColor"
-              strokeWidth="1.5"
+              strokeWidth="1"
             >
               <title>
                 {edge.label
@@ -232,10 +242,10 @@ export function Flowchart(props: {
           const routes = edges.filter((edge) => edge.from === index);
           const body = (
             <>
-              <span className="block truncate font-medium">
+              <span className="block truncate font-medium text-[13px]">
                 第 {index + 1} 步 · <span>{props.title(step, index)}</span>
               </span>
-              <span className="block truncate text-muted-foreground text-xs">
+              <span className="block truncate text-[11.5px] text-muted-foreground">
                 {STEP_KIND_LABEL[kind]}
                 {props.detail?.(step, index)
                   ? ` · ${props.detail(step, index)}`
@@ -250,14 +260,14 @@ export function Flowchart(props: {
               </span>
             </>
           );
-          const nodeClass = `relative flex h-full min-w-0 flex-1 flex-col justify-center rounded-md border px-3 text-left text-sm ${look.className} ${
-            selected ? "ring-2 ring-ring" : ""
+          const nodeClass = `relative flex h-full min-w-0 flex-1 flex-col justify-center rounded-[11px] border bg-card px-3 text-left text-sm shadow-[inset_0_1px_0_rgb(255_255_255/0.03)] ${look.className} ${
+            selected ? "ring-2 ring-signal/70" : ""
           }`;
           const node =
             kind === "decision" ? (
               <div
-                className={`relative flex h-full min-w-0 flex-1 flex-col justify-center px-8 text-center text-sm ${look.className.replace(/border-\S+/g, "")} ${
-                  selected ? "rounded-md ring-2 ring-ring" : ""
+                className={`relative flex h-full min-w-0 flex-1 flex-col justify-center px-8 text-center text-sm ${look.className.replace(/(?:border|bg)-\S+/g, "")} ${
+                  selected ? "rounded-[11px] ring-2 ring-signal/70" : ""
                 }`}
                 data-shape="diamond"
               >
@@ -269,19 +279,19 @@ export function Flowchart(props: {
                 >
                   <polygon
                     className={
-                      look.key === "failed"
-                        ? "text-destructive"
+                      SIGNAL_STATES.has(look.key)
+                        ? "text-signal"
                         : look.key === "done"
-                          ? "text-emerald-600 dark:text-emerald-400"
+                          ? "text-foreground/25"
                           : undefined
                     }
-                    fill="var(--background)"
+                    fill="var(--card)"
                     points="50,1 99,50 50,99 1,50"
                     stroke="currentColor"
                     strokeDasharray={
                       look.key === "skipped-branch" ? "4 3" : undefined
                     }
-                    strokeWidth="1.5"
+                    strokeWidth="1"
                     vectorEffect="non-scaling-stroke"
                   />
                 </svg>
@@ -290,7 +300,7 @@ export function Flowchart(props: {
             ) : kind === "confirm" ? (
               // A question to a person: a bubble, not a coworker's box.
               <div
-                className={`${nodeClass.replace("rounded-md", "rounded-3xl")} border-double pl-10`}
+                className={`${nodeClass.replace("rounded-[11px]", "rounded-[22px]")} border-double pl-10`}
                 data-shape="bubble"
                 style={{ borderWidth: 3 }}
               >
@@ -321,7 +331,7 @@ export function Flowchart(props: {
                   <button
                     aria-label={`第 ${index + 1} 步：${props.title(step, index)}`}
                     aria-pressed={selected}
-                    className="flex min-w-0 flex-1 flex-row"
+                    className="flex min-w-0 flex-1 flex-row rounded-[11px] outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
                     onClick={() => props.onSelect?.(step.id)}
                     type="button"
                   >
@@ -333,7 +343,7 @@ export function Flowchart(props: {
                 {kind === "decision" ? (
                   <ul
                     aria-label={`第 ${index + 1} 步的分支`}
-                    className="flex w-2/5 min-w-0 flex-col justify-center overflow-y-auto text-xs"
+                    className="flex w-2/5 min-w-0 flex-col justify-center overflow-y-auto text-[11.5px] text-muted-foreground"
                   >
                     {routes.map((edge) => (
                       <li className="truncate" key={`${edge.label}-${edge.to}`}>
@@ -344,7 +354,7 @@ export function Flowchart(props: {
                 ) : null}
               </div>
               <div
-                className="flex flex-row items-center gap-2 pl-6 text-muted-foreground text-xs"
+                className="flex flex-row items-center gap-2 pl-6 text-[11.5px] text-faint"
                 style={{ height: ROW - NODE }}
               >
                 {onward.length > 0 ? (
@@ -353,7 +363,7 @@ export function Flowchart(props: {
                       d={`M 6 2 V ${ROW - NODE - 2}`}
                       markerEnd={`url(#${marker})`}
                       stroke="currentColor"
-                      strokeWidth="1.5"
+                      strokeWidth="1"
                     />
                   </svg>
                 ) : null}
@@ -367,7 +377,7 @@ export function Flowchart(props: {
           data-step={WAKERFLOW_END}
           style={{ height: NODE }}
         >
-          <span className="rounded-full border border-border px-4 py-1 text-muted-foreground text-xs">
+          <span className="rounded-full border border-border bg-card px-4 py-1 font-mono text-[11px] text-muted-foreground tracking-[0.06em]">
             结束
           </span>
         </div>

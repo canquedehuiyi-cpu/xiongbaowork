@@ -1,9 +1,7 @@
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { WakerFlowInput } from "@/lib/wakerflows";
-
-const selectClass =
-  "border-input bg-background rounded-md border px-2 py-1 text-sm";
+import { SELECT_CLASS } from "./flow-ui";
 
 /**
  * The inputs of one WakerFlow as a form (WF8), shared by the run panel and the automation form.
@@ -62,7 +60,7 @@ export function FlowInputFields(props: {
             control = (
               <select
                 {...common}
-                className={selectClass}
+                className={SELECT_CLASS}
                 onChange={(event) => onChange(input.key, event.target.value)}
                 value={value}
               >
@@ -104,17 +102,17 @@ export function FlowInputFields(props: {
         }
         return (
           <div className="flex flex-col gap-1" key={input.key}>
-            <label className="font-medium text-sm" htmlFor={id}>
+            <label className="font-medium text-[13px]" htmlFor={id}>
               {label}
             </label>
             {control}
             {input.description ? (
-              <p className="text-muted-foreground text-xs" id={hint}>
+              <p className="text-[12px] text-muted-foreground" id={hint}>
                 {input.description}
               </p>
             ) : null}
             {problems[input.key] ? (
-              <p className="text-destructive text-xs" role="alert">
+              <p className="text-[12px] text-signal-ink" role="alert">
                 {problems[input.key]}
               </p>
             ) : null}

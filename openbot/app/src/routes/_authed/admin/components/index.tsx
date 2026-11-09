@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { StatusBadge } from "@/components/admin/admin-kit";
 import { AdminComponentPreview } from "@/components/component-preview";
 import { PageShell } from "@/components/layout/page-shell";
 import { SettingsItemBackground } from "@/components/settings/background";
@@ -11,7 +12,6 @@ import {
 } from "@/components/ui/empty";
 import { componentDisplayTitle } from "@/lib/components/display-title";
 import { componentListQueryOptions } from "@/lib/components/queries";
-import { cn } from "@/lib/utils";
 
 /**
  * The gallery of compiled components. Governance for any one of them is its own page, because a
@@ -49,7 +49,7 @@ function RouteComponent() {
           </EmptyHeader>
         </Empty>
       ) : (
-        <div className="mx-auto mt-12 grid w-full max-w-2xl grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="mt-10 grid w-full grid-cols-1 gap-[11px] sm:grid-cols-2">
           {components.data?.map((component) => (
             /*
              * A real link rather than a button, so a component can be opened in a new tab the way
@@ -57,23 +57,23 @@ function RouteComponent() {
              * the preview is `aria-hidden`, so nothing inside it reaches the accessible name.
              */
             <Link
-              className="flex aspect-square flex-col overflow-hidden rounded-lg border border-border bg-card text-left outline-none transition-colors hover:border-ring focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              className="flex aspect-square flex-col overflow-hidden rounded-[14px] border border-border bg-card text-left shadow-[inset_0_1px_0_rgb(255_255_255/0.03)] outline-none transition-colors hover:border-ring focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
               data-testid={`component-${component.name}`}
               key={component.name}
               params={{ name: component.name }}
               to="/admin/components/$name"
             >
               <div className="min-h-28 p-4">
-                <div className="flex flex-row items-center gap-2">
-                  <div
-                    className={cn("inline-block size-1.5 rounded-full", {
-                      "bg-muted-foreground": !component.published,
-                      "bg-success": component.published,
-                    })}
-                  />
+                <div className="flex flex-row items-center justify-between gap-2">
                   <h4 className="line-clamp-1 font-medium text-sm">
                     {componentDisplayTitle(component)}
                   </h4>
+                  {/* Published or not, in words: the dot this used to be said it in colour only. */}
+                  <StatusBadge
+                    tone={component.published ? "positive" : "muted"}
+                  >
+                    {component.published ? "已发布" : "未发布"}
+                  </StatusBadge>
                 </div>
                 <p className="mt-2 line-clamp-2 text-muted-foreground text-xs">
                   {component.draftDescription}
@@ -88,7 +88,7 @@ function RouteComponent() {
                  * `slice` crops it to whatever shape it is given instead.
                  */}
                 <div className="absolute top-0 left-0 h-full w-full p-3">
-                  <SettingsItemBackground className="h-full w-full rounded-md" />
+                  <SettingsItemBackground className="h-full w-full rounded-[9px]" />
                 </div>
                 <div className="absolute top-0 left-0 z-10 h-full w-full p-3">
                   <AdminComponentPreview

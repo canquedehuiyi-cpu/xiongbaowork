@@ -143,7 +143,11 @@ function RouteComponent() {
    * whole of its state defaulted to "you have never connected this".
    */
   if (plugins.isPending || connections.isPending) {
-    return <PageShell title="账号">{null}</PageShell>;
+    return (
+      <PageShell width="workbench" className="max-w-4xl" title="账号">
+        {null}
+      </PageShell>
+    );
   }
 
   const back = {
@@ -169,7 +173,12 @@ function RouteComponent() {
    */
   if (connections.error) {
     return (
-      <PageShell backButton={back} title={server?.title ?? key}>
+      <PageShell
+        width="workbench"
+        className="max-w-4xl"
+        backButton={back}
+        title={server?.title ?? key}
+      >
         <p className="mt-12 text-destructive text-sm" role="alert">
           读不到你是否连接过这个账号，所以这里什么都不显示，免得显示错的。请刷新页面；如果一直这样，请告诉管理员。
         </p>
@@ -184,7 +193,12 @@ function RouteComponent() {
    */
   if (!plugins.data) {
     return (
-      <PageShell backButton={back} title={key}>
+      <PageShell
+        width="workbench"
+        className="max-w-4xl"
+        backButton={back}
+        title={key}
+      >
         <p className="mt-12 text-destructive text-sm" role="alert">
           读不到这个连接器，所以这里什么都不显示，免得显示错的。请刷新页面；如果一直这样，请告诉管理员。
         </p>
@@ -207,6 +221,8 @@ function RouteComponent() {
 
     return (
       <PageShell
+        width="workbench"
+        className="max-w-4xl"
         backButton={back}
         description="通过 Composio 连接，账号由它保管，所以员工只能看到你能看到的东西。"
         title={server.title}
@@ -247,6 +263,8 @@ function RouteComponent() {
   if (entry?.auth !== "user-oauth") {
     return (
       <PageShell
+        width="workbench"
+        className="max-w-4xl"
         backButton={back}
         description="这不是需要你自己连接的服务。"
         title={entry?.title ?? key}
@@ -262,6 +280,8 @@ function RouteComponent() {
 
   return (
     <PageShell
+      width="workbench"
+      className="max-w-4xl"
       backButton={back}
       description={entry.summary}
       title={entry.title}

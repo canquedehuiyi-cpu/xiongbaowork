@@ -25,6 +25,7 @@ import {
   type WakerFlow,
   wakerFlowKeys,
 } from "@/lib/wakerflows";
+import { CARD_FACE } from "./flow-ui";
 
 const when = (iso: string) =>
   new Date(iso).toLocaleString("zh-CN", {
@@ -142,11 +143,11 @@ export function ShareDialog(props: { flow: WakerFlow }) {
           </DialogHeader>
           <DialogBody>
             {link ? (
-              <div className="grid gap-2 rounded-lg border border-border bg-card p-3">
-                <p className="font-medium">
+              <div className="grid gap-2 rounded-[13px] border border-signal/40 bg-signal-soft p-3">
+                <p className="font-semibold text-[13px]">
                   现在就复制这个链接。关闭后无法再次查看。
                 </p>
-                <code className="block break-all rounded bg-foreground/5 p-2 font-mono text-xs">
+                <code className="block break-all rounded-[9px] border border-border bg-background p-2 font-mono text-[12px]">
                   {link}
                 </code>
                 <div className="flex flex-row gap-2">
@@ -161,7 +162,10 @@ export function ShareDialog(props: { flow: WakerFlow }) {
             ) : (
               <div className="grid gap-3">
                 <div className="grid gap-1">
-                  <label htmlFor={`share-days-${flow.id}`}>
+                  <label
+                    className="font-medium text-[13px]"
+                    htmlFor={`share-days-${flow.id}`}
+                  >
                     有效期（天，最长 {SHARE_MAX_DAYS} 天）
                   </label>
                   <Input
@@ -172,7 +176,10 @@ export function ShareDialog(props: { flow: WakerFlow }) {
                   />
                 </div>
                 <div className="grid gap-1">
-                  <label htmlFor={`share-uses-${flow.id}`}>
+                  <label
+                    className="font-medium text-[13px]"
+                    htmlFor={`share-uses-${flow.id}`}
+                  >
                     可导入次数（最多 {SHARE_MAX_USES} 次）
                   </label>
                   <Input
@@ -183,7 +190,7 @@ export function ShareDialog(props: { flow: WakerFlow }) {
                   />
                 </div>
                 {expiresInDays === null || maxUses === null ? (
-                  <p className="text-destructive text-xs">
+                  <p className="text-[12px] text-signal-ink">
                     有效期需在 1 到 {SHARE_MAX_DAYS} 天之间，可导入次数需在 1 到{" "}
                     {SHARE_MAX_USES} 次之间。
                   </p>
@@ -200,26 +207,39 @@ export function ShareDialog(props: { flow: WakerFlow }) {
               </div>
             )}
             {failure ? (
-              <p className="mt-3 text-destructive" role="alert">
+              <p className="mt-3 text-signal-ink" role="alert">
                 {failure}
               </p>
             ) : null}
-            <h3 className="mt-4 font-medium">已创建的链接</h3>
+            <h3 className="mt-[18px] font-semibold text-[13px]">
+              已创建的链接
+            </h3>
             {(shares.data ?? []).length === 0 ? (
-              <p className="mt-1 text-muted-foreground">还没有分享链接。</p>
+              <p className="mt-1 text-[13px] text-muted-foreground">
+                还没有分享链接。
+              </p>
             ) : (
-              <ul aria-label="分享链接" className="mt-1 flex flex-col gap-2">
+              <ul
+                aria-label="分享链接"
+                className={`${CARD_FACE} mt-[7px] flex flex-col divide-y divide-border overflow-hidden`}
+              >
                 {(shares.data ?? []).map((share) => (
                   <li
-                    className="flex flex-row items-center justify-between gap-2 rounded-md bg-muted px-3 py-2"
+                    className="flex flex-row items-center justify-between gap-2 px-3 py-[9px] text-[13px]"
                     key={share.id}
                   >
-                    <div>
-                      <p>
+                    <div className="min-w-0">
+                      <p
+                        className={
+                          share.status === "active"
+                            ? undefined
+                            : "text-muted-foreground"
+                        }
+                      >
                         {SHARE_STATUS_LABEL[share.status]} · 已导入 {share.uses}
                         /{share.maxUses} 次 · 剩余 {share.remainingUses} 次
                       </p>
-                      <p className="text-muted-foreground text-xs">
+                      <p className="text-[11.5px] text-faint tabular-nums">
                         {when(share.createdAt)} 创建 · {when(share.expiresAt)}{" "}
                         到期
                       </p>

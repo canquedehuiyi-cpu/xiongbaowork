@@ -2,6 +2,7 @@ import { IconRefresh } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
+import { TablePanel } from "@/components/admin/admin-kit";
 import {
   PageEmpty,
   PageSection,
@@ -101,23 +102,28 @@ function AuditPage() {
           ))}
         </div>
 
-        {events.isPending ? null : events.isError ? (
+        {events.isPending ? (
+          <p className="mt-4 text-muted-foreground text-sm" role="status">
+            正在读取审计记录…
+          </p>
+        ) : events.isError ? (
           <p className="mt-4 text-destructive text-sm" role="alert">
             读不到审计记录。
           </p>
         ) : rows.length === 0 ? (
           <PageEmpty>这个筛选下还没有事件。</PageEmpty>
         ) : (
-          <div className="mt-4 overflow-x-auto rounded-lg border border-border bg-card">
-            <table className="w-full text-left text-sm">
-              <thead className="text-muted-foreground text-xs uppercase">
-                <tr className="border-border border-b">
-                  <th className="px-4 py-2 font-medium">时间</th>
-                  <th className="px-4 py-2 font-medium">动作</th>
-                  <th className="px-4 py-2 font-medium">对象</th>
-                  <th className="px-4 py-2 font-medium">员工</th>
-                  <th className="px-4 py-2 font-medium">发起方</th>
-                  <th className="px-4 py-2 font-medium">结果</th>
+          /* Scrolls sideways inside its own panel on a narrow window, never the page. */
+          <TablePanel>
+            <table aria-label="审计记录">
+              <thead>
+                <tr>
+                  <th>时间</th>
+                  <th>动作</th>
+                  <th>对象</th>
+                  <th>员工</th>
+                  <th>发起方</th>
+                  <th>结果</th>
                 </tr>
               </thead>
               <tbody>
@@ -126,7 +132,7 @@ function AuditPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </TablePanel>
         )}
       </PageSection>
     </PageShell>
