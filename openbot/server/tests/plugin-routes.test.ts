@@ -127,6 +127,7 @@ function serverRecord(row: { id: string; url: string }): ServerRecord {
     logo: null,
     tools: [],
     withdrawn: [],
+    adminConnectOnly: false,
   };
 }
 
