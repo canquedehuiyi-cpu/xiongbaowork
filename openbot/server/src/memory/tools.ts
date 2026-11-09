@@ -8,7 +8,6 @@ import type { GrantedTool } from "@openbot/toolkit/granted-tool";
 import { defer, from, type Observable, switchMap } from "rxjs";
 import { z } from "zod";
 import { type Edition, editionHasMemory } from "../edition";
-import { MEMORY_TOOLS_SERVER } from "../plugins/plugin-store/model";
 import type { MemoryIngestion } from "./ingestion";
 import type { MemoryStore } from "./store";
 import {
@@ -17,6 +16,14 @@ import {
   MemoryRefusedError,
   memoryInputSchema,
 } from "./types";
+
+/**
+ * The server half of every ref OpenBot's own memory tools carry (`memory/recall_personal_memory`).
+ *
+ * M3: upstream keeps this in plugins/plugin-store/model.ts, where adding a custom server under it is
+ * refused; the fork's plugins have no such module yet, so it is spelled here.
+ */
+const MEMORY_TOOLS_SERVER = "memory";
 
 /*
  * What the model is offered for an observed memory. The store's schema coerces `observedAt` to a

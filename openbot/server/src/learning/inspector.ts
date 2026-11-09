@@ -1,5 +1,4 @@
 import { z } from "zod";
-import type { IntelligenceSettings } from "../config";
 import {
   clearDesktopConnectionFailure,
   recordDesktopConnectionFailure,
