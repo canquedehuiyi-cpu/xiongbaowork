@@ -645,6 +645,57 @@ export function appEnableReason(name: string, source: string): string {
 }
 // --- end app discovery ---
 
+/** 删除、归档或应用标为破坏性的操作要先问时，卡片上写的理由。 */
+export const DESTRUCTIVE_TOOL_REASON =
+  "这个操作会删除或覆盖内容，总是先征得你同意。";
+
+/** 作为工具名第一个动词时按删除处理的词。 */
+const DELETING_VERBS =
+  "delete|deletes|remove|removes|archive|archives|trash|destroy|erase|purge|wipe|discard";
+/**
+ * 工具名里常见的其它动作词。只用来找出「第一个动词」：`list_archived_emails` 的第一个动词是 list，
+ * `unarchive_thread` 是 unarchive，`get_archive_settings` 是 get，都不是删除。没收进来的词（比如
+ * move、empty）会被跳过，所以 `GMAIL_MOVE_TO_TRASH`、`empty_trash` 的第一个动词是 trash。
+ */
+const OTHER_VERBS =
+  "unarchive|unarchives|untrash|undelete|restore|restores|recover|get|gets|list|lists|fetch|fetches|retrieve|search|find|read|reads|count|lookup|export|download|create|creates|add|adds|insert|update|updates|edit|patch|modify|set|mark|unmark|send|sends|post|posts|reply|forward|write|upload|share|invite|schedule|submit|publish|copy|duplicate|rename";
+/** 参照上游 `FIRST_VERB`：按出现顺序，名字里第一个认得的动作词就是这个工具做的事。 */
+const FIRST_VERB = new RegExp(`\\b(${DELETING_VERBS}|${OTHER_VERBS})\\b`);
+const DELETING = new RegExp(`^(${DELETING_VERBS})$`);
+
+/**
+ * 不是应用工具的：Bot 自己电脑上的操作（`computer_*`）、主人电脑上的命令（`host/`），以及 OpenBot
+ * 自己的工具（转交、记忆、私密分享）。它们各有自己的底线，删除类底线不管。
+ */
+const NOT_APP_TOOLS = /^(computer_|host\/|bot\/|memory\/|openbot\/)/;
+
+/** 工具名拆成小写单词：`HUBSPOT_ARCHIVE_CONTACT` 是 "hubspot archive contact"。 */
+function toolWords(toolRef: string): string {
+  return (toolRef.split("/").pop() ?? "")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/[-_.\s]+/g, " ")
+    .toLowerCase()
+    .trim();
+}
+
+/**
+ * 删除类底线：应用工具（MCP、Composio 授予的工具）只要满足其一就总是先问，
+ *  - 应用把它标为破坏性（`candidate.destructive`，列出应用时记下的），不管它叫什么；
+ *  - 工具名的第一个动词是删除类动词（delete、remove、archive、trash……）。收回别人访问权限的
+ *    `remove_collaborator` 也算：fork 没有单独的分享分类，按删除问一次就够了。
+ * 读操作不在此列。与 SEC1 的其它底线一样只往严里调，排在它们后面（见 {@link decideAction}）。
+ */
+export function destructiveFloor(
+  candidate: ApprovalCandidate,
+): { source: "destructive_tool"; reason: string } | undefined {
+  if (candidate.effect === "read") return undefined;
+  if (NOT_APP_TOOLS.test(candidate.toolRef)) return undefined;
+  const verb = toolWords(candidate.toolRef).match(FIRST_VERB)?.[1] ?? "";
+  return candidate.destructive === true || DELETING.test(verb)
+    ? { source: "destructive_tool", reason: DESTRUCTIVE_TOOL_REASON }
+    : undefined;
+}
+
 /**
  * The whole decision, layer by layer (SEC1 §4.2). The first layer that settles the action decides,
  * and every later one can only make it stricter:
@@ -656,6 +707,8 @@ export function appEnableReason(name: string, source: string): string {
  *  4. The deterministic floors: a dangerous command or a sensitive path asks at least (§4.3, §4.4),
  *     and so does the team cap of `ask` for a command on a paired computer, and so does a local
  *     app's tool the device does not list as read-only. The cap also covers `computer_app_call`.
+ *     删除类底线紧跟在 SEC1 的两条底线之后：删除、归档或应用标为破坏性的应用工具总是先问，规则
+ *     问过的也改记为这条底线，卡片因此只给「允许一次 / 拒绝」（见 {@link destructiveFloor}）。
  *  5. The strictest rule across the team's, the owner's and the person's own; then the reviewer
  *     where it applies; then the person's own "ask before making changes" default.
  */
@@ -699,8 +752,10 @@ export async function decideAction(input: {
       source: "safety",
       reason: safety.reason,
     };
+  const destructive = destructiveFloor(candidate);
   const floor:
     | SecurityFloor
+    | { source: "destructive_tool"; reason: string }
     // --- app discovery (sub-project 3) ---
     | { source: "host_command_cap" | "app_tool" | "app_enable"; reason: string }
     // --- end app discovery ---
@@ -713,6 +768,7 @@ export async function decideAction(input: {
       input.security ?? DEFAULT_EMPLOYEE_SECURITY,
       input.enforceDangerousCommands === true,
     ) ??
+    destructive ??
     (runnerCommand && input.hostCommandsCap === "ask"
       ? {
           source: "host_command_cap",
@@ -746,9 +802,12 @@ export async function decideAction(input: {
   // --- end desktop control ---
   const decided = await decideByRules(input, matched);
   // A floor only raises: an action the rules let through still asks; one already asked about or
-  // handed off keeps the stricter answer it had.
+  // handed off keeps the stricter answer it had. 删除类底线例外的一点：规则或偏好已经要问的，也改记
+  // 为这条底线，这样卡片不会给出一条存下来也永远用不上的「总是允许」。
   const outcome: ApprovalPolicyOutcome =
-    floor && decided.behaviour === "allow"
+    floor &&
+    (decided.behaviour === "allow" ||
+      (floor === destructive && decided.behaviour === "ask"))
       ? {
           behaviour: "ask",
           source: floor.source,

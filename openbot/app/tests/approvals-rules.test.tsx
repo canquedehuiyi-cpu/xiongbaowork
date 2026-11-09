@@ -409,3 +409,55 @@ test("SEC1: only an administrator sees and sets the team's 强制危险命令审
     role = "user";
   }
 });
+
+test("删除类底线问的动作只给「允许一次 / 拒绝」，收件箱和对话里都不画「在这里总是允许」", async () => {
+  const deleting = {
+    ...ownerAsked,
+    id: "request-archive",
+    action: {
+      ...ownerAsked.action,
+      toolRef: "hubspot/HUBSPOT_ARCHIVE_CONTACT",
+      scope: "hubspot",
+      args: { contactId: "42" },
+      toolCallId: "archive-call",
+      policy: {
+        behaviour: "ask",
+        source: "destructive_tool",
+        reason: "这个操作会删除或覆盖内容，总是先征得你同意。",
+      },
+    },
+  };
+  // The other pending request is a hand-off, so every 允许一次 drawn here is the deleting one's.
+  inbox.requests.push(deleting as unknown as (typeof inbox.requests)[number]);
+  try {
+    const view = draw();
+    await view.findByText(/这个操作会删除或覆盖内容/);
+    expect(view.getAllByRole("button", { name: "允许一次" })).toHaveLength(1);
+    expect(view.queryByRole("button", { name: "在这里总是允许" })).toBeNull();
+    cleanup();
+
+    const inline = render(
+      <QueryClientProvider
+        client={
+          new QueryClient({ defaultOptions: { queries: { retry: false } } })
+        }
+      >
+        <InlineApproval toolCallId="archive-call" fallback={<p>Archived</p>} />
+      </QueryClientProvider>,
+    );
+    await inline.findByRole("region", { name: "等你批准" });
+    expect(inline.getByRole("button", { name: "允许一次" })).toBeTruthy();
+    expect(inline.getByRole("button", { name: "拒绝" })).toBeTruthy();
+    expect(inline.queryByRole("button", { name: "在这里总是允许" })).toBeNull();
+    fireEvent.click(inline.getByRole("button", { name: "允许一次" }));
+    await waitFor(() =>
+      expect(sent).toContainEqual({
+        path: "/api/approvals/request-archive/decision",
+        method: "POST",
+        body: { decision: "allow_once" },
+      }),
+    );
+  } finally {
+    inbox.requests.pop();
+  }
+});

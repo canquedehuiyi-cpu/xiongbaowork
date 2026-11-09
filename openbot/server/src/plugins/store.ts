@@ -8560,6 +8560,8 @@ export function createPluginStore(options: PluginStoreOptions) {
         scope: serverId,
         args: vendorArgs,
         target: { serverId, toolName, url: row.url, effect },
+        // 列出应用时它把这个工具标成了破坏性：不管叫什么，都按删除处理，总是先问。
+        ...(advertised[0]?.destructive ? { destructive: true as const } : {}),
         continuation: currentApprovalContext(),
       });
       if (approval && "replay" in approval)
