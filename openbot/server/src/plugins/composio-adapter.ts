@@ -1,4 +1,5 @@
 import { Composio } from "@composio/core";
+import { appsPageZh, askAdminToZh, itsAppPage } from "../edition";
 import { displayName } from "./app-names";
 import {
   type AuthConfigOutcome,
@@ -913,7 +914,7 @@ export function connectionOf(row: VendorToolkit): BrokerConnection {
   if (offered.includes(DEPLOYMENT_CLIENT_SCHEME)) {
     return {
       kind: "unsupported",
-      reason: `${published.join(", ")}：${at} 要用这个部署自己注册的 OAuth 客户端，通过服务器到服务器授权连接，而这个部署还没有为 ${at} 保存客户端。请管理员先在插件页为它保存客户端 ID 和密钥。`,
+      reason: `${published.join(", ")}：${at} 要用这个部署自己注册的 OAuth 客户端，通过服务器到服务器授权连接，而这个部署还没有为 ${at} 保存客户端。${askAdminToZh(`先在${appsPageZh()}为它保存客户端 ID 和密钥`)}。`,
       awaitsClient: true,
     };
   }
@@ -1466,7 +1467,7 @@ function withdrawalDeclined(
  *
  * A PLAIN `Error` RATHER THAN A `BrokerRefusalError`, because this listing's failures are not
  * answered to a route. `./composio` records them in an app's `lastError` for an administrator to
- * read on its Plugins page, and `listingSentence` passes an authored message through untouched.
+ * read on ${itsAppPage()}, and `listingSentence` passes an authored message through untouched.
  */
 export function actionOf(
   row: VendorToolRow,
@@ -1768,7 +1769,7 @@ function vendorRefusal(
      */
     case "ComposioToolNotFoundError":
       return refusal(
-        `Composio would not hand that action over at the version this deployment recorded for it, so ${outcome}. This deployment's @composio/core reports an action Composio has withdrawn and a request for one that failed — a timeout, a dropped connection, a 500, a refused key — under one condition and says nothing that tells the two apart, so neither can this deployment. Refreshing ${app}'s tools on its Plugins page records what Composio publishes now, which settles it where the action is gone; where every action of every app is failing the same way, it is the request rather than the action, and Composio's status page is where that shows.`,
+        `Composio would not hand that action over at the version this deployment recorded for it, so ${outcome}. This deployment's @composio/core reports an action Composio has withdrawn and a request for one that failed — a timeout, a dropped connection, a 500, a refused key — under one condition and says nothing that tells the two apart, so neither can this deployment. Refreshing ${app}'s tools on ${itsAppPage()} records what Composio publishes now, which settles it where the action is gone; where every action of every app is failing the same way, it is the request rather than the action, and Composio's status page is where that shows.`,
       );
 
     /*
@@ -1779,7 +1780,7 @@ function vendorRefusal(
      */
     case "ComposioToolVersionRequiredError":
       return refusal(
-        `Composio refuses a call whose toolkit version is "latest", and that is the version travelling with this one, so ${outcome}. A dated version is recorded when an app's actions are listed, so refreshing ${app}'s tools on its Plugins page replaces "latest" with a version Composio will accept.`,
+        `Composio refuses a call whose toolkit version is "latest", and that is the version travelling with this one, so ${outcome}. A dated version is recorded when an app's actions are listed, so refreshing ${app}'s tools on ${itsAppPage()} replaces "latest" with a version Composio will accept.`,
       );
 
     /*
@@ -3062,7 +3063,7 @@ export function buildComposioClient(
         throw new Error(
           `${call.slug} was not sent to Composio: this connection is for ${call.toolkit}, and Composio resolves that action to ${
             ran ?? "no app at all"
-          }. Refreshing this app's tools on its Plugins page recovers it where the action was recorded against a url that has since changed.`,
+          }. Refreshing this app's tools on ${itsAppPage()} recovers it where the action was recorded against a url that has since changed.`,
         );
       }
 
@@ -3395,7 +3396,7 @@ export function buildComposioClient(
          * {@link ComposioBroker.deleteAuthConfig} states.
          *
          * IT IS A BLOCK, AND THE BLOCK IS THE POINT. The app's row survives this throw —
-         * `removeServer` deletes it only after this returns — so the app stays on its Plugins page
+         * `removeServer` deletes it only after this returns — so the app stays on ${itsAppPage()}
          * and stays removable, which is the one thing a silent success took away. The remedy is an
          * operator's and it is one act in a dashboard: rename the config back so it ends with the
          * suffix and remove the app again, which finishes the withdrawal, or satisfy yourself that
@@ -3451,7 +3452,7 @@ export function buildComposioClient(
        * unreadable next time.
        *
        * STILL A REFUSAL, WHICH IS THE HALF THAT DOES NOT MOVE. `removeServer` deletes the app's row
-       * only after this returns, so the app stays on its Plugins page and stays removable; a quiet
+       * only after this returns, so the app stays on ${itsAppPage()} and stays removable; a quiet
        * return here would file the app away over rows that may be this deployment's own configs,
        * holding live grants, under an answer it could not read.
        */
@@ -3495,7 +3496,7 @@ export function buildComposioClient(
          * reported after — {@link readableConfigs} says why at length: refusing before the first
          * delete meant one unreadable row made an app permanently unremovable, with the readable
          * configs of ours standing the whole time. It is still a refusal, so `removeServer` does
-         * not delete the app's row and the app stays on its Plugins page.
+         * not delete the app's row and the app stays on ${itsAppPage()}.
          *
          * TWO CLAUSES BECAUSE THEY ARE TWO REMEDIES. A config Composio refused is one a second press
          * reaches. A row it described with no id or no name is not — it will be exactly as
@@ -3570,7 +3571,7 @@ export function buildComposioClient(
           );
         }
         throw new BrokerRefusalError(
-          `This deployment has no authorization config at Composio for ${toolkit}, so there is nothing to connect an account against. An administrator removing the app on its Plugins page and adding it again creates one.`,
+          `This deployment has no authorization config at Composio for ${toolkit}, so there is nothing to connect an account against. An administrator removing the app on ${itsAppPage()} and adding it again creates one.`,
         );
       }
 
@@ -3647,7 +3648,7 @@ export function buildComposioClient(
         const disabled = ours.length - unsettled.length;
         if (disabled > 0) {
           left.push(
-            `Composio calls ${disabled} of this deployment's ${ours.length} authorization configs for ${toolkit} disabled, and an administrator can enable it in Composio's dashboard, or remove the app on its Plugins page and add it again.`,
+            `Composio calls ${disabled} of this deployment's ${ours.length} authorization configs for ${toolkit} disabled, and an administrator can enable it in Composio's dashboard, or remove the app on ${itsAppPage()} and add it again.`,
           );
         }
         if (unsettled.length > 0) {
@@ -4250,7 +4251,7 @@ export function buildComposioClient(
        */
       if (mode === undefined || mode === null) {
         throw new BrokerRefusalError(
-          `Composio no longer publishes a ${authScheme} connection for ${toolkit}, and ${toolkit}'s authorization config here was created as ${authScheme}, so there is nothing to ask this person for — and an empty form is a box they cannot fill in and a connection carrying no credential at all. An administrator removing the app on its Plugins page and adding it again is what records the scheme Composio publishes for it now.`,
+          `Composio no longer publishes a ${authScheme} connection for ${toolkit}, and ${toolkit}'s authorization config here was created as ${authScheme}, so there is nothing to ask this person for — and an empty form is a box they cannot fill in and a connection carrying no credential at all. An administrator removing the app on ${itsAppPage()} and adding it again is what records the scheme Composio publishes for it now.`,
         );
       }
       /*
@@ -4569,7 +4570,7 @@ export function buildComposioClient(
           );
         }
         throw new BrokerRefusalError(
-          `This deployment has no authorization config at Composio for ${toolkit}, so there is nothing to connect an account against and nothing was sent. An administrator removing the app on its Plugins page and adding it again creates one.`,
+          `This deployment has no authorization config at Composio for ${toolkit}, so there is nothing to connect an account against and nothing was sent. An administrator removing the app on ${itsAppPage()} and adding it again creates one.`,
         );
       }
 
@@ -4610,7 +4611,7 @@ export function buildComposioClient(
         const disabled = ours.length - unsettled.length;
         if (disabled > 0) {
           left.push(
-            `Composio calls ${disabled} of this deployment's ${ours.length} authorization configs for ${toolkit} disabled, and an administrator can enable it in Composio's dashboard, or remove the app on its Plugins page and add it again.`,
+            `Composio calls ${disabled} of this deployment's ${ours.length} authorization configs for ${toolkit} disabled, and an administrator can enable it in Composio's dashboard, or remove the app on ${itsAppPage()} and add it again.`,
           );
         }
         if (unsettled.length > 0) {

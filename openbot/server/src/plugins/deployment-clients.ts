@@ -1,3 +1,4 @@
+import { appsPageZh } from "../edition";
 import type { BrokerConnection } from "./broker";
 
 /**
@@ -84,7 +85,7 @@ export function adminConnectOnlySentence(title: string): string {
 
 /** What an administrator is told when enabling such an app with no client stored for it. */
 export function deploymentClientMissingSentence(toolkit: string): string {
-  return `${toolkit} 通过服务器到服务器授权（S2S_OAUTH2）连接，要用这个部署自己在 ${toolkit} 注册的 OAuth 客户端，而这个部署还没有保存它，所以没有创建授权配置，应用也没有启用。请先在插件页为 ${toolkit} 保存客户端 ID 和密钥，再启用一次。`;
+  return `${toolkit} 通过服务器到服务器授权（S2S_OAUTH2）连接，要用这个部署自己在 ${toolkit} 注册的 OAuth 客户端，而这个部署还没有保存它，所以没有创建授权配置，应用也没有启用。请先在${appsPageZh()}为 ${toolkit} 保存客户端 ID 和密钥，再启用一次。`;
 }
 
 /**
