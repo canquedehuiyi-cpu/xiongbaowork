@@ -53,6 +53,7 @@ import {
   type ComposioResult,
   useComposioClient,
 } from "../src/plugins/composio";
+import { actionOf } from "../src/plugins/composio-adapter";
 import { redirectUriFor } from "../src/plugins/oauth";
 import { createPluginRoutes } from "../src/plugins/routes";
 import {
@@ -72,6 +73,7 @@ import {
 } from "../src/plugins/store";
 import { grantedTools, REFUSAL_MARKER } from "../src/plugins/tools";
 import { runAsTenant } from "../src/tenant/context";
+import fileActions from "./fixtures/composio-file-actions.json";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -5397,12 +5399,16 @@ test("an identity a model puts in the arguments does not change whose account th
         // not read from arguments at all.
         userId: "user_asker",
         // Passed through whole, minus nothing: the reserved version key is the only thing the call
-        // path removes, and the model sent none.
+        // path removes, and the model sent none. The last three are OpenBot's own settings for a
+        // Gmail listing (`plugins/composio-shapes.ts`), added beside the model's, never read from them.
         args: {
           userId: "user_stranger",
           user_id: "user_stranger",
           entityId: "user_stranger",
           query: "is:unread",
+          include_payload: false,
+          verbose: false,
+          max_results: 20,
         },
       },
     ]);
@@ -8531,5 +8537,66 @@ describe("a vault read that fails on a query of this deployment's own", () => {
       expect(written).toContain(`absent_vault_${suite}`);
       expect(written).not.toContain("Failed query:");
       expect(written).not.toContain(faultCredentialId ?? "<none>");
+    }));
+});
+
+/**
+ * A COMPOSIO ACTION WHOSE ONLY FILE IS OPTIONAL IS RECORDED, WITHOUT THE FILE.
+ *
+ * The listing used to drop every action with a `file_uploadable` parameter in it, so a refresh of
+ * Gmail recorded 59 of its 63 actions and never GMAIL_SEND_EMAIL, GMAIL_CREATE_EMAIL_DRAFT,
+ * GMAIL_REPLY_TO_THREAD or GMAIL_UPDATE_DRAFT: no row to grant, so no Bot could send, draft or
+ * reply. The rows below are Composio's own (`fixtures/composio-file-actions.json`), mapped through
+ * `actionOf` exactly as the adapter maps a page, and what is asserted is the row a grant points at
+ * and a model is shown.
+ */
+describe("a Composio action whose only file is optional", () => {
+  test("is recorded with its version and without the attachment a model cannot fill in", () =>
+    asPlatform(async () => {
+      const { store, database } = await freshStore();
+      useComposioClient({
+        listActions: async () =>
+          fileActions.gmail.map((row, position) =>
+            actionOf(structuredClone(row), position, "gmail"),
+          ),
+        execute: async () => vendorAnswered(),
+      });
+      await seedComposioGmail(database, store);
+
+      expect(await store.refreshTools("gmail", "admin_user")).toEqual({
+        tools: 5,
+      });
+
+      const stored = await database
+        .select({
+          name: mcpTools.name,
+          inputSchema: mcpTools.inputSchema,
+          version: mcpTools.version,
+        })
+        .from(mcpTools)
+        .where(eq(mcpTools.serverId, "gmail"))
+        .orderBy(asc(mcpTools.name));
+
+      expect(stored.map((row) => row.name)).toEqual([
+        "GMAIL_CREATE_EMAIL_DRAFT",
+        "GMAIL_FETCH_EMAILS",
+        "GMAIL_REPLY_TO_THREAD",
+        "GMAIL_SEND_EMAIL",
+        "GMAIL_UPDATE_DRAFT",
+      ]);
+      // Callable: the version Composio published, which a call has to send back.
+      expect(new Set(stored.map((row) => row.version))).toEqual(
+        new Set(["20261018_00"]),
+      );
+      const send = stored.find((row) => row.name === "GMAIL_SEND_EMAIL")
+        ?.inputSchema as { properties?: Record<string, unknown> } | undefined;
+      const properties = Object.keys(send?.properties ?? {});
+      expect(properties).not.toContain("attachment");
+      expect(properties).toContain("recipient_email");
+      expect(properties).toContain("body");
+      // No staging descriptor in any row a model is shown.
+      expect(
+        JSON.stringify(stored.map((row) => row.inputSchema)),
+      ).not.toContain("file_uploadable");
     }));
 });
