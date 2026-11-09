@@ -304,18 +304,22 @@ export function ApprovalInbox() {
                   >
                     允许一次
                   </Button>
-                  <Button
-                    variant="outline"
-                    disabled={decision.isPending}
-                    onClick={() =>
-                      decision.mutate({
-                        id: request.id,
-                        choice: "allow_always",
-                      })
-                    }
-                  >
-                    在这里总是允许
-                  </Button>
+                  {/* 删除类底线问的动作每次都要问，存下的规则用不上，所以不画这个按钮。 */}
+                  {request.action.policy?.source ===
+                  "destructive_tool" ? null : (
+                    <Button
+                      variant="outline"
+                      disabled={decision.isPending}
+                      onClick={() =>
+                        decision.mutate({
+                          id: request.id,
+                          choice: "allow_always",
+                        })
+                      }
+                    >
+                      在这里总是允许
+                    </Button>
+                  )}
                   <Button
                     variant="outline"
                     disabled={decision.isPending}

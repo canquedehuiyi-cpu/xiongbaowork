@@ -223,6 +223,18 @@ export const mcpTools = pgTable(
      */
     destructive: boolean("destructive").notNull().default(false),
     /**
+     * vendor 列出了这个动作，却对它做什么只字未提：MCP 服务器没有 `readOnlyHint` 也没有
+     * `destructiveHint`，或 Composio 没有只读、破坏性、新建、修改中的任何一个标签（迁移 0146）。
+     *
+     * 和 {@link mcpTools.destructive} 分开记：destructive 是 vendor 自己说的，会让每次调用都先问；
+     * 这里没人说过它会删除什么。{@link mcpTools.effect} 记为 `write`，聊天里按普通修改处理；后台
+     * 只读路径（连接探测等）对它和 destructive 一样谨慎，不去调用。
+     *
+     * 只在 catalogue 条目的名单没有覆盖它时才记：名单覆盖的工具照旧由名单决定读写，这里是 `false`。
+     * 本列出现之前列出的行也是 `false`，应用下次刷新时重新记录。
+     */
+    unclassified: boolean("unclassified").notNull().default(false),
+    /**
      * The vendor's version for this action, as the listing gave it — `20260903_00` and the like.
      *
      * NOT OPTIONAL BOOKKEEPING. Composio refuses to execute an action without a specific version,

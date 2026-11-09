@@ -288,6 +288,8 @@ export type GrantedPlugins = {
     toolName: string;
     description: string;
     inputSchema: Record<string, unknown>;
+    /** 应用把它标为破坏性（`mcp_tools.destructive`）；提供给模型时描述里会写明。 */
+    destructive: boolean;
   }[];
   skills: {
     slug: string;
@@ -669,7 +671,7 @@ function storableSchema(
  * FIRST OCCURRENCE WINS, and the order is the vendor's own. Anything else needs a rule for which
  * of two identical names is the real one, and there is no such rule.
  */
-function storableTools(
+export function storableTools(
   serverId: string,
   listed: ListedTool[],
   /**
@@ -677,6 +679,11 @@ function storableTools(
    * other than its server, so a `team` server's tools are `team` and a catalogue server's `system`).
    */
   serverTenant?: string,
+  /**
+   * 这台服务器的 catalogue 条目，没有就是 null（管理员按 URL 添加的服务器、Composio 应用）。
+   * 条目的名单覆盖的工具由名单决定读写，vendor 的沉默不再记为 unclassified。
+   */
+  entry: CatalogueEntry | null = null,
 ) {
   const stamp = serverTenant ? { tenantId: serverTenant } : {};
   const byName = new Map<
@@ -689,6 +696,7 @@ function storableTools(
       inputSchema: Record<string, unknown>;
       effect: "read" | "write" | null;
       destructive: boolean;
+      unclassified: boolean;
       version: string | null;
     }
   >();
@@ -696,6 +704,15 @@ function storableTools(
   for (const tool of listed) {
     const name = tool.name.replaceAll(NUL, "");
     if (byName.has(name)) continue;
+    /*
+     * vendor 只字未提的工具，只在 catalogue 名单没有覆盖它时记为 unclassified。MCP 的沉默不记
+     * effect，条目在就由名单整体决定（名单外按读），所以条目在就算覆盖；broker 的沉默记成了
+     * write，名单只覆盖它点名的写操作。没有覆盖时，它是不算 destructive 的写操作。
+     */
+    const covered =
+      entry !== null &&
+      (tool.effect === undefined || entry.writeTools.includes(name));
+    const unclassified = tool.unclassified === true && !covered;
     byName.set(name, {
       ...stamp,
       serverId,
@@ -724,8 +741,10 @@ function storableTools(
        * nothing, and `classifyTool` reads null as silence rather than as a value, which is what
        * leaves Notion and Drive classified by their reviewed write list exactly as they were.
        */
-      effect: tool.effect ?? null,
+      effect: tool.effect ?? (unclassified ? "write" : null),
       destructive: tool.destructive ?? false,
+      // vendor 只字未提、又没有名单覆盖；见 `mcpTools.unclassified`。
+      unclassified,
       version: tool.version?.replaceAll(NUL, "") ?? null,
     });
   }
@@ -4769,7 +4788,7 @@ export function createPluginStore(options: PluginStoreOptions) {
        */
       let storable: ReturnType<typeof storableTools>;
       try {
-        storable = storableTools(rowId, listed, row.tenantId);
+        storable = storableTools(rowId, listed, row.tenantId, entry);
       } catch (error) {
         const reason =
           error instanceof Error ? withoutStatement(error) : String(error);
@@ -5869,6 +5888,7 @@ export function createPluginStore(options: PluginStoreOptions) {
                 name: mcpTools.name,
                 description: mcpTools.description,
                 inputSchema: mcpTools.inputSchema,
+                destructive: mcpTools.destructive,
               })
               .from(mcpTools)
               .innerJoin(mcpServers, eq(mcpServers.id, mcpTools.serverId))
@@ -5885,6 +5905,7 @@ export function createPluginStore(options: PluginStoreOptions) {
             toolName: toolNameFor(ref),
             description: row.description,
             inputSchema: row.inputSchema as Record<string, unknown>,
+            destructive: row.destructive,
           };
         });
 
@@ -6474,6 +6495,7 @@ export function createPluginStore(options: PluginStoreOptions) {
           inputSchema: mcpTools.inputSchema,
           effect: mcpTools.effect,
           destructive: mcpTools.destructive,
+          unclassified: mcpTools.unclassified,
           version: mcpTools.version,
         })
         .from(mcpTools)
@@ -6484,7 +6506,13 @@ export function createPluginStore(options: PluginStoreOptions) {
       // condition below has a version by definition, and building the answer here is what carries
       // that fact into the type instead of leaving the caller to re-check it.
       const safe = actions.flatMap((action) => {
-        if (action.effect !== "read" || action.destructive) return [];
+        // vendor 只字未提的也不碰：它没说会删除什么，但也没说不会（见 `mcpTools.unclassified`）。
+        if (
+          action.effect !== "read" ||
+          action.destructive ||
+          action.unclassified
+        )
+          return [];
         // Null in the column and blank in the data are the same nothing, and neither is a version
         // the transport can put on a call.
         const version = action.version?.trim();
@@ -8560,6 +8588,10 @@ export function createPluginStore(options: PluginStoreOptions) {
         scope: serverId,
         args: vendorArgs,
         target: { serverId, toolName, url: row.url, effect },
+        // 列出应用时它把这个工具标成了破坏性：不管叫什么，都按删除处理，总是先问。
+        ...(advertised[0]?.destructive ? { destructive: true as const } : {}),
+        // 标明它来自插件调用路径：删除类底线按来源认应用工具，不看服务器叫什么。
+        subject: { connector: true },
         continuation: currentApprovalContext(),
       });
       if (approval && "replay" in approval)

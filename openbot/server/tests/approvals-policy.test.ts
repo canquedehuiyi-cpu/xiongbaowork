@@ -6,6 +6,7 @@ import {
 } from "../src/agents/handoff-tool";
 import {
   DEFAULT_SENSITIVE_PATHS,
+  DESTRUCTIVE_TOOL_REASON,
   dangerousCommand,
   decideAction,
   effectiveHostCommandPolicy,
@@ -39,6 +40,7 @@ import {
   approvalArgsPreview,
   DEFAULT_EMPLOYEE_SECURITY,
   type EmployeePolicy,
+  offersStandingRule,
   withApprovalContext,
 } from "../src/approvals/types";
 import { createComputerGateway } from "../src/computer/gateway";
@@ -2187,4 +2189,327 @@ describe("SEC1: disabled tools are not offered to the model (D4)", () => {
       );
       expect(disabled("bot/message_bot")).toBeTrue();
     }));
+});
+
+/*
+ * 删除、归档，以及应用标记为破坏性的工具：一律先问，且只给「允许一次 / 拒绝」（上游 I 包按 fork 的
+ * 决策顺序重写）。这条底线排在 SEC1 已有的底线之后，任何规则或偏好都不能把它降为 allow。
+ */
+describe("destructive tools always ask, once at a time", () => {
+  const app = (toolRef: string, over: Partial<ApprovalCandidate> = {}) =>
+    candidate({ toolRef, scope: toolRef.split("/")[0] ?? "app", ...over });
+  const allowAll = [rule("allow", { toolRef: "*" })];
+
+  test("HUBSPOT_ARCHIVE_CONTACT asks: archive is the name's first verb", async () => {
+    const outcome = await decideAction({
+      ...base,
+      candidate: app("hubspot/HUBSPOT_ARCHIVE_CONTACT"),
+    });
+    expect(outcome).toMatchObject({
+      behaviour: "ask",
+      source: "destructive_tool",
+      reason: DESTRUCTIVE_TOOL_REASON,
+    });
+    expect(DESTRUCTIVE_TOOL_REASON).toBe(
+      "这个操作会删除或覆盖内容，总是先征得你同意。",
+    );
+  });
+
+  test("each deleting verb, as the first verb, asks", async () => {
+    for (const name of [
+      "GMAIL_DELETE_MESSAGE",
+      "deletes_record",
+      "remove_collaborator",
+      "removesItem",
+      "archive_thread",
+      "archives_card",
+      "GOOGLEDRIVE_TRASH_FILE",
+      "GMAIL_MOVE_TO_TRASH",
+      "destroy_bucket",
+      "erase_disk",
+      "purge_cache",
+      "wipe_device",
+      "discard_draft",
+    ])
+      expect(
+        (await decideAction({ ...base, candidate: app(`vendor/${name}`) }))
+          .source,
+      ).toBe("destructive_tool");
+  });
+
+  test("list_archived_emails, unarchive_thread and get_archive_settings do not ask", async () => {
+    for (const name of [
+      "list_archived_emails",
+      "unarchive_thread",
+      "get_archive_settings",
+      "undelete_message",
+      "list_deleted_items",
+    ])
+      expect(
+        await decideAction({ ...base, candidate: app(`gmail/${name}`) }),
+      ).toMatchObject({ behaviour: "allow", source: "default" });
+  });
+
+  test("an unambiguous deleting word asks wherever it stands in the name, as a whole word", async () => {
+    for (const name of [
+      "posts_delete",
+      "SHAREPOINT_LIST_ITEM_DELETE",
+      "lists_items_delete",
+      "share-delete",
+      "uploadSessionPurge",
+      "export_wipe",
+      "drafts/discard",
+      // 名字里有「找回」动作也不豁免：宁可多问，不能漏掉真正的删除。
+      "delete_restore_point",
+      "DeleteRestoreTestingPlan",
+      "purge_restore_points",
+      "wipe_and_recover",
+      "recover_and_delete_all",
+      "restore_from_trash",
+      // 大写缩写和后面的单词也要拆开。
+      "HTTPDelete",
+      "DNSDelete",
+    ])
+      expect(
+        (await decideAction({ ...base, candidate: app(`vendor/${name}`) }))
+          .source,
+      ).toBe("destructive_tool");
+    // remove and archive are still only the first verb: here they are what is listed.
+    for (const name of ["list_removed_users", "get_archive_remove_policy"])
+      expect(
+        (await decideAction({ ...base, candidate: app(`vendor/${name}`) }))
+          .behaviour,
+      ).toBe("allow");
+  });
+
+  test("a connector tool asks whatever its server is called, memory and host included", async () => {
+    // 管理员可以把自定义 MCP 服务器叫做 memory 或 host：来源由调用路径标明，不看名字前缀。
+    for (const toolRef of ["memory/delete_entities", "host/delete_entities"])
+      expect(
+        await decideAction({
+          ...base,
+          candidate: candidate({
+            toolRef,
+            scope: toolRef.split("/")[0] ?? "",
+            subject: { connector: true },
+          }),
+          personal: allowAll,
+        }),
+      ).toMatchObject({ behaviour: "ask", source: "destructive_tool" });
+    // OpenBot's own tools are not exempt by name either.
+    expect(
+      (
+        await decideAction({
+          ...base,
+          candidate: candidate({
+            toolRef: "bot/delete_everything",
+            scope: "bot",
+          }),
+        })
+      ).source,
+    ).toBe("destructive_tool");
+  });
+
+  test("a tool the app marks destructive asks whatever it is called", async () => {
+    const outcome = await decideAction({
+      ...base,
+      candidate: app("crm/reset_pipeline", { destructive: true }),
+    });
+    expect(outcome).toMatchObject({
+      behaviour: "ask",
+      source: "destructive_tool",
+    });
+    expect(
+      (await decideAction({ ...base, candidate: app("crm/reset_pipeline") }))
+        .behaviour,
+    ).toBe("allow");
+  });
+
+  test("an always-allow rule, a pre-approval or the reviewer's go-ahead cannot lower it", async () => {
+    expect(
+      await decideAction({
+        ...base,
+        candidate: app("hubspot/HUBSPOT_ARCHIVE_CONTACT"),
+        personal: allowAll,
+        team: [team("allow", { toolRef: "*" })],
+      }),
+    ).toMatchObject({
+      behaviour: "ask",
+      source: "destructive_tool",
+      ruleId: "team-allow",
+    });
+    expect(
+      await decideAction({
+        ...base,
+        candidate: app("crm/reset_pipeline", { destructive: true }),
+        personal: [rule("pre_approved", { toolRef: "*" })],
+        messages: said("Reset the pipeline."),
+        model: model({
+          verdict: "proceed",
+          preApproved: true,
+          reason: "Asked for.",
+        }),
+      }),
+    ).toMatchObject({ behaviour: "ask", source: "destructive_tool" });
+    expect(
+      await decideAction({
+        ...base,
+        candidate: app("gmail/GMAIL_DELETE_MESSAGE"),
+        autoReview: true,
+        model: model({
+          verdict: "proceed",
+          preApproved: false,
+          reason: "Fine.",
+        }),
+      }),
+    ).toMatchObject({ behaviour: "ask", source: "destructive_tool" });
+  });
+
+  test("an action already asked about takes the destructive source, so its card offers no standing rule", async () => {
+    const outcome = await decideAction({
+      ...base,
+      candidate: app("gmail/GMAIL_DELETE_MESSAGE"),
+      askBeforeChanges: true,
+    });
+    expect(outcome).toMatchObject({
+      behaviour: "ask",
+      source: "destructive_tool",
+    });
+    expect(offersStandingRule({ policy: outcome })).toBeFalse();
+    expect(offersStandingRule({ policy: { source: "default" } })).toBeTrue();
+    expect(offersStandingRule({})).toBeTrue();
+  });
+
+  test("a reason the rules or the reviewer already gave stays on the card beside the destructive one", async () => {
+    const asked = await decideAction({
+      ...base,
+      candidate: app("gmail/GMAIL_DELETE_MESSAGE"),
+      personal: [rule("ask", { toolRef: "*" })],
+    });
+    expect(asked.source).toBe("destructive_tool");
+    expect(asked.reason).toContain(DESTRUCTIVE_TOOL_REASON);
+    expect(asked.reason).toContain("A rule asks before this kind of action.");
+    const reviewed = await decideAction({
+      ...base,
+      candidate: app("gmail/GMAIL_DELETE_MESSAGE"),
+      autoReview: true,
+      model: model({
+        verdict: "needs_approval",
+        preApproved: false,
+        reason: "The person only asked to read this thread.",
+      }),
+    });
+    expect(reviewed.source).toBe("destructive_tool");
+    expect(reviewed.reason).toContain(DESTRUCTIVE_TOOL_REASON);
+    expect(reviewed.reason).toContain(
+      "The person only asked to read this thread.",
+    );
+    // Raised from allow, there is no earlier reason worth keeping: only the floor's own.
+    expect(
+      (
+        await decideAction({
+          ...base,
+          candidate: app("gmail/GMAIL_DELETE_MESSAGE"),
+          personal: [rule("allow", { toolRef: "*" })],
+        })
+      ).reason,
+    ).toBe(DESTRUCTIVE_TOOL_REASON);
+  });
+
+  test("the stricter answers stay: a disabled tool is refused, a payment and a hand-off rule hand off", async () => {
+    expect(
+      await decideAction({
+        ...base,
+        candidate: app("gmail/GMAIL_DELETE_MESSAGE"),
+        personal: [rule("deny", { toolRef: "*" })],
+      }),
+    ).toMatchObject({ behaviour: "deny" });
+    expect(
+      await decideAction({
+        ...base,
+        candidate: app("stripe/delete_payment_method"),
+      }),
+    ).toMatchObject({ behaviour: "hand_off", source: "safety" });
+    expect(
+      await decideAction({
+        ...base,
+        candidate: app("gmail/GMAIL_DELETE_MESSAGE"),
+        personal: [rule("hand_off", { toolRef: "*" })],
+      }),
+    ).toMatchObject({ behaviour: "hand_off", source: "personal_rule" });
+  });
+
+  test("computer_run_command and host/ tools are not app tools: their own floors decide", async () => {
+    expect(
+      await decideAction({
+        ...base,
+        candidate: command("ls"),
+        personal: [rule("allow", { toolRef: "computer_run_command" })],
+      }),
+    ).toMatchObject({ behaviour: "allow" });
+    expect(
+      await decideAction({
+        ...base,
+        candidate: candidate({
+          toolRef: "host/delete_file",
+          scope: "laptop",
+          destructive: true,
+        }),
+        personal: allowAll,
+      }),
+    ).toMatchObject({ behaviour: "allow" });
+    expect(
+      await decideAction({
+        ...base,
+        candidate: candidate({
+          toolRef: "computer_run_command",
+          scope: "workspace",
+          args: { command: "echo remove" },
+          destructive: true,
+        }),
+        personal: allowAll,
+      }),
+    ).toMatchObject({ behaviour: "allow" });
+  });
+
+  test("a read never asks here, whatever it is called or marked", async () => {
+    expect(
+      await decideAction({
+        ...base,
+        candidate: app("gmail/GMAIL_DELETE_MESSAGE", { effect: "read" }),
+      }),
+    ).toMatchObject({ behaviour: "allow" });
+    expect(
+      await decideAction({
+        ...base,
+        candidate: app("crm/reset_pipeline", {
+          effect: "read",
+          destructive: true,
+        }),
+      }),
+    ).toMatchObject({ behaviour: "allow" });
+  });
+
+  test("the destructive mark is a fact about the tool: it is not part of the action's digest", () => {
+    const context = {
+      runId: "run",
+      threadId: "thread",
+      toolCallId: "call",
+      toolName: "crm/reset_pipeline",
+      args: {},
+      messages: [],
+      state: {},
+      context: [],
+      forwardedProps: {},
+    };
+    const plain = approvalAction({
+      ...app("crm/reset_pipeline"),
+      continuation: context,
+    });
+    const marked = approvalAction({
+      ...app("crm/reset_pipeline", { destructive: true }),
+      continuation: context,
+    });
+    expect(marked.actionDigest).toBe(plain.actionDigest);
+  });
 });
