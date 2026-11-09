@@ -3837,9 +3837,12 @@ describe("upstream floors: computer tools", () => {
       "Search",
       "Subscribe",
     ])
-      expect({ label, asked: safetyRequirement(click(label)) }).toEqual({
+      expect({
         label,
-        asked: undefined,
+        asked: safetyRequirement(click(label)) ?? "nothing",
+      }).toEqual({
+        label,
+        asked: "nothing",
       });
   });
 
@@ -3974,7 +3977,7 @@ describe("upstream floors: computer tools", () => {
  * #398 安全评审的修复（I1–I4、M1、M3、M4、M5）：键盘写法、页面级按键、在按钮上按键、中文按钮和
  * 输入框，以及几处收窄的边界。都在「全部总是允许」之上跑。
  */
-describe("upstream floors: review fixes", () => {
+describe("upstream floors: the cases the first port missed", () => {
   const allowAll = {
     personal: [rule("allow", { toolRef: "*" })],
     team: [team("allow", { toolRef: "*" })],
@@ -4035,8 +4038,9 @@ describe("upstream floors: review fixes", () => {
     for (const pressed of ["Shift+Enter", "ShiftLeft+Enter", "ShiftRight+\n"])
       expect({
         pressed,
-        asked: safetyRequirement(key(pressed, box("Message #general"))),
-      }).toEqual({ pressed, asked: undefined });
+        asked:
+          safetyRequirement(key(pressed, box("Message #general"))) ?? "nothing",
+      }).toEqual({ pressed, asked: "nothing" });
     expect(safetyRequirement(key("\n", box("Subject")))).toBeUndefined();
   });
 
@@ -4056,9 +4060,12 @@ describe("upstream floors: review fixes", () => {
       });
     // 其它键不会提交或按下任何东西。
     for (const pressed of ["Tab", "a", "Escape", "ArrowDown", "Control+a"])
-      expect({ pressed, asked: safetyRequirement(key(pressed)) }).toEqual({
+      expect({
         pressed,
-        asked: undefined,
+        asked: safetyRequirement(key(pressed)) ?? "nothing",
+      }).toEqual({
+        pressed,
+        asked: "nothing",
       });
     // 带 submit 的输入、网关没能解析出元素的时候同样问。
     expect(
@@ -4178,9 +4185,12 @@ describe("upstream floors: review fixes", () => {
       "支付记录",
       "评论区",
     ])
-      expect({ label, asked: safetyRequirement(clickOn(label)) }).toEqual({
+      expect({
         label,
-        asked: undefined,
+        asked: safetyRequirement(clickOn(label)) ?? "nothing",
+      }).toEqual({
+        label,
+        asked: "nothing",
       });
   });
 
@@ -4201,8 +4211,8 @@ describe("upstream floors: review fixes", () => {
     for (const field of ["搜索消息", "主题", "用户名"])
       expect({
         field,
-        asked: safetyRequirement(key("Enter", box(field))),
-      }).toEqual({ field, asked: undefined });
+        asked: safetyRequirement(key("Enter", box(field))) ?? "nothing",
+      }).toEqual({ field, asked: "nothing" });
   });
 
   test("Add comment and Post comment buttons send, as Comment does", async () => {
