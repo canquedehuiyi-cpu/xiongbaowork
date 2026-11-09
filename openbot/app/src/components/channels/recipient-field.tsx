@@ -61,9 +61,15 @@ export function RecipientField({
         {isFull ? null : (
           <InputGroup className="h-8 w-56 border-none bg-transparent">
             <InputGroupInput
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
               aria-label="选择一位员工"
               onChange={(event) => setSearch(event.target.value)}
               placeholder="选择一位员工…"
+=======
+              aria-label="Choose a Bot"
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Choose a Bot…"
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
               value={search}
             />
             <InputGroupAddon />
@@ -96,7 +102,11 @@ export function RecipientField({
           ))}
           {matches.length === 0 ? (
             <li className="px-2 py-1.5 text-sm text-muted-foreground">
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
               没有叫这个名字的员工。
+=======
+              No Bot by that name.
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
             </li>
           ) : null}
         </ul>

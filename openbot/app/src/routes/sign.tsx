@@ -14,8 +14,13 @@ import {
   signInWithEmailDomain,
   signUpWithEmail,
 } from "@/lib/auth/client";
+import { resumeUrlFor, verifierPathFor } from "@/lib/auth/resume";
 import { appConfig } from "@/lib/generated/application-config";
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 import { queryClient } from "@/query-client";
+=======
+import { searchTextEntry } from "@/lib/search-text";
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 import {
   type AuthProviderId,
   authKeys,
@@ -36,12 +41,43 @@ const MIN_PASSWORD_LENGTH = 8;
 type PasswordMode = "sign-in" | "sign-up";
 
 export const Route = createFileRoute("/sign")({
-  beforeLoad: async ({ context }) => {
+  /*
+   * `?flow_id=` is the handle a brokered authorization arrived with, sent here when its session had
+   * lapsed. It is a value to carry back, never a place to go: see `resumeUrlFor`.
+   *
+   * READ AS TEXT WHATEVER THE ROUTER PARSED IT INTO, which is what `searchText` is for: a handle
+   * made of digits arrives here as a number and a JSON-shaped one as an object, so a `typeof`
+   * guard would drop the correlation for whichever handles the vendor's generator happens to emit
+   * — working in testing and losing the return leg's binding in production.
+   *
+   * The key is omitted rather than set to undefined, for the reason the connected-accounts screen
+   * gives for `?connected=`: present-but-undefined makes `search` a required prop on every Link to
+   * this route, which is a lot of ripple for a parameter only the verifier sets.
+   */
+  validateSearch: (search: Record<string, unknown>): { flow_id?: string } =>
+    searchTextEntry("flow_id", search.flow_id),
+  beforeLoad: async ({ context, search }) => {
     const user = await context.queryClient.ensureQueryData(
       currentUserQueryOptions(),
     );
     if (user) {
-      throw redirect({ to: "/" });
+      /*
+       * Signed in already, so the handle has nowhere to be lost between here and the verifier.
+       *
+       * `href` rather than `to` because the verifier is an API path, not a router route — and
+       * `reloadDocument` because of what follows from that. A redirect the router is left to
+       * handle is a navigation INSIDE the app: it resolves the href against the route tree, finds
+       * nothing (there is no route for `/api/…`, and there cannot be — the verifier is served by
+       * the server, not this build), and `__root.tsx` sends an address it does not know home. The
+       * person who was part-way through connecting an app would be dropped on the home screen with
+       * the authorization they started abandoned and nothing said about it, because no request for
+       * the verifier was ever made. `reloadDocument` makes this a document navigation, which is
+       * the only kind that leaves the app and therefore the only kind that arrives.
+       */
+      const verifier = verifierPathFor(search.flow_id);
+      throw verifier
+        ? redirect({ href: verifier, reloadDocument: true })
+        : redirect({ to: "/" });
     }
     // Loaded here so the screen paints with its buttons rather than painting empty and then
     // growing them, which reads as "no providers" for exactly as long as the request takes.
@@ -51,6 +87,7 @@ export const Route = createFileRoute("/sign")({
 });
 
 function SignScreen() {
+  const { flow_id: flowId } = Route.useSearch();
   // Which provider is being opened, rather than whether one is: with three buttons, a single
   // boolean would put "Opening…" on all of them.
   const [opening, setOpening] = useState<AuthProviderId | "sso" | null>(null);
@@ -85,12 +122,20 @@ function SignScreen() {
     setOpening("sso");
 
     try {
-      await signInWithEmailDomain(email);
+      await signInWithEmailDomain(
+        email,
+        undefined,
+        resumeUrlFor(window.location.origin, flowId),
+      );
     } catch (caughtError) {
       setError(
         caughtError instanceof Error
           ? caughtError.message
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           : "那个地址没有登记任何身份提供方。",
+=======
+          : "No company sign-in is set up for that address.",
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       );
       setOpening(null);
     }
@@ -101,12 +146,20 @@ function SignScreen() {
     setOpening(provider);
 
     try {
-      await signInWith(provider);
+      await signInWith(
+        provider,
+        undefined,
+        resumeUrlFor(window.location.origin, flowId),
+      );
     } catch (caughtError) {
       setError(
         caughtError instanceof Error
           ? caughtError.message
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           : `无法开始 ${providerName(provider)} 登录。`,
+=======
+          : `Couldn't open ${providerName(provider)} sign-in. Try again.`,
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       );
       setOpening(null);
     }
@@ -296,7 +349,12 @@ function SignScreen() {
         >
           {options?.ssoRequired ? (
             <p className="mb-3 text-center text-sm text-muted-foreground">
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
               你的组织要求使用单点登录。
+=======
+              Your organization requires you to sign in with your company
+              account.
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
             </p>
           ) : null}
           {providers.length > 0 && !options?.ssoRequired ? (
@@ -305,7 +363,11 @@ function SignScreen() {
             options?.ssoRequired ||
             options?.emailPassword ? null : (
             <p className="text-center text-sm text-muted-foreground">
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
               这个部署没有配置任何登录方式。
+=======
+              Sign-in isn't set up yet. An admin has to set it up first.
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
             </p>
           )}
           {/*
@@ -367,7 +429,11 @@ function SignScreen() {
           {options?.ssoRequired && providers.length > 0 ? (
             <details className="mt-4 text-sm">
               <summary className="cursor-pointer text-center text-muted-foreground">
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
                 管理员登录
+=======
+                Admin sign-in
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
               </summary>
               <div className="mt-3">{providerButtons}</div>
             </details>

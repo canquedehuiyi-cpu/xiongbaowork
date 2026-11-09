@@ -48,7 +48,14 @@ import { queryClient } from "@/query-client";
  * one, the server reports `code_required` and this form asks for that code alone, then sends it on
  * its own, cleared from state the same way.
  */
-export function SignInForm({ requestId }: { requestId: string }) {
+export function SignInForm({
+  requestId,
+  inDialog = false,
+}: {
+  requestId: string;
+  /** Drawn in the chat's sign-in dialog rather than on the page of its own. */
+  inDialog?: boolean;
+}) {
   const request = useQuery({
     ...signInRequestQueryOptions(requestId),
     // Polled so a takeover finishing elsewhere, or the request expiring, shows here.
@@ -70,6 +77,11 @@ export function SignInForm({ requestId }: { requestId: string }) {
   const [code, setCode] = useState("");
   const [save, setSave] = useState(false);
   const id = useId();
+  /*
+   * In a dialog the sections stack in its body's own 16px rhythm. The 48px a page puts above each
+   * section, to keep unrelated decisions apart, left the dialog mostly empty space above each heading.
+   */
+  const section = inDialog ? "mt-0" : undefined;
 
   if (request.isPending) return null;
   if (request.error)
@@ -96,9 +108,18 @@ export function SignInForm({ requestId }: { requestId: string }) {
 
   if (FINAL_SIGN_IN.includes(data.status))
     return (
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       <PageSection title={data.status === "signed_in" ? "已登录" : "已关闭"}>
         <p className="text-muted-foreground text-sm">
           {data.outcome ?? "这个登录请求已经关闭了。"}
+=======
+      <PageSection
+        className={section}
+        title={data.status === "signed_in" ? "Signed in" : "Closed"}
+      >
+        <p className="text-muted-foreground text-sm">
+          {data.outcome ?? "This sign-in has ended."}
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         </p>
       </PageSection>
     );
@@ -106,11 +127,17 @@ export function SignInForm({ requestId }: { requestId: string }) {
   if (data.status === "code_required")
     return (
       <PageSection
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         title="输入验证码"
         description="网站发来了验证码，输入后即可完成登录。"
+=======
+        className={section}
+        title="Enter the verification code"
+        description="The site sent a verification code. Enter it to finish signing in."
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       >
         <form
-          className="flex flex-col gap-3"
+          className="mt-4 flex flex-col gap-3"
           autoComplete="off"
           onSubmit={(event) => {
             event.preventDefault();
@@ -141,10 +168,22 @@ export function SignInForm({ requestId }: { requestId: string }) {
               {failure?.message ?? data.outcome}
             </p>
           ) : null}
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           <div className="flex flex-wrap gap-2">
             <Button size="sm" type="submit" disabled={busy || !code.trim()}>
               <IconShieldCheck />
               {submitCode.isPending ? "正在核对…" : "完成登录"}
+=======
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button
+              size="sm"
+              type="button"
+              variant="ghost"
+              disabled={busy}
+              onClick={() => cancel.mutate(requestId)}
+            >
+              Cancel
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
             </Button>
             <Button
               size="sm"
@@ -156,6 +195,7 @@ export function SignInForm({ requestId }: { requestId: string }) {
               <IconPointer />
               接管并完成登录
             </Button>
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
             <Button
               size="sm"
               type="button"
@@ -164,6 +204,11 @@ export function SignInForm({ requestId }: { requestId: string }) {
               onClick={() => cancel.mutate(requestId)}
             >
               取消
+=======
+            <Button size="sm" type="submit" disabled={busy || !code.trim()}>
+              <IconShieldCheck />
+              {submitCode.isPending ? "Checking…" : "Finish signing in"}
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
             </Button>
           </div>
         </form>
@@ -173,10 +218,24 @@ export function SignInForm({ requestId }: { requestId: string }) {
   if (data.status === "taken_over")
     return (
       <PageSection
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         title="手动登录"
         description="接管员工的浏览器，登录后交还给它。然后告诉它你已完成，员工就会接着做。"
+=======
+        className={section}
+        title="Sign in by hand"
+        description="Open the Bot's browser and sign in yourself. Then choose I've signed in and the Bot carries on."
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       >
-        <div className="flex flex-wrap gap-2">
+        <div className="mt-4 flex flex-wrap justify-end gap-2">
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={busy}
+            onClick={() => cancel.mutate(requestId)}
+          >
+            Cancel
+          </Button>
           <Button
             size="sm"
             variant="outline"
@@ -193,6 +252,7 @@ export function SignInForm({ requestId }: { requestId: string }) {
           >
             {finish.isPending ? "正在完成…" : "我已登录"}
           </Button>
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           <Button
             size="sm"
             variant="ghost"
@@ -201,6 +261,8 @@ export function SignInForm({ requestId }: { requestId: string }) {
           >
             取消
           </Button>
+=======
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         </div>
         {failure ? (
           <p className="mt-2 text-destructive text-sm" role="alert">
@@ -219,8 +281,14 @@ export function SignInForm({ requestId }: { requestId: string }) {
       ) : null}
       {data.savedLogins.length > 0 ? (
         <PageSection
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           title="使用已保存的登录"
           description={`选择一个即表示确认它可以用于这次登录 ${data.origin}。`}
+=======
+          className={section}
+          title="Use a saved login"
+          description={`Pick one to use it for this sign-in to ${data.origin}.`}
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         >
           <PageRows>
             {data.savedLogins.map((login, index) => (
@@ -255,11 +323,17 @@ export function SignInForm({ requestId }: { requestId: string }) {
         </PageSection>
       ) : null}
       <PageSection
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         title="输入你的登录信息"
         description="直接填进员工的浏览器。员工只会知道登录成功与否。"
+=======
+        className={section}
+        title="Enter your login"
+        description="This goes straight into the Bot's browser. The Bot only learns whether it worked."
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       >
         <form
-          className="flex flex-col gap-3"
+          className="mt-4 flex flex-col gap-3"
           autoComplete="off"
           onSubmit={(event) => {
             event.preventDefault();
@@ -326,10 +400,22 @@ export function SignInForm({ requestId }: { requestId: string }) {
               {failure.message}
             </p>
           ) : null}
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           <div className="flex flex-wrap gap-2">
             <Button size="sm" type="submit" disabled={busy || !password}>
               <IconLock />
               {submit.isPending ? "正在登录…" : "登录"}
+=======
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button
+              size="sm"
+              type="button"
+              variant="ghost"
+              disabled={busy}
+              onClick={() => cancel.mutate(requestId)}
+            >
+              Decline
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
             </Button>
             <Button
               size="sm"
@@ -341,6 +427,7 @@ export function SignInForm({ requestId }: { requestId: string }) {
               <IconPointer />
               接管并登录
             </Button>
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
             <Button
               size="sm"
               type="button"
@@ -349,6 +436,11 @@ export function SignInForm({ requestId }: { requestId: string }) {
               onClick={() => cancel.mutate(requestId)}
             >
               拒绝
+=======
+            <Button size="sm" type="submit" disabled={busy || !password}>
+              <IconLock />
+              {submit.isPending ? "Signing in…" : "Sign in"}
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
             </Button>
           </div>
         </form>

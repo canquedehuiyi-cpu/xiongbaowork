@@ -18,7 +18,11 @@ import {
 } from "@tanstack/react-router";
 import { cleanup, render, waitFor } from "@testing-library/react";
 import { type AgentProfile, agentKeys } from "@/lib/agents/queries";
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 import { Route as AgentsRoute } from "@/routes/_authed/_app/agents/index";
+=======
+import { deploymentKeys } from "@/lib/deployment/queries";
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 import { Route as HomeRoute } from "@/routes/_authed/_app/index";
 import { Route as WakersRoute } from "@/routes/_authed/_app/wakers";
 
@@ -107,6 +111,9 @@ function agent(
     modelRef: null,
     persona: null,
     hasCallbackToken: false,
+    isolated: false,
+    isolationActive: false,
+    isolationOffReason: null,
     hidden: false,
     pinned: false,
     systemOwned: false,
@@ -344,15 +351,29 @@ test("a failed roster on / reports the failure and explains the disabled compose
   const view = renderHome(failingQueryClient());
 
   expect(
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     await view.findByText("读不到共享给你的员工。", {}, HOME_FIND_TIMEOUT),
   ).toBeTruthy();
   expect(view.queryByText("还没有人把员工共享给你。")).toBeNull();
+=======
+    await view.findByText(
+      "Couldn't load the Bots shared with you.",
+      {},
+      HOME_FIND_TIMEOUT,
+    ),
+  ).toBeTruthy();
+  expect(view.queryByText("Nobody has shared a Bot with you yet.")).toBeNull();
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 
   // The composer goes `disabled={!fallback}` on the very same failure, with nothing on screen
   // saying why unless this alert renders.
   expect(
     await view.findByText(
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       "读不到你的员工，所以暂时没有人可以接收这条消息。",
+=======
+      "Couldn't load your Bots, so there's no one to send this to. Reload the page.",
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       {},
       HOME_FIND_TIMEOUT,
     ),
@@ -437,13 +458,26 @@ test("a failed REFETCH on / keeps the roster and does not disclaim the composer"
   // evidence that the composer is not the disabled, nothing-to-send-to state its alert describes.
   expect(
     await view.findByText(
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       "会自动交给对应的员工。",
+=======
+      "OpenBot picks the right Bot.",
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       { exact: false },
       HOME_FIND_TIMEOUT,
     ),
   ).toBeTruthy();
   expect(
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     view.queryByText("读不到你的员工，所以暂时没有人可以接收这条消息。"),
+=======
+    view.queryByText(
+      "Couldn't load your Bots, so there's no one to send this to. Reload the page.",
+    ),
+  ).toBeNull();
+  expect(
+    view.queryByText("Couldn't load the Bots shared with you."),
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   ).toBeNull();
   expect(view.queryByText("读不到共享给你的员工。")).toBeNull();
 });
@@ -607,6 +641,7 @@ test("a failed REFETCH on / with explore empty shows it as empty, not broken", a
   await waitForFailedRefetch(queryClient);
 
   expect(
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     await view.findByText("还没有人把员工共享给你。", {}, HOME_FIND_TIMEOUT),
   ).toBeTruthy();
   expect(view.queryByText("读不到共享给你的员工。")).toBeNull();
@@ -724,4 +759,52 @@ test("the pristine snapshot's options is never the live route's, and a restore l
   // name: no real caller, past or future, can ever hold a reference to this closure, so its
   // survival past the restore is unambiguous corruption either way.
   expect(liveOptions.getParentRoute).not.toBe(decoyGetParentRoute);
+=======
+    await view.findByText(
+      "Nobody has shared a Bot with you yet.",
+      {},
+      HOME_FIND_TIMEOUT,
+    ),
+  ).toBeTruthy();
+  expect(
+    view.queryByText("Couldn't load the Bots shared with you."),
+  ).toBeNull();
+  // `agents` loaded (it holds "Mine Agent"), so `fallback` falls back to it and the composer is
+  // enabled — the alert claiming a load failure must not appear beside that working composer.
+  expect(
+    view.queryByText(
+      "Couldn't load your Bots, so there's no one to send this to. Reload the page.",
+    ),
+  ).toBeNull();
+});
+
+/*
+ * The personal edition is one person on their own computer, and nobody can share a Bot with them.
+ * Its Home said "Nobody has shared a Bot with you yet." under Explore Bots all the same. With
+ * nothing to explore there, the section is not shown; the team edition keeps its sentence (above).
+ */
+test("on the personal edition, an empty Explore Bots says nothing about sharing", async () => {
+  const mine = agent({ id: "mine-1", name: "Mine Agent", mine: true });
+  const queryClient = staleQueryClient([mine]);
+  queryClient.setQueryData(deploymentKeys.capabilities(), {
+    edition: "personal",
+  });
+
+  const view = renderHome(queryClient);
+  await waitForFailedRefetch(queryClient);
+
+  // The composer has a Bot to send to: Home has drawn with the roster loaded.
+  expect(
+    await view.findByText(
+      "OpenBot picks the right Bot.",
+      { exact: false },
+      HOME_FIND_TIMEOUT,
+    ),
+  ).toBeTruthy();
+  expect(view.queryByText("Nobody has shared a Bot with you yet.")).toBeNull();
+  expect(
+    view.queryByText("Couldn't load the Bots shared with you."),
+  ).toBeNull();
+  expect(view.queryByRole("heading", { name: "Explore Bots" })).toBeNull();
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 });

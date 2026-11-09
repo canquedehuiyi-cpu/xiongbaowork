@@ -25,11 +25,20 @@ export function DictationButton({
   if (!dictation.available) return null;
   return (
     <Button
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       aria-label="语音输入"
       title={
         dictation.supported
           ? "语音输入"
           : "语音输入需要受支持的浏览器和 HTTPS（或 localhost）"
+=======
+      aria-label="Dictate a message"
+      data-slot="composer-dictate"
+      title={
+        dictation.supported
+          ? "Dictate a message"
+          : "Dictation needs a supported browser and a secure (HTTPS) connection"
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       }
       className="size-8 shrink-0 self-end rounded-full"
       disabled={disabled || !dictation.supported || dictation.busy}
@@ -62,10 +71,20 @@ export function DictationSurface({
           aria-hidden={dictation.busy || undefined}
           inert={dictation.busy}
           className={cn(
-            "min-w-0 transition-[opacity,transform] duration-200 ease-out motion-reduce:transform-none motion-reduce:transition-none",
+            /*
+             * NO TRANSLATE AT REST, NOT EVEN ZERO. Tailwind's `translate-y-0` sets the `translate`
+             * property to `0px`, which is not `none`, and any translate makes this box the containing
+             * block for `position: fixed` descendants. The @ menu is one: it is placed at the caret in
+             * viewport coordinates, and was drawn that far again from this box's corner, off the bottom
+             * of the screen. The idle state therefore names no translate at all.
+             *
+             * `translate` in the transition list, not `transform`: Tailwind v4's translate utilities
+             * set the `translate` property, so a transition on `transform` never animated the lift.
+             */
+            "min-w-0 transition-[opacity,translate] duration-200 ease-out motion-reduce:transition-none motion-reduce:translate-none",
             dictation.busy
               ? "pointer-events-none -translate-y-1 opacity-0"
-              : "translate-y-0 opacity-100",
+              : "opacity-100",
           )}
         >
           {children}
@@ -108,8 +127,14 @@ function RecordingControls({
     >
       <Button
         ref={cancel}
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         aria-label="取消语音输入"
         title="取消语音输入"
+=======
+        aria-label="Cancel dictation"
+        data-slot="composer-dictate-cancel"
+        title="Cancel dictation"
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         size="icon"
         type="button"
         variant="ghost"
@@ -179,8 +204,14 @@ function RecordingControls({
         ) : (
           <div className="flex shrink-0 items-center gap-2">
             <Button
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
               aria-label="停止并转写"
               title="停止并加入草稿"
+=======
+              aria-label="Stop and transcribe"
+              data-slot="composer-dictate-stop"
+              title="Stop and add to draft"
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
               disabled={!recording}
               size="icon"
               type="button"

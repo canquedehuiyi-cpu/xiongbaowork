@@ -71,10 +71,14 @@ function serve() {
         endpoint: null,
         hasAuth: false,
         hasCallbackToken: false,
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         // This fork's coworkers also carry a model binding and a persona; none here.
         modelRef: null,
         platformModelRef: null,
         persona: null,
+=======
+        isolated: false,
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       })),
   } as unknown as AgentProfileStore;
   const router = {
@@ -160,4 +164,11 @@ test("a message that fits is sent as it was written", async () => {
   await routeMessage("Is this contract compliant? 😀");
 
   expect(asked).toEqual(["Is this contract compliant? 😀"]);
+});
+
+test("selected skills cross the HTTP boundary without being dropped", async () => {
+  serve();
+  await expect(
+    routeMessage("Help me", undefined, ["first", "second"]),
+  ).rejects.toThrow("No Bot offers all the selected skills");
 });

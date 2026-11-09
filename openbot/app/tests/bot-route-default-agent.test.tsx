@@ -49,6 +49,9 @@ function agent(
     persona: null,
     hasAuth: false,
     hasCallbackToken: false,
+    isolated: false,
+    isolationActive: false,
+    isolationOffReason: null,
     hidden: false,
     pinned: false,
     mine: true,
@@ -184,15 +187,27 @@ test("/bot with an empty agent query uses the normal default Bot", async () => {
   expect(view.getByTestId("copilot-chat").dataset.agentId).toBe(
     "picked-harness",
   );
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   expect(view.queryByText("这个部署没有叫「」的员工。")).toBeNull();
   expect(view.queryByText("这个部署还没有员工。")).toBeNull();
+=======
+  expect(view.queryByText('There\'s no Bot called "".')).toBeNull();
+  expect(view.queryByText("There are no Bots yet.")).toBeNull();
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 });
 
 test("/bot reports a failed initial roster load instead of claiming there are no Bots", async () => {
   const view = renderBot(queryClientWithFailingAgents());
 
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   expect(await view.findByText("读不到员工列表。")).toBeTruthy();
   expect(view.queryByText("这个部署还没有员工。")).toBeNull();
+=======
+  expect(
+    await view.findByText("Couldn't load your Bots. Reload the page."),
+  ).toBeTruthy();
+  expect(view.queryByText("There are no Bots yet.")).toBeNull();
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 });
 
 test("/bot preserves an explicit agent, including the built-in first agent", async () => {
@@ -220,7 +235,11 @@ test("/bot preserves an explicit unknown agent as a clear missing-bot state", as
   );
 
   expect(
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     await view.findByText("这个部署没有叫「missing-agent」的员工。"),
+=======
+    await view.findByText('There\'s no Bot called "missing-agent".'),
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   ).toBeTruthy();
   expect(view.queryByTestId("copilot-chat")).toBeNull();
 });
@@ -243,7 +262,11 @@ test("/bot loads a hidden explicit agent from the detail endpoint", async () => 
 
   expect(await view.findByRole("heading", { name: "Hidden Bot" })).toBeTruthy();
   expect(view.getByTestId("copilot-chat").dataset.agentId).toBe("hidden-bot");
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   expect(view.queryByText("这个部署没有叫「hidden-bot」的员工。")).toBeNull();
+=======
+  expect(view.queryByText('There\'s no Bot called "hidden-bot".')).toBeNull();
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 });
 
 test("/bot hidden lookup does not collide with the shared agent detail cache", async () => {
@@ -263,7 +286,11 @@ test("/bot hidden lookup does not collide with the shared agent detail cache", a
 
   expect(await view.findByRole("heading", { name: "Hidden Bot" })).toBeTruthy();
   expect(view.getByTestId("copilot-chat").dataset.agentId).toBe("hidden-bot");
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   expect(view.queryByText("这个部署没有叫「hidden-bot」的员工。")).toBeNull();
+=======
+  expect(view.queryByText('There\'s no Bot called "hidden-bot".')).toBeNull();
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 });
 
 test("/bot reports an explicit agent detail load failure", async () => {
@@ -276,7 +303,13 @@ test("/bot reports an explicit agent detail load failure", async () => {
     "/bot?agent=error-bot",
   );
 
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   expect((await view.findByRole("alert")).textContent).toBe("读不到这位员工。");
+=======
+  expect((await view.findByRole("alert")).textContent).toBe(
+    "Couldn't load this Bot. Reload the page.",
+  );
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   expect(view.queryByTestId("copilot-chat")).toBeNull();
 });
 
@@ -307,6 +340,7 @@ test("/bot opens a live Computer sidebar with ownership controls and preserves t
           requested: false,
           transitioning: false,
           resumeSnapshotRequired: false,
+          recoveryRequired: false,
         });
       return Response.json({ error: "No frame yet" }, { status: 404 });
     },
@@ -336,7 +370,11 @@ test("/bot opens a live Computer sidebar with ownership controls and preserves t
   ).toBe(false);
   expect(
     sidebar.getByRole("button", {
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       name: "全屏打开员工的屏幕",
+=======
+      name: "Open the Bot's screen full size",
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     }),
   ).toBeTruthy();
   expect(sidebar.getByRole("heading", { name: "动态" })).toBeTruthy();
@@ -370,6 +408,7 @@ test("/bot?watch=true restores the live Computer panel on reload", async () => {
         requested: false,
         transitioning: false,
         resumeSnapshotRequired: false,
+        recoveryRequired: false,
       }),
     { preconnect: originalFetch.preconnect },
   );

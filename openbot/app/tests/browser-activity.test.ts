@@ -1,9 +1,12 @@
 import { expect, test } from "bun:test";
 import {
-  browserStepDetails,
-  groupBrowserSteps,
-} from "../src/components/channels/browser-activity";
+  DECLINED_BY_PERSON,
+  HANDLED_BY_PERSON,
+  NOT_RUN_WHILE_WAITING,
+} from "@openbot/shared/approval-outcomes";
+import { browserStepDetails } from "../src/components/channels/browser-activity";
 import type { VisibleChatItem } from "../src/components/channels/chat-messages";
+import { groupToolSteps } from "../src/components/channels/tool-activity";
 
 function step(
   id: string,
@@ -22,17 +25,21 @@ function step(
   };
 }
 
+// The computer tools the app draws itself, as CopilotKit's renderer registry would list them.
+const drawn = (name: string) =>
+  name.startsWith("computer_request_") || name === "computer_run_command";
+
 test("navigation and intervening browser actions become one stable row as results stream", () => {
   const first = step("one");
   const items = [first, step("read", "computer_read"), step("two")];
-  const grouped = groupBrowserSteps(items);
-  expect(grouped).toEqual([{ kind: "browser", id: "one", steps: items }]);
+  const grouped = groupToolSteps(items, drawn);
+  expect(grouped).toEqual([{ kind: "tools", id: "group:one", steps: items }]);
   expect(
-    groupBrowserSteps([
-      { ...first, result: '{"ok":true}' },
-      ...items.slice(1),
-    ])[0]?.id,
-  ).toBe("one");
+    groupToolSteps(
+      [{ ...first, result: '{"ok":true}' }, ...items.slice(1)],
+      drawn,
+    )[0]?.id,
+  ).toBe("group:one");
   expect(items).toHaveLength(3);
 });
 
@@ -50,8 +57,12 @@ test("grouping keeps messages, other tools, and human assistance requests in the
     step("shell", "computer_run_command"),
   ];
   for (const boundary of boundaries) {
-    const grouped = groupBrowserSteps([step("one"), boundary, step("two")]);
-    expect(grouped.map((item) => item.id)).toEqual(["one", boundary.id, "two"]);
+    const grouped = groupToolSteps([step("one"), boundary, step("two")], drawn);
+    expect(grouped.map((item) => item.id)).toEqual([
+      "group:one",
+      boundary.id,
+      "group:two",
+    ]);
     expect(grouped[1]).toBe(boundary);
   }
 });
@@ -81,4 +92,40 @@ test("failed visits stay inspectable and unsafe or streaming URLs never become l
     browserStepDetails(step("throw", "computer_navigate", "Error: Failed"))
       .failed,
   ).toBe(true);
+});
+
+test("a step the person declined, or one the turn stopped before, is not drawn as done", () => {
+  // The approval's answers come back as sentences, not the computer's JSON. Read as JSON they were
+  // nothing, so a declined field and the fields never filled in all said "Filled in field".
+  const declined = browserStepDetails(
+    step("name", "computer_type", DECLINED_BY_PERSON),
+  );
+  expect(declined).toMatchObject({ failed: true, reason: "You declined it." });
+  const notRun = browserStepDetails(
+    step("email", "computer_type", NOT_RUN_WHILE_WAITING),
+  );
+  expect(notRun.failed).toBe(true);
+  expect(notRun.reason).toBe(
+    "Not done. The Bot stopped to wait for you on another step.",
+  );
+  // The person doing it themselves is done, by them; and the computer's own answers read as before.
+  expect(
+    browserStepDetails(step("note", "computer_type", HANDLED_BY_PERSON)).failed,
+  ).toBe(false);
+  expect(
+    browserStepDetails(step("plant", "computer_type", '{"ok":true}')).failed,
+  ).toBe(false);
+  expect(
+    browserStepDetails(
+      step(
+        "gone",
+        "computer_click",
+        '{"ok":false,"reason":"Not on the page."}',
+      ),
+    ),
+  ).toMatchObject({ failed: true, reason: "Not on the page." });
+  expect(
+    browserStepDetails(step("broke", "computer_click", "Error: socket closed"))
+      .reason,
+  ).toBeUndefined();
 });

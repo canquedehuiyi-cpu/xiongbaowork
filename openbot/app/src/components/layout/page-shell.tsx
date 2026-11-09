@@ -3,6 +3,7 @@ import { Link, type LinkProps } from "@tanstack/react-router";
 import type * as React from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "../ui/button";
+import { PageColumn, PageHeader, type ShellWidth } from "./page-parts";
 import { SidebarToggle, useSidebarToggleVisible } from "./sidebar-toggle";
 
 /**
@@ -21,6 +22,7 @@ import { SidebarToggle, useSidebarToggleVisible } from "./sidebar-toggle";
  * whichever it happened to see first.
  */
 
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 /**
  * `prose` is the default because configuration is mostly reading. A measure of around 65 characters
  * is where prose stays comfortable, and a row of label-and-control has no business being wider than
@@ -42,6 +44,8 @@ const WIDTHS: Record<ShellWidth, string> = {
   workbench: "mx-auto max-w-[1760px] px-4 sm:px-6 lg:px-[40px]",
 };
 
+=======
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 export function PageShell({
   action,
   children,
@@ -81,6 +85,7 @@ export function PageShell({
   const showToggle = useSidebarToggleVisible();
   const bar = showToggle || !!backButton;
 
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   return (
     <>
       {bar ? (
@@ -166,89 +171,54 @@ export function PageShell({
               </p>
             ) : null}
           </header>
+=======
+  const header = (
+    <PageHeader title={title} action={action} description={description} />
+  );
+
+  const barRow = bar ? (
+    <div className="max-w-7xl w-full h-14 flex items-center gap-1 px-3">
+      {showToggle ? <SidebarToggle /> : null}
+      {!!backButton && (
+        <Button
+          variant="ghost"
+          render={(props) => <Link {...backButton.linkProps} {...props} />}
+        >
+          <IconChevronLeft />
+          {backButton.label}
+        </Button>
+      )}
+    </div>
+  ) : null;
+
+  if (width === "full") {
+    return (
+      /*
+       * Exactly the panel's height, never scrolls. `min-w-0` lets a table wider than the pane scroll
+       * inside its own container instead of pushing the page sideways.
+       */
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        {barRow}
+        <div className={cn("shrink-0 px-4", bar ? "pt-8" : "pt-12")}>
+          {header}
+        </div>
+        <div className={cn("mt-6 flex min-h-0 flex-1 flex-col", className)}>
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
           {children}
         </div>
       </div>
+    );
+  }
+
+  return (
+    <>
+      {barRow}
+      <PageColumn bar={bar} className={className}>
+        {header}
+        {children}
+      </PageColumn>
     </>
   );
 }
 
-/**
- * A titled group of rows.
- *
- * The gap above a section is deliberately large. These pages are lists of unrelated decisions, and
- * the space is what stops the eye running two of them together — it is doing the work a divider
- * would otherwise do, without drawing a line.
- */
-export function PageSection({
-  action,
-  children,
-  className,
-  description,
-  title,
-}: {
-  action?: React.ReactNode;
-  children?: React.ReactNode;
-  className?: string;
-  description?: React.ReactNode;
-  title?: string;
-}) {
-  return (
-    <section className={cn("mt-12", className)}>
-      {title ? (
-        <div className="flex min-h-8 flex-row items-center justify-between gap-4">
-          <h2 className="font-bold text-lg">{title}</h2>
-          {action}
-        </div>
-      ) : null}
-      {description ? (
-        <p className="mt-1 max-w-prose text-pretty text-muted-foreground text-sm leading-relaxed">
-          {description}
-        </p>
-      ) : null}
-      {children}
-    </section>
-  );
-}
-
-/**
- * The card that rows live in.
- *
- * Rows are `<Item size="sm">` with a `<Separator />` between them; this is only the border around
- * them. Rendering nothing when there is nothing is deliberate — an empty bordered box reads as a
- * thing that failed to load, where absence reads as nothing to see yet.
- */
-export function PageRows({
-  children,
-  className,
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    /*
-     * The rows are squared off and the card clips them. `Item` carries `rounded-lg` of its own, which
-     * inside a card of divided rows painted a hover as a floating pill: a middle row has no corners,
-     * and the first and last cannot be concentric with the card while sitting a border inside it.
-     */
-    <div
-      className={cn(
-        "mt-4 overflow-hidden rounded-lg border border-border bg-card dark:border-transparent",
-        "[&_[data-slot=item]]:rounded-none",
-        className,
-      )}
-    >
-      {children}
-    </div>
-  );
-}
-
-/**
- * What a section says when it has nothing to list.
- *
- * Said in a sentence rather than drawn as an illustration with a heading: on a configuration screen
- * "nothing here yet" is a fact, not an event, and the page already told you what the section is for.
- */
-export function PageEmpty({ children }: { children: React.ReactNode }) {
-  return <p className="mt-4 text-muted-foreground text-sm">{children}</p>;
-}
+export { PageCard, PageEmpty, PageRows, PageSection } from "./page-parts";

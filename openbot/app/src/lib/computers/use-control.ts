@@ -1,7 +1,10 @@
+import { useQuery } from "@tanstack/react-query";
 import { useSyncExternalStore } from "react";
+import { currentUserQueryOptions } from "@/lib/auth/queries";
+import { queryClient } from "@/query-client";
 import {
-  cancelControl,
   type ControlState,
+  cancelControl,
   readControl,
   releaseControl,
   takeControl,
@@ -23,6 +26,8 @@ type ControlStore = {
   subscribe: (listener: () => void) => () => void;
 };
 const stores = new Map<string, ControlStore>();
+/** How many reads in a row may fail before input is paused: two, about two seconds. */
+const MISSED_READS_BEFORE_PAUSE = 2;
 
 /** One authoritative poll and mutation gate per visible Bot, shared by chat, sidebar and modal. */
 function createControlStore(computerId: string): ControlStore {
@@ -30,6 +35,8 @@ function createControlStore(computerId: string): ControlStore {
   let version = 0;
   let timer: ReturnType<typeof setInterval> | undefined;
   let reading: AbortController | undefined;
+  /** Reads in a row that could not reach the computer. See `refresh`. */
+  let failures = 0;
   const listeners = new Set<() => void>();
   const publish = (next: Snapshot) => {
     snapshot = next;
@@ -47,6 +54,7 @@ function createControlStore(computerId: string): ControlStore {
     ).catch(() => null);
     if (reading === abort) reading = undefined;
     if (abort.signal.aborted || mine !== version || snapshot.busy) return;
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     publish({
       ...snapshot,
       control,
@@ -56,6 +64,30 @@ function createControlStore(computerId: string): ControlStore {
           : snapshot.problem
         : `${RECONNECTING}没能确认浏览器由谁操作，输入已暂停。`,
     });
+=======
+    /*
+     * One read that did not come back is not news. It used to blank the control state at once, which
+     * took the wheel off a person mid-sentence: their keyboard stopped being forwarded and every key
+     * they held was let go over there, for a hiccup the next read a second later recovered from. The
+     * computer still refuses input from anybody not holding the wheel, whatever this shows.
+     */
+    failures = control ? 0 : failures + 1;
+    if (!control && failures < MISSED_READS_BEFORE_PAUSE && snapshot.control)
+      return;
+    const problem = control
+      ? snapshot.problem?.startsWith("Reconnecting:")
+        ? null
+        : snapshot.problem
+      : "Reconnecting: browser ownership could not be checked. Input is paused.";
+    // The same answer as last time changes nothing on screen, so nothing is told. Every view of the
+    // computer re-rendered once a second for a state that had not moved.
+    if (
+      problem === snapshot.problem &&
+      JSON.stringify(control) === JSON.stringify(snapshot.control)
+    )
+      return;
+    publish({ ...snapshot, control, problem });
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   };
   // Keep the same store through Strict Mode resubscriptions and pending mutations.
   const disposeWhenUnused = () =>
@@ -109,6 +141,9 @@ function createControlStore(computerId: string): ControlStore {
       disposeWhenUnused();
     }
   };
+  const refreshWhenShown = () => {
+    if (!document.hidden && !snapshot.busy && !reading) void refresh();
+  };
   const store: ControlStore = {
     getSnapshot: () => snapshot,
     refresh,
@@ -117,15 +152,19 @@ function createControlStore(computerId: string): ControlStore {
       listeners.add(listener);
       if (timer === undefined) {
         if (!snapshot.busy) void refresh();
+        // Not while the tab is hidden: nobody is looking, and it is read again the moment they are.
         timer = setInterval(() => {
+          if (document.hidden) return;
           if (!snapshot.busy && !reading) void refresh();
         }, 1000);
+        document.addEventListener("visibilitychange", refreshWhenShown);
       }
       return () => {
         listeners.delete(listener);
         if (listeners.size) return;
         clearInterval(timer);
         timer = undefined;
+        document.removeEventListener("visibilitychange", refreshWhenShown);
         reading?.abort();
         version++;
         disposeWhenUnused();
@@ -136,6 +175,27 @@ function createControlStore(computerId: string): ControlStore {
 }
 const noSubscription = () => () => undefined;
 const emptySnapshot = () => EMPTY;
+/**
+ * Whether a person other than the signed-in one holds the wheel.
+ *
+ * The control state names the holder (`heldBy`), and on a Bot shared by several people the wheel in somebody's hands is
+ * not necessarily the hands of the person looking: telling them "You have control" and offering Hand back put them
+ * at the controls of someone else's session, with their clicks reaching a browser that is recording somebody else. A
+ * holder the state does not name (a take from before the wheel knew whose it was) or a signed-in person not known yet
+ * reads as the person looking, as every take did before.
+ */
+export function heldByOther(
+  control: ControlState | null,
+  me: string | undefined,
+): boolean {
+  return (
+    control?.holder === "human" &&
+    control.heldBy !== undefined &&
+    me !== undefined &&
+    control.heldBy !== me
+  );
+}
+
 export function useComputerControl(computerId: string, enabled = true) {
   let store = enabled ? stores.get(computerId) : undefined;
   if (enabled && !store) {
@@ -147,5 +207,13 @@ export function useComputerControl(computerId: string, enabled = true) {
     store?.getSnapshot ?? emptySnapshot,
     emptySnapshot,
   );
-  return { ...snapshot, change: store?.change, refresh: store?.refresh };
+  // The app's one client, passed rather than found through a provider: this hook runs in places drawn without one.
+  const me = useQuery(currentUserQueryOptions(), queryClient).data?.id;
+  return {
+    ...snapshot,
+    /** Someone other than the signed-in person holds the wheel: nothing here is theirs to drive or hand back. */
+    someoneElse: heldByOther(snapshot.control, me),
+    change: store?.change,
+    refresh: store?.refresh,
+  };
 }

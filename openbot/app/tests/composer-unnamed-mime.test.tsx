@@ -127,7 +127,11 @@ test("a file that does name its format is still refused here, in our words", asy
   drop(form, [new File(["<svg/>"], "logo.svg", { type: "image/svg+xml" })]);
 
   await waitFor(() => expect(view.queryByRole("alert")).not.toBeNull());
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   expect(view.queryByText(/可能带有脚本，不予接受/)).not.toBeNull();
+=======
+  expect(view.queryByText(/SVG files aren't accepted/)).not.toBeNull();
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   expect(view.queryByText(/Supported types:/)).toBeNull();
   expect(uploaded).toEqual([]);
 });

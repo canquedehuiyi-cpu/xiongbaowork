@@ -7,25 +7,14 @@ import {
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { memo, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { DeleteConversationDialog } from "@/components/channels/delete-conversation-dialog";
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  deleteChannelMutationOptions,
-  setChannelPinnedMutationOptions,
-} from "@/lib/channels/mutations";
+import { setChannelPinnedMutationOptions } from "@/lib/channels/mutations";
 import type { MessageListEmphasis } from "@/lib/settings/message-list";
 import { useTypedReveal } from "@/lib/typed-reveal";
 
@@ -48,7 +37,7 @@ export const Channel = memo(function Channel({
   participantIds,
   name,
   summary,
-  lastMessage,
+  untitled,
   lastMessageAt,
   pinned,
   unread,
@@ -60,8 +49,8 @@ export const Channel = memo(function Channel({
   name: string;
   /** What the conversation is about, once named. The channel name only says which Bot it is. */
   summary?: string;
-  /** Used as the thread title until the conversation has been named. */
-  lastMessage?: string;
+  /** Used as the thread title until the conversation has been named. See `untitledLine`. */
+  untitled?: string;
   lastMessageAt?: string;
   pinned: boolean;
   unread: boolean;
@@ -79,11 +68,14 @@ export const Channel = memo(function Channel({
   });
   /* Types in only on arrival; an already-named row draws it outright. */
   const revealed = useTypedReveal(summary);
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   const threadTitle = revealed.text || lastMessage || "新会话";
   const title = summary || lastMessage || "新会话";
   const group = participantIds.length > 1;
+=======
+  const threadTitle = revealed.text || untitled || "New conversation";
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   const setPinned = useMutation(setChannelPinnedMutationOptions(queryClient));
-  const deleteChannel = useMutation(deleteChannelMutationOptions(queryClient));
   const [confirming, setConfirming] = useState(false);
   /**
    * Why a pin did not take, said on the row it was asked of.
@@ -95,28 +87,6 @@ export const Channel = memo(function Channel({
    */
   const [pinProblem, setPinProblem] = useState<string | null>(null);
 
-  const confirmDelete = async () => {
-    /*
-     * Away first when this row's channel is the one on screen.
-     *
-     * The roster invalidates the moment the delete lands, so this row — and the dialog living inside
-     * it — unmounts while the rest of this function is still owed. Navigating after the mutation
-     * therefore ran in a component that was already gone, leaving somebody looking at a conversation
-     * that no longer exists. Leaving before asking is safe in the other direction: a refused delete
-     * puts them on the roster with the channel still in it, and says why in the dialog.
-     */
-    if (isOpen) {
-      await navigate({ to: "/" });
-    }
-    try {
-      await deleteChannel.mutateAsync(channelId);
-    } catch {
-      // The error is on the mutation and rendered in the dialog; leaving it open says "not done".
-      return;
-    }
-    setConfirming(false);
-  };
-
   return (
     <>
       <ContextMenu>
@@ -126,11 +96,16 @@ export const Channel = memo(function Channel({
             to={group ? "/group/$channelId" : "/channel/$channelId"}
             params={{ channelId }}
             type="button"
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
             className="flex w-full flex-row items-center gap-2 rounded-lg px-2.5 py-2 hover:bg-foreground/5 [contain-intrinsic-size:auto_3rem] [content-visibility:auto]"
+=======
+            className="flex flex-row py-2 px-2.5 gap-2 items-center w-full hover:bg-foreground/5 rounded-lg [contain-intrinsic-size:auto_3.25rem] [content-visibility:auto]"
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
             activeProps={{
               className: "bg-sidebar",
             }}
           >
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
                 <span
@@ -177,6 +152,20 @@ export const Channel = memo(function Channel({
                 <span className="size-1 animate-bounce rounded-full bg-primary" />
               </span>
             ) : null}
+=======
+            <ChannelItemContent
+              participantIds={participantIds}
+              name={name}
+              title={summary || untitled || "New conversation"}
+              displayedTitle={threadTitle}
+              lastMessageAt={lastMessageAt}
+              emphasis={emphasis}
+              busy={busy}
+              unread={unread}
+              pinned={pinned}
+              revealing={revealed.typing}
+            />
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
           </Link>
         </ContextMenuTrigger>
         <ContextMenuContent>
@@ -190,18 +179,22 @@ export const Channel = memo(function Channel({
             }}
           >
             {pinned ? <IconPinnedOff /> : <IconPin />}
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
             {pinned ? "取消置顶" : "置顶会话"}
+=======
+            {pinned ? "Unpin conversation" : "Pin conversation"}
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
           </ContextMenuItem>
           <ContextMenuItem
             variant="destructive"
-            onClick={() => {
-              // A refusal from a previous attempt is not news about this one.
-              deleteChannel.reset();
-              setConfirming(true);
-            }}
+            onClick={() => setConfirming(true)}
           >
             <IconTrash />
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
             删除会话…
+=======
+            Delete conversation…
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
@@ -210,11 +203,14 @@ export const Channel = memo(function Channel({
           {pinProblem}
         </p>
       ) : null}
-      <Dialog
-        onOpenChange={(open) => {
-          if (!open) setConfirming(false);
-        }}
+      <DeleteConversationDialog
+        channelId={channelId}
+        // Away first when this row's channel is the one on screen.
+        leave={isOpen ? () => navigate({ to: "/" }) : undefined}
+        name={name}
+        onOpenChange={setConfirming}
         open={confirming}
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       >
         <DialogContent>
           <DialogHeader>
@@ -249,6 +245,9 @@ export const Channel = memo(function Channel({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+=======
+      />
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     </>
   );
 });

@@ -1,15 +1,11 @@
-import { PendingApprovals } from "@/components/approvals/inline-approval";
+import { outcomeForPerson } from "@openbot/shared/approval-outcomes";
+import { ownToolLabel } from "@openbot/shared/tool-name";
+import { readOutcome } from "@/lib/computers/activity";
 import type { VisibleChatItem } from "./chat-messages";
-import { ToolLine } from "./tool-line";
 
 type BrowserStep = Extract<VisibleChatItem, { kind: "tool" }>;
-export type BrowserGroup = {
-  kind: "browser";
-  id: string;
-  steps: BrowserStep[];
-};
-export type TranscriptItem = VisibleChatItem | BrowserGroup;
 
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 const labels: Record<string, string> = {
   computer_navigate: "打开了页面",
   computer_read: "读取了页面",
@@ -19,25 +15,31 @@ const labels: Record<string, string> = {
   computer_key: "按了按键",
   computer_scroll: "滚动了页面",
 };
+=======
+/** The browser steps, named in the words every other line uses for them (`shared/tool-name.ts`). */
+const BROWSER_STEPS: ReadonlySet<string> = new Set([
+  "computer_navigate",
+  "computer_read",
+  "computer_snapshot",
+  "computer_click",
+  "computer_type",
+  "computer_key",
+  "computer_scroll",
+]);
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 
-/** Group adjacent browsing steps without moving messages or hiding requests for human help. */
-export function groupBrowserSteps(
-  items: readonly VisibleChatItem[],
-): TranscriptItem[] {
-  const grouped: TranscriptItem[] = [];
-  for (const item of items) {
-    if (
-      item.kind !== "tool" ||
-      !Object.hasOwn(labels, item.toolCall.function.name)
-    ) {
-      grouped.push(item);
-      continue;
-    }
-    const last = grouped.at(-1);
-    if (last?.kind === "browser") last.steps.push(item);
-    else grouped.push({ kind: "browser", id: item.id, steps: [item] });
+/** Whether a tool call is one of the browser steps a tool group draws with its page link. */
+export function isBrowserStep(item: BrowserStep): boolean {
+  return BROWSER_STEPS.has(item.toolCall.function.name);
+}
+
+function isJson(value: string): boolean {
+  try {
+    JSON.parse(value);
+    return true;
+  } catch {
+    return false;
   }
-  return grouped;
 }
 
 function objectOf(value: string | undefined): Record<string, unknown> {
@@ -49,6 +51,27 @@ function objectOf(value: string | undefined): Record<string, unknown> {
   } catch {
     return {};
   }
+}
+
+/**
+ * Whether the computer turned a browser step away until the Bot looked at the page again.
+ *
+ * After a person hands the browser back, the computer asks the Bot for a fresh snapshot before it
+ * acts on the page. That answer is an instruction for the Bot: nothing happened on the page, and the
+ * Bot takes the snapshot and acts again on its own. Drawn, it put the instruction in red under a
+ * turn that went on to work, so the transcript leaves it out.
+ *
+ * Not a handback whose closing snapshot failed. That result also says `snapshotRequired`, carries
+ * the handoff's status, and is a real failure the person may need to resume.
+ */
+export function awaitingFreshLook(step: BrowserStep): boolean {
+  if (!isBrowserStep(step)) return false;
+  const result = objectOf(step.result);
+  return (
+    result.ok === false &&
+    result.snapshotRequired === true &&
+    result.handoffStatus === undefined
+  );
 }
 
 export function browserStepDetails(step: BrowserStep) {
@@ -66,23 +89,41 @@ export function browserStepDetails(step: BrowserStep) {
   } catch {
     /* A partial streaming URL is not a link yet. */
   }
+  /*
+   * A sentence rather than the computer's JSON is the approval's answer for a step the Bot did not
+   * carry out: the person declined it, or the turn stopped before it to wait for them. Read as the
+   * Computer panel reads it (`readOutcome`), so the transcript does not draw it as done.
+   */
+  const sentence =
+    step.result !== undefined &&
+    !isJson(step.result) &&
+    !step.result.startsWith("Error:")
+      ? readOutcome(step.result)
+      : null;
   const failed =
     result.ok === false ||
     result.refused === true ||
-    step.result?.startsWith("Error:") === true;
+    step.result?.startsWith("Error:") === true ||
+    sentence?.ok === false;
   return {
-    label: labels[step.toolCall.function.name],
+    label: ownToolLabel(step.toolCall.function.name) ?? undefined,
     href: url?.href,
     title:
       navigation && typeof result.title === "string" && result.title.trim()
         ? result.title
         : url?.hostname,
     failed,
-    reason: typeof result.reason === "string" ? result.reason : undefined,
+    reason:
+      typeof result.reason === "string"
+        ? result.reason
+        : sentence?.ok === false && typeof sentence.reason === "string"
+          ? outcomeForPerson(sentence.reason)
+          : undefined,
     visited: navigation && result.ok === true,
     pending: step.result === undefined,
   };
 }
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 
 export function BrowserActivity({
   group,
@@ -150,3 +191,5 @@ export function BrowserActivity({
     </>
   );
 }
+=======
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b

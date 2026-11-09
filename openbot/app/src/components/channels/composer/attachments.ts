@@ -81,7 +81,13 @@ export function uploadToChannel(
     const body: unknown = await response.json().catch(() => undefined);
     // Named after the file rather than left empty, for every way this can go wrong. It is the only
     // sentence anybody gets: the composer keeps the string verbatim and shows it as the reason.
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     const couldNotUpload = new Error(`「${file.name}」没能上传。`);
+=======
+    const couldNotUpload = new Error(
+      `Couldn't upload "${file.name}". Try again.`,
+    );
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 
     if (!response.ok) {
       // The server phrases refusals in the product's voice — naming the mime type or the limit

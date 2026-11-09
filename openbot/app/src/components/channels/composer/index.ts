@@ -18,6 +18,7 @@ export {
   type QueueTransition,
   reduceQueue,
 } from "./queue";
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 export { PLACEHOLDER_COMMANDS } from "./sources";
 export type { CrewOption } from "./triggers";
 export {
@@ -27,3 +28,6 @@ export {
   toGroupOptions,
   withGroupMembers,
 } from "./triggers";
+=======
+export { type AgentOption, toAgentOptions } from "./triggers";
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b

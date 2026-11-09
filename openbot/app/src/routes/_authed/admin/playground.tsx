@@ -193,16 +193,25 @@ function PlaygroundPage() {
      * standard prose column and it lands below the fold, so you would be typing at something you
      * cannot see. It takes the header and the controls, and keeps the two panes.
      */
-    <div className="flex h-screen flex-col">
+    <div className="flex min-h-0 flex-1 flex-col">
       <header className="flex flex-wrap items-start justify-between gap-4 border-border border-b px-6 py-4">
         {/* Inline rather than in a band of its own: this screen is an editor beside a live preview
             and every 48px of height is taken from the thing being previewed. */}
         <div className="flex items-start gap-2">
           <SidebarToggle className="-ml-2 shrink-0" />
           <div>
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
             <h1 className="font-bold text-2xl">试验台</h1>
             <p className="mt-1 max-w-prose text-pretty text-muted-foreground text-sm leading-relaxed">
               在这里写组件，不用重新部署就能发布。你编辑的是草稿；对话里只会画出已发布的版本。
+=======
+            <h1 className="font-semibold text-2xl tracking-tight">
+              Playground
+            </h1>
+            <p className="mt-1 max-w-prose text-pretty text-muted-foreground text-sm leading-relaxed">
+              Write a component and publish it without redeploying. Your edits
+              are a draft. Conversations only show what is published.
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
             </p>
           </div>
         </div>
@@ -298,7 +307,11 @@ function PlaygroundPage() {
             {sample === null ? (
               <p className="text-sm text-destructive">
                 {validation.ok
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
                   ? "示例参数不可用。"
+=======
+                  ? "The sample arguments aren't available."
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
                   : (validation.fields.sampleArguments ??
                     "先把 JSON 字段改对再预览。")}
               </p>
@@ -328,7 +341,11 @@ function PlaygroundPage() {
             </div>
             {(components ?? []).length === 0 ? (
               <p className="px-4 py-3 text-muted-foreground text-sm">
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
                 还没有。
+=======
+                Nothing saved yet. Save a draft to see it here.
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
               </p>
             ) : (
               <ul className="divide-y divide-border">
@@ -371,7 +388,12 @@ function PlaygroundPage() {
               </ul>
             )}
             <p className="border-border border-t px-4 py-2 text-muted-foreground text-xs">
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
               发布后所有员工都能用。要对某位员工关掉它，到界面组件页里操作，和本版本自带的组件一样。
+=======
+              Publishing makes it available to every Bot. Turn it off for one
+              Bot on the UI components page.
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
             </p>
           </div>
         </div>
@@ -391,7 +413,12 @@ function PlaygroundPage() {
           <DialogHeader>
             <DialogTitle>删除 {deleting}?</DialogTitle>
             <DialogDescription>
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
               它会从这个部署中移除。原来能画出它的员工都将不能再用，且无法撤销。
+=======
+              It's removed from this deployment, and no Bot can draw it. You
+              can't undo this.
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

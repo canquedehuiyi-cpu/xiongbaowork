@@ -1,9 +1,12 @@
+import { TelemetryAssistantMessage } from "@/components/channels/telemetry-assistant-message";
 import { CopilotChat } from "@copilotkit/react-core/v2";
 import { IconPlus } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
+import { ConversationApprovals } from "@/components/approvals/inline-approval";
 import { ComputerChatControls } from "@/components/computer/computer-controls";
 import { ComputerViewPanel } from "@/components/computer/computer-panel";
+import { useOpenComputerOnRequest } from "@/lib/computers/panel-view";
 import { DetailPanel } from "@/components/layout/detail-panel";
 import { SidebarToggleBar } from "@/components/layout/sidebar-toggle";
 import { Button } from "@/components/ui/button";
@@ -15,15 +18,23 @@ import {
 } from "@/lib/agents/queries";
 import { tryClient } from "@/lib/client";
 import { useActiveBot } from "@/lib/copilot/active-bot";
+import { useBotActivity } from "@/lib/copilot/bot-activity";
 import { useBotThread } from "@/lib/copilot/bot-thread";
 import { useStoppedTurn } from "@/lib/copilot/stopped-turn";
+import { searchTextEntry } from "@/lib/search-text";
 
 export const Route = createFileRoute("/_authed/_app/bot")({
   component: RouteComponent,
+  /*
+   * `?agent=` is read as text whatever the router parsed it into (`searchText`), because search
+   * values are JSON-parsed and a Bot id made of digits would otherwise arrive as a number and open
+   * this deployment's default Bot rather than the named one. `?watch=` is a flag and is read as the
+   * boolean it is parsed into: anything else is not the flag being set.
+   */
   validateSearch: (
     search: Record<string, unknown>,
   ): { agent?: string; watch?: boolean } => ({
-    ...(typeof search.agent === "string" ? { agent: search.agent } : {}),
+    ...searchTextEntry("agent", search.agent),
     ...(search.watch === true ? { watch: true } : {}),
   }),
 });
@@ -60,10 +71,17 @@ async function loadExplicitBot(agentId: string): Promise<BotDetailLookup> {
     `/api/agents/${encodeURIComponent(agentId)}`,
   );
   if (response.status === 404) return { status: "missing" };
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   if (!response.ok) throw new Error("读不到这位员工。");
 
   const body: unknown = await response.json().catch(() => null);
   if (!isAgentEnvelope(body)) throw new Error("读不到这位员工。");
+=======
+  if (!response.ok) throw new Error("Couldn't load this Bot.");
+
+  const body: unknown = await response.json().catch(() => null);
+  if (!isAgentEnvelope(body)) throw new Error("Couldn't load this Bot.");
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   return { bot: body.agent, status: "found" };
 }
 
@@ -99,7 +117,11 @@ function RouteComponent() {
     return (
       <div className="flex h-screen items-center justify-center p-6">
         <p className="text-destructive text-sm" role="alert">
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           读不到员工列表。
+=======
+          Couldn't load your Bots. Reload the page.
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         </p>
       </div>
     );
@@ -108,7 +130,11 @@ function RouteComponent() {
     return (
       <div className="flex h-screen items-center justify-center p-6">
         <p className="text-destructive text-sm" role="alert">
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           读不到这位员工。
+=======
+          Couldn't load this Bot. Reload the page.
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         </p>
       </div>
     );
@@ -118,8 +144,13 @@ function RouteComponent() {
       <div className="flex h-screen items-center justify-center p-6">
         <p className="text-muted-foreground text-sm">
           {agent
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
             ? `这个部署没有叫「${agent}」的员工。`
             : "这个部署还没有员工。"}
+=======
+            ? `There's no Bot called "${agent}".`
+            : "There are no Bots yet."}
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         </p>
       </div>
     );
@@ -151,18 +182,23 @@ function BotChat({ agentId, name }: { agentId: string; name: string }) {
    * a provider this app does not mount.
    */
   const stopped = useStoppedTurn(agentId);
+  // What the Bot did on its computer in this conversation, for the Activity pane beside its screen.
+  useBotActivity(agentId);
   const { watch } = Route.useSearch();
   const navigate = Route.useNavigate();
   const showComputer = (open: boolean) =>
     navigate({
       search: (previous) => ({ ...previous, watch: open ? true : undefined }),
     });
+  // A command in the chat clicked opens the Computer on its terminal.
+  useOpenComputerOnRequest(agentId, () => showComputer(true));
 
   return (
     <DetailPanel
       title="电脑"
       open={watch === true}
       onClose={() => showComputer(false)}
+      waiting={threadId ? <ConversationApprovals threadId={threadId} /> : null}
       detail={<ComputerViewPanel agentId={agentId} name={name} />}
     >
       <div className="flex h-full min-h-0 flex-col">
@@ -209,7 +245,11 @@ function BotChat({ agentId, name }: { agentId: string; name: string }) {
             data-testid="bot-chat-history-unavailable"
             role="alert"
           >
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
             这段对话更早的消息没能加载，员工在没有这些消息的情况下回答。
+=======
+            Couldn't load earlier messages. The Bot is answering without them.
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
           </p>
         ) : null}
         {/*
@@ -242,6 +282,7 @@ function BotChat({ agentId, name }: { agentId: string; name: string }) {
           {threadId ? (
             <CopilotChat
               agentId={agentId}
+              messageView={{ assistantMessage: TelemetryAssistantMessage }}
               key={`${agentId}:${threadId}`}
               threadId={threadId}
             />

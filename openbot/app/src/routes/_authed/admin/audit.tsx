@@ -1,53 +1,28 @@
-import { IconDownload, IconRefresh } from "@tabler/icons-react";
-import { useQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
 import {
-  PageEmpty,
-  PageSection,
-  PageShell,
-} from "@/components/layout/page-shell";
-import { Button } from "@/components/ui/button";
-import { useBotNames } from "@/lib/agents/bot-names";
-import {
-  DID_NOT_HAPPEN_EVENT_TYPES,
-  eventTypeFilter,
-  outcomeOf,
-  REFUSED_EVENT_TYPES,
-} from "@/lib/audit/outcome";
-import { auditEventsQueryOptions, auditExportUrl } from "@/lib/audit/queries";
-import { silenceOf } from "@/lib/audit/silence";
-import { client } from "@/lib/client";
+  createFileRoute,
+  useNavigate,
+  useSearch,
+} from "@tanstack/react-router";
+import { z } from "zod";
+import { RecordingSection } from "@/components/admin/controls/recording-section";
+import { AuditPage } from "@/components/manage/audit-page";
 
 /**
- * Read surface for policy, computer, component, MCP, and credential audit events.
+ * Read surface for policy, computer, component, MCP, and credential audit events. `bot` narrows it
+ * to one Bot, which is how a Bot's own Activity page links here.
  */
 export const Route = createFileRoute("/_authed/admin/audit")({
-  component: AuditPage,
+  validateSearch: z.object({ bot: z.string().optional() }),
+  component: AdminAuditPage,
 });
 
-/** One row as the API returns it. */
-type AuditEvent = {
-  id: string;
-  actorUserId: string | null;
-  /** Absent on a deployment that has not migrated yet. */
-  initiatorKind?: string;
-  initiatorId?: string | null;
-  eventType: string;
-  targetType: string;
-  targetId: string | null;
-  payload: Record<string, unknown>;
-  createdAt: string;
-};
-
-/*
- * The saved views, built from the same lists the row label and colour are decided by.
+/**
+ * The log, then what else is recorded and where it is exported.
  *
- * Written out by hand here and again below, they had already drifted: a refusal on one list and not
- * the other is a row drawn as "Allowed" or a row missing from the view somebody clicks to ask what
- * this deployment refused. See `@/lib/audit/outcome`, which is now the only place either question is
- * answered.
+ * Search is read without `strict`, so the page also renders where it is mounted on a route of
+ * another name, as the audit tests do. The route's own `validateSearch` has already checked it.
  */
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 const FILTERS = [
   { label: "全部", search: "" },
   { label: "电脑操作", search: "?eventType=computer.action_allowed" },
@@ -541,3 +516,14 @@ function hostOf(url: string): string {
     return url;
   }
 }
+=======
+function AdminAuditPage() {
+  const { bot } = useSearch({ strict: false }) as { bot?: string };
+  const navigate = useNavigate();
+  return (
+    <AuditPage bot={bot} onClearBot={() => navigate({ to: "/admin/audit" })}>
+      <RecordingSection />
+    </AuditPage>
+  );
+}
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b

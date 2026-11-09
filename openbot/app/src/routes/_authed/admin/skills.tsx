@@ -1,6 +1,5 @@
-import { IconFileText, IconPlus } from "@tabler/icons-react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 import * as React from "react";
 import { useState } from "react";
 import {
@@ -56,19 +55,14 @@ import {
   type WakerGroup,
   wakerGroupsQueryOptions,
 } from "@/lib/waker-groups/queries";
+=======
+import { SkillsPage } from "@/components/manage/skills-page";
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 
-/**
- * The deployment's skills: named instructions a person invokes with `/` and a Bot follows.
- *
- * Its own screen rather than a tab on Plugins, because a skill is not a connector. It adds no
- * capability at all — it can only ask a Bot to use tools that Bot was already granted, and every one
- * of those calls is still decided, policy-checked and audited. That is why anybody may write one for
- * themselves on their own Skills page, while adding an MCP server stays an administrator's decision.
- * Sitting in a list of vendors made it look like a third kind of thing a Bot could reach.
- */
 export const Route = createFileRoute("/_authed/admin/skills")({
-  component: RouteComponent,
+  component: SkillsPage,
 });
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 
 const EMPTY_DRAFT = { slug: "", title: "", summary: "", instructions: "" };
 
@@ -402,3 +396,5 @@ function RouteComponent() {
     </PageShell>
   );
 }
+=======
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b

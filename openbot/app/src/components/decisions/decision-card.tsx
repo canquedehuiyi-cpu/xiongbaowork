@@ -18,7 +18,11 @@ export type DecisionOption = {
 
 /** The answer, once given: drawn as one line where the choices were. */
 export type DecisionAnswer = {
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   /** The badge: "已批准", "已拒绝", "已回答". */
+=======
+  /** The badge: "Approved", "Declined", "Answered". */
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   label: string;
   /** The line under it, when it says more than the badge: the option picked, in its own words. */
   choice?: string;
@@ -159,7 +163,11 @@ export function DecisionCard({
             {answer ? (
               <Badge tone={answer.tone}>{answer.label}</Badge>
             ) : (
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
               <Badge tone="caution">等你决定</Badge>
+=======
+              <Badge tone="caution">Waiting on you</Badge>
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
             )}
           </motion.span>
         </AnimatePresence>
@@ -246,7 +254,11 @@ export function DecisionCard({
                   />
                   <Dot on={picked === OTHER} />
                   <input
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
                     aria-label="你的回答"
+=======
+                    aria-label="Your answer"
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
                     className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
                     disabled={submitting}
                     onChange={(event) => setText(event.target.value)}
@@ -273,10 +285,17 @@ export function DecisionCard({
             <div className="flex justify-end px-4 py-2.5">
               <Button disabled={!canSend} onClick={send}>
                 {submitting
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
                   ? "正在发送…"
                   : picked === OTHER
                     ? "发送"
                     : (pickedOption?.label ?? "发送")}
+=======
+                  ? "Sending…"
+                  : picked === OTHER
+                    ? "Send"
+                    : (pickedOption?.label ?? "Send")}
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
               </Button>
             </div>
           </motion.div>

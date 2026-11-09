@@ -18,13 +18,22 @@ import {
  *
  * A coworker with no token can still hold a conversation. What it cannot do is reach anything outside
  * one, which is the right default for a URL somebody pasted.
+ *
+ * A Bot OpenBot runs itself, the harness picked in setup, is handed OpenBot's key on every run and
+ * uses its tools with none of its own. The panel says so and offers nothing to generate: it used to
+ * tell the personal starter it "can't use tools" while it searched the web and used the browser.
  */
+export const KEY_FROM_OPENBOT =
+  "OpenBot runs this Bot, so it can use its tools without a key.";
+
 export function CallbackTokenPanel({
   agentId,
   hasToken,
+  fromOpenBot = false,
 }: {
   agentId: string;
   hasToken: boolean;
+  fromOpenBot?: boolean;
 }) {
   const queryClient = useQueryClient();
   const issue = useMutation(issueCallbackTokenMutationOptions(queryClient));
@@ -34,8 +43,24 @@ export function CallbackTokenPanel({
   const [token, setToken] = useState<string | null>(null);
   const error = issue.error ?? revoke.error;
 
+  const heading = (
+    <h2 className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+      Key for tools
+    </h2>
+  );
+
+  if (fromOpenBot) {
+    return (
+      <section className="mt-6 grid gap-2">
+        {heading}
+        <p className="text-muted-foreground text-sm">{KEY_FROM_OPENBOT}</p>
+      </section>
+    );
+  }
+
   return (
     <section className="mt-6 grid gap-2">
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       <h2 className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
         回调工具
       </h2>
@@ -44,11 +69,25 @@ export function CallbackTokenPanel({
         {hasToken
           ? "这位员工持有凭据，所以能使用授予它的工具。轮换会换掉它，旧的立刻失效。"
           : "这位员工没有凭据，所以能对话，但用不了授予它的任何工具。生成一个，放进这位员工的配置里。"}
+=======
+      {heading}
+
+      <p className="text-muted-foreground text-sm">
+        {hasToken
+          ? "This Bot has a key, so it can use its tools. If you make a new key, the old one stops working right away."
+          : "This Bot has no key yet. It can talk but can't use tools. Generate a key and add it to your agent's configuration."}
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       </p>
 
       {token ? (
         <div className="grid gap-2 rounded-lg border border-border bg-card p-3">
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           <p className="font-medium text-sm">现在就复制。之后不会再显示。</p>
+=======
+          <p className="font-medium text-sm">
+            Copy this key now. You won't see it again.
+          </p>
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
           {/*
            * Selectable and wrapped rather than a copy button alone: somebody pasting this into a
            * deployment config on another machine may not have a clipboard between the two.
@@ -57,7 +96,11 @@ export function CallbackTokenPanel({
             {token}
           </code>
           <p className="text-muted-foreground text-xs">
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
             部署只保存它的哈希，所以这里没有办法再给你看一次。
+=======
+            If you lose it, make a new one.
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
           </p>
           <Button onClick={() => setToken(null)} size="sm" variant="outline">
             完成
@@ -71,7 +114,15 @@ export function CallbackTokenPanel({
             size="sm"
             variant="outline"
           >
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
             {issue.isPending ? "正在生成…" : hasToken ? "轮换令牌" : "生成令牌"}
+=======
+            {issue.isPending
+              ? "Generating…"
+              : hasToken
+                ? "Make a new key"
+                : "Generate key"}
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
           </Button>
           {hasToken ? (
             <Button
@@ -80,7 +131,11 @@ export function CallbackTokenPanel({
               size="sm"
               variant="outline"
             >
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
               {revoke.isPending ? "正在吊销…" : "吊销"}
+=======
+              {revoke.isPending ? "Revoking…" : "Revoke key"}
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
             </Button>
           ) : null}
         </div>

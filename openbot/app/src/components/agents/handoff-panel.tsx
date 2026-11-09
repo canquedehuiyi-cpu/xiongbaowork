@@ -1,4 +1,10 @@
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+=======
+import { IconArrowsExchange, IconBolt, IconLock } from "@tabler/icons-react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { Fragment } from "react";
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import {
   Empty,
@@ -75,6 +81,7 @@ export function HandoffPanel({ agentId }: { agentId: string }) {
           <span className="text-muted-foreground text-xs tabular-nums">
             已允许 {granted} / {total}
           </span>
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         ) : null}
       </header>
 
@@ -108,6 +115,26 @@ export function HandoffPanel({ agentId }: { agentId: string }) {
             </ItemDescription>
           </ItemContent>
         </Item>
+=======
+        ) : null
+      }
+      description="Choose which Bots this Bot can ask for help. Their answers appear in the same conversation under their own names. This does not change who can ask this Bot for help."
+      title="Bots it can ask"
+    >
+      {/* Facts about the deployment rather than rows to act on, so said as sentences. */}
+      {enabled ? null : (
+        <PageEmpty icon={IconArrowsExchange} title="Handoffs are off">
+          An admin turned off handing work between Bots. These settings are
+          kept, and they apply again once it's back on.
+        </PageEmpty>
+      )}
+
+      {grantable ? null : (
+        <PageEmpty icon={IconLock} title="Can't hand off work">
+          This Bot can't hand work to other Bots. Other Bots can still hand work
+          to it.
+        </PageEmpty>
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       )}
 
       {setGrant.error ? (
@@ -117,6 +144,7 @@ export function HandoffPanel({ agentId }: { agentId: string }) {
       ) : null}
 
       {grantable && total === 0 ? (
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         <Empty className="h-[180px] border border-dashed">
           <EmptyHeader>
             <EmptyTitle className="text-muted-foreground">
@@ -168,14 +196,68 @@ export function HandoffPanel({ agentId }: { agentId: string }) {
                 />
               </ItemActions>
             </Item>
+=======
+        <PageEmpty icon={IconBolt} title="No other Bots yet">
+          When there are more, you can let this Bot ask them here.
+        </PageEmpty>
+      ) : null}
+      {candidates.length > 0 ? (
+        <PageRows>
+          {candidates.map((candidate, index) => (
+            <Fragment key={candidate.id}>
+              {index > 0 ? <Separator /> : null}
+              <Item size="sm">
+                <ItemMedia>
+                  <AbstractAvatar
+                    name={candidate.name}
+                    seed={candidate.avatarSeed}
+                    size={28}
+                  />
+                </ItemMedia>
+                <ItemContent>
+                  <ItemTitle>{candidate.name}</ItemTitle>
+                  {/*
+                   * Said on the row, because otherwise it is a coworker that is not on your roster
+                   * appearing in a list with no explanation. It is here only because this Bot may
+                   * already ask it, and that is the sentence a person needs to decide what to do.
+                   */}
+                  <ItemDescription>
+                    {candidate.hidden
+                      ? `${candidate.title} · hidden from your Bots list`
+                      : candidate.title}
+                  </ItemDescription>
+                </ItemContent>
+                <ItemActions>
+                  <Switch
+                    aria-label={`Let this Bot ask ${candidate.name}`}
+                    checked={reachable.includes(candidate.id)}
+                    disabled={!canGrant || setGrant.isPending}
+                    onCheckedChange={(next: boolean) =>
+                      setGrant.mutate({
+                        agentId,
+                        ref: candidate.id,
+                        granted: next,
+                      })
+                    }
+                  />
+                </ItemActions>
+              </Item>
+            </Fragment>
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
           ))}
         </div>
       ) : null}
 
       {canGrant ? null : (
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         <p className="text-muted-foreground text-xs">
           可以问哪些员工，由管理员决定。
         </p>
+=======
+        <PageEmpty icon={IconLock} title="Set by an admin">
+          An admin decides which Bots this one can ask.
+        </PageEmpty>
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       )}
     </section>
   );

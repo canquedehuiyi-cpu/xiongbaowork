@@ -7,18 +7,24 @@ import {
 } from "@tanstack/react-query";
 import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { motion, useReducedMotion } from "motion/react";
-import { useEffect, useRef } from "react";
 import { z } from "zod";
 import { AgentProfile } from "@/components/agents/agent-profile";
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 import { hasUnseenActivity } from "@/components/app-sidebar/app-sidebar";
+=======
+import { ConversationApprovals } from "@/components/approvals/inline-approval";
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 import { BotPausedBanner } from "@/components/bot-profile/pause-banner";
 import { ChannelAvatar } from "@/components/channels/avatar";
 import { ChannelChat } from "@/components/channels/channel-chat";
+import { ConversationActions } from "@/components/channels/conversation-actions";
 import { ComputerChatControls } from "@/components/computer/computer-controls";
 import { ComputerViewPanel } from "@/components/computer/computer-panel";
+import { useAutoWatchScreen } from "@/components/computer/use-auto-watch-screen";
 import { DetailPanel } from "@/components/layout/detail-panel";
 import { SidebarToggle } from "@/components/layout/sidebar-toggle";
 import { Button } from "@/components/ui/button";
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 import { markChannelReadMutationOptions } from "@/lib/channels/mutations";
 import {
   type AgentChannel,
@@ -26,6 +32,11 @@ import {
   channelQueryOptions,
 } from "@/lib/channels/queries";
 import { onComputerActivity } from "@/lib/copilot/computer-activity";
+=======
+import { useMarkOpenChannelRead } from "@/lib/channels/mark-read";
+import { type AgentChannel, channelQueryOptions } from "@/lib/channels/queries";
+import { useOpenComputerOnRequest } from "@/lib/computers/panel-view";
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 
 const chatSearchSchema = z.object({
   settings: z.boolean().optional(),
@@ -38,8 +49,11 @@ const EASE_OUT = [0.23, 1, 0.32, 1] as const;
 const HEADING_ENTRANCE_SECONDS = 0.18;
 const HEADING_ENTRANCE_OFFSET = "translateY(4px)";
 
-/** Shared detail pane width for the live screen view. */
-const SCREEN_PANEL_WIDTH = 400;
+/**
+ * Shared detail pane width for the live screen view. A glimpse, not a place to read the page: it shows that the Bot is
+ * browsing and roughly what, and the full-size view (one click on the picture) is where the page is read.
+ */
+const SCREEN_PANEL_WIDTH = 360;
 
 export const Route = createFileRoute("/_authed/_app/channel/$channelId")({
   validateSearch: chatSearchSchema,
@@ -87,28 +101,29 @@ function RouteComponent() {
   }, [channelId, unseen, markReadMutate]);
 
   // Browser activity may auto-open the screen once per run unless this run was dismissed.
-  const dismissedEpoch = useRef<number | null>(null);
-  const runEpoch = useRef<number | null>(null);
-  useEffect(() => {
-    if (!agentId) return;
-    return onComputerActivity((activity) => {
-      if (activity.botId !== agentId) return;
-      runEpoch.current = activity.epoch;
-      if (dismissedEpoch.current === activity.epoch) return;
+  const autoWatch = useAutoWatchScreen({
+    botId: agentId,
+    watching: isWatching,
+    busy: isSettingsOpen,
+    open: () =>
       navigate({
-        search: (previous) =>
-          previous.watch === true || previous.settings === true
-            ? previous
-            : { ...previous, settings: undefined, watch: true },
-      });
-    });
-  }, [agentId, navigate]);
+        search: (previous) => ({
+          ...previous,
+          settings: undefined,
+          watch: true,
+        }),
+      }),
+    close: () =>
+      navigate({ search: (previous) => ({ ...previous, watch: undefined }) }),
+  });
+
+  // A command in the chat clicked opens the Computer on its terminal.
+  useOpenComputerOnRequest(agentId, () => show("watch"));
 
   // Settings and watch share one pane; opening either clears the other URL flag.
   const show = (next: "settings" | "watch" | null) => {
     // Dismissal applies only to the current browser-activity run.
-    if (next !== "watch" && isWatching)
-      dismissedEpoch.current = runEpoch.current;
+    if (next !== "watch" && isWatching) autoWatch.dismiss();
     return navigate({
       search: (previous) => ({
         ...previous,
@@ -123,18 +138,41 @@ function RouteComponent() {
       onClose={() => show(null)}
       open={(isSettingsOpen || isWatching) && agentId !== undefined}
       detailWidth={isWatching ? SCREEN_PANEL_WIDTH : undefined}
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       title={isWatching ? "电脑" : undefined}
+=======
+      title={isWatching ? "Computer" : undefined}
+      waiting={
+        channel.data ? (
+          <ConversationApprovals threadId={channel.data.threadId} />
+        ) : null
+      }
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       detail={
         agentId === undefined ? null : isWatching ? (
           // Manual watch remains active even when there is no current browser action.
           <ComputerViewPanel agentId={agentId} name={channel?.data?.name} />
         ) : (
-          <AgentProfile agentId={agentId} />
+          <AgentProfile
+            agentId={agentId}
+            footer={
+              channel.data ? (
+                <ConversationActions
+                  channelId={channelId}
+                  leave={() => navigate({ to: "/" })}
+                  name={channel.data.name}
+                />
+              ) : null
+            }
+          />
         )
       }
     >
       <div className="flex flex-col">
-        <div className="min-h-12 border-b border-border sticky top-0 flex flex-row flex-wrap items-center justify-between px-3 py-2 gap-2">
+        <div
+          className="min-h-12 border-b border-border sticky top-0 flex flex-row flex-wrap items-center justify-between px-3 py-2 gap-2"
+          data-slot="conversation-header"
+        >
           {/* Keyed on the displayed name so cold channel loads animate the resolved name, not the id. */}
           <div className="flex min-w-0 items-center gap-1.5">
             <SidebarToggle />
@@ -181,7 +219,11 @@ function RouteComponent() {
               onOpenChange={(open) => show(open ? "watch" : null)}
             />
             <Button
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
               aria-label="会话里的员工"
+=======
+              aria-label="This conversation's Bot"
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
               aria-pressed={isSettingsOpen}
               className={isSettingsOpen ? "bg-foreground/5" : undefined}
               disabled={agentId === undefined}
@@ -224,7 +266,11 @@ function ChannelBody({
   if (hasError || !channel) {
     return (
       <p className="p-8 text-sm text-destructive" role="alert">
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         读不到这段会话。
+=======
+        Couldn't load this conversation. Reload the page.
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       </p>
     );
   }

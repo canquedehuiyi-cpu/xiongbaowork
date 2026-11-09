@@ -105,7 +105,11 @@ export function ProposedBotCard({
   if (!respond) {
     return (
       <GalleryFrame title={titleFor(args.name, clashes)}>
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         <p className="text-muted-foreground text-sm">正在写这位员工…</p>
+=======
+        <p className="text-muted-foreground text-sm">Writing the Bot…</p>
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       </GalleryFrame>
     );
   }
@@ -125,7 +129,13 @@ export function ProposedBotCard({
     } catch (cause) {
       // Left on the card with the buttons still live. See `refusal` above.
       setSending(null);
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       setRefusal(cause instanceof Error ? cause.message : "这位员工没有建成。");
+=======
+      setRefusal(
+        cause instanceof Error ? cause.message : "The Bot wasn't created.",
+      );
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       return;
     }
     /*
@@ -145,8 +155,13 @@ export function ProposedBotCard({
       action={<Badge tone="caution">等你决定</Badge>}
       caption={
         clashes
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           ? `这里已经有一位「${clashes.title}」，是${OWNERSHIP_WORD[clashes.ownership] ?? clashes.ownership}。名字可以重复，但两个同名的员工在频道列表里很难分清。`
           : "你按下按钮之前，什么都不会创建。"
+=======
+          ? `There's already a ${clashes.title}, and it's ${clashes.ownership === "the deployment's" ? "built into OpenBot" : clashes.ownership}. Two Bots with the same name are hard to tell apart.`
+          : "Nothing is created until you press Create it."
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       }
       title={titleFor(values.name, clashes)}
     >
@@ -168,7 +183,11 @@ export function ProposedBotCard({
       </dl>
 
       <p className="mt-3 text-muted-foreground text-xs">
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         它的常驻指令。每一轮都会把这段文字交给模型。
+=======
+        Its instructions. It follows these every time it replies.
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       </p>
       {/*
        * Scrolled rather than clamped, and the distinction is the whole point of the card. A clamp
@@ -180,7 +199,11 @@ export function ProposedBotCard({
       </p>
 
       <p className="mt-2 text-muted-foreground text-xs">
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         它建好时是私有的，没有地址、没有连接器、也没有工具。它需要碰到的东西，之后在它的资料页里授予。
+=======
+        It starts private, with no apps. Apps are added on its page afterwards.
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       </p>
 
       {refusal ? (
@@ -189,6 +212,7 @@ export function ProposedBotCard({
         </p>
       ) : null}
 
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       <div className="mt-4 flex gap-2">
         <Button
           disabled={Boolean(sending)}
@@ -197,6 +221,9 @@ export function ProposedBotCard({
         >
           {sending === "create" ? "正在创建…" : "创建"}
         </Button>
+=======
+      <div className="mt-4 flex justify-end gap-2">
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         <Button
           disabled={Boolean(sending)}
           onClick={() => void decline()}
@@ -204,6 +231,13 @@ export function ProposedBotCard({
           variant="outline"
         >
           {sending === "decline" ? "…" : "不创建"}
+        </Button>
+        <Button
+          disabled={Boolean(sending)}
+          onClick={() => void make()}
+          size="sm"
+        >
+          {sending === "create" ? "Creating…" : "Create it"}
         </Button>
       </div>
     </GalleryFrame>
@@ -214,8 +248,13 @@ function titleFor(
   name: string | undefined,
   clashes: { title: string } | undefined,
 ): string {
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   const called = name?.trim() ? name.trim() : "一位新员工";
   return clashes ? `再创建一位「${called}」` : `创建「${called}」`;
+=======
+  const called = name?.trim() ? name.trim() : "a new Bot";
+  return clashes ? `Create ${called}, again` : `Create ${called}`;
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 }
 
 /**
@@ -238,7 +277,11 @@ function TalkToIt({
       search={{ agent: agentId }}
       to="/wakers"
     >
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       打开「{name?.trim() || "这位员工"}」
+=======
+      Open {name?.trim() || "the Bot"}
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     </Link>
   );
 }
@@ -273,11 +316,19 @@ function Unwritable({
 
   return (
     <GalleryFrame
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       action={<Badge tone="neutral">未创建</Badge>}
       title="创建一位员工"
     >
       <p className="text-sm">
         按现在写的内容建不出这位员工，所以没有来问你。正在重新起草。
+=======
+      action={<Badge tone="neutral">Not created</Badge>}
+      title="Create a Bot"
+    >
+      <p className="text-sm">
+        This Bot couldn't be created as written. It's being rewritten.
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       </p>
     </GalleryFrame>
   );

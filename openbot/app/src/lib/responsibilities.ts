@@ -56,7 +56,11 @@ export function responsibilitiesQueryOptions() {
     queryKey: responsibilityKeys.all,
     queryFn: (): Promise<ResponsibilityRecord[]> =>
       client("/api/responsibilities", "responsibilities", {
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         fallback: "读不到长期职责",
+=======
+        fallback: "Could not load goals",
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       }),
     refetchInterval: 10_000,
   });
@@ -66,7 +70,11 @@ export function responsibilityRunsQueryOptions(id: string) {
     queryKey: responsibilityKeys.runs(id),
     queryFn: (): Promise<ResponsibilityRunRecord[]> =>
       client(`/api/responsibilities/${encodeURIComponent(id)}/runs`, "runs", {
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         fallback: "读不到长期职责的运行记录",
+=======
+        fallback: "Could not load goal runs",
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       }),
     refetchInterval: 10_000,
   });
@@ -94,7 +102,11 @@ export function createResponsibility(input: {
     {
       method: "POST",
       body: input,
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       fallback: "长期职责没能创建",
+=======
+      fallback: "Could not create goal",
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     },
   );
 }
@@ -105,7 +117,11 @@ export function updateResponsibility(
   return client(`/api/responsibilities/${encodeURIComponent(id)}`, {
     method: "PATCH",
     body: patch,
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     fallback: "长期职责没能更新",
+=======
+    fallback: "Could not update goal",
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   });
 }
 export function responsibilityAction(
@@ -114,7 +130,11 @@ export function responsibilityAction(
 ) {
   return client(`/api/responsibilities/${encodeURIComponent(id)}/${action}`, {
     method: "POST",
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     fallback: "长期职责没能修改",
+=======
+    fallback: "Could not change goal",
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   });
 }
 export function createGithubBinding(repository: string, secret: string) {

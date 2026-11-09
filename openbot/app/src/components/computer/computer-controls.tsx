@@ -7,18 +7,23 @@ import { useComputerControl } from "@/lib/computers/use-control";
 export function ComputerControlButton({
   computerId,
   onTakeControl,
+  prominent = false,
 }: {
   computerId: string;
   onTakeControl?: () => void;
+  /** Take control drawn solid rather than outlined: where it is the one action offered, over the Bot's screen. */
+  prominent?: boolean;
 }) {
-  const { control, busy, problem, change } = useComputerControl(computerId);
-  const human = control?.holder === "human";
+  const { control, busy, problem, change, someoneElse } =
+    useComputerControl(computerId);
+  // Someone else's wheel is not the person's to hand back, and not theirs to take from under them either.
+  const human = control?.holder === "human" && !someoneElse;
   return (
     <div className="flex flex-col items-start gap-1">
       <Button
         size="sm"
-        variant={human ? "default" : "outline"}
-        disabled={busy || !control || control.transitioning}
+        variant={human || prominent ? "default" : "outline"}
+        disabled={busy || !control || control.transitioning || someoneElse}
         aria-busy={busy || control?.transitioning}
         onClick={async () => {
           if (await change?.(human ? "release" : "take")) {
@@ -51,12 +56,15 @@ export function ComputerChatControls({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const { control } = useComputerControl(computerId ?? "", Boolean(computerId));
+  const { control, someoneElse } = useComputerControl(
+    computerId ?? "",
+    Boolean(computerId),
+  );
   const needsYou = Boolean(
     control &&
       (control.requested ||
-        control.holder === "human" ||
-        control.request?.status === "interrupted" ||
+        (control.holder === "human" && !someoneElse) ||
+        control.recoveryRequired ||
         control.secretWanted !== undefined),
   );
   const promptKey = needsYou

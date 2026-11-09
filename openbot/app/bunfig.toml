@@ -3,11 +3,11 @@
 # this directory -- the twin of server/bunfig.toml.
 #
 # Bun reads bunfig.toml from the current working directory and nowhere else, so the root one applies
-# to `bun test app/` run from the root and not to `bun test` run from here. Without this file
-# tests/preload.ts never loads from inside `app`, Base UI binds its layout effect to a no-op, every
-# Dialog, Sheet and popover renders nothing, and the files that open one fail against an empty
-# <body> with no error to explain it. Measured 2026-10-09: the six app test files that failed on their
-# own went from 20 failures to 1 when run with this preload.
+# to `bun test app/tests` run from the root and not to `bun test` run from here. Without this file
+# nothing evaluates Base UI while a DOM exists (see tests/preload.ts): its layout effect is fixed as
+# a no-op, every Dialog, Sheet and popover mounts nothing, and each test that opens one waits out
+# findByRole("dialog") and fails at testing-library's one-second timeout, while passing from the root.
 #
-# tests/bunfig-preload.test.ts fails if this list and the root's stop naming the same scripts.
+# tests/bunfig-preload.test.ts and server/tests/bunfig-preload.test.ts fail if this list stops
+# agreeing with the root one.
 preload = ["../server/scripts/test-preload.ts", "./tests/preload.ts"]

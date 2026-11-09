@@ -4,6 +4,7 @@ import {
   type QueryClient,
 } from "@tanstack/react-query";
 import { client, tryClient } from "@/lib/client";
+import { settingsKeys } from "@/lib/settings/queries";
 import { type AgentChannel, type ChannelPage, channelKeys } from "./queries";
 
 /**
@@ -17,12 +18,22 @@ export function createChannelMutationOptions(queryClient: QueryClient) {
       const response = await client("/api/channels", {
         method: "POST",
         body: { agentIds },
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         fallback: "无法开始会话",
+=======
+        fallback: "Couldn't start a conversation.",
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       });
       return ((await response.json()) as { channel: AgentChannel }).channel;
     },
     onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: channelKeys.all }),
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: channelKeys.all }),
+        // Creating the first starter-Bot conversation claims this person's tour on the server.
+        queryClient.invalidateQueries({
+          queryKey: [...settingsKeys.all, "preferences"],
+        }),
+      ]),
   });
 }
 
@@ -83,7 +94,11 @@ export function setChannelPinnedMutationOptions(queryClient: QueryClient) {
       await client(`/api/channels/${variables.channelId}/pin`, {
         method: "PUT",
         body: { pinned: variables.pinned },
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         fallback: "无法置顶这段会话",
+=======
+        fallback: "Couldn't pin this conversation.",
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       });
     },
     onSuccess: () =>
@@ -104,7 +119,11 @@ export function markChannelReadMutationOptions(queryClient: QueryClient) {
     mutationFn: async (channelId: string) => {
       await client(`/api/channels/${channelId}/read`, {
         method: "PUT",
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         fallback: "无法把这段会话标为已读",
+=======
+        fallback: "Couldn't mark this conversation as read.",
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       });
     },
     onMutate: (channelId) => {
@@ -140,13 +159,26 @@ export function markChannelReadMutationOptions(queryClient: QueryClient) {
 }
 
 /** Soft-delete a channel for everyone in it. The server keeps the transcript; the roster forgets. */
-export function deleteChannelMutationOptions(queryClient: QueryClient) {
+export function deleteChannelMutationOptions(
+  queryClient: QueryClient,
+  discardFailedStart = false,
+) {
   return mutationOptions({
     mutationFn: async (channelId: string) => {
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       await client(`/api/channels/${channelId}`, {
         method: "DELETE",
         fallback: "无法删除这段会话",
       });
+=======
+      await client(
+        `/api/channels/${channelId}${discardFailedStart ? "?discardFailedStart=true" : ""}`,
+        {
+          method: "DELETE",
+          fallback: "Couldn't delete this conversation.",
+        },
+      );
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     },
     // The roster only. The open channel's detail query would refetch into the fresh 404 and
     // flash an error before the navigate-home lands; left alone, it keeps its cache and the

@@ -1,4 +1,10 @@
-import { IconLock, IconShieldCheck, IconUser } from "@tabler/icons-react";
+import {
+  IconLock,
+  IconSearch,
+  IconShieldCheck,
+  IconUser,
+  IconUsers,
+} from "@tabler/icons-react";
 import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
@@ -58,7 +64,11 @@ function describe(person: Person): string {
   if (person.revoked)
     return `已移除访问 · ${providers || "无登录方式"} · ${when}`;
   if (person.configuredAdmin) {
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     return `配置指定的管理员 · ${when}`;
+=======
+    return `Admin by configuration · ${when}`;
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   }
   return `${providers || "无登录方式"} · ${when}`;
 }
@@ -89,12 +99,21 @@ function PeoplePage() {
 
   return (
     <PageShell
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       description="所有登录过的人。管理员能进这些页面，其他人只和员工对话。"
       title="成员"
     >
       <PageSection
         description="列在 INITIAL_ADMIN_EMAILS 里的地址无论这里怎么显示都是管理员，所以不能在这里修改。"
         title="有哪些人"
+=======
+      description="Manage access for people who have signed in. Only admins can access the Admin pages."
+      title="People"
+    >
+      <PageSection
+        description="Addresses in INITIAL_ADMIN_EMAILS are always admins. You can't change them here."
+        title="Who is here"
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       >
         {failure ? (
           <p className="mt-4 text-destructive text-sm" role="alert">
@@ -105,7 +124,11 @@ function PeoplePage() {
           <p className="mt-4 text-muted-foreground text-sm" role="status">
             已停掉 {terminate.data.stopped.length} 台电脑
             {terminate.data.failed.length > 0
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
               ? `；${terminate.data.failed.length} 台没能停掉`
+=======
+              ? `. ${terminate.data.failed.length} couldn't be stopped`
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
               : ""}
             。他们的磁盘会保留。
           </p>
@@ -124,13 +147,25 @@ function PeoplePage() {
 
         {people.isPending ? null : people.error ? (
           <p className="mt-4 text-destructive text-sm" role="alert">
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
             读不到成员列表。
+=======
+            Couldn't load people. Reload the page.
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
           </p>
         ) : rows.length === 0 ? (
-          <PageEmpty>
+          <PageEmpty
+            icon={query ? IconSearch : IconUsers}
+            title={query ? "No matches" : "Nobody has signed in yet"}
+          >
             {query
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
               ? `没有人匹配「${query}」。`
               : "还没有人登录过。有人登录后会出现在这里。"}
+=======
+              ? `Nobody matches "${query}".`
+              : "People show here once they do."}
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
           </PageEmpty>
         ) : (
           <PageRows>
@@ -185,7 +220,11 @@ function PeoplePage() {
                         {person.revoked ? "恢复" : "移除"}
                       </Button>
                       <Switch
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
                         aria-label={`管理员：${person.email}`}
+=======
+                        aria-label={`Admin: ${person.email}`}
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
                         checked={person.role === "admin"}
                         disabled={busy || person.configuredAdmin || isSelf}
                         onCheckedChange={(checked) =>

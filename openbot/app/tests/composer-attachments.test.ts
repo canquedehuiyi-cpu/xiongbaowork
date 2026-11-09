@@ -78,8 +78,7 @@ describe("uploadToChannel", () => {
     global.fetch = (async () =>
       jsonResponse(
         {
-          error:
-            "'icon.svg' is an SVG, which can carry scripts and is not accepted.",
+          error: "'icon.svg' can't be attached. SVG files aren't accepted.",
         },
         415,
       )) as unknown as typeof fetch;
@@ -110,7 +109,11 @@ describe("uploadToChannel", () => {
 
     await expect(
       uploadToChannel("chan_1", "group_1")(file("receipt.png", "image/png")),
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     ).rejects.toThrow("「receipt.png」没能上传。");
+=======
+    ).rejects.toThrow('Couldn\'t upload "receipt.png". Try again.');
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   });
 
   test("a refusal whose `error` is empty throws the named fallback, not an empty refusal", async () => {
@@ -121,7 +124,11 @@ describe("uploadToChannel", () => {
 
     await expect(
       uploadToChannel("chan_1", "group_1")(file("receipt.png", "image/png")),
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     ).rejects.toThrow("「receipt.png」没能上传。");
+=======
+    ).rejects.toThrow('Couldn\'t upload "receipt.png". Try again.');
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   });
 
   test("a refusal whose `error` is not a string throws the named fallback", async () => {
@@ -130,7 +137,11 @@ describe("uploadToChannel", () => {
 
     await expect(
       uploadToChannel("chan_1", "group_1")(file("receipt.png", "image/png")),
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     ).rejects.toThrow("「receipt.png」没能上传。");
+=======
+    ).rejects.toThrow('Couldn\'t upload "receipt.png". Try again.');
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   });
 
   /**
@@ -151,7 +162,11 @@ describe("uploadToChannel", () => {
 
     const upload = uploadToChannel("chan_1", "group_1");
     await expect(upload(file("receipt.png", "image/png"))).rejects.toThrow(
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       "「receipt.png」没能上传。",
+=======
+      'Couldn\'t upload "receipt.png". Try again.',
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     );
     await expect(upload(file("receipt.png", "image/png"))).rejects.not.toThrow(
       /JSON/,
@@ -169,7 +184,11 @@ describe("uploadToChannel", () => {
 
     await expect(
       uploadToChannel("chan_1", "group_1")(file("receipt.png", "image/png")),
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     ).rejects.toThrow("「receipt.png」没能上传。");
+=======
+    ).rejects.toThrow('Couldn\'t upload "receipt.png". Try again.');
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   });
 });
 

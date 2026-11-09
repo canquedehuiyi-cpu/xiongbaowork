@@ -76,7 +76,11 @@ export function DataTable(props: Record<string, unknown>) {
   if (!parsed.success) {
     // Only a table still being written is waited for. Once its arguments are final, nothing more
     // is coming, and waiting would last for good.
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     if (!streaming) return <FailedCard reason={UNREADABLE} title="数据表格" />;
+=======
+    if (!streaming) return <FailedCard reason={UNREADABLE} title={TITLE} />;
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     return (
       <GalleryFrame title="表格">
         <p className="text-sm text-muted-foreground">正在等待完整的表格数据…</p>
@@ -228,7 +232,12 @@ export const GALLERY: GalleryComponent[] = [
     name: "showTable",
     title: TITLE,
     kind: "card",
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     summary: "显示一张可以按任意列排序的表格，方便把多条记录放在一起比较。",
+=======
+    summary:
+      "Shows a table you can sort by any column, for comparing records side by side.",
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     description:
       "Show a sortable table to compare records, plans, or other structured facts. Use when there are enough rows or fields that a Markdown list would be hard to compare. Supply up to eight columns and 100 rows, with exactly one cell per column. Use numbers for quantities so sorting is numeric. Show only data you have; do not invent rows.",
     parameters: DataTableProps,

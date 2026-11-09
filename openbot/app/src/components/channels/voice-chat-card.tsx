@@ -35,7 +35,11 @@ export function VoiceChatCard({ call }: { call: VoiceChatEntry }) {
           {call.transcript.map((entry) => (
             <div key={entry.id}>
               <p className="mb-0.5 text-xs font-medium text-muted-foreground">
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
                 {entry.role === "user" ? "你" : "员工"}
+=======
+                {entry.role === "user" ? "You" : "Bot"}
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
               </p>
               <p className="whitespace-pre-wrap text-sm leading-relaxed">
                 {entry.text}

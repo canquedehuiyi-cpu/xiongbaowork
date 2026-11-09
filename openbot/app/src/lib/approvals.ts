@@ -1,5 +1,14 @@
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 import { offersStandingRule as offersStandingRuleFor } from "@openbot/shared/standing-rule";
 import { queryOptions } from "@tanstack/react-query";
+=======
+import {
+  mutationOptions,
+  type QueryClient,
+  queryOptions,
+} from "@tanstack/react-query";
+import { botLifecycleKeys } from "@/lib/bot-lifecycle/queries";
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 import { client } from "@/lib/client";
 export type ApprovalDecision =
   | "allow_once"
@@ -20,7 +29,11 @@ export type ApprovalRuleInput = {
   scope: string;
   behaviour: RuleBehaviour;
 };
-export type ApprovalRuleRow = ApprovalRuleInput & { id: string };
+export type ApprovalRuleRow = ApprovalRuleInput & {
+  id: string;
+  /** The one account at the app a saved rule is for, where the person holds several. */
+  account?: string | null;
+};
 export const BEHAVIOUR_LABELS: Record<RuleBehaviour, string> = {
   allow: "不问直接做",
   pre_approved: "预先批准过才做",
@@ -66,6 +79,8 @@ export type ApprovalInboxData = {
     id: string;
     status: string;
     createdAt: string;
+    /** When the person (or a rule) decided it; null while it waits. */
+    decidedAt?: string | null;
     action: {
       botId: string;
       toolRef: string;
@@ -75,6 +90,8 @@ export type ApprovalInboxData = {
       toolCallId?: string;
       args: unknown;
       target: unknown;
+      /** Which of the person's accounts at the app, where they hold several. */
+      account?: string;
       policy?: {
         behaviour: "allow" | "ask" | "hand_off" | "deny";
         source: string;
@@ -102,8 +119,12 @@ export type ApprovalInboxData = {
     id: string;
     botId: string;
     threadId: string;
+    /** The conversation it was asked in, which is where it is answered. */
+    channelId?: string;
     question: string;
     why?: string;
+    /** The separate decisions inside the question, each answered on its own. */
+    parts?: { header: string; question: string; options?: string[] }[];
     createdAt: string;
   }[];
 };
@@ -118,6 +139,7 @@ export const approvalInboxOptions = () =>
     },
     refetchInterval: 10_000,
   });
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 /** One request as the inbox lists it. */
 export type ApprovalRequestData = ApprovalInboxData["requests"][number];
 
@@ -136,6 +158,63 @@ export const approvalRequestOptions = (id: string) =>
       );
       return response.json();
     },
+=======
+/**
+ * A request the person has decided and the server has not finished carrying on from.
+ *
+ * Decided (`approved` or `denied`) or started (`consumed`), the server runs the action, or tells the
+ * Bot it was declined, and then picks the conversation up where it stopped, in a turn no browser
+ * streams. It marks the request `completed` only once that turn has ended. So between the two, the
+ * conversation is the Bot's: the same fact a run on the wire is for a turn started here.
+ */
+const CARRYING_ON = new Set(["approved", "denied", "consumed"]);
+
+/**
+ * How long after the decision a request still counts as the server carrying on.
+ *
+ * The server stops a turn it carries on at five minutes (`TURN_LIMITS.turnTimeoutMs` in
+ * toolkit/limits.ts), and this allows twice that, as the routine sweep does for a run. A request
+ * still not `completed` after it is one the resume loop is retrying or giving up on, not a turn this
+ * conversation is in, and counting it would leave "Thinking" and Stop up, and messages parked behind
+ * them, for good.
+ */
+const CARRY_ON_MS = 2 * 5 * 60_000;
+
+/** Whether the server is carrying this conversation on after one of its approvals was decided. */
+export function carryingOnAfterApproval(
+  inbox: ApprovalInboxData | undefined,
+  threadId: string,
+  now = Date.now(),
+): boolean {
+  return (inbox?.requests ?? []).some(
+    (request) =>
+      request.action.threadId === threadId &&
+      CARRYING_ON.has(request.status) &&
+      now - Date.parse(request.decidedAt ?? request.createdAt) < CARRY_ON_MS,
+  );
+}
+
+/** Whether a conversation asks before every step, by its thread. Its own root: see below. */
+export const approvalThreadKeys = {
+  all: ["approval-thread"] as const,
+  detail: (threadId: string) => ["approval-thread", threadId] as const,
+};
+/**
+ * Whether this conversation asks before every step, which a task's started from a check-in does, as
+ * the server's gate decides it. Never stale: a conversation is a task's from the moment it exists,
+ * or never. Kept apart from `["approvals"]`, which every decision invalidates.
+ */
+export const threadAsksEveryStepQueryOptions = (threadId: string) =>
+  queryOptions({
+    queryKey: approvalThreadKeys.detail(threadId),
+    queryFn: (): Promise<boolean> =>
+      client(
+        `/api/approvals/threads/${encodeURIComponent(threadId)}`,
+        "asksEveryStep",
+        { fallback: "This conversation's approvals could not be checked." },
+      ),
+    staleTime: Number.POSITIVE_INFINITY,
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   });
 export const decideApproval = (id: string, decision: ApprovalDecision) =>
   client(`/api/approvals/${encodeURIComponent(id)}/decision`, {
@@ -188,11 +267,34 @@ export const revokeTeamApprovalRule = (id: string) =>
     method: "DELETE",
     fallback: "这条团队规则没能移除。",
   });
-export const answerPersonQuestion = (id: string, response: string) =>
-  client(`/api/approvals/questions/${encodeURIComponent(id)}/respond`, {
+/**
+ * Answer a question a Bot asked. Given in the open conversation (`inConversation`), it may be that
+ * conversation's to carry on: true means the question is closed and the conversation runs the answer
+ * as its own next turn; false means the server resumes the run that asked.
+ */
+export const answerPersonQuestion = async (
+  id: string,
+  response: string,
+  inConversation = false,
+) =>
+  (await client<boolean | undefined>(
+    `/api/approvals/questions/${encodeURIComponent(id)}/respond`,
+    "continueHere",
+    {
+      method: "POST",
+      body: inConversation ? { response, inConversation } : { response },
+      fallback: "Your answer could not be saved.",
+    },
+  )) === true;
+export const dismissPersonQuestion = (id: string) =>
+  client(`/api/approvals/questions/${encodeURIComponent(id)}/dismiss`, {
     method: "POST",
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     body: { response },
     fallback: "你的回答没能保存。",
+=======
+    fallback: "Couldn't dismiss that question.",
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   });
 export const updateApprovalRule = (
   id: string,
@@ -277,6 +379,66 @@ export const setEmployeeSecurity = (
     body: input,
     fallback: "这位员工的安全设置没能保存。",
   });
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
+=======
+export const revokeTeamApprovalRuleMutationOptions = (
+  queryClient: QueryClient,
+) =>
+  mutationOptions({
+    mutationFn: revokeTeamApprovalRule,
+    onSettled: settle(queryClient),
+  });
+/** Allow once, always allow, deny, or "I did it myself" on one waiting action. */
+export const decideApprovalMutationOptions = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({ id, choice }: { id: string; choice: ApprovalDecision }) =>
+      decideApproval(id, choice),
+    onSuccess: settle(queryClient),
+  });
+/** Answer a question a Bot asked mid-run; the run resumes with the answer. */
+export const answerPersonQuestionMutationOptions = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({
+      id,
+      response,
+      inConversation,
+    }: {
+      id: string;
+      response: string;
+      inConversation?: boolean;
+    }) => answerPersonQuestion(id, response, inConversation),
+    /*
+     * Answered is answered, whatever the turn that carries the answer comes to: the question's card
+     * goes at once, and the badge that counted it is read again rather than on its next poll.
+     */
+    onSuccess: (_continueHere, { id }) => {
+      queryClient.setQueryData<ApprovalInboxData>(approvalsKey, (inbox) =>
+        inbox
+          ? {
+              ...inbox,
+              questions: inbox.questions.filter(
+                (question) => question.id !== id,
+              ),
+            }
+          : inbox,
+      );
+      void queryClient.invalidateQueries({
+        queryKey: botLifecycleKeys.attention,
+      });
+      return settle(queryClient)();
+    },
+  });
+
+/** Put a question down unanswered. Everything is read again: a task waiting on it moves on too. */
+export const dismissPersonQuestionMutationOptions = (
+  queryClient: QueryClient,
+) =>
+  mutationOptions({
+    mutationFn: ({ id }: { id: string }) => dismissPersonQuestion(id),
+    onSuccess: () => queryClient.invalidateQueries(),
+  });
+
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 /**
  * The tools a Bot's permissions disable outright: a 禁用 mode, or a team row disabling the tool for
  * every action and target. The server leaves them out of what the model is offered and refuses them

@@ -63,7 +63,11 @@ export function GalleryPreview({
   if (shown.length === 0) {
     return (
       <p className="text-muted-foreground text-sm">
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         这位员工没有被授予任何组件，所以它用文字回答。
+=======
+        This Bot can't use any components yet. It answers in text.
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       </p>
     );
   }
@@ -120,7 +124,12 @@ function PreviewOf({ name }: { name: string }) {
      */
     return (
       <p className="text-muted-foreground text-sm">
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         它画的是本部署自己的记录，所以在员工请求之前没有东西可显示。
+=======
+        Shows OpenBot's own records. There's nothing to show until a Bot asks
+        for it.
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       </p>
     );
   }

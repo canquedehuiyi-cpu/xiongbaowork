@@ -48,7 +48,13 @@ export function chipAgentId(value: string): string {
 }
 
 export type ComposerDraft = {
-  /** Plain text, with chips flattened back to `@Agent` / `/command`. */
+  /**
+   * Plain text, with chips flattened back to `@Agent` / `/command`.
+   *
+   * A `/` chip shows a skill's name in the box, but flattens to its command (`/standup`, not
+   * `/Standup notes`): the command never changes, while a skill can be renamed, so a message keeps
+   * naming the skill it ran, and the transcript can find the skill again to draw its badge.
+   */
   text: string;
   /**
    * The single agent this message is addressed to, or `null` to let the channel pick its default.
@@ -86,10 +92,21 @@ export function toDraft(
   const lastCoworker = coworkerChips.at(-1);
 
   return {
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     text: segmentsToPlainText(segments).trim(),
     agentId: lastCoworker ? chipAgentId(lastCoworker.value) : null,
     crewTemplateId:
       crewChips.at(-1)?.value.slice(CREW_CHIP_PREFIX.length) ?? null,
+=======
+    text: segmentsToPlainText(
+      segments.map((segment) =>
+        segment.type === "chip" && segment.trigger === COMMAND_TRIGGER
+          ? { ...segment, displayText: segment.value }
+          : segment,
+      ),
+    ).trim(),
+    agentId: agentChips.at(-1)?.value ?? null,
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     commandIds: commandChips.map((chip) => chip.value),
     isEmpty: isSegmentsEmpty(segments),
     attachments,

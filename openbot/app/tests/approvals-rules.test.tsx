@@ -8,16 +8,40 @@ import {
 } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ApprovalInbox } from "@/components/approvals/inbox";
-import { InlineApproval } from "@/components/approvals/inline-approval";
+=======
 import {
-  BrowserActivity,
-  groupBrowserSteps,
-} from "@/components/channels/browser-activity";
+  createMemoryHistory,
+  createRootRoute,
+  createRouter,
+  RouterProvider,
+} from "@tanstack/react-router";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import type { ReactNode } from "react";
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+import { InlineApproval } from "@/components/approvals/inline-approval";
+import { ApprovalSettings } from "@/components/approvals/settings";
 import { toVisibleChatItems } from "@/components/channels/chat-messages";
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 import { offersStandingRule, POLICY_SOURCE_LABELS } from "@/lib/approvals";
+=======
+import {
+  groupToolSteps,
+  ToolActivity,
+} from "@/components/channels/tool-activity";
+import { TeamBotConsents } from "@/components/settings/team-bot-consents";
+import { deploymentKeys } from "@/lib/deployment/queries";
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 
 beforeAll(() => GlobalRegistrator.register());
 afterEach(cleanup);
@@ -110,6 +134,7 @@ afterEach(() => {
   global.fetch = originalFetch;
 });
 
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 function draw() {
   return render(
     <QueryClientProvider
@@ -118,6 +143,24 @@ function draw() {
       }
     >
       <ApprovalInbox />
+=======
+/** A screen in a router of one route, for the links it holds. */
+function draw(
+  screen: ReactNode = <ApprovalSettings />,
+  edition: "team" | "personal" = "team",
+) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  client.setQueryData(deploymentKeys.capabilities(), { edition });
+  const router = createRouter({
+    history: createMemoryHistory({ initialEntries: ["/"] }),
+    routeTree: createRootRoute({ component: () => screen }),
+  });
+  return render(
+    <QueryClientProvider client={client}>
+      <RouterProvider router={router as never} />
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     </QueryClientProvider>,
   );
 }
@@ -140,6 +183,7 @@ test("team rules are locked for members, enforced auto-review is shown as requir
   const view = draw();
   await view.findByText("做之前先问（团队规则）");
   const mine = view.getByRole("combobox", {
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     name: "「mcp/gmail/*」的处理方式",
   }) as HTMLSelectElement;
   expect(mine.value).toBe("allow");
@@ -149,12 +193,29 @@ test("team rules are locked for members, enforced auto-review is shown as requir
   expect(view.getByText(/团队要求开启/)).toBeTruthy();
   expect(view.getByText(/团队把这一项限定为「每次都问」/)).toBeTruthy();
   expect(view.queryByText("团队设置")).toBeNull();
+=======
+    name: "Behaviour for Any action on Gmail",
+  });
+  expect(mine.textContent).toContain("Take action without asking");
+  expect(view.getByText("Locked")).toBeTruthy();
+  const review = view.getByRole("switch", { name: "Auto-review" });
+  expect(review.getAttribute("aria-checked")).toBe("true");
+  expect(view.getByText(/An admin requires this/)).toBeTruthy();
+  expect(
+    view.getByText(/An admin limits this to "Ask every time"/),
+  ).toBeTruthy();
+  expect(view.queryByText("Team settings")).toBeNull();
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 });
 
 test("a member changes a saved rule in place", async () => {
   const view = draw();
   const mine = await view.findByRole("combobox", {
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     name: "「mcp/gmail/*」的处理方式",
+=======
+    name: "Behaviour for Any action on Gmail",
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   });
   fireEvent.change(mine, { target: { value: "hand_off" } });
   await waitFor(() =>
@@ -165,7 +226,11 @@ test("a member changes a saved rule in place", async () => {
     }),
   );
   expect(
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     view.queryByRole("combobox", { name: "「mcp/drive/share」的处理方式" }),
+=======
+    view.queryByRole("combobox", { name: "Behaviour for Share on Drive" }),
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   ).toBeNull();
 });
 
@@ -200,6 +265,7 @@ test("a member adds a rule with one of the four behaviours", async () => {
   );
 });
 
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 test("an administrator sets the team-wide controls", async () => {
   role = "admin";
   try {
@@ -222,6 +288,152 @@ test("an administrator sets the team-wide controls", async () => {
   } finally {
     role = "user";
   }
+=======
+test("a rule that is not saved keeps the dialog open, with what was typed and why", async () => {
+  refuseRule = "That tool is not one a Bot can use.";
+  const view = draw(<ApprovalSettings />);
+  await view.findByText("Add a rule");
+  const user = userEvent.setup({ document });
+  await user.click(view.getByRole("button", { name: /Add a rule/ }));
+  await user.type(
+    await view.findByRole("textbox", { name: "Tool or app" }),
+    "mcp/nowhere/*",
+  );
+  await user.click(view.getByRole("button", { name: "Save rule" }));
+  const dialog = await view.findByRole("dialog");
+  expect((await within(dialog).findByRole("alert")).textContent).toContain(
+    "That tool is not one a Bot can use.",
+  );
+  expect(
+    (
+      within(dialog).getByRole("textbox", {
+        name: "Tool or app",
+      }) as HTMLInputElement
+    ).value,
+  ).toBe("mcp/nowhere/*");
+  // Saved the second time, the dialog closes.
+  await user.click(within(dialog).getByRole("button", { name: "Save rule" }));
+  await waitFor(() => expect(view.queryByRole("dialog")).toBeNull());
+  expect(
+    sent.filter((request) => request.path === "/api/approvals/rules"),
+  ).toHaveLength(2);
+});
+
+test("two rules for one tool are told apart by the rest of what they match, never cut short", async () => {
+  inboxOverride = {
+    rules: [
+      {
+        id: "anywhere",
+        botId: "*",
+        toolRef: "computer_click",
+        effect: "*",
+        scope: "*",
+        behaviour: "ask",
+      },
+      {
+        id: "one-site",
+        botId: "*",
+        toolRef: "computer_click",
+        effect: "write",
+        scope: "checkout.a-very-long-shop-name.example",
+        behaviour: "allow",
+      },
+    ],
+  };
+  const view = draw(<ApprovalSettings />);
+  const match = await view.findByText(
+    "changes on checkout.a-very-long-shop-name.example",
+  );
+  expect(match.className).toContain("line-clamp-none");
+  // The action, in its approval card's words, stays the row's title.
+  expect(view.getAllByText("Click")).toHaveLength(2);
+});
+
+test("with personal rules switched off by the team, they are shown as not applying and none can be added", async () => {
+  inboxOverride = {
+    team: { ...inbox.team, customRulesEnabled: false },
+  };
+  const view = draw(<ApprovalSettings />);
+  expect(
+    await view.findByText(
+      /An admin has turned off personal rules\. Yours are kept but don't apply\./,
+    ),
+  ).toBeTruthy();
+  expect(view.queryByText("Add a rule")).toBeNull();
+});
+
+test("an administrator is told where team settings are", async () => {
+  role = "admin";
+  const view = draw(<ApprovalSettings />);
+  const link = await view.findByRole("link", { name: "Admin → Approvals" });
+  expect(link.getAttribute("href")).toBe("/admin/approvals");
+});
+
+test("the personal edition's one person is not pointed at an Admin it does not have", async () => {
+  role = "admin";
+  const served = global.fetch;
+  global.fetch = Object.assign(
+    async (path: Parameters<typeof fetch>[0], init?: RequestInit) =>
+      String(path) === "/api/capabilities"
+        ? Response.json({ edition: "personal" })
+        : served(path, init),
+    { preconnect: originalFetch.preconnect },
+  );
+  const view = draw(<ApprovalSettings />, "personal");
+  await view.findByText("Rules for every Bot");
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(view.queryByRole("link", { name: "Admin → Approvals" })).toBeNull();
+});
+
+test("a member is not pointed at Admin", async () => {
+  const view = draw(<ApprovalSettings />);
+  await view.findByText("Rules for every Bot");
+  expect(view.queryByRole("link", { name: "Admin → Approvals" })).toBeNull();
+});
+
+test("rules for every Bot point to where rules for a single Bot are", async () => {
+  inboxOverride = {
+    rules: [
+      ...inbox.rules,
+      {
+        id: "one-bot",
+        botId: "shopper-bot",
+        toolRef: "computer_click",
+        effect: "*",
+        scope: "*",
+        behaviour: "ask",
+      },
+    ],
+  };
+  const view = draw(<ApprovalSettings />);
+  const link = await view.findByRole("link", { name: "that Bot's page" });
+  expect(link.getAttribute("href")).toBe("/bots");
+  // A rule naming one Bot lives on that Bot's page, not here.
+  expect(
+    view.queryByRole("combobox", { name: "Behaviour for Click" }),
+  ).toBeNull();
+});
+
+test("a rule naming no Bot this person can open is listed so it can be removed", async () => {
+  inboxOverride = {
+    rules: [
+      ...inbox.rules,
+      {
+        id: "orphan",
+        botId: "Shopper",
+        toolRef: "computer_click",
+        effect: "*",
+        scope: "*",
+        behaviour: "allow",
+      },
+    ],
+  };
+  const view = draw(<ApprovalSettings />);
+  expect(await view.findByText("Rules for other Bots")).toBeTruthy();
+  expect(
+    view.getByRole("combobox", { name: "Behaviour for Click" }),
+  ).toBeTruthy();
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 });
 
 test("a pending change is drawn in the conversation where the action was, and decided there", async () => {
@@ -238,8 +450,13 @@ test("a pending change is drawn in the conversation where the action was, and de
       />
     </QueryClientProvider>,
   );
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   await view.findByRole("region", { name: "等你批准" });
   expect(view.getByText(/需要你来做：click，目标 shop\.example/)).toBeTruthy();
+=======
+  await view.findByRole("region", { name: "Waiting for your approval" });
+  expect(view.getByText("Click on shop.example")).toBeTruthy();
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   // Another call's line is left to its own renderer.
   expect(view.getByText("Filled in field")).toBeTruthy();
   expect(view.queryByText("Clicked on page")).toBeNull();
@@ -256,7 +473,7 @@ test("a pending change is drawn in the conversation where the action was, and de
 test("in the real transcript shape a waiting click is folded into browser activity, so its card is drawn beside the group", async () => {
   // What the channel transcript builds from the conversation: a navigate that finished and the
   // click the chat stopped on, unanswered, grouped into one browser-activity line.
-  const items = groupBrowserSteps(
+  const items = groupToolSteps(
     toVisibleChatItems([
       { id: "u1", role: "user", content: "Order a pizza on httpbin" },
       {
@@ -289,17 +506,19 @@ test("in the real transcript shape a waiting click is folded into browser activi
         content: '{"ok":true,"url":"https://httpbin.org/forms/post"}',
       },
     ] as never),
+    // Browser steps fold whatever the app draws, so nothing else needs naming here.
+    () => false,
   );
-  const group = items.find((item) => item.kind === "browser");
-  if (group?.kind !== "browser") throw new Error("no browser group");
+  const group = items.find((item) => item.kind === "tools");
+  if (group?.kind !== "tools") throw new Error("no tool group");
   const view = render(
     <QueryClientProvider
       client={
         new QueryClient({ defaultOptions: { queries: { retry: false } } })
       }
     >
-      {/* BrowserActivity mounts the waiting cards beside its folded line itself. */}
-      <BrowserActivity group={group} active={false} />
+      {/* ToolActivity mounts the waiting cards beside its folded line itself. */}
+      <ToolActivity group={group} active={false} />
     </QueryClientProvider>,
   );
   await view.findByRole("region", { name: "等你批准" });
@@ -519,4 +738,101 @@ test("分享与公开发布底线同样只给「允许一次」，来源有中�
     expect(offersStandingRule({ source })).toBeFalse();
   expect(offersStandingRule({ source: "default" })).toBeTrue();
   expect(offersStandingRule(undefined)).toBeTrue();
+});
+
+test("personal approvals keep the person's controls without team-only explanations or shared Bots", async () => {
+  inboxOverride = {
+    teamRules: [],
+    team: { enforceAutoReview: false, customRulesEnabled: true },
+    hostCommands: "allow",
+  };
+  const view = draw(
+    <>
+      <ApprovalSettings />
+      <TeamBotConsents />
+    </>,
+    "personal",
+  );
+  await view.findByText("Rules for every Bot");
+  expect(view.queryByText(/Team rules are locked/)).toBeNull();
+  expect(view.queryByText("Shared Bots")).toBeNull();
+  expect(
+    view.getByRole("switch", { name: "Always ask before making changes" }),
+  ).toBeTruthy();
+  expect(view.getByRole("switch", { name: "Auto-review" })).toBeTruthy();
+});
+test("team approvals still show the shared Bot account controls", async () => {
+  const view = draw(<TeamBotConsents />);
+  expect(await view.findByText("Shared Bots")).toBeTruthy();
+  expect(view.getByRole("button", { name: "Reset" })).toBeTruthy();
+});
+
+/*
+ * What always asks, said where the switches are, in the words onboarding uses, and only what is
+ * true: a Bot deleting a file in its own workspace is an ordinary change
+ * (server/src/approvals/policy.ts, NOT_ACCOUNT_ACTIONS), so the page must not promise that every
+ * delete asks. The switch says it adds every change on top.
+ */
+test.each(["team", "personal"] as const)(
+  "the %s edition says what always asks, and that a Bot's own workspace is left out of it",
+  async (edition) => {
+    inboxOverride = {
+      teamRules: [],
+      team: { enforceAutoReview: false, customRulesEnabled: true },
+    };
+    const view = draw(<ApprovalSettings />, edition);
+    await view.findByText("Rules for every Bot");
+    const said = view.container.textContent ?? "";
+    for (const sentence of [
+      "Bots always ask for your approval before deleting, sending, sharing, or posting content in your apps or on websites.",
+      "They also ask before every edit or command in a folder on your own computer.",
+      "Bots leave payments and account security changes for you to do yourself.",
+      "Bots can create, edit, and delete files in their own workspace without asking, unless your settings or rules say so.",
+      "Require your approval for every change to your apps, websites, and files, including routine edits and updates.",
+    ])
+      expect(said.replace(/\s+/g, " ")).toContain(sentence);
+    expect(said).not.toContain(
+      "Review a Bot's changes to websites, connected apps, and files.",
+    );
+  },
+);
+
+/*
+ * FOUND IN THE 1.0 RC1 MAC PASS: a rule saved from an approval card's "Always allow here" was
+ * titled by its tool id ("computer_click", "composio-gmail/GMAIL_SEND_EMAIL" over "on
+ * composio-gmail"). It is titled in the words the card used for the same action.
+ */
+test("a saved rule is titled in its approval card's words, never by its tool id", async () => {
+  inboxOverride = {
+    rules: [
+      {
+        id: "click-here",
+        botId: "*",
+        toolRef: "computer_click",
+        effect: "*",
+        scope: "en.wikipedia.org",
+        behaviour: "allow",
+      },
+      {
+        id: "send-mail",
+        botId: "*",
+        toolRef: "composio-gmail/GMAIL_SEND_EMAIL",
+        effect: "*",
+        scope: "composio-gmail",
+        behaviour: "allow",
+      },
+    ],
+    teamRules: [],
+  };
+  const view = draw(<ApprovalSettings />);
+  expect(
+    await view.findByRole("combobox", { name: "Behaviour for Click" }),
+  ).toBeTruthy();
+  expect(view.getByText("Click")).toBeTruthy();
+  expect(view.getByText("on en.wikipedia.org")).toBeTruthy();
+  expect(view.getByText("Send email on Gmail")).toBeTruthy();
+  const text = view.container.textContent ?? "";
+  expect(text).not.toContain("computer_click");
+  expect(text).not.toContain("composio");
+  expect(text).not.toContain("GMAIL_SEND_EMAIL");
 });

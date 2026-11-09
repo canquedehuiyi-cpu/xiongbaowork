@@ -1,8 +1,15 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useEffect } from "react";
-import { type ChannelPage, type ChannelSummary, channelKeys } from "./queries";
+import { noticeChannelEvent } from "@/lib/notifications/reply-notice";
 import { socketUrl as buildSocketUrl } from "@/lib/socket-url";
+import {
+  type AgentChannel,
+  type ChannelPage,
+  type ChannelSummary,
+  type ChannelWork,
+  channelKeys,
+} from "./queries";
 
 /**
  * Keep the roster live.
@@ -72,8 +79,16 @@ export type ChannelActivityEvent = {
   lastMessage: string | null;
   lastMessageAt: string | null;
   lastMessageAgentId: string | null;
+  /**
+   * A Bot's reply, its first line as plain text, for the notice a reply raises while OpenBot is out
+   * of sight. `lastMessage` runs every line into one. Only on a Bot's message, and absent from a
+   * server older than this.
+   */
+  firstLine?: string;
   /** The channel's newly written summary. Absent on an ordinary activity event. */
   summary?: string;
+  /** A person's first words, newly written: the row's name until its summary. Absent otherwise. */
+  opening?: string;
   /** The channel is gone from every member's roster. Absent on an ordinary activity event. */
   deleted?: true;
   /**
@@ -90,8 +105,23 @@ export type ChannelActivityEvent = {
    * indicator without disturbing the preview or the order.
    */
   busy?: boolean;
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   /** The tenant's task board changed somewhere; the tasks cache refetches. */
   taskUpdated?: true;
+=======
+  /**
+   * Everything the channel is waiting on now, replacing what the row held. Absent on an ordinary
+   * activity event. Rides on every busy event, and alone on the one the server sends when a hop
+   * settles without a turn starting or ending.
+   */
+  work?: ChannelWork[];
+  /**
+   * When the server read `work`, as fixed-width UTC that compares as a string. Two events can
+   * arrive in the other order from the one they were read in, so a list older than the one already
+   * held is ignored. See `newerWork`.
+   */
+  workAt?: string;
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 };
 
 /** The infinite query's cache, which holds pages rather than one array. */
@@ -151,6 +181,19 @@ export function applyChannelEvent(
   }
 
   /*
+   * An opening patches the one field too, for the same reason. It can come from a person's message
+   * the server found stale as the last message, so the spread below would carry nulls onto the row.
+   */
+  if (activity.opening !== undefined) {
+    if (previous.opening === activity.opening) return data;
+    const channels = page.channels.slice();
+    channels[index] = { ...previous, opening: activity.opening };
+    const pages = data.pages.slice();
+    pages[holdingPage] = { ...page, channels };
+    return { ...data, pages };
+  }
+
+  /*
    * A pin patches the one field it is about.
    *
    * The spread below would carry this event's null message onto the row and wipe the preview the
@@ -173,10 +216,22 @@ export function applyChannelEvent(
    * is also not activity — a channel does not jump to the top of the roster because a turn started
    * in it — so the order is left exactly as it was.
    */
-  if (activity.busy !== undefined) {
-    if ((previous.busy ?? false) === activity.busy) return data;
+  if (activity.busy !== undefined || activity.work !== undefined) {
+    const busy = activity.busy ?? previous.busy;
+    const fresh = newerWork(previous, activity);
+    const work = fresh ? activity.work : previous.work;
+    if (
+      (previous.busy ?? false) === (busy ?? false) &&
+      sameWork(previous.work, work)
+    )
+      return data;
     const channels = page.channels.slice();
-    channels[index] = { ...previous, busy: activity.busy };
+    channels[index] = {
+      ...previous,
+      ...(busy === undefined ? {} : { busy }),
+      ...(work === undefined ? {} : { work }),
+      ...(fresh && activity.workAt ? { workAt: activity.workAt } : {}),
+    };
     const pages = data.pages.slice();
     pages[holdingPage] = { ...page, channels };
     return { ...data, pages };
@@ -194,6 +249,63 @@ export function applyChannelEvent(
   const pages = data.pages.slice();
   pages[holdingPage] = { ...page, channels: next };
   return { ...data, pages };
+}
+
+/**
+ * The same list, entry for entry. Compared rather than replaced so an event that changes nothing
+ * leaves the cache alone and the transcript does not re-render to draw the same rows.
+ */
+function sameWork(
+  left: readonly ChannelWork[] | undefined,
+  right: readonly ChannelWork[] | undefined,
+): boolean {
+  const a = left ?? [];
+  const b = right ?? [];
+  return (
+    a.length === b.length &&
+    a.every(
+      (entry, at) =>
+        entry.key === b[at]?.key &&
+        entry.since === b[at]?.since &&
+        entry.botName === b[at]?.botName,
+    )
+  );
+}
+
+/**
+ * Whether this event's work list should replace the one held.
+ *
+ * Only when it carries one, and was not read before the one already held. A list from a fetch has
+ * no stamp and gives way to any event; an event without a stamp, from an older server, always
+ * wins, as every event did before stamps.
+ */
+function newerWork(
+  held: { workAt?: string },
+  activity: ChannelActivityEvent,
+): boolean {
+  if (activity.work === undefined) return false;
+  if (!held.workAt || !activity.workAt) return true;
+  return activity.workAt >= held.workAt;
+}
+
+/**
+ * Apply one event's work list to the open conversation's own read.
+ *
+ * The conversation screen reads the channel by id rather than from the roster: the roster is paged,
+ * and the conversation somebody has open need not be on a page they have loaded. So the list is
+ * patched there too, and only there when the event carries one.
+ */
+export function applyChannelWork(
+  channel: AgentChannel | undefined,
+  activity: ChannelActivityEvent,
+): AgentChannel | undefined {
+  if (!channel || !newerWork(channel, activity)) return channel;
+  if (sameWork(channel.work, activity.work)) return channel;
+  return {
+    ...channel,
+    work: activity.work,
+    ...(activity.workAt ? { workAt: activity.workAt } : {}),
+  };
 }
 
 const FIRST_RETRY_MS = 500;
@@ -221,6 +333,7 @@ export function useChannelEvents() {
         retryDelay = FIRST_RETRY_MS;
         // Recover events missed while the socket was disconnected.
         void queryClient.invalidateQueries({ queryKey: channelKeys.list() });
+        void queryClient.invalidateQueries({ queryKey: channelKeys.details() });
       };
 
       socket.onmessage = (message) => {
@@ -231,6 +344,9 @@ export function useChannelEvents() {
         // `channelId`, because this message has none.
         if (isResync(parsed)) {
           void queryClient.invalidateQueries({ queryKey: channelKeys.list() });
+          void queryClient.invalidateQueries({
+            queryKey: channelKeys.details(),
+          });
           return;
         }
 
@@ -267,6 +383,22 @@ export function useChannelEvents() {
             return data;
           },
         );
+
+        // A Bot's reply, while OpenBot is out of sight: the notice, when the person allowed them.
+        noticeChannelEvent(activity, queryClient, (channelId) => {
+          void router.navigate({
+            to: "/channel/$channelId",
+            params: { channelId },
+          });
+        });
+
+        if (activity.work !== undefined) {
+          queryClient.setQueryData(
+            channelKeys.detail(activity.channelId),
+            (channel: AgentChannel | undefined) =>
+              applyChannelWork(channel, activity),
+          );
+        }
 
         /*
          * A tab looking at the channel somebody just deleted in another tab.

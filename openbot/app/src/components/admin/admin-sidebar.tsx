@@ -1,14 +1,22 @@
 import {
   IconArrowLeft,
+  IconBrain,
   IconBuildingBank,
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
+=======
+  IconBulb,
+  IconChecks,
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   IconCode,
   IconDeviceDesktop,
-  IconFileText,
   IconKey,
   IconLayoutGrid,
   IconListDetails,
+  IconLockAccess,
   IconPuzzle,
+  IconRadar,
   IconShieldCheck,
+  IconSlash,
   IconUsers,
 } from "@tabler/icons-react";
 import { Link, type LinkOptions } from "@tanstack/react-router";
@@ -24,6 +32,7 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
+import { managePaths } from "@/lib/manage-paths";
 
 const appLinkOptions = { to: "/" } satisfies LinkOptions;
 const adminLinkOptions = { to: "/admin" } satisfies LinkOptions;
@@ -72,6 +81,7 @@ const GROUPS: {
         linkOptions: { to: "/admin/plugins" },
       },
       {
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         title: "技能",
         icon: IconFileText,
         linkOptions: { to: "/admin/skills" },
@@ -83,6 +93,29 @@ const GROUPS: {
       },
       {
         title: "界面组件",
+=======
+        title: "Providers",
+        icon: IconBrain,
+        linkOptions: { to: "/admin/providers" },
+      },
+      {
+        title: "Skills",
+        icon: IconSlash,
+        linkOptions: { to: "/admin/skills" },
+      },
+      {
+        title: "Automatic learning",
+        icon: IconBulb,
+        linkOptions: { to: "/admin/learning" },
+      },
+      {
+        title: "Check-ins",
+        icon: IconRadar,
+        linkOptions: { to: "/admin/proactive" },
+      },
+      {
+        title: "UI components",
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         icon: IconLayoutGrid,
         linkOptions: { to: "/admin/components" },
       },
@@ -102,7 +135,16 @@ const GROUPS: {
         linkOptions: { to: "/admin/people" },
       },
       {
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         title: "身份提供方",
+=======
+        title: "Permissions",
+        icon: IconLockAccess,
+        linkOptions: { to: "/admin/permissions" },
+      },
+      {
+        title: "Identity providers",
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         icon: IconBuildingBank,
         linkOptions: { to: "/admin/identity-providers" },
       },
@@ -112,7 +154,11 @@ const GROUPS: {
     label: "发生过什么",
     items: [
       {
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         title: "审计",
+=======
+        title: managePaths("team").auditLabel,
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         icon: IconListDetails,
         linkOptions: { to: "/admin/audit" },
       },
@@ -124,7 +170,7 @@ export function AdminSidebar({
   ...props
 }: React.ComponentProps<typeof Sidebar>) {
   return (
-    <Sidebar {...props}>
+    <Sidebar variant="inset" {...props}>
       {/*
        * Pinned to the same height as the app sidebar's header. Left to itself this one is 60px
        * against the app's 45px — `p-2` around a `size="lg"` button rather than a fixed height — so

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
+import { brokeredAccountsListedOn } from "@/lib/plugins/listed";
 import type { PluginServer } from "@/lib/plugins/queries";
-import { brokeredAccountsListedOn } from "@/routes/_authed/settings/connected-accounts/index";
 
 /**
  * Which brokered apps the Connected accounts page lists, decided without drawing anything.
@@ -78,4 +78,25 @@ test("a server that is not brokered at all is never listed", () => {
       }),
     ]),
   ).toEqual([]);
+});
+
+/**
+ * AN APP THAT CAN ONLY HOLD A SHARED ACCOUNT IS NOT A PERSON'S TO CONNECT, whatever its mode.
+ *
+ * It signs in with the deployment's own client, so the server refuses a personal Connect; listing
+ * it here would offer each person a row whose only button is refused. Read off `sharedOnly`, which
+ * the server sets from how the app connects, and never off the app's name.
+ */
+test("a brokered app that can only hold a shared account is not listed", () => {
+  expect(
+    brokeredAccountsListedOn([
+      server({
+        id: "composio-store",
+        authScheme: "S2S_OAUTH2",
+        accountMode: "personal",
+        sharedOnly: true,
+      }),
+      server({ id: "composio-gmail", authScheme: "OAUTH2" }),
+    ]).map((row) => row.id),
+  ).toEqual(["composio-gmail"]);
 });

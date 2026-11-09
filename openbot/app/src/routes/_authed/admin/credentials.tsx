@@ -1,7 +1,5 @@
-import { IconPlus } from "@tabler/icons-react";
-import { useForm } from "@tanstack/react-form";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 import { useState } from "react";
 import {
   PageEmpty,
@@ -55,10 +53,14 @@ import {
   type CredentialStatus,
   credentialListQueryOptions,
 } from "@/lib/credentials/queries";
+=======
+import { CredentialsPage } from "@/components/manage/credentials-page";
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 
 export const Route = createFileRoute("/_authed/admin/credentials")({
   component: CredentialsPage,
 });
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 
 function CredentialsPage() {
   const [adding, setAdding] = useState(false);
@@ -355,3 +357,5 @@ function liveCredentialFor(
       credential.keyId === keyId,
   );
 }
+=======
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b

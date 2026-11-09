@@ -6,11 +6,8 @@ import {
   dismissSelfHostBannerMutationOptions,
   useUserPreferences,
 } from "@/lib/settings/message-list";
+import { BUSINESS_URL } from "@/lib/openbot-for-business";
 import { cn } from "@/lib/utils";
-
-/** `ref` tells CopilotKit the visit came from inside a running OpenBot, not from the README. */
-export const SELF_HOST_URL =
-  "https://copilotkit.ai/talk-to-an-engineer?ref=openbot_app";
 
 /**
  * A slim bar offering help self-hosting OpenBot, until this person closes it.
@@ -52,11 +49,15 @@ export function SelfHostBanner() {
             buttonVariants({ size: "sm", variant: "link" }),
             "px-0 text-foreground underline",
           )}
-          href={SELF_HOST_URL}
+          href={BUSINESS_URL}
           rel="noopener noreferrer"
           target="_blank"
         >
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           联系工程师
+=======
+          Book a call
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         </a>
         <Button
           aria-label="关闭"

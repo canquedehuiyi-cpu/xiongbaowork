@@ -100,7 +100,12 @@ export function ActivityReportCard({
           ? { status: "read", data: result.data }
           : {
               status: "refused",
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
               reason: result.reason ?? result.error ?? "读不到这份数据。",
+=======
+              reason:
+                result.reason ?? result.error ?? "Couldn't read that data.",
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
             },
       );
     });
@@ -115,7 +120,11 @@ export function ActivityReportCard({
    * are final there is nothing to read, and "Choosing" or "Reading" would stay on screen for good.
    */
   if (!functionName) {
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     if (!streaming) return <FailedCard reason={UNREADABLE} title="活动报告" />;
+=======
+    if (!streaming) return <FailedCard reason={UNREADABLE} title={TITLE} />;
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     return (
       <GalleryFrame title="报告">
         <p className="text-sm text-muted-foreground">正在选择报告…</p>
@@ -125,8 +134,13 @@ export function ActivityReportCard({
 
   if (state.status === "reading") {
     return (
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       <GalleryFrame caption="正在从本部署读取" title={title ?? "报告"}>
         <p className="text-sm text-muted-foreground">正在读取…</p>
+=======
+      <GalleryFrame caption="Reading from OpenBot" title={title ?? "Report"}>
+        <p className="text-sm text-muted-foreground">Reading…</p>
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       </GalleryFrame>
     );
   }
@@ -187,7 +201,11 @@ function ActivityChart({
           <Button
             onClick={() =>
               ask(
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
                 `${nameFor(busiest.bot) || busiest.bot} 最近到底在做什么？看看审计记录，总结一下。`,
+=======
+                `What has ${nameFor(busiest.bot) || busiest.bot} actually been doing? Look at the audit trail and summarise it.`,
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
               )
             }
             size="sm"
@@ -197,8 +215,13 @@ function ActivityChart({
           </Button>
         ) : undefined
       }
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       caption={`统计自本部署的审计记录，最近 ${data.days} 天`}
       title={title ?? "员工活动"}
+=======
+      caption={`Counted from OpenBot's audit trail, last ${data.days} days`}
+      title={title ?? "Bot activity"}
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     >
       <ul className="flex flex-col gap-2">
         {rows.map((row, index) => (
@@ -241,7 +264,11 @@ function RefusalList({
     return (
       <GalleryFrame title={title ?? "最近的拒绝"}>
         <p className="text-sm text-muted-foreground">
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           这个部署还没有拒绝过任何事。
+=======
+          OpenBot hasn't refused anything.
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         </p>
       </GalleryFrame>
     );
@@ -262,8 +289,13 @@ function RefusalList({
           </Button>
         ) : undefined
       }
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       caption="读自本部署的审计记录"
       title={title ?? "最近的拒绝"}
+=======
+      caption="Read from OpenBot's audit trail"
+      title={title ?? "Recent refusals"}
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     >
       <ul className="flex flex-col gap-2">
         {rows.map((row) => (
@@ -301,7 +333,12 @@ export const GALLERY: GalleryComponent[] = [
     name: "showActivityReport",
     title: TITLE,
     kind: "card",
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     summary: "从本部署自己的记录里读出员工们都做了什么、有哪些被拒绝了。",
+=======
+    summary:
+      "Shows what your Bots have been doing and what was refused, read from OpenBot's own records.",
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     description:
       "Show what this deployment has actually been doing, read from its own records rather than from anything you know. Use for 'what have the Bots been up to' and 'what has been refused'. You choose the report and the period; the figures are read for you and you will not see them.",
     parameters: ActivityReportProps,

@@ -109,7 +109,11 @@ test("a pick-time refusal still names the file with no crypto.randomUUID", async
   ]);
 
   await waitFor(() => expect(view.queryByRole("alert")).not.toBeNull());
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   expect(view.queryByText(/可能带有脚本，不予接受/)).not.toBeNull();
+=======
+  expect(view.queryByText(/SVG files aren't accepted/)).not.toBeNull();
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   // The rest of the gesture survived the refusal, which is the part the throw used to take with it.
   await waitFor(() =>
     expect(view.queryByLabelText("移除 notes.txt")).not.toBeNull(),

@@ -1,4 +1,5 @@
 import { mutationOptions, type QueryClient } from "@tanstack/react-query";
+import { channelKeys } from "@/lib/channels/queries";
 import { client } from "@/lib/client";
 import type { Persona } from "../../../../shared/persona";
 import {
@@ -24,10 +25,20 @@ export type AgentInput = {
   modelRef?: string | null;
   /** Written whole: a persona is read as one character, so a part cleared should stop being said. */
   persona?: Persona;
+  /**
+   * A computer of its own. Omitted leaves it as it is, so an edit to anything else never moves a
+   * Bot between computers; only the Isolated control sends it.
+   */
+  isolated?: boolean;
+  /**
+   * The framework picked for an agent somebody runs themselves, by its id in the harness list, so
+   * the Bot is told what runs it whatever its subtitle says. Only New Bot sends it.
+   */
+  harness?: string;
 };
 
 /** The sentence for every write here, since they all fail the same way to a reader. */
-const FALLBACK = "Coworker operation failed";
+const FALLBACK = "无法保存对这个员工的修改。";
 
 /** Server-derived fields are invalidated instead of patched by hand. */
 function invalidateAgents(queryClient: QueryClient) {
@@ -57,7 +68,12 @@ export function updateAgentMutationOptions(queryClient: QueryClient) {
         body: variables.input,
         fallback: FALLBACK,
       }),
-    onSuccess: () => invalidateAgents(queryClient),
+    // A conversation is called by its Bot's name, so a rename shows in the sidebar and the header.
+    onSuccess: () =>
+      Promise.all([
+        invalidateAgents(queryClient),
+        queryClient.invalidateQueries({ queryKey: channelKeys.all }),
+      ]),
   });
 }
 

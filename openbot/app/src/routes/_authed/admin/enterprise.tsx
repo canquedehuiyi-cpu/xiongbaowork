@@ -1,3 +1,4 @@
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 import {
   IconChartBar,
   IconChevronRight,
@@ -71,10 +72,21 @@ import {
   withMcpServerApproval,
 } from "@/lib/enterprise/queries";
 import { queryClient } from "@/query-client";
+=======
+import { createFileRoute, redirect } from "@tanstack/react-router";
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 
+/**
+ * The old Enterprise controls page. Its sections now sit beside what they govern: Permissions,
+ * Models, Identity providers, Computers, Plugins, Automatic learning and Audit. An old link or
+ * bookmark lands on the Admin overview, which lists all of them.
+ */
 export const Route = createFileRoute("/_authed/admin/enterprise")({
-  component: EnterprisePage,
+  beforeLoad: () => {
+    throw redirect({ to: "/admin", replace: true });
+  },
 });
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 
 const MODE_NAMES: Record<NetworkMode, string> = {
   allow_all: "允许所有网络访问",
@@ -1111,3 +1123,5 @@ function DaysDialog({
     </Dialog>
   );
 }
+=======
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b

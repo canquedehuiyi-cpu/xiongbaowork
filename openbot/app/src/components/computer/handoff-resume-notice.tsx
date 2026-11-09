@@ -6,6 +6,10 @@ import {
   type PendingHandoff,
   pendingHandoff,
   rememberHandoff,
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
+=======
+  wasHandoffAnswered,
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 } from "@/lib/computers/handoff";
 import {
   findPendingTool,
@@ -43,7 +47,10 @@ export function HandoffResumeNotice({
             requestId: request.id,
             toolCallId: request.toolCallId,
           };
-          if (findPendingTool(agent.messages, candidate)) {
+          if (
+            !wasHandoffAnswered(botId, candidate.requestId) &&
+            findPendingTool(agent.messages, candidate)
+          ) {
             rememberHandoff(botId, candidate.requestId, candidate.toolCallId);
             stored = candidate;
           }
@@ -58,8 +65,17 @@ export function HandoffResumeNotice({
         if (answered) forgetHandoff(botId, stored.requestId);
         stored = null;
       }
+      /*
+       * Nothing to resume while a call in this tab is still waiting on the request, nor once one has taken its answer:
+       * a person who left the conversation while holding control comes back to a new chat whose restored call looks
+       * unanswered, while the turn that was running carried on with the answer and the reply is on its way here.
+       */
       setPending(
-        stored && !hasActiveHandoff(botId, stored.requestId) ? stored : null,
+        stored &&
+          !hasActiveHandoff(botId, stored.requestId) &&
+          !wasHandoffAnswered(botId, stored.requestId)
+          ? stored
+          : null,
       );
       timer = setTimeout(() => void check(), 1000);
     };
@@ -80,7 +96,13 @@ export function HandoffResumeNotice({
     try {
       await resumeHandoffTask(botId, pending, agent, run, abort.signal);
     } catch (error) {
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       setProblem(error instanceof Error ? error.message : "任务没能恢复。");
+=======
+      setProblem(
+        error instanceof Error ? error.message : "Couldn't resume the task.",
+      );
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     } finally {
       setBusy(false);
       controller.current = null;

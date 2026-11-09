@@ -32,8 +32,13 @@ export type Hotkey = {
 export const HOTKEYS = [
   {
     id: "new-chat",
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     label: "新对话",
     description: "在应用里的任何地方开始一段新对话。",
+=======
+    label: "New conversation",
+    description: "Start a new conversation from anywhere in OpenBot.",
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     combo: { key: "n", shift: true },
   },
 ] as const satisfies readonly Hotkey[];

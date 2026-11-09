@@ -182,7 +182,11 @@ export function ChecklistCard({
             <div className="min-w-0">
               <div className={item.done ? "text-muted-foreground" : ""}>
                 <span className="sr-only">
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
                   {item.done ? "已完成：" : "待办："}
+=======
+                  {item.done ? "Done: " : "To do: "}
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
                 </span>
                 <GalleryMarkdown>{item.text}</GalleryMarkdown>
               </div>
@@ -216,11 +220,19 @@ export const NoticeCardProps = z.object({
 function noticeBadge(tone: string | undefined): string | null {
   switch (tone) {
     case "positive":
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       return "好消息";
     case "caution":
       return "请注意";
     case "negative":
       return "有问题";
+=======
+      return "Good news";
+    case "caution":
+      return "Heads up";
+    case "negative":
+      return "Problem";
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     default:
       return null;
   }
@@ -262,7 +274,12 @@ export const GALLERY: GalleryComponent[] = [
     name: "showRecord",
     title: "Record",
     kind: "card",
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     summary: "显示一件事及其详细信息，比如一笔订单、一个人或一张工单。",
+=======
+    summary:
+      "Shows one thing and its details, such as an order, a person or a ticket.",
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     description:
       "Show one thing and its fields, an order, a person, a ticket. Use when there are several fields worth reading side by side; a fact or two about it belong in a Markdown reply.",
     parameters: RecordCardProps,
@@ -283,7 +300,11 @@ export const GALLERY: GalleryComponent[] = [
     name: "showMetrics",
     title: "Headline figures",
     kind: "card",
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     summary: "显示最多六个关键数字，以及每个数字的变化。",
+=======
+    summary: "Shows up to six headline figures and how each one has changed.",
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     description:
       "Show up to six headline figures, each with an optional movement. Use for figures somebody reads at a glance, not for a written summary. A figure may link to the page it came from, such as the record or the report, when you have that address; never make one up.",
     parameters: MetricsCardProps,
@@ -312,7 +333,12 @@ export const GALLERY: GalleryComponent[] = [
     name: "showChecklist",
     title: "Checklist",
     kind: "card",
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     summary: "显示一项工作的各个步骤和哪些已经完成，比如一份发布计划。",
+=======
+    summary:
+      "Shows the steps of a piece of work and which ones are done, such as a release plan.",
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     description:
       "Show the tasks or steps of a piece of work and which are finished, such as a release plan or an onboarding list. Only for work somebody ticks off. Not for presenting information: findings, options, recommendations and ordinary lists of points belong in a Markdown reply. The person cannot tick these here, so do not use it to ask for anything.",
     parameters: ChecklistCardProps,
@@ -331,7 +357,12 @@ export const GALLERY: GalleryComponent[] = [
     name: "showNotice",
     title: "Notice",
     kind: "card",
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     summary: "显示一条标题、一段简短说明和几条补充要点。",
+=======
+    summary:
+      "Shows a headline with a short explanation and a few supporting points.",
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     description:
       "Show a distinct actionable alert needing the person's attention, such as a failed scheduled task requiring intervention or a new issue blocking their work. Also use when the person explicitly asks for a notice card. Answer ordinary questions, explanations, summaries, recommendations and short lists directly in Markdown, including important emails or deadlines. Importance, a caveat or several paragraphs alone does not justify a notice. Do not use this to wrap or repeat a routine answer. Body and supporting points support Markdown.",
     parameters: NoticeCardProps,

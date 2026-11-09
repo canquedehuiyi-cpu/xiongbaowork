@@ -36,15 +36,23 @@ export function seedMessage(text: string, id: string): Message {
  * Deliberately not persisted. A reload finds nothing here, which is correct, by then the message
  * is in the thread and arrives through the normal replay.
  */
-const firstMessages = new Map<string, string>();
+export type FirstMessage = {
+  /**
+   * The words, with a `/` skill still at their start as `/<command>`: the server finds the skill
+   * there and gives the Bot its instructions, for the first message as for every later one.
+   */
+  text: string;
+};
+
+const firstMessages = new Map<string, FirstMessage>();
 
 export function stashFirstMessage(channelId: string, text: string): void {
-  firstMessages.set(channelId, text);
+  firstMessages.set(channelId, { text });
 }
 
 /** Read the pending first message and forget it. Null for a channel opened any other way. */
-export function takeFirstMessage(channelId: string): string | null {
-  const text = firstMessages.get(channelId) ?? null;
+export function takeFirstMessage(channelId: string): FirstMessage | null {
+  const message = firstMessages.get(channelId) ?? null;
   firstMessages.delete(channelId);
-  return text;
+  return message;
 }

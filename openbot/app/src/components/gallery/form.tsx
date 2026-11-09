@@ -79,8 +79,15 @@ export function FormCard(props: Record<string, unknown>) {
   const parsed = FormCardArgs.safeParse(props.args);
   if (props.status === "inProgress") {
     return (
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       <GalleryFrame title="正在准备表单…">
         <p className="text-sm text-muted-foreground">员工正在整理问题。</p>
+=======
+      <GalleryFrame title="Preparing your form…">
+        <p className="text-sm text-muted-foreground">
+          The Bot is putting the questions together.
+        </p>
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       </GalleryFrame>
     );
   }
@@ -136,8 +143,13 @@ function InvalidForm({
     <GalleryFrame title="表单不可用">
       <p role="alert" className="text-sm text-muted-foreground">
         {returned
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           ? "表单里有无效的问题。员工可以重新发一份改好的表单。"
           : "表单里有无效的问题，没法显示。"}
+=======
+          ? "The form had invalid questions. The Bot can send a corrected form."
+          : "The form has invalid questions, so it can't be shown."}
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       </p>
       {failed && (
         <Button className="mt-3" size="sm" onClick={() => void returnToBot()}>
@@ -361,7 +373,11 @@ function FormEntry({
           })}
           {failure && (
             <p role="alert" className="text-sm text-destructive">
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
               回答没能发送，请重试。
+=======
+              Couldn't send your answers. Try again.
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
             </p>
           )}
           <div className="flex justify-end border-t border-border pt-3">
@@ -380,7 +396,12 @@ export const GALLERY: GalleryComponent[] = [
     name: "askForm" satisfies DecisionToolName,
     title: "Form",
     kind: "decision",
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     summary: "请你填一份简短的表单，员工会等你填完。",
+=======
+    summary:
+      "Asks you to fill in a short form. The Bot waits for your answers.",
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     description:
       "Ask the person to fill in a short form and WAIT for their answers. Use when several related details are needed together. Provide up to eight labeled text, email, number, select, or textarea fields with unique IDs. Mark required fields and give options for selects. Never request passwords or secrets. The result has status submitted and values keyed by field ID; numbers are returned as numbers and blank optional fields are omitted.",
     parameters: FormCardArgs,
@@ -388,8 +409,13 @@ export const GALLERY: GalleryComponent[] = [
     preview: {
       status: "executing",
       args: {
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         title: "规划你的下一个项目",
         description: "填几项信息，好准备一份有用的初稿。",
+=======
+        title: "Plan your next project",
+        description: "Provide a few details to help prepare your first draft.",
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         fields: [
           { id: "team", label: "团队名称", type: "text", required: true },
           { id: "email", label: "工作邮箱", type: "email", required: true },

@@ -1,12 +1,5 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
-import { PageSection, PageShell } from "@/components/layout/page-shell";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { isComposing } from "@/lib/composing";
-import { saveActionPolicyMutationOptions } from "@/lib/computers/mutations";
 import {
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   type ActionPolicy,
   actionPolicyQueryOptions,
   type DryRunReport,
@@ -46,57 +39,91 @@ const PRESETS: { label: string; rule: string; cost?: string }[] = [
     cost: "只管列出的两个域名。从别处跳转过去的链接仍然放行。",
   },
 ];
+=======
+  IconChevronRight,
+  IconListSearch,
+  IconPlus,
+  IconShieldX,
+} from "@tabler/icons-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import {
+  PageEmpty,
+  PageRows,
+  PageSection,
+  PageShell,
+} from "@/components/layout/page-shell";
+import { StaggerItem } from "@/components/layout/stagger";
+import { Button } from "@/components/ui/button";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemMedia,
+  ItemTitle,
+} from "@/components/ui/item";
+import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
+import { ruleLabel } from "@/lib/boundaries/rules";
+import { saveActionPolicyMutationOptions } from "@/lib/computers/mutations";
+import { actionPolicyQueryOptions } from "@/lib/computers/queries";
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 
 export const Route = createFileRoute("/_authed/admin/boundaries")({
   component: BoundariesPage,
 });
 
+const DESCRIPTION =
+  "Define actions that Bots must never take. OpenBot checks these rules before a Bot acts on its computer or in a connected app.";
+
+/**
+ * The deployment's boundaries, read as a list of things Bots may never do.
+ *
+ * It used to be one screen that was also the editor: the rule language explained in a paragraph of
+ * attribute names, rules shown as raw CEL, and ready-made rules drawn as buttons. Nobody could tell
+ * from it what the page was for. Now each rule is a row with a name, adding one is its own screen
+ * (`boundaries_.new.tsx`) and a rule opens to what it has stopped (`boundaries_.$index.tsx`).
+ */
 function BoundariesPage() {
-  const [problem, setProblem] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
-  const [draft, setDraft] = useState("");
-
-  const [tested, setTested] = useState<{
-    rule: string;
-    report: DryRunReport;
-  } | null>(null);
-  const [testing, setTesting] = useState(false);
-
+  const queryClient = useQueryClient();
   const stored = useQuery(actionPolicyQueryOptions());
   const savePolicy = useMutation(saveActionPolicyMutationOptions(queryClient));
-
-  /*
-   * The saved policy wins while a save is in flight and after it lands: the server normalises what
-   * it stores, so what came back is the policy, not what was sent.
-   */
+  /* What the server stored wins once a save lands: it normalises what it keeps. */
   const policy = savePolicy.data ?? stored.data ?? null;
-  const saving = savePolicy.isPending;
 
-  const save = (next: ActionPolicy) => {
-    setSaved(false);
-    setProblem(null);
-    savePolicy.mutate(next, {
-      onError: (thrown: Error) => setProblem(thrown.message),
-      onSuccess: () => setSaved(true),
-    });
-  };
+  const addRule = (
+    <Button
+      render={(props) => <Link {...props} to="/admin/boundaries/new" />}
+      size="sm"
+      variant="ghost"
+    >
+      <IconPlus />
+      Add rule
+    </Button>
+  );
 
-  /*
-   * A read that failed says so. This screen used to set "The boundary could not be read." itself;
-   * since the read became a query, that sentence (or the server's own) is the query's error, and
-   * without this the page sat on its title with nothing under it for as long as it was open.
-   */
-  const unreadable = problem ?? stored.error?.message ?? null;
-  if (unreadable && !policy) {
+  if (!policy) {
     return (
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       <PageShell title="边界规则">
         <p className="mt-4 text-destructive text-sm" role="alert">
           {unreadable}
         </p>
+=======
+      <PageShell description={DESCRIPTION} title="Boundaries">
+        {/* Nothing until the policy is known: a rule list that guesses is worse than a blank. */}
+        {stored.error ? (
+          <p className="text-destructive text-sm" role="alert">
+            {stored.error.message}
+          </p>
+        ) : null}
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       </PageShell>
     );
   }
 
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   /* Nothing until the policy is known: a rule list that guesses is worse than a blank. */
   if (!policy) {
     return <PageShell title="边界规则">{null}</PageShell>;
@@ -265,15 +292,29 @@ function BoundariesPage() {
         <ul className="mt-3 space-y-2">
           {PRESETS.map((preset) => (
             <li className="flex items-start gap-3" key={preset.rule}>
+=======
+  const trial = policy.mode === "dry-run";
+  const allowsEverythingElse =
+    policy.allow.length === 1 && policy.allow[0] === "true";
+
+  return (
+    <PageShell action={addRule} description={DESCRIPTION} title="Boundaries">
+      <PageSection title="Bots may never">
+        {policy.deny.length === 0 ? (
+          <PageEmpty
+            action={
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
               <Button
-                className="shrink-0"
-                disabled={saving || policy.deny.includes(preset.rule)}
-                onClick={() => addRule(preset.rule)}
+                render={(props) => (
+                  <Link {...props} to="/admin/boundaries/new" />
+                )}
                 size="sm"
                 variant="outline"
               >
-                {preset.label}
+                <IconPlus />
+                Add rule
               </Button>
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
               {preset.cost ? (
                 <span className="pt-1 text-xs text-muted-foreground">
                   {preset.cost}
@@ -306,11 +347,127 @@ function BoundariesPage() {
           "已保存。从任何员工的下一个动作开始生效。"
         ) : (
           "改动从任何员工的下一个动作开始生效，并会保留：重启后仍按这里的规则执行。"
+=======
+            }
+            icon={IconShieldX}
+            title="No rules yet"
+          >
+            Bots can do anything their own permissions allow.
+          </PageEmpty>
+        ) : (
+          <PageRows>
+            {policy.deny.map((rule, index) => {
+              const label = ruleLabel(policy, rule);
+              return (
+                <StaggerItem index={index} key={rule}>
+                  <Item
+                    render={(props) => (
+                      <Link
+                        {...props}
+                        params={{ index: String(index) }}
+                        to="/admin/boundaries/$index"
+                      />
+                    )}
+                    size="sm"
+                  >
+                    <ItemMedia variant="icon">
+                      <IconShieldX />
+                    </ItemMedia>
+                    <ItemContent className="min-w-0">
+                      <ItemTitle>{label.name}</ItemTitle>
+                      {label.description ? (
+                        <ItemDescription>{label.description}</ItemDescription>
+                      ) : (
+                        // A rule nobody named is still told apart from the next by what it says.
+                        <ItemDescription className="line-clamp-1 font-mono">
+                          {rule}
+                        </ItemDescription>
+                      )}
+                    </ItemContent>
+                    <IconChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                  </Item>
+                  {index !== policy.deny.length - 1 && <Separator />}
+                </StaggerItem>
+              );
+            })}
+          </PageRows>
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         )}
-      </p>
+      </PageSection>
+
+      <PageSection title="How rules apply">
+        <PageRows>
+          <Item size="sm">
+            <ItemContent>
+              <ItemTitle>Trial mode</ItemTitle>
+              <ItemDescription>
+                {trial
+                  ? "On. A matching action goes ahead and is recorded in Audit, so you can see what a rule catches before it stops anything."
+                  : "Off. A matching action is stopped, and the Bot is told which rule stopped it."}
+              </ItemDescription>
+            </ItemContent>
+            <ItemActions>
+              <Switch
+                aria-label="Trial mode"
+                checked={trial}
+                disabled={savePolicy.isPending}
+                onCheckedChange={(checked) =>
+                  savePolicy.mutate({
+                    ...policy,
+                    mode: checked ? "dry-run" : "enforce",
+                  })
+                }
+              />
+            </ItemActions>
+          </Item>
+          <Separator />
+          <Item
+            render={(props) => <Link {...props} to="/admin/audit" />}
+            size="sm"
+          >
+            <ItemMedia variant="icon">
+              <IconListSearch />
+            </ItemMedia>
+            <ItemContent>
+              <ItemTitle>Stopped actions</ItemTitle>
+              <ItemDescription>
+                In Audit, choose Blocked to see every action a rule stopped and
+                which rule it was.
+              </ItemDescription>
+            </ItemContent>
+            <IconChevronRight className="size-4 shrink-0 text-muted-foreground" />
+          </Item>
+          <Separator />
+          {/*
+           * Read-only, and only interesting when it is not the default. Allow rules are checked after
+           * the list above and an empty list refuses everything, so a deployment that narrowed them
+           * in configuration needs to see that here rather than wonder why every action is refused.
+           */}
+          <Item size="sm">
+            <ItemContent className="min-w-0">
+              <ItemTitle>Everything else</ItemTitle>
+              <ItemDescription
+                className={allowsEverythingElse ? undefined : "font-mono"}
+              >
+                {allowsEverythingElse
+                  ? "Allowed. A Bot can do anything no rule above stops, within its own permissions."
+                  : policy.allow.length === 0
+                    ? "Nothing else is allowed. Every action is refused."
+                    : `Only what these allow: ${policy.allow.join(" · ")}`}
+              </ItemDescription>
+            </ItemContent>
+          </Item>
+        </PageRows>
+        {savePolicy.error ? (
+          <p className="mt-3 text-destructive text-sm" role="alert">
+            {savePolicy.error.message}
+          </p>
+        ) : null}
+      </PageSection>
     </PageShell>
   );
 }
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 
 /**
  * What the tested rule would have done to actions already on the trail.
@@ -371,3 +528,5 @@ function DryRunResult({ report }: { report: DryRunReport }) {
     </div>
   );
 }
+=======
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b

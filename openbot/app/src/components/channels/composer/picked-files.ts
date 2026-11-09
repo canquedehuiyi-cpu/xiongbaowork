@@ -50,8 +50,13 @@ export function screenPickedFiles(
         reject(
           file,
           mediaType === "image/svg+xml"
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
             ? `「${file.name}」是 SVG，可能带有脚本，不予接受。`
             : `「${file.name}」的图片格式不受支持。`,
+=======
+            ? `'${file.name}' can't be attached. SVG files aren't accepted.`
+            : `'${file.name}' isn't a supported image format.`,
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         ),
       );
       continue;
@@ -76,7 +81,11 @@ export function screenPickedFiles(
 
     if (kind === "unsupported" && !unnamed) {
       rejected.push(
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         reject(file, `「${file.name}」不是这个对话接受的文件类型。`),
+=======
+        reject(file, `'${file.name}' isn't a file type you can attach.`),
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       );
       continue;
     }
@@ -85,7 +94,11 @@ export function screenPickedFiles(
       rejected.push(
         reject(
           file,
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           `「${file.name}」作为图片附件太大了（上限 ${formatBytes(MAX_IMAGE_BYTES)}）。`,
+=======
+          `'${file.name}' is too large for an image. The limit is ${formatBytes(MAX_IMAGE_BYTES)}.`,
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         ),
       );
       continue;
@@ -95,7 +108,11 @@ export function screenPickedFiles(
       rejected.push(
         reject(
           file,
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           `「${file.name}」作为文本附件太大了（上限 ${formatBytes(MAX_FILE_BYTES)}）。`,
+=======
+          `'${file.name}' is too large for a text file. The limit is ${formatBytes(MAX_FILE_BYTES)}.`,
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         ),
       );
       continue;
@@ -108,7 +125,11 @@ export function screenPickedFiles(
       rejected.push(
         reject(
           file,
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           `「${file.name}」超过了附件 ${formatBytes(MAX_IMAGE_BYTES)} 的上限。`,
+=======
+          `'${file.name}' is too large. The limit is ${formatBytes(MAX_IMAGE_BYTES)}.`,
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         ),
       );
       continue;
@@ -121,7 +142,11 @@ export function screenPickedFiles(
       rejected.push(
         reject(
           file,
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           `「${file.name}」没有加上：一条消息最多只能带 ${MAX_ATTACHMENTS_PER_MESSAGE} 个附件。`,
+=======
+          `'${file.name}' wasn't added. A message can take at most ${MAX_ATTACHMENTS_PER_MESSAGE} attachments.`,
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         ),
       );
       continue;

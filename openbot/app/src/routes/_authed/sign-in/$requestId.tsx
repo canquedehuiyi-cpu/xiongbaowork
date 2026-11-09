@@ -23,7 +23,11 @@ function SignInPage() {
       title={request.data ? `登录 ${request.data.origin}` : "登录"}
       description={
         request.data?.reason ??
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         "你的员工需要先登录才能继续。你在这里输入的内容会直接填进它的浏览器，不会进入对话。"
+=======
+        "Your Bot needs to sign in to continue. What you type here goes to its browser, not the conversation."
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       }
     >
       <SignInForm requestId={requestId} />

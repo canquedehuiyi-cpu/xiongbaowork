@@ -1,4 +1,11 @@
 /** Small transport lifecycle shared by the live viewer and deterministic reconnect tests. */
+
+/** How every frame the computer sends starts: `JSON.stringify({ type: "frame", ... })`. */
+export const FRAME_PREFIX = '{"type":"frame"';
+
+/** What the screen sends back as each frame reaches it, when the computer has asked for it. */
+export const FRAME_RECEIVED = '{"type":"frame-received"}';
+
 export type ScreenSocket = {
   onopen: (() => void | Promise<void>) | null;
   onclose: (() => void) | null;
@@ -11,9 +18,21 @@ type Options = {
   verifyOwnership: () => Promise<boolean>;
   onReady: (ready: boolean) => void;
   onProblem: (problem: string | null) => void;
+  /**
+   * Whether a dropped stream is being retried on its own.
+   *
+   * Separate from `onProblem` on purpose. A retry in progress is routine (a deploy, a laptop waking,
+   * a load balancer recycling a connection) and is drawn as a small badge over the screen. A problem
+   * is what is left once the retries are spent, and only that gets the overlay with a Retry button.
+   * Both used to arrive through `onProblem`, so every brief blip covered the screen with the same
+   * panel a dead connection gets.
+   */
+  onReconnecting?: (reconnecting: boolean) => void;
   onDisconnect: () => void;
   onMessage: (event: { data: unknown }) => void;
   schedule?: (run: () => void, delay: number) => () => void;
+  /** What is said once the retries are spent. The live screen's sentence unless told otherwise. */
+  disconnected?: string;
 };
 const BACKOFF = [500, 1000, 2000, 4000, 8000];
 export function connectScreen(options: Options) {
@@ -40,10 +59,21 @@ export function connectScreen(options: Options) {
       options.onReady(false);
       const delay = BACKOFF[attempts++];
       if (delay === undefined) {
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         options.onProblem("实时屏幕断开了。按“重试”重新连接。");
         return;
       }
       options.onProblem("正在重新连接实时屏幕…");
+=======
+        options.onReconnecting?.(false);
+        options.onProblem(
+          options.disconnected ??
+            "The live screen is disconnected. Retry to reconnect.",
+        );
+        return;
+      }
+      options.onReconnecting?.(true);
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       cancelTimer = schedule(connect, delay);
     };
     current.onopen = async () => {
@@ -51,11 +81,23 @@ export function connectScreen(options: Options) {
       const permitted =
         attempts === 0 || (await options.verifyOwnership().catch(() => false));
       if (!owns()) return;
+      options.onReconnecting?.(false);
       options.onProblem(null);
       options.onReady(permitted);
     };
     current.onmessage = (event) => {
       if (!owns()) return;
+      // A frame is most of what arrives, and the screen parses it itself. Told apart by how it starts,
+      // so a frame of a hundred kilobytes is not parsed twice.
+      if (
+        typeof event.data === "string" &&
+        event.data.startsWith(FRAME_PREFIX)
+      ) {
+        // A frame means this socket recovered, so the next drop starts the backoff over.
+        attempts = 0;
+        options.onMessage(event);
+        return;
+      }
       let message: { type?: string; error?: string } | undefined;
       try {
         message = JSON.parse(String(event.data));
@@ -64,13 +106,16 @@ export function connectScreen(options: Options) {
       }
       if (message?.type === "error") {
         // The server deliberately leaves superseded sockets open. Never compete with the other tab.
+        // A fatal error is one no retry will change (a computer that runs no commands has no terminal).
         if (
+          (message as { fatal?: unknown }).fatal === true ||
           /superseded|another (?:viewer|screen)|opened elsewhere|watched somewhere else|another tab/i.test(
             message.error ?? "",
           )
         ) {
           stopped = true;
           cancelTimer?.();
+          options.onReconnecting?.(false);
           options.onDisconnect();
           options.onReady(false);
           options.onProblem(
@@ -83,7 +128,7 @@ export function connectScreen(options: Options) {
       }
       // A frame means this socket recovered, so the next drop starts the backoff over. Without
       // this, drops a viewer had already recovered from used up the retries for good.
-      if (message?.type === "frame") attempts = 0;
+      if (message?.type === "frame" || message?.type === "ready") attempts = 0;
       options.onMessage(event);
     };
     current.onerror = () => {
@@ -97,6 +142,7 @@ export function connectScreen(options: Options) {
     stop: () => {
       stopped = true;
       cancelTimer?.();
+      options.onReconnecting?.(false);
       options.onReady(false);
       socket?.close();
     },

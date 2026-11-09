@@ -1,3 +1,4 @@
+<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 import { IconArrowUpRight, IconChevronDown } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, useParams } from "@tanstack/react-router";
@@ -393,3 +394,28 @@ function RouteComponent() {
     </PageShell>
   );
 }
+=======
+import { createFileRoute, redirect } from "@tanstack/react-router";
+import { searchTextEntry } from "@/lib/search-text";
+
+/**
+ * One connected account, moved from Settings to Connections with the rest.
+ *
+ * Carries `?action=` through, because the per-action verifier of a consent begun before an upgrade
+ * still lands here to say which action was just authorized.
+ */
+export const Route = createFileRoute(
+  "/_authed/settings/connected-accounts/$key",
+)({
+  validateSearch: (search: Record<string, unknown>): { action?: string } =>
+    searchTextEntry("action", search.action),
+  beforeLoad: ({ params, search }) => {
+    throw redirect({
+      to: "/connections/$key",
+      params,
+      search,
+      replace: true,
+    });
+  },
+});
+>>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
