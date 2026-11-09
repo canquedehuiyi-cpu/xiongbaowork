@@ -643,6 +643,15 @@ test("on a paired machine the file and command tools say so; in the deployment's
   for (const workspace of [describe("workspace"), describe()]) {
     expect(workspace.computer_run_command).toContain("bash");
     expect(workspace.computer_run_command).not.toContain("paired machine");
+    // Employees do not sudo (user decision 2026-11-09): new tools go in the workspace.
+    expect(workspace.computer_run_command).not.toMatch(/apt-get|sudo apt/);
+    expect(workspace.computer_run_command).toContain("Do not use sudo");
+    // The image has no python3, so only the two installers that are there are named.
+    expect(workspace.computer_run_command).toContain("npm install");
+    expect(workspace.computer_run_command).toContain("bun add");
+    expect(workspace.computer_run_command).not.toMatch(
+      /\bpip\b|python|npm install -g/,
+    );
     expect(workspace.computer_list_files).not.toContain("paired machine");
   }
 });
