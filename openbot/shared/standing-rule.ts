@@ -16,5 +16,18 @@
 export function offersStandingRule(action: {
   policy?: { source: string } | undefined;
 }): boolean {
-  return action.policy?.source !== "task" && action.policy?.source !== "safety";
+  return !ONCE_ONLY_SOURCES.has(action.policy?.source ?? "");
 }
+
+/**
+ * The sources answered only once. `task` and `safety` as above; `destructive_tool` (deleting,
+ * archiving, a tool its app marks destructive) and `outbound_send` (an app tool sending something to
+ * other people) are the floors this deployment asks for after every rule, so a saved rule could
+ * never answer one either.
+ */
+const ONCE_ONLY_SOURCES: ReadonlySet<string> = new Set([
+  "task",
+  "safety",
+  "destructive_tool",
+  "outbound_send",
+]);

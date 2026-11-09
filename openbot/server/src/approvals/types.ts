@@ -1,4 +1,3 @@
-import type { ContinuationReceipt } from "./continuation-protocol";
 import { createHash } from "node:crypto";
 import { RunAgentInputSchema } from "@ag-ui/core/schemas";
 import {
@@ -8,6 +7,7 @@ import {
 } from "@openbot/toolkit/continuation";
 import type { AuditEventInput, AuditInitiator } from "../audit";
 import { cutAtCodeUnits } from "../channels/text";
+import type { ContinuationReceipt } from "./continuation-protocol";
 
 /** `handled` answers a hand-off: the person did it themselves, so it is never executed for them. */
 export type ApprovalDecision =
@@ -172,13 +172,6 @@ export type ApprovalCandidate = {
    */
   ownConnectionRead?: true;
   /**
-   * The app marks this tool as destroying something: MCP's `destructiveHint`, or a broker's
-   * destructive flag, as recorded when the app was listed (`mcpTools.destructive`). It asks as
-   * deleting does, whatever the tool is called (see `safetyRequirement` in ./policy). A fact about
-   * the tool, not about this call, so not in the action's digest.
-   */
-  destructive?: true;
-  /**
    * The row the trail records for this action if the person denies it, built by the code that would
    * have carried it out, so a denial reads like that surface's other refusals and lands in the
    * Blocked view. Written once, with the decision, in the transaction that saves it. Not part of what
@@ -193,27 +186,6 @@ export type ApprovalCandidate = {
   account?: string;
 };
 
-/** 只能「允许一次」的底线：它们在任何规则之后仍然要问。 */
-const ONCE_ONLY_SOURCES: ReadonlySet<string> = new Set([
-  "destructive_tool",
-  "outbound_send",
-]);
-
-/**
- * 这条审批能不能用「在这里总是允许」来回答，也就是存一条长期规则。
- *
- * 删除、归档和应用标为破坏性的操作不行：它们在任何规则之后仍然要问（`destructive_tool` 底线），
- * 存下的规则下次根本用不上，只会误导人。应用工具把内容发给别人（`outbound_send` 底线）同理。
- * 「允许一次」和「拒绝」照常提供。
- *
- * 服务端据此拒绝这种规则（./store 的 `decide`），聊天卡片据此不画这个按钮
- * （delivery/opentag-agent.ts）；网页的审批卡片按同一条件判断（app/src/components/approvals）。
- */
-export function offersStandingRule(action: {
-  policy?: { source: string } | undefined;
-}): boolean {
-  return !ONCE_ONLY_SOURCES.has(action.policy?.source ?? "");
-}
 export type ApprovalAction = ApprovalCandidate & {
   runId: string;
   threadId: string;
@@ -283,11 +255,12 @@ export type ApprovalTeamSettings = {
 /** The three modes a Bot's tool can be set to on its permissions page (SEC1 §4.5). */
 export type EmployeeToolMode = "direct" | "ask" | "disabled";
 /** Each mode is one rule behaviour: 直接 is allow, 询问 is ask, 禁用 is deny. */
-export const EMPLOYEE_TOOL_BEHAVIOUR: Record<EmployeeToolMode, RuleBehaviour> = {
-  direct: "allow",
-  ask: "ask",
-  disabled: "deny",
-};
+export const EMPLOYEE_TOOL_BEHAVIOUR: Record<EmployeeToolMode, RuleBehaviour> =
+  {
+    direct: "allow",
+    ask: "ask",
+    disabled: "deny",
+  };
 /** A floor's switch on one Bot: off, or ask before acting. */
 export type SecurityFloorMode = "off" | "ask";
 /**
@@ -623,7 +596,9 @@ export function approvalAction(candidate: ApprovalCandidate): ApprovalAction {
          * device was away could never run once it returned.
          */
         effect:
-          candidate.toolRef === APP_CALL_TOOL ? APP_CALL_TOOL : candidate.effect,
+          candidate.toolRef === APP_CALL_TOOL
+            ? APP_CALL_TOOL
+            : candidate.effect,
         scope: candidate.scope,
         args: candidate.args,
         target: candidate.target,
@@ -697,8 +672,7 @@ export function approvalArgsPreview(action: {
       source: approvalPreview(field(action.display, "description")),
     };
   // --- end app discovery ---
-  if (action.toolRef !== APP_CALL_TOOL)
-    return approvalPreview(action.args);
+  if (action.toolRef !== APP_CALL_TOOL) return approvalPreview(action.args);
   // Masked as an object, so secrets by name are hidden before the JSON is cut.
   const json =
     JSON.stringify(approvalPreview(field(action.args, "args") ?? {})) ?? "{}";
@@ -712,7 +686,9 @@ export function approvalArgsPreview(action: {
   const description =
     field(action.display, "description") ?? field(action.target, "description");
   return {
-    app: approvalPreview(field(action.target, "app") ?? field(action.args, "app")),
+    app: approvalPreview(
+      field(action.target, "app") ?? field(action.args, "app"),
+    ),
     tool: approvalPreview(
       field(action.target, "tool") ?? field(action.args, "tool"),
     ),

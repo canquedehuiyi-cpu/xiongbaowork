@@ -17,11 +17,11 @@ import type { AuditEventInput } from "../src/audit";
 import type { AppVariables, AuthenticatedActor } from "../src/auth/guards";
 import { CANDIDATE_REF } from "../src/computer/app-discovery";
 import type { ComputerTransport } from "../src/computer/client";
+import { personSeat } from "../src/computer/computer-key";
 import {
   DESKTOP_SNAPSHOT_DESCRIPTION,
   DESKTOP_WINDOWS_DESCRIPTION,
 } from "../src/computer/desktop-tools";
-import { personSeat } from "../src/computer/computer-key";
 import { createComputerGateway } from "../src/computer/gateway";
 import { createHeadlessComputerTools } from "../src/computer/headless-tools";
 import type { PolicyStore } from "../src/computer/policy-store";
@@ -441,7 +441,7 @@ describe("where the shell and file tools say they act", () => {
     new Map(
       createHeadlessComputerTools({
         gateway: {} as never,
-        botId: "bot-1",
+        seat: personSeat(OWNER, "bot-1"),
         actor: { id: OWNER },
         machine,
       }).map((tool) => [tool.definition.name, tool.definition.description]),
