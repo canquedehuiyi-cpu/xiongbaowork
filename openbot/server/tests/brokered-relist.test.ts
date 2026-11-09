@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { startBrokeredRelist } from "../src/plugins/relist";
+import { RELIST_RETRY_MS, startBrokeredRelist } from "../src/plugins/relist";
 
 /**
  * 启动时重新列 broker 应用的那个后台循环（上游 #1185 的 `startBrokeredRelist`）。
@@ -136,5 +136,88 @@ describe("relisting broker apps at start", () => {
     await Bun.sleep(60);
 
     expect(attempts).toBe(1);
+  });
+});
+
+/**
+ * 假时钟：记下每次排的等待时长，由测试一步步推进，不真的等。
+ */
+function fakeClock() {
+  const delays: number[] = [];
+  let pending: (() => void) | undefined;
+  return {
+    delays,
+    timers: {
+      set: (run: () => void, ms: number) => {
+        delays.push(ms);
+        pending = run;
+        return delays.length;
+      },
+      clear: () => {
+        pending = undefined;
+      },
+    },
+    /** 触发排着的那一次，等它那一轮做完。没有排着的就回答 false。 */
+    async tick(): Promise<boolean> {
+      const run = pending;
+      pending = undefined;
+      if (!run) return false;
+      run();
+      for (let spin = 0; spin < 20; spin += 1) await Promise.resolve();
+      return true;
+    },
+  };
+}
+
+describe("giving up only after the longest wait (N1)", () => {
+  test("walks every step of the backoff before any failure counts, then gives up after three at the longest", async () => {
+    const clock = fakeClock();
+    const counted: boolean[] = [];
+    let countedFailures = 0;
+    stop = startBrokeredRelist(
+      {
+        // 像 store 那样：只有要求计数的失败才算，算满 3 次就不再报落后。
+        relistOutdatedBrokeredApps: async ({ countFailures }) => {
+          counted.push(countFailures);
+          if (countedFailures >= 3) return [];
+          if (countFailures) countedFailures += 1;
+          return countedFailures >= 3 ? [] : ["gmail"];
+        },
+      },
+      RELIST_RETRY_MS,
+      clock.timers,
+    );
+
+    while (await clock.tick()) {}
+
+    // 第一次排在 0（不阻塞启动），之后每一档都走到，最长一档重复到放弃为止。
+    expect(clock.delays).toEqual([
+      0,
+      ...RELIST_RETRY_MS,
+      RELIST_RETRY_MS.at(-1),
+      RELIST_RETRY_MS.at(-1),
+    ]);
+    // 等过最长一档之后的尝试才计数，连续 3 次后循环停止。
+    expect(counted).toEqual([false, false, false, false, true, true, true]);
+  });
+
+  test("an app that catches up before the longest step never counts a failure", async () => {
+    const clock = fakeClock();
+    const counted: boolean[] = [];
+    stop = startBrokeredRelist(
+      {
+        relistOutdatedBrokeredApps: async ({ countFailures }) => {
+          counted.push(countFailures);
+          return counted.length < 3 ? ["gmail"] : [];
+        },
+      },
+      RELIST_RETRY_MS,
+      clock.timers,
+    );
+
+    while (await clock.tick()) {}
+
+    expect(counted).toEqual([false, false, false]);
+    expect(clock.delays).toEqual([0, 30_000, 60_000]);
   });
 });

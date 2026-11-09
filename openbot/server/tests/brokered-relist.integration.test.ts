@@ -96,7 +96,11 @@ const storeWith = (broker: ComposioBroker | undefined) =>
   });
 // 只看它在不在：重新列工具不经过 broker 的任何方法，清单走的是 Composio transport。
 const store = storeWith({} as ComposioBroker);
-const relist = () => asPlatform(() => store.relistOutdatedBrokeredApps());
+/**
+ * 一轮重列。`countFailures` 由后台循环决定：退避推进到最长一档之后的尝试才计入放弃的次数。
+ */
+const relist = (countFailures = false) =>
+  asPlatform(() => store.relistOutdatedBrokeredApps({ countFailures }));
 
 const asPlatform = <T>(work: () => Promise<T>) => runAsTenant("platform", work);
 
@@ -281,22 +285,37 @@ describe("listing each broker app again once after an upgrade", () => {
     expect([...behind].sort()).toEqual([BROKEN_ROW, DOWN_ROW].sort());
   });
 
-  test("after three failures at the same revision, an app is given up on for this process, said once", async () => {
-    const before = warned.length;
-    const behind = await relist();
+  test("failures before the longest backoff step are not counted: the app is never given up on", async () => {
+    for (let round = 0; round < 4; round += 1) {
+      const behind = await relist();
+      expect([...behind].sort()).toEqual([BROKEN_ROW, DOWN_ROW].sort());
+    }
+    expect(asked).toEqual([DOWN_APP, DOWN_APP, DOWN_APP, DOWN_APP]);
+    for (const id of [DOWN_ROW, BROKEN_ROW])
+      expect(logged("brokered-app-relist-given-up", id)).toEqual([]);
+  });
 
-    expect(asked).toEqual([DOWN_APP]);
+  test("after three counted failures at the same revision, an app is given up on for this process, said once", async () => {
+    for (let round = 0; round < 2; round += 1)
+      expect([...(await relist(true))].sort()).toEqual(
+        [BROKEN_ROW, DOWN_ROW].sort(),
+      );
+    const before = warned.length;
+    const behind = await relist(true);
+
+    expect(asked).toEqual([DOWN_APP, DOWN_APP, DOWN_APP]);
     expect(behind).toEqual([]);
     for (const id of [DOWN_ROW, BROKEN_ROW])
       expect(logged("brokered-app-relist-given-up", id)).toHaveLength(1);
 
-    const again = await relist();
-    expect(again).toEqual([]);
-    expect(asked).toEqual([DOWN_APP]);
+    asked.length = 0;
+    expect(await relist(true)).toEqual([]);
+    expect(await relist()).toEqual([]);
+    expect(asked).toEqual([]);
+    // 第三次：BROKEN 的失败日志一条，两条放弃日志；之后什么都不报。
     expect(warned.length).toBe(before + 3);
     for (const id of [DOWN_ROW, BROKEN_ROW])
       expect(logged("brokered-app-relist-given-up", id)).toHaveLength(1);
-    expect(logged("brokered-app-relist-failed", BROKEN_ROW)).toHaveLength(3);
   });
 
   test("a deployment with no Composio configured asks nothing", async () => {

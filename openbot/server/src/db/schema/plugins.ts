@@ -124,7 +124,7 @@ export const mcpServers = pgTable(
     lastError: text("last_error"),
     /**
      * 这台应用的工具是按哪一版的清单读法存下的：每次存下工具的刷新都写 `plugins/store.ts` 里的
-     * `LISTING_REVISION`，这一列出现之前存的行是 0（迁移 0147，上游 0080）。
+     * `LISTING_REVISION`，这一列出现之前存的行是 0（迁移 0152，上游 0080）。
      *
      * 同一份 vendor 清单，OpenBot 记下的东西会随版本变：0146 开始把 Composio 什么标签都没给的动作
      * 记为 `unclassified`，之前记的是普通写操作。存下的行分不清这两种，所以不改写，而是重新列：

@@ -648,7 +648,10 @@ function storableSchema(
  */
 export const LISTING_REVISION = 1;
 
-/** 升级后重新列 broker 应用时，同一个应用、同一个版本最多连续试几次（本进程内）。 */
+/**
+ * 升级后重新列 broker 应用时，退避到最长一档之后，同一个应用、同一个版本最多再连续失败几次就放弃
+ * （本进程内）。
+ */
 export const RELIST_ATTEMPTS = 3;
 
 /**
@@ -5178,10 +5181,14 @@ export function createPluginStore(options: PluginStoreOptions) {
      *
      * 日志：vendor 的失败落在应用的 `lastError`；`refreshTools` 抛出的（部署自己的故障、url 里没有
      * 应用的 brokered 行）写一行结构化日志，只写错误名，不写 message（可能带语句或 vendor 的原话）。
-     * 同一个应用、同一个 `listing_revision` 连续失败 {@link RELIST_ATTEMPTS} 次，本进程里就不再
-     * 重试，记一条日志，也不再算作落后；下一次启动或管理员的「刷新工具」会再试。
+     * 放弃：只有 `countFailures` 为 true 的一轮失败才计数，后台循环在退避推进到最长一档之后才这样
+     * 要求（见 `./relist`），所以退避表的每一档都会走到。同一个应用、同一个 `listing_revision`
+     * 计数满 {@link RELIST_ATTEMPTS} 次，本进程里就不再重试，记一条日志，也不再算作落后；下一次
+     * 启动或管理员的「刷新工具」会再试。成功一次就清零。
      */
-    async relistOutdatedBrokeredApps(): Promise<string[]> {
+    async relistOutdatedBrokeredApps(
+      options: { countFailures?: boolean } = {},
+    ): Promise<string[]> {
       if (!broker) return [];
       requireServerWriter();
       const outdated = await database
@@ -5217,6 +5224,10 @@ export function createPluginStore(options: PluginStoreOptions) {
           relistFailures.delete(attempt);
           continue;
         }
+        if (!options.countFailures) {
+          behind.push(id);
+          continue;
+        }
         const failures = (relistFailures.get(attempt) ?? 0) + 1;
         relistFailures.set(attempt, failures);
         if (failures >= RELIST_ATTEMPTS) {
@@ -5226,7 +5237,7 @@ export function createPluginStore(options: PluginStoreOptions) {
               serverId: id,
               listingRevision: revision,
               attempts: failures,
-              note: "Listed again after the upgrade and failed every time, so this process stops trying. Its stored actions keep working and ask as before; the next start, or Refresh tools on the app's page, tries again.",
+              note: "Listed again after the upgrade through every backoff step and then failed three times at the longest, so this process stops trying. Its stored actions keep working and ask as before; the next start, or Refresh tools on the app's page, tries again.",
             }),
           );
           continue;
