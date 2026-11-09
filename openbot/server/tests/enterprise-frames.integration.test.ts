@@ -568,7 +568,7 @@ describe("a parked crew run, answered", () => {
     ).text();
     // The owner check every parked run meets: the row's stamp, agreeing with the approval's owner.
     expect(source).toMatch(
-      /const ownedBy = \([^]*?assertPersonTenant\(parked\.tenantId, ownerUserId\)/,
+      /const ownedBy = \([\s\S]*?assertPersonTenant\(parked\.tenantId, ownerUserId\)/,
     );
     const lookup = source.indexOf("pipeline?.runHoldingApproval(");
     expect(lookup).toBeGreaterThan(-1);

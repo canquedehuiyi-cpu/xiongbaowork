@@ -1,8 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { readdirSync, readFileSync } from "node:fs";
-import { readdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
 import { createApp } from "../src/app";
 import {
   auditEventTypes,

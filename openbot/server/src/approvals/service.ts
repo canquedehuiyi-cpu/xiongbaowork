@@ -8,7 +8,6 @@ import {
   DECLINED_BY_PERSON,
   HANDLED_BY_PERSON,
   NOT_DONE,
-  notCarriedOut,
   notDoneOnRecheck,
   OUTCOME_UNKNOWN,
   WITHDRAWN_APPROVALS_OFF,

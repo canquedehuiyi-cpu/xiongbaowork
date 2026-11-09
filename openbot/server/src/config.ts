@@ -25,7 +25,6 @@ import {
   transcriptionConfig,
 } from "./dictation/config";
 import { type Edition, parseEdition } from "./edition";
-import { proxiedClientSocketUrl } from "./intelligence-gateway-proxy";
 import { type VoiceConfig, voiceConfig } from "./voice/config";
 import { type WebBotAuth, webBotAuthFromEnv } from "./web-bot-auth";
 
@@ -1363,14 +1362,6 @@ function tenantRuntime(
         tenantRuntime: "cloud",
         tenantRuntimeReason: "TENANT_RUNTIME is unset outside production",
       };
-}
-
-/** `on` or `off`, and unset is off. Anything else is a typo that would otherwise read as off. */
-function onOrOff(environment: Environment, name: string): boolean {
-  const value = optional(environment, name);
-  if (value === undefined || value === "off") return false;
-  if (value === "on") return true;
-  throw new Error(`${name} must be "on" or "off".`);
 }
 
 /**

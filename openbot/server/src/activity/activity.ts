@@ -23,7 +23,6 @@ import {
 } from "drizzle-orm";
 import { HANDOFF_KIND } from "../agents/handoff";
 import { readWakeUpPayload, wakeUpsOwnedBy } from "../agents/wake-up";
-import { WAKE_UP_KIND, type WakeUpPayload } from "../agents/wake-up";
 import {
   APPROVAL_CARDS,
   DECISION_KIND,

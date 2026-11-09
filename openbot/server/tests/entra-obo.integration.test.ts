@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import { decryptOAuthToken, setTokenUtil } from "better-auth/oauth2";
 import { and, eq, inArray, like } from "drizzle-orm";
 import {
   exportJWK,
@@ -13,7 +12,6 @@ import {
   SignJWT,
 } from "jose";
 import { createApp } from "../src/app";
-import { createPeopleStore } from "../src/people/store";
 import { createAuditStore } from "../src/audit";
 import { createAuth } from "../src/auth";
 import { createEntra, withEntraBearer } from "../src/auth/entra";
@@ -22,7 +20,6 @@ import { loadConfig } from "../src/config";
 import { encryptSecret } from "../src/credentials";
 import { createDatabase } from "../src/db/client";
 import {
-  accounts,
   agents,
   auditEvents,
   credentials,
@@ -31,11 +28,8 @@ import {
   sessions,
   users,
 } from "../src/db/schema";
-import {
-  CustomServerRefusedError,
-  createPluginStore,
-} from "../src/plugins/store";
-import { grantedTools, REFUSAL_MARKER } from "../src/plugins/tools";
+import { createPeopleStore } from "../src/people/store";
+import { createPluginStore } from "../src/plugins/store";
 import { createRequestActor } from "../src/request-actor";
 import { asPlatform, runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
@@ -68,7 +62,6 @@ const CLIENT_SECRET = `secret-${tag}`;
 const APP_CLIENT = randomUUID();
 const DOWNSTREAM_APP = randomUUID();
 const HR_SCOPE = `api://${DOWNSTREAM_APP}/.default`;
-const PAYROLL_SCOPE = "api://payroll/.default";
 const ISSUER = `https://login.microsoftonline.com/${TENANT}/v2.0`;
 const ENTRA_PORT = 7483;
 const MCP_PORT = 7484;
@@ -436,12 +429,7 @@ const api = (path: string, token: string | null, body?: unknown) =>
 
 const person = (name: string) => ({ oid: randomUUID(), upn: email(name) });
 const ada = person("ada");
-const alice = person("alice");
-const bob = person("bob");
-const cara = person("cara");
 
-const SERVER = `obo-hr-${tag}`;
-const PAYROLL = `obo-payroll-${tag}`;
 const PLAIN = `obo-plain-${tag}`;
 const BOT = `obo-bot-${tag}`;
 const DEPLOYMENT_CREDENTIAL = randomUUID();
@@ -455,69 +443,6 @@ async function userId(address: string) {
       .where(eq(users.email, address)),
   );
   return row?.id ?? null;
-}
-
-/**
- * How a person who signed in with Microsoft in their browser is left: a user and a Microsoft account
- * from that sign-in, holding their refresh token encrypted the way Better Auth writes it.
- *
- * The user and account come from the real first sign-in (a separate instance, so the token it saw is
- * not remembered by the one under test); the refresh token is what a browser's sign-in adds.
- */
-async function signedInWithMicrosoft(who: { oid: string; upn: string }) {
-  await newEntra().sessionFrom(
-    new Headers({ authorization: `Bearer ${await tokenToOpenBot(who)}` }),
-  );
-  const id = await userId(who.upn);
-  if (!id) throw new Error(`${who.upn} was signed in`);
-  const [account] = await database
-    .select({ id: accounts.id })
-    .from(accounts)
-    .where(and(eq(accounts.userId, id), eq(accounts.providerId, "microsoft")));
-  if (!account) throw new Error(`${who.upn} has a Microsoft account`);
-  const ctx = (await betterAuth.$context) as unknown as Parameters<
-    typeof setTokenUtil
-  >[1];
-  const refreshToken = `rt-${randomUUID()}`;
-  entra.refreshTokens.set(refreshToken, who);
-  await ctx.internalAdapter.updateAccount(account.id, {
-    refreshToken: (await setTokenUtil(refreshToken, ctx)) as string,
-  });
-  return id;
-}
-
-async function storedRefreshToken(id: string) {
-  const ctx = (await betterAuth.$context) as unknown as Parameters<
-    typeof decryptOAuthToken
-  >[1];
-  const [row] = await database
-    .select({ refreshToken: accounts.refreshToken })
-    .from(accounts)
-    .where(and(eq(accounts.userId, id), eq(accounts.providerId, "microsoft")));
-  return {
-    raw: row?.refreshToken ?? null,
-    plain: row?.refreshToken
-      ? await decryptOAuthToken(row.refreshToken, ctx)
-      : null,
-  };
-}
-
-/** One tool call from a routine: the in-process door a background run takes, with nobody watching. */
-async function backgroundCall(
-  tokens: ReturnType<typeof createEntra>,
-  actorId: string,
-  serverId = SERVER,
-) {
-  const [tool] = (
-    await grantedTools({
-      store: storeWith(tokens),
-      botId: BOT,
-      actorId,
-      initiator: { kind: "routine", id: `routine-${tag}` },
-    })
-  ).filter((granted) => granted.ref === `${serverId}/whoami`);
-  if (!tool) throw new Error(`the Bot holds ${serverId}/whoami`);
-  return String(await tool.execute({}));
 }
 
 /** A first sign-in writes the person's role through the restricted role writer, as index.ts binds it. */

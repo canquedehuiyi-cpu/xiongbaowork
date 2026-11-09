@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray, like, or, sql } from "drizzle-orm";
+import { and, eq, inArray, like, or, } from "drizzle-orm";
 import { createAuditStore } from "../src/audit";
 import { createCredentialStore } from "../src/credentials";
 import { createDatabase } from "../src/db/client";

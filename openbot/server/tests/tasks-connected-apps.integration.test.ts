@@ -11,11 +11,9 @@ import { createActorAgentResolver } from "../src/agents/agent-resolver";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import type { AgentActor } from "../src/agents/profile-types";
 import { serverTurnAdmission } from "../src/agents/turn-admission";
-import { createApprovedActionExecutor } from "../src/approvals/execute";
-import { createApprovalResumeTick } from "../src/approvals/resume-sweep";
 import { createApprovalService } from "../src/approvals/service";
 import { createApprovalStore } from "../src/approvals/store";
-import { createAuditStore, PERSON_INITIATOR } from "../src/audit";
+import { createAuditStore } from "../src/audit";
 import { createChannelStore } from "../src/channels/routes";
 import { createThreadIdentity } from "../src/channels/thread-identity";
 import type { RegisteredAgent } from "../src/copilot";
@@ -38,17 +36,9 @@ import {
   workItems,
 } from "../src/db/schema";
 import { createPluginStore } from "../src/plugins/store";
-import {
-  grantedTools,
-  REFUSAL_MARKER,
-  vendorAnswer,
-} from "../src/plugins/tools";
-import {
-  createPrivateShareCheck,
-  PRIVATE_SHARE_TOOL_REF,
-} from "../src/proactive/private-share";
+import { grantedTools } from "../src/plugins/tools";
+import { createPrivateShareCheck } from "../src/proactive/private-share";
 import { createProactiveStore } from "../src/proactive/store";
-import type { ResponsibilityStore } from "../src/responsibilities/types";
 import { createTaskRunner } from "../src/tasks/runner";
 import { createTaskStore } from "../src/tasks/store";
 import { createTaskTurn } from "../src/tasks/turn";
@@ -252,11 +242,6 @@ let script: (request: ChatCompletionRequest) => {
   content?: string;
   toolCalls?: { name: string; arguments: string }[];
 } = () => ({ content: "Done." });
-const lastAsk = (request: ChatCompletionRequest) => {
-  const asked = request.messages.filter((message) => message.role === "user");
-  const content = asked.at(-1)?.content;
-  return typeof content === "string" ? content : JSON.stringify(content);
-};
 /** How many tool results follow the person's last message. */
 const answeredSinceAsk = (request: ChatCompletionRequest) => {
   const last = request.messages.findLastIndex(
@@ -580,33 +565,6 @@ const tasks = createTaskRunner({
   retryMs: 0,
 });
 
-const resumeApproval = createApprovalResumeTick({
-  approvalQueue: queue,
-  approvalOwner: `tasks-apps-${suite}-approval`,
-  approvalService,
-  executeApprovedAction: createApprovedActionExecutor({
-    sourceFor: async () => ({}),
-    gate: approvalService.gate,
-    computerTools: async () => [],
-    hostTools: () => [],
-    callTool: (input) => plugins.callTool(input),
-    credentialActorFor: async (actorId) => actorId,
-    coordinationCall: async () => null,
-    answer: vendorAnswer,
-    privateShareToolRef: PRIVATE_SHARE_TOOL_REF,
-    refusalMarker: REFUSAL_MARKER,
-    personInitiator: PERSON_INITIATOR,
-  }),
-  database,
-  // Read only for a responsibility's waiting run, which these turns never are.
-  responsibilityStore: {} as ResponsibilityStore,
-  groupConversations: { continueWaiting: (_approvalId, run) => run() },
-  approvalContinuationRunner: runTurn,
-  channelStore,
-  actorFor,
-  notify: async () => undefined,
-});
-
 /* ------------------------------------------------------------------------------------------------
  * A person, their Bot holding the apps, and an item a check-in raised.
  * ---------------------------------------------------------------------------------------------- */
@@ -685,17 +643,6 @@ const pendingFor = (owner: string) =>
         eq(approvalRequests.status, "pending"),
       ),
     );
-
-async function allowOnce(owner: string, id: string) {
-  await runAsTenant(owner, () =>
-    approvalService.decide(owner, id, "allow_once"),
-  );
-  for (let tick = 0; tick < 10; tick += 1) {
-    await resumeApproval();
-    if ((await approvalStore.get(owner, id)).status === "completed") return;
-  }
-  throw new Error("The approval was never carried out.");
-}
 
 const callsOf = (tool: string) =>
   vendorCalls.filter((call) => call.tool === tool);

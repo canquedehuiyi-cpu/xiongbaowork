@@ -52,9 +52,9 @@ import { createTaskRunner } from "../src/tasks/runner";
 import { PROACTIVE_TASK_KIND } from "../src/tasks/state";
 import { createTaskStore } from "../src/tasks/store";
 import { createTaskTurn } from "../src/tasks/turn";
+import { runAsTenant } from "../src/tenant/context";
 import { createWorkQueue } from "../src/work/queue";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
-import { runAsTenant } from "../src/tenant/context";
 import { afterAll, test } from "./support/platform-frame";
 
 /**
@@ -687,7 +687,7 @@ describe("where a task stands", () => {
   });
 
   test("a task asks before every change though Ask before making changes is off, its reads of the person's own app run freely, and in the person's own conversation the send asks as every send does", async () => {
-    const { owner, botId, own, item } = await seed();
+    const { owner, item } = await seed();
     // The deployment's default: off, and the person never turned it on.
     expect(await approvalStore.enabled(owner.id)).toBe(false);
     const toSam = {

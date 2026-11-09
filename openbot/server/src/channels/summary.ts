@@ -17,13 +17,13 @@
 import { readFiring } from "@openbot/shared/routine-firing";
 import { and, asc, eq, isNull, notExists, notInArray, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
-import { NOBODY_TENANTS } from "../db/schema/tenant";
 import {
   channelMemberships,
   channels,
   intelligenceChannelMappings,
   workItems,
 } from "../db/schema";
+import { NOBODY_TENANTS } from "../db/schema/tenant";
 import {
   assertPersonTenant,
   isPersonTenant,
@@ -39,8 +39,6 @@ export const CHANNEL_SUMMARY_KIND = "channel.summary";
 /** The skip reason for work that names no person it could be done for. */
 export const SUMMARY_TENANT_UNRESOLVED = "no trusted tenant";
 
-/** A title long enough to truncate says no more than the preview it replaced. */
-const MAX_SUMMARY_GRAPHEMES = 60;
 /**
  * More words than a sidebar title holds. An answer this long is the model replying to the
  * conversation, not naming it, and is not written as its name.

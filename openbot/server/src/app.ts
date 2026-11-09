@@ -109,7 +109,6 @@ import type { HostAccessBroker } from "./host-access/broker";
 import { createHostAccessRoutes } from "./host-access/routes";
 import { identityRoutes } from "./identity/routes";
 import type { IdentityStore } from "./identity/store";
-import { createIntelligenceClient } from "./intelligence-client";
 import { createCapturePassOrigin } from "./intelligence-gateway-proxy";
 import {
   createLearningRoutes,
