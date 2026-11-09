@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 
 import { createShell, type Shell } from "./shell";
-import { createWorkspace } from "./workspace";
+import { createWorkspace, DEFAULT_WORKSPACE_LIMITS } from "./workspace";
 
 /**
  * Each employee its own computer, inside one shared container.
@@ -299,7 +299,11 @@ export function createPerBotComputer(options: {
       const key = botKeyOf(botId);
       let workspace = workspaces.get(key);
       if (!workspace) {
-        workspace = createWorkspace(homeFor(botId));
+        // Confined: the employee controls the paths in its directory, and this process can reach
+        // every employee's, so what is opened is checked as well as the path. See workspace.ts.
+        workspace = createWorkspace(homeFor(botId), DEFAULT_WORKSPACE_LIMITS, {
+          confineOpened: true,
+        });
         workspaces.set(key, workspace);
       }
       return workspace;

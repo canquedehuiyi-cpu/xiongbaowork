@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -535,5 +536,35 @@ describe("createPerBotComputer, when the helper refuses to run", () => {
       command: "exit 65",
     });
     expect(result.exitCode).toBe(65);
+  });
+});
+
+describe("createPerBotComputer, an employee's own files", () => {
+  test("are opened and then checked, as only the confined workspace does", async () => {
+    const root = await mkdtemp(join(tmpdir(), "per-bot-confined-"));
+    try {
+      const perBot = createPerBotComputer({
+        workspaceRoot: root,
+        defaultBotId: "shared",
+        enabled: true,
+        helper: async (args) => {
+          await mkdir(join(root, "bots", String(args[1])), { recursive: true });
+          return { code: 0, stdout: "", stderr: "" };
+        },
+      });
+      const workspace = await perBot.workspaceFor("bot-a");
+      // A named pipe: the shared workspace's open would wait for a writer; the confined one refuses.
+      execFileSync("mkfifo", [join(perBot.homeFor("bot-a"), "pipe")]);
+      const outcome = await Promise.race([
+        workspace.read("pipe").then(
+          () => "read",
+          () => "refused",
+        ),
+        Bun.sleep(3_000).then(() => "hung"),
+      ]);
+      expect(outcome).toBe("refused");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });

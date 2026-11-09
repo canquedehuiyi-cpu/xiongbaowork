@@ -22,13 +22,18 @@
  * can be tested against a temporary directory instead of being taken on trust.
  */
 import {
+  constants,
+  type FileHandle,
   lstat,
   mkdir,
+  open,
   readdir,
   readFile,
   readlink,
   realpath,
+  rmdir,
   stat,
+  unlink,
   writeFile,
 } from "node:fs/promises";
 import {
@@ -97,10 +102,171 @@ export const DEFAULT_WORKSPACE_LIMITS: WorkspaceLimits = {
   downloadBytes: 100 * 1024 * 1024,
 };
 
+export type WorkspaceOptions = {
+  /**
+   * Check the file that was opened, not only the path before it was opened. Per-employee mode only.
+   *
+   * There, the file tools run as the computer's own user, which can reach every employee's
+   * directory, while the paths inside an employee's directory are that employee's to change. A path
+   * checked and then opened by name leaves a window in which `d` is a real directory for the check
+   * and a link to another employee's directory for the open. So the file is opened first, the path
+   * the kernel actually opened is read back from `/proc/self/fd`, and it must still be inside the
+   * root before a byte is read or written. Linux only, as per-employee mode is.
+   *
+   * Off in the shared workspace: there every command already runs as the same user as the file
+   * tools, so there is no one to race and nothing to gain.
+   */
+  confineOpened?: boolean;
+  /** For tests: called with each path just before it is opened in confined mode. */
+  beforeOpen?: (path: string) => void | Promise<void>;
+};
+
+const {
+  O_APPEND,
+  O_CREAT,
+  O_EXCL,
+  O_NOCTTY,
+  O_NOFOLLOW,
+  O_NONBLOCK,
+  O_RDONLY,
+  O_WRONLY,
+} = constants;
+
+/**
+ * `O_NONBLOCK` so a named pipe an employee left behind is refused rather than an open that waits
+ * for a writer for ever. It changes nothing for a regular file or a directory.
+ */
+const READ_FLAGS = O_RDONLY | O_NONBLOCK | O_NOCTTY;
+
+/** Where the kernel says an open descriptor points, links and all resolved. */
+function openedPath(handle: FileHandle): Promise<string> {
+  return readlink(`/proc/self/fd/${handle.fd}`);
+}
+
+function errorCode(error: unknown): string | undefined {
+  return (error as NodeJS.ErrnoException | null)?.code;
+}
+
+/**
+ * What an open that failed tells the caller: a missing file is missing, and anything else (a pipe
+ * with no reader, a loop of links) a file that could not be opened, rather than a broken computer.
+ */
+function openFailure(error: unknown, shown: string): WorkspaceFileError {
+  if (errorCode(error) === "ENOENT")
+    return new WorkspaceFileNotFoundError(`There is no file at ${shown}.`);
+  return new WorkspaceFileError(`${shown} could not be opened.`);
+}
+
+function changedUnderneath(shown: string): WorkspacePathError {
+  return new WorkspacePathError(
+    `${shown} changed while it was being opened, and now leads outside your workspace.`,
+  );
+}
+
 export function createWorkspace(
   rootPath: string,
   limits: WorkspaceLimits = DEFAULT_WORKSPACE_LIMITS,
+  options: WorkspaceOptions = {},
 ) {
+  const confined = options.confineOpened === true;
+
+  /** Open `path` and prove that what was opened is inside `root`, or close it and refuse. */
+  async function openInside(
+    root: string,
+    path: string,
+    flags: number,
+    shown: string,
+  ): Promise<FileHandle> {
+    await options.beforeOpen?.(path);
+    let handle: FileHandle;
+    try {
+      handle = await open(path, flags);
+    } catch (error) {
+      throw openFailure(error, shown);
+    }
+    try {
+      const real = await openedPath(handle);
+      try {
+        assertInside(root, real, shown);
+      } catch {
+        throw changedUnderneath(shown);
+      }
+      return handle;
+    } catch (error) {
+      await handle.close().catch(() => {});
+      throw error;
+    }
+  }
+
+  /**
+   * Create the folders a write needs one at a time, each one opened and checked before the next is
+   * made inside it, so a folder swapped for a link part way down cannot aim the rest elsewhere. One
+   * made here and found outside is removed again, as far as that is possible.
+   */
+  async function makeFoldersInside(
+    root: string,
+    folder: string,
+    shown: string,
+  ): Promise<void> {
+    const rel = relative(root, folder);
+    if (rel === "") return;
+    let current = root;
+    for (const part of rel.split(sep)) {
+      const next = join(current, part);
+      await options.beforeOpen?.(next);
+      let made = false;
+      try {
+        await mkdir(next);
+        made = true;
+      } catch (error) {
+        if (errorCode(error) !== "EEXIST")
+          throw new WorkspaceFileError(`${shown} could not be created.`);
+      }
+      let handle: FileHandle;
+      try {
+        handle = await open(next, READ_FLAGS);
+      } catch {
+        throw new WorkspaceFileError(`${shown} could not be created.`);
+      }
+      try {
+        const real = await openedPath(handle);
+        try {
+          assertInside(root, real, shown);
+        } catch {
+          if (made) await rmdir(real).catch(() => {});
+          throw changedUnderneath(shown);
+        }
+        if (!(await handle.stat()).isDirectory())
+          throw new WorkspaceFileError(
+            `${relative(root, real)} is a file, not a folder.`,
+          );
+        current = real;
+      } finally {
+        await handle.close().catch(() => {});
+      }
+    }
+  }
+
+  /** Up to `length` bytes from the start of an open file. */
+  async function readStart(
+    handle: FileHandle,
+    length: number,
+  ): Promise<Buffer> {
+    const buffer = Buffer.alloc(length);
+    let filled = 0;
+    while (filled < length) {
+      const { bytesRead } = await handle.read(
+        buffer,
+        filled,
+        length - filled,
+        filled,
+      );
+      if (bytesRead === 0) break;
+      filled += bytesRead;
+    }
+    return buffer.subarray(0, filled);
+  }
+
   /**
    * Turn a Bot's requested path into a real one inside the workspace, or refuse.
    *
@@ -193,6 +359,223 @@ export function createWorkspace(
     return resolved;
   }
 
+  /** `list`, walking open folders rather than paths. */
+  async function listOpened(
+    root: string,
+    start: string,
+    requested: string,
+  ): Promise<{ path: string; entries: WorkspaceEntry[]; truncated: boolean }> {
+    let first: FileHandle;
+    try {
+      first = await openInside(root, start, READ_FLAGS, requested);
+    } catch (error) {
+      if (error instanceof WorkspaceFileNotFoundError)
+        throw new WorkspaceFileError(`There is no folder at ${requested}.`);
+      throw error;
+    }
+
+    const entries: WorkspaceEntry[] = [];
+    let truncated = false;
+
+    /*
+     * Each folder is read through its own descriptor (`/proc/self/fd/<fd>`), and a folder inside it
+     * is opened relative to that descriptor with O_NOFOLLOW, so no path is looked up twice. A folder
+     * that became a link since it was listed is not walked into, as a link never was.
+     */
+    const walk = async (handle: FileHandle, real: string): Promise<void> => {
+      if (truncated) return;
+      const here = `/proc/self/fd/${handle.fd}`;
+      const found = await readdir(here, { withFileTypes: true });
+      for (const item of found) {
+        if (entries.length >= limits.listEntries) {
+          truncated = true;
+          return;
+        }
+        const full = join(real, item.name);
+        const shown = full.slice(root.length + 1);
+        if (item.isDirectory()) {
+          entries.push({ path: shown, kind: "folder" });
+          await options.beforeOpen?.(full);
+          const child = await open(
+            join(here, item.name),
+            READ_FLAGS | O_NOFOLLOW,
+          ).catch(() => null);
+          if (child === null) continue;
+          try {
+            const childReal = await openedPath(child);
+            try {
+              assertInside(root, childReal, shown);
+            } catch {
+              throw changedUnderneath(shown);
+            }
+            if ((await child.stat()).isDirectory())
+              await walk(child, childReal);
+          } finally {
+            await child.close().catch(() => {});
+          }
+          continue;
+        }
+        if (!item.isFile()) continue;
+        const size = await lstat(join(here, item.name)).catch(() => null);
+        entries.push({
+          path: shown,
+          kind: "file",
+          ...(size?.isFile() ? { bytes: size.size } : {}),
+        });
+      }
+    };
+
+    try {
+      if (!(await first.stat()).isDirectory())
+        throw new WorkspaceFileError(`${requested} is a file, not a folder.`);
+      await walk(first, await openedPath(first));
+    } finally {
+      await first.close().catch(() => {});
+    }
+    return { path: requested, entries, truncated };
+  }
+
+  /** `read`, from the descriptor that was checked. */
+  async function readOpened(
+    full: string,
+    requested: string,
+  ): Promise<{
+    path: string;
+    text: string;
+    truncated: boolean;
+    bytes: number;
+  }> {
+    const root = await realpath(rootPath);
+    const handle = await openInside(root, full, READ_FLAGS, requested);
+    try {
+      const info = await handle.stat();
+      if (info.isDirectory())
+        throw new WorkspaceFileError(
+          `${requested} is a directory, not a file.`,
+        );
+      if (!info.isFile())
+        throw new WorkspaceFileError(`${requested} is not a file.`);
+      const slice = await readStart(
+        handle,
+        Math.min(info.size, limits.readBytes),
+      );
+      return {
+        path: requested,
+        text: slice.toString("utf8"),
+        truncated: info.size > slice.byteLength,
+        bytes: info.size,
+      };
+    } finally {
+      await handle.close().catch(() => {});
+    }
+  }
+
+  /**
+   * `download`, streamed from the descriptor that was checked. A `Bun.file` would open the path
+   * again when the response is sent, which is the window this closes. The stream owns the
+   * descriptor: it closes it at the end, or when the reader goes away.
+   */
+  async function downloadOpened(
+    full: string,
+    requested: string,
+  ): Promise<{
+    path: string;
+    name: string;
+    bytes: number;
+    body: ReadableStream<Uint8Array>;
+  }> {
+    const root = await realpath(rootPath);
+    const handle = await openInside(root, full, READ_FLAGS, requested);
+    let size: number;
+    try {
+      const info = await handle.stat();
+      if (!info.isFile())
+        throw new WorkspaceFileError(`${requested} is not a file.`);
+      if (info.size > limits.downloadBytes)
+        throw new WorkspaceFileTooLargeError(
+          `That file is ${info.size} bytes and the download limit is ${limits.downloadBytes}.`,
+        );
+      size = info.size;
+    } catch (error) {
+      await handle.close().catch(() => {});
+      throw error;
+    }
+
+    let sent = 0;
+    const body = new ReadableStream<Uint8Array>({
+      async pull(controller) {
+        // No more than the length the response announced, even if the file grew since.
+        const want = Math.min(64 * 1024, size - sent);
+        const chunk = want > 0 ? Buffer.alloc(want) : Buffer.alloc(0);
+        const { bytesRead } =
+          want > 0 ? await handle.read(chunk, 0, want, sent) : { bytesRead: 0 };
+        if (bytesRead === 0) {
+          await handle.close().catch(() => {});
+          controller.close();
+          return;
+        }
+        sent += bytesRead;
+        controller.enqueue(chunk.subarray(0, bytesRead));
+      },
+      async cancel() {
+        await handle.close().catch(() => {});
+      },
+    });
+    return {
+      path: requested,
+      name: basename(requested.replace(/\\/g, "/")) || "download",
+      bytes: size,
+      body,
+    };
+  }
+
+  /**
+   * `write`, into the descriptor that was checked.
+   *
+   * Opened without O_TRUNC, so a file that turns out to be outside is never emptied; truncated only
+   * once it is known to be this employee's. A file this call created and then found outside is
+   * removed again, by the path the kernel reports for it: that path runs through the other
+   * employee's directory, which this employee cannot change.
+   */
+  async function writeOpened(
+    full: string,
+    requested: string,
+    contents: string,
+    append: boolean,
+  ): Promise<void> {
+    const root = await realpath(rootPath);
+    await makeFoldersInside(root, dirname(full), requested);
+    const flags = O_WRONLY | O_NONBLOCK | O_NOCTTY | (append ? O_APPEND : 0);
+    await options.beforeOpen?.(full);
+    let handle: FileHandle;
+    let created = false;
+    try {
+      handle = await open(full, flags | O_CREAT | O_EXCL, 0o666);
+      created = true;
+    } catch (error) {
+      if (errorCode(error) !== "EEXIST") throw openFailure(error, requested);
+      handle = await open(full, flags).catch((again: unknown) => {
+        throw openFailure(again, requested);
+      });
+    }
+    try {
+      const real = await openedPath(handle);
+      try {
+        assertInside(root, real, requested);
+      } catch {
+        if (created) await unlink(real).catch(() => {});
+        throw changedUnderneath(requested);
+      }
+      const info = await handle.stat();
+      if (!info.isFile())
+        throw new WorkspaceFileError(`${requested} is not a file.`);
+      if (!append && !created) await handle.truncate(0);
+      await handle.writeFile(contents, { encoding: "utf8" });
+    } finally {
+      await handle.close().catch(() => {});
+    }
+  }
+
   return {
     resolvePath,
 
@@ -215,6 +598,7 @@ export function createWorkspace(
         requested === "." || requested.trim() === ""
           ? root
           : await resolvePath(requested, false);
+      if (confined) return listOpened(root, start, requested);
 
       const info = await stat(start).catch(() => null);
       if (!info) {
@@ -265,6 +649,7 @@ export function createWorkspace(
       bytes: number;
     }> {
       const full = await resolvePath(requested, false);
+      if (confined) return readOpened(full, requested);
       const info = await stat(full).catch(() => null);
       if (!info) {
         throw new WorkspaceFileError(`There is no file at ${requested}.`);
@@ -299,9 +684,11 @@ export function createWorkspace(
       path: string;
       name: string;
       bytes: number;
-      body: Blob;
+      // A stream from the checked descriptor in confined mode; the file itself otherwise.
+      body: Blob | ReadableStream<Uint8Array>;
     }> {
       const full = await resolvePath(requested, false);
+      if (confined) return downloadOpened(full, requested);
       const info = await stat(full).catch(() => null);
       if (!info) {
         throw new WorkspaceFileNotFoundError(
@@ -344,6 +731,10 @@ export function createWorkspace(
       }
 
       const full = await resolvePath(requested, true);
+      if (confined) {
+        await writeOpened(full, requested, contents, options.append === true);
+        return { path: requested, bytes, appended: options.append === true };
+      }
       await mkdir(dirname(full), { recursive: true });
       await writeFile(full, contents, {
         encoding: "utf8",
