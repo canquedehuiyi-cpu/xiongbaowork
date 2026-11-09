@@ -3188,6 +3188,27 @@ export function createPluginRoutes(
         }),
     );
 
+  /** 批准没有干净地完成时记一行日志：哪条申请、做到哪一步、已写入了哪些授予。 */
+  const logApproval = (
+    outcome: "refused" | "grant_failed" | "applied_but_closed",
+    request: AppAccessRequestRecord,
+    granted: string[],
+    reason?: string,
+  ) =>
+    console.warn(
+      JSON.stringify({
+        type: "app-access-approve",
+        outcome,
+        request: request.id,
+        kind: request.kind,
+        app: request.appKey,
+        bot: request.botId,
+        granted,
+        ...(reason ? { reason } : {}),
+        timestamp: new Date().toISOString(),
+      }),
+    );
+
   /** 申请人自己的 pending 申请，最新的在前。 */
   routes.get("/access-requests/mine", requireUser, async (context) =>
     context.json({
@@ -3290,26 +3311,73 @@ export function createPluginRoutes(
               request.botId,
               "grant",
             );
-            if (decision.refusal !== null)
-              return { error: decision.refusal, status: 403 as const };
+            if (decision.refusal !== null) {
+              // 原文是英文、写给开发者的；收件箱里给管理员看中文，原文只进日志（M-2）。
+              logApproval("refused", request, [], decision.refusal);
+              return {
+                error: `无法把「${title}」授予这位员工：员工或应用已不存在，或这项授予不由管理员在这里决定。`,
+                status: 403 as const,
+                granted: [] as string[],
+              };
+            }
           }
+          /*
+           * 逐个写入，记下写成了哪些。中途失败时前面写入的授予会留下（每个都是幂等的 upsert，重试会补齐），
+           * 所以响应和日志都写明已写入了哪些，申请保持 pending。
+           */
+          const written: string[] = [];
           try {
-            for (const ref of refs)
+            for (const ref of refs) {
               await store.grant("mcp", ref, request.botId, actorEmail(context));
+              written.push(ref);
+            }
           } catch (error) {
-            if (error instanceof PluginRefusedError)
-              return { error: error.message, status: 403 as const };
-            throw error;
+            logApproval(
+              "grant_failed",
+              request,
+              written,
+              error instanceof Error ? error.message : String(error),
+            );
+            const done = written.length > 0 ? written.join("、") : "无";
+            return {
+              error: `授予「${title}」时中途失败，申请保持待处理。已写入：${done}。${error instanceof PluginRefusedError ? "其余的这项授予不由管理员在这里决定。" : "其余的没有写入，可以稍后再批准一次补齐。"}`,
+              status: (error instanceof PluginRefusedError ? 403 : 500) as
+                | 403
+                | 500,
+              granted: written,
+            };
           }
           return { refs };
         });
         if ("error" in outcome)
-          return context.json({ error: outcome.error }, outcome.status);
+          return context.json(
+            { error: outcome.error, granted: outcome.granted },
+            outcome.status,
+          );
         granted = outcome.refs;
       }
 
       const decided = await decideAsRequester(context, request, "approved");
-      if (!decided) return context.json({ error: ALREADY_DECIDED }, 409);
+      if (!decided) {
+        /*
+         * 上架或授予已经生效，但关单时发现申请在此期间已被撤回或驳回（I-1）。这和「什么都没做成」的
+         * 409 不是一回事：返回一个可以区分的答复（`applied: true`），写明做了什么、申请状态没改，
+         * 由管理员决定要不要到插件页撤销。
+         */
+        logApproval("applied_but_closed", request, granted);
+        const what =
+          request.kind === "enable"
+            ? `「${title}」已上架`
+            : `「${title}」已授予（${granted.join("、")}）`;
+        return context.json(
+          {
+            error: `${what}，但这条申请在此期间已被撤回或驳回，申请状态未改。如不需要，请到插件页${request.kind === "enable" ? "下架" : "撤销"}。`,
+            applied: true,
+            granted,
+          },
+          409,
+        );
+      }
       return context.json({ request: decided, granted });
     },
   );

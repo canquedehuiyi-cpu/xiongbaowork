@@ -10,6 +10,8 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { AccessRequestInbox } from "@/components/approvals/access-requests";
+import { RequestError } from "@/lib/client";
+import { accessRequestQueryOptions } from "@/lib/plugins/access-requests";
 
 /**
  * 管理员的访问申请收件箱（审批页上，紧挨着审批收件箱）：列出待处理的申请，批准或驳回。
@@ -21,6 +23,8 @@ afterAll(() => GlobalRegistrator.unregister());
 
 const originalFetch = global.fetch;
 let role: "user" | "admin" = "admin";
+/** 批准后这条申请是否已从待处理列表里消失（被撤回或驳回）。 */
+let goneAfterApprove = false;
 let approveAnswer: { status: number; body: unknown } = {
   status: 200,
   body: { granted: [] },
@@ -64,16 +68,19 @@ beforeEach(() => {
   requested.length = 0;
   role = "admin";
   approveAnswer = { status: 200, body: { granted: [] } };
+  goneAfterApprove = false;
   global.fetch = Object.assign(
     async (path: Parameters<typeof fetch>[0], init?: RequestInit) => {
       const url = String(path);
       requested.push(url);
       if (init?.method && init.method !== "GET") {
         sent.push({ path: url, method: init.method });
-        if (url.endsWith("/approve"))
+        if (url.endsWith("/approve")) {
+          if (goneAfterApprove) pending.splice(0, 1);
           return Response.json(approveAnswer.body, {
             status: approveAnswer.status,
           });
+        }
         return Response.json({ request: {} });
       }
       if (url === "/api/plugins/access-requests")
@@ -110,7 +117,9 @@ test("an administrator sees each pending request: the app, who asked, for which 
   expect(
     view.getByText("王小明 替员工「小助理」申请上架这个应用"),
   ).toBeTruthy();
-  expect(view.getByText("理由：要查项目文档")).toBeTruthy();
+  // 理由是员工（模型）写的，不是申请人的原话，标签要说清楚（评审 M-3）。
+  expect(view.getByText("员工给出的理由：要查项目文档")).toBeTruthy();
+  expect(view.getByText(/替正在使用它的人申请/)).toBeTruthy();
   expect(
     view.getByText("li@example.test 替员工「bot-2」申请把这个应用授予这位员工"),
   ).toBeTruthy();
@@ -162,6 +171,32 @@ test("a member is shown nothing, and the inbox is never asked for", async () => 
   await waitFor(() => expect(requested).toContain("/api/me"));
   expect(view.queryByText("访问申请")).toBeNull();
   expect(requested).not.toContain("/api/plugins/access-requests");
+});
+
+test("listed but withdrawn meanwhile: the server's sentence stays on screen after the request leaves the list", async () => {
+  const sentence =
+    "「Notion」已上架，但这条申请在此期间已被撤回或驳回，申请状态未改。如不需要，请到插件页下架。";
+  approveAnswer = { status: 409, body: { error: sentence, applied: true } };
+  goneAfterApprove = true;
+  const view = draw();
+  await view.findByText("Notion");
+  fireEvent.click(
+    view.getAllByRole("button", { name: "批准" })[0] as HTMLElement,
+  );
+  const alert = await view.findByRole("alert");
+  expect(alert.textContent).toContain(sentence);
+  await waitFor(() => expect(view.queryByText("Notion")).toBeNull());
+  expect(view.getByRole("alert").textContent).toContain(sentence);
+});
+
+test("a request somebody else cannot read is not retried: a 404 is an answer", () => {
+  const retry = accessRequestQueryOptions("req-x").retry as (
+    count: number,
+    error: Error,
+  ) => boolean;
+  expect(retry(0, new RequestError("没有这条申请。", 404))).toBe(false);
+  expect(retry(0, new RequestError("出错了", 502))).toBe(true);
+  expect(retry(3, new RequestError("出错了", 502))).toBe(false);
 });
 
 test("with nothing waiting, it says so", async () => {

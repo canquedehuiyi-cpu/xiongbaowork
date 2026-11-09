@@ -1,5 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
-import { client } from "@/lib/client";
+import { client, RequestError } from "@/lib/client";
 
 /**
  * 申请访问（服务端 `/api/plugins/access-requests`，迁移 0153）。
@@ -49,6 +49,11 @@ export function accessRequestInboxQueryOptions() {
 export function accessRequestQueryOptions(id: string) {
   return queryOptions({
     queryKey: accessRequestKeys.one(id),
+    /*
+     * 群聊里别人看到这张卡片时读不到这条申请，404 就是答案，不重试；其他错误最多重试 3 次。
+     */
+    retry: (count: number, error: Error) =>
+      !(error instanceof RequestError && error.status === 404) && count < 3,
     queryFn: async (): Promise<AppAccessRequest> => {
       const response = await client(
         `/api/plugins/access-requests/${encodeURIComponent(id)}`,

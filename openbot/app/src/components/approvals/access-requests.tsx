@@ -54,7 +54,7 @@ function AdminAccessRequests() {
           访问申请
         </h2>
         <p className="text-sm text-muted-foreground">
-          员工在对话里替同事申请使用还没开放给它的应用。批准会上架这个应用，或把它的只读动作授予这位员工。
+          员工在对话里替正在使用它的人申请还没开放给它的应用。批准会上架这个应用，或把它的只读动作授予这位员工。
         </p>
       </div>
       {inbox.error ? (
@@ -62,6 +62,17 @@ function AdminAccessRequests() {
           {inbox.error.message}
         </p>
       ) : null}
+      {/*
+       * 已经不在列表里的申请的结果：比如上架或授予已经生效，但申请在此期间被撤回或驳回。服务端的话
+       * 原样留在这里，不随那一行一起消失。
+       */}
+      {Object.entries(errors)
+        .filter(([id]) => !requests.some((request) => request.id === id))
+        .map(([id, message]) => (
+          <p key={id} role="alert" className="text-sm text-destructive">
+            {message}
+          </p>
+        ))}
       {inbox.isSuccess && requests.length === 0 ? (
         <p className="text-sm text-muted-foreground">没有待处理的访问申请。</p>
       ) : null}
@@ -74,7 +85,8 @@ function AdminAccessRequests() {
           <p className="font-medium">{request.appTitle}</p>
           <p className="text-sm text-muted-foreground">{describe(request)}</p>
           {request.note ? (
-            <p className="text-sm">理由：{request.note}</p>
+            // 理由由员工（模型）写下，不是申请人的原话。
+            <p className="text-sm">员工给出的理由：{request.note}</p>
           ) : null}
           {errors[request.id] ? (
             <p role="alert" className="text-sm text-destructive">
