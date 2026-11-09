@@ -17,13 +17,9 @@ import {
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ComponentType, ReactNode } from "react";
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 import { AgentDialog } from "@/components/agents/agent-dialog";
 import { CreateAgentDialog } from "@/components/agents/create-agent-dialog";
-=======
 import { NewBotSheet } from "@/components/agents/new-bot-sheet";
-import { SetupSections } from "@/components/bot-profile/setup";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 import { type AgentProfile, agentKeys } from "@/lib/agents/queries";
 import { computerKeys } from "@/lib/computers/queries";
 import { Route as NewRuleRoute } from "@/routes/_authed/admin/boundaries_.new";
@@ -36,7 +32,8 @@ import { Route as NewRuleRoute } from "@/routes/_authed/admin/boundaries_.new";
  * Chromium marks it `isComposing`, and WebKit sends it after `compositionend` with the key code 229.
  * The chat composer already skips it: `prompt-area` checks `isComposing` on every Enter it handles.
  * Three text fields in the app acted on it instead, each with a text field's text still unconfirmed:
- * a coworker's name saved in place, the New Bot sheet moving on to its next step, and a
+ * a coworker's name saved in place, the new-coworker wizard (and the New Bot sheet) moving on to its
+ * next step, and a
  * boundary rule saved into the policy in force.
  *
  * THE HARNESS IS THIS REPOSITORY'S: `GlobalRegistrator` in `beforeAll`/`afterAll`, `cleanup` in
@@ -175,12 +172,11 @@ test("a coworker's name is not saved by the Enter that confirms a composed chara
   expect(writes[0]?.body).toMatchObject({ name: "経費" });
 });
 
-test("the New Bot sheet does not create from the Enter that confirms a composed character", async () => {
+test("the new-coworker wizard does not move on from the Enter that confirms a composed character", async () => {
   const view = draw(
-    <NewBotSheet onClose={() => {}} onCreated={() => {}} open />,
+    <CreateAgentDialog onClose={() => {}} onCreated={() => {}} open />,
   );
 
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   const name = await view.findByLabelText("名字");
   await type(name, "経費");
   await type(view.getByLabelText("头衔"), "Finance Operations");
@@ -189,7 +185,19 @@ test("the New Bot sheet does not create from the Enter that confirms a composed 
   await confirmComposedCharacter(name);
   await settle();
   expect(view.getByText("第 1 步，共 3 步")).toBeTruthy();
-=======
+
+  // An ordinary Enter still means Continue.
+  await act(async () => {
+    fireEvent.keyDown(name, { key: "Enter", keyCode: 13 });
+  });
+  expect(await view.findByText("第 2 步，共 3 步")).toBeTruthy();
+});
+
+test("the New Bot sheet does not create from the Enter that confirms a composed character", async () => {
+  const view = draw(
+    <NewBotSheet onClose={() => {}} onCreated={() => {}} open />,
+  );
+
   // The details screen opens first, with Run here selected by default.
   const name = await view.findByLabelText("Name");
   await type(name, "経費");
@@ -197,18 +205,13 @@ test("the New Bot sheet does not create from the Enter that confirms a composed 
   await confirmComposedCharacter(name);
   await settle();
   expect(writes.map((write) => write.request)).toEqual([]);
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 
   // An ordinary Enter still means Create.
   await act(async () => {
     fireEvent.keyDown(name, { key: "Enter", keyCode: 13 });
   });
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-  expect(await view.findByText("第 2 步，共 3 步")).toBeTruthy();
-=======
   await settle();
   expect(writes.map((write) => write.request)).toEqual(["POST /api/agents"]);
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 });
 
 test("a boundary rule is not added by the Enter that confirms a composed character", async () => {
@@ -217,12 +220,8 @@ test("a boundary rule is not added by the Enter that confirms a composed charact
     client.setQueryData(computerKeys.policy(), POLICY),
   );
 
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-  const field = await view.findByLabelText("一条用 CEL 写的规则");
-=======
   fireEvent.click(await view.findByText("Write your own"));
   const field = await view.findByLabelText("Rule");
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   expect(field.getAttribute("spellcheck")).toBe("false");
   expect(field.getAttribute("autocorrect")).toBe("off");
   expect(field.getAttribute("autocapitalize")).toBe("off");

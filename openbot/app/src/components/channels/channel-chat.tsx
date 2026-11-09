@@ -6,16 +6,6 @@ import {
   useAgent,
   useCopilotKit,
 } from "@copilotkit/react-core/v2";
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { attachmentModality } from "@/components/channels/chat-messages";
-import {
-  toGroupOptions,
-  withGroupMembers,
-} from "@/components/channels/composer";
-import { ConversationView } from "@/components/channels/conversation-view";
-=======
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BotOrb } from "@/components/agents/bot-orb";
@@ -29,12 +19,14 @@ import {
 } from "@/components/approvals/question-notice";
 import { ChannelWorkRows } from "@/components/channels/channel-work";
 import { attachmentModality } from "@/components/channels/chat-messages";
-import { toAgentOptions } from "@/components/channels/composer";
+import {
+  toGroupOptions,
+  withGroupMembers,
+} from "@/components/channels/composer";
 import { ModelPicker } from "@/components/channels/composer/model-picker";
 import { ConversationIntro } from "@/components/channels/conversation-intro";
 import { ConversationView } from "@/components/channels/conversation-view";
 import { ProgressRow } from "@/components/channels/progress-row";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 import {
   seedMessage,
   takeFirstMessage,
@@ -42,11 +34,8 @@ import {
 } from "@/components/channels/transcript-messages";
 import { VoiceCallWidget } from "@/components/channels/voice-call-widget";
 import { HandoffResumeNotice } from "@/components/computer/handoff-resume-notice";
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 import { ProjectPicker } from "@/components/projects/project-picker";
-=======
 import { StarterSuggestions } from "@/components/starter-tour/starter-suggestions";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import {
   answerPersonQuestionMutationOptions,
@@ -68,15 +57,6 @@ import {
   type ChannelSummary,
   channelKeys,
 } from "@/lib/channels/queries";
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-import { useActiveBot } from "@/lib/copilot/active-bot";
-import { observeApprovalAgent } from "@/lib/copilot/approval-context";
-import { ConversationProvider } from "@/lib/copilot/conversation";
-import { afterMs, joinWithin } from "@/lib/copilot/join-thread";
-import { repairUnansweredToolCalls } from "@/lib/copilot/repair-history";
-import { runErrorReason, stoppedReason } from "@/lib/copilot/stopped-turn";
-import { readThreadMessages } from "@/lib/copilot/thread-messages";
-=======
 import {
   onTurnFinishedAway,
   turnFinishedAway,
@@ -92,14 +72,17 @@ import { ConversationProvider } from "@/lib/copilot/conversation";
 import { afterMs, joinWithin } from "@/lib/copilot/join-thread";
 import { repairUnansweredToolCalls } from "@/lib/copilot/repair-history";
 import { releaseServerOwnedInterrupts } from "@/lib/copilot/server-owned-interrupts";
-import { followLastRun, stoppedReason } from "@/lib/copilot/stopped-turn";
+import {
+  followLastRun,
+  runErrorReason,
+  stoppedReason,
+} from "@/lib/copilot/stopped-turn";
 import {
   readThreadMessages,
   withCurrentA2uiVersions,
 } from "@/lib/copilot/thread-messages";
 import { modelCatalogueQueryOptions } from "@/lib/models/queries";
 import { useConversationModel } from "@/lib/models/run-model";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 import { useSkillCommands } from "@/lib/plugins/skill-commands";
 import { reportIfQuotaError } from "@/lib/quota/guidance";
 import {
@@ -116,10 +99,7 @@ import {
   withVoiceChats,
 } from "@/lib/voice/archive";
 import { useVoiceCall } from "@/lib/voice/use-voice-call";
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 import { wakerGroupsQueryOptions } from "@/lib/waker-groups/queries";
-=======
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 import { queryClient } from "@/query-client";
 import { newId } from "../../lib/new-id";
 
@@ -137,7 +117,7 @@ const JOIN_DEADLINE_MS = 1500;
 const SEND_WITHOUT_RUNTIME_AFTER_MS = 1500;
 
 /** What a turn that never left the browser says, with the person's words back in the box. */
-const NOT_SENT = "Your message wasn't sent. Try again.";
+const NOT_SENT = "你的消息没有发出去，请重试。";
 
 type ChannelActivitySignature = {
   agentId: string;
@@ -221,22 +201,13 @@ export function channelHistoryNotice({
     historyAvailability === "unavailable" &&
     (historyReadFailed || (messageCount === 0 && lastMessageAt !== null))
   ) {
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     return "更早的消息暂时读不到，你可以继续使用这段对话。";
-=======
-    return "Couldn't load earlier messages. You can keep using this conversation.";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   }
 
   if (unreadable > 0) {
     return unreadable === 1
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       ? "有一条更早的消息读不出来，没有显示。这段对话的其余部分是完整的。"
       : `有 ${unreadable} 条更早的消息读不出来，没有显示。这段对话的其余部分是完整的。`;
-=======
-      ? "One earlier message couldn't be read, so it isn't shown. Everything else is here."
-      : `${unreadable} earlier messages couldn't be read, so they aren't shown. Everything else is here.`;
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   }
 
   return null;
@@ -427,17 +398,13 @@ export function ChannelChat({
   const { copilotkit } = useCopilotKit();
   // Mentions are scoped to the channel's permitted agents.
   const { data: agentProfiles } = useQuery(agentListQueryOptions());
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   // Groups expand into their members in the `@` menu (spec B1); a failed read just lists no Groups.
   const { data: wakerGroups } = useQuery(wakerGroupsQueryOptions());
   const roster = mentionRoster(agentProfiles, channel.agentIds);
-  const channelAgentId = `channel:${channel.id}`;
-=======
   const botProfile = agentProfiles?.find(
     (profile) => profile.id === runtimeAgentId,
   );
   const localAgentId = channelAgentId(channel.id);
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   const { agent, isReady } = useAgent({
     agentId: localAgentId,
     runtimeAgentId,
@@ -825,9 +792,6 @@ export function ChannelChat({
     unreadable,
   });
 
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-  // Run failures arrive as events and are reported only for turns started in this mount.
-  const [runError, setRunError] = useState<string | null>(null);
   /**
    * What became of the last `@` dispatch from this conversation (spec B2): accepted, with where the
    * answer will appear, or refused in the server's own words. The reply itself arrives through the
@@ -837,8 +801,6 @@ export function ChannelChat({
     tone: "status" | "alert";
     text: string;
   } | null>(null);
-=======
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   const awaitingReply = useRef(false);
   /**
    * WHY THIS TURN ENDED WITHOUT AN ANSWER, KEPT WHERE `deliver` CAN STILL SEE IT — because the one
@@ -973,6 +935,7 @@ export function ChannelChat({
     trimmed: string,
     attachments: Attachment[],
     sent?: Message,
+    skillInstructions: string[] = [],
   ) => {
     // Wait briefly for the runtime agent instance before adding the message.
     if (!isReadyRef.current) {
@@ -1008,11 +971,7 @@ export function ChannelChat({
     ])
       .catch(() => {
         setVoiceContextNotice(
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-          "这条消息拿不到之前的语音上下文，员工可能需要你把通话里的细节再说一遍。",
-=======
-          "Couldn’t bring in what was said on the call. You may need to repeat it.",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+          "通话里说过的内容没能带进来，你可能需要再说一遍。",
         );
         return cachedVoiceArchive(channel.id);
       })
@@ -1033,12 +992,27 @@ export function ChannelChat({
     awaitingReply.current = true;
 
     /*
-     * NO SKILL ROW. A `/` skill stays at the start of the person's words as `/<command>`, and the
-     * server gives the Bot that skill's stored instructions in the instructions it writes for the run
-     * (server/src/plugins/picked-skill.ts). A system row added here never reached a Bot as an
-     * instruction: a built-in Bot's runtime drops it, and every harness reads one the browser wrote
-     * as conversation data.
+     * THE SKILL GOES IN FRONT OF THE MESSAGE, AS A SYSTEM TURN. A `/` chip is one token in the
+     * composer; what it stands for is the instruction added here, ahead of what the person typed, so
+     * the Bot reads the job before the request.
+     *
+     * A system message rather than text prepended to theirs, because the two are not the same kind
+     * of thing: the transcript should show what a person said, and pasting the skill into their
+     * words puts sentences in their mouth and makes the reply quote instructions back at them.
+     *
+     * `transcriptMessages` draws user and assistant turns, so this never appears on screen — the
+     * chip is what says a skill was used, and it stays visible in the message they sent.
+     *
+     * M4: upstream dropped this row for picked skill (server/src/plugins/picked-skill.ts), which this
+     * fork did not take; see `lib/plugins/skill-commands.ts`.
      */
+    for (const instruction of skillInstructions) {
+      target.addMessage({
+        content: instruction,
+        id: newId(),
+        role: "system",
+      });
+    }
 
     const voiceHistory = voiceArchiveContext(priorCalls);
     // Older development calls used a system row, which built-in agents discard.
@@ -1146,6 +1120,8 @@ export function ChannelChat({
     attachments: Attachment[] = [],
     /** The message to send for `text`, when it is more than the words: an answer to a question. */
     sent?: Message,
+    /** The `/` skills' instructions, put in front of the message (see `deliver`). */
+    skillInstructions: string[] = [],
   ) => {
     const trimmed = text.trim();
     // A pasted screenshot with no caption is still a message to send: `canSendDraft` already
@@ -1166,7 +1142,12 @@ export function ChannelChat({
       void setChannelBusy({ channelId: channel.id, busy: true });
     }
     try {
-      const reply = await deliver(trimmed, attachments, sent);
+      const reply = await deliver(
+        trimmed,
+        attachments,
+        sent,
+        skillInstructions,
+      );
       /*
        * The person left while this turn was running (holding control of the Bot's browser, say) and the turn went on
        * without this screen. The run-finished subscription that tells the roster what the Bot said went with it, so the
@@ -1206,12 +1187,8 @@ export function ChannelChat({
     const subscription = agent.subscribe?.({
       // Both surfaces fall back to the same sentence, from the same place, so a person who uses
       // both is not told two different things about the same silence.
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       // A quota refusal also opens the guidance dialog (story K4); see `runErrorReason`.
-      onRunErrorEvent: ({ event }) => fail(runErrorReason(event)),
-=======
-      onRunErrorEvent: ({ event }) => fail(stoppedReason(event?.message), true),
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+      onRunErrorEvent: ({ event }) => fail(runErrorReason(event), true),
       onRunFailed: ({ error }) => fail(stoppedReason(error)),
       onRunFinishedEvent: ({ event }) => {
         /*
@@ -1512,8 +1489,7 @@ export function ChannelChat({
                 />
                 {voiceArchive.error && (
                   <p className="pb-2 text-sm text-destructive" role="alert">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-                    语音对话没能加载，请刷新后重试。
+                    语音对话没能加载，请刷新页面。
                   </p>
                 )}
                 {dispatchStatus && (
@@ -1526,9 +1502,6 @@ export function ChannelChat({
                     role={dispatchStatus.tone}
                   >
                     {dispatchStatus.text}
-=======
-                    Couldn’t load voice chats. Reload the page.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
                   </p>
                 )}
                 {voiceContextNotice && (
@@ -1557,12 +1530,7 @@ export function ChannelChat({
                     className="pb-2 text-sm text-muted-foreground"
                     role="status"
                   >
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
                     这位员工已被删除。对话仍然可以查看，但它不会再回复了。
-=======
-                    This Bot was deleted. You can still read this conversation,
-                    but the Bot can't reply.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
                   </p>
                 )}
                 {/*
@@ -1579,7 +1547,7 @@ export function ChannelChat({
               </>
             }
             onSubmit={async (draft) => {
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
+              await runModel.beforeSend();
               // `draft.agentId` never re-pins this channel: it is bound to one `runtimeAgentId` for the
               // life of its thread. A mention of that coworker is an ordinary message; a mention of
               // anybody else is handed to them through `/dispatch` (spec B2), and their answer lands in
@@ -1589,6 +1557,9 @@ export function ChannelChat({
               // typed. Resolved against the same list the menu was built from, so a chip left over from
               // a skill that has since been revoked resolves to nothing rather than to a stale
               // instruction — the menu is refetched, and this reads from it.
+              //
+              // M4: upstream sends `/<command>` and lets the server find the skill (picked skill);
+              // this fork did not take picked skill, so the instruction still travels from here.
               const skillInstructions = draft.commandIds
                 .map(
                   (id) =>
@@ -1598,6 +1569,24 @@ export function ChannelChat({
                   Boolean(instruction),
                 );
 
+              /*
+               * An answer is words only: a draft carrying files or a `/` skill is sent as a turn, and
+               * so is a message handed to another coworker, which is theirs to answer rather than the
+               * question's.
+               */
+              const handsOff =
+                draft.agentId !== null && draft.agentId !== runtimeAgentId;
+              const asked =
+                draft.attachments.length === 0 &&
+                draft.commandIds.length === 0 &&
+                !handsOff
+                  ? await waitingQuestion()
+                  : undefined;
+              if (asked) {
+                await answerTo(draft.text, asked);
+                return;
+              }
+
               setDispatchStatus(null);
               try {
                 const sent = await sendChannelDraft(draft, {
@@ -1605,7 +1594,12 @@ export function ChannelChat({
                   pinnedAgentId: runtimeAgentId,
                   newId,
                   say: () =>
-                    say(draft.text, skillInstructions, draft.attachments),
+                    say(
+                      draft.text,
+                      draft.attachments,
+                      undefined,
+                      skillInstructions,
+                    ),
                 });
                 if (sent.kind === "dispatched") {
                   const name =
@@ -1621,11 +1615,7 @@ export function ChannelChat({
                 // A dispatch refused for quota is a 402 from `/dispatch`: the same guidance (K4).
                 reportIfQuotaError(error);
                 // Only a refused dispatch is said here; a failed turn has its own line (`runError`).
-                if (
-                  draft.agentId !== null &&
-                  draft.agentId !== runtimeAgentId &&
-                  channel.agentIds.length === 1
-                ) {
+                if (handsOff && channel.agentIds.length === 1) {
                   setDispatchStatus({
                     tone: "alert",
                     text:
@@ -1637,25 +1627,6 @@ export function ChannelChat({
                 // Rethrown so the composer gives the words back.
                 throw error;
               }
-=======
-              await runModel.beforeSend();
-              // `draft.agentId` carries the @mentioned coworker, but nothing routes on it yet: this
-              // channel is pinned to one `runtimeAgentId` for the life of its thread, so honouring a
-              // per-message mention is a change to that binding, not to the composer.
-              //
-              // An answer is words only: a draft carrying files or a `/` skill is sent as a turn. The
-              // skill stays at the start of the words as `/<command>`, where the server finds it and
-              // gives the Bot its instructions (server/src/plugins/picked-skill.ts).
-              const asked =
-                draft.attachments.length === 0 && draft.commandIds.length === 0
-                  ? await waitingQuestion()
-                  : undefined;
-              if (asked) {
-                await answerTo(draft.text, asked);
-                return;
-              }
-              await say(draft.text, draft.attachments);
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
             }}
             /**
              * Stop through the core so the abort signal reaches frontend tools; `say` repairs any
@@ -1710,7 +1681,7 @@ export function ChannelChat({
                 <>
                   {readingAnswer ? (
                     <ProgressRow
-                      label={`${botName} is reading your answer…`}
+                      label={`${botName} 正在读你的回答…`}
                       media={<BotOrb name={botName} seed={botSeed} size={20} />}
                     />
                   ) : null}

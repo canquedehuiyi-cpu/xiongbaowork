@@ -1,15 +1,16 @@
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-import { useCallback, useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { Button } from "@/components/ui/button";
-import { supplySecret } from "@/lib/computers/control";
-=======
 import type { BotBrowserApiState } from "@openbot/shared/bot-browser";
 import { IconLock, IconWorld, IconX } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { useFittedWidth } from "@/components/browser/fitted-window";
+import { Button } from "@/components/ui/button";
 import {
   botBrowserKeys,
   botBrowserStateQueryOptions,
@@ -19,7 +20,6 @@ import {
   type ComputerState,
   computerStatusQueryOptions,
 } from "@/lib/computers/queries";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 import {
   readPageFrame,
   readScreenshot,
@@ -124,10 +124,6 @@ async function preloadFrame(base64: string): Promise<void> {
   }
 }
 
-function capitalise(text: string): string {
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
 /**
  * How long a computer may go without a frame before that is worth telling anybody.
  *
@@ -164,7 +160,7 @@ function NothingToSee({
   settled,
   page,
   waiting,
-  owner = "the Bot's",
+  owner = "员工的",
 }: {
   problem: string | null;
   blankBrowser: boolean;
@@ -177,7 +173,7 @@ function NothingToSee({
    * cannot reach.
    */
   waiting?: "starting" | "asleep" | undefined;
-  /** Whose computer, possessive and lower case: "Sales's", or "the Bot's" without a name. */
+  /** Whose computer, possessive: "销售的", or "员工的" without a name. */
   owner?: string;
   /** Whether this is a turn that has finished, rather than the browser as it is now. */
   settled?: boolean;
@@ -217,38 +213,24 @@ function NothingToSee({
         </>
       ) : problem ? (
         <>
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           <span className="font-medium">现在看不到屏幕</span>
           <span>{problem}</span>
-          <span>员工可能仍在工作。管理员可以检查它的电脑是否在运行。</span>
-=======
-          <span className="font-medium">Can't show the screen right now</span>
-          <span>{problem}</span>
           <span>
-            The Bot may still be working. If this keeps happening, ask an admin
-            to check its Computer.
+            员工可能仍在工作。如果一直这样，请让管理员检查它的电脑。
           </span>
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         </>
       ) : waiting === "starting" ? (
         <span role="status">
-          Starting {owner} computer. The first start takes about a minute.
+          正在启动{owner}电脑。第一次启动大约需要一分钟。
         </span>
       ) : waiting === "asleep" ? (
         <span role="status">
-          {capitalise(owner)} computer is off. It starts when the Bot next uses
-          it.
+          {owner}电脑已关机。员工下次用到它时会自动启动。
         </span>
       ) : blankBrowser ? (
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-        <span>员工还没有打开任何页面。</span>
+        <span>员工的浏览器里现在没有打开任何页面。</span>
       ) : (
         <span>正在等待员工的屏幕…</span>
-=======
-        <span>Nothing is open in the Bot's browser right now.</span>
-      ) : (
-        <span>Waiting for the Bot's screen…</span>
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       )}
     </span>
   );
@@ -437,8 +419,9 @@ export function ComputerView({
   const [sendingSecret, setSendingSecret] = useState(false);
   const pageVisible = usePageVisible();
   const [previewRef, previewIntersecting] = useElementVisible<HTMLElement>();
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-  const driving = control?.holder === "human" && !control.transitioning;
+  /** The signed-in person holds the wheel. Someone else holding it on a shared Bot is not them driving. */
+  const driving =
+    control?.holder === "human" && !control.transitioning && !someoneElse;
   /**
    * The Bot's browser is on the tenant's own machine (F2). Its screen is relayed from the device, so
    * it can be watched live without anybody taking the wheel, before the browser has even opened.
@@ -450,11 +433,6 @@ export function ComputerView({
     (state: "idle" | "casting") => setScreenIdle(state === "idle"),
     [],
   );
-=======
-  /** The signed-in person holds the wheel. Someone else holding it on a shared Bot is not them driving. */
-  const driving =
-    control?.holder === "human" && !control.transitioning && !someoneElse;
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   /** Read by the polling loop without restarting it on control changes. */
   const drivingRef = useRef(false);
   drivingRef.current = driving;
@@ -479,7 +457,9 @@ export function ComputerView({
   const liveStreamOpen =
     expanded &&
     !settled &&
-    (driving || (shot !== null && !isBlankBrowser(shot)));
+    (driving ||
+      Boolean(onDevice) ||
+      (shot !== null && !isBlankBrowser(shot)));
   const polling = visualVisible && !liveStreamOpen;
 
   /*
@@ -545,10 +525,6 @@ export function ComputerView({
         const { frame, error, notReady } = await readScreenshot(computerId);
         if (generation.current !== mine) return;
 
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-        if (!frame) {
-          setProblem(error ?? "屏幕暂时不可用。");
-=======
         if (notReady) {
           /*
            * Asleep or starting, said by the server without waking the computer. Not a problem:
@@ -562,14 +538,13 @@ export function ComputerView({
            */
           setShot(null);
         } else if (!frame) {
-          setProblem(error ?? "The screen isn't available right now.");
+          setProblem(error ?? "屏幕暂时不可用。");
           /*
            * The state is unknown again, not whatever the last not-ready answer said. A stale
            * "absent" would keep calling a computer that is failing "off", and an off computer is
            * never timed out, so the failure would never be shown. Cleared, the status read resumes.
            */
           setPolledState(null);
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         } else {
           // Exact byte comparison is the settling signal.
           unchanged = frame.base64 === lastFrame ? unchanged + 1 : 0;
@@ -668,7 +643,7 @@ export function ComputerView({
    */
   const blankBrowser = !settled && shot ? isBlankBrowser(shot) : false;
 
-  const owner = name ? `${name}'s` : "the Bot's";
+  const owner = name ? `${name}的` : "员工的";
   /**
    * The problem worth showing, which is not the same as the last one that happened.
    *
@@ -678,9 +653,9 @@ export function ComputerView({
    */
   const shownProblem =
     computerState === "unreachable"
-      ? `${capitalise(owner)} computer can't be reached right now.`
+      ? `${owner}电脑暂时连不上。`
       : stalled
-        ? (problem ?? "It's taking longer than usual to start.")
+        ? (problem ?? "启动时间比平常长。")
         : null;
   /**
    * The calm sentence, when there is no picture and nothing wrong.
@@ -743,11 +718,7 @@ export function ComputerView({
   const polledScreen = showScreen ? (
     <img
       src={`data:image/png;base64,${drawn.base64}`}
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       alt="员工正在看的内容"
-=======
-      alt="What the Bot is looking at"
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       // Keep unexpected screenshot dimensions inside the reserved frame.
       className="absolute inset-0 h-full w-full object-contain opacity-100 transition-opacity duration-300 starting:opacity-0"
     />
@@ -763,25 +734,6 @@ export function ComputerView({
 
   return (
     <>
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-      <figure ref={previewRef} className="overflow-hidden rounded-2xl border">
-        {/* Inline preview remains in transcript; click opens a readable full-size view. */}
-        <button
-          type="button"
-          onClick={() => setExpanded(true)}
-          /*
-           * Opens whether or not there is a picture in it. It used to be disabled without one, and
-           * the wheel is down there: a blank browser, a screen that had not arrived yet, or a
-           * computer that could not be reached left a person with no way to take control at all —
-           * the states where they most want it. With nothing to draw the full-size view shows these
-           * same words, and the wheel below them.
-           */
-          className="relative block w-full cursor-pointer bg-muted"
-          style={frameStyle}
-          aria-label="全屏打开员工的屏幕"
-        >
-          {polledScreen}
-=======
       {/* A container, so the status over the picture can be compact in the narrow side panel (a glimpse) and roomy
           where the card is wide in the conversation. */}
       <figure
@@ -846,15 +798,14 @@ export function ComputerView({
              */
             className="relative block w-full cursor-pointer bg-muted"
             style={frameStyle}
-            aria-label="Open the Bot's screen full size"
+            aria-label="全屏打开员工的屏幕"
           >
             {polledScreen}
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 
             {/* Whose hands are on it, said on the picture itself. Whose computer it is, the frame above says. */}
             {wheelHere ? (
               <span className="absolute right-2 bottom-2 rounded-full border bg-popover px-2.5 py-1 font-medium text-popover-foreground text-xs shadow-sm">
-                You have control
+                由你操作
               </span>
             ) : null}
 
@@ -882,32 +833,34 @@ export function ComputerView({
                   </span>
                 ) : null}
                 <span className="min-w-0 truncate">
+                  {onDevice ? "在你自己的设备上。" : null}
                   {!control
-                    ? "Checking who has control…"
+                    ? "正在确认谁在操作…"
                     : control.transitioning
-                      ? "Finishing the current action…"
+                      ? "正在完成当前动作…"
                       : someoneElse
-                        ? "Someone else has control."
+                        ? "由其他人操作。"
                         : // Who holds the wheel, which is always true; whether it is acting right now, the page shows.
-                          `${name ?? "The Bot"} has control`}
+                          `由${name ?? "员工"}操作`}
                 </span>
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-              ) : null}
-              {wheelHere ? (
-                <span className="rounded-full bg-white px-2.5 py-1 font-medium text-black text-xs shadow-sm">
-                  由你操作
-                </span>
-              ) : null}
-            </span>
-=======
               </span>
-              <ComputerControlButton
-                computerId={computerId}
-                onTakeControl={() => setExpanded(true)}
-                prominent
-              />
+              <span className="flex shrink-0 items-center gap-1.5">
+                {onDevice ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setExpanded(true)}
+                  >
+                    查看实时画面
+                  </Button>
+                ) : null}
+                <ComputerControlButton
+                  computerId={computerId}
+                  onTakeControl={() => setExpanded(true)}
+                  prominent
+                />
+              </span>
             </div>
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
           ) : null}
         </div>
 
@@ -915,13 +868,8 @@ export function ComputerView({
         {!driving && !settled && control?.requested ? (
           <div className="flex items-start justify-between gap-3 border-t bg-amber-500/10 px-3 py-2 text-sm">
             <span>
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
               <strong className="font-medium">员工需要你。</strong>{" "}
-              {control.reason}
-=======
-              <strong className="font-medium">The Bot needs you.</strong>{" "}
               {reason}
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
             </span>
           </div>
         ) : null}
@@ -940,13 +888,9 @@ export function ComputerView({
         ) : null}
         {!settled && control?.transitioning ? (
           <p className="px-3 py-2 text-sm">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-            正在完成员工当前的动作，然后把控制交给你…
-=======
             {someoneElse
-              ? "Finishing the Bot's current action…"
-              : "Finishing the Bot's current action before giving you control…"}
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+              ? "正在完成员工当前的动作…"
+              : "正在完成员工当前的动作，然后把控制交给你…"}
           </p>
         ) : null}
         {/*
@@ -955,18 +899,11 @@ export function ComputerView({
         */}
         {!settled && control?.recoveryRequired ? (
           <p className="px-3 py-2 text-sm">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-            浏览器被中断了。 {control.request.interruption}{" "}
-            请打开屏幕重新接管，检查一下。
-=======
-            The Computer stopped while you had control. Take control to check
-            the page, then hand it back to the Bot.
+            你操作期间电脑停了下来。请接管检查一下页面，然后交还给员工。
           </p>
         ) : !settled && control?.request?.status === "interrupted" ? (
           <p className="px-3 py-2 text-sm text-muted-foreground">
-            The Computer stopped before anyone took control. The Bot will ask
-            again if it still needs you.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+            还没有人接管，电脑就停了下来。员工如果仍需要你，会再次请求。
           </p>
         ) : null}
         {/*
@@ -990,11 +927,7 @@ export function ComputerView({
             }}
           >
             <label className="block" htmlFor="openbot-secret">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
               <span className="font-medium">员工需要 </span>
-=======
-              <span className="font-medium">The Bot needs </span>
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
               <span>{control.secretWanted}</span>
             </label>
             <div className="mt-1.5 flex gap-2">
@@ -1006,11 +939,7 @@ export function ComputerView({
                 autoComplete="off"
                 autoCorrect="off"
                 spellCheck={false}
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
                 placeholder="在这里输入，员工永远看不到"
-=======
-                placeholder="Never shown to the Bot"
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
                 className="min-w-0 flex-1 rounded-md border bg-background px-2 py-1 text-sm"
               />
               <button
@@ -1022,12 +951,7 @@ export function ComputerView({
               </button>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-              这会直接填进页面，不会出现在对话里，员工也永远收不到。
-=======
-              This goes straight to the page. It isn't shown in the
-              conversation, and the Bot never sees it.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+              这会直接填进页面，不会出现在对话里，员工也永远看不到。
             </p>
             {secretProblem ? (
               <p className="mt-1 text-xs text-destructive">{secretProblem}</p>
@@ -1035,19 +959,6 @@ export function ComputerView({
           </form>
         ) : null}
 
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-        {!settled ? (
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t px-3 py-2">
-            <span className="text-xs text-muted-foreground">
-              {onDevice ? "在你自己的设备上。" : null}
-              {!control
-                ? "正在确认谁在操作…"
-                : control.transitioning
-                  ? "正在完成当前动作…"
-                  : driving
-                    ? "由你操作。打开屏幕即可点击和输入。"
-                    : "由员工操作。"}
-=======
         {/*
           Holding the wheel stops the Bot until the person hands it back, and closing the full-size
           view never hands it back. So while they hold it, this line says so as plainly as "The Bot
@@ -1057,25 +968,13 @@ export function ComputerView({
         {!settled && driving && !control?.transitioning ? (
           <div className="flex flex-wrap items-center justify-between gap-2 border-t bg-amber-500/10 px-3 py-2">
             <span className="text-sm">
-              <strong className="font-medium">You have control.</strong> The Bot
-              waits until you hand it back. Open the screen to click and type.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+              <strong className="font-medium">由你操作。</strong>
+              员工会一直等到你交还。打开屏幕即可点击和输入。
             </span>
-            <div className="flex items-start gap-2">
-              {onDevice ? (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setExpanded(true)}
-                >
-                  查看实时画面
-                </Button>
-              ) : null}
-              <ComputerControlButton
-                computerId={computerId}
-                onTakeControl={() => setExpanded(true)}
-              />
-            </div>
+            <ComputerControlButton
+              computerId={computerId}
+              onTakeControl={() => setExpanded(true)}
+            />
           </div>
         ) : null}
       </figure>
@@ -1093,13 +992,8 @@ export function ComputerView({
             <div
               role="dialog"
               aria-modal="true"
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
               aria-label="员工的屏幕"
-              className="fixed inset-0 z-50 flex flex-col items-center justify-center p-4 sm:p-8"
-=======
-              aria-label="The Bot's screen"
               className={`fixed inset-0 z-50 flex flex-col overflow-y-auto ${settled ? "p-4 sm:p-8" : "p-2 sm:p-4"}`}
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
             >
               {/*
                 Backdrop closes only while read-only, so a click that misses the page while driving
@@ -1110,16 +1004,9 @@ export function ComputerView({
               <button
                 type="button"
                 onClick={() => !wheelHere && setExpanded(false)}
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-                aria-label="关闭员工的屏幕"
-                aria-hidden={wheelHere}
-                tabIndex={wheelHere ? -1 : 0}
-                className={`absolute inset-0 bg-black/80 ${wheelHere ? "cursor-default" : "cursor-zoom-out"}`}
-=======
                 aria-hidden
                 tabIndex={-1}
                 className={`fixed inset-0 bg-black/80 ${wheelHere ? "cursor-default" : "cursor-zoom-out"}`}
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
               />
               {/*
                 A card holding the screen, with who and the wheel beneath it. A turn that is over is
@@ -1148,8 +1035,8 @@ export function ComputerView({
                   <button
                     type="button"
                     onClick={() => setExpanded(false)}
-                    aria-label="Close the Bot's screen"
-                    title="Close (Esc)"
+                    aria-label="关闭员工的屏幕"
+                    title="关闭（Esc）"
                     className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <IconX className="size-5" aria-hidden />
@@ -1167,42 +1054,6 @@ export function ComputerView({
                   to draw it reserves the same frame and says the same thing the card does — the
                   wheel below is the reason this view opens at all in that state.
                 */}
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-                <div
-                  className={`relative max-h-[75vh] min-h-0 overflow-auto rounded-xl ${showLiveScreen ? "bg-black" : "bg-muted"}`}
-                >
-                  {settled && drawn ? (
-                    /*
-                     * A record, opened larger. Not a window on the browser.
-                     *
-                     * Zooming a past turn used to mount the live stream and offer Take control, so
-                     * the one gesture for looking closer at what a turn did was also the one that
-                     * replaced it with whatever the Bot has open now. The kept frame exists to stop
-                     * exactly that; its own zoom control was undoing it.
-                     */
-                    <div className="relative w-full" style={{ aspectRatio }}>
-                      <img
-                        alt="这一轮打开过的内容"
-                        className="absolute inset-0 h-full w-full object-contain"
-                        src={`data:image/png;base64,${drawn.base64}`}
-                      />
-                    </div>
-                  ) : showLiveScreen ? (
-                    <div className="relative w-full" style={{ aspectRatio }}>
-                      <LiveScreen
-                        computerId={computerId}
-                        driving={driving}
-                        onProblem={setStreamProblem}
-                        onStatus={onScreenStatus}
-                        retryKey={retryKey}
-                      />
-                      {screenIdle && !streamProblem ? (
-                        <div className="absolute inset-0 flex items-center justify-center p-4 text-center text-sm text-white/80">
-                          员工还没有在这台设备上打开页面。它一打开，画面就会出现在这里。
-                        </div>
-                      ) : null}
-                      {/*
-=======
                   <div
                     className={`relative min-h-0 ${settled ? "max-h-[75vh] overflow-auto rounded-xl bg-muted" : "w-full overflow-hidden"} ${showLiveScreen ? "bg-black" : settled ? "" : "bg-background"}`}
                   >
@@ -1217,7 +1068,7 @@ export function ComputerView({
                        */
                       <div className="relative w-full" style={{ aspectRatio }}>
                         <img
-                          alt="What this turn had open"
+                          alt="这一轮打开过的内容"
                           className="absolute inset-0 h-full w-full object-contain"
                           src={`data:image/png;base64,${drawn.base64}`}
                         />
@@ -1232,6 +1083,7 @@ export function ComputerView({
                           driving={driving}
                           onProblem={setStreamProblem}
                           onReconnecting={setReconnecting}
+                          onStatus={onScreenStatus}
                           retryKey={retryKey}
                         />
                         {/*
@@ -1245,45 +1097,20 @@ export function ComputerView({
                             role="status"
                             className="absolute top-2 left-2 rounded-full bg-black/60 px-2.5 py-1 font-medium text-white text-xs backdrop-blur-sm"
                           >
-                            Reconnecting…
+                            正在重新连接…
                           </span>
                         ) : null}
+                        {screenIdle && !streamProblem ? (
+                          <div className="absolute inset-0 flex items-center justify-center p-4 text-center text-sm text-white/80">
+                            员工还没有在这台设备上打开页面。它一打开，画面就会出现在这里。
+                          </div>
+                        ) : null}
                         {/*
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
                         A live screen that ends reports why through `onProblem`, and this is the
                         branch that is mounted when it does. Without drawing it here the message
                         landed in `problem`, which only the sibling `NothingToSee` reads, so the
                         screen ended with the stale last frame frozen on the canvas and nothing said.
                       */}
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-                      {streamProblem ? (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-background/85 p-4 text-center text-sm text-muted-foreground">
-                          <span>{streamProblem}</span>
-                          <button
-                            type="button"
-                            className="underline"
-                            onClick={() => {
-                              setStreamProblem(null);
-                              setRetryKey((value) => value + 1);
-                            }}
-                          >
-                            重试
-                          </button>
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : (
-                    <div className="relative w-full" style={{ aspectRatio }}>
-                      <NothingToSee
-                        blankBrowser={blankBrowser}
-                        page={knownPage}
-                        problem={problem}
-                        settled={settled}
-                      />
-                    </div>
-                  )}
-                </div>
-=======
                         {streamProblem ? (
                           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-background/85 p-4 text-center text-sm text-muted-foreground">
                             <span>{streamProblem}</span>
@@ -1295,7 +1122,7 @@ export function ComputerView({
                                 setRetryKey((value) => value + 1);
                               }}
                             >
-                              Retry
+                              重试
                             </button>
                           </div>
                         ) : null}
@@ -1314,61 +1141,12 @@ export function ComputerView({
                     )}
                   </div>
                 </BrowserWindow>
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
                 {/*
                   NOT ON A TURN THAT IS OVER. Every past turn used to carry the wheel and the
                   standing "who is driving" prose under a picture of a page it opened an hour ago,
                   offering control of whatever the Bot has open now. Those sentences are about the
                   present and this view is a record; a record does not get a steering wheel.
                 */}
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-                {control?.transitioning ? (
-                  <p className="mt-3 text-center text-sm">
-                    正在完成当前动作，然后把控制交给你…
-                  </p>
-                ) : null}
-                {settled ? null : (
-                  <div className="mt-4 flex items-center justify-center gap-4">
-                    <span className="flex min-w-0 items-center gap-2 text-sm">
-                      {name ? (
-                        <span className="flex shrink-0 items-center gap-1.5 font-medium">
-                          <ChannelAvatar
-                            participantIds={[computerId]}
-                            size={20}
-                          />
-                          {name}
-                        </span>
-                      ) : null}
-                      {driving ? (
-                        <span className="truncate text-muted-foreground">
-                          由你操作——直接在页面上点击和输入。
-                          {control?.reason ? ` ${control.reason}` : null}
-                        </span>
-                      ) : control?.requested ? (
-                        <span className="truncate text-muted-foreground">
-                          <strong className="font-medium text-foreground">
-                            员工需要你。
-                          </strong>{" "}
-                          {control.reason}
-                        </span>
-                      ) : null}
-                      {onDevice ? (
-                        <span className="shrink-0 text-xs text-muted-foreground">
-                          实时画面来自你的设备 {onDevice.deviceId}
-                        </span>
-                      ) : null}
-                    </span>
-                    <ComputerControlButton computerId={computerId} />
-                  </div>
-                )}
-                {!settled && (
-                  <DemonstrationRecorder
-                    botId={computerId}
-                    driving={driving}
-                    onRecordingChange={() => setRetryKey((value) => value + 1)}
-                  />
-                )}
-=======
                 <WheelColumn live={!settled}>
                   {control?.transitioning ? (
                     <p
@@ -1377,8 +1155,8 @@ export function ComputerView({
                       }
                     >
                       {someoneElse
-                        ? "Finishing the current action…"
-                        : "Finishing the current action before giving you control…"}
+                        ? "正在完成当前动作…"
+                        : "正在完成当前动作，然后把控制交给你…"}
                     </p>
                   ) : null}
                   {settled ? null : (
@@ -1395,19 +1173,24 @@ export function ComputerView({
                         ) : null}
                         {driving ? (
                           <span className="truncate text-muted-foreground lg:whitespace-normal">
-                            You have control. Click and type on the page.
+                            由你操作——直接在页面上点击和输入。
                             {reason ? ` ${reason}` : null}
                           </span>
                         ) : someoneElse ? (
                           <span className="truncate text-muted-foreground lg:whitespace-normal">
-                            Someone else has control.
+                            由其他人操作。
                           </span>
                         ) : control?.requested ? (
                           <span className="truncate text-muted-foreground lg:whitespace-normal">
                             <strong className="font-medium text-foreground">
-                              The Bot needs you.
+                              员工需要你。
                             </strong>{" "}
                             {reason}
+                          </span>
+                        ) : null}
+                        {onDevice ? (
+                          <span className="shrink-0 text-xs text-muted-foreground">
+                            实时画面来自你的设备 {onDevice.deviceId}
                           </span>
                         ) : null}
                       </span>
@@ -1425,12 +1208,10 @@ export function ComputerView({
                     />
                   ) : botBrowser.error ? (
                     <p className="text-destructive text-sm" role="alert">
-                      Couldn't load the Bot's browser. Close this and open it
-                      again.
+                      员工的浏览器没能加载。关掉后重新打开试试。
                     </p>
                   ) : null}
                 </WheelColumn>
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
               </div>
             </div>,
             document.body,

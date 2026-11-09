@@ -1,6 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useState } from "react";
 import {
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   PageEmpty,
   PageRows,
   PageSection,
@@ -36,18 +37,12 @@ import {
 } from "@/lib/computers/host-access";
 import { setComputerStateMutationOptions } from "@/lib/computers/mutations";
 import { computerFleetQueryOptions } from "@/lib/computers/queries";
-=======
-  InactiveComputersSection,
-  NetworkSection,
-} from "@/components/admin/controls/computer-sections";
-import { ComputersPage } from "@/components/manage/computers-page";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 
+// M4: 待接入 上游 manage/computers-page.tsx 的「每人一台电脑、员工可单独要一台」（#871）与分区（InactiveComputersSection、NetworkSection）
 export const Route = createFileRoute("/_authed/admin/computers")({
-  component: AdminComputersPage,
+  component: ComputersPage,
 });
 
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 function ComputersPage() {
   /** Bot id currently running a stop/reset request. */
   const [busy, setBusy] = useState<string | null>(null);
@@ -519,14 +514,3 @@ function pendingLabel(request: HostAccessPendingOperation) {
       return "文件夹访问等待批准";
   }
 }
-=======
-/** The computers, then when idle ones stop and where they may connect. */
-function AdminComputersPage() {
-  return (
-    <ComputersPage>
-      <InactiveComputersSection />
-      <NetworkSection />
-    </ComputersPage>
-  );
-}
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b

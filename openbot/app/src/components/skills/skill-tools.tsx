@@ -1,5 +1,4 @@
-import { RESEARCH_ROLES } from "@openbot/shared/research";
-import { IconChevronRight, IconPlugOff, IconWorld } from "@tabler/icons-react";
+import { IconChevronRight, IconPlugOff } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { type ReactNode, useState } from "react";
 import { PageRows } from "@/components/layout/page-shell";
@@ -50,7 +49,10 @@ import { undeclaredElsewhere } from "@/lib/skills/form";
  * so the dialog changes the form's value and nothing else.
  */
 
-/** One group of choices: an app, web research, or refs no app here offers. */
+/**
+ * One group of choices: an app, or refs no app here offers. Upstream's web-research roles
+ * (`@research/*`) are left out: this deployment does not resolve them to a research app.
+ */
 type ToolGroup = {
   key: string;
   title: string;
@@ -84,10 +86,10 @@ function firstSentence(text: string): string {
 }
 
 function summary(held: number, total: number, unavailable?: boolean): string {
-  if (unavailable) return held === 1 ? "1 tool" : `${held} tools`;
-  if (held === 0) return "None";
-  if (held === total) return total === 1 ? "1 tool" : `All ${total} tools`;
-  return `${held} of ${total} tools`;
+  if (unavailable) return `${held} 个工具`;
+  if (held === 0) return "未选";
+  if (held === total) return total === 1 ? "1 个工具" : `全部 ${total} 个工具`;
+  return `${held}/${total} 个工具`;
 }
 
 export function SkillTools({
@@ -117,7 +119,7 @@ export function SkillTools({
   if (!plugins.data) {
     return (
       <p className="mt-4 text-destructive text-sm" role="alert">
-        Couldn't load the tools. Reload the page.
+        读不到这个部署有哪些工具，请刷新页面。
       </p>
     );
   }
@@ -149,28 +151,17 @@ export function SkillTools({
         writes: tool.effect === "write",
       })),
     })),
-    {
-      key: "research",
-      title: "Web research",
-      media: <IconWorld />,
-      tools: RESEARCH_ROLES.map((role) => ({
-        ref: role.ref,
-        title: role.label,
-        description: "Uses whichever research app the Bot has.",
-        writes: false,
-      })),
-    },
     ...(elsewhere.length > 0
       ? [
           {
             key: "elsewhere",
-            title: "Not available here",
+            title: "这里没有连接",
             media: <IconPlugOff />,
             unavailable: true,
             tools: elsewhere.map((ref) => ({
               ref,
               title: ref,
-              description: "No app here offers this.",
+              description: "这里没有已连接的应用提供它。",
               writes: false,
             })),
           },
@@ -179,42 +170,15 @@ export function SkillTools({
   ];
   const current = groups.find((group) => group.key === open);
 
-  return (
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-    <Field>
-      <FieldLabel>需要的工具</FieldLabel>
+  if (groups.length === 0) {
+    return (
+      <p className="text-muted-foreground text-xs">
+        还没有已连接的应用提供工具。照样可以写技能——多数技能是指令，而不是调用工具。
+      </p>
+    );
+  }
 
-      {plugins.isPending ? null : plugins.error ? (
-        <p className="text-destructive text-xs" role="alert">
-          读不到这个部署有哪些工具。
-        </p>
-      ) : servers.length === 0 ? (
-        <p className="text-muted-foreground text-xs">
-          还没有已连接的服务器提供工具。照样可以写技能——多数技能是指令，而不是调用工具。
-        </p>
-      ) : (
-        <div className="flex flex-col gap-3">
-          {servers.map((server) => (
-            <div className="flex flex-col gap-1.5" key={server.id}>
-              <p className="text-muted-foreground text-xs">{server.title}</p>
-              <div className="flex flex-wrap gap-2">
-                {server.tools.map((tool) => {
-                  const on = held.has(tool.ref);
-                  return (
-                    <Button
-                      key={tool.ref}
-                      onClick={() => toggle(tool.ref)}
-                      size="sm"
-                      /*
-                       * The vendor's own tool name, not the namespaced one a model sees. The person
-                       * reading this is matching it against the vendor's documentation.
-                       */
-                      title={tool.description}
-                      type="button"
-                      variant={on ? "default" : "outline"}
-                    >
-                      {tool.name}
-=======
+  return (
     <>
       <PageRows>
         {groups.map((group, index) => {
@@ -233,15 +197,13 @@ export function SkillTools({
                   <ItemTitle>{group.title}</ItemTitle>
                   <ItemDescription>
                     {group.unavailable
-                      ? "This skill asks for these, but no app here offers them."
+                      ? "这个技能列出了它们，但这里没有已连接的应用提供。"
                       : count > 0
                         ? group.tools
                             .filter((tool) => held.has(tool.ref))
                             .map((tool) => tool.title)
                             .join(", ")
-                        : group.tools.length === 1
-                          ? "1 tool"
-                          : `${group.tools.length} tools`}
+                        : `${group.tools.length} 个工具`}
                   </ItemDescription>
                 </ItemContent>
                 <ItemActions>
@@ -269,8 +231,8 @@ export function SkillTools({
               <DialogTitle>{current.title}</DialogTitle>
               <DialogDescription>
                 {current.unavailable
-                  ? "These do nothing until an admin adds the app. Untick one to remove it from the skill."
-                  : "Using this skill loads the tools you tick for that reply."}
+                  ? "在管理员添加对应应用之前，它们不起作用。取消勾选即可从技能里移除。"
+                  : "使用这个技能时，会为那次回复加载你勾选的工具。"}
               </DialogDescription>
             </DialogHeader>
             <DialogBody className="mt-4 overflow-y-auto">
@@ -287,28 +249,17 @@ export function SkillTools({
                       <ItemDescription>{tool.description}</ItemDescription>
                     </ItemContent>
                     <ItemActions>
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
                       {/*
                        * Writes are marked: "this one changes something at the vendor" is the part
                        * worth seeing before ticking it.
                        */}
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-                      {tool.effect === "write" ? (
-                        <span
-                          aria-label="会在外部服务做改动"
-                          className="ml-1 opacity-60"
-                          role="img"
-                        >
-                          ✎
-=======
                       {tool.writes ? (
                         <span className="text-amber-600 text-xs dark:text-amber-500">
-                          changes things
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+                          会做改动
                         </span>
                       ) : null}
                       <Checkbox
-                        aria-label={`Use ${tool.title}`}
+                        aria-label={`使用 ${tool.title}`}
                         checked={held.has(tool.ref)}
                         onCheckedChange={(checked) =>
                           toggle(tool.ref, checked === true)
@@ -318,44 +269,6 @@ export function SkillTools({
                   </Item>
                 ))}
               </div>
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-            </div>
-          ))}
-        </div>
-      )}
-
-      {elsewhere.length > 0 ? (
-        <div className="flex flex-col gap-1.5">
-          <p className="text-muted-foreground text-xs">这里没有连接</p>
-          <div className="flex flex-wrap gap-2">
-            {elsewhere.map((ref) => (
-              <Button
-                key={ref}
-                onClick={() => toggle(ref)}
-                size="sm"
-                /*
-                 * The whole ref, not a tool name. There is no server here to put it under, and the
-                 * server id is the part that says which connector is missing.
-                 */
-                title={`${ref} —— 没有已连接的服务器提供它`}
-                type="button"
-                variant="secondary"
-              >
-                {ref}
-              </Button>
-            ))}
-          </div>
-          <p className="text-muted-foreground text-xs">
-            这个技能列出了这些工具，但这里没有已连接的服务器提供它们——连接器还没添加，或已被移除。在连接器存在之前，它们不占用也不加载任何东西。点一下即可不再列出。
-          </p>
-        </div>
-      ) : null}
-
-      <p className="text-muted-foreground text-xs">
-        选用这个技能时，这些工具会在这一轮加载。这并不是授予——员工仍只能调用被授予的工具，所以在这里列出工具不会让任何人获得访问权。
-      </p>
-    </Field>
-=======
             </DialogBody>
             <DialogFooter className="mt-4 justify-between">
               {current.unavailable ? (
@@ -379,18 +292,17 @@ export function SkillTools({
                   variant="ghost"
                 >
                   {current.tools.every((tool) => held.has(tool.ref))
-                    ? "Clear all"
-                    : "Select all"}
+                    ? "全部取消"
+                    : "全选"}
                 </Button>
               )}
               <Button onClick={() => setOpen(null)} size="sm" type="button">
-                Done
+                完成
               </Button>
             </DialogFooter>
           </DialogContent>
         ) : null}
       </Dialog>
     </>
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   );
 }

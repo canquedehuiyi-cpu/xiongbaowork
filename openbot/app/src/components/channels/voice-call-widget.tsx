@@ -218,15 +218,7 @@ export function VoiceCallWidget({
               aria-label={state.muted ? "取消静音" : "静音麦克风"}
               aria-pressed={state.muted}
               disabled={connecting || failed}
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
               title={state.muted ? "取消静音" : "静音麦克风 · 你仍能听到员工"}
-=======
-              title={
-                state.muted
-                  ? "Unmute your microphone"
-                  : "Mute your microphone · you’ll still hear the Bot"
-              }
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
               variant="secondary"
               size="icon"
               className={cn(
@@ -266,11 +258,7 @@ export function VoiceCallWidget({
                 <div className="mt-3 h-16 overflow-y-auto rounded-xl bg-muted/40 p-2 text-xs leading-relaxed text-muted-foreground">
                   {state.reply ||
                     state.transcript ||
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-                    "准备好就开口说。这次通话使用当前的对话。"}
-=======
-                    "Speak when you’re ready. This call is part of this conversation."}
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+                    "准备好就开口说。这次通话属于当前的对话。"}
                 </div>
               </motion.div>
             )}

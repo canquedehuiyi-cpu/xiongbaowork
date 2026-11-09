@@ -69,13 +69,8 @@ export class ToolRenderBoundary extends Component<
     if (this.state.failed) {
       return (
         <p className="my-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           <span className="font-medium">{this.props.name}</span>
           没能画出来。这段对话的其余部分不受影响。
-=======
-          Couldn't show <span className="font-medium">{this.props.name}</span>.
-          The rest of the conversation is fine.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         </p>
       );
     }

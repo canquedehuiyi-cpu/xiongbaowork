@@ -105,27 +105,16 @@ function Sources({ basis, sources, asOf: when }: Provenance) {
     <p className="mt-3 text-xs text-muted-foreground">
       {unchecked ? (
         <span className="text-amber-700 dark:text-amber-400">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           来自员工自己的知识，没有对照来源核实。
-=======
-          From the Bot's own knowledge. Not checked against a source.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         </span>
       ) : null}
       {named.length > 0 ? (
         <>
           {unchecked ? " · " : null}
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           {"来源："}
           {byPosition(named).map(({ item: entry, key }, index) => (
             <span key={key}>
               {index > 0 ? "、" : null}
-=======
-          {"Sources: "}
-          {byPosition(named).map(({ item: entry, key }, index) => (
-            <span key={key}>
-              {index > 0 ? ", " : null}
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
               {entry.url ? (
                 <a
                   className="underline underline-offset-2 hover:text-foreground"
@@ -145,11 +134,7 @@ function Sources({ basis, sources, asOf: when }: Provenance) {
       {asOf ? (
         <>
           {unchecked || named.length > 0 ? " · " : null}
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           {`截至 ${asOf}`}
-=======
-          {`As of ${asOf}`}
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         </>
       ) : null}
     </p>
@@ -232,11 +217,7 @@ function Empty() {
         role="status"
         style={{ height: HEIGHT }}
       >
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         <span className="tool-line-running">正在画图表…</span>
-=======
-        <span className="tool-line-running">Drawing the chart…</span>
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       </p>
     );
   }
@@ -720,11 +701,7 @@ export function ProgressChartCard({
                 <FigureLink
                   className="-m-1 block p-1"
                   href={entry.link}
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
                   name={`${entry.label}: ${formatNumber(entry.value)} / ${formatNumber(entry.target)}`}
-=======
-                  name={`${entry.label}: ${formatNumber(entry.value)} of ${formatNumber(entry.target)}`}
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
                   wrap={false}
                 >
                   <div className="flex items-baseline justify-between gap-4 text-sm">
@@ -759,24 +736,15 @@ export const GALLERY: GalleryComponent[] = [
     name: "showBarChart",
     title: "Bar chart",
     kind: "chart",
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     summary: "用柱状图比较几样有名字的东西，比如各个团队或各个月份。",
-=======
-    summary: "Compares a few named things, such as teams or months, as bars.",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     description:
       "Show values as a bar chart. Use when comparing a handful of named things, teams, months, categories. Not for a trend over time, which is showLineChart. A point may link to the page its figure came from, such as the record or the search, when you have that address; never make one up.",
     parameters: BarChartProps,
     Component: BarChartCard as GalleryComponent["Component"],
     preview: {
       basis: "given",
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       title: "各团队收入",
       caption: "销售领先，研发正在追上。",
-=======
-      title: "Revenue by team",
-      caption: "Sales leads, and Engineering is closing the gap.",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       points: [
         { label: "销售", value: 120 },
         { label: "研发", value: 80 },
@@ -789,22 +757,14 @@ export const GALLERY: GalleryComponent[] = [
     name: "showPieChart",
     title: "Donut chart",
     kind: "chart",
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     summary: "用带图例的环形图显示一个整体怎样分成几部分。",
-=======
-    summary: "Shows how a whole splits into parts, as a donut with a legend.",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     description:
       "Show how a whole is divided, as a donut with a legend. Use only when the parts sum to something meaningful, and prefer a bar chart above about six slices. A point may link to the page its figure came from, such as the record or the search, when you have that address; never make one up.",
     parameters: PieChartProps,
     Component: PieChartCard as GalleryComponent["Component"],
     preview: {
       basis: "given",
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       title: "这个月的时间去哪了",
-=======
-      title: "Where the month went",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       points: [
         { label: "开发", value: 48 },
         { label: "支持", value: 26 },
@@ -817,24 +777,15 @@ export const GALLERY: GalleryComponent[] = [
     name: "showLineChart",
     title: "Line chart",
     kind: "chart",
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     summary: "显示一个或几个数值随时间的变化。",
-=======
-    summary: "Shows how one or more values change over time.",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     description:
       "Show one or more series over an ordered axis, usually time. Every series must have one value per label.",
     parameters: LineChartProps,
     Component: LineChartCard as GalleryComponent["Component"],
     preview: {
       basis: "given",
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       title: "注册数",
       caption: "六周，一次发布。",
-=======
-      title: "Signups",
-      caption: "Six weeks, one release.",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       labels: ["W1", "W2", "W3", "W4", "W5", "W6"],
       series: [{ name: "注册数", values: [120, 180, 160, 240, 300, 420] }],
     },
@@ -844,25 +795,15 @@ export const GALLERY: GalleryComponent[] = [
     name: "showAreaChart",
     title: "Area chart",
     kind: "chart",
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     summary: "显示总量随时间的累积，每条线下方的面积会填上颜色。",
-=======
-    summary:
-      "Shows how totals build up over time, with the area under each line filled.",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     description:
       "The same as showLineChart with the area under each line filled. Use for volume or accumulation rather than for a rate.",
     parameters: AreaChartProps,
     Component: AreaChartCard as GalleryComponent["Component"],
     preview: {
       basis: "given",
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       title: "已用存储",
       caption: "迁移后稳步增长。",
-=======
-      title: "Storage used",
-      caption: "Growing steadily since the migration.",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       labels: ["Jan", "Feb", "Mar", "Apr", "May"],
       series: [{ name: "TB", values: [12, 19, 26, 31, 44] }],
     },
@@ -872,25 +813,15 @@ export const GALLERY: GalleryComponent[] = [
     name: "showProgress",
     title: "Progress against target",
     kind: "chart",
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     summary: "显示每个数值离目标还有多远，比如预算花了多少、工作做了多少。",
-=======
-    summary:
-      "Shows how close each value is to its target, such as budget spent or work done.",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     description:
       "Show values against their targets as progress bars. Use for 'are we there yet' questions, budget spent against budget, done against planned. A point may link to the page its figure came from, such as the record or the search, when you have that address; never make one up.",
     parameters: ProgressChartProps,
     Component: ProgressChartCard as GalleryComponent["Component"],
     preview: {
       basis: "given",
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       title: "迁移到新运行时",
       caption: "还剩两个服务。",
-=======
-      title: "Migration to the new runtime",
-      caption: "Two services left.",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       points: [
         { label: "已迁移服务", value: 18, target: 20 },
         { label: "已移植测试", value: 240, target: 240 },

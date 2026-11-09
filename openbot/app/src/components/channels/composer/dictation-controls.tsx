@@ -25,20 +25,12 @@ export function DictationButton({
   if (!dictation.available) return null;
   return (
     <Button
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       aria-label="语音输入"
-      title={
-        dictation.supported
-          ? "语音输入"
-          : "语音输入需要受支持的浏览器和 HTTPS（或 localhost）"
-=======
-      aria-label="Dictate a message"
       data-slot="composer-dictate"
       title={
         dictation.supported
-          ? "Dictate a message"
-          : "Dictation needs a supported browser and a secure (HTTPS) connection"
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+          ? "语音输入"
+          : "语音输入需要受支持的浏览器和安全的（HTTPS）连接"
       }
       className="size-8 shrink-0 self-end rounded-full"
       disabled={disabled || !dictation.supported || dictation.busy}
@@ -127,14 +119,9 @@ function RecordingControls({
     >
       <Button
         ref={cancel}
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         aria-label="取消语音输入"
-        title="取消语音输入"
-=======
-        aria-label="Cancel dictation"
         data-slot="composer-dictate-cancel"
-        title="Cancel dictation"
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+        title="取消语音输入"
         size="icon"
         type="button"
         variant="ghost"
@@ -204,14 +191,9 @@ function RecordingControls({
         ) : (
           <div className="flex shrink-0 items-center gap-2">
             <Button
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
               aria-label="停止并转写"
-              title="停止并加入草稿"
-=======
-              aria-label="Stop and transcribe"
               data-slot="composer-dictate-stop"
-              title="Stop and add to draft"
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+              title="停止并加入草稿"
               disabled={!recording}
               size="icon"
               type="button"

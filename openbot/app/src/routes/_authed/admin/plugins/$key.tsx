@@ -1,4 +1,3 @@
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 import {
   IconArrowUpRight,
   IconChevronRight,
@@ -66,16 +65,20 @@ import {
 } from "@/lib/plugins/queries";
 import { useZh } from "@/lib/translations/queries";
 import { wakerGroupsQueryOptions } from "@/lib/waker-groups/queries";
-=======
-import { createFileRoute } from "@tanstack/react-router";
-import { PluginPage } from "@/components/manage/plugin-page";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 
+/**
+ * One vendor: what it needs from this deployment, and which Bots hold its tools.
+ *
+ * Its own page because what a connector needs configured differs by vendor and does not fit on a
+ * row. A token for one, an OAuth client and a redirect URI for another, an instance hostname for a
+ * third, and then a grant per tool per Bot. The screen this replaced tried to hold all of that in a
+ * list and grew a column per Bot, which is how a grant goes unread.
+ */
+// M4: 待接入 上游 manage/plugin-page.tsx：添加前说明哪些应用要密钥、去哪拿（#1297），工具统一按名称列出（#1296），从目录添加的应用关闭后回到连接页（#1192）
 export const Route = createFileRoute("/_authed/admin/plugins/$key")({
   component: RouteComponent,
 });
 
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 /** Which of the four dialogs is open, or none. */
 type OpenDialog = "token" | "client" | "instance" | "grant" | null;
 
@@ -1494,9 +1497,4 @@ function RouteComponent() {
       ) : null}
     </PageShell>
   );
-=======
-function RouteComponent() {
-  const { key } = Route.useParams();
-  return <PluginPage pluginKey={key} />;
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 }

@@ -109,13 +109,7 @@ export function ProposedSkillCard({
     } catch (cause) {
       // Left on the card with the buttons still live. See `refusal` above.
       setSending(null);
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       setRefusal(cause instanceof Error ? cause.message : "这个技能没有保存。");
-=======
-      setRefusal(
-        cause instanceof Error ? cause.message : "Couldn't save the skill.",
-      );
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       return;
     }
     await answer(respond, skillCardAnswer.saved(values.slug));
@@ -131,13 +125,8 @@ export function ProposedSkillCard({
       action={<Badge tone="caution">等你决定</Badge>}
       caption={
         replaces
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           ? `这会替换「${replaces.title}」，它是${OWNERSHIP_WORD[replaces.ownership] ?? replaces.ownership}。`
           : "你按下按钮之前，什么都不会保存。"
-=======
-          ? `This replaces ${replaces.title}, which is ${replaces.ownership}.`
-          : "Nothing is saved until you say so."
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       }
       title={titleFor(values.slug, replaces)}
     >
@@ -170,12 +159,7 @@ export function ProposedSkillCard({
 
       {values.tools.length > 0 ? (
         <p className="mt-2 text-muted-foreground text-xs">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-          列出工具不等于授予。只有管理员已经把这些工具授予某位员工，它才会拿到。
-=======
-          Naming a tool doesn't give access. A Bot can only use these if it
-          already has them.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+          列出工具不等于授予。员工只有已经拥有这些工具，才能用上它们。
         </p>
       ) : null}
 
@@ -192,7 +176,7 @@ export function ProposedSkillCard({
           size="sm"
           variant="outline"
         >
-          {sending === "decline" ? "…" : "Don't save"}
+          {sending === "decline" ? "…" : "不保存"}
         </Button>
         <Button
           disabled={Boolean(sending)}
@@ -201,17 +185,6 @@ export function ProposedSkillCard({
         >
           {sending === "save" ? "正在保存…" : replaces ? "替换" : "创建"}
         </Button>
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-        <Button
-          disabled={Boolean(sending)}
-          onClick={() => void decline()}
-          size="sm"
-          variant="outline"
-        >
-          {sending === "decline" ? "…" : "不保存"}
-        </Button>
-=======
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       </div>
     </GalleryFrame>
   );
@@ -230,13 +203,8 @@ function PutItOnABot({ slug }: { slug: string }) {
   return (
     <Link
       className="mt-2 inline-block text-sm underline underline-offset-4"
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       search={{ tab: "skills", edit: slug }}
       to="/resources"
-=======
-      search={{ edit: slug }}
-      to="/capabilities/skills"
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     >
       把它交给一位员工
     </Link>
@@ -274,12 +242,7 @@ function Unwritable({
   return (
     <GalleryFrame action={<Badge tone="negative">未保存</Badge>} title="技能">
       <p className="text-sm">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         员工起草的内容不是一个有效的技能，所以什么都没有保存。已经告诉它要改什么。
-=======
-        The Bot's draft wasn't a valid skill. Nothing was saved, and the Bot
-        knows what to fix.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       </p>
     </GalleryFrame>
   );

@@ -52,11 +52,7 @@ export const GALLERY: GalleryComponent[] = [
     name: "showQuote",
     title: "Quotation",
     kind: "card",
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     summary: "显示一段引文，以及是谁说的或写的。",
-=======
-    summary: "Shows a quotation and who said or wrote it.",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     description:
       "Show a quotation with its attribution. Use when the exact words matter, something a person said, or a line from a document you were given.",
     parameters: QuoteCardProps,

@@ -10,11 +10,7 @@ import {
   type NetworkMode,
 } from "./queries";
 
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 const FALLBACK = "这项企业管控没能保存";
-=======
-const FALLBACK = "Couldn't save that setting. Try again.";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 
 function invalidateEnterprise(queryClient: QueryClient) {
   return queryClient.invalidateQueries({ queryKey: enterpriseKeys.all });

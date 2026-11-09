@@ -16,11 +16,7 @@ const SHORT_LABEL = 32;
 export function ToolLine({
   icon,
   label,
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-  blockedLabel,
-=======
   attempted,
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   detail,
   running,
   refused,
@@ -36,17 +32,10 @@ export function ToolLine({
   /** What was done, in a couple of words: "Searched Slack", "Filled in", "Read the page". */
   label: string;
   /**
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
    * 被拦截或被拒绝时用的说法，未完成式：「执行命令」，不是「执行了命令」。`label` 多是完成式，
    * 拼成「已拦截：执行了命令」就成了命令已经执行了，与事实相反。不给就用 `label`。
    */
-  blockedLabel?: string;
-=======
-   * What was tried, for a step that was refused: "Save file", not "Saved file". A refused step did
-   * not happen, so its line says what was attempted. Without it the label is used.
-   */
   attempted?: string;
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   /** What it was done to. Muted, and truncated rather than wrapped. */
   detail?: string;
   running?: boolean;
@@ -88,15 +77,6 @@ export function ToolLine({
         running ? "tool-line-running" : ""
       }`}
     >
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-      <span className="shrink-0">
-        {/* 拦下的是哪一步也写出来，不只一个「已拦截」。 */}
-        {refused
-          ? `${declined ? "已拒绝" : "已拦截"}：${blockedLabel ?? label}`
-          : failed
-            ? `${label}，没有成功`
-            : label}
-=======
       {icon ? <span className="shrink-0 self-center">{icon}</span> : null}
       {/*
        * Free to shrink, so a long label (a folded run's "Read 1 file, searched for 2 patterns and
@@ -110,16 +90,16 @@ export function ToolLine({
           label.length <= SHORT_LABEL ? "shrink-0 whitespace-nowrap" : "min-w-0"
         }
       >
+        {/* 拦下的是哪一步也写出来，不只一个「已拦截」。 */}
         {refused
-          ? `Blocked: ${attempted ?? label}`
+          ? `${declined ? "已拒绝" : "已拦截"}：${attempted ?? label}`
           : failed
-            ? `${label}, didn't work`
+            ? `${label}，没有成功`
             : notYet
-              ? `${label}, not done yet`
+              ? `${label}，还没做`
               : byYou
-                ? `${label}, done by you`
+                ? `${label}，由你完成`
                 : label}
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       </span>
       {detail ? (
         <span className="min-w-0 shrink-[100] truncate opacity-70">

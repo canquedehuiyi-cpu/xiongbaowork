@@ -11,21 +11,13 @@ export function linkedNotice(value: string | undefined): LinkedNotice | null {
   if (value === "failed") {
     return {
       tone: "error",
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       text: "GitHub 账号没能关联，请再试一次。",
-=======
-      text: "Couldn't link your GitHub account. Try again.",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     };
   }
   if (value === "github-taken") {
     return {
       tone: "error",
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       text: "这个 GitHub 账号已经关联到另一位熊宝用户。请在 GitHub 换一个账号登录后再连接，或联系熊宝管理员。",
-=======
-      text: "That GitHub account is linked to someone else in OpenBot. Sign in to GitHub with another account and try again, or ask an admin.",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     };
   }
   return null;

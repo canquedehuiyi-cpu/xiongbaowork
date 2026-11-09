@@ -1,17 +1,14 @@
 import { mutationOptions, type QueryClient } from "@tanstack/react-query";
 import { client } from "@/lib/client";
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 import { forgetSession } from "@/lib/session-memory";
-=======
 import { clearSkin } from "@/skins/store";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 import { authKeys } from "./queries";
 
 async function signOut() {
   await client("/api/auth/sign-out", {
     method: "POST",
     // What a refused sign-out means whoever answers it (Better Auth puts its sentence where `client` does not read).
-    fallback: "Signing out did not finish. Try again.",
+    fallback: "没能退出登录，请再试一次。",
   });
 }
 
@@ -26,11 +23,7 @@ export function signOutMutationOptions(queryClient: QueryClient) {
   return mutationOptions({
     mutationFn: signOut,
     onSuccess: () => {
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       forgetSession();
-      queryClient.removeQueries({ queryKey: authKeys.all });
-    },
-=======
       clearSkin();
       queryClient.removeQueries({ queryKey: authKeys.all });
     },
@@ -44,13 +37,12 @@ export function updateProfileNameMutationOptions(queryClient: QueryClient) {
       client("/api/me/profile", "profile", {
         method: "PATCH",
         body: { name },
-        fallback: "Your name could not be saved",
+        fallback: "名字没能保存",
       }),
     onSuccess: () =>
       queryClient.invalidateQueries({
         queryKey: authKeys.currentUser(),
         refetchType: "all",
       }),
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   });
 }

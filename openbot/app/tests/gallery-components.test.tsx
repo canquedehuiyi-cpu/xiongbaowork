@@ -184,13 +184,7 @@ test("a failed answer preserves values and retries without duplicate submissions
   await fillForm(view);
   await user.click(view.getByRole("button", { name: "提交回答" }));
   await waitFor(() =>
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     expect(view.getByRole("alert").textContent).toContain("没能发送"),
-=======
-    expect(view.getByRole("alert").textContent).toContain(
-      "Couldn't send your answers",
-    ),
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   );
   const team = view.getByRole("textbox", { name: "Team" });
   expect(team instanceof HTMLInputElement).toBe(true);

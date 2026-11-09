@@ -73,9 +73,6 @@ import { agentListQueryOptions } from "@/lib/agents/queries";
 import { attachmentUrl } from "@/lib/channels/attachments";
 import { readResponsibilityTurn } from "@/lib/channels/responsibility-turn";
 import { readFiring } from "@/lib/channels/routine-firing";
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-import { markdownComponents } from "@/lib/markdown";
-=======
 import type { CardPlace } from "@/lib/copilot/carry-on";
 import { foreignCodingCall } from "@/lib/copilot/coding-calls";
 import { ToolPlaceContext } from "@/lib/copilot/tool-place";
@@ -92,7 +89,6 @@ import {
   markdownPlugins,
   replyRemarkPlugins,
 } from "@/lib/markdown";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 import { EASE_OUT, ENTRANCE_SECONDS } from "@/lib/motion";
 import {
   RESEARCH_RESULTS_LABELS,
@@ -111,18 +107,9 @@ import { useResultVisibility } from "@/lib/product-telemetry";
 import { readTeamBotConsent } from "@/lib/team-bots";
 import { cn } from "@/lib/utils";
 import { VOICE_CHAT_ACTIVITY, type VoiceChatEntry } from "@/lib/voice/archive";
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-import { AppAccessRequestCard, readAppAccessCard } from "./app-access-card";
-import {
-  BrowserActivity,
-  groupBrowserSteps,
-  type TranscriptItem,
-} from "./browser-activity";
-=======
-import { AppAccessCard } from "./app-access-card";
+import { AppAccessCard, AppAccessRequestCard, readAppAccessCard } from "./app-access-card";
 import { ChannelAvatar } from "./avatar";
 import { isBrowserStep } from "./browser-activity";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 import {
   attachmentModality,
   type SentAttachment,
@@ -761,11 +748,7 @@ function ResponsibilityFiring({
       <IconClock aria-hidden className="size-4 shrink-0 translate-y-0.5" />
       <div className="min-w-0">
         <p>
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           <span className="font-medium">长期职责运行了。</span> 触发方式：{" "}
-=======
-          <span className="font-medium">Worked on a goal.</span> Trigger:{" "}
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
           {describeTrigger(turn.trigger)}
         </p>
         <p className="whitespace-pre-wrap">{turn.instruction}</p>
@@ -946,7 +929,7 @@ function AnswererName({ botId }: { botId: string }) {
   if (!bots) return null;
   return (
     <MessageHeader className="text-xs font-medium text-muted-foreground">
-      {bots.find((bot) => bot.id === botId)?.name ?? "A Bot no longer here"}
+      {bots.find((bot) => bot.id === botId)?.name ?? "已不在的员工"}
     </MessageHeader>
   );
 }
@@ -1594,11 +1577,6 @@ const ToolCallBody = memo(function ToolCallBody({
          * answer it but the Bots page. The same card a computer step draws (see `approval-tools`),
          * read from the same inbox, and the line comes back once it is decided.
          */}
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-        {drawn ?? <ServerToolLine args={args} name={name} result={result} />}
-      </ToolRenderBoundary>
-    </Arriving>
-=======
         {drawn ?? (
           <InlineApproval
             toolCallId={toolCallId}
@@ -1614,7 +1592,6 @@ const ToolCallBody = memo(function ToolCallBody({
         )}
       </ToolPlaceContext.Provider>
     </ToolRenderBoundary>
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   );
 });
 
@@ -1711,18 +1688,6 @@ export function ServerToolLine({
   name,
   args,
   result,
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-}: {
-  name: string;
-  /** 调用的参数，JSON 文本。只用来给主人电脑上的文件夹步骤写出文件或命令。 */
-  args?: string;
-  result?: string;
-}) {
-  // 员工替对方申请访问某个应用：画成卡片，申请人可以在上面撤回（迁移 0153）。
-  const accessRequest = readAppAccessCard(name, result);
-  if (accessRequest) return <AppAccessRequestCard {...accessRequest} />;
-  const { label, detail } = readToolName(name);
-=======
   place,
 }: {
   name: string;
@@ -1736,13 +1701,15 @@ export function ServerToolLine({
   const named = readToolName(name, running);
   const { label } = named;
   const folders = useContext(FolderNamesContext);
+  // 员工替对方申请访问某个应用：画成卡片，申请人可以在上面撤回（迁移 0153）。
+  const accessRequest = readAppAccessCard(name, result);
+  if (accessRequest) return <AppAccessRequestCard {...accessRequest} />;
   // The file a file step read or saved, as a computer's own file steps name it; a step on a folder
   // on the person's computer names the folder too ("todo.txt in share").
   const detail =
     named.detail ??
     folderStepSubject(name, args, folders) ??
     ownToolSubject(name, args);
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   /*
    * A refusal is not a result, and must not read like one.
    *
@@ -1752,16 +1719,11 @@ export function ServerToolLine({
    * 一步不带标记，`refusalOf` 照审批服务的原话认出它。
    */
   const answer = result === undefined ? undefined : asText(result);
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
+  // Behind the marker, or a step the person declined on the conversation's card. See `refusalOf`.
   const refusal = refusalOf(answer);
   const refused = refusal !== undefined;
-  // 调用了从没提供给它的工具：没有成功，运行时那句列满工具名的话是写给模型的。
-=======
-  // Behind the marker, or a step the person declined on the conversation's card. See `refusalOf`.
-  const reason = refusalOf(answer);
-  const refused = reason !== undefined;
+  const reason = refusal?.reason;
   // Asked for a tool it was never offered: it didn't work, and what the runtime said was for the model.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   const unoffered = unofferedTool(result);
   const failed = !refused && (unoffered || toolResultFailed(result));
   /*
@@ -1770,34 +1732,11 @@ export function ServerToolLine({
    * times over by the end of the sentence. Stripped here rather than on the server, because the
    * server's copy is what the model is told and "Refused." in front of a reason is right for it.
    */
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-  const body = refusal ? refusal.reason : answer;
-=======
   const body = refused ? reason : answer;
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   // A Team Bot asking to use this person's own account draws its consent card, not the sentence.
   const consent = refused ? readTeamBotConsent(body) : null;
   if (consent) return <TeamBotConsentCard {...consent} />;
   /*
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-   * 主人电脑上文件夹里没有做成的一步，在这一行上写出是哪个文件或哪条命令、为什么，
-   * 「notes.txt · 你拒绝了这一步。」，不写授权 id，也不再展开。
-   */
-  const folderRefusal =
-    refused && name.startsWith("host_")
-      ? [hostStepSubject(args), refusal.reason].filter(Boolean).join(" · ")
-      : undefined;
-  const shown =
-    folderRefusal !== undefined
-      ? undefined
-      : unoffered
-        ? UNOFFERED_TOOL_SENTENCE
-        : body;
-  const lineDetail = folderRefusal ?? detail;
-  return (
-    <ToolLine
-      {...(lineDetail ? { detail: lineDetail } : {})}
-=======
    * An app this call could not use draws a card with the step that fixes it, not the name of a
    * screen: a refusal carrying the marker, or the answer of the one tool whose whole job is to put
    * that card on screen. Only that tool's ordinary answer is read for a marker — any other result
@@ -1866,7 +1805,6 @@ export function ServerToolLine({
         : {})}
       // A blocked step did not happen: "Blocked: Save a file", never "Blocked: Saved a file".
       {...(refused ? { attempted: ownToolAttempt(name) ?? undefined } : {})}
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       label={label}
       refused={refused}
       declined={refusal?.declined ?? false}
@@ -1874,32 +1812,12 @@ export function ServerToolLine({
       running={running}
     >
       {shown ? (
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-        <Streamdown components={markdownComponents}>
-          {unoffered ? shown : forDisplay(shown)}
-=======
         <Streamdown components={markdownComponents} plugins={markdownPlugins}>
-          {forDisplay(shown)}
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+          {unoffered ? shown : forDisplay(shown)}
         </Streamdown>
       ) : null}
     </ToolLine>
   );
-}
-
-/** 文件夹步骤针对的文件或命令，从调用参数里读；读不到就不写。授权 id 永远不上屏。 */
-function hostStepSubject(args: string | undefined): string | undefined {
-  if (!args) return undefined;
-  try {
-    const parsed: unknown = JSON.parse(args);
-    if (!parsed || typeof parsed !== "object") return undefined;
-    const { path, command } = parsed as { path?: unknown; command?: unknown };
-    if (typeof command === "string" && command.trim()) return command;
-    if (typeof path === "string" && path.trim() && path !== ".") return path;
-    return undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 /**
@@ -1913,7 +1831,7 @@ function foundToolsInWords(answer: string | undefined): string | undefined {
   return names
     .map((name) => {
       const { label, detail } = readToolName(name);
-      return `- ${detail ? `${label} on ${detail}` : label}`;
+      return `- ${detail ? `${label}（${detail}）` : label}`;
     })
     .join("\n");
 }

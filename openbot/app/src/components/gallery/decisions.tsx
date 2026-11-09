@@ -57,24 +57,14 @@ export function ApprovalCard(props: Waiting<ApprovalArgs> & { name?: string }) {
 
   if (status === "inProgress") {
     return (
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       <GalleryFrame title={args.title ?? "正在等待员工…"}>
         <p className="text-sm text-muted-foreground">正在准备请求…</p>
-=======
-      <GalleryFrame title={args.title ?? "Waiting for the Bot…"}>
-        <p className="text-sm text-muted-foreground">Preparing the request…</p>
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       </GalleryFrame>
     );
   }
 
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   const approve = args.approveLabel ?? "批准";
   const decline = args.rejectLabel ?? "拒绝";
-=======
-  const approve = args.approveLabel ?? "Approve";
-  const decline = args.rejectLabel ?? "Decline";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   const decided =
     status === "complete" ? readDecision(props.result) : undefined;
   const command = args.command?.trim() || undefined;
@@ -88,17 +78,10 @@ export function ApprovalCard(props: Waiting<ApprovalArgs> & { name?: string }) {
       answer={
         decided
           ? decided.decision === "approved"
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
             ? { label: "已批准", choice: approve, tone: "positive" }
             : decided.decision === "declined"
               ? { label: "已拒绝", choice: decline, tone: "negative" }
               : { label: "已回答", note: decided.note, tone: "neutral" }
-=======
-            ? { label: "Approved", choice: approve, tone: "positive" }
-            : decided.decision === "declined"
-              ? { label: "Declined", choice: decline, tone: "negative" }
-              : { label: "Answered", note: decided.note, tone: "neutral" }
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
           : undefined
       }
       onSubmit={async (value, text) => {
@@ -115,26 +98,15 @@ export function ApprovalCard(props: Waiting<ApprovalArgs> & { name?: string }) {
         {
           value: "approved",
           label: approve,
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           description: "员工会继续做下去。",
-=======
-          description: "The Bot goes ahead.",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         },
         {
           value: "declined",
           label: decline,
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           description: "员工不会做，并且会知道你拒绝了。",
         },
       ]}
       other={{ placeholder: "跟员工说点别的…" }}
-=======
-          description: "The Bot doesn't, and is told you declined.",
-        },
-      ]}
-      other={{ placeholder: "Tell the Bot something else…" }}
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       submitting={sending || !respond}
       title={args.title}
     >
@@ -143,11 +115,7 @@ export function ApprovalCard(props: Waiting<ApprovalArgs> & { name?: string }) {
         <dl className="mt-3 grid grid-cols-[minmax(0,9rem)_1fr] gap-x-4 gap-y-1.5 rounded-lg bg-muted/60 px-3 py-2 text-sm">
           {command ? (
             <div className="contents">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
               <dt className="truncate text-muted-foreground">命令</dt>
-=======
-              <dt className="truncate text-muted-foreground">Command</dt>
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
               <dd className="min-w-0">
                 <code className="break-all font-mono text-xs">{command}</code>
               </dd>
@@ -194,13 +162,8 @@ export function ChoiceCard(props: Waiting<ChoiceArgs>) {
 
   if (status === "inProgress") {
     return (
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       <GalleryFrame title={args.title ?? "正在等待员工…"}>
         <p className="text-sm text-muted-foreground">正在准备问题…</p>
-=======
-      <GalleryFrame title={args.title ?? "Waiting for the Bot…"}>
-        <p className="text-sm text-muted-foreground">Preparing the question…</p>
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       </GalleryFrame>
     );
   }
@@ -218,13 +181,8 @@ export function ChoiceCard(props: Waiting<ChoiceArgs>) {
       answer={
         chosen
           ? chosenLabel !== undefined
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
             ? { label: "已回答", choice: chosenLabel, tone: "positive" }
             : { label: "已回答", note: chosen.answer, tone: "positive" }
-=======
-            ? { label: "Answered", choice: chosenLabel, tone: "positive" }
-            : { label: "Answered", note: chosen.answer, tone: "positive" }
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
           : undefined
       }
       onSubmit={async (value, text) => {
@@ -244,11 +202,7 @@ export function ChoiceCard(props: Waiting<ChoiceArgs>) {
         label: option.label,
         ...(option.description ? { description: option.description } : {}),
       }))}
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       other={{ placeholder: "回答点别的…" }}
-=======
-      other={{ placeholder: "Answer something else…" }}
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       submitting={sending || !respond}
       title={args.title}
     >
@@ -308,12 +262,7 @@ export const GALLERY: GalleryComponent[] = [
     name: "askApproval" satisfies DecisionToolName,
     title: "Approval",
     kind: "decision",
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     summary: "请你批准或拒绝一件事，员工会等你回答。",
-=======
-    summary:
-      "Asks you to approve or decline something. The Bot waits for your answer.",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     description:
       "Ask the person to approve or decline something, and WAIT for their answer. You are given their decision: `approved`, `declined`, or `other` with `note`, what they wrote instead. Use it for a decision that is theirs to make, or before something you cannot undo, unless your instructions say the person is already asked before that kind of action.",
     parameters: ApprovalCardProps,
@@ -339,12 +288,7 @@ export const GALLERY: GalleryComponent[] = [
     name: "askChoice" satisfies DecisionToolName,
     title: "Choice",
     kind: "decision",
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     summary: "请你从几个选项里选一个，员工会等你回答。",
-=======
-    summary:
-      "Asks you to pick one of several options. The Bot waits for your answer.",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     description:
       "Ask the person to pick one of several options, and WAIT for their answer. Use when you cannot sensibly guess which one they meant. You are given the id of the option they chose as `choice`, or `answer`, what they wrote instead.",
     parameters: ChoiceCardProps,

@@ -16,11 +16,8 @@ import {
 } from "@/lib/auth/client";
 import { resumeUrlFor, verifierPathFor } from "@/lib/auth/resume";
 import { appConfig } from "@/lib/generated/application-config";
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-import { queryClient } from "@/query-client";
-=======
 import { searchTextEntry } from "@/lib/search-text";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+import { queryClient } from "@/query-client";
 import {
   type AuthProviderId,
   authKeys,
@@ -131,11 +128,7 @@ function SignScreen() {
       setError(
         caughtError instanceof Error
           ? caughtError.message
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           : "那个地址没有登记任何身份提供方。",
-=======
-          : "No company sign-in is set up for that address.",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       );
       setOpening(null);
     }
@@ -155,11 +148,7 @@ function SignScreen() {
       setError(
         caughtError instanceof Error
           ? caughtError.message
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           : `无法开始 ${providerName(provider)} 登录。`,
-=======
-          : `Couldn't open ${providerName(provider)} sign-in. Try again.`,
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       );
       setOpening(null);
     }
@@ -349,12 +338,7 @@ function SignScreen() {
         >
           {options?.ssoRequired ? (
             <p className="mb-3 text-center text-sm text-muted-foreground">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
               你的组织要求使用单点登录。
-=======
-              Your organization requires you to sign in with your company
-              account.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
             </p>
           ) : null}
           {providers.length > 0 && !options?.ssoRequired ? (
@@ -363,11 +347,7 @@ function SignScreen() {
             options?.ssoRequired ||
             options?.emailPassword ? null : (
             <p className="text-center text-sm text-muted-foreground">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
               这个部署没有配置任何登录方式。
-=======
-              Sign-in isn't set up yet. An admin has to set it up first.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
             </p>
           )}
           {/*
@@ -429,11 +409,7 @@ function SignScreen() {
           {options?.ssoRequired && providers.length > 0 ? (
             <details className="mt-4 text-sm">
               <summary className="cursor-pointer text-center text-muted-foreground">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
                 管理员登录
-=======
-                Admin sign-in
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
               </summary>
               <div className="mt-3">{providerButtons}</div>
             </details>

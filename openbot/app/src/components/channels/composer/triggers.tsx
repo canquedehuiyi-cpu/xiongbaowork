@@ -1,6 +1,6 @@
 import type { TriggerConfig, TriggerSuggestion } from "prompt-area/helpers";
 import { commandTrigger, mentionTrigger } from "prompt-area/helpers";
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371:src/components/channels/composer/triggers.ts
+import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import {
   AGENT_TRIGGER,
   COMMAND_TRIGGER,
@@ -8,10 +8,6 @@ import {
   CREW_CHIP_PREFIX,
   memberChipValue,
 } from "./draft";
-=======
-import { AbstractAvatar } from "@/components/agents/abstract-avatar";
-import { AGENT_TRIGGER, COMMAND_TRIGGER, type CommandOption } from "./draft";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b:src/components/channels/composer/triggers.tsx
 
 /**
  * The composer's trigger registry.
@@ -24,7 +20,7 @@ export type AgentOption = {
   id: string;
   name: string;
   description?: string;
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371:src/components/channels/composer/triggers.ts
+  avatarSeed: string;
   /**
    * Set when this entry is the coworker listed under a Group rather than on its own (spec B1). It is
    * the same coworker either way: picking it addresses `id`, exactly as the plain entry does.
@@ -55,9 +51,6 @@ export type CrewOption = {
   templateId: string;
   label: string;
   description?: string;
-=======
-  avatarSeed: string;
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b:src/components/channels/composer/triggers.tsx
 };
 
 /**
@@ -173,9 +166,8 @@ export function agentTrigger(
 ): TriggerConfig {
   return mentionTrigger({
     char: AGENT_TRIGGER,
-    accessibilityLabel: "Bot",
+    accessibilityLabel: "员工",
     reopenOnChipClick: true,
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371:src/components/channels/composer/triggers.ts
     emptyMessage: "这个频道里还没有员工",
     onSearch: (query): TriggerSuggestion[] => [
       ...agents
@@ -189,26 +181,6 @@ export function agentTrigger(
           value: `${CREW_CHIP_PREFIX}${crew.templateId}`,
           label: crew.label,
           description: crew.description,
-=======
-    emptyMessage: "No Bots in this conversation",
-    onSearch: (query): TriggerSuggestion[] =>
-      agents
-        .filter((agent) => matches(query, agent.name, agent.description))
-        .map((agent) => ({
-          value: agent.id,
-          label: agent.name,
-          description: agent.description,
-          // Hidden: the option is already announced by the Bot's name.
-          icon: (
-            <span aria-hidden="true" className="contents">
-              <AbstractAvatar
-                name={agent.name}
-                seed={agent.avatarSeed}
-                size={28}
-              />
-            </span>
-          ),
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b:src/components/channels/composer/triggers.tsx
         })),
     ],
     // A Group member's chip reads as the coworker it addresses, not as "成员 · 组名".
@@ -220,11 +192,18 @@ export function agentTrigger(
 }
 
 function toSuggestion(agent: AgentOption): TriggerSuggestion {
+  // Hidden: the option is already announced by the Bot's name.
+  const icon = (
+    <span aria-hidden="true" className="contents">
+      <AbstractAvatar name={agent.name} seed={agent.avatarSeed} size={28} />
+    </span>
+  );
   if (!agent.group) {
     return {
       value: agent.id,
       label: agent.name,
       description: agent.description,
+      icon,
     };
   }
   return {
@@ -235,6 +214,7 @@ function toSuggestion(agent: AgentOption): TriggerSuggestion {
       ? `组「${agent.group.name}」成员 · ${agent.description}`
       : `组「${agent.group.name}」成员`,
     data: { name: agent.name },
+    icon,
   };
 }
 
@@ -242,10 +222,6 @@ function toSuggestion(agent: AgentOption): TriggerSuggestion {
  * `/` is restricted to the start of a line, so a URL or a date in the middle of a sentence never
  * opens the dropdown. Selection resolves to a chip; `applyCommandChips` then rewrites the ones that
  * are really prompts or client actions.
- *
- * Listed and chipped by name ("Standup notes"), and found by name, command or description, so
- * typing the command still works for somebody who knows it. The command itself is not shown: it is
- * the skill's key, not something a person needs to read.
  */
 export function slashCommandTrigger(
   commands: readonly CommandOption[],
@@ -253,13 +229,8 @@ export function slashCommandTrigger(
   return commandTrigger({
     char: COMMAND_TRIGGER,
     position: "start",
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371:src/components/channels/composer/triggers.ts
-    accessibilityLabel: "command",
+    accessibilityLabel: "技能",
     emptyMessage: "没有匹配的命令",
-=======
-    accessibilityLabel: "skill",
-    emptyMessage: "No matching skills",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b:src/components/channels/composer/triggers.tsx
     onSearch: (query): TriggerSuggestion[] =>
       commands
         .filter((command) =>

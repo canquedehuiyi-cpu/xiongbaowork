@@ -157,11 +157,7 @@ export function AttachmentStrip({
                   className="truncate text-muted-foreground text-xs"
                   title={
                     file.mayTruncate === true
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-                      ? "模型只读取这个文件的前 120,000 个字符。"
-=======
-                      ? "The Bot reads only the first 120,000 characters of this file."
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+                      ? "员工只读取这个文件的前 120,000 个字符。"
                       : undefined
                   }
                 >

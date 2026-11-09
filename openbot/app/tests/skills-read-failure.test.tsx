@@ -20,11 +20,7 @@ import { cleanup, render, waitFor, within } from "@testing-library/react";
 import type { ComponentType } from "react";
 import { EditSkill } from "@/components/skills/edit-skill";
 import { type PluginsPage, pluginKeys } from "@/lib/plugins/queries";
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 import { Route as ResourcesRoute } from "@/routes/_authed/_app/resources";
-=======
-import { Route as SkillsRoute } from "@/routes/_authed/_app/capabilities.skills";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 import { Route as AdminSkillsRoute } from "@/routes/_authed/admin/skills";
 
 /**
@@ -187,20 +183,11 @@ test("a person's skills page says the skills failed to load, not that they have 
   const view = renderSkills(client);
   await waitForFailedRead(client);
 
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   const alert = await view.findByRole("alert");
   expect(alert.textContent).toContain("读不到技能");
   expect(within(alert).getByRole("button", { name: "重试" })).toBeTruthy();
   expect(view.queryByText("你还没有写过技能。")).toBeNull();
   expect(view.queryByText("这个部署还没有管理员写的技能。")).toBeNull();
-=======
-  expect(
-    await view.findByText("Couldn't load your skills. Reload the page."),
-  ).toBeTruthy();
-  expect(
-    view.queryByText("No skills yet. Write one with New skill."),
-  ).toBeNull();
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 });
 
 test("a person with genuinely no skills is still told so", async () => {
@@ -208,20 +195,11 @@ test("a person with genuinely no skills is still told so", async () => {
   const view = renderSkills(client);
   await waitForFailedRead(client);
 
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   // The answer already held stays on screen; the refetch that failed after it is said above it,
   // rather than replacing it.
   expect(await view.findByText("你还没有写过技能。")).toBeTruthy();
   expect(view.getByText("这个部署还没有管理员写的技能。")).toBeTruthy();
   expect((await view.findByRole("alert")).textContent).toContain("读不到技能");
-=======
-  expect(
-    await view.findByText("No skills yet. Write one with New skill."),
-  ).toBeTruthy();
-  expect(
-    view.queryByText("Couldn't load your skills. Reload the page."),
-  ).toBeNull();
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 });
 
 test("the admin skills page says the skills failed to load, not that there are none", async () => {
@@ -232,15 +210,8 @@ test("the admin skills page says the skills failed to load, not that there are n
   );
   await waitForFailedRead(client);
 
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   expect(await view.findByText("读不到技能。")).toBeTruthy();
   expect(view.queryByText("还没有技能。")).toBeNull();
-=======
-  expect(
-    await view.findByText("Couldn't load skills. Reload the page."),
-  ).toBeTruthy();
-  expect(view.queryByText("No skills yet")).toBeNull();
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 });
 
 test("a deployment with genuinely no skills still says so on the admin page", async () => {
@@ -251,13 +222,8 @@ test("a deployment with genuinely no skills still says so on the admin page", as
   );
   await waitForFailedRead(client);
 
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   expect(await view.findByText("还没有技能。")).toBeTruthy();
   expect(view.queryByText("读不到技能。")).toBeNull();
-=======
-  expect(await view.findByText("No skills yet")).toBeTruthy();
-  expect(view.queryByText("Couldn't load skills. Reload the page.")).toBeNull();
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 });
 
 test("opening a skill to edit says it failed to load, not that it no longer exists", async () => {
@@ -265,15 +231,6 @@ test("opening a skill to edit says it failed to load, not that it no longer exis
   const view = renderAlone(client, () => <EditSkill slug="triage" />);
   await waitForFailedRead(client);
 
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   expect(await view.findByText("读不到这个技能。")).toBeTruthy();
   expect(view.queryByText("这个技能已经不存在了，或者不归你编辑。")).toBeNull();
-=======
-  expect(
-    await view.findByText("Couldn't load this skill. Reload the page."),
-  ).toBeTruthy();
-  expect(
-    view.queryByText("This skill was deleted, or it isn't yours to edit."),
-  ).toBeNull();
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 });

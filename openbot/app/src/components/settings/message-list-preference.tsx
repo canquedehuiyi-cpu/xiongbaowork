@@ -42,11 +42,7 @@ export function MessageListPreference() {
         <ItemContent>
           <ItemTitle>消息列表突出显示</ItemTitle>
           <ItemDescription>
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
             选择在对话列表里用大字显示哪个名字。
-=======
-            Choose which line stands out in the sidebar.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
           </ItemDescription>
         </ItemContent>
         <ItemActions>
@@ -63,7 +59,6 @@ export function MessageListPreference() {
               <SelectValue>
                 {emphasis
                   ? emphasis === "agent"
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
                     ? "员工名字"
                     : "对话标题"
                   : "正在加载…"}
@@ -72,16 +67,6 @@ export function MessageListPreference() {
             <SelectContent>
               <SelectItem value="thread">对话标题</SelectItem>
               <SelectItem value="agent">员工名字</SelectItem>
-=======
-                    ? "Bot name"
-                    : "Conversation title"
-                  : "Loading…"}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="thread">Conversation title</SelectItem>
-              <SelectItem value="agent">Bot name</SelectItem>
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
             </SelectContent>
           </Select>
         </ItemActions>
@@ -96,11 +81,7 @@ export function MessageListPreference() {
             size="sm"
             onClick={() => void preferences.refetch()}
           >
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
             重试
-=======
-            Try again
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
           </Button>
         </div>
       ) : null}

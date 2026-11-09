@@ -6,10 +6,7 @@ import {
   type PendingHandoff,
   pendingHandoff,
   rememberHandoff,
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-=======
   wasHandoffAnswered,
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 } from "@/lib/computers/handoff";
 import {
   findPendingTool,
@@ -96,13 +93,7 @@ export function HandoffResumeNotice({
     try {
       await resumeHandoffTask(botId, pending, agent, run, abort.signal);
     } catch (error) {
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       setProblem(error instanceof Error ? error.message : "任务没能恢复。");
-=======
-      setProblem(
-        error instanceof Error ? error.message : "Couldn't resume the task.",
-      );
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     } finally {
       setBusy(false);
       controller.current = null;

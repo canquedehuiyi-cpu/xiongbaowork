@@ -7,18 +7,17 @@ import {
   test,
 } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import type { UserPreferences } from "@openbot/shared/user-preferences";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
-import { SelfHostBanner } from "@/components/layout/self-host-banner";
+import {
+  SELF_HOST_URL,
+  SelfHostBanner,
+} from "@/components/layout/self-host-banner";
 import { authKeys } from "@/lib/auth/queries";
 import { deploymentKeys } from "@/lib/deployment/queries";
 import { userPreferencesQueryOptions } from "@/lib/settings/message-list";
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 import type { UserPreferences } from "@openbot/shared/user-preferences";
 import { settleReactWork } from "./settle-react-work";
-=======
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 
 const originalFetch = globalThis.fetch;
 const clients: QueryClient[] = [];
@@ -55,19 +54,10 @@ afterEach(() => {
   clients.length = 0;
   globalThis.fetch = originalFetch;
 });
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 afterAll(async () => {
   // Drain React before the document goes away, for the reason recorded in `settle-react-work.ts`.
   await settleReactWork();
   GlobalRegistrator.unregister();
-=======
-// A failed save rolls the cache back after the last test has seen the banner return, and React
-// renders that after `cleanup`. Unregistering at once removes `window` under it, and the scheduler's
-// read of `window.event` throws between tests, failing the run with every test passed.
-afterAll(async () => {
-  await new Promise((resolve) => setTimeout(resolve, 50));
-  await GlobalRegistrator.unregister();
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 });
 
 const banner = { name: "自行部署" } as const;
@@ -114,20 +104,12 @@ function setup({
   return { client, view };
 }
 
-test("offers self-hosting with a link to book an OpenBot for Business call", () => {
+test("offers self-hosting with a link CopilotKit can tell came from the app", () => {
   const { view } = setup();
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   expect(view.getByText("为你的组织自行部署一套。")).toBeTruthy();
   const link = view.getByRole("link", { name: "联系工程师" });
   expect(link.getAttribute("href")).toBe(SELF_HOST_URL);
   expect(SELF_HOST_URL).toContain("ref=openbot_app");
-=======
-  expect(
-    view.getByText("Self-host OpenBot for your organization."),
-  ).toBeTruthy();
-  const link = view.getByRole("link", { name: "Book a call" });
-  expect(link.getAttribute("href")).toBe("https://open.bot/business");
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   expect(link.getAttribute("target")).toBe("_blank");
   expect(link.getAttribute("rel")).toBe("noopener noreferrer");
 });

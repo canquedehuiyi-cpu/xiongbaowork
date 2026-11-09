@@ -1,4 +1,3 @@
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useParams } from "@tanstack/react-router";
 import * as React from "react";
@@ -32,18 +31,48 @@ import {
   type PluginTool,
   pluginsPageQueryOptions,
 } from "@/lib/plugins/queries";
-=======
-import { createFileRoute } from "@tanstack/react-router";
-import { PluginBotPage } from "@/components/manage/plugin-bot-page";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 
-/** `$key_` opts this route out of nesting under `$key.tsx`, so the connector page stays a page. */
+/**
+ * One Bot and one app: every action the app offers, and which of them this Bot holds.
+ *
+ * The sibling screen — `$key_.tools.$tool` — answers the same question from the other end, one
+ * action and every Bot, and that is the right shape when somebody is thinking about an action. It
+ * is the wrong shape for setting a Bot up against an app that offers a hundred and sixty-seven of
+ * them: that is one visit per action, and the decision being made ("what can this Bot do in Slack")
+ * is never on screen at once.
+ *
+ * So the list is searchable and split by what a boundary sees. A read and a write are not the same
+ * decision, and an app's actions arrive interleaved by name, which puts `delete_channel` two rows
+ * under `list_channels` with nothing between them but a word.
+ *
+ * `$key_` opts this route out of nesting under `$key.tsx`, so the connector page stays a page rather
+ * than becoming a layout with an outlet.
+ */
+// M4: 待接入 上游 manage/plugin-bot-page.tsx（员工名代替 id、版式更新）
 export const Route = createFileRoute(
   "/_authed/admin/plugins/$key_/bots/$agentId",
 )({ component: RouteComponent });
 
+/**
+ * The refs the bulk action would grant: every action that only reads.
+ *
+ * Exported as a function so the promise the button makes is assertable without a DOM, a router or
+ * a query client — see `tests/bot-app-grants.test.tsx`. The button says "read-only" and states a
+ * resulting count before it acts, and both of those are only true if this is exactly the reads.
+ *
+ * A destructive action can never appear here. `destructive` sits beside `effect` rather than inside
+ * it, and the effect a destructive action carries is `write` — anything not positively known to be
+ * a read is one — so filtering on the effect alone already excludes it.
+ *
+ * Every action, not the ones a search happens to be showing. The button names every read-only
+ * action and that is what it grants; narrowing it to the filtered rows would make the sentence
+ * beside it quietly wrong.
+ */
+export function readOnlyRefs(tools: PluginTool[]): string[] {
+  return tools.filter((tool) => tool.effect === "read").map((tool) => tool.ref);
+}
+
 function RouteComponent() {
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   const { key, agentId } = useParams({
     from: "/_authed/admin/plugins/$key_/bots/$agentId",
   });
@@ -370,8 +399,4 @@ function RouteComponent() {
       )}
     </PageShell>
   );
-=======
-  const { key, agentId } = Route.useParams();
-  return <PluginBotPage agentId={agentId} pluginKey={key} />;
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 }

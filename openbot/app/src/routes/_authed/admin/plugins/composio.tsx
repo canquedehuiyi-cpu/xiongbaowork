@@ -1,5 +1,6 @@
+import { IconPlug } from "@tabler/icons-react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 import * as React from "react";
 import {
   PageEmpty,
@@ -28,15 +29,23 @@ import {
 } from "@/lib/plugins/queries";
 import { useLookupZh } from "@/lib/translations/queries";
 import { queryClient } from "@/query-client";
-=======
-import { BrokerDirectoryPage } from "@/components/manage/broker-directory-page";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 
-/** Composio's directory, behind the guard that it answers only on a Composio deployment. */
+/**
+ * Composio's directory, searched rather than listed.
+ *
+ * The catalogue on the previous screen is a reviewed handful, and every entry there is a decision
+ * somebody made about a vendor. This is a few hundred apps that nobody here has reviewed, which is
+ * why it is a search field and not a list: the only sensible entry point into a directory that size
+ * is the name of the app you already came looking for.
+ *
+ * Adding one is account-wide, and it still reads nothing. Every app here is reached as whoever is
+ * asking, so a person's own connection is what makes their own mail or messages readable — which is
+ * made on their settings page, not here.
+ */
+// M4: 待接入 上游 manage/broker-directory-page.tsx（Composio 与 Arcade 共用的目录页；Arcade 不收）
 export const Route = createFileRoute("/_authed/admin/plugins/composio")({
-  component: () => <BrokerDirectoryPage provider="composio" />,
+  component: RouteComponent,
 });
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 
 /**
  * The apps to draw, in the order to draw them.
@@ -224,5 +233,3 @@ function RouteComponent() {
     </PageShell>
   );
 }
-=======
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b

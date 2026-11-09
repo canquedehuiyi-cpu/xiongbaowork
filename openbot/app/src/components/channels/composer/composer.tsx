@@ -57,16 +57,12 @@ import {
 } from "./draft";
 import { screenPickedFiles } from "./picked-files";
 import { type RejectedFile, RejectedFiles } from "./rejected-files";
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-import { PLACEHOLDER_COMMANDS } from "./sources";
 import { type AgentOption, buildTriggers, type CrewOption } from "./triggers";
-=======
-import { type AgentOption, buildTriggers } from "./triggers";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 import { useDictation } from "./use-dictation";
 
 /** One shared empty list, so a box with no commands does not rebuild its triggers per render. */
 const NO_COMMANDS: readonly CommandOption[] = [];
+const NO_CREWS: readonly CrewOption[] = [];
 
 /**
  * The SDK's upload failure, derived rather than imported for the reason `attachments.ts` records
@@ -147,12 +143,9 @@ export type ComposerProps = {
   modelPicker?: ReactNode;
   /** Agents that `@` can address. Empty means the mention menu reports an empty channel. */
   agents?: readonly AgentOption[];
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   /** Crew flows `@` can start, alongside the agents. Empty offers no crew entry. */
   crews?: readonly CrewOption[];
-=======
   /** What `/` offers: the skills of the Bot this box sends to. Empty offers nothing. */
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   commands?: readonly CommandOption[];
   /**
    * Receives the whole draft rather than a string, so a mention or a command reaches the caller as
@@ -286,14 +279,8 @@ function overCap(draft: ComposerDraft): boolean {
 /** What the person is told when Send is held shut by the cap, and what to do about it. */
 function tooManyStagedReason(count: number): string {
   return (
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-    `已暂存 ${count} 个附件，但一条消息最多只能带 ` +
-    `${MAX_ATTACHMENTS_PER_MESSAGE} 个。请先移除 ` +
-    `${count - MAX_ATTACHMENTS_PER_MESSAGE} 个再发送。`
-=======
-    `A message can take at most ${MAX_ATTACHMENTS_PER_MESSAGE} attachments. ` +
-    `Remove ${count - MAX_ATTACHMENTS_PER_MESSAGE} to send.`
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+    `一条消息最多只能带 ${MAX_ATTACHMENTS_PER_MESSAGE} 个附件。` +
+    `请先移除 ${count - MAX_ATTACHMENTS_PER_MESSAGE} 个再发送。`
   );
 }
 
@@ -306,16 +293,10 @@ function tooManyStagedReason(count: number): string {
  */
 const DROPPED_REASON: Record<DroppedAttachmentCause, string> = {
   "merged-over-cap":
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
     "排队的消息合并成一条时被丢弃了：" +
     `一条消息最多只能带 ${MAX_ATTACHMENTS_PER_MESSAGE} ` +
     "个附件。",
   "queued-message-removed": "随它所附的排队消息一起被移除了。",
-=======
-    "dropped when your queued messages were merged. A message can take " +
-    `at most ${MAX_ATTACHMENTS_PER_MESSAGE} attachments.`,
-  "queued-message-removed": "removed with its queued message.",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 };
 
 /**
@@ -356,12 +337,8 @@ export function Composer({
   voiceCall,
   modelPicker,
   agents = [],
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-  crews = [],
-  commands = PLACEHOLDER_COMMANDS,
-=======
+  crews = NO_CREWS,
   commands = NO_COMMANDS,
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   onSubmit,
   onQueue,
   onStop,
@@ -1413,15 +1390,9 @@ export function Composer({
       title={
         callAction.supported
           ? callAction.active
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
             ? "显示语音通话"
             : "和这位员工通话"
-          : "语音通话需要 HTTPS 或 localhost，以及麦克风支持"
-=======
-            ? "Show voice call"
-            : "Call this Bot"
-          : "Voice calls need a microphone and a secure (HTTPS) connection"
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+          : "语音通话需要麦克风和安全的（HTTPS）连接"
       }
       className={actionClassName}
       disabled={disabled || dictation.busy || !callAction.supported}
@@ -1568,38 +1539,7 @@ export function Composer({
              * and the model on the left, the microphone and send on the right, so the controls
              * keep their place however long the message grows.
              */}
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-            <div className="flex items-center gap-3">
-              {attachmentsEnabled ? (
-                <Button
-                  aria-label="添加附件"
-                  className="self-end"
-                  // The button stays, and stays labelled: a conversation that cannot take another
-                  // message has not lost the ability to attach, it has lost the message. Swapping it
-                  // for the "unavailable" placeholder would say the wrong thing about why.
-                  disabled={disabled}
-                  onClick={() => fileInputRef.current?.click()}
-                  size="icon"
-                  type="button"
-                  variant="ghost"
-                >
-                  <IconPlus className="size-5" />
-                </Button>
-              ) : (
-                <Button
-                  aria-label="暂无更多消息选项"
-                  className="self-end disabled:opacity-100"
-                  disabled
-                  size="icon"
-                  type="button"
-                  variant="ghost"
-                >
-                  <IconPlus className="size-5" />
-                </Button>
-              )}
-=======
             <div className="min-w-0" data-slot="composer-input">
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
               <PromptArea
                 aria-label="消息"
                 className={cn(
@@ -1622,7 +1562,7 @@ export function Composer({
               <div className="flex min-w-0 items-center gap-1">
                 {attachmentsEnabled ? (
                   <Button
-                    aria-label="Attach a file"
+                    aria-label="添加附件"
                     data-slot="composer-attach"
                     // The button stays, and stays labelled: a conversation that cannot take another
                     // message has not lost the ability to attach, it has lost the message.
@@ -1636,7 +1576,7 @@ export function Composer({
                   </Button>
                 ) : (
                   <Button
-                    aria-label="More message options unavailable"
+                    aria-label="暂无更多消息选项"
                     className="disabled:opacity-100"
                     disabled
                     size="icon"
@@ -1691,28 +1631,9 @@ export function Composer({
               images={images}
               onRemove={discardAttachment}
             />
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-            <PromptArea
-              aria-label="消息"
-              autoGrow
-              className={cn(
-                "w-full border-0 bg-transparent p-0 text-sm shadow-none",
-                editorClassName,
-              )}
-              disabled={disabled}
-              maxHeight={MAX_HEIGHT_PX}
-              onChange={handleChange}
-              onImagePaste={canAttach ? stagePastedImage : undefined}
-              onSubmit={submitDraft}
-              placeholder="有什么需要，尽管说"
-              ref={promptAreaRef}
-              triggers={triggers}
-              value={value}
-            />
-=======
             <div data-slot="composer-input">
               <PromptArea
-                aria-label="Message"
+                aria-label="消息"
                 autoGrow
                 className={cn(
                   "w-full border-0 bg-transparent p-0 text-sm shadow-none",
@@ -1723,13 +1644,12 @@ export function Composer({
                 onChange={handleChange}
                 onImagePaste={canAttach ? stagePastedImage : undefined}
                 onSubmit={submitDraft}
-                placeholder="Ask anything"
+                placeholder="有什么需要，尽管说"
                 ref={promptAreaRef}
                 triggers={triggers}
                 value={value}
               />
             </div>
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
           </div>
 
           <div className="flex items-center justify-between">

@@ -1,4 +1,3 @@
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useParams } from "@tanstack/react-router";
 import { useState } from "react";
@@ -29,18 +28,25 @@ import {
   listedRefs,
   pluginsPageQueryOptions,
 } from "@/lib/plugins/queries";
-=======
-import { createFileRoute } from "@tanstack/react-router";
-import { PluginToolPage } from "@/components/manage/plugin-tool-page";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 
-/** `$key_` opts this route out of nesting under `$key.tsx`, so the connector page stays a page. */
+/**
+ * One tool, and which Bots hold it.
+ *
+ * Its own screen because a grant is a per-Bot decision and there is no upper bound on Bots. The
+ * connector page used to draw a chip for every Bot inside every tool row: at three Bots and eight
+ * tools that is twenty-four controls stacked in a list, wrapping onto second and third lines, where
+ * the thing being decided — does THIS Bot get THIS tool — was the least legible part of it. Here each
+ * Bot is one row with one switch, which is the same decision with nothing competing for it.
+ *
+ * `$key_` opts this route out of nesting under `$key.tsx`, so the connector page stays a page rather
+ * than becoming a layout with an outlet.
+ */
+// M4: 待接入 上游 manage/plugin-tool-page.tsx（版式更新）
 export const Route = createFileRoute(
   "/_authed/admin/plugins/$key_/tools/$tool",
 )({ component: RouteComponent });
 
 function RouteComponent() {
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   const { key, tool: toolName } = useParams({
     from: "/_authed/admin/plugins/$key_/tools/$tool",
   });
@@ -292,8 +298,4 @@ function RouteComponent() {
       </PageSection>
     </PageShell>
   );
-=======
-  const { key, tool } = Route.useParams();
-  return <PluginToolPage pluginKey={key} toolName={tool} />;
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 }

@@ -1,126 +1,4 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { cleanup, render } from "@testing-library/react";
-import { GALLERY as CHARTS } from "@/components/gallery/charts";
-import { GALLERY as DECISIONS } from "@/components/gallery/decisions";
-import {
-  UNREADABLE as FAILED_UNREADABLE,
-  WENT_WRONG as FAILED_WENT_WRONG,
-  FailedCard,
-} from "@/components/gallery/failed";
-import { GALLERY as TABLES } from "@/components/gallery/table";
-import { galleryCallFailure } from "@/lib/copilot/gallery-tools";
-
-/*
- * gallery 调用结束了却没有可画的内容（上游 #1132）：Claude Code 因为参数不是合法 JSON 拒绝了调用，
- * 结果就是那条错误，卡片却一直「正在等待完整的表格数据…」，重新打开对话也一样。
- * 结束了的失败调用改画成「没能显示」加一句原因。
- */
-
-beforeAll(() => GlobalRegistrator.register());
-afterEach(() => cleanup());
-afterAll(() => GlobalRegistrator.unregister());
-
-function spec(name: string) {
-  // `import.meta.glob` is Vite's, so under bun the registry is empty; the modules are read directly.
-  const found = [...CHARTS, ...DECISIONS, ...TABLES].find(
-    (component) => component.name === name,
-  );
-  if (!found) throw new Error(`${name} is not in the gallery`);
-  return found;
-}
-
-const REFUSED_ARGS =
-  "<tool_use_error>InputValidationError: columns is not an array</tool_use_error>";
-
-test("a finished table call that failed on arguments it can't read says so", () => {
-  expect(
-    galleryCallFailure(spec("showTable"), {
-      status: "complete",
-      args: { title: "团队产能", columns: "名字, 人数" },
-      result: REFUSED_ARGS,
-    }),
-  ).toBe(FAILED_UNREADABLE);
-});
-
-test("a finished call that failed with arguments that were fine went wrong", () => {
-  expect(
-    galleryCallFailure(spec("showTable"), {
-      status: "complete",
-      args: spec("showTable").preview,
-      result: "Error: the handler threw",
-    }),
-  ).toBe(FAILED_WENT_WRONG);
-});
-
-test("the harness's flagged failure counts, as Claude Code wraps it", () => {
-  expect(
-    galleryCallFailure(spec("showBarChart"), {
-      status: "complete",
-      args: {},
-      result: JSON.stringify({ error: true, content: "InputValidationError" }),
-    }),
-  ).toBe(FAILED_UNREADABLE);
-});
-
-test("a call still streaming or running is left to draw itself", () => {
-  for (const status of ["inProgress", "executing"]) {
-    expect(
-      galleryCallFailure(spec("showTable"), {
-        status,
-        args: {},
-        result: REFUSED_ARGS,
-      }),
-    ).toBeUndefined();
-  }
-});
-
-test("a confirmation or a refusal is not a failure", () => {
-  expect(
-    galleryCallFailure(spec("showTable"), {
-      status: "complete",
-      args: {},
-      result: "It is now on screen for the person.",
-    }),
-  ).toBeUndefined();
-  expect(
-    galleryCallFailure(spec("showTable"), {
-      status: "complete",
-      args: {},
-      result: "Not shown: Data table. Not granted.",
-    }),
-  ).toBeUndefined();
-});
-
-test("a decision stopped while it waited keeps its question; only unreadable arguments fail it", () => {
-  const ask = spec("askApproval");
-  expect(
-    galleryCallFailure(ask, {
-      status: "complete",
-      args: { title: 42 },
-      result: REFUSED_ARGS,
-    }),
-  ).toBe(FAILED_UNREADABLE);
-  const fine = (ask.preview as { args: Record<string, unknown> }).args;
-  expect(
-    galleryCallFailure(ask, {
-      status: "complete",
-      args: fine,
-      result: "Error: the run was stopped",
-    }),
-  ).toBeUndefined();
-});
-
-test("the failed card names the component and the reason", () => {
-  const view = render(
-    <FailedCard reason={FAILED_UNREADABLE} title="Data table" />,
-  );
-  const text = view.container.textContent ?? "";
-  expect(text).toContain("没能显示：Data table");
-  expect(text).toContain(FAILED_UNREADABLE);
-  expect(view.getByTestId("component-failed")).not.toBeNull();
-=======
 import type { Message } from "@ag-ui/core";
 import { CopilotKitProvider, useFrontendTool } from "@copilotkit/react-core/v2";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
@@ -134,9 +12,15 @@ import { GALLERY as CHARTS } from "@/components/gallery/charts";
 import { GALLERY as DECISIONS } from "@/components/gallery/decisions";
 import { GALLERY as FORMS } from "@/components/gallery/form";
 import { GALLERY as QUOTES } from "@/components/gallery/quote";
+import {
+  UNREADABLE as FAILED_UNREADABLE,
+  WENT_WRONG as FAILED_WENT_WRONG,
+  FailedCard,
+} from "@/components/gallery/failed";
 import { GALLERY as TABLES } from "@/components/gallery/table";
 import type { GalleryComponent } from "@/lib/copilot/gallery-registry";
 import {
+  galleryCallFailure,
   makeDecisionRender,
   makeGalleryRender,
 } from "@/lib/copilot/gallery-tools";
@@ -191,8 +75,7 @@ const CLAUDE_CODE_REFUSED = JSON.stringify({
 /** CopilotKit's own answer to a call whose arguments it couldn't parse (`executeToolHandler`). */
 const BROWSER_REFUSED = `Error: Unexpected token ',', ..."s":"Event","When","... is not valid JSON`;
 
-const UNREADABLE =
-  "The Bot sent data OpenBot couldn't read. Ask it to try again.";
+const UNREADABLE = FAILED_UNREADABLE;
 
 const SHOWN: GalleryComponent[] = [
   ...TABLES,
@@ -288,7 +171,7 @@ function draw(messages: Message[], busy = false) {
   );
 }
 
-const failure = (title: string) => `Couldn't show the ${title.toLowerCase()}.`;
+const failure = (title: string) => `没能显示：${title}`;
 
 for (const component of ALL) {
   for (const [moment, busy] of [
@@ -303,8 +186,8 @@ for (const component of ALL) {
 
       expect(await view.findByText(failure(component.title))).toBeTruthy();
       expect(view.getByText(UNREADABLE)).toBeTruthy();
-      expect(view.queryByText(/Waiting for complete table data/)).toBeNull();
-      expect(view.queryByText(/Choosing a report/)).toBeNull();
+      expect(view.queryByText(/正在等待完整的表格数据/)).toBeNull();
+      expect(view.queryByText(/正在选择报告/)).toBeNull();
     });
   }
 
@@ -321,8 +204,8 @@ for (const component of ALL) {
  * and a failure once its arguments are final, whatever the result says.
  */
 for (const [name, waiting] of [
-  ["showTable", /Waiting for complete table data/],
-  ["showActivityReport", /Choosing a report/],
+  ["showTable", /正在等待完整的表格数据/],
+  ["showActivityReport", /正在选择报告/],
 ] as const) {
   const { title } = spec(name);
 
@@ -354,9 +237,7 @@ test("a table whose call failed after it was sent whole says it went wrong", asy
 
   expect(await view.findByText(failure("Data table"))).toBeTruthy();
   expect(
-    view.getByText(
-      "Something went wrong while showing it. Ask the Bot to try again.",
-    ),
+    view.getByText(FAILED_WENT_WRONG),
   ).toBeTruthy();
   // The table the Bot was told failed is not drawn as if it worked.
   expect(view.queryByRole("table")).toBeNull();
@@ -390,5 +271,103 @@ test("a failure has the card's frame, not a refusal's", async () => {
   expect(lead.closest('[data-slot="gallery-frame"]')?.tagName).toBe("FIGURE");
   expect(lead.closest('[role="status"]')).toBeTruthy();
   expect(view.queryByTestId("component-refused")).toBeNull();
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+});
+
+/*
+ * 以下是 fork 原有的单元用例：直接测 galleryCallFailure 与 FailedCard。
+ *
+ * gallery 调用结束了却没有可画的内容（上游 #1132）：Claude Code 因为参数不是合法 JSON 拒绝了调用，
+ * 结果就是那条错误，卡片却一直「正在等待完整的表格数据…」，重新打开对话也一样。
+ * 结束了的失败调用改画成「没能显示」加一句原因。
+ */
+
+const REFUSED_ARGS =
+  "<tool_use_error>InputValidationError: columns is not an array</tool_use_error>";
+
+test("a finished table call that failed on arguments it can't read says so", () => {
+  expect(
+    galleryCallFailure(spec("showTable"), {
+      status: "complete",
+      args: { title: "团队产能", columns: "名字, 人数" },
+      result: REFUSED_ARGS,
+    }),
+  ).toBe(FAILED_UNREADABLE);
+});
+
+test("a finished call that failed with arguments that were fine went wrong", () => {
+  expect(
+    galleryCallFailure(spec("showTable"), {
+      status: "complete",
+      args: spec("showTable").preview,
+      result: "Error: the handler threw",
+    }),
+  ).toBe(FAILED_WENT_WRONG);
+});
+
+test("the harness's flagged failure counts, as Claude Code wraps it", () => {
+  expect(
+    galleryCallFailure(spec("showBarChart"), {
+      status: "complete",
+      args: {},
+      result: JSON.stringify({ error: true, content: "InputValidationError" }),
+    }),
+  ).toBe(FAILED_UNREADABLE);
+});
+
+test("a call still streaming or running is left to draw itself", () => {
+  for (const status of ["inProgress", "executing"]) {
+    expect(
+      galleryCallFailure(spec("showTable"), {
+        status,
+        args: {},
+        result: REFUSED_ARGS,
+      }),
+    ).toBeUndefined();
+  }
+});
+
+test("a confirmation or a refusal is not a failure", () => {
+  expect(
+    galleryCallFailure(spec("showTable"), {
+      status: "complete",
+      args: {},
+      result: "It is now on screen for the person.",
+    }),
+  ).toBeUndefined();
+  expect(
+    galleryCallFailure(spec("showTable"), {
+      status: "complete",
+      args: {},
+      result: "Not shown: Data table. Not granted.",
+    }),
+  ).toBeUndefined();
+});
+
+test("a decision stopped while it waited keeps its question; only unreadable arguments fail it", () => {
+  const ask = spec("askApproval");
+  expect(
+    galleryCallFailure(ask, {
+      status: "complete",
+      args: { title: 42 },
+      result: REFUSED_ARGS,
+    }),
+  ).toBe(FAILED_UNREADABLE);
+  const fine = (ask.preview as { args: Record<string, unknown> }).args;
+  expect(
+    galleryCallFailure(ask, {
+      status: "complete",
+      args: fine,
+      result: "Error: the run was stopped",
+    }),
+  ).toBeUndefined();
+});
+
+test("the failed card names the component and the reason", () => {
+  const view = render(
+    <FailedCard reason={FAILED_UNREADABLE} title="Data table" />,
+  );
+  const text = view.container.textContent ?? "";
+  expect(text).toContain("没能显示：Data table");
+  expect(text).toContain(FAILED_UNREADABLE);
+  expect(view.getByTestId("component-failed")).not.toBeNull();
 });

@@ -69,11 +69,7 @@ import { queryClient } from "@/query-client";
  */
 /** The same way back from every state this route can be in. */
 const BACK = {
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   label: "界面组件",
-=======
-  label: "UI components",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   linkProps: { to: "/admin/components" },
 } as const;
 
@@ -112,11 +108,7 @@ function RouteComponent() {
     return (
       <PageShell backButton={BACK} title="界面组件">
         <p className="mt-8 text-destructive text-sm" role="alert">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           读不到组件。
-=======
-          Couldn't load components. Reload the page.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         </p>
       </PageShell>
     );
@@ -130,23 +122,14 @@ function RouteComponent() {
     return (
       <PageShell
         backButton={BACK}
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         description="这里没有叫这个名字的组件。"
         title="没有这个组件"
-=======
-        description="There is no component with that name."
-        title="No such component"
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       >
         <Empty className="mt-12 min-h-[30dvh] border border-dashed">
           <EmptyHeader>
             <EmptyTitle>{name}</EmptyTitle>
             <EmptyDescription className="text-pretty">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
               它可能被改了名，或者这个部署已不再自带它。
-=======
-              It may have been renamed, or this deployment no longer ships it.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
             </EmptyDescription>
           </EmptyHeader>
           <Button
@@ -291,11 +274,7 @@ function ComponentDetail({
 
   const grantSummary =
     bots.length === 0
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       ? "还没有员工"
-=======
-      ? "No Bots yet"
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       : granted.length === bots.length
         ? `全部 ${bots.length} 位员工`
         : granted.length === 0
@@ -304,26 +283,16 @@ function ComponentDetail({
 
   const functionSummary =
     dataFunctions.length === 0
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       ? "这个部署没有授予任何数据函数"
       : held.length === 0
         ? "无——它只画模型交给它的内容"
-=======
-      ? "This deployment has no data functions"
-      : held.length === 0
-        ? "Nothing. It shows only what the Bot passes it."
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         : held.map((fn) => fn.name).join(", ");
 
   return (
     <PageShell
       backButton={BACK}
       description={
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         component.publishedDescription ?? "还没有发布，所以没有员工知道它。"
-=======
-        component.publishedDescription ?? "Not published. No Bot can see it."
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       }
       title={componentDisplayTitle(component)}
     >
@@ -341,13 +310,8 @@ function ComponentDetail({
       </div>
 
       <PageSection
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         description="这个组件是做什么的，以及哪些员工可以用它来回答。"
         title="配置"
-=======
-        description="Describe this component and choose which Bots can display it."
-        title="Configuration"
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       >
         <PageRows>
           {/*
@@ -363,11 +327,7 @@ function ComponentDetail({
                 <ItemContent>
                   <ItemTitle>本版本不包含</ItemTitle>
                   <ItemDescription>
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
                     无论其他怎么设置，这里都画不出它。
-=======
-                    OpenBot can't draw it. The settings below have no effect.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
                   </ItemDescription>
                 </ItemContent>
               </Item>
@@ -383,17 +343,10 @@ function ComponentDetail({
               <ItemTitle>已发布</ItemTitle>
               <ItemDescription>
                 {component.published
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
                   ? "员工可以用它来回答。"
                   : "没有员工能用它。"}
                 {component.hasUnpublishedChanges
                   ? " 描述有尚未发布的改动。"
-=======
-                  ? "Bots can answer with it."
-                  : "No Bot can use it."}
-                {component.hasUnpublishedChanges
-                  ? " The description has unpublished changes."
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
                   : null}
               </ItemDescription>
             </ItemContent>
@@ -431,11 +384,7 @@ function ComponentDetail({
 
           <SheetRow
             icon={<IconDatabase />}
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
             label="可读取的数据"
-=======
-            label="Can read"
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
             onOpen={() => setSheet("functions")}
             summary={functionSummary}
             testId={`functions-${component.name}`}
@@ -480,12 +429,7 @@ function ComponentDetail({
           <DialogHeader>
             <DialogTitle>描述</DialogTitle>
             <DialogDescription>
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
               模型决定是否调用它时读的内容。组件发布之前，改这里不会有任何效果。
-=======
-              What the model reads when it decides to use this. It has no effect
-              until the component is published.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
             </DialogDescription>
           </DialogHeader>
           <DialogBody className="mt-4">
@@ -529,21 +473,12 @@ function ComponentDetail({
           <DialogHeader>
             <DialogTitle>可用的员工</DialogTitle>
             <DialogDescription>
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
               对某位员工关掉后，它永远不会知道这个组件存在，所以不会去要，也不会因为没有而道歉。每次改动立即生效。
-=======
-              Turn a Bot off and it never learns this component exists. Changes
-              apply right away.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
             </DialogDescription>
           </DialogHeader>
           <DialogBody className="mt-4">
             {bots.length === 0 ? (
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
               <p className="text-muted-foreground text-sm">还没有员工。</p>
-=======
-              <p className="text-muted-foreground text-sm">No Bots yet.</p>
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
             ) : (
               <div className="flex flex-col">
                 {bots.map((bot, index) => {
@@ -584,28 +519,15 @@ function ComponentDetail({
       >
         <DialogContent>
           <DialogHeader>
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
             <DialogTitle>可读取的数据</DialogTitle>
             <DialogDescription>
               这是和“可用的员工”分开的授权，前者不包含后者：那个决定谁能画出它，这个决定它为了画出自己能去取哪些数据。这里一项都没打开时，它只显示员工交给它的内容；它的每次读取都会在审计里留一行。每次改动立即生效。
-=======
-            <DialogTitle>Can read</DialogTitle>
-            <DialogDescription>
-              The data this component can fetch to draw itself. This is separate
-              from Available to. With all of these off, it shows only what the
-              Bot passes it. Every read shows in Audit. Changes apply right
-              away.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
             </DialogDescription>
           </DialogHeader>
           <DialogBody className="mt-4">
             {dataFunctions.length === 0 ? (
               <p className="text-muted-foreground text-sm">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
                 这个部署没有授予任何数据函数。
-=======
-                This deployment has no data functions.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
               </p>
             ) : (
               <div className="flex flex-col">

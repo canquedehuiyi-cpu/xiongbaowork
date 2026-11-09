@@ -1,4 +1,3 @@
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 import {
   IconBrandGoogleDrive,
   IconBrandNotion,
@@ -31,17 +30,25 @@ import {
   pluginsPageQueryOptions,
 } from "@/lib/plugins/queries";
 import { useZh } from "@/lib/translations/queries";
-=======
-import { createFileRoute } from "@tanstack/react-router";
-import { McpAllowlistSection } from "@/components/admin/controls/mcp-allowlist-section";
-import { PluginsListPage } from "@/components/manage/plugins-list-page";
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 
+/**
+ * What this deployment can reach, as one list per state.
+ *
+ * This screen used to be three tabs: a catalogue of what could be added, a second tab for what had
+ * been, and skills. Answering one question about one vendor — is Drive available, and what can it
+ * do — meant visiting two of them, and the third was a different kind of thing altogether. Two
+ * lists say the same thing in one read: what is connected, and what else there is.
+ *
+ * Every row goes to that vendor's own page, because what a connector needs configured is not the
+ * same from one vendor to the next. A token, an OAuth client, an instance hostname, and a grant per
+ * tool per Bot do not fit on a row, and the previous screen's attempt to fit them made a page that
+ * scrolled sideways.
+ */
+// M4: 待接入 上游 manage/plugins-list-page.tsx（版式更新、员工模型相关提示）
 export const Route = createFileRoute("/_authed/admin/plugins/")({
-  component: AdminPluginsPage,
+  component: RouteComponent,
 });
 
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
 /**
  * A vendor's own mark where there is one, and a plug where there is not.
  *
@@ -282,13 +289,5 @@ function RouteComponent() {
         </>
       )}
     </PageShell>
-=======
-/** The apps and servers, then the allowlist of MCP servers Bots may call. */
-function AdminPluginsPage() {
-  return (
-    <PluginsListPage>
-      <McpAllowlistSection />
-    </PluginsListPage>
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   );
 }

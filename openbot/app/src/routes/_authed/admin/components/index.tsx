@@ -27,13 +27,8 @@ function RouteComponent() {
 
   return (
     <PageShell
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       description="每位员工可以用什么来回答。每个已发布的组件所有员工都能用；在这里对某位员工关掉，它就永远不会知道这个组件。每次改动和每次拒绝都会在审计里留一行。"
       title="界面组件"
-=======
-      description="Choose which components each Bot can display. Published components are available to all Bots by default. Changes and blocked requests appear in Audit."
-      title="UI components"
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
     >
       {/*
        * Pending, error, empty, rows — in that order. Pending draws nothing rather than a
@@ -42,22 +37,14 @@ function RouteComponent() {
        */}
       {components.isPending ? null : components.error ? (
         <p className="mt-12 text-destructive text-sm" role="alert">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           读不到组件。
-=======
-          Couldn't load components. Reload the page.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         </p>
       ) : components.data?.length === 0 ? (
         <Empty className="mt-12 min-h-[30dvh] border border-dashed">
           <EmptyHeader>
             <EmptyTitle>还没有组件</EmptyTitle>
             <EmptyDescription className="text-pretty">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
               你的员工能用的组件会显示在这里。
-=======
-              Components your Bots can use will show here.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
             </EmptyDescription>
           </EmptyHeader>
         </Empty>

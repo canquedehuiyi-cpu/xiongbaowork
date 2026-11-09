@@ -92,12 +92,6 @@ export function toDraft(
   const lastCoworker = coworkerChips.at(-1);
 
   return {
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-    text: segmentsToPlainText(segments).trim(),
-    agentId: lastCoworker ? chipAgentId(lastCoworker.value) : null,
-    crewTemplateId:
-      crewChips.at(-1)?.value.slice(CREW_CHIP_PREFIX.length) ?? null,
-=======
     text: segmentsToPlainText(
       segments.map((segment) =>
         segment.type === "chip" && segment.trigger === COMMAND_TRIGGER
@@ -105,8 +99,9 @@ export function toDraft(
           : segment,
       ),
     ).trim(),
-    agentId: agentChips.at(-1)?.value ?? null,
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+    agentId: lastCoworker ? chipAgentId(lastCoworker.value) : null,
+    crewTemplateId:
+      crewChips.at(-1)?.value.slice(CREW_CHIP_PREFIX.length) ?? null,
     commandIds: commandChips.map((chip) => chip.value),
     isEmpty: isSegmentsEmpty(segments),
     attachments,

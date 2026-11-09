@@ -120,14 +120,7 @@ function StandingInstructionsEditor() {
   };
 
   return (
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-    <PageSection
-      description="对所有频道里的所有员工都生效。员工的角色说明写它做什么；这里写你希望事情怎么做，比如写作风格，或者怎么介绍你的公司。"
-      title="长期指令"
-    >
-=======
     <>
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
       {stored.isPending ? null : stored.error ? (
         <p className="text-destructive text-sm" role="alert">
           {stored.error.message}

@@ -60,13 +60,8 @@ test("a complete draft shows the whole instruction before anything is written", 
   ).toBeTruthy();
   expect(getByText("/weekly-summary")).toBeTruthy();
   expect(getByText("google-drive/search_files")).toBeTruthy();
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
   expect(getByText("你按下按钮之前，什么都不会保存。")).toBeTruthy();
   expect(getByRole("button", { name: "创建" })).toBeTruthy();
-=======
-  expect(getByText("Nothing is saved until you say so.")).toBeTruthy();
-  expect(getByRole("button", { name: "Create it" })).toBeTruthy();
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
 });
 
 test("pressing create saves the checked fields, then resumes the run", async () => {

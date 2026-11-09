@@ -2,11 +2,7 @@ import {
   IconArrowLeft,
   IconBrain,
   IconBuildingBank,
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-=======
   IconBulb,
-  IconChecks,
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   IconCode,
   IconDeviceDesktop,
   IconKey,
@@ -32,7 +28,6 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
-import { managePaths } from "@/lib/manage-paths";
 
 const appLinkOptions = { to: "/" } satisfies LinkOptions;
 const adminLinkOptions = { to: "/admin" } satisfies LinkOptions;
@@ -81,41 +76,27 @@ const GROUPS: {
         linkOptions: { to: "/admin/plugins" },
       },
       {
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-        title: "技能",
-        icon: IconFileText,
-        linkOptions: { to: "/admin/skills" },
-      },
-      {
-        title: "自动学习",
-        icon: IconFileText,
-        linkOptions: { to: "/admin/learning" },
-      },
-      {
-        title: "界面组件",
-=======
-        title: "Providers",
+        title: "模型提供方",
         icon: IconBrain,
         linkOptions: { to: "/admin/providers" },
       },
       {
-        title: "Skills",
+        title: "技能",
         icon: IconSlash,
         linkOptions: { to: "/admin/skills" },
       },
       {
-        title: "Automatic learning",
+        title: "自动学习",
         icon: IconBulb,
         linkOptions: { to: "/admin/learning" },
       },
       {
-        title: "Check-ins",
+        title: "主动巡检",
         icon: IconRadar,
         linkOptions: { to: "/admin/proactive" },
       },
       {
-        title: "UI components",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+        title: "界面组件",
         icon: IconLayoutGrid,
         linkOptions: { to: "/admin/components" },
       },
@@ -135,16 +116,12 @@ const GROUPS: {
         linkOptions: { to: "/admin/people" },
       },
       {
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-        title: "身份提供方",
-=======
-        title: "Permissions",
+        title: "权限",
         icon: IconLockAccess,
         linkOptions: { to: "/admin/permissions" },
       },
       {
-        title: "Identity providers",
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+        title: "身份提供方",
         icon: IconBuildingBank,
         linkOptions: { to: "/admin/identity-providers" },
       },
@@ -154,11 +131,7 @@ const GROUPS: {
     label: "发生过什么",
     items: [
       {
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
         title: "审计",
-=======
-        title: managePaths("team").auditLabel,
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         icon: IconListDetails,
         linkOptions: { to: "/admin/audit" },
       },

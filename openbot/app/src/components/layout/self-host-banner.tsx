@@ -53,11 +53,7 @@ export function SelfHostBanner() {
           rel="noopener noreferrer"
           target="_blank"
         >
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           联系工程师
-=======
-          Book a call
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         </a>
         <Button
           aria-label="关闭"
