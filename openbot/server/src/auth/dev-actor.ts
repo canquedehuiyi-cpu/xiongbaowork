@@ -56,8 +56,8 @@ export async function initializeDevActorUser(
       .onConflictDoUpdate({
         target: users.id,
         set: {
+          // Not `name`: a name the person changed in their profile survives the next start.
           email: DEV_ACTOR.email,
-          name,
           updatedAt: new Date(),
         },
       }),
