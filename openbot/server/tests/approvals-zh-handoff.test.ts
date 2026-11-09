@@ -317,3 +317,100 @@ describe("只读或无害的按钮和字段不受影响", () => {
     ).toBeUndefined();
   });
 });
+
+describe("#403 评审：更多中文付款写法交给本人", () => {
+  test.each([
+    "确认订单并支付",
+    "提交订单并支付",
+    "提交订单并付款",
+    "确认订单并支付 ¥58.00",
+    "下单并支付",
+    "使用余额支付",
+    "用零钱支付",
+    "微信支付",
+    "支付宝支付",
+    "银行卡支付",
+    "花呗支付",
+    "云闪付支付",
+    "微信支付 ¥12",
+    "付款码",
+    "出示付款码",
+    "打开付款码",
+  ])("点「%s」交给本人（payments）", async (name) => {
+    expect(await handedOff(clickOn(name))).toEqual({
+      behaviour: "hand_off",
+      source: "safety",
+      id: "payments",
+    });
+  });
+
+  test("在「确认订单并支付」「微信支付」上按 Enter 或空格也交给本人", async () => {
+    for (const [name, key] of [
+      ["确认订单并支付", "Enter"],
+      ["确认订单并支付", "\r"],
+      ["微信支付", " "],
+    ] as const)
+      expect({ name, key, ...(await handedOff(pressOn(name, key))) }).toEqual({
+        name,
+        key,
+        behaviour: "hand_off",
+        source: "safety",
+        id: "payments",
+      });
+  });
+
+  test.each([
+    "付款码",
+    "持卡人姓名",
+    "有效期",
+    "卡片有效期",
+    "PIN码",
+    "PIN",
+    "银行账号",
+    "收款账户",
+    "收款账号",
+    "支付宝账号",
+  ])("往「%s」里填写交给本人（payments）", async (label) => {
+    expect(await handedOff(typeInto(label))).toEqual({
+      behaviour: "hand_off",
+      source: "safety",
+      id: "payments",
+    });
+  });
+
+  test.each(["设置新密码", "保存新密码", "确认新密码", "保存密码"])(
+    "点改密码页的提交按钮「%s」交给本人（credentials）",
+    async (name) => {
+      expect(await handedOff(clickOn(name))).toEqual({
+        behaviour: "hand_off",
+        source: "safety",
+        id: "credentials",
+      });
+    },
+  );
+
+  test.each([
+    "支付记录",
+    "支付方式",
+    "支付方式说明",
+    "查看支付详情",
+    "收款码",
+    "查看收款码",
+    "选择支付方式",
+    "微信支付说明",
+    "支付宝支付记录",
+    "订单详情",
+    "购买记录",
+  ])("点「%s」照常放行", async (name) => {
+    expect(await decide(clickOn(name))).toMatchObject({ behaviour: "allow" });
+  });
+
+  test.each(["用户名", "账号", "登录账号", "邮箱账号", "搜索订单"])(
+    "往「%s」里填写照常放行",
+    async (label) => {
+      expect(await decide(typeInto(label))).toMatchObject({
+        behaviour: "allow",
+      });
+    },
+  );
+});

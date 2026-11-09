@@ -209,7 +209,7 @@ const SAFETY_REQUIREMENTS: readonly {
      */
     fieldZh: /密码|口令|验证码|校验码|动态码|短信码|身份证|证件号/,
     clickZh: new RegExp(
-      `^${CN_CONFIRMING}(?:修改|更改|重置|重设|设置|找回|忘记|更换)(?:登录|支付|交易|账号|账户|帐号|帐户)?密码[?？]?${CN_END}` +
+      `^${CN_CONFIRMING}(?:修改|更改|重置|重设|设置|找回|忘记|更换|保存|确认)(?:新的?)?(?:登录|支付|交易|账号|账户|帐号|帐户)?(?:新的?)?密码[?？]?${CN_END}` +
         `|^(?:免费)?(?:获取|发送|重新获取|重新发送|重发)(?:短信)?(?:验证码|动态码|校验码)${CN_END}` +
         `|^${CN_CONFIRMING}(?:开启|关闭|设置|绑定|解绑)?(?:两步验证|二次验证|双重验证|双重认证|两步认证)${CN_END}`,
     ),
@@ -245,13 +245,23 @@ const SAFETY_REQUIREMENTS: readonly {
       `^${CONFIRMING}(transfer|withdraw|pay|buy|send money)\\b|^${CONFIRMING}(send|pay|transfer|donate|tip)\\b.*[$€£¥₹]\\s?\\d|\\b(place (your )?order|(complete|confirm|submit) (your )?(purchase|order)|order now|buy now|buy it now)\\b|^${CONFIRMING}(upgrade|downgrade|(change|switch) (your |my |the )?plan|start (my |your )?(subscription|membership))\\b`,
     ),
     // 同一批按钮的中文写法：支付、付款、立即购买、提交订单、去结算、转账、开通会员……
-    // 「提交订单」「确认并支付」后面可以带金额；绑定银行卡也是动钱的入口（阶段 2f）。
+    /*
+     * 「提交订单」「确认并支付」后面可以带金额；绑定银行卡也是动钱的入口（阶段 2f）。#403 评审补上：
+     * 「…并支付」（确认订单并支付、提交订单并付款）；按支付方式命名的按钮（微信支付、使用余额支付），
+     * 免密支付时点下去钱就转出去了；付款码是付款人给商家扣款用的。都从开头锚定到结尾，「支付记录」
+     * 「支付方式说明」「查看支付详情」「收款码」不算。
+     */
     clickZh: new RegExp(
       `^${CN_CONFIRMING}(?:立即|马上|去)?(?:支付|付款|购买|下单|结算|充值|转账|汇款|提现|打赏)${CN_AMOUNT}${CN_END}|^(?:提交|确认)订单${CN_AMOUNT}${CN_END}|^(?:立即|马上)?(?:开通|升级|续费)(?:会员|套餐|vip|高级版|专业版)?${CN_END}` +
         `|^(?:确认|同意)并(?:支付|付款|购买|下单)${CN_AMOUNT}${CN_END}` +
-        `|^${CN_CONFIRMING}(?:绑定|添加|新增)(?:新的?)?(?:银行卡|信用卡|储蓄卡)${CN_END}`,
+        `|^${CN_CONFIRMING}(?:绑定|添加|新增)(?:新的?)?(?:银行卡|信用卡|储蓄卡)${CN_END}` +
+        `|^\\S{0,8}并(?:支付|付款)${CN_AMOUNT}${CN_END}` +
+        `|^(?:使用|用)?(?:微信|支付宝|余额|零钱|银行卡|信用卡|储蓄卡|花呗|云闪付|qq钱包|apple ?pay)支付${CN_AMOUNT}${CN_END}` +
+        `|^(?:出示|查看|打开|展示)?付款码${CN_END}`,
     ),
-    fieldZh: /卡号|银行卡|信用卡|储蓄卡|cvv|cvc|安全码/,
+    // 卡和收付款账户的字段。只写「账号」会把用户名字段也交给本人，所以账号要带上银行、收款、支付宝。
+    fieldZh:
+      /卡号|银行卡|信用卡|储蓄卡|cvv|cvc|安全码|付款码|持卡人|有效期|\bpin\b|银行账[号户]|收款账[号户]|支付宝账[号户]/,
     pageZh:
       /收银台|确认支付|确认付款|支付订单|订单支付|在线支付|绑定银行卡|添加银行卡/,
   },
