@@ -73,8 +73,11 @@ import {
 } from "./broker";
 import {
   type CatalogueEntry,
+  type CredentialPlacement,
   catalogueEntry,
   classifyTool,
+  credentialFormatRefusal,
+  credentialPlacement,
   customUrlRefusal,
   resolveServerUrl,
   serverCredentialKind,
@@ -1186,6 +1189,7 @@ export type PluginStoreOptions = {
       actorId?: string;
       botId?: string;
       outbound?: OutboundPolicy;
+      placement?: CredentialPlacement;
     },
     toolName: string,
     args: Record<string, unknown>,
@@ -1776,7 +1780,7 @@ export function createPluginStore(options: PluginStoreOptions) {
     entry: CatalogueEntry | null,
     actorId: string,
     access: ServerAccess,
-  ): Promise<{ token?: string }> {
+  ): Promise<{ token?: string; placement?: CredentialPlacement }> {
     /*
      * A brokered app, where the deployment holds one key and Composio keeps the accounts apart.
      *
@@ -1915,6 +1919,44 @@ export function createPluginStore(options: PluginStoreOptions) {
     }
 
     if (access.credential !== "person-oauth") {
+      /*
+       * A PLACED DEPLOYMENT CREDENTIAL, which is a bearer token in every respect but where it goes.
+       *
+       * CRITERION. A placed entry with no credential is refused here, in words an administrator can
+       * act on, and never dialled; one with a credential travels WITH its placement, so the only
+       * module that builds a request is the one that puts the key into it.
+       *
+       * REASON. The bearer branch below answers `undefined` for a server with no credential and
+       * dials anyway, which is right for a server that may or may not need one. A placed vendor
+       * always does — its key is the whole of how the deployment is billed and identified — and some
+       * answer an anonymous handshake (Amap and Tencent both did, on 2026-11-09), so a dial without
+       * one would look connected while running on nobody's quota. And a placed key handed to a
+       * transport that does not read the placement would go out as `Authorization: Bearer`, which
+       * is why any transport but MCP is refused rather than trusted to ignore it.
+       */
+      const placement = entry ? credentialPlacement(entry) : null;
+      if (placement && entry) {
+        if (access.transport !== "mcp") {
+          throw new PluginInvariantError(
+            `${row.id} places its credential on the request, and only the MCP transport reads a placement.`,
+          );
+        }
+        if (!row.credentialId) {
+          throw new PluginRefusedError(
+            `${entry.title}还没有录入「${placement.label}」，所以没有拨号。请管理员在「插件 › 凭据」中录入后再试。`,
+            null,
+          );
+        }
+        const { secret } = await serverSecretFor(
+          {
+            id: row.id,
+            tenantId: row.tenantId,
+            credentialId: row.credentialId,
+          },
+          `${entry.title}的「${placement.label}」已失效或被撤销。请管理员在「插件 › 凭据」中重新录入。`,
+        );
+        return { token: secret, placement };
+      }
       const token = row.credentialId
         ? (
             await serverSecretFor(
@@ -3083,6 +3125,26 @@ export function createPluginStore(options: PluginStoreOptions) {
        * here now rather than in the review that re-adds one.
        */
       const credentialId = input.credentialId?.trim() || undefined;
+      /*
+       * A PLACED CREDENTIAL IS NEVER ATTACHED BY ID, only stored through `replaceServerToken`.
+       *
+       * CRITERION. Adding a placed entry with a `credentialId` is refused before anything is
+       * written; its key reaches the vault only through the door that checks its shape first.
+       *
+       * REASON. An id names a credential that was sealed elsewhere — by the generic credentials
+       * route, which knows nothing of placements — so a DingTalk address on another host, or a key
+       * with a line in it, would be in the vault and pointed at before anything had looked at it,
+       * and refused only on the first dial, in `last_error`. Decrypting it here to check would be a
+       * second reader of a team secret on a path that never needed one. So the add takes no key at
+       * all, and `replaceServerToken` (which runs `credentialFormatRefusal` before it seals) is how
+       * the first key arrives as well as every later one — the same check, refused at the form.
+       */
+      const placement = credentialPlacement(resolved.entry);
+      if (credentialId && placement) {
+        throw new CustomServerRefusedError(
+          `${resolved.entry.title}的「${placement.label}」不能按凭据 ID 绑定。请先启用插件，再在「插件 › 凭据」里录入，录入时会先校验格式。`,
+        );
+      }
       if (credentialId) {
         await requireCredentialOfKind(
           resolved.entry.title,
@@ -3511,6 +3573,18 @@ export function createPluginStore(options: PluginStoreOptions) {
         throw new CustomServerRefusedError(
           `${input.serverId} is not reached with a deployment token.`,
         );
+      }
+      /*
+       * A placed credential is checked for its shape before it is sealed, so a DingTalk address on
+       * another host or a key with a line in it is refused at the form rather than stored and refused
+       * on every call after. The sentence is built from the reviewed placement only and never echoes
+       * what was typed. The dial asks the same question again (`placeCredential`), because a
+       * credential can reach the vault by the generic credentials route as well as this one.
+       */
+      const placement = entry ? credentialPlacement(entry) : null;
+      if (placement) {
+        const refusal = credentialFormatRefusal(placement, plaintext);
+        if (refusal !== null) throw new CustomServerRefusedError(refusal);
       }
       // Only the team's row or the frame's own, as for an OAuth client: see writeOAuthClient.
       if (row.tenantId !== TEAM_TENANT && row.tenantId !== currentTenant()) {
@@ -4452,13 +4526,15 @@ export function createPluginStore(options: PluginStoreOptions) {
          * their personal settings page to grant access, so that a token could be minted and handed to
          * a function that discards it. The gate outlived the reason for it.
          */
-        const token = transport.listNeedsCredential
-          ? (await connectionTokenFor(row, entry, actorId, access)).token
-          : undefined;
+        const { token, placement } = transport.listNeedsCredential
+          ? await connectionTokenFor(row, entry, actorId, access)
+          : {};
 
         listed = await transport.listTools({
           url: effectiveUrl(row, entry),
           token,
+          // Beside the token it places, so a placed key never reaches the vendor as a bearer header.
+          ...(placement ? { placement } : {}),
           ...tenantChosenOutbound(
             entry,
             access.transport,
@@ -8417,7 +8493,7 @@ export function createPluginStore(options: PluginStoreOptions) {
        * it did.
        */
       try {
-        const { token } = await connectionTokenFor(
+        const { token, placement } = await connectionTokenFor(
           row,
           entry,
           input.credentialActorId ?? input.actorId,
@@ -8429,6 +8505,7 @@ export function createPluginStore(options: PluginStoreOptions) {
           {
             url: effectiveUrl(row, entry),
             token,
+            ...(placement ? { placement } : {}),
             actorId: input.credentialActorId ?? input.actorId,
             botId: input.botId,
             ...tenantChosenOutbound(

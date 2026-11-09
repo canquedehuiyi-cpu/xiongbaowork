@@ -29,14 +29,74 @@
 // The one place browsing and this check agree on: the addresses that hold the deployment's own
 // cloud credentials. `target.ts` imports nothing itself, so asking it here adds no dependency.
 import { isNeverAllowedHostname } from "../computer/target";
+// The static half of the outbound guard. It reaches no database and no network, so the rule that
+// this module imports nothing that does still holds.
+import { checkOutboundUrl } from "../net/outbound-guard";
 // Type-only, so naming the transport here creates no import cycle with the registry that resolves it.
 import type { CuratedTransportKind } from "./transport";
+
+/**
+ * What every deployment credential that is NOT a bearer token carries: the words an administrator
+ * is asked for, in the language of the screen that asks.
+ *
+ * `credentialLabel` names the thing ("高德 Web 服务 Key"), `credentialHint` says where it comes
+ * from. Both are reviewed copy, never a value: nothing here can hold a key, and the catalogue test
+ * asserts no entry's copy looks like one.
+ */
+type CredentialCopy = {
+  credentialLabel: string;
+  credentialHint: string;
+  /**
+   * The shortest key this vendor issues, when that is shorter than the default floor of sixteen.
+   * Taken from the vendor's own published format and never below twelve (see `MIN_PLACED_FLOOR`):
+   * a short key is a weak one, and a scrub has to be able to recognise it in a message.
+   */
+  credentialMinLength?: number;
+};
 
 export type CatalogueAuth =
   /** Answers without any credential at all. */
   | { kind: "none" }
   /** One token, held by the deployment, used for everybody. */
   | { kind: "deployment-bearer" }
+  /*
+   * THE THREE PLACED KINDS. Each is a `deployment-bearer` in every way that matters to who may do
+   * what — one credential an administrator stores once, sealed in the vault exactly as a bearer
+   * token is (kind `mcp`, the server's own row), used for everybody, audited as the deployment — and
+   * differs only in WHERE the vendor wants it on the request. They are kinds rather than a flag on
+   * `deployment-bearer` so that every branch on `auth.kind` has to answer for them: a placement
+   * dropped on the way to the dial would otherwise send the key as `Authorization: Bearer` to the
+   * vendor and look, from every screen, like a working connector.
+   *
+   * WHAT THE PLACEMENT MAY NOT DO is the security property, and it is the same for all three: the
+   * credential is a VALUE put into one pinned slot. It can never choose the scheme, the host, the
+   * port or the path (save the one segment the address kind admits, under a pinned prefix), and the
+   * URL it produces goes through the outbound guard on every request. See {@link placeCredential}.
+   */
+  /**
+   * The key goes into one pinned query parameter (Amap's `key`, Baidu Maps' `ak`). Pinned
+   * non-secret parameters the vendor also wants sit beside it in `fixedParams`.
+   */
+  | ({
+      kind: "deployment-query";
+      param: string;
+      fixedParams?: Readonly<Record<string, string>>;
+    } & CredentialCopy)
+  /** The key goes into one pinned request header that is not `Authorization`. */
+  | ({ kind: "deployment-header"; header: string } & CredentialCopy)
+  /**
+   * The credential IS an address: the vendor issues every customer their own URL, with the key in
+   * its query (DingTalk's `/server/{serverId}?key=…`). The entry's host and `path` are the pinned
+   * origin and prefix; the administrator's address may differ from them in exactly one path segment,
+   * matching the anchored `segmentPattern`, and one query parameter, `param`. Anything else — another
+   * host, another prefix, a second segment, a port, userinfo, a fragment, any other parameter — is
+   * refused, both when it is stored and on every dial.
+   */
+  | ({
+      kind: "deployment-address";
+      segmentPattern: string;
+      param: string;
+    } & CredentialCopy)
   /**
    * First-party and in-process. There is no credential, because there is nothing to authenticate
    * to: the call runs against this deployment's own tables, as the person whose turn it is.
@@ -173,6 +233,11 @@ export type CatalogueEntry = {
  * entries, each reached with one key the deployment holds for public-web lookups that answer the same
  * whoever asks. The shape is also the branch a server an administrator added by URL falls into, since
  * that has no catalogue entry at all.
+ *
+ * The third batch (Amap, Baidu Maps, Tencent, Kuaidi100, DingTalk) is the same deployment-held shape
+ * with the key placed where those vendors want it — a pinned query parameter, or for DingTalk a
+ * per-customer address under a pinned prefix — rather than a bearer header. The placement is the
+ * entry's, the value is the vault's, and the two meet only on the request; see `placeCredential`.
  *
  * Routines is the first entry here that is not a remote vendor at all — no host to dial, nothing
  * outside this process to trust. It is in the catalogue anyway, on purpose rather than by oversight:
@@ -409,6 +474,264 @@ export const CATALOGUE: readonly CatalogueEntry[] = Object.freeze([
     auth: { kind: "deployment-bearer" },
     writeTools: Object.freeze([]),
     docsUrl: "https://help.aliyun.com/zh/model-studio/token-plan-harness-tool",
+  },
+
+  /*
+   * MCP MARKET, THIRD BATCH. Five vendor-hosted servers inside mainland China, each reached with ONE
+   * credential an administrator stores for the whole deployment, and each needing it somewhere other
+   * than `Authorization: Bearer` — which is what the three placed auth kinds above exist for.
+   *
+   * Reachability was measured on 2026-11-09 from the JD Cloud network this deployment is served from,
+   * WITHOUT a credential: Amap 200, Baidu Maps 400, Tencent 200, Kuaidi100 200, DingTalk 404 at the
+   * gateway root (a real DingTalk address is per customer). So no tool listing below was seen through
+   * this deployment.
+   *
+   * THE WRITE LISTS ARE FROM THE CANDIDATE RESEARCH AND THE VENDORS' OWN PACKAGES, NOT FROM A LIVE
+   * LISTING. 工具清单未带凭据实测，首次刷新工具时必须对账: on the first Refresh tools after the
+   * credential is stored, compare the live listing against each entry's comment, and any tool that
+   * changes something and is not named here goes into `writeTools` before it is granted. Where a list
+   * is empty the vendor publishes nothing but lookups, and `unlistedAdvertisedTools` will name nothing
+   * for it, so that comparison is a person's job.
+   *
+   * THE CREDENTIAL NEVER APPEARS IN THIS FILE, AND NEVER IN A URL ANYTHING STORES. `host + path` is
+   * the bare pinned address; the key is sealed in the vault as the server's own `mcp` secret and is
+   * put into its slot only inside the MCP transport, on the request itself (`placeCredential`). What
+   * `mcp_servers.url`, the Plugins page, the audit trail and `last_error` see is the address without
+   * it, and every message out of the transport has had every spelling of the key taken out.
+   *
+   * Feishu is not here. Its remote server takes `X-Lark-MCP-TAT` (a tenant token) or `X-Lark-MCP-UAT`
+   * (a person's token), and both expire about two hours after they are issued: a tenant token stored
+   * by hand stops working the same afternoon, and keeping one fresh means holding the app secret and
+   * exchanging it at Feishu's token endpoint, which is a credential flow of its own rather than a
+   * placement. The header kind is ready for it; the entry waits for that flow and for a first-hand
+   * look at whether `X-Lark-MCP-Allowed-Tools` is required.
+   *
+   * None opts into owner assembly.
+   */
+  {
+    key: "amap",
+    title: "高德地图",
+    vendor: "高德（阿里巴巴）",
+    summary:
+      "地理编码与逆地理、POI 检索、驾车/步行/骑行/公交路线、距离测量、IP 定位和天气查询。部署统一使用一个高德 Web 服务 Key，按高德配额计费。",
+    /*
+     * Amap's own hosted server, published in Amap's MCP documentation as `/mcp?key=<Web 服务 Key>`.
+     * Answered 200 without a key on 2026-11-09, which is exactly why a placed entry refuses to dial
+     * without one rather than going out anonymously. Lookups per the official
+     * `@amap/amap-maps-mcp-server` package: `maps_geo`, `maps_regeocode`, `maps_ip_location`,
+     * `maps_weather`, `maps_text_search`, `maps_around_search`, `maps_search_detail`,
+     * `maps_direction_driving`, `maps_direction_walking`, `maps_bicycling`,
+     * `maps_direction_transit_integrated`, `maps_distance`. The three `maps_schema_*` tools reported
+     * for the HTTP endpoint build links that open the Amap app on navigation, ride-hailing or a
+     * personal map — not an order in themselves, but ride-hailing leads to one, so they are writes.
+     */
+    host: "https://mcp.amap.com",
+    path: "/mcp",
+    auth: {
+      kind: "deployment-query",
+      param: "key",
+      credentialLabel: "高德 Web 服务 Key",
+      credentialHint: "在高德开放平台控制台创建「Web 服务」类型的 Key 后复制。",
+    },
+    writeTools: Object.freeze([
+      "maps_schema_take_taxi",
+      "maps_schema_navi",
+      "maps_schema_personal_map",
+    ]),
+    docsUrl: "https://lbs.amap.com/api/mcp-server/create-project-and-key",
+  },
+  {
+    key: "baidu-map",
+    title: "百度地图",
+    vendor: "百度",
+    summary:
+      "地理编码与逆地理、地点检索与详情、路线规划与批量算路、天气、IP 定位、实时路况。部署统一使用一个百度地图服务端 AK。",
+    /*
+     * Baidu Maps' own hosted server, `/mcp?ak=<服务端 AK>` per the official baidu-maps/mcp repository;
+     * the AK must have the MCP service ticked in Baidu's console. Answered 400 without one on
+     * 2026-11-09. All ten tools in that repository are lookups: `map_geocode`,
+     * `map_reverse_geocode`, `map_search_places`, `map_place_details`, `map_directions_matrix`,
+     * `map_directions`, `map_weather`, `map_ip_location`, `map_road_traffic`, `map_poi_extract`.
+     */
+    host: "https://mcp.map.baidu.com",
+    path: "/mcp",
+    auth: {
+      kind: "deployment-query",
+      param: "ak",
+      credentialLabel: "百度地图服务端 AK",
+      credentialHint:
+        "在百度地图开放平台控制台创建服务端 AK，并为它勾选 MCP 服务后复制。",
+    },
+    writeTools: Object.freeze([]),
+    docsUrl: "https://lbs.baidu.com/faq/api?title=mcpserver/base",
+  },
+  {
+    key: "tencent-map",
+    title: "腾讯位置服务",
+    vendor: "腾讯",
+    summary:
+      "基于腾讯地图 WebService API 的地址解析、关键词/周边/沿途搜索等位置查询。部署统一使用一个腾讯位置服务 Key。",
+    /*
+     * Tencent's own hosted server, `/mcp?key=<Key>&format=0` per its MCP Server guide. `format=0`
+     * asks for readable text rather than raw JSON (`1`); it is a fixed, non-secret parameter, so it
+     * is pinned beside the key rather than typed. The Key needs WebServiceAPI enabled. Answered 200
+     * without a key on 2026-11-09. Confirmed lookups: `geocoder`, `placeSuggestion`,
+     * `placeSearchNearby`, `placeAlongby`; reverse geocoding, routing, IP location and weather are
+     * reported by third parties under names not confirmed — all lookups, but read the first listing.
+     */
+    host: "https://mcp.map.qq.com",
+    path: "/mcp",
+    auth: {
+      kind: "deployment-query",
+      param: "key",
+      fixedParams: Object.freeze({ format: "0" }),
+      credentialLabel: "腾讯位置服务 Key",
+      credentialHint:
+        "在腾讯位置服务控制台创建 Key 并开启 WebServiceAPI 后复制。",
+    },
+    writeTools: Object.freeze([]),
+    docsUrl: "https://lbs.qq.com/service/MCPServer/MCPServerGuide/overview",
+  },
+  {
+    key: "kuaidi100",
+    title: "快递100",
+    vendor: "快递100",
+    summary:
+      "快递物流轨迹查询、运费预估和送达时效预估。部署统一使用一个快递100 授权 Key，商用接口按量收费。",
+    /*
+     * Kuaidi100's own hosted server, `/mcp/streamable?key=<授权 key>` per the official
+     * kuaidi100-api/kuaidi100-MCP README, which recommends this over its SSE endpoint. Answered 200
+     * without a key on 2026-11-09. The vendor's published package (kuaidi100-mcp 0.1.3) offers four
+     * lookups — `query_trace`, `estimate_time`, `estimate_time_with_logistic`, `estimate_price` — and
+     * `query_trace` takes a phone number, so a grant of it is a grant to look parcels up by one.
+     *
+     * Kuaidi100's API platform also sells ordering, cancelling and push subscriptions. None is in
+     * the MCP package today; the names below are the shapes such tools would take, listed so that a
+     * hosted server that grows one meets a write rather than a read on the day it appears.
+     */
+    host: "https://api.kuaidi100.com",
+    path: "/mcp/streamable",
+    auth: {
+      kind: "deployment-query",
+      param: "key",
+      credentialLabel: "快递100 授权 Key",
+      credentialHint: "在快递100 API 开放平台的账号信息里复制授权 key。",
+      /*
+       * Kuaidi100's 授权 key is shorter than the default floor of sixteen: the platform issues
+       * twelve letters and digits. Lowered to exactly that, which is also the floor nothing may go
+       * under; every other entry here keeps sixteen.
+       */
+      credentialMinLength: 12,
+    },
+    writeTools: Object.freeze([
+      "place_order",
+      "create_order",
+      "send_order",
+      "cancel_order",
+      "border",
+      "corder",
+      "subscribe",
+      "subscribe_trace",
+      "poll",
+    ]),
+    docsUrl: "https://github.com/kuaidi100-api/kuaidi100-MCP",
+  },
+  {
+    key: "dingtalk",
+    title: "钉钉 MCP（企业专属地址）",
+    vendor: "钉钉（阿里巴巴）",
+    summary:
+      "钉钉官方托管、按企业开通的 MCP 服务：通讯录、日程、待办、AI 表格、机器人消息、工作通知等，视开通的服务而定。以企业应用身份操作，写操作务必逐次审批。",
+    /*
+     * DingTalk's own MCP gateway. Each customer's administrator enables a service in DingTalk's MCP
+     * square and is given an address of the form `https://mcp-gw.dingtalk.com/server/<serverId>
+     * ?key=<key>` — the address IS the credential. So the whole address is what is stored, sealed
+     * like any token, and `deployment-address` admits exactly one path segment under the pinned
+     * `/server` prefix on the pinned host, and exactly one `key` parameter: no other host, prefix,
+     * depth, port, userinfo, fragment or parameter can be stored or dialled. The gateway root
+     * answered 404 on 2026-11-09, which is what a per-customer address looks like from outside.
+     *
+     * The credential is the ORGANISATION'S, acting as its DingTalk application, and reaches its
+     * directory, calendars and group chats — far more than any one person asking can see. Every call
+     * is audited as the deployment. The write list is every action in the vendor's open-source
+     * dingtalk-mcp package (1.1.21) that creates, changes, sends, recalls or deletes, under both its
+     * bare and its prefixed spelling where the package uses one. Reads there include looking a
+     * person up by mobile number (`getUserIdByMobile`); grant those deliberately too. Which tools a
+     * hosted service offers depends on what the customer enabled, so the first listing is the review.
+     */
+    host: "https://mcp-gw.dingtalk.com",
+    path: "/server",
+    auth: {
+      kind: "deployment-address",
+      segmentPattern: "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$",
+      param: "key",
+      credentialLabel: "钉钉 MCP 专属地址",
+      credentialHint:
+        "企业管理员在钉钉 MCP 广场开通服务后，复制形如 https://mcp-gw.dingtalk.com/server/<服务 ID>?key=<密钥> 的完整地址。",
+    },
+    writeTools: Object.freeze([
+      // Robot messages, DING and work notices.
+      "sendMessageToGroupByRobot",
+      "recallGroupMessageByRobot",
+      "batchSendMessageToUsersByRobot",
+      "batchRecallToUsersMessageByRobot",
+      "sendMessageToGroupByCustomRobot",
+      "sendDINGMessageByRobot",
+      "recallDINGMessage",
+      "sendNotice",
+      "recallNotice",
+      "sendServiceWindowMessage",
+      "batchSendServiceWindowMessage",
+      // Calendar.
+      "createEvent",
+      "updateEvent",
+      "deleteEvent",
+      "addAttendee",
+      "removeAttendee",
+      // To-dos.
+      "createTask",
+      "updateTask",
+      "deleteTask",
+      "updateExecutorsTaskStatus",
+      // AI tables.
+      "createNotableSheet",
+      "updateNotableSheetName",
+      "deleteNotableSheet",
+      "insertNotableRecords",
+      "updateNotableRecords",
+      "deleteNotableRecords",
+      "createNotableField",
+      "updateNotableField",
+      "deleteNotableField",
+      // Work reports.
+      "createReport",
+      "saveReportDraft",
+      // Projects (Teambition).
+      "createProject",
+      "addProjectMembers",
+      "removeProjectMembers",
+      "createProjectTask",
+      "deleteProjectTask",
+      "updateProjectTaskNote",
+      "updateProjectTaskContent",
+      "updateProjectTaskExecutors",
+      "updateProjectTaskInvolveMembers",
+      // Honours.
+      "grantHonor",
+      "createOrgHonor",
+      "recallHonor",
+      "mcp_dingtalk-honor_grantHonor",
+      "mcp_dingtalk-honor_createOrgHonor",
+      "mcp_dingtalk-honor_recallHonor",
+      // Application management.
+      "createInnerApp",
+      "updateInnerApp",
+      "setMicroAppScope",
+      "publishInnerAppVersion",
+      "rollbackInnerAppVersion",
+    ]),
+    docsUrl:
+      "https://open.dingtalk.com/document/development/alibaba-cloud-uses-dingtalk-mcp-services",
   },
 
   {
@@ -1211,7 +1534,401 @@ const PATTERNS = new Map(
  * kind it names. A server needing no credential takes none.
  */
 export function serverCredentialKind(entry: CatalogueEntry): "mcp" | null {
-  return entry.auth.kind === "deployment-bearer" ? "mcp" : null;
+  // A switch the compiler checks for exhaustiveness, so an auth kind added later has to say here
+  // whether it takes the deployment's credential rather than falling into "takes none".
+  const auth = entry.auth;
+  switch (auth.kind) {
+    case "deployment-bearer":
+    case "deployment-query":
+    case "deployment-header":
+    case "deployment-address":
+      // Placed kinds are stored exactly as a bearer token is: the server's own `mcp` secret.
+      return "mcp";
+    case "none":
+    case "user-oauth":
+    case "builtin":
+      return null;
+    default: {
+      const unknown: never = auth;
+      throw new Error(
+        `Unknown catalogue auth kind ${(unknown as { kind?: unknown }).kind}`,
+      );
+    }
+  }
+}
+
+/**
+ * Where on the request a placed deployment credential goes, with the pinned address it may go to.
+ *
+ * Plain data, built from the reviewed entry only, and handed down to the MCP transport beside the
+ * decrypted secret so that the one module that builds a request is the one that places it. `base`
+ * is the entry's own `host + path`: the dial is refused unless the connection's url is exactly
+ * that, so a stored url edited by hand cannot carry the key somewhere else.
+ */
+export type CredentialPlacement =
+  | {
+      kind: "query";
+      base: string;
+      param: string;
+      fixedParams: Readonly<Record<string, string>>;
+      label: string;
+      minLength: number;
+    }
+  | {
+      kind: "header";
+      base: string;
+      header: string;
+      label: string;
+      minLength: number;
+    }
+  | {
+      kind: "address";
+      base: string;
+      segmentPattern: string;
+      param: string;
+      label: string;
+      minLength: number;
+    };
+
+/**
+ * The placement for a placed kind, or null for a kind that is not one (bearer, none, OAuth,
+ * builtin), which keeps its own path unchanged.
+ *
+ * Throws for a placed kind with no pinned host: the address is the whole of what makes putting a key
+ * into a URL safe, and a per-instance host would make it the caller's. The catalogue test asserts no
+ * entry is shaped that way; this is what stands behind a cast.
+ */
+export function credentialPlacement(
+  entry: CatalogueEntry,
+): CredentialPlacement | null {
+  const auth = entry.auth;
+  switch (auth.kind) {
+    case "none":
+    case "deployment-bearer":
+    case "user-oauth":
+    case "builtin":
+      return null;
+    case "deployment-query":
+    case "deployment-header":
+    case "deployment-address":
+      break;
+    default: {
+      const unknown: never = auth;
+      throw new Error(
+        `Unknown catalogue auth kind ${(unknown as { kind?: unknown }).kind}`,
+      );
+    }
+  }
+  if (entry.host === null) {
+    throw new Error(
+      `${entry.key} places its credential and has no pinned host, so there is nowhere safe to put it.`,
+    );
+  }
+  const base = `${entry.host}${entry.path === "/" ? "" : entry.path}`;
+  const label = auth.credentialLabel;
+  const minLength = auth.credentialMinLength ?? DEFAULT_PLACED_LENGTH;
+  if (auth.kind === "deployment-query") {
+    return {
+      kind: "query",
+      base,
+      param: auth.param,
+      fixedParams: auth.fixedParams ?? {},
+      label,
+      minLength,
+    };
+  }
+  if (auth.kind === "deployment-header") {
+    return { kind: "header", base, header: auth.header, label, minLength };
+  }
+  return {
+    kind: "address",
+    base,
+    segmentPattern: auth.segmentPattern,
+    param: auth.param,
+    label,
+    minLength,
+  };
+}
+
+/**
+ * A placed credential this deployment will not send, in a sentence for an administrator.
+ *
+ * NEVER CARRIES THE VALUE. Every message here is built from the reviewed placement alone — its
+ * label, its pinned address, its parameter name — so it can go into `last_error`, an audit row, a
+ * 400 body or a model's context without a key travelling with it.
+ */
+export class CredentialPlacementRefusedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CredentialPlacementRefusedError";
+  }
+}
+
+/**
+ * The characters a placed key may hold: letters, digits, `_` and `-`. Nothing else.
+ *
+ * Every key these vendors issue is hex or alphanumeric with dashes. Refusing the rest means a pasted
+ * value with a line break cannot split a header, a value carrying `&`, `#`, `?` or a space is
+ * refused rather than relied on to be encoded, and — the reason the set is this narrow rather than
+ * base64's — a key made of these characters has exactly one spelling under every encoding a vendor
+ * might echo it back in (percent, form, JSON, double), so {@link withoutSecrets} cannot miss one.
+ */
+const PLACED_CHARACTERS = /^[A-Za-z0-9_-]+$/;
+/** The length a placed key must have unless its entry names a vendor's shorter official format. */
+const DEFAULT_PLACED_LENGTH = 16;
+/** No entry may lower the floor below this, whatever it names. */
+const MIN_PLACED_FLOOR = 12;
+const MAX_PLACED_LENGTH = 512;
+
+/** The shortest key this placement admits: its own floor, never below {@link MIN_PLACED_FLOOR}. */
+function placedFloor(placement: CredentialPlacement): number {
+  return Math.max(placement.minLength, MIN_PLACED_FLOOR);
+}
+
+/** Whether this is a key a placement may hold: the characters above, and a length in range. */
+function placedValueOk(placement: CredentialPlacement, value: string): boolean {
+  return (
+    PLACED_CHARACTERS.test(value) &&
+    value.length >= placedFloor(placement) &&
+    value.length <= MAX_PLACED_LENGTH
+  );
+}
+
+/** The address an administrator pasted, broken into the two parts the dial may use. */
+function parsedAddress(
+  placement: Extract<CredentialPlacement, { kind: "address" }>,
+  secret: string,
+): { segment: string; key: string } | null {
+  let url: URL;
+  try {
+    url = new URL(secret);
+  } catch {
+    return null;
+  }
+  const base = new URL(placement.base);
+  if (
+    url.protocol !== "https:" ||
+    url.username !== "" ||
+    url.password !== "" ||
+    url.port !== "" ||
+    url.origin !== base.origin ||
+    url.hash !== ""
+  ) {
+    return null;
+  }
+  // `new URL` has already resolved dot segments, so `/server/../x` arrives as `/x` and fails here.
+  const prefix = `${base.pathname.replace(/\/+$/, "")}/`;
+  if (!url.pathname.startsWith(prefix)) return null;
+  const segment = url.pathname.slice(prefix.length);
+  if (!new RegExp(placement.segmentPattern).test(segment)) return null;
+  const names = [...url.searchParams.keys()];
+  if (names.length !== 1 || names[0] !== placement.param) return null;
+  const key = url.searchParams.get(placement.param) ?? "";
+  if (!placedValueOk(placement, key)) return null;
+  return { segment, key };
+}
+
+/**
+ * Why this deployment will not hold or send this value for this placement, or null when it will.
+ *
+ * Asked when an administrator stores the credential, so a malformed one is refused at the form, and
+ * again inside {@link placeCredential} on every dial, because a credential can reach the vault by
+ * other doors than the one that asks.
+ */
+export function credentialFormatRefusal(
+  placement: CredentialPlacement,
+  secret: string,
+): string | null {
+  const value = secret.trim();
+  if (value === "") {
+    return `还没有录入「${placement.label}」。请管理员在「插件 › 凭据」中录入后再试。`;
+  }
+  if (placement.kind === "address") {
+    return parsedAddress(placement, value) === null
+      ? `「${placement.label}」的格式不对：必须是 ${placement.base}/<服务 ID>?${placement.param}=<密钥> 这样的完整 https 地址，主机和路径前缀不能改，也不能带其他参数；密钥只能由英文字母、数字、_ 和 - 组成，至少 ${placedFloor(placement)} 位。`
+      : null;
+  }
+  return placedValueOk(placement, value)
+    ? null
+    : `「${placement.label}」的格式不对：只能由英文字母、数字、_ 和 - 组成，长度 ${placedFloor(placement)} 到 ${MAX_PLACED_LENGTH} 位。`;
+}
+
+/**
+ * The request a placed credential becomes: the URL to dial, the headers to send, and every spelling
+ * of the secret an error message must not carry.
+ *
+ * THE ONLY FUNCTION THAT PUTS A PLACED KEY INTO A REQUEST, and it refuses rather than degrades:
+ *
+ *  - No credential is a refusal, never a dial without one. A vendor that answers anonymously would
+ *    otherwise look connected while running on nobody's quota, or on a stranger's.
+ *  - The connection's url must be the placement's pinned `base`, exactly. It is the stored
+ *    `mcp_servers.url` on some paths, and a hand-edited row must not be able to move the key.
+ *  - The key fills its pinned slot and nothing else: `URLSearchParams` encodes it as one value of
+ *    one parameter, a header value is checked for visible ASCII before `Headers` sees it, and an
+ *    address is rebuilt from the pinned base plus the two parts {@link parsedAddress} admits.
+ *  - The result is checked once more — same origin, same path (or one segment under the prefix) —
+ *    and then by the outbound guard's static check, the one an administrator's typed URL meets.
+ *
+ * Every refusal is a {@link CredentialPlacementRefusedError} whose message names no value.
+ */
+export function placeCredential(
+  placement: CredentialPlacement,
+  connectionUrl: string,
+  secret: string | undefined,
+): { url: string; headers: Record<string, string>; secrets: string[] } {
+  const value = (secret ?? "").trim();
+  if (connectionUrl !== placement.base) {
+    throw new CredentialPlacementRefusedError(
+      `这台服务器的地址与目录登记的 ${placement.base} 不一致，拒绝带着「${placement.label}」拨号。`,
+    );
+  }
+  const refusal = credentialFormatRefusal(placement, value);
+  if (refusal !== null) throw new CredentialPlacementRefusedError(refusal);
+
+  const base = new URL(placement.base);
+  let url: URL;
+  const headers: Record<string, string> = {};
+  const secrets = [value];
+  switch (placement.kind) {
+    case "query": {
+      url = new URL(placement.base);
+      for (const [name, fixed] of Object.entries(placement.fixedParams)) {
+        url.searchParams.set(name, fixed);
+      }
+      url.searchParams.set(placement.param, value);
+      break;
+    }
+    case "header": {
+      // A vendor's own `X-` header only. `Authorization`, `Cookie`, `Host` and the rest mean
+      // something to every hop between here and the vendor, and a reviewed entry naming one is a
+      // mistake this refuses rather than sends.
+      if (!/^x-[a-z0-9-]{1,64}$/i.test(placement.header)) {
+        throw new CredentialPlacementRefusedError(
+          `目录为「${placement.label}」登记的请求头名不是服务商自定义的 X- 头，拒绝拨号。`,
+        );
+      }
+      url = new URL(placement.base);
+      headers[placement.header] = value;
+      break;
+    }
+    case "address": {
+      const parts = parsedAddress(placement, value);
+      // Unreachable after the format check above; asked again so the narrowing is not a cast.
+      if (parts === null) {
+        throw new CredentialPlacementRefusedError(
+          `「${placement.label}」的格式不对。`,
+        );
+      }
+      url = new URL(
+        `${placement.base.replace(/\/+$/, "")}/${encodeURIComponent(parts.segment)}`,
+      );
+      url.searchParams.set(placement.param, parts.key);
+      secrets.push(parts.key);
+      break;
+    }
+    default: {
+      const unknown: never = placement;
+      throw new CredentialPlacementRefusedError(
+        `未知的凭据放置方式 ${(unknown as { kind?: unknown }).kind}，拒绝拨号。`,
+      );
+    }
+  }
+
+  const samePath =
+    placement.kind === "address"
+      ? url.pathname.startsWith(`${base.pathname.replace(/\/+$/, "")}/`) &&
+        url.pathname.split("/").length === base.pathname.split("/").length + 1
+      : url.pathname === base.pathname;
+  if (url.origin !== base.origin || !samePath) {
+    throw new CredentialPlacementRefusedError(
+      `「${placement.label}」改变了目录登记的主机或路径，拒绝拨号。`,
+    );
+  }
+  const verdict = checkOutboundUrl(url.href);
+  if (!verdict.allowed) {
+    throw new CredentialPlacementRefusedError(verdict.reason);
+  }
+  return { url: url.href, headers, secrets: [...secrets, url.href] };
+}
+
+/**
+ * Every spelling of one secret a message might carry it in.
+ *
+ * As typed; percent-encoded once and twice (`encodeURIComponent`, and that again, which is what a
+ * vendor quoting an already-encoded URL produces); form-encoded, which writes a space as `+`; and
+ * JSON-escaped, with and without the `\/` escape PHP's `json_encode` uses by default.
+ */
+function spellingsOf(secret: string): string[] {
+  const once = encodeURIComponent(secret);
+  const json = JSON.stringify(secret).slice(1, -1);
+  return [
+    secret,
+    once,
+    encodeURIComponent(once),
+    new URLSearchParams({ v: secret }).toString().slice(2),
+    json,
+    json.replaceAll("/", "\\/"),
+  ];
+}
+
+/**
+ * Text with every spelling of these secrets taken out.
+ *
+ * Matched WITHOUT REGARD TO CASE, which covers in one rule a percent escape in either case (`%2F`
+ * and `%2f`), a URL lower-cased by whatever logged it, and a key a vendor upper-cased. Longest first,
+ * so a URL holding a key is removed whole rather than leaving its address around a gap.
+ *
+ * NO SECRET IS TOO SHORT. There used to be a floor below which a value was left alone, so that a
+ * three-character token could not shred ordinary words; the floor is now on what may be STORED (a
+ * placed key is at least twelve characters), and the scrub takes out whatever it is given. Only the
+ * empty string is skipped, because it is not a secret and would match everywhere.
+ *
+ * Callers take a secret out BEFORE anything is cut to length: a cut that lands inside a key leaves a
+ * prefix no full spelling matches, so that order is the whole of the guarantee.
+ */
+export function withoutSecrets(
+  text: string,
+  secrets: readonly (string | undefined)[],
+): string {
+  const spellings = new Set<string>();
+  for (const secret of secrets) {
+    if (!secret) continue;
+    for (const spelling of spellingsOf(secret)) spellings.add(spelling);
+  }
+  if (spellings.size === 0) return text;
+  const pattern = [...spellings]
+    .sort((a, b) => b.length - a.length)
+    .map((spelling) => spelling.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("|");
+  return text.replace(new RegExp(pattern, "gi"), "[已隐去]");
+}
+
+/**
+ * {@link withoutSecrets} over every string in a value: object keys, array items and nested values.
+ *
+ * For what a vendor hands back as structure rather than as text — a tool's input schema, a call's
+ * structured content — where a key echoed into a `default`, an `example` or a property name would
+ * otherwise be stored and shown as it came.
+ */
+export function withoutSecretsDeep<T>(
+  value: T,
+  secrets: readonly (string | undefined)[],
+): T {
+  if (!secrets.some(Boolean)) return value;
+  const walk = (node: unknown): unknown => {
+    if (typeof node === "string") return withoutSecrets(node, secrets);
+    if (Array.isArray(node)) return node.map(walk);
+    if (node && typeof node === "object") {
+      return Object.fromEntries(
+        Object.entries(node).map(([name, inner]) => [
+          withoutSecrets(name, secrets),
+          walk(inner),
+        ]),
+      );
+    }
+    return node;
+  };
+  return walk(value) as T;
 }
 
 export function catalogueEntry(key: string): CatalogueEntry | null {

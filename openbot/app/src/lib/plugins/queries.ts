@@ -120,6 +120,15 @@ export type CatalogueItem = {
    * inside this deployment — there is nothing to connect and nothing to type.
    */
   auth: "none" | "deployment-bearer" | "user-oauth" | "builtin";
+  /**
+   * What to call the deployment credential, for a vendor that takes it somewhere other than a
+   * bearer header — a Web 服务 Key in a query parameter, a 专属地址 that is itself the credential.
+   * Absent for an ordinary bearer token, which keeps the page's own "访问令牌". Reviewed copy from
+   * the catalogue, never a value.
+   */
+  credentialLabel?: string;
+  /** Where that credential comes from, in a sentence. Present exactly when the label is. */
+  credentialHint?: string;
   /** True for a vendor that gives every customer their own hostname. */
   perInstance: boolean;
 };
