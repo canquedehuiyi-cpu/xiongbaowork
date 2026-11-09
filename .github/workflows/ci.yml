@@ -296,10 +296,15 @@ jobs:
         include:
           # Own bun.lock, outside the root workspaces, so installed and typechecked on their own.
           # supervisor's docker.integration suite runs because the hosted runner has a Docker socket.
+          # Both also need the root install before their tests, as upstream and the image install them:
+          # agent-computer's source reaches `shared` (zod since upstream v1.0.0), and both take
+          # `@types/bun` from the root.
           - pkg: agent-computer
             own-lockfile: true
+            root-install: true
           - pkg: supervisor
             own-lockfile: true
+            root-install: true
           # Root workspace since upstream v1.0.0 (its own package.json: zod, happy-dom for the
           # recorder and rule tests), so it needs the root install like worker and runner.
           - pkg: shared
