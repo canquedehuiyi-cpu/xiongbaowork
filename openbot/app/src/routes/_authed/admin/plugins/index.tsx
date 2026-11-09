@@ -237,7 +237,7 @@ function RouteComponent() {
           </PageSection>
 
           <PageSection
-            description="一个未经本部署审核的应用目录，通过 Composio 连接。"
+            description="更多可以通过熊宝连接的应用，这里没有人审核过它们。"
             title="更多应用"
           >
             <PageRows>
@@ -258,7 +258,7 @@ function RouteComponent() {
                     <IconPlug className="size-4" />
                   </RowMark>
                   <ItemContent>
-                    <ItemTitle>浏览 Composio</ItemTitle>
+                    <ItemTitle>浏览应用</ItemTitle>
                     <ItemDescription>
                       几百个应用，以提问者的身份连接。每个人连接自己的账号。
                     </ItemDescription>
@@ -275,11 +275,10 @@ function RouteComponent() {
                     <IconPlug className="size-4" />
                   </RowMark>
                   <ItemContent>
-                    <ItemTitle>Composio</ItemTitle>
+                    <ItemTitle>浏览应用</ItemTitle>
                     <ItemDescription>
-                      添加你的 Composio
-                      密钥即可启用一整套工具目录。请在这个部署上设置
-                      COMPOSIO_API_KEY。
+                      还没有设置。请在这个部署上设置 COMPOSIO_API_KEY
+                      后再浏览这些应用。
                     </ItemDescription>
                   </ItemContent>
                 </Item>

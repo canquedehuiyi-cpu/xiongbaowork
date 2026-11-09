@@ -935,7 +935,6 @@ export function ChannelChat({
     trimmed: string,
     attachments: Attachment[],
     sent?: Message,
-    skillInstructions: string[] = [],
   ) => {
     // Wait briefly for the runtime agent instance before adding the message.
     if (!isReadyRef.current) {
@@ -992,28 +991,11 @@ export function ChannelChat({
     awaitingReply.current = true;
 
     /*
-     * THE SKILL GOES IN FRONT OF THE MESSAGE, AS A SYSTEM TURN. A `/` chip is one token in the
-     * composer; what it stands for is the instruction added here, ahead of what the person typed, so
-     * the Bot reads the job before the request.
-     *
-     * A system message rather than text prepended to theirs, because the two are not the same kind
-     * of thing: the transcript should show what a person said, and pasting the skill into their
-     * words puts sentences in their mouth and makes the reply quote instructions back at them.
-     *
-     * `transcriptMessages` draws user and assistant turns, so this never appears on screen — the
-     * chip is what says a skill was used, and it stays visible in the message they sent.
-     *
-     * M4: upstream dropped this row for picked skill (server/src/plugins/picked-skill.ts), which this
-     * fork did not take; see `lib/plugins/skill-commands.ts`.
+     * A `/` skill is not sent from here. The chip is already the start of `trimmed` as
+     * `/<command>`, and the server finds it there and gives the Bot the skill's instructions
+     * (server/src/plugins/picked-skill.ts, upstream #1226); a system row written here would not be
+     * read as an instruction.
      */
-    for (const instruction of skillInstructions) {
-      target.addMessage({
-        content: instruction,
-        id: newId(),
-        role: "system",
-      });
-    }
-
     const voiceHistory = voiceArchiveContext(priorCalls);
     // Older development calls used a system row, which built-in agents discard.
     const previousVoiceContextId = `voice-history:${channel.id}`;
@@ -1120,8 +1102,6 @@ export function ChannelChat({
     attachments: Attachment[] = [],
     /** The message to send for `text`, when it is more than the words: an answer to a question. */
     sent?: Message,
-    /** The `/` skills' instructions, put in front of the message (see `deliver`). */
-    skillInstructions: string[] = [],
   ) => {
     const trimmed = text.trim();
     // A pasted screenshot with no caption is still a message to send: `canSendDraft` already
@@ -1140,12 +1120,7 @@ export function ChannelChat({
       void setChannelBusy({ channelId: channel.id, busy: true });
     }
     try {
-      const reply = await deliver(
-        trimmed,
-        attachments,
-        sent,
-        skillInstructions,
-      );
+      const reply = await deliver(trimmed, attachments, sent);
       /*
        * The person left while this turn was running (holding control of the Bot's browser, say) and the turn went on
        * without this screen. The run-finished subscription that tells the roster what the Bot said went with it, so the
@@ -1551,21 +1526,9 @@ export function ChannelChat({
               // anybody else is handed to them through `/dispatch` (spec B2), and their answer lands in
               // this thread. A conversation with more than one coworker is the group screen.
               //
-              // `commandIds` are the `/` chips that survived into the send, in the order they were
-              // typed. Resolved against the same list the menu was built from, so a chip left over from
-              // a skill that has since been revoked resolves to nothing rather than to a stale
-              // instruction — the menu is refetched, and this reads from it.
-              //
-              // M4: upstream sends `/<command>` and lets the server find the skill (picked skill);
-              // this fork did not take picked skill, so the instruction still travels from here.
-              const skillInstructions = draft.commandIds
-                .map(
-                  (id) =>
-                    skillCommands.find((command) => command.id === id)?.prompt,
-                )
-                .filter((instruction): instruction is string =>
-                  Boolean(instruction),
-                );
+              // A `/` skill stays at the start of the words as `/<command>`, where the server finds
+              // it and gives the Bot its instructions, only if the Bot holds it
+              // (server/src/plugins/picked-skill.ts, upstream #1226).
 
               /*
                * An answer is words only: a draft carrying files or a `/` skill is sent as a turn, and
@@ -1591,13 +1554,7 @@ export function ChannelChat({
                   channel,
                   pinnedAgentId: runtimeAgentId,
                   newId,
-                  say: () =>
-                    say(
-                      draft.text,
-                      draft.attachments,
-                      undefined,
-                      skillInstructions,
-                    ),
+                  say: () => say(draft.text, draft.attachments),
                 });
                 if (sent.kind === "dispatched") {
                   const name =

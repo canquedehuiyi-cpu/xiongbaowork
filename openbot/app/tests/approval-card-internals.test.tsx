@@ -82,7 +82,7 @@ function serving() {
       });
     if (url === "/api/proactive/suggestions")
       return Response.json({ suggestions: [] });
-    if (url === "/api/tasks") return Response.json({ tasks: [] });
+    if (url === "/api/bot-tasks") return Response.json({ tasks: [] });
     if (url.startsWith("/api/channels"))
       return Response.json({ channels: [], nextCursor: null });
     return Response.json({

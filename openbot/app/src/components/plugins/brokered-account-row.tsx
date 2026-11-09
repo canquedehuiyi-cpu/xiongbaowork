@@ -19,11 +19,13 @@ import {
 } from "@/components/ui/item";
 import {
   type BrokerField,
+  type BrokerFieldsAnswer,
   brokeredConnectionFieldsMutationOptions,
   confirmBrokeredConnectionMutationOptions,
   connectAccountMutationOptions,
   connectBrokeredWithFieldsMutationOptions,
   disconnectBrokeredMutationOptions,
+  type KeyGuide,
   recheckBrokeredConnectionMutationOptions,
 } from "@/lib/plugins/mutations";
 
@@ -190,6 +192,11 @@ export type BrokeredAccount = {
    * so reading the request would make this null on every open — see the hook for what that cost.
    */
   fields: BrokerField[] | null;
+  /**
+   * Where the key comes from, as the same answer as {@link fields} said it (upstream #1297), or
+   * null where that answer carried none. Held and cleared with the list, never apart from it.
+   */
+  guide: KeyGuide | null;
   /** Ask the app what it needs, which is the first press on a `fields` app. */
   requestFields: () => void;
   /**
@@ -483,7 +490,7 @@ export function useBrokeredAccount(input: {
    * list away, which a `??` could not. A REFUSAL leaves the list alone, because a refusal is not an
    * answer about the app; what the dialog does about it is decided where the dialog is drawn.
    */
-  const [published, setPublished] = useState<BrokerField[] | null>(null);
+  const [published, setPublished] = useState<BrokerFieldsAnswer | null>(null);
   if (fieldsRequest.isSuccess && fieldsRequest.data !== published) {
     setPublished(fieldsRequest.data);
   }
@@ -634,7 +641,8 @@ export function useBrokeredAccount(input: {
      */
     disconnected: disconnect.isSuccess,
     kind: kindOf(authScheme),
-    fields: published,
+    fields: published?.fields ?? null,
+    guide: published?.guide ?? null,
     requestFields: () => {
       report(null);
       /*
@@ -685,17 +693,32 @@ function accountSentence(input: {
   connectedDescription: string;
   disconnectedDescription: string;
   disconnectedReassurance: string | undefined;
+  /** See {@link BrokeredAccountRow}'s `needsAdmin`. */
+  needsAdmin: boolean;
 }): string {
   const {
     account,
     connectedDescription,
     disconnectedDescription,
     disconnectedReassurance,
+    needsAdmin,
     title,
   } = input;
 
   if (!account.configured) {
     return "请在这个部署上设置 COMPOSIO_API_KEY。没有它就连不到中转服务，所以这个账号在这里既连不上也断不开。应用仍保持启用，它工具上的授权也都还在。";
+  }
+
+  /*
+   * AN APP ON THE DEPLOYMENT'S OWN CLIENT, READ BY SOMEBODY WHO IS NOT AN ADMINISTRATOR (upstream
+   * #950). Not connected: there is nothing for them to press, and the sentence says whose it is.
+   * Connected: the account is one they made while they were an administrator, and every call through
+   * it is now refused, so the row says which of the two buttons that is left to anybody ends it.
+   */
+  if (needsAdmin) {
+    return account.connected
+      ? `${title} 的这个连接用的是这个部署自己的应用凭据，只能由管理员持有。你现在不是管理员，员工通过它的调用都会被拒绝。请断开它，再请管理员重新连接。`
+      : `${title} 用的是这个部署自己的应用凭据，不是你自己的账号，所以需要由管理员连接。`;
   }
 
   if (account.kind === "no-auth") {
@@ -735,7 +758,7 @@ function accountSentence(input: {
        * is worth a second press rather than a second connection.
        */
       if (account.probe && !account.verified) {
-        return `用你的密钥对 ${title} 做的检查没有顺利通过——可能是密钥的问题，也可能是 ${title} 本身的问题。这个账号在 Composio 那边仍然有效，可以按“重新检查”再试一次，或者在这里断开后用新的密钥重新连接。`;
+        return `用你的密钥对 ${title} 做的检查没有顺利通过——可能是密钥的问题，也可能是 ${title} 本身的问题。这个账号仍然保持连接，可以按“重新检查”再试一次，或者在这里断开后用新的密钥重新连接。`;
       }
       /*
        * NOTHING WAS SPENT ON IT, WHICH IS A FACT ABOUT THE CHECK AND ABOUT THE APP AT THE TIME. The
@@ -775,7 +798,7 @@ function accountSentence(input: {
      * have live, so the row names the step this deployment cannot take for them.
      */
     if (account.disconnected) {
-      return `已从 Composio 移除。你的密钥在 ${title} 那边仍然有效——如果你是想终止它的访问，请到那边轮换密钥。`;
+      return `已断开。你的密钥在 ${title} 那边仍然有效——如果你是想终止它的访问，请到那边轮换密钥。`;
     }
     /*
      * NOT THE SCREEN'S OWN SENTENCE, which is written for the kind that leaves: one of the two says
@@ -805,6 +828,31 @@ function accountSentence(input: {
 }
 
 /**
+ * Where the key comes from, above the boxes it goes in (upstream #1297).
+ *
+ * The steps are the server's, already in Chinese, and the link is the provider's own page for the
+ * key — opened in a new tab, so the form and anything typed into it stay where they are.
+ */
+function KeyGuideNote({ guide }: { guide: KeyGuide }) {
+  return (
+    <div className="mb-4 flex flex-col gap-2 text-sm" data-slot="key-guide">
+      <p className="whitespace-pre-line text-muted-foreground">{guide.steps}</p>
+      {guide.url ? (
+        <a
+          className="inline-flex items-center gap-1 self-start underline underline-offset-4"
+          href={guide.url}
+          rel="noopener noreferrer"
+          target="_blank"
+        >
+          去哪里拿密钥
+          <IconArrowUpRight className="size-3.5" />
+        </a>
+      ) : null}
+    </div>
+  );
+}
+
+/**
  * The row itself, for a `PageRows` card on either screen.
  *
  * The `Item` and, for an app whose secret a person types, the dialog that takes it. Where the row
@@ -816,6 +864,7 @@ export function BrokeredAccountRow({
   connectedDescription,
   disconnectedDescription,
   disconnectedReassurance,
+  needsAdmin = false,
   title,
 }: {
   account: BrokeredAccount;
@@ -832,6 +881,12 @@ export function BrokeredAccountRow({
    * right for both. A screen with nothing of the second kind to say passes nothing.
    */
   disconnectedReassurance?: string;
+  /**
+   * Whether only an administrator may hold this connection and the person reading is not one
+   * (upstream #950): the server's `adminConnectOnly` on the app, combined by the screen with who is
+   * looking. Draws no Connect, and says who connects it instead. Absent is false.
+   */
+  needsAdmin?: boolean;
   /**
    * The app's own name, for the sentences that name it.
    *
@@ -879,6 +934,7 @@ export function BrokeredAccountRow({
               connectedDescription,
               disconnectedDescription,
               disconnectedReassurance,
+              needsAdmin,
               title,
             })}
           </ItemDescription>
@@ -936,7 +992,7 @@ export function BrokeredAccountRow({
                  * end the state from inside it. The sentence above still reads the record, because
                  * what to SAY is what happened; what to OFFER is what is possible now.
                  */}
-                {account.kind === "fields" && account.checkable ? (
+                {account.kind === "fields" && account.checkable && !needsAdmin ? (
                   <Button
                     disabled={account.rechecking}
                     onClick={account.recheck}
@@ -957,6 +1013,14 @@ export function BrokeredAccountRow({
                   断开
                 </Button>
               </>
+            ) : needsAdmin ? (
+              /*
+               * Nothing to press, and not a greyed Connect: the route refuses this person's connect
+               * before the form is even asked for, so a button could only lead to that refusal.
+               */
+              <span className="text-muted-foreground text-xs">
+                需由管理员连接
+              </span>
             ) : (
               /* The arrow says this leaves OpenBot for the vendor's consent page. It does. */
               <Button
@@ -1023,11 +1087,14 @@ export function BrokeredAccountRow({
                 {account.fieldsError}
               </p>
             ) : account.fields ? (
-              <ConnectionFields
-                busy={account.submittingFields}
-                fields={account.fields}
-                onSubmit={account.submitFields}
-              />
+              <>
+                {account.guide ? <KeyGuideNote guide={account.guide} /> : null}
+                <ConnectionFields
+                  busy={account.submittingFields}
+                  fields={account.fields}
+                  onSubmit={account.submitFields}
+                />
+              </>
             ) : account.requestingFields ? (
               <p className="text-muted-foreground text-sm">
                 正在询问应用需要什么…

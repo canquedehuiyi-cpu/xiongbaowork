@@ -349,6 +349,14 @@ function RouteComponent() {
   /* Bound once because the brokered row below is told it twice — once inside the whole
      disconnected sentence and once on its own — and two copies of it would drift. */
   const reassurance = "不连也算配置完成；连上后只会碰到你自己的文档。";
+  /*
+   * An app on this deployment's own client (upstream #950) is only ever connected by an
+   * administrator, and the account is the organization's access rather than anybody's own: said on
+   * the row, because it is the one thing about this connection the words around it get wrong.
+   */
+  const adminHeld = server?.adminConnectOnly
+    ? "这类连接用的是部署自己的应用凭据，只能由管理员连接；员工通过它调用时以管理员身份。"
+    : "";
 
   /*
    * Everything the brokered row below reads and does, shared with the personal connected-accounts
@@ -639,7 +647,7 @@ function RouteComponent() {
                 ? "内置在这个部署里。没有要连的服务商，也没有要保管的凭据——调用以提问者的身份运行。"
                 : auth === "brokered"
                   ? /* The row below says how, at length. This says whose account it is, which is the part that decides what an administrator has to do here — which is nothing. */
-                    "通过 Composio 连接，由它保管每个人自己的账号。"
+                    "通过熊宝连接，每个人连接自己的账号。"
                   : "这个部署向服务商出示的凭据。一份凭据，所有人共用。"
           }
           title="连接"
@@ -696,13 +704,12 @@ function RouteComponent() {
                 <ItemContent>
                   <ItemTitle>如何连接</ItemTitle>
                   <ItemDescription>
-                    这个应用通过 Composio
-                    连接，账号由它保管。部署只发送一个密钥和提问者的名字，所以每个人连接自己的账号，员工只能看到那个人能看到的东西。不需要粘贴令牌。
+                    这个应用通过熊宝连接。部署只发送一个密钥和提问者的名字，所以每个人连接自己的账号，员工只能看到那个人能看到的东西。不需要粘贴令牌。
                   </ItemDescription>
                 </ItemContent>
                 <ItemActions>
                   <span className="text-muted-foreground text-xs">
-                    经由 Composio
+                    通过熊宝
                   </span>
                 </ItemActions>
               </Item>
@@ -814,8 +821,8 @@ function RouteComponent() {
                     /* Said beside the button rather than after it: disconnecting ends the account
                        at Composio, so what it undoes is not the row here but the grant on this
                        person's mailbox, and connecting again is a fresh consent. */
-                    connectedDescription={`已连接。被授予这些工具的员工会以你的身份使用你的 ${title}。断开会在 Composio 那边结束这个账号，而不只是这里。`}
-                    disconnectedDescription={`连接你自己的账号来试用这个连接器。${reassurance}`}
+                    connectedDescription={`已连接。被授予这些工具的员工会以你的身份使用你的 ${title}。${adminHeld}断开也会收回熊宝对你账号的访问，而不只是这里的记录。`}
+                    disconnectedDescription={`连接你自己的账号来试用这个连接器。${adminHeld}${reassurance}`}
                     /* The half of the line above that is true whichever way this app connects.
                        An app whose key somebody types gets a different first sentence from the
                        row — pressing Connect opens a form rather than leaving for a consent

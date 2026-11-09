@@ -35,6 +35,11 @@ export type AgentInput = {
    * the Bot is told what runs it whatever its subtitle says. Only New Bot sends it.
    */
   harness?: string;
+  /**
+   * The starter's instructions, apart from what it does (`AgentProfile.instructions`). Omitted
+   * leaves them as they are; every other coworker's instructions are its role description.
+   */
+  instructions?: string;
 };
 
 /** The sentence for every write here, since they all fail the same way to a reader. */

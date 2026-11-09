@@ -8,37 +8,31 @@ import {
 } from "@/lib/plugins/queries";
 import { useZh } from "@/lib/translations/queries";
 
-/**
- * One granted skill as a `/` menu command.
- *
- * A CHIP, NOT AN EXPANSION. `prompt` used to paste the skill's whole instruction into the box, which
- * meant a person watched a paragraph they did not write appear over the message they were typing,
- * and had to scroll past it to reach their own words.
- *
- * The chip stays, one token wide, and `channel-chat` reads `draft.commandIds` on send and puts the
- * instruction in front of the run. Nothing is hidden by this that was not already: the instruction
- * is the skill's own text, visible on the skills page, and a skill is an instruction rather than a
- * capability — it can only ask for tools the Bot already holds.
- *
- * M4: upstream's #1226 sends `/<command>` and lets the server look the skill up
- * (`server/src/plugins/picked-skill.ts`); this fork did not take picked skill (M3), so the
- * instruction still travels on the option.
- */
+/** One granted skill as a `/` menu command. */
 function toCommand(
   skill: GrantedPlugins["skills"][number],
   zh: (text: string) => string,
 ): CommandOption {
   return {
     id: skill.slug,
-    name: skill.slug,
-    description: zh(skill.summary || skill.title),
-    kind: "chip",
+    // Its name, not its command: the menu and the chip read as what the skill is called.
+    name: skill.title || skill.slug,
+    // The menu line is for the person, so it is read in Chinese where the table has it.
+    ...(skill.summary ? { description: zh(skill.summary) } : {}),
     /*
-     * Carried on the option rather than looked up again at send time. `applyCommandChips` only
-     * substitutes `prompt` for `kind: "prompt"`, so on a chip this is inert payload, and the
-     * alternative is a second query racing the first for the same rows.
+     * A CHIP, NOT AN EXPANSION. `prompt` used to paste the skill's whole instruction into the
+     * box, which meant a person watched a paragraph they did not write appear over the message
+     * they were typing, and had to scroll past it to reach their own words.
+     *
+     * The chip stays, one token wide, and is sent as `/<command>` at the start of the message (the
+     * `/` menu only opens there, and `toDraft` flattens the chip to its command). The server finds
+     * it there and gives the Bot the skill's stored instructions, only for a skill that Bot holds
+     * (server/src/plugins/picked-skill.ts, upstream #1226). The browser sends no instruction of its
+     * own: a system row it wrote would not be read as one. Nothing is hidden by this that was not
+     * already: the instruction is the skill's own text, visible on the skills page, and a skill is
+     * an instruction rather than a capability — it can only ask for tools the Bot already holds.
      */
-    prompt: skill.instructions,
+    kind: "chip",
   };
 }
 
@@ -47,7 +41,6 @@ function toCommand(
  */
 export function useSkillCommands(agentId: string): CommandOption[] {
   const { data } = useQuery(agentPluginsQueryOptions(agentId));
-  // The menu line is for the person; the chip still carries the skill's own instruction.
   const zh = useZh();
 
   return useMemo(

@@ -245,6 +245,72 @@ export function enableComposioAppMutationOptions(queryClient: QueryClient) {
   });
 }
 
+/** What saving a deployment client answers: the id it holds now, and whether it replaced one. */
+export type SavedDeploymentClient = {
+  toolkit: string;
+  clientId: string;
+  replaced: boolean;
+};
+
+/** What removing one answers. `note` is the server's own sentence, said only when it matters. */
+export type RemovedDeploymentClient = {
+  removed: boolean;
+  stillInUseByEnabledApp: boolean;
+  note?: string;
+};
+
+/**
+ * Save this deployment's own OAuth client for one server-to-server app (upstream #950).
+ *
+ * The secret goes into the request body and nowhere else, for the reason
+ * {@link connectBrokeredWithFieldsMutationOptions} gives: it is erased from the variables as the
+ * request settles, so mutation state does not go on holding it. The server answers with the id
+ * only; the secret is never read back by any route.
+ */
+export function saveDeploymentClientMutationOptions(queryClient: QueryClient) {
+  return mutationOptions({
+    mutationFn: async (variables: {
+      toolkit: string;
+      clientId: string;
+      clientSecret: string;
+    }): Promise<SavedDeploymentClient> => {
+      try {
+        const response = await client(
+          `/api/plugins/composio/clients/${encodeURIComponent(variables.toolkit)}`,
+          {
+            method: "PUT",
+            body: {
+              client_id: variables.clientId,
+              client_secret: variables.clientSecret,
+            },
+            fallback: "这个客户端没能保存。",
+          },
+        );
+        return response.json();
+      } finally {
+        variables.clientSecret = "";
+      }
+    },
+    onSettled: () => invalidatePlugins(queryClient),
+  });
+}
+
+/** Remove this deployment's own OAuth client for one app. Apps already enabled keep theirs. */
+export function removeDeploymentClientMutationOptions(
+  queryClient: QueryClient,
+) {
+  return mutationOptions({
+    mutationFn: async (toolkit: string): Promise<RemovedDeploymentClient> => {
+      const response = await client(
+        `/api/plugins/composio/clients/${encodeURIComponent(toolkit)}`,
+        { method: "DELETE", fallback: "这个客户端没能删除。" },
+      );
+      return response.json();
+    },
+    onSettled: () => invalidatePlugins(queryClient),
+  });
+}
+
 /**
  * Re-read a server's tool list, which is what makes a newly-added tool appear.
  *
@@ -488,12 +554,33 @@ export type BrokerField = {
 };
 
 /**
+ * Where the key an app asks for comes from, in words a person can follow (upstream #1297).
+ *
+ * `steps` is Chinese, written by the server from its own map of apps or a sentence that fits any
+ * app; `url` is the provider's own page for the key, or null where nobody knows one. Never the
+ * connector provider's site: the server drops that link before it gets here.
+ */
+export type KeyGuide = { steps: string; url: string | null };
+
+/** What the first press on a key app answers: the boxes, and the guide that goes above them. */
+export type BrokerFieldsAnswer = {
+  fields: BrokerField[];
+  /** Null only where the server answered no guide, which a server older than #1297 does. */
+  guide: KeyGuide | null;
+};
+
+/**
  * Ask what an app wants typed in, for the apps nobody consents to.
  *
  * Most Composio apps are not connected through a consent screen — the person holds an API key and
  * types it in — so the same connect route answers a field list on the first press and takes the
  * values on the second. Nothing is written by this half: it is a question about the app, not about
  * anybody's account, which is why it refetches nothing.
+ *
+ * ASKED WITH `{ guide: true }` (upstream #1297), which is the fork's spelling of the first press:
+ * the route then answers the same boxes under the same names, labelled for a person, beside a guide
+ * saying where the key comes from. A press without it is answered with the vendor's form verbatim,
+ * so the second press is checked against the same names either way.
  *
  * NO FIELDS IS A REAL ANSWER HERE TOO, and it is the same defect as
  * {@link connectAccountMutationOptions} seen from the other side: that route answers a URL to a
@@ -503,20 +590,25 @@ export type BrokerField = {
  * of these two types may claim a value the route only sometimes sends.
  *
  * `null` for the reason spelled out over {@link connectAccountMutationOptions}: an `undefined` in
- * this position is inferred away by `useMutation` and reaches the caller as a plain `BrokerField[]`.
+ * this position is inferred away by `useMutation` and reaches the caller as a plain answer.
  */
 export function brokeredConnectionFieldsMutationOptions() {
   return mutationOptions({
-    mutationFn: async (serverId: string): Promise<BrokerField[] | null> => {
-      const fields = await client<BrokerField[] | undefined>(
+    mutationFn: async (serverId: string): Promise<BrokerFieldsAnswer | null> => {
+      const response = await client(
         `/api/plugins/servers/${encodeURIComponent(serverId)}/connect`,
-        "fields",
         {
           method: "POST",
+          body: { guide: true },
           fallback: "没能询问这个应用需要什么。",
         },
       );
-      return fields ?? null;
+      const answer = (await response.json()) as {
+        fields?: BrokerField[];
+        guide?: KeyGuide;
+      };
+      if (!Array.isArray(answer.fields)) return null;
+      return { fields: answer.fields, guide: answer.guide ?? null };
     },
   });
 }

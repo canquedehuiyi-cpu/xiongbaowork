@@ -11,7 +11,7 @@ function invalidateTasks(queryClient: QueryClient) {
   ]);
 }
 
-const taskPath = (id: string) => `/api/tasks/${encodeURIComponent(id)}`;
+const taskPath = (id: string) => `/api/bot-tasks/${encodeURIComponent(id)}`;
 
 /** Mark a task done, or reopen one marked done. Its conversation stays either way. */
 export const resolveTaskMutationOptions = (queryClient: QueryClient) =>

@@ -120,8 +120,8 @@ export function NeedsYouBoard({ agentId }: { agentId?: string }) {
                   key={botId}
                   note={
                     watched.length
-                      ? `watching ${watched.join(", ")}`
-                      : "from its check-ins"
+                      ? `在巡检 ${watched.join("、")}`
+                      : "来自主动巡检"
                   }
                   settingOf={settingOf}
                 />

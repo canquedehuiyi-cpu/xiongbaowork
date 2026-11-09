@@ -158,7 +158,7 @@ function serving() {
       items = items.filter((entry) => entry !== found);
       return Response.json({ suggestion: { ...found, status: "dismissed" } });
     }
-    const acted = path.match(/^\/api\/tasks\/(.+)\/(resolve|reopen|again)$/);
+    const acted = path.match(/^\/api\/bot-tasks\/(.+)\/(resolve|reopen|again)$/);
     if (acted) {
       const [, id, action] = acted;
       tasks = tasks.map((entry) =>
@@ -174,7 +174,7 @@ function serving() {
     }
     if (path === "/api/proactive/suggestions")
       return Response.json({ suggestions: items });
-    if (path === "/api/tasks") return Response.json({ tasks });
+    if (path === "/api/bot-tasks") return Response.json({ tasks });
     if (path.startsWith("/api/channels"))
       return Response.json({
         channels: busy.map((id) => ({
@@ -289,7 +289,7 @@ test("an item says what it is, why, which Bot found it and where, with Work on i
   ).toBeTruthy();
   // Under its Bot's header, from the app it was read with.
   expect(bots.getByText("巡检发现")).toBeTruthy();
-  expect(bots.getByText("· from its check-ins")).toBeTruthy();
+  expect(bots.getByText("· 来自主动巡检")).toBeTruthy();
   expect(bots.getByText("Gmail")).toBeTruthy();
   expect(bots.getByRole("button", { name: "Work on it" })).toBeTruthy();
   expect(
@@ -412,7 +412,7 @@ test("tasks list what to read, answer and retry first, and each acts from its ro
 
   fireEvent.click(bots.getByRole("button", { name: "Try again" }));
   await waitFor(() =>
-    expect(sent).toContainEqual({ method: "POST", path: "/api/tasks/f/again" }),
+    expect(sent).toContainEqual({ method: "POST", path: "/api/bot-tasks/f/again" }),
   );
   await waitFor(() =>
     expect(
@@ -433,7 +433,7 @@ test("tasks list what to read, answer and retry first, and each acts from its ro
   await waitFor(() =>
     expect(sent).toContainEqual({
       method: "POST",
-      path: "/api/tasks/r/reopen",
+      path: "/api/bot-tasks/r/reopen",
     }),
   );
   await waitFor(() =>

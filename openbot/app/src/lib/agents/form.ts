@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Persona } from "../../../../shared/persona";
+import type { AgentProfile } from "./queries";
 
 /** What the server accepts as an avatar seed (`routes.ts`). Kept in step by hand, like the limits. */
 export const AVATAR_SEED_PATTERN = /^[\w:.-]{1,64}$/;
@@ -130,4 +131,32 @@ export function agentInputFrom(values: AgentFormPatch) {
       ? {}
       : { instructions: values.instructions }),
   };
+}
+
+/**
+ * The full update body for changing one or two fields of a coworker (upstream's Setup rows; here the
+ * detail page's 运行方式 section).
+ *
+ * The update endpoint takes the whole profile, so unchanged fields ride along as stored. Not a
+ * built-in coworker's endpoint: that is the managed Bot's own address, which nobody typed, and the
+ * route checks any endpoint it is sent as one somebody did. Empty leaves the stored one where it is,
+ * and the empty key keeps the current one. The model binding, persona and avatar are left out, which
+ * the server reads as "leave them as they are".
+ */
+export function profileUpdateInput(
+  profile: Pick<
+    AgentProfile,
+    "name" | "title" | "roleDescription" | "visibility" | "builtIn" | "endpoint"
+  >,
+  patch: Partial<AgentFormValues>,
+) {
+  return agentInputFrom({
+    name: profile.name,
+    title: profile.title,
+    roleDescription: profile.roleDescription,
+    visibility: profile.visibility,
+    endpoint: profile.builtIn ? "" : (profile.endpoint ?? ""),
+    authValue: "",
+    ...patch,
+  });
 }

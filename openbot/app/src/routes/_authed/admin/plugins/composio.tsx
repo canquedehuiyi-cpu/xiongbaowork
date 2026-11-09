@@ -135,8 +135,8 @@ function RouteComponent() {
   return (
     <PageShell
       backButton={{ label: "插件", linkProps: { to: "/admin/plugins" } }}
-      description="Composio 自己的应用目录。添加一个应用后就能授予它的工具；每个人仍要先连接自己的账号，工具才能读到任何东西。"
-      title="浏览 Composio"
+      description="添加一个应用后就能把它的工具授予员工；每个人仍要先连接自己的账号，员工才能读到任何东西。"
+      title="浏览应用"
     >
       <PageSection
         description="按名字搜索。目录太长读不完，而且这里的东西都没有经过本部署审核。"
@@ -149,7 +149,7 @@ function RouteComponent() {
         ) : null}
 
         <Input
-          aria-label="搜索 Composio 应用"
+          aria-label="搜索应用"
           className="mt-4"
           onChange={(event) => setSearch(event.target.value)}
           placeholder="按应用名搜索"
@@ -165,13 +165,13 @@ function RouteComponent() {
              * thing an operator who reached this URL needs to read; the hardcoded line stays as
              * the fallback for a failure that arrived carrying no message of its own.
              */}
-            {apps.error.message || "读不到 Composio 的应用目录。"}
+            {apps.error.message || "读不到可以连接的应用。请刷新页面。"}
           </p>
         ) : listed.length === 0 ? (
           <PageEmpty>
             {query
-              ? `Composio 的目录里没有匹配「${query}」的应用。`
-              : "Composio 没有返回任何应用。"}
+              ? `没有匹配「${query}」的应用。`
+              : "没有找到任何应用。"}
           </PageEmpty>
         ) : (
           <PageRows>

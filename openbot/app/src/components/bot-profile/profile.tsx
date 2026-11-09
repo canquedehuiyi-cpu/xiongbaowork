@@ -51,6 +51,7 @@ import {
   useNotificationPermission,
 } from "@/lib/notifications/permission";
 import { queryClient } from "@/query-client";
+import { BotActivityRow } from "./activity";
 
 const NOTIFY_LABEL: Record<BotNotify, string> = {
   all: "全部",
@@ -261,13 +262,13 @@ export function UpdateRoutingSection() {
   );
 }
 
-/** A Bot's own page: its state for you, what it is doing, and the lifecycle controls. */
 /**
  * 对你: this person's relationship with one employee — pause, notifications, a new conversation,
- * reset. One section of the employee's detail page (/wakers/$agentId); the activity feed, tool
- * permissions and update routing that used to share a page with it are their own exports.
+ * reset, and the row to its activity when nothing is running or lined up (`BotActivityRow`; with
+ * something under way, `BotActivityGlance` draws its own section under this one). One section of
+ * the employee's detail page (/wakers/$agentId); tool permissions and update routing that used to
+ * share a page with it are their own exports.
  */
-// M4: 待接入 上游员工页的「需要你」看板（needs-you/board.tsx 的 BotNeedsYou）、动态速览（activity.tsx 的 BotActivityGlance/BotActivityRow）与本周已完成任务（DoneTasks），可接到 wakers_.$agentId.tsx
 export function BotControls({ agent }: { agent: AgentProfile }) {
   const lifecycle = useQuery(botLifecycleQueryOptions(agent.id));
   const pause = useMutation(setBotPausedMutationOptions(queryClient));
@@ -396,6 +397,7 @@ export function BotControls({ agent }: { agent: AgentProfile }) {
                 </ItemDescription>
               </ItemContent>
             </Item>
+            <BotActivityRow agentId={agent.id} />
           </PageRows>
         )}
       </PageSection>

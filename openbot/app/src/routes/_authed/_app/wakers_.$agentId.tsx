@@ -4,17 +4,22 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import { AgentAuditTrail } from "@/components/agents/audit-trail";
 import { AvatarSourcesPanel } from "@/components/avatar/avatar-sources";
-import { BotActivitySections } from "@/components/bot-profile/activity";
+import { BotActivityGlance } from "@/components/bot-profile/activity";
 import { BotPausedBanner } from "@/components/bot-profile/pause-banner";
 import { BotPermissions } from "@/components/bot-profile/permissions";
 import {
   BotControls,
   UpdateRoutingSection,
 } from "@/components/bot-profile/profile";
+import { BotRuntimeSection } from "@/components/bot-profile/runtime";
 import { PageSection, PageShell } from "@/components/layout/page-shell";
 import { QueryError } from "@/components/layout/query-error";
+import { MemorySources } from "@/components/memory/sources";
+import { BotNeedsYou } from "@/components/needs-you/board";
+import { DoneTasks, useNeedsYou } from "@/components/needs-you/needs-you";
 import { EditablePortrait } from "@/components/portraits/portrait-picker";
 import { ProjectPicker } from "@/components/projects/project-picker";
+import { ProactiveResearchSettings } from "@/components/suggestions/proactive-panel";
 import { Button } from "@/components/ui/button";
 import {
   Empty,
@@ -55,8 +60,10 @@ import { routinesQueryOptions } from "@/lib/routines/queries";
  * A sibling of `/wakers` (the trailing underscore), not a child: the card wall has no outlet and
  * this page is a whole screen of its own. It reads only what other screens already serve — the
  * coworker's profile, its responsibilities and routines, the board's running rows, its plugin
- * grants and its audit trail — and edits none of them here: changing a skill is the assembly
+ * grants and its audit trail — and edits none of those here: changing a skill is the assembly
  * screen's job, and a second place to grant one would be a second place to get the policy wrong.
+ * What it does edit is upstream's Bot page's own: the person's 对你 controls, its memory sources
+ * and check-ins, and the 运行方式 rows (its own computer, the starter's instructions).
  *
  * Each section owns its loading, error and empty state, so one read failing never blanks the
  * others.
@@ -179,17 +186,22 @@ function WakerDetailPage() {
       <ModelLine profile={profile} />
 
       {/*
-       * One employee, one page (user decision: 合并成一个详情页). First what is between this person
-       * and the employee and what it is doing for them — the old /bots profile — then what it is
-       * set up with.
+       * One employee, one page (user decision: 合并成一个详情页). First what it is waiting on this
+       * person for, then what is between them and what it is doing for them — upstream's Bot page,
+       * whose full activity lists live on /bots/$agentId/activity behind the 动态 row — then what it
+       * is set up with.
        */}
+      <BotNeedsYou agentId={profile.id} />
       <BotControls agent={profile} />
-      <BotActivitySections agentId={profile.id} />
+      <BotActivityGlance agentId={profile.id} />
+      <DoneThisWeek agentId={profile.id} />
       <RunningTasksSection agentId={profile.id} />
       <AvatarSourcesSection profile={profile} />
       <ProjectSection profile={profile} />
       <DutiesSection profile={profile} />
       <SkillGrantsSection agentId={profile.id} />
+      <BotRuntimeSection agent={profile} />
+      <MemorySection agentId={profile.id} />
       <BotPermissions agentId={profile.id} />
       <UpdateRoutingSection />
 
@@ -200,6 +212,37 @@ function WakerDetailPage() {
         <AgentAuditTrail agentId={profile.id} />
       </PageSection>
     </PageShell>
+  );
+}
+
+/** Tasks the person marked done this week from this employee's check-ins, folded until asked for. */
+function DoneThisWeek({ agentId }: { agentId: string }) {
+  const { done } = useNeedsYou(agentId);
+  return <DoneTasks done={done} />;
+}
+
+/**
+ * This employee's memory sources and check-ins (upstream's /bots/$agentId/memory), on its own page.
+ * What the person told every employee directly is not this employee's, so it stays in 能力与资源,
+ * and this says where.
+ */
+function MemorySection({ agentId }: { agentId: string }) {
+  return (
+    <>
+      <p className="mt-8 text-muted-foreground text-sm">
+        你直接告诉所有员工的事在
+        <Link
+          className="underline underline-offset-4"
+          search={{ tab: "sources" }}
+          to="/resources"
+        >
+          能力与资源 › 信息源与记忆
+        </Link>
+        里。
+      </p>
+      <MemorySources agentId={agentId} />
+      <ProactiveResearchSettings agentId={agentId} />
+    </>
   );
 }
 
@@ -442,7 +485,7 @@ function RunningTasksSection({ agentId }: { agentId: string }) {
           在看板上看
         </Button>
       }
-      description="任务看板上由它执行、还没结束的任务；上面的「进行中」是它替你跟进的事和等你处理的事。"
+      description="任务看板上由它执行、还没结束的任务；上面的「需要你」是等你处理的事，「动态」是它替你跟进的事。"
       title="看板上的进行中任务"
     >
       {running.isPending ? (

@@ -61,11 +61,15 @@ const moving = (status: TaskStatus) =>
  * Every open task of the person's, and the ones marked done in the last 7 days, kept live while any
  * of them is under way.
  */
+/*
+ * `/api/bot-tasks`, not upstream's `/api/tasks`: in this fork `/api/tasks` is the task board
+ * (server/src/tasks/routes.ts), and upstream's started work is mounted beside it (server/src/app.ts).
+ */
 export const taskListQueryOptions = () =>
   queryOptions({
     queryKey: taskKeys.list,
     queryFn: (): Promise<BotTask[]> =>
-      client("/api/tasks", "tasks", { fallback: "读不到你的任务" }),
+      client("/api/bot-tasks", "tasks", { fallback: "读不到你的任务" }),
     refetchInterval: (query) =>
       query.state.data?.some((task) => moving(task.status))
         ? LIVE_MS
