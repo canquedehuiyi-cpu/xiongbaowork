@@ -1,11 +1,12 @@
 import { expect, test } from "bun:test";
-import {
-  APPROVAL_ASKS_GUIDANCE,
-  COMPUTER_GUIDANCE,
-  DESTRUCTIVE_TOOL_NOTE,
-} from "../../shared/bot-prompt";
+import { COMPUTER_GUIDANCE } from "../../shared/bot-prompt";
 import type { PluginStore } from "../src/plugins/store";
-import { grantedTools } from "../src/plugins/tools";
+import {
+  CONNECTOR_APPROVAL_GUIDANCE,
+  DESTRUCTIVE_TOOL_NOTE,
+  grantedToolGuidance,
+  grantedTools,
+} from "../src/plugins/tools";
 
 /**
  * 删除类底线（approvals/policy.ts 的 `destructiveFloor`）总是先问，Bot 不必自己再问一遍。应用
@@ -49,8 +50,25 @@ test("a tool its app marks destructive is offered with the note at the end of it
   expect(DESTRUCTIVE_TOOL_NOTE).toContain("asks the person before it runs");
 });
 
-test("every Bot's guidance says deletes, archives and destructive tools are asked about by OpenBot", () => {
-  expect(COMPUTER_GUIDANCE).toContain(APPROVAL_ASKS_GUIDANCE);
-  for (const word of ["delete", "archive", "destructive", "do not ask"])
-    expect(APPROVAL_ASKS_GUIDANCE).toContain(word);
+test("a Bot holding connected-app tools is told OpenBot asks before their deletes, archives and destructive tools", async () => {
+  const tools = await grantedTools({
+    store: storeWith([
+      { ref: "crm/list_deals", description: "List deals.", destructive: false },
+    ]),
+    botId: "bot",
+    actorId: "owner",
+  });
+  // 只要持有应用工具就说，和这台部署有没有电脑无关。
+  const guidance = grantedToolGuidance(tools);
+  expect(guidance).toContain(CONNECTOR_APPROVAL_GUIDANCE);
+  for (const words of ["connected app", "delete", "archive", "destructive"])
+    expect(CONNECTOR_APPROVAL_GUIDANCE).toContain(words);
+  // 说清楚只管应用工具：电脑上的命令和文件不在此列。
+  expect(CONNECTOR_APPROVAL_GUIDANCE).toContain("not commands or files");
+  // A Bot that holds no app tool is not told so.
+  expect(grantedToolGuidance([], ["gmail"])).not.toContain(
+    CONNECTOR_APPROVAL_GUIDANCE,
+  );
+  // Nor is it in the computer guidance, beside commands this rule does not cover.
+  expect(COMPUTER_GUIDANCE).not.toContain("OpenBot itself asks");
 });

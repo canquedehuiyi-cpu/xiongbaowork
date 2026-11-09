@@ -9,4 +9,4 @@
  *
  * `false` for every existing row; each app's next refresh records it.
  */
-ALTER TABLE mcp_tools ADD COLUMN IF NOT EXISTS unclassified boolean NOT NULL DEFAULT false;
+ALTER TABLE "public"."mcp_tools" ADD COLUMN IF NOT EXISTS "unclassified" boolean DEFAULT false NOT NULL;

@@ -282,3 +282,41 @@ test("一个叫 memory 或 host 的 MCP 服务器上的 delete_entities 同样�
   }
   expect(vendorCalls).toEqual([]);
 });
+
+test("listForAgent 把 mcp_tools.destructive 带给模型那一侧，提供工具时才能写明会先问", async () => {
+  const granted = await runAsTenant(person, () =>
+    plugins.listForAgent(avatarAgentId(person)),
+  );
+  const byRef = new Map(granted.tools.map((tool) => [tool.ref, tool]));
+  expect(byRef.get(RESET)?.destructive).toBe(true);
+  expect(byRef.get("memory/delete_entities")?.destructive).toBe(false);
+});
+
+test("连接探测不调用 vendor 只字未提的动作，即使它被记成了读", async () => {
+  // 正常入库时 unclassified 一定是写；这里直接写一行「读 + unclassified」，钉住探测这一层双保险。
+  await runAsTenant("platform", () =>
+    database.insert(mcpTools).values([
+      {
+        tenantId: "team",
+        serverId: server,
+        name: "a_unlabelled_lookup",
+        description: "Nobody said what this does.",
+        effect: "read",
+        unclassified: true,
+        version: "20261101_00",
+      },
+      {
+        tenantId: "team",
+        serverId: server,
+        name: "b_list_pipelines",
+        description: "List pipelines.",
+        effect: "read",
+        version: "20261101_00",
+      },
+    ]),
+  );
+  // 按名字排序，没有这层判断时会先挑中 a_unlabelled_lookup。
+  expect(
+    await runAsTenant("platform", () => plugins.probeActionFor(server)),
+  ).toEqual({ name: "b_list_pipelines", version: "20261101_00" });
+});

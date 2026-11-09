@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { DESTRUCTIVE_TOOL_NOTE } from "../../../shared/bot-prompt";
 import { ApprovalRefusedError } from "../approvals/types";
 import type { AuditInitiator } from "../audit";
 import { HeadlessToolSuspension } from "../computer/headless-tools";
@@ -98,6 +97,24 @@ export function parametersFor(inputSchema: Record<string, unknown>): z.ZodType {
 }
 
 /**
+ * 谁在删除前问主人：OpenBot，不是 Bot。
+ *
+ * 应用工具的删除、归档，以及应用标为破坏性的工具，删除类底线总是先问（approvals/policy.ts 的
+ * `destructiveFloor`）。Bot 自己再问一遍，主人就要为一次删除回答两次；OpenBot 的卡片写明了具体
+ * 动作，留它就够了。只放在持有应用工具时才出现的说明里，并且只说应用工具：`computer_*` 和主人
+ * 电脑上的命令不归这条底线管，Bot 对它们该怎么确认还怎么确认。
+ */
+export const CONNECTOR_APPROVAL_GUIDANCE =
+  "For the tools of these connected apps, OpenBot itself asks the person before you delete or archive anything and before you use a tool marked destructive, on a card that shows exactly what you are about to do. So for those, do not ask them first: say what you are going to do and call the tool, and they are asked once, by OpenBot. This covers connected-app tools only, not commands or files on a computer.";
+
+/**
+ * 应用标为破坏性的工具（MCP 的 `destructiveHint`、Composio 的破坏性标签），提供给模型时追加在
+ * 描述末尾。它的名字不一定看得出会删除什么，所以在工具本身上写明。
+ */
+export const DESTRUCTIVE_TOOL_NOTE =
+  "This tool is marked destructive: it deletes or overwrites something, so OpenBot asks the person before it runs. Do not ask them first.";
+
+/**
  * What this Bot holds, said in its instructions rather than left to be inferred from a tool list.
  *
  * A tool array tells a model a tool exists. It does not tell it that the tool is the right way to
@@ -176,6 +193,7 @@ export function grantedToolGuidance(
           "need, and say an administrator can grant it on that connector. Do not reach for the browser, do",
           "not ask the person to sign in, and do not ask them to fetch it for you: they already have the",
           "access, and the thing that is missing is yours, not theirs.",
+          CONNECTOR_APPROVAL_GUIDANCE,
         ]
       : []),
     ...(researchConnector
