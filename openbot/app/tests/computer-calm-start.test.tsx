@@ -14,11 +14,7 @@ import { ComputerView } from "@/components/computer/computer-view";
 
 test("a call turned away by a computer still starting reads as not done yet, not as a failure", () => {
   const view = render(
-    <ToolLine
-      label="点击了"
-      detail="电脑还在启动。"
-      notYet
-    />,
+    <ToolLine label="点击了" detail="电脑还在启动。" notYet />,
   );
   const line = view.getByText("点击了，还没做");
   expect(line.closest(".text-amber-600")).toBeNull();
@@ -150,9 +146,7 @@ test("a computer that is starting says so, calmly, and shows no problem", async 
   );
 
   expect(
-    await view.findByText(
-      "正在启动Sales的电脑。第一次启动大约需要一分钟。",
-    ),
+    await view.findByText("正在启动Sales的电脑。第一次启动大约需要一分钟。"),
   ).toBeDefined();
   expect(view.queryByText(/can't show the screen/i)).toBeNull();
   expect(view.queryByText(/error/i)).toBeNull();
@@ -186,11 +180,7 @@ test("failed screenshots during a start are not a problem until the grace runs o
 
   // Past the grace, with still no frame, it is worth saying.
   expect(
-    await view.findByText(
-      "现在看不到屏幕",
-      {},
-      { timeout: 1000 },
-    ),
+    await view.findByText("现在看不到屏幕", {}, { timeout: 1000 }),
   ).toBeDefined();
   expect(view.getByText("The computer did not respond.")).toBeDefined();
 });
@@ -215,9 +205,7 @@ test("a computer the server cannot reach is a problem straight away", async () =
     <ComputerView active computerId="sales" intervalMs={10} name="Sales" />,
   );
 
-  expect(
-    await view.findByText("Sales的电脑暂时连不上。"),
-  ).toBeDefined();
+  expect(await view.findByText("Sales的电脑暂时连不上。")).toBeDefined();
   // The provider's own words are for an admin, not this screen.
   expect(view.queryByText(/supervisor down/)).toBeNull();
 });
@@ -239,9 +227,7 @@ test("a computer that is off, watched from the side panel, says it starts when t
   );
 
   expect(
-    await view.findByText(
-      "Sales的电脑已关机。员工下次用到它时会自动启动。",
-    ),
+    await view.findByText("Sales的电脑已关机。员工下次用到它时会自动启动。"),
   ).toBeDefined();
   // Off is not stalled: waiting past the grace still shows no problem.
   await act(async () => {
@@ -300,11 +286,7 @@ test("a computer that was off and then fails is not called off for ever", async 
   );
 
   expect(
-    await view.findByText(
-      "现在看不到屏幕",
-      {},
-      { timeout: 1000 },
-    ),
+    await view.findByText("现在看不到屏幕", {}, { timeout: 1000 }),
   ).toBeDefined();
   expect(view.queryByText(/is off/)).toBeNull();
 });
@@ -326,9 +308,7 @@ test("a computer that goes to sleep stops showing its last frame", async () => {
   await view.findByAltText("员工正在看的内容");
   await waitFor(() => {
     expect(
-      view.getByText(
-        "Sales的电脑已关机。员工下次用到它时会自动启动。",
-      ),
+      view.getByText("Sales的电脑已关机。员工下次用到它时会自动启动。"),
     ).toBeDefined();
     expect(view.queryByAltText("员工正在看的内容")).toBeNull();
   });

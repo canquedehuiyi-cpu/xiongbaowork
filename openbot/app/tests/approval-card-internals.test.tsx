@@ -116,9 +116,9 @@ test("on the Needs you board, a click names the link and shows no raw JSON", asy
   serving();
   const view = draw(<BotNeedsYou agentId="researcher" />);
   expect(
-    await view.findByText("Click the link “Python (programming language)”"),
+    await view.findByText("点击链接「Python (programming language)」"),
   ).toBeTruthy();
-  expect(view.getByText("Fill in “Search Wikipedia”")).toBeTruthy();
+  expect(view.getByText("填写「Search Wikipedia」")).toBeTruthy();
   // What a typing step would send is still shown whole, by its label.
   expect(view.getByText("Text")).toBeTruthy();
   expect(view.getByText("monty python")).toBeTruthy();
@@ -131,7 +131,7 @@ test("on the Bot's page, a click says what the Bot wants to do and shows no raw 
   const view = draw(<WaitingForYou agentId="researcher" />);
   expect(
     await view.findByText(
-      "Researcher wants to click the link “Python (programming language)”",
+      "Researcher 想要点击链接「Python (programming language)」",
     ),
   ).toBeTruthy();
   expect(view.getByText("monty python")).toBeTruthy();

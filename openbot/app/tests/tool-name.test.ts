@@ -15,13 +15,13 @@ describe("naming a tool call", () => {
       "mcp__parallel__web_search",
       "mcp__firecrawl__firecrawl_search",
     ]) {
-      expect(readToolName(name)).toEqual({ label: "Search the web" });
+      expect(readToolName(name)).toEqual({ label: "搜索网页" });
     }
     expect(readToolName("mcp__exa__web_fetch_exa")).toEqual({
-      label: "Read web pages",
+      label: "读取网页",
     });
     expect(readToolName("mcp__firecrawl__firecrawl_scrape")).toEqual({
-      label: "Read web pages",
+      label: "读取网页",
     });
     // Only the research pair is relabelled; a provider's other tools keep their own names.
     expect(readToolName("mcp__firecrawl__firecrawl_map")).toEqual({
@@ -67,10 +67,10 @@ describe("naming a tool call", () => {
   test("a goal's tools on the Routines app read as a goal's run reads them", () => {
     // Asked for a goal in a conversation, the step read "Create goal" beside "routines".
     expect(readToolName("mcp__routines__create_goal")).toEqual({
-      label: "Created a goal",
+      label: "创建了目标",
     });
     expect(readToolName("mcp__routines__list_goals", true)).toEqual({
-      label: "Checking goals",
+      label: "正在查看目标",
     });
   });
 
@@ -113,22 +113,14 @@ describe("naming a tool call", () => {
     });
   });
 
-  test("an Arcade app is named as the app, never as arcade-", () => {
-    // Arcade already strips its toolkit from the action, so only the broker prefix is left to drop.
-    expect(readToolName("mcp__arcade-Gmail__ListEmails")).toEqual({
-      label: "List emails",
-      detail: "Gmail",
-    });
-  });
-
   test("a name outside MCP and the label table still reads in words", () => {
     // A component's line is drawn before its renderer may have loaded, and a model can call a name
     // it was never offered. Either way the line says it in words, from the first frame.
     expect(readToolName("showBarChart")).toEqual({ label: "Show bar chart" });
     expect(readToolName("web_search", true)).toEqual({ label: "Web search" });
     expect(readToolName("web_search")).toEqual({ label: "Web search" });
-    expect(readToolName("", true)).toEqual({ label: "Using a tool" });
-    expect(readToolName("__")).toEqual({ label: "Used a tool" });
+    expect(readToolName("", true)).toEqual({ label: "正在使用工具" });
+    expect(readToolName("__")).toEqual({ label: "使用了工具" });
   });
 
   test("the server is dropped when a hyphenated server's words are already in the label", () => {
@@ -180,10 +172,10 @@ describe("naming a tool call", () => {
 describe("this deployment's own tools", () => {
   test("show_app_access is named for what it is doing, then for what it did", () => {
     expect(readToolName("show_app_access", true)).toEqual({
-      label: "Checking app access",
+      label: "正在查看应用权限",
     });
     expect(readToolName("show_app_access")).toEqual({
-      label: "Checked app access",
+      label: "查看了应用权限",
     });
   });
 
@@ -217,23 +209,17 @@ describe("naming what an approval asks to do", () => {
         scope: "composio-gmail",
       }),
     ).toEqual({ action: "send email", place: "Gmail" });
-    expect(
-      approvalWords({
-        toolRef: "arcade-Slack/SendMessage",
-        scope: "arcade-Slack",
-      }),
-    ).toEqual({ action: "send message", place: "Slack" });
   });
 
   test("a computer action keeps its words, and a file or a command reads as its step does", () => {
     expect(
       approvalWords({ toolRef: "computer_click", scope: "example.com" }),
-    ).toEqual({ action: "click", place: "example.com" });
+    ).toEqual({ action: "点击", place: "example.com" });
     expect(
       approvalWords({ toolRef: "computer_write_file", scope: "workspace" }),
-    ).toEqual({ action: "save a file", place: "workspace" });
+    ).toEqual({ action: "保存文件", place: "workspace" });
     expect(
       approvalWords({ toolRef: "host/run_command", scope: "grant-1" }),
-    ).toEqual({ action: "run a command", place: "grant-1" });
+    ).toEqual({ action: "执行命令", place: "grant-1" });
   });
 });

@@ -80,7 +80,7 @@ test("a figure with a web address opens it in a new tab with no referrer, named 
   const names = [
     "Support: 12",
     "Cloud: 75%",
-    "Hiring: 3 of 8",
+    "Hiring: 3 / 8",
     "Revenue: $412k",
   ];
   charts(RECORD).forEach((chart, index) => {

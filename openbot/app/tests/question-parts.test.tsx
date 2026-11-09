@@ -173,8 +173,8 @@ test("a question of one decision reads as asked, and is not numbered as if more 
     ),
   );
 
-  await view.findByText("Asked you");
-  expect(view.queryByText(/Blocked/)).toBeNull();
+  await view.findByText("问了你");
+  expect(view.queryByText(/已拦截/)).toBeNull();
   const list = view.getByRole("list");
   expect(list.className).not.toContain("list-decimal");
   expect(view.getByRole("listitem").textContent).toBe(
@@ -188,7 +188,7 @@ test("several decisions are still numbered", async () => {
     JSON.stringify(`${PUT_TO}the person in this conversation.`),
   );
 
-  await view.findByText("Asked you");
+  await view.findByText("问了你");
   expect(view.getByRole("list").className).toContain("list-decimal");
   expect(view.getAllByRole("listitem")).toHaveLength(2);
 });

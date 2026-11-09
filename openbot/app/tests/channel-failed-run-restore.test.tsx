@@ -332,17 +332,17 @@ function open(selected = channel) {
 }
 async function send(view: ReturnType<typeof open>, text: string) {
   const user = userEvent.setup({ document: view.container.ownerDocument });
-  const box = await view.findByRole("textbox", { name: "Message" });
+  const box = await view.findByRole("textbox", { name: "消息" });
   await user.clear(box);
   await user.type(box, text);
-  await user.click(view.getByRole("button", { name: "Send message" }));
+  await user.click(view.getByRole("button", { name: "发送消息" }));
   return user;
 }
 /** Settled: the history is in and the composer is open again. */
 async function settled(view: ReturnType<typeof open>, said: string) {
   await view.findByText(said);
   await waitFor(() =>
-    expect(view.queryByRole("button", { name: "Stop the Bot" })).toBeNull(),
+    expect(view.queryByRole("button", { name: "停止员工" })).toBeNull(),
   );
 }
 
@@ -402,10 +402,10 @@ test("a run the person stopped is not shown as a failure, live or after a reload
   const live = open();
   const user = await send(live, "Summarise my inbox");
   await live.findByText("Reading your inbox");
-  await user.click(await live.findByRole("button", { name: "Stop the Bot" }));
+  await user.click(await live.findByRole("button", { name: "停止员工" }));
   await waitFor(() => expect(stopRequests).toEqual([channel.threadId]));
   await waitFor(() =>
-    expect(live.queryByRole("button", { name: "Stop the Bot" })).toBeNull(),
+    expect(live.queryByRole("button", { name: "停止员工" })).toBeNull(),
   );
   expect(live.queryByTestId("transcript-stopped")).toBeNull();
 
@@ -431,6 +431,6 @@ test("a turn that fails in a run after its browser steps says so, as one that fa
   expect(shown.textContent).toBe(OUT_OF_TIME);
   expect(stepsRun).toBe(2);
   await waitFor(() =>
-    expect(live.queryByRole("button", { name: "Stop the Bot" })).toBeNull(),
+    expect(live.queryByRole("button", { name: "停止员工" })).toBeNull(),
   );
 });

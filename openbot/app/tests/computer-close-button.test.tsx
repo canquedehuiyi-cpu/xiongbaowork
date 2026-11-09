@@ -121,9 +121,9 @@ async function openFullSize() {
   const view = renderWithQueries(
     <ComputerView active computerId="sales" intervalMs={10} name="Sales" />,
   );
-  await view.findByAltText("What the Bot is looking at");
-  fireEvent.click(view.getByLabelText("Open the Bot's screen full size"));
-  await view.findByRole("dialog", { name: "The Bot's screen" });
+  await view.findByAltText("员工正在看的内容");
+  fireEvent.click(view.getByLabelText("全屏打开员工的屏幕"));
+  await view.findByRole("dialog", { name: "员工的屏幕" });
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
@@ -132,7 +132,7 @@ async function openFullSize() {
 
 /** The close button a person can see: an X in the card, not the backdrop behind it. */
 function closeButton(view: Awaited<ReturnType<typeof openFullSize>>) {
-  const button = view.getByRole("button", { name: "Close the Bot's screen" });
+  const button = view.getByRole("button", { name: "关闭员工的屏幕" });
   expect(button.querySelector("svg")).not.toBeNull();
   return button;
 }
@@ -144,22 +144,20 @@ test("watching a Bot work, the close button takes the person back", async () => 
   fireEvent.click(closeButton(view));
 
   await waitFor(() =>
-    expect(view.queryByRole("dialog", { name: "The Bot's screen" })).toBeNull(),
+    expect(view.queryByRole("dialog", { name: "员工的屏幕" })).toBeNull(),
   );
 });
 
 test("with the wheel in the person's hands, the close button still takes them back", async () => {
   serve("human");
   const view = await openFullSize();
-  await view.findAllByText(/You have control/);
+  await view.findAllByText(/由你操作/);
 
   fireEvent.click(closeButton(view));
 
   await waitFor(() =>
-    expect(view.queryByRole("dialog", { name: "The Bot's screen" })).toBeNull(),
+    expect(view.queryByRole("dialog", { name: "员工的屏幕" })).toBeNull(),
   );
   // Closing never hands the wheel back, so the Bot is still waiting on them, and the small view says so.
-  expect(
-    view.getByText(/The Bot waits until you hand it back\./),
-  ).toBeDefined();
+  expect(view.getByText(/员工会一直等到你交还。/)).toBeDefined();
 });

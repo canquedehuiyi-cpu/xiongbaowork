@@ -108,8 +108,8 @@ function serve(url: string) {
 
 /** The strip over the foot of the Bot's screen. */
 async function strip(view: ReturnType<typeof renderWithQueries>) {
-  await view.findByAltText("What the Bot is looking at");
-  const found = await view.findByText(/has control$/);
+  await view.findByAltText("员工正在看的内容");
+  const found = await view.findByText(/^由.*操作$/);
   const element = found.closest('[data-slot="control-strip"]');
   expect(element).not.toBeNull();
   return within(element as HTMLElement);
@@ -121,8 +121,8 @@ test("while the Bot holds the wheel, the strip on its screen names it and offers
     <ComputerView active computerId="sales" intervalMs={10} name="Sales" />,
   );
   const status = await strip(view);
-  expect(status.getByText("Sales has control")).toBeTruthy();
-  expect(status.getByRole("button", { name: "Take control" })).toBeTruthy();
+  expect(status.getByText("由Sales操作")).toBeTruthy();
+  expect(status.getByRole("button", { name: "接管" })).toBeTruthy();
 });
 
 test("a Bot without a name is still said to have control", async () => {
@@ -131,7 +131,7 @@ test("a Bot without a name is still said to have control", async () => {
     <ComputerView active computerId="sales" intervalMs={10} />,
   );
   const status = await strip(view);
-  expect(status.getByText("The Bot has control")).toBeTruthy();
+  expect(status.getByText("由员工操作")).toBeTruthy();
 });
 
 test("the window's address bar says where the Bot's browser is: the site, then the rest of the address", async () => {
@@ -139,7 +139,7 @@ test("the window's address bar says where the Bot's browser is: the site, then t
   const view = renderWithQueries(
     <ComputerView active computerId="sales" intervalMs={10} name="Sales" />,
   );
-  await view.findByAltText("What the Bot is looking at");
+  await view.findByAltText("员工正在看的内容");
   const host = await view.findByText("shop.example.com");
   const bar = host.closest("figcaption");
   expect(bar).not.toBeNull();

@@ -1,14 +1,14 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render } from "@testing-library/react";
-import { RecentDeliveries } from "@/components/settings/devices";
+import { RecentDeliveries } from "@/components/reachability/recent-deliveries";
+import type { Reachability } from "@/lib/delivery";
 import { settleReactWork } from "./settle-react-work";
 
 /**
- * Settings → Notifications, Recent deliveries: every message OpenBot sent the person outside the web
- * app, named in the words the rest of the page uses. A row once read "push · attention" and
- * "failed": the server's own names for the channel, the kind and the state.
+ * 可达性 › 最近送达 (upstream's Settings → Notifications, Recent deliveries): every message sent the
+ * person outside the web app, named in the words the rest of the page uses. A row once read
+ * "push · attention" and "failed": the server's own names for the channel, the kind and the state.
  */
 
 beforeAll(() => GlobalRegistrator.register());
@@ -18,19 +18,16 @@ afterAll(async () => {
   GlobalRegistrator.unregister();
 });
 
-const originalFetch = global.fetch;
-afterEach(() => {
-  global.fetch = originalFetch;
-});
+type Delivery = Reachability["deliveries"][number];
 
 /** One `delivery_outbox` row as `/api/delivery` returns it. */
 const delivery = (
   id: string,
-  transport: string,
-  kind: string,
-  state: string,
+  transport: Delivery["transport"],
+  kind: Delivery["kind"],
+  state: Delivery["state"],
   error: string | null = null,
-) => ({
+): Delivery & Record<string, unknown> => ({
   id,
   ownerUserId: "person",
   channelId: "channel",
@@ -49,28 +46,12 @@ const delivery = (
   updatedAt: "2026-10-30T22:24:30Z",
 });
 
+/** The section as 可达性 draws it, with what `/api/delivery` listed. */
 function draw(deliveries: ReturnType<typeof delivery>[]) {
-  global.fetch = (async (input: RequestInfo | URL) =>
-    String(input).endsWith("/api/delivery")
-      ? Response.json({
-          bindings: [],
-          devices: [],
-          deliveries,
-          available: { slack: true, teams: true, sms: true, push: true },
-        })
-      : new Response(null, { status: 404 })) as unknown as typeof fetch;
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
-  return render(
-    <QueryClientProvider client={client}>
-      <RecentDeliveries />
-    </QueryClientProvider>,
-  );
+  return render(<RecentDeliveries deliveries={deliveries} />);
 }
 
-const rowOf = (title: HTMLElement) =>
-  title.closest('[data-slot="item-content"]')?.textContent ?? "";
+const rowOf = (title: HTMLElement) => title.closest("li")?.textContent ?? "";
 
 test("each row names its kind and its channel in the words the routing switches use", async () => {
   const view = draw([
@@ -85,16 +66,16 @@ test("each row names its kind and its channel in the words the routing switches 
     delivery("approval", "teams", "approval", "sent"),
     delivery("question", "sms", "question", "queued"),
   ]);
-  const ping = rowOf(await view.findByText("Something needs you"));
-  expect(ping).toContain("Push");
-  expect(ping).toContain("Failed");
+  const ping = rowOf(await view.findByText("有事需要你"));
+  expect(ping).toContain("原生推送");
+  expect(ping).toContain("送达失败");
   expect(ping).toContain("Expo delivery failed (DeviceNotRegistered).");
-  expect(rowOf(view.getByText("Progress"))).toContain("Slack");
-  expect(rowOf(view.getByText("Progress"))).toContain("Delivered");
-  expect(rowOf(view.getByText("Decision"))).toContain("Microsoft Teams");
-  expect(rowOf(view.getByText("Decision"))).toContain("Sent");
-  expect(rowOf(view.getByText("Question"))).toContain("SMS");
-  expect(rowOf(view.getByText("Question"))).toContain("Waiting to send");
+  expect(rowOf(view.getByText("回复"))).toContain("Slack");
+  expect(rowOf(view.getByText("回复"))).toContain("已送达");
+  expect(rowOf(view.getByText("审批请求"))).toContain("Microsoft Teams");
+  expect(rowOf(view.getByText("审批请求"))).toContain("已发出");
+  expect(rowOf(view.getByText("提问"))).toContain("短信");
+  expect(rowOf(view.getByText("提问"))).toContain("排队中");
   const page = view.container.textContent ?? "";
   for (const raw of ["attention", "push ·", "slack ·", "teams", "sms ·"])
     expect(page).not.toContain(raw);
@@ -119,11 +100,11 @@ test("a state with no plain word of its own is never shown as the server's name 
     delivery("handed", "push", "reply", "accepted"),
     delivery("going", "slack", "question", "running"),
   ]);
-  expect(await view.findAllByText("Something needs you")).toHaveLength(2);
+  expect(await view.findAllByText("有事需要你")).toHaveLength(2);
   const page = view.container.textContent ?? "";
   for (const raw of ["unknown", "opted_out", "accepted", "running"])
     expect(page).not.toContain(raw);
-  expect(page).toContain("Not confirmed");
-  expect(page).toContain("Not sent");
-  expect(page).toContain("Sending");
+  expect(page).toContain("状态未知");
+  expect(page).toContain("对方已退订");
+  expect(page).toContain("发送中");
 });

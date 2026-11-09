@@ -113,7 +113,7 @@ test("Done closes the dialog", async () => {
   const view = draw("refund-order", () => {
     closed += 1;
   });
-  fireEvent.click(await view.findByRole("button", { name: "Done" }));
+  fireEvent.click(await view.findByRole("button", { name: "完成" }));
   expect(closed).toBe(1);
 });
 

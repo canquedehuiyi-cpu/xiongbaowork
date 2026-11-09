@@ -32,7 +32,7 @@ function Fragile({ args }: { args: string }) {
   return <p>drawn {args}</p>;
 }
 
-const FALLBACK = /Couldn't show/;
+const FALLBACK = /没能画出来/;
 
 test("recovers on the next chunk", () => {
   const quiet = spyOn(console, "error").mockImplementation(() => {});

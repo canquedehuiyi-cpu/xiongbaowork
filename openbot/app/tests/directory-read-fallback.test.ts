@@ -6,11 +6,15 @@ afterEach(() => {
   globalThis.fetch = realFetch;
 });
 
-/** Runs the directory query against a failure that carries no server message at all. */
-async function failureMessage(provider: "composio" | "arcade") {
+/**
+ * Runs the directory query against a failure that carries no server message at all.
+ *
+ * 熊宝中文版的目录只服务 Composio（Arcade 不收），所以只有这一个目录。
+ */
+async function failureMessage() {
   globalThis.fetch = (async () =>
     new Response(null, { status: 500 })) as unknown as typeof fetch;
-  const options = composioAppsQueryOptions("", provider);
+  const options = composioAppsQueryOptions("");
   try {
     await (options.queryFn as (ctx: unknown) => Promise<unknown>)({});
   } catch (thrown) {
@@ -20,11 +24,7 @@ async function failureMessage(provider: "composio" | "arcade") {
 }
 
 test("a messageless directory failure is the directory screen's sentence, and names no broker", async () => {
-  for (const provider of ["composio", "arcade"] as const) {
-    const message = await failureMessage(provider);
-    expect(message).toBe(
-      "Couldn't load the apps you can connect. Reload the page.",
-    );
-    expect(message).not.toMatch(/composio|arcade/i);
-  }
+  const message = await failureMessage();
+  expect(message).toBe("读不到可以连接的应用。请刷新页面。");
+  expect(message).not.toMatch(/composio|arcade/i);
 });

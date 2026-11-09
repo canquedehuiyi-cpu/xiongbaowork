@@ -20,7 +20,7 @@ import captured from "../../server/tests/fixtures/composio-key-apps.json";
  *
  * Reported from OpenBot Desktop 0.3.3: a person browsing for apps expected a sign-in and kept
  * meeting a key form at Connect. Most of the catalogue has no sign-in, so the form is right; the
- * surprise is the bug. A key app's row now says "Needs a key from 1Password", and apps you sign in
+ * surprise is the bug. A key app's row now says "需要 1Password 的密钥", and apps you sign in
  * to are listed first.
  *
  * The rows are Composio's own catalogue answer, captured read-only on 2026-11-08. Each one's
@@ -37,12 +37,13 @@ afterEach(() => {
   global.fetch = originalFetch;
 });
 
-const VERDICT: Record<string, ComposioApp["connection"]["kind"]> = {
-  hubspot: "consent",
-  gmail: "consent",
-  _1password: "fields",
-  posthog: "fields",
-};
+const VERDICT: Record<string, NonNullable<ComposioApp["connection"]>["kind"]> =
+  {
+    hubspot: "consent",
+    gmail: "consent",
+    _1password: "fields",
+    posthog: "fields",
+  };
 
 /** The captured rows, as the directory route answers them: the server's own projection. */
 function directory(): ComposioApp[] {
@@ -54,9 +55,6 @@ function directory(): ComposioApp[] {
     logo: null,
     categories: [],
     actionCount: row.meta.tools_count,
-    classifiedCount: null,
-    permissionCount: null,
-    scopedActionCount: null,
     connection: { kind: VERDICT[row.slug] ?? "unsupported" },
     enabled: false,
   }));
@@ -141,20 +139,20 @@ test("a key-only app says it needs a key before Add, and a sign-in app does not"
   stubFetch(directory());
   const view = renderDirectory();
 
-  const onePassword = await view.findByTestId("directory-_1password");
-  expect(onePassword.textContent).toContain("Needs a key from 1Password");
+  const onePassword = await view.findByTestId("composio-_1password");
+  expect(onePassword.textContent).toContain("需要 1Password 的密钥");
   // Composio's catalogue spells it "1password"; the row never does.
   expect(onePassword.textContent).not.toContain("1password");
-  expect((await view.findByTestId("directory-posthog")).textContent).toContain(
-    "Needs a key from PostHog",
+  expect((await view.findByTestId("composio-posthog")).textContent).toContain(
+    "需要 PostHog 的密钥",
   );
 
   // HubSpot also takes a key, but it has a sign-in, and that is how it connects.
-  const hubspot = await view.findByTestId("directory-hubspot");
-  expect(hubspot.textContent).not.toContain("Needs a key");
-  expect(
-    (await view.findByTestId("directory-gmail")).textContent,
-  ).not.toContain("Needs a key");
+  const hubspot = await view.findByTestId("composio-hubspot");
+  expect(hubspot.textContent).not.toContain("的密钥");
+  expect((await view.findByTestId("composio-gmail")).textContent).not.toContain(
+    "的密钥",
+  );
 
   // The page never names the broker.
   expect(view.container.textContent ?? "").not.toMatch(/composio/i);
@@ -164,16 +162,16 @@ test("apps you sign in to are listed ahead of apps that need a key", async () =>
   stubFetch(directory());
   const view = renderDirectory();
 
-  await view.findByTestId("directory-_1password");
+  await view.findByTestId("composio-_1password");
   await waitFor(() => {
     const order = Array.from(
-      view.container.querySelectorAll("[data-testid^='directory-']"),
+      view.container.querySelectorAll("[data-testid^='composio-']"),
     ).map((row) => row.getAttribute("data-testid"));
     expect(order).toEqual([
-      "directory-gmail",
-      "directory-hubspot",
-      "directory-_1password",
-      "directory-posthog",
+      "composio-gmail",
+      "composio-hubspot",
+      "composio-_1password",
+      "composio-posthog",
     ]);
   });
 });

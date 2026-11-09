@@ -83,13 +83,13 @@ test("the name is a row that states it and opens a dialog to change it", async (
 test("standing instructions are a row that says what they are, or that there are none yet", async () => {
   const view = draw();
   const row = await view.findByRole("button", {
-    name: /None yet\. Tell every Bot how you want things done\./,
+    name: /还没有。告诉所有员工你希望事情怎么做。/,
   });
   await userEvent.setup({ document }).click(row);
   const dialog = await view.findByRole("dialog");
   expect(
     await within(dialog).findByRole("textbox", {
-      name: "Standing instructions",
+      name: "长期指令",
     }),
   ).toBeTruthy();
   cleanup();

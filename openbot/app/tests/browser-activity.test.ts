@@ -100,14 +100,12 @@ test("a step the person declined, or one the turn stopped before, is not drawn a
   const declined = browserStepDetails(
     step("name", "computer_type", DECLINED_BY_PERSON),
   );
-  expect(declined).toMatchObject({ failed: true, reason: "You declined it." });
+  expect(declined).toMatchObject({ failed: true, reason: "你拒绝了这一步。" });
   const notRun = browserStepDetails(
     step("email", "computer_type", NOT_RUN_WHILE_WAITING),
   );
   expect(notRun.failed).toBe(true);
-  expect(notRun.reason).toBe(
-    "Not done. The Bot stopped to wait for you on another step.",
-  );
+  expect(notRun.reason).toBe("没有执行：员工停下来等你处理另一步了。");
   // The person doing it themselves is done, by them; and the computer's own answers read as before.
   expect(
     browserStepDetails(step("note", "computer_type", HANDLED_BY_PERSON)).failed,

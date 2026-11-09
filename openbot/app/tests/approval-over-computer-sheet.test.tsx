@@ -157,7 +157,7 @@ test("on a narrow window the Computer sheet shows the approval it covers, and an
   await resize(view.container, 560);
   const sheet = await view.findByRole("dialog", { name: "Computer" });
   const card = await within(sheet).findByRole("region", {
-    name: "Waiting for your approval",
+    name: "等你批准",
   });
   expect(
     within(card).getByText("Deleting something always asks you first."),
@@ -166,15 +166,15 @@ test("on a narrow window the Computer sheet shows the approval it covers, and an
     within(card)
       .getAllByRole("radio")
       .map((radio) => radio.getAttribute("aria-label")),
-  ).toEqual(["Allow once", "Deny"]);
+  ).toEqual(["允许一次", "拒绝"]);
   // Only this conversation's: an approval waiting in another one is not drawn here.
   expect(
-    within(sheet).getAllByRole("region", { name: "Waiting for your approval" }),
+    within(sheet).getAllByRole("region", { name: "等你批准" }),
   ).toHaveLength(1);
   expect(within(sheet).getByText("Browser preview")).toBeTruthy();
 
-  fireEvent.click(within(card).getByRole("radio", { name: "Allow once" }));
-  fireEvent.click(within(card).getByRole("button", { name: "Allow once" }));
+  fireEvent.click(within(card).getByRole("radio", { name: "允许一次" }));
+  fireEvent.click(within(card).getByRole("button", { name: "允许一次" }));
   await waitFor(() =>
     expect(decisions).toContainEqual({
       url: "/api/approvals/delete-request/decision",
@@ -187,16 +187,14 @@ test("beside a wide conversation the card is already in view, and the pane does 
   serving();
   const view = draw();
   await resize(view.container, 1200);
-  await view.findByRole("region", { name: "Waiting for your approval" });
+  await view.findByRole("region", { name: "等你批准" });
   expect(view.queryByRole("dialog")).toBeNull();
   expect(view.getByText("Browser preview")).toBeTruthy();
-  expect(
-    view.getAllByRole("region", { name: "Waiting for your approval" }),
-  ).toHaveLength(1);
+  expect(view.getAllByRole("region", { name: "等你批准" })).toHaveLength(1);
   expect(
     within(view.getByRole("region", { name: "Conversation" })).getByRole(
       "region",
-      { name: "Waiting for your approval" },
+      { name: "等你批准" },
     ),
   ).toBeTruthy();
 });

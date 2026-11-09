@@ -17,17 +17,16 @@ import {
   RouterProvider,
 } from "@tanstack/react-router";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
-import { SettingsSidebar } from "@/components/settings/settings-sidebar";
-import { SidebarProvider } from "@/components/ui/sidebar";
+import { SettingsNav } from "@/components/settings/settings-sidebar";
 import { queryClient } from "@/query-client";
 import type { RouterContext } from "@/router-context";
 import { Route as SetupRoute } from "@/routes/_authed/settings/setup";
 import { settleReactWork } from "./settle-react-work";
 
 /**
- * Settings → Setup: onboarding's setup checklist, kept where an admin can reopen it after a
- * restart. An admin and the one person on a local install get it; a member is sent to General and
- * is never offered it in the sidebar.
+ * Settings → 部署设置: onboarding's setup checklist, kept where an admin can reopen it after a
+ * restart. An admin and the one person on a local install get it; a member is sent to 通用 and
+ * is never offered it in Settings' own column.
  */
 
 beforeAll(() => GlobalRegistrator.register({ url: "http://localhost:3010" }));
@@ -155,14 +154,10 @@ function open(path: string) {
   return Object.assign(view, { router });
 }
 
-/** The settings sidebar, inside a router so its links resolve. */
+/** Settings' own column, inside a router so its links resolve. */
 function sidebar() {
   const rootRoute = createRootRouteWithContext<RouterContext>()({
-    component: () => (
-      <SidebarProvider>
-        <SettingsSidebar />
-      </SidebarProvider>
-    ),
+    component: () => <SettingsNav />,
   });
   const router = createRouter({
     routeTree: rootRoute,
@@ -179,11 +174,11 @@ function sidebar() {
 test("an admin reopens the setup checklist in Settings, and can check again", async () => {
   const view = open("/settings/setup");
 
-  expect(await view.findByRole("heading", { name: "Setup" })).toBeTruthy();
-  expect(await view.findByRole("list", { name: "Setup" })).toBeTruthy();
+  expect(await view.findByRole("heading", { name: "部署设置" })).toBeTruthy();
+  expect(await view.findByRole("list", { name: "设置项" })).toBeTruthy();
   expect(view.getByText("OPENAI_API_KEY")).toBeTruthy();
 
-  fireEvent.click(view.getByRole("button", { name: "Check again" }));
+  fireEvent.click(view.getByRole("button", { name: "再检查一遍" }));
   await waitFor(() => expect(rechecked).toBe(1));
 });
 
@@ -202,7 +197,7 @@ test("a member doesn't get the page, and lands on General", async () => {
 
   expect(await view.findByText("General settings")).toBeTruthy();
   expect(view.router.state.location.pathname).toBe("/settings");
-  expect(view.queryByRole("heading", { name: "Setup" })).toBeNull();
+  expect(view.queryByRole("heading", { name: "部署设置" })).toBeNull();
 });
 
 test("the one person on a local install gets the page", async () => {
@@ -210,13 +205,13 @@ test("the one person on a local install gets the page", async () => {
   localEvaluation = true;
   const view = open("/settings/setup");
 
-  expect(await view.findByRole("heading", { name: "Setup" })).toBeTruthy();
+  expect(await view.findByRole("heading", { name: "部署设置" })).toBeTruthy();
 });
 
-test("the sidebar lists Setup for an admin", async () => {
+test("the sidebar lists 部署设置 for an admin", async () => {
   const view = sidebar();
 
-  const link = await view.findByRole("link", { name: /^Setup/ });
+  const link = await view.findByRole("link", { name: /^部署设置/ });
   expect(link.getAttribute("href")).toBe("/settings/setup");
 });
 
@@ -233,13 +228,16 @@ const row = (id: string, over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-/** The sidebar's Setup link, once it reads `text`, the count's words included. */
-const setupLink = (view: ReturnType<typeof render>, text: string) =>
-  waitFor(() => {
-    const link = view.getByRole("link", { name: /^Setup/ });
-    expect(link.textContent).toBe(text);
-    return link;
-  });
+/**
+ * The sidebar's 部署设置 link, once its name reads `text`, the count's words included. The count's
+ * words are a span of their own, which the test DOM (no layout) names with a space before it.
+ */
+const setupLink = (view: ReturnType<typeof render>, text: string) => {
+  const [title, count] = text.split("，");
+  return waitFor(() =>
+    view.getByRole("link", { name: new RegExp(`^${title}\\s*，${count}$`) }),
+  );
+};
 
 test("an admin's sidebar counts beside Setup the rows they can fix", async () => {
   checklist = {
@@ -254,47 +252,42 @@ test("an admin's sidebar counts beside Setup the rows they can fix", async () =>
   };
   const view = sidebar();
 
-  const link = await setupLink(view, "Setup, 2 need setup");
-  const badge = link.parentElement?.querySelector(
-    '[data-sidebar="menu-badge"]',
-  );
+  const link = await setupLink(view, "部署设置，2 项待设置");
+  const badge = link.querySelector('[aria-hidden="true"]');
   expect(badge?.textContent).toBe("2");
   // Said once, in the link's name: the number on its own is hidden.
   expect(badge?.getAttribute("aria-hidden")).toBe("true");
 });
 
-test("one row to fix reads in the singular", async () => {
+test("one row to fix is counted as one", async () => {
   checklist = { audience: "admin", rows: [row("model")] };
   const view = sidebar();
 
-  expect(await setupLink(view, "Setup, 1 needs setup")).toBeTruthy();
+  expect(await setupLink(view, "部署设置，1 项待设置")).toBeTruthy();
 });
 
-test("an admin with nothing to fix sees Setup without a count", async () => {
+test("an admin with nothing to fix sees 部署设置 without a count", async () => {
   checklist = {
     audience: "admin",
     rows: [row("model", { status: "ready", ready: true })],
   };
   const view = sidebar();
 
-  await view.findByRole("link", { name: /^Setup/ });
+  await view.findByRole("link", { name: /^部署设置/ });
   await waitFor(() => expect(queryClient.isFetching()).toBe(0));
-  expect(view.getByRole("link", { name: /^Setup/ }).textContent).toBe("Setup");
-  expect(view.container.querySelector('[data-sidebar="menu-badge"]')).toBe(
-    null,
-  );
+  const link = view.getByRole("link", { name: /^部署设置/ });
+  expect(link.textContent).toBe("部署设置");
+  expect(link.querySelector('[aria-hidden="true"]')).toBe(null);
 });
 
-test("the sidebar never offers Setup to a member", async () => {
+test("the sidebar never offers 部署设置 to a member", async () => {
   role = "user";
   const view = sidebar();
 
-  await view.findByRole("link", { name: "General" });
+  await view.findByRole("link", { name: "通用" });
   await waitFor(() => expect(queryClient.isFetching()).toBe(0));
-  expect(view.queryByRole("link", { name: /^Setup/ })).toBeNull();
+  expect(view.queryByRole("link", { name: /^部署设置/ })).toBeNull();
   // Nor is the checklist asked for: there is nothing in it a member could fix.
   expect(requested).not.toContain("/api/setup");
-  expect(view.container.querySelector('[data-sidebar="menu-badge"]')).toBe(
-    null,
-  );
+  expect(view.container.textContent).not.toContain("项待设置");
 });

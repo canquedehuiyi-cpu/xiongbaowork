@@ -109,7 +109,7 @@ test("a table draws its complete rows while the last one is still arriving", () 
     </GalleryStreamingContext.Provider>,
   );
 
-  expect(view.queryByText(/Waiting for complete table data/)).toBeNull();
+  expect(view.queryByText(/正在等待完整的表格数据/)).toBeNull();
   expect(view.getByText("Q1")).toBeTruthy();
   expect(view.container.querySelectorAll("tbody tr").length).toBe(2);
 });
@@ -124,8 +124,8 @@ test("a complete table with a short last row is still refused", () => {
   );
 
   // Refused as a failure: nothing more is coming, so it does not wait.
-  expect(view.getByText("Couldn't show the data table.")).toBeTruthy();
-  expect(view.queryByText(/Waiting for complete table data/)).toBeNull();
+  expect(view.getByText("没能显示：Data table")).toBeTruthy();
+  expect(view.queryByText(/正在等待完整的表格数据/)).toBeNull();
   expect(view.queryByRole("table")).toBeNull();
 });
 

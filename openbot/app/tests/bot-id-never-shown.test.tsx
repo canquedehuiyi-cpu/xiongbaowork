@@ -92,7 +92,7 @@ async function renderActivity(queryClient: QueryClient) {
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
-  await view.findByText("Decision");
+  await view.findByText("结果");
   return view;
 }
 
@@ -105,7 +105,7 @@ test("Activity names the Bot and never shows its id, not even on hover", async (
   );
   const table = view.container.querySelector("tbody") as Element;
   expect(table.textContent).toContain(NAME);
-  expect(table.textContent).toContain(`Handed on by ${NAME}`);
+  expect(table.textContent).toContain(`由 ${NAME} 转交`);
   expect(everythingOn(table)).not.toContain(ID);
 });
 

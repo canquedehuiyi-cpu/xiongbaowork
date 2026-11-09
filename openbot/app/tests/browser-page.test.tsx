@@ -528,7 +528,7 @@ async function pressRecord(
   user: ReturnType<typeof userEvent.setup>,
 ) {
   if (!view.queryByRole("button", { name: "开始录制" })) {
-    const record = view.queryByRole("button", { name: "Record" });
+    const record = view.queryByRole("button", { name: "录制" });
     if (!record) {
       await user.click(view.getByRole("button", { name: "继续" }));
       await user.click(
@@ -554,7 +554,7 @@ async function behindRecord(
   const found = await waitFor(() => {
     const shown =
       view.queryByRole(role, { name }) ??
-      view.queryByRole("button", { name: "Record" });
+      view.queryByRole("button", { name: "录制" });
     if (!shown) throw new Error(`Neither ${name} nor Record is on the page.`);
     return shown;
   });
@@ -647,15 +647,15 @@ test("Teach a Bot says what it is above the browser, and leads from the recordin
   expect(titles[0]?.textContent).toBe("教员工做事");
   expect(
     view.getByText(
-      "Show your Bots how to do a task. Press Record, name the task, and do it once in the browser.",
+      "教员工怎么做一件事：点「录制」，给任务起个名字，然后在浏览器里亲自做一遍。",
     ),
   ).toBeTruthy();
   // What the recordings taught is in Settings, Learning, with the settings for it; this page only leads there.
   const learned = await view.findByRole("link", {
-    name: "See what your Bots learned",
+    name: "看看员工学到了什么",
   });
   expect(learned.getAttribute("href")).toBe("/settings/learning");
-  expect(view.queryByRole("switch", { name: /automatically/i })).toBeNull();
+  expect(view.queryByRole("switch", { name: /自动/ })).toBeNull();
 });
 
 test("under a browser shown in the page, no empty strip draws while the list loads", async () => {
@@ -688,7 +688,7 @@ test("arriving from the Recorder's link shows the recordings and opens no browse
   // The browser is one press away, not gone.
   await userEvent
     .setup({ document })
-    .click(view.getByRole("button", { name: "Open browser" }));
+    .click(view.getByRole("button", { name: "打开浏览器" }));
   await waitFor(() => expect(opens()).toBe(1));
 });
 
@@ -1193,7 +1193,7 @@ test("a recording of narration alone is saved, with its phrases, never said to h
         ? "Talk it through已存进你的学习空间：0 个动作和 3 句讲解。"
         : "已把「Talk it through」存进你的学习空间：0 个动作和 3 句讲解。",
     );
-    expect(view.queryByText(/Nothing was recorded/)).toBeNull();
+    expect(view.queryByText(/什么也没录到/)).toBeNull();
   }
 });
 
@@ -1357,12 +1357,12 @@ test("while the browser opens, the page's description names the button the page 
   // The Desktop's run of 2026-11-08 read "press Start recording" here, above a button that says Record.
   expect(
     await view.findByText(
-      "Show your Bots how to do a task. Press Record, name the task, and do it once in the browser.",
+      "教员工怎么做一件事：点「录制」，给任务起个名字，然后在浏览器里亲自做一遍。",
     ),
   ).toBeTruthy();
-  expect(view.queryByText(/Start recording/)).toBeNull();
+  expect(view.queryByText(/开始录制/)).toBeNull();
   opened();
-  expect(await view.findByRole("button", { name: "Record" })).toBeTruthy();
+  expect(await view.findByRole("button", { name: "录制" })).toBeTruthy();
 });
 
 test("on hosted OpenBot Record's (i) beside Narration says what narration is for, and pressing it records nothing", async () => {
@@ -1393,7 +1393,7 @@ test("on hosted OpenBot the toolbar holds one Record button, which asks for the 
   installChrome();
   const view = draw(<BrowserPage />);
   const user = userEvent.setup({ document });
-  const record = await view.findByRole("button", { name: "Record" });
+  const record = await view.findByRole("button", { name: "录制" });
   // Nothing to fill in beside the address bar until Record is pressed.
   expect(view.queryByRole("textbox", { name: "任务名称" })).toBeNull();
   expect(view.queryByRole("switch", { name: "讲解" })).toBeNull();
@@ -1685,7 +1685,7 @@ test("in the OpenBot Desktop window on a computer with no microphone, narration 
   await waitFor(async () =>
     expect((await toggle()).getAttribute("aria-checked")).toBe("true"),
   );
-  expect(view.queryByText(/^Narration is/)).toBeNull();
+  expect(view.queryByText(/^讲解已/)).toBeNull();
 
   await user.type(await taskField(view, user), "Submit an expense report");
   await pressRecord(view, user);
@@ -1695,18 +1695,18 @@ test("in the OpenBot Desktop window on a computer with no microphone, narration 
 
   await user.click(view.getByRole("button", { name: "停止" }));
   await stopped();
-  await view.findByRole("button", { name: "Record" });
+  await view.findByRole("button", { name: "录制" });
   await settleReactWork();
   // Still off once nothing records: the switch does not turn itself back on, and the status bar went with the recording.
   expect((await toggle()).getAttribute("aria-checked")).toBe("false");
-  expect(view.queryByText(/^Narration is/)).toBeNull();
+  expect(view.queryByText(/^讲解已/)).toBeNull();
 
   // The person turns it on: on, and still nothing captured while nothing records.
   await user.click(await toggle());
   await waitFor(async () =>
     expect((await toggle()).getAttribute("aria-checked")).toBe("true"),
   );
-  expect(view.queryByText(/^Narration is/)).toBeNull();
+  expect(view.queryByText(/^讲解已/)).toBeNull();
 
   // The next Record tries again, and the missing microphone turns narration off again.
   await user.type(await taskField(view, user), "Submit the taxi receipt");
@@ -1714,7 +1714,7 @@ test("in the OpenBot Desktop window on a computer with no microphone, narration 
   await waitFor(() => expect(starts()).toBe(2));
   expect(await view.findByText("讲解已关闭。")).toBeTruthy();
   expect((await toggle()).getAttribute("aria-checked")).toBe("false");
-  expect(view.queryByText(/capturing your voice/)).toBeNull();
+  expect(view.queryByText(/正在收录你的声音/)).toBeNull();
 
   // A microphone plugged in, and narration turned on while recording: it listens, and says so.
   desktop.fails = undefined;
@@ -1725,10 +1725,10 @@ test("in the OpenBot Desktop window on a computer with no microphone, narration 
 
   await user.click(view.getByRole("button", { name: "停止" }));
   await stopped();
-  await view.findByRole("button", { name: "Record" });
+  await view.findByRole("button", { name: "录制" });
   await settleReactWork();
   expect((await toggle()).getAttribute("aria-checked")).toBe("true");
-  expect(view.queryByText(/^Narration is/)).toBeNull();
+  expect(view.queryByText(/^讲解已/)).toBeNull();
 });
 
 /**
@@ -1782,7 +1782,7 @@ test("in the OpenBot Desktop window on a computer with no microphone, narration 
         view.getByRole("switch", { name: "讲解" }).getAttribute("aria-checked"),
       ).toBe("true"),
     );
-    expect(view.queryByText(/No microphone found/)).toBeNull();
+    expect(view.queryByText(/没找到麦克风/)).toBeNull();
   } finally {
     delete (navigator as { mediaDevices?: unknown }).mediaDevices;
   }
@@ -2478,7 +2478,7 @@ test("while a browser in the page opens on arrival, the page is laid out as it w
   await settleReactWork();
   expect(await view.findByText("正在打开你的浏览器…")).toBeTruthy();
   expect(view.queryByLabelText(SCREEN)).toBeNull();
-  expect(view.queryByRole("button", { name: "Record" })).toBeNull();
+  expect(view.queryByRole("button", { name: "录制" })).toBeNull();
   expect(view.queryByRole("textbox", { name: "地址" })).toBeNull();
   launched();
   expect(await view.findByLabelText(SCREEN)).toBeTruthy();
@@ -2506,9 +2506,7 @@ test("where OpenBot cannot run a browser for the person, the page says so and op
   state = { ...nativeState(), available: false, open: false };
   const view = draw(<BrowserPage />);
   expect(
-    await view.findByText(
-      "OpenBot isn't set up to run a browser for you. Ask an admin.",
-    ),
+    await view.findByText("这个部署还不能为你运行浏览器，请联系管理员。"),
   ).toBeTruthy();
   expect(opens()).toBe(0);
 });

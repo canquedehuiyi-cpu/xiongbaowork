@@ -20,8 +20,7 @@ const AI_SDK =
   "Error: Model tried to call unavailable tool 'web_search'. Available tools: generateSandboxedUi, computer_navigate, computer_read, mcp__routines__create_routine, copilotkit_load_skill, AGUISendStateSnapshot.";
 const LANGGRAPH =
   "Error: web_search is not a valid tool, try one of [computer_navigate, mcp__routines__create_routine].";
-const SENTENCE =
-  "This Bot asked for a tool it doesn't have, so it carried on without it.";
+const SENTENCE = "这位员工调用了一个它没有的工具，于是没用它，接着做了下去。";
 
 const originalFetch = globalThis.fetch;
 
@@ -105,7 +104,7 @@ function lone(result: string): Message[] {
 
 test("a lone call to a tool it was never offered opens to one sentence, and didn't work", async () => {
   const view = draw(lone(AI_SDK));
-  expect(await view.findByText("Web search, didn't work")).toBeTruthy();
+  expect(await view.findByText("Web search，没有成功")).toBeTruthy();
   expectOneSentence(view.container);
 });
 
@@ -116,7 +115,7 @@ test("LangGraph's wording, and the runtime's when the Bot has no tools at all, r
     "Error: Model tried to call unavailable tool 'web_search'. No tools are available.",
   ]) {
     const view = draw(lone(result));
-    expect(await view.findByText("Web search, didn't work")).toBeTruthy();
+    expect(await view.findByText("Web search，没有成功")).toBeTruthy();
     expectOneSentence(view.container);
     cleanup();
   }
@@ -138,7 +137,7 @@ test("the same call among other steps opens to the same sentence and counts as a
     { id: "t2", role: "tool", toolCallId: "c2", content: "Scout: yours" },
     { id: "a2", role: "assistant", content: "Done." },
   ]);
-  expect(await view.findByText("1 issue")).toBeTruthy();
+  expect(await view.findByText("1 个问题")).toBeTruthy();
   expectOneSentence(view.container);
 });
 

@@ -16,14 +16,12 @@ import {
   RouterProvider,
 } from "@tanstack/react-router";
 import { cleanup, render } from "@testing-library/react";
-import type { ComponentType } from "react";
 import { GALLERY as ACTIVITY } from "@/components/gallery/activity";
 import { GALLERY as TABLE } from "@/components/gallery/table";
+import { AuditPage } from "@/components/manage/audit-page";
 import { agentKeys } from "@/lib/agents/queries";
 import * as gallery from "@/lib/copilot/gallery-registry";
 import { deploymentKeys } from "@/lib/deployment/queries";
-import { Route as AdminAuditRoute } from "@/routes/_authed/admin/audit";
-import { Route as ActivityRoute } from "@/routes/_authed/settings/_personal/activity";
 import { seedAuditPage } from "./seed-audit-page";
 import { settleReactWork } from "./settle-react-work";
 
@@ -35,6 +33,11 @@ import { settleReactWork } from "./settle-react-work";
  * reason sending the person to an admin, "find-a-notion-page" under a skill, a key's id under
  * "Save a credential", and "Change a setting" for OpenBot setting up Learning. Admin keeps all of it
  * as it was.
+ */
+
+/*
+ * 熊宝版没有个人版的「活动」页：这里只测管理端的审计表（上游 `components/manage/audit-page.tsx`，
+ * 待接入 /admin/audit），个人版专有的用例不收。
  */
 
 beforeAll(() => GlobalRegistrator.register());
@@ -57,10 +60,6 @@ beforeEach(() => {
 afterAll(() => compiled.mockRestore());
 
 const BOT = "personal-assistant";
-
-/** Every query Activity sends leaves these out, as the page writes it. */
-const LEAVE_OUT =
-  "?excludeEventType=mcp.tools_discovered%2Cchannel.routed%2Ccomponent.published%2Ccomponent.description_updated%2Ccomputer.policy_loaded%2Ccomputer.isolation_loaded&excludeCalls=routines%2Fcreate_routine%2Croutines%2Fupdate_routine%2Croutines%2Fdelete_routine";
 
 function row(
   id: string,
@@ -188,10 +187,7 @@ const KEPT = [
   }),
 ];
 
-async function renderPage(
-  edition: "team" | "personal",
-  audit: Record<string, unknown[]>,
-) {
+async function renderPage(audit: Record<string, unknown[]>) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false, staleTime: Number.POSITIVE_INFINITY },
@@ -200,8 +196,8 @@ async function renderPage(
   queryClient.setQueryData(deploymentKeys.capabilities(), {
     generativeUi: true,
     selfHostBanner: false,
-    localEvaluation: edition === "personal",
-    edition,
+    localEvaluation: false,
+    edition: "team",
   });
   for (const [search, events] of Object.entries(audit))
     seedAuditPage(queryClient, search, { events });
@@ -209,10 +205,8 @@ async function renderPage(
     { id: BOT, name: "Personal Assistant" },
   ]);
   queryClient.setQueryData(agentKeys.list(true), []);
-  const Page = (edition === "personal" ? ActivityRoute : AdminAuditRoute)
-    .options.component as ComponentType;
   const router = createRouter({
-    routeTree: createRootRoute({ component: () => <Page /> }),
+    routeTree: createRootRoute({ component: () => <AuditPage /> }),
     history: createMemoryHistory({ initialEntries: ["/"] }),
   });
   const view = render(
@@ -235,65 +229,8 @@ function drawn(container: HTMLElement) {
   }));
 }
 
-test("Activity asks without routing, a build's components or the computer's start-up, and says the rest in words", async () => {
-  // Seeded only under the query that leaves them out: rows drawn mean the page asked for exactly that.
-  const view = await renderPage("personal", { [LEAVE_OUT]: KEPT });
-  const person = "由某个人发起";
-  const openbot = "由熊宝发起";
-  expect(drawn(view.container)).toEqual([
-    {
-      what: ["为组件读取数据", "Activity report · your Bots' activity"],
-      who: ["Personal Assistant", person],
-      decision: ["已拒绝", "它不能读取这些数据。"],
-    },
-    {
-      what: ["展示组件", "Data table"],
-      who: ["Personal Assistant", person],
-      decision: ["已拒绝", "这位员工不能展示它。"],
-    },
-    {
-      what: ["保存凭据", "Anthropic · personal"],
-      who: ["-", person],
-      decision: ["凭据已保存"],
-    },
-    // A removed key's row keeps nothing but its id, which is never shown.
-    {
-      what: ["删除凭据"],
-      who: ["-", person],
-      decision: ["已放行"],
-    },
-    {
-      what: ["打开页面", "example.com"],
-      who: ["Personal Assistant", person],
-      decision: ["已拦截", "Local computer access is off for you."],
-    },
-    {
-      what: ["给员工一项技能", "Find a document"],
-      who: ["Personal Assistant", openbot],
-      decision: ["配置已修改"],
-    },
-    {
-      what: ["设置学习"],
-      who: ["-", openbot],
-      decision: ["配置已修改"],
-    },
-  ]);
-  const table = view.container.querySelector("tbody")?.textContent ?? "";
-  for (const stored of [
-    "showActivityReport",
-    "botActivity",
-    "showTable",
-    "An admin",
-    "9869ac62",
-    "capability:",
-    "find-a-document",
-    "修改设置",
-  ])
-    expect(table).not.toContain(stored);
-});
-
 test("Admin keeps routing, a build's components, the computer's start-up and the stored names", async () => {
-  const view = await renderPage("team", {
+  const view = await renderPage({
     "": [ROUTED, ...KEPT.slice(0, 5), PUBLISHED, BOUNDARY],
   });
   expect(drawn(view.container)).toEqual([

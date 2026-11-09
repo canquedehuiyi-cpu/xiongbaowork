@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
-import { COMPONENT_GUIDANCE } from "@openbot/shared/bot-prompt";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { COMPONENT_GUIDANCE } from "@openbot/shared/bot-prompt";
 import { cleanup, render } from "@testing-library/react";
 import { ChecklistCard, GALLERY } from "@/components/gallery/cards";
 import { settleReactWork } from "./settle-react-work";

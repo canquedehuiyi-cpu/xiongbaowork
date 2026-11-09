@@ -30,7 +30,7 @@ import { settleReactWork } from "./settle-react-work";
  * the organization's sign-in in `error`; either way the person reads one plain sentence.
  */
 
-const UNFINISHED = "Signing out did not finish. Try again.";
+const UNFINISHED = "没能退出登录，请再试一次。";
 
 beforeAll(() => GlobalRegistrator.register());
 afterEach(cleanup);

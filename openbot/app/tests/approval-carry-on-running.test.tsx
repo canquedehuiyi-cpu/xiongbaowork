@@ -265,7 +265,7 @@ test("after Allow once, the conversation shows the Bot working until the server'
   const user = userEvent.setup({ document: view.container.ownerDocument });
 
   // Waiting on the person: nothing is running, so nothing says it is.
-  const allow = await view.findByRole("button", { name: "Allow once" });
+  const allow = await view.findByRole("button", { name: "允许一次" });
   expect(view.container.querySelector(WORKING)).toBeNull();
 
   await user.click(allow);
@@ -321,7 +321,7 @@ async function carriedOnThenEnded(
   history: Message[],
 ) {
   const user = userEvent.setup({ document: view.container.ownerDocument });
-  const allow = await view.findByRole("button", { name: "Allow once" });
+  const allow = await view.findByRole("button", { name: "允许一次" });
   /*
    * The reads opening the conversation makes are over (its restore, and the refresh that tries again
    * for two and a quarter seconds), so nothing but the end of the server's turn reads the thread again.
@@ -453,9 +453,7 @@ test("a second approval the server's turn stops on is asked in the conversation"
   ]);
 
   // Asked again, in the conversation, and nothing says the Bot is still going.
-  expect(
-    await view.findByRole("region", { name: "Waiting for your approval" }),
-  ).toBeTruthy();
-  expect(view.getByRole("button", { name: "Allow once" })).toBeTruthy();
+  expect(await view.findByRole("region", { name: "等你批准" })).toBeTruthy();
+  expect(view.getByRole("button", { name: "允许一次" })).toBeTruthy();
   expect(view.container.querySelector(WORKING)).toBeNull();
 }, 20_000);

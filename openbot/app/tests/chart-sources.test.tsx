@@ -41,7 +41,7 @@ test("a chart drawn from what the Bot read names and links its sources", () => {
   const link = view.getByRole("link", { name: "IMF World Economic Outlook" });
   expect(link.getAttribute("href")).toBe("https://imf.org/weo");
   expect(view.getByText(/Annual report/)).toBeTruthy();
-  expect(view.getByText(/As of 2025/)).toBeTruthy();
+  expect(view.getByText(/截至 2025/)).toBeTruthy();
 });
 
 test("figures from the Bot's own knowledge are marked as unchecked", () => {
@@ -53,7 +53,7 @@ test("figures from the Bot's own knowledge are marked as unchecked", () => {
       title="GDP"
     />,
   );
-  expect(view.getByText(/Not checked against a source/)).toBeTruthy();
+  expect(view.getByText(/没有对照来源核实/)).toBeTruthy();
 });
 
 test("the unchecked note and the sources read as separate parts", () => {
@@ -66,7 +66,7 @@ test("the unchecked note and the sources read as separate parts", () => {
     />,
   );
   expect(view.container.textContent).toContain(
-    "Not checked against a source. · Sources: Annual report",
+    "来自员工自己的知识，没有对照来源核实。 · 来源：Annual report",
   );
 });
 
@@ -82,9 +82,9 @@ test("sources the model wrote in the wrong shape are skipped, not fatal", () => 
       } as unknown as Parameters<typeof BarChartCard>[0])}
     />,
   );
-  expect(view.container.textContent).toContain("Sources: Notes");
+  expect(view.container.textContent).toContain("来源：Notes");
   expect(view.container.textContent).not.toContain("Notes, Notes");
-  expect(view.queryByText(/As of/)).toBeNull();
+  expect(view.queryByText(/截至/)).toBeNull();
 });
 
 test("only web addresses become links", () => {
@@ -103,7 +103,7 @@ test("only web addresses become links", () => {
 test("a chart from before sources existed still renders, with no footer", () => {
   const view = render(<BarChartCard points={POINTS} title="GDP" />);
   expect(view.getByText("GDP")).toBeTruthy();
-  expect(view.queryByText(/Sources:|As of|Not checked/)).toBeNull();
+  expect(view.queryByText(/来源：|截至|没有对照来源/)).toBeNull();
 });
 
 test("the model has to say where a chart's figures came from", () => {

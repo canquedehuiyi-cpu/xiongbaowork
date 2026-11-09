@@ -172,19 +172,16 @@ test("a Bot's own check-ins say they are off for all your Bots, and won't run no
   proactive = "off";
   serving();
   const view = await draw(<ProactiveResearchSettings agentId="expenses" />);
-  expect(
-    await view.findByText(/You turned off check-ins for all your Bots in/),
-  ).toBeTruthy();
-  expect(view.getByRole("link", { name: "Notifications" })).toBeTruthy();
-  expect(view.getByText("Every hour · Off for all your Bots")).toBeTruthy();
+  expect(await view.findByText(/你已为所有员工关掉了主动巡检/)).toBeTruthy();
+  expect(view.getByText("每小时 · 已为所有员工关闭")).toBeTruthy();
+  // 开关在设置的「通知」页：这句话要链过去（待接入，见 proactive-panel.tsx 的 M4 注释）。
+  expect(view.getByRole("link", { name: "通知" })).toBeTruthy();
 });
 
 test("a Bot's own check-ins say an admin turned them off", async () => {
   allowed = false;
   serving();
   const view = await draw(<ProactiveResearchSettings agentId="expenses" />);
-  expect(
-    await view.findByText("Your admin turned off check-ins for you."),
-  ).toBeTruthy();
-  expect(view.getByText("Every hour · Turned off by your admin")).toBeTruthy();
+  expect(await view.findByText("管理员为你关掉了主动巡检。")).toBeTruthy();
+  expect(view.getByText("每小时 · 管理员已关闭")).toBeTruthy();
 });

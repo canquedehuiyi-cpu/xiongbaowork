@@ -73,7 +73,7 @@ test("reads that keep failing pause input", async () => {
     timeout: 4_000,
   });
   await waitFor(() =>
-    expect(seen.at(-1)).toStartWith("Reconnecting: browser ownership"),
+    expect(seen.at(-1)).toStartWith("正在重连：没能确认浏览器由谁操作"),
   );
 });
 

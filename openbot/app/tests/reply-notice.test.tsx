@@ -475,7 +475,7 @@ test("a turn that ends in a question gives exactly one notice, and it is the que
 
   await waitFor(() =>
     expect(shown.map(({ title, options }) => [title, options.tag])).toEqual([
-      ["Expenses needs you", "openbot-march-receipts"],
+      ["Expenses 需要你", "openbot-march-receipts"],
     ]),
   );
   await settle();

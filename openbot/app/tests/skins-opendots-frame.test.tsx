@@ -94,6 +94,9 @@ function profile(
     hasAuth: false,
     hasCallbackToken: false,
     isolated: false,
+    modelRef: null,
+    platformModelRef: null,
+    persona: null,
     ...overrides,
   };
 }
@@ -371,15 +374,15 @@ describe("OpenDots frame", () => {
       "/channel/new", // new chat
       "/channel/trip", // a conversation with one Bot
       "/group/standup", // a group conversation
-      "/bots", // Bots, where approvals, responsibilities and Team Bots now live
-      "/bots?new=true", // creating a Bot
+      "/wakers", // 员工管理, this deployment's Bots page
+      "/wakers?new=true", // creating a Bot
       "/bots/ada", // each Bot's own pages
       "/bots/brook",
       "/bots/cass",
       "/s/routines", // routines
       "/s/memories", // memory
-      "/capabilities", // skills and memory
-      "/connections",
+      "/resources", // 能力与资源: skills and memory
+      "/settings/connected-accounts", // 已连接的账号
       "/settings", // the skin picker, approvals and reachability
     ]) {
       expect(links).toContain(href);
@@ -410,11 +413,11 @@ describe("OpenDots frame", () => {
       for (const href of [
         "/channel/new",
         "/channel/trip",
-        "/bots",
+        "/wakers",
         "/s/routines",
         "/s/memories",
-        "/capabilities",
-        "/connections",
+        "/resources",
+        "/settings/connected-accounts",
         "/settings",
       ]) {
         expect(links).toContain(href);
@@ -453,13 +456,13 @@ describe("OpenDots frame", () => {
       });
       await waitFor(() =>
         expect(
-          within(rail).queryByRole("link", { name: "Settings" }),
+          within(rail).queryByRole("link", { name: "设置" }),
         ).toBeTruthy(),
       );
       if (signedIn.role === "admin") {
         await waitFor(() =>
           expect(
-            within(rail).queryByRole("link", { name: "Admin" }),
+            within(rail).queryByRole("link", { name: "管理" }),
           ).toBeTruthy(),
         );
       }
@@ -497,7 +500,7 @@ describe("OpenDots frame", () => {
     "/group/standup",
     "/bots/ada/setup",
     "/s/routines",
-    "/connections",
+    "/settings/connected-accounts",
   ])(
     "Settings is reachable on %s, even when nothing else loads",
     async (path) => {
@@ -512,7 +515,7 @@ describe("OpenDots frame", () => {
       expect(settings.length).toBe(2);
       expect(
         within(view.getByRole("navigation", { name: "工作区导航" }))
-          .getByRole("link", { name: "Settings" })
+          .getByRole("link", { name: "设置" })
           .getAttribute("href"),
       ).toBe("/settings");
     },
@@ -545,7 +548,7 @@ describe("OpenDots frame", () => {
     expect(within(pane).getByText("Cass的电脑")).toBeTruthy();
     // OpenBot's own panel, not a copy of it.
     expect(
-      within(pane).getByRole("region", { name: "Computer sidebar" }),
+      within(pane).getByRole("region", { name: "电脑侧栏" }),
     ).toBeTruthy();
     await user.click(within(pane).getByRole("button", { name: "关闭电脑" }));
     expect(view.queryByTestId("opendots-computer-pane")).toBeNull();
@@ -561,11 +564,9 @@ describe("OpenDots frame", () => {
     });
     // A page about no one Bot offers no pause, since there would be nothing to say it applies to.
     cleanup();
-    const elsewhere = draw("/connections");
+    const elsewhere = draw("/settings/connected-accounts");
     await elsewhere.view.findByText("OpenBot page");
-    expect(
-      elsewhere.view.queryByRole("button", { name: /^Pause / }),
-    ).toBeNull();
+    expect(elsewhere.view.queryByRole("button", { name: /^暂停/ })).toBeNull();
   });
 });
 
@@ -579,10 +580,10 @@ describe("OpenDots screens", () => {
       </QueryClientProvider>,
     );
     expect(view.getByRole("heading", { name: "定时任务" })).toBeTruthy();
-    expect(await view.findByText("No routines yet")).toBeTruthy();
+    expect(await view.findByText("还没有定时任务")).toBeTruthy();
   });
 
-  test("Memories is OpenBot's memory list under OpenDots' heading, with Remember a fact", async () => {
+  test("Memories is OpenBot's memory list under OpenDots' heading, with 记住 a fact", async () => {
     const Screen = opendots.screens?.memories;
     if (!Screen) throw new Error("OpenDots has no memories screen");
     const view = render(
@@ -591,57 +592,9 @@ describe("OpenDots screens", () => {
       </QueryClientProvider>,
     );
     expect(await view.findByRole("heading", { name: "记忆" })).toBeTruthy();
-    expect(await view.findByText("No memories yet")).toBeTruthy();
-    expect(view.getByRole("button", { name: /Remember a fact/ })).toBeTruthy();
-  });
-});
-
-/** The personal edition has no memory: OpenBot Desktop's local Intelligence isn't licensed for it. */
-describe("OpenDots in the personal edition", () => {
-  test("has no Memories row", async () => {
-    edition = "personal";
-    const { view } = draw("/");
-    const workspace = await view.findByRole("navigation", {
-      name: "工作区",
-    });
-    await within(workspace).findByText("定时任务");
-    await waitFor(() =>
-      expect(within(workspace).queryByText("记忆")).toBeNull(),
-    );
-    expect(hrefs(view.container)).not.toContain("/s/memories");
-    expect(requests.some((request) => request.path === "/api/memory")).toBe(
-      false,
-    );
-  });
-
-  test("sends the Memories screen home", async () => {
-    edition = "personal";
-    const Screen = opendots.screens?.memories;
-    if (!Screen) throw new Error("OpenDots has no memories screen");
-    const root = createRootRoute({ component: Outlet });
-    const router = createRouter({
-      history: createMemoryHistory({ initialEntries: ["/s/memories"] }),
-      routeTree: root.addChildren([
-        createRoute({
-          getParentRoute: () => root,
-          path: "/",
-          component: () => <p>OpenBot home</p>,
-        }),
-        createRoute({
-          getParentRoute: () => root,
-          path: "/s/memories",
-          component: () => <Screen />,
-        }),
-      ]),
-    });
-    const view = render(
-      <QueryClientProvider client={queryClient}>
-        <RouterProvider router={router} />
-      </QueryClientProvider>,
-    );
-    expect(await view.findByText("OpenBot home")).toBeTruthy();
-    expect(router.state.location.pathname).toBe("/");
-    expect(view.queryByRole("heading", { name: "记忆" })).toBeNull();
+    expect(await view.findByText("还没有任何记忆。")).toBeTruthy();
+    expect(view.getByRole("heading", { name: "让它记住一条事实" })).toBeTruthy();
+    expect(view.getByRole("button", { name: "记住" })).toBeTruthy();
   });
 });
 

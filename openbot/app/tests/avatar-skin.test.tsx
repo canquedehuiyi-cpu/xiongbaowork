@@ -110,5 +110,5 @@ test("a busy conversation keeps its working badge as an orb", () => {
     "orb",
     <ChannelAvatar participantIds={["knowledge"]} size={32} typing />,
   );
-  expect(view.getByText("Working…")).toBeTruthy();
+  expect(view.getByText("处理中…")).toBeTruthy();
 });

@@ -37,6 +37,8 @@ import { settleReactWork } from "./settle-react-work";
 const originalFetch = globalThis.fetch;
 
 const knowledge: AgentProfile = {
+  modelRef: null,
+  persona: null,
   avatarSeed: "seed",
   builtIn: true,
   canManage: true,
@@ -206,10 +208,10 @@ test("sent from home, left before it was made, and come back to: the conversatio
   const view = renderAt("/", { home: true });
   const user = userEvent.setup({ document: view.container.ownerDocument });
   await user.type(
-    await view.findByRole("textbox", { name: "Message" }),
+    await view.findByRole("textbox", { name: "消息" }),
     "What were our Q3 numbers?",
   );
-  await user.click(await view.findByRole("button", { name: "Send message" }));
+  await user.click(await view.findByRole("button", { name: "发送消息" }));
   await waitFor(() =>
     expect(view.router.state.location.pathname).toStartWith("/start/"),
   );

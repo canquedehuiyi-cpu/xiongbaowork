@@ -108,9 +108,9 @@ test("the tools a live conversation showed by identifier read as what they did",
     ...step("list_bots", "Finance Bot: yours"),
     ...step("remember_personal_fact", '{"id":"m1"}'),
   ]);
-  expect(await view.findByText("Used a skill")).toBeTruthy();
-  expect(await view.findByText("Checked existing Bots")).toBeTruthy();
-  expect(await view.findByText("Saved a memory")).toBeTruthy();
+  expect(await view.findByText("使用了技能")).toBeTruthy();
+  expect(await view.findByText("查看了已有员工")).toBeTruthy();
+  expect(await view.findByText("保存了记忆")).toBeTruthy();
   for (const identifier of [
     "copilotkit_load_skill",
     "list_bots",
@@ -127,7 +127,7 @@ test("while one is still running, its line says what it is doing", async () => {
     ],
     true,
   );
-  expect(await view.findByText("Saving a memory")).toBeTruthy();
+  expect(await view.findByText("正在保存记忆")).toBeTruthy();
   expect(view.queryByText("remember_personal_fact")).toBeNull();
 });
 
@@ -141,7 +141,7 @@ test("drawing an interface reads as what the Bot did, not the tool's identifier"
     { id: "u1", role: "user", content: "Build a weekend trip budget." },
     ...step("render_ui", '{"rendered":true}'),
   ]);
-  expect(await view.findByText("Drew an interface")).toBeTruthy();
+  expect(await view.findByText("绘制了界面")).toBeTruthy();
   expect(view.queryByText("render_ui")).toBeNull();
 });
 
@@ -192,6 +192,6 @@ test("while the interface is still being drawn, its line says so in words", asyn
     ],
     true,
   );
-  expect(await view.findByText("Drawing an interface")).toBeTruthy();
+  expect(await view.findByText("正在绘制界面")).toBeTruthy();
   expect(view.queryByText("render_ui")).toBeNull();
 });

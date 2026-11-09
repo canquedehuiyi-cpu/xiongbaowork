@@ -129,8 +129,8 @@ async function aBotStartsNeedingThePerson(waitingIn: string | null = null) {
 }
 
 const EXPENSES_NEEDS_YOU = {
-  title: "Expenses needs you",
-  body: "1 question",
+  title: "Expenses 需要你",
+  body: "1 个提问",
   // The page a click opens (`open_notice_page` in the shell).
   path: "/bots/expenses",
   tag: "openbot-attention-expenses",

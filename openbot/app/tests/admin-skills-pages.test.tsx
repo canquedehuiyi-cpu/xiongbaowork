@@ -205,14 +205,11 @@ describe("writing a skill", () => {
   test("saves it for the deployment and opens its page to choose the Bots", async () => {
     const { view, router } = renderAt("/admin/skills/new");
     const user = userEvent.setup({ document });
-    await user.type(await view.findByLabelText("Command"), "Standup");
-    await user.type(view.getByLabelText("Title"), "Standup notes");
-    await user.type(
-      view.getByLabelText("Instructions"),
-      "Summarise yesterday.",
-    );
+    await user.type(await view.findByLabelText("命令"), "Standup");
+    await user.type(view.getByLabelText("标题"), "Standup notes");
+    await user.type(view.getByLabelText("指令"), "Summarise yesterday.");
     skills = [...skills, skill({ id: "skill-standup", slug: "standup" })];
-    await user.click(view.getByRole("button", { name: "Save skill" }));
+    await user.click(view.getByRole("button", { name: "保存技能" }));
     await waitFor(() =>
       expect(router.state.location.pathname).toBe("/admin/skills/standup"),
     );
@@ -236,7 +233,7 @@ describe("choosing a skill's tools", () => {
     const { view } = renderAt("/admin/skills/new");
     const user = userEvent.setup({ document });
     const notion = (await view.findByText("Notion")).closest("button");
-    expect(within(notion as HTMLElement).getByText("None")).toBeTruthy();
+    expect(within(notion as HTMLElement).getByText("未选")).toBeTruthy();
     // No button per tool on the page itself.
     expect(view.queryByRole("button", { name: "search_pages" })).toBeNull();
 
@@ -245,20 +242,20 @@ describe("choosing a skill's tools", () => {
     // Named for people, described by the first sentence, writes marked.
     expect(within(dialog).getByText("Search pages")).toBeTruthy();
     expect(within(dialog).getByText("Search pages by title.")).toBeTruthy();
-    expect(within(dialog).getByText("changes things")).toBeTruthy();
+    expect(within(dialog).getByText("会做改动")).toBeTruthy();
     await user.click(
-      within(dialog).getByRole("checkbox", { name: "Use Search pages" }),
+      within(dialog).getByRole("checkbox", { name: "使用 Search pages" }),
     );
-    await user.click(within(dialog).getByRole("button", { name: "Done" }));
+    await user.click(within(dialog).getByRole("button", { name: "完成" }));
 
     const row = view.getByText("Notion").closest("button") as HTMLElement;
     expect(within(row).getByText("Search pages")).toBeTruthy();
-    expect(within(row).getByText("1 of 2 tools")).toBeTruthy();
+    expect(within(row).getByText("1/2 个工具")).toBeTruthy();
 
-    await user.type(view.getByLabelText("Title"), "Find a page");
-    await user.type(view.getByLabelText("Command"), "find");
-    await user.type(view.getByLabelText("Instructions"), "Find it.");
-    await user.click(view.getByRole("button", { name: "Save skill" }));
+    await user.type(view.getByLabelText("标题"), "Find a page");
+    await user.type(view.getByLabelText("命令"), "find");
+    await user.type(view.getByLabelText("指令"), "Find it.");
+    await user.click(view.getByRole("button", { name: "保存技能" }));
     await waitFor(() => expect(writes).toHaveLength(1));
     expect(writes[0]?.body).toMatchObject({ tools: ["notion/search_pages"] });
   });
@@ -270,15 +267,13 @@ describe("choosing a skill's tools", () => {
       (await view.findByText("Notion")).closest("button") as HTMLElement,
     );
     const dialog = await view.findByRole("dialog");
-    await user.click(
-      within(dialog).getByRole("button", { name: "Select all" }),
-    );
+    await user.click(within(dialog).getByRole("button", { name: "全选" }));
     expect(
-      within(dialog).getByRole("button", { name: "Clear all" }),
+      within(dialog).getByRole("button", { name: "全部取消" }),
     ).toBeTruthy();
-    await user.click(within(dialog).getByRole("button", { name: "Done" }));
+    await user.click(within(dialog).getByRole("button", { name: "完成" }));
     const row = view.getByText("Notion").closest("button") as HTMLElement;
-    expect(within(row).getByText("All 2 tools")).toBeTruthy();
+    expect(within(row).getByText("全部 2 个工具")).toBeTruthy();
   });
 });
 
@@ -286,7 +281,7 @@ describe("a skill's page", () => {
   test("each Bot's switch offers or withdraws the skill at once", async () => {
     const { view } = renderAt("/admin/skills/triage");
     const grace = await view.findByRole("switch", {
-      name: "Grace offers Triage the inbox",
+      name: "Grace 提供 Triage the inbox",
     });
     fireEvent.click(grace);
     await waitFor(() => expect(writes).toHaveLength(1));
@@ -296,7 +291,7 @@ describe("a skill's page", () => {
       body: { kind: "skill", ref: "triage", agentId: "bot-grace" },
     });
     fireEvent.click(
-      view.getByRole("switch", { name: "Ada offers Triage the inbox" }),
+      view.getByRole("switch", { name: "Ada 提供 Triage the inbox" }),
     );
     await waitFor(() => expect(writes).toHaveLength(2));
     expect(writes[1]?.method).toBe("DELETE");
@@ -309,12 +304,12 @@ describe("a skill's page", () => {
     const { view, router } = renderAt("/admin/skills/triage");
     const user = userEvent.setup({ document });
     await user.click(
-      await view.findByRole("button", { name: /^Delete People can.t run it/ }),
+      await view.findByRole("button", { name: /^删除\s*删除后没人能再运行它/ }),
     );
     expect(writes).toEqual([]);
     const dialog = await view.findByRole("dialog");
-    expect(within(dialog).getByText("Delete Triage the inbox?")).toBeTruthy();
-    await user.click(within(dialog).getByRole("button", { name: "Delete" }));
+    expect(within(dialog).getByText("删除 Triage the inbox？")).toBeTruthy();
+    await user.click(within(dialog).getByRole("button", { name: "删除" }));
     await waitFor(() =>
       expect(router.state.location.pathname).toBe("/admin/skills"),
     );
@@ -325,7 +320,7 @@ describe("a skill's page", () => {
 
   test("a skill that is not there says so", async () => {
     const { view } = renderAt("/admin/skills/gone");
-    expect(await view.findByText("Skill not found")).toBeTruthy();
+    expect(await view.findByText("找不到这个技能")).toBeTruthy();
   });
 });
 

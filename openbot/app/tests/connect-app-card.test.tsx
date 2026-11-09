@@ -22,8 +22,6 @@ import { settleReactWork } from "./settle-react-work";
  *
  * - navigate THIS tab. The consent screen belongs to the vendor and the trip is a full page load,
  *   so the conversation being read would be replaced by it and the question would be behind them.
- * - say "connected" over a row whose credential has been withdrawn, which takes away the button
- *   that is the only way to get access back.
  * - press Connect for an app that takes a typed key and then do nothing at all, because the route
  *   answers a form rather than a page to visit and there was no url to open.
  *
@@ -51,7 +49,7 @@ afterEach(() => {
   window.open = originalOpen;
 });
 
-type Row = { serverId: string; holder?: string; revoked?: boolean };
+type Row = { serverId: string; holder?: string };
 
 function mounted(
   options: {
@@ -60,14 +58,24 @@ function mounted(
      * What `POST /connect` answers: a page to visit, a form to fill in, or an account the vendor
      * already held, which the route records on the press and lists from then on.
      */
-    answers?: "url" | "fields" | "failure" | "connected";
+    answers?: "url" | "fields" | "failure";
+    /**
+     * The person finishes the consent in the other tab and closes it, so the connections read lists
+     * the account from the press on. 熊宝的连接接口不会直接答 `{ connected: true }`，连上只能从这份列表看出来。
+     */
+    finishes?: boolean;
     /** False stands in for a browser that refused the tab, which answers null. */
     popupsAllowed?: boolean;
     /** Drawn inside a conversation, as the latest thing in it: what the card sends is kept here. */
     asked?: string[];
   } = {},
 ) {
-  const { connections = [], answers = "url", popupsAllowed = true } = options;
+  const {
+    connections = [],
+    answers = "url",
+    popupsAllowed = true,
+    finishes = false,
+  } = options;
 
   /** Where a claimed tab was pointed, which is the only evidence the vendor was reached. */
   const sentTo: string[] = [];
@@ -79,9 +87,12 @@ function mounted(
     if (!popupsAllowed) return null;
     const tab = {
       opener: {} as unknown,
+      /** A person who finishes the consent closes the tab and comes back to this one. */
+      closed: false,
       location: {
         replace: (next: string) => {
           sentTo.push(next);
+          if (finishes) tab.closed = true;
         },
       },
       close: () => {
@@ -113,11 +124,7 @@ function mounted(
       // What a key-entry app answers: a form to fill in, and no page to visit.
       if (answers === "fields")
         return json({ fields: [{ name: "api_key", type: "string" }] });
-      // What the route answers once it has recorded an account the vendor already held.
-      if (answers === "connected") {
-        recorded = true;
-        return json({ connected: true });
-      }
+      if (finishes) recorded = true;
       return json({ authorizationUrl: "https://notion.test/consent" });
     }
     return json({});
@@ -154,7 +161,7 @@ function mounted(
   // The destination the card links to for an app connected with a typed key.
   const settings = createRoute({
     getParentRoute: () => root,
-    path: "/connections/$key",
+    path: "/settings/connected-accounts/$key",
     component: () => null,
   });
   const router = createRouter({
@@ -175,14 +182,12 @@ function mounted(
 }
 
 const press = (card: ReturnType<typeof mounted>) =>
-  fireEvent.click(card.view.getByRole("button", { name: /^Connect$/ }));
+  fireEvent.click(card.view.getByRole("button", { name: /^连接$/ }));
 
 test("asks for the app by name, in the words the Bot used", async () => {
   const card = mounted();
 
-  await waitFor(() =>
-    expect(card.view.getByText(/Connect Notion/)).toBeTruthy(),
-  );
+  await waitFor(() => expect(card.view.getByText(/连接 Notion/)).toBeTruthy());
   expect(
     card.view.getByText(/You have not connected your Notion account/),
   ).toBeTruthy();
@@ -191,7 +196,7 @@ test("asks for the app by name, in the words the Bot used", async () => {
 test("sends the person to the vendor in another tab, never in this one", async () => {
   const card = mounted();
   const before = window.location.href;
-  await waitFor(() => card.view.getByRole("button", { name: /^Connect$/ }));
+  await waitFor(() => card.view.getByRole("button", { name: /^连接$/ }));
 
   press(card);
 
@@ -199,7 +204,7 @@ test("sends the person to the vendor in another tab, never in this one", async (
     expect(card.sentTo).toContain("https://notion.test/consent"),
   );
   expect(window.location.href).toBe(before);
-  expect(card.view.getByText(/Finish in the tab that opened/)).toBeTruthy();
+  expect(card.view.getByText(/在新打开的标签页里完成/)).toBeTruthy();
 });
 
 test("claims the tab on the click itself, before the request that mints the url", async () => {
@@ -210,7 +215,7 @@ test("claims the tab on the click itself, before the request that mints the url"
    * never there.
    */
   const card = mounted();
-  await waitFor(() => card.view.getByRole("button", { name: /^Connect$/ }));
+  await waitFor(() => card.view.getByRole("button", { name: /^连接$/ }));
 
   press(card);
 
@@ -223,53 +228,35 @@ test("claims the tab on the click itself, before the request that mints the url"
 
 test("offers the link when the browser blocked the tab anyway", async () => {
   const card = mounted({ popupsAllowed: false });
-  await waitFor(() => card.view.getByRole("button", { name: /^Connect$/ }));
+  await waitFor(() => card.view.getByRole("button", { name: /^连接$/ }));
 
   press(card);
 
   const link = await waitFor(() =>
-    card.view.getByRole("link", { name: /Open Notion's sign-in/ }),
+    card.view.getByRole("link", { name: /打开 Notion 的登录页/ }),
   );
   expect(link.getAttribute("href")).toBe("https://notion.test/consent");
 });
 
 test("says where to type a key for an app that has no page to visit", async () => {
   const card = mounted({ answers: "fields" });
-  await waitFor(() => card.view.getByRole("button", { name: /^Connect$/ }));
+  await waitFor(() => card.view.getByRole("button", { name: /^连接$/ }));
 
   press(card);
 
   const link = await waitFor(() =>
-    card.view.getByRole("link", { name: /Enter it on Notion's page/ }),
+    card.view.getByRole("link", { name: /Notion 的页面/ }),
   );
-  expect(link.getAttribute("href")).toBe("/connections/srv_notion");
+  expect(link.getAttribute("href")).toBe(
+    "/settings/connected-accounts/srv_notion",
+  );
   // The blank tab claimed on the click is let go rather than left sitting on about:blank.
   expect(card.tabsClosed()).toBe(1);
 });
 
-test("says connected when the press records an account the vendor already held", async () => {
-  /*
-   * The vendor refused a second link because it already held this person's account, and the route
-   * recorded that account on the press. Read as "no url", the card told the person to type a key
-   * for an app that had just been connected through a sign-in.
-   */
-  const card = mounted({ answers: "connected" });
-  await waitFor(() => card.view.getByRole("button", { name: /^Connect$/ }));
-
-  press(card);
-
-  await waitFor(() =>
-    expect(card.view.getByText(/Notion is connected/)).toBeTruthy(),
-  );
-  expect(card.view.queryByText(/needs a key from you/)).toBeNull();
-  // Nothing to visit: the claimed tab is let go without ever being pointed anywhere.
-  expect(card.tabsClosed()).toBe(1);
-  expect(card.sentTo).toEqual([]);
-});
-
 test("lets go of the claimed tab when connecting fails", async () => {
   const card = mounted({ answers: "failure" });
-  await waitFor(() => card.view.getByRole("button", { name: /^Connect$/ }));
+  await waitFor(() => card.view.getByRole("button", { name: /^连接$/ }));
 
   press(card);
 
@@ -285,47 +272,27 @@ test("says so once the account is actually listed, rather than once they return"
   });
 
   await waitFor(() =>
-    expect(card.view.getByText(/Notion is connected/)).toBeTruthy(),
+    expect(card.view.getByText(/Notion 已连接/)).toBeTruthy(),
   );
   // No button to press any more: the next step is to ask the Bot again.
-  expect(card.view.queryByRole("button", { name: /^Connect$/ })).toBeNull();
-});
-
-test("does not read a withdrawn credential as a connected account", async () => {
-  /*
-   * The row outlives the secret. Drawn over the "your access was withdrawn" refusal, a card
-   * reading the row alone said the app was connected and removed the only way back.
-   */
-  const card = mounted({
-    connections: [{ serverId: "srv_notion", holder: "person", revoked: true }],
-  });
-
-  await waitFor(() =>
-    expect(card.view.getByRole("button", { name: /^Connect$/ })).toBeTruthy(),
-  );
-  expect(card.view.queryByText(/Notion is connected/)).toBeNull();
-});
-
-test("does not read a Shared app's deployment account as this person's", async () => {
-  const card = mounted({
-    connections: [{ serverId: "srv_notion", holder: "deployment" }],
-  });
-
-  await waitFor(() =>
-    expect(card.view.getByRole("button", { name: /^Connect$/ })).toBeTruthy(),
-  );
-  expect(card.view.queryByText(/Notion is connected/)).toBeNull();
+  expect(card.view.queryByRole("button", { name: /^连接$/ })).toBeNull();
 });
 
 test("once connected in front of the person, the conversation carries on by itself, once", async () => {
   const asked: string[] = [];
-  const card = mounted({ answers: "connected", asked });
-  await waitFor(() => card.view.getByRole("button", { name: /^Connect$/ }));
+  const card = mounted({ finishes: true, asked });
+  await waitFor(() => card.view.getByRole("button", { name: /^连接$/ }));
 
   press(card);
 
-  await waitFor(() => expect(asked).toEqual([carryOnMessage("Notion")]));
-  expect(card.view.getByText("Notion is connected.")).toBeTruthy();
+  /*
+   * The person finishes in the other tab and closes it; the card asks for the connections again
+   * once it sees the tab closed, and the account is listed from then on.
+   */
+  await waitFor(() => expect(asked).toEqual([carryOnMessage("Notion")]), {
+    timeout: 4000,
+  });
+  expect(card.view.getByText("Notion 已连接。")).toBeTruthy();
   await settleReactWork();
   expect(asked).toHaveLength(1);
-});
+}, 10_000);

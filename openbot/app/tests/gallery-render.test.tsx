@@ -251,7 +251,7 @@ test("a call left without a result outside the running turn draws its last numbe
 });
 
 /*
- * A chart has no points until its first one streams in. It read "There is no data to chart." for
+ * A chart has no points until its first one streams in. It read "没有可画的数据。" for
  * that whole wait, as if the Bot had come back empty.
  */
 const barChart = () => {
@@ -268,8 +268,8 @@ test("a chart whose figures are still arriving shimmers, and does not say it has
   const view = render(
     <Render args={{ title: "Revenue" }} status="inProgress" />,
   );
-  expect(view.getByRole("status").textContent).toBe("Drawing the chart…");
-  expect(view.queryByText("There is no data to chart.")).toBeNull();
+  expect(view.getByRole("status").textContent).toBe("正在画图表…");
+  expect(view.queryByText("没有可画的数据。")).toBeNull();
 });
 
 test("a finished chart with no figures says so", () => {
@@ -277,7 +277,7 @@ test("a finished chart with no figures says so", () => {
   const view = render(
     <Render args={{ title: "Revenue", points: [] }} status="complete" />,
   );
-  expect(view.getByText("There is no data to chart.")).toBeTruthy();
+  expect(view.getByText("没有可画的数据。")).toBeTruthy();
   expect(view.queryByRole("status")).toBeNull();
 });
 
@@ -288,6 +288,6 @@ test("a chart stopped before its figures arrived says it has no data, and never 
       <Render args={{ title: "Revenue" }} status="inProgress" />
     </ArgumentsArrivingContext.Provider>,
   );
-  expect(view.getByText("There is no data to chart.")).toBeTruthy();
+  expect(view.getByText("没有可画的数据。")).toBeTruthy();
   expect(view.queryByRole("status")).toBeNull();
 });

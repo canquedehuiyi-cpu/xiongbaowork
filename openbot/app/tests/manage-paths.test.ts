@@ -9,6 +9,9 @@ function href(link: { to: string; params?: Record<string, string> }): string {
   );
 }
 
+/*
+ * 熊宝中文版只有团队版：个人版（以及它的 /connections、/settings/* 管理页）和 Arcade 目录有意不收。
+ */
 describe("where the pages a person manages live", () => {
   test("in the team edition, under Admin", () => {
     const paths = managePaths("team");
@@ -23,7 +26,6 @@ describe("where the pages a person manages live", () => {
     expect(href(paths.brokerDirectory("composio"))).toBe(
       "/admin/plugins/composio",
     );
-    expect(href(paths.brokerDirectory("arcade"))).toBe("/admin/plugins/arcade");
     expect(href(paths.skills())).toBe("/admin/skills");
     expect(href(paths.newSkill())).toBe("/admin/skills/new");
     expect(href(paths.skill("triage"))).toBe("/admin/skills/triage");
@@ -31,33 +33,6 @@ describe("where the pages a person manages live", () => {
     expect(href(paths.newCredential())).toBe("/admin/credentials/new");
     expect(href(paths.computers())).toBe("/admin/computers");
     expect(href(paths.audit())).toBe("/admin/audit");
-  });
-
-  test("in the personal edition, apps under Connections and the rest under Settings", () => {
-    const paths = managePaths("personal");
-    expect(href(paths.plugins())).toBe("/connections");
-    expect(href(paths.plugin("notion"))).toBe("/connections/notion");
-    // Every Bot has every tool here, so one tool or one Bot opens the app's own page.
-    expect(href(paths.pluginTool("notion", "search"))).toBe(
-      "/connections/notion",
-    );
-    expect(href(paths.pluginBot("notion", "bot-1"))).toBe(
-      "/connections/notion",
-    );
-    expect(href(paths.brokerDirectory("composio"))).toBe(
-      "/connections/browse/composio",
-    );
-    expect(href(paths.brokerDirectory("arcade"))).toBe(
-      "/connections/browse/arcade",
-    );
-    expect(paths.pluginsLabel).toBe("Connections");
-    expect(managePaths("team").pluginsLabel).toBe("Plugins");
-    expect(href(paths.skills())).toBe("/settings/skills");
-    expect(href(paths.newSkill())).toBe("/settings/skills/new");
-    expect(href(paths.skill("triage"))).toBe("/settings/skills/triage");
-    expect(href(paths.credentials())).toBe("/settings/credentials");
-    expect(href(paths.newCredential())).toBe("/settings/credentials/new");
-    expect(href(paths.computers())).toBe("/settings/computer");
-    expect(href(paths.audit())).toBe("/settings/activity");
+    expect(paths.pluginsLabel).toBe("插件");
   });
 });

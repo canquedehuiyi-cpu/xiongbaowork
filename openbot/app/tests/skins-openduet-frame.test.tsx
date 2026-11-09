@@ -351,9 +351,9 @@ describe("the frame reaches every OpenBot surface", () => {
       "/group/g-1",
       "/channel/new",
       "/s/tasks",
-      "/bots",
-      "/capabilities",
-      "/connections",
+      "/wakers",
+      "/resources",
+      "/settings/connected-accounts",
       "/admin",
       "/settings",
     ])
@@ -376,7 +376,7 @@ describe("the frame reaches every OpenBot surface", () => {
       const drawn = [...(group?.querySelectorAll("a") ?? [])].map((link) =>
         link.textContent?.replace(/\d+$/, "").trim(),
       );
-      const settings = within(menu).getByRole("link", { name: "Settings" });
+      const settings = within(menu).getByRole("link", { name: "设置" });
       expect([...drawn, settings.textContent?.trim()]).toEqual(
         navigationFor(role).map((item) => item.label),
       );
@@ -465,7 +465,7 @@ describe("Tasks is OpenBot's own lists under OpenDuet's headings", () => {
     fireEvent.click(await view.findByRole("tab", { name: "进行中" }));
     const needs = await view.findByRole("region", { name: "需要你回答" });
     expect(within(needs).getByText("需要你回答")).toBeTruthy();
-    expect(await within(needs).findByText(/Inbox Bot wants to/)).toBeTruthy();
+    expect(await within(needs).findByText(/Inbox Bot 想要/)).toBeTruthy();
     expect(within(needs).queryByText(/drive\/share/)).toBeNull();
     expect(
       within(needs).getByText(/Which kiln should I book the repair for\?/),
@@ -491,7 +491,7 @@ describe("Tasks is OpenBot's own lists under OpenDuet's headings", () => {
     fireEvent.click(await view.findByRole("tab", { name: "进行中" }));
     const needs = await view.findByRole("region", { name: "需要你回答" });
     fireEvent.click(
-      await within(needs).findByRole("button", { name: "Allow once" }),
+      await within(needs).findByRole("button", { name: "允许一次" }),
     );
     await waitFor(() =>
       expect(sent).toContainEqual({
@@ -509,8 +509,8 @@ describe("Tasks is OpenBot's own lists under OpenDuet's headings", () => {
     const needs = await view.findByRole("region", { name: "需要你回答" });
     await userEvent
       .setup({ document })
-      .type(await within(needs).findByLabelText("Your answer"), "Kiln 2");
-    const send = within(needs).getByRole("button", { name: "Send answer" });
+      .type(await within(needs).findByLabelText("你的回答"), "Kiln 2");
+    const send = within(needs).getByRole("button", { name: "发送回答" });
     await waitFor(() => expect(send.hasAttribute("disabled")).toBe(false));
     fireEvent.click(send);
     await waitFor(() =>

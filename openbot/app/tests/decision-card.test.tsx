@@ -53,7 +53,7 @@ test("each answer is a row with what it does, the first is picked, and the butto
   expect(staging.getAttribute("aria-describedby")).toBeTruthy();
   expect(view.getByText("Live customers")).toBeTruthy();
   expect(view.getByRole("button", { name: "Staging" })).toBeTruthy();
-  expect(view.getByText("Waiting on you")).toBeTruthy();
+  expect(view.getByText("等你决定")).toBeTruthy();
 });
 
 test("a number picks its row and Enter sends it", async () => {
@@ -111,7 +111,7 @@ test("the last row takes words instead, and Enter in it sends them", async () =>
   const view = render(card(sent, { other: true }));
   const user = userEvent.setup({ document });
   await user.type(
-    view.getByRole("textbox", { name: "Your answer" }),
+    view.getByRole("textbox", { name: "你的回答" }),
     "Neither, wait for Monday{Enter}",
   );
   expect(sent).toEqual([[OTHER, "Neither, wait for Monday"]]);
@@ -122,7 +122,7 @@ test("the words row needs words before it can be sent", async () => {
   const view = render(card(sent, { other: true }));
   const user = userEvent.setup({ document });
   await user.keyboard("3");
-  const button = await view.findByRole("button", { name: "Send" });
+  const button = await view.findByRole("button", { name: "发送" });
   expect((button as HTMLButtonElement).disabled).toBe(true);
 });
 

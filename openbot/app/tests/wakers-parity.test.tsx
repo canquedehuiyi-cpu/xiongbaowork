@@ -54,6 +54,9 @@ afterEach(() => {
 });
 
 const base: AgentProfile = {
+  isolated: false,
+  isolationActive: false,
+  isolationOffReason: null,
   id: "agent-1",
   name: "Backend Engineer",
   title: "后端开发",
@@ -96,6 +99,8 @@ const attentionRow = (agentId: string): BotAttention => ({
   unread: 0,
   paused: true,
   notify: "all",
+  items: 0,
+  tasks: { needsInput: 0, ready: 0, failed: 0 },
 });
 
 const minutesAgo = (minutes: number) =>
@@ -144,7 +149,11 @@ function seed({
   client.setQueryData(agentKeys.list(false), agents);
   client.setQueryData(agentKeys.list(true), []);
   client.setQueryData(wakerGroupKeys.list(), crews);
-  client.setQueryData(botLifecycleKeys.attention, paused.map(attentionRow));
+  // `GET /api/bots/attention` answers `{ bots, lastPingId }`; the cache holds the whole body.
+  client.setQueryData(botLifecycleKeys.attention, {
+    bots: paused.map(attentionRow),
+    lastPingId: null,
+  });
   client.setQueryData(
     runningTasksQueryOptions().queryKey,
     running.map((id) => ({

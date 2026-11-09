@@ -462,9 +462,7 @@ test("a framework on the first screen validates the name, then goes straight to 
   await user.click(
     customAgents(view).getByRole("button", { name: /LangChain/ }),
   );
-  expect((await view.findByRole("alert")).textContent).toBe(
-    "Name is required.",
-  );
+  expect((await view.findByRole("alert")).textContent).toBe("名字为必填项。");
   expect(document.activeElement).toBe(view.getByLabelText("名称"));
   expect(view.queryByLabelText("智能体地址")).toBeNull();
   await user.type(view.getByLabelText("名称"), "My Bot");
@@ -527,32 +525,6 @@ test("without hosting here, Back from the address returns to the list", async ()
     await view.findByRole("heading", { name: "连接自定义智能体" }),
   ).toBeTruthy();
   expect(view.queryByLabelText("名称")).toBeNull();
-});
-
-test("personal Bot creation hides team visibility and isolation controls and links to Business", async () => {
-  const view = draw(
-    <NewBotSheet open onClose={() => {}} onCreated={() => {}} />,
-    "personal",
-  );
-  await view.findByLabelText("名称");
-  expect(view.queryByText("谁能看到它")).toBeNull();
-  expect(view.queryByRole("checkbox", { name: "独立运行" })).toBeNull();
-  expect(
-    view
-      .getByRole("link", {
-        name: "Give each Bot its own computer with OpenBot for Business.",
-      })
-      .getAttribute("href"),
-  ).toBe("https://open.bot/business");
-  const user = userEvent.setup({ document: view.baseElement.ownerDocument });
-  const name = view.getByLabelText("名称");
-  await user.type(name, "Personal Research");
-  await act(async () => {
-    fireEvent.keyDown(name, { key: "Enter", keyCode: 13 });
-  });
-  await view.findByText("Personal Research准备好了");
-  expect(creates).toHaveLength(1);
-  expect(creates[0]).toMatchObject({ visibility: "private", isolated: false });
 });
 
 /**

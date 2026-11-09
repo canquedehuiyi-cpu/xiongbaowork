@@ -26,10 +26,10 @@ function renderViewport(tabIndex?: number) {
 
 test("a transcript with nothing to scroll is not a tab stop", () => {
   const view = renderViewport();
-  expect(view.getByRole("region", { name: "Messages" }).tabIndex).toBe(-1);
+  expect(view.getByRole("region", { name: "消息" }).tabIndex).toBe(-1);
 });
 
 test("a caller's own tabIndex still wins", () => {
   const view = renderViewport(0);
-  expect(view.getByRole("region", { name: "Messages" }).tabIndex).toBe(0);
+  expect(view.getByRole("region", { name: "消息" }).tabIndex).toBe(0);
 });

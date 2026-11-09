@@ -127,8 +127,6 @@ test("the audit trail shows the newest page, and 更早的记录 reaches the res
   );
   // The last page has no cursor, so there is nothing older to offer.
   await waitFor(() =>
-    expect(
-      view.queryByRole("button", { name: "更早的记录" }),
-    ).toBeNull(),
+    expect(view.queryByRole("button", { name: "更早的记录" })).toBeNull(),
   );
 });

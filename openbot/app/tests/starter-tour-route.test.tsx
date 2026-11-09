@@ -35,6 +35,8 @@ const NativeResponse = globalThis.Response;
 const BOT = "picked-harness";
 
 const bot: AgentProfile = {
+  modelRef: null,
+  persona: null,
   avatarSeed: "seed",
   builtIn: true,
   canManage: true,
@@ -150,7 +152,7 @@ beforeAll(() => {
           reason: "fixture override",
         });
       }
-      if (url.pathname === "/api/models")
+      if (url.pathname === "/api/model-catalogue")
         return NativeResponse.json({
           provider: "openai",
           source: "openai",
@@ -382,11 +384,11 @@ for (const path of ["/", `/channel/new?agent=${BOT}`]) {
         search: { agent: BOT },
       });
     });
-    await view.findByRole("textbox", { name: "Message" });
+    await view.findByRole("textbox", { name: "消息" });
     expect(view.queryByRole("region", { name: "入门任务" })).toBeNull();
     const user = userEvent.setup({ document });
     await user.type(
-      view.getByRole("textbox", { name: "Message" }),
+      view.getByRole("textbox", { name: "消息" }),
       "An ordinary later conversation.{Enter}",
     );
     await waitFor(() => expect(runs).toHaveLength(3), { timeout: 5000 });

@@ -120,21 +120,17 @@ test("an app's call OpenBot asks about draws its card in the conversation", asyn
     },
   ];
   const view = draw();
-  const card = within(
-    await view.findByRole("region", { name: "Waiting for your approval" }),
-  );
+  const card = within(await view.findByRole("region", { name: "等你批准" }));
   expect(
     card.getByText("Sending something to other people always asks you first."),
   ).toBeTruthy();
-  expect(card.getByRole("radio", { name: "Allow once" })).toBeTruthy();
-  expect(card.getByRole("radio", { name: "Deny" })).toBeTruthy();
-  expect(card.queryByRole("radio", { name: "Always allow here" })).toBeNull();
+  expect(card.getByRole("radio", { name: "允许一次" })).toBeTruthy();
+  expect(card.getByRole("radio", { name: "拒绝" })).toBeTruthy();
+  expect(card.queryByRole("radio", { name: "在这里总是允许" })).toBeNull();
 });
 
 test("with nothing waiting, the call is the line it always was", async () => {
   const view = draw();
   expect(await view.findByText("Create event")).toBeTruthy();
-  expect(
-    view.queryByRole("region", { name: "Waiting for your approval" }),
-  ).toBeNull();
+  expect(view.queryByRole("region", { name: "等你批准" })).toBeNull();
 });

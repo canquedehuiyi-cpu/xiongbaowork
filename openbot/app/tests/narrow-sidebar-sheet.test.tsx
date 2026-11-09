@@ -17,7 +17,6 @@ import {
 import { cleanup, render, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AppSidebar } from "@/components/app-sidebar/app-sidebar";
-import { TeamFeaturesDialog } from "@/components/edition/team-features-dialog";
 import { SidebarToggle } from "@/components/layout/sidebar-toggle";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { agentKeys } from "@/lib/agents/queries";
@@ -34,6 +33,9 @@ import { settleReactWork } from "./settle-react-work";
  * it opened that conversation behind the sheet, and the sheet stayed open until the person clicked
  * outside it, so it looked as if nothing had happened. Every way out of the sheet to a page closes
  * it; typing in its search box and opening its menus does not.
+ *
+ * 熊宝中文版保留自己的侧栏（工作管理、员工资源、员工与群组名册、更多、账户菜单），上游的新侧栏、
+ * 个人版和账户菜单里的 OpenBot for Business 有意不收，所以这里测的是熊宝侧栏里的入口。
  */
 
 class OfflineWebSocket extends EventTarget {
@@ -81,14 +83,18 @@ afterAll(async () => {
   GlobalRegistrator.unregister();
 });
 
-function conversation(id: string, summary: string): ChannelSummary {
+function conversation(
+  id: string,
+  summary: string,
+  lastMessageAt = "2026-11-08T14:00:00Z",
+): ChannelSummary {
   return {
     id,
     name: "Personal Assistant",
     agentIds: ["assistant"],
     threadId: id,
     active: true,
-    lastMessageAt: "2026-11-08T14:00:00Z",
+    lastMessageAt,
     summary,
     lastMessage: null,
     lastMessageAgentId: null,
@@ -103,12 +109,11 @@ function renderNarrowApp(start = "/channel/models") {
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
   clients.push(queryClient);
-  // The personal edition, as on the Windows install: OpenBot for Business sits in the account menu.
   queryClient.setQueryData(deploymentKeys.capabilities(), {
     generativeUi: true,
     selfHostBanner: false,
-    localEvaluation: true,
-    edition: "personal",
+    localEvaluation: false,
+    edition: "team",
   });
   queryClient.setQueryData(authKeys.currentUser(), {
     id: "dana",
@@ -124,7 +129,20 @@ function renderNarrowApp(start = "/channel/models") {
     skin: "openbot",
     proactive: "on",
   });
-  queryClient.setQueryData(agentKeys.list(false), []);
+  // One employee on the roster, whose latest conversation is the Hacker News one.
+  queryClient.setQueryData(agentKeys.list(false), [
+    {
+      id: "assistant",
+      name: "Personal Assistant",
+      title: "",
+      roleDescription: "",
+      avatarSeed: "assistant",
+      visibility: "public",
+      endpoint: null,
+      builtIn: true,
+      hasAuth: false,
+    },
+  ]);
   queryClient.setQueryDefaults(botLifecycleKeys.attention, {
     staleTime: Number.POSITIVE_INFINITY,
     refetchInterval: false,
@@ -133,7 +151,7 @@ function renderNarrowApp(start = "/channel/models") {
     bots: [],
     lastPingId: null,
   });
-  // OpenBot can run a browser here, so Teach a Bot is in the sidebar.
+  // OpenBot can run a browser here, so 教员工做事 is in the sidebar, under 更多.
   queryClient.setQueryDefaults(browserKeys.state, { refetchInterval: false });
   queryClient.setQueryData(browserKeys.state, {
     available: true,
@@ -146,7 +164,8 @@ function renderNarrowApp(start = "/channel/models") {
       {
         channels: [
           conversation("models", "AI Model and Agent Framework"),
-          conversation("hn", "Hacker News Top Stories"),
+          // The employee's latest conversation, which its roster row opens.
+          conversation("hn", "Hacker News Top Stories", "2026-11-08T15:00:00Z"),
         ],
         nextCursor: null,
       },
@@ -160,7 +179,6 @@ function renderNarrowApp(start = "/channel/models") {
           <AppSidebar />
           {/* The page's own Show sidebar button, which is how a narrow window opens the sheet. */}
           <SidebarToggle />
-          <TeamFeaturesDialog />
         </SidebarProvider>
       ),
     }),
@@ -178,17 +196,15 @@ function renderNarrowApp(start = "/channel/models") {
     router,
     /** Opens the sheet as a person does, and answers with it. */
     async openSheet() {
-      await user.click(
-        await view.findByRole("button", { name: "Show sidebar" }),
-      );
-      return view.findByRole("dialog", { name: "Sidebar" });
+      await user.click(await view.findByRole("button", { name: "显示侧栏" }));
+      return view.findByRole("dialog", { name: "侧栏" });
     },
     async sheetCloses() {
       // `hidden`, because a dialog opened over the sheet hides it from the accessibility tree
       // without closing it.
       await waitFor(() =>
         expect(
-          view.queryByRole("dialog", { name: "Sidebar", hidden: true }),
+          view.queryByRole("dialog", { name: "侧栏", hidden: true }),
         ).toBeNull(),
       );
     },
@@ -196,18 +212,11 @@ function renderNarrowApp(start = "/channel/models") {
 }
 
 test.each([
-  ["a conversation", "link", /Hacker News Top Stories/, "/channel/hn"],
-  [
-    "the conversation already open",
-    "link",
-    /AI Model and Agent Framework/,
-    "/channel/models",
-  ],
-  ["Bots", "link", /^Bots/, "/bots"],
-  ["Connections", "link", /^Connections/, "/connections"],
-  ["Teach a Bot", "link", /^Teach a Bot/, "/browser"],
-  // A link drawn as a button: it still goes somewhere.
-  ["New conversation", "button", /^New conversation$/, "/channel/new"],
+  ["an employee's conversation", "link", /^Personal Assistant/, "/channel/hn"],
+  ["任务看板", "link", /^任务看板/, "/tasks"],
+  ["员工管理", "link", /^员工管理/, "/wakers"],
+  ["能力与资源", "link", /^能力与资源/, "/resources"],
+  ["新建员工", "link", /^新建员工$/, "/wakers"],
 ] as const)(
   "picking %s in the narrow sheet closes it and opens the page",
   async (_label, role, name, path) => {
@@ -219,47 +228,41 @@ test.each([
   },
 );
 
-test("Settings in the account menu closes the sheet and opens Settings", async () => {
+test("opening 更多 keeps the sheet open, and 教员工做事 under it closes the sheet and opens the page", async () => {
   const app = renderNarrowApp();
   const sheet = await app.openSheet();
+  await app.user.click(within(sheet).getByRole("button", { name: /^更多/ }));
+  expect(app.view.getByRole("dialog", { name: "侧栏" })).toBeTruthy();
   await app.user.click(
-    within(sheet).getByRole("button", { name: /Dana Fresh/ }),
-  );
-  // The menu opens over the sheet; opening it leaves the sheet where it is.
-  const menu = await app.view.findByRole("menu");
-  expect(app.view.getByRole("dialog", { name: "Sidebar" })).toBeTruthy();
-  await app.user.click(
-    within(menu).getByRole("menuitem", { name: "Settings" }),
+    await within(sheet).findByRole("link", { name: /^教员工做事/ }),
   );
   await app.sheetCloses();
-  expect(app.router.state.location.pathname).toBe("/settings");
+  expect(app.router.state.location.pathname).toBe("/browser");
 });
 
-test("OpenBot for Business in the account menu closes the sheet and opens its dialog", async () => {
+test("设置 in the account menu closes the sheet and opens Settings", async () => {
   const app = renderNarrowApp();
   const sheet = await app.openSheet();
-  await app.user.click(
-    within(sheet).getByRole("button", { name: /Dana Fresh/ }),
-  );
+  await app.user.click(within(sheet).getByRole("button", { name: "设置" }));
+  // The menu opens over the sheet; opening it leaves the sheet where it is.
   const menu = await app.view.findByRole("menu");
-  await app.user.click(
-    within(menu).getByRole("menuitem", { name: "OpenBot for Business" }),
-  );
+  expect(app.view.getByRole("dialog", { name: "侧栏" })).toBeTruthy();
+  await app.user.click(within(menu).getByRole("menuitem", { name: "设置" }));
   await app.sheetCloses();
-  await app.view.findByRole("dialog", { name: "OpenBot for Business" });
-  expect(app.router.state.location.pathname).toBe("/channel/models");
+  expect(app.router.state.location.pathname).toBe("/settings");
 });
 
 test("searching the sheet keeps it open", async () => {
   const app = renderNarrowApp();
   const sheet = await app.openSheet();
+  await app.user.click(within(sheet).getByRole("button", { name: "搜索员工" }));
   await app.user.type(
-    within(sheet).getByRole("textbox", { name: "Search conversations" }),
-    "hacker",
+    within(sheet).getByRole("searchbox", { name: "按名字搜索员工" }),
+    "personal",
   );
-  expect(app.view.getByRole("dialog", { name: "Sidebar" })).toBeTruthy();
+  expect(app.view.getByRole("dialog", { name: "侧栏" })).toBeTruthy();
   expect(
-    within(sheet).getByRole("textbox", { name: "Search conversations" }),
-  ).toHaveProperty("value", "hacker");
+    within(sheet).getByRole("searchbox", { name: "按名字搜索员工" }),
+  ).toHaveProperty("value", "personal");
   expect(app.router.state.location.pathname).toBe("/channel/models");
 });

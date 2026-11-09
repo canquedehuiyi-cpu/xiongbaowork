@@ -61,15 +61,11 @@ const activity = (inProgress: number, scheduled: number, completed: number) =>
   }) as BotActivity;
 
 test("the activity row counts what is running and what is lined up", () => {
-  expect(activitySummary(activity(2, 3, 9))).toBe(
-    "2 in progress · 3 scheduled",
-  );
-  expect(activitySummary(activity(0, 1, 0))).toBe("1 scheduled");
-  expect(activitySummary(activity(0, 0, 4))).toBe(
-    "Nothing running or scheduled",
-  );
+  expect(activitySummary(activity(2, 3, 9))).toBe("2 项进行中 · 3 项已排期");
+  expect(activitySummary(activity(0, 1, 0))).toBe("1 项已排期");
+  expect(activitySummary(activity(0, 0, 4))).toBe("没有在进行或已排期的事");
   expect(activitySummary(activity(0, 0, 0))).toBe(
-    "No tasks, routines or goals yet",
+    "还没有任务、定时任务或长期职责",
   );
 });
 
@@ -93,17 +89,17 @@ test("a goal that runs only when asked is counted and listed as on demand, never
     onDemand: [goal],
     completed: [],
   };
-  expect(activitySummary(data)).toBe("1 scheduled · 1 on demand");
-  expect(activitySummary({ ...data, scheduled: [] })).toBe("1 on demand");
+  expect(activitySummary(data)).toBe("1 项已排期 · 1 项按需");
+  expect(activitySummary({ ...data, scheduled: [] })).toBe("1 项按需");
 
   const page = glance(data);
-  expect(await page.findByText("1 scheduled · 1 on demand")).toBeTruthy();
+  expect(await page.findByText("1 项已排期 · 1 项按需")).toBeTruthy();
   expect(page.getByText("Watch OpenBot releases")).toBeTruthy();
   cleanup();
 
   const sections = glance(data, BotActivitySections);
-  const scheduled = await sections.findByRole("heading", { name: "Scheduled" });
-  const onDemand = sections.getByRole("heading", { name: "On demand" });
+  const scheduled = await sections.findByRole("heading", { name: "已排期" });
+  const onDemand = sections.getByRole("heading", { name: "按需" });
   const listedUnder = (heading: HTMLElement) =>
     [
       ...(heading
@@ -142,9 +138,9 @@ test("the newest three suggestions show, and the rest open in place", async () =
 
   expect(await view.findByText("Suggestion 3")).toBeTruthy();
   expect(view.queryByText("Suggestion 4")).toBeNull();
-  fireEvent.click(view.getByRole("button", { name: "Show 2 more" }));
+  fireEvent.click(view.getByRole("button", { name: "再显示 2 条" }));
   expect(view.getByText("Suggestion 5")).toBeTruthy();
-  expect(view.queryByRole("button", { name: /more$/ })).toBeNull();
+  expect(view.queryByRole("button", { name: /^再显示/ })).toBeNull();
 });
 
 function glance(
@@ -186,13 +182,8 @@ test("running and scheduled work shows on the Bot's page, running first, three a
   const titles = [
     ...view.container.querySelectorAll("[data-slot=item-title]"),
   ].map((title) => title.textContent);
-  expect(titles).toEqual([
-    "Running 1",
-    "Running 2",
-    "Scheduled 1",
-    "All activity",
-  ]);
-  expect(view.getByText("2 in progress · 3 scheduled")).toBeTruthy();
+  expect(titles).toEqual(["Running 1", "Running 2", "Scheduled 1", "全部动态"]);
+  expect(view.getByText("2 项进行中 · 3 项已排期")).toBeTruthy();
   expect(view.queryByText("Done 1")).toBeNull();
 });
 
@@ -205,13 +196,13 @@ test("with nothing running or scheduled, there is no Activity section, and For y
   const section = glance(idle);
   const row = glance(idle, BotActivityRow);
 
-  expect(await row.findByText("Nothing running or scheduled")).toBeTruthy();
+  expect(await row.findByText("没有在进行或已排期的事")).toBeTruthy();
   const titles = [
     ...row.container.querySelectorAll("[data-slot=item-title]"),
   ].map((title) => title.textContent);
-  expect(titles).toEqual(["Activity"]);
+  expect(titles).toEqual(["动态"]);
   expect(section.container.querySelector("[data-slot=item]")).toBeNull();
-  expect(section.queryByRole("heading", { name: "Activity" })).toBeNull();
+  expect(section.queryByRole("heading", { name: "动态" })).toBeNull();
 });
 
 test("a long title is cut to one line with an ellipsis, and the whole of it shows on hover", async () => {
@@ -242,7 +233,7 @@ test("a goal's activity row says Goal and opens the Bot's goals", async () => {
   });
   const title = await view.findByText("Close the month 1");
   const row = title.closest("a");
-  expect(row?.getAttribute("href")).toBe("/bots/scout/responsibilities");
-  expect(row?.textContent).toContain("Goal · running");
+  expect(row?.getAttribute("href")).toBe("/responsibilities?agent=scout");
+  expect(row?.textContent).toContain("长期职责 · 进行中");
   expect(row?.textContent).not.toMatch(/responsibilit/i);
 });

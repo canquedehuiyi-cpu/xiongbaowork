@@ -218,19 +218,19 @@ test("the private sign-in dialog spaces its sections as a dialog does", async ()
   fireEvent.click(
     await tree.findByRole(
       "button",
-      { name: /Open private sign-in/ },
+      { name: /打开私密登录/ },
       { timeout: 4000 },
     ),
   );
 
-  const body = (await tree.findByText("Use a saved login")).closest(
+  const body = (await tree.findByText("使用已保存的登录")).closest(
     "[data-slot=dialog-body]",
   ) as HTMLElement;
   expect(body).not.toBeNull();
   const sections = [...body.querySelectorAll(":scope > section")];
   expect(
     sections.map((section) => section.querySelector("h2")?.textContent),
-  ).toEqual(["Use a saved login", "Enter your login"]);
+  ).toEqual(["使用已保存的登录", "输入你的登录信息"]);
   for (const section of sections) {
     // Spaced by the dialog body's own gap, with no page margin of its own above it.
     expect(section.className.split(/\s+/)).toContain("mt-0");

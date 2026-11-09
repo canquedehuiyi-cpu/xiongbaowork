@@ -53,21 +53,17 @@ function line(name: string, args: string, result?: string) {
 test("a blocked file change says what was tried, and on which file", () => {
   const view = line("host_write_file", write, DECLINED);
   const text = view.container.textContent ?? "";
-  expect(text).toContain("Blocked: Save a file");
+  expect(text).toContain("已拦截：保存文件");
   expect(text).toContain("todo.txt");
-  expect(text).not.toContain("Saved a file");
+  expect(text).not.toContain("保存了文件");
 });
 
 test("every folder step that is blocked reads as what was tried", () => {
   const cases = [
-    ["host_list_files", { grantId: "g" }, "Blocked: List files"],
-    ["host_read_file", { grantId: "g", path: "a.md" }, "Blocked: Read a file"],
-    [
-      "host_run_command",
-      { grantId: "g", command: "dir" },
-      "Blocked: Run a command",
-    ],
-    ["host_list_folders", {}, "Blocked: Check your folders"],
+    ["host_list_files", { grantId: "g" }, "已拦截：列出文件"],
+    ["host_read_file", { grantId: "g", path: "a.md" }, "已拦截：读取文件"],
+    ["host_run_command", { grantId: "g", command: "dir" }, "已拦截：执行命令"],
+    ["host_list_folders", {}, "已拦截：查看你的文件夹"],
   ] as const;
   for (const [name, args, words] of cases) {
     const view = line(name, JSON.stringify(args), DECLINED);
@@ -79,7 +75,7 @@ test("every folder step that is blocked reads as what was tried", () => {
 test("a file change that happened keeps its past tense, and names the file too", () => {
   const view = line("host_write_file", write, JSON.stringify({ ok: true }));
   const text = view.container.textContent ?? "";
-  expect(text).toContain("Saved a file");
+  expect(text).toContain("保存了文件");
   expect(text).toContain("todo.txt");
   expect(text).not.toContain("已拦下");
 });
@@ -97,10 +93,10 @@ test("in a folded run, a blocked folder step is named for what was tried beside 
   };
   expect(stepDetails(item)).toMatchObject({
     refused: true,
-    label: "Save a file",
+    label: "保存文件",
   });
   const { result: _blocked, ...running } = item;
-  expect(stepDetails(running)).toMatchObject({ label: "Saving a file" });
+  expect(stepDetails(running)).toMatchObject({ label: "正在保存文件" });
 });
 
 /*
@@ -119,9 +115,10 @@ test("a folder change declined on the conversation's card reads as declined, not
   });
   const view = line("host_write_file", edit, DECLINED_BY_PERSON);
   const text = view.container.textContent ?? "";
-  expect(text).toContain("Blocked: Save a file");
-  expect(text).toContain("notes.txt · You declined it.");
-  expect(text).not.toContain("Saved a file");
+  // 熊宝中文版把主人自己拒绝的一步说成「已拒绝」，与边界规则拦下的「已拦截」分开。
+  expect(text).toContain("已拒绝：保存文件");
+  expect(text).toContain("notes.txt · 你拒绝了这一步。");
+  expect(text).not.toContain("保存了文件");
   // The sentence written for the Bot is not what the person reads.
   expect(text).not.toContain("Do not try this action");
   view.unmount();
@@ -131,8 +128,8 @@ test("a folder change declined on the conversation's card reads as declined, not
     JSON.stringify({ grantId: "g", command: "wc -c notes.txt" }),
     DECLINED_BY_PERSON,
   );
-  expect(command.container.textContent).toContain("Blocked: Run a command");
-  expect(command.container.textContent).toContain("You declined it.");
+  expect(command.container.textContent).toContain("已拒绝：执行命令");
+  expect(command.container.textContent).toContain("你拒绝了这一步。");
   expect(command.container.textContent).not.toContain("执行了命令");
 });
 
@@ -149,9 +146,9 @@ test("in a folded run, a folder step declined on the card is Blocked, named for 
   };
   expect(stepDetails(item)).toMatchObject({
     refused: true,
-    label: "Save a file",
+    label: "保存文件",
   });
-  expect(stepDetails(item).output).toBe("You declined it.");
+  expect(stepDetails(item).output).toBe("你拒绝了这一步。");
 });
 
 /*
@@ -187,7 +184,7 @@ test("an opened folder step never lists the grant's internal id", () => {
  * came, {"connected":true,"folders":[{"grantId":"host-grant-7712-…","displayName":"share"}]}, and
  * the Save step named the file but not the folder it was in. A person reads the folders by name, no
  * JSON and no grant id, and a folder step names its file and folder as the card does:
- * "todo.txt in share".
+ * "todo.txt（在 share 中）".
  */
 const GRANT = "host-grant-7712-1794100000000000000";
 const listing = JSON.stringify({
@@ -278,10 +275,12 @@ test("a folder step names its file and the folder it is in, as the card does", (
       </FolderNamesContext.Provider>
     </QueryClientProvider>,
   );
-  expect(view.container.textContent).toContain("todo.txt in share");
+  expect(view.container.textContent).toContain("todo.txt（在 share 中）");
   view.unmount();
 
-  expect(stepDetailsIn(folders)(saveStep).detail).toBe("todo.txt in share");
+  expect(stepDetailsIn(folders)(saveStep).detail).toBe(
+    "todo.txt（在 share 中）",
+  );
   // A command or a listing is on the whole folder.
   expect(
     stepDetailsIn(folders)({
@@ -294,7 +293,7 @@ test("a folder step names its file and the folder it is in, as the card does", (
         },
       },
     }).detail,
-  ).toBe("in share");
+  ).toBe("在 share 中");
 });
 
 test("Activity names a folder step's file and folder", () => {
@@ -314,10 +313,10 @@ test("Activity names a folder step's file and folder", () => {
     );
   expect(
     row({ action: "host/write_file", file: "todo.txt", folder: "share" }),
-  ).toBe("todo.txt in share");
+  ).toBe("todo.txt（在 share 中）");
   expect(
     row({ action: "host/run_command", command: "dir", folder: "share" }),
-  ).toBe("dir in share");
+  ).toBe("dir（在 share 中）");
   // A row written before rows named their folder keeps the file alone.
   expect(row({ action: "host/write_file", file: "todo.txt" })).toBe("todo.txt");
 });

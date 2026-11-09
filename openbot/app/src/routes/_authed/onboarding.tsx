@@ -157,7 +157,8 @@ function welcomeStep(
 function sourcesStep(nextStep: number, onAdvanced: () => void): OnboardingStep {
   return {
     id: "sources",
-    title: "你的资料",
+    // The step list names a step by its heading, and SourcesStep draws its own.
+    title: "告诉你的分身，你的资料在哪里",
     intro: () => <SourcesStep nextStep={nextStep} onAdvanced={onAdvanced} />,
     primaryHidden: true,
   };
@@ -332,7 +333,12 @@ function RouteComponent() {
   const lastId = ids[ids.length - 1];
   const steps: OnboardingStep[] = ids.map((id) => {
     const step = byId[id];
-    if (id !== lastId || id === "name" || id === "sources") return step;
+    // The sources step finishes from its own buttons; a completion that fails there is said too.
+    if (id === "sources")
+      return id === lastId
+        ? { ...step, notice: step.notice ?? finishFailed }
+        : step;
+    if (id !== lastId || id === "name") return step;
     const out = () => void finish().catch(() => undefined);
     return {
       ...step,

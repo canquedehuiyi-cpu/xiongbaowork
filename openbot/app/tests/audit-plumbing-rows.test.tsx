@@ -7,13 +7,10 @@ import {
   createRouter,
   RouterProvider,
 } from "@tanstack/react-router";
-import { cleanup, render, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import type { ComponentType } from "react";
+import { cleanup, render } from "@testing-library/react";
+import { AuditPage } from "@/components/manage/audit-page";
 import { agentKeys } from "@/lib/agents/queries";
 import { deploymentKeys } from "@/lib/deployment/queries";
-import { Route as AdminAuditRoute } from "@/routes/_authed/admin/audit";
-import { Route as ActivityRoute } from "@/routes/_authed/settings/_personal/activity";
 import { seedAuditPage } from "./seed-audit-page";
 import { settleReactWork } from "./settle-react-work";
 
@@ -24,6 +21,11 @@ import { settleReactWork } from "./settle-react-work";
  * setting" with no Bot and no folder.
  */
 
+/*
+ * 熊宝版没有个人版的「活动」页：这里只测管理端的审计表（上游 `components/manage/audit-page.tsx`，
+ * 待接入 /admin/audit），个人版专有的用例不收。
+ */
+
 beforeAll(() => GlobalRegistrator.register());
 afterEach(() => cleanup());
 afterAll(async () => {
@@ -32,10 +34,6 @@ afterAll(async () => {
 });
 
 const BOT = "personal-assistant";
-
-/** What Activity asks the server to leave out, as the page writes it into its query. */
-const LEAVE_OUT =
-  "excludeEventType=mcp.tools_discovered%2Cchannel.routed%2Ccomponent.published%2Ccomponent.description_updated%2Ccomputer.policy_loaded%2Ccomputer.isolation_loaded&excludeCalls=routines%2Fcreate_routine%2Croutines%2Fupdate_routine%2Croutines%2Fdelete_routine";
 
 function row(
   id: string,
@@ -70,10 +68,7 @@ const READ = row("read", 1, "computer.action_allowed", "host_access", {
   file: "todo.txt",
 });
 
-async function renderPage(
-  edition: "team" | "personal",
-  audit: Record<string, unknown[]>,
-) {
+async function renderPage(audit: Record<string, unknown[]>) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false, staleTime: Number.POSITIVE_INFINITY },
@@ -82,8 +77,8 @@ async function renderPage(
   queryClient.setQueryData(deploymentKeys.capabilities(), {
     generativeUi: true,
     selfHostBanner: false,
-    localEvaluation: edition === "personal",
-    edition,
+    localEvaluation: false,
+    edition: "team",
   });
   for (const [search, events] of Object.entries(audit))
     seedAuditPage(queryClient, search, { events });
@@ -91,10 +86,8 @@ async function renderPage(
     { id: BOT, name: "Personal Assistant" },
   ]);
   queryClient.setQueryData(agentKeys.list(true), []);
-  const Page = (edition === "personal" ? ActivityRoute : AdminAuditRoute)
-    .options.component as ComponentType;
   const router = createRouter({
-    routeTree: createRootRoute({ component: () => <Page /> }),
+    routeTree: createRootRoute({ component: () => <AuditPage /> }),
     history: createMemoryHistory({ initialEntries: ["/"] }),
   });
   const view = render(
@@ -118,32 +111,8 @@ function drawn(container: HTMLElement) {
   }));
 }
 
-test("Activity leaves out choosing tools for a run, in every view", async () => {
-  /*
-   * Seeded only under the queries that leave it out: rows drawn mean the page asked the server for
-   * exactly that, which is what lets a page of 50 be 50 rows a person reads.
-   */
-  const view = await renderPage("personal", {
-    [`?${LEAVE_OUT}`]: [READ],
-    [`?initiatorKind=routine%2Chandoff%2Cresponsibility%2Cmemory&${LEAVE_OUT}`]:
-      [],
-  });
-  expect(drawn(view.container)).toEqual([
-    {
-      what: ["读取文件", "todo.txt"],
-      who: ["Personal Assistant", "由某个人发起"],
-      decision: ["已放行"],
-    },
-  ]);
-  expect(view.container.textContent).not.toContain("为一次运行挑选工具");
-  await userEvent
-    .setup({ document })
-    .click(view.getByRole("button", { name: "Nobody watching" }));
-  await waitFor(() => expect(view.getByText("No matches")).toBeTruthy());
-});
-
 test("Admin keeps choosing tools for a run, as it read before", async () => {
-  const view = await renderPage("team", { "": [CHOOSE_TOOLS, READ] });
+  const view = await renderPage({ "": [CHOOSE_TOOLS, READ] });
   expect(drawn(view.container)[0]).toEqual({
     what: ["为一次运行挑选工具", "96 / 96 个工具"],
     who: ["Personal Assistant", "由某个人发起"],
@@ -186,9 +155,7 @@ const FOLDER_ROWS = [
 ];
 
 test("a folder given to a Bot, taken away or stopped reads in words, with the Bot and the folder", async () => {
-  const view = await renderPage("personal", {
-    [`?${LEAVE_OUT}`]: FOLDER_ROWS,
-  });
+  const view = await renderPage({ "": FOLDER_ROWS });
   const person = "由某个人发起";
   const changed = ["配置已修改"];
   expect(drawn(view.container)).toEqual([

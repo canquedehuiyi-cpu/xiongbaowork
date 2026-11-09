@@ -163,11 +163,11 @@ test("/ starts the box with the words a link hands over, and sends them only whe
     queryClientWithAgents([own]),
     "/?ask=Find%20my%20meeting",
   );
-  const box = await view.findByRole("textbox", { name: "Message" });
+  const box = await view.findByRole("textbox", { name: "消息" });
   await waitFor(() => expect(box.textContent).toBe("Find my meeting"));
   expect(starts).toEqual([]);
   const user = userEvent.setup({ document: view.container.ownerDocument });
-  await user.click(await view.findByRole("button", { name: "Send message" }));
+  await user.click(await view.findByRole("button", { name: "发送消息" }));
   await waitFor(() => expect(starts).toEqual([["own-public"]]));
 });
 
@@ -307,7 +307,7 @@ test("a start that fails after the person went back home shows its words and rea
   expect(await view.findByText("Starting")).toBeTruthy();
   // Home's own link, while the Bot is still being picked: a home page mounted before the failure.
   await view.router.navigate({ to: "/" });
-  await view.findByRole("textbox", { name: "Message" });
+  await view.findByRole("textbox", { name: "消息" });
 
   answer(
     Response.json(
@@ -323,9 +323,9 @@ test("a start that fails after the person went back home shows its words and rea
   // the box after it, in PromptArea's own effect, which under load runs a task later.
   await waitFor(() => {
     expect(view.getByRole("alert").textContent).toContain(
-      "Data Analyst, Risk Analyst",
+      "Data Analyst、Risk Analyst",
     );
-    expect(view.getByRole("textbox", { name: "Message" }).textContent).toBe(
+    expect(view.getByRole("textbox", { name: "消息" }).textContent).toBe(
       "ask analyst",
     );
   });
@@ -355,7 +355,7 @@ test("a start that fails while the person is writing something else on home leav
   await view.router.navigate({ to: "/" });
   const user = userEvent.setup({ document: view.container.ownerDocument });
   await user.type(
-    await view.findByRole("textbox", { name: "Message" }),
+    await view.findByRole("textbox", { name: "消息" }),
     "something new",
   );
 
@@ -371,7 +371,7 @@ test("a start that fails while the person is writing something else on home leav
 
   // Nothing to wait on but the failure itself; give it the turns it needs to land.
   await new Promise((resolve) => setTimeout(resolve, 50));
-  expect(view.getByRole("textbox", { name: "Message" }).textContent).toBe(
+  expect(view.getByRole("textbox", { name: "消息" }).textContent).toBe(
     "something new",
   );
   // Kept for the next home page, which is not this test's to open.
@@ -409,10 +409,10 @@ for (const status of [409, 500]) {
     });
     const view = renderHome(client);
     const user = userEvent.setup({ document: view.container.ownerDocument });
-    await user.click(await view.findByRole("textbox", { name: "Message" }));
+    await user.click(await view.findByRole("textbox", { name: "消息" }));
     await user.keyboard("/first");
     await user.click(await view.findByRole("option", { name: /First skill/ }));
-    await user.click(await view.findByRole("button", { name: "Send message" }));
+    await user.click(await view.findByRole("button", { name: "发送消息" }));
     await waitFor(() =>
       expect(view.getByRole("alert").textContent).toContain(
         "Cannot route these skills",
@@ -420,8 +420,8 @@ for (const status of [409, 500]) {
     );
     expect(requests).toEqual([{ text: "/first", skillSlugs: ["first"] }]);
     expect(starts).toEqual([]);
-    expect(
-      view.getByRole("textbox", { name: "Message" }).textContent,
-    ).toContain("/first");
+    expect(view.getByRole("textbox", { name: "消息" }).textContent).toContain(
+      "/first",
+    );
   });
 }

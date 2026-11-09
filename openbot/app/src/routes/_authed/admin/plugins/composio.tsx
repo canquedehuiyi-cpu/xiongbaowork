@@ -60,7 +60,25 @@ export const Route = createFileRoute("/_authed/admin/plugins/composio")({
  * app somebody typed half the name of.
  */
 export function matchingApps(apps: ComposioApp[]): ComposioApp[] {
-  return [...apps].sort((left, right) => left.name.localeCompare(right.name));
+  // Apps somebody signs in to before apps that take a key: most of the catalogue has no sign-in,
+  // and a person browsing expected one (upstream, reported from OpenBot Desktop 0.3.3).
+  return [...apps].sort(
+    (left, right) =>
+      Number(needsKey(left)) - Number(needsKey(right)) ||
+      left.name.localeCompare(right.name),
+  );
+}
+
+/**
+ * An app connected by typing a key from the vendor rather than by signing in. One on this
+ * deployment's own client also arrives as `fields`, but only an administrator connects it, and its
+ * row says so instead.
+ */
+function needsKey(app: ComposioApp): boolean {
+  return (
+    app.connection?.kind === "fields" &&
+    app.connection.authScheme !== "S2S_OAUTH2"
+  );
 }
 
 function RouteComponent() {
@@ -193,6 +211,12 @@ function RouteComponent() {
                     <ItemContent>
                       <ItemTitle>{entry.name}</ItemTitle>
                       <ItemDescription>{zh(entry.description)}</ItemDescription>
+                      {/* Said before Add, so the key form at Connect is not a surprise. */}
+                      {needsKey(entry) ? (
+                        <ItemDescription>
+                          需要 {entry.name} 的密钥
+                        </ItemDescription>
+                      ) : null}
                       {/* An app on this deployment's own client (upstream #950): only an
                           administrator connects it, and calls through it are made as them. */}
                       {entry.connection?.authScheme === "S2S_OAUTH2" ? (

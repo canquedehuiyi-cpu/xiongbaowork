@@ -135,12 +135,12 @@ test("in the conversation, an app's approval names the action in words and the a
     </>,
   );
   const cards = await view.findAllByRole("region", {
-    name: "Waiting for your approval",
+    name: "等你批准",
   });
   expect(cards.map((card) => card.querySelector("p")?.textContent)).toEqual([
-    "Get request on Requests",
-    "Send email on Gmail",
-    "Click on example.com",
+    "Get request（Requests）",
+    "Send email（Gmail）",
+    "在 example.com 上点击",
   ]);
 });
 
@@ -158,11 +158,11 @@ test("a file save's card names it as its step and its Activity row do", async ()
     </>,
   );
   const cards = await view.findAllByRole("region", {
-    name: "Waiting for your approval",
+    name: "等你批准",
   });
   expect(cards.map((card) => card.querySelector("p")?.textContent)).toEqual([
-    "Save a file todo.txt in share",
-    "Save a file notes.txt",
+    "保存文件 todo.txt（在 share 中）",
+    "保存文件 notes.txt",
   ]);
   expect(view.container.textContent).not.toMatch(/write file|workspace/i);
 });
@@ -170,17 +170,17 @@ test("a file save's card names it as its step and its Activity row do", async ()
 test("on the Bot's page, the row says what the Bot wants to do, over the app's name", async () => {
   serving();
   const view = draw(<WaitingForYou agentId="assistant" />);
-  const row = (await view.findByText("General Assistant wants to get request"))
+  const row = (await view.findByText("General Assistant 想要get request"))
     .parentElement as HTMLElement;
   expect(row.textContent).toContain("Requests");
   expect(row.textContent).not.toContain("requests/");
   expect(
-    view.getByText("General Assistant wants to send email").parentElement
+    view.getByText("General Assistant 想要send email").parentElement
       ?.textContent,
   ).toContain("Gmail");
-  expect(view.getByText("General Assistant wants to click")).toBeTruthy();
+  expect(view.getByText("General Assistant 想要点击")).toBeTruthy();
   expect(
-    view.getByText("General Assistant wants to get IMAP settings"),
+    view.getByText("General Assistant 想要get IMAP settings"),
   ).toBeTruthy();
   expect(view.container.textContent).not.toContain("composio");
 });

@@ -11,18 +11,20 @@ import {
 import { cleanup, render, waitFor } from "@testing-library/react";
 import { identityKeys } from "@/lib/identity/queries";
 import { pluginKeys } from "@/lib/plugins/queries";
-import { Route } from "@/routes/_authed/_app/connections.index";
+import { Route } from "@/routes/_authed/settings/connected-accounts/index";
 
 /**
  * EVERY ONE-SHOT PARAMETER THIS SCREEN CONSUMES IS DROPPED FROM THE URL, NOT JUST `?linked=`.
  *
- * All three — `?connected=failed` from the Composio OAuth callback, `?authorized=<code>` from the
- * brokered per-action verifier, `?linked=` from the GitHub account-link callback — report something
- * that has already happened: read once, and then over. A parameter left in the address bar is read
- * again on every reload and on every back-navigation, so news that is minutes old is redrawn as
- * though it had just happened — somebody is told again that their account could not be connected,
- * or that there is no authorization in progress, about an attempt they have since finished.
- * `?linked=` was stripped and the other two were not.
+ * Both — `?connected=failed` from the OAuth callback and `?linked=` from the GitHub account-link
+ * callback — report something that has already happened: read once, and then over. A parameter
+ * left in the address bar is read again on every reload and on every back-navigation, so news that
+ * is minutes old is redrawn as though it had just happened — somebody is told again that their
+ * account could not be connected about an attempt they have since finished. `?linked=` was stripped
+ * and `?connected=` was not.
+ *
+ * 熊宝中文版的已连接账号页在 /settings/connected-accounts（上游搬去的 /connections 不收）；
+ * 上游的 `?authorized=`（代管应用的逐次授权核验）服务端没有，这里也不测。
  *
  * THE NOTICE STILL HAS TO BE DRAWN, which is the other half of the claim and the reason the strip
  * cannot be a bare navigate on mount: the screen reads each value once into state, draws the
@@ -30,7 +32,7 @@ import { Route } from "@/routes/_authed/_app/connections.index";
  * satisfied by a screen that says nothing at all.
  */
 
-const PATH = "/connections";
+const PATH = "/settings/connected-accounts";
 
 beforeAll(() => GlobalRegistrator.register());
 afterEach(cleanup);
@@ -80,47 +82,32 @@ const searchOf = (router: TestRouter) => router.state.location.search;
 
 test("?connected=failed is said once and then dropped from the URL", async () => {
   const { view, router } = renderScreen("?connected=failed");
-  await view.findByText(/Couldn't connect that account/);
+  await view.findByText(/这个账号没能连接/);
   await waitFor(() => expect(searchOf(router)).toEqual({}));
   // And the sentence survives the strip: the news is read once, not withdrawn.
-  expect(view.queryByText(/Couldn't connect that account/)).not.toBeNull();
+  expect(view.queryByText(/这个账号没能连接/)).not.toBeNull();
   expect(router.state.location.href).toBe(PATH);
 });
 
-test("?authorized= is said once and then dropped from the URL", async () => {
-  const { view, router } = renderScreen("?authorized=no-attempt");
-  await view.findByText(/There's no authorization in progress/);
-  await waitFor(() => expect(searchOf(router)).toEqual({}));
-  expect(
-    view.queryByText(/There's no authorization in progress/),
-  ).not.toBeNull();
-  expect(router.state.location.href).toBe(PATH);
-});
-
-/** The one that was already stripped, kept here so the three are pinned in one place. */
+/** The one that was already stripped, kept here so the two are pinned in one place. */
 test("?linked= is said once and then dropped from the URL", async () => {
   const { view, router } = renderScreen("?linked=failed");
-  await view.findByText(/Couldn't link your GitHub account/);
+  await view.findByText(/GitHub 账号没能关联/);
   await waitFor(() => expect(searchOf(router)).toEqual({}));
-  expect(view.queryByText(/Couldn't link your GitHub account/)).not.toBeNull();
+  expect(view.queryByText(/GitHub 账号没能关联/)).not.toBeNull();
 });
 
 /**
- * ALL THREE AT ONCE, because stripping them one at a time is the failure mode a per-parameter
- * effect invites: each navigate replaces the whole search, so one that drops `connected` while
- * rebuilding `authorized` leaves the second behind for ever.
+ * BOTH AT ONCE, because stripping them one at a time is the failure mode a per-parameter effect
+ * invites: each navigate replaces the whole search, so one that drops `connected` while
+ * rebuilding `linked` leaves the second behind for ever.
  */
-test("all three arriving together leave nothing behind", async () => {
-  const { view, router } = renderScreen(
-    "?connected=failed&authorized=no-attempt&linked=failed",
-  );
-  await view.findByText(/Couldn't connect that account/);
+test("both arriving together leave nothing behind", async () => {
+  const { view, router } = renderScreen("?connected=failed&linked=failed");
+  await view.findByText(/这个账号没能连接/);
   await waitFor(() => expect(searchOf(router)).toEqual({}));
   expect(router.state.location.href).toBe(PATH);
-  expect(
-    view.queryByText(/There's no authorization in progress/),
-  ).not.toBeNull();
-  expect(view.queryByText(/Couldn't link your GitHub account/)).not.toBeNull();
+  expect(view.queryByText(/GitHub 账号没能关联/)).not.toBeNull();
 });
 
 /** Nothing to consume means nothing to clean up, and no navigation at all. */

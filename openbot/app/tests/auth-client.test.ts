@@ -169,7 +169,7 @@ describe("signInWithEmailDomain", () => {
 
     expect(
       signInWithEmailDomain("someone@company.com", refuse),
-    ).rejects.toThrow("No identity provider is registered for that address.");
+    ).rejects.toThrow("这个邮箱地址没有登记任何身份提供方。");
   });
 
   test("resolves quietly when the redirect is under way", async () => {

@@ -39,6 +39,8 @@ function agent(
 ): AgentProfile {
   return {
     avatarSeed: overrides.id,
+    modelRef: null,
+    persona: null,
     builtIn: true,
     canManage: true,
     endpoint: null,
@@ -226,7 +228,7 @@ async function addToTo(view: View, name: string) {
   // The field shows the Bot it now holds.
   await waitFor(() =>
     expect(
-      view.getByRole<HTMLInputElement>("combobox", { hidden: true }).value,
+      (view.getByRole("combobox", { hidden: true }) as HTMLInputElement).value,
     ).toBe(name),
   );
 }

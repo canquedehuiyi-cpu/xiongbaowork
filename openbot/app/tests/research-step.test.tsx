@@ -153,7 +153,7 @@ test("a web search on its own line opens to the same results, never the provider
   );
   for (const summary of view.container.querySelectorAll("summary"))
     fireEvent.click(summary);
-  expect(view.getByText("Search the web")).toBeDefined();
+  expect(view.getByText("搜索网页")).toBeDefined();
   const text = view.container.textContent ?? "";
   expect(text).not.toContain("search_id");
   expect(text).not.toContain("\\n");

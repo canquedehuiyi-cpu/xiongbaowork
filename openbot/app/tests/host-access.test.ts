@@ -119,7 +119,7 @@ test("a failed revoke or stop says so in the person's words", async () => {
   ];
 
   expect(messages).toEqual([
-    "Access to that folder could not be revoked.",
-    "Folder access could not be stopped.",
+    "这台电脑上的文件夹授权没能撤销。",
+    "这台电脑上的文件夹访问没能停止。",
   ]);
 });

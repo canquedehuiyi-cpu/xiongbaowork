@@ -134,42 +134,42 @@ test("the panel shows the terminal when the Bot runs a command, the screen when 
   followView("follow-bot", { view: "terminal", callId: "c1" });
   const first = renderWithQueries(<ComputerViewPanel agentId="follow-bot" />);
   // A Bot that has only used its shell opens on the terminal.
-  await waitFor(() => expect(selected()).toEqual(["Terminal"]));
+  await waitFor(() => expect(selected()).toEqual(["终端"]));
 
   act(() => followView("follow-bot", { view: "screen", callId: "c2" }));
-  await waitFor(() => expect(selected()).toEqual(["Screen"]));
+  await waitFor(() => expect(selected()).toEqual(["屏幕"]));
   act(() => followView("follow-bot", { view: "terminal", callId: "c3" }));
-  await waitFor(() => expect(selected()).toEqual(["Terminal"]));
+  await waitFor(() => expect(selected()).toEqual(["终端"]));
 
   // The person picks the screen: the Bot's next command does not take it away.
   const screenTab = [...document.querySelectorAll('[role="tab"]')].find(
-    (tab) => tab.textContent?.trim() === "Screen",
+    (tab) => tab.textContent?.trim() === "屏幕",
   ) as HTMLElement;
   act(() => screenTab.click());
-  await waitFor(() => expect(selected()).toEqual(["Screen"]));
+  await waitFor(() => expect(selected()).toEqual(["屏幕"]));
   act(() => followView("follow-bot", { view: "terminal", callId: "c4" }));
   await Bun.sleep(50);
-  expect(selected()).toEqual(["Screen"]);
+  expect(selected()).toEqual(["屏幕"]);
 
   // Closed and opened again, it follows the Bot again.
   first.unmount();
   renderWithQueries(<ComputerViewPanel agentId="follow-bot" />);
-  await waitFor(() => expect(selected()).toEqual(["Terminal"]));
+  await waitFor(() => expect(selected()).toEqual(["终端"]));
 });
 
 test("a command clicked in the chat puts the terminal in front", async () => {
   followView("click-bot", { view: "screen", callId: "s1" });
   renderWithQueries(<ComputerViewPanel agentId="click-bot" />);
-  await waitFor(() => expect(selected()).toEqual(["Screen"]));
+  await waitFor(() => expect(selected()).toEqual(["屏幕"]));
   act(() => showComputerView("click-bot", "terminal"));
-  await waitFor(() => expect(selected()).toEqual(["Terminal"]));
+  await waitFor(() => expect(selected()).toEqual(["终端"]));
 });
 
 test("Take control in the terminal gives the terminal the keyboard, says so in terminal words, and opens no screen", async () => {
   renderWithQueries(<ComputerTerminal computerId="wheel-bot" />);
   const take = await waitFor(() => {
     const button = [...document.querySelectorAll("button")].find(
-      (candidate) => candidate.textContent === "Take control",
+      (candidate) => candidate.textContent === "接管",
     );
     expect(button?.hasAttribute("disabled")).toBe(false);
     return button as HTMLButtonElement;
@@ -177,7 +177,7 @@ test("Take control in the terminal gives the terminal the keyboard, says so in t
   act(() => take.click());
   await waitFor(() =>
     expect(document.body.textContent).toContain(
-      "of the terminal and the screen. Click the terminal and type.",
+      "终端和屏幕现在由你操作。点击终端就能输入。",
     ),
   );
   expect(asked).toContain("POST /api/computers/wheel-bot/control/take");
@@ -187,5 +187,5 @@ test("Take control in the terminal gives the terminal the keyboard, says so in t
       "xterm-helper-textarea",
     ),
   );
-  expect(document.querySelector('[aria-label="The Bot\'s screen"]')).toBeNull();
+  expect(document.querySelector('[aria-label="员工的屏幕"]')).toBeNull();
 });

@@ -153,5 +153,5 @@ test("the orb finds the real composer's editor by its hook", () => {
   const view = render(<Composer compact onSubmit={() => {}} />);
   const editor = view.container.querySelector(EDITOR_SELECTOR);
   expect(editor).not.toBeNull();
-  expect(editor?.getAttribute("aria-label")).toBe("Message");
+  expect(editor?.getAttribute("aria-label")).toBe("消息");
 });

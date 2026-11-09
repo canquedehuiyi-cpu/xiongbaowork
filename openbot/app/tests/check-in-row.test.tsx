@@ -147,9 +147,9 @@ test("the row leads with how often and when, whatever the focus, and the focus f
   const view = draw();
   const row = await view.findByRole("button", { name: /Expenses/ });
   const lines = [...row.querySelectorAll("[data-slot=item-description]")];
-  expect(lines[0]?.textContent).toMatch(/^Every hour · Next /);
+  expect(lines[0]?.textContent).toMatch(/^每小时 · 下次 /);
   const focus = lines.find((line) => line.textContent?.includes(FOCUS));
-  expect(focus?.textContent).toBe(`Looks for: ${FOCUS}`);
+  expect(focus?.textContent).toBe(`要找：${FOCUS}`);
   expect(focus?.className).toContain("line-clamp-1");
 });
 
@@ -169,14 +169,12 @@ test("a skipped check-in says why on the row and in its dialog", async () => {
   ];
   const view = draw();
   const row = await view.findByRole("button", { name: /Expenses/ });
-  expect(
-    within(row).getByText(`Skipped 5 minutes ago. ${NOTHING_TO_READ}`),
-  ).toBeTruthy();
+  expect(within(row).getByText(`5分钟前跳过。${NOTHING_TO_READ}`)).toBeTruthy();
   const user = userEvent.setup({ document });
   await user.click(row);
   const dialog = await view.findByRole("dialog");
   expect(
-    within(dialog).getByText(`Skipped 5 minutes ago. ${NOTHING_TO_READ}`),
+    within(dialog).getByText(`5分钟前跳过。${NOTHING_TO_READ}`),
   ).toBeTruthy();
 });
 
@@ -195,10 +193,10 @@ test("Run now skipped at once says why in its dialog, never nothing", async () =
   const user = userEvent.setup({ document });
   await user.click(await view.findByRole("button", { name: /Expenses/ }));
   const dialog = await view.findByRole("dialog");
-  await user.click(within(dialog).getByRole("button", { name: "Run now" }));
+  await user.click(within(dialog).getByRole("button", { name: "立即运行" }));
   expect(writes).toEqual(["POST /api/proactive/settings/p1/run"]);
   expect(
-    await within(dialog).findByText(`Skipped just now. ${NOTHING_TO_READ}`),
+    await within(dialog).findByText(`刚刚跳过。${NOTHING_TO_READ}`),
   ).toBeTruthy();
 });
 
@@ -221,18 +219,18 @@ test("Run now queued says it is on its way, and a check-in that ran says what it
   await user.click(await view.findByRole("button", { name: /Expenses/ }));
   const dialog = await view.findByRole("dialog");
   expect(
-    within(dialog).getByText("Checked 2 hours ago. Found 2 things for you."),
+    within(dialog).getByText("2小时前巡检过，为你找到 2 件事。"),
   ).toBeTruthy();
-  await user.click(within(dialog).getByRole("button", { name: "Run now" }));
+  await user.click(within(dialog).getByRole("button", { name: "立即运行" }));
   expect(
-    await within(dialog).findByText("Queued. It checks in within a minute."),
+    await within(dialog).findByText("已排队，一分钟内开始巡检。"),
   ).toBeTruthy();
 });
 
 test("Turn on check-ins is offered only for a Bot without them, and lists its own conversations, never a task's", async () => {
   const on = draw();
   await on.findByRole("button", { name: /Expenses/ });
-  expect(on.queryByRole("button", { name: "Turn on check-ins" })).toBeNull();
+  expect(on.queryByRole("button", { name: "开启主动巡检" })).toBeNull();
   cleanup();
   queryClient.clear();
 
@@ -240,10 +238,10 @@ test("Turn on check-ins is offered only for a Bot without them, and lists its ow
   const off = draw();
   const user = userEvent.setup({ document });
   const [turnOn] = await off.findAllByRole("button", {
-    name: "Turn on check-ins",
+    name: "开启主动巡检",
   });
   await user.click(turnOn as HTMLElement);
-  await user.click(await off.findByRole("combobox", { name: "Conversation" }));
+  await user.click(await off.findByRole("combobox", { name: "对话" }));
   await waitFor(() =>
     expect(
       off.getAllByRole("option").map((option) => option.textContent),

@@ -118,18 +118,18 @@ test("the composer's form, input, attach and send carry their hooks, in both lay
     const input = slot(composer, "composer-input");
     // The hook is ours, around prompt-area's editor: the editor is inside it and nothing else is.
     expect(
-      input.querySelector('[role="textbox"][aria-label="Message"]'),
+      input.querySelector('[role="textbox"][aria-label="消息"]'),
     ).not.toBeNull();
     expect(input.querySelector("button")).toBeNull();
 
     const attach = slot(composer, "composer-attach");
     expect(attach.tagName).toBe("BUTTON");
-    expect(attach.getAttribute("aria-label")).toBe("Attach a file");
+    expect(attach.getAttribute("aria-label")).toBe("添加附件");
 
     const send = slot(composer, "composer-send");
     expect(send.tagName).toBe("BUTTON");
     expect(send.getAttribute("type")).toBe("submit");
-    expect(send.getAttribute("aria-label")).toBe("Send message");
+    expect(send.getAttribute("aria-label")).toBe("发送消息");
     cleanup();
   }
 });
@@ -146,7 +146,7 @@ test("the composer's stop button carries its hook while a Bot is working", () =>
   );
   const stop = slot(slot(view.container, "composer"), "composer-stop");
   expect(stop.tagName).toBe("BUTTON");
-  expect(stop.getAttribute("aria-label")).toBe("Stop the Bot");
+  expect(stop.getAttribute("aria-label")).toBe("停止员工");
   expect(
     view.container.querySelector('[data-slot="composer-send"]'),
   ).toBeNull();
@@ -180,7 +180,7 @@ test("the detail pane, its header and its title carry their hooks", () => {
   expect(header.parentElement).toBe(pane);
   const title = slot(header, "detail-pane-title");
   expect(title.textContent).toBe("Computer");
-  expect(header.querySelector('[aria-label="Close details"]')).not.toBeNull();
+  expect(header.querySelector('[aria-label="关闭详情"]')).not.toBeNull();
 });
 
 test("a page's header and title carry their hooks", async () => {
@@ -263,9 +263,9 @@ function conversationRoutes(path: string) {
 }
 
 test.each([
-  ["a conversation with one Bot", "/channel/c-1", "Channel"],
-  ["a group conversation", "/group/g-1", "Group"],
-  ["a new conversation", "/channel/new", "To:"],
+  ["a conversation with one Bot", "/channel/c-1", "会话"],
+  ["a group conversation", "/group/g-1", "群聊"],
+  ["a new conversation", "/channel/new", "发给："],
 ])("%s has its conversation header", async (_name, path, heading) => {
   const view = conversationRoutes(path);
   const header = await waitFor(() =>

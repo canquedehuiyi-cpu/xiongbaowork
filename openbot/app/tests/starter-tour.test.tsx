@@ -278,7 +278,7 @@ test("a failed selection leaves an error and permits retry", async () => {
   const view = draw({
     agentId: "picked-harness",
     onSelect: async () => {
-      if (++sends === 1) throw new Error("Task could not start. Try again.");
+      if (++sends === 1) throw new Error("没能开始这个任务。请再试一次。");
     },
   });
   const button = await view.findByRole("button", {

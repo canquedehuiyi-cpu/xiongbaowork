@@ -78,6 +78,9 @@ const base: AgentProfile = {
   modelRef: null,
   persona: null,
   hasCallbackToken: false,
+  isolated: false,
+  isolationActive: false,
+  isolationOffReason: null,
   hidden: false,
   pinned: false,
   systemOwned: false,
@@ -103,6 +106,8 @@ const attention = (
   unread: 0,
   paused: false,
   notify: "all",
+  items: 0,
+  tasks: { needsInput: 0, ready: 0, failed: 0 },
   ...over,
 });
 
@@ -144,7 +149,10 @@ function seed({
   for (const agent of agents)
     client.setQueryData(agentKeys.detail(agent.id), agent);
   client.setQueryData(wakerGroupKeys.list(), []);
-  client.setQueryData(botLifecycleKeys.attention, rows);
+  client.setQueryData(botLifecycleKeys.attention, {
+    bots: rows,
+    lastPingId: null,
+  });
   client.setQueryData(runningTasksQueryOptions().queryKey, []);
   client.setQueryData(deviceKeys.list(), []);
   return client;

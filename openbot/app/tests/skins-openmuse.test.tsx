@@ -81,6 +81,8 @@ function agent(
 ): AgentProfile {
   return {
     avatarSeed: overrides.id,
+    modelRef: null,
+    persona: null,
     builtIn: true,
     canManage: true,
     endpoint: null,
@@ -382,7 +384,6 @@ const plugins: PluginsPage = {
   botsMayCallBack: false,
   redirectUri: null,
   composioConfigured: false,
-  authorizesPerAction: false,
 };
 
 type Call = { method: string; path: string; body: unknown };
@@ -546,7 +547,7 @@ describe("OpenMuse is a registered skin with its own frame", () => {
 describe("the frame", () => {
   test("centres OpenBot's default Bot, with what it is waiting on", async () => {
     serve();
-    renderAt("/connections");
+    renderAt("/settings/connected-accounts");
     const centre = await page().findByRole("button", {
       name: /^Muse，待你审阅 · 1 个审批。切换员工$/,
     });
@@ -596,7 +597,7 @@ describe("the frame", () => {
       tabs.getByRole("link", { name: "目标" }).getAttribute("aria-current"),
     ).toBe("page");
     expect(tabs.getByRole("link", { name: "应用" }).getAttribute("href")).toBe(
-      "/connections",
+      "/settings/connected-accounts",
     );
   });
 
@@ -604,12 +605,12 @@ describe("the frame", () => {
     ["/s/activity", "动态"],
     ["/s/ideas", "建议"],
     ["/s/goals", "目标"],
-    ["/connections", "应用"],
+    ["/settings/connected-accounts", "应用"],
     ["/channel/c-muse", "对话"],
     ["/routines", null],
     ["/settings/approvals", null],
     ["/bots/scout/setup", null],
-    ["/capabilities/memory", null],
+    ["/resources?tab=sources", null],
   ])("on %s the current tab is %s", async (path, current) => {
     serve();
     renderAt(path);
@@ -624,7 +625,7 @@ describe("the frame", () => {
 
   test.each([
     ["/s/goals", "column"],
-    ["/connections", "column"],
+    ["/settings/connected-accounts", "column"],
     ["/channel/c-muse", "column"],
     // The Bot's computer open beside the conversation needs OpenBot's own width.
     ["/channel/c-muse?watch=true", "page"],
@@ -715,7 +716,7 @@ describe("the frame wears the deployment's brand, not OpenMuse's", () => {
     "/s/activity",
     "/s/ideas",
     "/s/goals",
-    "/connections",
+    "/settings/connected-accounts",
   ])(
     "%s shows the deployment's name, never OpenMuse, and no capybara",
     async (path) => {
@@ -734,7 +735,7 @@ describe("the frame wears the deployment's brand, not OpenMuse's", () => {
 
   test("the centre Bot is drawn with its own OpenBot avatar", async () => {
     serve();
-    renderAt("/connections");
+    renderAt("/settings/connected-accounts");
     const centre = await page().findByRole("button", { name: /切换员工$/ });
     // AbstractAvatar names the drawing after the Bot, as on its OpenBot page.
     expect(within(centre).getByRole("img", { name: "Muse" })).toBeTruthy();
@@ -767,11 +768,11 @@ describe("every OpenBot surface stays reachable", () => {
     [/^新建群组$/, "/channel/new"],
     [/^首页$/, "/"],
     // OpenBot's own destinations, from the shared navigation list its sidebar draws.
-    [/^Bots$/, "/bots"],
-    [/^Capabilities$/, "/capabilities"],
-    [/^Connections$/, "/connections"],
-    [/^Admin$/, "/admin"],
-    [/^Settings$/, "/settings"],
+    [/^员工管理$/, "/wakers"],
+    [/^能力与资源$/, "/resources"],
+    [/^已连接的账号$/, "/settings/connected-accounts"],
+    [/^管理$/, "/admin"],
+    [/^设置$/, "/settings"],
   ];
 
   test("the menu reaches every surface, every conversation and every group", async () => {
@@ -804,7 +805,7 @@ describe("every OpenBot surface stays reachable", () => {
       serve({ role });
       renderAt("/s/goals");
       const menu = within(await openMenu());
-      await menu.findByRole("link", { name: /^Settings$/ });
+      await menu.findByRole("link", { name: /^设置$/ });
       for (const item of navigationFor(role).filter(isNavigationLink)) {
         expect(
           menu
@@ -819,8 +820,8 @@ describe("every OpenBot surface stays reachable", () => {
     serve({ role: "user" });
     renderAt("/s/activity");
     const menu = within(await openMenu());
-    await menu.findByRole("link", { name: /^Settings$/ });
-    expect(menu.queryByRole("link", { name: /^Admin$/ })).toBeNull();
+    await menu.findByRole("link", { name: /^设置$/ });
+    expect(menu.queryByRole("link", { name: /^管理$/ })).toBeNull();
   });
 
   test.each([
@@ -829,13 +830,13 @@ describe("every OpenBot surface stays reachable", () => {
     "/s/activity",
     "/s/ideas",
     "/s/goals",
-    "/connections",
+    "/settings/connected-accounts",
     "/bots/scout/setup",
   ])("Settings is one tap behind the menu on %s", async (path) => {
     serve();
     const router = renderAt(path);
     const menu = within(await openMenu());
-    const settings = await menu.findByRole("link", { name: /^Settings$/ });
+    const settings = await menu.findByRole("link", { name: /^设置$/ });
     expect(settings.getAttribute("href")).toBe("/settings");
     fireEvent.click(settings);
     await waitFor(() =>
@@ -845,19 +846,19 @@ describe("every OpenBot surface stays reachable", () => {
 
   test("the Bot switcher reaches each Bot's page, the roster and a new Bot", async () => {
     serve();
-    renderAt("/connections");
+    renderAt("/settings/connected-accounts");
     fireEvent.click(await page().findByRole("button", { name: /切换员工$/ }));
     const sheet = within(await page().findByRole("dialog"));
     expect(hrefOf(/^Muse的主页/)).toBe("/bots/picked-harness");
     expect(
       sheet.getByRole("link", { name: /^全部员工/ }).getAttribute("href"),
-    ).toBe("/bots");
+    ).toBe("/wakers");
     expect(
       sheet.getByRole("link", { name: /^新建员工/ }).getAttribute("href"),
-    ).toBe("/bots?new=true");
+    ).toBe("/wakers?new=true");
     // A Bot that is waiting on the person says so; one with only unread messages does not.
     expect(sheet.getByText("需要你 · 1 个审批")).toBeTruthy();
-    expect(sheet.getByText("1 unread")).toBeTruthy();
+    expect(sheet.getByText("1 条未读")).toBeTruthy();
     expect(sheet.queryByText(/需要你 · 1 条未读/)).toBeNull();
     // Choosing Scout moves it to the centre.
     fireEvent.click(sheet.getByRole("button", { name: /Scout/ }));
@@ -878,8 +879,8 @@ describe("each tab is OpenBot's own sections for the centre Bot", () => {
     // OpenBot's activity sections for the Bot.
     expect(await page().findByText("Morning briefing")).toBeTruthy();
     expect(page().getByText("Draft the launch post")).toBeTruthy();
-    expect(page().getByRole("heading", { name: "In progress" })).toBeTruthy();
-    expect(page().getByRole("heading", { name: "Completed" })).toBeTruthy();
+    expect(page().getByRole("heading", { name: "进行中" })).toBeTruthy();
+    expect(page().getByRole("heading", { name: "已完成" })).toBeTruthy();
   });
 
   test("Ideas shows only the centre Bot's suggestions and starts one through OpenBot", async () => {
@@ -890,8 +891,8 @@ describe("each tab is OpenBot's own sections for the centre Bot", () => {
     ).toBeTruthy();
     expect(page().queryByText("Compare pricing pages")).toBeNull();
     // OpenBot's own check-ins section for the Bot sits under the suggestions.
-    expect(page().getByRole("heading", { name: "Check-ins" })).toBeTruthy();
-    fireEvent.click(page().getByRole("button", { name: "Work on it" }));
+    expect(page().getByRole("heading", { name: "主动巡检" })).toBeTruthy();
+    fireEvent.click(page().getByRole("button", { name: "开始处理" }));
     await waitFor(() =>
       expect(
         calls.some(
@@ -916,7 +917,7 @@ describe("each tab is OpenBot's own sections for the centre Bot", () => {
     renderAt("/s/goals");
     fireEvent.click(
       await page().findByRole("switch", {
-        name: "Enable the routine scheduled Every weekday at 9:00",
+        name: "启用定时任务「Every weekday at 9:00」",
       }),
     );
     await waitFor(() =>
@@ -935,12 +936,12 @@ describe("each tab is OpenBot's own sections for the centre Bot", () => {
       await page().findByRole("button", { name: "需要你，有 1 件在等" }),
     );
     const sheet = within(await page().findByRole("dialog"));
-    expect(await sheet.findByText("Muse wants to open url")).toBeTruthy();
+    expect(await sheet.findByText("Muse 想要open url")).toBeTruthy();
     // What it will send is always on screen, as in OpenBot.
     expect(sheet.getByText("URL")).toBeTruthy();
     expect(sheet.getAllByText("https://example.com").length).toBe(2);
     expect(sheet.queryByText(/send email/)).toBeNull();
-    fireEvent.click(sheet.getByRole("button", { name: "Allow once" }));
+    fireEvent.click(sheet.getByRole("button", { name: "允许一次" }));
     await waitFor(() =>
       expect(calls).toContainEqual({
         method: "POST",
@@ -979,12 +980,12 @@ describe("the rules the frame runs on", () => {
     expect(tabFor("/s/activity")).toBe("activity");
     expect(tabFor("/s/ideas")).toBe("ideas");
     expect(tabFor("/s/goals")).toBe("goals");
-    expect(tabFor("/connections")).toBe("apps");
-    expect(tabFor("/connections/notion")).toBe("apps");
+    expect(tabFor("/settings/connected-accounts")).toBe("apps");
+    expect(tabFor("/settings/connected-accounts/notion")).toBe("apps");
     expect(tabFor("/routines")).toBeNull();
     expect(tabFor("/settings/approvals")).toBeNull();
     expect(tabFor("/bots/scout/setup")).toBeNull();
-    expect(tabFor("/capabilities/skills")).toBeNull();
+    expect(tabFor("/resources")).toBeNull();
     expect(tabFor("/s/apps")).toBeNull();
   });
 

@@ -751,18 +751,17 @@ export function ComputerTools() {
         "directory is your workspace, so paths are relative to it and files you write here are the " +
         "same ones the file tools see. Commands run in bash, so pipes and && work. Long output is " +
         "truncated from the start, and a command that runs too long is stopped. " +
-        "For package installation, check `id -u` first. As root (0), use " +
-        "`apt-get update && apt-get install -y <package>` directly; otherwise use " +
-        "`sudo openbot-apt update && sudo openbot-apt install <package>`, which takes package " +
-        "names and nothing else, not `sudo apt-get`. If installation is refused, say so rather " +
-        "than retrying.",
+        "Use the tools already installed first. If you need a new one, prefer installing it inside " +
+        "your workspace: `npm install <package>` (without -g), `bun add <package>`, or " +
+        "`python3 -m venv .venv` and then `.venv/bin/pip install <package>`. If you are told you " +
+        "have no sudo permission, do not try to escalate; say so rather than retrying.",
     parameters: z.object({
       command: z
         .string()
         .describe(
           onDevice
             ? "The command to run, written for the paired machine's own system"
-            : "The command to run, such as: apt-get install -y jq (as root)",
+            : "The command to run, such as: npm install marked",
         ),
     }),
     /*

@@ -463,7 +463,8 @@ export function startedByText(
     case "responsibility":
       return "目标";
     case "deployment":
-      return deployment.replace(/数字员工$/, "") || deployment;
+      // The product by its short name: 「熊宝数字员工」 reads as one of the person's Bots.
+      return deployment === "熊宝数字员工" ? "熊宝" : deployment;
     default:
       return "某个人";
   }

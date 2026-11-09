@@ -282,7 +282,7 @@ test("the app-access card stays out of a group, even before its answer arrives",
 
 test("show_app_access is named in words in a step's details too, and keeps its words to the model out", () => {
   const running = stepDetails(call("card", "show_app_access", { app: "x" }));
-  expect(running.label).toBe("Checking app access");
+  expect(running.label).toBe("正在查看应用权限");
   const done = stepDetails(
     call(
       "card",
@@ -293,7 +293,7 @@ test("show_app_access is named in words in a step's details too, and keeps its w
       ),
     ),
   );
-  expect(done.label).toBe("Checked app access");
+  expect(done.label).toBe("查看了应用权限");
   expect(done.output).toBeUndefined();
 });
 
@@ -334,11 +334,6 @@ test("a brokered app is summarised as the app, never with its broker's name", ()
     "List bases",
     "Get base schema",
   ]);
-  expect(
-    summarise(
-      [call("a", "mcp__arcade-Gmail__ListEmails", {}, '"x"')].map(stepDetails),
-    ),
-  ).toBe("用了 Gmail");
 });
 
 test("a refusal and a failure each count as an issue on the folded line", () => {
@@ -389,7 +384,7 @@ test("the computer asking the Bot to look again after a handback never reaches t
   expect(view.queryByText(/fresh browser snapshot/)).toBeNull();
   expect(view.queryByText("没成功")).toBeNull();
   expect(view.queryByText(/个问题/)).toBeNull();
-  expect(view.getAllByText("Opened page")).toHaveLength(1);
+  expect(view.getAllByText("打开了页面")).toHaveLength(1);
   expect(view.getByText("The Internet")).toBeDefined();
 
   // A handback whose closing snapshot failed says so too, and is a failure the person sees.
@@ -421,8 +416,8 @@ test("while running, the line names the step in progress; opened, a step shows i
       <ToolActivity group={group} active />
     </QueryClientProvider>,
   );
-  expect(view.getByText("Read web pages…")).toBeDefined();
-  fireEvent.click(view.getAllByText("Search the web")[0] as HTMLElement);
+  expect(view.getByText("读取网页…")).toBeDefined();
+  fireEvent.click(view.getAllByText("搜索网页")[0] as HTMLElement);
   expect(view.getByText("query")).toBeDefined();
   expect(view.getAllByText("top 5 GDP 2025").length).toBeGreaterThan(0);
 });

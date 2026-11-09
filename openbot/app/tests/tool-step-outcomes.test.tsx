@@ -27,7 +27,7 @@ function line(name: string, result?: string, args = "{}") {
 
 test("a refused line names what was tried, not what was done", () => {
   const text = render(
-    <ToolLine blockedLabel="执行命令" label="执行了命令" refused />,
+    <ToolLine attempted="执行命令" label="执行了命令" refused />,
   ).container.textContent;
   expect(text).toContain("已拦截：执行命令");
   // 「执行了命令」说的是命令已经执行了，被拦截时正好相反。
@@ -35,11 +35,11 @@ test("a refused line names what was tried, not what was done", () => {
 });
 
 test("a line that was not refused keeps its done label", () => {
-  const text = render(<ToolLine blockedLabel="执行命令" label="执行了命令" />)
+  const text = render(<ToolLine attempted="执行命令" label="执行了命令" />)
     .container.textContent;
   expect(text).toContain("执行了命令");
   const failed = render(
-    <ToolLine blockedLabel="保存文件" failed label="保存了文件" />,
+    <ToolLine attempted="保存文件" failed label="保存了文件" />,
   ).container.textContent;
   expect(failed).toContain("保存了文件，没有成功");
 });
@@ -66,7 +66,7 @@ test("every computer step names, for a blocked line, what it tried", () => {
     按下了: "按键",
     列出了文件: "列出文件",
     读取了文件: "读取文件",
-    执行了命令: "执行命令",
+    // 执行命令不在这张表里：computer_run_command 画成终端块（terminal-block.tsx），拦下时由状态徽标「已拦下」说。
     保存了文件: "保存文件",
     追加到文件: "追加到文件",
     滚动了: "滚动",
@@ -85,7 +85,7 @@ test("every computer step names, for a blocked line, what it tried", () => {
     const at = source.indexOf(`"${label}"`);
     const near = source.slice(Math.max(0, at - 200), at + 200);
     expect(near).toContain(`"${blocked}"`);
-    expect(near).toContain("blockedLabel");
+    expect(near).toContain("attempted");
   }
 });
 
@@ -122,7 +122,7 @@ test("a tool the Bot doesn't have reads as one sentence, not the runtime's list"
     "web_search",
     "Error: Model tried to call unavailable tool 'web_search'. Available tools: computer_navigate, computer_read.",
   );
-  expect(text).toContain("web_search，没有成功");
+  expect(text).toContain("Web search，没有成功");
   expect(text).toContain(UNOFFERED_TOOL_SENTENCE);
   expect(text).not.toContain("computer_navigate");
 });
@@ -174,7 +174,7 @@ test("a folder step that could not be completed reads as not having worked", () 
     "That host operation could not be completed: ENOENT: no such file",
     JSON.stringify({ grantId: "g", path: "missing.txt" }),
   );
-  expect(text).toContain("host_read_file，没有成功");
+  expect(text).toContain("读取了文件，没有成功");
   expect(text).not.toContain("已拦截");
 });
 

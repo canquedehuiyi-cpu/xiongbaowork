@@ -1,6 +1,5 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { connectAppRefusal } from "@openbot/shared/connect-prompt";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   createMemoryHistory,
@@ -9,11 +8,9 @@ import {
   RouterProvider,
 } from "@tanstack/react-router";
 import { cleanup, render } from "@testing-library/react";
-import type { ComponentType } from "react";
+import { AuditPage } from "@/components/manage/audit-page";
 import { agentKeys } from "@/lib/agents/queries";
 import { deploymentKeys } from "@/lib/deployment/queries";
-import { Route as AdminAuditRoute } from "@/routes/_authed/admin/audit";
-import { Route as ActivityRoute } from "@/routes/_authed/settings/_personal/activity";
 import { seedAuditPage } from "./seed-audit-page";
 import { settleReactWork } from "./settle-react-work";
 
@@ -25,6 +22,11 @@ import { settleReactWork } from "./settle-react-work";
  * connected your Gmail account. Connect it and ask again.` The server had answered: not connected.
  */
 
+/*
+ * 熊宝版没有个人版的「活动」页：这里只测管理端的审计表（上游 `components/manage/audit-page.tsx`，
+ * 待接入 /admin/audit），个人版专有的用例不收。
+ */
+
 beforeAll(() => GlobalRegistrator.register());
 afterEach(() => cleanup());
 afterAll(async () => {
@@ -34,10 +36,6 @@ afterAll(async () => {
 
 const BOT = "personal-assistant";
 const REF = "composio-gmail/GMAIL_FETCH_EMAILS";
-
-/** What Activity asks the server to leave out, as the page writes it into its query. */
-const LEAVE_OUT =
-  "excludeEventType=mcp.tools_discovered%2Cchannel.routed%2Ccomponent.published%2Ccomponent.description_updated%2Ccomputer.policy_loaded%2Ccomputer.isolation_loaded&excludeCalls=routines%2Fcreate_routine%2Croutines%2Fupdate_routine%2Croutines%2Fdelete_routine";
 
 /** An `mcp.call_failed` row as `callTool` writes it when the call's credential was refused. */
 function failedCall(id: string, minute: number, failure: string) {
@@ -69,41 +67,14 @@ function failedCall(id: string, minute: number, failure: string) {
   };
 }
 
-/** The refusal the server writes today, built by the same function the server builds it with. */
-const NOT_CONNECTED = failedCall(
-  "now",
-  3,
-  connectAppRefusal({
-    serverId: "composio-gmail",
-    title: "Gmail",
-    message:
-      "You have not connected your Gmail account. Connect it and ask again.",
-  }),
-);
 /** The row as it was stored on the Windows install, character for character. */
 const STORED_BEFORE = failedCall(
   "before",
   2,
   '[connect-app]{"serverId":"composio-gmail","title":"Gmail"} You have not connected your Gmail account. Connect it and ask again.',
 );
-/** An account the vendor stopped honouring, which the server words as a reconnect. */
-const WITHDRAWN = failedCall(
-  "withdrawn",
-  1,
-  connectAppRefusal({
-    serverId: "composio-gmail",
-    title: "Gmail",
-    message:
-      "Your Gmail access was withdrawn at the vendor, so this was not done. Reconnect it and ask again.",
-    reason: "reconnect",
-    at: "2026-11-08T18:01:00.000Z",
-  }),
-);
 
-async function renderPage(
-  edition: "team" | "personal",
-  audit: Record<string, unknown[]>,
-) {
+async function renderPage(audit: Record<string, unknown[]>) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false, staleTime: Number.POSITIVE_INFINITY },
@@ -112,8 +83,8 @@ async function renderPage(
   queryClient.setQueryData(deploymentKeys.capabilities(), {
     generativeUi: true,
     selfHostBanner: false,
-    localEvaluation: edition === "personal",
-    edition,
+    localEvaluation: false,
+    edition: "team",
   });
   for (const [search, events] of Object.entries(audit))
     seedAuditPage(queryClient, search, { events });
@@ -121,10 +92,8 @@ async function renderPage(
     { id: BOT, name: "Personal Assistant" },
   ]);
   queryClient.setQueryData(agentKeys.list(true), []);
-  const Page = (edition === "personal" ? ActivityRoute : AdminAuditRoute)
-    .options.component as ComponentType;
   const router = createRouter({
-    routeTree: createRootRoute({ component: () => <Page /> }),
+    routeTree: createRootRoute({ component: () => <AuditPage /> }),
     history: createMemoryHistory({ initialEntries: ["/"] }),
   });
   const view = render(
@@ -146,40 +115,8 @@ function drawn(container: HTMLElement) {
   }));
 }
 
-/** Nothing of the marker, the app's id or the provider behind it reaches the page. */
-function expectInWords(container: HTMLElement) {
-  const text = container.querySelector("tbody")?.textContent ?? "";
-  expect(text).not.toContain("[connect-app]");
-  expect(text).not.toContain("{");
-  expect(text).not.toContain("serverId");
-  expect(text).not.toMatch(/composio/i);
-  expect(text).not.toContain("didn't answer");
-}
-
-test("an app the person hasn't connected reads as not connected on Activity, the rows stored before included", async () => {
-  const view = await renderPage("personal", {
-    [`?${LEAVE_OUT}`]: [NOT_CONNECTED, STORED_BEFORE, WITHDRAWN],
-  });
-  const notConnected = {
-    what: ["Fetch emails", "Gmail"],
-    decision: ["未连接", "Gmail 还没有连接，请到「已连接的账号」里连接。"],
-  };
-  expect(drawn(view.container)).toEqual([
-    notConnected,
-    notConnected,
-    {
-      what: ["Fetch emails", "Gmail"],
-      decision: [
-        "需要重新连接",
-        "Gmail 的连接已失效，请到「已连接的账号」里重新连接。",
-      ],
-    },
-  ]);
-  expectInWords(view.container);
-});
-
 test("Admin reads the refusal's own sentence, without the marker", async () => {
-  const view = await renderPage("team", { "": [STORED_BEFORE] });
+  const view = await renderPage({ "": [STORED_BEFORE] });
   expect(drawn(view.container)[0]?.decision).toEqual([
     "未连接",
     "You have not connected your Gmail account. Connect it and ask again.",

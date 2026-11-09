@@ -835,7 +835,7 @@ export function ComputerView({
                     : control.transitioning
                       ? "正在完成当前动作…"
                       : someoneElse
-                        ? "由其他人操作。"
+                        ? "有人接管了操作。"
                         : // Who holds the wheel, which is always true; whether it is acting right now, the page shows.
                           `由${name ?? "员工"}操作`}
                 </span>
@@ -1173,7 +1173,7 @@ export function ComputerView({
                           </span>
                         ) : someoneElse ? (
                           <span className="truncate text-muted-foreground lg:whitespace-normal">
-                            由其他人操作。
+                            有人接管了操作。
                           </span>
                         ) : control?.requested ? (
                           <span className="truncate text-muted-foreground lg:whitespace-normal">

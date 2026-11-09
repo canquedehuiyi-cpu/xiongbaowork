@@ -374,10 +374,10 @@ test("the Bot's work on an answer streams in the conversation, and Stop stops it
   await view.findByText("Find weekend plans");
 
   await user.type(
-    await view.findByRole("textbox", { name: "Message" }),
+    await view.findByRole("textbox", { name: "消息" }),
     "Chicago",
   );
-  await user.click(view.getByRole("button", { name: "Send message" }));
+  await user.click(view.getByRole("button", { name: "发送消息" }));
 
   await waitFor(() => expect(answers).toMatchObject([{ response: "Chicago" }]));
   // The answer is this conversation's next turn, run here, with the question it answers.
@@ -393,11 +393,11 @@ test("the Bot's work on an answer streams in the conversation, and Stop stops it
   // Its work shows while it is happening, not all at once at the end, and it can be stopped.
   await view.findByText(WORKING);
   expect(view.getByText("Chicago")).toBeTruthy();
-  expect(view.queryByText(/is reading your answer/)).toBeNull();
-  await user.click(await view.findByRole("button", { name: "Stop the Bot" }));
+  expect(view.queryByText(/正在读你的回答/)).toBeNull();
+  await user.click(await view.findByRole("button", { name: "停止员工" }));
   await waitFor(() => expect(stopRequests).toEqual([channel.threadId]));
   await waitFor(() =>
-    expect(view.queryByRole("button", { name: "Stop the Bot" })).toBeNull(),
+    expect(view.queryByRole("button", { name: "停止员工" })).toBeNull(),
   );
   // The question is answered: the notice is gone, and nothing else was sent.
   await waitFor(() =>
@@ -422,25 +422,25 @@ test("an answer given the moment the Bot asks closes the question, even when its
   nextRunAsks = true;
   const view = conversation();
   const user = userEvent.setup({ document: view.container.ownerDocument });
-  const box = await view.findByRole("textbox", { name: "Message" });
+  const box = await view.findByRole("textbox", { name: "消息" });
   await user.type(box, "Find weekend plans");
-  await user.click(view.getByRole("button", { name: "Send message" }));
+  await user.click(view.getByRole("button", { name: "发送消息" }));
   // The Bot asks, and its run ends on the question.
   await waitFor(() => expect(open).toBe(true));
   await waitFor(() =>
-    expect(view.queryByRole("button", { name: "Stop the Bot" })).toBeNull(),
+    expect(view.queryByRole("button", { name: "停止员工" })).toBeNull(),
   );
   // The badge's own poll comes round and counts it.
   await queryClient.invalidateQueries({ queryKey: botLifecycleKeys.attention });
-  await view.findByRole("img", { name: "1 thing needs you" });
+  await view.findByRole("img", { name: "1 件事需要你" });
 
   // Straight away.
   await user.type(box, "Chicago");
-  await user.click(view.getByRole("button", { name: "Send message" }));
+  await user.click(view.getByRole("button", { name: "发送消息" }));
   await waitFor(() => expect(runs).toHaveLength(1));
   expect(runs[0]?.messages.at(-1)?.id).toBe("person-response:q-1");
   await view.findByText(WORKING);
-  await user.click(await view.findByRole("button", { name: "Stop the Bot" }));
+  await user.click(await view.findByRole("button", { name: "停止员工" }));
   await waitFor(() => expect(stopRequests).toEqual([channel.threadId]));
 
   // Answered, though the turn it started was stopped: nothing asks again, and nothing counts it.

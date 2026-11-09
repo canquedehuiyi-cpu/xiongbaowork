@@ -228,7 +228,7 @@ test("naming a task and pressing Record starts a recording", async () => {
   );
   await user.click(view.getByLabelText("任务名称"));
   await user.keyboard("Find an invoice");
-  await user.click(view.getByRole("button", { name: "Record" }));
+  await user.click(view.getByRole("button", { name: "录制" }));
 
   await waitFor(() =>
     expect(

@@ -72,6 +72,8 @@ export const DELIVERY_KIND_LABELS: Record<string, string> = {
   reply: "回复",
   question: "提问",
   approval: "审批请求",
+  // A Bot's check-ins found something (server: delivery/router.ts sends it as its own kind).
+  attention: "有事需要你",
 };
 
 export const TRANSPORT_LABELS: Record<string, string> = {

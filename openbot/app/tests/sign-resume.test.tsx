@@ -186,7 +186,7 @@ test("the sign-in starter gets the resume URL as its callbackURL", async () => {
     sso: false,
     ssoRequired: false,
   });
-  await user.click(await view.findByText(/Continue with Google/));
+  await user.click(await view.findByText(/使用 Google 继续/));
   await waitFor(() => expect(asked).toHaveLength(1));
   expect(asked[0]).toBe(`${window.location.origin}${RESUME_URL}`);
 });
@@ -213,7 +213,7 @@ test("the company-account form gets the resume URL as its callbackURL", async ()
     await view.findByPlaceholderText("you@company.com"),
     "someone@company.com",
   );
-  await user.click(await view.findByText(/Continue with your company account/));
+  await user.click(await view.findByText(/使用企业账户继续/));
   await waitFor(() => expect(asked).toHaveLength(1));
   expect(asked[0]).toBe(`${window.location.origin}${RESUME_URL}`);
 });

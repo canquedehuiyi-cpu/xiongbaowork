@@ -209,13 +209,10 @@ test("a Bot's question waits in the group, and answering it there clears the bad
   });
   expect(card.textContent).toContain(QUESTION);
   expect(card.textContent).toContain(WHY);
-  await view.findByRole("img", { name: "1 thing needs you" });
+  await view.findByRole("img", { name: "1 件事需要你" });
 
-  await user.type(
-    await view.findByRole("textbox", { name: "Message" }),
-    ANSWER,
-  );
-  await user.click(view.getByRole("button", { name: "Send message" }));
+  await user.type(await view.findByRole("textbox", { name: "消息" }), ANSWER);
+  await user.click(view.getByRole("button", { name: "发送消息" }));
 
   // What they sent is the answer to the question, not a new message to every Bot.
   await waitFor(() => expect(answers).toEqual([{ response: ANSWER }]));

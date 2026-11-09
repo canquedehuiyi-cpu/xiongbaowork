@@ -221,9 +221,9 @@ function mounting() {
 
 async function send(view: ReturnType<typeof render>, text: string) {
   const user = userEvent.setup({ document: view.container.ownerDocument });
-  const box = await view.findByRole("textbox", { name: "Message" });
+  const box = await view.findByRole("textbox", { name: "消息" });
   await user.type(box, text);
-  await user.click(view.getByRole("button", { name: "Send message" }));
+  await user.click(view.getByRole("button", { name: "发送消息" }));
   return box;
 }
 
@@ -268,7 +268,7 @@ test("a message that cannot leave the browser says so and goes back in the box",
 
   const box = await send(view, "Send Ana the spec too.");
 
-  await view.findByText("Your message wasn't sent. Try again.");
+  await view.findByText("你的消息没有发出去，请重试。");
   expect(runRequests).toHaveLength(0);
   await waitFor(() => expect(box.textContent).toBe("Send Ana the spec too."));
   expect(view.queryByText("Send Ana the spec too.", { selector: "p" })).toBe(

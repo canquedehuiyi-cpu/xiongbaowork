@@ -22,8 +22,8 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { BotRoster } from "@/components/bots/bot-roster";
-import { BotNeedsYou } from "@/components/needs-you/board";
+import { BotNeedsYou, NeedsYouBoard } from "@/components/needs-you/board";
+import { DoneTasks, useNeedsYou } from "@/components/needs-you/needs-you";
 import { queryClient } from "@/query-client";
 import {
   TASKS_VIEW_STORAGE_KEY,
@@ -231,6 +231,21 @@ beforeEach(() => {
   queryClient.clear();
 });
 
+/**
+ * What the upstream Bots page drew above its roster: every Bot's Needs you board, then this week's
+ * done tasks. 熊宝中文版不收上游的 Bots 页（BotRoster），这两块组件在 src 里原样保留，员工详情页按单个
+ * 员工画同样的两块（`wakers_.$agentId.tsx`）。
+ */
+function EveryBotsNeedsYou() {
+  const { done } = useNeedsYou();
+  return (
+    <>
+      <NeedsYouBoard />
+      <DoneTasks done={done} />
+    </>
+  );
+}
+
 /** The Bots page, the Inbox Bot's page and OpenDuet's Tasks on its Up next list, side by side. */
 async function drawAll() {
   window.localStorage.setItem(TASKS_VIEW_STORAGE_KEY, "up_next");
@@ -242,7 +257,7 @@ async function drawAll() {
       component: () => (
         <>
           <section aria-label="Bots page">
-            <BotRoster />
+            <EveryBotsNeedsYou />
           </section>
           <section aria-label="Bot page">
             <BotNeedsYou agentId="inbox" />
@@ -293,11 +308,11 @@ test("an item says what it is, why, which Bot found it and where, with Work on i
   expect(bots.getByText("巡检发现")).toBeTruthy();
   expect(bots.getByText("· 来自主动巡检")).toBeTruthy();
   expect(bots.getByText("Gmail")).toBeTruthy();
-  expect(bots.getByRole("button", { name: "Work on it" })).toBeTruthy();
+  expect(bots.getByRole("button", { name: "开始处理" })).toBeTruthy();
   expect(
-    bots.getByRole("button", { name: "Dismiss Send Dana the Q3 numbers" }),
+    bots.getByRole("button", { name: "忽略「Send Dana the Q3 numbers」" }),
   ).toBeTruthy();
-  const open = bots.getByRole("link", { name: "Open mail.example.com" });
+  const open = bots.getByRole("link", { name: "打开 mail.example.com" });
   expect(open.getAttribute("href")).toBe("https://mail.example.com/1");
   expect(open.getAttribute("target")).toBe("_blank");
 });
@@ -318,7 +333,7 @@ test("Open names the site its link goes to, never the app the Bot read it with",
   const bots = region("Bots page");
   expect(bots.getByText("Exa Search")).toBeTruthy();
   expect(bots.queryByRole("link", { name: /Exa Search/ })).toBeNull();
-  const open = bots.getByRole("link", { name: "Open bun.com" });
+  const open = bots.getByRole("link", { name: "打开 bun.com" });
   expect(open.getAttribute("href")).toBe("https://www.bun.com/blog/bun-v1.4.4");
 });
 
@@ -337,7 +352,7 @@ test("Dismiss takes an item off the Bots page, the Bot's page and OpenDuet at on
     .closest("[data-slot=item]") as HTMLElement;
   fireEvent.click(
     within(row).getByRole("button", {
-      name: "Dismiss Send Dana the Q3 numbers",
+      name: "忽略「Send Dana the Q3 numbers」",
     }),
   );
   await waitFor(() =>
@@ -356,22 +371,22 @@ test("Work on it takes the item off and shows its task, Working, opening its own
   serving();
   const { view, region } = await drawAll();
   const bots = region("Bots page");
-  fireEvent.click(await bots.findByRole("button", { name: "Work on it" }));
-  await waitFor(() => expect(bots.getByText("Working")).toBeTruthy());
+  fireEvent.click(await bots.findByRole("button", { name: "开始处理" }));
+  await waitFor(() => expect(bots.getByText("工作中")).toBeTruthy());
   expect(sent).toEqual([
     { method: "POST", path: "/api/proactive/suggestions/s1/start" },
   ]);
   // The item became the task: nothing left to start or dismiss for it anywhere.
-  expect(view.queryAllByRole("button", { name: "Work on it" })).toHaveLength(0);
-  expect(bots.getByText("Just started.")).toBeTruthy();
+  expect(view.queryAllByRole("button", { name: "开始处理" })).toHaveLength(0);
+  expect(bots.getByText("刚刚开始。")).toBeTruthy();
   const row = bots
     .getByText("Send Dana the Q3 numbers")
     .closest("[data-slot=item]") as HTMLElement;
   expect(
-    within(row).getByRole("button", { name: "Open" }).getAttribute("href"),
+    within(row).getByRole("button", { name: "打开" }).getAttribute("href"),
   ).toBe("/channel/c-task-s1");
   // The Bot's own page lists it too.
-  expect(region("Bot page").getByText("Working")).toBeTruthy();
+  expect(region("Bot page").getByText("工作中")).toBeTruthy();
 });
 
 test("tasks list what to read, answer and retry first, and each acts from its row", async () => {
@@ -408,11 +423,9 @@ test("tasks list what to read, answer and retry first, and each acts from its ro
     "Draft the board update",
   ]);
   expect(bots.getByText("I drafted a reply. Want me to send it?")).toBeTruthy();
-  expect(
-    bots.getByText("Couldn't finish: Gmail stopped answering."),
-  ).toBeTruthy();
+  expect(bots.getByText("没能完成：Gmail stopped answering。")).toBeTruthy();
 
-  fireEvent.click(bots.getByRole("button", { name: "Try again" }));
+  fireEvent.click(bots.getByRole("button", { name: "再试一次" }));
   await waitFor(() =>
     expect(sent).toContainEqual({
       method: "POST",
@@ -420,21 +433,19 @@ test("tasks list what to read, answer and retry first, and each acts from its ro
     }),
   );
   await waitFor(() =>
-    expect(
-      bots.queryByText("Couldn't finish: Gmail stopped answering."),
-    ).toBeNull(),
+    expect(bots.queryByText("没能完成：Gmail stopped answering。")).toBeNull(),
   );
 
   const ready = bots
     .getByText("Reply to the landlord")
     .closest("[data-slot=item]") as HTMLElement;
-  fireEvent.click(within(ready).getByRole("button", { name: "Mark done" }));
+  fireEvent.click(within(ready).getByRole("button", { name: "标为完成" }));
   // Marked done, it leaves Needs you for the folded Done list, where it can be reopened.
   const done = await bots.findByRole("heading", { name: "已完成" });
   const section = within(done.closest("section") as HTMLElement);
   expect(section.getByText("这周你标为完成的任务有 1 项。")).toBeTruthy();
   fireEvent.click(section.getByRole("button", { name: "展开" }));
-  fireEvent.click(section.getByRole("button", { name: "Reopen" }));
+  fireEvent.click(section.getByRole("button", { name: "重新打开" }));
   await waitFor(() =>
     expect(sent).toContainEqual({
       method: "POST",
@@ -452,7 +463,7 @@ test("a task whose conversation is running a turn reads Working, whatever the se
   serving();
   const { region } = await drawAll();
   const bots = region("Bots page");
-  await waitFor(() => expect(bots.getByText("Working")).toBeTruthy());
+  await waitFor(() => expect(bots.getByText("工作中")).toBeTruthy());
 });
 
 test("OpenDuet's Active lists the tasks under OpenDuet's headings, in its order", async () => {
@@ -481,14 +492,12 @@ test("OpenDuet's Active lists the tasks under OpenDuet's headings, in its order"
       <RouterProvider router={router as never} />
     </QueryClientProvider>,
   );
-  const ready = await view.findByRole("region", { name: "Ready for review" });
+  const ready = await view.findByRole("region", { name: "待你审阅" });
   expect(within(ready).getByText("Reply to the landlord")).toBeTruthy();
-  const working = view.getByRole("region", { name: "Working" });
+  const working = view.getByRole("region", { name: "工作中" });
   expect(within(working).getByText("Draft the board update")).toBeTruthy();
   const order = [...view.container.querySelectorAll("section[aria-label]")].map(
     (section) => section.getAttribute("aria-label"),
   );
-  expect(order.indexOf("Ready for review")).toBeLessThan(
-    order.indexOf("Working"),
-  );
+  expect(order.indexOf("待你审阅")).toBeLessThan(order.indexOf("工作中"));
 });

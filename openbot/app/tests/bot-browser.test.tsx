@@ -415,11 +415,9 @@ async function openScreen() {
     </StrictMode>,
   );
   const user = userEvent.setup({ document });
-  await user.click(
-    view.getByRole("button", { name: "Open the Bot's screen full size" }),
-  );
+  await user.click(view.getByRole("button", { name: "全屏打开员工的屏幕" }));
   const dialog = within(
-    await view.findByRole("dialog", { name: "The Bot's screen" }),
+    await view.findByRole("dialog", { name: "员工的屏幕" }),
   );
   await dialog.findByRole("tablist", { name: "标签页" });
   return { view, dialog, user };
@@ -432,7 +430,7 @@ const writes = () =>
       sent.path.startsWith(`${botBrowserApiPaths.state(botId)}/`),
   );
 const address = (dialog: ReturnType<typeof within>) =>
-  dialog.getByRole("textbox", { name: "Address" }) as HTMLInputElement;
+  dialog.getByRole("textbox", { name: "地址" }) as HTMLInputElement;
 const disabled = (element: HTMLElement) =>
   (element as HTMLButtonElement).disabled;
 const preferenceWrites = () =>
@@ -455,7 +453,7 @@ test("while the Bot holds the wheel the bar shows where the Bot is, read only, a
   for (const name of ["后退", "前进", "刷新", "新标签页"])
     expect(disabled(dialog.getByRole("button", { name }))).toBe(true);
   // The mouse's close button, which is outside the accessibility tree (the tab's Delete is its keyboard way).
-  expect(disabled(dialog.getByTitle("Close Expense report"))).toBe(true);
+  expect(disabled(dialog.getByTitle("关闭Expense report"))).toBe(true);
   expect(disabled(second as HTMLElement)).toBe(true);
 
   // Record is the person's alone, so it waits for the wheel, and says so.
@@ -463,9 +461,9 @@ test("while the Bot holds the wheel the bar shows where the Bot is, read only, a
     dialog.getByRole("textbox", { name: "任务名称" }),
     "Submit the taxi receipt",
   );
-  expect(disabled(dialog.getByRole("button", { name: "Record" }))).toBe(true);
+  expect(disabled(dialog.getByRole("button", { name: "录制" }))).toBe(true);
   expect(dialog.getByText("接管后才能录制。")).toBeTruthy();
-  expect(dialog.queryByRole("switch", { name: "Narration" })).toBeNull();
+  expect(dialog.queryByRole("switch", { name: "讲解" })).toBeNull();
 
   // The Bot moves on: the bar follows it.
   browser = {
@@ -494,9 +492,9 @@ test("where the Bots share one computer, the screen says why it cannot record, a
   const panel = within(dialog.getByRole("region", { name: "录制任务" }));
   expect(panel.getByText("这里不能录制")).toBeTruthy();
   expect(panel.getByText(recordRefused)).toBeTruthy();
-  expect(panel.queryByRole("button", { name: "Record" })).toBeNull();
+  expect(panel.queryByRole("button", { name: "录制" })).toBeNull();
   expect(panel.queryByRole("textbox", { name: "任务名称" })).toBeNull();
-  expect(panel.queryByRole("switch", { name: "Narration" })).toBeNull();
+  expect(panel.queryByRole("switch", { name: "讲解" })).toBeNull();
   // The bar is the person's while they hold the wheel, as anywhere else.
   await waitFor(() => expect(address(dialog).readOnly).toBe(false));
   expect(writes()).toEqual([]);
@@ -504,7 +502,7 @@ test("where the Bots share one computer, the screen says why it cannot record, a
 
 test("taking control makes the bar live at once, and it works the Bot's browser through the Bot's own routes", async () => {
   const { dialog, user } = await openScreen();
-  await user.click(dialog.getByRole("button", { name: "Take control" }));
+  await user.click(dialog.getByRole("button", { name: "接管" }));
   // Read again as the wheel changes hands, not on the next once-a-second read.
   await waitFor(() => expect(address(dialog).readOnly).toBe(false), {
     timeout: 900,
@@ -513,8 +511,8 @@ test("taking control makes the bar live at once, and it works the Bot's browser 
   const [, second] = dialog.getAllByRole("tab");
   if (second) await user.click(second);
   await user.click(dialog.getByRole("button", { name: "新标签页" }));
-  await user.click(dialog.getByTitle("Close Expense report"));
-  await user.click(dialog.getByRole("button", { name: "Back" }));
+  await user.click(dialog.getByTitle("关闭Expense report"));
+  await user.click(dialog.getByRole("button", { name: "后退" }));
   await user.click(dialog.getByRole("button", { name: "前进" }));
   await user.click(dialog.getByRole("button", { name: "刷新" }));
   await user.clear(address(dialog));
@@ -565,7 +563,7 @@ test("taking control makes the bar live at once, and it works the Bot's browser 
 test("Record names the task, runs while the person holds the wheel, and Stop says it went to their Learning space", async () => {
   control = heldBy(ME);
   const { dialog, user } = await openScreen();
-  const record = dialog.getByRole("button", { name: "Record" });
+  const record = dialog.getByRole("button", { name: "录制" });
   expect(disabled(record)).toBe(true);
   await user.type(
     dialog.getByRole("textbox", { name: "任务名称" }),
@@ -586,13 +584,11 @@ test("Record names the task, runs while the person holds the wheel, and Stop say
     ]),
   );
   expect(
-    (await dialog.findByRole("timer")).textContent?.match(
-      /^0:4\d · 7 actions$/,
-    ),
+    (await dialog.findByRole("timer")).textContent?.match(/^0:4\d · 7 个动作$/),
   ).toBeTruthy();
   expect(dialog.getByText("Submit the taxi receipt")).toBeTruthy();
 
-  await user.click(dialog.getByRole("button", { name: "Stop" }));
+  await user.click(dialog.getByRole("button", { name: "停止" }));
   await waitFor(() =>
     expect(writes().at(-1)).toEqual({
       path: botBrowserApiPaths.recording(botId),
@@ -605,8 +601,8 @@ test("Record names the task, runs while the person holds the wheel, and Stop say
       dialog
         .getAllByRole("status")
         .map((status) => status.textContent)
-        .find((text) => text?.includes("Saved")),
-    ).toBe("Submit the taxi receiptSaved to your Learning space: 7 actions."),
+        .find((text) => text?.includes("已存进")),
+    ).toBe("Submit the taxi receipt已存进你的学习空间：7 个动作。"),
   );
   expect(dialog.getByRole("textbox", { name: "任务名称" })).toBeTruthy();
   expect(dialog.queryByRole("alert")).toBeNull();
@@ -618,18 +614,16 @@ test("narration goes to the Bot's browser, and Stop hands over the phrase being 
   const { dialog, user } = await openScreen();
   await waitFor(() =>
     expect(
-      dialog
-        .getByRole("switch", { name: "Narration" })
-        .getAttribute("aria-checked"),
+      dialog.getByRole("switch", { name: "讲解" }).getAttribute("aria-checked"),
     ).toBe("true"),
   );
   await user.type(
     dialog.getByRole("textbox", { name: "任务名称" }),
     "Submit the taxi receipt",
   );
-  await user.click(dialog.getByRole("button", { name: "Record" }));
+  await user.click(dialog.getByRole("button", { name: "录制" }));
   await waitFor(() => expect(recognitions.at(-1)?.heard).toBe(true));
-  await user.click(dialog.getByRole("button", { name: "Stop" }));
+  await user.click(dialog.getByRole("button", { name: "停止" }));
   await waitFor(() =>
     expect(writes().at(-1)?.body).toEqual({ action: "stop" }),
   );
@@ -652,9 +646,7 @@ test("narration goes to the Bot's browser, and Stop hands over the phrase being 
     false,
   );
   expect(
-    await dialog.findByText(
-      "Saved to your Learning space: 7 actions and 1 narrated phrase.",
-    ),
+    await dialog.findByText("已存进你的学习空间：7 个动作和 1 句讲解。"),
   ).toBeTruthy();
 });
 
@@ -666,22 +658,22 @@ test("handing the wheel back while recording ends the recording, said as an endi
     dialog.getByRole("textbox", { name: "任务名称" }),
     "Submit the taxi receipt",
   );
-  await user.click(dialog.getByRole("button", { name: "Record" }));
+  await user.click(dialog.getByRole("button", { name: "录制" }));
   await dialog.findByRole("timer");
 
-  await user.click(dialog.getByRole("button", { name: "Hand back" }));
+  await user.click(dialog.getByRole("button", { name: "交还" }));
   await waitFor(() =>
     expect(
       dialog
         .getAllByRole("status")
         .map((status) => status.textContent)
-        .find((text) => text?.includes("Saved")),
+        .find((text) => text?.includes("已存进")),
     ).toBe(
-      "Submit the taxi receiptThe recording ended when control went back to the Bot. Saved to your Learning space: 3 actions.",
+      "Submit the taxi receipt操作交还给员工时，录制就结束了。 已存进你的学习空间：3 个动作。",
     ),
   );
   expect(dialog.queryByRole("alert")).toBeNull();
-  expect(dialog.queryByRole("button", { name: "Stop" })).toBeNull();
+  expect(dialog.queryByRole("button", { name: "停止" })).toBeNull();
   expect(dialog.getByText("接管后才能录制。")).toBeTruthy();
   // The person never pressed Stop: the computer ended it.
   expect(
@@ -699,11 +691,11 @@ test("a phrase cut off as the wheel goes back is not still reported as lost when
     dialog.getByRole("textbox", { name: "任务名称" }),
     "Submit the taxi receipt",
   );
-  await user.click(dialog.getByRole("button", { name: "Record" }));
+  await user.click(dialog.getByRole("button", { name: "录制" }));
   await waitFor(() => expect(recognitions.at(-1)?.heard).toBe(true));
 
   // Mid-phrase: the phrase arrives after the computer has ended the recording, and is refused.
-  await user.click(dialog.getByRole("button", { name: "Hand back" }));
+  await user.click(dialog.getByRole("button", { name: "交还" }));
   await waitFor(() =>
     expect(
       requests.some(
@@ -713,10 +705,10 @@ test("a phrase cut off as the wheel goes back is not still reported as lost when
       ),
     ).toBe(true),
   );
-  await dialog.findByText(/The recording ended when control went back/);
+  await dialog.findByText(/操作交还给员工时，录制就结束了/);
 
-  await user.click(dialog.getByRole("button", { name: "Take control" }));
-  await dialog.findByRole("switch", { name: "Narration" });
+  await user.click(dialog.getByRole("button", { name: "接管" }));
+  await dialog.findByRole("switch", { name: "讲解" });
   expect(dialog.queryByText(/didn't reach the Recorder/)).toBeNull();
   expect(dialog.queryByRole("alert")).toBeNull();
 });
@@ -739,7 +731,7 @@ test("another person's recording is said only to be running, and is never called
   const { dialog } = await openScreen();
   expect(await dialog.findByText("有人正在录制")).toBeTruthy();
   expect(dialog.queryByText(/Pay the vendor/)).toBeNull();
-  expect(dialog.queryByRole("button", { name: "Stop" })).toBeNull();
+  expect(dialog.queryByRole("button", { name: "停止" })).toBeNull();
   expect(dialog.queryByRole("timer")).toBeNull();
 
   // They stop. What their recording held is theirs to be told, not this person.
@@ -747,13 +739,13 @@ test("another person's recording is said only to be running, and is never called
   await queryClient.invalidateQueries();
   expect(await dialog.findByRole("textbox", { name: "任务名称" })).toBeTruthy();
   expect(dialog.queryByText(/Pay the vendor/)).toBeNull();
-  expect(dialog.queryByText(/Saved/)).toBeNull();
+  expect(dialog.queryByText(/已存进/)).toBeNull();
 });
 
 test("the retired Teach a browser workflow panel is gone, and nothing asks for demonstrations", async () => {
   control = heldBy(ME);
   const { view, dialog } = await openScreen();
-  await dialog.findByRole("button", { name: "Record" });
+  await dialog.findByRole("button", { name: "录制" });
   expect(view.queryByText(/Teach a browser workflow/)).toBeNull();
   expect(view.queryByText(/Record your steps/)).toBeNull();
   expect(
@@ -764,7 +756,7 @@ test("the retired Teach a browser workflow panel is gone, and nothing asks for d
 test("after a reload the person is told their last recording went to their Learning space, and never told so of someone else's", async () => {
   // Recordings this page never saw running: it was opened after they had ended.
   for (const [owner, says] of [
-    [ME, "Submit the taxi receiptSaved to your Learning space: 4 actions."],
+    [ME, "Submit the taxi receipt已存进你的学习空间：4 个动作。"],
     [SOMEONE, null],
   ] as const) {
     cleanup();
@@ -786,21 +778,21 @@ test("after a reload the person is told their last recording went to their Learn
       }),
     };
     const { dialog } = await openScreen();
-    await dialog.findByRole("button", { name: "Record" });
+    await dialog.findByRole("button", { name: "录制" });
     if (says)
       await waitFor(() =>
         expect(
           dialog
             .getAllByRole("status")
             .map((status) => status.textContent)
-            .find((text) => text?.includes("Saved")),
+            .find((text) => text?.includes("已存进")),
         ).toBe(says),
       );
     else {
       // Read twice, so the answer is not the moment before the first read arrived.
       await queryClient.invalidateQueries();
       await settleReactWork();
-      expect(dialog.queryByText(/Saved/)).toBeNull();
+      expect(dialog.queryByText(/已存进/)).toBeNull();
       expect(dialog.queryByText(/Submit the taxi receipt/)).toBeNull();
     }
   }
@@ -813,22 +805,21 @@ test("when someone else holds the wheel the row says so, offers no Hand back, an
   await waitFor(() =>
     expect(dialog.getAllByText("有人接管了操作。").length).toBe(2),
   );
-  expect(view.queryByText(/You have control/)).toBeNull();
-  expect(view.queryByRole("button", { name: "Hand back" })).toBeNull();
-  for (const take of view.getAllByRole("button", { name: "Take control" }))
+  expect(view.queryByText(/由你操作/)).toBeNull();
+  expect(view.queryByRole("button", { name: "交还" })).toBeNull();
+  for (const take of view.getAllByRole("button", { name: "接管" }))
     expect(disabled(take)).toBe(true);
   // The card under the conversation says the same, and so does Record, which waits for the wheel.
   expect(view.getAllByText("有人接管了操作。").length).toBe(3);
-  expect(disabled(dialog.getByRole("button", { name: "Record" }))).toBe(true);
+  expect(disabled(dialog.getByRole("button", { name: "录制" }))).toBe(true);
   expect(dialog.queryByText("接管后才能录制。")).toBeNull();
   // Read only: the live screen is not this person's to click and type into.
-  expect(view.queryByLabelText(/Click and type here/)).toBeNull();
+  expect(view.queryByLabelText(/可以在这里点击和输入/)).toBeNull();
 
   // The holder themselves is still told they have it, and may hand it back.
   control = heldBy(ME);
   await waitFor(
-    () =>
-      expect(dialog.getByRole("button", { name: "Hand back" })).toBeTruthy(),
+    () => expect(dialog.getByRole("button", { name: "交还" })).toBeTruthy(),
     { timeout: 3000 },
   );
   expect(dialog.queryByText("有人接管了操作。")).toBeNull();
@@ -859,15 +850,12 @@ test("someone else taking the wheel does not open the Computer for this person o
 
 test("the wheel's line never echoes the person's own take as a reason, and says the Bot's when the Bot asked", async () => {
   const { dialog, user } = await openScreen();
-  const line = () =>
-    dialog.getByText(/^You have control\. Click and type on the page\./);
+  const line = () => dialog.getByText(/^由你操作——直接在页面上点击和输入。/);
 
   // The person takes the wheel themselves. The app says it is their take, and the computer records it so.
-  await user.click(dialog.getByRole("button", { name: "Take control" }));
+  await user.click(dialog.getByRole("button", { name: "接管" }));
   await waitFor(() =>
-    expect(line().textContent).toBe(
-      "You have control. Click and type on the page.",
-    ),
+    expect(line().textContent).toBe("由你操作——直接在页面上点击和输入。"),
   );
   expect(
     requests.find((sent) => sent.path.endsWith("/control/request"))?.body,
@@ -876,7 +864,7 @@ test("the wheel's line never echoes the person's own take as a reason, and says 
     source: "manual",
   });
   expect(dialog.queryByText(/I want to take control/)).toBeNull();
-  await user.click(dialog.getByRole("button", { name: "Hand back" }));
+  await user.click(dialog.getByRole("button", { name: "交还" }));
 
   // The Bot asks for the person, as the computer records a Bot's request, and they take the wheel for it: what the
   // Bot asked for is worth repeating.
@@ -890,14 +878,13 @@ test("the wheel's line never echoes the person's own take as a reason, and says 
       "Sign in to the bank, then hand back.",
     ),
   };
-  await waitFor(
-    () => expect(dialog.getByText("The Bot needs you.")).toBeTruthy(),
-    { timeout: 3000 },
-  );
-  await user.click(dialog.getByRole("button", { name: "Take control" }));
+  await waitFor(() => expect(dialog.getByText("员工需要你。")).toBeTruthy(), {
+    timeout: 3000,
+  });
+  await user.click(dialog.getByRole("button", { name: "接管" }));
   await waitFor(() =>
     expect(line().textContent).toBe(
-      "You have control. Click and type on the page. Sign in to the bank, then hand back.",
+      "由你操作——直接在页面上点击和输入。 Sign in to the bank, then hand back.",
     ),
   );
 });
@@ -930,7 +917,7 @@ test("narration the person turned off stays off when they open the Bot's screen 
   control = heldBy(ME);
   const recognitions = installChrome();
   const first = await openScreen();
-  const toggle = await first.dialog.findByRole("switch", { name: "Narration" });
+  const toggle = await first.dialog.findByRole("switch", { name: "讲解" });
   await waitFor(() => expect(toggle.getAttribute("aria-checked")).toBe("true"));
   await first.user.click(toggle);
   expect(toggle.getAttribute("aria-checked")).toBe("false");
@@ -946,7 +933,7 @@ test("narration the person turned off stays off when they open the Bot's screen 
   queryClient.clear();
   const again = await openScreen();
   const reloaded = await again.dialog.findByRole("switch", {
-    name: "Narration",
+    name: "讲解",
   });
   await settleReactWork();
   expect(reloaded.getAttribute("aria-checked")).toBe("false");
@@ -955,10 +942,10 @@ test("narration the person turned off stays off when they open the Bot's screen 
     again.dialog.getByRole("textbox", { name: "任务名称" }),
     "Submit the taxi receipt",
   );
-  await again.user.click(again.dialog.getByRole("button", { name: "Record" }));
+  await again.user.click(again.dialog.getByRole("button", { name: "录制" }));
   await again.dialog.findByRole("timer");
   await settleReactWork();
-  expect(again.view.queryByRole("dialog", { name: /Narrate/ })).toBeNull();
+  expect(again.view.queryByRole("dialog", { name: /讲解吗/ })).toBeNull();
   expect(recognitions.filter((recognition) => recognition.started)).toEqual([]);
   expect(
     writes().filter(
@@ -975,15 +962,13 @@ test("Record on a Bot's screen asks whether to narrate before the person's first
   // Nobody chose yet: the switch is off, and nothing listens.
   expect(await dialog.findByText("讲解已关闭。")).toBeTruthy();
   expect(
-    dialog
-      .getByRole("switch", { name: "Narration" })
-      .getAttribute("aria-checked"),
+    dialog.getByRole("switch", { name: "讲解" }).getAttribute("aria-checked"),
   ).toBe("false");
   await user.type(
     dialog.getByRole("textbox", { name: "任务名称" }),
     "Submit the taxi receipt",
   );
-  await user.click(dialog.getByRole("button", { name: "Record" }));
+  await user.click(dialog.getByRole("button", { name: "录制" }));
   // The same question, and the same answer kept, as the Browser page's.
   const question = await view.findByRole("dialog", {
     name: "录制时同时讲解吗？",
@@ -1011,8 +996,8 @@ test("Record on a Bot's screen asks whether to narrate before the person's first
   expect(
     await dialog.findByText("讲解已开启，正在收录你的声音。"),
   ).toBeTruthy();
-  expect(view.queryByRole("dialog", { name: /Narrate/ })).toBeNull();
-  expect(view.getByRole("dialog", { name: "The Bot's screen" })).toBeTruthy();
+  expect(view.queryByRole("dialog", { name: /讲解吗/ })).toBeNull();
+  expect(view.getByRole("dialog", { name: "员工的屏幕" })).toBeTruthy();
 });
 
 test("the Bot's tabs follow the tabs pattern: one Tab stop, arrows, Home and End, Enter to switch, Delete to close", async () => {
@@ -1037,12 +1022,12 @@ test("the Bot's tabs follow the tabs pattern: one Tab stop, arrows, Home and End
   // The tab that shows controls the panel below, which it names: the address bar and the Bot's page are in it.
   const panel = dialog.getByRole("tabpanel", { name: "Expense report" });
   expect(first?.getAttribute("aria-controls")).toBe(panel.id);
-  expect(within(panel).getByRole("textbox", { name: "Address" })).toBe(
+  expect(within(panel).getByRole("textbox", { name: "地址" })).toBe(
     address(dialog),
   );
   expect(
     await within(panel).findByLabelText(
-      "The Bot's screen. You have control. Click and type here.",
+      "员工的屏幕。由你操作：可以在这里点击和输入。",
     ),
   ).toBeTruthy();
   // Only the tab that shows is in the Tab order.
@@ -1104,15 +1089,15 @@ test("Escape on the narration question closes the question, not the Bot's screen
     dialog.getByRole("textbox", { name: "任务名称" }),
     "Submit the taxi receipt",
   );
-  await user.click(dialog.getByRole("button", { name: "Record" }));
+  await user.click(dialog.getByRole("button", { name: "录制" }));
   await view.findByRole("dialog", { name: "录制时同时讲解吗？" });
   await user.keyboard("{Escape}");
   await waitFor(() =>
-    expect(view.queryByRole("dialog", { name: /Narrate/ })).toBeNull(),
+    expect(view.queryByRole("dialog", { name: /讲解吗/ })).toBeNull(),
   );
   await settleReactWork();
   // Nothing was answered, so nothing records and nothing is kept; the person is still at the Bot's screen.
-  expect(view.getByRole("dialog", { name: "The Bot's screen" })).toBeTruthy();
+  expect(view.getByRole("dialog", { name: "员工的屏幕" })).toBeTruthy();
   expect(preferenceWrites()).toEqual([]);
   expect(writes()).toEqual([]);
 });
@@ -1122,7 +1107,7 @@ test("taking control gives the Bot's screen the keyboard, and the bar and Record
   control = heldBy(ME);
   const { dialog, user } = await openScreen();
   const screen = await dialog.findByLabelText(
-    "The Bot's screen. You have control. Click and type here.",
+    "员工的屏幕。由你操作：可以在这里点击和输入。",
   );
   // Opened to drive: the person types into the Bot's page with no click first.
   await waitFor(() => expect(document.activeElement).toBe(screen));
@@ -1213,7 +1198,7 @@ test("Clear browser data is the wheel holder's: a short confirmation, Cancel doe
   const button = () => dialog.getByRole("button", { name: "清除浏览器数据" });
   // Never under the Bot.
   expect(disabled(button())).toBe(true);
-  await user.click(dialog.getByRole("button", { name: "Take control" }));
+  await user.click(dialog.getByRole("button", { name: "接管" }));
   await waitFor(() => expect(disabled(button())).toBe(false));
 
   // One question, one sentence, two answers.
@@ -1231,8 +1216,8 @@ test("Clear browser data is the wheel holder's: a short confirmation, Cancel doe
       .getAllByRole("button")
       .map((each) => each.textContent?.trim())
       .filter(Boolean),
-  ).toEqual(["Cancel", "Clear", "Close"]);
-  await user.click(confirm.getByRole("button", { name: "Cancel" }));
+  ).toEqual(["取消", "清除", "关闭"]);
+  await user.click(confirm.getByRole("button", { name: "取消" }));
   await waitFor(() =>
     expect(view.queryByRole("dialog", { name: "清除这个浏览器？" })).toBeNull(),
   );
@@ -1249,7 +1234,7 @@ test("Clear browser data is the wheel holder's: a short confirmation, Cancel doe
   const again = within(
     await view.findByRole("dialog", { name: "清除这个浏览器？" }),
   );
-  await user.click(again.getByRole("button", { name: "Clear" }));
+  await user.click(again.getByRole("button", { name: "清除" }));
   await waitFor(() =>
     expect(view.queryByRole("dialog", { name: "清除这个浏览器？" })).toBeNull(),
   );
@@ -1280,7 +1265,7 @@ test("Clear browser data is the wheel holder's: a short confirmation, Cancel doe
   const layer = (element: Element | null) =>
     Number(/(?:^|\s)z-(\d+)(?:\s|$)/.exec(element?.className ?? "")?.[1]);
   const screenLayer = layer(
-    document.querySelector('[role="dialog"][aria-label="The Bot\'s screen"]'),
+    document.querySelector('[role="dialog"][aria-label="员工的屏幕"]'),
   );
   expect(screenLayer).toBeGreaterThan(0);
   expect(
@@ -1300,12 +1285,12 @@ test("a clear the server refuses says why in the confirmation, and wipes nothing
   const confirm = within(
     await view.findByRole("dialog", { name: "清除这个浏览器？" }),
   );
-  await user.click(confirm.getByRole("button", { name: "Clear" }));
+  await user.click(confirm.getByRole("button", { name: "清除" }));
   expect((await confirm.findByRole("alert")).textContent).toBe(
     "Take control of the Bot's browser first.",
   );
   // Nothing was wiped: the question closes on Cancel, over the browser as it was.
-  await user.click(confirm.getByRole("button", { name: "Cancel" }));
+  await user.click(confirm.getByRole("button", { name: "取消" }));
   await waitFor(() =>
     expect(view.queryByRole("dialog", { name: "清除这个浏览器？" })).toBeNull(),
   );

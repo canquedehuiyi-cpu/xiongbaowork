@@ -159,7 +159,7 @@ test("a drop being retried reports reconnecting, and no problem until the retrie
     timers[i]?.();
   }
   expect(reconnecting.at(-1)).toBe(false);
-  expect(problems.at(-1)).toContain("Retry");
+  expect(problems.at(-1)).toContain("重试");
 });
 
 test("unmount cancels a pending reconnect and ignores old socket callbacks", () => {

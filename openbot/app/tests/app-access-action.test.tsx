@@ -58,7 +58,6 @@ function mounted(
   answer?: { status: number; body: unknown },
   options: {
     admin?: boolean;
-    personal?: boolean;
     /** Holds the connect route's answer until it settles, so a test can refetch first. */
     connectGate?: Promise<void>;
   } = {},
@@ -87,8 +86,6 @@ function mounted(
     });
     if (options.admin && url === "/api/me")
       return Response.json({ user: { id: "usr_admin", role: "admin" } });
-    if (options.personal && url === "/api/capabilities")
-      return Response.json({ edition: "personal" });
     if (options.admin && url === "/api/agents/expenses")
       return Response.json({ agent: { id: "expenses", name: "Expenses" } });
     if (answer && method !== "GET")
@@ -123,12 +120,7 @@ function mounted(
   });
   const settings = createRoute({
     getParentRoute: () => root,
-    path: "/connections/$key",
-    component: () => null,
-  });
-  const directory = createRoute({
-    getParentRoute: () => root,
-    path: "/connections/browse/$provider",
+    path: "/settings/connected-accounts/$key",
     component: () => null,
   });
   const admin = createRoute({
@@ -137,7 +129,7 @@ function mounted(
     component: () => null,
   });
   const router = createRouter({
-    routeTree: root.addChildren([page, settings, directory, admin]),
+    routeTree: root.addChildren([page, settings, admin]),
     history: createMemoryHistory({ initialEntries: ["/"] }),
   });
   const view = render(
@@ -155,68 +147,54 @@ function mounted(
 }
 
 const COPY: [string, Partial<AppAccess>, RegExp][] = [
-  ["ready", {}, /^Ready to use\.$/],
+  ["ready", {}, /^可以用了。$/],
   [
     "ready, on the owner's account",
     { accountHolder: "owner" },
-    /^Ready to use\. This Bot uses its owner's Gmail account\.$/,
+    /^可以用了。这位员工用的是它主人的 Gmail 账号。$/,
   ],
   [
     "ready, asking first",
     { asksFirst: true },
-    /^Ready to use with your own Gmail account\. You'll be asked to allow it the first time\.$/,
+    /^可以用你自己的 Gmail 账号了。第一次用时会先问你是否允许。$/,
   ],
   [
     "not_connected",
     { state: "not_connected" },
-    /You haven't connected your Gmail account yet\./,
+    /你还没连接自己的 Gmail 账号。/,
   ],
-  [
-    "reconnect",
-    { state: "reconnect" },
-    /^Your Gmail connection needs reconnecting\.$/,
-  ],
+  ["reconnect", { state: "reconnect" }, /^你的 Gmail 连接需要重新连接。$/],
   [
     "reconnect, on the owner's account",
     { state: "reconnect", accountHolder: "owner" },
-    /^This Bot uses its owner's Gmail account, which needs reconnecting\. Only the Bot's owner can reconnect it\.$/,
-  ],
-  [
-    "shared_not_connected",
-    { state: "shared_not_connected" },
-    /Your organisation's Gmail account isn't connected yet\. Only an admin can connect it\./,
-  ],
-  [
-    "shared_not_approved",
-    { state: "shared_not_approved" },
-    /^This Bot reaches more people than an admin approved for your organisation's Gmail account\. Only an admin can approve it\.$/,
+    /^这位员工用的是它主人的 Gmail 账号，需要重新连接。只有员工的主人能重新连接。$/,
   ],
   [
     "disabled, never switched on",
     { state: "disabled", unavailable: "absent" },
-    /^Gmail isn't turned on yet\. Only an admin can turn it on\.$/,
+    /^Gmail 还没开启。只有管理员能开启。$/,
   ],
   [
     "disabled, with no reason given",
     { state: "disabled", unavailable: null },
-    /^Gmail isn't turned on yet\./,
+    /^Gmail 还没开启。/,
   ],
   [
     "disabled, with no Composio key",
     { state: "disabled", unavailable: "composio_unconfigured" },
-    /^Gmail isn't set up yet\. An admin has to turn it on\.$/,
+    /^Gmail 还没设置。需要管理员开启。$/,
   ],
   ...(
     ["scheme_unreadable", "oauth_client_missing", "token_missing"] as const
   ).map((unavailable): [string, Partial<AppAccess>, RegExp] => [
     `disabled, ${unavailable}`,
     { state: "disabled", unavailable },
-    /^Gmail isn't fully set up yet\. Only an admin can finish setting it up\.$/,
+    /^Gmail 还没设置完。只有管理员能完成设置。$/,
   ]),
   [
     "not_granted",
     { state: "not_granted" },
-    /This Bot hasn't been given Gmail\. Only an admin can give it\./,
+    /这位员工还没有 Gmail。只有管理员能给它。/,
   ],
 ];
 
@@ -226,24 +204,24 @@ test.each(COPY)("says whose move it is: %s", (_, overrides, sentence) => {
 
 test("no sentence about a switched-off app says an admin turned it off", () => {
   for (const [, overrides] of COPY.filter(([, o]) => o.state === "disabled"))
-    expect(appAccessSentence(appAccess(overrides))).not.toMatch(/Turned off/);
+    expect(appAccessSentence(appAccess(overrides))).not.toMatch(/关掉|关闭/);
 });
 
 test("ready offers nothing to press", async () => {
   const { view } = mounted(appAccess());
-  await view.findByText("Ready to use.");
+  await view.findByText("可以用了。");
   expect(view.queryByRole("button")).toBeNull();
   expect(view.queryByRole("link")).toBeNull();
 });
 
 test("not connected offers Connect, which starts the person's own consent in a new tab", async () => {
   const { view, sent, opened } = mounted(appAccess({ state: "not_connected" }));
-  fireEvent.click(await view.findByRole("button", { name: "Connect Gmail" }));
+  fireEvent.click(await view.findByRole("button", { name: "连接 Gmail" }));
   await waitFor(() => expect(opened).toEqual(["https://gmail.test/consent"]));
   expect(sent.map((call) => `${call.method} ${call.url}`)).toContain(
     "POST /api/plugins/servers/composio-gmail/connect?returnTo=settings",
   );
-  await view.findByText("Finish in the tab that opened.");
+  await view.findByText("在新打开的标签页里完成。");
 });
 
 test("an app connected with a typed key goes to its page in Settings, where the form is", async () => {
@@ -251,27 +229,23 @@ test("an app connected with a typed key goes to its page in Settings, where the 
     appAccess({ state: "not_connected", connect: "key" }),
   );
   // Drawn as a button (`Button` over a `Link`), and an anchor underneath with the address.
-  const link = (await view.findByText("Connect")).closest("a");
-  expect(link?.getAttribute("href")).toBe("/connections/composio-gmail");
+  const link = (await view.findByText("连接")).closest("a");
+  expect(link?.getAttribute("href")).toBe(
+    "/settings/connected-accounts/composio-gmail",
+  );
 });
 
-test("a brokered app to reconnect goes to its page in Settings, on Composio and on Arcade alike", async () => {
+test("a brokered app to reconnect goes to its page in Settings", async () => {
   /*
-   * ONE DESTINATION FOR BOTH BROKERS, Composio's. A Composio row that stands is refused by the
-   * connect route until it is disconnected on that page. An Arcade row is not, and the same page
-   * offers Reconnect over it in one press, so the card sends both people to the same place.
+   * A Composio row that stands is refused by the connect route until it is disconnected on that
+   * page, so the card sends the person there rather than opening a consent.
    */
   const composio = mounted(appAccess({ state: "reconnect" }));
-  const toComposio = (await composio.view.findByText("Reconnect")).closest("a");
-  expect(toComposio?.getAttribute("href")).toBe("/connections/composio-gmail");
-  cleanup();
-
-  const arcade = mounted(
-    appAccess({ key: "arcade-Gmail", provider: "arcade", state: "reconnect" }),
+  const toComposio = (await composio.view.findByText("重新连接")).closest("a");
+  expect(toComposio?.getAttribute("href")).toBe(
+    "/settings/connected-accounts/composio-gmail",
   );
-  const toArcade = (await arcade.view.findByText("Reconnect")).closest("a");
-  expect(toArcade?.getAttribute("href")).toBe("/connections/arcade-Gmail");
-  expect(arcade.opened).toEqual([]);
+  expect(composio.opened).toEqual([]);
 });
 
 test("this deployment's own OAuth app reconnects in place, with a fresh consent", async () => {
@@ -284,9 +258,7 @@ test("this deployment's own OAuth app reconnects in place, with a fresh consent"
       state: "reconnect",
     }),
   );
-  fireEvent.click(
-    await view.findByRole("button", { name: "Reconnect Notion" }),
-  );
+  fireEvent.click(await view.findByRole("button", { name: "重新连接 Notion" }));
   await waitFor(() => expect(opened).toHaveLength(1));
 });
 
@@ -304,39 +276,35 @@ async function withFocus(focused: boolean, run: () => Promise<void>) {
 test("closing the sign-in tab ends the wait, rather than waiting for it forever", async () => {
   await withFocus(true, async () => {
     const { view, tabs } = mounted(appAccess({ state: "not_connected" }));
-    fireEvent.click(await view.findByRole("button", { name: "Connect Gmail" }));
-    await view.findByText("Waiting for Gmail…");
+    fireEvent.click(await view.findByRole("button", { name: "连接 Gmail" }));
+    await view.findByText("正在等待 Gmail…");
     const [tab] = tabs;
     if (!tab) throw new Error("no tab was claimed");
     tab.closed = true;
     await waitFor(
       () =>
-        expect(
-          view.getByRole("button", { name: "Connect Gmail" }),
-        ).toBeTruthy(),
+        expect(view.getByRole("button", { name: "连接 Gmail" })).toBeTruthy(),
       { timeout: 3_000 },
     );
-    expect(view.queryByText("Waiting for Gmail…")).toBeNull();
-    expect(view.queryByText("Finish in the tab that opened.")).toBeNull();
+    expect(view.queryByText("正在等待 Gmail…")).toBeNull();
+    expect(view.queryByText("在新打开的标签页里完成。")).toBeNull();
   });
 });
 
 test("a sign-in tab that only reads closed keeps the wait until this tab has the focus back", async () => {
   await withFocus(false, async () => {
     const { view, tabs } = mounted(appAccess({ state: "not_connected" }));
-    fireEvent.click(await view.findByRole("button", { name: "Connect Gmail" }));
-    await view.findByText("Waiting for Gmail…");
+    fireEvent.click(await view.findByRole("button", { name: "连接 Gmail" }));
+    await view.findByText("正在等待 Gmail…");
     const [tab] = tabs;
     if (!tab) throw new Error("no tab was claimed");
     // A vendor's opener policy severs the handle while the person is still on its consent screen.
     tab.closed = true;
     await new Promise((resolve) => setTimeout(resolve, 1_500));
-    expect(view.getByText("Waiting for Gmail…")).toBeTruthy();
+    expect(view.getByText("正在等待 Gmail…")).toBeTruthy();
     // They come back to this tab: there is an answer to show now.
     window.dispatchEvent(new Event("focus"));
-    await waitFor(() =>
-      expect(view.queryByText("Waiting for Gmail…")).toBeNull(),
-    );
+    await waitFor(() => expect(view.queryByText("正在等待 Gmail…")).toBeNull());
   });
 });
 
@@ -344,26 +312,14 @@ test("a Reconnect on the owner's account offers nothing: only the owner can reco
   const { view } = mounted(
     appAccess({ state: "reconnect", accountHolder: "owner" }),
   );
-  await view.findByText(/Only the Bot's owner can reconnect it/);
+  await view.findByText(/只有员工的主人能重新连接/);
   expect(view.queryByRole("button")).toBeNull();
   expect(view.queryByRole("link")).toBeNull();
 });
 
-test("a Shared app waiting on an admin's approval offers nothing: the refused call already asked", async () => {
-  const { view } = mounted(
-    appAccess({
-      state: "shared_not_approved",
-      account: "shared",
-      accountMode: "shared",
-    }),
-  );
-  await view.findByText(/Only an admin can approve it/);
-  expect(view.queryByRole("button")).toBeNull();
-});
-
 test.each([
-  [{ accountHolder: "owner" }, /owner's Gmail account/],
-  [{ asksFirst: true }, /asked to allow it the first time/],
+  [{ accountHolder: "owner" }, /它主人的 Gmail 账号/],
+  [{ asksFirst: true }, /第一次用时会先问你是否允许/],
 ] as const)(
   "ready on somebody else's Team Bot offers nothing to press",
   async (overrides, sentence) => {
@@ -376,13 +332,12 @@ test.each([
 test.each([
   ["disabled", "enable"],
   ["not_granted", "grant"],
-  ["shared_not_connected", "connect_shared"],
 ] as const)(
   "%s offers Request access, naming the Bot and the app and never the kind",
   async (state, kind) => {
     const { view, sent } = mounted(appAccess({ state, requestKind: kind }));
     fireEvent.click(
-      await view.findByRole("button", { name: "Request access to Gmail" }),
+      await view.findByRole("button", { name: "申请使用 Gmail" }),
     );
     await waitFor(() =>
       expect(sent.find((call) => call.method === "POST")).toEqual({
@@ -406,13 +361,9 @@ test("a pending request reads Requested, and Withdraw cancels it", async () => {
       },
     }),
   );
-  await view.findByText("Requested");
-  expect(
-    view.queryByRole("button", { name: "Request access to Gmail" }),
-  ).toBeNull();
-  fireEvent.click(
-    view.getByRole("button", { name: "Withdraw request for Gmail" }),
-  );
+  await view.findByText("已申请");
+  expect(view.queryByRole("button", { name: "申请使用 Gmail" })).toBeNull();
+  fireEvent.click(view.getByRole("button", { name: "撤回对 Gmail 的申请" }));
   await waitFor(() =>
     expect(
       sent.some(
@@ -429,27 +380,17 @@ test("the server's refusal of a request is drawn beside the button", async () =>
     appAccess({ state: "not_granted", requestKind: "grant" }),
     { status: 409, body: { error: "Gmail is ready to use." } },
   );
-  fireEvent.click(
-    await view.findByRole("button", { name: "Request access to Gmail" }),
-  );
+  fireEvent.click(await view.findByRole("button", { name: "申请使用 Gmail" }));
   expect((await view.findByRole("alert")).textContent).toBe(
     "Gmail is ready to use.",
   );
-});
-
-test("a state with no request to file offers none, rather than a button the server would refuse", async () => {
-  const { view } = mounted(
-    appAccess({ state: "shared_not_connected", requestKind: null }),
-  );
-  await view.findByText(/organisation's Gmail account/);
-  expect(view.queryByRole("button")).toBeNull();
 });
 
 test("the focus follows the press: Request access hands it to Withdraw, and Withdraw back", async () => {
   const asked = appAccess({ state: "not_granted", requestKind: "grant" });
   const { view, sent, swap } = mounted(asked);
   const ask = await view.findByRole("button", {
-    name: "Request access to Gmail",
+    name: "申请使用 Gmail",
   });
   ask.focus();
   fireEvent.click(ask);
@@ -466,7 +407,7 @@ test("the focus follows the press: Request access hands it to Withdraw, and With
   };
   await swap(pending);
   const withdraw = await view.findByRole("button", {
-    name: "Withdraw request for Gmail",
+    name: "撤回对 Gmail 的申请",
   });
   expect(document.activeElement).toBe(withdraw);
 
@@ -476,17 +417,13 @@ test("the focus follows the press: Request access hands it to Withdraw, and With
   );
   await swap(asked);
   expect(document.activeElement).toBe(
-    await view.findByRole("button", { name: "Request access to Gmail" }),
+    await view.findByRole("button", { name: "申请使用 Gmail" }),
   );
 });
 
 test.each([
-  [
-    "disabled",
-    "Turn on and give it to Expenses",
-    "Turn on Gmail and give it to Expenses",
-  ],
-  ["not_granted", "Give it to Expenses", "Give Gmail to Expenses"],
+  ["disabled", "开启并交给Expenses", "开启 Gmail 并交给Expenses"],
+  ["not_granted", "交给Expenses", "把 Gmail 交给Expenses"],
 ] as const)(
   "an admin looking at %s gets the fix itself, in one press, never a request to themselves",
   async (state, label, spoken) => {
@@ -501,9 +438,7 @@ test.each([
     );
     const button = await view.findByRole("button", { name: spoken });
     expect(button.textContent).toBe(label);
-    expect(
-      view.queryByRole("button", { name: "Request access to Gmail" }),
-    ).toBeNull();
+    expect(view.queryByRole("button", { name: "申请使用 Gmail" })).toBeNull();
     fireEvent.click(button);
     await waitFor(() =>
       expect(sent.find((call) => call.method === "POST")).toStrictEqual({
@@ -515,98 +450,6 @@ test.each([
   },
 );
 
-test.each(["disabled", "not_granted"] as const)(
-  "in the personal edition, %s is one Connect: turn it on, then sign in in a new tab",
-  async (state) => {
-    const { view, sent, opened } = mounted(
-      appAccess({
-        state,
-        unavailable: state === "disabled" ? "absent" : null,
-      }),
-      undefined,
-      { admin: true, personal: true },
-    );
-    const button = await view.findByRole("button", { name: "Connect Gmail" });
-    expect(button.textContent).toBe("Connect");
-    fireEvent.click(button);
-    await waitFor(() => expect(opened).toEqual(["https://gmail.test/consent"]));
-    expect(
-      sent.filter((call) => call.method === "POST").map((call) => call.url),
-    ).toEqual([
-      "/api/plugins/for/expenses/apps/composio-gmail/approve",
-      "/api/plugins/servers/composio-gmail/connect?returnTo=settings",
-    ]);
-  },
-);
-
-test("in the personal edition, Connect still opens the sign-in when turning the app on swaps the button", async () => {
-  let release: () => void = () => {};
-  const connectGate = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  const { view, sent, opened, swap } = mounted(
-    appAccess({ state: "disabled", unavailable: "absent" }),
-    undefined,
-    { admin: true, personal: true, connectGate },
-  );
-  fireEvent.click(await view.findByRole("button", { name: "Connect Gmail" }));
-  await waitFor(() =>
-    expect(
-      sent.some((call) => call.url.endsWith("/connect?returnTo=settings")),
-    ).toBe(true),
-  );
-  // The refetch after turning it on: the app is on now, and only this person's sign-in is missing.
-  swap(appAccess({ state: "not_connected" }));
-  release();
-  await waitFor(() => expect(opened).toEqual(["https://gmail.test/consent"]));
-  expect(
-    (await view.findByRole("button", { name: "Waiting for Gmail…" }))
-      .textContent,
-  ).toBe("Waiting for Gmail…");
-});
-
-test("in the personal edition, an app that isn't set up says what is missing, not who to ask", () => {
-  expect(
-    appAccessSentence(
-      appAccess({ state: "disabled", unavailable: "composio_unconfigured" }),
-      undefined,
-      "personal",
-    ),
-  ).toBe("Gmail isn't set up yet. Set it up to connect it.");
-  expect(
-    appAccessSentence(
-      appAccess({ state: "disabled", unavailable: "token_missing" }),
-      undefined,
-      "personal",
-    ),
-  ).toBe("Gmail isn't fully set up yet. Set it up to finish.");
-});
-
-test("in the personal edition, Set it up for an app with no broker key opens the broker's directory", async () => {
-  const { view } = mounted(
-    appAccess({
-      state: "disabled",
-      unavailable: "composio_unconfigured",
-      requestKind: "enable",
-    }),
-    undefined,
-    { admin: true, personal: true },
-  );
-  const link = await view.findByRole("button", { name: "Set up Gmail" });
-  expect(link.getAttribute("href")).toBe("/connections/browse/composio");
-});
-
-test("in the personal edition, the card says what is missing rather than who to ask", () => {
-  for (const state of ["disabled", "not_granted"] as const) {
-    const sentence = appAccessSentence(
-      appAccess({ state, unavailable: state === "disabled" ? "absent" : null }),
-      undefined,
-      "personal",
-    );
-    expect(sentence).toBe("Gmail isn't connected yet.");
-  }
-});
-
 test("an admin's press that cannot be carried out says what is missing", async () => {
   const { view } = mounted(
     appAccess({ state: "not_granted", requestKind: "grant" }),
@@ -614,7 +457,7 @@ test("an admin's press that cannot be carried out says what is missing", async (
     { admin: true },
   );
   fireEvent.click(
-    await view.findByRole("button", { name: "Give Gmail to Expenses" }),
+    await view.findByRole("button", { name: "把 Gmail 交给Expenses" }),
   );
   expect((await view.findByRole("alert")).textContent).toBe(
     "Gmail has no tools to give yet.",
@@ -623,13 +466,8 @@ test("an admin's press that cannot be carried out says what is missing", async (
 
 test.each([
   [
-    { state: "shared_not_connected", requestKind: "connect_shared" },
-    "Connect the team Gmail account",
-    "/admin/plugins/composio-gmail",
-  ],
-  [
     { state: "disabled", unavailable: "token_missing", requestKind: "enable" },
-    "Set up Gmail",
+    "设置 Gmail",
     "/admin/plugins/composio-gmail",
   ],
   [
@@ -638,7 +476,7 @@ test.each([
       unavailable: "composio_unconfigured",
       requestKind: "enable",
     },
-    "Set up Gmail",
+    "设置 Gmail",
     "/admin/plugins/composio",
   ],
 ] as const)(
@@ -653,27 +491,29 @@ test.each([
 
 test("an owner is asked about their own app, by the Bot's name where the caller has it", () => {
   const owners = appAccess({ state: "owner_grantable", granted: false });
-  expect(appAccessSentence(owners)).toBe("Let this Bot use your Gmail?");
+  expect(appAccessSentence(owners)).toBe("让这位员工使用你的 Gmail？");
   expect(appAccessSentence(owners, "Research Bot")).toBe(
-    "Let Research Bot use your Gmail?",
+    "让Research Bot使用你的 Gmail？",
   );
   expect(
     appAccessSentence({ ...owners, needsConnect: true }, "Research Bot"),
-  ).toBe("Let Research Bot use your Gmail? Connect it first.");
+  ).toBe("让Research Bot使用你的 Gmail？请先连接。");
   // An app on nobody's own account is not "your" anything.
   expect(
     appAccessSentence(
       { ...owners, displayName: "Routines", account: "deployment" },
       "Research Bot",
     ),
-  ).toBe("Let Research Bot use Routines?");
+  ).toBe("让Research Bot使用Routines？");
 });
 
 test("an owner's Allow gives the app in one press, naming the Bot and the app and nothing else", async () => {
   const { view, sent } = mounted(
     appAccess({ state: "owner_grantable", granted: false }),
   );
-  fireEvent.click(await view.findByRole("button", { name: /^Let .* Gmail$/ }));
+  fireEvent.click(
+    await view.findByRole("button", { name: /^让.*使用 Gmail$/ }),
+  );
   await waitFor(() =>
     expect(sent.filter((call) => call.method === "POST")).toStrictEqual([
       {
@@ -693,7 +533,7 @@ test("Connect and allow opens the person's consent first, and gives the app once
   });
   const { view, sent, opened, swap } = mounted(waiting);
   fireEvent.click(
-    await view.findByRole("button", { name: /after you connect it$/ }),
+    await view.findByRole("button", { name: /^连接后让.*使用 Gmail$/ }),
   );
   await waitFor(() => expect(opened).toEqual(["https://gmail.test/consent"]));
   const gives = () =>

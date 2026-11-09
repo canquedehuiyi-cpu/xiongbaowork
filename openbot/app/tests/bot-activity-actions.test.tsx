@@ -8,17 +8,14 @@ import {
   RouterProvider,
 } from "@tanstack/react-router";
 import { cleanup, render } from "@testing-library/react";
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
 import { BotActivitySections } from "@/components/bot-profile/activity";
-import {
-  AuditPage,
-  withBot,
-  withoutOpenBotWorking,
-} from "@/components/manage/audit-page";
+import { withBot } from "@/components/manage/audit-page";
 import { agentKeys } from "@/lib/agents/queries";
 import { authKeys } from "@/lib/auth/queries";
 import { botLifecycleKeys } from "@/lib/bot-lifecycle/queries";
 import { deploymentKeys } from "@/lib/deployment/queries";
+import { Route as AuditRoute } from "@/routes/_authed/admin/audit";
 import { seedAuditPage } from "./seed-audit-page";
 import { settleReactWork } from "./settle-react-work";
 
@@ -35,6 +32,7 @@ afterAll(async () => {
 });
 
 const BOT = "bot-claude";
+const AuditRoutePage = AuditRoute.options.component as ComponentType;
 
 async function renderWith(
   ui: ReactNode,
@@ -43,6 +41,8 @@ async function renderWith(
     role: "admin" | "user";
     audit?: Record<string, unknown[]>;
     ready?: string;
+    /** Where the page is opened, search included. */
+    at?: string;
   },
 ) {
   const queryClient = new QueryClient({
@@ -70,37 +70,26 @@ async function renderWith(
     seedAuditPage(queryClient, search, { events });
   const router = createRouter({
     routeTree: createRootRoute({ component: () => ui }),
-    history: createMemoryHistory({ initialEntries: ["/"] }),
+    history: createMemoryHistory({ initialEntries: [options.at ?? "/"] }),
   });
   const view = render(
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
-  await view.findByText(options.ready ?? "Completed");
+  await view.findByText(options.ready ?? "已完成");
   return view;
 }
 
 test("says what it lists, and does not claim the Bot has done nothing", async () => {
   const view = await renderWith(<BotActivitySections agentId={BOT} />, {
-    edition: "personal",
+    edition: "team",
     role: "admin",
   });
   expect(view.queryByText("Nothing has finished yet.")).toBeNull();
-  expect(
-    view.getByText("No tasks, routines or goals have finished yet."),
-  ).toBeTruthy();
-});
-
-test("in the personal edition, links to Settings › Activity narrowed to this Bot", async () => {
-  const view = await renderWith(<BotActivitySections agentId={BOT} />, {
-    edition: "personal",
-    role: "admin",
-  });
-  const link = view
-    .getByText("Every action this Bot took")
-    .closest("a") as HTMLAnchorElement;
-  expect(link.getAttribute("href")).toBe(`/settings/activity?bot=${BOT}`);
+  expect(view.getByText("还没有做完的事。")).toBeTruthy();
+  // And where the rest of what it did is: every action, in the trail.
+  expect(view.getByText("这位员工做过的每个动作")).toBeTruthy();
 });
 
 test("for a team admin, links to Admin › Audit narrowed to this Bot", async () => {
@@ -109,7 +98,7 @@ test("for a team admin, links to Admin › Audit narrowed to this Bot", async ()
     role: "admin",
   });
   const link = view
-    .getByText("Every action this Bot took")
+    .getByText("这位员工做过的每个动作")
     .closest("a") as HTMLAnchorElement;
   expect(link.getAttribute("href")).toBe(`/admin/audit?bot=${BOT}`);
 });
@@ -119,7 +108,7 @@ test("a team member, who cannot open the trail, is not sent to it", async () => 
     edition: "team",
     role: "user",
   });
-  expect(view.queryByText("Every action this Bot took")).toBeNull();
+  expect(view.queryByText("这位员工做过的每个动作")).toBeNull();
 });
 
 test("the trail opened for one Bot asks the server for that Bot's rows, and says so", async () => {
@@ -130,12 +119,13 @@ test("the trail opened for one Bot asks the server for that Bot's rows, and says
     withBot("?eventType=computer.action_refused,mcp.call_rejected", BOT),
   ).toBe(`?eventType=computer.action_refused%2Cmcp.call_rejected&bot=${BOT}`);
   // Seeded only under the narrowed query: rows drawn mean the page asked for exactly that.
-  const view = await renderWith(<AuditPage bot={BOT} />, {
-    edition: "personal",
+  const view = await renderWith(<AuditRoutePage />, {
+    edition: "team",
     role: "admin",
-    ready: "Decision",
+    ready: "结果",
+    at: `/?bot=${BOT}`,
     audit: {
-      [withoutOpenBotWorking(search)]: [
+      [search]: [
         {
           id: "e1",
           actorUserId: "person",
@@ -150,10 +140,10 @@ test("the trail opened for one Bot asks the server for that Bot's rows, and says
       ],
     },
   });
-  expect(view.getByText("a.txt")).toBeTruthy();
+  expect(view.container.querySelector("tbody")?.textContent).toContain("a.txt");
   expect(
     view.getByRole("button", {
-      name: "Show every Bot, not only Claude Agent SDK",
+      name: "显示所有员工，而不只是 Claude Agent SDK",
     }).textContent,
-  ).toBe("Only Claude Agent SDK");
+  ).toBe("只看 Claude Agent SDK");
 });

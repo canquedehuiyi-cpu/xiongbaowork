@@ -63,6 +63,9 @@ const calls: { method: string; path: string; body: unknown }[] = [];
 const writes = () => calls.filter((entry) => entry.method !== "GET");
 
 const base: AgentProfile = {
+  isolated: false,
+  isolationActive: false,
+  isolationOffReason: null,
   id: "agent-1",
   name: "Backend Engineer",
   title: "Writes the migration",
@@ -105,6 +108,8 @@ const attentionRow = (agent: AgentProfile, paused: boolean): BotAttention => ({
   unread: 0,
   paused,
   notify: "all",
+  items: 0,
+  tasks: { needsInput: 0, ready: 0, failed: 0 },
 });
 
 const crew: WakerGroup = {
@@ -143,12 +148,13 @@ function seed(
   );
   queryClient.setQueryData(wakerGroupKeys.list(), crews);
   // 暂停 is bot_lifecycle paused (spec D4), which the attention read answers -- not `hidden`.
-  queryClient.setQueryData(
-    botLifecycleKeys.attention,
-    agents
+  // `GET /api/bots/attention` answers `{ bots, lastPingId }`; the cache holds the whole body.
+  queryClient.setQueryData(botLifecycleKeys.attention, {
+    bots: agents
       .filter((agent) => pausedIds.includes(agent.id))
       .map((agent) => attentionRow(agent, true)),
-  );
+    lastPingId: null,
+  });
   queryClient.setQueryData(
     runningTasksQueryOptions().queryKey,
     runningIds.map((id) => ({
@@ -388,6 +394,7 @@ test("pause and resume go to the bot lifecycle, and the card follows the answer"
         bots: [base, reviewer]
           .filter((agent) => pausedNow.includes(agent.id))
           .map((agent) => attentionRow(agent, true)),
+        lastPingId: null,
       };
     return {};
   });
@@ -636,9 +643,10 @@ test("a board that cannot be read is said as unknown, not as idle", async () => 
   queryClient.setQueryData(agentKeys.list(true), [parked]);
   queryClient.setQueryData(wakerGroupKeys.list(), [crew]);
   // The pause read answers: Night Auditor is paused, which the failed board read cannot undo.
-  queryClient.setQueryData(botLifecycleKeys.attention, [
-    attentionRow(parked, true),
-  ]);
+  queryClient.setQueryData(botLifecycleKeys.attention, {
+    bots: [attentionRow(parked, true)],
+    lastPingId: null,
+  });
   queryClientForDraw = queryClient;
 
   const screen = draw();

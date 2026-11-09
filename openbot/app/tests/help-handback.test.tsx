@@ -354,10 +354,10 @@ function app(inConversation: boolean) {
 async function askForHelp(view: ReturnType<typeof render>) {
   const user = userEvent.setup({ document: view.container.ownerDocument });
   await user.type(
-    await view.findByRole("textbox", { name: "Message" }),
+    await view.findByRole("textbox", { name: "消息" }),
     "Fill in my phone number on the order form",
   );
-  await user.click(view.getByRole("button", { name: "Send message" }));
+  await user.click(view.getByRole("button", { name: "发送消息" }));
   await waitFor(() => expect(control.request?.status).toBe("waiting"), {
     timeout: 5000,
   });
@@ -380,11 +380,11 @@ test("a help request is drawn in the conversation, and after the hand-back the B
   const user = await askForHelp(view);
   // While it is open: the Bot's screen, saying what it needs, with the wheel.
   expect(await view.findByText(ASKED, { exact: false })).toBeTruthy();
-  await user.click(await view.findByRole("button", { name: "Take control" }));
+  await user.click(await view.findByRole("button", { name: "接管" }));
   await waitFor(() => expect(control.holder).toBe("human"));
   await user.keyboard("{Escape}");
   await user.click(
-    await view.findByRole("button", { name: "Hand back" }, { timeout: 3000 }),
+    await view.findByRole("button", { name: "交还" }, { timeout: 3000 }),
   );
 
   // The Bot's next run carries what happened and asks for the next step said out loud.
@@ -399,9 +399,7 @@ test("a help request is drawn in the conversation, and after the hand-back the B
 
   expect(await view.findByText(REPLY)).toBeTruthy();
   const card = view.container.querySelector('[data-help-request="call-help"]');
-  expect(card?.textContent).toBe(
-    `Taken over and handed backThe Bot asked: “${ASKED}”`,
-  );
+  expect(card?.textContent).toBe(`已接管并交还员工的请求：「${ASKED}」`);
   expect(view.queryByRole("button", { name: "继续" })).toBeNull();
 });
 
@@ -425,7 +423,7 @@ test("a Bot that answers the hand-back with no words leaves a step that says so,
       view.container.querySelector('[data-help-request="call-help"]')
         ?.textContent,
     ).toBe(
-      `Taken over and handed backThe Bot asked: “${ASKED}” The Bot stopped here without saying what it does next.Carry on`,
+      `已接管并交还员工的请求：「${ASKED}」员工停在了这里，没说接下来做什么。继续`,
     ),
   );
   await user.click(view.getByRole("button", { name: "继续" }));
@@ -461,19 +459,17 @@ test("leaving the conversation while holding control: back in it, the hand-back'
     release = resolve;
   });
   await user.click(
-    await view.findByRole("button", { name: "Hand back" }, { timeout: 5000 }),
+    await view.findByRole("button", { name: "交还" }, { timeout: 5000 }),
   );
   // The waiting call has its answer and the Bot is working on it: nothing here is paused, and the step says so.
   await waitFor(() => expect(runs).toHaveLength(2), { timeout: 5000 });
   await new Promise((resolve) => setTimeout(resolve, 1500));
-  expect(view.queryByText(/A browser task is paused/)).toBeNull();
-  expect(view.queryByRole("button", { name: "Resume task" })).toBeNull();
+  expect(view.queryByText(/有一个浏览器任务暂停了/)).toBeNull();
+  expect(view.queryByRole("button", { name: "恢复任务" })).toBeNull();
   expect(
     view.container.querySelector('[data-help-request="call-help"]')
       ?.textContent,
-  ).toBe(
-    `Taken over and handed backThe Bot asked: “${ASKED}” The Bot is carrying on.`,
-  );
+  ).toBe(`已接管并交还员工的请求：「${ASKED}」员工正在继续。`);
   release();
 
   // The turn that was waiting carries on with the answer; its reply reaches the conversation on screen.
@@ -481,7 +477,7 @@ test("leaving the conversation while holding control: back in it, the hand-back'
   expect(handBackResult()).toMatchObject({ handoffStatus: "completed" });
   // And nothing claims a task is paused: it was not, and Resume would run it again.
   await new Promise((resolve) => setTimeout(resolve, 1500));
-  expect(view.queryByText(/A browser task is paused/)).toBeNull();
-  expect(view.queryByRole("button", { name: "Resume task" })).toBeNull();
+  expect(view.queryByText(/有一个浏览器任务暂停了/)).toBeNull();
+  expect(view.queryByRole("button", { name: "恢复任务" })).toBeNull();
   expect(runs).toHaveLength(2);
 });

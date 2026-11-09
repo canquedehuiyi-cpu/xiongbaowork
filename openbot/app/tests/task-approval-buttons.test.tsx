@@ -118,10 +118,10 @@ test("in the conversation, a check-in task's approval offers Allow once and Deny
       </section>
     </>,
   );
-  await view.findAllByRole("region", { name: "Waiting for your approval" });
+  await view.findAllByRole("region", { name: "等你批准" });
   expect(names(view.getByRole("region", { name: "task" }))).toEqual([
-    "Allow once",
-    "Deny",
+    "允许一次",
+    "拒绝",
   ]);
   expect(
     within(view.getByRole("region", { name: "task" })).getByText(
@@ -129,9 +129,9 @@ test("in the conversation, a check-in task's approval offers Allow once and Deny
     ),
   ).toBeTruthy();
   expect(names(view.getByRole("region", { name: "own" }))).toEqual([
-    "Allow once",
-    "Always allow here",
-    "Deny",
+    "允许一次",
+    "在这里总是允许",
+    "拒绝",
   ]);
 });
 
@@ -143,12 +143,12 @@ test("on the Bot's page, the same: the task's row has no Always allow here, the 
       "[data-slot=item]",
     ) as HTMLElement;
   expect(buttons(await row("deno-rollback-note.md"))).toEqual([
-    "Allow once",
-    "Deny",
+    "允许一次",
+    "拒绝",
   ]);
   expect(buttons(await row("notes.md"))).toEqual([
-    "Allow once",
-    "Always allow here",
-    "Deny",
+    "允许一次",
+    "在这里总是允许",
+    "拒绝",
   ]);
 });

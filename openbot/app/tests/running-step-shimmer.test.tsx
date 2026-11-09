@@ -146,12 +146,12 @@ test("once every step has its answer and the model is still going, the transcrip
   const view = render(transcript(run(true), true));
 
   expect(await view.findByText("用了 Gmail")).toBeTruthy();
-  const thinking = view.getByText("Thinking");
+  const thinking = view.getByText("思考中");
   expect(thinking.getAttribute("role")).toBe("status");
   expect(thinking.classList.contains(SHIMMER)).toBe(true);
 
   // The turn ends: nothing says it is still working.
   view.rerender(transcript(run(true), false));
-  expect(view.queryByText("Thinking")).toBeNull();
+  expect(view.queryByText("思考中")).toBeNull();
   expect(document.querySelector(`.${SHIMMER}`)).toBeNull();
 });
