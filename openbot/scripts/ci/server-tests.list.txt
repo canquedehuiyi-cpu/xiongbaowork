@@ -303,6 +303,8 @@ tests/intelligence-expected-answers.test.ts
 tests/intelligence-memory.test.ts
 tests/isolated-bots.integration.test.ts
 tests/jsonb-encoding.integration.test.ts
+tests/key-guide-link.test.ts
+tests/key-only-apps.test.ts
 tests/knowledge-base.integration.test.ts
 tests/knowledge-tools.test.ts
 tests/last-sign-in-backfill.integration.test.ts

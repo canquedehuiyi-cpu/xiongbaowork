@@ -20,11 +20,13 @@ import {
   type ComposioBroker,
   type Decides,
   isFieldScheme,
+  type KeyGuideSource,
   type SchemeKind,
   schemeKind,
 } from "./broker";
 import { CATALOGUE, type CatalogueEntry, catalogueEntry } from "./catalogue";
 import { toolkitOf, vendorSentence } from "./composio";
+import { fieldsForPerson, keyGuideFor } from "./key-guides";
 import {
   authorizationUrlFor,
   type ConnectOrigin,
@@ -149,6 +151,81 @@ function brokerRefusal(
 }
 
 /**
+ * The broker's name, in whatever case a sentence spells it.
+ *
+ * A person connects their work apps through 熊宝 and is never told which company sits behind it
+ * (upstream #1223). Most of the broker layer's sentences were written for an operator who can open
+ * that company's dashboard, so they name it. Case-insensitive, so `composio://linear` is caught as
+ * well as "Composio"; `COMPOSIO_API_KEY` is left alone by the word boundary (the underscore is part
+ * of the word), because that is the setting an admin sets and naming it is how a person knows what
+ * to ask for.
+ */
+const NAMES_THE_BROKER = /\bcomposio\b/i;
+const NAMES_THE_BROKER_EVERYWHERE = /\bcomposio\b/gi;
+
+/**
+ * A refusal the STORE wrote for the person, with only the broker's name taken out.
+ *
+ * The store's sentences say what is now true (an account left standing and recorded as unchecked, a
+ * key the app rejected, a check that wrote a new verdict), and that is what the person needs to act
+ * on. Swapping the whole sentence for a route's generic one told somebody whose account was in fact
+ * made that it was not (review M-7), so here the facts stay and the name goes.
+ */
+export function withoutBrokerName(sentence: string): string {
+  return sentence.replace(
+    NAMES_THE_BROKER_EVERYWHERE,
+    "the connection service",
+  );
+}
+
+/**
+ * A broker-layer refusal a person reads, kept free of the broker's name.
+ *
+ * Those sentences were written for the operator, and their remedy is somewhere a person cannot go
+ * (a dashboard, a setting), so the person gets the route's own sentence instead, which says what
+ * failed and who to ask. The status is unchanged: only the words differ.
+ *
+ * NOTHING OF THE ORIGINAL SENTENCE IS LOGGED (review M-8). On the key flow it can carry the vendor's
+ * own words about what was typed, so the log line says only that a sentence was kept back, on which
+ * route, about which app; the operator reproduces the failure from there.
+ */
+export function forPerson(
+  sentence: string,
+  generic: string,
+  where: { route: string; toolkit?: string } = { route: "unknown" },
+): string {
+  if (!NAMES_THE_BROKER.test(sentence)) return sentence;
+  console.error(
+    JSON.stringify({
+      type: "broker-sentence-kept-from-person",
+      route: where.route,
+      ...(where.toolkit ? { toolkit: where.toolkit } : {}),
+    }),
+  );
+  return generic;
+}
+
+/** {@link brokerRefusal} for a route a person calls: see {@link forPerson}. */
+function personRefusal(
+  error: unknown,
+  generic: string,
+  where?: { route: string; toolkit?: string },
+): { error: string; status: 502 | 503 } {
+  const refusal = brokerRefusal(error, generic);
+  return { ...refusal, error: forPerson(refusal.error, generic, where) };
+}
+
+/**
+ * What a person is told on a route they call when this deployment has no broker at all.
+ *
+ * {@link BrokerUnconfiguredError}'s own message is written for an operator and names the provider;
+ * a person reads this instead. It still names the setting, because that is what they ask an admin
+ * to set. The admin directory keeps the operator's sentence.
+ */
+const PERSON_UNCONFIGURED =
+  "这个部署还没有设置好连接应用（需要管理员设置 COMPOSIO_API_KEY），所以什么也没有问。请联系管理员。";
+
+/**
  * What a reader is told when Composio would not answer with its directory.
  *
  * One constant because two routes make that call — browsing the catalogue and enabling an app out of
@@ -260,7 +337,7 @@ export function createPluginRoutes(
    * trap `connect` documents applies here with one more argument in it — every parameter from that
    * position on is optional, so a misplaced one typechecks and quietly does nothing.
    */
-  composio?: { broker: ComposioBroker },
+  composio?: { broker: ComposioBroker; guides?: KeyGuideSource },
   /**
    * `createAdminScope(...)`: its `adminCapability` is mounted on the grant routes (G01-E P8b) and on
    * every route that writes the deployment's servers, their OAuth clients and their secrets (P10):
@@ -1169,10 +1246,7 @@ export function createPluginRoutes(
     const toolkit = row ? toolkitOf(row.url) : null;
     if (row && toolkit) {
       if (!composio) {
-        return context.json(
-          { error: new BrokerUnconfiguredError().message },
-          503,
-        );
+        return context.json({ error: PERSON_UNCONFIGURED }, 503);
       }
 
       /*
@@ -1329,6 +1403,7 @@ export function createPluginRoutes(
          */
         const body = (await context.req.json().catch(() => null)) as {
           values?: unknown;
+          guide?: unknown;
         } | null;
         const submitted =
           typeof body?.values === "object" &&
@@ -1350,11 +1425,36 @@ export function createPluginRoutes(
             authScheme,
           });
         } catch (error) {
-          const refusal = brokerRefusal(
+          const refusal = personRefusal(
             error,
-            `Composio would not say what ${row.title} asks for, and said nothing about why. Try again, and ask an administrator to check this deployment's Composio key if it persists.`,
+            `没能查到连接 ${row.title} 需要填写什么。请重试；如果一直这样，请联系管理员。`,
+            { route: "connect.form", toolkit },
           );
           return context.json({ error: refusal.error }, refusal.status);
+        }
+
+        /*
+         * THE FIRST PRESS, ASKED FOR THE GUIDE, ANSWERS THE FORM A PERSON CAN FOLLOW (upstream
+         * #1297): the same boxes under the same names, labelled and explained in their words, and a
+         * guide saying where the key comes from. The names are untouched, so the second press is
+         * checked against `published` exactly as before. The broker's own link is asked for and a
+         * failure there costs only the link: the form is what the person came for, and
+         * `./key-guides` has the fallback.
+         *
+         * ASKED FOR WITH `{ "guide": true }`, which is the fork's one difference from upstream: a
+         * first press without it is answered exactly as it always was, the vendor's form verbatim,
+         * so a browser that predates the guide reads what it has always read.
+         */
+        if (submitted === null && body?.guide === true) {
+          return context.json({
+            fields: fieldsForPerson(toolkit, published),
+            guide: await keyGuideFor({
+              ask: composio.guides?.connectionGuideUrl.bind(composio.guides),
+              toolkit,
+              authScheme,
+              title: row.title,
+            }),
+          });
         }
 
         if (submitted === null) return context.json({ fields: published });
@@ -1382,7 +1482,8 @@ export function createPluginRoutes(
         if (published.length === 0) {
           return context.json(
             {
-              error: `${row.title} publishes no boxes to fill in, so there is nothing you could type that would reach it and no account was made. An administrator has to look at how ${row.title} is set up at Composio; removing it on the Plugins page and adding it again is what records the way Composio connects it now.`,
+              // A person reads this (upstream #1223): no connector provider named.
+              error: `${row.title} 没有要填写的内容，所以没有建立任何连接。请管理员在插件页移除它，再重新添加。`,
             },
             400,
           );
@@ -1460,7 +1561,8 @@ export function createPluginRoutes(
           const optional = published.map((field) => field.name).join(", ");
           return context.json(
             {
-              error: `${row.title} publishes no box it says has to be filled in — only ${optional} — so nothing you could type would be a credential it insists on, and no account was made. An app that genuinely needs none is one Composio publishes as needing no authentication, and ${row.title} is recorded here as an app whose secret you type. An administrator has to look at how ${row.title} is set up at Composio; removing it on the Plugins page and adding it again is what records the way Composio connects it now.`,
+              // A person reads this (upstream #1223): no connector provider named.
+              error: `${row.title} 没有标出必须填写的项（只有 ${optional}），所以没有建立任何连接。请管理员在插件页移除它，再重新添加。`,
             },
             400,
           );
@@ -1609,13 +1711,17 @@ export function createPluginRoutes(
            * reason the skills route gives its own refusal one: it is something the person who made
            * the request can fix, and the message says what to fix.
            */
+          const generic = `没能用你填写的内容连接 ${row.title}。请重试；如果一直这样，请联系管理员。`;
           if (error instanceof PluginRefusedError) {
-            return context.json({ error: error.message }, 400);
+            return context.json(
+              { error: withoutBrokerName(error.message) },
+              400,
+            );
           }
-          const refusal = brokerRefusal(
-            error,
-            `${row.title} could not be connected with what you entered, and Composio said nothing about why. Try again, and ask an administrator to check this deployment's Composio key if it persists.`,
-          );
+          const refusal = personRefusal(error, generic, {
+            route: "connect.fields",
+            toolkit,
+          });
           return context.json({ error: refusal.error }, refusal.status);
         }
       }
@@ -1641,7 +1747,8 @@ export function createPluginRoutes(
       if (kind === "unreadable") {
         return context.json(
           {
-            error: `This deployment cannot tell how ${row.title} connects, so nothing was sent to Composio and no account was made. An administrator has to remove it on the Plugins page and add it again, which records the way Composio connects it now.`,
+            // English, because the route's tests pin "cannot tell how"; no provider named (upstream #1223).
+            error: `OpenBot cannot tell how ${row.title} connects, so nothing was sent and no account was made. Ask an admin to remove it on the Plugins page and add it again.`,
           },
           400,
         );
@@ -1725,9 +1832,10 @@ export function createPluginRoutes(
           ),
         }));
       } catch (error) {
-        const refusal = brokerRefusal(
+        const refusal = personRefusal(
           error,
-          `Composio would not begin a connection to ${row.title}, and said nothing about why. Try again, and ask an administrator to check this deployment's Composio key if it persists.`,
+          `没能开始连接 ${row.title}。请重试；如果一直这样，请联系管理员。`,
+          { route: "connect.consent", toolkit },
         );
         return context.json({ error: refusal.error }, refusal.status);
       }
@@ -1900,7 +2008,7 @@ export function createPluginRoutes(
     }
     if (!composio) {
       return {
-        refusal: { error: new BrokerUnconfiguredError().message, status: 503 },
+        refusal: { error: PERSON_UNCONFIGURED, status: 503 },
       };
     }
     return { toolkit };
@@ -1968,9 +2076,14 @@ export function createPluginRoutes(
          * no. So the page is told the ask failed, and what it goes on showing is the last answer
          * Composio gave rather than a guess about this one.
          */
-        const refusal = brokerRefusal(
+        const refusal = personRefusal(
           error,
-          "Composio would not say whether this account is connected, and gave no reason, so what is shown here is the last answer it gave rather than a fresh one. Try again, and ask an administrator to check this deployment's Composio key if it persists.",
+          /*
+           * English, because the route's existing tests pin "last answer"; upstream #1223's own
+           * wording, which names no broker.
+           */
+          "Couldn't check whether this account is connected. This shows the last answer. Try again, or ask an admin if it keeps happening.",
+          { route: "connection.confirm", toolkit: resolved.toolkit },
         );
         return context.json({ error: refusal.error }, refusal.status);
       }
@@ -2043,18 +2156,20 @@ export function createPluginRoutes(
          * send them to an administrator about this deployment's key. 400 because it is theirs to
          * fix and the message says what to fix.
          */
+        const generic =
+          "没能检查这个连接是否还能用，这里显示的是上一次检查的结果。请再按一次重新检查；如果一直这样，请联系管理员。";
         if (error instanceof PluginRefusedError) {
-          return context.json({ error: error.message }, 400);
+          return context.json({ error: withoutBrokerName(error.message) }, 400);
         }
         /*
          * And a failure this deployment cannot explain says what is on the screen instead of
          * guessing. Nothing was written on the way out of the store here, so the row still carries
          * the last answer anybody earned rather than a verdict invented by a call that failed.
          */
-        const refusal = brokerRefusal(
-          error,
-          "Composio would not say whether this connection still works, and gave no reason, so what is shown here is the last answer it gave rather than a fresh one. Press Re-check again, and ask an administrator to check this deployment's Composio key if it persists.",
-        );
+        const refusal = personRefusal(error, generic, {
+          route: "connection.recheck",
+          toolkit: resolved.toolkit,
+        });
         return context.json({ error: refusal.error }, refusal.status);
       }
     },
@@ -2112,9 +2227,11 @@ export function createPluginRoutes(
        * one thing a person needs is the button to press, not this deployment's theory of where it
        * stopped.
        */
-      const refusal = brokerRefusal(
+      const refusal = personRefusal(
         error,
-        "Composio would not end this account, and gave no reason. Press Disconnect again: the revoke at Composio runs before anything here is deleted, so repeating it is safe and is the whole recovery. Ask an administrator to check this deployment's Composio key if it persists.",
+        // English for the same reason as confirm's: the route's tests pin "Disconnect again".
+        "Couldn't disconnect this account. Press Disconnect again. It's safe to repeat. Ask an admin if it keeps happening.",
+        { route: "connection.disconnect", toolkit: resolved.toolkit },
       );
       return context.json({ error: refusal.error }, refusal.status);
     }

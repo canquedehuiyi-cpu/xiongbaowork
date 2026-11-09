@@ -1,4 +1,5 @@
 import { Composio } from "@composio/core";
+import { displayName } from "./app-names";
 import {
   type AuthConfigOutcome,
   type BrokerApp,
@@ -9,6 +10,7 @@ import {
   type FieldScheme,
   flagOf,
   isFieldScheme,
+  type KeyGuideSource,
 } from "./broker";
 import {
   type ComposioAction,
@@ -183,6 +185,11 @@ type VendorToolkit = {
  */
 type VendorToolkitDetail = {
   auth_config_details?: unknown;
+  /**
+   * The app's own page about connecting it, where Composio publishes one. Read by
+   * {@link KeyGuideSource.connectionGuideUrl} alone, and only ever as a link to show a person.
+   */
+  auth_guide_url?: unknown;
 };
 
 /**
@@ -926,7 +933,7 @@ export function connectionOf(row: VendorToolkit): BrokerConnection {
  * that had no app in it. A guard whose absence is argued from a dereference that does not
  * dereference is not a guard anything should rest on.
  */
-function appOf(row: VendorToolkit, position: number): BrokerApp {
+export function appOf(row: VendorToolkit, position: number): BrokerApp {
   const at = `row ${position + 1} of Composio's app catalogue`;
 
   if (typeof row !== "object" || row === null || Array.isArray(row)) {
@@ -1061,7 +1068,8 @@ function appOf(row: VendorToolkit, position: number): BrokerApp {
 
   return {
     slug,
-    name,
+    // The brand's own spelling where the catalogue lowercased it. See `./app-names`.
+    name: displayName(slug, name),
     description,
     logo,
     categories,
@@ -2521,12 +2529,49 @@ function copyOf(apps: Promise<BrokerApp[]>): Promise<BrokerApp[]> {
  * {@link ComposioBroker.listApps}, because the seam's callers are routes and none of them has an
  * opinion about what time it is.
  */
+/**
+ * The provider's page for making an app's key, where Composio publishes one (upstream #1297).
+ *
+ * Two places can carry it: `auth_hint_url` on the connection mode the app was added with, and
+ * `auth_guide_url` on the app. Both are empty for nearly every app, so null is the ordinary answer.
+ * Anything that is not text is read as no link: this is a link shown beside a form, and a shape this
+ * file cannot read is no reason to refuse the form a person came for.
+ *
+ * NOT ONE OF THE SEAM'S DOORS, so it is answered beside the broker as `guides` rather than on it;
+ * see {@link KeyGuideSource}.
+ */
+function connectionGuideUrlFor(
+  vendor: ComposioVendor,
+): KeyGuideSource["connectionGuideUrl"] {
+  return async ({ toolkit, authScheme }) => {
+    const detail = await askVendor(
+      {
+        outcome: `where to get ${toolkit}'s key could not be read`,
+        app: toolkit,
+      },
+      () => vendor.toolkits.retrieve(toolkit),
+    );
+    if (typeof detail !== "object" || detail === null) return null;
+    const modes = Array.isArray(detail.auth_config_details)
+      ? detail.auth_config_details
+      : [];
+    const mode = modes.find(
+      (entry: unknown) =>
+        typeof entry === "object" &&
+        entry !== null &&
+        textOf((entry as { mode?: unknown }).mode) === authScheme,
+    ) as { auth_hint_url?: unknown } | undefined;
+    return textOf(mode?.auth_hint_url) ?? textOf(detail.auth_guide_url) ?? null;
+  };
+}
+
 export function buildComposioClient(
   vendor: ComposioVendor,
   now: () => number = Date.now,
 ): {
   actions: ComposioActions;
   broker: ComposioBroker;
+  guides: KeyGuideSource;
 } {
   /**
    * This person's accounts for this app, in whichever states the ASKING question is about.
@@ -4606,7 +4651,8 @@ export function buildComposioClient(
         throw new BrokerRefusalError(
           said === null
             ? `Composio did not accept the connection to ${toolkit} and said nothing this deployment can pass on. The failure arrived through this deployment's @composio/core with no sentence of Composio's on it, which is what an outage, a cancelled request and a reply the package could not read all look like from here — and the failure itself was dropped rather than recorded, because on this one call the object carrying it also carries what was typed into the form. Nothing was attached. Composio's own dashboard logs the attempt, and asking again is what settles whether the request ever landed.`
-            : `Composio refused the connection to ${toolkit}: ${said} Nothing was attached. Nothing further about this attempt is kept here, because what the failure carried was the value typed into the form — the request id in Composio's own words above is what their dashboard searches on.`,
+            : // A person reads this one (upstream #1223): the vendor's own sentence, and no broker named.
+              `${toolkit} 没有接受你填写的内容：${said} 没有连接任何账号。请检查填写的内容后重试。`,
         );
       }
 
@@ -4711,7 +4757,11 @@ export function buildComposioClient(
     },
   };
 
-  return { actions, broker };
+  return {
+    actions,
+    broker,
+    guides: { connectionGuideUrl: connectionGuideUrlFor(vendor) },
+  };
 }
 
 /**
@@ -4751,6 +4801,7 @@ export function buildComposioClient(
 export function createComposioClient(apiKey: string): {
   actions: ComposioActions;
   broker: ComposioBroker;
+  guides: KeyGuideSource;
 } {
   /*
    * THREE ENTRIES, EVERY ONE OF THEM LOAD-BEARING, AND ALL THREE PINNED BY A TEST. What this
