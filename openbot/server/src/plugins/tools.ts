@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DESTRUCTIVE_TOOL_NOTE } from "../../../shared/bot-prompt";
 import { ApprovalRefusedError } from "../approvals/types";
 import type { AuditInitiator } from "../audit";
 import { HeadlessToolSuspension } from "../computer/headless-tools";
@@ -228,7 +229,12 @@ export async function grantedTools(options: {
     name: tool.toolName,
     ref: tool.ref,
     initiator,
-    description: tool.description,
+    // 应用标为破坏性的工具，名字不一定看得出来：在描述末尾写明 OpenBot 会先问，Bot 不必再问。
+    description: tool.destructive
+      ? [tool.description.trim(), DESTRUCTIVE_TOOL_NOTE]
+          .filter(Boolean)
+          .join("\n\n")
+      : tool.description,
     parameters: parametersFor(tool.inputSchema),
     execute: async (args: unknown) => {
       try {

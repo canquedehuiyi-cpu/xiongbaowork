@@ -297,16 +297,17 @@ export function toolkitOf(url: string): string | null {
 /**
  * What an action does, from the labels Composio publishes with it.
  *
- * SIX LABELS, AND ONLY TWO DECIDE ANYTHING. `readOnlyHint` is the one thing that can produce a read.
- * `destructiveHint` produces a destructive write. `createHint` and `updateHint` are writes, which is
- * also what an unlabelled action is, so reading them buys nothing over the default. `idempotentHint`
- * and `openWorldHint` say nothing about effect — DELETE is idempotent, so treating idempotence as
- * safety would wave through exactly the calls worth asking about.
+ * SIX LABELS, AND ONLY TWO DECIDE THE EFFECT. `readOnlyHint` is the one thing that can produce a
+ * read. `destructiveHint` produces a destructive write. `createHint` and `updateHint` are plain
+ * writes. `idempotentHint` and `openWorldHint` say nothing about effect — DELETE is idempotent, so
+ * treating idempotence as safety would wave through exactly the calls worth asking about.
  *
- * ANYTHING UNLABELLED IS A WRITE. Measured across Gmail, Linear, Calendar, Notion and Slack, every
- * action carried at least one label, so this is a guard against the future rather than the present: an
- * app that labels nothing, or a label added later that this code has never heard of, must land on
- * write. The opposite default would silently classify new actions as safe.
+ * ANYTHING UNLABELLED IS AN UNCLASSIFIED WRITE. Measured across Gmail, Linear, Calendar, Notion and
+ * Slack, every action carried at least one label, so this is a guard against the future rather than
+ * the present: an app that labels nothing, or a label added later that this code has never heard
+ * of, must land on write. The opposite default would silently classify new actions as safe. 它记为
+ * `unclassified` 而不是 `destructive`：Composio 并没有说它会删除什么，所以调用时不按删除类底线
+ * 总是先问；后台只读路径对它和 destructive 一样谨慎（见 `mcpTools.unclassified`）。
  *
  * DESTRUCTIVE WINS OVER READ-ONLY. Both at once is somebody else's bug, and the strict reading is the
  * only safe one.
@@ -314,6 +315,8 @@ export function toolkitOf(url: string): string | null {
 export function effectOf(tags: readonly string[] | undefined): {
   effect: "read" | "write";
   destructive: boolean;
+  /** Composio 没有给出只读、破坏性、新建或修改中的任何一个标签。 */
+  unclassified?: true;
 } {
   /*
    * AND THE LABEL IS THE WORD, WHICH IS THE SAME READ THE SLUG AND THE VERSION BESIDE IT ALREADY
@@ -332,7 +335,9 @@ export function effectOf(tags: readonly string[] | undefined): {
   if (labels.has("destructiveHint"))
     return { effect: "write", destructive: true };
   if (labels.has("readOnlyHint")) return { effect: "read", destructive: false };
-  return { effect: "write", destructive: false };
+  if (labels.has("createHint") || labels.has("updateHint"))
+    return { effect: "write", destructive: false };
+  return { effect: "write", destructive: false, unclassified: true };
 }
 
 /**
@@ -1006,7 +1011,7 @@ export async function listTools(connection: {
   }
 
   return offered.map((action) => {
-    const { effect, destructive } = effectOf(action.tags);
+    const { effect, destructive, unclassified } = effectOf(action.tags);
     /*
      * TRIMMED HERE BECAUSE IT IS TRIMMED AT THE OTHER END. {@link callTool} trims the recorded
      * version and refuses an empty one, so a whitespace-only string that counted as a version
@@ -1053,6 +1058,7 @@ export async function listTools(connection: {
       inputSchema: action.inputParameters ?? {},
       effect,
       destructive,
+      ...(unclassified ? { unclassified } : {}),
       ...(version ? { version } : {}),
     };
   });

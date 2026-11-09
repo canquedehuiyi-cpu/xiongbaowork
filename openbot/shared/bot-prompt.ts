@@ -10,6 +10,25 @@
  * and then said it could not, never calling `computer_request_help` to have a person sign in.
  */
 /**
+ * Who asks the person before a delete: OpenBot, not the Bot.
+ *
+ * OpenBot always puts a card in front of the person before a delete, an archive, or an app tool its
+ * app marks destructive, whatever their rules say (`destructiveFloor` in
+ * `server/src/approvals/policy.ts`). A Bot that asked first as well had the person answer twice for
+ * one delete. The card names the exact action, so it is the one that stays.
+ */
+export const APPROVAL_ASKS_GUIDANCE =
+  "Before you delete or archive anything, or use a tool marked destructive, OpenBot itself asks the person on a card that shows exactly what you are about to do. So do not ask them first: say what you are going to do and call the tool, and they are asked once, by OpenBot.";
+
+/**
+ * Added to the description of an app tool its app marks destructive (MCP's `destructiveHint`,
+ * Composio's destructive label) where the Bot is offered it (`server/src/plugins/tools.ts`). Its name
+ * need not say it deletes anything, so the Bot is told on the tool itself.
+ */
+export const DESTRUCTIVE_TOOL_NOTE =
+  "This tool is marked destructive: it deletes or overwrites something, so OpenBot asks the person before it runs. Do not ask them first.";
+
+/**
  * The order of operations that makes the computer tools usable.
  *
  * The prompt requires snapshot-first computer use. Element refs are opaque and valid only with the
@@ -63,6 +82,7 @@ const COMPUTER_GUIDANCE_LINES = [
   "Some actions are refused by this deployment's policy. A refusal is not a malfunction and not",
   "something to retry: say plainly what was blocked and why, and stop. Do not try another route to",
   "the same thing.",
+  APPROVAL_ASKS_GUIDANCE,
   "Say what you found or did in plain language, briefly.",
 ];
 

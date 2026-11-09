@@ -196,6 +196,7 @@ tests/entra-profile.test.ts
 tests/github-oauth-signup.test.ts
 tests/google-drive-rest.test.ts
 tests/google-oauth-transport.test.ts
+tests/granted-tools-destructive.test.ts
 tests/group-conversations.integration.test.ts
 tests/group-conversations.test.ts
 tests/guards.test.ts

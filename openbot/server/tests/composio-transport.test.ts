@@ -278,24 +278,22 @@ describe("what a label means", () => {
   });
 
   test("idempotent is not a read, because deleting is idempotent", () => {
+    // Nor is it a word about what the action does, so the action is unclassified.
     expect(effectOf(["idempotentHint", "openWorldHint"])).toEqual({
       effect: "write",
       destructive: false,
+      unclassified: true,
     });
   });
 
-  test("no label at all is a write", () => {
+  test("no label at all is an unclassified write, not a destructive one", () => {
     // Measured across five apps and never seen, so this branch guards the future rather than the
-    // present: an app that labels nothing, or a label added later, must land on write.
-    expect(effectOf([])).toEqual({ effect: "write", destructive: false });
-    expect(effectOf(undefined)).toEqual({
-      effect: "write",
-      destructive: false,
-    });
-    expect(effectOf(["gmail", "inbox"])).toEqual({
-      effect: "write",
-      destructive: false,
-    });
+    // present: an app that labels nothing, or a label added later, must land on write. 记为
+    // unclassified：按写操作处理，不算 destructive，后台读取对它和 destructive 一样谨慎。
+    const silent = { effect: "write", destructive: false, unclassified: true };
+    expect(effectOf([])).toEqual(silent);
+    expect(effectOf(undefined)).toEqual(silent);
+    expect(effectOf(["gmail", "inbox"])).toEqual(silent);
   });
 
   test("destructive wins over read-only when both are present", () => {
