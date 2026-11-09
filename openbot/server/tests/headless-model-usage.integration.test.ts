@@ -15,6 +15,7 @@ import {
   recordHeadlessModelUsage,
 } from "../src/admin/controls";
 import { createHandoffDelivery } from "../src/agents/handoff-delivery";
+import { serverTurnAdmission } from "../src/agents/turn-admission";
 import { createAuditStore } from "../src/audit";
 import type { AppVariables } from "../src/auth/guards";
 import type { AgentChannel, ChannelStore } from "../src/channels/routes";
@@ -385,6 +386,8 @@ test("a hand-off delivered from the platform-framed work loop records under the 
     { type: "RUN_FINISHED" },
   ] as unknown as BaseEvent[];
   const hop = createHandoffDelivery({
+    // The pause guard and the enterprise controls, as the server wires every hop.
+    admission: serverTurnAdmission,
     agentFor: async () =>
       ({
         threadId: "",
