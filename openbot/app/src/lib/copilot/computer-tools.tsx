@@ -13,6 +13,11 @@ import {
   runNavigation,
 } from "@/lib/computers/handoff";
 import {
+  type ComputerMachine,
+  computerToolPlace,
+  DEVICE_RUN_COMMAND_DESCRIPTION,
+} from "../../../../shared/computer-tool-words";
+import {
   DESKTOP_REF,
   DESKTOP_WINDOW_ID,
 } from "../../../../shared/desktop-control";
@@ -195,7 +200,9 @@ export function ComputerTools() {
   const bot = useActiveBotHolder();
   // Not offered to a Team Bot's teammates; see useComputerAvailable.
   const available = useComputerAvailable();
-  const localTools = useLocalToolsAllowed();
+  const { allowed: localTools, machine } = useLocalTools();
+  const onDevice = machine === "device";
+  const place = computerToolPlace(machine);
 
   useFrontendTool({
     available,
@@ -587,10 +594,11 @@ export function ComputerTools() {
   useFrontendTool({
     available,
     name: "computer_list_files",
-    description:
-      "List what is in your workspace: every file and folder you have saved, with sizes. Call this " +
-      "FIRST when you are asked what files you have, or before reading a file whose exact name you " +
-      "are not sure of. Never guess a filename.",
+    description: onDevice
+      ? `List files and folders in ${place}. Call first before reading an uncertain filename. Never guess a filename.`
+      : "List what is in your workspace: every file and folder you have saved, with sizes. Call this " +
+        "FIRST when you are asked what files you have, or before reading a file whose exact name you " +
+        "are not sure of. Never guess a filename.",
     parameters: z.object({
       path: z
         .string()
@@ -635,10 +643,11 @@ export function ComputerTools() {
   useFrontendTool({
     available,
     name: "computer_read_file",
-    description:
-      "Read a file you saved earlier in your own workspace. Paths are relative to your workspace, " +
-      "such as notes.md or reports/august.csv. Your workspace survives between conversations, so use " +
-      "this to pick up notes you made before.",
+    description: onDevice
+      ? `Read a saved file relative to ${place}, such as notes.md or reports/august.csv. The folder survives between conversations, so use this to pick up notes you made before.`
+      : "Read a file you saved earlier in your own workspace. Paths are relative to your workspace, " +
+        "such as notes.md or reports/august.csv. Your workspace survives between conversations, so use " +
+        "this to pick up notes you made before.",
     parameters: z.object({
       path: z
         .string()
@@ -681,20 +690,25 @@ export function ComputerTools() {
   useFrontendTool({
     available,
     name: "computer_run_command",
-    description:
-      "Run a shell command on your own computer. Use this for anything the browser cannot do: " +
-      "installing a tool you need, processing a file you saved, running a script. The working " +
-      "directory is your workspace, so paths are relative to it and files you write here are the " +
-      "same ones the file tools see. Commands run in bash, so pipes and && work. Long output is " +
-      "truncated from the start, and a command that runs too long is stopped. " +
-      "You are not the root user, so anything that writes outside your workspace needs sudo, " +
-      "which asks for no password: installing a package is " +
-      "`sudo apt-get update && sudo apt-get install -y <package>`. If sudo is refused, this " +
-      "computer does not grant it, so say so rather than retrying.",
+    description: onDevice
+      ? DEVICE_RUN_COMMAND_DESCRIPTION
+      : "Run a shell command on your own computer. Use this for anything the browser cannot do: " +
+        "installing a tool you need, processing a file you saved, running a script. The working " +
+        "directory is your workspace, so paths are relative to it and files you write here are the " +
+        "same ones the file tools see. Commands run in bash, so pipes and && work. Long output is " +
+        "truncated from the start, and a command that runs too long is stopped. " +
+        "You are not the root user, so anything that writes outside your workspace needs sudo, " +
+        "which asks for no password: installing a package is " +
+        "`sudo apt-get update && sudo apt-get install -y <package>`. If sudo is refused, this " +
+        "computer does not grant it, so say so rather than retrying.",
     parameters: z.object({
       command: z
         .string()
-        .describe("The command to run, such as: sudo apt-get install -y jq"),
+        .describe(
+          onDevice
+            ? "The command to run, written for the paired machine's own system"
+            : "The command to run, such as: sudo apt-get install -y jq",
+        ),
     }),
     handler: async (
       input: { command: string },
@@ -767,10 +781,11 @@ export function ComputerTools() {
   useFrontendTool({
     available,
     name: "computer_write_file",
-    description:
-      "Save a file in your own workspace so you still have it later. Paths are relative to your " +
-      "workspace and folders are created as needed. Set append to true to add to the end of an " +
-      "existing file rather than replacing it. Text only.",
+    description: onDevice
+      ? `Save text in ${place}. Paths are relative to it and folders are created as needed. Set append to true to add to the end of an existing file rather than replacing it.`
+      : "Save a file in your own workspace so you still have it later. Paths are relative to your " +
+        "workspace and folders are created as needed. Set append to true to add to the end of an " +
+        "existing file rather than replacing it. Text only.",
     parameters: z.object({
       path: z
         .string()
@@ -871,25 +886,34 @@ export function ComputerTools() {
 
 /**
  * Whether this person is offered the Bot owner's local apps and desktop, as the server answers it:
- * device mode, and the Bot's owner asking, which is the rule the unattended run's tools follow.
+ * device mode, and the Bot's owner asking, which is the rule the unattended run's tools follow. Also
+ * where the shell and file tools act (`machine`), which is the server's and true for every viewer.
  *
  * No until the server says yes, unlike the computer tools above: these act on the owner's own
  * machine, so nobody else is shown them even for a moment. The gateway refuses everyone else anyway.
  */
-function useLocalToolsAllowed(): boolean {
+function useLocalTools(): { allowed: boolean; machine: ComputerMachine } {
   const declared = useDeclaredBotId();
   const { data } = useQuery({
     queryKey: ["computers", "local-tools", declared ?? ""],
-    queryFn: () =>
-      client<boolean>(
+    queryFn: async () => {
+      const response = await client(
         `/api/computers/${encodeURIComponent(declared ?? "")}/local-tools`,
-        "allowed",
         { fallback: "读不到本机应用是否可用。" },
-      ),
+      );
+      return (await response.json()) as {
+        allowed?: boolean;
+        machine?: ComputerMachine;
+      };
+    },
     enabled: declared !== undefined,
     staleTime: 60_000,
   });
-  return data === true;
+  return {
+    allowed: data?.allowed === true,
+    // The cloud words stand until the server says this is a paired machine: they are the old ones.
+    machine: data?.machine === "device" ? "device" : "workspace",
+  };
 }
 
 /** What the local-app and desktop results carry that their transcript lines read back. */
