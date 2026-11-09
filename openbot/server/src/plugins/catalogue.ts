@@ -50,8 +50,16 @@ export type CatalogueAuth =
       kind: "user-oauth";
       authorizationUrl: string;
       tokenUrl: string;
-      /** Where a disconnect is sent, so revocation happens at the vendor and not just here. */
-      revokeUrl: string;
+      /**
+       * Where a disconnect is sent, so revocation happens at the vendor and not just here.
+       *
+       * Absent for a vendor whose published metadata names no revocation endpoint (GitHub, Slack,
+       * HubSpot and Figma among the MCP market's second batch): an address guessed for it would be
+       * a source contract nobody read. Nothing calls any entry's `revokeUrl` today — see Baidu's
+       * entry — so absence changes no behaviour; it only declines to record a URL that was not
+       * published.
+       */
+      revokeUrl?: string;
       /**
        * What to ask a person to consent to. Narrow on purpose: a scope granted by everybody who
        * connects and used by nothing is a permission nobody remembers agreeing to. Empty for a
@@ -150,6 +158,11 @@ export type CatalogueEntry = {
  * source contract for a vendor nobody had connected, and a screen offering five untried connectors
  * asserts more than this deployment can stand behind. They are in the history if they are wanted
  * back, and re-adding one is a review of that vendor rather than a revert.
+ *
+ * Atlassian and Slack are back in the second batch, and that was such a review rather than a revert:
+ * each is now the vendor's own hosted MCP server reached as the person asking (`user-oauth`), not the
+ * shared bearer token the removed entries held, with its OAuth addresses read from the vendor's own
+ * published metadata. Box, Salesforce and ServiceNow stay out.
  *
  * The MCP market's first batch (below the Parallel entries) is the same rule applied forwards rather
  * than an exception to it: nine servers, each vendor-hosted, each answered from this deployment's own
@@ -579,6 +592,575 @@ export const CATALOGUE: readonly CatalogueEntry[] = Object.freeze([
     ]),
     docsUrl: "https://developers.notion.com/guides/mcp/build-mcp-client",
   },
+
+  /*
+   * MCP MARKET, SECOND BATCH. Ten vendor-hosted remote servers reached as the person asking, each on
+   * the shape Notion established above. The evidence is narrower than the first batch's and the
+   * difference matters: on 2026-11-09, from the JD Cloud network this deployment is served from, each
+   * MCP endpoint answered an anonymous request with 401, and each vendor's published OAuth metadata
+   * (RFC 9728 protected-resource, then RFC 8414 authorization-server) was read. Nobody logged in, so
+   * NO TOOL LISTING WAS SEEN for any of them.
+   *
+   * Every OAuth address below is copied from that metadata, never composed: the comment on each says
+   * which document. A vendor whose metadata publishes no revocation endpoint has no `revokeUrl`, and
+   * nothing calls one today anyway (see Baidu's entry).
+   *
+   * Two client shapes, decided by the vendor rather than by us. Where the metadata publishes a
+   * `registration_endpoint` the entry is `clientRegistration: "dynamic"` and registers itself on the
+   * first connect (RFC 7591), a public client proven by PKCE. Where it does not, an administrator
+   * registers an app at the vendor and pastes its client id and secret into this deployment, as for
+   * Baidu (`POST /servers/:id/oauth-client`). Either way the shared flow sends S256 PKCE, joins
+   * `scopes` with a space, and REQUIRES a refresh token from the code redemption: a vendor that
+   * returns none fails the connect rather than storing an hour of access. Where that depends on a
+   * setting of the vendor-side app, the entry says which.
+   *
+   * Scopes lean read-only where the vendor offers a read-only one. Where it does, the vendor refuses
+   * the writes as well; where it does not (empty, or one all-or-nothing scope), `writeTools` and the
+   * action policy are the whole write barrier, exactly as for Notion.
+   *
+   * THE WRITE LISTS ARE NOT RECONCILED. 未登录实测，首次刷新工具时必须对账: the names come from each
+   * vendor's documentation and repository, are deliberately over-inclusive (a name a server never
+   * advertises costs nothing here), and the first Refresh tools after somebody connects is where each
+   * live listing is compared with them. An advertised tool missing from a list is a READ to
+   * {@link classifyTool}, so any tool on that listing that changes something is added before it is
+   * granted.
+   *
+   * NOT ENTERED: Zapier (`mcp.zapier.com`). Its tools are whatever actions each person configured in
+   * Zapier, named at runtime, and nearly all of them send or write. No reviewed list can name them in
+   * advance, and an advertised name that no list holds classifies as a read, so this catalogue cannot
+   * express that server safely; it waits for a shape that treats every tool of an entry as a write.
+   *
+   * None of these opts into owner assembly.
+   */
+  {
+    key: "github",
+    title: "GitHub（只读）",
+    vendor: "GitHub",
+    summary:
+      "提问的人自己有权访问的 GitHub 仓库、Issue、PR、Actions 等（只读端点）。",
+    /*
+     * GitHub's own hosted server, on the READ-ONLY path its remote-server documentation publishes
+     * (`/mcp/readonly`, the default toolsets restricted to tools that only read). Chosen over `/mcp/`
+     * because GitHub offers no read-only OAuth scope worth the name, so the endpoint is the vendor-side
+     * barrier that a scope is for other vendors: the server does not advertise its writes at all.
+     * Widening to `/mcp/` is its own review. Measured on 2026-11-09: `/mcp/` answered 401. The
+     * read-only path was not probed separately; GitHub documents it as the same server, and the first
+     * connect is where that is confirmed.
+     */
+    host: "https://api.githubcopilot.com",
+    path: "/mcp/readonly",
+    auth: {
+      kind: "user-oauth",
+      /*
+       * From https://github.com/login/oauth 的 RFC 8414 元数据（/.well-known/oauth-authorization-server），
+       * 2026-11-09 京东云实测. No registration endpoint and no revocation endpoint published.
+       *
+       * The administrator registers a GITHUB APP, not an OAuth App, with "Expire user authorization
+       * tokens" left on. An OAuth App's user token never expires and comes with no refresh token, and
+       * the shared flow refuses a redemption without one, so an OAuth App can never connect here. A
+       * GitHub App's own permissions (set read-only by whoever registers it) are its scoping: GitHub
+       * ignores `scope` for a GitHub App, so none is sent rather than one that asserts nothing.
+       *
+       * GitHub's token endpoint answers form-encoded unless asked for JSON; the shared flow sends
+       * `Accept: application/json` on both token requests for exactly this.
+       */
+      authorizationUrl: "https://github.com/login/oauth/authorize",
+      tokenUrl: "https://github.com/login/oauth/access_token",
+      scopes: Object.freeze([]),
+    },
+    /*
+     * Named although the read-only path advertises none of them — the Drive argument: this list keeps
+     * a widening of the path from turning a write into something the policy has never heard of.
+     * From the github-mcp-server README, plus older spellings of the same tools.
+     */
+    writeTools: Object.freeze([
+      "actions_run_trigger",
+      "add_comment_to_pending_review",
+      "add_issue_comment",
+      "add_pull_request_review_comment_to_pending_review",
+      "add_reply_to_pull_request_comment",
+      "add_sub_issue",
+      "assign_copilot_to_issue",
+      "assign_copilot_to_issue_with_intent",
+      "cancel_workflow_run",
+      "create_and_submit_pull_request_review",
+      "create_branch",
+      "create_gist",
+      "create_issue",
+      "create_or_update_file",
+      "create_pending_pull_request_review",
+      "create_pull_request",
+      "create_pull_request_with_copilot",
+      "create_repository",
+      "create_repository_ruleset",
+      "custom_properties_write",
+      "delete_file",
+      "delete_pending_pull_request_review",
+      "delete_workflow_run_logs",
+      "disable_pr_auto_merge",
+      "discussion_comment_write",
+      "dismiss_notification",
+      "enable_pr_auto_merge",
+      "fork_repository",
+      "issue_write",
+      "label_write",
+      "manage_notification_subscription",
+      "manage_repository_notification_subscription",
+      "mark_all_notifications_read",
+      "merge_pull_request",
+      "projects_write",
+      "pull_request_review_write",
+      "push_files",
+      "remove_sub_issue",
+      "reprioritize_sub_issue",
+      "request_copilot_review",
+      "rerun_failed_jobs",
+      "rerun_workflow_run",
+      "resolve_review_thread",
+      "run_secret_scanning",
+      "run_workflow",
+      "star_repository",
+      "sub_issue_write",
+      "submit_pending_pull_request_review",
+      "unresolve_review_thread",
+      "unstar_repository",
+      "update_gist",
+      "update_issue",
+      "update_issue_comment",
+      "update_pull_request",
+      "update_pull_request_branch",
+    ]),
+    docsUrl:
+      "https://github.com/github/github-mcp-server/blob/main/docs/remote-server.md",
+  },
+  {
+    key: "linear",
+    title: "Linear",
+    vendor: "Linear",
+    summary: "提问的人自己 Linear 工作区里的 Issue、项目、周期与文档。",
+    host: "https://mcp.linear.app",
+    path: "/mcp",
+    auth: {
+      kind: "user-oauth",
+      // From https://mcp.linear.app/.well-known/oauth-authorization-server，2026-11-09 京东云实测.
+      authorizationUrl: "https://mcp.linear.app/authorize",
+      tokenUrl: "https://mcp.linear.app/token",
+      // Linear's published revocation_endpoint is its token endpoint, as Notion's is.
+      revokeUrl: "https://mcp.linear.app/token",
+      /*
+       * `read` alone out of `read write openid email`: Linear refuses the writes below at the vendor
+       * until somebody reviews asking for `write`. No identity scopes, since nothing here reads them.
+       */
+      scopes: Object.freeze(["read"]),
+      clientRegistration: "dynamic",
+      registrationUrl: "https://mcp.linear.app/register",
+    },
+    writeTools: Object.freeze([
+      "create_attachment",
+      "create_comment",
+      "create_document",
+      "create_issue",
+      "create_issue_label",
+      "create_project",
+      "create_project_label",
+      "delete_attachment",
+      "delete_comment",
+      "delete_issue",
+      "save_comment",
+      "save_document",
+      "save_issue",
+      "save_milestone",
+      "save_project",
+      "update_comment",
+      "update_document",
+      "update_issue",
+      "update_project",
+    ]),
+    docsUrl: "https://linear.app/docs/mcp",
+  },
+  {
+    key: "atlassian",
+    title: "Atlassian（Jira / Confluence）",
+    vendor: "Atlassian",
+    summary:
+      "提问的人自己有权访问的 Jira 事务、Confluence 页面与 Compass 组件。",
+    /*
+     * Atlassian's hosted Rovo MCP server. The site administrator of each Atlassian organisation must
+     * first allow this deployment's callback domain (Atlassian Administration, Rovo MCP server
+     * settings), or consent fails at Atlassian whatever this entry says.
+     */
+    host: "https://mcp.atlassian.com",
+    path: "/v1/mcp",
+    auth: {
+      kind: "user-oauth",
+      // From https://mcp.atlassian.com/.well-known/oauth-authorization-server，2026-11-09 京东云实测.
+      authorizationUrl: "https://mcp.atlassian.com/v1/authorize",
+      tokenUrl: "https://mcp.atlassian.com/v1/token",
+      revokeUrl: "https://mcp.atlassian.com/v1/token",
+      /*
+       * Atlassian publishes no scopes for this server: the person's own Jira and Confluence
+       * permissions, chosen on the consent screen, are the scoping. As for Notion, `writeTools` and
+       * the action policy are the whole write barrier. The metadata also allows `plain` PKCE; the
+       * shared flow only ever sends S256.
+       */
+      scopes: Object.freeze([]),
+      clientRegistration: "dynamic",
+      registrationUrl: "https://mcp.atlassian.com/v1/register",
+    },
+    writeTools: Object.freeze([
+      "addCommentToJiraIssue",
+      "addWorklogToJiraIssue",
+      "createCompassComponent",
+      "createCompassComponentRelationship",
+      "createCompassCustomFieldDefinition",
+      "createConfluenceFooterComment",
+      "createConfluenceInlineComment",
+      "createConfluencePage",
+      "createIssueLink",
+      "createJiraIssue",
+      "deleteCompassCustomFieldDefinition",
+      "editJiraIssue",
+      "transitionJiraIssue",
+      "updateCompassCustomFieldDefinition",
+      "updateConfluencePage",
+    ]),
+    docsUrl:
+      "https://support.atlassian.com/atlassian-rovo-mcp-server/docs/use-atlassian-rovo-mcp-server/",
+  },
+  {
+    key: "sentry",
+    title: "Sentry",
+    vendor: "Sentry",
+    summary: "提问的人自己 Sentry 组织里的项目、Issue、事件与 Trace。",
+    host: "https://mcp.sentry.dev",
+    path: "/mcp",
+    auth: {
+      kind: "user-oauth",
+      // From https://mcp.sentry.dev/.well-known/oauth-authorization-server，2026-11-09 京东云实测.
+      authorizationUrl: "https://mcp.sentry.dev/oauth/authorize",
+      tokenUrl: "https://mcp.sentry.dev/oauth/token",
+      revokeUrl: "https://mcp.sentry.dev/oauth/token",
+      /*
+       * `org:read` alone. Every other scope Sentry publishes (`project:write`, `team:write`,
+       * `event:write`, `alerts:write`) is a write; Sentry's server is read-only unless one is
+       * granted. Whether `org:read` alone lists every read tool is checked on first connect.
+       */
+      scopes: Object.freeze(["org:read"]),
+      clientRegistration: "dynamic",
+      registrationUrl: "https://mcp.sentry.dev/oauth/register",
+    },
+    writeTools: Object.freeze([
+      // Seer runs are billed to the organisation, so starting one is an effect.
+      "analyze_issue_with_seer",
+      "begin_seer_issue_fix",
+      "create_dsn",
+      "create_project",
+      "create_team",
+      "update_issue",
+      "update_project",
+      // Sentry's embedded agent tool, which can call any of the above.
+      "use_sentry",
+    ]),
+    docsUrl: "https://docs.sentry.io/ai/mcp/",
+  },
+  {
+    key: "stripe",
+    title: "Stripe",
+    vendor: "Stripe",
+    summary:
+      "提问的人自己 Stripe 账户里的客户、发票、订阅与支付。涉及资金，写操作务必逐次审批。",
+    /*
+     * Stripe's hosted server, served at the origin itself, so the path is the root. The
+     * authorization server is a different host (`access.stripe.com`) from the MCP host; the catalogue
+     * pins each address separately, so that needs nothing extra.
+     */
+    host: "https://mcp.stripe.com",
+    path: "/",
+    auth: {
+      kind: "user-oauth",
+      /*
+       * From https://access.stripe.com/mcp 的 RFC 8414 元数据（/.well-known/oauth-authorization-server），
+       * 2026-11-09 京东云实测.
+       */
+      authorizationUrl: "https://access.stripe.com/mcp/oauth2/authorize",
+      tokenUrl: "https://access.stripe.com/mcp/oauth2/token",
+      revokeUrl: "https://access.stripe.com/mcp/oauth2/revoke",
+      /*
+       * `mcp` is the only scope Stripe publishes, and it is all or nothing: there is no read-only
+       * one. `writeTools` and the action policy are the whole write barrier for money.
+       */
+      scopes: Object.freeze(["mcp"]),
+      clientRegistration: "dynamic",
+      registrationUrl: "https://access.stripe.com/mcp/oauth2/register",
+    },
+    /*
+     * Money moves through these, so every create, update, cancel, refund, finalize, send, pay and
+     * delete Stripe documents or might, including names not yet seen on the hosted server. The
+     * documented ones are from docs.stripe.com/mcp and the stripe/agent-toolkit repository; the rest
+     * are the same API's other money-moving calls, listed so that one appearing on a refresh is
+     * already a write.
+     */
+    writeTools: Object.freeze([
+      "cancel_payment_intent",
+      "cancel_refund",
+      "cancel_subscription",
+      "capture_payment_intent",
+      "close_dispute",
+      "confirm_payment_intent",
+      "create_checkout_session",
+      "create_coupon",
+      "create_customer",
+      "create_invoice",
+      "create_invoice_item",
+      "create_payment_intent",
+      "create_payment_link",
+      "create_payout",
+      "create_price",
+      "create_product",
+      "create_promotion_code",
+      "create_refund",
+      "create_setup_intent",
+      "create_subscription",
+      "delete_coupon",
+      "delete_customer",
+      "delete_invoice",
+      "expire_checkout_session",
+      "finalize_invoice",
+      "pay_invoice",
+      "send_invoice",
+      "update_customer",
+      "update_dispute",
+      "update_invoice",
+      "update_payment_link",
+      "update_price",
+      "update_product",
+      "update_subscription",
+      "void_invoice",
+    ]),
+    docsUrl: "https://docs.stripe.com/mcp",
+  },
+  {
+    key: "slack",
+    title: "Slack",
+    vendor: "Slack",
+    summary:
+      "以提问的人自己的身份搜索和读取 Slack 消息、频道、线程与 Canvas（只读授权）。",
+    host: "https://mcp.slack.com",
+    path: "/mcp",
+    auth: {
+      kind: "user-oauth",
+      /*
+       * From https://mcp.slack.com/.well-known/oauth-authorization-server，2026-11-09 京东云实测. Slack's
+       * user-token pair; no registration endpoint and no revocation endpoint published.
+       *
+       * The administrator creates a Slack app (Slack may require it to be approved for its MCP
+       * server), adds this deployment's redirect URI, and turns ON token rotation: without it Slack
+       * issues no refresh token, and the shared flow refuses a redemption without one.
+       */
+      authorizationUrl: "https://slack.com/oauth/v2_user/authorize",
+      tokenUrl: "https://slack.com/api/oauth.v2.user.access",
+      /*
+       * User scopes, read-only. Slack decides which tools a token sees from the scopes granted, so
+       * leaving out `chat:write`, `canvases:write` and every other `:write` keeps the sending tools
+       * away at the vendor. The probe read only the first twelve of Slack's published scopes; the
+       * `*:history` and `search:read.*` names are from Slack's MCP documentation. 首次接入时须对照
+       * Slack 官方 MCP 文档核对这一列表（例如是否还需要 `users:read`）。
+       */
+      scopes: Object.freeze([
+        "canvases:read",
+        "channels:history",
+        "channels:read",
+        "files:read",
+        "groups:history",
+        "groups:read",
+        "im:history",
+        "mpim:history",
+        "search:read.im",
+        "search:read.mpim",
+        "search:read.private",
+        "search:read.public",
+      ]),
+    },
+    // Both spellings: Slack's own `slack_` prefix and the bare names third-party listings show.
+    writeTools: Object.freeze([
+      "create_canvas",
+      "schedule_message",
+      "send_message",
+      "send_message_draft",
+      "slack_create_canvas",
+      "slack_schedule_message",
+      "slack_send_message",
+      "slack_send_message_draft",
+      "slack_update_canvas",
+      "update_canvas",
+    ]),
+    docsUrl: "https://docs.slack.dev/ai/slack-mcp-server/",
+  },
+  {
+    key: "hubspot",
+    title: "HubSpot CRM",
+    vendor: "HubSpot",
+    summary: "提问的人自己有权访问的 HubSpot 联系人、公司、交易与工单。",
+    // HubSpot's hosted server, served at the origin itself, so the path is the root.
+    host: "https://mcp.hubspot.com",
+    path: "/",
+    auth: {
+      kind: "user-oauth",
+      /*
+       * From https://mcp.hubspot.com/.well-known/oauth-authorization-server，2026-11-09 京东云实测. No
+       * registration endpoint and no revocation endpoint published.
+       *
+       * The administrator creates an MCP auth app in HubSpot (Development > MCP Auth Apps) and pastes
+       * its client id and secret. HubSpot publishes no scopes for it: access follows the connecting
+       * user's own HubSpot permissions, so no scope is sent and, as for Notion, `writeTools` and the
+       * action policy are the whole write barrier.
+       */
+      authorizationUrl: "https://mcp.hubspot.com/oauth/authorize/user",
+      tokenUrl: "https://mcp.hubspot.com/oauth/v3/token",
+      scopes: Object.freeze([]),
+    },
+    writeTools: Object.freeze([
+      "batch_create_crm_objects",
+      "batch_update_crm_objects",
+      "create_crm_object",
+      "create_engagement",
+      "manage_crm_objects",
+      // Sends text to HubSpot on the person's behalf.
+      "submit_feedback",
+      "update_crm_object",
+      "update_engagement",
+    ]),
+    docsUrl:
+      "https://developers.hubspot.com/docs/apps/developer-platform/build-apps/integrate-with-the-remote-hubspot-mcp-server",
+  },
+  {
+    key: "asana",
+    title: "Asana",
+    vendor: "Asana",
+    summary: "提问的人自己 Asana 工作区里的任务、项目与评论。",
+    host: "https://mcp.asana.com",
+    path: "/v2/mcp",
+    auth: {
+      kind: "user-oauth",
+      /*
+       * From https://app.asana.com/.well-known/oauth-authorization-server，2026-11-09 京东云实测. No
+       * registration endpoint published, so the administrator registers an "MCP app" in Asana's
+       * developer console and pastes its client id and secret.
+       */
+      authorizationUrl: "https://app.asana.com/-/oauth_authorize",
+      tokenUrl: "https://app.asana.com/-/oauth_token",
+      revokeUrl: "https://app.asana.com/-/oauth_revoke",
+      /*
+       * `default` is the one scope the metadata publishes, and it is Asana's full access: there is
+       * no read-only one for this server. `writeTools` and the action policy are the write barrier.
+       */
+      scopes: Object.freeze(["default"]),
+    },
+    // Both the V2 server's bare names and the `asana_` names of Asana's earlier server.
+    writeTools: Object.freeze([
+      "add_comment",
+      "add_followers",
+      "add_task_dependencies",
+      "add_task_dependents",
+      "asana_add_task_dependencies",
+      "asana_add_task_dependents",
+      "asana_add_task_followers",
+      "asana_create_project",
+      "asana_create_project_status",
+      "asana_create_task",
+      "asana_create_task_story",
+      "asana_delete_project_status",
+      "asana_delete_task",
+      "asana_remove_task_followers",
+      "asana_set_parent_for_task",
+      "asana_update_task",
+      "create_project",
+      "create_project_status",
+      "create_task",
+      "delete_task",
+      "remove_followers",
+      "set_parent_for_task",
+      "update_project",
+      "update_task",
+    ]),
+    docsUrl:
+      "https://developers.asana.com/docs/integrating-with-asanas-mcp-server",
+  },
+  {
+    key: "cloudflare-api",
+    title: "Cloudflare API",
+    vendor: "Cloudflare",
+    summary:
+      "以提问的人自己的 Cloudflare 账户调用 Cloudflare API（只申请只读权限）。",
+    /*
+     * Cloudflare's consolidated API server from its official mcp-server-cloudflare repository: one
+     * tool searches the API and another executes code against it. That `execute` reaches the whole
+     * Cloudflare API is the reason the scopes below are read-only and the reason it is a write.
+     */
+    host: "https://mcp.cloudflare.com",
+    path: "/mcp",
+    auth: {
+      kind: "user-oauth",
+      // From https://mcp.cloudflare.com/.well-known/oauth-authorization-server，2026-11-09 京东云实测.
+      authorizationUrl: "https://mcp.cloudflare.com/authorize",
+      tokenUrl: "https://mcp.cloudflare.com/token",
+      revokeUrl: "https://mcp.cloudflare.com/token",
+      /*
+       * Read scopes only, and only the ones the probe saw (it read the first twelve of a longer
+       * list). `offline_access` is what asks Cloudflare for the refresh token the shared flow
+       * requires. Reads of zones, DNS, Workers and so on need further `:read` scopes, reviewed on
+       * first connect against the full published list; no `:write` scope is asked for.
+       */
+      scopes: Object.freeze(["offline_access", "user:read", "account:read"]),
+      clientRegistration: "dynamic",
+      registrationUrl: "https://mcp.cloudflare.com/register",
+    },
+    writeTools: Object.freeze([
+      "execute",
+      // An account selector on Cloudflare's per-product servers; it changes server-side state.
+      "set_active_account",
+    ]),
+    docsUrl: "https://github.com/cloudflare/mcp-server-cloudflare",
+  },
+  {
+    key: "figma",
+    title: "Figma",
+    vendor: "Figma",
+    summary: "读取提问的人有权访问的 Figma 设计稿上下文、截图与变量。",
+    /*
+     * Figma's hosted server. Figma admits dynamically registered clients by name from its own MCP
+     * client catalogue, so registration may be refused until this deployment is admitted there; that
+     * surfaces as Connect answering 502, and changes nothing else.
+     */
+    host: "https://mcp.figma.com",
+    path: "/mcp",
+    auth: {
+      kind: "user-oauth",
+      /*
+       * From https://api.figma.com/.well-known/oauth-authorization-server，2026-11-09 京东云实测. The
+       * consent page is on www.figma.com and the token and registration endpoints on api.figma.com,
+       * as published. No revocation endpoint published.
+       */
+      authorizationUrl: "https://www.figma.com/oauth/mcp",
+      tokenUrl: "https://api.figma.com/v1/oauth/token",
+      // The one scope Figma publishes for this server, and not a read-only one.
+      scopes: Object.freeze(["mcp:connect"]),
+      clientRegistration: "dynamic",
+      registrationUrl: "https://api.figma.com/v1/oauth/mcp/register",
+    },
+    writeTools: Object.freeze([
+      "add_code_connect_map",
+      "create_new_file",
+      "generate_diagram",
+      "generate_figma_design",
+      "send_code_connect_mappings",
+      "upload_assets",
+      "use_figma",
+    ]),
+    docsUrl:
+      "https://developers.figma.com/docs/figma-mcp-server/remote-server-installation",
+  },
+
   {
     key: "routines",
     title: "Routines",
