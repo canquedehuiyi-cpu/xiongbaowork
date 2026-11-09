@@ -51,6 +51,12 @@ async function throwawayDatabase(): Promise<string> {
   return url.href;
 }
 
+/*
+ * Cleanup only, so it gets more than Bun's five-second hook default. Every DROP DATABASE forces a
+ * checkpoint, which took about a second on CI's PostgreSQL 17 with a full suite's buffers dirty, and
+ * this drops one database per case: six of them ran the hook past five seconds and failed the shard as
+ * an "(unnamed)" test while every case had passed.
+ */
 afterAll(async () => {
   const admin = postgres(administrative.href, { max: 1, onnotice: () => {} });
   try {
@@ -60,7 +66,7 @@ afterAll(async () => {
   } finally {
     await admin.end({ timeout: 5 });
   }
-});
+}, 60_000);
 
 type Entry = { tag: string; when: number; sql: string };
 
