@@ -415,6 +415,7 @@ tests/platform-model-pool-routes.test.ts
 tests/platform-model-pool.integration.test.ts
 tests/platform-store.test.ts
 tests/plugin-call-args-validation.test.ts
+tests/plugin-catalogue-github-reads.test.ts
 tests/plugin-catalogue-market.test.ts
 tests/plugin-catalogue.test.ts
 tests/plugin-connect-lists-tools.integration.test.ts
