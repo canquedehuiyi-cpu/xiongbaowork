@@ -33,6 +33,11 @@ import {
   navigateWebPage,
   type PagePurpose,
 } from "./navigation";
+import {
+  createPerBotComputer,
+  PerBotUnavailableError,
+  perBotUsersEnabled,
+} from "./per-bot";
 import { createProfiles, numberFromEnv, VIEWPORT } from "./profiles";
 import {
   parseExecTimeout,
@@ -53,7 +58,6 @@ import { createShell } from "./shell";
 import { fillSignIn, parseSignInFill } from "./sign-in";
 import { startVirtualDisplay } from "./virtual-display";
 import {
-  createWorkspace,
   WorkspaceFileError,
   WorkspaceFileNotFoundError,
   WorkspaceFileTooLargeError,
@@ -228,10 +232,6 @@ await assertWritable(
   process.env.PROFILES_DIR?.trim() || "/profiles",
 );
 
-const workspace = createWorkspace(
-  process.env.WORKSPACE_DIR?.trim() || "/workspace",
-);
-
 /**
  * Who has the wheel, as a state machine in its own module.
  *
@@ -289,6 +289,19 @@ const DEFAULT_BOT_ID = (() => {
   }
   return configured;
 })();
+
+/**
+ * Each employee's files, and with `COMPUTER_PER_BOT_USERS=on` its own Linux user. See per-bot.ts.
+ *
+ * Switched off (the default outside the one-container image) every employee shares the workspace
+ * root, exactly as before. Switched on, an employee other than the default one gets
+ * `<workspace>/bots/<botKey>`, prepared by the root helper on its first call.
+ */
+const perBot = createPerBotComputer({
+  workspaceRoot: process.env.WORKSPACE_DIR?.trim() || "/workspace",
+  defaultBotId: DEFAULT_BOT_ID,
+  enabled: perBotUsersEnabled(process.env, process.platform),
+});
 
 async function currentPage(
   botId: string,
@@ -908,19 +921,27 @@ serve<StreamData>({
 
       if (url.pathname === "/health") {
         const [profile] = profiles.summary([botId]);
-        return json({
-          status: "ok",
-          // `browser` kept as it was: it is in the published contract and start.sh reads it.
-          browser: profile?.running ?? false,
-          profile,
-          // Which Bot this computer can prove it is, when the deployment runs SPIRE. Null is a
-          // deployment without it, not a failure, and it is reported rather than omitted so the
-          // difference between "no identity here" and "identity broken" is visible.
-          identity: await identity(),
-          browserMode: BROWSER_MODE,
-          browserBackend: RUNTIME.backend,
-          browserChannel: RUNTIME.channel,
-        });
+        const perBotUsers = await perBot.status();
+        // Switched on and unable to give an employee its own user is not healthy: those employees
+        // are refused rather than quietly sharing one user, so the orchestrator should know.
+        const unready = perBotUsers.enabled && !perBotUsers.ready;
+        return json(
+          {
+            status: unready ? "unready" : "ok",
+            // `browser` kept as it was: it is in the published contract and start.sh reads it.
+            browser: profile?.running ?? false,
+            profile,
+            // Which Bot this computer can prove it is, when the deployment runs SPIRE. Null is a
+            // deployment without it, not a failure, and it is reported rather than omitted so the
+            // difference between "no identity here" and "identity broken" is visible.
+            identity: await identity(),
+            browserMode: BROWSER_MODE,
+            browserBackend: RUNTIME.backend,
+            browserChannel: RUNTIME.channel,
+            perBotUsers,
+          },
+          unready ? 503 : 200,
+        );
       }
 
       /**
@@ -1085,6 +1106,7 @@ serve<StreamData>({
       // MAY touch a path: the gateway in front of this process does that.
       if (url.pathname === "/files/download" && request.method === "GET") {
         try {
+          const workspace = await perBot.workspaceFor(botId);
           const file = await workspace.download(
             url.searchParams.get("path") ?? "",
           );
@@ -1104,6 +1126,7 @@ serve<StreamData>({
           path?: unknown;
         } | null;
         try {
+          const workspace = await perBot.workspaceFor(botId);
           return json(await workspace.read(String(body?.path ?? "")));
         } catch (error) {
           return json(
@@ -1118,6 +1141,7 @@ serve<StreamData>({
           path?: unknown;
         } | null;
         try {
+          const workspace = await perBot.workspaceFor(botId);
           return json(
             await workspace.list(
               typeof body?.path === "string" ? body.path : undefined,
@@ -1186,6 +1210,7 @@ serve<StreamData>({
           return json({ error: "The contents to write are required." }, 400);
         }
         try {
+          const workspace = await perBot.workspaceFor(botId);
           return json(
             await workspace.write(String(body?.path ?? ""), body.contents, {
               append: body.append === true,
@@ -1518,7 +1543,9 @@ function describe(error: unknown, fallback: string): string {
  * succeed. Collapsing these into 500 would tell the caller the computer is broken and invite a retry
  * of the same request.
  */
-function fileStatus(error: unknown): 400 | 403 | 404 | 413 | 500 {
+function fileStatus(error: unknown): 400 | 403 | 404 | 413 | 500 | 503 {
+  // The employee's own computer is not ready; a 503 rather than its files falling back to the shared root.
+  if (error instanceof PerBotUnavailableError) return 503;
   if (error instanceof WorkspacePathError) return 403;
   if (error instanceof WorkspaceFileTooLargeError) return 413;
   if (error instanceof WorkspaceFileNotFoundError) return 404;
