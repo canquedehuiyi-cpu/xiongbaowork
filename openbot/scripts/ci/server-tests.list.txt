@@ -269,6 +269,7 @@ tests/platform-model-pool-routes.test.ts
 tests/platform-model-pool.integration.test.ts
 tests/platform-store.test.ts
 tests/plugin-call-args-validation.test.ts
+tests/plugin-catalogue-market.test.ts
 tests/plugin-catalogue.test.ts
 tests/plugin-connect-route.test.ts
 tests/plugin-credential-binding.integration.test.ts
