@@ -107,6 +107,12 @@ export function createRecorderExtension(deps: {
   auditFor?: (executor: Database) => AuditStore;
   /** How Intelligence is reached for recording summaries; `fetch` unless a test says otherwise. */
   intelligenceFetch?: typeof fetch;
+  /**
+   * Where Intelligence is, for recording summaries: the address its client resolved, and its key.
+   * Absent, INTELLIGENCE_API_URL and INTELLIGENCE_API_KEY as configured; with neither (the fork's
+   * Intelligence is optional, R0), a recording has no summary to show.
+   */
+  intelligence?: { apiUrl: string; apiKey: string };
 }): RecorderExtensionDeps & {
   /** The capture pass, for `mountCopilotRuntime`: its gate (an onBeforeHandler hook) and its Learning space selector. */
   trajectoryCapture: {
@@ -199,18 +205,27 @@ export function createRecorderExtension(deps: {
         }
       : async () => null;
 
-  const { apiUrl, apiKey } = config.runtime.intelligence;
+  const intelligence =
+    deps.intelligence ??
+    (config.intelligence?.apiUrl
+      ? {
+          apiUrl: config.intelligence.apiUrl,
+          apiKey: config.intelligence.apiKey,
+        }
+      : undefined);
   const recordings = createRecordings({
     pageForUser: trajectoryBindings.pageForUser,
     isBoundTo: trajectoryBindings.isBoundTo,
     boundTo: trajectoryBindings.boundTo,
     summaries: (ids) =>
-      fetchTrajectorySummaries({
-        apiUrl,
-        apiKey,
-        fetch: deps.intelligenceFetch ?? fetch,
-        ids,
-      }),
+      intelligence
+        ? fetchTrajectorySummaries({
+            apiUrl: intelligence.apiUrl,
+            apiKey: intelligence.apiKey,
+            fetch: deps.intelligenceFetch ?? fetch,
+            ids,
+          })
+        : Promise.resolve({ unavailable: "unavailable" as const }),
   });
 
   return {

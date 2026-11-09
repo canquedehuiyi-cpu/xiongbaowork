@@ -1968,6 +1968,15 @@ await startupLifecycle.run(async (startup) => {
       : {}),
     // A connection is made or ended exactly when its row is written: both in one transaction.
     auditFor: (executor) => createAuditStore(executor),
+    // Recording summaries come from the optional Intelligence, at the address its client resolved.
+    ...(intelligenceClient && config.intelligence
+      ? {
+          intelligence: {
+            apiUrl: intelligenceClient.ɵgetApiUrl(),
+            apiKey: config.intelligence.apiKey,
+          },
+        }
+      : {}),
   });
   /*
    * Connections whose lifetime has run out already resolve to nobody; this ends them for good, with
