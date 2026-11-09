@@ -1,5 +1,5 @@
 /*
- * 自动学习（Automatic Learning）的设置，上游 0046 的两张表，0078 删掉后在这里重建（R0 阶段）。
+ * 自动学习（Automatic Learning）的设置，上游 0046 的两张表，0078 删掉后在这里重建（R0 阶段，编号 0147：0146 已由 MCP 工具分类迁移占用）。
  *
  * OPTIONAL. 只有接入了 CopilotKit Intelligence（INTELLIGENCE_API_URL + INTELLIGENCE_API_KEY）的部署
  * 才会读写这两张表；没接入的部署表是空的，行为与之前完全相同。

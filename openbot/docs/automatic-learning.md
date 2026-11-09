@@ -6,7 +6,7 @@
 > - **能做的**：管理员在「自动学习」页选择默认学习容器与参与的员工；员工每次运行时取回 Intelligence 里**已发布**的学习技能（内置员工拿到技能目录与读取工具，远端员工收到校验过的技能快照）。
 > - **做不到的**：上游让对话线程存进 Intelligence，由它自动收集学习证据。本仓库的对话线程保存在自己的 PostgreSQL 里（任务看板、配额都依赖它），**不会自动作为学习证据送进 Intelligence**；技能需要在 Intelligence 里另行产生、审核、发布。下文关于「证据收集」「线程分配到容器」的段落对本仓库不适用。
 > - **授权**：自建 Intelligence 需要 CopilotKit 商业授权（`COPILOTKIT_LICENSE_TOKEN`）；托管版只需项目密钥，学习技能与记忆数据保存在 CopilotKit 云端。
-> - 数据表：`learning_settings`（部署级）与 `learning_thread_bindings`（按人，带 `tenant_id` 与行级安全），由迁移 `0146_learning` 重建。
+> - 数据表：`learning_settings`（部署级）与 `learning_thread_bindings`（按人，带 `tenant_id` 与行级安全），由迁移 `0147_learning` 重建。
 
 Open **Admin → Automatic Learning** to choose which Bots contribute completed conversations to a CopilotKit Intelligence Learning container and receive its published skills. Learning defaults on for managed and self-hosted deployments; a saved off setting is preserved. Collection and delivery require an existing, assigned container. OpenBot still starts and chats without one.
 

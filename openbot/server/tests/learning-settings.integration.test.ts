@@ -15,7 +15,7 @@ const threads: string[] = [];
 /*
  * This fork reads and writes only inside a tenant frame. The deployment's settings are an
  * administrator's, written in the platform frame; a thread's assignment is the person's own row,
- * written in their frame (0146), and read back here in the platform frame, which sees every row.
+ * written in their frame (0147), and read back here in the platform frame, which sees every row.
  */
 const asPlatform = <T>(work: () => T) => runAsTenant("platform", work);
 const as = <T>(person: string, work: () => T) => runAsTenant(person, work);
@@ -153,7 +153,7 @@ describe("durable Learning settings", () => {
           .where(eq(learningThreadBindings.threadId, threadId)),
       ),
     ).toHaveLength(2);
-    // Row security: each person's frame sees only their own assignment (0146).
+    // Row security: each person's frame sees only their own assignment (0147).
     const seenBy = (person: string) =>
       as(person, () =>
         database
