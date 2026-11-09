@@ -16,7 +16,7 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   page says Intelligence is not connected. A URL or licence set without the key is refused at boot
   as half-configured. Conversations stay in this deployment's PostgreSQL, so they are **not** sent
   to Intelligence as learning evidence: skills are produced and published in Intelligence itself.
-  Migration `0147_learning` recreates `learning_settings` (deployment-wide) and
+  Migration `0154_learning` recreates `learning_settings` (deployment-wide) and
   `learning_thread_bindings` (per person, with `tenant_id` and row security). The self-host bar
   also hides itself for a deployment that pays for a connected Intelligence.
 
