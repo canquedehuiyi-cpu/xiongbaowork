@@ -14,13 +14,12 @@ import {
   PageShell,
 } from "@/components/layout/page-shell";
 import { RowMark } from "@/components/layout/row-mark";
+import { PluginLogo } from "@/components/plugins/plugin-logo";
 import { LinkedAccountsSection } from "@/components/settings/linked-accounts";
 import {
   linkedNotice,
   visibleLinkedNotice,
 } from "@/components/settings/linked-notice";
-import { linkedAccountsQueryOptions } from "@/lib/identity/queries";
-import { PluginLogo } from "@/components/plugins/plugin-logo";
 import {
   InputGroup,
   InputGroupAddon,
@@ -33,6 +32,7 @@ import {
   ItemDescription,
   ItemTitle,
 } from "@/components/ui/item";
+import { linkedAccountsQueryOptions } from "@/lib/identity/queries";
 import {
   appKeyOf,
   connectionsQueryOptions,

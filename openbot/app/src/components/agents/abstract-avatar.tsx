@@ -31,9 +31,7 @@ export function AbstractAvatar(props: FaceProps) {
    */
   const queryClient = useContext(QueryClientContext);
   if (props.portrait && queryClient) {
-    return (
-      <PortraitFace {...props} look={look} portrait={props.portrait} />
-    );
+    return <PortraitFace {...props} look={look} portrait={props.portrait} />;
   }
   return <Face {...props} look={look} />;
 }

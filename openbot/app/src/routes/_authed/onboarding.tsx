@@ -261,9 +261,7 @@ function RouteComponent() {
    * Where the fade lands. The model guide's way out goes to 能力与资源's model library tab, which the
    * person can only reach once onboarding is finished.
    */
-  const [destination, setDestination] = React.useState<"/" | "/resources">(
-    "/",
-  );
+  const [destination, setDestination] = React.useState<"/" | "/resources">("/");
   const finish = async () => {
     await complete.mutateAsync(undefined);
     setFinished(true);

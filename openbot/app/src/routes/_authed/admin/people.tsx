@@ -137,9 +137,7 @@ function PeoplePage() {
             icon={query ? IconSearch : IconUsers}
             title={query ? "没有匹配的人" : "还没有人登录过"}
           >
-            {query
-              ? `没有人匹配「${query}」。`
-              : "有人登录后会出现在这里。"}
+            {query ? `没有人匹配「${query}」。` : "有人登录后会出现在这里。"}
           </PageEmpty>
         ) : (
           <PageRows>

@@ -315,9 +315,7 @@ function AllActivityItem({
       <ItemContent>
         <ItemTitle>{title}</ItemTitle>
         <ItemDescription>
-          {activity
-            ? activitySummary(activity)
-            : "读不到这位员工的动态。"}
+          {activity ? activitySummary(activity) : "读不到这位员工的动态。"}
         </ItemDescription>
       </ItemContent>
       <ItemActions>

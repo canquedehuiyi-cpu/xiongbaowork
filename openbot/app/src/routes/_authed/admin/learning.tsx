@@ -27,7 +27,6 @@ import {
 } from "@/components/layout/page-shell";
 import { LearnedSkillDialog } from "@/components/learning/learned-skill-dialog";
 import { ProposalDialog } from "@/components/learning/proposal-dialog";
-import { skillTitle } from "@/lib/learning/display";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -40,6 +39,7 @@ import {
 } from "@/components/ui/item";
 import { Separator } from "@/components/ui/separator";
 import { agentListQueryOptions } from "@/lib/agents/queries";
+import { skillTitle } from "@/lib/learning/display";
 import {
   reviewLearningProposalMutationOptions,
   startLearningRunMutationOptions,
@@ -591,7 +591,8 @@ function ProposedSkills({ agentId }: { agentId?: string }) {
         </PageEmpty>
       ) : proposals.data.proposals.length === 0 ? (
         <PageEmpty icon={IconSparkles} title="还没有提出的技能">
-          Intelligence 分析过学习证据之后才会提出技能。点「立即学习」开始一次分析。
+          Intelligence
+          分析过学习证据之后才会提出技能。点「立即学习」开始一次分析。
         </PageEmpty>
       ) : (
         <PageRows>
@@ -658,8 +659,7 @@ const RUN_STATUS: Record<LearningRunSummary["status"], string> = {
 };
 
 const FAILURES: Record<string, string> = {
-  LEARNING_MODEL_NOT_CONFIGURED:
-    "Intelligence 里还没有为学习配置模型。",
+  LEARNING_MODEL_NOT_CONFIGURED: "Intelligence 里还没有为学习配置模型。",
   LEARNING_NOT_ENABLED: "Intelligence 里没有打开学习。",
   LEARNING_CONTAINER_NOT_FOUND: "Intelligence 里已经没有这个容器了。",
 };
@@ -694,9 +694,7 @@ function runCounts(run: LearningRunSummary): string | null {
 /** The times a run started and finished, as the reader's local time. */
 function runTimes(run: LearningRunSummary): string | null {
   const times = [
-    run.startedAt
-      ? `开始于 ${new Date(run.startedAt).toLocaleString()}`
-      : null,
+    run.startedAt ? `开始于 ${new Date(run.startedAt).toLocaleString()}` : null,
     run.completedAt
       ? `完成于 ${new Date(run.completedAt).toLocaleString()}`
       : null,

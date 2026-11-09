@@ -204,11 +204,7 @@ function NewConversation({ composition }: { composition: string }) {
     } catch (caught) {
       // Preserve the unsent draft when channel creation fails.
       setSent(null);
-      setError(
-        caught instanceof Error
-          ? caught.message
-          : "对话没能开始。",
-      );
+      setError(caught instanceof Error ? caught.message : "对话没能开始。");
       throw caught;
     }
   };

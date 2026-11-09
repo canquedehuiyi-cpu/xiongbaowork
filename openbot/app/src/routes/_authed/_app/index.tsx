@@ -161,16 +161,12 @@ function RouteComponent() {
           throw caught;
         agentId = fallback?.id;
       }
-      if (!agentId)
-        throw new Error("没有可以接收这条消息的员工，请刷新页面。");
+      if (!agentId) throw new Error("没有可以接收这条消息的员工，请刷新页面。");
       await start(agentId, draft.text, undefined, pendingId);
     } catch (caught) {
       stashFailedStart({
         text: draft.text,
-        error:
-          caught instanceof Error
-            ? caught.message
-            : "对话没能开始。",
+        error: caught instanceof Error ? caught.message : "对话没能开始。",
       });
       if (router.state.location.pathname === pendingStartPath(pendingId))
         await navigate({ replace: true, to: "/" });

@@ -1093,9 +1093,7 @@ describe("reviewing proposed skills", () => {
         "/api/admin/learning/personal-review",
       ),
     );
-    fireEvent.click(
-      view.getByRole("button", { name: "保存设置" }),
-    );
+    fireEvent.click(view.getByRole("button", { name: "保存设置" }));
     await waitFor(() =>
       expect(puts.some((put) => put.path.endsWith("/settings"))).toBe(true),
     );
@@ -1197,9 +1195,7 @@ describe("reviewing proposed skills", () => {
     intelligence();
     const without = shared();
     await without.findByText("OpenBot (openbot)");
-    expect(
-      without.queryByText("在 Intelligence 里管理学习"),
-    ).toBeNull();
+    expect(without.queryByText("在 Intelligence 里管理学习")).toBeNull();
     expect(without.queryByText("待分析的对话")).toBeNull();
     expect(without.getByText("待审核的技能")).not.toBeNull();
     cleanup();
@@ -1217,9 +1213,9 @@ describe("reviewing proposed skills", () => {
     });
     const managed = shared();
     expect(
-      (
-        await managed.findByText("在 Intelligence 里管理学习")
-      ).getAttribute("href"),
+      (await managed.findByText("在 Intelligence 里管理学习")).getAttribute(
+        "href",
+      ),
     ).toBe("https://app.intelligence.example/o/acme/support/learning");
     expect(managed.getByText("待分析的对话")).not.toBeNull();
   });

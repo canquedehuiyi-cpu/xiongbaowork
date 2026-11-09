@@ -85,7 +85,8 @@ const SECTIONS: {
     items: [
       {
         title: "插件",
-        description: "这个部署能连到的服务、哪些员工可以用，以及审批 MCP 服务器。",
+        description:
+          "这个部署能连到的服务、哪些员工可以用，以及审批 MCP 服务器。",
         icon: IconPuzzle,
         linkOptions: { to: "/admin/plugins" },
       },
@@ -103,7 +104,8 @@ const SECTIONS: {
       },
       {
         title: "自动学习",
-        description: "从结束的对话里学习，审核它提出的技能，并决定大家能否分享自己的技能。",
+        description:
+          "从结束的对话里学习，审核它提出的技能，并决定大家能否分享自己的技能。",
         icon: IconBulb,
         linkOptions: { to: "/admin/learning" },
       },
@@ -139,7 +141,8 @@ const SECTIONS: {
       },
       {
         title: "权限",
-        description: "决定大家能拿员工做什么，可以对所有人设置，也可以按角色或分组设置。",
+        description:
+          "决定大家能拿员工做什么，可以对所有人设置，也可以按角色或分组设置。",
         icon: IconLockAccess,
         linkOptions: { to: "/admin/permissions" },
       },
@@ -165,7 +168,8 @@ const SECTIONS: {
     items: [
       {
         title: "审计",
-        description: "这个部署里发生的每个动作、是谁做的，以及员工执行过的命令记录。",
+        description:
+          "这个部署里发生的每个动作、是谁做的，以及员工执行过的命令记录。",
         icon: IconListDetails,
         linkOptions: { to: "/admin/audit" },
       },
