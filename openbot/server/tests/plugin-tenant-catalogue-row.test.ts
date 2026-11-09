@@ -120,6 +120,7 @@ afterAll(async () => {
     );
   }
   await releaseAdmins?.();
+  await database.$client.close();
 });
 
 test("a person who is not an administrator with the capability writes no server row at all", async () => {

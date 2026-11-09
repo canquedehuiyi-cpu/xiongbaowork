@@ -441,4 +441,5 @@ afterAll(async () => {
       .delete(users)
       .where(inArray(users.id, [tenantA.id, tenantB.id]));
   });
+  await database.$client.close();
 });

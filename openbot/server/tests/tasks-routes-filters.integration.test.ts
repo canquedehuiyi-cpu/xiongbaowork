@@ -277,7 +277,11 @@ const theirs = await runAsTenant(neighbour, async () => {
 const neighbourRoutes = createTaskRoutes(
   database,
   async (context, next) => {
-    context.set("actor", { id: neighbour, email: `${neighbour}@example.test`, role: "user" as const });
+    context.set("actor", {
+      id: neighbour,
+      email: `${neighbour}@example.test`,
+      role: "user" as const,
+    });
     await next();
   },
   projector,
@@ -287,6 +291,7 @@ afterAll(async () => {
   await runAsTenant(neighbour, async () => {
     await database.delete(tasks).where(eq(tasks.tenantId, neighbour));
   });
+  await database.$client.close();
 });
 
 test("source takes a comma list: 自主工作 is routine and responsibility, in this tenant only", async () => {

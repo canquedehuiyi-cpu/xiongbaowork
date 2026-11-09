@@ -61,4 +61,5 @@ afterAll(async () => {
       .delete(modelRegistry)
       .where(inArray(modelRegistry.tenantId, [tenantA, tenantB])),
   );
+  await database.$client.close();
 });

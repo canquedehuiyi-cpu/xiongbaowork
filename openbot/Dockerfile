@@ -225,10 +225,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && mkdir -p /var/lib/postgresql/data /var/run/postgresql \
   && chown -R postgres:postgres /var/lib/postgresql /var/run/postgresql
 
-# A Bot can install what a task needs, and nothing else as root.
+# The default employee (pwuser) may install system packages as root, and nothing else as root.
 #
-# `sudo` without a password, because a package manager that cannot install is not one, and "install a
-# tool then use it" is the whole point of giving a Bot a shell.
+# WHO THIS IS FOR. Only commands that run as pwuser: the default employee, with no employee header,
+# and every Bot when COMPUTER_PER_BOT_USERS is off. With the switch on (the default below) each real
+# employee runs as its own user and may not sudo at all (user decision, 2026-11-09). Bots are told
+# to use the tools already here and to install new ones in their own workspace first (npm install
+# without -g, bun add, a python3 venv), and not to try to escalate when sudo is refused; system
+# packages a task commonly needs belong in this image (git, jq, python3 below).
 #
 # ONE COMMAND, NOT THE PACKAGE MANAGERS. This was `NOPASSWD: ALL`, then the package managers by name:
 # apt-get, apt, dpkg, apt-key and apt-cache, with any arguments. The second read as a narrowing and
@@ -239,10 +243,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # /run/s6/container_environment, which holds BETTER_AUTH_SECRET, KEY_ENCRYPTION_KEY and the
 # database's password, and with those every credential, every session and the audit database.
 #
-# So sudo now runs `openbot-apt` and nothing else. It takes `update`, or `install` and package
+# So of the package managers, sudo runs `openbot-apt` and nothing else (the only other sudo rule is
+# the per-employee helper's `ensure` and `run`, below). It takes `update`, or `install` and package
 # names, and refuses any other argument; `docker/openbot-apt` says what it refuses and why. Root's,
 # in a directory that is root's, so the Bot cannot change what sudo runs. `sudo openbot-apt install
-# jq` is what the tool description tells a model to run here. `sudo apt-get` is refused.
+# jq` is what the tool description tells a model to run here, as pwuser. `sudo apt-get` is refused.
 #
 # The environment stays sudo's to reset (`env_reset` in Ubuntu's /etc/sudoers) and the helper
 # clears it again, so nothing the Bot exports reaches apt-get. DEBIAN_FRONTEND is set by the
@@ -250,9 +255,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 #
 # WHAT THIS IS NOT. It is a floor, not a boundary. Root is one CVE away and a shared container is not
 # an isolation story for code a model wrote: that needs a computer per Bot and a sandbox under it,
-# which is why per-Bot computers and gVisor are not optional extras next to this feature. Run the
-# image with `--security-opt no-new-privileges` where the platform allows and the Bots need not
-# install anything: it turns setuid off, sudo with it, so installing stops too.
+# which is why per-Bot computers and gVisor are not optional extras next to this feature.
+#
+# `--security-opt no-new-privileges` turns setuid off, sudo with it: installing stops, and so does
+# the helper that runs each employee as its own user (below). So use it only with
+# COMPUTER_PER_BOT_USERS=off and Bots that need not install anything. With the switch on (the
+# default below) /health would report the per-employee computer not ready.
 COPY docker/openbot-apt /usr/local/sbin/openbot-apt
 RUN apt-get update && apt-get install -y --no-install-recommends sudo \
   && rm -rf /var/lib/apt/lists/* \
@@ -264,9 +272,42 @@ RUN apt-get update && apt-get install -y --no-install-recommends sudo \
   && chmod 0440 /etc/sudoers.d/pwuser \
   && visudo -cf /etc/sudoers.d/pwuser
 
+# EACH EMPLOYEE ITS OWN LINUX USER. An employee's commands run as `xb-<botKey>` (a uid in
+# 20000-59999), in `/workspace/bots/<botKey>`, through the narrow root helper `xb-bot`: pwuser may
+# sudo its `ensure` and `run` and nothing else of it. `restore`, which s6 runs as root at start
+# (`computer-users`), is not in sudoers. Each employee has a primary group of its own (gid = uid
+# where free, hence the SYS_GID range) and `xbbots` beside it; pwuser is alone in `xbcomp`, the group
+# of every employee directory, so the file tools reach them all.
+#
+# EMPLOYEES DO NOT SUDO. Not even `openbot-apt`, which pwuser keeps above: no sudoers file names an
+# employee user. Root reads every other employee's directory, the browser profiles and the container's
+# environment. An employee installs user-level tools in its own directory (npm install, bun add,
+# `python3 -m venv .venv` then `.venv/bin/pip install`); system packages it needs belong in this
+# image, hence git, jq, python3 and python3-venv here.
+#
+# `acl` for the default ACLs that let the file tools and the employee's commands write each other's
+# files; `procps` for `ps`/`pgrep`.
+COPY docker/xb-bot.sh /usr/local/sbin/xb-bot
+RUN apt-get update && apt-get install -y --no-install-recommends acl procps git jq python3 python3-venv \
+  && rm -rf /var/lib/apt/lists/* \
+  && chown root:root /usr/local/sbin/xb-bot \
+  && chmod 0755 /usr/local/sbin/xb-bot \
+  && groupadd xbcomp \
+  && groupadd xbbots \
+  && usermod -aG xbcomp pwuser \
+  && sed -i -E '/^#?[[:space:]]*SYS_[UG]ID_(MIN|MAX)[[:space:]]/d' /etc/login.defs \
+  && printf '%s\n' 'SYS_UID_MIN 20000' 'SYS_UID_MAX 59999' 'SYS_GID_MIN 20000' 'SYS_GID_MAX 59999' >> /etc/login.defs \
+  && printf '%s\n' \
+    'pwuser ALL=(root) NOPASSWD: /usr/local/sbin/xb-bot ensure *, /usr/local/sbin/xb-bot run *' \
+    > /etc/sudoers.d/xb-bot \
+  && chmod 0440 /etc/sudoers.d/xb-bot \
+  && visudo -cf /etc/sudoers.d/xb-bot
+ENV COMPUTER_PER_BOT_USERS=on
+
 # THE PACKAGE MANAGER AND THE SHELL STAY. Both were removed here once as hardening, which was
-# backwards: a Bot being able to open a shell and install what a task needs is a requested feature,
-# not an oversight. Removing them hardens the image by deleting the product.
+# backwards: a Bot being able to open a shell and use the tools it needs is a requested feature, not
+# an oversight. Removing them hardens the image by deleting the product. What an employee may not
+# do is become root to install one: it installs user-level tools in its own workspace instead.
 #
 # What makes that safe is not their absence. It is that a Bot reaches them the same way it reaches
 # anything else, through the gateway: resolve, decide against the policy, write the audit row, then

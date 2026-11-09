@@ -57,7 +57,11 @@ const routesFor = (actorId: string, frameTenant: string = actorId) => {
     context,
     next,
   ) => {
-    context.set("actor", { id: actorId, email: `${actorId}@example.test`, role: "user" as const });
+    context.set("actor", {
+      id: actorId,
+      email: `${actorId}@example.test`,
+      role: "user" as const,
+    });
     await runAsTenant(frameTenant, () => next());
   };
   return createAttachmentRoutes(database, requireUser);
@@ -148,6 +152,7 @@ afterAll(async () => {
       await database.delete(users).where(eq(users.id, id));
     }
   });
+  await database.$client.close();
 });
 
 test("the uploader reads the file back, and its own revalidation is a 304", async () => {

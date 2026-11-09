@@ -1,8 +1,11 @@
+import type { DecisionToolName } from "@openbot/shared/decision-tools";
 import { useState } from "react";
 import { z } from "zod";
-import { Button } from "@/components/ui/button";
+import { DecisionCard, OTHER } from "@/components/decisions/decision-card";
 import type { GalleryComponent } from "@/lib/copilot/gallery-registry";
-import { Badge, GalleryFrame } from "./frame";
+import { GalleryFrame } from "./frame";
+import { GalleryMarkdown } from "./markdown";
+import { byPosition } from "./positions";
 
 /**
  * Human-in-the-loop gallery components. `respond` resolves the suspended Bot run, and completed
@@ -36,6 +39,12 @@ export const ApprovalCardProps = z.object({
     .describe(
       "The facts they need in order to decide, e.g. amount, vendor, date",
     ),
+  command: z
+    .string()
+    .optional()
+    .describe(
+      "When you are asking before running a command on your computer: that command, exactly as you will run it. It is shown on the card, and listed with their answer in your computer's Activity.",
+    ),
   approveLabel: z.string().optional().describe("Defaults to Approve"),
   rejectLabel: z.string().optional().describe("Defaults to Decline"),
 });
@@ -44,15 +53,7 @@ type ApprovalArgs = z.infer<typeof ApprovalCardProps>;
 
 export function ApprovalCard(props: Waiting<ApprovalArgs> & { name?: string }) {
   const { args, status, respond } = props;
-  const [note, setNote] = useState("");
-  const [sending, setSending] = useState<"approved" | "declined" | null>(null);
-
-  const answer = async (decision: "approved" | "declined") => {
-    if (!respond) return;
-    setSending(decision);
-    // Include the note in the same tool result that resumes the Bot.
-    await respond({ decision, note: note.trim() || undefined });
-  };
+  const [sending, setSending] = useState(false);
 
   if (status === "inProgress") {
     return (
@@ -62,69 +63,75 @@ export function ApprovalCard(props: Waiting<ApprovalArgs> & { name?: string }) {
     );
   }
 
+  const approve = args.approveLabel ?? "批准";
+  const decline = args.rejectLabel ?? "拒绝";
   const decided =
     status === "complete" ? readDecision(props.result) : undefined;
+  const command = args.command?.trim() || undefined;
+  // The command once: a Bot that also lists it among the facts would show it twice.
+  const details = (args.details ?? []).filter(
+    (detail) => !command || detail.value?.trim() !== command,
+  );
 
   return (
-    <GalleryFrame
-      action={
-        decided ? (
-          <Badge tone={decided === "approved" ? "positive" : "negative"}>
-            {decided === "approved" ? "已批准" : "已拒绝"}
-          </Badge>
-        ) : (
-          <Badge tone="caution">等你决定</Badge>
-        )
+    <DecisionCard
+      answer={
+        decided
+          ? decided.decision === "approved"
+            ? { label: "已批准", choice: approve, tone: "positive" }
+            : decided.decision === "declined"
+              ? { label: "已拒绝", choice: decline, tone: "negative" }
+              : { label: "已回答", note: decided.note, tone: "neutral" }
+          : undefined
       }
+      onSubmit={async (value, text) => {
+        if (!respond) return;
+        setSending(true);
+        // Words instead of a yes or no go back as the answer itself; the Bot reads `note`.
+        await respond(
+          value === OTHER
+            ? { decision: "other", note: text }
+            : { decision: value },
+        );
+      }}
+      options={[
+        {
+          value: "approved",
+          label: approve,
+          description: "员工会继续做下去。",
+        },
+        {
+          value: "declined",
+          label: decline,
+          description: "员工不会做，并且会知道你拒绝了。",
+        },
+      ]}
+      other={{ placeholder: "跟员工说点别的…" }}
+      submitting={sending || !respond}
       title={args.title}
     >
-      <p className="text-sm">{args.summary}</p>
-
-      {args.details?.length ? (
-        <dl className="mt-3 grid grid-cols-[minmax(0,9rem)_1fr] gap-x-4 gap-y-1.5 text-sm">
-          {args.details.map((detail) => (
-            <div className="contents" key={detail.label}>
+      <GalleryMarkdown className="text-sm">{args.summary}</GalleryMarkdown>
+      {command || details.length ? (
+        <dl className="mt-3 grid grid-cols-[minmax(0,9rem)_1fr] gap-x-4 gap-y-1.5 rounded-lg bg-muted/60 px-3 py-2 text-sm">
+          {command ? (
+            <div className="contents">
+              <dt className="truncate text-muted-foreground">命令</dt>
+              <dd className="min-w-0">
+                <code className="break-all font-mono text-xs">{command}</code>
+              </dd>
+            </div>
+          ) : null}
+          {byPosition(details).map(({ item: detail, key }) => (
+            <div className="contents" key={key}>
               <dt className="truncate text-muted-foreground">{detail.label}</dt>
-              <dd className="min-w-0 break-words">{detail.value}</dd>
+              <dd className="min-w-0 break-words">
+                <GalleryMarkdown>{detail.value}</GalleryMarkdown>
+              </dd>
             </div>
           ))}
         </dl>
       ) : null}
-
-      {decided ? null : (
-        <div className="mt-4 space-y-2">
-          <input
-            aria-label="理由（可选）"
-            className="w-full rounded-md border border-border bg-transparent px-3 py-1.5 text-sm"
-            disabled={Boolean(sending)}
-            onChange={(event) => setNote(event.target.value)}
-            placeholder="理由（可选）"
-            value={note}
-          />
-          <div className="flex gap-2">
-            <Button
-              disabled={Boolean(sending)}
-              onClick={() => void answer("approved")}
-              size="sm"
-            >
-              {sending === "approved"
-                ? "正在发送…"
-                : (args.approveLabel ?? "批准")}
-            </Button>
-            <Button
-              disabled={Boolean(sending)}
-              onClick={() => void answer("declined")}
-              size="sm"
-              variant="outline"
-            >
-              {sending === "declined"
-                ? "正在发送…"
-                : (args.rejectLabel ?? "拒绝")}
-            </Button>
-          </div>
-        </div>
-      )}
-    </GalleryFrame>
+    </DecisionCard>
   );
 }
 
@@ -151,7 +158,7 @@ type ChoiceArgs = z.infer<typeof ChoiceCardProps>;
 
 export function ChoiceCard(props: Waiting<ChoiceArgs>) {
   const { args, status, respond } = props;
-  const [sending, setSending] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
 
   if (status === "inProgress") {
     return (
@@ -161,53 +168,49 @@ export function ChoiceCard(props: Waiting<ChoiceArgs>) {
     );
   }
 
+  const options = args.options ?? [];
   const chosen = status === "complete" ? readChoice(props.result) : undefined;
+  const chosenLabel =
+    chosen?.choice !== undefined
+      ? (options.find((option) => option.id === chosen.choice)?.label ??
+        chosen.choice)
+      : undefined;
 
   return (
-    <GalleryFrame
-      action={
-        chosen ? (
-          <Badge tone="positive">已回答</Badge>
-        ) : (
-          <Badge tone="caution">等你决定</Badge>
-        )
+    <DecisionCard
+      answer={
+        chosen
+          ? chosenLabel !== undefined
+            ? { label: "已回答", choice: chosenLabel, tone: "positive" }
+            : { label: "已回答", note: chosen.answer, tone: "positive" }
+          : undefined
       }
-      caption={args.summary}
+      onSubmit={async (value, text) => {
+        if (!respond) return;
+        setSending(true);
+        await respond(
+          value === OTHER
+            ? { answer: text }
+            : {
+                choice: value,
+                label: options.find((option) => option.id === value)?.label,
+              },
+        );
+      }}
+      options={options.map((option) => ({
+        value: option.id,
+        label: option.label,
+        ...(option.description ? { description: option.description } : {}),
+      }))}
+      other={{ placeholder: "回答点别的…" }}
+      submitting={sending || !respond}
       title={args.title}
     >
-      <ul className="space-y-2">
-        {(args.options ?? []).map((option) => {
-          const picked = chosen === option.id;
-          return (
-            <li key={option.id}>
-              <button
-                className={`w-full rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
-                  picked
-                    ? "border-emerald-500/40 bg-emerald-500/10"
-                    : chosen
-                      ? "border-border opacity-50"
-                      : "border-border hover:bg-foreground/5"
-                }`}
-                disabled={Boolean(chosen) || Boolean(sending)}
-                onClick={async () => {
-                  if (!respond) return;
-                  setSending(option.id);
-                  await respond({ choice: option.id, label: option.label });
-                }}
-                type="button"
-              >
-                <span className="font-medium">{option.label}</span>
-                {option.description ? (
-                  <span className="block text-xs text-muted-foreground">
-                    {option.description}
-                  </span>
-                ) : null}
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-    </GalleryFrame>
+      {/* Drawn as the approval's summary is: a Bot writes it in markdown, which a caption shows raw. */}
+      {args.summary ? (
+        <GalleryMarkdown className="text-sm">{args.summary}</GalleryMarkdown>
+      ) : null}
+    </DecisionCard>
   );
 }
 
@@ -230,28 +233,38 @@ function readResult(
 
 function readDecision(
   result: string | undefined,
-): "approved" | "declined" | undefined {
-  const value = readResult(result)?.decision;
-  return value === "approved" || value === "declined" ? value : undefined;
+): { decision: "approved" | "declined" | "other"; note?: string } | undefined {
+  const read = readResult(result);
+  const value = read?.decision;
+  const note = typeof read?.note === "string" ? read.note : undefined;
+  return value === "approved" || value === "declined" || value === "other"
+    ? { decision: value, ...(note ? { note } : {}) }
+    : undefined;
 }
 
-function readChoice(result: string | undefined): string | undefined {
-  const value = readResult(result)?.choice;
-  return typeof value === "string" ? value : undefined;
+/** The option picked, or the words typed instead. */
+function readChoice(
+  result: string | undefined,
+): { choice?: string; answer?: string } | undefined {
+  const read = readResult(result);
+  if (typeof read?.choice === "string") return { choice: read.choice };
+  if (typeof read?.answer === "string") return { answer: read.answer };
+  return undefined;
 }
 
 /**
- * `kind: "decision"` is what makes these suspend the run: they are registered with
- * `useHumanInTheLoop` rather than as ordinary tools, and the person's answer IS the tool result, so
+ * `kind: "decision"` is what makes these suspend the run: they are registered as human-in-the-loop
+ * tools (`useDecisionTool`) rather than as ordinary ones, and the person's answer IS the tool result, so
  * there is no confirmation line to give the model.
  */
 export const GALLERY: GalleryComponent[] = [
   {
-    name: "askApproval",
+    name: "askApproval" satisfies DecisionToolName,
     title: "Approval",
     kind: "decision",
+    summary: "请你批准或拒绝一件事，员工会等你回答。",
     description:
-      "Ask the person to approve or decline something, and WAIT for their answer. Use before doing anything you cannot undo, spending money, sending a message, changing a record. You are given their decision and any reason they typed.",
+      "Ask the person to approve or decline something, and WAIT for their answer. You are given their decision: `approved`, `declined`, or `other` with `note`, what they wrote instead. Use it for a decision that is theirs to make, or before something you cannot undo, unless your instructions say the person is already asked before that kind of action.",
     parameters: ApprovalCardProps,
     Component: ApprovalCard as GalleryComponent["Component"],
     preview: {
@@ -272,11 +285,12 @@ export const GALLERY: GalleryComponent[] = [
     },
   },
   {
-    name: "askChoice",
+    name: "askChoice" satisfies DecisionToolName,
     title: "Choice",
     kind: "decision",
+    summary: "请你从几个选项里选一个，员工会等你回答。",
     description:
-      "Ask the person to pick one of several options, and WAIT for their answer. Use when you cannot sensibly guess which one they meant. You are given the id of the option they chose.",
+      "Ask the person to pick one of several options, and WAIT for their answer. Use when you cannot sensibly guess which one they meant. You are given the id of the option they chose as `choice`, or `answer`, what they wrote instead.",
     parameters: ChoiceCardProps,
     Component: ChoiceCard as GalleryComponent["Component"],
     preview: {

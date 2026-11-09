@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import type { MiddlewareHandler } from "hono";
 import {
+  computerToolPlace,
+  DEVICE_RUN_COMMAND_DESCRIPTION,
+  WORKSPACE_RUN_COMMAND_DESCRIPTION,
+} from "../../shared/computer-tool-words";
+import {
   LOCAL_TOOL_DESCRIPTIONS,
   LOCAL_TOOL_NAMES,
   LOCAL_TOOL_PARAMETERS,
@@ -377,14 +382,20 @@ describe("whether the browser offers the five tools", () => {
       "http://openbot.test/bot-1/local-tools",
     );
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ allowed: true });
+    expect(await response.json()).toEqual({
+      allowed: true,
+      machine: "device",
+    });
   });
 
   test("no to anyone else", async () => {
     const response = await harness({ actor: teammate }).routes.request(
       "http://openbot.test/bot-1/local-tools",
     );
-    expect(await response.json()).toEqual({ allowed: false });
+    expect(await response.json()).toEqual({
+      allowed: false,
+      machine: "device",
+    });
   });
 
   test("no where the deployment has no paired machines at all", async () => {
@@ -392,7 +403,10 @@ describe("whether the browser offers the five tools", () => {
     const response = await h.routes.request(
       "http://openbot.test/bot-1/local-tools",
     );
-    expect(await response.json()).toEqual({ allowed: false });
+    expect(await response.json()).toEqual({
+      allowed: false,
+      machine: "workspace",
+    });
     // Nor do the tools work there: the gateway says there is nothing to use.
     expect((await h.send("/apps/list", {})).status).toBe(503);
   });
@@ -415,6 +429,37 @@ describe("whether the browser offers the five tools", () => {
     const response = await routes.request(
       "http://openbot.test/bot-1/local-tools",
     );
-    expect(await response.json()).toEqual({ allowed: false });
+    expect(await response.json()).toEqual({
+      allowed: false,
+      machine: "device",
+    });
+  });
+});
+
+describe("where the shell and file tools say they act", () => {
+  const described = (machine: "device" | "workspace") =>
+    new Map(
+      createHeadlessComputerTools({
+        gateway: {} as never,
+        botId: "bot-1",
+        actor: { id: OWNER },
+        machine,
+      }).map((tool) => [tool.definition.name, tool.definition.description]),
+    );
+
+  test("the unattended run words them from the shared file the web chat reads", () => {
+    const device = described("device");
+    expect(device.get("computer_run_command")).toBe(
+      DEVICE_RUN_COMMAND_DESCRIPTION,
+    );
+    expect(device.get("computer_list_files")).toContain(
+      computerToolPlace("device"),
+    );
+    expect(described("workspace").get("computer_run_command")).toBe(
+      WORKSPACE_RUN_COMMAND_DESCRIPTION,
+    );
+    expect(described("workspace").get("computer_list_files")).toContain(
+      computerToolPlace("workspace"),
+    );
   });
 });

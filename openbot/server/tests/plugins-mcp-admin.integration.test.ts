@@ -249,6 +249,7 @@ afterAll(async () => {
     await database.delete(users).where(inArray(users.id, people));
   });
   await releaseAdmins?.();
+  await database.$client.close();
 });
 
 describe("an administrator's server is the team's, and its secret reaches a member only through the broker", () => {
@@ -1342,9 +1343,9 @@ describe("an OAuth client is stored only beside a row that will read it, and onl
         create: async (value, executor) => {
           const stored = await vault.create(value, executor);
           // The store hands its own transaction, which has `execute`; the type names only what it reads.
-          await (executor as unknown as Pick<typeof database, "execute">).execute(
-            sql`select set_config('app.tenant_id', ${member}, true)`,
-          );
+          await (
+            executor as unknown as Pick<typeof database, "execute">
+          ).execute(sql`select set_config('app.tenant_id', ${member}, true)`);
           return stored;
         },
       },

@@ -2,7 +2,7 @@ import { execFile, spawn } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import { win32 } from "node:path";
 import { egressShellEnvironment, splitProxyCredentials } from "./egress";
-import { createLiveShell } from "./live-shell";
+import { createLiveShell, type LiveShell } from "./live-shell";
 import { readableOutput } from "./shell-marks";
 
 /**
@@ -251,11 +251,161 @@ function clamp(text: string): { text: string; truncated: boolean } {
   return { text: kept, truncated: true };
 }
 
+/** How the root helper is reached. `-n`: never a password prompt nobody is there to answer. */
+const DEFAULT_RUN_AS_LAUNCHER = ["sudo", "-n", "/usr/local/sbin/xb-bot"];
+
+/**
+ * Names the employee's own user gets from the helper rather than from here.
+ *
+ * HOME and TMPDIR are the employee's directory and its `.tmp`, which the helper sets; USER, LOGNAME
+ * and SHELL describe the account, and passing this process's values would describe pwuser.
+ */
+const SET_BY_HELPER = new Set(["HOME", "TMPDIR", "USER", "LOGNAME", "SHELL"]);
+
+/**
+ * How long, after a timeout or a Stop, before the request stops waiting for the helper.
+ *
+ * The command runs as another user, under GNU timeout in a process group of its own, so nothing this
+ * process may signal reaches it: the SIGTERM goes to sudo, sudo relays it to the helper, and the
+ * helper ends the command's group (a SIGTERM, three seconds, a SIGKILL). This is the bound on the
+ * case where that chain is broken, so a request cannot wait for ever on a pipe nobody closes.
+ */
+const RUN_AS_GIVE_UP_MS = 15_000;
+
+/**
+ * How long the output may keep arriving after the helper has exited.
+ *
+ * The helper ends what the command left in its group, so the pipes normally close with it. Something
+ * that left the group (a `setsid` daemon) can hold them open for ever, and this process may not end
+ * it. Whatever the command wrote before it exited is already in the pipe; this is time to read it.
+ */
+const RUN_AS_DRAIN_MS = 1_000;
+
+/** The hash part of `xb-<key>`; anything else never reaches the helper's argv. */
+const RUN_AS_KEY = /^[0-9a-f]{12}$/;
+
+/**
+ * The environment the helper is given: the command's, without what the helper sets itself, and
+ * without a value that cannot be one line (a newline, or a NUL, which no environment can carry).
+ */
+function runAsEnvironment(env: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(env).filter(
+      ([name, value]) =>
+        ENV_NAME.test(name) &&
+        !SET_BY_HELPER.has(name) &&
+        !value.includes("\n") &&
+        !value.includes("\0"),
+    ),
+  );
+}
+
+/**
+ * What the helper reads on stdin: `NAME=VALUE` lines, an empty line, then the command exactly as
+ * written.
+ */
+function runAsInput(env: Record<string, string>, command: string): string {
+  const lines = Object.entries(env).map(
+    ([name, value]) => `${name}=${value}\n`,
+  );
+  return `${lines.join("")}\n${command}`;
+}
+
+export type RunAs = {
+  /** The employee's botKey: twelve hex digits, the hash part of its user name `xb-<key>`. */
+  key: string;
+  /** What is spawned before `run <key> <timeout_s>`. Defaults to `sudo -n /usr/local/sbin/xb-bot`. */
+  launcher?: string[];
+};
+
+/** The command a caller hands a shell, and the Stop that ends it. */
+export type CommandInput = {
+  command: string;
+  timeoutMs?: number;
+  signal?: AbortSignal;
+};
+
+export type ShellOptions = {
+  /** The bash the live shell starts, where it is not the one on PATH. */
+  bash?: string;
+  /** Each command in a shell of its own (`runOnce`) instead of the live one. */
+  oneShot?: boolean;
+  /** Run each command as an employee's own Linux user, through the root helper. See below. */
+  runAs?: RunAs;
+};
+
+/**
+ * A shell that only runs commands: no live terminal behind it.
+ *
+ * What `createShell` gives for an employee's own user (`runAs`). The live shell (live-shell.ts) is
+ * one bash in a pseudo-terminal that this process starts, so it runs as this process's user, pwuser,
+ * and the root helper's `run` takes a command and its environment on stdin rather than a terminal.
+ * An employee's live terminal would therefore be pwuser's bash in the employee's directory: every
+ * other employee's files, the browser profiles, and `sudo openbot-apt`. So an employee has no live
+ * terminal at all. Its commands run one at a time through the helper, and the computer refuses the
+ * terminal socket for it (index.ts).
+ */
+export type CommandShell = {
+  run(input: CommandInput): Promise<ShellResult>;
+  /** Never set: the employee's commands have no terminal to watch or take over. */
+  terminal?: undefined;
+  dispose(): void;
+};
+
+/**
+ * A shell for one workspace.
+ *
+ * Without `runAs`, the Bot's commands are typed into one live shell (live-shell.ts), or with
+ * `oneShot` each runs in a shell of its own.
+ *
+ * With `runAs`, the command runs as the employee's own Linux user rather than this process's: it is
+ * handed to the root helper as `run <key> <timeout_s>` with the environment and the command on stdin,
+ * never in argv. Always one shell per command, and no live terminal (`CommandShell`), whatever
+ * `oneShot` says.
+ */
+export function createShell(
+  workspaceDir: string,
+  sourceEnv: NodeJS.ProcessEnv,
+  options: ShellOptions & { runAs: RunAs },
+): CommandShell;
+export function createShell(
+  workspaceDir: string,
+  sourceEnv?: NodeJS.ProcessEnv,
+  options?: ShellOptions & { runAs?: undefined },
+): LiveBackedShell;
 export function createShell(
   workspaceDir: string,
   sourceEnv: NodeJS.ProcessEnv = process.env,
-  options: { bash?: string; oneShot?: boolean } = {},
-) {
+  options: ShellOptions = {},
+): CommandShell | LiveBackedShell {
+  const runAs = options.runAs;
+  if (runAs) {
+    // Checked here as well as by the helper, so a caller with the wrong idea of a key finds out at once.
+    if (!RUN_AS_KEY.test(runAs.key)) {
+      throw new Error(
+        "An employee's key must be twelve lowercase hexadecimal digits.",
+      );
+    }
+    const launcher = runAs.launcher ?? DEFAULT_RUN_AS_LAUNCHER;
+    return {
+      async run(input: CommandInput): Promise<ShellResult> {
+        const started = Date.now();
+        if (input.signal?.aborted) return stoppedBeforeStart(input, started);
+        await mkdir(workspaceDir, { recursive: true });
+        return runOnce({
+          command: input.command,
+          signal: input.signal,
+          workspaceDir,
+          sourceEnv,
+          started,
+          timeoutMs: commandTimeoutMs(input.timeoutMs),
+          runAs: { key: runAs.key, launcher },
+        });
+      },
+      dispose() {},
+    };
+  }
+
   /*
    * A command in a shell of its own (`runOnce`) instead of the live one: always on Windows, where
    * there is no pseudo-terminal bash, and wherever the caller asks for it. The device runner on a
@@ -285,41 +435,11 @@ export function createShell(
   });
 
   return {
-    async run(input: {
-      command: string;
-      timeoutMs?: number;
-      signal?: AbortSignal;
-    }): Promise<ShellResult> {
+    async run(input: CommandInput): Promise<ShellResult> {
       const started = Date.now();
-      if (input.signal?.aborted)
-        return {
-          command: input.command,
-          exitCode: -1,
-          stdout: "",
-          stderr: "The command was stopped before it started.",
-          truncated: false,
-          timedOut: false,
-          stopped: true,
-          elapsedMs: Date.now() - started,
-        };
+      if (input.signal?.aborted) return stoppedBeforeStart(input, started);
       await mkdir(workspaceDir, { recursive: true });
-      /*
-       * Bounded at both ends. Only `Math.min` was applied, so a zero or negative `timeoutMs` from a
-       * caller made the timer fire immediately: the command was killed before it did anything and
-       * the answer said it had timed out, which is true and useless.
-       *
-       * A non-finite value is the same failure one step earlier: `Math.max(NaN, 1000)` is `NaN`.
-       * The HTTP layer rejects those with a 400, so this is defence in depth for a direct caller —
-       * fall back to the default rather than run a command that is already out of time.
-       */
-      const requested =
-        typeof input.timeoutMs === "number" && Number.isFinite(input.timeoutMs)
-          ? input.timeoutMs
-          : DEFAULT_TIMEOUT_MS;
-      const timeoutMs = Math.min(
-        Math.max(requested, MIN_TIMEOUT_MS),
-        MAX_TIMEOUT_MS,
-      );
+      const timeoutMs = commandTimeoutMs(input.timeoutMs);
 
       /*
        * Through a shell on purpose. A Bot writes `apt-get install -y jq && jq --version`, and pipes,
@@ -383,12 +503,51 @@ export function createShell(
   };
 }
 
+/** A shell with a live terminal behind it: every Bot's but an employee's own user's. */
+export type LiveBackedShell = {
+  run(input: CommandInput): Promise<ShellResult>;
+  terminal: LiveShell;
+  dispose(): void;
+};
+
+function stoppedBeforeStart(input: CommandInput, started: number): ShellResult {
+  return {
+    command: input.command,
+    exitCode: -1,
+    stdout: "",
+    stderr: "The command was stopped before it started.",
+    truncated: false,
+    timedOut: false,
+    stopped: true,
+    elapsedMs: Date.now() - started,
+  };
+}
+
+/*
+ * Bounded at both ends. Only `Math.min` was applied, so a zero or negative `timeoutMs` from a caller
+ * made the timer fire immediately: the command was killed before it did anything and the answer said
+ * it had timed out, which is true and useless.
+ *
+ * A non-finite value is the same failure one step earlier: `Math.max(NaN, 1000)` is `NaN`. The HTTP
+ * layer rejects those with a 400, so this is defence in depth for a direct caller — fall back to the
+ * default rather than run a command that is already out of time.
+ */
+function commandTimeoutMs(timeoutMs: number | undefined): number {
+  const requested =
+    typeof timeoutMs === "number" && Number.isFinite(timeoutMs)
+      ? timeoutMs
+      : DEFAULT_TIMEOUT_MS;
+  return Math.min(Math.max(requested, MIN_TIMEOUT_MS), MAX_TIMEOUT_MS);
+}
+
 /**
- * One command in a shell of its own, which ends with it: PowerShell on Windows, `bash -c` elsewhere.
+ * One command in a shell of its own, which ends with it: PowerShell on Windows, `bash -c` elsewhere,
+ * or, with `runAs`, the root helper running it as an employee's own user.
  *
  * The live shell (live-shell.ts) needs a pseudo-terminal and bash 4.4 or newer, which a person's
  * Windows machine does not have and a Mac's own `/bin/bash` (3.2) is not. The device runner on such a
- * machine runs each command this way, as every command ran before the live shell.
+ * machine runs each command this way, as every command ran before the live shell. So does every
+ * employee with its own user, which the live shell cannot be.
  */
 async function runOnce(input: {
   command: string;
@@ -397,8 +556,9 @@ async function runOnce(input: {
   sourceEnv: NodeJS.ProcessEnv;
   started: number;
   timeoutMs: number;
+  runAs?: { key: string; launcher: string[] };
 }): Promise<ShellResult> {
-  const { workspaceDir, sourceEnv, started, timeoutMs } = input;
+  const { workspaceDir, sourceEnv, started, timeoutMs, runAs } = input;
   /*
    * `-c`, not `-lc`. A login shell sources `$HOME/.bash_profile`, and HOME is the workspace a Bot
    * writes with `computer_write_file`. That let a Bot leave a file which every later command ran
@@ -410,19 +570,39 @@ async function runOnce(input: {
    * `bash -c "sleep 600 | cat"` leaves the sleep and the cat holding the inherited pipes, so `close`
    * never fires and the await never settles. Killing the negative pid signals the whole group.
    */
-  const shell = commandShell(input.command, process.platform, sourceEnv);
-  const windows = process.platform === "win32";
-  const codePage = windows ? await windowsCodePage(shell.executable) : undefined;
+  // The egress filter's address last, so a command cannot be pointed around it.
+  const fullEnv = {
+    ...environmentForCommand(sourceEnv, workspaceDir),
+    ...egressShellEnvironment(),
+  };
+  // sudo resets its own environment; the helper is given the same map on stdin.
+  const commandEnv = runAs ? runAsEnvironment(fullEnv) : fullEnv;
+  const shell = runAs
+    ? {
+        executable: runAs.launcher[0] ?? DEFAULT_RUN_AS_LAUNCHER[0],
+        args: [
+          ...runAs.launcher.slice(1),
+          "run",
+          runAs.key,
+          String(Math.ceil(timeoutMs / 1000)),
+        ],
+      }
+    : commandShell(input.command, process.platform, sourceEnv);
+  const windows = process.platform === "win32" && !runAs;
+  const codePage = windows
+    ? await windowsCodePage(shell.executable)
+    : undefined;
   const child = spawn(shell.executable, shell.args, {
     cwd: workspaceDir,
-    // The egress filter's address last, so a command cannot be pointed around it.
-    env: {
-      ...environmentForCommand(sourceEnv, workspaceDir),
-      ...egressShellEnvironment(),
-    },
+    env: commandEnv,
     detached: process.platform !== "win32",
     windowsHide: true,
   });
+  if (runAs) {
+    // A helper that refused before reading all of it closes the pipe; that is its exit code's story.
+    child.stdin?.on("error", () => {});
+    child.stdin?.end(runAsInput(commandEnv, input.command));
+  }
 
   let timedOut = false;
 
@@ -468,10 +648,49 @@ async function runOnce(input: {
     failStop = reject;
   });
   let stopping: Promise<void> | undefined;
+  /*
+   * Running as the employee, the request ends on one of three things: the pipes closing, which is
+   * the ordinary end; the output having drained after the helper exited; or giving up on a helper
+   * that did not end after a timeout or a Stop. The last two stop reading rather than wait.
+   */
+  let stopRequested = false;
+  let finished = false;
+  let exitedWith: number | undefined;
+  let drainTimer: ReturnType<typeof setTimeout> | undefined;
+  let giveUpTimer: ReturnType<typeof setTimeout> | undefined;
+  let abandon: () => void = () => {};
+  const abandoned = new Promise<number>((resolve) => {
+    abandon = () => {
+      child.stdout.destroy();
+      child.stderr.destroy();
+      resolve(exitedWith ?? -1);
+    };
+  });
+  if (runAs) {
+    child.once("exit", (code) => {
+      exitedWith = code ?? -1;
+      if (!finished) drainTimer = setTimeout(abandon, RUN_AS_DRAIN_MS);
+    });
+  }
   const stop = () => {
     const { pid } = child;
     if (pid === undefined) return;
     if (stopping) return;
+    if (runAs) {
+      /*
+       * To sudo alone, which relays it to the helper; the helper ends the command's group. The
+       * group is not signalled from here: it is another user's, under a process group of its own.
+       */
+      if (stopRequested) return;
+      stopRequested = true;
+      try {
+        process.kill(pid, "SIGTERM");
+      } catch {
+        // Gone already, or EPERM: the deadline below still ends the request.
+      }
+      giveUpTimer = setTimeout(abandon, RUN_AS_GIVE_UP_MS);
+      return;
+    }
     if (process.platform === "win32") {
       stopping = new Promise<void>((resolve, reject) => {
         const systemRoot =
@@ -544,11 +763,15 @@ async function runOnce(input: {
         );
       }),
       stopFailure,
+      ...(runAs ? [abandoned] : []),
     ]);
     await stopping;
   } finally {
+    finished = true;
     clearTimeout(timer);
     input.signal?.removeEventListener("abort", onAbort);
+    if (drainTimer) clearTimeout(drainTimer);
+    if (giveUpTimer) clearTimeout(giveUpTimer);
   }
 
   if (outDecoder) outBuffer.add(outDecoder.end());
@@ -579,7 +802,12 @@ const INCOMPLETE_COMMAND =
 const SHELL_BUSY =
   "The command was not run: the shell is still running something a person started. Ask them to finish it.";
 
-export type Shell = ReturnType<typeof createShell>;
+export type Shell = LiveBackedShell;
+
+/** What runs a command and nothing more: a live-backed shell, or an employee's `CommandShell`. */
+export type CommandRunner = {
+  run(input: CommandInput): Promise<ShellResult>;
+};
 
 /** The upper half of the two Western OEM code pages, which have no `TextDecoder` label. */
 const OEM_UPPER_HALF: Record<number, string> = {

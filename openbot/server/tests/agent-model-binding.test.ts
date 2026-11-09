@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { afterAll, expect, test } from "bun:test";
 import { generateText } from "ai";
 import { eq } from "drizzle-orm";
 import {
@@ -476,4 +476,8 @@ test("a coworker that runs on another server is not offered a model", async () =
   expect(refused).toBeInstanceOf(ModelBindingNotApplicableError);
 
   await cleanup();
+});
+
+afterAll(async () => {
+  await db.$client.close();
 });

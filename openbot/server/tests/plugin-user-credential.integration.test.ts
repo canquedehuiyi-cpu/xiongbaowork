@@ -480,6 +480,7 @@ afterAll(async () => {
     database.delete(users).where(eq(users.id, otherId)),
   );
   await releaseAdmin?.();
+  await database.$client.close();
 });
 
 describe("a person who has not connected", () => {

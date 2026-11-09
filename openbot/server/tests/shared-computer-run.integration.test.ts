@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import type { AuditEventInput, AuditStore } from "../src/audit";
 import { StaleSnapshotError } from "../src/computer/client";
 import { botSeat } from "../src/computer/computer-key";
@@ -132,7 +132,10 @@ describe("a Bot on the one shared computer, against the table", () => {
         expect((await snapshots.load("bot:bot-1"))?.url).toBe(DEAD.url);
 
         const refusal = await gateway
-          .click(botSeat("bot-1"), ACTOR, { ref: "e9", snapshotId: taken.snapshotId })
+          .click(botSeat("bot-1"), ACTOR, {
+            ref: "e9",
+            snapshotId: taken.snapshotId,
+          })
           .catch((error: unknown) => error);
 
         expect(refusal).toBeInstanceOf(StaleSnapshotError);
@@ -290,4 +293,8 @@ describe("a Bot on the one shared computer, against the table", () => {
         server.stop(true);
       }
     }));
+});
+
+afterAll(async () => {
+  await database.$client.close();
 });

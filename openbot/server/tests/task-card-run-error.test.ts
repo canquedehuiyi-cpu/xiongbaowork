@@ -211,4 +211,5 @@ afterAll(async () => {
     await database.delete(threads);
     await database.delete(tasks);
   });
+  await database.$client.close();
 });

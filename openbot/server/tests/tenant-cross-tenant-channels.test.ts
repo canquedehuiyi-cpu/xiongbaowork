@@ -61,7 +61,11 @@ const routesFor = (actorId: string) => {
     context,
     next,
   ) => {
-    context.set("actor", { id: actorId, email: `${actorId}@example.test`, role: "user" as const });
+    context.set("actor", {
+      id: actorId,
+      email: `${actorId}@example.test`,
+      role: "user" as const,
+    });
     // A signed-in request runs in the person's own frame.
     await runAsTenant(actorId, () => next());
   };
@@ -242,6 +246,7 @@ afterAll(async () => {
       await database.delete(users).where(eq(users.id, id));
     }
   });
+  await database.$client.close();
 });
 
 test("the owner reads the channel, and a stranger cannot even see the row in the database", async () => {

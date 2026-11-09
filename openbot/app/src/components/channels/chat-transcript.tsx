@@ -54,12 +54,15 @@ import { readToolName } from "@/lib/plugins/tool-name";
 import {
   asText,
   forDisplay,
-  REFUSAL_MARKER,
+  refusalOf,
   toolResultFailed,
+  UNOFFERED_TOOL_SENTENCE,
+  unofferedTool,
 } from "@/lib/plugins/tool-result";
 import { readTeamBotConsent } from "@/lib/team-bots";
 import { cn } from "@/lib/utils";
 import { VOICE_CHAT_ACTIVITY, type VoiceChatEntry } from "@/lib/voice/archive";
+import { AppAccessRequestCard, readAppAccessCard } from "./app-access-card";
 import {
   BrowserActivity,
   groupBrowserSteps,
@@ -1335,7 +1338,7 @@ const TranscriptToolCall = memo(function TranscriptToolCall({
          * What was called, shimmering until its result arrives, and then the server's own words
          * drawn the way a Bot's prose is drawn.
          */}
-        {drawn ?? <ServerToolLine name={name} result={result} />}
+        {drawn ?? <ServerToolLine args={args} name={name} result={result} />}
       </ToolRenderBoundary>
     </Arriving>
   );
@@ -1347,43 +1350,90 @@ const TranscriptToolCall = memo(function TranscriptToolCall({
  * Named from the reader's side: what was done, against which server, with the server's own words
  * behind a disclosure. The identifier the model was offered never reaches the screen.
  */
-function ServerToolLine({ name, result }: { name: string; result?: string }) {
+export function ServerToolLine({
+  name,
+  args,
+  result,
+}: {
+  name: string;
+  /** 调用的参数，JSON 文本。只用来给主人电脑上的文件夹步骤写出文件或命令。 */
+  args?: string;
+  result?: string;
+}) {
+  // 员工替对方申请访问某个应用：画成卡片，申请人可以在上面撤回（迁移 0153）。
+  const accessRequest = readAppAccessCard(name, result);
+  if (accessRequest) return <AppAccessRequestCard {...accessRequest} />;
   const { label, detail } = readToolName(name);
   /*
    * A refusal is not a result, and must not read like one.
    *
    * The server says which it is rather than the browser inferring it from the wording, because the
    * wording is a policy message an administrator can rewrite and the first rephrasing would break
-   * any guess made here. See REFUSAL_MARKER in server/src/plugins/tools.ts.
+   * any guess made here. See REFUSAL_MARKER in server/src/plugins/tools.ts. 主人在对话卡片上拒绝的
+   * 一步不带标记，`refusalOf` 照审批服务的原话认出它。
    */
   const answer = result === undefined ? undefined : asText(result);
-  const refused = answer?.startsWith(REFUSAL_MARKER) ?? false;
-  const failed = !refused && toolResultFailed(result);
+  const refusal = refusalOf(answer);
+  const refused = refusal !== undefined;
+  // 调用了从没提供给它的工具：没有成功，运行时那句列满工具名的话是写给模型的。
+  const unoffered = unofferedTool(result);
+  const failed = !refused && (unoffered || toolResultFailed(result));
   /*
    * The marker is for this component, not for the reader. Left in, a refusal reads "Blocked" in the
    * label and then "Refused." again in the first two words of the body, which is the same fact three
    * times over by the end of the sentence. Stripped here rather than on the server, because the
    * server's copy is what the model is told and "Refused." in front of a reason is right for it.
    */
-  const body = refused ? answer?.slice(REFUSAL_MARKER.length).trim() : answer;
+  const body = refusal ? refusal.reason : answer;
   // A Team Bot asking to use this person's own account draws its consent card, not the sentence.
   const consent = refused ? readTeamBotConsent(body) : null;
   if (consent) return <TeamBotConsentCard {...consent} />;
+  /*
+   * 主人电脑上文件夹里没有做成的一步，在这一行上写出是哪个文件或哪条命令、为什么，
+   * 「notes.txt · 你拒绝了这一步。」，不写授权 id，也不再展开。
+   */
+  const folderRefusal =
+    refused && name.startsWith("host_")
+      ? [hostStepSubject(args), refusal.reason].filter(Boolean).join(" · ")
+      : undefined;
+  const shown =
+    folderRefusal !== undefined
+      ? undefined
+      : unoffered
+        ? UNOFFERED_TOOL_SENTENCE
+        : body;
+  const lineDetail = folderRefusal ?? detail;
   return (
     <ToolLine
-      {...(detail ? { detail } : {})}
+      {...(lineDetail ? { detail: lineDetail } : {})}
       label={label}
       refused={refused}
+      declined={refusal?.declined ?? false}
       failed={failed}
       running={result === undefined}
     >
-      {body ? (
+      {shown ? (
         <Streamdown components={markdownComponents}>
-          {forDisplay(body)}
+          {unoffered ? shown : forDisplay(shown)}
         </Streamdown>
       ) : null}
     </ToolLine>
   );
+}
+
+/** 文件夹步骤针对的文件或命令，从调用参数里读；读不到就不写。授权 id 永远不上屏。 */
+function hostStepSubject(args: string | undefined): string | undefined {
+  if (!args) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(args);
+    if (!parsed || typeof parsed !== "object") return undefined;
+    const { path, command } = parsed as { path?: unknown; command?: unknown };
+    if (typeof command === "string" && command.trim()) return command;
+    if (typeof path === "string" && path.trim() && path !== ".") return path;
+    return undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /**

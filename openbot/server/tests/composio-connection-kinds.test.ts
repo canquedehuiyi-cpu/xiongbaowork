@@ -1761,36 +1761,39 @@ function declaredCellsOf(consumers: Consumer<string>[]): string[] {
   );
 }
 
-describe.each(SCHEME_KINDS)("a %s scheme", (kind: (typeof SCHEME_KINDS)[number]) => {
-  for (const consumer of SCHEME_CONSUMERS) {
-    const cell = consumer.cells[kind];
-    if ("claimedBy" in cell) {
-      test(`${consumer.name} — DECLARED, not asserted: ${cell.decides}`, () => {
-        // The declaration IS the assertion here: this cell names an open finding, and the sentence
-        // above records what the code does today so the next reader can tell the two apart.
-        expect(cell.claimedBy).not.toBe("");
-        expect(DECLARED_CELLS).toContain(`${consumer.name} × ${kind}`);
-      });
-      continue;
+describe.each(SCHEME_KINDS)(
+  "a %s scheme",
+  (kind: (typeof SCHEME_KINDS)[number]) => {
+    for (const consumer of SCHEME_CONSUMERS) {
+      const cell = consumer.cells[kind];
+      if ("claimedBy" in cell) {
+        test(`${consumer.name} — DECLARED, not asserted: ${cell.decides}`, () => {
+          // The declaration IS the assertion here: this cell names an open finding, and the sentence
+          // above records what the code does today so the next reader can tell the two apart.
+          expect(cell.claimedBy).not.toBe("");
+          expect(DECLARED_CELLS).toContain(`${consumer.name} × ${kind}`);
+        });
+        continue;
+      }
+      test(`${consumer.name} ${cell.decides}`, () => asPlatform(cell.assert));
     }
-    test(`${consumer.name} ${cell.decides}`, () => asPlatform(cell.assert));
-  }
-});
+  },
+);
 
 describe.each(BROKERED_PROBE_OUTCOMES)(
   "a probe that %s",
   (outcome: (typeof BROKERED_PROBE_OUTCOMES)[number]) => {
-  for (const consumer of PROBE_CONSUMERS) {
-    const cell = consumer.cells[outcome];
-    if ("claimedBy" in cell) {
-      test(`${consumer.name} — DECLARED, not asserted: ${cell.decides}`, () => {
-        expect(cell.claimedBy).not.toBe("");
-        expect(DECLARED_CELLS).toContain(`${consumer.name} × ${outcome}`);
-      });
-      continue;
+    for (const consumer of PROBE_CONSUMERS) {
+      const cell = consumer.cells[outcome];
+      if ("claimedBy" in cell) {
+        test(`${consumer.name} — DECLARED, not asserted: ${cell.decides}`, () => {
+          expect(cell.claimedBy).not.toBe("");
+          expect(DECLARED_CELLS).toContain(`${consumer.name} × ${outcome}`);
+        });
+        continue;
+      }
+      test(`${consumer.name} ${cell.decides}`, () => asPlatform(cell.assert));
     }
-    test(`${consumer.name} ${cell.decides}`, () => asPlatform(cell.assert));
-  }
   },
 );
 
@@ -1997,4 +2000,8 @@ describe("what a brokered connection writes into the append-only trail", () => {
         ...new Set([...byConsent, ...byFields].map((payload) => payload.scope)),
       ]).toEqual([""]);
     }));
+});
+
+afterAll(async () => {
+  await database.$client.close();
 });

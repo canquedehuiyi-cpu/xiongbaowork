@@ -186,6 +186,7 @@ afterAll(async () => {
       ),
   );
   await releaseAdmin?.();
+  await database.$client.close();
 });
 
 /**

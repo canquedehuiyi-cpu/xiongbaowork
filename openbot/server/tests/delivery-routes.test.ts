@@ -53,7 +53,10 @@ function fixture(
     challengeError?: Error;
     /** The transport the Reachability code was issued for. */
     challengeTransport?: "slack" | "teams";
-    /** Why the gate asked, as the stored request carries it; "task" for a check-in task's. */
+    /**
+     * Why the gate asked, as the stored request carries it; "task" for a check-in task's,
+     * 删除类底线 `destructive_tool`、对外发送底线 `outbound_send` 等。
+     */
     policySource?: string;
     /** What the stored request asks to do, in place of opening example.com. */
     action?: {
@@ -181,7 +184,9 @@ function fixture(
                       behaviour: "ask" as const,
                       source: options.policySource as "task",
                       reason:
-                        "Tasks started from a check-in ask before every change.",
+                        options.policySource === "task"
+                          ? "Tasks started from a check-in ask before every change."
+                          : "这个操作会删除或覆盖内容，总是先征得你同意。",
                     },
                   }
                 : {}),
@@ -863,6 +868,43 @@ test("a click waiting in Slack is named in words, with no tool id or page handle
   expect(JSON.stringify([asked.events, denied.events])).not.toMatch(
     /computer_click|snapshotId|f3e43/,
   );
+});
+test("a deleting action's card offers no Always allow, and an always answer from an old card is taken as once", async () => {
+  const f = fixture({
+    policySource: "destructive_tool",
+    converse: {
+      kind: "waiting",
+      binding: bound,
+      inboxId: "in1",
+      replyText: "",
+      extras: { approvals: [APPROVAL], questions: [] },
+    },
+  });
+  const result = await run(f, {
+    context: [sender()],
+    messages: [{ id: "m9", role: "user", content: "<@UBOT> archive it" }],
+  });
+  const card = result.events.find(
+    (e) => e.type === "CUSTOM" && e.name === "on_interrupt",
+  );
+  expect(card.value.__copilotkit_interrupt_value__.args.allow_always).toBe(
+    false,
+  );
+  const answered = await run(f, {
+    forwardedProps: {
+      command: {
+        resume: {
+          "0f8fad5bd9cb469fa16570867728950e": {
+            confirmed: true,
+            always: true,
+            by: "slack:T1:U1",
+          },
+        },
+      },
+    },
+  });
+  expect(said(answered.events)).toContain("Allowed once");
+  expect(f.decisions).toEqual([["owner", APPROVAL, "allow_once"]]);
 });
 test("SMS STOP and START record opt-out without a turn or a second reply", async () => {
   const f = fixture();

@@ -359,7 +359,10 @@ export function confirmWriteInterrupt(input: {
   approver: string;
   effect?: string;
   fields: { label: string; value: string }[];
-  /** Whether the card offers "Always allow". Not for a check-in task's approval. */
+  /**
+   * Whether the card offers "Always allow". Not for a check-in task's approval.
+   * 删除类底线问的动作不画（见 approvals/types 的 `offersStandingRule`）。
+   */
   allowAlways?: boolean;
 }) {
   return {

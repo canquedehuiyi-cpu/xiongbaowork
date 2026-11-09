@@ -414,4 +414,5 @@ afterAll(async () => {
       .delete(wakerGroups)
       .where(eq(wakerGroups.name, `平台示例组-${suite}`)),
   );
+  await database.$client.close();
 });

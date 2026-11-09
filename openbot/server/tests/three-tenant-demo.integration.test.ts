@@ -286,6 +286,7 @@ afterAll(async () => {
     database.delete(users).where(inArray(users.id, tenants)),
   );
   await releaseAdministrator?.();
+  await database.$client.close();
 });
 
 /**

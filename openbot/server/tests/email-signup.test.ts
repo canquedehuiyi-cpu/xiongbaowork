@@ -43,6 +43,7 @@ beforeAll(async () => {
 });
 afterAll(async () => {
   await releaseRoleWriter?.();
+  await database.$client.close();
 });
 
 const suite = randomUUID().slice(0, 8);

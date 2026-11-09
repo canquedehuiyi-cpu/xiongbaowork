@@ -1,4 +1,9 @@
 import {
+  computerToolPlace,
+  DEVICE_RUN_COMMAND_DESCRIPTION,
+  WORKSPACE_RUN_COMMAND_DESCRIPTION,
+} from "@openbot/shared/computer-tool-words";
+import {
   type HeadlessTool,
   HeadlessToolSuspension,
 } from "@openbot/toolkit/headless-tools";
@@ -6,14 +11,16 @@ import { z } from "zod";
 import { currentApprovalContext } from "../approvals/types";
 import { type AuditStore, recordAuditEvent } from "../audit";
 import type { ComputerSeat } from "./computer-key";
+
 /** The turn engine's headless-tool types live in the toolkit now; re-exported for this server's callers. */
 export { type HeadlessTool, HeadlessToolSuspension };
+
 import { computerActionIdentity } from "./action-identity";
-// --- desktop control (sub-project 2) ---
-import { desktopTools } from "./desktop-tools";
 // --- end desktop control ---
 // --- app discovery (sub-project 3) ---
 import { CANDIDATE_REF } from "./app-discovery";
+// --- desktop control (sub-project 2) ---
+import { desktopTools } from "./desktop-tools";
 // --- end app discovery ---
 import {
   type ActionActor,
@@ -97,9 +104,7 @@ function headlessComputerTools(options: {
   const { gateway, seat, actor, auditStore, signIn } = options;
   const botId = seat.botId;
   const onDevice = options.machine === "device";
-  const where = onDevice
-    ? "your workspace folder on the person's own paired machine (not a container of yours)"
-    : "your workspace";
+  const where = computerToolPlace(options.machine ?? "workspace");
   const snapshotId = z.number().int().positive();
   const ref = z.string().min(1);
   const text = z.string().min(1);
@@ -298,8 +303,8 @@ function headlessComputerTools(options: {
     tool(
       "computer_run_command",
       onDevice
-        ? `Run a shell command on the person's own paired machine, in ${where}: this is how you act on their computer when they ask. The machine may run Windows (PowerShell), macOS or Linux, so write the command for that system. Long output is truncated and long commands are stopped. A command that deletes recursively, formats a drive or names a file that may hold secrets waits for the person's approval; if refused say so rather than retrying.`
-        : "Run a bash shell command in your workspace. Pipes and && work; long output is truncated and long commands are stopped. For package installation check id -u first: as root (0), use apt-get directly; otherwise use sudo openbot-apt update && sudo openbot-apt install <package>, which takes package names and nothing else, not sudo apt-get. If installation is refused, say so rather than retrying.",
+        ? DEVICE_RUN_COMMAND_DESCRIPTION
+        : WORKSPACE_RUN_COMMAND_DESCRIPTION,
       z.strictObject({ command: text }),
       async (input, { signal }) => ({
         ok: true,
@@ -345,7 +350,11 @@ function headlessComputerTools(options: {
         z.strictObject({
           app: z.string().min(1).max(40),
           // No `*`: the tool is half of the approval scope, where `*` would match every tool.
-          tool: z.string().min(1).max(128).regex(/^[^*]+$/),
+          tool: z
+            .string()
+            .min(1)
+            .max(128)
+            .regex(/^[^*]+$/),
           args: z.record(z.string(), z.unknown()).optional(),
         }),
         async (input, { signal }) => ({

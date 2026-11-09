@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
@@ -317,5 +317,9 @@ describe("the admin trail across people", () => {
       error: "Administrator access required.",
     });
     expect(reads).toBe(2);
+  });
+
+  afterAll(async () => {
+    await database.$client.close();
   });
 });

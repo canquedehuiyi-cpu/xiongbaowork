@@ -77,7 +77,10 @@ export type PairedApprovals = {
         target?: unknown;
         threadId: string;
         args: unknown;
-        /** Why the gate asked; a check-in task's approval offers no "Always allow". */
+        /**
+         * Why the gate asked. A check-in task's approval, and one the delete/outbound floors raised
+         * (删除类和对外发送底线问的), offers no "Always allow".
+         */
         policy?: ApprovalPolicyOutcome;
       };
     }>;
@@ -674,6 +677,7 @@ async function decideAsBinding(
       text: "That approval was already decided. Check its result in OpenBot.",
     };
   // An older card may still offer "Always allow" on a check-in task's approval: that is once.
+  // 删除类底线问的动作没有「总是允许」：旧卡片上按的 always 只当作这一次。
   const decision: ApprovalDecision = !resume.confirmed
     ? "deny"
     : resume.always && offersStandingRule(record.action)

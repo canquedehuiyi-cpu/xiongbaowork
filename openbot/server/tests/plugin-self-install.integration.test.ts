@@ -274,6 +274,7 @@ afterAll(async () => {
   await asPlatform(() =>
     database.delete(users).where(inArray(users.id, [alice, bob, adminUser])),
   );
+  await database.$client.close();
 });
 
 describe("before anything is listed", () => {

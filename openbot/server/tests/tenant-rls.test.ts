@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { afterAll, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { createDatabase } from "../src/db/client";
 import { agents } from "../src/db/schema";
@@ -137,4 +137,8 @@ test("a transaction writes and reads as the tenant that opened it", async () => 
   await runAsTenant(`${marker}-a`, () =>
     db.delete(agents).where(eq(agents.id, txAgentId)),
   );
+});
+
+afterAll(async () => {
+  await db.$client.close();
 });

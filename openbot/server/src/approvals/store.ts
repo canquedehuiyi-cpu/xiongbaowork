@@ -237,9 +237,15 @@ export function createApprovalStore(
           throw new ApprovalRefusedError(
             "Only an action handed to you can be marked done by you.",
           );
+        // 删除类和对外发送底线问的动作在任何规则之后都还要问，存一条「总是允许」只会误导人。
+        // 从 check-in 开始的任务（M3/upstream）同理：每一步都要问。
         if (decision === "allow_always" && !offersStandingRule(request.action))
           throw new ApprovalRefusedError(
-            "Tasks started from a check-in ask before every change. Allow this once, or deny it.",
+            request.action.policy?.source === "outbound_send"
+              ? "这个操作可能会把内容发给别人，每次都要你确认，只能「允许一次」或拒绝。"
+              : request.action.policy?.source === "destructive_tool"
+                ? "这个操作会删除或覆盖内容，每次都要你确认，只能「允许一次」或拒绝。"
+                : "Tasks started from a check-in ask before every change. Allow this once, or deny it.",
           );
         if (decision === "allow_always")
           await tx.insert(approvalRules).values({

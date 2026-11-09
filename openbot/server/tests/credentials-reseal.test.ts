@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import {
@@ -296,4 +296,8 @@ describe("resealing v1 credential rows", () => {
     expect(tenants).toContain(a);
     expect(tenants).toContain(b);
   });
+});
+
+afterAll(async () => {
+  await database.$client.close();
 });

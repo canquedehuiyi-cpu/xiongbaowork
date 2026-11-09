@@ -49,6 +49,13 @@ import {
   type PagePurpose,
 } from "./navigation";
 import {
+  createPerBotComputer,
+  PerBotUnavailableError,
+  perBotUsersEnabled,
+  usesOwnUser,
+  XB_BOT_WORKSPACE,
+} from "./per-bot";
+import {
   computerOwner,
   NOT_ITS_OWN_COMPUTER_RECORD,
   PERSONS_OWN_BROWSER,
@@ -80,12 +87,18 @@ import {
   unmarkPersonFilled,
 } from "./secret-masking";
 import { type BotSession, createSessions } from "./sessions";
+import type { CommandRunner } from "./shell";
 import {
   fillSignIn,
   fillSignInCode,
   parseSignInCode,
   parseSignInFill,
 } from "./sign-in";
+import {
+  createTerminalSockets,
+  TERMINAL_UNAVAILABLE,
+  type TerminalSocketData,
+} from "./terminal-socket";
 import { startVirtualDisplay } from "./virtual-display";
 import { applyWebBotAuthPush } from "./web-bot-auth";
 import {
@@ -94,12 +107,7 @@ import {
   WorkspaceFileTooLargeError,
   WorkspacePathError,
 } from "./workspace";
-import {
-  createTerminalSockets,
-  TERMINAL_UNAVAILABLE,
-  type TerminalSocketData,
-} from "./terminal-socket";
-import { createWorkspaces } from "./workspaces";
+import { createWorkspaces, type Workspace } from "./workspaces";
 
 /**
  * The Bot's computer: one long-lived browser, reachable over HTTP.
@@ -317,9 +325,18 @@ const workspaces = createWorkspaces(
   process.env.COMPUTER_SEPARATE_WORKSPACES?.trim().toLowerCase() === "on",
 );
 
-/** Each seat's live shell, as a terminal a person watches and, holding the wheel, types into. */
+/**
+ * Each seat's live shell, as a terminal a person watches and, holding the wheel, types into.
+ *
+ * Never for an employee with its own Linux user: the live shell is this process's bash, so it would
+ * be pwuser's. The upgrade below refuses those seats; this refuses them again, so a path that forgets
+ * cannot open one.
+ */
 const terminalSockets = createTerminalSockets<StreamData & TerminalSocketData>({
-  shellFor: async (seat) => (await workspaces.for(seat)).shell.terminal,
+  shellFor: async (seat) => {
+    if (runsAsOwnUser(seat)) throw new Error(TERMINAL_NOT_FOR_OWN_USER);
+    return (await workspaces.for(seat)).shell.terminal;
+  },
   mayType: (seat) => sessions.for(seat).control.humanMayDrive(),
   takeControlFirst: TAKE_CONTROL_FIRST,
   describe,
@@ -441,6 +458,54 @@ const DEFAULT_BOT_ID = (() => {
   }
   return configured;
 })();
+
+/**
+ * Each employee's files, and with `COMPUTER_PER_BOT_USERS=on` its own Linux user. See per-bot.ts.
+ *
+ * Switched off (the default outside the one-container image) every employee shares the workspace
+ * root, exactly as before. Switched on, an employee other than the default one gets
+ * `<workspace>/bots/<botKey>`, prepared by the root helper on its first call.
+ */
+const PER_BOT_USERS = perBotUsersEnabled(process.env, process.platform);
+const perBot = createPerBotComputer({
+  workspaceRoot: process.env.WORKSPACE_DIR?.trim() || "/workspace",
+  defaultBotId: DEFAULT_BOT_ID,
+  enabled: PER_BOT_USERS,
+  helperRoot: XB_BOT_WORKSPACE,
+});
+
+/**
+ * Whether this seat's files and commands are an employee's own Linux user's.
+ *
+ * Keyed by the seat, the same id the folders and shells above are kept by: on a computer people
+ * share, each person's seat for a Bot is its own user too, never one user for everyone at that Bot.
+ * The default employee's own seat, and every seat with the switch off, stay with `workspaces`.
+ */
+function runsAsOwnUser(seat: string): boolean {
+  return usesOwnUser(seat, DEFAULT_BOT_ID, PER_BOT_USERS);
+}
+
+/** Said on the terminal socket of an employee with its own user, which has no live shell. */
+const TERMINAL_NOT_FOR_OWN_USER =
+  "This employee runs commands as its own user, so there's no live terminal to show. Its commands still run, one at a time.";
+
+/** The seat's files: its own user's directory, or its folder in `workspaces`. */
+async function filesFor(seat: string): Promise<Workspace> {
+  return runsAsOwnUser(seat)
+    ? perBot.workspaceFor(seat)
+    : (await workspaces.for(seat)).files;
+}
+
+/**
+ * What runs the seat's commands. An employee with its own user: one command at a time through the
+ * root helper (`sudo -n xb-bot run`), never this process's live shell. Everyone else: the seat's live
+ * shell.
+ */
+async function commandsFor(seat: string): Promise<CommandRunner> {
+  return runsAsOwnUser(seat)
+    ? perBot.shellFor(seat)
+    : (await workspaces.for(seat)).shell;
+}
 
 async function currentPage(
   botId: string,
@@ -1213,12 +1278,18 @@ serve<StreamData & TerminalSocketData>({
           return json({ error: "That is not a usable bot id." }, 400);
         if (isPersonBrowserId(named.bot))
           return json({ error: PERSONS_OWN_BROWSER }, 403);
+        // Opened to say so, as where commands are off: an employee with its own user has no live shell.
+        const terminalRefused = !RUNTIME.allowExec
+          ? TERMINAL_UNAVAILABLE
+          : runsAsOwnUser(named.seat)
+            ? TERMINAL_NOT_FOR_OWN_USER
+            : undefined;
         if (
           server.upgrade(request, {
             data: {
               botId: named.seat,
               kind: "terminal" as const,
-              ...(RUNTIME.allowExec ? {} : { refused: TERMINAL_UNAVAILABLE }),
+              ...(terminalRefused ? { refused: terminalRefused } : {}),
             },
           })
         )
@@ -1473,19 +1544,28 @@ serve<StreamData & TerminalSocketData>({
 
       if (url.pathname === "/health") {
         const [profile] = profiles.summary([botId]);
-        return json({
-          status: "ok",
-          // `browser` kept as it was: it is in the published contract and start.sh reads it.
-          browser: profile?.running ?? false,
-          profile,
-          // Which Bot this computer can prove it is, when the deployment runs SPIRE. Null is a
-          // deployment without it, not a failure, and it is reported rather than omitted so the
-          // difference between "no identity here" and "identity broken" is visible.
-          identity: await identity(),
-          browserMode: BROWSER_MODE,
-          browserBackend: RUNTIME.backend,
-          browserChannel: RUNTIME.channel,
-        });
+        const perBotUsers = await perBot.status();
+        // Switched on and unable to give an employee its own user is not healthy: those employees
+        // are refused rather than quietly sharing one user, so the orchestrator should know.
+        // Switched off, the answer is exactly what it was before the switch existed.
+        const unready = perBotUsers.enabled && !perBotUsers.ready;
+        return json(
+          {
+            status: unready ? "unready" : "ok",
+            // `browser` kept as it was: it is in the published contract and start.sh reads it.
+            browser: profile?.running ?? false,
+            profile,
+            // Which Bot this computer can prove it is, when the deployment runs SPIRE. Null is a
+            // deployment without it, not a failure, and it is reported rather than omitted so the
+            // difference between "no identity here" and "identity broken" is visible.
+            identity: await identity(),
+            browserMode: BROWSER_MODE,
+            browserBackend: RUNTIME.backend,
+            browserChannel: RUNTIME.channel,
+            ...(perBotUsers.enabled ? { perBotUsers } : {}),
+          },
+          unready ? 503 : 200,
+        );
       }
 
       /**
@@ -1729,7 +1809,7 @@ serve<StreamData & TerminalSocketData>({
       // MAY touch a path: the gateway in front of this process does that.
       if (url.pathname === "/files/download" && request.method === "GET") {
         try {
-          const { files } = await workspaces.for(botId);
+          const files = await filesFor(botId);
           const file = await files.download(url.searchParams.get("path") ?? "");
           return new Response(file.body, {
             headers: downloadHeaders(file.name, file.bytes),
@@ -1747,7 +1827,7 @@ serve<StreamData & TerminalSocketData>({
           path?: unknown;
         } | null;
         try {
-          const { files } = await workspaces.for(botId);
+          const files = await filesFor(botId);
           return json(await files.read(String(body?.path ?? "")));
         } catch (error) {
           return json(
@@ -1762,7 +1842,7 @@ serve<StreamData & TerminalSocketData>({
           path?: unknown;
         } | null;
         try {
-          const { files } = await workspaces.for(botId);
+          const files = await filesFor(botId);
           return json(
             await files.list(
               typeof body?.path === "string" ? body.path : undefined,
@@ -1805,8 +1885,9 @@ serve<StreamData & TerminalSocketData>({
         }
         try {
           // Rooted in the same folder the file tools use, so a command and a written file see one
-          // directory rather than two.
-          const { shell } = await workspaces.for(botId);
+          // directory rather than two. An employee with its own user gets its own shell, run through
+          // the helper; with that user unavailable, a 503 rather than the shared one.
+          const shell = await commandsFor(botId);
           return json(
             await shell.run({
               command: body.command,
@@ -1819,7 +1900,7 @@ serve<StreamData & TerminalSocketData>({
         } catch (error) {
           return json(
             { error: describe(error, "The command could not be run.") },
-            500,
+            error instanceof PerBotUnavailableError ? 503 : 500,
           );
         }
       }
@@ -1834,7 +1915,7 @@ serve<StreamData & TerminalSocketData>({
           return json({ error: "The contents to write are required." }, 400);
         }
         try {
-          const { files } = await workspaces.for(botId);
+          const files = await filesFor(botId);
           return json(
             await files.write(String(body?.path ?? ""), body.contents, {
               append: body.append === true,
@@ -2203,7 +2284,9 @@ function describe(error: unknown, fallback: string): string {
  * succeed. Collapsing these into 500 would tell the caller the computer is broken and invite a retry
  * of the same request.
  */
-function fileStatus(error: unknown): 400 | 403 | 404 | 413 | 500 {
+function fileStatus(error: unknown): 400 | 403 | 404 | 413 | 500 | 503 {
+  // The employee's own computer is not ready; a 503 rather than its files falling back to the shared root.
+  if (error instanceof PerBotUnavailableError) return 503;
   if (error instanceof WorkspacePathError) return 403;
   if (error instanceof WorkspaceFileTooLargeError) return 413;
   if (error instanceof WorkspaceFileNotFoundError) return 404;

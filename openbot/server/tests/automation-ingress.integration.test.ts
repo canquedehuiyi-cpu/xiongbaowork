@@ -245,6 +245,7 @@ afterAll(async () => {
     await as(tenant, () => store.softDelete(id)).catch(() => false);
   }
   await clearQueue();
+  await database.$client.close();
 });
 
 describe("the public hook (AUT2)", () => {

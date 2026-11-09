@@ -932,6 +932,9 @@ export function createComputerRoutes(
         context.req.param("botId"),
         actorOf(context.var.actor),
       ),
+      // For every viewer, not only the owner: a teammate on a device deployment still runs commands
+      // on the paired machine, and the chat words its shell tool by this.
+      machine: gateway.machine(),
     }),
   );
 

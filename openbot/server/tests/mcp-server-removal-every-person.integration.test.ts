@@ -201,6 +201,7 @@ afterAll(async () => {
     await database.delete(users).where(eq(users.id, person));
   });
   await releaseAdmin?.();
+  await database.$client.close();
 });
 
 test("removing a token server revokes every person's token and releases every person's grant", async () => {

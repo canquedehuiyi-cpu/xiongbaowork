@@ -229,6 +229,7 @@ afterAll(async () => {
     await database.delete(users).where(inArray(users.id, [alice, bob]));
   });
   await remote.stop();
+  await database.$client.close();
 });
 
 const as = (person: string | null) =>

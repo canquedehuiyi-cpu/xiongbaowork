@@ -461,4 +461,5 @@ afterAll(async () => {
   if (systemCrew) await clean("system", systemCrew);
   await runAsTenant("system", remove(systemAgent));
   await runAsTenant(tenantB, remove(ownAgent));
+  await database.$client.close();
 });
