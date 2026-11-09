@@ -12,19 +12,28 @@ import type { ReactNode } from "react";
  */
 export function ToolLine({
   label,
+  blockedLabel,
   detail,
   running,
   refused,
+  declined,
   failed,
   children,
 }: {
   /** What was done, in a couple of words: "Searched Slack", "Filled in", "Read the page". */
   label: string;
+  /**
+   * 被拦截或被拒绝时用的说法，未完成式：「执行命令」，不是「执行了命令」。`label` 多是完成式，
+   * 拼成「已拦截：执行了命令」就成了命令已经执行了，与事实相反。不给就用 `label`。
+   */
+  blockedLabel?: string;
   /** What it was done to. Muted, and truncated rather than wrapped. */
   detail?: string;
   running?: boolean;
   /** A policy or a boundary said no. Final: nothing the Bot does differently will help. */
   refused?: boolean;
+  /** 和 `refused` 一起用：说「不」的是主人自己（在对话卡片上拒绝了），不是策略或边界。 */
+  declined?: boolean;
   /** It was permitted and did not work. A different request might. */
   failed?: boolean;
   /** Shown when the line is expanded. Without it the line is not expandable. */
@@ -43,7 +52,12 @@ export function ToolLine({
       }`}
     >
       <span className="shrink-0">
-        {refused ? "已拦截" : failed ? `${label}，没有成功` : label}
+        {/* 拦下的是哪一步也写出来，不只一个「已拦截」。 */}
+        {refused
+          ? `${declined ? "已拒绝" : "已拦截"}：${blockedLabel ?? label}`
+          : failed
+            ? `${label}，没有成功`
+            : label}
       </span>
       {detail ? <span className="truncate opacity-70">{detail}</span> : null}
     </span>

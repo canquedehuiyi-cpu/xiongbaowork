@@ -1,6 +1,7 @@
 import type { OutboundPolicy } from "../net/outbound-guard";
 import * as baiduNetdiskRest from "./baidu-netdisk-rest";
 import * as builtinRoutines from "./builtin-routines";
+import type { CredentialPlacement } from "./catalogue";
 import * as composio from "./composio";
 import * as driveRest from "./google-drive-rest";
 import type { ListedTool, McpCallResult } from "./mcp";
@@ -62,6 +63,12 @@ export type VendorTransport = {
    * sequence hinted that the middle step was doing no work.
    */
   listNeedsCredential: boolean;
+  /**
+   * 工具清单是不是本部署自己的代码，而不是 vendor 的答复：Routines、Google Drive 和百度网盘是。
+   * 这样的清单每次启动都会刷新到当前版本（`refreshOwnListings`），因为添加应用时保存的那份属于
+   * 添加它的那一版。别人发布的清单不设这个字段，只有「刷新工具」才替换。
+   */
+  listIsThisCode?: boolean;
   listTools(connection: {
     url: string;
     token?: string;
@@ -84,6 +91,12 @@ export type VendorTransport = {
     botId?: string;
     /** Set for a tenant-chosen MCP URL; read by `./mcp` only. See its `Connection.outbound`. */
     outbound?: OutboundPolicy;
+    /**
+     * Where `token` goes for a placed deployment credential; read by `./mcp` only. See its
+     * `Connection.placement`. The store refuses a placed entry on any other transport rather than
+     * hand one a key it would send as a bearer token.
+     */
+    placement?: CredentialPlacement;
   }): Promise<ListedTool[]>;
   callTool(
     connection: {
@@ -108,6 +121,8 @@ export type VendorTransport = {
       botId?: string;
       /** Set for a tenant-chosen MCP URL; read by `./mcp` only. See its `Connection.outbound`. */
       outbound?: OutboundPolicy;
+      /** As on `listTools` above: read by `./mcp` only. */
+      placement?: CredentialPlacement;
     },
     toolName: string,
     args: Record<string, unknown>,

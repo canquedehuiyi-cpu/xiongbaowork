@@ -5,7 +5,30 @@ import {
   type ApprovalDecision,
   approvalInboxOptions,
   decideApproval,
+  offersStandingRule,
 } from "@/lib/approvals";
+
+/**
+ * 审批卡片上「目标」怎么称呼。
+ *
+ * 主人电脑上的文件夹（`host/` 开头的动作）用它的名字：服务端 `host-access/broker.ts` 把
+ * `displayName` 放在动作的 `target` 里。它的 `scope` 是授权 id，以前卡片上就写着
+ * 「目标 host-grant-15407-1794112361547002000」。没记下名字时也不退回授权 id。其余动作照旧写 `scope`。
+ */
+export function approvalTargetName(action: {
+  toolRef: string;
+  scope: string;
+  target: unknown;
+}): string {
+  if (!action.toolRef.startsWith("host/")) return action.scope;
+  const displayName =
+    action.target && typeof action.target === "object"
+      ? (action.target as { displayName?: unknown }).displayName
+      : undefined;
+  return typeof displayName === "string" && displayName.trim()
+    ? displayName
+    : "你电脑上的文件夹";
+}
 
 /**
  * A pending approval, drawn in the conversation where the action it holds would have been.
@@ -42,7 +65,13 @@ export function InlineApproval({
       ]
     : [
         ["allow_once", "允许一次"],
-        ["allow_always", "在这里总是允许"],
+        // 删除类和对外发送底线问的动作每次都要问，存下的规则用不上，所以不给这个选项（服务端也会拒绝）。
+        ...(offersStandingRule(request.action.policy)
+          ? ([["allow_always", "在这里总是允许"]] as [
+              ApprovalDecision,
+              string,
+            ][])
+          : []),
         ["deny", "拒绝"],
       ];
   return (
@@ -55,7 +84,7 @@ export function InlineApproval({
         {request.action.toolRef
           .replace(/^computer_|^host\//, "")
           .replaceAll("_", " ")}
-        ，目标 {request.action.scope}
+        ，目标 {approvalTargetName(request.action)}
       </p>
       {request.action.policy ? (
         <p className="text-muted-foreground">{request.action.policy.reason}</p>

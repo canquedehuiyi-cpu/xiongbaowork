@@ -59,6 +59,7 @@ const originalFetch = global.fetch;
 let sent: Sent[] = [];
 let page: PluginsPage;
 let refuseWrite = false;
+let refusalText = "The deployment refused this change.";
 
 function pageWith(
   catalogue: CatalogueItem[],
@@ -99,6 +100,7 @@ function server(overrides: Partial<PluginServer>): PluginServer {
 beforeEach(() => {
   sent = [];
   refuseWrite = false;
+  refusalText = "The deployment refused this change.";
   global.fetch = Object.assign(
     async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
       const path = String(input).split("?")[0] ?? "";
@@ -116,7 +118,7 @@ beforeEach(() => {
       if (path === "/api/agents") return json({ agents: [] });
       if (path.startsWith("/api/plugins/servers") && method === "POST") {
         if (refuseWrite) {
-          return json({ error: "The deployment refused this change." }, 400);
+          return json({ error: refusalText }, 400);
         }
         return json({ server: {} });
       }
@@ -336,4 +338,85 @@ test("a refused instance host is said on the page and the dialog stays open", as
     await view.findByText("The deployment refused this change."),
   ).toBeTruthy();
   expect(document.getElementById("instance-host")).not.toBeNull();
+});
+
+/*
+ * A PLACED CREDENTIAL — a key the server puts into a query parameter, or a per-customer address —
+ * reaches the vault only through `POST /servers/:id/token`, which checks its shape before sealing
+ * it. So the first add never goes through `POST /api/admin/credentials` and never sends an id, and
+ * the page asks for the thing by the catalogue's own name for it.
+ */
+const PLACED_LABEL = "钉钉 MCP 专属地址";
+const placedItem: CatalogueItem = {
+  key: "placed",
+  title: "Placed",
+  vendor: "vendor.example",
+  summary: "",
+  docsUrl: "",
+  auth: "deployment-bearer",
+  credentialLabel: PLACED_LABEL,
+  credentialHint: "从控制台复制。",
+  perInstance: false,
+};
+
+test("a placed credential's vendor is added with no credential id and nothing stored first", async () => {
+  page = pageWith([placedItem], []);
+  const view = renderAdmin("placed");
+  const user = userEvent.setup({ document });
+  await user.click(await view.findByLabelText("为这个部署启用 Placed"));
+
+  await waitFor(() => expect(sent).toHaveLength(1));
+  expect(sent[0]).toEqual({
+    method: "POST",
+    path: "/api/plugins/servers",
+    body: { key: "placed" },
+  });
+  expect(sent.map((request) => request.path)).not.toContain(
+    "/api/admin/credentials",
+  );
+});
+
+test("a placed credential is asked for by its own name and stored through the checked door", async () => {
+  page = pageWith([placedItem], [server({ id: "placed", title: "Placed" })]);
+  const view = renderAdmin("placed");
+  const user = userEvent.setup({ document });
+  await user.click(await view.findByText(PLACED_LABEL));
+  const input = await waitFor(() => {
+    const field = document.getElementById("access-token");
+    if (!field) throw new Error("the credential field is not open");
+    return field;
+  });
+  await user.type(input, NEW_TOKEN);
+  await user.click(await view.findByText("保存"));
+
+  await waitFor(() => expect(sent).toHaveLength(1));
+  expect(sent[0]).toEqual({
+    method: "POST",
+    path: "/api/plugins/servers/placed/token",
+    body: { token: NEW_TOKEN },
+  });
+});
+
+test("a malformed placed credential is refused at the form, in the server's words, without repeating it", async () => {
+  refuseWrite = true;
+  refusalText = `「${PLACED_LABEL}」的格式不对：必须是 https://mcp-gw.dingtalk.com/server/<服务 ID>?key=<密钥> 这样的完整 https 地址。`;
+  page = pageWith([placedItem], [server({ id: "placed", title: "Placed" })]);
+  const view = renderAdmin("placed");
+  const user = userEvent.setup({ document });
+  await user.click(await view.findByText(PLACED_LABEL));
+  const input = await waitFor(() => {
+    const field = document.getElementById("access-token");
+    if (!field) throw new Error("the credential field is not open");
+    return field;
+  });
+  await user.type(input, NEW_TOKEN);
+  await user.click(await view.findByText("保存"));
+
+  expect(await view.findByText(refusalText)).toBeTruthy();
+  expect(document.getElementById("access-token")).not.toBeNull();
+  expect(sent.map((request) => request.path)).toEqual([
+    "/api/plugins/servers/placed/token",
+  ]);
+  // The page shows the server's sentence and nothing of what was typed.
+  expect(document.body.textContent ?? "").not.toContain(NEW_TOKEN);
 });

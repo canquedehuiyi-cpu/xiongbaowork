@@ -74,6 +74,11 @@ const CREDENTIAL_BY_AUTH: Record<
 > = {
   none: "none",
   "deployment-bearer": "deployment-token",
+  // The placed kinds are the deployment's one credential too; only where it sits on the request
+  // differs, and that is the transport's business (`placeCredential` in catalogue.ts).
+  "deployment-query": "deployment-token",
+  "deployment-header": "deployment-token",
+  "deployment-address": "deployment-token",
   "user-oauth": "person-oauth",
   builtin: "none",
 };
@@ -98,6 +103,9 @@ const REACHED_AS_BY_AUTH: Record<
 > = {
   none: "deployment",
   "deployment-bearer": "deployment",
+  "deployment-query": "deployment",
+  "deployment-header": "deployment",
+  "deployment-address": "deployment",
   "user-oauth": "person",
   builtin: "person",
 };
@@ -199,6 +207,20 @@ function isBrokerTransport(kind: TransportKind): boolean {
 }
 
 /**
+ * A reviewed entry whose auth kind neither table below {@link accessFor} has a row for.
+ *
+ * Unreachable through the type, like {@link CatalogueTransportUnroutableError}, and refused for the
+ * same reason: this is what stands behind a cast, and the unrefused answer was a credential of
+ * `undefined` that the store reads as "the deployment's token".
+ */
+export class CatalogueAuthUnknownError extends ServerUnresolvableError {
+  constructor(message: string) {
+    super(message);
+    this.name = "CatalogueAuthUnknownError";
+  }
+}
+
+/**
  * A reviewed entry decides for itself; otherwise the row decides — and a row that claims both is
  * refused rather than resolved.
  *
@@ -239,6 +261,23 @@ export function accessFor(
     if (isBrokerTransport(entry.transport ?? "mcp")) {
       throw new CatalogueTransportUnroutableError(
         `${entry.key} is a catalogue entry declaring the composio transport, which is reached from a row's provenance and the app slug in its url — neither of which an entry has. There is no app to broker to and no connection to check, so this entry is not resolved at all: give it the transport it is actually reached over.`,
+      );
+    }
+
+    /*
+     * Asked through `Object.hasOwn`, because the two tables are complete only for the kinds the
+     * compiler knows. An entry whose kind arrived past the type — a cast, a fixture, a loader — read
+     * `undefined` here, and `connectionTokenFor` treats every credential that is neither brokered nor
+     * a person's as the deployment's token: the key would have gone out as a bearer header for an
+     * entry nobody reviewed that way. Refused instead, on the same shelf as the two refusals above.
+     */
+    const kind: string = entry.auth.kind;
+    if (
+      !Object.hasOwn(CREDENTIAL_BY_AUTH, kind) ||
+      !Object.hasOwn(REACHED_AS_BY_AUTH, kind)
+    ) {
+      throw new CatalogueAuthUnknownError(
+        `${entry.key} is a catalogue entry whose auth kind (${kind}) this deployment does not know, so it is not resolved at all rather than dialled without a credential or with the wrong one.`,
       );
     }
 

@@ -356,6 +356,8 @@ export function confirmWriteInterrupt(input: {
   approver: string;
   effect?: string;
   fields: { label: string; value: string }[];
+  /** 是否画「总是允许」按钮；删除类底线问的动作不画（见 approvals/types 的 `offersStandingRule`）。 */
+  allowAlways?: boolean;
 }) {
   return {
     __opentag_interrupt_id__: interruptIdForApproval(input.approvalId),
@@ -369,7 +371,7 @@ export function confirmWriteInterrupt(input: {
         ["read", "write", "destructive"].includes(input.effect)
           ? { effect: input.effect }
           : {}),
-        allow_always: true,
+        allow_always: input.allowAlways ?? true,
       },
     },
   };
