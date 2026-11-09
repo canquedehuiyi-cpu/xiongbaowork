@@ -3,6 +3,7 @@ import {
   CATALOGUE,
   type CatalogueEntry,
   catalogueEntry,
+  checkInRead,
   classifyTool,
   customUrlRefusal,
   hostAdmissible,
@@ -651,4 +652,73 @@ test("anonymous authentication alone does not opt a source into owner assembly",
   expect(ownerAssemblySource(catalogueEntry("unknown-owner-source"))).toBe(
     false,
   );
+});
+
+/*
+ * check-in 只认可靠的读：厂商记录为读的，或目录 `readTools` 里审查过的名字。`classifyTool` 对
+ * 「目录里有、名单都没提到、厂商也没记录」的工具推断为读，这个推断不能让工具进 check-in。
+ */
+describe("what a check-in may read", () => {
+  test("a tool nothing labelled is not a check-in read, even where chat infers a read", () => {
+    const linear = catalogueEntry("linear");
+    expect(linear?.readTools).toBeUndefined();
+    const silent = { effect: null, destructive: false, unclassified: false };
+    // 聊天的判定不变：目录里有、写名单没提到，就是读。
+    expect(classifyTool(linear, "list_things", true, null)).toBe("read");
+    expect(checkInRead(linear, "list_things", silent)).toBe(false);
+    // 没有目录条目的服务器、Notion 广播的没有标签的名字，也一样。
+    expect(checkInRead(null, "list_things", silent)).toBe(false);
+    expect(
+      checkInRead(catalogueEntry("notion"), "notion-delete-page", silent),
+    ).toBe(false);
+  });
+
+  test("a reviewed read is a check-in read, unless something says it writes or destroys", () => {
+    const context7 = catalogueEntry("context7");
+    expect(context7?.readTools).toContain("query-docs");
+    const silent = { effect: null, destructive: false, unclassified: false };
+    expect(checkInRead(context7, "query-docs", silent)).toBe(true);
+    expect(
+      checkInRead(context7, "query-docs", { ...silent, effect: "write" }),
+    ).toBe(false);
+    expect(
+      checkInRead(context7, "query-docs", { ...silent, destructive: true }),
+    ).toBe(false);
+    expect(
+      checkInRead(context7, "query-docs", { ...silent, unclassified: true }),
+    ).toBe(false);
+    // 写名单上的名字永远不是读，哪怕读名单也列了它。
+    const both = { ...context7!, writeTools: ["query-docs"] };
+    expect(checkInRead(both, "query-docs", silent)).toBe(false);
+  });
+
+  test("an action the vendor recorded as a read is a check-in read; any other recorded value is not", () => {
+    const recorded = (effect: string | null) => ({
+      effect,
+      destructive: false,
+      unclassified: false,
+    });
+    expect(checkInRead(null, "GMAIL_FETCH_EMAILS", recorded("read"))).toBe(
+      true,
+    );
+    for (const value of ["write", "", "READ", " read"])
+      expect(checkInRead(null, "GMAIL_FETCH_EMAILS", recorded(value))).toBe(
+        false,
+      );
+    expect(
+      checkInRead(null, "GMAIL_PURGE", {
+        effect: "read",
+        destructive: true,
+        unclassified: false,
+      }),
+    ).toBe(false);
+    // 列了 readTools 的条目，名单外的名字即使厂商记了读也不算：名单只收紧。
+    expect(
+      checkInRead(
+        catalogueEntry("context7"),
+        "some-new-tool",
+        recorded("read"),
+      ),
+    ).toBe(false);
+  });
 });
