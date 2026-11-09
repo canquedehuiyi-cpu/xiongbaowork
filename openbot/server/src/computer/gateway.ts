@@ -1196,6 +1196,8 @@ export function createComputerGateway(
             ? { command: subject.command }
             : {}),
           ...(filePath !== undefined ? { path: filePath } : {}),
+          // 要按的键，给键盘发送底线：调用处的值，不是模型的参数。
+          ...(subject.key !== undefined ? { key: subject.key } : {}),
           runner: target !== null,
           // The device-list verdict for a local app's tool, for the app-tool floor (§4.4).
           ...(app ? { appTool: { readOnly: app.readOnly === true } } : {}),

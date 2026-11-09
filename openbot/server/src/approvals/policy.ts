@@ -143,6 +143,10 @@ export function applicableRules(input: {
   };
 }
 
+/** 按钮上动词前面的确认词：「Yes, delete」「Confirm transfer」（参照上游 `CONFIRMING`）。 */
+const CONFIRMING =
+  "(?:(?:yes|ok|okay|confirm|continue and|i want to|permanently)[,\\s]+)?";
+
 /**
  * Built-in safety requirements. These always hand the action to the person, before and regardless of
  * any rule, preference or reviewer verdict, and they are not configurable.
@@ -163,6 +167,8 @@ const SAFETY_REQUIREMENTS: readonly {
   pagePathOnly?: true;
   /** 只匹配应用工具自己的名字（见 {@link actionName}，参照上游 #998、#1015）。 */
   tool?: RegExp;
+  /** 只匹配网页上点击的按钮的文字（见 {@link actionName}）。 */
+  click?: RegExp;
 }[] = [
   {
     id: "credentials",
@@ -201,6 +207,10 @@ const SAFETY_REQUIREMENTS: readonly {
      * （submit on demand payroll、run payroll）算，工资单的文件和设置不算。
      */
     tool: /\b(payouts?|transfers?(?! (an? |the )?(ownership|of ownership|files?|domains?|calls?|chats?|conversations?|repositor(y|ies)|repos?)\b)|withdraw(als?)?|charges?|buy|purchases?|remit|pay (an? |the )?(invoices?|orders?|bills?|balances?)|(create|place|submit) (an? )?order|send money|(submit|run|process|approve|execute|confirm|pay) (an? |the )?(\w+ ){0,3}?(payrolls?|pay runs?|payruns?)(?! (migration|imports?|amendments?|entries|settings?|reports?)\b)|(upgrade|downgrade) (an? |the |your |my )?(\w+ ){0,2}?(plans?|subscriptions?|tiers?|seats?|licen[cs]es?)|(change|switch) (an? |the |your |my )?(\w+ ){0,2}?(plans?|subscriptions?|tiers?)|(create|start|purchase) (an? )?app subscriptions?)\b/,
+    // 网页上的付款、购买、带金额的发送和升降级套餐按钮。
+    click: new RegExp(
+      `^${CONFIRMING}(transfer|withdraw|pay|buy|send money)\\b|^${CONFIRMING}(send|pay|transfer|donate|tip)\\b.*[$€£¥₹]\\s?\\d|\\b(place (your )?order|(complete|confirm|submit) (your )?(purchase|order)|order now|buy now|buy it now)\\b|^${CONFIRMING}(upgrade|downgrade|(change|switch) (your |my |the )?plan|start (my |your )?(subscription|membership))\\b`,
+    ),
   },
 ];
 
@@ -331,33 +341,94 @@ function handOffRequirement(
     candidate.subject?.connector !== true
   )
     return undefined;
+  /*
+   * Bot 往字段里输入的内容是内容，不是动作（上游 #836）：CRM 备注里写「采购订单」不是采购。输入框
+   * 本身和所在页面说明了动作是什么（「卡号」「…/checkout」「新密码」），它们照样读。只去掉
+   * `computer_type` 的 `text`，其它工具的参数照旧全读。
+   */
+  const args =
+    candidate.toolRef === "computer_type" &&
+    candidate.args !== null &&
+    typeof candidate.args === "object" &&
+    !Array.isArray(candidate.args)
+      ? { ...(candidate.args as Record<string, unknown>), text: undefined }
+      : candidate.args;
   const wordsWith = (target: unknown) =>
-    [
-      candidate.toolRef,
-      candidate.scope,
-      flatten(candidate.args),
-      flatten(target),
-    ].join(" ");
+    [candidate.toolRef, candidate.scope, flatten(args), flatten(target)].join(
+      " ",
+    );
   const words = wordsWith(candidate.target);
   const pathWords = wordsWith(pageWithoutQuery(candidate.target));
   const named = actionName(candidate);
-  const hit = SAFETY_REQUIREMENTS.find(
-    (entry) =>
-      entry.pattern.test(entry.pagePathOnly ? pathWords : words) ||
-      (named?.kind === "tool" && entry.tool?.test(named.name) === true),
-  );
+  const hit =
+    SAFETY_REQUIREMENTS.find(
+      (entry) =>
+        entry.pattern.test(entry.pagePathOnly ? pathWords : words) ||
+        (named !== undefined &&
+          (named.kind === "tool" ? entry.tool : entry.click)?.test(
+            named.name,
+          ) === true),
+    ) ??
+    (paysToSubscribe(candidate, named)
+      ? SAFETY_REQUIREMENTS.find((entry) => entry.id === "payments")
+      : undefined);
   return hit ? { id: hit.id, reason: hit.reason } : undefined;
 }
 
 /**
- * 这个动作叫什么，和它带了什么无关：应用工具自己的名字，拆成小写单词（见 {@link toolWords}）。
- * 只认经插件调用路径来的应用工具（`subject.connector`）；Bot 自己的工具和电脑上的动作没有这种名字。
+ * 「订阅」按钮是不是在买付费套餐（上游 #1015）：按钮文字带价格或套餐，或者它所在的页面讲的是
+ * 套餐、定价、账单。订阅频道或免费简报什么也没买，交给本人反而让 Bot 根本按不了。
+ */
+function paysToSubscribe(
+  candidate: ApprovalCandidate,
+  named: ReturnType<typeof actionName>,
+): boolean {
+  if (
+    named?.kind !== "click" ||
+    !new RegExp(`^${CONFIRMING}subscribe\\b`).test(named.name)
+  )
+    return false;
+  if (
+    /[$€£¥₹]\s?\d|\b(premium|pro|plus|membership|plans?|annual|annually|monthly|yearly|month|year|trial)\b/.test(
+      named.name,
+    )
+  )
+    return true;
+  const page = (candidate.target as { pageUrl?: unknown } | undefined)?.pageUrl;
+  if (typeof page !== "string") return false;
+  try {
+    const url = new URL(page);
+    return /\b(pricing|plans?|billing|checkout|subscriptions?|membership|premium|upgrade|payment)\b/i.test(
+      `${url.pathname} ${url.search}`,
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 这个动作叫什么，和它带了什么无关（参照上游 `actionName`）：应用工具自己的名字，拆成小写单词
+ * （见 {@link toolWords}），只认经插件调用路径来的应用工具（`subject.connector`）；或者网页上点击
+ * 的按钮的文字（「Place your order」），来自网关从快照里解析出的元素。其它电脑动作没有名字。
  */
 function actionName(
   candidate: ApprovalCandidate,
-): { kind: "tool"; name: string } | undefined {
-  if (candidate.subject?.connector !== true) return undefined;
-  return { kind: "tool", name: toolWords(candidate.toolRef) };
+): { kind: "tool" | "click"; name: string } | undefined {
+  if (candidate.subject?.connector === true)
+    return { kind: "tool", name: toolWords(candidate.toolRef) };
+  if (candidate.toolRef !== "computer_click") return undefined;
+  const label = elementName(candidate).replace(/\s+/g, " ").trim();
+  return label ? { kind: "click", name: label } : undefined;
+}
+
+/** 网关交给审批门的元素名字（`target.element.name`），小写；没有就是空串。 */
+function elementName(candidate: ApprovalCandidate): string {
+  const target = candidate.target as
+    | { element?: { name?: unknown } }
+    | undefined;
+  return typeof target?.element?.name === "string"
+    ? target.element.name.toLowerCase()
+    : "";
 }
 
 /**
@@ -1116,7 +1187,105 @@ export function onceOnlyFloor(
     destructiveFloor(candidate) ??
     outboundSendFloor(candidate) ??
     shareAccessFloor(candidate) ??
-    publishPostFloor(candidate)
+    publishPostFloor(candidate) ??
+    browserActionFloor(candidate)
+  );
+}
+
+/**
+ * 网页上的按钮（上游 #998、#1015）：动词在按钮文字的开头才算（「Delete」「Send」「Post」），所以
+ * 叫「Sent」的文件夹、叫「Posts」的标签页、「Shared with me」列表是在浏览，不是在动作。Remove、
+ * Comment、Reply 只认整个按钮文字：「Remove filter」「Reply all settings」不算。
+ */
+const CLICK_FLOORS: readonly { floor: OnceOnlyFloor; click: RegExp }[] = [
+  {
+    floor: { source: "destructive_tool", reason: DESTRUCTIVE_TOOL_REASON },
+    click: new RegExp(
+      `^${CONFIRMING}(delete|permanently delete|move to (the )?(trash|bin)|trash|empty (the )?(trash|bin)|discard|erase|destroy)\\b|^${CONFIRMING}remove( permanently)?$`,
+    ),
+  },
+  {
+    floor: { source: "outbound_send", reason: OUTBOUND_SEND_REASON },
+    click: new RegExp(`^${CONFIRMING}(send\\b|(comment|reply)$)`),
+  },
+  {
+    floor: { source: "share_access", reason: SHARE_ACCESS_REASON },
+    click: new RegExp(`^${CONFIRMING}(share|invite|add people)\\b`),
+  },
+  {
+    floor: { source: "publish_post", reason: PUBLISH_POST_REASON },
+    click: new RegExp(
+      `^${CONFIRMING}(post|publish|tweet|repost|retweet|go live)\\b`,
+    ),
+  },
+];
+
+/**
+ * 电脑工具一侧，按 fork 的电脑工具审批路径（网关给的 `target` 和 `subject`）：点了删除、发送、
+ * 分享、发布按钮，或者用键盘发送（见 {@link pressesSend}），总是先问，只给「允许一次 / 拒绝」。
+ * 不看 effect：点击和按键在网关那里都是改动。
+ */
+function browserActionFloor(
+  candidate: ApprovalCandidate,
+): OnceOnlyFloor | undefined {
+  const named = actionName(candidate);
+  if (named?.kind === "click")
+    return CLICK_FLOORS.find((entry) => entry.click.test(named.name))?.floor;
+  return pressesSend(candidate)
+    ? { source: "outbound_send", reason: OUTBOUND_SEND_REASON }
+    : undefined;
+}
+
+const SEND_MODIFIERS = new Set([
+  "control",
+  "ctrl",
+  "meta",
+  "cmd",
+  "command",
+  "controlormeta",
+]);
+
+/**
+ * 一次按键是不是把页面上写的东西发出去了（上游 #998）：Cmd+Enter 或 Ctrl+Enter，多数邮件和聊天
+ * 应用用它发送；或者在写消息、回复、评论的输入框里按 Enter。带 `submit` 的 `computer_type` 在输完
+ * 后按 Enter，所以也算 Enter。Shift+Enter 在那里是换行，不算。Ctrl+Enter 在有些编辑器里是插入分页
+ * 符，问一次只多一次点击。
+ *
+ * 要按的键优先取调用处给的（`subject.key`，网关从工具的输入里取，`computer_type` 带 `submit` 时是
+ * Enter），没有时才看参数。
+ */
+function pressesSend(candidate: ApprovalCandidate): boolean {
+  if (
+    candidate.toolRef !== "computer_key" &&
+    candidate.toolRef !== "computer_type"
+  )
+    return false;
+  const args = (
+    candidate.args !== null && typeof candidate.args === "object"
+      ? candidate.args
+      : {}
+  ) as { key?: unknown; submit?: unknown };
+  const fromArgs =
+    candidate.toolRef === "computer_key"
+      ? typeof args.key === "string"
+        ? args.key
+        : ""
+      : args.submit === true
+        ? "Enter"
+        : "";
+  const key = candidate.subject?.key ?? fromArgs;
+  const parts = key.split(/\+(?=.)/).map((part) => part.trim().toLowerCase());
+  const main = parts.at(-1) ?? "";
+  if (main !== "enter" && main !== "numpadenter" && main !== "return")
+    return false;
+  if (parts.slice(0, -1).some((part) => SEND_MODIFIERS.has(part))) return true;
+  // Shift+Enter 在写消息的输入框里是换行。
+  if (parts.length > 1) return false;
+  const field = elementName(candidate);
+  return (
+    /\b(message|reply|comment|chat|compose|tweet|post)\b|what'?s happening/.test(
+      field,
+    ) && !/\bsearch\b/.test(field)
   );
 }
 

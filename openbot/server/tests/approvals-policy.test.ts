@@ -3221,3 +3221,289 @@ describe("upstream floors: app tools", () => {
       expect(offersStandingRule({ policy: { source } })).toBeFalse();
   });
 });
+
+/*
+ * 上游审批底线补齐（阶段 2b），电脑工具一侧：网页上的按钮、键盘发送、输入框。按 fork 现有的电脑
+ * 工具审批路径：网关给审批门的 `target`（页面地址、元素）和调用处的 `subject.key`。
+ */
+describe("upstream floors: computer tools", () => {
+  const allowAll = {
+    personal: [rule("allow", { toolRef: "*" })],
+    team: [team("allow", { toolRef: "*" })],
+  };
+  const click = (
+    name: string,
+    pageUrl = "https://app.example/inbox",
+  ): ApprovalCandidate =>
+    candidate({
+      toolRef: "computer_click",
+      scope: new URL(pageUrl).host,
+      args: { ref: "e12" },
+      target: { pageUrl, element: { ref: "e12", role: "button", name } },
+    });
+  const press = (
+    key: string,
+    field = "Message body",
+    over: Partial<ApprovalCandidate> = {},
+  ): ApprovalCandidate =>
+    candidate({
+      toolRef: "computer_key",
+      scope: "mail.google.com",
+      args: { key, ref: "f3" },
+      target: {
+        pageUrl: "https://mail.google.com/mail/u/0/#inbox?compose=new",
+        element: { ref: "f3", role: "textbox", name: field },
+      },
+      ...over,
+    });
+  const submit = (field: string): ApprovalCandidate =>
+    candidate({
+      toolRef: "computer_type",
+      scope: "app.slack.com",
+      args: { ref: "f9", text: "Friday works.", submit: true },
+      target: {
+        pageUrl: "https://app.slack.com/client/T1/C1",
+        element: { ref: "f9", role: "textbox", name: field },
+      },
+    });
+
+  test.each([
+    "Meta+Enter",
+    "Control+Enter",
+    "ControlOrMeta+Enter",
+    "Ctrl+Enter",
+    "Cmd+Return",
+  ])("%s sends, as a Send button does", async (key) => {
+    const outcome = await decideAction({
+      ...base,
+      ...allowAll,
+      candidate: press(key),
+    });
+    expect(outcome).toMatchObject({
+      behaviour: "ask",
+      source: "outbound_send",
+      reason: OUTBOUND_SEND_REASON,
+    });
+    expect(offersStandingRule({ policy: outcome })).toBeFalse();
+  });
+
+  test("Enter in a box for writing a message, a reply or a comment sends", () => {
+    expect(safetyRequirement(press("Enter", "Message #general"))).toEqual({
+      id: "outbound_send",
+      reason: OUTBOUND_SEND_REASON,
+      behaviour: "ask",
+    });
+    expect(safetyRequirement(submit("Message #general"))?.id).toBe(
+      "outbound_send",
+    );
+    expect(safetyRequirement(submit("Reply…"))?.id).toBe("outbound_send");
+    expect(safetyRequirement(submit("Add a comment"))?.id).toBe(
+      "outbound_send",
+    );
+    expect(
+      safetyRequirement(press("NumpadEnter", "What's happening?"))?.id,
+    ).toBe("outbound_send");
+  });
+
+  test("Enter in a search box, a plain field or a letter does not send", () => {
+    expect(safetyRequirement(submit("Search messages"))).toBeUndefined();
+    expect(safetyRequirement(submit("Subject"))).toBeUndefined();
+    expect(safetyRequirement(press("Enter", "Subject"))).toBeUndefined();
+    expect(safetyRequirement(press("Shift+Enter"))).toBeUndefined();
+    expect(safetyRequirement(press("a"))).toBeUndefined();
+    expect(safetyRequirement(press("Control+a"))).toBeUndefined();
+  });
+
+  test("the key the call site names wins over the model's arguments", () => {
+    // 网关从调用处给出要按的键（`subject.key`），模型参数里写的不算。
+    expect(
+      safetyRequirement(
+        press("a", "Message #general", { subject: { key: "Enter" } }),
+      )?.id,
+    ).toBe("outbound_send");
+    expect(
+      safetyRequirement(
+        press("Meta+Enter", "Subject", { subject: { key: "a" } }),
+      ),
+    ).toBeUndefined();
+    // computer_type 带 submit 时，网关给的键是 Enter。
+    expect(
+      safetyRequirement(
+        candidate({
+          ...submit("Message #general"),
+          args: { ref: "f9", snapshotId: 2 },
+          subject: { key: "Enter" },
+        }),
+      )?.id,
+    ).toBe("outbound_send");
+  });
+
+  test("a button that deletes, sends, shares or posts asks, once at a time, over an always-allow rule", async () => {
+    for (const [label, source] of [
+      ["Delete", "destructive_tool"],
+      ["Yes, delete", "destructive_tool"],
+      ["Permanently delete", "destructive_tool"],
+      ["Move to trash", "destructive_tool"],
+      ["Empty bin", "destructive_tool"],
+      ["Remove", "destructive_tool"],
+      ["Yes, remove", "destructive_tool"],
+      ["Send", "outbound_send"],
+      ["Send now", "outbound_send"],
+      ["Comment", "outbound_send"],
+      ["Reply", "outbound_send"],
+      ["Share", "share_access"],
+      ["Invite", "share_access"],
+      ["Add people", "share_access"],
+      ["Post", "publish_post"],
+      ["Publish", "publish_post"],
+      ["Tweet", "publish_post"],
+      ["Go live", "publish_post"],
+    ] as const) {
+      const outcome = await decideAction({
+        ...base,
+        ...allowAll,
+        candidate: click(label),
+      });
+      expect({ label, outcome }).toMatchObject({
+        label,
+        outcome: { behaviour: "ask", source },
+      });
+      expect(offersStandingRule({ policy: outcome })).toBeFalse();
+    }
+  });
+
+  test("a folder, a tab or a filter named like an action is browsing, not acting", () => {
+    for (const label of [
+      "Sent",
+      "Posts",
+      "Shared with me",
+      "Remove filter",
+      "Deleted items",
+      "Reply all settings",
+      "Search",
+      "Subscribe",
+    ])
+      expect({ label, asked: safetyRequirement(click(label)) }).toEqual({
+        label,
+        asked: undefined,
+      });
+  });
+
+  test("a button that pays, buys or starts a paid plan is handed to the person", async () => {
+    for (const label of [
+      "Pay",
+      "Buy now",
+      "Place your order",
+      "Confirm purchase",
+      "Send $20",
+      "Transfer",
+      "Upgrade",
+      "Change plan",
+      "Subscribe for $9.99/month",
+    ])
+      expect({
+        label,
+        outcome: await decideAction({
+          ...base,
+          ...allowAll,
+          candidate: click(label, "https://shop.example/account"),
+        }),
+      }).toMatchObject({
+        label,
+        outcome: { behaviour: "hand_off", source: "safety" },
+      });
+    // 定价页上的「订阅」是买付费套餐；频道和免费简报的「订阅」不是。
+    expect(
+      safetyRequirement(click("Subscribe", "https://news.example/pricing"))?.id,
+    ).toBe("payments");
+    expect(
+      safetyRequirement(click("Subscribe", "https://video.example/channel/42")),
+    ).toBeUndefined();
+  });
+
+  test("what a Bot types into a field is content: the field and the page say what the action is", () => {
+    const typing = (text: string, field: string, pageUrl: string) =>
+      safetyRequirement(
+        candidate({
+          toolRef: "computer_type",
+          scope: new URL(pageUrl).host,
+          args: { ref: "f1e145", text, submit: false, snapshotId: 3 },
+          target: {
+            element: { ref: "f1e145", name: field, role: "textbox" },
+            pageUrl,
+            snapshotId: 3,
+          },
+        }),
+      )?.id;
+    const crm = "http://host.docker.internal:4900/accounts/new";
+    expect(
+      typing(
+        "Expanded its AI agents for purchase orders, detention and dock workflows.",
+        "Notes",
+        crm,
+      ),
+    ).toBeUndefined();
+    expect(typing("Business Wire; LinkedIn", "Source", crm)).toBeUndefined();
+    expect(
+      typing("Payments platform for freight billing", "Notes", crm),
+    ).toBeUndefined();
+    expect(typing("my password is hunter2", "Notes", crm)).toBeUndefined();
+    // 付款字段、结账页、密码字段照样交给本人，不管输的是什么。
+    expect(
+      typing(
+        "4111 1111 1111 1111",
+        "Card number",
+        "https://shop.example/account",
+      ),
+    ).toBe("payments");
+    expect(typing("1", "Quantity", "https://shop.example/checkout")).toBe(
+      "payments",
+    );
+    expect(
+      typing("hunter2", "New password", "https://mail.example/settings"),
+    ).toBe("credentials");
+    // 只去掉 computer_type 的输入内容：其它工具的参数照旧全读。
+    expect(
+      safetyRequirement(
+        candidate({
+          toolRef: "computer_key",
+          args: { key: "a", text: "payment" },
+        }),
+      )?.id,
+    ).toBe("payments");
+  });
+
+  test("the computer gateway hands the gate the key a call presses, from the call site", async () => {
+    const seen: ApprovalCandidate[] = [];
+    const gateway = createComputerGateway({
+      provider: {
+        name: "test",
+        isolation: "per-bot",
+        locate: async () => "http://computer:4100",
+        status: async (botId) => ({ botId, state: "ready" }),
+        list: async () => [],
+        stop: async () => ({ wasRunning: true }),
+        reset: async () => ({ cleared: true }),
+      },
+      policy: () => ({ mode: "enforce", allow: ["true"], deny: [] }),
+      auditStore: { insert: async () => undefined },
+      approvalGate: async (c) => {
+        seen.push(c);
+        return undefined;
+      },
+      fetchImpl: async () => Response.json({ ok: true }),
+    });
+    await gateway.key("bot", { id: "owner" }, { key: "Meta+Enter" });
+    await gateway.type(
+      "bot",
+      { id: "owner" },
+      { text: "Friday works.", submit: true },
+    );
+    await gateway.type("bot", { id: "owner" }, { text: "draft" });
+    expect(seen.map((c) => c.subject?.key)).toEqual([
+      "Meta+Enter",
+      "Enter",
+      undefined,
+    ]);
+  });
+});
