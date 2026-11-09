@@ -830,6 +830,17 @@ export const CATALOGUE: readonly CatalogueEntry[] = Object.freeze([
      * into something the policy engine has never heard of.
      */
     writeTools: Object.freeze(["create_file", "copy_file"]),
+    /*
+     * 读名单：`google-drive-rest.ts` 广播的四个工具全在这里，每个都只发 GET（`request` 不设 method），
+     * 只查文件、列文件、取元数据、读内容。列了名单，名单外的名字（包括切回 MCP 后 Google 新加的工具）
+     * 都按写处理，要有人读过代码、列进来才算读；check-in 也只读这几个。
+     */
+    readTools: Object.freeze([
+      "search_files",
+      "list_recent_files",
+      "get_file_metadata",
+      "read_file_content",
+    ]),
     docsUrl:
       "https://developers.google.com/workspace/guides/configure-mcp-servers",
   },
@@ -895,6 +906,17 @@ export const CATALOGUE: readonly CatalogueEntry[] = Object.freeze([
       "rename_file",
       "delete_file",
     ]),
+    /*
+     * 读名单：`baidu-netdisk-rest.ts` 广播的五个工具全在这里。每个都只发 GET：xpan 的 `search`、
+     * `list`、`filemetas`、`uinfo`，以及按 `dlink` 下载文本文件。名单外的名字都按写处理。
+     */
+    readTools: Object.freeze([
+      "search_files",
+      "list_files",
+      "get_file_metadata",
+      "read_file_content",
+      "get_account_info",
+    ]),
     docsUrl: "https://pan.baidu.com/union/doc/",
   },
   {
@@ -950,6 +972,61 @@ export const CATALOGUE: readonly CatalogueEntry[] = Object.freeze([
       "notion-update-folder",
       "notion-update-page",
       "notion-update-view",
+    ]),
+    /*
+     * THE READS, NAMED, so a tool Notion adds later is a write until somebody reads it and lists it
+     * here.
+     *
+     * The write list above used to stand alone, and {@link classifyTool} reads an advertised name
+     * that list omits as a read. Notion has no read-only scope behind it, and its hosted server
+     * grows: by 2026-10-30 it advertised deletes, comment edits, calendar events and agent sessions,
+     * none of them on the write list, so every one was offered to a Bot as a read. Naming the reads
+     * turns that around, the same way Firecrawl's entry does: an unlisted name is a write.
+     *
+     * Copied from Notion's published tool reference
+     * (https://developers.notion.com/docs/mcp-supported-tools, read 2026-10-30): the tools it
+     * describes as searching, fetching, listing, querying or reading, and nothing that creates,
+     * changes, moves, deletes, sends or starts anything.
+     */
+    readTools: Object.freeze([
+      "notion-search",
+      "notion-connector-search",
+      "notion-memory-search",
+      "notion-get-tool-access",
+      "notion-get-self",
+      "notion-download-skill",
+      "notion-get-enabled-skills",
+      "notion-fetch",
+      "notion-get-file-download-urls",
+      "notion-list-private-pages",
+      "notion-list-shared-pages",
+      "notion-list-favorite-pages",
+      "notion-list-recent-pages",
+      "notion-list-page-backlinks",
+      "notion-view-version",
+      "notion-get-version-changes",
+      "notion-download-attachment",
+      "notion-get-comments",
+      "notion-get-suggested-edit",
+      "notion-get-teams",
+      "notion-get-groups",
+      "notion-get-users",
+      "notion-get-async-task",
+      "notion-query-data-sources",
+      "notion-query-multiple-data-sources",
+      "notion-query-meeting-notes",
+      "notion-search-agents",
+      "notion-query-sessions",
+      "notion-search-sessions",
+      "notion-get-session-status",
+      "notion-wait-session",
+      "notion-list-session-events",
+      "notion-read-session-event",
+      "notion-calendar-list-calendars",
+      "notion-calendar-list-events",
+      "notion-calendar-list-coworkers-events",
+      "notion-calendar-list-calendar-resources",
+      "notion-calendar-list-contacts",
     ]),
     docsUrl: "https://developers.notion.com/guides/mcp/build-mcp-client",
   },
@@ -1545,7 +1622,24 @@ export const CATALOGUE: readonly CatalogueEntry[] = Object.freeze([
       "pause_trigger",
       "resume_trigger",
       "delete_trigger",
+      /*
+       * 目标（goal）的六个写工具，照上游 v1.0.0 的同一条目。整合分支上还没有这些工具，先列成写，
+       * 等它们并进来、被广播时不会被当成读。
+       */
+      "create_goal",
+      "update_goal",
+      "run_goal",
+      "pause_goal",
+      "resume_goal",
+      "complete_goal",
     ]),
+    /*
+     * 读名单：这个传输广播的工具里，只有这两个只查不改。`list_routines` 只读本人的例程
+     * （`builtin-routines.ts` 里调 `listFor`，store 里是 select）；`list_triggers` 只读本人分配给这个
+     * Bot 的触发器（`responsibilities/trigger-tools.ts` 里调 `listForAgent`，也是 select）。其余都在
+     * 上面的写名单里；名单外以后新加的名字一律按写处理。
+     */
+    readTools: Object.freeze(["list_routines", "list_triggers"]),
     docsUrl: "https://github.com/CopilotKit/OpenBot/blob/main/docs/routines.md",
   },
 ]);
