@@ -122,6 +122,9 @@ type Connection = { url: string; token?: string };
 /** The list is this file, as it is for Drive, so listing needs nobody's credential. */
 export const listNeedsCredential = false;
 
+/** 这份清单就是本文件，所以每次启动都把保存的那份刷新到当前版本（见 `refreshOwnListings`）。 */
+export const listIsThisCode = true;
+
 export async function listTools(_connection: Connection): Promise<McpTool[]> {
   return TOOLS.map((tool) => ({ ...tool }));
 }

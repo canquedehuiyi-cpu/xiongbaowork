@@ -18,6 +18,14 @@
  * The refs are opaque to the caller precisely so that the server holds the mapping.
  */
 
+// --- desktop control (sub-project 2) ---
+import {
+  type DesktopSnapshot,
+  type DesktopWindow,
+  snapshotForStorage,
+} from "../../../shared/desktop-control";
+// --- app discovery (sub-project 3) ---
+import { APP_ENABLE_TOOL } from "../approvals/policy";
 import {
   type ApprovalCandidate,
   type ApprovalGate,
@@ -29,17 +37,23 @@ import {
   type AuditStore,
   recordAuditEvent,
 } from "../audit";
-import { isRunnerAddress, runnerAddress } from "../devices/channel";
+import {
+  DeviceOfflineError,
+  isRunnerAddress,
+  runnerAddress,
+} from "../devices/channel";
 import { DeviceDeliveryError } from "../devices/queue";
-import type { ProjectRoot } from "../projects/context";
 import {
   DEVICE_HUMAN_HAS_CONTROL,
   type DeviceTakeovers,
 } from "../devices/takeover";
+import type { ProjectRoot } from "../projects/context";
 import { withUntrustedNotice } from "../untrusted-content";
-// --- app discovery (sub-project 3) ---
-import { APP_ENABLE_TOOL } from "../approvals/policy";
-import { DeviceOfflineError } from "../devices/channel";
+// --- end app discovery ---
+import {
+  computerActionIdentity,
+  computerActionOrigin,
+} from "./action-identity";
 import {
   AVAILABLE_HINT,
   CANDIDATE_EXPIRED,
@@ -52,11 +66,6 @@ import {
   readDiscovery,
   readEnabled,
 } from "./app-discovery";
-// --- end app discovery ---
-import {
-  computerActionIdentity,
-  computerActionOrigin,
-} from "./action-identity";
 import {
   ComputerStoppedError,
   type ComputerTransport,
@@ -65,15 +74,9 @@ import {
   HumanHasControlError,
   StaleSnapshotError,
 } from "./client";
-import { HeadlessToolSuspension } from "./headless-tools";
-// --- desktop control (sub-project 2) ---
-import {
-  type DesktopSnapshot,
-  type DesktopWindow,
-  snapshotForStorage,
-} from "../../../shared/desktop-control";
 import { createDesktopMethods, type DesktopSubject } from "./desktop-gateway";
 import { createDesktopWindowCache } from "./desktop-state";
+import { HeadlessToolSuspension } from "./headless-tools";
 // --- end desktop control ---
 import { checkComputerAddress } from "./target";
 
@@ -290,7 +293,9 @@ export type ComputerGatewayOptions = {
    * because fetching it starts the app on the person's machine. Absent: nothing is asked early, and
    * the gate still decides in full.
    */
-  approvalRefusal?: (candidate: ApprovalCandidate) => Promise<string | undefined>;
+  approvalRefusal?: (
+    candidate: ApprovalCandidate,
+  ) => Promise<string | undefined>;
   /** The clock a device's cached tool list is aged by. Tests hand in their own. */
   now?: () => number;
   provider: ComputerProvider;
@@ -417,6 +422,12 @@ export interface ComputerGateway {
    * call is still decided in full by its own method.
    */
   localToolsAllowed(botId: string, actor: ActionActor): Promise<boolean>;
+  /**
+   * Where this deployment's computer tools act: `device` when commands land on a person's paired
+   * machine (the same condition as `TENANT_RUNTIME=device`, which is when `resolveDevice` is wired),
+   * else `workspace`. For what a surface tells the model; it decides nothing.
+   */
+  machine(): "workspace" | "device";
   control(botId: string, requestId?: string): Promise<ControlState>;
   requestHelp(
     botId: string,
@@ -1126,16 +1137,18 @@ export function createComputerGateway(
         scope: subject.desktop
           ? `desktop/${subject.desktop.process}`
           : toolName === "computer_desktop_windows"
-          ? "desktop"
-          // --- end desktop control ---
-          : app
-          ? `${app.name}/${app.tool}`
-          : filePath
-            ? filePath.split("/").slice(0, -1).join("/") || "workspace"
-            : subject.command
-              ? "workspace"
-              : hostOf(pageUrl) || "browser",
-        ...(app?.description ? { display: { description: app.description } } : {}),
+            ? "desktop"
+            : // --- end desktop control ---
+              app
+              ? `${app.name}/${app.tool}`
+              : filePath
+                ? filePath.split("/").slice(0, -1).join("/") || "workspace"
+                : subject.command
+                  ? "workspace"
+                  : hostOf(pageUrl) || "browser",
+        ...(app?.description
+          ? { display: { description: app.description } }
+          : {}),
         args: continuation?.args ?? {
           ...subject,
           signal: undefined,
@@ -1165,21 +1178,23 @@ export function createComputerGateway(
               },
               screenshot: subject.desktop.screenshot,
             }
-          // --- end desktop control ---
-          : app
-          ? { app: app.name, tool: app.tool }
-          : {
-              pageUrl,
-              ...(element ? { element, snapshotId } : {}),
-              ...(filePath ? { filePath } : {}),
-            },
+          : // --- end desktop control ---
+            app
+            ? { app: app.name, tool: app.tool }
+            : {
+                pageUrl,
+                ...(element ? { element, snapshotId } : {}),
+                ...(filePath ? { filePath } : {}),
+              },
         /*
          * What this call will actually run and touch, from this call site rather than from the
          * model's arguments, for the gate's dangerous-command and sensitive-path floors and the
          * team's host-command cap on a paired machine (SEC1 §4.3, §4.4, D5).
          */
         subject: {
-          ...(subject.command !== undefined ? { command: subject.command } : {}),
+          ...(subject.command !== undefined
+            ? { command: subject.command }
+            : {}),
           ...(filePath !== undefined ? { path: filePath } : {}),
           runner: target !== null,
           // The device-list verdict for a local app's tool, for the app-tool floor (§4.4).
@@ -1405,7 +1420,8 @@ export function createComputerGateway(
         ...(refusal ? { refusal } : {}),
       },
       () => {
-        if (!root.ok) throw new ActionRefusedError(root.reason, PROJECT_UNAVAILABLE_RULE);
+        if (!root.ok)
+          throw new ActionRefusedError(root.reason, PROJECT_UNAVAILABLE_RULE);
         const {
           root: _root,
           writable: _writable,
@@ -1416,7 +1432,11 @@ export function createComputerGateway(
           runnerAddress(machine),
           botId,
           route,
-          { ...rest, root: root.rootRef, ...(writes ? { writable: true } : {}) },
+          {
+            ...rest,
+            root: root.rootRef,
+            ...(writes ? { writable: true } : {}),
+          },
           subject.signal,
           timeoutMs,
           computerActionIdentity.getStore()
@@ -1502,7 +1522,9 @@ export function createComputerGateway(
     ref: string,
     signal?: AbortSignal,
   ): Promise<AppTool[] | undefined> {
-    const cached = appTools.get(`${machine.tenantId}/${machine.deviceId}/${ref}`);
+    const cached = appTools.get(
+      `${machine.tenantId}/${machine.deviceId}/${ref}`,
+    );
     if (cached && now() - cached.at < APP_TOOLS_TTL_MS) return cached.tools;
     try {
       return await fetchAppTools(machine, botId, ref, signal);
@@ -1650,6 +1672,10 @@ export function createComputerGateway(
       } catch {
         return false;
       }
+    },
+
+    machine() {
+      return options.resolveDevice ? "device" : "workspace";
     },
 
     status(botId: string): Promise<ComputerStatus> {
@@ -2616,7 +2642,9 @@ function readAppTools(value: unknown[]): AppTool[] {
           ? { description: cutUtf8(description, 1024) }
           : {}),
         ...(inputSchema !== undefined ? { inputSchema } : {}),
-        ...(annotations && typeof annotations === "object" && !Array.isArray(annotations)
+        ...(annotations &&
+        typeof annotations === "object" &&
+        !Array.isArray(annotations)
           ? { annotations: annotations as AppTool["annotations"] }
           : {}),
       },

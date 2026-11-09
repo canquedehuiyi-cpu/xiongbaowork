@@ -247,10 +247,93 @@ function clamp(text: string): { text: string; truncated: boolean } {
   return { text: kept, truncated: true };
 }
 
+/** How the root helper is reached. `-n`: never a password prompt nobody is there to answer. */
+const DEFAULT_RUN_AS_LAUNCHER = ["sudo", "-n", "/usr/local/sbin/xb-bot"];
+
+/**
+ * Names the employee's own user gets from the helper rather than from here.
+ *
+ * HOME and TMPDIR are the employee's directory and its `.tmp`, which the helper sets; USER, LOGNAME
+ * and SHELL describe the account, and passing this process's values would describe pwuser.
+ */
+const SET_BY_HELPER = new Set(["HOME", "TMPDIR", "USER", "LOGNAME", "SHELL"]);
+
+/**
+ * How long, after a timeout or a Stop, before the request stops waiting for the helper.
+ *
+ * The command runs as another user, under GNU timeout in a process group of its own, so nothing this
+ * process may signal reaches it: the SIGTERM goes to sudo, sudo relays it to the helper, and the
+ * helper ends the command's group (a SIGTERM, three seconds, a SIGKILL). This is the bound on the
+ * case where that chain is broken, so a request cannot wait for ever on a pipe nobody closes.
+ */
+const RUN_AS_GIVE_UP_MS = 15_000;
+
+/**
+ * How long the output may keep arriving after the helper has exited.
+ *
+ * The helper ends what the command left in its group, so the pipes normally close with it. Something
+ * that left the group (a `setsid` daemon) can hold them open for ever, and this process may not end
+ * it. Whatever the command wrote before it exited is already in the pipe; this is time to read it.
+ */
+const RUN_AS_DRAIN_MS = 1_000;
+
+/** The hash part of `xb-<key>`; anything else never reaches the helper's argv. */
+const RUN_AS_KEY = /^[0-9a-f]{12}$/;
+
+/**
+ * The environment the helper is given: the command's, without what the helper sets itself, and
+ * without a value that cannot be one line (a newline, or a NUL, which no environment can carry).
+ */
+function runAsEnvironment(env: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(env).filter(
+      ([name, value]) =>
+        ENV_NAME.test(name) &&
+        !SET_BY_HELPER.has(name) &&
+        !value.includes("\n") &&
+        !value.includes("\0"),
+    ),
+  );
+}
+
+/**
+ * What the helper reads on stdin: `NAME=VALUE` lines, an empty line, then the command exactly as
+ * written.
+ */
+function runAsInput(env: Record<string, string>, command: string): string {
+  const lines = Object.entries(env).map(
+    ([name, value]) => `${name}=${value}\n`,
+  );
+  return `${lines.join("")}\n${command}`;
+}
+
+export type RunAs = {
+  /** The employee's botKey: twelve hex digits, the hash part of its user name `xb-<key>`. */
+  key: string;
+  /** What is spawned before `run <key> <timeout_s>`. Defaults to `sudo -n /usr/local/sbin/xb-bot`. */
+  launcher?: string[];
+};
+
+/**
+ * A shell for one workspace.
+ *
+ * With `runAs`, the command runs as the employee's own Linux user rather than this process's: it is
+ * handed to the root helper as `run <key> <timeout_s>` with the environment and the command on stdin,
+ * never in argv. Without it, nothing about the command changes.
+ */
 export function createShell(
   workspaceDir: string,
   sourceEnv: NodeJS.ProcessEnv = process.env,
+  options: { runAs?: RunAs } = {},
 ) {
+  const runAs = options.runAs;
+  // Checked here as well as by the helper, so a caller with the wrong idea of a key finds out at once.
+  if (runAs && !RUN_AS_KEY.test(runAs.key)) {
+    throw new Error(
+      "An employee's key must be twelve lowercase hexadecimal digits.",
+    );
+  }
+  const launcher = runAs?.launcher ?? DEFAULT_RUN_AS_LAUNCHER;
   return {
     async run(input: {
       command: string;
@@ -315,21 +398,39 @@ export function createShell(
        * runs on and the caller waits for the transport to give up instead. Killing the negative pid
        * signals the whole group.
        */
-      const shell = commandShell(input.command, process.platform, sourceEnv);
-      const windows = process.platform === "win32";
+      // The egress filter's address last, so a command cannot be pointed around it.
+      const fullEnv = {
+        ...environmentForCommand(sourceEnv, workspaceDir),
+        ...egressShellEnvironment(),
+      };
+      // sudo resets its own environment; the helper is given the same map on stdin.
+      const commandEnv = runAs ? runAsEnvironment(fullEnv) : fullEnv;
+      const shell = runAs
+        ? {
+            executable: launcher[0] ?? DEFAULT_RUN_AS_LAUNCHER[0],
+            args: [
+              ...launcher.slice(1),
+              "run",
+              runAs.key,
+              String(Math.ceil(timeoutMs / 1000)),
+            ],
+          }
+        : commandShell(input.command, process.platform, sourceEnv);
+      const windows = process.platform === "win32" && !runAs;
       const codePage = windows
         ? await windowsCodePage(shell.executable)
         : undefined;
       const child = spawn(shell.executable, shell.args, {
         cwd: workspaceDir,
-        // The egress filter's address last, so a command cannot be pointed around it.
-        env: {
-          ...environmentForCommand(sourceEnv, workspaceDir),
-          ...egressShellEnvironment(),
-        },
+        env: commandEnv,
         detached: process.platform !== "win32",
         windowsHide: true,
       });
+      if (runAs) {
+        // A helper that refused before reading all of it closes the pipe; that is its exit code's story.
+        child.stdin?.on("error", () => {});
+        child.stdin?.end(runAsInput(commandEnv, input.command));
+      }
 
       let timedOut = false;
 
@@ -383,10 +484,49 @@ export function createShell(
         failStop = reject;
       });
       let stopping: Promise<void> | undefined;
+      /*
+       * Running as the employee, the request ends on one of three things: the pipes closing, which is
+       * the ordinary end; the output having drained after the helper exited; or giving up on a helper
+       * that did not end after a timeout or a Stop. The last two stop reading rather than wait.
+       */
+      let stopRequested = false;
+      let finished = false;
+      let exitedWith: number | undefined;
+      let drainTimer: ReturnType<typeof setTimeout> | undefined;
+      let giveUpTimer: ReturnType<typeof setTimeout> | undefined;
+      let abandon: () => void = () => {};
+      const abandoned = new Promise<number>((resolve) => {
+        abandon = () => {
+          child.stdout.destroy();
+          child.stderr.destroy();
+          resolve(exitedWith ?? -1);
+        };
+      });
+      if (runAs) {
+        child.once("exit", (code) => {
+          exitedWith = code ?? -1;
+          if (!finished) drainTimer = setTimeout(abandon, RUN_AS_DRAIN_MS);
+        });
+      }
       const stop = () => {
         const { pid } = child;
         if (pid === undefined) return;
         if (stopping) return;
+        if (runAs) {
+          /*
+           * To sudo alone, which relays it to the helper; the helper ends the command's group. The
+           * group is not signalled from here: it is another user's, under a process group of its own.
+           */
+          if (stopRequested) return;
+          stopRequested = true;
+          try {
+            process.kill(pid, "SIGTERM");
+          } catch {
+            // Gone already, or EPERM: the deadline below still ends the request.
+          }
+          giveUpTimer = setTimeout(abandon, RUN_AS_GIVE_UP_MS);
+          return;
+        }
         if (process.platform === "win32") {
           stopping = new Promise<void>((resolve, reject) => {
             const systemRoot =
@@ -461,11 +601,15 @@ export function createShell(
             );
           }),
           stopFailure,
+          ...(runAs ? [abandoned] : []),
         ]);
         await stopping;
       } finally {
+        finished = true;
         clearTimeout(timer);
         input.signal?.removeEventListener("abort", onAbort);
+        if (drainTimer) clearTimeout(drainTimer);
+        if (giveUpTimer) clearTimeout(giveUpTimer);
       }
 
       if (outDecoder) outBuffer.add(outDecoder.end());

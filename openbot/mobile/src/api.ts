@@ -58,6 +58,8 @@ export type ApprovalInbox = {
       scope: string;
       args: unknown;
       target?: unknown;
+      /** 由哪一层要问的；删除类（`destructive_tool`）和对外发送（`outbound_send`）底线问的只能「允许一次」。 */
+      policy?: { behaviour: string; source: string; reason: string };
     };
   }[];
   questions?: {
