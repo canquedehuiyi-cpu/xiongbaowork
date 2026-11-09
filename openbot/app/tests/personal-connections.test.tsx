@@ -98,7 +98,6 @@ function server(key: string): PluginServer {
 let servers: PluginServer[] = [];
 let connected: string[] = [];
 let composio = false;
-const writes: string[] = [];
 
 function page(): PluginsPage {
   return {
@@ -108,7 +107,6 @@ function page(): PluginsPage {
     botsMayCallBack: true,
     redirectUri: null,
     composioConfigured: composio,
-    authorizesPerAction: false,
   } as unknown as PluginsPage;
 }
 
@@ -117,12 +115,10 @@ beforeEach(() => {
   servers = [server("notion")];
   connected = [];
   composio = false;
-  writes.length = 0;
   global.fetch = Object.assign(
     async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
       const path = String(input).split("?")[0] ?? "";
       if (init?.method && init.method !== "GET") {
-        writes.push(`${init.method} ${path}`);
         if (path === "/api/plugins/servers") {
           const { key } = JSON.parse(String(init.body)) as { key: string };
           servers = [...servers, server(key)];

@@ -100,6 +100,9 @@ test("the / menu describes a skill in Chinese and carries no instruction of its 
   expect(commands[0]?.description).toBe("每周销售摘要");
   expect(commands[0]?.name).toBe("Digest");
   // 服务端按消息开头的 `/digest` 找技能并把说明交给员工（上游 #1226），浏览器不再带说明。
-  expect(commands[0]?.prompt).toBeUndefined();
+  // 没有这一项时读到的是 `prompt`，断言照样失败。
+  expect(Object.keys(commands[0] ?? { prompt: "缺少命令" })).not.toContain(
+    "prompt",
+  );
   expect(commands[0]?.kind).toBe("chip");
 });
