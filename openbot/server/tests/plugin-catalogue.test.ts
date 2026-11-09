@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { listTools as netdiskTools } from "../src/plugins/baidu-netdisk-rest";
+import { listTools as routineTools } from "../src/plugins/builtin-routines";
 import {
   CATALOGUE,
   type CatalogueEntry,
@@ -11,6 +13,7 @@ import {
   resolveServerUrl,
   serverCredentialKind,
 } from "../src/plugins/catalogue";
+import { listTools as driveTools } from "../src/plugins/google-drive-rest";
 
 /**
  * The catalogue decides two things that are worth being sure about: which addresses this deployment
@@ -290,6 +293,12 @@ describe("Routines", () => {
       "pause_trigger",
       "resume_trigger",
       "delete_trigger",
+      "create_goal",
+      "update_goal",
+      "run_goal",
+      "pause_goal",
+      "resume_goal",
+      "complete_goal",
     ]);
   });
 
@@ -720,5 +729,151 @@ describe("what a check-in may read", () => {
         recorded("read"),
       ),
     ).toBe(false);
+  });
+});
+
+/*
+ * 目录的只读名单：Notion 的原样取自上游 v1.0.0；三个内置应用（Drive、百度网盘、Routines）的工具
+ * 定义就在本仓库里，名单按代码里每个工具的实际行为列出。列了名单，名单外的名字都是写，所以内置
+ * 应用广播的每个工具都得在读名单或写名单里，不能漏。
+ */
+describe("reviewed read lists for Notion and the built-in apps", () => {
+  test("Notion's read list is upstream v1.0.0's, word for word", () => {
+    const notion = catalogueEntry("notion");
+    expect(notion?.readTools).toEqual([
+      "notion-search",
+      "notion-connector-search",
+      "notion-memory-search",
+      "notion-get-tool-access",
+      "notion-get-self",
+      "notion-download-skill",
+      "notion-get-enabled-skills",
+      "notion-fetch",
+      "notion-get-file-download-urls",
+      "notion-list-private-pages",
+      "notion-list-shared-pages",
+      "notion-list-favorite-pages",
+      "notion-list-recent-pages",
+      "notion-list-page-backlinks",
+      "notion-view-version",
+      "notion-get-version-changes",
+      "notion-download-attachment",
+      "notion-get-comments",
+      "notion-get-suggested-edit",
+      "notion-get-teams",
+      "notion-get-groups",
+      "notion-get-users",
+      "notion-get-async-task",
+      "notion-query-data-sources",
+      "notion-query-multiple-data-sources",
+      "notion-query-meeting-notes",
+      "notion-search-agents",
+      "notion-query-sessions",
+      "notion-search-sessions",
+      "notion-get-session-status",
+      "notion-wait-session",
+      "notion-list-session-events",
+      "notion-read-session-event",
+      "notion-calendar-list-calendars",
+      "notion-calendar-list-events",
+      "notion-calendar-list-coworkers-events",
+      "notion-calendar-list-calendar-resources",
+      "notion-calendar-list-contacts",
+    ]);
+    for (const name of notion?.readTools ?? [])
+      expect(notion?.writeTools).not.toContain(name);
+  });
+
+  test("a Notion tool off the read list is a write in chat and not a check-in read", () => {
+    const notion = catalogueEntry("notion");
+    const silent = { effect: null, destructive: false, unclassified: false };
+    expect(classifyTool(notion, "notion-fetch", true, null)).toBe("read");
+    expect(checkInRead(notion, "notion-fetch", silent)).toBe(true);
+    for (const name of ["notion-delete-page", "notion-new-thing"]) {
+      expect(classifyTool(notion, name, true, null)).toBe("write");
+      expect(checkInRead(notion, name, silent)).toBe(false);
+    }
+  });
+
+  test.each([
+    [
+      "google-drive",
+      async () =>
+        (await driveTools({ url: "https://www.googleapis.com/drive/v3" })).map(
+          (tool) => tool.name,
+        ),
+      [
+        "search_files",
+        "list_recent_files",
+        "get_file_metadata",
+        "read_file_content",
+      ],
+    ],
+    [
+      "baidu-netdisk",
+      async () =>
+        (
+          await netdiskTools({ url: "https://pan.baidu.com/rest/2.0/xpan" })
+        ).map((tool) => tool.name),
+      [
+        "search_files",
+        "list_files",
+        "get_file_metadata",
+        "read_file_content",
+        "get_account_info",
+      ],
+    ],
+    [
+      "routines",
+      async () => (await routineTools()).map((tool) => tool.name),
+      ["list_routines", "list_triggers"],
+    ],
+  ] as const)(
+    "%s names its reads, and every tool it advertises is on one list or the other",
+    async (key, advertised, reads) => {
+      const entry = catalogueEntry(key);
+      expect(entry?.readTools).toEqual([...reads]);
+      const silent = { effect: null, destructive: false, unclassified: false };
+      for (const name of await advertised()) {
+        const read = entry?.readTools?.includes(name) ?? false;
+        expect(read || (entry?.writeTools.includes(name) ?? false)).toBe(true);
+        expect(read && entry?.writeTools.includes(name)).toBe(false);
+        // 名单里的是读，聊天和 check-in 都认；名单外的（写名单上的）两边都是写。
+        expect(classifyTool(entry, name, true, null)).toBe(
+          read ? "read" : "write",
+        );
+        expect(checkInRead(entry, name, silent)).toBe(read);
+      }
+      // 名单之外、以后才加的名字是写。
+      expect(classifyTool(entry, "some_new_tool", true, null)).toBe("write");
+    },
+  );
+});
+
+/*
+ * 上游 v1.0.0 的 Routines 还带着目标（goal）的六个写工具。整合分支上还没有这些工具，但目录先把它们
+ * 列成写：等它们并进来、被广播出去时，不管 Routines 有没有读名单，都不会被当成读。
+ */
+describe("the goal tools Routines will carry are writes", () => {
+  const goalWrites = [
+    "create_goal",
+    "update_goal",
+    "run_goal",
+    "pause_goal",
+    "resume_goal",
+    "complete_goal",
+  ];
+
+  test("each one is on Routines' write list, off its read list, and classifies as a write", () => {
+    const routines = catalogueEntry("routines");
+    const silent = { effect: null, destructive: false, unclassified: false };
+    for (const name of goalWrites) {
+      expect(routines?.writeTools).toContain(name);
+      expect(routines?.readTools ?? []).not.toContain(name);
+      expect(classifyTool(routines, name, true, null)).toBe("write");
+      // 厂商记录的读也翻不过写名单。
+      expect(classifyTool(routines, name, true, "read")).toBe("write");
+      expect(checkInRead(routines, name, silent)).toBe(false);
+    }
   });
 });
