@@ -124,6 +124,7 @@ tests/computer-fleet-route.test.ts
 tests/computer-gateway.test.ts
 tests/computer-handoff-contract.test.ts
 tests/computer-human-input.test.ts
+tests/computer-local-tools-routes.test.ts
 tests/computer-page-frame-route.test.ts
 tests/computer-page-frame-store.integration.test.ts
 tests/computer-policy-dry-run-frame.test.ts

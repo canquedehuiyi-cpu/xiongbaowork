@@ -410,6 +410,13 @@ export interface ComputerGateway {
     signal?: AbortSignal,
   ): Promise<{ enabled: { name: string; tools: AppTool[] }; next: string }>;
   // --- end app discovery ---
+  /**
+   * Whether this person may use the local apps and the desktop of this Bot's owner's machine at all:
+   * the same question `listApps` and `listDesktopWindows` ask before anything else, answered without
+   * asking the machine, recording a row or deciding a policy. Only for what a surface offers; every
+   * call is still decided in full by its own method.
+   */
+  localToolsAllowed(botId: string, actor: ActionActor): Promise<boolean>;
   control(botId: string, requestId?: string): Promise<ControlState>;
   requestHelp(
     botId: string,
@@ -1629,6 +1636,21 @@ export function createComputerGateway(
       windows: createDesktopWindowCache({ now }),
     }),
     // --- end desktop control ---
+
+    /*
+     * `appsOf`'s own preconditions, as a yes or no: device mode (a machine to resolve and its apps to
+     * read), and the machine this Bot resolves to is the asker's own. Anything that fails, a Bot with
+     * no paired machine included, is no.
+     */
+    async localToolsAllowed(botId: string, actor: ActionActor) {
+      if (!options.resolveDevice || !options.deviceApps) return false;
+      try {
+        const machine = await options.resolveDevice(botId);
+        return !!machine && machine.tenantId === actor.id;
+      } catch {
+        return false;
+      }
+    },
 
     status(botId: string): Promise<ComputerStatus> {
       return provider.status(botId);
