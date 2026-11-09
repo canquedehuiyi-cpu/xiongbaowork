@@ -223,7 +223,8 @@ describe("createPerBotComputer", () => {
       const status = await perBot.status();
       expect(status.enabled).toBe(true);
       expect(status.ready).toBe(ready);
-      if (!ready) expect(status.reason).toContain("no helper");
+      // The detail is the helper's stderr, which /health (open to anyone) must not repeat.
+      if (!ready) expect(status.reason).toBe("员工独立电脑的辅助程序不可用");
       await perBot.status();
       expect(calls).toEqual([["ensure", botKeyOf("__probe__")]]);
     },
@@ -300,5 +301,156 @@ describe("createPerBotComputer", () => {
     });
     const failure = await perBot.shellFor("bot-a").catch((error) => error);
     expect(failure).toBeInstanceOf(PerBotUnavailableError);
+  });
+});
+
+/**
+ * Readiness, as /health reports it.
+ *
+ * /health needs no token, so a probe is not run per request; but a failure that happens once (two
+ * `useradd`s racing at start-up) must not leave the computer unready until it restarts.
+ */
+describe("createPerBotComputer status", () => {
+  const PROBE = ["ensure", botKeyOf("__probe__")];
+  let root = "";
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), "per-bot-status-"));
+  });
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  function setup(answer: () => Promise<{ code: number; stderr?: string }>) {
+    const calls: string[][] = [];
+    const options: ({ timeoutMs?: number } | undefined)[] = [];
+    const logged: string[] = [];
+    let clock = 1_000_000;
+    const perBot = createPerBotComputer({
+      workspaceRoot: root,
+      defaultBotId: "shared",
+      enabled: true,
+      helper: async (args, given) => {
+        calls.push(args);
+        options.push(given);
+        const { code, stderr = "" } = await answer();
+        return { code, stdout: "", stderr };
+      },
+      now: () => clock,
+      log: (detail) => logged.push(detail),
+    });
+    return {
+      perBot,
+      calls,
+      options,
+      logged,
+      advance: (ms: number) => {
+        clock += ms;
+      },
+    };
+  }
+
+  test("a failure is remembered for 30 seconds, then asked again; a success for good", async () => {
+    let code = 1;
+    const { perBot, calls, logged, advance } = setup(async () => ({
+      code,
+      stderr: "useradd: cannot lock /etc/passwd",
+    }));
+    expect(await perBot.status()).toEqual({
+      enabled: true,
+      ready: false,
+      reason: "员工独立电脑的辅助程序不可用",
+    });
+    expect(logged.join("\n")).toContain("cannot lock /etc/passwd");
+    advance(29_000);
+    expect((await perBot.status()).ready).toBe(false);
+    expect(calls).toEqual([PROBE]);
+
+    code = 0;
+    advance(2_000);
+    expect(await perBot.status()).toEqual({ enabled: true, ready: true });
+    expect(calls).toEqual([PROBE, PROBE]);
+    advance(86_400_000);
+    expect((await perBot.status()).ready).toBe(true);
+    expect(calls).toEqual([PROBE, PROBE]);
+  });
+
+  test("callers at the same moment share one probe", async () => {
+    const { perBot, calls } = setup(async () => {
+      await Bun.sleep(20);
+      return { code: 0 };
+    });
+    const [a, b] = await Promise.all([perBot.status(), perBot.status()]);
+    expect(a.ready && b.ready).toBe(true);
+    expect(calls).toEqual([PROBE]);
+  });
+
+  test("a probe gets five seconds, and one that hangs is unready rather than a hung /health", async () => {
+    const { perBot, options, logged } = setup(() => new Promise(() => {}));
+    const started = Date.now();
+    const status = await perBot.status();
+    expect(Date.now() - started).toBeLessThan(7_000);
+    expect(Date.now() - started).toBeGreaterThanOrEqual(4_500);
+    expect(status).toEqual({
+      enabled: true,
+      ready: false,
+      reason: "员工独立电脑的辅助程序不可用",
+    });
+    expect(options[0]?.timeoutMs).toBe(5_000);
+    expect(logged.join("\n")).toContain("超时");
+  }, 15_000);
+
+  test("an employee prepared successfully is proof enough that the helper works", async () => {
+    let code = 1;
+    const { perBot, calls, advance } = setup(async () => ({ code }));
+    expect((await perBot.status()).ready).toBe(false);
+    code = 0;
+    await perBot.ensure("bot-a");
+    expect((await perBot.status()).ready).toBe(true);
+    advance(60_000);
+    expect((await perBot.status()).ready).toBe(true);
+    expect(calls).toEqual([PROBE, ["ensure", botKeyOf("bot-a")]]);
+  });
+
+  test("a workspace that is not the helper's is never ready, and nobody is prepared in it", async () => {
+    const calls: string[][] = [];
+    const perBot = createPerBotComputer({
+      workspaceRoot: root,
+      defaultBotId: "shared",
+      enabled: true,
+      helperRoot: "/workspace",
+      helper: async (args) => {
+        calls.push(args);
+        return { code: 0, stdout: "", stderr: "" };
+      },
+    });
+    expect(await perBot.status()).toEqual({
+      enabled: true,
+      ready: false,
+      reason: "每员工模式要求工作目录为 /workspace",
+    });
+    const failure = await perBot.workspaceFor("bot-a").catch((error) => error);
+    expect(failure).toBeInstanceOf(PerBotUnavailableError);
+    expect((failure as Error).message).toContain(
+      "每员工模式要求工作目录为 /workspace",
+    );
+    expect(
+      await perBot.shellFor("bot-a").catch((error) => error),
+    ).toBeInstanceOf(PerBotUnavailableError);
+    expect(calls).toEqual([]);
+    // The default employee is not the helper's business, and keeps working.
+    await (await perBot.workspaceFor("shared")).write("ok.txt", "ok");
+  });
+
+  test("the helper's own root, however it is written, is accepted", async () => {
+    const perBot = createPerBotComputer({
+      workspaceRoot: `${root}/`,
+      defaultBotId: "shared",
+      enabled: true,
+      helperRoot: root,
+      helper: async () => ({ code: 0, stdout: "", stderr: "" }),
+    });
+    expect((await perBot.status()).ready).toBe(true);
   });
 });

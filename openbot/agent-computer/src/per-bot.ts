@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
+import { resolve } from "node:path";
 
 import { createShell, type Shell } from "./shell";
 import { createWorkspace } from "./workspace";
@@ -60,9 +61,16 @@ export function botHome(
 /** Where the root helper lives in the image. Root-owned, 0755, reachable only through sudo. */
 export const XB_BOT_HELPER = "/usr/local/sbin/xb-bot";
 
+/**
+ * The workspace the helper is written for: it creates `/workspace/bots/<key>` and runs commands
+ * there, whatever this process was told. Per-employee mode is only coherent on the same root.
+ */
+export const XB_BOT_WORKSPACE = "/workspace";
+
 /** One call of the root helper: `ensure <botKey>` here, `run` from the shell. */
 export type HelperRunner = (
   args: string[],
+  options?: { timeoutMs?: number },
 ) => Promise<{ code: number; stdout: string; stderr: string }>;
 
 /**
@@ -84,7 +92,7 @@ export class PerBotUnavailableError extends Error {
 const HELPER_TIMEOUT_MS = 30_000;
 
 /** `sudo -n`: never a password prompt, which nobody is there to answer. */
-export const sudoHelper: HelperRunner = (args) =>
+export const sudoHelper: HelperRunner = (args, options = {}) =>
   new Promise((resolve) => {
     const child = spawn("sudo", ["-n", XB_BOT_HELPER, ...args], {
       stdio: ["ignore", "pipe", "pipe"],
@@ -97,7 +105,10 @@ export const sudoHelper: HelperRunner = (args) =>
     child.stderr.on("data", (chunk) => {
       stderr += String(chunk);
     });
-    const timer = setTimeout(() => child.kill("SIGKILL"), HELPER_TIMEOUT_MS);
+    const timer = setTimeout(
+      () => child.kill("SIGKILL"),
+      options.timeoutMs ?? HELPER_TIMEOUT_MS,
+    );
     child.once("error", (error) => {
       clearTimeout(timer);
       resolve({ code: -1, stdout, stderr: stderr || error.message });
@@ -123,6 +134,30 @@ function helperReason(result: { code: number; stderr: string }): string {
 /** The key the readiness probe ensures. One extra empty user and directory, created once. */
 const PROBE_BOT_ID = "__probe__";
 
+/** /health waits this long for the probe, and no longer. */
+const PROBE_TIMEOUT_MS = 5_000;
+
+/**
+ * How long a failed probe is believed. Long enough that /health, which needs no token, cannot be used
+ * to start a root process per request; short enough that one failure at start-up (two `useradd`s
+ * racing for the passwd lock) is not an unready computer until it restarts.
+ */
+const PROBE_FAILURE_TTL_MS = 30_000;
+
+/**
+ * What /health says when the helper cannot be used. /health is open to anyone who can reach the
+ * port, so the helper's own words (sudo's error, a path) go to the log rather than into the answer.
+ */
+const HELPER_UNAVAILABLE = "员工独立电脑的辅助程序不可用";
+
+const WRONG_WORKSPACE = `每员工模式要求工作目录为 ${XB_BOT_WORKSPACE}`;
+
+export type PerBotStatus = {
+  enabled: boolean;
+  ready: boolean;
+  reason?: string;
+};
+
 /**
  * The files of every employee on this computer, and the preparation an employee's own user needs.
  *
@@ -137,9 +172,28 @@ export function createPerBotComputer(options: {
   helper?: HelperRunner;
   /** What an employee's command is handed to; the shell's own default (`sudo -n xb-bot`) if unset. */
   launcher?: string[];
+  /**
+   * The workspace root the helper works in. When given and the workspace is elsewhere, nobody gets
+   * their own user: files would land in one directory and commands run in another.
+   */
+  helperRoot?: string;
+  /** For tests: the clock the probe's failure is timed by, and where the helper's own words go. */
+  now?: () => number;
+  log?: (detail: string) => void;
 }) {
   const { workspaceRoot, defaultBotId, enabled, launcher } = options;
   const helper = options.helper ?? sudoHelper;
+  const now = options.now ?? Date.now;
+  const log =
+    options.log ??
+    ((detail: string) =>
+      console.warn(
+        JSON.stringify({ type: "computer-per-bot-users-unready", detail }),
+      ));
+  const wrongWorkspace =
+    enabled &&
+    options.helperRoot !== undefined &&
+    resolve(workspaceRoot) !== resolve(options.helperRoot);
   const shared = createWorkspace(workspaceRoot);
   // Rooted in the same workspace the file tools use, so a command and a written file see one
   // directory rather than two.
@@ -147,9 +201,10 @@ export function createPerBotComputer(options: {
   const workspaces = new Map<string, ReturnType<typeof createWorkspace>>();
   const shells = new Map<string, Shell>();
   const ensured = new Map<string, Promise<void>>();
-  let probe:
-    | Promise<{ enabled: boolean; ready: boolean; reason?: string }>
-    | undefined;
+  // Ready is remembered for good; a failure until `failedAt + PROBE_FAILURE_TTL_MS`.
+  let ready = false;
+  let failedAt: number | undefined;
+  let probing: Promise<PerBotStatus> | undefined;
 
   const ensureKey = (key: string): Promise<void> => {
     const known = ensured.get(key);
@@ -165,6 +220,8 @@ export function createPerBotComputer(options: {
       }
       if (result.code !== 0)
         throw new PerBotUnavailableError(helperReason(result));
+      // An employee prepared is the probe's question answered.
+      ready = true;
     })();
     ensured.set(key, attempt);
     // Forgotten on failure, so the next call asks again.
@@ -180,7 +237,45 @@ export function createPerBotComputer(options: {
   /** A no-op for the default employee and with the switch off: they have no user to prepare. */
   const ensure = async (botId: string): Promise<void> => {
     if (!usesOwnUser(botId, defaultBotId, enabled)) return;
+    if (wrongWorkspace) throw new PerBotUnavailableError(WRONG_WORKSPACE);
     await ensureKey(botKeyOf(botId));
+  };
+
+  /** One question to the helper, bounded, answered as /health may repeat it. */
+  const probe = async (): Promise<PerBotStatus> => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timedOut = new Promise<{ code: number; stderr: string }>((done) => {
+      timer = setTimeout(
+        () =>
+          done({
+            code: -1,
+            stderr: `探测超时（${PROBE_TIMEOUT_MS / 1000} 秒）`,
+          }),
+        PROBE_TIMEOUT_MS,
+      );
+    });
+    let detail: string | undefined;
+    try {
+      const result = await Promise.race([
+        helper(["ensure", botKeyOf(PROBE_BOT_ID)], {
+          timeoutMs: PROBE_TIMEOUT_MS,
+        }),
+        timedOut,
+      ]);
+      if (result.code !== 0) detail = helperReason(result);
+    } catch (error) {
+      detail = error instanceof Error ? error.message : String(error);
+    } finally {
+      clearTimeout(timer);
+    }
+    if (detail === undefined) {
+      ready = true;
+      return { enabled: true, ready: true };
+    }
+    if (ready) return { enabled: true, ready: true };
+    failedAt = now();
+    log(detail);
+    return { enabled: true, ready: false, reason: HELPER_UNAVAILABLE };
   };
 
   return {
@@ -217,27 +312,21 @@ export function createPerBotComputer(options: {
       return shell;
     },
     /**
-     * Whether an employee could be given its own user now, asked of the helper once and remembered.
-     * Switched off, there is nothing to be ready for.
+     * Whether an employee could be given its own user now. Switched off, there is nothing to be ready
+     * for. A success is remembered for good, a failure for 30 seconds, and callers at the same moment
+     * share one probe.
      */
-    status(): Promise<{ enabled: boolean; ready: boolean; reason?: string }> {
-      if (!enabled) return Promise.resolve({ enabled: false, ready: true });
-      probe ??= (async () => {
-        try {
-          await ensureKey(botKeyOf(PROBE_BOT_ID));
-          return { enabled: true, ready: true };
-        } catch (error) {
-          return {
-            enabled: true,
-            ready: false,
-            reason:
-              error instanceof PerBotUnavailableError
-                ? error.reason
-                : String(error),
-          };
-        }
-      })();
-      return probe;
+    async status(): Promise<PerBotStatus> {
+      if (!enabled) return { enabled: false, ready: true };
+      if (wrongWorkspace)
+        return { enabled: true, ready: false, reason: WRONG_WORKSPACE };
+      if (ready) return { enabled: true, ready: true };
+      if (failedAt !== undefined && now() - failedAt < PROBE_FAILURE_TTL_MS)
+        return { enabled: true, ready: false, reason: HELPER_UNAVAILABLE };
+      probing ??= probe().finally(() => {
+        probing = undefined;
+      });
+      return probing;
     },
   };
 }

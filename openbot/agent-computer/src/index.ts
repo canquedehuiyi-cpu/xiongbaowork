@@ -37,6 +37,7 @@ import {
   createPerBotComputer,
   PerBotUnavailableError,
   perBotUsersEnabled,
+  XB_BOT_WORKSPACE,
 } from "./per-bot";
 import { createProfiles, numberFromEnv, VIEWPORT } from "./profiles";
 import {
@@ -297,6 +298,7 @@ const perBot = createPerBotComputer({
   workspaceRoot: process.env.WORKSPACE_DIR?.trim() || "/workspace",
   defaultBotId: DEFAULT_BOT_ID,
   enabled: perBotUsersEnabled(process.env, process.platform),
+  helperRoot: XB_BOT_WORKSPACE,
 });
 
 async function currentPage(
@@ -920,6 +922,7 @@ serve<StreamData>({
         const perBotUsers = await perBot.status();
         // Switched on and unable to give an employee its own user is not healthy: those employees
         // are refused rather than quietly sharing one user, so the orchestrator should know.
+        // Switched off, the answer is exactly what it was before the switch existed.
         const unready = perBotUsers.enabled && !perBotUsers.ready;
         return json(
           {
@@ -934,7 +937,7 @@ serve<StreamData>({
             browserMode: BROWSER_MODE,
             browserBackend: RUNTIME.backend,
             browserChannel: RUNTIME.channel,
-            perBotUsers,
+            ...(perBotUsers.enabled ? { perBotUsers } : {}),
           },
           unready ? 503 : 200,
         );
