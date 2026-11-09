@@ -4,9 +4,9 @@ type StarterSuggestion = CopilotChatSuggestionViewProps["suggestions"][number];
 
 /** Draws editable controls, so it needs generated interfaces switched on for this installation. */
 export const INTERACTIVE_STARTER: StarterSuggestion = {
-  title: "Build a trip budget",
+  title: "做一份出行预算",
   message:
-    "Build an interactive weekend trip budget in this conversation. Start with transport $100, lodging $200 and food $80. Let me edit each cost and see the total update immediately. Use clearly labeled sample amounts, not live prices.",
+    "在这段对话里做一份可交互的周末出行预算。先填交通 100 元、住宿 200 元、餐饮 80 元。让我能修改每一项费用，并立刻看到总额更新。用清楚标明的示例金额，不要用实时价格。",
   isLoading: false,
 };
 
@@ -18,21 +18,21 @@ export const INTERACTIVE_STARTER: StarterSuggestion = {
 export const STARTER_SUGGESTIONS: CopilotChatSuggestionViewProps["suggestions"] =
   [
     {
-      title: "Chart Hacker News",
+      title: "把 Hacker News 做成图表",
       message:
-        "Use web search to find the top 10 stories on the Hacker News front page right now. Show me a bar chart of them by points, then list them with their points and links.",
+        "用网页搜索找出 Hacker News 首页现在排名前 10 的文章。按得分给我画一张柱状图，再列出每篇的得分和链接。",
       isLoading: false,
     },
     {
-      title: "Browse Google Maps",
+      title: "用 Google 地图查路线",
       message:
-        "Use your browser to open Google Maps and check the British Museum's Saturday opening hours. Then get walking directions from King's Cross station, list them step by step, and tell me when to leave to arrive at opening time. Don't sign in or change anything.",
+        "用你的浏览器打开 Google 地图，查一下大英博物馆周六的开放时间。再查从国王十字车站步行过去的路线，一步一步列出来，并告诉我几点出发能在开门时到达。不要登录，也不要改动任何东西。",
       isLoading: false,
     },
     {
-      title: "Triage my inbox",
+      title: "整理我的收件箱",
       message:
-        "Use Gmail to read my emails from the past 24 hours and tell me the top 2 that need my attention, and why. Don't mark anything as read or change anything. If Gmail isn't connected, help me connect it here, then continue this request.",
+        "用 Gmail 读一下我过去 24 小时的邮件，告诉我最需要我处理的 2 封以及原因。不要把任何邮件标为已读，也不要改动任何东西。如果 Gmail 还没连接，先在这里帮我连接，然后继续这个请求。",
       isLoading: false,
     },
     INTERACTIVE_STARTER,

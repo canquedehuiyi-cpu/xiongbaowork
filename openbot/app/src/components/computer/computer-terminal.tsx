@@ -41,7 +41,7 @@ export function ComputerTerminal({ computerId }: { computerId: string }) {
             className="absolute top-2 right-2 rounded-full bg-black/60 px-2.5 py-1 font-medium text-white text-xs backdrop-blur-sm"
             role="status"
           >
-            Reconnecting…
+            正在重新连接…
           </span>
         ) : null}
         {problem ? (
@@ -55,7 +55,7 @@ export function ComputerTerminal({ computerId }: { computerId: string }) {
               }}
               type="button"
             >
-              Retry
+              重试
             </button>
           </div>
         ) : null}
@@ -65,19 +65,18 @@ export function ComputerTerminal({ computerId }: { computerId: string }) {
       >
         {driving ? (
           <span className="text-sm">
-            <strong className="font-medium">You have control</strong> of the
-            terminal and the screen. Click the terminal and type. The Bot waits
-            until you hand it back.
+            <strong className="font-medium">终端和屏幕现在由你操作。</strong>
+            点击终端就能输入。你交还之前，员工会一直等着。
           </span>
         ) : (
           <span className="text-muted-foreground text-xs">
             {!control
-              ? "Checking who has control…"
+              ? "正在确认谁在操作…"
               : control.transitioning
-                ? "Finishing the current action…"
+                ? "正在完成当前动作…"
                 : someoneElse
-                  ? "Someone else has control."
-                  : "The Bot has control."}
+                  ? "有人接管了操作。"
+                  : "员工正在操作。"}
           </span>
         )}
         <ComputerControlButton

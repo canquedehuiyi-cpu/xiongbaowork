@@ -1,6 +1,10 @@
 import { IconHandStop } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
+  ASK_FIRST_DESCRIPTION,
+  ASK_FIRST_TITLE,
+} from "@/components/approvals/ask-first-copy";
+import {
   Item,
   ItemActions,
   ItemContent,
@@ -8,10 +12,6 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
-import {
-  ASK_FIRST_DESCRIPTION,
-  ASK_FIRST_TITLE,
-} from "@/components/approvals/ask-first-copy";
 import { Switch } from "@/components/ui/switch";
 import {
   approvalInboxOptions,
@@ -60,11 +60,11 @@ export function AskFirstSwitch() {
       </Item>
       {preferences.error ? (
         <p className="text-sm text-destructive" role="alert">
-          Couldn't change it. Try again, or change it later in Settings.
+          没能修改。请再试一次，或者之后在设置里修改。
         </p>
       ) : inbox.error ? (
         <p className="text-sm text-muted-foreground" role="status">
-          Couldn't load this setting. You can change it later in Settings.
+          读不到这项设置。之后可以在设置里修改。
         </p>
       ) : null}
     </div>

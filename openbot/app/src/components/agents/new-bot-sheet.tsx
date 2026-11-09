@@ -148,12 +148,12 @@ function frameworkName(runtime: Runtime): string {
  * cannot know what is behind its address.
  */
 function poweredBy(runtime: Runtime): string {
-  if (runtime.kind === "builtin") return `Powered by ${OPENBOT_HARNESS_NAME}`;
+  if (runtime.kind === "builtin") return `由 ${OPENBOT_HARNESS_NAME} 驱动`;
   if (runtime.harness === "byo-url") return "";
   const framework = WEB_HARNESSES.find(
     (harness) => harness.id === runtime.harness,
   );
-  return framework ? `Powered by ${framework.name}` : "";
+  return framework ? `由 ${framework.name} 驱动` : "";
 }
 
 /**
@@ -277,7 +277,7 @@ function NewBotFlow({ onCreated }: { onCreated: (agentId: string) => void }) {
   const named = name.trim() !== "";
   const endpointIssue =
     endpoint.trim() === ""
-      ? "Enter your agent's address."
+      ? "请输入你的智能体地址。"
       : agentFormSchema.shape.endpoint.safeParse(endpoint).error?.issues[0]
           ?.message;
   const busy = checking || createAgent.isPending;
@@ -398,7 +398,7 @@ function NewBotFlow({ onCreated }: { onCreated: (agentId: string) => void }) {
   if (createdId) {
     return (
       <MotionConfig reducedMotion="user">
-        <SheetTitle className="sr-only">New Bot</SheetTitle>
+        <SheetTitle className="sr-only">新建员工</SheetTitle>
         <CreatedView name={name.trim()} />
       </MotionConfig>
     );
@@ -448,7 +448,7 @@ function NewBotFlow({ onCreated }: { onCreated: (agentId: string) => void }) {
               />
             </motion.div>
             <SheetTitle className="text-2xl font-semibold tracking-tight">
-              New Bot
+              新建员工
             </SheetTitle>
             {/* On a phone the custom agents can't show above the footer, so this says they are there. */}
             {step === "about" && builtInAvailable && (
@@ -458,7 +458,7 @@ function NewBotFlow({ onCreated }: { onCreated: (agentId: string) => void }) {
                 type="button"
                 variant="link"
               >
-                Custom agent
+                自定义智能体
                 <IconChevronDown className="size-3.5" />
               </Button>
             )}
@@ -510,8 +510,7 @@ function NewBotFlow({ onCreated }: { onCreated: (agentId: string) => void }) {
                   />
                 ) : (
                   <p className="mt-3 text-sm text-muted-foreground">
-                    An admin must enable built-in hosting before you can run a
-                    Bot here.
+                    管理员开启内置托管后，你才能在这里运行员工。
                   </p>
                 )}
               </>
@@ -555,7 +554,7 @@ function NewBotFlow({ onCreated }: { onCreated: (agentId: string) => void }) {
           <SheetClose
             render={<Button className="px-4" size="lg" variant="ghost" />}
           >
-            Cancel
+            取消
           </SheetClose>
         ) : (
           <Button
@@ -566,7 +565,7 @@ function NewBotFlow({ onCreated }: { onCreated: (agentId: string) => void }) {
             type="button"
             variant="ghost"
           >
-            Back
+            返回
           </Button>
         )}
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
@@ -578,12 +577,12 @@ function NewBotFlow({ onCreated }: { onCreated: (agentId: string) => void }) {
               type="submit"
             >
               {checking
-                ? "Checking…"
+                ? "正在检查…"
                 : createAgent.isPending
-                  ? "Creating…"
+                  ? "正在创建…"
                   : step === "endpoint" || (step === "about" && !custom)
-                    ? "Create Bot"
-                    : "Continue"}
+                    ? "创建员工"
+                    : "继续"}
             </Button>
           )}
         </div>
@@ -643,9 +642,9 @@ function CreatedView({ name }: { name: string }) {
         transition={{ delay: 0.3, duration: 0.35, ease: "easeOut" }}
       >
         <h2 className="break-words font-semibold text-xl tracking-tight">
-          {name} is ready
+          {name}准备好了
         </h2>
-        <p className="mt-1 text-muted-foreground text-sm">Taking you to it…</p>
+        <p className="mt-1 text-muted-foreground text-sm">正在带你过去…</p>
       </motion.div>
     </div>
   );
@@ -659,8 +658,8 @@ const VISIBILITY_OPTIONS: Array<{
   title: string;
   icon: typeof IconLock;
 }> = [
-  { value: "private", title: "Private", icon: IconLock },
-  { value: "public", title: "Public", icon: IconUsers },
+  { value: "private", title: "仅自己", icon: IconLock },
+  { value: "public", title: "公开", icon: IconUsers },
 ];
 
 /**
@@ -703,7 +702,7 @@ function AboutStep({
     <FieldGroup className="gap-5">
       <Field>
         <FieldLabel className={SECTION_LABEL} htmlFor="new-bot-name">
-          Name
+          名称
         </FieldLabel>
         <Input
           autoComplete="off"
@@ -713,7 +712,7 @@ function AboutStep({
           aria-describedby={nameError ? "new-bot-name-error" : undefined}
           maxLength={80}
           onChange={(event) => onName(event.target.value)}
-          placeholder="Expense Review"
+          placeholder="报销审核"
           value={name}
         />
         {nameError && (
@@ -728,17 +727,15 @@ function AboutStep({
       </Field>
       <Field>
         <FieldLabel className={SECTION_LABEL} htmlFor="new-bot-instructions">
-          Instructions
-          <span className="font-normal normal-case tracking-normal">
-            Optional
-          </span>
+          指令
+          <span className="font-normal normal-case tracking-normal">可选</span>
         </FieldLabel>
         <Textarea
           autoComplete="off"
           id="new-bot-instructions"
           maxLength={1000}
           onChange={(event) => onInstructions(event.target.value)}
-          placeholder="Review receipts, categorize expenses, and prepare reimbursement reports."
+          placeholder="审核票据、给费用分类，并准备报销报告。"
           rows={5}
           value={instructions}
         />
@@ -747,7 +744,7 @@ function AboutStep({
         <>
           <FieldSet>
             <FieldLegend className={SECTION_LABEL} variant="label">
-              Who can see it
+              谁能看到它
             </FieldLegend>
             <div className="grid gap-2 sm:grid-cols-2">
               {VISIBILITY_OPTIONS.map((option) => {
@@ -775,11 +772,9 @@ function AboutStep({
       ) : apps.length > 0 ? (
         <FieldSet className="gap-2">
           <FieldLegend className={SECTION_LABEL} variant="label">
-            Apps it can use
+            它能用的应用
           </FieldLegend>
-          <FieldDescription>
-            It always uses the account of whoever is asking.
-          </FieldDescription>
+          <FieldDescription>它总是用提问者本人的账号。</FieldDescription>
           <div className="grid gap-x-4 sm:grid-cols-2">
             {apps.map((app) => (
               <label
@@ -819,20 +814,17 @@ function EveryAppList({ turnedOn }: { turnedOn: UseQueryResult<PluginsPage> }) {
   return (
     <FieldSet className="gap-2">
       <FieldLegend className={SECTION_LABEL} variant="label">
-        Apps it can use
+        它能用的应用
       </FieldLegend>
       <FieldDescription>
-        Every Bot can use every app you turn on in Connections.
+        你在「连接」里打开的每个应用，所有员工都能用。
       </FieldDescription>
       {turnedOn.error ? (
         <p className="text-destructive text-sm" role="alert">
-          Couldn't load your apps.
+          读不到你的应用。
         </p>
       ) : servers.length > 0 ? (
-        <ul
-          aria-label="Apps it can use"
-          className="grid gap-x-4 sm:grid-cols-2"
-        >
+        <ul aria-label="它能用的应用" className="grid gap-x-4 sm:grid-cols-2">
           {servers.map((server) => (
             <li
               className="flex items-center gap-3 py-1 text-sm"
@@ -889,7 +881,7 @@ function IsolatedOption({
   return (
     <FieldSet>
       <FieldLegend className={SECTION_LABEL} variant="label">
-        Its computer
+        它的电脑
       </FieldLegend>
       <div className="flex items-start gap-3">
         <Checkbox
@@ -909,13 +901,13 @@ function IsolatedOption({
               )}
               htmlFor="new-bot-isolated"
             >
-              Isolated
+              独立运行
             </label>
             <Tooltip>
               <TooltipTrigger
                 render={
                   <Button
-                    aria-label="What Isolated means"
+                    aria-label="「独立运行」是什么意思"
                     className="text-muted-foreground"
                     size="icon-xs"
                     type="button"
@@ -971,7 +963,7 @@ function RuntimeStep({ onChoose }: { onChoose: (runtime: Runtime) => void }) {
   return (
     <div className="flex flex-col">
       <h2 className={cn("mb-3", RUNTIME_HEADING)} ref={heading} tabIndex={-1}>
-        Connect a custom agent
+        连接自定义智能体
       </h2>
       <FrameworkRows onChoose={onChoose} />
     </div>
@@ -1057,7 +1049,7 @@ function CustomAgents({
         id={CUSTOM_HEADING_ID}
         tabIndex={-1}
       >
-        Connect a custom agent
+        连接自定义智能体
       </h2>
       <FrameworkRows disabled={disabled} onChoose={onChoose} />
     </section>
@@ -1106,13 +1098,13 @@ function EndpointStep({
           </span>
         ) : null}
         <h2 className="break-words font-semibold text-lg tracking-tight">
-          Where can it be reached?
+          它的地址是什么？
         </h2>
       </div>
 
       <FieldGroup>
         <Field data-invalid={endpointError ? true : undefined}>
-          <FieldLabel htmlFor="new-bot-endpoint">Agent address</FieldLabel>
+          <FieldLabel htmlFor="new-bot-endpoint">智能体地址</FieldLabel>
           <Input
             aria-invalid={endpointError ? true : undefined}
             autoComplete="off"
@@ -1130,15 +1122,15 @@ function EndpointStep({
             />
           ) : (
             <FieldDescription>
-              Any agent that speaks AG-UI works. OpenBot connects to it, so it
-              has to be reachable from OpenBot's server.
+              任何支持 AG-UI
+              的智能体都可以。由熊宝去连接它，所以熊宝的服务器必须能访问到它。
             </FieldDescription>
           )}
         </Field>
         <Field>
           <FieldLabel htmlFor="new-bot-key">
-            Key
-            <span className="font-normal text-muted-foreground">Optional</span>
+            密钥
+            <span className="font-normal text-muted-foreground">可选</span>
           </FieldLabel>
           <Input
             autoComplete="off"
@@ -1149,8 +1141,7 @@ function EndpointStep({
             value={secret}
           />
           <FieldDescription>
-            Sent as an <code>Authorization</code> header with every request, and
-            stored encrypted.
+            每次请求都会作为 <code>Authorization</code> 请求头发送，并加密保存。
           </FieldDescription>
         </Field>
       </FieldGroup>

@@ -49,9 +49,9 @@ const SOURCE_NAMES: Record<ModelSource, string> = {
   anthropic: "Anthropic",
   google: "Google",
   xai: "xAI",
-  gateway: "OpenAI-compatible endpoint",
-  chatgpt: "ChatGPT plan",
-  claude: "Claude plan",
+  gateway: "兼容 OpenAI 的接口",
+  chatgpt: "ChatGPT 订阅",
+  claude: "Claude 订阅",
 };
 
 /**
@@ -76,15 +76,15 @@ export function ProviderSection() {
   const available = useQuery(availableModelsQueryOptions());
   return (
     <ControlsSection
-      description="Built-in Bots and the framework picked at setup run on models from this provider."
-      title="Connected"
+      description="内置员工和部署时选定的框架，都运行在这个提供方的模型上。"
+      title="已连接"
     >
       {() => {
         if (available.isPending) return null;
         if (available.error)
           return (
             <p className="mt-4 text-destructive text-sm" role="alert">
-              Couldn't load the provider. Reload the page.
+              读不到模型提供方。请刷新页面。
             </p>
           );
         const { source } = available.data;
@@ -106,8 +106,8 @@ export function ProviderSection() {
                 <ItemTitle>{name}</ItemTitle>
                 <ItemDescription>
                   {available.data.listed
-                    ? `Default ${available.data.default} · ${available.data.models.length} models listed`
-                    : `Default ${available.data.default} · couldn't read its models`}
+                    ? `默认 ${available.data.default} · 列出了 ${available.data.models.length} 个模型`
+                    : `默认 ${available.data.default} · 读不到它的模型列表`}
                 </ItemDescription>
               </ItemContent>
             </Item>
@@ -129,12 +129,12 @@ export function ModelChoiceSection() {
     <ControlsSection
       description={() => {
         const data = available.data;
-        if (!data) return "Which models people can pick in each conversation.";
+        if (!data) return "大家在每段对话里可以挑选哪些模型。";
         return data.exposure === "all"
-          ? `People can pick any model your provider lists, and its thinking level, in each conversation. Bots run on ${data.default} until somebody picks another.`
-          : `People pick among the models you allow below, and their thinking level, in each conversation. Until you allow one, every conversation runs on ${data.default}.`;
+          ? `大家在每段对话里可以挑选提供方列出的任意模型及其思考强度。没人另选之前，员工都用 ${data.default}。`
+          : `大家在每段对话里从你在下面允许的模型中挑选，并选择思考强度。你允许任何模型之前，所有对话都用 ${data.default}。`;
       }}
-      title="In conversations"
+      title="对话中可选的模型"
     >
       {({ data }) => {
         const listing = available.data;
@@ -153,17 +153,17 @@ export function ModelChoiceSection() {
               <ItemContent>
                 <ItemTitle>
                   {listing.exposure === "all"
-                    ? "Every listed model"
+                    ? "所有列出的模型"
                     : allowed === 0
-                      ? "No models allowed yet"
-                      : `${allowed} ${allowed === 1 ? "model" : "models"} allowed`}
+                      ? "还没有允许任何模型"
+                      : `已允许 ${allowed} 个模型`}
                 </ItemTitle>
                 <ItemDescription>
                   {listing.exposure === "all"
-                    ? `${listing.models.length} models, kept current from your provider.`
+                    ? `${listing.models.length} 个模型，随提供方的列表保持更新。`
                     : allowed === 0
-                      ? "People don't see a model picker. Allow models below to offer them."
-                      : "People see them in the composer's model picker, with the default."}
+                      ? "大家看不到模型选择器。在下面允许一些模型，就能提供给大家。"
+                      : "大家会在输入框的模型选择器里看到它们和默认模型。"}
                 </ItemDescription>
               </ItemContent>
             </Item>
@@ -176,9 +176,9 @@ export function ModelChoiceSection() {
 
 /** What the allowed-models row says: the models themselves, the first few by name. */
 export function allowedSummary(models: readonly string[]): string {
-  if (models.length === 0) return "None listed";
-  if (models.length <= 3) return models.join(", ");
-  return `${models.slice(0, 3).join(", ")} and ${models.length - 3} more`;
+  if (models.length === 0) return "未列出任何模型";
+  if (models.length <= 3) return models.join("、");
+  return `${models.slice(0, 3).join("、")}等另外 ${models.length - 3} 个`;
 }
 
 /** Admin, Providers: the allowlist every Bot's model is checked against. */
@@ -186,8 +186,8 @@ export function ModelAllowlistSection() {
   const [open, setOpen] = useState(false);
   return (
     <ControlsSection
-      description="The models people may pick in each conversation. With Only allowed models on, a Bot on any other model is refused before it runs, and a remote Bot's own model is checked too."
-      title="Allowed models"
+      description="大家在每段对话里可以挑选的模型。打开「只用允许的模型」后，用其他模型的员工会在运行前被拒绝，远程员工自己的模型也会被检查。"
+      title="允许的模型"
     >
       {({ data, setSetting, saving }) => {
         const { modelAllowlist } = data.settings;
@@ -199,16 +199,16 @@ export function ModelAllowlistSection() {
                   <IconShieldLock />
                 </ItemMedia>
                 <ItemContent>
-                  <ItemTitle>Only allowed models</ItemTitle>
+                  <ItemTitle>只用允许的模型</ItemTitle>
                   <ItemDescription>
                     {modelAllowlist.enabled
-                      ? "Bots can only run on the models listed below."
-                      : "Off. Runs on other models, a remote Bot's own included, aren't refused."}
+                      ? "员工只能用下面列出的模型运行。"
+                      : "已关闭。用其他模型运行（包括远程员工自己的模型）不会被拒绝。"}
                   </ItemDescription>
                 </ItemContent>
                 <ItemActions>
                   <Switch
-                    aria-label="Only allowed models"
+                    aria-label="只用允许的模型"
                     checked={modelAllowlist.enabled}
                     disabled={saving}
                     onCheckedChange={(enabled) =>
@@ -229,7 +229,7 @@ export function ModelAllowlistSection() {
                   <IconKey />
                 </ItemMedia>
                 <ItemContent>
-                  <ItemTitle>Allowed models</ItemTitle>
+                  <ItemTitle>允许的模型</ItemTitle>
                   <ItemDescription>
                     {allowedSummary(modelAllowlist.models)}
                   </ItemDescription>
@@ -330,13 +330,13 @@ export function AllowedModelsDialog({
     >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Allowed models</DialogTitle>
+          <DialogTitle>允许的模型</DialogTitle>
         </DialogHeader>
         <DialogBody className="mt-4 flex flex-col gap-3 overflow-y-auto">
           <Input
-            aria-label="Search models"
+            aria-label="搜索模型"
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search models"
+            placeholder="搜索模型"
             value={search}
           />
           {available.isPending ? null : available.error ? (
@@ -345,12 +345,11 @@ export function AllowedModelsDialog({
             </p>
           ) : !available.data.listed ? (
             <p className="text-muted-foreground text-sm">
-              Couldn't read the provider's models, so only the configured one is
-              listed. Add others by their full name.
+              读不到提供方的模型列表，所以只列出了已配置的那个。其他模型请按完整名称添加。
             </p>
           ) : null}
           {rows.length === 0 ? (
-            <PageEmpty icon={IconSearch} title="No matches" />
+            <PageEmpty icon={IconSearch} title="没有匹配的模型" />
           ) : (
             <div className="flex flex-col gap-px">
               {rows.map((model) => (
@@ -374,15 +373,15 @@ export function AllowedModelsDialog({
                     <ItemTitle>{model.label}</ItemTitle>
                     <ItemDescription className="text-xs">
                       <span className="font-mono">{model.name}</span>
-                      {model.name === defaultName ? " · default" : ""}
+                      {model.name === defaultName ? " · 默认" : ""}
                       {model.model?.efforts?.length
-                        ? ` · Thinking: ${model.model.efforts.map(effortLabel).join(", ")}`
+                        ? ` · 思考强度：${model.model.efforts.map(effortLabel).join("、")}`
                         : ""}
                     </ItemDescription>
                   </ItemContent>
                   <ItemActions>
                     <Checkbox
-                      aria-label={`Allow ${model.label}`}
+                      aria-label={`允许 ${model.label}`}
                       checked={selected.includes(model.name)}
                       onCheckedChange={(checked) =>
                         toggle(model.name, checked === true)
@@ -403,10 +402,10 @@ export function AllowedModelsDialog({
             }}
           >
             <Input
-              aria-label="Another model"
+              aria-label="其他模型"
               className="font-mono text-xs"
               onChange={(event) => setOther(event.target.value)}
-              placeholder="provider/model, for a model not listed"
+              placeholder="未列出的模型，格式为 提供方/模型"
               value={other}
             />
             <Button
@@ -415,19 +414,19 @@ export function AllowedModelsDialog({
               type="submit"
               variant="outline"
             >
-              Add
+              添加
             </Button>
           </form>
           {defaultName && !selected.includes(defaultName) ? (
             <p className="text-muted-foreground text-xs">
-              {defaultName} is the default and stays offered. With Only allowed
-              models on, a built-in Bot on it is refused unless you allow it.
+              {defaultName}{" "}
+              是默认模型，会一直提供。打开「只用允许的模型」后，除非你允许它，用它的内置员工会被拒绝。
             </p>
           ) : null}
         </DialogBody>
         <DialogFooter className="mt-4">
           <Button onClick={onClose} size="sm" type="button" variant="outline">
-            Cancel
+            取消
           </Button>
           <Button
             onClick={() => {
@@ -437,7 +436,7 @@ export function AllowedModelsDialog({
             size="sm"
             type="button"
           >
-            Save
+            保存
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -455,19 +454,19 @@ export function ModelUsageSection({ team }: { team: boolean }) {
     <ControlsSection
       description={
         team
-          ? "Runs on each model in the last 30 days, including runs the allowlist refused."
-          : "Runs on each model in the last 30 days."
+          ? "最近 30 天里每个模型的运行次数，包括被允许列表拒绝的运行。"
+          : "最近 30 天里每个模型的运行次数。"
       }
-      title="Usage"
+      title="用量"
     >
       {() =>
         usage.isPending ? null : usage.error ? (
           <p className="mt-4 text-destructive text-sm" role="alert">
-            Couldn't load model usage. Reload the page.
+            读不到模型用量。请刷新页面。
           </p>
         ) : usage.data.summary.length === 0 ? (
-          <PageEmpty icon={IconChartBar} title="No recent runs">
-            Runs will appear here once a Bot answers.
+          <PageEmpty icon={IconChartBar} title="最近没有运行">
+            员工回复后，运行记录会出现在这里。
           </PageEmpty>
         ) : (
           <PageRows>
@@ -481,10 +480,9 @@ export function ModelUsageSection({ team }: { team: boolean }) {
                   <ItemContent>
                     <ItemTitle>{row.model}</ItemTitle>
                     <ItemDescription>
-                      {row.runs} runs by {row.people}{" "}
-                      {row.people === 1 ? "person" : "people"}
+                      {row.people} 人运行了 {row.runs} 次
                       {row.refused > 0
-                        ? ` · ${row.refused} off the allowlist`
+                        ? ` · ${row.refused} 次不在允许列表中`
                         : ""}{" "}
                       · {row.source}
                     </ItemDescription>

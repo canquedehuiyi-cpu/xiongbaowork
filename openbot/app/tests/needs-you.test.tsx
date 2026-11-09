@@ -283,12 +283,12 @@ test("an item says what it is, why, which Bot found it and where, with Work on i
   const { view, region } = await drawAll();
   await view.findAllByText("Send Dana the Q3 numbers");
   const bots = region("Bots page");
-  expect(bots.getByRole("heading", { name: "Needs you" })).toBeTruthy();
+  expect(bots.getByRole("heading", { name: "需要你" })).toBeTruthy();
   expect(
     bots.getByText("Dana asked for the Q3 numbers by Friday."),
   ).toBeTruthy();
   // Under its Bot's header, from the app it was read with.
-  expect(bots.getByText("From check-ins")).toBeTruthy();
+  expect(bots.getByText("巡检发现")).toBeTruthy();
   expect(bots.getByText("· from its check-ins")).toBeTruthy();
   expect(bots.getByText("Gmail")).toBeTruthy();
   expect(bots.getByRole("button", { name: "Work on it" })).toBeTruthy();
@@ -395,7 +395,7 @@ test("tasks list what to read, answer and retry first, and each acts from its ro
   await bots.findByText("Reply to the landlord");
   const titles = [
     ...(bots
-      .getByRole("heading", { name: "Needs you" })
+      .getByRole("heading", { name: "需要你" })
       .closest("section")
       ?.querySelectorAll("[data-slot=item-title]") ?? []),
   ].map((title) => title.textContent);
@@ -425,10 +425,10 @@ test("tasks list what to read, answer and retry first, and each acts from its ro
     .closest("[data-slot=item]") as HTMLElement;
   fireEvent.click(within(ready).getByRole("button", { name: "Mark done" }));
   // Marked done, it leaves Needs you for the folded Done list, where it can be reopened.
-  const done = await bots.findByRole("heading", { name: "Done" });
+  const done = await bots.findByRole("heading", { name: "已完成" });
   const section = within(done.closest("section") as HTMLElement);
-  expect(section.getByText("1 task you marked done this week.")).toBeTruthy();
-  fireEvent.click(section.getByRole("button", { name: "Show" }));
+  expect(section.getByText("这周你标为完成的任务有 1 项。")).toBeTruthy();
+  fireEvent.click(section.getByRole("button", { name: "展开" }));
   fireEvent.click(section.getByRole("button", { name: "Reopen" }));
   await waitFor(() =>
     expect(sent).toContainEqual({
@@ -437,7 +437,7 @@ test("tasks list what to read, answer and retry first, and each acts from its ro
     }),
   );
   await waitFor(() =>
-    expect(bots.queryByRole("heading", { name: "Done" })).toBeNull(),
+    expect(bots.queryByRole("heading", { name: "已完成" })).toBeNull(),
   );
 });
 

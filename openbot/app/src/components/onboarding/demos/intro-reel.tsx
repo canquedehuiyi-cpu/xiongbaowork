@@ -12,8 +12,7 @@ type Scene = { id: string; caption: string; draw: () => ReactNode };
 
 const ASK: Scene = {
   id: "welcome",
-  caption:
-    "Ask in plain words. A Bot does the work and tells you when it's done.",
+  caption: "用平常的话提要求。员工会把活干完，做好了告诉你。",
   draw: () => <WelcomeDemo />,
 };
 /*
@@ -23,12 +22,12 @@ const ASK: Scene = {
  */
 const COMPUTER: Scene = {
   id: "computer",
-  caption: "Bots use a browser and files of their own, apart from yours.",
+  caption: "员工用自己的浏览器和文件，和你的分开。",
   draw: () => <ComputerDemo />,
 };
 const TEAM: Scene = {
   id: "team",
-  caption: "Pick a Bot for the job, or make your own.",
+  caption: "为这件事挑一位员工，或者自己新建一位。",
   draw: () => <TeamDemo />,
 };
 

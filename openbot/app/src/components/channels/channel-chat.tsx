@@ -1131,9 +1131,7 @@ export function ChannelChat({
 
     // Voice and typed requests share this turn boundary, including gaps between frontend tools.
     if (turnsRef.current > 0 || agentRef.current.isRunning) {
-      throw new Error(
-        "This Bot is still working on something. Wait for it, or stop it first.",
-      );
+      throw new Error("这位员工还在忙。等它做完，或者先让它停下。");
     }
 
     turnsRef.current += 1;

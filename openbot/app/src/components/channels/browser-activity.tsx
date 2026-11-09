@@ -16,17 +16,6 @@ const BROWSER_STEPS: ReadonlySet<string> = new Set([
   "computer_scroll",
 ]);
 
-/** 浏览器步骤的中文说法；`shared/tool-name.ts` 的 `ownToolLabel` 还是英文，这里先用中文盖过去。 */
-const BROWSER_STEP_LABELS: Record<string, string> = {
-  computer_navigate: "打开了页面",
-  computer_read: "读取了页面",
-  computer_snapshot: "查看了页面结构",
-  computer_click: "在页面上点击",
-  computer_type: "填写了字段",
-  computer_key: "按了按键",
-  computer_scroll: "滚动了页面",
-};
-
 /** Whether a tool call is one of the browser steps a tool group draws with its page link. */
 export function isBrowserStep(item: BrowserStep): boolean {
   return BROWSER_STEPS.has(item.toolCall.function.name);
@@ -105,10 +94,7 @@ export function browserStepDetails(step: BrowserStep) {
     step.result?.startsWith("Error:") === true ||
     sentence?.ok === false;
   return {
-    label:
-      BROWSER_STEP_LABELS[step.toolCall.function.name] ??
-      ownToolLabel(step.toolCall.function.name) ??
-      undefined,
+    label: ownToolLabel(step.toolCall.function.name) ?? undefined,
     href: url?.href,
     title:
       navigation && typeof result.title === "string" && result.title.trim()

@@ -252,7 +252,7 @@ export function OnboardingWizard({
             step?.primaryHidden
               ? undefined
               : {
-                  label: step?.primaryLabel ?? "Continue",
+                  label: step?.primaryLabel ?? "继续",
                   disabled:
                     step?.primaryDisabled === true ||
                     step?.primaryPending === true,

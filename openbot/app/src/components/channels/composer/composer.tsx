@@ -324,10 +324,10 @@ const DROPPED_REASON: Record<DroppedAttachmentCause, string> = {
  * second time.
  */
 const UNACCEPTED_DROP_REASON = {
-  "cannot-send": "not attached. This conversation can no longer take messages.",
+  "cannot-send": "没有附上。这段对话已经不能再发消息了。",
   "no-conversation":
-    "not attached. There is no conversation here yet. Send your message " +
-    "first, then attach files in the conversation it starts.",
+    "没有附上。这里还没有对话。请先发送消息，" +
+    "再到由此开始的对话里附加文件。",
 } as const;
 
 export function Composer({

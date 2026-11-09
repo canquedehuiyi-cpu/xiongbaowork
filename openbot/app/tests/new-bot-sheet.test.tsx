@@ -164,30 +164,30 @@ async function opened(onCreated: (id: string) => void = () => {}) {
   const view = draw(
     <NewBotSheet onClose={() => {}} onCreated={onCreated} open />,
   );
-  await view.findByLabelText("Name");
+  await view.findByLabelText("名称");
   const user = userEvent.setup({ document: view.container.ownerDocument });
   return { view, user };
 }
 
 /** The first screen's custom agents, below the simple form. */
 function customAgents(view: Awaited<ReturnType<typeof opened>>["view"]) {
-  return within(view.getByRole("region", { name: "Connect a custom agent" }));
+  return within(view.getByRole("region", { name: "连接自定义智能体" }));
 }
 
 /** A name typed; the frameworks are on the same screen, below the form. */
 async function customFlow() {
   const result = await opened();
-  await result.user.type(result.view.getByLabelText("Name"), "Expense Review");
+  await result.user.type(result.view.getByLabelText("名称"), "Expense Review");
   return result;
 }
 async function connected(address = "https://agent.example.com/ag-ui") {
   const { view, user } = await customFlow();
-  expect(view.queryByRole("button", { name: "Continue" })).toBeNull();
+  expect(view.queryByRole("button", { name: "继续" })).toBeNull();
   await user.click(
     customAgents(view).getByRole("button", { name: /LangChain/ }),
   );
   if (address)
-    await user.type(await view.findByLabelText("Agent address"), address);
+    await user.type(await view.findByLabelText("智能体地址"), address);
   return { view, user };
 }
 
@@ -200,19 +200,19 @@ async function settle() {
 
 test("opens on New Bot details and creates locally without another screen", async () => {
   const { view, user } = await opened();
-  expect(view.getByRole("heading", { name: "New Bot" })).toBeTruthy();
+  expect(view.getByRole("heading", { name: "新建员工" })).toBeTruthy();
   expect(view.queryByRole("button", { name: /^Run here/ })).toBeNull();
   // The custom agents are below the form, and do not take focus from Name.
   expect(
-    view.getByRole("heading", { name: "Connect a custom agent" }),
+    view.getByRole("heading", { name: "连接自定义智能体" }),
   ).toBeTruthy();
-  expect(document.activeElement).toBe(view.getByLabelText("Name"));
+  expect(document.activeElement).toBe(view.getByLabelText("名称"));
   expect(
-    view.getByRole("button", { name: "Create Bot" }).hasAttribute("disabled"),
+    view.getByRole("button", { name: "创建员工" }).hasAttribute("disabled"),
   ).toBe(true);
-  await user.type(view.getByLabelText("Name"), "Expense Review");
+  await user.type(view.getByLabelText("名称"), "Expense Review");
   expect(
-    view.getByRole("button", { name: "Create Bot" }).hasAttribute("disabled"),
+    view.getByRole("button", { name: "创建员工" }).hasAttribute("disabled"),
   ).toBe(false);
 });
 
@@ -222,28 +222,28 @@ test("unavailable hosting still permits the custom path", async () => {
   await settle();
   expect(view.queryByRole("button", { name: /^Run here/ })).toBeNull();
   expect(
-    view.queryByRole("region", { name: "Connect a custom agent" }),
+    view.queryByRole("region", { name: "连接自定义智能体" }),
   ).toBeNull();
   expect(view.queryByRole("button", { name: /LangChain/ })).toBeNull();
   expect(
-    view.getByRole("button", { name: "Continue" }).hasAttribute("disabled"),
+    view.getByRole("button", { name: "继续" }).hasAttribute("disabled"),
   ).toBe(true);
-  await user.type(view.getByLabelText("Name"), "External");
+  await user.type(view.getByLabelText("名称"), "External");
   expect(
-    view.getByRole("button", { name: "Continue" }).hasAttribute("disabled"),
+    view.getByRole("button", { name: "继续" }).hasAttribute("disabled"),
   ).toBe(false);
-  await user.click(view.getByRole("button", { name: "Continue" }));
+  await user.click(view.getByRole("button", { name: "继续" }));
   const framework = view.getByRole("button", { name: /LangChain/ });
   expect(framework.hasAttribute("aria-pressed")).toBe(false);
-  expect(view.queryByRole("button", { name: "Continue" })).toBeNull();
+  expect(view.queryByRole("button", { name: "继续" })).toBeNull();
   await user.click(framework);
-  expect(await view.findByLabelText("Agent address")).toBeTruthy();
+  expect(await view.findByLabelText("智能体地址")).toBeTruthy();
   expect(view.getByText("LangChain")).toBeTruthy();
   await user.type(
-    view.getByLabelText("Agent address"),
+    view.getByLabelText("智能体地址"),
     "https://agent.example.test/ag-ui",
   );
-  await user.click(view.getByRole("button", { name: "Create Bot" }));
+  await user.click(view.getByRole("button", { name: "创建员工" }));
   await waitFor(() => expect(creates).toHaveLength(1));
   expect(creates[0]?.roleDescription).toBe("Connected from LangChain.");
 });
@@ -251,19 +251,19 @@ test("unavailable hosting still permits the custom path", async () => {
 test("Create fills in what was left blank, then hands over", async () => {
   const handedOver: string[] = [];
   const { view, user } = await opened((id) => handedOver.push(id));
-  const name = await view.findByLabelText("Name");
+  const name = await view.findByLabelText("名称");
   await user.type(name, "Expense Review");
   // Enter in the name is Create.
   await act(async () => {
     fireEvent.keyDown(name, { key: "Enter", keyCode: 13 });
   });
 
-  expect(await view.findByText("Expense Review is ready")).toBeTruthy();
+  expect(await view.findByText("Expense Review准备好了")).toBeTruthy();
   expect(creates).toHaveLength(1);
   // Its subtitle says what runs it: OpenBot itself.
   expect(creates[0]).toMatchObject({
     name: "Expense Review",
-    title: "Powered by OpenBot",
+    title: "由 OpenBot 驱动",
     visibility: "private",
     endpoint: "",
   });
@@ -283,14 +283,14 @@ test("Create fills in what was left blank, then hands over", async () => {
 test("refuses an empty or unreachable custom endpoint without creating", async () => {
   verdict = { ok: false, reason: "Nothing answered at that address." };
   const { view, user } = await connected("");
-  await user.click(view.getByRole("button", { name: "Create Bot" }));
-  expect(await view.findByText("Enter your agent's address.")).toBeTruthy();
+  await user.click(view.getByRole("button", { name: "创建员工" }));
+  expect(await view.findByText("请输入你的智能体地址。")).toBeTruthy();
   expect(dialled).toEqual([]);
   await user.type(
-    view.getByLabelText("Agent address"),
+    view.getByLabelText("智能体地址"),
     "https://agent.example.com/ag-ui",
   );
-  await user.click(view.getByRole("button", { name: "Create Bot" }));
+  await user.click(view.getByRole("button", { name: "创建员工" }));
   expect(
     await view.findByText("Nothing answered at that address."),
   ).toBeTruthy();
@@ -299,16 +299,16 @@ test("refuses an empty or unreachable custom endpoint without creating", async (
 
 test("checks the connection then creates with its saved name and key", async () => {
   const { view, user } = await connected();
-  await user.type(view.getByLabelText(/Key/), "Bearer secret");
-  await user.click(view.getByRole("button", { name: "Create Bot" }));
-  await view.findByText("Expense Review is ready");
+  await user.type(view.getByLabelText(/密钥/), "Bearer secret");
+  await user.click(view.getByRole("button", { name: "创建员工" }));
+  await view.findByText("Expense Review准备好了");
   expect(dialled).toEqual(["https://agent.example.com/ag-ui"]);
   expect(creates[0]).toMatchObject({
     name: "Expense Review",
     endpoint: "https://agent.example.com/ag-ui",
     auth: { header: "Authorization", value: "Bearer secret" },
     // The framework picked from the list, by the name the list showed.
-    title: "Powered by LangChain",
+    title: "由 LangChain 驱动",
     // And by its id, so the Bot is told what runs it whatever its subtitle becomes.
     harness: "langgraph",
   });
@@ -316,34 +316,34 @@ test("checks the connection then creates with its saved name and key", async () 
 
 test("preserves every entry across back navigation and hosting switches", async () => {
   const { view, user } = await connected();
-  await user.type(view.getByLabelText(/Key/), "Bearer secret");
+  await user.type(view.getByLabelText(/密钥/), "Bearer secret");
   // Back from the address returns to the first screen, at its custom agents, with the name kept.
-  await user.click(view.getByRole("button", { name: "Back" }));
-  expect((view.getByLabelText("Name") as HTMLInputElement).value).toBe(
+  await user.click(view.getByRole("button", { name: "返回" }));
+  expect((view.getByLabelText("名称") as HTMLInputElement).value).toBe(
     "Expense Review",
   );
   await waitFor(() =>
     expect(document.activeElement).toBe(
-      view.getByRole("heading", { name: "Connect a custom agent" }),
+      view.getByRole("heading", { name: "连接自定义智能体" }),
     ),
   );
-  await user.type(view.getByLabelText(/^Instructions/), "Review carefully");
-  await user.click(view.getByRole("button", { name: /Public/ }));
+  await user.type(view.getByLabelText(/^指令/), "Review carefully");
+  await user.click(view.getByRole("button", { name: /公开/ }));
   expect(
-    (view.getByLabelText(/^Instructions/) as HTMLTextAreaElement).value,
+    (view.getByLabelText(/^指令/) as HTMLTextAreaElement).value,
   ).toBe("Review carefully");
   await user.click(
     customAgents(view).getByRole("button", { name: /LangChain/ }),
   );
-  expect((view.getByLabelText("Agent address") as HTMLInputElement).value).toBe(
+  expect((view.getByLabelText("智能体地址") as HTMLInputElement).value).toBe(
     "https://agent.example.com/ag-ui",
   );
-  expect((view.getByLabelText(/Key/) as HTMLInputElement).value).toBe(
+  expect((view.getByLabelText(/密钥/) as HTMLInputElement).value).toBe(
     "Bearer secret",
   );
-  await user.click(view.getByRole("button", { name: "Back" }));
-  await user.click(view.getByRole("button", { name: "Create Bot" }));
-  await view.findByText("Expense Review is ready");
+  await user.click(view.getByRole("button", { name: "返回" }));
+  await user.click(view.getByRole("button", { name: "创建员工" }));
+  await view.findByText("Expense Review准备好了");
   expect(creates[0]).toMatchObject({
     endpoint: "",
     visibility: "public",
@@ -368,15 +368,15 @@ test("the person's own apps arrive ticked, and the ones left ticked are given on
     },
   ];
   const { view, user } = await opened();
-  await user.type(await view.findByLabelText("Name"), "Research");
+  await user.type(await view.findByLabelText("名称"), "Research");
   const gmail = await view.findByRole("checkbox", { name: "Gmail" });
   const routines = view.getByRole("checkbox", { name: "Routines" });
   expect(gmail.getAttribute("aria-checked")).toBe("true");
   expect(routines.getAttribute("aria-checked")).toBe("true");
   await user.click(routines);
   expect(routines.getAttribute("aria-checked")).toBe("false");
-  await user.click(view.getByRole("button", { name: "Create Bot" }));
-  expect(await view.findByText("Research is ready")).toBeTruthy();
+  await user.click(view.getByRole("button", { name: "创建员工" }));
+  expect(await view.findByText("Research准备好了")).toBeTruthy();
   expect(given).toEqual([
     "/api/plugins/for/agent_new/apps/composio-gmail/give",
   ]);
@@ -384,15 +384,15 @@ test("the person's own apps arrive ticked, and the ones left ticked are given on
 
 test("a person with no apps to give is asked nothing about apps", async () => {
   const { view } = await opened();
-  await view.findByLabelText("Name");
+  await view.findByLabelText("名称");
   await settle();
-  expect(view.queryByText("Apps it can use")).toBeNull();
+  expect(view.queryByText("它能用的应用")).toBeNull();
 });
 
 /** On the details step the sheet opens on, with a name typed. */
 async function named(name = "Research") {
   const { view, user } = await opened();
-  await user.type(await view.findByLabelText("Name"), name);
+  await user.type(await view.findByLabelText("名称"), name);
   await settle();
   return { view, user };
 }
@@ -402,86 +402,86 @@ async function isolatedTooltip(
   view: Awaited<ReturnType<typeof named>>["view"],
   user: Awaited<ReturnType<typeof named>>["user"],
 ) {
-  await user.hover(view.getByRole("button", { name: "What Isolated means" }));
+  await user.hover(view.getByRole("button", { name: "「独立运行」是什么意思" }));
   return (await view.findByText(new RegExp(ISOLATED_EXPLAINED.slice(0, 30))))
     .textContent;
 }
 
 test("Isolated is offered with what it means, and a public Bot is told who shares it", async () => {
   const { view, user } = await named();
-  const isolated = await view.findByRole("checkbox", { name: "Isolated" });
+  const isolated = await view.findByRole("checkbox", { name: "独立运行" });
   expect(isolated.getAttribute("aria-checked")).toBe("false");
   expect(isolated.hasAttribute("data-disabled")).toBe(false);
   expect(await isolatedTooltip(view, user)).toBe(ISOLATED_EXPLAINED);
 
-  await user.unhover(view.getByRole("button", { name: "What Isolated means" }));
-  await user.click(view.getByRole("button", { name: /Public/ }));
+  await user.unhover(view.getByRole("button", { name: "「独立运行」是什么意思" }));
+  await user.click(view.getByRole("button", { name: /公开/ }));
   expect(await isolatedTooltip(view, user)).toBe(
-    `${ISOLATED_EXPLAINED} ${ISOLATED_PUBLIC}`,
+    `${ISOLATED_EXPLAINED}${ISOLATED_PUBLIC}`,
   );
 });
 
 test("a ticked Isolated is sent with the Bot, and an unticked one says no", async () => {
   const { view, user } = await named("Research");
-  await user.click(await view.findByRole("checkbox", { name: "Isolated" }));
-  await user.click(view.getByRole("button", { name: "Create Bot" }));
-  expect(await view.findByText("Research is ready")).toBeTruthy();
+  await user.click(await view.findByRole("checkbox", { name: "独立运行" }));
+  await user.click(view.getByRole("button", { name: "创建员工" }));
+  expect(await view.findByText("Research准备好了")).toBeTruthy();
   expect(creates[0]).toMatchObject({ name: "Research", isolated: true });
 
   cleanup();
   creates = [];
   const again = await named("Plain");
   await again.user.click(
-    again.view.getByRole("button", { name: "Create Bot" }),
+    again.view.getByRole("button", { name: "创建员工" }),
   );
-  expect(await again.view.findByText("Plain is ready")).toBeTruthy();
+  expect(await again.view.findByText("Plain准备好了")).toBeTruthy();
   expect(creates[0]).toMatchObject({ name: "Plain", isolated: false });
 });
 
 test("a deployment that cannot make a second computer shows Isolated disabled, and says why", async () => {
   isolationAvailable = false;
   const { view, user } = await named();
-  const isolated = await view.findByRole("checkbox", { name: "Isolated" });
+  const isolated = await view.findByRole("checkbox", { name: "独立运行" });
   expect(isolated.hasAttribute("data-disabled")).toBe(true);
   expect(view.getByText(ISOLATION_UNAVAILABLE)).toBeTruthy();
   await user.click(isolated);
-  await user.click(view.getByRole("button", { name: "Create Bot" }));
-  await view.findByText("Research is ready");
+  await user.click(view.getByRole("button", { name: "创建员工" }));
+  await view.findByText("Research准备好了");
   expect(creates[0]).toMatchObject({ isolated: false });
 });
 
 test("somebody an admin has not allowed sees Isolated disabled, and why", async () => {
   mayIsolate = false;
   const { view } = await named();
-  const isolated = await view.findByRole("checkbox", { name: "Isolated" });
+  const isolated = await view.findByRole("checkbox", { name: "独立运行" });
   expect(isolated.hasAttribute("data-disabled")).toBe(true);
   expect(await view.findByText(ISOLATION_NOT_ALLOWED)).toBeTruthy();
 });
 
 test("a framework on the first screen validates the name, then goes straight to its address", async () => {
   const { view, user } = await opened();
-  await user.type(view.getByLabelText("Name"), "   ");
+  await user.type(view.getByLabelText("名称"), "   ");
   await user.click(
     customAgents(view).getByRole("button", { name: /LangChain/ }),
   );
   expect((await view.findByRole("alert")).textContent).toBe(
     "Name is required.",
   );
-  expect(document.activeElement).toBe(view.getByLabelText("Name"));
-  expect(view.queryByLabelText("Agent address")).toBeNull();
-  await user.type(view.getByLabelText("Name"), "My Bot");
+  expect(document.activeElement).toBe(view.getByLabelText("名称"));
+  expect(view.queryByLabelText("智能体地址")).toBeNull();
+  await user.type(view.getByLabelText("名称"), "My Bot");
   await user.click(
     customAgents(view).getByRole("button", { name: /LangChain/ }),
   );
-  expect(await view.findByLabelText("Agent address")).toBeTruthy();
+  expect(await view.findByLabelText("智能体地址")).toBeTruthy();
   expect(view.getByText("LangChain")).toBeTruthy();
-  await user.click(view.getByRole("button", { name: "Back" }));
+  await user.click(view.getByRole("button", { name: "返回" }));
   // Back to the first screen, not the list: the name is there, and so are the custom agents.
-  expect(((await view.findByLabelText("Name")) as HTMLInputElement).value).toBe(
+  expect(((await view.findByLabelText("名称")) as HTMLInputElement).value).toBe(
     "   My Bot",
   );
   expect(
-    view.getByRole("region", { name: "Connect a custom agent" }),
+    view.getByRole("region", { name: "连接自定义智能体" }),
   ).toBeTruthy();
 });
 
@@ -493,11 +493,11 @@ test("an agent somebody already runs, picked on the first screen, goes to its ad
     }),
   );
   await user.type(
-    await view.findByLabelText("Agent address"),
+    await view.findByLabelText("智能体地址"),
     "https://agent.example.com/ag-ui",
   );
-  await user.click(view.getByRole("button", { name: "Create Bot" }));
-  await view.findByText("Expense Review is ready");
+  await user.click(view.getByRole("button", { name: "创建员工" }));
+  await view.findByText("Expense Review准备好了");
   expect(creates[0]).not.toHaveProperty("harness");
 });
 
@@ -522,15 +522,15 @@ test("without hosting here, Back from the address returns to the list", async ()
   builtInAvailable = false;
   const { view, user } = await opened();
   await settle();
-  await user.type(view.getByLabelText("Name"), "External");
-  await user.click(view.getByRole("button", { name: "Continue" }));
+  await user.type(view.getByLabelText("名称"), "External");
+  await user.click(view.getByRole("button", { name: "继续" }));
   await user.click(view.getByRole("button", { name: /LangChain/ }));
-  await view.findByLabelText("Agent address");
-  await user.click(view.getByRole("button", { name: "Back" }));
+  await view.findByLabelText("智能体地址");
+  await user.click(view.getByRole("button", { name: "返回" }));
   expect(
-    await view.findByRole("heading", { name: "Connect a custom agent" }),
+    await view.findByRole("heading", { name: "连接自定义智能体" }),
   ).toBeTruthy();
-  expect(view.queryByLabelText("Name")).toBeNull();
+  expect(view.queryByLabelText("名称")).toBeNull();
 });
 
 test("personal Bot creation hides team visibility and isolation controls and links to Business", async () => {
@@ -538,9 +538,9 @@ test("personal Bot creation hides team visibility and isolation controls and lin
     <NewBotSheet open onClose={() => {}} onCreated={() => {}} />,
     "personal",
   );
-  await view.findByLabelText("Name");
-  expect(view.queryByText("Who can see it")).toBeNull();
-  expect(view.queryByRole("checkbox", { name: "Isolated" })).toBeNull();
+  await view.findByLabelText("名称");
+  expect(view.queryByText("谁能看到它")).toBeNull();
+  expect(view.queryByRole("checkbox", { name: "独立运行" })).toBeNull();
   expect(
     view
       .getByRole("link", {
@@ -549,12 +549,12 @@ test("personal Bot creation hides team visibility and isolation controls and lin
       .getAttribute("href"),
   ).toBe("https://open.bot/business");
   const user = userEvent.setup({ document: view.baseElement.ownerDocument });
-  const name = view.getByLabelText("Name");
+  const name = view.getByLabelText("名称");
   await user.type(name, "Personal Research");
   await act(async () => {
     fireEvent.keyDown(name, { key: "Enter", keyCode: 13 });
   });
-  await view.findByText("Personal Research is ready");
+  await view.findByText("Personal Research准备好了");
   expect(creates).toHaveLength(1);
   expect(creates[0]).toMatchObject({ visibility: "private", isolated: false });
 });
@@ -585,12 +585,12 @@ test("personal: the sheet lists every app that is turned on, with nothing to unt
     <NewBotSheet open onClose={() => {}} onCreated={() => {}} />,
     "personal",
   );
-  const list = await view.findByRole("list", { name: "Apps it can use" });
+  const list = await view.findByRole("list", { name: "它能用的应用" });
   expect(
     Array.from(list.querySelectorAll("li")).map((item) => item.textContent),
   ).toEqual(["Gmail", "Parallel Search", "Routines"]);
   expect(
-    view.getByText("Every Bot can use every app you turn on in Connections."),
+    view.getByText("你在「连接」里打开的每个应用，所有员工都能用。"),
   ).toBeTruthy();
   expect(view.queryAllByRole("checkbox")).toHaveLength(0);
 });
@@ -604,7 +604,7 @@ test("team: the sheet offers only the apps the person can give, ticked", async (
   expect(view.queryByText("Gmail")).toBeNull();
   expect(view.queryByText("Parallel Search")).toBeNull();
   expect(
-    view.getByText("It always uses the account of whoever is asking."),
+    view.getByText("它总是用提问者本人的账号。"),
   ).toBeTruthy();
   expect(requested).not.toContain("/api/plugins");
 });

@@ -57,9 +57,9 @@ export function AccessRequestsSection({ app }: { app?: string }) {
   if (inbox.isPending) return null;
   if (inbox.error)
     return (
-      <PageSection title="Requests">
+      <PageSection title="申请">
         <p className="mt-4 text-destructive text-sm" role="alert">
-          Couldn't load access requests. Reload the page.
+          读不到使用申请。请刷新页面。
         </p>
       </PageSection>
     );
@@ -69,10 +69,10 @@ export function AccessRequestsSection({ app }: { app?: string }) {
     <PageSection
       description={
         app
-          ? "People asking for this app. Approve does what they asked, right away."
-          : "People asking for an app to be turned on, given to a Bot, or connected. Approve does what they asked, right away."
+          ? "大家对这个应用的申请。点「批准」会立即按申请处理。"
+          : "大家申请打开某个应用、把它交给某位员工，或连接它。点「批准」会立即按申请处理。"
       }
-      title="Requests"
+      title="申请"
     >
       <PageRows>
         {requests.map((request, index) => (
@@ -88,14 +88,14 @@ export function AccessRequestsSection({ app }: { app?: string }) {
 
 /** What the request asks for, as the thing an administrator would do. */
 export function askedFor(request: AppAccessRequest): string {
-  const bot = request.botName ?? "a Bot";
+  const bot = request.botName ?? "一位员工";
   switch (request.kind) {
     case "enable":
-      return `Turn on ${request.appTitle} for ${bot}`;
+      return `为${bot}打开 ${request.appTitle}`;
     case "grant":
-      return `Give ${request.appTitle} to ${bot}`;
+      return `把 ${request.appTitle} 交给${bot}`;
     case "connect_shared":
-      return `Connect the shared ${request.appTitle} account`;
+      return `连接共享的 ${request.appTitle} 账号`;
   }
 }
 
@@ -109,7 +109,7 @@ function AccessRequestRow({ request }: { request: AppAccessRequest }) {
   );
   const busy = approve.isPending || dismiss.isPending;
   const error = approve.error ?? dismiss.error;
-  const who = request.requesterName ?? request.requesterEmail ?? "Somebody";
+  const who = request.requesterName ?? request.requesterEmail ?? "有人";
   return (
     <Item data-request={request.id} size="sm">
       <ItemMedia variant="icon">
@@ -118,11 +118,11 @@ function AccessRequestRow({ request }: { request: AppAccessRequest }) {
       <ItemContent>
         <ItemTitle>{askedFor(request)}</ItemTitle>
         <ItemDescription className="line-clamp-none">
-          {who} asked {relativeTime(request.createdAt)}
+          {who}于{relativeTime(request.createdAt)}申请
           {request.kind === "connect_shared" && request.botName
-            ? `, for ${request.botName}`
+            ? `，用于${request.botName}`
             : ""}
-          . <GrantNote request={request} />
+          。<GrantNote request={request} />
         </ItemDescription>
       </ItemContent>
       <ItemActions>
@@ -135,7 +135,7 @@ function AccessRequestRow({ request }: { request: AppAccessRequest }) {
           size="sm"
           variant="ghost"
         >
-          {dismiss.isPending ? "Dismissing…" : "Dismiss"}
+          {dismiss.isPending ? "正在忽略…" : "忽略"}
         </Button>
         <Button
           disabled={busy}
@@ -145,7 +145,7 @@ function AccessRequestRow({ request }: { request: AppAccessRequest }) {
           }}
           size="sm"
         >
-          {approve.isPending ? "Approving…" : "Approve"}
+          {approve.isPending ? "正在批准…" : "批准"}
         </Button>
       </ItemActions>
       {error ? (
@@ -167,8 +167,8 @@ function AccessRequestRow({ request }: { request: AppAccessRequest }) {
 function GrantNote({ request }: { request: AppAccessRequest }) {
   const paths = useManagePaths();
   if (request.kind === "connect_shared" || !request.agentId) return null;
-  const bot = request.botName ?? "the Bot";
-  const where = `the Bot's page under ${request.appTitle}`;
+  const bot = request.botName ?? "这位员工";
+  const where = `员工主页的 ${request.appTitle} 分区`;
   const page =
     request.kind === "grant" ? (
       <Link {...paths.pluginBot(request.appKey, request.agentId)}>{where}</Link>
@@ -177,8 +177,8 @@ function GrantNote({ request }: { request: AppAccessRequest }) {
     );
   return (
     <>
-      Approving gives {bot} only {request.appTitle}'s read-only actions. Choose
-      any others on {page}.
+      批准后，{bot}只会得到 {request.appTitle} 的只读操作。其他操作可以在{page}
+      里选择。
     </>
   );
 }

@@ -103,8 +103,8 @@ export function TeachSteps({ state }: { state: BrowserApiState }) {
         onBack={() => setStep(1)}
         action={
           <Button disabled={!named} form="teach-a-bot-name" type="submit">
- 继续
- </Button>
+            继续
+          </Button>
         }
       >
         <PageRows className="mt-0 w-full max-w-md shadow-lg">
@@ -160,8 +160,8 @@ export function TeachSteps({ state }: { state: BrowserApiState }) {
                 size="sm"
                 variant="outline"
               >
- 显示浏览器
- </Button>
+                显示浏览器
+              </Button>
             }
           />
           <Separator />
@@ -189,7 +189,7 @@ export function TeachSteps({ state }: { state: BrowserApiState }) {
           </Button>
           <span className="max-w-[90%] truncate rounded-full bg-background px-3 py-1 text-muted-foreground text-xs shadow-sm">
             「{recording.title.trim()}」 · 讲解
- {choice.narration === "on" ? "开" : "关"}
+            {choice.narration === "on" ? "开" : "关"}
           </span>
         </div>
       </Slide>
@@ -273,11 +273,11 @@ function SavedStep({
       action={
         <div className="flex flex-wrap justify-end gap-2">
           <Button variant="outline" render={<Link to={YOUR_SKILLS} />}>
- 查看你的技能
- </Button>
+            查看你的技能
+          </Button>
           <Button variant={learned ? "outline" : "default"} onClick={another}>
- 再录一个
- </Button>
+            再录一个
+          </Button>
         </div>
       }
     >
@@ -318,8 +318,7 @@ function Slide({
           variant="ghost"
         >
           <IconArrowLeft />
- 返回
-
+          返回
         </Button>
       ) : null}
       <div className="flex flex-1 items-center justify-center px-6 pt-12 pb-4">
@@ -372,26 +371,23 @@ function RecorderIllustration() {
             <span className="teach-type teach-delay-1 font-medium">差旅</span>
           </div>
           <span className="inline-block rounded-md bg-foreground px-2.5 py-1 text-background">
- 提交
- </span>
+            提交
+          </span>
         </div>
       </div>
       <div className="absolute top-14 -right-6 w-36 space-y-1 rounded-lg bg-card p-2 text-[10px] text-muted-foreground shadow-lg sm:-right-28">
-        {[
-          "打开了报销页",
- "填写了金额",
- "选择了差旅",
- "点击了提交",
-        ].map((step, index) => (
-          <div
-            key={step}
-            className="teach-step flex items-center gap-1.5"
-            style={{ animationDelay: `${0.4 + index * 0.6}s` }}
-          >
-            <span className="size-1 shrink-0 rounded-full bg-primary" />
-            {step}
-          </div>
-        ))}
+        {["打开了报销页", "填写了金额", "选择了差旅", "点击了提交"].map(
+          (step, index) => (
+            <div
+              key={step}
+              className="teach-step flex items-center gap-1.5"
+              style={{ animationDelay: `${0.4 + index * 0.6}s` }}
+            >
+              <span className="size-1 shrink-0 rounded-full bg-primary" />
+              {step}
+            </div>
+          ),
+        )}
       </div>
     </div>
   );

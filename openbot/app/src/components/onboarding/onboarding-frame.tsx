@@ -118,7 +118,7 @@ export function OnboardingFrame({
         <div className="relative flex h-[68px] items-center justify-center px-[76px] lg:hidden">
           {index > 0 ? (
             <button
-              aria-label="Back"
+              aria-label="返回"
               className="bg-background/80 backdrop-blur absolute left-4 grid size-11 place-items-center rounded-full text-foreground ring-1 ring-border shadow-lg outline-none transition-transform focus-visible:ring-3 focus-visible:ring-ring active:scale-95 motion-reduce:transition-none"
               data-onboarding-back="phone"
               onClick={onBack}
@@ -201,7 +201,7 @@ export function OnboardingFrame({
                 type="button"
               >
                 <IconChevronLeft className="size-4" />
-                Back
+                返回
               </button>
             ) : null}
             {primary ? (
@@ -293,14 +293,14 @@ function StepMenu({
         )}
         data-onboarding-steps=""
       >
-        Step {index + 1} of {titles.length}
+        第 {index + 1} 步，共 {titles.length} 步
         <IconChevronDown aria-hidden className="size-3.5" />
       </PopoverTrigger>
       <PopoverContent align="end" className="w-88 gap-1 p-1.5">
         <PopoverTitle className="text-xs px-2 pt-1 text-muted-foreground">
-          Steps
+          步骤
         </PopoverTitle>
-        <nav aria-label="Onboarding steps">
+        <nav aria-label="新手引导步骤">
           <ol className="flex flex-col">
             {titles.map((title, at) => {
               const current = at === index;
@@ -327,9 +327,9 @@ function StepMenu({
                   </span>
                   <span className="min-w-0 truncate">{title}</span>
                   {done ? (
-                    <span className="sr-only">, done</span>
+                    <span className="sr-only">，已完成</span>
                   ) : !current && !pickable ? (
-                    <span className="sr-only">, not yet available</span>
+                    <span className="sr-only">，暂不可用</span>
                   ) : null}
                 </>
               );
@@ -384,11 +384,11 @@ function StepMenu({
 export function StepDashes({ index, total }: { index: number; total: number }) {
   return (
     <div
-      aria-label="Onboarding progress"
+      aria-label="新手引导进度"
       aria-valuemax={total}
       aria-valuemin={1}
       aria-valuenow={index + 1}
-      aria-valuetext={`Step ${index + 1} of ${total}`}
+      aria-valuetext={`第 ${index + 1} 步，共 ${total} 步`}
       className="flex w-full min-w-0 max-w-[228px] items-center gap-[6px]"
       role="progressbar"
     >

@@ -68,10 +68,8 @@ export function elapsed(seconds: number): string {
     : `${minutes}:${rest}`;
 }
 
-export const actionCount = (actions: number) =>
-  `${actions} 个动作`;
-const phraseCount = (phrases: number) =>
-  `${phrases} 句讲解`;
+export const actionCount = (actions: number) => `${actions} 个动作`;
+const phraseCount = (phrases: number) => `${phrases} 句讲解`;
 
 /** What Record and Stop do around the recording itself, on a screen. */
 export type RecordingHooks = {
@@ -104,9 +102,7 @@ export function useRecording(
      * browser again before it starts (a Disconnect in Settings, Browsers leaves it signed out until then).
      */
     waiting:
-      !opens && !state.open
-        ? "你的浏览器已关闭。打开它才能录制。"
-        : null,
+      !opens && !state.open ? "你的浏览器已关闭。打开它才能录制。" : null,
     start: opens
       ? openAndStartBrowserRecordingMutationOptions(queryClient)
       : startBrowserRecordingMutationOptions(queryClient),
@@ -277,8 +273,7 @@ function heldIn(stopped: Stopped): string {
  */
 const NOT_SAVED: Record<NonNullable<Stopped["kept"]>, string> = {
   refused: "它保留在这个浏览器里，稍后会重新发送。",
-  "signed-out":
-    "它保留在这个浏览器里，等你重新连接熊宝后再发送。",
+  "signed-out": "它保留在这个浏览器里，等你重新连接熊宝后再发送。",
 };
 
 /** What the page says once Stop ended a recording, naming it. The sidebar's Browser button says the same. */
@@ -444,8 +439,8 @@ export function RecordingRow({
             disabled={recording.stopping || recording.phase !== "recording"}
             onClick={() => void recording.stop()}
           >
- 停止
- </Button>
+            停止
+          </Button>
         </ItemActions>
       </Item>
     );
@@ -524,8 +519,8 @@ export function RecordingBar({
           disabled={recording.stopping || recording.phase !== "recording"}
           onClick={() => void recording.stop()}
         >
- 停止
- </Button>
+          停止
+        </Button>
       </div>
     );
   }
@@ -549,8 +544,7 @@ export function RecordingBar({
         <PopoverHeader>
           <PopoverTitle>录制任务</PopoverTitle>
           <PopoverDescription>
-            {recording.waiting ??
-              "在这个浏览器里做一遍，你的员工就学会了。"}
+            {recording.waiting ?? "在这个浏览器里做一遍，你的员工就学会了。"}
           </PopoverDescription>
         </PopoverHeader>
         <form
@@ -574,8 +568,7 @@ export function RecordingBar({
           />
           {children}
           <Button disabled={!recording.canRecord} size="sm" type="submit">
- 开始录制
-
+            开始录制
           </Button>
         </form>
       </PopoverContent>

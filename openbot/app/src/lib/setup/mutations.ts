@@ -14,7 +14,7 @@ export function recheckSetupMutationOptions(queryClient: QueryClient) {
     mutationFn: (): Promise<SetupChecklist> =>
       client("/api/setup/check", "checklist", {
         method: "POST",
-        fallback: "Couldn't check your setup.",
+        fallback: "没能检查你的设置。",
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: setupKeys.all }),
   });

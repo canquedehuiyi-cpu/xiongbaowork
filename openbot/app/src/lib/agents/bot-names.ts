@@ -11,7 +11,7 @@ import { type AgentProfile, agentListQueryOptions } from "./queries";
  * names arrive a Bot is named nothing rather than its id for a moment. The id stays in the CSV
  * export, which is where somebody reconciling the trail reads it.
  */
-export const GONE_BOT = "A Bot no longer here";
+export const GONE_BOT = "已不在的员工";
 
 /** Stable query selector so the id-to-name map only rebuilds when the roster changes. */
 const toNames = (agents: AgentProfile[]): Map<string, string> =>

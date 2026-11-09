@@ -23,8 +23,8 @@ export const resolveTaskMutationOptions = (queryClient: QueryClient) =>
         {
           method: "POST",
           fallback: done
-            ? "Couldn't mark this task done. Try again."
-            : "Couldn't reopen this task. Try again.",
+            ? "没能把这个任务标为完成。请再试一次。"
+            : "没能重新打开这个任务。请再试一次。",
         },
       ),
     onSuccess: () => invalidateTasks(queryClient),
@@ -39,7 +39,7 @@ export const tryTaskAgainMutationOptions = (queryClient: QueryClient) =>
     mutationFn: (id: string) =>
       client<BotTask>(`${taskPath(id)}/again`, "task", {
         method: "POST",
-        fallback: "Couldn't run this task again. Try again in a moment.",
+        fallback: "没能重新运行这个任务。请稍后再试。",
       }),
     onSuccess: () => invalidateTasks(queryClient),
   });

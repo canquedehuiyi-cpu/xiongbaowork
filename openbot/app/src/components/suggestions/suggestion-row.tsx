@@ -64,10 +64,10 @@ export function SuggestionRow({
             size="sm"
             variant="outline"
           >
-            {pressed === "start" ? "Starting…" : "Work on it"}
+            {pressed === "start" ? "正在开始…" : "开始处理"}
           </Button>
           <Button
-            aria-label={`Dismiss ${suggestion.title}`}
+            aria-label={`忽略「${suggestion.title}」`}
             disabled={act.isPending}
             onClick={() => act.mutate({ id: suggestion.id, action: "dismiss" })}
             size="icon-sm"
@@ -80,7 +80,7 @@ export function SuggestionRow({
               <DropdownMenuTrigger
                 render={
                   <Button
-                    aria-label={`More for ${suggestion.title}`}
+                    aria-label={`「${suggestion.title}」的更多操作`}
                     size="icon-sm"
                     variant="ghost"
                   />
@@ -99,8 +99,8 @@ export function SuggestionRow({
                   }
                 >
                   {setting.subject
-                    ? `Stop checking ${setting.subject}`
-                    : "Stop these check-ins"}
+                    ? `不再巡检${setting.subject}`
+                    : "停止这类巡检"}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -131,7 +131,7 @@ export function SuggestionRow({
             rel="noreferrer"
             target="_blank"
           >
-            {site ? `Open ${site}` : "Open"}
+            {site ? `打开 ${site}` : "打开"}
             <IconArrowUpRight aria-hidden className="size-3" />
           </a>
         ) : null,

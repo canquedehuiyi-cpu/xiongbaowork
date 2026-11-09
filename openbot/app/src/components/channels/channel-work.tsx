@@ -52,7 +52,7 @@ export function ChannelWorkRows({
 
 function labelFor(entry: ChannelWork, name: string | null): string {
   if (entry.kind === "handoff") {
-    return name ? `Asking ${name}…` : "Asking another Bot…";
+    return name ? `正在问${name}…` : "正在问另一位员工…";
   }
-  return name ? `${name} is running a routine…` : "A routine is running…";
+  return name ? `${name}正在执行定时任务…` : "有定时任务正在执行…";
 }

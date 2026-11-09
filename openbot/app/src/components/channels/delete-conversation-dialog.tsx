@@ -59,9 +59,9 @@ export function DeleteConversationDialog({
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Delete {name}?</DialogTitle>
+          <DialogTitle>删除「{name}」？</DialogTitle>
           <DialogDescription>
-            It disappears for everyone in the conversation.
+            会话里的所有人都将不再看到这段会话。
           </DialogDescription>
         </DialogHeader>
         {deleteChannel.error ? (
@@ -71,7 +71,7 @@ export function DeleteConversationDialog({
         ) : null}
         <DialogFooter>
           <Button onClick={() => onOpenChange(false)} size="sm" variant="ghost">
-            Cancel
+            取消
           </Button>
           <Button
             disabled={deleteChannel.isPending}
@@ -81,7 +81,7 @@ export function DeleteConversationDialog({
             size="sm"
             variant="destructive"
           >
-            {deleteChannel.isPending ? "Deleting…" : "Delete"}
+            {deleteChannel.isPending ? "正在删除…" : "删除"}
           </Button>
         </DialogFooter>
       </DialogContent>

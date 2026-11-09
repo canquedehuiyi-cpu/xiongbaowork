@@ -190,17 +190,15 @@ function QuestionParts({
           <QuestionnaireInput
             aria-label={`${part.header}，用你自己的话回答`}
             className="min-h-9 bg-card dark:bg-card"
-            placeholder={
-              part.options ? "或者用你自己的话回答" : "你的回答"
-            }
+            placeholder={part.options ? "或者用你自己的话回答" : "你的回答"}
           />
           <QuestionnaireError />
         </QuestionnaireItem>
       ))}
       <QuestionnaireActions className="min-h-8">
         <QuestionnairePrevious size="sm" variant="ghost">
- 上一步
- </QuestionnairePrevious>
+          上一步
+        </QuestionnairePrevious>
         {several ? (
           <QuestionnaireProgress className="col-start-2 row-start-1 justify-self-end" />
         ) : null}
@@ -250,7 +248,8 @@ export function QuestionNotice({
       <BotOrb name={botName} seed={avatarSeed} size={20} />
       <div className="flex max-h-80 min-w-0 flex-1 flex-col gap-1 overflow-y-auto">
         <p className="text-muted-foreground text-xs">
-          <span className="font-medium text-foreground">{botName}</span>在等你的回答
+          <span className="font-medium text-foreground">{botName}</span>
+          在等你的回答
         </p>
         <p className="whitespace-pre-wrap text-sm leading-snug">
           {question.question}

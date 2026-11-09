@@ -64,7 +64,7 @@ export function setupChecklistQueryOptions() {
     queryKey: setupKeys.checklist(),
     queryFn: (): Promise<SetupChecklist> =>
       client("/api/setup", "checklist", {
-        fallback: "Couldn't check your setup.",
+        fallback: "没能检查你的设置。",
       }),
   });
 }

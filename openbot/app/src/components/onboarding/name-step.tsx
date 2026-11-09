@@ -39,7 +39,7 @@ export function useNameStep({
 
   return {
     id: "name",
-    title: "What should we call you?",
+    title: "我们该怎么称呼你？",
     intro: () => (
       <StepIntro
         after={
@@ -53,7 +53,7 @@ export function useNameStep({
             }}
           >
             <label className="text-left" htmlFor={fieldId}>
-              Name
+              名字
             </label>
             <Input
               autoComplete="name"
@@ -75,17 +75,13 @@ export function useNameStep({
           </form>
         }
       >
-        <p>You can change your name later in Settings.</p>
+        <p>之后可以在设置里修改名字。</p>
       </StepIntro>
     ),
     demo: () => <NameOrb finished={finished} size={128} />,
     demoFirst: true,
     primaryForm: formId,
-    primaryLabel: finished
-      ? "All set"
-      : save.isPending
-        ? "Saving…"
-        : "Get started",
+    primaryLabel: finished ? "好了" : save.isPending ? "正在保存…" : "开始使用",
     primaryDone: finished,
     primaryDisabled: !finished && (!name.trim() || save.isPending),
   };

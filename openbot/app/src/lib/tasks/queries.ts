@@ -65,7 +65,7 @@ export const taskListQueryOptions = () =>
   queryOptions({
     queryKey: taskKeys.list,
     queryFn: (): Promise<BotTask[]> =>
-      client("/api/tasks", "tasks", { fallback: "Couldn't load your tasks" }),
+      client("/api/tasks", "tasks", { fallback: "读不到你的任务" }),
     refetchInterval: (query) =>
       query.state.data?.some((task) => moving(task.status))
         ? LIVE_MS
@@ -83,14 +83,14 @@ export function liveStatus(status: TaskStatus, busy: boolean): TaskStatus {
 
 /** Each status in a word or two, as a row says it. */
 export const TASK_STATUS_LABEL: Record<TaskStatus, string> = {
-  ready_for_review: "Ready for review",
-  needs_input: "Needs input",
-  failed: "Failed",
-  working: "Working",
-  resolved: "Resolved",
+  ready_for_review: "待你审阅",
+  needs_input: "需要你回答",
+  failed: "失败",
+  working: "工作中",
+  resolved: "已完成",
 };
 
 /** What a failed task says after its status: "Couldn't finish: <reason>." */
 export function couldNotFinish(failure: string | null): string {
-  return failure ? `Couldn't finish: ${failure}.` : "Couldn't finish.";
+  return failure ? `没能完成：${failure}。` : "没能完成。";
 }

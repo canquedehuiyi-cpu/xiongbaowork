@@ -5,8 +5,7 @@ import { cn } from "@/lib/utils";
 import { DemoStage } from "../demo-stage";
 
 /** The request the composer types, a thing somebody would really hand off. */
-export const WELCOME_REQUEST =
-  "Find somewhere near the office for a team dinner on Friday, for eight.";
+export const WELCOME_REQUEST = "周五在公司附近找个地方办团队聚餐，八个人。";
 
 /** How long each character takes to land. Linear: a typewriter that eases reads as hesitating. */
 const CHARACTER_MS = 38;
@@ -55,7 +54,7 @@ export function WelcomeDemo() {
       beats={3}
       className="flex min-w-0 flex-col items-center gap-8 px-5 pt-12 pb-8 sm:px-8"
       kind="welcome"
-      label={`A message box where somebody asks a Bot: ${WELCOME_REQUEST}`}
+      label={`有人在消息框里请员工帮忙：${WELCOME_REQUEST}`}
       rest={0}
     >
       {({ beat, playing, reduced }) => (
@@ -143,7 +142,7 @@ function WelcomeScene({
                 : "text-blue-600 dark:text-blue-400"
             }
           >
-            {beat === 2 ? "Found three places" : "Working on it"}
+            {beat === 2 ? "找到了三个地方" : "正在处理"}
           </span>
         </p>
       </div>

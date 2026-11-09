@@ -154,9 +154,7 @@ export function useLearningNext(stopped: Stopped) {
   else if (runSince?.status === "failed")
     next = {
       kind: "failed",
-      reason:
-        runSince.failure ??
-        "学习没做完就停了。点「立即学习」再试一次。",
+      reason: runSince.failure ?? "学习没做完就停了。点「立即学习」再试一次。",
     };
   else if (
     runSince?.status === "succeeded" &&
@@ -277,8 +275,7 @@ export function learningNextWords(
   if (next.kind === "model" || next.kind === "off")
     return {
       heading: `已保存「${title}」`,
-      sentence:
-        "你的录制已保留。等学习可以运行了，熊宝就会从中学出技能。",
+      sentence: "你的录制已保留。等学习可以运行了，熊宝就会从中学出技能。",
     };
   if (!canReview)
     return {
@@ -317,8 +314,8 @@ export function LearningNextRow({
       size="sm"
       variant="outline"
     >
- 立即学习
- </Button>
+      立即学习
+    </Button>
   ) : null;
   let icon = <IconSparkles />;
   let tone: "ok" | "warn" | "busy" | "plain" = "plain";
@@ -332,8 +329,8 @@ export function LearningNextRow({
       sentence = next.skill.description;
       action = (
         <Button size="sm" render={<Link to="/" search={{ ask: title }} />}>
- 试一试
- </Button>
+          试一试
+        </Button>
       );
       break;
     case "proposed":
@@ -341,8 +338,8 @@ export function LearningNextRow({
       sentence = next.skill.description;
       action = canReview ? (
         <Button size="sm" variant="outline" render={<Link to={YOUR_SKILLS} />}>
- 审核
- </Button>
+          审核
+        </Button>
       ) : null;
       break;
     case "learning":
@@ -360,8 +357,7 @@ export function LearningNextRow({
       break;
     case "none":
       heading = "还没从中学到技能";
-      sentence =
-        "学习没能从这段录制里找出技能。再录一遍，边做边说你在做什么。";
+      sentence = "学习没能从这段录制里找出技能。再录一遍，边做边说你在做什么。";
       action = learnNow;
       break;
     case "model":
@@ -374,8 +370,7 @@ export function LearningNextRow({
       tone = "warn";
       icon = <IconAlertTriangle />;
       heading = "学习已关闭";
-      sentence =
-        "后端没有提供学习功能，所以不会从中学习技能。";
+      sentence = "后端没有提供学习功能，所以不会从中学习技能。";
       break;
     case "unreadable":
       tone = "warn";
@@ -451,8 +446,8 @@ export function LearningNextNotice({ stopped }: { stopped: Stopped }) {
             variant="outline"
             render={<Link to={YOUR_SKILLS} />}
           >
- 查看你的技能
- </Button>
+            查看你的技能
+          </Button>
         }
       />
     </div>

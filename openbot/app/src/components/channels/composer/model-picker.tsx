@@ -59,7 +59,7 @@ const sameChoice = (a: Choice, b: Choice) =>
 function DefaultTag() {
   return (
     <span className="ml-auto shrink-0 pr-5 text-muted-foreground text-xs">
-      Default
+      默认
     </span>
   );
 }
@@ -179,7 +179,7 @@ function Picker({
     }));
     // A provider that does not say which effort is its default still has one: offer it by name.
     if (!selected.defaultEffort)
-      efforts.unshift({ kind: "effort", effort: null, label: "Default" });
+      efforts.unshift({ kind: "effort", effort: null, label: "默认" });
     return [models, { value: "thinking", items: efforts }];
   }, [catalogue.models, selected]);
 
@@ -268,19 +268,19 @@ function Picker({
       >
         <ComboboxInput
           className="col-start-1 row-start-1"
-          placeholder="Search models"
+          placeholder="搜索模型"
           showTrigger={false}
         />
         {noModels ? (
           <p className="col-start-1 row-start-2 px-3 py-6 text-center text-muted-foreground text-sm">
-            No models match.
+            没有匹配的模型。
           </p>
         ) : null}
         <ComboboxList className="contents">
           {(group: ChoiceGroup) =>
             group.value === "models" ? (
               <ComboboxGroup
-                aria-label="Models"
+                aria-label="模型"
                 className="no-scrollbar col-start-1 row-start-2 max-h-[min(20rem,calc(var(--available-height)-4rem))] min-h-0 scroll-py-1 overflow-y-auto overscroll-contain p-1.5 pt-0.5"
                 items={group.items}
                 key="models"
@@ -317,7 +317,7 @@ function Picker({
                  * name sits outside the label, so the group is still called "Thinking".
                  */}
                 <div className="flex h-10 items-center gap-2 px-2.5">
-                  <ComboboxLabel className="p-0">Thinking</ComboboxLabel>
+                  <ComboboxLabel className="p-0">思考强度</ComboboxLabel>
                   <span
                     aria-hidden
                     className="ml-auto min-w-0 truncate text-muted-foreground text-xs"

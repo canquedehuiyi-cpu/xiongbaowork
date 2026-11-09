@@ -361,16 +361,16 @@ function OwnerGiveAction({
       ) : null}
       {tab.blockedUrl ? (
         <p className="text-xs" role="status">
-          This browser blocked the tab.{" "}
+          浏览器拦下了这个标签页。
           <a
             className="underline underline-offset-2"
             href={tab.blockedUrl}
             rel="noreferrer"
             target="_blank"
           >
-            Open {name}'s sign-in
+            打开 {name} 的登录页
           </a>
-          .
+          。
         </p>
       ) : waiting ? (
         <p className="text-muted-foreground text-xs" role="status">
@@ -492,16 +492,16 @@ function PersonalConnectAction({
       ) : null}
       {tab.blockedUrl ? (
         <p className="text-xs" role="status">
-          This browser blocked the tab.{" "}
+          浏览器拦下了这个标签页。
           <a
             className="underline underline-offset-2"
             href={tab.blockedUrl}
             rel="noreferrer"
             target="_blank"
           >
-            Open {name}'s sign-in
+            打开 {name} 的登录页
           </a>
-          .
+          。
         </p>
       ) : waiting ? (
         <p className="text-muted-foreground text-xs" role="status">
@@ -611,16 +611,16 @@ function ConnectAction({
       ) : null}
       {tab.blockedUrl ? (
         <p className="text-xs" role="status">
-          This browser blocked the tab.{" "}
+          浏览器拦下了这个标签页。
           <a
             className="underline underline-offset-2"
             href={tab.blockedUrl}
             rel="noreferrer"
             target="_blank"
           >
-            Open {access.displayName}'s sign-in
+            打开 {access.displayName} 的登录页
           </a>
-          .
+          。
         </p>
       ) : waiting ? (
         <p className="text-muted-foreground text-xs" role="status">

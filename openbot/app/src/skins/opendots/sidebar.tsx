@@ -189,7 +189,7 @@ function BotsSection({
           </IconAction>
         }
       >
-        员工
+        我的员工
       </NavLabel>
       {agents.isPending ? null : agents.error ? (
         <p className="px-3.5 py-1.5 text-[12px] text-destructive" role="alert">

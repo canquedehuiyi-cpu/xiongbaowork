@@ -47,28 +47,28 @@ export function ConversationActions({
     <section className="grid gap-2">
       {/* Headed like the profile's own sections, so it reads as about the conversation, not the Bot. */}
       <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        This conversation
+        这段对话
       </h2>
       <div className="flex flex-col gap-2">
         {/* The heading names the conversation, so the labels drop it; screen readers still hear it. */}
         <Button
-          aria-label={pinned ? "Unpin conversation" : "Pin conversation"}
+          aria-label={pinned ? "取消置顶对话" : "置顶对话"}
           className="w-full text-sm!"
           disabled={pinned === undefined || setPinned.isPending}
           onClick={() => setPinned.mutate({ channelId, pinned: !pinned })}
           variant="outline"
         >
           {pinned ? <IconPinnedOff /> : <IconPin />}
-          {pinned ? "Unpin" : "Pin"}
+          {pinned ? "取消置顶" : "置顶"}
         </Button>
         <Button
-          aria-label="Delete conversation…"
+          aria-label="删除对话…"
           className="w-full text-sm!"
           onClick={() => setConfirming(true)}
           variant="destructive"
         >
           <IconTrash />
-          Delete…
+          删除…
         </Button>
       </div>
       {/* No toast in this app: why a pin did not take is said where it was asked for. */}

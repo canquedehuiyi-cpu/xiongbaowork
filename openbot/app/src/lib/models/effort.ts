@@ -10,13 +10,13 @@ import type { ConversationModel, ModelCatalogue, ModelOption } from "./queries";
 export type ModelPick = { model: string; effort: string | null };
 
 const EFFORT_LABELS: Record<string, string> = {
-  none: "None",
-  minimal: "Minimal",
-  low: "Low",
-  medium: "Medium",
-  high: "High",
-  xhigh: "Extra high",
-  max: "Max",
+  none: "不思考",
+  minimal: "极低",
+  low: "低",
+  medium: "中",
+  high: "高",
+  xhigh: "很高",
+  max: "最高",
 };
 
 /** An effort as a person reads it. One the list does not know is shown as given, capitalised. */

@@ -340,8 +340,8 @@ export function OpeningBrowser({
                 </p>
                 {onRetry ? (
                   <Button onClick={onRetry} size="sm" variant="outline">
- 再试一次
- </Button>
+                    再试一次
+                  </Button>
                 ) : null}
               </div>
             ) : (
@@ -354,8 +354,7 @@ export function OpeningBrowser({
                   aria-hidden="true"
                   className="size-12 drop-shadow-[0_8px_24px_rgb(120_100_220/0.35)] motion-safe:animate-pulse"
                 />
- 正在打开你的浏览器…
-
+                正在打开你的浏览器…
               </div>
             )}
           </div>
@@ -437,8 +436,8 @@ function Screen({
             size="sm"
             variant="outline"
           >
- 再试一次
- </Button>
+            再试一次
+          </Button>
         </div>
       ) : blank ? (
         <StartPage onGo={onGo} />

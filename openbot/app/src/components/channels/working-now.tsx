@@ -19,7 +19,7 @@ export function WorkingNow({
 }) {
   const working = channels?.find((channel) => channel.busy);
   if (!working) return null;
-  const title = working.summary || untitledLine(working) || "New conversation";
+  const title = working.summary || untitledLine(working) || "新对话";
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-6 flex justify-center px-4">
       <Link
@@ -34,14 +34,14 @@ export function WorkingNow({
         <ChannelAvatar participantIds={working.agentIds} size={28} typing />
         <span className="flex min-w-0 flex-col leading-tight">
           <span className="truncate font-medium text-sm">
-            {working.name} is working
+            {working.name}正在工作
           </span>
           <span className="truncate text-muted-foreground text-xs">
             {title}
           </span>
         </span>
         <span className="shrink-0 rounded-full border bg-background px-3 py-1 font-medium text-xs">
-          Open
+          打开
         </span>
       </Link>
     </div>

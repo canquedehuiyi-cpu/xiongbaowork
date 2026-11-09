@@ -164,14 +164,11 @@ const CONNECT_REFUSALS: Record<string, string> = {
     "你的组织给录制器设的熊宝地址用不了。请联系你们的 IT 团队。",
   busy: "录制器正在处理另一个连接请求。请稍后再试。",
   // A trusted OpenBot's connect, which the Recorder completes itself with OpenBot, with no Connect page.
-  "exchange-refused":
-    "熊宝没有接受录制器的连接请求。请再试一次。",
-  "openbot-unreachable":
-    "录制器连不上熊宝。请检查网络后再试。",
+  "exchange-refused": "熊宝没有接受录制器的连接请求。请再试一次。",
+  "openbot-unreachable": "录制器连不上熊宝。请检查网络后再试。",
 };
 /** The Recorder can also answer `unreachable` or `invalid`, which have no sentence of their own. */
-const CONNECT_REFUSAL_FALLBACK =
-  "录制器没有接受这个请求。请再试一次。";
+const CONNECT_REFUSAL_FALLBACK = "录制器没有接受这个请求。请再试一次。";
 
 /** The Recorder takes only so many connects from one OpenBot in ten minutes; its refusal says how long is left. */
 function throttledSentence(retryAfterMs: number | undefined): string {

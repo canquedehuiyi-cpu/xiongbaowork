@@ -100,10 +100,10 @@ export function statusLine(input: {
 }): string {
   const { attention, channels, agentId } = input;
   if (attention?.approvals) {
-    return `待你审阅 · ${attention.approvals} 项审批`;
+    return `待你审阅 · ${attention.approvals} 个审批`;
   }
   if (attention?.questions) {
-    return `需要你回答 · ${attention.questions} 个问题`;
+    return `需要你回答 · ${attention.questions} 个提问`;
   }
   if (attention?.handoffs) return "等你接手";
   const working = agentId

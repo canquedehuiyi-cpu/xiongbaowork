@@ -128,8 +128,8 @@ export function SkillPage({ slug }: { slug: string }) {
       <PageSection
         description={
           <>
-            Bots with their switch on offer {skill.title} when someone types{" "}
-            <code>/</code>. It takes effect at once.
+            打开开关的员工，会在有人输入 <code>/</code> 时提供「{skill.title}
+            」。改动立即生效。
           </>
         }
         title="员工"

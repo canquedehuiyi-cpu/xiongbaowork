@@ -49,17 +49,17 @@ const SIGN_IN: Node[] = [
 /** What an organization gets once its people are in. */
 const OUTCOMES: Node[] = [
   {
-    label: "Your rules",
+    label: "你的规则",
     icon: IconShieldCheck,
     tone: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
   },
   {
-    label: "Team Bots",
+    label: "团队员工",
     icon: IconRobot,
     tone: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
   },
   {
-    label: "Audit trail",
+    label: "审计记录",
     icon: IconListCheck,
     tone: "bg-violet-500/15 text-violet-600 dark:text-violet-400",
   },

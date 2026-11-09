@@ -154,7 +154,7 @@ export function giveableAppsQueryOptions() {
     queryKey: appAccessKeys.giveable,
     queryFn: (): Promise<GiveableApp[]> =>
       client("/api/plugins/giveable", "apps", {
-        fallback: "Couldn't load your apps.",
+        fallback: "读不到你的应用。",
       }),
   });
 }
@@ -165,7 +165,7 @@ export function botAppsQueryOptions(agentId: string) {
     queryKey: appAccessKeys.bot(agentId),
     queryFn: (): Promise<AppAccess[]> =>
       client(`/api/plugins/for/${encodeURIComponent(agentId)}/apps`, "apps", {
-        fallback: "This Bot's apps could not be loaded.",
+        fallback: "读不到这位员工的应用。",
       }),
   });
 }
@@ -181,7 +181,7 @@ export function botAppQueryOptions(agentId: string, app: string) {
       client(
         `/api/plugins/for/${encodeURIComponent(agentId)}/apps/${encodeURIComponent(app)}`,
         "app",
-        { fallback: `What ${app} is for this Bot could not be loaded.` },
+        { fallback: `读不到 ${app} 对这位员工的用途。` },
       ),
   });
 }
@@ -197,7 +197,7 @@ export function appAccessInboxQueryOptions(enabled: boolean, app?: string) {
     queryFn: async (): Promise<AppAccessInbox> => {
       const query = app ? `?app=${encodeURIComponent(app)}` : "";
       const response = await client(`/api/plugins/access-requests${query}`, {
-        fallback: "Access requests could not be loaded.",
+        fallback: "读不到使用申请。",
       });
       return response.json();
     },

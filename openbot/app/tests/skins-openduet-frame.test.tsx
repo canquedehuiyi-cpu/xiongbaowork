@@ -331,11 +331,11 @@ function hrefs(): string[] {
 }
 
 async function openMenu(view: ReturnType<typeof render>) {
-  fireEvent.click(await view.findByRole("button", { name: "Menu" }));
-  const menu = await view.findByRole("navigation", { name: "Menu" });
+  fireEvent.click(await view.findByRole("button", { name: "菜单" }));
+  const menu = await view.findByRole("navigation", { name: "菜单" });
   // Wait for the conversations, then open Manage.
   await within(menu).findByText("Renewal for the studio policy");
-  fireEvent.click(within(menu).getByRole("button", { name: /Manage/ }));
+  fireEvent.click(within(menu).getByRole("button", { name: /管理/ }));
   return menu;
 }
 
@@ -369,7 +369,7 @@ describe("the frame reaches every OpenBot surface", () => {
       api(role);
       const view = renderApp("/");
       const menu = await openMenu(view);
-      const manage = within(menu).getByRole("button", { name: /Manage/ });
+      const manage = within(menu).getByRole("button", { name: /管理/ });
       const group = document.getElementById(
         manage.getAttribute("aria-controls") ?? "",
       );
@@ -387,7 +387,7 @@ describe("the frame reaches every OpenBot surface", () => {
   test("Settings, which holds the skin picker, is on every tab without opening anything; Admin only for administrators", async () => {
     api("user");
     const view = renderApp("/");
-    const settings = await view.findByRole("link", { name: "Your settings" });
+    const settings = await view.findByRole("link", { name: "你的设置" });
     expect(settings.getAttribute("href")).toBe("/settings");
     await openMenu(view);
     const links = hrefs();
@@ -404,9 +404,9 @@ describe("the frame reaches every OpenBot surface", () => {
   test("a page opened over the app names itself from its own title, writes nothing to it, and has one way back that goes where the page's does", async () => {
     api("user");
     const view = renderApp("/bots");
-    const back = await view.findByRole("button", { name: "Back to Home" });
-    expect(view.queryByRole("navigation", { name: "Main" })).toBeNull();
-    expect(view.queryByRole("button", { name: "Menu" })).toBeNull();
+    const back = await view.findByRole("button", { name: "返回Home" });
+    expect(view.queryByRole("navigation", { name: "主导航" })).toBeNull();
+    expect(view.queryByRole("button", { name: "菜单" })).toBeNull();
     await waitFor(() =>
       expect(document.querySelector("header p[aria-hidden]")?.textContent).toBe(
         "Bots",
@@ -449,7 +449,7 @@ describe("the frame reaches every OpenBot surface", () => {
     api("user");
     const view = renderApp("/");
     expect(
-      await view.findByRole("link", { name: "Tasks, 2 waiting" }),
+      await view.findByRole("link", { name: "任务，2 件在等" }),
     ).toBeTruthy();
   });
 });
@@ -462,9 +462,9 @@ describe("Tasks is OpenBot's own lists under OpenDuet's headings", () => {
   test("Active shows OpenBot's waiting list, responsibilities and routines, and every region has its own name", async () => {
     api("user");
     const view = renderApp("/s/tasks");
-    fireEvent.click(await view.findByRole("tab", { name: "Active" }));
-    const needs = await view.findByRole("region", { name: "Needs input" });
-    expect(within(needs).getByText("Needs input")).toBeTruthy();
+    fireEvent.click(await view.findByRole("tab", { name: "进行中" }));
+    const needs = await view.findByRole("region", { name: "需要你回答" });
+    expect(within(needs).getByText("需要你回答")).toBeTruthy();
     expect(await within(needs).findByText(/Inbox Bot wants to/)).toBeTruthy();
     expect(within(needs).queryByText(/drive\/share/)).toBeNull();
     expect(
@@ -475,7 +475,7 @@ describe("Tasks is OpenBot's own lists under OpenDuet's headings", () => {
     expect(
       await view.findByText("Keep the support inbox at zero"),
     ).toBeTruthy();
-    const routines = view.getByRole("region", { name: "Routines" });
+    const routines = view.getByRole("region", { name: "定时任务" });
     expect(
       await within(routines).findByText("Post the standup notes"),
     ).toBeTruthy();
@@ -488,8 +488,8 @@ describe("Tasks is OpenBot's own lists under OpenDuet's headings", () => {
   test("an approval is decided in OpenBot's own row", async () => {
     const sent = api("user");
     const view = renderApp("/s/tasks");
-    fireEvent.click(await view.findByRole("tab", { name: "Active" }));
-    const needs = await view.findByRole("region", { name: "Needs input" });
+    fireEvent.click(await view.findByRole("tab", { name: "进行中" }));
+    const needs = await view.findByRole("region", { name: "需要你回答" });
     fireEvent.click(
       await within(needs).findByRole("button", { name: "Allow once" }),
     );
@@ -505,8 +505,8 @@ describe("Tasks is OpenBot's own lists under OpenDuet's headings", () => {
   test("a Bot's question is answered in OpenBot's own row", async () => {
     const sent = api("user");
     const view = renderApp("/s/tasks");
-    fireEvent.click(await view.findByRole("tab", { name: "Active" }));
-    const needs = await view.findByRole("region", { name: "Needs input" });
+    fireEvent.click(await view.findByRole("tab", { name: "进行中" }));
+    const needs = await view.findByRole("region", { name: "需要你回答" });
     await userEvent
       .setup({ document })
       .type(await within(needs).findByLabelText("Your answer"), "Kiln 2");
@@ -525,11 +525,11 @@ describe("Tasks is OpenBot's own lists under OpenDuet's headings", () => {
   test("Up next starts or hides a suggestion with OpenBot's own suggestion list", async () => {
     const sent = api("user");
     const view = renderApp("/s/tasks");
-    fireEvent.click(await view.findByRole("tab", { name: "Up next" }));
+    fireEvent.click(await view.findByRole("tab", { name: "接下来" }));
     expect(
       await view.findByText("Confirm Friday ship date for the 120 mugs"),
     ).toBeTruthy();
-    fireEvent.click(view.getByRole("button", { name: "Work on it" }));
+    fireEvent.click(view.getByRole("button", { name: "开始处理" }));
     await waitFor(() =>
       expect(sent).toContainEqual({
         method: "POST",
@@ -537,7 +537,7 @@ describe("Tasks is OpenBot's own lists under OpenDuet's headings", () => {
         body: null,
       }),
     );
-    fireEvent.click(await view.findByRole("button", { name: /^Dismiss / }));
+    fireEvent.click(await view.findByRole("button", { name: /^忽略「/ }));
     await waitFor(() =>
       expect(sent).toContainEqual({
         method: "POST",
@@ -569,7 +569,7 @@ describe("the frame carries the deployment's brand, not OpenDuet's", () => {
     api("admin");
     const view = renderApp("/");
     const orb = await view.findByRole("button", {
-      name: `Talk to ${appConfig.brand.productName}`,
+      name: `和${appConfig.brand.productName}说话`,
     });
     await openMenu(view);
     const menu = view.getByRole("dialog");
@@ -583,10 +583,10 @@ describe("the frame carries the deployment's brand, not OpenDuet's", () => {
   test("Tasks names nothing as OpenDuet either", async () => {
     api("user");
     const view = renderApp("/s/tasks");
-    fireEvent.click(await view.findByRole("tab", { name: "Active" }));
-    await view.findByRole("region", { name: "Needs input" });
-    fireEvent.click(view.getByRole("tab", { name: "Up next" }));
-    await view.findByRole("button", { name: "Work on it" });
+    fireEvent.click(await view.findByRole("tab", { name: "进行中" }));
+    await view.findByRole("region", { name: "需要你回答" });
+    fireEvent.click(view.getByRole("tab", { name: "接下来" }));
+    await view.findByRole("button", { name: "开始处理" });
     expect(readable()).not.toContain("OpenDuet");
   });
 });

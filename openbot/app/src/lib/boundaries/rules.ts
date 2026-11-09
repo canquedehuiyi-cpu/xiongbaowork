@@ -39,12 +39,12 @@ export const RULE_TEMPLATES: RuleTemplate[] = [
 export const RULE_ATTRIBUTES: { name: string; meaning: string }[] = [
   {
     name: "tool.name",
-    meaning:
-      "动作本身，比如 computer_click、computer_type 或 computer_key。",
+    meaning: "动作本身，比如 computer_click、computer_type 或 computer_key。",
   },
   {
     name: "intent",
-    meaning: "动作的用途：activate（触发）、type（输入）或 navigate（打开网页）。",
+    meaning:
+      "动作的用途：activate（触发）、type（输入）或 navigate（打开网页）。",
   },
   { name: "bot.id", meaning: "执行这个动作的员工。" },
   { name: "actor.id", meaning: "员工替谁做这件事。" },
@@ -63,8 +63,7 @@ export const RULE_ATTRIBUTES: { name: string; meaning: string }[] = [
   { name: "command", meaning: "正在执行的命令。" },
   {
     name: "mcp.server, mcp.tool, mcp.effect",
-    meaning:
-      "用于已连接应用的工具：哪个应用、哪个工具，以及是读还是写。",
+    meaning: "用于已连接应用的工具：哪个应用、哪个工具，以及是读还是写。",
   },
 ];
 

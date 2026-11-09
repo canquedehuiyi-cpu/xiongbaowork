@@ -108,9 +108,7 @@ function ConnectedBrowserRow({
         <ItemContent>
           <ItemTitle>{name}</ItemTitle>
           <ItemDescription>
-            {connection.via === "openbot-browser"
-              ? "你的熊宝浏览器，"
-              : ""}
+            {connection.via === "openbot-browser" ? "你的熊宝浏览器，" : ""}
             {connectedAt.format(new Date(connection.createdAt))} 连接
             {connection.via === "desktop"
               ? "，来自熊宝桌面端"
@@ -148,7 +146,8 @@ function ConnectedBrowserRow({
           </DialogHeader>
           <DialogBody className="mt-4 text-sm">
             <p>
-              熊宝会让{which}里的录制器退出登录。重新连接之前，它不会再为你录制任何内容，正在那里进行的录制也会停止。
+              熊宝会让{which}
+              里的录制器退出登录。重新连接之前，它不会再为你录制任何内容，正在那里进行的录制也会停止。
             </p>
             {revoke.error ? (
               <p className="mt-2 text-destructive" role="alert">

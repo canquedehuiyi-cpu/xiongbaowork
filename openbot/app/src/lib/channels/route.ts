@@ -67,7 +67,7 @@ export async function routeMessage(
       names?: unknown;
     } | null;
     const message =
-      typeof body?.error === "string" ? body.error : "Couldn't pick a Bot.";
+      typeof body?.error === "string" ? body.error : "没能选出员工。";
     if (
       response.status === 409 &&
       Array.isArray(body?.names) &&

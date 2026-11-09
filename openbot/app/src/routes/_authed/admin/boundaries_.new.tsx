@@ -164,9 +164,7 @@ function NewRulePage() {
                     {custom ? <IconCode /> : <IconShieldX />}
                   </ItemMedia>
                   <ItemContent>
-                    <ItemTitle>
-                      {template ? template.name : "自己写"}
-                    </ItemTitle>
+                    <ItemTitle>{template ? template.name : "自己写"}</ItemTitle>
                     <ItemDescription>
                       {template
                         ? taken
@@ -213,8 +211,7 @@ function NewRulePage() {
                     )}
                     variant="outline"
                   >
- 取消
-
+                    取消
                   </Button>
                   <Button
                     disabled={!ready || savePolicy.isPending}
@@ -237,10 +234,7 @@ function NewRulePage() {
                   />
                 </Field>
                 <Field>
-                  <FieldLabel htmlFor="rule-description">
- 它拦住什么
-
-                  </FieldLabel>
+                  <FieldLabel htmlFor="rule-description">它拦住什么</FieldLabel>
                   <FieldDescription>
                     一句话，显示在列表里的名称下面。
                   </FieldDescription>
@@ -254,7 +248,8 @@ function NewRulePage() {
                 <Field>
                   <FieldLabel htmlFor="rule-expression">规则</FieldLabel>
                   <FieldDescription>
-                    用 CEL 写成。无法求值的规则算作命中，所以写错了只会多拦，不会漏放。
+                    用 CEL
+                    写成。无法求值的规则算作命中，所以写错了只会多拦，不会漏放。
                   </FieldDescription>
                   <Textarea
                     autoCapitalize="off"
@@ -317,8 +312,7 @@ function RuleReference() {
   return (
     <details className="text-sm">
       <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
- 规则能检查哪些内容
-
+        规则能检查哪些内容
       </summary>
       <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
         {RULE_ATTRIBUTES.map((attribute) => (
@@ -332,7 +326,8 @@ function RuleReference() {
       </dl>
       <p className="mt-3 text-muted-foreground">
         规则里写了动作没有的属性（比如对点击动作写
-        <code className="font-mono text-xs">key</code>），也算命中。先写明工具，其余条件就只在适用的地方检查：{" "}
+        <code className="font-mono text-xs">key</code>
+        ），也算命中。先写明工具，其余条件就只在适用的地方检查：{" "}
         <code className="font-mono text-xs">
           tool.name == "computer_key" && key == "Enter"
         </code>

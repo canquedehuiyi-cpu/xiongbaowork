@@ -60,7 +60,7 @@ export function ProfileNameForm({
         if (name.trim() && !save.isPending) save.mutate(name.trim());
       }}
     >
-      <label htmlFor={id}>Name</label>
+      <label htmlFor={id}>名字</label>
       <Input
         id={id}
         autoComplete="name"
@@ -80,7 +80,7 @@ export function ProfileNameForm({
       )}
       {save.isSuccess && (
         <p role="status" className="text-sm text-muted-foreground">
-          Your name has been saved.
+          名字已保存。
         </p>
       )}
       <Button
@@ -88,7 +88,7 @@ export function ProfileNameForm({
         className="self-end"
         disabled={!name.trim() || save.isPending}
       >
-        {save.isPending ? "Saving…" : "Save name"}
+        {save.isPending ? "正在保存…" : "保存名字"}
       </Button>
     </form>
   );
@@ -112,8 +112,8 @@ export function NameRow() {
           <IconUserCircle />
         </ItemMedia>
         <ItemContent>
-          <ItemTitle>Name</ItemTitle>
-          <ItemDescription>{name || "Not set yet."}</ItemDescription>
+          <ItemTitle>名字</ItemTitle>
+          <ItemDescription>{name || "还没设置。"}</ItemDescription>
         </ItemContent>
         <ItemActions>
           <IconChevronRight className="size-4 text-muted-foreground" />
@@ -122,10 +122,8 @@ export function NameRow() {
       <Dialog onOpenChange={setOpen} open={open}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Your name</DialogTitle>
-            <DialogDescription>
-              Choose the name OpenBot shows for you.
-            </DialogDescription>
+            <DialogTitle>你的名字</DialogTitle>
+            <DialogDescription>设置熊宝显示给你的名字。</DialogDescription>
           </DialogHeader>
           <DialogBody className="mt-4">
             {user ? (

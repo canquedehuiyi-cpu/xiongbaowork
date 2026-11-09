@@ -44,7 +44,7 @@ export function ResearchResults({
           onClick={() => setAll(!all)}
           type="button"
         >
-          {all ? "Show fewer" : `Show ${hidden} more`}
+          {all ? "收起" : `再显示 ${hidden} 条`}
         </button>
       ) : null}
     </section>
@@ -99,7 +99,7 @@ function SourceEntry({ source }: { source: ResearchSource }) {
               onClick={() => setOpen(!open)}
               type="button"
             >
-              {open ? "Show less" : "Show all"}
+              {open ? "收起" : "全部显示"}
             </button>
           ) : null}
         </>

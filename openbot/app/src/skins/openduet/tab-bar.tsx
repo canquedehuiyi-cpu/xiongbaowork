@@ -68,7 +68,7 @@ export function TabBar({ current }: { current: OpenDuetTab }) {
             ? "bg-openduet-tile text-openduet-ink"
             : "text-openduet-ink-2 hover:text-openduet-ink",
         );
-        const name = badge ? `${label}, ${badge} waiting` : label;
+        const name = badge ? `${label}，${badge} 件在等` : label;
         return id === "chat" ? (
           <Link
             activeOptions={{ exact: true }}

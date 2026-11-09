@@ -138,8 +138,8 @@ export function LearnedSkillDialog({
         <DialogFooter className="mt-4">
           {footer ?? (
             <Button onClick={onClose} size="sm" type="button">
- 完成
- </Button>
+              完成
+            </Button>
           )}
         </DialogFooter>
       </DialogContent>

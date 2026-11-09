@@ -489,8 +489,8 @@ export function ClearBrowserDialog({
             size="sm"
             variant="outline"
           >
- 取消
- </Button>
+            取消
+          </Button>
           <Button
             disabled={clear.isPending}
             onClick={() =>

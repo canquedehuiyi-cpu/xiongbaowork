@@ -162,17 +162,17 @@ test("a team's admin allows the models people pick, with no separate switch", as
   const view = await draw(ProvidersPage);
   expect(await view.findByText("OpenAI")).toBeTruthy();
   expect(
-    await view.findByText("Default gpt-5.6-terra · 3 models listed"),
+    await view.findByText("默认 gpt-5.6-terra · 列出了 3 个模型"),
   ).toBeTruthy();
   // What is allowed says it: one listed model allowed, and no on/off switch beside it.
-  expect(await view.findByText("1 model allowed")).toBeTruthy();
+  expect(await view.findByText("已允许 1 个模型")).toBeTruthy();
   expect(
     view.queryByRole("switch", { name: "Let people choose a model" }),
   ).toBeNull();
-  expect(view.getByRole("button", { name: /Allowed models/ })).toBeTruthy();
+  expect(view.getByRole("button", { name: /允许的模型/ })).toBeTruthy();
   expect(
     await view.findByText(
-      "Runs on each model in the last 30 days, including runs the allowlist refused.",
+      "最近 30 天里每个模型的运行次数，包括被允许列表拒绝的运行。",
     ),
   ).toBeTruthy();
 });
@@ -180,10 +180,10 @@ test("a team's admin allows the models people pick, with no separate switch", as
 test("a team with nothing allowed is told people see no picker until it allows one", async () => {
   settings = { ...settings, modelAllowlist: { enabled: false, models: [] } };
   const view = await draw(ProvidersPage);
-  expect(await view.findByText("No models allowed yet")).toBeTruthy();
+  expect(await view.findByText("还没有允许任何模型")).toBeTruthy();
   expect(
     view.getByText(
-      "People don't see a model picker. Allow models below to offer them.",
+      "大家看不到模型选择器。在下面允许一些模型，就能提供给大家。",
     ),
   ).toBeTruthy();
 });
@@ -191,21 +191,21 @@ test("a team with nothing allowed is told people see no picker until it allows o
 test("one person on their own machine is offered every model, and nothing can narrow it", async () => {
   exposure = "all";
   const view = await draw(ProvidersPage);
-  expect(await view.findByText("Every listed model")).toBeTruthy();
+  expect(await view.findByText("所有列出的模型")).toBeTruthy();
   expect(
-    view.getByText("3 models, kept current from your provider."),
+    view.getByText("3 个模型，随提供方的列表保持更新。"),
   ).toBeTruthy();
   // No allowlist and no switch to narrow it.
-  expect(view.queryByRole("button", { name: /Allowed models/ })).toBeNull();
+  expect(view.queryByRole("button", { name: /允许的模型/ })).toBeNull();
   expect(
-    view.queryByRole("switch", { name: "Only allowed models" }),
+    view.queryByRole("switch", { name: "只用允许的模型" }),
   ).toBeNull();
   expect(
     view.queryByRole("switch", { name: "Let people choose a model" }),
   ).toBeNull();
   // Usage doesn't mention an allowlist one person doesn't have.
   expect(
-    await view.findByText("Runs on each model in the last 30 days."),
+    await view.findByText("最近 30 天里每个模型的运行次数。"),
   ).toBeTruthy();
   expect(view.queryByText(/allowlist refused/)).toBeNull();
 });
@@ -216,9 +216,9 @@ test("Providers names what actually serves the models, with a vendor's mark only
     ["anthropic", "Anthropic", "Anthropic"],
     ["google", "Google", "Google"],
     ["xai", "xAI", "xAI"],
-    ["gateway", "OpenAI-compatible endpoint", null],
-    ["chatgpt", "ChatGPT plan", "ChatGPT plan"],
-    ["claude", "Claude plan", "Claude plan"],
+    ["gateway", "兼容 OpenAI 的接口", null],
+    ["chatgpt", "ChatGPT 订阅", "ChatGPT 订阅"],
+    ["claude", "Claude 订阅", "Claude 订阅"],
   ];
   for (const [served, name, mark] of cases) {
     source = served;
@@ -230,7 +230,7 @@ test("Providers names what actually serves the models, with a vendor's mark only
       mark ?? undefined,
     );
     expect(row.textContent).toContain(
-      "Default gpt-5.6-terra · 3 models listed",
+      "默认 gpt-5.6-terra · 列出了 3 个模型",
     );
     view.unmount();
   }
@@ -239,14 +239,14 @@ test("Providers names what actually serves the models, with a vendor's mark only
 test("the allowlist names models by provider, whoever serves them", async () => {
   source = "gateway";
   const view = await draw(ProvidersPage);
-  fireEvent.click(await view.findByRole("button", { name: /Allowed models/ }));
+  fireEvent.click(await view.findByRole("button", { name: /允许的模型/ }));
   const dialog = await view.findByRole("dialog");
   await waitFor(() => expect(dialog.textContent).toContain("openai/gpt-6-sol"));
 });
 
 test("the allowlist is picked from the provider's models, and takes one it doesn't list by full name", async () => {
   const view = await draw(ProvidersPage);
-  fireEvent.click(await view.findByRole("button", { name: /Allowed models/ }));
+  fireEvent.click(await view.findByRole("button", { name: /允许的模型/ }));
   const dialog = await view.findByRole("dialog");
 
   // Every listed model is offered, with the deployment's own marked and how each thinks.
@@ -260,16 +260,16 @@ test("the allowlist is picked from the provider's models, and takes one it doesn
 
   // Search narrows the list.
   const user = userEvent.setup({ document });
-  const search = view.getByRole("textbox", { name: "Search models" });
+  const search = view.getByRole("textbox", { name: "搜索模型" });
   await user.type(search, "sol");
   await waitFor(() => expect(dialog.textContent).not.toContain("GPT-4o"));
-  fireEvent.click(view.getByRole("checkbox", { name: "Allow GPT-6 Sol" }));
+  fireEvent.click(view.getByRole("checkbox", { name: "允许 GPT-6 Sol" }));
   await user.type(search, "{Backspace}{Backspace}{Backspace}");
   await waitFor(() => expect(dialog.textContent).toContain("GPT-4o"));
 
   // A model the listing doesn't have, by its full name only.
-  const other = view.getByRole("textbox", { name: "Another model" });
-  const add = view.getByRole("button", { name: "Add" });
+  const other = view.getByRole("textbox", { name: "其他模型" });
+  const add = view.getByRole("button", { name: "添加" });
   await user.type(other, "claude-opus-5-5");
   expect((add as HTMLButtonElement).disabled).toBe(true);
   await user.type(other, "{Home}anthropic/");
@@ -279,7 +279,7 @@ test("the allowlist is picked from the provider's models, and takes one it doesn
     expect(dialog.textContent).toContain("anthropic/claude-opus-5-5"),
   );
 
-  fireEvent.click(view.getByRole("button", { name: "Save" }));
+  fireEvent.click(view.getByRole("button", { name: "保存" }));
   await waitFor(() =>
     expect(writes).toContainEqual({
       path: "/api/admin/enterprise/settings/modelAllowlist",
@@ -299,14 +299,14 @@ test("the allowlist is picked from the provider's models, and takes one it doesn
 
 test("unticking the default says it stays offered, and what Only allowed models would do", async () => {
   const view = await draw(ProvidersPage);
-  fireEvent.click(await view.findByRole("button", { name: /Allowed models/ }));
+  fireEvent.click(await view.findByRole("button", { name: /允许的模型/ }));
   const dialog = await view.findByRole("dialog");
   await waitFor(() => expect(dialog.textContent).toContain("GPT-5.6 Terra"));
-  expect(dialog.textContent).not.toContain("stays offered");
-  fireEvent.click(view.getByRole("checkbox", { name: "Allow GPT-5.6 Terra" }));
-  await waitFor(() => expect(dialog.textContent).toContain("stays offered"));
+  expect(dialog.textContent).not.toContain("会一直提供");
+  fireEvent.click(view.getByRole("checkbox", { name: "允许 GPT-5.6 Terra" }));
+  await waitFor(() => expect(dialog.textContent).toContain("会一直提供"));
   expect(dialog.textContent).toContain(
-    "openai/gpt-5.6-terra is the default and stays offered. With Only allowed models on, a built-in Bot on it is refused unless you allow it.",
+    "openai/gpt-5.6-terra 是默认模型，会一直提供。打开「只用允许的模型」后，除非你允许它，用它的内置员工会被拒绝。",
   );
 });
 
@@ -324,15 +324,15 @@ test("Permissions holds the organization's switches", async () => {
       },
     }),
   );
-  expect(view.getByRole("button", { name: /Role and group overrides/ }));
+  expect(view.getByRole("button", { name: /按角色和用户组例外设置/ }));
 });
 
 test("the allowed-models row names the first few models", () => {
-  expect(allowedSummary([])).toBe("None listed");
-  expect(allowedSummary(["openai/a", "openai/b"])).toBe("openai/a, openai/b");
+  expect(allowedSummary([])).toBe("未列出任何模型");
+  expect(allowedSummary(["openai/a", "openai/b"])).toBe("openai/a、openai/b");
   expect(
     allowedSummary(["openai/a", "openai/b", "openai/c", "openai/d", "x/e"]),
-  ).toBe("openai/a, openai/b, openai/c and 2 more");
+  ).toBe("openai/a、openai/b、openai/c等另外 2 个");
 });
 
 test("an old link to Enterprise controls opens the Admin overview", () => {
@@ -349,18 +349,18 @@ test("an old link to Enterprise controls opens the Admin overview", () => {
 
 test("cancelling allowlist edits restores the saved choices when reopened", async () => {
   const view = await draw(ProvidersPage);
-  fireEvent.click(await view.findByRole("button", { name: /Allowed models/ }));
+  fireEvent.click(await view.findByRole("button", { name: /允许的模型/ }));
   fireEvent.click(
-    await view.findByRole("checkbox", { name: "Allow GPT-6 Sol" }),
+    await view.findByRole("checkbox", { name: "允许 GPT-6 Sol" }),
   );
-  fireEvent.click(view.getByRole("button", { name: "Cancel" }));
+  fireEvent.click(view.getByRole("button", { name: "取消" }));
   await waitFor(() => expect(view.queryByRole("dialog")).toBeNull());
-  fireEvent.click(view.getByRole("button", { name: /Allowed models/ }));
+  fireEvent.click(view.getByRole("button", { name: /允许的模型/ }));
   const reopened = await view.findByRole("checkbox", {
-    name: "Allow GPT-6 Sol",
+    name: "允许 GPT-6 Sol",
   });
   expect(reopened.getAttribute("aria-checked")).toBe("false");
-  fireEvent.click(view.getByRole("button", { name: "Save" }));
+  fireEvent.click(view.getByRole("button", { name: "保存" }));
   await waitFor(() =>
     expect(writes).toContainEqual({
       path: "/api/admin/enterprise/settings/modelAllowlist",

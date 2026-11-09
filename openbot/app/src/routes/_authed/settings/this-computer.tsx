@@ -142,9 +142,7 @@ function OpenBotSection({
             <IconCpu className="size-4" />
           </RowMark>
           <ItemContent>
-            <ItemTitle>
-              {status.openbotRunning ? "运行中" : "已停止"}
-            </ItemTitle>
+            <ItemTitle>{status.openbotRunning ? "运行中" : "已停止"}</ItemTitle>
             <ItemDescription>
               {restart.isPending
                 ? "正在重启…"
@@ -176,8 +174,8 @@ function OpenBotSection({
                   size="sm"
                   variant="outline"
                 >
- 重启
- </Button>
+                  重启
+                </Button>
               )}
               <Button
                 disabled={busy}
@@ -185,8 +183,8 @@ function OpenBotSection({
                 size="sm"
                 variant="outline"
               >
- 停止
- </Button>
+                停止
+              </Button>
             </ItemActions>
           )}
         </Item>
@@ -263,16 +261,16 @@ function IntelligenceSection({
                   size="sm"
                   variant="outline"
                 >
- 重启
- </Button>
+                  重启
+                </Button>
                 <Button
                   disabled={intelligence.isPending}
                   onClick={() => intelligence.mutate("stop")}
                   size="sm"
                   variant="outline"
                 >
- 停止
- </Button>
+                  停止
+                </Button>
               </>
             ) : (
               <Button
@@ -281,8 +279,8 @@ function IntelligenceSection({
                 size="sm"
                 variant="outline"
               >
- 启动
- </Button>
+                启动
+              </Button>
             )}
           </ItemActions>
         </Item>
@@ -398,8 +396,7 @@ function LogsRow({ folder }: { folder: string }) {
           size="sm"
           variant="outline"
         >
- 打开日志文件夹
-
+          打开日志文件夹
         </Button>
       </ItemActions>
     </Item>

@@ -303,8 +303,8 @@ export function LearningSharing() {
                           <>
                             {needsAdmin && skill.sharing === "requested" ? (
                               <span className="text-muted-foreground text-sm">
- 已申请共享
- </span>
+                                已申请共享
+                              </span>
                             ) : null}
                             <Switch
                               aria-label={`向所有人公开「${skillTitle(skill.name, skill.description)}」`}
@@ -340,8 +340,8 @@ export function LearningSharing() {
                           </>
                         ) : skill.sharing === "requested" ? (
                           <span className="text-muted-foreground text-sm">
- 已申请共享
- </span>
+                            已申请共享
+                          </span>
                         ) : (
                           <Button
                             disabled={requestShare.isPending}
@@ -350,8 +350,8 @@ export function LearningSharing() {
                             type="button"
                             variant="outline"
                           >
- 申请共享
- </Button>
+                            申请共享
+                          </Button>
                         )}
                       </ItemActions>
                     </Item>

@@ -57,7 +57,7 @@ export function replyNotice(
       ? activity.firstLine
       : (activity.lastMessage ?? "");
   return {
-    title: name ? `${name} replied` : "Your Bot replied",
+    title: name ? `${name}回复了` : "你的员工回复了",
     body,
     tag: conversationTag(activity.channelId),
     path: `/channel/${encodeURIComponent(activity.channelId)}`,

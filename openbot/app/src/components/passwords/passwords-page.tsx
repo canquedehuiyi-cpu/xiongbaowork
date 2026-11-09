@@ -36,21 +36,21 @@ export function PasswordsPage() {
   const remove = useMutation(deleteSavedLoginMutationOptions(queryClient));
   return (
     <PageShell
-      title={personal ? "Saved logins" : "Passwords"}
-      description="Manage saved website logins. Bots cannot see your passwords, and you approve each use."
+      title={personal ? "保存的登录" : "密码"}
+      description="管理保存的网站登录信息。员工看不到你的密码，每次使用都要经过你批准。"
     >
-      <PageSection title={personal ? undefined : "Saved logins"}>
+      <PageSection title={personal ? undefined : "保存的登录"}>
         {logins.isPending ? null : logins.error ? (
           <p className="text-destructive text-sm" role="alert">
-            Couldn't load your passwords. Reload the page.
+            读不到你的密码。请刷新页面。
           </p>
         ) : !logins.data.passwordManager ? (
-          <PageEmpty icon={IconLockOff} title="Saved passwords are off">
-            An admin turned them off. Your logins are kept but won't be offered.
+          <PageEmpty icon={IconLockOff} title="保存密码已关闭">
+            管理员关闭了这项功能。你的登录信息仍会保留，但不会再提供给员工。
           </PageEmpty>
         ) : logins.data.logins.length === 0 ? (
-          <PageEmpty icon={IconKey} title="No saved logins yet">
-            Choose Save to Passwords when you sign a Bot in to a website.
+          <PageEmpty icon={IconKey} title="还没有保存的登录">
+            替员工登录网站时，选择「保存到密码」即可。
           </PageEmpty>
         ) : (
           <PageRows>
@@ -66,13 +66,13 @@ export function PasswordsPage() {
                     <ItemDescription>
                       {login.username}
                       {login.lastUsedAt
-                        ? ` · last used ${new Date(login.lastUsedAt).toLocaleDateString()}`
-                        : " · never used"}
+                        ? ` · 最近使用：${new Date(login.lastUsedAt).toLocaleDateString()}`
+                        : " · 从未使用"}
                     </ItemDescription>
                   </ItemContent>
                   <ItemActions>
                     <Button
-                      aria-label={`Delete login for ${login.origin}`}
+                      aria-label={`删除 ${login.origin} 的登录信息`}
                       size="sm"
                       variant="ghost"
                       disabled={remove.isPending}

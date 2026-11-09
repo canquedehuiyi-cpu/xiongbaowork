@@ -147,8 +147,7 @@ function RuleDetail({ policy, rule }: { policy: ActionPolicy; rule: string }) {
           onClick={() => setRemoving(true)}
           variant="destructive"
         >
- 删除规则
-
+          删除规则
         </Button>
       </PageSection>
 
@@ -171,8 +170,7 @@ function RuleDetail({ policy, rule }: { policy: ActionPolicy; rule: string }) {
               size="sm"
               variant="ghost"
             >
- 取消
-
+              取消
             </Button>
             <Button
               disabled={savePolicy.isPending}

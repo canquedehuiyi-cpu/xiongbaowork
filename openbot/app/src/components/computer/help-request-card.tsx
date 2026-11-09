@@ -61,21 +61,21 @@ function endedAs(outcome: HelpOutcome): {
   detail?: string;
 } {
   if (outcome.handoffStatus === "completed")
-    return { title: "Taken over and handed back", done: true };
-  if (outcome.stopped) return { title: "Stopped waiting for you", done: false };
+    return { title: "已接管并交还", done: true };
+  if (outcome.stopped) return { title: "不再等你了", done: false };
   switch (outcome.handoffStatus) {
     case "cancelled":
-      return { title: "Nobody took over", done: false };
+      return { title: "没有人接管", done: false };
     case "expired":
-      return { title: "Nobody took over in time", done: false };
+      return { title: "没有人及时接管", done: false };
     case "interrupted":
       return {
-        title: "The computer stopped before this was done",
+        title: "还没处理完，电脑就停了",
         done: false,
       };
     default:
       return {
-        title: "Couldn't wait for you",
+        title: "没能等你",
         done: false,
         ...(outcome.reason ? { detail: outcome.reason } : {}),
       };
@@ -120,7 +120,7 @@ export function HelpRequestCard({
     );
 
   const ended = handedBackHere
-    ? { title: "Taken over and handed back", done: true }
+    ? { title: "已接管并交还", done: true }
     : endedAs(outcome ?? {});
   /*
    * The Bot's turn ended on the hand-back without a word. Its tool result asks it to say what it does next, and it
@@ -160,22 +160,20 @@ export function HelpRequestCard({
                 aria-hidden="true"
                 className="mr-1 inline size-3.5 align-[-2px]"
               />
-              The Bot asked: “{asked}”
+              员工的请求：「{asked}」
             </>
           ) : (
-            "The Bot asked you to take over its browser."
+            "员工请你接管它的浏览器。"
           )}
           {ended.detail ? ` ${ended.detail}` : null}
-          {handedBackHere ? " The Bot is carrying on." : null}
-          {silent
-            ? " The Bot stopped here without saying what it does next."
-            : null}
+          {handedBackHere ? "员工正在继续。" : null}
+          {silent ? "员工停在了这里，没说接下来做什么。" : null}
         </ItemDescription>
       </ItemContent>
       {silent ? (
         <ItemActions>
-          <Button onClick={() => ask?.("Please carry on.")} size="sm">
-            Carry on
+          <Button onClick={() => ask?.("请继续。")} size="sm">
+            继续
           </Button>
         </ItemActions>
       ) : null}

@@ -7,11 +7,10 @@
 
 /** What Isolated means. */
 export const ISOLATED_EXPLAINED =
-  "Runs in its own computer. Nothing it does can reach your other Bots' files or logins. Costs more to run.";
+  "在自己独立的电脑上运行。它做的任何事都碰不到你其他员工的文件和登录状态。运行成本更高。";
 
 /** Added for a public Bot, whose one computer is everybody's. */
-export const ISOLATED_PUBLIC =
-  "Everyone who uses this Bot shares that computer.";
+export const ISOLATED_PUBLIC = "用这位员工的所有人共用那台电脑。";
 
 /**
  * Said on an isolated Bot's Visibility row. Its one computer is shared by everybody who uses it, so a public one shares
@@ -19,31 +18,29 @@ export const ISOLATED_PUBLIC =
  * before it is made public, and while it is.
  */
 export const ISOLATED_PUBLIC_SHARES_LOGINS =
-  "Everyone who uses it shares its computer, so anything signed in to there is theirs too.";
+  "用它的所有人共用它的电脑，所以在那里登录的任何账号，大家也都能用。";
 
 /** The same, said to the owner of a private isolated Bot before they make it public. */
 export const ISOLATED_MAKING_PUBLIC =
-  "Making it public shares its computer, and anything signed in to there, with everyone who uses it.";
+  "设为公开后，它的电脑和在那里登录的任何账号，都会与所有用它的人共享。";
 
 /** Why it cannot be ticked on this deployment. */
-export const ISOLATION_UNAVAILABLE =
-  "This OpenBot can't give a Bot a computer of its own.";
+export const ISOLATION_UNAVAILABLE = "这个熊宝没法给员工分配独立的电脑。";
 
 /** Why it cannot be ticked by this person. */
-export const ISOLATION_NOT_ALLOWED =
-  "Your admin turned off Isolated Bots for you.";
+export const ISOLATION_NOT_ALLOWED = "管理员为你关闭了独立运行的员工。";
 
 /** An isolated Bot whose owner lost the switch, which keeps running on their shared computer. */
 export const ISOLATION_WITHDRAWN =
-  "Your admin turned off Isolated Bots, so this Bot runs on your computer.";
+  "管理员关闭了独立运行的员工，所以这位员工在你的电脑上运行。";
 
 /** An isolated Bot on a deployment that can no longer make it a computer of its own. */
 export const ISOLATION_GONE =
-  "This OpenBot can't give a Bot a computer of its own, so this Bot runs on your computer.";
+  "这个熊宝没法给员工分配独立的电脑，所以这位员工在你的电脑上运行。";
 
 /** The whole explanation for a Bot of this visibility. */
 export function isolatedExplained(isPublic: boolean): string {
   return isPublic
-    ? `${ISOLATED_EXPLAINED} ${ISOLATED_PUBLIC}`
+    ? `${ISOLATED_EXPLAINED}${ISOLATED_PUBLIC}`
     : ISOLATED_EXPLAINED;
 }

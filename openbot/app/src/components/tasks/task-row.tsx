@@ -58,7 +58,7 @@ function nextLine({ task, status }: ListedTask): string | null {
   if (status === "failed") return couldNotFinish(task.failure);
   const said = task.next?.trim();
   if (said) return said;
-  return status === "working" ? "Just started." : null;
+  return status === "working" ? "刚刚开始。" : null;
 }
 
 /**
@@ -116,7 +116,7 @@ export function TaskRow({
               onClick={() => again.mutate(task.id)}
               size="sm"
             >
-              {again.isPending ? "Starting…" : "Try again"}
+              {again.isPending ? "正在开始…" : "再试一次"}
             </Button>
           ) : null}
           <Button
@@ -129,7 +129,7 @@ export function TaskRow({
             size="sm"
             variant={openFirst ? "default" : "outline"}
           >
-            Open
+            打开
           </Button>
           {status === "resolved" ? (
             <Button
@@ -138,7 +138,7 @@ export function TaskRow({
               size="sm"
               variant="outline"
             >
-              {resolve.isPending ? "Reopening…" : "Reopen"}
+              {resolve.isPending ? "正在重新打开…" : "重新打开"}
             </Button>
           ) : (
             <Button
@@ -147,7 +147,7 @@ export function TaskRow({
               size="sm"
               variant="ghost"
             >
-              {resolve.isPending ? "Saving…" : "Mark done"}
+              {resolve.isPending ? "正在保存…" : "标为完成"}
             </Button>
           )}
         </ItemFooter>
@@ -183,7 +183,7 @@ export function TaskBoardRow({ listed }: { listed: ListedTask }) {
               onClick={() => again.mutate(task.id)}
               size="sm"
             >
-              {again.isPending ? "Starting…" : "Try again"}
+              {again.isPending ? "正在开始…" : "再试一次"}
             </Button>
           ) : null}
           <Button
@@ -192,7 +192,7 @@ export function TaskBoardRow({ listed }: { listed: ListedTask }) {
             size="sm"
             variant="ghost"
           >
-            {resolve.isPending ? "Saving…" : "Mark done"}
+            {resolve.isPending ? "正在保存…" : "标为完成"}
           </Button>
           <Button
             render={
@@ -204,7 +204,7 @@ export function TaskBoardRow({ listed }: { listed: ListedTask }) {
             size="sm"
             variant={openFirst ? "default" : "outline"}
           >
-            Open
+            打开
           </Button>
         </>
       }

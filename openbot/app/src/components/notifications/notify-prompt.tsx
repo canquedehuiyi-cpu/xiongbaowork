@@ -58,7 +58,7 @@ export function NotifyPrompt() {
       </ItemMedia>
       <ItemContent>
         <ItemTitle className="text-pretty">
-          Get notified when your Bot finishes or needs your approval.
+          员工做完或需要你批准时，通知你。
         </ItemTitle>
       </ItemContent>
       <ItemActions>
@@ -70,7 +70,7 @@ export function NotifyPrompt() {
           size="sm"
           variant="ghost"
         >
-          Not now
+          以后再说
         </Button>
         <Button
           onClick={() => {
@@ -81,7 +81,7 @@ export function NotifyPrompt() {
           size="sm"
           variant="outline"
         >
-          Enable notifications
+          打开通知
         </Button>
       </ItemActions>
     </Item>

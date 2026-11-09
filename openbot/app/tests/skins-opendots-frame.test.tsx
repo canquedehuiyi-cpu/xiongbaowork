@@ -304,7 +304,7 @@ function hrefs(container: HTMLElement) {
 describe("OpenDots frame", () => {
   test("BOTS lists the Bots OpenBot's agent list returns, in the roster's order", async () => {
     const { view } = draw("/");
-    const list = await view.findByRole("navigation", { name: "Your Bots" });
+    const list = await view.findByRole("navigation", { name: "你的员工" });
     await waitFor(() =>
       expect(within(list).getAllByTestId("opendots-bot")).toHaveLength(3),
     );
@@ -321,7 +321,7 @@ describe("OpenDots frame", () => {
 
   test("a Bot's row reopens its latest chat, starts one when there is none, and its settings open the Bot", async () => {
     const { view, router, user } = draw("/");
-    const dots = await view.findByRole("navigation", { name: "Your Bots" });
+    const dots = await view.findByRole("navigation", { name: "你的员工" });
     await within(dots).findByText("Ada");
     await waitFor(() =>
       expect(
@@ -341,7 +341,7 @@ describe("OpenDots frame", () => {
       expect(view.getByTestId("opendots-crumb").textContent).toBe("Ada"),
     );
 
-    await user.click(view.getByLabelText("Open Cass's settings"));
+    await user.click(view.getByLabelText("打开Cass的设置"));
     await waitFor(() =>
       expect(router.state.location.pathname).toBe("/bots/cass"),
     );
@@ -352,13 +352,13 @@ describe("OpenDots frame", () => {
     expect(await view.findByRole("heading", { name: "Ada" })).toBeTruthy();
     expect(view.getByText("Ada helps.")).toBeTruthy();
     expect(
-      view.getByRole("link", { name: /Edit Bot/ }).getAttribute("href"),
+      view.getByRole("link", { name: /编辑员工/ }).getAttribute("href"),
     ).toBe("/bots/ada");
     cleanup();
     // Without a chosen Bot there is no one to introduce.
     const open = draw("/channel/new");
     await open.view.findByText("OpenBot page");
-    expect(open.view.queryByRole("link", { name: /Edit Bot/ })).toBeNull();
+    expect(open.view.queryByRole("link", { name: /编辑员工/ })).toBeNull();
   });
 
   test("every OpenBot surface is reachable from the frame", async () => {
@@ -386,7 +386,7 @@ describe("OpenDots frame", () => {
     }
     // Admin is offered only to the people the server lets in.
     expect(links).not.toContain("/admin");
-    expect(view.getByRole("button", { name: "Sign out" })).toBeTruthy();
+    expect(view.getByRole("button", { name: "退出登录" })).toBeTruthy();
   });
 
   test("on a phone the sidebar is a drawer, and every surface is in it", async () => {
@@ -400,9 +400,9 @@ describe("OpenDots frame", () => {
     viewport.setViewport({ width: 390, height: 844 });
     try {
       const { view, user } = draw("/");
-      const menu = await view.findByRole("button", { name: "Open navigation" });
+      const menu = await view.findByRole("button", { name: "打开导航" });
       // The drawer is shut until asked for, so the page has the screen.
-      expect(view.queryByRole("navigation", { name: "Your Bots" })).toBeNull();
+      expect(view.queryByRole("navigation", { name: "你的员工" })).toBeNull();
       await user.click(menu);
       const drawer = await view.findByRole("dialog");
       await within(drawer).findByText("Planning the Lisbon trip");
@@ -420,7 +420,7 @@ describe("OpenDots frame", () => {
         expect(links).toContain(href);
       }
       expect(
-        within(drawer).getByRole("button", { name: "Sign out" }),
+        within(drawer).getByRole("button", { name: "退出登录" }),
       ).toBeTruthy();
     } finally {
       viewport.setViewport({ width: 1024, height: 768 });
@@ -429,11 +429,11 @@ describe("OpenDots frame", () => {
 
   test("the frame's chrome is marked, so reduced motion can still it", async () => {
     const { view } = draw("/");
-    await view.findByRole("navigation", { name: "Your Bots" });
+    await view.findByRole("navigation", { name: "你的员工" });
     for (const chrome of [
-      view.getByRole("navigation", { name: "Workspace navigation" }),
-      view.getByRole("complementary", { name: "Sidebar" }),
-      view.getByRole("navigation", { name: "Breadcrumb" }).closest("header"),
+      view.getByRole("navigation", { name: "工作区导航" }),
+      view.getByRole("complementary", { name: "侧栏" }),
+      view.getByRole("navigation", { name: "当前位置" }).closest("header"),
     ]) {
       expect(chrome?.hasAttribute("data-opendots-chrome")).toBe(true);
     }
@@ -449,7 +449,7 @@ describe("OpenDots frame", () => {
       const { view } = draw("/");
       const expected = navigationFor(signedIn.role).filter(isNavigationLink);
       const rail = await view.findByRole("navigation", {
-        name: "Workspace navigation",
+        name: "工作区导航",
       });
       await waitFor(() =>
         expect(
@@ -478,7 +478,7 @@ describe("OpenDots frame", () => {
           NAVIGATION.filter(isNavigationLink).some((item) => item.to === href),
         );
       expect(railDestinations).toEqual(expected.map((item) => item.to));
-      const sidebar = view.getByRole("complementary", { name: "Sidebar" });
+      const sidebar = view.getByRole("complementary", { name: "侧栏" });
       for (const item of expected) {
         expect(hrefs(sidebar)).toContain(item.to);
       }
@@ -511,7 +511,7 @@ describe("OpenDots frame", () => {
       // In the rail and in the sidebar, so collapsing the sidebar never hides it.
       expect(settings.length).toBe(2);
       expect(
-        within(view.getByRole("navigation", { name: "Workspace navigation" }))
+        within(view.getByRole("navigation", { name: "工作区导航" }))
           .getByRole("link", { name: "Settings" })
           .getAttribute("href"),
       ).toBe("/settings");
@@ -520,7 +520,7 @@ describe("OpenDots frame", () => {
 
   test("on a conversation, the computer toggle opens the conversation's own computer pane", async () => {
     const { view, router, user } = draw("/channel/trip");
-    const toggle = await view.findByRole("button", { name: "Show computer" });
+    const toggle = await view.findByRole("button", { name: "显示电脑" });
     await user.click(toggle);
     await waitFor(() =>
       expect(router.state.location.search).toMatchObject({ watch: true }),
@@ -528,7 +528,7 @@ describe("OpenDots frame", () => {
     // No second screen: the frame's own pane stays shut where the page has one.
     expect(view.queryByTestId("opendots-computer-pane")).toBeNull();
     await user.click(
-      await view.findByRole("button", { name: "Hide computer" }),
+      await view.findByRole("button", { name: "隐藏电脑" }),
     );
     await waitFor(() =>
       expect(
@@ -542,24 +542,24 @@ describe("OpenDots frame", () => {
     await waitFor(() =>
       expect(view.getByTestId("opendots-crumb").textContent).toBe("Cass"),
     );
-    await user.click(view.getByRole("button", { name: "Show computer" }));
+    await user.click(view.getByRole("button", { name: "显示电脑" }));
     const pane = await view.findByTestId("opendots-computer-pane");
-    expect(within(pane).getByText("Cass’s computer")).toBeTruthy();
+    expect(within(pane).getByText("Cass的电脑")).toBeTruthy();
     // OpenBot's own panel, not a copy of it.
     expect(
       within(pane).getByRole("region", { name: "Computer sidebar" }),
     ).toBeTruthy();
     await user.click(
-      within(pane).getByRole("button", { name: "Close computer" }),
+      within(pane).getByRole("button", { name: "关闭电脑" }),
     );
     expect(view.queryByTestId("opendots-computer-pane")).toBeNull();
   });
 
   test("the Bot on screen can be paused and resumed from the top bar", async () => {
     const { view, user } = draw("/channel/new?agent=ada");
-    await user.click(await view.findByRole("button", { name: "Pause Ada" }));
+    await user.click(await view.findByRole("button", { name: "暂停Ada" }));
     expect(
-      await view.findByRole("button", { name: "Resume Ada" }),
+      await view.findByRole("button", { name: "恢复Ada" }),
     ).toBeTruthy();
     expect(requests).toContainEqual({
       method: "POST",
@@ -584,7 +584,7 @@ describe("OpenDots screens", () => {
         <Screen />
       </QueryClientProvider>,
     );
-    expect(view.getByRole("heading", { name: "Routines" })).toBeTruthy();
+    expect(view.getByRole("heading", { name: "定时任务" })).toBeTruthy();
     expect(await view.findByText("No routines yet")).toBeTruthy();
   });
 
@@ -596,7 +596,7 @@ describe("OpenDots screens", () => {
         <Screen />
       </QueryClientProvider>,
     );
-    expect(await view.findByRole("heading", { name: "Memories" })).toBeTruthy();
+    expect(await view.findByRole("heading", { name: "记忆" })).toBeTruthy();
     expect(await view.findByText("No memories yet")).toBeTruthy();
     expect(view.getByRole("button", { name: /Remember a fact/ })).toBeTruthy();
   });
@@ -608,11 +608,11 @@ describe("OpenDots in the personal edition", () => {
     edition = "personal";
     const { view } = draw("/");
     const workspace = await view.findByRole("navigation", {
-      name: "Workspace",
+      name: "工作区",
     });
-    await within(workspace).findByText("Routines");
+    await within(workspace).findByText("定时任务");
     await waitFor(() =>
-      expect(within(workspace).queryByText("Memories")).toBeNull(),
+      expect(within(workspace).queryByText("记忆")).toBeNull(),
     );
     expect(hrefs(view.container)).not.toContain("/s/memories");
     expect(requests.some((request) => request.path === "/api/memory")).toBe(
@@ -647,7 +647,7 @@ describe("OpenDots in the personal edition", () => {
     );
     expect(await view.findByText("OpenBot home")).toBeTruthy();
     expect(router.state.location.pathname).toBe("/");
-    expect(view.queryByRole("heading", { name: "Memories" })).toBeNull();
+    expect(view.queryByRole("heading", { name: "记忆" })).toBeNull();
   });
 });
 
@@ -662,7 +662,7 @@ describe("OpenDots skin wears the deployment's brand", () => {
 
   test("the frame names the product from brand.yaml and never says OpenDots or Dots", async () => {
     const { view } = draw("/channel/new?agent=ada");
-    await view.findByRole("navigation", { name: "Your Bots" });
+    await view.findByRole("navigation", { name: "你的员工" });
     await view.findByRole("heading", { name: "Ada" });
     const productName = appConfig.brand.productName;
     expect(view.getByTestId("opendots-wordmark").textContent).toBe(productName);
@@ -682,7 +682,7 @@ describe("OpenDots skin wears the deployment's brand", () => {
     ].join(" ");
     expect(read).not.toContain("OpenDots");
     expect(read).not.toMatch(/\bDots?\b/);
-    expect(view.getByText("BOTS")).toBeTruthy();
+    expect(view.getByText("我的员工")).toBeTruthy();
     expect(view.getByText("Bots", { selector: "span" })).toBeTruthy();
     // No plush, no monogram: nothing of OpenDots' own identity is drawn.
     expect(view.container.querySelector('img[src*="/skins/"]')).toBeNull();
@@ -690,7 +690,7 @@ describe("OpenDots skin wears the deployment's brand", () => {
 
   test("every Bot wears OpenBot's own avatar, drawn from its avatarSeed", async () => {
     const { view } = draw("/channel/new?agent=ada");
-    const list = await view.findByRole("navigation", { name: "Your Bots" });
+    const list = await view.findByRole("navigation", { name: "你的员工" });
     await waitFor(() =>
       expect(within(list).getAllByTestId("opendots-bot")).toHaveLength(3),
     );

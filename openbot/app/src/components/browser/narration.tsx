@@ -30,8 +30,7 @@ import type { NarrationControls } from "./use-narration";
  * recording runs and narration hears the person; on with nothing to capture yet (before Record, or while it starts),
  * it says only that it is on.
  */
-export const NARRATION_CAPTURING =
-  "讲解已开启，正在收录你的声音。";
+export const NARRATION_CAPTURING = "讲解已开启，正在收录你的声音。";
 export const NARRATION_ON = "讲解已开启。";
 export const NARRATION_OFF = "讲解已关闭。";
 /** What narration is for, beside its switch in Record's popover. */
@@ -178,13 +177,13 @@ export function NarrationSwitch({
             aria-hidden="true"
             className="size-1.5 shrink-0 rounded-full bg-emerald-500 motion-safe:animate-pulse"
           />
- 正在听
- </span>
+          正在听
+        </span>
       ) : null}
       <Icon aria-hidden="true" className="size-4 text-muted-foreground" />
       <label htmlFor={id} id={labelId} className="text-muted-foreground">
- 讲解
- </label>
+        讲解
+      </label>
       {/*
         What narration is for, on hover or focus, where the choice is made (Record's popover). Not while recording:
         the choice is made by then, and the bar has no room. A button of type "button": in Record's form any other

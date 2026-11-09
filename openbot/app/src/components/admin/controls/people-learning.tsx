@@ -15,7 +15,6 @@ import {
 } from "@/components/layout/page-shell";
 import { LearnedSkillDialog } from "@/components/learning/learned-skill-dialog";
 import { ProposalDialog } from "@/components/learning/proposal-dialog";
-import { skillTitle } from "@/lib/learning/display";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -34,6 +33,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Separator } from "@/components/ui/separator";
+import { skillTitle } from "@/lib/learning/display";
 import {
   decideSharingMutationOptions,
   reviewPersonProposalMutationOptions,
@@ -56,8 +56,7 @@ const CHOICES: {
   {
     value: "admins",
     title: "管理员",
-    description:
-      "从某人的录制里学到的技能，要等管理员审核。",
+    description: "从某人的录制里学到的技能，要等管理员审核。",
   },
   {
     value: "people",
@@ -184,8 +183,8 @@ function WhoApprovesDialog({
             size="sm"
             variant="outline"
           >
- 取消
- </Button>
+            取消
+          </Button>
           <Button
             disabled={save.isPending}
             onClick={() => save.mutate(draft, { onSuccess: onClose })}
@@ -427,8 +426,8 @@ export function SharingRequestsSection() {
                 size="sm"
                 variant="outline"
               >
- 拒绝
- </Button>
+                拒绝
+              </Button>
               <Button
                 disabled={cannotDecide}
                 onClick={() =>

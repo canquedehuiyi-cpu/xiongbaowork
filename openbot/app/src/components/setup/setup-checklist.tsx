@@ -220,8 +220,8 @@ function SetupItem({
           {row.title}
           {row.required && !member ? (
             <span className="text-xs ms-2 whitespace-nowrap font-normal text-muted-foreground">
- 必需
- </span>
+              必需
+            </span>
           ) : null}
         </ItemTitle>
         <ItemDescription className="line-clamp-none [overflow-wrap:anywhere]">
@@ -274,8 +274,8 @@ function Fix({
   );
   const guide = (url: string) => (
     <a className={LINK} href={url} rel="noopener noreferrer" target="_blank">
- 设置指南
- </a>
+      设置指南
+    </a>
   );
 
   if (fix.kind === "page") {

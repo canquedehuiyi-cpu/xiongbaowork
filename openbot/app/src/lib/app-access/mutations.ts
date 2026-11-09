@@ -3,7 +3,7 @@ import { client } from "@/lib/client";
 import { pluginKeys } from "@/lib/plugins/queries";
 import type { AppAccessRequest } from "./queries";
 
-const FALLBACK = "That request could not be sent.";
+const FALLBACK = "申请没能发出。";
 
 /*
  * EVERY PLUGIN SCREEN, AND ON `onSettled`, for the reason `invalidatePlugins` in
@@ -47,7 +47,7 @@ export function cancelAppAccessRequestMutationOptions(
         "request",
         {
           method: "DELETE",
-          fallback: "That request could not be withdrawn.",
+          fallback: "申请没能撤回。",
         },
       ),
     onSettled: () => refresh(queryClient),
@@ -76,7 +76,7 @@ export function approveAppAccessRequestMutationOptions(
         {
           method: "POST",
           ...(variables.refs ? { body: { refs: variables.refs } } : {}),
-          fallback: "That request could not be approved.",
+          fallback: "申请没能批准。",
         },
       );
       return response.json();
@@ -103,7 +103,7 @@ export function approveBotAppMutationOptions(queryClient: QueryClient) {
     }> => {
       const response = await client(
         `/api/plugins/for/${encodeURIComponent(variables.agentId)}/apps/${encodeURIComponent(variables.app)}/approve`,
-        { method: "POST", fallback: "Couldn't turn that app on. Try again." },
+        { method: "POST", fallback: "没能打开这个应用。请再试一次。" },
       );
       return response.json();
     },
@@ -122,7 +122,7 @@ export async function giveBotApp(variables: {
 }): Promise<{ granted: string[] }> {
   const response = await client(
     `/api/plugins/for/${encodeURIComponent(variables.agentId)}/apps/${encodeURIComponent(variables.app)}/give`,
-    { method: "POST", fallback: "Couldn't give that app to this Bot." },
+    { method: "POST", fallback: "没能把这个应用交给这位员工。" },
   );
   return response.json();
 }
@@ -144,7 +144,7 @@ export function takeBackBotAppMutationOptions(queryClient: QueryClient) {
     }): Promise<{ revoked: string[] }> => {
       const response = await client(
         `/api/plugins/for/${encodeURIComponent(variables.agentId)}/apps/${encodeURIComponent(variables.app)}/give`,
-        { method: "DELETE", fallback: "Couldn't take that app back." },
+        { method: "DELETE", fallback: "没能收回这个应用。" },
       );
       return response.json();
     },
@@ -161,7 +161,7 @@ export function dismissAppAccessRequestMutationOptions(
       client(
         `/api/plugins/access-requests/${encodeURIComponent(id)}/dismiss`,
         "request",
-        { method: "POST", fallback: "That request could not be dismissed." },
+        { method: "POST", fallback: "申请没能忽略。" },
       ),
     onSettled: () => refresh(queryClient),
   });

@@ -41,26 +41,26 @@ function linesOf(text: string): string[] {
 function StatusBadge({ status }: { status: TerminalBlockStatus }) {
   const [tone, label, icon]: [Tone, string, ReactNode] =
     status.state === "running"
-      ? ["neutral", "Running", null]
+      ? ["neutral", "正在运行", null]
       : status.state === "starting"
-        ? ["caution", "Computer starting", null]
+        ? ["caution", "电脑正在启动", null]
         : status.state === "exited"
           ? status.timedOut
-            ? ["caution", "Stopped: too long", null]
+            ? ["caution", "已停止：运行太久", null]
             : status.exitCode === 0
               ? [
                   "positive",
-                  "Exit 0",
+                  "退出码 0",
                   <IconCheck aria-hidden className="size-3" key="ok" />,
                 ]
-              : ["negative", `Exit ${status.exitCode}`, null]
+              : ["negative", `退出码 ${status.exitCode}`, null]
           : status.state === "blocked"
-            ? ["negative", "Blocked", null]
+            ? ["negative", "已拦下", null]
             : status.state === "declined"
-              ? ["neutral", "Declined", null]
+              ? ["neutral", "已拒绝", null]
               : status.state === "by-you"
-                ? ["neutral", "Done by you", null]
-                : ["negative", "Didn't run", null];
+                ? ["neutral", "你自己做了", null]
+                : ["negative", "没有运行", null];
   return (
     <span
       className={cn(
@@ -84,7 +84,7 @@ export function TerminalBlock({
   output,
   status,
   truncated,
-  label = "Ran a command",
+  label = "执行了命令",
   aside,
 }: {
   /** Whose terminal clicking opens. Absent, the block is only a record. */
@@ -124,7 +124,7 @@ export function TerminalBlock({
       </div>
       {folds && !open ? (
         <div className="select-none" style={{ color: TERMINAL_TEXT.muted }}>
-          … {lines.length - SHOWN_LINES} earlier lines
+          … 前面还有 {lines.length - SHOWN_LINES} 行
         </div>
       ) : null}
       {shown.length ? (
@@ -138,7 +138,7 @@ export function TerminalBlock({
         </pre>
       ) : finished && ran ? (
         <div className="italic" style={{ color: TERMINAL_TEXT.muted }}>
-          It printed nothing.
+          没有输出。
         </div>
       ) : null}
     </>
@@ -146,7 +146,7 @@ export function TerminalBlock({
 
   return (
     <section
-      aria-label={typeof label === "string" ? label : "Command"}
+      aria-label={typeof label === "string" ? label : "命令"}
       className="my-1.5 flex w-full min-w-0 flex-col gap-1.5 rounded-xl border border-border bg-sidebar p-1.5 dark:border-white/10"
     >
       <header className="flex h-7 min-w-0 items-center gap-2 px-1 text-xs">
@@ -161,11 +161,11 @@ export function TerminalBlock({
         <StatusBadge status={status} />
         {openTerminal ? (
           <Button
-            aria-label="Open in the terminal"
+            aria-label="在终端里打开"
             className="text-muted-foreground"
             onClick={openTerminal}
             size="icon-xs"
-            title="Open in the terminal"
+            title="在终端里打开"
             variant="ghost"
           >
             <IconArrowUpRight />
@@ -204,14 +204,14 @@ export function TerminalBlock({
                 variant="ghost"
               >
                 {open ? <IconChevronUp /> : <IconChevronDown />}
-                {open ? "Show less" : `Show all ${lines.length} lines`}
+                {open ? "收起" : `显示全部 ${lines.length} 行`}
               </Button>
             ) : (
               <span />
             )}
             {truncated ? (
               <span className="px-1.5 text-[11px] text-white/60">
-                Long output. This is the end of it.
+                输出很长，这里只显示结尾部分。
               </span>
             ) : null}
           </div>

@@ -121,11 +121,11 @@ export function saveSkinMutationOptions(
   return mutationOptions({
     mutationKey: saveSkinMutationKey,
     mutationFn: (skin: SkinId): Promise<UserPreferences> => {
-      if (!userId) throw new Error("Sign in to save your preferences.");
+      if (!userId) throw new Error("登录后才能保存你的偏好。");
       return client("/api/settings/preferences", "preferences", {
         method: "PATCH",
         body: { skin },
-        fallback: "Could not save your skin",
+        fallback: "没能保存你的皮肤",
       });
     },
     onMutate: async (skin) => {

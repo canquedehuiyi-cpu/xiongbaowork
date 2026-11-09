@@ -162,9 +162,7 @@ export function ThisBrowser({
       setAttempt({
         state: "failed",
         message:
-          error instanceof Error
-            ? error.message
-            : "没能连接当前浏览器。",
+          error instanceof Error ? error.message : "没能连接当前浏览器。",
       });
     }
   }

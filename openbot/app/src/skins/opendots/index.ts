@@ -11,8 +11,7 @@ import { MemoriesScreen, RoutinesScreen } from "./screens";
 export const opendots: Skin = {
   id: "opendots",
   name: "OpenDots",
-  description:
-    "紧凑的员工侧栏，对话旁边就是这位员工的电脑。",
+  description: "紧凑的员工侧栏，对话旁边就是这位员工的电脑。",
   Frame: OpenDotsFrame,
   screens: {
     routines: RoutinesScreen,

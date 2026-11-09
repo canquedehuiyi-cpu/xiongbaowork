@@ -229,7 +229,7 @@ export function LiveTerminal({
           refit();
         }
       },
-      disconnected: "The terminal is disconnected. Retry to reconnect.",
+      disconnected: "终端已断开。点「重试」重新连接。",
     });
 
     return () => {
@@ -255,9 +255,7 @@ export function LiveTerminal({
   return (
     <section
       aria-label={
-        driving
-          ? "The Bot's terminal. You have control. Type here."
-          : "The Bot's terminal"
+        driving ? "员工的终端。由你操作：可以在这里输入。" : "员工的终端"
       }
       className="h-full w-full"
       data-live={live ? "" : undefined}

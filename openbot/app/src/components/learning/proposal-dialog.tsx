@@ -23,11 +23,7 @@ import { skillTitle } from "@/lib/learning/display";
 /** What one Insight was learned from: the messages a conversation was cited for, or a recording. */
 function EvidenceList({ evidence }: { evidence: LearningEvidence[] | null }) {
   if (evidence === null)
-    return (
-      <p className="text-muted-foreground text-sm">
-        读不到这条依据。
-      </p>
-    );
+    return <p className="text-muted-foreground text-sm">读不到这条依据。</p>;
   return (
     <ul className="grid gap-3">
       {evidence.map((entry) => (
@@ -61,8 +57,7 @@ function EvidenceList({ evidence }: { evidence: LearningEvidence[] | null }) {
                 {entry.available ? "" : "（已不可用）"}
               </p>
               <p className="text-pretty">
-                {entry.events.join("、") ||
-                  `${entry.eventCount} 个步骤`}
+                {entry.events.join("、") || `${entry.eventCount} 个步骤`}
               </p>
             </>
           )}
@@ -165,19 +160,15 @@ export function ProposalDialog<TKey extends QueryKey>({
                 type="button"
                 variant="outline"
               >
- 驳回
- </Button>
+                驳回
+              </Button>
               <Button
                 disabled={deciding}
                 onClick={() => onDecide("approve")}
                 size="sm"
                 type="button"
               >
-                {deciding
-                  ? "正在保存…"
-                  : removal
-                    ? "批准删除"
-                    : "批准并发布"}
+                {deciding ? "正在保存…" : removal ? "批准删除" : "批准并发布"}
               </Button>
             </>
           ) : (
@@ -197,8 +188,8 @@ export function ProposalDialog<TKey extends QueryKey>({
                 </span>
               )}
               <Button onClick={onClose} size="sm" type="button">
- 完成
- </Button>
+                完成
+              </Button>
             </>
           )}
         </DialogFooter>

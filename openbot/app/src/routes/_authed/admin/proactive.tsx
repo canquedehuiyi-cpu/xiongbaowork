@@ -88,8 +88,6 @@ const SKIPPED_BECAUSE: Record<CheckInSkipReason, string> = {
 /** A count as people read it, with the thousands separated. */
 const number = (count: number) => count.toLocaleString();
 
-
-
 const percent = (share: number) => `${Math.round(share * 100)}%`;
 
 /** Check-ins that reached the model, whatever they found. */
@@ -160,9 +158,9 @@ function CheckInSettings({ data }: { data: EnterpriseOverview }) {
         <>
           这些设置对所有人生效。要按角色或用户组调整谁能用主动巡检，请到
           <Link className="underline" to="/admin/permissions">
- 权限
- </Link>
- 页面。
+            权限
+          </Link>
+          页面。
         </>
       }
       title="设置"
@@ -392,9 +390,7 @@ function BotDialog({
           <div className="grid grid-cols-3 gap-4">
             <Stat
               label="采纳率"
-              value={
-                bot.acceptance === null ? "暂无" : percent(bot.acceptance)
-              }
+              value={bot.acceptance === null ? "暂无" : percent(bot.acceptance)}
             />
             <Stat label="提出的事项" value={number(bot.items.raised)} />
             <Stat label="随提醒发出" value={number(bot.pinged)} />
@@ -428,8 +424,8 @@ function BotDialog({
         </DialogBody>
         <DialogFooter className="mt-4">
           <Button onClick={onClose} size="sm" type="button">
- 完成
- </Button>
+            完成
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -521,8 +517,8 @@ function DailyLimitDialog({
         </DialogBody>
         <DialogFooter className="mt-4">
           <Button onClick={onClose} size="sm" type="button" variant="outline">
- 取消
- </Button>
+            取消
+          </Button>
           <Button
             disabled={!valid || saving}
             onClick={() => onSave(parsed)}

@@ -237,8 +237,8 @@ function OverridesDialog({
         </DialogBody>
         <DialogFooter className="mt-4">
           <Button onClick={() => onOpenChange(false)} size="sm" type="button">
- 完成
- </Button>
+            完成
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

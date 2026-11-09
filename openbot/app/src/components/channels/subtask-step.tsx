@@ -138,25 +138,23 @@ function SubtaskStatus({
   handedBack: boolean;
   count: number;
 }) {
-  const steps = count > 0 ? `${count} ${count === 1 ? "step" : "steps"}` : "";
+  const steps = count > 0 ? `${count} 个步骤` : "";
   if (running)
     return (
       <span className="shrink-0 text-muted-foreground">
-        {steps ? `Working · ${steps}` : "Working"}
+        {steps ? `工作中 · ${steps}` : "工作中"}
       </span>
     );
   if (step.pending)
-    return (
-      <span className="shrink-0 text-muted-foreground">Not completed</span>
-    );
+    return <span className="shrink-0 text-muted-foreground">未完成</span>;
   if (step.refused)
-    return <span className="shrink-0 text-destructive">Blocked</span>;
+    return <span className="shrink-0 text-destructive">已拦下</span>;
   if (handedBack)
-    return <span className="shrink-0 text-muted-foreground">Handed back</span>;
+    return <span className="shrink-0 text-muted-foreground">已交还</span>;
   if (step.failed)
     return (
       <span className="shrink-0 text-amber-600 dark:text-amber-500">
-        Didn't finish
+        没能完成
       </span>
     );
   return steps ? (
@@ -177,14 +175,13 @@ function HandedBack({ tool, args }: { tool: string; args: unknown }) {
       ? Object.entries(args as Record<string, unknown>)
       : [];
   return (
-    <section aria-label="Handed back" className="space-y-1">
+    <section aria-label="已交还" className="space-y-1">
       <p>
-        It stopped before a step that needs your approval. If the step still
-        needs doing, the Bot asks you in this conversation.
+        它在一个需要你批准的步骤前停了下来。如果这一步仍然需要做，员工会在这段对话里问你。
       </p>
       <p className="font-medium">
         {label}
-        {detail ? ` on ${detail}` : ""}
+        {detail ? `（${detail}）` : ""}
       </p>
       {inputs.length ? (
         <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-muted-foreground">

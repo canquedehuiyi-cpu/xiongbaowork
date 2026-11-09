@@ -36,8 +36,8 @@ export function CheckInsSection() {
   const botPage = offersMemory(
     useQuery(deploymentCapabilitiesQueryOptions()).data,
   )
-    ? "Memory"
-    : "What it can do";
+    ? "记忆"
+    : "能力";
   const save = useMutation(
     saveUserPreferencesMutationOptions(queryClient, preferences.userId),
   );
@@ -49,12 +49,12 @@ export function CheckInsSection() {
   const on = chosen === "on" && !byAdmin;
   return (
     <PageSection
-      description="Your Bots check the apps they can read and tell you when something needs you, at most once an hour. They never act without asking."
-      title="Check-ins"
+      description="员工会查看它们能读取的应用，有需要你处理的事就告诉你，最多每小时一次。没经过你同意，它们不会动手。"
+      title="主动巡检"
     >
       {preferences.isPending ? null : preferences.error ? (
         <p className="mt-4 text-destructive text-sm" role="alert">
-          Couldn't load your check-ins. Reload the page.
+          读不到你的主动巡检设置。请刷新页面。
         </p>
       ) : (
         <PageRows>
@@ -63,18 +63,18 @@ export function CheckInsSection() {
               <IconRadar />
             </ItemMedia>
             <ItemContent>
-              <ItemTitle>All your Bots</ItemTitle>
+              <ItemTitle>你的所有员工</ItemTitle>
               <ItemDescription>
                 {byAdmin
-                  ? "Turned off by your admin."
+                  ? "已被管理员关闭。"
                   : on
-                    ? `On. Each Bot's own check-ins are on its ${botPage} page.`
-                    : "Off. None of your Bots check in for you."}
+                    ? `已开启。每位员工自己的巡检设置在它的「${botPage}」页。`
+                    : "已关闭。你的员工都不会为你巡检。"}
               </ItemDescription>
             </ItemContent>
             <ItemActions>
               <Switch
-                aria-label="Check-ins for all your Bots"
+                aria-label="为你的所有员工开启主动巡检"
                 checked={on}
                 disabled={byAdmin || save.isPending}
                 onCheckedChange={(next) =>

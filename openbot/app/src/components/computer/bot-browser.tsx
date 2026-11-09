@@ -1,6 +1,6 @@
 import type { BotBrowserApiState } from "@openbot/shared/bot-browser";
-import { IconLock, IconPlayerStop } from "@tabler/icons-react";
 import { RECORDER_COLLECTS_SHORT } from "@openbot/shared/recorder-disclosure";
+import { IconLock, IconPlayerStop } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { type ReactNode, useId } from "react";
 import {
@@ -37,7 +37,6 @@ import {
 } from "@/components/ui/item";
 import { Separator } from "@/components/ui/separator";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
-import { useComputerControl } from "@/lib/computers/use-control";
 import {
   botBrowserTabsMutationOptions,
   clearBotBrowserMutationOptions,
@@ -46,6 +45,7 @@ import {
   startBotBrowserRecordingMutationOptions,
   stopBotBrowserRecordingMutationOptions,
 } from "@/lib/bot-browser/mutations";
+import { useComputerControl } from "@/lib/computers/use-control";
 import { queryClient } from "@/query-client";
 
 /*
@@ -184,8 +184,7 @@ const recordingKey = (botId: string, recordingId: string) =>
   `${botId}\n${recordingId}`;
 
 /** What the panel says when a recording of the person's ended without Stop, while they no longer hold the wheel. */
-const ENDED_WITH_THE_WHEEL =
-  "The recording ended when control went back to the Bot.";
+const ENDED_WITH_THE_WHEEL = "操作交还给员工时，录制就结束了。";
 
 /**
  * Record and Stop for the Bot's browser, for the person holding the wheel, from the Recorder's report and the server's
@@ -226,10 +225,10 @@ function useBotRecording(
     recorder,
     waiting: !state.mine
       ? someoneElse
-        ? "Someone else has control."
-        : "Take control to record."
+        ? "有人接管了操作。"
+        : "接管后才能录制。"
       : !state.open
-        ? "The Bot's browser isn't open."
+        ? "员工的浏览器没打开。"
         : null,
     start: startBotBrowserRecordingMutationOptions(queryClient, botId),
     stop: stopBotBrowserRecordingMutationOptions(queryClient, botId),
@@ -301,15 +300,15 @@ export function BotRecordPanel(props: {
   // Where the Bots share one computer, so another Bot could read the person's Recorder connection off the disk.
   if (props.state.recordRefused)
     return (
-      <section aria-label="Record a task">
-        <h2 className="font-semibold text-sm">Record a task</h2>
+      <section aria-label="录制任务">
+        <h2 className="font-semibold text-sm">录制任务</h2>
         <PageRows className="mt-3">
           <Item size="sm" role="status">
             <ItemMedia variant="icon">
               <IconLock className="text-muted-foreground" />
             </ItemMedia>
             <ItemContent>
-              <ItemTitle>Recording isn't available here</ItemTitle>
+              <ItemTitle>这里不能录制</ItemTitle>
               <ItemDescription className="line-clamp-none">
                 {props.state.recordRefused}
               </ItemDescription>
@@ -347,13 +346,12 @@ function RecordPanel({
     },
   });
   /** Why a recording of the person's ended that Stop did not end: the wheel going back, as a rule. */
-  const ended = state.mine ? "The recording ended." : ENDED_WITH_THE_WHEEL;
+  const ended = state.mine ? "录制已结束。" : ENDED_WITH_THE_WHEEL;
   return (
-    <section aria-label="Record a task">
-      <h2 className="font-semibold text-sm">Record a task</h2>
+    <section aria-label="录制任务">
+      <h2 className="font-semibold text-sm">录制任务</h2>
       <p className="mt-1 text-pretty text-muted-foreground text-sm">
-        Do the task in the Bot's browser while you have control. Only what you
-        do is recorded, and it goes to your own Learning space.
+        接管后在员工的浏览器里做这个任务。只会录下你做的操作，录制内容进入你自己的学习空间。
       </p>
       {/* What the Recorder keeps, said before Record, quieter than what to do. */}
       <p className="mt-2 text-pretty text-muted-foreground text-xs leading-relaxed">
@@ -366,14 +364,14 @@ function RecordPanel({
               <RecordingMark live={false} />
             </ItemMedia>
             <ItemContent>
-              <ItemTitle>Someone is recording</ItemTitle>
-              <ItemDescription>You can record once they stop.</ItemDescription>
+              <ItemTitle>有人正在录制</ItemTitle>
+              <ItemDescription>等对方停止后你就可以录制。</ItemDescription>
             </ItemContent>
           </Item>
         ) : (
           <RecordingRow
             recording={recording}
-            placeholder="Name the task to record"
+            placeholder="给要录制的任务起个名字"
           />
         )}
         {/* Narration is for the person who can record: their own microphone, while they hold the wheel. */}

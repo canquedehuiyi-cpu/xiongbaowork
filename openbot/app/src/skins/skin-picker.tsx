@@ -46,7 +46,9 @@ export function SkinPicker() {
         <ItemContent>
           <ItemTitle>皮肤</ItemTitle>
           <ItemDescription>
-            更换{appConfig.brand.productName}在你所有设备上的外观。每种皮肤都保留{appConfig.brand.productName}的全部功能。
+            更换{appConfig.brand.productName}
+            在你所有设备上的外观。每种皮肤都保留{appConfig.brand.productName}
+            的全部功能。
           </ItemDescription>
         </ItemContent>
         <ItemActions>

@@ -30,8 +30,7 @@ export function GoalsScreen() {
               "text-[var(--openmuse-green-text)]",
             )}
           >
- 定时任务
-
+            定时任务
           </h2>
         </div>
         <RoutinesList agentId={bot.id} embedded />

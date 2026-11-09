@@ -397,7 +397,7 @@ function detailsOf(step: ToolItem, folders: FolderNames): StepDetails {
     return {
       id: step.id,
       kind: "browser",
-      label: browser.label ?? "Used the browser",
+      label: browser.label ?? "用了浏览器",
       ...(browser.title ? { detail: browser.title } : {}),
       ...(browser.href ? { href: browser.href } : {}),
       pending: browser.pending,
@@ -551,7 +551,7 @@ function subtaskDetails(
   return {
     id: step.id,
     kind: "subtask",
-    label: "Subtask",
+    label: "子任务",
     ...(task ? { detail: task } : {}),
     pending: answer === undefined,
     failed:
@@ -571,12 +571,7 @@ function subtaskDetails(
 }
 
 function joinPhrases(phrases: string[]): string {
-  if (phrases.length <= 1) return phrases[0] ?? "";
-  return `${phrases.slice(0, -1).join(", ")} and ${phrases.at(-1)}`;
-}
-
-function plural(count: number, one: string, many: string): string {
-  return `${count} ${count === 1 ? one : many}`;
+  return phrases.join("，");
 }
 
 /** The site a page is on, as people say it: the host without `www.`. Empty when the address is not one. */
@@ -603,16 +598,14 @@ export function summarise(steps: readonly StepDetails[]): string {
   const phrases: string[] = [];
   // Claude Code's own words for a run of reads and searches.
   const files = of("file").length;
-  if (files) phrases.push(`read ${plural(files, "file", "files")}`);
+  if (files) phrases.push(`读了 ${files} 个文件`);
   const patterns = of("pattern").length;
-  if (patterns)
-    phrases.push(`searched for ${plural(patterns, "pattern", "patterns")}`);
+  if (patterns) phrases.push(`搜索了 ${patterns} 个模式`);
   const directories = of("directory").length;
-  if (directories)
-    phrases.push(`listed ${plural(directories, "directory", "directories")}`);
-  if (of("search").length) phrases.push("searched the web");
+  if (directories) phrases.push(`列出了 ${directories} 个目录`);
+  if (of("search").length) phrases.push("搜索了网络");
   const read = of("fetch").reduce((sum, step) => sum + step.pages, 0);
-  if (read) phrases.push(`read ${plural(read, "page", "pages")}`);
+  if (read) phrases.push(`读了 ${read} 个网页`);
   const browser = of("browser");
   const browsed = browser.reduce((sum, step) => sum + step.pages, 0);
   // One site is named, as a person would say where they went: "Browsed example.com", "Browsed 3 pages on gov.uk".
@@ -625,26 +618,25 @@ export function summarise(steps: readonly StepDetails[]): string {
   if (browsed && site)
     phrases.push(
       browsed === 1
-        ? `browsed ${site}`
-        : `browsed ${plural(browsed, "page", "pages")} on ${site}`,
+        ? `浏览了 ${site}`
+        : `在 ${site} 上浏览了 ${browsed} 个网页`,
     );
-  else if (browsed) phrases.push(`browsed ${plural(browsed, "page", "pages")}`);
-  else if (browser.length) phrases.push("used the browser");
+  else if (browsed) phrases.push(`浏览了 ${browsed} 个网页`);
+  else if (browser.length) phrases.push("用了浏览器");
   const connectors = [
     ...new Set(of("connector").map((step) => step.connector ?? "")),
   ].filter(Boolean);
-  if (connectors.length === 1) phrases.push(`used ${connectors[0]}`);
+  if (connectors.length === 1) phrases.push(`用了 ${connectors[0]}`);
   else if (connectors.length > 1)
-    phrases.push(
-      `used ${plural(connectors.length, "connector", "connectors")}`,
-    );
+    phrases.push(`用了 ${connectors.length} 个连接器`);
   const subtasks = of("subtask").length;
   if (subtasks)
-    phrases.push(subtasks === 1 ? "ran a subtask" : `ran ${subtasks} subtasks`);
+    phrases.push(
+      subtasks === 1 ? "执行了一个子任务" : `执行了 ${subtasks} 个子任务`,
+    );
   const tools = of("tool").length;
-  if (tools) phrases.push(`used ${plural(tools, "tool", "tools")}`);
-  const sentence = joinPhrases(phrases);
-  return sentence.charAt(0).toUpperCase() + sentence.slice(1);
+  if (tools) phrases.push(`用了 ${tools} 个工具`);
+  return joinPhrases(phrases);
 }
 
 const KIND_ICONS = {
@@ -704,15 +696,15 @@ export function StepStatus({
   if (step.pending)
     return (
       <span className="shrink-0 text-muted-foreground">
-        {active ? "In progress" : "Not completed"}
+        {active ? "进行中" : "未完成"}
       </span>
     );
   if (step.refused)
-    return <span className="shrink-0 text-destructive">Blocked</span>;
+    return <span className="shrink-0 text-destructive">已拦下</span>;
   if (step.failed)
     return (
       <span className="shrink-0 text-amber-600 dark:text-amber-500">
-        Didn't work
+        没成功
       </span>
     );
   return null;
@@ -758,7 +750,7 @@ export function StepRow({
   const reason =
     step.failed && step.kind === "browser" ? (
       <p className="mt-0.5 pl-6 text-destructive">
-        {step.reason ?? "Couldn't finish this step."}
+        {step.reason ?? "这一步没能完成。"}
       </p>
     ) : null;
   // A browser step says everything it has in its line. Anything else opens to what it was given
@@ -861,7 +853,7 @@ export function StepOutput({
           onClick={() => setOpen(!open)}
           type="button"
         >
-          {open ? "Show less" : "Show all"}
+          {open ? "收起" : "全部显示"}
         </button>
       ) : null}
     </div>
@@ -894,13 +886,13 @@ export function ToolActivity({
         label={
           running && working
             ? working === 1
-              ? "Working on a subtask…"
-              : `Working on ${working} subtasks…`
+              ? "正在处理一个子任务…"
+              : `正在处理 ${working} 个子任务…`
             : running && current
               ? `${current.label}…`
               : summarise(steps)
         }
-        detail={issues ? plural(issues, "issue", "issues") : undefined}
+        detail={issues ? `${issues} 个问题` : undefined}
         running={running}
       >
         <ol className="space-y-2 py-1">

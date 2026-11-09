@@ -87,8 +87,7 @@ export function MenuSheet({ onClose }: { onClose: () => void }) {
           primary
           render={<NewChatLink agentId={bot?.id} onClick={onClose} />}
         >
- 新对话
-
+          新对话
         </MuseLinkButton>
         <div className="mt-3 flex items-center justify-between">
           <h2 className={museText.heading}>对话</h2>
@@ -97,8 +96,7 @@ export function MenuSheet({ onClose }: { onClose: () => void }) {
             render={<Link onClick={onClose} to="/channel/new" />}
             small
           >
- 新建群组
-
+            新建群组
           </MuseLinkButton>
         </div>
         <label className="relative block">
@@ -172,8 +170,7 @@ export function MenuSheet({ onClose }: { onClose: () => void }) {
               }}
               small
             >
- 退出登录
-
+              退出登录
             </MuseButton>
             <ErrorNotice error={signOut.error?.message} />
           </>
@@ -205,8 +202,7 @@ function ConversationRow({
   const group = channel.agentIds.length > 1;
   const unread = isUnread(channel, openId);
   const busy = channel.busy || (channel.work?.length ?? 0) > 0;
-  const title =
-    channel.summary?.trim() || untitledLine(channel) || "新对话";
+  const title = channel.summary?.trim() || untitledLine(channel) || "新对话";
   const who = group
     ? channel.agentIds
         .map((id) => agents.data?.find((agent) => agent.id === id)?.name)
@@ -286,8 +282,7 @@ function ConversationRow({
           {channel.pinned ? "取消置顶" : "置顶"}
         </MuseButton>
         <MuseButton icon={IconTrash} onClick={() => setConfirming(true)} small>
- 删除
-
+          删除
         </MuseButton>
       </div>
       <ErrorNotice error={setPinned.error?.message} />

@@ -16,8 +16,7 @@
 export const ALWAYS_ASKS =
   "员工在你的应用或网站上删除、发送、分享或发布内容之前，总会先征得你的同意。";
 
-export const HANDED_TO_YOU =
-  "付款和账号安全设置的改动，员工会留给你亲自处理。";
+export const HANDED_TO_YOU = "付款和账号安全设置的改动，员工会留给你亲自处理。";
 
 export const ASK_FIRST_TITLE = "做任何改动前都先问我";
 

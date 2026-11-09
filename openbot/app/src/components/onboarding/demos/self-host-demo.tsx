@@ -3,9 +3,9 @@ import { AnimatePresence, motion } from "motion/react";
 import type { ReactNode } from "react";
 import { HarnessMark } from "@/components/agents/harness-mark";
 import { appConfig } from "@/lib/generated/application-config";
+import { DemoStage } from "../demo-stage";
 import { LaptopIllustration } from "../laptop-illustration";
 import { OrganizationFlow } from "../organization-flow";
-import { DemoStage } from "../demo-stage";
 
 /** Every framework the New Bot wizard offers by name; "an agent you already run" is the sentence. */
 export const FRAMEWORKS = WEB_HARNESSES.filter(
@@ -19,12 +19,12 @@ const PANELS: Array<{ id: string; caption: string; picture: () => ReactNode }> =
   [
     {
       id: "local",
-      caption: "On this computer",
+      caption: "在这台电脑上",
       picture: () => <LaptopIllustration />,
     },
     {
       id: "agents",
-      caption: "With the agents you already have",
+      caption: "接入你已有的智能体",
       picture: () => (
         <div className="flex flex-wrap justify-center gap-2">
           {FRAMEWORKS.map((harness) => (
@@ -41,7 +41,7 @@ const PANELS: Array<{ id: string; caption: string; picture: () => ReactNode }> =
     },
     {
       id: "organization",
-      caption: "For your organization",
+      caption: "面向你的组织",
       picture: () => <OrganizationFlow />,
     },
   ];
@@ -69,7 +69,7 @@ export function SelfHostDemo() {
       beatMs={3200}
       className="flex min-h-[22rem] flex-col justify-center gap-10 px-4 py-8 sm:px-6"
       kind="self-host"
-      label={`${PRODUCT} on a laptop; frameworks that work as Bots: ${FRAMEWORKS.map((harness) => harness.name).join(", ")}; and your organization signing in with Google, Microsoft or Okta`}
+      label={`笔记本电脑上的${PRODUCT}；可以作为员工接入的框架：${FRAMEWORKS.map((harness) => harness.name).join("、")}；以及用 Google、Microsoft 或 Okta 登录的组织`}
       rest={-1}
     >
       {({ beat, reduced }) =>

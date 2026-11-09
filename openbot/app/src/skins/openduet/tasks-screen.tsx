@@ -92,12 +92,10 @@ function TasksSwitch({
         role="tablist"
       >
         <SwitchTab id="active" onView={onView} view={view}>
- 进行中
-
+          进行中
         </SwitchTab>
         <SwitchTab id="up_next" onView={onView} view={view}>
- 接下来
-
+          接下来
         </SwitchTab>
       </div>
     </div>

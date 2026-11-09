@@ -13,7 +13,7 @@ export function researchRoleOfCall(name: string): ResearchRole | null {
 
 /** What a list of research results is, for a screen reader. */
 export const RESEARCH_RESULTS_LABELS: Readonly<Record<ResearchRole, string>> =
-  Object.freeze({ search: "Search results", fetch: "Pages read" });
+  Object.freeze({ search: "搜索结果", fetch: "读过的网页" });
 
 /** One page a research call found or read, as a person would want to see it. */
 export type ResearchSource = {

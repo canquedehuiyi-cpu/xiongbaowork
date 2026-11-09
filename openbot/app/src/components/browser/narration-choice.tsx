@@ -116,13 +116,11 @@ export function NarrationChoiceDialog({
         </DialogBody>
         <DialogFooter className="mt-4">
           <Button onClick={() => onAnswer(false)} size="sm" variant="outline">
- 不讲解，直接录制
-
+            不讲解，直接录制
           </Button>
           <Button onClick={() => onAnswer(true)} size="sm">
             <IconMicrophone data-icon="inline-start" />
- 边讲解边录制
-
+            边讲解边录制
           </Button>
         </DialogFooter>
       </DialogContent>

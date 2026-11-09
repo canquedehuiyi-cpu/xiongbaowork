@@ -11,8 +11,8 @@ import {
 } from "@tabler/icons-react";
 import { structuredPatch } from "diff";
 import { type ReactNode, useState } from "react";
-import { byPosition } from "@/components/gallery/positions";
 import { Badge, GalleryFrame } from "@/components/gallery/frame";
+import { byPosition } from "@/components/gallery/positions";
 import { Button } from "@/components/ui/button";
 import type { Look } from "@/lib/copilot/coding-calls";
 import { asText, flaggedFailure } from "@/lib/plugins/tool-result";
@@ -73,10 +73,6 @@ export function codingOutcome(
 function linesOf(text: string): string[] {
   const trimmed = text.replace(/\s+$/, "");
   return trimmed ? trimmed.split("\n") : [];
-}
-
-function plural(count: number, one: string, many: string): string {
-  return `${count} ${count === 1 ? one : many}`;
 }
 
 /** The name of the file, which is what a person scans for; the whole path is its tooltip. */
@@ -140,16 +136,14 @@ function OutcomeStatus({
     );
   if (outcome.state === "stopped")
     return (
-      <span className="shrink-0 text-xs text-muted-foreground">
-        Not completed
-      </span>
+      <span className="shrink-0 text-xs text-muted-foreground">未完成</span>
     );
   if (outcome.state === "failed")
     return (
       <span className="shrink-0 text-xs text-amber-600 dark:text-amber-500">
         {outcome.exitCode === undefined
-          ? "Didn't work"
-          : `Exit code ${outcome.exitCode}`}
+          ? "没成功"
+          : `退出码 ${outcome.exitCode}`}
       </span>
     );
   return null;
@@ -182,9 +176,7 @@ function Folded({
           variant="ghost"
         >
           {open ? <IconChevronUp /> : <IconChevronDown />}
-          {open
-            ? "Show less"
-            : `Show ${plural(total - limit, "more line", "more lines")}`}
+          {open ? "收起" : `再显示 ${total - limit} 行`}
         </Button>
       ) : null}
     </>
@@ -204,9 +196,9 @@ export function CommandCard({
   const lines = linesOf(outcome.text);
   return (
     <CodingFrame
-      aside={<OutcomeStatus outcome={outcome} running="Running" />}
+      aside={<OutcomeStatus outcome={outcome} running="正在运行" />}
       icon={<IconTerminal2 className="size-4" />}
-      label="Ran a command"
+      label="执行了命令"
       title={<span title={command}>{command}</span>}
     >
       {lines.length ? (
@@ -300,7 +292,7 @@ export function DiffCard({
         <>
           {replaceAll ? (
             <span className="shrink-0 text-xs text-muted-foreground">
-              All occurrences
+              全部替换
             </span>
           ) : null}
           {added || removed ? (
@@ -313,12 +305,12 @@ export function DiffCard({
           ) : null}
           <OutcomeStatus
             outcome={outcome}
-            running={kind === "write" ? "Writing" : "Editing"}
+            running={kind === "write" ? "正在写入" : "正在编辑"}
           />
         </>
       }
       icon={<Icon className="size-4" />}
-      label={kind === "write" ? "Wrote a file" : "Edited a file"}
+      label={kind === "write" ? "写入了文件" : "编辑了文件"}
       title={<span title={path}>{fileName(path)}</span>}
     >
       {rows.length ? (
@@ -381,9 +373,9 @@ type Todo = {
 };
 
 const TODO_STATES = {
-  completed: "Done",
-  in_progress: "In progress",
-  pending: "Not started",
+  completed: "已完成",
+  in_progress: "进行中",
+  pending: "未开始",
 } as const;
 
 /**
@@ -400,10 +392,10 @@ export function TodoCard({ todos }: { todos: readonly Todo[] }) {
             done === todos.length && todos.length > 0 ? "positive" : "neutral"
           }
         >
-          {done} of {todos.length}
+          {done} / {todos.length}
         </Badge>
       }
-      title="To-dos"
+      title="待办"
     >
       <ul className="space-y-2">
         {byPosition(todos).map(({ item: todo, key }) => {
@@ -502,8 +494,8 @@ function readWords(
 ): LookWords {
   const count = outcome.state === "done" ? numberedLines(outcome.text) : 0;
   return {
-    did: count ? `Read ${plural(count, "line", "lines")}` : "Read",
-    doing: "Reading",
+    did: count ? `读取了 ${count} 行` : "读取了",
+    doing: "正在读取",
     detail: fileName(path),
   };
 }
@@ -518,13 +510,13 @@ function grepFound(text: string, mode: GrepMode): string {
   const trimmed = text.trim();
   const files = mode === "files_with_matches";
   if (!trimmed || /^No (matches|files) found/.test(trimmed))
-    return files ? "Found no files" : "Found no matches";
+    return files ? "没找到文件" : "没找到匹配";
   if (files) {
     const found = /^Found (\d+) files?/.exec(trimmed);
     const count = found
       ? Number(found[1])
       : trimmed.split("\n").filter(Boolean).length;
-    return `Found ${plural(count, "file", "files")}`;
+    return `找到 ${count} 个文件`;
   }
   const lines = trimmed.split("\n");
   const total = /Found (\d+) total occurrences?/.exec(trimmed);
@@ -539,7 +531,7 @@ function grepFound(text: string, mode: GrepMode): string {
       : lines.filter(
           (line) => line && line !== "--" && !line.startsWith("[Showing"),
         ).length;
-  return `Found ${plural(count, "match", "matches")}`;
+  return `找到 ${count} 处匹配`;
 }
 
 function grepWords(
@@ -553,12 +545,12 @@ function grepWords(
     did:
       outcome.state === "done"
         ? grepFound(outcome.text, mode ?? "files_with_matches")
-        : "Searched",
-    doing: "Searching",
+        : "搜索了",
+    doing: "正在搜索",
     detail:
       pattern === undefined
         ? undefined
-        : `"${pattern}"${where ? ` in ${where}` : ""}`,
+        : `「${pattern}」${where ? `，在 ${where} 中` : ""}`,
   };
 }
 
@@ -574,19 +566,19 @@ function globWords(
     did:
       outcome.state === "done"
         ? files
-          ? `Found ${plural(files, "file", "files")}`
-          : "Found no files"
-        : "Looked for files",
-    doing: "Looking for files",
+          ? `找到 ${files} 个文件`
+          : "没找到文件"
+        : "查找了文件",
+    doing: "正在查找文件",
     detail: pattern,
   };
 }
 
 /** A shell command that only looked, named for what it did; the command is what it was done to. */
 const COMMAND_WORDS: Record<Look, { did: string; doing: string }> = {
-  file: { did: "Read", doing: "Reading" },
-  pattern: { did: "Searched", doing: "Searching" },
-  directory: { did: "Listed", doing: "Listing" },
+  file: { did: "读取了", doing: "正在读取" },
+  pattern: { did: "搜索了", doing: "正在搜索" },
+  directory: { did: "列出了", doing: "正在列出" },
 };
 
 /**

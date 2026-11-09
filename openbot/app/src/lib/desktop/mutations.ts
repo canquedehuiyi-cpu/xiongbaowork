@@ -86,9 +86,7 @@ export function intelligenceMutationOptions(queryClient: QueryClient) {
       });
       if (report.outcome !== "completed")
         throw new Error(
-          action === "start"
-            ? "后端没能启动。"
-            : "后端没能停止。",
+          action === "start" ? "后端没能启动。" : "后端没能停止。",
         );
     },
     onSettled: () => invalidateDesktop(queryClient),

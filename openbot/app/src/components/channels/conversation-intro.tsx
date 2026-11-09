@@ -54,7 +54,7 @@ export function ConversationIntro({
         {personal ? null : (
           <div className="mt-3 flex flex-wrap gap-2">
             <span className="inline-flex h-6.5 items-center rounded-lg bg-muted px-2.5 font-semibold text-[13px] text-muted-foreground">
-              {agent.visibility === "public" ? "Public" : "Private"}
+              {agent.visibility === "public" ? "公开" : "仅自己"}
             </span>
           </div>
         )}

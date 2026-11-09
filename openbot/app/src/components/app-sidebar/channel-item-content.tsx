@@ -52,7 +52,7 @@ export function ChannelItemContent({
            */}
           {busy ? (
             <span className="shrink-0 whitespace-nowrap font-medium text-[12px] text-indigo-600 leading-4 dark:text-indigo-300">
-              Working
+              工作中
             </span>
           ) : (
             <span className="shrink-0 whitespace-nowrap text-[12px] leading-4 text-muted-foreground/70">

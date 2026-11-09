@@ -526,7 +526,7 @@ const hrefOf = (name: string | RegExp) =>
 
 async function openMenu() {
   fireEvent.click(
-    await page().findByRole("button", { name: "Open conversations and menu" }),
+    await page().findByRole("button", { name: "打开对话和菜单" }),
   );
   return page().findByRole("dialog");
 }
@@ -548,26 +548,26 @@ describe("the frame", () => {
     serve();
     renderAt("/connections");
     const centre = await page().findByRole("button", {
-      name: /^Muse, Ready to review · 1 approval\. Switch Bot$/,
+      name: /^Muse，待你审阅 · 1 个审批。切换员工$/,
     });
     expect(centre.textContent).toContain("Muse");
     expect(page().getByTestId("openmuse-status").textContent).toBe(
-      "Ready to review · 1 approval",
+      "待你审阅 · 1 个审批",
     );
     // The bell carries the one pending approval.
     expect(
-      page().getByRole("button", { name: "Needs you, 1 waiting" }),
+      page().getByRole("button", { name: "需要你，有 1 件在等" }),
     ).toBeTruthy();
   });
 
   test("a one-to-one conversation puts its own Bot at the centre", async () => {
     serve();
     renderAt("/channel/c-scout");
-    await page().findByRole("button", { name: /^Scout, .*Switch Bot$/ });
+    await page().findByRole("button", { name: /^Scout，.*切换员工$/ });
     // Scout has a turn running in its channel; the line says so.
     await waitFor(() =>
       expect(page().getByTestId("openmuse-status").textContent).toBe(
-        "Working on Competitor notes…",
+        "正在处理：Competitor notes…",
       ),
     );
     expect(page().getByTestId("page").textContent).toBe(
@@ -583,29 +583,29 @@ describe("the frame", () => {
     // Chat is the centre Bot's main chat: its one-to-one conversation.
     await waitFor(() =>
       expect(
-        tabs.getByRole("link", { name: "Chat" }).getAttribute("href"),
+        tabs.getByRole("link", { name: "对话" }).getAttribute("href"),
       ).toBe("/channel/c-muse"),
     );
     expect(
-      tabs.getByRole("link", { name: "Activity" }).getAttribute("href"),
+      tabs.getByRole("link", { name: "动态" }).getAttribute("href"),
     ).toBe("/s/activity");
-    expect(tabs.getByRole("link", { name: "Ideas" }).getAttribute("href")).toBe(
+    expect(tabs.getByRole("link", { name: "建议" }).getAttribute("href")).toBe(
       "/s/ideas",
     );
     expect(
-      tabs.getByRole("link", { name: "Goals" }).getAttribute("aria-current"),
+      tabs.getByRole("link", { name: "目标" }).getAttribute("aria-current"),
     ).toBe("page");
-    expect(tabs.getByRole("link", { name: "Apps" }).getAttribute("href")).toBe(
+    expect(tabs.getByRole("link", { name: "应用" }).getAttribute("href")).toBe(
       "/connections",
     );
   });
 
   test.each([
-    ["/s/activity", "Activity"],
-    ["/s/ideas", "Ideas"],
-    ["/s/goals", "Goals"],
-    ["/connections", "Apps"],
-    ["/channel/c-muse", "Chat"],
+    ["/s/activity", "动态"],
+    ["/s/ideas", "建议"],
+    ["/s/goals", "目标"],
+    ["/connections", "应用"],
+    ["/channel/c-muse", "对话"],
     ["/routines", null],
     ["/settings/approvals", null],
     ["/bots/scout/setup", null],
@@ -614,7 +614,7 @@ describe("the frame", () => {
     serve();
     renderAt(path);
     const nav = await page().findByRole("navigation", { name: PRODUCT });
-    await within(nav).findByRole("link", { name: "Chat" });
+    await within(nav).findByRole("link", { name: "对话" });
     const marked = within(nav)
       .getAllByRole("link")
       .filter((link) => link.getAttribute("aria-current") === "page")
@@ -645,20 +645,20 @@ describe("the frame", () => {
   test("the chosen Bot is remembered per person, not per machine", async () => {
     serve({ userId: "u-1" });
     renderAt("/s/activity");
-    fireEvent.click(await page().findByRole("button", { name: /Switch Bot$/ }));
+    fireEvent.click(await page().findByRole("button", { name: /切换员工$/ }));
     fireEvent.click(
       within(await page().findByRole("dialog")).getByRole("button", {
         name: /Scout/,
       }),
     );
-    await page().findByRole("button", { name: /^Scout, / });
+    await page().findByRole("button", { name: /^Scout，/ });
     expect(window.localStorage.getItem(chosenBotKey("u-1"))).toBe(scout.id);
     cleanup();
     // The next person on this browser starts from OpenBot's default Bot.
     forgetChosenBots();
     serve({ userId: "u-2" });
     renderAt("/s/activity");
-    await page().findByRole("button", { name: /^Muse, / });
+    await page().findByRole("button", { name: /^Muse，/ });
     expect(window.localStorage.getItem(chosenBotKey("u-2"))).toBeNull();
   });
 
@@ -680,10 +680,10 @@ describe("the frame", () => {
     })();
     renderAt("/s/ideas");
     const nav = await page().findByRole("navigation", { name: PRODUCT });
-    await page().findByRole("button", { name: /^Scout, / });
+    await page().findByRole("button", { name: /^Scout，/ });
     await waitFor(() =>
       expect(
-        within(nav).getByRole("link", { name: "Chat" }).getAttribute("href"),
+        within(nav).getByRole("link", { name: "对话" }).getAttribute("href"),
       ).toBe("/channel/new?agent=scout"),
     );
   });
@@ -735,7 +735,7 @@ describe("the frame wears the deployment's brand, not OpenMuse's", () => {
   test("the centre Bot is drawn with its own OpenBot avatar", async () => {
     serve();
     renderAt("/connections");
-    const centre = await page().findByRole("button", { name: /Switch Bot$/ });
+    const centre = await page().findByRole("button", { name: /切换员工$/ });
     // AbstractAvatar names the drawing after the Bot, as on its OpenBot page.
     expect(within(centre).getByRole("img", { name: "Muse" })).toBeTruthy();
     expect(capybaras()).toEqual([]);
@@ -752,7 +752,7 @@ describe("the frame wears the deployment's brand, not OpenMuse's", () => {
       { preconnect: originalFetch.preconnect },
     );
     renderAt("/s/activity");
-    const centre = await page().findByRole("button", { name: "Choose a Bot" });
+    const centre = await page().findByRole("button", { name: "选择员工" });
     await waitFor(() => expect(centre.textContent).toContain(PRODUCT));
     expect(readable()).not.toMatch(/openmuse/i);
     expect(capybaras()).toEqual([]);
@@ -762,10 +762,10 @@ describe("the frame wears the deployment's brand, not OpenMuse's", () => {
 describe("every OpenBot surface stays reachable", () => {
   // A row's name is its title and then its one line of detail, so each is matched from its start.
   const surfaces: [RegExp, string][] = [
-    [/^Main chat/, "/channel/c-muse"],
-    [/^New chat$/, "/channel/new?agent=picked-harness"],
-    [/^New group$/, "/channel/new"],
-    [/^Home$/, "/"],
+    [/^主对话/, "/channel/c-muse"],
+    [/^新对话$/, "/channel/new?agent=picked-harness"],
+    [/^新建群组$/, "/channel/new"],
+    [/^首页$/, "/"],
     // OpenBot's own destinations, from the shared navigation list its sidebar draws.
     [/^Bots$/, "/bots"],
     [/^Capabilities$/, "/capabilities"],
@@ -846,22 +846,22 @@ describe("every OpenBot surface stays reachable", () => {
   test("the Bot switcher reaches each Bot's page, the roster and a new Bot", async () => {
     serve();
     renderAt("/connections");
-    fireEvent.click(await page().findByRole("button", { name: /Switch Bot$/ }));
+    fireEvent.click(await page().findByRole("button", { name: /切换员工$/ }));
     const sheet = within(await page().findByRole("dialog"));
-    expect(hrefOf(/^Muse's page/)).toBe("/bots/picked-harness");
+    expect(hrefOf(/^Muse的主页/)).toBe("/bots/picked-harness");
     expect(
-      sheet.getByRole("link", { name: /^All Bots/ }).getAttribute("href"),
+      sheet.getByRole("link", { name: /^全部员工/ }).getAttribute("href"),
     ).toBe("/bots");
     expect(
-      sheet.getByRole("link", { name: /^New Bot/ }).getAttribute("href"),
+      sheet.getByRole("link", { name: /^新建员工/ }).getAttribute("href"),
     ).toBe("/bots?new=true");
     // A Bot that is waiting on the person says so; one with only unread messages does not.
-    expect(sheet.getByText("Needs you · 1 approval")).toBeTruthy();
+    expect(sheet.getByText("需要你 · 1 个审批")).toBeTruthy();
     expect(sheet.getByText("1 unread")).toBeTruthy();
-    expect(sheet.queryByText(/Needs you · 1 unread/)).toBeNull();
+    expect(sheet.queryByText(/需要你 · 1 条未读/)).toBeNull();
     // Choosing Scout moves it to the centre.
     fireEvent.click(sheet.getByRole("button", { name: /Scout/ }));
-    await page().findByRole("button", { name: /^Scout, / });
+    await page().findByRole("button", { name: /^Scout，/ });
   });
 });
 
@@ -932,7 +932,7 @@ describe("each tab is OpenBot's own sections for the centre Bot", () => {
     const calls = serve();
     renderAt("/s/goals");
     fireEvent.click(
-      await page().findByRole("button", { name: "Needs you, 1 waiting" }),
+      await page().findByRole("button", { name: "需要你，有 1 件在等" }),
     );
     const sheet = within(await page().findByRole("dialog"));
     expect(await sheet.findByText("Muse wants to open url")).toBeTruthy();
@@ -1006,30 +1006,30 @@ describe("the rules the frame runs on", () => {
     };
     expect(
       statusLine({ attention: undefined, channels: busy, agentId: "b" }),
-    ).toBe("Working on Report…");
+    ).toBe("正在处理：Report…");
     expect(
       statusLine({
         attention: { ...base, questions: 2 },
         channels: busy,
         agentId: "b",
       }),
-    ).toBe("Needs your input · 2 questions");
+    ).toBe("需要你回答 · 2 个提问");
     expect(
       statusLine({
         attention: { ...base, approvals: 1 },
         channels: busy,
         agentId: "b",
       }),
-    ).toBe("Ready to review · 1 approval");
+    ).toBe("待你审阅 · 1 个审批");
     expect(
       statusLine({
         attention: { ...base, paused: true },
         channels: [],
         agentId: "b",
       }),
-    ).toBe("Paused");
+    ).toBe("已暂停");
     expect(statusLine({ attention: base, channels: [], agentId: "b" })).toBe(
-      "Ready when you are",
+      "随时待命",
     );
   });
 });

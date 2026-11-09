@@ -1,6 +1,6 @@
-import { DemoOrb } from "@/components/onboarding/demo-orb";
 import { DesktopIllustration } from "@/components/computer/desktop-illustration";
 import { ComputerPlaceholder } from "@/components/computer/placeholder";
+import { DemoOrb } from "@/components/onboarding/demo-orb";
 import { DemoStage } from "../demo-stage";
 
 /**
@@ -17,7 +17,7 @@ export function ComputerDemo() {
       beats={2}
       className="overflow-hidden p-3"
       kind="computer"
-      label="A Bot's own browser and folder of files open, and the Bot working on them"
+      label="员工打开了自己的浏览器和文件夹，正在上面干活"
       rest={0}
     >
       {({ beat, playing }) => (
@@ -27,7 +27,7 @@ export function ComputerDemo() {
           <div className="bg-background/80 backdrop-blur absolute bottom-3 left-3 flex items-center gap-2 rounded-full py-1 pr-3 pl-1 ring-1 ring-border shadow-lg">
             <DemoOrb size={28} state="thinking" still={!playing} />
             <span className="text-xs font-medium text-foreground">
-              {beat === 0 ? "Reading the page" : "Saving it to a file"}
+              {beat === 0 ? "正在读网页" : "正在存进文件"}
             </span>
           </div>
         </div>

@@ -87,7 +87,7 @@ export function computerStatusQueryOptions(botId: string) {
     queryKey: computerKeys.status(botId),
     queryFn: (): Promise<ComputerStatus> =>
       client(`/api/computers/${encodeURIComponent(botId)}/status`, {
-        fallback: "Couldn't check the computer.",
+        fallback: "没能检查电脑。",
       }).then((response) => response.json()),
   });
 }

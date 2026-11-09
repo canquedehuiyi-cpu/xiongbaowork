@@ -108,7 +108,7 @@ const proactiveSettingsQuery = {
   queryFn: async (): Promise<ProactiveSettingsBody> =>
     (
       await client("/api/proactive/settings", {
-        fallback: "Couldn't load your check-ins",
+        fallback: "读不到你的主动巡检设置",
       })
     ).json(),
   refetchInterval: 30_000,
@@ -132,7 +132,7 @@ export const proactiveSuggestionsQueryOptions = () =>
     queryKey: proactiveKeys.suggestions,
     queryFn: (): Promise<ProactiveSuggestion[]> =>
       client("/api/proactive/suggestions", "suggestions", {
-        fallback: "Couldn't load what your Bots found",
+        fallback: "读不到员工巡检发现的事",
       }),
     refetchInterval: 30_000,
   });
@@ -148,7 +148,7 @@ export const createProactiveSetting = (input: {
   client("/api/proactive/settings", {
     method: "POST",
     body: input,
-    fallback: "Couldn't turn on check-ins",
+    fallback: "没能开启主动巡检",
   });
 export const updateProactiveSetting = (
   id: string,
@@ -157,19 +157,19 @@ export const updateProactiveSetting = (
   client(`/api/proactive/settings/${encodeURIComponent(id)}`, {
     method: "PATCH",
     body: input,
-    fallback: "Couldn't change check-ins",
+    fallback: "没能修改主动巡检",
   });
 export const runProactiveNow = async (id: string): Promise<RunNowAnswer> =>
   (
     await client(`/api/proactive/settings/${encodeURIComponent(id)}/run`, {
       method: "POST",
-      fallback: "Couldn't start a check-in",
+      fallback: "没能开始巡检",
     })
   ).json();
 export const removeProactiveSetting = (id: string) =>
   client(`/api/proactive/settings/${encodeURIComponent(id)}`, {
     method: "DELETE",
-    fallback: "Couldn't remove check-ins",
+    fallback: "没能移除主动巡检",
   });
 
 /**
@@ -182,8 +182,8 @@ export const resolveSuggestion = (id: string, action: "start" | "dismiss") =>
     method: "POST",
     fallback:
       action === "start"
-        ? "Couldn't start this. Try again."
-        : "Couldn't hide this. Try again.",
+        ? "没能开始处理。请再试一次。"
+        : "没能隐藏。请再试一次。",
   });
 
 /** A setting's check-ins produce items, so a change to either refreshes both. */

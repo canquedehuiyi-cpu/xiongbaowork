@@ -194,7 +194,6 @@ export function MenuSheet({
             >
               <IconPlus size={22} stroke={1.8} />
               新对话
-
             </Link>
           </div>
           <div className="mt-2 flex shrink-0 flex-col border-openduet-hair border-t pt-2">
@@ -217,8 +216,7 @@ export function MenuSheet({
                   size={22}
                   stroke={1.8}
                 />
- 管理
-
+                管理
                 {/* Closed, the group would hide what waits on the person, so Manage carries it. */}
                 {manageOpen ? null : <AccentBadge />}
               </button>
@@ -363,8 +361,7 @@ function ConversationRow({
   const setPinned = useMutation(setChannelPinnedMutationOptions(queryClient));
   const [confirming, setConfirming] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
-  const title = channel.summary || untitledLine(channel) || "新对话
-";
+  const title = channel.summary || untitledLine(channel) || "新对话";
   const when = channel.lastMessageAt
     ? relativeTime(channel.lastMessageAt)
     : null;

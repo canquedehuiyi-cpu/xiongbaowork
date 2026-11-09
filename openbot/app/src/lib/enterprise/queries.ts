@@ -241,7 +241,7 @@ export function checkInMetricsQueryOptions(days: 7 | 30) {
     queryFn: async (): Promise<CheckInMetrics> =>
       (
         await client(`/api/admin/proactive?days=${days}`, {
-          fallback: "Couldn't load check-ins",
+          fallback: "读不到主动巡检",
         })
       ).json(),
   });
@@ -277,7 +277,7 @@ export function myCapabilitiesQueryOptions() {
     queryFn: async (): Promise<MyCapabilities> =>
       (
         await client("/api/admin/enterprise/me", {
-          fallback: "Couldn't load what OpenBot allows.",
+          fallback: "读不到熊宝允许做什么。",
         })
       ).json(),
   });

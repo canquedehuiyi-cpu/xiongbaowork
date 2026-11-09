@@ -57,8 +57,8 @@ function StarterSuggestionChoices({ onSelect, disabled = false }: Props) {
     ) {
       setError(
         capabilities.isPending
-          ? "Still checking whether interactive answers are available. Try again in a moment."
-          : "Interactive answers are disabled for this installation. Try another starter task.",
+          ? "还在确认能否使用交互式回答。请稍后再试。"
+          : "这个部署关闭了交互式回答。换一个入门任务试试。",
       );
       return;
     }
@@ -70,7 +70,7 @@ function StarterSuggestionChoices({ onSelect, disabled = false }: Props) {
       setError(
         caught instanceof Error
           ? caught.message
-          : "Couldn't start that task. Try again.",
+          : "没能开始这个任务。请再试一次。",
       );
     } finally {
       sendingRef.current = false;
@@ -87,7 +87,7 @@ function StarterSuggestionChoices({ onSelect, disabled = false }: Props) {
      * read as the row sitting on the composer.
      */
     <section
-      aria-label="Starter tasks"
+      aria-label="入门任务"
       className="relative mb-3 w-full max-w-2xl px-3 [&>div]:gap-1 [&>div]:bg-transparent"
     >
       <CopilotChatSuggestionView

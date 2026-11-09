@@ -21,6 +21,6 @@ export function toolsListError(
   if (!prompt) return lastError;
   if (!reader.personal) return prompt.message || null;
   return prompt.reason === "reconnect"
-    ? `Your ${reader.title} access was withdrawn. Reconnect it above to list its tools.`
-    : `Connect your ${reader.title} account above to list its tools.`;
+    ? `你对 ${reader.title} 的授权已被撤回。在上面重新连接后才能列出它的工具。`
+    : `在上面连接你的 ${reader.title} 账号后才能列出它的工具。`;
 }

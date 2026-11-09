@@ -20,21 +20,21 @@ type TeamCard = Pick<AgentProfile, "id" | "name" | "avatarSeed"> & {
 const EXAMPLES: TeamCard[] = [
   {
     id: "example-research",
-    name: "Research Analyst",
+    name: "研究分析师",
     avatarSeed: "example-research",
-    role: "Finds and compares",
+    role: "查找和比较",
   },
   {
     id: "example-data",
-    name: "Data Analyst",
+    name: "数据分析师",
     avatarSeed: "data-analyst",
-    role: "Reads the numbers",
+    role: "解读数据",
   },
   {
     id: "example-support",
-    name: "Support Desk",
+    name: "客服台",
     avatarSeed: "example-support-agent",
-    role: "Answers customers",
+    role: "答复客户",
   },
 ];
 
@@ -70,11 +70,9 @@ export function TeamDemo() {
       beats={cards.length}
       className="flex flex-col gap-2.5 p-4 sm:p-6"
       kind="team"
-      label={`Bots you can work with: ${cards
-        .map(
-          (card) => `${card.name} (${card.example ? "example" : "available"})`,
-        )
-        .join(", ")}, and one of your own`}
+      label={`可以和你一起工作的员工：${cards
+        .map((card) => `${card.name}（${card.example ? "示例" : "可用"}）`)
+        .join("、")}，以及一位你自己的员工`}
       rest={-1}
     >
       {({ beat, playing }) => (
@@ -102,7 +100,7 @@ export function TeamDemo() {
                 <div className="min-w-0 flex-1">
                   <p className="text-sm truncate font-medium">{card.name}</p>
                   <p className="text-xs truncate text-muted-foreground">
-                    {card.example ? "Example" : card.role || "Ready"}
+                    {card.example ? "示例" : card.role || "就绪"}
                   </p>
                 </div>
                 <span
@@ -112,7 +110,7 @@ export function TeamDemo() {
                   )}
                 >
                   <span className="size-1.5 rounded-full bg-blue-500" />
-                  Working
+                  工作中
                 </span>
               </div>
             );
@@ -120,7 +118,7 @@ export function TeamDemo() {
           <div className="flex min-w-0 items-center gap-3 rounded-xl border border-dashed border-foreground/25 p-3">
             <span className="size-11 shrink-0 rounded-full border border-dashed border-foreground/30" />
             <p className="text-sm truncate font-medium text-foreground/70">
-              Your own Bot
+              你自己的员工
             </p>
           </div>
         </>

@@ -199,7 +199,7 @@ test("the New Bot sheet does not create from the Enter that confirms a composed 
   );
 
   // The details screen opens first, with Run here selected by default.
-  const name = await view.findByLabelText("Name");
+  const name = await view.findByLabelText("名称");
   await type(name, "経費");
 
   await confirmComposedCharacter(name);
@@ -220,14 +220,14 @@ test("a boundary rule is not added by the Enter that confirms a composed charact
     client.setQueryData(computerKeys.policy(), POLICY),
   );
 
-  fireEvent.click(await view.findByText("Write your own"));
-  const field = await view.findByLabelText("Rule");
+  fireEvent.click(await view.findByText("自己写"));
+  const field = await view.findByLabelText("规则");
   expect(field.getAttribute("spellcheck")).toBe("false");
   expect(field.getAttribute("autocorrect")).toBe("off");
   expect(field.getAttribute("autocapitalize")).toBe("off");
   const rule = 'contains(element.name, "送信")';
   await type(field, rule);
-  const name = view.getByLabelText("Name");
+  const name = view.getByLabelText("名称");
   await type(name, "送信しない");
 
   // The composing Enter is held back from the form; an ordinary one is left to submit it.
@@ -240,7 +240,7 @@ test("a boundary rule is not added by the Enter that confirms a composed charact
   expect(writes).toEqual([]);
 
   await act(async () => {
-    fireEvent.click(view.getByRole("button", { name: "Add rule" }));
+    fireEvent.click(view.getByRole("button", { name: "添加规则" }));
   });
   await settle();
   expect(writes).toEqual([

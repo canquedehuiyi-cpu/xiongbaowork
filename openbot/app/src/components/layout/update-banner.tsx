@@ -51,8 +51,7 @@ export function UpdateBanner() {
             size="sm"
             variant="link"
           >
- 更新并重启
-
+            更新并重启
           </Button>
           <Button
             aria-label="关闭"

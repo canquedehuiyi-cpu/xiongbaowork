@@ -25,8 +25,8 @@ export function TeamBotConsents() {
   if (personal) return null;
   return (
     <PageSection
-      description="A Bot shared with you uses its owner's apps. It uses yours only where you said yes in a conversation."
-      title="Shared Bots"
+      description="共享给你的员工用的是它主人的应用。只有你在对话里同意过的地方，它才会用你的应用。"
+      title="共享给你的员工"
     >
       {clear.error ? (
         <p className="mt-4 text-destructive text-sm" role="alert">
@@ -36,11 +36,11 @@ export function TeamBotConsents() {
       <PageRows>
         <Item size="sm">
           <ItemContent>
-            <ItemTitle>Apps you let shared Bots use</ItemTitle>
+            <ItemTitle>你允许共享员工使用的应用</ItemTitle>
             <ItemDescription>
               {clear.isSuccess
-                ? "Reset. Each shared Bot will ask again."
-                : "Forget every answer, so each shared Bot asks again."}
+                ? "已重置。每位共享员工都会重新问你。"
+                : "清除所有回答，让每位共享员工重新问你。"}
             </ItemDescription>
           </ItemContent>
           <ItemActions>
@@ -50,7 +50,7 @@ export function TeamBotConsents() {
               size="sm"
               variant="outline"
             >
-              Reset
+              重置
             </Button>
           </ItemActions>
         </Item>
