@@ -135,6 +135,6 @@ git merge-tree --write-tree --merge-base=<上次同步点> <本仓库 openbot �
 
 - 学习证据：对话不出库，录制接收接口（`/api/copilotkit/trajectory/:id/connect`）与本地学习证据提取在 L 阶段补，
   见 `docs/automatic-learning.md`。
-- 设置里的「通知」「审批」页、电脑工具按调用所属员工执行（`useBotOfCall` / `useOfferedTo`）、上游 manage 系列的
+- 设置里的「审批」页（审批规则仍在 `/approvals`）、电脑工具按调用所属员工执行（`useBotOfCall` / `useOfferedTo`）、上游 manage 系列的
   电脑、凭据、审计分区、新建员工用上游 NewBotSheet 还是 fork 向导（需产品判断）。
 
