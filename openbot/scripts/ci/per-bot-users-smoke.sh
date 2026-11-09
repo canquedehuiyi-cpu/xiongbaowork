@@ -64,7 +64,6 @@ key=$(head -c 32 /dev/urandom | base64 | tr -d '\n')
 docker run -d --name "$name" -p "127.0.0.1:$port:3001" \
   -v "$volume:/var/lib/postgresql" \
   -e EMBEDDED_POSTGRES=on -e COPILOTKIT_TELEMETRY_DISABLED=true \
-  -e COMPUTER_PER_BOT_USERS=off \
   -e TENANT_PACKAGE_DIR=../examples/qoderwake \
   -e OPENBOT_SINGLE_USER=true -e OPENBOT_PUBLIC_URL="http://localhost:$port" \
   -e KEY_ENCRYPTION_KEY="$key" "$image" >/dev/null
@@ -115,7 +114,9 @@ if [ "$healthy" = true ]; then
 
   r=$(call "$B" /exec "$(exec_body "cat ../$keyA/a.txt")")
   rc=$(exit_of "$r")
-  if [ -n "$rc" ] && [ "$rc" != 0 ] && ! body_of "$r" | grep -q "$marker"; then
+  # Permission denied, not merely absent: with the switch off the path does not exist at all.
+  if [ -n "$rc" ] && [ "$rc" != 0 ] && ! body_of "$r" | grep -q "$marker" \
+    && body_of "$r" | jq -r '.stderr' | grep -q 'Permission denied'; then
     pass "$B's command cannot cat ../$keyA/a.txt (exit $rc: $(body_of "$r" | jq -r '.stderr' | head -n 1))"
   else
     fail "$B's command cannot cat ../$keyA/a.txt (HTTP $(code_of "$r"): $(body_of "$r"))"
