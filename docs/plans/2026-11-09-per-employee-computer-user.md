@@ -24,6 +24,11 @@
   - `/workspace/bots/<botKey>/.tmp`：属主 `xb-<botKey>`，权限 `0700`。
   - 默认 ACL：`u:xb-<botKey>:rwx,u:pwuser:rwx,o::---`。
 - 映射文件 `/workspace/.xb-users` 由 root 所有，权限 `600`，每行格式为 `<botKey> <uid>`。
+- 顶层目录：
+  - `/workspace`：属主 `pwuser:pwuser`，权限 `0711`，默认 ACL `o::---`。pwuser 必须仍可写，agent-computer 启动时的 `assertWritable` 依赖这一点。
+  - `/workspace/bots`：属主 `pwuser:pwuser`，权限 `0711`。
+  - `/profiles`：属主 `pwuser:pwuser`，权限 `0700`。
+  - 以上三项每次启动都由 `restore` 强制设定，已挂载的旧卷也一样。
 - 默认员工（`COMPUTER_BOT_ID`，默认 `shared`）以及不带请求头的调用：根目录仍是 `/workspace`，以 pwuser 运行。
 - 辅助程序路径 `/usr/local/sbin/xb-bot`，root 所有，权限 `0755`。子命令只有 `ensure`、`run`、`restore`：
   - 参数不合法时退出码为 `64`，`run` 时用户不存在为 `65`。
@@ -183,8 +188,11 @@
     ```
 - `restore`：
   - 只有 `id -u` 为 0 且 `SUDO_USER` 为空时才执行，否则退出码 64。
-  - 映射文件不存在时直接退出 0。
-  - 对映射中每一行，若用户不存在，则按记录的 uid 重新 `useradd`。
+  - 先按 Global Constraints 强制设定 `/workspace`、`/workspace/bots`、`/profiles` 的属主、权限和 ACL（目录不存在就先创建）。
+  - 再对 `/workspace` 下 `bots` 以外的全部条目执行 `chmod -R o-rwx`。
+  - 映射文件不存在时到此退出 0。
+  - 对映射中每一行：uid 不在 20000–59999 内，或 key 不合法，就跳过并向 stderr 记一行；用户不存在时按记录的 uid 重新 `useradd`。
+  - 开关关闭时 `restore` 照样执行（s6 不看开关）。
 
 - [ ] **Step 1：写失败测试** `docker/tests/xb-bot.test.sh`（POSIX sh，任一断言失败即 `exit 1`），断言：
   - `xb-bot nope` 退出码 64；`xb-bot ensure ABC` 退出码 64；`xb-bot run <key> 0` 退出码 64；未 ensure 的 key 执行 `run` 退出码 65。
@@ -197,6 +205,8 @@
   - `printf '\nsleep 30\n' | xb-bot run <keyA> 2` 在 8 秒内结束，退出码为 124 或 137。
   - 执行 `userdel xb-<keyA>` 后再 `xb-bot restore`，`id -u xb-<keyA>` 与之前相同，A 的旧文件属主不变。
   - 以 pwuser 执行 `sudo -n /usr/local/sbin/xb-bot restore` 被 sudo 拒绝（非 0）。
+  - 先 `chmod 0755 /profiles` 并在 `/workspace` 下放一个 0644 的 `old.txt`，再跑 `restore`：`stat -c %a /profiles` 为 `700`，`/workspace` 为 `711`，`old.txt` 为 `640`，pwuser 仍能在 `/workspace` 下新建文件。
+  - 映射里写入一行 `<key> 0` 后跑 `restore`：退出 0，且不会创建 uid 为 0 的用户（`getent passwd xb-<key>` 为空，或其 uid 不是 0）。
 - [ ] **Step 2：** 本地构建镜像，以 root 运行测试，预期失败（辅助程序不存在）：
   ```bash
   cd openbot && docker build -f Dockerfile -t openbot:pbu .

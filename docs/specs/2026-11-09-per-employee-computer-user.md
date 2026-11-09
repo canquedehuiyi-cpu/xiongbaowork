@@ -38,15 +38,16 @@
 - 用户名：`xb-` 加 `sha256(botId)` 的前 12 位十六进制（满足 Linux 用户名 ≤ 32 字符和字符集要求；botId 本身可能超长或含大写）。
 - uid 由 `useradd --system` 自动分配，范围 20000–59999（写入 `/etc/login.defs` 的 `SYS_UID_MIN/MAX`）。
 - 不登录，shell 为 `/usr/sbin/nologin`，不加入 sudo 以外的任何组。
-- 员工用户映射持久化在 `/workspace/.xb-users`（root 600）。容器重建后由辅助程序按映射重建用户，保证 uid 不变，文件属主随之不变。
+- 员工用户映射持久化在 `/workspace/.xb-users`（root 600）。员工用户对 `/workspace` 没有写权限，改不了它。pwuser 是 agent-computer 服务本身，属于可信方，本规格不防它：它本来就能经 `xbcomp` 组读写所有员工目录。服务端的每次调用都带真实员工 id 的请求头，所以以 pwuser 运行的「默认员工」只服务于不带请求头的调用（如健康检查），不对应任何真实员工。容器重建后，辅助程序按映射重建用户，保证 uid 不变，文件属主随之不变。恢复时校验每个 uid 都在 20000–59999 之间，范围外的行跳过并记日志。
 
 ### 3.2 目录与权限
 
 ```
-/workspace/                     root:root      0755
+/workspace/                     pwuser:pwuser  0711   员工只能穿过，不能列出；默认 ACL o::---
+/workspace/bots/                pwuser:pwuser  0711
 /workspace/bots/<botKey>/       xb-…:xbcomp    2770   该员工的家目录、工作目录
 /workspace/bots/<botKey>/.tmp/  xb-…:xbcomp    0700   该员工的 TMPDIR
-/profiles/                      pwuser:pwuser  0700   不变；员工用户进不去
+/profiles/                      pwuser:pwuser  0700   启动时由 restore 强制设定（含已挂载的旧卷）
 ```
 
 - `botKey` 等于用户名里的哈希部分，不在路径里暴露原始 botId。
@@ -83,7 +84,12 @@ pwuser ALL=(root) NOPASSWD: /usr/local/sbin/xb-bot
 ### 3.5 镜像改动（Dockerfile 和 s6）
 
 - 安装 `xb-bot` 和 sudoers 条目；创建 `xbcomp` 组并把 pwuser 加进去；在 login.defs 里设置 uid 范围。
-- 容器启动时以 root 运行一个 oneshot（s6）：`xb-bot restore`，按 `/workspace/.xb-users` 重建用户（子命令只允许 s6 以 root 调用，不进 sudoers）。
+- 容器启动时，s6 以 root 运行 oneshot `xb-bot restore`。这个子命令只允许 s6 以 root 调用，不进 sudoers。它依次做三件事：
+  1. 按 `/workspace/.xb-users` 重建用户。
+  2. 强制设定 `/workspace`（0711，并设默认 ACL `o::---`）、`/workspace/bots`（0711）、`/profiles`（0700）的属主和权限。
+  3. 对默认员工的旧文件（`/workspace` 下 `bots/` 以外的全部）执行 `chmod -R o-rwx`，只去掉 other 位，不改属主。
+
+  开关关闭时 restore 照样执行，因为收紧 `/profiles` 无论开关如何都是对的。
 
 ## 4. 测试
 
