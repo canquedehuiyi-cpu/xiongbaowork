@@ -6206,9 +6206,7 @@ export function createPluginStore(options: PluginStoreOptions) {
      * 团队的行在前（{@link ownRowFirst}）。在调用者的帧里读，所以只找得到这个人看得见的应用。null 表示本
      * 部署没有这个应用，申请无从提起。
      */
-    async findAppForRequest(
-      app: string,
-    ): Promise<{
+    async findAppForRequest(app: string): Promise<{
       serverId: string;
       appKey: string;
       title: string;
