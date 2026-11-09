@@ -1634,12 +1634,13 @@ export const CATALOGUE: readonly CatalogueEntry[] = Object.freeze([
       "complete_goal",
     ]),
     /*
-     * 读名单：这个传输广播的工具里，只有这两个只查不改。`list_routines` 只读本人的例程
-     * （`builtin-routines.ts` 里调 `listFor`，store 里是 select）；`list_triggers` 只读本人分配给这个
-     * Bot 的触发器（`responsibilities/trigger-tools.ts` 里调 `listForAgent`，也是 select）。其余都在
-     * 上面的写名单里；名单外以后新加的名字一律按写处理。
+     * 读名单：`list_routines` 只读本人的例程（`builtin-routines.ts` 里调 `listFor`，store 里是
+     * select）。其余工具都在上面的写名单里；名单外以后新加的名字一律按写处理。
+     *
+     * `list_triggers` 虽然也只做 select，但故意不列：它列出的 webhook 地址和邮件入站地址能触发任务，
+     * 作用接近凭据，不能让无人值守的 check-in 读到。代价是聊天里它按写处理，要先问人。
      */
-    readTools: Object.freeze(["list_routines", "list_triggers"]),
+    readTools: Object.freeze(["list_routines"]),
     docsUrl: "https://github.com/CopilotKit/OpenBot/blob/main/docs/routines.md",
   },
 ]);
