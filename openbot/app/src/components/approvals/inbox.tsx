@@ -33,6 +33,7 @@ import {
   hostAccessQueryOptions,
 } from "@/lib/computers/host-access";
 import { approvalTargetName } from "./inline-approval";
+import { afterChinese } from "./waiting";
 
 const HOST_LABELS: Record<HostCommandPolicy, string> = {
   ask: "每次都问",
@@ -66,6 +67,7 @@ export function ApprovalInbox() {
     onSuccess: refresh,
   });
   const { data: me } = useQuery(currentUserQueryOptions());
+  const botName = useBotNames();
   const isAdmin = me?.role === "admin";
   const preferences = useMutation({
     mutationFn: setApprovalPreferences,
@@ -257,10 +259,12 @@ export function ApprovalInbox() {
             >
               <div>
                 <h3 className="font-medium">
-                  {request.action.botId} 想要{" "}
-                  {request.action.toolRef
-                    .replace(/^computer_|^host\//, "")
-                    .replaceAll("_", " ")}
+                  {botName(request.action.botId)} 想要
+                  {afterChinese(
+                    request.action.toolRef
+                      .replace(/^computer_|^host\//, "")
+                      .replaceAll("_", " "),
+                  )}
                 </h3>
                 <p className="text-sm text-muted-foreground">
                   {approvalTargetName(request.action)}

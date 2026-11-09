@@ -936,7 +936,7 @@ describe("each tab is OpenBot's own sections for the centre Bot", () => {
       await page().findByRole("button", { name: "需要你，有 1 件在等" }),
     );
     const sheet = within(await page().findByRole("dialog"));
-    expect(await sheet.findByText("Muse 想要open url")).toBeTruthy();
+    expect(await sheet.findByText("Muse 想要 open url")).toBeTruthy();
     // What it will send is always on screen, as in OpenBot.
     expect(sheet.getByText("URL")).toBeTruthy();
     expect(sheet.getAllByText("https://example.com").length).toBe(2);

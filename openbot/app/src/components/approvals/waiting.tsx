@@ -181,7 +181,7 @@ function RequestRow({
       </ItemMedia>
       <ItemContent className="min-w-0">
         <ItemTitle className="line-clamp-none">
-          {botName} 想要{words.action}
+          {botName} 想要{afterChinese(words.action)}
         </ItemTitle>
         <ItemDescription className="line-clamp-none break-all">
           {words.place}
@@ -266,6 +266,11 @@ function RequestRow({
  * The waiting questions and actions under each Bot's header on the Needs you board, questions first,
  * each with when it was asked so the header can say how long it has waited.
  */
+/** 接在中文后面的一段说法：以英文、数字或路径开头时，前面留一个半角空格（与服务端 `afterChinese` 同一条规则）。 */
+export function afterChinese(text: string): string {
+  return /^[\u3000-\u9fff\uff00-\uffef]/.test(text) ? text : ` ${text}`;
+}
+
 export function useWaitingByBot(agentId: string | undefined) {
   const waiting = useWaiting(agentId);
   const byBot = new Map<string, { rows: ReactNode[]; times: string[] }>();

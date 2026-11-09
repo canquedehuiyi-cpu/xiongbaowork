@@ -170,17 +170,17 @@ test("a file save's card names it as its step and its Activity row do", async ()
 test("on the Bot's page, the row says what the Bot wants to do, over the app's name", async () => {
   serving();
   const view = draw(<WaitingForYou agentId="assistant" />);
-  const row = (await view.findByText("General Assistant 想要get request"))
+  const row = (await view.findByText("General Assistant 想要 get request"))
     .parentElement as HTMLElement;
   expect(row.textContent).toContain("Requests");
   expect(row.textContent).not.toContain("requests/");
   expect(
-    view.getByText("General Assistant 想要send email").parentElement
+    view.getByText("General Assistant 想要 send email").parentElement
       ?.textContent,
   ).toContain("Gmail");
   expect(view.getByText("General Assistant 想要点击")).toBeTruthy();
   expect(
-    view.getByText("General Assistant 想要get IMAP settings"),
+    view.getByText("General Assistant 想要 get IMAP settings"),
   ).toBeTruthy();
   expect(view.container.textContent).not.toContain("composio");
 });
