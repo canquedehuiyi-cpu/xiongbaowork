@@ -674,9 +674,19 @@ jobs:
         run: bun desktop-device/scripts/build-sidecar.ts
       - name: Bundle the unsigned NSIS installer
         working-directory: openbot/desktop-device
+        # Tauri downloads NSIS and nsis_tauri_utils.dll from GitHub Releases on the first bundle, and
+        # that host answers 504 at times. It caches what it fetched, and the compile is cached in
+        # target/, so a retry costs seconds; a real build failure still fails after three attempts.
         run: |
-          ../desktop/node_modules/.bin/tauri build --ci --bundles nsis --config src-tauri/tauri.bundle.conf.json
-          if ($LASTEXITCODE -ne 0) { throw "tauri build exited $LASTEXITCODE" }
+          $attempt = 0
+          while ($true) {
+            $attempt++
+            ../desktop/node_modules/.bin/tauri build --ci --bundles nsis --config src-tauri/tauri.bundle.conf.json
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($attempt -ge 3) { throw "tauri build exited $LASTEXITCODE after $attempt attempts" }
+            Write-Host "tauri build exited $LASTEXITCODE on attempt $attempt; retrying in $(15 * $attempt)s"
+            Start-Sleep -Seconds (15 * $attempt)
+          }
       - name: Check the installer's payload, product name and version, and that it is unsigned
         working-directory: openbot/desktop-device
         run: |
