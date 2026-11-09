@@ -195,23 +195,26 @@ if [ "$healthy" = true ]; then
   # computer ends every employee process before it (re)starts: otherwise one could take port 4100
   # first, or read the computer's argv, while it comes back up, and catch COMPUTER_TOKEN.
   lingering() { docker exec "$name" pgrep -u "$userA" -f 'sleep 1003' >/dev/null 2>&1; }
-  r=$(call "$A" /exec "$(exec_body 'setsid sleep 1003 >/dev/null 2>&1 </dev/null &')")
-  sleep 1
+  # `; sleep 1` so the child has called setsid before the command ends and its group is killed.
+  r=$(call "$A" /exec "$(exec_body 'setsid sleep 1003 >/dev/null 2>&1 </dev/null & sleep 1')")
   if [ "$(exit_of "$r")" = 0 ] && lingering; then
     pass "$A leaves a setsid sleep that outlives its command"
   else
     fail "$A leaves a setsid sleep that outlives its command (HTTP $(code_of "$r"): $(body_of "$r"))"
   fi
-  computer_pid() { docker exec "$name" pgrep -u pwuser -f 'bun src/index.ts' 2>/dev/null | head -n 1; }
+  # The computer's pid as s6 sees it (the run script execs into bun, so it is bun's).
+  svc=$(docker exec "$name" sh -c 'for d in /run/service/computer /run/s6-rc/servicedirs/computer; do if [ -d "$d" ]; then echo "$d"; break; fi; done' || true)
+  computer_pid() { docker exec "$name" /command/s6-svstat -p "$svc" 2>/dev/null || true; }
   before=$(computer_pid)
-  docker exec "$name" /command/s6-svc -r /run/service/computer || true
+  echo "computer service: ${svc:-not found}, pid ${before:-?}"
+  docker exec "$name" /command/s6-svc -r "$svc" || true
   restarted=false
   gone=false
   started=$SECONDS
   while [ $((SECONDS-started)) -le 60 ]; do
     now=$(computer_pid)
     code=$(docker exec "$name" curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:4100/health || true)
-    if [ -n "$now" ] && [ "$now" != "$before" ] && [ "$code" = 200 ]; then restarted=true; fi
+    if [ -n "$now" ] && [ "$now" != -1 ] && [ "$now" != "$before" ] && [ "$code" = 200 ]; then restarted=true; fi
     if lingering; then gone=false; else gone=true; fi
     [ "$restarted" = true ] && break
     sleep 1
