@@ -56,6 +56,37 @@ export const ROUTES: RouteSpec[] = [
   { path: "/channel/new" },
   // The conversation workspace column beside a new conversation addressed to one employee.
   { path: "/channel/new?agent=agent-analyst", slug: "channel-new-analyst" },
+  /*
+   * The rest of the app, for the site-wide pass of the black/white/red redesign
+   * (docs/design/ios-studio/IMPLEMENTATION.zh-CN.md §全站范围). Captured for review; the fixtures may
+   * not answer every read these pages make, and an unmatched read shows as that page's error state.
+   */
+  { path: "/", slug: "home" },
+  { path: "/onboarding" },
+  { path: "/group/new" },
+  { path: "/assemble/agent-analyst" },
+  { path: "/role-templates" },
+  { path: "/team-bots" },
+  { path: "/pipelines" },
+  { path: "/approvals" },
+  { path: "/responsibilities" },
+  { path: "/plans" },
+  { path: "/platform" },
+  { path: "/wakerflows/new" },
+  { path: "/settings/passwords" },
+  { path: "/settings/connected-accounts" },
+  { path: "/settings/components-gallery" },
+  { path: "/admin", slug: "admin" },
+  { path: "/admin/people" },
+  { path: "/admin/plugins" },
+  { path: "/admin/skills" },
+  { path: "/admin/audit" },
+  { path: "/admin/credentials" },
+  { path: "/admin/computers" },
+  { path: "/admin/enterprise" },
+  { path: "/admin/identity-providers" },
+  { path: "/admin/boundaries" },
+  { path: "/admin/components" },
 ];
 
 export const VIEWPORTS = [

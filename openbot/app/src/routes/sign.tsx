@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { motion, useReducedMotion } from "motion/react";
 import { useState } from "react";
-import AgentOrb from "@/components/agents/orb/agent-orb";
+import { BrandLogo } from "@/components/layout/brand-logo";
 import { ProviderLogo } from "@/components/auth/provider-logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -268,7 +268,7 @@ function SignScreen() {
     <div className="flex flex-col h-dvh w-full items-center justify-center -mt-12">
       <motion.div
         animate="shown"
-        className="flex-1 flex w-full max-w-82 flex-col items-center justify-center p-4"
+        className="flex-1 flex w-full max-w-[380px] flex-col items-center justify-center p-4"
         initial="hidden"
         variants={{
           hidden: {},
@@ -280,17 +280,31 @@ function SignScreen() {
           variants={{ hidden, shown }}
           className="flex items-center justify-center"
         >
-          <AgentOrb size="56px" />
+          {/* The brand, as the workbench sidebar draws it: 熊宝's mask on its gold frame. */}
+          <BrandLogo className="rounded-[14px]" size={56} />
         </motion.div>
+        {appConfig.brand.englishName ? (
+          <motion.p
+            className="mt-6 flex items-center gap-[8px] font-mono text-[10px] text-muted-foreground uppercase tracking-[0.14em]"
+            transition={{ duration: ENTRANCE_SECONDS, ease: EASE_OUT }}
+            variants={{ hidden, shown }}
+          >
+            <span
+              aria-hidden="true"
+              className="h-[2px] w-[12px] rounded-[2px] bg-signal"
+            />
+            {appConfig.brand.englishName}
+          </motion.p>
+        ) : null}
         <motion.h1
-          className="text-2xl font-medium tracking-tight text-center mt-8"
+          className="mt-3 text-center font-bold text-[28px] leading-[1.15] tracking-[-0.04em]"
           transition={{ duration: ENTRANCE_SECONDS, ease: EASE_OUT }}
           variants={{ hidden, shown }}
         >
           登录 {appConfig.brand.productName}
         </motion.h1>
         <motion.div
-          className="mt-8 w-full"
+          className="mt-7 w-full rounded-[18px] border border-border bg-card p-5 shadow-[inset_0_1px_0_rgb(255_255_255/0.03)]"
           transition={{ duration: ENTRANCE_SECONDS, ease: EASE_OUT }}
           variants={{ hidden, shown }}
         >

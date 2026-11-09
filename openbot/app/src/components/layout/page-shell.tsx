@@ -331,7 +331,18 @@ function WorkbenchShell({
             ) : null}
             <div className="relative z-[1] min-w-0 max-w-full">
               {eyebrow ? <Eyebrow text={eyebrow} /> : null}
-              <h1 className="mt-[11px] mb-[10px] max-w-full font-bold text-[clamp(35px,4.5vw,55px)] leading-[1.06] tracking-[-0.05em]">
+              {/*
+               * The large open title is the five workbench pages' (they carry an eyebrow). Settings
+               * and other pages in this frame keep a compact one: reading and density come first there.
+               */}
+              <h1
+                className={cn(
+                  "max-w-full font-bold",
+                  eyebrow
+                    ? "mt-[11px] mb-[10px] text-[clamp(35px,4.5vw,55px)] leading-[1.06] tracking-[-0.05em]"
+                    : "mb-[6px] text-[28px] leading-[1.2] tracking-[-0.03em]",
+                )}
+              >
                 {title}
               </h1>
               {description ? (

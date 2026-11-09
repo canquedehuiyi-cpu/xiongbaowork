@@ -1,10 +1,12 @@
 import { createRouter } from "@tanstack/react-router";
+import { RouteError } from "./components/layout/route-error";
 import type { RouterContext } from "./router-context";
 import { routeTree } from "./routeTree.gen";
 
 export const router = createRouter({
   routeTree,
   context: {} as RouterContext,
+  defaultErrorComponent: RouteError,
 });
 
 declare module "@tanstack/react-router" {
