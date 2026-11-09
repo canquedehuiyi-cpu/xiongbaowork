@@ -10,12 +10,12 @@ import {
   answerPersonQuestion,
   approvalInboxOptions,
   BEHAVIOUR_LABELS,
-  POLICY_SOURCE_LABELS,
   createApprovalRule,
   createTeamApprovalRule,
   decideApproval,
   type HostCommandPolicy,
   offersStandingRule,
+  POLICY_SOURCE_LABELS,
   type RuleBehaviour,
   revokeApprovalRule,
   revokeTeamApprovalRule,
@@ -26,6 +26,7 @@ import {
   updateTeamApprovalRule,
 } from "@/lib/approvals";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
+import { approvalTargetName } from "./inline-approval";
 
 const HOST_LABELS: Record<HostCommandPolicy, string> = {
   ask: "每次都问",
@@ -256,7 +257,7 @@ export function ApprovalInbox() {
                     .replaceAll("_", " ")}
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  {request.action.scope}
+                  {approvalTargetName(request.action)}
                 </p>
                 {request.action.policy ? (
                   <p className="text-sm">
@@ -266,7 +267,8 @@ export function ApprovalInbox() {
                     {request.action.policy.reason}
                     {POLICY_SOURCE_LABELS[request.action.policy.source] ? (
                       <span className="ml-2 text-muted-foreground">
-                        （来源：{POLICY_SOURCE_LABELS[request.action.policy.source]}）
+                        （来源：
+                        {POLICY_SOURCE_LABELS[request.action.policy.source]}）
                       </span>
                     ) : null}
                   </p>

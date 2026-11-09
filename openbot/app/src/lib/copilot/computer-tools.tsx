@@ -167,12 +167,15 @@ function labelOf(result: string | undefined): string | undefined {
  */
 function ActionLine({
   label,
+  blockedLabel,
   detail,
   running,
   refused,
   failed,
 }: {
   label: string;
+  /** 被拦截时的未完成说法，见 `ToolLine` 的同名属性。 */
+  blockedLabel: string;
   detail?: string;
   running?: boolean;
   /** A policy or a boundary said no. Final: nothing the Bot does differently will help. */
@@ -182,6 +185,7 @@ function ActionLine({
 }) {
   return (
     <ToolLine
+      blockedLabel={blockedLabel}
       detail={detail}
       failed={failed}
       label={label}
@@ -314,6 +318,7 @@ export function ComputerTools() {
         <ActionLine
           running={status !== "complete"}
           label="读取了页面"
+          blockedLabel="读取页面"
           detail={
             elements.length
               ? `${elements.length} thing${elements.length === 1 ? "" : "s"} it can act on`
@@ -364,6 +369,7 @@ export function ComputerTools() {
       <ActionLine
         running={status !== "complete"}
         label="填写了"
+        blockedLabel="填写"
         detail={
           // Never show typed values; identify only the target field.
           labelOf(result) ??
@@ -408,6 +414,7 @@ export function ComputerTools() {
         <ActionLine
           running={status !== "complete"}
           label="点击了"
+          blockedLabel="点击"
           detail={
             // Show refusal reason instead of an internal element ref.
             outcome.refused === true
@@ -457,6 +464,7 @@ export function ComputerTools() {
       <ActionLine
         running={status !== "complete"}
         label="按下了"
+        blockedLabel="按键"
         detail={typeof args?.key === "string" ? args.key : undefined}
         refused={outcomeOf(result).refused === true}
         failed={didNotWork(outcomeOf(result))}
@@ -626,6 +634,7 @@ export function ComputerTools() {
         <ActionLine
           running={status !== "complete"}
           label="列出了文件"
+          blockedLabel="列出文件"
           detail={
             outcome.refused === true || didNotWork(outcome)
               ? String(outcome.reason ?? "")
@@ -673,6 +682,7 @@ export function ComputerTools() {
         <ActionLine
           running={status !== "complete"}
           label="读取了文件"
+          blockedLabel="读取文件"
           detail={
             outcome.refused === true
               ? String(outcome.reason ?? "")
@@ -755,6 +765,7 @@ export function ComputerTools() {
         <ToolLine
           running={status !== "complete"}
           label="执行了命令"
+          blockedLabel="执行命令"
           detail={
             outcome.refused === true
               ? String(outcome.reason ?? "")
@@ -832,6 +843,7 @@ export function ComputerTools() {
         <ActionLine
           running={status !== "complete"}
           label={args?.append === true ? "追加到文件" : "保存了文件"}
+          blockedLabel={args?.append === true ? "追加到文件" : "保存文件"}
           // Show the path, never file contents.
           detail={
             outcome.refused === true
@@ -875,6 +887,7 @@ export function ComputerTools() {
       <ActionLine
         running={status !== "complete"}
         label="滚动了"
+        blockedLabel="滚动"
         refused={outcomeOf(result).refused === true}
         failed={didNotWork(outcomeOf(result))}
       />
@@ -967,6 +980,7 @@ function LocalTools() {
         <ActionLine
           running={status !== "complete"}
           label="查看了本机应用"
+          blockedLabel="查看本机应用"
           detail={localDetail(outcome, () => {
             const names = (outcome.apps ?? [])
               .map((app) => app?.name)
@@ -1009,6 +1023,7 @@ function LocalTools() {
         <ActionLine
           running={status !== "complete"}
           label="调用了本机应用"
+          blockedLabel="调用本机应用"
           detail={localDetail(outcome, () =>
             typeof args?.app === "string" && typeof args?.tool === "string"
               ? `${args.app} · ${args.tool}`
@@ -1041,6 +1056,7 @@ function LocalTools() {
         <ActionLine
           running={status !== "complete"}
           label="启用了本机应用"
+          blockedLabel="启用本机应用"
           detail={localDetail(outcome, () =>
             typeof outcome.enabled?.name === "string"
               ? outcome.enabled.name
@@ -1073,6 +1089,7 @@ function LocalTools() {
         <ActionLine
           running={status !== "complete"}
           label="查看了桌面窗口"
+          blockedLabel="查看桌面窗口"
           detail={localDetail(outcome, () =>
             Array.isArray(outcome.windows)
               ? `${outcome.windows.length} 个窗口`
@@ -1109,6 +1126,7 @@ function LocalTools() {
         <ActionLine
           running={status !== "complete"}
           label="读取了桌面窗口"
+          blockedLabel="读取桌面窗口"
           detail={localDetail(outcome, () =>
             typeof outcome.window?.title === "string"
               ? outcome.window.title
