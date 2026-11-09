@@ -100,7 +100,13 @@ const channelOf = (bot: string) => `${bot}-channel`;
 
 /** Notion: the person's own grant, an MCP server, and the tools as a refresh records them. */
 const NOTION = "notion";
-const notionDigest = `notion-digest-${suite}`; // readOnlyHint, on no reviewed list
+/*
+ * M3: a name on Notion's reviewed read list. Upstream's `notion-digest-<suite>` carried only the
+ * vendor's readOnlyHint; in this fork a catalogue entry with a reviewed list is judged by that list
+ * (integration branch #406), so a vendor read that is not on it is a write in chat and is never a
+ * check-in read. The tool is still labelled read below, as a refresh records it.
+ */
+const notionDigest = "notion-list-recent-pages";
 const notionDraft = `notion-draft-${suite}`; // no label at all
 const notionErase = `notion-erase-${suite}`; // destructiveHint
 /** The same tools on a server an admin added by URL, on one token for everybody. */

@@ -146,7 +146,7 @@ test("every routine and trigger mutation is a write, so the approvals gate sees 
     "delete_trigger",
   ])
     expect(classifyTool(entry, name, true, null)).toBe("write");
-  expect(classifyTool(entry, "list_triggers", true, null)).toBe("read");
+  expect(classifyTool(entry, "list_triggers", true, null)).toBe("write");
 });
 
 const access = (
