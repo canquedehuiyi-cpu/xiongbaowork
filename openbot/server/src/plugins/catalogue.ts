@@ -2110,6 +2110,35 @@ export function reviewedRead(
 }
 
 /**
+ * 无人值守的 check-in 能不能把这个工具当读来调用。比聊天的 {@link classifyTool} 更严。
+ *
+ * 只认两种有人作证的读：
+ * - 厂商列出时记录为读（`mcp_tools.effect` 正好是 `read`）。这一列只由厂商的标签写入：Composio 的
+ *   `readOnlyHint` 记成 read；MCP 服务器自报的 `readOnlyHint` 不记（见 mcp.ts 的 `declaredEffect`）。
+ * - 条目 `readTools` 里审查过的名字（{@link reviewedRead}）。
+ *
+ * `classifyTool` 对「目录里有、写名单没提到、厂商也没记录」的工具推断为读，这个推断在聊天里照旧有效
+ * （人在场，写操作另有审批），但不能让工具进入没人看着的 check-in。破坏性标记、`unclassified`
+ * （厂商什么都没说）以及 `classifyTool` 判为写的，一律不算。
+ *
+ * 调用方负责先确认这个名字确实被广播过（`mcp_tools` 里有这一行）。
+ */
+export function checkInRead(
+  entry: CatalogueEntry | null,
+  toolName: string,
+  tool: {
+    /** `mcp_tools.effect`：厂商记录的效果，没有记录时为 null。 */
+    effect: string | null | undefined;
+    destructive: boolean;
+    unclassified: boolean;
+  },
+): boolean {
+  if (tool.destructive || tool.unclassified) return false;
+  if (classifyTool(entry, toolName, true, tool.effect) !== "read") return false;
+  return tool.effect === "read" || reviewedRead(entry, toolName, tool);
+}
+
+/**
  * Words that make a parameter name a credential, wherever they appear in it.
  *
  * A containment test rather than a list of exact names, because the exact-name version of this rule

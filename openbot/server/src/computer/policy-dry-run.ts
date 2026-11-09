@@ -13,10 +13,14 @@
  */
 
 import type { AuditEvent, AuditInitiator } from "../audit";
-import { describeFile, hostOf, intentOf } from "./gateway";
+import {
+  describeFile,
+  evaluateComputerPolicy,
+  hostOf,
+  intentOf,
+} from "./gateway";
 import {
   type ActionPolicy,
-  evaluateActionPolicy,
   type PolicyContext,
   policyInitiator,
 } from "./policy";
@@ -203,7 +207,8 @@ export function dryRunAgainstHistory(
         : event.eventType === "computer.action_refused"
           ? "refused"
           : "allowed";
-    const decision = evaluateActionPolicy(policy, context);
+    // 和网关同一个判定：键名规范化以后再判一次（见 evaluateComputerPolicy）。
+    const decision = evaluateComputerPolicy(policy, context);
     const would = decision.allowed ? "allowed" : "refused";
 
     if (was === would) {

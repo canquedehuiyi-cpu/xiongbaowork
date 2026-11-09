@@ -29,7 +29,7 @@ import type {
 import { isPersonBrowserId } from "@openbot/shared/openbot-browser";
 import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 // --- app discovery (sub-project 3) ---
-import { APP_ENABLE_TOOL } from "../approvals/policy";
+import { APP_ENABLE_TOOL, canonicalKeyName } from "../approvals/policy";
 import {
   ApprovalAlreadyAnsweredError,
   type ApprovalCandidate,
@@ -1157,7 +1157,7 @@ export function createComputerGateway(
       mcp: { server: "", tool: "", effect: "" },
     };
 
-    const decision = evaluateActionPolicy(options.policy(), context);
+    const decision = evaluateComputerPolicy(options.policy(), context);
     /*
      * Which of the tenant's machines this is carried out on, asked once for both the row below and
      * the approval gate. A resolver that fails is not "this deployment's container": in device mode
@@ -3246,6 +3246,35 @@ function mainKey(key: string): string {
     } else building += char;
   }
   return building || last;
+}
+
+/**
+ * 部署策略对一个电脑动作的判定，键名规范化以后再判一次（阶段 2f）。
+ *
+ * 管理员写的是 `key == "Enter"`、`key == "Control+Enter"`、`intent == "activate"`，而 Playwright 认
+ * 同一个键的好几种写法：`"\r"`、`"\n"` 是 Enter，ControlLeft 是 Control，组合键的顺序随便写。只按
+ * 原样判定，换个写法就绕过了管理员的 deny 规则。所以键名按审批策略里的同一套规则规范化
+ * （`canonicalKeyName`），连同由它推出的 `intent` 再判一次。
+ *
+ * 只会更严：原样的判定先算，它拒绝就是拒绝（写着原始写法的规则照样生效）；它放行时，规范化的
+ * 判定拒绝就拒绝。两次都放行才放行，记下的是原样那次。规范化只用于判定，发给浏览器的键、审计行和
+ * 审批门里的键都是原样的。策略预演（./policy-dry-run）用的也是这个函数，预演和实际一致。
+ */
+export function evaluateComputerPolicy(
+  policy: ActionPolicy | null | undefined,
+  context: PolicyContext,
+): PolicyDecision {
+  const asWritten = evaluateActionPolicy(policy, context);
+  if (!asWritten.allowed || !context.key) return asWritten;
+  const key = canonicalKeyName(context.key);
+  if (key === context.key) return asWritten;
+  const intent = intentOf(context.tool.name, key);
+  const canonical = evaluateActionPolicy(policy, {
+    ...context,
+    key,
+    ...(intent ? { intent } : {}),
+  });
+  return canonical.allowed ? asWritten : canonical;
 }
 
 /**

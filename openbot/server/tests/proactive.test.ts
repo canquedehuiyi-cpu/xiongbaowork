@@ -16,7 +16,11 @@ import {
   restrictCoordinationForRun,
   restrictToolsForRun,
 } from "../src/proactive/restriction";
-import { appsOf, createCheckInScope } from "../src/proactive/scope";
+import {
+  appsOf,
+  checkInCatalogue,
+  createCheckInScope,
+} from "../src/proactive/scope";
 import type {
   ProactiveStore,
   StampedProactiveSetting,
@@ -1076,5 +1080,73 @@ describe("private information sharing check", () => {
     const preview = (opened[0] as { args: { preview: string } }).args.preview;
     expect(preview).toBe("a".repeat(279));
     expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(preview)).toBe(false);
+  });
+});
+
+/*
+ * 读集合由 store 判定哪些工具可以给 check-in：store 对推断出来的读报 `checkInRead: false`，
+ * 这里就不算读，即使它在聊天里的 effect 是 read。
+ */
+describe("a check-in reads only what something vouched for", () => {
+  test("a tool the store says a check-in may not rely on is neither offered nor dispatched", async () => {
+    const calls: string[] = [];
+    const reader = {
+      listServers: async () => [
+        {
+          id: "linear",
+          title: "Linear",
+          tools: [
+            {
+              ref: "linear/list_issues",
+              effect: "read",
+              destructive: false,
+              checkInRead: true,
+            },
+            {
+              ref: "linear/list_things",
+              effect: "read",
+              destructive: false,
+              checkInRead: false,
+            },
+          ],
+        },
+      ],
+    };
+    // M3: the check-in's reads are its scope over the catalogue (proactive/scope.ts), as index.ts wires
+    // it; upstream's read-only classifier is that scope here. The server counts as the person's own, so
+    // only what vouches for each tool decides.
+    const scope = createCheckInScope({
+      catalogue: checkInCatalogue(
+        reader as Parameters<typeof checkInCatalogue>[0],
+      ),
+      ownConnections: async () => new Set(["linear"]),
+    });
+    const reads = await scope("person", "bot");
+    expect(reads.has("linear/list_issues")).toBe(true);
+    expect(reads.has("linear/list_things")).toBe(false);
+    const tools = await restrictToolsForRun(
+      proactiveInitiator("vouched"),
+      "person",
+      async () => [
+        granted("linear/list_issues", calls),
+        granted("linear/list_things", calls),
+      ],
+      scope,
+    )("bot");
+    expect(tools.map((tool) => tool.ref)).toEqual(["linear/list_issues"]);
+    expect(
+      (
+        await guardProactiveCallback(
+          {
+            name: "linear/list_things",
+            botId: "bot",
+            actorId: "person",
+            run: { initiator: proactiveInitiator("vouched") },
+          },
+          scope,
+        )
+      )?.text,
+    ).toStartWith("Refused.");
+    expect(calls).toEqual([]);
   });
 });

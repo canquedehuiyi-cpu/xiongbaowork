@@ -3,7 +3,9 @@
  *
  * A proactive run is a Bot looking through a person's apps while nobody is watching. It may read:
  * the apps the person connected with their own account, through the tools that say they only read
- * (see `scope.ts`), and the person's own memory. It may not write to an app, send a message, hand
+ * (see `scope.ts`), and the person's own memory. 而且这个「读」必须有人作证：厂商列出时记录为读，或目录
+ * `readTools` 审查过（见 plugins/catalogue.ts 的 `checkInRead`）。聊天里 `classifyTool` 对没有标签的工具
+ * 推断出的读，在这里不算。 It may not write to an app, send a message, hand
  * work to another Bot or person, or drive a browser or the computer. That is decided here, by the
  * deployment, and never by telling the model.
  *

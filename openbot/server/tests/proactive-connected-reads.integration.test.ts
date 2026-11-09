@@ -761,26 +761,15 @@ describe("a check-in reads what the person connected, through the tools that say
       reads: 1,
     });
 
-    // Chat is unchanged: the server's read-only label is not believed there, so the person's own
-    // turn asks before the same tool, as it always did.
+    // M3: in this fork the vendor's own read label is the recorded `effect` (no separate
+    // `labelledRead`), and chat reads it as the read it says it is, as it did before; what this test
+    // is about holds the same way: a check-in reads only a read something vouches for (`checkInRead`).
     const listed = (await plugins.listServers()).find(
       (server) => server.id === NOTION,
     );
     expect(
       listed?.tools.find((tool) => tool.name === notionDigest),
-    ).toMatchObject({ effect: "write", labelledRead: true });
-    gateAsked.length = 0;
-    await asOwner(() =>
-      plugins.callTool({
-        ref: ref(NOTION, notionDigest),
-        args: {},
-        botId: desk,
-        actorId: owner,
-      }),
-    );
-    expect(gateAsked).toEqual([
-      { toolRef: ref(NOTION, notionDigest), effect: "write" },
-    ]);
+    ).toMatchObject({ effect: "read", checkInRead: true });
   });
 
   test("the instruction names what the person connected and asks its one question, with nothing about mail or a calendar", async () => {

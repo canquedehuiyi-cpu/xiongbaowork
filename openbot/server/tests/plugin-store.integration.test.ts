@@ -70,11 +70,15 @@ import {
   PluginInvariantError,
   PluginRefusedError,
   type PluginStore,
+  storableTools,
   TokenRefusedError,
   unlistedAdvertisedTools,
 } from "../src/plugins/store";
 import { grantedTools, REFUSAL_MARKER } from "../src/plugins/tools";
-import { proactiveInitiator } from "../src/proactive/restriction";
+import {
+  proactiveInitiator,
+  restrictToolsForRun,
+} from "../src/proactive/restriction";
 import { checkInCatalogue, createCheckInScope } from "../src/proactive/scope";
 import { runAsTenant } from "../src/tenant/context";
 import fileActions from "./fixtures/composio-file-actions.json";
@@ -5627,7 +5631,9 @@ test("a connector call hands the approval gate the refused row for the person's 
         reason: DECLINED_BY_PERSON,
       },
     });
-    expect(JSON.stringify(declined)).not.toContain("needle-argument-value-5529");
+    expect(JSON.stringify(declined)).not.toContain(
+      "needle-argument-value-5529",
+    );
     // Handing it over writes nothing: the row is the approval store's to write, on denial.
     const refused = () =>
       auditStore
@@ -5822,6 +5828,319 @@ test("a person's own call to a write is not a check-in's refusal", () =>
       ).toEqual([]);
     } finally {
       await database.delete(mcpServers).where(eq(mcpServers.id, checkInNotes));
+    }
+  }));
+
+/*
+ * 上游 proactive-connected-reads 的用例「Notion, connected with the person's own account: its
+ * read-only tool is read, its unlabeled and destructive tools are never offered, and chat still asks
+ * first」，按 fork 的接口改写。
+ *
+ * fork 没有上游那套端到端搭建（aimock、ownConnections、checkInToolsFor），也不记服务器自报的
+ * `readOnlyHint`（上游 0072 的 declared_read），所以这里：
+ * - Notion 的工具用 `storableTools` 按一次真实刷新的样子存下：自报只读的、什么标签都没有的、
+ *   标了 destructiveHint 的，外加上游审查名单里的 `notion-search`。前两个在 fork 里存下来是一样的，
+ *   都没有厂商记录的效果。
+ * - check-in 的工具清单是 `restrictToolsForRun` 包住 `grantedTools` 的结果，读集合是
+ *   `createReadOnlyClassifier(store)`，和 index.ts 的接法一样。
+ * - fork 的 Notion 条目还没有 `readTools`，Notion 的 MCP 清单也不带厂商记录的效果，所以没有一个
+ *   Notion 工具有人作证是读：check-in 一个都拿不到，连 `notion-search` 也不行。能读的只有 Composio
+ *   记录为读的 Gmail 动作。上游的「只读工具被读到」要等 Notion 有了审查名单才成立。
+ * - 聊天不变：人自己的调用照旧先过审批门，判定仍是 `classifyTool` 的。
+ */
+const notionDigest = `notion-digest-${suite}`; // 服务器自报 readOnlyHint，不在任何审查名单上
+const notionDraft = `notion-draft-${suite}`; // 什么标签都没有
+const notionErase = `notion-erase-${suite}`; // destructiveHint
+async function seedNotionForCheckIn(database: Database, store: PluginStore) {
+  await seedComposioGmail(database, store);
+  await database.insert(mcpTools).values({
+    serverId: "gmail",
+    name: "GMAIL_SEND_EMAIL",
+    description: "Send an email.",
+    effect: "write",
+    version: "20260903_00",
+  });
+  await database.insert(mcpServers).values({
+    id: "notion",
+    title: "Notion",
+    vendor: "Notion",
+    url: "https://mcp.notion.com/mcp",
+    provenance: "first-party",
+  });
+  const listed: Parameters<typeof storableTools>[1] = [
+    { name: "notion-search", description: "Search.", inputSchema: {} },
+    { name: notionDigest, description: "A digest.", inputSchema: {} },
+    {
+      name: notionDraft,
+      description: "A draft.",
+      inputSchema: {},
+      unclassified: true,
+    },
+    {
+      name: notionErase,
+      description: "Erase a page.",
+      inputSchema: {},
+      effect: "write",
+      destructive: true,
+    },
+  ];
+  await database
+    .insert(mcpTools)
+    .values(
+      storableTools("notion", listed, undefined, catalogueEntry("notion")),
+    );
+  for (const granted of [
+    "gmail/GMAIL_SEND_EMAIL",
+    "notion/notion-search",
+    `notion/${notionDigest}`,
+    `notion/${notionDraft}`,
+    `notion/${notionErase}`,
+  ])
+    await store.grant("mcp", granted, "bot_helper", "admin@example.com");
+}
+
+/**
+ * M3: a check-in's reads are its scope (`proactive/scope.ts`) over this store's catalogue, as index.ts
+ * wires it, not upstream's read-only classifier. Every server counts as the person's own here, so only
+ * the labels decide, which is what these cases are about.
+ */
+function checkInScopeOf(store: PluginStore) {
+  return createCheckInScope({
+    catalogue: checkInCatalogue(store),
+    ownConnections: async () =>
+      new Set((await store.listServers()).map((server) => server.id)),
+  });
+}
+function createReadOnlyClassifier(store: PluginStore) {
+  return () => checkInScopeOf(store)("user_asker", "bot_helper");
+}
+
+/** 一次 check-in 拿到的工具：`grantedTools` 经 `restrictToolsForRun` 收窄，和 index.ts 一样。 */
+async function checkInToolRefs(store: PluginStore, runId: string) {
+  const initiator = proactiveInitiator(runId);
+  const load = restrictToolsForRun(
+    initiator,
+    "user_asker",
+    (botId) =>
+      grantedTools({
+        store,
+        botId,
+        actorId: "user_asker",
+        initiator,
+      }),
+    checkInScopeOf(store),
+  );
+  return (await load("bot_helper")).map((tool) => tool.ref).sort();
+}
+
+/** 以 check-in 的身份调用，确认在 store 门被拒，写的是 check_in_not_a_read。 */
+async function expectCheckInRefused(
+  store: PluginStore,
+  auditStore: {
+    recorded(): {
+      eventType: string;
+      targetId?: string | null;
+      payload?: unknown;
+    }[];
+  },
+  ref: string,
+  runId: string,
+) {
+  await expect(
+    store.callTool({
+      ref,
+      args: {},
+      botId: "bot_helper",
+      actorId: "user_asker",
+      initiator: proactiveInitiator(runId),
+    }),
+  ).rejects.toBeInstanceOf(PluginRefusedError);
+  expect(
+    auditStore
+      .recorded()
+      .filter(
+        (event) =>
+          event.eventType === "mcp.call_rejected" && event.targetId === ref,
+      )
+      .map((event) => (event.payload as { refusal?: string }).refusal),
+  ).toEqual(["check_in_not_a_read"]);
+}
+
+test("Notion, connected with the person's own account: its unlabeled, self-declared and destructive tools are never offered to a check-in, and chat still asks first", () =>
+  asPlatform(async () => {
+    const gateAsked: { toolRef: string; effect: string }[] = [];
+    const { store, database, auditStore } = await freshStore({
+      approvalGate: async (candidate) => {
+        gateAsked.push({
+          toolRef: candidate.toolRef,
+          effect: candidate.effect,
+        });
+        throw new ApprovalRefusedError(TOOL_DISABLED);
+      },
+    });
+    const executed: string[] = [];
+    useComposioClient({
+      listActions: async () => [],
+      execute: async (call) => {
+        executed.push(call.slug);
+        return vendorAnswered({ messages: [] });
+      },
+    });
+    await seedNotionForCheckIn(database, store);
+    const runId = `notion-check-in-${suite}`;
+
+    // 提供给 check-in 的：只有 Gmail 记录为读的动作。没有标签的、自报只读的、破坏性的 Notion
+    // 工具都不在，Gmail 的发送也不在。
+    expect(await checkInToolRefs(store, runId)).toEqual([
+      "gmail/GMAIL_FETCH_EMAILS",
+    ]);
+    const reads = await createReadOnlyClassifier(store)();
+    for (const notARead of [
+      "notion/notion-search",
+      `notion/${notionDigest}`,
+      `notion/${notionDraft}`,
+      `notion/${notionErase}`,
+      "gmail/GMAIL_SEND_EMAIL",
+    ])
+      expect(reads.has(notARead)).toBe(false);
+
+    // 别的路径直接到 store，也一样被拒，且在审批门、凭据和厂商之前。
+    for (const ref of [
+      "notion/notion-search",
+      `notion/${notionDigest}`,
+      `notion/${notionDraft}`,
+      `notion/${notionErase}`,
+    ])
+      await expectCheckInRefused(store, auditStore, ref, runId);
+    expect(gateAsked).toEqual([]);
+    expect(executed).toEqual([]);
+
+    // Gmail 记录为读的动作能过 check-in 的门，接着才问审批门。
+    await expect(
+      store.callTool({
+        ref: "gmail/GMAIL_FETCH_EMAILS",
+        args: {},
+        botId: "bot_helper",
+        actorId: "user_asker",
+        initiator: proactiveInitiator(runId),
+      }),
+    ).rejects.toThrow(TOOL_DISABLED);
+    expect(gateAsked).toEqual([
+      { toolRef: "gmail/GMAIL_FETCH_EMAILS", effect: "read" },
+    ]);
+
+    // 聊天的判定不变：Notion 没有读名单，广播了、不在写名单上的名字仍按读，人自己的调用照旧先问。
+    const listed = (await store.listServers()).find(
+      (server) => server.id === "notion",
+    );
+    const effectOf = (name: string) =>
+      listed?.tools.find((tool) => tool.name === name)?.effect;
+    expect(effectOf(notionDigest)).toBe("read");
+    expect(effectOf(notionDraft)).toBe("read");
+    expect(effectOf(notionErase)).toBe("write");
+    gateAsked.length = 0;
+    await expect(
+      store.callTool({
+        ref: `notion/${notionDigest}`,
+        args: {},
+        botId: "bot_helper",
+        actorId: "user_asker",
+      }),
+    ).rejects.toThrow(TOOL_DISABLED);
+    expect(gateAsked).toEqual([
+      { toolRef: `notion/${notionDigest}`, effect: "read" },
+    ]);
+  }));
+
+/*
+ * classifyTool 的默认推断不让工具进 check-in。
+ *
+ * Linear 的目录条目只有 `writeTools`，没有 `readTools`。它广播、又不在写名单上的工具，聊天里照旧
+ * 按读处理（这一条路径不变）；但没有厂商标签、也没有审查过的读名单替它作证，check-in 拿不到它，
+ * store 的门也拒绝它。
+ */
+test("a tool carrying no label at all is not in a check-in's tools, and the store refuses a check-in's call to it, though chat still reads it", () =>
+  asPlatform(async () => {
+    const gateAsked: { toolRef: string; effect: string }[] = [];
+    const { store, database, auditStore } = await freshStore({
+      approvalGate: async (candidate) => {
+        gateAsked.push({
+          toolRef: candidate.toolRef,
+          effect: candidate.effect,
+        });
+        throw new ApprovalRefusedError(TOOL_DISABLED);
+      },
+    });
+    useComposioClient({
+      listActions: async () => [],
+      execute: async () => vendorAnswered({ messages: [] }),
+    });
+    await seedComposioGmail(database, store);
+    const linearRow = `check-in-linear-${suite}`;
+    const unlabelled = `list_things_${suite}`;
+    expect(catalogueEntry("linear")?.readTools).toBeUndefined();
+    expect(catalogueEntry("linear")?.writeTools).not.toContain(unlabelled);
+    await database.insert(mcpServers).values({
+      id: linearRow,
+      catalogueKey: "linear",
+      title: "Linear",
+      vendor: "Linear",
+      url: "https://mcp.linear.app/mcp",
+      provenance: "first-party",
+    });
+    try {
+      await database.insert(mcpTools).values({
+        serverId: linearRow,
+        name: unlabelled,
+        description: "List things.",
+      });
+      await store.grant(
+        "mcp",
+        `linear/${unlabelled}`,
+        "bot_helper",
+        "admin@example.com",
+      );
+      const runId = `unlabelled-check-in-${suite}`;
+
+      // 聊天里照旧：广播了、不在写名单上，判为读。
+      const listed = (await store.listServers()).find(
+        (server) => server.id === linearRow,
+      );
+      expect(
+        listed?.tools.find((tool) => tool.name === unlabelled)?.effect,
+      ).toBe("read");
+
+      // check-in 里：不在工具清单，也不在读集合。
+      expect(await checkInToolRefs(store, runId)).toEqual([
+        "gmail/GMAIL_FETCH_EMAILS",
+      ]);
+      expect(
+        (await createReadOnlyClassifier(store)()).has(`linear/${unlabelled}`),
+      ).toBe(false);
+
+      // store 门拒绝，在审批门之前。
+      await expectCheckInRefused(
+        store,
+        auditStore,
+        `linear/${unlabelled}`,
+        runId,
+      );
+      expect(gateAsked).toEqual([]);
+
+      // 人自己在聊天里调用，check-in 的门不管，照旧按读去问审批门。
+      await expect(
+        store.callTool({
+          ref: `linear/${unlabelled}`,
+          args: {},
+          botId: "bot_helper",
+          actorId: "user_asker",
+        }),
+      ).rejects.toThrow(TOOL_DISABLED);
+      expect(gateAsked).toEqual([
+        { toolRef: `linear/${unlabelled}`, effect: "read" },
+      ]);
+    } finally {
+      await database.delete(mcpServers).where(eq(mcpServers.id, linearRow));
     }
   }));
 

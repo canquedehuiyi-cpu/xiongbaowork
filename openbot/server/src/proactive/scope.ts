@@ -72,7 +72,16 @@ export function checkInCatalogue(store: {
     {
       id: string;
       title: string;
-      tools: { ref: string; effect: "read" | "write"; destructive: boolean }[];
+      tools: {
+        ref: string;
+        effect: "read" | "write";
+        destructive: boolean;
+        /**
+         * 这个「读」有人作证：厂商列出时记录为读，或目录 `readTools` 审查过（plugins/catalogue.ts 的
+         * `checkInRead`）。聊天里 `classifyTool` 推断出来的读不算，check-in 不读它。
+         */
+        checkInRead: boolean;
+      }[];
     }[]
   >;
 }): CheckInScopeDeps["catalogue"] {
@@ -84,7 +93,8 @@ export function checkInCatalogue(store: {
         ownCredential: true,
         tools: server.tools.map((tool) => ({
           ref: tool.ref,
-          labelledRead: tool.effect === "read" && !tool.destructive,
+          labelledRead:
+            tool.effect === "read" && !tool.destructive && tool.checkInRead,
         })),
       })),
   };

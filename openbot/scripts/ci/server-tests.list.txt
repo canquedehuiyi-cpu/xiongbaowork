@@ -71,6 +71,7 @@ tests/approvals-question-resume.integration.test.ts
 tests/approvals-questions.test.ts
 tests/approvals-saved-call.test.ts
 tests/approvals-store.integration.test.ts
+tests/approvals-zh-handoff.test.ts
 tests/approvals.test.ts
 tests/ask-person-free-text.integration.test.ts
 tests/ask-person-one-part.integration.test.ts
@@ -176,6 +177,7 @@ tests/computer-page-frame-route.test.ts
 tests/computer-page-frame-store.integration.test.ts
 tests/computer-policy-dry-run-frame.test.ts
 tests/computer-policy-dry-run-limit.test.ts
+tests/computer-policy-key-names.test.ts
 tests/computer-policy-route.test.ts
 tests/computer-policy.test.ts
 tests/computer-provider.test.ts
