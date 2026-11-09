@@ -452,3 +452,34 @@ OneDrive 不在平台目录里，这一步只涉及百度网盘。
 
 每一步截图，结果记在本节下面。任何一项不通过，先查根因，不改验收标准。
 
+## 17. 员工独立电脑（京东云）
+
+每个数字员工的命令以它自己的 Linux 用户（`xb-<12 位十六进制>`）运行，文件只在 `/workspace/bots/<同一串>` 里，员工之间读不到对方的文件。默认员工（`shared`）不变，仍用 `/workspace`，以 `pwuser` 运行。设计见 `docs/specs/2026-11-09-per-employee-computer-user.md`。
+
+**交付镜像默认开启**（`COMPUTER_PER_BOT_USERS=on`），升级镜像后不需要另加配置。注意：
+
+- 不要给容器加 `--security-opt no-new-privileges`，它和本功能互斥，加了以后员工电脑会报未就绪。确实需要它时，同时设 `-e COMPUTER_PER_BOT_USERS=off`，回到所有员工共用一个用户的旧行为。
+- **员工不能再用 sudo 装系统包**（`sudo apt-get install` 会失败）。员工可以在自己目录里用 `npm install`（不带 `-g`）、`bun add` 装用户级工具（镜像里没有 python3，不提供 Python 的安装方式）；常用的系统包需要预装进镜像，有缺的请提需求。
+- 已有数据卷照常挂载。容器每次启动都会收紧 `/workspace`、`/workspace/bots`、`/profiles` 的权限，并按 `/workspace/.xb-users` 恢复员工用户，同一员工的 uid 和文件归属不变。
+
+**升级后确认已生效**（任选其一）：
+
+1. 看健康检查，`perBotUsers.ready` 应为 `true`：
+   ```sh
+   docker exec <容器名> curl -s http://127.0.0.1:4100/health
+   ```
+   输出里应有 `"perBotUsers":{"enabled":true,"ready":true}`，`status` 为 `ok`。
+2. 在两个不同员工的对话里，各让员工执行 `id -un`：两个结果都应形如 `xb-` 加 12 位十六进制，且互不相同。默认员工「我的分身」执行的结果是 `pwuser`。
+
+**遇到未就绪怎么排查**：健康检查返回 HTTP 503、`status` 为 `unready`，或员工执行命令时提示「员工独立电脑未就绪：…」。
+
+1. 看收紧失败的原因（文件不存在说明启动时的收紧没有失败）：
+   ```sh
+   docker exec <容器名> cat /run/xb-bot/unready
+   ```
+   常见原因是数据卷不支持 ACL 或 root 无法 chown（例如 NFS root_squash）。换成支持 ACL 的本地卷后重启容器。
+2. 看健康检查里的 `perBotUsers.reason`：「辅助程序不可用」多半是加了 `no-new-privileges`，或镜像不是交付镜像；「要求工作目录为 /workspace」说明改了 `WORKSPACE_DIR`。
+3. 看容器日志里以 `xb-bot:` 开头的行：`docker logs <容器名> 2>&1 | grep 'xb-bot:'`。
+4. 未就绪时只有非默认员工受影响（命令和文件工具返回 503），默认员工和网页照常可用。修不好又急用时，可临时加 `-e COMPUTER_PER_BOT_USERS=off` 重建容器，回到共用一个用户的旧行为。
+
+验收：按「升级后确认已生效」两项各做一次，再让员工 A 写一个文件，让员工 B 去读，B 应读不到。结果记在本节下面。
