@@ -114,6 +114,7 @@ import type {
   DeploymentModel,
 } from "./models/runtime-resolver";
 import { withModelRun } from "./models/token-metering";
+import { pickedSkillGuidance } from "./plugins/picked-skill";
 import type { SelectableSkill, Selection } from "./plugins/selection";
 import {
   latestUserText,
@@ -907,9 +908,6 @@ export function builtInAgentConfiguration(
   /**
    * The instructions of the skill the person picked for this message, from this deployment's own
    * store (`picked-skill.ts`). Absent when they picked none.
-   *
-   * M3: nothing passes it yet. The fork's plugins directory has no `picked-skill.ts` and its skills
-   * carry no `instructions`, so the slot is kept for when it does.
    */
   pickedSkill?: string,
   /*
@@ -1685,10 +1683,12 @@ async function buildAgent(
     }
   }
   /*
-   * M3: upstream also tells a Bot the skill the person picked for a message (`picked-skill.ts`, read
-   * from each skill's `instructions`). Neither is in the fork's plugins directory yet, so no run here
-   * is told one.
+   * The skill this run's message picked, among the ones this Bot holds, as the Bot is told it. Read
+   * from the same grants narrowing reads, fresh per request. See `picked-skill.ts`.
    */
+  const pickedSkillFor = (input: RunAgentInput) =>
+    pickedSkillGuidance(input, skills);
+  const holdsInstructions = skills.some((skill) => skill.instructions);
   const narrowing =
     selection &&
     skills.some((skill) => skill.tools.length > 0) &&
@@ -1863,6 +1863,7 @@ async function buildAgent(
             )
         : undefined,
       refusingProvider(model),
+      holdsInstructions ? pickedSkillFor : undefined,
     );
   }
 
@@ -1994,6 +1995,8 @@ async function buildAgent(
     timeZone?: string,
     /** The model this coworker speaks with on this run. See {@link bindingFor}. */
     runAgentModel: LanguageModel | undefined = agentModel,
+    /** What the Bot is told for the skill this run's message picked. See `picked-skill.ts`. */
+    pickedSkill?: string,
   ) => {
     /*
      * What waits behind a search, decided where the run's tools are final. The count includes what
@@ -2030,7 +2033,7 @@ async function buildAgent(
         waiting,
         undefined,
         timeZone,
-        undefined,
+        pickedSkill,
         runAgentModel,
         runToolNames,
       );
@@ -2104,6 +2107,7 @@ async function buildAgent(
     !model.plan &&
     !acquireLearnedSkills &&
     !holdsTools &&
+    !holdsInstructions &&
     !granted.some((tool) => tool.searchable)
   )
     return whole;
@@ -2141,6 +2145,7 @@ async function buildAgent(
           timeZone,
           runAgentModel,
         );
+      const pickedSkill = pickedSkillFor(input);
       // Fetched per run, so a skill published a moment ago reaches the next run (upstream 0046).
       const learnedSkills = await acquireLearnedSkills?.(agent.id, signal);
       signal.throwIfAborted();
@@ -2180,7 +2185,8 @@ async function buildAgent(
         passing.length === 0 &&
         pinned.size === 0 &&
         input.tools.length === 0 &&
-        !timeZone
+        !timeZone &&
+        !pickedSkill
         ? whole
         : withTools(
             tools,
@@ -2191,6 +2197,7 @@ async function buildAgent(
             runModel,
             timeZone,
             runAgentModel,
+            pickedSkill,
           );
     },
   );
@@ -2599,10 +2606,15 @@ function remoteAgentWithStandingRole(
    * may be on any provider, so its refusals name the provider only when its own words do.
    */
   ourProvider?: RefusingProvider,
-  /*
-   * M3: upstream's `pickedSkillFor` (the skill a run's message picked) and `apps` are not taken: both
-   * read the plugins directory, which the fork keeps as it is. See the note on the plugins imports.
+  /**
+   * What the Bot is told for the skill a run's message picked, among the ones it holds. Put in the
+   * standing role, the one message every harness reads as this deployment's instructions: a system
+   * row the browser sent is read there as conversation data. Absent when the Bot holds no skill.
+   * See `picked-skill.ts`.
+   *
+   * M3: upstream's `apps` is still not taken; see the note on the plugins imports.
    */
+  pickedSkillFor?: (input: RunAgentInput) => string | undefined,
 ) {
   const holds = (input: RunAgentInput) => !holdsTools || holdsTools(input);
   /*
@@ -2790,13 +2802,18 @@ function remoteAgentWithStandingRole(
          * line names the framework ("Powered by ..."), and the Bot is told its model the way a
          * built-in one is (`modelGuidance`). A Bot that picks its own model is told none.
          */
-        // M3: upstream adds the skill the person picked after the date; see the note on the signature.
+        /*
+         * And after the date, because it changes with the message, the skill the person picked for
+         * this one. Not for a run the runtime makes for itself, which holds nothing of the Bot's.
+         */
+        const pickedSkill = held ? pickedSkillFor?.(input) : undefined;
         const standingMessage = {
           ...agent.standingMessage,
           content: [
             agent.standingMessage.content,
             ...(label ? [modelGuidance(label)] : []),
             todayGuidance(new Date(), runTimeZone(input.forwardedProps)),
+            ...(pickedSkill ? [pickedSkill] : []),
           ].join("\n\n"),
         };
         const prepared: RunAgentInput = {
