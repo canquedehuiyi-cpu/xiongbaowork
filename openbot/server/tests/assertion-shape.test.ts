@@ -507,6 +507,57 @@ const key = (o: Pick<Offence, "file" | "shape" | "context" | "expression">) =>
  */
 const ALLOW: Allowed[] = [
   {
+    file: "server/tests/mcp-listing.test.ts",
+    shape: "b",
+    context: [
+      '"a tool the vendor said nothing about is unclassified"',
+      '"an MCP tool with no annotations is listed as unclassified, with no effect recorded"',
+    ],
+    expression: "expect(search?.effect).toBeUndefined()",
+    finding: "M3: a plugins-session test from main, which predates this guard",
+  },
+  {
+    file: "server/tests/mcp-listing.test.ts",
+    shape: "b",
+    context: [
+      '"a tool the vendor said nothing about is unclassified"',
+      '"an MCP tool with no annotations is listed as unclassified, with no effect recorded"',
+    ],
+    expression:
+      "expect(tools.find((tool)=>tool.name===name)?.unclassified,).toBeUndefined()",
+    finding: "M3: a plugins-session test from main, which predates this guard",
+  },
+  {
+    file: "server/tests/plugin-catalogue-market.test.ts",
+    shape: "b",
+    context: [
+      '"the MCP market\'s first batch"',
+      '"none of them opts into owner assembly"',
+    ],
+    expression: "expect(entry?.ownerAssembly).toBeUndefined()",
+    finding: "M3: a plugins-session test from main, which predates this guard",
+  },
+  {
+    file: "server/tests/plugin-catalogue-market.test.ts",
+    shape: "b",
+    context: [
+      '"reviewed read lists"',
+      '"an entry with no read list behaves exactly as it did"',
+    ],
+    expression: "expect(exa?.readTools).toBeUndefined()",
+    finding: "M3: a plugins-session test from main, which predates this guard",
+  },
+  {
+    file: "server/tests/plugin-catalogue-market.test.ts",
+    shape: "b",
+    context: [
+      '"the MCP market\'s second batch"',
+      '"none of them opts into owner assembly"',
+    ],
+    expression: "expect(entry?.ownerAssembly).toBeUndefined()",
+    finding: "M3: a plugins-session test from main, which predates this guard",
+  },
+  {
     file: "app/tests/auth-client.test.ts",
     shape: "a",
     context: ['"signInWith"', '"throws what the client said when it refuses"'],

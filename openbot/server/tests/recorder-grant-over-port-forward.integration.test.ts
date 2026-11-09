@@ -49,7 +49,6 @@ const INSTALL_ID = "e".repeat(32);
 /** What the stand-in for Intelligence was asked: its trajectory joins, and the sockets opened on its gateway. */
 const joins: Array<{ trajectoryId: string; appUserId: string }> = [];
 const gatewaySockets: Array<{ path: string; search: string }> = [];
-const gatewayHeard: string[] = [];
 
 let intelligence: ReturnType<typeof Bun.serve>;
 let openbot: { stop(closeActiveConnections?: boolean): Promise<void> };
@@ -88,7 +87,6 @@ beforeAll(async () => {
     },
     websocket: {
       message(ws, message) {
-        gatewayHeard.push(String(message));
         ws.send(message);
       },
     },

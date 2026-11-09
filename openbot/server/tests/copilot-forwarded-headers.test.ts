@@ -49,7 +49,6 @@ const seen: { bot: string; headers: Record<string, string | undefined> }[] = [];
 /** AG-UI events the runner delivered to the platform, so a run can be awaited to its end. */
 const delivered: { runId?: string; type?: string }[] = [];
 /** Anything the platform was asked that this fake does not answer: a hint, if a run stalls. */
-const unanswered: string[] = [];
 
 let endpoint: ReturnType<typeof Bun.serve>;
 let platform: ReturnType<typeof Bun.serve>;
@@ -118,7 +117,6 @@ beforeAll(() => {
         if (rest === "lock" && request.method === "DELETE")
           return new Response(null, { status: 204 });
       }
-      unanswered.push(`${request.method} ${url.pathname}`);
       return Response.json({ error: "not found" }, { status: 404 });
     },
     websocket: {

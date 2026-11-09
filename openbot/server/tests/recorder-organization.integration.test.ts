@@ -142,6 +142,9 @@ const clearOrganizationFailure = () =>
   clearDesktopConnectionFailure("organization");
 beforeEach(() => {
   clearOrganizationFailure();
+  // The failure state is one per process: a model failure an earlier file recorded in the same run
+  // is not this file's to read (the desktop answers the first failure it holds).
+  clearDesktopConnectionFailure("model");
   answer = signedIn;
 });
 afterEach(clearOrganizationFailure);

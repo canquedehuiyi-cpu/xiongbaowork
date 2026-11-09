@@ -312,7 +312,6 @@ async function tokenEndpoint(request: Request): Promise<Response> {
 /* ------------------------------------------------- the company's system, as MCP */
 
 /** Every bearer the system accepted, as the person it named. */
-const reached: string[] = [];
 
 async function hrSystem(request: Request): Promise<Response> {
   const bearer = request.headers.get("authorization")?.replace(/^Bearer /, "");
@@ -334,7 +333,6 @@ async function hrSystem(request: Request): Promise<Response> {
     "whoami",
     { description: "Who this HR system sees calling it." },
     async () => {
-      reached.push(who);
       return { content: [{ type: "text", text: `You are ${who}.` }] };
     },
   );
