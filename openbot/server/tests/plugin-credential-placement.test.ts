@@ -592,6 +592,29 @@ describe("M1: the key is taken out before anything is cut, so no half of it surv
     expect(fragmentOf(message, KEY)).toBeNull();
   });
 
+  test("a 403 whose 400-character cut lands inside an emoji is cut before it, after the key is out", async () => {
+    // The key is taken out first and the cut is measured on what is left: "Invalid key " and the
+    // five-unit marker that replaces the key, padding up to 399 units, then emoji. The 400-unit cut
+    // lands between the first emoji's two halves, and the half is dropped rather than kept.
+    const said = `Invalid key ${KEY}`;
+    const pad = "x".repeat(399 - "Invalid key [已隐去]".length);
+    const message = await listTools(
+      viaFake(
+        (async () =>
+          new Response(
+            JSON.stringify({
+              error: { message: `${said}${pad}${"🙂".repeat(300)}` },
+            }),
+            { status: 403, headers: { "content-type": "application/json" } },
+          )) as unknown as typeof fetch,
+      ),
+    ).catch((error: Error) => error.message);
+    expect(message).toContain("(403)");
+    expect(fragmentOf(message, KEY)).toBeNull();
+    expect(message).toContain(`It said: Invalid key [已隐去]${pad}…`);
+    expect(message.isWellFormed()).toBe(true);
+  });
+
   test("a result whose 20 000-character cut lands inside the key leaves no fragment of it", async () => {
     // Long enough that it is still cut after the key is taken out, wherever the cut then falls.
     const text = `${"y".repeat(20_000 - KEY.length / 2)}${KEY}${"z".repeat(200)}`;

@@ -469,6 +469,23 @@ export class CatalogueEntryUnknownError extends Error {
   }
 }
 
+/**
+ * The deployment's stored OAuth client could not be read: the vault read or the decryption failed.
+ *
+ * Distinct from "there is none" (missing, revoked, or not a client), because only that may be
+ * answered by registering a new one. The client is one row every replica shares, so a replica that
+ * cannot decrypt it and registers around it replaces the client for every replica that still can.
+ *
+ * Carries nothing of the fault it stands for, never its message or cause: a vault or parser message
+ * can quote the stored client.
+ */
+export class OAuthClientReadError extends Error {
+  constructor() {
+    super("The stored OAuth client could not be read.");
+    this.name = "OAuthClientReadError";
+  }
+}
+
 /** A URL an administrator offered that this deployment will not point itself at. */
 export class CustomServerRefusedError extends Error {
   constructor(message: string) {
@@ -2131,7 +2148,7 @@ export function createPluginStore(options: PluginStoreOptions) {
         parsed = JSON.parse(decrypted);
       } catch {
         /*
-         * Unreadable is the same as none, exactly as it is for {@link heldOAuthClient} and
+         * Unparseable is the same as none, exactly as it is for {@link heldOAuthClient} and
          * {@link storedOAuthClient}: there is nothing here to present to a vendor. Those two answer
          * null because their callers are deciding whether a consent flow can start; this one is
          * already mid-call, and its every caller would have to turn a null into this same refusal
@@ -2536,6 +2553,50 @@ export function createPluginStore(options: PluginStoreOptions) {
   });
 
   /**
+   * A stored-client read, with every fault it raises turned into {@link OAuthClientReadError}.
+   *
+   * Only the READ is wrapped — the server row, the vault row, the decryption — never a vendor
+   * registration or a vault write after it, so a registration that fails is not reported as a client
+   * nobody could read. Missing, revoked and unparseable answer null inside `work` and pass through.
+   *
+   * The fault is logged by its name alone (a wrong key is `OperationError`, a vault outage whatever
+   * the driver throws), because its message can quote the stored value. The error thrown in its place
+   * carries nothing of it, so this line is all an operator gets.
+   */
+  async function readClient(
+    serverId: string,
+    work: () => Promise<OAuthClient | null>,
+  ): Promise<OAuthClient | null> {
+    try {
+      return await work();
+    } catch (error) {
+      console.error(
+        JSON.stringify({
+          type: "mcp-oauth-client-read-failed",
+          server: serverId,
+          error: error instanceof Error ? error.name : "UnknownError",
+        }),
+      );
+      throw new OAuthClientReadError();
+    }
+  }
+
+  /**
+   * A decrypted client, or null when it is not one.
+   *
+   * Never rethrown: `JSON.parse` reports failure by quoting the input, and the input is the decrypted
+   * client. A value that parsed and is not a client is the same none — see {@link isUsableClient}.
+   */
+  function clientFromStoredJson(plaintext: string): OAuthClient | null {
+    try {
+      const parsed: unknown = JSON.parse(plaintext);
+      return isUsableClient(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * One writer at a time for one server's OAuth client, across the whole deployment.
    *
    * Everything that stores a client reads "is there a live one" and then writes accordingly, and the
@@ -2580,46 +2641,43 @@ export function createPluginStore(options: PluginStoreOptions) {
     transaction: Transaction,
     serverId: string,
   ): Promise<OAuthClient | null> {
-    const [server] = await transaction
-      .select({
-        id: mcpServers.id,
-        tenantId: mcpServers.tenantId,
-        credentialId: mcpServers.credentialId,
-      })
-      .from(mcpServers)
-      .where(atServerAddress(serverId))
-      .orderBy(ownRowFirst())
-      .limit(1);
-    if (!server?.credentialId) return null;
+    return readClient(serverId, async () => {
+      const [server] = await transaction
+        .select({
+          id: mcpServers.id,
+          tenantId: mcpServers.tenantId,
+          credentialId: mcpServers.credentialId,
+        })
+        .from(mcpServers)
+        .where(atServerAddress(serverId))
+        .orderBy(ownRowFirst())
+        .limit(1);
+      if (!server?.credentialId) return null;
 
-    // A team server's client, in a person's frame, through the broker (G01-E P10).
-    const [held] = throughBroker(server)
-      ? [await brokeredSecret(transaction, server.id)]
-      : await transaction
-          .select({
-            encryptedValue: credentialRows.encryptedValue,
-            revokedAt: credentialRows.revokedAt,
-            id: credentialRows.id,
-            tenantId: credentialRows.tenantId,
-            kind: credentialRows.kind,
-          })
-          .from(credentialRows)
-          .where(eq(credentialRows.id, server.credentialId))
-          .limit(1);
-    if (!held || held.revokedAt) return null;
+      // A team server's client, in a person's frame, through the broker (G01-E P10).
+      const [held] = throughBroker(server)
+        ? [await brokeredSecret(transaction, server.id)]
+        : await transaction
+            .select({
+              encryptedValue: credentialRows.encryptedValue,
+              revokedAt: credentialRows.revokedAt,
+              id: credentialRows.id,
+              tenantId: credentialRows.tenantId,
+              kind: credentialRows.kind,
+            })
+            .from(credentialRows)
+            .where(eq(credentialRows.id, server.credentialId))
+            .limit(1);
+      if (!held || held.revokedAt) return null;
 
-    try {
-      const parsed: unknown = JSON.parse(
-        await openCredential(encryptionKey, held),
-      );
-      // A value that parsed and is not a client is unreadable in the same way and for the same
-      // caller — see {@link isUsableClient}. Null, because that is what this reader's caller acts
-      // on: it goes and registers one, which is the answer to holding none.
-      return isUsableClient(parsed) ? parsed : null;
-    } catch {
-      // Unreadable is the same as none: there is nothing to send anybody to consent with.
-      return null;
-    }
+      /*
+       * A decryption fault does not mean the vendor forgot this client, and it is not "none". The
+       * caller answers null by registering, under this lock, over the one row every replica shares:
+       * a replica holding the wrong key would replace the client for every replica that can still
+       * read it. So it throws, and only an unparseable value is none.
+       */
+      return clientFromStoredJson(await openCredential(encryptionKey, held));
+    });
   }
 
   /**
@@ -2795,19 +2853,19 @@ export function createPluginStore(options: PluginStoreOptions) {
   async function storedOAuthClient(
     serverId: string,
   ): Promise<OAuthClient | null> {
-    const [row] = await database
-      .select({
-        id: mcpServers.id,
-        tenantId: mcpServers.tenantId,
-        credentialId: mcpServers.credentialId,
-      })
-      .from(mcpServers)
-      .where(atServerAddress(serverId))
-      .orderBy(ownRowFirst())
-      .limit(1);
-    if (!row?.credentialId) return null;
+    return readClient(serverId, async () => {
+      const [row] = await database
+        .select({
+          id: mcpServers.id,
+          tenantId: mcpServers.tenantId,
+          credentialId: mcpServers.credentialId,
+        })
+        .from(mcpServers)
+        .where(atServerAddress(serverId))
+        .orderBy(ownRowFirst())
+        .limit(1);
+      if (!row?.credentialId) return null;
 
-    try {
       // A team server's client, in a person's frame, through the broker (G01-E P10).
       const brokered = throughBroker(row)
         ? await brokeredSecret(database, row.id)
@@ -2815,22 +2873,25 @@ export function createPluginStore(options: PluginStoreOptions) {
       if (brokered !== undefined && (!brokered || brokered.revokedAt)) {
         return null;
       }
-      const parsed: unknown = JSON.parse(
-        brokered
+      let plaintext: string;
+      try {
+        plaintext = brokered
           ? await openCredential(encryptionKey, brokered)
           : await serverCredentialById({
               tenantId: row.tenantId,
               credentialId: row.credentialId,
-            }),
-      );
-      // A client that parsed and is not one is as unusable as the revoked or missing row the catch
-      // below answers for, and is the same none to every caller — see {@link isUsableClient}.
-      return isUsableClient(parsed) ? parsed : null;
-    } catch {
-      // A revoked, missing or unreadable client is the same as none for every caller: there is
-      // nothing to send anybody to consent with, and the answer is to obtain one again.
-      return null;
-    }
+            });
+      } catch (error) {
+        /*
+         * Only a confirmed missing, revoked or not-this-server's credential is none, and permits
+         * obtaining a replacement. A failed read or decryption is a fault: answering null here sends
+         * `ensureOAuthClient` to register over a client the other replicas can still use.
+         */
+        if (error instanceof CredentialUnusableError) return null;
+        throw error;
+      }
+      return clientFromStoredJson(plaintext);
+    });
   }
 
   /**
@@ -6011,9 +6072,35 @@ export function createPluginStore(options: PluginStoreOptions) {
     /**
      * The deployment's OAuth client for a server, or null if none is registered.
      *
-     * Reads only. {@link ensureOAuthClient} is the one that will go and get one.
+     * Reads only. {@link ensureOAuthClient} is the one that will go and get one. A client that is
+     * held and cannot be read is {@link OAuthClientReadError}, not null.
      */
     oauthClientFor: storedOAuthClient,
+
+    /**
+     * The trail row for a Connect that stopped because the deployment's client could not be read.
+     *
+     * Written in the caller's frame, like every other row this store writes for a person's act: the
+     * Connect route runs in the person's own. Who pressed it goes in the payload with the server and
+     * the operation; the fault itself never does, not its name and not its message, because a vault or
+     * decryption message can quote the stored client. The server's log line has the name.
+     */
+    async recordOAuthClientReadFailure(input: {
+      serverId: string;
+      actorId: string;
+    }): Promise<void> {
+      await recordAuditEvent(auditStore, {
+        eventType: "mcp.oauth_client_read_failed",
+        targetType: "mcp_server",
+        targetId: input.serverId,
+        payload: {
+          actor: input.actorId,
+          server: input.serverId,
+          operation: "connect",
+          reason: "credential_read_failed",
+        },
+      });
+    },
 
     /** Which `user-oauth` servers this person has connected, for their own settings page. */
     async connectionsFor(
