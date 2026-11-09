@@ -639,3 +639,282 @@ describe("windowsCodePage cache", () => {
     expect(await calls("good")).toBe(1);
   });
 });
+
+/**
+ * An employee's command, run as its own Linux user through the root helper.
+ *
+ * The helper is replaced by a script that does what `xb-bot run` is contracted to do with its input:
+ * it prints its arguments, reads `NAME=VALUE` lines up to the first empty line, then runs the rest of
+ * stdin as the command. What it prints is what the real helper would have been given.
+ */
+describe("a command run as the employee's own user", () => {
+  const KEY = "0123456789ab";
+  let root: string;
+  let launcher: string;
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), "openbot-shell-run-as-"));
+    launcher = join(root, "fake-xb.sh");
+    await writeFile(
+      launcher,
+      [
+        "#!/bin/sh",
+        'echo "$@"',
+        'while IFS= read -r line; do [ -z "$line" ] && break; printf "ENV:%s\\n" "$line"; done',
+        'exec sh -c "$(cat)"',
+        "",
+      ].join("\n"),
+    );
+    await chmod(launcher, 0o755);
+  });
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  const shellFor = (env: NodeJS.ProcessEnv = source()) =>
+    createShell(root, env, { runAs: { key: KEY, launcher: [launcher] } });
+
+  test("the helper is asked to run as the employee, for the default limit in seconds", async () => {
+    const result = await shellFor().run({ command: "echo hi" });
+    expect(result.stdout).toContain(`run ${KEY} 120`);
+    expect(result.stdout).toContain("hi");
+    expect(result.exitCode).toBe(0);
+  });
+
+  test("the command's environment arrives on stdin, without the user's own identity", async () => {
+    const result = await shellFor(
+      source({
+        COMPUTER_SHELL_ENV: "USER,LOGNAME,SHELL,TMPDIR,MULTI,KEPT",
+        USER: "pwuser",
+        LOGNAME: "pwuser",
+        SHELL: "/bin/bash",
+        TMPDIR: "/tmp",
+        MULTI: "one\ntwo",
+        KEPT: "yes",
+      }),
+    ).run({ command: "true" });
+    expect(result.stdout).toContain("ENV:PATH=/usr/bin:/bin");
+    expect(result.stdout).toContain("ENV:KEPT=yes");
+    for (const name of ["HOME", "TMPDIR", "USER", "LOGNAME", "SHELL", "MULTI"])
+      expect(result.stdout).not.toContain(`ENV:${name}=`);
+    // Still the allow-list: a secret on the process does not reach the helper either.
+    expect(result.stdout).not.toContain("deployment-key");
+  });
+
+  test("a command with newlines and quotes runs exactly as written", async () => {
+    const result = await shellFor().run({
+      command: `printf '%s\\n' "a b"\necho "it's"`,
+    });
+    expect(result.stdout).toContain("a b\nit's\n");
+    expect(result.exitCode).toBe(0);
+  });
+
+  test("it starts in the employee's directory", async () => {
+    const result = await shellFor().run({ command: "pwd" });
+    expect(result.stdout).toContain(`${root}\n`);
+  });
+
+  test("a command past its limit is stopped and says so", async () => {
+    const started = Date.now();
+    const result = await shellFor().run({
+      command: "sleep 30",
+      timeoutMs: 1_000,
+    });
+    expect(result.stdout).toContain(`run ${KEY} 1`);
+    expect(result.timedOut).toBe(true);
+    expect(Date.now() - started).toBeLessThan(3_000);
+  }, 20_000);
+
+  test("a Stop reaches the command", async () => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 300);
+    const started = Date.now();
+    try {
+      const result = await shellFor().run({
+        command: "sleep 30",
+        timeoutMs: 20_000,
+        signal: controller.signal,
+      });
+      expect(result.stopped).toBe(true);
+      expect(result.timedOut).toBe(false);
+      expect(Date.now() - started).toBeLessThan(10_000);
+    } finally {
+      clearTimeout(timer);
+    }
+  }, 20_000);
+});
+
+/**
+ * Stopping an employee's command when the command is out of this process's reach.
+ *
+ * In the image the child is sudo, running as root, and the command runs under GNU timeout in a
+ * process group of its own, as another user: nothing this process sends to its child's group reaches
+ * it. Only sudo relays the SIGTERM it is sent to the helper, and the helper ends the command's group.
+ * The launchers here keep that shape: the command is moved into its own session with `setsid`, and
+ * only the launcher's own trap can end it.
+ */
+describe("an employee's command out of this process's reach", () => {
+  const KEY = "0123456789ab";
+  let root: string;
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), "openbot-shell-reach-"));
+  });
+
+  afterEach(async () => {
+    // Whatever a launcher left behind, by the pids it wrote down.
+    for (const name of ["pgid", "launcher"]) {
+      const pid = Number(
+        await readFile(join(root, name), "utf8").catch(() => ""),
+      );
+      if (!Number.isInteger(pid) || pid <= 0) continue;
+      for (const target of name === "pgid" ? [-pid] : [pid]) {
+        try {
+          process.kill(target, "SIGKILL");
+        } catch {}
+      }
+    }
+    await rm(root, { recursive: true, force: true });
+  });
+
+  /**
+   * `relays`: on SIGTERM it ends the command's group, as the helper's trap does. (`kill -s KILL --`,
+   * because dash's `kill -KILL -- -<pgid>` refuses the `--` and kills nothing.)
+   * `stuck`: it ignores SIGTERM, as a sudo this process may not signal would.
+   * Neither cleans up after a command that exited and left something running.
+   */
+  async function launcher(kind: "relays" | "stuck"): Promise<string> {
+    const path = join(root, `fake-xb-${kind}.sh`);
+    const trap =
+      kind === "relays"
+        ? `trap 'kill -s KILL -- -"$child" 2>/dev/null; exit 143' TERM`
+        : "trap '' TERM";
+    await writeFile(
+      path,
+      [
+        "#!/bin/sh",
+        `echo $$ > '${root}/launcher'`,
+        'while IFS= read -r line; do [ -z "$line" ] && break; done',
+        "cmd=$(cat)",
+        'setsid sh -c "$cmd" &',
+        "child=$!",
+        `echo "$child" > '${root}/pgid'`,
+        trap,
+        'wait "$child"; rc=$?',
+        'while [ "$rc" -gt 128 ] && kill -0 "$child" 2>/dev/null; do wait "$child"; rc=$?; done',
+        'exit "$rc"',
+        "",
+      ].join("\n"),
+    );
+    await chmod(path, 0o755);
+    return path;
+  }
+
+  const shell = (path: string) =>
+    createShell(root, source(), { runAs: { key: KEY, launcher: [path] } });
+
+  /** Whether the command's group is still there a moment later; a killed process takes a beat to be reaped. */
+  const groupAlive = async () => {
+    const pgid = Number(await readFile(join(root, "pgid"), "utf8"));
+    const until = Date.now() + 2_000;
+    for (;;) {
+      try {
+        process.kill(-pgid, 0);
+      } catch {
+        return false;
+      }
+      if (Date.now() > until) return true;
+      await Bun.sleep(50);
+    }
+  };
+
+  test("a command that exits and leaves a process holding its output still comes back", async () => {
+    const started = Date.now();
+    const result = await shell(await launcher("relays")).run({
+      command: "echo hi; sleep 987 &",
+      timeoutMs: 60_000,
+    });
+    expect(result.stdout).toContain("hi");
+    expect(result.exitCode).toBe(0);
+    expect(result.timedOut).toBe(false);
+    expect(Date.now() - started).toBeLessThan(6_000);
+  }, 20_000);
+
+  test("a timeout is sent to the child, which ends the command", async () => {
+    const started = Date.now();
+    const result = await shell(await launcher("relays")).run({
+      command: "sleep 986",
+      timeoutMs: 1_000,
+    });
+    expect(result.timedOut).toBe(true);
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(await groupAlive()).toBe(false);
+  }, 20_000);
+
+  test("a Stop is sent to the child, which ends the command", async () => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 300);
+    const started = Date.now();
+    try {
+      const result = await shell(await launcher("relays")).run({
+        command: "sleep 986",
+        timeoutMs: 60_000,
+        signal: controller.signal,
+      });
+      expect(result.stopped).toBe(true);
+      expect(result.timedOut).toBe(false);
+      expect(Date.now() - started).toBeLessThan(5_000);
+      expect(await groupAlive()).toBe(false);
+    } finally {
+      clearTimeout(timer);
+    }
+  }, 20_000);
+
+  test("a child that never exits is given up on, so the request does not hang", async () => {
+    const started = Date.now();
+    const result = await shell(await launcher("stuck")).run({
+      command: "echo started; sleep 985",
+      timeoutMs: 1_000,
+    });
+    const elapsed = Date.now() - started;
+    expect(result.timedOut).toBe(true);
+    expect(result.stdout).toContain("started");
+    expect(elapsed).toBeGreaterThanOrEqual(15_000);
+    expect(elapsed).toBeLessThan(20_000);
+  }, 30_000);
+
+  test.each([
+    ["not hex", "../../etc/x"],
+    ["upper case", "0123456789AB"],
+    ["too short", "0123456789a"],
+    ["too long", "0123456789abc"],
+  ])("a key that is %s is refused before anything runs", (_, key) => {
+    expect(() => createShell(root, source(), { runAs: { key } })).toThrow();
+  });
+
+  test("a value with a NUL never reaches the helper", async () => {
+    const path = join(root, "print-env.sh");
+    await writeFile(
+      path,
+      [
+        "#!/bin/sh",
+        'while IFS= read -r line; do [ -z "$line" ] && break; printf "ENV:%s\\n" "$line"; done',
+        "cat >/dev/null",
+        "",
+      ].join("\n"),
+    );
+    await chmod(path, 0o755);
+    const result = await createShell(
+      root,
+      source({
+        COMPUTER_SHELL_ENV: "WITH_NUL,PLAIN",
+        WITH_NUL: "a\0b",
+        PLAIN: "ok",
+      }),
+      { runAs: { key: KEY, launcher: [path] } },
+    ).run({ command: "true" });
+    expect(result.stdout).toContain("ENV:PLAIN=ok");
+    expect(result.stdout).not.toContain("WITH_NUL");
+  });
+});

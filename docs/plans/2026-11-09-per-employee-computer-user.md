@@ -172,6 +172,8 @@
 **辅助程序行为：**
 - 全程 `set -eu`，`PATH=/usr/sbin:/usr/bin:/sbin:/bin`，不读取调用方的环境变量。
 - 第一个参数不在 `ensure|run|restore` 中，或 key 不匹配 `^[0-9a-f]{12}$`，退出码 64。
+- 辅助程序自身的任何错误（退出码 64、65，以及 ensure 或 restore 失败）都向 stderr 输出一行以 `xb-bot: ` 开头的说明。agent-computer 只在「退出码为 64 或 65，且 stderr 首行以 `xb-bot: ` 开头」时，才判定是辅助程序拒绝并返回 503；否则当作命令自身的退出码。这一条同时修改 `openbot/agent-computer/src/shell.ts` 中 M4 的判定，并补对应测试。
+- 用 dash 的写法给进程组发信号：`kill -s TERM -- "-$pid"`。dash 不接受 `kill -TERM -- -$pid`，会静默失败。测试必须断言进程确实已被清掉。
 - `ensure <key>`：
   - 映射中已有 uid 就用 `-u <uid>`。
   - 用户不存在时执行 `useradd --system --gid xbbots --home-dir /workspace/bots/<key> --no-create-home --shell /usr/sbin/nologin xb-<key>`，并把 uid 追加进映射。
@@ -188,8 +190,8 @@
     timeout --kill-after=5 "$t" runuser -u "xb-$key" -- env -i "$@" HOME="$dir" TMPDIR="$dir/.tmp" USER="xb-$key" LOGNAME="xb-$key" /bin/bash -c "$cmd" &
     ```
     记下 pid（timeout 会自建进程组，组号就是它的 pid）。
-  - `trap` 捕获 TERM、INT、HUP（sudo 会把调用方的信号转给辅助程序），收到后依次执行：`kill -TERM -- -$pid`，等 3 秒，`kill -KILL -- -$pid`，再执行 `pkill -KILL -u "xb-$key"` 兜底。
-  - `wait $pid` 拿到退出码后，**无论命令是正常结束还是超时**，都执行 `kill -KILL -- -$pid 2>/dev/null || true`，清掉命令留在组里的后台进程（例如 `sleep 1000 &`）。这样后台进程不会一直占着输出管道。说明：命令结束时连同它的后台进程一起结束，不支持常驻进程。
+  - `trap` 捕获 TERM、INT、HUP（sudo 会把调用方的信号转给辅助程序），收到后依次执行：`kill -s TERM -- "-$pid"`，等 3 秒，`kill -s KILL -- "-$pid"`，再执行 `pkill -KILL -u "xb-$key"` 兜底。
+  - `wait $pid` 拿到退出码后，**无论命令是正常结束还是超时**，都执行 `kill -s KILL -- "-$pid" 2>/dev/null || true`，清掉命令留在组里的后台进程（例如 `sleep 1000 &`）。这样后台进程不会一直占着输出管道。说明：命令结束时连同它的后台进程一起结束，不支持常驻进程。
   - 以命令的退出码退出。超时时 timeout 返回 124 或 137，原样透传。
 - `restore`：
   - 若 `/run/s6/container_environment` 存在，强制设为 `root:root 0700`（员工用户不得读取容器环境，例如 COMPUTER_TOKEN 和数据库地址）。
