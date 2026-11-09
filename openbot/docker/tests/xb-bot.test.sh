@@ -434,5 +434,47 @@ COMPUTER_PER_BOT_USERS=on "$XB" restore 2>"$T/err" || fail "restore exited $?"
 [ ! -e /run/xb-bot/unready ] || fail "a clean restore left the unready mark"
 pass "restore removes stale command files"
 
+# shell: the employee's live terminal, an interactive bash as the employee (agent-computer's
+# ownUserTerminal). Root stands in for the caller here, so the terminal directory is root's and
+# SUDO_UID says 0, as sudo would say pwuser's uid.
+"$XB" ensure "$A" >/dev/null 2>"$T/err" || fail "ensure of A before shell exited $?: $(cat "$T/err")"
+SH=$(mktemp -d /tmp/.openbot-shell-XXXXXX)
+printf 'PS1="xb> "\n' >"$SH/bashrc"
+printf 'PATH=/usr/local/bin:/usr/bin:/bin\nHOME=/root\nUSER=root\nXB_TEST_VAR=from-env\n' >"$SH/env"
+chmod 600 "$SH/bashrc" "$SH/env"
+printf 'id -un; echo "home=$HOME var=$XB_TEST_VAR token=${COMPUTER_TOKEN:-none}"; umask; pwd; exit\n' |
+  SUDO_UID=0 COMPUTER_TOKEN=leak "$XB" shell "$A" "$SH" >"$T/out" 2>"$T/err"
+code=$?
+[ "$code" = 0 ] || fail "shell for A exited $code: $(cat "$T/err")"
+grep -qx "xb-$A" "$T/out" || fail "the shell did not run as xb-$A: $(cat "$T/out")"
+grep -qx "home=$DIRA var=from-env token=none" "$T/out" || fail "the shell's environment is wrong: $(cat "$T/out")"
+grep -qx "0077" "$T/out" || fail "the shell's umask is not 077: $(cat "$T/out")"
+grep -qx "$DIRA" "$T/out" || fail "the shell did not start in $DIRA: $(cat "$T/out")"
+pass "shell runs an interactive bash as the employee, in its directory, with the env file and nothing of the caller's"
+none_left "-u xb-$A -x bash" || fail "a bash of xb-$A was left running after exit"
+pass "shell leaves nothing running once the person exits"
+
+expect_code 64 "shell outside /tmp/.openbot-shell-* is refused" -- env SUDO_UID=0 "$XB" shell "$A" /tmp
+expect_code 64 "shell with a path below the terminal directory is refused" -- env SUDO_UID=0 "$XB" shell "$A" "$SH/x"
+expect_code 64 "shell with .. in the path is refused" -- env SUDO_UID=0 "$XB" shell "$A" "$SH/.."
+expect_code 64 "shell without SUDO_UID is refused" -- env -u SUDO_UID "$XB" shell "$A" "$SH"
+expect_code 64 "shell for a directory the caller does not own is refused" -- env SUDO_UID=12345 "$XB" shell "$A" "$SH"
+LINK=/tmp/.openbot-shell-link$$
+ln -s "$SH" "$LINK"
+expect_code 64 "shell through a symlinked terminal directory is refused" -- env SUDO_UID=0 "$XB" shell "$A" "$LINK"
+rm -f "$LINK"
+chmod 755 "$SH"
+expect_code 64 "shell with a terminal directory others can read is refused" -- env SUDO_UID=0 "$XB" shell "$A" "$SH"
+chmod 700 "$SH"
+rm -f "$SH/env"
+expect_code 64 "shell without the env file is refused" -- env SUDO_UID=0 "$XB" shell "$A" "$SH"
+printf 'PATH=/usr/bin:/bin\n' >"$SH/env"
+chmod 600 "$SH/env"
+expect_code 65 "shell for an employee that was never prepared is 65" -- env SUDO_UID=0 "$XB" shell abcdefabcdef "$SH"
+expect_code 64 "shell with a bad key is 64" -- env SUDO_UID=0 "$XB" shell ABC "$SH"
+[ -z "$(ls /run/xb-bot/rc.* 2>/dev/null)" ] || fail "shell left a startup file in /run/xb-bot"
+pass "shell leaves no startup file behind"
+rm -rf "$SH"
+
 rm -rf "$T"
 echo "all xb-bot tests passed"

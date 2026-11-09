@@ -1,11 +1,12 @@
 #!/bin/sh
 # xb-bot: the narrow root helper that gives each digital employee its own Linux user.
 #
-# Installed as /usr/local/sbin/xb-bot (root, 0755). pwuser reaches `ensure` and `run` through sudo;
+# Installed as /usr/local/sbin/xb-bot (root, 0755). pwuser reaches `ensure`, `run` and `shell` through sudo;
 # `restore` is for s6 alone, as root at container start, and is not in sudoers.
 #
 #   xb-bot ensure <key>             create xb-<key>, its directory and ACLs; print its uid
 #   xb-bot run <key> <timeout_s>    stdin: NAME=VALUE lines, an empty line, then the command
+#   xb-bot shell <key> <dir>         an interactive bash as the employee, for its live terminal
 #   xb-bot restore                  tighten the top directories and recreate users from the map
 #
 # Exit 64: arguments refused, or the helper is not ready (see restore). Exit 65 (run): the employee's
@@ -383,7 +384,7 @@ cmd_restore() {
   take_lock
   rm -f "$UNREADY"
   # Command files a helper killed before unlinking them left behind.
-  rm -f -- "$LOCKDIR"/cmd.*
+  rm -f -- "$LOCKDIR"/cmd.* "$LOCKDIR"/rc.*
   if [ -e "$TEST_FAIL" ]; then
     step_failed "测试注入的收紧失败（$TEST_FAIL）"
   fi
@@ -429,8 +430,84 @@ cmd_restore() {
   fi
 }
 
+# The employee's live terminal: one interactive bash, as the employee, on the caller's terminal.
+#
+# Only for the person watching (agent-computer/src/index.ts `ownUserTerminal`): the employee's own
+# commands still go through `run`, one at a time. What the person types runs as the employee, in the
+# employee's directory, with the same reset environment and umask as `run` — never as pwuser or root.
+#
+# <dir> is the directory agent-computer's live shell made for this terminal (`mkdtemp` under /tmp):
+# `bashrc` (the prompt marks, live-shell.ts `startupFile`) and `env` (NAME=VALUE lines, as `run`
+# reads them from stdin, which here is the terminal). Both are read by root and handed over, never
+# opened by the employee: the directory is the caller's alone (0700), so it has to be the caller's,
+# a real directory, and not a link, or a link planted in /tmp could make root read something else.
+cmd_shell() {
+  key=$1
+  src=$2
+  fail_code=64
+  trap on_exit EXIT
+  user=xb-$key
+  id -u "$user" >/dev/null 2>&1 || die 65 "员工的系统用户 $user 不存在"
+  dir=$BOTS/$key
+  cd "$dir" 2>/dev/null || die 65 "员工目录 $dir 不存在"
+
+  case $src in
+    /tmp/.openbot-shell-*) ;;
+    *) die 64 "终端目录必须在 /tmp/.openbot-shell-* 下" ;;
+  esac
+  case $src in
+    /tmp/.openbot-shell-*/* | *[!A-Za-z0-9/._-]* | */.. | */../* | */./* | */. | *//*) die 64 "终端目录路径不合法" ;;
+  esac
+  caller=${SUDO_UID:-}
+  case $caller in
+    '' | *[!0-9]*) die 64 "只能经 sudo 调用" ;;
+  esac
+  [ -d "$src" ] && [ ! -L "$src" ] || die 64 "终端目录不存在"
+  [ "$(stat -c %u -- "$src")" = "$caller" ] || die 64 "终端目录不属于调用方"
+  [ "$(stat -c %a -- "$src")" = 700 ] || die 64 "终端目录权限必须是 0700"
+  for f in bashrc env; do
+    [ -f "$src/$f" ] && [ ! -L "$src/$f" ] || die 64 "终端目录里缺少 $f"
+    [ "$(stat -c %u -- "$src/$f")" = "$caller" ] || die 64 "$f 不属于调用方"
+  done
+
+  # NAME=VALUE lines, filtered exactly as `run` filters them.
+  set --
+  while IFS= read -r line || [ -n "$line" ]; do
+    case $line in
+      *=*) ;;
+      *) continue ;;
+    esac
+    name=${line%%=*}
+    case $name in
+      '' | [0-9]* | *[!A-Za-z0-9_]*) continue ;;
+      HOME | TMPDIR | USER | LOGNAME | SHELL) continue ;;
+    esac
+    set -- "$@" "$line"
+  done <"$src/env"
+
+  # The startup file goes over as fd 3 of a root-owned 0600 file already unlinked, as `run` hands over
+  # its command. The employee's bash reads it from the fd and gives the real shell a pipe of its own
+  # (`<( )`), which it may reopen as /dev/fd/N; a root-owned file or pipe it could not.
+  lockdir_ready || die 64 "准备 $LOCKDIR 失败"
+  tmp=$( (umask 077 && mktemp "$LOCKDIR/rc.XXXXXX") 2>/dev/null) || die 64 "无法创建临时文件"
+  cat -- "$src/bashrc" 2>/dev/null >"$tmp" || die 64 "无法读取启动脚本"
+  true 2>/dev/null <"$tmp" || die 64 "无法打开临时文件"
+  exec 3<"$tmp"
+  rm -f -- "$tmp"
+  tmp=
+
+  umask 077
+  trap - EXIT
+  fail_code=
+  # exec, so sudo's signals (HUP when the terminal goes, TERM) reach runuser, which passes them on.
+  # shellcheck disable=SC2016
+  exec runuser -u "$user" -- env -i "$@" \
+    HOME="$dir" TMPDIR="$dir/.tmp" USER="$user" LOGNAME="$user" SHELL=/bin/bash \
+    /bin/bash -c '__xb_rc=$(cat <&3); exec 3<&-; exec /bin/bash --noprofile --rcfile <(printf "%s\n" "$__xb_rc") -i'
+}
+
 if [ $# -lt 1 ]; then
-  die 64 "用法：xb-bot ensure <key> | run <key> <timeout_s> | restore"
+  die 64 "用法：xb-bot ensure <key> | run <key> <timeout_s> | shell <key> <dir> | restore"
 fi
 case $1 in
   ensure)
@@ -440,6 +517,10 @@ case $1 in
   run)
     [ $# -eq 3 ] && valid_key "$2" || die 64 "用法：xb-bot run <key> <timeout_s>（key 为 12 位小写十六进制）"
     cmd_run "$2" "$3"
+    ;;
+  shell)
+    [ $# -eq 3 ] && valid_key "$2" || die 64 "用法：xb-bot shell <key> <dir>（key 为 12 位小写十六进制）"
+    cmd_shell "$2" "$3"
     ;;
   restore)
     [ $# -eq 1 ] || die 64 "用法：xb-bot restore"

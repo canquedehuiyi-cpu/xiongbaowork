@@ -340,14 +340,15 @@ export type ShellOptions = {
  * What `createShell` gives for an employee's own user (`runAs`). The live shell (live-shell.ts) is
  * one bash in a pseudo-terminal that this process starts, so it runs as this process's user, pwuser,
  * and the root helper's `run` takes a command and its environment on stdin rather than a terminal.
- * An employee's live terminal would therefore be pwuser's bash in the employee's directory: every
- * other employee's files, the browser profiles, and `sudo openbot-apt`. So an employee has no live
- * terminal at all. Its commands run one at a time through the helper, and the computer refuses the
- * terminal socket for it (index.ts).
+ * An employee's live terminal made that way would be pwuser's bash in the employee's directory: every
+ * other employee's files, the browser profiles, and `sudo openbot-apt`. So its commands run one at a
+ * time through the helper, and the terminal a person watches is a separate bash the helper starts as
+ * the employee (`xb-bot shell`, index.ts `ownUserTerminal`), into which the employee's own commands
+ * are not typed.
  */
 export type CommandShell = {
   run(input: CommandInput): Promise<ShellResult>;
-  /** Never set: the employee's commands have no terminal to watch or take over. */
+  /** Never set: the employee's commands are not typed into a terminal; see `ownUserTerminal`. */
   terminal?: undefined;
   dispose(): void;
 };

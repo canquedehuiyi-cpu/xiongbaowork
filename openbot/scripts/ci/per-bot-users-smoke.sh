@@ -191,6 +191,29 @@ if [ "$healthy" = true ]; then
     fail "no xb-bot run, runuser or timeout of $userA left within 10s (still matching: $(printf '%s' "$left" | tr '\n' '|'); $(docker exec "$name" ps -o user,pid,ppid,pgid,stat,args -A 2>/dev/null | grep -E 'sleep|xb-bot|sudo|timeout|runuser' | grep -v grep | tr '\n' ';'))"
   fi
 
+  # The live terminal of an employee with its own user: a bash as that employee, never pwuser's
+  # (agent-computer ownUserTerminal, `xb-bot shell`). Opening the terminal socket starts it.
+  docker exec "$name" sh -c '
+    token=$(cat /run/s6/container_environment/COMPUTER_TOKEN)
+    cd /tmp && OPENBOT_SMOKE_TOKEN=$token timeout 20 bun -e "
+      const ws = new WebSocket(\"ws://127.0.0.1:4100/terminal?bot=$1&token=\" + process.env.OPENBOT_SMOKE_TOKEN);
+      const said = [];
+      ws.addEventListener(\"message\", (e) => { if (typeof e.data === \"string\") said.push(e.data); });
+      ws.addEventListener(\"error\", () => { console.log(\"socket error\"); process.exit(1); });
+      setTimeout(() => { console.log(said.join(\"\\n\")); ws.close(); process.exit(0); }, 5000);
+    "
+  ' sh "$A" > "$T_TERM" 2>&1 || true
+  if docker exec "$name" pgrep -u "$userA" -x bash >/dev/null 2>&1; then
+    pass "$A's live terminal runs a bash as $userA"
+  else
+    fail "$A's live terminal runs a bash as $userA (socket said: $(tr '\n' ' ' < "$T_TERM" | head -c 300); $(docker exec "$name" ps -o user,pid,args -A 2>/dev/null | grep -E 'bash|xb-bot|sudo' | grep -v grep | tr '\n' ';'))"
+  fi
+  if grep -q '"fatal":true' "$T_TERM"; then
+    fail "$A's live terminal was refused: $(tr '\n' ' ' < "$T_TERM" | head -c 300)"
+  else
+    pass "$A's live terminal was not refused"
+  fi
+
   # A process an employee leaves outside its command's group (setsid) survives the command, so the
   # computer ends every employee process before it (re)starts: otherwise one could take port 4100
   # first, or read the computer's argv, while it comes back up, and catch COMPUTER_TOKEN.

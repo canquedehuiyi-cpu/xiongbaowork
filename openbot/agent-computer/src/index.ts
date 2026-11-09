@@ -38,6 +38,7 @@ import { handleEgressPolicyRequest, startEgressFilter } from "./egress";
 import { enterText, FieldValueError } from "./enter-text";
 import { identity } from "./identity";
 import { createInputQueue, type InputQueue } from "./input-queue";
+import { createLiveShell } from "./live-shell";
 import {
   LOOPBACK_RELAYS_ENV,
   parseLoopbackRelays,
@@ -49,10 +50,12 @@ import {
   type PagePurpose,
 } from "./navigation";
 import {
+  botKeyOf,
   createPerBotComputer,
   PerBotUnavailableError,
   perBotUsersEnabled,
   usesOwnUser,
+  XB_BOT_HELPER,
   XB_BOT_WORKSPACE,
 } from "./per-bot";
 import {
@@ -87,7 +90,7 @@ import {
   unmarkPersonFilled,
 } from "./secret-masking";
 import { type BotSession, createSessions } from "./sessions";
-import type { CommandRunner } from "./shell";
+import { type CommandRunner, environmentForCommand } from "./shell";
 import {
   fillSignIn,
   fillSignInCode,
@@ -328,13 +331,12 @@ const workspaces = createWorkspaces(
 /**
  * Each seat's live shell, as a terminal a person watches and, holding the wheel, types into.
  *
- * Never for an employee with its own Linux user: the live shell is this process's bash, so it would
- * be pwuser's. The upgrade below refuses those seats; this refuses them again, so a path that forgets
- * cannot open one.
+ * An employee with its own Linux user gets one too, but never this process's bash, which would be
+ * pwuser's: `ownUserTerminal` starts it through the root helper as the employee (`xb-bot shell`).
  */
 const terminalSockets = createTerminalSockets<StreamData & TerminalSocketData>({
   shellFor: async (seat) => {
-    if (runsAsOwnUser(seat)) throw new Error(TERMINAL_NOT_FOR_OWN_USER);
+    if (runsAsOwnUser(seat)) return ownUserTerminal(seat);
     return (await workspaces.for(seat)).shell.terminal;
   },
   mayType: (seat) => sessions.for(seat).control.humanMayDrive(),
@@ -485,9 +487,41 @@ function runsAsOwnUser(seat: string): boolean {
   return usesOwnUser(seat, DEFAULT_BOT_ID, PER_BOT_USERS);
 }
 
-/** Said on the terminal socket of an employee with its own user, which has no live shell. */
-const TERMINAL_NOT_FOR_OWN_USER =
-  "This employee runs commands as its own user, so there's no live terminal to show. Its commands still run, one at a time.";
+/**
+ * An employee with its own Linux user: its live terminal, for the person watching.
+ *
+ * A bash started through the root helper as the employee (`sudo -n xb-bot shell <key> <dir>`,
+ * docker/xb-bot.sh), in the employee's directory, with the environment its commands get. What the
+ * person types runs as the employee, never as pwuser. Only the person's: the employee's own commands
+ * still go one at a time through `run` (`commandsFor`), so they are not typed into this shell and the
+ * terminal shows what the person did here. Prepared like a command is (`ensure`), so the first thing
+ * opened for an employee can be its terminal; a helper that is not ready refuses here, as it does
+ * for a command.
+ */
+const ownUserTerminals = new Map<string, ReturnType<typeof createLiveShell>>();
+async function ownUserTerminal(
+  seat: string,
+): Promise<ReturnType<typeof createLiveShell>> {
+  await perBot.ensure(seat);
+  const key = botKeyOf(seat);
+  let shell = ownUserTerminals.get(key);
+  if (!shell) {
+    shell = createLiveShell({
+      cwd: "/",
+      env: () => environmentForCommand(process.env, "/"),
+      command: (directory) => [
+        "sudo",
+        "-n",
+        XB_BOT_HELPER,
+        "shell",
+        key,
+        directory,
+      ],
+    });
+    ownUserTerminals.set(key, shell);
+  }
+  return shell;
+}
 
 /** The seat's files: its own user's directory, or its folder in `workspaces`. */
 async function filesFor(seat: string): Promise<Workspace> {
@@ -1278,12 +1312,10 @@ serve<StreamData & TerminalSocketData>({
           return json({ error: "That is not a usable bot id." }, 400);
         if (isPersonBrowserId(named.bot))
           return json({ error: PERSONS_OWN_BROWSER }, 403);
-        // Opened to say so, as where commands are off: an employee with its own user has no live shell.
+        // Opened to say so where commands are off. An employee with its own user has one too, as itself.
         const terminalRefused = !RUNTIME.allowExec
           ? TERMINAL_UNAVAILABLE
-          : runsAsOwnUser(named.seat)
-            ? TERMINAL_NOT_FOR_OWN_USER
-            : undefined;
+          : undefined;
         if (
           server.upgrade(request, {
             data: {
