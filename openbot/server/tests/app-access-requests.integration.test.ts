@@ -3,6 +3,10 @@ import { randomUUID } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { readAppAccessRequestAnswer } from "../../shared/app-access-request";
 import { createAuditStore } from "../src/audit";
+import type {
+  CredentialSecretReader,
+  CredentialStore,
+} from "../src/credentials";
 import { createDatabase } from "../src/db/client";
 import {
   agentProfiles,
@@ -41,7 +45,7 @@ const store = createPluginStore({
     revoke: async () => {
       throw new Error("this suite does not revoke credentials");
     },
-  },
+  } as unknown as CredentialSecretReader & CredentialStore,
   encryptionKey: "x".repeat(44),
   policy: () => ({ mode: "enforce", deny: [], allow: ["true"] }),
 });
@@ -139,7 +143,7 @@ beforeAll(async () => {
         title: "助理",
         roleDescription: "测试用。",
         avatarSeed: id as string,
-        visibility: "private",
+        visibility: "private" as const,
       })),
     );
     // 团队的应用和工具，管理员添加时就是这样盖章的（G01-E P10）。

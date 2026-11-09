@@ -92,7 +92,7 @@ function deployment() {
         encryptionKey: `${"A".repeat(43)}=`,
         personHasAccess: async () => true,
       },
-      { broker, provider: "composio" },
+      { broker },
     ),
   );
   const url = "http://openbot.test/api/plugins/composio/apps";

@@ -199,7 +199,7 @@ describe("the catalogue entry", () => {
       scopes: ["basic,netdisk"],
     });
     if (entry?.auth.kind !== "user-oauth") throw new Error("not user-oauth");
-    expect(entry.auth.revokeUrl.startsWith("https://openapi.baidu.com/")).toBe(
+    expect(entry.auth.revokeUrl?.startsWith("https://openapi.baidu.com/")).toBe(
       true,
     );
     // An administrator pastes the AppKey and SecretKey; nothing registers itself.
@@ -213,7 +213,11 @@ describe("the catalogue entry", () => {
     expect(
       transportFor(
         accessFor(
-          { provenance: "first-party", url: "https://pan.baidu.com", authScheme: null },
+          {
+            provenance: "first-party",
+            url: "https://pan.baidu.com",
+            authScheme: null,
+          },
           entry,
         ).transport,
       ).callTool,

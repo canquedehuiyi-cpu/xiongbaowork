@@ -210,5 +210,3 @@ server/tests/voice-session-store.integration.test.ts: error TS2345: Argument of 
 server/tests/voice-sessions.test.ts: error TS2741: Property 'preconnect' is missing in type '() => Promise<Response>' but required in type 'typeof fetch'.
 server/tests/voice-sessions.test.ts: error TS2741: Property 'preconnect' is missing in type '(_url: URL | RequestInfo, init: RequestInit | BunFetchRequestInit | undefined) => Promise<Response>' but required in type 'typeof fetch'.
 server/tests/web-research.test.ts: error TS2339: Property 'get' does not exist on type 'never'.
-server/tests/web-research.test.ts: error TS2339: Property 'get' does not exist on type 'never'.
-server/tests/web-research.test.ts: error TS2339: Property 'get' does not exist on type 'never'.
