@@ -1566,17 +1566,24 @@ describe("GET /:id", () => {
       // Warmed, so the first request's own module and pool costs are not counted as a stall.
       expect((await app.request(`http://test/${id}`)).status).toBe(200);
 
+      /** Milliseconds of CPU this thread — the one running the event loop — has spent so far. */
+      const threadCpuMs = () => {
+        const { user, system } = process.threadCpuUsage();
+        return (user + system) / 1000;
+      };
+      // Everything earlier files left behind, collected now rather than inside the window.
+      Bun.gc(true);
       let longestPause = 0;
-      let previousTick = performance.now();
+      let previousTick = threadCpuMs();
       const sampler = setInterval(() => {
-        const now = performance.now();
+        const now = threadCpuMs();
         longestPause = Math.max(longestPause, now - previousTick);
         previousTick = now;
       }, 1);
       let response: Response;
       let servedBytes = 0;
       try {
-        previousTick = performance.now();
+        previousTick = threadCpuMs();
         response = await app.request(`http://test/${id}`);
         // Include consumption, so moving work to a stream cannot hide a pause from this gate.
         servedBytes = (await response.arrayBuffer()).byteLength;
@@ -1602,53 +1609,7 @@ describe("GET /:id", () => {
         longestPause < 40 ? "under 40ms" : `${Math.round(longestPause)}ms`,
       ).toBe("under 40ms");
     });
-<<<<<<< fork
 
-=======
-    const app = attachmentApp(db, member);
-    // Warmed, so the first request's own module and pool costs are not counted as a stall.
-    expect((await app.request(`http://test/${id}`)).status).toBe(200);
-
-    /** Milliseconds of CPU this thread — the one running the event loop — has spent so far. */
-    const threadCpuMs = () => {
-      const { user, system } = process.threadCpuUsage();
-      return (user + system) / 1000;
-    };
-    // Everything earlier files left behind, collected now rather than inside the window.
-    Bun.gc(true);
-    let longestPause = 0;
-    let previousTick = threadCpuMs();
-    const sampler = setInterval(() => {
-      const now = threadCpuMs();
-      longestPause = Math.max(longestPause, now - previousTick);
-      previousTick = now;
-    }, 1);
-    let response: Response;
-    try {
-      previousTick = threadCpuMs();
-      response = await app.request(`http://test/${id}`);
-      /*
-       * ONE TURN OF THE LOOP BEFORE THE SAMPLER IS TAKEN AWAY, and without it this test cannot
-       * fail. A timer is a macrotask and an awaited promise resumes on the microtask queue, so the
-       * line above continues BEFORE the interval that would observe the stall gets to run: clearing
-       * the sampler here measured 2.5ms against a fault that really did block for 62-87ms. The
-       * gap that spans the blocked stretch is recorded by the first tick after it, so that tick
-       * has to be allowed to happen.
-       */
-      await new Promise((resume) => setTimeout(resume, 5));
-    } finally {
-      clearInterval(sampler);
-    }
-
-    expect(response.status).toBe(200);
-    expect((await response.arrayBuffer()).byteLength).toBe(MAX_IMAGE_BYTES);
-    // Compared as a sentence rather than with `toBeLessThan`, so a failure names the pause it
-    // measured: "62ms" against "under 40ms" says which fault came back, where "false is not true"
-    // would leave the next person to re-measure it.
-    expect(
-      longestPause < 40 ? "under 40ms" : `${Math.round(longestPause)}ms`,
-    ).toBe("under 40ms");
->>>>>>> v1.0.0
   }, 30_000);
 
   /*
@@ -3543,13 +3504,12 @@ describe("markAttachmentsSent", () => {
         consoleError.mockRestore();
       }
 
-<<<<<<< fork
       expect(raised).toBeInstanceOf(Error);
       // A sentence somebody can act on, naming the file and saying the turn did not run — this leaves
       // through the run as an AG-UI error and is shown to the person who was waiting.
       expect((raised as Error).message).toContain(id);
-      expect((raised as Error).message).toContain("was not run");
-      expect((raised as Error).message).toContain("attach the file again");
+      expect((raised as Error).message).toContain("wasn't sent");
+      expect((raised as Error).message).toContain("Attach the files again");
       // And named for whoever has to act on it from the other side. Every consequence of a missing
       // stamp is about a specific person and a specific row.
       expect(logged.join(" ")).toContain(memberId);
@@ -3557,20 +3517,6 @@ describe("markAttachmentsSent", () => {
       // Still staged: still withdrawable, still countable against the cap, still stampable by a retry.
       expect(await attachedAtOf(db, id)).toBeNull();
     });
-=======
-    expect(raised).toBeInstanceOf(Error);
-    // A sentence somebody can act on, naming the file and saying the turn did not run — this leaves
-    // through the run as an AG-UI error and is shown to the person who was waiting.
-    expect((raised as Error).message).toContain(id);
-    expect((raised as Error).message).toContain("wasn't sent");
-    expect((raised as Error).message).toContain("Attach the files again");
-    // And named for whoever has to act on it from the other side. Every consequence of a missing
-    // stamp is about a specific person and a specific row.
-    expect(logged.join(" ")).toContain(memberId);
-    expect(logged.join(" ")).toContain(id);
-    // Still staged: still withdrawable, still countable against the cap, still stampable by a retry.
-    expect(await attachedAtOf(db, id)).toBeNull();
->>>>>>> v1.0.0
   });
 
   /*
