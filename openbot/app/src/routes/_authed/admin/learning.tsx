@@ -392,13 +392,15 @@ export function LearningPage() {
                     : "还没有运行过分析。"}
               </p>
               <div className="flex flex-wrap gap-4 text-sm underline">
-                <a
-                  href={snapshot.links.learning}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  在 Intelligence 里管理学习
-                </a>
+                {snapshot.links.learning && (
+                  <a
+                    href={snapshot.links.learning}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    在 Intelligence 里管理学习
+                  </a>
+                )}
                 {snapshot.links.candidates && (
                   <a
                     href={snapshot.links.candidates}
