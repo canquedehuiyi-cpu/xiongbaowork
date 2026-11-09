@@ -278,7 +278,7 @@ test("GET /api/quota carries this period's tokens beside the existing fields", a
     context,
     next,
   ) => {
-    context.set("actor", { id: tenant, role: "user" as const });
+    context.set("actor", { id: tenant, email: `${tenant}@example.test`, role: "user" as const });
     await runAsTenant(tenant, () => next());
   };
   const routes = createQuotaRoutes(

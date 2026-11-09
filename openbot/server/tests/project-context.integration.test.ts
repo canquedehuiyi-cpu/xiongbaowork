@@ -13,6 +13,7 @@ import { eq, inArray } from "drizzle-orm";
 import { createRunnerExecutor } from "../../runner/src/execute";
 import { heartbeatFrame } from "../../runner/src/index";
 import { createRootRegistry } from "../../runner/src/roots";
+import { personSeat } from "../src/computer/computer-key";
 import {
   ActionRefusedError,
   createComputerGateway,
@@ -142,13 +143,13 @@ function gatewayFor(on: Machine, attached: Machine[]) {
   const gateway = createComputerGateway({
     provider: {
       name: "unused",
-      isolation: "per-bot",
+      isolation: "per-person",
       locate: async () => {
         throw new Error(
           "A paired machine is never located through the provider.",
         );
       },
-      status: async (id) => ({ botId: id, state: "ready" }),
+      status: async (seat) => ({ botId: seat.botId, state: "ready" }),
       list: async () => [],
       stop: async () => ({ wasRunning: false }),
       reset: async () => ({ cleared: false }),
@@ -245,7 +246,7 @@ describe("where an action runs", () => {
     const project = await bound(study, botX);
     const { gateway, frames } = gatewayFor(study, [study, office]);
     await asPerson(async () => {
-      await gateway.writeFile(botX, { id: person, userId: person }, {
+      await gateway.writeFile(personSeat(person, botX), { id: person, userId: person }, {
         path: "src/order.ts",
         contents: "export const order = 1;\n",
         // What a model might send to steer the write elsewhere: none of it reaches the machine.
@@ -254,7 +255,7 @@ describe("where an action runs", () => {
         cwd: study.readable.ref,
       } as never);
       const listed = await gateway.listFiles(
-        botX,
+        personSeat(person, botX),
         { id: person, userId: person },
         {
           path: "src",
@@ -262,7 +263,7 @@ describe("where an action runs", () => {
       );
       expect(JSON.stringify(listed)).toContain("order.ts");
       const read = await gateway.readFile(
-        botX,
+        personSeat(person, botX),
         { id: person, userId: person },
         {
           path: "src/order.ts",
@@ -270,7 +271,7 @@ describe("where an action runs", () => {
       );
       expect(read.text).toBe("export const order = 1;\n");
       const ran = await gateway.runCommand(
-        botX,
+        personSeat(person, botX),
         { id: person, userId: person },
         {
           command: "pwd",
@@ -305,7 +306,7 @@ describe("where an action runs", () => {
     const { gateway, frames } = gatewayFor(study, [study]);
     await asPerson(() =>
       gateway.writeFile(
-        botY,
+        personSeat(person, botY),
         { id: person, userId: person },
         {
           path: "note.md",
@@ -325,10 +326,10 @@ describe("where an action runs", () => {
     const { gateway, frames, rows } = gatewayFor(study, [study]);
     const actor = { id: person, userId: person };
     await asPerson(async () => {
-      await gateway.listFiles(botX, actor, {});
+      await gateway.listFiles(personSeat(person, botX), actor, {});
       for (const attempt of [
-        () => gateway.writeFile(botX, actor, { path: "x.md", contents: "x" }),
-        () => gateway.runCommand(botX, actor, { command: "touch x" }),
+        () => gateway.writeFile(personSeat(person, botX), actor, { path: "x.md", contents: "x" }),
+        () => gateway.runCommand(personSeat(person, botX), actor, { command: "touch x" }),
       ]) {
         const refused = await attempt().catch((error: unknown) => error);
         expect(refused).toBeInstanceOf(ActionRefusedError);
@@ -349,7 +350,7 @@ describe("acceptance 3: a current project that cannot be used is refused, record
     const { gateway, frames, rows } = gatewayFor(on, [study, office]);
     const refused = await asPerson(() =>
       gateway.writeFile(
-        botX,
+        personSeat(person, botX),
         { id: person, userId: person },
         {
           path: "out.md",
@@ -439,7 +440,8 @@ describe("acceptance 4: the prompt", () => {
     for (const path of [study.code, scratch, "/home/", "/Users/"])
       expect(section).not.toContain(path);
 
-    const prompt = builtInAgentConfiguration(
+    const prompt = (
+      builtInAgentConfiguration(
       {
         id: botX,
         name: "后端工程师",
@@ -449,10 +451,12 @@ describe("acceptance 4: the prompt", () => {
       },
       { provider: "openai", defaultModel: "gpt-5.6-terra" },
       "synthetic-model-key",
+    ) as { prompt?: unknown }
     ).prompt as string;
     expect(prompt).toContain(section as string);
     // No project, no section: the prompt it was before.
-    const without = builtInAgentConfiguration(
+    const without = (
+      builtInAgentConfiguration(
       {
         id: botX,
         name: "后端工程师",
@@ -461,6 +465,7 @@ describe("acceptance 4: the prompt", () => {
       },
       { provider: "openai", defaultModel: "gpt-5.6-terra" },
       "synthetic-model-key",
+    ) as { prompt?: unknown }
     ).prompt as string;
     expect(without).not.toContain("current project");
     expect(projectGuidance(null)).toBeNull();

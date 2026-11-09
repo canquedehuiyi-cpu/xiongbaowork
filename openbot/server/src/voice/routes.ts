@@ -117,7 +117,8 @@ export function createVoiceRoutes(
       } catch {
         return context.json({ error: "无法加载该频道，请重试。" }, 503);
       }
-      if (!channel) return context.json({ error: "Channel not found." }, 404);
+      if (!channel)
+        return context.json({ error: "Couldn't find that conversation." }, 404);
       if (!channel.active)
         return context.json({ error: "该频道已不再活跃。" }, 409);
       const agentId = channel.agentIds[0];
@@ -133,7 +134,7 @@ export function createVoiceRoutes(
         return context.json({ error: "无法加载该员工，请重试。" }, 503);
       }
       if (!profile || profile.deletedAt)
-        return context.json({ error: "Agent not found." }, 404);
+        return context.json({ error: "Couldn't find that Bot." }, 404);
       const timeout = new AbortController();
       const timer = setTimeout(
         () => timeout.abort(),
@@ -156,8 +157,7 @@ export function createVoiceRoutes(
         return signal.aborted
           ? context.json(
               {
-                error:
-                  "Voice connection timed out or was cancelled. Please retry.",
+                error: "The call timed out or was cancelled. Try again.",
               },
               504,
             )
@@ -168,7 +168,7 @@ export function createVoiceRoutes(
                 error:
                   error instanceof VoiceError
                     ? error.message
-                    : "The voice service could not start a call. Please retry.",
+                    : "Couldn't start the call. Try again.",
               },
               502,
             );

@@ -13,7 +13,13 @@ const APPROVAL = "0f8fad5b-d9cb-469f-a165-70867728950e";
  * Rows carry the tenant the database stamped on them; tenants are 1:1 with people, so a person's
  * binding and link challenge are stamped with the owner's id (G01).
  */
-const bound: DeliveryBinding & { tenantId: string } = {
+/** As the store reads a binding row back: the stamp, and the columns a row always has. */
+const bound: DeliveryBinding & {
+  tenantId: string;
+  mentionId: string | null;
+  optedOutAt: Date | null;
+  createdAt: Date;
+} = {
   tenantId: "owner",
   id: "b1",
   ownerUserId: "owner",
@@ -25,6 +31,16 @@ const bound: DeliveryBinding & { tenantId: string } = {
   identity: "U1",
   address: "U1",
   enabled: true,
+  mentionId: null,
+  optedOutAt: null,
+  createdAt: new Date(0),
+};
+type IdentityAdapter = {
+  redeem(
+    code: string,
+    sender: { teamId: string; userId: string },
+  ): Promise<"linked" | "conflict" | "invalid">;
+  discard(code: string): Promise<boolean>;
 };
 function fixture(
   options: {
@@ -32,8 +48,23 @@ function fixture(
     bound?: boolean;
     /** The tenant stamped on the binding and on the link challenge. */
     stamp?: string;
-    /** 待批请求上记下的决策层，比如删除类底线 `destructive_tool`。 */
+    identity?: IdentityAdapter;
+    /** Makes every Reachability lookup throw, as a store that is down would. */
+    challengeError?: Error;
+    /** The transport the Reachability code was issued for. */
+    challengeTransport?: "slack" | "teams";
+    /**
+     * Why the gate asked, as the stored request carries it; "task" for a check-in task's,
+     * 删除类底线 `destructive_tool`、对外发送底线 `outbound_send` 等。
+     */
     policySource?: string;
+    /** What the stored request asks to do, in place of opening example.com. */
+    action?: {
+      toolRef: string;
+      scope: string;
+      args: Record<string, unknown>;
+      target?: unknown;
+    };
   } = {},
 ) {
   const calls: unknown[] = [];
@@ -42,6 +73,7 @@ function fixture(
   const frames: string[] = [];
   const frame = (name: string) => frames.push(`${name}:${currentTenant()}`);
   const stamped = { ...bound, tenantId: options.stamp ?? bound.tenantId };
+  const consumed: unknown[] = [];
   const twilio = createTwilioTransport({
     accountSid: "AC1",
     authToken: "token",
@@ -79,8 +111,10 @@ function fixture(
       },
     },
     store: {
-      readChallenge: async (id: string) =>
-        frame("readChallenge") && id === "11111111-2222-4333-8444-555555555555"
+      readChallenge: async (id: string) => {
+        frame("readChallenge");
+        if (options.challengeError) throw options.challengeError;
+        return id === "11111111-2222-4333-8444-555555555555"
           ? {
               tenantId: stamped.tenantId,
               id,
@@ -88,11 +122,16 @@ function fixture(
               channelId: "ch",
               agentId: "bot",
               threadId: "canonical",
-              transport: "slack",
+              transport: options.challengeTransport ?? "slack",
               address: null,
             }
-          : null,
-      consumeChallenge: async () => frame("consumeChallenge") > 0,
+          : null;
+      },
+      consumeChallenge: async (...input) => {
+        frame("consumeChallenge");
+        consumed.push(input);
+        return true;
+      },
       bind: async (input) => {
         frame("bind");
         calls.push({ bind: input });
@@ -101,6 +140,8 @@ function fixture(
       updateSmsStatus: async (...input) => {
         calls.push(input);
       },
+      // The store answers null for no binding, though its type (`rows[0] ?? null`, read without
+      // `noUncheckedIndexedAccess`) says it always finds one: hence the cast on the miss.
       findBinding: async (transport, realm, identity) =>
         frame("findBinding") &&
         options.bound !== false &&
@@ -108,7 +149,7 @@ function fixture(
         realm === "T1" &&
         identity === "U1"
           ? stamped
-          : null,
+          : (null as unknown as typeof stamped),
       botIdentity: async (agentId) => ({ agentId, name: "Research Bot" }),
     },
     scopeFor: async (ownerUserId, channelId, agentId) =>
@@ -121,6 +162,7 @@ function fixture(
       return { matched: 0, deliveries: [] };
     },
     twilio,
+    ...(options.identity ? { identity: options.identity } : {}),
     approvals: {
       store: {
         get: async (owner, id) => {
@@ -130,16 +172,21 @@ function fixture(
             status: "pending",
             action: {
               botId: "bot",
-              toolRef: "browser/navigate",
+              toolRef: "computer_navigate",
+              scope: "example.com",
               effect: "write",
               threadId: "canonical",
               args: { url: "https://example.com" },
+              ...options.action,
               ...(options.policySource
                 ? {
                     policy: {
-                      behaviour: "ask",
-                      source: options.policySource,
-                      reason: "这个操作会删除或覆盖内容，总是先征得你同意。",
+                      behaviour: "ask" as const,
+                      source: options.policySource as "task",
+                      reason:
+                        options.policySource === "task"
+                          ? "Tasks started from a check-in ask before every change."
+                          : "这个操作会删除或覆盖内容，总是先征得你同意。",
                     },
                   }
                 : {}),
@@ -160,7 +207,7 @@ function fixture(
       inbox: async () => ({ questions: [] }),
     },
   });
-  return { routes, calls, decisions, frames };
+  return { routes, calls, decisions, frames, consumed };
 }
 const sender = (
   user = "slack:T1:U1",
@@ -258,6 +305,311 @@ test("a link code binds the verified sender to the challenge's own scope", async
     },
   ]);
 });
+const IDENTITY_CODE = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
+const EXPIRED =
+  "That link code expired, was already used, or is for another app. Create a new one in OpenBot.";
+function identityFixture(
+  outcome?: "linked" | "conflict" | "invalid",
+  live = true,
+) {
+  const redeemed: unknown[] = [];
+  const discarded: string[] = [];
+  const f = fixture({
+    bound: false,
+    ...(outcome
+      ? {
+          identity: {
+            redeem: async (code, who) => {
+              redeemed.push([code, who]);
+              return outcome;
+            },
+            discard: async (code) => {
+              discarded.push(code);
+              return live;
+            },
+          },
+        }
+      : {}),
+  });
+  return { f, redeemed, discarded };
+}
+const linkMessage = (code: string) => ({
+  messages: [
+    { id: "m1", role: "user", content: `<@UBOT> link ${code.toUpperCase()}` },
+  ],
+});
+test("a Reachability code is checked before the identity adapter", async () => {
+  const { f, redeemed } = identityFixture("linked");
+  const result = await run(f, {
+    context: [sender()],
+    ...linkMessage("11111111-2222-4333-8444-555555555555"),
+  });
+  expect(said(result.events)).toContain("Linked");
+  expect(f.calls).toHaveLength(1);
+  expect(redeemed).toEqual([]);
+});
+test("an identity code from a Slack sender is redeemed through the adapter", async () => {
+  const { f, redeemed } = identityFixture("linked");
+  const result = await run(f, {
+    context: [sender()],
+    ...linkMessage(IDENTITY_CODE),
+  });
+  expect(said(result.events)).toBe(
+    "Linked your Slack account to OpenBot. You can see it under Connections.",
+  );
+  expect(redeemed).toEqual([[IDENTITY_CODE, { teamId: "T1", userId: "U1" }]]);
+});
+const CANCELLED =
+  "That code was posted where others could see it, so I cancelled it. Create a new one in OpenBot and send it to me in a direct message.";
+test("an identity code sent where others can read it is cancelled, never redeemed", async () => {
+  for (const conversation of [{ id: "C0123456789", kind: "channel" }, null]) {
+    const { f, redeemed, discarded } = identityFixture("linked");
+    const result = await run(f, {
+      context: [sender("slack:T1:U1", conversation)],
+      ...linkMessage(IDENTITY_CODE),
+    });
+    expect(said(result.events)).toBe(CANCELLED);
+    expect(said(result.events)).not.toContain("still works");
+    expect(discarded).toEqual([IDENTITY_CODE]);
+    expect(redeemed).toEqual([]);
+    expect(f.calls).toEqual([]);
+  }
+});
+test("an unknown or expired code in a shared conversation gets the expired reply", async () => {
+  const { f, redeemed, discarded } = identityFixture("linked", false);
+  const result = await run(f, {
+    context: [sender("slack:T1:U1", { id: "C0123456789", kind: "channel" })],
+    ...linkMessage(IDENTITY_CODE),
+  });
+  expect(said(result.events)).toBe(EXPIRED);
+  expect(discarded).toEqual([IDENTITY_CODE]);
+  expect(redeemed).toEqual([]);
+});
+test("an identity code in a direct message is never discarded", async () => {
+  const { f, discarded } = identityFixture("linked");
+  await run(f, { context: [sender()], ...linkMessage(IDENTITY_CODE) });
+  expect(discarded).toEqual([]);
+});
+const REACHABILITY_CODE = "11111111-2222-4333-8444-555555555555";
+test("a Reachability code sent where others can read it is cancelled, never bound", async () => {
+  // Whoever sends a Reachability code is bound to its issuer's Bot and decides its approvals as
+  // the issuer, so a code others have seen is spent, exactly like an account code.
+  for (const conversation of [{ id: "C0123456789", kind: "channel" }, null]) {
+    const { f, redeemed, discarded } = identityFixture("linked");
+    const result = await run(f, {
+      context: [sender("slack:T1:U1", conversation)],
+      ...linkMessage(REACHABILITY_CODE),
+    });
+    expect(said(result.events)).toBe(CANCELLED);
+    expect(f.consumed).toEqual([[REACHABILITY_CODE, "owner"]]);
+    expect(f.calls).toEqual([]);
+    expect(redeemed).toEqual([]);
+    expect(discarded).toEqual([]);
+  }
+});
+test("a Reachability code is cancelled from a shared conversation without an account adapter", async () => {
+  const f = fixture({ bound: false });
+  const result = await run(f, {
+    context: [sender("slack:T1:U1", { id: "C0123456789", kind: "channel" })],
+    ...linkMessage(REACHABILITY_CODE),
+  });
+  expect(said(result.events)).toBe(CANCELLED);
+  expect(f.consumed).toEqual([[REACHABILITY_CODE, "owner"]]);
+  expect(f.calls).toEqual([]);
+});
+test("a Reachability code in a direct message still links", async () => {
+  const { f } = identityFixture("linked");
+  const result = await run(f, {
+    context: [sender()],
+    ...linkMessage(REACHABILITY_CODE),
+  });
+  expect(said(result.events)).toContain("Linked.");
+  expect(f.calls).toHaveLength(1);
+});
+test("a Reachability code in a Teams personal chat still links", async () => {
+  // A Teams conversation id is never a Slack `D…` id, so the only thing that makes this chat
+  // private is its kind. Were `personal` not read as private, every Teams code would be spent.
+  const f = fixture({ bound: false, challengeTransport: "teams" });
+  const result = await run(f, {
+    context: [
+      sender("teams:tenant1:user1", {
+        id: "a:1aBcDeFgHiJkLmNoPqRsTuVwXyZ",
+        kind: "personal",
+      }),
+    ],
+    ...linkMessage(REACHABILITY_CODE),
+  });
+  expect(said(result.events)).toContain("Linked.");
+  expect(f.calls).toEqual([
+    {
+      bind: expect.objectContaining({ transport: "teams", identity: "user1" }),
+    },
+  ]);
+});
+test("a Reachability code in a shared Teams chat still links until Teams' private chats are confirmed", async () => {
+  // The direct-message rule is Slack's only for now: a Teams chat is private only by its kind, and
+  // nothing yet confirms OpenTag sends `personal` for one, so applying the rule could spend every
+  // code sent from Teams.
+  const f = fixture({ bound: false, challengeTransport: "teams" });
+  const result = await run(f, {
+    context: [
+      sender("teams:tenant1:user1", {
+        id: "19:meeting_abc@thread.v2",
+        kind: "groupChat",
+      }),
+    ],
+    ...linkMessage(REACHABILITY_CODE),
+  });
+  expect(said(result.events)).toContain("Linked.");
+  expect(f.calls).toEqual([
+    {
+      bind: expect.objectContaining({ transport: "teams", identity: "user1" }),
+    },
+  ]);
+});
+const observedMessage = (content: string) => ({
+  context: [
+    {
+      description: "openbot.sender",
+      value: JSON.stringify({
+        user: "slack:T1:U1",
+        event: "Ev50",
+        conversation: { id: "C0123456789", kind: "channel" },
+        observe: "message",
+      }),
+    },
+  ],
+  messages: [{ id: "m1", role: "user", content }],
+});
+const triggersOf = (f: ReturnType<typeof fixture>) =>
+  f.calls
+    .map((c) => (c as { trigger?: Record<string, unknown> }).trigger)
+    .filter(Boolean);
+test("an identity code pasted in a channel without a mention is cancelled quietly and kept out of triggers", async () => {
+  for (const content of [
+    `link ${IDENTITY_CODE.toUpperCase()}`,
+    `here: link ${IDENTITY_CODE.toUpperCase()} thanks`,
+  ]) {
+    const { f, redeemed, discarded } = identityFixture("linked");
+    const result = await run(f, observedMessage(content));
+    expect(said(result.events)).toBe("");
+    expect(discarded).toEqual([IDENTITY_CODE]);
+    expect(redeemed).toEqual([]);
+    const triggers = triggersOf(f);
+    expect(triggers).toHaveLength(1);
+    expect(triggers[0]).toMatchObject({ type: "message", eventId: "Ev50" });
+    expect(JSON.stringify(triggers[0]).toLowerCase()).not.toContain(
+      IDENTITY_CODE,
+    );
+  }
+});
+test("a Reachability code pasted in a channel without a mention is cancelled quietly and kept out of triggers", async () => {
+  const { f, redeemed, discarded } = identityFixture("linked");
+  const result = await run(
+    f,
+    observedMessage(`here: link ${REACHABILITY_CODE.toUpperCase()}`),
+  );
+  expect(said(result.events)).toBe("");
+  expect(f.consumed).toEqual([[REACHABILITY_CODE, "owner"]]);
+  expect(redeemed).toEqual([]);
+  expect(discarded).toEqual([REACHABILITY_CODE]);
+  const triggers = triggersOf(f);
+  expect(triggers).toHaveLength(1);
+  expect(JSON.stringify(triggers[0]).toLowerCase()).not.toContain(
+    REACHABILITY_CODE,
+  );
+});
+test("a Reachability store that fails still lets the account code with that value be cancelled", async () => {
+  const discarded: string[] = [];
+  const f = fixture({
+    bound: false,
+    challengeError: new Error("store is down"),
+    identity: {
+      redeem: async () => "linked",
+      discard: async (code) => {
+        discarded.push(code);
+        return true;
+      },
+    },
+  });
+  const result = await run(
+    f,
+    observedMessage(`here: link ${IDENTITY_CODE.toUpperCase()}`),
+  );
+  expect(said(result.events)).toBe("");
+  expect(discarded).toEqual([IDENTITY_CODE]);
+  const triggers = triggersOf(f);
+  expect(triggers).toHaveLength(1);
+  expect(JSON.stringify(triggers[0]).toLowerCase()).not.toContain(
+    IDENTITY_CODE,
+  );
+});
+test("an ordinary observed channel message reaches triggers unchanged and discards nothing", async () => {
+  const { f, discarded } = identityFixture("linked");
+  const result = await run(f, observedMessage("deploy is broken"));
+  expect(said(result.events)).toBe("");
+  expect(discarded).toEqual([]);
+  expect(triggersOf(f)).toEqual([
+    expect.objectContaining({ type: "message", text: "deploy is broken" }),
+  ]);
+});
+test("a failed discard of an observed channel code still feeds triggers quietly", async () => {
+  const f = fixture({
+    bound: false,
+    identity: {
+      redeem: async () => "invalid",
+      discard: async () => {
+        throw new Error("db down");
+      },
+    },
+  });
+  const error = console.error;
+  console.error = () => {};
+  try {
+    const result = await run(f, observedMessage(`link ${IDENTITY_CODE}`));
+    expect(said(result.events)).toBe("");
+  } finally {
+    console.error = error;
+  }
+  const triggers = triggersOf(f);
+  expect(triggers).toHaveLength(1);
+  expect(JSON.stringify(triggers[0])).not.toContain(IDENTITY_CODE);
+});
+test("an identity code conflict gets the already-linked reply", async () => {
+  const { f } = identityFixture("conflict");
+  const result = await run(f, {
+    context: [sender()],
+    ...linkMessage(IDENTITY_CODE),
+  });
+  expect(said(result.events)).toBe(
+    "This Slack account is already linked to another OpenBot user.",
+  );
+});
+test("an invalid identity code gets the expired reply", async () => {
+  const { f } = identityFixture("invalid");
+  const result = await run(f, {
+    context: [sender()],
+    ...linkMessage(IDENTITY_CODE),
+  });
+  expect(said(result.events)).toBe(EXPIRED);
+});
+test("a Teams sender never reaches the identity adapter", async () => {
+  const { f, redeemed } = identityFixture("linked");
+  const result = await run(f, {
+    context: [sender("teams:tenant1:user1")],
+    ...linkMessage(IDENTITY_CODE),
+  });
+  expect(said(result.events)).toBe(EXPIRED);
+  expect(redeemed).toEqual([]);
+});
+test("without an identity adapter an unknown code gets the expired reply", async () => {
+  const { f } = identityFixture();
+  const result = await run(f, {
+    context: [sender()],
+    ...linkMessage(IDENTITY_CODE),
+  });
+  expect(said(result.events)).toBe(EXPIRED);
+});
 test("bound sender runs the canonical turn and an approval becomes an OpenTag card", async () => {
   const f = fixture({
     converse: {
@@ -291,8 +643,8 @@ test("bound sender runs the canonical turn and an approval becomes an OpenTag ca
     __copilotkit_interrupt_value__: {
       action: "confirm_write",
       args: {
-        action: "Research Bot: browser/navigate",
-        fields: [{ label: "url", value: "https://example.com" }],
+        action: "Research Bot wants to open a page on example.com",
+        fields: [{ label: "URL", value: "https://example.com" }],
         approver: "slack:U1",
         effect: "write",
         allow_always: true,
@@ -300,6 +652,44 @@ test("bound sender runs the canonical turn and an approval becomes an OpenTag ca
     },
   });
   expect(result.events.at(-1)).toMatchObject({ type: "RUN_FINISHED" });
+});
+test("a check-in task's approval becomes a card without Always allow, and an older card's Always is once", async () => {
+  const f = fixture({
+    policySource: "task",
+    converse: {
+      kind: "waiting",
+      binding: bound,
+      inboxId: "in1",
+      replyText: "",
+      extras: { approvals: [APPROVAL], questions: [] },
+    },
+  });
+  const result = await run(f, {
+    context: [sender()],
+    messages: [{ id: "m9", role: "user", content: "<@UBOT> open example.com" }],
+  });
+  const card = result.events.find(
+    (e) => e.type === "CUSTOM" && e.name === "on_interrupt",
+  );
+  expect(card.value.__copilotkit_interrupt_value__.args).toMatchObject({
+    action: "Research Bot wants to open a page on example.com",
+    allow_always: false,
+  });
+  const resumed = await run(f, {
+    forwardedProps: {
+      command: {
+        resume: {
+          "0f8fad5bd9cb469fa16570867728950e": {
+            confirmed: true,
+            always: true,
+            by: "slack:T1:U1",
+          },
+        },
+      },
+    },
+  });
+  expect(said(resumed.events)).toContain("Allowed once");
+  expect(f.decisions).toEqual([["owner", APPROVAL, "allow_once"]]);
 });
 test("in a conversation others may read, the answer goes to the owner privately", async () => {
   const f = fixture({
@@ -421,6 +811,63 @@ test("card resume decides through the approvals service as the binding owner onl
   expect(f.decisions).toHaveLength(1);
   await resume({ confirmed: false, by: "slack:T1:U1" });
   expect(f.decisions[1]).toEqual(["owner", APPROVAL, "deny"]);
+});
+/*
+ * FOUND IN THE 1.0 RC1 MAC PASS: a click waiting in Slack read "Research Bot: computer_click" over
+ * "ref" and "snapshotId" fields, and denying it said "will not run computer_click". Both are said in
+ * the words the approval card in OpenBot uses, and the click's page handles are left out.
+ */
+test("a click waiting in Slack is named in words, with no tool id or page handles", async () => {
+  const f = fixture({
+    action: {
+      toolRef: "computer_click",
+      scope: "en.wikipedia.org",
+      args: { ref: "f3e43", snapshotId: 4 },
+      target: {
+        pageUrl: "https://en.wikipedia.org/wiki/Main_Page",
+        element: { ref: "f3e43", role: "link", name: "Python", type: "" },
+        snapshotId: 4,
+      },
+    },
+    converse: {
+      kind: "waiting",
+      binding: bound,
+      inboxId: "in1",
+      replyText: "",
+      extras: { approvals: [APPROVAL], questions: [] },
+    },
+  });
+  const asked = await run(f, {
+    context: [sender()],
+    messages: [
+      { id: "m9", role: "user", content: "<@UBOT> read about Python" },
+    ],
+  });
+  const card = asked.events.find(
+    (e) => e.type === "CUSTOM" && e.name === "on_interrupt",
+  );
+  expect(card.value.__copilotkit_interrupt_value__.args).toMatchObject({
+    action: "Research Bot wants to click the link “Python” on en.wikipedia.org",
+    fields: [],
+  });
+  const denied = await run(f, {
+    forwardedProps: {
+      command: {
+        resume: {
+          "0f8fad5bd9cb469fa16570867728950e": {
+            confirmed: false,
+            by: "slack:T1:U1",
+          },
+        },
+      },
+    },
+  });
+  expect(said(denied.events)).toBe(
+    "Denied. Research Bot won't click the link “Python” on en.wikipedia.org.",
+  );
+  expect(JSON.stringify([asked.events, denied.events])).not.toMatch(
+    /computer_click|snapshotId|f3e43/,
+  );
 });
 test("a deleting action's card offers no Always allow, and an always answer from an old card is taken as once", async () => {
   const f = fixture({
@@ -642,6 +1089,71 @@ test("a chart the Bot drew is drawn natively by the Channel, and its follow-up r
   expect(
     f.calls.filter((c) => (c as { converse?: unknown }).converse),
   ).toHaveLength(turns);
+});
+test("a chart drawn natively in Slack or Teams says where its figures came from", async () => {
+  const points = [{ label: "France", value: 3.1 }];
+  const f = fixture({
+    converse: {
+      kind: "replied",
+      binding: bound,
+      inboxId: "in1",
+      replyText: "Here is GDP.",
+      components: [
+        {
+          name: "showBarChart",
+          args: {
+            title: "GDP",
+            points,
+            basis: "read",
+            sources: [
+              { title: "World Bank", url: "https://data.worldbank.org" },
+              { title: "World Bank", url: "https://data.worldbank.org" },
+              { title: "Notes", url: "javascript:alert(1)" },
+              null,
+            ],
+            asOf: "2025",
+          },
+        },
+        {
+          name: "showPieChart",
+          args: { title: "Unchecked", points, basis: "own-knowledge" },
+        },
+        { name: "showBarChart", args: { title: "Old", points } },
+      ],
+      extras: { approvals: [], questions: [] },
+    },
+  });
+  const result = await run(f, {
+    tools: [{ name: "render_chart", description: "", parameters: {} }],
+    context: [sender()],
+    messages: [{ id: "m1", role: "user", content: "chart GDP" }],
+  });
+  expect(
+    result.events.filter((e) => e.type === "TOOL_CALL_START"),
+  ).toHaveLength(3);
+  expect(
+    result.events
+      .filter((e) => e.type === "TEXT_MESSAGE_CONTENT")
+      .map((e) => e.delta),
+  ).toEqual([
+    "Here is GDP.",
+    "Sources: [World Bank](https://data.worldbank.org), Notes · As of 2025",
+    "From the Bot's own knowledge. Not checked against a source.",
+  ]);
+  // Each line follows its own chart.
+  const kinds = result.events
+    .filter(
+      (e) => e.type === "TOOL_CALL_START" || e.type === "TEXT_MESSAGE_CONTENT",
+    )
+    .map((e) => e.type);
+  expect(kinds).toEqual([
+    "TEXT_MESSAGE_CONTENT",
+    "TOOL_CALL_START",
+    "TEXT_MESSAGE_CONTENT",
+    "TOOL_CALL_START",
+    "TEXT_MESSAGE_CONTENT",
+    "TOOL_CALL_START",
+  ]);
 });
 test("a channel message from a colleague who never linked still reaches the owners' Slack triggers", async () => {
   // Whose triggers fire is decided by each owner's channel membership in the ingest, never by the

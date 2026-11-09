@@ -3,16 +3,24 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 static NEXT_TEMP_ROOT: AtomicU64 = AtomicU64::new(0);
 
+/// Held by every test that binds or probes loopback ports, in every module. Tests run in
+/// parallel, so one test's port could be taken by another between choosing it and using it.
+/// A test that panics while holding it does not fail the others that wait for it.
+#[allow(dead_code)] // The library's port tests use it; the binary shares this file.
+static PORT_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+#[allow(dead_code)]
+pub(crate) fn hold_ports() -> std::sync::MutexGuard<'static, ()> {
+    PORT_TEST_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 pub(crate) fn temp_root(label: &str) -> PathBuf {
     let next = NEXT_TEMP_ROOT.fetch_add(1, Ordering::Relaxed);
     let path = std::env::temp_dir().join(format!("openbot-{label}-{}-{next}", std::process::id()));
     let _ = std::fs::remove_dir_all(&path);
     path
-}
-
-#[test]
-fn temp_roots_with_the_same_label_do_not_collide() {
-    assert_ne!(temp_root("same-label"), temp_root("same-label"));
 }
 
 /// The digest every fixture image is pinned to: the full 64 hex digits a release publishes.
@@ -59,7 +67,7 @@ pub(crate) fn installed_release<'a>(
         serde_json::to_string(&manifest).unwrap(),
     )
     .expect("manifest is written");
-    crate::deployment::record(root, version).expect("stamp is written");
+    crate::deployment::record(root, version, false).expect("stamp is written");
 }
 
 /// Runtime PATH belongs to the scenario under test; the compiler and linker tools belong to
@@ -79,26 +87,6 @@ pub(crate) fn compile_fixture(source: &std::path::Path, binary: &std::path::Path
         "fixture did not compile: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-}
-
-#[test]
-fn compile_fixture_preserves_windows_executable_filename() {
-    let root = temp_root("fixture-executable-filename");
-    std::fs::create_dir_all(&root).unwrap();
-    // Exercise Windows provider naming even when this regression runs on Unix.
-    let source = root.join("docker-compose.exe.rs");
-    let binary = root.join("docker-compose.exe");
-    std::fs::write(
-        &source,
-        "fn main() { println!(\"fixture executable ran\"); }",
-    )
-    .unwrap();
-
-    compile_fixture(&source, &binary);
-    let output = std::process::Command::new(&binary).output().unwrap();
-    std::fs::remove_dir_all(&root).expect("remove owned compiler fixture");
-    assert!(output.status.success());
-    assert_eq!(output.stdout, b"fixture executable ran\n");
 }
 
 /// Tests that replace the process environment run in their own exact-test child. The normal

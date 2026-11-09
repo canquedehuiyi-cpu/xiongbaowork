@@ -83,6 +83,7 @@ test("the catalog query answers in the shape the reader expects", async () => {
   // ticket exists to prevent, arriving as a red line instead of as a quiet green.
   expect(facts.role).toBe("openbot_app");
   expect(judgeRlsEnforcement(facts)).toEqual({ enforced: true });
+  await database.$client.close();
 });
 
 /**
@@ -158,4 +159,5 @@ test("the application role cannot create objects in the schemas it writes throug
       ? failure.cause
       : failure;
   expect(String(cause)).toMatch(/permission denied/i);
+  await database.$client.close();
 });

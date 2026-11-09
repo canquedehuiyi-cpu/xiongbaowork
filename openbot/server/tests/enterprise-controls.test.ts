@@ -250,6 +250,39 @@ describe("the computer boundary overlay", () => {
     ).toBe("network:organization");
   });
 
+  test("a navigation to an allowed host on a non-default port is checked by host and port", () => {
+    // `page.host` is `URL.host`, which carries a non-default port. The allowlist is matched on the
+    // host alone, with the port checked against the rule's ports.
+    const current = snapshot({
+      network: [
+        {
+          scopeKind: "organization",
+          scopeId: "",
+          mode: "allowlist_only",
+          rules: [
+            { type: "domain", value: "erp.internal", ports: "8080" },
+            { type: "domain", value: "example.com" },
+          ],
+          locked: false,
+          updatedBy: null,
+          updatedAt: new Date().toISOString(),
+        },
+      ],
+    });
+    const at = (url: string) =>
+      decideFromSnapshot(
+        current,
+        context({ page: { url, host: new URL(url).host } }),
+      );
+    expect(at("http://erp.internal:8080/invoices")).toBeNull();
+    expect(at("https://example.com:8443/")).toBeNull();
+    // The rule's ports still bind.
+    expect(at("http://erp.internal:9090/")?.matched).toBe(
+      "network:organization",
+    );
+    expect(at("http://evil.test:8080/")?.matched).toBe("network:organization");
+  });
+
   test("installed, it is final even over a permissive dry-run boundary", () => {
     const current = snapshot({
       rows: [row("organization", "", "cloudBrowser", false)],
@@ -398,6 +431,11 @@ describe("scrubbing commands", () => {
       "psql postgres://app:[REDACTED]@db:5432/app",
     ],
     ["mysql -uroot -phunter2 app", "mysql -uroot -p[REDACTED] app"],
+    // `-P` is mysql's port, not its password: the attached port must survive and the real
+    // password later in the same command must still be redacted (gh-815).
+    ["mysql -h db -P3306 -phunter2 app", "mysql -h db -P3306 -p[REDACTED] app"],
+    ["mysql -uroot -p3306 app", "mysql -uroot -p[REDACTED] app"],
+    ["mysqldump -phunter2 db", "mysqldump -p[REDACTED] db"],
     [
       "tool --password hunter2 --verbose",
       "tool --password [REDACTED] --verbose",
@@ -435,6 +473,41 @@ describe("scrubbing commands", () => {
       'curl -u "admin:s3 cret" https://x.test',
       "curl -u admin:[REDACTED] https://x.test",
     ],
+    [
+      "curl --proxy-user bob:hunter2 -x http://proxy.test:3128 https://x.test",
+      "curl --proxy-user bob:[REDACTED] -x http://proxy.test:3128 https://x.test",
+    ],
+    // `-p` bare asks mysql for the password and leaves the database name after it alone: the two are
+    // separated by a space, and the attached form is what carries a password.
+    ["mysql -h db -p", "mysql -h db -p"],
+    ["mysql -u root -p mydb", "mysql -u root -p mydb"],
+    ["docker login -u bob -p hunter2", "docker login -u bob -p [REDACTED]"],
+    ["sshpass -p hunter2 ssh user@host", "sshpass -p [REDACTED] ssh user@host"],
+    ["redis-cli -a hunter2 SET k v", "redis-cli -a [REDACTED] SET k v"],
+    ["redis-cli -ahunter2 SET k v", "redis-cli -a[REDACTED] SET k v"],
+    ["redis-cli --pass hunter2 SET k v", "redis-cli --pass [REDACTED] SET k v"],
+    ["redis://:hunter2@cache:6379", "redis://:[REDACTED]@cache:6379"],
+    // Each of those rules ends where its command does. A line break starts another command, whose
+    // `-p` is a port again; a line continued with a backslash does not. sshpass's options end at
+    // the command it wraps, and that command's own `-p` and `-P` are ports too.
+    [
+      "sshpass -p hunter2 ssh -p 2222 user@host",
+      "sshpass -p [REDACTED] ssh -p 2222 user@host",
+    ],
+    [
+      "sshpass -f pw.txt ssh -p 2222 user@host",
+      "sshpass -f pw.txt ssh -p 2222 user@host",
+    ],
+    ["sshpass -e scp -P 2222 f host:", "sshpass -e scp -P 2222 f host:"],
+    [
+      "docker login -u bob r.test\ndocker run -p 8080:80 nginx",
+      "docker login -u bob r.test\ndocker run -p 8080:80 nginx",
+    ],
+    [
+      "docker login -u bob \\\n  -p hunter2 r.test",
+      "docker login -u bob \\\n  -p [REDACTED] r.test",
+    ],
+    ["redis-cli PING\nls -a /tmp", "redis-cli PING\nls -a /tmp"],
   ];
   for (const [input, output] of cases) {
     test(input, () => expect(scrubCommand(input)).toBe(output));

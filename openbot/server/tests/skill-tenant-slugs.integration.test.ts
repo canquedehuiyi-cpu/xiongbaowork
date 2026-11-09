@@ -45,7 +45,7 @@ const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const store = createPluginStore({
   database,
   auditStore: createAuditStore(database),
-  credentials: { readSecret: async () => null },
+  credentials: { readSecret: async () => null } as never,
   encryptionKey: "x".repeat(44),
   policy: () => ({ mode: "enforce", deny: [], allow: ["true"] }),
 });
@@ -116,6 +116,7 @@ const listed = async (tenant: string, slug: string) =>
 
 const catalogue = (slugs: string[]): LoadedTenantPackage => ({
   tenantId: packageKey,
+  formerTenantIds: [],
   productName: "Skill slug fixture",
   stylesheet: null,
   agents: [],

@@ -67,6 +67,7 @@ afterAll(async () => {
       .where(eq(registeredDevices.tenantId, tenant));
     await database.delete(users).where(eq(users.id, tenant));
   });
+  await database.$client.close();
 });
 
 test("an open account is not banned, and a mixed-case ban still finds it", async () => {

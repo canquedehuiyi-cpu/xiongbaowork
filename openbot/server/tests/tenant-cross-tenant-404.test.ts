@@ -2,7 +2,7 @@ import { afterAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
-import type { AppVariables } from "../src/app-variables";
+import type { AppVariables } from "../src/auth/guards";
 import { createDatabase } from "../src/db/client";
 import { tasks } from "../src/db/schema";
 import { createTaskProjector } from "../src/tasks/projector";
@@ -33,7 +33,11 @@ const routesFor = (actorId: string) => {
     context,
     next,
   ) => {
-    context.set("actor", { id: actorId, role: "user" as const });
+    context.set("actor", {
+      id: actorId,
+      email: `${actorId}@example.test`,
+      role: "user" as const,
+    });
     await next();
   };
   return createTaskRoutes(database, requireUser, projector);
@@ -75,6 +79,7 @@ afterAll(async () => {
       await database.delete(tasks).where(eq(tasks.tenantId, scope));
     });
   }
+  await database.$client.close();
 });
 
 test("a stranger cannot see the card in the list at all", async () => {

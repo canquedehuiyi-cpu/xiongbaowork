@@ -107,7 +107,11 @@ const storeFor = () =>
   );
 let store = storeFor();
 
-const actorOf = (id: string) => ({ id, role: "user" as const });
+const actorOf = (id: string) => ({
+  id,
+  email: `${id}@example.test`,
+  role: "user" as const,
+});
 
 /** `GET /api/channels` as the signed-in person: `requireUser` runs the request in their own frame. */
 async function listAs(id: string) {

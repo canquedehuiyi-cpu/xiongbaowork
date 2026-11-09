@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import postgres from "postgres";
 import { sweepAuditTrail } from "../src/audit-retention";
@@ -362,4 +362,8 @@ describe("keeping the audit trail to a retention policy", () => {
 
     expect(deleted).toBe(1);
   });
+});
+
+afterAll(async () => {
+  await database.$client.close();
 });

@@ -60,6 +60,7 @@ function serve() {
       ROSTER.map((item) => ({
         ...item,
         visibility: "public",
+        isolated: false,
         title: item.name,
         avatarSeed: item.id,
         ownerUserId: null,

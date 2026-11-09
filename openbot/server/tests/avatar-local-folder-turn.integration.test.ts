@@ -31,6 +31,7 @@ import {
   createAvatarSourceStore,
 } from "../src/avatar-sources";
 import { ComputerUnavailableError } from "../src/computer/client";
+import { personSeat } from "../src/computer/computer-key";
 import { createComputerGateway } from "../src/computer/gateway";
 import {
   createHeadlessComputerTools,
@@ -102,11 +103,11 @@ const sources = createAvatarSourceStore(database, {
 const gateway = createComputerGateway({
   provider: {
     name: "container",
-    isolation: "per-bot",
+    isolation: "per-person",
     locate: async () => {
       throw new Error("A local folder is never read through the container.");
     },
-    status: async (id) => ({ botId: id, state: "ready" }),
+    status: async (seat) => ({ botId: seat.botId, state: "ready" }),
     list: async () => [],
     stop: async () => ({ wasRunning: false }),
     reset: async () => ({ cleared: false }),
@@ -132,7 +133,7 @@ const actor =
   };
 
 async function call<T>(
-  app: { request: (input: Request) => Promise<Response> },
+  app: { request: (input: Request) => Response | Promise<Response> },
   method: string,
   path: string,
   body?: unknown,
@@ -251,11 +252,11 @@ function toolCall(
     state: {},
     context: [],
     forwardedProps: {},
-    initiator: { kind: "person", id: person },
+    initiator: { kind: "person" },
   };
   const tool = createHeadlessComputerTools({
     gateway,
-    botId,
+    seat: personSeat(person, botId),
     actor: { id: person, userId: person, initiator: { kind: "person" } },
   }).find((candidate) => candidate.definition.name === toolName);
   if (!tool) throw new Error(`The 分身 has no ${toolName}.`);
@@ -353,7 +354,7 @@ describe("register a folder, add it as a source, and the 分身 reads it", () =>
     const originalBase = process.env.OPENAI_BASE_URL;
     try {
       process.env.OPENAI_BASE_URL = await recorder.start();
-      recorder.onMessage(/.*/, { type: "text", content: "好的。" });
+      recorder.onMessage(/.*/, { content: "好的。" });
       const roster: RegisteredAgent[] = [
         {
           id: avatarA,
@@ -372,6 +373,11 @@ describe("register a folder, add it as a source, and the 分身 reads it", () =>
         roster,
         { provider: "openai", defaultModel: "gpt-5.6-terra" },
         "synthetic-model-key",
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
         undefined,
         undefined,
         undefined,
@@ -474,7 +480,7 @@ describe("register a folder, add it as a source, and the 分身 reads it", () =>
     );
     const tool = createHeadlessComputerTools({
       gateway,
-      botId: avatarA,
+      seat: personSeat(personA, avatarA),
       actor: { id: personA, userId: personA, initiator: { kind: "person" } },
     }).find((candidate) => candidate.definition.name === "computer_read_file");
     const read = (await runAsTenant(personA, () =>

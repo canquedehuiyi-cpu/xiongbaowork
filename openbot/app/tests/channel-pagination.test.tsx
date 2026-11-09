@@ -171,6 +171,9 @@ function renderSidebar(first: ChannelSummary = channel("Recent conversation")) {
   queryClient.setQueryData(userPreferencesQueryOptions("user").queryKey, {
     messageListEmphasis: "thread",
     selfHostBannerDismissed: false,
+    narration: null,
+    skin: "openbot",
+    proactive: "on",
   });
   // The footer reads the plan once on its own; these tests count channel requests only.
   queryClient.setQueryData(quotaKeys.usage(), {
@@ -237,6 +240,9 @@ test("message emphasis updates mounted rows from the account preferences cache",
     clients[0]?.setQueryData(userPreferencesQueryOptions("user").queryKey, {
       messageListEmphasis: "agent",
       selfHostBannerDismissed: false,
+      narration: null,
+      skin: "openbot",
+      proactive: "on",
     }),
   );
   // 员工名字 emphasis: the name leads, and the title moves down to the grey line.

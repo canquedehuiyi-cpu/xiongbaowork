@@ -1,4 +1,11 @@
-import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  test,
+} from "bun:test";
 import { randomUUID } from "node:crypto";
 import { eq, inArray, sql } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
@@ -583,4 +590,8 @@ describe("sandboxed components are the team's", () => {
       "sandboxed",
     );
   });
+});
+
+afterAll(async () => {
+  await database.$client.close();
 });

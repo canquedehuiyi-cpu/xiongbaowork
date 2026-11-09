@@ -1,12 +1,19 @@
 import { useFrontendTool, useHumanInTheLoop } from "@copilotkit/react-core/v2";
+import { NOT_SHOWN, NOT_SHOWN_TAIL } from "@openbot/shared/component-markers";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useContext, useEffect, useMemo, useState } from "react";
 import {
-  FAILED_UNREADABLE,
-  FAILED_WENT_WRONG,
   FailedCard,
-  RefusedCard,
-} from "@/components/gallery/refused";
+  UNREADABLE,
+  WENT_WRONG,
+} from "@/components/gallery/failed";
+import { RefusedCard } from "@/components/gallery/refused";
+import {
+  ArgumentsArrivingContext,
+  GalleryDecidedContext,
+  GalleryStreamingContext,
+  TurnInFlightContext,
+} from "@/components/gallery/streaming";
 import {
   agentComponentsQueryOptions,
   announceGallery,
@@ -20,11 +27,8 @@ import {
   type GalleryComponent,
   galleryManifest,
 } from "@/lib/copilot/gallery-registry";
+import { settledArgs } from "@/lib/copilot/settled-args";
 import { browserCallFailed } from "@/lib/plugins/tool-result";
-import {
-  NOT_SHOWN,
-  NOT_SHOWN_TAIL,
-} from "../../../../shared/component-markers";
 
 /**
  * 一次已经结束的 gallery 调用为什么什么都没画出来；它不是这种情况就是 undefined。
@@ -53,9 +57,8 @@ export function galleryCallFailure(
   )
     return undefined;
   const fit = argumentsFit(spec, call.args);
-  if (spec.kind === "decision")
-    return fit === false ? FAILED_UNREADABLE : undefined;
-  return fit === false ? FAILED_UNREADABLE : FAILED_WENT_WRONG;
+  if (spec.kind === "decision") return fit === false ? UNREADABLE : undefined;
+  return fit === false ? UNREADABLE : WENT_WRONG;
 }
 
 /** 调用的参数是不是组件要的；schema 不能当场回答时为 undefined。只对已结束的调用问。 */
@@ -138,49 +141,10 @@ function GrantedTool({
     new Map(),
   );
 
-  const Component = spec.Component;
-
-  const render = useCallback(
-    (props: {
-      toolCallId?: string;
-      status?: string;
-      args?: Record<string, unknown>;
-      result?: string;
-    }) => {
-      const refusal = props.toolCallId
-        ? refusals.get(props.toolCallId)
-        : undefined;
-      if (refusal) {
-        return <RefusedCard reason={refusal} title={spec.title} />;
-      }
-      /*
-       * A stored refusal. The in-memory map above is gone once the page reloads, and a headless turn
-       * never had one: the server answered the call itself (`server/src/components/headless.ts`).
-       * The result is what survives, so a call that drew nothing is drawn as the refusal it was.
-       */
-      if (props.result?.startsWith(NOT_SHOWN)) {
-        const lead = `${NOT_SHOWN}${spec.title}. `;
-        const reason = (
-          props.result.startsWith(lead)
-            ? props.result.slice(lead.length)
-            : props.result.slice(NOT_SHOWN.length)
-        ).replace(NOT_SHOWN_TAIL, "");
-        return <RefusedCard reason={reason} title={spec.title} />;
-      }
-      const failure = galleryCallFailure(spec, props);
-      if (failure) return <FailedCard reason={failure} title={spec.title} />;
-      // Render from the polled grant snapshot so revocations show before a new call starts.
-      if (!isHeld) {
-        return (
-          <RefusedCard
-            reason={`${spec.title} is not available to this Bot at the moment. An administrator grants components per Bot, and can unpublish one for every Bot at once.`}
-            title={spec.title}
-          />
-        );
-      }
-      return <Component {...(props.args ?? {})} />;
-    },
-    [Component, isHeld, refusals, spec],
+  // Rebuilt only when what it draws from changes: the SDK remounts a card when this identity changes.
+  const render = useMemo(
+    () => makeGalleryRender(spec, isHeld, refusals),
+    [spec, isHeld, refusals],
   );
 
   useFrontendTool({
@@ -214,6 +178,77 @@ function GrantedTool({
   });
 
   return null;
+}
+
+/**
+ * The card a gallery tool call draws, for one component, its grant and the refusals so far.
+ *
+ * A factory rather than a hook's callback, because the SDK draws what it returns as a component
+ * type, and that component reads the streaming contexts the transcript may provide.
+ */
+function makeGalleryRender(
+  spec: GalleryComponent,
+  isHeld: boolean,
+  refusals: ReadonlyMap<string, string>,
+) {
+  const Component = spec.Component;
+  return function GalleryRender(props: {
+    toolCallId?: string;
+    status?: string;
+    args?: Record<string, unknown>;
+    result?: string;
+  }) {
+    // Read before any early return: the SDK draws this as a component type.
+    const arriving = useContext(ArgumentsArrivingContext);
+    const turnRunning = useContext(TurnInFlightContext);
+    const refusal = props.toolCallId
+      ? refusals.get(props.toolCallId)
+      : undefined;
+    if (refusal) {
+      return <RefusedCard reason={refusal} title={spec.title} />;
+    }
+    /*
+     * A stored refusal. The in-memory map above is gone once the page reloads, and a headless turn
+     * never had one: the server answered the call itself (`server/src/components/headless.ts`).
+     * The result is what survives, so a call that drew nothing is drawn as the refusal it was.
+     */
+    if (props.result?.startsWith(NOT_SHOWN)) {
+      const lead = `${NOT_SHOWN}${spec.title}. `;
+      const reason = (
+        props.result.startsWith(lead)
+          ? props.result.slice(lead.length)
+          : props.result.slice(NOT_SHOWN.length)
+      ).replace(NOT_SHOWN_TAIL, "");
+      return <RefusedCard reason={reason} title={spec.title} />;
+    }
+    const failure = galleryCallFailure(spec, props);
+    if (failure) return <FailedCard reason={failure} title={spec.title} />;
+    // Render from the polled grant snapshot so revocations show before a new call starts.
+    if (!isHeld) {
+      return (
+        <RefusedCard
+          reason={`${spec.title} is not available to this Bot at the moment. An administrator grants components per Bot, and can unpublish one for every Bot at once.`}
+          title={spec.title}
+        />
+      );
+    }
+    /*
+     * A number, link or colour still arriving is held back; see `settledArgs`. Only while the
+     * arguments are streaming (`inProgress`, not `executing`) in a row that can still receive them.
+     * This fork's transcript provides neither context, so their defaults apply: arguments may be
+     * arriving while `inProgress`, and nothing is waiting on a decision.
+     */
+    const complete = !(arriving && props.status === "inProgress");
+    // Still being decided: the call has no answer yet in a turn that is still running.
+    const decided = !(turnRunning && props.status !== "complete");
+    return (
+      <GalleryStreamingContext.Provider value={!complete}>
+        <GalleryDecidedContext.Provider value={decided}>
+          <Component {...settledArgs(props.args ?? {}, complete)} />
+        </GalleryDecidedContext.Provider>
+      </GalleryStreamingContext.Provider>
+    );
+  };
 }
 
 function GrantedDecision({

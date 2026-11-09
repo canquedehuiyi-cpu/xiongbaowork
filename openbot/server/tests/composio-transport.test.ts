@@ -310,7 +310,11 @@ describe("what a label means", () => {
     // Measured across five apps and never seen, so this branch guards the future rather than the
     // present: an app that labels nothing, or a label added later, must land on write. 记为
     // unclassified：按写操作处理，不算 destructive，后台读取对它和 destructive 一样谨慎。
-    const silent = { effect: "write", destructive: false, unclassified: true };
+    const silent: ReturnType<typeof effectOf> = {
+      effect: "write",
+      destructive: false,
+      unclassified: true,
+    };
     expect(effectOf([])).toEqual(silent);
     expect(effectOf(undefined)).toEqual(silent);
     expect(effectOf(["gmail", "inbox"])).toEqual(silent);

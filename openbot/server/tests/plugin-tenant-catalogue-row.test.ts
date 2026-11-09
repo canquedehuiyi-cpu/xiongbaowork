@@ -38,7 +38,7 @@ const store = createPluginStore({
     revoke: async () => {
       throw new Error("this suite does not revoke credentials");
     },
-  },
+  } as never,
   encryptionKey: "x".repeat(44),
   policy: () => ({ mode: "enforce", deny: [], allow: ["true"] }),
 });
@@ -120,6 +120,7 @@ afterAll(async () => {
     );
   }
   await releaseAdmins?.();
+  await database.$client.close();
 });
 
 test("a person who is not an administrator with the capability writes no server row at all", async () => {

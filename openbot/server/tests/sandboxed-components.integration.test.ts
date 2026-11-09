@@ -61,7 +61,7 @@ async function asAdministrator<T>(work: () => Promise<T>): Promise<T> {
   app.use(
     "*",
     async (context, next) => {
-      context.set("actor", { id: administrator, role: "admin" });
+      context.set("actor", { id: administrator, email: `${administrator}@example.test`, role: "admin" });
       await runAsTenant(administrator, () => next());
     },
     scope.adminCapability,
@@ -347,4 +347,8 @@ describe("deleting a name this surface does not own", () => {
         .where(eq(components.name, orphan));
       expect(gone).toBeUndefined();
     }));
+});
+
+afterAll(async () => {
+  await database.$client.close();
 });

@@ -241,7 +241,7 @@ describe("reviewed read lists", () => {
     // ...and chat answers as before: an advertised name off the write list reads.
     expect(classifyTool(exa, "some_new_tool", true)).toBe("read");
     expect(
-      classifyTool(catalogueEntry("notion"), "notion-new-thing", true),
+      classifyTool(catalogueEntry("linear"), "linear-new-thing", true),
     ).toBe("read");
     expect(classifyTool(null, "anything", true)).toBe("write");
   });

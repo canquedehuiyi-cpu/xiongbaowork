@@ -105,7 +105,11 @@ describe("the adapter is the transport the catalogue asks for", () => {
     expect(
       transportFor(
         accessFor(
-          { provenance: "first-party", url: "https://www.googleapis.com" },
+          {
+            provenance: "first-party",
+            url: "https://www.googleapis.com",
+            authScheme: null,
+          },
           entry,
         ).transport,
       ).callTool,
@@ -119,7 +123,11 @@ describe("the adapter is the transport the catalogue asks for", () => {
     expect(
       transportFor(
         accessFor(
-          { provenance: "custom", url: "https://mcp.example.com/mcp" },
+          {
+            provenance: "custom",
+            url: "https://mcp.example.com/mcp",
+            authScheme: null,
+          },
           null,
         ).transport,
       ).callTool,
@@ -359,6 +367,30 @@ describe("reading a file asks Drive what it is first", () => {
     expect(result.text).toContain("application/pdf");
     // One call: the metadata lookup. No download followed it.
     expect(calls).toHaveLength(1);
+  });
+
+  /*
+   * A type Google never defined is declined like any other unreadable one.
+   *
+   * Whoever uploaded the file chose the type string, so the export table is asked a question by
+   * somebody outside this deployment. Looked up in a plain object, `toString` is answered with
+   * `Object.prototype.toString` — truthy, so the file is treated as an exportable editor format:
+   * the refusal above is skipped and `?mimeType=function toString() { [native code] }` is sent to
+   * Google in its place.
+   */
+  test("a made-up type borrowed from Object.prototype is not an exportable format", async () => {
+    for (const mimeType of ["toString", "constructor", "valueOf"]) {
+      const calls = stubFetch({ id: "odd1", name: "Odd", mimeType });
+
+      const result = await callTool(connection, "read_file_content", {
+        fileId: "odd1",
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.text).toContain(mimeType);
+      // One call: the metadata lookup. No export followed it.
+      expect(calls).toHaveLength(1);
+    }
   });
 });
 

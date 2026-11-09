@@ -85,6 +85,15 @@ export const personalMemories = pgTable(
     sourceRef: text("source_ref"),
     sourceLink: text("source_link"),
     observedAt: timestamp("observed_at", { withTimezone: true }),
+    /**
+     * The memory's id in CopilotKit Intelligence, when this deployment is entitled to Intelligence
+     * memory and the memory has been mirrored there. Intelligence holds the content and does the
+     * recall; this row keeps what Intelligence has no field for (provenance, review, who formed it,
+     * which source and Bot may see it). Null while it is local only.
+     */
+    intelligenceMemoryId: text("intelligence_memory_id"),
+    /** sha256 of the content last written to Intelligence, so an edit is mirrored exactly once. */
+    intelligenceDigest: text("intelligence_digest"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -94,6 +103,10 @@ export const personalMemories = pgTable(
   },
   (table) => [
     index("personal_memories_owner_idx").on(table.ownerUserId, table.enabled),
+    index("personal_memories_intelligence_idx").on(
+      table.ownerUserId,
+      table.intelligenceMemoryId,
+    ),
     index("personal_memories_formed_idx").on(
       table.ownerUserId,
       table.formedByAgentId,
@@ -102,10 +115,11 @@ export const personalMemories = pgTable(
       table.sourceId,
       table.externalId,
     ),
-    // One Bot-formed fact per person and content: two runs forming the same fact at once store it
-    // once, which a read-then-insert cannot promise.
-    uniqueIndex("personal_memories_formed_digest_idx")
-      .on(table.ownerUserId, table.importDigest)
+    // One Bot-formed fact per person, Bot and content: two runs forming the same fact at once store
+    // it once, which a read-then-insert cannot promise. Per Bot, because each Bot recalls only
+    // what it formed.
+    uniqueIndex("personal_memories_formed_digest_per_bot_idx")
+      .on(table.ownerUserId, table.formedByAgentId, table.importDigest)
       .where(sql`${table.formedBy} = 'bot'`),
   ],
 );

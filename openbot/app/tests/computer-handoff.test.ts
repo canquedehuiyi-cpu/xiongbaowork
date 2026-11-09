@@ -9,7 +9,7 @@ import {
 import type {
   ComputerControlState,
   HandoffStatus,
-} from "../../shared/computer-control";
+} from "@openbot/shared/computer-control";
 import {
   awaitHandoff,
   runHelpRequest,
@@ -27,6 +27,7 @@ function state(status: HandoffStatus, id = "request-1"): ComputerControlState {
     holder: status === "taken" ? "human" : "bot",
     since: "2026-09-26T00:00:00Z",
     requested: status === "waiting",
+    recoveryRequired: false,
     transitioning: false,
     resumeSnapshotRequired: status === "completed",
     request: {

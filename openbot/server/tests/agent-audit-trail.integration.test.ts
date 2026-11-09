@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { createAgentTrailReader } from "../src/audit";
 import { createDatabase } from "../src/db/client";
@@ -265,4 +265,8 @@ describe("an agent's audit trail", () => {
     expect(events).toEqual([]);
     expect(nextCursor).toBeUndefined();
   });
+});
+
+afterAll(async () => {
+  await database.$client.close();
 });

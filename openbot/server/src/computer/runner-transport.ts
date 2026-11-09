@@ -6,8 +6,10 @@ import {
 } from "../devices/channel";
 import {
   type ComputerDownload,
+  type ComputerEndpoint,
   type ComputerTransport,
   ComputerUnavailableError,
+  type SeatAddress,
 } from "./client";
 import type { NavigateResult } from "./schema";
 
@@ -43,8 +45,18 @@ const BROWSER_ACTIONS = new Set([
 export function createRunnerTransport(
   channel: DeviceChannel,
 ): ComputerTransport {
-  const targetOf = (address: string): DispatchTarget => {
-    const target = parseRunnerAddress(address);
+  /*
+   * What the gateway hands a transport since computers have seats: an endpoint that may carry its
+   * computer's token, and a seat that may name the person too. A paired machine is always named by a
+   * bare `runner:` address and the Bot alone (the gateway's `route`), so both are read as strings; the
+   * wider shapes are accepted so this transport is a `ComputerTransport` without a cast.
+   */
+  const urlOf = (endpoint: ComputerEndpoint): string =>
+    typeof endpoint === "string" ? endpoint : endpoint.url;
+  const botOf = (seat: SeatAddress): string =>
+    typeof seat === "string" ? seat : seat.botId;
+  const targetOf = (endpoint: ComputerEndpoint): DispatchTarget => {
+    const target = parseRunnerAddress(urlOf(endpoint));
     if (!target) {
       throw new ComputerUnavailableError(
         "That computer is not a device this deployment can dispatch to.",
@@ -201,8 +213,8 @@ export function createRunnerTransport(
 
   return {
     call<T>(
-      baseUrl: string,
-      botId: string,
+      baseUrl: ComputerEndpoint,
+      botId: SeatAddress,
       path: string,
       init?: RequestInit,
       caller?: AbortSignal,
@@ -215,7 +227,7 @@ export function createRunnerTransport(
       return carry<T>(
         action,
         targetOf(baseUrl),
-        botId,
+        botOf(botId),
         init?.body ? JSON.parse(String(init.body)) : {},
         timeoutMs,
         idempotencyKey,
@@ -224,8 +236,8 @@ export function createRunnerTransport(
     },
 
     post<T>(
-      baseUrl: string,
-      botId: string,
+      baseUrl: ComputerEndpoint,
+      botId: SeatAddress,
       path: string,
       payload: unknown,
       caller?: AbortSignal,
@@ -235,7 +247,7 @@ export function createRunnerTransport(
       return carry<T>(
         actionFor(path),
         targetOf(baseUrl),
-        botId,
+        botOf(botId),
         payload,
         timeoutMs,
         idempotencyKey,
@@ -244,15 +256,15 @@ export function createRunnerTransport(
     },
 
     navigate(
-      baseUrl: string,
-      botId: string,
+      baseUrl: ComputerEndpoint,
+      botId: SeatAddress,
       url: string,
       toolCallId?: string,
     ): Promise<NavigateResult> {
       return carry<NavigateResult>(
         "navigate",
         targetOf(baseUrl),
-        botId,
+        botOf(botId),
         { url },
         // A page on a real machine over a home connection is slower than the container's, and the
         // deadline that matters is the one the person is waiting on.

@@ -223,4 +223,5 @@ afterAll(async () => {
       .delete(textTranslations)
       .where(inArray(textTranslations.sourceHash, written));
   });
+  await database.$client.close();
 });

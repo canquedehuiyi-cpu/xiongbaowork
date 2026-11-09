@@ -26,6 +26,7 @@ import { knowledgeNotebooks } from "./knowledge-foundations";
 import { modelRegistry, platformModelPool } from "./model";
 import { mcpServers } from "./plugins";
 import { tenantId } from "./tenant";
+import { responsibilities } from "./responsibilities";
 
 const createdAt = () =>
   timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
@@ -68,6 +69,16 @@ export const agentProfiles = pgTable(
       () => platformModelPool.id,
       { onDelete: "restrict" },
     ),
+    /*
+     * A computer of its own rather than its owner's.
+     *
+     * By default every Bot a person uses runs on that person's one computer, each Bot with its own
+     * browser profile and folder there. An isolated Bot gets a computer keyed by the Bot instead, which
+     * keeps its logins between runs and which everyone who uses the Bot shares. Only someone the
+     * `isolatedComputers` capability allows may set it; when that is withdrawn the Bot runs on the
+     * person's computer again rather than stopping.
+     */
+    isolated: boolean("isolated").notNull().default(false),
     /*
      * The credential this Bot's agent presents when it calls a tool back.
      *
@@ -314,6 +325,24 @@ export const routines = pgTable(
      */
     channelId: text("channel_id").notNull(),
     instruction: text("instruction").notNull(),
+    /**
+     * What the person called it, in their own words: "Morning briefing". Null when they named it
+     * nothing, and then the instruction stands in for it wherever a routine is named.
+     */
+    title: text("title"),
+    /**
+     * The goal this routine runs, recorded when it is made for one (`goalId` on `create_routine`, or
+     * the goal's id in its instruction) or when its firing runs one with `run_goal`. A goal a routine
+     * runs repeats, and is listed with it. Cleared when the goal is deleted.
+     */
+    goalId: text("goal_id").references(() => responsibilities.id, {
+      onDelete: "set null",
+    }),
+    /**
+     * Made before routines recorded their goal. Its goal, if any, is found from its instruction: the
+     * goal's id, or its whole title in quotes. False for every routine made since.
+     */
+    goalByTitle: boolean("goal_by_title").notNull().default(false),
     /** Five-field cron. Validated at the tool boundary; never parsed by the client. */
     cron: text("cron").notNull(),
     /** IANA zone the cron is read in. UTC when the person never said otherwise. */

@@ -1,3 +1,4 @@
+import { declaredHarness } from "@openbot/shared/harnesses";
 import type { Context, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import type { AuditEventType, AuditStore } from "../audit";
@@ -9,12 +10,16 @@ import { QuotaExceeded } from "../quota/limits";
 import { capabilityFor, isPersonTenant } from "../tenant/context";
 import { testAgentConnection } from "./connection-test";
 import { checkAgentEndpoint } from "./endpoint";
+import { takesModelChoice } from "./harness-model";
+import { isolationState, mayIsolate } from "./isolation";
+import { isManagedEndpoint } from "./managed-endpoint";
 import { canManageAgent } from "./profile-policy";
 import {
   AgentAssignedError,
   AgentNotFoundError,
   AgentNotManageableError,
   type AgentProfileStore,
+  IsolationRefusedError,
   ManagedAgentUnavailableError,
   ModelBindingConflictError,
   ModelBindingNotApplicableError,
@@ -49,6 +54,9 @@ type AgentInputObject = {
   bible?: unknown;
   avatarSeed?: unknown;
   roleTemplate?: unknown;
+  isolated?: unknown;
+  instructions?: unknown;
+  harness?: unknown;
 };
 
 /** The longest 工作手册 a coworker may carry (ROLE1, D3), in characters as the database counts them. */
@@ -74,6 +82,8 @@ export function parseAgentInput(
   allowPrivateHosts = false,
   /** Private addresses this deployment named as acceptable. Empty is the default posture. */
   allowedHosts: ReadonlySet<string> = new Set(),
+  /** The deployment's own agent addresses, reachable at exactly those URLs; see checkAgentEndpoint. */
+  managedEndpoints?: readonly (string | URL)[],
 ): AgentInputParseResult {
   if (!isAgentInputObject(input)) {
     return { ok: false, error: "Agent input must be a JSON object." };
@@ -86,17 +96,18 @@ export function parseAgentInput(
   );
   if (typeof name !== "string") return name;
 
-  const title = boundedText(
-    input.title,
-    120,
-    "Title must be text between 1 and 120 characters.",
-  );
-  if (typeof title !== "string") return title;
+  if (typeof input.title !== "string" || input.title.trim().length > 120) {
+    return {
+      ok: false,
+      error: "Title must be text of 120 characters or fewer.",
+    };
+  }
+  const title = input.title.trim();
 
   const roleDescription = boundedText(
     input.roleDescription,
     1000,
-    "Role description must be text between 1 and 1000 characters.",
+    "What it does must be text between 1 and 1000 characters.",
   );
   if (typeof roleDescription !== "string") return roleDescription;
 
@@ -116,6 +127,7 @@ export function parseAgentInput(
     const verdict = checkAgentEndpoint(input.endpoint, {
       allowPrivateHosts,
       allowedHosts,
+      ...(managedEndpoints ? { managedEndpoints } : {}),
     });
     if (!verdict.allowed) return { ok: false, error: verdict.reason };
     endpoint = verdict.url;
@@ -198,6 +210,41 @@ export function parseAgentInput(
     };
   }
 
+  // Absent is "leave it as it is", so only a present value is checked. A string "true" is refused
+  // rather than read as yes: this decides which computer a Bot runs on.
+  if (input.isolated !== undefined && typeof input.isolated !== "boolean") {
+    return { ok: false, error: "Isolated must be true or false." };
+  }
+  const isolated = input.isolated;
+
+  /*
+   * The framework a person named for an agent they run themselves, by its id in the harness list.
+   * Kept only with an address: a Bot with none runs here, on OpenBot. See `frameworkOf`.
+   */
+  let harness: string | undefined;
+  if (input.harness !== undefined && input.harness !== "") {
+    const named = declaredHarness(input.harness);
+    if (!named)
+      return {
+        ok: false,
+        error: "OpenBot doesn't know that framework. Pick one from the list.",
+      };
+    if (endpoint) harness = named.id;
+  }
+
+  // Absent leaves them as they are. Only the personal starter keeps instructions apart from what
+  // it does, and the same limit holds for them as held when they were edited as that text.
+  let instructions: string | undefined;
+  if (input.instructions !== undefined) {
+    const bounded = boundedText(
+      input.instructions,
+      1000,
+      "Instructions must be text between 1 and 1000 characters.",
+    );
+    if (typeof bounded !== "string") return bounded;
+    instructions = bounded;
+  }
+
   return {
     ok: true,
     value: {
@@ -215,6 +262,9 @@ export function parseAgentInput(
       // The same: a form that never showed the handbook leaves it alone.
       ...(bible === undefined ? {} : { bible }),
       ...(avatarSeed === undefined ? {} : { avatarSeed }),
+      ...(isolated === undefined ? {} : { isolated }),
+      ...(instructions === undefined ? {} : { instructions }),
+      ...(harness === undefined ? {} : { harness }),
     },
   };
 }
@@ -468,10 +518,11 @@ export function createAgentRoutes(
     canHandOn?: (agentId: string) => Promise<boolean | undefined>;
   },
   /**
-   * Whether a coworker can run on this deployment's own Bot, i.e. be created with no endpoint.
+   * Whether a coworker can be created with no endpoint, i.e. run here.
    *
-   * The store already refuses such a create on a deployment with no managed Bot; this exists so a
-   * screen can say so before somebody fills in three steps of a form that was always going to fail.
+   * It runs on the managed Bot when there is one, and otherwise in this server on its role
+   * description (`create`'s `built_in` branch). This exists so a screen can say so before somebody
+   * fills in three steps of a form that was always going to fail.
    */
   builtInAvailable = false,
   /**
@@ -503,7 +554,31 @@ export function createAgentRoutes(
     AdminScope,
     "adminCapability" | "adminActAsOwner" | "asAdminPlatform"
   >,
+  /**
+   * The deployment's own token and the addresses it belongs to, so a connection test against one of
+   * them knocks the way a real run will.
+   *
+   * A named object rather than two more positional strings, for the reason the handoff parameter
+   * gives: everything above it is optional, and a misplaced string typechecks.
+   *
+   * `endpoints` is every address this deployment runs — the Bot in the box and any harness picked
+   * during setup — because the run path had to learn that same lesson: matching only the first left
+   * the picked harness answering 401 to everything.
+   */
+  managedRun?: { token: string; endpoints: readonly (string | URL)[] },
+  /**
+   * Whether this deployment can give one Bot a computer of its own (`deploymentCanIsolate`).
+   *
+   * Absent is no: a deployment that never said it can make a second computer is not trusted to.
+   */
+  isolation?: { available: boolean },
+  /**
+   * The name this server's container reaches the person's machine by (`OPENBOT_THIS_MACHINE_HOST`),
+   * so a connection test dials an agent on their loopback where a run will. See onThisMachine.
+   */
+  dial?: { thisMachineHost?: string },
 ) {
+  const isolationAvailable = isolation?.available ?? false;
   /** The plan's refusal as a response, or null when there is room. A create and a duplicate answer alike. */
   const overPlan = async (tenantId: string): Promise<Response | null> => {
     if (!quota) return null;
@@ -521,7 +596,49 @@ export function createAgentRoutes(
     // A string comparison on purpose: two absent values must not read as "runs on our Bot".
     builtIn:
       typeof agent.endpoint === "string" && agent.endpoint === managedEndpoint,
+    /*
+     * Whether it runs on this deployment's model, so a person can pick the model and effort per
+     * conversation: a `built_in` Bot (no endpoint), or the harness picked in setup when it is one of
+     * OpenBot's own that takes the choice. A Bot on any other framework picks its own model.
+     */
+    runsOnOpenBotModel:
+      agent.endpoint === null || takesModelChoice(agent.endpoint),
+    /*
+     * Whether OpenBot gives it a key on every run, as it does at every address it runs itself: the
+     * Bot in the box and the harness picked in setup (see runtime-agents.ts). Such a Bot uses its
+     * tools with no key of its own, so its Setup page must not say it can't.
+     */
+    keyFromOpenBot:
+      typeof agent.endpoint === "string" &&
+      managedRun !== undefined &&
+      isManagedEndpoint(agent.endpoint, managedRun.endpoints),
   });
+  /**
+   * The dtos, each with whether its computer of its own is in effect now.
+   *
+   * Asked of the OWNER's switch, read now, so an administrator withdrawing "Isolated Bots" shows on
+   * the Bot's page at its next load without anybody editing the Bot. Read once per owner and one
+   * owner at a time, and only for Bots that asked: a roster is mostly people's own Bots, and most of
+   * those are not isolated.
+   */
+  const dtos = async (actor: AgentActor, list: readonly AgentProfile[]) => {
+    const owners = new Map<string, boolean>();
+    for (const agent of list) {
+      if (!agent.isolated || !agent.ownerUserId) continue;
+      if (owners.has(agent.ownerUserId)) continue;
+      owners.set(agent.ownerUserId, await mayIsolate(agent.ownerUserId));
+    }
+    return list.map((agent) => ({
+      ...dto(actor, agent),
+      ...isolationState(
+        agent,
+        isolationAvailable,
+        agent.ownerUserId ? (owners.get(agent.ownerUserId) ?? false) : false,
+      ),
+    }));
+  };
+  const dtoOf = async (actor: AgentActor, agent: AgentProfile) =>
+    (await dtos(actor, [agent]))[0];
   const routes = new Hono<{ Variables: AppVariables }>();
 
   /*
@@ -613,7 +730,7 @@ export function createAgentRoutes(
      */
     const agent = await store.get(context.var.actor, agentId);
     if (!agent) {
-      return context.json({ error: "Agent not found." }, 404);
+      return context.json({ error: "Couldn't find that Bot." }, 404);
     }
 
     if (auditStore) {
@@ -647,7 +764,7 @@ export function createAgentRoutes(
       const hidden = context.req.query("hidden") === "true";
       const agents = await store.list(context.var.actor, hidden);
       return context.json({
-        agents: agents.map((agent) => dto(context.var.actor, agent)),
+        agents: await dtos(context.var.actor, agents),
       });
     } catch (error) {
       return mapStoreError(context, error);
@@ -661,7 +778,13 @@ export function createAgentRoutes(
    * the parameterised route on purpose, so "capabilities" can never be read as an agent id.
    */
   routes.get("/capabilities", requireUser, (context) =>
-    context.json({ capabilities: { builtInAvailable } }),
+    context.json({
+      capabilities: {
+        builtInAvailable,
+        // Whether this person may tick it is a switch, read from `/api/admin/enterprise/me`.
+        isolationAvailable,
+      },
+    }),
   );
 
   routes.get("/:agentId", signedInAsAdmin, async (context) => {
@@ -681,9 +804,9 @@ export function createAgentRoutes(
           ? await doors.asAdminPlatform(actor, () => store.get(actor, agentId))
           : null);
       if (!agent) {
-        return context.json({ error: "Agent not found." }, 404);
+        return context.json({ error: "Couldn't find that Bot." }, 404);
       }
-      return context.json({ agent: dto(context.var.actor, agent) });
+      return context.json({ agent: await dtoOf(context.var.actor, agent) });
     } catch (error) {
       return mapStoreError(context, error);
     }
@@ -706,11 +829,37 @@ export function createAgentRoutes(
     if (!parsed.ok) {
       return context.json({ error: parsed.error }, 400);
     }
-    const headers = parsed.value;
+    /*
+     * An address this deployment runs is knocked on with this deployment's token.
+     *
+     * Nobody types that token — the run path attaches it by recognising the address — so a test
+     * that left it off reported "The agent refused this request. If it needs a key, add it as a
+     * header." for the Bot in the box and for the harness picked during setup. Both work; the
+     * advice was to break them.
+     *
+     * The person's own headers are applied over these rather than under, because a header they
+     * typed is a thing they can see and change, and this one is not.
+     */
+    const ours =
+      managedRun &&
+      typeof body?.endpoint === "string" &&
+      isManagedEndpoint(body.endpoint, managedRun.endpoints);
+    const headers = {
+      ...(ours ? { "x-openbot-agent-token": managedRun.token } : {}),
+      ...parsed.value,
+    };
     const result = await testAgentConnection(body?.endpoint, {
-      headers,
+      // Absent rather than empty when there is nothing to send, so a deployment with no managed Bot
+      // probes exactly as it did before this.
+      ...(Object.keys(headers).length > 0 ? { headers } : {}),
       allowPrivateHosts,
       allowedHosts,
+      // Our own addresses are reachable at exactly their URLs: the test must not refuse the Bot
+      // this deployment started, and must not open anything else on its host.
+      ...(managedRun ? { managedEndpoints: managedRun.endpoints } : {}),
+      ...(dial?.thisMachineHost
+        ? { thisMachineHost: dial.thisMachineHost }
+        : {}),
     });
     // 200 either way: the request succeeded, and the verdict is the payload. A failed connection test
     // is an answer, not an error, and a 4xx here would have the surface render it as a broken button.
@@ -729,7 +878,8 @@ export function createAgentRoutes(
   const record = async (
     context: Context<{ Variables: AppVariables }>,
     eventType: Extract<AuditEventType, `bot.${string}`>,
-    agentId: string,
+    /** Undefined only for a Bot that was refused before it existed. */
+    agentId: string | undefined,
     payload: Record<string, unknown> = {},
   ): Promise<void> => {
     if (!auditStore) return;
@@ -738,11 +888,15 @@ export function createAgentRoutes(
       await recordAuditEvent(auditStore, {
         eventType,
         targetType: "agent",
-        targetId: agentId,
+        ...(agentId ? { targetId: agentId } : {}),
         ...(actor?.id && actor.email !== DEV_ACTOR_EMAIL
           ? { actorUserId: actor.id }
           : {}),
-        payload: { bot: agentId, actor: actor?.email ?? "unknown", ...payload },
+        payload: {
+          bot: agentId ?? null,
+          actor: actor?.email ?? "unknown",
+          ...payload,
+        },
       });
     } catch (error) {
       console.error(
@@ -756,11 +910,57 @@ export function createAgentRoutes(
     }
   };
 
+  /**
+   * A computer of its own, asked for and refused, on the trail and in the answer.
+   *
+   * Recorded because nothing else would be: the Bot is unchanged, or was never made, so the row is
+   * the only evidence of the attempt. Against the Bot it was asked for, or against no Bot on a create.
+   * The answer has the shape the enterprise gate gives a refused capability, so a screen reads both
+   * the same way.
+   */
+  const refuseIsolation = async (
+    context: Context<{ Variables: AppVariables }>,
+    reason: "capability" | "unowned" | "deployment",
+    message: string,
+    agentId: string | undefined,
+    name: string,
+  ): Promise<Response> => {
+    await record(context, "bot.isolation_refused", agentId, {
+      reason,
+      name,
+      ...(agentId ? {} : { attempted: "create" }),
+    });
+    return context.json(
+      {
+        error: message,
+        ...(reason === "capability" ? { capability: "isolatedComputers" } : {}),
+      },
+      reason === "deployment" ? 400 : 403,
+    );
+  };
+  /** Said where a deployment's computers cannot make one more. */
+  const NO_ISOLATION =
+    "This OpenBot can't give a Bot a computer of its own, so it runs on yours.";
+
   routes.post("/", requireUser, async (context) => {
     // Malformed JSON is a recoverable client-input error and is validated by the same parser.
     const body = await context.req.json().catch(() => null);
-    const parsed = parseAgentInput(body, allowPrivateHosts, allowedHosts);
+    const parsed = parseAgentInput(
+      body,
+      allowPrivateHosts,
+      allowedHosts,
+      managedRun?.endpoints,
+    );
     if (!parsed.ok) return context.json({ error: parsed.error }, 400);
+    if (parsed.value.isolated === true && !isolationAvailable) {
+      return refuseIsolation(
+        context,
+        "deployment",
+        NO_ISOLATION,
+        undefined,
+        parsed.value.name,
+      );
+    }
     // Create-only (ROLE1): the template the form started from. `update` never reads it.
     const roleTemplate = parseRoleTemplateSource(
       isAgentInputObject(body) ? body.roleTemplate : undefined,
@@ -816,9 +1016,23 @@ export function createAgentRoutes(
         visibility: parsed.value.visibility,
         ...(parsed.value.endpoint ? { endpoint: parsed.value.endpoint } : {}),
         hasKey: Boolean(parsed.value.auth),
+        // Which computer it runs on is who it can reach, so a computer of its own is worth naming.
+        ...(parsed.value.isolated ? { isolated: true } : {}),
       });
-      return context.json({ agent: dto(context.var.actor, agent) }, 201);
+      return context.json(
+        { agent: await dtoOf(context.var.actor, agent) },
+        201,
+      );
     } catch (error) {
+      if (error instanceof IsolationRefusedError) {
+        return refuseIsolation(
+          context,
+          error.reason,
+          error.message,
+          undefined,
+          parsed.value.name,
+        );
+      }
       return mapStoreError(context, error);
     }
   });
@@ -829,8 +1043,18 @@ export function createAgentRoutes(
       await context.req.json().catch(() => null),
       allowPrivateHosts,
       allowedHosts,
+      managedRun?.endpoints,
     );
     if (!parsed.ok) return context.json({ error: parsed.error }, 400);
+    if (parsed.value.isolated === true && !isolationAvailable) {
+      return refuseIsolation(
+        context,
+        "deployment",
+        NO_ISOLATION,
+        context.req.param("agentId"),
+        parsed.value.name,
+      );
+    }
 
     try {
       const actor = context.var.actor;
@@ -856,11 +1080,25 @@ export function createAgentRoutes(
           visibility: parsed.value.visibility,
           ...(parsed.value.endpoint ? { endpoint: parsed.value.endpoint } : {}),
           ...(parsed.value.auth ? { keyReplaced: true } : {}),
+          // Only when the edit said, since absent leaves it as it was and the route has no before.
+          ...(parsed.value.isolated === undefined
+            ? {}
+            : { isolated: parsed.value.isolated }),
         });
         return updated;
       });
-      return context.json({ agent: dto(actor, agent) });
+      // M3: upstream's `sharedApps` (#757 shared use, `afterExposureChange`) is out of scope.
+      return context.json({ agent: await dtoOf(actor, agent) });
     } catch (error) {
+      if (error instanceof IsolationRefusedError) {
+        return refuseIsolation(
+          context,
+          error.reason,
+          error.message,
+          context.req.param("agentId"),
+          parsed.value.name,
+        );
+      }
       return mapStoreError(context, error);
     }
   });
@@ -889,8 +1127,13 @@ export function createAgentRoutes(
       // reader needs to know a second Bot now points at it.
       await record(context, "bot.duplicated", agent.id, {
         copiedFrom: context.req.param("agentId"),
+        // Kept only when the person duplicating may give it a computer of its own.
+        ...(agent.isolated ? { isolated: true } : {}),
       });
-      return context.json({ agent: dto(context.var.actor, agent) }, 201);
+      return context.json(
+        { agent: await dtoOf(context.var.actor, agent) },
+        201,
+      );
     } catch (error) {
       return mapStoreError(context, error);
     }
@@ -1034,7 +1277,8 @@ export function createAgentRoutes(
       // Asked of the store, so a Bot somebody may not see is "not found" here as everywhere else,
       // rather than a list of who it can reach.
       const agent = await store.get(context.var.actor, agentId);
-      if (!agent) return context.json({ error: "Agent not found." }, 404);
+      if (!agent)
+        return context.json({ error: "Couldn't find that Bot." }, 404);
       return context.json({
         handoff: {
           enabled: handoff?.enabled ?? false,
@@ -1095,6 +1339,12 @@ function agentDto(actor: AgentActor, agent: AgentProfile) {
     hasAuth: agent.hasAuth,
     // Whether one exists, never what it is.
     hasCallbackToken: agent.hasCallbackToken,
+    // What the owner asked for. Whether it is in effect is `isolationActive`, added by the route.
+    isolated: agent.isolated,
+    // The personal starter's, for its Setup page. No other Bot's DTO carries any.
+    ...(agent.instructions ? { instructions: agent.instructions } : {}),
+    // What runs it, by name, so a page can say that where it would otherwise show an address.
+    ...(agent.framework ? { framework: agent.framework } : {}),
     canManage: canManageAgent(actor, agent),
     // Ownership, kept separate from permission. `canManage` is also true for an administrator on
     // another user's coworker, so a roster that split "mine" on it would file other people's work
@@ -1107,16 +1357,16 @@ function agentDto(actor: AgentActor, agent: AgentProfile) {
 function mapStoreError(context: Context, error: unknown): Response {
   if (error instanceof QuotaExceeded) return context.json(error.body, 402);
   if (error instanceof AgentNotFoundError) {
-    return context.json({ error: "Agent not found." }, 404);
+    return context.json({ error: "Couldn't find that Bot." }, 404);
   }
   if (error instanceof AgentNotManageableError) {
-    return context.json(
-      { error: "You do not have permission to manage this agent." },
-      403,
-    );
+    return context.json({ error: "You can't manage this Bot." }, 403);
   }
   if (error instanceof ProtectedAgentError) {
-    return context.json({ error: "System-owned agents are protected." }, 403);
+    return context.json(
+      { error: "This Bot is built in and can't be changed." },
+      403,
+    );
   }
   if (error instanceof ManagedAgentUnavailableError) {
     return context.json({ error: error.message }, 400);
@@ -1144,6 +1394,18 @@ function mapStoreError(context: Context, error: unknown): Response {
   }
   if (error instanceof OwnerlessBotPrivateError) {
     return context.json({ error: error.message }, 409);
+  }
+  // Every route that can raise this records it first; this is the answer for any that is added later.
+  if (error instanceof IsolationRefusedError) {
+    return context.json(
+      {
+        error: error.message,
+        ...(error.reason === "capability"
+          ? { capability: "isolatedComputers" }
+          : {}),
+      },
+      403,
+    );
   }
   throw error;
 }

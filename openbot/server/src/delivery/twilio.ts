@@ -1,4 +1,6 @@
 import { validateRequest } from "twilio";
+import { cutAtCodeUnits } from "../channels/text";
+import { DELIVERY_REQUEST_TIMEOUT_MS } from "../timeouts";
 import {
   DeliveryProviderError,
   type ProviderFetch,
@@ -67,7 +69,7 @@ export function createTwilioTransport(config: TwilioConfig) {
     try {
       response = await wire(url, {
         method: "POST",
-        signal: AbortSignal.timeout(30_000),
+        signal: AbortSignal.timeout(DELIVERY_REQUEST_TIMEOUT_MS),
         headers: {
           authorization: `Basic ${Buffer.from(`${config.accountSid}:${config.authToken}`).toString("base64")}`,
           "content-type": "application/x-www-form-urlencoded",
@@ -118,7 +120,7 @@ export function createTwilioTransport(config: TwilioConfig) {
           Body:
             input.text.length <= 1500
               ? input.text
-              : `${input.text.slice(0, 1400)}…\nOpen OpenBot to read the full message.`,
+              : `${cutAtCodeUnits(input.text, 1400)}…\nOpen OpenBot to read the full message.`,
           ...(config.statusUrl ? { StatusCallback: config.statusUrl } : {}),
         },
       );

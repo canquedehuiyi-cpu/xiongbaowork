@@ -15,15 +15,15 @@
  * Bot are bound when the tools are built.
  */
 import { randomUUID } from "node:crypto";
+import type { GrantedTool } from "@openbot/toolkit/granted-tool";
+import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { AuditInitiator, AuditStore } from "../audit";
 import { recordAuditEvent } from "../audit";
 import type { AgentChannel } from "../channels/routes";
-import { HeadlessToolSuspension } from "../computer/headless-tools";
 import type { Database } from "../db/client";
 import { workItems } from "../db/schema/work";
-import type { GrantedTool } from "../plugins/tools";
 import { REFUSAL_MARKER } from "../plugins/tools";
 import {
   assertPersonTenant,
@@ -446,6 +446,9 @@ export function wakeUpInstruction(payload: WakeUpPayload): string {
 }
 
 export type WakeUpTurn = (input: {
+  telemetry?: Parameters<
+    import("@openbot/toolkit/run-turn").TurnRunner
+  >[0]["telemetry"];
   ownerUserId: string;
   /** The follow-up's own tenant, as stamped when it was scheduled: see `TurnRunner`. */
   tenantId: string;
@@ -570,6 +573,11 @@ export function createWakeUpRunner(options: {
                     ownerUserId: payload.ownerUserId,
                     tenantId: tenant,
                     routineId: `follow-up:${item.key}`,
+                    telemetry: {
+                      trigger: "followup",
+                      rootTaskId: `follow-up:${item.key}`,
+                      attempt: item.attempts,
+                    },
                     agentId: payload.agentId,
                     threadId: channel.threadId,
                     instruction: wakeUpInstruction(payload),

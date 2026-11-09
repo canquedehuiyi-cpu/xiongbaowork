@@ -232,6 +232,8 @@ export class McpServerError extends Error {
 
 type Connection = {
   url: string;
+  /** The conversation the call is made in, for the built-in Routines (see store.ts `callTool`). */
+  threadId?: string;
   /** The bearer token for this server, already decrypted. Absent for a server that needs none. */
   token?: string;
   /**

@@ -33,6 +33,7 @@ import {
   ApprovalRefusedError,
   withApprovalContext,
 } from "../src/approvals/types";
+import { personSeat } from "../src/computer/computer-key";
 import { createComputerGateway } from "../src/computer/gateway";
 import { HeadlessToolSuspension } from "../src/computer/headless-tools";
 import { createRunnerTransport } from "../src/computer/runner-transport";
@@ -252,7 +253,7 @@ test("unknown online outcomes block fresh identities across replicas until the o
     createDeviceRoutes(
       store,
       async (context, next) => {
-        context.set("actor", { id: actorId, role: "user" });
+        context.set("actor", { id: actorId, email: `${actorId}@example.test`, role: "user" });
         await next();
       },
       replica,
@@ -603,11 +604,11 @@ async function governedRunner(
   const gateway = createComputerGateway({
     provider: {
       name: "unused",
-      isolation: "per-bot",
+      isolation: "per-person",
       locate: async () => {
         throw new Error("A paired machine is never located through the provider.");
       },
-      status: async (id) => ({ botId: id, state: "ready" }),
+      status: async (seat) => ({ botId: seat.botId, state: "ready" }),
       list: async () => [],
       stop: async () => ({ wasRunning: false }),
       reset: async () => ({ cleared: false }),
@@ -651,7 +652,7 @@ async function governedRunner(
       withApprovalContext(context(command), () =>
         computerActionIdentity.run(`${botId}-call-${command}`, () =>
           gateway.runCommand(
-            botId,
+            personSeat(target.tenantId, botId),
             { id: target.tenantId, userId: target.tenantId },
             { command },
           ),
@@ -665,7 +666,7 @@ async function governedRunner(
         () =>
           computerActionIdentity.run(`${botId}-call-write ${path}`, () =>
             gateway.writeFile(
-              botId,
+              personSeat(target.tenantId, botId),
               { id: target.tenantId, userId: target.tenantId },
               { path, contents },
             ),

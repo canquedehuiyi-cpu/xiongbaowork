@@ -146,8 +146,9 @@ export function ProactiveResearchSettings() {
     <section className="grid gap-3">
       <h2 className="font-semibold">后台调研</h2>
       <p className="text-sm text-muted-foreground">
-        你开启一位员工后，它会翻阅自己已经读得到的应用，整理成待你复核的记忆，并给出下一步建议。
-        它只能读：不能发消息、不能改动任何应用，也不使用浏览器或电脑。
+        你和某位员工单独开始对话后，它的后台调研就默认开启：每四小时翻阅一次它已经读得到的应用，
+        整理成待你复核的记忆，并给出下一步建议。它只能读：不能发消息、不能改动任何应用，也不使用浏览器或电脑。
+        你关掉或移除之后，它就一直保持关闭。
       </p>
       <form
         className="grid gap-3 rounded-lg border p-4"

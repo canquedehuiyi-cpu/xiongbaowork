@@ -190,13 +190,10 @@ describe("giving up only after the longest wait (N1)", () => {
 
     while (await clock.tick()) {}
 
+    const longest = RELIST_RETRY_MS.at(-1);
+    if (longest === undefined) throw new Error("RELIST_RETRY_MS is empty");
     // 第一次排在 0（不阻塞启动），之后每一档都走到，最长一档重复到放弃为止。
-    expect(clock.delays).toEqual([
-      0,
-      ...RELIST_RETRY_MS,
-      RELIST_RETRY_MS.at(-1),
-      RELIST_RETRY_MS.at(-1),
-    ]);
+    expect(clock.delays).toEqual([0, ...RELIST_RETRY_MS, longest, longest]);
     // 等过最长一档之后的尝试才计数，连续 3 次后循环停止。
     expect(counted).toEqual([false, false, false, false, true, true, true]);
   });

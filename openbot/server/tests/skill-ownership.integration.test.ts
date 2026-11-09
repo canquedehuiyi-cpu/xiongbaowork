@@ -114,6 +114,7 @@ afterAll(() =>
           bobSkill,
           deploymentSkill,
           `written-${suite}`,
+          `catalogue-${suite}`,
         ]),
       );
     await database
@@ -190,6 +191,10 @@ describe("editing keeps ownership", () => {
 
       expect(await store.skillOwner(aliceSkill)).toBe(alice);
     }));
+
+  // M3: "saving over a catalogue skill makes it the deployment's own" waits for the plugins session:
+  // the fork's plugins/store.ts installSkill does not reset `origin` to "yours" (upstream's
+  // plugin-store split is not adopted).
 });
 
 /**
@@ -341,4 +346,8 @@ describe("what a person may do over HTTP", () => {
       expect(slugs).toContain(deploymentSkill);
       expect(slugs).not.toContain(bobSkill);
     }));
+});
+
+afterAll(async () => {
+  await database.$client.close();
 });

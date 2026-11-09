@@ -196,7 +196,7 @@ test("wellformed decimal oversize Content-Length early rejects and cancels", asy
 });
 
 test("absent, equal, zero-padded and malformed Content-Length do not define reserve or parsed value", async () => {
-	for (const headers of [{}, { "content-length": "4" }, { "content-length": "0004" }, { "content-length": "1e20" }]) {
+	for (const headers of [{}, { "content-length": "4" }, { "content-length": "0004" }, { "content-length": "1e20" }] as HeadersInit[]) {
 		const replay = await preserveExactHttpRunInputV1(post('null', { headers }));
 		expect(getOwnedHttpEntryV1(replay)).toEqual({ value: null, rawByteLength: 4 });
 	}

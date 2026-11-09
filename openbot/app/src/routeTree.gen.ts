@@ -17,22 +17,22 @@ import { Route as AuthedOnboardingRouteImport } from './routes/_authed/onboardin
 import { Route as AuthedSettingsRouteRouteImport } from './routes/_authed/settings/route'
 import { Route as AuthedAppIndexRouteImport } from './routes/_authed/_app/index'
 import { Route as AuthedAppApprovalsRouteImport } from './routes/_authed/_app/approvals'
-import { Route as AuthedAppBotRouteImport } from './routes/_authed/_app/bot'
-import { Route as AuthedAppMemoryRouteImport } from './routes/_authed/_app/memory'
-import { Route as AuthedAppKnowledgeRouteImport } from './routes/_authed/_app/knowledge'
-import { Route as AuthedAppTasksRouteImport } from './routes/_authed/_app/tasks'
-import { Route as AuthedAppPlatformRouteImport } from './routes/_authed/_app/platform'
-import { Route as AuthedAppResourcesRouteImport } from './routes/_authed/_app/resources'
-import { Route as AuthedAppPlansRouteImport } from './routes/_authed/_app/plans'
-import { Route as AuthedAppRoleTemplatesRouteImport } from './routes/_authed/_app/role-templates'
-import { Route as AuthedAppWakersRouteImport } from './routes/_authed/_app/wakers'
-import { Route as AuthedAppPipelinesRouteImport } from './routes/_authed/_app/pipelines'
 import { Route as AuthedAppAutonomousRouteImport } from './routes/_authed/_app/autonomous'
+import { Route as AuthedAppBotRouteImport } from './routes/_authed/_app/bot'
+import { Route as AuthedAppKnowledgeRouteImport } from './routes/_authed/_app/knowledge'
+import { Route as AuthedAppMemoryRouteImport } from './routes/_authed/_app/memory'
+import { Route as AuthedAppPipelinesRouteImport } from './routes/_authed/_app/pipelines'
+import { Route as AuthedAppPlansRouteImport } from './routes/_authed/_app/plans'
+import { Route as AuthedAppPlatformRouteImport } from './routes/_authed/_app/platform'
 import { Route as AuthedAppReachabilityRouteImport } from './routes/_authed/_app/reachability'
+import { Route as AuthedAppResourcesRouteImport } from './routes/_authed/_app/resources'
 import { Route as AuthedAppResponsibilitiesRouteImport } from './routes/_authed/_app/responsibilities'
+import { Route as AuthedAppRoleTemplatesRouteImport } from './routes/_authed/_app/role-templates'
 import { Route as AuthedAppRoutinesRouteImport } from './routes/_authed/_app/routines'
 import { Route as AuthedAppSkillsRouteImport } from './routes/_authed/_app/skills'
+import { Route as AuthedAppTasksRouteImport } from './routes/_authed/_app/tasks'
 import { Route as AuthedAppTeamBotsRouteImport } from './routes/_authed/_app/team-bots'
+import { Route as AuthedAppWakersRouteImport } from './routes/_authed/_app/wakers'
 import { Route as AuthedAdminIndexRouteImport } from './routes/_authed/admin/index'
 import { Route as AuthedAdminAuditRouteImport } from './routes/_authed/admin/audit'
 import { Route as AuthedAdminBoundariesRouteImport } from './routes/_authed/admin/boundaries'
@@ -40,6 +40,7 @@ import { Route as AuthedAdminComputersRouteImport } from './routes/_authed/admin
 import { Route as AuthedAdminCredentialsRouteImport } from './routes/_authed/admin/credentials'
 import { Route as AuthedAdminEnterpriseRouteImport } from './routes/_authed/admin/enterprise'
 import { Route as AuthedAdminIdentityProvidersRouteImport } from './routes/_authed/admin/identity-providers'
+import { Route as AuthedAdminLearningRouteImport } from './routes/_authed/admin/learning'
 import { Route as AuthedAdminPeopleRouteImport } from './routes/_authed/admin/people'
 import { Route as AuthedAdminPlaygroundRouteImport } from './routes/_authed/admin/playground'
 import { Route as AuthedAdminSkillsRouteImport } from './routes/_authed/admin/skills'
@@ -47,18 +48,17 @@ import { Route as AuthedSettingsIndexRouteImport } from './routes/_authed/settin
 import { Route as AuthedSettingsPasswordsRouteImport } from './routes/_authed/settings/passwords'
 import { Route as AuthedSignInRequestIdRouteImport } from './routes/_authed/sign-in/$requestId'
 import { Route as AuthedAppAgentsIndexRouteImport } from './routes/_authed/_app/agents/index'
+import { Route as AuthedAppAssembleAgentIdRouteImport } from './routes/_authed/_app/assemble.$agentId'
 import { Route as AuthedAppBotsIndexRouteImport } from './routes/_authed/_app/bots.index'
 import { Route as AuthedAppBotsAgentIdRouteImport } from './routes/_authed/_app/bots.$agentId'
-import { Route as AuthedAppWakerflowsIndexRouteImport } from './routes/_authed/_app/wakerflows.index'
-import { Route as AuthedAppWakerflowsNewRouteImport } from './routes/_authed/_app/wakerflows.new'
-import { Route as AuthedAppWakerflowsFlowIdRouteImport } from './routes/_authed/_app/wakerflows.$flowId'
-import { Route as AuthedAppWakerflowsImportTokenRouteImport } from './routes/_authed/_app/wakerflows.import.$token'
-import { Route as AuthedAppAssembleAgentIdRouteImport } from './routes/_authed/_app/assemble.$agentId'
-import { Route as AuthedAppWakersAgentIdRouteImport } from './routes/_authed/_app/wakers_.$agentId'
 import { Route as AuthedAppChannelChannelIdRouteImport } from './routes/_authed/_app/channel/$channelId'
 import { Route as AuthedAppChannelNewRouteImport } from './routes/_authed/_app/channel/new'
 import { Route as AuthedAppGroupChannelIdRouteImport } from './routes/_authed/_app/group/$channelId'
 import { Route as AuthedAppGroupNewRouteImport } from './routes/_authed/_app/group/new'
+import { Route as AuthedAppWakerflowsIndexRouteImport } from './routes/_authed/_app/wakerflows.index'
+import { Route as AuthedAppWakerflowsFlowIdRouteImport } from './routes/_authed/_app/wakerflows.$flowId'
+import { Route as AuthedAppWakerflowsNewRouteImport } from './routes/_authed/_app/wakerflows.new'
+import { Route as AuthedAppWakersAgentIdRouteImport } from './routes/_authed/_app/wakers_.$agentId'
 import { Route as AuthedAdminComponentsIndexRouteImport } from './routes/_authed/admin/components/index'
 import { Route as AuthedAdminComponentsNameRouteImport } from './routes/_authed/admin/components/$name'
 import { Route as AuthedAdminPluginsIndexRouteImport } from './routes/_authed/admin/plugins/index'
@@ -68,6 +68,7 @@ import { Route as AuthedSettingsComponentsGalleryIndexRouteImport } from './rout
 import { Route as AuthedSettingsComponentsGalleryNameRouteImport } from './routes/_authed/settings/components-gallery/$name'
 import { Route as AuthedSettingsConnectedAccountsIndexRouteImport } from './routes/_authed/settings/connected-accounts/index'
 import { Route as AuthedSettingsConnectedAccountsKeyRouteImport } from './routes/_authed/settings/connected-accounts/$key'
+import { Route as AuthedAppWakerflowsImportTokenRouteImport } from './routes/_authed/_app/wakerflows.import.$token'
 import { Route as AuthedAdminPluginsKeyBotsAgentIdRouteImport } from './routes/_authed/admin/plugins/$key_.bots.$agentId'
 import { Route as AuthedAdminPluginsKeyToolsToolRouteImport } from './routes/_authed/admin/plugins/$key_.tools.$tool'
 
@@ -109,41 +110,6 @@ const AuthedAppApprovalsRoute = AuthedAppApprovalsRouteImport.update({
   path: '/approvals',
   getParentRoute: () => AuthedAppRoute,
 } as any)
-const AuthedAppTasksRoute = AuthedAppTasksRouteImport.update({
-  id: '/tasks',
-  path: '/tasks',
-  getParentRoute: () => AuthedAppRoute,
-} as any)
-const AuthedAppPlatformRoute = AuthedAppPlatformRouteImport.update({
-  id: '/platform',
-  path: '/platform',
-  getParentRoute: () => AuthedAppRoute,
-} as any)
-const AuthedAppResourcesRoute = AuthedAppResourcesRouteImport.update({
-  id: '/resources',
-  path: '/resources',
-  getParentRoute: () => AuthedAppRoute,
-} as any)
-const AuthedAppPlansRoute = AuthedAppPlansRouteImport.update({
-  id: '/plans',
-  path: '/plans',
-  getParentRoute: () => AuthedAppRoute,
-} as any)
-const AuthedAppRoleTemplatesRoute = AuthedAppRoleTemplatesRouteImport.update({
-  id: '/role-templates',
-  path: '/role-templates',
-  getParentRoute: () => AuthedAppRoute,
-} as any)
-const AuthedAppWakersRoute = AuthedAppWakersRouteImport.update({
-  id: '/wakers',
-  path: '/wakers',
-  getParentRoute: () => AuthedAppRoute,
-} as any)
-const AuthedAppPipelinesRoute = AuthedAppPipelinesRouteImport.update({
-  id: '/pipelines',
-  path: '/pipelines',
-  getParentRoute: () => AuthedAppRoute,
-} as any)
 const AuthedAppAutonomousRoute = AuthedAppAutonomousRouteImport.update({
   id: '/autonomous',
   path: '/autonomous',
@@ -154,19 +120,39 @@ const AuthedAppBotRoute = AuthedAppBotRouteImport.update({
   path: '/bot',
   getParentRoute: () => AuthedAppRoute,
 } as any)
-const AuthedAppMemoryRoute = AuthedAppMemoryRouteImport.update({
-  id: '/memory',
-  path: '/memory',
-  getParentRoute: () => AuthedAppRoute,
-} as any)
 const AuthedAppKnowledgeRoute = AuthedAppKnowledgeRouteImport.update({
   id: '/knowledge',
   path: '/knowledge',
   getParentRoute: () => AuthedAppRoute,
 } as any)
+const AuthedAppMemoryRoute = AuthedAppMemoryRouteImport.update({
+  id: '/memory',
+  path: '/memory',
+  getParentRoute: () => AuthedAppRoute,
+} as any)
+const AuthedAppPipelinesRoute = AuthedAppPipelinesRouteImport.update({
+  id: '/pipelines',
+  path: '/pipelines',
+  getParentRoute: () => AuthedAppRoute,
+} as any)
+const AuthedAppPlansRoute = AuthedAppPlansRouteImport.update({
+  id: '/plans',
+  path: '/plans',
+  getParentRoute: () => AuthedAppRoute,
+} as any)
+const AuthedAppPlatformRoute = AuthedAppPlatformRouteImport.update({
+  id: '/platform',
+  path: '/platform',
+  getParentRoute: () => AuthedAppRoute,
+} as any)
 const AuthedAppReachabilityRoute = AuthedAppReachabilityRouteImport.update({
   id: '/reachability',
   path: '/reachability',
+  getParentRoute: () => AuthedAppRoute,
+} as any)
+const AuthedAppResourcesRoute = AuthedAppResourcesRouteImport.update({
+  id: '/resources',
+  path: '/resources',
   getParentRoute: () => AuthedAppRoute,
 } as any)
 const AuthedAppResponsibilitiesRoute =
@@ -175,6 +161,11 @@ const AuthedAppResponsibilitiesRoute =
     path: '/responsibilities',
     getParentRoute: () => AuthedAppRoute,
   } as any)
+const AuthedAppRoleTemplatesRoute = AuthedAppRoleTemplatesRouteImport.update({
+  id: '/role-templates',
+  path: '/role-templates',
+  getParentRoute: () => AuthedAppRoute,
+} as any)
 const AuthedAppRoutinesRoute = AuthedAppRoutinesRouteImport.update({
   id: '/routines',
   path: '/routines',
@@ -185,9 +176,19 @@ const AuthedAppSkillsRoute = AuthedAppSkillsRouteImport.update({
   path: '/skills',
   getParentRoute: () => AuthedAppRoute,
 } as any)
+const AuthedAppTasksRoute = AuthedAppTasksRouteImport.update({
+  id: '/tasks',
+  path: '/tasks',
+  getParentRoute: () => AuthedAppRoute,
+} as any)
 const AuthedAppTeamBotsRoute = AuthedAppTeamBotsRouteImport.update({
   id: '/team-bots',
   path: '/team-bots',
+  getParentRoute: () => AuthedAppRoute,
+} as any)
+const AuthedAppWakersRoute = AuthedAppWakersRouteImport.update({
+  id: '/wakers',
+  path: '/wakers',
   getParentRoute: () => AuthedAppRoute,
 } as any)
 const AuthedAdminIndexRoute = AuthedAdminIndexRouteImport.update({
@@ -226,6 +227,11 @@ const AuthedAdminIdentityProvidersRoute =
     path: '/identity-providers',
     getParentRoute: () => AuthedAdminRouteRoute,
   } as any)
+const AuthedAdminLearningRoute = AuthedAdminLearningRouteImport.update({
+  id: '/learning',
+  path: '/learning',
+  getParentRoute: () => AuthedAdminRouteRoute,
+} as any)
 const AuthedAdminPeopleRoute = AuthedAdminPeopleRouteImport.update({
   id: '/people',
   path: '/people',
@@ -261,6 +267,12 @@ const AuthedAppAgentsIndexRoute = AuthedAppAgentsIndexRouteImport.update({
   path: '/agents/',
   getParentRoute: () => AuthedAppRoute,
 } as any)
+const AuthedAppAssembleAgentIdRoute =
+  AuthedAppAssembleAgentIdRouteImport.update({
+    id: '/assemble/$agentId',
+    path: '/assemble/$agentId',
+    getParentRoute: () => AuthedAppRoute,
+  } as any)
 const AuthedAppBotsIndexRoute = AuthedAppBotsIndexRouteImport.update({
   id: '/bots/',
   path: '/bots/',
@@ -269,40 +281,6 @@ const AuthedAppBotsIndexRoute = AuthedAppBotsIndexRouteImport.update({
 const AuthedAppBotsAgentIdRoute = AuthedAppBotsAgentIdRouteImport.update({
   id: '/bots/$agentId',
   path: '/bots/$agentId',
-  getParentRoute: () => AuthedAppRoute,
-} as any)
-const AuthedAppWakerflowsIndexRoute =
-  AuthedAppWakerflowsIndexRouteImport.update({
-    id: '/wakerflows/',
-    path: '/wakerflows/',
-    getParentRoute: () => AuthedAppRoute,
-  } as any)
-const AuthedAppWakerflowsNewRoute = AuthedAppWakerflowsNewRouteImport.update({
-  id: '/wakerflows/new',
-  path: '/wakerflows/new',
-  getParentRoute: () => AuthedAppRoute,
-} as any)
-const AuthedAppWakerflowsFlowIdRoute =
-  AuthedAppWakerflowsFlowIdRouteImport.update({
-    id: '/wakerflows/$flowId',
-    path: '/wakerflows/$flowId',
-    getParentRoute: () => AuthedAppRoute,
-  } as any)
-const AuthedAppWakerflowsImportTokenRoute =
-  AuthedAppWakerflowsImportTokenRouteImport.update({
-    id: '/wakerflows/import/$token',
-    path: '/wakerflows/import/$token',
-    getParentRoute: () => AuthedAppRoute,
-  } as any)
-const AuthedAppAssembleAgentIdRoute =
-  AuthedAppAssembleAgentIdRouteImport.update({
-    id: '/assemble/$agentId',
-    path: '/assemble/$agentId',
-    getParentRoute: () => AuthedAppRoute,
-  } as any)
-const AuthedAppWakersAgentIdRoute = AuthedAppWakersAgentIdRouteImport.update({
-  id: '/wakers_/$agentId',
-  path: '/wakers/$agentId',
   getParentRoute: () => AuthedAppRoute,
 } as any)
 const AuthedAppChannelChannelIdRoute =
@@ -324,6 +302,28 @@ const AuthedAppGroupChannelIdRoute = AuthedAppGroupChannelIdRouteImport.update({
 const AuthedAppGroupNewRoute = AuthedAppGroupNewRouteImport.update({
   id: '/group/new',
   path: '/group/new',
+  getParentRoute: () => AuthedAppRoute,
+} as any)
+const AuthedAppWakerflowsIndexRoute =
+  AuthedAppWakerflowsIndexRouteImport.update({
+    id: '/wakerflows/',
+    path: '/wakerflows/',
+    getParentRoute: () => AuthedAppRoute,
+  } as any)
+const AuthedAppWakerflowsFlowIdRoute =
+  AuthedAppWakerflowsFlowIdRouteImport.update({
+    id: '/wakerflows/$flowId',
+    path: '/wakerflows/$flowId',
+    getParentRoute: () => AuthedAppRoute,
+  } as any)
+const AuthedAppWakerflowsNewRoute = AuthedAppWakerflowsNewRouteImport.update({
+  id: '/wakerflows/new',
+  path: '/wakerflows/new',
+  getParentRoute: () => AuthedAppRoute,
+} as any)
+const AuthedAppWakersAgentIdRoute = AuthedAppWakersAgentIdRouteImport.update({
+  id: '/wakers_/$agentId',
+  path: '/wakers/$agentId',
   getParentRoute: () => AuthedAppRoute,
 } as any)
 const AuthedAdminComponentsIndexRoute =
@@ -378,6 +378,12 @@ const AuthedSettingsConnectedAccountsKeyRoute =
     path: '/connected-accounts/$key',
     getParentRoute: () => AuthedSettingsRouteRoute,
   } as any)
+const AuthedAppWakerflowsImportTokenRoute =
+  AuthedAppWakerflowsImportTokenRouteImport.update({
+    id: '/wakerflows/import/$token',
+    path: '/wakerflows/import/$token',
+    getParentRoute: () => AuthedAppRoute,
+  } as any)
 const AuthedAdminPluginsKeyBotsAgentIdRoute =
   AuthedAdminPluginsKeyBotsAgentIdRouteImport.update({
     id: '/plugins/$key_/bots/$agentId',
@@ -398,28 +404,29 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthedSettingsRouteRouteWithChildren
   '/onboarding': typeof AuthedOnboardingRoute
   '/approvals': typeof AuthedAppApprovalsRoute
-  '/bot': typeof AuthedAppBotRoute
-  '/memory': typeof AuthedAppMemoryRoute
-  '/knowledge': typeof AuthedAppKnowledgeRoute
-  '/tasks': typeof AuthedAppTasksRoute
-  '/platform': typeof AuthedAppPlatformRoute
-  '/resources': typeof AuthedAppResourcesRoute
-  '/plans': typeof AuthedAppPlansRoute
-  '/role-templates': typeof AuthedAppRoleTemplatesRoute
-  '/wakers': typeof AuthedAppWakersRoute
-  '/pipelines': typeof AuthedAppPipelinesRoute
   '/autonomous': typeof AuthedAppAutonomousRoute
+  '/bot': typeof AuthedAppBotRoute
+  '/knowledge': typeof AuthedAppKnowledgeRoute
+  '/memory': typeof AuthedAppMemoryRoute
+  '/pipelines': typeof AuthedAppPipelinesRoute
+  '/plans': typeof AuthedAppPlansRoute
+  '/platform': typeof AuthedAppPlatformRoute
   '/reachability': typeof AuthedAppReachabilityRoute
+  '/resources': typeof AuthedAppResourcesRoute
   '/responsibilities': typeof AuthedAppResponsibilitiesRoute
+  '/role-templates': typeof AuthedAppRoleTemplatesRoute
   '/routines': typeof AuthedAppRoutinesRoute
   '/skills': typeof AuthedAppSkillsRoute
+  '/tasks': typeof AuthedAppTasksRoute
   '/team-bots': typeof AuthedAppTeamBotsRoute
+  '/wakers': typeof AuthedAppWakersRoute
   '/admin/audit': typeof AuthedAdminAuditRoute
   '/admin/boundaries': typeof AuthedAdminBoundariesRoute
   '/admin/computers': typeof AuthedAdminComputersRoute
   '/admin/credentials': typeof AuthedAdminCredentialsRoute
   '/admin/enterprise': typeof AuthedAdminEnterpriseRoute
   '/admin/identity-providers': typeof AuthedAdminIdentityProvidersRoute
+  '/admin/learning': typeof AuthedAdminLearningRoute
   '/admin/people': typeof AuthedAdminPeopleRoute
   '/admin/playground': typeof AuthedAdminPlaygroundRoute
   '/admin/skills': typeof AuthedAdminSkillsRoute
@@ -427,16 +434,15 @@ export interface FileRoutesByFullPath {
   '/sign-in/$requestId': typeof AuthedSignInRequestIdRoute
   '/admin/': typeof AuthedAdminIndexRoute
   '/settings/': typeof AuthedSettingsIndexRoute
-  '/bots/$agentId': typeof AuthedAppBotsAgentIdRoute
-  '/wakerflows/new': typeof AuthedAppWakerflowsNewRoute
-  '/wakerflows/$flowId': typeof AuthedAppWakerflowsFlowIdRoute
-  '/wakerflows/import/$token': typeof AuthedAppWakerflowsImportTokenRoute
   '/assemble/$agentId': typeof AuthedAppAssembleAgentIdRoute
-  '/wakers/$agentId': typeof AuthedAppWakersAgentIdRoute
+  '/bots/$agentId': typeof AuthedAppBotsAgentIdRoute
   '/channel/$channelId': typeof AuthedAppChannelChannelIdRoute
   '/channel/new': typeof AuthedAppChannelNewRoute
   '/group/$channelId': typeof AuthedAppGroupChannelIdRoute
   '/group/new': typeof AuthedAppGroupNewRoute
+  '/wakerflows/$flowId': typeof AuthedAppWakerflowsFlowIdRoute
+  '/wakerflows/new': typeof AuthedAppWakerflowsNewRoute
+  '/wakers/$agentId': typeof AuthedAppWakersAgentIdRoute
   '/admin/components/$name': typeof AuthedAdminComponentsNameRoute
   '/admin/plugins/$key': typeof AuthedAdminPluginsKeyRoute
   '/admin/plugins/composio': typeof AuthedAdminPluginsComposioRoute
@@ -449,6 +455,7 @@ export interface FileRoutesByFullPath {
   '/admin/plugins/': typeof AuthedAdminPluginsIndexRoute
   '/settings/components-gallery/': typeof AuthedSettingsComponentsGalleryIndexRoute
   '/settings/connected-accounts/': typeof AuthedSettingsConnectedAccountsIndexRoute
+  '/wakerflows/import/$token': typeof AuthedAppWakerflowsImportTokenRoute
   '/admin/plugins/$key/bots/$agentId': typeof AuthedAdminPluginsKeyBotsAgentIdRoute
   '/admin/plugins/$key/tools/$tool': typeof AuthedAdminPluginsKeyToolsToolRoute
 }
@@ -457,28 +464,29 @@ export interface FileRoutesByTo {
   '/sign': typeof SignRoute
   '/onboarding': typeof AuthedOnboardingRoute
   '/approvals': typeof AuthedAppApprovalsRoute
-  '/bot': typeof AuthedAppBotRoute
-  '/memory': typeof AuthedAppMemoryRoute
-  '/knowledge': typeof AuthedAppKnowledgeRoute
-  '/tasks': typeof AuthedAppTasksRoute
-  '/platform': typeof AuthedAppPlatformRoute
-  '/resources': typeof AuthedAppResourcesRoute
-  '/plans': typeof AuthedAppPlansRoute
-  '/role-templates': typeof AuthedAppRoleTemplatesRoute
-  '/wakers': typeof AuthedAppWakersRoute
-  '/pipelines': typeof AuthedAppPipelinesRoute
   '/autonomous': typeof AuthedAppAutonomousRoute
+  '/bot': typeof AuthedAppBotRoute
+  '/knowledge': typeof AuthedAppKnowledgeRoute
+  '/memory': typeof AuthedAppMemoryRoute
+  '/pipelines': typeof AuthedAppPipelinesRoute
+  '/plans': typeof AuthedAppPlansRoute
+  '/platform': typeof AuthedAppPlatformRoute
   '/reachability': typeof AuthedAppReachabilityRoute
+  '/resources': typeof AuthedAppResourcesRoute
   '/responsibilities': typeof AuthedAppResponsibilitiesRoute
+  '/role-templates': typeof AuthedAppRoleTemplatesRoute
   '/routines': typeof AuthedAppRoutinesRoute
   '/skills': typeof AuthedAppSkillsRoute
+  '/tasks': typeof AuthedAppTasksRoute
   '/team-bots': typeof AuthedAppTeamBotsRoute
+  '/wakers': typeof AuthedAppWakersRoute
   '/admin/audit': typeof AuthedAdminAuditRoute
   '/admin/boundaries': typeof AuthedAdminBoundariesRoute
   '/admin/computers': typeof AuthedAdminComputersRoute
   '/admin/credentials': typeof AuthedAdminCredentialsRoute
   '/admin/enterprise': typeof AuthedAdminEnterpriseRoute
   '/admin/identity-providers': typeof AuthedAdminIdentityProvidersRoute
+  '/admin/learning': typeof AuthedAdminLearningRoute
   '/admin/people': typeof AuthedAdminPeopleRoute
   '/admin/playground': typeof AuthedAdminPlaygroundRoute
   '/admin/skills': typeof AuthedAdminSkillsRoute
@@ -486,16 +494,15 @@ export interface FileRoutesByTo {
   '/sign-in/$requestId': typeof AuthedSignInRequestIdRoute
   '/admin': typeof AuthedAdminIndexRoute
   '/settings': typeof AuthedSettingsIndexRoute
-  '/bots/$agentId': typeof AuthedAppBotsAgentIdRoute
-  '/wakerflows/new': typeof AuthedAppWakerflowsNewRoute
-  '/wakerflows/$flowId': typeof AuthedAppWakerflowsFlowIdRoute
-  '/wakerflows/import/$token': typeof AuthedAppWakerflowsImportTokenRoute
   '/assemble/$agentId': typeof AuthedAppAssembleAgentIdRoute
-  '/wakers/$agentId': typeof AuthedAppWakersAgentIdRoute
+  '/bots/$agentId': typeof AuthedAppBotsAgentIdRoute
   '/channel/$channelId': typeof AuthedAppChannelChannelIdRoute
   '/channel/new': typeof AuthedAppChannelNewRoute
   '/group/$channelId': typeof AuthedAppGroupChannelIdRoute
   '/group/new': typeof AuthedAppGroupNewRoute
+  '/wakerflows/$flowId': typeof AuthedAppWakerflowsFlowIdRoute
+  '/wakerflows/new': typeof AuthedAppWakerflowsNewRoute
+  '/wakers/$agentId': typeof AuthedAppWakersAgentIdRoute
   '/admin/components/$name': typeof AuthedAdminComponentsNameRoute
   '/admin/plugins/$key': typeof AuthedAdminPluginsKeyRoute
   '/admin/plugins/composio': typeof AuthedAdminPluginsComposioRoute
@@ -508,6 +515,7 @@ export interface FileRoutesByTo {
   '/admin/plugins': typeof AuthedAdminPluginsIndexRoute
   '/settings/components-gallery': typeof AuthedSettingsComponentsGalleryIndexRoute
   '/settings/connected-accounts': typeof AuthedSettingsConnectedAccountsIndexRoute
+  '/wakerflows/import/$token': typeof AuthedAppWakerflowsImportTokenRoute
   '/admin/plugins/$key/bots/$agentId': typeof AuthedAdminPluginsKeyBotsAgentIdRoute
   '/admin/plugins/$key/tools/$tool': typeof AuthedAdminPluginsKeyToolsToolRoute
 }
@@ -520,28 +528,29 @@ export interface FileRoutesById {
   '/_authed/_app': typeof AuthedAppRouteWithChildren
   '/_authed/onboarding': typeof AuthedOnboardingRoute
   '/_authed/_app/approvals': typeof AuthedAppApprovalsRoute
-  '/_authed/_app/bot': typeof AuthedAppBotRoute
-  '/_authed/_app/memory': typeof AuthedAppMemoryRoute
-  '/_authed/_app/knowledge': typeof AuthedAppKnowledgeRoute
-  '/_authed/_app/tasks': typeof AuthedAppTasksRoute
-  '/_authed/_app/platform': typeof AuthedAppPlatformRoute
-  '/_authed/_app/resources': typeof AuthedAppResourcesRoute
-  '/_authed/_app/plans': typeof AuthedAppPlansRoute
-  '/_authed/_app/role-templates': typeof AuthedAppRoleTemplatesRoute
-  '/_authed/_app/wakers': typeof AuthedAppWakersRoute
-  '/_authed/_app/pipelines': typeof AuthedAppPipelinesRoute
   '/_authed/_app/autonomous': typeof AuthedAppAutonomousRoute
+  '/_authed/_app/bot': typeof AuthedAppBotRoute
+  '/_authed/_app/knowledge': typeof AuthedAppKnowledgeRoute
+  '/_authed/_app/memory': typeof AuthedAppMemoryRoute
+  '/_authed/_app/pipelines': typeof AuthedAppPipelinesRoute
+  '/_authed/_app/plans': typeof AuthedAppPlansRoute
+  '/_authed/_app/platform': typeof AuthedAppPlatformRoute
   '/_authed/_app/reachability': typeof AuthedAppReachabilityRoute
+  '/_authed/_app/resources': typeof AuthedAppResourcesRoute
   '/_authed/_app/responsibilities': typeof AuthedAppResponsibilitiesRoute
+  '/_authed/_app/role-templates': typeof AuthedAppRoleTemplatesRoute
   '/_authed/_app/routines': typeof AuthedAppRoutinesRoute
   '/_authed/_app/skills': typeof AuthedAppSkillsRoute
+  '/_authed/_app/tasks': typeof AuthedAppTasksRoute
   '/_authed/_app/team-bots': typeof AuthedAppTeamBotsRoute
+  '/_authed/_app/wakers': typeof AuthedAppWakersRoute
   '/_authed/admin/audit': typeof AuthedAdminAuditRoute
   '/_authed/admin/boundaries': typeof AuthedAdminBoundariesRoute
   '/_authed/admin/computers': typeof AuthedAdminComputersRoute
   '/_authed/admin/credentials': typeof AuthedAdminCredentialsRoute
   '/_authed/admin/enterprise': typeof AuthedAdminEnterpriseRoute
   '/_authed/admin/identity-providers': typeof AuthedAdminIdentityProvidersRoute
+  '/_authed/admin/learning': typeof AuthedAdminLearningRoute
   '/_authed/admin/people': typeof AuthedAdminPeopleRoute
   '/_authed/admin/playground': typeof AuthedAdminPlaygroundRoute
   '/_authed/admin/skills': typeof AuthedAdminSkillsRoute
@@ -550,16 +559,15 @@ export interface FileRoutesById {
   '/_authed/_app/': typeof AuthedAppIndexRoute
   '/_authed/admin/': typeof AuthedAdminIndexRoute
   '/_authed/settings/': typeof AuthedSettingsIndexRoute
-  '/_authed/_app/bots/$agentId': typeof AuthedAppBotsAgentIdRoute
-  '/_authed/_app/wakerflows/new': typeof AuthedAppWakerflowsNewRoute
-  '/_authed/_app/wakerflows/$flowId': typeof AuthedAppWakerflowsFlowIdRoute
-  '/_authed/_app/wakerflows/import/$token': typeof AuthedAppWakerflowsImportTokenRoute
   '/_authed/_app/assemble/$agentId': typeof AuthedAppAssembleAgentIdRoute
-  '/_authed/_app/wakers_/$agentId': typeof AuthedAppWakersAgentIdRoute
+  '/_authed/_app/bots/$agentId': typeof AuthedAppBotsAgentIdRoute
   '/_authed/_app/channel/$channelId': typeof AuthedAppChannelChannelIdRoute
   '/_authed/_app/channel/new': typeof AuthedAppChannelNewRoute
   '/_authed/_app/group/$channelId': typeof AuthedAppGroupChannelIdRoute
   '/_authed/_app/group/new': typeof AuthedAppGroupNewRoute
+  '/_authed/_app/wakerflows/$flowId': typeof AuthedAppWakerflowsFlowIdRoute
+  '/_authed/_app/wakerflows/new': typeof AuthedAppWakerflowsNewRoute
+  '/_authed/_app/wakers_/$agentId': typeof AuthedAppWakersAgentIdRoute
   '/_authed/admin/components/$name': typeof AuthedAdminComponentsNameRoute
   '/_authed/admin/plugins/$key': typeof AuthedAdminPluginsKeyRoute
   '/_authed/admin/plugins/composio': typeof AuthedAdminPluginsComposioRoute
@@ -572,6 +580,7 @@ export interface FileRoutesById {
   '/_authed/admin/plugins/': typeof AuthedAdminPluginsIndexRoute
   '/_authed/settings/components-gallery/': typeof AuthedSettingsComponentsGalleryIndexRoute
   '/_authed/settings/connected-accounts/': typeof AuthedSettingsConnectedAccountsIndexRoute
+  '/_authed/_app/wakerflows/import/$token': typeof AuthedAppWakerflowsImportTokenRoute
   '/_authed/admin/plugins/$key_/bots/$agentId': typeof AuthedAdminPluginsKeyBotsAgentIdRoute
   '/_authed/admin/plugins/$key_/tools/$tool': typeof AuthedAdminPluginsKeyToolsToolRoute
 }
@@ -584,28 +593,29 @@ export interface FileRouteTypes {
     | '/settings'
     | '/onboarding'
     | '/approvals'
-    | '/bot'
-    | '/memory'
-    | '/knowledge'
-    | '/tasks'
-    | '/platform'
-    | '/resources'
-    | '/plans'
-    | '/role-templates'
-    | '/wakers'
-    | '/pipelines'
     | '/autonomous'
+    | '/bot'
+    | '/knowledge'
+    | '/memory'
+    | '/pipelines'
+    | '/plans'
+    | '/platform'
     | '/reachability'
+    | '/resources'
     | '/responsibilities'
+    | '/role-templates'
     | '/routines'
     | '/skills'
+    | '/tasks'
     | '/team-bots'
+    | '/wakers'
     | '/admin/audit'
     | '/admin/boundaries'
     | '/admin/computers'
     | '/admin/credentials'
     | '/admin/enterprise'
     | '/admin/identity-providers'
+    | '/admin/learning'
     | '/admin/people'
     | '/admin/playground'
     | '/admin/skills'
@@ -613,16 +623,15 @@ export interface FileRouteTypes {
     | '/sign-in/$requestId'
     | '/admin/'
     | '/settings/'
-    | '/bots/$agentId'
-    | '/wakerflows/new'
-    | '/wakerflows/$flowId'
-    | '/wakerflows/import/$token'
     | '/assemble/$agentId'
-    | '/wakers/$agentId'
+    | '/bots/$agentId'
     | '/channel/$channelId'
     | '/channel/new'
     | '/group/$channelId'
     | '/group/new'
+    | '/wakerflows/$flowId'
+    | '/wakerflows/new'
+    | '/wakers/$agentId'
     | '/admin/components/$name'
     | '/admin/plugins/$key'
     | '/admin/plugins/composio'
@@ -635,6 +644,7 @@ export interface FileRouteTypes {
     | '/admin/plugins/'
     | '/settings/components-gallery/'
     | '/settings/connected-accounts/'
+    | '/wakerflows/import/$token'
     | '/admin/plugins/$key/bots/$agentId'
     | '/admin/plugins/$key/tools/$tool'
   fileRoutesByTo: FileRoutesByTo
@@ -643,28 +653,29 @@ export interface FileRouteTypes {
     | '/sign'
     | '/onboarding'
     | '/approvals'
-    | '/bot'
-    | '/memory'
-    | '/knowledge'
-    | '/tasks'
-    | '/platform'
-    | '/resources'
-    | '/plans'
-    | '/role-templates'
-    | '/wakers'
-    | '/pipelines'
     | '/autonomous'
+    | '/bot'
+    | '/knowledge'
+    | '/memory'
+    | '/pipelines'
+    | '/plans'
+    | '/platform'
     | '/reachability'
+    | '/resources'
     | '/responsibilities'
+    | '/role-templates'
     | '/routines'
     | '/skills'
+    | '/tasks'
     | '/team-bots'
+    | '/wakers'
     | '/admin/audit'
     | '/admin/boundaries'
     | '/admin/computers'
     | '/admin/credentials'
     | '/admin/enterprise'
     | '/admin/identity-providers'
+    | '/admin/learning'
     | '/admin/people'
     | '/admin/playground'
     | '/admin/skills'
@@ -672,16 +683,15 @@ export interface FileRouteTypes {
     | '/sign-in/$requestId'
     | '/admin'
     | '/settings'
-    | '/bots/$agentId'
-    | '/wakerflows/new'
-    | '/wakerflows/$flowId'
-    | '/wakerflows/import/$token'
     | '/assemble/$agentId'
-    | '/wakers/$agentId'
+    | '/bots/$agentId'
     | '/channel/$channelId'
     | '/channel/new'
     | '/group/$channelId'
     | '/group/new'
+    | '/wakerflows/$flowId'
+    | '/wakerflows/new'
+    | '/wakers/$agentId'
     | '/admin/components/$name'
     | '/admin/plugins/$key'
     | '/admin/plugins/composio'
@@ -694,6 +704,7 @@ export interface FileRouteTypes {
     | '/admin/plugins'
     | '/settings/components-gallery'
     | '/settings/connected-accounts'
+    | '/wakerflows/import/$token'
     | '/admin/plugins/$key/bots/$agentId'
     | '/admin/plugins/$key/tools/$tool'
   id:
@@ -705,22 +716,29 @@ export interface FileRouteTypes {
     | '/_authed/_app'
     | '/_authed/onboarding'
     | '/_authed/_app/approvals'
+    | '/_authed/_app/autonomous'
     | '/_authed/_app/bot'
-    | '/_authed/_app/memory'
     | '/_authed/_app/knowledge'
-    | '/_authed/_app/tasks'
+    | '/_authed/_app/memory'
+    | '/_authed/_app/pipelines'
+    | '/_authed/_app/plans'
     | '/_authed/_app/platform'
     | '/_authed/_app/reachability'
+    | '/_authed/_app/resources'
     | '/_authed/_app/responsibilities'
+    | '/_authed/_app/role-templates'
     | '/_authed/_app/routines'
     | '/_authed/_app/skills'
+    | '/_authed/_app/tasks'
     | '/_authed/_app/team-bots'
+    | '/_authed/_app/wakers'
     | '/_authed/admin/audit'
     | '/_authed/admin/boundaries'
     | '/_authed/admin/computers'
     | '/_authed/admin/credentials'
     | '/_authed/admin/enterprise'
     | '/_authed/admin/identity-providers'
+    | '/_authed/admin/learning'
     | '/_authed/admin/people'
     | '/_authed/admin/playground'
     | '/_authed/admin/skills'
@@ -729,15 +747,15 @@ export interface FileRouteTypes {
     | '/_authed/_app/'
     | '/_authed/admin/'
     | '/_authed/settings/'
+    | '/_authed/_app/assemble/$agentId'
     | '/_authed/_app/bots/$agentId'
-    | '/_authed/_app/wakerflows/new'
-    | '/_authed/_app/wakerflows/$flowId'
-    | '/_authed/_app/wakerflows/import/$token'
-    | '/_authed/_app/wakers_/$agentId'
     | '/_authed/_app/channel/$channelId'
     | '/_authed/_app/channel/new'
     | '/_authed/_app/group/$channelId'
     | '/_authed/_app/group/new'
+    | '/_authed/_app/wakerflows/$flowId'
+    | '/_authed/_app/wakerflows/new'
+    | '/_authed/_app/wakers_/$agentId'
     | '/_authed/admin/components/$name'
     | '/_authed/admin/plugins/$key'
     | '/_authed/admin/plugins/composio'
@@ -750,6 +768,7 @@ export interface FileRouteTypes {
     | '/_authed/admin/plugins/'
     | '/_authed/settings/components-gallery/'
     | '/_authed/settings/connected-accounts/'
+    | '/_authed/_app/wakerflows/import/$token'
     | '/_authed/admin/plugins/$key_/bots/$agentId'
     | '/_authed/admin/plugins/$key_/tools/$tool'
   fileRoutesById: FileRoutesById
@@ -817,18 +836,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedAppApprovalsRouteImport
       parentRoute: typeof AuthedAppRoute
     }
+    '/_authed/_app/autonomous': {
+      id: '/_authed/_app/autonomous'
+      path: '/autonomous'
+      fullPath: '/autonomous'
+      preLoaderRoute: typeof AuthedAppAutonomousRouteImport
+      parentRoute: typeof AuthedAppRoute
+    }
     '/_authed/_app/bot': {
       id: '/_authed/_app/bot'
       path: '/bot'
       fullPath: '/bot'
       preLoaderRoute: typeof AuthedAppBotRouteImport
-      parentRoute: typeof AuthedAppRoute
-    }
-    '/_authed/_app/memory': {
-      id: '/_authed/_app/memory'
-      path: '/memory'
-      fullPath: '/memory'
-      preLoaderRoute: typeof AuthedAppMemoryRouteImport
       parentRoute: typeof AuthedAppRoute
     }
     '/_authed/_app/knowledge': {
@@ -838,46 +857,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedAppKnowledgeRouteImport
       parentRoute: typeof AuthedAppRoute
     }
-    '/_authed/_app/tasks': {
-      id: '/_authed/_app/tasks'
-      path: '/tasks'
-      fullPath: '/tasks'
-      preLoaderRoute: typeof AuthedAppTasksRouteImport
-      parentRoute: typeof AuthedAppRoute
-    }
-    '/_authed/_app/platform': {
-      id: '/_authed/_app/platform'
-      path: '/platform'
-      fullPath: '/platform'
-      preLoaderRoute: typeof AuthedAppPlatformRouteImport
-      parentRoute: typeof AuthedAppRoute
-    }
-    '/_authed/_app/resources': {
-      id: '/_authed/_app/resources'
-      path: '/resources'
-      fullPath: '/resources'
-      preLoaderRoute: typeof AuthedAppResourcesRouteImport
-      parentRoute: typeof AuthedAppRoute
-    }
-    '/_authed/_app/plans': {
-      id: '/_authed/_app/plans'
-      path: '/plans'
-      fullPath: '/plans'
-      preLoaderRoute: typeof AuthedAppPlansRouteImport
-      parentRoute: typeof AuthedAppRoute
-    }
-    '/_authed/_app/role-templates': {
-      id: '/_authed/_app/role-templates'
-      path: '/role-templates'
-      fullPath: '/role-templates'
-      preLoaderRoute: typeof AuthedAppRoleTemplatesRouteImport
-      parentRoute: typeof AuthedAppRoute
-    }
-    '/_authed/_app/wakers': {
-      id: '/_authed/_app/wakers'
-      path: '/wakers'
-      fullPath: '/wakers'
-      preLoaderRoute: typeof AuthedAppWakersRouteImport
+    '/_authed/_app/memory': {
+      id: '/_authed/_app/memory'
+      path: '/memory'
+      fullPath: '/memory'
+      preLoaderRoute: typeof AuthedAppMemoryRouteImport
       parentRoute: typeof AuthedAppRoute
     }
     '/_authed/_app/pipelines': {
@@ -887,11 +871,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedAppPipelinesRouteImport
       parentRoute: typeof AuthedAppRoute
     }
-    '/_authed/_app/autonomous': {
-      id: '/_authed/_app/autonomous'
-      path: '/autonomous'
-      fullPath: '/autonomous'
-      preLoaderRoute: typeof AuthedAppAutonomousRouteImport
+    '/_authed/_app/plans': {
+      id: '/_authed/_app/plans'
+      path: '/plans'
+      fullPath: '/plans'
+      preLoaderRoute: typeof AuthedAppPlansRouteImport
+      parentRoute: typeof AuthedAppRoute
+    }
+    '/_authed/_app/platform': {
+      id: '/_authed/_app/platform'
+      path: '/platform'
+      fullPath: '/platform'
+      preLoaderRoute: typeof AuthedAppPlatformRouteImport
       parentRoute: typeof AuthedAppRoute
     }
     '/_authed/_app/reachability': {
@@ -901,11 +892,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedAppReachabilityRouteImport
       parentRoute: typeof AuthedAppRoute
     }
+    '/_authed/_app/resources': {
+      id: '/_authed/_app/resources'
+      path: '/resources'
+      fullPath: '/resources'
+      preLoaderRoute: typeof AuthedAppResourcesRouteImport
+      parentRoute: typeof AuthedAppRoute
+    }
     '/_authed/_app/responsibilities': {
       id: '/_authed/_app/responsibilities'
       path: '/responsibilities'
       fullPath: '/responsibilities'
       preLoaderRoute: typeof AuthedAppResponsibilitiesRouteImport
+      parentRoute: typeof AuthedAppRoute
+    }
+    '/_authed/_app/role-templates': {
+      id: '/_authed/_app/role-templates'
+      path: '/role-templates'
+      fullPath: '/role-templates'
+      preLoaderRoute: typeof AuthedAppRoleTemplatesRouteImport
       parentRoute: typeof AuthedAppRoute
     }
     '/_authed/_app/routines': {
@@ -922,11 +927,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedAppSkillsRouteImport
       parentRoute: typeof AuthedAppRoute
     }
+    '/_authed/_app/tasks': {
+      id: '/_authed/_app/tasks'
+      path: '/tasks'
+      fullPath: '/tasks'
+      preLoaderRoute: typeof AuthedAppTasksRouteImport
+      parentRoute: typeof AuthedAppRoute
+    }
     '/_authed/_app/team-bots': {
       id: '/_authed/_app/team-bots'
       path: '/team-bots'
       fullPath: '/team-bots'
       preLoaderRoute: typeof AuthedAppTeamBotsRouteImport
+      parentRoute: typeof AuthedAppRoute
+    }
+    '/_authed/_app/wakers': {
+      id: '/_authed/_app/wakers'
+      path: '/wakers'
+      fullPath: '/wakers'
+      preLoaderRoute: typeof AuthedAppWakersRouteImport
       parentRoute: typeof AuthedAppRoute
     }
     '/_authed/admin/': {
@@ -978,6 +997,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedAdminIdentityProvidersRouteImport
       parentRoute: typeof AuthedAdminRouteRoute
     }
+    '/_authed/admin/learning': {
+      id: '/_authed/admin/learning'
+      path: '/learning'
+      fullPath: '/admin/learning'
+      preLoaderRoute: typeof AuthedAdminLearningRouteImport
+      parentRoute: typeof AuthedAdminRouteRoute
+    }
     '/_authed/admin/people': {
       id: '/_authed/admin/people'
       path: '/people'
@@ -1027,49 +1053,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedAppAgentsIndexRouteImport
       parentRoute: typeof AuthedAppRoute
     }
-    '/_authed/_app/bots/': {
-      id: '/_authed/_app/bots/'
-      path: '/bots'
-      fullPath: '/bots/'
-      preLoaderRoute: typeof AuthedAppBotsIndexRouteImport
-      parentRoute: typeof AuthedAppRoute
-    }
-    '/_authed/_app/wakerflows/': {
-      id: '/_authed/_app/wakerflows/'
-      path: '/wakerflows'
-      fullPath: '/wakerflows/'
-      preLoaderRoute: typeof AuthedAppWakerflowsIndexRouteImport
-      parentRoute: typeof AuthedAppRoute
-    }
-    '/_authed/_app/wakerflows/new': {
-      id: '/_authed/_app/wakerflows/new'
-      path: '/wakerflows/new'
-      fullPath: '/wakerflows/new'
-      preLoaderRoute: typeof AuthedAppWakerflowsNewRouteImport
-      parentRoute: typeof AuthedAppRoute
-    }
-    '/_authed/_app/wakerflows/$flowId': {
-      id: '/_authed/_app/wakerflows/$flowId'
-      path: '/wakerflows/$flowId'
-      fullPath: '/wakerflows/$flowId'
-      preLoaderRoute: typeof AuthedAppWakerflowsFlowIdRouteImport
-      parentRoute: typeof AuthedAppRoute
-    }
-    '/_authed/_app/wakerflows/import/$token': {
-      id: '/_authed/_app/wakerflows/import/$token'
-      path: '/wakerflows/import/$token'
-      fullPath: '/wakerflows/import/$token'
-      preLoaderRoute: typeof AuthedAppWakerflowsImportTokenRouteImport
-      parentRoute: typeof AuthedAppRoute
-    }
-    '/_authed/_app/bots/$agentId': {
-      id: '/_authed/_app/bots/$agentId'
-      path: '/bots/$agentId'
-      fullPath: '/bots/$agentId'
-      preLoaderRoute: typeof AuthedAppBotsAgentIdRouteImport
-      preLoaderRoute: typeof AuthedAppAssembleAgentIdRouteImport
-      parentRoute: typeof AuthedAppRoute
-    }
     '/_authed/_app/assemble/$agentId': {
       id: '/_authed/_app/assemble/$agentId'
       path: '/assemble/$agentId'
@@ -1077,11 +1060,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedAppAssembleAgentIdRouteImport
       parentRoute: typeof AuthedAppRoute
     }
-    '/_authed/_app/wakers_/$agentId': {
-      id: '/_authed/_app/wakers_/$agentId'
-      path: '/wakers/$agentId'
-      fullPath: '/wakers/$agentId'
-      preLoaderRoute: typeof AuthedAppWakersAgentIdRouteImport
+    '/_authed/_app/bots/': {
+      id: '/_authed/_app/bots/'
+      path: '/bots'
+      fullPath: '/bots/'
+      preLoaderRoute: typeof AuthedAppBotsIndexRouteImport
+      parentRoute: typeof AuthedAppRoute
+    }
+    '/_authed/_app/bots/$agentId': {
+      id: '/_authed/_app/bots/$agentId'
+      path: '/bots/$agentId'
+      fullPath: '/bots/$agentId'
+      preLoaderRoute: typeof AuthedAppBotsAgentIdRouteImport
       parentRoute: typeof AuthedAppRoute
     }
     '/_authed/_app/channel/$channelId': {
@@ -1110,6 +1100,34 @@ declare module '@tanstack/react-router' {
       path: '/group/new'
       fullPath: '/group/new'
       preLoaderRoute: typeof AuthedAppGroupNewRouteImport
+      parentRoute: typeof AuthedAppRoute
+    }
+    '/_authed/_app/wakerflows/': {
+      id: '/_authed/_app/wakerflows/'
+      path: '/wakerflows'
+      fullPath: '/wakerflows/'
+      preLoaderRoute: typeof AuthedAppWakerflowsIndexRouteImport
+      parentRoute: typeof AuthedAppRoute
+    }
+    '/_authed/_app/wakerflows/$flowId': {
+      id: '/_authed/_app/wakerflows/$flowId'
+      path: '/wakerflows/$flowId'
+      fullPath: '/wakerflows/$flowId'
+      preLoaderRoute: typeof AuthedAppWakerflowsFlowIdRouteImport
+      parentRoute: typeof AuthedAppRoute
+    }
+    '/_authed/_app/wakerflows/new': {
+      id: '/_authed/_app/wakerflows/new'
+      path: '/wakerflows/new'
+      fullPath: '/wakerflows/new'
+      preLoaderRoute: typeof AuthedAppWakerflowsNewRouteImport
+      parentRoute: typeof AuthedAppRoute
+    }
+    '/_authed/_app/wakers_/$agentId': {
+      id: '/_authed/_app/wakers_/$agentId'
+      path: '/wakers/$agentId'
+      fullPath: '/wakers/$agentId'
+      preLoaderRoute: typeof AuthedAppWakersAgentIdRouteImport
       parentRoute: typeof AuthedAppRoute
     }
     '/_authed/admin/components/': {
@@ -1175,6 +1193,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedSettingsConnectedAccountsKeyRouteImport
       parentRoute: typeof AuthedSettingsRouteRoute
     }
+    '/_authed/_app/wakerflows/import/$token': {
+      id: '/_authed/_app/wakerflows/import/$token'
+      path: '/wakerflows/import/$token'
+      fullPath: '/wakerflows/import/$token'
+      preLoaderRoute: typeof AuthedAppWakerflowsImportTokenRouteImport
+      parentRoute: typeof AuthedAppRoute
+    }
     '/_authed/admin/plugins/$key_/bots/$agentId': {
       id: '/_authed/admin/plugins/$key_/bots/$agentId'
       path: '/plugins/$key/bots/$agentId'
@@ -1199,6 +1224,7 @@ interface AuthedAdminRouteRouteChildren {
   AuthedAdminCredentialsRoute: typeof AuthedAdminCredentialsRoute
   AuthedAdminEnterpriseRoute: typeof AuthedAdminEnterpriseRoute
   AuthedAdminIdentityProvidersRoute: typeof AuthedAdminIdentityProvidersRoute
+  AuthedAdminLearningRoute: typeof AuthedAdminLearningRoute
   AuthedAdminPeopleRoute: typeof AuthedAdminPeopleRoute
   AuthedAdminPlaygroundRoute: typeof AuthedAdminPlaygroundRoute
   AuthedAdminSkillsRoute: typeof AuthedAdminSkillsRoute
@@ -1219,6 +1245,7 @@ const AuthedAdminRouteRouteChildren: AuthedAdminRouteRouteChildren = {
   AuthedAdminCredentialsRoute: AuthedAdminCredentialsRoute,
   AuthedAdminEnterpriseRoute: AuthedAdminEnterpriseRoute,
   AuthedAdminIdentityProvidersRoute: AuthedAdminIdentityProvidersRoute,
+  AuthedAdminLearningRoute: AuthedAdminLearningRoute,
   AuthedAdminPeopleRoute: AuthedAdminPeopleRoute,
   AuthedAdminPlaygroundRoute: AuthedAdminPlaygroundRoute,
   AuthedAdminSkillsRoute: AuthedAdminSkillsRoute,
@@ -1262,62 +1289,69 @@ const AuthedSettingsRouteRouteWithChildren =
 
 interface AuthedAppRouteChildren {
   AuthedAppApprovalsRoute: typeof AuthedAppApprovalsRoute
+  AuthedAppAutonomousRoute: typeof AuthedAppAutonomousRoute
   AuthedAppBotRoute: typeof AuthedAppBotRoute
-  AuthedAppMemoryRoute: typeof AuthedAppMemoryRoute
   AuthedAppKnowledgeRoute: typeof AuthedAppKnowledgeRoute
+  AuthedAppMemoryRoute: typeof AuthedAppMemoryRoute
+  AuthedAppPipelinesRoute: typeof AuthedAppPipelinesRoute
+  AuthedAppPlansRoute: typeof AuthedAppPlansRoute
+  AuthedAppPlatformRoute: typeof AuthedAppPlatformRoute
   AuthedAppReachabilityRoute: typeof AuthedAppReachabilityRoute
+  AuthedAppResourcesRoute: typeof AuthedAppResourcesRoute
   AuthedAppResponsibilitiesRoute: typeof AuthedAppResponsibilitiesRoute
+  AuthedAppRoleTemplatesRoute: typeof AuthedAppRoleTemplatesRoute
   AuthedAppRoutinesRoute: typeof AuthedAppRoutinesRoute
   AuthedAppSkillsRoute: typeof AuthedAppSkillsRoute
+  AuthedAppTasksRoute: typeof AuthedAppTasksRoute
   AuthedAppTeamBotsRoute: typeof AuthedAppTeamBotsRoute
-  AuthedAppRoleTemplatesRoute: typeof AuthedAppRoleTemplatesRoute
+  AuthedAppWakersRoute: typeof AuthedAppWakersRoute
   AuthedAppIndexRoute: typeof AuthedAppIndexRoute
-  AuthedAppBotsAgentIdRoute: typeof AuthedAppBotsAgentIdRoute
   AuthedAppAssembleAgentIdRoute: typeof AuthedAppAssembleAgentIdRoute
-  AuthedAppWakersAgentIdRoute: typeof AuthedAppWakersAgentIdRoute
+  AuthedAppBotsAgentIdRoute: typeof AuthedAppBotsAgentIdRoute
   AuthedAppChannelChannelIdRoute: typeof AuthedAppChannelChannelIdRoute
   AuthedAppChannelNewRoute: typeof AuthedAppChannelNewRoute
   AuthedAppGroupChannelIdRoute: typeof AuthedAppGroupChannelIdRoute
   AuthedAppGroupNewRoute: typeof AuthedAppGroupNewRoute
+  AuthedAppWakerflowsFlowIdRoute: typeof AuthedAppWakerflowsFlowIdRoute
+  AuthedAppWakerflowsNewRoute: typeof AuthedAppWakerflowsNewRoute
+  AuthedAppWakersAgentIdRoute: typeof AuthedAppWakersAgentIdRoute
   AuthedAppAgentsIndexRoute: typeof AuthedAppAgentsIndexRoute
   AuthedAppBotsIndexRoute: typeof AuthedAppBotsIndexRoute
   AuthedAppWakerflowsIndexRoute: typeof AuthedAppWakerflowsIndexRoute
-  AuthedAppWakerflowsNewRoute: typeof AuthedAppWakerflowsNewRoute
-  AuthedAppWakerflowsFlowIdRoute: typeof AuthedAppWakerflowsFlowIdRoute
   AuthedAppWakerflowsImportTokenRoute: typeof AuthedAppWakerflowsImportTokenRoute
 }
 
 const AuthedAppRouteChildren: AuthedAppRouteChildren = {
   AuthedAppApprovalsRoute: AuthedAppApprovalsRoute,
-  AuthedAppBotRoute: AuthedAppBotRoute,
-  AuthedAppMemoryRoute: AuthedAppMemoryRoute,
-  AuthedAppKnowledgeRoute: AuthedAppKnowledgeRoute,
-  AuthedAppTasksRoute: AuthedAppTasksRoute,
-  AuthedAppPlatformRoute: AuthedAppPlatformRoute,
-  AuthedAppResourcesRoute: AuthedAppResourcesRoute,
-  AuthedAppPlansRoute: AuthedAppPlansRoute,
-  AuthedAppRoleTemplatesRoute: AuthedAppRoleTemplatesRoute,
-  AuthedAppWakersRoute: AuthedAppWakersRoute,
-  AuthedAppPipelinesRoute: AuthedAppPipelinesRoute,
   AuthedAppAutonomousRoute: AuthedAppAutonomousRoute,
+  AuthedAppBotRoute: AuthedAppBotRoute,
+  AuthedAppKnowledgeRoute: AuthedAppKnowledgeRoute,
+  AuthedAppMemoryRoute: AuthedAppMemoryRoute,
+  AuthedAppPipelinesRoute: AuthedAppPipelinesRoute,
+  AuthedAppPlansRoute: AuthedAppPlansRoute,
+  AuthedAppPlatformRoute: AuthedAppPlatformRoute,
   AuthedAppReachabilityRoute: AuthedAppReachabilityRoute,
+  AuthedAppResourcesRoute: AuthedAppResourcesRoute,
   AuthedAppResponsibilitiesRoute: AuthedAppResponsibilitiesRoute,
+  AuthedAppRoleTemplatesRoute: AuthedAppRoleTemplatesRoute,
   AuthedAppRoutinesRoute: AuthedAppRoutinesRoute,
   AuthedAppSkillsRoute: AuthedAppSkillsRoute,
+  AuthedAppTasksRoute: AuthedAppTasksRoute,
   AuthedAppTeamBotsRoute: AuthedAppTeamBotsRoute,
+  AuthedAppWakersRoute: AuthedAppWakersRoute,
   AuthedAppIndexRoute: AuthedAppIndexRoute,
-  AuthedAppBotsAgentIdRoute: AuthedAppBotsAgentIdRoute,
   AuthedAppAssembleAgentIdRoute: AuthedAppAssembleAgentIdRoute,
-  AuthedAppWakersAgentIdRoute: AuthedAppWakersAgentIdRoute,
+  AuthedAppBotsAgentIdRoute: AuthedAppBotsAgentIdRoute,
   AuthedAppChannelChannelIdRoute: AuthedAppChannelChannelIdRoute,
   AuthedAppChannelNewRoute: AuthedAppChannelNewRoute,
   AuthedAppGroupChannelIdRoute: AuthedAppGroupChannelIdRoute,
   AuthedAppGroupNewRoute: AuthedAppGroupNewRoute,
+  AuthedAppWakerflowsFlowIdRoute: AuthedAppWakerflowsFlowIdRoute,
+  AuthedAppWakerflowsNewRoute: AuthedAppWakerflowsNewRoute,
+  AuthedAppWakersAgentIdRoute: AuthedAppWakersAgentIdRoute,
   AuthedAppAgentsIndexRoute: AuthedAppAgentsIndexRoute,
   AuthedAppBotsIndexRoute: AuthedAppBotsIndexRoute,
   AuthedAppWakerflowsIndexRoute: AuthedAppWakerflowsIndexRoute,
-  AuthedAppWakerflowsNewRoute: AuthedAppWakerflowsNewRoute,
-  AuthedAppWakerflowsFlowIdRoute: AuthedAppWakerflowsFlowIdRoute,
   AuthedAppWakerflowsImportTokenRoute: AuthedAppWakerflowsImportTokenRoute,
 }
 

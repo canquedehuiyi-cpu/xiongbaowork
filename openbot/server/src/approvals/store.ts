@@ -1,11 +1,8 @@
-import { currentTenant, runAsTenant } from "../tenant/context";
-import { TEAM_TENANT } from "../db/schema/tenant";
-import { ownerTenantOfBot } from "../agents/bot-owner";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { ownerTenantOfBot } from "../agents/bot-owner";
 import { createAuditStore, recordAuditEvent } from "../audit";
 import type { Database } from "../db/client";
 import { agentSecuritySettings } from "../db/schema/agent-security-settings";
-import { agents } from "../db/schema/core";
 import {
   approvalPreferences,
   approvalRequests,
@@ -13,10 +10,14 @@ import {
   approvalTeamRules,
   approvalTeamSettings,
 } from "../db/schema/approvals";
+import { agents, intelligenceChannelMappings } from "../db/schema/core";
+import { botTasks } from "../db/schema/tasks";
+import { TEAM_TENANT } from "../db/schema/tenant";
 import { workItems } from "../db/schema/work";
+import { currentEdition } from "../edition";
 import type { TaskProjector } from "../tasks/projector";
+import { currentTenant, runAsTenant } from "../tenant/context";
 import {
-  validateApprovalRecoveryContext,
   type ApprovalAction,
   ApprovalNotFoundError,
   type ApprovalPolicyStore,
@@ -29,6 +30,8 @@ import {
   type EmployeePolicy,
   type EmployeeSecuritySettings,
   offersStandingRule,
+  targetSubject,
+  validateApprovalRecoveryContext,
 } from "./types";
 
 /**
@@ -36,10 +39,33 @@ import {
  * `team` as well is {@link TEAM_TENANT}, which happens to be spelled the same.
  */
 const TEAM = "team";
+/**
+ * 有人仍然对只给「允许一次」的底线按「总是允许」时服务端回的话（`decide`）。哪些来源只给一次，
+ * 只在 shared/standing-rule.ts 声明（`offersStandingRule`）；这里只放每个底线的说法。
+ */
+const ONCE_ONLY_REFUSALS: Readonly<Record<string, string>> = {
+  destructive_tool:
+    "这个操作会删除或覆盖内容，每次都要你确认，只能「允许一次」或拒绝。",
+  outbound_send:
+    "这个操作可能会把内容发给别人，每次都要你确认，只能「允许一次」或拒绝。",
+  share_access:
+    "这个操作会分享内容或改变谁能访问，每次都要你确认，只能「允许一次」或拒绝。",
+  publish_post:
+    "这个操作会公开发布内容，每次都要你确认，只能「允许一次」或拒绝。",
+};
 const DEFAULT_PREFERENCES: ApprovalPreferences = {
   enabled: false,
   autoReview: false,
   hostCommands: "ask",
+};
+/**
+ * One person on their own machine: a Bot gets on with ordinary changes, and only what the safety
+ * policy names asks first (paying, deleting, sending, sharing, publishing; see `policy.ts`), as in the
+ * team edition. Turning "Ask before making changes" on in Settings is the person's to choose.
+ */
+const PERSONAL_PREFERENCES: ApprovalPreferences = {
+  ...DEFAULT_PREFERENCES,
+  enabled: false,
 };
 const DEFAULT_TEAM: ApprovalTeamSettings = {
   enforceAutoReview: false,
@@ -77,11 +103,7 @@ export async function openStoredApprovalInTransaction(
   // saved "always" rule was already weighed there and must not approve it behind that.
   const [rule] = action.policy
     ? []
-    : await tx
-        .select()
-        .from(approvalRules)
-        .where(ruleScope(action))
-        .limit(1);
+    : await tx.select().from(approvalRules).where(ruleScope(action)).limit(1);
   await tx
     .insert(approvalRequests)
     .values({
@@ -119,6 +141,16 @@ export function createApprovalStore(
 ): ApprovalStore {
   const owned = (owner: string, id: string) =>
     and(eq(approvalRequests.ownerUserId, owner), eq(approvalRequests.id, id));
+  const ruleScope = (action: ApprovalAction) =>
+    and(
+      eq(approvalRules.ownerUserId, action.actorId),
+      eq(approvalRules.botId, action.botId),
+      eq(approvalRules.toolRef, action.toolRef),
+      eq(approvalRules.effect, action.effect),
+      eq(approvalRules.scope, action.scope),
+      eq(approvalRules.behaviour, "allow"),
+      isNull(approvalRules.revokedAt),
+    );
   async function get(owner: string, id: string): Promise<ApprovalRecord> {
     const [row] = await database
       .select()
@@ -152,7 +184,12 @@ export function createApprovalStore(
         .from(approvalPreferences)
         .where(eq(approvalPreferences.ownerUserId, owner))
         .limit(1);
-      return row?.enabled === true;
+      // The same default the policy decides with, so the switch shows what actually happens.
+      if (!row)
+        return currentEdition() === "personal"
+          ? PERSONAL_PREFERENCES.enabled
+          : DEFAULT_PREFERENCES.enabled;
+      return row.enabled === true;
     },
     async setEnabled(owner, enabled) {
       await database
@@ -208,12 +245,12 @@ export function createApprovalStore(
           throw new ApprovalRefusedError(
             "Only an action handed to you can be marked done by you.",
           );
-        // 删除类和对外发送底线问的动作在任何规则之后都还要问，存一条「总是允许」只会误导人。
+        // 只给「允许一次」的底线（删除类、对外发送、分享、公开发布）问的动作在任何规则之后都还要
+        // 问，存一条「总是允许」只会误导人。从 check-in 开始的任务（M3/upstream）同理：每一步都要问。
         if (decision === "allow_always" && !offersStandingRule(request.action))
           throw new ApprovalRefusedError(
-            request.action.policy?.source === "outbound_send"
-              ? "这个操作可能会把内容发给别人，每次都要你确认，只能「允许一次」或拒绝。"
-              : "这个操作会删除或覆盖内容，每次都要你确认，只能「允许一次」或拒绝。",
+            ONCE_ONLY_REFUSALS[request.action.policy?.source ?? ""] ??
+              "Tasks started from a check-in ask before every change. Allow this once, or deny it.",
           );
         if (decision === "allow_always")
           await tx.insert(approvalRules).values({
@@ -234,7 +271,8 @@ export function createApprovalStore(
           .where(owned(owner, id))
           .returning();
         if (!updated) throw new ApprovalNotFoundError();
-        await recordAuditEvent(createAuditStore(tx as unknown as Database), {
+        const trail = createAuditStore(tx as unknown as Database);
+        await recordAuditEvent(trail, {
           eventType: "approval.person_decided",
           targetType: "approval",
           targetId: id,
@@ -245,8 +283,17 @@ export function createApprovalStore(
             bot: request.action.botId,
             tool: request.action.toolRef,
             scope: request.action.scope,
+            ...targetSubject(request.action.target),
           },
         });
+        /*
+         * The action's own row for a denial, beside the decision and in the same transaction (the
+         * person's own tenant frame, like the decision), so it is written once. Without it the trail
+         * held only the decision: the action itself read as nothing, or, from the code that asked, as
+         * allowed, and the Blocked view never showed it. Redacted like every audit payload.
+         */
+        if (decision === "deny" && request.action.declined)
+          await recordAuditEvent(trail, request.action.declined);
         await tx
           .insert(workItems)
           .values({
@@ -336,6 +383,33 @@ export function createApprovalStore(
         .orderBy(desc(approvalRules.createdAt));
     },
     policy: createPolicyStore(database),
+    /*
+     * A check-in task's conversation, found by the thread an action names: the task's own turn, the
+     * turn an approval carries on, and the person replying there all run in that thread. Started from
+     * a check-in, so it is work the person did not write out themselves, and every step in it asks
+     * but a read of their own connected app (see `gate` in approvals/service.ts).
+     */
+    async asksEveryChange(owner, threadId) {
+      const [row] = await database
+        .select({ id: botTasks.id })
+        .from(botTasks)
+        .innerJoin(
+          intelligenceChannelMappings,
+          and(
+            eq(intelligenceChannelMappings.channelId, botTasks.channelId),
+            eq(intelligenceChannelMappings.userId, owner),
+          ),
+        )
+        .where(
+          and(
+            eq(botTasks.ownerUserId, owner),
+            eq(botTasks.origin, "check_in"),
+            eq(intelligenceChannelMappings.threadId, threadId),
+          ),
+        )
+        .limit(1);
+      return Boolean(row);
+    },
     async revoke(owner, id) {
       const rows = await database
         .update(approvalRules)
@@ -402,9 +476,13 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
           autoReview: row.autoReview,
           hostCommands: row.hostCommands,
         }
-      : { ...DEFAULT_PREFERENCES };
+      : currentEdition() === "personal"
+        ? { ...PERSONAL_PREFERENCES }
+        : { ...DEFAULT_PREFERENCES };
   };
   const teamSettings = async (): Promise<ApprovalTeamSettings> => {
+    // No team, and no screen for these: a team deployment's values are not read.
+    if (currentEdition() === "personal") return { ...DEFAULT_TEAM };
     const [row] = await database
       .select()
       .from(approvalTeamSettings)
@@ -473,6 +551,7 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
       return next;
     },
     async teamRules() {
+      if (currentEdition() === "personal") return [];
       return database
         .select()
         .from(approvalTeamRules)
@@ -600,7 +679,7 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
         .limit(1);
       return row;
     },
-    async withdrawPending(owner, reason, match) {
+    async withdrawPending(owner, reason, match, options = {}) {
       const pending = await database
         .select()
         .from(approvalRequests)
@@ -629,6 +708,7 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
             )
             .returning({ id: approvalRequests.id });
           if (!rows.length) return false;
+          if (options.resume === false) return true;
           // The waiting conversation resumes with the reason as its result; nothing is executed.
           await tx
             .insert(workItems)
@@ -707,7 +787,10 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
         .insert(agentSecuritySettings)
         .values({ agentId: botId, ...next, updatedBy: by })
         .onConflictDoUpdate({
-          target: [agentSecuritySettings.tenantId, agentSecuritySettings.agentId],
+          target: [
+            agentSecuritySettings.tenantId,
+            agentSecuritySettings.agentId,
+          ],
           set: { ...next, updatedBy: by, updatedAt: sql`now()` },
         });
       await recordAuditEvent(audit, {
@@ -715,7 +798,12 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
         targetType: "approval_settings",
         targetId: botId,
         actorUserId: by,
-        payload: { changed: input, settings: next, layer: "employee", bot: botId },
+        payload: {
+          changed: input,
+          settings: next,
+          layer: "employee",
+          bot: botId,
+        },
       });
       return next;
     },
@@ -732,6 +820,7 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
           tool: input.toolRef,
           effect: input.effect,
           scope: input.scope,
+          ...targetSubject(input.target),
           outcome: input.outcome,
         },
       });

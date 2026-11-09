@@ -2,13 +2,13 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
-import type { AppVariables } from "../src/app-variables";
+import type { AppVariables } from "../src/auth/guards";
 import { createApprovalService } from "../src/approvals/service";
 import { createApprovalStore } from "../src/approvals/store";
 import {
-  approvalAction,
-  ApprovalNotFoundError,
   type ApprovalCandidate,
+  ApprovalNotFoundError,
+  approvalAction,
 } from "../src/approvals/types";
 import { createAdminScope } from "../src/auth/admin-scope";
 import { createRoleRepository } from "../src/auth/guards";
@@ -198,7 +198,7 @@ async function asAdminRequest<T>(id: string, work: () => Promise<T>) {
   app.use(
     "*",
     async (context, next) => {
-      context.set("actor", { id, role: "admin" });
+      context.set("actor", { id, email: `${id}@example.test`, role: "admin" });
       await runAsTenant(id, () => next());
     },
     scope.adminCapability,

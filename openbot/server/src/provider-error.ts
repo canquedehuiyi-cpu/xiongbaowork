@@ -1,5 +1,6 @@
 import { type BaseEvent, EventType } from "@ag-ui/client";
 import { catchError, type Observable, of, throwError } from "rxjs";
+import { BILLING } from "./model-billing";
 
 /**
  * A provider's refusal, turned into something a person can read.
@@ -108,12 +109,22 @@ function refusalOf(status: number): string {
   return `模型供应商返回了 HTTP ${status}`;
 }
 
+/** A refusal for want of credit, said as that, never as Forbidden or a bad request. */
+const BILLING_REFUSAL =
+  "模型供应商说账户余额已经用完或达到了消费上限，请充值或调高上限后再试";
+
 /** The `RUN_ERROR` both surfaces already subscribe to, carrying the sentence. */
 function runError(failure: ProviderFailure): BaseEvent {
   const words = providerWords(failure.body);
+  /*
+   * Out of credit or at a spending limit, whatever status says so (upstream model-billing.ts): xAI
+   * says it with a 403 and Anthropic with a 400, which read as "no right to this model" or "a request
+   * it would not take" and send the person to the wrong setting.
+   */
+  const billing = BILLING.test(failure.body);
   return {
     type: EventType.RUN_ERROR,
-    message: `${refusalOf(failure.status)}（HTTP ${failure.status}）。${
+    message: `${billing ? BILLING_REFUSAL : refusalOf(failure.status)}（HTTP ${failure.status}）。${
       words ? `供应商原话：「${words}」` : "供应商没有说明原因。"
     }`,
     code: "OPENBOT_PROVIDER_REQUEST_REFUSED",

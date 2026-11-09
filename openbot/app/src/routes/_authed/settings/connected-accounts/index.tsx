@@ -14,6 +14,12 @@ import {
   PageShell,
 } from "@/components/layout/page-shell";
 import { RowMark } from "@/components/layout/row-mark";
+import { LinkedAccountsSection } from "@/components/settings/linked-accounts";
+import {
+  linkedNotice,
+  visibleLinkedNotice,
+} from "@/components/settings/linked-notice";
+import { linkedAccountsQueryOptions } from "@/lib/identity/queries";
 import { PluginLogo } from "@/components/plugins/plugin-logo";
 import {
   InputGroup,
@@ -46,14 +52,22 @@ export const Route = createFileRoute("/_authed/settings/connected-accounts/")({
   component: RouteComponent,
   /*
    * `?connected=` is how the OAuth callback reports back, carrying a server key on success and
-   * `failed` otherwise. It is the only channel available: the callback is a redirect from another
-   * company's server, so there is no response body to read.
+   * `failed` otherwise. `?linked=` is the same for the GitHub account-link callback (upstream #763):
+   * `github` on success, `github-taken` when that GitHub account belongs to another person, `failed`
+   * otherwise (see linked-notice.ts). Each is the only channel available: the callback is a
+   * redirect from another company's server, so there is no response body to read.
    *
    * The key is omitted rather than set to undefined. Present-but-undefined makes `search` a required
    * prop on every Link to this route, which is a lot of ripple for a parameter only the callback sets.
    */
-  validateSearch: (search: Record<string, unknown>): { connected?: string } =>
-    typeof search.connected === "string" ? { connected: search.connected } : {},
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { connected?: string; linked?: string } => ({
+    ...(typeof search.connected === "string"
+      ? { connected: search.connected }
+      : {}),
+    ...(typeof search.linked === "string" ? { linked: search.linked } : {}),
+  }),
 });
 
 /** The same marks the admin connector list uses: these are the same vendors seen from your side. */
@@ -81,7 +95,18 @@ export function brokeredAccountsListedOn(
 }
 
 function RouteComponent() {
-  const { connected: outcome } = Route.useSearch();
+  const { connected: outcome, linked } = Route.useSearch();
+  /* Read once, then dropped from the URL, so a refresh does not repeat the news. */
+  const [arrival] = React.useState(() => linkedNotice(linked));
+  /* The same cached list the linked accounts section reads, so a Disconnect there retracts a success here. */
+  const links = useQuery(linkedAccountsQueryOptions());
+  const notice = visibleLinkedNotice(arrival, links.data);
+  const navigate = Route.useNavigate();
+  React.useEffect(() => {
+    if (linked !== undefined) {
+      navigate({ search: ({ linked: _l, ...rest }) => rest, replace: true });
+    }
+  }, [linked, navigate]);
   const [search, setSearch] = React.useState("");
   const plugins = useQuery(pluginsPageQueryOptions());
   const connections = useQuery(connectionsQueryOptions());
@@ -183,6 +208,17 @@ function RouteComponent() {
         <p className="text-destructive text-sm" role="alert">
           这个账号没能连接，什么都没有保存——请重试。
         </p>
+      ) : null}
+      {notice ? (
+        notice.tone === "error" ? (
+          <p className="text-destructive text-sm" role="alert">
+            {notice.text}
+          </p>
+        ) : (
+          <p className="text-sm text-muted-foreground" role="status">
+            {notice.text}
+          </p>
+        )
       ) : null}
       {/*
        * BOTH READS DECIDE THIS, AND ONLY ONE OF THEM USED TO. The waits were already paired here;
@@ -289,6 +325,7 @@ function RouteComponent() {
           )}
         </>
       )}
+      <LinkedAccountsSection />
     </PageShell>
   );
 }

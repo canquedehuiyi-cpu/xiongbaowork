@@ -17,6 +17,7 @@ import {
   groupBrowserSteps,
 } from "@/components/channels/browser-activity";
 import { toVisibleChatItems } from "@/components/channels/chat-messages";
+import { offersStandingRule, POLICY_SOURCE_LABELS } from "@/lib/approvals";
 
 beforeAll(() => GlobalRegistrator.register());
 afterEach(cleanup);
@@ -504,4 +505,18 @@ test("对外发送底线问的动作同样只给「允许一次 / 拒绝」，�
   } finally {
     inbox.requests.pop();
   }
+});
+
+test("分享与公开发布底线同样只给「允许一次」，来源有中文名字", () => {
+  expect(POLICY_SOURCE_LABELS.share_access).toBe("分享与授权");
+  expect(POLICY_SOURCE_LABELS.publish_post).toBe("公开发布");
+  for (const source of [
+    "destructive_tool",
+    "outbound_send",
+    "share_access",
+    "publish_post",
+  ])
+    expect(offersStandingRule({ source })).toBeFalse();
+  expect(offersStandingRule({ source: "default" })).toBeTrue();
+  expect(offersStandingRule(undefined)).toBeTrue();
 });
