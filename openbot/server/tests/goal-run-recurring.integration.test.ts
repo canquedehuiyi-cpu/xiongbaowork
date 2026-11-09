@@ -30,12 +30,10 @@ import {
   users,
   workItems,
 } from "../src/db/schema";
-import { useRoutineTools } from "../src/plugins/builtin-routines";
 import {
-  ALWAYS_ON_APP,
-  ensureAlwaysOnApp,
-  personalDefaultsDeps,
-} from "../src/plugins/personal-defaults";
+  listTools as listRoutineTools,
+  useRoutineTools,
+} from "../src/plugins/builtin-routines";
 import { createPluginStore } from "../src/plugins/store";
 import { useGoalTools } from "../src/responsibilities/chat-tools";
 import { RESPONSIBILITY_RUN_KIND } from "../src/responsibilities/engine";
@@ -78,6 +76,30 @@ const pluginStore = createPluginStore({
   // Allowed, as a person who has not turned on Ask before acting has it.
   policy: () => ({ mode: "enforce", deny: [], allow: ["true"] }),
 });
+
+/**
+ * Routines, added and given to `bots` as boot gives it to every Bot.
+ *
+ * M3: upstream does this with `ensureAlwaysOnApp` from `plugins/personal-defaults`, which this fork
+ * does not take. The same three steps by hand: add the catalogue app once, list its tools, and
+ * grant every one of them to each Bot.
+ */
+const ALWAYS_ON_APP = "routines";
+async function ensureRoutines(bots: readonly string[]) {
+  if (!(await pluginStore.serverAddress(ALWAYS_ON_APP)))
+    await pluginStore.addServer({ key: ALWAYS_ON_APP, by: "boot" });
+  await pluginStore.refreshTools(ALWAYS_ON_APP);
+  const tools = await listRoutineTools();
+  for (const bot of bots)
+    for (const tool of tools)
+      await pluginStore.grant(
+        "mcp",
+        `${ALWAYS_ON_APP}/${tool.name}`,
+        bot,
+        "boot",
+      );
+}
+
 const goalStore = createResponsibilityStore(database, {
   resolveTarget: async (ownerUserId, agentId, channelId) => {
     const [row] = await database
@@ -250,7 +272,8 @@ const call = (tool: string, args: Record<string, unknown>) =>
     args,
     botId: BOT,
     actorId: OWNER,
-    threadId: CONVERSATION.threadId,
+    // M3: upstream also passes the conversation (`threadId`) so Routines binds what it creates to
+    // it; the fork's `plugins/builtin-routines.ts` (plugins session) takes no thread yet.
   });
 
 /** One sweep of the goal engine, as the server's goal sweep runs it. */
@@ -413,10 +436,7 @@ beforeEach(async () => {
   routinesWereAdded =
     routinesWereAdded ||
     Boolean(await pluginStore.serverAddress(ALWAYS_ON_APP));
-  await ensureAlwaysOnApp(pluginStore, {
-    ...personalDefaultsDeps(database),
-    bots: async () => [BOT],
-  });
+  await ensureRoutines([BOT]);
   useRoutineTools(routineStore);
   useGoalTools({
     store: goalStore,

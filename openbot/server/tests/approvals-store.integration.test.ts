@@ -198,7 +198,7 @@ async function asAdminRequest<T>(id: string, work: () => Promise<T>) {
   app.use(
     "*",
     async (context, next) => {
-      context.set("actor", { id, role: "admin" });
+      context.set("actor", { id, email: `${id}@example.test`, role: "admin" });
       await runAsTenant(id, () => next());
     },
     scope.adminCapability,

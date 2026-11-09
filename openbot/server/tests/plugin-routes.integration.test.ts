@@ -104,7 +104,7 @@ const foreignCredentialId = randomUUID();
 const ownCredentialId = randomUUID();
 
 /** What this deployment already had, so a database somebody is using is left as it was found. */
-let existing: Awaited<ReturnType<typeof entryRow>> = null;
+let existing: Awaited<ReturnType<typeof entryRow>> | null = null;
 
 beforeAll(async () => {
   releaseAdmin = await seedAdministrator(database, ADMIN.id);

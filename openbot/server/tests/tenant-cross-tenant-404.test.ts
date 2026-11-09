@@ -33,7 +33,7 @@ const routesFor = (actorId: string) => {
     context,
     next,
   ) => {
-    context.set("actor", { id: actorId, role: "user" as const });
+    context.set("actor", { id: actorId, email: `${actorId}@example.test`, role: "user" as const });
     await next();
   };
   return createTaskRoutes(database, requireUser, projector);

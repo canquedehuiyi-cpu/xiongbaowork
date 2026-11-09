@@ -167,6 +167,8 @@ async function testConnection(
     undefined,
     undefined,
     undefined,
+    // M3: the fork's createAgentRoutes takes a quota service after the managed endpoint.
+    undefined,
     config.thisMachineHost
       ? { thisMachineHost: config.thisMachineHost }
       : undefined,

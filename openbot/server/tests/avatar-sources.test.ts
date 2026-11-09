@@ -40,6 +40,14 @@ import {
 import { UNTRUSTED_GUIDANCE, untrustedNotice } from "../src/untrusted-content";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
+/** The system prompt a built-in configuration carries; a configuration without a key has none. */
+const promptOf = (
+  configuration: ReturnType<typeof builtInAgentConfiguration>,
+): string =>
+  "prompt" in configuration && typeof configuration.prompt === "string"
+    ? configuration.prompt
+    : "";
+
 /**
  * Story F1, stage 1: a person declares where their material lives, and their 分身 is told.
  *
@@ -174,7 +182,9 @@ describe("the sources routes", () => {
       { kind: "declaration", label: "周报", note: "在飞书 / 工作 / 周报" },
       { kind: "declaration", label: "客户名单", note: "" },
     ]);
-    expect(state.sources.map((source) => source.id)).toEqual([
+    expect(
+      state.sources.map((source): string | undefined => source.id),
+    ).toEqual([
       first.body.source?.id,
       second.body.source?.id,
     ]);
@@ -364,7 +374,8 @@ describe("what the 分身 is told", () => {
     "The person you represent has told you where their own material lives.";
 
   test("the block lists the sources inside the untrusted envelope, after the person's instructions", () => {
-    const prompt = builtInAgentConfiguration(
+    const prompt = promptOf(
+      builtInAgentConfiguration(
       {
         ...avatar,
         avatarSources: [
@@ -377,7 +388,8 @@ describe("what the 分身 is told", () => {
       undefined,
       [],
       "Write in British English.",
-    ).prompt as string;
+    ),
+    );
 
     expect(prompt).toContain(DECLARED);
     expect(prompt).toContain(
@@ -399,11 +411,13 @@ describe("what the 分身 is told", () => {
   test("no sources is no block, byte for byte the prompt it was before", () => {
     expect(avatarSourcesGuidance([])).toBeNull();
     expect(
-      builtInAgentConfiguration(
-        { ...avatar, avatarSources: [] },
-        model,
-        "synthetic-model-key",
-      ).prompt,
+      promptOf(
+        builtInAgentConfiguration(
+          { ...avatar, avatarSources: [] },
+          model,
+          "synthetic-model-key",
+        ),
+      ),
     ).toBe(
       `${avatar.systemPrompt}\n\n${PROVENANCE_GUIDANCE}\n\n${UNTRUSTED_GUIDANCE}`,
     );
@@ -432,12 +446,17 @@ describe("what the 分身 is told", () => {
     const originalBase = process.env.OPENAI_BASE_URL;
     try {
       process.env.OPENAI_BASE_URL = await recorder.start();
-      recorder.onMessage(/.*/, { type: "text", content: "好的。" });
+      recorder.onMessage(/.*/, { content: "好的。" });
       const roster: RegisteredAgent[] = [avatar, colleague];
       const built = await buildAgents(
         roster,
         model,
         "synthetic-model-key",
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
         undefined,
         undefined,
         undefined,
@@ -548,7 +567,8 @@ describe("what the 分身 is told", () => {
       throw new Error("Expected the 分身 on its owner's roster.");
     }
     expect(registered.systemPrompt).toBe(edited);
-    const prompt = builtInAgentConfiguration(
+    const prompt = promptOf(
+      builtInAgentConfiguration(
       {
         ...registered,
         avatarSources: await avatarSourcesForActor(store)(personA)(
@@ -557,7 +577,8 @@ describe("what the 分身 is told", () => {
       },
       model,
       "synthetic-model-key",
-    ).prompt as string;
+    ),
+    );
     expect(prompt.startsWith(edited)).toBeTrue();
     expect(prompt).toContain('"label":"周报"');
     await clear(personA);

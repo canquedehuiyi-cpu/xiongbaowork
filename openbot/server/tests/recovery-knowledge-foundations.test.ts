@@ -1931,7 +1931,7 @@ describe("L1-19 historical knowledge three-table closed foundations", () => {
       priorForwardPaths.some((path) => path === f.path),
     );
     expect(priorForwardArtifacts).toHaveLength(44);
-    expect(priorForwardArtifacts.map((f) => f.path)).toEqual(priorForwardPaths);
+    expect(priorForwardArtifacts.map((f) => f.path)).toEqual([...priorForwardPaths]);
     expect(recoveryArtifacts.filter((f) => !priorForwardPaths.some((path) => path === f.path)))
       .toEqual([{
         path: "recovery/recovery-20261018-v1/FLOW-ACTIVATION-CONTRACT.md",

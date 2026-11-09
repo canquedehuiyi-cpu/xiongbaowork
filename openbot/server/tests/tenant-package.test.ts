@@ -1778,16 +1778,32 @@ describe("pairing a package's coworkers with its skills", () => {
  * blank-endpoint test below is: the package they synchronize lands there, and so do the fixtures
  * standing in for what a deployment already held.
  */
+/** One row's arguments as `bun:test`'s `each` hands them over: an array row is spread, anything else is one. */
+type CatalogueRow<T> = [T] extends [readonly unknown[]] ? [...T] : [T];
 const catalogueTest = Object.assign(
   (name: string, body: () => unknown, timeout?: number) =>
-    test(name, () => runAsTenant("system", body), timeout),
+    test(
+      name,
+      async () => {
+        await runAsTenant("system", body);
+      },
+      timeout,
+    ),
   {
     each:
-      <T>(rows: readonly T[]) =>
-      (name: string, body: (row: T) => unknown, timeout?: number) =>
-        test.each(rows as T[])(
+      <const T>(rows: readonly T[]) =>
+      (
+        name: string,
+        body: (...row: CatalogueRow<T>) => unknown,
+        timeout?: number,
+      ) =>
+        test.each(rows as unknown[])(
           name,
-          (row: T) => runAsTenant("system", () => body(row)),
+          async (...row: unknown[]) => {
+            await runAsTenant("system", () =>
+              body(...(row as CatalogueRow<T>)),
+            );
+          },
           timeout,
         ),
   },

@@ -190,7 +190,7 @@ afterAll(async () => {
 });
 
 test("the owner's inbox holds the request, so the refusals below are about tenancy", async () => {
-  const inbox = await call(owner, "");
+  const inbox = await call(owner, "", "GET");
   expect(inbox.status).toBe(200);
   const body = (await inbox.json()) as { requests: { id: string }[] };
   expect(body.requests.map((entry) => entry.id)).toContain(requestId);
@@ -201,7 +201,7 @@ test("the request is absent from a stranger's inbox", async () => {
    * The row sits in the owner's tenant, so row-level security keeps it from this caller; the store's
    * owner predicate would keep it out of a stranger's list even where the database did not.
    */
-  const inbox = await call(stranger, "");
+  const inbox = await call(stranger, "", "GET");
   expect(inbox.status).toBe(200);
   const body = (await inbox.json()) as { requests: { id: string }[] };
   expect(body.requests.map((entry) => entry.id)).not.toContain(requestId);
@@ -323,7 +323,7 @@ test("admin A's team rule is stamped `team`, and member M's frame reads and appl
   const seen = await runAsTenant(stranger, () => store.policy!.teamRules());
   expect(seen.map((rule) => rule.id)).toContain(teamRuleId);
   // ...and through the member's own inbox, as the locked rows they are shown.
-  const inbox = await call(stranger, "");
+  const inbox = await call(stranger, "", "GET");
   expect(inbox.status).toBe(200);
   const body = (await inbox.json()) as { teamRules: { id: string }[] };
   expect(body.teamRules.map((rule) => rule.id)).toContain(teamRuleId);

@@ -49,7 +49,7 @@ import {
 import type { AttentionResponse } from "../src/proactive/contracts";
 import { createProactiveStore } from "../src/proactive/store";
 import type { ResponsibilityStore } from "../src/responsibilities/types";
-import { createTaskRoutes } from "../src/tasks/routes";
+import { createBotTaskRoutes } from "../src/tasks/bot-task-routes";
 import { createTaskRunner } from "../src/tasks/runner";
 import { PROACTIVE_TASK_KIND } from "../src/tasks/state";
 import { createTaskStore } from "../src/tasks/store";
@@ -334,16 +334,18 @@ const resumeTick = (
 const resumeApproval = resumeTick();
 
 const app = new Hono<{ Variables: AppVariables }>();
+// M3: upstream's bot task routes are `createBotTaskRoutes` at /api/bot-tasks here; the fork's /api/tasks
+// is the task board.
 app.route(
-  "/api/tasks",
-  createTaskRoutes(taskStore, tasks, async (context, next) => {
+  "/api/bot-tasks",
+  createBotTaskRoutes(taskStore, tasks, async (context, next) => {
     const id = context.req.header("x-test-user") ?? "";
     context.set("actor", { id, email: `${id}@example.test`, role: "user" });
     await next();
   }),
 );
 const call = (user: string, path: string, method = "GET") =>
-  app.request(`/api/tasks${path}`, {
+  app.request(`/api/bot-tasks${path}`, {
     method,
     headers: { "x-test-user": user },
   });

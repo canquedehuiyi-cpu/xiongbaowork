@@ -31,7 +31,7 @@ import { createCoworkerRoutingService } from "../src/routing/service";
 
 const ACTOR = { id: "u1", email: "person@openbot.test", role: "user" } as const;
 
-const ROSTER = [
+const ROSTER: Parameters<typeof profile>[0][] = [
   {
     id: "general-assistant",
     name: "General Assistant",
@@ -80,6 +80,9 @@ function profile(input: {
     systemOwned: false,
     title: input.name,
     visibility: input.visibility,
+    modelRef: null,
+    platformModelRef: null,
+    persona: null,
   };
 }
 
@@ -93,7 +96,7 @@ function app(
   options: {
     routed?: string;
     undecided?: RoutingUndecided;
-    roster?: readonly (typeof ROSTER)[number][];
+    roster?: readonly Parameters<typeof profile>[0][];
     skillsFor?: (id: string) => Promise<readonly string[]>;
   } = {},
 ) {

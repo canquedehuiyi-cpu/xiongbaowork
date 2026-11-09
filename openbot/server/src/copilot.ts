@@ -8,7 +8,6 @@ import type {
 import { CopilotRuntime, resolveModel } from "@copilotkit/runtime/v2";
 import { createCopilotHonoHandler } from "@copilotkit/runtime/v2/hono";
 import {
-  APPROVAL_GUIDANCE,
   COMPONENT_GUIDANCE,
   type ComputerGuidance,
   frameworkGuidance,
@@ -25,10 +24,6 @@ import { MODEL_TOOL_LIMIT } from "@openbot/shared/model-tool-limit";
 import { runTimeZone } from "@openbot/shared/person-time-zone";
 import { type Persona, personaGuidance } from "@openbot/shared/persona";
 import { researchRoleOfToolName } from "@openbot/shared/research";
-import type { LanguageModel } from "ai";
-import { Hono } from "hono";
-import { defer, from, switchMap } from "rxjs";
-import { z } from "zod";
 import {
   BuiltInAgentWithSaneHistory,
   CloningRemoteAgent,
@@ -43,6 +38,10 @@ import { sanitizeSeededHistory } from "@openbot/toolkit/history-sanitize";
 import { executeNativeApprovalTool } from "@openbot/toolkit/native-approval";
 import type { ThreadLock } from "@openbot/toolkit/ports";
 import { observeDetachedRun } from "@openbot/toolkit/run-stop";
+import type { LanguageModel } from "ai";
+import { Hono } from "hono";
+import { defer, from, switchMap } from "rxjs";
+import { z } from "zod";
 import {
   type ActorAgentResolver,
   CoworkerUnavailableError,
@@ -113,7 +112,6 @@ import type {
   DeploymentModel,
 } from "./models/runtime-resolver";
 import { withModelRun } from "./models/token-metering";
-import { withQuotaRunErrors } from "./quota/limits";
 import type { SelectableSkill, Selection } from "./plugins/selection";
 import {
   latestUserText,
@@ -127,6 +125,7 @@ import {
 import { refFromToolName } from "./plugins/store";
 import { grantedToolGuidance } from "./plugins/tools";
 import { type ProjectForPrompt, projectGuidance } from "./projects/context";
+import { withQuotaRunErrors } from "./quota/limits";
 import { corsOrigin } from "./request-trust";
 import type { ProductTelemetry } from "./telemetry/product";
 import { productRuntimeHook } from "./telemetry/product-boundaries";
@@ -1024,8 +1023,13 @@ export function builtInAgentConfiguration(
       COMPONENT_GUIDANCE,
       // When to give work to subagents. Worded for a run that holds the tool, which most do.
       ORCHESTRATION_GUIDANCE,
-      // OpenBot asks the person before consequential actions, so the Bot does not ask as well.
-      APPROVAL_GUIDANCE,
+      /*
+       * M3: upstream's APPROVAL_GUIDANCE ("OpenBot asks before you delete, archive, send, share or post …
+       * so do not ask them first") is NOT sent yet. It is safe only while approvals/policy.ts really asks
+       * about every one of those, and the fork's policy does not yet (those floors are being built on the
+       * integration branch by the plugins session). Telling a Bot not to ask while the gate does not
+       * either would let a delete or a send run unasked. Restore it with that policy.
+       */
       // How to read the untrusted-content envelope every outside result arrives in.
       UNTRUSTED_GUIDANCE,
       // M3: the fork's two-argument guidance; see the note on the plugins imports.

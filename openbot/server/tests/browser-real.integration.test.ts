@@ -268,7 +268,8 @@ function build(
     native: config.browser !== undefined,
     allowPrivateHosts: false,
     openbotUrls: [config.publicUrl, config.appUrl],
-    gatewayUrl: config.runtime.intelligence.gatewayWsUrl,
+    // As index.ts wires it: without the optional Intelligence there is no gateway to stream to.
+    gatewayUrl: config.intelligence?.gatewayWsUrl ?? "",
   });
   const provider = withPolicyPushOnWake(
     withPersonBrowsers(
@@ -310,7 +311,7 @@ function build(
   args[7] = gateway;
   args[8] = {} as never;
   args[12] = auditStore;
-  args[34] = {
+  args[33] = {
     recorder,
     browser: {
       ...personBrowserPlace({

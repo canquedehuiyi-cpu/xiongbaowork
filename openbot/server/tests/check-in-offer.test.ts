@@ -14,6 +14,7 @@ import { researchInstruction } from "../src/proactive/window";
 function setting(overrides: Partial<ProactiveSetting>): ProactiveSetting {
   return {
     id: "set_1",
+    tenantId: "usr_1",
     ownerUserId: "usr_1",
     agentId: "assistant",
     channelId: "ch_1",

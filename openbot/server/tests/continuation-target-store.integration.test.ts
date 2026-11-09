@@ -593,8 +593,11 @@ test("a continuation before its tenant's threads are loaded keeps the thread's e
     );
   });
   // A process that has loaded nobody's threads: a fresh copy of the runner module (as after a restart).
+  // The query string makes Bun load a second copy; held in a variable so tsc does not try to resolve it as a path.
+  const freshCopy =
+    "../src/threads/postgres-runner.ts?p20-continuation-before-load";
   const cold = (await import(
-    "../src/threads/postgres-runner.ts?p20-continuation-before-load"
+    freshCopy
   )) as typeof import("../src/threads/postgres-runner");
   const runner = new cold.PostgresAgentRunner(dbA);
   expect(ɵGLOBAL_STORE.peek(threadId)).toBeUndefined();

@@ -206,7 +206,6 @@ let environmentBefore: Record<string, string | undefined> = {};
 const approvalStore = createApprovalStore(database);
 const approvalService = createApprovalService(approvalStore);
 const plugins = createPluginStore({
-  brokerProvider: "composio",
   database,
   auditStore: createAuditStore(database),
   credentials: createCredentialStore(database),
@@ -484,20 +483,19 @@ beforeAll(async () => {
     {
       serverId: SERVER,
       name: SEARCH,
-      vendorName: SEARCH,
       description: "Search the team's notes.",
       inputSchema: {
         type: "object",
         properties: { query: { type: "string" } },
         required: ["query"],
       },
+      // M3: upstream also marks it `declaredRead`; the fork's mcp_tools has no such column, and
+      // `effect` is what says it reads.
       effect: "read",
-      declaredRead: true,
     },
     {
       serverId: SERVER,
       name: POST,
-      vendorName: POST,
       description: "Post a note the whole team reads.",
       inputSchema: {
         type: "object",
@@ -510,7 +508,6 @@ beforeAll(async () => {
     {
       serverId: SERVER,
       name: UNGRANTED,
-      vendorName: UNGRANTED,
       description: "Delete every note.",
       inputSchema: { type: "object", properties: {} },
       effect: "write",

@@ -48,7 +48,10 @@ test("the real frontend AG-UI agent supplies canonical call identity, original c
     },
     url: "https://agent.example/ag-ui",
   });
-  const cleanup = observeApprovalAgent(agent);
+  // M3: the app is on @ag-ui/client 1.0.1 (react-core 1.77) and the server on 1.0.2, so the one agent
+  // has two declarations of its class; the app's functions are handed it as theirs.
+  const appAgent = agent as unknown as Parameters<typeof observeApprovalAgent>[0];
+  const cleanup = observeApprovalAgent(appAgent);
   await agent.runAgent({
     runId: "canonical-run",
     tools: [],
@@ -61,7 +64,7 @@ test("the real frontend AG-UI agent supplies canonical call identity, original c
   if (message?.role !== "assistant" || !message.toolCalls?.[0])
     throw new Error("missing tool call");
   const snapshot = parseApprovalContinuation(
-    frontendApprovalSnapshot({ agent, toolCall: message.toolCalls[0] }),
+    frontendApprovalSnapshot({ agent: appAgent, toolCall: message.toolCalls[0] }),
   );
   expect(snapshot).toMatchObject({
     runId: "canonical-run",
@@ -76,6 +79,6 @@ test("the real frontend AG-UI agent supplies canonical call identity, original c
   expect(snapshot.messages).toEqual(agent.messages);
   cleanup();
   expect(() =>
-    frontendApprovalSnapshot({ agent, toolCall: message.toolCalls[0] }),
+    frontendApprovalSnapshot({ agent: appAgent, toolCall: message.toolCalls[0] }),
   ).toThrow("active conversation");
 });

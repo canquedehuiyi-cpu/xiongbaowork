@@ -103,7 +103,7 @@ const runtime = mountCopilotRuntime(
   }),
   identifyUser,
   identifyActor,
-  { learningSettings, trajectoryCapture: recorder.trajectoryCapture },
+  { trajectoryCapture: recorder.trajectoryCapture },
 );
 
 /*
@@ -125,7 +125,7 @@ args[6] = runtime.handler;
 args[9] = agentProfileStore;
 args[12] = auditStore;
 const skillApprovals = createSkillApprovalStore(database);
-args[34] = {
+args[33] = {
   recorder,
   personalLearning: {
     store: createLearningSharingStore(database),
@@ -286,7 +286,8 @@ describe("a recorder bearer works only on the Recorder's own routes", () => {
     expect(answer.ok).toBe(false);
     expect(threadsFor).toEqual([owner]);
     expect(loadedFor.slice(loaded)).not.toContain(owner);
-    const intelligence = config.runtime.intelligence.apiUrl;
+    const intelligence = config.intelligence?.apiUrl;
+    if (!intelligence) throw new Error("The test environment names an Intelligence.");
     expect(dialled.filter((url) => url.startsWith(intelligence))).toEqual([]);
   });
 

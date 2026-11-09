@@ -1761,7 +1761,7 @@ function declaredCellsOf(consumers: Consumer<string>[]): string[] {
   );
 }
 
-describe.each(SCHEME_KINDS)("a %s scheme", (kind) => {
+describe.each(SCHEME_KINDS)("a %s scheme", (kind: (typeof SCHEME_KINDS)[number]) => {
   for (const consumer of SCHEME_CONSUMERS) {
     const cell = consumer.cells[kind];
     if ("claimedBy" in cell) {
@@ -1777,7 +1777,9 @@ describe.each(SCHEME_KINDS)("a %s scheme", (kind) => {
   }
 });
 
-describe.each(BROKERED_PROBE_OUTCOMES)("a probe that %s", (outcome) => {
+describe.each(BROKERED_PROBE_OUTCOMES)(
+  "a probe that %s",
+  (outcome: (typeof BROKERED_PROBE_OUTCOMES)[number]) => {
   for (const consumer of PROBE_CONSUMERS) {
     const cell = consumer.cells[outcome];
     if ("claimedBy" in cell) {
@@ -1789,7 +1791,8 @@ describe.each(BROKERED_PROBE_OUTCOMES)("a probe that %s", (outcome) => {
     }
     test(`${consumer.name} ${cell.decides}`, () => asPlatform(cell.assert));
   }
-});
+  },
+);
 
 /**
  * THE COMPLETENESS HALF, WHICH IS WHAT MAKES THE TABLE A LEVER RATHER THAN A LIST.

@@ -61,7 +61,7 @@ async function asAdministrator<T>(work: () => Promise<T>): Promise<T> {
   app.use(
     "*",
     async (context, next) => {
-      context.set("actor", { id: administrator, role: "admin" });
+      context.set("actor", { id: administrator, email: `${administrator}@example.test`, role: "admin" });
       await runAsTenant(administrator, () => next());
     },
     scope.adminCapability,

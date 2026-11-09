@@ -834,6 +834,12 @@ describe("admin credential API", () => {
             revokedAt: null,
           };
         },
+        rotate: async () => {
+          throw new Error("this test only creates");
+        },
+        revoke: async () => {
+          throw new Error("this test only creates");
+        },
       },
     );
 

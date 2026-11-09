@@ -124,6 +124,7 @@ function serverRecord(row: { id: string; url: string }): ServerRecord {
     addedBy: null,
     dynamicClient: false,
     authScheme: null,
+    logo: null,
     tools: [],
     withdrawn: [],
   };
@@ -813,6 +814,7 @@ function directoryApp(
   const added: Array<{
     slug: string;
     title: string;
+    logo?: string | null;
     by: string;
     connection: BrokerConnection;
   }> = [];
@@ -1595,6 +1597,7 @@ function brokeredApp(
   const rows = [
     {
       id: "composio-linear",
+      catalogueKey: null,
       // The app's name, which is the one of the two a person has ever seen. The refusal below
       // reads it off the row, and the id beside it is what that refusal used to quote instead.
       title: "Linear",
@@ -1617,6 +1620,7 @@ function brokeredApp(
      */
     {
       id: "composio-firecrawl",
+      catalogueKey: null,
       title: "Firecrawl",
       url: "composio://firecrawl",
       authScheme: "API_KEY",
@@ -1636,6 +1640,7 @@ function brokeredApp(
      */
     {
       id: "composio-hackernews",
+      catalogueKey: null,
       title: "Hacker News",
       url: "composio://hackernews",
       authScheme: "NO_AUTH",
@@ -1649,6 +1654,7 @@ function brokeredApp(
      */
     {
       id: "notion",
+      catalogueKey: null,
       title: "Notion",
       url: "https://notion.test/mcp",
       // Null is not an older brokered row; it is a row that is not brokered at all.
@@ -1671,6 +1677,7 @@ function brokeredApp(
      */
     {
       id: "composio-slack",
+      catalogueKey: null,
       title: "Slack",
       url: "composio://slack",
       authScheme: null,
@@ -1687,6 +1694,7 @@ function brokeredApp(
      */
     {
       id: "composio-trello",
+      catalogueKey: null,
       title: "Trello",
       url: "composio://trello",
       authScheme: "OAUTH1",

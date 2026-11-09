@@ -213,7 +213,7 @@ describe("the catalogue entry", () => {
     expect(
       transportFor(
         accessFor(
-          { provenance: "first-party", url: "https://pan.baidu.com" },
+          { provenance: "first-party", url: "https://pan.baidu.com", authScheme: null },
           entry,
         ).transport,
       ).callTool,

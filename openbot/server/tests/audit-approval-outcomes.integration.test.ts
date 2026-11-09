@@ -396,7 +396,6 @@ test("an app write the person denies is on the trail as a refused call, and so i
   await database.insert(mcpTools).values({
     serverId: APP,
     name: "create_note",
-    vendorName: "create_note",
     inputSchema: {},
     effect: "write",
   });

@@ -8,6 +8,7 @@ import {
 } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { eq, inArray, sql } from "drizzle-orm";
+import { DATA_FUNCTIONS } from "../src/components/functions";
 import {
   ComponentNotFoundError,
   type ComponentStore,

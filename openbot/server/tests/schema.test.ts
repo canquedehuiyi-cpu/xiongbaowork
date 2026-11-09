@@ -195,8 +195,9 @@ describe("OpenBot database schema", () => {
      * reintroduction under a different name, and on column types rather than column names, so it
      * catches an embedding smuggled onto a table that sounds like something else.
      */
-    const tables = Object.values(schema).filter((value): value is PgTable =>
-      is(value, PgTable),
+    // The schema module exports constants beside its tables, so the values are read as unknown.
+    const tables = Object.values(schema as Record<string, unknown>).filter(
+      (value): value is PgTable => is(value, PgTable),
     );
     expect(tables.length).toBeGreaterThan(20);
 

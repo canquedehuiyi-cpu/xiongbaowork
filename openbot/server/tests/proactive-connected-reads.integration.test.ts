@@ -27,7 +27,7 @@ import { createDatabase } from "../src/db/client";
 import { auditEvents } from "../src/db/schema";
 import { agents, channels, credentials, users } from "../src/db/schema/core";
 import {
-  brokeredConnections,
+  composioConnections,
   mcpServers,
   mcpTools,
   mcpUserCredentials,
@@ -103,9 +103,6 @@ const MAIL_APP = `mail-${suite}`;
 const EXA = "exa-authenticated";
 /** A server added under the id OpenBot's memory tools are spelled with. */
 const MEMORY = "memory";
-/** An Arcade app the person connected, on a deployment that runs Arcade. */
-const TASKS = `arcade-tasks-${suite}`;
-const TASKS_APP = `Tasks${suite}`;
 
 const modelName = (ref: string) => `mcp__${ref.replace("/", "__")}`;
 const ref = (server: string, tool: string) => `${server}/${tool}`;
@@ -121,9 +118,8 @@ const gateAsked: { toolRef: string; effect: string }[] = [];
 /** Every dial at a Bot's own endpoint. A check-in must make none. */
 const endpointDials: string[] = [];
 
-function pluginStoreFor(brokerProvider: "composio" | "arcade") {
+function pluginStoreFor() {
   return createPluginStore({
-    brokerProvider,
     database,
     auditStore,
     credentials: createCredentialStore(database),
@@ -150,7 +146,7 @@ function pluginStoreFor(brokerProvider: "composio" | "arcade") {
     }),
   });
 }
-const plugins = pluginStoreFor("composio");
+const plugins = pluginStoreFor();
 
 /* ------------------------------------------------------------------------------------------------
  * The scripted model, behind the OpenAI-compatible address the built-in Bot calls.
@@ -314,7 +310,7 @@ const fixtures = (() => {
   async function tool(row: typeof mcpTools.$inferInsert) {
     const inserted = await database
       .insert(mcpTools)
-      .values({ vendorName: row.name, inputSchema: {}, ...row })
+      .values({ inputSchema: {}, ...row })
       .onConflictDoNothing()
       .returning({ name: mcpTools.name });
     if (inserted.length)
@@ -391,7 +387,7 @@ const fixtures = (() => {
         provenance: "custom",
       });
       for (const serverId of [NOTION, NOTES]) {
-        await tool({ serverId, name: notionDigest, declaredRead: true });
+        await tool({ serverId, name: notionDigest, effect: "read" });
         await tool({ serverId, name: notionDraft });
         await tool({
           serverId,
@@ -409,37 +405,15 @@ const fixtures = (() => {
         url: `composio://${MAIL_APP}`,
         provenance: "composio",
         authScheme: "OAUTH2",
-        accountMode: "personal",
       });
       await tool({ serverId: MAIL, name: "MAIL_FETCH_EMAILS", effect: "read" });
       await tool({ serverId: MAIL, name: "MAIL_SEND_EMAIL", effect: "write" });
-      await database.insert(brokeredConnections).values({
-        provider: "composio",
-        app: MAIL_APP,
-        holder: "person",
+      await database.insert(composioConnections).values({
+        toolkit: MAIL_APP,
         userId: owner,
-        vendorUserId: owner,
       });
 
-      // Tasks at Arcade, connected the same way, on a deployment that runs Arcade.
-      await server({
-        id: TASKS,
-        title: "Tasks",
-        vendor: "Arcade",
-        url: `arcade://${TASKS_APP}`,
-        provenance: "arcade",
-        authScheme: "OAUTH2",
-        accountMode: "personal",
-      });
-      await tool({ serverId: TASKS, name: "ListTasks", effect: "read" });
-      await tool({ serverId: TASKS, name: "CreateTask", effect: "write" });
-      await database.insert(brokeredConnections).values({
-        provider: "arcade",
-        app: TASKS_APP,
-        holder: "person",
-        userId: owner,
-        vendorUserId: owner,
-      });
+      // M3: upstream's Tasks at Arcade is gone here: this fork does not take Arcade.
 
       // Web search on the deployment's own key: a reviewed read, and nobody's own account.
       await server({
@@ -462,7 +436,7 @@ const fixtures = (() => {
       await tool({
         serverId: MEMORY,
         name: "recall_personal_memory",
-        declaredRead: true,
+        effect: "read",
       });
 
       await grant(desk, [
@@ -485,7 +459,6 @@ const fixtures = (() => {
         ref(NOTES, notionDraft),
         ref(EXA, "web_search_exa"),
       ]);
-      await grant(tasker, [ref(TASKS, "ListTasks"), ref(TASKS, "CreateTask")]);
     },
 
     async remove() {
@@ -493,8 +466,8 @@ const fixtures = (() => {
         .delete(pluginGrants)
         .where(inArray(pluginGrants.agentId, botIds));
       await database
-        .delete(brokeredConnections)
-        .where(eq(brokeredConnections.userId, owner));
+        .delete(composioConnections)
+        .where(eq(composioConnections.userId, owner));
       await database
         .delete(mcpUserCredentials)
         .where(eq(mcpUserCredentials.userId, owner));
@@ -571,9 +544,29 @@ const runner: RunnerLike = {
 };
 
 function deployment(pluginStore: ReturnType<typeof pluginStoreFor>) {
+  // M3: as index.ts wires it until the plugins session brings upstream's `ownCredential`,
+  // `labelledRead` and `ownConnections`: a server is the person's own where they hold a connection to
+  // it, and a tool reads where it is recorded as a read and not destructive.
   const scope = createCheckInScope({
-    catalogue: pluginStore,
-    ownConnections: (userId) => pluginStore.ownConnections(userId),
+    catalogue: {
+      listServers: async () =>
+        (await pluginStore.listServers()).map((server) => ({
+          id: server.id,
+          title: server.title,
+          ownCredential: true,
+          tools: server.tools.map((tool) => ({
+            ref: tool.ref,
+            labelledRead: tool.effect === "read" && !tool.destructive,
+          })),
+        })),
+    },
+    ownConnections: async (userId) =>
+      new Set(
+        [
+          ...(await pluginStore.connectionsFor(userId)),
+          ...(await pluginStore.brokeredConnectionsFor(userId)),
+        ].map((connection) => connection.serverId),
+      ),
   });
   const load =
     (actorId: string, initiator?: AuditInitiator) => (botId: string) =>
@@ -871,16 +864,8 @@ describe("a check-in reads what the person connected, through the tools that say
     expect(endpointDials).toHaveLength(1);
   });
 
-  test("an Arcade app the person connected is read through its read-only label, and its other tools are not offered", async () => {
-    const arcade = deployment(pluginStoreFor("arcade"));
-    script = { read: modelName(ref(TASKS, "ListTasks")) };
-    await checkIn(tasker, arcade);
-    expect(connectorsOffered(asked[0])).toEqual([
-      modelName(ref(TASKS, "ListTasks")),
-    ]);
-    expect(vendorCalls.map((call) => call.tool)).toEqual(["ListTasks"]);
-    expect((await itemsOf(tasker))[0]).toMatchObject({ sourceApp: "Tasks" });
-  });
+  // M3: "an Arcade app the person connected is read through its read-only label, and its other
+  // tools are not offered" is upstream's Arcade deployment, which this fork does not take.
 });
 
 describe("the memory tools' own id", () => {

@@ -366,7 +366,7 @@ const fixtures = (() => {
   async function tool(row: typeof mcpTools.$inferInsert) {
     const inserted = await database
       .insert(mcpTools)
-      .values({ vendorName: row.name, inputSchema: {}, ...row })
+      .values({ inputSchema: {}, ...row })
       .onConflictDoNothing()
       .returning({ name: mcpTools.name });
     if (inserted.length)
@@ -418,16 +418,17 @@ const fixtures = (() => {
         .update(mcpServers)
         .set({ credentialId: client })
         .where(eq(mcpServers.id, NOTION));
-      // As a refresh records them from the server's own labels.
-      await tool({ serverId: NOTION, name: GET_REQUEST, declaredRead: true });
-      await tool({ serverId: NOTION, name: FETCH, declaredRead: true });
+      // As a refresh records them from the server's own labels (M3: the fork records a read as its
+      // effect; upstream's `declaredRead` column is the plugins session's).
+      await tool({ serverId: NOTION, name: GET_REQUEST, effect: "read" });
+      await tool({ serverId: NOTION, name: FETCH, effect: "read" });
       await tool({
         serverId: NOTION,
         name: COMMENT,
         effect: "write",
         destructive: true,
       });
-      await tool({ serverId: EXA, name: SEARCH, declaredRead: true });
+      await tool({ serverId: EXA, name: SEARCH, effect: "read" });
     },
     /** This person's own Notion account, and the Bot's grants. */
     async connect(owner: string, botId: string) {

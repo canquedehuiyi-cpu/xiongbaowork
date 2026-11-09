@@ -214,7 +214,7 @@ test("the persona routes refuse an empty persona and answer with the saved one",
     context,
     next,
   ) => {
-    context.set("actor", { id: tenantA, role: "user" });
+    context.set("actor", { id: tenantA, email: `${tenantA}@example.test`, role: "user" });
     await next();
   };
   const routes = createPersonaRoutes(templates, requireUser);

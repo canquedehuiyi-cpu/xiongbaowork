@@ -168,6 +168,16 @@ const store = createPluginStore({
       if (!row?.revokedAt) throw new Error("credential was not revoked");
       return row.revokedAt;
     },
+    // The rest of the vault is not this suite's: loud, like `create`.
+    rotate: async () => {
+      throw new Error("this suite writes credentials directly");
+    },
+    isLive: async () => {
+      throw new Error("this suite writes credentials directly");
+    },
+    findLiveByKey: async () => {
+      throw new Error("this suite writes credentials directly");
+    },
   },
   encryptionKey: ENCRYPTION_KEY,
   policy: () => policy,

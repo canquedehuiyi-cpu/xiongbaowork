@@ -334,6 +334,7 @@ describe("an unattended firing's card", () => {
     agentIds: ["bot_helper"],
     threadId: "thread_owner_channel_1",
     active: true,
+    lastMessageAt: null,
   };
 
   async function fireRoutine(runTurn: TurnRunner) {
@@ -428,6 +429,9 @@ describe("an unattended firing's card", () => {
           return context;
         },
         async settleRun() {},
+        async requeueRun() {
+          return false;
+        },
       },
       queue: {
         async claim() {
@@ -446,6 +450,9 @@ describe("an unattended firing's card", () => {
         },
         async finish() {
           return true;
+        },
+        async release() {
+          return false;
         },
       },
       board: recordingBoard(finished),

@@ -478,8 +478,7 @@ describe("follow-up runner", () => {
           {
             kind: "bot.wakeup",
             // The stamp on the row is the trusted tenant; the payload's owner only has to agree.
-            tenantId:
-              "tenantId" in claimed ? claimed.tenantId : payload.ownerUserId,
+            tenantId: claimed.tenantId ?? payload.ownerUserId,
             key: "w1",
             payload,
             attempts: 1,

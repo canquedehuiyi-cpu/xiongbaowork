@@ -106,8 +106,10 @@ mock.module("@copilotkit/runtime/v2", () => ({
 // evaluated once, at load. If an earlier file in this shard process (copilot.test.ts, say) already
 // loaded postgres-runner against the real runtime, the cached class keeps the real base class and the
 // mock above never reaches it; the query makes Bun evaluate the module again against the mock.
+// Through a variable: the query is Bun's, and TypeScript resolves only the literal path it names.
+const freshRunner = "../src/threads/postgres-runner.ts?local-threads";
 const { PostgresAgentRunner } = (await import(
-  "../src/threads/postgres-runner.ts?local-threads"
+  freshRunner
 )) as typeof import("../src/threads/postgres-runner");
 
 // The explicit test URL survives earlier pools deleting DATABASE_URL. Never read the application's

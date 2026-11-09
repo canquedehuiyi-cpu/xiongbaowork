@@ -371,49 +371,49 @@ describe("how many a person may have switched on", () => {
           enabling.$client.end(),
         ]);
       }
-    }, 15000);
+    });
+  }, 15000);
 
-    test("refuses the one past the cap, and accepts it once another is off", async () => {
-      await asNewPerson(async (ownerId) => {
-        const { owner, agentId, channel } = await setUp(ownerId);
-        const created: string[] = [];
-        for (let index = 0; index < MAX_ENABLED_ROUTINES; index += 1) {
-          const routine = await store.create({
-            ownerUserId: owner.id,
-            agentId,
-            channelId: channel.id,
-            instruction: `Routine ${index}`,
-            cron: DAILY,
-          });
-          created.push(routine.id);
-        }
-
-        await expect(
-          store.create({
-            ownerUserId: owner.id,
-            agentId,
-            channelId: channel.id,
-            instruction: "One too many.",
-            cron: DAILY,
-          }),
-        ).rejects.toBeInstanceOf(RoutineRefusedError);
-
-        await store.setEnabled(owner.id, created[0] as string, false);
-
-        const room = await store.create({
+  test("refuses the one past the cap, and accepts it once another is off", async () => {
+    await asNewPerson(async (ownerId) => {
+      const { owner, agentId, channel } = await setUp(ownerId);
+      const created: string[] = [];
+      for (let index = 0; index < MAX_ENABLED_ROUTINES; index += 1) {
+        const routine = await store.create({
           ownerUserId: owner.id,
           agentId,
           channelId: channel.id,
-          instruction: "Now there is room.",
+          instruction: `Routine ${index}`,
           cron: DAILY,
         });
-        expect(room.enabled).toBe(true);
+        created.push(routine.id);
+      }
 
-        // And switching the disabled one back on is refused for the same reason.
-        await expect(
-          store.setEnabled(owner.id, created[0] as string, true),
-        ).rejects.toBeInstanceOf(RoutineRefusedError);
+      await expect(
+        store.create({
+          ownerUserId: owner.id,
+          agentId,
+          channelId: channel.id,
+          instruction: "One too many.",
+          cron: DAILY,
+        }),
+      ).rejects.toBeInstanceOf(RoutineRefusedError);
+
+      await store.setEnabled(owner.id, created[0] as string, false);
+
+      const room = await store.create({
+        ownerUserId: owner.id,
+        agentId,
+        channelId: channel.id,
+        instruction: "Now there is room.",
+        cron: DAILY,
       });
+      expect(room.enabled).toBe(true);
+
+      // And switching the disabled one back on is refused for the same reason.
+      await expect(
+        store.setEnabled(owner.id, created[0] as string, true),
+      ).rejects.toBeInstanceOf(RoutineRefusedError);
     });
   });
 
@@ -1021,26 +1021,26 @@ describe("changing a routine", () => {
           changingZone.$client.end(),
         ]);
       }
-    }, 15000);
+    });
+  }, 15000);
 
-    test("recomputes the next run when the cron changes", async () => {
-      await asNewPerson(async (ownerId) => {
-        const { owner, agentId, channel } = await setUp(ownerId);
-        const routine = await store.create({
-          ownerUserId: owner.id,
-          agentId,
-          channelId: channel.id,
-          instruction: "Summarise the day.",
-          cron: DAILY,
-        });
-
-        const updated = await store.update(owner.id, routine.id, {
-          cron: "30 21 * * *",
-        });
-
-        expect(updated.cron).toBe("30 21 * * *");
-        expect(updated.nextRunAt.getTime()).not.toBe(routine.nextRunAt.getTime());
+  test("recomputes the next run when the cron changes", async () => {
+    await asNewPerson(async (ownerId) => {
+      const { owner, agentId, channel } = await setUp(ownerId);
+      const routine = await store.create({
+        ownerUserId: owner.id,
+        agentId,
+        channelId: channel.id,
+        instruction: "Summarise the day.",
+        cron: DAILY,
       });
+
+      const updated = await store.update(owner.id, routine.id, {
+        cron: "30 21 * * *",
+      });
+
+      expect(updated.cron).toBe("30 21 * * *");
+      expect(updated.nextRunAt.getTime()).not.toBe(routine.nextRunAt.getTime());
     });
   });
 
@@ -1700,7 +1700,7 @@ describe("the runner's read of one firing", () => {
       const expected = {
         routineId: routine.id,
         // A scheduled firing, not one a person started with Run now.
-        source: "schedule",
+        source: "schedule" as const,
         ownerUserId: owner.id,
         tenantId: ownerId,
         agentId,
@@ -1752,7 +1752,7 @@ describe("the runner's read of one firing", () => {
 });
 
 /** The tenant stamped on a routine row, read back from the row itself. */
-async function stampOf(routineId: string): Promise<string | undefined> {
+async function stampOf(routineId: string): Promise<string> {
   const [row] = await asPlatform(() =>
     database
       .select({ tenantId: routines.tenantId })
@@ -1760,7 +1760,8 @@ async function stampOf(routineId: string): Promise<string | undefined> {
       .where(eq(routines.id, routineId))
       .limit(1),
   );
-  return row?.tenantId;
+  if (!row) throw new Error(`routine ${routineId} is not there`);
+  return row.tenantId;
 }
 
 /**

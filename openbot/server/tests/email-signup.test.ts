@@ -123,7 +123,7 @@ describe("email and password registration", () => {
     userId = body.user.id as string;
     const [row] = await runAsTenant("platform", () =>
       database
-        .select({ id: users.id, name: users.name })
+        .select({ id: users.id, name: users.name, email: users.email })
         .from(users)
         .where(eq(users.id, userId)),
     );
@@ -214,6 +214,8 @@ describe("email and password registration", () => {
         context.internalAdapter.linkAccount({
           userId,
           providerId: "google",
+          // Better Auth now records which issuer a provider account came from.
+          issuer: "https://accounts.google.com",
           accountId: `google-${suite}`,
         }),
       ),

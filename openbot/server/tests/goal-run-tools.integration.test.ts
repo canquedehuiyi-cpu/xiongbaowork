@@ -25,11 +25,7 @@ import {
   pluginGrants,
   users,
 } from "../src/db/schema";
-import {
-  ALWAYS_ON_APP,
-  ensureAlwaysOnApp,
-  personalDefaultsDeps,
-} from "../src/plugins/personal-defaults";
+import { listTools as listRoutineTools } from "../src/plugins/builtin-routines";
 import { createPluginStore } from "../src/plugins/store";
 import { grantedTools } from "../src/plugins/tools";
 import { withoutGoalCopiesInGoalRun } from "../src/responsibilities/chat-tools";
@@ -70,6 +66,30 @@ const pluginStore = createPluginStore({
   encryptionKey: "x".repeat(44),
   policy: () => ({ mode: "enforce", deny: [], allow: ["true"] }),
 });
+
+/**
+ * Routines, added and given to `bots` as boot gives it to every Bot.
+ *
+ * M3: upstream does this with `ensureAlwaysOnApp` from `plugins/personal-defaults`, which this fork
+ * does not take. The same three steps by hand: add the catalogue app once, list its tools, and
+ * grant every one of them to each Bot.
+ */
+const ALWAYS_ON_APP = "routines";
+async function ensureRoutines(bots: readonly string[]) {
+  if (!(await pluginStore.serverAddress(ALWAYS_ON_APP)))
+    await pluginStore.addServer({ key: ALWAYS_ON_APP, by: "boot" });
+  await pluginStore.refreshTools(ALWAYS_ON_APP);
+  const tools = await listRoutineTools();
+  for (const bot of bots)
+    for (const tool of tools)
+      await pluginStore.grant(
+        "mcp",
+        `${ALWAYS_ON_APP}/${tool.name}`,
+        bot,
+        "boot",
+      );
+}
+
 
 const VARIABLES = [
   "OPENAI_BASE_URL",
@@ -180,10 +200,7 @@ beforeEach(async () => {
   routinesWereAdded =
     routinesWereAdded ||
     Boolean(await pluginStore.serverAddress(ALWAYS_ON_APP));
-  await ensureAlwaysOnApp(pluginStore, {
-    ...personalDefaultsDeps(database),
-    bots: async () => [BOT],
-  });
+  await ensureRoutines([BOT]);
 });
 
 afterEach(async () => {

@@ -14,6 +14,8 @@ function runContext(): ResponsibilityRunContext {
     runId: "run-1",
     responsibilityId: "goal-1",
     ownerUserId: "person-1",
+    // Tenants are 1:1 with people, so the goal's run is the owner's.
+    tenantId: "person-1",
     agentId: "bot-1",
     channelId: "channel-1",
     threadId: "thread-1",
@@ -38,6 +40,7 @@ function fixture(
   const item: WorkItem = {
     kind: "responsibility.run",
     key: "run-1",
+    tenantId: "person-1",
     payload: { runId: "run-1" },
     attempts: 1,
   };
@@ -189,6 +192,7 @@ function cardFixture(
   const item: WorkItem = {
     kind: "responsibility.run",
     key: "run-1",
+    tenantId: "person-1",
     payload: { runId: "run-1" },
     attempts: 1,
   };
@@ -212,6 +216,9 @@ function cardFixture(
       async settleRun(_id, outcome) {
         outcomes.push(outcome);
       },
+      async requeueRun() {
+        return false;
+      },
     },
     queue: {
       async claim() {
@@ -223,6 +230,9 @@ function cardFixture(
       async finish(input) {
         finished.push(input.key);
         return true;
+      },
+      async release() {
+        return false;
       },
     },
     runTurn,

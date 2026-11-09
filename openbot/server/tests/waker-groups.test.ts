@@ -46,7 +46,8 @@ const requireUser: MiddlewareHandler<{ Variables: AppVariables }> = async (
     id: `${suite}-tester`,
     email: `${suite}-tester@example.test`,
     name: "Tester",
-    role: "owner",
+    // M3: a role is "admin" or "user"; the crew's owner is a person, so "user".
+    role: "user",
   });
   await next();
 };
@@ -97,7 +98,7 @@ await runAsTenant(tenantA, async () => {
       ownedByA.map((id) => ({
         id,
         name: `${id} 号员工`,
-        type: "built_in",
+        type: "built_in" as const,
         configuration: {},
       })),
     )

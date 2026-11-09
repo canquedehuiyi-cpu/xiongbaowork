@@ -68,8 +68,14 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-function elementsOf(value: unknown): { ref: string; value?: string }[] {
-  return asRecord(value).elements as { ref: string; value?: string }[];
+function elementsOf(
+  value: unknown,
+): { ref: string; role?: string; value?: string }[] {
+  return asRecord(value).elements as {
+    ref: string;
+    role?: string;
+    value?: string;
+  }[];
 }
 
 function refOf(elements: { ref: string }[], index: number): string {
@@ -425,7 +431,7 @@ describe("what one browser action is answered with", () => {
     const fake = fakeBrowser();
     const browser = browserOf(profileRoot(), fake);
     const out = asRecord(await drive(browser, "screenshot"));
-    expect(Buffer.from(out.base64 as string, "base64")).toEqual(
+    expect(new Uint8Array(Buffer.from(out.base64 as string, "base64"))).toEqual(
       new Uint8Array([80, 78, 71]),
     );
     expect(out.width).toBe(1280);

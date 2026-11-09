@@ -91,7 +91,6 @@ const device = `check-in-device-${suite}`;
 
 const auditStore = createAuditStore(database);
 const plugins = createPluginStore({
-  brokerProvider: "composio",
   database,
   auditStore,
   credentials: createCredentialStore(database),
@@ -163,14 +162,12 @@ beforeAll(async () => {
     {
       serverId: mail,
       name: "list_messages",
-      vendorName: "list_messages",
       effect: "read",
       inputSchema: {},
     },
     {
       serverId: diary,
       name: "list_events",
-      vendorName: "list_events",
       effect: "read",
       inputSchema: {},
     },

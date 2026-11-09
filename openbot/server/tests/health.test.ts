@@ -61,11 +61,13 @@ describe("runtime capabilities", () => {
       remove: async () => false,
     };
     // `identityProviders` is createApp's 19th argument, after the config and seventeen optional ones.
-    const withProviders = createApp(
-      loadConfig(testEnvironment()),
-      ...(Array.from({ length: 17 }, () => undefined) as []),
-      identityProviders,
-    );
+    // Placed by index, so it is type-checked against the parameter it lands on.
+    const args = new Array(createApp.length) as unknown as Parameters<
+      typeof createApp
+    >;
+    args[0] = loadConfig(testEnvironment());
+    args[18] = identityProviders;
+    const withProviders = createApp(...args);
     const response = await withProviders.request(
       "http://openbot.local/api/capabilities",
     );
@@ -83,11 +85,12 @@ describe("runtime capabilities", () => {
         .wakerflowAutomations,
     ).toBe(false);
     // `coworker` is createApp's 34th argument, after the config and thirty-two optional ones.
-    const withFlows = createApp(
-      loadConfig(testEnvironment()),
-      ...(Array.from({ length: 32 }, () => undefined) as []),
-      { wakerflowAutomations: true },
-    );
+    const args = new Array(createApp.length) as unknown as Parameters<
+      typeof createApp
+    >;
+    args[0] = loadConfig(testEnvironment());
+    args[33] = { wakerflowAutomations: true };
+    const withFlows = createApp(...args);
     const offered = await withFlows.request(
       "http://openbot.local/api/capabilities",
     );

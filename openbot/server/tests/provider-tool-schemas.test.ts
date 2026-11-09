@@ -1,11 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { z } from "zod";
 import {
-  type ArcadeActions,
-  listTools as listArcadeTools,
-  useArcadeClient,
-} from "../src/plugins/arcade";
-import {
   listTools as listComposioTools,
   useComposioClient,
 } from "../src/plugins/composio";
@@ -14,7 +9,6 @@ import {
   type ComposioVendor,
 } from "../src/plugins/composio-adapter";
 import type { ListedTool } from "../src/plugins/mcp";
-import { storableSchema } from "../src/plugins/plugin-store/model";
 import type { PluginStore } from "../src/plugins/store";
 import { grantedTools } from "../src/plugins/tools";
 import fixture from "./fixtures/provider-schema-tools.json";
@@ -42,7 +36,6 @@ import { providerSchemaFaults } from "./support/provider-schema-rules";
 
 afterEach(() => {
   useComposioClient(null);
-  useArcadeClient(null);
 });
 
 type WireRow = { slug: string; [key: string]: unknown };
@@ -80,20 +73,6 @@ function composioWith(toolkit: string, rows: WireRow[]): ComposioVendor {
   } as unknown as ComposioVendor;
 }
 
-/** Arcade for one toolkit's captured rows, answering the listing and nothing else. */
-function arcadeWith(toolkit: string, rows: unknown[]): ArcadeActions {
-  return {
-    listTools: async (query) => {
-      const items = query.toolkit === toolkit ? structuredClone(rows) : [];
-      return {
-        items: items.slice(query.offset, query.offset + query.limit),
-        total_count: items.length,
-      };
-    },
-    execute: refuse("execute"),
-  };
-}
-
 /** What a harness is sent for each of these tools, by the name the vendor gave it. */
 async function sentToHarness(
   server: string,
@@ -105,7 +84,9 @@ async function sentToHarness(
         toolName: `mcp__${server}__${tool.name}`,
         ref: `${server}/${tool.name}`,
         description: tool.description,
-        inputSchema: storableSchema(tool.inputSchema),
+        // M3: upstream writes it through the store's `storableSchema`, which the fork's store keeps to
+        // itself; there it only drops U+0000, which none of these captured schemas holds.
+        inputSchema: structuredClone(tool.inputSchema),
       })),
     }),
     callTool: refuse("callTool"),
@@ -120,7 +101,6 @@ async function sentToHarness(
 }
 
 const composio = fixture.composio as Record<string, WireRow[]>;
-const arcade = fixture.arcade as Record<string, unknown[]>;
 
 async function composioSchemas(toolkit: string) {
   const rows = composio[toolkit] ?? [];
@@ -152,20 +132,8 @@ describe("what a harness is sent for an app's tools", () => {
     },
   );
 
-  test.each(Object.keys(arcade))(
-    "Arcade's %s tools fit what the model providers accept",
-    async (toolkit) => {
-      useArcadeClient(arcadeWith(toolkit, arcade[toolkit] ?? []));
-      const listed = await listArcadeTools({ url: `arcade://${toolkit}` });
-      expect(listed).toHaveLength(arcade[toolkit]?.length ?? -1);
-      const schemas = await sentToHarness(`arcade-${toolkit}`, listed);
-      for (const [name, schema] of schemas)
-        expect({ name, faults: providerSchemaFaults(schema) }).toEqual({
-          name,
-          faults: [],
-        });
-    },
-  );
+  // M3: upstream's "Arcade's %s tools fit what the model providers accept" is not kept: Arcade is
+  // not adopted here.
 
   test("an email address goes out with no lookaround, and says it is an email address", async () => {
     const schemas = await composioSchemas("hubspot");

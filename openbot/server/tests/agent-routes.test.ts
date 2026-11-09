@@ -48,6 +48,9 @@ function profile(overrides: Partial<AgentProfile> = {}): AgentProfile {
     hasAuth: false,
     hasCallbackToken: false,
     isolated: false,
+    modelRef: null,
+    platformModelRef: null,
+    persona: null,
     ...overrides,
   };
 }

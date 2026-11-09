@@ -5971,7 +5971,7 @@ test("a catalogue entry declaring the broker's transport is refused, not dialled
 
   expect(() =>
     accessFor(
-      { provenance: "first-party", url: "https://mcp.example.com/mcp" },
+      { provenance: "first-party", url: "https://mcp.example.com/mcp", authScheme: null },
       brokered,
     ),
   ).toThrow(CatalogueTransportUnroutableError);
@@ -5980,7 +5980,7 @@ test("a catalogue entry declaring the broker's transport is refused, not dialled
   // per-person vendor does, so what is refused is the value and not the fixture.
   expect(
     accessFor(
-      { provenance: "first-party", url: "https://mcp.example.com/mcp" },
+      { provenance: "first-party", url: "https://mcp.example.com/mcp", authScheme: null },
       { ...brokered, transport: undefined },
     ),
   ).toEqual({
@@ -6871,6 +6871,9 @@ test("enabling an app writes a brokered row, and asks for its auth config first"
       authorize: unasked("begin somebody's connection"),
       isConnected: unasked("check somebody's connection"),
       revoke: unasked("withdraw somebody's grant"),
+      connectionFields: unasked("draw a connect form"),
+      connectWithFields: unasked("connect with typed fields"),
+      revokeAccount: unasked("undo one account"),
     };
 
     const { store, database, auditStore } = await freshStore({ broker });

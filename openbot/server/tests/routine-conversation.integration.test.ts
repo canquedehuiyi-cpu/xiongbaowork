@@ -30,20 +30,17 @@ import {
   channels,
   intelligenceChannelMappings,
   mcpServers,
+  mcpTools,
   pluginGrants,
   routines,
   users,
 } from "../src/db/schema";
 import { useRoutineTools } from "../src/plugins/builtin-routines";
-import {
-  ALWAYS_ON_APP,
-  ensureAlwaysOnApp,
-  personalDefaultsDeps,
-} from "../src/plugins/personal-defaults";
 import { createPluginStore } from "../src/plugins/store";
 import { grantedTools } from "../src/plugins/tools";
 import { createRoutineStore } from "../src/routines/store";
 import { loadTenantPackage } from "../src/tenant-package";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
 import {
@@ -133,7 +130,6 @@ const ASK_CHOICE = {
 
 const auditStore = createAuditStore(database);
 const pluginStore = createPluginStore({
-  brokerProvider: "composio",
   database,
   auditStore,
   credentials: {} as never,
@@ -141,6 +137,32 @@ const pluginStore = createPluginStore({
   // Allowed, as a person who has not turned on Ask before acting has it.
   policy: () => ({ mode: "enforce", deny: [], allow: ["true"] }),
 });
+
+/**
+ * Routines, added and given to this Bot.
+ *
+ * M3: upstream's boot adds it and gives every Bot all of its tools (`ensureAlwaysOnApp` in
+ * plugins/personal-defaults), which the fork does not adopt. The test adds the catalogue app and
+ * grants each tool it lists itself, which is what that did for one Bot.
+ */
+const ROUTINES_APP = "routines";
+async function giveRoutines(bot: string) {
+  await runAsTenant("platform", async () => {
+    if (!(await pluginStore.serverAddress(ROUTINES_APP)))
+      await pluginStore.addServer({ key: ROUTINES_APP, by: "openbot:test" });
+    const listed = await database
+      .select({ name: mcpTools.name })
+      .from(mcpTools)
+      .where(eq(mcpTools.serverId, ROUTINES_APP));
+    for (const { name } of listed)
+      await pluginStore.grant(
+        "mcp",
+        `${ROUTINES_APP}/${name}`,
+        bot,
+        "openbot:test",
+      );
+  });
+}
 const routineStore = createRoutineStore(database);
 
 const VARIABLES = [
@@ -312,14 +334,11 @@ beforeEach(async () => {
       threadId: conversation.threadId,
     });
   }
-  // Routines, added and given to this Bot exactly as boot does it for every Bot.
+  // Routines, added and given to this Bot (see giveRoutines).
   routinesWereAdded =
     routinesWereAdded ||
-    Boolean(await pluginStore.serverAddress(ALWAYS_ON_APP));
-  await ensureAlwaysOnApp(pluginStore, {
-    ...personalDefaultsDeps(database),
-    bots: async () => [BOT],
-  });
+    Boolean(await pluginStore.serverAddress(ROUTINES_APP));
+  await giveRoutines(BOT);
   useRoutineTools(routineStore);
 });
 
@@ -337,7 +356,7 @@ afterEach(async () => {
 afterAll(async () => {
   await clean();
   if (!routinesWereAdded)
-    await database.delete(mcpServers).where(eq(mcpServers.id, ALWAYS_ON_APP));
+    await database.delete(mcpServers).where(eq(mcpServers.id, ROUTINES_APP));
   await database.$client.end({ timeout: 5 });
 });
 

@@ -11,21 +11,18 @@ import {
   channels,
   intelligenceChannelMappings,
   mcpServers,
+  mcpTools,
   pluginGrants,
   responsibilities,
   users,
 } from "../src/db/schema";
 import { useRoutineTools } from "../src/plugins/builtin-routines";
-import {
-  ALWAYS_ON_APP,
-  ensureAlwaysOnApp,
-  personalDefaultsDeps,
-} from "../src/plugins/personal-defaults";
 import { createPluginStore } from "../src/plugins/store";
 import { grantedTools } from "../src/plugins/tools";
 import { useGoalTools } from "../src/responsibilities/chat-tools";
 import { createResponsibilityStore } from "../src/responsibilities/store";
 import { createRoutineStore } from "../src/routines/store";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -60,7 +57,6 @@ const CONVERSATIONS = [
 const [ASKED_IN, OTHER] = CONVERSATIONS;
 
 const pluginStore = createPluginStore({
-  brokerProvider: "composio",
   database,
   auditStore: createAuditStore(database),
   credentials: {} as never,
@@ -68,6 +64,32 @@ const pluginStore = createPluginStore({
   // Allowed, as a person who has not turned on Ask before acting has it.
   policy: () => ({ mode: "enforce", deny: [], allow: ["true"] }),
 });
+
+/**
+ * Routines, added and given to this Bot.
+ *
+ * M3: upstream's boot adds it and gives every Bot all of its tools (`ensureAlwaysOnApp` in
+ * plugins/personal-defaults), which the fork does not adopt. The test adds the catalogue app and
+ * grants each tool it lists itself, which is what that did for one Bot.
+ */
+const ROUTINES_APP = "routines";
+async function giveRoutines(bot: string) {
+  await runAsTenant("platform", async () => {
+    if (!(await pluginStore.serverAddress(ROUTINES_APP)))
+      await pluginStore.addServer({ key: ROUTINES_APP, by: "openbot:test" });
+    const listed = await database
+      .select({ name: mcpTools.name })
+      .from(mcpTools)
+      .where(eq(mcpTools.serverId, ROUTINES_APP));
+    for (const { name } of listed)
+      await pluginStore.grant(
+        "mcp",
+        `${ROUTINES_APP}/${name}`,
+        bot,
+        "openbot:test",
+      );
+  });
+}
 const goalStore = createResponsibilityStore(database, {
   resolveTarget: async (ownerUserId, agentId, channelId) => {
     const [row] = await database
@@ -94,7 +116,7 @@ let routinesWereAdded = false;
 
 const call = (tool: string, args: Record<string, unknown>, threadId?: string) =>
   pluginStore.callTool({
-    ref: `${ALWAYS_ON_APP}/${tool}`,
+    ref: `${ROUTINES_APP}/${tool}`,
     args,
     botId: BOT,
     actorId: OWNER,
@@ -161,14 +183,11 @@ beforeEach(async () => {
       threadId: conversation.threadId,
     });
   }
-  // Routines, added and given to this Bot exactly as boot does it for every Bot.
+  // Routines, added and given to this Bot (see giveRoutines).
   routinesWereAdded =
     routinesWereAdded ||
-    Boolean(await pluginStore.serverAddress(ALWAYS_ON_APP));
-  await ensureAlwaysOnApp(pluginStore, {
-    ...personalDefaultsDeps(database),
-    bots: async () => [BOT],
-  });
+    Boolean(await pluginStore.serverAddress(ROUTINES_APP));
+  await giveRoutines(BOT);
   const routineStore = createRoutineStore(database);
   useRoutineTools(routineStore);
   useGoalTools({
@@ -188,7 +207,7 @@ afterAll(async () => {
   useGoalTools(null);
   await clean();
   if (!routinesWereAdded)
-    await database.delete(mcpServers).where(eq(mcpServers.id, ALWAYS_ON_APP));
+    await database.delete(mcpServers).where(eq(mcpServers.id, ROUTINES_APP));
   await database.$client.end({ timeout: 5 });
 });
 
@@ -206,10 +225,10 @@ describe("a goal asked for in a conversation", () => {
       "resume_goal",
       "complete_goal",
     ])
-      expect(held).toContain(`mcp__${ALWAYS_ON_APP}__${name}`);
-    expect(held).toContain(`mcp__${ALWAYS_ON_APP}__create_routine`);
+      expect(held).toContain(`mcp__${ROUTINES_APP}__${name}`);
+    expect(held).toContain(`mcp__${ROUTINES_APP}__create_routine`);
     // Progress is recorded by the run working on a goal, never from a conversation.
-    expect(held).not.toContain(`mcp__${ALWAYS_ON_APP}__report_goal_progress`);
+    expect(held).not.toContain(`mcp__${ROUTINES_APP}__report_goal_progress`);
   });
 
   test("is made in the conversation it was asked in, listed, run, paused and completed", async () => {

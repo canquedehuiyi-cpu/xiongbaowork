@@ -1416,6 +1416,7 @@ describe("a remote Bot past what one request may carry", () => {
     );
     expect(recorded.at(-1)?.offered.length).toBe(sent.length);
     expect(recorded.at(-1)?.granted).toBe(big.length);
-    expect(recorded.at(-1)?.limit).toBeLessThanOrEqual(128 - surface.length);
+    // M3: upstream's Selection also records the `limit` it cut to; the fork's plugins/selection.ts
+    // has no such field, so the row's count above is what is asserted.
   });
 });

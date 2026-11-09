@@ -4875,7 +4875,8 @@ test("enabling an app over a row somebody typed leaves a row that says it is bro
 
     // Asked through the same function every gate asks, rather than by comparing the columns again:
     // what the row must be is not "these two strings" but the answer those two strings produce.
-    expect(accessFor(row, null)).toMatchObject({
+    // The scheme only says whose account a brokered call lands in, which is not what is asked here.
+    expect(accessFor({ ...row, authScheme: null }, null)).toMatchObject({
       credential: "brokered",
       toolkit: collidedToolkit,
     });

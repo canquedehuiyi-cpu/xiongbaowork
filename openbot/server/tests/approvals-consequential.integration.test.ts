@@ -25,9 +25,7 @@ import { approvalRequests } from "../src/db/schema/approvals";
 import { users } from "../src/db/schema/core";
 import { workItems } from "../src/db/schema/work";
 import { type Edition, setEdition } from "../src/edition";
-import { classify } from "../src/plugins/arcade";
 import { effectOf } from "../src/plugins/composio";
-import { storableTools } from "../src/plugins/plugin-store/model";
 import { createPluginStore } from "../src/plugins/store";
 import { grantedTools } from "../src/plugins/tools";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
@@ -793,7 +791,6 @@ describe("a tool its app marks destructive, called through the app", () => {
   const BOT = `${prefix}-app-bot`;
   const vendorCalls: string[] = [];
   const plugins = createPluginStore({
-    brokerProvider: "composio",
     database,
     auditStore: createAuditStore(database),
     credentials: createCredentialStore(database),
@@ -821,7 +818,6 @@ describe("a tool its app marks destructive, called through the app", () => {
       {
         serverId: APP,
         name: "reset_workspace",
-        vendorName: "reset_workspace",
         inputSchema: {},
         effect: "write",
         destructive: true,
@@ -829,7 +825,6 @@ describe("a tool its app marks destructive, called through the app", () => {
       {
         serverId: APP,
         name: "rename_workspace",
-        vendorName: "rename_workspace",
         inputSchema: {},
       },
     ]);
@@ -840,10 +835,14 @@ describe("a tool its app marks destructive, called through the app", () => {
       configuration: {},
     });
     /*
-     * As each broker's own listing records an action: Arcade's from its behaviour flags, Composio's
-     * from its labels, through the same mapping a refresh writes with.
+     * As the broker's own listing records an action: Composio's from its labels, through the same
+     * mapping a refresh writes with.
+     *
+     * M3: upstream also lists Arcade's, through its behaviour flags; Arcade is not adopted here. And
+     * the fork's store keeps its row builder to itself, so the rows are written as it writes them.
      */
-    const listed = (name: string, said: ReturnType<typeof classify>) => ({
+    const listed = (name: string, said: ReturnType<typeof effectOf>) => ({
+      serverId: APP,
       name,
       description: "",
       inputSchema: {},
@@ -851,17 +850,10 @@ describe("a tool its app marks destructive, called through the app", () => {
     });
     await database
       .insert(mcpTools)
-      .values(
-        storableTools(APP, [
-          listed("arcade_unflagged", classify({ behavior: {} })),
-          listed(
-            "arcade_flagged",
-            classify({ behavior: { destructive: true } }),
-          ),
-          listed("composio_unlabelled", effectOf(["openWorldHint"])),
-          listed("composio_labelled", effectOf(["destructiveHint"])),
-        ]).rows,
-      );
+      .values([
+        listed("composio_unlabelled", effectOf(["openWorldHint"])),
+        listed("composio_labelled", effectOf(["destructiveHint"])),
+      ]);
     await database
       .insert(pluginGrants)
       .values(
@@ -976,9 +968,8 @@ describe("a tool its app marks destructive, called through the app", () => {
   });
 });
 
-/** One tool each broker said nothing about, and one it flagged destructive. */
+/** One tool each broker said nothing about, and one it flagged destructive. M3: no Arcade here. */
 const BROKERED = [
-  { broker: "arcade", unsaid: "arcade_unflagged", flagged: "arcade_flagged" },
   {
     broker: "composio",
     unsaid: "composio_unlabelled",

@@ -40,7 +40,7 @@ const suite = randomUUID().slice(0, 8);
 const tenant = `open-${suite}`;
 const stranger = `open-stranger-${suite}`;
 
-const actor = { id: tenant, role: "user" as const };
+const actor = { id: tenant, email: `${tenant}@example.test`, role: "user" as const };
 const requireUser: MiddlewareHandler<{ Variables: AppVariables }> = async (
   context,
   next,

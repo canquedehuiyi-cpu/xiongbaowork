@@ -13,7 +13,13 @@ const APPROVAL = "0f8fad5b-d9cb-469f-a165-70867728950e";
  * Rows carry the tenant the database stamped on them; tenants are 1:1 with people, so a person's
  * binding and link challenge are stamped with the owner's id (G01).
  */
-const bound: DeliveryBinding & { tenantId: string } = {
+/** As the store reads a binding row back: the stamp, and the columns a row always has. */
+const bound: DeliveryBinding & {
+  tenantId: string;
+  mentionId: string | null;
+  optedOutAt: Date | null;
+  createdAt: Date;
+} = {
   tenantId: "owner",
   id: "b1",
   ownerUserId: "owner",
@@ -25,6 +31,9 @@ const bound: DeliveryBinding & { tenantId: string } = {
   identity: "U1",
   address: "U1",
   enabled: true,
+  mentionId: null,
+  optedOutAt: null,
+  createdAt: new Date(0),
 };
 type IdentityAdapter = {
   redeem(
@@ -128,6 +137,8 @@ function fixture(
       updateSmsStatus: async (...input) => {
         calls.push(input);
       },
+      // The store answers null for no binding, though its type (`rows[0] ?? null`, read without
+      // `noUncheckedIndexedAccess`) says it always finds one: hence the cast on the miss.
       findBinding: async (transport, realm, identity) =>
         frame("findBinding") &&
         options.bound !== false &&
@@ -135,7 +146,7 @@ function fixture(
         realm === "T1" &&
         identity === "U1"
           ? stamped
-          : null,
+          : (null as unknown as typeof stamped),
       botIdentity: async (agentId) => ({ agentId, name: "Research Bot" }),
     },
     scopeFor: async (ownerUserId, channelId, agentId) =>

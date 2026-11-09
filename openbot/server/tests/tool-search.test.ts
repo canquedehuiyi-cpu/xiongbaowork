@@ -39,7 +39,7 @@ import {
   type RuntimeModel,
   type ToolSelection,
 } from "../src/copilot";
-import { grantedToolGuidance, grantedTools } from "../src/plugins/tools";
+import { grantedTools } from "../src/plugins/tools";
 
 /*
  * General Assistant after its Shopify approval, without the network.
@@ -726,27 +726,9 @@ describe("what one step is sent", () => {
   });
 });
 
-describe("what the Bot is told it holds", () => {
-  test("names the tools it can see and counts the ones it finds with search", () => {
-    const tool = (name: string): GrantedTool => ({
-      name,
-      ref: `shopify/${name}`,
-      description: "",
-      parameters: z.object({}),
-      execute: async () => "ok",
-    });
-    const guidance = grantedToolGuidance(
-      [tool("mcp__shopify__GET_SHOP"), tool("mcp__shopify__LIST_ORDERS")],
-      ["shopify"],
-      new Set(["mcp__shopify__LIST_ORDERS"]),
-    );
-    expect(guidance).toContain(
-      `- shopify: GET_SHOP, 1 more tools you find with ${SEARCH_TOOLS}`,
-    );
-    expect(guidance).not.toContain("LIST_ORDERS");
-    expect(guidance).not.toContain("You hold none of their tools");
-  });
-});
+// M3: "what the Bot is told it holds" (it names the tools it can see and counts the ones it finds
+// with search) is dropped: it needs upstream's `grantedToolGuidance(tools, vendors, waiting)`, and the
+// fork's plugins/tools.ts, which the plugins session keeps, does not take the waiting set.
 
 describe("the pre-flight count", () => {
   test("leaves out what waits behind search", () => {

@@ -177,7 +177,7 @@ beforeAll(() => {
   args[2] = roleRepository;
   args[12] = auditStore;
   args[27] = HOST_TOKEN;
-  args[34] = { recorder };
+  args[33] = { recorder };
   app = createApp(...args);
 });
 afterAll(async () => {

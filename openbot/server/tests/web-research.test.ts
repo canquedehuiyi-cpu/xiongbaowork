@@ -13,14 +13,12 @@ import {
   CATALOGUE,
   catalogueEntry,
   classifyTool,
-  researchRoleFor,
   resolveServerUrl,
   serverCredentialKind,
-  tokenHeaderFor,
 } from "../src/plugins/catalogue";
 import { listTools } from "../src/plugins/mcp";
 import { selectTools } from "../src/plugins/selection";
-import { grantedToolGuidance, holdsWebSearch } from "../src/plugins/tools";
+import { grantedToolGuidance } from "../src/plugins/tools";
 
 const tool = (server: string, name: string): GrantedTool => ({
   name: `mcp__${server}__${name}`,
@@ -42,16 +40,14 @@ const pair = (server = "parallel") =>
 
 describe("whether a Bot holds a search tool", () => {
   test("any provider's search tool counts, from its ref or the name a model sees", () => {
+    // M3: the fork's plugins/tools.ts has no `holdsWebSearch` yet (planned with phase 4's search), so
+    // only the shared name reading is asserted here.
     for (const [server, [search, fetch]] of Object.entries(RESEARCH_TOOLS)) {
-      expect(holdsWebSearch([tool(server, search)])).toBe(true);
-      expect(holdsWebSearch([tool(server, fetch)])).toBe(false);
       expect(researchRoleOfToolName(`mcp__${server}__${search}`)).toBe(
         "search",
       );
       expect(researchRoleOfToolName(`mcp__${server}__${fetch}`)).toBe("fetch");
     }
-    expect(holdsWebSearch([])).toBe(false);
-    expect(holdsWebSearch([tool("google-drive", "search_files")])).toBe(false);
     expect(researchRoleOfToolName("web_search")).toBeNull();
     expect(
       researchRoleOfToolName("mcp__google-drive__search_files"),
@@ -100,15 +96,12 @@ describe("research providers in the catalogue", () => {
       expect(classifyTool(entry, fetch, true)).toBe("read");
       expect(classifyTool(entry, "not_advertised", false)).toBe("write");
       expect(classifyTool(entry, search, true, "write")).toBe("write");
-      expect(researchRoleFor(`${key}/${search}`)).toBe("search");
-      expect(researchRoleFor(`${key}/${fetch}`)).toBe("fetch");
     }
-    expect(researchRoleFor("notion/notion-search")).toBeNull();
+    // M3: the fork's catalogue has no `researchRoleFor` (no research role on a ref), so a ref's role
+    // is not asserted here.
     // The app labels research from this table, so every key must be a real catalogue entry.
     for (const key of Object.keys(SHARED_RESEARCH_TOOLS))
       expect(catalogueEntry(key)).not.toBeNull();
-    // Instructions are built from these, so a tool missing its ref must not throw.
-    expect(researchRoleFor(undefined as never)).toBeNull();
     expect(
       grantedToolGuidance([{ name: "mcp__drive__search" } as GrantedTool]),
     ).toContain("drive: search");
@@ -142,14 +135,7 @@ describe("research providers in the catalogue", () => {
       "firecrawl-authenticated",
     ])
       expect(serverCredentialKind(catalogueEntry(key)!)).toBe("mcp");
-    expect(tokenHeaderFor(catalogueEntry("exa-authenticated"))).toBe(
-      "x-api-key",
-    );
-    expect(
-      tokenHeaderFor(catalogueEntry("firecrawl-authenticated")),
-    ).toBeUndefined();
-    expect(tokenHeaderFor(catalogueEntry("parallel"))).toBeUndefined();
-    expect(tokenHeaderFor(null)).toBeUndefined();
+    // M3: the fork's catalogue has no `tokenHeaderFor` (no entry names its own token header).
   });
 });
 

@@ -56,7 +56,7 @@ const args = new Array(createApp.length) as unknown as Parameters<
 args[0] = config;
 args[2] = roleRepository;
 args[12] = auditStore;
-args[34] = { recorder };
+args[33] = { recorder };
 const app = createApp(...args);
 
 const call = (path: string, init: RequestInit & { json?: unknown } = {}) => {

@@ -4,7 +4,11 @@ import { fileURLToPath } from "node:url";
 import type { AbstractAgent, RunAgentInput } from "@ag-ui/client";
 import { HttpAgent } from "@ag-ui/client";
 import { LLMock } from "@copilotkit/aimock";
-import { BuiltInAgent } from "@copilotkit/runtime/v2";
+import {
+  BuiltInAgent,
+  type BuiltInAgentClassicConfig,
+  type BuiltInAgentConfiguration,
+} from "@copilotkit/runtime/v2";
 import {
   APPROVAL_GUIDANCE,
   COMPONENT_GUIDANCE,
@@ -36,13 +40,10 @@ import {
   standingRoleMessage,
 } from "../src/copilot";
 import {
-  connectedSystems,
-  grantedToolGuidance,
-} from "../src/plugins/tools";
-import type {
-  AgentModelResolver,
+  type AgentModelResolver,
   languageModelFor,
 } from "../src/models/runtime-resolver";
+import { grantedToolGuidance } from "../src/plugins/tools";
 import { loadTenantPackage } from "../src/tenant-package";
 import { UNTRUSTED_GUIDANCE } from "../src/untrusted-content";
 import { testEnvironment } from "./support/environment";
@@ -174,7 +175,6 @@ describe("deployment model selection", () => {
     try {
       process.env.OPENAI_BASE_URL = await recorder.start();
       recorder.onMessage(/.*/, {
-        type: "text",
         content: "DEFAULTMODEL001 fixture completed.",
       });
       const agents = await resolveRuntimeAgents(
@@ -1978,7 +1978,7 @@ describe("a person's standing instructions", () => {
     const originalBase = process.env.OPENAI_BASE_URL;
     try {
       process.env.OPENAI_BASE_URL = await recorder.start();
-      recorder.onMessage(/.*/, { type: "text", content: "Fixture completed." });
+      recorder.onMessage(/.*/, { content: "Fixture completed." });
       const agents = await buildAgents(
         [
           assistant,
@@ -3182,6 +3182,10 @@ describe("where an attachment reaches the model, and where it deliberately does 
   });
 });
 
+/** A model-backed configuration, as the runtime reads one: these tests never build the factory form. */
+const classic = (configuration: BuiltInAgentConfiguration) =>
+  configuration as BuiltInAgentClassicConfig;
+
 describe("each coworker runs on the model it was bound to", () => {
   const developer = {
     id: "developer",
@@ -3255,7 +3259,6 @@ describe("each coworker runs on the model it was bound to", () => {
     try {
       process.env.OPENAI_BASE_URL = await recorder.start();
       recorder.onMessage(/.*/, {
-        type: "text",
         content: "BINDING001 fixture completed.",
       });
       const bound = languageModelFor(
@@ -3289,7 +3292,6 @@ describe("each coworker runs on the model it was bound to", () => {
     try {
       process.env.OPENAI_BASE_URL = await recorder.start();
       recorder.onMessage(/.*/, {
-        type: "text",
         content: "BINDING002 fixture completed.",
       });
       const agents = await build(async (agentId) => {
@@ -3321,7 +3323,6 @@ describe("each coworker runs on the model it was bound to", () => {
     try {
       process.env.OPENAI_BASE_URL = await recorder.start();
       recorder.onMessage(/.*/, {
-        type: "text",
         content: "BINDING003 fixture completed.",
       });
       const bound = languageModelFor(
@@ -3383,7 +3384,7 @@ describe("each coworker runs on the model it was bound to", () => {
 
     // Plan mode is a different transport with its own endpoint, not a model choice, so the binding
     // cannot be honoured beside it and must not silently replace it.
-    expect(configuration.model).toBe(plan);
+    expect(classic(configuration).model).toBe(plan);
     expect("apiKey" in configuration).toBe(false);
   });
 
@@ -3405,7 +3406,9 @@ describe("each coworker runs on the model it was bound to", () => {
       { modelId: "gpt-6" } as never,
     );
 
-    expect((configuration.model as { modelId: string }).modelId).toBe("gpt-6");
+    expect(
+      (classic(configuration).model as { modelId: string }).modelId,
+    ).toBe("gpt-6");
     // One credential per request: sending the deployment's key with a model that holds its own would
     // put it in front of the other provider.
     expect("apiKey" in configuration).toBe(false);
@@ -3415,8 +3418,8 @@ describe("each coworker runs on the model it was bound to", () => {
       model,
       "synthetic-deployment-key",
     );
-    expect(unbound.model).toBe("openai/gpt-5.6-terra");
-    expect(unbound.apiKey).toBe("synthetic-deployment-key");
+    expect(classic(unbound).model).toBe("openai/gpt-5.6-terra");
+    expect(classic(unbound).apiKey).toBe("synthetic-deployment-key");
   });
 
   test("a binding alone is a credential: no deployment key, no refusal", () => {
@@ -3439,7 +3442,7 @@ describe("each coworker runs on the model it was bound to", () => {
 
     // A deployment with no model key at all can still run a coworker that brings its own — the
     // failure this avoids is the one where the binding is configured and the house model is not.
-    expect(configuration.model).toMatchObject({ modelId: "gpt-6" });
+    expect(classic(configuration).model).toMatchObject({ modelId: "gpt-6" });
   });
 });
 

@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
   mintRunAssertion,
-  readOrigin,
   readRunAssertion,
 } from "../src/agents/callback-token";
 import { delegatedWork } from "../src/agents/handoff-tool";
@@ -47,28 +46,11 @@ describe("handoffInitiator", () => {
   });
 });
 
-describe("readOrigin", () => {
-  test("reads the roots it knows", () => {
-    expect(readOrigin({ kind: "person" })).toEqual({ kind: "person" });
-    expect(readOrigin({ kind: "responsibility", id: "r1" })).toEqual({
-      kind: "responsibility",
-      id: "r1",
-    });
-  });
-
-  test("answers unreadable rather than a person for anything else", () => {
-    for (const garbled of [
-      undefined,
-      null,
-      "person",
-      { kind: "robot" },
-      { kind: "routine" },
-      { kind: "handoff", id: "x" },
-    ]) {
-      expect(readOrigin(garbled)).toBeUndefined();
-    }
-  });
-});
+/*
+ * M3: upstream's `readOrigin` cases are not kept: the fork's callback-token.ts does not export it. Its
+ * `readInitiator` drops a handoff's origin when reading a signed assertion, so the "keeps a handoff's
+ * origin through signing" case below fails against it (reported, not changed here).
+ */
 
 describe("a signed run assertion", () => {
   test("keeps a handoff's origin through signing", () => {

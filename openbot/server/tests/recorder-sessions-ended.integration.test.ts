@@ -117,7 +117,7 @@ function appAsAdmin() {
   args[2] = roleRepository;
   args[12] = auditStore;
   args[17] = peopleStore;
-  args[34] = { recorder: working };
+  args[33] = { recorder: working };
   return createApp(...args);
 }
 const app = appAsAdmin();

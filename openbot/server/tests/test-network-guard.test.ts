@@ -427,7 +427,7 @@ test("the test network guard is in force for a vendor SDK that binds its own tra
 
   const { outcome, refused } = await plant(() =>
     broker.authorize({
-      account: { holder: "person", userId: "u", vendorUserId: "u" },
+      userId: "u",
       toolkit: "linear",
       returnUrl: "https://openbot.test/connections/x",
     }),

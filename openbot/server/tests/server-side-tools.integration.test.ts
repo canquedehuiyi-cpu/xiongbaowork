@@ -76,7 +76,6 @@ beforeAll(() =>
 
     mock.addTool({
       name: toolName,
-      vendorName: toolName,
       description: "Search the notes.",
       inputSchema: {
         type: "object",
