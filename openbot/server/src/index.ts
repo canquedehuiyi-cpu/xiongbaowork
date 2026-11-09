@@ -288,6 +288,7 @@ import {
   PRIVATE_SHARE_TOOL_REF,
 } from "./proactive/private-share";
 import {
+  computerGuidanceForRun,
   createReadOnlyClassifier,
   guardProactiveCallback,
   restrictCoordinationForRun,
@@ -2233,7 +2234,11 @@ await startupLifecycle.run(async (startup) => {
         proactiveReadOnlyRefs,
       ),
       signRunForActor(actor.id, initiator, depth),
-      computerProvider ? COMPUTER_GUIDANCE : undefined,
+      // 后台调研没有电脑，不告诉它有（也就不给网页搜索引导）。
+      computerGuidanceForRun(
+        initiator,
+        computerProvider ? COMPUTER_GUIDANCE : undefined,
+      ),
       loadVendors,
       selectionForActor(actor.id),
       agentFetch,
