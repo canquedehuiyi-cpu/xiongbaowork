@@ -20,7 +20,6 @@ import { Route as AuthedAppApprovalsRouteImport } from './routes/_authed/_app/ap
 import { Route as AuthedAppAutonomousRouteImport } from './routes/_authed/_app/autonomous'
 import { Route as AuthedAppBotRouteImport } from './routes/_authed/_app/bot'
 import { Route as AuthedAppBrowserRouteImport } from './routes/_authed/_app/browser'
-import { Route as AuthedAppCapabilitiesRouteImport } from './routes/_authed/_app/capabilities'
 import { Route as AuthedAppKnowledgeRouteImport } from './routes/_authed/_app/knowledge'
 import { Route as AuthedAppMemoryRouteImport } from './routes/_authed/_app/memory'
 import { Route as AuthedAppPipelinesRouteImport } from './routes/_authed/_app/pipelines'
@@ -50,7 +49,6 @@ import { Route as AuthedAdminProactiveRouteImport } from './routes/_authed/admin
 import { Route as AuthedAdminProvidersRouteImport } from './routes/_authed/admin/providers'
 import { Route as AuthedAdminSkillsRouteImport } from './routes/_authed/admin/skills'
 import { Route as AuthedSettingsIndexRouteImport } from './routes/_authed/settings/index'
-import { Route as AuthedSettingsPersonalRouteImport } from './routes/_authed/settings/_personal'
 import { Route as AuthedSettingsBrowsersRouteImport } from './routes/_authed/settings/browsers'
 import { Route as AuthedSettingsLearningRouteImport } from './routes/_authed/settings/learning'
 import { Route as AuthedSettingsPasswordsRouteImport } from './routes/_authed/settings/passwords'
@@ -61,13 +59,8 @@ import { Route as AuthedAppAgentsIndexRouteImport } from './routes/_authed/_app/
 import { Route as AuthedAppAssembleAgentIdRouteImport } from './routes/_authed/_app/assemble.$agentId'
 import { Route as AuthedAppBotsIndexRouteImport } from './routes/_authed/_app/bots.index'
 import { Route as AuthedAppBotsAgentIdRouteImport } from './routes/_authed/_app/bots.$agentId'
-import { Route as AuthedAppCapabilitiesIndexRouteImport } from './routes/_authed/_app/capabilities.index'
-import { Route as AuthedAppCapabilitiesMemoryRouteImport } from './routes/_authed/_app/capabilities.memory'
-import { Route as AuthedAppCapabilitiesSkillsRouteImport } from './routes/_authed/_app/capabilities.skills'
 import { Route as AuthedAppChannelChannelIdRouteImport } from './routes/_authed/_app/channel/$channelId'
 import { Route as AuthedAppChannelNewRouteImport } from './routes/_authed/_app/channel/new'
-import { Route as AuthedAppConnectionsIndexRouteImport } from './routes/_authed/_app/connections.index'
-import { Route as AuthedAppConnectionsKeyRouteImport } from './routes/_authed/_app/connections.$key'
 import { Route as AuthedAppGroupChannelIdRouteImport } from './routes/_authed/_app/group/$channelId'
 import { Route as AuthedAppGroupNewRouteImport } from './routes/_authed/_app/group/new'
 import { Route as AuthedAppSScreenRouteImport } from './routes/_authed/_app/s/$screen'
@@ -83,28 +76,15 @@ import { Route as AuthedAdminComponentsNameRouteImport } from './routes/_authed/
 import { Route as AuthedAdminCredentialsNewRouteImport } from './routes/_authed/admin/credentials_.new'
 import { Route as AuthedAdminPluginsIndexRouteImport } from './routes/_authed/admin/plugins/index'
 import { Route as AuthedAdminPluginsKeyRouteImport } from './routes/_authed/admin/plugins/$key'
-import { Route as AuthedAdminPluginsArcadeRouteImport } from './routes/_authed/admin/plugins/arcade'
 import { Route as AuthedAdminPluginsComposioRouteImport } from './routes/_authed/admin/plugins/composio'
 import { Route as AuthedAdminSkillsSlugRouteImport } from './routes/_authed/admin/skills_.$slug'
 import { Route as AuthedAdminSkillsNewRouteImport } from './routes/_authed/admin/skills_.new'
-import { Route as AuthedSettingsPersonalActivityRouteImport } from './routes/_authed/settings/_personal/activity'
-import { Route as AuthedSettingsPersonalComputerRouteImport } from './routes/_authed/settings/_personal/computer'
-import { Route as AuthedSettingsPersonalCredentialsRouteImport } from './routes/_authed/settings/_personal/credentials'
-import { Route as AuthedSettingsPersonalSkillsRouteImport } from './routes/_authed/settings/_personal/skills'
 import { Route as AuthedSettingsComponentsGalleryIndexRouteImport } from './routes/_authed/settings/components-gallery/index'
 import { Route as AuthedSettingsComponentsGalleryNameRouteImport } from './routes/_authed/settings/components-gallery/$name'
 import { Route as AuthedSettingsConnectedAccountsIndexRouteImport } from './routes/_authed/settings/connected-accounts/index'
 import { Route as AuthedSettingsConnectedAccountsKeyRouteImport } from './routes/_authed/settings/connected-accounts/$key'
 import { Route as AuthedAppBotsAgentIdActivityRouteImport } from './routes/_authed/_app/bots.$agentId.activity'
-import { Route as AuthedAppConnectionsBrowseArcadeRouteImport } from './routes/_authed/_app/connections.browse.arcade'
-import { Route as AuthedAppConnectionsBrowseComposioRouteImport } from './routes/_authed/_app/connections.browse.composio'
 import { Route as AuthedAppWakerflowsImportTokenRouteImport } from './routes/_authed/_app/wakerflows.import.$token'
-import { Route as AuthedSettingsPersonalCredentialsNewRouteImport } from './routes/_authed/settings/_personal/credentials_.new'
-import { Route as AuthedSettingsPersonalPluginsSplatRouteImport } from './routes/_authed/settings/_personal/plugins.$'
-import { Route as AuthedSettingsPersonalSkillsSlugRouteImport } from './routes/_authed/settings/_personal/skills_.$slug'
-import { Route as AuthedSettingsPersonalSkillsNewRouteImport } from './routes/_authed/settings/_personal/skills_.new'
-import { Route as AuthedAppConnectionsKeyBotsAgentIdRouteImport } from './routes/_authed/_app/connections.$key_.bots.$agentId'
-import { Route as AuthedAppConnectionsKeyToolsToolRouteImport } from './routes/_authed/_app/connections.$key_.tools.$tool'
 import { Route as AuthedAdminPluginsKeyBotsAgentIdRouteImport } from './routes/_authed/admin/plugins/$key_.bots.$agentId'
 import { Route as AuthedAdminPluginsKeyToolsToolRouteImport } from './routes/_authed/admin/plugins/$key_.tools.$tool'
 
@@ -159,11 +139,6 @@ const AuthedAppBotRoute = AuthedAppBotRouteImport.update({
 const AuthedAppBrowserRoute = AuthedAppBrowserRouteImport.update({
   id: '/browser',
   path: '/browser',
-  getParentRoute: () => AuthedAppRoute,
-} as any)
-const AuthedAppCapabilitiesRoute = AuthedAppCapabilitiesRouteImport.update({
-  id: '/capabilities',
-  path: '/capabilities',
   getParentRoute: () => AuthedAppRoute,
 } as any)
 const AuthedAppKnowledgeRoute = AuthedAppKnowledgeRouteImport.update({
@@ -313,10 +288,6 @@ const AuthedSettingsIndexRoute = AuthedSettingsIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthedSettingsRouteRoute,
 } as any)
-const AuthedSettingsPersonalRoute = AuthedSettingsPersonalRouteImport.update({
-  id: '/_personal',
-  getParentRoute: () => AuthedSettingsRouteRoute,
-} as any)
 const AuthedSettingsBrowsersRoute = AuthedSettingsBrowsersRouteImport.update({
   id: '/browsers',
   path: '/browsers',
@@ -369,24 +340,6 @@ const AuthedAppBotsAgentIdRoute = AuthedAppBotsAgentIdRouteImport.update({
   path: '/bots/$agentId',
   getParentRoute: () => AuthedAppRoute,
 } as any)
-const AuthedAppCapabilitiesIndexRoute =
-  AuthedAppCapabilitiesIndexRouteImport.update({
-    id: '/',
-    path: '/',
-    getParentRoute: () => AuthedAppCapabilitiesRoute,
-  } as any)
-const AuthedAppCapabilitiesMemoryRoute =
-  AuthedAppCapabilitiesMemoryRouteImport.update({
-    id: '/memory',
-    path: '/memory',
-    getParentRoute: () => AuthedAppCapabilitiesRoute,
-  } as any)
-const AuthedAppCapabilitiesSkillsRoute =
-  AuthedAppCapabilitiesSkillsRouteImport.update({
-    id: '/skills',
-    path: '/skills',
-    getParentRoute: () => AuthedAppCapabilitiesRoute,
-  } as any)
 const AuthedAppChannelChannelIdRoute =
   AuthedAppChannelChannelIdRouteImport.update({
     id: '/channel/$channelId',
@@ -396,17 +349,6 @@ const AuthedAppChannelChannelIdRoute =
 const AuthedAppChannelNewRoute = AuthedAppChannelNewRouteImport.update({
   id: '/channel/new',
   path: '/channel/new',
-  getParentRoute: () => AuthedAppRoute,
-} as any)
-const AuthedAppConnectionsIndexRoute =
-  AuthedAppConnectionsIndexRouteImport.update({
-    id: '/connections/',
-    path: '/connections/',
-    getParentRoute: () => AuthedAppRoute,
-  } as any)
-const AuthedAppConnectionsKeyRoute = AuthedAppConnectionsKeyRouteImport.update({
-  id: '/connections/$key',
-  path: '/connections/$key',
   getParentRoute: () => AuthedAppRoute,
 } as any)
 const AuthedAppGroupChannelIdRoute = AuthedAppGroupChannelIdRouteImport.update({
@@ -491,12 +433,6 @@ const AuthedAdminPluginsKeyRoute = AuthedAdminPluginsKeyRouteImport.update({
   path: '/plugins/$key',
   getParentRoute: () => AuthedAdminRouteRoute,
 } as any)
-const AuthedAdminPluginsArcadeRoute =
-  AuthedAdminPluginsArcadeRouteImport.update({
-    id: '/plugins/arcade',
-    path: '/plugins/arcade',
-    getParentRoute: () => AuthedAdminRouteRoute,
-  } as any)
 const AuthedAdminPluginsComposioRoute =
   AuthedAdminPluginsComposioRouteImport.update({
     id: '/plugins/composio',
@@ -513,30 +449,6 @@ const AuthedAdminSkillsNewRoute = AuthedAdminSkillsNewRouteImport.update({
   path: '/skills/new',
   getParentRoute: () => AuthedAdminRouteRoute,
 } as any)
-const AuthedSettingsPersonalActivityRoute =
-  AuthedSettingsPersonalActivityRouteImport.update({
-    id: '/activity',
-    path: '/activity',
-    getParentRoute: () => AuthedSettingsPersonalRoute,
-  } as any)
-const AuthedSettingsPersonalComputerRoute =
-  AuthedSettingsPersonalComputerRouteImport.update({
-    id: '/computer',
-    path: '/computer',
-    getParentRoute: () => AuthedSettingsPersonalRoute,
-  } as any)
-const AuthedSettingsPersonalCredentialsRoute =
-  AuthedSettingsPersonalCredentialsRouteImport.update({
-    id: '/credentials',
-    path: '/credentials',
-    getParentRoute: () => AuthedSettingsPersonalRoute,
-  } as any)
-const AuthedSettingsPersonalSkillsRoute =
-  AuthedSettingsPersonalSkillsRouteImport.update({
-    id: '/skills',
-    path: '/skills',
-    getParentRoute: () => AuthedSettingsPersonalRoute,
-  } as any)
 const AuthedSettingsComponentsGalleryIndexRoute =
   AuthedSettingsComponentsGalleryIndexRouteImport.update({
     id: '/components-gallery/',
@@ -567,58 +479,10 @@ const AuthedAppBotsAgentIdActivityRoute =
     path: '/activity',
     getParentRoute: () => AuthedAppBotsAgentIdRoute,
   } as any)
-const AuthedAppConnectionsBrowseArcadeRoute =
-  AuthedAppConnectionsBrowseArcadeRouteImport.update({
-    id: '/connections/browse/arcade',
-    path: '/connections/browse/arcade',
-    getParentRoute: () => AuthedAppRoute,
-  } as any)
-const AuthedAppConnectionsBrowseComposioRoute =
-  AuthedAppConnectionsBrowseComposioRouteImport.update({
-    id: '/connections/browse/composio',
-    path: '/connections/browse/composio',
-    getParentRoute: () => AuthedAppRoute,
-  } as any)
 const AuthedAppWakerflowsImportTokenRoute =
   AuthedAppWakerflowsImportTokenRouteImport.update({
     id: '/wakerflows/import/$token',
     path: '/wakerflows/import/$token',
-    getParentRoute: () => AuthedAppRoute,
-  } as any)
-const AuthedSettingsPersonalCredentialsNewRoute =
-  AuthedSettingsPersonalCredentialsNewRouteImport.update({
-    id: '/credentials_/new',
-    path: '/credentials/new',
-    getParentRoute: () => AuthedSettingsPersonalRoute,
-  } as any)
-const AuthedSettingsPersonalPluginsSplatRoute =
-  AuthedSettingsPersonalPluginsSplatRouteImport.update({
-    id: '/plugins/$',
-    path: '/plugins/$',
-    getParentRoute: () => AuthedSettingsPersonalRoute,
-  } as any)
-const AuthedSettingsPersonalSkillsSlugRoute =
-  AuthedSettingsPersonalSkillsSlugRouteImport.update({
-    id: '/skills_/$slug',
-    path: '/skills/$slug',
-    getParentRoute: () => AuthedSettingsPersonalRoute,
-  } as any)
-const AuthedSettingsPersonalSkillsNewRoute =
-  AuthedSettingsPersonalSkillsNewRouteImport.update({
-    id: '/skills_/new',
-    path: '/skills/new',
-    getParentRoute: () => AuthedSettingsPersonalRoute,
-  } as any)
-const AuthedAppConnectionsKeyBotsAgentIdRoute =
-  AuthedAppConnectionsKeyBotsAgentIdRouteImport.update({
-    id: '/connections/$key_/bots/$agentId',
-    path: '/connections/$key/bots/$agentId',
-    getParentRoute: () => AuthedAppRoute,
-  } as any)
-const AuthedAppConnectionsKeyToolsToolRoute =
-  AuthedAppConnectionsKeyToolsToolRouteImport.update({
-    id: '/connections/$key_/tools/$tool',
-    path: '/connections/$key/tools/$tool',
     getParentRoute: () => AuthedAppRoute,
   } as any)
 const AuthedAdminPluginsKeyBotsAgentIdRoute =
@@ -644,7 +508,6 @@ export interface FileRoutesByFullPath {
   '/autonomous': typeof AuthedAppAutonomousRoute
   '/bot': typeof AuthedAppBotRoute
   '/browser': typeof AuthedAppBrowserRoute
-  '/capabilities': typeof AuthedAppCapabilitiesRouteWithChildren
   '/knowledge': typeof AuthedAppKnowledgeRoute
   '/memory': typeof AuthedAppMemoryRoute
   '/pipelines': typeof AuthedAppPipelinesRoute
@@ -682,11 +545,8 @@ export interface FileRoutesByFullPath {
   '/settings/': typeof AuthedSettingsIndexRoute
   '/assemble/$agentId': typeof AuthedAppAssembleAgentIdRoute
   '/bots/$agentId': typeof AuthedAppBotsAgentIdRouteWithChildren
-  '/capabilities/memory': typeof AuthedAppCapabilitiesMemoryRoute
-  '/capabilities/skills': typeof AuthedAppCapabilitiesSkillsRoute
   '/channel/$channelId': typeof AuthedAppChannelChannelIdRoute
   '/channel/new': typeof AuthedAppChannelNewRoute
-  '/connections/$key': typeof AuthedAppConnectionsKeyRoute
   '/group/$channelId': typeof AuthedAppGroupChannelIdRoute
   '/group/new': typeof AuthedAppGroupNewRoute
   '/s/$screen': typeof AuthedAppSScreenRoute
@@ -699,35 +559,20 @@ export interface FileRoutesByFullPath {
   '/admin/components/$name': typeof AuthedAdminComponentsNameRoute
   '/admin/credentials/new': typeof AuthedAdminCredentialsNewRoute
   '/admin/plugins/$key': typeof AuthedAdminPluginsKeyRoute
-  '/admin/plugins/arcade': typeof AuthedAdminPluginsArcadeRoute
   '/admin/plugins/composio': typeof AuthedAdminPluginsComposioRoute
   '/admin/skills/$slug': typeof AuthedAdminSkillsSlugRoute
   '/admin/skills/new': typeof AuthedAdminSkillsNewRoute
-  '/settings/activity': typeof AuthedSettingsPersonalActivityRoute
-  '/settings/computer': typeof AuthedSettingsPersonalComputerRoute
-  '/settings/credentials': typeof AuthedSettingsPersonalCredentialsRoute
-  '/settings/skills': typeof AuthedSettingsPersonalSkillsRoute
   '/settings/components-gallery/$name': typeof AuthedSettingsComponentsGalleryNameRoute
   '/settings/connected-accounts/$key': typeof AuthedSettingsConnectedAccountsKeyRoute
   '/agents/': typeof AuthedAppAgentsIndexRoute
   '/bots/': typeof AuthedAppBotsIndexRoute
-  '/capabilities/': typeof AuthedAppCapabilitiesIndexRoute
-  '/connections/': typeof AuthedAppConnectionsIndexRoute
   '/wakerflows/': typeof AuthedAppWakerflowsIndexRoute
   '/admin/components/': typeof AuthedAdminComponentsIndexRoute
   '/admin/plugins/': typeof AuthedAdminPluginsIndexRoute
   '/settings/components-gallery/': typeof AuthedSettingsComponentsGalleryIndexRoute
   '/settings/connected-accounts/': typeof AuthedSettingsConnectedAccountsIndexRoute
   '/bots/$agentId/activity': typeof AuthedAppBotsAgentIdActivityRoute
-  '/connections/browse/arcade': typeof AuthedAppConnectionsBrowseArcadeRoute
-  '/connections/browse/composio': typeof AuthedAppConnectionsBrowseComposioRoute
   '/wakerflows/import/$token': typeof AuthedAppWakerflowsImportTokenRoute
-  '/settings/credentials/new': typeof AuthedSettingsPersonalCredentialsNewRoute
-  '/settings/plugins/$': typeof AuthedSettingsPersonalPluginsSplatRoute
-  '/settings/skills/$slug': typeof AuthedSettingsPersonalSkillsSlugRoute
-  '/settings/skills/new': typeof AuthedSettingsPersonalSkillsNewRoute
-  '/connections/$key/bots/$agentId': typeof AuthedAppConnectionsKeyBotsAgentIdRoute
-  '/connections/$key/tools/$tool': typeof AuthedAppConnectionsKeyToolsToolRoute
   '/admin/plugins/$key/bots/$agentId': typeof AuthedAdminPluginsKeyBotsAgentIdRoute
   '/admin/plugins/$key/tools/$tool': typeof AuthedAdminPluginsKeyToolsToolRoute
 }
@@ -766,7 +611,6 @@ export interface FileRoutesByTo {
   '/admin/proactive': typeof AuthedAdminProactiveRoute
   '/admin/providers': typeof AuthedAdminProvidersRoute
   '/admin/skills': typeof AuthedAdminSkillsRoute
-  '/settings': typeof AuthedSettingsIndexRoute
   '/settings/browsers': typeof AuthedSettingsBrowsersRoute
   '/settings/learning': typeof AuthedSettingsLearningRoute
   '/settings/passwords': typeof AuthedSettingsPasswordsRoute
@@ -774,13 +618,11 @@ export interface FileRoutesByTo {
   '/settings/this-computer': typeof AuthedSettingsThisComputerRoute
   '/sign-in/$requestId': typeof AuthedSignInRequestIdRoute
   '/admin': typeof AuthedAdminIndexRoute
+  '/settings': typeof AuthedSettingsIndexRoute
   '/assemble/$agentId': typeof AuthedAppAssembleAgentIdRoute
   '/bots/$agentId': typeof AuthedAppBotsAgentIdRouteWithChildren
-  '/capabilities/memory': typeof AuthedAppCapabilitiesMemoryRoute
-  '/capabilities/skills': typeof AuthedAppCapabilitiesSkillsRoute
   '/channel/$channelId': typeof AuthedAppChannelChannelIdRoute
   '/channel/new': typeof AuthedAppChannelNewRoute
-  '/connections/$key': typeof AuthedAppConnectionsKeyRoute
   '/group/$channelId': typeof AuthedAppGroupChannelIdRoute
   '/group/new': typeof AuthedAppGroupNewRoute
   '/s/$screen': typeof AuthedAppSScreenRoute
@@ -793,35 +635,20 @@ export interface FileRoutesByTo {
   '/admin/components/$name': typeof AuthedAdminComponentsNameRoute
   '/admin/credentials/new': typeof AuthedAdminCredentialsNewRoute
   '/admin/plugins/$key': typeof AuthedAdminPluginsKeyRoute
-  '/admin/plugins/arcade': typeof AuthedAdminPluginsArcadeRoute
   '/admin/plugins/composio': typeof AuthedAdminPluginsComposioRoute
   '/admin/skills/$slug': typeof AuthedAdminSkillsSlugRoute
   '/admin/skills/new': typeof AuthedAdminSkillsNewRoute
-  '/settings/activity': typeof AuthedSettingsPersonalActivityRoute
-  '/settings/computer': typeof AuthedSettingsPersonalComputerRoute
-  '/settings/credentials': typeof AuthedSettingsPersonalCredentialsRoute
-  '/settings/skills': typeof AuthedSettingsPersonalSkillsRoute
   '/settings/components-gallery/$name': typeof AuthedSettingsComponentsGalleryNameRoute
   '/settings/connected-accounts/$key': typeof AuthedSettingsConnectedAccountsKeyRoute
   '/agents': typeof AuthedAppAgentsIndexRoute
   '/bots': typeof AuthedAppBotsIndexRoute
-  '/capabilities': typeof AuthedAppCapabilitiesIndexRoute
-  '/connections': typeof AuthedAppConnectionsIndexRoute
   '/wakerflows': typeof AuthedAppWakerflowsIndexRoute
   '/admin/components': typeof AuthedAdminComponentsIndexRoute
   '/admin/plugins': typeof AuthedAdminPluginsIndexRoute
   '/settings/components-gallery': typeof AuthedSettingsComponentsGalleryIndexRoute
   '/settings/connected-accounts': typeof AuthedSettingsConnectedAccountsIndexRoute
   '/bots/$agentId/activity': typeof AuthedAppBotsAgentIdActivityRoute
-  '/connections/browse/arcade': typeof AuthedAppConnectionsBrowseArcadeRoute
-  '/connections/browse/composio': typeof AuthedAppConnectionsBrowseComposioRoute
   '/wakerflows/import/$token': typeof AuthedAppWakerflowsImportTokenRoute
-  '/settings/credentials/new': typeof AuthedSettingsPersonalCredentialsNewRoute
-  '/settings/plugins/$': typeof AuthedSettingsPersonalPluginsSplatRoute
-  '/settings/skills/$slug': typeof AuthedSettingsPersonalSkillsSlugRoute
-  '/settings/skills/new': typeof AuthedSettingsPersonalSkillsNewRoute
-  '/connections/$key/bots/$agentId': typeof AuthedAppConnectionsKeyBotsAgentIdRoute
-  '/connections/$key/tools/$tool': typeof AuthedAppConnectionsKeyToolsToolRoute
   '/admin/plugins/$key/bots/$agentId': typeof AuthedAdminPluginsKeyBotsAgentIdRoute
   '/admin/plugins/$key/tools/$tool': typeof AuthedAdminPluginsKeyToolsToolRoute
 }
@@ -837,7 +664,6 @@ export interface FileRoutesById {
   '/_authed/_app/autonomous': typeof AuthedAppAutonomousRoute
   '/_authed/_app/bot': typeof AuthedAppBotRoute
   '/_authed/_app/browser': typeof AuthedAppBrowserRoute
-  '/_authed/_app/capabilities': typeof AuthedAppCapabilitiesRouteWithChildren
   '/_authed/_app/knowledge': typeof AuthedAppKnowledgeRoute
   '/_authed/_app/memory': typeof AuthedAppMemoryRoute
   '/_authed/_app/pipelines': typeof AuthedAppPipelinesRoute
@@ -865,7 +691,6 @@ export interface FileRoutesById {
   '/_authed/admin/proactive': typeof AuthedAdminProactiveRoute
   '/_authed/admin/providers': typeof AuthedAdminProvidersRoute
   '/_authed/admin/skills': typeof AuthedAdminSkillsRoute
-  '/_authed/settings/_personal': typeof AuthedSettingsPersonalRouteWithChildren
   '/_authed/settings/browsers': typeof AuthedSettingsBrowsersRoute
   '/_authed/settings/learning': typeof AuthedSettingsLearningRoute
   '/_authed/settings/passwords': typeof AuthedSettingsPasswordsRoute
@@ -877,11 +702,8 @@ export interface FileRoutesById {
   '/_authed/settings/': typeof AuthedSettingsIndexRoute
   '/_authed/_app/assemble/$agentId': typeof AuthedAppAssembleAgentIdRoute
   '/_authed/_app/bots/$agentId': typeof AuthedAppBotsAgentIdRouteWithChildren
-  '/_authed/_app/capabilities/memory': typeof AuthedAppCapabilitiesMemoryRoute
-  '/_authed/_app/capabilities/skills': typeof AuthedAppCapabilitiesSkillsRoute
   '/_authed/_app/channel/$channelId': typeof AuthedAppChannelChannelIdRoute
   '/_authed/_app/channel/new': typeof AuthedAppChannelNewRoute
-  '/_authed/_app/connections/$key': typeof AuthedAppConnectionsKeyRoute
   '/_authed/_app/group/$channelId': typeof AuthedAppGroupChannelIdRoute
   '/_authed/_app/group/new': typeof AuthedAppGroupNewRoute
   '/_authed/_app/s/$screen': typeof AuthedAppSScreenRoute
@@ -894,35 +716,20 @@ export interface FileRoutesById {
   '/_authed/admin/components/$name': typeof AuthedAdminComponentsNameRoute
   '/_authed/admin/credentials_/new': typeof AuthedAdminCredentialsNewRoute
   '/_authed/admin/plugins/$key': typeof AuthedAdminPluginsKeyRoute
-  '/_authed/admin/plugins/arcade': typeof AuthedAdminPluginsArcadeRoute
   '/_authed/admin/plugins/composio': typeof AuthedAdminPluginsComposioRoute
   '/_authed/admin/skills_/$slug': typeof AuthedAdminSkillsSlugRoute
   '/_authed/admin/skills_/new': typeof AuthedAdminSkillsNewRoute
-  '/_authed/settings/_personal/activity': typeof AuthedSettingsPersonalActivityRoute
-  '/_authed/settings/_personal/computer': typeof AuthedSettingsPersonalComputerRoute
-  '/_authed/settings/_personal/credentials': typeof AuthedSettingsPersonalCredentialsRoute
-  '/_authed/settings/_personal/skills': typeof AuthedSettingsPersonalSkillsRoute
   '/_authed/settings/components-gallery/$name': typeof AuthedSettingsComponentsGalleryNameRoute
   '/_authed/settings/connected-accounts/$key': typeof AuthedSettingsConnectedAccountsKeyRoute
   '/_authed/_app/agents/': typeof AuthedAppAgentsIndexRoute
   '/_authed/_app/bots/': typeof AuthedAppBotsIndexRoute
-  '/_authed/_app/capabilities/': typeof AuthedAppCapabilitiesIndexRoute
-  '/_authed/_app/connections/': typeof AuthedAppConnectionsIndexRoute
   '/_authed/_app/wakerflows/': typeof AuthedAppWakerflowsIndexRoute
   '/_authed/admin/components/': typeof AuthedAdminComponentsIndexRoute
   '/_authed/admin/plugins/': typeof AuthedAdminPluginsIndexRoute
   '/_authed/settings/components-gallery/': typeof AuthedSettingsComponentsGalleryIndexRoute
   '/_authed/settings/connected-accounts/': typeof AuthedSettingsConnectedAccountsIndexRoute
   '/_authed/_app/bots/$agentId/activity': typeof AuthedAppBotsAgentIdActivityRoute
-  '/_authed/_app/connections/browse/arcade': typeof AuthedAppConnectionsBrowseArcadeRoute
-  '/_authed/_app/connections/browse/composio': typeof AuthedAppConnectionsBrowseComposioRoute
   '/_authed/_app/wakerflows/import/$token': typeof AuthedAppWakerflowsImportTokenRoute
-  '/_authed/settings/_personal/credentials_/new': typeof AuthedSettingsPersonalCredentialsNewRoute
-  '/_authed/settings/_personal/plugins/$': typeof AuthedSettingsPersonalPluginsSplatRoute
-  '/_authed/settings/_personal/skills_/$slug': typeof AuthedSettingsPersonalSkillsSlugRoute
-  '/_authed/settings/_personal/skills_/new': typeof AuthedSettingsPersonalSkillsNewRoute
-  '/_authed/_app/connections/$key_/bots/$agentId': typeof AuthedAppConnectionsKeyBotsAgentIdRoute
-  '/_authed/_app/connections/$key_/tools/$tool': typeof AuthedAppConnectionsKeyToolsToolRoute
   '/_authed/admin/plugins/$key_/bots/$agentId': typeof AuthedAdminPluginsKeyBotsAgentIdRoute
   '/_authed/admin/plugins/$key_/tools/$tool': typeof AuthedAdminPluginsKeyToolsToolRoute
 }
@@ -938,7 +745,6 @@ export interface FileRouteTypes {
     | '/autonomous'
     | '/bot'
     | '/browser'
-    | '/capabilities'
     | '/knowledge'
     | '/memory'
     | '/pipelines'
@@ -976,11 +782,8 @@ export interface FileRouteTypes {
     | '/settings/'
     | '/assemble/$agentId'
     | '/bots/$agentId'
-    | '/capabilities/memory'
-    | '/capabilities/skills'
     | '/channel/$channelId'
     | '/channel/new'
-    | '/connections/$key'
     | '/group/$channelId'
     | '/group/new'
     | '/s/$screen'
@@ -993,35 +796,20 @@ export interface FileRouteTypes {
     | '/admin/components/$name'
     | '/admin/credentials/new'
     | '/admin/plugins/$key'
-    | '/admin/plugins/arcade'
     | '/admin/plugins/composio'
     | '/admin/skills/$slug'
     | '/admin/skills/new'
-    | '/settings/activity'
-    | '/settings/computer'
-    | '/settings/credentials'
-    | '/settings/skills'
     | '/settings/components-gallery/$name'
     | '/settings/connected-accounts/$key'
     | '/agents/'
     | '/bots/'
-    | '/capabilities/'
-    | '/connections/'
     | '/wakerflows/'
     | '/admin/components/'
     | '/admin/plugins/'
     | '/settings/components-gallery/'
     | '/settings/connected-accounts/'
     | '/bots/$agentId/activity'
-    | '/connections/browse/arcade'
-    | '/connections/browse/composio'
     | '/wakerflows/import/$token'
-    | '/settings/credentials/new'
-    | '/settings/plugins/$'
-    | '/settings/skills/$slug'
-    | '/settings/skills/new'
-    | '/connections/$key/bots/$agentId'
-    | '/connections/$key/tools/$tool'
     | '/admin/plugins/$key/bots/$agentId'
     | '/admin/plugins/$key/tools/$tool'
   fileRoutesByTo: FileRoutesByTo
@@ -1060,7 +848,6 @@ export interface FileRouteTypes {
     | '/admin/proactive'
     | '/admin/providers'
     | '/admin/skills'
-    | '/settings'
     | '/settings/browsers'
     | '/settings/learning'
     | '/settings/passwords'
@@ -1068,13 +855,11 @@ export interface FileRouteTypes {
     | '/settings/this-computer'
     | '/sign-in/$requestId'
     | '/admin'
+    | '/settings'
     | '/assemble/$agentId'
     | '/bots/$agentId'
-    | '/capabilities/memory'
-    | '/capabilities/skills'
     | '/channel/$channelId'
     | '/channel/new'
-    | '/connections/$key'
     | '/group/$channelId'
     | '/group/new'
     | '/s/$screen'
@@ -1087,35 +872,20 @@ export interface FileRouteTypes {
     | '/admin/components/$name'
     | '/admin/credentials/new'
     | '/admin/plugins/$key'
-    | '/admin/plugins/arcade'
     | '/admin/plugins/composio'
     | '/admin/skills/$slug'
     | '/admin/skills/new'
-    | '/settings/activity'
-    | '/settings/computer'
-    | '/settings/credentials'
-    | '/settings/skills'
     | '/settings/components-gallery/$name'
     | '/settings/connected-accounts/$key'
     | '/agents'
     | '/bots'
-    | '/capabilities'
-    | '/connections'
     | '/wakerflows'
     | '/admin/components'
     | '/admin/plugins'
     | '/settings/components-gallery'
     | '/settings/connected-accounts'
     | '/bots/$agentId/activity'
-    | '/connections/browse/arcade'
-    | '/connections/browse/composio'
     | '/wakerflows/import/$token'
-    | '/settings/credentials/new'
-    | '/settings/plugins/$'
-    | '/settings/skills/$slug'
-    | '/settings/skills/new'
-    | '/connections/$key/bots/$agentId'
-    | '/connections/$key/tools/$tool'
     | '/admin/plugins/$key/bots/$agentId'
     | '/admin/plugins/$key/tools/$tool'
   id:
@@ -1130,7 +900,6 @@ export interface FileRouteTypes {
     | '/_authed/_app/autonomous'
     | '/_authed/_app/bot'
     | '/_authed/_app/browser'
-    | '/_authed/_app/capabilities'
     | '/_authed/_app/knowledge'
     | '/_authed/_app/memory'
     | '/_authed/_app/pipelines'
@@ -1158,7 +927,6 @@ export interface FileRouteTypes {
     | '/_authed/admin/proactive'
     | '/_authed/admin/providers'
     | '/_authed/admin/skills'
-    | '/_authed/settings/_personal'
     | '/_authed/settings/browsers'
     | '/_authed/settings/learning'
     | '/_authed/settings/passwords'
@@ -1170,11 +938,8 @@ export interface FileRouteTypes {
     | '/_authed/settings/'
     | '/_authed/_app/assemble/$agentId'
     | '/_authed/_app/bots/$agentId'
-    | '/_authed/_app/capabilities/memory'
-    | '/_authed/_app/capabilities/skills'
     | '/_authed/_app/channel/$channelId'
     | '/_authed/_app/channel/new'
-    | '/_authed/_app/connections/$key'
     | '/_authed/_app/group/$channelId'
     | '/_authed/_app/group/new'
     | '/_authed/_app/s/$screen'
@@ -1187,35 +952,20 @@ export interface FileRouteTypes {
     | '/_authed/admin/components/$name'
     | '/_authed/admin/credentials_/new'
     | '/_authed/admin/plugins/$key'
-    | '/_authed/admin/plugins/arcade'
     | '/_authed/admin/plugins/composio'
     | '/_authed/admin/skills_/$slug'
     | '/_authed/admin/skills_/new'
-    | '/_authed/settings/_personal/activity'
-    | '/_authed/settings/_personal/computer'
-    | '/_authed/settings/_personal/credentials'
-    | '/_authed/settings/_personal/skills'
     | '/_authed/settings/components-gallery/$name'
     | '/_authed/settings/connected-accounts/$key'
     | '/_authed/_app/agents/'
     | '/_authed/_app/bots/'
-    | '/_authed/_app/capabilities/'
-    | '/_authed/_app/connections/'
     | '/_authed/_app/wakerflows/'
     | '/_authed/admin/components/'
     | '/_authed/admin/plugins/'
     | '/_authed/settings/components-gallery/'
     | '/_authed/settings/connected-accounts/'
     | '/_authed/_app/bots/$agentId/activity'
-    | '/_authed/_app/connections/browse/arcade'
-    | '/_authed/_app/connections/browse/composio'
     | '/_authed/_app/wakerflows/import/$token'
-    | '/_authed/settings/_personal/credentials_/new'
-    | '/_authed/settings/_personal/plugins/$'
-    | '/_authed/settings/_personal/skills_/$slug'
-    | '/_authed/settings/_personal/skills_/new'
-    | '/_authed/_app/connections/$key_/bots/$agentId'
-    | '/_authed/_app/connections/$key_/tools/$tool'
     | '/_authed/admin/plugins/$key_/bots/$agentId'
     | '/_authed/admin/plugins/$key_/tools/$tool'
   fileRoutesById: FileRoutesById
@@ -1302,13 +1052,6 @@ declare module '@tanstack/react-router' {
       path: '/browser'
       fullPath: '/browser'
       preLoaderRoute: typeof AuthedAppBrowserRouteImport
-      parentRoute: typeof AuthedAppRoute
-    }
-    '/_authed/_app/capabilities': {
-      id: '/_authed/_app/capabilities'
-      path: '/capabilities'
-      fullPath: '/capabilities'
-      preLoaderRoute: typeof AuthedAppCapabilitiesRouteImport
       parentRoute: typeof AuthedAppRoute
     }
     '/_authed/_app/knowledge': {
@@ -1514,13 +1257,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedSettingsIndexRouteImport
       parentRoute: typeof AuthedSettingsRouteRoute
     }
-    '/_authed/settings/_personal': {
-      id: '/_authed/settings/_personal'
-      path: ''
-      fullPath: '/settings'
-      preLoaderRoute: typeof AuthedSettingsPersonalRouteImport
-      parentRoute: typeof AuthedSettingsRouteRoute
-    }
     '/_authed/settings/browsers': {
       id: '/_authed/settings/browsers'
       path: '/browsers'
@@ -1591,27 +1327,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedAppBotsAgentIdRouteImport
       parentRoute: typeof AuthedAppRoute
     }
-    '/_authed/_app/capabilities/': {
-      id: '/_authed/_app/capabilities/'
-      path: '/'
-      fullPath: '/capabilities/'
-      preLoaderRoute: typeof AuthedAppCapabilitiesIndexRouteImport
-      parentRoute: typeof AuthedAppCapabilitiesRoute
-    }
-    '/_authed/_app/capabilities/memory': {
-      id: '/_authed/_app/capabilities/memory'
-      path: '/memory'
-      fullPath: '/capabilities/memory'
-      preLoaderRoute: typeof AuthedAppCapabilitiesMemoryRouteImport
-      parentRoute: typeof AuthedAppCapabilitiesRoute
-    }
-    '/_authed/_app/capabilities/skills': {
-      id: '/_authed/_app/capabilities/skills'
-      path: '/skills'
-      fullPath: '/capabilities/skills'
-      preLoaderRoute: typeof AuthedAppCapabilitiesSkillsRouteImport
-      parentRoute: typeof AuthedAppCapabilitiesRoute
-    }
     '/_authed/_app/channel/$channelId': {
       id: '/_authed/_app/channel/$channelId'
       path: '/channel/$channelId'
@@ -1624,20 +1339,6 @@ declare module '@tanstack/react-router' {
       path: '/channel/new'
       fullPath: '/channel/new'
       preLoaderRoute: typeof AuthedAppChannelNewRouteImport
-      parentRoute: typeof AuthedAppRoute
-    }
-    '/_authed/_app/connections/': {
-      id: '/_authed/_app/connections/'
-      path: '/connections'
-      fullPath: '/connections/'
-      preLoaderRoute: typeof AuthedAppConnectionsIndexRouteImport
-      parentRoute: typeof AuthedAppRoute
-    }
-    '/_authed/_app/connections/$key': {
-      id: '/_authed/_app/connections/$key'
-      path: '/connections/$key'
-      fullPath: '/connections/$key'
-      preLoaderRoute: typeof AuthedAppConnectionsKeyRouteImport
       parentRoute: typeof AuthedAppRoute
     }
     '/_authed/_app/group/$channelId': {
@@ -1745,13 +1446,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedAdminPluginsKeyRouteImport
       parentRoute: typeof AuthedAdminRouteRoute
     }
-    '/_authed/admin/plugins/arcade': {
-      id: '/_authed/admin/plugins/arcade'
-      path: '/plugins/arcade'
-      fullPath: '/admin/plugins/arcade'
-      preLoaderRoute: typeof AuthedAdminPluginsArcadeRouteImport
-      parentRoute: typeof AuthedAdminRouteRoute
-    }
     '/_authed/admin/plugins/composio': {
       id: '/_authed/admin/plugins/composio'
       path: '/plugins/composio'
@@ -1772,34 +1466,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/skills/new'
       preLoaderRoute: typeof AuthedAdminSkillsNewRouteImport
       parentRoute: typeof AuthedAdminRouteRoute
-    }
-    '/_authed/settings/_personal/activity': {
-      id: '/_authed/settings/_personal/activity'
-      path: '/activity'
-      fullPath: '/settings/activity'
-      preLoaderRoute: typeof AuthedSettingsPersonalActivityRouteImport
-      parentRoute: typeof AuthedSettingsPersonalRoute
-    }
-    '/_authed/settings/_personal/computer': {
-      id: '/_authed/settings/_personal/computer'
-      path: '/computer'
-      fullPath: '/settings/computer'
-      preLoaderRoute: typeof AuthedSettingsPersonalComputerRouteImport
-      parentRoute: typeof AuthedSettingsPersonalRoute
-    }
-    '/_authed/settings/_personal/credentials': {
-      id: '/_authed/settings/_personal/credentials'
-      path: '/credentials'
-      fullPath: '/settings/credentials'
-      preLoaderRoute: typeof AuthedSettingsPersonalCredentialsRouteImport
-      parentRoute: typeof AuthedSettingsPersonalRoute
-    }
-    '/_authed/settings/_personal/skills': {
-      id: '/_authed/settings/_personal/skills'
-      path: '/skills'
-      fullPath: '/settings/skills'
-      preLoaderRoute: typeof AuthedSettingsPersonalSkillsRouteImport
-      parentRoute: typeof AuthedSettingsPersonalRoute
     }
     '/_authed/settings/components-gallery/': {
       id: '/_authed/settings/components-gallery/'
@@ -1836,67 +1502,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedAppBotsAgentIdActivityRouteImport
       parentRoute: typeof AuthedAppBotsAgentIdRoute
     }
-    '/_authed/_app/connections/browse/arcade': {
-      id: '/_authed/_app/connections/browse/arcade'
-      path: '/connections/browse/arcade'
-      fullPath: '/connections/browse/arcade'
-      preLoaderRoute: typeof AuthedAppConnectionsBrowseArcadeRouteImport
-      parentRoute: typeof AuthedAppRoute
-    }
-    '/_authed/_app/connections/browse/composio': {
-      id: '/_authed/_app/connections/browse/composio'
-      path: '/connections/browse/composio'
-      fullPath: '/connections/browse/composio'
-      preLoaderRoute: typeof AuthedAppConnectionsBrowseComposioRouteImport
-      parentRoute: typeof AuthedAppRoute
-    }
     '/_authed/_app/wakerflows/import/$token': {
       id: '/_authed/_app/wakerflows/import/$token'
       path: '/wakerflows/import/$token'
       fullPath: '/wakerflows/import/$token'
       preLoaderRoute: typeof AuthedAppWakerflowsImportTokenRouteImport
-      parentRoute: typeof AuthedAppRoute
-    }
-    '/_authed/settings/_personal/credentials_/new': {
-      id: '/_authed/settings/_personal/credentials_/new'
-      path: '/credentials/new'
-      fullPath: '/settings/credentials/new'
-      preLoaderRoute: typeof AuthedSettingsPersonalCredentialsNewRouteImport
-      parentRoute: typeof AuthedSettingsPersonalRoute
-    }
-    '/_authed/settings/_personal/plugins/$': {
-      id: '/_authed/settings/_personal/plugins/$'
-      path: '/plugins/$'
-      fullPath: '/settings/plugins/$'
-      preLoaderRoute: typeof AuthedSettingsPersonalPluginsSplatRouteImport
-      parentRoute: typeof AuthedSettingsPersonalRoute
-    }
-    '/_authed/settings/_personal/skills_/$slug': {
-      id: '/_authed/settings/_personal/skills_/$slug'
-      path: '/skills/$slug'
-      fullPath: '/settings/skills/$slug'
-      preLoaderRoute: typeof AuthedSettingsPersonalSkillsSlugRouteImport
-      parentRoute: typeof AuthedSettingsPersonalRoute
-    }
-    '/_authed/settings/_personal/skills_/new': {
-      id: '/_authed/settings/_personal/skills_/new'
-      path: '/skills/new'
-      fullPath: '/settings/skills/new'
-      preLoaderRoute: typeof AuthedSettingsPersonalSkillsNewRouteImport
-      parentRoute: typeof AuthedSettingsPersonalRoute
-    }
-    '/_authed/_app/connections/$key_/bots/$agentId': {
-      id: '/_authed/_app/connections/$key_/bots/$agentId'
-      path: '/connections/$key/bots/$agentId'
-      fullPath: '/connections/$key/bots/$agentId'
-      preLoaderRoute: typeof AuthedAppConnectionsKeyBotsAgentIdRouteImport
-      parentRoute: typeof AuthedAppRoute
-    }
-    '/_authed/_app/connections/$key_/tools/$tool': {
-      id: '/_authed/_app/connections/$key_/tools/$tool'
-      path: '/connections/$key/tools/$tool'
-      fullPath: '/connections/$key/tools/$tool'
-      preLoaderRoute: typeof AuthedAppConnectionsKeyToolsToolRouteImport
       parentRoute: typeof AuthedAppRoute
     }
     '/_authed/admin/plugins/$key_/bots/$agentId': {
@@ -1936,7 +1546,6 @@ interface AuthedAdminRouteRouteChildren {
   AuthedAdminComponentsNameRoute: typeof AuthedAdminComponentsNameRoute
   AuthedAdminCredentialsNewRoute: typeof AuthedAdminCredentialsNewRoute
   AuthedAdminPluginsKeyRoute: typeof AuthedAdminPluginsKeyRoute
-  AuthedAdminPluginsArcadeRoute: typeof AuthedAdminPluginsArcadeRoute
   AuthedAdminPluginsComposioRoute: typeof AuthedAdminPluginsComposioRoute
   AuthedAdminSkillsSlugRoute: typeof AuthedAdminSkillsSlugRoute
   AuthedAdminSkillsNewRoute: typeof AuthedAdminSkillsNewRoute
@@ -1966,7 +1575,6 @@ const AuthedAdminRouteRouteChildren: AuthedAdminRouteRouteChildren = {
   AuthedAdminComponentsNameRoute: AuthedAdminComponentsNameRoute,
   AuthedAdminCredentialsNewRoute: AuthedAdminCredentialsNewRoute,
   AuthedAdminPluginsKeyRoute: AuthedAdminPluginsKeyRoute,
-  AuthedAdminPluginsArcadeRoute: AuthedAdminPluginsArcadeRoute,
   AuthedAdminPluginsComposioRoute: AuthedAdminPluginsComposioRoute,
   AuthedAdminSkillsSlugRoute: AuthedAdminSkillsSlugRoute,
   AuthedAdminSkillsNewRoute: AuthedAdminSkillsNewRoute,
@@ -1979,40 +1587,7 @@ const AuthedAdminRouteRouteChildren: AuthedAdminRouteRouteChildren = {
 const AuthedAdminRouteRouteWithChildren =
   AuthedAdminRouteRoute._addFileChildren(AuthedAdminRouteRouteChildren)
 
-interface AuthedSettingsPersonalRouteChildren {
-  AuthedSettingsPersonalActivityRoute: typeof AuthedSettingsPersonalActivityRoute
-  AuthedSettingsPersonalComputerRoute: typeof AuthedSettingsPersonalComputerRoute
-  AuthedSettingsPersonalCredentialsRoute: typeof AuthedSettingsPersonalCredentialsRoute
-  AuthedSettingsPersonalSkillsRoute: typeof AuthedSettingsPersonalSkillsRoute
-  AuthedSettingsPersonalCredentialsNewRoute: typeof AuthedSettingsPersonalCredentialsNewRoute
-  AuthedSettingsPersonalPluginsSplatRoute: typeof AuthedSettingsPersonalPluginsSplatRoute
-  AuthedSettingsPersonalSkillsSlugRoute: typeof AuthedSettingsPersonalSkillsSlugRoute
-  AuthedSettingsPersonalSkillsNewRoute: typeof AuthedSettingsPersonalSkillsNewRoute
-}
-
-const AuthedSettingsPersonalRouteChildren: AuthedSettingsPersonalRouteChildren =
-  {
-    AuthedSettingsPersonalActivityRoute: AuthedSettingsPersonalActivityRoute,
-    AuthedSettingsPersonalComputerRoute: AuthedSettingsPersonalComputerRoute,
-    AuthedSettingsPersonalCredentialsRoute:
-      AuthedSettingsPersonalCredentialsRoute,
-    AuthedSettingsPersonalSkillsRoute: AuthedSettingsPersonalSkillsRoute,
-    AuthedSettingsPersonalCredentialsNewRoute:
-      AuthedSettingsPersonalCredentialsNewRoute,
-    AuthedSettingsPersonalPluginsSplatRoute:
-      AuthedSettingsPersonalPluginsSplatRoute,
-    AuthedSettingsPersonalSkillsSlugRoute:
-      AuthedSettingsPersonalSkillsSlugRoute,
-    AuthedSettingsPersonalSkillsNewRoute: AuthedSettingsPersonalSkillsNewRoute,
-  }
-
-const AuthedSettingsPersonalRouteWithChildren =
-  AuthedSettingsPersonalRoute._addFileChildren(
-    AuthedSettingsPersonalRouteChildren,
-  )
-
 interface AuthedSettingsRouteRouteChildren {
-  AuthedSettingsPersonalRoute: typeof AuthedSettingsPersonalRouteWithChildren
   AuthedSettingsBrowsersRoute: typeof AuthedSettingsBrowsersRoute
   AuthedSettingsLearningRoute: typeof AuthedSettingsLearningRoute
   AuthedSettingsPasswordsRoute: typeof AuthedSettingsPasswordsRoute
@@ -2026,7 +1601,6 @@ interface AuthedSettingsRouteRouteChildren {
 }
 
 const AuthedSettingsRouteRouteChildren: AuthedSettingsRouteRouteChildren = {
-  AuthedSettingsPersonalRoute: AuthedSettingsPersonalRouteWithChildren,
   AuthedSettingsBrowsersRoute: AuthedSettingsBrowsersRoute,
   AuthedSettingsLearningRoute: AuthedSettingsLearningRoute,
   AuthedSettingsPasswordsRoute: AuthedSettingsPasswordsRoute,
@@ -2046,23 +1620,6 @@ const AuthedSettingsRouteRouteChildren: AuthedSettingsRouteRouteChildren = {
 const AuthedSettingsRouteRouteWithChildren =
   AuthedSettingsRouteRoute._addFileChildren(AuthedSettingsRouteRouteChildren)
 
-interface AuthedAppCapabilitiesRouteChildren {
-  AuthedAppCapabilitiesMemoryRoute: typeof AuthedAppCapabilitiesMemoryRoute
-  AuthedAppCapabilitiesSkillsRoute: typeof AuthedAppCapabilitiesSkillsRoute
-  AuthedAppCapabilitiesIndexRoute: typeof AuthedAppCapabilitiesIndexRoute
-}
-
-const AuthedAppCapabilitiesRouteChildren: AuthedAppCapabilitiesRouteChildren = {
-  AuthedAppCapabilitiesMemoryRoute: AuthedAppCapabilitiesMemoryRoute,
-  AuthedAppCapabilitiesSkillsRoute: AuthedAppCapabilitiesSkillsRoute,
-  AuthedAppCapabilitiesIndexRoute: AuthedAppCapabilitiesIndexRoute,
-}
-
-const AuthedAppCapabilitiesRouteWithChildren =
-  AuthedAppCapabilitiesRoute._addFileChildren(
-    AuthedAppCapabilitiesRouteChildren,
-  )
-
 interface AuthedAppBotsAgentIdRouteChildren {
   AuthedAppBotsAgentIdActivityRoute: typeof AuthedAppBotsAgentIdActivityRoute
 }
@@ -2079,7 +1636,6 @@ interface AuthedAppRouteChildren {
   AuthedAppAutonomousRoute: typeof AuthedAppAutonomousRoute
   AuthedAppBotRoute: typeof AuthedAppBotRoute
   AuthedAppBrowserRoute: typeof AuthedAppBrowserRoute
-  AuthedAppCapabilitiesRoute: typeof AuthedAppCapabilitiesRouteWithChildren
   AuthedAppKnowledgeRoute: typeof AuthedAppKnowledgeRoute
   AuthedAppMemoryRoute: typeof AuthedAppMemoryRoute
   AuthedAppPipelinesRoute: typeof AuthedAppPipelinesRoute
@@ -2099,7 +1655,6 @@ interface AuthedAppRouteChildren {
   AuthedAppBotsAgentIdRoute: typeof AuthedAppBotsAgentIdRouteWithChildren
   AuthedAppChannelChannelIdRoute: typeof AuthedAppChannelChannelIdRoute
   AuthedAppChannelNewRoute: typeof AuthedAppChannelNewRoute
-  AuthedAppConnectionsKeyRoute: typeof AuthedAppConnectionsKeyRoute
   AuthedAppGroupChannelIdRoute: typeof AuthedAppGroupChannelIdRoute
   AuthedAppGroupNewRoute: typeof AuthedAppGroupNewRoute
   AuthedAppSScreenRoute: typeof AuthedAppSScreenRoute
@@ -2109,13 +1664,8 @@ interface AuthedAppRouteChildren {
   AuthedAppWakersAgentIdRoute: typeof AuthedAppWakersAgentIdRoute
   AuthedAppAgentsIndexRoute: typeof AuthedAppAgentsIndexRoute
   AuthedAppBotsIndexRoute: typeof AuthedAppBotsIndexRoute
-  AuthedAppConnectionsIndexRoute: typeof AuthedAppConnectionsIndexRoute
   AuthedAppWakerflowsIndexRoute: typeof AuthedAppWakerflowsIndexRoute
-  AuthedAppConnectionsBrowseArcadeRoute: typeof AuthedAppConnectionsBrowseArcadeRoute
-  AuthedAppConnectionsBrowseComposioRoute: typeof AuthedAppConnectionsBrowseComposioRoute
   AuthedAppWakerflowsImportTokenRoute: typeof AuthedAppWakerflowsImportTokenRoute
-  AuthedAppConnectionsKeyBotsAgentIdRoute: typeof AuthedAppConnectionsKeyBotsAgentIdRoute
-  AuthedAppConnectionsKeyToolsToolRoute: typeof AuthedAppConnectionsKeyToolsToolRoute
 }
 
 const AuthedAppRouteChildren: AuthedAppRouteChildren = {
@@ -2123,7 +1673,6 @@ const AuthedAppRouteChildren: AuthedAppRouteChildren = {
   AuthedAppAutonomousRoute: AuthedAppAutonomousRoute,
   AuthedAppBotRoute: AuthedAppBotRoute,
   AuthedAppBrowserRoute: AuthedAppBrowserRoute,
-  AuthedAppCapabilitiesRoute: AuthedAppCapabilitiesRouteWithChildren,
   AuthedAppKnowledgeRoute: AuthedAppKnowledgeRoute,
   AuthedAppMemoryRoute: AuthedAppMemoryRoute,
   AuthedAppPipelinesRoute: AuthedAppPipelinesRoute,
@@ -2143,7 +1692,6 @@ const AuthedAppRouteChildren: AuthedAppRouteChildren = {
   AuthedAppBotsAgentIdRoute: AuthedAppBotsAgentIdRouteWithChildren,
   AuthedAppChannelChannelIdRoute: AuthedAppChannelChannelIdRoute,
   AuthedAppChannelNewRoute: AuthedAppChannelNewRoute,
-  AuthedAppConnectionsKeyRoute: AuthedAppConnectionsKeyRoute,
   AuthedAppGroupChannelIdRoute: AuthedAppGroupChannelIdRoute,
   AuthedAppGroupNewRoute: AuthedAppGroupNewRoute,
   AuthedAppSScreenRoute: AuthedAppSScreenRoute,
@@ -2153,15 +1701,8 @@ const AuthedAppRouteChildren: AuthedAppRouteChildren = {
   AuthedAppWakersAgentIdRoute: AuthedAppWakersAgentIdRoute,
   AuthedAppAgentsIndexRoute: AuthedAppAgentsIndexRoute,
   AuthedAppBotsIndexRoute: AuthedAppBotsIndexRoute,
-  AuthedAppConnectionsIndexRoute: AuthedAppConnectionsIndexRoute,
   AuthedAppWakerflowsIndexRoute: AuthedAppWakerflowsIndexRoute,
-  AuthedAppConnectionsBrowseArcadeRoute: AuthedAppConnectionsBrowseArcadeRoute,
-  AuthedAppConnectionsBrowseComposioRoute:
-    AuthedAppConnectionsBrowseComposioRoute,
   AuthedAppWakerflowsImportTokenRoute: AuthedAppWakerflowsImportTokenRoute,
-  AuthedAppConnectionsKeyBotsAgentIdRoute:
-    AuthedAppConnectionsKeyBotsAgentIdRoute,
-  AuthedAppConnectionsKeyToolsToolRoute: AuthedAppConnectionsKeyToolsToolRoute,
 }
 
 const AuthedAppRouteWithChildren = AuthedAppRoute._addFileChildren(
