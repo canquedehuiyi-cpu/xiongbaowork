@@ -12,7 +12,7 @@ export const opendots: Skin = {
   id: "opendots",
   name: "OpenDots",
   description:
-    "A compact sidebar of your Bots, with each Bot's computer beside the conversation.",
+    "紧凑的员工侧栏，对话旁边就是这位员工的电脑。",
   Frame: OpenDotsFrame,
   screens: {
     routines: RoutinesScreen,

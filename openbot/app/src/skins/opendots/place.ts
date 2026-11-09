@@ -44,15 +44,15 @@ type Parsed = Omit<Place, "label" | "botId" | "watching" | "coworkerHome"> & {
 };
 
 const BOT_TABS: Record<string, string> = {
-  setup: "Setup",
-  access: "Access",
-  activity: "Activity",
-  approvals: "Approvals",
-  memory: "Memory",
-  reach: "Reach",
-  responsibilities: "Goals",
-  routines: "Routines",
-  sharing: "Sharing",
+  setup: "设置",
+  access: "权限",
+  activity: "动态",
+  approvals: "审批",
+  memory: "记忆",
+  reach: "联系方式",
+  responsibilities: "长期职责",
+  routines: "定时任务",
+  sharing: "共享",
 };
 
 /**
@@ -66,12 +66,12 @@ export function parsePlace(
   const agent = typeof search.agent === "string" ? search.agent : undefined;
   const path = pathname.replace(/\/+$/, "") || "/";
   if (path === "/") {
-    return { section: "chat", label: "New chat", ownsWatch: false };
+    return { section: "chat", label: "新对话", ownsWatch: false };
   }
   if (path === "/channel/new") {
     return {
       section: "chat",
-      label: (bot) => bot ?? "New chat",
+      label: (bot) => bot ?? "新对话",
       agentFromUrl: agent,
       ownsWatch: false,
     };
@@ -80,7 +80,7 @@ export function parsePlace(
   if (channel) {
     return {
       section: "chat",
-      label: (bot) => bot ?? "Conversation",
+      label: (bot) => bot ?? "对话",
       channelId: decodeURIComponent(channel[2]),
       ownsWatch: channel[1] === "channel",
     };
@@ -88,7 +88,7 @@ export function parsePlace(
   if (path === "/bot") {
     return {
       section: "chat",
-      label: (bot) => bot ?? "Conversation",
+      label: (bot) => bot ?? "对话",
       agentFromUrl: agent,
       ownsWatch: true,
     };
@@ -110,10 +110,10 @@ export function parsePlace(
     return { section: "bots", label: "员工管理", ownsWatch: false };
   }
   if (path === "/s/routines" || path === "/routines") {
-    return { section: "routines", label: "Routines", ownsWatch: false };
+    return { section: "routines", label: "定时任务", ownsWatch: false };
   }
   if (path === "/s/memories" || path === "/memory") {
-    return { section: "memories", label: "Memories", ownsWatch: false };
+    return { section: "memories", label: "记忆", ownsWatch: false };
   }
   if (path === "/resources" || path.startsWith("/resources/")) {
     return { section: "capabilities", label: "能力与资源", ownsWatch: false };

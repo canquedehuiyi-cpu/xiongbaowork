@@ -29,7 +29,7 @@ export const Route = createFileRoute("/_authed/admin/boundaries_/$index")({
 });
 
 const BACK = {
-  label: "Boundaries",
+  label: "边界规则",
   linkProps: { to: "/admin/boundaries" as const },
 };
 
@@ -47,7 +47,7 @@ function RulePage() {
 
   if (!policy) {
     return (
-      <PageShell backButton={BACK} title="Rule">
+      <PageShell backButton={BACK} title="规则">
         {stored.error ? (
           <p className="text-destructive text-sm" role="alert">
             {stored.error.message}
@@ -58,9 +58,9 @@ function RulePage() {
   }
   if (rule === undefined) {
     return (
-      <PageShell backButton={BACK} title="Rule">
+      <PageShell backButton={BACK} title="规则">
         <p className="text-muted-foreground text-sm">
-          This rule isn't in place anymore. It may have been removed.
+          这条规则已经不在了，可能已被删除。
         </p>
       </PageShell>
     );
@@ -97,14 +97,13 @@ function RuleDetail({ policy, rule }: { policy: ActionPolicy; rule: string }) {
     >
       {policy.mode === "dry-run" ? (
         <p className="text-amber-600 text-sm dark:text-amber-500">
-          Trial mode is on, so this rule records matching actions without
-          stopping them.
+          试运行已开启，这条规则只记录命中的动作，不会拦下。
         </p>
       ) : null}
 
       <PageSection
-        description="Written in CEL. It is checked before every action a Bot takes."
-        title="Rule"
+        description="用 CEL 写成。员工每做一个动作前都会检查它。"
+        title="规则"
       >
         <PageCard className="mt-4">
           <code className="block whitespace-pre-wrap break-all font-mono text-xs">
@@ -113,22 +112,21 @@ function RuleDetail({ policy, rule }: { policy: ActionPolicy; rule: string }) {
         </PageCard>
       </PageSection>
 
-      <PageSection title="Recently stopped">
+      <PageSection title="最近拦下的">
         {reach.isPending ? null : reach.error ? (
           <p className="mt-4 text-muted-foreground text-sm">
             {reach.error.message}
           </p>
         ) : reach.data.scanned === 0 ? (
           <p className="mt-4 text-muted-foreground text-sm">
-            No recorded actions yet. What this rule stops will show here once
-            Bots have acted.
+            还没有记录到动作。员工开始干活后，这条规则拦下的动作会显示在这里。
           </p>
         ) : (
           <>
             <p className="mt-4 text-muted-foreground text-sm">
               {reach.data.wouldAllow === 0
-                ? `It stopped none of the last ${reach.data.scanned} recorded actions.`
-                : `It stopped ${reach.data.wouldAllow} of the last ${reach.data.scanned} recorded actions.`}
+                ? `最近记录的 ${reach.data.scanned} 个动作里，它一个也没拦。`
+                : `最近记录的 ${reach.data.scanned} 个动作里，它拦下了 ${reach.data.wouldAllow} 个。`}
             </p>
             <DryRunChanges
               changes={reach.data.changes.filter(
@@ -141,24 +139,25 @@ function RuleDetail({ policy, rule }: { policy: ActionPolicy; rule: string }) {
       </PageSection>
 
       <PageSection
-        description="Bots can do this again from their next action."
-        title="Remove"
+        description="从下一个动作起，员工又可以做这件事了。"
+        title="删除"
       >
         <Button
           className="mt-4"
           onClick={() => setRemoving(true)}
           variant="destructive"
         >
-          Remove rule
+ 删除规则
+
         </Button>
       </PageSection>
 
       <Dialog onOpenChange={setRemoving} open={removing}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Remove “{label.name}”?</DialogTitle>
+            <DialogTitle>删除「{label.name}」？</DialogTitle>
             <DialogDescription>
-              Every Bot can do this again from its next action.
+              从下一个动作起，所有员工又可以做这件事了。
             </DialogDescription>
           </DialogHeader>
           {savePolicy.error ? (
@@ -172,7 +171,8 @@ function RuleDetail({ policy, rule }: { policy: ActionPolicy; rule: string }) {
               size="sm"
               variant="ghost"
             >
-              Cancel
+ 取消
+
             </Button>
             <Button
               disabled={savePolicy.isPending}
@@ -180,7 +180,7 @@ function RuleDetail({ policy, rule }: { policy: ActionPolicy; rule: string }) {
               size="sm"
               variant="destructive"
             >
-              {savePolicy.isPending ? "Removing…" : "Remove"}
+              {savePolicy.isPending ? "正在删除…" : "删除"}
             </Button>
           </DialogFooter>
         </DialogContent>

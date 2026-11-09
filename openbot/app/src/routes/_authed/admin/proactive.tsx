@@ -70,26 +70,25 @@ export const Route = createFileRoute("/_authed/admin/proactive")({
 type Days = CheckInMetrics["days"];
 
 const PERIODS: Record<Days, string> = {
-  7: "Last 7 days",
-  30: "Last 30 days",
+  7: "最近 7 天",
+  30: "最近 30 天",
 };
 
 /** Why check-ins were skipped, in the order the page lists them. */
 const SKIPPED_BECAUSE: Record<CheckInSkipReason, string> = {
-  off_admin: "Turned off by an admin",
-  off_person: "Turned off by the person",
-  paused: "Bot paused",
-  capped: "Over the daily limit",
-  no_sources: "Nothing it could read",
-  unreachable: "Conversation gone",
-  busy: "Another one still running",
+  off_admin: "被管理员关闭",
+  off_person: "被本人关闭",
+  paused: "员工已暂停",
+  capped: "超出每日上限",
+  no_sources: "没有可读的内容",
+  unreachable: "对话已不存在",
+  busy: "上一次还在运行",
 };
 
 /** A count as people read it, with the thousands separated. */
 const number = (count: number) => count.toLocaleString();
 
-const plural = (count: number, one: string, many: string) =>
-  `${number(count)} ${count === 1 ? one : many}`;
+
 
 const percent = (share: number) => `${Math.round(share * 100)}%`;
 
@@ -121,12 +120,12 @@ export function CheckInsPage() {
 
   return (
     <PageShell
-      description="Bots check the apps people connected and tell them when something needs them, at most once an hour. They never act without asking."
-      title="Check-ins"
+      description="员工会查看大家连接的应用，有需要处理的事就告诉本人，最多每小时一次。没经过同意，员工不会动手。"
+      title="主动巡检"
     >
       {overview.isPending ? null : overview.error ? (
         <p className="mt-4 text-destructive text-sm" role="alert">
-          Couldn't load check-in settings. Reload the page.
+          读不到主动巡检设置。请刷新页面。
         </p>
       ) : (
         <CheckInSettings data={overview.data} />
@@ -159,15 +158,14 @@ function CheckInSettings({ data }: { data: EnterpriseOverview }) {
     <PageSection
       description={
         <>
-          These apply to everybody. To change who gets check-ins by role or
-          group, use{" "}
+          这些设置对所有人生效。要按角色或用户组调整谁能用主动巡检，请到
           <Link className="underline" to="/admin/permissions">
-            Permissions
-          </Link>
-          .
+ 权限
+ </Link>
+ 页面。
         </>
       }
-      title="Settings"
+      title="设置"
     >
       <PageRows>
         <Item size="sm">
@@ -175,19 +173,19 @@ function CheckInSettings({ data }: { data: EnterpriseOverview }) {
             <IconRadar />
           </ItemMedia>
           <ItemContent>
-            <ItemTitle>Check-ins</ItemTitle>
+            <ItemTitle>主动巡检</ItemTitle>
             <ItemDescription>
               {on
-                ? "Bots check in for everybody."
-                : "Off. No Bot checks in for anybody."}
+                ? "员工为所有人做主动巡检。"
+                : "已关闭。员工不会为任何人做主动巡检。"}
               {overrides > 0
-                ? ` ${plural(overrides, "role or group override", "role or group overrides")} change that for some people.`
+                ? `有 ${number(overrides)} 条按角色或用户组的例外设置，对部分人另有规定。`
                 : ""}
             </ItemDescription>
           </ItemContent>
           <ItemActions>
             <Switch
-              aria-label="Check-ins"
+              aria-label="主动巡检"
               checked={on}
               disabled={saving}
               onCheckedChange={(checked) =>
@@ -210,9 +208,9 @@ function CheckInSettings({ data }: { data: EnterpriseOverview }) {
             <IconGauge />
           </ItemMedia>
           <ItemContent>
-            <ItemTitle>Daily limit</ItemTitle>
+            <ItemTitle>每日上限</ItemTitle>
             <ItemDescription>
-              {`Up to ${plural(data.settings.proactiveDailyRuns, "check-in", "check-ins")} a day per Bot for each person`}
+              {`每位员工每天为每个人最多巡检 ${number(data.settings.proactiveDailyRuns)} 次`}
             </ItemDescription>
           </ItemContent>
           <ItemActions>
@@ -260,7 +258,7 @@ function Activity({
           onValueChange={(value) => onDays(Number(value) === 30 ? 30 : 7)}
           value={String(days)}
         >
-          <SelectTrigger aria-label="Period" size="sm">
+          <SelectTrigger aria-label="时间范围" size="sm">
             <SelectValue>{PERIODS[days]}</SelectValue>
           </SelectTrigger>
           <SelectContent align="end">
@@ -271,12 +269,12 @@ function Activity({
           </SelectContent>
         </Select>
       }
-      description="Acceptance is how many items people started, out of the ones they started or hid."
-      title="Activity"
+      description="采纳率是大家开始处理的事项，占开始处理和隐藏的事项总数的比例。"
+      title="动态"
     >
       {metrics.isPending ? null : metrics.error ? (
         <p className="mt-4 text-destructive text-sm" role="alert">
-          Couldn't load check-in activity. Reload the page.
+          读不到主动巡检动态。请刷新页面。
         </p>
       ) : (
         <>
@@ -286,11 +284,11 @@ function Activity({
                 <IconBellRinging />
               </ItemMedia>
               <ItemContent>
-                <ItemTitle>Pings sent</ItemTitle>
+                <ItemTitle>已发送的提醒</ItemTitle>
                 <ItemDescription>
                   {metrics.data.pings.itemsPerPing === null
-                    ? "Each one folds a person's waiting items from every Bot into one message."
-                    : `${metrics.data.pings.itemsPerPing.toFixed(1)} items in each, on average`}
+                    ? "每条提醒会把所有员工给同一个人的待办事项合并成一条消息。"
+                    : `平均每条含 ${metrics.data.pings.itemsPerPing.toFixed(1)} 项`}
                 </ItemDescription>
               </ItemContent>
               <ItemActions>
@@ -301,8 +299,8 @@ function Activity({
             </Item>
           </PageRows>
           {metrics.data.bots.length === 0 ? (
-            <PageEmpty icon={IconRadar} title="No check-ins yet">
-              A Bot starts checking in once somebody talks to it.
+            <PageEmpty icon={IconRadar} title="还没有巡检">
+              有人和员工对话之后，它就会开始巡检。
             </PageEmpty>
           ) : (
             <PageRows>
@@ -343,18 +341,18 @@ function BotRow({
         <ItemTitle>{bot.name}</ItemTitle>
         <ItemDescription>
           {[
-            plural(bot.peopleOn, "person", "people"),
-            plural(ran(bot), "check-in", "check-ins"),
-            plural(bot.items.raised, "item", "items"),
+            `${number(bot.peopleOn)} 人`,
+            `巡检 ${number(ran(bot))} 次`,
+            `${number(bot.items.raised)} 项`,
           ].join(" · ")}
         </ItemDescription>
       </ItemContent>
       <ItemActions>
         {bot.acceptance === null ? (
-          <span className="text-muted-foreground text-sm">No answers yet</span>
+          <span className="text-muted-foreground text-sm">还没有反馈</span>
         ) : (
           <span className="text-sm tabular-nums">
-            {percent(bot.acceptance)} started
+            已开始 {percent(bot.acceptance)}
           </span>
         )}
         <IconChevronRight className="size-4 text-muted-foreground" />
@@ -385,7 +383,7 @@ function BotDialog({
             <div className="flex min-w-0 flex-col gap-0.5">
               <DialogTitle>{bot.name}</DialogTitle>
               <DialogDescription>
-                {`${PERIODS[days]}. ${bot.peopleOn === 1 ? "1 person has" : `${bot.peopleOn} people have`} check-ins on now.`}
+                {`${PERIODS[days]}。目前有 ${bot.peopleOn} 人开着主动巡检。`}
               </DialogDescription>
             </div>
           </div>
@@ -393,20 +391,20 @@ function BotDialog({
         <DialogBody className="mt-4 gap-6 overflow-y-auto">
           <div className="grid grid-cols-3 gap-4">
             <Stat
-              label="Acceptance"
+              label="采纳率"
               value={
-                bot.acceptance === null ? "None yet" : percent(bot.acceptance)
+                bot.acceptance === null ? "暂无" : percent(bot.acceptance)
               }
             />
-            <Stat label="Items raised" value={number(bot.items.raised)} />
-            <Stat label="Sent in a ping" value={number(bot.pinged)} />
+            <Stat label="提出的事项" value={number(bot.items.raised)} />
+            <Stat label="随提醒发出" value={number(bot.pinged)} />
           </div>
           <Breakdown
             rows={[
-              ["Found nothing", bot.runs.quiet],
-              ["Raised something", bot.runs.raised],
-              ["Couldn't finish", bot.runs.failed],
-              ["Skipped before looking", skipped(bot)],
+              ["没有发现", bot.runs.quiet],
+              ["有所发现", bot.runs.raised],
+              ["没能完成", bot.runs.failed],
+              ["查看前就跳过", skipped(bot)],
               ...reasons.map(
                 (reason) =>
                   [SKIPPED_BECAUSE[reason], bot.runs.skipped[reason], true] as [
@@ -416,22 +414,22 @@ function BotDialog({
                   ],
               ),
             ]}
-            title="Check-ins"
+            title="主动巡检"
           />
           <Breakdown
             rows={[
-              ["Started", bot.items.started],
-              ["Hidden", bot.items.hidden],
-              ["Cleared by the Bot", bot.items.cleared],
-              ["Still open", bot.items.open],
+              ["已开始", bot.items.started],
+              ["已隐藏", bot.items.hidden],
+              ["员工已清除", bot.items.cleared],
+              ["仍待处理", bot.items.open],
             ]}
-            title="Items"
+            title="事项"
           />
         </DialogBody>
         <DialogFooter className="mt-4">
           <Button onClick={onClose} size="sm" type="button">
-            Done
-          </Button>
+ 完成
+ </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -505,11 +503,11 @@ function DailyLimitDialog({
     >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Daily limit</DialogTitle>
+          <DialogTitle>每日上限</DialogTitle>
         </DialogHeader>
         <DialogBody className="mt-4 gap-2">
           <Label htmlFor="check-in-daily-limit">
-            Check-ins a day per Bot, for each person
+            每位员工每天为每个人巡检的次数
           </Label>
           <Input
             id="check-in-daily-limit"
@@ -518,20 +516,20 @@ function DailyLimitDialog({
             value={value}
           />
           <p className="text-muted-foreground text-xs">
-            24 is once an hour. Skipped check-ins don't count.
+            24 就是每小时一次。跳过的巡检不计入。
           </p>
         </DialogBody>
         <DialogFooter className="mt-4">
           <Button onClick={onClose} size="sm" type="button" variant="outline">
-            Cancel
-          </Button>
+ 取消
+ </Button>
           <Button
             disabled={!valid || saving}
             onClick={() => onSave(parsed)}
             size="sm"
             type="button"
           >
-            {saving ? "Saving…" : "Save"}
+            {saving ? "正在保存…" : "保存"}
           </Button>
         </DialogFooter>
       </DialogContent>

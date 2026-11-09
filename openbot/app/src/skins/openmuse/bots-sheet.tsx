@@ -50,14 +50,14 @@ export function BotsSheet({ onClose }: { onClose: () => void }) {
   return (
     <MuseSheet
       onClose={onClose}
-      subtitle={`Choose who is at the centre of ${appConfig.brand.productName}.`}
-      title="Your Bots"
+      subtitle={`选一位员工，放在${appConfig.brand.productName}的正中。`}
+      title="你的员工"
     >
       <div className="flex flex-col gap-3.5">
         {agents.isPending ? null : agents.error ? (
-          <ErrorNotice error="Couldn't load your Bots. Reload the page." />
+          <ErrorNotice error="读不到你的员工。请刷新页面。" />
         ) : agents.data.length === 0 ? (
-          <p className={museText.muted}>You don't have a Bot yet.</p>
+          <p className={museText.muted}>你还没有员工。</p>
         ) : (
           <div className="flex flex-col">
             {agents.data.map((agent) => {
@@ -91,7 +91,7 @@ export function BotsSheet({ onClose }: { onClose: () => void }) {
                     </ItemTitle>
                     <span className={cn(museText.small, "line-clamp-1")}>
                       {asks
-                        ? `Needs you · ${summary}`
+                        ? `需要你 · ${summary}`
                         : summary || agent.title || agent.roleDescription}
                     </span>
                   </ItemContent>
@@ -115,7 +115,7 @@ export function BotsSheet({ onClose }: { onClose: () => void }) {
         <div>
           {centre ? (
             <LinkRow
-              detail="Setup, access, sharing and activity"
+              detail="设置、权限、共享和动态"
               icon={IconUserCircle}
               render={
                 <Link
@@ -124,24 +124,24 @@ export function BotsSheet({ onClose }: { onClose: () => void }) {
                   to="/bots/$agentId"
                 />
               }
-              title={`${centre.name}'s page`}
+              title={`${centre.name}的主页`}
             />
           ) : null}
           <LinkRow
-            detail="Yours, shared with you, and your team's"
+            detail="你的、共享给你的，以及团队的"
             icon={IconBolt}
             render={<Link onClick={onClose} to="/wakers" />}
             tint="plain"
-            title="All Bots"
+            title="全部员工"
           />
           <LinkRow
-            detail="Describe what it should do"
+            detail="描述它要做什么"
             icon={IconPlus}
             render={
               <Link onClick={onClose} search={{ new: true }} to="/wakers" />
             }
             tint="plain"
-            title="New Bot"
+            title="新建员工"
           />
         </div>
       </div>

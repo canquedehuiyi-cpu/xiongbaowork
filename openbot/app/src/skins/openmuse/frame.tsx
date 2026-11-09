@@ -47,11 +47,11 @@ import { type MuseIcon, RoundButton } from "./ui";
 const PRODUCT = appConfig.brand.productName;
 
 const TABS: { id: MuseTab; label: string; icon: MuseIcon }[] = [
-  { id: "chat", label: "Chat", icon: IconMessageCircle },
-  { id: "activity", label: "Activity", icon: IconTable },
-  { id: "ideas", label: "Ideas", icon: IconBulb },
-  { id: "goals", label: "Goals", icon: IconSquareCheck },
-  { id: "apps", label: "Apps", icon: IconTriangleSquareCircle },
+  { id: "chat", label: "对话", icon: IconMessageCircle },
+  { id: "activity", label: "动态", icon: IconTable },
+  { id: "ideas", label: "建议", icon: IconBulb },
+  { id: "goals", label: "目标", icon: IconSquareCheck },
+  { id: "apps", label: "应用", icon: IconTriangleSquareCircle },
 ];
 
 /**
@@ -144,7 +144,7 @@ export function OpenMuseFrame({ children }: { children: ReactNode }) {
             <div className="absolute top-4 left-0">
               <RoundButton
                 icon={IconMenu2}
-                label="Open conversations and menu"
+                label="打开对话和菜单"
                 onClick={() => setSheet("menu")}
               >
                 {/* OpenBot's own "a Bot needs you" mark, worn as OpenMuse's dot. */}
@@ -156,7 +156,7 @@ export function OpenMuseFrame({ children }: { children: ReactNode }) {
             <div className="pointer-events-none flex flex-col items-center">
               <button
                 aria-label={
-                  bot ? `${bot.name}, ${status}. Switch Bot` : "Choose a Bot"
+                  bot ? `${bot.name}，${status}。切换员工` : "选择员工"
                 }
                 className="group pointer-events-auto flex max-w-[70%] flex-col items-center gap-px rounded-2xl outline-none transition-opacity active:opacity-65 focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none"
                 onClick={() => setSheet("bots")}
@@ -189,14 +189,14 @@ export function OpenMuseFrame({ children }: { children: ReactNode }) {
                   className="mb-1.5 max-w-full truncate text-[11px] text-muted-foreground"
                   data-testid="openmuse-status"
                 >
-                  {bot ? status : agents.isPending ? "" : "No Bots yet"}
+                  {bot ? status : agents.isPending ? "" : "还没有员工"}
                 </span>
               </button>
             </div>
             <div className="absolute top-4 right-0">
               <RoundButton
                 icon={IconBell}
-                label={`Needs you, ${waiting} waiting`}
+                label={`需要你，有 ${waiting} 件在等`}
                 onClick={() => setSheet("notifications")}
               >
                 {waiting > 0 ? (

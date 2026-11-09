@@ -56,7 +56,7 @@ export function personalLearningQueryOptions() {
     queryFn: async (): Promise<PersonalLearningSharing> =>
       (
         await client("/api/settings/learning", {
-          fallback: "Couldn't load your Learning settings. Reload the page.",
+          fallback: "读不到你的学习设置。请刷新页面。",
         })
       ).json(),
   });
@@ -79,7 +79,7 @@ export function learningAutomaticQueryOptions() {
       (await client<LearningAutoAssignState | undefined>(
         "/api/admin/learning/settings",
         "automatic",
-        { fallback: "Learning settings could not be loaded." },
+        { fallback: "读取学习设置失败。" },
       )) ?? null,
   });
 }
@@ -113,7 +113,7 @@ export function createLearningContainer(): Promise<LearningAutoAssignState> {
   return client("/api/admin/learning/container", "automatic", {
     method: "POST",
     body: {},
-    fallback: "The Learning container could not be created.",
+    fallback: "学习空间没能创建。",
   });
 }
 export function saveLearningSettings(
@@ -140,7 +140,7 @@ export function learningProposalsQueryOptions(agentId?: string) {
     queryFn: async (): Promise<LearningProposals> =>
       (
         await client(`/api/admin/learning/proposals${forBot(agentId)}`, {
-          fallback: "Couldn't load proposed skills. Try again.",
+          fallback: "读不到建议的技能。请再试一次。",
         })
       ).json(),
   });
@@ -158,7 +158,7 @@ export function learningProposalQueryOptions(
       client(
         `/api/admin/learning/proposals/${encodeURIComponent(proposalId)}${forBot(agentId)}`,
         "proposal",
-        { fallback: "Couldn't load this skill. Try again." },
+        { fallback: "读不到这项技能。请再试一次。" },
       ),
   });
 }
@@ -174,7 +174,7 @@ export function learningRunsQueryOptions(agentId?: string) {
     }> =>
       (
         await client(`/api/admin/learning/runs${forBot(agentId)}`, {
-          fallback: "Couldn't load analysis runs. Try again.",
+          fallback: "读不到分析运行记录。请再试一次。",
         })
       ).json(),
   });
@@ -191,7 +191,7 @@ export function learnedSkillsQueryOptions(agentId?: string) {
     }> =>
       (
         await client(`/api/admin/learning/skills${forBot(agentId)}`, {
-          fallback: "Couldn't load published skills. Try again.",
+          fallback: "读不到已发布的技能。请再试一次。",
         })
       ).json(),
   });
@@ -225,7 +225,7 @@ export function learnedSkillQueryOptions(
     retry: false,
     queryFn: (): Promise<LearnedSkillDetail> =>
       client(learnedSkillPath(source, name), "skill", {
-        fallback: "Couldn't load this skill. Try again.",
+        fallback: "读不到这项技能。请再试一次。",
       }),
   });
 }
@@ -247,7 +247,7 @@ export function personalReviewQueryOptions() {
     queryFn: async (): Promise<PersonalReview> =>
       (
         await client("/api/settings/learning/review", {
-          fallback: "Couldn't load your skills to review. Reload the page.",
+          fallback: "读不到待你审核的技能。请刷新页面。",
         })
       ).json(),
   });
@@ -265,7 +265,7 @@ export function personalProposalQueryOptions(
       client(
         `/api/settings/learning/proposals/${encodeURIComponent(proposalId)}?container=${encodeURIComponent(container)}`,
         "proposal",
-        { fallback: "Couldn't load this skill. Try again." },
+        { fallback: "读不到这项技能。请再试一次。" },
       ),
   });
 }
@@ -278,7 +278,7 @@ export function peopleProposalsQueryOptions() {
     queryFn: async (): Promise<PeopleProposals> =>
       (
         await client("/api/admin/learning/people/proposals", {
-          fallback: "Couldn't load people's skills to review. Try again.",
+          fallback: "读不到大家待审核的技能。请再试一次。",
         })
       ).json(),
   });
@@ -293,7 +293,7 @@ export function personProposalQueryOptions(userId: string, proposalId: string) {
       client(
         `/api/admin/learning/people/${encodeURIComponent(userId)}/proposals/${encodeURIComponent(proposalId)}`,
         "proposal",
-        { fallback: "Couldn't load this skill. Try again." },
+        { fallback: "读不到这项技能。请再试一次。" },
       ),
   });
 }
@@ -305,7 +305,7 @@ export function sharingRequestsQueryOptions() {
     retry: false,
     queryFn: (): Promise<SharingRequest[]> =>
       client("/api/admin/learning/sharing-requests", "requests", {
-        fallback: "Couldn't load sharing requests. Try again.",
+        fallback: "读不到共享申请。请再试一次。",
       }),
   });
 }
@@ -327,7 +327,7 @@ export function recordingSkillsQueryOptions(
       (
         await client(
           `/api/settings/learning/recording-skills?title=${encodeURIComponent(title)}&since=${since}`,
-          { fallback: "Couldn't read your skills just now. Try again." },
+          { fallback: "刚才没能读到你的技能。请再试一次。" },
         )
       ).json(),
   });

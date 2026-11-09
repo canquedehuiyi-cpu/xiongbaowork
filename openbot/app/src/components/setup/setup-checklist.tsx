@@ -90,7 +90,7 @@ export function SetupChecklist({
       size="sm"
       variant="ghost"
     >
-      {checking ? "Checking…" : "Check again"}
+      {checking ? "正在检查…" : "再检查一遍"}
     </Button>
   );
 
@@ -98,14 +98,14 @@ export function SetupChecklist({
     <div className="flex w-full flex-col gap-3" data-setup-checklist="">
       {recheck.error ? (
         <p className="text-sm text-destructive" role="alert">
-          Couldn't check again. Try again.
+          没能重新检查。请再试一次。
         </p>
       ) : null}
       {/* Nothing while the first answer is on its way: OpenBot has no loading placeholder. */}
       {checklist.isPending ? null : checklist.error ? (
         <>
           <p className="text-sm text-destructive" role="alert">
-            Couldn't check your setup. Check again.
+            没能检查你的设置。请再检查一遍。
           </p>
           {checkAgain}
         </>
@@ -117,7 +117,7 @@ export function SetupChecklist({
               : summaryOf(checklist.data.rows)}
           </p>
           <PageRows className="mt-0">
-            <ul aria-label="Setup">
+            <ul aria-label="设置项">
               {checklist.data.rows.map((row, at) => (
                 <li
                   data-ready={row.ready ? "" : undefined}
@@ -150,48 +150,47 @@ export function summaryOf(rows: SetupRow[]): string {
     unchecked === 0
       ? null
       : unchecked === 1
-        ? "1 thing isn't checked yet."
-        : `${unchecked} things aren't checked yet.`;
-  if (gaps.length === 0) return notChecked ?? "Everything is set up.";
+        ? "还有 1 项没检查。"
+        : `还有 ${unchecked} 项没检查。`;
+  if (gaps.length === 0) return notChecked ?? "全部设置好了。";
   const required = gaps.filter((row) => row.required).length;
-  const things =
-    gaps.length === 1 ? "1 thing needs" : `${gaps.length} things need`;
+  const things = `有 ${gaps.length} 项需要设置`;
   /*
    * Says what to do, not only how many: an admin reading "works without them" was left unsure
    * whether to act. Optional gaps are features to add when wanted; required ones come first.
    */
   const optional =
     gaps.length === 1
-      ? "1 optional feature isn't set up yet"
-      : `${gaps.length} optional features aren't set up yet`;
+      ? "有 1 项可选功能还没设置"
+      : `有 ${gaps.length} 项可选功能还没设置`;
   const needs =
     required > 0
-      ? `${things} setup, and ${required === 1 ? "1 is" : `${required} are`} required. Set up the required ${required === 1 ? "one" : "ones"} first.`
-      : `${PRODUCT} is ready to use. ${optional}. Each says how to add it.`;
-  return notChecked ? `${needs} ${notChecked}` : needs;
+      ? `${things}，其中 ${required} 项是必需的。请先设置必需项。`
+      : `${PRODUCT}已经可以使用。${optional}，每项都写了怎么加。`;
+  return notChecked ? `${needs}${notChecked}` : needs;
 }
 
 /** A member's line over the list: whether anything is left, and who sees to it, without counting. */
 export function memberSummaryOf(rows: SetupRow[]): string {
   return rows.every((row) => row.ready)
-    ? "Everything is set up."
-    : "Your admin sets up anything that isn't ready yet.";
+    ? "全部设置好了。"
+    : "还没就绪的部分由管理员负责设置。";
 }
 
 /** The pill's words and colours: done green, a gap that blocks red, everything else amber. */
 function pillFor(row: SetupRow) {
   if (row.status === "ready")
     return {
-      label: "Ready",
+      label: "就绪",
       tone: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
     };
   if (row.status === "not_checked")
     return {
-      label: "Not checked",
+      label: "未检查",
       tone: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
     };
   return {
-    label: "Needs setup",
+    label: "需要设置",
     tone: row.required
       ? "bg-destructive/10 text-destructive"
       : "bg-amber-500/10 text-amber-600 dark:text-amber-400",
@@ -221,8 +220,8 @@ function SetupItem({
           {row.title}
           {row.required && !member ? (
             <span className="text-xs ms-2 whitespace-nowrap font-normal text-muted-foreground">
-              Required
-            </span>
+ 必需
+ </span>
           ) : null}
         </ItemTitle>
         <ItemDescription className="line-clamp-none [overflow-wrap:anywhere]">
@@ -275,31 +274,31 @@ function Fix({
   );
   const guide = (url: string) => (
     <a className={LINK} href={url} rel="noopener noreferrer" target="_blank">
-      Setup guide
-    </a>
+ 设置指南
+ </a>
   );
 
   if (fix.kind === "page") {
     return (
       <p className="text-sm text-muted-foreground">
-        Open {page(fix)}. {fix.docsUrl ? guide(fix.docsUrl) : null}
+        打开{page(fix)}。{fix.docsUrl ? guide(fix.docsUrl) : null}
       </p>
     );
   }
 
   return (
     <p className="text-sm text-muted-foreground">
-      Set{" "}
+      设置
       {fix.names.map((name, at) => (
         <Fragment key={name}>
-          {at > 0 ? (at === fix.names.length - 1 ? " and " : ", ") : null}
+          {at > 0 ? (at === fix.names.length - 1 ? " 和 " : "、") : null}
           <code className="text-xs rounded-md bg-muted px-1.5 py-0.5 font-mono text-foreground [overflow-wrap:anywhere]">
             {name}
           </code>
         </Fragment>
       ))}
-      , then restart {PRODUCT}.
-      {fix.page ? <> Or add the key in {page(fix.page)}.</> : null}{" "}
+      ，然后重启{PRODUCT}。
+      {fix.page ? <>或者在{page(fix.page)}里添加密钥。</> : null}{" "}
       {guide(fix.docsUrl)}
     </p>
   );

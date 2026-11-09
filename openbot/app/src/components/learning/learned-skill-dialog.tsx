@@ -35,7 +35,7 @@ import {
 function LearnedFrom({ recordings }: { recordings: LearnedSkillRecording[] }) {
   return (
     <section className="grid gap-1.5">
-      <h3 className="font-medium text-sm">Learned from</h3>
+      <h3 className="font-medium text-sm">学自</h3>
       <div className="grid gap-2">
         {recordings.map((recording) => {
           const row = (
@@ -44,9 +44,9 @@ function LearnedFrom({ recordings }: { recordings: LearnedSkillRecording[] }) {
                 <IconVideo />
               </ItemMedia>
               <ItemContent>
-                <ItemTitle>{recording.title ?? "Untitled recording"}</ItemTitle>
+                <ItemTitle>{recording.title ?? "未命名录制"}</ItemTitle>
                 {!recording.available && (
-                  <ItemDescription>No longer available.</ItemDescription>
+                  <ItemDescription>已不可用。</ItemDescription>
                 )}
               </ItemContent>
             </>
@@ -138,8 +138,8 @@ export function LearnedSkillDialog({
         <DialogFooter className="mt-4">
           {footer ?? (
             <Button onClick={onClose} size="sm" type="button">
-              Done
-            </Button>
+ 完成
+ </Button>
           )}
         </DialogFooter>
       </DialogContent>

@@ -11,27 +11,27 @@ export type RuleTemplate = RuleLabel & { rule: string; cost: string };
 
 export const RULE_TEMPLATES: RuleTemplate[] = [
   {
-    name: "Never submit a form",
-    description: "Stops a Bot pressing a submit button, or Enter while typing.",
+    name: "绝不提交表单",
+    description: "不让员工点提交按钮，也不让它在输入时按回车。",
     // The keypress clause is guarded by tool name so a click is only refused on a submit button.
     // Both tools that can press Enter are named: `computer_type` takes a `submit` flag that presses
     // it once the text is in, and a rule naming only `computer_key` left that door open. It asks for
     // the activation the gateway reads from the key, not `key == "Enter"`, so Shift+Enter, `\n` and
     // Space (which press a focused button) are refused as well.
     rule: '(intent == "activate" && contains(element.name, "submit")) || ((tool.name == "computer_key" || tool.name == "computer_type") && intent == "activate")',
-    cost: "Also stops the Bot pressing Enter or Space anywhere else. A form can submit from Enter in any field.",
+    cost: "也会拦住员工在别处按回车或空格，因为在表单的任意字段里按回车都会提交。",
   },
   {
-    name: "Never type into a password field",
-    description: "Stops a Bot typing into a field labelled as a password.",
+    name: "绝不在密码框里输入",
+    description: "不让员工在标为密码的输入框里打字。",
     rule: 'intent == "type" && contains(element.name, "password")',
-    cost: "A password box with a different label isn't covered. The rule matches the label.",
+    cost: "页面上标签不叫 password 的密码框不在覆盖范围内，规则匹配的是标签。",
   },
   {
-    name: "Stay off social media",
-    description: "Stops a Bot opening Facebook or X.",
+    name: "不上社交媒体",
+    description: "不让员工打开 Facebook 或 X。",
     rule: 'intent == "navigate" && (contains(page.host, "facebook.com") || contains(page.host, "x.com"))',
-    cost: "Only these two sites. A link that redirects there from elsewhere is allowed.",
+    cost: "只管列出的两个域名。从别处跳转过去的链接仍然放行。",
   },
 ];
 
@@ -40,31 +40,31 @@ export const RULE_ATTRIBUTES: { name: string; meaning: string }[] = [
   {
     name: "tool.name",
     meaning:
-      "The action, such as computer_click, computer_type or computer_key.",
+      "动作本身，比如 computer_click、computer_type 或 computer_key。",
   },
   {
     name: "intent",
-    meaning: "What the action is for: activate, type or navigate.",
+    meaning: "动作的用途：activate（触发）、type（输入）或 navigate（打开网页）。",
   },
-  { name: "bot.id", meaning: "The Bot taking the action." },
-  { name: "actor.id", meaning: "The person the Bot is acting for." },
+  { name: "bot.id", meaning: "执行这个动作的员工。" },
+  { name: "actor.id", meaning: "员工替谁做这件事。" },
   {
     name: "initiator.kind",
     meaning:
-      "What started the run: person, routine or handoff. A scheduled run acts as its owner, so actor.id alone can't tell you.",
+      "这次运行是谁发起的：person（本人）、routine（定时任务）或 handoff（交接）。定时运行以主人的身份执行，所以单看 actor.id 分辨不出来。",
   },
-  { name: "page.url, page.host", meaning: "The page the Bot is on." },
+  { name: "page.url, page.host", meaning: "员工所在的网页。" },
   {
     name: "element.name, element.role",
-    meaning: "The button, link or field being clicked or typed into.",
+    meaning: "被点击或被输入的按钮、链接或输入框。",
   },
-  { name: "key", meaning: "The key pressed, such as Enter." },
-  { name: "file", meaning: "The file being read or written." },
-  { name: "command", meaning: "The command being run." },
+  { name: "key", meaning: "按下的键，比如 Enter。" },
+  { name: "file", meaning: "被读取或写入的文件。" },
+  { name: "command", meaning: "正在执行的命令。" },
   {
     name: "mcp.server, mcp.tool, mcp.effect",
     meaning:
-      "For a connected app's tool: which app, which tool, and read or write.",
+      "用于已连接应用的工具：哪个应用、哪个工具，以及是读还是写。",
   },
 ];
 
@@ -75,7 +75,7 @@ export function ruleLabel(policy: ActionPolicy, rule: string): RuleLabel {
   const template = RULE_TEMPLATES.find((one) => one.rule === rule);
   if (template)
     return { name: template.name, description: template.description };
-  return { name: "Custom rule", description: "" };
+  return { name: "自定义规则", description: "" };
 }
 
 /** The policy without one rule, and without that rule's label. */

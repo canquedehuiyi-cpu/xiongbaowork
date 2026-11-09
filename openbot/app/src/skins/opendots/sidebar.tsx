@@ -175,11 +175,11 @@ function BotsSection({
     .filter(isNavigationLink)
     .find((item) => item.id === "bots");
   return (
-    <section aria-label="Bots">
+    <section aria-label="员工">
       <NavLabel
         actions={
           <IconAction
-            label="Create Bot"
+            label="新建员工"
             onClick={onNavigate}
             render={(props) => (
               <Link {...props} search={{ new: true }} to="/wakers" />
@@ -189,19 +189,19 @@ function BotsSection({
           </IconAction>
         }
       >
-        BOTS
+        员工
       </NavLabel>
       {agents.isPending ? null : agents.error ? (
         <p className="px-3.5 py-1.5 text-[12px] text-destructive" role="alert">
-          Couldn't load your Bots. Reload the page.
+          读不到你的员工。请刷新页面。
         </p>
       ) : dots.length === 0 ? (
         <p className="px-3.5 py-1.5 text-[12px] leading-relaxed text-(--opendots-faint)">
-          No Bots yet. Use + to create one.
+          还没有员工。点 + 新建一位。
         </p>
       ) : (
         <nav
-          aria-label="Your Bots"
+          aria-label="你的员工"
           className="grid max-h-[32vh] gap-[3px] overflow-y-auto"
         >
           {dots.map((agent) => {
@@ -239,7 +239,7 @@ function BotsSection({
                   <span className="min-w-0 flex-1 truncate">{agent.name}</span>
                 </Link>
                 <IconAction
-                  label={`Open ${agent.name}'s settings`}
+                  label={`打开${agent.name}的设置`}
                   onClick={onNavigate}
                   render={(props) => (
                     <Link
@@ -266,7 +266,7 @@ function BotsSection({
           to={bots.to}
         >
           <bots.icon />
-          <span className="min-w-0 flex-1 truncate">All {bots.label}</span>
+          <span className="min-w-0 flex-1 truncate">全部员工</span>
         </Link>
       ) : null}
     </section>
@@ -318,13 +318,13 @@ function ThreadRow({
             </span>
             {channel.pinned ? (
               <IconPin
-                aria-label="Pinned"
+                aria-label="已置顶"
                 className="size-3! text-(--opendots-faint)"
               />
             ) : null}
             {unread ? (
               <span
-                aria-label="Unread"
+                aria-label="有未读消息"
                 className="size-1.5 shrink-0 rounded-full bg-(--opendots-teal)"
                 role="img"
               />
@@ -342,14 +342,14 @@ function ThreadRow({
             }}
           >
             {channel.pinned ? <IconPinnedOff /> : <IconPin />}
-            {channel.pinned ? "Unpin conversation" : "Pin conversation"}
+            {channel.pinned ? "取消置顶" : "置顶对话"}
           </ContextMenuItem>
           <ContextMenuItem
             onClick={() => setConfirming(true)}
             variant="destructive"
           >
             <IconTrash />
-            Delete conversation…
+            删除对话…
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
@@ -392,7 +392,7 @@ function RecentChats({
   };
   return (
     <section
-      aria-label="Recent chats"
+      aria-label="最近对话"
       className="mt-4 flex min-h-0 flex-1 flex-col max-md:flex-none"
     >
       <NavLabel
@@ -400,13 +400,13 @@ function RecentChats({
           <>
             <IconAction
               aria-pressed={searching}
-              label={searching ? "Close search" : "Search conversations"}
+              label={searching ? "关闭搜索" : "搜索对话"}
               onClick={() => (searching ? closeSearch() : setSearching(true))}
             >
               {searching ? <IconX /> : <IconSearch />}
             </IconAction>
             <IconAction
-              label="New conversation"
+              label="新对话"
               onClick={onNavigate}
               render={(props) => <Link {...props} {...newChat} />}
             >
@@ -416,19 +416,19 @@ function RecentChats({
         }
         className="mt-[18px]"
       >
-        RECENT CHATS
+        最近对话
       </NavLabel>
       {searching ? (
         <div className="mb-2 px-1">
           <Input
-            aria-label="Search conversations"
+            aria-label="搜索对话"
             autoFocus
             className="h-8 rounded-[9px] bg-background text-[13px]"
             onChange={(event) => setSearch(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "Escape") closeSearch();
             }}
-            placeholder="Find a conversation…"
+            placeholder="查找对话…"
             value={search}
           />
         </div>
@@ -439,13 +439,13 @@ function RecentChats({
       >
         {channels.isPending ? null : channels.error ? (
           <p className="px-3.5 py-1.5 text-[12px] text-(--opendots-error-ink)">
-            Couldn't load your conversations. Reload the page.
+            读不到你的对话。请刷新页面。
           </p>
         ) : visible.length === 0 ? (
           <p className="px-3.5 py-1.5 text-[12px] leading-relaxed text-(--opendots-faint)">
             {search.trim()
-              ? `No conversation has “${search.trim()}” in its name or latest message.`
-              : "No conversations yet. Start one with New chat."}
+              ? `没有哪段对话的名称或最新消息里有「${search.trim()}」。`
+              : "还没有对话。点「新对话」开始一段。"}
           </p>
         ) : (
           visible.map((channel) => (
@@ -511,7 +511,7 @@ function WorkspaceLinks({
   const navigation = useNavigationItems().filter((item) => item.id !== "bots");
   return (
     <nav
-      aria-label="Workspace"
+      aria-label="工作区"
       className="mt-auto border-t border-(--opendots-line) pt-2.5"
     >
       <Link
@@ -522,7 +522,7 @@ function WorkspaceLinks({
         to="/s/$screen"
       >
         <IconClockHour3 />
-        <span className="min-w-0 flex-1 truncate">Routines</span>
+        <span className="min-w-0 flex-1 truncate">定时任务</span>
         <Count value={routines.data?.routines.length} />
       </Link>
       {memory ? (
@@ -534,7 +534,7 @@ function WorkspaceLinks({
           to="/s/$screen"
         >
           <IconBook />
-          <span className="min-w-0 flex-1 truncate">Memories</span>
+          <span className="min-w-0 flex-1 truncate">记忆</span>
           <Count value={memories.data?.length} />
         </Link>
       ) : null}
@@ -593,7 +593,7 @@ function UserRow() {
       {signOutOffered ? (
         <IconAction
           disabled={signOut.isPending}
-          label="Sign out"
+          label="退出登录"
           onClick={async () => {
             await signOut.mutateAsync();
             await navigate({ to: "/sign" });
@@ -632,7 +632,7 @@ export function OpenDotsSidebar({
         onClick={onNavigate}
       >
         <IconPlus />
-        <span>New chat</span>
+        <span>新对话</span>
       </Link>
       <BotsSection
         channels={channels.data}

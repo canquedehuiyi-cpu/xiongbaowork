@@ -85,7 +85,7 @@ function RailUserMenu() {
       <DropdownMenuTrigger
         render={
           <button
-            aria-label="Account"
+            aria-label="账号"
             className="grid size-[29px] place-items-center rounded-full border border-(--opendots-avatar-line) bg-(--opendots-avatar) text-[10px] text-(--opendots-avatar-ink) outline-none focus-visible:ring-2 focus-visible:ring-ring"
             type="button"
           />
@@ -114,7 +114,7 @@ function RailUserMenu() {
               variant="destructive"
             >
               <IconLogout />
-              Sign out
+              退出登录
             </DropdownMenuItem>
           </>
         ) : null}
@@ -168,7 +168,7 @@ function Rail({
   const navigation = useNavigationItems();
   return (
     <nav
-      aria-label="Workspace navigation"
+      aria-label="工作区导航"
       data-opendots-chrome
       className="flex w-12 shrink-0 flex-col items-center gap-3 border-r border-(--opendots-line) bg-(--opendots-rail) px-[5px] py-4 max-md:hidden"
     >
@@ -180,11 +180,11 @@ function Rail({
       >
         <AgentOrb size="26px" />
       </Link>
-      <RailTip label={navCollapsed ? "Expand sidebar" : "Collapse sidebar"}>
+      <RailTip label={navCollapsed ? "展开侧栏" : "收起侧栏"}>
         <button
           aria-controls="opendots-sidebar"
           aria-expanded={!navCollapsed}
-          aria-label={navCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-label={navCollapsed ? "展开侧栏" : "收起侧栏"}
           className={railButton}
           onClick={onToggleNav}
           type="button"
@@ -192,14 +192,14 @@ function Rail({
           <IconLayoutSidebar />
         </button>
       </RailTip>
-      <RailTip label="New chat">
-        <Link {...newChat} aria-label="New chat" className={railButton}>
+      <RailTip label="新对话">
+        <Link {...newChat} aria-label="新对话" className={railButton}>
           <IconPlus className="size-[19px]!" />
         </Link>
       </RailTip>
-      <RailTip label="Routines">
+      <RailTip label="定时任务">
         <Link
-          aria-label="Routines"
+          aria-label="定时任务"
           className={railButton}
           params={{ screen: "routines" }}
           to="/s/$screen"
@@ -236,19 +236,19 @@ function PauseControl({ botId, name }: { botId: string; name: string }) {
   const paused = lifecycle.data.paused;
   return (
     <button
-      aria-label={paused ? `Resume ${name}` : `Pause ${name}`}
+      aria-label={paused ? `恢复${name}` : `暂停${name}`}
       className="inline-flex items-center gap-[5px] rounded-md p-1 text-[12px] text-(--opendots-pause-ink) outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 [&_svg]:size-3.5"
       disabled={setPaused.isPending}
       onClick={() => setPaused.mutate({ agentId: botId, paused: !paused })}
       title={
         paused
-          ? `${name} is paused. Nothing runs for you until you resume it.`
-          : `Pause ${name}. Nothing runs for you until you resume it.`
+          ? `${name}已暂停。恢复之前，它不会为你做任何事。`
+          : `暂停${name}。恢复之前，它不会为你做任何事。`
       }
       type="button"
     >
       {paused ? <IconPlayerPlay /> : <IconPlayerPause />}
-      <span className="max-md:hidden">{paused ? "Resume" : "Pause"}</span>
+      <span className="max-md:hidden">{paused ? "恢复" : "暂停"}</span>
     </button>
   );
 }
@@ -276,7 +276,7 @@ function Topbar({
       <button
         aria-controls="opendots-sidebar"
         aria-expanded={!navCollapsed}
-        aria-label={navCollapsed ? "Show navigation" : "Hide navigation"}
+        aria-label={navCollapsed ? "显示导航" : "隐藏导航"}
         className="grid size-10 shrink-0 place-items-center rounded-lg text-(--opendots-toggle-ink) outline-none transition-colors hover:bg-(--opendots-hover) focus-visible:ring-2 focus-visible:ring-ring max-md:hidden [&_svg]:size-[18px]"
         onClick={onToggleNav}
         type="button"
@@ -284,10 +284,10 @@ function Topbar({
         <IconLayoutSidebar />
       </button>
       <nav
-        aria-label="Breadcrumb"
+        aria-label="当前位置"
         className="flex min-w-0 flex-1 items-center gap-[13px] text-[13px] text-(--opendots-crumb) max-md:gap-[7px]"
       >
-        <span className="shrink-0 max-md:hidden">Bots</span>
+        <span className="shrink-0 max-md:hidden">员工</span>
         <span aria-hidden className="shrink-0 max-md:hidden">
           /
         </span>
@@ -318,7 +318,7 @@ function Topbar({
             "size-8 [&_svg:not([class*='size-'])]:size-[18px]",
             computerOpen && "bg-(--opendots-tab) text-foreground",
           )}
-          label={computerOpen ? "Hide computer" : "Show computer"}
+          label={computerOpen ? "隐藏电脑" : "显示电脑"}
           onClick={onToggleComputer}
         >
           <IconDeviceDesktop />
@@ -394,7 +394,7 @@ export function OpenDotsFrame({ children }: { children: ReactNode }) {
         <>
           <button
             aria-expanded={mobileOpen}
-            aria-label="Open navigation"
+            aria-label="打开导航"
             className="fixed top-3.5 left-2.5 z-20 grid size-9 place-items-center rounded-lg text-(--opendots-menu-ink) outline-none focus-visible:ring-2 focus-visible:ring-ring [&_svg]:size-[21px]"
             data-opendots-chrome
             onClick={() => setMobileOpen(true)}
@@ -414,7 +414,7 @@ export function OpenDotsFrame({ children }: { children: ReactNode }) {
               showCloseButton={false}
               side="left"
             >
-              <SheetTitle className="sr-only">Navigation</SheetTitle>
+              <SheetTitle className="sr-only">导航</SheetTitle>
               <OpenDotsSidebar
                 newChat={newChat}
                 onNavigate={() => setMobileOpen(false)}
@@ -425,7 +425,7 @@ export function OpenDotsFrame({ children }: { children: ReactNode }) {
         </>
       ) : (
         <aside
-          aria-label="Sidebar"
+          aria-label="侧栏"
           className="w-[220px] shrink-0 border-r border-(--opendots-line) bg-(--opendots-sidebar)"
           data-opendots-chrome
           hidden={navCollapsed}

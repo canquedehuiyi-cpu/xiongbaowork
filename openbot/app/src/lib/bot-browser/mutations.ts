@@ -52,7 +52,7 @@ export function startBotBrowserRecordingMutationOptions(
             title: variables.title,
             ...(variables.language ? { language: variables.language } : {}),
           },
-          fallback: "Couldn't start recording. Try again.",
+          fallback: "没能开始录制。请再试一次。",
         })
       ).json(),
     onSuccess: () => invalidateBotBrowser(queryClient, botId),
@@ -74,7 +74,7 @@ export function stopBotBrowserRecordingMutationOptions(
         await client(botBrowserApiPaths.recording(botId), {
           method: "POST",
           body: { action: "stop" },
-          fallback: "Couldn't stop recording. Try again.",
+          fallback: "没能停止录制。请再试一次。",
         })
       ).json(),
     onSettled: () => invalidateBotBrowser(queryClient, botId),
@@ -94,7 +94,7 @@ export function botBrowserTabsMutationOptions(
         await client(botBrowserApiPaths.tabs(botId), {
           method: "POST",
           body: request,
-          fallback: "Couldn't change the tabs. Try again.",
+          fallback: "没能切换标签页。请再试一次。",
         })
       ).json(),
     onSuccess: () => invalidateBotBrowser(queryClient, botId),
@@ -114,7 +114,7 @@ export function navigateBotBrowserMutationOptions(
         await client(botBrowserApiPaths.navigate(botId), {
           method: "POST",
           body: request,
-          fallback: "Couldn't open that page. Try again.",
+          fallback: "没能打开那个网页。请再试一次。",
         })
       ).json(),
     onSuccess: () => invalidateBotBrowser(queryClient, botId),
@@ -134,7 +134,7 @@ export function clearBotBrowserMutationOptions(
       (
         await client(botBrowserApiPaths.clear(botId), {
           method: "POST",
-          fallback: "Couldn't clear the browser. Try again.",
+          fallback: "没能清除浏览器。请再试一次。",
         })
       ).json(),
     onSettled: () => invalidateBotBrowser(queryClient, botId),

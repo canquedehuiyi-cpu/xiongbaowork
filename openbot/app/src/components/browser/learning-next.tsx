@@ -156,7 +156,7 @@ export function useLearningNext(stopped: Stopped) {
       kind: "failed",
       reason:
         runSince.failure ??
-        "Learning stopped before it finished. Choose Learn now to try again.",
+        "学习没做完就停了。点「立即学习」再试一次。",
     };
   else if (
     runSince?.status === "succeeded" &&
@@ -235,13 +235,13 @@ function useSkillNotice(title: string, next: LearningNext) {
     try {
       new Notification(
         next.kind === "learned"
-          ? `Your Bots learned “${title}”`
-          : `A skill from “${title}” is ready to review`,
+          ? `你的员工学会了「${title}」`
+          : `从「${title}」学到的技能可以审核了`,
         {
           body:
             next.kind === "learned"
-              ? "Open Teach a Bot to try it."
-              : "Review it in Settings, Learning.",
+              ? "打开「教员工做事」试一试。"
+              : "到「设置 → 学习」里审核。",
           tag: `openbot-learned-${skill}`,
         },
       );
@@ -261,36 +261,36 @@ export function learningNextWords(
   const { next, canReview, autoApprove } = learning;
   if (next.kind === "learned")
     return {
-      heading: "Your Bots learned it",
-      sentence: `Your Bots can do “${title}” now. Try it, or ask any Bot to do it.`,
+      heading: "你的员工学会了",
+      sentence: `你的员工现在会做「${title}」了。试一试，或者让任意一位员工去做。`,
     };
   if (next.kind === "proposed")
     return canReview
       ? {
-          heading: "Your new skill is ready to review",
-          sentence: `Learning made a skill from “${title}”. Approve it in Settings, Learning, then ask any Bot to do it.`,
+          heading: "新技能可以审核了",
+          sentence: `学习从「${title}」里学出了一项技能。到「设置 → 学习」里批准它，然后就可以让任意一位员工去做。`,
         }
       : {
-          heading: "Your new skill is waiting for an admin",
-          sentence: `Learning made a skill from “${title}”. Once an admin approves it, ask any Bot to do it.`,
+          heading: "新技能在等管理员审核",
+          sentence: `学习从「${title}」里学出了一项技能。管理员批准后，就可以让任意一位员工去做。`,
         };
   if (next.kind === "model" || next.kind === "off")
     return {
-      heading: `Saved “${title}”`,
+      heading: `已保存「${title}」`,
       sentence:
-        "Your recording is kept. OpenBot learns a skill from it once Learning can run.",
+        "你的录制已保留。等学习可以运行了，熊宝就会从中学出技能。",
     };
   if (!canReview)
     return {
-      heading: `Saved “${title}”`,
+      heading: `已保存「${title}」`,
       sentence:
-        "OpenBot learns a skill from it, and an admin reviews it. Once it's approved, ask any Bot to do it.",
+        "熊宝会从中学出技能，再由管理员审核。批准后，就可以让任意一位员工去做。",
     };
   return {
-    heading: `Saved “${title}”`,
+    heading: `已保存「${title}」`,
     sentence: autoApprove
-      ? "OpenBot learns a skill from it, and you'll find it in Settings, Learning. Once it's learned, ask any Bot to do it."
-      : "OpenBot learns a skill from it, and you'll see it in Settings, Learning to review. Once you approve it, ask any Bot to do it.",
+      ? "熊宝会从中学出技能，你可以在「设置 → 学习」里找到它。学会后，就可以让任意一位员工去做。"
+      : "熊宝会从中学出技能，你可以在「设置 → 学习」里审核它。你批准后，就可以让任意一位员工去做。",
   };
 }
 
@@ -317,8 +317,8 @@ export function LearningNextRow({
       size="sm"
       variant="outline"
     >
-      Learn now
-    </Button>
+ 立即学习
+ </Button>
   ) : null;
   let icon = <IconSparkles />;
   let tone: "ok" | "warn" | "busy" | "plain" = "plain";
@@ -328,73 +328,73 @@ export function LearningNextRow({
   switch (next.kind) {
     case "learned":
       tone = "ok";
-      heading = "Skill learned";
+      heading = "技能已学会";
       sentence = next.skill.description;
       action = (
         <Button size="sm" render={<Link to="/" search={{ ask: title }} />}>
-          Try it
-        </Button>
+ 试一试
+ </Button>
       );
       break;
     case "proposed":
-      heading = canReview ? "Ready to review" : "Waiting for an admin";
+      heading = canReview ? "可以审核了" : "等管理员审核";
       sentence = next.skill.description;
       action = canReview ? (
         <Button size="sm" variant="outline" render={<Link to={YOUR_SKILLS} />}>
-          Review
-        </Button>
+ 审核
+ </Button>
       ) : null;
       break;
     case "learning":
       tone = "busy";
       icon = <IconLoader2 />;
-      heading = "Learning from your recordings";
-      sentence = "This takes a few minutes. You can leave this page.";
+      heading = "正在从你的录制里学习";
+      sentence = "这需要几分钟。你可以先离开这个页面。";
       break;
     case "failed":
       tone = "warn";
       icon = <IconAlertTriangle />;
-      heading = "Learning didn't finish";
+      heading = "学习没有完成";
       sentence = next.reason;
       action = learnNow;
       break;
     case "none":
-      heading = "No skill from it yet";
+      heading = "还没从中学到技能";
       sentence =
-        "Learning didn't find a skill in this recording. Record it again, and say what you're doing as you go.";
+        "学习没能从这段录制里找出技能。再录一遍，边做边说你在做什么。";
       action = learnNow;
       break;
     case "model":
       tone = "warn";
       icon = <IconAlertTriangle />;
-      heading = "Learning can't run yet";
+      heading = "学习暂时还不能运行";
       sentence = next.reason;
       break;
     case "off":
       tone = "warn";
       icon = <IconAlertTriangle />;
-      heading = "Learning is off";
+      heading = "学习已关闭";
       sentence =
-        "Learning isn't available in the back end, so no skill is learned from it.";
+        "后端没有提供学习功能，所以不会从中学习技能。";
       break;
     case "unreadable":
       tone = "warn";
       icon = <IconAlertTriangle />;
-      heading = "Couldn't check on Learning";
+      heading = "没能查看学习进度";
       sentence = next.reason;
       break;
     case "waiting":
-      heading = "Learning runs on its own";
+      heading = "学习会自动运行";
       sentence = canReview
-        ? "Learn now to get the skill sooner."
-        : "An admin decides when it runs.";
+        ? "点「立即学习」可以更快拿到技能。"
+        : "什么时候运行由管理员决定。";
       action = learnNow;
       break;
   }
   if (learnError && next.kind !== "learned" && next.kind !== "proposed") {
     tone = "warn";
     icon = <IconAlertTriangle />;
-    heading = "Learning didn't start";
+    heading = "学习没能开始";
     sentence = learnError;
   }
   return (
@@ -451,8 +451,8 @@ export function LearningNextNotice({ stopped }: { stopped: Stopped }) {
             variant="outline"
             render={<Link to={YOUR_SKILLS} />}
           >
-            See your skills
-          </Button>
+ 查看你的技能
+ </Button>
         }
       />
     </div>

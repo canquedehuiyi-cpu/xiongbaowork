@@ -52,7 +52,7 @@ import { cn } from "@/lib/utils";
 export function tabName(tab: BrowserTab): string {
   const title = tab.title.trim();
   if (title && title !== tab.url) return title;
-  if (!tab.url || tab.url === "about:blank") return "New tab";
+  if (!tab.url || tab.url === "about:blank") return "新标签页";
   try {
     return new URL(tab.url).host || tab.url;
   } catch {
@@ -180,7 +180,7 @@ export function TabStrip({
         </div>
       ) : null}
       <div
-        aria-label="Tabs"
+        aria-label="标签页"
         className="-mb-px flex min-w-0 items-end gap-0.5 overflow-x-auto"
         role="tablist"
       >
@@ -234,7 +234,7 @@ export function TabStrip({
                 onClick={() => onClose(tab.id)}
                 size="icon-xs"
                 tabIndex={-1}
-                title={`Close ${name}`}
+                title={`关闭${name}`}
                 variant="ghost"
               >
                 <IconX />
@@ -244,7 +244,7 @@ export function TabStrip({
         })}
       </div>
       <Button
-        aria-label="New tab"
+        aria-label="新标签页"
         className="mb-1 self-center"
         disabled={disabled}
         onClick={onNew}
@@ -278,7 +278,7 @@ export function TabPanel({
   if (!tabs) return <div className={className}>{children}</div>;
   return (
     <div
-      aria-label={active ? undefined : "Browser"}
+      aria-label={active ? undefined : "浏览器"}
       aria-labelledby={active ? tabId(ids, active.id) : undefined}
       className={className}
       id={panelId(ids)}
@@ -335,7 +335,7 @@ export function AddressBar({
   }, [focus, still, onFocused]);
   return (
     <form
-      aria-label="Address bar"
+      aria-label="地址栏"
       className={cn(
         "flex items-center gap-0.5 border-border border-b bg-background px-2 py-1.5",
         className,
@@ -352,7 +352,7 @@ export function AddressBar({
       }}
     >
       <Button
-        aria-label="Back"
+        aria-label="后退"
         disabled={still}
         onClick={() => onMove("back")}
         size="icon-sm"
@@ -361,7 +361,7 @@ export function AddressBar({
         <IconArrowLeft />
       </Button>
       <Button
-        aria-label="Forward"
+        aria-label="前进"
         disabled={still}
         onClick={() => onMove("forward")}
         size="icon-sm"
@@ -370,7 +370,7 @@ export function AddressBar({
         <IconArrowRight />
       </Button>
       <Button
-        aria-label="Reload"
+        aria-label="刷新"
         disabled={still}
         onClick={() => onMove("reload")}
         size="icon-sm"
@@ -380,11 +380,11 @@ export function AddressBar({
       </Button>
       {clear ? (
         <Button
-          aria-label="Clear browser data"
+          aria-label="清除浏览器数据"
           disabled={clear.disabled}
           onClick={clear.ask}
           size="icon-sm"
-          title="Clear browser data"
+          title="清除浏览器数据"
           variant="ghost"
         >
           <IconEraser />
@@ -393,7 +393,7 @@ export function AddressBar({
       {/* A pill in the window's frame colour, as a desktop browser's address bar is, lit like a field while typed in. */}
       <InputGroup className="ml-1.5 h-8 min-w-0 flex-1 rounded-full border-transparent bg-muted/70 text-sm shadow-none transition-colors has-[[data-slot=input-group-control]:focus-visible]:bg-background dark:bg-input/40">
         <InputGroupInput
-          aria-label="Address"
+          aria-label="地址"
           ref={input}
           disabled={disabled}
           readOnly={readOnly}
@@ -402,7 +402,7 @@ export function AddressBar({
           onKeyDown={(event) => {
             if (event.key === "Escape") setDraft(null);
           }}
-          placeholder="Search or type an address"
+          placeholder="搜索或输入网址"
           spellCheck={false}
           value={draft ?? address}
         />
@@ -471,10 +471,9 @@ export function ClearBrowserDialog({
           : {})}
       >
         <DialogHeader>
-          <DialogTitle>Clear this browser?</DialogTitle>
+          <DialogTitle>清除这个浏览器？</DialogTitle>
           <DialogDescription>
-            Cookies, saved passwords and history are wiped. You'll have to sign
-            in everywhere again.
+            Cookie、保存的密码和浏览记录都会被清除，所有网站都要重新登录。
           </DialogDescription>
         </DialogHeader>
         {clear.error ? (
@@ -490,22 +489,22 @@ export function ClearBrowserDialog({
             size="sm"
             variant="outline"
           >
-            Cancel
-          </Button>
+ 取消
+ </Button>
           <Button
             disabled={clear.isPending}
             onClick={() =>
               clear.mutate(undefined, {
                 onSuccess: () => {
                   onOpenChange(false);
-                  toast.add({ title: "Browser cleared", type: "success" });
+                  toast.add({ title: "浏览器已清除", type: "success" });
                 },
               })
             }
             size="sm"
             variant="destructive"
           >
-            {clear.isPending ? "Clearing…" : "Clear"}
+            {clear.isPending ? "正在清除…" : "清除"}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -34,10 +34,10 @@ export function UpdateBanner() {
 
   return (
     <aside
-      aria-label="OpenBot update"
+      aria-label="熊宝更新"
       className="flex shrink-0 flex-wrap items-center gap-x-2 border-b border-border bg-muted/60 px-4 py-1.5 text-sm"
     >
-      <p className="text-foreground">OpenBot {version} is available.</p>
+      <p className="text-foreground">熊宝 {version} 已发布。</p>
       {busy ? (
         <p className="text-muted-foreground" role="status">
           {describe(progress)}
@@ -51,10 +51,11 @@ export function UpdateBanner() {
             size="sm"
             variant="link"
           >
-            Update and restart
+ 更新并重启
+
           </Button>
           <Button
-            aria-label="Dismiss"
+            aria-label="关闭"
             disabled={dismiss.isPending}
             onClick={() => dismiss.mutate(version)}
             size="icon-xs"
@@ -66,7 +67,7 @@ export function UpdateBanner() {
       )}
       {install.error && !busy ? (
         <p className="basis-full text-destructive" role="alert">
-          Couldn't install the update: {reason(install.error)}
+          没能安装更新：{reason(install.error)}
         </p>
       ) : null}
     </aside>
@@ -75,9 +76,9 @@ export function UpdateBanner() {
 
 /** "Downloading… 25%", then "Restarting…" once it is installed. */
 export function describe(progress: DesktopAppUpdate["installing"]): string {
-  if (progress?.restarting) return "Restarting…";
-  if (!progress?.total) return "Downloading…";
-  return `Downloading… ${Math.min(100, Math.round((progress.downloaded / progress.total) * 100))}%`;
+  if (progress?.restarting) return "正在重启…";
+  if (!progress?.total) return "正在下载…";
+  return `正在下载… ${Math.min(100, Math.round((progress.downloaded / progress.total) * 100))}%`;
 }
 
 /** The desktop app refuses with its own sentence, as a plain string. */

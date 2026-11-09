@@ -188,10 +188,10 @@ function QuestionParts({
             </QuestionnaireChoices>
           ) : null}
           <QuestionnaireInput
-            aria-label={`${part.header}, in your own words`}
+            aria-label={`${part.header}，用你自己的话回答`}
             className="min-h-9 bg-card dark:bg-card"
             placeholder={
-              part.options ? "Or answer in your own words" : "Your answer"
+              part.options ? "或者用你自己的话回答" : "你的回答"
             }
           />
           <QuestionnaireError />
@@ -199,14 +199,14 @@ function QuestionParts({
       ))}
       <QuestionnaireActions className="min-h-8">
         <QuestionnairePrevious size="sm" variant="ghost">
-          Back
-        </QuestionnairePrevious>
+ 上一步
+ </QuestionnairePrevious>
         {several ? (
           <QuestionnaireProgress className="col-start-2 row-start-1 justify-self-end" />
         ) : null}
-        <QuestionnaireNext size="sm">Next</QuestionnaireNext>
+        <QuestionnaireNext size="sm">下一步</QuestionnaireNext>
         <QuestionnaireSubmit disabled={sending} size="sm">
-          {sending ? "Sending…" : several ? "Send answers" : "Send answer"}
+          {sending ? "正在发送…" : "发送回答"}
         </QuestionnaireSubmit>
       </QuestionnaireActions>
       {error ? (
@@ -244,14 +244,13 @@ export function QuestionNotice({
   const parts = question.parts?.length ? question.parts : undefined;
   return (
     <section
-      aria-label={`${botName} is waiting on your answer`}
+      aria-label={`${botName}在等你的回答`}
       className="flex gap-2.5 px-3 pt-2.5 pb-2"
     >
       <BotOrb name={botName} seed={avatarSeed} size={20} />
       <div className="flex max-h-80 min-w-0 flex-1 flex-col gap-1 overflow-y-auto">
         <p className="text-muted-foreground text-xs">
-          <span className="font-medium text-foreground">{botName}</span> is
-          waiting on your answer
+          <span className="font-medium text-foreground">{botName}</span>在等你的回答
         </p>
         <p className="whitespace-pre-wrap text-sm leading-snug">
           {question.question}
@@ -269,12 +268,12 @@ export function QuestionNotice({
         ) : null}
       </div>
       <Button
-        aria-label="Dismiss question"
+        aria-label="忽略这个问题"
         className="-mt-1 -mr-1"
         disabled={dismiss.isPending}
         onClick={() => dismiss.mutate({ id: question.id })}
         size="icon-sm"
-        title="Dismiss without answering"
+        title="不回答，直接忽略"
         variant="ghost"
       >
         <IconX />

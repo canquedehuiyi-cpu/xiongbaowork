@@ -49,21 +49,21 @@ export const SHARING_CHOICES: {
   {
     mode: "closed",
     icon: IconLock,
-    title: "Only my Bots",
-    description: "Only the Bots you use draw on your skills.",
+    title: "只给我的员工",
+    description: "只有你用的员工会用到你的技能。",
   },
   {
     mode: "open",
     icon: IconUsersGroup,
-    title: "Everyone's Bots",
-    description: "Every Bot on OpenBot draws on all of your skills.",
+    title: "所有人的员工",
+    description: "熊宝上的每位员工都会用到你的全部技能。",
   },
   {
     mode: "choose",
     icon: IconListCheck,
-    title: "The skills I choose",
+    title: "我挑选的技能",
     description:
-      "Every Bot draws on the skills you open below; your own Bots use all of them.",
+      "每位员工都会用到你在下面公开的技能；你自己的员工会用到全部技能。",
   },
 ];
 
@@ -73,12 +73,12 @@ export const SHARING_CHOICES: {
  */
 function choiceSentence(data: PersonalLearningSharing): string {
   if (data.sharingAllowed)
-    return "Your own Bots always use every skill learned from your recordings.";
+    return "你自己的员工总会用到从你的录制里学到的每一项技能。";
   const off =
-    "An admin hasn't turned on sharing skills with every Bot, so only the Bots you use draw on yours.";
+    "管理员还没开启向所有员工共享技能，所以只有你用的员工会用到你的技能。";
   return data.mode === "closed"
     ? off
-    : `${off} Your choice below applies again if an admin turns it on.`;
+    : `${off}管理员开启后，你在下面的选择会重新生效。`;
 }
 
 /** What the Skills list says when it has none to show. */
@@ -89,23 +89,23 @@ function emptySentence(
 ): string {
   if (personal) {
     return data.skills === null
-      ? "Couldn't read your Skills from the back end just now. Reload the page to try again."
-      : "No skills learned from your recordings and conversations yet. Once there are, they show up here.";
+      ? "刚才没能从后端读到你的技能。请刷新页面再试。"
+      : "还没有从你的录制和对话里学到技能。学到之后会显示在这里。";
   }
   if (data.unavailable === "off")
-    return "An admin has turned off automatic learning, so no skills are learned from your recordings.";
+    return "管理员关闭了自动学习，所以不会从你的录制里学习技能。";
   if (data.skills === null)
-    return "Couldn't read your Skills from the back end just now. Your choice above still applies to them.";
+    return "刚才没能从后端读到你的技能。你在上面的选择对它们仍然有效。";
   return mode === "choose"
-    ? "No Skills learned from your recordings yet. Once there are, each one you open here reaches every Bot."
-    : "No Skills learned from your recordings yet. Once there are, they show up here.";
+    ? "还没有从你的录制里学到技能。学到之后，你在这里公开的每一项都会提供给所有员工。"
+    : "还没有从你的录制里学到技能。学到之后会显示在这里。";
 }
 
 /** What the Your Skills section says about who draws on them, in the mode chosen. */
 const SKILLS_DESCRIPTION: Record<LearningSharingMode, string> = {
-  closed: "Only the Bots you use draw on these skills.",
-  open: "Every Bot on OpenBot draws on these skills.",
-  choose: "Open a skill to let every Bot on OpenBot use it.",
+  closed: "只有你用的员工会用到这些技能。",
+  open: "熊宝上的每位员工都会用到这些技能。",
+  choose: "公开一项技能，熊宝上的每位员工就都能用它。",
 };
 
 /**
@@ -150,9 +150,9 @@ export function LearningSharing() {
     const none = data.skills === null || data.skills.length === 0;
     return (
       <PageSection
-        title="Your skills"
+        title="你的技能"
         // Said only over skills to open: above the empty state it would point at nothing.
-        description={none ? undefined : "Open a skill to read what it does."}
+        description={none ? undefined : "打开一项技能，看看它做什么。"}
       >
         {data.skills === null || data.skills.length === 0 ? (
           <PageEmpty>{emptySentence(data, mode, true)}</PageEmpty>
@@ -200,7 +200,7 @@ export function LearningSharing() {
   return (
     <>
       <PageSection
-        title="Who else's Bots use your skills"
+        title="还有谁的员工能用你的技能"
         description={choiceSentence(data)}
       >
         <PageRows>
@@ -247,7 +247,7 @@ export function LearningSharing() {
         </PageRows>
       </PageSection>
       <PageSection
-        title="Your skills"
+        title="你的技能"
         description={SKILLS_DESCRIPTION[data.sharingAllowed ? mode : "closed"]}
       >
         {data.skills === null || data.skills.length === 0 ? (
@@ -287,9 +287,9 @@ export function LearningSharing() {
                               needsAdmin ||
                               (mode === "choose" &&
                                 !(open && data.sharingAllowed))
-                                ? "Only your Bots use it."
+                                ? "只有你的员工会用它。"
                                 : mode === "choose"
-                                  ? "Every Bot may use it."
+                                  ? "所有员工都可以用它。"
                                   : null,
                               skill.description,
                             ]
@@ -303,11 +303,11 @@ export function LearningSharing() {
                           <>
                             {needsAdmin && skill.sharing === "requested" ? (
                               <span className="text-muted-foreground text-sm">
-                                Asked to share
-                              </span>
+ 已申请共享
+ </span>
                             ) : null}
                             <Switch
-                              aria-label={`Open ${skillTitle(skill.name, skill.description)} to everyone`}
+                              aria-label={`向所有人公开「${skillTitle(skill.name, skill.description)}」`}
                               checked={open}
                               // An open Skill can always be closed; opening one waits for an admin.
                               disabled={
@@ -340,8 +340,8 @@ export function LearningSharing() {
                           </>
                         ) : skill.sharing === "requested" ? (
                           <span className="text-muted-foreground text-sm">
-                            Asked to share
-                          </span>
+ 已申请共享
+ </span>
                         ) : (
                           <Button
                             disabled={requestShare.isPending}
@@ -350,8 +350,8 @@ export function LearningSharing() {
                             type="button"
                             variant="outline"
                           >
-                            Ask to share
-                          </Button>
+ 申请共享
+ </Button>
                         )}
                       </ItemActions>
                     </Item>

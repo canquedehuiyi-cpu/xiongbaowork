@@ -21,7 +21,7 @@ export function revokeRecorderConnectionMutationOptions(
     mutationFn: async (connectionId: string): Promise<void> => {
       await client(recorderPaths.connection(connectionId), {
         method: "DELETE",
-        fallback: "Couldn't disconnect this browser.",
+        fallback: "没能断开这个浏览器。",
       });
     },
     onSuccess: () =>
@@ -35,7 +35,7 @@ export async function mintRecorderConnectCode(): Promise<ConnectCodeResponse> {
     await client(recorderPaths.connectCodes, {
       method: "POST",
       body: { via: "web" },
-      fallback: "Couldn't start connecting this browser.",
+      fallback: "没能开始连接这个浏览器。",
     })
   ).json();
 }
@@ -70,7 +70,7 @@ export function connectRecorderHereMutationOptions(queryClient: QueryClient) {
 }
 
 /** What the Browser button says when the Recorder it asked did not answer at all. */
-const UNANSWERED = "The OpenBot Recorder didn't answer. Try again.";
+const UNANSWERED = "OpenBot 录制器没有回应。请再试一次。";
 
 /** `openbot.record` or `openbot.stop`, with the Recorder's refusal thrown in its own sentence. */
 async function askRecorderHere(

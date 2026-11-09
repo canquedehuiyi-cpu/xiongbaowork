@@ -46,7 +46,7 @@ export const recorderConnectionsQueryOptions = (options?: {
     queryFn: async (): Promise<RecorderConnectionsResponse> =>
       (
         await client(recorderPaths.connections, {
-          fallback: "Couldn't load your connected browsers.",
+          fallback: "读不到你已连接的浏览器。",
         })
       ).json(),
     refetchInterval: options?.awaiting
@@ -140,7 +140,7 @@ export const recordingsQueryOptions = (options?: { waiting?: boolean }) =>
         ? `?cursor=${encodeURIComponent(pageParam)}`
         : "";
       const response = await client(`${recorderPaths.recordings}${suffix}`, {
-        fallback: "Couldn't load your recordings. Reload the page.",
+        fallback: "读不到你的录制。请刷新页面。",
       });
       return response.json();
     },

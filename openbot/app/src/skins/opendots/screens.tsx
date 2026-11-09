@@ -14,7 +14,7 @@ import {
  * switch, Run now, history and delete OpenBot offers is still there.
  */
 function OpenDotsPage({
-  eyebrow = "YOUR WORKSPACE",
+  eyebrow = "你的工作区",
   title,
   description,
   action,
@@ -53,8 +53,8 @@ function OpenDotsPage({
 export function RoutinesScreen() {
   return (
     <OpenDotsPage
-      description="What your Bots do on a schedule. Ask a Bot to set one up. Pause, run or delete one here."
-      title="Routines"
+      description="员工按时间表做的事。让员工帮你设一个；在这里可以暂停、运行或删除。"
+      title="定时任务"
     >
       <RoutinesList embedded />
     </OpenDotsPage>

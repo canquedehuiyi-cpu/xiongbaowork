@@ -96,7 +96,7 @@ export async function invokeDesktop<T>(
   args?: Record<string, unknown>,
 ): Promise<T> {
   const shell = desktopShell();
-  if (!shell) throw new Error("This page needs the OpenBot desktop app.");
+  if (!shell) throw new Error("这个页面需要熊宝桌面端。");
   return (await shell.invoke(`${PLUGIN}|${command}`, args)) as T;
 }
 

@@ -7,7 +7,7 @@ import { mutationOptions, type QueryClient } from "@tanstack/react-query";
 import { client } from "@/lib/client";
 import { learningKeys } from "./queries";
 
-const FALLBACK = "Couldn't save your Learning settings. Try again.";
+const FALLBACK = "没能保存你的学习设置。请再试一次。";
 
 /** Who else's Bots use your Skills: only yours, everyone's, or the ones you open. */
 export function setLearningSharingModeMutationOptions(
@@ -59,7 +59,7 @@ export function reviewLearningProposalMutationOptions(
         {
           method: "POST",
           body: {},
-          fallback: "Couldn't save your decision. Try again.",
+          fallback: "没能保存你的决定。请再试一次。",
         },
       ),
     onSuccess: () =>
@@ -77,7 +77,7 @@ export function startLearningRunMutationOptions(queryClient: QueryClient) {
         {
           method: "POST",
           body: {},
-          fallback: "Couldn't start Learning. Try again.",
+          fallback: "没能开始学习。请再试一次。",
         },
       ),
     onSuccess: () =>
@@ -101,7 +101,7 @@ export function reviewPersonalProposalMutationOptions(
         {
           method: "POST",
           body: {},
-          fallback: "Couldn't save your decision. Try again.",
+          fallback: "没能保存你的决定。请再试一次。",
         },
       ),
     onSuccess: () =>
@@ -121,7 +121,7 @@ export function startPersonalLearningRunMutationOptions(
         {
           method: "POST",
           body: {},
-          fallback: "Couldn't start Learning. Try again.",
+          fallback: "没能开始学习。请再试一次。",
         },
       ),
     onSuccess: () =>
@@ -143,7 +143,7 @@ export function reviewPersonProposalMutationOptions(queryClient: QueryClient) {
         {
           method: "POST",
           body: {},
-          fallback: "Couldn't save your decision. Try again.",
+          fallback: "没能保存你的决定。请再试一次。",
         },
       ),
     onSuccess: () =>
@@ -160,7 +160,7 @@ export function requestSkillSharingMutationOptions(queryClient: QueryClient) {
         {
           method: "POST",
           body: {},
-          fallback: "Couldn't send your request. Try again.",
+          fallback: "没能发出你的申请。请再试一次。",
         },
       );
     },
@@ -184,7 +184,7 @@ export function decideSharingMutationOptions(queryClient: QueryClient) {
         {
           method: "POST",
           body: { requestedAt: variables.requestedAt },
-          fallback: "Couldn't save your decision. Try again.",
+          fallback: "没能保存你的决定。请再试一次。",
         },
       ),
     onSuccess: () =>
@@ -203,7 +203,7 @@ export function savePersonalReviewMutationOptions(queryClient: QueryClient) {
       client("/api/admin/learning/personal-review", "settings", {
         method: "PUT",
         body: { personalReview },
-        fallback: "Couldn't save who approves. Try again.",
+        fallback: "没能保存审核人设置。请再试一次。",
       }),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: learningKeys.all }),
@@ -217,7 +217,7 @@ export function saveAutoApproveMutationOptions(queryClient: QueryClient) {
       client("/api/settings/learning/auto-approve", {
         method: "PUT",
         body: { autoApprove },
-        fallback: "Couldn't save automatic approval. Try again.",
+        fallback: "没能保存自动批准设置。请再试一次。",
       }).then((response) => response.json()),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: learningKeys.all }),

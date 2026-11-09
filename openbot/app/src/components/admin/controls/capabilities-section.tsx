@@ -71,7 +71,7 @@ export function CapabilitiesSection() {
                         <ItemDescription>
                           {effective
                             ? capability.description
-                            : "Off for everybody, unless a role or group turns it on."}
+                            : "对所有人关闭，除非某个角色或用户组把它打开。"}
                         </ItemDescription>
                       </ItemContent>
                       <ItemActions>
@@ -102,11 +102,11 @@ export function CapabilitiesSection() {
                   <IconUsersGroup />
                 </ItemMedia>
                 <ItemContent>
-                  <ItemTitle>Role and group overrides</ItemTitle>
+                  <ItemTitle>按角色和用户组例外设置</ItemTitle>
                   <ItemDescription>
                     {overrideCount === 0
-                      ? "None. Everybody gets the switches above"
-                      : `${overrideCount} set`}
+                      ? "无。所有人都按上面的开关来"
+                      : `已设置 ${overrideCount} 项`}
                   </ItemDescription>
                 </ItemContent>
                 <ItemActions>
@@ -139,12 +139,12 @@ function OverridesDialog({
 }) {
   const setCapability = useMutation(setCapabilityMutationOptions(queryClient));
   const scopes: { kind: "role" | "group"; id: string; label: string }[] = [
-    { kind: "role", id: "admin", label: "Admins" },
-    { kind: "role", id: "user", label: "Members" },
+    { kind: "role", id: "admin", label: "管理员" },
+    { kind: "role", id: "user", label: "成员" },
     ...data.groups.map((group) => ({
       kind: "group" as const,
       id: group,
-      label: `Group: ${group}`,
+      label: `用户组：${group}`,
     })),
   ];
   const [scopeIndex, setScopeIndex] = useState(0);
@@ -154,14 +154,14 @@ function OverridesDialog({
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Role and group overrides</DialogTitle>
+          <DialogTitle>按角色和用户组例外设置</DialogTitle>
         </DialogHeader>
         <DialogBody className="mt-4 space-y-4 overflow-y-auto">
           <Select
             onValueChange={(value) => setScopeIndex(Number(value))}
             value={String(scopeIndex)}
           >
-            <SelectTrigger aria-label="Scope">
+            <SelectTrigger aria-label="范围">
               <SelectValue>{scope?.label}</SelectValue>
             </SelectTrigger>
             <SelectContent>
@@ -179,8 +179,8 @@ function OverridesDialog({
           </Select>
           <p className="text-muted-foreground text-xs">
             {scope?.kind === "group"
-              ? "A group can only add. Grant gives its members the capability even when the organization has it off."
-              : "A role's setting replaces the organization switch for everybody with that role."}
+              ? "用户组只能放宽。选「授予」后，即使组织层面关闭了这项能力，组内成员也能使用。"
+              : "角色的设置会替代组织层面的开关，对该角色的所有人生效。"}
           </p>
           {scope
             ? data.capabilities.map((capability) => {
@@ -208,19 +208,19 @@ function OverridesDialog({
                       value={value}
                     >
                       <SelectTrigger
-                        aria-label={`${capability.title} for ${scope.label}`}
+                        aria-label={`${scope.label}的${capability.title}`}
                         className="w-36"
                       >
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectGroup>
-                          <SelectItem value="inherit">Inherit</SelectItem>
+                          <SelectItem value="inherit">沿用</SelectItem>
                           <SelectItem value="on">
-                            {scope.kind === "group" ? "Grant" : "On"}
+                            {scope.kind === "group" ? "授予" : "开启"}
                           </SelectItem>
                           {scope.kind === "role" ? (
-                            <SelectItem value="off">Off</SelectItem>
+                            <SelectItem value="off">关闭</SelectItem>
                           ) : null}
                         </SelectGroup>
                       </SelectContent>
@@ -237,8 +237,8 @@ function OverridesDialog({
         </DialogBody>
         <DialogFooter className="mt-4">
           <Button onClick={() => onOpenChange(false)} size="sm" type="button">
-            Done
-          </Button>
+ 完成
+ </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -86,9 +86,6 @@ export function inColumn(pathname: string, sidePanelOpen: boolean): boolean {
   return tabFor(pathname) !== null && !sidePanelOpen;
 }
 
-const plural = (count: number, word: string) =>
-  `${count} ${word}${count === 1 ? "" : "s"}`;
-
 /**
  * The line under the Bot's name: what it is doing right now, in OpenMuse's own words.
  *
@@ -103,12 +100,12 @@ export function statusLine(input: {
 }): string {
   const { attention, channels, agentId } = input;
   if (attention?.approvals) {
-    return `Ready to review · ${plural(attention.approvals, "approval")}`;
+    return `待你审阅 · ${attention.approvals} 项审批`;
   }
   if (attention?.questions) {
-    return `Needs your input · ${plural(attention.questions, "question")}`;
+    return `需要你回答 · ${attention.questions} 个问题`;
   }
-  if (attention?.handoffs) return "Waiting on a hand-off";
+  if (attention?.handoffs) return "等你接手";
   const working = agentId
     ? channels?.find(
         (channel) =>
@@ -118,11 +115,11 @@ export function statusLine(input: {
     : undefined;
   if (working) {
     const routine = working.work?.find((work) => work.kind === "routine");
-    if (routine && !working.busy) return "Running a routine…";
-    return `Working on ${working.summary?.trim() || working.name}…`;
+    if (routine && !working.busy) return "正在执行定时任务…";
+    return `正在处理：${working.summary?.trim() || working.name}…`;
   }
-  if (attention?.paused) return "Paused";
-  return "Ready when you are";
+  if (attention?.paused) return "已暂停";
+  return "随时待命";
 }
 
 /** Approvals and questions the person has not answered yet, across every Bot. */

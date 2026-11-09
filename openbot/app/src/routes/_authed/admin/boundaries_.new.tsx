@@ -45,7 +45,7 @@ export const Route = createFileRoute("/_authed/admin/boundaries_/new")({
 });
 
 const BACK = {
-  label: "Boundaries",
+  label: "边界规则",
   linkProps: { to: "/admin/boundaries" as const },
 };
 
@@ -140,10 +140,10 @@ function NewRulePage() {
   return (
     <PageShell
       backButton={BACK}
-      description="Define an action that no Bot may take. This boundary applies to every Bot’s next action."
-      title="Add rule"
+      description="规定一个任何员工都不能做的动作。从下一个动作起，它对所有员工生效。"
+      title="添加规则"
     >
-      <PageSection title="Start from">
+      <PageSection title="从这里开始">
         <PageRows>
           {options.map((option, index) => {
             const custom = option.value === "custom";
@@ -165,14 +165,14 @@ function NewRulePage() {
                   </ItemMedia>
                   <ItemContent>
                     <ItemTitle>
-                      {template ? template.name : "Write your own"}
+                      {template ? template.name : "自己写"}
                     </ItemTitle>
                     <ItemDescription>
                       {template
                         ? taken
-                          ? "Already one of your rules."
+                          ? "已经在你的规则里了。"
                           : template.description
-                        : "Describe the action yourself, in CEL."}
+                        : "用 CEL 自己描述这个动作。"}
                     </ItemDescription>
                   </ItemContent>
                   {selected ? (
@@ -189,7 +189,7 @@ function NewRulePage() {
       </PageSection>
 
       {chosen ? (
-        <PageSection title="The rule">
+        <PageSection title="规则内容">
           <form
             className="mt-4"
             noValidate
@@ -213,34 +213,36 @@ function NewRulePage() {
                     )}
                     variant="outline"
                   >
-                    Cancel
+ 取消
+
                   </Button>
                   <Button
                     disabled={!ready || savePolicy.isPending}
                     type="submit"
                   >
-                    {savePolicy.isPending ? "Adding…" : "Add rule"}
+                    {savePolicy.isPending ? "正在添加…" : "添加规则"}
                   </Button>
                 </>
               }
             >
               <FieldGroup>
                 <Field>
-                  <FieldLabel htmlFor="rule-name">Name</FieldLabel>
+                  <FieldLabel htmlFor="rule-name">名称</FieldLabel>
                   <Input
                     id="rule-name"
                     maxLength={80}
                     onChange={(event) => setName(event.target.value)}
-                    placeholder="Never delete files"
+                    placeholder="绝不删除文件"
                     value={name}
                   />
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="rule-description">
-                    What it stops
+ 它拦住什么
+
                   </FieldLabel>
                   <FieldDescription>
-                    One sentence, shown under the name in the list.
+                    一句话，显示在列表里的名称下面。
                   </FieldDescription>
                   <Input
                     id="rule-description"
@@ -250,11 +252,9 @@ function NewRulePage() {
                   />
                 </Field>
                 <Field>
-                  <FieldLabel htmlFor="rule-expression">Rule</FieldLabel>
+                  <FieldLabel htmlFor="rule-expression">规则</FieldLabel>
                   <FieldDescription>
-                    Written in CEL. A rule that can't be evaluated counts as a
-                    match, so a typo stops actions rather than letting them
-                    through.
+                    用 CEL 写成。无法求值的规则算作命中，所以写错了只会多拦，不会漏放。
                   </FieldDescription>
                   <Textarea
                     autoCapitalize="off"
@@ -271,7 +271,7 @@ function NewRulePage() {
                   />
                   {duplicate ? (
                     <p className="text-destructive text-sm">
-                      This rule is already in place.
+                      这条规则已经在了。
                     </p>
                   ) : null}
                   {chosen !== "custom" ? (
@@ -291,7 +291,7 @@ function NewRulePage() {
                   type="button"
                   variant="outline"
                 >
-                  {testing ? "Testing…" : "Test on recent activity"}
+                  {testing ? "正在测试…" : "拿最近的动作测试"}
                 </Button>
                 {tested ? <TestResult report={tested} /> : null}
               </div>
@@ -317,7 +317,8 @@ function RuleReference() {
   return (
     <details className="text-sm">
       <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
-        What a rule can check
+ 规则能检查哪些内容
+
       </summary>
       <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
         {RULE_ATTRIBUTES.map((attribute) => (
@@ -330,9 +331,8 @@ function RuleReference() {
         ))}
       </dl>
       <p className="mt-3 text-muted-foreground">
-        A rule that names something an action doesn't have, such as{" "}
-        <code className="font-mono text-xs">key</code> on a click, counts as a
-        match. Name the tool first so the rest is only checked where it applies:{" "}
+        规则里写了动作没有的属性（比如对点击动作写
+        <code className="font-mono text-xs">key</code>），也算命中。先写明工具，其余条件就只在适用的地方检查：{" "}
         <code className="font-mono text-xs">
           tool.name == "computer_key" && key == "Enter"
         </code>
@@ -346,8 +346,7 @@ function TestResult({ report }: { report: DryRunReport }) {
   if (report.scanned === 0) {
     return (
       <p className="mt-3 text-muted-foreground text-sm" role="status">
-        No recorded actions to test against yet. The rule is valid; you'll see
-        what it stops once Bots have acted.
+        还没有记录到可供测试的动作。规则本身没问题；员工开始干活后，就能看到它拦下什么。
       </p>
     );
   }
@@ -355,8 +354,8 @@ function TestResult({ report }: { report: DryRunReport }) {
     <div className="mt-3" role="status">
       <p className="text-muted-foreground text-sm">
         {report.wouldRefuse === 0
-          ? `Of the last ${report.scanned} recorded actions, this rule would have stopped none. It may still stop future ones.`
-          : `Of the last ${report.scanned} recorded actions, this rule would have stopped ${report.wouldRefuse}.`}
+          ? `最近记录的 ${report.scanned} 个动作里，这条规则一个也不会拦。以后的动作仍可能被它拦下。`
+          : `最近记录的 ${report.scanned} 个动作里，这条规则会拦下 ${report.wouldRefuse} 个。`}
       </p>
       <DryRunChanges
         changes={report.changes.filter((change) => change.would === "refused")}

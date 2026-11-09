@@ -30,7 +30,7 @@ export function SkillFiles({
       )}
       {others.length > 0 && (
         <section className="grid gap-1.5">
-          <h3 className="font-medium text-sm">Other files</h3>
+          <h3 className="font-medium text-sm">其他文件</h3>
           {others.map((file) =>
             file.text === null ? (
               <div className="rounded-md border p-3 text-sm" key={file.path}>

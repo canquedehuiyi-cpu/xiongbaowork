@@ -11,7 +11,7 @@ import { MuseEmpty, MuseScreen } from "../ui";
 export function ActivityScreen() {
   const { bot } = useMuse();
   return (
-    <MuseScreen title="Activity">
+    <MuseScreen title="动态">
       {bot ? (
         <div className="[&>section:first-child]:mt-0">
           <BotNeedsYou agentId={bot.id} />
@@ -27,9 +27,9 @@ export function ActivityScreen() {
 export function NoBot() {
   return (
     <MuseEmpty
-      detail="Create one with New Bot on the Bots page."
+      detail="在员工页点「新建员工」创建一位。"
       icon={IconListCheck}
-      title="No Bots yet"
+      title="还没有员工"
     />
   );
 }

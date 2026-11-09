@@ -269,7 +269,7 @@ export function BrowserDesk({
         className="mx-auto flex min-h-0 w-full min-w-0 flex-1 flex-col gap-4"
         style={width === undefined ? undefined : { width }}
       >
-        {heading ?? <h1 className="sr-only">Browser</h1>}
+        {heading ?? <h1 className="sr-only">浏览器</h1>}
         <div
           ref={frame}
           className="flex shrink-0 flex-col overflow-clip rounded-xl border bg-background shadow-sm"
@@ -340,8 +340,8 @@ export function OpeningBrowser({
                 </p>
                 {onRetry ? (
                   <Button onClick={onRetry} size="sm" variant="outline">
-                    Try again
-                  </Button>
+ 再试一次
+ </Button>
                 ) : null}
               </div>
             ) : (
@@ -354,7 +354,8 @@ export function OpeningBrowser({
                   aria-hidden="true"
                   className="size-12 drop-shadow-[0_8px_24px_rgb(120_100_220/0.35)] motion-safe:animate-pulse"
                 />
-                Opening your browser…
+ 正在打开你的浏览器…
+
               </div>
             )}
           </div>
@@ -404,7 +405,7 @@ function Screen({
         <LiveScreen
           computerId={computerId}
           driving
-          label="Your browser. Click it to type into it, and press Escape to leave it."
+          label="你的浏览器。点击后可以在里面输入，按 Esc 退出。"
           onProblem={setProblem}
           ref={screen}
           retryKey={retryKey}
@@ -420,9 +421,9 @@ function Screen({
         </div>
       ) : !open ? (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-4 text-center text-muted-foreground text-sm">
-          <span>Your browser is closed.</span>
+          <span>你的浏览器已关闭。</span>
           <Button disabled={reopening} onClick={reopen} size="sm">
-            {reopening ? "Opening…" : "Open it again"}
+            {reopening ? "正在打开…" : "重新打开"}
           </Button>
         </div>
       ) : problem ? (
@@ -436,8 +437,8 @@ function Screen({
             size="sm"
             variant="outline"
           >
-            Try again
-          </Button>
+ 再试一次
+ </Button>
         </div>
       ) : blank ? (
         <StartPage onGo={onGo} />
@@ -456,7 +457,7 @@ function StartPage({ onGo }: { onGo: (url: string) => void }) {
     <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 bg-background px-6">
       <OpenBotLogo className="size-14 drop-shadow-[0_8px_24px_rgb(120_100_220/0.35)]" />
       <form
-        aria-label="Search or go to a site"
+        aria-label="搜索或前往网站"
         className="w-full max-w-lg"
         onSubmit={(event) => {
           event.preventDefault();
@@ -468,9 +469,9 @@ function StartPage({ onGo }: { onGo: (url: string) => void }) {
       >
         <InputGroup className="h-11 rounded-full bg-muted/50 shadow-xs dark:bg-input/40">
           <InputGroupInput
-            aria-label="Search or go to a site"
+            aria-label="搜索或前往网站"
             onChange={(event) => setTyped(event.target.value)}
-            placeholder="Search or type an address"
+            placeholder="搜索或输入网址"
             spellCheck={false}
             value={typed}
           />

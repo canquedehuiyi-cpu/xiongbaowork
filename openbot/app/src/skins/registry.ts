@@ -12,7 +12,7 @@ import type { Skin, SkinId } from "./types";
 const openbot: Skin = {
   id: "openbot",
   name: appConfig.brand.productName,
-  description: "The standard look, with your conversations in a sidebar.",
+  description: "标准外观，对话列在侧栏里。",
   botLook: "orb",
 };
 

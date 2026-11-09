@@ -20,17 +20,17 @@ export function TabBar({ current }: { current: OpenDuetTab }) {
   const inbox = useQuery(approvalInboxOptions());
   const waiting = waitingCount(inbox.data);
   const tabs = [
-    { id: "chat" as const, label: "Chat", Glyph: IconMessageCircle, badge: 0 },
+    { id: "chat" as const, label: "对话", Glyph: IconMessageCircle, badge: 0 },
     {
       id: "tasks" as const,
-      label: "Tasks",
+      label: "任务",
       Glyph: IconTasksList,
       badge: waiting,
     },
   ];
   return (
     <nav
-      aria-label="Main"
+      aria-label="主导航"
       className="openduet-glass absolute inset-x-0 bottom-[22px] z-20 mx-auto flex h-16 w-[236px] max-w-[calc(100%-32px)] gap-0.5 rounded-[32px] p-[5px] shadow-openduet-glass"
     >
       {tabs.map(({ id, label, Glyph, badge }) => {

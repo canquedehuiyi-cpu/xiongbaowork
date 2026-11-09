@@ -15,8 +15,8 @@ import { ControlsSection } from "./controls-section";
 export function SkillSharingSection() {
   return (
     <ControlsSection
-      description="Each person's recordings teach Skills in their own Learning space, and those Skills reach the Bots that person uses. A shared Skill puts its person's recorded and narrated text in front of everybody's Bots."
-      title="Sharing"
+      description="每个人的录制会在自己的学习空间里教出技能，这些技能会提供给这个人用的员工。共享出去的技能，会把这个人录制和讲解的文字展示给所有人的员工。"
+      title="共享"
     >
       {({ data, setSetting, saving }) => (
         <PageRows>
@@ -25,16 +25,16 @@ export function SkillSharingSection() {
               <IconShare />
             </ItemMedia>
             <ItemContent>
-              <ItemTitle>Skill sharing</ItemTitle>
+              <ItemTitle>技能共享</ItemTitle>
               <ItemDescription className="line-clamp-none">
                 {data.settings.skillSharing
-                  ? "People may open their Skills to every Bot in Settings, Learning."
-                  : "Off. Each person's Skills reach only the Bots they use, even Skills they opened before."}
+                  ? "大家可以在「设置 → 学习」里把自己的技能向所有员工公开。"
+                  : "已关闭。每个人的技能只提供给自己用的员工，以前公开过的技能也一样。"}
               </ItemDescription>
             </ItemContent>
             <ItemActions>
               <Switch
-                aria-label="Skill sharing"
+                aria-label="技能共享"
                 checked={data.settings.skillSharing}
                 disabled={saving}
                 onCheckedChange={(checked) =>

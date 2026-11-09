@@ -87,8 +87,8 @@ export function intelligenceMutationOptions(queryClient: QueryClient) {
       if (report.outcome !== "completed")
         throw new Error(
           action === "start"
-            ? "The back end did not start."
-            : "The back end did not stop.",
+            ? "后端没能启动。"
+            : "后端没能停止。",
         );
     },
     onSettled: () => invalidateDesktop(queryClient),

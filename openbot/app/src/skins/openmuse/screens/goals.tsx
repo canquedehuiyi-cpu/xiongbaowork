@@ -14,13 +14,13 @@ export function GoalsScreen() {
   const { bot } = useMuse();
   if (!bot) {
     return (
-      <MuseScreen title="Goals">
+      <MuseScreen title="目标">
         <NoBot />
       </MuseScreen>
     );
   }
   return (
-    <MuseScreen title="Goals">
+    <MuseScreen title="目标">
       <section>
         <div className="flex items-center gap-2.5">
           <StatusDot tone="green" />
@@ -30,7 +30,8 @@ export function GoalsScreen() {
               "text-[var(--openmuse-green-text)]",
             )}
           >
-            Routines
+ 定时任务
+
           </h2>
         </div>
         <RoutinesList agentId={bot.id} embedded />

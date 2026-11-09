@@ -66,7 +66,7 @@ export function MenuSheet({ onClose }: { onClose: () => void }) {
   const body = useRef<HTMLDivElement>(null);
   const searching = search.trim().length > 0;
   const shown = pinnedFirst(matchingChannels(channels.data, search));
-  const botName = bot?.name ?? "your Bot";
+  const botName = bot?.name ?? "你的员工";
 
   return (
     <MuseSheet
@@ -77,26 +77,28 @@ export function MenuSheet({ onClose }: { onClose: () => void }) {
     >
       <div className="flex flex-col gap-3.5">
         <LinkRow
-          detail={`Your ongoing conversation with ${botName}`}
+          detail={`你和${botName}一直在进行的对话`}
           icon={IconMessageCircle}
           render={<MainChatLink agentId={bot?.id} onClick={onClose} />}
-          title="Main chat"
+          title="主对话"
         />
         <MuseLinkButton
           icon={IconPlus}
           primary
           render={<NewChatLink agentId={bot?.id} onClick={onClose} />}
         >
-          New chat
+ 新对话
+
         </MuseLinkButton>
         <div className="mt-3 flex items-center justify-between">
-          <h2 className={museText.heading}>Conversations</h2>
+          <h2 className={museText.heading}>对话</h2>
           <MuseLinkButton
             icon={IconUsersGroup}
             render={<Link onClick={onClose} to="/channel/new" />}
             small
           >
-            New group
+ 新建群组
+
           </MuseLinkButton>
         </div>
         <label className="relative block">
@@ -105,20 +107,20 @@ export function MenuSheet({ onClose }: { onClose: () => void }) {
             className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-4 size-4 text-muted-foreground"
           />
           <input
-            aria-label="Search conversations"
+            aria-label="搜索对话"
             className="min-h-[45px] w-full rounded-[19px] border border-border bg-card py-3 pr-4 pl-10 text-[16px] text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-[var(--openmuse-focus)]"
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search conversations"
+            placeholder="搜索对话"
             value={search}
           />
         </label>
         {channels.isPending ? null : channels.error ? (
-          <ErrorNotice error="Couldn't load your conversations." />
+          <ErrorNotice error="读不到你的对话。" />
         ) : shown.length === 0 ? (
           <p className={museText.muted}>
             {searching
-              ? `No conversation has “${search.trim()}” in its name or latest message.`
-              : `Start a conversation with ${botName} and it shows up here.`}
+              ? `没有哪段对话的名称或最新消息里有「${search.trim()}」。`
+              : `和${botName}开始一段对话，它就会出现在这里。`}
           </p>
         ) : (
           <div>
@@ -137,15 +139,14 @@ export function MenuSheet({ onClose }: { onClose: () => void }) {
           searching={searching}
         />
         <p className={museText.small}>
-          A conversation stays with the Bots in it. Pin one to keep it at the
-          top.
+          对话跟着参与其中的员工走。置顶一段，它就会留在最上面。
         </p>
         <Divider className="my-1.5" />
         <div>
           <LinkRow
             icon={IconHome}
             render={<Link onClick={onClose} to="/" />}
-            title="Home"
+            title="首页"
           />
           {/* OpenBot's own destinations, from the one list its sidebar draws. */}
           {navigation.map((item) => (
@@ -171,7 +172,8 @@ export function MenuSheet({ onClose }: { onClose: () => void }) {
               }}
               small
             >
-              Sign out
+ 退出登录
+
             </MuseButton>
             <ErrorNotice error={signOut.error?.message} />
           </>
@@ -204,7 +206,7 @@ function ConversationRow({
   const unread = isUnread(channel, openId);
   const busy = channel.busy || (channel.work?.length ?? 0) > 0;
   const title =
-    channel.summary?.trim() || untitledLine(channel) || "New conversation";
+    channel.summary?.trim() || untitledLine(channel) || "新对话";
   const who = group
     ? channel.agentIds
         .map((id) => agents.data?.find((agent) => agent.id === id)?.name)
@@ -253,7 +255,7 @@ function ConversationRow({
             </span>
             {busy ? (
               <span className="shrink-0 text-[var(--openmuse-accent)]">
-                · working
+                · 工作中
               </span>
             ) : null}
           </span>
@@ -262,12 +264,12 @@ function ConversationRow({
           <span
             className="mt-2 size-2 shrink-0 rounded-full bg-[var(--openmuse-accent)]"
             role="img"
-            aria-label="Unread"
+            aria-label="有未读消息"
           />
         ) : null}
         {channel.pinned ? (
           <IconPinFilled
-            aria-label="Pinned"
+            aria-label="已置顶"
             className="mt-1 size-3.5 shrink-0 text-muted-foreground"
           />
         ) : null}
@@ -281,10 +283,11 @@ function ConversationRow({
           }
           small
         >
-          {channel.pinned ? "Unpin" : "Pin"}
+          {channel.pinned ? "取消置顶" : "置顶"}
         </MuseButton>
         <MuseButton icon={IconTrash} onClick={() => setConfirming(true)} small>
-          Delete
+ 删除
+
         </MuseButton>
       </div>
       <ErrorNotice error={setPinned.error?.message} />

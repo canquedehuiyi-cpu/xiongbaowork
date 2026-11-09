@@ -38,7 +38,7 @@ async function openBrowser(): Promise<
   return (
     await client(browserApiPaths.open, {
       method: "POST",
-      fallback: "Couldn't open your browser. Try again.",
+      fallback: "没能打开你的浏览器。请再试一次。",
     })
   ).json();
 }
@@ -64,7 +64,7 @@ async function startBrowserRecording(
           ? { narrate: variables.narrate }
           : {}),
       },
-      fallback: "Couldn't start recording. Try again.",
+      fallback: "没能开始录制。请再试一次。",
     })
   ).json();
 }
@@ -88,13 +88,13 @@ const REAL_BROWSER_NAMES: Record<RealBrowser, string> = {
  * that browser.
  */
 export function storeOpenedSentence(browser: RealBrowser): string {
-  return `The OpenBot Recorder's page is open in ${REAL_BROWSER_NAMES[browser]}. Add it there to record in your own browser.`;
+  return `OpenBot 录制器的页面已在 ${REAL_BROWSER_NAMES[browser]} 里打开。在那里添加它，就能在你自己的浏览器里录制。`;
 }
 
 /** What the person is told when Start recording found their own everyday browser rather than the one OpenBot opens:
  * OpenBot cannot start the Recorder there, so they start it with its own button. */
 export const RECORD_THERE =
-  "Your browser is open. Start recording with the Recorder's button in its toolbar.";
+  "你的浏览器已打开。请用工具栏上录制器的按钮开始录制。";
 
 /**
  * Start recording where the browser is a window on the person's desktop: opens it, or brings it forward,
@@ -131,7 +131,7 @@ export function stopBrowserRecordingMutationOptions(queryClient: QueryClient) {
         await client(browserApiPaths.recording, {
           method: "POST",
           body: { action: "stop" },
-          fallback: "Couldn't stop recording. Try again.",
+          fallback: "没能停止录制。请再试一次。",
         })
       ).json(),
     onSuccess: () => invalidateBrowser(queryClient),
@@ -146,7 +146,7 @@ export function browserTabsMutationOptions(queryClient: QueryClient) {
         await client(browserApiPaths.tabs, {
           method: "POST",
           body: request,
-          fallback: "Couldn't change the tabs. Try again.",
+          fallback: "没能切换标签页。请再试一次。",
         })
       ).json(),
     onSuccess: () => invalidateBrowser(queryClient),
@@ -163,7 +163,7 @@ export function navigateBrowserMutationOptions(queryClient: QueryClient) {
         await client(browserApiPaths.navigate, {
           method: "POST",
           body: request,
-          fallback: "Couldn't open that page. Try again.",
+          fallback: "没能打开那个网页。请再试一次。",
         })
       ).json(),
     onSuccess: () => invalidateBrowser(queryClient),
@@ -180,7 +180,7 @@ export function clearBrowserMutationOptions(queryClient: QueryClient) {
       (
         await client(browserApiPaths.clear, {
           method: "POST",
-          fallback: "Couldn't clear your browser. Try again.",
+          fallback: "没能清除你的浏览器。请再试一次。",
         })
       ).json(),
     // Settings > Computer lists the browser too, with whether it runs.

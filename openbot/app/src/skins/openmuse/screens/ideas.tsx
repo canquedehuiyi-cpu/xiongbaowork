@@ -18,7 +18,7 @@ export function IdeasScreen() {
   const suggestions = useQuery(proactiveSuggestionsQueryOptions());
   if (!bot) {
     return (
-      <MuseScreen title="Ideas">
+      <MuseScreen title="建议">
         <NoBot />
       </MuseScreen>
     );
@@ -27,13 +27,13 @@ export function IdeasScreen() {
     suggestions.data !== undefined &&
     !suggestions.data.some((suggestion) => suggestion.agentId === bot.id);
   return (
-    <MuseScreen title="Ideas">
+    <MuseScreen title="建议">
       <div className="[&>section:first-child]:mt-0">
         {none ? (
           <MuseEmpty
-            detail={`When ${bot.name}'s check-ins find something that needs you, it shows up here.`}
+            detail={`${bot.name}巡检时发现需要你处理的事，会出现在这里。`}
             icon={IconBulb}
-            title="Nothing needs you right now"
+            title="现在没有需要你处理的事"
           />
         ) : (
           <SuggestionsInbox agentId={bot.id} />

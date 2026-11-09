@@ -55,15 +55,15 @@ const CHOICES: {
 }[] = [
   {
     value: "admins",
-    title: "Admins",
+    title: "管理员",
     description:
-      "A skill learned from a person's recordings waits for an admin.",
+      "从某人的录制里学到的技能，要等管理员审核。",
   },
   {
     value: "people",
-    title: "Each person, for their own Bots",
+    title: "每个人自己审核，只用于自己的员工",
     description:
-      "Each person approves the skills learned from their own recordings. Those skills reach only that person's Bots until an admin shares them.",
+      "每个人自己审核从自己的录制里学到的技能。在管理员共享之前，这些技能只给这个人的员工用。",
   },
 ];
 
@@ -71,12 +71,12 @@ const CHOICES: {
 function SettingsError({ message }: { message?: string }) {
   return (
     <p className="mt-4 text-destructive text-sm" role="alert">
-      {message ?? "Couldn't load Learning settings. Reload the page."}
+      {message ?? "读不到学习设置。请刷新页面。"}
     </p>
   );
 }
 
-const LABEL = "Who approves skills learned from people's recordings";
+const LABEL = "谁来审核从个人录制里学到的技能";
 
 /** Admin, Automatic learning: who approves the skills learned from a person's own recordings. */
 export function WhoApprovesSection() {
@@ -85,13 +85,13 @@ export function WhoApprovesSection() {
   if (settings.isPending) return null;
   if (settings.error || !settings.data)
     return (
-      <PageSection title="Approval">
+      <PageSection title="审核">
         <SettingsError message={settings.error?.message} />
       </PageSection>
     );
   const current = settings.data.personalReview ?? "admins";
   return (
-    <PageSection title="Approval">
+    <PageSection title="审核">
       <PageRows>
         <Item
           render={<button onClick={() => setOpen(true)} type="button" />}
@@ -184,14 +184,14 @@ function WhoApprovesDialog({
             size="sm"
             variant="outline"
           >
-            Cancel
-          </Button>
+ 取消
+ </Button>
           <Button
             disabled={save.isPending}
             onClick={() => save.mutate(draft, { onSuccess: onClose })}
             size="sm"
           >
-            {save.isPending ? "Saving…" : "Save"}
+            {save.isPending ? "正在保存…" : "保存"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -218,7 +218,7 @@ export function PeopleProposalsSection() {
   if (settings.isPending) return null;
   if (settings.error)
     return (
-      <PageSection title="From people's recordings">
+      <PageSection title="来自个人录制">
         <SettingsError message={settings.error.message} />
       </PageSection>
     );
@@ -233,8 +233,8 @@ export function PeopleProposalsSection() {
   );
   return (
     <PageSection
-      title="From people's recordings"
-      description="Approve a skill to publish it to the Bots of the person who taught it."
+      title="来自个人录制"
+      description="批准一项技能，就会把它发布给教会它的那个人的员工。"
     >
       {people.isPending ? null : people.error ? (
         <p className="mt-4 text-destructive text-sm" role="alert">
@@ -248,14 +248,13 @@ export function PeopleProposalsSection() {
               key={person.userId}
               role="alert"
             >
-              {`Couldn't read ${person.name}'s skills. Reload the page to try again.`}
+              {`读不到${person.name}的技能。请刷新页面再试。`}
             </p>
           ))}
           {rows.length === 0 ? (
             unreadable.length > 0 ? null : (
-              <PageEmpty icon={IconSparkles} title="Nothing to review">
-                Skills learned from people's recordings appear here when they
-                are ready.
+              <PageEmpty icon={IconSparkles} title="没有待审核的内容">
+                从个人录制里学到的技能准备好后，会出现在这里。
               </PageEmpty>
             )
           ) : (
@@ -307,7 +306,7 @@ export function PeopleProposalsSection() {
             review.reset();
           }}
           onDecide={(decision) => review.mutate({ ...open, decision })}
-          publishedNote="Published. Their Bots use it from their next conversation."
+          publishedNote="已发布。对方的员工从下一段对话起就会用它。"
         />
       ) : null}
     </PageSection>
@@ -355,8 +354,8 @@ export function SharingRequestsSection() {
   };
   return (
     <PageSection
-      title="Sharing requests"
-      description="Approve a request to open a skill to every Bot."
+      title="共享申请"
+      description="批准申请，这项技能就会向所有员工公开。"
     >
       {settings.error ? (
         <SettingsError message={settings.error.message} />
@@ -366,8 +365,8 @@ export function SharingRequestsSection() {
           {requests.error.message}
         </p>
       ) : rows.length === 0 ? (
-        <PageEmpty icon={IconShare} title="No requests to share">
-          Requests to share a skill appear here when people send them.
+        <PageEmpty icon={IconShare} title="没有共享申请">
+          有人申请共享技能时，申请会出现在这里。
         </PageEmpty>
       ) : (
         <PageRows>
@@ -428,8 +427,8 @@ export function SharingRequestsSection() {
                 size="sm"
                 variant="outline"
               >
-                Decline
-              </Button>
+ 拒绝
+ </Button>
               <Button
                 disabled={cannotDecide}
                 onClick={() =>
@@ -444,7 +443,7 @@ export function SharingRequestsSection() {
                 }
                 size="sm"
               >
-                {decide.isPending ? "Saving…" : "Approve sharing"}
+                {decide.isPending ? "正在保存…" : "批准共享"}
               </Button>
             </>
           ) : undefined

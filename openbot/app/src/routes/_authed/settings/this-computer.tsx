@@ -58,11 +58,11 @@ export const Route = createFileRoute("/_authed/settings/this-computer")({
 });
 
 const READINESS: Record<IntelligenceReadiness, string> = {
-  ready: "Ready",
-  starting: "Starting",
-  stopped: "Stopped",
-  degraded: "Not fully working",
-  unknown: "Running",
+  ready: "就绪",
+  starting: "正在启动",
+  stopped: "已停止",
+  degraded: "部分不可用",
+  unknown: "运行中",
 };
 
 /**
@@ -75,14 +75,14 @@ function ComputerPage() {
   const inDesktop = desktopShell() !== null;
   return (
     <PageShell
-      description="What OpenBot runs on this computer and how much memory it uses. Restart a part when it gets stuck."
-      title="This computer"
+      description="熊宝在这台电脑上运行了哪些部分、各占多少内存。哪个部分卡住了，就重启它。"
+      title="这台电脑"
     >
       {inDesktop ? (
         <ComputerSections />
       ) : (
         <PageSection>
-          <PageEmpty>This page is only in the OpenBot desktop app.</PageEmpty>
+          <PageEmpty>这个页面只在熊宝桌面端里提供。</PageEmpty>
         </PageSection>
       )}
     </PageShell>
@@ -103,7 +103,7 @@ function ComputerSections() {
   if (!data)
     return (
       <p className="text-destructive text-sm" role="alert">
-        Could not read what OpenBot runs on this computer.
+        读不到熊宝在这台电脑上运行了什么。
       </p>
     );
   const isMeasured = measured.data !== undefined;
@@ -135,7 +135,7 @@ function OpenBotSection({
   const memory = totalMemory([...status.processes, ...status.containers]);
   const busy = restart.isPending || stop.isPending;
   return (
-    <PageSection title="App">
+    <PageSection title="应用">
       <PageRows>
         <Item size="sm">
           <RowMark>
@@ -143,24 +143,24 @@ function OpenBotSection({
           </RowMark>
           <ItemContent>
             <ItemTitle>
-              {status.openbotRunning ? "Running" : "Stopped"}
+              {status.openbotRunning ? "运行中" : "已停止"}
             </ItemTitle>
             <ItemDescription>
               {restart.isPending
-                ? "Restarting…"
+                ? "正在重启…"
                 : stop.isPending
-                  ? "Stopping…"
+                  ? "正在停止…"
                   : [
                       // Nothing until the containers are measured: a total of the processes alone
                       // would be a smaller number that then jumps.
                       !measured
                         ? null
                         : memory !== null
-                          ? `${formatBytes(memory)} in use`
-                          : "Memory could not be measured.",
+                          ? `占用 ${formatBytes(memory)}`
+                          : "量不出内存占用。",
                       // Restart is the desktop app's supervisor bringing its own processes back.
                       status.openbotRunning && !status.openbotHeld
-                        ? "Started before the desktop app last opened; Stop it and start again to restart."
+                        ? "它在桌面端上次打开之前就已启动。要重启，请先停止再重新启动。"
                         : null,
                     ]
                       .filter(Boolean)
@@ -176,8 +176,8 @@ function OpenBotSection({
                   size="sm"
                   variant="outline"
                 >
-                  Restart
-                </Button>
+ 重启
+ </Button>
               )}
               <Button
                 disabled={busy}
@@ -185,8 +185,8 @@ function OpenBotSection({
                 size="sm"
                 variant="outline"
               >
-                Stop
-              </Button>
+ 停止
+ </Button>
             </ItemActions>
           )}
         </Item>
@@ -223,8 +223,8 @@ function IntelligenceSection({
   const memory = totalMemory(status.intelligenceContainers);
   return (
     <PageSection
-      description="Keeps your Bots' conversations and skills. OpenBot uses it while it runs."
-      title="Back end"
+      description="保存员工的对话和技能。熊宝运行时会用到它。"
+      title="后端"
     >
       <PageRows>
         <Item size="sm">
@@ -233,22 +233,22 @@ function IntelligenceSection({
           </RowMark>
           <ItemContent>
             <ItemTitle>
-              {running ? READINESS[readiness ?? "unknown"] : "Stopped"}
+              {running ? READINESS[readiness ?? "unknown"] : "已停止"}
             </ItemTitle>
             <ItemDescription>
               {intelligence.isPending
                 ? intelligence.variables === "start"
-                  ? "Starting…"
-                  : "Stopping…"
+                  ? "正在启动…"
+                  : "正在停止…"
                 : intelligence.error
                   ? intelligence.error.message
                   : !running
-                    ? "Not using memory while stopped."
+                    ? "停止时不占内存。"
                     : !measured
                       ? null
                       : memory !== null
-                        ? `${formatBytes(memory)} in use`
-                        : "Memory could not be measured."}
+                        ? `占用 ${formatBytes(memory)}`
+                        : "量不出内存占用。"}
             </ItemDescription>
           </ItemContent>
           <ItemActions>
@@ -263,16 +263,16 @@ function IntelligenceSection({
                   size="sm"
                   variant="outline"
                 >
-                  Restart
-                </Button>
+ 重启
+ </Button>
                 <Button
                   disabled={intelligence.isPending}
                   onClick={() => intelligence.mutate("stop")}
                   size="sm"
                   variant="outline"
                 >
-                  Stop
-                </Button>
+ 停止
+ </Button>
               </>
             ) : (
               <Button
@@ -281,8 +281,8 @@ function IntelligenceSection({
                 size="sm"
                 variant="outline"
               >
-                Start
-              </Button>
+ 启动
+ </Button>
             )}
           </ItemActions>
         </Item>
@@ -317,10 +317,10 @@ function MachineSection({
           size="sm"
           variant="outline"
         >
-          {copied ? "Copied" : "Copy diagnostics"}
+          {copied ? "已复制" : "复制诊断信息"}
         </Button>
       }
-      title="Details"
+      title="详情"
     >
       <PageRows>
         <Item size="sm">
@@ -334,7 +334,7 @@ function MachineSection({
           </ItemContent>
           <ItemActions>
             <span className="text-muted-foreground text-sm">
-              {status.engine ? "Running" : "Not running"}
+              {status.engine ? "运行中" : "未运行"}
             </span>
           </ItemActions>
         </Item>
@@ -344,7 +344,7 @@ function MachineSection({
             <IconFolder className="size-4" />
           </RowMark>
           <ItemContent>
-            <ItemTitle>Installed in</ItemTitle>
+            <ItemTitle>安装位置</ItemTitle>
             <ItemDescription className="line-clamp-none break-all">
               {status.root}
             </ItemDescription>
@@ -375,10 +375,9 @@ function LogsRow({ folder }: { folder: string }) {
         <IconFileText className="size-4" />
       </RowMark>
       <ItemContent>
-        <ItemTitle>Logs</ItemTitle>
+        <ItemTitle>日志</ItemTitle>
         <ItemDescription className="line-clamp-none">
-          Logs stay on this computer and leave out your keys and messages. Share
-          them when you ask for help.
+          日志只保存在这台电脑上，不含你的密钥和消息。求助时可以把它发给对方。
         </ItemDescription>
         <ItemDescription className="line-clamp-none break-all">
           {folder}
@@ -388,7 +387,7 @@ function LogsRow({ folder }: { folder: string }) {
             className="line-clamp-none text-destructive"
             role="alert"
           >
-            Couldn't open the log folder. Find it at the path above.
+            没能打开日志文件夹。请按上面的路径找到它。
           </ItemDescription>
         )}
       </ItemContent>
@@ -399,7 +398,8 @@ function LogsRow({ folder }: { folder: string }) {
           size="sm"
           variant="outline"
         >
-          Open log folder
+ 打开日志文件夹
+
         </Button>
       </ItemActions>
     </Item>
@@ -435,7 +435,7 @@ function VersionRow({ status }: { status: DesktopStatus }) {
         <IconInfoCircle className="size-4" />
       </RowMark>
       <ItemContent>
-        <ItemTitle>Version {status.version}</ItemTitle>
+        <ItemTitle>版本 {status.version}</ItemTitle>
         <ItemDescription className="line-clamp-none">
           {status.build}
         </ItemDescription>
@@ -465,7 +465,7 @@ function VersionRow({ status }: { status: DesktopStatus }) {
             className="line-clamp-none text-destructive"
             role="alert"
           >
-            Couldn't install the update: {reason(install.error)}
+            没能安装更新：{reason(install.error)}
           </ItemDescription>
         )}
       </ItemContent>
@@ -477,7 +477,7 @@ function VersionRow({ status }: { status: DesktopStatus }) {
               onClick={() => install.mutate()}
               size="sm"
             >
-              {installing ? describe(progress) : "Update and restart"}
+              {installing ? describe(progress) : "更新并重启"}
             </Button>
           ) : (
             <Button
@@ -486,7 +486,7 @@ function VersionRow({ status }: { status: DesktopStatus }) {
               size="sm"
               variant="outline"
             >
-              {check.isPending ? "Checking…" : "Check for updates"}
+              {check.isPending ? "正在检查…" : "检查更新"}
             </Button>
           )}
         </ItemActions>
@@ -499,11 +499,11 @@ function VersionRow({ status }: { status: DesktopStatus }) {
 function checked(found: DesktopAppUpdateCheck): string {
   switch (found.found) {
     case "available":
-      return `OpenBot ${found.version} is available.`;
+      return `熊宝 ${found.version} 已发布。`;
     case "upToDate":
-      return `OpenBot ${found.current} is up to date.`;
+      return `熊宝 ${found.current} 已是最新版本。`;
     case "installing":
-      return `OpenBot is downloading ${found.version} and restarts when it's done.`;
+      return `熊宝正在下载 ${found.version}，下载完会自动重启。`;
     case "notOffered":
       return DOESNT_UPDATE_ITSELF;
   }

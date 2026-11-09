@@ -25,7 +25,7 @@ function EvidenceList({ evidence }: { evidence: LearningEvidence[] | null }) {
   if (evidence === null)
     return (
       <p className="text-muted-foreground text-sm">
-        Couldn't load the evidence for this.
+        读不到这条依据。
       </p>
     );
   return (
@@ -38,17 +38,17 @@ function EvidenceList({ evidence }: { evidence: LearningEvidence[] | null }) {
           {entry.kind === "conversation" ? (
             <>
               <p className="font-medium">
-                {entry.title ?? "A conversation"}
-                {entry.available ? "" : " (no longer available)"}
+                {entry.title ?? "一段对话"}
+                {entry.available ? "" : "（已不可用）"}
               </p>
               {entry.messages.map((message) => (
                 <p className="text-pretty" key={message.id}>
                   <span className="text-muted-foreground">
                     {message.role === "user"
-                      ? "Person: "
+                      ? "用户："
                       : message.role === "assistant"
-                        ? "Bot: "
-                        : "Tool: "}
+                        ? "员工："
+                        : "工具："}
                   </span>
                   {message.content}
                 </p>
@@ -57,12 +57,12 @@ function EvidenceList({ evidence }: { evidence: LearningEvidence[] | null }) {
           ) : (
             <>
               <p className="font-medium">
-                {entry.title ?? "A recording"}
-                {entry.available ? "" : " (no longer available)"}
+                {entry.title ?? "一段录制"}
+                {entry.available ? "" : "（已不可用）"}
               </p>
               <p className="text-pretty">
-                {entry.events.join(", ") ||
-                  `${entry.eventCount} ${entry.eventCount === 1 ? "step" : "steps"}`}
+                {entry.events.join("、") ||
+                  `${entry.eventCount} 个步骤`}
               </p>
             </>
           )}
@@ -83,7 +83,7 @@ export function ProposalDialog<TKey extends QueryKey>({
   deciding,
   decided,
   error,
-  publishedNote = "Published. Bots on this container use it from their next conversation.",
+  publishedNote = "已发布。这个学习空间里的员工从下一段对话起就会用它。",
   onClose,
 }: {
   load: UseQueryOptions<
@@ -111,7 +111,7 @@ export function ProposalDialog<TKey extends QueryKey>({
           <DialogTitle>
             {proposal
               ? skillTitle(proposal.title, proposal.description)
-              : "Proposed skill"}
+              : "建议的技能"}
           </DialogTitle>
           {proposal && (
             <DialogDescription>{proposal.description}</DialogDescription>
@@ -125,7 +125,7 @@ export function ProposalDialog<TKey extends QueryKey>({
           ) : (
             <>
               <section className="grid gap-1.5">
-                <h3 className="font-medium text-sm">Why</h3>
+                <h3 className="font-medium text-sm">原因</h3>
                 <p className="text-pretty text-sm">{proposal?.reason}</p>
               </section>
               {proposal && (
@@ -138,7 +138,7 @@ export function ProposalDialog<TKey extends QueryKey>({
               )}
               {proposal && proposal.insights.length > 0 && (
                 <section className="grid gap-3">
-                  <h3 className="font-medium text-sm">Learned from</h3>
+                  <h3 className="font-medium text-sm">学自</h3>
                   {proposal.insights.map((insight) => (
                     <div className="grid gap-2" key={insight.id}>
                       <p className="text-pretty text-sm">{insight.statement}</p>
@@ -165,8 +165,8 @@ export function ProposalDialog<TKey extends QueryKey>({
                 type="button"
                 variant="outline"
               >
-                Reject
-              </Button>
+ 驳回
+ </Button>
               <Button
                 disabled={deciding}
                 onClick={() => onDecide("approve")}
@@ -174,10 +174,10 @@ export function ProposalDialog<TKey extends QueryKey>({
                 type="button"
               >
                 {deciding
-                  ? "Saving…"
+                  ? "正在保存…"
                   : removal
-                    ? "Approve removal"
-                    : "Approve and publish"}
+                    ? "批准删除"
+                    : "批准并发布"}
               </Button>
             </>
           ) : (
@@ -189,16 +189,16 @@ export function ProposalDialog<TKey extends QueryKey>({
                 >
                   {status === "approved"
                     ? removal
-                      ? "Removed. Bots stop using it from their next conversation."
+                      ? "已删除。员工从下一段对话起不再用它。"
                       : publishedNote
                     : removal
-                      ? "Rejected. The skill stays."
-                      : "Rejected. It won't be published."}
+                      ? "已驳回。技能保持不变。"
+                      : "已驳回。它不会被发布。"}
                 </span>
               )}
               <Button onClick={onClose} size="sm" type="button">
-                Done
-              </Button>
+ 完成
+ </Button>
             </>
           )}
         </DialogFooter>

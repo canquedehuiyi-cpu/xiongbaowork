@@ -63,9 +63,9 @@ function useOpenConversation() {
 export function doingLine(busy: boolean, work: ChannelWork[]): string | null {
   const first = work[0];
   if (first?.kind === "handoff")
-    return `Asking ${first.botName ?? "another Bot"}`;
-  if (first?.kind === "routine") return "Running a routine";
-  return busy ? "Thinking" : null;
+    return `正在问${first.botName ?? "另一位员工"}`;
+  if (first?.kind === "routine") return "正在执行定时任务";
+  return busy ? "正在思考" : null;
 }
 
 /**
@@ -130,10 +130,10 @@ export function TabHeader({
   };
 
   const label = !canDictate
-    ? "Chat"
+    ? "对话"
     : presence.recording
-      ? "Stop and add to your message"
-      : `Talk to ${appConfig.brand.productName}`;
+      ? "停止并加到你的消息里"
+      : `和${appConfig.brand.productName}说话`;
 
   return (
     <header
@@ -146,7 +146,7 @@ export function TabHeader({
     >
       <button
         aria-expanded={menuOpen}
-        aria-label="Menu"
+        aria-label="菜单"
         className={cn(DISC, "pointer-events-auto mt-2")}
         onClick={onMenu}
         style={{ width: SIDE, height: SIDE }}
@@ -173,7 +173,7 @@ export function TabHeader({
         <DoingPill line={doingLine(working, conversation.work)} />
       </div>
       <Link
-        aria-label="Your settings"
+        aria-label="你的设置"
         to={settings?.to ?? "/settings"}
         className={cn(DISC, "pointer-events-auto mt-2")}
         style={{ width: SIDE, height: SIDE }}
@@ -271,7 +271,7 @@ export function PageHeader({ main }: { main: HTMLElement | null }) {
   return (
     <header className="relative z-20 flex h-[72px] shrink-0 items-start gap-2 px-4 pt-3">
       <button
-        aria-label={back?.label ? `Back to ${back.label}` : "Back"}
+        aria-label={back?.label ? `返回${back.label}` : "返回"}
         className={DISC}
         onClick={() => {
           if (back) void router.navigate({ href: back.href });

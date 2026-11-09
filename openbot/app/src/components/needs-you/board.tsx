@@ -52,7 +52,7 @@ export function NeedsYouBoard({ agentId }: { agentId?: string }) {
   if (blocked.size === 0 && found.size === 0) {
     const error = waiting.error ?? list.error;
     return error ? (
-      <PageSection title="Needs you">
+      <PageSection title="需要你">
         <p className="mt-4 text-destructive text-sm" role="alert">
           {error.message}
         </p>
@@ -74,28 +74,28 @@ export function NeedsYouBoard({ agentId }: { agentId?: string }) {
       action={
         <span className="text-muted-foreground text-xs">
           {[
-            waitingCount ? `${waitingCount} waiting` : null,
-            foundCount ? `${foundCount} found` : null,
+            waitingCount ? `${waitingCount} 件在等` : null,
+            foundCount ? `发现 ${foundCount} 件` : null,
           ]
             .filter(Boolean)
             .join(" · ")}
         </span>
       }
-      title="Needs you"
+      title="需要你"
     >
       <div className="flex flex-col gap-5">
         {blocked.size ? (
-          <Half title="Waiting on you">
+          <Half title="在等你">
             {[...blocked].map(([botId, group]) => (
               <BotGroup
                 bot={bot(botId)}
                 botId={botId}
                 key={botId}
-                note={`waiting since ${relativeTime(
+                note={`从${relativeTime(
                   group.times.reduce((first, at) =>
                     Date.parse(at) < Date.parse(first) ? at : first,
                   ),
-                )}`}
+                )}起在等`}
               >
                 {group.rows}
               </BotGroup>
@@ -103,7 +103,7 @@ export function NeedsYouBoard({ agentId }: { agentId?: string }) {
           </Half>
         ) : null}
         {found.size ? (
-          <Half title="From check-ins">
+          <Half title="巡检发现">
             {[...found].map(([botId, items]) => {
               const watched = [
                 ...new Set(
@@ -157,7 +157,7 @@ function BotGroup({
   note: string;
   children: ReactNode[];
 }) {
-  const name = bot?.name ?? "Your Bot";
+  const name = bot?.name ?? "你的员工";
   return (
     <div
       // The page's own card: white on the off-white page, borderless in the dark, as PageRows is.
@@ -202,7 +202,7 @@ function FoundGroup({
   const shown = folded ? items.slice(0, FINDS_SHOWN) : items;
   const rows: ReactNode[] = shown.map((item) => (
     <SuggestionRow
-      botName={bot?.name ?? "Your Bot"}
+      botName={bot?.name ?? "你的员工"}
       inGroup
       key={item.id}
       setting={settingOf(item.settingId)}
@@ -217,7 +217,7 @@ function FoundGroup({
         onClick={() => setExpanded(true)}
         type="button"
       >
-        Show {folded} more
+        再显示 {folded} 项
         <IconChevronDown className="size-4" />
       </button>,
     );

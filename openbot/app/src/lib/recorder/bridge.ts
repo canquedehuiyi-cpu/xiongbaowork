@@ -158,27 +158,27 @@ export async function askConnectWait(id: string): Promise<ConnectWait> {
 }
 
 const CONNECT_REFUSALS: Record<string, string> = {
-  "not-https": "The Recorder only connects to OpenBot over HTTPS.",
-  "pinned-elsewhere": "Your organization set the Recorder to another OpenBot.",
+  "not-https": "录制器只通过 HTTPS 连接熊宝。",
+  "pinned-elsewhere": "你的组织把录制器设成了连接另一个熊宝。",
   "policy-invalid":
-    "Your organization's Recorder policy names an OpenBot address the Recorder can't use. Ask your IT team.",
-  busy: "The Recorder is finishing another connect request. Try again in a moment.",
+    "你的组织给录制器设的熊宝地址用不了。请联系你们的 IT 团队。",
+  busy: "录制器正在处理另一个连接请求。请稍后再试。",
   // A trusted OpenBot's connect, which the Recorder completes itself with OpenBot, with no Connect page.
   "exchange-refused":
-    "OpenBot didn't accept the Recorder's connect request. Try again.",
+    "熊宝没有接受录制器的连接请求。请再试一次。",
   "openbot-unreachable":
-    "The Recorder couldn't reach OpenBot to connect. Check your connection and try again.",
+    "录制器连不上熊宝。请检查网络后再试。",
 };
 /** The Recorder can also answer `unreachable` or `invalid`, which have no sentence of their own. */
 const CONNECT_REFUSAL_FALLBACK =
-  "The Recorder didn't accept the request. Try again.";
+  "录制器没有接受这个请求。请再试一次。";
 
 /** The Recorder takes only so many connects from one OpenBot in ten minutes; its refusal says how long is left. */
 function throttledSentence(retryAfterMs: number | undefined): string {
-  const lead = "Too many connect requests in a short time.";
-  if (retryAfterMs === undefined) return `${lead} Try again in a few minutes.`;
+  const lead = "短时间内连接请求太多。";
+  if (retryAfterMs === undefined) return `${lead}请过几分钟再试。`;
   const minutes = Math.max(1, Math.ceil(retryAfterMs / 60_000));
-  return `${lead} Try again in ${minutes} ${minutes === 1 ? "minute" : "minutes"}.`;
+  return `${lead}请 ${minutes} 分钟后再试。`;
 }
 
 /** What a refused `openbot.connect` says to the person, wherever they asked to connect this browser. */

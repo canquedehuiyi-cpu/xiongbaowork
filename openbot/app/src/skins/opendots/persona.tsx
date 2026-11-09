@@ -38,7 +38,7 @@ export function CoworkerPersona({ botId }: { botId: string }) {
           params={{ agentId: bot.id }}
           to="/bots/$agentId"
         >
-          Edit Bot <IconDots className="size-3.5" />
+          编辑员工 <IconDots className="size-3.5" />
         </Link>
       </div>
     </div>

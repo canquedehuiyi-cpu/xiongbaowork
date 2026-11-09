@@ -21,9 +21,9 @@ import { Separator } from "@/components/ui/separator";
 import { recordingsQueryOptions } from "@/lib/recorder/queries";
 
 const STOP_REASONS: Record<string, string> = {
-  disconnected: "disconnected",
-  "signed-out": "signed out",
-  interrupted: "browser closed",
+  disconnected: "连接断开",
+  "signed-out": "已退出登录",
+  interrupted: "浏览器已关闭",
 };
 
 /**
@@ -31,12 +31,12 @@ const STOP_REASONS: Record<string, string> = {
  * arrived, is badged too, so it never reads as a success.
  */
 function endedLabel(row: RecordingRow): string | null {
-  if (row.ended === "sending") return "Still sending";
-  if (row.ended === "missing") return "Not in the back end";
-  if (row.ended === "unknown") return "No result";
+  if (row.ended === "sending") return "仍在发送";
+  if (row.ended === "missing") return "后端里没有";
+  if (row.ended === "unknown") return "没有结果";
   if (row.ended !== "stopped") return null;
   const reason = row.reason ? STOP_REASONS[row.reason] : undefined;
-  return reason ? `Stopped early: ${reason}` : "Stopped early";
+  return reason ? `提前停止：${reason}` : "提前停止";
 }
 
 /**
@@ -53,7 +53,7 @@ export function recordingOnItsWay(
   );
 }
 
-const EMPTY = "No recordings yet. Each task you record shows up here.";
+const EMPTY = "还没有录制。你录下的每个任务都会出现在这里。";
 
 /**
  * The browser section's list of the person's own recordings, with how each one ended.
@@ -80,7 +80,7 @@ export function YourRecordings({
   // A failed "Show more" or refresh keeps the rows already loaded: the error goes below them, where Show more retries.
   const failure = recordings.error;
   const section = (
-    <PageSection action={action} title="Your recordings">
+    <PageSection action={action} title="你的录制">
       {failure && rows.length === 0 ? (
         <p className="mt-4 text-destructive text-sm" role="alert">
           {failure.message}
@@ -105,7 +105,7 @@ export function YourRecordings({
                       <IconVideo />
                     </ItemMedia>
                     <ItemContent>
-                      <ItemTitle>{row.title ?? "Untitled recording"}</ItemTitle>
+                      <ItemTitle>{row.title ?? "未命名录制"}</ItemTitle>
                       <ItemDescription>
                         {new Date(row.recordedAt).toLocaleString()}
                       </ItemDescription>
@@ -125,15 +125,15 @@ export function YourRecordings({
           {unavailable ? (
             <p className="mt-4 text-muted-foreground text-sm">
               {unavailable === "unreachable"
-                ? "Couldn't reach the back end to list your recordings. Try again in a moment."
-                : "The back end isn't available, so your recordings can't be listed."}
+                ? "连不上后端，列不出你的录制。请稍后再试。"
+                : "后端不可用，所以列不出你的录制。"}
             </p>
           ) : null}
           {failure ? (
             <p className="mt-4 text-destructive text-sm">
               {recordings.isFetchNextPageError
-                ? "Couldn't load more recordings. Try again."
-                : "Couldn't refresh your recordings."}
+                ? "没能加载更多录制。请再试一次。"
+                : "没能刷新你的录制。"}
             </p>
           ) : null}
           {recordings.hasNextPage ? (
@@ -144,8 +144,8 @@ export function YourRecordings({
               size="sm"
               variant="outline"
             >
-              Show more
-            </Button>
+ 显示更多
+ </Button>
           ) : null}
         </>
       )}

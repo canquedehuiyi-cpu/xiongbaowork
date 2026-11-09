@@ -44,11 +44,9 @@ export function SkinPicker() {
           <IconPalette />
         </ItemMedia>
         <ItemContent>
-          <ItemTitle>Skin</ItemTitle>
+          <ItemTitle>皮肤</ItemTitle>
           <ItemDescription>
-            Change how {appConfig.brand.productName} looks for you, on every
-            device. Every skin keeps everything {appConfig.brand.productName}{" "}
-            does.
+            更换{appConfig.brand.productName}在你所有设备上的外观。每种皮肤都保留{appConfig.brand.productName}的全部功能。
           </ItemDescription>
         </ItemContent>
         <ItemActions>
@@ -60,7 +58,7 @@ export function SkinPicker() {
               if (id && id !== skin) save.mutate(id);
             }}
           >
-            <SelectTrigger aria-label="Skin">
+            <SelectTrigger aria-label="皮肤">
               <SelectValue>{SKINS[skin].name}</SelectValue>
             </SelectTrigger>
             {/* Wider than the trigger, so each skin's description has room to wrap. */}
@@ -85,8 +83,7 @@ export function SkinPicker() {
       </Item>
       {save.isError ? (
         <p className="px-3 pb-3 text-sm text-destructive" role="alert">
-          Couldn't save that skin to your account, so {SKINS[skin].name} is
-          back. Try again.
+          没能把这个皮肤存到你的账号，已换回{SKINS[skin].name}。请再试一次。
         </p>
       ) : null}
     </>

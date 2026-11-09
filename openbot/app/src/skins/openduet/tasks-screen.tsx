@@ -87,15 +87,17 @@ function TasksSwitch({
       )}
     >
       <div
-        aria-label="Tasks"
+        aria-label="任务"
         className="flex min-h-11 min-w-0 flex-wrap items-center gap-x-4"
         role="tablist"
       >
         <SwitchTab id="active" onView={onView} view={view}>
-          Active
+ 进行中
+
         </SwitchTab>
         <SwitchTab id="up_next" onView={onView} view={view}>
-          Up next
+ 接下来
+
         </SwitchTab>
       </div>
     </div>
@@ -169,7 +171,7 @@ function ActiveView() {
         </p>
       ) : null}
       <BotResponsibilities />
-      <Section count={routines.data?.routines.length} label="Routines">
+      <Section count={routines.data?.routines.length} label="定时任务">
         <RoutinesList embedded />
       </Section>
     </div>

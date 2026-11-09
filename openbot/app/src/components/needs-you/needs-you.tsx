@@ -35,7 +35,7 @@ export function useBotName() {
   return (agentId: string) =>
     bots.data?.find((bot) => bot.id === agentId)?.name ??
     attention.data?.find((bot) => bot.agentId === agentId)?.name ??
-    "Your Bot";
+    "你的员工";
 }
 
 /**
@@ -127,7 +127,7 @@ export function NeedsYouRows({
           >
             <ItemContent>
               <ItemTitle className="text-muted-foreground">
-                Show {folded} more
+                再显示 {folded} 项
               </ItemTitle>
             </ItemContent>
             <ItemActions>
@@ -152,11 +152,11 @@ export function DoneTasks({ done }: { done: ListedTask[] }) {
     <PageSection
       action={
         <Button onClick={() => setOpen(!open)} size="sm" variant="ghost">
-          {open ? "Hide" : "Show"}
+          {open ? "收起" : "展开"}
         </Button>
       }
-      description={`${done.length} ${done.length === 1 ? "task" : "tasks"} you marked done this week.`}
-      title="Done"
+      description={`这周你标为完成的任务有 ${done.length} 项。`}
+      title="已完成"
     >
       {open ? (
         <PageRows>

@@ -30,7 +30,7 @@ import {
 /** Kept once the person has saved a recording: from then on the page opens on naming the task, past the introduction. */
 export const INTRODUCED_KEY = "openbot.teach-a-bot.introduced";
 
-export const OPEN_AND_RECORD = "Open browser and record";
+export const OPEN_AND_RECORD = "打开浏览器并录制";
 
 type Step = 1 | 2 | 3;
 
@@ -88,9 +88,9 @@ export function TeachSteps({ state }: { state: BrowserApiState }) {
   if (shown === 1) {
     body = (
       <Slide
-        title="Do it once, and your Bots learn it"
-        description="Do a task in your browser as you always would. The Recorder follows each step, and your Bots learn to do it for you."
-        action={<Button onClick={() => setStep(2)}>Continue</Button>}
+        title="做一遍，员工就学会了"
+        description="像平时一样在浏览器里做一遍任务。录制器会跟着记下每一步，你的员工就学会替你做了。"
+        action={<Button onClick={() => setStep(2)}>继续</Button>}
       >
         <RecorderIllustration />
       </Slide>
@@ -98,13 +98,13 @@ export function TeachSteps({ state }: { state: BrowserApiState }) {
   } else if (shown === 2) {
     body = (
       <Slide
-        title="Name the task"
-        description="Say what you're about to do. Your Bots use the name to know when to do it."
+        title="给任务起个名字"
+        description="说说你要做什么。员工会凭这个名字判断什么时候该做它。"
         onBack={() => setStep(1)}
         action={
           <Button disabled={!named} form="teach-a-bot-name" type="submit">
-            Continue
-          </Button>
+ 继续
+ </Button>
         }
       >
         <PageRows className="mt-0 w-full max-w-md shadow-lg">
@@ -113,7 +113,7 @@ export function TeachSteps({ state }: { state: BrowserApiState }) {
             render={
               <form
                 id="teach-a-bot-name"
-                aria-label="Name the task"
+                aria-label="给任务起个名字"
                 onSubmit={(event) => {
                   event.preventDefault();
                   if (named) setStep(3);
@@ -126,11 +126,11 @@ export function TeachSteps({ state }: { state: BrowserApiState }) {
             </ItemMedia>
             <ItemContent>
               <Input
-                aria-label="Task name"
+                aria-label="任务名称"
                 autoFocus
                 maxLength={200}
                 onChange={(event) => recording.setTitle(event.target.value)}
-                placeholder="Like Submit an expense report"
+                placeholder="比如「提交报销单」"
                 value={recording.title}
               />
             </ItemContent>
@@ -147,8 +147,8 @@ export function TeachSteps({ state }: { state: BrowserApiState }) {
   } else if (live) {
     body = (
       <Slide
-        title="Recording in your browser"
-        description="Do the task in your browser. When you're done, press Stop at the top of the tab and save."
+        title="正在你的浏览器里录制"
+        description="在浏览器里做这个任务。做完后，点标签页顶部的 Stop 并保存。"
       >
         <PageRows className="mt-0 w-full max-w-md shadow-lg">
           <RecordingRow
@@ -160,8 +160,8 @@ export function TeachSteps({ state }: { state: BrowserApiState }) {
                 size="sm"
                 variant="outline"
               >
-                Show browser
-              </Button>
+ 显示浏览器
+ </Button>
             }
           />
           <Separator />
@@ -176,8 +176,8 @@ export function TeachSteps({ state }: { state: BrowserApiState }) {
   } else if (named) {
     body = (
       <Slide
-        title="Do it in your browser"
-        description="Recording starts as your browser opens. When you're done, press Stop at the top of the tab and save."
+        title="在浏览器里做一遍"
+        description="浏览器一打开就开始录制。做完后，点标签页顶部的 Stop 并保存。"
         onBack={() => setStep(2)}
       >
         <div className="flex h-40 w-full max-w-md flex-col items-center justify-center gap-3 rounded-xl border border-foreground/20 border-dashed bg-background/50">
@@ -185,11 +185,11 @@ export function TeachSteps({ state }: { state: BrowserApiState }) {
             disabled={recording.starting}
             onClick={() => void recording.record()}
           >
-            {recording.starting ? "Opening…" : OPEN_AND_RECORD}
+            {recording.starting ? "正在打开…" : OPEN_AND_RECORD}
           </Button>
           <span className="max-w-[90%] truncate rounded-full bg-background px-3 py-1 text-muted-foreground text-xs shadow-sm">
-            “{recording.title.trim()}” · Narration{" "}
-            {choice.narration === "on" ? "on" : "off"}
+            「{recording.title.trim()}」 · 讲解
+ {choice.narration === "on" ? "开" : "关"}
           </span>
         </div>
       </Slide>
@@ -200,13 +200,13 @@ export function TeachSteps({ state }: { state: BrowserApiState }) {
     const stopped = recording.stopped;
     body = (
       <Slide
-        title={stopped.discarded ? "Recording discarded" : "Recording finished"}
+        title={stopped.discarded ? "录制已丢弃" : "录制完成"}
         description={
           stopped.discarded
-            ? "Nothing more is sent. Record the task again whenever you're ready."
-            : "Record another task, or the same one again, to teach your Bots more."
+            ? "不会再发送任何内容。准备好了随时可以重新录制这个任务。"
+            : "再录一个任务，或者把这个任务再录一遍，教员工更多本事。"
         }
-        action={<Button onClick={() => setStep(2)}>Record another</Button>}
+        action={<Button onClick={() => setStep(2)}>再录一个</Button>}
       >
         <PageRows className="mt-0 w-full max-w-md shadow-lg">
           <StoppedRow stopped={stopped} />
@@ -216,7 +216,7 @@ export function TeachSteps({ state }: { state: BrowserApiState }) {
   }
 
   return (
-    <section aria-label="Teach a Bot" className="mt-6">
+    <section aria-label="教员工做事" className="mt-6">
       <div className="teach-stage relative flex min-h-[26rem] flex-col overflow-hidden rounded-2xl">
         <StepDots step={shown} />
         {body}
@@ -273,11 +273,11 @@ function SavedStep({
       action={
         <div className="flex flex-wrap justify-end gap-2">
           <Button variant="outline" render={<Link to={YOUR_SKILLS} />}>
-            See your skills
-          </Button>
+ 查看你的技能
+ </Button>
           <Button variant={learned ? "outline" : "default"} onClick={another}>
-            Record another
-          </Button>
+ 再录一个
+ </Button>
         </div>
       }
     >
@@ -318,7 +318,8 @@ function Slide({
           variant="ghost"
         >
           <IconArrowLeft />
-          Back
+ 返回
+
         </Button>
       ) : null}
       <div className="flex flex-1 items-center justify-center px-6 pt-12 pb-4">
@@ -363,24 +364,24 @@ function RecorderIllustration() {
         <div className="space-y-1.5 px-4 pt-2 pb-4 text-[11px]">
           <div className="h-1.5 w-2/5 rounded-full bg-muted" />
           <div className="flex justify-between rounded-md border px-2 py-1">
-            <span className="text-muted-foreground">Amount</span>
+            <span className="text-muted-foreground">金额</span>
             <span className="teach-type font-medium">42.50</span>
           </div>
           <div className="flex justify-between rounded-md border px-2 py-1">
-            <span className="text-muted-foreground">Category</span>
-            <span className="teach-type teach-delay-1 font-medium">Travel</span>
+            <span className="text-muted-foreground">类别</span>
+            <span className="teach-type teach-delay-1 font-medium">差旅</span>
           </div>
           <span className="inline-block rounded-md bg-foreground px-2.5 py-1 text-background">
-            Submit
-          </span>
+ 提交
+ </span>
         </div>
       </div>
       <div className="absolute top-14 -right-6 w-36 space-y-1 rounded-lg bg-card p-2 text-[10px] text-muted-foreground shadow-lg sm:-right-28">
         {[
-          "Opened expenses",
-          "Typed Amount",
-          "Chose Travel",
-          "Clicked Submit",
+          "打开了报销页",
+ "填写了金额",
+ "选择了差旅",
+ "点击了提交",
         ].map((step, index) => (
           <div
             key={step}

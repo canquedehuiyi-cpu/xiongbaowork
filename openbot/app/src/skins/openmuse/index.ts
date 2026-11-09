@@ -14,7 +14,7 @@ export const openmuse: Skin = {
   id: "openmuse",
   name: "OpenMuse",
   description:
-    "One Bot at the centre of a phone-shaped column, with five tabs.",
+    "一位员工居中，手机形状的窄栏，下方五个标签页。",
   Frame: OpenMuseFrame,
   screens: {
     activity: ActivityScreen,

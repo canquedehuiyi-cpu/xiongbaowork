@@ -69,9 +69,9 @@ export function elapsed(seconds: number): string {
 }
 
 export const actionCount = (actions: number) =>
-  `${actions} ${actions === 1 ? "action" : "actions"}`;
+  `${actions} 个动作`;
 const phraseCount = (phrases: number) =>
-  `${phrases} narrated ${phrases === 1 ? "phrase" : "phrases"}`;
+  `${phrases} 句讲解`;
 
 /** What Record and Stop do around the recording itself, on a screen. */
 export type RecordingHooks = {
@@ -105,7 +105,7 @@ export function useRecording(
      */
     waiting:
       !opens && !state.open
-        ? "Your browser is closed. Open it to record."
+        ? "你的浏览器已关闭。打开它才能录制。"
         : null,
     start: opens
       ? openAndStartBrowserRecordingMutationOptions(queryClient)
@@ -261,12 +261,12 @@ export type Stopped = NonNullable<ReturnType<typeof stoppedRecording>>;
 /** What a recording holds, which the person can go by next time: the browser's own pages (a new tab, its settings)
  * and the sites they leave out are never recorded (@openbot/shared/recorder-disclosure says it in full). */
 const WHAT_IT_RECORDS =
-  "The Recorder records the pages you open on websites and what you do there, with what each step saves, AI assistant conversations and your narration, in every tab you use while it records, except sites you leave out.";
+  "录制期间，录制器会在你用到的每个标签页里记下你打开的网页、你在那里做的操作和每一步保存的内容，以及 AI 助手对话和你的讲解；你排除的网站除外。";
 
 /** What a saved recording held: its actions, and its narrated phrases when there were any. */
 function heldIn(stopped: Stopped): string {
   return stopped.phrases > 0
-    ? `${actionCount(stopped.actions)} and ${phraseCount(stopped.phrases)}`
+    ? `${actionCount(stopped.actions)}和${phraseCount(stopped.phrases)}`
     : actionCount(stopped.actions);
 }
 
@@ -276,23 +276,23 @@ function heldIn(stopped: Stopped): string {
  * saw a recording an Intelligence with Trajectories turned off refused said to be saved to the Learning space.
  */
 const NOT_SAVED: Record<NonNullable<Stopped["kept"]>, string> = {
-  refused: "It's kept in this browser and sent again later.",
+  refused: "它保留在这个浏览器里，稍后会重新发送。",
   "signed-out":
-    "It's kept in this browser until you connect it to OpenBot again.",
+    "它保留在这个浏览器里，等你重新连接熊宝后再发送。",
 };
 
 /** What the page says once Stop ended a recording, naming it. The sidebar's Browser button says the same. */
 export function stoppedSentence(stopped: Stopped): string {
-  if (stopped.discarded) return `Discarded “${stopped.title}”.`;
+  if (stopped.discarded) return `已丢弃「${stopped.title}」。`;
   if (stopped.empty)
-    return `Nothing was recorded in “${stopped.title}”. ${WHAT_IT_RECORDS}`;
+    return `「${stopped.title}」里什么也没录到。${WHAT_IT_RECORDS}`;
   if (stopped.kept)
-    return `“${stopped.title}” wasn't saved to your Learning space. ${NOT_SAVED[stopped.kept]}`;
+    return `「${stopped.title}」没能存进你的学习空间。${NOT_SAVED[stopped.kept]}`;
   if (stopped.sending && stopped.retrying)
-    return `“${stopped.title}” wasn't saved to your Learning space yet. ${stopped.retrying}`;
+    return `「${stopped.title}」还没存进你的学习空间。${stopped.retrying}`;
   if (stopped.sending)
-    return `Saving “${stopped.title}” to your Learning space: ${heldIn(stopped)}.`;
-  return `Saved “${stopped.title}” to your Learning space: ${heldIn(stopped)}.`;
+    return `正在把「${stopped.title}」存进你的学习空间：${heldIn(stopped)}。`;
+  return `已把「${stopped.title}」存进你的学习空间：${heldIn(stopped)}。`;
 }
 
 export function StoppedIcon({
@@ -342,16 +342,16 @@ export function StoppedRow({
   ended?: string;
 }) {
   const held = stopped.discarded
-    ? "Discarded. You chose not to save it."
+    ? "已丢弃。你选择了不保存。"
     : stopped.empty
-      ? `Nothing was recorded. ${WHAT_IT_RECORDS}`
+      ? `什么也没录到。${WHAT_IT_RECORDS}`
       : stopped.kept
-        ? `Not saved to your Learning space. ${NOT_SAVED[stopped.kept]}`
+        ? `没能存进你的学习空间。${NOT_SAVED[stopped.kept]}`
         : stopped.sending && stopped.retrying
-          ? `Not saved to your Learning space yet. ${stopped.retrying}`
+          ? `还没存进你的学习空间。${stopped.retrying}`
           : stopped.sending
-            ? `Saving to your Learning space: ${heldIn(stopped)}.`
-            : `Saved to your Learning space: ${heldIn(stopped)}.`;
+            ? `正在存进你的学习空间：${heldIn(stopped)}。`
+            : `已存进你的学习空间：${heldIn(stopped)}。`;
   return (
     <Item size="sm" role="status">
       <ItemMedia variant="icon">
@@ -403,7 +403,7 @@ export function RecordingMark({ live }: { live: boolean }) {
 /** The line under a recording's name: how long it has run and how many actions it holds. */
 function progressLine(recording: Recording): string {
   if (recording.phase === "starting") return "正在开始…";
-  if (recording.stopping) return "Stopping…";
+  if (recording.stopping) return "正在停止…";
   return `${elapsed(recording.seconds)} · ${actionCount(recording.actions)}`;
 }
 
@@ -414,7 +414,7 @@ function progressLine(recording: Recording): string {
  */
 export function RecordingRow({
   recording,
-  placeholder = "Name the task, like Submit an expense report",
+  placeholder = "给任务起个名字，比如「提交报销单」",
   recordLabel = "录制",
   whileRecording,
 }: {
@@ -444,8 +444,8 @@ export function RecordingRow({
             disabled={recording.stopping || recording.phase !== "recording"}
             onClick={() => void recording.stop()}
           >
-            Stop
-          </Button>
+ 停止
+ </Button>
         </ItemActions>
       </Item>
     );
@@ -455,7 +455,7 @@ export function RecordingRow({
       size="sm"
       render={
         <form
-          aria-label="Record a task"
+          aria-label="录制任务"
           onSubmit={(event) => {
             event.preventDefault();
             void recording.record();
@@ -468,7 +468,7 @@ export function RecordingRow({
       </ItemMedia>
       <ItemContent>
         <Input
-          aria-label="Task name"
+          aria-label="任务名称"
           maxLength={200}
           onChange={(event) => recording.setTitle(event.target.value)}
           placeholder={placeholder}
@@ -524,8 +524,8 @@ export function RecordingBar({
           disabled={recording.stopping || recording.phase !== "recording"}
           onClick={() => void recording.stop()}
         >
-          Stop
-        </Button>
+ 停止
+ </Button>
       </div>
     );
   }
@@ -547,14 +547,14 @@ export function RecordingBar({
         initialFocus={field}
       >
         <PopoverHeader>
-          <PopoverTitle>Record a task</PopoverTitle>
+          <PopoverTitle>录制任务</PopoverTitle>
           <PopoverDescription>
             {recording.waiting ??
-              "Do it once in this browser, and your Bots learn to do it."}
+              "在这个浏览器里做一遍，你的员工就学会了。"}
           </PopoverDescription>
         </PopoverHeader>
         <form
-          aria-label="Record a task"
+          aria-label="录制任务"
           className="flex flex-col gap-3 [&>[data-slot=narration-switch]]:w-full"
           onSubmit={(event) => {
             event.preventDefault();
@@ -565,16 +565,17 @@ export function RecordingBar({
           }}
         >
           <Input
-            aria-label="Task name"
+            aria-label="任务名称"
             maxLength={200}
             onChange={(event) => recording.setTitle(event.target.value)}
-            placeholder="Name the task, like Submit an expense report"
+            placeholder="给任务起个名字，比如「提交报销单」"
             ref={field}
             value={recording.title}
           />
           {children}
           <Button disabled={!recording.canRecord} size="sm" type="submit">
-            Start recording
+ 开始录制
+
           </Button>
         </form>
       </PopoverContent>

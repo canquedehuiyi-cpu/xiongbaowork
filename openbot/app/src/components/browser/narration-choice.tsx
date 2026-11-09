@@ -101,29 +101,28 @@ export function NarrationChoiceDialog({
     <Dialog onOpenChange={(next) => (next ? null : onClose())} open={open}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Narrate while you record?</DialogTitle>
+          <DialogTitle>录制时同时讲解吗？</DialogTitle>
           <DialogDescription>
-            Talk through the task as you do it, and the recording keeps what you
-            say as text, so your Bots learn why you did each step.
+            一边做任务一边讲，录制会把你说的话存成文字，员工就能知道你为什么这样做每一步。
           </DialogDescription>
         </DialogHeader>
         <DialogBody className="mt-4 text-muted-foreground text-sm">
           <p>
-            Your browser turns your speech into text on your own computer. Your
-            voice never leaves it, and no recording of it is kept.
+            你的浏览器会在你自己的电脑上把语音转成文字。你的声音不会离开这台电脑，也不会保留录音。
           </p>
           <p className="mt-2">
-            OpenBot keeps your answer for every recording. You can change it any
-            time with the Narration switch on this page.
+            熊宝会在之后的每次录制里沿用你这次的选择。你随时可以用本页的「讲解」开关修改。
           </p>
         </DialogBody>
         <DialogFooter className="mt-4">
           <Button onClick={() => onAnswer(false)} size="sm" variant="outline">
-            Record without narration
+ 不讲解，直接录制
+
           </Button>
           <Button onClick={() => onAnswer(true)} size="sm">
             <IconMicrophone data-icon="inline-start" />
-            Record with narration
+ 边讲解边录制
+
           </Button>
         </DialogFooter>
       </DialogContent>

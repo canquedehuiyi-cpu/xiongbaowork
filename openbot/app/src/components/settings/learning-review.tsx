@@ -39,22 +39,22 @@ import { queryClient } from "@/query-client";
 function operationLabel(proposal: LearningProposal): string {
   switch (proposal.operation) {
     case "add":
-      return "New skill";
+      return "新技能";
     case "update":
-      return `Update to ${skillTitle(proposal.title, proposal.description)}`;
+      return `更新「${skillTitle(proposal.title, proposal.description)}」`;
     case "remove":
-      return `Remove ${skillTitle(proposal.title, proposal.description)}`;
+      return `删除「${skillTitle(proposal.title, proposal.description)}」`;
   }
 }
 
 const RUN_STATUS: Record<LearningRunSummary["status"], string> = {
-  queued: "queued",
-  freezing: "starting",
-  batching: "analyzing",
-  reducing: "analyzing",
-  finalizing: "finishing",
-  succeeded: "finished",
-  failed: "failed",
+  queued: "排队中",
+  freezing: "正在开始",
+  batching: "正在分析",
+  reducing: "正在分析",
+  finalizing: "即将完成",
+  succeeded: "已完成",
+  failed: "失败",
 };
 
 type StartState = {
@@ -245,25 +245,25 @@ export function LearningReview() {
 
   return (
     <PageSection
-      title={canReview ? "Waiting for your review" : "Waiting for an admin"}
+      title={canReview ? "等你审核" : "等管理员审核"}
       description={
         canReview
-          ? "Approve a skill to publish it to your Bots."
-          : "An admin reviews these. You can read what Learning proposes here."
+          ? "批准一项技能，就会把它发布给你的员工。"
+          : "这些由管理员审核。你可以在这里看到学习提出的建议。"
       }
     >
       {autoApproveOn !== null && (
         <PageRows>
           <Item size="sm">
             <ItemContent>
-              <ItemTitle>Approve new skills automatically</ItemTitle>
+              <ItemTitle>自动批准新技能</ItemTitle>
               <ItemDescription>
-                New skills go to your Bots without waiting for your review.
+                新技能不等你审核，直接交给你的员工。
               </ItemDescription>
             </ItemContent>
             <ItemActions>
               <Switch
-                aria-label="Approve new skills automatically"
+                aria-label="自动批准新技能"
                 checked={autoApproveOn}
                 disabled={saveAutoApprove.isPending}
                 onCheckedChange={(checked) => saveAutoApprove.mutate(checked)}
@@ -284,12 +284,12 @@ export function LearningReview() {
                     <ItemDescription>
                       {group.latestRun
                         ? [
-                            `Latest run ${RUN_STATUS[group.latestRun.status]}.`,
+                            `最近一次运行：${RUN_STATUS[group.latestRun.status]}。`,
                             group.latestRun.failure,
                           ]
                             .filter(Boolean)
                             .join(" ")
-                        : "No run yet."}
+                        : "还没运行过。"}
                     </ItemDescription>
                   )}
                 </ItemContent>
@@ -306,8 +306,8 @@ export function LearningReview() {
                       variant="outline"
                     >
                       {learningInProgress(group, starting[group.label])
-                        ? "Learning in progress…"
-                        : "Learn now"}
+                        ? "正在学习…"
+                        : "立即学习"}
                     </Button>
                   </ItemActions>
                 )}
@@ -347,10 +347,10 @@ export function LearningReview() {
           </Fragment>
         ))}
       {showList && !anyWaiting && !unreadable && !unavailable && (
-        <PageEmpty icon={IconSparkles} title="Nothing to review">
+        <PageEmpty icon={IconSparkles} title="没有待审核的内容">
           {autoApprove !== null
-            ? "New proposals show up here after Learning analyses your recordings and conversations."
-            : "New proposals show up here after Learning analyses your recordings."}
+            ? "学习分析完你的录制和对话后，新建议会出现在这里。"
+            : "学习分析完你的录制后，新建议会出现在这里。"}
         </PageEmpty>
       )}
       {saveAutoApprove.error && (
@@ -361,14 +361,14 @@ export function LearningReview() {
       {unavailable && (
         <p className="mt-4 text-muted-foreground text-sm">
           {sources.every((source) => source.unavailable)
-            ? "Learning isn't available in the back end, so nothing is proposed here."
-            : `Learning isn't available for ${[
+            ? "后端没有提供学习功能，所以这里不会有建议。"
+            : `${[
                 ...new Set(
                   sources
                     .filter((source) => source.unavailable)
                     .map((source) => source.label),
                 ),
-              ].join(", ")}, so nothing is proposed there.`}
+              ].join("、")}没有提供学习功能，所以那里不会有建议。`}
         </p>
       )}
       {unreadable && (
@@ -376,8 +376,8 @@ export function LearningReview() {
           {sources
             .filter((source) => !source.unavailable)
             .every((source) => source.proposals === null)
-            ? "Couldn't read your proposed skills. Reload the page."
-            : "Couldn't read some of your proposed skills. Reload the page."}
+            ? "读不到为你建议的技能。请刷新页面。"
+            : "有些为你建议的技能读不到。请刷新页面。"}
         </p>
       )}
       {open && (
@@ -400,7 +400,7 @@ export function LearningReview() {
                   })
               : undefined
           }
-          publishedNote="Published. Your Bots use it from their next conversation."
+          publishedNote="已发布。你的员工从下一段对话起就会用它。"
         />
       )}
     </PageSection>

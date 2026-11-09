@@ -46,7 +46,7 @@ const STORE_NAMES: Record<RecorderStore, string> = {
  * open in: adding it there is what lets them record from here.
  */
 export function storeTabSentence(store: RecorderStore): string {
-  return `The OpenBot Recorder's page is open in a new tab. Add it to ${STORE_NAMES[store]} to record from OpenBot.`;
+  return `OpenBot 录制器的页面已在新标签页打开。把它添加到 ${STORE_NAMES[store]}，就能在熊宝里录制。`;
 }
 
 /** The short note that waits in OpenBot for a person who opened the Recorder's store page in a new tab: one at a time,
@@ -105,12 +105,12 @@ function useRecordingLabel(
     phase === "recording" ? activity?.startedAt : undefined,
   );
   if (!activity || phase === "idle") return null;
-  const named = activity.title ? `Recording: ${activity.title}` : "Recording";
+  const named = activity.title ? `正在录制：${activity.title}` : "正在录制";
   const progress =
     phase === "starting"
-      ? "starting"
+      ? "正在开始"
       : phase === "stopping"
-        ? "stopping"
+        ? "正在停止"
         : activity.startedAt === undefined
           ? null
           : elapsed(seconds);

@@ -31,8 +31,8 @@ import { queryClient } from "@/query-client";
 
 /** What the store's own button says, in the browser this page is open in. */
 const ADD_TO: Record<RecorderStore, string> = {
-  chrome: "Add to Chrome",
-  edge: "Add to Edge",
+  chrome: "添加到 Chrome",
+  edge: "添加到 Edge",
 };
 
 /** `since`: when the awaited connect started. `cancelled` and `closed`: the person pressed Cancel on the Recorder's
@@ -164,16 +164,16 @@ export function ThisBrowser({
         message:
           error instanceof Error
             ? error.message
-            : "Couldn't connect this browser.",
+            : "没能连接当前浏览器。",
       });
     }
   }
 
   return (
-    <PageSection title="This browser">
+    <PageSection title="当前浏览器">
       {connections.error ? (
         <p className="text-destructive text-sm" role="alert">
-          Couldn't check whether this browser is connected. Reload the page.
+          没能确认当前浏览器是否已连接。请刷新页面。
         </p>
       ) : detected === undefined ? null : (
         <PageRows>
@@ -182,7 +182,7 @@ export function ThisBrowser({
               <IconBrowser />
             </ItemMedia>
             <ItemContent>
-              <ItemTitle>OpenBot Recorder</ItemTitle>
+              <ItemTitle>OpenBot 录制器</ItemTitle>
               <ItemDescription>
                 {describe(detected, connected, attempt)}
               </ItemDescription>
@@ -194,7 +194,7 @@ export function ThisBrowser({
                   disabled={attempt.state === "sending" || awaiting}
                   onClick={() => void connect()}
                 >
-                  Connect this browser
+                  连接当前浏览器
                 </Button>
               </ItemActions>
             ) : detected === null ? (
@@ -237,20 +237,20 @@ function describe(
   connected: boolean,
   attempt: Attempt,
 ): string {
-  if (!detected) return "The OpenBot Recorder isn't installed in this browser.";
-  if (connected) return "Connected";
+  if (!detected) return "当前浏览器还没装 OpenBot 录制器。";
+  if (connected) return "已连接";
   switch (attempt.state) {
     case "awaiting":
-      return "Confirm in the OpenBot Recorder tab that opened.";
+      return "请在刚打开的 OpenBot 录制器标签页里确认。";
     case "expired":
-      return "The request expired. Try again.";
+      return "请求已过期。请再试一次。";
     case "cancelled":
-      return "You cancelled in the OpenBot Recorder tab. Nothing was connected.";
+      return "你在 OpenBot 录制器标签页里取消了，没有连接任何东西。";
     case "closed":
-      return "The OpenBot Recorder tab closed before you confirmed. Nothing was connected.";
+      return "你确认之前 OpenBot 录制器标签页就关了，没有连接任何东西。";
     case "failed":
       return attempt.message;
     default:
-      return "Installed. Connect it to record tasks for your Bots.";
+      return "已安装。连接后就能为员工录制任务。";
   }
 }
