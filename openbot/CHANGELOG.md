@@ -18,6 +18,24 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   controls, cards, badges and empty states. Presentation only: routes, queries, permissions and APIs
   are unchanged. Acceptance notes and screenshots are in docs/design/ios-studio/acceptance.
 
+## 0.2.5
+
+- **The web chat gets the local-app and desktop tools.** Talking to a coworker in the browser now
+  offers `computer_apps`, `computer_app_call`, `computer_app_enable`, `computer_desktop_windows` and
+  `computer_desktop_snapshot`, which until now only the unattended runs (routines, approval
+  follow-ups, group turns) had: in the 「我的分身」 chat the employee answered that it had no such
+  tool. They are offered only when the deployment runs on devices and the coworker's paired machine
+  is the asker's own (new `GET /api/computer/:botId/local-tools`). New routes
+  `POST /api/computer/:botId/apps/list|call|enable` and `.../desktop/windows|snapshot` call the same
+  gateway methods as the unattended tools, so owner-only, approvals, the sensitive-window floor and
+  the audit trail are unchanged; whatever needs asking goes through the approval route. An approval
+  refusal on a computer route now answers 403 instead of 500.
+
+## 0.2.4
+
+The first entries below were on `main` under Unreleased when `v0.2.4` was tagged, and shipped in
+that image; the 0.2.4 entries written at release time follow them.
+
 - **The last English corners of skills and plugins read in Chinese too.** The `/` menu in chat
   describes each skill in Chinese (the chip still carries the skill's original instruction); a
   skill's edit page and the admin skill dialog show a folded 中文说明 under the original
@@ -58,7 +76,6 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   draws from the list and no longer requests each automation's detail. The field is additive, so
   older clients are unaffected.
 
-## 0.2.4
 
 - **Ask the employee what apps your computer has.** With no app named, `computer_apps` now also
   lists apps found on the owner's computer that are not enabled yet (from the MCP configs of

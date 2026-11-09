@@ -1,8 +1,9 @@
+import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import { ToolLine } from "@/components/channels/tool-line";
 import { CommandOutput } from "@/components/computer/command-output";
 import { ComputerView } from "@/components/computer/computer-view";
-import { tryClient } from "@/lib/client";
+import { client, tryClient } from "@/lib/client";
 import { noteBrowsed, recordActivity } from "@/lib/computers/activity";
 import { callComputer, type ToolOutcome } from "@/lib/computers/call";
 import { type ControlState, readControl } from "@/lib/computers/control";
@@ -11,7 +12,15 @@ import {
   runHelpRequest,
   runNavigation,
 } from "@/lib/computers/handoff";
-import { useActiveBotHolder } from "./active-bot";
+import {
+  DESKTOP_REF,
+  DESKTOP_WINDOW_ID,
+} from "../../../../shared/desktop-control";
+import {
+  CANDIDATE_REF,
+  LOCAL_TOOL_DESCRIPTIONS,
+} from "../../../../shared/local-tools";
+import { useActiveBotHolder, useDeclaredBotId } from "./active-bot";
 import { useFrontendTool } from "./approval-tools";
 import { useComputerAvailable } from "./computer-available";
 
@@ -186,6 +195,7 @@ export function ComputerTools() {
   const bot = useActiveBotHolder();
   // Not offered to a Team Bot's teammates; see useComputerAvailable.
   const available = useComputerAvailable();
+  const localTools = useLocalToolsAllowed();
 
   useFrontendTool({
     available,
@@ -854,6 +864,239 @@ export function ComputerTools() {
         failed={didNotWork(outcomeOf(result))}
       />
     ),
+  });
+
+  return localTools ? <LocalTools /> : null;
+}
+
+/**
+ * Whether this person is offered the Bot owner's local apps and desktop, as the server answers it:
+ * device mode, and the Bot's owner asking, which is the rule the unattended run's tools follow.
+ *
+ * No until the server says yes, unlike the computer tools above: these act on the owner's own
+ * machine, so nobody else is shown them even for a moment. The gateway refuses everyone else anyway.
+ */
+function useLocalToolsAllowed(): boolean {
+  const declared = useDeclaredBotId();
+  const { data } = useQuery({
+    queryKey: ["computers", "local-tools", declared ?? ""],
+    queryFn: () =>
+      client<boolean>(
+        `/api/computers/${encodeURIComponent(declared ?? "")}/local-tools`,
+        "allowed",
+        { fallback: "读不到本机应用是否可用。" },
+      ),
+    enabled: declared !== undefined,
+    staleTime: 60_000,
+  });
+  return data === true;
+}
+
+/** What the local-app and desktop results carry that their transcript lines read back. */
+type LocalOutcome = ComputerOutcome & {
+  apps?: { name?: unknown }[];
+  windows?: unknown[];
+  enabled?: { name?: unknown };
+  window?: { title?: unknown };
+};
+
+/** A refusal's or failure's reason, else what `detail` makes of a result that worked. */
+function localDetail(
+  outcome: LocalOutcome,
+  detail: () => string | undefined,
+): string | undefined {
+  return outcome.refused === true || didNotWork(outcome)
+    ? String(outcome.reason ?? "")
+    : detail();
+}
+
+/**
+ * The owner's local apps and desktop (真机验收 2026-11-09: the unattended run had these and the web
+ * chat did not). Mounted only when `useLocalToolsAllowed` says yes, so for anyone else they are not
+ * registered at all.
+ *
+ * Names, words and parameters are the server's (`shared/local-tools.ts`). A listing goes straight to
+ * its route; a call, an enable and a window read may need the owner's approval, so `useFrontendTool`
+ * sends those through the approval route, as it does a command. The desktop is read only: nothing
+ * here clicks, types, presses a key or launches anything.
+ */
+function LocalTools() {
+  const bot = useActiveBotHolder();
+
+  useFrontendTool({
+    name: "computer_apps",
+    description: LOCAL_TOOL_DESCRIPTIONS.computer_apps,
+    parameters: z.strictObject({ app: z.string().min(1).max(40).optional() }),
+    handler: async (
+      input: { app?: string },
+      { signal }: { signal?: AbortSignal } = {},
+    ) =>
+      callComputer(
+        bot.current,
+        "/apps/list",
+        { method: "POST", body: input ?? {} },
+        signal,
+      ),
+    render: ({ result, status }) => {
+      const outcome = outcomeOf(result) as LocalOutcome;
+      return (
+        <ActionLine
+          running={status !== "complete"}
+          label="查看了本机应用"
+          detail={localDetail(outcome, () => {
+            const names = (outcome.apps ?? [])
+              .map((app) => app?.name)
+              .filter((name): name is string => typeof name === "string");
+            return names.length ? names.join("、") : "还没有本机应用";
+          })}
+          refused={outcome.refused === true}
+          failed={didNotWork(outcome)}
+        />
+      );
+    },
+  });
+
+  useFrontendTool({
+    name: "computer_app_call",
+    description: LOCAL_TOOL_DESCRIPTIONS.computer_app_call,
+    parameters: z.strictObject({
+      app: z.string().min(1).max(40),
+      // No `*`: the tool is half of the approval scope, where `*` would match every tool.
+      tool: z
+        .string()
+        .min(1)
+        .max(128)
+        .regex(/^[^*]+$/),
+      args: z.record(z.string(), z.unknown()).optional(),
+    }),
+    handler: async (
+      input: { app: string; tool: string; args?: Record<string, unknown> },
+      { signal }: { signal?: AbortSignal } = {},
+    ) =>
+      callComputer(
+        bot.current,
+        "/apps/call",
+        { method: "POST", body: input },
+        signal,
+      ),
+    render: ({ args, result, status }) => {
+      const outcome = outcomeOf(result) as LocalOutcome;
+      return (
+        <ActionLine
+          running={status !== "complete"}
+          label="调用了本机应用"
+          detail={localDetail(outcome, () =>
+            typeof args?.app === "string" && typeof args?.tool === "string"
+              ? `${args.app} · ${args.tool}`
+              : undefined,
+          )}
+          refused={outcome.refused === true}
+          failed={didNotWork(outcome)}
+        />
+      );
+    },
+  });
+
+  useFrontendTool({
+    name: "computer_app_enable",
+    description: LOCAL_TOOL_DESCRIPTIONS.computer_app_enable,
+    parameters: z.strictObject({ candidate: z.string().regex(CANDIDATE_REF) }),
+    handler: async (
+      input: { candidate: string },
+      { signal }: { signal?: AbortSignal } = {},
+    ) =>
+      callComputer(
+        bot.current,
+        "/apps/enable",
+        { method: "POST", body: input },
+        signal,
+      ),
+    render: ({ result, status }) => {
+      const outcome = outcomeOf(result) as LocalOutcome;
+      return (
+        <ActionLine
+          running={status !== "complete"}
+          label="启用了本机应用"
+          detail={localDetail(outcome, () =>
+            typeof outcome.enabled?.name === "string"
+              ? outcome.enabled.name
+              : undefined,
+          )}
+          refused={outcome.refused === true}
+          failed={didNotWork(outcome)}
+        />
+      );
+    },
+  });
+
+  useFrontendTool({
+    name: "computer_desktop_windows",
+    description: LOCAL_TOOL_DESCRIPTIONS.computer_desktop_windows,
+    parameters: z.strictObject({}),
+    handler: async (
+      _input: Record<string, never>,
+      { signal }: { signal?: AbortSignal } = {},
+    ) =>
+      callComputer(
+        bot.current,
+        "/desktop/windows",
+        { method: "POST", body: {} },
+        signal,
+      ),
+    render: ({ result, status }) => {
+      const outcome = outcomeOf(result) as LocalOutcome;
+      return (
+        <ActionLine
+          running={status !== "complete"}
+          label="查看了桌面窗口"
+          detail={localDetail(outcome, () =>
+            Array.isArray(outcome.windows)
+              ? `${outcome.windows.length} 个窗口`
+              : undefined,
+          )}
+          refused={outcome.refused === true}
+          failed={didNotWork(outcome)}
+        />
+      );
+    },
+  });
+
+  useFrontendTool({
+    name: "computer_desktop_snapshot",
+    description: LOCAL_TOOL_DESCRIPTIONS.computer_desktop_snapshot,
+    parameters: z.strictObject({
+      windowId: z.string().regex(DESKTOP_WINDOW_ID),
+      from: z.string().regex(DESKTOP_REF).optional(),
+      screenshot: z.boolean().optional(),
+    }),
+    handler: async (
+      input: { windowId: string; from?: string; screenshot?: boolean },
+      { signal }: { signal?: AbortSignal } = {},
+    ) =>
+      callComputer(
+        bot.current,
+        "/desktop/snapshot",
+        { method: "POST", body: input },
+        signal,
+      ),
+    render: ({ args, result, status }) => {
+      const outcome = outcomeOf(result) as LocalOutcome;
+      return (
+        <ActionLine
+          running={status !== "complete"}
+          label="读取了桌面窗口"
+          detail={localDetail(outcome, () =>
+            typeof outcome.window?.title === "string"
+              ? outcome.window.title
+              : typeof args?.windowId === "string"
+                ? args.windowId
+                : undefined,
+          )}
+          refused={outcome.refused === true}
+          failed={didNotWork(outcome)}
+        />
+      );
+    },
   });
 
   return null;
