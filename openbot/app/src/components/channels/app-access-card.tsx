@@ -61,6 +61,12 @@ export function AppAccessRequestCard({ card }: { card: Card }) {
       {status && status !== "pending" ? (
         <p role="status">{ANSWERED[status]}</p>
       ) : null}
+      {status === "approved" && card.kind === "enable" ? (
+        // 上架之后还要员工的主人自己装（D08），批准不等于马上能用。
+        <p className="text-muted-foreground">
+          应用已上架，员工的主人在装配页安装后即可使用。
+        </p>
+      ) : null}
       {status === "pending" ? (
         <div>
           <Button

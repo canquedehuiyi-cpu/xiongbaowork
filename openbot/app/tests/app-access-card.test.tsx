@@ -150,3 +150,12 @@ test("the transcript draws the tool's answer as the card, not as a tool line", a
   expect(view.queryByText(/请管理员上架/)).toBeNull();
   await view.findByRole("button", { name: "撤回申请" });
 });
+
+test("an approved listing says the Bot's owner still installs it before it can be used", async () => {
+  status = "approved";
+  const view = draw();
+  await view.findByText("管理员已批准");
+  expect(
+    view.getByText("应用已上架，员工的主人在装配页安装后即可使用。"),
+  ).toBeTruthy();
+});
