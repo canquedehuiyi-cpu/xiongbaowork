@@ -268,6 +268,7 @@ import { createPipelineStore } from "./pipeline/store";
 import { createActionStepRunner } from "./pipeline/action-step";
 import { createPipelineStepRunner } from "./pipeline/turn-channel";
 import { createPlatformRoutes } from "./platform/routes";
+import { appAccessTools } from "./plugins/app-access-tool";
 import { useRoutineTools } from "./plugins/builtin-routines";
 import { useComposioClient } from "./plugins/composio";
 import { createComposioClient } from "./plugins/composio-adapter";
@@ -1682,6 +1683,8 @@ await startupLifecycle.run(async (startup) => {
         // A Team Bot reaches its owner's accounts, and a teammate's own only with their consent.
         credentialActorFor: teamBots.credentialActorFor(actorId, botId),
       })),
+      // 申请访问：用不了某个应用时替对方向管理员申请（迁移 0153）。只建一条本租户的申请，不碰应用。
+      ...appAccessTools({ store: pluginStore, botId, actorId }),
       ...hostAccessTools({
         broker: hostAccessBroker,
         botId,

@@ -31,6 +31,7 @@ import {
 import {
   agentProfiles,
   agents,
+  appAccessRequests,
   composioConnections,
   // Aliased: `credentials` is already the injected vault interface in this module, and the table and
   // the interface are two different things to reach for.
@@ -41,7 +42,12 @@ import {
   pluginGrants,
   skills,
   skillTools,
+  users,
 } from "../db/schema";
+import type {
+  AppAccessRequestKind,
+  AppAccessRequestStatus,
+} from "../db/schema/app-access-requests";
 import {
   type InstallListingKind,
   pluginInstallListings,
@@ -887,6 +893,33 @@ export function unlistedAdvertisedTools(
 
 const iso = (value: Date | string | null): string | null =>
   value === null ? null : value instanceof Date ? value.toISOString() : value;
+
+/** 一条申请访问（迁移 0153），连同收件箱和卡片要显示的名字。 */
+export type AppAccessRequestRecord = {
+  id: string;
+  /** 申请人的租户：管理员处理时就在这个帧里改它。 */
+  tenantId: string;
+  /** `mcp_servers.id`，应用行本身。 */
+  serverId: string;
+  /** 应用的标识：目录键，没有目录键时是行自己的 id。上架和授予的 ref 都按它写。 */
+  appKey: string;
+  appTitle: string;
+  botId: string;
+  botName: string | null;
+  requesterUserId: string;
+  requesterName: string | null;
+  requesterEmail: string | null;
+  kind: AppAccessRequestKind;
+  status: AppAccessRequestStatus;
+  note: string | null;
+  decidedBy: string | null;
+  decidedAt: string | null;
+  createdAt: string;
+};
+
+/** 路由和工具传进来的申请 id 是任意文字；不是 uuid 的在查询之前就答"没有"，不让 Postgres 报类型错误。 */
+const isUuid = (value: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 
 /**
  * The two things an actor field says when the actor is not a person, and they are not the same
@@ -3260,6 +3293,87 @@ export function createPluginStore(options: PluginStoreOptions) {
    * 只是本进程的重试上限，不是共享状态：别的副本、下一次启动各自从零开始。
    */
   const relistFailures = new Map<string, number>();
+
+  /**
+   * 申请访问的行，带上应用名、员工名和申请人，在调用者的帧里读，最新的在前。
+   *
+   * 三个都是左连接：应用、员工、人各自有自己的行安全，看不见时卡片和收件箱退回到 id，而不是让这条申请
+   * 从列表里消失。三个连接都按主键，不会把一条申请连成几行。
+   */
+  async function appAccessRequestRows(
+    where: ReturnType<typeof and>,
+  ): Promise<AppAccessRequestRecord[]> {
+    const rows = await database
+      .select({
+        id: appAccessRequests.id,
+        tenantId: appAccessRequests.tenantId,
+        serverId: appAccessRequests.serverId,
+        catalogueKey: mcpServers.catalogueKey,
+        appTitle: mcpServers.title,
+        botId: appAccessRequests.botId,
+        botName: agents.name,
+        requesterUserId: appAccessRequests.requesterUserId,
+        requesterName: users.name,
+        requesterEmail: users.email,
+        kind: appAccessRequests.kind,
+        status: appAccessRequests.status,
+        note: appAccessRequests.note,
+        decidedBy: appAccessRequests.decidedBy,
+        decidedAt: appAccessRequests.decidedAt,
+        createdAt: appAccessRequests.createdAt,
+      })
+      .from(appAccessRequests)
+      .leftJoin(mcpServers, eq(mcpServers.id, appAccessRequests.serverId))
+      .leftJoin(agents, eq(agents.id, appAccessRequests.botId))
+      .leftJoin(users, eq(users.id, appAccessRequests.requesterUserId))
+      .where(where)
+      .orderBy(
+        sql`${appAccessRequests.createdAt} desc`,
+        asc(appAccessRequests.id),
+      );
+    return rows.map((row) => ({
+      id: row.id,
+      tenantId: row.tenantId,
+      serverId: row.serverId,
+      appKey: row.catalogueKey ?? row.serverId,
+      appTitle: row.appTitle ?? row.serverId,
+      botId: row.botId,
+      botName: row.botName,
+      requesterUserId: row.requesterUserId,
+      requesterName: row.requesterName,
+      requesterEmail: row.requesterEmail,
+      kind: row.kind as AppAccessRequestKind,
+      status: row.status as AppAccessRequestStatus,
+      note: row.note,
+      decidedBy: row.decidedBy,
+      decidedAt: iso(row.decidedAt),
+      createdAt: iso(row.createdAt) ?? "",
+    }));
+  }
+
+  /** 把一条仍是 pending 的申请关掉，只关一次；没关上（不存在、看不见、已处理）答 null。 */
+  async function closeAppAccessRequest(
+    id: string,
+    status: "approved" | "dismissed" | "cancelled",
+    by: string,
+    narrower?: ReturnType<typeof eq>,
+  ): Promise<AppAccessRequestRecord | null> {
+    if (!isUuid(id)) return null;
+    const closed = await database
+      .update(appAccessRequests)
+      .set({ status, decidedBy: by, decidedAt: new Date() })
+      .where(
+        and(
+          eq(appAccessRequests.id, id),
+          eq(appAccessRequests.status, "pending"),
+          narrower,
+        ),
+      )
+      .returning({ id: appAccessRequests.id });
+    if (closed.length === 0) return null;
+    const [row] = await appAccessRequestRows(eq(appAccessRequests.id, id));
+    return row ?? null;
+  }
 
   return {
     /**
@@ -6082,6 +6196,202 @@ export function createPluginStore(options: PluginStoreOptions) {
         payload: { actor: by, change: "plugin_unlisted", kind, ref },
       });
       return true;
+    },
+
+    /**
+     * 申请访问（迁移 0153）：员工说出的应用，对应到本部署的哪一行应用。
+     *
+     * 按应用行 id、目录键或应用名（不区分大小写）找；id 或目录键精确命中的排在按名字命中的前面，同名时
+     * 团队的行在前（{@link ownRowFirst}）。在调用者的帧里读，所以只找得到这个人看得见的应用。null 表示本
+     * 部署没有这个应用，申请无从提起。
+     */
+    async findAppForRequest(
+      app: string,
+    ): Promise<{ serverId: string; appKey: string; title: string } | null> {
+      const wanted = app.trim().toLowerCase();
+      if (!wanted) return null;
+      const byKey = sql`(lower(${mcpServers.id}) = ${wanted} or lower(${mcpServers.catalogueKey}) = ${wanted})`;
+      const [row] = await database
+        .select({
+          id: mcpServers.id,
+          catalogueKey: mcpServers.catalogueKey,
+          title: mcpServers.title,
+        })
+        .from(mcpServers)
+        .where(or(byKey, sql`lower(${mcpServers.title}) = ${wanted}`))
+        .orderBy(
+          sql`case when ${byKey} then 0 else 1 end`,
+          ownRowFirst(),
+          asc(mcpServers.id),
+        )
+        .limit(1);
+      return row
+        ? {
+            serverId: row.id,
+            appKey: row.catalogueKey ?? row.id,
+            title: row.title,
+          }
+        : null;
+    },
+
+    /**
+     * 提一条申请，或拿到已有的那条。
+     *
+     * 写在调用者的帧里，行盖的就是申请人的租户章。同一个人、同一位员工、同一个应用、同一种类型已有
+     * pending 的，答已有那条（`existing`），不再写；一个人同时等着的申请到了 `maxPending` 条，答
+     * `limited`。并发的两次提交由部分唯一索引兜住，后到的那次读回先到的那条。
+     */
+    async fileAppAccessRequest(input: {
+      serverId: string;
+      botId: string;
+      requesterUserId: string;
+      kind: AppAccessRequestKind;
+      note: string | null;
+      maxPending: number;
+    }): Promise<
+      | { outcome: "created" | "existing"; request: AppAccessRequestRecord }
+      | { outcome: "limited" }
+    > {
+      const samePending = and(
+        eq(appAccessRequests.requesterUserId, input.requesterUserId),
+        eq(appAccessRequests.botId, input.botId),
+        eq(appAccessRequests.serverId, input.serverId),
+        eq(appAccessRequests.kind, input.kind),
+        eq(appAccessRequests.status, "pending"),
+      );
+      const [existing] = await appAccessRequestRows(samePending);
+      if (existing) return { outcome: "existing", request: existing };
+      const [waiting] = await database
+        .select({ count: sql<number>`count(*)::int` })
+        .from(appAccessRequests)
+        .where(
+          and(
+            eq(appAccessRequests.requesterUserId, input.requesterUserId),
+            eq(appAccessRequests.status, "pending"),
+          ),
+        );
+      if ((waiting?.count ?? 0) >= input.maxPending)
+        return { outcome: "limited" };
+      const inserted = await database
+        .insert(appAccessRequests)
+        .values({
+          serverId: input.serverId,
+          botId: input.botId,
+          requesterUserId: input.requesterUserId,
+          kind: input.kind,
+          note: input.note,
+        })
+        .onConflictDoNothing()
+        .returning({ id: appAccessRequests.id });
+      const [request] = await appAccessRequestRows(
+        inserted[0] ? eq(appAccessRequests.id, inserted[0].id) : samePending,
+      );
+      if (!request)
+        throw new PluginInvariantError(
+          "An access request was filed and then could not be read back in the same frame.",
+        );
+      if (!inserted[0]) return { outcome: "existing", request };
+      await recordAuditEvent(auditStore, {
+        eventType: "configuration.changed",
+        targetType: "app_access_request",
+        targetId: request.id,
+        actorUserId: input.requesterUserId,
+        payload: {
+          change: "app_access_requested",
+          app: request.appKey,
+          bot: request.botId,
+          kind: request.kind,
+        },
+      });
+      return { outcome: "created", request };
+    },
+
+    /** 一条申请，在调用者的帧里读；看不见或不存在都是 null。 */
+    async appAccessRequest(id: string): Promise<AppAccessRequestRecord | null> {
+      if (!isUuid(id)) return null;
+      const [row] = await appAccessRequestRows(eq(appAccessRequests.id, id));
+      return row ?? null;
+    },
+
+    /**
+     * 调用者的帧里所有待处理的申请，最新的在前。本人的帧里是自己的；`platform` 帧里是所有人的，
+     * 管理员收件箱经 `asAdminPlatform` 读的就是这个。
+     */
+    async pendingAppAccessRequests(filter?: {
+      requesterUserId?: string;
+    }): Promise<AppAccessRequestRecord[]> {
+      return appAccessRequestRows(
+        and(
+          eq(appAccessRequests.status, "pending"),
+          filter?.requesterUserId
+            ? eq(appAccessRequests.requesterUserId, filter.requesterUserId)
+            : undefined,
+        ),
+      );
+    },
+
+    /**
+     * 申请人撤回自己的一条 pending 申请。别人的、已处理的、不存在的，都答 null，什么也不改，所以从答案
+     * 里看不出是谁申请了什么。
+     */
+    async cancelAppAccessRequest(input: {
+      id: string;
+      requesterUserId: string;
+    }): Promise<AppAccessRequestRecord | null> {
+      const closed = await closeAppAccessRequest(
+        input.id,
+        "cancelled",
+        input.requesterUserId,
+        eq(appAccessRequests.requesterUserId, input.requesterUserId),
+      );
+      if (closed)
+        await recordAuditEvent(auditStore, {
+          eventType: "configuration.changed",
+          targetType: "app_access_request",
+          targetId: closed.id,
+          actorUserId: input.requesterUserId,
+          payload: {
+            change: "app_access_cancelled",
+            app: closed.appKey,
+            bot: closed.botId,
+            kind: closed.kind,
+          },
+        });
+      return closed;
+    },
+
+    /**
+     * 把一条 pending 申请关成 approved 或 dismissed，只关一次。在申请人的帧里调用（管理员经
+     * `adminActAsOwner` 进来），所以轨迹和这次改动都归申请人。已处理或看不见的答 null。
+     */
+    async decideAppAccessRequest(input: {
+      id: string;
+      status: "approved" | "dismissed";
+      by: string;
+    }): Promise<AppAccessRequestRecord | null> {
+      const closed = await closeAppAccessRequest(
+        input.id,
+        input.status,
+        input.by,
+      );
+      if (closed)
+        await recordAuditEvent(auditStore, {
+          eventType: "configuration.changed",
+          targetType: "app_access_request",
+          targetId: closed.id,
+          payload: {
+            actor: input.by,
+            change:
+              input.status === "approved"
+                ? "app_access_approved"
+                : "app_access_dismissed",
+            app: closed.appKey,
+            bot: closed.botId,
+            kind: closed.kind,
+            requester: closed.requesterUserId,
+          },
+        });
+      return closed;
     },
 
     /** Everything one Bot may use. The runtime asks this and offers exactly what comes back. */
