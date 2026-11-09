@@ -103,7 +103,6 @@ function input(id = randomUUID()): SaveVoiceSessionInput {
   };
 }
 
-<<<<<<< fork
 test("sessions persist as JSON, are immutable/idempotent, and are shared only with channel members", () =>
   asOwner(async () => {
     const request = input();
@@ -115,10 +114,10 @@ test("sessions persist as JSON, are immutable/idempotent, and are shared only wi
       saved,
     );
     await expect(store.list(outsider, channelId)).rejects.toThrow(
-      "Channel not found",
+      "Couldn't find that conversation.",
     );
     await expect(store.save(outsider, input())).rejects.toThrow(
-      "Channel not found",
+      "Couldn't find that conversation.",
     );
     await expect(store.save(member, request)).rejects.toThrow("already in use");
     await expect(
@@ -173,26 +172,6 @@ test(
       await expect(
         store.list(owner, channelId, "not-a-cursor"),
       ).rejects.toThrow("Invalid voice history cursor");
-=======
-test("sessions persist as JSON, are immutable/idempotent, and are shared only with channel members", async () => {
-  const request = input();
-  const saved = await store.save(owner, request);
-  expect(saved.durationSeconds).toBe(45);
-  expect(saved.summaryStatus).toBe("failed");
-  expect(await store.save(owner, request)).toEqual(saved);
-  expect((await store.list(member, channelId)).sessions).toContainEqual(saved);
-  await expect(store.list(outsider, channelId)).rejects.toThrow(
-    "Couldn't find that conversation.",
-  );
-  await expect(store.save(outsider, input())).rejects.toThrow(
-    "Couldn't find that conversation.",
-  );
-  await expect(store.save(member, request)).rejects.toThrow("already in use");
-  await expect(
-    store.save(owner, {
-      ...request,
-      transcript: [{ id: "changed", role: "user", text: "Changed" }],
->>>>>>> v1.0.0
     }),
   15_000,
 );

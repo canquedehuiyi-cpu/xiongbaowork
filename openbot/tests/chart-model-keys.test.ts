@@ -67,6 +67,14 @@ function render(...args: string[]): Doc[] {
     .filter((document): document is Doc => document !== null);
 }
 
+/**
+ * The same, with the bundled Intelligence switched on. This fork leaves it off by default
+ * (Intelligence is optional, R0), so whatever reads its Learning agent asks for it.
+ */
+function renderBundled(...args: string[]): Doc[] {
+  return render("--set", "intelligence.enabled=true", ...args);
+}
+
 const component = (name: string) => (doc: Doc) =>
   doc.metadata.labels?.["app.kubernetes.io/component"] === name;
 
@@ -188,7 +196,10 @@ describe.skipIf(!helm)("an install on OpenAI alone", () => {
   });
 
   test("leaves Learning's agent on openai/gpt-5.5 and the OpenAI key, and hands it nothing else", () => {
-    const docs = render("--set-string", `secrets.modelApiKey=${OPENAI_KEY}`);
+    const docs = renderBundled(
+      "--set-string",
+      `secrets.modelApiKey=${OPENAI_KEY}`,
+    );
     expect(agentValue(docs, "LEARNING_AGENT_MODEL")).toBe("openai/gpt-5.5");
     expect(agentValue(docs, "OPENAI_API_KEY")).toBe(OPENAI_KEY);
     expect(agentValue(docs, "ANTHROPIC_API_KEY")).toBeUndefined();
@@ -271,6 +282,7 @@ describe.skipIf(!helm)("the model, for a model router", () => {
 });
 
 describe.skipIf(!helm)("Learning in the bundled Intelligence", () => {
+  const render = renderBundled;
   const anthropicAlone = [
     "--set-string",
     "secrets.modelApiKey=",

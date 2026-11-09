@@ -254,6 +254,9 @@ describe.skipIf(!helm)("AWS usage attribution", () => {
   test("the bundled Intelligence's own Ingress keeps its single tag", () => {
     const ingress = render(
       ...(surfaces[0] as Surface).on,
+      // Off by default in this fork (Intelligence is optional, R0).
+      "--set",
+      "intelligence.enabled=true",
       "--set",
       "intelligence.ingress.enabled=true",
     ).find(

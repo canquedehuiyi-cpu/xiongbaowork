@@ -107,7 +107,6 @@ test("the same signed event replayed with a fresh X-GitHub-Delivery dedupes", as
   expect(events).toHaveLength(2);
   expect(events[0]?.externalId).toBe(events[1]?.externalId as string);
 });
-<<<<<<< fork
 test("the binding is read as platform and the event ingested in the binding's own tenant (G01)", async () => {
   const { routes, events, frames } = fixture();
   const response = await routes.fetch(
@@ -137,7 +136,7 @@ test("a binding stamped as nobody's, or with somebody other than its owner, is u
     expect(response.status).toBe(404);
     expect(events).toHaveLength(0);
   }
-=======
+});
 test("a pull request event larger than 32 KiB is accepted and fitted to the ledger cap", async () => {
   const { routes, events } = fixture();
   // A real `pull_request` delivery for an OpenBot PR is 26–57 KB: the PR object alone repeats the
@@ -182,5 +181,4 @@ test("a pull request event under 32 KiB is handed on whole", async () => {
     202,
   );
   expect(events[0]?.payload).toEqual(payload);
->>>>>>> v1.0.0
 });

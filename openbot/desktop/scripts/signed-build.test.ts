@@ -467,10 +467,10 @@ test("Desktop macOS signing builds both Macs on the Apple silicon runner and che
   );
   expect(check?.env?.LIPO_ARCH).toBe(expression("matrix.platform.lipo-arch"));
   expect(check?.run).toContain(
-    'desktop/scripts/verify-mac-arch.sh "$BUNDLE/macos/OpenBot.app" "$LIPO_ARCH"',
+    'desktop/scripts/verify-mac-arch.sh "$BUNDLE/macos/XiongBao.app" "$LIPO_ARCH"',
   );
   expect(check?.run).toContain(
-    'desktop/scripts/verify-mac-arch.sh "$mount/OpenBot.app" "$LIPO_ARCH"',
+    'desktop/scripts/verify-mac-arch.sh "$mount/XiongBao.app" "$LIPO_ARCH"',
   );
 });
 

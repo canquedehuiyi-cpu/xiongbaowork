@@ -28,6 +28,11 @@ export type TaskTurnInput = {
   final: boolean;
   /** Which run of the turn this is, counting from 1. A retry shares its first run's ask. */
   attempt?: number;
+  /**
+   * The tenant stamped on the claimed work row, which is whose turn this is (G01). The runner was
+   * claimed on a timer or by a kick and is told it here; see `TurnRunner`.
+   */
+  tenantId?: string;
 };
 
 export type TaskTurn = (
@@ -81,6 +86,7 @@ export function createTaskTurn(deps: {
     try {
       const result = await deps.runTurn({
         ...scope,
+        ...(input.tenantId ? { tenantId: input.tenantId } : {}),
         routineId: input.runId,
         telemetry: {
           trigger: "human",

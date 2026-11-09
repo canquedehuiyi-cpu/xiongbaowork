@@ -647,13 +647,9 @@ describe("headless turns obey the same switches", () => {
     });
     try {
       const turn = headlessTurn(bot);
-<<<<<<< fork
       await expect(asMemberTenant(() => turn.run())).rejects.toThrow(
-        /allowlist/,
+        /isn't an allowed model/,
       );
-=======
-      await expect(turn.run()).rejects.toThrow(/isn't an allowed model/);
->>>>>>> v1.0.0
       expect(turn.ran).toEqual([]);
     } finally {
       await put(asAdmin, "/api/admin/enterprise/settings/modelAllowlist", {
@@ -746,15 +742,10 @@ describe("headless turns obey the same switches", () => {
     });
     try {
       await expect(
-<<<<<<< fork
         asMemberTenant(() =>
           hop.deliver({ work, message: "m", shown: "s", assertion: "a" }),
         ),
-      ).rejects.toThrow(/allowlist/);
-=======
-        hop.deliver({ work, message: "m", shown: "s", assertion: "a" }),
       ).rejects.toThrow(/isn't an allowed model/);
->>>>>>> v1.0.0
     } finally {
       await put(asAdmin, "/api/admin/enterprise/settings/modelAllowlist", {
         value: { enabled: false, models: [] },
@@ -929,8 +920,13 @@ describe("offboarding", () => {
       `/api/admin/enterprise/people/${member.id}/terminate-computers`,
       { method: "POST" },
     );
-<<<<<<< fork
-    expect((await response.json()).stopped).toEqual([bot]);
+    // Their own computer, which every Bot they used runs on, and the computer of the Bot they own,
+    // which would be its own were it isolated.
+    expect((await response.json()).stopped).toEqual([
+      `person:${member.id}`,
+      `bot:${bot}`,
+    ]);
+    expect(stopped).toEqual([`person:${member.id}`, `bot:${bot}`]);
     const [row] = await asPlatform(() =>
       database
         .select()
@@ -940,22 +936,6 @@ describe("offboarding", () => {
             eq(auditEvents.eventType, "computer.terminated"),
             eq(auditEvents.targetId, member.id),
           ),
-=======
-    // Their own computer, which every Bot they used runs on, and the computer of the Bot they own,
-    // which would be its own were it isolated.
-    expect((await response.json()).stopped).toEqual([
-      `person:${member.id}`,
-      `bot:${bot}`,
-    ]);
-    expect(stopped).toEqual([`person:${member.id}`, `bot:${bot}`]);
-    const [row] = await database
-      .select()
-      .from(auditEvents)
-      .where(
-        and(
-          eq(auditEvents.eventType, "computer.terminated"),
-          eq(auditEvents.targetId, member.id),
->>>>>>> v1.0.0
         ),
     );
     expect(row?.actorUserId).toBe(admin.id);
@@ -1066,11 +1046,8 @@ describe("action recording", () => {
     expect(rows.map((row) => row.command)).toEqual([
       "curl -H 'Authorization: Bearer [REDACTED]' https://x.test",
     ]);
-<<<<<<< fork
     // Past Bun's 5 s default, so a row that never arrives fails the assertion above, not the clock.
   }, 15_000);
-=======
-  });
 
   test("a command on the person's own computer is recorded once, as local", async () => {
     // Its Activity row is a computer action too now, which the recording tap reads; the guard
@@ -1097,7 +1074,10 @@ describe("action recording", () => {
       actorId: admin.id,
       auditStore,
     }).find((candidate) => candidate.name === "host_run_command");
-    const answer = tool?.execute({ grantId, command: "ls -la" });
+    // In the acting person's own frame, as their turn runs the tool.
+    const answer = runAsTenant(admin.id, async () =>
+      tool?.execute({ grantId, command: "ls -la" }),
+    );
     for (let attempt = 0; attempt < 50; attempt++) {
       const operation = broker.nextDesktopOperation()?.operations[0];
       if (operation) {
@@ -1112,20 +1092,21 @@ describe("action recording", () => {
     }
     await answer;
     await Bun.sleep(100);
-    const rows = await database
-      .select()
-      .from(actionRecords)
-      .where(
-        and(
-          eq(actionRecords.botId, bot),
-          eq(actionRecords.toolName, "host/run_command"),
+    const rows = await asPlatform(() =>
+      database
+        .select()
+        .from(actionRecords)
+        .where(
+          and(
+            eq(actionRecords.botId, bot),
+            eq(actionRecords.toolName, "host/run_command"),
+          ),
         ),
-      );
+    );
     expect(rows.map((row) => [row.surface, row.outcome, row.command])).toEqual([
       ["local", "allowed", "ls -la"],
     ]);
   });
->>>>>>> v1.0.0
 });
 
 describe("OpenTelemetry export", () => {

@@ -411,7 +411,6 @@ describe("offering the firings that are due", () => {
       },
     };
 
-<<<<<<< fork
     const outcomes = await Promise.all([
       asPlatform(() =>
         offerDueRoutines(sweepOptions({ routineStore: racing })),
@@ -420,47 +419,17 @@ describe("offering the firings that are due", () => {
         offerDueRoutines(sweepOptions({ routineStore: racing })),
       ),
     ]);
-=======
-    // Both sweeps must finish reading the same due stamp before either offers it. Promise.all
-    // alone does not ensure this: a slower reader can see the already-advanced stamp, which is
-    // still due by Postgres's real clock because this fixture deliberately dates its rows to 2001.
-    const dueRoutines = store.dueRoutines.bind(store);
-    const bothRead = Promise.withResolvers<void>();
-    let readers = 0;
-    const read = spyOn(store, "dueRoutines").mockImplementation(
-      async (limit) => {
-        const rows = await dueRoutines(limit);
-        if (++readers === 2) bothRead.resolve();
-        await bothRead.promise;
-        return rows;
-      },
-    );
-    try {
-      const outcomes = await Promise.all([
-        offerDueRoutines(sweepOptions({ now })),
-        offerDueRoutines(sweepOptions({ now })),
-      ]);
->>>>>>> v1.0.0
 
-      // Both snapshots came from the real database. The real queue and compare-and-set must
-      // still collapse their two offers to one firing and one clock advance.
-      expect(readers).toBe(2);
-      for (const outcome of outcomes) {
-        expect(outcome.offered).toContain(routine.id);
-      }
-      expect(await firingsFor(routine.id)).toHaveLength(1);
-    } finally {
-      read.mockRestore();
+    // Both sweeps saw it as due and both offered it, which is the honest report: each did put the
+    // work on the queue. What must be single is the row, and the clock.
+    for (const outcome of outcomes) {
+      expect(outcome.offered).toContain(routine.id);
     }
-<<<<<<< fork
     const firings = await firingsFor(routine.id);
     expect(firings).toHaveLength(1);
     expect(firings[0]?.key).toBe(
       `${routine.id}:${stamp.toISOString().slice(0, 16)}Z`,
     );
-=======
-
->>>>>>> v1.0.0
 
     const after = await readRoutine(routine.id);
     expect(after?.nextRunAt.getTime()).toBeGreaterThan(stamp.getTime());
@@ -1778,8 +1747,11 @@ describe("consuming a claimed firing", () => {
         "succeeded",
       );
 
-      // What a reload reads: nothing is running in this conversation any more.
-      const work = await channelStore.workIn(owner, [channel]);
+      // What a reload reads: nothing is running in this conversation any more. Read the way the
+      // person reads it, in their own frame.
+      const work = await asRoutineOwner(routine, () =>
+        channelStore.workIn(owner, [channel]),
+      );
       expect(work.get(channel.id) ?? []).toEqual([]);
 
       // And what the open roster heard when the run ended: no turn, and nothing still working.

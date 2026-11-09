@@ -219,10 +219,11 @@ describe.skipIf(!helm)("routines on a Helm install", () => {
   test("a worker secret named in the store is read from the store, and the chart writes none", () => {
     const docs = render(
       ...values("eks"),
+      // The entry after the five ci/eks-values.yaml names (this fork's has no Intelligence key).
       "--set",
-      "externalSecrets.data[6].secretKey=worker-shared-secret",
+      "externalSecrets.data[5].secretKey=worker-shared-secret",
       "--set",
-      "externalSecrets.data[6].remoteRef.key=openbot/worker-shared-secret",
+      "externalSecrets.data[5].remoteRef.key=openbot/worker-shared-secret",
     );
     const ref = workerRef(sweep(docs));
     expect(workerRef(server(docs))).toEqual(ref);

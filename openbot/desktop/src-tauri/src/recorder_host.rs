@@ -33,8 +33,9 @@ use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::Arc;
 use std::time::Duration;
 
-/// Tauri's bundle identifier for OpenBot Desktop (`tauri.conf.json` `identifier`).
-const APP_IDENTIFIER: &str = "ai.copilotkit.openbot.desktop";
+/// Tauri's bundle identifier for 熊宝 Desktop (`tauri.conf.json` `identifier`): the folder Tauri keeps
+/// the app's own configuration in, which the host reads to find the installation.
+const APP_IDENTIFIER: &str = "com.xiongbao.desktop";
 
 /// The largest message either way. Chrome refuses a host message over 1 MB, and the extension sends
 /// only a few bytes, so a longer length prefix is a broken or hostile pipe.
@@ -431,7 +432,7 @@ mod tests {
     use std::time::Instant;
 
     const ID: &str = "icpcnhgjghecmklnjbccdgdicklblcgd";
-    const DESKTOP: &str = "ai.copilotkit.openbot.desktop";
+    const DESKTOP: &str = "com.xiongbao.desktop";
 
     fn args(list: &[&str]) -> Vec<OsString> {
         list.iter().map(OsString::from).collect()

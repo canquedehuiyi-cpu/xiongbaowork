@@ -894,6 +894,68 @@ mod tests {
         std::fs::remove_dir_all(root).unwrap();
     }
 
+    /// M3: upstream's lay-out step downloads the next release and lays it out in place
+    /// (`deployment::fetch_with`). This fork never lays an unverified download out over a
+    /// deployment, so the step downloads nothing and fails, and the upgrade keeps the previous
+    /// release, its files and its database, and starts it again.
+    #[test]
+    fn an_upgrades_lay_out_fails_closed_and_keeps_the_previous_release() {
+        let (root, steps) = installation();
+        let compose_before = std::fs::read(root.join("docker-compose.yml")).unwrap();
+        let images_before = std::fs::read(deployment::images_path(&root)).unwrap();
+        struct LaysOutAsTheAppDoes(Recorded);
+        impl Steps for LaysOutAsTheAppDoes {
+            fn stop(&mut self) -> Result<(), Problem> {
+                self.0.stop()
+            }
+            fn back_up(&mut self, to: &Path) -> Result<(), Problem> {
+                self.0.back_up(to)
+            }
+            fn lay_out(&mut self) -> Result<(), Problem> {
+                self.0.ran.push("lay_out".into());
+                let get = |url: &str| -> Result<Vec<u8>, String> {
+                    panic!("nothing is downloaded: {url}")
+                };
+                deployment::fetch_with(&self.0.root, &self.0.version, &get).map_err(Problem::from)
+            }
+            fn install(&mut self) -> Result<(), Problem> {
+                self.0.install()
+            }
+            fn start(&mut self) -> Result<(), Problem> {
+                self.0.start()
+            }
+            fn restore(&mut self, from: &Path) -> Result<(), Problem> {
+                self.0.restore(from)
+            }
+        }
+        let mut upgrading = LaysOutAsTheAppDoes(steps);
+        let ran = run(&root, &mut upgrading);
+        let Ran::Kept(failed) = ran else {
+            panic!("{ran:?}")
+        };
+        assert!(
+            detail(&failed).contains("PUBLICATION_UNAVAILABLE"),
+            "{failed:?}"
+        );
+        assert_eq!(
+            upgrading.0.ran,
+            ["stop", "back_up", "lay_out", "stop", "restore", "start"]
+        );
+        assert_eq!(deployment::installed(&root).unwrap().version, "v0.3.0");
+        assert_eq!(
+            std::fs::read(root.join("docker-compose.yml")).unwrap(),
+            compose_before
+        );
+        assert_eq!(
+            std::fs::read(deployment::images_path(&root)).unwrap(),
+            images_before
+        );
+        assert_eq!(upgrading.0.database, "rows at v0.3.0; started v0.3.0");
+        assert!(!interrupted(&root));
+        untouched(&root);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
     #[test]
     fn a_new_version_that_migrated_and_then_failed_has_its_database_restored() {
         let (root, mut steps) = installation();
@@ -1508,7 +1570,7 @@ volumes:
     }
 
     #[test]
-    #[ignore = "pushes to a local registry and runs an isolated Compose project on the selected engine"]
+    #[ignore = "pushes to a local registry and runs an isolated Compose project on the selected engine. M3: cannot pass in this fork, where laying a release out (deployment::fetch_with) fails closed"]
     fn an_installation_on_n_is_upgraded_to_the_next_release_with_its_data_and_one_migration() {
         let mut fixture = Fixture::new("moves");
         let previous = installed_and_used(&mut fixture);
@@ -1562,7 +1624,7 @@ volumes:
     }
 
     #[test]
-    #[ignore = "pushes to a local registry and runs an isolated Compose project on the selected engine"]
+    #[ignore = "pushes to a local registry and runs an isolated Compose project on the selected engine. M3: cannot pass in this fork, where laying a release out (deployment::fetch_with) fails closed"]
     fn an_upgrade_whose_image_cannot_be_pulled_puts_n_back_with_its_data_and_starts_it() {
         let mut fixture = Fixture::new("kept");
         let previous = installed_and_used(&mut fixture);
@@ -1639,7 +1701,7 @@ volumes:
     /// OpenBot kept sessions open to it. Retry runs Start, which puts the previous version back
     /// (`recover`) and starts it, with that client still connected.
     #[test]
-    #[ignore = "pushes to a local registry and runs an isolated Compose project on the selected engine"]
+    #[ignore = "pushes to a local registry and runs an isolated Compose project on the selected engine. M3: cannot pass in this fork, where laying a release out (deployment::fetch_with) fails closed"]
     fn a_previous_version_left_aside_is_put_back_and_started_while_the_database_is_in_use() {
         let mut fixture = Fixture::new("stuck");
         let previous = installed_and_used(&mut fixture);

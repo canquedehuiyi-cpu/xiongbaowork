@@ -173,7 +173,7 @@ import { createRoutingRoutes } from "./routing/routes";
 import { createCoworkerRoutingService } from "./routing/service";
 import type { SelfHostBanner } from "./self-host-banner";
 import { createSetupRoutes, type SetupSources } from "./setup/checklist";
-import { createTaskRoutes } from "./tasks/routes";
+import { createBotTaskRoutes } from "./tasks/bot-task-routes";
 import type { TaskRunner } from "./tasks/runner";
 import type { TaskStore } from "./tasks/store";
 import { createTeamBotRoutes } from "./team-bots/routes";
@@ -447,10 +447,6 @@ export function createApp(
   coworker?: {
     /** AUT3: whether an automation may target a WakerFlow (its executor is registered). */
     wakerflowAutomations?: boolean;
-    demonstrations?: {
-      store: DemonstrationStore;
-      recorder: DemonstrationRecorder;
-    };
     approvals?: ApprovalService;
     productTelemetry?: ProductTelemetry;
     /** The Recorder extension's routes and guards (recorder/wiring.ts). Absent, nothing about it is mounted. */
@@ -1962,8 +1958,16 @@ export function createApp(
    */
   if (coworker?.setup)
     app.route("/api/setup", createSetupRoutes(coworker.setup, requireUser));
+  /*
+   * Upstream's model catalogue (what a person may pick for a built-in Bot's run) at
+   * `/api/model-catalogue`: `/api/models` is the fork's tenant model library (models/routes.ts),
+   * mounted by index.ts, and both answer `GET /`.
+   */
   if (coworker?.models)
-    app.route("/api/models", createModelRoutes(coworker.models, requireUser));
+    app.route(
+      "/api/model-catalogue",
+      createModelRoutes(coworker.models, requireUser),
+    );
   if (coworker?.modelChoices)
     app.route(
       "/api/channels",
@@ -2009,10 +2013,15 @@ export function createApp(
         requireUser,
       ),
     );
+  /*
+   * Upstream's started work (a check-in item a person started runs as a task in a conversation of
+   * its own) at `/api/bot-tasks`: `/api/tasks` is the fork's task board (tasks/routes.ts), mounted
+   * by index.ts.
+   */
   if (coworker?.tasks)
     app.route(
-      "/api/tasks",
-      createTaskRoutes(
+      "/api/bot-tasks",
+      createBotTaskRoutes(
         coworker.tasks.store,
         coworker.tasks.runner,
         requireUser,

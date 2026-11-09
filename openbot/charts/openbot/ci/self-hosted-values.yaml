@@ -5,7 +5,8 @@
 # file needs to grow, a default is wrong.
 #
 # Both bundled databases at once on purpose: OpenBot's and Intelligence's are both Bitnami PostgreSQL,
-# and nothing else renders the two side by side.
+# and nothing else renders the two side by side. The bundled Intelligence is off by default in this
+# fork (Intelligence is optional, R0), so this target switches it on below.
 config:
   initialAdminEmails: admin@example.com
   auth:
@@ -52,4 +53,8 @@ computers:
 # still the chart's default: a policy on a cluster whose CNI ignores it does nothing, and on one that
 # enforces it a wrong rule is an outage, so turning it on stays a deployment's decision.
 networkPolicy:
+  enabled: true
+
+# The bundled Intelligence, so CI renders it in full on one target (see the top of this file).
+intelligence:
   enabled: true

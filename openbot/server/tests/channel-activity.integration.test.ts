@@ -217,7 +217,6 @@ describe("reading a person's channels", () => {
     });
   });
 
-<<<<<<< fork
   test("a caller cannot ask for every channel in one page", async () => {
     // The limit arrives over HTTP, so the ceiling is what makes paging a property of the endpoint.
     const owner = await createUser();
@@ -231,9 +230,6 @@ describe("reading a person's channels", () => {
     });
   });
 
-=======
-
->>>>>>> v1.0.0
   test("a nonsense cursor reads as the first page", async () => {
     const owner = await createUser();
     await as(owner, async () => {
@@ -281,36 +277,18 @@ describe("channel activity", () => {
           ...channel,
           // Nothing has named this conversation: the sweep that does runs outside this store.
           summary: null,
+          // Only a person's message opens a conversation, and this one was the Bot's.
+          opening: null,
           lastMessage: "Categorized three expenses.",
           lastMessageAgentId: agentId,
           lastMessageAt: at,
           createdAt: expect.any(Date),
           pinned: false,
           lastReadAt: null,
+          task: false,
         },
       ]);
     });
-<<<<<<< fork
-
-=======
-
-    expect((await store.list(owner)).channels).toEqual([
-      {
-        ...channel,
-        // Nothing has named this conversation: the sweep that does runs outside this store.
-        summary: null,
-        // Only a person's message opens a conversation, and this one was the Bot's.
-        opening: null,
-        lastMessage: "Categorized three expenses.",
-        lastMessageAgentId: agentId,
-        lastMessageAt: at,
-        createdAt: expect.any(Date),
-        pinned: false,
-        lastReadAt: null,
-        task: false,
-      },
-    ]);
->>>>>>> v1.0.0
   });
 
   test("keeps a person's roster to the channels they belong to", async () => {

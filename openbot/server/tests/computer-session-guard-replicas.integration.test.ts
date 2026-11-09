@@ -106,11 +106,10 @@ function replica(startedAt: () => string, known: string[] = []) {
 }
 
 beforeAll(async () => {
-<<<<<<< fork
   await asPerson(() =>
     database
       .delete(computerSnapshot)
-      .where(eq(computerSnapshot.computerId, botId)),
+      .where(eq(computerSnapshot.computerId, `bot:${botId}`)),
   );
 });
 
@@ -118,93 +117,44 @@ afterAll(async () => {
   await asPerson(() =>
     database
       .delete(computerSnapshot)
-      .where(eq(computerSnapshot.computerId, botId)),
+      .where(eq(computerSnapshot.computerId, `bot:${botId}`)),
   );
+  await database.$client.close();
 });
 
 test("replica B refuses a ref that replica A took before the container was replaced", () =>
   asPerson(async () => {
     // Replica A: takes the snapshot during the first run. Writes it to Postgres.
     const a = replica(() => FIRST_RUN);
-    await a.gateway.snapshot(botId);
+    await a.gateway.snapshot(botSeat(botId));
 
     // The row really is in Postgres, carrying the run it was taken on.
     const [stored] = await database
       .select({ session: computerSnapshot.session })
       .from(computerSnapshot)
-      .where(eq(computerSnapshot.computerId, botId));
+      .where(eq(computerSnapshot.computerId, `bot:${botId}`));
     expect(stored?.session).toBe(FIRST_RUN);
 
     // Replica B: a different process. Never located this Bot, so it holds nothing for it. The
     // container has since been replaced, so the supervisor now reports the second run.
     const b = replica(() => SECOND_RUN, [botId]);
     const clicked = await b.gateway
-      .click(botId, ACTOR, { ref: "e9", snapshotId: 7 })
+      .click(botSeat(botId), ACTOR, { ref: "e9", snapshotId: 7 })
       .catch((error: unknown) => error);
-=======
-  await database
-    .delete(computerSnapshot)
-    .where(eq(computerSnapshot.computerId, `bot:${botId}`));
-});
-
-afterAll(async () => {
-  await database
-    .delete(computerSnapshot)
-    .where(eq(computerSnapshot.computerId, `bot:${botId}`));
-});
-
-test("replica B refuses a ref that replica A took before the container was replaced", async () => {
-  // Replica A: takes the snapshot during the first run. Writes it to Postgres.
-  const a = replica(() => FIRST_RUN);
-  await a.gateway.snapshot(botSeat(botId));
-
-  // The row really is in Postgres, carrying the run it was taken on.
-  const [stored] = await database
-    .select({ session: computerSnapshot.session })
-    .from(computerSnapshot)
-    .where(eq(computerSnapshot.computerId, `bot:${botId}`));
-  expect(stored?.session).toBe(FIRST_RUN);
-
-  // Replica B: a different process. Never located this Bot, so it holds nothing for it. The
-  // container has since been replaced, so the supervisor now reports the second run.
-  const b = replica(() => SECOND_RUN, [botId]);
-  const clicked = await b.gateway
-    .click(botSeat(botId), ACTOR, { ref: "e9", snapshotId: 7 })
-    .catch((error: unknown) => error);
->>>>>>> v1.0.0
 
     expect(clicked).toBeInstanceOf(StaleSnapshotError);
   }));
 
-<<<<<<< fork
 test("CONTROL: replica B allows the same ref while the run is still current", () =>
   asPerson(async () => {
     const a = replica(() => FIRST_RUN);
-    await a.gateway.snapshot(botId);
+    await a.gateway.snapshot(botSeat(botId));
 
     // Same cold replica, but the container was never replaced.
     const b = replica(() => FIRST_RUN, [botId]);
-    const result = await b.gateway.click(botId, ACTOR, {
+    const result = await b.gateway.click(botSeat(botId), ACTOR, {
       ref: "e9",
       snapshotId: 7,
     });
     expect(result).toMatchObject({ action: "click" });
   }));
-=======
-test("CONTROL: replica B allows the same ref while the run is still current", async () => {
-  const a = replica(() => FIRST_RUN);
-  await a.gateway.snapshot(botSeat(botId));
-
-  // Same cold replica, but the container was never replaced.
-  const b = replica(() => FIRST_RUN, [botId]);
-  const result = await b.gateway.click(botSeat(botId), ACTOR, {
-    ref: "e9",
-    snapshotId: 7,
-  });
-  expect(result).toMatchObject({ action: "click" });
-});
-
-afterAll(async () => {
-  await database.$client.close();
-});
->>>>>>> v1.0.0

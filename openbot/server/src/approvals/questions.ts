@@ -274,6 +274,19 @@ export function createApprovalQuestions(
           .catch((error) => console.error("task projection failed", error));
       return outcome;
     },
+    /**
+     * Put a question down without answering it. The run that asked already finished, so nothing
+     * is resumed and nothing is sent to the Bot: the question just stops waiting on the person.
+     */
+    async dismiss(owner: string, id: string) {
+      const [row] = await database
+        .update(workItems)
+        .set({ finishedAt: sql`now()`, updatedAt: sql`now()` })
+        .where(and(owned(owner, id), isNull(workItems.finishedAt)))
+        .returning({ key: workItems.key });
+      if (!row) throw new ApprovalNotFoundError();
+      return { id, dismissed: true };
+    },
   };
 }
 
@@ -295,19 +308,6 @@ export function withQuestionParking(
       await questions
         .parkRun({ tenantId: input.tenantId, runRef: input.runRef })
         .catch((error) => console.error("task projection failed", error));
-    },
-    /**
-     * Put a question down without answering it. The run that asked already finished, so nothing
-     * is resumed and nothing is sent to the Bot: the question just stops waiting on the person.
-     */
-    async dismiss(owner: string, id: string) {
-      const [row] = await database
-        .update(workItems)
-        .set({ finishedAt: sql`now()`, updatedAt: sql`now()` })
-        .where(and(owned(owner, id), isNull(workItems.finishedAt)))
-        .returning({ key: workItems.key });
-      if (!row) throw new ApprovalNotFoundError();
-      return { id, dismissed: true };
     },
   };
 }

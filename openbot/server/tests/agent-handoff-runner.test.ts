@@ -57,19 +57,16 @@ function runner(options?: {
   const delivered: Array<{ message: string; assertion: string }> = [];
   const offered: HandoffWork[] = [];
   const delays: number[] = [];
-<<<<<<< fork
   /** The tenant each outside effect ran as: the claimed row's, or nobody's. */
   const tenants = {
     deliver: [] as string[],
     audit: [] as string[],
     offer: [] as string[],
   };
-=======
   const released: { uncounted: boolean; payload?: Record<string, unknown> }[] =
     [];
   /** Each time the asking conversation was told the queue moved, with what the queue had seen by then. */
   const settled: Array<{ threadId: string; after: string[] }> = [];
->>>>>>> v1.0.0
 
   const queue = {
     claim: async () =>
@@ -130,12 +127,9 @@ function runner(options?: {
     delivered,
     offered,
     delays,
-<<<<<<< fork
     tenants,
-=======
     released,
     settled,
->>>>>>> v1.0.0
     runner: createHandoffRunner({
       queue,
       owner: "replica-a",
@@ -276,24 +270,13 @@ describe("delivering a hop", () => {
     // Waiting is not failing.
     expect(first.events).not.toContain("agent.handoff_failed");
 
-<<<<<<< fork
-    const later = runner({
-      claimed: [
-        { kind: "bot.message", tenantId: "user-1", key: "run-1:abc", payload: WORK, attempts: 2 },
-      ] as unknown as WorkItem[],
-      deliver: async () => {
-        throw new ThreadBusyError("thread-1 is busy with another run");
-      },
-    });
-    await later.runner.sweep();
-    expect(later.delays).toEqual([60_000]);
-=======
     const waits = [];
     for (const busyRetries of [1, 2, 3, 4, 9]) {
       const later = runner({
         claimed: [
           {
             kind: "bot.message",
+            tenantId: "user-1",
             key: "run-1:abc",
             payload: { ...WORK, busyRetries },
             attempts: 1,
@@ -305,7 +288,6 @@ describe("delivering a hop", () => {
       waits.push(...later.delays);
     }
     expect(waits).toEqual([10_000, 20_000, 40_000, 60_000, 60_000]);
->>>>>>> v1.0.0
 
     // A real failure still spends an attempt, a minute apart, and is recorded as one.
     const other = runner({
@@ -759,7 +741,6 @@ describe("what a notice shows", () => {
   });
 });
 
-<<<<<<< fork
 /**
  * G01: a hop runs as the person whose row it is.
  *
@@ -954,7 +935,7 @@ describe("the tenant guard", () => {
     expect(failedAs).toBe("tenant-a");
   });
 });
-=======
+
 /*
  * The asking conversation reads what it is waiting on from the queue, so it is told after the queue
  * moved and not before. Told from inside the delivery, the row would still say the hop was in
@@ -1000,4 +981,3 @@ describe("telling the asking conversation", () => {
     ]);
   });
 });
->>>>>>> v1.0.0

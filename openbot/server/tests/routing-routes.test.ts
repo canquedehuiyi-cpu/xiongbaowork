@@ -93,11 +93,8 @@ function app(
   options: {
     routed?: string;
     undecided?: RoutingUndecided;
-<<<<<<< fork
     roster?: readonly (typeof ROSTER)[number][];
-=======
     skillsFor?: (id: string) => Promise<readonly string[]>;
->>>>>>> v1.0.0
   } = {},
 ) {
   const written: Recorded[] = [];

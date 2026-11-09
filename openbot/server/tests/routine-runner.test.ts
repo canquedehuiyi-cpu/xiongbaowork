@@ -62,13 +62,10 @@ type Recorded = {
   }[];
   enabled: { ownerUserId: string; id: string; enabled: boolean }[];
   turns: Parameters<TurnRunner>[0][];
-<<<<<<< fork
   /** What the firing told the task board (ticket 020), in the order it said it. */
   board: { opened: Record<string, unknown>[]; finished: string[] };
-=======
   /** Each busy signal, with how many run rows had been closed when it was sent. */
   busy: { threadId: string; busy: boolean; finishedBefore: number }[];
->>>>>>> v1.0.0
 };
 
 /**
@@ -108,16 +105,13 @@ function harness(options: {
   failures?: number;
   runTurn?: TurnRunner;
   recordActivity?: () => Promise<void>;
-<<<<<<< fork
   /** The month's ceiling already spent (ticket 022): the firing must not dial the model at all. */
   overQuota?: boolean;
   /** The fatigue count cannot be read (spec C3: the card must still close). */
   failuresError?: Error;
   /** The switch-off cannot be written (spec C3: the card must not claim it happened). */
   setEnabledError?: Error;
-=======
   signalBusy?: () => Promise<void>;
->>>>>>> v1.0.0
 }) {
   const closes: Close[] = [];
   const recorded: Recorded = {
@@ -125,11 +119,8 @@ function harness(options: {
     activity: [],
     enabled: [],
     turns: [],
-<<<<<<< fork
     board: { opened: [], finished: [] },
-=======
     busy: [],
->>>>>>> v1.0.0
   };
 
   const routineStore: RoutineStore = {
@@ -359,11 +350,8 @@ describe("createRoutineRunner", () => {
       activity: [],
       enabled: [],
       turns: [],
-<<<<<<< fork
       board: { opened: [], finished: [] },
-=======
       busy: [],
->>>>>>> v1.0.0
     });
   });
 

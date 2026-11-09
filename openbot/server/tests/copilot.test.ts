@@ -35,7 +35,6 @@ import {
   selfAddressGuidance,
   standingRoleMessage,
 } from "../src/copilot";
-import { setEdition } from "../src/edition";
 import {
   connectedSystems,
   grantedToolGuidance,
@@ -287,15 +286,12 @@ describe("registered Copilot agents", () => {
       name: "General Assistant",
       type: "built_in",
       systemPrompt: "Be helpful.",
-<<<<<<< fork
-      // Always present on the record, null when nobody wrote one: the prompt builder asks the record
-      // rather than the row, so this is where a missing persona becomes an absent section.
-      persona: null,
-=======
       title: "Everyday Work",
       // What runs it, whatever its subtitle says.
       framework: "OpenBot",
->>>>>>> v1.0.0
+      // Always present on the record, null when nobody wrote one: the prompt builder asks the record
+      // rather than the row, so this is where a missing persona becomes an absent section.
+      persona: null,
     });
     expect(
       registeredAgentFromRow({
@@ -1261,310 +1257,11 @@ describe("what a Bot is told it holds", () => {
   });
 });
 
-/**
- * A Bot knows which apps it can use for this person from its first message.
- *
- * FOUND IN 1.0.0-rc.1. A new Bot holding Gmail, which the person had connected, said it had no email
- * connected; asked to check, it searched, found Gmail's tools, and said Gmail was connected and
- * working. Its instructions named the app only as `composio-gmail`, said nothing about the person's
- * connection, and gave Gmail as the example of an app "not named here at all". Any app, not Gmail
- * alone: the apps here are several, behind tool search as a held app's tools are past the floor.
+/*
+ * M3: upstream's "which apps a Bot is told it can use" and "where each app stands, as the Bot's page
+ * says it" are not carried: they test `builtInAgentConfiguration`'s `apps` argument (`BotApp`,
+ * `grantedToolGuidance`), which this tree does not take; see the M3 note on that signature.
  */
-describe("which apps a Bot is told it can use", () => {
-  const card = {
-    name: "show_app_access",
-    ref: "app-access/show_app_access",
-    description: "Show an app card.",
-    parameters: z.object({}),
-    execute: async () => "",
-  };
-  const appTools = (server: string, count: number) =>
-    Array.from({ length: count }, (_, index) => ({
-      name: `mcp__${server}__ACTION_${index}`,
-      ref: `${server}/ACTION_${index}`,
-      searchable: true as const,
-      description: "An app action.",
-      parameters: z.object({}),
-      execute: async () => "",
-    }));
-  const tools = [
-    card,
-    ...appTools("composio-gmail", 30),
-    ...appTools("composio-googlecalendar", 20),
-    ...appTools("composio-notion", 10),
-  ];
-  const instructionsFor = (
-    apps?: Parameters<typeof builtInAgentConfiguration>[13],
-  ) =>
-    String(
-      (
-        builtInAgentConfiguration(
-          {
-            id: "weekly-planner",
-            name: "Weekly Planner",
-            type: "built_in",
-            systemPrompt: "Plan the person's week.",
-          },
-          { provider: "openai", defaultModel: "gpt-5.6-terra" },
-          "openai-secret",
-          apps?.length ? (tools as never[]) : ([card] as never[]),
-          computerGuidance,
-          ["composio-gmail", "composio-googlecalendar", "composio-notion"],
-          null,
-          undefined,
-          undefined,
-          new Set(
-            apps?.length
-              ? tools.filter((tool) => "searchable" in tool).map((t) => t.name)
-              : [],
-          ),
-          new Date("2026-11-08T12:00:00Z"),
-          undefined,
-          undefined,
-          apps,
-        ) as { prompt?: unknown }
-      ).prompt,
-    ).replace(/\s+/g, " ");
-  const gmail = {
-    key: "composio-gmail",
-    displayName: "Gmail",
-    account: "personal" as const,
-  };
-  const calendar = {
-    key: "composio-googlecalendar",
-    displayName: "Google Calendar",
-    account: "personal" as const,
-  };
-  const notion = {
-    key: "composio-notion",
-    displayName: "Notion",
-    account: "personal" as const,
-  };
-
-  test("an app the person connected is named as one it can use now, by its own name", () => {
-    const prompt = instructionsFor([
-      { ...gmail, state: "ready" },
-      { ...calendar, state: "ready" },
-      { ...notion, state: "not_connected" },
-    ]);
-    expect(prompt).toContain(
-      "You can use these apps for the person you are working with: Gmail (connected), Google Calendar (connected), Notion (needs connecting).",
-    );
-    expect(prompt).toContain(
-      "Never tell the person you have no access to an app named here as connected or ready",
-    );
-    // Its tools wait behind search, so it is told to look them up rather than claim it has none.
-    expect(prompt).toContain(
-      "use its tools, finding them with search_tools when they are not in front of you",
-    );
-    expect(prompt).toContain("- Gmail: 30 tools you find with search_tools");
-    expect(prompt).not.toContain("composio-gmail");
-    // Gmail is held, so it is never the example of an app "not named here at all".
-    expect(prompt).not.toContain("not named here at all (Gmail");
-  });
-
-  test("an app turned on and not connected is named as needing a connection", () => {
-    const prompt = instructionsFor([
-      { ...gmail, state: "not_connected" },
-      { ...calendar, state: "reconnect" },
-    ]);
-    expect(prompt).toContain(
-      "You can use these apps for the person you are working with: Gmail (needs connecting), Google Calendar (needs reconnecting).",
-    );
-    expect(prompt).toContain(
-      "For one that needs connecting or reconnecting, call show_app_access with its name",
-    );
-  });
-
-  test("a Bot with no apps is told it has none", () => {
-    expect(instructionsFor([])).toContain(
-      "You have no apps turned on for the person you are working with.",
-    );
-  });
-
-  test("it says what it did in plain words, never a tool id", () => {
-    expect(instructionsFor([{ ...gmail, state: "ready" }])).toContain(
-      "Never name a tool or a function to the person, such as GMAIL_GET_PROFILE",
-    );
-  });
-});
-
-/**
- * Where each app stands is told from the same truth the Bot's page draws, with one reason per app
- * and words true for the edition.
- *
- * FOUND IN 1.0.0-rc.4, on a personal install with Gmail and 1Password turned on and neither
- * connected, and Notion turned on with only its OAuth client and a connect error. Asked which apps
- * it could use, the Bot said Gmail was ready to read and send mail (its tools were listed as ones it
- * reached "as the person asking"), that Notion was connected for the deployment and an
- * administrator had to grant it, and that Parallel could not search, which an administrator could
- * grant, while Parallel's search tools waited behind search_tools.
- */
-describe("where each app stands, as the Bot's page says it", () => {
-  const card = {
-    name: "show_app_access",
-    ref: "app-access/show_app_access",
-    description: "Show an app card.",
-    parameters: z.object({}),
-    execute: async () => "",
-  };
-  const tool = (server: string, name: string) => ({
-    name: `mcp__${server}__${name}`,
-    ref: `${server}/${name}`,
-    description: "An app action.",
-    parameters: z.object({}),
-    execute: async () => "",
-  });
-  const gmailTools = ["GMAIL_SEND_EMAIL", "GMAIL_FETCH_EMAILS"].map((name) =>
-    tool("composio-gmail", name),
-  );
-  // Parallel's shape: feedback in front, its search and reader waiting behind tool search.
-  const parallelTools = ["submit_feedback", "web_search", "web_fetch"].map(
-    (name) => tool("parallel", name),
-  );
-  const deferred = new Set([
-    "mcp__parallel__web_search",
-    "mcp__parallel__web_fetch",
-  ]);
-  // The rows as `listServers` returns them on that install.
-  const servers = [
-    { id: "composio-gmail", tools: gmailTools },
-    { id: "parallel", tools: parallelTools },
-    { id: "1password", tools: [] },
-    // First-party, only its OAuth client, a connect error and nothing listed.
-    { id: "notion", tools: [] },
-  ];
-  const apps = (gmail: "ready" | "not_connected") => [
-    {
-      key: "1password",
-      displayName: "1Password",
-      account: "personal" as const,
-      state: "not_connected" as const,
-    },
-    {
-      key: "composio-gmail",
-      displayName: "Gmail",
-      account: "personal" as const,
-      state: gmail,
-    },
-    {
-      key: "parallel",
-      displayName: "Parallel",
-      account: "deployment" as const,
-      state: "ready" as const,
-    },
-  ];
-  const instructionsFor = (
-    edition: "team" | "personal",
-    gmail: "ready" | "not_connected",
-  ) => {
-    setEdition(edition);
-    try {
-      return String(
-        (
-          builtInAgentConfiguration(
-            {
-              id: "personal-assistant",
-              name: "Personal Assistant",
-              type: "built_in",
-              systemPrompt: "Help the person.",
-            },
-            { provider: "openai", defaultModel: "gpt-5.6-terra" },
-            "openai-secret",
-            [card, ...gmailTools, ...parallelTools] as never[],
-            computerGuidance,
-            connectedSystems(servers),
-            null,
-            undefined,
-            undefined,
-            deferred,
-            new Date("2026-11-08T12:00:00Z"),
-            undefined,
-            undefined,
-            apps(gmail),
-          ) as { prompt?: unknown }
-        ).prompt,
-      ).replace(/\s+/g, " ");
-    } finally {
-      setEdition("team");
-    }
-  };
-
-  test("an app turned on with no connected account needs connecting, and is not listed as reachable", () => {
-    const prompt = instructionsFor("personal", "not_connected");
-    expect(prompt).toContain(
-      "1Password (needs connecting), Gmail (needs connecting), Parallel (ready)",
-    );
-    expect(prompt).not.toContain("- Gmail:");
-    expect(prompt).not.toContain("GMAIL_SEND_EMAIL");
-  });
-
-  test("an app the person connected is connected and reachable", () => {
-    const prompt = instructionsFor("personal", "ready");
-    expect(prompt).toContain("Gmail (connected)");
-    expect(prompt).toContain("- Gmail: GMAIL_SEND_EMAIL, GMAIL_FETCH_EMAILS");
-  });
-
-  test("an app that never connected is not described as connected, and no administrator is named", () => {
-    const prompt = instructionsFor("personal", "not_connected");
-    expect(prompt).not.toContain("Notion");
-    expect(prompt).not.toContain("also connects to");
-    expect(prompt.toLowerCase()).not.toContain("administrator");
-    // The team edition does not name it as connected either: nothing of it was ever listed.
-    expect(instructionsFor("team", "not_connected")).not.toContain("notion");
-  });
-
-  test("tools waiting behind search are held, never a missing grant", () => {
-    const prompt = instructionsFor("personal", "not_connected");
-    expect(prompt).toContain(
-      "- Parallel: submit_feedback, 2 more tools you find with search_tools",
-    );
-    expect(prompt).not.toContain("missing grant");
-    expect(prompt).toContain("web_search finds sources");
-  });
-
-  test("tools an endpoint was not offered this turn are held, never a missing grant", () => {
-    // The remote path's shape: offered only Parallel's feedback tool on this turn.
-    setEdition("personal");
-    try {
-      const guidance = grantedToolGuidance(
-        [card, ...parallelTools] as never[],
-        connectedSystems(servers),
-        undefined,
-        apps("not_connected"),
-        deferred,
-      ).replace(/\s+/g, " ");
-      expect(guidance).toContain(
-        "- Parallel: submit_feedback, 2 more tools offered on a turn that needs them",
-      );
-      expect(guidance).toContain(
-        "never say you lack it or that it has to be granted",
-      );
-      expect(guidance.toLowerCase()).not.toContain("administrator");
-      expect(guidance).not.toContain("missing grant");
-    } finally {
-      setEdition("team");
-    }
-  });
-
-  test("one reason per app: an app the apps line names is not also one it holds nothing for", () => {
-    const guidance = grantedToolGuidance(
-      [card] as never[],
-      ["notion"],
-      undefined,
-      [
-        {
-          key: "notion",
-          displayName: "Notion",
-          account: "personal",
-          state: "not_connected",
-        },
-      ],
-    );
-    expect(guidance).toContain("Notion (needs connecting)");
-    expect(guidance).not.toContain("You hold none of their tools");
-  });
-});
 
 /**
  * Whether the browser leaves searching to a search tool, decided by what this run holds.
@@ -3485,7 +3182,6 @@ describe("where an attachment reaches the model, and where it deliberately does 
   });
 });
 
-<<<<<<< fork
 describe("each coworker runs on the model it was bound to", () => {
   const developer = {
     id: "developer",
@@ -3520,6 +3216,11 @@ describe("each coworker runs on the model it was bound to", () => {
       undefined,
       undefined,
       undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      // recordToolLimitRefusal, holdsTools, pickedModel and botNames, upstream's, come before it.
       undefined,
       undefined,
       undefined,
@@ -3668,6 +3369,12 @@ describe("each coworker runs on the model it was bound to", () => {
       [],
       null,
       plan,
+      // learnedSkills, waiting, now, timeZone and pickedSkill sit between the plan and the binding.
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
       // The binding goes where the signature takes it. A stray placeholder here once pushed it into
       // the next position, so this test passed without ever handing the binding over.
       bound,
@@ -3688,6 +3395,11 @@ describe("each coworker runs on the model it was bound to", () => {
       undefined,
       [],
       null,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
       undefined,
       { modelId: "gpt-6" } as never,
     );
@@ -3716,13 +3428,20 @@ describe("each coworker runs on the model it was bound to", () => {
       [],
       null,
       undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
       { modelId: "gpt-6" } as never,
     );
 
     // A deployment with no model key at all can still run a coworker that brings its own — the
     // failure this avoids is the one where the binding is configured and the house model is not.
     expect(configuration.model).toMatchObject({ modelId: "gpt-6" });
-=======
+  });
+});
+
 describe("generativeUiMiddlewares", () => {
   test("a deployment that opted out refuses render_ui whatever the browser sends", () => {
     // Omitted, the runtime would apply it to any run that carries a catalog.
@@ -3736,6 +3455,5 @@ describe("generativeUiMiddlewares", () => {
   test("the A2UI 0.9 middleware is off either way", () => {
     expect(generativeUiMiddlewares(true).a2ui).toEqual({ enabled: false });
     expect(generativeUiMiddlewares(false).a2ui).toEqual({ enabled: false });
->>>>>>> v1.0.0
   });
 });

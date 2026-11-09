@@ -530,7 +530,7 @@ mod tests {
         let record = record_location(Os::Mac, dirs);
         assert_eq!(
             record,
-            mac_folder("ai.copilotkit.openbot.desktop").join("recorder-store-extensions.json")
+            mac_folder("com.xiongbao.desktop").join("recorder-store-extensions.json")
         );
         assert_eq!(
             serde_json::from_str::<Value>(&computer.files[&record]).unwrap(),
@@ -589,7 +589,7 @@ mod tests {
         assert_eq!(
             record_location(Os::Linux, dirs),
             h.join(".config")
-                .join("ai.copilotkit.openbot.desktop")
+                .join("com.xiongbao.desktop")
                 .join("recorder-store-extensions.json")
         );
     }

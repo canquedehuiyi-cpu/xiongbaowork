@@ -7,6 +7,7 @@ import type { ChannelStore } from "../channels/routes";
 import type { Database } from "../db/client";
 import { proactiveSuggestions } from "../db/schema";
 import type { TaskService } from "../proactive/contracts";
+import { runAsClaimedTenant } from "../tenant/context";
 import type { WorkQueue } from "../work/queue";
 import { PROACTIVE_TASK_KIND, TASK_RUNS } from "./state";
 import { itemAsk, TaskRefusedError, type TaskStore, whyOf } from "./store";
@@ -197,6 +198,7 @@ export function createTaskRunner(deps: {
     signal: AbortSignal,
     attempt: number,
     workKey: string,
+    tenantId: string,
   ) {
     const work = turnSchema.parse(payload);
     /*
@@ -266,6 +268,7 @@ export function createTaskRunner(deps: {
       signal,
       final: attempt >= TASK_RUNS,
       attempt,
+      tenantId,
     });
   }
 
@@ -275,6 +278,12 @@ export function createTaskRunner(deps: {
    *
    * Each claim is owned under an id of its own, so a late finish from a run whose lease lapsed can
    * never finish or release a later claim of the same turn on this replica.
+   *
+   * WHOSE TURN THIS IS comes from the row the queue handed out, never from the payload (G01). The
+   * claim is made in the caller's frame: `platform` from the sweep's loop, the person's own when a
+   * Start or Try again kicks it (and then only their own turns are visible to claim). The turn then
+   * runs in the tenant stamped on the row, which the payload's owner may only confirm; a row stamped
+   * as nobody's, or naming somebody else, is ended and never run.
    */
   async function drainTask(): Promise<boolean> {
     const owner = `${deps.owner}:${randomUUID()}`;
@@ -298,8 +307,27 @@ export function createTaskRunner(deps: {
     }, TASK_LEASE_MS / 3);
     renew.unref?.();
     try {
-      await runTurn(item.payload, controller.signal, item.attempts, item.key);
+      const claimed = await runAsClaimedTenant(
+        item,
+        item.payload.ownerUserId,
+        (tenantId) =>
+          runTurn(
+            item.payload,
+            controller.signal,
+            item.attempts,
+            item.key,
+            tenantId,
+          ),
+      );
       await deps.queue.finish(held);
+      if (!claimed.ran)
+        console.error(
+          JSON.stringify({
+            type: "task-turn-untrusted-tenant",
+            key: item.key,
+            reason: claimed.reason,
+          }),
+        );
     } catch (error) {
       const released = await deps.queue.release({
         ...held,

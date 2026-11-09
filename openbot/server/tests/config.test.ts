@@ -54,14 +54,15 @@ describe("deployment configuration", () => {
         INTELLIGENCE_API_KEY: legacy,
         CPK_INTELLIGENCE_API_KEY: "  cpk-current-project  ",
       });
-      expect(config.runtime.intelligence.apiKey).toBe("cpk-current-project");
+      // Optional Intelligence here (R0), so the key is on `intelligence`, not on the runtime.
+      expect(config.intelligence?.apiKey).toBe("cpk-current-project");
     },
   );
 
   test("an empty CLI key preserves legacy-only deployments", () => {
     expect(
-      loadConfig({ ...baseEnvironment, CPK_INTELLIGENCE_API_KEY: "  " }).runtime
-        .intelligence.apiKey,
+      loadConfig({ ...baseEnvironment, CPK_INTELLIGENCE_API_KEY: "  " })
+        .intelligence?.apiKey,
     ).toBe("tenant-api-key");
   });
 
@@ -113,7 +114,6 @@ describe("deployment configuration", () => {
     },
   );
 
-<<<<<<< fork
   test("local mode is accepted explicitly, and is the same answer as unset", () => {
     const explicit = loadConfig({
       ...baseEnvironment,
@@ -127,119 +127,6 @@ describe("deployment configuration", () => {
    * local mode gets no silent preference for either, and nothing about its threads changes.
    */
   test("ignores a platform address that is still set in the environment", () => {
-=======
-    expect(() => loadConfig(environment)).toThrow(
-      `CopilotKit Intelligence is required and is not configured. Missing: ${name === "INTELLIGENCE_API_KEY" ? "CPK_INTELLIGENCE_API_KEY (or INTELLIGENCE_API_KEY)" : name}`,
-    );
-  });
-
-  test("starts without COPILOTKIT_LICENSE_TOKEN, because managed Intelligence no longer issues one", () => {
-    const environment: Record<string, string | undefined> = {
-      ...baseEnvironment,
-    };
-    delete environment.COPILOTKIT_LICENSE_TOKEN;
-
-    const config = loadConfig(environment);
-
-    if (config.runtime.mode !== "intelligence") {
-      throw new Error("expected the Intelligence runtime");
-    }
-    expect(config.runtime.intelligence.licenseToken).toBeUndefined();
-    expect(config.runtime.intelligence.apiKey).toBe(
-      baseEnvironment.INTELLIGENCE_API_KEY,
-    );
-  });
-
-  // The browser opens the gateway itself, at the address `/info` gives it. A server in a container
-  // reaches local Intelligence somewhere the browser on the host cannot, so it may name both.
-  test("keeps the browser's gateway address apart from the server's, when one is given", () => {
-    const config = loadConfig({
-      ...baseEnvironment,
-      INTELLIGENCE_GATEWAY_WS_URL: "ws://host.docker.internal:14401",
-      INTELLIGENCE_BROWSER_GATEWAY_WS_URL: "ws://localhost:14401",
-    });
-    if (config.runtime.mode !== "intelligence") {
-      throw new Error("expected the Intelligence runtime");
-    }
-    expect(config.runtime.intelligence.gatewayWsUrl).toBe(
-      "ws://host.docker.internal:14401",
-    );
-    expect(config.runtime.intelligence.browserGatewayWsUrl).toBe(
-      "ws://localhost:14401",
-    );
-
-    const without = loadConfig(baseEnvironment);
-    if (without.runtime.mode !== "intelligence") {
-      throw new Error("expected the Intelligence runtime");
-    }
-    expect(without.runtime.intelligence.browserGatewayWsUrl).toBeUndefined();
-
-    expect(() =>
-      loadConfig({
-        ...baseEnvironment,
-        INTELLIGENCE_BROWSER_GATEWAY_WS_URL: "not a url",
-      }),
-    ).toThrow("INTELLIGENCE_BROWSER_GATEWAY_WS_URL must be a valid URL");
-  });
-
-  // Intelligence installed in the cluster beside OpenBot has no address a browser can reach, and the
-  // browser opens the gateway's socket itself. With the proxy on, the browser is told OpenBot's own
-  // address for it: a path, resolved against the page, or on the public URL when there is one.
-  test("tells the browser OpenBot's own address for the gateway when the server carries its socket", () => {
-    const proxied = loadConfig({
-      ...baseEnvironment,
-      INTELLIGENCE_GATEWAY_WS_URL:
-        "ws://openbot-intelligence-realtime-gateway:4401",
-      INTELLIGENCE_GATEWAY_PROXY: "on",
-    });
-    if (proxied.runtime.mode !== "intelligence") {
-      throw new Error("expected the Intelligence runtime");
-    }
-    expect(proxied.runtime.intelligence.gatewayProxy).toBe(true);
-    expect(proxied.runtime.intelligence.browserGatewayWsUrl).toBe(
-      "/api/intelligence/client",
-    );
-    // The server still reaches the gateway where it is.
-    expect(proxied.runtime.intelligence.gatewayWsUrl).toBe(
-      "ws://openbot-intelligence-realtime-gateway:4401",
-    );
-
-    const published = loadConfig({
-      ...baseEnvironment,
-      INTELLIGENCE_GATEWAY_PROXY: "on",
-      OPENBOT_PUBLIC_URL: "https://openbot.example.com/",
-    });
-    if (published.runtime.mode !== "intelligence") {
-      throw new Error("expected the Intelligence runtime");
-    }
-    expect(published.runtime.intelligence.browserGatewayWsUrl).toBe(
-      "wss://openbot.example.com/api/intelligence/client",
-    );
-
-    const off = loadConfig({
-      ...baseEnvironment,
-      INTELLIGENCE_GATEWAY_PROXY: "off",
-    });
-    if (off.runtime.mode !== "intelligence") {
-      throw new Error("expected the Intelligence runtime");
-    }
-    expect(off.runtime.intelligence.gatewayProxy).toBeUndefined();
-    expect(off.runtime.intelligence.browserGatewayWsUrl).toBeUndefined();
-
-    expect(() =>
-      loadConfig({
-        ...baseEnvironment,
-        INTELLIGENCE_GATEWAY_PROXY: "on",
-        INTELLIGENCE_BROWSER_GATEWAY_WS_URL: "ws://localhost:14401",
-      }),
-    ).toThrow("Set one of them");
-    expect(() =>
-      loadConfig({ ...baseEnvironment, INTELLIGENCE_GATEWAY_PROXY: "yes" }),
-    ).toThrow('INTELLIGENCE_GATEWAY_PROXY must be "on" or "off"');
-  });
-
-  test("still forwards a licence token when a deployment sets one", () => {
->>>>>>> v1.0.0
     const config = loadConfig({
       ...baseEnvironment,
       INTELLIGENCE_API_URL: "http://localhost:7100",
@@ -1450,7 +1337,6 @@ test("a Composio key is read when set and absent when not", () => {
   ).toBe("ak_example");
 });
 
-<<<<<<< fork
 /*
  * Where a coworker's actions are carried out (ticket 017), and the axis the whole 025 walkthrough
  * still has to be repeated on: `cloud` runs them in the deployment's own container, `device` sends
@@ -1579,7 +1465,9 @@ describe("the model name a deployment actually reads", () => {
   test("stays quiet when nobody wrote the inert one", () => {
     const lines = warningsWith({ BOT_MODEL: "deepseek-flash" });
     expect(lines.some((line) => line.includes("OPENAI_MODEL"))).toBe(false);
-=======
+  });
+});
+
 test("an Arcade key and a broker provider are read, and an unknown provider is refused", () => {
   const unset = loadConfig(baseEnvironment);
   expect(unset).toHaveProperty("arcadeApiKey", undefined);
@@ -1675,6 +1563,5 @@ describe("edition", () => {
   test("personal edition refuses a deployment with no computer", () => {
     const { AGENT_COMPUTER_URL: _, ...environment } = personalEnvironment;
     expect(() => loadConfig(environment)).toThrow("AGENT_COMPUTER_URL");
->>>>>>> v1.0.0
   });
 });

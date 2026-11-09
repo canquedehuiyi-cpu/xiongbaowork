@@ -51,6 +51,7 @@ afterAll(async () => {
     await database.delete(sessions).where(eq(sessions.userId, memberId));
     await database.delete(users).where(inArray(users.id, [adminId, memberId]));
   });
+  await database.$client.close();
 });
 
 function appFor(
@@ -148,7 +149,6 @@ test("a broker that will not answer still leaves the removal on the trail, and a
   expect(events).toEqual(["person.access_revoked"]);
 });
 
-<<<<<<< fork
 /*
  * G01-E P7: the retirement runs in the removed person's own frame.
  *
@@ -277,8 +277,4 @@ test("acting as the owner without the admin capability is refused", async () => 
     ).toThrow("the admin capability is not held here");
   });
   expect(ran).toBe(false);
-=======
-afterAll(async () => {
-  await database.$client.close();
->>>>>>> v1.0.0
 });

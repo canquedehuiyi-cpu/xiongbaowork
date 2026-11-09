@@ -91,9 +91,13 @@ function refusal(...args: string[]): string {
   return "";
 }
 
+/** This fork leaves the bundled Intelligence off by default (Intelligence is optional, R0). */
+const bundled = ["--set", "intelligence.enabled=true"];
+
 const vanilla = [
   "--values",
   join(chart, "ci/vanilla-values.yaml"),
+  ...bundled,
   "--set-string",
   `secrets.licenseToken=${LICENCE}`,
 ];
@@ -259,10 +263,16 @@ describe.skipIf(!helm)("the chart with the bundled Intelligence", () => {
 
   test("with the licence in a Secret of the operator's, both sides read that one Secret", () => {
     const docs = render(
+      ...bundled,
       "--set",
       "config.singleUser=true",
       "--set",
       "postgresql.enabled=true",
+      // The bundled database's superuser, which the chart refuses unless RLS enforcement is named.
+      "--set",
+      "config.extraEnv[0].name=OPENBOT_RLS_ENFORCE",
+      "--set",
+      "config.extraEnv[0].value=warn",
       "--set-string",
       "postgresql.auth.existingSecret=openbot",
       "--set-string",
@@ -660,7 +670,20 @@ describe.skipIf(!helm)("Automatic Learning in the bundled Intelligence", () => {
 
 describe.skipIf(!helm)("the chart with intelligence.enabled=false", () => {
   test("renders no Intelligence and uses the Intelligence the operator named", () => {
-    const docs = render("--values", join(chart, "ci/eks-values.yaml"));
+    // This fork's EKS target runs with no Intelligence at all (Intelligence is optional, R0), so
+    // the managed one, and its key in the store, are named here.
+    const docs = render(
+      "--values",
+      join(chart, "ci/eks-values.yaml"),
+      "--set-string",
+      "config.intelligence.apiUrl=https://api.intelligence.copilotkit.ai",
+      "--set-string",
+      "config.intelligence.gatewayWsUrl=wss://realtime.intelligence.copilotkit.ai",
+      "--set",
+      "externalSecrets.data[5].secretKey=intelligence-api-key",
+      "--set",
+      "externalSecrets.data[5].remoteRef.key=openbot/intelligence-api-key",
+    );
     expect(
       docs.some(
         (d) => d.metadata.labels?.["app.kubernetes.io/name"] === "intelligence",

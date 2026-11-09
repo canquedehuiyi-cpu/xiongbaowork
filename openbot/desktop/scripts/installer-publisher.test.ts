@@ -1,16 +1,17 @@
 /**
- * Windows names OpenBot's publisher as CopilotKit, as the rest of the bundle does.
+ * Windows names 熊宝's publisher as XiongBao, on every build.
  *
- * v0.3.3's installer listed the publisher as "copilotkit" in Settings > Apps and in Programs and
- * Features. tauri.conf.json set no `bundle.publisher`, so Tauri fell back to the identifier's second
- * segment, both for the NSIS installer's `Publisher` uninstall value (its `MANUFACTURER`) and for
- * the app's `CompanyName` version resource (tauri-build).
+ * Upstream's v0.3.3 installer listed the publisher as "copilotkit" because tauri.conf.json set no
+ * `bundle.publisher`, and Tauri fell back to the identifier's second segment, both for the NSIS
+ * installer's `Publisher` uninstall value (its `MANUFACTURER`) and for the app's `CompanyName`
+ * version resource (tauri-build). This fork's identifier is `com.xiongbao.desktop`, so its earlier
+ * installers named "xiongbao" the same way, and kept the install folder under
+ * `Software\xiongbao\<product>`, which the installer reads back on every update. Windows registry keys
+ * ignore case, so XiongBao is the same key, and a different name would lose the folder an update
+ * installs into.
  *
- * CopilotKit is the name the bundle already gives as its copyright: the installer's branding text,
- * the `LegalCopyright` version resource and the Mac app's copyright. The installer also keeps the
- * install folder under `Software\<publisher>\OpenBot` and reads it back on every update. Windows
- * registry keys ignore case, so CopilotKit is the same key v0.3.3 wrote under "copilotkit", and a
- * different name would lose the folder an update installs into.
+ * The copyright stays upstream's (CopilotKit), so unlike upstream the publisher is not asserted to
+ * match it.
  *
  * Plain file reads only, so it runs on any runner.
  */
@@ -63,18 +64,17 @@ const builds: Record<string, Config> = {
 };
 
 for (const [build, config] of Object.entries(builds)) {
-  test(`the ${build} build names CopilotKit as the publisher`, () => {
-    expect(publisherOf(config)).toBe("CopilotKit");
-  });
-
-  test(`the ${build} build's publisher matches its copyright`, () => {
-    expect(publisherOf(config)).toBe(config.bundle.copyright as string);
+  test(`the ${build} build names XiongBao as the publisher`, () => {
+    expect(publisherOf(config)).toBe("XiongBao");
   });
 
   test(`the ${build} build keeps the identifier and the registry key an update reads`, () => {
     // Updates and app data are keyed on the identifier.
-    expect(config.identifier).toBe("ai.copilotkit.openbot.desktop");
-    // v0.3.3 kept its install folder under Software\copilotkit\OpenBot. Registry keys ignore case.
-    expect(publisherOf(config).toLowerCase()).toBe("copilotkit");
+    expect(config.identifier).toBe("com.xiongbao.desktop");
+    // Earlier installers kept their folder under Software\xiongbao, the identifier's second segment.
+    // Registry keys ignore case.
+    expect(publisherOf(config).toLowerCase()).toBe(
+      config.identifier.split(".")[1],
+    );
   });
 }

@@ -57,14 +57,11 @@ function fixture(
 ) {
   const calls: unknown[] = [];
   const decisions: unknown[] = [];
-<<<<<<< fork
   /** Which tenant each store, router and approvals call ran as. */
   const frames: string[] = [];
   const frame = (name: string) => frames.push(`${name}:${currentTenant()}`);
   const stamped = { ...bound, tenantId: options.stamp ?? bound.tenantId };
-=======
   const consumed: unknown[] = [];
->>>>>>> v1.0.0
   const twilio = createTwilioTransport({
     accountSid: "AC1",
     authToken: "token",
@@ -102,14 +99,10 @@ function fixture(
       },
     },
     store: {
-<<<<<<< fork
-      readChallenge: async (id: string) =>
-        frame("readChallenge") && id === "11111111-2222-4333-8444-555555555555"
-=======
       readChallenge: async (id: string) => {
+        frame("readChallenge");
         if (options.challengeError) throw options.challengeError;
         return id === "11111111-2222-4333-8444-555555555555"
->>>>>>> v1.0.0
           ? {
               tenantId: stamped.tenantId,
               id,
@@ -120,17 +113,13 @@ function fixture(
               transport: options.challengeTransport ?? "slack",
               address: null,
             }
-<<<<<<< fork
-          : null,
-      consumeChallenge: async () => frame("consumeChallenge") > 0,
-=======
           : null;
       },
       consumeChallenge: async (...input) => {
+        frame("consumeChallenge");
         consumed.push(input);
         return true;
       },
->>>>>>> v1.0.0
       bind: async (input) => {
         frame("bind");
         calls.push({ bind: input });
@@ -202,11 +191,7 @@ function fixture(
       inbox: async () => ({ questions: [] }),
     },
   });
-<<<<<<< fork
-  return { routes, calls, decisions, frames };
-=======
-  return { routes, calls, decisions, consumed };
->>>>>>> v1.0.0
+  return { routes, calls, decisions, frames, consumed };
 }
 const sender = (
   user = "slack:T1:U1",

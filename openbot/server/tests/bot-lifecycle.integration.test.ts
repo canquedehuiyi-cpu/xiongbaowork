@@ -490,7 +490,6 @@ describe("Activity and attention", () => {
   });
 
   test("sections hold the owner's work and nobody else's", async () => {
-<<<<<<< fork
     for (const result of [
       await as(owner, () => activity.forBot(owner, bot)),
       await asPlatform(() => activity.forBot(owner, bot)),
@@ -498,6 +497,7 @@ describe("Activity and attention", () => {
       const all = [
         ...result.inProgress,
         ...result.scheduled,
+        ...result.onDemand,
         ...result.completed,
       ];
       expect(all.some((item) => item.title === "Not yours")).toBe(false);
@@ -527,41 +527,6 @@ describe("Activity and attention", () => {
         ),
       ).toBe(true);
     }
-=======
-    const result = await activity.forBot(owner, bot);
-    const all = [
-      ...result.inProgress,
-      ...result.scheduled,
-      ...result.onDemand,
-      ...result.completed,
-    ];
-    expect(all.some((item) => item.title === "Not yours")).toBe(false);
-    expect(
-      result.scheduled.some(
-        (item) => item.kind === "routine" && item.channelId === direct,
-      ),
-    ).toBe(true);
-    expect(
-      result.scheduled.some(
-        (item) => item.kind === "handoff" && item.stoppable,
-      ),
-    ).toBe(true);
-    expect(
-      result.inProgress.some(
-        (item) => item.kind === "approval" && item.needsYou,
-      ),
-    ).toBe(true);
-    expect(
-      result.inProgress.some(
-        (item) => item.kind === "question" && item.channelId === direct,
-      ),
-    ).toBe(true);
-    expect(
-      result.inProgress.some(
-        (item) => item.kind === "handoff" && item.status === "failed",
-      ),
-    ).toBe(true);
->>>>>>> v1.0.0
   });
 
   test("a routine's schedule reads in words, as the Routines page says it", async () => {

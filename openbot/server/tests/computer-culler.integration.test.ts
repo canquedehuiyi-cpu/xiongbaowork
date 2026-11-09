@@ -7,12 +7,7 @@ import {
   test,
 } from "bun:test";
 import { randomUUID } from "node:crypto";
-import {
-  and,
-  eq,
-  inArray,
-  like,
-} from "drizzle-orm";
+import { and, eq, inArray, like } from "drizzle-orm";
 import { computerKeyText } from "../src/computer/computer-key";
 import type {
   ComputerLocation,
@@ -41,7 +36,6 @@ const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const queue = createWorkQueue(database);
 const suite = randomUUID().slice(0, 8);
 const botOf = (name: string) => `cull-${suite}-${name}`;
-<<<<<<< fork
 /*
  * Two people, for the G01 cases. A computer is its Bot's, and the suspension runs as the tenant on
  * the Bot's own row, so every Bot this suite names is a real `agents` row owned by one of them.
@@ -68,13 +62,11 @@ const nobodysBots = {
   system: botOf("system-bot"),
   platform: botOf("platform-bot"),
 };
-=======
 /**
  * The computer of a Bot from before computers were per person, which is an isolated Bot's today.
  * Its rows below name only the Bot, as every row did then, and still count as its computer's use.
  */
 const botKey = (botId: string) => ({ kind: "bot" as const, botId });
->>>>>>> v1.0.0
 
 function providerWith(computers: ComputerLocation[]) {
   const stopped: string[] = [];
@@ -110,6 +102,7 @@ const used = (botId: string, when: Date) =>
   runAsTenant(tenantA, () =>
     database.insert(auditEvents).values(ran(botId, when)),
   );
+
 
 /*
  * This suite's own rows and nobody else's.
@@ -346,15 +339,10 @@ describe("suspending computers nobody is using", () => {
       return report;
     };
 
-<<<<<<< fork
     await used(botId, minutesAgo(60));
-    expect((await sweep("2026-08-24T12:00:00Z")).suspended).toEqual([botId]);
-=======
-    await database.insert(auditEvents).values(ran(botId, minutesAgo(60)));
     expect((await sweep("2026-08-24T12:00:00Z")).suspended).toEqual([
       `bot:${botId}`,
     ]);
->>>>>>> v1.0.0
 
     // Somebody comes back at 13:00, and it is quiet again by 14:00.
     await used(botId, new Date("2026-08-24T13:00:00Z"));
@@ -372,7 +360,9 @@ describe("suspending computers nobody is using", () => {
    */
   test("a person's computer stays up while any one of their Bots is in use", async () => {
     const person = `person:${botOf("ada")}`;
-    await database.insert(auditEvents).values([
+    // The person's own turns, written in their frame.
+    await runAsTenant(botOf("ada"), () =>
+      database.insert(auditEvents).values([
       {
         ...ran(botOf("ada-quiet"), minutesAgo(90)),
         payload: { bot: botOf("ada-quiet"), computer: person, action: "x" },
@@ -381,7 +371,8 @@ describe("suspending computers nobody is using", () => {
         ...ran(botOf("ada-busy"), minutesAgo(1)),
         payload: { bot: botOf("ada-busy"), computer: person, action: "x" },
       },
-    ]);
+    ]),
+    );
     const { provider, stopped } = providerWith([
       {
         key: { kind: "person", personId: botOf("ada") },
@@ -405,11 +396,13 @@ describe("suspending computers nobody is using", () => {
   test("a person's computer idle across all their Bots is suspended, once", async () => {
     const personId = botOf("bo");
     const person = `person:${personId}`;
-    await database.insert(auditEvents).values(
+    await runAsTenant(personId, () =>
+      database.insert(auditEvents).values(
       ["one", "two"].map((name) => ({
         ...ran(botOf(`bo-${name}`), minutesAgo(60)),
         payload: { bot: botOf(`bo-${name}`), computer: person, action: "x" },
       })),
+    ),
     );
     const { provider, stopped } = providerWith([
       // The shared computer lists a person's seats, so this one computer appears twice.
@@ -452,39 +445,43 @@ describe("whose suspension it is (G01)", () => {
     owner: "replica-1",
     now,
   });
+  /** The queue item for a Bot's own computer is keyed by that computer: `bot:<id>`. */
   const stampOf = (botId: string, tenant: string) =>
     runAsTenant(tenant, () =>
       database
         .select({ tenantId: workItems.tenantId })
         .from(workItems)
-        .where(and(eq(workItems.kind, CULL_KIND), eq(workItems.key, botId))),
+        .where(
+          and(eq(workItems.kind, CULL_KIND), eq(workItems.key, `bot:${botId}`)),
+        ),
     );
 
   test("is offered in the Bot's own tenant, which another tenant cannot read", async () => {
     const botId = botOf("mine");
     await used(botId, minutesAgo(45));
     const { provider, stopped } = providerWith([
-      { botId, status: "running", url: "http://c" },
+      { key: botKey(botId), status: "running", url: "http://c" },
     ]);
 
     expect((await offerIdleComputers(options(provider))).offered).toEqual([
-      botId,
+      `bot:${botId}`,
     ]);
     expect(await stampOf(botId, "platform")).toEqual([{ tenantId: tenantA }]);
     expect(await stampOf(botId, tenantB)).toEqual([]);
 
     expect(
       (await suspendClaimedComputers(options(provider))).suspended,
-    ).toEqual([botId]);
-    expect(stopped).toEqual([botId]);
+    ).toEqual([`bot:${botId}`]);
+    expect(stopped).toEqual([`bot:${botId}`]);
   });
 
   test("a Bot stamped as nobody's is offered and suspended as the platform", async () => {
     const ids = [nobodysBots.system, nobodysBots.platform];
+    const computers = ids.map((id) => `bot:${id}`);
     for (const botId of ids) await used(botId, minutesAgo(90));
     const { provider, stopped } = providerWith(
       ids.map((botId) => ({
-        botId,
+        key: botKey(botId),
         status: "running" as const,
         url: "http://c",
       })),
@@ -493,8 +490,8 @@ describe("whose suspension it is (G01)", () => {
     const { offered, offeredAsPlatform } = await offerIdleComputers(
       options(provider),
     );
-    expect([...offered].sort()).toEqual([...ids].sort());
-    expect([...offeredAsPlatform].sort()).toEqual([...ids].sort());
+    expect([...offered].sort()).toEqual([...computers].sort());
+    expect([...offeredAsPlatform].sort()).toEqual([...computers].sort());
     // Stamped as the platform, so no person's frame can see the item.
     for (const botId of ids) {
       expect(await stampOf(botId, "platform")).toEqual([
@@ -505,28 +502,28 @@ describe("whose suspension it is (G01)", () => {
 
     expect(
       [...(await suspendClaimedComputers(options(provider))).suspended].sort(),
-    ).toEqual([...ids].sort());
-    expect([...stopped].sort()).toEqual([...ids].sort());
+    ).toEqual([...computers].sort());
+    expect([...stopped].sort()).toEqual([...computers].sort());
   });
 
   test("an orphaned computer, whose Bot row is gone, is still suspended as the platform", async () => {
     const botId = botOf("orphan");
     await used(botId, minutesAgo(90));
     const { provider, stopped } = providerWith([
-      { botId, status: "running", url: "http://c" },
+      { key: botKey(botId), status: "running", url: "http://c" },
     ]);
 
     expect(await offerIdleComputers(options(provider))).toEqual({
-      offered: [botId],
-      offeredAsPlatform: [botId],
+      offered: [`bot:${botId}`],
+      offeredAsPlatform: [`bot:${botId}`],
     });
     expect(await stampOf(botId, "platform")).toEqual([
       { tenantId: "platform" },
     ]);
     expect(
       (await suspendClaimedComputers(options(provider))).suspended,
-    ).toEqual([botId]);
-    expect(stopped).toEqual([botId]);
+    ).toEqual([`bot:${botId}`]);
+    expect(stopped).toEqual([`bot:${botId}`]);
   });
 
   test("an item stamped as nobody's, or as another tenant than its Bot's, is ended without suspending", async () => {
@@ -538,8 +535,11 @@ describe("whose suspension it is (G01)", () => {
     const offer = (botId: string) =>
       queue.offer({
         kind: CULL_KIND,
-        key: botId,
-        payload: { botId, idleSince: minutesAgo(90).toISOString() },
+        key: `bot:${botId}`,
+        payload: {
+          computer: `bot:${botId}`,
+          idleSince: minutesAgo(90).toISOString(),
+        },
       });
     // Someone else's frame names tenant A's Bot; the platform's frame names nobody.
     await runAsTenant(tenantB, () => offer(mislabelled));
@@ -551,7 +551,9 @@ describe("whose suspension it is (G01)", () => {
     expect(report.suspended).toEqual([]);
     expect(
       report.skipped
-        .filter((skip) => [mislabelled, unstamped].includes(skip.botId))
+        .filter((skip) =>
+          [`bot:${mislabelled}`, `bot:${unstamped}`].includes(skip.computer),
+        )
         .map((skip) => skip.reason.startsWith("tenant unresolved"))
         .sort(),
     ).toEqual([true, true]);

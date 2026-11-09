@@ -378,7 +378,7 @@ jobs:
       - name: Verify the signature, Gatekeeper and the notarization ticket
         run: |
           set -euo pipefail
-          app="$BUNDLE/macos/OpenBot.app"
+          app="$BUNDLE/macos/XiongBao.app"
           images=("$BUNDLE"/dmg/*.dmg)
 
           # What the RED case fails. An ad-hoc build passes none of these three. Validating the
@@ -410,16 +410,18 @@ jobs:
           LIPO_ARCH: ${{ matrix.platform.lipo-arch }}
         run: |
           set -euo pipefail
-          ROSETTA_CHECK=1 desktop/scripts/verify-mac-arch.sh "$BUNDLE/macos/OpenBot.app" "$LIPO_ARCH"
+          ROSETTA_CHECK=1 desktop/scripts/verify-mac-arch.sh "$BUNDLE/macos/XiongBao.app" "$LIPO_ARCH"
           images=("$BUNDLE"/dmg/*.dmg)
           mount="$RUNNER_TEMP/openbot-arch-check"
           mkdir -p "$mount"
           hdiutil attach -readonly -nobrowse -mountpoint "$mount" "${images[0]}"
           trap 'hdiutil detach "$mount"' EXIT
-          desktop/scripts/verify-mac-arch.sh "$mount/OpenBot.app" "$LIPO_ARCH"
-          codesign --verify --deep --strict --verbose=2 "$mount/OpenBot.app"
-      # Named by architecture because both builds produce `OpenBot.app.tar.gz`, and latest.json
-      # points at one URL per platform. A pinned build made no updater archive.
+          desktop/scripts/verify-mac-arch.sh "$mount/XiongBao.app" "$LIPO_ARCH"
+          codesign --verify --deep --strict --verbose=2 "$mount/XiongBao.app"
+      # Named by architecture because both builds produce `XiongBao.app.tar.gz` (the product name in
+      # tauri.conf.json), and latest.json points at one URL per platform. The published names keep
+      # the `OpenBot-` prefix that publish-signed-mac.sh and downloads-sync.sh read. A pinned build
+      # made no updater archive.
       - name: Collect the artifacts
         env:
           TARGET: ${{ matrix.platform.target }}
@@ -429,9 +431,9 @@ jobs:
           mkdir -p signed
           cp "$BUNDLE"/dmg/*.dmg signed/
           if [ "$UPDATER" = true ]; then
-            cp "$BUNDLE/macos/OpenBot.app.tar.gz" "signed/OpenBot-$TARGET.app.tar.gz"
-            cp "$BUNDLE/macos/OpenBot.app.tar.gz.sig" "signed/OpenBot-$TARGET.app.tar.gz.sig"
-          elif [ -e "$BUNDLE/macos/OpenBot.app.tar.gz" ]; then
+            cp "$BUNDLE/macos/XiongBao.app.tar.gz" "signed/OpenBot-$TARGET.app.tar.gz"
+            cp "$BUNDLE/macos/XiongBao.app.tar.gz.sig" "signed/OpenBot-$TARGET.app.tar.gz.sig"
+          elif [ -e "$BUNDLE/macos/XiongBao.app.tar.gz" ]; then
             echo '::error::A build with no updater made an updater archive.'
             exit 1
           fi

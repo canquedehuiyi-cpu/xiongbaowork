@@ -338,28 +338,24 @@ mod tests {
         }
     }
 
-    /// Exercises the production resolver and downloader against GitHub in an empty directory.
+    /// M3: upstream downloaded the latest public release from GitHub here and laid it out in an
+    /// empty directory. This fork's legacy downloader fails closed (`deployment::fetch`): a release
+    /// that resolves is still never laid out, and a restart has nothing laid out it could reuse.
     #[test]
-    #[ignore = "downloads the latest public release from GitHub"]
-    fn live_latest_release_is_downloaded_and_pinned() {
+    fn a_resolved_release_is_not_laid_out_by_the_legacy_download() {
         let root = scratch("release-live");
-        let version = resolve_version(&root).expect("resolve the public release");
-        assert!(deployment::installed(&root).is_none());
-        deployment::fetch(&root, &version).expect("download the tagged deployment and manifest");
-        assert_eq!(deployment::installed(&root).unwrap().version, version);
-        let images: deployment::Images =
-            serde_json::from_slice(&std::fs::read(deployment::images_path(&root)).unwrap())
-                .unwrap();
-        assert_eq!(images.version, version);
-        for path in deployment::LAYOUT {
-            assert!(root.join(path).exists(), "missing {path}");
-        }
+        let version = resolve_version_with(&root, None, || Ok("v1.0.0".into())).unwrap();
+        assert_eq!(version, "v1.0.0");
         assert_eq!(
-            resolve_version_with(&root, None, || panic!("restart must not need GitHub")).unwrap(),
-            version
+            deployment::fetch(&root, &version).unwrap_err(),
+            "PUBLICATION_UNAVAILABLE: UNVERIFIED_PUBLICATION_CONTEXT"
         );
-        assert!(!deployment::needs_fetch(&root, &version));
-        println!("Downloaded and pinned {version}; tagged source, image manifest, and offline reuse verified.");
+        assert!(deployment::installed(&root).is_none());
+        for path in deployment::LAYOUT {
+            assert!(!root.join(path).exists(), "laid out {path}");
+        }
+        assert!(!deployment::images_path(&root).exists());
+        assert!(deployment::needs_fetch(&root, &version));
         std::fs::remove_dir_all(root).unwrap();
     }
 }

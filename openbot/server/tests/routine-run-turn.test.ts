@@ -243,7 +243,6 @@ function harness(options: {
 
   // In the owner's frame, as every production caller runs a turn: the pause guard reads it.
   const run = () =>
-<<<<<<< fork
     runAsTenant(OWNER, () =>
       runTurn({
         ownerUserId: OWNER,
@@ -251,18 +250,9 @@ function harness(options: {
         agentId: AGENT_ID,
         threadId: THREAD_ID,
         instruction: INSTRUCTION,
+        ...(options.continuation ? { continuation: options.continuation } : {}),
       }),
     );
-=======
-    runTurn({
-      ownerUserId: OWNER,
-      routineId: ROUTINE_ID,
-      agentId: AGENT_ID,
-      threadId: THREAD_ID,
-      instruction: INSTRUCTION,
-      ...(options.continuation ? { continuation: options.continuation } : {}),
-    });
->>>>>>> v1.0.0
 
   return { run, agent, calls, order, builtFor };
 }
