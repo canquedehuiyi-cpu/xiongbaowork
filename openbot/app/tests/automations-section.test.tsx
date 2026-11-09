@@ -80,6 +80,9 @@ const bear: AgentProfile = {
   systemOwned: false,
   canManage: true,
   mine: true,
+  isolated: false,
+  isolationActive: false,
+  isolationOffReason: null,
 };
 
 const HOUR = 3_600_000;

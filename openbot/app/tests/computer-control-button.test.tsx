@@ -27,7 +27,6 @@ function server(initial: "bot" | "human" = "bot") {
     holder: initial,
     since: "2026-09-26T00:00:00Z",
     requested: false,
-    recoveryRequired: false,
     transitioning: false,
     resumeSnapshotRequired: false,
     recoveryRequired: false,

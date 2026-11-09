@@ -129,6 +129,7 @@ function server(overrides: Partial<PluginServer> & { id: string }) {
     lastError: null,
     addedBy: null,
     dynamicClient: false,
+    adminConnectOnly: false,
     // Not brokered unless a case says otherwise, which is what a null means here.
     authScheme: null,
     tools: [],
@@ -146,7 +147,6 @@ function pluginsPage(overrides: Partial<PluginsPage> = {}): PluginsPage {
     botsMayCallBack: true,
     redirectUri: null,
     composioConfigured: false,
-    authorizesPerAction: false,
     ...overrides,
   };
 }

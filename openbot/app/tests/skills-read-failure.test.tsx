@@ -90,7 +90,6 @@ function answeredEmpty() {
     botsMayCallBack: true,
     redirectUri: null,
     composioConfigured: false,
-    authorizesPerAction: false,
   };
   client.setQueryData(pluginKeys.page(), page);
   return client;

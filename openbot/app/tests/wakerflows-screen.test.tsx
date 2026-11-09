@@ -77,6 +77,9 @@ const coworker: AgentProfile = {
   systemOwned: false,
   canManage: true,
   mine: true,
+  isolated: false,
+  isolationActive: false,
+  isolationOffReason: null,
 };
 
 const FLOW_ID = "11111111-1111-4111-8111-111111111111";

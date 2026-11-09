@@ -43,7 +43,6 @@ function boundary(id: string, refusal?: "unauthenticated" | "forbidden") {
   const requests: { method: string; path: string; body: unknown }[] = [];
   const profile: AgentProfile = {
     ...input,
-    isolated: false,
     id,
     avatarSeed: id,
     ownerUserId: actor.id,

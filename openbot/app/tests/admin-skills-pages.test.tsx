@@ -123,7 +123,6 @@ beforeEach(() => {
           botsMayCallBack: true,
           redirectUri: null,
           composioConfigured: false,
-          authorizesPerAction: false,
         });
       return new Response(null, { status: 404 });
     },

@@ -80,6 +80,7 @@ const server = (
   lastError: null,
   addedBy: null,
   dynamicClient: false,
+  adminConnectOnly: false,
   authScheme: null,
   tools: tools.map(({ name, grantedTo }) => ({
     serverId: id,

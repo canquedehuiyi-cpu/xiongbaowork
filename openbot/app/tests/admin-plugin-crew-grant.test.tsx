@@ -77,6 +77,7 @@ const server: PluginServer = {
   lastError: null,
   addedBy: null,
   dynamicClient: false,
+  adminConnectOnly: false,
   authScheme: null,
   tools: [tool("list_issues"), tool("get_issue")],
   withdrawn: [],

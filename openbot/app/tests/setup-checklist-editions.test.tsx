@@ -99,7 +99,7 @@ function serve(
     credentials: { list: async () => [] },
     entitlements: async () => facts.entitlement,
     computer: true,
-    apps: { configured: facts.moreApps, provider: "composio" },
+    apps: { configured: facts.moreApps },
     chat: false,
   });
   const routes = createSetupRoutes(sources, async (context, next) => {

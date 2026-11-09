@@ -85,6 +85,9 @@ const AGENT: AgentProfile = {
   systemOwned: false,
   canManage: true,
   mine: true,
+  isolated: false,
+  isolationActive: false,
+  isolationOffReason: null,
 };
 
 const OVERVIEW: AutonomousSummary[] = [
@@ -190,7 +193,8 @@ const ROUTINE_RECORDS: RoutineRecord[] = [
     schedule: "每天 09:00",
     timezone: "UTC",
     instruction: "Post standup",
-    channel: { id: "c", name: "c", gone: false },
+    title: null,
+    channel: { id: "c", name: "c", title: "c", gone: false },
     enabled: false,
     nextRunAt: at(2 * HOUR),
     lastRun: null,
@@ -201,7 +205,8 @@ const ROUTINE_RECORDS: RoutineRecord[] = [
     schedule: "每天 18:00",
     timezone: "UTC",
     instruction: "Archive mail",
-    channel: { id: "c", name: "c", gone: false },
+    title: null,
+    channel: { id: "c", name: "c", title: "c", gone: false },
     enabled: true,
     nextRunAt: at(HOUR),
     lastRun: { status: "failed", at: at(-HOUR) },

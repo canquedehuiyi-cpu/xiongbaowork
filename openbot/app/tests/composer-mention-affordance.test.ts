@@ -31,6 +31,7 @@ const coworker = (id: string): AgentOption => ({
   id,
   name: `同事-${id}`,
   description: "",
+  avatarSeed: id,
 });
 
 const chars = (agents: AgentOption[]) =>
@@ -59,9 +60,9 @@ test("a roster nobody can choose from registers no @, but keeps /", () => {
  * Group can never offer a coworker this person cannot see.
  */
 const visibleRoster: AgentOption[] = [
-  { id: "pinned", name: "小熊", description: "助理" },
-  { id: "reviewer", name: "阿审", description: "审核" },
-  { id: "writer", name: "阿写", description: "写作" },
+  { id: "pinned", name: "小熊", description: "助理", avatarSeed: "pinned" },
+  { id: "reviewer", name: "阿审", description: "审核", avatarSeed: "reviewer" },
+  { id: "writer", name: "阿写", description: "写作", avatarSeed: "writer" },
 ];
 
 const workspaceGroups = [

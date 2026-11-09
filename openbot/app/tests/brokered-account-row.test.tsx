@@ -1316,6 +1316,7 @@ function accountState(overrides: Partial<BrokeredAccount>): BrokeredAccount {
      * where a key app is not connected and is exercised against the stub above.
      */
     fieldsError: null,
+    guide: null,
     kind: "consent",
     /*
      * UNDEFINED IS THE DEFAULT BECAUSE IT IS THE COMMON STATE, not because the field is optional to

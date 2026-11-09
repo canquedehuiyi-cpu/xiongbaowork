@@ -62,6 +62,9 @@ const CREATED: AgentProfile = {
   systemOwned: false,
   canManage: true,
   mine: true,
+  isolated: false,
+  isolationActive: false,
+  isolationOffReason: null,
 };
 
 beforeEach(() => {
