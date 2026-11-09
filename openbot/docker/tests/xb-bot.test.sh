@@ -11,6 +11,9 @@ B=bbbbbbbbbbb2
 C=ccccccccccc3
 D=ddddddddddd4
 E=eeeeeeeeeee5
+F=fffffffffff6
+G=aaaaaaaaaab7
+H=aaaaaaaaaac8
 DIRA=/workspace/bots/$A
 T=$(mktemp -d)
 
@@ -47,8 +50,11 @@ mkdir -p /run/s6/container_environment
 echo secret-token >/run/s6/container_environment/COMPUTER_TOKEN
 chmod 0755 /run/s6/container_environment
 chmod 0644 /run/s6/container_environment/COMPUTER_TOKEN
-"$XB" restore || fail "restore at start exited $?"
+COMPUTER_PER_BOT_USERS=on "$XB" restore || fail "restore at start exited $?"
 pass "restore at start"
+[ "$(stat -c '%U %a' /run/xb-bot)" = "root 700" ] || fail "/run/xb-bot is $(stat -c '%U %a' /run/xb-bot 2>&1)"
+[ "$(stat -c '%U %a' /run/xb-bot/lock)" = "root 600" ] || fail "/run/xb-bot/lock is $(stat -c '%U %a' /run/xb-bot/lock 2>&1)"
+pass "the lock is root's alone (/run/xb-bot 700, lock 600)"
 
 # --- Arguments --------------------------------------------------------------------------------
 expect_code 64 "unknown subcommand is 64" -- "$XB" nope
@@ -78,6 +84,34 @@ grep -q "^$A $UA\$" /workspace/.xb-users || fail "the map has no line for A"
 pass "A's directory, .tmp, ACL and map line"
 UB=$("$XB" ensure "$B") || fail "ensure of B exited $?"
 [ "$UB" != "$UA" ] || fail "A and B share uid $UA"
+GA=$(id -g "xb-$A")
+
+# Each employee its own primary group; xbbots only as a supplementary one.
+as "$A" 10 '
+id -gn
+id -Gn
+' || fail "id as A exited $?"
+[ "$(sed -n 1p "$T/out")" = "xb-$A" ] || fail "A's primary group is $(sed -n 1p "$T/out"), want xb-$A"
+case " $(sed -n 2p "$T/out") " in
+  *" xbbots "*) ;;
+  *) fail "A is not in xbbots: $(sed -n 2p "$T/out")" ;;
+esac
+pass "A has its own primary group, with xbbots supplementary"
+as "$A" 10 '
+echo group-private > /tmp/a-group.txt && chmod 0640 /tmp/a-group.txt
+' || fail "A could not write /tmp/a-group.txt"
+as "$B" 10 '
+cat /tmp/a-group.txt
+' && fail "B read A's group-readable file in /tmp: $(cat "$T/out")"
+pass "B cannot read A's group-readable file in /tmp"
+
+# Employees may not install system packages; pwuser (the default employee) still may.
+as "$A" 10 '
+sudo -n apt-get --version
+' && fail "employee A may sudo apt-get"
+pass "an employee may not sudo apt-get"
+runuser -u pwuser -- sudo -n apt-get --version >/dev/null 2>"$T/err" || fail "pwuser may no longer sudo apt-get: $(cat "$T/err")"
+pass "pwuser may still sudo apt-get"
 
 # --- run --------------------------------------------------------------------------------------
 as "$A" 10 'PATH=/usr/bin:/bin
@@ -115,6 +149,58 @@ took=$(($(date +%s) - start))
 sleep 0.2
 none_left "-u xb-$A" || fail "processes of xb-$A left after TERM: $(pgrep -a -u "xb-$A")"
 pass "TERM to the helper ends the command's group (${took}s)"
+
+# Stopping one command leaves the same employee's other commands running.
+printf '\nsleep 1001\n' | "$XB" run "$A" 600 >/dev/null 2>&1 &
+h1=$!
+printf '\nsleep 1002\n' | "$XB" run "$A" 600 >/dev/null 2>&1 &
+h2=$!
+sleep 1
+pgrep -u "xb-$A" -f 'sleep 1001' >/dev/null || fail "the first concurrent command did not start"
+pgrep -u "xb-$A" -f 'sleep 1002' >/dev/null || fail "the second concurrent command did not start"
+kill -s TERM "$h1"
+wait "$h1" 2>/dev/null
+sleep 0.2
+pgrep -u "xb-$A" -f 'sleep 1001' >/dev/null && fail "the stopped command is still running"
+pgrep -u "xb-$A" -f 'sleep 1002' >/dev/null || fail "stopping one command ended the employee's other command"
+pass "stopping one command leaves the employee's other command running"
+kill -s TERM "$h2"
+wait "$h2" 2>/dev/null
+sleep 0.2
+none_left "-u xb-$A" || fail "processes of xb-$A left after stopping both: $(pgrep -a -u "xb-$A")"
+
+# An employee can neither open the helper's lock nor hold up another employee's ensure with it.
+as "$A" 10 '
+: </run/xb-bot/lock
+' && fail "A opened /run/xb-bot/lock"
+as "$A" 10 '
+: </run/xb-bot.lock
+' && fail "A opened /run/xb-bot.lock"
+pass "an employee cannot open the helper's lock"
+printf '\nflock -x /run/xb-bot/lock sleep 30 & flock -x /run/xb-bot.lock sleep 30 & sleep 30\n' |
+  "$XB" run "$A" 60 >/dev/null 2>&1 &
+holder=$!
+sleep 1
+start=$(date +%s)
+timeout 20 "$XB" ensure "$B" >"$T/out" 2>"$T/err" || fail "ensure of B while A tried to hold the lock exited $?: $(cat "$T/err")"
+took=$(($(date +%s) - start))
+[ "$took" -le 5 ] || fail "ensure of B took ${took}s while A tried to hold the lock"
+kill -s TERM "$holder"
+wait "$holder" 2>/dev/null
+pass "ensure of B is not held up by A (${took}s)"
+
+# The command's text is not in any argv another employee can read with ps.
+printf '\n: secret-marker-m1; sleep 20\n' | "$XB" run "$A" 30 >/dev/null 2>&1 &
+hm=$!
+sleep 1
+as "$B" 10 '
+ps -eo args
+' || fail "B could not run ps"
+grep -q 'sleep 20' "$T/out" || fail "B's ps does not show A's sleep, so it proves nothing: $(cat "$T/out")"
+grep -q secret-marker-m1 "$T/out" && fail "B saw A's command text in ps: $(grep secret-marker-m1 "$T/out")"
+kill -s TERM "$hm"
+wait "$hm" 2>/dev/null
+pass "another employee's ps does not show the command's text"
 
 as "$A" 10 '
 cat /run/s6/container_environment/COMPUTER_TOKEN
@@ -192,8 +278,10 @@ runuser -u pwuser -- sudo -n "$XB" ensure "$B" >"$T/out" 2>"$T/err" || fail "pwu
 printf '\nid -u\n' | runuser -u pwuser -- sudo -n "$XB" run "$B" 10 >"$T/out" 2>"$T/err" || fail "pwuser's sudo run failed: $(cat "$T/err")"
 [ "$(cat "$T/out")" = "$UB" ] || fail "pwuser's sudo run printed $(cat "$T/out")"
 pass "pwuser may sudo ensure and run"
-runuser -u pwuser -- sudo -n "$XB" restore >/dev/null 2>&1 && fail "pwuser may sudo restore"
-pass "pwuser may not sudo restore"
+# Asked of sudo itself, so a refusal by the helper (SUDO_USER set) cannot pass for sudo's.
+runuser -u pwuser -- sudo -n -l "$XB" ensure "$B" >/dev/null 2>"$T/err" || fail "sudo -l does not allow pwuser ensure: $(cat "$T/err")"
+runuser -u pwuser -- sudo -n -l "$XB" restore >"$T/out" 2>&1 && fail "sudoers allows pwuser restore: $(cat "$T/out")"
+pass "sudoers does not allow pwuser restore"
 
 # --- restore ----------------------------------------------------------------------------------
 owner_before=$(stat -c %u "$DIRA/secret.txt")
@@ -204,12 +292,18 @@ id -u "xb-$A" >/dev/null 2>&1 && fail "xb-$A still exists after userdel"
 [ "$(id -u "xb-$A")" = "$UA" ] || fail "restore recreated xb-$A as $(id -u "xb-$A" 2>&1), want $UA"
 [ "$(stat -c %u "$DIRA/secret.txt")" = "$owner_before" ] || fail "A's old file changed owner"
 [ "$(stat -c %U "$DIRA/secret.txt")" = "xb-$A" ] || fail "A's old file is owned by $(stat -c %U "$DIRA/secret.txt")"
+[ "$(id -g "xb-$A")" = "$GA" ] || fail "restore gave xb-$A gid $(id -g "xb-$A"), want $GA"
 pass "restore brings xb-$A back with uid $UA and its files"
 
 chmod 0755 /profiles
 echo old >/workspace/old.txt
 chmod 0644 /workspace/old.txt
+echo keep >/workspace/keep.txt
+chmod 0640 /workspace/keep.txt
+keep_ctime=$(stat -c %z /workspace/keep.txt)
+sleep 1.1
 "$XB" restore || fail "restore exited $?"
+[ "$(stat -c %z /workspace/keep.txt)" = "$keep_ctime" ] || fail "restore touched keep.txt, which had no other bits"
 [ "$(stat -c %a /profiles)" = 700 ] || fail "/profiles is $(stat -c %a /profiles)"
 [ "$(stat -c %a /workspace)" = 711 ] || fail "/workspace is $(stat -c %a /workspace)"
 [ "$(stat -c %a /workspace/bots)" = 711 ] || fail "/workspace/bots is $(stat -c %a /workspace/bots)"
@@ -223,6 +317,47 @@ grep -q '^xb-bot: ' "$T/err" || fail "the skipped line was not logged"
 uid_e=$(getent passwd "xb-$E" | cut -d: -f3)
 [ -z "$uid_e" ] || [ "$uid_e" != 0 ] || fail "restore created xb-$E with uid 0"
 pass "a uid-0 map line is skipped"
+
+# A last map line without a newline is still read, and the next ensure does not run into it.
+printf '%s %s' "$F" 21000 >>/workspace/.xb-users
+"$XB" restore 2>"$T/err" || fail "restore with an unterminated last line exited $?"
+[ "$(id -u "xb-$F" 2>/dev/null)" = 21000 ] || fail "the unterminated last map line was not restored"
+UG=$("$XB" ensure "$G") || fail "ensure of G after an unterminated line exited $?"
+grep -q "^$F 21000\$" /workspace/.xb-users || fail "the map lost F's line: $(cat /workspace/.xb-users)"
+grep -q "^$G $UG\$" /workspace/.xb-users || fail "the map has no line for G: $(cat /workspace/.xb-users)"
+pass "a last map line without a newline is read"
+
+# Every error of the helper's own starts with xb-bot:, even when useradd fails first.
+printf '%s %s\n' "$H" "$UB" >>/workspace/.xb-users
+"$XB" ensure "$H" >/dev/null 2>"$T/err" && fail "ensure with a uid already taken succeeded"
+head -n 1 "$T/err" | grep -q '^xb-bot: ' || fail "a failed useradd's first stderr line is not xb-bot: ($(cat "$T/err"))"
+pass "a failed useradd is reported on one xb-bot: line"
+
+# Tightening that fails at start: with the switch off a warning, with it on the helper unready.
+# The failure is injected through a file only root can create, in the helper's own directory.
+touch /run/xb-bot/test-fail-tighten
+COMPUTER_PER_BOT_USERS=off "$XB" restore 2>"$T/err"
+code=$?
+[ "$code" = 0 ] || fail "with the switch off, a failed tightening made restore exit $code"
+grep -q '^xb-bot: ' "$T/err" || fail "with the switch off, the failed tightening was not logged"
+[ ! -e /run/xb-bot/unready ] || fail "with the switch off, restore marked the helper unready"
+"$XB" ensure "$B" >/dev/null 2>"$T/err" || fail "with the switch off, ensure was refused: $(cat "$T/err")"
+pass "with the switch off, a failed tightening only warns"
+COMPUTER_PER_BOT_USERS=on "$XB" restore 2>"$T/err"
+code=$?
+[ "$code" = 0 ] || fail "with the switch on, a failed tightening made restore exit $code"
+[ "$(stat -c '%U %a' /run/xb-bot/unready 2>&1)" = "root 600" ] || fail "the unready mark is $(stat -c '%U %a' /run/xb-bot/unready 2>&1)"
+[ -s /run/xb-bot/unready ] || fail "the unready mark carries no reason"
+"$XB" ensure "$B" >/dev/null 2>"$T/err"
+code=$?
+[ "$code" = 64 ] || fail "ensure while unready exited $code, want 64"
+head -n 1 "$T/err" | grep -q '^xb-bot: 未就绪：' || fail "ensure while unready said $(cat "$T/err")"
+pass "with the switch on, a failed tightening makes ensure refuse (64, xb-bot: 未就绪：)"
+rm -f /run/xb-bot/test-fail-tighten
+COMPUTER_PER_BOT_USERS=on "$XB" restore 2>"$T/err" || fail "a clean restore exited $?"
+[ ! -e /run/xb-bot/unready ] || fail "a clean restore left the unready mark"
+"$XB" ensure "$B" >/dev/null 2>"$T/err" || fail "ensure after a clean restore was refused: $(cat "$T/err")"
+pass "a clean restore clears the unready mark"
 
 rm -rf "$T"
 echo "all xb-bot tests passed"
