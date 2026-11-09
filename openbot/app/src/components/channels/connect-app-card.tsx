@@ -56,14 +56,12 @@ export function ConnectAppCard({
     refetchInterval: waiting ? 2_000 : false,
   });
   /*
-   * A ROW IS NOT ACCESS, which is the whole reason `revoked` is read here. Withdrawing somebody's
-   * access leaves their row in place pointing at a revoked credential, so a card drawn over the
-   * "your access was withdrawn" refusal would have said the app was connected and taken away the
-   * button that is the only way to get it back.
+   * Upstream also skips a row whose access was withdrawn (`revoked`); this fork has no withdrawing
+   * of somebody's access, so every row listed is a live connection.
    */
   const connected = personalConnections(
     connections.data?.connections ?? [],
-  ).some((row) => row.serverId === serverId && row.revoked !== true);
+  ).some((row) => row.serverId === serverId);
   // Every card drawn here is a refusal, so the app was blocked when the Bot asked.
   const { carried, offer } = useCarryOn({
     place,
@@ -93,57 +91,57 @@ export function ConnectAppCard({
       data-connect-app={serverId}
     >
       <div className="flex flex-col gap-1">
-        <p className="font-medium text-sm">Connect {title}</p>
+        <p className="font-medium text-sm">连接 {title}</p>
         <p className="text-muted-foreground text-sm">{message}</p>
       </div>
       {connected ? (
         <div className="flex flex-wrap items-center gap-3">
           <p className="text-sm" role="status">
             {carried || offer
-              ? `${title} is connected.`
-              : `${title} is connected. Ask again and the Bot can use it.`}
+              ? `${title} 已连接。`
+              : `${title} 已连接。再问一次，员工就能用它了。`}
           </p>
           {offer ? (
             <Button onClick={offer} size="sm">
-              Continue
+              继续
             </Button>
           ) : null}
         </div>
       ) : needsKey ? (
         <p className="text-sm" role="status">
-          {title} needs a key from you.{" "}
+          {title} 需要你提供密钥。请在{" "}
           <Link
             className="underline underline-offset-2"
             params={{ key: serverId }}
-            to="/connections/$key"
+            to="/settings/connected-accounts/$key"
           >
-            Enter it on {title}'s page
+            {title} 的页面
           </Link>
-          , then ask again.
+          {" "}填好，然后再问一次。
         </p>
       ) : (
         <div className="flex flex-wrap items-center gap-3">
           {/* The heading above already names the app; the button says what pressing it does. */}
           <Button disabled={pending} onClick={open} size="sm">
-            {waiting ? `Waiting for ${title}…` : "Connect"}
+            {waiting ? `正在等待 ${title}…` : "连接"}
           </Button>
           {waiting ? (
             <p className="text-muted-foreground text-sm" role="status">
-              Finish in the tab that opened, then come back here.
+              在新打开的标签页里完成，然后回到这里。
             </p>
           ) : null}
           {blockedUrl ? (
             <p className="text-sm" role="status">
-              This browser blocked the tab.{" "}
+              浏览器拦截了新标签页。{" "}
               <a
                 className="underline underline-offset-2"
                 href={blockedUrl}
                 rel="noreferrer"
                 target="_blank"
               >
-                Open {title}'s sign-in
+                打开 {title} 的登录页
               </a>
-              .
+              。
             </p>
           ) : null}
           {error ? (

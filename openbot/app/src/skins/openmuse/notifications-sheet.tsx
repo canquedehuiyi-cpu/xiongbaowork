@@ -17,25 +17,25 @@ export function NotificationsSheet({ onClose }: { onClose: () => void }) {
   return (
     <MuseSheet
       onClose={onClose}
-      subtitle="Approvals and questions your Bots are waiting on."
-      title="Needs you"
+      subtitle="员工在等你处理的审批和问题。"
+      title="等你处理"
     >
       <div className="flex flex-col gap-3.5">
         {nothing ? (
           <MuseEmpty
-            detail="When a Bot needs your OK or an answer, it shows up here."
+            detail="员工需要你同意或回答时，会出现在这里。"
             icon={IconBell}
-            title="You're all caught up"
+            title="都处理完了"
           />
         ) : (
           <WaitingForYou />
         )}
         <LinkRow
-          detail="What your Bots may do without asking"
+          detail="员工不用问就能做哪些事"
           icon={IconHandStop}
-          render={<Link onClick={onClose} to="/settings/approvals" />}
+          render={<Link onClick={onClose} to="/approvals" />}
           tint="lavender"
-          title="Approval rules"
+          title="审批规则"
         />
       </div>
     </MuseSheet>

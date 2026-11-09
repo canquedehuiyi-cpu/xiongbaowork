@@ -138,24 +138,12 @@ export function useConnectInNewTab() {
    * whoever is still mounted; the error is still read from `connect` for whoever is.
    */
   const ask = async (serverId: string, tab: Window | null) => {
-    let start: Awaited<ReturnType<typeof connect.mutateAsync>>;
+    let authorizationUrl: string | null;
     try {
-      start = await connect.mutateAsync(serverId);
+      authorizationUrl = await connect.mutateAsync(serverId);
     } catch {
       tab?.close();
       handle.current = null;
-      return;
-    }
-    /*
-     * ALREADY CONNECTED: the account was held at the vendor with no row here, and the route
-     * recorded it on this press. There is no page to visit, so the claimed tab goes, and every
-     * query is refetched once, as the card does on its own connected edge. Whoever drew the
-     * button reads the new row there, and the Bot's next turn is asked against it.
-     */
-    if (start !== null && "connected" in start) {
-      tab?.close();
-      handle.current = null;
-      void queryClient.invalidateQueries();
       return;
     }
     /*
@@ -163,13 +151,12 @@ export function useConnectInNewTab() {
      * route answers `{ fields }` and the mutation unwraps nothing. Saying so, with the page
      * that has the form, beats a button that silently does nothing.
      */
-    if (start === null) {
+    if (authorizationUrl === null) {
       tab?.close();
       handle.current = null;
       setNeedsKey(true);
       return;
     }
-    const { authorizationUrl } = start;
     setWaiting(true);
     if (tab) tab.location.replace(authorizationUrl);
     // The tab was blocked. The url is still good, so offer it as something to click.
@@ -189,7 +176,7 @@ export function useConnectInNewTab() {
     error: connect.isError
       ? connect.error instanceof Error
         ? connect.error.message
-        : "Couldn't connect that account."
+        : "这个账号没能连接。"
       : null,
   };
 }

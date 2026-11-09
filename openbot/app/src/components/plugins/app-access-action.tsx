@@ -66,32 +66,32 @@ export function appAccessSentence(
       (access.state === "disabled" &&
         (access.unavailable === null || access.unavailable === "absent")))
   )
-    return `${name} isn't connected yet.`;
+    return `${name} 还没连接。`;
   switch (access.state) {
     case "ready":
       if (owners)
-        return `Ready to use. This Bot uses its owner's ${name} account.`;
+        return `可以用了。这位员工用的是它主人的 ${name} 账号。`;
       if (access.asksFirst)
-        return `Ready to use with your own ${name} account. You'll be asked to allow it the first time.`;
-      return "Ready to use.";
+        return `可以用你自己的 ${name} 账号了。第一次用时会先问你是否允许。`;
+      return "可以用了。";
     case "not_connected":
-      return `You haven't connected your ${name} account yet.`;
+      return `你还没连接自己的 ${name} 账号。`;
     case "reconnect":
       return owners
-        ? `This Bot uses its owner's ${name} account, which needs reconnecting. Only the Bot's owner can reconnect it.`
-        : `Your ${name} connection needs reconnecting.`;
+        ? `这位员工用的是它主人的 ${name} 账号，需要重新连接。只有员工的主人能重新连接。`
+        : `你的 ${name} 连接需要重新连接。`;
     case "shared_not_connected":
-      return `Your organisation's ${name} account isn't connected yet. Only an admin can connect it.`;
+      return `团队的 ${name} 账号还没连接。只有管理员能连接。`;
     case "shared_not_approved":
-      return `This Bot reaches more people than an admin approved for your organisation's ${name} account. Only an admin can approve it.`;
+      return `这位员工能接触的人超出了管理员为团队 ${name} 账号批准的范围。只有管理员能批准。`;
     case "disabled":
       return disabledSentence(access, edition);
     case "not_granted":
-      return `This Bot hasn't been given ${name}. Only an admin can give it.`;
+      return `这位员工还没有 ${name}。只有管理员能给它。`;
     case "owner_grantable": {
-      const yours = access.account === "personal" ? `your ${name}` : name;
-      const ask = `Let ${bot ?? "this Bot"} use ${yours}?`;
-      return access.needsConnect ? `${ask} Connect it first.` : ask;
+      const yours = access.account === "personal" ? `你的 ${name}` : name;
+      const ask = `让${bot ?? "这位员工"}使用${yours}？`;
+      return access.needsConnect ? `${ask}请先连接。` : ask;
     }
   }
 }
@@ -111,17 +111,17 @@ function disabledSentence(
   // beside the sentence goes to where it is fixed.
   if (edition === "personal")
     return access.unavailable === "composio_unconfigured"
-      ? `${name} isn't set up yet. Set it up to connect it.`
-      : `${name} isn't fully set up yet. Set it up to finish.`;
+      ? `${name} 还没设置。设置好后就能连接。`
+      : `${name} 还没设置完。设置好即可。`;
   switch (access.unavailable) {
     case "composio_unconfigured":
-      return `${name} isn't set up yet. An admin has to turn it on.`;
+      return `${name} 还没设置。需要管理员开启。`;
     case "scheme_unreadable":
     case "oauth_client_missing":
     case "token_missing":
-      return `${name} isn't fully set up yet. Only an admin can finish setting it up.`;
+      return `${name} 还没设置完。只有管理员能完成设置。`;
     default:
-      return `${name} isn't turned on yet. Only an admin can turn it on.`;
+      return `${name} 还没开启。只有管理员能开启。`;
   }
 }
 
@@ -206,7 +206,7 @@ function AdminAction({
   access: AppAccess;
 }) {
   const paths = useManagePaths();
-  const bot = useQuery(agentQueryOptions(agentId)).data?.name ?? "this Bot";
+  const bot = useQuery(agentQueryOptions(agentId)).data?.name ?? "这位员工";
   const approve = useMutation(approveBotAppMutationOptions(queryClient));
   const name = access.displayName;
 
@@ -217,12 +217,12 @@ function AdminAction({
   if (oneClick) {
     const disabled = access.state === "disabled";
     const label = disabled
-      ? `Turn on and give it to ${bot}`
-      : `Give it to ${bot}`;
+      ? `开启并交给${bot}`
+      : `交给${bot}`;
     // The card names the app beside the button; on its own, the button has to.
     const spoken = disabled
-      ? `Turn on ${name} and give it to ${bot}`
-      : `Give ${name} to ${bot}`;
+      ? `开启 ${name} 并交给${bot}`
+      : `把 ${name} 交给${bot}`;
     return (
       <div className="flex flex-wrap items-center justify-end gap-2">
         {approve.error ? (
@@ -245,7 +245,7 @@ function AdminAction({
           }
           size="sm"
         >
-          {approve.isPending ? (disabled ? "Turning on…" : "Giving…") : label}
+          {approve.isPending ? (disabled ? "正在开启…" : "正在交给…") : label}
         </Button>
       </div>
     );
@@ -254,23 +254,21 @@ function AdminAction({
   const page =
     access.state === "disabled" &&
     access.unavailable === "composio_unconfigured"
-      ? access.provider === "arcade"
-        ? "arcade"
-        : "composio"
+      ? "composio"
       : access.key;
   const [label, spoken] =
     access.state !== "shared_not_connected"
-      ? ["Set it up", `Set up ${name}`]
+      ? ["去设置", `设置 ${name}`]
       : access.requestKind
-        ? ["Connect the team account", `Connect the team ${name} account`]
-        : ["Reconnect the team account", `Reconnect the team ${name} account`];
+        ? ["连接团队账号", `连接团队的 ${name} 账号`]
+        : ["重新连接团队账号", `重新连接团队的 ${name} 账号`];
   /*
    * A broker with no key is set up on its directory, which is a page of its own in the personal
    * edition. There `/connections/composio` would read as an app called "composio" and say there is
    * none; the team edition's `/admin/plugins/composio` happens to be that directory already.
    */
   const target =
-    page === "composio" || page === "arcade"
+    page === "composio"
       ? paths.brokerDirectory(page)
       : paths.plugin(page);
   return (
@@ -309,7 +307,7 @@ function OwnerGiveAction({
   access: AppAccess;
   tab: ConnectInNewTab;
 }) {
-  const bot = useQuery(agentQueryOptions(agentId)).data?.name ?? "this Bot";
+  const bot = useQuery(agentQueryOptions(agentId)).data?.name ?? "这位员工";
   const give = useMutation(giveBotAppMutationOptions(queryClient));
   const { waiting, stopWaiting } = tab;
   const name = access.displayName;
@@ -344,12 +342,12 @@ function OwnerGiveAction({
   )
     return (
       <Button
-        render={<Link params={{ key: access.key }} to="/connections/$key" />}
-        aria-label={`Connect ${name}`}
+        render={<Link params={{ key: access.key }} to="/settings/connected-accounts/$key" />}
+        aria-label={`连接 ${name}`}
         size="sm"
         variant="outline"
       >
-        Connect
+        连接
       </Button>
     );
 
@@ -376,14 +374,14 @@ function OwnerGiveAction({
         </p>
       ) : waiting ? (
         <p className="text-muted-foreground text-xs" role="status">
-          Finish in the tab that opened.
+          在新打开的标签页里完成。
         </p>
       ) : null}
       <Button
         aria-label={
           give.isPending || waiting || tab.pending
             ? undefined
-            : `Let ${bot} use ${name}${access.needsConnect ? " after you connect it" : ""}`
+            : `${access.needsConnect ? "连接后" : ""}让${bot}使用 ${name}`
         }
         disabled={give.isPending || tab.pending}
         onClick={() => {
@@ -399,14 +397,14 @@ function OwnerGiveAction({
         size="sm"
       >
         {give.isPending
-          ? "Allowing…"
+          ? "正在允许…"
           : waiting
-            ? `Waiting for ${name}…`
+            ? `正在等待 ${name}…`
             : tab.pending
-              ? "Opening sign-in…"
+              ? "正在打开登录页…"
               : access.needsConnect
-                ? "Connect and allow"
-                : "Allow"}
+                ? "连接并允许"
+                : "允许"}
       </Button>
     </div>
   );
@@ -471,11 +469,11 @@ function PersonalConnectAction({
   if (access.connect === "key" || tab.needsKey)
     return (
       <Button
-        render={<Link params={{ key: access.key }} to="/connections/$key" />}
-        aria-label={`Set up ${name}`}
+        render={<Link params={{ key: access.key }} to="/settings/connected-accounts/$key" />}
+        aria-label={`设置 ${name}`}
         size="sm"
       >
-        Set up
+        去设置
       </Button>
     );
 
@@ -502,14 +500,14 @@ function PersonalConnectAction({
         </p>
       ) : waiting ? (
         <p className="text-muted-foreground text-xs" role="status">
-          Finish in the tab that opened.
+          在新打开的标签页里完成。
         </p>
       ) : null}
       <Button
         aria-label={
           waiting || approve.isPending || tab.pending
             ? undefined
-            : `${signsIn ? "Connect" : "Turn on"} ${name}`
+            : `${signsIn ? "连接" : "开启"} ${name}`
         }
         disabled={approve.isPending || tab.pending}
         onClick={() => {
@@ -525,14 +523,14 @@ function PersonalConnectAction({
         size="sm"
       >
         {waiting
-          ? `Waiting for ${name}…`
+          ? `正在等待 ${name}…`
           : approve.isPending
-            ? "Turning on…"
+            ? "正在开启…"
             : tab.pending
-              ? "Opening sign-in…"
+              ? "正在打开登录页…"
               : signsIn
-                ? "Connect"
-                : "Turn on"}
+                ? "连接"
+                : "开启"}
       </Button>
     </div>
   );
@@ -546,7 +544,7 @@ function ConnectAction({
   access: AppAccess;
   tab: ConnectInNewTab;
 }) {
-  const label = access.state === "reconnect" ? "Reconnect" : "Connect";
+  const label = access.state === "reconnect" ? "重新连接" : "连接";
   const { waiting, stopWaiting } = tab;
 
   /*
@@ -585,7 +583,7 @@ function ConnectAction({
   if (viaSettings)
     return (
       <Button
-        render={<Link params={{ key: access.key }} to="/connections/$key" />}
+        render={<Link params={{ key: access.key }} to="/settings/connected-accounts/$key" />}
         aria-label={`${label} ${access.displayName}`}
         size="sm"
         variant="outline"
@@ -616,7 +614,7 @@ function ConnectAction({
         </p>
       ) : waiting ? (
         <p className="text-muted-foreground text-xs" role="status">
-          Finish in the tab that opened.
+          在新打开的标签页里完成。
         </p>
       ) : null}
       <Button
@@ -633,9 +631,9 @@ function ConnectAction({
         variant="outline"
       >
         {waiting
-          ? `Waiting for ${access.displayName}…`
+          ? `正在等待 ${access.displayName}…`
           : tab.pending
-            ? "Opening sign-in…"
+            ? "正在打开登录页…"
             : label}
       </Button>
     </div>
@@ -696,13 +694,13 @@ function RequestAction({
       {access.request ? (
         <>
           <span className="text-muted-foreground text-xs" role="status">
-            Requested
+            已申请
           </span>
           <Button
             aria-label={
               cancel.isPending
                 ? undefined
-                : `Withdraw request for ${access.displayName}`
+                : `撤回对 ${access.displayName} 的申请`
             }
             disabled={cancel.isPending}
             onClick={() => {
@@ -714,7 +712,7 @@ function RequestAction({
             size="sm"
             variant="ghost"
           >
-            {cancel.isPending ? "Withdrawing…" : "Withdraw"}
+            {cancel.isPending ? "正在撤回…" : "撤回"}
           </Button>
         </>
       ) : (
@@ -722,7 +720,7 @@ function RequestAction({
           aria-label={
             request.isPending
               ? undefined
-              : `Request access to ${access.displayName}`
+              : `申请使用 ${access.displayName}`
           }
           disabled={request.isPending}
           onClick={() => {
@@ -734,7 +732,7 @@ function RequestAction({
           size="sm"
           variant="outline"
         >
-          {request.isPending ? "Requesting…" : "Request access"}
+          {request.isPending ? "正在申请…" : "申请使用"}
         </Button>
       )}
     </div>

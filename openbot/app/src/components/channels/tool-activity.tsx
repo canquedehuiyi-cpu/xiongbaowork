@@ -435,7 +435,7 @@ function detailsOf(step: ToolItem, folders: FolderNames): StepDetails {
   const reason = refusalOf(answer);
   const refused = reason !== undefined;
   // A refusal is said in the person's words, never in the sentence written for the Bot.
-  const body = refused ? outcomeForPerson(reason) : answer;
+  const body = refused ? outcomeForPerson(reason.reason) : answer;
   // A tool whose answer is for the model, not the person; see `ServerToolLine`.
   const own = answersTheModel(name);
   // A tool the Bot was never offered: the runtime's answer lists every tool it has, for the model.

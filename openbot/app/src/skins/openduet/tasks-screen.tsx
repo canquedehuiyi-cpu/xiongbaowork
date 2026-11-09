@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { type ReactNode, useState } from "react";
 import { useWaitingRows } from "@/components/approvals/waiting";
 import { NeedsYouRows, useNeedsYou } from "@/components/needs-you/needs-you";
-import { BotResponsibilities } from "@/components/responsibilities/responsibilities";
+import { BotResponsibilities } from "@/components/responsibilities/bot-responsibilities";
 import { RoutinesList } from "@/components/routines/routines-list";
 import { SuggestionsInbox } from "@/components/suggestions/proactive-panel";
 import { routinesQueryOptions } from "@/lib/routines/queries";

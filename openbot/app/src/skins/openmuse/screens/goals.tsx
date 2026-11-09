@@ -1,4 +1,4 @@
-import { BotResponsibilities } from "@/components/responsibilities/responsibilities";
+import { BotResponsibilities } from "@/components/responsibilities/bot-responsibilities";
 import { RoutinesList } from "@/components/routines/routines-list";
 import { cn } from "@/lib/utils";
 import { useMuse } from "../context";

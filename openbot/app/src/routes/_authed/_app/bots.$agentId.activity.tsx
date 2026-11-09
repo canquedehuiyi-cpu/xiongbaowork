@@ -16,8 +16,8 @@ function ActivityPage() {
   return (
     <BotSubpage
       agentId={agentId}
-      description="Review the tasks, routines and goals this Bot is running, has scheduled and has finished."
-      title="Activity"
+      description="查看这位员工正在做、已安排和已完成的任务、定时任务与长期职责。"
+      title="动态"
     >
       {(agent) => <BotActivitySections agentId={agent.id} />}
     </BotSubpage>

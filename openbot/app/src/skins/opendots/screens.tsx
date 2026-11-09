@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Navigate } from "@tanstack/react-router";
-import type { ReactNode } from "react";
-import { MemoryList, RememberFact } from "@/components/memory/memories";
+import { type ReactNode, useState } from "react";
+import { MemoryScreen } from "@/components/memory/memory-screen";
 import { RoutinesList } from "@/components/routines/routines-list";
 import {
   deploymentCapabilitiesQueryOptions,
@@ -62,20 +62,18 @@ export function RoutinesScreen() {
 }
 
 /**
- * "Memories": what the person's Bots know about them, as OpenBot's memory. Home where memory isn't
+ * "Memories": what the person's Bots know about them, as this fork's 信息源与记忆 screen (the same
+ * one 能力与资源 shows), which holds both remembering a fact and the list. Home where memory isn't
  * offered, as the screen route does for a screen this skin doesn't have (see `offersMemory`).
  */
 export function MemoriesScreen() {
   const capabilities = useQuery(deploymentCapabilitiesQueryOptions());
+  const [query, setQuery] = useState("");
   if (capabilities.isPending) return null;
   if (!offersMemory(capabilities.data)) return <Navigate replace to="/" />;
   return (
-    <OpenDotsPage
-      action={<RememberFact />}
-      description="What your Bots know about you."
-      title="Memories"
-    >
-      <MemoryList />
+    <OpenDotsPage description="员工记得的关于你的事。" title="记忆">
+      <MemoryScreen onQuery={setQuery} query={query} />
     </OpenDotsPage>
   );
 }

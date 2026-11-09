@@ -93,30 +93,33 @@ export function parsePlace(
       ownsWatch: true,
     };
   }
-  const bot = path.match(/^\/bots\/([^/]+)(?:\/([^/]+))?$/);
+  // `/bots/$agentId` forwards to the employee's page under 员工管理, `/wakers/$agentId`.
+  const bot =
+    path.match(/^\/bots\/([^/]+)(?:\/([^/]+))?$/) ??
+    path.match(/^\/wakers\/([^/]+)(?:\/([^/]+))?$/);
   if (bot) {
     return {
       section: "bots",
-      label: (name) => name ?? "Bot",
+      label: (name) => name ?? "员工",
       detail: bot[2] ? (BOT_TABS[bot[2]] ?? bot[2]) : undefined,
       agentFromUrl: decodeURIComponent(bot[1]),
       ownsWatch: false,
     };
   }
-  if (path === "/bots" || path === "/agents") {
-    return { section: "bots", label: "All Bots", ownsWatch: false };
+  if (path === "/bots" || path === "/agents" || path === "/wakers") {
+    return { section: "bots", label: "员工管理", ownsWatch: false };
   }
   if (path === "/s/routines" || path === "/routines") {
     return { section: "routines", label: "Routines", ownsWatch: false };
   }
-  if (path === "/s/memories" || path === "/capabilities/memory") {
+  if (path === "/s/memories" || path === "/memory") {
     return { section: "memories", label: "Memories", ownsWatch: false };
   }
-  if (path.startsWith("/capabilities")) {
-    return { section: "capabilities", label: "Capabilities", ownsWatch: false };
+  if (path === "/resources" || path.startsWith("/resources/")) {
+    return { section: "capabilities", label: "能力与资源", ownsWatch: false };
   }
-  if (path.startsWith("/connections")) {
-    return { section: "connections", label: "Connections", ownsWatch: false };
+  if (path.startsWith("/settings/connected-accounts")) {
+    return { section: "connections", label: "已连接的账号", ownsWatch: false };
   }
   return {
     section: "other",
