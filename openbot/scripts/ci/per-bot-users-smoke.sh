@@ -190,6 +190,43 @@ if [ "$healthy" = true ]; then
   else
     fail "no xb-bot run, runuser or timeout of $userA left within 10s (still matching: $(printf '%s' "$left" | tr '\n' '|'); $(docker exec "$name" ps -o user,pid,ppid,pgid,stat,args -A 2>/dev/null | grep -E 'sleep|xb-bot|sudo|timeout|runuser' | grep -v grep | tr '\n' ';'))"
   fi
+
+  # A process an employee leaves outside its command's group (setsid) survives the command, so the
+  # computer ends every employee process before it (re)starts: otherwise one could take port 4100
+  # first, or read the computer's argv, while it comes back up, and catch COMPUTER_TOKEN.
+  lingering() { docker exec "$name" pgrep -u "$userA" -f 'sleep 1003' >/dev/null 2>&1; }
+  r=$(call "$A" /exec "$(exec_body 'setsid sleep 1003 >/dev/null 2>&1 </dev/null &')")
+  sleep 1
+  if [ "$(exit_of "$r")" = 0 ] && lingering; then
+    pass "$A leaves a setsid sleep that outlives its command"
+  else
+    fail "$A leaves a setsid sleep that outlives its command (HTTP $(code_of "$r"): $(body_of "$r"))"
+  fi
+  computer_pid() { docker exec "$name" pgrep -u pwuser -f 'bun src/index.ts' 2>/dev/null | head -n 1; }
+  before=$(computer_pid)
+  docker exec "$name" /command/s6-svc -r /run/service/computer || true
+  restarted=false
+  gone=false
+  started=$SECONDS
+  while [ $((SECONDS-started)) -le 60 ]; do
+    now=$(computer_pid)
+    code=$(docker exec "$name" curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:4100/health || true)
+    if [ -n "$now" ] && [ "$now" != "$before" ] && [ "$code" = 200 ]; then restarted=true; fi
+    if lingering; then gone=false; else gone=true; fi
+    [ "$restarted" = true ] && break
+    sleep 1
+  done
+  elapsed=$((SECONDS-started))
+  if [ "$restarted" = true ]; then
+    pass "the computer restarted (pid $before -> $(computer_pid)) and /health is 200 again after ${elapsed}s"
+  else
+    fail "the computer restarted and /health is 200 again within 60s (pid $before -> $(computer_pid), HTTP $code)"
+  fi
+  if [ "$restarted" = true ] && [ "$gone" = true ]; then
+    pass "$A's setsid sleep is gone once the computer has restarted"
+  else
+    fail "$A's setsid sleep is gone once the computer has restarted ($(docker exec "$name" ps -o user,pid,args -u "$userA" 2>/dev/null | tr '\n' ';'))"
+  fi
 fi
 
 echo "PER-BOT USERS failed checks=$failures"
