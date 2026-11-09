@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import {
   type ApprovalDecision,
   approvalInboxOptions,
+  approvalTargetName,
   decideApproval,
 } from "@/lib/approvals";
 
@@ -61,7 +62,7 @@ export function InlineApproval({
         {request.action.toolRef
           .replace(/^computer_|^host\//, "")
           .replaceAll("_", " ")}
-        ，目标 {request.action.scope}
+        ，目标 {approvalTargetName(request.action)}
       </p>
       {request.action.policy ? (
         <p className="text-muted-foreground">{request.action.policy.reason}</p>

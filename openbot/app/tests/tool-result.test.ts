@@ -2,8 +2,15 @@ import { describe, expect, test } from "bun:test";
 import { HANDED_OVER, PUT_TO } from "../src/lib/copilot/markers";
 import {
   asText,
+  browserCallFailed,
+  DECLINED_BY_PERSON,
+  DECLINED_FOR_PERSON,
+  flaggedFailure,
   forDisplay,
+  refusalOf,
   saidItWentAhead,
+  toolResultFailed,
+  unofferedTool,
 } from "../src/lib/plugins/tool-result";
 
 /**
@@ -117,5 +124,139 @@ describe("the markers the server and the transcript both use", () => {
 
   test("a result that has not arrived yet is left to the caller's status", () => {
     expect(saidItWentAhead(undefined, HANDED_OVER)).toBe(true);
+  });
+});
+
+/*
+ * 失败和成功分开（上游 #729）。前缀是服务端两道工具门写的：plugins/tools.ts 的
+ * "The vendor reported an error:" 和 "That tool could not be called"。拒绝有自己的标记，不算失败。
+ */
+describe("telling a failed tool from a successful one", () => {
+  test("vendor errors are failures, encoded or not", () => {
+    const answer = "The vendor reported an error:\npermission denied";
+    expect(toolResultFailed(answer)).toBe(true);
+    expect(toolResultFailed(JSON.stringify(answer))).toBe(true);
+  });
+
+  test("a call that could not be made is a failure", () => {
+    expect(toolResultFailed("That tool could not be called.")).toBe(true);
+    expect(
+      toolResultFailed("That tool could not be called: connection reset"),
+    ).toBe(true);
+  });
+
+  test("ordinary results, refusals and running calls are not failures", () => {
+    expect(toolResultFailed("Found 12 results.")).toBe(false);
+    expect(toolResultFailed("Refused. The rule says no.")).toBe(false);
+    expect(toolResultFailed(undefined)).toBe(false);
+  });
+});
+
+/*
+ * 调用了自己没有的工具（上游 #1153）。只认运行时自己的两种原话：AI SDK 的 NoSuchToolError
+ * （本仓库 node_modules 里的 ai 包可查到原文），以及 LangGraph 预置 ToolNode 的报错。
+ */
+describe("a Bot asking for a tool it was never offered", () => {
+  test("the AI SDK's wording, with or without the runtime's Error prefix", () => {
+    const said =
+      "Model tried to call unavailable tool 'web_search'. Available tools: computer_navigate, computer_read.";
+    expect(unofferedTool(said)).toBe(true);
+    expect(unofferedTool(`Error: ${said}`)).toBe(true);
+    expect(unofferedTool(JSON.stringify(`Error: ${said}`))).toBe(true);
+  });
+
+  test("LangGraph's prebuilt ToolNode wording", () => {
+    expect(
+      unofferedTool(
+        "Error: web_search is not a valid tool, try one of [computer_read].",
+      ),
+    ).toBe(true);
+  });
+
+  test("read through the Claude Agent SDK harness's failure wrapper", () => {
+    const wrapped = JSON.stringify({
+      error: true,
+      content:
+        "Model tried to call unavailable tool 'web_search'. Available tools: a, b.",
+    });
+    expect(unofferedTool(wrapped)).toBe(true);
+  });
+
+  test("anything else is drawn as it came", () => {
+    expect(unofferedTool("Error: the page did not load.")).toBe(false);
+    expect(
+      unofferedTool("I tried to call unavailable tool 'x'. It said no."),
+    ).toBe(false);
+    expect(unofferedTool(undefined)).toBe(false);
+  });
+});
+
+/*
+ * 主人拒绝的步骤（上游 #1230）。审批服务给被拒的一步的答复就是写给 Bot 的那句话，不带拒绝标记；
+ * 被当成工具结果画出来，一次被拒的文件写入就读成了「写好了」。
+ */
+describe("a step that was refused or declined", () => {
+  test("the reason behind the refusal marker is a boundary's no", () => {
+    expect(refusalOf("Refused. The rule says no.")).toEqual({
+      reason: "The rule says no.",
+      declined: false,
+    });
+  });
+
+  test("the approval service's answer for a declined step is the person's no", () => {
+    expect(refusalOf(DECLINED_BY_PERSON)).toEqual({
+      reason: DECLINED_FOR_PERSON,
+      declined: true,
+    });
+    // The plugin door puts the marker in front of the same sentence when it refuses at once.
+    expect(refusalOf(`Refused. ${DECLINED_BY_PERSON}`)).toEqual({
+      reason: DECLINED_FOR_PERSON,
+      declined: true,
+    });
+  });
+
+  test("an ordinary answer, or none, is not a refusal", () => {
+    expect(refusalOf("Saved notes.txt")).toBeUndefined();
+    expect(refusalOf(undefined)).toBeUndefined();
+    // Quoting the sentence inside a longer answer is not the service answering.
+    expect(refusalOf(`The file said: ${DECLINED_BY_PERSON}`)).toBeUndefined();
+  });
+});
+
+/*
+ * gallery 调用没画出东西（上游 #1132）。三种失败各有标记：Claude Agent SDK 适配器的包装、
+ * Claude Code 的 <tool_use_error>、CopilotKit 自己的 "Error: "。
+ */
+describe("a gallery call that failed instead of drawing", () => {
+  test("only the harness's exact wrapper is a flagged failure", () => {
+    expect(flaggedFailure('{"error": true, "content": "bad args"}')).toBe(
+      "bad args",
+    );
+    // An API's own error object printed by a command is not the harness's wrapper.
+    expect(
+      flaggedFailure('{"error": true, "content": "x", "message": "y"}'),
+    ).toBeUndefined();
+    expect(flaggedFailure('{"error": "true", "content": "x"}')).toBeUndefined();
+    expect(flaggedFailure("not json")).toBeUndefined();
+  });
+
+  test("each of the three marks is a failure", () => {
+    expect(
+      browserCallFailed('{"error": true, "content": "InputValidationError"}'),
+    ).toBe(true);
+    expect(
+      browserCallFailed(
+        "<tool_use_error>InputValidationError</tool_use_error>",
+      ),
+    ).toBe(true);
+    expect(browserCallFailed("Error: arguments did not parse")).toBe(true);
+  });
+
+  test("a confirmation, a refusal or a running call is not", () => {
+    expect(browserCallFailed("It is now on screen for the person.")).toBe(
+      false,
+    );
+    expect(browserCallFailed("Not shown: Data table. No.")).toBe(false);
+    expect(browserCallFailed(undefined)).toBe(false);
   });
 });

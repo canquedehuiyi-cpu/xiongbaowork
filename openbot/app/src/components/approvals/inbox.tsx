@@ -9,12 +9,13 @@ import {
   type ApprovalRuleRow,
   answerPersonQuestion,
   approvalInboxOptions,
+  approvalTargetName,
   BEHAVIOUR_LABELS,
-  POLICY_SOURCE_LABELS,
   createApprovalRule,
   createTeamApprovalRule,
   decideApproval,
   type HostCommandPolicy,
+  POLICY_SOURCE_LABELS,
   type RuleBehaviour,
   revokeApprovalRule,
   revokeTeamApprovalRule,
@@ -255,7 +256,7 @@ export function ApprovalInbox() {
                     .replaceAll("_", " ")}
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  {request.action.scope}
+                  {approvalTargetName(request.action)}
                 </p>
                 {request.action.policy ? (
                   <p className="text-sm">
@@ -265,7 +266,8 @@ export function ApprovalInbox() {
                     {request.action.policy.reason}
                     {POLICY_SOURCE_LABELS[request.action.policy.source] ? (
                       <span className="ml-2 text-muted-foreground">
-                        （来源：{POLICY_SOURCE_LABELS[request.action.policy.source]}）
+                        （来源：
+                        {POLICY_SOURCE_LABELS[request.action.policy.source]}）
                       </span>
                     ) : null}
                   </p>

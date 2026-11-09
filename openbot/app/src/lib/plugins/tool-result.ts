@@ -116,3 +116,117 @@ export function saidItWentAhead(result: unknown, marker: string): boolean {
   if (typeof result !== "string") return false;
   return asText(result).startsWith(marker);
 }
+
+/**
+ * 主人在对话卡片上拒绝一步时，审批服务答给 Bot 的那句话。
+ *
+ * 和 {@link REFUSAL_MARKER} 一样两端各声明一份：服务端那份随工具结果过网络，这一份负责认出它。
+ * 必须与 `server/src/approvals/service.ts` 的 `DECLINED_BY_PERSON` 一字不差，
+ * `server/tests/approvals-frontend.test.ts` 会比对两份。
+ */
+export const DECLINED_BY_PERSON =
+  "The person declined this action when you asked for their approval, so it was not done. This was their decision, not a policy or a boundary. Do not try this action, or anything equivalent, again in this conversation unless the person asks you to in words; tell them you did not do it because they declined.";
+
+/** 被主人拒绝的一步，给主人看的说法。上面那句是写给 Bot 的，主人不该读到「不要再试」。 */
+export const DECLINED_FOR_PERSON = "你拒绝了这一步。";
+
+/** 一步没有执行：边界或策略说了不（`declined: false`），或者是主人自己拒绝的（`declined: true`）。 */
+export type Refusal = { reason: string; declined: boolean };
+
+/**
+ * 一步为什么没有执行；它执行了就是 undefined。
+ *
+ * 两种来源：拒绝标记后面的理由；或者主人在对话卡片上拒绝后，审批服务答的那句话。后者不带标记
+ * （服务对所有种类的步骤都这么答），当成结果画出来，一次被拒的文件写入就读成了「写好了」。
+ * 插件那道门立即拒绝时会在同一句话前加标记，所以标记之后也要再认一次。
+ * 主人拒绝的理由换成给主人看的说法。
+ */
+export function refusalOf(answer: string | undefined): Refusal | undefined {
+  if (answer === undefined) return undefined;
+  const marked = answer.startsWith(REFUSAL_MARKER);
+  const reason = marked ? answer.slice(REFUSAL_MARKER.length).trim() : answer;
+  if (reason.trim() === DECLINED_BY_PERSON)
+    return { reason: DECLINED_FOR_PERSON, declined: true };
+  return marked ? { reason, declined: false } : undefined;
+}
+
+/**
+ * Claude Agent SDK 适配器包装失败的格式里的文本；不是这个格式就是 undefined。
+ *
+ * `ag-ui-claude-sdk` 在 AG-UI 的结果里没有地方放 Claude Code 的 `is_error`，于是把失败的结果包成
+ * `{"error": true, "content": "..."}`，重新打开的对话里的历史也保留这层包装。
+ *
+ * 只认这一个精确形状：`error: true`、字符串 `content`，再没有别的字段。命令打印出来的 API 错误
+ * 对象（`{"error": true, "message": "..."}`）长得很像，但不是适配器的包装，把它读成失败会把一次
+ * 成功的请求画成「没有成功」。
+ */
+export function flaggedFailure(answer: string): string | undefined {
+  if (!answer.trimStart().startsWith("{")) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(answer);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+      return undefined;
+    const { error, content, ...rest } = parsed as Record<string, unknown>;
+    if (error !== true || typeof content !== "string") return undefined;
+    return Object.keys(rest).length === 0 ? content : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * 一次由浏览器应答的调用（gallery 组件）是否失败了、什么都没画出来。
+ *
+ * 成功的结果是已知的：组件的确认、拒绝、或者主人的回答。失败有三处来源，各有标记：
+ * - Claude Agent SDK 适配器：参数解析不了，Claude Code 在调用到达浏览器之前就拒绝了，
+ *   包装成 {@link flaggedFailure}；
+ * - 适配器保留包装之前的历史：Claude Code 裸的 `<tool_use_error>`；
+ * - CopilotKit 自己跑不了的调用（参数解析不了、处理函数抛错）：`Error: ` 加原因。
+ */
+export function browserCallFailed(result: string | undefined): boolean {
+  if (result === undefined) return false;
+  const answer = asText(result);
+  return (
+    flaggedFailure(answer) !== undefined ||
+    /^\s*<tool_use_error>/.test(answer) ||
+    answer.startsWith("Error: ")
+  );
+}
+
+/** Bot 调用了它没有的工具时，展开这一步看到的那句话。 */
+export const UNOFFERED_TOOL_SENTENCE =
+  "这位员工调用了一个它没有的工具，于是没用它，接着做了下去。";
+
+/**
+ * 这次调用的答复是不是运行时在说：这个工具从来没有提供给这位 Bot。
+ *
+ * 那句答复是写给模型的：它按标识符列出 Bot 拥有的每个工具，好让模型下次挑一个。原样画出来，
+ * 主人展开这一步读到的是一长串 `computer_navigate, computer_read, …`。只认两种库自己的原话：
+ * AI SDK 的 `NoSuchToolError`（「Model tried to call unavailable tool 'web_search'. Available
+ * tools: …」，运行时会在前面加 `Error: `），以及 LangGraph 预置 `ToolNode` 的（「Error: web_search
+ * is not a valid tool, try one of […].」）。Claude Agent SDK 的失败包装会先拆开再认。
+ */
+export function unofferedTool(result: string | undefined): boolean {
+  if (result === undefined) return false;
+  const answer = asText(result);
+  const text = (flaggedFailure(answer) ?? answer).trim();
+  return (
+    /^(Error: )?Model tried to call unavailable tool '[^']*'\./.test(text) ||
+    /^Error: \S+ is not a valid tool, try one of \[/.test(text)
+  );
+}
+
+/**
+ * 服务端工具是否以失败告终，而不是返回了结果。
+ *
+ * 这两个前缀由服务端的两道工具门（`server/src/plugins/tools.ts`、`server/src/app.ts`）在区分完
+ * 「策略拒绝」和「执行失败」之后写入。拒绝有自己的标记，不能并进这个状态。
+ */
+export function toolResultFailed(result: string | undefined): boolean {
+  if (result === undefined) return false;
+  const answer = asText(result);
+  return (
+    answer.startsWith("The vendor reported an error:") ||
+    answer.startsWith("That tool could not be called")
+  );
+}

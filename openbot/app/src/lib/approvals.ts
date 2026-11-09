@@ -93,6 +93,28 @@ export type ApprovalInboxData = {
     createdAt: string;
   }[];
 };
+/**
+ * 审批卡片上「目标」怎么称呼。
+ *
+ * 主人电脑上的文件夹（`host/` 开头的动作）用它的名字：服务端 `host-access/broker.ts` 把
+ * `displayName` 放在动作的 `target` 里。它的 `scope` 是授权 id，以前卡片上就写着
+ * 「目标 host-grant-15407-1794112361547002000」。没记下名字时也不退回授权 id。其余动作照旧写 `scope`。
+ */
+export function approvalTargetName(action: {
+  toolRef: string;
+  scope: string;
+  target: unknown;
+}): string {
+  if (!action.toolRef.startsWith("host/")) return action.scope;
+  const displayName =
+    action.target && typeof action.target === "object"
+      ? (action.target as { displayName?: unknown }).displayName
+      : undefined;
+  return typeof displayName === "string" && displayName.trim()
+    ? displayName
+    : "你电脑上的文件夹";
+}
+
 export const approvalInboxOptions = () =>
   queryOptions({
     queryKey: ["approvals"],
@@ -207,7 +229,9 @@ export const TOOL_MODE_LABELS: Record<EmployeeToolMode, string> = {
   disabled: "禁用",
 };
 /** The rule behaviour each mode is saved as, read back the same way. */
-export const MODE_OF_BEHAVIOUR: Partial<Record<RuleBehaviour, EmployeeToolMode>> = {
+export const MODE_OF_BEHAVIOUR: Partial<
+  Record<RuleBehaviour, EmployeeToolMode>
+> = {
   allow: "direct",
   ask: "ask",
   deny: "disabled",

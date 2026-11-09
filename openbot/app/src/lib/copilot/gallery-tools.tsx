@@ -1,7 +1,12 @@
 import { useFrontendTool, useHumanInTheLoop } from "@copilotkit/react-core/v2";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { RefusedCard } from "@/components/gallery/refused";
+import {
+  FAILED_UNREADABLE,
+  FAILED_WENT_WRONG,
+  FailedCard,
+  RefusedCard,
+} from "@/components/gallery/refused";
 import {
   agentComponentsQueryOptions,
   announceGallery,
@@ -15,10 +20,48 @@ import {
   type GalleryComponent,
   galleryManifest,
 } from "@/lib/copilot/gallery-registry";
+import { browserCallFailed } from "@/lib/plugins/tool-result";
 import {
   NOT_SHOWN,
   NOT_SHOWN_TAIL,
 } from "../../../../shared/component-markers";
+
+/**
+ * 一次已经结束的 gallery 调用为什么什么都没画出来；它不是这种情况就是 undefined。
+ *
+ * 失败的常常是参数：Claude Code 会在浏览器执行调用之前拒绝不是合法 JSON 的参数。照那些参数去画，
+ * 表格就一直「正在等待完整的表格数据…」，重新打开对话也一样。结果说它失败了，而结果正是重新打开时
+ * 保留下来的东西。还在流式输出或执行中的调用不算。
+ *
+ * 决策类组件只在参数读不懂时才算：等待时被停掉的决策也会以失败结果结束，但它的参数没问题，
+ * 卡片上那个问题仍然是主人被问到的问题，照常画。
+ */
+export function galleryCallFailure(
+  spec: GalleryComponent,
+  call: { status?: unknown; args?: unknown; result?: unknown },
+): string | undefined {
+  if (call.status !== "complete") return undefined;
+  if (
+    !browserCallFailed(
+      typeof call.result === "string" ? call.result : undefined,
+    )
+  )
+    return undefined;
+  const fit = argumentsFit(spec, call.args);
+  if (spec.kind === "decision")
+    return fit === false ? FAILED_UNREADABLE : undefined;
+  return fit === false ? FAILED_UNREADABLE : FAILED_WENT_WRONG;
+}
+
+/** 调用的参数是不是组件要的；schema 不能当场回答时为 undefined。只对已结束的调用问。 */
+function argumentsFit(
+  spec: GalleryComponent,
+  args: unknown,
+): boolean | undefined {
+  const verdict = spec.parameters?.["~standard"]?.validate(args ?? {});
+  if (!verdict || verdict instanceof Promise) return undefined;
+  return !verdict.issues;
+}
 
 /**
  * Register compiled gallery components once per name, scoped to the active Bot with `available`.
@@ -95,6 +138,7 @@ function GrantedTool({
   const render = useCallback(
     (props: {
       toolCallId?: string;
+      status?: string;
       args?: Record<string, unknown>;
       result?: string;
     }) => {
@@ -118,6 +162,8 @@ function GrantedTool({
         ).replace(NOT_SHOWN_TAIL, "");
         return <RefusedCard reason={reason} title={spec.title} />;
       }
+      const failure = galleryCallFailure(spec, props);
+      if (failure) return <FailedCard reason={failure} title={spec.title} />;
       // Render from the polled grant snapshot so revocations show before a new call starts.
       if (!isHeld) {
         return (
@@ -129,7 +175,7 @@ function GrantedTool({
       }
       return <Component {...(props.args ?? {})} />;
     },
-    [Component, isHeld, refusals, spec.title],
+    [Component, isHeld, refusals, spec],
   );
 
   useFrontendTool({
@@ -180,6 +226,8 @@ function GrantedDecision({
   const Render = useMemo(
     () =>
       function DecisionRender(props: Record<string, unknown>) {
+        const failure = galleryCallFailure(spec, props);
+        if (failure) return <FailedCard reason={failure} title={spec.title} />;
         if (isHeld) return <Component {...props} />;
         return (
           <RefusedDecision
@@ -190,7 +238,7 @@ function GrantedDecision({
           />
         );
       },
-    [Component, isHeld, spec.title],
+    [Component, isHeld, spec],
   );
 
   useHumanInTheLoop({

@@ -15,6 +15,7 @@ export function ToolLine({
   detail,
   running,
   refused,
+  declined,
   failed,
   children,
 }: {
@@ -25,6 +26,8 @@ export function ToolLine({
   running?: boolean;
   /** A policy or a boundary said no. Final: nothing the Bot does differently will help. */
   refused?: boolean;
+  /** 和 `refused` 一起用：说「不」的是主人自己（在对话卡片上拒绝了），不是策略或边界。 */
+  declined?: boolean;
   /** It was permitted and did not work. A different request might. */
   failed?: boolean;
   /** Shown when the line is expanded. Without it the line is not expandable. */
@@ -43,7 +46,12 @@ export function ToolLine({
       }`}
     >
       <span className="shrink-0">
-        {refused ? "已拦截" : failed ? `${label}，没有成功` : label}
+        {/* 拦下的是哪一步也写出来，不只一个「已拦截」。 */}
+        {refused
+          ? `${declined ? "已拒绝" : "已拦截"}：${label}`
+          : failed
+            ? `${label}，没有成功`
+            : label}
       </span>
       {detail ? <span className="truncate opacity-70">{detail}</span> : null}
     </span>
