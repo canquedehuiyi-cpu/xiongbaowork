@@ -323,7 +323,15 @@ test("in the cloud the shell and file tools keep their own words", async () => {
   expect(run?.description).toContain(
     "Run a shell command on your own computer",
   );
-  expect(run?.description).toContain("sudo apt-get install -y <package>");
+  // Employees do not sudo (user decision 2026-11-09): new tools go in the workspace.
+  expect(run?.description).not.toMatch(/sudo|apt-get/);
+  expect(run?.description).toContain("pip install --user");
+  const example = (
+    z.toJSONSchema(run?.parameters as z.ZodType) as unknown as {
+      properties: { command: { description: string } };
+    }
+  ).properties.command.description;
+  expect(example).not.toMatch(/sudo|apt-get/);
   expect(run?.description).not.toContain("paired machine");
   expect(registered.get("computer_list_files")?.description).toStartWith(
     "List what is in your workspace",
@@ -336,6 +344,6 @@ test("in the cloud the shell and file tools keep their own words", async () => {
 test("until the server answers, the cloud words stand", async () => {
   await mount("unanswered");
   expect(registered.get("computer_run_command")?.description).toContain(
-    "sudo apt-get",
+    "pip install --user",
   );
 });

@@ -110,6 +110,10 @@ as "$A" 10 '
 sudo -n apt-get --version
 ' && fail "employee A may sudo apt-get"
 pass "an employee may not sudo apt-get"
+# Asked of sudo itself, for every command: whatever else might stop sudo later cannot hide a rule.
+sudo -l -U "xb-$A" >"$T/out" 2>&1
+grep -q 'not allowed to run sudo' "$T/out" || fail "sudo -l -U xb-$A lists something: $(cat "$T/out")"
+pass "sudoers grants an employee nothing"
 runuser -u pwuser -- sudo -n apt-get --version >/dev/null 2>"$T/err" || fail "pwuser may no longer sudo apt-get: $(cat "$T/err")"
 pass "pwuser may still sudo apt-get"
 
@@ -201,6 +205,19 @@ grep -q secret-marker-m1 "$T/out" && fail "B saw A's command text in ps: $(grep 
 kill -s TERM "$hm"
 wait "$hm" 2>/dev/null
 pass "another employee's ps does not show the command's text"
+
+# The command's fd is closed before it runs, and nothing it prints names /dev/fd/3.
+as "$A" 10 '
+ls -l /proc/$$/fd/3
+' && fail "fd 3 is still open in the employee's shell: $(cat "$T/out")"
+pass "fd 3 is closed before the command runs"
+as "$A" 10 '
+echo "zero=$0"
+no-such-command-xb
+'
+grep -q '/dev/fd/3' "$T/out" "$T/err" && fail "the command's \$0 or errors name /dev/fd/3: $(cat "$T/out" "$T/err")"
+grep -q 'no-such-command-xb' "$T/err" || fail "the command's error did not arrive: $(cat "$T/err")"
+pass "\$0 and error prefixes do not name /dev/fd/3"
 
 as "$A" 10 '
 cat /run/s6/container_environment/COMPUTER_TOKEN
@@ -358,6 +375,25 @@ COMPUTER_PER_BOT_USERS=on "$XB" restore 2>"$T/err" || fail "a clean restore exit
 [ ! -e /run/xb-bot/unready ] || fail "a clean restore left the unready mark"
 "$XB" ensure "$B" >/dev/null 2>"$T/err" || fail "ensure after a clean restore was refused: $(cat "$T/err")"
 pass "a clean restore clears the unready mark"
+
+# The switch is read as agent-computer reads it: trimmed, any case.
+touch /run/xb-bot/test-fail-tighten
+COMPUTER_PER_BOT_USERS=' ON ' "$XB" restore 2>"$T/err"
+code=$?
+[ "$code" = 0 ] || fail "with COMPUTER_PER_BOT_USERS=' ON ', restore exited $code"
+[ -e /run/xb-bot/unready ] || fail "with COMPUTER_PER_BOT_USERS=' ON ', a failed tightening did not mark the helper unready"
+"$XB" ensure "$B" >/dev/null 2>"$T/err"
+code=$?
+[ "$code" = 64 ] || fail "with COMPUTER_PER_BOT_USERS=' ON ', ensure while unready exited $code"
+pass "COMPUTER_PER_BOT_USERS=' ON ' counts as on"
+rm -f /run/xb-bot/test-fail-tighten
+
+# Command files a killed helper left behind are removed at start.
+touch /run/xb-bot/cmd.stale1
+COMPUTER_PER_BOT_USERS=on "$XB" restore 2>"$T/err" || fail "restore exited $?"
+[ ! -e /run/xb-bot/cmd.stale1 ] || fail "restore left /run/xb-bot/cmd.stale1"
+[ ! -e /run/xb-bot/unready ] || fail "a clean restore left the unready mark"
+pass "restore removes stale command files"
 
 rm -rf "$T"
 echo "all xb-bot tests passed"

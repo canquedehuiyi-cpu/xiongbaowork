@@ -643,6 +643,9 @@ test("on a paired machine the file and command tools say so; in the deployment's
   for (const workspace of [describe("workspace"), describe()]) {
     expect(workspace.computer_run_command).toContain("bash");
     expect(workspace.computer_run_command).not.toContain("paired machine");
+    // Employees do not sudo (user decision 2026-11-09): new tools go in the workspace.
+    expect(workspace.computer_run_command).not.toMatch(/sudo|apt-get/);
+    expect(workspace.computer_run_command).toContain("pip install --user");
     expect(workspace.computer_list_files).not.toContain("paired machine");
   }
 });
