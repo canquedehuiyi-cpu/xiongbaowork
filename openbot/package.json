@@ -41,6 +41,8 @@
     "@biomejs/biome": "2.5.10",
     "@copilotkit/aimock": "1.43.0",
     "@types/bun": "^1.3.3",
+    "@xterm/addon-serialize": "0.14.0",
+    "@xterm/headless": "6.0.0",
     "roughjs": "^4.6.6",
     "typescript": "^5.9.3",
     "yaml": "^2.9.0"
