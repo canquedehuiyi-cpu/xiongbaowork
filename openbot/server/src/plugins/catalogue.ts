@@ -151,9 +151,15 @@ export type CatalogueEntry = {
  * asserts more than this deployment can stand behind. They are in the history if they are wanted
  * back, and re-adding one is a review of that vendor rather than a revert.
  *
- * `deployment-bearer` therefore has no entry using it. The shape stays because the call path still
- * needs it: a server an administrator added by URL has no catalogue entry at all, and that is the
- * branch it falls into.
+ * The MCP market's first batch (below the Parallel entries) is the same rule applied forwards rather
+ * than an exception to it: nine servers, each vendor-hosted, each answered from this deployment's own
+ * network before it was entered, and each offering only lookups. "Short" was never a number; it is
+ * that every entry is one somebody tried, and those nine were.
+ *
+ * `deployment-bearer` is used by the keyed Parallel entry and by the two Alibaba Cloud Model Studio
+ * entries, each reached with one key the deployment holds for public-web lookups that answer the same
+ * whoever asks. The shape is also the branch a server an administrator added by URL falls into, since
+ * that has no catalogue entry at all.
  *
  * Routines is the first entry here that is not a remote vendor at all — no host to dial, nothing
  * outside this process to trust. It is in the catalogue anyway, on purpose rather than by oversight:
@@ -186,6 +192,210 @@ export const CATALOGUE: readonly CatalogueEntry[] = Object.freeze([
     auth: { kind: "deployment-bearer" },
     writeTools: Object.freeze([]),
     docsUrl: "https://docs.parallel.ai/integrations/mcp/search-mcp",
+  },
+
+  /*
+   * MCP MARKET, FIRST BATCH. Nine vendor-hosted remote servers, every one reviewed on the same
+   * evidence: an anonymous read-only handshake plus `tools/list`, run on 2026-11-09 from the JD Cloud
+   * network this deployment is served from — so "reachable" below is measured, not inferred. Each
+   * entry's host and path are the endpoint the vendor's own documentation publishes, and each server
+   * is run by the vendor itself, not a community wrapper of the vendor's API.
+   *
+   * THE WRITE LISTS ARE EMPTY, AND THAT IS A REVIEWED STATEMENT RATHER THAN AN OMISSION. Every tool
+   * the handshake listed is a lookup — search, fetch, read — and where the server annotated them they
+   * carry `readOnlyHint`. That hint is NOT what makes them reads here (`declaredEffect` in mcp.ts
+   * deliberately ignores it): an advertised name this list declines to call a write is a read by
+   * {@link classifyTool}, and the hint only corroborates that the decision is right. Empty also means
+   * `unlistedAdvertisedTools` in store.ts names nothing for these entries, so the reconciliation it
+   * does for Notion is a person's job here: on the first Refresh tools, compare the live listing
+   * against the names in each entry's comment, and any tool that was not there on 2026-11-09 is
+   * reviewed before it is granted, and added to `writeTools` if it changes anything. Reads only does
+   * not mean ungoverned, either: a grant and the action policy still decide whether a Bot may call
+   * each one.
+   *
+   * None of these opts into owner assembly. `ownerAssembly` is its own reviewed decision, taken for
+   * Parallel alone, and is not implied by a server being anonymous.
+   *
+   * No credential goes into a URL. Every host is a bare https origin, no path carries a key or a
+   * query string, and every resolved URL passes the same static refusals an administrator's typed URL
+   * would (`customUrlRefusal` below and the outbound guard's `checkOutboundUrl`) — asserted per entry
+   * in plugin-catalogue-market.test.ts. A vendor that publishes its optional key as a query
+   * parameter (Exa) is entered keyless for exactly that reason.
+   */
+  {
+    key: "context7",
+    title: "Context7 技术文档",
+    vendor: "Upstash",
+    summary: "按库名检索编程库与框架的最新官方文档和代码示例，免登录。",
+    /*
+     * Upstash's own hosted server, documented in the official upstash/context7 repository. Anonymous
+     * use is rate-limited; an API key raises the quota and would be a separate deployment-bearer
+     * entry, not a flag on this one. Listed on 2026-11-09: `resolve-library-id`, `query-docs`, both
+     * annotated read-only.
+     */
+    host: "https://mcp.context7.com",
+    path: "/mcp",
+    auth: { kind: "none" },
+    writeTools: Object.freeze([]),
+    docsUrl: "https://github.com/upstash/context7",
+  },
+  {
+    key: "deepwiki",
+    title: "DeepWiki 代码仓库问答",
+    vendor: "Cognition（Devin）",
+    summary: "浏览公开 GitHub 仓库的 AI 生成文档并就仓库提问，免登录。",
+    /*
+     * Cognition's hosted server; Devin's documentation states it is free, unauthenticated and covers
+     * public repositories only. Listed on 2026-11-09: `ask_wiki_question`, `read_wiki_contents`,
+     * `read_wiki_structure`. The server carries no annotations at all — these are reads on their
+     * names and on Devin's documentation, which describes all three as reading a repository's wiki.
+     * That makes this the entry where the first-refresh check above matters most.
+     */
+    host: "https://mcp.deepwiki.com",
+    path: "/mcp",
+    auth: { kind: "none" },
+    writeTools: Object.freeze([]),
+    docsUrl: "https://docs.devin.ai/work-with-devin/deepwiki-mcp",
+  },
+  {
+    key: "microsoft-learn",
+    title: "Microsoft Learn 文档",
+    vendor: "Microsoft",
+    summary: "搜索并读取 Microsoft Learn 官方技术文档与代码示例，免登录。",
+    /*
+     * Microsoft's own endpoint, which its documentation states needs no authentication. Listed on
+     * 2026-11-09: `microsoft_docs_search`, `microsoft_code_sample_search`, `microsoft_docs_fetch`,
+     * all annotated read-only.
+     */
+    host: "https://learn.microsoft.com",
+    path: "/api/mcp",
+    auth: { kind: "none" },
+    writeTools: Object.freeze([]),
+    docsUrl: "https://learn.microsoft.com/training/support/mcp",
+  },
+  {
+    key: "aws-knowledge",
+    title: "AWS 知识库",
+    vendor: "AWS",
+    summary: "搜索并读取 AWS 官方文档、区域与服务可用性信息，免登录。",
+    /*
+     * AWS's hosted knowledge server, documented by awslabs; no AWS account is needed. The endpoint
+     * is served at the origin itself, so the path is the root and `resolveServerUrl` dials the bare
+     * host. Listed on 2026-11-09: `aws___read_documentation`, `aws___search_documentation`,
+     * `aws___list_regions`, `aws___get_regional_availability`, `aws___retrieve_skill`, all annotated
+     * read-only. The triple underscore is AWS's own spelling; a tool ref is split at the FIRST `__`
+     * after the `mcp__` prefix (`refFromToolName` in store.ts), and no catalogue key contains one,
+     * so the tool half keeps it intact.
+     */
+    host: "https://knowledge-mcp.global.api.aws",
+    path: "/",
+    auth: { kind: "none" },
+    writeTools: Object.freeze([]),
+    docsUrl: "https://awslabs.github.io/mcp/servers/aws-knowledge-mcp-server",
+  },
+  {
+    key: "cloudflare-docs",
+    title: "Cloudflare 开发者文档",
+    vendor: "Cloudflare",
+    summary: "检索 Cloudflare 官方开发者文档，免登录。",
+    /*
+     * One of the servers Cloudflare runs from its official mcp-server-cloudflare repository, which
+     * lists this host as active. Answered without a credential on 2026-11-09 and listed
+     * `search_cloudflare_documentation` and `migrate_pages_to_workers_guide`, both annotated
+     * read-only. Cloudflare's other servers in the same repository (Workers, DNS and so on) take an
+     * account grant and can write; each is its own entry if wanted, not a widening of this one.
+     */
+    host: "https://docs.mcp.cloudflare.com",
+    path: "/mcp",
+    auth: { kind: "none" },
+    writeTools: Object.freeze([]),
+    docsUrl: "https://github.com/cloudflare/mcp-server-cloudflare",
+  },
+  {
+    key: "exa",
+    title: "Exa 网页搜索",
+    vendor: "Exa",
+    summary: "面向 AI 的公开网页搜索与网页正文抓取。免 Key 档，有限速。",
+    /*
+     * Exa's hosted server on its keyless tier. Exa accepts an optional key, documented as an
+     * `exaApiKey` query parameter or a header; the query form is a credential in a URL, which this
+     * catalogue does not pin, so the entry is keyless. Listed on 2026-11-09: `web_search_exa`,
+     * `web_fetch_exa`, both annotated read-only. Exa also publishes an agent tool for keyed callers;
+     * if one ever appears on this keyless endpoint it is reviewed, not inherited.
+     */
+    host: "https://mcp.exa.ai",
+    path: "/mcp",
+    auth: { kind: "none" },
+    writeTools: Object.freeze([]),
+    docsUrl: "https://exa.ai/docs",
+  },
+  {
+    key: "firecrawl-keyless",
+    title: "Firecrawl 网页抓取（免 Key）",
+    vendor: "Firecrawl",
+    summary: "抓取与解析公开网页，并做网页搜索。免 Key 档，有限速。",
+    /*
+     * Firecrawl's hosted v2 server on its documented keyless tier. The legacy form that put the key
+     * in the path is deliberately not used. Listed on 2026-11-09: `firecrawl_scrape`,
+     * `firecrawl_search`, `firecrawl_parse`, all annotated read-only.
+     *
+     * The keyed tier offers more, and some of it is not a read: Firecrawl documents an interactive
+     * browser tool (clicking, filling forms) and an agent tool there. Neither is advertised here, so
+     * neither can be called; if either appears on a refresh it belongs in `writeTools` before it is
+     * granted, and a keyed Firecrawl is a separate entry.
+     */
+    host: "https://mcp.firecrawl.dev",
+    path: "/v2/mcp",
+    auth: { kind: "none" },
+    writeTools: Object.freeze([]),
+    docsUrl: "https://docs.firecrawl.dev/mcp-server/keyless",
+  },
+  {
+    key: "bailian-websearch",
+    title: "阿里云百炼联网搜索",
+    vendor: "阿里云（百炼）",
+    summary:
+      "百炼官方托管的联网搜索，查询新闻、百科、天气等实时信息。按量计费。",
+    /*
+     * Alibaba Cloud Model Studio's own hosted server, on its mainland DashScope host. Reached with
+     * the deployment's DashScope API key as `Authorization: Bearer`, which is what
+     * `deployment-bearer` sends: one key an administrator holds for everybody, billed per call to
+     * the deployment's Model Studio account. That is acceptable here because a web search answers
+     * from the public web, the same for whoever asks; nothing per-person sits behind the key.
+     *
+     * Measured on 2026-11-09 without a key: reachable, and refused with 401, so the tool listing was
+     * not seen. The handshake is the first Refresh tools after the key is set, and that listing is
+     * reviewed then. Model Studio's documentation describes a single web-search tool; anything else
+     * it lists that changes something goes into `writeTools` before it is granted.
+     */
+    host: "https://dashscope.aliyuncs.com",
+    path: "/api/v1/mcps/WebSearch/mcp",
+    auth: { kind: "deployment-bearer" },
+    writeTools: Object.freeze([]),
+    docsUrl: "https://help.aliyun.com/zh/model-studio/mcp-external-calls",
+  },
+  {
+    key: "bailian-enhanced-search",
+    title: "阿里云百炼增强搜索",
+    vendor: "阿里云（百炼）",
+    summary: "百炼托管的增强联网搜索，可能仅限特定套餐。按量计费。",
+    /*
+     * The same vendor, host and credential shape as `bailian-websearch`, on the path Model Studio's
+     * Token Plan tool documentation publishes. Its own entry rather than a variant because it is a
+     * different service at Alibaba: it is documented under Token Plan, and whether an ordinary
+     * DashScope key is entitled to it was not established — a key without the plan may be refused
+     * by Alibaba even though the server row and the key look correct here. Each server row holds
+     * its own credential pointer, so the key is entered for this entry separately even when it is
+     * the same key.
+     *
+     * Measured on 2026-11-09 without a key: reachable, and refused with 401; tools were not listed,
+     * so the first Refresh tools is the review of what it offers.
+     */
+    host: "https://dashscope.aliyuncs.com",
+    path: "/api/v1/mcps/EnhancedSearch/mcp",
+    auth: { kind: "deployment-bearer" },
+    writeTools: Object.freeze([]),
+    docsUrl: "https://help.aliyun.com/zh/model-studio/token-plan-harness-tool",
   },
 
   {
