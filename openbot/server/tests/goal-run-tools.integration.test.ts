@@ -64,7 +64,6 @@ const GOAL_RUN: AuditInitiator = {
 const CONVERSATION: AuditInitiator = { kind: "person" };
 
 const pluginStore = createPluginStore({
-  brokerProvider: "composio",
   database,
   auditStore: createAuditStore(database),
   credentials: {} as never,

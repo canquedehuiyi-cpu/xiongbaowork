@@ -4,7 +4,7 @@ import { eq, inArray } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import { createAgentRoutes } from "../src/agents/routes";
-import type { AppVariables } from "../src/app-variables";
+import type { AppVariables } from "../src/auth/guards";
 import { createDatabase } from "../src/db/client";
 import { agentProfiles, agents, users } from "../src/db/schema";
 import { runAsTenant } from "../src/tenant/context";

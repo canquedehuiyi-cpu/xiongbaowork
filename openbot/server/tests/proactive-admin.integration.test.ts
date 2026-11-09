@@ -97,7 +97,6 @@ const FAR = new Date("2100-01-01T00:00:00Z");
 const store = createProactiveStore(database);
 const queue = createWorkQueue(database);
 const plugins = createPluginStore({
-  brokerProvider: "composio",
   database,
   auditStore,
   credentials: createCredentialStore(database),

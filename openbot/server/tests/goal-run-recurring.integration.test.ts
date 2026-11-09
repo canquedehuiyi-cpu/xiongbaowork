@@ -71,7 +71,6 @@ const CONVERSATION = {
 } as const;
 
 const pluginStore = createPluginStore({
-  brokerProvider: "composio",
   database,
   auditStore: createAuditStore(database),
   credentials: {} as never,

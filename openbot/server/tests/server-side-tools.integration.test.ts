@@ -51,7 +51,6 @@ const asAdmin = <T>(fn: () => Promise<T>) => runAsTenant(admin, fn);
 let policy: ActionPolicy = { mode: "enforce", deny: [], allow: ["true"] };
 
 const store = createPluginStore({
-  brokerProvider: "composio",
   database,
   auditStore: createAuditStore(database),
   credentials: { readSecret: async () => null },

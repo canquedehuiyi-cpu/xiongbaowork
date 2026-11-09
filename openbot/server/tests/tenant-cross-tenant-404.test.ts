@@ -2,7 +2,7 @@ import { afterAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
-import type { AppVariables } from "../src/app-variables";
+import type { AppVariables } from "../src/auth/guards";
 import { createDatabase } from "../src/db/client";
 import { tasks } from "../src/db/schema";
 import { createTaskProjector } from "../src/tasks/projector";

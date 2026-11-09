@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
 import { createAgentProfileStore } from "../src/agents/profile-store";
-import type { AppVariables } from "../src/app-variables";
+import type { AppVariables } from "../src/auth/guards";
 import {
   createChannelRoutes,
   createChannelStore,

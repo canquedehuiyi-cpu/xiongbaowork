@@ -494,7 +494,6 @@ const fixtures = (() => {
  * ---------------------------------------------------------------------------------------------- */
 
 const plugins = createPluginStore({
-  brokerProvider: "composio",
   database,
   auditStore: createAuditStore(database),
   credentials: createCredentialStore(database),

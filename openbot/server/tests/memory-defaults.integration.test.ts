@@ -42,7 +42,6 @@ const plugins = createPluginStore({
   encryptionKey: Buffer.alloc(32, 7).toString("base64"),
   // This suite's apps are `composio://` rows with `provenance: "composio"`, and the store has no
   // default for this: it dispatches the toolkit read on it, so the fixtures name their own broker.
-  brokerProvider: "composio",
   policy: () => ({ mode: "enforce", deny: [], allow: ["true"] }),
   callVendor: async () => ({ text: "[]", isError: false }),
 });

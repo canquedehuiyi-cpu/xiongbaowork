@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import type { MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import type { BotAccessCheck } from "../src/agents/profile-policy";
-import type { AppVariables } from "../src/app-variables";
+import type { AppVariables } from "../src/auth/guards";
 import { createComponentRoutes } from "../src/components/routes";
 import type { ComponentStore } from "../src/components/store";
 

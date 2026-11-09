@@ -47,7 +47,6 @@ const store = withPersonalDefaults(
     auditStore: createAuditStore(database),
     credentials: createCredentialStore(database),
     encryptionKey: Buffer.alloc(32, 7).toString("base64"),
-    brokerProvider: "composio",
     policy: () => ({ mode: "enforce", deny: [], allow: ["true"] }),
   }),
   deps,

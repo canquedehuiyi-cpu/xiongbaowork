@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 import { and, eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
-import type { AppVariables } from "../src/app-variables";
+import type { AppVariables } from "../src/auth/guards";
 import {
   createApprovalService,
   HANDLED_BY_PERSON,

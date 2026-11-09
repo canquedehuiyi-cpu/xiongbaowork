@@ -51,7 +51,6 @@ const ALL = [ASSISTANT, PICKED];
 
 const auditStore = createAuditStore(database);
 const pluginStore = createPluginStore({
-  brokerProvider: "composio",
   database,
   auditStore,
   credentials: createCredentialStore(database),
