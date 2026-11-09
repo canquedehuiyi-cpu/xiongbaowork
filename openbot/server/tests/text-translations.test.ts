@@ -159,6 +159,60 @@ test("the plugins read translates exactly the texts the caller can see", async (
   );
 });
 
+test("an administrator can look up live texts no table holds; nobody else can, and only a few at a time", async () => {
+  const live = text("Manage issues and pull requests");
+  const as = (role: "admin" | "user") => {
+    const requireUser: MiddlewareHandler<{ Variables: AppVariables }> = async (
+      context,
+      next,
+    ) => {
+      context.set("actor", {
+        id: `${suite}-${role}`,
+        email: `${role}@example.test`,
+        role,
+      });
+      await runAsTenant(`${suite}-${role}`, () => next());
+    };
+    return createTranslationRoutes(
+      framed,
+      {
+        listServers: async () => [],
+        listSkills: async () => [],
+      } as unknown as Pick<PluginStore, "listServers" | "listSkills">,
+      requireUser,
+    );
+  };
+  const lookup = (role: "admin" | "user", texts: unknown) =>
+    as(role).request("http://openbot.test/lookup", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ texts }),
+    });
+
+  expect((await lookup("user", [live])).status).toBe(403);
+  expect(
+    (
+      await lookup(
+        "admin",
+        Array.from({ length: 61 }, (_, i) => `t${i}`),
+      )
+    ).status,
+  ).toBe(400);
+
+  const first = await lookup("admin", [live]);
+  expect(first.status).toBe(200);
+  expect(((await first.json()) as { zh: object }).zh).toEqual({});
+  await translatePending(
+    store,
+    async (texts) => texts.map((source) => `中文：${source}`),
+    { batch: 100 },
+  );
+  const second = await lookup("admin", [live]);
+  expect(((await second.json()) as { zh: Record<string, string> }).zh).toEqual({
+    [live]: `中文：${live}`,
+  });
+});
+
 afterAll(async () => {
   // The catalogue's texts were queued by the plugins read too; leave the cache as it was found.
   for (const entry of CATALOGUE) {

@@ -4,6 +4,7 @@ import { SkillAgents } from "@/components/skills/skill-agents";
 import { SkillFields } from "@/components/skills/skill-fields";
 import { saveSkillMutationOptions } from "@/lib/plugins/mutations";
 import { pluginsPageQueryOptions } from "@/lib/plugins/queries";
+import { TranslatedInstructions } from "./translated-instructions";
 
 /**
  * Editing a skill, in the same panel that writes one.
@@ -69,6 +70,8 @@ export function EditSkill({ slug }: { slug: string }) {
           时生效。已经拿到它的员工会继续保留。
         </p>
       </header>
+
+      <TranslatedInstructions text={skill.instructions} />
 
       <SkillFields
         defaultValues={{

@@ -9,6 +9,7 @@ import {
   PageSection,
   PageShell,
 } from "@/components/layout/page-shell";
+import { TranslatedInstructions } from "@/components/skills/translated-instructions";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -375,6 +376,7 @@ function RouteComponent() {
                   placeholder="用到这个技能时，员工应该做什么。"
                   value={draft.instructions}
                 />
+                <TranslatedInstructions text={draft.instructions} />
               </Field>
             </FieldGroup>
           </DialogBody>

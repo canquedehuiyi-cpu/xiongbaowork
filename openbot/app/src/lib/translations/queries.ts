@@ -18,6 +18,7 @@ import { client } from "@/lib/client";
  */
 export const translationKeys = {
   plugins: ["translations", "plugins"] as const,
+  lookup: ["translations", "lookup"] as const,
 };
 
 export function pluginTranslationsQueryOptions() {
@@ -47,6 +48,32 @@ export function useZh(): (text: string) => string {
     { ...pluginTranslationsQueryOptions(), enabled: queryClient !== undefined },
     queryClient ?? DETACHED,
   );
+  const map = translations.data;
+  return useCallback((text: string) => map?.[text] ?? text, [map]);
+}
+
+/**
+ * Chinese for texts no table holds, looked up as a screen shows them (`POST
+ * /api/translations/lookup`, administrators only): the Composio app directory, read live from
+ * Composio. The first look queues what is missing; the next read, a minute later, has it.
+ */
+export function useLookupZh(
+  texts: readonly string[],
+): (text: string) => string {
+  const wanted = [...new Set(texts.filter((text) => text.trim()))].sort();
+  const translations = useQuery({
+    queryKey: [...translationKeys.lookup, wanted] as const,
+    queryFn: () =>
+      client<Record<string, string>>("/api/translations/lookup", "zh", {
+        method: "POST",
+        body: { texts: wanted.slice(0, 60) },
+        fallback: "读不到中文翻译。",
+      }),
+    enabled: wanted.length > 0,
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+    retry: false,
+  });
   const map = translations.data;
   return useCallback((text: string) => map?.[text] ?? text, [map]);
 }
