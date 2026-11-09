@@ -808,6 +808,7 @@ describe("reviewed read lists for Notion and the built-in apps", () => {
         "get_file_metadata",
         "read_file_content",
       ],
+      [],
     ],
     [
       "baidu-netdisk",
@@ -822,23 +823,30 @@ describe("reviewed read lists for Notion and the built-in apps", () => {
         "read_file_content",
         "get_account_info",
       ],
+      [],
     ],
     [
       "routines",
       async () => (await routineTools()).map((tool) => tool.name),
-      ["list_routines", "list_triggers"],
+      ["list_routines"],
+      // 只读，但列出的 webhook 地址和邮件入站地址能触发任务，作用接近凭据，所以故意不列进读名单：
+      // 聊天里按写处理（先问人），check-in 读不到。
+      ["list_triggers"],
     ],
   ] as const)(
-    "%s names its reads, and every tool it advertises is on one list or the other",
-    async (key, advertised, reads) => {
+    "%s names its reads, and every tool it advertises is on one list or the other, or deliberately on neither",
+    async (key, advertised, reads, neither) => {
       const entry = catalogueEntry(key);
       expect(entry?.readTools).toEqual([...reads]);
       const silent = { effect: null, destructive: false, unclassified: false };
       for (const name of await advertised()) {
         const read = entry?.readTools?.includes(name) ?? false;
-        expect(read || (entry?.writeTools.includes(name) ?? false)).toBe(true);
+        const unlisted = (neither as readonly string[]).includes(name);
+        expect(
+          read || unlisted || (entry?.writeTools.includes(name) ?? false),
+        ).toBe(true);
         expect(read && entry?.writeTools.includes(name)).toBe(false);
-        // 名单里的是读，聊天和 check-in 都认；名单外的（写名单上的）两边都是写。
+        // 名单里的是读，聊天和 check-in 都认；名单外的（写名单上的、故意两边都不列的）两边都是写。
         expect(classifyTool(entry, name, true, null)).toBe(
           read ? "read" : "write",
         );
@@ -875,5 +883,19 @@ describe("the goal tools Routines will carry are writes", () => {
       expect(classifyTool(routines, name, true, "read")).toBe("write");
       expect(checkInRead(routines, name, silent)).toBe(false);
     }
+  });
+});
+
+/*
+ * `list_triggers` 只读，但它列出的 webhook 地址和邮件入站地址能触发任务，作用接近凭据，所以不让
+ * 无人值守的 check-in 读到：它不在 Routines 的读名单上。代价是聊天里它按写处理，要先问人。
+ */
+describe("list_triggers is kept from a check-in", () => {
+  test("it is off Routines' read list, so it is not a check-in read and chat asks first", () => {
+    const routines = catalogueEntry("routines");
+    expect(routines?.readTools).not.toContain("list_triggers");
+    const silent = { effect: null, destructive: false, unclassified: false };
+    expect(checkInRead(routines, "list_triggers", silent)).toBe(false);
+    expect(classifyTool(routines, "list_triggers", true, null)).toBe("write");
   });
 });

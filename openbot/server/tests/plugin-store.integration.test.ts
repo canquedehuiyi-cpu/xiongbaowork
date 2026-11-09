@@ -50,6 +50,7 @@ import {
 } from "../src/plugins/access";
 import { listTools as listBaiduNetdiskTools } from "../src/plugins/baidu-netdisk-rest";
 import type { BrokerConnection, ComposioBroker } from "../src/plugins/broker";
+import { listTools as listRoutineTools } from "../src/plugins/builtin-routines";
 import type { CatalogueEntry } from "../src/plugins/catalogue";
 import { catalogueEntry } from "../src/plugins/catalogue";
 import {
@@ -6266,6 +6267,80 @@ test("a check-in reads Google Drive and Baidu Netdisk again, through their revie
       ).toEqual([]);
     } finally {
       await database.delete(mcpServers).where(eq(mcpServers.id, netdiskRow));
+    }
+  }));
+
+/*
+ * `list_triggers` 列出的 webhook 地址和邮件入站地址能触发任务，所以 check-in 读不到它：它不在
+ * Routines 的读名单上，不出现在 check-in 的清单里，store 的门也拒绝它。同一传输上的 `list_routines`
+ * 照旧能读。Routines 行带本套件后缀，`catalogueKey` 指向 `routines`，工具按真实刷新的样子存下。
+ */
+test("list_triggers is not available to a check-in, though list_routines is", () =>
+  asPlatform(async () => {
+    const gateAsked: { toolRef: string; effect: string }[] = [];
+    const { store, database, auditStore } = await freshStore({
+      approvalGate: async (candidate) => {
+        gateAsked.push({
+          toolRef: candidate.toolRef,
+          effect: candidate.effect,
+        });
+        throw new ApprovalRefusedError(TOOL_DISABLED);
+      },
+    });
+    await seedComposioGmail(database, store);
+    const routinesRow = `check-in-routines-${suite}`;
+    await database.insert(mcpServers).values({
+      id: routinesRow,
+      catalogueKey: "routines",
+      title: "Routines",
+      vendor: "OpenBot",
+      url: "builtin://routines/",
+      provenance: "first-party",
+    });
+    try {
+      await database
+        .insert(mcpTools)
+        .values(
+          storableTools(
+            routinesRow,
+            await listRoutineTools(),
+            undefined,
+            catalogueEntry("routines"),
+          ),
+        );
+      for (const granted of [
+        "routines/list_routines",
+        "routines/list_triggers",
+      ])
+        await store.grant("mcp", granted, "bot_helper", "admin@example.com");
+      const runId = `list-triggers-${suite}`;
+
+      expect(await checkInToolRefs(store, runId)).toEqual(
+        ["gmail/GMAIL_FETCH_EMAILS", "routines/list_routines"].sort(),
+      );
+      await expectCheckInRefused(
+        store,
+        auditStore,
+        "routines/list_triggers",
+        runId,
+      );
+      expect(gateAsked).toEqual([]);
+
+      // 同一传输上的 list_routines 能过 check-in 的门，接着才问审批门。
+      await expect(
+        store.callTool({
+          ref: "routines/list_routines",
+          args: {},
+          botId: "bot_helper",
+          actorId: "user_asker",
+          initiator: proactiveInitiator(runId),
+        }),
+      ).rejects.toThrow(TOOL_DISABLED);
+      expect(gateAsked).toEqual([
+        { toolRef: "routines/list_routines", effect: "read" },
+      ]);
+    } finally {
+      await database.delete(mcpServers).where(eq(mcpServers.id, routinesRow));
     }
   }));
 
