@@ -12124,7 +12124,7 @@ mod tests {
     fn the_main_window_built_in_setup_keeps_every_property_the_configured_window_had() {
         // The entry as it stood while Tauri created the window from it.
         let pinned = serde_json::json!({
-            "title": "OpenBot",
+            "title": "熊宝",
             "width": 1000,
             "height": 800,
             "minWidth": 720,
@@ -12159,7 +12159,7 @@ mod tests {
             .iter()
             .find(|window| window.label == "main")
             .unwrap();
-        assert_eq!(built.title, "OpenBot");
+        assert_eq!(built.title, "熊宝");
         assert_eq!((built.width, built.height), (1000.0, 800.0));
         assert_eq!(
             (built.min_width, built.min_height),
