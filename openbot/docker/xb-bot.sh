@@ -342,12 +342,14 @@ restore_exit() {
       else
         # Not ready and unable to say so: the one case that still stops the container.
         warn "写入 $UNREADY 失败"
+        warn "restore 失败，耗时 $(($(date +%s) - started)) 秒"
         exit 1
       fi
     else
       warn "COMPUTER_PER_BOT_USERS 未开启，以上失败只告警"
     fi
   fi
+  warn "restore 完成，耗时 $(($(date +%s) - started)) 秒"
   exit 0
 }
 
@@ -363,6 +365,10 @@ cmd_restore() {
     *) switch=off ;;
   esac
   reasons=
+  # The API waits for this (api -> computer -> computer-users), and the first start on an old volume
+  # walks all of it: say when it starts and how long it took, so a slow start is not taken for a hang.
+  started=$(date +%s)
+  warn "restore 开始（开关：$switch）"
   trap restore_exit EXIT
 
   # Employees must never read the container's environment (COMPUTER_TOKEN, database URLs).

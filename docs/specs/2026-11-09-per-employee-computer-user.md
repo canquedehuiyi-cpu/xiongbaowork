@@ -1,7 +1,7 @@
 # 规格：每个数字员工一台独立的电脑（单容器内按员工分系统用户）
 
 - 日期：2026-11-09
-- 状态：待用户审阅
+- 状态：用户已于 2026-11-09 同意
 - 用户决定：「每个数字员工有自己独立的电脑」；隔离方式选「每员工独立系统用户」（2026-11-09）。
 
 ## 1. 背景
@@ -23,12 +23,12 @@
 **目标**
 1. 在单容器里，每个员工的命令以它自己的 Linux 用户运行。员工之间读不到对方的工作目录、临时目录和浏览器档案。
 2. 每个员工的文件工具只能看到自己的目录。
-3. 已有数据可迁移：现有 `/workspace` 下的文件留给原来的默认员工（`COMPUTER_BOT_ID`，默认值 `shared`）。新员工从空目录开始。
+3. 已有数据不丢：现有 `/workspace` 根目录下的文件留给默认员工（不带员工请求头的调用），真实员工看不到，从自己的空目录开始。确实需要时，管理员可以在容器里以 root 把文件手工搬到 `/workspace/bots/<botKey>/` 并 chown 给对应的员工用户（步骤见 HUMAN-STEPS 第 17 节）。京东云目前是设备模式，云端 `/workspace` 通常是空的。
 4. 配了 supervisor 的形态（每员工一个容器）行为不变。
 
 **非目标**
 - 不防内核漏洞。需要更强隔离的部署，仍应使用 supervisor 加 gVisor。
-- 员工不能 sudo 安装系统包（用户决定，2026-11-09：经 sudo 跑包管理器就等于拿到 root，员工之间的隔离会被打穿）。员工可以在自己目录里用 `npm install`（不带 `-g`）、`bun add` 安装用户级工具（镜像里没有 python3，所以不提供 Python 的安装方式）；常用系统包预装进镜像。默认员工（pwuser）保留原有的包管理 sudo。
+- 员工不能 sudo 安装系统包（用户决定，2026-11-09：经 sudo 跑包管理器就等于拿到 root，员工之间的隔离会被打穿）。员工可以在自己目录里用 `npm install`（不带 `-g`）、`bun add`，或 `python3 -m venv .venv` 后用 `.venv/bin/pip install` 安装用户级工具；常用系统包（git、jq、python3、python3-venv）预装进镜像。默认员工（pwuser）保留原有的包管理 sudo。
 - 设备模式（`TENANT_RUNTIME=device`，命令跑在主人自己的电脑上）不在本规格内。另起一项：设备端给每个员工一个独立工作文件夹。
 - 不做网络隔离：各员工共用出站代理和出站策略。
 
@@ -115,9 +115,14 @@ pwuser ALL=(root) NOPASSWD: /usr/local/sbin/xb-bot ensure *, /usr/local/sbin/xb-
 | 风险 | 缓解 |
 |---|---|
 | sudoers 放行的辅助程序本身成为提权入口 | 参数严格白名单；命令经 stdin 交给辅助程序、再经 fd 交给员工的 bash，不进任何 argv；辅助程序只经 s6 with-contenv 读取 `COMPUTER_PER_BOT_USERS`，其余环境变量一律不读（员工命令的环境由它自己 `env -i` 设定）；锁文件在 root 专属目录；加 shellcheck；专项安全评审 |
-| 员工经包管理 sudo 提权到 root | 员工不能 sudo（sudoers 不放行 `%xbbots`）；用户级工具装在员工自己目录里，常用系统包预装进镜像。默认员工（pwuser）仍保留包管理 sudo，它只服务不带员工请求头的调用 |
+| 员工经包管理 sudo 提权到 root | 员工不能 sudo（sudoers 不放行 `%xbbots`）；用户级工具装在员工自己目录里，常用系统包（git、jq、python3、python3-venv）预装进镜像。默认员工（pwuser）仍保留包管理 sudo，它只服务不带员工请求头的调用 |
 | 平台不允许 setuid（`no-new-privileges`） | 开关打开时 `/health` 明确报不就绪；交付文档说明二者互斥 |
-| 旧数据归属 | 默认员工继续使用 `/workspace` 根目录；不搬动、不改属主 |
+| 旧数据归属 | 默认员工继续使用 `/workspace` 根目录；不自动搬动、不改属主，真实员工看不到。需要时由管理员以 root 手工搬到员工目录并 chown（HUMAN-STEPS 第 17 节） |
+| 员工留下常驻进程，在 computer 服务重启时抢占 4100 端口或读启动参数里的 `COMPUTER_TOKEN` | computer 的 run 脚本在降权启动 bun 之前，以 root 结束所有员工进程（uid 20000–59999）。`COMPUTER_TOKEN` 只在 `s6-setuidgid`、`env` 的 argv 里出现到 `env` 执行 exec 为止（微秒级），那时已没有员工进程；暂不改为经文件传递 |
+| 环境变量值在 `ps` 中可见 | 辅助程序把员工命令的 `NAME=VALUE` 放在 root 侧 `timeout`、`runuser` 的 argv 里，其他员工能用 `ps` 看到。目前每个员工拿到的值相同（白名单变量、去掉凭据的代理、全局的 `COMPUTER_SHELL_ENV`），看到的都是自己已有的值。以后若加入按员工区分的变量，需要改为经 fd 传递。员工命令子进程自己的参数同样可见（容器内没有 hidepid），密钥不应写在命令行参数里 |
+| Xvfb 在 headed 模式下以 `-ac` 启动 | 任何员工都能连上虚拟显示器，看到并操控所有员工的浏览器。默认 headless 不受影响；`COMPUTER_BROWSER_MODE=headed` 与本功能同时使用时存在这一风险 |
+| 隔离单位是员工，不是使用者 | 多个租户共用的公共员工（例如 `general-assistant`）仍共用同一个用户和目录，租户之间能看到彼此在这个员工里留下的文件。改动前就是全部共享，不算回归 |
+| login.defs 全局改动 | 镜像把 `SYS_UID_MIN/MAX`、`SYS_GID_MIN/MAX` 设为 20000–59999。之后在镜像里（或运行时 pwuser 经 sudo）安装会建系统用户的包，会占用员工的 uid 段，可能让 restore 按映射重建某个员工失败（只告警）。Dockerfile 里这一行之后不要再安装会建系统用户的包 |
 
 ## 6. 分包（每 PR ≤ 8 个文件）
 

@@ -188,8 +188,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # WHO THIS IS FOR. Only commands that run as pwuser: the default employee, with no employee header,
 # and every Bot when COMPUTER_PER_BOT_USERS is off. With the switch on (the default below) each real
 # employee runs as its own user and may not sudo at all (user decision, 2026-11-09). Bots are told
-# to use the tools already here and to install new ones in their own workspace (npm install without
-# -g, bun add), never with sudo; system packages a task commonly needs belong in this image.
+# to use the tools already here and to install new ones in their own workspace first (npm install
+# without -g, bun add, a python3 venv), and not to try to escalate when sudo is refused; system
+# packages a task commonly needs belong in this image (git, jq, python3 below).
 #
 # THE PACKAGE MANAGERS, NOT ALL. This was `NOPASSWD: ALL`, and the comment below it explained what
 # that cost: a Bot could become root inside its container. It then named the two conditions that make
@@ -226,13 +227,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends sudo \
 #
 # EMPLOYEES DO NOT SUDO. Not even the package managers pwuser keeps above: apt-get or dpkg as root is
 # root, and root reads every other employee's directory, the browser profiles and the container's
-# environment. An employee installs user-level tools in its own directory (npm install, bun add);
-# system packages it needs belong in this image.
+# environment. An employee installs user-level tools in its own directory (npm install, bun add,
+# `python3 -m venv .venv` then `.venv/bin/pip install`); system packages it needs belong in this
+# image, hence git, jq, python3 and python3-venv here.
 #
 # `acl` for the default ACLs that let the file tools and the employee's commands write each other's
-# files; `procps` for `ps`/`pgrep`, which the helper's tests use.
+# files; `procps` for `ps`/`pgrep`.
 COPY docker/xb-bot.sh /usr/local/sbin/xb-bot
-RUN apt-get update && apt-get install -y --no-install-recommends acl procps \
+RUN apt-get update && apt-get install -y --no-install-recommends acl procps git jq python3 python3-venv \
   && rm -rf /var/lib/apt/lists/* \
   && chown root:root /usr/local/sbin/xb-bot \
   && chmod 0755 /usr/local/sbin/xb-bot \
