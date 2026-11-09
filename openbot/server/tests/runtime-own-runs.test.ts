@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import type { RunAgentInput } from "@ag-ui/client";
+import { inArray } from "drizzle-orm";
 import { type ChatCompletionRequest, LLMock } from "@copilotkit/aimock";
 import { SUBAGENT_TOOL } from "@openbot/shared/subagent";
 import { RUNTIME_STATE_TOOLS } from "@openbot/toolkit/copilotkit/agents";
@@ -19,6 +20,11 @@ import {
   type RegisteredAgent,
   registeredAgentFromRow,
 } from "../src/copilot";
+import { createDatabase } from "../src/db/client";
+import { threadRuns, threads } from "../src/db/schema";
+import { runAsTenant } from "../src/tenant/context";
+import { PostgresAgentRunner } from "../src/threads/postgres-runner";
+import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
 
 /**
@@ -50,6 +56,16 @@ const REMOTE = "remote-planner";
 const HARNESS = "harness-planner";
 const MANAGED_AGENT_TOKEN = "deployment-token";
 
+/**
+ * M3: the fork keeps a person's threads in its own database and refuses to mount the runtime without
+ * that runner (`localRunnerOrRefused` in copilot.ts), so each run here goes through it and is read
+ * back from its own stream. On that runner the runtime names no conversation (its naming belongs to
+ * the Intelligence runtime, `handlers/intelligence/thread-names`), so there is no title run to hold
+ * tools, and the three cases about it are not here.
+ */
+const database = createDatabase(testDatabaseUrl(), TEST_POOL);
+/** The threads the runs below started, cleared once each run is stored. */
+const started: string[] = [];
 const realFetch = globalThis.fetch;
 let environmentBefore: Record<string, string | undefined> = {};
 
@@ -228,14 +244,6 @@ const resolver = createActorAgentResolver({
 });
 let runtime: ReturnType<typeof mountCopilotRuntime>;
 
-async function until(done: () => boolean, what: string) {
-  const deadline = Date.now() + 15_000;
-  while (!done()) {
-    if (Date.now() > deadline) throw new Error(`Timed out waiting for ${what}`);
-    await Bun.sleep(10);
-  }
-}
-
 /** A person's message to a Bot in a new conversation, through the runtime's run route. */
 async function personAsks(
   botId: string,
@@ -260,15 +268,19 @@ async function personAsks(
     }),
   );
   expect(response.status).toBe(200);
-  await until(
-    () =>
-      delivered.some(
-        (event) => event.runId === runId && event.type === "RUN_FINISHED",
-      ),
-    "the person's run to finish",
-  );
-  // The runtime names a new conversation beside the person's run, so it is waited for too.
-  await until(() => named.has(threadId), "the conversation to be named");
+  started.push(threadId);
+  // The run's own stream, to its end.
+  const streamed = (await response.text())
+    .split("\n")
+    .filter((line) => line.startsWith("data: "))
+    .map(
+      (line) =>
+        JSON.parse(line.slice("data: ".length)) as (typeof delivered)[number],
+    );
+  if (!streamed.some((event) => event.type === "RUN_FINISHED"))
+    throw new Error(
+      `the person's run did not finish: ${JSON.stringify(streamed.map(({ type }) => type))}`,
+    );
   return { threadId, runId };
 }
 
@@ -468,6 +480,7 @@ beforeAll(async () => {
     resolver,
     async () => person,
     async () => ({ id: person.id, role: "user" }),
+    { localRunner: new PostgresAgentRunner(database) },
   );
 });
 
@@ -493,62 +506,29 @@ afterAll(async () => {
     if (value === undefined) delete process.env[name];
     else process.env[name] = value;
   }
+  await runAsTenant("platform", async () => {
+    // Each run is stored after its stream ends: cleared only once it is, or the store trips on it.
+    const deadline = Date.now() + 10_000;
+    while (
+      started.length > 0 &&
+      (
+        await database
+          .selectDistinct({ threadId: threadRuns.threadId })
+          .from(threadRuns)
+          .where(inArray(threadRuns.threadId, started))
+      ).length < started.length &&
+      Date.now() < deadline
+    )
+      await Bun.sleep(10);
+    if (started.length > 0)
+      await database.delete(threads).where(inArray(threads.id, started));
+  });
+  await database.$client.close();
 });
 
-test("naming a new conversation holds none of a built-in Bot's tools, so it starts no subagent even when the model asks for one, and the conversation is still named", async () => {
-  const { threadId } = await personAsks(BUILT_IN, "Plan the team offsite.");
-
-  expect(subagentsStarted).toEqual([]);
-  expect(
-    modelRequests.filter((request) => isSubagent(request.messages)),
-  ).toEqual([]);
-  const naming = modelRequests.filter((request) => isNaming(request.messages));
-  expect(naming.length).toBeGreaterThan(0);
-  // Only the two state tools CopilotKit's own agent adds to every run: nothing of the Bot's.
-  for (const request of naming)
-    expect(
-      offered(request).filter(
-        (name) => !(RUNTIME_STATE_TOOLS as readonly string[]).includes(name),
-      ),
-    ).toEqual([]);
-  expect(named.get(threadId)).toBe("Offsite plan");
-});
-
-test("naming a new conversation never runs somebody's own agent: no title run reaches it, and the conversation is named on the deployment's model", async () => {
-  const { threadId } = await personAsks(REMOTE, "Plan the team offsite.");
-
-  // The person's one run, and nothing else: the runtime's title prompt never reaches the endpoint.
-  expect(remoteRequests.filter((input) => isNaming(input.messages))).toEqual(
-    [],
-  );
-  expect(remoteRequests).toHaveLength(1);
-  // Named on the deployment's model, holding none of the Bot's tools, so it starts no subagent.
-  const naming = modelRequests.filter((request) => isNaming(request.messages));
-  expect(naming.length).toBeGreaterThan(0);
-  for (const request of naming)
-    expect(
-      offered(request).filter(
-        (name) => !(RUNTIME_STATE_TOOLS as readonly string[]).includes(name),
-      ),
-    ).toEqual([]);
-  expect(subagentsStarted).toEqual([]);
-  expect(named.get(threadId)).toBe("Offsite plan");
-});
-
-test("a harness this deployment runs still names its own conversations, holding none of its tools and no signed run", async () => {
-  namingAsks = false;
-  const { threadId } = await personAsks(HARNESS, "Plan the team offsite.");
-
-  const naming = remoteRequests.filter((input) => isNaming(input.messages));
-  expect(naming).toHaveLength(1);
-  for (const input of naming) {
-    expect(input.tools.map((tool) => tool.name)).toEqual([]);
-    // Without the deployment's signed statement of the run, no callback of the Bot's is accepted.
-    expect(input.forwardedProps).toMatchObject({ openbotBotId: HARNESS });
-    expect(Object.hasOwn(input.forwardedProps, "openbotRun")).toBe(false);
-  }
-  expect(named.get(threadId)).toBe("Remote offsite");
-});
+// M3: "naming a new conversation holds none of a built-in Bot's tools", "naming a new conversation
+// never runs somebody's own agent" and "a harness this deployment runs still names its own
+// conversations" are the Intelligence runtime's thread naming, which the fork's local runner does not do.
 
 test("a turn sends the endpoint the component catalog once, as the guide, and not the browser's envelope as well", async () => {
   namingAsks = false;
