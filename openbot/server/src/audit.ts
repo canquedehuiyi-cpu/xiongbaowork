@@ -277,20 +277,18 @@ export const auditEventTypes = [
   "mcp.authorization_cancelled",
   /*
    * A cancelled per-action consent completed at the vendor anyway, and its grant was LEFT LIVE
-   * there: withdrawing it would have ended more than the cancelled consent — on Arcade a revoke ends
-   * the whole `(identity, auth provider)` connection, which the account already held for this app or
-   * shares with a sibling — or the withdrawal was asked and not confirmed. `why` says which. Calls
-   * are gated by the vendor's own authorization, so a Bot
-   * may still take the cancelled action — for a Shared app, as the team. Filed beside
-   * `mcp.authorization_cancelled` so the trail does not read as a clean withdrawal. `why` is this
+   * there: withdrawing it would have ended more than the cancelled consent, or the withdrawal was
+   * asked and not confirmed. `why` says which. Calls are gated by the vendor's own authorization,
+   * so a Bot may still take the cancelled action. Filed beside `mcp.authorization_cancelled` so the
+   * trail does not read as a clean withdrawal. `why` is this
    * deployment's own phrase; nothing of the vendor's and no handle for the flow is in the payload.
    */
   "mcp.cancelled_grant_left_live",
   /*
-   * A person asking an administrator to switch a work app on, grant it to a Bot, or connect a
-   * Shared app's team account (`app_access_requests`), and what became of it: cancelled by the
-   * person, approved or dismissed by an administrator, or refused — a request that could not be
-   * filed, or an approval that could not be carried out. Target the app key; payload `request`,
+   * A person asking an administrator to switch a work app on or grant it to a Bot
+   * (`app_access_requests`), and what became of it: cancelled by the person, approved or dismissed
+   * by an administrator, or refused — a request that could not be filed, or an approval that could
+   * not be carried out. Target the app key; payload `request`,
    * `app`, `bot`, `kind`, and for a refusal `reason`.
    */
   "app_access.requested",
@@ -298,14 +296,6 @@ export const auditEventTypes = [
   "app_access.approved",
   "app_access.dismissed",
   "app_access.refused",
-  /*
-   * A Bot's owner giving one of their own apps to their own Bot, or taking it back, without an
-   * administrator (`plugins/owner-grants.ts`). Target the app key; payload `app`, `bot`, and the
-   * refs given or taken. Each ref also has its own `plugin_granted` / `plugin_revoked` row marked
-   * `grantedAs: owner`.
-   */
-  "app_access.owner_granted",
-  "app_access.owner_revoked",
   // Every action a Bot takes on its computer, allowed or refused. Both, always: a trail that records
   // only what was permitted cannot answer whether the Bot tried.
   "computer.action_allowed",

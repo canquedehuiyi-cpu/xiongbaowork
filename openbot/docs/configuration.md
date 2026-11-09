@@ -171,7 +171,7 @@ and still open wherever they are pasted. They keep working until you finish the 
 | `OPENBOT_GENERATIVE_UI` | unset (capability on)               | Set `false` or `0` to stop Bots from answering with generated interfaces. |
 | `OPENBOT_SELF_HOST_BANNER` | unset (banner on)               | Set `false` or `0` to hide the bar offering help self-hosting OpenBot, for everybody. Each person can also close it for themselves. |
 | `OPENBOT_ACCESSIBILITY_DISABLED` | unset | `true` or `1` stops naming OpenBot on the analytics the runtime already sends. |
-| `COMPOSIO_API_KEY`   | provisioned during desktop sign-in or local setup when no broker is configured | One project key for the whole deployment. Desktop sign-in saves a provisioned key in native protected storage and supplies it on Start/restart. A key in `.env` or the environment always wins and is never moved. `start.sh` / `bun run setup:composio` uses the existing CLI login; supplied keys and Arcade are preserved. Direct server/container launches still need the prepared key. See [Composio](plugins/composio.md). |
+| `COMPOSIO_API_KEY`   | provisioned during desktop sign-in or local setup when no broker is configured | One project key for the whole deployment. Desktop sign-in saves a provisioned key in native protected storage and supplies it on Start/restart. A key in `.env` or the environment always wins and is never moved. `start.sh` / `bun run setup:composio` uses the existing CLI login; supplied keys are preserved. Direct server/container launches still need the prepared key. See [Composio](plugins/composio.md). |
 | `COMPOSIO_<SLUG>_CLIENT_ID`, `COMPOSIO_<SLUG>_CLIENT_SECRET` | unset | This deployment's own OAuth client for one Composio app that connects with a server-to-server grant (`S2S_OAUTH2`), such as `COMPOSIO_SHOPIFY_CLIENT_ID`. Both or neither. Set, the app can be enabled and connected as one shared account; unset, it stays hidden. Read only when the app is enabled; see [rotating the client](#rotating-a-composio-apps-own-client). See [Composio](plugins/composio.md#the-56-that-are-not-offered). |
 | `OPENBOT_INSTALLATION_ID` | a fresh private UUID in `.env.openbot-installation-id` | Stable Composio provisioning identity, persisted before a request. Optional explicit UUID for first setup; later values must match the saved file. Retain it for retries and restarts, and generate a fresh identity for a new installation. It never falls back to `DEPLOYMENT_ID`. |
 
@@ -540,9 +540,9 @@ container engine; set it yourself only for a container of your own that runs thi
 that containers and services call back on (Bots' tool calls, the model proxy, the routines worker)
 prove themselves with their own secrets and are not affected.
 
-**A single-user deployment has its own identity at Composio or Arcade.** Both keep accounts apart
+**A single-user deployment has its own identity at Composio.** Composio keeps accounts apart
 by a user id OpenBot sends, and the one person of every single-user deployment is `dev-local-user`,
-so two of them on the same `COMPOSIO_API_KEY` or `ARCADE_API_KEY` used to share one set of
+so two of them on the same `COMPOSIO_API_KEY` used to share one set of
 connections: one deployment's Gmail, or its consent to Google, was used by the other, and a
 disconnect in one ended it for both. Now each is given its own user id at its broker,
 `dev-local-user:` and a random part, at its first start with that broker's key, and keeps it in its
@@ -551,10 +551,9 @@ and on every replica. Only the name at the broker changes: threads, memory and e
 with `dev-local-user`.
 
 A deployment that already had connections under `dev-local-user` gets its own id too, at the same
-start, and **connects each of its apps once more**. Neither broker can move a connection to another
-user id: Composio's connected-account update takes no user id, and Arcade's user connections can
-only be listed and deleted. Nor can either say which deployment made a connection under the shared
-id, and before this change one deployment opening an app another had connected recorded that
+start, and **connects each of its apps once more**. Composio cannot move a connection to another
+user id: its connected-account update takes no user id. Nor can it say which deployment made a
+connection under the shared id, and before this change one deployment opening an app another had connected recorded that
 account as its own. So at that start the deployment removes its own records of connections under
 `dev-local-user` (its `brokered_connections` rows for the active broker whose `user_id` and
 `vendor_user_id` are both `dev-local-user`), logs the apps it removed as
@@ -562,8 +561,7 @@ account as its own. So at that start the deployment removes its own records of c
 and one Connect files it under the new id. The accounts themselves stay at the broker under
 `dev-local-user`, because another OpenBot on the same key may still be using them. If this was the
 only OpenBot on its key, remove them there: they are Composio's connected accounts for user id
-`dev-local-user`, and Arcade's user connections for `user_id=dev-local-user`
-(`GET /v1/admin/user_connections`).
+`dev-local-user`.
 
 A consent begun under `dev-local-user` before that start and finished after it is refused, and the
 person is asked to press Connect again; nothing held under `dev-local-user` is confirmed or
@@ -1308,7 +1306,7 @@ useful answer is that the image could not be fetched. Somewhere that must never 
 ## Setup checklist
 
 **Settings → Setup** shows admins one row each for
-CopilotKit Intelligence, the AI model, the Bot computer, more apps (Composio or Arcade) and Slack and
+CopilotKit Intelligence, the AI model, the Bot computer, more apps (Composio) and Slack and
 Teams. They are read from `GET /api/setup`, and `POST /api/setup/check` asks again.
 
 - **Ready means it works.** Intelligence is read from its own entitlement answer and the model from

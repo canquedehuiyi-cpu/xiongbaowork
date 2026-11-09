@@ -45,10 +45,10 @@ Archive asks as deleting because some apps call their delete that: HubSpot delet
 `HUBSPOT_ARCHIVE_CONTACT`, and Gmail's archive takes mail out of the inbox. Unarchive is not archiving.
 
 An app can also say a tool destroys something, whatever it is named: an MCP server with the tool's
-`destructiveHint` annotation, Composio with the same tag, and Arcade with its `destructive` flag.
+`destructiveHint` annotation, and Composio with the same tag.
 OpenBot records that when it lists the app's tools (`destructive` on `mcp_tools`), and such a tool
 asks as deleting does. Composio tags `HUBSPOT_ARCHIVE_CONTACT` this way. An action a broker says
-nothing about (no flag from Arcade, no label from Composio) is not destructive: it is an ordinary
+nothing about (no label from Composio) is not destructive: it is an ordinary
 change, which asks only when Always ask before making changes or a rule says so.
 
 ## What doesn't ask

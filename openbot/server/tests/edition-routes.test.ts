@@ -45,7 +45,6 @@ const open = [
   "/api/auth/get-session",
   // What a person's own screens still read, under or beside a closed prefix.
   "/api/admin/enterprise/me",
-  "/api/approvals/shared-use",
   "/api/groups",
   "/api/team-bots",
   // Prefixes, not substrings: a sibling that merely starts the same way stays open.

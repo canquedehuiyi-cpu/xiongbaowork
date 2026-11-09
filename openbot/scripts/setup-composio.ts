@@ -108,14 +108,6 @@ export async function setupComposio(
     environment[name]?.trim() || values[name]?.trim() || "";
   // A blank exported value must never cause a supplied file key to be replaced.
   if (effective("COMPOSIO_API_KEY")) return "preserved";
-  const provider = effective("OPENBOT_BROKER_PROVIDER").toLowerCase();
-  if (provider === "arcade" || (!provider && effective("ARCADE_API_KEY")))
-    return "preserved";
-  if (provider && provider !== "composio") {
-    throw new SetupComposioError(
-      "OPENBOT_BROKER_PROVIDER must be composio or arcade. Fix it before running Composio setup.",
-    );
-  }
 
   const id = await installationIdentity(directory, effective(IDENTITY));
   // The existing sanitized runner rejects arguments cmd.exe could execute. Forward slashes are

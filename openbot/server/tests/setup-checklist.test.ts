@@ -61,7 +61,7 @@ const READY: SetupFacts = {
   },
   computer: true,
   computerStatus: "ready",
-  apps: { configured: true, provider: "composio" },
+  apps: { configured: true },
   chat: true,
 };
 
@@ -74,7 +74,7 @@ const UNSET: SetupFacts = {
     model: "gpt-5.6-terra",
   },
   computer: false,
-  apps: { configured: false, provider: "composio" },
+  apps: { configured: false },
   chat: false,
 };
 
@@ -531,7 +531,7 @@ function appWith(input: {
       entitlements: input.entitlements ?? (async () => ENTITLED),
       computer: input.computer ?? Boolean(config.computer),
       computerCheck: input.computerCheck ?? (async () => "ready"),
-      apps: { configured: input.apps ?? false, provider: "composio" },
+      apps: { configured: input.apps ?? false },
       chat: input.chat ?? false,
     });
   const app = createApp(

@@ -228,7 +228,7 @@ The example configuration sets `OPENBOT_SINGLE_USER=true`, so you can try the ap
    unavailable. You can run `bun run setup:composio` first to prepare it separately, or
    later to retry; it does not need a Learning container. The helper creates or reuses one
    isolated Composio project for this installation and saves its project key to `.env`.
-   Existing Composio keys and Arcade configurations are preserved. Keep the private
+   Existing Composio keys are preserved. Keep the private
    `.env.openbot-installation-id` file across restarts and interrupted setup attempts;
    do not copy it into a new installation. This needs a published CopilotKit CLI with
    `integrations composio provision` and the hosted provisioning service enabled.

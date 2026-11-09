@@ -73,8 +73,8 @@ export function appToolName(server: string, tool: string): ToolName {
   /*
    * A BROKERED APP IS NAMED ONCE, AS THE APP, BESIDE THE ACTION. Composio publishes
    * `<APP>_<VERB>_<NOUN>`, so its app leads every action and reads as a vendor's prefix
-   * ("Airtable list bases"); Arcade has already dropped its toolkit from the name. Either way the
-   * action starts at the verb and the app is said once, in its own name.
+   * ("Airtable list bases"). The action starts at the verb and the app is said once, in its own
+   * name.
    */
   if (broker) {
     const appWords = wordsOf(broker);
@@ -136,7 +136,7 @@ export function appToolName(server: string, tool: string): ToolName {
 
 /**
  * The connector a server key names, the way a person would say it: "google-drive" as "Google
- * Drive", and a broker's "composio-airtable" or "arcade-Gmail" as the app alone.
+ * Drive", and a broker's "composio-airtable" as the app alone.
  */
 export function connectorName(server: string): string {
   return wordsOf(brokeredApp(server) ?? server)
@@ -160,8 +160,6 @@ export function approvalWords(action: {
   scope: string;
   /** What the action is aimed at, as the server resolved it. A folder's carries its name. */
   target?: unknown;
-  /** Which of the person's accounts at the app, where they hold several: "from dana@work.example". */
-  account?: string;
 }): {
   action: string;
   place: string;
@@ -179,8 +177,6 @@ export function approvalPhrase(action: {
   toolRef: string;
   scope: string;
   target?: unknown;
-  /** Which of the person's accounts at the app, where they hold several: "from dana@work.example". */
-  account?: string;
 }): string {
   const { action: words, place, joiner } = approvalParts(action);
   return joiner ? `${words} ${joiner} ${place}` : `${words} ${place}`;
@@ -190,15 +186,13 @@ function approvalParts(action: {
   toolRef: string;
   scope: string;
   target?: unknown;
-  account?: string;
 }): { action: string; place: string; joiner: "on" | "in" | "" } {
   const slash = action.toolRef.indexOf("/");
   const app = action.toolRef.slice(0, slash);
   if (slash > 0 && app === action.scope) {
     const { label } = appToolName(app, action.toolRef.slice(slash + 1));
-    const words = lowerFirst(label);
     return {
-      action: action.account ? `${words} from ${action.account}` : words,
+      action: lowerFirst(label),
       place: connectorName(app),
       joiner: "on",
     };
@@ -770,7 +764,7 @@ export function answersTheModel(name: string): boolean {
 /**
  * The app behind a brokered server key, or null for a server this deployment dials itself.
  *
- * A brokered server is keyed `<broker>-<app>` — `composio-gmail`, `arcade-Gmail` — because the broker is how the
+ * A brokered server is keyed `<broker>-<app>` — `composio-gmail` — because the broker is how the
  * credential is held and two brokers could both offer Gmail. Neither of those is the reader's
  * business: they asked their Bot about their email, not about which company holds the grant. This
  * is the same argument the research relabelling above makes, and the answer is the same — which
@@ -788,7 +782,7 @@ function brokeredApp(server: string): string | null {
 }
 
 /** The brokers whose apps this deployment keys `<broker>-<app>`. See `server/src/plugins/access.ts`. */
-const BROKER_PREFIXES = ["composio-", "arcade-"] as const;
+const BROKER_PREFIXES = ["composio-"] as const;
 
 /**
  * `routines` and `routine` are the same word for this purpose.

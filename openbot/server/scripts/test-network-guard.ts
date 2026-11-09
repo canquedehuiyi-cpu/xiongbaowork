@@ -69,8 +69,8 @@
  * `server/tests/test-network-guard.test.ts` plants a call through every guarded entry point.
  *
  * HOW A SUITE THAT IS MEANT TO DIAL OPTS OUT: any `OPENBOT_LIVE_*` variable with a non-empty value.
- * The three live suites already set one — `OPENBOT_LIVE_COMPOSIO`, `OPENBOT_LIVE_ARCADE` and
- * `OPENBOT_LIVE_SCREEN` are set by their `test:live-*` scripts in `package.json`, which also refuse
+ * The live suites already set one — `OPENBOT_LIVE_COMPOSIO` and `OPENBOT_LIVE_SCREEN` are set by
+ * their `test:live-*` scripts in `package.json`, which also refuse
  * to run without a key, so a live suite remains deliberate and credentialed and stays skipped
  * otherwise.
  */

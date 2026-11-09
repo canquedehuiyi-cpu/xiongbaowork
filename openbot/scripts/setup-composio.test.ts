@@ -112,17 +112,6 @@ test.each([
     "COMPOSIO_API_KEY=\n",
     { COMPOSIO_API_KEY: "existing-project-key" },
   ],
-  [
-    "explicit Arcade",
-    "OPENBOT_BROKER_PROVIDER=arcade\nARCADE_API_KEY=existing-arcade\n",
-    {},
-  ],
-  ["automatic Arcade", "ARCADE_API_KEY=existing-arcade\n", {}],
-  [
-    "an Arcade file key behind a blank exported value",
-    "ARCADE_API_KEY=existing-arcade\n",
-    { ARCADE_API_KEY: "   " },
-  ],
 ] as const)(
   "preserves %s without invoking the CLI or allocating an identity",
   async (_, content, environment) => {
@@ -155,16 +144,6 @@ test("separate installations never reuse a shared packaged deployment identity",
   expect(await readFile(first.identityPath, "utf8")).not.toBe(
     await readFile(second.identityPath, "utf8"),
   );
-});
-
-test("an explicit Composio selection can prepare its key while retaining an Arcade key", async () => {
-  const content =
-    "OPENBOT_BROKER_PROVIDER=composio\nARCADE_API_KEY=existing-arcade\n";
-  const f = await fixture(content);
-  expect(await setupComposio({ ...f.options, runCli: f.provision })).toBe(
-    "configured",
-  );
-  expect(await readFile(f.envPath, "utf8")).toStartWith(content);
 });
 
 test("a missing npx names its prerequisite without relaying child output", async () => {
@@ -203,14 +182,6 @@ test("a missing environment file never starts provisioning", async () => {
   await expect(
     setupComposio({ ...f.options, runCli: f.provision }),
   ).rejects.toThrow("copying .env.example");
-  expect(f.calls).toEqual([]);
-});
-
-test("an invalid provider is reported without provisioning", async () => {
-  const f = await fixture("OPENBOT_BROKER_PROVIDER=invalid\n");
-  await expect(
-    setupComposio({ ...f.options, runCli: f.provision }),
-  ).rejects.toThrow("must be composio or arcade");
   expect(f.calls).toEqual([]);
 });
 

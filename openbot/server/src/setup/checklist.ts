@@ -1,6 +1,6 @@
 import { Hono, type MiddlewareHandler } from "hono";
 import type { AppVariables } from "../auth/guards";
-import type { BrokerProvider, DeploymentConfig } from "../config";
+import type { DeploymentConfig } from "../config";
 import type { CredentialStatusReader } from "../credentials";
 import type { Edition } from "../edition";
 import { entitlementWarning } from "../intelligence-entitlement-check";
@@ -143,8 +143,8 @@ export type SetupFacts = {
   /** A Bot computer is configured. Absent, its routes are not mounted at all. */
   computer: boolean;
   computerStatus?: SetupStatus;
-  /** A broker for apps beyond the ones an admin adds, and which one this deployment would use. */
-  apps: { configured: boolean; provider: BrokerProvider };
+  /** A broker for apps beyond the ones an admin adds: Composio, the one this fork takes. */
+  apps: { configured: boolean };
   /** The OpenTag pairing that carries Slack and Microsoft Teams. */
   chat: boolean;
 };
@@ -155,8 +155,8 @@ const KEY_NAME = {
 } as const;
 const PROVIDER_NAME = { openai: "OpenAI", anthropic: "Anthropic" } as const;
 const BROKER = {
-  composio: { key: "COMPOSIO_API_KEY", docs: `${DOCS}/plugins/composio.md` },
-  arcade: { key: "ARCADE_API_KEY", docs: `${DOCS}/plugins/arcade.md` },
+  key: "COMPOSIO_API_KEY",
+  docs: `${DOCS}/plugins/composio.md`,
 } as const;
 
 /** What a member is told about a dependency that is set up and was never checked. */
@@ -212,8 +212,6 @@ export function setupRows(
     fix: row.status === "ready" || !admin ? null : row.fix,
   });
 
-  const broker = BROKER[facts.apps.provider];
-
   const rows = [
     deployment({
       id: "intelligence",
@@ -249,7 +247,7 @@ export function setupRows(
       gapDetail: personal
         ? `Without it, you can connect only the apps ${product} comes with.`
         : "Without it, people can connect only the apps an admin adds.",
-      fix: { kind: "env", names: [broker.key], docsUrl: broker.docs },
+      fix: { kind: "env", names: [BROKER.key], docsUrl: BROKER.docs },
     }),
     deployment({
       id: "chat",
@@ -584,7 +582,7 @@ export function createSetupSources(input: {
   computer: boolean;
   /** Authenticated reachability and policy delivery, with per-operation deadlines and no wake. */
   computerCheck?: () => Promise<SetupStatus>;
-  apps: { configured: boolean; provider: BrokerProvider };
+  apps: { configured: boolean };
   chat: boolean;
 }): SetupSources {
   const keyFacts = {

@@ -36,7 +36,7 @@ type Run = {
   composioSetup?: "configured" | "failed" | "real-helper" | "real-cli";
   /** What `npx` does when the real helper runs the CopilotKit CLI. */
   cli?: "missing-provision" | "provisions";
-  probeBrokerEnvironment?: { composioKey?: string; arcadeKey?: string };
+  probeBrokerEnvironment?: { composioKey?: string };
 };
 
 async function runStartWithStaleServerProbe(
@@ -128,7 +128,6 @@ console.log(result === "configured" ? "COMPOSIO-CONFIGURED" : "COMPOSIO-PRESERVE
     `
 await Bun.write(process.env.BROKER_ENVIRONMENT_PROBE, [
   "composio=" + (process.env.COMPOSIO_API_KEY === process.env.EXPECTED_COMPOSIO_KEY),
-  "arcade=" + (process.env.ARCADE_API_KEY === process.env.EXPECTED_ARCADE_KEY),
 ].join("\\n"));
 `,
   );
@@ -233,7 +232,6 @@ exit 0
           ? {
               BROKER_ENVIRONMENT_PROBE: brokerEnvironmentPath,
               EXPECTED_COMPOSIO_KEY: probeBrokerEnvironment.composioKey,
-              EXPECTED_ARCADE_KEY: probeBrokerEnvironment.arcadeKey,
             }
           : {}),
         ...processEnvironment,
@@ -305,7 +303,7 @@ describe("start.sh automatic Composio setup", () => {
       });
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toContain("COMPOSIO-CONFIGURED");
-      expect(result.brokerEnvironment).toBe("composio=true\narcade=true");
+      expect(result.brokerEnvironment).toBe("composio=true");
       expect(result.stdout + result.stderr).not.toContain(
         "synthetic-project-key",
       );
@@ -325,12 +323,6 @@ describe("start.sh automatic Composio setup", () => {
       { COMPOSIO_API_KEY: "saved-composio" },
       { composioKey: "saved-composio" },
     ],
-    [
-      "Arcade",
-      { COMPOSIO_API_KEY: "" },
-      { ARCADE_API_KEY: "existing-arcade", OPENBOT_BROKER_PROVIDER: "arcade" },
-      { arcadeKey: "existing-arcade" },
-    ],
   ] as const)(
     "real child startup preserves %s",
     async (_, processEnvironment, settings, probeBrokerEnvironment) => {
@@ -342,7 +334,7 @@ describe("start.sh automatic Composio setup", () => {
       });
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toContain("COMPOSIO-PRESERVED");
-      expect(result.brokerEnvironment).toBe("composio=true\narcade=true");
+      expect(result.brokerEnvironment).toBe("composio=true");
     },
   );
 

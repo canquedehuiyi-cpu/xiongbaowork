@@ -92,8 +92,6 @@ export const AUDIT_EVENT_WORDS: Readonly<Record<string, string>> = {
   "app_access.approved": "Approve a request for an app",
   "app_access.dismissed": "Dismiss a request for an app",
   "app_access.refused": "Ask for an app",
-  "app_access.owner_granted": "Share an app",
-  "app_access.owner_revoked": "Stop sharing an app",
   "computer.action_allowed": "Use the computer",
   "computer.action_refused": "Use the computer",
   "computer.action_failed": "Use the computer",

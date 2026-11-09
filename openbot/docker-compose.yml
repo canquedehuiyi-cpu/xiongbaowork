@@ -181,8 +181,6 @@ services:
       # in its protected store, never in `.env`, so it reaches this container only by being named
       # here. A key the person put in `.env` wins and arrives the same way.
       COMPOSIO_API_KEY: ${COMPOSIO_API_KEY:-}
-      ARCADE_API_KEY: ${ARCADE_API_KEY:-}
-      OPENBOT_BROKER_PROVIDER: ${OPENBOT_BROKER_PROVIDER:-}
       # A Google or xAI sign-in, which the server reads and renews itself. The file is on the host,
       # at `.openbot/model-oauth.json` beside this one, and reaches the container through the mount
       # below, so a host path here becomes the mount's. Empty stays empty: no sign-in, no file.

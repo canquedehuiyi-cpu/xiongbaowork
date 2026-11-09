@@ -81,7 +81,6 @@ function deployment() {
     "/api/plugins",
     createPluginRoutes(
       {
-        brokerProvider: "composio",
         serverUrls: async () => [],
       } as unknown as PluginStore,
       signedIn,

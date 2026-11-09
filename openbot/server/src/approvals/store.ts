@@ -148,7 +148,6 @@ export function createApprovalStore(
       eq(approvalRules.toolRef, action.toolRef),
       eq(approvalRules.effect, action.effect),
       eq(approvalRules.scope, action.scope),
-      // M3: upstream's per-account rules (multi-account) are not adopted; the column was never migrated.
       eq(approvalRules.behaviour, "allow"),
       isNull(approvalRules.revokedAt),
     );

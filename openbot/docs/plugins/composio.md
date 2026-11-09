@@ -73,8 +73,7 @@ generate its own identity file rather than copy an existing one. You may supply 
 `OPENBOT_INSTALLATION_ID` before first setup; a later value must match the saved one. Setup never
 uses `DEPLOYMENT_ID`, whose packaged default can be shared by multiple clones.
 
-A supplied `COMPOSIO_API_KEY` is left intact. `OPENBOT_BROKER_PROVIDER=arcade`, or an Arcade key
-without an explicit Composio selection, also skips provisioning. Learning setup and container
+A supplied `COMPOSIO_API_KEY` is left intact. Learning setup and container
 creation are independent. No parent Composio organization credential is stored in OpenBot; its
 runtime receives only the provisioned project's key. That key is still deployment-wide: this does
 not create a separate Composio project for each OpenBot organization or person. Enabling an app
@@ -224,8 +223,8 @@ policy, and writes an audit row.
 A destructive action renders as danger, and always asks with Allow once or Deny before it runs (see
 [Approvals](../approvals.md)). Nothing renders as reassurance: an action that does not claim to be
 destructive is not claiming to be safe, so the absence of the marker is drawn plain, never as green.
-An action Composio labels nothing about at all is recorded as an unclassified write, as Arcade's
-action with no flags is: it asks wherever changes ask, and no background read calls it.
+An action Composio labels nothing about at all is recorded as an unclassified write: it asks
+wherever changes ask, and no background read calls it.
 
 ## The four ways an app connects
 
