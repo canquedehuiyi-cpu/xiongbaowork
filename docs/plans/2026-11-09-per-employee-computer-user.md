@@ -109,7 +109,7 @@
   - `/files/*` 改用 `await perBot.workspaceFor(botIdOf(request))`。
   - 捕获 `PerBotUnavailableError`，返回 `json({error: e.message}, 503)`。
   - `/health` 增加字段 `perBotUsers: await perBot.status()`。`enabled && !ready` 时 HTTP 503，`status: "unready"`；其余字段不变。
-  - `/exec` 暂时只接 `homeFor`，留给 Task 3 接 shell。
+  - `/exec` 本任务不改，留给 Task 3。`DEFAULT_BOT_ID` 用 index.ts 现有常量。
 - [ ] **Step 5：** 运行 `bun test`（agent-computer 全部）和 `bunx tsc --noEmit`，预期通过。现有 `workspace.test.ts`、`file-download-http.test.ts` 不需要修改，默认开关是关闭的。
 - [ ] **Step 6：** 提交：`feat(computer): give each employee its own file root`。
 
