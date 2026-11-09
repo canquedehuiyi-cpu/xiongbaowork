@@ -6,7 +6,7 @@ import {
   type RunAgentInput,
   RunAgentInputSchema,
 } from "@ag-ui/client";
-import type { AuditInitiator } from "../audit";
+import type { AuditEventInput, AuditInitiator } from "../audit";
 
 /** `handled` answers a hand-off: the person did it themselves, so it is never executed for them. */
 export type ApprovalDecision =
@@ -182,6 +182,14 @@ export type ApprovalCandidate = {
    */
   destructive?: true;
   continuation?: ApprovalContinuation;
+  /**
+   * The row the trail records for this action if the person denies it, built by the code that would
+   * have carried it out, so a denial reads like that surface's other refusals and lands in the
+   * Blocked view. Written once, with the decision, in the transaction that saves it (./store
+   * `decide`). Never holds the arguments. Not part of what the person approves, so not in the
+   * action's digest.
+   */
+  declined?: AuditEventInput;
 };
 
 /**
@@ -429,6 +437,17 @@ export class ApprovalRefusedError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "ApprovalRefusedError";
+  }
+}
+/**
+ * This same call was answered already: it was denied, it failed, or its approval was used or
+ * revoked. What it got then is what it gets now. Nothing new was turned away, so the code that asked
+ * the gate records nothing new for it.
+ */
+export class ApprovalAlreadyAnsweredError extends ApprovalRefusedError {
+  constructor(message: string) {
+    super(message);
+    this.name = "ApprovalAlreadyAnsweredError";
   }
 }
 export class ApprovalNotFoundError extends Error {
