@@ -3195,6 +3195,128 @@ describe("a dynamic client the vendor has evicted", () => {
       }));
   }
 
+  /*
+   * The read OUTSIDE the lock, on its own. `ensureOAuthClient` reads again under the lock with the
+   * same key, so a fault the first read swallowed is thrown by the second and the tests above pass
+   * either way. `oauthClientFor` is that first read, and the callback route calls it with no second
+   * read behind it.
+   */
+  for (const fault of ["wrong-key", "reader-fault"] as const) {
+    test(`the read outside the lock classifies a client read fault (${fault}) by itself`, () =>
+      asPlatform(async () => {
+        await putClient(EVICTED);
+        registrations.length = 0;
+        const reader = storeReading(
+          fault === "reader-fault"
+            ? {
+                ...vault,
+                readSecret: async () => {
+                  throw new Error("vault unavailable");
+                },
+              }
+            : vault,
+          fault === "wrong-key" ? WRONG_KEY : DYNAMIC_KEY,
+        );
+        const said: string[] = [];
+        const realError = console.error;
+        console.error = (...args: unknown[]) => {
+          said.push(args.map(String).join(" "));
+        };
+        try {
+          const outcome = await reader.oauthClientFor(dynamicServerId).then(
+            (client) => client,
+            (error: unknown) =>
+              error instanceof OAuthClientReadError ? "read-error" : error,
+          );
+          console.error = realError;
+          expect(outcome).toBe("read-error");
+          expect(
+            said.filter((line) =>
+              line.includes("mcp-oauth-client-read-failed"),
+            ),
+          ).toHaveLength(1);
+          expect(registrations).toEqual([]);
+        } finally {
+          console.error = realError;
+          await putClient(EVICTED);
+        }
+      }));
+  }
+
+  /*
+   * Missing or revoked is still none (upstream #922 keeps this, and so must we): only a FAULT stops
+   * Connect. An administrator who revoked the client in the vault expects the next Connect to register
+   * a fresh one, not a 503 and a read-failure row on every press.
+   */
+  test("a client whose credential was revoked is none: read as null, and registered again", () =>
+    asPlatform(async () => {
+      await putClient(EVICTED);
+      const [pointed] = await database
+        .select({ credentialId: mcpServers.credentialId })
+        .from(mcpServers)
+        .where(eq(mcpServers.id, dynamicServerId));
+      if (!pointed?.credentialId) throw new Error("client was not pointed at");
+      // The pointer stays; the row it names is retired.
+      await database
+        .update(credentials)
+        .set({ revokedAt: new Date() })
+        .where(eq(credentials.id, pointed.credentialId));
+      registrations.length = 0;
+      issue = () => FRESH;
+      const said: string[] = [];
+      const realError = console.error;
+      console.error = (...args: unknown[]) => {
+        said.push(args.map(String).join(" "));
+      };
+      try {
+        expect(await dynamicStore.oauthClientFor(dynamicServerId)).toBeNull();
+        expect(
+          await dynamicStore.ensureOAuthClient(
+            dynamicServerId,
+            "someone@openbot.test",
+          ),
+        ).toEqual(FRESH);
+        console.error = realError;
+        expect(registrations).toEqual([
+          { registrationUrl: REGISTRATION_URL, redirectUri: REDIRECT_URI },
+        ]);
+        expect(await dynamicStore.oauthClientFor(dynamicServerId)).toEqual(
+          FRESH,
+        );
+        expect(
+          said.filter((line) => line.includes("mcp-oauth-client-read-failed")),
+        ).toEqual([]);
+      } finally {
+        console.error = realError;
+        await putClient(EVICTED);
+      }
+    }));
+
+  test("a client whose credential row is gone is none, not a read failure", () =>
+    asPlatform(async () => {
+      await putClient(EVICTED);
+      // The vault answers "no such row" for the pointer the server row still holds.
+      const reader = storeReading(
+        { ...vault, readSecret: async () => null },
+        DYNAMIC_KEY,
+      );
+      const said: string[] = [];
+      const realError = console.error;
+      console.error = (...args: unknown[]) => {
+        said.push(args.map(String).join(" "));
+      };
+      try {
+        expect(await reader.oauthClientFor(dynamicServerId)).toBeNull();
+        console.error = realError;
+        expect(
+          said.filter((line) => line.includes("mcp-oauth-client-read-failed")),
+        ).toEqual([]);
+      } finally {
+        console.error = realError;
+        await putClient(EVICTED);
+      }
+    }));
+
   test("a client that decrypts and is not JSON is none, and nothing of it is thrown", () =>
     asPlatform(async () => {
       const plaintext = "bare-client-secret-not-json";
@@ -5300,12 +5422,9 @@ test("SEC1: a connector call the gate refuses or holds never reaches the vendor"
         asked.push(candidate);
         if (answer === "refuse") throw new ApprovalRefusedError(TOOL_DISABLED);
         if (answer === "hold")
-          throw new HeadlessToolSuspension(
-            "This action is waiting for your approval.",
-            {
-              kind: "approval",
-            },
-          );
+          throw new HeadlessToolSuspension("This action is waiting for your approval.", {
+            kind: "approval",
+          });
         return undefined;
       },
     });
@@ -5331,9 +5450,7 @@ test("SEC1: a connector call the gate refuses or holds never reaches the vendor"
     await expect(call()).rejects.toBeInstanceOf(HeadlessToolSuspension);
     expect(executed).toBe(0);
     expect(
-      auditStore
-        .recorded()
-        .filter((event) => event.eventType === "mcp.call_succeeded"),
+      auditStore.recorded().filter((event) => event.eventType === "mcp.call_succeeded"),
     ).toEqual([]);
     expect(asked.map((candidate) => candidate.toolRef)).toEqual([
       "gmail/GMAIL_FETCH_EMAILS",

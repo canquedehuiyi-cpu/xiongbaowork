@@ -14,7 +14,10 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   every replica shares, breaking everybody's connection to it. Now only a missing or revoked client
   is "none"; a read or decryption fault stops Connect with a 503 「暂时无法连接 …」, writes
   `mcp.oauth_client_read_failed` (who and which server, never the fault), and logs the fault's name
-  only. From upstream OpenBot #922.
+  only. From upstream OpenBot #922. Before turning on `VAULT_REQUIRE_AAD`, run
+  `bun scripts/reseal-credentials.ts` (in `server/`) and wait for `remaining=0`: a client still in a
+  v1 envelope is now a read fault, so Connect answers 503 instead of registering a new client over
+  it.
 - **Long tool link fields and vendor refusals are cut between characters.** A cut at 400 that landed
   inside an emoji left half of it behind; it now drops the half. The credential is still taken out
   before anything is cut. From upstream #919.
