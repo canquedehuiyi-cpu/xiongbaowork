@@ -80,7 +80,12 @@ test("the default conversation is the person's own 分身, and the shared Bot do
 });
 
 test("the shipped copy says nothing in English that a person would read as unfinished", async () => {
-  const text = [loaded.brand, loaded.agents, loaded.skills, loaded.channels]
+  // brand.yaml's words, as the loaded package carries them: the product's names.
+  const brand = {
+    productName: loaded.productName,
+    englishName: loaded.englishName,
+  };
+  const text = [brand, loaded.agents, loaded.skills, loaded.channels]
     .map((part) => JSON.stringify(part))
     .join("\n");
   // A placeholder left behind from the upstream example reads as a broken install rather than as

@@ -34,6 +34,9 @@ import { createDeliveryRouter } from "../src/delivery/router";
 import { createDeliveryStore } from "../src/delivery/store";
 import { createProactiveEngine } from "../src/proactive/engine";
 import { createProactiveStore } from "../src/proactive/store";
+import { createTaskRunner } from "../src/tasks/runner";
+import { createTaskStore } from "../src/tasks/store";
+import { createTaskTurn } from "../src/tasks/turn";
 import { createTurnRunner } from "../src/routines/run-turn";
 import { runAsTenant } from "../src/tenant/context";
 import { provisionTenant } from "../src/tenant/provisioning";
@@ -301,6 +304,12 @@ test("a queued delivery records under its inbox row's tenant, keyed by the inbox
     owner: `h4c-delivery-${suite}`,
     providers: {},
     authoriseScope: async () => true,
+    scopeFor: async (ownerUserId, channel, agent) => ({
+      ownerUserId,
+      channelId: channel,
+      agentId: agent,
+      threadId,
+    }),
     routeFor: async () => ({
       kind: "progress",
       notify: false,
@@ -354,8 +363,7 @@ test("a proactive run records under its setting's tenant, keyed by the run id it
       agentId: agent,
       threadId,
     }),
-    notify: async () => undefined,
-    startTask: async () => undefined,
+    attention: { notifyAttention: async () => undefined },
     catalogue: { listServers: async () => [] },
     mintThreadId: () => threadId,
   });
@@ -390,6 +398,29 @@ test("a proactive run records under its setting's tenant, keyed by the run id it
 test("a started suggestion records under its setting's tenant, keyed by its turn's run id", async () => {
   const agentId = bot("suggestion");
   const store = createProactiveStore(database);
+  const actorFor = async (id: string) => ({ id, role: "user" as const });
+  /** The task's conversation is the suite's own; what it records there is not under test. */
+  const conversation = {
+    create: async () => channelFor(agentId),
+    recordActivity: async () => undefined,
+    signalBusy: async () => undefined,
+  } as unknown as Parameters<typeof createTaskRunner>[0]["channels"] &
+    Parameters<typeof createTaskTurn>[0]["channels"];
+  const tasks = createTaskRunner({
+    database,
+    store: createTaskStore(database),
+    channels: conversation,
+    actorFor,
+    queue: createWorkQueue(database),
+    owner: `h4c-tasks-${suite}`,
+    scopeFor: async (ownerUserId, channel, agent) => ({
+      ownerUserId,
+      channelId: channel,
+      agentId: agent,
+      threadId,
+    }),
+    runTask: createTaskTurn({ channels: conversation, actorFor, runTurn }),
+  });
   const engine = createProactiveEngine({
     store,
     memory: { formMemory: async () => ({}) as never },
@@ -402,18 +433,10 @@ test("a started suggestion records under its setting's tenant, keyed by its turn
       agentId: agent,
       threadId,
     }),
-    notify: async () => undefined,
-    // As the server wires it: the setting's tenant goes to the person-started turn.
-    startTask: async (scope, input) => {
-      await runTurn({
-        ...scope,
-        tenantId: input.tenantId,
-        routineId: input.runId,
-        instruction: input.text,
-        userMessage: { id: input.runId, role: "user", content: input.text },
-        signal: input.signal,
-      });
-    },
+    attention: { notifyAttention: async () => undefined },
+    // As the server wires it (M3, upstream's tasks): a started suggestion opens a task, whose turn
+    // the task runner claims and runs as the person's own, in the tenant stamped on its row.
+    tasks,
     catalogue: { listServers: async () => [] },
     mintThreadId: () => threadId,
   });
@@ -440,7 +463,10 @@ test("a started suggestion records under its setting's tenant, keyed by its turn
   });
 
   await sweepUntil(
-    () => engine.sweep(),
+    async () => {
+      await tasks.idle();
+      await tasks.sweep();
+    },
     () => (ranAs.get(agentId)?.length ?? 0) > 0,
   );
   const runs = ranAs.get(agentId) ?? [];

@@ -1,3 +1,5 @@
+import { currentApprovalContext } from "@openbot/toolkit/continuation";
+import type { AuditInitiator } from "@openbot/toolkit/initiator";
 import {
   and,
   desc,
@@ -5,7 +7,9 @@ import {
   getTableColumns,
   gt,
   inArray,
+  isNull,
   lt,
+  ne,
   notInArray,
   or,
   type SQL,
@@ -16,7 +20,6 @@ import type { Database } from "./db/client";
 import { auditEvents } from "./db/schema";
 import { parsePageLimit } from "./paging";
 import { assertPersonTenant, runAsTenant } from "./tenant/context";
-import type { AuditInitiator } from "@openbot/toolkit/initiator";
 
 const sensitiveKeys = new Set([
   "access_token",
@@ -115,6 +118,17 @@ export const auditEventTypes = [
    * endpoint that dies mid-answer from one that never answers at all.
    */
   "agent.stream_stalled",
+  /**
+   * A built-in Bot's run refused before its model call, because it would have sent more tools than
+   * the model accepts in one request (Chat Completions: 128).
+   *
+   * The person is told in the run; this is for the admin, who is the one who can fix it and the one
+   * who would otherwise never hear of it. Rare since tool search: an app's tools wait behind a
+   * search and are not counted, so this fires only when what a Bot needs on every step is itself
+   * past the limit. Payload: `bot`, `tools` (what the run would have sent, including the runtime's
+   * and the client's own), `limit`, `provider`.
+   */
+  "agent.tool_limit_refused",
   /*
    * Which of a Bot's tools were put in front of the model for one run, and why those.
    *
@@ -182,6 +196,8 @@ export const auditEventTypes = [
    * was current when it was made. The client id, never the secret.
    */
   "mcp.oauth_client_registered",
+  /** A Connect attempt could not read the deployment's client. No credential or raw fault is recorded. */
+  "mcp.oauth_client_read_failed",
   /*
    * A Connect stopped because the deployment's OAuth client is held and could not be read (a vault
    * fault, or a key that will not decrypt it), so no replacement was registered over it. Who pressed
@@ -226,6 +242,8 @@ export const auditEventTypes = [
    * thing they are entitled to see a record of. Carries the scope the vendor actually granted.
    */
   "mcp.account_connected",
+  /** A vendor authorization answer could not be reconciled with its pending attempt. */
+  "mcp.authorization_unreconciled",
   /*
    * One person's connector access retired, by them or on their behalf.
    *
@@ -244,6 +262,40 @@ export const auditEventTypes = [
    * while the grant at Google stood untouched.
    */
   "mcp.account_disconnected",
+  /*
+   * One person retracted their own pending per-action authorization before it completed.
+   *
+   * The counterpart of `mcp.account_connected` on the same lifecycle: that row is the attempt
+   * ending in a yes, this one is the person deliberately ending it themselves. Without it, pressing
+   * Cancel deleted the attempt and nothing recorded who withdrew what — on a lifecycle whose whole
+   * point is that consent is attributable. Filed under the app's slug, as its two siblings are.
+   *
+   * NEVER THE CONSENT URL AND NEVER THE VENDOR'S HANDLE FOR THE FLOW: the first is a bearer
+   * capability, and neither is in the payload. `minted` says only whether a flow had been started at
+   * the vendor at all, which is the one fact about it a reader of the trail needs.
+   */
+  "mcp.authorization_cancelled",
+  /*
+   * A cancelled per-action consent completed at the vendor anyway, and its grant was LEFT LIVE
+   * there: withdrawing it would have ended more than the cancelled consent, or the withdrawal was
+   * asked and not confirmed. `why` says which. Calls are gated by the vendor's own authorization,
+   * so a Bot may still take the cancelled action. Filed beside `mcp.authorization_cancelled` so the
+   * trail does not read as a clean withdrawal. `why` is this
+   * deployment's own phrase; nothing of the vendor's and no handle for the flow is in the payload.
+   */
+  "mcp.cancelled_grant_left_live",
+  /*
+   * A person asking an administrator to switch a work app on or grant it to a Bot
+   * (`app_access_requests`), and what became of it: cancelled by the person, approved or dismissed
+   * by an administrator, or refused — a request that could not be filed, or an approval that could
+   * not be carried out. Target the app key; payload `request`,
+   * `app`, `bot`, `kind`, and for a refusal `reason`.
+   */
+  "app_access.requested",
+  "app_access.cancelled",
+  "app_access.approved",
+  "app_access.dismissed",
+  "app_access.refused",
   // Every action a Bot takes on its computer, allowed or refused. Both, always: a trail that records
   // only what was permitted cannot answer whether the Bot tried.
   "computer.action_allowed",
@@ -282,6 +334,9 @@ export const auditEventTypes = [
   // when is exactly the sort of thing an investigator needs and nothing else records.
   "computer.stopped",
   "computer.reset",
+  // A browser's data wiped by the person working it: a Bot's, by whoever held its wheel, or the person's own. Every
+  // login in it goes, as with a reset, so who did it and to which browser is worth a row; the Bot's files stay.
+  "computer.browser_cleared",
   // A computer moved onto the current image. Its files and sign-ins are kept, but a running one is
   // restarted, which interrupts whatever it was doing, so who asked is worth a row.
   "computer.updated",
@@ -343,6 +398,8 @@ export const auditEventTypes = [
   "component.published",
   "component.unpublished",
   "component.draft_saved",
+  // A build's own description, replaced by a newer build's where nobody here had edited it.
+  "component.description_updated",
   "component.refused",
 
   /*
@@ -429,6 +486,12 @@ export const auditEventTypes = [
   "bot.deleted",
   "bot.callback_token_issued",
   "bot.callback_token_revoked",
+  /*
+   * A Bot was asked for a computer of its own and refused it: the person does not hold "Isolated
+   * Bots", the Bot belongs to no person, or this deployment cannot make a second computer. The row is
+   * the only trace of the attempt, since nothing about the Bot changed. `payload.reason` says which.
+   */
+  "bot.isolation_refused",
   /*
    * A Bot's lifecycle as one person runs it: paused, resumed, reset, how loudly it may reach them,
    * a follow-up it scheduled for itself, and a delegated task somebody stopped. See agents/lifecycle.ts.
@@ -571,6 +634,62 @@ export const auditEventTypes = [
   "knowledge.source_removed",
   "knowledge.binding_granted",
   "knowledge.binding_revoked",
+  /*
+   * A Recorder extension's bearer turned away: malformed, unknown or revoked, the person removed,
+   * their organization sign-in ended, or no role. Target the first 16 hex digits of the token's
+   * SHA-256, never the token; payload `reason` and `path`. At most one row per digest and reason a
+   * minute per replica, because a browser retrying a dead token would otherwise flood the trail.
+   */
+  "recorder.bearer_refused",
+  /*
+   * A browser connected to OpenBot as the Recorder, by whom and through which extension copy. Never
+   * the token or the code; the label is the person's own name for the browser.
+   */
+  "recorder.connected",
+  /*
+   * A connection refused before it was made; payload `reason`: `origin`, an origin that is not the Recorder's (payload
+   * `origin`, the one offered); `code`, a connect code that is unknown, expired or already used (payload `extensionId`
+   * and `installId`, never the code); or `too_many_codes`, the person already holding ten unused codes (payload `via`).
+   * A row that cannot be written is logged and the refusal stands.
+   */
+  "recorder.connect_refused",
+  /*
+   * A connection ended; payload `via`, how it was made (as on `recorder.connected`), and `reason`: replaced (the same
+   * copy connected again), disconnected, revoked, signed_out (the person's sign-in here ended: payload `ending` says how,
+   * a sign-out, sessions ended another way, the person removed, their organization ending the session it holds a copy
+   * of) or expired (its lifetime ran out: the deployment ended it, payload `owner`); for a Bot's browser's connection,
+   * which lasts one recording, stopped (the person's Stop), ended (the recording ended without one) or not-started (the
+   * start it was for did not happen); for the person's own OpenBot browser's, cleared (they cleared that browser, and its
+   * token went with the profile). Written in the transaction that ends the connection, as `recorder.connected` is in
+   * the one that makes it.
+   */
+  "recorder.revoked",
+  /*
+   * A security row: a person's sign-in here was ending (payload `ending`) and their Recorder connections could not be
+   * ended, after `attempts` tries (payload `error`, the database's complaint, never the query). The sign-in did not end
+   * either, and whoever was ending it was told: the person signing out, the administrator, the directory. Target the
+   * person.
+   */
+  "recorder.sign_out_failed",
+  /*
+   * The capture pass (the runtime's trajectory/connect) turned a caller away: an id that is not a UUID, no
+   * Recorder bearer or one that no longer resolves, no role, the organization unable to answer, or a trajectory
+   * already bound to another person. Target the trajectory id; payload `reason`. At most one row per person,
+   * trajectory and reason a minute per replica.
+   */
+  "recorder.trajectory_refused",
+  /*
+   * A person changed who else's Bots use the Skills learned in their own Learning space (Settings, Learning). Target
+   * the person; payload `from` and `to`, each `closed`, `open` or `choose`.
+   */
+  "learning.sharing_changed",
+  /* A person opened one of their own learned Skills to every Bot, or closed it again. Target and payload `skill`. */
+  "learning.skill_opened",
+  "learning.skill_closed",
+  /* A person asked an admin to share a Skill they approved themselves. Target and payload `skill`. */
+  "learning.sharing_requested",
+  /* An admin answered such a request. Target `skill`; payload `skill`, `userId` and `decision`, `approved` or `declined`. */
+  "learning.sharing_decided",
 ] as const;
 
 export type AuditEventType = (typeof auditEventTypes)[number];
@@ -658,11 +777,29 @@ export type AuditEventQuery = {
    * and a filter that returns only the first quietly hides two thirds of the refusals.
    */
   eventType?: string;
+  /**
+   * Types to leave out, separated by commas: what the personal edition's Activity does not show
+   * (`app/src/lib/audit/outcome.ts`), asked of the server so a page of 50 is 50 rows a person reads.
+   */
+  excludeEventType?: string;
+  /**
+   * Tools whose successful calls to leave out, separated by commas: a call whose change is recorded
+   * on its own row (`CALLS_RECORDED_AS_CHANGES` in `@openbot/shared/activity-rows`). A call that
+   * failed is kept.
+   */
+  excludeCalls?: string;
   actorUserId?: string;
   /** One kind, or several separated by commas, the way `eventType` takes several. */
   initiatorKind?: string;
   targetType?: string;
   targetId?: string;
+  /**
+   * One Bot's rows: what it did (`payload.bot`) and what was done to it (an `agent` target), the
+   * same two the audit page's Bot column reads. Asked of the server, so a Bot's actions older than
+   * the newest page are found too. A folder given to a Bot before its row said `bot` named it as
+   * `botId`, and is that Bot's row too.
+   */
+  bot?: string;
   from?: string;
   to?: string;
   /**
@@ -779,6 +916,12 @@ function initiatorColumns(initiator: AuditInitiator | undefined) {
 
 /** One row as written, handed to anything that streams the trail elsewhere. */
 export type AuditTapEvent = {
+  /** Persisted row identity, stable across analytics delivery attempts. */
+  id?: string;
+  createdAt?: Date;
+  /** Trusted native/headless action scope; never read from an analytics client. */
+  runId?: string;
+  threadId?: string;
   eventType: string;
   targetType: string;
   targetId?: string;
@@ -910,10 +1053,18 @@ export function createAuditStore(database: Database): AuditStore {
         ...initiatorColumns(initiator),
         payload: redactAuditPayload(event.payload) as Record<string, unknown>,
       };
-      await database.insert(auditEvents).values(row);
+      const [persisted] = await database
+        .insert(auditEvents)
+        .values(row)
+        .returning({ id: auditEvents.id, createdAt: auditEvents.createdAt });
       for (const tap of auditTaps) {
         try {
-          tap(row);
+          const run = currentApprovalContext();
+          tap({
+            ...row,
+            ...persisted,
+            ...(run ? { runId: run.runId, threadId: run.threadId } : {}),
+          });
         } catch (error) {
           console.error(
             JSON.stringify({
@@ -1110,6 +1261,22 @@ async function readAuditPage(
   };
 }
 
+/** Leaves out the successful calls of these tools. Naming nothing leaves out nothing. */
+function notSucceededCall(tools: string[] | undefined) {
+  return tools && tools.length > 0
+    ? or(
+        ne(auditEvents.eventType, "mcp.call_succeeded"),
+        isNull(auditEvents.targetId),
+        notInArray(auditEvents.targetId, tools),
+      )
+    : undefined;
+}
+
+/** The condition a set to leave out puts on a column. Naming nothing leaves out nothing. */
+function notRequested(column: PgColumn, values: string[] | undefined) {
+  return values && values.length > 0 ? notInArray(column, values) : undefined;
+}
+
 export function createAuditReader(database: Database): AuditReader {
   return {
     list: async (query) =>
@@ -1120,6 +1287,11 @@ export function createAuditReader(database: Database): AuditReader {
             auditEvents.eventType,
             requestedValues(query.eventType),
           ),
+          notRequested(
+            auditEvents.eventType,
+            requestedValues(query.excludeEventType),
+          ),
+          notSucceededCall(requestedValues(query.excludeCalls)),
           query.actorUserId
             ? eq(auditEvents.actorUserId, query.actorUserId)
             : undefined,
@@ -1131,6 +1303,30 @@ export function createAuditReader(database: Database): AuditReader {
             ? eq(auditEvents.targetType, query.targetType)
             : undefined,
           query.targetId ? eq(auditEvents.targetId, query.targetId) : undefined,
+          query.bot
+            ? or(
+                eq(sql<string>`${auditEvents.payload} ->> 'bot'`, query.bot),
+                and(
+                  eq(auditEvents.targetType, "agent"),
+                  eq(auditEvents.targetId, query.bot),
+                ),
+                and(
+                  eq(auditEvents.targetType, "host_access"),
+                  eq(
+                    sql<string>`${auditEvents.payload} ->> 'botId'`,
+                    query.bot,
+                  ),
+                ),
+                // A routine is its Bot's, whoever made it.
+                and(
+                  eq(auditEvents.targetType, "routine"),
+                  eq(
+                    sql<string>`${auditEvents.payload} ->> 'agentId'`,
+                    query.bot,
+                  ),
+                ),
+              )
+            : undefined,
           query.tenantId ? eq(auditEvents.tenantId, query.tenantId) : undefined,
           query.from
             ? gt(auditEvents.createdAt, new Date(query.from))
@@ -1295,10 +1491,13 @@ export function auditQueryFromUrl(url: URL): AuditEventQuery {
     cursor,
     limit,
     eventType: optional("eventType"),
+    excludeEventType: optional("excludeEventType"),
+    excludeCalls: optional("excludeCalls"),
     actorUserId: optional("actorUserId"),
     initiatorKind: optional("initiatorKind"),
     targetType: optional("targetType"),
     targetId: optional("targetId"),
+    bot: optional("bot"),
     from,
     to,
   };

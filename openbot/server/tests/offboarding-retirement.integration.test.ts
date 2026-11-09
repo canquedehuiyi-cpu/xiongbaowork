@@ -51,6 +51,7 @@ afterAll(async () => {
     await database.delete(sessions).where(eq(sessions.userId, memberId));
     await database.delete(users).where(inArray(users.id, [adminId, memberId]));
   });
+  await database.$client.close();
 });
 
 function appFor(

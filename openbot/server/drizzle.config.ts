@@ -31,6 +31,7 @@ export default defineConfig({
     "./src/db/schema/memory.ts",
     "./src/db/schema/defaults.ts",
     "./src/db/schema/proactive.ts",
+    "./src/db/schema/tasks.ts",
     "./src/db/schema/demonstrations.ts",
     "./src/db/schema/delivery.ts",
     "./src/db/schema/group.ts",
@@ -48,6 +49,7 @@ export default defineConfig({
     "./src/db/schema/pipeline.ts",
     "./src/db/schema/wakerflows.ts",
     "./src/db/schema/identity.ts",
+    "./src/db/schema/recorder.ts",
   ],
   out: "./drizzle",
   dbCredentials: {

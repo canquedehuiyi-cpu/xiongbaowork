@@ -187,6 +187,7 @@ afterAll(async () => {
     });
   }
   await releaseRoleWriter?.();
+  await database.$client.close();
 });
 
 describe("GitHub sign-in", () => {

@@ -9,8 +9,10 @@ export function parseLog(raw) {
   if (!counts.length || !ran || Number(ran[1]) === 0) {
     throw new Error("No completed Bun test summary; this run is unverified.");
   }
+  // An unnamed failure (a hook that threw) cannot be compared. Bun 1.4 also prints `(skip) … > (unnamed)`
+  // for the hooks of a skipped describe, which is not a failure and must not invalidate the run.
   if (
-    /remaining connection slots|too many clients|\(unnamed\)|error:.*preload|^\s*[1-9]\d* errors?\s*$/im.test(
+    /remaining connection slots|too many clients|^\(fail\)[^\n]*\(unnamed\)|error:.*preload|^\s*[1-9]\d* errors?\s*$/im.test(
       text,
     )
   ) {

@@ -212,7 +212,7 @@ test("every tenant table answers all four commands, and no writer answers the pl
   const rows = Array.from(
     (await runAsTenant("system", () =>
       database.execute(sql.raw(POLICY_CATALOG_SQL)),
-    )) as ArrayLike<PolicyRow>,
+    )) as unknown as ArrayLike<PolicyRow>,
   );
 
   const commands = new Map<string, Set<string>>();
@@ -303,7 +303,7 @@ test("every write that names a 'team' row also names who is writing it (G01-E, 0
           order by p.tablename, p.policyname
         `),
       ),
-    )) as ArrayLike<NamedPolicyRow>,
+    )) as unknown as ArrayLike<NamedPolicyRow>,
   );
 
   const unowned = rows
@@ -342,7 +342,7 @@ test("every write that names a 'team' row also names who is writing it (G01-E, 0
           where t.tgname = 'openbot_team_row_guard' and not t.tgisinternal
         `),
       ),
-    )) as ArrayLike<{
+    )) as unknown as ArrayLike<{
       table: string;
       count: number;
       args: string;
@@ -396,7 +396,7 @@ test("every write that names a 'team' row also names who is writing it (G01-E, 0
           from information_schema.columns where table_schema = 'public'
         `),
       ),
-    )) as ArrayLike<{ table: string; column: string }>,
+    )) as unknown as ArrayLike<{ table: string; column: string }>,
   );
   const known = new Set(columns.map((row) => `${row.table}.${row.column}`));
   const misspelled = triggers.flatMap((row) => {
@@ -461,4 +461,5 @@ afterAll(async () => {
   if (systemCrew) await clean("system", systemCrew);
   await runAsTenant("system", remove(systemAgent));
   await runAsTenant(tenantB, remove(ownAgent));
+  await database.$client.close();
 });

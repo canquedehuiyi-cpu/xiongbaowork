@@ -60,6 +60,7 @@ afterAll(async () => {
           ),
         ),
   );
+  await database.$client.close();
 });
 
 describe("settling a follow-up", () => {

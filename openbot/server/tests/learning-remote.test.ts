@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
   AbstractAgent,
-  EventType,
   type BaseEvent,
+  EventType,
   type RunAgentInput,
   type Tool,
 } from "@ag-ui/client";
@@ -264,6 +264,23 @@ describe("remote Automatic Learning delivery", () => {
       ),
     ).toEqual([start, finish]);
     expect(remote.inputs).toEqual([input]);
+  });
+
+  test("a Bot whose stream ends with no answer and no error is told in words", async () => {
+    // Seen on OpenBot Desktop as "Remote agent ended without a terminal event." in red: the
+    // LangGraph harness died on a provider refusal and its stream just stopped after RUN_STARTED.
+    const remote = new Remote(() => of(start));
+    const output = await events(
+      new RemoteLearnedSkillsMiddleware("bot", async () => snapshot()),
+      remote,
+    );
+    expect(output.map((event) => event.type)).toEqual([
+      EventType.RUN_STARTED,
+      EventType.RUN_ERROR,
+    ]);
+    expect((output.at(-1) as { message?: string }).message).toBe(
+      "The Bot stopped before it finished answering. Try again.",
+    );
   });
 
   test("denied acquisition stops before remote model work", async () => {

@@ -394,4 +394,5 @@ test("a card that fails again after it was archived asks again, and can be archi
 
 afterAll(async () => {
   await runAsTenant(tenant, () => database.delete(tasks));
+  await database.$client.close();
 });

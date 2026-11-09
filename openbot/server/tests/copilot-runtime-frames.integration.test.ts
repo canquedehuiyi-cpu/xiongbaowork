@@ -229,6 +229,7 @@ afterAll(async () => {
     await database.delete(users).where(inArray(users.id, [alice, bob]));
   });
   await remote.stop();
+  await database.$client.close();
 });
 
 const as = (person: string | null) =>
@@ -734,8 +735,10 @@ describe("after a restart a person's stored threads are theirs again, and nobody
     expect(runsInMemory(legacy)).toBeUndefined();
     // Then a new process's runner: a fresh evaluation of the module, so its ownership index is empty
     // and it has hydrated nobody, mounted exactly as the boot one was.
+    // Through a variable: the query is Bun's, and TypeScript resolves only a literal path.
+    const restartRunner = "../src/threads/postgres-runner.ts?p18-restart";
     const fresh = (await import(
-      "../src/threads/postgres-runner.ts?p18-restart"
+      restartRunner
     )) as typeof import("../src/threads/postgres-runner");
     restarted = mountApp(new fresh.PostgresAgentRunner(database));
   });

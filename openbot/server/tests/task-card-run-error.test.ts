@@ -119,7 +119,7 @@ async function takeTurn(
         .where(eq(threadRunEvents.runId, runId));
       return {
         status: row?.status ?? "missing",
-        types: rows.map((entry) => entry.event.type),
+        types: rows.map((entry) => (entry.event as { type: string }).type),
       };
     });
     status = read.status;
@@ -211,4 +211,5 @@ afterAll(async () => {
     await database.delete(threads);
     await database.delete(tasks);
   });
+  await database.$client.close();
 });

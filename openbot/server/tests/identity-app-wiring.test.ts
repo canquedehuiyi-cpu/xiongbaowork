@@ -189,7 +189,7 @@ test("the GitHub callback is reachable with a session and redirects to the app",
   );
   expect(response.status).toBe(302);
   expect(response.headers.get("location")).toBe(
-    "https://app.test/settings/connected-accounts?linked=failed",
+    "https://app.test/connections/github?linked=failed",
   );
   expect(fetchImpl).not.toHaveBeenCalled();
 });
@@ -240,7 +240,7 @@ test("the signed-in person's session reaches the callback and completes the link
   );
   expect(response.status).toBe(302);
   expect(response.headers.get("location")).toBe(
-    "https://app.test/settings/connected-accounts?linked=github",
+    "https://app.test/connections/github?linked=github",
   );
   expect(fetchImpl).toHaveBeenCalledTimes(2);
   expect(linkVerified).toHaveBeenCalledTimes(1);
@@ -259,7 +259,7 @@ test("a session for a different person than the state's fails and never reaches 
   );
   expect(response.status).toBe(302);
   expect(response.headers.get("location")).toBe(
-    "https://app.test/settings/connected-accounts?linked=failed",
+    "https://app.test/connections/github?linked=failed",
   );
   expect(fetchImpl).not.toHaveBeenCalled();
   expect(linkVerified).not.toHaveBeenCalled();

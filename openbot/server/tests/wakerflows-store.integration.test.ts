@@ -16,6 +16,7 @@ import {
   wakerGroupMembers,
   wakerGroups,
 } from "../src/db/schema";
+import type { PipelineStepRow } from "../src/db/schema/pipeline";
 import { createPipelineStore } from "../src/pipeline/store";
 import { createTaskProjector } from "../src/tasks/projector";
 import { runAsTenant } from "../src/tenant/context";
@@ -264,7 +265,8 @@ test("Flow plans are revision fenced, versioned, and protected from generic crew
       tenantId: f.tenantId,
       groupId,
       name: "bypass",
-      steps: f.plan.steps,
+      // A WakerFlow's own steps, handed to the pipeline door they must not get through.
+      steps: f.plan.steps as unknown as PipelineStepRow[],
     }),
   ).rejects.toThrow("WakerFlow 内");
   await expect(
@@ -326,12 +328,13 @@ test("Flow plans are revision fenced, versioned, and protected from generic crew
       .where(eq(groupTaskTemplates.tenantId, f.tenantId)),
   );
   expect(versions).toHaveLength(2);
-  expect(versions.find((row) => row.id === templateId)?.steps).toEqual(
+  // The row's column is the pipeline's step type; what a WakerFlow saves there is its own steps.
+  expect(versions.find((row) => row.id === templateId)?.steps).toEqual<unknown>(
     f.plan.steps,
   );
-  expect(versions.find((row) => row.id === edited.templateId)?.steps).toEqual(
-    editedPlan.steps,
-  );
+  expect(
+    versions.find((row) => row.id === edited.templateId)?.steps,
+  ).toEqual<unknown>(editedPlan.steps);
   const rosterAfterEdit = await runAsTenant(f.tenantId, () =>
     database
       .select({ agentId: wakerGroupMembers.agentId })

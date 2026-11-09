@@ -13,11 +13,14 @@
     "windows": [
       {
         "title": "熊宝",
-        "width": 900,
-        "height": 640,
+        "width": 1000,
+        "height": 800,
         "minWidth": 720,
         "minHeight": 560,
-        "resizable": true
+        "resizable": true,
+        "titleBarStyle": "Transparent",
+        "backgroundThrottling": "disabled",
+        "create": false
       }
     ],
     "security": { "csp": null }
@@ -27,15 +30,28 @@
     "macOS": {
       "entitlements": "./Entitlements.plist"
     },
+    "windows": {
+      "nsis": {
+        "installerHooks": "./windows/hooks.nsh",
+        "installerIcon": "./icons/icon.ico",
+        "uninstallerIcon": "./icons/icon.ico",
+        "headerImage": "./windows/installer-header.bmp",
+        "sidebarImage": "./windows/installer-sidebar.bmp"
+      }
+    },
     "linux": {
-      "deb": { "depends": ["pkexec", "procps", "lsof", "ca-certificates"] },
+      "deb": {
+        "depends": ["pkexec", "procps", "lsof", "ca-certificates"],
+        "postRemoveScript": "./linux/remove.sh"
+      },
       "rpm": {
         "depends": [
           "/usr/bin/pkexec",
           "/usr/bin/ps",
           "/usr/bin/lsof",
           "ca-certificates"
-        ]
+        ],
+        "postRemoveScript": "./linux/remove.sh"
       }
     },
     "targets": ["dmg", "nsis", "appimage", "deb", "rpm"],
@@ -46,9 +62,17 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "publisher": "XiongBao",
     "copyright": "CopilotKit",
     "category": "DeveloperTool",
     "shortDescription": "在你自己的电脑上运行熊宝",
     "longDescription": "熊宝桌面版会安装容器引擎、启动服务栈并保持其持续运行。"
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["openbot"]
+      }
+    }
   }
 }

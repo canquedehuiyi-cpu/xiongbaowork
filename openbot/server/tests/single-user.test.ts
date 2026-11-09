@@ -74,3 +74,46 @@ describe("running with no sign-in", () => {
     }
   });
 });
+
+/*
+ * M3: the routes this fork appends in index.ts (the board, quota, devices, models, platform and the
+ * rest) mounted `createDevRequireUser()` with no access, which is the strictest reading: this machine
+ * only. Inside the image that refused every request, because the engine's proxy is the peer of all of
+ * them, while upstream's own routes (app.ts) were handed the deployment's access and answered. The
+ * image smoke check caught it as eight 403s. Every single-user guard takes the deployment's access.
+ */
+describe("every single-user guard takes the deployment's access", () => {
+  test("index.ts never mounts the guard without it", async () => {
+    const source = await Bun.file(
+      new URL("../src/index.ts", import.meta.url),
+    ).text();
+    expect(source).not.toMatch(/createDevRequireUser\(\s*\)/);
+    expect(source).toContain("createDevRequireUser(config.singleUserAccess)");
+  });
+
+  test("in a container, a caller from the engine's network is the administrator; on a machine, it is not", async () => {
+    const { Hono } = await import("hono");
+    const { createDevRequireUser } = await import("../src/auth/dev-actor");
+    const answer = async (access: {
+      thisMachineOnly: boolean;
+      hosts: string[];
+    }) => {
+      const app = new Hono();
+      app.use("*", createDevRequireUser(access));
+      app.get("/api/tasks", (context) => context.json({ ok: true }));
+      return (
+        await app.request(
+          "http://127.0.0.1:3772/api/tasks",
+          { headers: { host: "127.0.0.1:3772" } },
+          { caller: { address: "172.17.0.1" } },
+        )
+      ).status;
+    };
+    expect(await answer({ thisMachineOnly: false, hosts: ["localhost"] })).toBe(
+      200,
+    );
+    expect(await answer({ thisMachineOnly: true, hosts: ["localhost"] })).toBe(
+      403,
+    );
+  });
+});

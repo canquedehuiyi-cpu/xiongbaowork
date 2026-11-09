@@ -10,6 +10,10 @@ import {
 import { randomUUID } from "node:crypto";
 import { inArray } from "drizzle-orm";
 import { createAuditStore } from "../src/audit";
+import type {
+  CredentialSecretReader,
+  CredentialStore,
+} from "../src/credentials";
 import { createDatabase } from "../src/db/client";
 import { mcpServers, mcpTools } from "../src/db/schema";
 import type { ComposioBroker } from "../src/plugins/broker";
@@ -89,7 +93,9 @@ const storeWith = (broker: ComposioBroker | undefined) =>
   createPluginStore({
     database,
     auditStore: createAuditStore(database),
-    credentials: { readSecret: async () => null },
+    credentials: {
+      readSecret: async () => null,
+    } as unknown as CredentialSecretReader & CredentialStore,
     encryptionKey: "x".repeat(44),
     policy: () => ({ mode: "enforce", deny: [], allow: ["true"] }),
     broker,

@@ -20,6 +20,8 @@
  */
 import { createHash } from "node:crypto";
 import type { Message } from "@ag-ui/client";
+import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
+import type { TurnRunner } from "@openbot/toolkit/run-turn";
 import { and, asc, desc, eq, isNull, min, sql } from "drizzle-orm";
 import { Hono, type MiddlewareHandler } from "hono";
 import { z } from "zod";
@@ -48,11 +50,20 @@ import {
 import { TEAM_TENANT } from "../db/schema/tenant";
 import { workItems } from "../db/schema/work";
 import type { CheckPrivateShare } from "../proactive/private-share";
-import type { TurnRunner } from "@openbot/toolkit/run-turn";
-import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 import type { TaskProjector } from "../tasks/projector";
 import { currentTenant, runAsClaimedTenant } from "../tenant/context";
 import type { WorkQueue } from "../work/queue";
+
+/**
+ * The command a message starts with, or undefined: a skill picked from the composer's `/` menu.
+ *
+ * M3: upstream reads this from plugins/picked-skill.ts (`leadingSkillCommand`), which the fork's
+ * plugins do not have yet; the same rule is spelled here. Only at the very start, and only a whole
+ * command followed by a space, a line break or the end.
+ */
+function leadingSkillCommand(text: string): string | undefined {
+  return /^\s*\/([a-z0-9]+(?:-[a-z0-9]+)*)(?=\s|$)/.exec(text)?.[1];
+}
 
 export const GROUP_TURN_KIND = "group.turn";
 
@@ -73,6 +84,12 @@ export type GroupTurn = {
   text: string;
   depth?: number;
   fromAgentId?: string;
+  /**
+   * The question this message answers, when it is the person's answer to one a Bot here asked. The
+   * transcript shows what they wrote; the Bot is told what it is an answer to, as a one-Bot
+   * conversation tells it (`questionResponseMessage`).
+   */
+  inResponseTo?: string;
 };
 const turnSchema = z.object({
   ownerUserId: z.string().min(1),
@@ -82,6 +99,7 @@ const turnSchema = z.object({
   text: z.string().min(1).max(16000),
   depth: z.number().int().nonnegative().optional(),
   fromAgentId: z.string().min(1).optional(),
+  inResponseTo: z.string().min(1).max(6000).optional(),
 });
 
 /**
@@ -319,47 +337,7 @@ export function createGroupStore(
     async submit(turn) {
       if (!PERSON_MESSAGE_ID.test(turn.messageId))
         throw new GroupRefusedError(PERSON_MESSAGE_ID_REFUSED);
-      await database.transaction(async (tx) => {
-        await tx.execute(
-          sql`select pg_advisory_xact_lock(hashtext(${`group:${turn.messageId}`}))`,
-        );
-        const [existing] = await tx
-          .select()
-          .from(groupMessages)
-          .where(eq(groupMessages.id, turn.messageId))
-          .limit(1);
-        // The same send twice (a retry after a dropped response) is one message. A different send
-        // reusing its id is refused rather than merged.
-        if (existing) {
-          if (
-            existing.ownerUserId !== turn.ownerUserId ||
-            existing.channelId !== turn.channelId ||
-            existing.text !== turn.text ||
-            JSON.stringify(existing.details.agentIds) !==
-              JSON.stringify(turn.agentIds)
-          )
-            throw new GroupRefusedError(
-              "This group message belongs to a different request.",
-            );
-          return;
-        }
-        await tx.insert(groupMessages).values({
-          id: turn.messageId,
-          ownerUserId: turn.ownerUserId,
-          channelId: turn.channelId,
-          text: turn.text,
-          details: { agentIds: turn.agentIds },
-          ...(await stampFor(tx, turn.channelId)),
-        });
-        // The turn is the sender's work, stamped with them by the frame: it runs as them.
-        await tx
-          .insert(workItems)
-          .values({ kind: GROUP_TURN_KIND, key: turn.messageId, payload: turn })
-          .onConflictDoNothing();
-        await tx.execute(
-          sql`select pg_notify('openbot_work_offered', ${GROUP_TURN_KIND})`,
-        );
-      });
+      await database.transaction((tx) => submitGroupTurn(tx, turn));
     },
     async start(turn, agentId, threadId) {
       const id = `${turn.messageId}:${agentId}`;
@@ -643,6 +621,57 @@ export function createGroupStore(
   };
 }
 
+type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
+
+/**
+ * A person's message to the group, and the turn that answers it, inside the caller's transaction.
+ *
+ * The same send twice (a retry after a dropped response) is one message. A different send reusing
+ * its id is refused rather than merged. Also how a person's answer to a Bot's question reaches the
+ * group (`approvals/questions.ts`), in the transaction that closes the question, so a question is
+ * never closed without its answer being posted.
+ */
+export async function submitGroupTurn(tx: Transaction, turn: GroupTurn) {
+  await tx.execute(
+    sql`select pg_advisory_xact_lock(hashtext(${`group:${turn.messageId}`}))`,
+  );
+  const [existing] = await tx
+    .select()
+    .from(groupMessages)
+    .where(eq(groupMessages.id, turn.messageId))
+    .limit(1);
+  if (existing) {
+    if (
+      existing.ownerUserId !== turn.ownerUserId ||
+      existing.channelId !== turn.channelId ||
+      existing.text !== turn.text ||
+      JSON.stringify(existing.details.agentIds) !==
+        JSON.stringify(turn.agentIds)
+    )
+      throw new GroupRefusedError(
+        "This group message belongs to a different request.",
+      );
+    return;
+  }
+  await tx.insert(groupMessages).values({
+    id: turn.messageId,
+    ownerUserId: turn.ownerUserId,
+    channelId: turn.channelId,
+    text: turn.text,
+    details: { agentIds: turn.agentIds },
+    // A shared group's messages are the team's; anyone else's are the sender's, by the frame (G01).
+    ...(await stampFor(tx, turn.channelId)),
+  });
+  // The turn is the sender's work, stamped with them by the frame: it runs as them.
+  await tx
+    .insert(workItems)
+    .values({ kind: GROUP_TURN_KIND, key: turn.messageId, payload: turn })
+    .onConflictDoNothing();
+  await tx.execute(
+    sql`select pg_notify('openbot_work_offered', ${GROUP_TURN_KIND})`,
+  );
+}
+
 /**
  * Which group a Bot's group thread belongs to, for a run that thread is carrying.
  *
@@ -689,17 +718,31 @@ export async function groupSourceForRun(
 export function groupTurnMessage(
   id: string,
   text: string,
-  transcript: ReadonlyArray<Pick<GroupMessage, "id" | "agentId" | "text">>,
+  transcript: ReadonlyArray<
+    Pick<GroupMessage, "id" | "agentId" | "text"> &
+      Partial<Pick<GroupMessage, "details">>
+  >,
   names: ReadonlyMap<string, string> = new Map(),
   exclude: ReadonlySet<string> = new Set(),
 ): Message {
   const prior = transcript
     .filter((row) => row.id !== id && !exclude.has(row.id) && row.text)
     .slice(-40)
-    .map((row) => ({
-      speaker: row.agentId ? (names.get(row.agentId) ?? row.agentId) : "person",
-      text: row.text.slice(0, 6000),
-    }));
+    .map((row) => {
+      /*
+       * A `message_bot` answer is written in the asking Bot's row, because that is the voice its
+       * thread admits, and `details.answeredBy` names the Bot whose words they are (`announceHandoff`).
+       * Quoted as the asking Bot's, the answer read to every Bot here as that Bot's own.
+       */
+      const answeredBy = (row.details as { answeredBy?: unknown } | undefined)
+        ?.answeredBy;
+      const speakerId =
+        typeof answeredBy === "string" ? answeredBy : row.agentId;
+      return {
+        speaker: speakerId ? (names.get(speakerId) ?? speakerId) : "person",
+        text: row.text.slice(0, 6000),
+      };
+    });
   return {
     id,
     role: "user",
@@ -1154,9 +1197,13 @@ export function createGroupConversations(deps: {
       .map((candidate) => candidate.name);
     // Each Bot speaks for itself: left unsaid, the first to answer writes everybody's part.
     const role = `You are ${self}, one of several Bots in this group conversation${others.length ? ` with ${others.join(", ")}` : ""}. Answer only your own part. The other Bots answer in their own turns, so do not write replies for them.`;
+    // An answer is told as one, with the question it answers, as a one-Bot conversation tells it.
+    const said = turn.inResponseTo
+      ? `In response to your question: ${turn.inResponseTo}\n\n${turn.text}`
+      : turn.text;
     const instruction = from
-      ? `${role}\n\n${from} addressed you in this group conversation:\n${turn.text}`
-      : `${role}\n\n${turn.text}`;
+      ? `${role}\n\n${from} addressed you in this group conversation:\n${said}`
+      : `${role}\n\n${said}`;
     // A peer turn's prompt is the peer's reply, so that row is left out of the transcript under it.
     const exclude = new Set(
       turn.fromAgentId
@@ -1173,6 +1220,13 @@ export function createGroupConversations(deps: {
      * avoid, where the open sits after the pause gate and the refusal for exactly this reason.
      */
     const carded = await openCard(turn, agentId, runId);
+    /*
+     * The skill the person picked, when their message starts with its command: under the group's
+     * framing above, the message this Bot is sent no longer starts with it, so it is stated for the
+     * run. Only a person's own turn; a peer's reply that starts with one picks nothing. Which skill
+     * that is, and whether this Bot holds it, the server decides (`picked-skill.ts`).
+     */
+    const skill = turn.fromAgentId ? undefined : leadingSkillCommand(turn.text);
     const consents = deps.listenForConsent?.(turn.ownerUserId, agentId);
     // Partial text, written at most this often, so the transcript shows the reply as it arrives.
     let latest: string | null = null;
@@ -1205,6 +1259,11 @@ export function createGroupConversations(deps: {
           flush();
         },
         ownerUserId: turn.ownerUserId,
+        telemetry: {
+          trigger: turn.fromAgentId ? "subagent" : "human",
+          surface: "web",
+          rootTaskId: `group:${turn.channelId}:${turn.messageId}`,
+        },
         routineId: `group:${turn.channelId}`,
         runId,
         // `openCard` above filed this answer under the same run id, so the runner files nothing — and
@@ -1213,6 +1272,7 @@ export function createGroupConversations(deps: {
         agentId,
         threadId,
         instruction,
+        ...(skill ? { skill } : {}),
         userMessage: groupTurnMessage(
           `group-user:${id}`,
           instruction,

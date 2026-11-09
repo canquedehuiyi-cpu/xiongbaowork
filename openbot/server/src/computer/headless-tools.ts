@@ -10,6 +10,7 @@ import {
 import { z } from "zod";
 import { currentApprovalContext } from "../approvals/types";
 import { type AuditStore, recordAuditEvent } from "../audit";
+import type { ComputerSeat } from "./computer-key";
 
 /** The turn engine's headless-tool types live in the toolkit now; re-exported for this server's callers. */
 export { type HeadlessTool, HeadlessToolSuspension };
@@ -24,6 +25,7 @@ import { desktopTools } from "./desktop-tools";
 import {
   type ActionActor,
   type ComputerGateway,
+  ComputerStillStartingError,
   HumanHasControlError,
 } from "./gateway";
 import type { ControlState } from "./schema";
@@ -50,7 +52,13 @@ export const SIGN_IN_TOOL_DESCRIPTION =
 /** Shipped browser/file/command tools, with identity bound before the model supplies arguments. */
 export function createHeadlessComputerTools(options: {
   gateway: ComputerGateway;
-  botId: string;
+  /**
+   * The Bot's seat for the person this run acts for: `gateway.seatFor(botId, ownerUserId)`.
+   *
+   * Resolved once per run, so an administrator withdrawing Isolated Bots moves the Bot onto the
+   * person's computer from its next run rather than part way through this one.
+   */
+  seat: ComputerSeat;
   actor: ActionActor;
   auditStore?: AuditStore;
   /** The private sign-in request. Absent leaves the Bot with help and secret requests only. */
@@ -86,14 +94,15 @@ export function createHeadlessComputerTools(options: {
 
 function headlessComputerTools(options: {
   gateway: ComputerGateway;
-  botId: string;
+  seat: ComputerSeat;
   actor: ActionActor;
   auditStore?: AuditStore;
   signIn?: HeadlessSignInRequester;
   machine?: "workspace" | "device";
   apps?: boolean;
 }): HeadlessTool[] {
-  const { gateway, botId, actor, auditStore, signIn } = options;
+  const { gateway, seat, actor, auditStore, signIn } = options;
+  const botId = seat.botId;
   const onDevice = options.machine === "device";
   const where = computerToolPlace(options.machine ?? "workspace");
   const snapshotId = z.number().int().positive();
@@ -126,6 +135,22 @@ function headlessComputerTools(options: {
             execute(input, context),
           );
         } catch (error) {
+          /*
+           * A cold start that outlasted the wait is answered, not thrown.
+           *
+           * Thrown, it reached the model as a bare error string beside every real failure, and a
+           * model reading "error" tends to apologise and give up on a computer that was seconds from
+           * ready. As a result it says the three things that decide the next step: the computer is
+           * starting, this call did nothing, and trying again shortly is the right move.
+           */
+          if (error instanceof ComputerStillStartingError) {
+            return {
+              ok: false,
+              starting: true,
+              notPerformed: true,
+              reason: error.message,
+            };
+          }
           if (error instanceof HumanHasControlError) {
             throw new HeadlessToolSuspension(error.message, {
               kind: "computer_handoff",
@@ -158,7 +183,7 @@ function headlessComputerTools(options: {
       "Open a web page and return its title and readable text. Use the returned content to answer.",
       z.strictObject({ url: text }),
       async ({ url }, { toolCallId }) => {
-        const result = await gateway.navigate(botId, actor, url, toolCallId);
+        const result = await gateway.navigate(seat, actor, url, toolCallId);
         if (result.challenge)
           throw new HeadlessToolSuspension(result.challenge.reason, {
             kind: "computer_handoff",
@@ -173,28 +198,36 @@ function headlessComputerTools(options: {
       "computer_read",
       "Read the currently open browser page without navigating.",
       noArgs,
-      async () => ({ ok: true, ...(await gateway.read(botId)) }),
+      async () => ({ ok: true, ...(await gateway.read(seat)) }),
     ),
     tool(
       "computer_snapshot",
       "List fields, buttons and links with refs. Call before clicking or typing and pass the returned snapshotId with every ref. If refs are stale take a fresh snapshot.",
       noArgs,
-      async () => ({ ok: true, ...(await gateway.snapshot(botId)) }),
+      async () => ({ ok: true, ...(await gateway.snapshot(seat)) }),
     ),
     tool(
       "computer_screenshot",
       "Return an image of the browser currently open on your computer.",
       noArgs,
-      async () => ({ ok: true, ...(await gateway.screenshot(botId)) }),
+      async () => ({ ok: true, ...(await gateway.screenshot(seat)) }),
     ),
     tool(
       "computer_click",
-      "Click an element using its ref and snapshotId from the latest snapshot.",
+      "Click an element using its ref and snapshotId from the latest snapshot. A link to another page is opened at its address.",
       z.strictObject({ ref, snapshotId }),
-      async (input, { signal }) => ({
-        ok: true,
-        ...(await gateway.click(botId, actor, input, signal)),
-      }),
+      async (input, { signal }) => {
+        const result = await gateway.click(seat, actor, input, signal);
+        // A followed link is a navigation, so a page that wants a person stops here as one does.
+        if (result.challenge)
+          throw new HeadlessToolSuspension(result.challenge.reason, {
+            kind: "computer_handoff",
+            botId,
+            requestId: result.challenge.requestId,
+            source: result.challenge.kind,
+          });
+        return { ok: true, ...result };
+      },
     ),
     tool(
       "computer_type",
@@ -207,7 +240,7 @@ function headlessComputerTools(options: {
       }),
       async (input, { signal }) => ({
         ok: true,
-        ...(await gateway.type(botId, actor, input, signal)),
+        ...(await gateway.type(seat, actor, input, signal)),
       }),
     ),
     tool(
@@ -224,7 +257,7 @@ function headlessComputerTools(options: {
         }),
       async (input, { signal }) => ({
         ok: true,
-        ...(await gateway.key(botId, actor, input, signal)),
+        ...(await gateway.key(seat, actor, input, signal)),
       }),
     ),
     tool(
@@ -233,7 +266,7 @@ function headlessComputerTools(options: {
       z.strictObject({ deltaY: z.number().optional() }),
       async (input) => ({
         ok: true,
-        ...(await gateway.scroll(botId, actor, input)),
+        ...(await gateway.scroll(seat, actor, input)),
       }),
     ),
     tool(
@@ -242,7 +275,7 @@ function headlessComputerTools(options: {
       z.strictObject({ path: z.string().optional(), root: folderRoot }),
       async (input) => ({
         ok: true,
-        ...(await gateway.listFiles(botId, actor, input)),
+        ...(await gateway.listFiles(seat, actor, input)),
       }),
     ),
     tool(
@@ -251,7 +284,7 @@ function headlessComputerTools(options: {
       z.strictObject({ path: text, root: folderRoot }),
       async (input) => ({
         ok: true,
-        ...(await gateway.readFile(botId, actor, input)),
+        ...(await gateway.readFile(seat, actor, input)),
       }),
     ),
     tool(
@@ -264,7 +297,7 @@ function headlessComputerTools(options: {
       }),
       async (input) => ({
         ok: true,
-        ...(await gateway.writeFile(botId, actor, input)),
+        ...(await gateway.writeFile(seat, actor, input)),
       }),
     ),
     tool(
@@ -275,7 +308,7 @@ function headlessComputerTools(options: {
       z.strictObject({ command: text }),
       async (input, { signal }) => ({
         ok: true,
-        ...(await gateway.runCommand(botId, actor, input, signal)),
+        ...(await gateway.runCommand(seat, actor, input, signal)),
       }),
     ),
     tool(
@@ -284,7 +317,7 @@ function headlessComputerTools(options: {
       z.strictObject({ reason: text }),
       async ({ reason }, { toolCallId }) =>
         waiting(
-          await gateway.requestHelp(botId, actor, reason, toolCallId),
+          await gateway.requestHelp(seat, actor, reason, toolCallId),
           reason,
         ),
     ),
@@ -294,7 +327,7 @@ function headlessComputerTools(options: {
       z.strictObject({ label: text, ref, snapshotId }),
       async (input) =>
         waiting(
-          await gateway.requestSecret(botId, actor, input),
+          await gateway.requestSecret(seat, actor, input),
           `The person must enter ${input.label} directly into the page.`,
           "computer_secret",
         ),

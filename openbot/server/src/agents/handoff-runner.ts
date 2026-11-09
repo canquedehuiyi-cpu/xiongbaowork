@@ -22,6 +22,7 @@ import {
   TenantContextError,
 } from "../tenant/context";
 import { DEFAULT_MAX_ATTEMPTS, type WorkQueue } from "../work/queue";
+import { isEndpointRefusal } from "./endpoint";
 import { HANDOFF_KIND } from "./handoff";
 import { ThreadBusyError } from "./handoff-delivery";
 import { BOT_PAUSED_REASON, isBotPaused } from "./lifecycle";
@@ -51,6 +52,14 @@ export type HandoffWork = {
    * the asking Bot, which is why it can speak in it at all.
    */
   answerIn?: string;
+  /**
+   * What the Bot that was asked said, word for word, on a hop carrying it home.
+   *
+   * Present, the hop writes these words into `answerIn` as that Bot's own message (`fromBotId` is
+   * the Bot that said them) and no model runs. Absent on a relay queued before this existed, which
+   * is delivered the old way, by running the asking Bot on `task`.
+   */
+  answer?: string;
 };
 
 export type HandoffDelivery = {
@@ -102,6 +111,13 @@ export type HandoffRunReport = {
 const RENEW_EVERY_MS = 20_000;
 
 /**
+ * The waits between tries of a hop whose conversation is busy: five seconds, doubling, never more
+ * than a minute. The delivery has already waited up to `BUSY_WAIT_MS` for it each time.
+ */
+const BUSY_RETRY_FIRST_MS = 5_000;
+const BUSY_RETRY_MAX_MS = 60_000;
+
+/**
  * How long a hop that is over is kept before it is dropped.
  *
  * Long past the point where its key still has to stop a duplicate — that is the asking run's own
@@ -126,6 +142,16 @@ export function createHandoffRunner(options: {
   /** After how many tries a hop is given up on. Told to `claim` as well as gating the notice. */
   maxAttempts?: number;
   /**
+   * Why a hop waiting on a busy conversation is no longer wanted there, or null while it is.
+   *
+   * A busy conversation is waited out for as long as it takes, so something has to say when there
+   * is no longer anything to wait for: the conversation was deleted, or the Bot that would speak in
+   * it was. Answered only from positive evidence; a conversation it cannot place is waited for.
+   */
+  answerGone?: (work: HandoffWork) => Promise<string | null>;
+  /** The first wait after a busy conversation, doubled each time up to `BUSY_RETRY_MAX_MS`. */
+  busyRetryFirstMs?: number;
+  /**
    * How often a claim is refreshed. Comfortably inside the lease.
    *
    * Injectable so the thing it protects against can be driven in a test in milliseconds rather than
@@ -133,6 +159,13 @@ export function createHandoffRunner(options: {
    * which is a matter of one duration outrunning another and does not care about the scale.
    */
   renewEveryMs?: number;
+  /**
+   * The queue moved for a hop: finished, released for another try, or dropped. Told after the row
+   * changed, with the relay already queued, so the conversation that asked can be told what it is
+   * waiting on now. The delivery's own busy signal fires inside the run, while the row still says
+   * the hop is in flight, so it cannot be the one that says it is over. Best-effort: never thrown.
+   */
+  onSettled?: (work: HandoffWork) => Promise<void>;
 }) {
   const {
     queue,
@@ -144,7 +177,52 @@ export function createHandoffRunner(options: {
     limit = 5,
     maxAttempts = DEFAULT_MAX_ATTEMPTS,
     renewEveryMs = RENEW_EVERY_MS,
+    busyRetryFirstMs = BUSY_RETRY_FIRST_MS,
+    answerGone,
+    onSettled,
   } = options;
+
+  /**
+   * The hop recorded as never delivered, and over. The row a person's unanswered question ends on,
+   * so it says why in words: never a silent drop.
+   */
+  const notDelivered = async (
+    report: HandoffRunReport,
+    work: HandoffWork,
+    item: { key: string; attempts: number },
+    reason: string,
+    startedAt?: number,
+  ) => {
+    await queue.finish({ kind: HANDOFF_KIND, key: item.key, owner });
+    report.skipped.push({ key: item.key, reason });
+    await settled(work);
+    await recordAuditEvent(auditStore, {
+      eventType: "agent.handoff_failed",
+      targetType: "agent",
+      targetId: work.toBotId,
+      ...(work.actorId ? { actorUserId: work.actorId } : {}),
+      initiator: { kind: "handoff", id: work.fromBotId },
+      payload: {
+        bot: work.fromBotId,
+        from: work.fromBotId,
+        to: work.toBotId,
+        run: work.runId,
+        attempt: item.attempts,
+        reason: `not delivered: ${reason}`,
+        final: true,
+        ...(startedAt === undefined ? {} : { ms: Date.now() - startedAt }),
+      },
+    });
+  };
+
+  const settled = async (work: HandoffWork) => {
+    try {
+      await onSettled?.(work);
+    } catch {
+      // A conversation that has not heard is corrected by its next event or its next read; a hop
+      // reported as failed for it would be run again.
+    }
+  };
 
   /**
    * Put the failure in front of the person, by running the Bot that asked in the conversation they
@@ -158,16 +236,23 @@ export function createHandoffRunner(options: {
    * itself worth a notice, and the check above skips any hop that carries one.
    */
   /**
-   * Put the answer in front of the person, the same way a failure is: by running the Bot that
-   * asked, in the conversation they are watching.
+   * Put the answer in front of the person, in the conversation they are watching, as the answering
+   * Bot's own message.
    *
-   * THE ADDRESSED BOT NEVER SPEAKS THERE — the platform gives a thread exactly one agent — so its
-   * words come home in the asking Bot's voice, attributed. The same `answerIn` marker that stops a
-   * notice recursing stops a relay relaying: a hop that carries one enqueues nothing when it lands.
+   * WORD FOR WORD, UNDER ITS OWN NAME. The platform gives a thread exactly one agent, so the
+   * answering Bot cannot run in the asking Bot's thread; its words are written there by the
+   * deployment instead, on a message whose id names the Bot that said them (see
+   * `answerMessageId`). This used to run the asking Bot to say the answer over in its own voice: a
+   * second model call, the answer paraphrased, and nothing in the conversation from the Bot the
+   * person was told would answer, which is the opposite of what the Bot's settings promise.
    *
-   * The answer is clipped rather than trusted to be a paragraph. It rides inside the prompt of the
-   * relaying run, and a Bot that came back with a report the length of a book would otherwise spend
-   * the relay's whole context window repeating it.
+   * `task` still carries the old instruction, so a replica running the previous release that claims
+   * this mid-upgrade delivers it the old way rather than reading the question as its own task.
+   *
+   * The same `answerIn` marker that stops a notice recursing stops a relay relaying: a hop that
+   * carries one enqueues nothing when it lands. The answer is clipped rather than trusted to be a
+   * paragraph, because a Bot that came back with a book would otherwise put a book in the person's
+   * conversation, and in every prompt that reads it afterwards.
    */
   const relay = (work: HandoffWork, key: string, answer: string) =>
     queue.offer({
@@ -184,7 +269,10 @@ export function createHandoffRunner(options: {
         runId: work.runId,
         depth: work.depth,
         ...(work.initiator ? { initiator: work.initiator } : {}),
+        ...(work.toName ? { fromName: work.toName } : {}),
+        ...(work.fromName ? { toName: work.fromName } : {}),
         answerIn: work.threadId,
+        answer: clip(answer),
         task: `You asked ${work.toName ?? work.toBotId} to help with this: ${work.task}\n\nIt answered:\n\n${clip(answer)}\n\nGive the person the outcome. Keep what matters, drop the pleasantries, and say it came from ${work.toName ?? work.toBotId}.`,
       } as unknown as Record<string, unknown>,
     });
@@ -346,11 +434,11 @@ export function createHandoffRunner(options: {
             continue;
           }
           await runAsTenant(tenant, async () => {
-            // A hop to a Bot its person paused is dropped, not delivered. See agents/lifecycle.ts.
+            // A hop to a Bot its person paused is dropped, not delivered, and recorded as such. See
+            // agents/lifecycle.ts.
             if (await isBotPaused(work.actorId, work.toBotId)) {
-              await queue.finish({ kind: HANDOFF_KIND, key: item.key, owner });
               ours.delete(item.key);
-              report.skipped.push({ key: item.key, reason: BOT_PAUSED_REASON });
+              await notDelivered(report, work, item, BOT_PAUSED_REASON);
               return;
             }
 
@@ -475,6 +563,8 @@ export function createHandoffRunner(options: {
                   );
                 });
               }
+              // After the relay is queued, so the conversation reads as still waiting on the answer.
+              await settled(work);
               await recordAuditEvent(auditStore, {
                 eventType: "agent.handoff_delivered",
                 targetType: "agent",
@@ -496,6 +586,41 @@ export function createHandoffRunner(options: {
               const reason =
                 error instanceof Error ? error.message : "could not be delivered";
               /*
+               * A CONVERSATION SOMEBODY ELSE IS RUNNING IN IS NOT A FAILURE, and does not spend an
+               * attempt: nothing was started, and the attempts are for things that went wrong. A
+               * relay counted down by a person's long run used to run out of attempts and was dropped
+               * with nobody told, the answer lost. Now it is put back uncounted and tried again,
+               * backing off to a minute between tries, until the conversation frees, or until there
+               * is no conversation or Bot left to answer in, which is recorded as not delivered.
+               */
+              if (error instanceof ThreadBusyError) {
+                ours.delete(item.key);
+                const gone = await answerGone?.(work).catch(() => null);
+                if (gone) {
+                  await notDelivered(report, work, item, gone, startedAt);
+                  return;
+                }
+                const waited = Number(
+                  (item.payload as { busyRetries?: unknown }).busyRetries ?? 0,
+                );
+                const busyRetries = Number.isFinite(waited) ? waited : 0;
+                await queue.release({
+                  kind: HANDOFF_KIND,
+                  key: item.key,
+                  owner,
+                  delayMs: Math.min(
+                    busyRetryFirstMs * 2 ** busyRetries,
+                    BUSY_RETRY_MAX_MS,
+                  ),
+                  reason,
+                  uncounted: true,
+                  payload: { busyRetries: busyRetries + 1 },
+                });
+                report.skipped.push({ key: item.key, reason });
+                await settled(work);
+                return;
+              }
+              /*
                * The last try, so the person is told rather than left waiting.
                *
                * Enqueued before the release, because the release is what makes this attempt the last
@@ -503,10 +628,14 @@ export function createHandoffRunner(options: {
                * this hop. A person who was told their question had been handed on, and then hears
                * nothing for ever, has no way to tell a slow Bot from a broken one.
                */
-              // The deployment's controls refused it (Use Bots, the model allowlist). Trying again in a
-              // minute gets the same answer, so this is the last try, whatever the count says.
+              // The deployment's controls refused it (Use Bots, the model allowlist), or the other
+              // Bot's address is one this deployment will not dial. Trying again in a minute gets the
+              // same answer, so this is the last try, whatever the count says. Retrying a refused
+              // address left the person watching "Asking …" for five minutes before being told.
               const refused =
-                error instanceof Error && error.name === "CapabilityRefusedError";
+                (error instanceof Error &&
+                  error.name === "CapabilityRefusedError") ||
+                isEndpointRefusal(error);
               if ((refused || item.attempts >= maxAttempts) && !work.answerIn) {
                 await tell(work, item.key, reason).catch((failure) => {
                   // A notice that cannot be queued must not take the release with it: leaving the row
@@ -529,17 +658,12 @@ export function createHandoffRunner(options: {
                   kind: HANDOFF_KIND,
                   key: item.key,
                   owner,
-                  // A busy conversation on the first try is almost always the asking Bot finishing its
-                  // own reply, a second or two from free. Later tries keep the minute, so a person
-                  // mid-conversation still gets the same few minutes of patience.
-                  delayMs:
-                    error instanceof ThreadBusyError && item.attempts <= 1
-                      ? 5_000
-                      : 60_000,
+                  delayMs: 60_000,
                   reason,
                 });
               ours.delete(item.key);
               report.skipped.push({ key: item.key, reason });
+              await settled(work);
               await recordAuditEvent(auditStore, {
                 eventType: "agent.handoff_failed",
                 targetType: "agent",
@@ -626,8 +750,16 @@ function attribute(work: HandoffWork): string {
   if (work.answerIn) {
     return `${work.task}\n\nSay this in your own words to the person in this conversation, in a sentence or two. Do not hand it to another Bot.`;
   }
+  /*
+   * BY NAME, AND IT IS TOLD WHICH ONE IT IS. A Bot's own prompt does not have to say its name, and
+   * the person's words it reads alongside this were said to the asking Bot: "ask the Knowledge Bot,
+   * do not answer it yourself", read by a Bot that was never told it is Knowledge, sent it looking
+   * for a Knowledge Bot, and it answered that there was none.
+   */
+  const asker = work.fromName ?? work.fromBotId;
+  const self = work.toName ?? work.toBotId;
   const lines = [
-    `${work.fromBotId} has asked you to help with this, on behalf of the person in this conversation.`,
+    `You are ${self}. ${asker}, another Bot, has asked you to help with this, on behalf of the person it is talking to.`,
     "",
     `Task: ${work.task}`,
   ];
@@ -636,7 +768,7 @@ function attribute(work: HandoffWork): string {
     lines.push(`What a good answer looks like: ${work.expecting}`);
   lines.push(
     "",
-    "Answer in this conversation as yourself. The person can see it, so write it for them rather than for the Bot that asked.",
+    `Answer it yourself, as ${self}, with what you can reach. Your answer is shown to the person in their conversation with ${asker}, under your own name, so write it for them rather than for the Bot that asked.`,
   );
   return lines.join("\n");
 }

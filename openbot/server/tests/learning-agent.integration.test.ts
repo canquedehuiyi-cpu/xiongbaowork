@@ -3,8 +3,8 @@ import { LLMock } from "@copilotkit/aimock";
 import { CopilotKitIntelligence } from "@copilotkit/runtime/v2";
 import { buildAgents, type RuntimeModel } from "../src/copilot";
 import {
-  createLearningRuntime,
   type AcquireLearnedSkills,
+  createLearningRuntime,
 } from "../src/learning/runtime";
 import { createLearningSettingsStore } from "../src/learning/settings";
 import { skillSnapshot } from "./fixtures/learned-skills";
@@ -32,12 +32,6 @@ function agents(
     undefined,
     undefined,
     undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    // This fork's buildAgents carries four more seams before learning: personal memory, the model
-    // binding, the 分身's sources and the current project. Learning is appended last (R0).
     undefined,
     undefined,
     undefined,

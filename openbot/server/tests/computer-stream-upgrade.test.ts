@@ -6,15 +6,12 @@ import { createAgentProfileStore } from "../src/agents/profile-store";
 import type { OpenBotRole } from "../src/auth/roles";
 import {
   type ComputerStreamSocketData,
-  captureInFrame,
   handleComputerStreamUpgrade,
 } from "../src/computer/stream-upgrade";
 import { createDatabase } from "../src/db/client";
 import { runnerAddress } from "../src/devices/channel";
 import { agents, users } from "../src/db/schema/core";
 import { agentProfiles } from "../src/db/schema/coworker";
-import { createDemonstrationRecorder } from "../src/demonstrations/recording";
-import { createDemonstrationStore } from "../src/demonstrations/store";
 import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
@@ -30,7 +27,6 @@ const owner = `${prefix}-owner`;
 const stranger = `${prefix}-stranger`;
 const bot = `${prefix}-bot`;
 const profiles = createAgentProfileStore(database, undefined);
-const demonstrations = createDemonstrationStore(database);
 
 const roles: Record<string, OpenBotRole> = {
   [owner]: "user",
@@ -51,8 +47,6 @@ function deps() {
     locate: async (botId: string) => `http://computer.example.test/${botId}`,
     toStreamUrl: (base: string, botId: string) =>
       `${base.replace(/^http/, "ws")}/stream?bot=${encodeURIComponent(botId)}&token=t`,
-    activeRecording: (ownerUserId: string, botId: string) =>
-      demonstrations.active(ownerUserId, botId),
   };
 }
 
@@ -124,8 +118,6 @@ test("the owner of a private Bot gets its live screen", async () => {
   expect(server.upgraded).toEqual([
     {
       upstream: `ws://computer.example.test/${bot}/stream?bot=${encodeURIComponent(bot)}&token=t`,
-      ownerUserId: owner,
-      botId: bot,
     },
   ]);
 });
@@ -152,61 +144,9 @@ test("nobody signed in is asked to sign in", async () => {
   expect(server.upgraded).toEqual([]);
 });
 
-test("the owner's active recording rides along on the socket", async () => {
-  const recording = await runAsTenant(owner, () =>
-    demonstrations.start(owner, bot, "Watched workflow"),
-  );
-  try {
-    const server = fakeServer();
-    const answer = await handleComputerStreamUpgrade(
-      deps(),
-      streamRequest(owner),
-      server,
-    );
-    expect(answer).toBeUndefined();
-    expect(server.upgraded).toHaveLength(1);
-    expect(server.upgraded[0]?.recordingId).toBe(recording.id);
-    expect(server.upgraded[0]?.upstream).toEndWith(
-      `&recording=${encodeURIComponent(recording.id)}`,
-    );
-  } finally {
-    await runAsTenant(owner, () => demonstrations.stop(owner, recording.id));
-  }
-});
-
-test("a step of the owner's recording that arrives on the socket is saved in the owner's frame", async () => {
-  const recorder = createDemonstrationRecorder({
-    store: demonstrations,
-    ownsBot: async (person, target) => person === owner && target === bot,
-    ownsSkill: async () => false,
-  });
-  const recording = await runAsTenant(owner, () =>
-    demonstrations.start(owner, bot, "Recorded workflow"),
-  );
-  try {
-    const server = fakeServer();
-    await handleComputerStreamUpgrade(deps(), streamRequest(owner), server);
-    const socket = server.upgraded[0];
-    expect(socket?.recordingId).toBe(recording.id);
-    if (!socket) throw new Error("the socket was not upgraded");
-    // Outside any frame, as Bun runs the socket's handlers: an unframed read would throw.
-    await captureInFrame(
-      socket,
-      {
-        kind: "click",
-        url: "https://example.test/invoices",
-        target: { role: "button", name: "Search", sensitive: false },
-      },
-      (...args) => recorder.capture(...args),
-    );
-    const saved = await runAsTenant(owner, () =>
-      demonstrations.get(owner, recording.id),
-    );
-    expect(saved.actions.map((action) => action.kind)).toEqual(["click"]);
-  } finally {
-    await runAsTenant(owner, () => demonstrations.stop(owner, recording.id));
-  }
-});
+// M3: "the owner's active recording rides along on the socket" and "a step of the owner's recording
+// that arrives on the socket is saved in the owner's frame" are gone with server/src/demonstrations
+// (upstream #868, replaced by the Recorder): the socket now carries only where to connect inward.
 
 /*
  * F2 stage 2: a coworker whose computer is a tenant's own machine. Its screen is relayed from the

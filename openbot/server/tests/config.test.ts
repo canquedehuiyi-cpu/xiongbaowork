@@ -46,6 +46,30 @@ const {
 } = baseEnvironment;
 
 describe("deployment configuration", () => {
+  test.each([undefined, "", "stale-legacy-key"])(
+    "uses the CLI runtime key with legacy value %s",
+    (legacy) => {
+      const config = loadConfig({
+        ...baseEnvironment,
+        INTELLIGENCE_API_KEY: legacy,
+        CPK_INTELLIGENCE_API_KEY: "  cpk-current-project  ",
+      });
+      // Optional Intelligence here (R0), so the key is on `intelligence`, not on the runtime.
+      expect(config.intelligence?.apiKey).toBe("cpk-current-project");
+    },
+  );
+
+  test("an empty CLI key preserves legacy-only deployments", () => {
+    expect(
+      // The fork's base deployment has no Intelligence (R0), so the legacy key is given here.
+      loadConfig({
+        ...baseEnvironment,
+        INTELLIGENCE_API_KEY: "tenant-api-key",
+        CPK_INTELLIGENCE_API_KEY: "  ",
+      }).intelligence?.apiKey,
+    ).toBe("tenant-api-key");
+  });
+
   test("organization authority disables the standalone actor without requiring local provider secrets", () => {
     const config = loadConfig({
       ...withoutSignIn,
@@ -373,8 +397,39 @@ describe("deployment configuration", () => {
       clientId: "entra-client-id",
       clientSecret: "entra-client-secret",
       tenantId: "common",
+      apiScope: "api://entra-client-id/.default",
+      // No app may call OpenBot with a person's token until one is named.
+      allowedClients: [],
     });
     expect(configuredAuthProviders(config.auth)).toEqual(["microsoft"]);
+  });
+
+  test("takes the apps that may call with a person's Entra token by client id, and refuses anything else", () => {
+    const entra = {
+      ...withoutSignIn,
+      ...SESSION,
+      MICROSOFT_OAUTH_CLIENT_ID: "entra-client-id",
+      MICROSOFT_OAUTH_CLIENT_SECRET: "entra-client-secret",
+      MICROSOFT_OAUTH_TENANT_ID: "8f2c1e40-0000-0000-0000-000000000000",
+    };
+    // Compared as Entra writes `azp`, lower case, whatever case the portal was copied in.
+    expect(
+      loadConfig({
+        ...entra,
+        MICROSOFT_OAUTH_ALLOWED_CLIENTS:
+          "6E74172B-BE56-4843-9FF4-E66A39BB12E3, 1b4f7c2d-0000-4000-8000-000000000001",
+      }).auth?.microsoft?.allowedClients,
+    ).toEqual([
+      "6e74172b-be56-4843-9ff4-e66a39bb12e3",
+      "1b4f7c2d-0000-4000-8000-000000000001",
+    ]);
+    // The app's API URI is the likely paste, and no token's `azp` is ever one.
+    expect(() =>
+      loadConfig({
+        ...entra,
+        MICROSOFT_OAUTH_ALLOWED_CLIENTS: "api://hr-portal",
+      }),
+    ).toThrow("MICROSOFT_OAUTH_ALLOWED_CLIENTS names `api://hr-portal`");
   });
 
   test("narrows Microsoft to one directory when given a tenant", () => {
@@ -555,6 +610,15 @@ describe("deployment configuration", () => {
       { TRUSTED_ORIGINS: "http://localhost:3010,https://openbot.example.com" },
     ],
     ["an address that is not a URL at all", { OPENBOT_PUBLIC_URL: "openbot" }],
+    [
+      "a public URL missing its scheme",
+      { OPENBOT_PUBLIC_URL: "example.com:3010" },
+    ],
+    ["an app URL missing its scheme", { OPENBOT_APP_URL: "example.com:3010" }],
+    [
+      "a trusted origin missing its scheme",
+      { TRUSTED_ORIGINS: "http://localhost:3010,example.com:3010" },
+    ],
   ])("refuses no sign-in combined with %s", (_label, published) => {
     expect(() =>
       loadConfig({ ...withoutSignIn, ...OPEN, ...published }),
@@ -1133,23 +1197,29 @@ describe("automatic Learning container assignment", () => {
 });
 
 describe("memory sources and background research", () => {
-  test("are on by default for a fresh deployment", () => {
+  test("memory sources are on by default; background research is asked for in a conversation", () => {
     expect(loadConfig(baseEnvironment).memoryDefaults).toEqual({
       sources: true,
-      research: true,
+      research: false,
     });
   });
 
-  test.each(["false", "0"])("each switches off on its own with %p", (value) => {
+  test.each(["false", "0"])("memory sources switch off with %p", (value) => {
     expect(
       loadConfig({ ...baseEnvironment, OPENBOT_MEMORY_SOURCE_DEFAULTS: value })
         .memoryDefaults,
-    ).toEqual({ sources: false, research: true });
-    expect(
-      loadConfig({ ...baseEnvironment, OPENBOT_PROACTIVE_DEFAULTS: value })
-        .memoryDefaults,
-    ).toEqual({ sources: true, research: false });
+    ).toEqual({ sources: false, research: false });
   });
+
+  test.each(["true", "1"])(
+    "research by default comes back only with %p",
+    (value) => {
+      expect(
+        loadConfig({ ...baseEnvironment, OPENBOT_PROACTIVE_DEFAULTS: value })
+          .memoryDefaults,
+      ).toEqual({ sources: true, research: true });
+    },
+  );
 });
 
 /**
@@ -1399,5 +1469,87 @@ describe("the model name a deployment actually reads", () => {
   test("stays quiet when nobody wrote the inert one", () => {
     const lines = warningsWith({ BOT_MODEL: "deepseek-flash" });
     expect(lines.some((line) => line.includes("OPENAI_MODEL"))).toBe(false);
+  });
+});
+
+/**
+ * The personal edition: one person on their own machine, with no sign-in and the one shared
+ * computer. Each refusal names the variable to change, because the combinations it refuses are the
+ * ones somebody gets by copying a team deployment's `.env`.
+ */
+describe("edition", () => {
+  const personalEnvironment = {
+    ...withoutSignIn,
+    OPENBOT_EDITION: "personal",
+    OPENBOT_SINGLE_USER: "true",
+    AGENT_COMPUTER_URL: "http://127.0.0.1:7000",
+  };
+
+  test("defaults to team", () => {
+    expect(loadConfig(baseEnvironment).edition).toBe("team");
+    expect(
+      loadConfig({ ...baseEnvironment, OPENBOT_EDITION: "" }).edition,
+    ).toBe("team");
+  });
+
+  test("personal edition loads with single user and a shared computer", () => {
+    const config = loadConfig(personalEnvironment);
+    expect(config.edition).toBe("personal");
+    expect(config.computer?.provider).toBe("shared");
+  });
+
+  // What OpenBot Desktop writes, so an app connected over its own OAuth has an address to come
+  // back to. Loopback is this machine, so single-user mode stays on and stays this machine's.
+  test("personal edition takes the app's own loopback address as its public URL", () => {
+    const config = loadConfig({
+      ...personalEnvironment,
+      OPENBOT_IN_CONTAINER: "true",
+      OPENBOT_PUBLIC_URL: "http://127.0.0.1:3010",
+      TRUSTED_ORIGINS:
+        "http://localhost:3010,http://127.0.0.1:3010,http://[::1]:3010",
+    });
+    expect(config.publicUrl).toBe("http://127.0.0.1:3010");
+    expect(config.singleUser).toBe(true);
+    expect(config.edition).toBe("personal");
+    expect(config.browserOrigins).toContain("http://127.0.0.1:3010");
+    expect(config.browserOrigins).toContain("http://[::1]:3010");
+  });
+
+  test("refuses an unknown value", () => {
+    expect(() =>
+      loadConfig({ ...personalEnvironment, OPENBOT_EDITION: "consumer" }),
+    ).toThrow(/OPENBOT_EDITION.*"team".*"personal"/);
+  });
+
+  test("personal edition refuses without single-user mode", () => {
+    const { OPENBOT_SINGLE_USER: _, ...environment } = personalEnvironment;
+    expect(() => loadConfig(environment)).toThrow("OPENBOT_SINGLE_USER=true");
+  });
+
+  test("personal edition refuses an identity provider", () => {
+    expect(() =>
+      loadConfig({
+        ...personalEnvironment,
+        GOOGLE_OAUTH_CLIENT_ID: "google-client-id",
+        GOOGLE_OAUTH_CLIENT_SECRET: "google-client-secret",
+        BETTER_AUTH_SECRET: baseEnvironment.BETTER_AUTH_SECRET,
+        BETTER_AUTH_URL: baseEnvironment.BETTER_AUTH_URL,
+        INITIAL_ADMIN_EMAILS: baseEnvironment.INITIAL_ADMIN_EMAILS,
+      }),
+    ).toThrow("GOOGLE_OAUTH_CLIENT_ID");
+  });
+
+  test("personal edition refuses the Docker supervisor", () => {
+    expect(() =>
+      loadConfig({
+        ...personalEnvironment,
+        COMPUTER_SUPERVISOR_URL: "http://127.0.0.1:7001",
+      }),
+    ).toThrow(/COMPUTER_SUPERVISOR_URL.*AGENT_COMPUTER_URL/);
+  });
+
+  test("personal edition refuses a deployment with no computer", () => {
+    const { AGENT_COMPUTER_URL: _, ...environment } = personalEnvironment;
+    expect(() => loadConfig(environment)).toThrow("AGENT_COMPUTER_URL");
   });
 });

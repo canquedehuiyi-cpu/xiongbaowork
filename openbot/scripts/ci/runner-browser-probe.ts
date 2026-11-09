@@ -231,7 +231,7 @@ try {
     request("navigate", { url: "http://169.254.169.254/latest/meta-data/iam/" }),
   );
   assert(
-    String(metadata.error).includes("cloud credentials"),
+    String(metadata.error).includes("cloud keys"),
     "cloud metadata is refused even with private hosts open",
     "runner policy, before any request",
   );

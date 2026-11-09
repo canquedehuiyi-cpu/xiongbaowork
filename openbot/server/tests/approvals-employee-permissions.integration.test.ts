@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
-import type { AppVariables } from "../src/app-variables";
+import type { AppVariables } from "../src/auth/guards";
 import { TOOL_DISABLED } from "../src/approvals/policy";
 import { createApprovalRoutes } from "../src/approvals/routes";
 import { createApprovalService } from "../src/approvals/service";
@@ -48,7 +48,7 @@ function client(id: string, role: "user" | "admin" = "user") {
     createApprovalRoutes(
       service,
       async (context, next) => {
-        context.set("actor", { id, role });
+        context.set("actor", { id, email: `${id}@example.test`, role });
         await runAsTenant(id, () => next());
       },
       scope.adminCapability,

@@ -1,11 +1,14 @@
+import { MAX_IMAGE_BYTES } from "@openbot/shared/attachments";
 import type { Context, Hono as HonoApp, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { serveStatic } from "hono/bun";
-import { MAX_IMAGE_BYTES } from "@openbot/shared/attachments";
 import { enterpriseControls } from "./admin/controls";
 import { createEnterpriseGate } from "./admin/gate";
-import { createEnterpriseAdminRoutes } from "./admin/routes";
+import {
+  createEnterpriseAdminRoutes,
+  createProactiveAdminRoutes,
+} from "./admin/routes";
 import {
   authoriseAgentCall,
   callbackFrameFor,
@@ -14,6 +17,7 @@ import {
   sameToken,
 } from "./agents/callback-token";
 import { computerAccessCheck } from "./agents/computer-access";
+import { deploymentCanIsolate } from "./agents/isolation";
 import {
   type BotLifecycleServices,
   createBotLifecycleRoutes,
@@ -27,10 +31,10 @@ import type { ApprovalService } from "./approvals/service";
 import {
   type AuditEventType,
   type AuditInitiator,
-  auditEventsToCsv,
   AuditQueryError,
   type AuditReader,
   type AuditStore,
+  auditEventsToCsv,
   auditQueryFromUrl,
   DEPLOYMENT_INITIATOR,
   readAuditExportRows,
@@ -49,11 +53,24 @@ import {
 import type { IdentityProviderStore } from "./auth/identity-provider-store";
 import { desktopAuthPage } from "./auth/native-browser";
 import {
+  type BotBrowserRouteDeps,
+  createBotBrowser,
+} from "./browser/bot-browser";
+import {
+  type BrowserRouteDeps,
+  browserConnectionRevoked,
+  createBrowserRoutes,
+} from "./browser/routes";
+import {
   createAttachmentRoutes,
   createChannelAttachmentRoutes,
 } from "./channels/attachments";
 import type { ChannelEventHub } from "./channels/events";
 import { createGroupRoutes, type GroupConversations } from "./channels/group";
+import {
+  createModelChoiceRoutes,
+  type ModelChoices,
+} from "./channels/model-choice";
 import { type ChannelStore, createChannelRoutes } from "./channels/routes";
 import type { ThreadIdentity } from "./channels/thread-identity";
 import {
@@ -84,27 +101,39 @@ import {
   createDeliveryRoutes,
   createDeliveryWebhookRoutes,
 } from "./delivery/routes";
-import type { DemonstrationRecorder } from "./demonstrations/recording";
-import { createDemonstrationRoutes } from "./demonstrations/routes";
-import type { DemonstrationStore } from "./demonstrations/store";
 import { mountDesktopConnectionFailure } from "./desktop-connection-failure";
 import { createTranscriptionProvider } from "./dictation/provider";
 import { createDictationRoutes } from "./dictation/routes";
+import { createEditionGate } from "./edition-routes";
 import type { HostAccessBroker } from "./host-access/broker";
 import { createHostAccessRoutes } from "./host-access/routes";
 import { identityRoutes } from "./identity/routes";
 import type { IdentityStore } from "./identity/store";
+import { createCapturePassOrigin } from "./intelligence-gateway-proxy";
 import {
   createLearningRoutes,
   type LearningAdminDependencies,
 } from "./learning/routes";
+import {
+  type LearningModelEndpoint,
+  mountLearningModelEndpoint,
+} from "./learning/model-endpoint";
+import {
+  createPersonalLearningRoutes,
+  type PersonalLearningRouteDeps,
+} from "./learning/sharing-routes";
 import type { MemoryIngestion } from "./memory/ingestion";
 import { createMemoryRoutes } from "./memory/routes";
 import type { MemoryStore } from "./memory/store";
+import {
+  createModelRoutes,
+  type ModelCatalogueReader,
+} from "./model-catalogue";
 import { parsePageLimit } from "./paging";
 import { createPasswordRoutes, createSignInRoutes } from "./passwords/routes";
 import type { SignInService } from "./passwords/service";
 import type { OnboardingStore } from "./people/onboarding";
+import { createProfileRoutes, type ProfileStore } from "./people/profile";
 import { MAX_PAGE, type PeopleStore } from "./people/store";
 import type { ComposioBroker } from "./plugins/broker";
 import { createPluginRoutes } from "./plugins/routes";
@@ -122,6 +151,14 @@ import {
   mountProviderOAuthProxy,
 } from "./provider-oauth";
 import type { QuotaService } from "./quota/limits";
+import {
+  createRequireRecorder,
+  RECORDER_BEARER_PREFIX,
+} from "./recorder/guard";
+import { createRecorderRoutes } from "./recorder/routes";
+import type { RecorderExtensionDeps } from "./recorder/wiring";
+import { createReleaseStatusRoutes } from "./release-status";
+import { createOriginGuard, createSingleUserGate } from "./request-trust";
 import type { ResponsibilityBindingStore } from "./responsibilities/bindings";
 import type { ResponsibilityEngine } from "./responsibilities/engine";
 import { createGithubResponsibilityRoutes } from "./responsibilities/github";
@@ -134,8 +171,14 @@ import type { IntentRouter } from "./routing/classify";
 import { createRoutingRoutes } from "./routing/routes";
 import { createCoworkerRoutingService } from "./routing/service";
 import type { SelfHostBanner } from "./self-host-banner";
+import { createSetupRoutes, type SetupSources } from "./setup/checklist";
+import { createBotTaskRoutes } from "./tasks/bot-task-routes";
+import type { TaskRunner } from "./tasks/runner";
+import type { TaskStore } from "./tasks/store";
 import { createTeamBotRoutes } from "./team-bots/routes";
 import type { TeamBots } from "./team-bots/team-bots";
+import type { ProductTelemetry } from "./telemetry/product";
+import { createProductTelemetryRoutes } from "./telemetry/product-routes";
 import type { PackageStatusReader } from "./tenant-package";
 import { capabilityFor, runAsTenant } from "./tenant/context";
 import {
@@ -394,6 +437,7 @@ export function createApp(
    * configured, which is the correct degraded behaviour: a deployment with no Composio API key has
    * no app directory to offer, rather than one that lists apps nobody can connect.
    */
+  // M3: upstream also passes a broker `provider` (Arcade); the fork's plugins keep Composio alone.
   composio?: { broker: ComposioBroker },
   /** Native model OAuth stays server-side; callers hold only a separate local bearer. */
   modelProviderProxy?: ModelProviderProxy,
@@ -402,11 +446,21 @@ export function createApp(
   coworker?: {
     /** AUT3: whether an automation may target a WakerFlow (its executor is registered). */
     wakerflowAutomations?: boolean;
-    demonstrations?: {
-      store: DemonstrationStore;
-      recorder: DemonstrationRecorder;
-    };
     approvals?: ApprovalService;
+    productTelemetry?: ProductTelemetry;
+    /** The Recorder extension's routes and guards (recorder/wiring.ts). Absent, nothing about it is mounted. */
+    recorder?: RecorderExtensionDeps;
+    /** A person's own OpenBot browser, with the Recorder in it already connected (browser/routes.ts). Absent, nothing
+     * about it is mounted and the app shows no Browser button. */
+    browser?: Omit<BrowserRouteDeps, "requireUser" | "auditStore">;
+    /** A Bot's browser worked by a person: its bar and Record (browser/bot-browser.ts), under the computer routes. Absent,
+     * or with no computer, nothing about it is mounted. */
+    botBrowser?: Omit<
+      BotBrowserRouteDeps,
+      "gateway" | "auditStore" | "botName"
+    >;
+    /** Settings, Learning: who else's Bots use a person's own learned Skills. Absent, the screen has nothing to read. */
+    personalLearning?: PersonalLearningRouteDeps;
     /** The private sign-in form and the Passwords vault. See passwords/service.ts. */
     passwords?: SignInService;
     delivery?: {
@@ -418,6 +472,8 @@ export function createApp(
     };
     memory?: { store: MemoryStore; ingestion: MemoryIngestion };
     proactive?: { store: ProactiveStore; engine: ProactiveEngine };
+    /** Started items, each run as a task in a conversation of its own. See tasks/runner.ts. */
+    tasks?: { store: TaskStore; runner: TaskRunner };
     responsibilities?: {
       store: ResponsibilityStore;
       engine: ResponsibilityEngine;
@@ -434,6 +490,20 @@ export function createApp(
     teamBots?: TeamBots;
     /** Pause, reset, Activity and attention for a person's own Bots. See agents/lifecycle.ts. */
     lifecycle?: BotLifecycleServices;
+    /**
+     * The setup checklist Settings → Setup draws, read from this server's own
+     * configuration and state. See setup/checklist.ts. Absent, `/api/setup` is not mounted.
+     */
+    setup?: SetupSources;
+    /** The models a person may pick for a built-in Bot's run. Absent, `/api/models` is not mounted. */
+    models?: ModelCatalogueReader;
+    /** Each person's pick per conversation. Absent, `/api/channels/:id/model` is not mounted. */
+    modelChoices?: ModelChoices;
+    /**
+     * The model local Intelligence's Learning agent is pointed at on a Claude or ChatGPT plan. See
+     * learning/model-endpoint.ts. Absent, nothing is mounted.
+     */
+    learningModel?: LearningModelEndpoint;
   },
   /**
    * Whether a conversation this deployment keeps is still there, for `GET /api/threads/:threadId`.
@@ -470,12 +540,18 @@ export function createApp(
   identity?: IdentityStore,
   /** The GitHub sign-in callback, built by the caller; mounted behind requireUser ahead of /api/identity. */
   identityGithubCallback?: Hono<{ Variables: AppVariables }>,
+  profileStore?: ProfileStore,
 ) {
   const app = new Hono<{ Variables: AppVariables }>();
+  // First, in every auth mode: a page from another website changes nothing here and opens no socket.
+  // See request-trust.ts for what passes and why.
+  app.use("/api/*", createOriginGuard(config));
   mountDesktopConnectionFailure(app, desktopHostToken);
   mountProviderOAuthProxy(app, modelProviderProxy);
+  mountLearningModelEndpoint(app, coworker?.learningModel);
 
   app.get("/health", (context) => context.json({ status: "ok" }));
+  app.route("/", createReleaseStatusRoutes());
   // The public key Bots' browsers sign their requests with, where Cloudflare and any other verifier
   // look for it. Public by design, and absent when Web Bot Auth is off. See web-bot-auth.ts.
   const webBotAuth = config.webBotAuth;
@@ -506,10 +582,27 @@ export function createApp(
        * the WakerFlow target, so the form never offers a target the store would refuse.
        */
       wakerflowAutomations: coworker?.wakerflowAutomations === true,
-      // Whether to offer help self-hosting. A fork running this for its own people turns it off.
-      selfHostBanner: selfHostBanner
-        ? await selfHostBanner.shown()
-        : config.selfHostBanner,
+      // Whether to offer help self-hosting OpenBot. A fork running it for its own people turns it off,
+      // and a deployment that pays for Intelligence never sees it. See self-host-banner.ts.
+      // Never in the personal edition: one person running it for themselves is not the audience.
+      selfHostBanner:
+        config.edition === "personal"
+          ? false
+          : selfHostBanner
+            ? await selfHostBanner.shown()
+            : config.selfHostBanner,
+      /*
+       * Whether this is somebody trying OpenBot on their own machine, not an organization's
+       * deployment. Onboarding reads it to explain where OpenBot can run, which only the person
+       * evaluating it needs and an organization's employees should never be pitched.
+       *
+       * Single-user mode, not a new switch: it is already true only with no identity provider and
+       * no address anybody else can reach (see `singleUserAllowed` in config.ts), which is exactly
+       * a local trial, and an operator cannot forget to set it.
+       */
+      localEvaluation: config.singleUser,
+      // Which product this is: the app shows the personal edition's screens instead of Admin.
+      edition: config.edition,
       transcription: Boolean(config.transcription),
       voice: Boolean(config.voice),
       /*
@@ -558,6 +651,8 @@ export function createApp(
       emailPassword: emailPasswordAvailable(config),
     }),
   );
+  // Ahead of every route it closes, the auth handler's SSO and SCIM routes included.
+  app.use("/api/*", createEditionGate(config.edition));
   /*
    * Registering an identity provider is an administrator's decision, not a signed-in one.
    *
@@ -599,6 +694,18 @@ export function createApp(
       );
     }
     if (!auth) {
+      /*
+       * One person and no sign-in (OpenBot Desktop): there is no session for Sign out to end, so
+       * ending it has already happened. The app no longer offers Sign out here; a page loaded
+       * before that change still could, and a 503 left the person staring at "No identity provider
+       * is configured." for a button that cannot fail.
+       */
+      if (
+        config.singleUser &&
+        context.req.method === "POST" &&
+        new URL(context.req.url).pathname === "/api/auth/sign-out"
+      )
+        return context.json({ success: true });
       return context.json(
         { error: "No identity provider is configured." },
         503,
@@ -677,9 +784,10 @@ export function createApp(
   }> = async (context) =>
     context.json({ error: "No identity provider is configured." }, 503);
   // One administrator, when nothing is configured to sign anybody in. Checked first, and only ever
-  // true when there is no provider, so a configured deployment cannot fall back to it.
+  // true when there is no provider, so a configured deployment cannot fall back to it. Admitted only
+  // from where that one person can be: see `singleUserRefusal`.
   const requireUser = config.singleUser
-    ? createDevRequireUser()
+    ? createDevRequireUser(config.singleUserAccess)
     : auth && roleRepository
       ? createRequireUser(auth, roleRepository)
       : authenticationUnavailable;
@@ -700,10 +808,16 @@ export function createApp(
   // Enterprise controls: capability switches and the model allowlist in front of the routes they
   // govern, the admin screen's API, and the SCIM verbs the GET/POST auth handler above does not take.
   app.use("/api/*", createEnterpriseGate(requireUser));
+  if (coworker?.productTelemetry)
+    app.route(
+      "/api/telemetry",
+      createProductTelemetryRoutes(requireUser, coworker.productTelemetry),
+    );
   app.route(
     "/api/admin/enterprise",
     createEnterpriseAdminRoutes(requireUser, adminScope),
   );
+  app.route("/api/admin/proactive", createProactiveAdminRoutes(requireUser));
   app.on(["PUT", "PATCH", "DELETE"], "/api/auth/scim/*", (context) =>
     auth
       ? asIdentityLayer(() => auth.handler(context.req.raw))
@@ -738,6 +852,7 @@ export function createApp(
     context.json({
       user: {
         ...context.var.actor,
+        ...(profileStore ? await profileStore.read(context.var.actor.id) : {}),
         /*
          * Read here rather than in the guard, so only this route pays the extra query. Null means
          * this deployment does not track onboarding, which the app reads as nothing to finish;
@@ -747,8 +862,15 @@ export function createApp(
           ? await onboardingStore.status(context.var.actor.id)
           : null,
       },
+      /*
+       * The OpenBot release this server runs, drawn small under the person's name. Here rather than
+       * on /api/capabilities, which anybody can read: as with /release, the exact version is not
+       * handed to whoever can reach the port. Null when the build has none, such as in development.
+       */
+      version: config.version ?? null,
     }),
   );
+  app.route("/api/me/profile", createProfileRoutes(requireUser, profileStore));
   app.post("/api/me/onboarding", requireUser, async (context) => {
     if (!onboardingStore) {
       return context.json({ error: "新手引导暂不可用。" }, 503);
@@ -1492,6 +1614,30 @@ export function createApp(
   // The CopilotKit runtime, behind the same session guard as every other API route. Mounted last so
   // its own routing under /api/copilotkit cannot shadow an OpenBot route declared above.
   if (copilotHandler) {
+    /*
+     * The runtime admits the single-user administrator by itself (`resolveRequestActor`), from a
+     * request its hooks may already have copied, so the connection it came on is checked here, in
+     * front of it. A Recorder bearer is not the administrator: it resolves to its own connection and
+     * is refused everywhere but the capture pass.
+     */
+    if (config.singleUser)
+      app.use(
+        "/api/copilotkit/*",
+        createSingleUserGate(config.singleUserAccess, (request) =>
+          Boolean(
+            request.headers
+              .get("authorization")
+              ?.startsWith(RECORDER_BEARER_PREFIX),
+          ),
+        ),
+      );
+    /*
+     * The Recorder's capture pass names the Intelligence gateway's socket, and where this server
+     * carries that socket with no public URL to write before it, as over a `kubectl port-forward`, the
+     * address is a path. The page resolves a path against itself; the Recorder is not on the page, so
+     * its pass is answered knowing this server's own origin as the Recorder reached it.
+     */
+    app.use("/api/copilotkit/*", createCapturePassOrigin(config));
     // Mounted at the ROOT with the handler carrying its own basePath. Mounting it at
     // "/api/copilotkit" as well double-prefixes it: Hono strips the prefix before the handler sees
     // the path, so every route lands at /api/copilotkit/api/copilotkit/* and /info 404s. The browser
@@ -1530,6 +1676,19 @@ export function createApp(
         pageFrames,
         auditReader,
         adminScope,
+        coworker?.botBrowser
+          ? createBotBrowser({
+              ...coworker.botBrowser,
+              gateway: computerGateway,
+              ...(auditStore ? { auditStore } : {}),
+              ...(agentProfileStore
+                ? {
+                    botName: async (actor, botId) =>
+                      (await agentProfileStore.get(actor, botId))?.name ?? null,
+                  }
+                : {}),
+            })
+          : undefined,
       ),
     );
   }
@@ -1583,9 +1742,11 @@ export function createApp(
               canHandOn: (agentId) => pluginStore.agentCanHandOn(agentId),
             }
           : undefined,
-        // Whether "built-in" is a kind of coworker this deployment can actually make: the create
-        // path falls back to the managed Bot's endpoint, so without one it can only refuse.
-        config.managedAgent?.endpoint !== undefined,
+        // Whether a Bot made with no address can run here. Always: with a managed Bot it runs there,
+        // and without one `create` makes a `built_in` Bot that runs in this server on the person's
+        // instructions, as the personal edition's Personal Assistant does. Answering "is there a
+        // managed Bot" told OpenBot Desktop, which has none, that nobody could make a Bot at all.
+        true,
         // The managed Bot's address, so a coworker created without an endpoint — which creation
         // stores as running at this address — can be told apart from one a person hosts.
         config.managedAgent?.endpoint?.toString(),
@@ -1593,6 +1754,23 @@ export function createApp(
         // An administrator reaches another person's Bot here as `platform`, and changes it in the
         // owner's frame (G01-E P8b).
         adminScope,
+        // So testing one of our own addresses knocks with the token the run will use, rather than
+        // reporting a refusal for a Bot this deployment started itself.
+        config.managedAgent
+          ? {
+              token: config.managedAgent.token,
+              endpoints: [
+                config.managedAgent.endpoint,
+                config.managedAgent.alsoRun,
+              ].filter((url): url is URL => url !== undefined),
+            }
+          : undefined,
+        // Whether a Bot can have a computer of its own here: only where the provider makes computers.
+        { available: deploymentCanIsolate(config.computer) },
+        // An agent on the person's own loopback, dialled from this server's container.
+        config.thisMachineHost
+          ? { thisMachineHost: config.thisMachineHost }
+          : undefined,
       ),
     );
     // Choosing a coworker for an untagged message needs the same permission-filtered roster the
@@ -1606,6 +1784,12 @@ export function createApp(
             store: agentProfileStore,
             router: intentRouter,
             auditStore,
+            skillsFor: pluginStore
+              ? async (agentId) =>
+                  (await pluginStore.listForAgent(agentId)).skills.map(
+                    (skill) => skill.slug,
+                  )
+              : undefined,
             /*
              * Which vendors each coworker holds tools for, so the router weighs what a coworker can
              * reach and not only what somebody wrote it was for. Only when there is a plugin store to
@@ -1635,7 +1819,13 @@ export function createApp(
   if (channelStore) {
     app.route(
       "/api/channels",
-      createChannelRoutes(channelStore, requireUser, channelEvents, auditStore),
+      createChannelRoutes(
+        channelStore,
+        requireUser,
+        channelEvents,
+        auditStore,
+        userPreferences,
+      ),
     );
   }
 
@@ -1724,12 +1914,34 @@ export function createApp(
       createDeliveryRoutes({ ...coworker.delivery.authenticated, requireUser }),
     );
   }
-  if (coworker?.demonstrations)
+  if (coworker?.recorder) {
     app.route(
-      "/api/demonstrations",
-      createDemonstrationRoutes(
-        coworker.demonstrations.store,
-        coworker.demonstrations.recorder,
+      "/api/recorder",
+      createRecorderRoutes({
+        ...coworker.recorder,
+        // A Disconnect in Settings, Browsers reaches the person's own OpenBot browser at once.
+        ...(coworker.browser
+          ? { onRevoked: browserConnectionRevoked(coworker.browser) }
+          : {}),
+        requireUser,
+        requireRecorder: createRequireRecorder(
+          coworker.recorder.resolve,
+          coworker.recorder.onRefused,
+        ),
+        auditStore,
+      }),
+    );
+  }
+  if (coworker?.browser)
+    app.route(
+      "/api/browser",
+      createBrowserRoutes({ ...coworker.browser, requireUser, auditStore }),
+    );
+  if (coworker?.personalLearning)
+    app.route(
+      "/api/settings/learning",
+      createPersonalLearningRoutes(
+        { ...coworker.personalLearning, auditStore },
         requireUser,
       ),
     );
@@ -1737,6 +1949,28 @@ export function createApp(
     app.route(
       "/api/bots",
       createBotLifecycleRoutes(coworker.lifecycle, requireUser, adminScope),
+    );
+  /*
+   * Signed in, unlike `/api/capabilities`, which anybody can read. The checklist names what this
+   * deployment has and lacks, and for an admin which variables would close a gap, which is not a
+   * visitor's to have before they sign in.
+   */
+  if (coworker?.setup)
+    app.route("/api/setup", createSetupRoutes(coworker.setup, requireUser));
+  /*
+   * Upstream's model catalogue (what a person may pick for a built-in Bot's run) at
+   * `/api/model-catalogue`: `/api/models` is the fork's tenant model library (models/routes.ts),
+   * mounted by index.ts, and both answer `GET /`.
+   */
+  if (coworker?.models)
+    app.route(
+      "/api/model-catalogue",
+      createModelRoutes(coworker.models, requireUser),
+    );
+  if (coworker?.modelChoices)
+    app.route(
+      "/api/channels",
+      createModelChoiceRoutes(coworker.modelChoices, requireUser),
     );
   if (coworker?.groups)
     app.route("/api/groups", createGroupRoutes(coworker.groups, requireUser));
@@ -1775,6 +2009,20 @@ export function createApp(
       createProactiveRoutes(
         coworker.proactive.store,
         coworker.proactive.engine,
+        requireUser,
+      ),
+    );
+  /*
+   * Upstream's started work (a check-in item a person started runs as a task in a conversation of
+   * its own) at `/api/bot-tasks`: `/api/tasks` is the fork's task board (tasks/routes.ts), mounted
+   * by index.ts.
+   */
+  if (coworker?.tasks)
+    app.route(
+      "/api/bot-tasks",
+      createBotTaskRoutes(
+        coworker.tasks.store,
+        coworker.tasks.runner,
         requireUser,
       ),
     );
@@ -2043,6 +2291,8 @@ export function createApp(
             ...(credentialActorId === verdict.actorId
               ? {}
               : { credentialActorId }),
+            // The conversation the signed run is in, so a routine asked for there posts there.
+            ...(verdict.run.threadId ? { threadId: verdict.run.threadId } : {}),
           });
           // Worded by the helper the in-process door uses, so a framework Bot's model reads a vendor's
           // error as the vendor's and not as a result. Neither Bot words it on its way through.
@@ -2128,8 +2378,9 @@ export function createApp(
   /*
    * The built app, served by the API that serves it.
    *
-   * WHY THE SAME PROCESS. There is no CORS anywhere in this server, deliberately, so the app has to
-   * reach `/api` on its own origin. Two containers behind one ingress does that too, and costs a
+   * WHY THE SAME PROCESS. The app's API calls get no CORS from this server, deliberately, so the app
+   * has to reach `/api` on its own origin. (The runtime answers CORS for this deployment's own origins
+   * and the Recorder only; see `cors` in copilot.ts.) Two containers behind one ingress does that too, and costs a
    * path rule on every deployment plus a way for the two to disagree about which host they are on.
    * One process cannot disagree with itself.
    *

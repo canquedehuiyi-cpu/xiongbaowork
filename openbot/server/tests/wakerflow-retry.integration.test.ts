@@ -464,10 +464,11 @@ describe("retrying from the failed step (spec §3.5)", () => {
     const source = await f.runRow(sourceId);
     const changed: WakerFlowPlan = {
       ...f.plan,
-      steps: f.plan.steps.map((step) => ({
-        ...step,
-        instruction: `新版${step.instruction}`,
-      })),
+      steps: f.plan.steps.map((step) =>
+        "instruction" in step
+          ? { ...step, instruction: `新版${step.instruction}` }
+          : step,
+      ),
     };
     const saved = await f.store.save(f.tenantId, f.tenantId, f.flow.id, {
       revision: f.flow.revision,

@@ -11,8 +11,13 @@ There are two supported paths, and they are different jobs:
   B. They want to try OpenBot on their own machine, change OpenBot itself, or edit a tenant package
      from source. Use the clone.
 
-There is no released desktop app yet: no OpenBot release carries a desktop installer, only the
-container image list. Do not send anybody to a desktop app.
+There is also a desktop app, OpenBot Personal Edition, for somebody who only wants to use OpenBot
+on their own computer, not deploy it or change it. It runs the workspace and CopilotKit
+Intelligence locally. Send them to its installer instead of either path below:
+
+  Mac (Apple silicon)  https://downloads.copilotkit.ai/latest/OpenBot-mac-arm64.dmg
+  Mac (Intel)          https://downloads.copilotkit.ai/latest/OpenBot-mac-x64.dmg
+  Windows (x64)        https://downloads.copilotkit.ai/latest/OpenBot-windows-x64-setup.exe
 
 OpenBot is a template to make your own and white-label, not a hosted product somebody signs up for.
 The container runs it as released; the clone is for running it locally and for changing the
@@ -103,9 +108,9 @@ OpenBot root where `.env` is:
   npx copilotkit@latest local connect --approve-connection
 
 `local connect` writes INTELLIGENCE_API_URL, INTELLIGENCE_GATEWAY_WS_URL and
-CPK_INTELLIGENCE_API_KEY to `.env`. OpenBot reads the first two as they are but takes its project
-key only from INTELLIGENCE_API_KEY, so copy the `cpk-...` value of CPK_INTELLIGENCE_API_KEY into
-INTELLIGENCE_API_KEY before `bash scripts/start.sh`. The local licence lasts 30 days;
+CPK_INTELLIGENCE_API_KEY to `.env`. OpenBot reads those values directly; do not copy or rename
+the key. INTELLIGENCE_API_KEY remains a legacy fallback when the CLI key is empty or absent.
+When both are set, the non-empty CLI key takes precedence. The local licence lasts 30 days;
 `npx copilotkit@latest local renew` renews it as often as needed while the account is in good
 standing. Skip the managed `project select` and setup-learning commands on this path.
 
@@ -117,7 +122,7 @@ OpenAI path, put the model key in OPENAI_API_KEY. For Anthropic, set all three l
 
   ANTHROPIC_API_KEY=...
   BOT_PROVIDER=anthropic
-  BOT_MODEL=claude-sonnet-4-5
+  BOT_MODEL=claude-sonnet-5-5
 
 That BOT_MODEL line is not optional in the clone path: docker-compose defaults BOT_MODEL to an
 OpenAI model. For a compatible endpoint, set OPENAI_BASE_URL, OPENAI_API_KEY if that endpoint needs

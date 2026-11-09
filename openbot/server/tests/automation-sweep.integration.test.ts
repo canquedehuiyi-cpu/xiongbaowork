@@ -205,6 +205,7 @@ afterAll(async () => {
       .delete(workItems)
       .where(eq(workItems.kind, AUTOMATION_FIRE_KIND));
   });
+  await database.$client.close();
 });
 
 describe("the minute key", () => {

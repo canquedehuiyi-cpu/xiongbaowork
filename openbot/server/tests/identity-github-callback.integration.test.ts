@@ -14,10 +14,9 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { afterAll, test } from "./support/platform-frame";
 
 const encryptionKey = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
-const OK = "https://app.test/settings/connected-accounts?linked=github";
-const FAILED = "https://app.test/settings/connected-accounts?linked=failed";
-const TAKEN =
-  "https://app.test/settings/connected-accounts?linked=github-taken";
+const OK = "https://app.test/connections/github?linked=github";
+const FAILED = "https://app.test/connections/github?linked=failed";
+const TAKEN = "https://app.test/connections/github?linked=github-taken";
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const vault = createCredentialStore(database);

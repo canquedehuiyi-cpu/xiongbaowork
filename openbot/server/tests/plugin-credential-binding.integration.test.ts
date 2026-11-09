@@ -496,6 +496,7 @@ afterAll(async () => {
       .delete(credentials)
       .where(like(credentials.provider, `binding-swap-%${tag}`)),
   );
+  await database.$client.close();
 });
 
 describe("replacing an added server's token", () => {

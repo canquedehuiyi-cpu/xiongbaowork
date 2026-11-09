@@ -212,6 +212,9 @@ export function createTeamBots(options: {
      * personal account on (a shared credential reaches the same place whoever asks). The owner, where
      * the owner connected it. The asker's own account only with a standing or one-time consent;
      * without one the call is refused with the card's marker, and nothing is sent.
+     *
+     * M3: upstream also leaves the owner's account out for an action the owner granted the Bot
+     * themselves (owner app grants, `plugin_grants.granted_as`); that is not adopted here.
      */
     credentialActorFor(actorId: string, botId: string) {
       return async (ref: string): Promise<string> => {
@@ -267,6 +270,51 @@ export function createTeamBots(options: {
           `${TEAM_BOT_CONSENT_MARKER}${JSON.stringify({ botId, serverId })} ${message}`,
           null,
         );
+      };
+    },
+
+    /**
+     * For a check-in, which nobody is watching: which of this Bot's tools go out on the asker's OWN
+     * account without asking them anything. Null when the Bot is theirs or nobody's Team Bot, where
+     * every call already does.
+     *
+     * {@link credentialActorFor}'s answer, read without acting on it. That one spends a one-time
+     * consent and raises a card, and both need a person present. So here the owner's account is no
+     * (it is not what the asker connected), a one-time consent is no (it was for one call they made),
+     * no consent is no, and a standing consent, for this Bot or every Bot, is yes.
+     */
+    async unaskedOwnAccount(
+      actorId: string,
+      botId: string,
+    ): Promise<((ref: string) => Promise<boolean>) | null> {
+      const owner = (await publication(botId))?.ownerUserId;
+      if (!owner || owner === actorId) return null;
+      return async (ref) => {
+        const serverId = ref.split("/")[0] ?? "";
+        if ((await connectedServers(owner)).has(serverId)) return false;
+        const [consent] = await database
+          .select({ decision: teamBotConsents.decision })
+          .from(teamBotConsents)
+          .where(
+            and(
+              eq(teamBotConsents.userId, actorId),
+              eq(teamBotConsents.agentId, botId),
+              eq(teamBotConsents.serverId, serverId),
+            ),
+          )
+          .limit(1);
+        if (consent?.decision === "always") return true;
+        const [everyBot] = await database
+          .select({ serverId: teamBotConsentDefaults.serverId })
+          .from(teamBotConsentDefaults)
+          .where(
+            and(
+              eq(teamBotConsentDefaults.userId, actorId),
+              eq(teamBotConsentDefaults.serverId, serverId),
+            ),
+          )
+          .limit(1);
+        return everyBot !== undefined;
       };
     },
 
@@ -492,9 +540,7 @@ export function createTeamBots(options: {
 
     async assign(actor: AgentActor, botId: string, groupName: string) {
       if (actor.role !== "admin")
-        throw new TeamBotRefusedError(
-          "Only an administrator can assign Team Bots.",
-        );
+        throw new TeamBotRefusedError("Only an admin can assign Team Bots.");
       if (!(await publication(botId)))
         throw new TeamBotRefusedError("Publish this Bot before assigning it.");
       // Asked after the publication, so a Bot this frame cannot see is still "publish it first".

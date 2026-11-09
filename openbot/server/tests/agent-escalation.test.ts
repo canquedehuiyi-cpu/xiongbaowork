@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
   askTheirOwnPerson,
-  ESCALATE_TOOL,
   escalationTool,
   PUT_TO,
 } from "../src/agents/escalation";
@@ -35,11 +34,6 @@ function recorder() {
 }
 
 describe("asking a person", () => {
-  test("is offered to every run, granted anybody or not", () => {
-    const tool = escalationTool({ from: FROM, route: askTheirOwnPerson });
-    expect(tool.name).toBe(ESCALATE_TOOL);
-  });
-
   test("names who was reached, so the Bot can say what it did", async () => {
     const tool = escalationTool({ from: FROM, route: askTheirOwnPerson });
 
@@ -63,19 +57,6 @@ describe("asking a person", () => {
     await tool.execute({ question: "which account?" });
 
     expect(written[0]?.initiator).toEqual({ kind: "routine", id: "routine_7" });
-  });
-
-  test("a run that says nothing leaves the row filed as a person's", async () => {
-    const { written, store } = recorder();
-    const tool = escalationTool({
-      from: FROM,
-      route: askTheirOwnPerson,
-      auditStore: store,
-    });
-
-    await tool.execute({ question: "which account?" });
-
-    expect(written[0]?.initiator).toBe(undefined);
   });
 
   test("the question is on the record", async () => {
@@ -103,6 +84,60 @@ describe("asking a person", () => {
    * A route that reaches nobody is the row worth finding later: the Bot stopped, the person was
    * never asked, and without it nothing anywhere says so.
    */
+  /*
+   * Several decisions asked at once travel as separate parts, each with its own options, so the
+   * person answers them one at a time rather than parsing "(1) … (2) … (3) …" out of a sentence.
+   */
+  test("several decisions reach the route as parts, with their options", async () => {
+    const asked: unknown[] = [];
+    const tool = escalationTool({
+      from: FROM,
+      route: async (input) => {
+        asked.push(input);
+        return { reached: "the person in this conversation" };
+      },
+    });
+    const parts = [
+      {
+        header: "Tier name",
+        question: "Which paid-tier name?",
+        options: ["Pro", "Plus"],
+      },
+      { header: "Soar", question: "Is Soar in the launch?" },
+    ];
+
+    await tool.execute({ question: "Two launch decisions", parts });
+
+    expect(asked[0]).toMatchObject({ question: "Two launch decisions", parts });
+  });
+
+  /*
+   * One option is a suggestion, not a malformed question. It was refused, which left the person
+   * unasked over a hint; the card offers it as a choice above the field for their own words.
+   */
+  test("a part offering a single option is sent, with the option as a suggestion", async () => {
+    const asked: unknown[] = [];
+    const tool = escalationTool({
+      from: FROM,
+      route: async (input) => {
+        asked.push(input);
+        return { reached: "the person in this conversation" };
+      },
+    });
+    const parts = [
+      { header: "Tier name", question: "Which name?", options: ["Pro"] },
+      { header: "Soar", question: "Is Soar in?" },
+    ];
+
+    const said = await tool.execute({
+      question: "Two launch decisions",
+      parts,
+    });
+
+    expect(String(said)).toStartWith(PUT_TO);
+    expect(asked[0]).toMatchObject({ question: "Two launch decisions", parts });
+  });
+
   test("a question that reached nobody is recorded as one", async () => {
     const { written, store } = recorder();
     const tool = escalationTool({

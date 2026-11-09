@@ -66,6 +66,7 @@ beforeEach(() => {
 function serve(endpoint: string) {
   let profile: AgentProfile = {
     id: "expenses",
+    isolated: false,
     name: "Expenses",
     title: "Finance Operations",
     roleDescription: "Review receipts.",

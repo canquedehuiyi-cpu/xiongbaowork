@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { AuditEventInput, AuditStore } from "../src/audit";
 import { computerActionIdentity } from "../src/computer/action-identity";
+import { personSeat } from "../src/computer/computer-key";
 import {
   ActionRefusedError,
   createComputerGateway,
@@ -22,6 +23,8 @@ import {
  * beside the gateway would have silently lost.
  */
 const ACTOR = { id: "owner-1" };
+/** The Bot's seat on its owner's computer; device mode reaches the paired machine by the Bot. */
+const SEAT = personSeat(ACTOR.id, "bot-1");
 const ENFORCE: ActionPolicy = { mode: "enforce", deny: [], allow: ["true"] };
 const DENY_ALL: ActionPolicy = { mode: "enforce", deny: ["true"], allow: [] };
 function deviceGateway(
@@ -57,12 +60,12 @@ function deviceGateway(
   const located: string[] = [];
   const provider: ComputerProvider = {
     name: "test",
-    isolation: "per-bot",
+    isolation: "per-person",
     locate: async () => {
       located.push("http://agent-computer:4100");
       return "http://agent-computer:4100";
     },
-    status: async (botId) => ({ botId, state: "ready" }),
+    status: async (seat) => ({ botId: seat.botId, state: "ready" }),
     stop: async () => ({ wasRunning: false }),
     reset: async () => ({ cleared: false }),
     list: async () => [],
@@ -95,7 +98,7 @@ describe("a coworker's action on the tenant's own machine", () => {
     await Promise.all(
       Array.from({ length: 2 }, () =>
         computerActionIdentity.run("tool-call-once", () =>
-          gateway.runCommand("bot-1", ACTOR, { command: "echo once" }),
+          gateway.runCommand(SEAT, ACTOR, { command: "echo once" }),
         ),
       ),
     );
@@ -103,14 +106,14 @@ describe("a coworker's action on the tenant's own machine", () => {
     expect(String(frames[0]?.key)).toContain("tool-call-once");
     await expect(
       computerActionIdentity.run("tool-call-once", () =>
-        gateway.runCommand("bot-1", ACTOR, { command: "echo different" }),
+        gateway.runCommand(SEAT, ACTOR, { command: "echo different" }),
       ),
     ).rejects.toThrow("different request");
     expect(frames).toHaveLength(1);
   });
   test("an allowed command is written to the device and nothing is dialled", async () => {
     const { gateway, frames, located, fetched, rows } = deviceGateway(ENFORCE);
-    const result = await gateway.runCommand("bot-1", ACTOR, {
+    const result = await gateway.runCommand(SEAT, ACTOR, {
       command: "pwd",
     });
     expect(frames.map((frame) => frame.action)).toEqual(["exec"]);
@@ -130,7 +133,7 @@ describe("a coworker's action on the tenant's own machine", () => {
   test("a refused command reaches no machine, and the trail says which rule said so", async () => {
     const { gateway, frames, fetched } = deviceGateway(DENY_ALL);
     const refusal = await gateway
-      .runCommand("bot-1", ACTOR, { command: "rm -rf /" })
+      .runCommand(SEAT, ACTOR, { command: "rm -rf /" })
       .catch((error: unknown) => error);
     expect(refusal).toBeInstanceOf(ActionRefusedError);
     expect(frames).toEqual([]);
@@ -141,7 +144,7 @@ describe("a coworker's action on the tenant's own machine", () => {
       unreachable: true,
     });
     const failure = await gateway
-      .runCommand("bot-1", ACTOR, { command: "pwd" })
+      .runCommand(SEAT, ACTOR, { command: "pwd" })
       .catch((error: unknown) => error);
     expect(failure).toBeInstanceOf(DeviceOfflineError);
     expect(frames).toEqual([]);
@@ -151,7 +154,7 @@ describe("a coworker's action on the tenant's own machine", () => {
   test("a refusal is written to the trail before the machine is asked", async () => {
     const { gateway, rows, frames } = deviceGateway(DENY_ALL);
     await gateway
-      .runCommand("bot-1", ACTOR, { command: "id" })
+      .runCommand(SEAT, ACTOR, { command: "id" })
       .catch(() => undefined);
     expect(rows.length).toBe(1);
     const payload = rows[0]?.payload as { decision?: { allowed?: boolean } };

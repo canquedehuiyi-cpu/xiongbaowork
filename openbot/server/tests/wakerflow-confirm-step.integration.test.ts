@@ -211,7 +211,18 @@ async function fixture() {
         );
       return { parent, children };
     });
-  return { tenantId, member, flow, calls, build, run, types, cards, ...first };
+  return {
+    tenantId,
+    member,
+    flow,
+    board,
+    calls,
+    build,
+    run,
+    types,
+    cards,
+    ...first,
+  };
 }
 
 describe("a confirm step asks a person (WF8 §3.3)", () => {

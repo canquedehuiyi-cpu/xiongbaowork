@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
 import { createAgentProfileStore } from "../src/agents/profile-store";
-import type { AppVariables } from "../src/app-variables";
+import type { AppVariables } from "../src/auth/guards";
 import {
   createChannelRoutes,
   createChannelStore,
@@ -61,7 +61,11 @@ const routesFor = (actorId: string) => {
     context,
     next,
   ) => {
-    context.set("actor", { id: actorId, role: "user" as const });
+    context.set("actor", {
+      id: actorId,
+      email: `${actorId}@example.test`,
+      role: "user" as const,
+    });
     // A signed-in request runs in the person's own frame.
     await runAsTenant(actorId, () => next());
   };
@@ -71,7 +75,7 @@ const routesFor = (actorId: string) => {
 const call = (
   actorId: string,
   path: string,
-  method: "GET" | "POST" | "PUT" | "DELETE",
+  method: "GET" | "POST" | "PUT" | "DELETE" = "GET",
   body?: unknown,
 ) =>
   routesFor(actorId).request(
@@ -242,6 +246,7 @@ afterAll(async () => {
       await database.delete(users).where(eq(users.id, id));
     }
   });
+  await database.$client.close();
 });
 
 test("the owner reads the channel, and a stranger cannot even see the row in the database", async () => {

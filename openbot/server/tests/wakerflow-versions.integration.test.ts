@@ -184,7 +184,8 @@ describe("rolling back", () => {
         .from(groupTaskTemplates)
         .where(eq(groupTaskTemplates.id, restored.templateId ?? "")),
     );
-    expect(template?.steps).toEqual(one.plan.steps);
+    // The template row's column type predates decision steps; what it holds is the plan's steps.
+    expect(template?.steps as unknown).toEqual(one.plan.steps);
 
     const versions = await f.store.versions(f.tenantId, f.flow.id);
     expect(versions.map((version) => version.revision)).toEqual([4, 3, 2, 1]);

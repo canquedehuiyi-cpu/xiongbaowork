@@ -5,6 +5,10 @@ import type { MiddlewareHandler } from "hono";
 import { createAuditStore } from "../src/audit";
 import { createAdminScope } from "../src/auth/admin-scope";
 import { type AppVariables, createRoleRepository } from "../src/auth/guards";
+import type {
+  CredentialSecretReader,
+  CredentialStore,
+} from "../src/credentials";
 import { createDatabase } from "../src/db/client";
 import {
   agentProfiles,
@@ -41,7 +45,7 @@ const store = createPluginStore({
     revoke: async () => {
       throw new Error("this suite does not revoke credentials");
     },
-  },
+  } as unknown as CredentialSecretReader & CredentialStore,
   encryptionKey: "x".repeat(44),
   policy: () => ({ mode: "enforce", deny: [], allow: ["true"] }),
 });
@@ -668,4 +672,9 @@ describe("races and partial failures", () => {
     expect(dismiss.status).toBe(403);
     expect((await row(id))?.status).toBe("pending");
   });
+});
+
+// The pool closes last, after every cleanup above has run its queries (database-pool-closing).
+afterAll(async () => {
+  await database.$client.close();
 });

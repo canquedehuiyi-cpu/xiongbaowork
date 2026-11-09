@@ -95,3 +95,10 @@ export const tasks = pgTable(
     index("tasks_run_ref_idx").on(table.runRef),
   ],
 );
+
+/*
+ * Upstream's own "tasks" (#929, a Bot's work on an item a check-in raised) share this module's name
+ * with the board above. They live in ./bot-tasks.ts and are re-exported here, where upstream's code
+ * imports them from.
+ */
+export { type BotTaskOrigin, botTasks } from "./bot-tasks";

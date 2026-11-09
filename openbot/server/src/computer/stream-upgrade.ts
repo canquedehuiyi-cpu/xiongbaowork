@@ -2,14 +2,11 @@ import type { OpenBotRole } from "../auth/roles";
 import { parseRunnerAddress } from "../devices/channel";
 import type { ScreenWatch } from "../devices/screen";
 import { currentTenant, runAsTenant } from "../tenant/context";
-import { streamPathBotId } from "./stream-path";
+import { computerSocketPath } from "./stream-path";
 
-/** What the proxied live-screen socket carries once upgraded. */
+/** What the proxied live-screen or terminal socket carries once upgraded: where to connect inward. */
 export type ComputerStreamSocketData = {
   upstream: string;
-  ownerUserId: string;
-  botId: string;
-  recordingId?: string;
 };
 
 export type ComputerStreamUpgradeDeps = {
@@ -24,15 +21,23 @@ export type ComputerStreamUpgradeDeps = {
     actor: { id: string; role: OpenBotRole },
     botId: string,
   ) => Promise<boolean>;
-  /** The computer gateway's `locate`, or `undefined` when no gateway exists. */
-  locate: ((botId: string) => Promise<string>) | undefined;
-  /** The inward socket URL for a located computer. */
-  toStreamUrl: (baseUrl: string, botId: string) => string;
-  /** This person's active demonstration on this Bot, if one is recording. */
-  activeRecording: (
-    ownerUserId: string,
+  /**
+   * Where the watcher's seat on this Bot is (their computer, or the Bot's own if it is isolated):
+   * the computer gateway's `seatFor` then `locate`, or `undefined` when no gateway exists.
+   */
+  locate: ((botId: string, viewerId: string) => Promise<string>) | undefined;
+  /** The inward socket URL for a located computer, under that seat's own token. */
+  toStreamUrl: (
+    baseUrl: string,
     botId: string,
-  ) => Promise<{ id: string } | null>;
+    viewerId: string,
+    socket: "stream" | "terminal",
+  ) => string | Promise<string>;
+  /**
+   * On a single-user OpenBot, whether this request is somebody it admits at all (request-trust.ts):
+   * a sentence to refuse with, or null. Asked before the session, which admits everybody there.
+   */
+  refuse?: (request: Request) => string | null;
 };
 
 /**
@@ -53,11 +58,13 @@ export type ComputerStreamServer = {
 };
 
 /**
- * The live screen's WebSocket upgrade: `undefined` once upgraded, a `Response` otherwise.
+ * The live screen's (or the terminal's) WebSocket upgrade: `undefined` once upgraded, a `Response`
+ * otherwise. Whoever may watch a Bot's screen may watch its terminal, and typing into either is the
+ * computer's own question, asked of the wheel.
  *
  * An upgrade runs ahead of Hono, so no middleware has opened a tenant frame for it. Every question
- * asked here after the session is known — may this person watch this Bot, where is its computer, is
- * a demonstration recording — is asked in the frame of the person signed in (G01-E P4). Asked with no
+ * asked here after the session is known — may this person watch this Bot, where is its computer — is
+ * asked in the frame of the person signed in (G01-E P4). Asked with no
  * frame they used to read as `system`, which cannot see a private Bot, so an owner was told their own
  * Bot did not exist; under the frame guard they would throw.
  */
@@ -66,13 +73,17 @@ export async function handleComputerStreamUpgrade(
   request: Request,
   server: ComputerStreamServer,
 ): Promise<Response | undefined> {
-  const streamBotId = streamPathBotId(new URL(request.url).pathname);
-  if (streamBotId === null) {
+  const named = computerSocketPath(new URL(request.url).pathname);
+  if (named === null) {
     return new Response("There is no such Bot.", { status: 404 });
   }
+  const streamBotId = named.botId;
   if (!deps.computerConfigured) {
     return new Response("No computer is configured.", { status: 503 });
   }
+  // On a single-user OpenBot the guard below admits everybody, so first: is this somebody it may admit.
+  const notHere = deps.refuse?.(request) ?? null;
+  if (notHere) return new Response(notHere, { status: 403 });
   // The session guard, applied by hand because middleware does not run on an upgrade. An
   // unauthenticated socket here would be the whole point of the proxy defeated.
   const actor = await deps.resolveRequestActor(request).catch(() => null);
@@ -82,7 +93,8 @@ export async function handleComputerStreamUpgrade(
   return runAsTenant(actor.id, async () => {
     // And which Bot, which the guard above does not answer. This socket carries that Bot's screen,
     // so signing in is not enough: without this, anybody signed in watches anybody's Bot work. And
-    // seeing a Team Bot is not enough either: its screen is its owner's signed-in browser.
+    // seeing a Team Bot is not enough either: its screen is its owner's signed-in browser. A person's
+    // own OpenBot browser is that person's alone, an administrator's neither: the same check says so.
     if (
       !(await deps.accessCheck({ id: actor.id, role: actor.role }, streamBotId))
     ) {
@@ -98,8 +110,9 @@ export async function handleComputerStreamUpgrade(
      */
     let upstream: string;
     try {
+      // The watcher's own seat on that Bot: their computer, or the Bot's own if it is isolated.
       const streamBase = deps.locate
-        ? await deps.locate(streamBotId)
+        ? await deps.locate(streamBotId, actor.id)
         : undefined;
       if (!streamBase) {
         return new Response("No computer address is configured.", {
@@ -115,6 +128,13 @@ export async function handleComputerStreamUpgrade(
        * somehow passed the first question still meets the same "no such Bot" as everybody else.
        */
       const device = parseRunnerAddress(streamBase);
+      // A paired machine relays its screen; it has no terminal to proxy.
+      if (device && named.socket === "terminal") {
+        return new Response(
+          "This Bot's terminal is not available on a paired machine.",
+          { status: 503 },
+        );
+      }
       if (device) {
         const viewerTenant = currentTenant();
         if (device.tenantId !== viewerTenant) {
@@ -132,7 +152,12 @@ export async function handleComputerStreamUpgrade(
           ? undefined
           : new Response("Expected a WebSocket upgrade.", { status: 400 });
       }
-      upstream = deps.toStreamUrl(streamBase, streamBotId);
+      upstream = await deps.toStreamUrl(
+        streamBase,
+        streamBotId,
+        actor.id,
+        named.socket,
+      );
     } catch (error) {
       // Said out loud rather than falling back to another Bot's computer, which is the failure this
       // whole path exists to prevent.
@@ -143,47 +168,9 @@ export async function handleComputerStreamUpgrade(
         { status: 502 },
       );
     }
-    const recording = await deps.activeRecording(actor.id, streamBotId);
-    if (recording) upstream += `&recording=${encodeURIComponent(recording.id)}`;
-    if (
-      server.upgrade(request, {
-        data: {
-          upstream,
-          ownerUserId: actor.id,
-          botId: streamBotId,
-          ...(recording ? { recordingId: recording.id } : {}),
-        },
-      })
-    ) {
+    if (server.upgrade(request, { data: { upstream } })) {
       return undefined;
     }
     return new Response("Expected a WebSocket upgrade.", { status: 400 });
   });
-}
-
-/**
- * Saves one step of the owner's recording that arrived on an upgraded live-screen socket.
- *
- * Bun runs WebSocket handlers outside the upgrade's frame (it does not carry AsyncLocalStorage
- * across), so the `runAsTenant` above has ended by the time a `demonstration.action` comes in. The
- * socket's `ownerUserId` is the person `handleComputerStreamUpgrade` signed in, and the recording is
- * theirs, so the step is saved in their frame: unframed it read as `system`, which cannot see the
- * owner's recording, and under the frame guard it throws (G01-E P4).
- */
-export function captureInFrame(
-  data: Pick<
-    ComputerStreamSocketData,
-    "ownerUserId" | "botId" | "recordingId"
-  >,
-  action: unknown,
-  capture: (
-    ownerUserId: string,
-    botId: string,
-    recordingId: string,
-    action: unknown,
-  ) => Promise<void>,
-): Promise<void> {
-  return runAsTenant(data.ownerUserId, () =>
-    capture(data.ownerUserId, data.botId, data.recordingId ?? "", action),
-  );
 }

@@ -34,7 +34,7 @@ const as = (
   role: "admin" | "user",
 ): MiddlewareHandler<{ Variables: AppVariables }> =>
   async function actor(context, next) {
-    context.set("actor", { id, role });
+    context.set("actor", { id, email: `${id}@example.test`, role });
     await next();
   };
 

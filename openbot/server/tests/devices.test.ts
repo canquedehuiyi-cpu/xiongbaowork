@@ -43,7 +43,7 @@ beforeAll(async () => {
 const actor =
   (id: string): MiddlewareHandler<{ Variables: AppVariables }> =>
   async (context, next) => {
-    context.set("actor", { id, role: "user" as const });
+    context.set("actor", { id, email: `${id}@example.test`, role: "user" as const });
     await next();
   };
 
@@ -52,7 +52,7 @@ const theirs = createDeviceRoutes(store, actor(other));
 const runner = createRunnerRoutes(store);
 
 async function call<T>(
-  app: { request: (input: Request) => Promise<Response> },
+  app: { request: (input: Request) => Response | Promise<Response> },
   method: string,
   path: string,
   options: { body?: unknown; token?: string } = {},

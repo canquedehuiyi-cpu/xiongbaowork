@@ -1,3 +1,4 @@
+import type { UserPreferences } from "@openbot/shared/user-preferences";
 import { sql } from "drizzle-orm";
 import {
   boolean,
@@ -12,7 +13,6 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { UserPreferences } from "@openbot/shared/user-preferences";
 // NOT drizzle's `jsonb`: that one serialises, and so does the driver, so every object landed as a
 // JSON string and nothing in this database could be queried by a JSON field. See ./json.ts.
 import { jsonb } from "./json";
@@ -311,6 +311,15 @@ export const channels = pgTable(
     /** When the summary above was written, so a later change can decide whether to redo it. */
     summaryAt: timestamp("summary_at", { withTimezone: true }),
     /**
+     * The first thing a person said here, as one plain line: what the conversation is called until
+     * `summary` names it.
+     *
+     * Without it the roster fell back to `last_message`, which by then is usually the Bot's reply, so
+     * a new conversation was called by its answer, Markdown and all, for as long as naming took, and
+     * for good when naming gave up. Written once, by the first person's message to arrive.
+     */
+    opening: text("opening"),
+    /**
      * The last thing said in this channel, denormalised so a roster is one indexed read.
      *
      * Channel grain, not per-member: what was said last is a property of the conversation, and a copy
@@ -514,6 +523,18 @@ export const intelligenceChannelMappings = pgTable(
       .notNull()
       .references(() => channels.id, { onDelete: "cascade" }),
     threadId: text("thread_id").notNull(),
+    /**
+     * The model and effort this person picked for this conversation's Bot, or null for the
+     * default. Per person, like the thread: in a shared channel each member answers on their own
+     * pick. The provider is kept so a pick made under one provider is not sent to another after the
+     * deployment switches. `model` absent means the default model, with only an effort picked.
+     * See channels/model-choice.ts.
+     */
+    modelSelection: jsonb("model_selection").$type<{
+      provider: string;
+      model?: string | null;
+      effort?: string | null;
+    }>(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
