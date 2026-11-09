@@ -140,7 +140,7 @@ test("team rules are locked for members, enforced auto-review is shown as requir
   const view = draw();
   await view.findByText("做之前先问（团队规则）");
   const mine = view.getByRole("combobox", {
-    name: "「mcp/gmail/*」的处理方式",
+    name: "「Gmail 上的任何操作」的处理方式",
   }) as HTMLSelectElement;
   expect(mine.value).toBe("allow");
   expect(view.getByText("已锁定")).toBeTruthy();
@@ -154,7 +154,7 @@ test("team rules are locked for members, enforced auto-review is shown as requir
 test("a member changes a saved rule in place", async () => {
   const view = draw();
   const mine = await view.findByRole("combobox", {
-    name: "「mcp/gmail/*」的处理方式",
+    name: "「Gmail 上的任何操作」的处理方式",
   });
   fireEvent.change(mine, { target: { value: "hand_off" } });
   await waitFor(() =>
@@ -239,7 +239,7 @@ test("a pending change is drawn in the conversation where the action was, and de
     </QueryClientProvider>,
   );
   await view.findByRole("region", { name: "等你批准" });
-  expect(view.getByText("Click on shop.example")).toBeTruthy();
+  expect(view.getByText("在 shop.example 上点击")).toBeTruthy();
   // Another call's line is left to its own renderer.
   expect(view.getByText("Filled in field")).toBeTruthy();
   expect(view.queryByText("Clicked on page")).toBeNull();
@@ -382,7 +382,7 @@ async function ownerLayerShown() {
   expect(view.getByText(/（来源：员工所有者设定）/)).toBeTruthy();
   // A member can choose 禁用 for a rule of their own.
   const mine = view.getByRole("combobox", {
-    name: "「mcp/gmail/*」的处理方式",
+    name: "「Gmail 上的任何操作」的处理方式",
   });
   fireEvent.change(mine, { target: { value: "deny" } });
   await waitFor(() =>

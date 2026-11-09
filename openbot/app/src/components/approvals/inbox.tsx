@@ -1,8 +1,10 @@
+import { ruleTitle } from "@openbot/shared/tool-name";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { GONE_BOT, useBotNames } from "@/lib/agents/bot-names";
 import {
   type ApprovalDecision,
   type ApprovalRuleInput,
@@ -26,6 +28,10 @@ import {
   updateTeamApprovalRule,
 } from "@/lib/approvals";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
+import {
+  type HostFolderGrant,
+  hostAccessQueryOptions,
+} from "@/lib/computers/host-access";
 import { approvalTargetName } from "./inline-approval";
 
 const HOST_LABELS: Record<HostCommandPolicy, string> = {
@@ -483,7 +489,73 @@ export function ApprovalInbox() {
   );
 }
 
-function RuleRow({
+/** What kind of action a rule covers, in words. Any other kind is left unsaid. */
+const EFFECT_WORDS: Record<string, string> = {
+  read: "读取",
+  write: "修改",
+  destructive: "删除",
+  delegate: "转交工作",
+};
+
+/** A rule saved from a folder's card is on the id OpenBot gave that folder (`host-access/broker.ts`). */
+const FOLDER_GRANT = "host-grant-";
+
+/**
+ * A folder rule's place by the folder's name, as the computer settings show it: 「在 share 中」. A
+ * grant ends when OpenBot stops, so a rule on one that is gone says so rather than naming its id.
+ */
+function folderWords(
+  grantId: string,
+  grants: readonly HostFolderGrant[] | undefined,
+): string {
+  if (!grants) return "在一个文件夹中";
+  const grant = grants.find((candidate) => candidate.id === grantId);
+  return grant && !grant.revoked
+    ? `在 ${grant.displayName} 中`
+    : "在一个已不再共享的文件夹中";
+}
+
+/** 「员工 Expenses」; nothing until the names arrive, so an employee is never named by its id. */
+function forBot(name: string): string | null {
+  if (!name) return null;
+  return name === GONE_BOT ? GONE_BOT : `员工 ${name}`;
+}
+
+/**
+ * What a saved rule matches beyond its title, in words: the kind of action, the place, the employee.
+ * Never the id OpenBot gave a folder (`host-grant-…`), an employee's id, or the raw kind of action.
+ */
+export function useRuleMatch(rule: ApprovalRuleRow): {
+  title: string;
+  match: string;
+} {
+  const { title, place } = ruleTitle(rule);
+  const botName = useBotNames();
+  const folderRule = rule.scope.startsWith(FOLDER_GRANT);
+  const folders = useQuery({
+    ...hostAccessQueryOptions(),
+    refetchInterval: false,
+    enabled: folderRule,
+  });
+  const match = [
+    EFFECT_WORDS[rule.effect] ?? null,
+    rule.scope === "*" || place
+      ? null
+      : folderRule
+        ? folderWords(rule.scope, folders.data?.grants)
+        : `在 ${rule.scope} 上`,
+    rule.botId === "*"
+      ? null
+      : rule.botId.includes("*")
+        ? `名字匹配 ${rule.botId} 的员工`
+        : forBot(botName(rule.botId)),
+  ]
+    .filter(Boolean)
+    .join("，");
+  return { title, match };
+}
+
+export function RuleRow({
   rule,
   team,
   locked,
@@ -499,6 +571,7 @@ function RuleRow({
   onChange: (behaviour: RuleBehaviour) => void;
 }) {
   const label = `${BEHAVIOUR_LABELS[rule.behaviour]}${team ? "（团队规则）" : ""}`;
+  const { title, match } = useRuleMatch(rule);
   return (
     <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
       <div className="space-y-1">
@@ -506,7 +579,7 @@ function RuleRow({
           <p className="text-sm font-medium">{label}</p>
         ) : (
           <select
-            aria-label={`「${rule.toolRef}」的处理方式`}
+            aria-label={`「${title}」的处理方式`}
             className={selectClass}
             value={rule.behaviour}
             disabled={disabled}
@@ -523,12 +596,10 @@ function RuleRow({
             ))}
           </select>
         )}
-        <p className="text-sm text-muted-foreground">
-          {rule.toolRef}
-          {rule.effect !== "*" ? `，${rule.effect}` : ""}
-          {rule.scope !== "*" ? `，目标 ${rule.scope}` : ""}
-          {rule.botId !== "*" ? `，员工 ${rule.botId}` : ""}
-        </p>
+        <p className="text-sm font-medium">{title}</p>
+        {match ? (
+          <p className="break-all text-sm text-muted-foreground">{match}</p>
+        ) : null}
       </div>
       {locked ? (
         <span className="text-sm text-muted-foreground">已锁定</span>

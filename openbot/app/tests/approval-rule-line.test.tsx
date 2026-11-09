@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render } from "@testing-library/react";
-import { RuleRow } from "@/components/approvals/rules";
+import { RuleRow } from "@/components/approvals/inbox";
 import type { ApprovalRuleRow } from "@/lib/approvals";
 import { settleReactWork } from "./settle-react-work";
 
@@ -11,6 +11,9 @@ import { settleReactWork } from "./settle-react-work";
  * read "write on host-grant-15407-1794112361547002000 for shopper-bot": the raw kind of action, the
  * id OpenBot gave a folder, and the Bot's id. It names the folder as Settings → Computer does, the
  * Bot by its name, and the kind of action in words.
+ *
+ * M4: the fork's rule row lives in the approvals inbox (`/approvals`), not upstream's settings page;
+ * it had the same fault (it printed toolRef, effect, scope and botId as they were stored).
  */
 
 beforeAll(() => GlobalRegistrator.register());
@@ -82,7 +85,7 @@ test("a folder rule names the folder, the Bot and the kind of action in words", 
   const view = draw(
     rule({ id: "folder", botId: "shopper-bot", effect: "write", scope: GRANT }),
   );
-  expect(await view.findByText("changes in share for Shop")).toBeTruthy();
+  expect(await view.findByText("修改，在 share 中，员工 Shop")).toBeTruthy();
   const text = view.container.textContent ?? "";
   expect(text).not.toContain("host-grant");
   expect(text).not.toContain("shopper-bot");
@@ -100,9 +103,7 @@ test("a rule on a folder no longer shared, for a Bot no longer here, says so", a
     }),
   );
   expect(
-    await view.findByText(
-      "reading in a folder that's no longer shared for a Bot no longer here",
-    ),
+    await view.findByText("读取，在一个已不再共享的文件夹中，已不在的员工"),
   ).toBeTruthy();
   expect(view.container.textContent ?? "").not.toContain("host-grant");
 });
@@ -117,6 +118,6 @@ test("a kind of action with no words of its own is left unsaid", async () => {
       scope: "shop.example",
     }),
   );
-  expect(await view.findByText("on shop.example")).toBeTruthy();
+  expect(await view.findByText("在 shop.example 上")).toBeTruthy();
   expect(view.container.textContent ?? "").not.toContain("teleport");
 });
