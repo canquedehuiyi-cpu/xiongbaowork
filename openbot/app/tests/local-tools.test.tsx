@@ -324,7 +324,8 @@ test("in the cloud the shell and file tools keep their own words", async () => {
     "Run a shell command on your own computer",
   );
   // Employees do not sudo (user decision 2026-11-09): new tools go in the workspace.
-  expect(run?.description).not.toMatch(/sudo|apt-get/);
+  expect(run?.description).not.toMatch(/apt-get|sudo apt/);
+  expect(run?.description).toContain("Do not use sudo");
   expect(run?.description).toContain("pip install --user");
   const example = (
     z.toJSONSchema(run?.parameters as z.ZodType) as unknown as {

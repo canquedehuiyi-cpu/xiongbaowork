@@ -183,10 +183,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && mkdir -p /var/lib/postgresql/data /var/run/postgresql \
   && chown -R postgres:postgres /var/lib/postgresql /var/run/postgresql
 
-# A Bot can install what a task needs, and nothing else as root.
+# The default employee (pwuser) may run the package managers as root, and nothing else as root.
 #
-# `sudo` without a password, because a package manager that cannot install is not one, and "install a
-# tool then use it" is the whole point of giving a Bot a shell.
+# WHO THIS IS FOR. Only commands that run as pwuser: the default employee, with no employee header,
+# and every Bot when COMPUTER_PER_BOT_USERS is off. With the switch on (the default below) each real
+# employee runs as its own user and may not sudo at all (user decision, 2026-11-09). Bots are told
+# to use the tools already here and to install new ones in their own workspace (pip --user, npm,
+# bun), never with sudo; system packages a task commonly needs belong in this image.
 #
 # THE PACKAGE MANAGERS, NOT ALL. This was `NOPASSWD: ALL`, and the comment below it explained what
 # that cost: a Bot could become root inside its container. It then named the two conditions that make
@@ -195,8 +198,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # `EMBEDDED_POSTGRES=on` is a documented way to run it. So root here read another Bot's workspace, the
 # API's environment, and the audit database that records what it did.
 #
-# Naming the commands keeps the feature and removes that. `apt-get install` still works, which is what
-# the tool description tells a model to run. `sudo cat /proc/1/environ` does not.
+# Naming the commands keeps the feature and removes that. `apt-get install` still works for pwuser;
+# `sudo cat /proc/1/environ` does not.
 #
 # WHAT THIS IS NOT. It is a floor, not a boundary. Root is one CVE away and a shared container is not
 # an isolation story for code a model wrote: that needs a computer per Bot and a sandbox under it,
@@ -246,8 +249,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends acl procps \
 ENV COMPUTER_PER_BOT_USERS=on
 
 # THE PACKAGE MANAGER AND THE SHELL STAY. Both were removed here once as hardening, which was
-# backwards: a Bot being able to open a shell and install what a task needs is a requested feature,
-# not an oversight. Removing them hardens the image by deleting the product.
+# backwards: a Bot being able to open a shell and use the tools it needs is a requested feature, not
+# an oversight. Removing them hardens the image by deleting the product. What an employee may not
+# do is become root to install one: it installs user-level tools in its own workspace instead.
 #
 # What makes that safe is not their absence. It is that a Bot reaches them the same way it reaches
 # anything else, through the gateway: resolve, decide against the policy, write the audit row, then

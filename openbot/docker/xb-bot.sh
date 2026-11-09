@@ -39,6 +39,8 @@ UID_MAX=59999
 
 said=
 tmp=
+# The exit code an unexpected failure is reported with; run sets 64 until its command starts.
+fail_code=
 
 die() {
   code=$1
@@ -64,6 +66,9 @@ on_exit() {
   fi
   if [ "$rc" != 0 ] && [ -z "$said" ]; then
     printf 'xb-bot: 意外失败（退出码 %s）\n' "$rc" >&2
+    if [ -n "$fail_code" ]; then
+      exit "$fail_code"
+    fi
   fi
 }
 
@@ -223,6 +228,9 @@ cmd_ensure() {
 cmd_run() {
   key=$1
   t=$2
+  # Until the command starts, every failure is the helper refusing: 64 with an xb-bot: line, which
+  # agent-computer answers with 503 rather than passing off as the command's own exit code.
+  fail_code=64
   trap on_exit EXIT
   case $t in
     '' | 0* | *[!0-9]* | ????*) die 64 "timeout_s 必须是 1–600 的整数" ;;
@@ -273,25 +281,27 @@ cmd_run() {
   done
 
   # The command never goes into an argv, which every user can read in /proc. Root writes it to a
-  # 0600 file in its own directory, hands the file to the employee (bash re-opens /dev/fd/3, and
-  # that open is checked against the file's owner), opens it as fd 3 and unlinks it before the
-  # command starts.
-  lockdir_ready || die 1 "准备 $LOCKDIR 失败"
-  tmp=$( (umask 077 && mktemp "$LOCKDIR/cmd.XXXXXX") 2>/dev/null) || die 1 "无法创建临时文件"
-  cat >"$tmp" || die 1 "无法写入临时文件"
-  must "无法设置临时文件属主" chown "$user" "$tmp"
-  true 2>/dev/null <"$tmp" || die 1 "无法打开临时文件"
+  # root-owned 0600 file in its own directory, opens it as fd 3 and unlinks it; the employee's bash
+  # reads the inherited fd (no permission check on an fd already open), closes it, and evaluates
+  # the text. So $0 is /bin/bash and errors read `/bin/bash: line N:`, as for the default employee.
+  lockdir_ready || die 64 "准备 $LOCKDIR 失败"
+  tmp=$( (umask 077 && mktemp "$LOCKDIR/cmd.XXXXXX") 2>/dev/null) || die 64 "无法创建临时文件"
+  cat 2>/dev/null >"$tmp" || die 64 "无法写入临时文件"
+  true 2>/dev/null <"$tmp" || die 64 "无法打开临时文件"
   exec 3<"$tmp"
   rm -f -- "$tmp"
   tmp=
 
   # Not exec: the helper stays to end the command's process group, which timeout creates and whose
-  # id is timeout's pid.
+  # id is timeout's pid. The variable holding the text is unset before the text runs.
+  # shellcheck disable=SC2016
   timeout --kill-after=5 "$t" runuser -u "$user" -- env -i "$@" \
-    HOME="$dir" TMPDIR="$dir/.tmp" USER="$user" LOGNAME="$user" /bin/bash /dev/fd/3 &
+    HOME="$dir" TMPDIR="$dir/.tmp" USER="$user" LOGNAME="$user" \
+    /bin/bash -c '__xb_cmd=$(cat <&3); exec 3<&-; eval "unset __xb_cmd; $__xb_cmd"' &
   pid=$!
   exec 3<&-
   trap - EXIT
+  fail_code=
 
   rc=0
   wait "$pid" || rc=$?
@@ -343,7 +353,12 @@ restore_exit() {
 
 cmd_restore() {
   [ "$(id -u)" = 0 ] && [ -z "${SUDO_USER:-}" ] || die 64 "restore 只能由 root 直接运行"
-  case ${COMPUTER_PER_BOT_USERS:-off} in
+  # Read as agent-computer reads it (per-bot.ts perBotUsersEnabled): trimmed, any case, then "on".
+  # Read differently, " ON " would leave a failed tightening as a warning while agent-computer ran
+  # employees as their own users anyway.
+  sw=$(printf '%s' "${COMPUTER_PER_BOT_USERS:-}" |
+    sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr '[:upper:]' '[:lower:]')
+  case $sw in
     on) switch=on ;;
     *) switch=off ;;
   esac
@@ -358,6 +373,8 @@ cmd_restore() {
 
   take_lock
   rm -f "$UNREADY"
+  # Command files a helper killed before unlinking them left behind.
+  rm -f -- "$LOCKDIR"/cmd.*
   if [ -e "$TEST_FAIL" ]; then
     step_failed "测试注入的收紧失败（$TEST_FAIL）"
   fi
