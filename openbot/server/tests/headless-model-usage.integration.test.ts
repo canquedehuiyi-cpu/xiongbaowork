@@ -184,6 +184,8 @@ const routineRunner = createRoutineRunner({
       return channel;
     },
     async recordActivity() {},
+    // The routine runner marks the conversation busy while the firing runs (upstream v1.0.0).
+    async signalBusy() {},
   } as unknown as ChannelStore,
   runTurn,
   board,
