@@ -68,8 +68,8 @@ test("the example environment and the changelog name the variable and that a bad
     readFileSync(new URL("../package.json", import.meta.url), "utf8"),
   ).dependencies["@copilotkit/runtime"];
   for (const term of [
-    // M3: upstream's 0066 is this fork's 0157 (server/recovery).
-    "0157_recorder_extension",
+    // M3: upstream's 0066 is this fork's 0162 (server/recovery).
+    "0162_recorder_extension",
     "OPENBOT_RECORDER_EXTRA_EXTENSION_IDS",
     "stops the server at boot",
     "Settings → Browsers",

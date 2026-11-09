@@ -35,7 +35,7 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
     interface phase). Behind an `OPENAI_BASE_URL` that is not OpenAI or Azure, the built-in Bots
     reach most `openai/...` models through Chat Completions; a gateway that serves only the
     Responses API needs `COPILOTKIT_OPENAI_API=responses`.
-  - The Recorder ("teach a Bot"): migration `0157_recorder_extension` adds Recorder connections,
+  - The Recorder ("teach a Bot"): migration `0162_recorder_extension` adds Recorder connections,
     connect codes and recording ownership, a person's own learning space, open skills and sharing,
     each person's rows with `tenant_id` and row security. `OPENBOT_RECORDER_EXTRA_EXTENSION_IDS`
     trusts other Recorder builds: each 32 letters from a to p, comma separated; any other value

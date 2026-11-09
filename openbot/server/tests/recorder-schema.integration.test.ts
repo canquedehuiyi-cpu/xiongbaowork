@@ -64,9 +64,9 @@ afterAll(async () => {
 
 test("no name in the migration is longer than PostgreSQL keeps", async () => {
   const migration = await Bun.file(
-    // M3: the fork ships upstream's 0066 as its recovery migration 0157.
+    // M3: the fork ships upstream's 0066 as its recovery migration 0162.
     new URL(
-      "../recovery/recovery-20261018-v1/sql/0157_recorder_extension.sql",
+      "../recovery/recovery-20261018-v1/sql/0162_recorder_extension.sql",
       import.meta.url,
     ),
   ).text();
@@ -246,9 +246,9 @@ test("one Learning space per person, and no two people share one", async () => {
 
 test("the migration holds only the Recorder's connections and trajectory bindings, and each person's Learning space and sharing", async () => {
   const migration = await Bun.file(
-    // M3: the fork ships upstream's 0066 as its recovery migration 0157.
+    // M3: the fork ships upstream's 0066 as its recovery migration 0162.
     new URL(
-      "../recovery/recovery-20261018-v1/sql/0157_recorder_extension.sql",
+      "../recovery/recovery-20261018-v1/sql/0162_recorder_extension.sql",
       import.meta.url,
     ),
   ).text();

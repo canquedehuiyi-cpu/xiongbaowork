@@ -84,7 +84,7 @@ git merge-tree --write-tree --merge-base=<上次同步点> <本仓库 openbot �
 - 实时终端（`live-shell`，需要伪终端与 bash 4.4+）；用户自己电脑上的 runner 与 Windows 仍走单次执行。
 - CopilotKit runtime 升到 1.85（前端仍是 1.77，M4 升级）。桌面端收入上游的窗口、升级与无 Bun 安装流程，保留熊宝身份
   与「失败即关闭」的部署。
-- 迁移：上游 0061–0083 中的非插件部分改编为 overlay `0154`–`0169`；新增的按人数据表（Recorder 6 张、check-in 4 张、
+- 迁移：上游 0061–0083 中的非插件部分改编为 overlay `0159`–`0174`；新增的按人数据表（Recorder 6 张、check-in 4 张、
   技能审批 1 张）都带 `tenant_id` 与 RLS。上游的 `proactive_runs`（check-in 运行记录）与我们 0107 的同名表冲突，
   建为 `proactive_check_in_runs`。`0152`、`0153` 是 MCP 会话的迁移，按字节一致收入。
 
