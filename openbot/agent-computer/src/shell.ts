@@ -1,10 +1,6 @@
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
 import { execFile, spawn } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import { win32 } from "node:path";
-
-=======
->>>>>>> v1.0.0
 import { egressShellEnvironment, splitProxyCredentials } from "./egress";
 import { createLiveShell } from "./live-shell";
 import { readableOutput } from "./shell-marks";
@@ -51,12 +47,10 @@ export type ShellResult = {
   truncated: boolean;
   timedOut: boolean;
   elapsedMs: number;
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
+  /** Stopped by a person (the signal was aborted) rather than finishing or timing out. */
   stopped?: boolean;
-=======
   /** Never typed: the shell was busy with something a person started. */
   notRun?: boolean;
->>>>>>> v1.0.0
 };
 
 /**
@@ -260,8 +254,14 @@ function clamp(text: string): { text: string; truncated: boolean } {
 export function createShell(
   workspaceDir: string,
   sourceEnv: NodeJS.ProcessEnv = process.env,
-  options: { bash?: string } = {},
+  options: { bash?: string; oneShot?: boolean } = {},
 ) {
+  /*
+   * A command in a shell of its own (`runOnce`) instead of the live one: always on Windows, where
+   * there is no pseudo-terminal bash, and wherever the caller asks for it. The device runner on a
+   * person's own machine asks, because a Mac's own bash is too old for the live shell.
+   */
+  const oneShot = options.oneShot ?? process.platform === "win32";
   /*
    * One live shell for this Bot, which its commands are typed into and a person can watch and take
    * over (live-shell.ts). It used to be a fresh `bash -c` for each command.
@@ -337,190 +337,41 @@ export function createShell(
        * The person's Stop reaches the command too: the shell presses Ctrl-C for it, then stops its
        * process group, then the shell, so nothing the command started outlives it.
        */
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
-      const shell = commandShell(input.command, process.platform, sourceEnv);
-      const windows = process.platform === "win32";
-      const codePage = windows
-        ? await windowsCodePage(shell.executable)
-        : undefined;
-      const child = spawn(shell.executable, shell.args, {
-        cwd: workspaceDir,
-        // The egress filter's address last, so a command cannot be pointed around it.
-        env: {
-          ...environmentForCommand(sourceEnv, workspaceDir),
-          ...egressShellEnvironment(),
-        },
-        detached: process.platform !== "win32",
-        windowsHide: true,
-=======
+      if (oneShot)
+        return runOnce({
+          command: input.command,
+          signal: input.signal,
+          workspaceDir,
+          sourceEnv,
+          started,
+          timeoutMs,
+        });
+
       const outcome = await live.run({
         command: input.command,
         deadline: started + timeoutMs,
         ...(input.signal ? { signal: input.signal } : {}),
->>>>>>> v1.0.0
       });
 
       /*
        * One stream, because a terminal has one: stdout and stderr arrive interleaved, as a person
        * watching sees them, so they come back as `stdout`.
        */
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
-      const collect = () => {
-        let text = "";
-        let dropped = false;
-        return {
-          add(chunk: unknown) {
-            text += String(chunk);
-            if (Buffer.byteLength(text, "utf8") <= MAX_OUTPUT_BYTES * 2) return;
-            text = Buffer.from(text, "utf8")
-              .subarray(-MAX_OUTPUT_BYTES)
-              .toString("utf8");
-            dropped = true;
-          },
-          get text() {
-            return text;
-          },
-          get dropped() {
-            return dropped;
-          },
-        };
-      };
-
-      const outBuffer = collect();
-      const errBuffer = collect();
-      const outDecoder = windows ? windowsOutputDecoder(codePage) : undefined;
-      const errDecoder = windows ? windowsOutputDecoder(codePage) : undefined;
-
-      child.stdout.on("data", (chunk) => {
-        outBuffer.add(outDecoder ? outDecoder.write(chunk) : chunk);
-      });
-      child.stderr.on("data", (chunk) => {
-        errBuffer.add(errDecoder ? errDecoder.write(chunk) : chunk);
-      });
-
-      let failStop: (error: Error) => void = () => {};
-      const stopFailure = new Promise<never>((_, reject) => {
-        failStop = reject;
-      });
-      let stopping: Promise<void> | undefined;
-      const stop = () => {
-        const { pid } = child;
-        if (pid === undefined) return;
-        if (stopping) return;
-        if (process.platform === "win32") {
-          stopping = new Promise<void>((resolve, reject) => {
-            const systemRoot =
-              sourceEnv.SystemRoot ?? sourceEnv.SYSTEMROOT ?? "C:\\Windows";
-            const killer = spawn(
-              win32.join(systemRoot, "System32", "taskkill.exe"),
-              ["/PID", String(pid), "/T", "/F"],
-              {
-                windowsHide: true,
-                stdio: "ignore",
-                env: environmentForCommand(sourceEnv, workspaceDir),
-              },
-            );
-            killer.once("error", () =>
-              reject(
-                new Error("The command's process tree could not be stopped."),
-              ),
-            );
-            killer.once("close", (code) => {
-              if (code === 0) resolve();
-              else
-                reject(
-                  new Error(
-                    "The command's process tree could not be confirmed stopped.",
-                  ),
-                );
-            });
-          });
-          // A failed tree kill must not leave the request waiting forever on inherited pipes.
-          void stopping.catch((error: Error) => {
-            child.kill();
-            child.stdout.destroy();
-            child.stderr.destroy();
-            failStop(error);
-          });
-          return;
-        }
-        try {
-          // The group, so nothing the command backgrounded outlives it.
-          process.kill(-pid, "SIGKILL");
-        } catch {
-          // Already gone, or the group went with it. Either way there is nothing left to stop.
-        }
-      };
-
-      const timer = setTimeout(() => {
-        timedOut = true;
-        stop();
-      }, timeoutMs);
-
-      // The person's Stop reaches the command, not just the request that started it.
-      const onAbort = stop;
-      input.signal?.addEventListener("abort", onAbort, { once: true });
-      // A listener added to an already-aborted signal never fires, so listening alone only honours a
-      // Stop that arrives from here on. The abort can beat the spawn above: the surface aborts, the
-      // server aborts the request it made to this computer, and Bun aborts this one in turn, which
-      // happens before this line whenever the person was quick. Reading the flag is what makes the
-      // Stop mean the same thing whenever it landed.
-      if (input.signal?.aborted) stop();
-
-      let exitCode: number;
-      try {
-        exitCode = await Promise.race([
-          new Promise<number>((resolve, reject) => {
-            child.on("close", (code) => resolve(code ?? -1));
-            child.on("error", (error: NodeJS.ErrnoException) =>
-              reject(
-                new Error(
-                  `The command shell could not start (${error.code ?? "unknown error"}).`,
-                ),
-              ),
-            );
-          }),
-          stopFailure,
-        ]);
-        await stopping;
-      } finally {
-        clearTimeout(timer);
-        input.signal?.removeEventListener("abort", onAbort);
-      }
-
-      if (outDecoder) outBuffer.add(outDecoder.end());
-      if (errDecoder) errBuffer.add(errDecoder.end());
-      const out = clamp(outBuffer.text);
-      const err = clamp(
-        windows ? plainPowerShellStderr(errBuffer.text) : errBuffer.text,
-      );
-=======
       const text = outcome.busy
         ? ""
         : readableOutput(outcome.raw) +
           (outcome.incomplete ? INCOMPLETE_COMMAND : "");
       const out = clamp(text);
->>>>>>> v1.0.0
       return {
         command: input.command,
         exitCode: outcome.exitCode,
         stdout: out.text,
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
-        stderr: err.text,
-        // Either end of the pipe, and either point it was cut: while arriving, or on the way out.
-        truncated:
-          out.truncated ||
-          err.truncated ||
-          outBuffer.dropped ||
-          errBuffer.dropped,
-        timedOut,
-        ...(input.signal?.aborted ? { stopped: true } : {}),
-=======
         stderr: outcome.busy ? SHELL_BUSY : "",
         // Either point it was cut: while arriving, or on the way out.
         truncated: out.truncated || outcome.dropped,
         timedOut: outcome.timedOut,
->>>>>>> v1.0.0
+        // The device runner reports a person's Stop as such rather than as a failed command.
+        ...(outcome.stopped || input.signal?.aborted ? { stopped: true } : {}),
         elapsedMs: Date.now() - started,
         ...(outcome.busy ? { notRun: true } : {}),
       };
@@ -529,6 +380,194 @@ export function createShell(
     terminal: live,
     /** End this shell for good. */
     dispose: () => live.dispose(),
+  };
+}
+
+/**
+ * One command in a shell of its own, which ends with it: PowerShell on Windows, `bash -c` elsewhere.
+ *
+ * The live shell (live-shell.ts) needs a pseudo-terminal and bash 4.4 or newer, which a person's
+ * Windows machine does not have and a Mac's own `/bin/bash` (3.2) is not. The device runner on such a
+ * machine runs each command this way, as every command ran before the live shell.
+ */
+async function runOnce(input: {
+  command: string;
+  signal: AbortSignal | undefined;
+  workspaceDir: string;
+  sourceEnv: NodeJS.ProcessEnv;
+  started: number;
+  timeoutMs: number;
+}): Promise<ShellResult> {
+  const { workspaceDir, sourceEnv, started, timeoutMs } = input;
+  /*
+   * `-c`, not `-lc`. A login shell sources `$HOME/.bash_profile`, and HOME is the workspace a Bot
+   * writes with `computer_write_file`. That let a Bot leave a file which every later command ran
+   * first: it could put its own `apt-get` earlier on PATH, and the audit row would still read
+   * `apt-get --version`. A permissive shell is a decision a deployment can make. A trail that
+   * describes something other than what ran is not.
+   *
+   * Its own process group, so stopping it stops what it started. `child.kill` signals bash alone.
+   * `bash -c "sleep 600 | cat"` leaves the sleep and the cat holding the inherited pipes, so `close`
+   * never fires and the await never settles. Killing the negative pid signals the whole group.
+   */
+  const shell = commandShell(input.command, process.platform, sourceEnv);
+  const windows = process.platform === "win32";
+  const codePage = windows ? await windowsCodePage(shell.executable) : undefined;
+  const child = spawn(shell.executable, shell.args, {
+    cwd: workspaceDir,
+    // The egress filter's address last, so a command cannot be pointed around it.
+    env: {
+      ...environmentForCommand(sourceEnv, workspaceDir),
+      ...egressShellEnvironment(),
+    },
+    detached: process.platform !== "win32",
+    windowsHide: true,
+  });
+
+  let timedOut = false;
+
+  /*
+   * Trimmed while it arrives, not at the end, and carrying the fact that it happened: output that
+   * quietly ends is output a model reads as the whole answer.
+   */
+  const collect = () => {
+    let text = "";
+    let dropped = false;
+    return {
+      add(chunk: unknown) {
+        text += String(chunk);
+        if (Buffer.byteLength(text, "utf8") <= MAX_OUTPUT_BYTES * 2) return;
+        text = Buffer.from(text, "utf8")
+          .subarray(-MAX_OUTPUT_BYTES)
+          .toString("utf8");
+        dropped = true;
+      },
+      get text() {
+        return text;
+      },
+      get dropped() {
+        return dropped;
+      },
+    };
+  };
+
+  const outBuffer = collect();
+  const errBuffer = collect();
+  const outDecoder = windows ? windowsOutputDecoder(codePage) : undefined;
+  const errDecoder = windows ? windowsOutputDecoder(codePage) : undefined;
+
+  child.stdout.on("data", (chunk) => {
+    outBuffer.add(outDecoder ? outDecoder.write(chunk) : chunk);
+  });
+  child.stderr.on("data", (chunk) => {
+    errBuffer.add(errDecoder ? errDecoder.write(chunk) : chunk);
+  });
+
+  let failStop: (error: Error) => void = () => {};
+  const stopFailure = new Promise<never>((_, reject) => {
+    failStop = reject;
+  });
+  let stopping: Promise<void> | undefined;
+  const stop = () => {
+    const { pid } = child;
+    if (pid === undefined) return;
+    if (stopping) return;
+    if (process.platform === "win32") {
+      stopping = new Promise<void>((resolve, reject) => {
+        const systemRoot =
+          sourceEnv.SystemRoot ?? sourceEnv.SYSTEMROOT ?? "C:\\Windows";
+        const killer = spawn(
+          win32.join(systemRoot, "System32", "taskkill.exe"),
+          ["/PID", String(pid), "/T", "/F"],
+          {
+            windowsHide: true,
+            stdio: "ignore",
+            env: environmentForCommand(sourceEnv, workspaceDir),
+          },
+        );
+        killer.once("error", () =>
+          reject(new Error("The command's process tree could not be stopped.")),
+        );
+        killer.once("close", (code) => {
+          if (code === 0) resolve();
+          else
+            reject(
+              new Error(
+                "The command's process tree could not be confirmed stopped.",
+              ),
+            );
+        });
+      });
+      // A failed tree kill must not leave the request waiting forever on inherited pipes.
+      void stopping.catch((error: Error) => {
+        child.kill();
+        child.stdout.destroy();
+        child.stderr.destroy();
+        failStop(error);
+      });
+      return;
+    }
+    try {
+      // The group, so nothing the command backgrounded outlives it.
+      process.kill(-pid, "SIGKILL");
+    } catch {
+      // Already gone, or the group went with it. Either way there is nothing left to stop.
+    }
+  };
+
+  const timer = setTimeout(() => {
+    timedOut = true;
+    stop();
+  }, timeoutMs);
+
+  // The person's Stop reaches the command, not just the request that started it.
+  const onAbort = stop;
+  input.signal?.addEventListener("abort", onAbort, { once: true });
+  // A listener added to an already-aborted signal never fires, so listening alone only honours a
+  // Stop that arrives from here on. The abort can beat the spawn above: the surface aborts, the
+  // server aborts the request it made to this computer, and Bun aborts this one in turn, which
+  // happens before this line whenever the person was quick. Reading the flag is what makes the
+  // Stop mean the same thing whenever it landed.
+  if (input.signal?.aborted) stop();
+
+  let exitCode: number;
+  try {
+    exitCode = await Promise.race([
+      new Promise<number>((resolve, reject) => {
+        child.on("close", (code) => resolve(code ?? -1));
+        child.on("error", (error: NodeJS.ErrnoException) =>
+          reject(
+            new Error(
+              `The command shell could not start (${error.code ?? "unknown error"}).`,
+            ),
+          ),
+        );
+      }),
+      stopFailure,
+    ]);
+    await stopping;
+  } finally {
+    clearTimeout(timer);
+    input.signal?.removeEventListener("abort", onAbort);
+  }
+
+  if (outDecoder) outBuffer.add(outDecoder.end());
+  if (errDecoder) errBuffer.add(errDecoder.end());
+  const out = clamp(outBuffer.text);
+  const err = clamp(
+    windows ? plainPowerShellStderr(errBuffer.text) : errBuffer.text,
+  );
+  return {
+    command: input.command,
+    exitCode,
+    stdout: out.text,
+    stderr: err.text,
+    // Either end of the pipe, and either point it was cut: while arriving, or on the way out.
+    truncated:
+      out.truncated || err.truncated || outBuffer.dropped || errBuffer.dropped,
+    timedOut,
+    ...(input.signal?.aborted ? { stopped: true } : {}),
+    elapsedMs: Date.now() - started,
   };
 }
 

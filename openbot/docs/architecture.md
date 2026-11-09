@@ -169,16 +169,12 @@ A coworker is a durable Bot profile:
 
 A channel is a conversation with one coworker and a thread mapping. Starting a new channel creates a new thread.
 
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
-A group conversation holds several Bots. A thread admits exactly one agent, so each Bot gets a thread of its own in the group (`group_bot_threads`), and what the people in it read is a shared transcript (`group_messages`) with every reply attributed to its speaker. A Bot that names a peer as `@Name` hands the conversation to it under the same grant, caps and audit rows as any other hop.
-=======
 For a message with no named Bot, the intent router chooses from the person's roster. If it cannot
 choose confidently, a unique app holder may receive the message instead of the default Bot. When
 different named apps point to different unique holders, that fallback is ambiguous and the default
 stays selected; roster order does not decide which Bot owns the conversation.
 
-A group conversation holds several Bots. An Intelligence thread admits exactly one agent, so each Bot gets a thread of its own in the group (`group_bot_threads`), and what the people in it read is a shared transcript (`group_messages`) with every reply attributed to its speaker. A Bot that names a peer as `@Name` hands the conversation to it under the same grant, caps and audit rows as any other hop.
->>>>>>> v1.0.0
+A group conversation holds several Bots. A thread admits exactly one agent, so each Bot gets a thread of its own in the group (`group_bot_threads`), and what the people in it read is a shared transcript (`group_messages`) with every reply attributed to its speaker. A Bot that names a peer as `@Name` hands the conversation to it under the same grant, caps and audit rows as any other hop.
 
 Who may reach one is decided by membership: every channel route resolves the caller in
 `channel_memberships` and refuses without a row. `channels.allowed_groups` is declared in the
@@ -247,20 +243,13 @@ Four things are decided by the deployment and never by the model:
 The second Bot runs as the same person, with its own role and its own grants, so it sees what that
 person may see and no more.
 
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
-**The answer lands in that Bot's own conversation with the person.** Not the conversation that asked,
-and this is a property of a thread rather than a choice: a thread is owned by
-exactly one agent. So the conversation that asked says where the work went, and the one that answers
-moves to the top of the roster with an unread mark. The person gets both halves.
-=======
-**The answer lands in the conversation that asked, under the answering Bot's name.** An Intelligence
+**The answer lands in the conversation that asked, under the answering Bot's name.** A
 thread is owned by exactly one agent, so the second Bot cannot run in the first Bot's thread. It runs
 in a scratch thread of its own that no channel shows, and its words then come home as a second hop:
 the deployment writes them, word for word, into the asking conversation as a message whose id names
 the Bot that said them (`bot-answer:<bot>:<run>`), and the transcript draws that message under the
 answering Bot's face and name. No model runs for that second hop, and the asking Bot does not say the
 answer over in its own voice.
->>>>>>> v1.0.0
 
 The addressed Bot is told which Bot it is and who asked, and reads the asking conversation as context
 set out inside the ask, each turn attributed to whoever said it. It is never handed that conversation

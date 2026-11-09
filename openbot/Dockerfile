@@ -76,11 +76,7 @@ RUN cd agent-computer && bun install --frozen-lockfile
 # A second tree with the build-time dependencies left out, for the runtime stage to take. Vite,
 # biome and the test tooling are a gigabyte that nothing in a running container imports.
 RUN mkdir -p /prod && cp package.json bun.lock /prod/ \
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
-  && cd /prod && mkdir -p app server worker runner shared toolkit \
-=======
-  && cd /prod && mkdir -p app server worker shared toolkit extension \
->>>>>>> v1.0.0
+  && cd /prod && mkdir -p app server worker runner shared toolkit extension \
   && cp /src/app/package.json app/package.json \
   && cp /src/server/package.json server/package.json \
   && cp /src/worker/package.json worker/package.json \
@@ -118,25 +114,6 @@ ARG S6_OVERLAY_VERSION=3.2.1.0
 # to be translated. Hardcoding one of them builds fine on the other and then fails at start with an
 # exec format error, which reads as a broken image rather than a wrong download.
 ARG TARGETARCH
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
-# Both tarballs through curl with retries, not `ADD <url>`. BuildKit fetches a remote ADD once to
-# compute its cache key and fails the whole build on the first 5xx, with no retry; GitHub's release
-# downloads answer 504 often enough that this broke the image job several times in one day, and
-# an outage there has lasted over a minute, so curl keeps retrying for up to five minutes.
-RUN case "${TARGETARCH}" in \
-      amd64) S6_ARCH=x86_64 ;; \
-      arm64) S6_ARCH=aarch64 ;; \
-      *) echo "unsupported architecture: ${TARGETARCH}" >&2; exit 1 ;; \
-    esac \
-  && base="https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}" \
-  && curl -fsSL --retry 30 --retry-all-errors --retry-delay 10 --retry-max-time 300 -o /tmp/s6-overlay-noarch.tar.xz \
-    "${base}/s6-overlay-noarch.tar.xz" \
-  && curl -fsSL --retry 30 --retry-all-errors --retry-delay 10 --retry-max-time 300 -o /tmp/s6-overlay-arch.tar.xz \
-    "${base}/s6-overlay-${S6_ARCH}.tar.xz" \
-  && tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz \
-  && tar -C / -Jxpf /tmp/s6-overlay-arch.tar.xz \
-  && rm /tmp/s6-overlay-*.tar.xz
-=======
 # A GITHUB 504 MUST NOT FAIL THE BUILD. This was `ADD <url>`, and BuildKit works out an ADD's cache key
 # by requesting the URL on every build, cache or no cache, retrying only a 429 or a 503. When
 # github.com's release downloads answered 504 the build died with "failed to load cache key: invalid
@@ -146,6 +123,10 @@ RUN case "${TARGETARCH}" in \
 # release-asset endpoint, which is served separately. Either way the bytes are checked against the
 # checksums s6 publishes with the release (`<name>.sha256`), so a bump changes the version, the
 # three checksums and the three asset ids together.
+#
+# The retries are this fork's longer ones: GitHub's release downloads answered 504 often enough that
+# the image job broke several times in one day, and an outage there has lasted over a minute, so each
+# source keeps retrying for up to five minutes before the next is tried.
 ARG S6_OVERLAY_NOARCH_SHA256=42e038a9a00fc0fef70bf0bc42f625a9c14f8ecdfe77d4ad93281edf717e10c5
 ARG S6_OVERLAY_X86_64_SHA256=8bcbc2cada58426f976b159dcc4e06cbb1454d5f39252b3bb0c778ccf71c9435
 ARG S6_OVERLAY_AARCH64_SHA256=c8fd6b1f0380d399422fc986a1e6799f6a287e2cfa24813ad0b6a4fb4fa755cc
@@ -156,9 +137,10 @@ RUN set -eu; \
       *) echo "unsupported architecture: ${TARGETARCH}" >&2; exit 1 ;; \
     esac; \
     fetch() { \
-      curl -fsSL --retry 5 --retry-all-errors -o "/tmp/$1" \
+      curl -fsSL --retry 30 --retry-all-errors --retry-delay 10 --retry-max-time 300 -o "/tmp/$1" \
         "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/$1" \
-      || curl -fsSL --retry 5 --retry-all-errors -H 'Accept: application/octet-stream' -o "/tmp/$1" \
+      || curl -fsSL --retry 30 --retry-all-errors --retry-delay 10 --retry-max-time 300 \
+        -H 'Accept: application/octet-stream' -o "/tmp/$1" \
         "https://api.github.com/repos/just-containers/s6-overlay/releases/assets/$2"; \
       echo "$3  /tmp/$1" | sha256sum -c -; \
     }; \
@@ -179,7 +161,6 @@ RUN set -eu; \
 # warned about once each at every start. See the file.
 RUN install -d -m 1777 /tmp/.X11-unix
 COPY docker/x11/XKeysymDB /usr/share/X11/XKeysymDB
->>>>>>> v1.0.0
 
 WORKDIR /app
 
@@ -191,13 +172,6 @@ WORKDIR /app
 # emptied, along with the two `.bin` shims pointing at it. Every dependency `server/package.json`
 # declares resolves from the /prod half; the ones it does not declare are absent now rather than
 # present and broken.
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
-COPY --chown=pwuser:pwuser --from=deps /prod/node_modules node_modules
-COPY --chown=pwuser:pwuser --from=deps /prod/server/node_modules server/node_modules
-COPY --chown=pwuser:pwuser --from=deps /prod/toolkit/node_modules toolkit/node_modules
-COPY --chown=pwuser:pwuser --from=deps /src/package.json package.json
-COPY --chown=pwuser:pwuser --from=deps /src/bun.lock bun.lock
-=======
 COPY --from=deps /prod/node_modules node_modules
 COPY --from=deps /prod/server/node_modules server/node_modules
 COPY --from=deps /prod/toolkit/node_modules toolkit/node_modules
@@ -205,18 +179,17 @@ COPY --from=deps /prod/toolkit/node_modules toolkit/node_modules
 COPY --from=deps /prod/shared/node_modules shared/node_modules
 COPY --from=deps /src/package.json package.json
 COPY --from=deps /src/bun.lock bun.lock
->>>>>>> v1.0.0
 # The browser's tree is a separate install root with its own lockfile rather than a workspace of the
 # one above, so there is no /prod half of it to take and it ships as resolved, `typescript` included.
 # Pruning it would mean a second `--production` install in the stage above.
-COPY --chown=pwuser:pwuser --from=deps /src/agent-computer/node_modules agent-computer/node_modules
+COPY --from=deps /src/agent-computer/node_modules agent-computer/node_modules
 
-COPY --chown=pwuser:pwuser server server
-COPY --chown=pwuser:pwuser shared shared
-COPY --chown=pwuser:pwuser toolkit toolkit
-COPY --chown=pwuser:pwuser examples examples
-COPY --chown=pwuser:pwuser agent-computer/src agent-computer/src
-COPY --chown=pwuser:pwuser agent-computer/package.json agent-computer/package.json
+COPY server server
+COPY shared shared
+COPY toolkit toolkit
+COPY examples examples
+COPY agent-computer/src agent-computer/src
+COPY agent-computer/package.json agent-computer/package.json
 
 # `bun run composio:smoke`, because the manifest copied above carries that entry and the question it
 # answers belongs here rather than on a laptop: it asks what THIS deployment's Composio key can see,
@@ -229,11 +202,11 @@ COPY --chown=pwuser:pwuser agent-computer/package.json agent-computer/package.js
 # is not in the image; `generate:app-config` writes a file the build has already baked into
 # `app/dist`. Copying the directory ships four more entries with nothing to do here, to fix one that
 # has something to do.
-COPY --chown=pwuser:pwuser scripts/composio-smoke.ts scripts/composio-smoke.ts
+COPY scripts/composio-smoke.ts scripts/composio-smoke.ts
 
 # The built app, served by the API on the same origin. There is no CORS in this server, so this is
 # not a convenience: two origins would simply fail.
-COPY --chown=pwuser:pwuser --from=app-build /src/app/dist app/dist
+COPY --from=app-build /src/app/dist app/dist
 ENV APP_DIST_DIR=/app/app/dist
 ENV TENANT_PACKAGE_DIR=../examples/qoderwake
 ENV OPENBOT_SELF_HOST_BANNER=false
@@ -327,14 +300,6 @@ ENV AGENT_COMPUTER_URL=http://127.0.0.1:4100
 #
 # The two directories the browser writes are its workspace and its profile, the second being what
 # keeps a Bot signed in between turns. Owned here, because a non-root process cannot create them at
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
-# the root of the filesystem and the failure surfaces as EACCES on the first navigation.
-# COPY assigns application contents to pwuser. Only the top-level directories
-# created implicitly by COPY need chown here; a recursive chown of /app would
-# copy the entire dependency tree into another image layer.
-RUN mkdir -p /workspace /profiles \
-  && chown pwuser:pwuser /workspace /profiles /app /app/*
-=======
 # the root of the filesystem and the failure surfaces as EACCES on the first navigation. Its other
 # writes go to its home directory and /tmp, which it can write already.
 #
@@ -350,7 +315,6 @@ RUN mkdir -p /workspace /profiles \
 RUN mkdir -p /workspace /profiles \
   && chown -R pwuser:pwuser /workspace /profiles \
   && find /app -perm /022 ! -type l -exec chmod go-w {} +
->>>>>>> v1.0.0
 
 # Where the embedded database answers, when there is one. Overridden by whatever you set, so an
 # external database needs no special case: set DATABASE_URL and EMBEDDED_POSTGRES stays off.

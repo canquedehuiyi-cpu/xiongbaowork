@@ -430,6 +430,24 @@ fn layout() -> Vec<String> {
 /// away with the previous version (`upgrade::KEPT`).
 pub const LAYOUT: [&str; 1] = ["docker-compose.yml"];
 
+// M3: upstream v1.0.0 replaced these with `LAYOUT`. The fork's staged release admission
+// (`admission_selected`) still selects a release bundle's top-level entries by them; they no longer
+// describe what is laid out live.
+/// The top-level entries a staged release bundle is checked for.
+const REQUIRED: [&str; 4] = ["docker-compose.yml", "server", "app", "worker"];
+
+/// The rest of what a staged release bundle may carry, which is not what it is checked for.
+const ALSO_COPIED: [&str; 8] = [
+    "shared",
+    "toolkit",
+    "examples",
+    "package.json",
+    "bun.lock",
+    "scripts",
+    "tsconfig.base.json",
+    "bunfig.toml",
+];
+
 /// Legacy entry has no checked stage context and can never mutate a deployment.
 /// Real Install acquisition uses main's explicit context and fetch_staged below.
 pub fn fetch(root: &Path, version: &str) -> Result<(), String> {
@@ -450,6 +468,13 @@ pub type Download<'a> = &'a dyn Fn(&str) -> Result<Vec<u8>, String>;
 pub fn fetch_with(root: &Path, version: &str, get: Download) -> Result<(), String> {
     let _ = get;
     fetch(root, version)
+}
+
+/// The tarball GitHub publishes for a commit.
+///
+/// A pinned build's release was cut from a commit, not a tag that could be moved.
+pub fn commit_tarball_url(commit: &str) -> String {
+    format!("https://github.com/CopilotKit/OpenBot/archive/{commit}.tar.gz")
 }
 
 /// Lay out the commit a pinned build was cut from, with the images the build was compiled with.
@@ -2176,100 +2201,30 @@ mod tests {
         std::fs::remove_dir_all(&root).unwrap();
     }
 
-    /// Install lays the same release out again when its stamp laid out less than this app needs,
-    /// from GitHub's own tarball shape, and leaves the installation's own files alone. It never
-    /// changes the release: only Start's upgrade does.
+    /// M3: upstream's `fetch_with` lays a release out in place (Install's re-lay-out of an older
+    /// layout, and the move of a host-server release to the latest one). This fork refuses any
+    /// unverified in-place lay-out, so it downloads nothing and leaves the deployment as it was.
     #[test]
-    fn an_installation_laid_out_before_a_layout_change_is_laid_out_again_at_its_version() {
-        let root = crate::test_support::temp_root("deployment-older-layout");
+    fn fetch_with_fails_closed_without_downloading_or_touching_the_deployment() {
+        let root = crate::test_support::temp_root("deployment-fetch-with-closed");
         std::fs::create_dir_all(&root).unwrap();
-        let tarball = whole_release("OpenBot-0.0.7");
-        unpack(&root, &tarball).unwrap();
-        std::fs::remove_file(root.join("docker-compose.yml")).unwrap();
-        // Laid out by an app that left the Compose file out.
-        std::fs::write(
-            stamp_path(&root),
-            serde_json::to_string(&Installed {
-                version: "v0.0.7".into(),
-                layout: vec!["shared".into()],
-                pinned: false,
-            })
-            .unwrap(),
-        )
-        .unwrap();
+        let compose = "services:\n  postgres: {}\n  supervisor: {}\n";
+        std::fs::write(root.join("docker-compose.yml"), compose).unwrap();
+        std::fs::write(images_path(&root), "{}").unwrap();
         std::fs::write(root.join(".env"), "KEY_ENCRYPTION_KEY=customer-key\n").unwrap();
-        let published: Vec<&str> = IMAGE_VARIABLES.iter().map(|(name, _)| *name).collect();
-        let images = serde_json::to_vec(&manifest(&published)).unwrap();
-        std::fs::write(images_path(&root), &images).unwrap();
-        assert!(needs_fetch(&root, "v0.0.7"));
-
-        let get = |url: &str| -> Result<Vec<u8>, String> {
-            match url {
-                "https://github.com/CopilotKit/OpenBot/archive/refs/tags/v0.0.7.tar.gz" => {
-                    Ok(tarball.clone())
-                }
-                "https://github.com/CopilotKit/OpenBot/releases/download/v0.0.7/container-images.json" => {
-                    Ok(images.clone())
-                }
-                other => Err(format!("unexpected download {other}")),
-            }
-        };
-        fetch_with(&root, "v0.0.7", &get).expect("Install lays the same release out again");
-        assert_eq!(
-            std::fs::read_to_string(root.join("docker-compose.yml")).unwrap(),
-            "services:\n  server: {}\n  worker: {}\n"
-        );
-        assert!(!needs_fetch(&root, "v0.0.7"));
+        record(&root, "v0.0.15", false).unwrap();
+        let get = |url: &str| -> Result<Vec<u8>, String> { panic!("nothing is downloaded: {url}") };
+        for version in ["v0.0.15", "v0.0.16"] {
+            let error = fetch_with(&root, version, &get).unwrap_err();
+            assert!(error.starts_with(PUBLICATION_UNAVAILABLE), "{error}");
+        }
+        assert_eq!(installed(&root).unwrap().version, "v0.0.15");
+        assert_eq!(std::fs::read_to_string(root.join("docker-compose.yml")).unwrap(), compose);
+        assert_eq!(std::fs::read_to_string(images_path(&root)).unwrap(), "{}");
         assert_eq!(
             std::fs::read_to_string(root.join(".env")).unwrap(),
             "KEY_ENCRYPTION_KEY=customer-key\n"
         );
-        // A different version is Start's upgrade, never Install's.
-        assert!(fetch_with(&root, "v0.0.8", &get).is_err());
-        std::fs::remove_dir_all(&root).unwrap();
-    }
-
-    /// A release from before the server was a container is moved to the latest release by
-    /// `deployment_release`. The guard that leaves version changes to Start must not refuse that
-    /// move, or such an installation could never Install or Start again.
-    #[test]
-    fn a_release_whose_server_ran_on_the_host_is_laid_out_at_the_latest_version() {
-        let root = crate::test_support::temp_root("deployment-host-server-move");
-        std::fs::create_dir_all(&root).unwrap();
-        std::fs::write(
-            root.join("docker-compose.yml"),
-            "services:\n  postgres: {}\n  supervisor: {}\n",
-        )
-        .unwrap();
-        std::fs::write(images_path(&root), "{}").unwrap();
-        record(&root, "v0.0.15", false).unwrap();
-        assert!(predates_containers(&root));
-
-        // The latest release's Compose file has the server and worker in it.
-        let tarball = release_tarball(
-            "OpenBot-0.0.16",
-            &[(
-                "docker-compose.yml",
-                "services:\n  server: {}\n  worker: {}\n",
-            )],
-        );
-        let published: Vec<&str> = IMAGE_VARIABLES.iter().map(|(name, _)| *name).collect();
-        let images = serde_json::to_vec(&manifest(&published)).unwrap();
-        let get = |url: &str| -> Result<Vec<u8>, String> {
-            match url {
-                "https://github.com/CopilotKit/OpenBot/archive/refs/tags/v0.0.16.tar.gz" => {
-                    Ok(tarball.clone())
-                }
-                "https://github.com/CopilotKit/OpenBot/releases/download/v0.0.16/container-images.json" => {
-                    Ok(images.clone())
-                }
-                other => Err(format!("unexpected download {other}")),
-            }
-        };
-        fetch_with(&root, "v0.0.16", &get).expect("a host-server release moves to latest");
-        assert_eq!(installed(&root).unwrap().version, "v0.0.16");
-        assert!(!predates_containers(&root));
-        assert!(!needs_fetch(&root, "v0.0.16"));
         std::fs::remove_dir_all(&root).unwrap();
     }
 
@@ -2348,7 +2303,7 @@ mod tests {
         let wanted = format!("REGISTRY/team/repo:tag@sha256:{}", "a".repeat(64));
         value.images.get_mut("server").unwrap().reference = wanted.clone();
         assert_eq!(pin(&value).unwrap()[0].1, wanted);
-        record(&root, &value.version).unwrap();
+        record(&root, &value.version, false).unwrap();
         save_images(&root, &value.version, &manifest_bytes(&value)).unwrap();
         assert_eq!(image_variables(&root).unwrap()[0].1, wanted);
         assert_eq!(reference(&root, "server").unwrap(), wanted);
@@ -2372,7 +2327,7 @@ mod tests {
         let mut value = complete_manifest();
         let extra = format!("localhost:5000/extra:release@sha256:{}", "b".repeat(64));
         value.images.insert("additional-published-name".into(), Image { reference: extra.clone() });
-        record(&root, &value.version).unwrap();
+        record(&root, &value.version, false).unwrap();
         save_images(&root, &value.version, &manifest_bytes(&value)).unwrap();
         assert_eq!(image_variables(&root).unwrap(), pin(&value).unwrap());
         assert_eq!(reference(&root, "additional-published-name").unwrap(), extra);
@@ -2385,7 +2340,7 @@ mod tests {
         let root = scratch("strict-extra");
         let mut value = complete_manifest();
         value.images.insert("extra".into(), Image { reference: "repo:latest".into() });
-        record(&root, &value.version).unwrap();
+        record(&root, &value.version, false).unwrap();
         std::fs::write(images_path(&root), manifest_bytes(&value)).unwrap();
         assert_readers_refuse(&root);
         assert!(reference(&root, "extra").is_err());
@@ -2408,7 +2363,7 @@ mod tests {
     #[test]
     fn runtime_readers_refuse_missing_bad_wrong_version_or_bad_reference_manifest() {
         let root = scratch("strict-manifest");
-        record(&root, "v0.0.7").unwrap();
+        record(&root, "v0.0.7", false).unwrap();
         assert_readers_refuse(&root);
         for body in [b"not json".as_slice(), b"{}"] {
             std::fs::write(images_path(&root), body).unwrap();
@@ -2437,7 +2392,7 @@ mod tests {
         }
         for version in ["v0.0.7", "0.0.7", "release-candidate_01"] {
             let mut value = complete_manifest(); value.version = version.into();
-            record(&root, version).unwrap();
+            record(&root, version, false).unwrap();
             save_images(&root, version, &manifest_bytes(&value)).unwrap();
             assert_eq!(read_images(&root).unwrap().version, version);
         }
@@ -2458,7 +2413,7 @@ mod tests {
     fn rejected_response_or_requested_version_preserves_existing_manifest_and_stamp() {
         let root = scratch("save-version-existing");
         let value = complete_manifest();
-        record(&root, &value.version).unwrap();
+        record(&root, &value.version, false).unwrap();
         save_images(&root, &value.version, &manifest_bytes(&value)).unwrap();
         let old_stamp = std::fs::read(stamp_path(&root)).unwrap();
         let old_images = std::fs::read(images_path(&root)).unwrap();
@@ -2483,7 +2438,7 @@ mod tests {
         save_images(&root, &value.version, &body).unwrap();
         assert_eq!(std::fs::read(images_path(&root)).unwrap(), body);
         assert!(!stamp_path(&root).exists(), "saving images does not record fetch success");
-        record(&root, &value.version).unwrap();
+        record(&root, &value.version, false).unwrap();
         assert_eq!(image_variables(&root).unwrap(), pin(&value).unwrap());
         assert_eq!(reference(&root, "server").unwrap(), value.images["server"].reference);
         std::fs::remove_dir_all(root).unwrap();
@@ -2579,7 +2534,7 @@ mod tests {
         let images: Vec<String> = IMAGE_VARIABLES
             .iter()
             .map(|(name, _)| {
-                format!(r#""{name}": {{ "reference": "ghcr.io/x/{name}@sha256:abc" }}"#)
+                format!(r#""{name}": {{ "reference": "ghcr.io/x/{name}@sha256:{}" }}"#, "a".repeat(64))
             })
             .collect();
         let text = format!(
@@ -2590,26 +2545,16 @@ mod tests {
     }
 
     #[test]
-    fn a_pinned_fetch_lays_out_the_commit_with_the_compiled_in_images() {
+    fn a_pinned_fetch_fails_closed_and_lays_nothing_out() {
+        // M3: upstream lays the pinned commit's archive out in place; this fork refuses an
+        // unverified lay-out, a pinned build's included (see `fetch_pinned`).
         let dir = scratch("pinned-fetch");
         std::fs::write(dir.join(".env"), "KEEP=1").unwrap();
         let pin = pin_from(full_pin_text(), "0123456789abcdef").unwrap();
-        let archive = tarball(&[(
-            "OpenBot-0123456789abcdef/docker-compose.yml",
-            b"services: {}",
-        )]);
-        fetch_pinned_with(&dir, &pin, |url| {
-            assert_eq!(url, commit_tarball_url("0123456789abcdef"));
-            Ok(archive.clone())
-        })
-        .unwrap();
-        assert_eq!(
-            std::fs::read_to_string(images_path(&dir)).unwrap(),
-            pin.images
-        );
-        let installed = installed(&dir).unwrap();
-        assert!(installed.pinned);
-        assert_eq!(installed.version, "v0.3.0-rc.1");
+        let error = fetch_pinned(&dir, &pin).unwrap_err();
+        assert!(error.starts_with(PUBLICATION_UNAVAILABLE), "{error}");
+        assert!(installed(&dir).is_none());
+        assert!(!images_path(&dir).exists());
         assert_eq!(std::fs::read_to_string(dir.join(".env")).unwrap(), "KEEP=1");
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -2618,7 +2563,7 @@ mod tests {
     fn an_incomplete_pin_is_refused_before_anything_is_fetched() {
         let dir = scratch("pinned-incomplete");
         let pin = pin_from(r#"{ "version": "v0.3.0", "images": {} }"#, "abc").unwrap();
-        let error = fetch_pinned_with(&dir, &pin, |_| panic!("nothing is fetched")).unwrap_err();
+        let error = fetch_pinned(&dir, &pin).unwrap_err();
         assert!(error.contains("names no"), "{error}");
         assert!(installed(&dir).is_none());
         std::fs::remove_dir_all(&dir).ok();

@@ -254,10 +254,11 @@ managedNodeGroups:
 ```
 
 **Why three nodes.** The scheduler places a pod by what it requests, not by what it uses, and the
-vanilla install requests about 3.25 vCPU for as long as it runs: summing `resources.requests.cpu`
-over the Deployments and StatefulSets in
-`helm template openbot charts/openbot -f charts/openbot/ci/vanilla-values.yaml`, times their
-replicas, gives 2200m for the Deployments (OpenBot's two servers and Intelligence's API, gateway,
+vanilla install with the bundled Intelligence requests about 3.25 vCPU for as long as it runs (OpenBot
+alone, the default here, asks for less): summing `resources.requests.cpu` over the
+Deployments and StatefulSets in
+`helm template openbot charts/openbot -f charts/openbot/ci/vanilla-values.yaml --set intelligence.enabled=true`,
+times their replicas, gives 2200m for the Deployments (OpenBot's two servers and Intelligence's API, gateway,
 embeddings and Learning) and 1050m for the StatefulSets (both databases, Redis, object storage and
 the shared computer, which alone asks for 500m). The install Jobs add about 400m while they run. A
 t3.large leaves about 1.93 vCPU allocatable, and EKS's own pods (the VPC CNI, kube-proxy, CoreDNS,
@@ -645,20 +646,15 @@ nobody can talk to.
 
 ## Automatic Learning (optional)
 
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
-Only with a connected CopilotKit Intelligence (`secrets.intelligenceApiKey`); without one, Admin →
-自动学习 says so and nothing below applies. This fork keeps conversations in its own PostgreSQL, so
-they are not sent to Intelligence as learning evidence: the skills it delivers are the ones produced
-and published in Intelligence itself. Learning is on by default, and it needs a container in the
-Intelligence project before it delivers anything. With nothing saved in Admin and no `config.learning.containerId`, the server
-assigns the project's `openbot` container as the default by itself once it exists. The runtime key
-cannot create it, so give the chart a credential that can and a setup Job creates it on install and
-=======
-**With the bundled Intelligence** (the default) there is nothing to set up. Learning is on in
-Intelligence too (`intelligence.learning`), Intelligence creates the project's `openbot` container at
-install, the server assigns it as the default, and it creates each person's own Learning space with
-its runtime key. Intelligence's Learning agent spends the same key your Bots do, on a model that
-follows the keys you give:
+Only with a connected CopilotKit Intelligence (`secrets.intelligenceApiKey`, or the bundled one);
+without one, Admin → 自动学习 says so and nothing below applies. This fork keeps conversations in its
+own PostgreSQL, so they are not sent to Intelligence as learning evidence: the skills it delivers are
+the ones produced and published in Intelligence itself.
+
+**With the bundled Intelligence** (`intelligence.enabled: true`, off by default) there is nothing to
+set up. Learning is on in Intelligence too (`intelligence.learning`), Intelligence creates the
+project's `openbot` container at install, and the server assigns it as the default. Intelligence's
+Learning agent spends the same key your Bots do, on a model that follows the keys you give:
 
 | Keys | Learning's model | Key it spends |
 | --- | --- | --- |
@@ -682,23 +678,20 @@ adding or removing a key (which can change the model), restart it once `helm upg
 kubectl -n openbot rollout restart deployment/openbot-intelligence-learning-agent
 ```
 
-It runs by itself after
-15 finished conversations and after every 15 more, and keeps what it learns in an object store the
-release runs (`intelligence.localObjectStorage`). Trajectories, the sessions the Recorder captures, are
-on as well, which any valid licence allows.
-
-Intelligence's own dashboard is not installed, so Admin → Automatic learning is where its work is
-reviewed: the skills it proposes, each one's SKILL.md and the conversations it was learned from,
-Approve (which publishes it to the container's Bots) and Reject, and Learn now to run it at any time.
-Every approval and rejection is recorded in OpenBot's audit log with the admin who made it. With an
-Intelligence that has a dashboard (managed Intelligence), the page links to it as well.
+Upstream's Learning runs by itself after 15 finished conversations and after every 15 more; in this
+fork Intelligence receives no conversations of OpenBot's, so it learns only from what reaches it
+otherwise. What it learns is kept in an object store the release runs
+(`intelligence.localObjectStorage`). Admin → 自动学习 chooses the default container and which Bots
+receive its published skills; upstream's review screen (proposed skills, Approve, Reject, Learn now)
+is not in this fork's web app yet. Intelligence's own dashboard is not installed by default
+(`intelligence.appFrontend`); turn it on, with `intelligence.auth.issuer` and an Ingress, to review
+skills in Intelligence itself.
 
 **With an Intelligence of your own** (`intelligence.enabled: false`), Learning needs a container in its
-project before it collects or delivers anything. With nothing saved in Admin and no
+project before it delivers anything. With nothing saved in Admin and no
 `config.learning.containerId`, the server assigns the project's `openbot` container as the default by
 itself once it exists. A current Intelligence lets the runtime key create it, and the server does. On
 one that does not, give the chart a credential that can and a setup Job creates it on install and
->>>>>>> v1.0.0
 every upgrade:
 
 - Managed Intelligence: a CopilotKit CLI login. Sign in into an empty folder and store the file it

@@ -532,12 +532,7 @@ const agents = Object.keys(info.agents ?? {});
  */
 if (status !== undefined && status !== "valid") {
   console.log(`\x1b[31m  licence is '${status}', not 'valid'.\x1b[0m`);
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
   console.log("\x1b[31m  This runtime reported a licence and it was refused. See docs/deployment.md.\x1b[0m");
-=======
-  console.log("\x1b[31m  Check CPK_INTELLIGENCE_API_KEY (or INTELLIGENCE_API_KEY): npx copilotkit@latest login && npx copilotkit@latest project select\x1b[0m");
-  console.log("\x1b[31m  See README.md for Intelligence setup.\x1b[0m");
->>>>>>> v1.0.0
   process.exit(1);
 }
 if (agents.length === 0) {

@@ -2,26 +2,21 @@
 
 ## Setup
 
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
-Install Docker, [Bun](https://bun.sh) 1.3+, `lsof`, `openssl`, and `curl`. `scripts/start.sh` uses
-`openssl` to mint the generated secrets on a first run.
-=======
-Install Docker, [Bun](https://bun.sh) 1.4+ (the tests need it), `lsof`, `openssl`, and `curl`. The
-Intelligence provisioning below also needs `npx` (Node); `scripts/start.sh` uses `openssl` to mint
-the generated secrets on a first run.
->>>>>>> v1.0.0
+Install Docker, [Bun](https://bun.sh) 1.4+ (the tests need it), `lsof`, `openssl`, and `curl`.
+`scripts/start.sh` uses `openssl` to mint the generated secrets on a first run; connecting the optional
+Intelligence below also needs `npx` (Node).
 
 ```sh
 cp .env.example .env
 bun install
 ```
 
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
 Nothing is provisioned first. Conversations, memory and skills live in this deployment's own
 PostgreSQL, so there is no platform key to mint and no container to create. Add `OPENAI_API_KEY` to
-`.env` — that is what the shipped Bots answer with — then start the stack:
-=======
-Provision CopilotKit Intelligence after `.env` exists:
+`.env` — that is what the shipped Bots answer with.
+
+CopilotKit Intelligence is optional (it only adds Admin → 自动学习's published skills). To connect
+one, provision it after `.env` exists:
 
 ```sh
 npx --yes copilotkit@latest login
@@ -38,7 +33,7 @@ Chrome or Edge first: the helper opens an isolated browser window for the deploy
 sign-in, lets you choose an accessible project, and creates or reuses `openbot` before minting
 its runtime key. Local development may use a loopback HTTP origin. Existing key-only setups
 use authenticated Intelligence administration to create a container and assign it in OpenBot Admin.
-There is no managed licence step. Then add `OPENAI_API_KEY`.
+There is no managed licence step.
 
 The same CLI sign-in also prepares Composio on the first `bash scripts/start.sh`;
 `bun run setup:composio` runs that step alone, independently of Learning. A failure
@@ -52,7 +47,6 @@ provisioning service must be available before adopting this startup flow. See
 [automatic project setup](plugins/composio.md#automatic-project-setup).
 
 Start the stack:
->>>>>>> v1.0.0
 
 ```sh
 bash scripts/start.sh

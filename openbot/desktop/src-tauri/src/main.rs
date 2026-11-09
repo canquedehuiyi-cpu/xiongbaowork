@@ -2038,6 +2038,10 @@ async fn deployment_ready<R: tauri::Runtime>(app: &tauri::AppHandle<R>, root: &P
 async fn deployment_ready_for_generation<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>, root: &Path, generation: u64,
 ) -> Result<(), Problem> {
+    // A superseded Install stops here, before even saying an upgrade is due.
+    if app.state::<Shell>().start_generation.load(std::sync::atomic::Ordering::SeqCst) != generation {
+        return Err(Problem::from("STAGE_CANCELLED".to_string()));
+    }
     if let Some(planned) = upgrade::due(root, &upgrade::own()) {
         report(
             app,
@@ -5115,7 +5119,7 @@ mod app_page_tests {
         let folder = logging::folder(app.handle()).unwrap();
         assert_eq!(folder, app.path().app_log_dir().unwrap());
         let identifier = app.config().identifier.clone();
-        assert_eq!(identifier, "ai.copilotkit.openbot.desktop");
+        assert_eq!(identifier, "com.xiongbao.desktop");
         let home = PathBuf::from(
             std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).unwrap(),
         );
@@ -5245,8 +5249,8 @@ mod app_page_tests {
     fn windows_toasts_name_the_app_the_start_menu_shortcut_carries() {
         let (app, _) = app();
         let config = app.config();
-        assert_eq!(config.identifier, "ai.copilotkit.openbot.desktop");
-        assert_eq!(config.product_name.as_deref(), Some("OpenBot"));
+        assert_eq!(config.identifier, "com.xiongbao.desktop");
+        assert_eq!(config.product_name.as_deref(), Some("XiongBao"));
         // Read from the files the installer is built from, the base and every overlay a build
         // passes with --config: the app's runtime config leaves the bundle settings out.
         let folder = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -5266,10 +5270,10 @@ mod app_page_tests {
                  AppUserModelID itself"
             );
             if let Some(identifier) = file.get("identifier") {
-                assert_eq!(identifier, "ai.copilotkit.openbot.desktop", "{name}");
+                assert_eq!(identifier, "com.xiongbao.desktop", "{name}");
             }
             if let Some(product) = file.get("productName") {
-                assert_eq!(product, "OpenBot", "{name}");
+                assert_eq!(product, "XiongBao", "{name}");
             }
             checked += 1;
         }
@@ -16627,13 +16631,13 @@ fn main() {
     #[test]
     fn stale_install_generation_cannot_enter_context_or_fetch_even_with_a_cached_pin() {
         let root = temp_root("f4b-stale-generation"); write_installed_deployment(&root);
-        deployment::record(&root, "v0.0.7").unwrap();
+        deployment::record(&root, "v0.0.7", false).unwrap();
         let app = tauri::test::mock_builder().manage(Shell::default())
             .build(tauri::test::mock_context(tauri::test::noop_assets())).unwrap();
         app.state::<Shell>().start_generation.store(9, std::sync::atomic::Ordering::SeqCst);
         assert!(tauri::async_runtime::block_on(deployment_ready_for_generation(app.handle(), &root, 8)).is_err());
         assert_eq!(deployment::installed(&root).unwrap().version, "v0.0.7");
-        assert_eq!(std::fs::read_to_string(root.join("docker-compose.yml")).unwrap(), "services: {}\n");
+        assert_eq!(std::fs::read_to_string(root.join("docker-compose.yml")).unwrap(), INSTALLED_COMPOSE);
         std::fs::remove_dir_all(root).unwrap();
     }
 }

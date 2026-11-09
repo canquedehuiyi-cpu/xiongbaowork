@@ -16,26 +16,14 @@ bash scripts/start.sh
 
 ## Required API server variables
 
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
 | Variable                   | Meaning                                                                                               |
 | -------------------------- | ----------------------------------------------------------------------------------------------------- |
 | `DATABASE_URL`             | PostgreSQL connection string.                                                                         |
 | `KEY_ENCRYPTION_KEY`       | Base64-encoded 32-byte key for encrypted stored credentials. Generate with `openssl rand -base64 32`. |
-=======
-| Variable                      | Meaning                                                                                               |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                | PostgreSQL connection string.                                                                         |
-| `KEY_ENCRYPTION_KEY`          | Base64-encoded 32-byte key for encrypted stored credentials. Generate with `openssl rand -base64 32`. |
-| `INTELLIGENCE_API_URL`        | CopilotKit Intelligence API URL.                                                                      |
-| `INTELLIGENCE_GATEWAY_WS_URL` | CopilotKit Intelligence realtime gateway URL.                                                         |
-| `CPK_INTELLIGENCE_API_KEY` | Runtime key written by the CopilotKit CLI. Preferred when non-empty. |
-| `INTELLIGENCE_API_KEY` | Legacy runtime key; used when `CPK_INTELLIGENCE_API_KEY` is empty or absent. |
->>>>>>> v1.0.0
 
 Sign-in adds its own pair: `BETTER_AUTH_SECRET` (at least 32 characters) and `BETTER_AUTH_URL`. All
 four stop server startup if missing.
 
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
 ### The database role and `OPENBOT_RLS_ENFORCE`
 
 `DATABASE_URL` must name the application role `openbot_app`, not the owner: PostgreSQL does not apply
@@ -88,35 +76,35 @@ Threads and memory live in the PostgreSQL above, through the runtime's SSE-mode 
 `DATABASE_URL` is the whole contract for a conversation's life. `INTELLIGENCE_MODE` is read only to be
 refused: set it to `local` or leave it unset, and naming `managed` stops startup with the reason.
 
-CopilotKit Intelligence is **optional** (R0). `INTELLIGENCE_API_KEY` connects one, and Admin → 自动学习
+CopilotKit Intelligence is **optional** (R0). `INTELLIGENCE_API_KEY` (or `CPK_INTELLIGENCE_API_KEY`,
+the name the CopilotKit CLI writes, preferred when both are set) connects one, and Admin → 自动学习
 then delivers the skills published in it; managed Intelligence needs only the key, a self-hosted one
 also `INTELLIGENCE_API_URL` (and `INTELLIGENCE_GATEWAY_WS_URL`) and its licence in
 `COPILOTKIT_LICENSE_TOKEN`. A URL or licence set without the key stops startup as half-configured.
 Conversations are not sent to Intelligence as learning evidence; see
 [automatic-learning.md](automatic-learning.md).
-=======
+
 The browser opens the Intelligence gateway's socket itself, at the address the server gives it. Where
 the server reaches the gateway somewhere a browser cannot, two variables cover it.
 `INTELLIGENCE_BROWSER_GATEWAY_WS_URL` names a second address for the same gateway (OpenBot Desktop's
 container uses it). `INTELLIGENCE_GATEWAY_PROXY=on` has the server carry the socket itself, at
 `/api/intelligence/client` on its own address, for an Intelligence nobody outside the cluster can
-reach: the Helm chart sets it for the Intelligence it installs, so one port-forward or one Ingress
-host is enough. The socket needs a signed-in session, and the gateway still checks the join token on
+reach: the Helm chart sets it when it installs Intelligence itself (`intelligence.enabled`, off by
+default in this fork), so one port-forward or one Ingress host is enough. The socket needs a signed-in session, and the gateway still checks the join token on
 it. Set one of the two, not both; `off` or unset is neither. With the proxy on and no
 `OPENBOT_PUBLIC_URL`, the page is told the socket as a path and resolves it against itself. The
 OpenBot Recorder is not on the page, so its capture pass names the socket on the address the
 Recorder reached OpenBot at, and only where that is this machine's loopback, as over
 `kubectl port-forward`. A Recorder that reaches OpenBot any other way needs `OPENBOT_PUBLIC_URL`.
 
-`COPILOTKIT_LICENSE_TOKEN` is optional: managed Intelligence issues no licence token, and a
-self-hosted Intelligence that has one sets this and has it forwarded to the runtime. That
+With Intelligence connected, `COPILOTKIT_LICENSE_TOKEN` is optional: managed Intelligence issues no
+licence token, and a self-hosted Intelligence that has one sets this and has it forwarded to the runtime. That
 Intelligence needs the same licence on its own deployment as well, or it refuses memory and the
 other licensed features while conversations carry on. OpenBot asks Intelligence at boot and logs
 `intelligence-entitlement-not-ready`, naming the fix, when the answer is not ready. An
 Intelligence still starting, as one installed beside OpenBot is while its migrations run, is asked
 again for up to ten minutes, with one `intelligence-entitlement-waiting` line; only one still not
 answering then is logged as `intelligence-entitlement-unreadable`. A refused key is logged at once.
->>>>>>> v1.0.0
 
 `MANAGED_AGENT_AG_UI_URL` names the Bot in the box: the default endpoint for coworkers created in
 the product. It needs `MANAGED_AGENT_TOKEN` beside it, or the server refuses to start. Unset, the
@@ -155,11 +143,8 @@ and still open wherever they are pasted. They keep working until you finish the 
 | Variable             | Default                            | Meaning                                                             |
 | -------------------- | ---------------------------------- | ------------------------------------------------------------------- |
 | `PORT`               | `3001`                             | API server port. `SERVER_PORT` names the same port; set either, or both to the same value, or the server refuses to start. |
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
 | `VAULT_REQUIRE_AAD`  | unset (off)                        | `1` or `true` refuses stored credentials that are not bound to their row. Set it only after `scripts/reseal-credentials.ts` exits `0`; see [above](#binding-stored-credentials-to-their-row-vault_require_aad). |
-=======
 | `OPENBOT_EDITION`    | `team`                             | `personal` runs OpenBot for one person with no sign-in, one computer and no Admin. See [personal-edition.md](personal-edition.md). Any value other than `team` or `personal` refuses to start. |
->>>>>>> v1.0.0
 | `NODE_ENV`           | unset                              | `production` refuses the example `KEY_ENCRYPTION_KEY`. It does not decide whether sign-in is required; see `OPENBOT_SINGLE_USER`. |
 | `TENANT_PACKAGE_DIR` | `../examples/qoderwake`            | Tenant package directory, resolved from `server/`.                  |
 | `DEPLOYMENT_ID`      | the tenant package's id            | Names this deployment inside a shared database (and a shared Intelligence project, when one is connected). |
@@ -764,16 +749,10 @@ Slack app of its own.
 
 Point OpenTag's `AGENT_URL` at `<public URL>/api/delivery/webhooks/opentag/agent`. A person links
 their Slack or Teams identity from a Bot's page, under **Reaching you**: OpenBot shows a one-time `link <code>` message,
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
-valid for ten minutes, which they send to the OpenTag app. After that, only that person's messages
-reach their chosen Bot, in their own OpenBot conversation, with governance, approvals and audit on
-every turn. Anyone unlinked is told how to link and nothing runs. Approval requests appear
-=======
 valid for ten minutes, which they send to the OpenTag app in a direct message. On Slack, a code posted
 in a shared channel is cancelled, because whoever sends it first is linked to that Bot. After that, only that person's messages
-reach their chosen Bot, in their own OpenBot conversation, with learning, governance, approvals and
-audit on every turn. Anyone unlinked is told how to link and nothing runs. Approval requests appear
->>>>>>> v1.0.0
+reach their chosen Bot, in their own OpenBot conversation, with governance, approvals and audit on
+every turn. Anyone unlinked is told how to link and nothing runs. Approval requests appear
 as OpenTag approval cards (allow once, always allow, cancel) and are decided through the approvals
 service as the linked owner; a reply to a Bot's question answers that question.
 
@@ -897,12 +876,8 @@ them, including a saved off. See [automatic-learning.md](automatic-learning.md).
 | `INTELLIGENCE_SERVICE_TOKEN`             | An Intelligence service token that creates the `openbot` Learning container (local evaluation installs only; see [Creating the container](automatic-learning.md#creating-the-container)). Requires `INTELLIGENCE_PROJECT_ID`. |
 | `INTELLIGENCE_PROJECT_ID`                | The numeric ID of the runtime key's Intelligence project, where the service token creates the container. Set both or neither, or the server refuses to start. |
 | `OPENBOT_MEMORY_SOURCE_DEFAULTS`         | `false` or `0` stops OpenBot making each app a person connected into a memory source for the Bots they talk to. On otherwise. Existing sources are left as they are. |
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
-| `OPENBOT_PROACTIVE_DEFAULTS`             | `false` or `0` stops OpenBot switching on background research for the Bots a person talks to. On otherwise. Existing settings are left as they are. |
-=======
 | `OPENBOT_PROACTIVE_DEFAULTS`             | `true` or `1` switches on an hourly check-in on everything a Bot can read the first time a person talks to it alone, as OpenBot did before. Off otherwise: a Bot offers a check-in on one thing in the conversation, and it runs only once the person accepts. Existing settings are left as they are. |
 
->>>>>>> v1.0.0
 ## OpenTelemetry export
 
 Every audit row is also sent as an OTLP log record over HTTP, so a SIEM or an OpenTelemetry

@@ -10,7 +10,6 @@ import {
   type LoadAvatarSources,
   type LoadCurrentProject,
   type LoadInstructions,
-  type LoadAppsForBot,
   type LoadToolsForBot,
   type MarkAttachmentsSent,
   onOpenBotRunner,
@@ -23,13 +22,10 @@ import {
 } from "../copilot";
 import type { AcquireLearnedSkills } from "../learning/runtime";
 import type { LoadPersonalMemory } from "../memory/tools";
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
 import type { AgentModelResolver } from "../models/runtime-resolver";
-=======
 import { NameContextMiddleware } from "../people/name-context";
 import { isProactiveInitiator } from "../proactive/initiator";
 import type { ProductTelemetry } from "../telemetry/product";
->>>>>>> v1.0.0
 import type { AgentActor } from "./profile-types";
 
 export type AgentResolutionContext = {
@@ -72,8 +68,8 @@ export type ActorAgentResolverDependencies = {
     actorId: string,
     initiator?: AuditInitiator,
   ) => LoadToolsForBot;
-  /** The apps each Bot holds, as they stand for whoever is asking. See `LoadAppsForBot`. */
-  loadAppsForActor?: (actorId: string) => LoadAppsForBot;
+  // M3: upstream's `loadAppsForActor` is not taken: the fork's plugins directory has no `BotApp`
+  // yet, so `copilot.ts` builds no Bot with its apps. See the note on its plugins imports.
   signRunForActor?: (
     actorId: string,
     initiator?: AuditInitiator,
@@ -97,8 +93,20 @@ export type ActorAgentResolverDependencies = {
   loadInstructionsForActor?: (actorId: string) => LoadInstructions;
   loadAttachmentForActor?: (actorId: string) => LoadAttachment;
   markAttachmentsSentForActor?: (actorId: string) => MarkAttachmentsSent;
+  /**
+   * Published Automatic Learning skills for a Bot's run. Only with a connected CopilotKit
+   * Intelligence (R0, optional); absent, every Bot is built exactly as without learning. Bound to
+   * the person asking below, so their own Learning space and opened Skills join the Bot's own.
+   */
+  acquireLearnedSkills?: AcquireLearnedSkills;
   loadPersonalMemoryForActor?: (actorId: string) => LoadPersonalMemory;
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
+  /** The model a person picked for the conversation a run answers in. Absent, the deployment's. */
+  pickedModelForActor?: (actorId: string) => PickedModel;
+  /** Writes the row for a run refused for sending more tools than its model accepts. */
+  recordToolLimitRefusalForActor?: (
+    actorId: string,
+    initiator?: AuditInitiator,
+  ) => RecordToolLimitRefusal;
   /**
    * Which model a built-in coworker was bound to in this tenant's model library. Not per actor: the
    * binding is the coworker's, and the request's row-level-security frame decides whose library the
@@ -109,20 +117,6 @@ export type ActorAgentResolverDependencies = {
   loadAvatarSourcesForActor?: (actorId: string) => LoadAvatarSources;
   /** Each Bot's current project (story RES2), per actor. */
   loadCurrentProjectForActor?: (actorId: string) => LoadCurrentProject;
-  /**
-   * Published Automatic Learning skills for a Bot's run. Only with a connected CopilotKit
-   * Intelligence (R0, optional); absent, every Bot is built exactly as without learning.
-   */
-  acquireLearnedSkills?: AcquireLearnedSkills;
-=======
-  /** The model a person picked for the conversation a run answers in. Absent, the deployment's. */
-  pickedModelForActor?: (actorId: string) => PickedModel;
-  /** Writes the row for a run refused for sending more tools than its model accepts. */
-  recordToolLimitRefusalForActor?: (
-    actorId: string,
-    initiator?: AuditInitiator,
-  ) => RecordToolLimitRefusal;
->>>>>>> v1.0.0
 };
 
 /**
@@ -186,20 +180,14 @@ export function createActorAgentResolver(
       context?.initiator,
       deps.loadAttachmentForActor?.(actor.id),
       deps.markAttachmentsSentForActor?.(actor.id),
-<<<<<<< 4fa35ea559ba740cb906e3cb633ad58e76378cb7
-      deps.loadPersonalMemoryForActor?.(actor.id),
-      deps.resolveAgentModel,
-      deps.loadAvatarSourcesForActor?.(actor.id),
-      deps.loadCurrentProjectForActor?.(actor.id),
-      deps.acquireLearnedSkills,
-    );
-=======
       acquireForActor,
       deps.loadPersonalMemoryForActor?.(actor.id),
       deps.recordToolLimitRefusalForActor?.(actor.id, context?.initiator),
       context?.holdsTools,
       deps.pickedModelForActor?.(actor.id),
-      deps.loadAppsForActor?.(actor.id),
+      deps.resolveAgentModel,
+      deps.loadAvatarSourcesForActor?.(actor.id),
+      deps.loadCurrentProjectForActor?.(actor.id),
     ).then((agents) => {
       const loadName = deps.loadNameForActor;
       if (loadName) {
@@ -217,7 +205,6 @@ export function createActorAgentResolver(
       return agents;
     });
   };
->>>>>>> v1.0.0
 
   const resolveAgentsForActor = async (
     actor: AgentActor,

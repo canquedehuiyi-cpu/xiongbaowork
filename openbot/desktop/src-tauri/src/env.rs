@@ -2285,7 +2285,10 @@ HTTPS_PROXY=http://proxy:8080
                 .collect()
         };
         assert_eq!(lines("OPENBOT_EDITION"), ["personal"]);
-        assert_eq!(lines("TENANT_PACKAGE_DIR"), ["../examples/personal"]);
+        // M3: upstream moves the package to `../examples/personal` here. This fork's new installs
+        // run its own package, and a package a previous Start chose is carried by the caller
+        // (`CARRIED_SETTINGS`), not by `compose`, which was handed none.
+        assert_eq!(lines("TENANT_PACKAGE_DIR"), [DEFAULT_TENANT_PACKAGE_DIR]);
         assert_eq!(lines("MY_OWN"), ["kept"]);
         for key in [
             "COMPUTER_SUPERVISOR_URL",
