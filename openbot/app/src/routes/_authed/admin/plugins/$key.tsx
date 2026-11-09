@@ -337,6 +337,12 @@ function RouteComponent() {
   }));
 
   const auth = connectionKindFor(server, entry?.auth);
+  /*
+   * What the deployment credential is called. A vendor that takes it somewhere other than a bearer
+   * header names it in the catalogue ("高德 Web 服务 Key", "钉钉 MCP 专属地址"), and where it goes on
+   * the request is the server's business — so the page only swaps the words, never the flow.
+   */
+  const credentialLabel = entry?.credentialLabel ?? "访问令牌";
   const title = zh(entry?.title ?? server?.title ?? key);
 
   /* Bound once because the brokered row below is told it twice — once inside the whole
@@ -384,12 +390,21 @@ function RouteComponent() {
     checkable: connection?.checkable ?? false,
   });
 
+  /*
+   * Whether this vendor's credential is placed somewhere other than a bearer header (a key in a
+   * query parameter, a per-customer address). Its key is never stored through the generic
+   * credentials route: the server refuses to attach one by id, and takes it only through
+   * `POST /servers/:id/token`, which checks its shape before anything is sealed — so a malformed
+   * key is refused at the form on the first add exactly as on every replacement.
+   */
+  const placedCredential = entry?.credentialLabel !== undefined;
+
   /** Adding is two writes when a token was typed: the credential, then the record pointing at it. */
   const add = async () => {
     setError(null);
     try {
       const credentialId =
-        auth === "deployment-bearer"
+        auth === "deployment-bearer" && !placedCredential
           ? await storeMcpToken(appKey, token || undefined)
           : undefined;
       await addCurated.mutateAsync({
@@ -397,6 +412,11 @@ function RouteComponent() {
         instanceHost: instanceHost || undefined,
         credentialId,
       });
+      if (placedCredential && token.trim()) {
+        // Through the checked door, after the server exists. A refusal throws into the catch
+        // below, so the dialog stays open with the server's sentence and nothing was sealed.
+        await replaceServerToken.mutateAsync({ serverId: key, token });
+      }
       if (auth === "user-oauth" && client.clientId && client.clientSecret) {
         await registerClient.mutateAsync({ serverId: key, ...client });
       }
@@ -695,9 +715,11 @@ function RouteComponent() {
                 size="sm"
               >
                 <ItemContent>
-                  <ItemTitle>访问令牌</ItemTitle>
+                  <ItemTitle>{credentialLabel}</ItemTitle>
                   <ItemDescription>
-                    每次调用这个服务商时作为 Bearer 令牌发送。
+                    {entry?.credentialHint
+                      ? `${entry.credentialHint}管理员录入一次，所有人共用；部署按服务商要求放进请求，不会显示或记录。`
+                      : "每次调用这个服务商时作为 Bearer 令牌发送。"}
                   </ItemDescription>
                 </ItemContent>
                 <ItemActions>
@@ -1143,14 +1165,14 @@ function RouteComponent() {
                 ? `${title} 的 OAuth 客户端`
                 : dialog === "instance"
                   ? `${title} 的实例地址`
-                  : `${title} 的访问令牌`}
+                  : `${title} 的${credentialLabel}`}
             </DialogTitle>
             <DialogDescription>
               {dialog === "client"
                 ? "来自服务商的控制台。密钥保存在这个部署的保险库里，永远不会被读回来。"
                 : dialog === "instance"
                   ? "你在这个服务商那里的主机名。保存前会按他们的格式校验。"
-                  : "保存在这个部署的保险库里，永远不会被读回来。"}
+                  : `${entry?.credentialHint ?? ""}保存在这个部署的保险库里，永远不会被读回来。`}
             </DialogDescription>
           </DialogHeader>
           <DialogBody className="mt-4">
@@ -1197,7 +1219,9 @@ function RouteComponent() {
                 </Field>
               ) : (
                 <Field>
-                  <FieldLabel htmlFor="access-token">访问令牌</FieldLabel>
+                  <FieldLabel htmlFor="access-token">
+                    {credentialLabel}
+                  </FieldLabel>
                   <Input
                     id="access-token"
                     onChange={(event) => setToken(event.target.value)}

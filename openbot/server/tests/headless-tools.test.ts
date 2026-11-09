@@ -645,6 +645,19 @@ test("on a paired machine the file and command tools say so; in the deployment's
   for (const workspace of [describe("workspace"), describe()]) {
     expect(workspace.computer_run_command).toContain("bash");
     expect(workspace.computer_run_command).not.toContain("paired machine");
+    // True in every form of the computer (own user, shared user, supervisor root): new tools go
+    // in the workspace first, and a refused sudo is not something to work around.
+    expect(workspace.computer_run_command).not.toMatch(
+      /apt-get|sudo apt|Do not use sudo|cannot install/,
+    );
+    expect(workspace.computer_run_command).toContain("npm install");
+    expect(workspace.computer_run_command).toContain("bun add");
+    expect(workspace.computer_run_command).toContain("python3 -m venv .venv");
+    expect(workspace.computer_run_command).toContain(".venv/bin/pip install");
+    expect(workspace.computer_run_command).toContain("do not try to escalate");
+    expect(workspace.computer_run_command).not.toMatch(
+      /npm install -g|pip install --user/,
+    );
     expect(workspace.computer_list_files).not.toContain("paired machine");
   }
 });

@@ -299,11 +299,13 @@ import { createPipelineStore } from "./pipeline/store";
 import { createActionStepRunner } from "./pipeline/action-step";
 import { createPipelineStepRunner } from "./pipeline/turn-channel";
 import { createPlatformRoutes } from "./platform/routes";
+import { appAccessTools } from "./plugins/app-access-tool";
 import { useRoutineTools } from "./plugins/builtin-routines";
 import { useComposioClient } from "./plugins/composio";
 import { createComposioClient } from "./plugins/composio-adapter";
 import { backfillComposioLogos } from "./plugins/logos";
 import { redirectUriFor } from "./plugins/oauth";
+import { startBrokeredRelist } from "./plugins/relist";
 import { createPluginStore } from "./plugins/store";
 import {
   grantedSkills,
@@ -1333,6 +1335,39 @@ await startupLifecycle.run(async (startup) => {
     });
   }
 
+  /*
+   * 自带应用（Routines、Google Drive、百度网盘）保存的工具，刷新到这一版的代码（见
+   * `refreshOwnListings`）。跨所有租户读 `mcp_servers`、按每台服务器的 tenant 写 `mcp_tools`，所以
+   * 在平台帧里跑。不 await：启动不等它，失败只记日志，保存的清单照常可用，下次启动再试。
+   */
+  void runAsTenant("platform", () => pluginStore.refreshOwnListings()).catch(
+    (error: unknown) => {
+      console.warn(
+        "[plugins] OpenBot's own apps' tools could not be brought up to date:",
+        error instanceof Error ? error.message : error,
+      );
+    },
+  );
+
+  /*
+   * 工具按旧版清单读法存下的 Composio 应用，重新列一次，让升级上来的部署记下和全新安装一样的东西
+   * （见 `relistOutdatedBrokeredApps`）。只有配置了 Composio 才启动。不 await；还有应用落后就按退避
+   * 间隔重试，退避表每一档都走到，在最长一档上连续失败 3 次才放弃；同一个应用只报一次。每一轮跨所有租户读写 `mcp_servers`/`mcp_tools`，所以在平台帧里跑。
+   */
+  if (composio) {
+    startup.acquireSync(
+      () => ({
+        stop: startBrokeredRelist({
+          relistOutdatedBrokeredApps: (options) =>
+            runAsTenant("platform", () =>
+              pluginStore.relistOutdatedBrokeredApps(options),
+            ),
+        }),
+      }),
+      (resource) => resource.stop(),
+    );
+  }
+
   /**
    * Routines, and the one moment its tools are told what to act on.
    *
@@ -1787,6 +1822,8 @@ await startupLifecycle.run(async (startup) => {
       // A Team Bot reaches its owner's accounts, and a teammate's own only with their consent.
       credentialActorFor: teamBots.credentialActorFor(actorId, botId),
     })),
+    // 申请访问：用不了某个应用时替对方向管理员申请（迁移 0153）。只建一条本租户的申请，不碰应用。
+    ...appAccessTools({ store: pluginStore, botId, actorId }),
     ...hostAccessTools({
       broker: hostAccessBroker,
       botId,

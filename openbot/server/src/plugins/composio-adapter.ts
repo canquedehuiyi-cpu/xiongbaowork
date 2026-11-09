@@ -16,6 +16,7 @@ import {
   type ComposioResult,
   LISTING_LIMIT,
   vendorSentence,
+  withheldArguments,
 } from "./composio";
 
 /**
@@ -1434,7 +1435,7 @@ function withdrawalDeclined(
  * answered to a route. `./composio` records them in an app's `lastError` for an administrator to
  * read on its Plugins page, and `listingSentence` passes an authored message through untouched.
  */
-function actionOf(
+export function actionOf(
   row: VendorToolRow,
   position: number,
   toolkit: string,
@@ -2440,6 +2441,30 @@ const REVOCABLE: VendorAccountStatus[] = [
 const DIRECTORY_TTL_MS = 10 * 60 * 1000;
 
 /**
+ * The toolkits Composio publishes about ITSELF, which are left out of the directory entirely.
+ *
+ * Composio's catalogue lists its own tooling beside the apps it connects: "Composio" (its meta
+ * tools), "Composio Search" and "Browser Tool". None of them is an app a person works in, and each
+ * puts the connector provider's name in front of a person browsing for apps, which is the one word
+ * these screens are written not to say. Verified against the live catalogue, which publishes the
+ * three under exactly these slugs, each as a no-auth toolkit.
+ *
+ * DROPPED WHERE THE DIRECTORY IS READ, so every caller agrees: the admin picker and its search, the
+ * enable route's check (a hand-composed request for one is refused as not listed), and the chat's
+ * connect suggestions, which name an app nobody enabled out of this same directory. An app already
+ * enabled is untouched: its row, its grants and its calls never read the directory, so it stays
+ * in that deployment's enabled apps and keeps working until an administrator removes it.
+ *
+ * Slugs, never names: the slug is the only identifier Composio keeps stable. Exa and every other
+ * search or browser app stay, because they are third-party apps rather than Composio's own.
+ */
+export const VENDOR_OWN_TOOLKITS: ReadonlySet<string> = new Set([
+  "composio",
+  "composio_search",
+  "browser_tool",
+]);
+
+/**
  * The held catalogue as a copy nobody else holds, which is what makes handing it out safe.
  *
  * WHAT WAS HANDED OUT WAS THE CACHE ITSELF. One array of one set of row objects was returned to
@@ -2806,7 +2831,9 @@ export function buildComposioClient(
      * toolkit measured, so this is a guard against the vendor rather than a routine case. A count
      * that arrives as something other than a number is the different case and is refused.
      */
-    return toolkits.map(appOf);
+    return toolkits
+      .map(appOf)
+      .filter((app) => !VENDOR_OWN_TOOLKITS.has(app.slug));
   };
 
   const actions: ComposioActions = {
@@ -2963,6 +2990,35 @@ export function buildComposioClient(
           `${call.slug} was not sent to Composio: this connection is for ${call.toolkit}, and Composio resolves that action to ${
             ran ?? "no app at all"
           }. Refreshing this app's tools on its Plugins page recovers it where the action was recorded against a url that has since changed.`,
+        );
+      }
+
+      /*
+       * A FILE PARAMETER THE LISTING LEFT OUT IS REFUSED HERE, AND THE RESOLVE IS WHAT MAKES THAT
+       * POSSIBLE. `./composio` offers an action whose file parameters are all optional with those
+       * parameters removed, because the only value a model can put in one is a staging key it made
+       * up. A model can still send one, so the call has to be checked against the action's own
+       * schema, and the tool resolved above at the recorded version is that schema: the same
+       * definition the listing was read from, asked the same question by the same walk. See
+       * {@link withheldArguments}.
+       *
+       * REFUSED IN A SENTENCE RATHER THAN STRIPPED, which is how this file answers every call it
+       * will not send. Dropping the value quietly would run a different call from the one the model
+       * made and tell it nothing, so the email would go without the attachment the model believes it
+       * attached. The sentence names the parameter and the remedy, which is the same call without it.
+       *
+       * ONE LIMIT, WRITTEN DOWN RATHER THAN HIDDEN. What resolves here has been through
+       * `ToolSchema.parse`, which keeps `properties`, `required`, the composition keywords, `items`
+       * and the flag itself, and drops the rarer 2020-12 applicators (`prefixItems`, `contains` and
+       * the like). A file reachable only through one of those is withheld by the listing and not
+       * seen here. In the fifteen toolkits read when this was written, every file sat directly on a
+       * named property or under its `anyOf` or `items`, all of which survive the parse.
+       */
+      const withheld = withheldArguments(resolved.inputParameters, args);
+      if (withheld.length > 0) {
+        const named = withheld.join(", ");
+        throw new Error(
+          `${call.slug} was not run, because it included ${named}, which is a file. OpenBot can't pass a file to this action, so any value there could only have been made up, and the action is offered without ${named} for that reason. Try again without ${named}.`,
         );
       }
 
@@ -4744,12 +4800,13 @@ export function createComposioClient(apiKey: string): {
      * have to re-derive it.
      *
      * `dangerouslyAllowAutoUploadDownloadFiles` defaults OFF (`ConfigDefaults.node.ts:4`) and is
-     * the premise `./composio`'s file filter is written on; that filter drops every action whose
-     * schema stages a file under EITHER setting, so the premise is defended by a tested guard
-     * rather than by this literal, and turning the flag on here would be a change to make against
-     * that filter. `sensitiveFileUploadProtection`, `fileUploadPathDenySegments`, `fileUploadDirs`
-     * and `fileDownloadDir` only bear on uploads and downloads that the same filter means never
-     * happen. `provider` defaults to the SDK's `OpenAIProvider`, which this adapter never asks to
+     * the premise `./composio`'s file filter is written on; under EITHER setting that filter drops
+     * every action that needs a file and offers one that only accepts a file without that
+     * parameter, and the execute path refuses a call that carries it anyway. So the premise is
+     * defended by tested guards rather than by this literal, and turning the flag on here would be
+     * a change to make against that filter. `sensitiveFileUploadProtection`,
+     * `fileUploadPathDenySegments`, `fileUploadDirs` and `fileDownloadDir` only bear on uploads
+     * and downloads that the same filter means never happen. `provider` defaults to the SDK's `OpenAIProvider`, which this adapter never asks to
      * format anything — every read here goes through the raw client or the SDK's own models.
      * `host` and `defaultHeaders` are telemetry and header cosmetics, and telemetry is off above.
      * `toolkitVersions` defaults to "latest", which is the literal every listing in this file

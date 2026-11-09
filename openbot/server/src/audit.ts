@@ -183,6 +183,12 @@ export const auditEventTypes = [
    */
   "mcp.oauth_client_registered",
   /*
+   * A Connect stopped because the deployment's OAuth client is held and could not be read (a vault
+   * fault, or a key that will not decrypt it), so no replacement was registered over it. Who pressed
+   * Connect and the server; never the credential, and never the raw fault.
+   */
+  "mcp.oauth_client_read_failed",
+  /*
    * One person's brokered account was exercised with a real call, to see whether it is really there.
    *
    * THE ONE EXECUTION OF AN APP'S OWN ACTION THAT HAPPENS OUTSIDE `callTool`, which is why it is

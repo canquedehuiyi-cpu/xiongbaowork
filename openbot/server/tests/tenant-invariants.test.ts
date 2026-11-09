@@ -190,14 +190,21 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   "src/devices/store.ts": { 'runAsTenant("platform"': 4 },
   // The third is the background translator (migration 0145): it reads and writes only
   // `text_translations`, a deployment-wide cache with no tenant column and no row security, and
-  // touches no tenant's rows.
+  // touches no tenant's rows. The fourth is the boot refresh of OpenBot's own apps' saved tools
+  // (`refreshOwnListings`, upstream #1130): not awaited, it reads every `mcp_servers` row and rewrites
+  // the `mcp_tools` of a Routines, Google Drive or 百度网盘 row whose saved list differs from this
+  // build's code, each stamped with its own server's tenant. No request reaches it. The fifth is each
+  // round of the broker relist (`relistOutdatedBrokeredApps`, upstream #1185), started only when
+  // Composio is configured: it re-lists the Composio apps whose `listing_revision` is behind, through
+  // the ordinary `refreshTools`, each app's tools stamped with its own row's tenant. No request
+  // reaches it either.
   // Linked accounts (upstream #763): who an outside account is, which person a code was issued to,
   // cancelling an exposed code — each about a sender nobody knows yet — and clearing codes a day
   // dead. Every other write runs as the person the row belongs to.
   "src/identity/store.ts": { 'runAsTenant("platform"': 4 },
   // Learning's container assignment is the deployment's (start, the nudge on read, Admin's check),
   // and the GitHub callback's "is this person still active" reads the deployment's people table.
-  "src/index.ts": { 'runAsTenant("platform"': 3, "asPlatform(": 4 },
+  "src/index.ts": { 'runAsTenant("platform"': 5, "asPlatform(": 4 },
   "src/memory/ingestion.ts": { 'runAsTenant("platform"': 2 },
   // Whose memories are out of step with Intelligence (upstream #773); each person's are then
   // mirrored in their own frame.
@@ -212,11 +219,21 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   "src/platform/routes.ts": { "adminActAsOwner(": 1, "asAdminPlatform(": 2 },
   "src/platform/store.ts": { 'runAsTenant("platform"': 3 },
   "src/plugins/logos.ts": { 'runAsTenant("platform"': 2 },
-  "src/plugins/routes.ts": { "adminActAsOwner(": 1, "asAdminPlatform(": 1 },
+  // 授予时进入 Bot 主人的帧（asBotOwner），以及申请访问的收件箱（迁移 0153）：持有 capability 的管理员
+  // 在 platform 帧里列出所有人的 pending 申请、按 id 读一条，处理结果经 adminActAsOwner 写回申请人的帧。
+  // 申请人自己的读、撤回都在本人的帧里，不经过这些入口。
+  "src/plugins/routes.ts": { "adminActAsOwner(": 2, "asAdminPlatform(": 3 },
   // Install listings (admin-only), and `removeServer`'s reach over every person's rows tied to one
   // team server (their tokens, brokered connections and grants for it), after `requireServerWriter`
-  // has checked the admin capability (P21).
-  "src/plugins/store.ts": { 'runAsTenant("platform"': 3 },
+  // has checked the admin capability (P21). The fourth is reachable from a member's request on
+  // purpose: `discoverToolsOnConnect` (upstream #1073), from the OAuth callback once the sealed
+  // state's person has been checked and their connection recorded. It refuses unless the frame is
+  // that person's own, and acts only when the app holds no tools at all. The row is resolved, the
+  // person's token exchanged and the vendor asked in the PERSON's frame, so P10 still applies there,
+  // and it never registers a replacement OAuth client (`reRegister: false`: an `invalid_client` only
+  // lands in `lastError`). Only the writes after the listing (the server's `team` tool rows, its
+  // status columns and the audit rows) run as `platform`.
+  "src/plugins/store.ts": { 'runAsTenant("platform"': 4 },
   "src/proactive/engine.ts": { 'runAsTenant("platform"': 2 },
   "src/quota/routes.ts": { 'runAsTenant("platform"': 1 },
   "src/recovery/abandoned-work.ts": { 'runAsTenant("platform"': 1 },

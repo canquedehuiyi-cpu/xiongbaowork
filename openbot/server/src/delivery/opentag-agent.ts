@@ -14,7 +14,11 @@
  */
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { type ApprovalDecision, approvalArgsPreview } from "../approvals/types";
+import {
+  type ApprovalDecision,
+  approvalArgsPreview,
+  offersStandingRule,
+} from "../approvals/types";
 import {
   ingestSlackEvent,
   type SlackTriggerEvent,
@@ -66,6 +70,8 @@ export type PairedApprovals = {
         effect: string;
         threadId: string;
         args: unknown;
+        /** 由哪一层要问的；删除类底线问的不能「总是允许」。 */
+        policy?: { source: string };
       };
     }>;
   };
@@ -548,6 +554,7 @@ async function approvalCard(
     effect: record.action.effect,
     // The approvals preview already redacts secrets and private content.
     fields: approvalFields(approvalArgsPreview(record.action)),
+    allowAlways: offersStandingRule(record.action),
   });
 }
 
@@ -612,9 +619,10 @@ async function decideAsBinding(
     return {
       text: "That approval was already decided. Check its result in OpenBot.",
     };
+  // 删除类底线问的动作没有「总是允许」：旧卡片上按的 always 只当作这一次。
   const decision: ApprovalDecision = !resume.confirmed
     ? "deny"
-    : resume.always
+    : resume.always && offersStandingRule(record.action)
       ? "allow_always"
       : "allow_once";
   await deps.approvals.decide(binding.ownerUserId, resume.approvalId, decision);

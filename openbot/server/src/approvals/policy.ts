@@ -645,6 +645,153 @@ export function appEnableReason(name: string, source: string): string {
 }
 // --- end app discovery ---
 
+/** 删除、归档或应用标为破坏性的操作要先问时，卡片上写的理由。 */
+export const DESTRUCTIVE_TOOL_REASON =
+  "这个操作会删除或覆盖内容，总是先征得你同意。";
+
+/** 应用工具要把内容发给别人（发信、回复、转发、发帖、分享、邀请）时，卡片上写的理由。 */
+export const OUTBOUND_SEND_REASON =
+  "这个操作可能会把内容发给别人，总是先征得你同意。";
+
+/**
+ * 没有歧义的删除词：在工具名的任意位置、作为整词出现就按删除处理（参照上游）。资源名在前的命名
+ * 很常见，`posts_delete`、`SHAREPOINT_LIST_ITEM_DELETE` 里删除词前面的是名词。整词匹配，所以
+ * `undelete_message`、`list_deleted_items` 不算。
+ */
+const ALWAYS_DELETING =
+  /\b(delete|deletes|trash|destroy|erase|purge|wipe|discard)\b/;
+/**
+ * 有歧义的删除词：只在它是工具名的第一个动词时才按删除处理。`remove_collaborator` 收回别人的
+ * 访问权限也算（fork 没有单独的分享分类，按删除问一次就够了）；`get_archive_settings` 不算。
+ */
+const FIRST_VERB_DELETING = "remove|removes|archive|archives";
+/**
+ * 工具名里常见的其它动作词，只用来找出「第一个动词」：`list_archived_emails` 的第一个动词是 list，
+ * `unarchive_thread` 是 unarchive，都不是删除。
+ */
+const OTHER_VERBS =
+  "unarchive|unarchives|untrash|undelete|restore|restores|recover|get|gets|list|lists|fetch|fetches|retrieve|search|find|read|reads|count|lookup|export|download|create|creates|add|adds|insert|update|updates|edit|patch|modify|set|mark|unmark|send|sends|post|posts|reply|forward|write|upload|share|invite|schedule|submit|publish|copy|duplicate|rename";
+/** 参照上游 `FIRST_VERB`：按出现顺序，名字里第一个认得的动作词就是这个工具做的事。 */
+const FIRST_VERB = new RegExp(`\\b(${FIRST_VERB_DELETING}|${OTHER_VERBS})\\b`);
+const DELETING_FIRST_VERB = new RegExp(`^(${FIRST_VERB_DELETING})$`);
+
+/*
+ * 对外发送按名字判定，三条规则任一成立就问（用户决定 2026-11-09「对外发送一律先问」，阶段 6 评审
+ * 后扩大）：
+ *  (a) 没有歧义的发送词出现在名字任意位置（整词）：`drafts_send`、`create_and_send_email`、
+ *      `resend_invite`、`EMAIL_DISPATCH`；
+ *  (b) 第一个动词是回复、转发、发帖、发布、分享、邀请：`GMAIL_REPLY_TO_THREAD`、`SLACK_POST_MESSAGE`；
+ *  (c) 第一个动词是新建、定时、撰写，并且后面说的是一条消息、帖子、邮件、短信、推文、评论或聊天：
+ *      `TWILIO_CREATE_MESSAGE`、`SLACK_SCHEDULE_MESSAGE`、`LINKEDIN_CREATE_LINKED_IN_POST`。
+ * 草稿只有一种豁免：名字里没有 (a) 类的词，第一个动词是 create、update、save，并且含有 draft。
+ */
+/** (a) 出现在任意位置就算发送的词。 */
+const ALWAYS_SENDING = /\b(send|sends|resend|dispatch)\b/;
+/** (b) 作为第一个动词时算发送的词。`posts`、`shares` 这类复数多半是资源名（`posts_list`），不在此列。 */
+const SENDING_FIRST_VERB =
+  /^(reply|replies|forward|post|publish|share|invite)$/;
+/** (c) 作为第一个动词、且后面跟着 {@link SENT_THING} 时算发送的词。 */
+const COMPOSING_FIRST_VERB = /^(create|schedule|compose|new)$/;
+/** (c) 新建或定时出来就是要发给别人的东西。 */
+const SENT_THING =
+  /\b(message|messages|post|email|mail|sms|tweet|comment|chat)\b/;
+/** 草稿豁免要求的第一个动词。 */
+const DRAFTING_FIRST_VERB = /^(create|update|save)$/;
+const DRAFT = /\b(draft|drafts)\b/;
+/**
+ * 找对外发送的第一个动词时用的词表：删除类的 {@link FIRST_VERB} 加上 replies、compose、new、
+ * save、resend、dispatch。只用于这条底线，删除类的词表不变。
+ */
+const OUTBOUND_VERB_SCAN = new RegExp(
+  `\\b(${FIRST_VERB_DELETING}|${OTHER_VERBS}|replies|compose|new|save|resend|dispatch)\\b`,
+);
+
+/**
+ * Bot 自己电脑上的操作（`computer_*`）和主人电脑上的命令（`host/`）有自己的底线，删除类底线
+ * 不管它们。只按前缀认不够：管理员可以把自定义 MCP 服务器叫做 `host`，所以经插件调用路径来的
+ * 工具由调用处标明（`subject.connector`），不看名字。
+ */
+const OWN_COMPUTER_TOOLS = /^(computer_|host\/)/;
+
+/**
+ * 工具名拆成小写单词，分隔符是 `_`、`-`、`.`、`/`、空白或大小写边界：
+ * `HUBSPOT_ARCHIVE_CONTACT` 是 "hubspot archive contact"，`postsDelete` 是 "posts delete"。
+ * 只看 ref 里服务器之后的部分。
+ */
+function toolWords(toolRef: string): string {
+  // 先把大写缩写和后面的单词分开：`HTTPDelete` 是 "http delete"。
+  return toolRef
+    .slice(toolRef.indexOf("/") + 1)
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[-_./\s]+/g, " ")
+    .toLowerCase()
+    .trim();
+}
+
+/** 工具名是否说它会删除东西。 */
+function deletesByName(toolRef: string): boolean {
+  const words = toolWords(toolRef);
+  // 不因名字里有 restore、recover 之类就放过：`delete_restore_point`、`wipe_and_recover` 都是删除。
+  // 代价是 `restore_from_trash` 也会问一次，宁可多问，不能漏问。
+  const first = words.match(FIRST_VERB)?.[1] ?? "";
+  return ALWAYS_DELETING.test(words) || DELETING_FIRST_VERB.test(first);
+}
+
+/**
+ * 删除类底线：一个改动只要满足其一就总是先问，
+ *  - 应用把这个工具标为破坏性（`candidate.destructive`，列出应用时记下的），不管它叫什么；
+ *  - 工具名说它会删除：没有歧义的删除词出现在名字任意位置，或 remove、archive 是第一个动词。
+ * 被分类成读也照样问：读的分类名单并不完整，应用自己标了破坏性的以应用为准。
+ * Bot 或主人电脑上的工具不在此列，除非它是经插件调用路径来的。
+ */
+export function destructiveFloor(
+  candidate: ApprovalCandidate,
+): { source: "destructive_tool"; reason: string } | undefined {
+  if (
+    candidate.subject?.connector !== true &&
+    OWN_COMPUTER_TOOLS.test(candidate.toolRef)
+  )
+    return undefined;
+  // 不看 effect：分类名单不完整，被当成读的删除工具仍要问；应用标了破坏性的以应用为准。
+  return candidate.destructive === true || deletesByName(candidate.toolRef)
+    ? { source: "destructive_tool", reason: DESTRUCTIVE_TOOL_REASON }
+    : undefined;
+}
+
+/** 工具名是否说它会（或可能会）把内容发给别人，规则见 {@link ALWAYS_SENDING} 上方。 */
+function sendsByName(toolRef: string): boolean {
+  const words = toolWords(toolRef);
+  if (ALWAYS_SENDING.test(words)) return true;
+  const scanned = words.match(OUTBOUND_VERB_SCAN);
+  const first = scanned?.[1] ?? "";
+  if (SENDING_FIRST_VERB.test(first)) return true;
+  if (DRAFTING_FIRST_VERB.test(first) && DRAFT.test(words)) return false;
+  if (!COMPOSING_FIRST_VERB.test(first)) return false;
+  // 只看第一个动词之后的词：`message_create` 不是「新建一条消息」的说法。
+  const after = words.slice((scanned?.index ?? 0) + first.length);
+  return SENT_THING.test(after);
+}
+
+/**
+ * 对外发送底线（用户决定，2026-11-09）：应用工具把内容发给别人，例如 Gmail 发信、回复、转发，或在
+ * Slack 发消息，总是先问，且只给「允许一次 / 拒绝」（见 types 的 `offersStandingRule`）。
+ *
+ * 只管应用工具：来源按插件调用路径设置的 `subject.connector` 认定，和删除类底线同一个标记。Bot
+ * 自己的工具、`computer_*` 和 `host/` 上的命令都不在此列。
+ *
+ * 不看 effect：工具被分类成读也照样问。catalogue 的 writeTools 名单并不完整，没列进去的工具会被
+ * 当成读，名字是这时唯一的兜底。
+ */
+export function outboundSendFloor(
+  candidate: ApprovalCandidate,
+): { source: "outbound_send"; reason: string } | undefined {
+  if (candidate.subject?.connector !== true) return undefined;
+  return sendsByName(candidate.toolRef)
+    ? { source: "outbound_send", reason: OUTBOUND_SEND_REASON }
+    : undefined;
+}
+
 /**
  * The whole decision, layer by layer (SEC1 §4.2). The first layer that settles the action decides,
  * and every later one can only make it stricter:
@@ -656,6 +803,11 @@ export function appEnableReason(name: string, source: string): string {
  *  4. The deterministic floors: a dangerous command or a sensitive path asks at least (§4.3, §4.4),
  *     and so does the team cap of `ask` for a command on a paired computer, and so does a local
  *     app's tool the device does not list as read-only. The cap also covers `computer_app_call`.
+ *     删除类底线：删除、归档或应用标为破坏性的改动总是先问，规则问过的也改记为这条底线，卡片因此
+ *     只给「允许一次 / 拒绝」（见 {@link destructiveFloor}）。它和上面几条底线管的工具互不相交
+ *     （那几条只看 `computer_*`、`host/` 的命令、路径和本机应用），在链里排第几不影响结果。
+ *     对外发送底线：应用工具把内容发给别人时同样总是先问、只给「允许一次 / 拒绝」
+ *     （见 {@link outboundSendFloor}）。一个工具既删除又发送时，按删除类底线问。
  *  5. The strictest rule across the team's, the owner's and the person's own; then the reviewer
  *     where it applies; then the person's own "ask before making changes" default.
  */
@@ -699,8 +851,12 @@ export async function decideAction(input: {
       source: "safety",
       reason: safety.reason,
     };
+  const destructive = destructiveFloor(candidate);
+  const outbound = outboundSendFloor(candidate);
   const floor:
     | SecurityFloor
+    | { source: "destructive_tool"; reason: string }
+    | { source: "outbound_send"; reason: string }
     // --- app discovery (sub-project 3) ---
     | { source: "host_command_cap" | "app_tool" | "app_enable"; reason: string }
     // --- end app discovery ---
@@ -713,6 +869,8 @@ export async function decideAction(input: {
       input.security ?? DEFAULT_EMPLOYEE_SECURITY,
       input.enforceDangerousCommands === true,
     ) ??
+    destructive ??
+    outbound ??
     (runnerCommand && input.hostCommandsCap === "ask"
       ? {
           source: "host_command_cap",
@@ -746,13 +904,21 @@ export async function decideAction(input: {
   // --- end desktop control ---
   const decided = await decideByRules(input, matched);
   // A floor only raises: an action the rules let through still asks; one already asked about or
-  // handed off keeps the stricter answer it had.
+  // handed off keeps the stricter answer it had. 删除类和对外发送底线多做一步：规则、偏好或审查
+  // 本来就要问的，也改记为这条底线，卡片才不会给出一条存了也永远用不上的「总是允许」；原来的理由
+  // 接在后面保留。
+  const restated =
+    floor !== undefined &&
+    (floor === destructive || floor === outbound) &&
+    decided.behaviour === "ask";
   const outcome: ApprovalPolicyOutcome =
-    floor && decided.behaviour === "allow"
+    floor && (decided.behaviour === "allow" || restated)
       ? {
           behaviour: "ask",
           source: floor.source,
-          reason: floor.reason,
+          reason: restated
+            ? `${floor.reason}（${decided.reason}）`
+            : floor.reason,
           ...(decided.ruleId ? { ruleId: decided.ruleId } : {}),
           ...(decided.review ? { review: decided.review } : {}),
         }

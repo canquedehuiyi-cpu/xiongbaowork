@@ -365,7 +365,15 @@ export async function redeemAuthorizationCode(input: {
   try {
     response = await fetch(input.tokenUrl, {
       method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        /*
+         * Asked for, not assumed. RFC 6749 already answers in JSON, but GitHub's token endpoint
+         * answers form-encoded unless the request asks for JSON, and the read below would take that
+         * body for no token at all. Vendors that always answer JSON are unaffected.
+         */
+        accept: "application/json",
+      },
       body: params,
       /*
        * A redirect is a refusal, not a detour to be followed.
