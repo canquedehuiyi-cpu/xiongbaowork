@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
-import { type ApprovalGate, currentApprovalContext } from "../approvals/types";
+import { ALREADY_WAITING } from "../approvals/service";
+import {
+  type ApprovalGate,
+  ApprovalRefusedError,
+  currentApprovalContext,
+} from "../approvals/types";
 import {
   type AuditInitiator,
   type AuditStore,
@@ -9203,20 +9208,49 @@ export function createPluginStore(options: PluginStoreOptions) {
         }
       }
 
-      const approval = await options.approvalGate?.({
-        actorId: input.actorId,
-        botId: input.botId,
-        toolRef: input.ref,
-        effect,
-        scope: serverId,
-        args: vendorArgs,
-        target: { serverId, toolName, url: row.url, effect },
-        // 列出应用时它把这个工具标成了破坏性：不管叫什么，都按删除处理，总是先问。
-        ...(advertised[0]?.destructive ? { destructive: true as const } : {}),
-        // 标明它来自插件调用路径：删除类底线按来源认应用工具，不看服务器叫什么。
-        subject: { connector: true },
-        continuation: currentApprovalContext(),
-      });
+      const approval = await options
+        .approvalGate?.({
+          actorId: input.actorId,
+          botId: input.botId,
+          toolRef: input.ref,
+          effect,
+          scope: serverId,
+          args: vendorArgs,
+          target: { serverId, toolName, url: row.url, effect },
+          // 列出应用时它把这个工具标成了破坏性：不管叫什么，都按删除处理，总是先问。
+          ...(advertised[0]?.destructive ? { destructive: true as const } : {}),
+          // 标明它来自插件调用路径：删除类底线按来源认应用工具，不看服务器叫什么。
+          subject: { connector: true },
+          continuation: currentApprovalContext(),
+        })
+        ?.catch(async (error: unknown) => {
+          /*
+           * Turned away at the gate: a rule that disables the tool, or an equivalent call the person
+           * declined earlier in this conversation. It is on the trail like every other refusal here,
+           * in the caller's frame, with the same fields as the rows above and never the arguments.
+           * A call already waiting for the person turns nothing new away, and a suspension is a
+           * wait rather than a refusal, so neither writes a row. Only the audit is added: the error
+           * goes on to the caller exactly as it came.
+           */
+          const reason =
+            error instanceof ApprovalRefusedError
+              ? withoutStatement(error)
+              : undefined;
+          if (reason !== undefined && reason !== ALREADY_WAITING)
+            await recordAuditEvent(auditStore, {
+              eventType: "mcp.call_rejected",
+              targetType: "mcp_tool",
+              targetId: input.ref,
+              ...(input.initiator ? { initiator: input.initiator } : {}),
+              payload: {
+                ...decided,
+                decision: { ...decided.decision, carriedOut: false },
+                refusal: "approval",
+                reason,
+              },
+            });
+          throw error;
+        });
       if (approval && "replay" in approval)
         return approval.replay as { text: string; isError: boolean };
 

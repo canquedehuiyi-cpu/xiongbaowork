@@ -14,6 +14,7 @@ import { MCPMock, type MCPToolDefinition } from "@copilotkit/aimock/mcp";
 import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import { and, asc, eq, gte, inArray, sql } from "drizzle-orm";
 import { TOOL_DISABLED } from "../src/approvals/policy";
+import { ALREADY_WAITING } from "../src/approvals/service";
 import {
   type ApprovalCandidate,
   type ApprovalGate,
@@ -5465,6 +5466,82 @@ test("SEC1: a connector call the gate refuses or holds never reaches the vendor"
     answer = "allow";
     await call();
     expect(executed).toBe(1);
+  }));
+
+/*
+ * A call the approval gate turns away is on the trail as refused (upstream #1106, plugin store). The
+ * row says who was refused and by what, never what was sent: no argument values, and it is filed in
+ * the caller's own tenant frame like the other refusals this method writes. A call already waiting
+ * for the person turns nothing new away and writes nothing.
+ */
+test("a connector call the approval gate turns away is a refused row, with no arguments and in the caller's tenant", () =>
+  asPlatform(async () => {
+    const DECLINED = "The person declined this action, so it was not done.";
+    let answer: "decline" | "waiting" = "decline";
+    const { store, database, auditStore } = await freshStore({
+      approvalGate: async () => {
+        throw new ApprovalRefusedError(
+          answer === "decline" ? DECLINED : ALREADY_WAITING,
+        );
+      },
+    });
+    let executed = 0;
+    useComposioClient({
+      listActions: async () => [],
+      execute: async () => {
+        executed += 1;
+        return vendorAnswered({ messages: [] });
+      },
+    });
+    await seedComposioGmail(database, store);
+    const call = () =>
+      store.callTool({
+        ref: "gmail/GMAIL_FETCH_EMAILS",
+        args: { query: "needle-argument-value-7731" },
+        botId: "bot_helper",
+        actorId: "user_asker",
+      });
+
+    await expect(call()).rejects.toThrow(DECLINED);
+    const refused = () =>
+      auditStore
+        .recorded()
+        .filter((event) => event.eventType === "mcp.call_rejected");
+    expect(refused()).toHaveLength(1);
+    expect(refused()[0]).toMatchObject({
+      targetType: "mcp_tool",
+      targetId: "gmail/GMAIL_FETCH_EMAILS",
+      payload: {
+        actor: "user_asker",
+        bot: "bot_helper",
+        server: "gmail",
+        tool: "GMAIL_FETCH_EMAILS",
+        decision: { carriedOut: false },
+        refusal: "approval",
+        reason: DECLINED,
+      },
+    });
+    expect(JSON.stringify(refused())).not.toContain(
+      "needle-argument-value-7731",
+    );
+
+    const [row] = await database
+      .select({ tenantId: auditEvents.tenantId })
+      .from(auditEvents)
+      .where(
+        and(
+          eq(auditEvents.eventType, "mcp.call_rejected"),
+          eq(sql<string>`${auditEvents.payload} ->> 'refusal'`, "approval"),
+          eq(sql<string>`${auditEvents.payload} ->> 'bot'`, "bot_helper"),
+        ),
+      );
+    // The frame the call ran in (the grant above is the deployment's, so this suite calls as it).
+    expect(row?.tenantId).toBe("platform");
+
+    answer = "waiting";
+    await expect(call()).rejects.toThrow(ALREADY_WAITING);
+    expect(refused()).toHaveLength(1);
+    expect(executed).toBe(0);
   }));
 
 test("a Composio call is recorded as reaching the vendor as the person, not as the deployment", () =>
