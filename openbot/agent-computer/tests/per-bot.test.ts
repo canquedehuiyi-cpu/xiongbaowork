@@ -474,12 +474,18 @@ describe("createPerBotComputer, when the helper refuses to run", () => {
     await rm(root, { recursive: true, force: true });
   });
 
-  async function computerWhoseHelperExits(code: number) {
+  async function computerWhoseHelperExits(code: number, stderr = "") {
     const calls: string[][] = [];
     const launcher = join(root, "fake-xb.sh");
     await writeFile(
       launcher,
-      ["#!/bin/sh", "cat >/dev/null", `exit ${code}`, ""].join("\n"),
+      [
+        "#!/bin/sh",
+        "cat >/dev/null",
+        ...(stderr ? [`printf '%s\\n' '${stderr}' >&2`] : []),
+        `exit ${code}`,
+        "",
+      ].join("\n"),
     );
     await chmod(launcher, 0o755);
     const perBot = createPerBotComputer({
@@ -499,19 +505,25 @@ describe("createPerBotComputer, when the helper refuses to run", () => {
   test.each([
     [64, "64"],
     [65, "65"],
-  ])("exit %d is an unavailable computer", async (code, shown) => {
-    const { perBot } = await computerWhoseHelperExits(code);
-    const shell = await perBot.shellFor("bot-a");
-    const failure = await shell
-      .run({ command: "echo hi" })
-      .catch((error) => error);
-    expect(failure).toBeInstanceOf(PerBotUnavailableError);
-    expect((failure as Error).message).toStartWith("员工独立电脑未就绪：");
-    expect((failure as Error).message).toContain(shown);
-  });
+  ])(
+    "exit %d with the helper's own error line is an unavailable computer",
+    async (code, shown) => {
+      const { perBot } = await computerWhoseHelperExits(code, "xb-bot: 拒绝");
+      const shell = await perBot.shellFor("bot-a");
+      const failure = await shell
+        .run({ command: "echo hi" })
+        .catch((error) => error);
+      expect(failure).toBeInstanceOf(PerBotUnavailableError);
+      expect((failure as Error).message).toStartWith("员工独立电脑未就绪：");
+      expect((failure as Error).message).toContain(shown);
+    },
+  );
 
   test("a missing user is prepared again on the next call", async () => {
-    const { perBot, calls } = await computerWhoseHelperExits(65);
+    const { perBot, calls } = await computerWhoseHelperExits(
+      65,
+      "xb-bot: 员工的系统用户 xb-x 不存在",
+    );
     await (await perBot.shellFor("bot-a"))
       .run({ command: "true" })
       .catch(() => {});
@@ -521,6 +533,22 @@ describe("createPerBotComputer, when the helper refuses to run", () => {
       ["ensure", botKeyOf("bot-a")],
     ]);
   });
+
+  test.each([
+    [64, ""],
+    [65, ""],
+    [64, "usage: mytool [options]"],
+    [65, "warning\nxb-bot: not on the first line"],
+  ])(
+    "exit %d without the helper's first line is the command's own answer",
+    async (code, stderr) => {
+      const { perBot } = await computerWhoseHelperExits(code, stderr);
+      const result = await (await perBot.shellFor("bot-a")).run({
+        command: `exit ${code}`,
+      });
+      expect(result.exitCode).toBe(code);
+    },
+  );
 
   test("any other exit is the command's own answer", async () => {
     const { perBot } = await computerWhoseHelperExits(1);

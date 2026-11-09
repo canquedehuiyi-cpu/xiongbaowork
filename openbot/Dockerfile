@@ -212,6 +212,34 @@ RUN apt-get update && apt-get install -y --no-install-recommends sudo \
   && chmod 0440 /etc/sudoers.d/pwuser \
   && visudo -cf /etc/sudoers.d/pwuser
 
+# EACH EMPLOYEE ITS OWN LINUX USER. An employee's commands run as `xb-<botKey>` (a uid in
+# 20000-59999), in `/workspace/bots/<botKey>`, through the narrow root helper `xb-bot`: pwuser may
+# sudo its `ensure` and `run` and nothing else of it. `restore`, which s6 runs as root at start
+# (`computer-users`), is not in sudoers. Employee users share `xbbots`, which gets the same package
+# managers as pwuser; pwuser is alone in `xbcomp`, the group of every employee directory, so the file
+# tools reach them all. `acl` for the default ACLs that let the file tools and the employee's
+# commands write each other's files; `procps` for the helper's `pkill`.
+#
+# Mutually exclusive with `--security-opt no-new-privileges`: sudo cannot switch user under it, and
+# with COMPUTER_PER_BOT_USERS=on /health then says the computer is not ready.
+COPY docker/xb-bot.sh /usr/local/sbin/xb-bot
+RUN apt-get update && apt-get install -y --no-install-recommends acl procps \
+  && rm -rf /var/lib/apt/lists/* \
+  && chown root:root /usr/local/sbin/xb-bot \
+  && chmod 0755 /usr/local/sbin/xb-bot \
+  && groupadd xbcomp \
+  && groupadd xbbots \
+  && usermod -aG xbcomp pwuser \
+  && sed -i -E '/^#?[[:space:]]*SYS_UID_(MIN|MAX)[[:space:]]/d' /etc/login.defs \
+  && printf '%s\n' 'SYS_UID_MIN 20000' 'SYS_UID_MAX 59999' >> /etc/login.defs \
+  && printf '%s\n' \
+    'pwuser ALL=(root) NOPASSWD: /usr/local/sbin/xb-bot ensure *, /usr/local/sbin/xb-bot run *' \
+    '%xbbots ALL=(root) NOPASSWD: /usr/bin/apt-get, /usr/bin/apt, /usr/bin/dpkg, /usr/bin/apt-key, /usr/bin/apt-cache' \
+    > /etc/sudoers.d/xb-bot \
+  && chmod 0440 /etc/sudoers.d/xb-bot \
+  && visudo -cf /etc/sudoers.d/xb-bot
+ENV COMPUTER_PER_BOT_USERS=on
+
 # THE PACKAGE MANAGER AND THE SHELL STAY. Both were removed here once as hardening, which was
 # backwards: a Bot being able to open a shell and install what a task needs is a requested feature,
 # not an oversight. Removing them hardens the image by deleting the product.
