@@ -643,7 +643,7 @@ test("bound sender runs the canonical turn and an approval becomes an OpenTag ca
     __copilotkit_interrupt_value__: {
       action: "confirm_write",
       args: {
-        action: "Research Bot wants to 在 example.com 上打开页面",
+        action: "Research Bot 想要在 example.com 上打开页面",
         fields: [{ label: "URL", value: "https://example.com" }],
         approver: "slack:U1",
         effect: "write",
@@ -672,7 +672,7 @@ test("a check-in task's approval becomes a card without Always allow, and an old
     (e) => e.type === "CUSTOM" && e.name === "on_interrupt",
   );
   expect(card.value.__copilotkit_interrupt_value__.args).toMatchObject({
-    action: "Research Bot wants to 在 example.com 上打开页面",
+    action: "Research Bot 想要在 example.com 上打开页面",
     allow_always: false,
   });
   const resumed = await run(f, {
@@ -688,7 +688,7 @@ test("a check-in task's approval becomes a card without Always allow, and an old
       },
     },
   });
-  expect(said(resumed.events)).toContain("Allowed once");
+  expect(said(resumed.events)).toContain("已允许这一次");
   expect(f.decisions).toEqual([["owner", APPROVAL, "allow_once"]]);
 });
 test("in a conversation others may read, the answer goes to the owner privately", async () => {
@@ -800,7 +800,7 @@ test("card resume decides through the approvals service as the binding owner onl
       (await resume({ confirmed: true, always: true, by: "slack:T1:U1" }))
         .events,
     ),
-  ).toContain("Always allowed");
+  ).toContain("已设为总是允许");
   expect(f.decisions).toEqual([["owner", APPROVAL, "allow_always"]]);
   expect(
     said((await resume({ confirmed: true, by: "slack:T1:U2" })).events),
@@ -847,7 +847,7 @@ test("a click waiting in Slack is named in words, with no tool id or page handle
     (e) => e.type === "CUSTOM" && e.name === "on_interrupt",
   );
   expect(card.value.__copilotkit_interrupt_value__.args).toMatchObject({
-    action: "Research Bot wants to 在 en.wikipedia.org 上点击链接「Python」",
+    action: "Research Bot 想要在 en.wikipedia.org 上点击链接「Python」",
     fields: [],
   });
   const denied = await run(f, {
@@ -863,7 +863,7 @@ test("a click waiting in Slack is named in words, with no tool id or page handle
     },
   });
   expect(said(denied.events)).toBe(
-    "Denied. Research Bot won't 在 en.wikipedia.org 上点击链接「Python」.",
+    "已拒绝。Research Bot 不会在 en.wikipedia.org 上点击链接「Python」。",
   );
   expect(JSON.stringify([asked.events, denied.events])).not.toMatch(
     /computer_click|snapshotId|f3e43/,
@@ -903,7 +903,7 @@ test("a deleting action's card offers no Always allow, and an always answer from
       },
     },
   });
-  expect(said(answered.events)).toContain("Allowed once");
+  expect(said(answered.events)).toContain("已允许这一次");
   expect(f.decisions).toEqual([["owner", APPROVAL, "allow_once"]]);
 });
 test("SMS STOP and START record opt-out without a turn or a second reply", async () => {

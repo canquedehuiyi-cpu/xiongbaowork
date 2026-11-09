@@ -103,7 +103,7 @@ test("a task waiting on a folder edit says where by the folder's name", () => {
       target: { displayName: "folder-test" },
       handOff: false,
     }),
-  ).toBe("Waiting for your approval: 保存文件（在 folder-test 中）");
+  ).toBe("等你批准：保存文件（在 folder-test 中）");
   expect(
     waitingLine({
       kind: "approval",
@@ -112,5 +112,5 @@ test("a task waiting on a folder edit says where by the folder's name", () => {
       target: { displayName: "folder-test", relativePath: "notes.txt" },
       handOff: false,
     }),
-  ).toBe("Waiting for your approval: 保存文件 notes.txt（在 folder-test 中）");
+  ).toBe("等你批准：保存文件 notes.txt（在 folder-test 中）");
 });

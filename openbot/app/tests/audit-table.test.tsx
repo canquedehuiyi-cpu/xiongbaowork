@@ -85,7 +85,7 @@ async function renderAudit(sections?: ReactNode) {
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
-  await view.findByText("Decision");
+  await view.findByText("结果");
   return view;
 }
 
@@ -96,7 +96,7 @@ const whats = (container: HTMLElement) =>
 
 test("the page fills the shell's panel and only the table scrolls", async () => {
   const view = await renderAudit();
-  const heading = view.getByRole("heading", { name: "Audit" });
+  const heading = view.getByRole("heading", { name: "审计" });
   const page = heading.closest(".overflow-hidden");
   expect(page).not.toBeNull();
   expect(page?.className).toContain("flex-1");
@@ -112,20 +112,12 @@ test("the page fills the shell's panel and only the table scrolls", async () => 
 
 test("newest first, and a press on When turns it oldest first", async () => {
   const view = await renderAudit();
-  expect(whats(view.container)).toEqual([
-    "Open a page",
-    "Click on a page",
-    "Fill in a field",
-  ]);
+  expect(whats(view.container)).toEqual(["打开页面", "点击页面", "填写字段"]);
   await userEvent
     .setup({ document })
-    .click(view.getByRole("button", { name: /When/ }));
+    .click(view.getByRole("button", { name: /时间/ }));
   await waitFor(() =>
-    expect(whats(view.container)).toEqual([
-      "Fill in a field",
-      "Click on a page",
-      "Open a page",
-    ]),
+    expect(whats(view.container)).toEqual(["填写字段", "点击页面", "打开页面"]),
   );
 });
 
@@ -134,10 +126,8 @@ test("search narrows the rows already loaded, and says how many match", async ()
   await userEvent
     .setup({ document })
     .type(view.getByRole("searchbox", { name: "Search events" }), "save deal");
-  await waitFor(() =>
-    expect(whats(view.container)).toEqual(["Click on a page"]),
-  );
-  expect(view.getByText("1 of 3 events")).toBeDefined();
+  await waitFor(() => expect(whats(view.container)).toEqual(["点击页面"]));
+  expect(view.getByText("3 条事件中的 1 条")).toBeDefined();
 });
 
 test("each row carries what happened, for its colour", async () => {
@@ -167,12 +157,12 @@ test("a row about a Bot names it under Bot, not under On", () => {
 test("the Outcome button narrows the rows to the outcomes ticked", async () => {
   const view = await renderAudit();
   const user = userEvent.setup({ document });
-  await user.click(view.getByRole("button", { name: /Outcome/ }));
+  await user.click(view.getByRole("button", { name: /状态/ }));
   await user.click(
-    await view.findByRole("menuitemcheckbox", { name: /Blocked/ }),
+    await view.findByRole("menuitemcheckbox", { name: /已拦截/ }),
   );
-  await waitFor(() => expect(whats(view.container)).toEqual(["Open a page"]));
-  expect(view.getByText("1 of 3 events")).toBeTruthy();
+  await waitFor(() => expect(whats(view.container)).toEqual(["打开页面"]));
+  expect(view.getByText("3 条事件中的 1 条")).toBeTruthy();
 });
 
 test("recording history shares a page scroller with the bounded audit log", async () => {

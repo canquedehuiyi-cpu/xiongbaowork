@@ -19,8 +19,10 @@ import { z } from "zod";
 import {
   type ApprovalDecision,
   type ApprovalPolicyOutcome,
+  afterChinese,
   approvalArgsPreview,
   offersStandingRule,
+  wantsTo,
 } from "../approvals/types";
 import {
   ingestSlackEvent,
@@ -584,6 +586,9 @@ async function linkAs(
   };
 }
 
+/** 找不到员工的名字时，卡片和回复里对它的称呼。 */
+const YOUR_BOT = "你的员工";
+
 async function approvalCard(
   deps: OpenTagAgentDeps,
   binding: DeliveryBinding,
@@ -605,7 +610,7 @@ async function approvalCard(
   return confirmWriteInterrupt({
     approvalId,
     // In the words the approval card in OpenBot uses, never the tool's id ("Your Bot: computer_click").
-    action: `${bot?.name ?? "Your Bot"} wants to ${approvalPhrase(record.action)}`,
+    action: wantsTo(bot?.name ?? YOUR_BOT, record.action),
     approver: `${binding.transport}:${binding.identity}`,
     effect: record.action.effect,
     // The approvals preview already redacts secrets and private content.
@@ -684,12 +689,12 @@ async function decideAsBinding(
       : "allow_once";
   await deps.approvals.decide(binding.ownerUserId, resume.approvalId, decision);
   const bot = await deps.store.botIdentity(record.action.botId);
-  const name = bot?.name ?? "Your Bot";
+  const name = bot?.name ?? YOUR_BOT;
   return {
     text:
       decision === "deny"
-        ? `Denied. ${name} won't ${approvalPhrase(record.action)}.`
-        : `${decision === "allow_always" ? "Always allowed" : "Allowed once"}. ${name} is continuing and will send its result here.`,
+        ? `已拒绝。${name} 不会${afterChinese(approvalPhrase(record.action))}。`
+        : `${decision === "allow_always" ? "已设为总是允许" : "已允许这一次"}。${name} 会继续，并把结果发到这里。`,
   };
 }
 

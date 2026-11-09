@@ -117,14 +117,14 @@ test("Activity names what it shows as the newest events, and Show older events r
   );
 
   // The first page, and a count that does not pass itself off as the whole trail.
-  await view.findByText("Newest 50 events");
+  await view.findByText("最新的 50 条事件");
   expect(view.container.textContent).toContain("Button 50");
   expect(view.container.textContent).not.toContain("Button 51");
 
   fireEvent.click(view.getByRole("button", { name: "Show older events" }));
 
   // The older page, asked for with the same view and the server's cursor, under the newer rows.
-  await view.findByText("60 events");
+  await view.findByText("60 条事件");
   expect(view.container.textContent).toContain("Button 60");
   expect(view.container.querySelectorAll("tbody tr[data-outcome]").length).toBe(
     60,

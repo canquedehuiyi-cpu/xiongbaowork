@@ -151,7 +151,7 @@ async function renderActivity() {
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
-  await view.findByText("Decision");
+  await view.findByText("结果");
   return view;
 }
 
@@ -181,22 +181,21 @@ test("a denied write reads as refused, and the person's answer as a denial", asy
   );
   expect(rows).toEqual([
     {
-      what: "Save a file",
+      what: "保存文件",
       on: "refused.txt",
-      decision: "BlockedA person denied it when asked.",
+      decision: "已拦截询问时有人拒绝了。",
       outcome: "refused",
     },
     {
-      what: "Save a file",
+      what: "保存文件",
       on: "refused.txt",
-      decision: "Denied by a person",
+      decision: "有人拒绝了",
       outcome: "refused",
     },
     {
-      what: "Save a file",
+      what: "保存文件",
       on: "refused.txt",
-      decision:
-        "Asked a person firstYou asked to review changes before they happen.",
+      decision: "先问了人You asked to review changes before they happen.",
       outcome: "allowed",
     },
   ]);
@@ -207,9 +206,9 @@ test("an allowed write reads as allowed once, after the person allowed it", asyn
     entry.on.startsWith("allowed.txt"),
   );
   expect(rows.map((entry) => entry.decision)).toEqual([
-    "Allowed",
-    "Allowed once by a person",
-    "Asked a person firstYou asked to review changes before they happen.",
+    "已放行",
+    "有人允许了这一次",
+    "先问了人You asked to review changes before they happen.",
   ]);
 });
 
@@ -219,10 +218,9 @@ test("a read that failed is one row that says it did not happen", async () => {
   );
   expect(rows).toEqual([
     {
-      what: "Read a file",
+      what: "读取文件",
       on: "missing-report.txt",
-      decision:
-        "Did not happenmissing-report.txt does not exist in the workspace.",
+      decision: "没有发生missing-report.txt does not exist in the workspace.",
       outcome: "did-not-happen",
     },
   ]);

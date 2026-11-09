@@ -4,11 +4,11 @@ import { NOT_SHOWN, NOT_SHOWN_TAIL } from "@openbot/shared/component-markers";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, render, waitFor } from "@testing-library/react";
 import { GALLERY } from "@/components/gallery/activity";
-import { agentKeys } from "@/lib/agents/queries";
 import {
   ArgumentsArrivingContext,
   TurnInFlightContext,
 } from "@/components/gallery/streaming";
+import { agentKeys } from "@/lib/agents/queries";
 import { makeGalleryRender } from "@/lib/copilot/gallery-tools";
 import { createGrantStore } from "@/lib/copilot/grant-store";
 import { settleReactWork } from "./settle-react-work";
@@ -129,7 +129,7 @@ test("a refused call reads nothing, so its one refusal is the handler's", async 
 
 test("an allowed call reads once, with its final arguments, and draws the figures", async () => {
   const { view, inTurn } = drawCall();
-  expect(view.getByText("Reading…")).toBeTruthy();
+  expect(view.getByText("正在读取…")).toBeTruthy();
   view.rerender(
     inTurn(
       {
@@ -160,7 +160,7 @@ test("the refusals report says what was refused in words, and names the Bot", as
       false,
     ),
   );
-  await waitFor(() => expect(view.getByText("Use the computer")).toBeTruthy());
+  await waitFor(() => expect(view.getByText("使用电脑")).toBeTruthy());
   expect(view.getByText("Personal Assistant")).toBeTruthy();
   expect(view.container.textContent).not.toContain("computer.action_refused");
   expect(reads).toHaveLength(1);

@@ -16,7 +16,6 @@ import { Fragment, type ReactNode } from "react";
 import { type AuditOutcome, outcomeOf } from "@/lib/audit/outcome";
 import { silenceOf } from "@/lib/audit/silence";
 import { galleryComponent } from "@/lib/copilot/gallery-registry";
-import { atStart } from "@/lib/manage-paths";
 
 /** One row as the API returns it. */
 export type AuditEvent = {
@@ -209,7 +208,7 @@ export function whatName(event: AuditEvent): string {
  * was nobody's approval (see {@link givenWithoutAsking}).
  */
 export function whatText(event: AuditEvent, storedNames = true): string {
-  if (!storedNames && givenWithoutAsking(event)) return "Let a Bot use an app";
+  if (!storedNames && givenWithoutAsking(event)) return "允许员工使用应用";
   const action = actionOf(event);
   if (action) return auditActionWords(action);
   const change =
@@ -324,7 +323,7 @@ export function subjectText(event: AuditEvent, storedNames = true): string {
   if (event.eventType === "mcp.tools_discovered")
     return typeof payload.offered === "number" &&
       typeof payload.granted === "number"
-      ? `${payload.offered} of ${payload.granted} tools`
+      ? `${payload.offered} / ${payload.granted} 个工具`
       : "";
   if (!storedNames) {
     const words = subjectWords(event);
@@ -442,30 +441,31 @@ function initiatorKindOf(event: AuditEvent): string | undefined {
 }
 
 /**
- * Who started a row, as the row's Started by filter and its line under the Bot both say it.
- * `deployment` is what OpenBot itself is called on this screen: "this deployment" in Admin, and
- * "OpenBot" in the personal edition's Activity, which is anybody's page.
+ * Who started a row, as the row's 发起方 filter says it, and {@link startedByLine} puts in a
+ * sentence under the Bot. `deployment` is what OpenBot itself is called on this screen: 「本部署」 in
+ * Admin, and the product in the personal edition's Activity, which is anybody's page. The product
+ * is said by its short name, 「熊宝」: 「熊宝数字员工」 reads as one of the person's Bots.
  */
 export function startedByText(
   event: AuditEvent,
   nameFor: NameFor,
-  deployment = "this deployment",
+  deployment = "本部署",
 ): string {
   switch (initiatorKindOf(event)) {
     case "routine":
-      return "A routine";
+      return "例行任务";
     case "handoff":
       return event.initiatorId
-        ? `Handed on by ${nameFor(event.initiatorId)}`
-        : "Handed on";
+        ? `由${spaced(nameFor(event.initiatorId))}转交`
+        : "由其他员工转交";
     case "memory":
-      return "A memory source";
+      return "记忆来源";
     case "responsibility":
-      return "A goal";
+      return "目标";
     case "deployment":
-      return atStart(deployment);
+      return deployment.replace(/数字员工$/, "") || deployment;
     default:
-      return "A person";
+      return "某个人";
   }
 }
 
@@ -487,7 +487,7 @@ function givenWithoutAsking(event: AuditEvent): boolean {
 export function decisionText(event: AuditEvent, storedNames = true): string {
   const payload = event.payload ?? {};
   const outcome = outcomeOf(event);
-  if (!storedNames && givenWithoutAsking(event)) return "Allowed automatically";
+  if (!storedNames && givenWithoutAsking(event)) return "自动允许";
   /*
    * Three different things, and the difference is what somebody comes to this row to find out.
    *
@@ -499,23 +499,23 @@ export function decisionText(event: AuditEvent, storedNames = true): string {
   const routed =
     event.eventType === "channel.routed"
       ? payload.viaMention === true
-        ? "The person chose this Bot"
+        ? "由用户指定的员工"
         : payload.fallback === true
-          ? "Sent to the default Bot"
-          : "Sent to the Bot it was meant for"
+          ? "交给了默认员工"
+          : "交给了对应的员工"
       : null;
   const legacy = legacyFolderAction(event);
   return (
     routed ??
     approvalText(event) ??
-    (legacy?.outcome === "requested" ? "Asked for" : undefined) ??
+    (legacy?.outcome === "requested" ? "已请求" : undefined) ??
     notConnectedText(event) ??
     (legacy ? undefined : DECISIONS[event.eventType]) ??
     (outcome === "refused"
-      ? "Blocked"
+      ? "已拦截"
       : outcome === "did-not-happen"
-        ? "Did not happen"
-        : "Allowed")
+        ? "没有发生"
+        : "已放行")
   );
 }
 
@@ -538,9 +538,7 @@ function connectPromptOf(event: AuditEvent): ConnectPrompt | null {
 function notConnectedText(event: AuditEvent): string | undefined {
   const prompt = connectPromptOf(event);
   if (!prompt) return undefined;
-  return prompt.reason === "reconnect"
-    ? "No longer connected"
-    : "Not connected";
+  return prompt.reason === "reconnect" ? "需要重新连接" : "未连接";
 }
 
 /**
@@ -551,10 +549,10 @@ function notConnectedText(event: AuditEvent): string | undefined {
 function notConnectedLine(prompt: ConnectPrompt, storedNames: boolean): string {
   if (storedNames && prompt.message) return prompt.message;
   if (prompt.reason === "reconnect")
-    return `${prompt.title} is no longer connected. Reconnect it in Connections.`;
+    return `${prompt.title} 的连接已失效，请到「已连接的账号」里重新连接。`;
   if (prompt.reason === "shared")
-    return `${prompt.title} uses a shared account nobody has connected yet. Ask an admin to connect it.`;
-  return `${prompt.title} isn't connected. Connect it in Connections.`;
+    return `${prompt.title} 使用的共享账号还没有人连接，请联系管理员连接。`;
+  return `${prompt.title} 还没有连接，请到「已连接的账号」里连接。`;
 }
 
 /**
@@ -579,17 +577,17 @@ function approvalText(event: AuditEvent): string | undefined {
 }
 
 const PERSON_DECISIONS: Record<string, string> = {
-  allow_once: "Allowed once by a person",
-  allow_always: "Always allowed by a person",
-  deny: "Denied by a person",
-  handled: "Done by a person",
+  allow_once: "有人允许了这一次",
+  allow_always: "有人设为总是允许",
+  deny: "有人拒绝了",
+  handled: "有人亲自做了",
 };
 
 const GATE_DECISIONS: Record<string, string> = {
-  allow: "Allowed without asking",
-  ask: "Asked a person first",
-  hand_off: "Handed to a person",
-  deny: "Blocked",
+  allow: "没有询问，直接允许",
+  ask: "先问了人",
+  hand_off: "交给人来做",
+  deny: "已拦截",
 };
 
 /**
@@ -597,8 +595,7 @@ const GATE_DECISIONS: Record<string, string> = {
  * sentences written for it; the shared table turns them into the ones a person reads.
  */
 function refusalLine(payload: Record<string, unknown>): string | undefined {
-  if (payload.refusal === "person_declined")
-    return "A person denied it when asked.";
+  if (payload.refusal === "person_declined") return "询问时有人拒绝了。";
   if (payload.refusal === "approval" && typeof payload.reason === "string")
     return outcomeForPerson(payload.reason);
   return undefined;
@@ -609,8 +606,8 @@ function refusalLine(payload: Record<string, unknown>): string | undefined {
  * is given, which names the component and its data by their ids and sends the person to an admin.
  */
 const COMPONENT_REFUSALS: Record<string, string> = {
-  "component.refused": "This Bot can't show it.",
-  "component.function_refused": "It isn't allowed to read that data.",
+  "component.refused": "这位员工不能展示它。",
+  "component.function_refused": "它不能读取这些数据。",
 };
 
 /**
@@ -673,7 +670,7 @@ export function decisionDetails(
     lines.push(
       `${DISCOVERY_REASONS[payload.reason] ?? payload.reason}${
         Array.isArray(payload.skills) && payload.skills.length > 0
-          ? `: ${payload.skills.join(", ")}`
+          ? `：${payload.skills.join(", ")}`
           : ""
       }`,
     );
@@ -693,7 +690,7 @@ export function decisionDetails(
   )
     lines.push(payload.reason);
   if (event.eventType === "bot.declined" && typeof payload.reason === "string")
-    lines.push(`${payload.reason}, reported by the Bot itself`);
+    lines.push(`${payload.reason}，由员工自己报告`);
   const notConnected = connectPromptOf(event);
   if (failed && notConnected)
     lines.push(notConnectedLine(notConnected, storedNames));
@@ -715,7 +712,7 @@ export function decisionDetails(
     decision.allowed === false &&
     decision.carriedOut
   )
-    lines.push("dry-run: recorded, not enforced");
+    lines.push("演练模式：只记录，不拦截");
   return lines;
 }
 
@@ -842,13 +839,22 @@ export function StartedByCell({
 }
 
 /**
- * Under the Bot's name, so it says what it is: "Started by a routine", "Handed on by Scout",
- * "Started by OpenBot". Only a leading "A" or "This" is lowered; a name keeps its capitals.
+ * Under the Bot's name, so it says what it is: 「由例行任务发起」「由 Scout 转交」「由熊宝发起」.
+ * A hand-off already says it as a sentence.
  */
 export function startedByLine(text: string): string {
-  return text.startsWith("Handed on")
-    ? text
-    : `Started by ${text.replace(/^(A|This) /, (word) => word.toLowerCase())}`;
+  return text.startsWith("由") ? text : `由${spaced(text)}发起`;
+}
+
+/**
+ * A name set inside a Chinese sentence, with the half-width space the copy rules put between
+ * Chinese and English or a number on each side it touches: 「由 Scout 转交」, 「由熊宝发起」.
+ */
+function spaced(name: string): string {
+  const cjk = /[　-鿿＀-￯]/;
+  const before = cjk.test(name.charAt(0)) ? "" : " ";
+  const after = cjk.test(name.at(-1) ?? "") ? "" : " ";
+  return `${before}${name}${after}`;
 }
 
 export function DecisionCell({
@@ -913,11 +919,11 @@ export const OUTCOME_ROW: Record<AuditOutcome, string> = {
  * and one whose selector could not be reached, and only the last is a fault.
  */
 const DISCOVERY_REASONS: Record<string, string> = {
-  "under-floor": "Few enough tools to offer them all",
-  "nothing-declared": "No skill declares any of these tools",
-  unavailable: "Couldn't choose, so all were offered",
-  "nothing-chosen": "No skill applied, so all were offered",
-  selected: "Chosen by skill",
+  "under-floor": "工具不多，全部提供",
+  "nothing-declared": "没有技能声明过这些工具",
+  unavailable: "没法挑选，所以全部提供",
+  "nothing-chosen": "没有用上技能，所以全部提供",
+  selected: "按技能挑选",
 };
 
 /** Target types whose id is a name worth putting on screen; anything else falls through. */
@@ -930,51 +936,51 @@ const NAMED_TARGETS = new Set([
 ]);
 
 const DECISIONS: Record<string, string> = {
-  "bot.declined": "The Bot declined",
+  "bot.declined": "员工拒绝了",
   // Not a refusal, so not the refusal colour: nothing was blocked. The Bot was asked and never
   // answered, which is the same complaint as an action that was allowed and then did not happen.
-  "agent.stream_stalled": "The Bot stopped responding",
-  "agent.tool_limit_refused": "Too many tools for its model",
-  "computer.policy_loaded": "Boundary at start-up",
-  "computer.isolation_loaded": "Isolation at start-up",
-  "computer.control_taken": "A person took control",
-  "computer.control_released": "Control went back to the Bot",
-  "computer.help_requested": "The Bot asked for help",
-  "computer.secret_requested": "The Bot asked for a secret",
-  "computer.secret_supplied": "A person supplied a secret",
-  "computer.reset": "The computer was reset",
-  "computer.browser_cleared": "A person cleared the browser",
-  "computer.updated": "The computer was updated",
-  "computer.stopped": "A person pressed stop",
+  "agent.stream_stalled": "员工不再回应",
+  "agent.tool_limit_refused": "工具太多，超出了模型的上限",
+  "computer.policy_loaded": "启动时的边界",
+  "computer.isolation_loaded": "启动时的隔离",
+  "computer.control_taken": "有人接管了操作",
+  "computer.control_released": "已交还给员工",
+  "computer.help_requested": "员工请求帮助",
+  "computer.secret_requested": "员工索要密钥",
+  "computer.secret_supplied": "有人提供了密钥",
+  "computer.reset": "电脑已重置",
+  "computer.browser_cleared": "有人清空了浏览器",
+  "computer.updated": "电脑已更新",
+  "computer.stopped": "有人按了停止",
 
-  "component.granted": "Granted to this Bot",
-  "component.revoked": "Taken away from this Bot",
-  "component.published": "Published. Every Bot can use it",
-  "component.unpublished": "Unpublished. No Bot can use it",
-  "component.draft_saved": "Draft saved, not yet published",
-  "component.description_updated": "Description updated to this version's",
-  "component.refused": "Refused",
-  "component.function_granted": "Can read this",
-  "component.function_revoked": "Can no longer read this",
-  "component.function_called": "Read real data",
-  "component.function_refused": "Refused",
+  "component.granted": "已授予这位员工",
+  "component.revoked": "已从这位员工收回",
+  "component.published": "已发布，所有员工都能用",
+  "component.unpublished": "已取消发布，没有员工能用",
+  "component.draft_saved": "草稿已保存，尚未发布",
+  "component.description_updated": "说明已更新为这个版本的",
+  "component.refused": "已拒绝",
+  "component.function_granted": "可以读取",
+  "component.function_revoked": "不再可以读取",
+  "component.function_called": "读取了真实数据",
+  "component.function_refused": "已拒绝",
   // A function failure is execution failure, not a policy refusal.
-  "component.function_failed": "Couldn't read it",
+  "component.function_failed": "没能读取",
 
   // Not a call and not a decision: the tools this run was allowed to see. Worded so nobody reads it
   // as permission, which it is not — everything named was already granted.
-  "mcp.tools_discovered": "Tools offered for one run",
-  "mcp.call_succeeded": "Called on this Bot's behalf",
-  "mcp.call_rejected": "Blocked",
-  "mcp.call_failed": "The server didn't answer",
+  "mcp.tools_discovered": "本次运行提供的工具",
+  "mcp.call_succeeded": "代这位员工调用",
+  "mcp.call_rejected": "已拦截",
+  "mcp.call_failed": "服务器没有回应",
   // Not "Blocked": nothing about the Bot was judged, because nothing proved which Bot it was.
-  "mcp.callback_refused": "Couldn't confirm which Bot it was",
+  "mcp.callback_refused": "无法确认是哪位员工",
 
   // A request closed without an answer: asking was turned off, or a rule now allows it.
-  "approval.withdrawn": "Withdrawn",
+  "approval.withdrawn": "已撤回",
 
-  "configuration.changed": "Configuration changed",
-  "credential.created": "Credential saved",
+  "configuration.changed": "配置已修改",
+  "credential.created": "凭据已保存",
 };
 
 function hostOf(url: string): string {

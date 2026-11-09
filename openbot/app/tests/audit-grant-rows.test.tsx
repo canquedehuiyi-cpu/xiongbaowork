@@ -20,7 +20,7 @@ import { settleReactWork } from "./settle-react-work";
 
 /*
  * Seen on Windows after an upgrade: Settings > Activity listed 21 rows, each "Change a setting" over
- * `routines/complete_goal` and the rest, each "Started by a person", for the goal tools the upgrade
+ * `routines/complete_goal` and the rest, each "由某个人发起", for the goal tools the upgrade
  * itself gave three Bots. Older rows showed `composio-gmail/GMAIL_SEND_EMAIL` under their title.
  * Activity says what changed and on which app in words, and who started it; Admin keeps the stored
  * names it showed before.
@@ -171,7 +171,7 @@ async function renderAs(edition: "team" | "personal") {
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
-  await view.findByText("Decision");
+  await view.findByText("结果");
   return view;
 }
 
@@ -194,22 +194,22 @@ test("Activity says what changed in words, and that OpenBot started what it did 
   const view = await renderAs("personal");
   expect(drawn(view.container)).toEqual([
     {
-      what: "Give a Bot tools",
-      on: "Complete goal, create goal and 5 more on Routines",
-      startedBy: "Started by OpenBot",
+      what: "给员工多个工具",
+      on: "Complete goal、create goal 及另外 5 个工具（Routines）",
+      startedBy: "由熊宝发起",
     },
     {
       // Recorded as a person's before the fix. Its own actor says it was OpenBot's.
-      what: "Give a Bot a tool",
-      on: "Complete goal on Routines",
-      startedBy: "Started by OpenBot",
+      what: "给员工一个工具",
+      on: "Complete goal（Routines）",
+      startedBy: "由熊宝发起",
     },
     {
-      what: "Give a Bot a tool",
-      on: "Send email on Gmail",
-      startedBy: "Started by a person",
+      what: "给员工一个工具",
+      on: "Send email（Gmail）",
+      startedBy: "由某个人发起",
     },
-    { what: "Send email", on: "Gmail", startedBy: "Started by a person" },
+    { what: "Send email", on: "Gmail", startedBy: "由某个人发起" },
   ]);
   const table = view.container.querySelector("tbody")?.textContent ?? "";
   for (const stored of [
@@ -217,7 +217,7 @@ test("Activity says what changed in words, and that OpenBot started what it did 
     "_goal",
     "composio-gmail",
     "GMAIL_SEND_EMAIL",
-    "Change a setting",
+    "修改设置",
   ])
     expect(table).not.toContain(stored);
 });
@@ -226,29 +226,29 @@ test("Admin keeps each tool's stored name under the words", async () => {
   const view = await renderAs("team");
   expect(drawn(view.container)).toEqual([
     {
-      what: "Give a Bot tools",
+      what: "给员工多个工具",
       on: GOAL_TOOLS.join(", "),
-      startedBy: "Started by this deployment",
+      startedBy: "由本部署发起",
     },
     {
-      what: "Give a Bot a tool",
+      what: "给员工一个工具",
       on: "routines/complete_goal",
-      startedBy: "Started by this deployment",
+      startedBy: "由本部署发起",
     },
     {
-      what: "Give a Bot a tool",
+      what: "给员工一个工具",
       on: "composio-gmail/GMAIL_SEND_EMAIL",
-      startedBy: "Started by a person",
+      startedBy: "由某个人发起",
     },
     {
       what: "Send email",
       on: "composio-gmail/GMAIL_SEND_EMAIL",
-      startedBy: "Started by a person",
+      startedBy: "由某个人发起",
     },
     {
-      what: "Publish a component",
+      what: "发布组件",
       on: "showTable",
-      startedBy: "Started by this deployment",
+      startedBy: "由本部署发起",
     },
   ]);
 });

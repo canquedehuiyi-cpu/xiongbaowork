@@ -133,7 +133,7 @@ async function renderActivity() {
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
-  await view.findByText("Decision");
+  await view.findByText("结果");
   return view;
 }
 
@@ -148,52 +148,52 @@ test("a Bot's folder actions read as what it did, on which file, and what came o
     decision: lines(tr.querySelector("[data-column=decision]")),
     outcome: tr.getAttribute("data-outcome"),
   }));
-  const bot = ["Personal Assistant", "Started by a person"];
+  const bot = ["Personal Assistant", "由某个人发起"];
   expect(drawn).toEqual([
     {
-      what: ["Check your folders"],
+      what: ["查看你的文件夹"],
       who: bot,
-      decision: ["Blocked", "No host folders are granted to this Bot."],
+      decision: ["已拦截", "No host folders are granted to this Bot."],
       outcome: "refused",
     },
     {
-      what: ["Run a command", "dir"],
+      what: ["执行命令", "dir"],
       who: bot,
-      decision: ["Allowed"],
+      decision: ["已放行"],
       outcome: "allowed",
     },
     // One row for the denied write, not "Allowed" beside "Blocked".
     {
-      what: ["Save a file", "todo.txt"],
+      what: ["保存文件", "todo.txt"],
       who: bot,
-      decision: ["Blocked", "A person denied it when asked."],
+      decision: ["已拦截", "询问时有人拒绝了。"],
       outcome: "refused",
     },
     {
-      what: ["Read a file", "todo.txt"],
+      what: ["读取文件", "todo.txt"],
       who: bot,
-      decision: ["Allowed"],
+      decision: ["已放行"],
       outcome: "allowed",
     },
     // Older rows read in the same words, though they cannot say which file.
     {
-      what: ["Save a file"],
+      what: ["保存文件"],
       who: bot,
-      decision: ["Blocked"],
+      decision: ["已拦截"],
       outcome: "refused",
     },
     {
-      what: ["Save a file"],
+      what: ["保存文件"],
       who: bot,
-      decision: ["Asked for"],
+      decision: ["已请求"],
       outcome: "allowed",
     },
     {
-      what: ["Read a file"],
+      what: ["读取文件"],
       who: bot,
-      decision: ["Allowed"],
+      decision: ["已放行"],
       outcome: "allowed",
     },
   ]);
-  expect(view.container.textContent).not.toContain("Change a setting");
+  expect(view.container.textContent).not.toContain("修改设置");
 });

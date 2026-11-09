@@ -80,13 +80,13 @@ const ROWS = [
 ];
 
 const WORDS = [
-  "Choose tools for a run",
-  "Read a file",
-  "Save a file",
-  "Save a file",
-  "Search the web",
-  "Choose a Bot for a message",
-  "Start the computer",
+  "为一次运行挑选工具",
+  "读取文件",
+  "保存文件",
+  "保存文件",
+  "搜索网页",
+  "为消息选择员工",
+  "启动电脑",
 ];
 
 const STORED = [
@@ -140,7 +140,7 @@ async function renderAs(edition: "team" | "personal", rows = ROWS) {
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
-  await view.findByText("Decision");
+  await view.findByText("结果");
   return view;
 }
 
@@ -181,7 +181,7 @@ test("the search box still finds a row by its stored name", async () => {
     );
   await waitFor(() =>
     expect(whats(view.container).map((line) => line.textContent)).toEqual([
-      "Search the web",
+      "搜索网页",
     ]),
   );
 });

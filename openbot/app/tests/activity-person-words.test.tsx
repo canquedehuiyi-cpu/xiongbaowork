@@ -26,7 +26,7 @@ import { settleReactWork } from "./settle-react-work";
  *   public web"), while the skills' own titles are "Write a skill", "Make a coworker" and "Research
  *   the public web".
  * - A Bot asked for Notion, the person pressed Connect, and the row read "Approve a request for an
- *   app, Notion, Allowed" beside "Started by a person". Nobody approved anything: the personal
+ *   app, Notion, Allowed" beside "由某个人发起". Nobody approved anything: the personal
  *   edition lets every Bot use every app the person turns on.
  * - An opened "Looked for a tool" listed `mcp__composio-gmail__GMAIL_...`.
  */
@@ -160,7 +160,7 @@ async function renderAs(edition: "team" | "personal") {
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
-  await view.findByText("Decision");
+  await view.findByText("结果");
   return view;
 }
 
@@ -184,34 +184,34 @@ test("Activity names a skill by its title, an app's sign-in in words, and an app
   const view = await renderAs("personal");
   expect(drawn(view.container)).toEqual([
     {
-      what: "Let a Bot use an app",
+      what: "允许员工使用应用",
       on: "Notion",
-      startedBy: "Started by a person",
-      decision: "Allowed automatically",
+      startedBy: "由某个人发起",
+      decision: "自动允许",
     },
     {
-      what: "Give a Bot a skill",
+      what: "给员工一项技能",
       on: "Write a skill",
-      startedBy: "Started by a person",
-      decision: "Configuration changed",
+      startedBy: "由某个人发起",
+      decision: "配置已修改",
     },
     {
-      what: "Give a Bot a skill",
+      what: "给员工一项技能",
       on: "Make a coworker",
-      startedBy: "Started by a person",
-      decision: "Configuration changed",
+      startedBy: "由某个人发起",
+      decision: "配置已修改",
     },
     {
-      what: "Give a Bot a skill",
+      what: "给员工一项技能",
       on: "Research the public web",
-      startedBy: "Started by a person",
-      decision: "Configuration changed",
+      startedBy: "由某个人发起",
+      decision: "配置已修改",
     },
     {
-      what: "Set up an app's sign-in",
+      what: "设置应用的登录",
       on: "Notion",
-      startedBy: "Started by a person",
-      decision: "Allowed",
+      startedBy: "由某个人发起",
+      decision: "已放行",
     },
   ]);
   const table = view.container.querySelector("tbody")?.textContent ?? "";
@@ -228,9 +228,9 @@ test("Activity names a skill by its title, an app's sign-in in words, and an app
 test("Admin keeps an admin's one-press approval as an approval", async () => {
   const view = await renderAs("team");
   expect(drawn(view.container)[0]).toMatchObject({
-    what: "Approve a request for an app",
+    what: "批准应用申请",
     on: "notion",
-    decision: "Allowed",
+    decision: "已放行",
   });
 });
 
@@ -251,9 +251,9 @@ test("an opened tool search names the tools it found in words, never by their id
       />
     </QueryClientProvider>,
   );
-  fireEvent.click(await view.findByText("Looked for a tool"));
-  await view.findByText("Send email on Gmail");
-  expect(view.getByText("Fetch thread messages on Gmail")).toBeTruthy();
+  fireEvent.click(await view.findByText("查找了工具"));
+  await view.findByText("Send email（Gmail）");
+  expect(view.getByText("Fetch thread messages（Gmail）")).toBeTruthy();
   const text = view.container.textContent ?? "";
   for (const id of ["mcp__", "GMAIL_", "composio", "Tools found"])
     expect(text).not.toContain(id);

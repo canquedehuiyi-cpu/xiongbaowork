@@ -31,7 +31,7 @@ export function auditEventsQueryOptions(search = "") {
         : "";
       const response = await client(
         `/api/admin/audit-events${search}${cursor}`,
-        { fallback: "Could not load audit events" },
+        { fallback: "没能加载审计记录" },
       );
       return response.json();
     },

@@ -132,7 +132,7 @@ async function renderPage(
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
-  await view.findByText("Decision");
+  await view.findByText("结果");
   return view;
 }
 
@@ -162,10 +162,7 @@ test("an app the person hasn't connected reads as not connected on Activity, the
   });
   const notConnected = {
     what: ["Fetch emails", "Gmail"],
-    decision: [
-      "Not connected",
-      "Gmail isn't connected. Connect it in Connections.",
-    ],
+    decision: ["未连接", "Gmail 还没有连接，请到「已连接的账号」里连接。"],
   };
   expect(drawn(view.container)).toEqual([
     notConnected,
@@ -173,8 +170,8 @@ test("an app the person hasn't connected reads as not connected on Activity, the
     {
       what: ["Fetch emails", "Gmail"],
       decision: [
-        "No longer connected",
-        "Gmail is no longer connected. Reconnect it in Connections.",
+        "需要重新连接",
+        "Gmail 的连接已失效，请到「已连接的账号」里重新连接。",
       ],
     },
   ]);
@@ -184,7 +181,7 @@ test("an app the person hasn't connected reads as not connected on Activity, the
 test("Admin reads the refusal's own sentence, without the marker", async () => {
   const view = await renderPage("team", { "": [STORED_BEFORE] });
   expect(drawn(view.container)[0]?.decision).toEqual([
-    "Not connected",
+    "未连接",
     "You have not connected your Gmail account. Connect it and ask again.",
   ]);
   const decision =

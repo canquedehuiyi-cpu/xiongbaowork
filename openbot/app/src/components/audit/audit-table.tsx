@@ -79,9 +79,9 @@ const UNDRAWN = new Set(["search", "startedBy"]);
 const INITIAL_SORT: SortingState = [{ id: "when", desc: true }];
 
 const OUTCOME_LABEL: Record<AuditOutcome, string> = {
-  allowed: "Allowed",
-  refused: "Blocked",
-  "did-not-happen": "Did not happen",
+  allowed: "已放行",
+  refused: "已拦截",
+  "did-not-happen": "没有发生",
 };
 
 /**
@@ -89,13 +89,13 @@ const OUTCOME_LABEL: Record<AuditOutcome, string> = {
  * act on the rows already loaded.
  */
 const FACETS = [
-  { id: "mark", title: "Outcome" },
-  { id: "bot", title: "Bot" },
-  { id: "startedBy", title: "Started by" },
+  { id: "mark", title: "状态" },
+  { id: "bot", title: "员工" },
+  { id: "startedBy", title: "发起方" },
 ] as const;
 
 export function AuditTable({
-  deploymentName = "this deployment",
+  deploymentName = "本部署",
   events,
   footer,
   moreToLoad = false,
@@ -104,7 +104,7 @@ export function AuditTable({
   storedNames = false,
   toolbar,
 }: {
-  /** What OpenBot itself is called in a row it started: "this deployment" in Admin. */
+  /** What OpenBot itself is called in a row it started: 「本部署」 in Admin. */
   deploymentName?: string;
   events: AuditEvent[];
   /** Drawn under the last row, inside the scroll: where older events are asked for. */
@@ -238,8 +238,8 @@ export function AuditTable({
       </Table>
       {events.length > 0 && rows.length === 0 ? (
         <div className="px-4">
-          <PageEmpty icon={IconSearch} title="No matches">
-            Nothing loaded matches this search and these filters.
+          <PageEmpty icon={IconSearch} title="没有匹配的事件">
+            已加载的事件里，没有符合这次搜索和筛选的。
           </PageEmpty>
           {footer}
         </div>
@@ -295,9 +295,7 @@ function Facet({
         {title}
         {selected.length > 0 ? (
           <span className="ml-1 rounded-sm bg-muted px-1 font-normal text-xs">
-            {selected.length === 1
-              ? selected[0]
-              : `${selected.length} selected`}
+            {selected.length === 1 ? selected[0] : `已选 ${selected.length} 项`}
           </span>
         ) : null}
       </DropdownMenuTrigger>
@@ -324,7 +322,7 @@ function Facet({
           <>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => onChange([])}>
-              Clear filter
+              清除筛选
             </DropdownMenuItem>
           </>
         ) : null}
@@ -342,15 +340,14 @@ function countLabel(
   loaded: number,
   moreToLoad: boolean,
 ): string {
-  const noun = loaded === 1 ? "event" : "events";
   if (moreToLoad) {
     return shown === loaded
-      ? `Newest ${loaded} ${noun}`
-      : `${shown} of the newest ${loaded} ${noun}`;
+      ? `最新的 ${loaded} 条事件`
+      : `最新的 ${loaded} 条事件中的 ${shown} 条`;
   }
   return shown === loaded
-    ? `${loaded} ${noun}`
-    : `${shown} of ${loaded} ${noun}`;
+    ? `${loaded} 条事件`
+    : `${loaded} 条事件中的 ${shown} 条`;
 }
 
 function auditColumns(
@@ -363,7 +360,7 @@ function auditColumns(
       id: "mark",
       accessorFn: (event) => OUTCOME_LABEL[outcomeOf(event)],
       filterFn: anyOf,
-      header: () => <span className="sr-only">Outcome</span>,
+      header: () => <span className="sr-only">状态</span>,
       cell: ({ row }) => (
         <span
           aria-hidden
@@ -386,14 +383,14 @@ function auditColumns(
             onClick={column.getToggleSortingHandler()}
             type="button"
           >
-            When
+            时间
             {sorted === "asc" ? (
               <IconArrowUp className="size-3.5" />
             ) : (
               <IconArrowDown className="size-3.5" />
             )}
             <span className="sr-only">
-              {sorted === "asc" ? ", oldest first" : ", newest first"}
+              {sorted === "asc" ? "，最早的在前" : "，最新的在前"}
             </span>
           </button>
         );
@@ -404,7 +401,7 @@ function auditColumns(
     {
       id: "what",
       accessorFn: (event) => whatText(event),
-      header: "What",
+      header: "动作",
       cell: ({ row }) => (
         <WhatCell event={row.original} storedName={storedNames} />
       ),
@@ -412,9 +409,9 @@ function auditColumns(
     },
     {
       id: "bot",
-      accessorFn: (event) => botText(event, nameFor) || "None",
+      accessorFn: (event) => botText(event, nameFor) || "无",
       filterFn: anyOf,
-      header: "Bot",
+      header: "员工",
       cell: ({ row }) => (
         <WhoCell
           deployment={deployment}
@@ -434,7 +431,7 @@ function auditColumns(
     },
     {
       id: "decision",
-      header: "Decision",
+      header: "结果",
       cell: ({ row }) => (
         <DecisionCell event={row.original} storedNames={storedNames} />
       ),

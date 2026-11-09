@@ -135,7 +135,7 @@ async function renderPage(
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
-  await view.findByText("Decision");
+  await view.findByText("结果");
   return view;
 }
 
@@ -152,28 +152,25 @@ function drawn(container: HTMLElement) {
 test("Activity names the data a component was given, and a Bot's routine once, under its Bot", async () => {
   // Seeded only under the page's query: rows drawn mean it asked the server to leave the call out.
   const view = await renderPage("personal", { [ACTIVITY_QUERY]: ROWS });
-  const openbot = ["-", "Started by OpenBot"];
+  const openbot = ["-", "由熊宝发起"];
   expect(drawn(view.container)).toEqual([
     {
-      what: ["Create a routine"],
-      who: ["Personal Assistant", "Started by a person"],
+      what: ["创建例行任务"],
+      who: ["Personal Assistant", "由某个人发起"],
     },
     {
       what: [
-        "Let a component read data",
+        "允许组件读取数据",
         "Activity report · your Bots' activity and what was refused",
       ],
       who: openbot,
     },
     {
-      what: [
-        "Let a component read data",
-        "Activity report · your Bots' activity",
-      ],
+      what: ["允许组件读取数据", "Activity report · your Bots' activity"],
       who: openbot,
     },
     {
-      what: ["Let a component read data", "Activity report · what was refused"],
+      what: ["允许组件读取数据", "Activity report · what was refused"],
       who: openbot,
     },
   ]);
@@ -182,12 +179,9 @@ test("Activity names the data a component was given, and a Bot's routine once, u
 test("Admin names the functions as stored", async () => {
   const view = await renderPage("team", { "": ROWS });
   expect(drawn(view.container).map((one) => one.what)).toEqual([
-    ["Create a routine"],
-    [
-      "Let a component read data",
-      "showActivityReport · botActivity, recentRefusals",
-    ],
-    ["Let a component read data", "showActivityReport · botActivity"],
-    ["Let a component read data", "showActivityReport · recentRefusals"],
+    ["创建例行任务"],
+    ["允许组件读取数据", "showActivityReport · botActivity, recentRefusals"],
+    ["允许组件读取数据", "showActivityReport · botActivity"],
+    ["允许组件读取数据", "showActivityReport · recentRefusals"],
   ]);
 });

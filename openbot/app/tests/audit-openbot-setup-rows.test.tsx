@@ -220,7 +220,7 @@ async function renderPage(
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
-  await view.findByText("Decision");
+  await view.findByText("结果");
   return view;
 }
 
@@ -238,47 +238,44 @@ function drawn(container: HTMLElement) {
 test("Activity asks without routing, a build's components or the computer's start-up, and says the rest in words", async () => {
   // Seeded only under the query that leaves them out: rows drawn mean the page asked for exactly that.
   const view = await renderPage("personal", { [LEAVE_OUT]: KEPT });
-  const person = "Started by a person";
-  const openbot = "Started by OpenBot";
+  const person = "由某个人发起";
+  const openbot = "由熊宝发起";
   expect(drawn(view.container)).toEqual([
     {
-      what: [
-        "Read data for a component",
-        "Activity report · your Bots' activity",
-      ],
+      what: ["为组件读取数据", "Activity report · your Bots' activity"],
       who: ["Personal Assistant", person],
-      decision: ["Refused", "It isn't allowed to read that data."],
+      decision: ["已拒绝", "它不能读取这些数据。"],
     },
     {
-      what: ["Show a component", "Data table"],
+      what: ["展示组件", "Data table"],
       who: ["Personal Assistant", person],
-      decision: ["Refused", "This Bot can't show it."],
+      decision: ["已拒绝", "这位员工不能展示它。"],
     },
     {
-      what: ["Save a credential", "Anthropic · personal"],
+      what: ["保存凭据", "Anthropic · personal"],
       who: ["-", person],
-      decision: ["Credential saved"],
+      decision: ["凭据已保存"],
     },
     // A removed key's row keeps nothing but its id, which is never shown.
     {
-      what: ["Remove a credential"],
+      what: ["删除凭据"],
       who: ["-", person],
-      decision: ["Allowed"],
+      decision: ["已放行"],
     },
     {
-      what: ["Open a page", "example.com"],
+      what: ["打开页面", "example.com"],
       who: ["Personal Assistant", person],
-      decision: ["Blocked", "Local computer access is off for you."],
+      decision: ["已拦截", "Local computer access is off for you."],
     },
     {
-      what: ["Give a Bot a skill", "Find a document"],
+      what: ["给员工一项技能", "Find a document"],
       who: ["Personal Assistant", openbot],
-      decision: ["Configuration changed"],
+      decision: ["配置已修改"],
     },
     {
-      what: ["Set up Learning"],
+      what: ["设置学习"],
       who: ["-", openbot],
-      decision: ["Configuration changed"],
+      decision: ["配置已修改"],
     },
   ]);
   const table = view.container.querySelector("tbody")?.textContent ?? "";
@@ -290,7 +287,7 @@ test("Activity asks without routing, a build's components or the computer's star
     "9869ac62",
     "capability:",
     "find-a-document",
-    "Change a setting",
+    "修改设置",
   ])
     expect(table).not.toContain(stored);
 });
@@ -301,54 +298,54 @@ test("Admin keeps routing, a build's components, the computer's start-up and the
   });
   expect(drawn(view.container)).toEqual([
     {
-      what: ["Choose a Bot for a message"],
-      who: ["Personal Assistant", "Started by a person"],
-      decision: ["Sent to the default Bot", "fallback: one-candidate"],
+      what: ["为消息选择员工"],
+      who: ["Personal Assistant", "由某个人发起"],
+      decision: ["交给了默认员工", "fallback: one-candidate"],
     },
     {
-      what: ["Read data for a component", "showActivityReport · botActivity"],
-      who: ["Personal Assistant", "Started by a person"],
+      what: ["为组件读取数据", "showActivityReport · botActivity"],
+      who: ["Personal Assistant", "由某个人发起"],
       decision: [
-        "Refused",
+        "已拒绝",
         "showActivityReport can't use the function botActivity. An admin has to give it to this component.",
       ],
     },
     {
-      what: ["Show a component", "showTable"],
-      who: ["Personal Assistant", "Started by a person"],
+      what: ["展示组件", "showTable"],
+      who: ["Personal Assistant", "由某个人发起"],
       decision: [
-        "Refused",
+        "已拒绝",
         "Data table has been withheld from this Bot in this deployment, though other Bots may use it. Answer in prose instead.",
       ],
     },
     {
-      what: ["Save a credential", "9869ac62-2f72-4ffc-b39d-8faf84702828"],
-      who: ["-", "Started by a person"],
-      decision: ["Credential saved"],
+      what: ["保存凭据", "9869ac62-2f72-4ffc-b39d-8faf84702828"],
+      who: ["-", "由某个人发起"],
+      decision: ["凭据已保存"],
     },
     {
-      what: ["Remove a credential", "9869ac62-2f72-4ffc-b39d-8faf84702828"],
-      who: ["-", "Started by a person"],
-      decision: ["Allowed"],
+      what: ["删除凭据", "9869ac62-2f72-4ffc-b39d-8faf84702828"],
+      who: ["-", "由某个人发起"],
+      decision: ["已放行"],
     },
     {
-      what: ["Open a page", "example.com"],
-      who: ["Personal Assistant", "Started by a person"],
+      what: ["打开页面", "example.com"],
+      who: ["Personal Assistant", "由某个人发起"],
       decision: [
-        "Blocked",
+        "已拦截",
         "Local computer access is off for you.",
         "capability:localComputer",
       ],
     },
     {
-      what: ["Publish a component", "showTable"],
-      who: ["-", "Started by this deployment"],
-      decision: ["Published. Every Bot can use it"],
+      what: ["发布组件", "showTable"],
+      who: ["-", "由本部署发起"],
+      decision: ["已发布，所有员工都能用"],
     },
     {
-      what: ["Start the computer"],
-      who: ["-", "Started by this deployment"],
-      decision: ["Boundary at start-up"],
+      what: ["启动电脑"],
+      who: ["-", "由本部署发起"],
+      decision: ["启动时的边界"],
     },
   ]);
 });

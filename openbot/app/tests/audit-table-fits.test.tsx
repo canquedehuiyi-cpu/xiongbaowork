@@ -93,7 +93,7 @@ async function renderAudit() {
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
-  await view.findByText("Decision");
+  await view.findByText("结果");
   return view;
 }
 
@@ -102,28 +102,16 @@ test("five columns, not seven: what it acted on sits under the action, and who s
   const headers = [...view.container.querySelectorAll("thead th")].map(
     (th) => th.textContent,
   );
-  expect(headers).toEqual([
-    "Outcome",
-    "When, newest first",
-    "What",
-    "Bot",
-    "Decision",
-  ]);
+  expect(headers).toEqual(["状态", "时间，最新的在前", "动作", "员工", "结果"]);
 
   const [refused, routine] = [...view.container.querySelectorAll("tbody tr")];
   const cell = (row: Element | undefined, column: string) =>
     [...(row?.querySelectorAll(`[data-column=${column}] > div`) ?? [])].map(
       (line) => line.textContent,
     );
-  expect(cell(refused, "what")).toEqual(["Save a file", "reports/refused.txt"]);
-  expect(cell(refused, "bot")).toEqual([
-    "Claude Agent SDK",
-    "Started by a person",
-  ]);
-  expect(cell(routine, "bot")).toEqual([
-    "Claude Agent SDK",
-    "Started by a routine",
-  ]);
+  expect(cell(refused, "what")).toEqual(["保存文件", "reports/refused.txt"]);
+  expect(cell(refused, "bot")).toEqual(["Claude Agent SDK", "由某个人发起"]);
+  expect(cell(routine, "bot")).toEqual(["Claude Agent SDK", "由例行任务发起"]);
 });
 
 test("a long reason wraps inside Decision instead of setting its width", async () => {
@@ -145,9 +133,9 @@ test("a long reason wraps inside Decision instead of setting its width", async (
 test("the Started by filter still narrows the rows, though it is no longer a column", async () => {
   const view = await renderAudit();
   const user = userEvent.setup({ document });
-  await user.click(view.getByRole("button", { name: /Started by/ }));
+  await user.click(view.getByRole("button", { name: /发起方/ }));
   await user.click(
-    await view.findByRole("menuitemcheckbox", { name: /A routine/ }),
+    await view.findByRole("menuitemcheckbox", { name: /例行任务/ }),
   );
   await waitFor(() =>
     expect(view.container.querySelectorAll("tbody tr")).toHaveLength(1),

@@ -102,7 +102,7 @@ async function renderPage(
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
-  await view.findByText("Decision");
+  await view.findByText("结果");
   return view;
 }
 
@@ -130,12 +130,12 @@ test("Activity leaves out choosing tools for a run, in every view", async () => 
   });
   expect(drawn(view.container)).toEqual([
     {
-      what: ["Read a file", "todo.txt"],
-      who: ["Personal Assistant", "Started by a person"],
-      decision: ["Allowed"],
+      what: ["读取文件", "todo.txt"],
+      who: ["Personal Assistant", "由某个人发起"],
+      decision: ["已放行"],
     },
   ]);
-  expect(view.container.textContent).not.toContain("Choose tools for a run");
+  expect(view.container.textContent).not.toContain("为一次运行挑选工具");
   await userEvent
     .setup({ document })
     .click(view.getByRole("button", { name: "Nobody watching" }));
@@ -145,12 +145,9 @@ test("Activity leaves out choosing tools for a run, in every view", async () => 
 test("Admin keeps choosing tools for a run, as it read before", async () => {
   const view = await renderPage("team", { "": [CHOOSE_TOOLS, READ] });
   expect(drawn(view.container)[0]).toEqual({
-    what: ["Choose tools for a run", "96 of 96 tools"],
-    who: ["Personal Assistant", "Started by a person"],
-    decision: [
-      "Tools offered for one run",
-      "Couldn't choose, so all were offered",
-    ],
+    what: ["为一次运行挑选工具", "96 / 96 个工具"],
+    who: ["Personal Assistant", "由某个人发起"],
+    decision: ["本次运行提供的工具", "没法挑选，所以全部提供"],
   });
 });
 
@@ -192,36 +189,36 @@ test("a folder given to a Bot, taken away or stopped reads in words, with the Bo
   const view = await renderPage("personal", {
     [`?${LEAVE_OUT}`]: FOLDER_ROWS,
   });
-  const person = "Started by a person";
-  const changed = ["Configuration changed"];
+  const person = "由某个人发起";
+  const changed = ["配置已修改"];
   expect(drawn(view.container)).toEqual([
     {
-      what: ["Give a Bot a folder", "share"],
+      what: ["给员工一个文件夹", "share"],
       who: ["Personal Assistant", person],
       decision: changed,
     },
     {
-      what: ["Take a folder from a Bot", "share"],
+      what: ["从员工收回文件夹", "share"],
       who: ["Personal Assistant", person],
       decision: changed,
     },
     {
-      what: ["Stop folder access", "share, Documents"],
+      what: ["停止文件夹访问", "share, Documents"],
       who: ["Personal Assistant", person],
       decision: changed,
     },
     // Older rows read as well as what they kept: the Bot a folder was given to, and no folder.
     {
-      what: ["Give a Bot a folder"],
+      what: ["给员工一个文件夹"],
       who: ["Personal Assistant", person],
       decision: changed,
     },
     {
-      what: ["Take a folder from a Bot"],
+      what: ["从员工收回文件夹"],
       who: ["-", person],
       decision: changed,
     },
-    { what: ["Stop folder access"], who: ["-", person], decision: changed },
+    { what: ["停止文件夹访问"], who: ["-", person], decision: changed },
   ]);
-  expect(view.container.textContent).not.toContain("Change a setting");
+  expect(view.container.textContent).not.toContain("修改设置");
 });
