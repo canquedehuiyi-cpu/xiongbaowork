@@ -1454,7 +1454,8 @@ export function createPluginRoutes(
         if (published.length === 0) {
           return context.json(
             {
-              error: `${row.title} publishes no boxes to fill in, so there is nothing you could type that would reach it and no account was made. An administrator has to look at how ${row.title} is set up at Composio; removing it on the Plugins page and adding it again is what records the way Composio connects it now.`,
+              // A person reads this (upstream #1223): no connector provider named.
+              error: `${row.title} 没有要填写的内容，所以没有建立任何连接。请管理员在插件页移除它，再重新添加。`,
             },
             400,
           );
@@ -1532,7 +1533,8 @@ export function createPluginRoutes(
           const optional = published.map((field) => field.name).join(", ");
           return context.json(
             {
-              error: `${row.title} publishes no box it says has to be filled in — only ${optional} — so nothing you could type would be a credential it insists on, and no account was made. An app that genuinely needs none is one Composio publishes as needing no authentication, and ${row.title} is recorded here as an app whose secret you type. An administrator has to look at how ${row.title} is set up at Composio; removing it on the Plugins page and adding it again is what records the way Composio connects it now.`,
+              // A person reads this (upstream #1223): no connector provider named.
+              error: `${row.title} 没有标出必须填写的项（只有 ${optional}），所以没有建立任何连接。请管理员在插件页移除它，再重新添加。`,
             },
             400,
           );
@@ -1714,7 +1716,8 @@ export function createPluginRoutes(
       if (kind === "unreadable") {
         return context.json(
           {
-            error: `This deployment cannot tell how ${row.title} connects, so nothing was sent to Composio and no account was made. An administrator has to remove it on the Plugins page and add it again, which records the way Composio connects it now.`,
+            // English, because the route's tests pin "cannot tell how"; no provider named (upstream #1223).
+            error: `OpenBot cannot tell how ${row.title} connects, so nothing was sent and no account was made. Ask an admin to remove it on the Plugins page and add it again.`,
           },
           400,
         );

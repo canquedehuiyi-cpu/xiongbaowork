@@ -3501,3 +3501,21 @@ describe("a person is never told who the broker is", () => {
     }
   });
 });
+
+describe("the connect route's own refusals name no broker either", () => {
+  test("an app publishing no box, or none it requires, is refused without naming the provider", async () => {
+    const empty = brokeredApp(null, AUTHORIZATION_URL, { published: [] });
+    const optionalOnly = brokeredApp(null, AUTHORIZATION_URL, {
+      published: [{ ...PUBLISHED[0], required: false }],
+    });
+    for (const response of [
+      await empty.connectFields({ values: {} }),
+      await optionalOnly.connectFields({ values: { api_key: "fc-1" } }),
+    ]) {
+      expect(response.status).toBe(400);
+      const refusal = (await response.json()).error as string;
+      expect(refusal).toContain("Firecrawl");
+      expect(refusal).not.toMatch(/\bComposio\b/);
+    }
+  });
+});
