@@ -147,7 +147,8 @@ cmd_ensure() {
   mkdir -p .tmp || die 1 "创建 $dir/.tmp 失败"
   cd .tmp || die 1 "进不去 $dir/.tmp"
   [ "$(pwd -P)" = "$real_bots/$key/.tmp" ] || die 1 "$dir/.tmp 不是真实目录"
-  chown "$user:xbcomp" . && chmod 0700 . || die 1 "设置 $dir/.tmp 的属主和权限失败"
+  # g-s as well: .tmp inherits the parent's setgid bit, and GNU chmod keeps it on a directory.
+  chown "$user:xbcomp" . && chmod 0700 . && chmod g-s . || die 1 "设置 $dir/.tmp 的属主和权限失败"
   printf '%s\n' "$uid"
 }
 
