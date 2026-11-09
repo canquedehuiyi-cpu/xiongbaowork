@@ -295,9 +295,11 @@ jobs:
           # No package.json: imports only bun:test, node:crypto and relative files.
           - pkg: shared
             own-lockfile: false
-          # Root workspace (typechecked by static); its tests import only worker/src and ../shared.
+          # Root workspace (typechecked by static). Its source imports `@openbot/shared` by the
+          # workspace name (upstream #784), which only the root install links.
           - pkg: worker
             own-lockfile: false
+            root-install: true
           # Root workspace (typechecked by static). Its tests need the root install: runner/src reaches
           # yaml through agent-computer, and the package test serves the server's own runner routes.
           - pkg: runner
