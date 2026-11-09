@@ -670,8 +670,6 @@ const OTHER_VERBS =
 /** 参照上游 `FIRST_VERB`：按出现顺序，名字里第一个认得的动作词就是这个工具做的事。 */
 const FIRST_VERB = new RegExp(`\\b(${FIRST_VERB_DELETING}|${OTHER_VERBS})\\b`);
 const DELETING_FIRST_VERB = new RegExp(`^(${FIRST_VERB_DELETING})$`);
-/** 把东西找回来的动作：`restore_from_trash` 里的 trash 是它的对象，不是它要做的事。 */
-const RESTORING = /^(untrash|undelete|restore|restores|recover)$/;
 
 /**
  * Bot 自己电脑上的操作（`computer_*`）和主人电脑上的命令（`host/`）有自己的底线，删除类底线
@@ -686,8 +684,10 @@ const OWN_COMPUTER_TOOLS = /^(computer_|host\/)/;
  * 只看 ref 里服务器之后的部分。
  */
 function toolWords(toolRef: string): string {
+  // 先把大写缩写和后面的单词分开：`HTTPDelete` 是 "http delete"。
   return toolRef
     .slice(toolRef.indexOf("/") + 1)
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .replace(/[-_./\s]+/g, " ")
     .toLowerCase()
@@ -697,8 +697,9 @@ function toolWords(toolRef: string): string {
 /** 工具名是否说它会删除东西。 */
 function deletesByName(toolRef: string): boolean {
   const words = toolWords(toolRef);
+  // 不因名字里有 restore、recover 之类就放过：`delete_restore_point`、`wipe_and_recover` 都是删除。
+  // 代价是 `restore_from_trash` 也会问一次，宁可多问，不能漏问。
   const first = words.match(FIRST_VERB)?.[1] ?? "";
-  if (RESTORING.test(first)) return false;
   return ALWAYS_DELETING.test(words) || DELETING_FIRST_VERB.test(first);
 }
 

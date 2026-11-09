@@ -2242,7 +2242,6 @@ describe("destructive tools always ask, once at a time", () => {
       "list_archived_emails",
       "unarchive_thread",
       "get_archive_settings",
-      "restore_from_trash",
       "undelete_message",
       "list_deleted_items",
     ])
@@ -2260,6 +2259,16 @@ describe("destructive tools always ask, once at a time", () => {
       "uploadSessionPurge",
       "export_wipe",
       "drafts/discard",
+      // 名字里有「找回」动作也不豁免：宁可多问，不能漏掉真正的删除。
+      "delete_restore_point",
+      "DeleteRestoreTestingPlan",
+      "purge_restore_points",
+      "wipe_and_recover",
+      "recover_and_delete_all",
+      "restore_from_trash",
+      // 大写缩写和后面的单词也要拆开。
+      "HTTPDelete",
+      "DNSDelete",
     ])
       expect(
         (await decideAction({ ...base, candidate: app(`vendor/${name}`) }))
