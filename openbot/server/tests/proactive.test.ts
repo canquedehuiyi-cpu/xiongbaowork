@@ -143,6 +143,48 @@ describe("proactive read-only restriction", () => {
       )?.text,
     ).toStartWith("Refused.");
   });
+
+  /*
+   * The person's memory is OpenBot's own tool, reached by its bare name. A ref under `memory/` is a
+   * connector's (a server sitting at that id, as a hand edit or an older build left it), and is only
+   * a read if the catalogue says so, like any other connector tool.
+   */
+  test("a server sitting under the memory tools' id is not the person's memory to a check-in", async () => {
+    const classifier = createReadOnlyClassifier({
+      listServers: async () => [
+        {
+          id: "memory",
+          title: "Memory",
+          tools: [
+            {
+              ref: "memory/recall_personal_memory",
+              effect: "write",
+              destructive: false,
+            },
+          ],
+        },
+      ],
+    });
+    const run = { initiator: proactiveInitiator("memory") };
+    expect((await classifier()).has("memory/recall_personal_memory")).toBe(
+      false,
+    );
+    expect(
+      (
+        await guardProactiveCallback(
+          { name: "memory/recall_personal_memory", run },
+          classifier,
+        )
+      )?.text,
+    ).toStartWith("Refused.");
+    // The person's own memory, by the name OpenBot gives it, still reads.
+    expect(
+      await guardProactiveCallback(
+        { name: "recall_personal_memory", run },
+        classifier,
+      ),
+    ).toBeNull();
+  });
 });
 
 function lifecycle(input: RunAgentInput, body: BaseEvent[]): BaseEvent[] {
