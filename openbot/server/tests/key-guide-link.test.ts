@@ -5,8 +5,8 @@ import { keyGuideFor } from "../src/plugins/key-guides";
 /**
  * The broker's own link for making an app's key, and what its failures cost: only the link.
  *
- * `connectionGuideUrl` is attached to the broker beside its methods rather than among them (see
- * `connectionGuideUrlFor` in `composio-adapter.ts`), because none of its failures reaches a person:
+ * `connectionGuideUrl` is answered beside the broker as `guides`, not among its methods (see
+ * `KeyGuideSource` in `broker.ts`; review M-6), because none of its failures reaches a person:
  * the key form's first press reads any of them, and any delay, as "no link", and the maintained map
  * answers. This file is the table for that door: every kind of failure the adapter tests raise at
  * the other doors, raised here, ends as the map's guide and never as a refusal.
@@ -63,16 +63,16 @@ const THROWN: { kind: string; raise: () => Error }[] = [
 ];
 
 describe("the broker's link for an app's key", () => {
-  test("is on the broker, and not among the methods the seam's failure table enumerates", () => {
-    const { broker } = buildComposioClient(
+  test("is beside the broker, and not among the methods the seam's failure table enumerates", () => {
+    const { broker, guides } = buildComposioClient(
       vendorRetrieving(refuse("toolkits.retrieve")) as never,
     );
-    expect(typeof broker.connectionGuideUrl).toBe("function");
-    expect(Object.keys(broker)).not.toContain("connectionGuideUrl");
+    expect(typeof guides.connectionGuideUrl).toBe("function");
+    expect("connectionGuideUrl" in broker).toBe(false);
   });
 
   test("the mode's hint wins over the app's guide, and anything not text is no link", async () => {
-    const { broker } = buildComposioClient(
+    const { guides } = buildComposioClient(
       vendorRetrieving(async () => ({
         auth_guide_url: "https://example.com/guide",
         auth_config_details: [
@@ -82,20 +82,20 @@ describe("the broker's link for an app's key", () => {
       })) as never,
     );
     expect(
-      await broker.connectionGuideUrl?.({
+      await guides.connectionGuideUrl({
         toolkit: "firecrawl",
         authScheme: "API_KEY",
       }),
     ).toBe("https://example.com/key");
 
-    const { broker: bare } = buildComposioClient(
+    const { guides: bare } = buildComposioClient(
       vendorRetrieving(async () => ({
         auth_guide_url: 42,
         auth_config_details: "not a list",
       })) as never,
     );
     expect(
-      await bare.connectionGuideUrl?.({
+      await bare.connectionGuideUrl({
         toolkit: "firecrawl",
         authScheme: "API_KEY",
       }),
@@ -104,14 +104,14 @@ describe("the broker's link for an app's key", () => {
 
   for (const thrown of THROWN) {
     test(`${thrown.kind} costs only the link: the map answers`, async () => {
-      const { broker } = buildComposioClient(
+      const { guides } = buildComposioClient(
         vendorRetrieving(async () => {
           throw thrown.raise();
         }) as never,
       );
       expect(
         await keyGuideFor({
-          ask: broker.connectionGuideUrl?.bind(broker),
+          ask: guides.connectionGuideUrl.bind(guides),
           toolkit: "firecrawl",
           authScheme: "API_KEY",
           title: "Firecrawl",

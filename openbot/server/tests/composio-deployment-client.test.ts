@@ -230,6 +230,46 @@ describe("enabling a server-to-server app", () => {
   });
 });
 
+describe("a refused server-to-server config keeps nothing of the request (review M-5)", () => {
+  test("the refusal carries the vendor's sentence and no cause, and never the secret", async () => {
+    const vendorError = Object.assign(
+      new Error("400 Bad Request: invalid client_id"),
+      {
+        // What an SDK error object carries: the request it was made for, secret and all.
+        request: { body: { credentials: CLIENT } },
+      },
+    );
+    const { broker } = buildComposioClient(
+      fakeVendor({
+        authConfigs: {
+          list: async () => ({ items: [] }),
+          create: async () => {
+            throw vendorError;
+          },
+        },
+      }),
+    );
+    let caught: unknown;
+    try {
+      await broker.ensureAuthConfig({
+        toolkit: "shopify",
+        name: "Shopify",
+        connection: { kind: "fields", authScheme: "S2S_OAUTH2" },
+        client: CLIENT,
+      });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(BrokerRefusalError);
+    const refusal = caught as Error & { cause?: unknown };
+    expect(refusal.cause).toBeUndefined();
+    expect(refusal.message).not.toContain(CLIENT.client_secret);
+    expect(JSON.stringify(Object.entries(refusal))).not.toContain(
+      CLIENT.client_secret,
+    );
+  });
+});
+
 describe("connecting a server-to-server app", () => {
   const OURS = { id: "ac_ours", name: "Shopify (OpenBot)", status: "ENABLED" };
 

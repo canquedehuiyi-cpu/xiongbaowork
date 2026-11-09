@@ -21,6 +21,7 @@ import {
   type ComposioBroker,
   type Decides,
   isFieldScheme,
+  type KeyGuideSource,
   type SchemeKind,
   schemeKind,
 } from "./broker";
@@ -29,7 +30,11 @@ import { toolkitOf, vendorSentence } from "./composio";
 import {
   adminConnectOnly,
   adminConnectOnlySentence,
+  CLIENT_ID_MAX,
+  CLIENT_SECRET_MAX,
+  DEPLOYMENT_CLIENT_SLUG_MAX,
   deploymentClientFrom,
+  deploymentClientSlug,
   withDeploymentClients,
 } from "./deployment-clients";
 import { fieldsForPerson, keyGuideFor } from "./key-guides";
@@ -50,6 +55,7 @@ import {
   CustomServerRefusedError,
   deploymentFaultSentence,
   isDeploymentFault,
+  isServerWriteRefusal,
   type OAuthClient,
   OAuthClientReadError,
   type PluginKind,
@@ -157,30 +163,55 @@ function brokerRefusal(
 }
 
 /**
- * The broker's name, as a sentence written for an operator spells it.
+ * The broker's name, in whatever case a sentence spells it.
  *
  * A person connects their work apps through 熊宝 and is never told which company sits behind it
  * (upstream #1223). Most of the broker layer's sentences were written for an operator who can open
- * that company's dashboard, so they name it; a route a person calls passes each one through
- * {@link forPerson}. Case-sensitive on purpose: `COMPOSIO_API_KEY` is the setting an admin sets,
- * and naming it is how a person knows what to ask for.
+ * that company's dashboard, so they name it. Case-insensitive, so `composio://linear` is caught as
+ * well as "Composio"; `COMPOSIO_API_KEY` is left alone by the word boundary (the underscore is part
+ * of the word), because that is the setting an admin sets and naming it is how a person knows what
+ * to ask for.
  */
-const NAMES_THE_BROKER = /\bComposio\b/;
+const NAMES_THE_BROKER = /\bcomposio\b/i;
+const NAMES_THE_BROKER_EVERYWHERE = /\bcomposio\b/gi;
 
 /**
- * A sentence a person reads, kept free of the broker's name.
+ * A refusal the STORE wrote for the person, with only the broker's name taken out.
  *
- * A sentence that names the broker was written for the operator, and its remedy is somewhere a
- * person cannot go. The person gets the route's own sentence instead, which says what failed and
- * who to ask, and the operator's sentence goes to the log, where the admin who can act on it reads.
- * The status is unchanged: only the words differ.
+ * The store's sentences say what is now true (an account left standing and recorded as unchecked, a
+ * key the app rejected, a check that wrote a new verdict), and that is what the person needs to act
+ * on. Swapping the whole sentence for a route's generic one told somebody whose account was in fact
+ * made that it was not (review M-7), so here the facts stay and the name goes.
  */
-export function forPerson(sentence: string, generic: string): string {
+export function withoutBrokerName(sentence: string): string {
+  return sentence.replace(
+    NAMES_THE_BROKER_EVERYWHERE,
+    "the connection service",
+  );
+}
+
+/**
+ * A broker-layer refusal a person reads, kept free of the broker's name.
+ *
+ * Those sentences were written for the operator, and their remedy is somewhere a person cannot go
+ * (a dashboard, a setting), so the person gets the route's own sentence instead, which says what
+ * failed and who to ask. The status is unchanged: only the words differ.
+ *
+ * NOTHING OF THE ORIGINAL SENTENCE IS LOGGED (review M-8). On the key flow it can carry the vendor's
+ * own words about what was typed, so the log line says only that a sentence was kept back, on which
+ * route, about which app; the operator reproduces the failure from there.
+ */
+export function forPerson(
+  sentence: string,
+  generic: string,
+  where: { route: string; toolkit?: string } = { route: "unknown" },
+): string {
   if (!NAMES_THE_BROKER.test(sentence)) return sentence;
   console.error(
     JSON.stringify({
       type: "broker-sentence-kept-from-person",
-      note: sentence,
+      route: where.route,
+      ...(where.toolkit ? { toolkit: where.toolkit } : {}),
     }),
   );
   return generic;
@@ -190,9 +221,10 @@ export function forPerson(sentence: string, generic: string): string {
 function personRefusal(
   error: unknown,
   generic: string,
+  where?: { route: string; toolkit?: string },
 ): { error: string; status: 502 | 503 } {
   const refusal = brokerRefusal(error, generic);
-  return { ...refusal, error: forPerson(refusal.error, generic) };
+  return { ...refusal, error: forPerson(refusal.error, generic, where) };
 }
 
 /**
@@ -317,7 +349,7 @@ export function createPluginRoutes(
    * trap `connect` documents applies here with one more argument in it — every parameter from that
    * position on is optional, so a misplaced one typechecks and quietly does nothing.
    */
-  composio?: { broker: ComposioBroker },
+  composio?: { broker: ComposioBroker; guides?: KeyGuideSource },
   /**
    * `createAdminScope(...)`: its `adminCapability` is mounted on the grant routes (G01-E P8b) and on
    * every route that writes the deployment's servers, their OAuth clients and their secrets (P10):
@@ -828,6 +860,11 @@ export function createPluginRoutes(
     }
   };
 
+  /** What the client routes answer an administrator whose request holds no capability (M-2). */
+  const CLIENTS_NEED_CAPABILITY =
+    "保存、查看或删除部署自己的应用客户端，需要以管理员身份在管理页面操作。";
+  const BAD_CLIENT_SLUG = `应用名只能包含字母、数字、下划线和连字符，最长 ${DEPLOYMENT_CLIENT_SLUG_MAX} 个字符。`;
+
   /**
    * The OAuth clients this deployment holds for brokered apps that connect with a server-to-server
    * grant (upstream #950; Shopify is one). Administrator only. The id and when it was stored come
@@ -839,6 +876,9 @@ export function createPluginRoutes(
     try {
       return context.json({ clients: await store.listDeploymentClients() });
     } catch (error) {
+      if (isServerWriteRefusal(error)) {
+        return context.json({ error: CLIENTS_NEED_CAPABILITY }, 403);
+      }
       if (isDeploymentFault(error)) {
         return context.json({ error: deploymentFaultSentence(error) }, 409);
       }
@@ -853,12 +893,18 @@ export function createPluginRoutes(
   routes.put("/composio/clients/:slug", capable, async (context) => {
     const forbidden = requireAdmin(context);
     if (forbidden) return forbidden;
-    const toolkit = context.req.param("slug");
+    const toolkit = deploymentClientSlug(context.req.param("slug"));
+    if (!toolkit) return context.json({ error: BAD_CLIENT_SLUG }, 400);
     const client = deploymentClientFrom(
       await context.req.json().catch(() => null),
     );
     if (!client) {
-      return context.json({ error: "客户端 ID 和客户端密钥都要填写。" }, 400);
+      return context.json(
+        {
+          error: `客户端 ID 和客户端密钥都要填写，ID 不超过 ${CLIENT_ID_MAX} 个字符、密钥不超过 ${CLIENT_SECRET_MAX} 个字符，且不能包含控制字符。`,
+        },
+        400,
+      );
     }
     try {
       const { replaced } = await store.storeDeploymentClient({
@@ -868,6 +914,9 @@ export function createPluginRoutes(
       });
       return context.json({ toolkit, clientId: client.client_id, replaced });
     } catch (error) {
+      if (isServerWriteRefusal(error)) {
+        return context.json({ error: CLIENTS_NEED_CAPABILITY }, 403);
+      }
       if (error instanceof CustomServerRefusedError) {
         return context.json({ error: error.message }, 400);
       }
@@ -882,14 +931,25 @@ export function createPluginRoutes(
   routes.delete("/composio/clients/:slug", capable, async (context) => {
     const forbidden = requireAdmin(context);
     if (forbidden) return forbidden;
+    const toolkit = deploymentClientSlug(context.req.param("slug"));
+    if (!toolkit) return context.json({ error: BAD_CLIENT_SLUG }, 400);
     try {
-      return context.json(
-        await store.removeDeploymentClient({
-          toolkit: context.req.param("slug"),
-          by: actorEmail(context),
-        }),
-      );
+      const removed = await store.removeDeploymentClient({
+        toolkit,
+        by: actorEmail(context),
+      });
+      return context.json({
+        ...removed,
+        ...(removed.stillInUseByEnabledApp
+          ? {
+              note: `删除只影响以后的启用：已经启用的 ${toolkit} 仍在用这个客户端。要停用它，请移除这个应用，并在 ${toolkit} 后台轮换客户端密钥。`,
+            }
+          : {}),
+      });
     } catch (error) {
+      if (isServerWriteRefusal(error)) {
+        return context.json({ error: CLIENTS_NEED_CAPABILITY }, 403);
+      }
       if (error instanceof CustomServerRefusedError) {
         return context.json({ error: error.message }, 400);
       }
@@ -1520,6 +1580,7 @@ export function createPluginRoutes(
           const refusal = personRefusal(
             error,
             `没能查到连接 ${row.title} 需要填写什么。请重试；如果一直这样，请联系管理员。`,
+            { route: "connect.form", toolkit },
           );
           return context.json({ error: refusal.error }, refusal.status);
         }
@@ -1540,7 +1601,7 @@ export function createPluginRoutes(
           return context.json({
             fields: fieldsForPerson(toolkit, published),
             guide: await keyGuideFor({
-              ask: composio.broker.connectionGuideUrl?.bind(composio.broker),
+              ask: composio.guides?.connectionGuideUrl.bind(composio.guides),
               toolkit,
               authScheme,
               title: row.title,
@@ -1787,11 +1848,6 @@ export function createPluginRoutes(
               toolkit,
               userId: context.var.actor.id,
               values,
-              // Said only where it is read: an app on the deployment's own client (#950).
-              ...(adminConnectOnly(authScheme) &&
-              context.var.actor.role === "admin"
-                ? { byAdmin: true }
-                : {}),
             }),
           );
         } catch (error) {
@@ -1810,11 +1866,14 @@ export function createPluginRoutes(
           const generic = `没能用你填写的内容连接 ${row.title}。请重试；如果一直这样，请联系管理员。`;
           if (error instanceof PluginRefusedError) {
             return context.json(
-              { error: forPerson(error.message, generic) },
+              { error: withoutBrokerName(error.message) },
               400,
             );
           }
-          const refusal = personRefusal(error, generic);
+          const refusal = personRefusal(error, generic, {
+            route: "connect.fields",
+            toolkit,
+          });
           return context.json({ error: refusal.error }, refusal.status);
         }
       }
@@ -1928,6 +1987,7 @@ export function createPluginRoutes(
         const refusal = personRefusal(
           error,
           `没能开始连接 ${row.title}。请重试；如果一直这样，请联系管理员。`,
+          { route: "connect.consent", toolkit },
         );
         return context.json({ error: refusal.error }, refusal.status);
       }
@@ -2175,6 +2235,7 @@ export function createPluginRoutes(
            * wording, which names no broker.
            */
           "Couldn't check whether this account is connected. This shows the last answer. Try again, or ask an admin if it keeps happening.",
+          { route: "connection.confirm", toolkit: resolved.toolkit },
         );
         return context.json({ error: refusal.error }, refusal.status);
       }
@@ -2250,17 +2311,17 @@ export function createPluginRoutes(
         const generic =
           "没能检查这个连接是否还能用，这里显示的是上一次检查的结果。请再按一次重新检查；如果一直这样，请联系管理员。";
         if (error instanceof PluginRefusedError) {
-          return context.json(
-            { error: forPerson(error.message, generic) },
-            400,
-          );
+          return context.json({ error: withoutBrokerName(error.message) }, 400);
         }
         /*
          * And a failure this deployment cannot explain says what is on the screen instead of
          * guessing. Nothing was written on the way out of the store here, so the row still carries
          * the last answer anybody earned rather than a verdict invented by a call that failed.
          */
-        const refusal = personRefusal(error, generic);
+        const refusal = personRefusal(error, generic, {
+          route: "connection.recheck",
+          toolkit: resolved.toolkit,
+        });
         return context.json({ error: refusal.error }, refusal.status);
       }
     },
@@ -2322,6 +2383,7 @@ export function createPluginRoutes(
         error,
         // English for the same reason as confirm's: the route's tests pin "Disconnect again".
         "Couldn't disconnect this account. Press Disconnect again. It's safe to repeat. Ask an admin if it keeps happening.",
+        { route: "connection.disconnect", toolkit: resolved.toolkit },
       );
       return context.json({ error: refusal.error }, refusal.status);
     }

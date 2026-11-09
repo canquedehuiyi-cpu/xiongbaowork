@@ -351,6 +351,23 @@ export type AuthConfigOutcome = "created" | "standing" | "not-needed";
  * into each of those tests, and the first thing every one of them would do is find a way not to
  * dial.
  */
+/**
+ * Where the broker says an app's key is made (upstream #1297), held BESIDE the broker rather than on
+ * it (review M-6).
+ *
+ * Every method on {@link ComposioBroker} is a door whose failure reaches a person, and the adapter
+ * tests keep a table proving what each failure becomes there. This one's failures reach nobody: the
+ * key form reads any of them, and any delay, as "no link", and the map in `./key-guides` answers
+ * (`tests/key-guide-link.test.ts`). So it is its own object, and the table stays about the doors.
+ * Null where the broker published no link, which is most apps.
+ */
+export type KeyGuideSource = {
+  connectionGuideUrl(request: {
+    toolkit: string;
+    authScheme: FieldScheme;
+  }): Promise<string | null>;
+};
+
 export type ComposioBroker = {
   /** Every app the catalogue offers, which is what an administrator chooses from. */
   listApps(): Promise<BrokerApp[]>;
@@ -496,20 +513,13 @@ export type ComposioBroker = {
     authScheme: FieldScheme;
   }): Promise<BrokerField[]>;
   /**
-   * The provider's own page for making the key this app asks for, where the broker publishes one.
-   *
-   * Optional because only a broker with a typed-key flow has anything to say. Null where the broker
-   * published no link, which is most apps; the connect route then falls back to the map in
-   * `./key-guides`. Ported from upstream #1297.
-   */
-  connectionGuideUrl?(request: {
-    toolkit: string;
-    authScheme: FieldScheme;
-  }): Promise<string | null>;
-  /**
    * Connect this person with the secret they typed, answering the account it made.
    *
-   * THE ONE CALL WHOSE IMPLEMENTATION MUST RETHROW WITH NO `cause`, WHICH IS AN INVERSION OF THE
+   * ONE OF THE TWO CALLS WHOSE IMPLEMENTATION MUST RETHROW WITH NO `cause` (the other is
+   * {@link ComposioBroker.ensureAuthConfig} for a server-to-server grant, which sends this
+   * deployment's own OAuth client; review M-5).
+   *
+   * THE FIRST CALL WHOSE IMPLEMENTATION HAD TO RETHROW WITH NO `cause`, WHICH IS AN INVERSION OF THE
    * STANDING RULE AND SAYS SO ON PURPOSE. The rule `composio-adapter.ts` states and every path here
    * keeps is that a vendor error is never logged and always carried as `cause`, precisely because
    * the object holds the request it was made for and whoever is reading a log rather than a page
