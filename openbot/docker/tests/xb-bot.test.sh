@@ -117,6 +117,16 @@ pass "sudoers grants an employee nothing"
 runuser -u pwuser -- sudo -n apt-get --version >/dev/null 2>"$T/err" || fail "pwuser may no longer sudo apt-get: $(cat "$T/err")"
 pass "pwuser may still sudo apt-get"
 
+# What the shell tool tells an employee to do instead: install user-level tools in its own
+# directory. The image has no python3, so npm and bun are the installers; an empty `npm install`
+# needs no network.
+as "$A" 60 'PATH=/usr/local/bin:/usr/bin:/bin
+
+bun --version && npm init -y >/dev/null && npm install --no-audit --no-fund
+' || fail "A could not use npm and bun in its directory: $(cat "$T/err")"
+[ "$(stat -c %U "$DIRA/package-lock.json" 2>&1)" = "xb-$A" ] || fail "npm install left no package-lock.json of A's: $(stat -c %U "$DIRA/package-lock.json" 2>&1)"
+pass "an employee installs with npm and bun in its own directory"
+
 # --- run --------------------------------------------------------------------------------------
 as "$A" 10 'PATH=/usr/bin:/bin
 

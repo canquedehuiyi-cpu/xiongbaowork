@@ -326,7 +326,10 @@ test("in the cloud the shell and file tools keep their own words", async () => {
   // Employees do not sudo (user decision 2026-11-09): new tools go in the workspace.
   expect(run?.description).not.toMatch(/apt-get|sudo apt/);
   expect(run?.description).toContain("Do not use sudo");
-  expect(run?.description).toContain("pip install --user");
+  // The image has no python3, so only the two installers that are there are named.
+  expect(run?.description).toContain("npm install");
+  expect(run?.description).toContain("bun add");
+  expect(run?.description).not.toMatch(/\bpip\b|python|npm install -g/);
   const example = (
     z.toJSONSchema(run?.parameters as z.ZodType) as unknown as {
       properties: { command: { description: string } };
@@ -345,6 +348,6 @@ test("in the cloud the shell and file tools keep their own words", async () => {
 test("until the server answers, the cloud words stand", async () => {
   await mount("unanswered");
   expect(registered.get("computer_run_command")?.description).toContain(
-    "pip install --user",
+    "bun add",
   );
 });

@@ -188,8 +188,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # WHO THIS IS FOR. Only commands that run as pwuser: the default employee, with no employee header,
 # and every Bot when COMPUTER_PER_BOT_USERS is off. With the switch on (the default below) each real
 # employee runs as its own user and may not sudo at all (user decision, 2026-11-09). Bots are told
-# to use the tools already here and to install new ones in their own workspace (pip --user, npm,
-# bun), never with sudo; system packages a task commonly needs belong in this image.
+# to use the tools already here and to install new ones in their own workspace (npm install without
+# -g, bun add), never with sudo; system packages a task commonly needs belong in this image.
 #
 # THE PACKAGE MANAGERS, NOT ALL. This was `NOPASSWD: ALL`, and the comment below it explained what
 # that cost: a Bot could become root inside its container. It then named the two conditions that make
@@ -226,7 +226,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends sudo \
 #
 # EMPLOYEES DO NOT SUDO. Not even the package managers pwuser keeps above: apt-get or dpkg as root is
 # root, and root reads every other employee's directory, the browser profiles and the container's
-# environment. An employee installs user-level tools in its own directory (pip --user, npm, bun);
+# environment. An employee installs user-level tools in its own directory (npm install, bun add);
 # system packages it needs belong in this image.
 #
 # `acl` for the default ACLs that let the file tools and the employee's commands write each other's
