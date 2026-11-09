@@ -8,6 +8,7 @@ import {
   CredentialPlacementRefusedError,
   placeCredential,
   withoutSecrets,
+  withoutSecretsDeep,
 } from "./catalogue";
 
 /**
@@ -99,12 +100,20 @@ function resourceLinkText(item: {
 }
 
 export function resultText(
-  content: unknown,
-  structuredContent?: unknown,
+  rawContent: unknown,
+  rawStructuredContent?: unknown,
+  /**
+   * Strings no part of the result may carry: the credential this call went out with, in every
+   * spelling. Taken out of the vendor's whole answer FIRST, before any field is cut to length below
+   * — a cut that lands inside a key leaves a prefix no full spelling matches any more.
+   */
+  secrets: readonly string[] = [],
 ): {
   text: string;
   truncated: boolean;
 } {
+  const content = withoutSecretsDeep(rawContent, secrets);
+  const structuredContent = withoutSecretsDeep(rawStructuredContent, secrets);
   const parts = Array.isArray(content) ? content : [];
   let joined = parts
     .map((part) => {
@@ -249,8 +258,12 @@ type Connection = {
  * the explanation as text under `isError`. Both are worth surfacing; the tool list, which arrives in
  * the same position under a 403, is not.
  */
-function reasonFrom(error: unknown): string | null {
-  const message = error instanceof Error ? error.message : String(error);
+function reasonFrom(error: unknown, secrets: readonly string[]): string | null {
+  // Scrubbed while still whole, before `trimmed` below can cut through a key.
+  const message = withoutSecrets(
+    error instanceof Error ? error.message : String(error),
+    secrets,
+  );
   const body = message.slice(message.indexOf("{"));
   if (!body.startsWith("{")) return null;
 
@@ -304,7 +317,7 @@ const trimmed = (value: string) =>
  * where there is one, because that is where Google says which API is not enabled — and each Workspace
  * product is two APIs, so nothing else can tell "I enabled it" from "it is enabled".
  */
-function vendorFailure(error: unknown): string {
+function vendorFailure(error: unknown, secrets: readonly string[]): string {
   const status =
     typeof error === "object" && error !== null && "code" in error
       ? (error as { code?: unknown }).code
@@ -331,7 +344,7 @@ function vendorFailure(error: unknown): string {
      * with a full, valid list under a 403 — and a wall of JSON is what made the original error
      * unreadable.
      */
-    const detail = reasonFrom(error);
+    const detail = reasonFrom(error, secrets);
     return detail
       ? `The vendor accepted the credential and refused the request (403). It said: ${detail}`
       : "The vendor accepted the credential and refused the request (403). The account may lack access, or the API may not be enabled for this project.";
@@ -339,7 +352,10 @@ function vendorFailure(error: unknown): string {
   if (typeof status === "number") {
     return `The vendor answered ${status}.`;
   }
-  return error instanceof Error ? error.message : String(error);
+  return withoutSecrets(
+    error instanceof Error ? error.message : String(error),
+    secrets,
+  );
 }
 
 /**
@@ -479,7 +495,7 @@ async function withClient<T>(
     // message is written into `last_error`, an audit row and a model's context, and a transport
     // error that quotes the URL it dialled would otherwise quote a key placed in it.
     throw new McpServerError(
-      withoutSecrets(vendorFailure(error), dial.secrets),
+      withoutSecrets(vendorFailure(error, dial.secrets), dial.secrets),
     );
   } finally {
     await client.close().catch(() => {
@@ -537,13 +553,26 @@ export async function listTools(connection: Connection): Promise<ListedTool[]> {
     const result = await client.listTools(undefined, {
       timeout: LIST_TIMEOUT_MS,
     });
-    return result.tools.map((tool) => ({
-      name: tool.name,
-      // Stored and shown on the Plugins page, so a vendor echoing the key here does not put it there.
-      description: withoutSecrets(tool.description ?? "", secrets),
-      inputSchema: (tool.inputSchema ?? {}) as Record<string, unknown>,
-      ...declaredEffect(tool.annotations),
-    }));
+    return (
+      result.tools
+        /*
+         * A tool whose NAME carries the credential is not listed at all. A name is an identifier a
+         * grant, a policy rule and a call are all written against, so scrubbing it would list a tool
+         * nobody can call under the name shown — and leaving it would store the key as a tool name.
+         */
+        .filter((tool) => withoutSecrets(tool.name, secrets) === tool.name)
+        .map((tool) => ({
+          name: tool.name,
+          // Stored and shown on the Plugins page, and handed to a model: a vendor echoing the key
+          // into a description, a schema's default, an example or a property name puts it nowhere.
+          description: withoutSecrets(tool.description ?? "", secrets),
+          inputSchema: withoutSecretsDeep(
+            (tool.inputSchema ?? {}) as Record<string, unknown>,
+            secrets,
+          ),
+          ...declaredEffect(tool.annotations),
+        }))
+    );
   });
 }
 
@@ -575,9 +604,11 @@ export async function callTool(
       { timeout: CALL_TIMEOUT_MS },
     );
 
+    // The secrets go INTO `resultText`, so the answer is scrubbed whole before it is cut to length.
     const { text, truncated } = resultText(
       result.content,
       "structuredContent" in result ? result.structuredContent : undefined,
+      secrets,
     );
     // A model reads this, and an `isError` text is copied into the audit row; neither gets the key.
     return {
