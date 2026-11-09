@@ -74,6 +74,9 @@ export function appAccessTools(options: {
         const found = await options.store.findAppForRequest(app);
         if (!found)
           return `这个部署还没有叫「${app}」的应用，没有可以申请的。请如实告诉对方；不要改用浏览器去打开它的网站，也不要让对方去那里登录。`;
+        // 自己添加的应用不归管理员管：申请只会让管理员看到一个在他的帧里不存在的应用，永远批不了。
+        if (found.own)
+          return `「${found.title}」是你自己添加的应用，不需要向管理员申请。请在插件页自己把它装到这位员工上。`;
         const held = await options.store.listForAgent(options.botId);
         if (held.tools.some((tool) => tool.ref.startsWith(`${found.appKey}/`)))
           return `「${found.title}」已经可以使用了，不需要申请。请直接调用它的工具。`;
@@ -119,5 +122,10 @@ function toldTheModel(card: AppAccessRequestCard): string {
     card.status === "created"
       ? `已向管理员申请访问：${asked}。`
       : `「${card.title}」已有待处理的申请（${asked}），没有重复提交。`;
-  return `${what}对方的对话里有一张卡片，写着「${card.title}」和「${card.status === "created" ? "已向管理员申请访问" : "已有待处理的申请"}」，并有一个「撤回申请」按钮；卡片上没有别的按钮。用一句话告诉对方在等管理员处理即可，不要重复卡片上的内容。管理员处理之前，不要改用浏览器去打开它的网站，也不要让对方去那里登录。`;
+  // 上架之后还要员工的主人在装配页安装（D08），员工才真正能用；先说清楚，免得对方以为批准就能用了。
+  const after =
+    card.kind === "enable"
+      ? "管理员上架之后，还需要员工的主人在装配页把它装到这位员工上，员工才能使用。"
+      : "";
+  return `${what}${after}对方的对话里有一张卡片，写着「${card.title}」和「${card.status === "created" ? "已向管理员申请访问" : "已有待处理的申请"}」，并有一个「撤回申请」按钮；卡片上没有别的按钮。用一句话告诉对方在等管理员处理即可，不要重复卡片上的内容。管理员处理之前，不要改用浏览器去打开它的网站，也不要让对方去那里登录。`;
 }

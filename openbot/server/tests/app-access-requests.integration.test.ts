@@ -476,3 +476,199 @@ describe("withdrawing and deciding", () => {
     expect((await rowsFor(bob))[0]?.status).toBe("pending");
   });
 });
+
+/*
+ * 评审补充（I-2、M-4、M-5、M-9）：每项自备数据，不依赖上面用例的顺序。
+ */
+describe("guards that stand on their own", () => {
+  const carol = `aar-${suite}-carol`;
+  const dave = `aar-${suite}-dave`;
+  const carolBot = `aar-${suite}-carol-bot`;
+  const daveBot = `aar-${suite}-dave-bot`;
+  /** 20 个应用，给 carol 造满 20 条 pending。 */
+  const capApps = Array.from(
+    { length: 20 },
+    (_, index) => `aar-${suite}-cap-${index}`,
+  );
+  const extraApp = `aar-${suite}-extra`;
+  const raceApp = `aar-${suite}-race`;
+  /** dave 自己添加的私有应用：不是本部署的，不该向管理员申请。 */
+  const daveOwnApp = `aar-${suite}-dave-own`;
+  const teamApps = [...capApps, extraApp, raceApp];
+
+  beforeAll(async () => {
+    await asPlatform(async () => {
+      await database
+        .insert(users)
+        .values(
+          [carol, dave].map((id) => ({ id, email: `${id}@example.test` })),
+        );
+      for (const [id, owner] of [
+        [carolBot, carol],
+        [daveBot, dave],
+      ] as const) {
+        await database.insert(agents).values({
+          id,
+          tenantId: owner,
+          name: `${owner} 的员工`,
+          type: "built_in",
+          configuration: {},
+        });
+        await database.insert(agentProfiles).values({
+          agentId: id,
+          tenantId: owner,
+          ownerUserId: owner,
+          title: "助理",
+          roleDescription: "测试用。",
+          avatarSeed: id,
+          visibility: "private",
+        });
+      }
+      await database.insert(mcpServers).values([
+        ...teamApps.map((id) => ({
+          tenantId: "team",
+          id,
+          title: `应用${id.slice(-8)}`,
+          vendor: "test",
+          url: "https://example.invalid/mcp",
+          provenance: "custom",
+        })),
+        {
+          tenantId: dave,
+          id: daveOwnApp,
+          title: `私有应用${suite}`,
+          vendor: "test",
+          url: "https://example.invalid/mcp",
+          provenance: "custom",
+        },
+      ]);
+    });
+  });
+
+  afterAll(async () => {
+    await asPlatform(async () => {
+      await database
+        .delete(appAccessRequests)
+        .where(inArray(appAccessRequests.requesterUserId, [carol, dave]));
+      await database
+        .delete(mcpServers)
+        .where(inArray(mcpServers.id, [...teamApps, daveOwnApp]));
+      await database
+        .delete(agents)
+        .where(inArray(agents.id, [carolBot, daveBot]));
+      await database.delete(users).where(inArray(users.id, [carol, dave]));
+    });
+  });
+
+  const pendingOf = (person: string) =>
+    runAsTenant(person, () =>
+      database
+        .select({
+          id: appAccessRequests.id,
+          serverId: appAccessRequests.serverId,
+        })
+        .from(appAccessRequests)
+        .where(
+          and(
+            eq(appAccessRequests.requesterUserId, person),
+            eq(appAccessRequests.status, "pending"),
+          ),
+        ),
+    );
+
+  test("a person with 20 requests waiting is refused a 21st, and may ask again once one is withdrawn", async () => {
+    await runAsTenant(carol, () =>
+      database.insert(appAccessRequests).values(
+        capApps.map((serverId) => ({
+          serverId,
+          botId: carolBot,
+          requesterUserId: carol,
+          kind: "enable",
+        })),
+      ),
+    );
+    const refused = await ask(carol, carolBot, {
+      app: extraApp,
+      reason: "第 21 条",
+    });
+    expect(refused.startsWith("Refused.")).toBe(true);
+    expect(refused).toContain("20 条申请");
+    expect(await pendingOf(carol)).toHaveLength(20);
+
+    const [first] = await pendingOf(carol);
+    await runAsTenant(carol, () =>
+      store.cancelAppAccessRequest({
+        id: first?.id ?? "",
+        requesterUserId: carol,
+      }),
+    );
+    const again = await ask(carol, carolBot, {
+      app: extraApp,
+      reason: "撤回一条之后",
+    });
+    expect(readAppAccessRequestAnswer(again)?.card.status).toBe("created");
+    expect(await pendingOf(carol)).toHaveLength(20);
+  });
+
+  test("two filings at the same moment leave one request: one created, one handed the existing", async () => {
+    const file = () =>
+      runAsTenant(dave, () =>
+        store.fileAppAccessRequest({
+          serverId: raceApp,
+          botId: daveBot,
+          requesterUserId: dave,
+          kind: "enable",
+          note: "并发",
+          maxPending: 20,
+        }),
+      );
+    const outcomes = await Promise.all([file(), file()]);
+    expect(outcomes.map((outcome) => outcome.outcome).sort()).toEqual([
+      "created",
+      "existing",
+    ]);
+    const ids = outcomes.map((outcome) =>
+      outcome.outcome === "limited" ? null : outcome.request.id,
+    );
+    expect(ids[0]).toBe(ids[1]);
+    expect(
+      (await pendingOf(dave)).filter((row) => row.serverId === raceApp),
+    ).toHaveLength(1);
+  });
+
+  test("withdrawing names nobody as the decider: the asker's own withdrawal is the status itself", async () => {
+    const [request] = (await pendingOf(dave)).filter(
+      (row) => row.serverId === raceApp,
+    );
+    const cancelled = await runAsTenant(dave, () =>
+      store.cancelAppAccessRequest({
+        id: request?.id ?? "",
+        requesterUserId: dave,
+      }),
+    );
+    expect(cancelled).toMatchObject({ status: "cancelled", decidedBy: null });
+    expect(cancelled?.decidedAt).not.toBeNull();
+  });
+
+  test("an app the person added for themselves is theirs: nothing is filed for an administrator", async () => {
+    const answer = await ask(dave, daveBot, {
+      app: daveOwnApp,
+      reason: "需要它",
+    });
+    expect(readAppAccessRequestAnswer(answer)).toBeNull();
+    expect(answer).toContain("你自己添加的应用");
+    expect(
+      (await pendingOf(dave)).filter((row) => row.serverId === daveOwnApp),
+    ).toEqual([]);
+  });
+
+  test("an enable request tells the model the Bot's owner installs the app after it is listed", async () => {
+    const answer = await ask(dave, daveBot, {
+      app: extraApp,
+      reason: "需要它",
+    });
+    expect(readAppAccessRequestAnswer(answer)?.sentence).toContain(
+      "员工的主人",
+    );
+  });
+});

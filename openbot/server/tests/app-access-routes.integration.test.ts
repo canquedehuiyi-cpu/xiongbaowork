@@ -17,7 +17,7 @@ import {
 } from "../src/db/schema";
 import { pluginInstallListings } from "../src/db/schema/plugin-install-listings";
 import { createPluginRoutes } from "../src/plugins/routes";
-import { createPluginStore } from "../src/plugins/store";
+import { createPluginStore, PluginRefusedError } from "../src/plugins/store";
 import { runAsTenant } from "../src/tenant/context";
 import { seedAdministrator } from "./support/admin-request";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
@@ -67,7 +67,10 @@ const apps = [unlistedApp, listedApp, writeOnlyApp];
 let releaseAdmin: (() => Promise<void>) | undefined;
 const asPlatform = <T>(work: () => Promise<T>) => runAsTenant("platform", work);
 
-function routesAs(actor: { id: string; role: "admin" | "user" }) {
+function routesAs(
+  actor: { id: string; role: "admin" | "user" },
+  using: typeof store = store,
+) {
   const requireUser: MiddlewareHandler<{ Variables: AppVariables }> = async (
     context,
     next,
@@ -76,7 +79,7 @@ function routesAs(actor: { id: string; role: "admin" | "user" }) {
     await runAsTenant(actor.id, () => next());
   };
   return createPluginRoutes(
-    store,
+    using,
     requireUser,
     async () => true,
     undefined,
@@ -434,5 +437,235 @@ describe("the administrator's inbox", () => {
           .status,
       ).toBe(404);
     }
+  });
+});
+
+/*
+ * 评审补充（I-1、I-2、M-2）：每项自备申请人、员工和应用，不依赖上面用例的顺序。
+ */
+describe("races and partial failures", () => {
+  const carol = `${suite}-carol`;
+  const carolBot = `${suite}-carol-bot`;
+  /** 未上架、带一个只读工具：enable 用。 */
+  const raceUnlisted = `${suite}-race-unlisted`;
+  const raceUnlisted2 = `${suite}-race-unlisted-2`;
+  /** 已上架、带两个只读工具：grant 用。 */
+  const raceListed = `${suite}-race-listed`;
+  const raceListed2 = `${suite}-race-listed-2`;
+  const raceListed3 = `${suite}-race-listed-3`;
+  const raceApps = [
+    raceUnlisted,
+    raceUnlisted2,
+    raceListed,
+    raceListed2,
+    raceListed3,
+  ];
+  const listedRace = [raceListed, raceListed2, raceListed3];
+
+  beforeAll(async () => {
+    await asPlatform(async () => {
+      await database
+        .insert(users)
+        .values({ id: carol, email: `${carol}@example.test` });
+      await database.insert(agents).values({
+        id: carolBot,
+        tenantId: carol,
+        name: `${carol} 的助理`,
+        type: "built_in",
+        configuration: {},
+      });
+      await database.insert(agentProfiles).values({
+        agentId: carolBot,
+        tenantId: carol,
+        ownerUserId: carol,
+        title: "助理",
+        roleDescription: "测试用。",
+        avatarSeed: carolBot,
+        visibility: "private",
+      });
+      for (const app of raceApps) {
+        await database.insert(mcpServers).values({
+          tenantId: "team",
+          id: app,
+          title: `应用 ${app}`,
+          vendor: "test",
+          url: "https://example.invalid/mcp",
+          provenance: "custom",
+        });
+        await database.insert(mcpTools).values(
+          ["alpha", "beta"].map((name) => ({
+            tenantId: "team",
+            serverId: app,
+            name,
+            description: "读。",
+            effect: "read",
+          })),
+        );
+      }
+      for (const app of listedRace)
+        await store.addInstallListing("mcp", app, "admin@example.test");
+    });
+  });
+
+  afterAll(async () => {
+    await asPlatform(async () => {
+      await database
+        .delete(appAccessRequests)
+        .where(inArray(appAccessRequests.serverId, raceApps));
+      await database
+        .delete(pluginInstallListings)
+        .where(
+          and(
+            eq(pluginInstallListings.tenantId, "system"),
+            inArray(pluginInstallListings.ref, raceApps),
+          ),
+        );
+      await database
+        .delete(pluginGrants)
+        .where(eq(pluginGrants.agentId, carolBot));
+      await database
+        .delete(mcpTools)
+        .where(inArray(mcpTools.serverId, raceApps));
+      await database.delete(mcpServers).where(inArray(mcpServers.id, raceApps));
+      await database.delete(agents).where(eq(agents.id, carolBot));
+      await database.delete(users).where(eq(users.id, carol));
+    });
+  });
+
+  const withdraw = (id: string) =>
+    runAsTenant(carol, () =>
+      store.cancelAppAccessRequest({ id, requesterUserId: carol }),
+    );
+
+  test("withdrawn first, approved after: 409, nothing listed and nothing granted", async () => {
+    const enable = await file(carol, carolBot, raceUnlisted, "enable");
+    const grant = await file(carol, carolBot, raceListed, "grant");
+    await withdraw(enable);
+    await withdraw(grant);
+    for (const id of [enable, grant]) {
+      const response = await asAdmin().request(
+        `/access-requests/${id}/approve`,
+        post,
+      );
+      expect(response.status).toBe(409);
+      expect(((await response.json()) as { error: string }).error).toBe(
+        "这条申请已经处理过了。",
+      );
+      expect((await row(id))?.status).toBe("cancelled");
+    }
+    expect(await listed(raceUnlisted)).toBe(false);
+    expect(await grantsOn(carolBot)).toEqual([]);
+  });
+
+  test("listed, then found withdrawn meanwhile: a distinct answer saying the listing happened and the request was left as it is", async () => {
+    const id = await file(carol, carolBot, raceUnlisted2, "enable");
+    // 上架落地之前，申请人在卡片上撤回了。
+    const racing = {
+      ...store,
+      addInstallListing: async (
+        ...args: Parameters<typeof store.addInstallListing>
+      ) => {
+        await withdraw(id);
+        return store.addInstallListing(...args);
+      },
+    };
+    const response = await routesAs(
+      { id: admin, role: "admin" },
+      racing,
+    ).request(`/access-requests/${id}/approve`, post);
+    expect(response.status).toBe(409);
+    const body = (await response.json()) as {
+      error: string;
+      applied: boolean;
+    };
+    expect(body.applied).toBe(true);
+    expect(body.error).toContain("已上架");
+    expect(body.error).toContain(
+      "但这条申请在此期间已被撤回或驳回，申请状态未改",
+    );
+    expect(await listed(raceUnlisted2)).toBe(true);
+    expect((await row(id))?.status).toBe("cancelled");
+  });
+
+  test("granted, then found dismissed meanwhile: the same distinct answer, naming what was granted", async () => {
+    const id = await file(carol, carolBot, raceListed2, "grant");
+    let dismissed = false;
+    const racing = {
+      ...store,
+      grant: async (...args: Parameters<typeof store.grant>) => {
+        if (!dismissed) {
+          dismissed = true;
+          const other = await asAdmin().request(
+            `/access-requests/${id}/dismiss`,
+            post,
+          );
+          expect(other.status).toBe(200);
+        }
+        return store.grant(...args);
+      },
+    };
+    const response = await routesAs(
+      { id: admin, role: "admin" },
+      racing,
+    ).request(`/access-requests/${id}/approve`, post);
+    expect(response.status).toBe(409);
+    const body = (await response.json()) as {
+      error: string;
+      applied: boolean;
+      granted: string[];
+    };
+    expect(body.applied).toBe(true);
+    expect(body.granted).toEqual([
+      `${raceListed2}/alpha`,
+      `${raceListed2}/beta`,
+    ]);
+    expect(body.error).toContain("已授予");
+    expect(body.error).toContain(`${raceListed2}/alpha`);
+    expect(body.error).toContain(
+      "但这条申请在此期间已被撤回或驳回，申请状态未改",
+    );
+    expect((await row(id))?.status).toBe("dismissed");
+  });
+
+  test("a grant that fails part way says, in Chinese, which grants were written, and the request stays pending", async () => {
+    const id = await file(carol, carolBot, raceListed3, "grant");
+    let calls = 0;
+    const failing = {
+      ...store,
+      grant: async (...args: Parameters<typeof store.grant>) => {
+        calls += 1;
+        if (calls === 2)
+          throw new PluginRefusedError(
+            "This Bot was given that by the deployment itself, and it is changed only there.",
+            null,
+          );
+        return store.grant(...args);
+      },
+    };
+    const response = await routesAs(
+      { id: admin, role: "admin" },
+      failing,
+    ).request(`/access-requests/${id}/approve`, post);
+    expect(response.status).toBe(403);
+    const body = (await response.json()) as {
+      error: string;
+      granted: string[];
+    };
+    expect(body.granted).toEqual([`${raceListed3}/alpha`]);
+    expect(body.error).toContain(`已写入：${raceListed3}/alpha`);
+    expect(body.error).not.toContain("This Bot");
+    expect((await row(id))?.status).toBe("pending");
+  });
+
+  test("an administrator whose role was taken away cannot list or dismiss either", async () => {
+    const id = await file(carol, carolBot, raceListed, "grant");
+    const list = await asFormerAdmin().request("/access-requests");
+    expect(list.status).toBe(403);
+    const dismiss = await asFormerAdmin().request(
+      `/access-requests/${id}/dismiss`,
+      post,
+    );
+    expect(dismiss.status).toBe(403);
+    expect((await row(id))?.status).toBe("pending");
   });
 });
