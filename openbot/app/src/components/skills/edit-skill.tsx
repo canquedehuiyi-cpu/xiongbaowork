@@ -39,11 +39,7 @@ export function EditSkill({ slug }: { slug: string }) {
     return (
       <div className="mx-auto flex w-full max-w-xl flex-col gap-6 p-8">
         <p className="text-destructive text-sm" role="alert">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           读不到这个技能。
-=======
-          Couldn't load this skill. Reload the page.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         </p>
       </div>
     );
@@ -59,11 +55,7 @@ export function EditSkill({ slug }: { slug: string }) {
          * not own.
          */}
         <p className="text-muted-foreground text-sm">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           这个技能已经不存在了，或者不归你编辑。
-=======
-          This skill was deleted, or it isn't yours to edit.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         </p>
       </div>
     );
@@ -74,13 +66,8 @@ export function EditSkill({ slug }: { slug: string }) {
       <header>
         <h1 className="text-2xl font-semibold">编辑技能</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           改动会在下次使用 <code>/{skill.slug}</code>{" "}
           时生效。已经拿到它的员工会继续保留。
-=======
-          Changes apply the next time someone uses {skill.title}. Bots that have
-          it keep it.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         </p>
       </header>
 
@@ -105,11 +92,7 @@ export function EditSkill({ slug }: { slug: string }) {
         footer={<SkillAgents grantedTo={skill.grantedTo} slug={skill.slug} />}
         onSubmit={async (values) => {
           await saveSkill.mutateAsync(values);
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
           await navigate({ search: { tab: "skills" }, to: "/resources" });
-=======
-          await navigate({ search: {}, to: "/capabilities/skills" });
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         }}
         slugLocked
         submitLabel="保存改动"

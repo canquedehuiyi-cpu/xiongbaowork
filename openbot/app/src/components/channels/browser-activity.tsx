@@ -5,17 +5,6 @@ import type { VisibleChatItem } from "./chat-messages";
 
 type BrowserStep = Extract<VisibleChatItem, { kind: "tool" }>;
 
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-const labels: Record<string, string> = {
-  computer_navigate: "打开了页面",
-  computer_read: "读取了页面",
-  computer_snapshot: "查看了页面结构",
-  computer_click: "在页面上点击",
-  computer_type: "填写了字段",
-  computer_key: "按了按键",
-  computer_scroll: "滚动了页面",
-};
-=======
 /** The browser steps, named in the words every other line uses for them (`shared/tool-name.ts`). */
 const BROWSER_STEPS: ReadonlySet<string> = new Set([
   "computer_navigate",
@@ -26,7 +15,17 @@ const BROWSER_STEPS: ReadonlySet<string> = new Set([
   "computer_key",
   "computer_scroll",
 ]);
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
+
+/** 浏览器步骤的中文说法；`shared/tool-name.ts` 的 `ownToolLabel` 还是英文，这里先用中文盖过去。 */
+const BROWSER_STEP_LABELS: Record<string, string> = {
+  computer_navigate: "打开了页面",
+  computer_read: "读取了页面",
+  computer_snapshot: "查看了页面结构",
+  computer_click: "在页面上点击",
+  computer_type: "填写了字段",
+  computer_key: "按了按键",
+  computer_scroll: "滚动了页面",
+};
 
 /** Whether a tool call is one of the browser steps a tool group draws with its page link. */
 export function isBrowserStep(item: BrowserStep): boolean {
@@ -106,7 +105,10 @@ export function browserStepDetails(step: BrowserStep) {
     step.result?.startsWith("Error:") === true ||
     sentence?.ok === false;
   return {
-    label: ownToolLabel(step.toolCall.function.name) ?? undefined,
+    label:
+      BROWSER_STEP_LABELS[step.toolCall.function.name] ??
+      ownToolLabel(step.toolCall.function.name) ??
+      undefined,
     href: url?.href,
     title:
       navigation && typeof result.title === "string" && result.title.trim()
@@ -123,73 +125,3 @@ export function browserStepDetails(step: BrowserStep) {
     pending: step.result === undefined,
   };
 }
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-
-export function BrowserActivity({
-  group,
-  active,
-}: {
-  group: BrowserGroup;
-  active: boolean;
-}) {
-  const steps = group.steps.map((step) => ({
-    id: step.id,
-    ...browserStepDetails(step),
-  }));
-  const pages = steps.filter((step) => step.visited).length;
-  const issues = steps.filter((step) => step.failed).length;
-  const running = active && steps.some((step) => step.pending);
-  // The folded line draws its own steps, so a waiting approval gets its card beside it, not inside.
-  return (
-    <>
-      <ToolLine
-        label={
-          running
-            ? "正在浏览…"
-            : pages
-              ? `浏览了 ${pages} 个页面`
-              : "浏览器活动"
-        }
-        detail={issues ? `${issues} 个问题` : undefined}
-        running={running}
-      >
-        <ol className="space-y-2 py-1">
-          {steps.map((step) => (
-            <li key={step.id} className="min-w-0">
-              <div className="flex min-w-0 items-baseline gap-2">
-                <span className="shrink-0 text-muted-foreground">
-                  {step.label}
-                </span>
-                {step.href ? (
-                  <a
-                    href={step.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="truncate underline decoration-muted-foreground/40 underline-offset-2 hover:decoration-current"
-                  >
-                    {step.title ?? step.href}
-                  </a>
-                ) : null}
-                {step.pending && (
-                  <span className="text-muted-foreground">
-                    {active ? "进行中" : "未完成"}
-                  </span>
-                )}
-              </div>
-              {step.failed && (
-                <p className="mt-0.5 text-destructive">
-                  {step.reason ?? "这一步没能完成。"}
-                </p>
-              )}
-            </li>
-          ))}
-        </ol>
-      </ToolLine>
-      <PendingApprovals
-        toolCallIds={group.steps.map((step) => step.toolCall.id)}
-      />
-    </>
-  );
-}
-=======
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b

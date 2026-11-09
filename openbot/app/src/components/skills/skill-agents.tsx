@@ -77,17 +77,10 @@ export function SkillAgents({
 
   return (
     <div className="flex flex-col gap-2">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
       <h2 className="text-sm font-medium">员工</h2>
       {mine.length === 0 ? (
         <p className="text-muted-foreground text-xs">
           你还没有可以交给它的员工。
-=======
-      <h2 className="text-sm font-medium">Bots</h2>
-      {mine.length === 0 ? (
-        <p className="text-muted-foreground text-xs">
-          You don't have a Bot of your own yet.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
         </p>
       ) : (
         <>
@@ -140,12 +133,7 @@ export function SkillAgents({
             </div>
           )}
           <p className="text-muted-foreground text-xs">
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
             拿到它的员工会在输入框里提供 <code>/{slug}</code> 。
-=======
-            Bots you pick here offer <code>/{slug}</code> when you type{" "}
-            <code>/</code>.
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
           </p>
         </>
       )}

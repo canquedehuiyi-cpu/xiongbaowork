@@ -54,17 +54,6 @@ function createControlStore(computerId: string): ControlStore {
     ).catch(() => null);
     if (reading === abort) reading = undefined;
     if (abort.signal.aborted || mine !== version || snapshot.busy) return;
-<<<<<<< 4abbcd6a3db206b598d2fc6a41298762a4ebb371
-    publish({
-      ...snapshot,
-      control,
-      problem: control
-        ? snapshot.problem?.startsWith(RECONNECTING)
-          ? null
-          : snapshot.problem
-        : `${RECONNECTING}没能确认浏览器由谁操作，输入已暂停。`,
-    });
-=======
     /*
      * One read that did not come back is not news. It used to blank the control state at once, which
      * took the wheel off a person mid-sentence: their keyboard stopped being forwarded and every key
@@ -75,10 +64,10 @@ function createControlStore(computerId: string): ControlStore {
     if (!control && failures < MISSED_READS_BEFORE_PAUSE && snapshot.control)
       return;
     const problem = control
-      ? snapshot.problem?.startsWith("Reconnecting:")
+      ? snapshot.problem?.startsWith(RECONNECTING)
         ? null
         : snapshot.problem
-      : "Reconnecting: browser ownership could not be checked. Input is paused.";
+      : `${RECONNECTING}没能确认浏览器由谁操作，输入已暂停。`;
     // The same answer as last time changes nothing on screen, so nothing is told. Every view of the
     // computer re-rendered once a second for a state that had not moved.
     if (
@@ -87,7 +76,6 @@ function createControlStore(computerId: string): ControlStore {
     )
       return;
     publish({ ...snapshot, control, problem });
->>>>>>> 799267df33f0e0c0e4c049d98453d9b95a74167b
   };
   // Keep the same store through Strict Mode resubscriptions and pending mutations.
   const disposeWhenUnused = () =>
