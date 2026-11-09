@@ -454,3 +454,86 @@ describe("createPerBotComputer status", () => {
     expect((await perBot.status()).ready).toBe(true);
   });
 });
+
+/**
+ * The helper refusing to run a command is the computer not being ready, not the command failing.
+ *
+ * 64 is the helper refusing its arguments and 65 the employee's user missing (deleted, or a restore
+ * that has not run). Reported as the command's exit code, a model would rewrite and retry a command
+ * that never ran.
+ */
+describe("createPerBotComputer, when the helper refuses to run", () => {
+  let root = "";
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), "per-bot-refused-"));
+  });
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  async function computerWhoseHelperExits(code: number) {
+    const calls: string[][] = [];
+    const launcher = join(root, "fake-xb.sh");
+    await writeFile(
+      launcher,
+      ["#!/bin/sh", "cat >/dev/null", `exit ${code}`, ""].join("\n"),
+    );
+    await chmod(launcher, 0o755);
+    const perBot = createPerBotComputer({
+      workspaceRoot: root,
+      defaultBotId: "shared",
+      enabled: true,
+      launcher: [launcher],
+      helper: async (args) => {
+        calls.push(args);
+        await mkdir(join(root, "bots", String(args[1])), { recursive: true });
+        return { code: 0, stdout: "20001\n", stderr: "" };
+      },
+    });
+    return { perBot, calls };
+  }
+
+  test.each([
+    [64, "64"],
+    [65, "65"],
+  ])("exit %d is an unavailable computer", async (code, shown) => {
+    const { perBot } = await computerWhoseHelperExits(code);
+    const shell = await perBot.shellFor("bot-a");
+    const failure = await shell
+      .run({ command: "echo hi" })
+      .catch((error) => error);
+    expect(failure).toBeInstanceOf(PerBotUnavailableError);
+    expect((failure as Error).message).toStartWith("员工独立电脑未就绪：");
+    expect((failure as Error).message).toContain(shown);
+  });
+
+  test("a missing user is prepared again on the next call", async () => {
+    const { perBot, calls } = await computerWhoseHelperExits(65);
+    await (await perBot.shellFor("bot-a"))
+      .run({ command: "true" })
+      .catch(() => {});
+    await perBot.shellFor("bot-a");
+    expect(calls).toEqual([
+      ["ensure", botKeyOf("bot-a")],
+      ["ensure", botKeyOf("bot-a")],
+    ]);
+  });
+
+  test("any other exit is the command's own answer", async () => {
+    const { perBot } = await computerWhoseHelperExits(1);
+    const result = await (await perBot.shellFor("bot-a")).run({
+      command: "false",
+    });
+    expect(result.exitCode).toBe(1);
+  });
+
+  test("the default employee's own exit 65 is just its exit code", async () => {
+    const { perBot } = await computerWhoseHelperExits(0);
+    const result = await (await perBot.shellFor("shared")).run({
+      command: "exit 65",
+    });
+    expect(result.exitCode).toBe(65);
+  });
+});

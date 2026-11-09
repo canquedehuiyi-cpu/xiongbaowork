@@ -152,6 +152,16 @@ const HELPER_UNAVAILABLE = "员工独立电脑的辅助程序不可用";
 
 const WRONG_WORKSPACE = `每员工模式要求工作目录为 ${XB_BOT_WORKSPACE}`;
 
+/**
+ * The helper's own refusals from `run`, before any command starts. A command that exits 64 or 65
+ * itself reads the same way; the helper's protocol has no other signal, and a refusal mistaken for a
+ * command's answer is the worse error of the two.
+ */
+const HELPER_REFUSED: Record<number, string> = {
+  64: "辅助程序拒绝了这次调用（退出码 64：参数不合法）",
+  65: "员工的系统用户不存在（退出码 65）",
+};
+
 export type PerBotStatus = {
   enabled: boolean;
   ready: boolean;
@@ -304,9 +314,20 @@ export function createPerBotComputer(options: {
       const key = botKeyOf(botId);
       let shell = shells.get(key);
       if (!shell) {
-        shell = createShell(homeFor(botId), process.env, {
+        const runAs = createShell(homeFor(botId), process.env, {
           runAs: { key, ...(launcher ? { launcher } : {}) },
         });
+        shell = {
+          async run(input) {
+            const result = await runAs.run(input);
+            if (result.timedOut || result.stopped) return result;
+            const refused = HELPER_REFUSED[result.exitCode];
+            if (refused === undefined) return result;
+            // The user is gone, so the next call prepares it again rather than trusting the cache.
+            if (result.exitCode === 65) ensured.delete(key);
+            throw new PerBotUnavailableError(refused);
+          },
+        };
         shells.set(key, shell);
       }
       return shell;
