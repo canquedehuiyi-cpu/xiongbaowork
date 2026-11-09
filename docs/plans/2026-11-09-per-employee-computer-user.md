@@ -18,7 +18,7 @@
 
 - 用户名格式为 `xb-<botKey>`，其中 `botKey` 取 `sha256(botId)` 十六进制的前 12 位，满足 `^[0-9a-f]{12}$`。
 - uid 范围 20000–59999（`SYS_UID_MIN`、`SYS_UID_MAX`），由 `useradd --system` 分配。
-- 员工用户统一加入 `xbbots` 组；pwuser 是 `xbcomp` 组的唯一成员。
+- 员工用户各有私有主组 `xb-<botKey>`，统一以附加组加入 `xbbots`；pwuser 是 `xbcomp` 组的唯一成员。
 - 目录：
   - `/workspace/bots/<botKey>`：属主 `xb-<botKey>:xbcomp`，权限 `2770`。
   - `/workspace/bots/<botKey>/.tmp`：属主 `xb-<botKey>`，权限 `0700`。
@@ -35,7 +35,7 @@
   - `timeout_s` 是 1–600 的整数。
 - sudoers 只放行以下几条，不放行 `restore`：
   - `pwuser ALL=(root) NOPASSWD: /usr/local/sbin/xb-bot ensure *, /usr/local/sbin/xb-bot run *`
-  - `%xbbots` 获得与 pwuser 相同的包管理命令清单（apt-get、apt、dpkg、apt-key、apt-cache）。
+  - `%xbbots` 不获得任何 sudo 权限（用户决定，2026-11-09）：员工不能 sudo 安装系统包，可以在自己目录里用 `pip --user`、`npm`、`bun` 安装用户级工具；常用系统包预装进镜像。pwuser 原有的包管理 sudo 保留。
 - 开关 `COMPUTER_PER_BOT_USERS` 取 `on`/`off`：源码默认 `off`，交付镜像 `ENV COMPUTER_PER_BOT_USERS=on`。只在 Linux 上生效。
 - 开关打开但辅助程序不可用时，`/health` 返回 HTTP 503，`status: "unready"`，并附 `perBotUsers.reason`。非默认员工的 `/exec` 和 `/files/*` 返回 503，**不退回共享模式**。
 - 用户可见文案用中文，提交与注释不写模型名。不加 npm 依赖，不改 lockfile。每个任务（PR）改动不超过 8 个文件（测试另计）。
@@ -176,11 +176,11 @@
 - 用 dash 的写法给进程组发信号：`kill -s TERM -- "-$pid"`。dash 不接受 `kill -TERM -- -$pid`，会静默失败。测试必须断言进程确实已被清掉。
 - `ensure <key>`：
   - 映射中已有 uid 就用 `-u <uid>`。
-  - 用户不存在时执行 `useradd --system --gid xbbots --home-dir /workspace/bots/<key> --no-create-home --shell /usr/sbin/nologin xb-<key>`，并把 uid 追加进映射。
+  - 用户不存在时执行 `useradd --system -U -G xbbots --home-dir /workspace/bots/<key> --no-create-home --shell /usr/sbin/nologin xb-<key>`（私有主组，gid 尽量与 uid 相同），并把 uid 追加进映射。
   - mkdir 并 chown、chmod，执行 `setfacl -m` 和 `setfacl -d -m`（ACL 内容见 Global Constraints）。
   - 建 `.tmp`，最后输出 uid。
   - 幂等。setfacl 失败时退出码非 0。
-  - 整个 ensure 在 `flock /run/xb-bot.lock` 下串行执行，避免并发 useradd 抢锁失败。
+  - 整个 ensure 在 `flock /run/xb-bot/lock` 下串行执行，避免并发 useradd 抢锁失败。`/run/xb-bot/` 为 root 0700、锁文件 0600，员工打不开锁，也就卡不住别人的 ensure。
 - `run <key> <timeout_s>`：
   - timeout 不是 1–600 的整数，退出码 64；用户不存在，退出码 65。
   - 读 stdin 直到空行，每行 `NAME=VALUE`。NAME 必须匹配 `^[A-Za-z_][A-Za-z0-9_]*$` 且不在 `HOME TMPDIR USER LOGNAME SHELL` 中，否则跳过该行。合法的行用 `set --` 累积。
@@ -190,7 +190,7 @@
     timeout --kill-after=5 "$t" runuser -u "xb-$key" -- env -i "$@" HOME="$dir" TMPDIR="$dir/.tmp" USER="xb-$key" LOGNAME="xb-$key" /bin/bash -c "$cmd" &
     ```
     记下 pid（timeout 会自建进程组，组号就是它的 pid）。
-  - `trap` 捕获 TERM、INT、HUP（sudo 会把调用方的信号转给辅助程序），收到后依次执行：`kill -s TERM -- "-$pid"`，等 3 秒，`kill -s KILL -- "-$pid"`，再执行 `pkill -KILL -u "xb-$key"` 兜底。
+  - `trap` 捕获 TERM、INT、HUP（sudo 会把调用方的信号转给辅助程序），收到后依次执行：`kill -s TERM -- "-$pid"`，等 3 秒，`kill -s KILL -- "-$pid"`，只清理本次命令的进程组，不用 `pkill -u`（会误杀同一员工的其他命令）；用 `${pid:-${!:-}}` 补上信号落在 `&` 与 `pid=$!` 之间的窗口。
   - `wait $pid` 拿到退出码后，**无论命令是正常结束还是超时**，都执行 `kill -s KILL -- "-$pid" 2>/dev/null || true`，清掉命令留在组里的后台进程（例如 `sleep 1000 &`）。这样后台进程不会一直占着输出管道。说明：命令结束时连同它的后台进程一起结束，不支持常驻进程。
   - 以命令的退出码退出。超时时 timeout 返回 124 或 137，原样透传。
 - `restore`：

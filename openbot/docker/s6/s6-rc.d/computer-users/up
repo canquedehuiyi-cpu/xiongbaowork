@@ -1,1 +1,1 @@
-/usr/local/sbin/xb-bot restore
+/command/with-contenv /usr/local/sbin/xb-bot restore
