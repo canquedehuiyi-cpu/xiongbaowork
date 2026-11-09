@@ -235,9 +235,7 @@ export function grantedToolGuidance(
         ]
       : []),
     // 只有内部工具（记忆、跟进等）时不说：它们不经审批门。
-    ...(holdsAppTools(tools)
-      ? [CONNECTOR_APPROVAL_GUIDANCE]
-      : []),
+    ...(holdsAppTools(tools) ? [CONNECTOR_APPROVAL_GUIDANCE] : []),
     ...(researchConnector
       ? [
           `Parallel provides public-web search and extraction: ${researchTools.map((tool) => tool.name).join(" and ")} discover sources and read selected pages.`,

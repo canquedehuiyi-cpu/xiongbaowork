@@ -1,11 +1,8 @@
-import { currentTenant, runAsTenant } from "../tenant/context";
-import { TEAM_TENANT } from "../db/schema/tenant";
-import { ownerTenantOfBot } from "../agents/bot-owner";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { ownerTenantOfBot } from "../agents/bot-owner";
 import { createAuditStore, recordAuditEvent } from "../audit";
 import type { Database } from "../db/client";
 import { agentSecuritySettings } from "../db/schema/agent-security-settings";
-import { agents } from "../db/schema/core";
 import {
   approvalPreferences,
   approvalRequests,
@@ -13,13 +10,14 @@ import {
   approvalTeamRules,
   approvalTeamSettings,
 } from "../db/schema/approvals";
-import { intelligenceChannelMappings } from "../db/schema/core";
+import { agents, intelligenceChannelMappings } from "../db/schema/core";
 import { botTasks } from "../db/schema/tasks";
+import { TEAM_TENANT } from "../db/schema/tenant";
 import { workItems } from "../db/schema/work";
-import type { TaskProjector } from "../tasks/projector";
 import { currentEdition } from "../edition";
+import type { TaskProjector } from "../tasks/projector";
+import { currentTenant, runAsTenant } from "../tenant/context";
 import {
-  validateApprovalRecoveryContext,
   type ApprovalAction,
   ApprovalNotFoundError,
   type ApprovalPolicyStore,
@@ -33,6 +31,7 @@ import {
   type EmployeeSecuritySettings,
   offersStandingRule,
   targetSubject,
+  validateApprovalRecoveryContext,
 } from "./types";
 
 /**
@@ -104,11 +103,7 @@ export async function openStoredApprovalInTransaction(
   // saved "always" rule was already weighed there and must not approve it behind that.
   const [rule] = action.policy
     ? []
-    : await tx
-        .select()
-        .from(approvalRules)
-        .where(ruleScope(action))
-        .limit(1);
+    : await tx.select().from(approvalRules).where(ruleScope(action)).limit(1);
   await tx
     .insert(approvalRequests)
     .values({
@@ -792,7 +787,10 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
         .insert(agentSecuritySettings)
         .values({ agentId: botId, ...next, updatedBy: by })
         .onConflictDoUpdate({
-          target: [agentSecuritySettings.tenantId, agentSecuritySettings.agentId],
+          target: [
+            agentSecuritySettings.tenantId,
+            agentSecuritySettings.agentId,
+          ],
           set: { ...next, updatedBy: by, updatedAt: sql`now()` },
         });
       await recordAuditEvent(audit, {
@@ -800,7 +798,12 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
         targetType: "approval_settings",
         targetId: botId,
         actorUserId: by,
-        payload: { changed: input, settings: next, layer: "employee", bot: botId },
+        payload: {
+          changed: input,
+          settings: next,
+          layer: "employee",
+          bot: botId,
+        },
       });
       return next;
     },

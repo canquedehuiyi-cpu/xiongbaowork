@@ -10,6 +10,7 @@ import {
   type BuiltInAgentConfiguration,
 } from "@copilotkit/runtime/v2";
 import {
+  approvalGuidance,
   COMPONENT_GUIDANCE,
   computerGuidance,
   ORCHESTRATION_GUIDANCE,
@@ -361,7 +362,7 @@ describe("registered Copilot agents", () => {
       model: "openai/gpt-5.6-terra",
       // The provenance rule is unconditional, so even a Bot with no tools and no computer carries
       // it. That Bot needs it most: nothing it says was read anywhere. The date is unconditional too.
-      prompt: `${identity("General Assistant")}\n\nBe helpful.\n\n${PROVENANCE_GUIDANCE}\n\n${COMPONENT_GUIDANCE}\n\n${ORCHESTRATION_GUIDANCE}\n\n${UNTRUSTED_GUIDANCE}\n\n${todayGuidance(new Date("2026-11-05T15:44:00Z"))}`,
+      prompt: `${identity("General Assistant")}\n\nBe helpful.\n\n${PROVENANCE_GUIDANCE}\n\n${COMPONENT_GUIDANCE}\n\n${ORCHESTRATION_GUIDANCE}\n\n${approvalGuidance({ apps: false })}\n\n${UNTRUSTED_GUIDANCE}\n\n${todayGuidance(new Date("2026-11-05T15:44:00Z"))}`,
       apiKey: "openai-secret",
     });
   });
@@ -1863,7 +1864,7 @@ describe("a person's standing instructions", () => {
       // Byte for byte what a deployment had before any of this existed, which is what most people
       // on most days get: the Bot's name, its role, and the guidance every Bot is given.
       expect(prompt).toBe(
-        `${identity("General Assistant")}\n\nBe helpful.\n\n${PROVENANCE_GUIDANCE}\n\n${COMPONENT_GUIDANCE}\n\n${ORCHESTRATION_GUIDANCE}\n\n${UNTRUSTED_GUIDANCE}\n\n${todayGuidance(NOW)}`,
+        `${identity("General Assistant")}\n\nBe helpful.\n\n${PROVENANCE_GUIDANCE}\n\n${COMPONENT_GUIDANCE}\n\n${ORCHESTRATION_GUIDANCE}\n\n${approvalGuidance({ apps: false })}\n\n${UNTRUSTED_GUIDANCE}\n\n${todayGuidance(NOW)}`,
       );
     },
   );

@@ -1,11 +1,11 @@
 import { describe, expect } from "bun:test";
 import { randomUUID } from "node:crypto";
+import type { ChatCompletionRequest } from "@copilotkit/aimock";
 import { LLMock } from "@copilotkit/aimock";
 import {
   COMPONENT_GUIDANCE,
   PROVENANCE_GUIDANCE,
 } from "@openbot/shared/bot-prompt";
-import type { ChatCompletionRequest } from "@copilotkit/aimock";
 import { createTurnRunner, type RunnerLike } from "@openbot/toolkit/run-turn";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { Observable } from "rxjs";
@@ -17,7 +17,6 @@ import type { ActionPolicy } from "../src/computer/policy";
 import { type RegisteredAgent, registeredAgentFromRow } from "../src/copilot";
 import { createCredentialStore, encryptSecret } from "../src/credentials";
 import { createDatabase } from "../src/db/client";
-import { auditEvents } from "../src/db/schema";
 import { agents, channels, credentials, users } from "../src/db/schema/core";
 import {
   composioConnections,
@@ -27,9 +26,9 @@ import {
   pluginGrants,
 } from "../src/db/schema/plugins";
 import {
+  proactiveCheckInRuns,
   proactivePeople,
   proactivePings,
-  proactiveCheckInRuns,
   proactiveSettings,
   proactiveSuggestions,
 } from "../src/db/schema/proactive";
@@ -38,7 +37,6 @@ import { createMemoryStore } from "../src/memory/store";
 import {
   CustomServerRefusedError,
   createPluginStore,
-  PluginRefusedError,
 } from "../src/plugins/store";
 import { grantedTools } from "../src/plugins/tools";
 import { createProactiveEngine } from "../src/proactive/engine";
@@ -47,11 +45,15 @@ import {
   proactiveInitiator,
   restrictToolsForRun,
 } from "../src/proactive/restriction";
-import { checkInToolsFor, createCheckInScope } from "../src/proactive/scope";
+import {
+  checkInCatalogue,
+  checkInToolsFor,
+  createCheckInScope,
+} from "../src/proactive/scope";
 import { createProactiveStore } from "../src/proactive/store";
 import { type ProactiveSetting, SKIPPED_BECAUSE } from "../src/proactive/types";
-import { UNTRUSTED_GUIDANCE } from "../src/untrusted-content";
 import { runAsTenant } from "../src/tenant/context";
+import { UNTRUSTED_GUIDANCE } from "../src/untrusted-content";
 import { createWorkQueue } from "../src/work/queue";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import {
@@ -231,15 +233,13 @@ beforeAll(async () => {
       },
       { id: tasker, name: "Task Bot", type: "built_in", configuration: {} },
     ]);
-    await database
-      .insert(channels)
-      .values(
-        botIds.map((bot) => ({
-          id: channelOf(bot),
-          name: bot,
-          description: "",
-        })),
-      );
+    await database.insert(channels).values(
+      botIds.map((bot) => ({
+        id: channelOf(bot),
+        name: bot,
+        description: "",
+      })),
+    );
   });
   await fixtures.install();
 });
@@ -578,22 +578,11 @@ const runner: RunnerLike = {
 };
 
 function deployment(pluginStore: ReturnType<typeof pluginStoreFor>) {
-  // M3: as index.ts wires it until the plugins session brings upstream's `ownCredential`,
-  // `labelledRead` and `ownConnections`: a server is the person's own where they hold a connection to
-  // it, and a tool reads where it is recorded as a read and not destructive.
+  // M3: as index.ts wires it (`checkInCatalogue`) until the plugins session brings upstream's
+  // `ownCredential`, `labelledRead` and `ownConnections`: a server is the person's own where they hold
+  // a connection to it, and a tool reads where it is recorded as a read and not destructive.
   const scope = createCheckInScope({
-    catalogue: {
-      listServers: async () =>
-        (await pluginStore.listServers()).map((server) => ({
-          id: server.id,
-          title: server.title,
-          ownCredential: true,
-          tools: server.tools.map((tool) => ({
-            ref: tool.ref,
-            labelledRead: tool.effect === "read" && !tool.destructive,
-          })),
-        })),
-    },
+    catalogue: checkInCatalogue(pluginStore),
     ownConnections: async (userId) =>
       new Set(
         [
@@ -834,30 +823,11 @@ describe("a check-in reads what the person connected, through the tools that say
     );
     expect(asked).toEqual([]);
 
-    // Reached any other way, the dispatcher refuses a check-in's call there too, and says so.
-    await expect(
-      asOwner(() =>
-        plugins.callTool({
-          ref: ref(NOTES, notionDigest),
-          args: {},
-          botId: unconnected,
-          actorId: owner,
-          initiator: proactiveInitiator(`direct-${suite}`),
-        }),
-      ),
-    ).rejects.toBeInstanceOf(PluginRefusedError);
-    expect(vendorCalls).toEqual([]);
-    const [refusal] = await database
-      .select({ payload: auditEvents.payload })
-      .from(auditEvents)
-      .where(
-        and(
-          eq(auditEvents.eventType, "mcp.call_rejected"),
-          eq(auditEvents.targetId, ref(NOTES, notionDigest)),
-          sql`${auditEvents.payload} ->> 'bot' = ${unconnected}`,
-        ),
-      );
-    expect(refusal?.payload).toMatchObject({ refusal: "check_in_not_a_read" });
+    // M3: upstream's "reached any other way, the dispatcher refuses a check-in's call there too" is
+    // not kept: the plugin store refuses a check-in's call by the tool's label
+    // (`check_in_not_a_read`), and whose account a server runs on is upstream's `ownCredential`,
+    // which this fork does not have. A check-in is only ever offered the person's own connections
+    // (`proactive/scope.ts`), at load, before each call and at the remote callback door.
   });
 
   test("a Bot on another framework checks in on OpenBot's own runner, as itself, with the person's tools, and its endpoint is never called", async () => {

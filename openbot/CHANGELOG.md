@@ -42,9 +42,16 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
     a conversation can pick the built-in Bot's model; Microsoft Entra sign-in, tenant-isolated.
   - Not taken (decided with the plugins session): Arcade, owner app grants, shared use and shared
     or multiple accounts, the personal edition's always-on apps, and per-viewer app state in a
-    Bot's instructions. Upstream's approval floors (delete, archive, send, share, post always ask)
-    land with the plugins session's policy work; until then Bots are not told that OpenBot asks
-    first.
+    Bot's instructions.
+  - Built-in Bots are told again that OpenBot asks before the actions its approval floors cover,
+    so they do not ask first: in Chinese, worded for this deployment's floors (deleting, sending,
+    sharing and publishing in connected apps, the matching buttons and a keyboard send on web pages),
+    with the connected-app part only for a Bot that holds an app's tool. Payments, purchases and
+    password or security changes are left to the person. Remote Bots are not told. A tool its app
+    marks destructive says on itself that OpenBot asks before it runs.
+  - A Bot that holds a browser is told how to search the public web with it (Baidu, then Bing), and
+    its computer guidance no longer forbids a search engine in that case; a check-in is given no
+    computer guidance at all.
 - **Merged upstream OpenBot up to `6fb38c8b`** (#784; `UPSTREAM.md` records what was taken and
   what was not). What a deployment notices:
   - **Before upgrading.** Migrations `0146_mcp_tools_unclassified` (shared with the plugin work) and

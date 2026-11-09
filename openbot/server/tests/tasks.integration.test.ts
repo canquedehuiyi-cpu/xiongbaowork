@@ -7,6 +7,7 @@ import {
   type Message,
   type RunAgentInput,
 } from "@ag-ui/client";
+import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 import { createTurnRunner, type RunnerLike } from "@openbot/toolkit/run-turn";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { Hono } from "hono";
@@ -27,6 +28,7 @@ import { createApprovalRoutes } from "../src/approvals/routes";
 import { createApprovalService } from "../src/approvals/service";
 import { createApprovalStore } from "../src/approvals/store";
 import { currentApprovalContext } from "../src/approvals/types";
+import { PERSON_INITIATOR } from "../src/audit";
 import type { AppVariables } from "../src/auth/guards";
 import { createChannelStore } from "../src/channels/routes";
 import { createThreadIdentity } from "../src/channels/thread-identity";
@@ -223,6 +225,8 @@ async function sendMessage(args: unknown, actorId: string, botId: string) {
     scope: "mail",
     args,
     continuation: currentApprovalContext(),
+    // As the plugin store marks every app call: the send floor reads app tools by this mark.
+    subject: { connector: true },
   });
   if (approval && "replay" in approval) return approval.replay;
   sent.push(args);
@@ -687,7 +691,7 @@ describe("where a task stands", () => {
   });
 
   test("a task asks before every change though Ask before making changes is off, its reads of the person's own app run freely, and in the person's own conversation the send asks as every send does", async () => {
-    const { owner, item } = await seed();
+    const { owner, botId, own, item } = await seed();
     // The deployment's default: off, and the person never turned it on.
     expect(await approvalStore.enabled(owner.id)).toBe(false);
     const toSam = {
@@ -748,9 +752,32 @@ describe("where a task stands", () => {
       (await approvalStore.get(owner.id, waiting[0]?.id ?? "")).status,
     ).toBe("pending");
 
-    // M3: waits for the approvals/policy.ts floors (plugins session). The rest of this case, "the same
-    // send in the person's own conversation asks too, on the safety policy's floor", is dropped until
-    // then.
+    // The same send in the person's own conversation with the Bot asks too, as every send to other
+    // people does whatever the switch says: on the send floor (M3: the fork's `outbound_send`, where
+    // upstream says `safety`), not as the task's.
+    const asked = await runTurn({
+      ownerUserId: owner.id,
+      routineId: `${prefix}-own-${randomUUID()}`,
+      agentId: botId,
+      threadId: own.threadId,
+      instruction: "Reply to Sam.",
+      userMessage: { id: randomUUID(), role: "user", content: "Reply to Sam." },
+      initiator: PERSON_INITIATOR,
+    }).catch((error: unknown) => error);
+    expect(asked).toBeInstanceOf(HeadlessToolSuspension);
+    expect(sent.length).toBe(sentBefore);
+    const pending = await database
+      .select()
+      .from(approvalRequests)
+      .where(
+        and(
+          eq(approvalRequests.ownerUserId, owner.id),
+          eq(approvalRequests.status, "pending"),
+        ),
+      );
+    expect(
+      pending.map((request) => request.action.policy?.source).sort(),
+    ).toEqual(["outbound_send", "task"]);
   });
 
   test("with Ask before making changes on, a task's send still waits as the task's: no Always allow, and switching it off or saving an allow rule leaves it waiting", async () => {

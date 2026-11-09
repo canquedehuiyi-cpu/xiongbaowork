@@ -1,18 +1,27 @@
 import { describe, expect } from "bun:test";
 import { randomUUID } from "node:crypto";
+import { DESTRUCTIVE_TOOL_NOTE } from "@openbot/shared/bot-prompt";
+import { offersStandingRule } from "@openbot/shared/standing-rule";
 import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 import { and, eq, inArray } from "drizzle-orm";
+import { DESTRUCTIVE_TOOL_REASON } from "../src/approvals/policy";
 import { createApprovalService } from "../src/approvals/service";
 import { createApprovalStore } from "../src/approvals/store";
 import {
   type ApprovalCandidate,
   withApprovalContext,
 } from "../src/approvals/types";
+import { createAuditStore } from "../src/audit";
+import { createCredentialStore } from "../src/credentials";
 import { createDatabase } from "../src/db/client";
+import { agents, mcpServers, mcpTools, pluginGrants } from "../src/db/schema";
 import { approvalRequests } from "../src/db/schema/approvals";
 import { users } from "../src/db/schema/core";
 import { workItems } from "../src/db/schema/work";
 import { type Edition, setEdition } from "../src/edition";
+import { effectOf } from "../src/plugins/composio";
+import { createPluginStore } from "../src/plugins/store";
+import { grantedTools } from "../src/plugins/tools";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { afterAll, afterEach, beforeAll, test } from "./support/platform-frame";
 
@@ -35,7 +44,11 @@ async function person() {
   return id;
 }
 
-/** A connector call, as `plugins/plugin-store/calls.ts` puts it to the gate. */
+/**
+ * A connector call, as the plugin store's `callTool` puts it to the gate. M3: marked as coming
+ * through the plugin call path (`subject.connector`), as the store marks every app call: the fork's
+ * send, share and publish floors read app tools by that mark.
+ */
 const tool = (
   server: string,
   name: string,
@@ -52,6 +65,7 @@ const tool = (
     url: `composio://${server}`,
     effect: "write",
   },
+  subject: { connector: true },
 });
 
 /** A browser click, as `computer/gateway.ts` puts it to the gate: the control and its page. */
@@ -102,8 +116,160 @@ async function gate(
   return request;
 }
 
-// M3: waits for the approvals/policy.ts floors (plugins session). The categories that always ask
-// (money, buying, deleting, sending, sharing, publishing) and their cases are dropped until then.
+/*
+ * M3: money and buying are handed to the person as upstream has them (`source: "safety"`). The
+ * categories that ask are the fork's once-only floors, each filed under its own source and offering
+ * "allow once" only: deleting (`destructive_tool`), sending (`outbound_send`), sharing
+ * (`share_access`) and publishing (`publish_post`). The fork reads its own send floor first
+ * (`onceOnlyFloor`), so a post or a share it already took for a send is filed as a send; either
+ * way it asks, once.
+ */
+const SOURCE_OF: Record<string, string> = {
+  money: "safety",
+  buying: "safety",
+  deleting: "destructive_tool",
+  sending: "outbound_send",
+  sharing: "share_access",
+  publishing: "publish_post",
+};
+const ONCE_ONLY = [
+  "destructive_tool",
+  "outbound_send",
+  "share_access",
+  "publish_post",
+];
+
+const CONSEQUENTIAL = {
+  money: {
+    behaviour: "hand_off",
+    cases: [
+      tool("composio-stripe", "STRIPE_CREATE_TRANSFER", {
+        amount: 5000,
+        currency: "usd",
+        destination: "acct_1",
+      }),
+      tool("composio-stripe", "STRIPE_CREATE_PAYOUT", {
+        amount: 5000,
+        currency: "usd",
+      }),
+      click(
+        "https://secure.chase.com/web/auth/dashboard",
+        "button",
+        "Transfer",
+      ),
+      click("https://venmo.com/pay", "button", "Send $20"),
+      // Paying an invoice or an order says so in the tool's name, and nowhere in its arguments.
+      tool("composio-stripe", "STRIPE_PAY_INVOICE", { invoice: "in_1" }),
+      tool("composio-square", "SQUARE_PAY_ORDER", {
+        order_id: "ord_1",
+        idempotency_key: "k1",
+      }),
+    ],
+  },
+  buying: {
+    behaviour: "hand_off",
+    cases: [
+      click(
+        "https://www.amazon.com/gp/buy/spc/handlers/display.html",
+        "button",
+        "Place your order",
+      ),
+      click("https://www.amazon.com/dp/B0EXAMPLE", "button", "Buy Now"),
+      tool("composio-shopify", "SHOPIFY_CREATE_ORDER", {
+        line_items: [{ variant_id: 1, quantity: 1 }],
+      }),
+    ],
+  },
+  deleting: {
+    behaviour: "ask",
+    cases: [
+      tool("composio-googledrive", "GOOGLEDRIVE_DELETE_FILE", {
+        file_id: "1abc",
+      }),
+      tool("composio-github", "GITHUB_DELETE_A_REPOSITORY", {
+        owner: "me",
+        repo: "notes",
+      }),
+      // HubSpot's delete is called archive.
+      tool("composio-hubspot", "HUBSPOT_ARCHIVE_CONTACT", { contact_id: "51" }),
+      // Gmail's archive, as a Gmail MCP server names it: the mail leaves the inbox.
+      tool("gmail-mcp", "gmail_archive", { message_id: "18c" }),
+      // Named like nothing, from an app that marks it destructive (MCP's `destructiveHint`).
+      {
+        ...tool("acme-mcp", "reset_workspace", { workspace: "w1" }),
+        destructive: true,
+      },
+      click("https://mail.google.com/mail/u/0/#inbox", "button", "Delete"),
+      click(
+        "https://drive.google.com/drive/my-drive",
+        "menuitem",
+        "Move to trash",
+      ),
+    ],
+  },
+  sending: {
+    behaviour: "ask",
+    cases: [
+      click(
+        "https://mail.google.com/mail/u/0/#inbox?compose=new",
+        "button",
+        "Send ‪(⌘Enter)‬",
+      ),
+      tool("composio-gmail", "GMAIL_SEND_EMAIL", {
+        recipient_email: "sam@example.com",
+        subject: "Friday",
+        body: "Friday works.",
+      }),
+      // An event with attendees sends each of them an invitation.
+      tool("composio-googlecalendar", "GOOGLECALENDAR_CREATE_EVENT", {
+        summary: "Spec review",
+        start_datetime: "2026-11-06T10:00",
+        attendees: ["sam@example.com"],
+      }),
+      // The same invitation through Arcade's Google Calendar, Composio's Outlook and Arcade's
+      // Teams, which name their attendees differently.
+      tool("arcade-GoogleCalendar", "CreateEvent", {
+        summary: "Spec review",
+        start_datetime: "2026-11-06T10:00:00",
+        end_datetime: "2026-11-06T10:30:00",
+        attendee_emails: ["sam@example.com"],
+      }),
+      tool("composio-outlook", "OUTLOOK_CALENDAR_CREATE_EVENT", {
+        subject: "Spec review",
+        start_datetime: "2026-11-06T10:00:00",
+        end_datetime: "2026-11-06T10:30:00",
+        attendees_info: [{ email: "sam@example.com", type: "required" }],
+      }),
+      tool("arcade-MicrosoftTeams", "CreateMeeting", {
+        subject: "Spec review",
+        start_date_time: "2026-11-06T10:00:00",
+        attendee_emails: ["sam@example.com"],
+      }),
+    ],
+  },
+  sharing: {
+    behaviour: "ask",
+    cases: [
+      tool("composio-googledrive", "GOOGLEDRIVE_ADD_FILE_SHARING_PREFERENCE", {
+        file_id: "1abc",
+        role: "writer",
+        type: "user",
+        email_address: "sam@example.com",
+      }),
+      click("https://drive.google.com/drive/my-drive", "button", "Share"),
+    ],
+  },
+  publishing: {
+    behaviour: "ask",
+    cases: [
+      click("https://x.com/compose/post", "button", "Post"),
+      click("https://medium.com/new-story", "button", "Publish"),
+      tool("composio-linkedin", "LINKEDIN_CREATE_LINKED_IN_POST", {
+        commentary: "Hello",
+      }),
+    ],
+  },
+} as const;
 
 const ORDINARY = {
   "drafting an email": tool("composio-gmail", "GMAIL_CREATE_EMAIL_DRAFT", {
@@ -212,9 +378,62 @@ describe.each(EDITIONS)("the %s edition", (edition) => {
     owner = await person();
   });
 
-  // M3: waits for the approvals/policy.ts floors (plugins session). "<category> asks, whether by an app or a click, and
-  // offers no Always allow", "an archive is answered with Allow once or Deny" and "Allow once lets the Bot
-  // delete, send, share or publish that one time".
+  for (const [category, { behaviour, cases }] of Object.entries(
+    CONSEQUENTIAL,
+  )) {
+    test(`${category} asks, whether by an app or a click, and offers no Always allow`, async () => {
+      setEdition(edition);
+      expect(await store.enabled(owner)).toBe(false);
+      for (const action of cases) {
+        const request = await gate(owner, action);
+        const policy = request?.action.policy;
+        expect({
+          action: action.toolRef,
+          target: action.target,
+          behaviour: policy?.behaviour,
+          once:
+            behaviour === "hand_off"
+              ? policy?.source === "safety"
+              : ONCE_ONLY.includes(policy?.source ?? ""),
+        }).toMatchObject({ behaviour, once: true });
+        expect(offersStandingRule(request?.action ?? {})).toBeFalse();
+        await expect(
+          service.decide(owner, request?.id ?? "", "allow_always"),
+        ).rejects.toThrow();
+      }
+    });
+  }
+
+  test("an archive is answered with Allow once or Deny, each that one time", async () => {
+    setEdition(edition);
+    const archive = tool("composio-hubspot", "HUBSPOT_ARCHIVE_CONTACT", {
+      contact_id: "51",
+    });
+    const allowed = await gate(owner, archive);
+    expect(allowed?.action.policy).toMatchObject({
+      behaviour: "ask",
+      source: SOURCE_OF.deleting,
+      reason: DESTRUCTIVE_TOOL_REASON,
+    });
+    expect(
+      (await service.decide(owner, allowed?.id ?? "", "allow_once")).status,
+    ).toBe("approved");
+    const denied = await gate(owner, archive);
+    expect((await service.decide(owner, denied?.id ?? "", "deny")).status).toBe(
+      "denied",
+    );
+  });
+
+  test("Allow once lets the Bot delete, send, share or publish that one time", async () => {
+    setEdition(edition);
+    const request = await gate(owner, CONSEQUENTIAL.deleting.cases[0]);
+    const decided = await service.decide(
+      owner,
+      request?.id ?? "",
+      "allow_once",
+    );
+    expect(decided.status).toBe("approved");
+  });
 
   for (const [name, action] of Object.entries(ORDINARY)) {
     test(`${name} runs without asking`, async () => {
@@ -279,7 +498,10 @@ async function outcomes(
     const policy = request?.action.policy;
     seen[name] = policy
       ? {
-          category: CATEGORY_OF[policy.reason] ?? policy.reason,
+          category:
+            CATEGORY_OF[policy.source] ??
+            CATEGORY_OF[policy.reason] ??
+            policy.reason,
           behaviour: policy.behaviour as "ask" | "hand_off",
         }
       : { category: null };
@@ -290,12 +512,13 @@ async function outcomes(
   return { seen, wanted };
 }
 
+/** M3: a once-only floor by the fork's source; a hand-off by its reason, as upstream has it. */
 const CATEGORY_OF: Record<string, string> = {
   "Paying, purchasing or moving money is always done by the person.": "money",
-  "Deleting something always asks you first.": "deleting",
-  "Sending something to other people always asks you first.": "sending",
-  "Sharing something with other people always asks you first.": "sharing",
-  "Posting or publishing something always asks you first.": "publishing",
+  destructive_tool: "deleting",
+  outbound_send: "sending",
+  share_access: "sharing",
+  publish_post: "publishing",
 };
 
 const nothing: Expected = { category: null };
@@ -305,31 +528,6 @@ const nothing: Expected = { category: null };
  * the others the verb is the action ("mark", "bookmark", "like"), with the word only its object.
  */
 const OUTSIDE = {
-  "updating a Stripe plan with an HTTP POST": [
-    tool("composio-stripe", "STRIPE_POST_V1_PLANS_OVERVIEW", {
-      plan: "plan_1",
-      nickname: "Pro",
-    }),
-    nothing,
-  ],
-  "a Stripe POST to a setup intent": [
-    tool("composio-stripe", "STRIPE_POST_SETUP_INTENTS_INTENT", {
-      intent: "seti_1",
-    }),
-    nothing,
-  ],
-  "a Salesforce composite POST": [
-    tool("composio-salesforce", "SALESFORCE_POST_COMPOSITE_SOBJECTS", {
-      records: [{ Name: "Acme" }],
-    }),
-    nothing,
-  ],
-  "a Salesforce record created via POST": [
-    tool("composio-salesforce", "SALESFORCE_CREATE_CAMPAIGN_RECORD_VIA_POST", {
-      Name: "Spring",
-    }),
-    nothing,
-  ],
   "marking a comment as spam": [
     tool("composio-shopify", "SHOPIFY_MARK_COMMENT_AS_SPAM", {
       comment_id: 1,
@@ -346,30 +544,9 @@ const OUTSIDE = {
     }),
     nothing,
   ],
-  "liking a post": [
-    tool("composio-twitter", "TWITTER_USER_LIKE_POST", { tweet_id: "1" }),
-    nothing,
-  ],
   "liking a tweet": [tool("arcade-X", "LikeTweet", { tweet_id: "1" }), nothing],
-  "a reaction to a comment": [
-    tool("composio-linear", "LINEAR_CREATE_COMMENT_REACTION", {
-      comment_id: "c1",
-      emoji: "+1",
-    }),
-    nothing,
-  ],
-  "hiding replies": [
-    tool("composio-twitter", "TWITTER_HIDE_REPLIES", { tweet_id: "1" }),
-    nothing,
-  ],
   "a draft of a post": [
     tool("composio-buffer", "BUFFER_CREATE_POST_DRAFT", { text: "Soon" }),
-    nothing,
-  ],
-  "Gmail's send-as alias settings": [
-    tool("composio-gmail", "GMAIL_UPDATE_SEND_AS", {
-      send_as_email: "me@example.com",
-    }),
     nothing,
   ],
   "cancelling a scheduled message": [
@@ -380,7 +557,132 @@ const OUTSIDE = {
   ],
 } as const;
 
-// M3: waits for the approvals/policy.ts floors (plugins session). MISSED (scheduled sends, Comment/Reply, payroll, paid plans).
+/*
+ * M3: named with a word a category uses, outside it as upstream reads the name, and asked about here
+ * all the same. The fork's own send floor (`sendsByName` in approvals/policy.ts, read before the
+ * floors ported from upstream so that what it asked about before still asks) takes a POST, a like,
+ * a reaction, hiding replies and Gmail's send-as for a send. Asking once more than upstream does is
+ * the fork's choice, not a gap; these pin it so a change to it is a decision.
+ */
+const FORK_SENDS = {
+  "updating a Stripe plan with an HTTP POST": [
+    tool("composio-stripe", "STRIPE_POST_V1_PLANS_OVERVIEW", {
+      plan: "plan_1",
+      nickname: "Pro",
+    }),
+    { category: "sending" },
+  ],
+  "a Stripe POST to a setup intent": [
+    tool("composio-stripe", "STRIPE_POST_SETUP_INTENTS_INTENT", {
+      intent: "seti_1",
+    }),
+    { category: "sending" },
+  ],
+  "a Salesforce composite POST": [
+    tool("composio-salesforce", "SALESFORCE_POST_COMPOSITE_SOBJECTS", {
+      records: [{ Name: "Acme" }],
+    }),
+    { category: "sending" },
+  ],
+  "a Salesforce record created via POST": [
+    tool("composio-salesforce", "SALESFORCE_CREATE_CAMPAIGN_RECORD_VIA_POST", {
+      Name: "Spring",
+    }),
+    { category: "sending" },
+  ],
+  "liking a post": [
+    tool("composio-twitter", "TWITTER_USER_LIKE_POST", { tweet_id: "1" }),
+    { category: "sending" },
+  ],
+  "a reaction to a comment": [
+    tool("composio-linear", "LINEAR_CREATE_COMMENT_REACTION", {
+      comment_id: "c1",
+      emoji: "+1",
+    }),
+    { category: "sending" },
+  ],
+  "hiding replies": [
+    tool("composio-twitter", "TWITTER_HIDE_REPLIES", { tweet_id: "1" }),
+    { category: "sending" },
+  ],
+  "Gmail's send-as alias settings": [
+    tool("composio-gmail", "GMAIL_UPDATE_SEND_AS", {
+      send_as_email: "me@example.com",
+    }),
+    { category: "sending" },
+  ],
+} as const;
+
+/** Inside a category, and missed: each asks as its category does. */
+const MISSED = {
+  "a Slack message scheduled for later": [
+    tool("composio-slack", "SLACK_SCHEDULE_MESSAGE", {
+      channel: "C1",
+      text: "Standup moved",
+      post_at: 1793900000,
+    }),
+    { category: "sending" },
+  ],
+  "a scheduled message through Arcade": [
+    tool("arcade-Slack", "CreateScheduledMessage", {
+      channel_name: "general",
+      message: "Standup moved",
+      send_at: "2026-11-06T09:00:00",
+    }),
+    { category: "sending" },
+  ],
+  "a Mailchimp campaign scheduled": [
+    tool("composio-mailchimp", "MAILCHIMP_SCHEDULE_CAMPAIGN", {
+      campaign_id: "c1",
+      schedule_time: "2026-11-06T09:00:00Z",
+    }),
+    { category: "sending" },
+  ],
+  "a Comment button": [
+    click("https://github.com/acme/notes/issues/7", "button", "Comment"),
+    { category: "sending" },
+  ],
+  "a Reply button": [
+    click("https://x.com/someone/status/1", "button", "Reply"),
+    { category: "sending" },
+  ],
+  "a payroll submitted": [
+    tool("composio-deel", "DEEL_SUBMIT_ON_DEMAND_PAYROLL", {
+      payroll_id: "p1",
+    }),
+    { category: "money", behaviour: "hand_off" },
+  ],
+  "a payroll run": [
+    tool("composio-gusto", "GUSTO_SUBMIT_PAYROLL", {
+      company_id: "co1",
+      payroll_id: "p1",
+    }),
+    { category: "money", behaviour: "hand_off" },
+  ],
+  "an Upgrade button": [
+    click("https://app.example.com/settings/workspace", "button", "Upgrade"),
+    { category: "money", behaviour: "hand_off" },
+  ],
+  "a Subscribe button on a plans page": [
+    click("https://www.nytimes.com/subscription", "button", "Subscribe"),
+    { category: "money", behaviour: "hand_off" },
+  ],
+  "a Subscribe button with a price": [
+    click(
+      "https://news.example.com/article/1",
+      "button",
+      "Subscribe for $4/month",
+    ),
+    { category: "money", behaviour: "hand_off" },
+  ],
+  "a paid plan changed by an app": [
+    tool("composio-shopify", "SHOPIFY_CREATE_APP_SUBSCRIPTION", {
+      name: "Pro",
+      price: 29,
+    }),
+    { category: "money", behaviour: "hand_off" },
+  ],
+} as const;
 
 /** Free, so outside buying: a hand-off would leave the Bot unable to do it at all. */
 const FREE = {
@@ -396,7 +698,96 @@ const FREE = {
   ],
 } as const;
 
-// M3: waits for the approvals/policy.ts floors (plugins session). REMOVING and ARCHIVING.
+/** Remove is deleting, unless it takes somebody's access away, which is sharing. */
+const REMOVING = {
+  "removing an attachment": [
+    tool("arcade-Linear", "RemoveAttachment", { attachment_id: "a1" }),
+    { category: "deleting" },
+  ],
+  "removing a member from a project": [
+    tool("composio-asana", "ASANA_REMOVE_MEMBERS_FOR_PROJECT", {
+      project_gid: "p1",
+      members: "u1",
+    }),
+    { category: "deleting" },
+  ],
+  // M3: the fork reads its delete floor before the share floor (`onceOnlyFloor`), so taking
+  // somebody's access away by removing them asks as deleting: once, either way.
+  "removing a collaborator": [
+    tool("composio-github", "GITHUB_REMOVE_A_REPOSITORY_COLLABORATOR", {
+      owner: "me",
+      repo: "notes",
+      username: "sam",
+    }),
+    { category: "deleting" },
+  ],
+  "a Remove button": [
+    click(
+      "https://mail.google.com/mail/u/0/#settings/filters",
+      "button",
+      "Remove",
+    ),
+    { category: "deleting" },
+  ],
+  "a Yes, remove button": [
+    click("https://app.example.com/team", "button", "Yes, remove"),
+    { category: "deleting" },
+  ],
+  "a Remove permanently button": [
+    click("https://app.example.com/files", "button", "Remove permanently"),
+    { category: "deleting" },
+  ],
+  "a Remove filter button": [
+    click("https://shop.example.com/search?q=lamp", "button", "Remove filter"),
+    nothing,
+  ],
+} as const;
+
+/** Archive is deleting as the action of a tool's name, its first verb, and nowhere else. */
+const ARCHIVING = {
+  "archiving a HubSpot contact": [
+    tool("composio-hubspot", "HUBSPOT_ARCHIVE_CONTACT", { contact_id: "51" }),
+    { category: "deleting" },
+  ],
+  "archiving a batch of HubSpot records": [
+    tool("composio-hubspot", "HUBSPOT_ARCHIVE_BATCH_OF_FEEDBACK_SUBMISSIONS", {
+      inputs: [{ id: "1" }],
+    }),
+    { category: "deleting" },
+  ],
+  "archiving a Slack conversation": [
+    tool("composio-slack", "SLACK_ARCHIVE_CONVERSATION", { channel: "C1" }),
+    { category: "deleting" },
+  ],
+  "archiving mail through a Gmail MCP server": [
+    tool("gmail-mcp", "gmail_archive", { message_id: "18c" }),
+    { category: "deleting" },
+  ],
+  "archiving mail named with a hyphen": [
+    tool("gmail-mcp", "archive-email", { id: "18c" }),
+    { category: "deleting" },
+  ],
+  "listing archived emails": [
+    tool("gmail-mcp", "list_archived_emails", { max_results: 10 }),
+    nothing,
+  ],
+  "reading archive settings": [
+    tool("gmail-mcp", "get_archive_settings", { account: "me" }),
+    nothing,
+  ],
+  "unarchiving a Slack channel": [
+    tool("composio-slack", "SLACK_UNARCHIVE_CHANNEL", { channel: "C1" }),
+    nothing,
+  ],
+  "downloading a repository archive": [
+    tool("composio-github", "GITHUB_DOWNLOAD_A_REPOSITORY_ARCHIVE_ZIP", {
+      owner: "me",
+      repo: "notes",
+      ref: "main",
+    }),
+    nothing,
+  ],
+} as const;
 
 describe.each(EDITIONS)("named words in the %s edition", (edition) => {
   let owner = "";
@@ -410,7 +801,17 @@ describe.each(EDITIONS)("named words in the %s edition", (edition) => {
     expect(seen).toEqual(wanted);
   });
 
-  // M3: waits for the approvals/policy.ts floors (plugins session). "a scheduled send, a Comment or Reply button, ...".
+  test("M3: the fork's own send floor asks about a POST, a like, a reaction, hidden replies and send-as", async () => {
+    setEdition(edition);
+    const { seen, wanted } = await outcomes(owner, FORK_SENDS);
+    expect(seen).toEqual(wanted);
+  });
+
+  test("a scheduled send, a Comment or Reply button, a payroll run and a paid plan ask as their category", async () => {
+    setEdition(edition);
+    const { seen, wanted } = await outcomes(owner, MISSED);
+    expect(seen).toEqual(wanted);
+  });
 
   test("a free subscription and a payroll file are not handed off", async () => {
     setEdition(edition);
@@ -418,9 +819,204 @@ describe.each(EDITIONS)("named words in the %s edition", (edition) => {
     expect(seen).toEqual(wanted);
   });
 
-  // M3: waits for the approvals/policy.ts floors (plugins session). "removing asks as deleting, ..." and "archiving asks
-  // as deleting; ...".
+  test("removing asks as deleting, taking access away included", async () => {
+    setEdition(edition);
+    const { seen, wanted } = await outcomes(owner, REMOVING);
+    expect(seen).toEqual(wanted);
+  });
+
+  test("archiving asks as deleting; listing archived mail, archive settings and unarchiving don't", async () => {
+    setEdition(edition);
+    const { seen, wanted } = await outcomes(owner, ARCHIVING);
+    expect(seen).toEqual(wanted);
+  });
 });
 
-// M3: waits for the approvals/policy.ts floors (plugins session). "a tool its app marks destructive, called through the
-// app" (always asks, DESTRUCTIVE_TOOL_NOTE in the offered description, either broker).
+/*
+ * What the app says about a tool, through the real app call: the plugin store reads the
+ * `destructive` its listing recorded and puts it to the gate. Only the vendor is a seam.
+ */
+describe("a tool its app marks destructive, called through the app", () => {
+  const APP = `${prefix}-workspace`;
+  const BOT = `${prefix}-app-bot`;
+  const vendorCalls: string[] = [];
+  const plugins = createPluginStore({
+    database,
+    auditStore: createAuditStore(database),
+    credentials: createCredentialStore(database),
+    encryptionKey: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+    policy: () => ({ mode: "enforce", allow: ["true"], deny: [] }),
+    approvalGate: (candidate) => service.gate(candidate),
+    callVendor: async (_connection, toolName) => {
+      vendorCalls.push(toolName);
+      return { text: "done", isError: false };
+    },
+  });
+  let owner = "";
+
+  beforeAll(async () => {
+    owner = await person();
+    await database.insert(mcpServers).values({
+      id: APP,
+      title: "Acme Workspace",
+      vendor: "Acme",
+      url: "https://workspace.example.test/mcp",
+      provenance: "custom",
+    });
+    // As the listing records them: `destructiveHint: true` on one, nothing said about the other.
+    await database.insert(mcpTools).values([
+      {
+        serverId: APP,
+        name: "reset_workspace",
+        inputSchema: {},
+        effect: "write",
+        destructive: true,
+      },
+      {
+        serverId: APP,
+        name: "rename_workspace",
+        inputSchema: {},
+      },
+    ]);
+    await database.insert(agents).values({
+      id: BOT,
+      name: "Workspace",
+      type: "built_in",
+      configuration: {},
+    });
+    /*
+     * As Composio's own listing records an action, from its labels, through the same mapping a
+     * refresh writes with. M3: Arcade is not adopted here, so Composio is the one broker.
+     */
+    await database.insert(mcpTools).values(
+      [
+        ["composio_unlabelled", effectOf(["openWorldHint"])],
+        ["composio_labelled", effectOf(["destructiveHint"])],
+      ].map(([name, said]) => ({
+        serverId: APP,
+        name: name as string,
+        inputSchema: {},
+        ...(said as ReturnType<typeof effectOf>),
+      })),
+    );
+    await database
+      .insert(pluginGrants)
+      .values(
+        [
+          "reset_workspace",
+          "rename_workspace",
+          ...BROKERED.flatMap(({ unsaid, flagged }) => [unsaid, flagged]),
+        ].map((name) => ({ kind: "mcp", ref: `${APP}/${name}`, agentId: BOT })),
+      );
+  });
+  afterAll(async () => {
+    await database.delete(mcpServers).where(eq(mcpServers.id, APP));
+    await database.delete(agents).where(eq(agents.id, BOT));
+  });
+
+  const call = (name: string) => {
+    const toolCallId = randomUUID();
+    return withApprovalContext(
+      {
+        runId: randomUUID(),
+        threadId: `${prefix}-app-${toolCallId}`,
+        toolCallId,
+        toolName: `mcp__${APP}__${name}`,
+        args: { workspace: "w1" },
+        messages: [{ id: "u1", role: "user", content: "Tidy the workspace." }],
+        state: {},
+        context: [],
+        forwardedProps: {},
+      },
+      () =>
+        plugins.callTool({
+          ref: `${APP}/${name}`,
+          args: { workspace: "w1" },
+          botId: BOT,
+          actorId: owner,
+        }),
+    ).then(
+      () => ({ toolCallId, asked: false }),
+      (error: unknown) => {
+        if (!(error instanceof HeadlessToolSuspension)) throw error;
+        return { toolCallId, asked: true };
+      },
+    );
+  };
+
+  test("it asks with Allow once or Deny, whatever it is called; an unmarked tool of the same app runs", async () => {
+    setEdition("personal");
+    expect(await store.enabled(owner)).toBe(false);
+
+    const reset = await call("reset_workspace");
+    expect(reset.asked).toBeTrue();
+    const [request] = (await store.list(owner)).filter(
+      (row) => row.action.toolCallId === reset.toolCallId,
+    );
+    expect(request?.action.policy).toEqual({
+      behaviour: "ask",
+      source: "destructive_tool",
+      reason: DESTRUCTIVE_TOOL_REASON,
+    });
+    expect(offersStandingRule(request?.action ?? {})).toBeFalse();
+    expect(vendorCalls).toEqual([]);
+
+    expect((await call("rename_workspace")).asked).toBeFalse();
+    expect(vendorCalls).toEqual(["rename_workspace"]);
+  });
+
+  test("a tool the broker flags destructive asks, and one it said nothing about runs", async () => {
+    setEdition("personal");
+    for (const { broker, unsaid, flagged } of BROKERED) {
+      // Said nothing: an ordinary change, which runs with Ask before making changes off.
+      expect({ broker, asked: (await call(unsaid)).asked }).toEqual({
+        broker,
+        asked: false,
+      });
+      expect(vendorCalls).toContain(unsaid);
+      // Said it destroys something: always asks.
+      const destroys = await call(flagged);
+      expect({ broker, asked: destroys.asked }).toEqual({
+        broker,
+        asked: true,
+      });
+      const [request] = (await store.list(owner)).filter(
+        (row) => row.action.toolCallId === destroys.toolCallId,
+      );
+      expect(request?.action.policy).toMatchObject({
+        behaviour: "ask",
+        source: "destructive_tool",
+      });
+      expect(vendorCalls).not.toContain(flagged);
+    }
+  });
+
+  test("the Bot is offered it with a description that says OpenBot asks, so it doesn't ask first", async () => {
+    const offered = await grantedTools({
+      store: plugins,
+      botId: BOT,
+      actorId: owner,
+    });
+    const described = Object.fromEntries(
+      offered.map((tool) => [tool.ref, tool.description]),
+    );
+    expect(described[`${APP}/reset_workspace`]).toEndWith(
+      DESTRUCTIVE_TOOL_NOTE,
+    );
+    expect(described[`${APP}/rename_workspace`]).toBe("");
+    // Flagged destructive carries the note, and silence doesn't.
+    for (const { unsaid, flagged } of BROKERED) {
+      expect(described[`${APP}/${flagged}`]).toEndWith(DESTRUCTIVE_TOOL_NOTE);
+      expect(described[`${APP}/${unsaid}`]).toBe("");
+    }
+  });
+});
+
+/** One tool each broker said nothing about, and one it flagged destructive. M3: Composio only. */
+const BROKERED = [
+  {
+    broker: "composio",
+    unsaid: "composio_unlabelled",
+    flagged: "composio_labelled",
+  },
+] as const;

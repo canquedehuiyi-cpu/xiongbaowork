@@ -1,5 +1,5 @@
-import { queryOptions } from "@tanstack/react-query";
 import { offersStandingRule as offersStandingRuleFor } from "@openbot/shared/standing-rule";
+import { queryOptions } from "@tanstack/react-query";
 import { client } from "@/lib/client";
 export type ApprovalDecision =
   | "allow_once"
@@ -221,7 +221,9 @@ export const TOOL_MODE_LABELS: Record<EmployeeToolMode, string> = {
   disabled: "禁用",
 };
 /** The rule behaviour each mode is saved as, read back the same way. */
-export const MODE_OF_BEHAVIOUR: Partial<Record<RuleBehaviour, EmployeeToolMode>> = {
+export const MODE_OF_BEHAVIOUR: Partial<
+  Record<RuleBehaviour, EmployeeToolMode>
+> = {
   allow: "direct",
   ask: "ask",
   deny: "disabled",

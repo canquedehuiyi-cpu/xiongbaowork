@@ -127,7 +127,9 @@ export default function ApprovalsScreen() {
              * one the safety policy raised. 删除类、对外发送、分享与授权、公开发布底线问的动作每次都要问，存下的规则用不上，
              * 服务端也会拒绝，所以不画。Mirrors `offersStandingRule` (shared/standing-rule.ts).
              */}
-            {ONCE_ONLY_SOURCES.has(request.action?.policy?.source ?? "") ? null : (
+            {ONCE_ONLY_SOURCES.has(
+              request.action?.policy?.source ?? "",
+            ) ? null : (
               <Button
                 disabled={Boolean(busy)}
                 title="Always allow this scope"

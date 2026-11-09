@@ -702,12 +702,14 @@ afterAll(async () => {
  * ---------------------------------------------------------------------------------------------- */
 
 describe("a task works with the apps the person connected", () => {
-  // M3: waits for the approvals/policy.ts floors (plugins session). "it reads their own app without
-  // asking, asks once before a send..." needs the reviewed read list (`reviewedRead` in upstream's
-  // plugins/catalogue.ts) to let a task read the person's own app unasked, and the send floor.
-  // M3: waits for the approvals/policy.ts floors (plugins session). "in the person's own
-  // conversation a send asks once, on the send itself" needs the send floor ahead of the
-  // private-share check.
+  // M3: "it reads their own app without asking, asks once before a send..." is not restored with the
+  // policy floors: what it starts from is a task reading the person's own app unasked, which needs
+  // the plugin store to mark a reviewed read of the person's own connection (`ownConnectionRead`,
+  // from `reviewedRead` in plugins/catalogue.ts and upstream's `ownCredential`). The fork's store
+  // sets no such mark, so in a task that read asks (source `task`), as the case below pins.
+  // M3: "in the person's own conversation a send asks once, on the send itself" is not ported: the
+  // fork asks the private-share check before the send floor, so one send can show two cards (the
+  // approval guidance tells the Bot so).
   test("it asks before a tool of their own app that no reviewed list names, though the app's own server says it only reads", async () => {
     const { owner, item } = await seed();
     script = (request) =>
@@ -737,7 +739,6 @@ describe("a task works with the apps the person connected", () => {
   // M3: "it asks before a read that is not of the person's own app..." is not kept: it reads the web
   // through Exa on the deployment's own access, which is not in the fork's catalogue (Chinese web
   // search comes later).
-  // M3: waits for the approvals/policy.ts floors (plugins session). "two people's tasks whose models
-  // name a tool call alike..." needs a task to read the person's own app unasked (`reviewedRead`),
-  // or the first person's slow read never starts.
+  // M3: "two people's tasks whose models name a tool call alike..." needs a task to read the person's
+  // own app unasked (`ownConnectionRead`, as above), or the first person's slow read never starts.
 });

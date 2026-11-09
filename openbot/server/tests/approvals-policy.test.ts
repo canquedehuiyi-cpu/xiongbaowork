@@ -8,15 +8,15 @@ import {
   appEnableReason,
   DEFAULT_SENSITIVE_PATHS,
   DESTRUCTIVE_TOOL_REASON,
-  OUTBOUND_SEND_REASON,
-  PUBLISH_POST_REASON,
-  SHARE_ACCESS_REASON,
   dangerousCommand,
   decideAction,
   effectiveHostCommandPolicy,
   globMatches,
+  OUTBOUND_SEND_REASON,
+  PUBLISH_POST_REASON,
   refusedOutright,
   reviewAction,
+  SHARE_ACCESS_REASON,
   safetyRequirement,
   securityFloor,
   sensitivePath,
@@ -272,18 +272,324 @@ describe("built-in safety requirements", () => {
     ).toBeUndefined();
   });
 
-  // M3: upstream's "archive as an app tool's action deletes, and so does a tool its app marks
-  // destructive" waits for the plugins session's approvals/policy.ts floors (see approvals-ask-once).
+  test("archive as an app tool's action deletes, and so does a tool its app marks destructive", async () => {
+    const asked = (toolRef: string, over: Partial<ApprovalCandidate> = {}) =>
+      safetyRequirement(candidate({ toolRef, args: { id: "51" }, ...over }));
+    for (const toolRef of [
+      // HubSpot's delete is called archive. Seen on a Mac: "delete that HubSpot contact" ran unasked.
+      "composio-hubspot/HUBSPOT_ARCHIVE_CONTACT",
+      "composio-hubspot/HUBSPOT_ARCHIVE_BATCH_OF_FEEDBACK_SUBMISSIONS",
+      "composio-hubspot/HUBSPOT_BATCH_ARCHIVE_ASSOCIATION_LABELS",
+      "composio-slack/SLACK_ARCHIVE_CONVERSATION",
+      // Gmail's archive, as Gmail MCP servers name it, and in a broker's CamelCase.
+      "mcp/gmail/gmail_archive",
+      "mcp/gmail/archive-email",
+      "mcp/gmail/archive",
+      "arcade-Gmail/ArchiveEmail",
+      // The delete words, as before.
+      "composio-googledrive/GOOGLEDRIVE_DELETE_FILE",
+      "composio-gmail/GMAIL_MOVE_TO_TRASH",
+      "arcade-Linear/RemoveAttachment",
+    ])
+      expect({ toolRef, asked: asked(toolRef) }).toEqual({
+        toolRef,
+        asked: {
+          id: "destructive_tool",
+          reason: DESTRUCTIVE_TOOL_REASON,
+          behaviour: "ask",
+        },
+      });
+    // Archive counts only as the action, the name's first verb.
+    for (const toolRef of [
+      "mcp/gmail/list_archived_emails",
+      "mcp/gmail/get_archive_settings",
+      "composio-slack/SLACK_UNARCHIVE_CHANNEL",
+      "composio-github/GITHUB_DOWNLOAD_A_REPOSITORY_ARCHIVE_ZIP",
+      "composio-hubspot/HUBSPOT_SEARCH_ARCHIVED_CONTACTS",
+    ])
+      expect({ toolRef, asked: asked(toolRef) ?? "nothing" }).toEqual({
+        toolRef,
+        asked: "nothing",
+      });
 
-  // M3: upstream's "what a Bot types into a field is content: the field and the page say what the action is" waits for the approvals/policy.ts floors (plugins session).
+    // A name that says nothing, from an app that marks the tool destructive.
+    const destructive = candidate({
+      toolRef: "mcp/acme/reset_workspace",
+      args: { workspace: "w1" },
+      destructive: true,
+    });
+    expect(safetyRequirement(destructive)).toEqual({
+      id: "destructive_tool",
+      reason: DESTRUCTIVE_TOOL_REASON,
+      behaviour: "ask",
+    });
+    // Before any rule: an allow rule, the person's or the team's, doesn't answer it. M3: the fork
+    // files it under its delete floor, which offers "allow once" only.
+    expect(
+      await decideAction({
+        ...base,
+        candidate: destructive,
+        team: [team("allow", { toolRef: "*" })],
+        personal: [rule("allow", { toolRef: "*" })],
+      }),
+    ).toMatchObject({ behaviour: "ask", source: "destructive_tool" });
+    // The same tool unmarked is an ordinary change.
+    const { destructive: _marked, ...unmarked } = destructive;
+    expect(safetyRequirement(unmarked)).toBeUndefined();
+    // M3: upstream never asks about a read here; the fork's delete floor does when the app marks the
+    // tool destructive, because its read lists are not complete (`destructiveFloor`). Stricter.
+    expect(safetyRequirement({ ...destructive, effect: "read" })?.id).toBe(
+      "destructive_tool",
+    );
+  });
 
-  // M3: upstream's "an address that carries credential words in its query string is not a credentials page" waits for the approvals/policy.ts floors (plugins session).
+  test("what a Bot types into a field is content: the field and the page say what the action is", () => {
+    // As the computer describes a typing action: the field it types into and the page it is on.
+    const typing = (text: string, field: string, pageUrl: string) =>
+      safetyRequirement(
+        candidate({
+          toolRef: "computer_type",
+          scope: new URL(pageUrl).host,
+          args: { ref: "f1e145", text, submit: false, snapshotId: 3 },
+          target: {
+            element: { ref: "f1e145", name: field, role: "textbox" },
+            pageUrl,
+            snapshotId: 3,
+          },
+        }),
+      )?.id;
+    const crm = "http://host.docker.internal:4900/accounts/new";
+    // A new CRM account, filled in from research: its notes and source name purchase orders,
+    // a payments company, a news wire. None of it is paying.
+    expect(
+      typing(
+        "Expanded its AI agents for purchase orders, detention and dock workflows.",
+        "Notes",
+        crm,
+      ),
+    ).toBeUndefined();
+    expect(typing("Business Wire; LinkedIn", "Source", crm)).toBeUndefined();
+    expect(
+      typing("Payments platform for freight billing", "Notes", crm),
+    ).toBeUndefined();
+    // A payment field or a checkout page still goes to the person, whatever is typed.
+    expect(
+      typing(
+        "4111 1111 1111 1111",
+        "Card number",
+        "https://shop.example/account",
+      ),
+    ).toBe("payments");
+    expect(typing("1", "Quantity", "https://shop.example/checkout")).toBe(
+      "payments",
+    );
+    expect(
+      typing("hunter2", "New password", "https://mail.example/settings"),
+    ).toBe("credentials");
+  });
 
-  // M3: upstream's "a news wire is not a wire of money" waits for the approvals/policy.ts floors (plugins session).
+  test("an address that carries credential words in its query string is not a credentials page", () => {
+    // As the computer describes an action on a page: the element acted on and the page it is on.
+    const acting = (
+      toolRef: "computer_type" | "computer_click",
+      element: { name: string; role: string; type?: string },
+      pageUrl: string,
+    ) =>
+      safetyRequirement(
+        candidate({
+          toolRef,
+          scope: new URL(pageUrl).host,
+          args:
+            toolRef === "computer_type"
+              ? { ref: "e5", text: "Test Robot", snapshotId: 4 }
+              : { ref: "e5", snapshotId: 4 },
+          target: {
+            element: { ref: "e5", ...element },
+            pageUrl,
+            snapshotId: 4,
+          },
+        }),
+      )?.id;
+    // A page served from a link signed for one download, as S3 signs it: the signature's
+    // credential and session token ride in the query string of an ordinary sign-up form.
+    const presigned =
+      "https://garden-club-example.s3.us-east-2.amazonaws.com/f4/garden-signup.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=EXAMPLEKEYID%2F20261107%2Fus-east-2%2Fs3%2Faws4_request&X-Amz-Date=20261107T043445Z&X-Amz-Expires=21600&X-Amz-SignedHeaders=host&X-Amz-Security-Token=EXAMPLE-SESSION-TOKEN&X-Amz-Signature=0123456789abcdef";
+    for (const field of ["Full name", "Email", "Note"])
+      expect(
+        acting("computer_type", { name: field, role: "textbox" }, presigned),
+      ).toBeUndefined();
+    expect(
+      acting(
+        "computer_type",
+        { name: "Favourite plant", role: "combobox" },
+        presigned,
+      ),
+    ).toBeUndefined();
+    expect(
+      acting("computer_click", { name: "Sign up", role: "button" }, presigned),
+    ).toBeUndefined();
+    // A sign-in's return address, with its token in the query string or the fragment.
+    expect(
+      acting(
+        "computer_type",
+        { name: "Display name", role: "textbox" },
+        "https://app.example/welcome?code=4%2F0AY&state=xyz&access_token=ya29.a0Af#access_token=ya29.a0Af&token_type=Bearer",
+      ),
+    ).toBeUndefined();
+    expect(
+      acting(
+        "computer_type",
+        { name: "Company", role: "textbox" },
+        "https://crm.example/accounts/new?api_key=sk_live_123&credential=abc",
+      ),
+    ).toBeUndefined();
 
-  // M3: upstream's "refunds move money; writing an order note does not" waits for the approvals/policy.ts floors (plugins session).
+    // A credential field, button or page still goes to the person, on any address.
+    expect(
+      acting(
+        "computer_type",
+        { name: "New password", role: "textbox" },
+        presigned,
+      ),
+    ).toBe("credentials");
+    expect(
+      acting(
+        "computer_type",
+        { name: "PIN", role: "textbox", type: "password" },
+        presigned,
+      ),
+    ).toBe("credentials");
+    expect(
+      acting(
+        "computer_click",
+        { name: "Change password", role: "button" },
+        "https://mail.example/settings?tab=general",
+      ),
+    ).toBe("credentials");
+    expect(
+      acting(
+        "computer_type",
+        { name: "Phone number", role: "textbox" },
+        "https://accounts.example/security/2fa?step=1",
+      ),
+    ).toBe("credentials");
+    expect(
+      acting(
+        "computer_type",
+        { name: "Name", role: "textbox" },
+        "https://platform.example/settings/api-keys",
+      ),
+    ).toBe("credentials");
+    expect(
+      acting(
+        "computer_click",
+        { name: "Create", role: "button" },
+        "https://console.cloud.example/apis/credentials?project=demo",
+      ),
+    ).toBe("credentials");
+    // Only the credentials rule reads the page without its query string: a checkout reached by
+    // its query string is still paying.
+    expect(
+      acting(
+        "computer_type",
+        { name: "Quantity", role: "textbox" },
+        "https://shop.example/cart?step=checkout",
+      ),
+    ).toBe("payments");
+  });
 
-  // M3: upstream's "a field nested past the depth cap still counts by its name" waits for the approvals/policy.ts floors (plugins session).
+  test("a news wire is not a wire of money", () => {
+    const clicking = (name: string) =>
+      safetyRequirement(
+        candidate({
+          toolRef: "computer_click",
+          scope: "news.example",
+          args: { ref: "e7" },
+          target: { element: { ref: "e7", name, role: "link" } },
+        }),
+      )?.id;
+    // Press releases go out on Business Wire; following one is not paying.
+    expect(clicking("Read the release on Business Wire")).toBeUndefined();
+    expect(clicking("news wire")).toBeUndefined();
+    // Moving money by wire still goes to the person.
+    expect(clicking("Wire the deposit to the vendor")).toBe("payments");
+    expect(clicking("Send a wire")).toBe("payments");
+    expect(clicking("Start a wire transfer")).toBe("payments");
+  });
+
+  test("refunds move money; writing an order note does not", () => {
+    const shopify = (toolName: string, args: Record<string, unknown>) =>
+      safetyRequirement(
+        candidate({
+          toolRef: `composio-shopify/${toolName}`,
+          scope: "composio-shopify",
+          args,
+          target: {
+            serverId: "composio-shopify",
+            toolName,
+            url: "https://mcp.composio.dev/shopify",
+            effect: "write",
+          },
+        }),
+      )?.id;
+    // A refund moves money, whatever surrounds it in the action name.
+    expect(
+      shopify("SHOPIFY_CREATE_REFUND", {
+        id: 123,
+        refund_line_items: [{ line_item_id: 1 }],
+      }),
+    ).toBe("payments");
+    // Writing only a note on an order moves no money.
+    expect(
+      shopify("SHOPIFY_UPDATE_ORDER", { id: 123, note: "gift wrap" }),
+    ).toBeUndefined();
+    // A field left empty is not an argument sent: the billing_address the Bot did not
+    // fill in must not hand the note off as money-moving (#890).
+    expect(
+      shopify("SHOPIFY_UPDATE_ORDER", {
+        id: 123,
+        billing_address: null,
+        note: "gift wrap",
+      }),
+    ).toBeUndefined();
+    expect(
+      shopify("SHOPIFY_UPDATE_ORDER", {
+        id: 123,
+        billing_address: {},
+        note: "",
+      }),
+    ).toBeUndefined();
+  });
+
+  test("a field nested past the depth cap still counts by its name", () => {
+    // Values deeper than the cap are not read, so a field there flattens to nothing whether or not
+    // it holds anything. Its name is all the rule gets to see of it, and an unread value is not an
+    // empty one: dropping the name too let a money field through just by nesting it deep enough.
+    const sent = (args: Record<string, unknown>) =>
+      safetyRequirement(
+        candidate({
+          toolRef: "composio-shopify/SHOPIFY_GRAPHQL_MUTATION",
+          scope: "composio-shopify",
+          args,
+          target: {
+            serverId: "composio-shopify",
+            toolName: "SHOPIFY_GRAPHQL_MUTATION",
+            url: "https://mcp.composio.dev/shopify",
+            effect: "write",
+          },
+        }),
+      )?.id;
+    const nested = (leaf: Record<string, unknown>) =>
+      sent({ a: { b: { c: { d: { e: { f: leaf } } } } } });
+    expect(nested({ payment_method: { card: "tok_123" } })).toBe("payments");
+    expect(nested({ billing: [{ line: 1 }] })).toBe("payments");
+    // A list read at the cap whose entries are past it is not empty either.
+    expect(
+      sent({ a: { b: { c: { d: { e: { refund_lines: [{ id: 1 }] } } } } } }),
+    ).toBe("payments");
+    // Past the cap as well, but genuinely empty: still nothing sent.
+    expect(nested({ billing_address: {}, refund: [] })).toBeUndefined();
+  });
 });
 
 describe("the reviewer's safety classification", () => {
@@ -3626,9 +3932,9 @@ describe("upstream floors: computer tools", () => {
     const gateway = createComputerGateway({
       provider: {
         name: "test",
-        isolation: "per-bot",
-        locate: async () => "http://computer:4100",
         // M3: the gateway addresses a computer by its seat (`botSeat`), as the SEC1 cases above do.
+        isolation: "per-person",
+        locate: async () => "http://computer:4100",
         status: async (seat) => ({ botId: seat.botId, state: "ready" }),
         list: async () => [],
         stop: async () => ({ wasRunning: true }),
@@ -3640,15 +3946,22 @@ describe("upstream floors: computer tools", () => {
         seen.push(c);
         return undefined;
       },
-      fetchImpl: (async () => Response.json({ ok: true })) as typeof fetch,
+      fetchImpl: (async () =>
+        Response.json({ ok: true })) as unknown as typeof fetch,
     });
     await gateway.key(botSeat("bot"), { id: "owner" }, { key: "Meta+Enter" });
+    // M3: the fork's typing names its field (`ActionTarget`); no snapshot is stored, so the gate
+    // judges the key alone.
     await gateway.type(
       botSeat("bot"),
       { id: "owner" },
-      { text: "Friday works.", submit: true },
+      { ref: "e1", snapshotId: 1, text: "Friday works.", submit: true },
     );
-    await gateway.type(botSeat("bot"), { id: "owner" }, { text: "draft" });
+    await gateway.type(
+      botSeat("bot"),
+      { id: "owner" },
+      { ref: "e1", snapshotId: 1, text: "draft" },
+    );
     expect(seen.map((c) => c.subject?.key)).toEqual([
       "Meta+Enter",
       "Enter",

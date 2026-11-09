@@ -23,6 +23,7 @@ import type { AuditInitiator } from "../audit";
 import { REFUSAL_MARKER } from "../plugins/tools";
 import { isProactiveInitiator } from "./initiator";
 import type { CheckInReads, CheckInScope } from "./scope";
+
 // In `./initiator` so the plugin store can ask the same question without importing this module.
 export {
   isProactiveInitiator,

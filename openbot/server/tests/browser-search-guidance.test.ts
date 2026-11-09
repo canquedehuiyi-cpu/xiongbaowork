@@ -3,8 +3,8 @@ import { readFileSync } from "node:fs";
 import { LLMock } from "@copilotkit/aimock";
 import { z } from "zod";
 import {
-  COMPUTER_GUIDANCE,
-  PROVENANCE_GUIDANCE,
+  type ComputerHolding,
+  computerGuidance,
 } from "../../shared/bot-prompt";
 import { decideAction } from "../src/approvals/policy";
 import type { ApprovalCandidate, ApprovalRule } from "../src/approvals/types";
@@ -22,7 +22,6 @@ import {
   proactiveInitiator,
 } from "../src/proactive/restriction";
 import { loadTenantPackage } from "../src/tenant-package";
-import { UNTRUSTED_GUIDANCE } from "../src/untrusted-content";
 
 /**
  * 默认的中文网页搜索：员工用自己的浏览器搜百度，百度不行再搜必应（2026-11-09 用户选定的免费方案）。
@@ -76,7 +75,7 @@ describe("员工持有浏览器时的公开网页搜索引导", () => {
     expect(text).toContain("do not try to get around it");
     // 先换另一个搜索引擎（百度被拦就换必应）。
     expect(text).toContain("switch to the other search engine");
-    // 还被拦：和 COMPUTER_GUIDANCE、computer_request_help 的说明一致，请人接管，不让对方把密码或验证码打给你。
+    // 还被拦：和电脑说明（computerGuidance）、computer_request_help 的说明一致，请人接管，不让对方把密码或验证码打给你。
     expect(guidance).toContain("computer_request_help");
     expect(text).toContain(
       "never ask them to type a password or a code to you",
@@ -85,8 +84,12 @@ describe("员工持有浏览器时的公开网页搜索引导", () => {
     expect(text).not.toContain("do not ask the person to sign in");
     expect(text).not.toContain("solve it for you");
     // 现有电脑说明确实是这条规则：遇到验证码调用 computer_request_help。
-    expect(flat(COMPUTER_GUIDANCE)).toContain("a CAPTCHA");
-    expect(flat(COMPUTER_GUIDANCE)).toContain("call computer_request_help");
+    // M3: the computer guidance is a function of what the run holds (upstream v1.0.0).
+    const computer = flat(
+      computerGuidance({ search: false, browserSearch: true }),
+    );
+    expect(computer).toContain("a CAPTCHA");
+    expect(computer).toContain("call computer_request_help");
   });
 
   test("只搜公开信息，不把对话全文或私人文件内容当关键词", () => {
@@ -198,25 +201,64 @@ describe("内置员工的提示词", () => {
   const model = { provider: "openai" as const, defaultModel: "gpt-5.6-terra" };
 
   const BROWSER = ["computer_navigate", "computer_read"];
-  const configured = (computerGuidance?: string, runToolNames?: string[]) =>
-    builtInAgentConfiguration(
-      agent,
-      model,
-      "synthetic-key",
-      [],
-      computerGuidance,
-      [],
-      null,
-      undefined,
-      undefined,
-      runToolNames,
-    ).prompt as string;
+  // A fixed moment, so two prompts built a moment apart end with the same date.
+  const now = new Date("2026-11-09T08:00:00Z");
+  /*
+   * M3: the computer guidance is a function of what the run holds (upstream v1.0.0), and the run's
+   * tool names are the last of the fork's positional parameters.
+   */
+  const COMPUTER = "COMPUTER GUIDANCE HERE";
+  const holdings: ComputerHolding[] = [];
+  const guidance = (holding: ComputerHolding) => {
+    holdings.push(holding);
+    return COMPUTER;
+  };
+  const configured = (computer?: typeof guidance, runToolNames?: string[]) =>
+    (
+      builtInAgentConfiguration(
+        agent,
+        model,
+        "synthetic-key",
+        [],
+        computer,
+        [],
+        null,
+        undefined,
+        undefined,
+        undefined,
+        now,
+        undefined,
+        undefined,
+        undefined,
+        runToolNames,
+      ) as { prompt?: string }
+    ).prompt ?? "";
 
   test("这次运行持有浏览器工具：搜索引导在，且排在电脑说明之前", () => {
-    const prompt = configured("COMPUTER GUIDANCE HERE", BROWSER);
+    const prompt = configured(guidance, BROWSER);
     expect(prompt).toContain(BAIDU);
-    expect(prompt.indexOf(BAIDU)).toBeLessThan(
-      prompt.indexOf("COMPUTER GUIDANCE HERE"),
+    expect(prompt.indexOf(BAIDU)).toBeLessThan(prompt.indexOf(COMPUTER));
+  });
+
+  test("持有浏览器时，电脑说明不再说「不许用浏览器打开搜索引擎」，和搜索引导不打架", () => {
+    holdings.length = 0;
+    configured(guidance, BROWSER);
+    expect(holdings.at(-1)?.browserSearch).toBeTrue();
+    configured(guidance);
+    expect(holdings.at(-1)?.browserSearch).toBeFalse();
+    const searching = flat(
+      computerGuidance({ search: false, browserSearch: true }),
+    );
+    expect(searching).not.toContain(
+      "NEVER drive your browser to a search engine",
+    );
+    expect(searching).not.toContain(
+      "Do not open a search engine in your browser",
+    );
+    expect(searching).toContain("searching with your browser");
+    // 没有浏览器搜索引导的运行（远程 Bot、没有浏览器工具）照旧。
+    expect(flat(computerGuidance({ search: false }))).toContain(
+      "NEVER drive your browser to a search engine",
     );
   });
 
@@ -224,21 +266,35 @@ describe("内置员工的提示词", () => {
     // 纯设备模式的聊天：没有 config.computer，所以没有电脑说明，但前端注册了浏览器工具。
     expect(configured(undefined, BROWSER)).toContain(BAIDU);
     // 部署有电脑说明，但这次运行没有浏览器工具（例如后台调研、被禁用、Team Bot 的队友）。
-    expect(configured("COMPUTER GUIDANCE HERE")).not.toContain(BAIDU);
-    expect(configured("COMPUTER GUIDANCE HERE", [])).not.toContain(BAIDU);
+    expect(configured(guidance)).not.toContain(BAIDU);
+    expect(configured(guidance, [])).not.toContain(BAIDU);
     // 两个都要有：只能导航、读不了页面，不算能搜。
     expect(configured(undefined, ["computer_navigate"])).not.toContain(BAIDU);
   });
 
   test("没有浏览器工具：提示词与原来逐字一致", () => {
-    const prompt = builtInAgentConfiguration(agent, model, "synthetic-key")
-      .prompt as string;
-    expect(prompt).toBe(
-      `Be helpful.\n\n${PROVENANCE_GUIDANCE}\n\n${UNTRUSTED_GUIDANCE}`,
-    );
-    expect(configured("COMPUTER GUIDANCE HERE")).toBe(
-      `Be helpful.\n\n${PROVENANCE_GUIDANCE}\n\n${UNTRUSTED_GUIDANCE}\n\nCOMPUTER GUIDANCE HERE`,
-    );
+    // M3: the fork's prompt carries more sections than it did when this was written, so "as before"
+    // is the prompt built without the run's tool names at all.
+    const before =
+      (
+        builtInAgentConfiguration(
+          agent,
+          model,
+          "synthetic-key",
+          [],
+          guidance,
+          [],
+          null,
+          undefined,
+          undefined,
+          undefined,
+          now,
+        ) as { prompt?: string }
+      ).prompt ?? "";
+    expect(before).not.toContain(BAIDU);
+    expect(configured(guidance)).toBe(before);
+    expect(configured(guidance, [])).toBe(before);
+    expect(configured(guidance, ["computer_navigate"])).toBe(before);
   });
 
   test("holdsBrowserSearchTools 只认 computer_navigate 加 computer_read", () => {
@@ -273,7 +329,7 @@ describe("纯设备模式的聊天：员工持有浏览器工具时拿到搜索�
     const originalBase = process.env.OPENAI_BASE_URL;
     try {
       process.env.OPENAI_BASE_URL = await recorder.start();
-      recorder.onMessage(/.*/, { type: "text", content: "好的。" });
+      recorder.onMessage(/.*/, { content: "好的。" });
       const agents = await resolveRuntimeAgents(
         async () => [
           {
@@ -308,7 +364,11 @@ describe("纯设备模式的聊天：员工持有浏览器工具时拿到搜索�
         messages?: { role: string; content: unknown }[];
       };
       return JSON.stringify(
-        (body.messages ?? []).filter((message) => message.role === "system"),
+        // M3: the runtime sends the instructions as a `developer` message to an OpenAI reasoning model.
+        (body.messages ?? []).filter(
+          (message) =>
+            message.role === "system" || message.role === "developer",
+        ),
       );
     } finally {
       if (originalBase === undefined) delete process.env.OPENAI_BASE_URL;
