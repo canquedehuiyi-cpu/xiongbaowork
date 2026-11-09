@@ -452,6 +452,26 @@ describe("the MCP transport places the key on the request it sends", () => {
     expect(message).toContain("[已隐去]");
   });
 
+  test("a bearer token is scrubbed only when it is long enough to be a credential", async () => {
+    // Scrubbing a short test token would rewrite ordinary words through every result and schema.
+    const failWith = (token: string) => {
+      const { impl } = recorder(() => {
+        throw new Error(`upstream refused token ${token} for the word test`);
+      });
+      return listTools({
+        url: "https://mcp.example.com/mcp",
+        token,
+        outbound: { lookup: publicLookup, fetchImpl: impl },
+      }).catch((error: Error) => error.message);
+    };
+    const short = await failWith("test");
+    expect(short).toContain("the word test");
+    expect(short).not.toContain("[已隐去]");
+    const long = await failWith("bearer-token-0123456789");
+    expect(long).not.toContain("bearer-token-0123456789");
+    expect(long).toContain("[已隐去]");
+  });
+
   test("a vendor that answers with a redirect is not followed, so the key is not carried on", async () => {
     const { calls, impl } = recorder((url) =>
       url.startsWith("https://mcp.vendor.example/")

@@ -448,7 +448,7 @@ function dialFor(connection: Connection): {
           : undefined,
       // Always guarded: see `Connection.placement`.
       fetch: createGuardedFetch(connection.outbound ?? {}),
-      secrets: [...placed.secrets, connection.token ?? ""],
+      secrets: [...placed.secrets, ...scrubbableBearer(connection.token)],
     };
   }
   return {
@@ -460,9 +460,24 @@ function dialFor(connection: Connection): {
     fetch: connection.outbound
       ? createGuardedFetch(connection.outbound)
       : undefined,
-    secrets: connection.token ? [connection.token] : [],
+    secrets: scrubbableBearer(connection.token),
   };
 }
+
+/**
+ * A bearer or OAuth token to scrub from what leaves the transport, or none.
+ *
+ * Placed credentials are format-checked at entry (at least twelve characters of `[A-Za-z0-9_-]`),
+ * so scrubbing them can never hit ordinary text. A bearer or OAuth token is not: an administrator
+ * may have typed a short test token, and scrubbing a four-letter word would replace it all through
+ * tool results and schemas and hide every tool whose name contains it. Below eight characters a
+ * token is not a credential worth that cost, and it was never scrubbed before placed credentials
+ * brought scrubbing in.
+ */
+function scrubbableBearer(token: string | undefined): string[] {
+  return token && token.length >= BEARER_SCRUB_MIN ? [token] : [];
+}
+const BEARER_SCRUB_MIN = 8;
 
 async function withClient<T>(
   connection: Connection,
