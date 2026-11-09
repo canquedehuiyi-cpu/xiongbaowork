@@ -8,6 +8,15 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+- **OpenBot's own apps' saved tools are brought up to date at every start.** Routines, Google Drive
+  and 百度网盘 list tools that are this code, but a deployment kept the list the build that added
+  the app saved until an admin pressed Refresh tools. Each start now compares every such app's saved
+  tools with this build's and refreshes only the ones that differ, row by row and as each row's own
+  tenant; an ordinary start writes nothing, and a failure is a warning, not a failed start.
+  Connecting the first account to a per-person OAuth app (Figma, Notion and the like) now lists its
+  tools as that person when the app holds none, instead of leaving it "Connected" with no tools.
+  That listing never registers a new OAuth client: a vendor answering `invalid_client` is recorded
+  in the app's last error. From upstream #1130 and #1073.
 - **A replica that cannot read a connector's OAuth client no longer registers a new one over it.**
   A vault fault or a wrong `KEY_ENCRYPTION_KEY` used to read as "no client", so Connect on a
   self-registering connector (Notion and the like) registered again and replaced the one client

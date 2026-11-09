@@ -2280,6 +2280,31 @@ export function createPluginRoutes(
         return context.redirect(failed);
       }
 
+      /*
+       * 应用提供什么，以刚连接的这个人的身份问（上游 #1073）。
+       *
+       * 只能按个人凭据列出工具的应用，在有人连接之前一个工具也没有，而这是第一个有人连接的时刻。
+       * 等它做完再跳转，这样这个人回到的页面已经列出工具，下一次 Bot 运行也拿得到。见
+       * `discoverToolsOnConnect`：只在一个工具都没有时才列，在这个人的帧里调用。
+       *
+       * 连接已经写下，这里的任何失败都不会把它变成连接失败。vendor 不肯回答，会在刷新里落到应用的
+       * `lastError`；我们自己的故障只记日志，应用页上的「刷新工具」还可以再问一次。
+       */
+      try {
+        await asPerson(() =>
+          store.discoverToolsOnConnect(state.serverId, userId),
+        );
+      } catch (error) {
+        console.error(
+          JSON.stringify({
+            type: "oauth-connection-tools-not-listed",
+            serverId: state.serverId,
+            note: "A person connected and their account was recorded, but asking the app what it offers failed. Refresh tools on the app's page asks again.",
+            error: reasonWithoutStatement(error),
+          }),
+        );
+      }
+
       return context.redirect(
         connectedAccountsUrlFor(
           connect.appUrl,

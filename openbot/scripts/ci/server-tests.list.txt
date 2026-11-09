@@ -251,6 +251,7 @@ tests/otel-export-scrubbing.test.ts
 tests/otel-exporter-compat.test.ts
 tests/otel-sdk-lifecycle.test.ts
 tests/outbound-guard.test.ts
+tests/own-app-tools-refresh.integration.test.ts
 tests/owner-assembly-audit.test.ts
 tests/page-frame-retention.integration.test.ts
 tests/paging.test.ts
@@ -276,6 +277,7 @@ tests/platform-store.test.ts
 tests/plugin-call-args-validation.test.ts
 tests/plugin-catalogue-market.test.ts
 tests/plugin-catalogue.test.ts
+tests/plugin-connect-lists-tools.integration.test.ts
 tests/plugin-connect-route.test.ts
 tests/plugin-credential-binding.integration.test.ts
 tests/plugin-credential-placement.integration.test.ts
