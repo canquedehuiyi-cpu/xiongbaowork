@@ -234,7 +234,8 @@ export function createApprovalStore(
           .where(owned(owner, id))
           .returning();
         if (!updated) throw new ApprovalNotFoundError();
-        await recordAuditEvent(createAuditStore(tx as unknown as Database), {
+        const trail = createAuditStore(tx as unknown as Database);
+        await recordAuditEvent(trail, {
           eventType: "approval.person_decided",
           targetType: "approval",
           targetId: id,
@@ -247,6 +248,14 @@ export function createApprovalStore(
             scope: request.action.scope,
           },
         });
+        /*
+         * The action's own row for a denial, beside the decision and in the same transaction (the
+         * person's own tenant frame, like the decision), so it is written once. Without it the trail
+         * held only the decision: the action itself read as nothing, or, from the code that asked, as
+         * allowed, and the Blocked view never showed it. Redacted like every audit payload.
+         */
+        if (decision === "deny" && request.action.declined)
+          await recordAuditEvent(trail, request.action.declined);
         await tx
           .insert(workItems)
           .values({
