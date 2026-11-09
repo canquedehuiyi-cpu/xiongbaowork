@@ -215,9 +215,11 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   // has checked the admin capability (P21). The fourth is reachable from a member's request on
   // purpose: `discoverToolsOnConnect` (upstream #1073), from the OAuth callback once the sealed
   // state's person has been checked and their connection recorded. It refuses unless the frame is
-  // that person's own, resolves the row in that frame, and only when the app holds no tools at all
-  // runs `refreshTools` as `platform` on that row id, listing with the person's own token; the tool
-  // rows are the server's (`team`), which only an administrator or `platform` may write.
+  // that person's own, and acts only when the app holds no tools at all. The row is resolved, the
+  // person's token exchanged and the vendor asked in the PERSON's frame, so P10 still applies there,
+  // and it never registers a replacement OAuth client (`reRegister: false`: an `invalid_client` only
+  // lands in `lastError`). Only the writes after the listing (the server's `team` tool rows, its
+  // status columns and the audit rows) run as `platform`.
   "src/plugins/store.ts": { 'runAsTenant("platform"': 4 },
   "src/proactive/engine.ts": { 'runAsTenant("platform"': 2 },
   "src/quota/routes.ts": { 'runAsTenant("platform"': 1 },

@@ -1194,6 +1194,21 @@ export type AccessToken = {
   refreshToken?: string;
 };
 
+/**
+ * `refreshTools` 的内部选项，只有 store 自己传，路由不传。
+ *
+ * - `exactRow`：`serverId` 就是准确的行 id，不经过「id 或 catalogue_key、team 行优先」的查找
+ *   （批量刷新用，见 `requireServerRow`）。
+ * - `reRegister: false`：遇到 vendor 逐出 client 也不重新注册（见 `connectionTokenFor`）。
+ * - `writeAs`：列完清单之后的读写（工具行、服务器行、审计）放在哪个帧里跑；不给就是调用方的帧。
+ *   给了它，写权限检查也在那个帧里做，列清单仍在调用方的帧里。
+ */
+type RefreshOptions = {
+  exactRow?: boolean;
+  reRegister?: boolean;
+  writeAs?: <T>(work: () => Promise<T>) => Promise<T>;
+};
+
 export type PluginStoreOptions = {
   approvalGate?: ApprovalGate;
   /**
@@ -1825,6 +1840,12 @@ export function createPluginStore(options: PluginStoreOptions) {
     entry: CatalogueEntry | null,
     actorId: string,
     access: ServerAccess,
+    /**
+     * `reRegister: false`：vendor 逐出 client（`invalid_client`）时只拒绝，不重新注册、不替换。
+     * 连接回调列工具的路径（`discoverToolsOnConnect`）一律这样：替换的是全部署共享的 client，
+     * 不能由一个成员的连接触发（G01-E P10）。
+     */
+    options: { reRegister?: boolean } = {},
   ): Promise<{ token?: string; placement?: CredentialPlacement }> {
     /*
      * A brokered app, where the deployment holds one key and Composio keeps the accounts apart.
@@ -2350,6 +2371,7 @@ export function createPluginStore(options: PluginStoreOptions) {
          * Rethrows anything that is not the vendor disowning our client, which is every ordinary
          * failure: a withdrawn grant, a vendor being down, a disconnect mid-queue.
          */
+        if (options.reRegister === false) throw error;
         return await refuseAndReplaceEvictedClient({
           error,
           clientRegisteredAt: stored.registeredAt,
@@ -3058,7 +3080,27 @@ export function createPluginStore(options: PluginStoreOptions) {
       .orderBy(ownRowFirst())
       .limit(1);
     if (!row) throw new CatalogueEntryUnknownError(serverId);
+    return resolvedRow(row);
+  }
 
+  /**
+   * 按准确的行 id 取一行，不经过 {@link atServerAddress} 的「id 或 catalogue_key、team 行优先」。
+   *
+   * 给跨租户的批量刷新用（`refreshOwnListings`、`relistOutdatedBrokeredApps`）：遍历到哪一行就刷新
+   * 哪一行。经 `requireServer` 重新查找时，legacy `system` 行 `routines` 会解析成 catalogue_key 为
+   * `routines` 的 `team:routines`，于是 system 行永远停在旧清单，team 行每次启动都被重写。
+   */
+  async function requireServerRow(rowId: string) {
+    const [row] = await database
+      .select()
+      .from(mcpServers)
+      .where(eq(mcpServers.id, rowId))
+      .limit(1);
+    if (!row) throw new CatalogueEntryUnknownError(rowId);
+    return resolvedRow(row);
+  }
+
+  function resolvedRow(row: typeof mcpServers.$inferSelect) {
     // Null for a custom server, and every caller handles that by assuming the worst about it.
     const entry = catalogueEntry(row.catalogueKey ?? row.id);
     if (row.provenance === "first-party" && !entry) {
@@ -4516,10 +4558,16 @@ export function createPluginStore(options: PluginStoreOptions) {
     async refreshTools(
       serverId: string,
       actorId = "",
+      internal: RefreshOptions = {},
     ): Promise<{ tools: number }> {
+      // 列完清单之后的读写在哪个帧里跑；见 {@link RefreshOptions}。
+      const write =
+        internal.writeAs ?? (<T>(work: () => Promise<T>): Promise<T> => work());
       // It rewrites the server's tool rows and its status columns: an administrator's (G01-E P10).
-      requireServerWriter();
-      const { row, entry, access } = await requireServer(serverId);
+      await write(async () => requireServerWriter());
+      const { row, entry, access } = internal.exactRow
+        ? await requireServerRow(serverId)
+        : await requireServer(serverId);
 
       /*
        * WHICH OF THE PARAMETER'S TWO MEANINGS each statement below needs.
@@ -4616,7 +4664,9 @@ export function createPluginStore(options: PluginStoreOptions) {
          * a function that discards it. The gate outlived the reason for it.
          */
         const { token, placement } = transport.listNeedsCredential
-          ? await connectionTokenFor(row, entry, actorId, access)
+          ? await connectionTokenFor(row, entry, actorId, access, {
+              reRegister: internal.reRegister,
+            })
           : {};
 
         listed = await transport.listTools({
@@ -4687,20 +4737,22 @@ export function createPluginStore(options: PluginStoreOptions) {
         // explanation reads as a server that offers nothing, and an operator would go looking in
         // the wrong place. The tools already held are left alone: a vendor being briefly
         // unreachable is not a reason to revoke what Bots are using.
-        await database
-          .update(mcpServers)
-          .set({
-            /*
-             * Capped at the same 400 characters `callTool` caps its recorded failure at.
-             *
-             * Parts of this sentence come from a vendor, and it is drawn on the admin page — neither
-             * is a promise about length, and the two paths that show a vendor's words to an operator
-             * should not disagree about how much of them to keep.
-             */
-            lastError: message.slice(0, 400),
-            updatedAt: new Date(),
-          })
-          .where(eq(mcpServers.id, rowId));
+        await write(async () =>
+          database
+            .update(mcpServers)
+            .set({
+              /*
+               * Capped at the same 400 characters `callTool` caps its recorded failure at.
+               *
+               * Parts of this sentence come from a vendor, and it is drawn on the admin page — neither
+               * is a promise about length, and the two paths that show a vendor's words to an operator
+               * should not disagree about how much of them to keep.
+               */
+              lastError: message.slice(0, 400),
+              updatedAt: new Date(),
+            })
+            .where(eq(mcpServers.id, rowId)),
+        );
         return { tools: 0 };
       }
 
@@ -4744,26 +4796,30 @@ export function createPluginStore(options: PluginStoreOptions) {
        * rather than branched on here.
        */
       if (listed.length === 0) {
-        const held = await database
-          .select({ name: mcpTools.name })
-          .from(mcpTools)
-          .where(eq(mcpTools.serverId, rowId));
+        const held = await write(async () =>
+          database
+            .select({ name: mcpTools.name })
+            .from(mcpTools)
+            .where(eq(mcpTools.serverId, rowId)),
+        );
 
         if (held.length > 0) {
-          await database
-            .update(mcpServers)
-            .set({
-              // Named as the state it is, because "listed nothing" and "would not answer" send an
-              // operator to different places, and reaching this line settles which one it was: a
-              // listing that could not be made throws and lands in the `catch` above instead. So
-              // this sentence must not send anybody to check their configuration — that is the
-              // other state's sentence, written by the transport that refused. No
-              // `toolsRefreshedAt`: that column says when this deployment last learned what the app
-              // offers, and it did not learn it here.
-              lastError: `This app was asked and answered with no actions at all, so the ${held.length} already recorded for it were kept rather than deleted. Check whether it still publishes them, then refresh again.`,
-              updatedAt: new Date(),
-            })
-            .where(eq(mcpServers.id, rowId));
+          await write(async () =>
+            database
+              .update(mcpServers)
+              .set({
+                // Named as the state it is, because "listed nothing" and "would not answer" send an
+                // operator to different places, and reaching this line settles which one it was: a
+                // listing that could not be made throws and lands in the `catch` above instead. So
+                // this sentence must not send anybody to check their configuration — that is the
+                // other state's sentence, written by the transport that refused. No
+                // `toolsRefreshedAt`: that column says when this deployment last learned what the app
+                // offers, and it did not learn it here.
+                lastError: `This app was asked and answered with no actions at all, so the ${held.length} already recorded for it were kept rather than deleted. Check whether it still publishes them, then refresh again.`,
+                updatedAt: new Date(),
+              })
+              .where(eq(mcpServers.id, rowId)),
+          );
           // What the app advertises, which is what it advertised before: the honest count, because
           // nothing was replaced.
           return { tools: held.length };
@@ -4801,20 +4857,22 @@ export function createPluginStore(options: PluginStoreOptions) {
       } catch (error) {
         const reason =
           error instanceof Error ? withoutStatement(error) : String(error);
-        await database
-          .update(mcpServers)
-          .set({
-            // Capped where every other quoted failure in this file is capped, and for the same
-            // reason: part of this sentence comes from elsewhere and none of it is a promise about
-            // length.
-            lastError:
-              `This app answered with an action whose schema could not be stored as it arrived, so the actions already recorded for it were kept rather than replaced. ${reason}`.slice(
-                0,
-                400,
-              ),
-            updatedAt: new Date(),
-          })
-          .where(eq(mcpServers.id, rowId));
+        await write(async () =>
+          database
+            .update(mcpServers)
+            .set({
+              // Capped where every other quoted failure in this file is capped, and for the same
+              // reason: part of this sentence comes from elsewhere and none of it is a promise about
+              // length.
+              lastError:
+                `This app answered with an action whose schema could not be stored as it arrived, so the actions already recorded for it were kept rather than replaced. ${reason}`.slice(
+                  0,
+                  400,
+                ),
+              updatedAt: new Date(),
+            })
+            .where(eq(mcpServers.id, rowId)),
+        );
         return { tools: 0 };
       }
 
@@ -4840,14 +4898,16 @@ export function createPluginStore(options: PluginStoreOptions) {
        * is not something the vendor did.
        */
       try {
-        await database.transaction(async (transaction) => {
-          await transaction
-            .delete(mcpTools)
-            .where(eq(mcpTools.serverId, rowId));
-          if (storable.length > 0) {
-            await transaction.insert(mcpTools).values(storable);
-          }
-        });
+        await write(async () =>
+          database.transaction(async (transaction) => {
+            await transaction
+              .delete(mcpTools)
+              .where(eq(mcpTools.serverId, rowId));
+            if (storable.length > 0) {
+              await transaction.insert(mcpTools).values(storable);
+            }
+          }),
+        );
       } catch (error) {
         /*
          * A database failure, with the statement and its parameters left behind.
@@ -4872,16 +4932,18 @@ export function createPluginStore(options: PluginStoreOptions) {
         );
       }
 
-      await database
-        .update(mcpServers)
-        .set({
-          toolsRefreshedAt: new Date(),
-          lastError: null,
-          // 按这一版的清单读法存下的；见 `relistOutdatedBrokeredApps`。
-          listingRevision: LISTING_REVISION,
-          updatedAt: new Date(),
-        })
-        .where(eq(mcpServers.id, rowId));
+      await write(async () =>
+        database
+          .update(mcpServers)
+          .set({
+            toolsRefreshedAt: new Date(),
+            lastError: null,
+            // 按这一版的清单读法存下的；见 `relistOutdatedBrokeredApps`。
+            listingRevision: LISTING_REVISION,
+            updatedAt: new Date(),
+          })
+          .where(eq(mcpServers.id, rowId)),
+      );
 
       /*
        * A grant left pointing at nothing goes in the trail, at the moment it starts pointing at
@@ -4901,25 +4963,29 @@ export function createPluginStore(options: PluginStoreOptions) {
       // The names as STORED, so a grant is compared against a row that exists: a duplicate the
       // vendor listed twice is one row, and a name is spelled here the way the insert spelled it.
       const advertised = new Set(storable.map((tool) => tool.name));
-      const stranded = [...(await mcpGrantsForServers([entryKey])).entries()]
+      const stranded = [
+        ...(await write(() => mcpGrantsForServers([entryKey]))).entries(),
+      ]
         .filter(([ref]) => !advertised.has(ref.slice(entryKey.length + 1)))
         .sort(([left], [right]) => left.localeCompare(right));
 
       if (stranded.length > 0) {
-        await recordAuditEvent(auditStore, {
-          eventType: "configuration.changed",
-          targetType: "mcp_server",
-          targetId: entryKey,
-          payload: {
-            actor: auditActor,
-            change: "grants_not_advertised",
-            server: entryKey,
-            // The refs, because that is what a grant is keyed on and what an administrator revokes.
-            refs: stranded.map(([ref]) => ref),
-            bots: [...new Set(stranded.flatMap(([, agents]) => agents))],
-            note: "Held by a Bot and not offered to any model, because this server no longer advertises the tool. Offered again if it starts.",
-          },
-        });
+        await write(() =>
+          recordAuditEvent(auditStore, {
+            eventType: "configuration.changed",
+            targetType: "mcp_server",
+            targetId: entryKey,
+            payload: {
+              actor: auditActor,
+              change: "grants_not_advertised",
+              server: entryKey,
+              // The refs, because that is what a grant is keyed on and what an administrator revokes.
+              refs: stranded.map(([ref]) => ref),
+              bots: [...new Set(stranded.flatMap(([, agents]) => agents))],
+              note: "Held by a Bot and not offered to any model, because this server no longer advertises the tool. Offered again if it starts.",
+            },
+          }),
+        );
       }
 
       /*
@@ -4936,18 +5002,20 @@ export function createPluginStore(options: PluginStoreOptions) {
        */
       const unlisted = unlistedAdvertisedTools(entry, [...advertised]);
       if (unlisted.length > 0) {
-        await recordAuditEvent(auditStore, {
-          eventType: "configuration.changed",
-          targetType: "mcp_server",
-          targetId: entryKey,
-          payload: {
-            actor: auditActor,
-            change: "unlisted_tools_advertised",
-            server: entryKey,
-            tools: unlisted,
-            note: "Advertised by this server and not named in its reviewed write list, so each is offered to models as a read. This vendor has no read-only scope behind that list, so anything here that writes should be added to the entry.",
-          },
-        });
+        await write(() =>
+          recordAuditEvent(auditStore, {
+            eventType: "configuration.changed",
+            targetType: "mcp_server",
+            targetId: entryKey,
+            payload: {
+              actor: auditActor,
+              change: "unlisted_tools_advertised",
+              server: entryKey,
+              tools: unlisted,
+              note: "Advertised by this server and not named in its reviewed write list, so each is offered to models as a read. This vendor has no read-only scope behind that list, so anything here that writes should be added to the entry.",
+            },
+          }),
+        );
       }
 
       // What was recorded, which is what "this app offers N actions" means on the page. Counting
@@ -4969,22 +5037,26 @@ export function createPluginStore(options: PluginStoreOptions) {
      * 只写变了的：逐行比较，普通的一次启动什么都不写，也不留审计。经 `this.refreshTools` 刷新，和
      * 管理员按「刷新工具」一样：授权按名字记，不受影响。
      *
-     * 跨所有租户：调用方要在平台帧里调用（启动时由 `index.ts` 打开）。读的是每一台服务器的整行，
-     * 按行 id 刷新，所以工具按这台服务器自己的 tenant 盖戳（`storableTools` 用 `row.tenantId`）。
+     * 跨所有租户：调用方要在平台帧里调用（启动时由 `index.ts` 打开）。遍历到哪一行就刷新哪一行，
+     * 按准确的行 id（`exactRow`，见 {@link requireServerRow}），不经过「id 或 catalogue_key、team
+     * 行优先」的重新查找；工具按这台服务器自己的 tenant 盖戳（`storableTools` 用 `row.tenantId`）。
+     * `ids` 只给测试用，限定只看这些行；启动时不给，看整张表。
      * 列清单不出网、不取凭据：这三个 transport 的清单就是常量。某一行失败只记一条警告，不让启动
      * 失败：保存的清单照常可用，下次启动再试。
      */
-    async refreshOwnListings(): Promise<string[]> {
+    async refreshOwnListings(ids?: readonly string[]): Promise<string[]> {
+      requireServerWriter();
       const refreshed: string[] = [];
       const rows = await database
         .select()
         .from(mcpServers)
+        .where(ids ? inArray(mcpServers.id, [...ids]) : undefined)
         .orderBy(asc(mcpServers.id));
       for (const row of rows) {
         const entry = catalogueEntry(row.catalogueKey ?? row.id);
-        const kind = entry?.transport;
-        if (!entry || !kind) continue;
-        const transport = transportFor(kind);
+        if (!entry) continue;
+        // 条目没写 transport 就是 MCP；只有清单就是本代码的 transport 才在启动时刷新。
+        const transport = transportFor(entry.transport ?? "mcp");
         if (!transport.listIsThisCode) continue;
         try {
           const listed = await transport.listTools({
@@ -5001,7 +5073,7 @@ export function createPluginStore(options: PluginStoreOptions) {
             )
           )
             continue;
-          await this.refreshTools(row.id);
+          await this.refreshTools(row.id, "", { exactRow: true });
           refreshed.push(row.id);
         } catch (error) {
           console.warn(
@@ -5029,10 +5101,14 @@ export function createPluginStore(options: PluginStoreOptions) {
      * 只在一个工具都没有时：刷新会替换每个 Bot 拿到的工具，那是管理员的按钮。填满一张空清单不拿走
      * 任何人的东西；每个成员连接时都替换整张清单，就等于让每个人都成了它的作者。
      *
-     * 租户帧（fork 特有）：调用方在这个人自己的帧里（连接回调就是）。行在本人帧里解析，所以只会是
-     * 这个人看得见的那一行；工具行属于服务器（`team`），只有管理员或平台帧能写，所以刷新在平台帧里
-     * 跑，按行 id。列工具用的仍然是这个人自己的凭据：`connectionTokenFor` 按 `actorId` 只取这个人的
-     * 连接。只能替自己列：帧不是这个人就拒绝，平台帧不会因为别人的名字被打开。
+     * 租户帧（fork 特有）：调用方在这个人自己的帧里（连接回调就是），只能替自己列，帧不是这个人就
+     * 拒绝。行在本人帧里解析；取 token 和问 vendor 也在本人帧里，和这个人自己调用工具时一样，所以
+     * P10 的写权限检查照常生效。之后的写（工具行、服务器行、审计）属于服务器（`team`），只有管理员
+     * 或平台帧能写，只有这一段放进平台帧（`writeAs`）。
+     *
+     * 一律不重新注册 OAuth client（`reRegister: false`）：vendor 回 `invalid_client` 时只记
+     * `lastError`。替换的是全部署共享的 client，所有人的 refresh token 都绑在旧的上，不能由一个成员
+     * 的连接触发。
      */
     async discoverToolsOnConnect(
       serverId: string,
@@ -5050,7 +5126,11 @@ export function createPluginStore(options: PluginStoreOptions) {
         .where(eq(mcpTools.serverId, row.id))
         .limit(1);
       if (held) return null;
-      return runAsTenant("platform", () => this.refreshTools(row.id, userId));
+      return this.refreshTools(row.id, userId, {
+        exactRow: true,
+        reRegister: false,
+        writeAs: (work) => runAsTenant("platform", work),
+      });
     },
 
     /**
