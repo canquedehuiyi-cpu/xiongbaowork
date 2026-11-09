@@ -22,7 +22,7 @@ import {
 } from "@/components/app-sidebar/app-sidebar";
 import { ChannelPagination } from "@/components/app-sidebar/channel-pagination";
 import { DeleteConversationDialog } from "@/components/channels/delete-conversation-dialog";
-import { NavigationTarget } from "@/components/edition/team-features-dialog";
+import { NavigationTarget } from "@/components/layout/navigation-target";
 import { OpenBotVersion } from "@/components/layout/openbot-version";
 import { Button } from "@/components/ui/button";
 import {

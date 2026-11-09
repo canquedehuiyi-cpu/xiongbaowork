@@ -18,7 +18,7 @@ import {
 import { type ReactNode, useEffect, useState } from "react";
 import AgentOrb from "@/components/agents/orb/agent-orb";
 import { BotsNavBadge } from "@/components/bot-profile/attention";
-import { NavigationTarget } from "@/components/edition/team-features-dialog";
+import { NavigationTarget } from "@/components/layout/navigation-target";
 import { OpenBotVersion } from "@/components/layout/openbot-version";
 import { SelfHostBanner } from "@/components/layout/self-host-banner";
 import { UpdateBanner } from "@/components/layout/update-banner";

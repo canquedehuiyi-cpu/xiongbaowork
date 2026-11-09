@@ -23,7 +23,7 @@ export function AppShell({
   return (
     // One viewport, never scrolls: panes scroll inside it. A growable shell lets the transcript's
     // scroller size against the page, grow it, and grow again.
-    <SidebarShell className="h-svh overflow-hidden" width="240px">
+    <SidebarShell className="h-svh overflow-hidden" name="app" width="240px">
       <AppSidebar />
       {secondary ?? <ConversationWorkspace />}
       <main className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">

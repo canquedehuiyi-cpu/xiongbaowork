@@ -16,7 +16,7 @@ import { ChannelPagination } from "@/components/app-sidebar/channel-pagination";
 import { waitingOnYou } from "@/components/bot-profile/attention";
 import { ChannelAvatar } from "@/components/channels/avatar";
 import { DeleteConversationDialog } from "@/components/channels/delete-conversation-dialog";
-import { NavigationTarget } from "@/components/edition/team-features-dialog";
+import { NavigationTarget } from "@/components/layout/navigation-target";
 import {
   ContextMenu,
   ContextMenuContent,

@@ -19,7 +19,6 @@ import { MotionConfig, motion, useReducedMotion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { HarnessMark } from "@/components/agents/harness-mark";
 import AgentOrb from "@/components/agents/orb/agent-orb";
-import { BusinessComputerLink } from "@/components/edition/team-features-dialog";
 import { PluginLogo } from "@/components/plugins/plugin-logo";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -744,9 +743,7 @@ function AboutStep({
           value={instructions}
         />
       </Field>
-      {personal ? (
-        <BusinessComputerLink />
-      ) : (
+      {personal ? null : (
         <>
           <FieldSet>
             <FieldLegend className={SECTION_LABEL} variant="label">

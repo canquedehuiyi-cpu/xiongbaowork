@@ -509,38 +509,6 @@ body {
 }
 
 /*
- * The field behind the OpenBot for Business orb (components/edition/business-orb.tsx). It drifts
- * up by exactly one tile per loop, so it never jumps. The orb in front is a Bot's live orb, which
- * animates itself.
- */
-.business-orb-field {
-  --business-orb-tile: 288px;
-  background-size: 288px var(--business-orb-tile);
-  opacity: 0.3;
-  filter: blur(3px);
-  mask-image: linear-gradient(
-    to bottom,
-    transparent,
-    black 20%,
-    black 80%,
-    transparent
-  );
-  animation: business-orb-drift 18s linear infinite;
-}
-
-@keyframes business-orb-drift {
-  to {
-    background-position: 0 calc(-1 * var(--business-orb-tile));
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .business-orb-field {
-    animation: none;
-  }
-}
-
-/*
  * Teach a Bot's three steps sit on one soft gradient, the way an app's introduction does in other products. The
  * colours are fixed tints rather than tokens, with a darker set for the dark theme, so the stage reads as a showcase
  * while the cards on it keep the app's own colours.
