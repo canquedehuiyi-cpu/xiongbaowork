@@ -153,6 +153,11 @@ const CONFIRMING =
  */
 const CN_CONFIRMING = "(?:(?:确认|确定|是的?)[，,\\s]*)?";
 const CN_END = "\\s*(?:[（(][^）)]*[）)])?$";
+/**
+ * 中文付款按钮文字里可有可无的金额：「支付 ¥128.00」「提交订单 共¥99」「提交订单 实付：¥45.50」。
+ */
+const CN_AMOUNT =
+  "(?:\\s*(?:共|合计|总计|实付|应付)?[:：]?\\s*[¥￥$]?\\s*[\\d.,]+\\s*元?)?";
 
 /**
  * Built-in safety requirements. These always hand the action to the person, before and regardless of
@@ -178,6 +183,13 @@ const SAFETY_REQUIREMENTS: readonly {
   click?: RegExp;
   /** 同上，按钮文字的中文写法。 */
   clickZh?: RegExp;
+  /**
+   * 中文写的输入框名字或标签（「新密码」「验证码」「银行卡号」），只在电脑工具一侧、元素是能往里
+   * 写字的输入框时才看（见 {@link chineseSurface}）。纯文本「密码强度说明」不算。
+   */
+  fieldZh?: RegExp;
+  /** 中文写的页面路径（解码后，见 {@link chineseSurface}），只在电脑工具一侧看。 */
+  pageZh?: RegExp;
 }[] = [
   {
     id: "credentials",
@@ -191,6 +203,18 @@ const SAFETY_REQUIREMENTS: readonly {
      * 表单里填名字不是改凭据。页面的路径、字段和按钮照样算。
      */
     pagePathOnly: true,
+    /*
+     * 中文的凭据页（阶段 2f）。中文正文里「密码」「验证码」很常见（「新密码稍后发你」），所以这些词
+     * 不用在应用工具的参数上，只看电脑工具一侧的输入框名字、按钮文字和页面路径。
+     */
+    fieldZh: /密码|口令|验证码|校验码|动态码|短信码|身份证|证件号/,
+    clickZh: new RegExp(
+      `^${CN_CONFIRMING}(?:修改|更改|重置|重设|设置|找回|忘记|更换|保存|确认)(?:新的?)?(?:登录|支付|交易|账号|账户|帐号|帐户)?(?:新的?)?密码[?？]?${CN_END}` +
+        `|^(?:免费)?(?:获取|发送|重新获取|重新发送|重发)(?:短信)?(?:验证码|动态码|校验码)${CN_END}` +
+        `|^${CN_CONFIRMING}(?:开启|关闭|设置|绑定|解绑)?(?:两步验证|二次验证|双重验证|双重认证|两步认证)${CN_END}`,
+    ),
+    pageZh:
+      /修改密码|更改密码|重置密码|重设密码|找回密码|设置密码|忘记密码|密码设置|密码管理|支付密码|交易密码|两步验证|二次验证|双重验证/,
   },
   {
     id: "security_settings",
@@ -221,9 +245,25 @@ const SAFETY_REQUIREMENTS: readonly {
       `^${CONFIRMING}(transfer|withdraw|pay|buy|send money)\\b|^${CONFIRMING}(send|pay|transfer|donate|tip)\\b.*[$€£¥₹]\\s?\\d|\\b(place (your )?order|(complete|confirm|submit) (your )?(purchase|order)|order now|buy now|buy it now)\\b|^${CONFIRMING}(upgrade|downgrade|(change|switch) (your |my |the )?plan|start (my |your )?(subscription|membership))\\b`,
     ),
     // 同一批按钮的中文写法：支付、付款、立即购买、提交订单、去结算、转账、开通会员……
+    /*
+     * 「提交订单」「确认并支付」后面可以带金额；绑定银行卡也是动钱的入口（阶段 2f）。#403 评审补上：
+     * 「…并支付」（确认订单并支付、提交订单并付款）；按支付方式命名的按钮（微信支付、使用余额支付），
+     * 免密支付时点下去钱就转出去了；付款码是付款人给商家扣款用的。都从开头锚定到结尾，「支付记录」
+     * 「支付方式说明」「查看支付详情」「收款码」不算。
+     */
     clickZh: new RegExp(
-      `^${CN_CONFIRMING}(?:立即|马上|去)?(?:支付|付款|购买|下单|结算|充值|转账|汇款|提现|打赏)(?:\\s*[¥￥$]?\\s*[\\d.,]+\\s*元?)?${CN_END}|^(?:提交|确认)订单${CN_END}|^(?:立即|马上)?(?:开通|升级|续费)(?:会员|套餐|vip|高级版|专业版)?${CN_END}`,
+      `^${CN_CONFIRMING}(?:立即|马上|去)?(?:支付|付款|购买|下单|结算|充值|转账|汇款|提现|打赏)${CN_AMOUNT}${CN_END}|^(?:提交|确认)订单${CN_AMOUNT}${CN_END}|^(?:立即|马上)?(?:开通|升级|续费)(?:会员|套餐|vip|高级版|专业版)?${CN_END}` +
+        `|^(?:确认|同意)并(?:支付|付款|购买|下单)${CN_AMOUNT}${CN_END}` +
+        `|^${CN_CONFIRMING}(?:绑定|添加|新增)(?:新的?)?(?:银行卡|信用卡|储蓄卡)${CN_END}` +
+        `|^\\S{0,8}并(?:支付|付款)${CN_AMOUNT}${CN_END}` +
+        `|^(?:使用|用)?(?:微信|支付宝|余额|零钱|银行卡|信用卡|储蓄卡|花呗|云闪付|qq钱包|apple ?pay)支付${CN_AMOUNT}${CN_END}` +
+        `|^(?:出示|查看|打开|展示)?付款码${CN_END}`,
     ),
+    // 卡和收付款账户的字段。只写「账号」会把用户名字段也交给本人，所以账号要带上银行、收款、支付宝。
+    fieldZh:
+      /卡号|银行卡|信用卡|储蓄卡|cvv|cvc|安全码|付款码|持卡人|有效期|\bpin\b|银行账[号户]|收款账[号户]|支付宝账[号户]/,
+    pageZh:
+      /收银台|确认支付|确认付款|支付订单|订单支付|在线支付|绑定银行卡|添加银行卡/,
   },
 ];
 
@@ -298,11 +338,56 @@ function pageWithoutQuery(target: unknown): unknown {
   if (typeof page !== "string") return target;
   try {
     const url = new URL(page);
-    const route = /^#!?\//.test(url.hash) ? url.hash.split("?")[0] : "";
-    return { ...target, pageUrl: `${url.origin}${url.pathname}${route}` };
+    return { ...target, pageUrl: `${url.origin}${pagePath(url)}` };
   } catch {
     return target;
   }
+}
+
+/** 页面的路径，加上单页应用 `#/` 或 `#!/` 的路由（见 {@link pageWithoutQuery}）。 */
+function pagePath(url: URL): string {
+  const route = /^#!?\//.test(url.hash) ? url.hash.split("?")[0] : "";
+  return `${url.pathname}${route}`;
+}
+
+/**
+ * 中文关键词只在电脑工具一侧看的那几处（阶段 2f）：能往里写字的元素的名字（字段名或标签，去掉
+ * 空白），以及页面路径（解码成中文，查询串和片段照旧不算，单页应用的路由算）。应用工具不看：它的
+ * 参数是正文，备注里写「支付方案」「新密码稍后发你」不是在付款或改密码。
+ *
+ * 浏览器的页面标题不在审批门拿到的目标里（网关只存了地址），所以「页面」这一维只能看路径。
+ */
+function chineseSurface(candidate: ApprovalCandidate): {
+  field?: string;
+  page?: string;
+} {
+  if (
+    !candidate.toolRef.startsWith("computer_") ||
+    candidate.subject?.connector === true
+  )
+    return {};
+  const target = candidate.target as
+    | { element?: unknown; pageUrl?: unknown }
+    | undefined;
+  const element = target?.element;
+  const field =
+    element !== null &&
+    typeof element === "object" &&
+    entersText(element as { role?: unknown; type?: unknown })
+      ? elementName(candidate).replace(/\s+/g, "")
+      : undefined;
+  let page: string | undefined;
+  if (typeof target?.pageUrl === "string") {
+    try {
+      page = decodeURIComponent(pagePath(new URL(target.pageUrl)));
+    } catch {
+      // 解不开的地址：英文规则照旧整段匹配它，中文这一维不看。
+    }
+  }
+  return {
+    ...(field ? { field } : {}),
+    ...(page ? { page } : {}),
+  };
 }
 
 /**
@@ -378,6 +463,7 @@ function handOffRequirement(
   const words = wordsWith(candidate.target);
   const pathWords = wordsWith(pageWithoutQuery(candidate.target));
   const named = actionName(candidate);
+  const zh = chineseSurface(candidate);
   const hit =
     SAFETY_REQUIREMENTS.find(
       (entry) =>
@@ -386,7 +472,9 @@ function handOffRequirement(
           (named.kind === "tool"
             ? entry.tool?.test(named.name) === true
             : entry.click?.test(named.name) === true ||
-              entry.clickZh?.test(named.name) === true)),
+              entry.clickZh?.test(named.name) === true)) ||
+        (zh.field !== undefined && entry.fieldZh?.test(zh.field) === true) ||
+        (zh.page !== undefined && entry.pageZh?.test(zh.page) === true),
     ) ??
     (paysToSubscribe(candidate, named)
       ? SAFETY_REQUIREMENTS.find((entry) => entry.id === "payments")
@@ -536,14 +624,73 @@ function pressedKey(
       : args.submit === true
         ? "Enter"
         : "";
-  const key = candidate.subject?.key ?? fromArgs;
-  const parts = key.split(/\+(?=[\s\S])/).map(normalisedKey);
+  return parsedKey(candidate.subject?.key ?? fromArgs);
+}
+
+/** 一个键名的各段：`Shift++` 的主键是 `+`。 */
+const KEY_PARTS = /\+(?=[\s\S])/;
+
+/** 按上面的规则拆开并规范化一个键名（小写，修饰键是 control、meta、alt、shift 之一或原样）。 */
+function parsedKey(key: string): { main: string; modifiers: string[] } {
+  const parts = key.split(KEY_PARTS).map(normalisedKey);
   return {
     main: parts.at(-1) ?? "",
-    modifiers: parts
-      .slice(0, -1)
-      .map((part) => MODIFIER_NAMES[part.replace(/(left|right)$/, "")] ?? part),
+    modifiers: parts.slice(0, -1).map(modifierName),
   };
+}
+
+function modifierName(part: string): string {
+  const name = part.replace(/(left|right)$/, "");
+  return Object.hasOwn(MODIFIER_NAMES, name) ? MODIFIER_NAMES[name] : part;
+}
+
+/** 规范化后的修饰键按这个顺序写，用 Playwright 的名字。 */
+const MODIFIER_ORDER = ["control", "meta", "alt", "shift"] as const;
+const PLAYWRIGHT_KEY_NAMES: Record<string, string> = {
+  control: "Control",
+  meta: "Meta",
+  alt: "Alt",
+  shift: "Shift",
+  enter: "Enter",
+  space: "Space",
+};
+
+/**
+ * 一个键名规范化以后的写法，给部署策略判定用（阶段 2f；见 computer/gateway 的
+ * `evaluateComputerPolicy`）。和 {@link pressedKey} 同一套规则：
+ *  - `"\n"`、`"\r"`、Return、NumpadEnter、大小写不同的 enter 都写成 `Enter`，`" "`、Spacebar
+ *    写成 `Space`；
+ *  - 修饰键去掉 Left、Right 后缀、认别名，写成 `Control`、`Meta`、`Alt`、`Shift`，去重，按这个
+ *    顺序排在前面；
+ *  - 其它键原样保留（`a`、`Tab`、`ArrowLeft`），认不出的修饰段也原样保留，排在已知修饰键之后。
+ * 只用于判定：发给浏览器的键和审计行里记的键都是原样的。
+ */
+export function canonicalKeyName(key: string): string {
+  const raw = key.split(KEY_PARTS);
+  const { main, modifiers } = parsedKey(key);
+  const known = new Set(
+    modifiers.filter((name) =>
+      (MODIFIER_ORDER as readonly string[]).includes(name),
+    ),
+  );
+  const unknown = raw
+    .slice(0, -1)
+    .filter(
+      (_, index) =>
+        !(MODIFIER_ORDER as readonly string[]).includes(modifiers[index] ?? ""),
+    );
+  const named = (name: string) =>
+    Object.hasOwn(PLAYWRIGHT_KEY_NAMES, name)
+      ? PLAYWRIGHT_KEY_NAMES[name]
+      : undefined;
+  const mainName = named(main) ?? named(modifierName(main)) ?? raw.at(-1) ?? "";
+  return [
+    ...MODIFIER_ORDER.filter((name) => known.has(name)).map(
+      (name) => PLAYWRIGHT_KEY_NAMES[name],
+    ),
+    ...unknown,
+    mainName,
+  ].join("+");
 }
 
 function normalisedKey(part: string): string {
@@ -1339,21 +1486,22 @@ export function onceOnlyFloor(
  * settings」不算。
  *
  * 中文按钮整段锚定（见 {@link CN_END}）：「删除」「发送(S)」「分享到微信」「发布动态」算，「删除线」
- * 「已发送」「分享给我的」「发布时间」「评论区」不算。
+ * 「已发送」「分享给我的」「发布时间」「评论区」不算。更长的常见写法也认（阶段 2f）：「发送消息给张三」
+ * 「全部回复」「发布回答」「移到已删除邮件」；仍然从开头锚定，「回复全部设置」不算。
  */
 const CLICK_FLOORS: readonly { floor: OnceOnlyFloor; click: RegExp }[] = [
   {
     floor: { source: "destructive_tool", reason: DESTRUCTIVE_TOOL_REASON },
     click: new RegExp(
       `^${CONFIRMING}(delete|permanently delete|move to (the )?(trash|bin)|trash|empty (the )?(trash|bin)|discard|erase|destroy)\\b|^${CONFIRMING}remove( permanently)?$` +
-        `|^${CN_CONFIRMING}(?:永久|彻底)?(?:删除|移到回收站|移至回收站|放入回收站|清空回收站|移除|丢弃)(?:文件|邮件|消息|记录|评论|帖子|账号|账户|此项|该项|全部|所选)?${CN_END}`,
+        `|^${CN_CONFIRMING}(?:永久|彻底)?(?:删除|移到回收站|移至回收站|放入回收站|清空回收站|移到已删除|移至已删除|移除|丢弃)(?:文件|邮件|消息|记录|评论|帖子|账号|账户|此项|该项|全部|所选)?${CN_END}`,
     ),
   },
   {
     floor: { source: "outbound_send", reason: OUTBOUND_SEND_REASON },
     click: new RegExp(
       `^${CONFIRMING}(send\\b|(comment|reply)$|(add|leave|write) (a |your )?(comment|reply)$)` +
-        `|^${CN_CONFIRMING}(?:立即)?(?:发送(?:消息|邮件|短信|私信|评论)?|回复|评论|发表(?:评论|回复))${CN_END}`,
+        `|^${CN_CONFIRMING}(?:立即)?(?:发送(?:消息|邮件|短信|私信|评论)?(?:给\\S{1,16})?|回复|全部回复|回复全部|评论|发表(?:评论|回复))${CN_END}`,
     ),
   },
   {
@@ -1368,7 +1516,7 @@ const CLICK_FLOORS: readonly { floor: OnceOnlyFloor; click: RegExp }[] = [
     floor: { source: "publish_post", reason: PUBLISH_POST_REASON },
     click: new RegExp(
       `^${CONFIRMING}(post|publish|tweet|repost|retweet|go live)\\b` +
-        `|^${CN_CONFIRMING}(?:立即)?(?:发布|发表|发帖|转发|发微博|发动态)(?:动态|文章|帖子|视频|笔记|微博|评论|作品)?${CN_END}`,
+        `|^${CN_CONFIRMING}(?:立即)?(?:发布|发表|发帖|转发|发微博|发动态)(?:动态|文章|帖子|视频|笔记|微博|评论|作品|回答|想法|问题|专栏|日志)?${CN_END}`,
     ),
   },
 ];

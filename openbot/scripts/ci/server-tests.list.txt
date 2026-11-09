@@ -56,6 +56,7 @@ tests/approvals-question-board.test.ts
 tests/approvals-question-resume.integration.test.ts
 tests/approvals-questions.test.ts
 tests/approvals-store.integration.test.ts
+tests/approvals-zh-handoff.test.ts
 tests/approvals.test.ts
 tests/attachment-mime.test.ts
 tests/attachment-parts.test.ts
@@ -140,6 +141,7 @@ tests/computer-page-frame-route.test.ts
 tests/computer-page-frame-store.integration.test.ts
 tests/computer-policy-dry-run-frame.test.ts
 tests/computer-policy-dry-run-limit.test.ts
+tests/computer-policy-key-names.test.ts
 tests/computer-policy-route.test.ts
 tests/computer-policy.test.ts
 tests/computer-provider.test.ts
