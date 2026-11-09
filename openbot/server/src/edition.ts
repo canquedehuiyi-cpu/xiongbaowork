@@ -120,3 +120,16 @@ export function askAdminTo(step: string): string {
     ? `${step.charAt(0).toUpperCase()}${step.slice(1)}`
     : `Ask an admin to ${step}`;
 }
+
+/**
+ * {@link appsPage} for a sentence written in Chinese, as the fork's own sentences are: 插件页 in the
+ * team edition, 连接页 in the personal one (upstream #1277).
+ */
+export function appsPageZh(): "插件页" | "连接页" {
+  return currentEdition() === "personal" ? "连接页" : "插件页";
+}
+
+/** {@link askAdminTo} for a sentence written in Chinese: the one person is asked directly. */
+export function askAdminToZh(step: string): string {
+  return currentEdition() === "personal" ? `请${step}` : `请管理员${step}`;
+}

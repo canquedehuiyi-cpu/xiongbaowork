@@ -73,6 +73,7 @@ tests/approvals-saved-call.test.ts
 tests/approvals-store.integration.test.ts
 tests/approvals-zh-handoff.test.ts
 tests/approvals.test.ts
+tests/apps-page-wording.test.ts
 tests/ask-person-free-text.integration.test.ts
 tests/ask-person-one-part.integration.test.ts
 tests/assertion-shape.test.ts

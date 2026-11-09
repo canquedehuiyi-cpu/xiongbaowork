@@ -5,6 +5,7 @@ import type { AdminScope } from "../auth/admin-scope";
 import type { AppVariables } from "../auth/guards";
 import { requireAdmin } from "../auth/guards";
 import { reasonWithoutStatement } from "../db/query-failure";
+import { appsPage, appsPageZh, askAdminTo, askAdminToZh } from "../edition";
 import {
   capabilityFor,
   currentTenant,
@@ -1219,7 +1220,7 @@ export function createPluginRoutes(
       if (error instanceof CatalogueEntryUnknownError) {
         return context.json(
           {
-            error: `${app.name} was added, and then could not be read back out of this deployment's own servers — so the row and its trail entry stand, and what is on this page may be missing it. Reload the Plugins page: if ${app.name} is there it is enabled and there is nothing to redo, and if it is not, adding it again is safe.`,
+            error: `${app.name} was added, and then could not be read back out of this deployment's own servers — so the row and its trail entry stand, and what is on this page may be missing it. Reload the ${appsPage()} page: if ${app.name} is there it is enabled and there is nothing to redo, and if it is not, adding it again is safe.`,
           },
           409,
         );
@@ -1634,7 +1635,7 @@ export function createPluginRoutes(
           return context.json(
             {
               // A person reads this (upstream #1223): no connector provider named.
-              error: `${row.title} 没有要填写的内容，所以没有建立任何连接。请管理员在插件页移除它，再重新添加。`,
+              error: `${row.title} 没有要填写的内容，所以没有建立任何连接。${askAdminToZh(`在${appsPageZh()}移除它，再重新添加`)}。`,
             },
             400,
           );
@@ -1713,7 +1714,7 @@ export function createPluginRoutes(
           return context.json(
             {
               // A person reads this (upstream #1223): no connector provider named.
-              error: `${row.title} 没有标出必须填写的项（只有 ${optional}），所以没有建立任何连接。请管理员在插件页移除它，再重新添加。`,
+              error: `${row.title} 没有标出必须填写的项（只有 ${optional}），所以没有建立任何连接。${askAdminToZh(`在${appsPageZh()}移除它，再重新添加`)}。`,
             },
             400,
           );
@@ -1899,7 +1900,7 @@ export function createPluginRoutes(
         return context.json(
           {
             // English, because the route's tests pin "cannot tell how"; no provider named (upstream #1223).
-            error: `OpenBot cannot tell how ${row.title} connects, so nothing was sent and no account was made. Ask an admin to remove it on the Plugins page and add it again.`,
+            error: `OpenBot cannot tell how ${row.title} connects, so nothing was sent and no account was made. ${askAdminTo(`remove it on the ${appsPage()} page and add it again`)}.`,
           },
           400,
         );
