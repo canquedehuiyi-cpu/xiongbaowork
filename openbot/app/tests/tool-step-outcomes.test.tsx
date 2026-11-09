@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { cleanup, render } from "@testing-library/react";
 import { ServerToolLine } from "@/components/channels/chat-transcript";
@@ -24,10 +25,68 @@ function line(name: string, result?: string, args = "{}") {
   return view.container.textContent ?? "";
 }
 
-test("a refused line keeps what was refused beside the word", () => {
-  const text = render(<ToolLine label="执行了命令" refused />).container
+test("a refused line names what was tried, not what was done", () => {
+  const text = render(
+    <ToolLine blockedLabel="执行命令" label="执行了命令" refused />,
+  ).container.textContent;
+  expect(text).toContain("已拦截：执行命令");
+  // 「执行了命令」说的是命令已经执行了，被拦截时正好相反。
+  expect(text).not.toContain("执行了命令");
+});
+
+test("a line that was not refused keeps its done label", () => {
+  const text = render(<ToolLine blockedLabel="执行命令" label="执行了命令" />)
+    .container.textContent;
+  expect(text).toContain("执行了命令");
+  const failed = render(
+    <ToolLine blockedLabel="保存文件" failed label="保存了文件" />,
+  ).container.textContent;
+  expect(failed).toContain("保存了文件，没有成功");
+});
+
+test("a refused line with no blocked label falls back to its label", () => {
+  const text = render(<ToolLine label="Create note" refused />).container
     .textContent;
-  expect(text).toContain("已拦截：执行了命令");
+  expect(text).toContain("已拦截：Create note");
+});
+
+/*
+ * 电脑工具的每一处标签都是完成式（「读取了页面」），被拦截时要换成未完成式。逐处对照评审给出的表；
+ * 新加一处标签而没给未完成式，这条测试就会失败。
+ */
+test("every computer step names, for a blocked line, what it tried", () => {
+  const source = readFileSync(
+    new URL("../src/lib/copilot/computer-tools.tsx", import.meta.url),
+    "utf8",
+  );
+  const expected: Record<string, string> = {
+    读取了页面: "读取页面",
+    填写了: "填写",
+    点击了: "点击",
+    按下了: "按键",
+    列出了文件: "列出文件",
+    读取了文件: "读取文件",
+    执行了命令: "执行命令",
+    保存了文件: "保存文件",
+    追加到文件: "追加到文件",
+    滚动了: "滚动",
+    查看了本机应用: "查看本机应用",
+    调用了本机应用: "调用本机应用",
+    启用了本机应用: "启用本机应用",
+    查看了桌面窗口: "查看桌面窗口",
+    读取了桌面窗口: "读取桌面窗口",
+  };
+  const done = [...source.matchAll(/"([^"]*)"/g)]
+    .map((match) => match[1] ?? "")
+    .filter((text) => text in expected);
+  expect(new Set(done)).toEqual(new Set(Object.keys(expected)));
+  for (const [label, blocked] of Object.entries(expected)) {
+    // Each done label sits beside its blocked label at the call site.
+    const at = source.indexOf(`"${label}"`);
+    const near = source.slice(Math.max(0, at - 200), at + 200);
+    expect(near).toContain(`"${blocked}"`);
+    expect(near).toContain("blockedLabel");
+  }
 });
 
 test("a declined line says the person declined it, not that it was blocked", () => {
@@ -102,4 +161,32 @@ test("a boundary's refusal still reads as blocked", () => {
   const text = line("mcp__notes__create_note", "Refused. The rule says no.");
   expect(text).toContain("已拦截：Create note");
   expect(text).not.toContain("已拒绝");
+});
+
+/*
+ * 文件夹工具门（`server/src/host-access/tools.ts`）把失败和当场被拒都包成
+ * 「That host operation could not be completed: …」。失败读成没有成功；包着的是主人拒绝的那句话时，
+ * 读成已拒绝，和异步审批被拒走同一条显示路径。
+ */
+test("a folder step that could not be completed reads as not having worked", () => {
+  const text = line(
+    "host_read_file",
+    "That host operation could not be completed: ENOENT: no such file",
+    JSON.stringify({ grantId: "g", path: "missing.txt" }),
+  );
+  expect(text).toContain("host_read_file，没有成功");
+  expect(text).not.toContain("已拦截");
+});
+
+test("a folder step the person declined at once reads as declined, not as the sentence for the Bot", () => {
+  const text = line(
+    "host_write_file",
+    `That host operation could not be completed: ${DECLINED_BY_PERSON}`,
+    JSON.stringify({ grantId: "host-grant-1", path: "notes.txt" }),
+  );
+  expect(text).toContain("已拒绝");
+  expect(text).toContain("notes.txt · 你拒绝了这一步。");
+  expect(text).not.toContain("没有成功");
+  expect(text).not.toContain("Do not try this action");
+  expect(text).not.toContain("host-grant-");
 });

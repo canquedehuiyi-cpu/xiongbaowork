@@ -145,10 +145,23 @@ export function refusalOf(answer: string | undefined): Refusal | undefined {
   if (answer === undefined) return undefined;
   const marked = answer.startsWith(REFUSAL_MARKER);
   const reason = marked ? answer.slice(REFUSAL_MARKER.length).trim() : answer;
-  if (reason.trim() === DECLINED_BY_PERSON)
+  // 文件夹工具门把当场抛出的拒绝也包成「没能完成」，剥掉这层再认是不是主人拒绝的那句话。
+  const unwrapped = reason.startsWith(HOST_NOT_COMPLETED)
+    ? reason.slice(HOST_NOT_COMPLETED.length)
+    : reason;
+  if (unwrapped.trim() === DECLINED_BY_PERSON)
     return { reason: DECLINED_FOR_PERSON, declined: true };
   return marked ? { reason, declined: false } : undefined;
 }
+
+/**
+ * 文件夹工具门（`server/src/host-access/tools.ts` 的 `answer`）给失败的操作加的前缀，冒号和空格在内。
+ *
+ * 它不只包失败：审批服务当场抛出的拒绝（主人先前已经拒绝过同样的动作）也从同一个 catch 出来，
+ * 被包成「That host operation could not be completed: <DECLINED_BY_PERSON>」。{@link refusalOf}
+ * 先剥掉它再认主人的拒绝，{@link toolResultFailed} 把其余的算作失败。
+ */
+const HOST_NOT_COMPLETED = "That host operation could not be completed: ";
 
 /**
  * Claude Agent SDK 适配器包装失败的格式里的文本；不是这个格式就是 undefined。
@@ -219,14 +232,17 @@ export function unofferedTool(result: string | undefined): boolean {
 /**
  * 服务端工具是否以失败告终，而不是返回了结果。
  *
- * 这两个前缀由服务端的两道工具门（`server/src/plugins/tools.ts`、`server/src/app.ts`）在区分完
- * 「策略拒绝」和「执行失败」之后写入。拒绝有自己的标记，不能并进这个状态。
+ * 前两个前缀由服务端的工具门（`server/src/plugins/tools.ts`、`server/src/app.ts`）在区分完
+ * 「策略拒绝」和「执行失败」之后写入；第三个是文件夹工具门（`server/src/host-access/tools.ts`）的。
+ * 拒绝有自己的标记，不能并进这个状态；文件夹工具门包着的主人拒绝由 {@link refusalOf} 先认走，
+ * 调用方只在不是拒绝时才问这里。
  */
 export function toolResultFailed(result: string | undefined): boolean {
   if (result === undefined) return false;
   const answer = asText(result);
   return (
     answer.startsWith("The vendor reported an error:") ||
-    answer.startsWith("That tool could not be called")
+    answer.startsWith("That tool could not be called") ||
+    answer.startsWith(HOST_NOT_COMPLETED)
   );
 }

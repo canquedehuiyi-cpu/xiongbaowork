@@ -145,6 +145,14 @@ describe("telling a failed tool from a successful one", () => {
     ).toBe(true);
   });
 
+  test("a folder operation that could not be completed is a failure", () => {
+    expect(
+      toolResultFailed(
+        "That host operation could not be completed: ENOENT: no such file",
+      ),
+    ).toBe(true);
+  });
+
   test("ordinary results, refusals and running calls are not failures", () => {
     expect(toolResultFailed("Found 12 results.")).toBe(false);
     expect(toolResultFailed("Refused. The rule says no.")).toBe(false);
@@ -213,6 +221,18 @@ describe("a step that was refused or declined", () => {
       reason: DECLINED_FOR_PERSON,
       declined: true,
     });
+  });
+
+  test("the folder door's wrapper around the person's no is still the person's no", () => {
+    expect(
+      refusalOf(
+        `That host operation could not be completed: ${DECLINED_BY_PERSON}`,
+      ),
+    ).toEqual({ reason: DECLINED_FOR_PERSON, declined: true });
+    // Any other folder failure is a failure, not a refusal.
+    expect(
+      refusalOf("That host operation could not be completed: ENOENT"),
+    ).toBeUndefined();
   });
 
   test("an ordinary answer, or none, is not a refusal", () => {

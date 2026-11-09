@@ -9,7 +9,6 @@ import {
   type ApprovalRuleRow,
   answerPersonQuestion,
   approvalInboxOptions,
-  approvalTargetName,
   BEHAVIOUR_LABELS,
   createApprovalRule,
   createTeamApprovalRule,
@@ -26,6 +25,7 @@ import {
   updateTeamApprovalRule,
 } from "@/lib/approvals";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
+import { approvalTargetName } from "./inline-approval";
 
 const HOST_LABELS: Record<HostCommandPolicy, string> = {
   ask: "每次都问",

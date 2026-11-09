@@ -12,6 +12,7 @@ import type { ReactNode } from "react";
  */
 export function ToolLine({
   label,
+  blockedLabel,
   detail,
   running,
   refused,
@@ -21,6 +22,11 @@ export function ToolLine({
 }: {
   /** What was done, in a couple of words: "Searched Slack", "Filled in", "Read the page". */
   label: string;
+  /**
+   * 被拦截或被拒绝时用的说法，未完成式：「执行命令」，不是「执行了命令」。`label` 多是完成式，
+   * 拼成「已拦截：执行了命令」就成了命令已经执行了，与事实相反。不给就用 `label`。
+   */
+  blockedLabel?: string;
   /** What it was done to. Muted, and truncated rather than wrapped. */
   detail?: string;
   running?: boolean;
@@ -48,7 +54,7 @@ export function ToolLine({
       <span className="shrink-0">
         {/* 拦下的是哪一步也写出来，不只一个「已拦截」。 */}
         {refused
-          ? `${declined ? "已拒绝" : "已拦截"}：${label}`
+          ? `${declined ? "已拒绝" : "已拦截"}：${blockedLabel ?? label}`
           : failed
             ? `${label}，没有成功`
             : label}

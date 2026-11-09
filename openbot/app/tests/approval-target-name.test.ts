@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { approvalTargetName } from "../src/lib/approvals";
+import { approvalTargetName } from "../src/components/approvals/inline-approval";
 
 /*
  * 审批卡片上的「目标」（上游 #1230）。主人电脑上的文件夹以前写成授权 id：
