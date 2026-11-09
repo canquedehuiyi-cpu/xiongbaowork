@@ -4493,7 +4493,7 @@ await startupLifecycle.run(async (startup) => {
     createPlatformRoutes(
       database,
       config.singleUser
-        ? createDevRequireUser()
+        ? createDevRequireUser(config.singleUserAccess)
         : createRequireUser(auth as AuthService, roleRepository),
       signInAuditStore,
       // Spec J5's cross-tenant reads, through the admin capability like `/api/admin/audit-events`.
@@ -4513,7 +4513,7 @@ await startupLifecycle.run(async (startup) => {
     createChannelDispatchRoutes(
       channelDispatch,
       config.singleUser
-        ? createDevRequireUser()
+        ? createDevRequireUser(config.singleUserAccess)
         : createRequireUser(auth as AuthService, roleRepository),
     ),
   );
@@ -4527,7 +4527,7 @@ await startupLifecycle.run(async (startup) => {
     createTaskRoutes(
       database,
       config.singleUser
-        ? createDevRequireUser()
+        ? createDevRequireUser(config.singleUserAccess)
         : createRequireUser(auth as AuthService, roleRepository),
       taskProjector,
     ),
@@ -4542,7 +4542,7 @@ await startupLifecycle.run(async (startup) => {
     createModelRoutes(
       database,
       config.singleUser
-        ? createDevRequireUser()
+        ? createDevRequireUser(config.singleUserAccess)
         : createRequireUser(auth as AuthService, roleRepository),
       credentialStore,
       config.keyEncryptionKey,
@@ -4576,7 +4576,7 @@ await startupLifecycle.run(async (startup) => {
       database,
       quota,
       config.singleUser
-        ? createDevRequireUser()
+        ? createDevRequireUser(config.singleUserAccess)
         : createRequireUser(auth as AuthService, roleRepository),
     ),
   );
@@ -4586,7 +4586,7 @@ await startupLifecycle.run(async (startup) => {
     createDeviceRoutes(
       deviceStore,
       config.singleUser
-        ? createDevRequireUser()
+        ? createDevRequireUser(config.singleUserAccess)
         : createRequireUser(auth as AuthService, roleRepository),
       deviceQueue,
       (target) => {
@@ -4602,7 +4602,7 @@ await startupLifecycle.run(async (startup) => {
     createProjectRoutes(
       projectStore,
       config.singleUser
-        ? createDevRequireUser()
+        ? createDevRequireUser(config.singleUserAccess)
         : createRequireUser(auth as AuthService, roleRepository),
       {
         isReachable: (target) => deviceChannel.isReachable(target),
@@ -4618,7 +4618,7 @@ await startupLifecycle.run(async (startup) => {
     createAvatarSourceRoutes(
       avatarSourceStore,
       config.singleUser
-        ? createDevRequireUser()
+        ? createDevRequireUser(config.singleUserAccess)
         : createRequireUser(auth as AuthService, roleRepository),
     ),
   );
@@ -4628,7 +4628,7 @@ await startupLifecycle.run(async (startup) => {
     createAutonomousRoutes(
       createAutonomousStore(database),
       config.singleUser
-        ? createDevRequireUser()
+        ? createDevRequireUser(config.singleUserAccess)
         : createRequireUser(auth as AuthService, roleRepository),
     ),
   );
@@ -4652,7 +4652,7 @@ await startupLifecycle.run(async (startup) => {
     createAutomationRoutes(
       automationStore,
       config.singleUser
-        ? createDevRequireUser()
+        ? createDevRequireUser(config.singleUserAccess)
         : createRequireUser(auth as AuthService, roleRepository),
       automationIngress,
     ),
@@ -4663,7 +4663,7 @@ await startupLifecycle.run(async (startup) => {
     createWakerGroupRoutes(
       createWakerGroupStore(database),
       config.singleUser
-        ? createDevRequireUser()
+        ? createDevRequireUser(config.singleUserAccess)
         : createRequireUser(auth as AuthService, roleRepository),
     ),
   );
@@ -4675,7 +4675,7 @@ await startupLifecycle.run(async (startup) => {
       createPortraitStore(database),
       coworkerFaceAccess(agentProfileStore),
       config.singleUser
-        ? createDevRequireUser()
+        ? createDevRequireUser(config.singleUserAccess)
         : createRequireUser(auth as AuthService, roleRepository),
     ),
   );
@@ -4686,7 +4686,7 @@ await startupLifecycle.run(async (startup) => {
       textTranslationStore,
       pluginStore,
       config.singleUser
-        ? createDevRequireUser()
+        ? createDevRequireUser(config.singleUserAccess)
         : createRequireUser(auth as AuthService, roleRepository),
     ),
   );
@@ -4697,7 +4697,7 @@ await startupLifecycle.run(async (startup) => {
     createPipelineRoutes(
       pipelineStore,
       config.singleUser
-        ? createDevRequireUser()
+        ? createDevRequireUser(config.singleUserAccess)
         : createRequireUser(auth as AuthService, roleRepository),
     ),
   );
@@ -4708,7 +4708,7 @@ await startupLifecycle.run(async (startup) => {
     createWakerFlowRoutes({
       store: wakerFlowStore,
       requireUser: config.singleUser
-        ? createDevRequireUser()
+        ? createDevRequireUser(config.singleUserAccess)
         : createRequireUser(auth as AuthService, roleRepository),
     }),
   );
@@ -4718,7 +4718,7 @@ await startupLifecycle.run(async (startup) => {
     createWakerFlowShareRoutes({
       store: wakerFlowStore,
       requireUser: config.singleUser
-        ? createDevRequireUser()
+        ? createDevRequireUser(config.singleUserAccess)
         : createRequireUser(auth as AuthService, roleRepository),
     }),
   );
@@ -4728,7 +4728,7 @@ await startupLifecycle.run(async (startup) => {
     createPersonaRoutes(
       createPersonaTemplateStore(database),
       config.singleUser
-        ? createDevRequireUser()
+        ? createDevRequireUser(config.singleUserAccess)
         : createRequireUser(auth as AuthService, roleRepository),
     ),
   );
@@ -4753,7 +4753,7 @@ await startupLifecycle.run(async (startup) => {
         quota,
       }),
       config.singleUser
-        ? createDevRequireUser()
+        ? createDevRequireUser(config.singleUserAccess)
         : createRequireUser(auth as AuthService, roleRepository),
     ),
   );
@@ -4764,7 +4764,7 @@ await startupLifecycle.run(async (startup) => {
     createKnowledgeRoutes(
       knowledgeStore,
       config.singleUser
-        ? createDevRequireUser()
+        ? createDevRequireUser(config.singleUserAccess)
         : createRequireUser(auth as AuthService, roleRepository),
     ),
   );
