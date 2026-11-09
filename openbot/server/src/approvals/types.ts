@@ -6,7 +6,7 @@ import {
   type RunAgentInput,
   RunAgentInputSchema,
 } from "@ag-ui/client";
-import type { AuditInitiator } from "../audit";
+import type { AuditEventInput, AuditInitiator } from "../audit";
 
 /** `handled` answers a hand-off: the person did it themselves, so it is never executed for them. */
 export type ApprovalDecision =
@@ -81,6 +81,13 @@ export type ApprovalPolicyOutcome = {
      * （见 `offersStandingRule`）。
      */
     | "outbound_send"
+    /**
+     * 应用工具把内容分享给别人，或改变谁能访问（共享链接、权限、协作者）：总是先问，且只能
+     * 「允许一次」（见 `offersStandingRule`）。
+     */
+    | "share_access"
+    /** 应用工具公开发布（发帖、转发、开直播、发版本）：总是先问，且只能「允许一次」。 */
+    | "publish_post"
     | "auto_review"
     | "default"
     /** The person already declined this action, or an equivalent, earlier in this conversation. */
@@ -139,6 +146,11 @@ export type ApprovalSubject = {
    * 认定它是应用工具：服务器 id 由管理员起名，可以叫 `host` 或 `memory`，不能靠 ref 前缀判断。
    */
   connector?: true;
+  /**
+   * 这次电脑调用要按的键（`computer_key` 的键；`computer_type` 带 `submit` 时是 Enter），由网关从
+   * 调用处给出。键盘发送底线据此判断是不是把写好的东西发了出去（见 ./policy 的 `pressesSend`）。
+   */
+  key?: string;
   // --- desktop control (sub-project 2) ---
   /**
    * 要读的桌面窗口（设备端桌面查看第 1 期）：网关从窗口列表里拿到的标题，以及它命中的敏感词。
@@ -170,19 +182,37 @@ export type ApprovalCandidate = {
    */
   destructive?: true;
   continuation?: ApprovalContinuation;
+  /**
+   * The row the trail records for this action if the person denies it, built by the code that would
+   * have carried it out, so a denial reads like that surface's other refusals and lands in the
+   * Blocked view. Written once, with the decision, in the transaction that saves it (./store
+   * `decide`). Never holds the arguments. Not part of what the person approves, so not in the
+   * action's digest.
+   */
+  declined?: AuditEventInput;
 };
 
-/** 只能「允许一次」的底线：它们在任何规则之后仍然要问。 */
-const ONCE_ONLY_SOURCES: ReadonlySet<string> = new Set([
-  "destructive_tool",
-  "outbound_send",
-]);
+/**
+ * 只能「允许一次」的底线：它们在任何规则之后仍然要问。值是有人仍然按「总是允许」时服务端回的话
+ * （./store 的 `decide`）。
+ */
+export const ONCE_ONLY_SOURCES: Readonly<Record<string, string>> = {
+  destructive_tool:
+    "这个操作会删除或覆盖内容，每次都要你确认，只能「允许一次」或拒绝。",
+  outbound_send:
+    "这个操作可能会把内容发给别人，每次都要你确认，只能「允许一次」或拒绝。",
+  share_access:
+    "这个操作会分享内容或改变谁能访问，每次都要你确认，只能「允许一次」或拒绝。",
+  publish_post:
+    "这个操作会公开发布内容，每次都要你确认，只能「允许一次」或拒绝。",
+};
 
 /**
  * 这条审批能不能用「在这里总是允许」来回答，也就是存一条长期规则。
  *
  * 删除、归档和应用标为破坏性的操作不行：它们在任何规则之后仍然要问（`destructive_tool` 底线），
- * 存下的规则下次根本用不上，只会误导人。应用工具把内容发给别人（`outbound_send` 底线）同理。
+ * 存下的规则下次根本用不上，只会误导人。把内容发给别人（`outbound_send`）、分享或改动访问权限
+ * （`share_access`）、公开发布（`publish_post`）同理。
  * 「允许一次」和「拒绝」照常提供。
  *
  * 服务端据此拒绝这种规则（./store 的 `decide`），聊天卡片据此不画这个按钮
@@ -191,7 +221,7 @@ const ONCE_ONLY_SOURCES: ReadonlySet<string> = new Set([
 export function offersStandingRule(action: {
   policy?: { source: string } | undefined;
 }): boolean {
-  return !ONCE_ONLY_SOURCES.has(action.policy?.source ?? "");
+  return !Object.hasOwn(ONCE_ONLY_SOURCES, action.policy?.source ?? "");
 }
 export type ApprovalAction = ApprovalCandidate & {
   runId: string;
@@ -407,6 +437,17 @@ export class ApprovalRefusedError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "ApprovalRefusedError";
+  }
+}
+/**
+ * This same call was answered already: it was denied, it failed, or its approval was used or
+ * revoked. What it got then is what it gets now. Nothing new was turned away, so the code that asked
+ * the gate records nothing new for it.
+ */
+export class ApprovalAlreadyAnsweredError extends ApprovalRefusedError {
+  constructor(message: string) {
+    super(message);
+    this.name = "ApprovalAlreadyAnsweredError";
   }
 }
 export class ApprovalNotFoundError extends Error {

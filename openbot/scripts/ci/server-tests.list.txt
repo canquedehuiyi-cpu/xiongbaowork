@@ -42,6 +42,7 @@ tests/approval-recovery-port.test.ts
 tests/approvals-continuation-protocol.test.ts
 tests/approvals-continuation-recovery.test.ts
 tests/approvals-database-settlement.integration.test.ts
+tests/approvals-declined-audit.integration.test.ts
 tests/approvals-desktop-policy.test.ts
 tests/approvals-destructive-tool.integration.test.ts
 tests/approvals-employee-permissions.integration.test.ts
@@ -55,12 +56,14 @@ tests/approvals-question-board.test.ts
 tests/approvals-question-resume.integration.test.ts
 tests/approvals-questions.test.ts
 tests/approvals-store.integration.test.ts
+tests/approvals-zh-handoff.test.ts
 tests/approvals.test.ts
 tests/attachment-mime.test.ts
 tests/attachment-parts.test.ts
 tests/attachment-routes.test.ts
 tests/attachment-store.test.ts
 tests/attachment-sweeper.test.ts
+tests/audit-approval-outcomes.integration.test.ts
 tests/audit-cursor.integration.test.ts
 tests/audit-cursor.test.ts
 tests/audit-initiator.integration.test.ts
@@ -92,6 +95,7 @@ tests/bot-lifecycle-watcher.test.ts
 tests/bot-lifecycle.integration.test.ts
 tests/brokered-relist.integration.test.ts
 tests/brokered-relist.test.ts
+tests/browser-search-guidance.test.ts
 tests/builtin-routines.test.ts
 tests/bunfig-preload.test.ts
 tests/catalogue-bot-grants.integration.test.ts
@@ -137,6 +141,7 @@ tests/computer-page-frame-route.test.ts
 tests/computer-page-frame-store.integration.test.ts
 tests/computer-policy-dry-run-frame.test.ts
 tests/computer-policy-dry-run-limit.test.ts
+tests/computer-policy-key-names.test.ts
 tests/computer-policy-route.test.ts
 tests/computer-policy.test.ts
 tests/computer-provider.test.ts
@@ -319,6 +324,7 @@ tests/project-context.integration.test.ts
 tests/provider-error-run-error.test.ts
 tests/provider-oauth-lock-helper.test.ts
 tests/provider-oauth.test.ts
+tests/provider-tool-schemas.test.ts
 tests/qoderwake-package.test.ts
 tests/quota-concurrency.integration.test.ts
 tests/quota-error-contract.test.ts

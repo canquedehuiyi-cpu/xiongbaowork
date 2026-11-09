@@ -14,7 +14,9 @@ import { MCPMock, type MCPToolDefinition } from "@copilotkit/aimock/mcp";
 import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import { and, asc, eq, gte, inArray, sql } from "drizzle-orm";
 import { TOOL_DISABLED } from "../src/approvals/policy";
+import { ALREADY_WAITING, DECLINED_BY_PERSON } from "../src/approvals/service";
 import {
+  ApprovalAlreadyAnsweredError,
   type ApprovalCandidate,
   type ApprovalGate,
   ApprovalRefusedError,
@@ -46,7 +48,9 @@ import {
   CatalogueTransportUnroutableError,
   ServerRowAmbiguousError,
 } from "../src/plugins/access";
+import { listTools as listBaiduNetdiskTools } from "../src/plugins/baidu-netdisk-rest";
 import type { BrokerConnection, ComposioBroker } from "../src/plugins/broker";
+import { listTools as listRoutineTools } from "../src/plugins/builtin-routines";
 import type { CatalogueEntry } from "../src/plugins/catalogue";
 import { catalogueEntry } from "../src/plugins/catalogue";
 import {
@@ -68,10 +72,16 @@ import {
   PluginInvariantError,
   PluginRefusedError,
   type PluginStore,
+  storableTools,
   TokenRefusedError,
   unlistedAdvertisedTools,
 } from "../src/plugins/store";
 import { grantedTools, REFUSAL_MARKER } from "../src/plugins/tools";
+import {
+  createReadOnlyClassifier,
+  proactiveInitiator,
+  restrictToolsForRun,
+} from "../src/proactive/restriction";
 import { runAsTenant } from "../src/tenant/context";
 import fileActions from "./fixtures/composio-file-actions.json";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
@@ -4089,6 +4099,30 @@ describe("a custom server may not be named after one of the app's own screens", 
     }));
 });
 
+/*
+ * Nor the id OpenBot's own memory tools are spelled under (upstream proactive-connected-reads).
+ * Their refs are `memory/<tool>`, so a server at `memory` would list a second
+ * `memory/recall_personal_memory` beside the person's own.
+ */
+describe("the memory tools' own id", () => {
+  test("no server can be added under it", () =>
+    asPlatform(async () => {
+      const added = store.addCustomServer({
+        id: "memory",
+        title: "Memory",
+        url: "https://memory.invalid/mcp",
+        by: "admin@example.com",
+      });
+      await expect(added).rejects.toBeInstanceOf(CustomServerRefusedError);
+      await expect(added).rejects.toThrow("memory tools");
+      const rows = await database
+        .select({ id: mcpServers.id })
+        .from(mcpServers)
+        .where(eq(mcpServers.id, "memory"));
+      expect(rows).toHaveLength(0);
+    }));
+});
+
 /**
  * Which credential a custom server is allowed to be pointed at.
  *
@@ -5465,6 +5499,849 @@ test("SEC1: a connector call the gate refuses or holds never reaches the vendor"
     answer = "allow";
     await call();
     expect(executed).toBe(1);
+  }));
+
+/*
+ * A call the approval gate turns away is on the trail as refused (upstream #1106, plugin store). The
+ * row says who was refused and by what, never what was sent: no argument values, and it is filed in
+ * the caller's own tenant frame like the other refusals this method writes. A call already waiting
+ * for the person turns nothing new away and writes nothing.
+ */
+test("a connector call the approval gate turns away is a refused row, with no arguments and in the caller's tenant", () =>
+  asPlatform(async () => {
+    const DECLINED = "The person declined this action, so it was not done.";
+    let answer: "decline" | "waiting" = "decline";
+    const { store, database, auditStore } = await freshStore({
+      approvalGate: async () => {
+        throw new ApprovalRefusedError(
+          answer === "decline" ? DECLINED : ALREADY_WAITING,
+        );
+      },
+    });
+    let executed = 0;
+    useComposioClient({
+      listActions: async () => [],
+      execute: async () => {
+        executed += 1;
+        return vendorAnswered({ messages: [] });
+      },
+    });
+    await seedComposioGmail(database, store);
+    const call = () =>
+      store.callTool({
+        ref: "gmail/GMAIL_FETCH_EMAILS",
+        args: { query: "needle-argument-value-7731" },
+        botId: "bot_helper",
+        actorId: "user_asker",
+      });
+
+    await expect(call()).rejects.toThrow(DECLINED);
+    const refused = () =>
+      auditStore
+        .recorded()
+        .filter((event) => event.eventType === "mcp.call_rejected");
+    expect(refused()).toHaveLength(1);
+    expect(refused()[0]).toMatchObject({
+      targetType: "mcp_tool",
+      targetId: "gmail/GMAIL_FETCH_EMAILS",
+      payload: {
+        actor: "user_asker",
+        bot: "bot_helper",
+        server: "gmail",
+        tool: "GMAIL_FETCH_EMAILS",
+        decision: { carriedOut: false },
+        refusal: "approval",
+        reason: DECLINED,
+      },
+    });
+    expect(JSON.stringify(refused())).not.toContain(
+      "needle-argument-value-7731",
+    );
+
+    const [row] = await database
+      .select({ tenantId: auditEvents.tenantId })
+      .from(auditEvents)
+      .where(
+        and(
+          eq(auditEvents.eventType, "mcp.call_rejected"),
+          eq(sql<string>`${auditEvents.payload} ->> 'refusal'`, "approval"),
+          eq(sql<string>`${auditEvents.payload} ->> 'bot'`, "bot_helper"),
+        ),
+      );
+    // The frame the call ran in (the grant above is the deployment's, so this suite calls as it).
+    expect(row?.tenantId).toBe("platform");
+
+    answer = "waiting";
+    await expect(call()).rejects.toThrow(ALREADY_WAITING);
+    expect(refused()).toHaveLength(1);
+    expect(executed).toBe(0);
+  }));
+
+/*
+ * What the person's own "no" leaves on the trail (upstream #1106, `declined`). The call hands the
+ * gate the refused row it would have written itself, so the approval store can write it, once, the
+ * moment the person denies: refusal "person_declined", this tool and this Bot, never the arguments.
+ * A call the gate answers again with what it said before (an answer already given) turns nothing
+ * new away and writes nothing.
+ */
+test("a connector call hands the approval gate the refused row for the person's denial", () =>
+  asPlatform(async () => {
+    const asked: ApprovalCandidate[] = [];
+    let answer: "hold" | "answered" = "hold";
+    const { store, database, auditStore } = await freshStore({
+      approvalGate: async (candidate) => {
+        asked.push(candidate);
+        if (answer === "answered")
+          throw new ApprovalAlreadyAnsweredError(DECLINED_BY_PERSON);
+        throw new HeadlessToolSuspension(
+          "This action is waiting for your approval.",
+          { kind: "approval" },
+        );
+      },
+    });
+    useComposioClient({
+      listActions: async () => [],
+      execute: async () => vendorAnswered({ messages: [] }),
+    });
+    await seedComposioGmail(database, store);
+    const call = () =>
+      store.callTool({
+        ref: "gmail/GMAIL_FETCH_EMAILS",
+        args: { query: "needle-argument-value-5529" },
+        botId: "bot_helper",
+        actorId: "user_asker",
+      });
+
+    await expect(call()).rejects.toBeInstanceOf(HeadlessToolSuspension);
+    const declined = asked[0]?.declined;
+    expect(declined).toMatchObject({
+      eventType: "mcp.call_rejected",
+      targetType: "mcp_tool",
+      targetId: "gmail/GMAIL_FETCH_EMAILS",
+      payload: {
+        actor: "user_asker",
+        bot: "bot_helper",
+        server: "gmail",
+        tool: "GMAIL_FETCH_EMAILS",
+        decision: { carriedOut: false },
+        refusal: "person_declined",
+        reason: DECLINED_BY_PERSON,
+      },
+    });
+    expect(JSON.stringify(declined)).not.toContain("needle-argument-value-5529");
+    // Handing it over writes nothing: the row is the approval store's to write, on denial.
+    const refused = () =>
+      auditStore
+        .recorded()
+        .filter((event) => event.eventType === "mcp.call_rejected");
+    expect(refused()).toEqual([]);
+
+    // The same call answered already: nothing new was turned away, so no row.
+    answer = "answered";
+    await expect(call()).rejects.toThrow(DECLINED_BY_PERSON);
+    expect(refused()).toEqual([]);
+  }));
+
+/*
+ * A check-in only reads (upstream proactive-connected-reads), and the plugin store is the one door
+ * every call passes, so the rule is held there too and not only where a check-in's tools are loaded.
+ *
+ * Seeded the way a refresh records them: a vendor-labelled read; an action Composio said nothing
+ * about (`unclassified`, recorded as a write since 0146); a read the vendor also said destroys
+ * something; a plain write; and a server an administrator added by URL whose tool carries no label
+ * at all.
+ */
+const checkInNotes = `team-notes-${suite}`;
+async function seedCheckInTools(database: Database, store: PluginStore) {
+  await seedComposioGmail(database, store);
+  await database.insert(mcpTools).values([
+    {
+      serverId: "gmail",
+      name: "GMAIL_ARCHIVE",
+      description: "Archive an email.",
+      effect: "write",
+      unclassified: true,
+      version: "20260903_00",
+    },
+    {
+      serverId: "gmail",
+      name: "GMAIL_PURGE",
+      description: "Purge the trash.",
+      effect: "read",
+      destructive: true,
+      version: "20260903_00",
+    },
+    {
+      serverId: "gmail",
+      name: "GMAIL_SEND_EMAIL",
+      description: "Send an email.",
+      effect: "write",
+      version: "20260903_00",
+    },
+  ]);
+  await database.insert(mcpServers).values({
+    id: checkInNotes,
+    title: "Team Notes",
+    vendor: "Acme",
+    url: "https://notes.example.test/mcp",
+    provenance: "custom",
+  });
+  await database.insert(mcpTools).values({
+    serverId: checkInNotes,
+    name: "notes_digest",
+    description: "A digest of the notes.",
+  });
+  for (const granted of [
+    "gmail/GMAIL_ARCHIVE",
+    "gmail/GMAIL_PURGE",
+    "gmail/GMAIL_SEND_EMAIL",
+    `${checkInNotes}/notes_digest`,
+  ])
+    await store.grant("mcp", granted, "bot_helper", "admin@example.com");
+}
+
+test("a tool with no read-only label is not a read to a check-in", () =>
+  asPlatform(async () => {
+    const { store, database } = await freshStore();
+    await seedCheckInTools(database, store);
+    try {
+      const reads = await createReadOnlyClassifier(store)();
+      expect(reads.has("gmail/GMAIL_FETCH_EMAILS")).toBe(true);
+      for (const notARead of [
+        "gmail/GMAIL_ARCHIVE",
+        "gmail/GMAIL_PURGE",
+        "gmail/GMAIL_SEND_EMAIL",
+        `${checkInNotes}/notes_digest`,
+      ])
+        expect(reads.has(notARead)).toBe(false);
+    } finally {
+      await database.delete(mcpServers).where(eq(mcpServers.id, checkInNotes));
+    }
+  }));
+
+test("a check-in calling anything but a labelled read is refused at the store, as check_in_not_a_read, before the vendor", () =>
+  asPlatform(async () => {
+    const { store, database, auditStore } = await freshStore();
+    const executed: string[] = [];
+    useComposioClient({
+      listActions: async () => [],
+      execute: async (call) => {
+        executed.push(call.slug);
+        return vendorAnswered({ messages: [] });
+      },
+    });
+    await seedCheckInTools(database, store);
+    try {
+      const initiator = proactiveInitiator(`check-in-${suite}`);
+
+      for (const refused of [
+        "gmail/GMAIL_ARCHIVE",
+        "gmail/GMAIL_PURGE",
+        "gmail/GMAIL_SEND_EMAIL",
+        `${checkInNotes}/notes_digest`,
+      ]) {
+        await expect(
+          store.callTool({
+            ref: refused,
+            args: {},
+            botId: "bot_helper",
+            actorId: "user_asker",
+            initiator,
+          }),
+        ).rejects.toBeInstanceOf(PluginRefusedError);
+        const [server, tool] = refused.split("/");
+        expect(
+          auditStore
+            .recorded()
+            .filter(
+              (event) =>
+                event.eventType === "mcp.call_rejected" &&
+                event.targetId === refused,
+            ),
+        ).toEqual([
+          expect.objectContaining({
+            targetType: "mcp_tool",
+            initiator,
+            payload: {
+              actor: "user_asker",
+              bot: "bot_helper",
+              server,
+              tool,
+              refusal: "check_in_not_a_read",
+            },
+          }),
+        ]);
+      }
+      expect(executed).toEqual([]);
+
+      // The labelled read still goes through for the check-in.
+      const read = await store.callTool({
+        ref: "gmail/GMAIL_FETCH_EMAILS",
+        args: {},
+        botId: "bot_helper",
+        actorId: "user_asker",
+        initiator,
+      });
+      expect(read.isError).toBe(false);
+      expect(executed).toHaveLength(1);
+    } finally {
+      await database.delete(mcpServers).where(eq(mcpServers.id, checkInNotes));
+    }
+  }));
+
+test("a person's own call to a write is not a check-in's refusal", () =>
+  asPlatform(async () => {
+    const { store, database, auditStore } = await freshStore();
+    useComposioClient({
+      listActions: async () => [],
+      execute: async () => vendorAnswered({ messages: [] }),
+    });
+    await seedCheckInTools(database, store);
+    try {
+      await store
+        .callTool({
+          ref: "gmail/GMAIL_SEND_EMAIL",
+          args: {},
+          botId: "bot_helper",
+          actorId: "user_asker",
+        })
+        .catch(() => undefined);
+      expect(
+        auditStore
+          .recorded()
+          .filter(
+            (event) =>
+              (event.payload as { refusal?: string } | undefined)?.refusal ===
+              "check_in_not_a_read",
+          ),
+      ).toEqual([]);
+    } finally {
+      await database.delete(mcpServers).where(eq(mcpServers.id, checkInNotes));
+    }
+  }));
+
+/*
+ * 上游 proactive-connected-reads 的用例「Notion, connected with the person's own account: its
+ * read-only tool is read, its unlabeled and destructive tools are never offered, and chat still asks
+ * first」，按 fork 的接口改写。
+ *
+ * fork 没有上游那套端到端搭建（aimock、ownConnections、checkInToolsFor），也不记服务器自报的
+ * `readOnlyHint`（上游 0072 的 declared_read），所以这里：
+ * - Notion 的工具用 `storableTools` 按一次真实刷新的样子存下：自报只读的、什么标签都没有的、
+ *   标了 destructiveHint 的，外加上游审查名单里的 `notion-search`。前两个在 fork 里存下来是一样的，
+ *   都没有厂商记录的效果。
+ * - check-in 的工具清单是 `restrictToolsForRun` 包住 `grantedTools` 的结果，读集合是
+ *   `createReadOnlyClassifier(store)`，和 index.ts 的接法一样。
+ * - Notion 的 MCP 清单不带厂商记录的效果，所以 Notion 上能被 check-in 读的只有目录 `readTools`
+ *   审查过的名字（这里是 `notion-search`）；另外能读的是 Composio 记录为读的 Gmail 动作。
+ * - 聊天里，Notion 有了 `readTools`，名单外的名字都按写处理，人自己的调用按写来问。
+ */
+const notionDigest = `notion-digest-${suite}`; // 服务器自报 readOnlyHint，不在任何审查名单上
+const notionDraft = `notion-draft-${suite}`; // 什么标签都没有
+const notionErase = `notion-erase-${suite}`; // destructiveHint
+async function seedNotionForCheckIn(database: Database, store: PluginStore) {
+  await seedComposioGmail(database, store);
+  await database.insert(mcpTools).values({
+    serverId: "gmail",
+    name: "GMAIL_SEND_EMAIL",
+    description: "Send an email.",
+    effect: "write",
+    version: "20260903_00",
+  });
+  await database.insert(mcpServers).values({
+    id: "notion",
+    title: "Notion",
+    vendor: "Notion",
+    url: "https://mcp.notion.com/mcp",
+    provenance: "first-party",
+  });
+  const listed: Parameters<typeof storableTools>[1] = [
+    { name: "notion-search", description: "Search.", inputSchema: {} },
+    { name: notionDigest, description: "A digest.", inputSchema: {} },
+    {
+      name: notionDraft,
+      description: "A draft.",
+      inputSchema: {},
+      unclassified: true,
+    },
+    {
+      name: notionErase,
+      description: "Erase a page.",
+      inputSchema: {},
+      effect: "write",
+      destructive: true,
+    },
+  ];
+  await database
+    .insert(mcpTools)
+    .values(
+      storableTools("notion", listed, undefined, catalogueEntry("notion")),
+    );
+  for (const granted of [
+    "gmail/GMAIL_SEND_EMAIL",
+    "notion/notion-search",
+    `notion/${notionDigest}`,
+    `notion/${notionDraft}`,
+    `notion/${notionErase}`,
+  ])
+    await store.grant("mcp", granted, "bot_helper", "admin@example.com");
+}
+
+/** 一次 check-in 拿到的工具：`grantedTools` 经 `restrictToolsForRun` 收窄，和 index.ts 一样。 */
+async function checkInToolRefs(store: PluginStore, runId: string) {
+  const initiator = proactiveInitiator(runId);
+  const load = restrictToolsForRun(
+    initiator,
+    () =>
+      grantedTools({
+        store,
+        botId: "bot_helper",
+        actorId: "user_asker",
+        initiator,
+      }),
+    createReadOnlyClassifier(store),
+  );
+  return (await load()).map((tool) => tool.ref).sort();
+}
+
+/** 以 check-in 的身份调用，确认在 store 门被拒，写的是 check_in_not_a_read。 */
+async function expectCheckInRefused(
+  store: PluginStore,
+  auditStore: {
+    recorded(): {
+      eventType: string;
+      targetId?: string | null;
+      payload?: unknown;
+    }[];
+  },
+  ref: string,
+  runId: string,
+) {
+  await expect(
+    store.callTool({
+      ref,
+      args: {},
+      botId: "bot_helper",
+      actorId: "user_asker",
+      initiator: proactiveInitiator(runId),
+    }),
+  ).rejects.toBeInstanceOf(PluginRefusedError);
+  expect(
+    auditStore
+      .recorded()
+      .filter(
+        (event) =>
+          event.eventType === "mcp.call_rejected" && event.targetId === ref,
+      )
+      .map((event) => (event.payload as { refusal?: string }).refusal),
+  ).toEqual(["check_in_not_a_read"]);
+}
+
+test("Notion, connected with the person's own account: its reviewed read is read, its unlabeled, self-declared and destructive tools are never offered to a check-in, and chat still asks first", () =>
+  asPlatform(async () => {
+    const gateAsked: { toolRef: string; effect: string }[] = [];
+    const { store, database, auditStore } = await freshStore({
+      approvalGate: async (candidate) => {
+        gateAsked.push({
+          toolRef: candidate.toolRef,
+          effect: candidate.effect,
+        });
+        throw new ApprovalRefusedError(TOOL_DISABLED);
+      },
+    });
+    const executed: string[] = [];
+    useComposioClient({
+      listActions: async () => [],
+      execute: async (call) => {
+        executed.push(call.slug);
+        return vendorAnswered({ messages: [] });
+      },
+    });
+    await seedNotionForCheckIn(database, store);
+    const runId = `notion-check-in-${suite}`;
+
+    // 提供给 check-in 的：Gmail 记录为读的动作，Notion 审查过的读。没有标签的、自报只读的、
+    // 破坏性的 Notion 工具都不在，Gmail 的发送也不在。
+    expect(await checkInToolRefs(store, runId)).toEqual(
+      ["gmail/GMAIL_FETCH_EMAILS", "notion/notion-search"].sort(),
+    );
+    const reads = await createReadOnlyClassifier(store)();
+    for (const notARead of [
+      `notion/${notionDigest}`,
+      `notion/${notionDraft}`,
+      `notion/${notionErase}`,
+      "gmail/GMAIL_SEND_EMAIL",
+    ])
+      expect(reads.has(notARead)).toBe(false);
+
+    // 别的路径直接到 store，也一样被拒，且在审批门、凭据和厂商之前。
+    for (const ref of [
+      `notion/${notionDigest}`,
+      `notion/${notionDraft}`,
+      `notion/${notionErase}`,
+    ])
+      await expectCheckInRefused(store, auditStore, ref, runId);
+    expect(gateAsked).toEqual([]);
+    expect(executed).toEqual([]);
+
+    // 审查过的读和 Gmail 记录为读的动作能过 check-in 的门，接着才问审批门。
+    for (const ref of ["notion/notion-search", "gmail/GMAIL_FETCH_EMAILS"])
+      await expect(
+        store.callTool({
+          ref,
+          args: {},
+          botId: "bot_helper",
+          actorId: "user_asker",
+          initiator: proactiveInitiator(runId),
+        }),
+      ).rejects.toThrow(TOOL_DISABLED);
+    expect(gateAsked).toEqual([
+      { toolRef: "notion/notion-search", effect: "read" },
+      { toolRef: "gmail/GMAIL_FETCH_EMAILS", effect: "read" },
+    ]);
+
+    // 聊天：Notion 列了 readTools，名单外的名字都是写，人自己的调用按写来问。
+    const listed = (await store.listServers()).find(
+      (server) => server.id === "notion",
+    );
+    const effectOf = (name: string) =>
+      listed?.tools.find((tool) => tool.name === name)?.effect;
+    expect(effectOf("notion-search")).toBe("read");
+    expect(effectOf(notionDigest)).toBe("write");
+    expect(effectOf(notionDraft)).toBe("write");
+    expect(effectOf(notionErase)).toBe("write");
+    gateAsked.length = 0;
+    await expect(
+      store.callTool({
+        ref: `notion/${notionDigest}`,
+        args: {},
+        botId: "bot_helper",
+        actorId: "user_asker",
+      }),
+    ).rejects.toThrow(TOOL_DISABLED);
+    expect(gateAsked).toEqual([
+      { toolRef: `notion/${notionDigest}`, effect: "write" },
+    ]);
+  }));
+
+/*
+ * classifyTool 的默认推断不让工具进 check-in。
+ *
+ * Linear 的目录条目只有 `writeTools`，没有 `readTools`。它广播、又不在写名单上的工具，聊天里照旧
+ * 按读处理（这一条路径不变）；但没有厂商标签、也没有审查过的读名单替它作证，check-in 拿不到它，
+ * store 的门也拒绝它。
+ */
+test("a tool carrying no label at all is not in a check-in's tools, and the store refuses a check-in's call to it, though chat still reads it", () =>
+  asPlatform(async () => {
+    const gateAsked: { toolRef: string; effect: string }[] = [];
+    const { store, database, auditStore } = await freshStore({
+      approvalGate: async (candidate) => {
+        gateAsked.push({
+          toolRef: candidate.toolRef,
+          effect: candidate.effect,
+        });
+        throw new ApprovalRefusedError(TOOL_DISABLED);
+      },
+    });
+    useComposioClient({
+      listActions: async () => [],
+      execute: async () => vendorAnswered({ messages: [] }),
+    });
+    await seedComposioGmail(database, store);
+    const linearRow = `check-in-linear-${suite}`;
+    const unlabelled = `list_things_${suite}`;
+    expect(catalogueEntry("linear")?.readTools).toBeUndefined();
+    expect(catalogueEntry("linear")?.writeTools).not.toContain(unlabelled);
+    await database.insert(mcpServers).values({
+      id: linearRow,
+      catalogueKey: "linear",
+      title: "Linear",
+      vendor: "Linear",
+      url: "https://mcp.linear.app/mcp",
+      provenance: "first-party",
+    });
+    try {
+      await database.insert(mcpTools).values({
+        serverId: linearRow,
+        name: unlabelled,
+        description: "List things.",
+      });
+      await store.grant(
+        "mcp",
+        `linear/${unlabelled}`,
+        "bot_helper",
+        "admin@example.com",
+      );
+      const runId = `unlabelled-check-in-${suite}`;
+
+      // 聊天里照旧：广播了、不在写名单上，判为读。
+      const listed = (await store.listServers()).find(
+        (server) => server.id === linearRow,
+      );
+      expect(
+        listed?.tools.find((tool) => tool.name === unlabelled)?.effect,
+      ).toBe("read");
+
+      // check-in 里：不在工具清单，也不在读集合。
+      expect(await checkInToolRefs(store, runId)).toEqual([
+        "gmail/GMAIL_FETCH_EMAILS",
+      ]);
+      expect(
+        (await createReadOnlyClassifier(store)()).has(`linear/${unlabelled}`),
+      ).toBe(false);
+
+      // store 门拒绝，在审批门之前。
+      await expectCheckInRefused(
+        store,
+        auditStore,
+        `linear/${unlabelled}`,
+        runId,
+      );
+      expect(gateAsked).toEqual([]);
+
+      // 人自己在聊天里调用，check-in 的门不管，照旧按读去问审批门。
+      await expect(
+        store.callTool({
+          ref: `linear/${unlabelled}`,
+          args: {},
+          botId: "bot_helper",
+          actorId: "user_asker",
+        }),
+      ).rejects.toThrow(TOOL_DISABLED);
+      expect(gateAsked).toEqual([
+        { toolRef: `linear/${unlabelled}`, effect: "read" },
+      ]);
+    } finally {
+      await database.delete(mcpServers).where(eq(mcpServers.id, linearRow));
+    }
+  }));
+
+/*
+ * Notion 有了 `readTools` 以后，名单外的名字都按写处理：一个 Notion 以后新加、谁也没审查过的工具，
+ * 聊天里人自己调用要按写去问，check-in 既拿不到它，store 的门也拒绝它。
+ */
+test("a Notion tool off its reviewed read list is a write in chat and unavailable to a check-in", () =>
+  asPlatform(async () => {
+    const gateAsked: { toolRef: string; effect: string }[] = [];
+    const { store, database, auditStore } = await freshStore({
+      approvalGate: async (candidate) => {
+        gateAsked.push({
+          toolRef: candidate.toolRef,
+          effect: candidate.effect,
+        });
+        throw new ApprovalRefusedError(TOOL_DISABLED);
+      },
+    });
+    await seedComposioGmail(database, store);
+    await database.insert(mcpServers).values({
+      id: "notion",
+      title: "Notion",
+      vendor: "Notion",
+      url: "https://mcp.notion.com/mcp",
+      provenance: "first-party",
+    });
+    const added = `notion-archive-${suite}`;
+    const notion = catalogueEntry("notion");
+    expect(notion?.readTools).not.toContain(added);
+    expect(notion?.writeTools).not.toContain(added);
+    await database.insert(mcpTools).values(
+      storableTools(
+        "notion",
+        [
+          { name: "notion-fetch", description: "Fetch.", inputSchema: {} },
+          {
+            name: added,
+            description: "Archive a page.",
+            inputSchema: {},
+            unclassified: true,
+          },
+        ],
+        undefined,
+        notion,
+      ),
+    );
+    for (const granted of ["notion/notion-fetch", `notion/${added}`])
+      await store.grant("mcp", granted, "bot_helper", "admin@example.com");
+    const runId = `notion-unlisted-${suite}`;
+
+    // check-in：只拿到审查过的读，名单外的不在清单里，store 门也拒绝，在审批门之前。
+    expect(await checkInToolRefs(store, runId)).toEqual(
+      ["gmail/GMAIL_FETCH_EMAILS", "notion/notion-fetch"].sort(),
+    );
+    await expectCheckInRefused(store, auditStore, `notion/${added}`, runId);
+    expect(gateAsked).toEqual([]);
+
+    // 聊天：名单里的是读，名单外的是写，人自己的调用按写去问。
+    const listed = (await store.listServers()).find(
+      (server) => server.id === "notion",
+    );
+    const effectOf = (name: string) =>
+      listed?.tools.find((tool) => tool.name === name)?.effect;
+    expect(effectOf("notion-fetch")).toBe("read");
+    expect(effectOf(added)).toBe("write");
+    await expect(
+      store.callTool({
+        ref: `notion/${added}`,
+        args: {},
+        botId: "bot_helper",
+        actorId: "user_asker",
+      }),
+    ).rejects.toThrow(TOOL_DISABLED);
+    expect(gateAsked).toEqual([
+      { toolRef: `notion/${added}`, effect: "write" },
+    ]);
+  }));
+
+/*
+ * Google Drive 和百度网盘是 fork 自己写的内置传输，工具定义就在 google-drive-rest.ts 和
+ * baidu-netdisk-rest.ts 里，每个都只发 GET 请求。目录条目列了 `readTools` 以后，check-in 重新能读
+ * 它们：工具在 check-in 的清单里，store 的门放行，接着才去问审批门。
+ *
+ * Drive 用这个文件自己的 `google-drive` 行（beforeAll 建好的，只存了 `search_files`）。网盘用一行
+ * 带本套件后缀的服务器，`catalogueKey` 指向 `baidu-netdisk`，工具按真实刷新的样子用 `storableTools`
+ * 存下这个适配器广播的全部五个。
+ */
+test("a check-in reads Google Drive and Baidu Netdisk again, through their reviewed read lists", () =>
+  asPlatform(async () => {
+    const gateAsked: { toolRef: string; effect: string }[] = [];
+    const { store, database, auditStore } = await freshStore({
+      approvalGate: async (candidate) => {
+        gateAsked.push({
+          toolRef: candidate.toolRef,
+          effect: candidate.effect,
+        });
+        throw new ApprovalRefusedError(TOOL_DISABLED);
+      },
+    });
+    await seedComposioGmail(database, store);
+    const netdiskRow = `check-in-baidu-${suite}`;
+    const netdisk = catalogueEntry("baidu-netdisk");
+    const netdiskTools = await listBaiduNetdiskTools({
+      url: "https://pan.baidu.com/rest/2.0/xpan",
+    });
+    await database.insert(mcpServers).values({
+      id: netdiskRow,
+      catalogueKey: "baidu-netdisk",
+      title: "Baidu Netdisk",
+      vendor: "Baidu",
+      url: "https://pan.baidu.com/rest/2.0/xpan",
+      provenance: "first-party",
+    });
+    try {
+      await database
+        .insert(mcpTools)
+        .values(storableTools(netdiskRow, netdiskTools, undefined, netdisk));
+      const refs = [
+        `${serverId}/${toolName}`,
+        ...netdiskTools.map((tool) => `baidu-netdisk/${tool.name}`),
+      ];
+      for (const granted of refs)
+        await store.grant("mcp", granted, "bot_helper", "admin@example.com");
+      const runId = `builtin-reads-${suite}`;
+
+      expect(await checkInToolRefs(store, runId)).toEqual(
+        ["gmail/GMAIL_FETCH_EMAILS", ...refs].sort(),
+      );
+
+      for (const granted of refs)
+        await expect(
+          store.callTool({
+            ref: granted,
+            args: {},
+            botId: "bot_helper",
+            actorId: "user_asker",
+            initiator: proactiveInitiator(runId),
+          }),
+        ).rejects.toThrow(TOOL_DISABLED);
+      expect(gateAsked).toEqual(
+        refs.map((granted) => ({ toolRef: granted, effect: "read" })),
+      );
+      expect(
+        auditStore
+          .recorded()
+          .filter(
+            (event) =>
+              (event.payload as { refusal?: string } | undefined)?.refusal ===
+              "check_in_not_a_read",
+          ),
+      ).toEqual([]);
+    } finally {
+      await database.delete(mcpServers).where(eq(mcpServers.id, netdiskRow));
+    }
+  }));
+
+/*
+ * `list_triggers` 列出的 webhook 地址和邮件入站地址能触发任务，所以 check-in 读不到它：它不在
+ * Routines 的读名单上，不出现在 check-in 的清单里，store 的门也拒绝它。同一传输上的 `list_routines`
+ * 照旧能读。Routines 行带本套件后缀，`catalogueKey` 指向 `routines`，工具按真实刷新的样子存下。
+ */
+test("list_triggers is not available to a check-in, though list_routines is", () =>
+  asPlatform(async () => {
+    const gateAsked: { toolRef: string; effect: string }[] = [];
+    const { store, database, auditStore } = await freshStore({
+      approvalGate: async (candidate) => {
+        gateAsked.push({
+          toolRef: candidate.toolRef,
+          effect: candidate.effect,
+        });
+        throw new ApprovalRefusedError(TOOL_DISABLED);
+      },
+    });
+    await seedComposioGmail(database, store);
+    const routinesRow = `check-in-routines-${suite}`;
+    await database.insert(mcpServers).values({
+      id: routinesRow,
+      catalogueKey: "routines",
+      title: "Routines",
+      vendor: "OpenBot",
+      url: "builtin://routines/",
+      provenance: "first-party",
+    });
+    try {
+      await database
+        .insert(mcpTools)
+        .values(
+          storableTools(
+            routinesRow,
+            await listRoutineTools(),
+            undefined,
+            catalogueEntry("routines"),
+          ),
+        );
+      for (const granted of [
+        "routines/list_routines",
+        "routines/list_triggers",
+      ])
+        await store.grant("mcp", granted, "bot_helper", "admin@example.com");
+      const runId = `list-triggers-${suite}`;
+
+      expect(await checkInToolRefs(store, runId)).toEqual(
+        ["gmail/GMAIL_FETCH_EMAILS", "routines/list_routines"].sort(),
+      );
+      await expectCheckInRefused(
+        store,
+        auditStore,
+        "routines/list_triggers",
+        runId,
+      );
+      expect(gateAsked).toEqual([]);
+
+      // 同一传输上的 list_routines 能过 check-in 的门，接着才问审批门。
+      await expect(
+        store.callTool({
+          ref: "routines/list_routines",
+          args: {},
+          botId: "bot_helper",
+          actorId: "user_asker",
+          initiator: proactiveInitiator(runId),
+        }),
+      ).rejects.toThrow(TOOL_DISABLED);
+      expect(gateAsked).toEqual([
+        { toolRef: "routines/list_routines", effect: "read" },
+      ]);
+    } finally {
+      await database.delete(mcpServers).where(eq(mcpServers.id, routinesRow));
+    }
   }));
 
 test("a Composio call is recorded as reaching the vendor as the person, not as the deployment", () =>

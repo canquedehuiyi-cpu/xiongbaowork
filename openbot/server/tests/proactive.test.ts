@@ -143,6 +143,48 @@ describe("proactive read-only restriction", () => {
       )?.text,
     ).toStartWith("Refused.");
   });
+
+  /*
+   * The person's memory is OpenBot's own tool, reached by its bare name. A ref under `memory/` is a
+   * connector's (a server sitting at that id, as a hand edit or an older build left it), and is only
+   * a read if the catalogue says so, like any other connector tool.
+   */
+  test("a server sitting under the memory tools' id is not the person's memory to a check-in", async () => {
+    const classifier = createReadOnlyClassifier({
+      listServers: async () => [
+        {
+          id: "memory",
+          title: "Memory",
+          tools: [
+            {
+              ref: "memory/recall_personal_memory",
+              effect: "write",
+              destructive: false,
+            },
+          ],
+        },
+      ],
+    });
+    const run = { initiator: proactiveInitiator("memory") };
+    expect((await classifier()).has("memory/recall_personal_memory")).toBe(
+      false,
+    );
+    expect(
+      (
+        await guardProactiveCallback(
+          { name: "memory/recall_personal_memory", run },
+          classifier,
+        )
+      )?.text,
+    ).toStartWith("Refused.");
+    // The person's own memory, by the name OpenBot gives it, still reads.
+    expect(
+      await guardProactiveCallback(
+        { name: "recall_personal_memory", run },
+        classifier,
+      ),
+    ).toBeNull();
+  });
 });
 
 function lifecycle(input: RunAgentInput, body: BaseEvent[]): BaseEvent[] {
@@ -1029,5 +1071,62 @@ describe("private information sharing check", () => {
     ).toBe("allowed");
     expect((await check(input)).status).toBe("allowed");
     expect(opened).toHaveLength(0);
+  });
+});
+
+/*
+ * 读集合由 store 判定哪些工具可以给 check-in：store 对推断出来的读报 `checkInRead: false`，
+ * 这里就不算读，即使它在聊天里的 effect 是 read。
+ */
+describe("a check-in reads only what something vouched for", () => {
+  test("a tool the store says a check-in may not rely on is neither offered nor dispatched", async () => {
+    const calls: string[] = [];
+    const reader = {
+      listServers: async () => [
+        {
+          id: "linear",
+          title: "Linear",
+          tools: [
+            {
+              ref: "linear/list_issues",
+              effect: "read",
+              destructive: false,
+              checkInRead: true,
+            },
+            {
+              ref: "linear/list_things",
+              effect: "read",
+              destructive: false,
+              checkInRead: false,
+            },
+          ],
+        },
+      ],
+    };
+    const classifier = createReadOnlyClassifier(reader);
+    const reads = await classifier();
+    expect(reads.has("linear/list_issues")).toBe(true);
+    expect(reads.has("linear/list_things")).toBe(false);
+    const tools = await restrictToolsForRun(
+      proactiveInitiator("vouched"),
+      async () => [
+        granted("linear/list_issues", calls),
+        granted("linear/list_things", calls),
+      ],
+      classifier,
+    )();
+    expect(tools.map((tool) => tool.ref)).toEqual(["linear/list_issues"]);
+    expect(
+      (
+        await guardProactiveCallback(
+          {
+            name: "linear/list_things",
+            run: { initiator: proactiveInitiator("vouched") },
+          },
+          classifier,
+        )
+      )?.text,
+    ).toStartWith("Refused.");
+    expect(calls).toEqual([]);
   });
 });

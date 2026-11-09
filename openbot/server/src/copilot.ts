@@ -60,7 +60,11 @@ import {
   selectTools,
 } from "./plugins/selection";
 import type { GrantedTool } from "./plugins/tools";
-import { grantedToolGuidance } from "./plugins/tools";
+import {
+  BROWSER_SEARCH_TOOLS,
+  grantedToolGuidance,
+  holdsBrowserSearchTools,
+} from "./plugins/tools";
 import {
   isPersonTenant,
   runAsTenant,
@@ -605,6 +609,12 @@ export function builtInAgentConfiguration(
    * selection but a different transport with its own endpoint and harness.
    */
   agentModel?: LanguageModel,
+  /**
+   * 这次运行由界面或无人值守那套额外提供给模型的工具名（RunAgentInput.tools）。浏览器工具只从这里
+   * 来，据此决定是否给公开网页搜索引导（见 `holdsBrowserSearchTools`）。不传表示没有。追加在最后，
+   * 原因同上。
+   */
+  runToolNames: readonly string[] = [],
 ): BuiltInAgentConfiguration {
   if (!apiKey && !planModel && !agentModel) {
     return {
@@ -623,6 +633,18 @@ export function builtInAgentConfiguration(
   const project = projectGuidance(agent.currentProject);
   const persona = personaGuidance(agent.persona);
   const bible = bibleGuidance(agent.bible);
+  /*
+   * 这次运行实际持有浏览器工具时，才告诉员工查公开网页怎么搜（百度为主、必应备选）。按工具名判断，
+   * 不看 `computerGuidance`：纯设备模式的聊天没有电脑说明，浏览器工具却由前端照常提供。没有浏览器
+   * 工具时，这段与原来逐字一致。
+   */
+  const holdings = grantedToolGuidance(tools, connectedVendors, {
+    browser: holdsBrowserSearchTools([
+      ...tools.map((tool) => tool.name),
+      // 只认数组：较早的调用方可能在这个位置多传了一个无关参数。
+      ...(Array.isArray(runToolNames) ? runToolNames : []),
+    ]),
+  });
 
   return {
     model: planModel ?? agentModel ?? `${model.provider}/${model.defaultModel}`,
@@ -659,9 +681,7 @@ export function builtInAgentConfiguration(
       PROVENANCE_GUIDANCE,
       // How to read the untrusted-content envelope every outside result arrives in.
       UNTRUSTED_GUIDANCE,
-      ...(grantedToolGuidance(tools, connectedVendors)
-        ? [grantedToolGuidance(tools, connectedVendors)]
-        : []),
+      ...(holdings ? [holdings] : []),
       ...(computerGuidance ? [computerGuidance] : []),
     ].join("\n\n"),
     ...(planModel || agentModel ? {} : { apiKey: apiKey ?? undefined }),
@@ -1294,8 +1314,8 @@ async function buildAgent(
     tools: GrantedTool[],
     input?: RunAgentInput,
     signal?: AbortSignal,
-  ) =>
-    new BuiltInAgentWithSaneHistory(
+  ) => {
+    const configurationFor = (runToolNames?: readonly string[]) =>
       builtInAgentConfiguration(
         agent,
         model,
@@ -1314,10 +1334,20 @@ async function buildAgent(
             )
           : undefined,
         agentModel,
-      ),
+        runToolNames,
+      );
+    const runToolNames = input?.tools.map((tool) => tool.name);
+    return new BuiltInAgentWithSaneHistory(
+      configurationFor(runToolNames),
       loadAttachment,
       markAttachmentsSent,
+      /*
+       * 构建时还不知道这次运行带不带浏览器工具（它们随 RunAgentInput.tools 才来），所以备好一份含
+       * 公开网页搜索引导的配置，运行时带了就换用它。已按某次运行构建的（有 input）不需要。
+       */
+      runToolNames ? undefined : configurationFor(BROWSER_SEARCH_TOOLS),
     );
+  };
 
   const whole = withTools(granted);
   if (!narrowing && !handoff && !model.plan) return whole;
@@ -1937,19 +1967,40 @@ class BuiltInAgentWithSaneHistory extends BuiltInAgent {
    * of THIS class, and a seam lost in a clone is a seam that never runs.
    */
   private readonly markAttachmentsSent: MarkAttachmentsSent | undefined;
+  /**
+   * 这次运行带了浏览器工具（`computer_navigate` 和 `computer_read`）时换用的配置：提示词里多了公开
+   * 网页搜索引导。浏览器工具随 RunAgentInput.tools 才来，构建时不知道，所以在运行时选。
+   */
+  private readonly browserConfiguration: BuiltInAgentConfiguration | undefined;
+  /** 换用的那一个，留着让 Stop 能停到它。 */
+  private browserRun: BuiltInAgentWithSaneHistory | undefined;
 
   constructor(
     configuration: BuiltInAgentConfiguration,
     loadAttachment?: LoadAttachment,
     markAttachmentsSent?: MarkAttachmentsSent,
+    browserConfiguration?: BuiltInAgentConfiguration,
   ) {
     super(configuration);
     this.configuration = configuration;
     this.loadAttachment = loadAttachment;
     this.markAttachmentsSent = markAttachmentsSent;
+    this.browserConfiguration = browserConfiguration;
   }
 
   run(input: RunAgentInput): Observable<BaseEvent> {
+    if (
+      this.browserConfiguration &&
+      holdsBrowserSearchTools(input.tools.map((tool) => tool.name))
+    ) {
+      const browserRun = new BuiltInAgentWithSaneHistory(
+        this.browserConfiguration,
+        this.loadAttachment,
+        this.markAttachmentsSent,
+      );
+      this.browserRun = browserRun;
+      return browserRun.run(input);
+    }
     const answeredByResume = new Set(
       (input.resume ?? []).map((entry) => entry.interruptId),
     );
@@ -2014,12 +2065,19 @@ class BuiltInAgentWithSaneHistory extends BuiltInAgent {
       this.configuration,
       this.loadAttachment,
       this.markAttachmentsSent,
+      this.browserConfiguration,
     );
     type WithMiddlewares = { middlewares: unknown[] };
     (cloned as unknown as WithMiddlewares).middlewares = [
       ...(this as unknown as WithMiddlewares).middlewares,
     ];
     return cloned;
+  }
+
+  /** Stop 也要停到换用的那一个。 */
+  abortRun(): void {
+    this.browserRun?.abortRun();
+    super.abortRun();
   }
 }
 

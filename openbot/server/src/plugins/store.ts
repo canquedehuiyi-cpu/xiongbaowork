@@ -1,6 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
-import { type ApprovalGate, currentApprovalContext } from "../approvals/types";
+import { ALREADY_WAITING, DECLINED_BY_PERSON } from "../approvals/service";
+import {
+  ApprovalAlreadyAnsweredError,
+  type ApprovalGate,
+  ApprovalRefusedError,
+  currentApprovalContext,
+} from "../approvals/types";
 import {
   type AuditInitiator,
   type AuditStore,
@@ -54,6 +60,7 @@ import {
 } from "../db/schema/plugin-install-listings";
 import { SYSTEM_TENANT, TEAM_TENANT } from "../db/schema/tenant";
 import type { OutboundLookup, OutboundPolicy } from "../net/outbound-guard";
+import { isProactiveInitiator } from "../proactive/initiator";
 import type { CheckPrivateShare } from "../proactive/private-share";
 import {
   capabilityFor,
@@ -81,6 +88,7 @@ import {
   type CatalogueEntry,
   type CredentialPlacement,
   catalogueEntry,
+  checkInRead,
   classifyTool,
   credentialFormatRefusal,
   credentialPlacement,
@@ -152,6 +160,12 @@ export type ToolRecord = {
    * of a claim rather than a claim of safety.
    */
   destructive: boolean;
+  /**
+   * 无人值守的 check-in 能不能把它当读来调用：厂商记录为读，或目录 `readTools` 审查过，见
+   * {@link checkInRead}。`effect` 是聊天的判定，可能是 {@link classifyTool} 推断出来的读，所以
+   * check-in 的读集合（`proactive/restriction.ts`）看的是这个字段，不是 `effect`。
+   */
+  checkInRead: boolean;
   grantedTo: string[];
 };
 
@@ -1226,6 +1240,12 @@ const CLIENT_REREGISTRATION_BACKOFF_MS = 5 * 60_000;
  */
 export const IDENTITY_ACTION =
   /(_GET_ME|_PROFILE|_CURRENT_USER|_USER_INFO|_WHOAMI|_GET_SHOP_DETAILS)$/;
+
+/**
+ * The server half of every ref OpenBot's own memory tools carry (`memory/recall_personal_memory`,
+ * see `memory/tools.ts`). No server may be added under it: see `addCustomServer`.
+ */
+export const MEMORY_TOOLS_SERVER = "memory";
 
 /** What a vendor's token endpoint gave back for a refresh token. */
 export type AccessToken = {
@@ -3617,6 +3637,18 @@ export function createPluginStore(options: PluginStoreOptions) {
       }
 
       /*
+       * Nor the name OpenBot's own memory tools are spelled under. Their refs are `memory/<tool>`
+       * (`memory/tools.ts`), so a server at `memory` would list `memory/recall_personal_memory` beside
+       * them: two tools one name, and the one an admin typed could be taken for the person's own
+       * memory by anything that reads a ref.
+       */
+      if (input.id === MEMORY_TOOLS_SERVER) {
+        throw new CustomServerRefusedError(
+          `${input.id} is the name of OpenBot's own memory tools. Choose another.`,
+        );
+      }
+
+      /*
        * NOR THE NAMESPACE THE BROKERED ROWS ARE MINTED IN, which is the reservation above one step
        * further out.
        *
@@ -5473,6 +5505,7 @@ export function createPluginStore(options: PluginStoreOptions) {
                 ref,
                 effect: classifyTool(entry, tool.name, true, tool.effect),
                 destructive: tool.destructive,
+                checkInRead: checkInRead(entry, tool.name, tool),
                 grantedTo: grants.get(ref) ?? [],
               };
             }),
@@ -8967,6 +9000,7 @@ export function createPluginStore(options: PluginStoreOptions) {
           inputSchema: mcpTools.inputSchema,
           effect: mcpTools.effect,
           destructive: mcpTools.destructive,
+          unclassified: mcpTools.unclassified,
           version: mcpTools.version,
         })
         .from(mcpTools)
@@ -8979,6 +9013,45 @@ export function createPluginStore(options: PluginStoreOptions) {
         advertised.length > 0,
         advertised[0]?.effect,
       );
+
+      /*
+       * A CHECK-IN ONLY READS, AND THAT IS DECIDED HERE TOO, not only where its tools are loaded.
+       *
+       * `proactive/restriction.ts` offers a check-in only the tools the catalogue calls a read, and
+       * checks again before each call. This is the same rule at the one door every call passes, so a
+       * check-in reaching a tool by any other route is refused before the policy, the vault or the
+       * vendor. A read here is the one `createReadOnlyClassifier` counts: advertised, classified a
+       * read, not destructive, and not an action the broker said nothing about (`unclassified`).
+       *
+       * 而且必须有人作证：厂商记录为读，或目录 `readTools` 审查过（{@link checkInRead}）。
+       * `classifyTool` 对没有任何标签的工具推断出的读，在这里不算。
+       */
+      if (
+        isProactiveInitiator(input.initiator) &&
+        !(
+          advertised[0] &&
+          effect === "read" &&
+          checkInRead(entry, toolName, advertised[0])
+        )
+      ) {
+        await recordAuditEvent(auditStore, {
+          eventType: "mcp.call_rejected",
+          targetType: "mcp_tool",
+          targetId: input.ref,
+          ...(input.initiator ? { initiator: input.initiator } : {}),
+          payload: {
+            actor: auditActor,
+            bot: input.botId,
+            server: serverId,
+            tool: toolName,
+            refusal: "check_in_not_a_read",
+          },
+        });
+        throw new PluginRefusedError(
+          `${input.ref} is not available during a check-in, which can only read.`,
+          null,
+        );
+      }
 
       const args = withoutEmptyOptionals(
         input.args,
@@ -9203,20 +9276,58 @@ export function createPluginStore(options: PluginStoreOptions) {
         }
       }
 
-      const approval = await options.approvalGate?.({
-        actorId: input.actorId,
-        botId: input.botId,
-        toolRef: input.ref,
-        effect,
-        scope: serverId,
-        args: vendorArgs,
-        target: { serverId, toolName, url: row.url, effect },
-        // 列出应用时它把这个工具标成了破坏性：不管叫什么，都按删除处理，总是先问。
-        ...(advertised[0]?.destructive ? { destructive: true as const } : {}),
-        // 标明它来自插件调用路径：删除类底线按来源认应用工具，不看服务器叫什么。
-        subject: { connector: true },
-        continuation: currentApprovalContext(),
+      /** A call the approval gate or the person turned away, as this surface's other refusals read. */
+      const refusedRow = (refusal: string, reason: string) => ({
+        eventType: "mcp.call_rejected" as const,
+        targetType: "mcp_tool",
+        targetId: input.ref,
+        ...(input.initiator ? { initiator: input.initiator } : {}),
+        payload: {
+          ...decided,
+          decision: { ...decided.decision, carriedOut: false },
+          refusal,
+          reason,
+        },
       });
+      const approval = await options
+        .approvalGate?.({
+          actorId: input.actorId,
+          botId: input.botId,
+          toolRef: input.ref,
+          effect,
+          scope: serverId,
+          args: vendorArgs,
+          target: { serverId, toolName, url: row.url, effect },
+          // 列出应用时它把这个工具标成了破坏性：不管叫什么，都按删除处理，总是先问。
+          ...(advertised[0]?.destructive ? { destructive: true as const } : {}),
+          // 标明它来自插件调用路径：删除类底线按来源认应用工具，不看服务器叫什么。
+          subject: { connector: true },
+          continuation: currentApprovalContext(),
+          /*
+           * The row for the person's own "no": the approval store writes it, once, when they deny.
+           * Built here from the same facts as the rows above and never holding the arguments.
+           */
+          declined: refusedRow("person_declined", DECLINED_BY_PERSON),
+        })
+        ?.catch(async (error: unknown) => {
+          /*
+           * Turned away at the gate: a rule that disables the tool, or an equivalent call the person
+           * declined earlier in this conversation. It is on the trail like every other refusal here,
+           * in the caller's frame, with the same fields as the rows above and never the arguments.
+           * A call already waiting for the person, and one answered already (denied, failed or its
+           * approval used), turn nothing new away, and a suspension is a wait rather than a refusal,
+           * so none of them writes a row. Only the audit is added: the error
+           * goes on to the caller exactly as it came.
+           */
+          const reason =
+            error instanceof ApprovalRefusedError &&
+            !(error instanceof ApprovalAlreadyAnsweredError)
+              ? withoutStatement(error)
+              : undefined;
+          if (reason !== undefined && reason !== ALREADY_WAITING)
+            await recordAuditEvent(auditStore, refusedRow("approval", reason));
+          throw error;
+        });
       if (approval && "replay" in approval)
         return approval.replay as { text: string; isError: boolean };
 

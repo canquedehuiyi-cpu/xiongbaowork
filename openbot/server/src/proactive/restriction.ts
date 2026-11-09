@@ -3,6 +3,8 @@
  *
  * A proactive run is a Bot looking through a person's apps while nobody is watching. It may read:
  * connected-app actions its catalogue marks `read` and not destructive, and the person's own memory.
+ * 而且这个「读」必须有人作证：厂商列出时记录为读，或目录 `readTools` 审查过（见 plugins/catalogue.ts
+ * 的 `checkInRead`）。聊天里 `classifyTool` 对没有标签的工具推断出的读，在这里不算。
  * It may not write to an app, send a message, hand work to another Bot or person, or drive a browser
  * or the computer. That is decided here, by the deployment, and never by telling the model.
  *
@@ -17,38 +19,27 @@
  */
 import type { AuditInitiator } from "../audit";
 import { type GrantedTool, REFUSAL_MARKER } from "../plugins/tools";
+import { isProactiveInitiator } from "./initiator";
 
-export const PROACTIVE_INITIATOR_PREFIX = "proactive:";
+// In `./initiator` so the plugin store can ask the same question without importing this module.
+export {
+  isProactiveInitiator,
+  PROACTIVE_INITIATOR_PREFIX,
+  proactiveInitiator,
+  proactiveRunIdOf,
+} from "./initiator";
 
 /**
- * A proactive run's initiator. Recorded as an unattended routine-kind run, so every policy written
- * for unattended work applies to it too, with an id that names it as proactive.
+ * Memory tools a proactive run may call by name. Writing memory goes through the proactive tool.
+ *
+ * BY NAME AND NEVER BY REF. A connector tool's name is always `mcp__<server>__<tool>` and its ref
+ * `<server>/<tool>`, so no connector can carry one of these names. The ref
+ * `memory/recall_personal_memory` used to be on this list too, and a server sitting at the id
+ * `memory` with a tool of that name would have passed as the person's own memory. That id is
+ * reserved now as well (`addCustomServer` in `plugins/store.ts`).
  */
-export function proactiveInitiator(runId: string): AuditInitiator {
-  return { kind: "routine", id: `${PROACTIVE_INITIATOR_PREFIX}${runId}` };
-}
-
-export function isProactiveInitiator(
-  initiator: AuditInitiator | undefined | null,
-): boolean {
-  return (
-    !!initiator &&
-    "id" in initiator &&
-    typeof initiator.id === "string" &&
-    initiator.id.startsWith(PROACTIVE_INITIATOR_PREFIX)
-  );
-}
-
-export function proactiveRunIdOf(initiator: AuditInitiator | undefined) {
-  return initiator && isProactiveInitiator(initiator) && "id" in initiator
-    ? initiator.id.slice(PROACTIVE_INITIATOR_PREFIX.length)
-    : null;
-}
-
-/** Memory tools a proactive run may call by name. Writing memory goes through the proactive tool. */
 export const PROACTIVE_MEMORY_READS: ReadonlySet<string> = new Set([
   "recall_personal_memory",
-  "memory/recall_personal_memory",
 ]);
 
 type CatalogueReader = {
@@ -56,7 +47,16 @@ type CatalogueReader = {
     {
       id: string;
       title: string;
-      tools: { ref: string; effect: string; destructive: boolean }[];
+      tools: {
+        ref: string;
+        effect: string;
+        destructive: boolean;
+        /**
+         * check-in 能否依赖它是读，插件 store 对每个工具都给出（`ToolRecord.checkInRead`）。为 false
+         * 时，即使 `effect` 是 read（聊天里推断出来的读）也不算。类型上必填，src 里的读者都得给。
+         */
+        checkInRead: boolean;
+      }[];
     }[]
   >;
 };
@@ -68,7 +68,11 @@ export function createReadOnlyClassifier(plugins: CatalogueReader) {
     const refs = new Set<string>(PROACTIVE_MEMORY_READS);
     for (const server of servers)
       for (const tool of server.tools)
-        if (tool.effect === "read" && tool.destructive !== true)
+        if (
+          tool.effect === "read" &&
+          tool.destructive !== true &&
+          tool.checkInRead !== false
+        )
           refs.add(tool.ref);
     return refs;
   };
@@ -105,6 +109,17 @@ export function restrictToolsForRun<A extends unknown[]>(
         },
       }));
   };
+}
+
+/**
+ * 后台调研的运行没有电脑（见 index.ts 里它的 `toolsForTurn`：只有它自己的两个工具），所以也不告诉它
+ * 有浏览器：电脑说明和随之而来的网页搜索引导一并不给。其他运行照旧。
+ */
+export function computerGuidanceForRun(
+  initiator: AuditInitiator | undefined,
+  guidance: string | undefined,
+): string | undefined {
+  return isProactiveInitiator(initiator) ? undefined : guidance;
 }
 
 /** Handing work to a Bot or asking a person is a message; a proactive run is given neither. */

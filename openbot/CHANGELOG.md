@@ -8,6 +8,26 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+- **中文的改密码、验证码、付款页面交给你本人做；部署边界规则按规范化的键名判定。** Bot 在网页上往
+  「新密码」「验证码」「支付密码」「银行卡号」「CVV / 安全码」「身份证号」「付款码」这类输入框里填写，点
+  「修改密码」「获取验证码」「提交订单 ¥99」「确认订单并支付」「微信支付」「绑定银行卡」这类按钮，或者在
+  路径带「修改密码」「收银台」的页面上操作，都和英文的同类页面一样交给你本人，「总是允许」规则也不能
+  绕过。「发送消息给张三」「全部回复」「发布回答」「移到已删除邮件」这类按钮总是先问，只给「允许一次」。
+  「查看订单」「支付记录」「已发送」这类只读按钮不受影响；已连接应用的工具参数里写的中文正文不参与判定。
+  部署的边界规则（`AGENT_COMPUTER_POLICY` 和 Boundaries 页面）现在对键名多判一次：`"\r"`、`"\n"`、
+  `NumpadEnter`、`ControlLeft+Enter`、`Shift+Control+Enter` 分别按 `Enter`、`Control+Enter`、
+  `Control+Shift+Enter` 判定，`intent` 也随之判定，所以 `key == "Enter"`、`intent == "activate"` 不能再
+  被换个写法绕过；按原样写的规则照样生效，发给浏览器的键和审计记录不变。注意：只放行某种原样写法的
+  allow 规则（例如只写了 `key == " "`）现在可能多拒，因为同一个键规范化后（`Space`）也要被放行。
+- **分享、公开发布、更多发送方式和网页上的同类按钮，一律先问，只给「允许一次」。** 应用工具的分享、
+  改权限、加协作者（来源「分享与授权」），转发、开直播、发版本、发帖（来源「公开发布」），以及 notify、
+  broadcast、comment、定时群发和写明受邀人或收件人邮箱的调用（来源「对外发送」），在「总是允许」规则之上
+  仍然要问。网页上点 Delete、Send、Comment、Reply、Share、Invite、Post、Publish，或在写消息的输入框里按
+  Enter、Ctrl/Cmd+Enter 同样要问。付款类按名字和按钮交给你做：payout、transfer、pay invoice、下单、工资
+  发放、升降级付费套餐，Pay、Buy now、Place your order、定价页上的 Subscribe；退款也算动钱。另一方面，新闻
+  通稿（Business Wire）不再被当成电汇，留空的字段不再触发安全规则，地址查询串里的 `access_token=` 之类
+  不再让普通页面变成凭据页，Bot 在输入框里打的字按输入框和页面判定、不按内容判定。From upstream #904、
+  #930、#998、#1015、#1109、#1175。
 - **Composio apps are listed again once after an upgrade.** An app's actions that Composio gives no
   read-only, destructive, create or update label are now recorded as unclassified, as a fresh
   install records them, where an upgraded install had kept them as plain writes. Migration 0152

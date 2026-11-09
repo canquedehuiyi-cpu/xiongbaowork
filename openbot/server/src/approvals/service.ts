@@ -31,6 +31,7 @@ import {
   type ApprovalPolicyOutcome,
   type ApprovalPreferences,
   type ApprovalRecord,
+  ApprovalAlreadyAnsweredError,
   ApprovalRefusedError,
   ApprovalNotFoundError,
   type ApprovalRule,
@@ -498,7 +499,7 @@ export function createApprovalService(
         return { replay: HANDLED_BY_PERSON, complete: async () => undefined };
       if (request.result) {
         if (request.result.error)
-          throw new ApprovalRefusedError(request.result.error);
+          throw new ApprovalAlreadyAnsweredError(request.result.error);
         let replay: unknown;
         try {
           replay = JSON.parse(request.result.content);
@@ -508,7 +509,7 @@ export function createApprovalService(
         return { replay, complete: async () => undefined };
       }
       if (request.status === "denied")
-        throw new ApprovalRefusedError(DECLINED_BY_PERSON);
+        throw new ApprovalAlreadyAnsweredError(DECLINED_BY_PERSON);
       if (
         request.status === "approved" &&
         (await store.consume(action.actorId, request.id, action.actionDigest))
@@ -526,7 +527,7 @@ export function createApprovalService(
           },
         };
       if (request.status !== "pending")
-        throw new ApprovalRefusedError(
+        throw new ApprovalAlreadyAnsweredError(
           "This approval has already been used or revoked. The action was not repeated.",
         );
       const handOff = request.action.policy?.behaviour === "hand_off";
