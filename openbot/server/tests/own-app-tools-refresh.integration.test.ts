@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { inArray } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 import { createAuditStore } from "../src/audit";
 import { createDatabase } from "../src/db/client";
 import { mcpServers, mcpTools } from "../src/db/schema";
@@ -18,8 +18,11 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
  * 只有管理员按「刷新工具」才会替换。所以某一版改了工具名或描述，已有部署永远收不到。
  *
  * fork 特有的约束也在这里验证：批量刷新跨所有租户，在平台帧里跑；每台服务器的工具按这台服务器自己
- * 的 tenant 盖戳。夹具用本套件自己的租户和行 id（`catalogue_key` 指向真实条目），不碰共享测试库里
- * 别人的 `team:routines` 之类的行。
+ * 的 tenant 盖戳；按准确的行 id 刷新，不经过「id 或 catalogue_key、team 行优先」的重新查找。
+ *
+ * 只刷新本套件自己建的行（`refreshOwnListings` 的 `ids` 参数），不碰共享测试库里别人的行。夹具用本
+ * 套件自己的租户和行 id（`catalogue_key` 指向真实条目）。只有「同一个 key 有多行」那一组必须用真实
+ * 的 `baidu-netdisk` / `team:baidu-netdisk`，库里已有就拒绝运行。
  */
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
@@ -32,7 +35,17 @@ const DRIVE = `own-${suite}-drive`;
 const BAIDU = `own-${suite}-baidu`;
 /** 一台 vendor 的 MCP 应用：清单是 vendor 的答复，启动时不能去问。 */
 const VENDOR_APP = `own-${suite}-context7`;
-const ROWS = [ROUTINES, DRIVE, BAIDU, VENDOR_APP];
+/**
+ * 升级上来的部署里会有的形状：拆分前写下的 legacy `system` 行，id 就是 catalogue key；管理员之后
+ * 再添加，另建了 `team:<key>`。
+ */
+const LEGACY = "baidu-netdisk";
+const TEAM_ROW = "team:baidu-netdisk";
+const ROWS = [ROUTINES, DRIVE, BAIDU, VENDOR_APP, LEGACY, TEAM_ROW];
+
+/** 有没有人去问 vendor 应用的 MCP 端点：启动刷新一次都不该问。 */
+const vendorAsked: string[] = [];
+const realFetch = globalThis.fetch;
 
 const store = createPluginStore({
   database,
@@ -72,6 +85,34 @@ async function refreshedAt(serverId: string) {
 }
 
 beforeAll(async () => {
+  const [taken] = await asPlatform(() =>
+    database
+      .select({ id: mcpServers.id })
+      .from(mcpServers)
+      .where(
+        or(
+          inArray(mcpServers.id, [LEGACY, TEAM_ROW]),
+          and(
+            eq(mcpServers.catalogueKey, LEGACY),
+            inArray(mcpServers.tenantId, ["system", "team"]),
+          ),
+        ),
+      ),
+  );
+  if (taken) {
+    throw new Error(
+      "The test database already has a baidu-netdisk server row, so this suite will not run against it.",
+    );
+  }
+  globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+    const target = String(input instanceof Request ? input.url : input);
+    if (target.includes("context7.com")) {
+      vendorAsked.push(target);
+      return Promise.resolve(new Response("{}", { status: 500 }));
+    }
+    return realFetch(input, init);
+  }) as typeof fetch;
+
   await asPlatform(async () => {
     await database.insert(mcpServers).values([
       {
@@ -147,6 +188,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  globalThis.fetch = realFetch;
   await asPlatform(async () => {
     await database.delete(mcpTools).where(inArray(mcpTools.serverId, ROWS));
     await database.delete(mcpServers).where(inArray(mcpServers.id, ROWS));
@@ -156,9 +198,9 @@ afterAll(async () => {
 
 describe("starting a newer build", () => {
   test("saves the tools Routines, Drive and 百度网盘 have in this build", async () => {
-    const refreshed = await asPlatform(() => store.refreshOwnListings());
+    const refreshed = await asPlatform(() => store.refreshOwnListings(ROWS));
 
-    expect(refreshed).toEqual(expect.arrayContaining([ROUTINES, DRIVE, BAIDU]));
+    expect([...refreshed].sort()).toEqual([BAIDU, DRIVE, ROUTINES].sort());
     expect(descriptions(await saved(ROUTINES))).toEqual(
       descriptions(await routinesListing()),
     );
@@ -184,19 +226,85 @@ describe("starting a newer build", () => {
       "resolve-library-id": "Whatever the vendor said when it was added.",
     });
     expect(await refreshedAt(VENDOR_APP)).toBeNull();
+    // 不是「问了没问到」，而是根本没问。
+    expect(vendorAsked).toEqual([]);
   });
 
   test("writes nothing at a start where nothing changed", async () => {
     const before = await Promise.all([ROUTINES, DRIVE, BAIDU].map(refreshedAt));
     expect(before.every((at) => at !== null)).toBe(true);
 
-    const refreshed = await asPlatform(() => store.refreshOwnListings());
+    const refreshed = await asPlatform(() => store.refreshOwnListings(ROWS));
 
-    expect(refreshed).not.toContain(ROUTINES);
-    expect(refreshed).not.toContain(DRIVE);
-    expect(refreshed).not.toContain(BAIDU);
+    expect(refreshed).toEqual([]);
     expect(
       await Promise.all([ROUTINES, DRIVE, BAIDU].map(refreshedAt)),
     ).toEqual(before);
+  });
+});
+
+describe("two rows for one app", () => {
+  test("the legacy system row is refreshed itself, and the team row is not written", async () => {
+    // 先让 team 行存好这一版的清单。
+    await asPlatform(() =>
+      database.insert(mcpServers).values({
+        tenantId: "team",
+        id: TEAM_ROW,
+        catalogueKey: LEGACY,
+        title: "百度网盘",
+        vendor: "百度",
+        url: "https://pan.baidu.com/rest/2.0/xpan",
+        provenance: "first-party",
+      }),
+    );
+    expect(
+      await asPlatform(() => store.refreshOwnListings([TEAM_ROW])),
+    ).toEqual([TEAM_ROW]);
+    const teamAt = await refreshedAt(TEAM_ROW);
+    expect(teamAt).not.toBeNull();
+
+    // 拆分前留下的 legacy system 行：id 就是 team 行的 catalogue key，存的是旧清单。
+    await asPlatform(async () => {
+      await database.insert(mcpServers).values({
+        tenantId: "system",
+        id: LEGACY,
+        catalogueKey: LEGACY,
+        title: "百度网盘",
+        vendor: "百度",
+        url: "https://pan.baidu.com/rest/2.0/xpan",
+        provenance: "first-party",
+      });
+      await database.insert(mcpTools).values({
+        tenantId: "system",
+        serverId: LEGACY,
+        name: "old",
+        description: "old",
+        inputSchema: {},
+      });
+    });
+
+    const refreshed = await asPlatform(() =>
+      store.refreshOwnListings([LEGACY, TEAM_ROW]),
+    );
+
+    expect(refreshed).toEqual([LEGACY]);
+    expect(descriptions(await saved(LEGACY))).toEqual(
+      descriptions(await baiduListing({ url: "" })),
+    );
+    expect([
+      ...new Set((await saved(LEGACY)).map((row) => row.tenantId)),
+    ]).toEqual(["system"]);
+    expect(await refreshedAt(LEGACY)).not.toBeNull();
+    expect(await refreshedAt(TEAM_ROW)).toBe(teamAt);
+  });
+
+  test("and the next start writes neither", async () => {
+    const before = await Promise.all([LEGACY, TEAM_ROW].map(refreshedAt));
+    expect(
+      await asPlatform(() => store.refreshOwnListings([LEGACY, TEAM_ROW])),
+    ).toEqual([]);
+    expect(await Promise.all([LEGACY, TEAM_ROW].map(refreshedAt))).toEqual(
+      before,
+    );
   });
 });

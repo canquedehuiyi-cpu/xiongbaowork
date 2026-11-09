@@ -14,7 +14,7 @@ import {
 } from "../src/db/schema";
 import { catalogueEntry } from "../src/plugins/catalogue";
 import { redirectUriFor } from "../src/plugins/oauth";
-import { createPluginStore } from "../src/plugins/store";
+import { createPluginStore, TokenRefusedError } from "../src/plugins/store";
 import { runAsTenant } from "../src/tenant/context";
 import { createAdminRequest, seedAdministrator } from "./support/admin-request";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
@@ -78,6 +78,10 @@ const vault = {
 
 /** 每次 token 交换用的是谁的 refresh token。 */
 const exchanged: string[] = [];
+/** 动态注册被调了几次：只有管理员第一次连接那一次。 */
+let registered = 0;
+/** 为 true 时 vendor 对 refresh 交换回 `invalid_client`，像把 client 逐出了一样。 */
+let vendorEvictsClient = false;
 
 const store = createPluginStore({
   database,
@@ -86,12 +90,14 @@ const store = createPluginStore({
   encryptionKey: ENCRYPTION_KEY,
   policy: () => ({ mode: "enforce", deny: [], allow: ["true"] }),
   redirectUri: redirectUriFor(PUBLIC_URL),
-  registerClient: async () => ({
-    clientId: `dyn-${suite}`,
-    clientSecret: "",
-  }),
+  registerClient: async () => {
+    registered += 1;
+    return { clientId: `dyn-${suite}-${registered}`, clientSecret: "" };
+  },
   exchangeRefreshToken: async ({ refreshToken }) => {
     exchanged.push(refreshToken);
+    if (vendorEvictsClient)
+      throw new TokenRefusedError("vendor: invalid_client", "invalid_client");
     if (refreshToken !== REFRESH_TOKEN) throw new Error("unknown refresh");
     return { accessToken: ACCESS_TOKEN, expiresInSeconds: 3600 };
   },
@@ -220,7 +226,89 @@ describe("connecting an app that lists its tools only as a person", () => {
         .where(eq(mcpServers.id, ROW)),
     );
     expect(row?.lastError).toContain("not attributed to anybody");
+    expect(registered).toBe(1);
   });
+
+  test("only the person themself, in their own frame, may ask", async () => {
+    // 平台帧和别人的帧都不行：这条路径打开的平台写入只替连接的人自己做。
+    await expect(
+      asPlatform(() => store.discoverToolsOnConnect(KEY, personId)),
+    ).rejects.toThrow();
+    await expect(
+      runAsTenant(adminId, () => store.discoverToolsOnConnect(KEY, personId)),
+    ).rejects.toThrow();
+    expect(exchanged).toEqual([]);
+  });
+
+  /*
+   * vendor 回 `invalid_client`，而 client 注册已超过重新注册的退避窗口：管理员的「刷新工具」此时会
+   * 重新注册，连接回调的这条路径不能。两个调用方：成员自己的帧（连接回调就是这样）；以及管理员在
+   * 持 capability 的请求里自己连接——这时只剩 `reRegister: false` 拦着。
+   */
+  const clientOf = async () => {
+    const [server] = await asPlatform(() =>
+      database
+        .select({ credentialId: mcpServers.credentialId })
+        .from(mcpServers)
+        .where(eq(mcpServers.id, ROW)),
+    );
+    return server?.credentialId ?? null;
+  };
+  const callers: [string, string, <T>(work: () => Promise<T>) => Promise<T>][] =
+    [
+      ["a member, in their own frame", personId, asPerson],
+      ["an administrator holding the capability", adminId, asAdmin],
+    ];
+  for (const [who, userId, as] of callers) {
+    test(`a vendor answering invalid_client replaces no client: ${who}`, async () => {
+      const before = await clientOf();
+      expect(before).not.toBeNull();
+      await asPlatform(() =>
+        database
+          .update(credentials)
+          .set({ createdAt: new Date(Date.now() - 86_400_000) })
+          .where(eq(credentials.id, before ?? "")),
+      );
+      await as(() =>
+        store.recordConnection({
+          serverId: KEY,
+          userId,
+          refreshToken: REFRESH_TOKEN,
+          scope: "",
+        }),
+      );
+
+      vendorEvictsClient = true;
+      try {
+        await as(() => store.discoverToolsOnConnect(KEY, userId)).catch(
+          () => null,
+        );
+      } finally {
+        vendorEvictsClient = false;
+      }
+
+      expect(exchanged).toEqual([REFRESH_TOKEN]);
+      expect(registered).toBe(1);
+      expect(await clientOf()).toBe(before);
+      const [client] = await asPlatform(() =>
+        database
+          .select({ revokedAt: credentials.revokedAt })
+          .from(credentials)
+          .where(eq(credentials.id, before ?? "")),
+      );
+      expect(client?.revokedAt).toBeNull();
+      expect(await heldTools()).toEqual([]);
+      const [row] = await asPlatform(() =>
+        database
+          .select({ lastError: mcpServers.lastError })
+          .from(mcpServers)
+          .where(eq(mcpServers.id, ROW)),
+      );
+      expect(row?.lastError).toBeTruthy();
+      expect(row?.lastError).not.toContain("not attributed to anybody");
+      exchanged.length = 0;
+    });
+  }
 
   test("the first person's connect lists the tools as them, into the team's row", async () => {
     await asPerson(() =>
