@@ -1073,3 +1073,60 @@ describe("private information sharing check", () => {
     expect(opened).toHaveLength(0);
   });
 });
+
+/*
+ * 读集合由 store 判定哪些工具可以给 check-in：store 对推断出来的读报 `checkInRead: false`，
+ * 这里就不算读，即使它在聊天里的 effect 是 read。
+ */
+describe("a check-in reads only what something vouched for", () => {
+  test("a tool the store says a check-in may not rely on is neither offered nor dispatched", async () => {
+    const calls: string[] = [];
+    const reader = {
+      listServers: async () => [
+        {
+          id: "linear",
+          title: "Linear",
+          tools: [
+            {
+              ref: "linear/list_issues",
+              effect: "read",
+              destructive: false,
+              checkInRead: true,
+            },
+            {
+              ref: "linear/list_things",
+              effect: "read",
+              destructive: false,
+              checkInRead: false,
+            },
+          ],
+        },
+      ],
+    };
+    const classifier = createReadOnlyClassifier(reader);
+    const reads = await classifier();
+    expect(reads.has("linear/list_issues")).toBe(true);
+    expect(reads.has("linear/list_things")).toBe(false);
+    const tools = await restrictToolsForRun(
+      proactiveInitiator("vouched"),
+      async () => [
+        granted("linear/list_issues", calls),
+        granted("linear/list_things", calls),
+      ],
+      classifier,
+    )();
+    expect(tools.map((tool) => tool.ref)).toEqual(["linear/list_issues"]);
+    expect(
+      (
+        await guardProactiveCallback(
+          {
+            name: "linear/list_things",
+            run: { initiator: proactiveInitiator("vouched") },
+          },
+          classifier,
+        )
+      )?.text,
+    ).toStartWith("Refused.");
+    expect(calls).toEqual([]);
+  });
+});
