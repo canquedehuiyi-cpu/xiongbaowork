@@ -1,23 +1,19 @@
 {
   "$schema": "./shared/release-policy.schema.json",
-  "version": "v1.0.0",
+  "version": "v0.2.5",
   "compatibility": {
     "launcherApi": 1,
     "configSchema": 1,
     "extensionApi": 1,
     "database": {
-      "from": [
-        "0083_learning_skill_approvals",
-        "0082_routine_goal",
-        "0077_channel_opening"
-      ],
-      "to": "0085_approval_rule_account",
+      "from": ["0080_wakerflow_quota_contracts"],
+      "to": "0080_wakerflow_quota_contracts",
       "rollbackCompatible": false
     },
     "intelligenceCapabilities": []
   },
   "upgrade": {
-    "fromVersions": ["v0.3.4", "v0.3.3", "v0.3.2", "v0.3.1", "v0.3.0"],
+    "fromVersions": ["v0.2.4"],
     "requiresDowntime": true,
     "recovery": "restore-backup"
   }
