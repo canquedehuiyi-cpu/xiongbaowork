@@ -3,6 +3,7 @@ import { MCPMock, type MCPToolDefinition } from "@copilotkit/aimock/mcp";
 import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import { catalogueEntry, classifyTool } from "../src/plugins/catalogue";
 import { listTools } from "../src/plugins/mcp";
+import { storableTools } from "../src/plugins/store";
 
 /**
  * What an MCP listing carries out of the transport, and what the classifier then makes of it.
@@ -179,5 +180,96 @@ describe("what an MCP listing tells the classifier", () => {
     expect(search?.effect).toBeUndefined();
     expect(search?.destructive).toBeUndefined();
     expect(classify(tools, "notion-search")).toBe("read");
+  });
+});
+
+/*
+ * vendor 什么都没标注的工具记为 unclassified：按写操作处理，但不算 destructive（上游 #1177 的 MCP
+ * 部分）。catalogue 条目的读写判定不变：有名单覆盖的工具由名单决定，不记 unclassified。
+ */
+describe("a tool the vendor said nothing about is unclassified", () => {
+  test("an MCP tool with no annotations is listed as unclassified, with no effect recorded", async () => {
+    const tools = await listTools({ url });
+    const search = tools.find((tool) => tool.name === "notion-search");
+    expect(search?.unclassified).toBe(true);
+    expect(search?.effect).toBeUndefined();
+    // Any hint at all is the vendor saying something.
+    for (const name of ["notion-purge-workspace", "notion-fetch"])
+      expect(
+        tools.find((tool) => tool.name === name)?.unclassified,
+      ).toBeUndefined();
+  });
+
+  test("a server added by URL records such a tool as an unclassified write that is not destructive", () => {
+    const [row] = storableTools(
+      "custom-crm",
+      [
+        {
+          name: "do_thing",
+          description: "",
+          inputSchema: {},
+          unclassified: true,
+        },
+      ],
+      undefined,
+      null,
+    );
+    expect(row).toMatchObject({
+      effect: "write",
+      destructive: false,
+      unclassified: true,
+    });
+  });
+
+  test("a catalogue entry's lists still decide: nothing is recorded as unclassified, the read stays a read", () => {
+    const [row] = storableTools(
+      "notion",
+      [
+        {
+          name: "notion-search",
+          description: "",
+          inputSchema: {},
+          unclassified: true,
+        },
+      ],
+      undefined,
+      notion,
+    );
+    expect(row).toMatchObject({
+      effect: null,
+      destructive: false,
+      unclassified: false,
+    });
+    expect(classifyTool(notion, "notion-search", true, row?.effect)).toBe(
+      "read",
+    );
+  });
+
+  test("a broker's silent action the reviewed write list names is covered by that list", () => {
+    const [covered, silent] = storableTools(
+      "notion",
+      [
+        {
+          name: "notion-update-page",
+          description: "",
+          inputSchema: {},
+          effect: "write",
+          destructive: false,
+          unclassified: true,
+        },
+        {
+          name: "notion-new-thing",
+          description: "",
+          inputSchema: {},
+          effect: "write",
+          destructive: false,
+          unclassified: true,
+        },
+      ],
+      undefined,
+      notion,
+    );
+    expect(covered).toMatchObject({ effect: "write", unclassified: false });
+    expect(silent).toMatchObject({ effect: "write", unclassified: true });
   });
 });
