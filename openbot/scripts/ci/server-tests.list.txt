@@ -394,6 +394,7 @@ tests/personal-edition-defaults.test.ts
 tests/personal-handoff.integration.test.ts
 tests/personal-local-folders.integration.test.ts
 tests/picked-harness-auth.test.ts
+tests/picked-skill-tenancy.integration.test.ts
 tests/picked-skill.test.ts
 tests/pipeline-control.integration.test.ts
 tests/pipeline-decision.test.ts
