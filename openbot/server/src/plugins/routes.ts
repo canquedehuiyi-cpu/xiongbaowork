@@ -29,7 +29,11 @@ import { toolkitOf, vendorSentence } from "./composio";
 import {
   adminConnectOnly,
   adminConnectOnlySentence,
+  CLIENT_ID_MAX,
+  CLIENT_SECRET_MAX,
+  DEPLOYMENT_CLIENT_SLUG_MAX,
   deploymentClientFrom,
+  deploymentClientSlug,
   withDeploymentClients,
 } from "./deployment-clients";
 import { fieldsForPerson, keyGuideFor } from "./key-guides";
@@ -50,6 +54,7 @@ import {
   CustomServerRefusedError,
   deploymentFaultSentence,
   isDeploymentFault,
+  isServerWriteRefusal,
   type OAuthClient,
   OAuthClientReadError,
   type PluginKind,
@@ -854,6 +859,11 @@ export function createPluginRoutes(
     }
   };
 
+  /** What the client routes answer an administrator whose request holds no capability (M-2). */
+  const CLIENTS_NEED_CAPABILITY =
+    "保存、查看或删除部署自己的应用客户端，需要以管理员身份在管理页面操作。";
+  const BAD_CLIENT_SLUG = `应用名只能包含字母、数字、下划线和连字符，最长 ${DEPLOYMENT_CLIENT_SLUG_MAX} 个字符。`;
+
   /**
    * The OAuth clients this deployment holds for brokered apps that connect with a server-to-server
    * grant (upstream #950; Shopify is one). Administrator only. The id and when it was stored come
@@ -865,6 +875,9 @@ export function createPluginRoutes(
     try {
       return context.json({ clients: await store.listDeploymentClients() });
     } catch (error) {
+      if (isServerWriteRefusal(error)) {
+        return context.json({ error: CLIENTS_NEED_CAPABILITY }, 403);
+      }
       if (isDeploymentFault(error)) {
         return context.json({ error: deploymentFaultSentence(error) }, 409);
       }
@@ -879,12 +892,18 @@ export function createPluginRoutes(
   routes.put("/composio/clients/:slug", capable, async (context) => {
     const forbidden = requireAdmin(context);
     if (forbidden) return forbidden;
-    const toolkit = context.req.param("slug");
+    const toolkit = deploymentClientSlug(context.req.param("slug"));
+    if (!toolkit) return context.json({ error: BAD_CLIENT_SLUG }, 400);
     const client = deploymentClientFrom(
       await context.req.json().catch(() => null),
     );
     if (!client) {
-      return context.json({ error: "客户端 ID 和客户端密钥都要填写。" }, 400);
+      return context.json(
+        {
+          error: `客户端 ID 和客户端密钥都要填写，ID 不超过 ${CLIENT_ID_MAX} 个字符、密钥不超过 ${CLIENT_SECRET_MAX} 个字符，且不能包含控制字符。`,
+        },
+        400,
+      );
     }
     try {
       const { replaced } = await store.storeDeploymentClient({
@@ -894,6 +913,9 @@ export function createPluginRoutes(
       });
       return context.json({ toolkit, clientId: client.client_id, replaced });
     } catch (error) {
+      if (isServerWriteRefusal(error)) {
+        return context.json({ error: CLIENTS_NEED_CAPABILITY }, 403);
+      }
       if (error instanceof CustomServerRefusedError) {
         return context.json({ error: error.message }, 400);
       }
@@ -908,14 +930,25 @@ export function createPluginRoutes(
   routes.delete("/composio/clients/:slug", capable, async (context) => {
     const forbidden = requireAdmin(context);
     if (forbidden) return forbidden;
+    const toolkit = deploymentClientSlug(context.req.param("slug"));
+    if (!toolkit) return context.json({ error: BAD_CLIENT_SLUG }, 400);
     try {
-      return context.json(
-        await store.removeDeploymentClient({
-          toolkit: context.req.param("slug"),
-          by: actorEmail(context),
-        }),
-      );
+      const removed = await store.removeDeploymentClient({
+        toolkit,
+        by: actorEmail(context),
+      });
+      return context.json({
+        ...removed,
+        ...(removed.stillInUseByEnabledApp
+          ? {
+              note: `删除只影响以后的启用：已经启用的 ${toolkit} 仍在用这个客户端。要停用它，请移除这个应用，并在 ${toolkit} 后台轮换客户端密钥。`,
+            }
+          : {}),
+      });
     } catch (error) {
+      if (isServerWriteRefusal(error)) {
+        return context.json({ error: CLIENTS_NEED_CAPABILITY }, 403);
+      }
       if (error instanceof CustomServerRefusedError) {
         return context.json({ error: error.message }, 400);
       }
@@ -1814,11 +1847,6 @@ export function createPluginRoutes(
               toolkit,
               userId: context.var.actor.id,
               values,
-              // Said only where it is read: an app on the deployment's own client (#950).
-              ...(adminConnectOnly(authScheme) &&
-              context.var.actor.role === "admin"
-                ? { byAdmin: true }
-                : {}),
             }),
           );
         } catch (error) {

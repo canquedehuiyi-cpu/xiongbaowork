@@ -292,7 +292,7 @@ describe("the deployment's own client for a server-to-server app", () => {
       await asAdmin(() =>
         store.removeDeploymentClient({ toolkit, by: "admin@example.test" }),
       ),
-    ).toEqual({ removed: true });
+    ).toEqual({ removed: true, stillInUseByEnabledApp: false });
     expect((await vaultRows()).filter((row) => row.revokedAt === null)).toEqual(
       [],
     );
@@ -303,7 +303,7 @@ describe("the deployment's own client for a server-to-server app", () => {
       await asAdmin(() =>
         store.removeDeploymentClient({ toolkit, by: "admin@example.test" }),
       ),
-    ).toEqual({ removed: false });
+    ).toEqual({ removed: false, stillInUseByEnabledApp: false });
   });
 });
 
@@ -350,9 +350,23 @@ describe("an enabled app on the deployment's own client", () => {
           toolkit,
           userId: admin.id,
           values: { subdomain: "acme-store" },
-          byAdmin: true,
         }),
       ),
     ).rejects.toThrow("the broker was asked to connect with typed fields");
+  });
+
+  test("removing the client of an app that stands enabled says it is still in use (M-4)", async () => {
+    await asAdmin(() =>
+      store.storeDeploymentClient({
+        toolkit,
+        client: CLIENT,
+        by: "admin@example.test",
+      }),
+    );
+    expect(
+      await asAdmin(() =>
+        store.removeDeploymentClient({ toolkit, by: "admin@example.test" }),
+      ),
+    ).toEqual({ removed: true, stillInUseByEnabledApp: true });
   });
 });

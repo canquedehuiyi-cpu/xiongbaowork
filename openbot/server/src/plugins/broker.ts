@@ -515,7 +515,11 @@ export type ComposioBroker = {
   /**
    * Connect this person with the secret they typed, answering the account it made.
    *
-   * THE ONE CALL WHOSE IMPLEMENTATION MUST RETHROW WITH NO `cause`, WHICH IS AN INVERSION OF THE
+   * ONE OF THE TWO CALLS WHOSE IMPLEMENTATION MUST RETHROW WITH NO `cause` (the other is
+   * {@link ComposioBroker.ensureAuthConfig} for a server-to-server grant, which sends this
+   * deployment's own OAuth client; review M-5).
+   *
+   * THE FIRST CALL WHOSE IMPLEMENTATION HAD TO RETHROW WITH NO `cause`, WHICH IS AN INVERSION OF THE
    * STANDING RULE AND SAYS SO ON PURPOSE. The rule `composio-adapter.ts` states and every path here
    * keeps is that a vendor error is never logged and always carried as `cause`, precisely because
    * the object holds the request it was made for and whoever is reading a log rather than a page

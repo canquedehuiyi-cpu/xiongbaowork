@@ -46,9 +46,20 @@ export function toolkitOfDeploymentClientKey(keyId: string): string | null {
     : null;
 }
 
+/** The longest client id and secret a pair may carry (review M-3). Well past any vendor's. */
+export const CLIENT_ID_MAX = 512;
+export const CLIENT_SECRET_MAX = 4096;
+/** The longest app name a client may be stored under, as the catalogue spells slugs. */
+export const DEPLOYMENT_CLIENT_SLUG_MAX = 64;
+
+// biome-ignore lint/suspicious/noControlCharactersInRegex: control characters are what it refuses.
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
+
 /**
  * A pair as an administrator typed it, or null when it is not one. Both halves, trimmed: half a
- * pair is no client, and an app offered on half a pair fails at the first connect.
+ * pair is no client, and an app offered on half a pair fails at the first connect. Bounded and free
+ * of control characters, because the id is written into the row's metadata, the trail and the
+ * listing, and neither half is ever a page of text (review M-3).
  */
 export function deploymentClientFrom(value: unknown): DeploymentClient | null {
   if (typeof value !== "object" || value === null) return null;
@@ -58,7 +69,28 @@ export function deploymentClientFrom(value: unknown): DeploymentClient | null {
   }
   const id = client_id.trim();
   const secret = client_secret.trim();
-  return id && secret ? { client_id: id, client_secret: secret } : null;
+  if (!id || !secret) return null;
+  if (id.length > CLIENT_ID_MAX || secret.length > CLIENT_SECRET_MAX) {
+    return null;
+  }
+  if (CONTROL_CHARACTERS.test(id) || CONTROL_CHARACTERS.test(secret)) {
+    return null;
+  }
+  return { client_id: id, client_secret: secret };
+}
+
+/**
+ * The app a client is stored under, as the catalogue spells it, or null (review M-3).
+ *
+ * Lower-cased, because the catalogue's slugs are, and a client stored under `Shopify` would never
+ * meet the directory's `shopify`: stored, and silently never used. Letters, digits, underscores and
+ * hyphens, at most {@link DEPLOYMENT_CLIENT_SLUG_MAX}, which is also what a `composio://` url reads.
+ */
+export function deploymentClientSlug(raw: string): string | null {
+  const slug = raw.trim().toLowerCase();
+  return slug.length <= DEPLOYMENT_CLIENT_SLUG_MAX && /^[a-z0-9_-]+$/.test(slug)
+    ? slug
+    : null;
 }
 
 /**
@@ -80,6 +112,14 @@ export function adminConnectOnly(authScheme: string | null): boolean {
 /** The refusal a person's connect to such an app meets, in one place for both readers of it. */
 export function adminConnectOnlySentence(title: string): string {
   return `${title} 用的是这个部署自己的应用凭据，不是你自己的账号，所以只有管理员能连接它。没有建立任何连接。请联系管理员。`;
+}
+
+/**
+ * The refusal a call through such an account meets once the person it was made by is no longer an
+ * administrator (review I-1). Said to whoever's Bot made the call, which may be a teammate's.
+ */
+export function adminConnectionLapsedSentence(title: string): string {
+  return `${title} 的连接用的是这个部署自己的应用凭据，只能由管理员持有；建立这个连接的人现在已经不是管理员，所以这次没有调用。请管理员重新连接 ${title}。`;
 }
 
 /** What an administrator is told when enabling such an app with no client stored for it. */

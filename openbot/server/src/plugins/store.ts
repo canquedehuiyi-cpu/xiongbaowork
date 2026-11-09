@@ -48,6 +48,7 @@ import {
   pluginGrants,
   skills,
   skillTools,
+  userRoles,
   users,
 } from "../db/schema";
 import type {
@@ -104,6 +105,7 @@ import {
 } from "./composio";
 import { inspectToolArguments } from "./content-governance";
 import {
+  adminConnectionLapsedSentence,
   adminConnectOnly,
   adminConnectOnlySentence,
   DEPLOYMENT_CLIENT_PROVIDER,
@@ -111,6 +113,7 @@ import {
   type DeploymentClient,
   deploymentClientFrom,
   deploymentClientKey,
+  deploymentClientSlug,
   toolkitOfDeploymentClientKey,
 } from "./deployment-clients";
 import { type ListedTool, McpServerError } from "./mcp";
@@ -532,6 +535,19 @@ export class CustomServerRefusedError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "CustomServerRefusedError";
+  }
+}
+
+/**
+ * {@link CustomServerRefusedError} for the one refusal that is about WHO asked rather than what was
+ * sent: the caller is not an administrator holding the capability. Its own class so a route can
+ * answer it 403 by asking the class, not by reading a message (review M-2). Still a
+ * {@link CustomServerRefusedError}, so every reader of that class reads it as before.
+ */
+export class ServerWriteRefusedError extends CustomServerRefusedError {
+  constructor(message: string) {
+    super(message);
+    this.name = "ServerWriteRefusedError";
   }
 }
 
@@ -1469,6 +1485,14 @@ const SERVER_WRITE_REFUSAL =
   "Changing this deployment's apps takes an administrator, from the administrator's own screens.";
 
 /**
+ * Whether a refusal is {@link SERVER_WRITE_REFUSAL}: the caller is not an administrator holding
+ * the capability. A route answers it 403, not as a mistake in what was sent (review M-2).
+ */
+export function isServerWriteRefusal(error: unknown): boolean {
+  return error instanceof ServerWriteRefusedError;
+}
+
+/**
  * The tenants a skill slug can name for the caller: their own, then the platform's (audit #9).
  *
  * Stated in every slug query rather than left to row security, because the platform frame's SELECT
@@ -1796,7 +1820,7 @@ export function createPluginStore(options: PluginStoreOptions) {
 
   function requireServerWriter(): void {
     if (!writesTeamServers()) {
-      throw new CustomServerRefusedError(SERVER_WRITE_REFUSAL);
+      throw new ServerWriteRefusedError(SERVER_WRITE_REFUSAL);
     }
   }
 
@@ -1909,6 +1933,17 @@ export function createPluginStore(options: PluginStoreOptions) {
    * `deployment-token` is decrypted out of the vault per call, and a `brokered` key is never held
    * here at all.
    */
+  /** Whether this person holds the administrator role right now, as `user_roles` says. */
+  async function holdsAdminRole(userId: string): Promise<boolean> {
+    if (!userId) return false;
+    const [held] = await database
+      .select({ role: userRoles.role })
+      .from(userRoles)
+      .where(and(eq(userRoles.userId, userId), eq(userRoles.role, "admin")))
+      .limit(1);
+    return held !== undefined;
+  }
+
   async function connectionTokenFor(
     row: {
       id: string;
@@ -2018,7 +2053,8 @@ export function createPluginStore(options: PluginStoreOptions) {
        * per connector on any deployment, and the call it guards is a network round trip to the
        * vendor.
        */
-      if ((await brokeredAppKind(access.toolkit)) === "none") return {};
+      const appScheme = await brokeredAppScheme(access.toolkit);
+      if (schemeKind(appScheme) === "none") return {};
 
       /**
        * WHAT THAT GATE ANSWERS FOR EACH KIND OF APP, WRITTEN DOWN BECAUSE THE LINE ABOVE DOES NOT.
@@ -2063,6 +2099,27 @@ export function createPluginStore(options: PluginStoreOptions) {
       if (!connected) {
         throw new PluginRefusedError(
           `You have not connected your ${row.title} account. Connect it in Settings and ask again.`,
+          null,
+        );
+      }
+
+      /*
+       * AN ACCOUNT ON THE DEPLOYMENT'S OWN CLIENT IS ONLY EVER AN ADMINISTRATOR'S, AND THAT IS ASKED
+       * ON EVERY CALL, NOT ONLY WHEN IT WAS MADE (upstream #950; review I-1).
+       *
+       * A server-to-server app connects with the client this deployment registered, so the account
+       * is the organization's access filed under one person. The connect route and
+       * `connectBrokeredWithFields` let only an administrator make one; but an administrator who is
+       * later made an ordinary member keeps the row, and every call through it — their own Bots',
+       * and a teammate's through their Team Bot, which reaches the owner's account
+       * (`credentialActorFor`) — would go on spending the organization's access in their name. So
+       * the person whose account the call goes out on must still hold the administrator role now.
+       * Read from `user_roles` (no row security: role facts belong to no tenant), the same table
+       * the admin capability is granted from.
+       */
+      if (adminConnectOnly(appScheme) && !(await holdsAdminRole(actorId))) {
+        throw new PluginRefusedError(
+          adminConnectionLapsedSentence(row.title),
           null,
         );
       }
@@ -4133,10 +4190,17 @@ export function createPluginStore(options: PluginStoreOptions) {
       by: string;
     }): Promise<{ replaced: boolean }> {
       requireServerWriter();
-      const url = `composio://${input.toolkit}`;
-      if (toolkitOf(url) !== input.toolkit) {
+      // The catalogue's own spelling, which the directory matches on (review M-3).
+      const slug = deploymentClientSlug(input.toolkit);
+      const url = `composio://${slug}`;
+      if (slug !== input.toolkit || toolkitOf(url) !== input.toolkit) {
         throw new CustomServerRefusedError(
-          `${input.toolkit} 不是一个应用能用的名字。应用名只能包含字母、数字、下划线和连字符。`,
+          `${input.toolkit} 不是一个应用能用的名字。应用名只能包含小写字母、数字、下划线和连字符。`,
+        );
+      }
+      if (!deploymentClientFrom(input.client)) {
+        throw new CustomServerRefusedError(
+          "客户端 ID 和客户端密钥都要填写，且不能过长或包含控制字符。",
         );
       }
       const key = deploymentClientVaultKey(input.toolkit);
@@ -4191,7 +4255,7 @@ export function createPluginStore(options: PluginStoreOptions) {
     async removeDeploymentClient(input: {
       toolkit: string;
       by: string;
-    }): Promise<{ removed: boolean }> {
+    }): Promise<{ removed: boolean; stillInUseByEnabledApp: boolean }> {
       requireServerWriter();
       const key = deploymentClientVaultKey(input.toolkit);
       const removed = await withOAuthClientLock(
@@ -4211,7 +4275,15 @@ export function createPluginStore(options: PluginStoreOptions) {
           payload: { actor: input.by, toolkit: input.toolkit },
         });
       }
-      return { removed };
+      /*
+       * WHAT THE REMOVAL DID NOT DO, SAID (review M-4). An app already enabled keeps the client in
+       * its authorization config at Composio, and its connections keep working; removing the vault
+       * row only stops the next enable from using it. So the answer says whether such an app stands.
+       */
+      const stillInUseByEnabledApp = adminConnectOnly(
+        await brokeredAppScheme(input.toolkit),
+      );
+      return { removed, stillInUseByEnabledApp };
     },
 
     /**
@@ -8134,11 +8206,6 @@ export function createPluginStore(options: PluginStoreOptions) {
       toolkit: string;
       userId: string;
       values: Record<string, string>;
-      /**
-       * Whether the person connecting is an administrator. Read only for an app on this deployment's
-       * own OAuth client, which nobody else may connect (`adminConnectOnly`); absent is not one.
-       */
-      byAdmin?: boolean;
     }): Promise<{ connected: true; verified: boolean; probe: string | null }> {
       // First, and for `confirmBrokeredConnection`'s reason: a deployment with no key has nobody to
       // connect anybody at, and the refusal must happen before the values are touched at all.
@@ -8187,8 +8254,12 @@ export function createPluginStore(options: PluginStoreOptions) {
        * route refuses this before the form is drawn; it is asked again here, before the values
        * travel, because this method is callable without that route and what it would make is the
        * organization's access filed as one person's account (see `adminConnectOnly`).
+       *
+       * DECIDED HERE, NOT TAKEN FROM THE CALLER (review M-1): an administrator's request holds the
+       * capability, which is what {@link writesTeamServers} asks, so no caller can say it on their
+       * behalf.
        */
-      if (adminConnectOnly(authScheme) && input.byAdmin !== true) {
+      if (adminConnectOnly(authScheme) && !writesTeamServers()) {
         throw new PluginRefusedError(
           adminConnectOnlySentence(input.toolkit),
           null,

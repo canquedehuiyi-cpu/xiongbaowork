@@ -2,7 +2,10 @@ import { describe, expect, test } from "bun:test";
 import { createApp } from "../src/app";
 import { loadConfig } from "../src/config";
 import type { BrokerApp } from "../src/plugins/broker";
-import type { PluginStore } from "../src/plugins/store";
+import {
+  type PluginStore,
+  ServerWriteRefusedError,
+} from "../src/plugins/store";
 import { testEnvironment } from "./support/environment";
 
 /**
@@ -50,6 +53,9 @@ const UP_TO_BROKER = Array.from({ length: 14 }, () => undefined) as [
 ];
 
 const SECRET = "shpss_never_comes_back";
+/** The store's own refusal for a request that holds no administrator capability. */
+const WRITE_REFUSAL =
+  "Changing this deployment's apps takes an administrator, from the administrator's own screens.";
 
 const SHOPIFY: BrokerApp = {
   slug: "shopify",
@@ -75,7 +81,14 @@ function appFor(options: {
   role?: "admin" | "user";
   held?: string[];
   heldThrows?: boolean;
+  /** The store refuses as it does for a request holding no capability (review M-2). */
+  noCapability?: boolean;
+  /** An enabled app still uses the client being removed (review M-4). */
+  stillInUse?: boolean;
 }) {
+  const refuseWithoutCapability = () => {
+    if (options.noCapability) throw new ServerWriteRefusedError(WRITE_REFUSAL);
+  };
   const stored: unknown[] = [];
   const removed: unknown[] = [];
   const added: unknown[] = [];
@@ -89,16 +102,22 @@ function appFor(options: {
       if (options.heldThrows) throw new Error("vault unreachable");
       return new Set(options.held ?? []);
     },
-    listDeploymentClients: async () => [
-      { toolkit: "shopify", clientId: "shpca_id", storedAt: null },
-    ],
+    listDeploymentClients: async () => {
+      refuseWithoutCapability();
+      return [{ toolkit: "shopify", clientId: "shpca_id", storedAt: null }];
+    },
     storeDeploymentClient: async (input: unknown) => {
+      refuseWithoutCapability();
       stored.push(input);
       return { replaced: false };
     },
     removeDeploymentClient: async (input: unknown) => {
+      refuseWithoutCapability();
       removed.push(input);
-      return { removed: true };
+      return {
+        removed: true,
+        stillInUseByEnabledApp: options.stillInUse === true,
+      };
     },
     addBrokeredApp: async (input: { slug: string }) => {
       added.push(input);
@@ -241,7 +260,10 @@ describe("storing the deployment's own client", () => {
       method: "DELETE",
     });
     expect(gone.status).toBe(200);
-    expect(await gone.json()).toEqual({ removed: true });
+    expect(await gone.json()).toEqual({
+      removed: true,
+      stillInUseByEnabledApp: false,
+    });
     expect(removed).toEqual([{ toolkit: "shopify", by: ADMIN.email }]);
   });
 });
@@ -341,8 +363,81 @@ describe("connecting an app on the deployment's own client", () => {
         toolkit: "shopify",
         userId: ADMIN.id,
         values: { subdomain: "acme" },
-        byAdmin: true,
       },
     ]);
+  });
+});
+
+describe("what the client routes accept (review M-2, M-3, M-4)", () => {
+  test("an app name is stored as the catalogue spells it, lower-cased", async () => {
+    const { app, stored } = appFor({});
+    const response = await request(app, "/composio/clients/%20Shopify%20", {
+      method: "PUT",
+      body: JSON.stringify({ client_id: "id", client_secret: SECRET }),
+    });
+    expect(response.status).toBe(200);
+    expect(stored).toEqual([expect.objectContaining({ toolkit: "shopify" })]);
+  });
+
+  test("a name that is not one, or is too long, is refused on PUT and DELETE alike", async () => {
+    const { app, stored, removed } = appFor({});
+    for (const slug of ["shop%2Fify", "a".repeat(65), "shop.ify"]) {
+      const put = await request(app, `/composio/clients/${slug}`, {
+        method: "PUT",
+        body: JSON.stringify({ client_id: "id", client_secret: SECRET }),
+      });
+      expect(put.status).toBe(400);
+      const gone = await request(app, `/composio/clients/${slug}`, {
+        method: "DELETE",
+      });
+      expect(gone.status).toBe(400);
+    }
+    expect(stored).toEqual([]);
+    expect(removed).toEqual([]);
+  });
+
+  test("a secret past its bound, or carrying a control character, is refused", async () => {
+    const { app, stored } = appFor({});
+    for (const body of [
+      { client_id: "id", client_secret: "s".repeat(4097) },
+      { client_id: "i".repeat(513), client_secret: SECRET },
+      { client_id: "id\u0000x", client_secret: SECRET },
+    ]) {
+      const response = await request(app, "/composio/clients/shopify", {
+        method: "PUT",
+        body: JSON.stringify(body),
+      });
+      expect(response.status).toBe(400);
+    }
+    expect(stored).toEqual([]);
+  });
+
+  test("an administrator whose request holds no capability is told 403 on all three", async () => {
+    const { app } = appFor({ noCapability: true });
+    for (const [path, method] of [
+      ["/composio/clients", "GET"],
+      ["/composio/clients/shopify", "PUT"],
+      ["/composio/clients/shopify", "DELETE"],
+    ] as const) {
+      const response = await request(app, path, {
+        method,
+        ...(method === "PUT"
+          ? {
+              body: JSON.stringify({ client_id: "id", client_secret: SECRET }),
+            }
+          : {}),
+      });
+      expect(response.status).toBe(403);
+    }
+  });
+
+  test("removing a client an enabled app still uses says so", async () => {
+    const { app } = appFor({ stillInUse: true });
+    const gone = await request(app, "/composio/clients/shopify", {
+      method: "DELETE",
+    });
+    const body = await gone.json();
+    expect(body.stillInUseByEnabledApp).toBe(true);
+    expect(body.note).toContain("移除这个应用");
   });
 });

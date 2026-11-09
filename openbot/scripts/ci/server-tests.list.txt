@@ -156,6 +156,7 @@ tests/composio-broker-seam.test.ts
 tests/composio-classify.test.ts
 tests/composio-connection-kinds.test.ts
 tests/composio-connections.test.ts
+tests/composio-deployment-client-lapse.integration.test.ts
 tests/composio-deployment-client-routes.test.ts
 tests/composio-deployment-client.integration.test.ts
 tests/composio-deployment-client.test.ts

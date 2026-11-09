@@ -3311,13 +3311,26 @@ export function buildComposioClient(
               credentials: s2s && client ? client : {},
             } as const);
 
-      const created = await askVendor(
-        {
-          outcome: `the app is not enabled, and whether an authorization config for ${toolkit} now stands at Composio is not something this deployment can tell`,
-          app: toolkit,
-        },
-        () => vendor.authConfigs.create(toolkit, options),
-      );
+      const outcome = `the app is not enabled, and whether an authorization config for ${toolkit} now stands at Composio is not something this deployment can tell`;
+      /*
+       * A SERVER-TO-SERVER CONFIG CARRIES THE DEPLOYMENT'S CLIENT SECRET, SO ITS FAILURE IS READ AND
+       * DROPPED, NEVER ATTACHED (review M-5). It is the second call here that sends a secret, after
+       * {@link ComposioBroker.connectWithFields}, and it keeps that call's rule for the same reason:
+       * the vendor's error object carries the request, and the request is the secret. Only the
+       * vendor's own sentence leaves this block, through `vendorSentence`, the one door for it.
+       */
+      const created = s2s
+        ? await vendor.authConfigs.create(toolkit, options).catch((error) => {
+            const said = vendorSentence(error);
+            throw new BrokerRefusalError(
+              said === null
+                ? `Composio did not accept the authorization config for ${toolkit} and said nothing this deployment can pass on, so ${outcome}. The failure itself was dropped rather than recorded, because the request carried this deployment's own OAuth client.`
+                : `Composio refused the authorization config for ${toolkit}: ${said} So ${outcome}. Nothing further is kept, because the request carried this deployment's own OAuth client.`,
+            );
+          })
+        : await askVendor({ outcome, app: toolkit }, () =>
+            vendor.authConfigs.create(toolkit, options),
+          );
 
       /*
        * THE REPLY IS READ, WHICH IS THE HALF THAT WAS MISSING. Composio names the config it just
