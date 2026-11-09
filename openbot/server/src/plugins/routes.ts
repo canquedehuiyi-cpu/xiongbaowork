@@ -62,6 +62,47 @@ import {
 export type ConnectingPersonCheck = (userId: string) => Promise<boolean>;
 
 /**
+ * What the Plugins page is told about how an entry is reached: the question it has to ask an
+ * administrator, and the words to ask it in.
+ *
+ * THE PLACED KINDS ARE `deployment-bearer` TO THE PAGE, deliberately. What the page decides from
+ * `auth` is whose credential it collects — one an administrator types once for everybody — and for
+ * a key that goes into a query parameter, a vendor header or a per-customer address the answer is
+ * the same. Where the key sits on the request is the server's business (`placeCredential`), and a
+ * browser has no more use for the parameter or header name than for a vendor's OAuth addresses.
+ * What does differ is what to call the thing, so the reviewed label and hint travel beside it;
+ * neither ever holds a value.
+ */
+function pageAuth(entry: CatalogueEntry): {
+  auth: "none" | "deployment-bearer" | "user-oauth" | "builtin";
+  credentialLabel?: string;
+  credentialHint?: string;
+} {
+  const auth = entry.auth;
+  switch (auth.kind) {
+    case "none":
+    case "deployment-bearer":
+    case "user-oauth":
+    case "builtin":
+      return { auth: auth.kind };
+    case "deployment-query":
+    case "deployment-header":
+    case "deployment-address":
+      return {
+        auth: "deployment-bearer",
+        credentialLabel: auth.credentialLabel,
+        credentialHint: auth.credentialHint,
+      };
+    default: {
+      const unknown: never = auth;
+      throw new Error(
+        `Unknown catalogue auth kind ${(unknown as { kind?: unknown }).kind}`,
+      );
+    }
+  }
+}
+
+/**
  * What somebody is told when the broker itself failed, and what is deliberately kept out of it.
  *
  * EVERY BROKERED ROUTE NEEDS THIS AND NONE OF THEM USED TO HAVE IT. A listing, a connect, a confirm
@@ -288,7 +329,7 @@ export function createPluginRoutes(
          * authorization code to is not improved by also existing in every browser that opens the
          * Plugins page.
          */
-        auth: entry.auth.kind,
+        ...pageAuth(entry),
         perInstance: entry.host === null,
       })),
       /*

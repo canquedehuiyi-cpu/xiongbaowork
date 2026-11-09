@@ -3,6 +3,12 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import { cutAtCodeUnits } from "../channels/text";
 import { createGuardedFetch, type OutboundPolicy } from "../net/outbound-guard";
+import {
+  type CredentialPlacement,
+  CredentialPlacementRefusedError,
+  placeCredential,
+  withoutSecrets,
+} from "./catalogue";
 
 /**
  * The only place in this deployment that speaks MCP to somebody else's server.
@@ -221,6 +227,18 @@ type Connection = {
    * Absent for a catalogue-pinned server, whose host is a reviewed constant.
    */
   outbound?: OutboundPolicy;
+  /**
+   * Where `token` goes, for a catalogue entry whose vendor does not take it as a bearer token: a
+   * pinned query parameter, a pinned vendor header, or an address that is itself the credential.
+   *
+   * Present, it REPLACES the Authorization header rather than adding to it, and three more things
+   * hold: no token is a refusal rather than an anonymous dial; `url` must be the entry's pinned base
+   * exactly; and every request goes through the outbound guard — with `outbound` when a test injects
+   * one, with the strict default otherwise — so a redirect is refused rather than followed and a
+   * key in a URL or a vendor header (which `fetch` does not strip across origins the way it strips
+   * Authorization) is never carried to another host. See `placeCredential` in catalogue.ts.
+   */
+  placement?: CredentialPlacement;
 };
 
 /**
@@ -387,29 +405,82 @@ async function connectWithinDeadline(
   }
 }
 
-async function withClient<T>(
-  connection: Connection,
-  use: (client: Client) => Promise<T>,
-): Promise<T> {
-  const transport = new StreamableHTTPClientTransport(new URL(connection.url), {
+/**
+ * The request a connection becomes: where to send it, what headers, which fetch, and which strings
+ * no message about it may carry.
+ *
+ * A placed credential is decided entirely in `placeCredential`, before any transport exists, so a
+ * refusal there is a sentence with nothing sent. Everything else dials exactly as it always has.
+ */
+function dialFor(connection: Connection): {
+  url: string;
+  requestInit: RequestInit | undefined;
+  fetch: typeof fetch | undefined;
+  secrets: string[];
+} {
+  if (connection.placement) {
+    const placed = placeCredential(
+      connection.placement,
+      connection.url,
+      connection.token,
+    );
+    return {
+      url: placed.url,
+      requestInit:
+        Object.keys(placed.headers).length > 0
+          ? { headers: placed.headers }
+          : undefined,
+      // Always guarded: see `Connection.placement`.
+      fetch: createGuardedFetch(connection.outbound ?? {}),
+      secrets: [...placed.secrets, connection.token ?? ""],
+    };
+  }
+  return {
+    url: connection.url,
     requestInit: connection.token
       ? { headers: { Authorization: authorizationHeader(connection.token) } }
       : undefined,
     // The SDK sends every POST, GET and DELETE through this when given; see `Connection.outbound`.
-    ...(connection.outbound
-      ? { fetch: createGuardedFetch(connection.outbound) }
-      : {}),
+    fetch: connection.outbound
+      ? createGuardedFetch(connection.outbound)
+      : undefined,
+    secrets: connection.token ? [connection.token] : [],
+  };
+}
+
+async function withClient<T>(
+  connection: Connection,
+  use: (client: Client, secrets: readonly string[]) => Promise<T>,
+): Promise<T> {
+  let dial: ReturnType<typeof dialFor>;
+  try {
+    dial = dialFor(connection);
+  } catch (error) {
+    // A placement refusal names no value; anything else thrown while placing is not trusted to.
+    throw new McpServerError(
+      error instanceof CredentialPlacementRefusedError
+        ? error.message
+        : "无法为这台服务器构造请求，未发送任何内容。",
+    );
+  }
+  const transport = new StreamableHTTPClientTransport(new URL(dial.url), {
+    requestInit: dial.requestInit,
+    ...(dial.fetch ? { fetch: dial.fetch } : {}),
   });
   const client = new Client({ name: "openbot", version: "1.0.0" });
 
   try {
     await connectWithinDeadline(client, transport);
-    return await use(client);
+    return await use(client, dial.secrets);
   } catch (error) {
     // Rewrapped so a caller never has to care whether the failure came from the transport, the
     // handshake or the call, and so the message that reaches an audit row and an admin page is one
-    // sentence rather than a stack.
-    throw new McpServerError(vendorFailure(error));
+    // sentence rather than a stack. Every spelling of the credential is taken out first: this
+    // message is written into `last_error`, an audit row and a model's context, and a transport
+    // error that quotes the URL it dialled would otherwise quote a key placed in it.
+    throw new McpServerError(
+      withoutSecrets(vendorFailure(error), dial.secrets),
+    );
   } finally {
     await client.close().catch(() => {
       // A server that will not say goodbye is not a failure of the work that just succeeded.
@@ -462,13 +533,14 @@ function declaredEffect(annotations: ToolAnnotations | undefined) {
 
 /** What this server says it offers, right now. */
 export async function listTools(connection: Connection): Promise<ListedTool[]> {
-  return withClient(connection, async (client) => {
+  return withClient(connection, async (client, secrets) => {
     const result = await client.listTools(undefined, {
       timeout: LIST_TIMEOUT_MS,
     });
     return result.tools.map((tool) => ({
       name: tool.name,
-      description: tool.description ?? "",
+      // Stored and shown on the Plugins page, so a vendor echoing the key here does not put it there.
+      description: withoutSecrets(tool.description ?? "", secrets),
       inputSchema: (tool.inputSchema ?? {}) as Record<string, unknown>,
       ...declaredEffect(tool.annotations),
     }));
@@ -496,7 +568,7 @@ export async function callTool(
   toolName: string,
   args: Record<string, unknown>,
 ): Promise<McpCallResult> {
-  return withClient(connection, async (client) => {
+  return withClient(connection, async (client, secrets) => {
     const result = await client.callTool(
       { name: toolName, arguments: args },
       undefined,
@@ -507,6 +579,11 @@ export async function callTool(
       result.content,
       "structuredContent" in result ? result.structuredContent : undefined,
     );
-    return { text, isError: result.isError === true, truncated };
+    // A model reads this, and an `isError` text is copied into the audit row; neither gets the key.
+    return {
+      text: withoutSecrets(text, secrets),
+      isError: result.isError === true,
+      truncated,
+    };
   });
 }

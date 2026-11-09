@@ -29,14 +29,68 @@
 // The one place browsing and this check agree on: the addresses that hold the deployment's own
 // cloud credentials. `target.ts` imports nothing itself, so asking it here adds no dependency.
 import { isNeverAllowedHostname } from "../computer/target";
+// The static half of the outbound guard. It reaches no database and no network, so the rule that
+// this module imports nothing that does still holds.
+import { checkOutboundUrl } from "../net/outbound-guard";
 // Type-only, so naming the transport here creates no import cycle with the registry that resolves it.
 import type { CuratedTransportKind } from "./transport";
+
+/**
+ * What every deployment credential that is NOT a bearer token carries: the words an administrator
+ * is asked for, in the language of the screen that asks.
+ *
+ * `credentialLabel` names the thing ("高德 Web 服务 Key"), `credentialHint` says where it comes
+ * from. Both are reviewed copy, never a value: nothing here can hold a key, and the catalogue test
+ * asserts no entry's copy looks like one.
+ */
+type CredentialCopy = {
+  credentialLabel: string;
+  credentialHint: string;
+};
 
 export type CatalogueAuth =
   /** Answers without any credential at all. */
   | { kind: "none" }
   /** One token, held by the deployment, used for everybody. */
   | { kind: "deployment-bearer" }
+  /*
+   * THE THREE PLACED KINDS. Each is a `deployment-bearer` in every way that matters to who may do
+   * what — one credential an administrator stores once, sealed in the vault exactly as a bearer
+   * token is (kind `mcp`, the server's own row), used for everybody, audited as the deployment — and
+   * differs only in WHERE the vendor wants it on the request. They are kinds rather than a flag on
+   * `deployment-bearer` so that every branch on `auth.kind` has to answer for them: a placement
+   * dropped on the way to the dial would otherwise send the key as `Authorization: Bearer` to the
+   * vendor and look, from every screen, like a working connector.
+   *
+   * WHAT THE PLACEMENT MAY NOT DO is the security property, and it is the same for all three: the
+   * credential is a VALUE put into one pinned slot. It can never choose the scheme, the host, the
+   * port or the path (save the one segment the address kind admits, under a pinned prefix), and the
+   * URL it produces goes through the outbound guard on every request. See {@link placeCredential}.
+   */
+  /**
+   * The key goes into one pinned query parameter (Amap's `key`, Baidu Maps' `ak`). Pinned
+   * non-secret parameters the vendor also wants sit beside it in `fixedParams`.
+   */
+  | ({
+      kind: "deployment-query";
+      param: string;
+      fixedParams?: Readonly<Record<string, string>>;
+    } & CredentialCopy)
+  /** The key goes into one pinned request header that is not `Authorization`. */
+  | ({ kind: "deployment-header"; header: string } & CredentialCopy)
+  /**
+   * The credential IS an address: the vendor issues every customer their own URL, with the key in
+   * its query (DingTalk's `/server/{serverId}?key=…`). The entry's host and `path` are the pinned
+   * origin and prefix; the administrator's address may differ from them in exactly one path segment,
+   * matching the anchored `segmentPattern`, and one query parameter, `param`. Anything else — another
+   * host, another prefix, a second segment, a port, userinfo, a fragment, any other parameter — is
+   * refused, both when it is stored and on every dial.
+   */
+  | ({
+      kind: "deployment-address";
+      segmentPattern: string;
+      param: string;
+    } & CredentialCopy)
   /**
    * First-party and in-process. There is no credential, because there is nothing to authenticate
    * to: the call runs against this deployment's own tables, as the person whose turn it is.
@@ -1211,7 +1265,317 @@ const PATTERNS = new Map(
  * kind it names. A server needing no credential takes none.
  */
 export function serverCredentialKind(entry: CatalogueEntry): "mcp" | null {
-  return entry.auth.kind === "deployment-bearer" ? "mcp" : null;
+  // A switch the compiler checks for exhaustiveness, so an auth kind added later has to say here
+  // whether it takes the deployment's credential rather than falling into "takes none".
+  const auth = entry.auth;
+  switch (auth.kind) {
+    case "deployment-bearer":
+    case "deployment-query":
+    case "deployment-header":
+    case "deployment-address":
+      // Placed kinds are stored exactly as a bearer token is: the server's own `mcp` secret.
+      return "mcp";
+    case "none":
+    case "user-oauth":
+    case "builtin":
+      return null;
+    default: {
+      const unknown: never = auth;
+      throw new Error(
+        `Unknown catalogue auth kind ${(unknown as { kind?: unknown }).kind}`,
+      );
+    }
+  }
+}
+
+/**
+ * Where on the request a placed deployment credential goes, with the pinned address it may go to.
+ *
+ * Plain data, built from the reviewed entry only, and handed down to the MCP transport beside the
+ * decrypted secret so that the one module that builds a request is the one that places it. `base`
+ * is the entry's own `host + path`: the dial is refused unless the connection's url is exactly
+ * that, so a stored url edited by hand cannot carry the key somewhere else.
+ */
+export type CredentialPlacement =
+  | {
+      kind: "query";
+      base: string;
+      param: string;
+      fixedParams: Readonly<Record<string, string>>;
+      label: string;
+    }
+  | { kind: "header"; base: string; header: string; label: string }
+  | {
+      kind: "address";
+      base: string;
+      segmentPattern: string;
+      param: string;
+      label: string;
+    };
+
+/**
+ * The placement for a placed kind, or null for a kind that is not one (bearer, none, OAuth,
+ * builtin), which keeps its own path unchanged.
+ *
+ * Throws for a placed kind with no pinned host: the address is the whole of what makes putting a key
+ * into a URL safe, and a per-instance host would make it the caller's. The catalogue test asserts no
+ * entry is shaped that way; this is what stands behind a cast.
+ */
+export function credentialPlacement(
+  entry: CatalogueEntry,
+): CredentialPlacement | null {
+  const auth = entry.auth;
+  switch (auth.kind) {
+    case "none":
+    case "deployment-bearer":
+    case "user-oauth":
+    case "builtin":
+      return null;
+    case "deployment-query":
+    case "deployment-header":
+    case "deployment-address":
+      break;
+    default: {
+      const unknown: never = auth;
+      throw new Error(
+        `Unknown catalogue auth kind ${(unknown as { kind?: unknown }).kind}`,
+      );
+    }
+  }
+  if (entry.host === null) {
+    throw new Error(
+      `${entry.key} places its credential and has no pinned host, so there is nowhere safe to put it.`,
+    );
+  }
+  const base = `${entry.host}${entry.path === "/" ? "" : entry.path}`;
+  const label = auth.credentialLabel;
+  if (auth.kind === "deployment-query") {
+    return {
+      kind: "query",
+      base,
+      param: auth.param,
+      fixedParams: auth.fixedParams ?? {},
+      label,
+    };
+  }
+  if (auth.kind === "deployment-header") {
+    return { kind: "header", base, header: auth.header, label };
+  }
+  return {
+    kind: "address",
+    base,
+    segmentPattern: auth.segmentPattern,
+    param: auth.param,
+    label,
+  };
+}
+
+/**
+ * A placed credential this deployment will not send, in a sentence for an administrator.
+ *
+ * NEVER CARRIES THE VALUE. Every message here is built from the reviewed placement alone — its
+ * label, its pinned address, its parameter name — so it can go into `last_error`, an audit row, a
+ * 400 body or a model's context without a key travelling with it.
+ */
+export class CredentialPlacementRefusedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CredentialPlacementRefusedError";
+  }
+}
+
+/**
+ * The characters a placed key may hold: letters, digits and `. _ ~ + / = : -`, at most 512.
+ *
+ * Every key these vendors issue is hex, alphanumeric with dashes, or base64-ish. Refusing the rest
+ * means a pasted value with a line break cannot split a header, and a value carrying `&`, `#`, `?`
+ * or a space is refused rather than relied on to be encoded — encoding would make it harmless, and
+ * refusing makes a paste of the wrong thing (a whole URL, a sentence) visible at the form.
+ */
+const PLACED_VALUE = /^[A-Za-z0-9._~+/=:-]{1,512}$/;
+
+/** The address an administrator pasted, broken into the two parts the dial may use. */
+function parsedAddress(
+  placement: Extract<CredentialPlacement, { kind: "address" }>,
+  secret: string,
+): { segment: string; key: string } | null {
+  let url: URL;
+  try {
+    url = new URL(secret);
+  } catch {
+    return null;
+  }
+  const base = new URL(placement.base);
+  if (
+    url.protocol !== "https:" ||
+    url.username !== "" ||
+    url.password !== "" ||
+    url.port !== "" ||
+    url.origin !== base.origin ||
+    url.hash !== ""
+  ) {
+    return null;
+  }
+  // `new URL` has already resolved dot segments, so `/server/../x` arrives as `/x` and fails here.
+  const prefix = `${base.pathname.replace(/\/+$/, "")}/`;
+  if (!url.pathname.startsWith(prefix)) return null;
+  const segment = url.pathname.slice(prefix.length);
+  if (!new RegExp(placement.segmentPattern).test(segment)) return null;
+  const names = [...url.searchParams.keys()];
+  if (names.length !== 1 || names[0] !== placement.param) return null;
+  const key = url.searchParams.get(placement.param) ?? "";
+  if (!PLACED_VALUE.test(key)) return null;
+  return { segment, key };
+}
+
+/**
+ * Why this deployment will not hold or send this value for this placement, or null when it will.
+ *
+ * Asked when an administrator stores the credential, so a malformed one is refused at the form, and
+ * again inside {@link placeCredential} on every dial, because a credential can reach the vault by
+ * other doors than the one that asks.
+ */
+export function credentialFormatRefusal(
+  placement: CredentialPlacement,
+  secret: string,
+): string | null {
+  const value = secret.trim();
+  if (value === "") {
+    return `还没有录入「${placement.label}」。请管理员在「插件 › 凭据」中录入后再试。`;
+  }
+  if (placement.kind === "address") {
+    return parsedAddress(placement, value) === null
+      ? `「${placement.label}」的格式不对：必须是 ${placement.base}/<服务 ID>?${placement.param}=<密钥> 这样的完整 https 地址，主机和路径前缀不能改，也不能带其他参数。`
+      : null;
+  }
+  return PLACED_VALUE.test(value)
+    ? null
+    : `「${placement.label}」的格式不对：只能由英文字母、数字和 . _ ~ + / = : - 组成，不能有空格，长度不超过 512。`;
+}
+
+/**
+ * The request a placed credential becomes: the URL to dial, the headers to send, and every spelling
+ * of the secret an error message must not carry.
+ *
+ * THE ONLY FUNCTION THAT PUTS A PLACED KEY INTO A REQUEST, and it refuses rather than degrades:
+ *
+ *  - No credential is a refusal, never a dial without one. A vendor that answers anonymously would
+ *    otherwise look connected while running on nobody's quota, or on a stranger's.
+ *  - The connection's url must be the placement's pinned `base`, exactly. It is the stored
+ *    `mcp_servers.url` on some paths, and a hand-edited row must not be able to move the key.
+ *  - The key fills its pinned slot and nothing else: `URLSearchParams` encodes it as one value of
+ *    one parameter, a header value is checked for visible ASCII before `Headers` sees it, and an
+ *    address is rebuilt from the pinned base plus the two parts {@link parsedAddress} admits.
+ *  - The result is checked once more — same origin, same path (or one segment under the prefix) —
+ *    and then by the outbound guard's static check, the one an administrator's typed URL meets.
+ *
+ * Every refusal is a {@link CredentialPlacementRefusedError} whose message names no value.
+ */
+export function placeCredential(
+  placement: CredentialPlacement,
+  connectionUrl: string,
+  secret: string | undefined,
+): { url: string; headers: Record<string, string>; secrets: string[] } {
+  const value = (secret ?? "").trim();
+  if (connectionUrl !== placement.base) {
+    throw new CredentialPlacementRefusedError(
+      `这台服务器的地址与目录登记的 ${placement.base} 不一致，拒绝带着「${placement.label}」拨号。`,
+    );
+  }
+  const refusal = credentialFormatRefusal(placement, value);
+  if (refusal !== null) throw new CredentialPlacementRefusedError(refusal);
+
+  const base = new URL(placement.base);
+  let url: URL;
+  const headers: Record<string, string> = {};
+  const secrets = [value];
+  switch (placement.kind) {
+    case "query": {
+      url = new URL(placement.base);
+      for (const [name, fixed] of Object.entries(placement.fixedParams)) {
+        url.searchParams.set(name, fixed);
+      }
+      url.searchParams.set(placement.param, value);
+      break;
+    }
+    case "header": {
+      // A vendor's own `X-` header only. `Authorization`, `Cookie`, `Host` and the rest mean
+      // something to every hop between here and the vendor, and a reviewed entry naming one is a
+      // mistake this refuses rather than sends.
+      if (!/^x-[a-z0-9-]{1,64}$/i.test(placement.header)) {
+        throw new CredentialPlacementRefusedError(
+          `目录为「${placement.label}」登记的请求头名不是服务商自定义的 X- 头，拒绝拨号。`,
+        );
+      }
+      url = new URL(placement.base);
+      headers[placement.header] = value;
+      break;
+    }
+    case "address": {
+      const parts = parsedAddress(placement, value);
+      // Unreachable after the format check above; asked again so the narrowing is not a cast.
+      if (parts === null) {
+        throw new CredentialPlacementRefusedError(
+          `「${placement.label}」的格式不对。`,
+        );
+      }
+      url = new URL(
+        `${placement.base.replace(/\/+$/, "")}/${encodeURIComponent(parts.segment)}`,
+      );
+      url.searchParams.set(placement.param, parts.key);
+      secrets.push(parts.key);
+      break;
+    }
+    default: {
+      const unknown: never = placement;
+      throw new CredentialPlacementRefusedError(
+        `未知的凭据放置方式 ${(unknown as { kind?: unknown }).kind}，拒绝拨号。`,
+      );
+    }
+  }
+
+  const samePath =
+    placement.kind === "address"
+      ? url.pathname.startsWith(`${base.pathname.replace(/\/+$/, "")}/`) &&
+        url.pathname.split("/").length === base.pathname.split("/").length + 1
+      : url.pathname === base.pathname;
+  if (url.origin !== base.origin || !samePath) {
+    throw new CredentialPlacementRefusedError(
+      `「${placement.label}」改变了目录登记的主机或路径，拒绝拨号。`,
+    );
+  }
+  const verdict = checkOutboundUrl(url.href);
+  if (!verdict.allowed) {
+    throw new CredentialPlacementRefusedError(verdict.reason);
+  }
+  return { url: url.href, headers, secrets: [...secrets, url.href] };
+}
+
+/**
+ * Text with every spelling of these secrets taken out.
+ *
+ * A key put into a URL can come back in an error three ways: as typed, percent-encoded by
+ * `encodeURIComponent`, and form-encoded by `URLSearchParams` (which writes a space as `+`). All
+ * three are removed, longest first so a URL holding a key is removed whole. Values shorter than four
+ * characters are left alone: they cannot be a vendor key, and removing them would shred ordinary
+ * words.
+ */
+export function withoutSecrets(
+  text: string,
+  secrets: readonly (string | undefined)[],
+): string {
+  const spellings = new Set<string>();
+  for (const secret of secrets) {
+    if (!secret || secret.length < 4) continue;
+    spellings.add(secret);
+    spellings.add(encodeURIComponent(secret));
+    spellings.add(new URLSearchParams({ v: secret }).toString().slice(2));
+  }
+  let out = text;
+  for (const spelling of [...spellings].sort((a, b) => b.length - a.length)) {
+    out = out.split(spelling).join("[已隐去]");
+  }
+  return out;
 }
 
 export function catalogueEntry(key: string): CatalogueEntry | null {
