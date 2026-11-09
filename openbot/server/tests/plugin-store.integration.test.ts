@@ -14,8 +14,9 @@ import { MCPMock, type MCPToolDefinition } from "@copilotkit/aimock/mcp";
 import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import { and, asc, eq, gte, inArray, sql } from "drizzle-orm";
 import { TOOL_DISABLED } from "../src/approvals/policy";
-import { ALREADY_WAITING } from "../src/approvals/service";
+import { ALREADY_WAITING, DECLINED_BY_PERSON } from "../src/approvals/service";
 import {
+  ApprovalAlreadyAnsweredError,
   type ApprovalCandidate,
   type ApprovalGate,
   ApprovalRefusedError,
@@ -5573,6 +5574,71 @@ test("a connector call the approval gate turns away is a refused row, with no ar
     await expect(call()).rejects.toThrow(ALREADY_WAITING);
     expect(refused()).toHaveLength(1);
     expect(executed).toBe(0);
+  }));
+
+/*
+ * What the person's own "no" leaves on the trail (upstream #1106, `declined`). The call hands the
+ * gate the refused row it would have written itself, so the approval store can write it, once, the
+ * moment the person denies: refusal "person_declined", this tool and this Bot, never the arguments.
+ * A call the gate answers again with what it said before (an answer already given) turns nothing
+ * new away and writes nothing.
+ */
+test("a connector call hands the approval gate the refused row for the person's denial", () =>
+  asPlatform(async () => {
+    const asked: ApprovalCandidate[] = [];
+    let answer: "hold" | "answered" = "hold";
+    const { store, database, auditStore } = await freshStore({
+      approvalGate: async (candidate) => {
+        asked.push(candidate);
+        if (answer === "answered")
+          throw new ApprovalAlreadyAnsweredError(DECLINED_BY_PERSON);
+        throw new HeadlessToolSuspension(
+          "This action is waiting for your approval.",
+          { kind: "approval" },
+        );
+      },
+    });
+    useComposioClient({
+      listActions: async () => [],
+      execute: async () => vendorAnswered({ messages: [] }),
+    });
+    await seedComposioGmail(database, store);
+    const call = () =>
+      store.callTool({
+        ref: "gmail/GMAIL_FETCH_EMAILS",
+        args: { query: "needle-argument-value-5529" },
+        botId: "bot_helper",
+        actorId: "user_asker",
+      });
+
+    await expect(call()).rejects.toBeInstanceOf(HeadlessToolSuspension);
+    const declined = asked[0]?.declined;
+    expect(declined).toMatchObject({
+      eventType: "mcp.call_rejected",
+      targetType: "mcp_tool",
+      targetId: "gmail/GMAIL_FETCH_EMAILS",
+      payload: {
+        actor: "user_asker",
+        bot: "bot_helper",
+        server: "gmail",
+        tool: "GMAIL_FETCH_EMAILS",
+        decision: { carriedOut: false },
+        refusal: "person_declined",
+        reason: DECLINED_BY_PERSON,
+      },
+    });
+    expect(JSON.stringify(declined)).not.toContain("needle-argument-value-5529");
+    // Handing it over writes nothing: the row is the approval store's to write, on denial.
+    const refused = () =>
+      auditStore
+        .recorded()
+        .filter((event) => event.eventType === "mcp.call_rejected");
+    expect(refused()).toEqual([]);
+
+    // The same call answered already: nothing new was turned away, so no row.
+    answer = "answered";
+    await expect(call()).rejects.toThrow(DECLINED_BY_PERSON);
+    expect(refused()).toEqual([]);
   }));
 
 /*

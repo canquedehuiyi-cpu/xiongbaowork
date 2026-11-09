@@ -288,9 +288,10 @@ export function createApprovalStore(
           },
         });
         /*
-         * The action's own row for a denial, beside the decision and in the same transaction, so it
-         * is written once. Without it the trail held only the decision: the action itself read as
-         * nothing, or, from the code that asked, as allowed, and the Blocked view never showed it.
+         * The action's own row for a denial, beside the decision and in the same transaction (the
+         * person's own tenant frame, like the decision), so it is written once. Without it the trail
+         * held only the decision: the action itself read as nothing, or, from the code that asked, as
+         * allowed, and the Blocked view never showed it. Redacted like every audit payload.
          */
         if (decision === "deny" && request.action.declined)
           await recordAuditEvent(trail, request.action.declined);

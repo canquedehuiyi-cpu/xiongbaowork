@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
-import { ALREADY_WAITING } from "../approvals/service";
+import { ALREADY_WAITING, DECLINED_BY_PERSON } from "../approvals/service";
 import {
+  ApprovalAlreadyAnsweredError,
   type ApprovalGate,
   ApprovalRefusedError,
   currentApprovalContext,
@@ -9271,6 +9272,19 @@ export function createPluginStore(options: PluginStoreOptions) {
         }
       }
 
+      /** A call the approval gate or the person turned away, as this surface's other refusals read. */
+      const refusedRow = (refusal: string, reason: string) => ({
+        eventType: "mcp.call_rejected" as const,
+        targetType: "mcp_tool",
+        targetId: input.ref,
+        ...(input.initiator ? { initiator: input.initiator } : {}),
+        payload: {
+          ...decided,
+          decision: { ...decided.decision, carriedOut: false },
+          refusal,
+          reason,
+        },
+      });
       const approval = await options
         .approvalGate?.({
           actorId: input.actorId,
@@ -9285,33 +9299,29 @@ export function createPluginStore(options: PluginStoreOptions) {
           // 标明它来自插件调用路径：删除类底线按来源认应用工具，不看服务器叫什么。
           subject: { connector: true },
           continuation: currentApprovalContext(),
+          /*
+           * The row for the person's own "no": the approval store writes it, once, when they deny.
+           * Built here from the same facts as the rows above and never holding the arguments.
+           */
+          declined: refusedRow("person_declined", DECLINED_BY_PERSON),
         })
         ?.catch(async (error: unknown) => {
           /*
            * Turned away at the gate: a rule that disables the tool, or an equivalent call the person
            * declined earlier in this conversation. It is on the trail like every other refusal here,
            * in the caller's frame, with the same fields as the rows above and never the arguments.
-           * A call already waiting for the person turns nothing new away, and a suspension is a
-           * wait rather than a refusal, so neither writes a row. Only the audit is added: the error
+           * A call already waiting for the person, and one answered already (denied, failed or its
+           * approval used), turn nothing new away, and a suspension is a wait rather than a refusal,
+           * so none of them writes a row. Only the audit is added: the error
            * goes on to the caller exactly as it came.
            */
           const reason =
-            error instanceof ApprovalRefusedError
+            error instanceof ApprovalRefusedError &&
+            !(error instanceof ApprovalAlreadyAnsweredError)
               ? withoutStatement(error)
               : undefined;
           if (reason !== undefined && reason !== ALREADY_WAITING)
-            await recordAuditEvent(auditStore, {
-              eventType: "mcp.call_rejected",
-              targetType: "mcp_tool",
-              targetId: input.ref,
-              ...(input.initiator ? { initiator: input.initiator } : {}),
-              payload: {
-                ...decided,
-                decision: { ...decided.decision, carriedOut: false },
-                refusal: "approval",
-                reason,
-              },
-            });
+            await recordAuditEvent(auditStore, refusedRow("approval", reason));
           throw error;
         });
       if (approval && "replay" in approval)

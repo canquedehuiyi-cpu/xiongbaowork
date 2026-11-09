@@ -1,5 +1,3 @@
-import { ApprovalFreshError, createApprovalFreshCoordinator } from "./fresh-producer";
-import { currentTenant } from "../tenant/context";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
@@ -14,8 +12,13 @@ import {
   WITHDRAWN_RULE_ALLOWS,
 } from "@openbot/shared/approval-outcomes";
 import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
-import { desktopFloor } from "./desktop-policy";
 import { PERSON_INITIATOR } from "../audit";
+import { currentTenant } from "../tenant/context";
+import { desktopFloor } from "./desktop-policy";
+import {
+  ApprovalFreshError,
+  createApprovalFreshCoordinator,
+} from "./fresh-producer";
 import {
   applicableRules,
   DEFAULT_SENSITIVE_PATHS,
@@ -28,35 +31,35 @@ import {
 } from "./policy";
 import type { ApprovalQuestions } from "./questions";
 import {
-  type ApprovalFreshProducerPort,
-  type ApprovalRecoveryContext,
-  type ApprovalRecoveryPort,
-  type ApprovalRecoveryOutcome,
-  validateApprovalRecoveryContext,
   type ApprovalAction,
   ApprovalAlreadyAnsweredError,
   type ApprovalCandidate,
   type ApprovalContinuation,
   type ApprovalDecision,
+  type ApprovalFreshProducerPort,
+  ApprovalNotFoundError,
   type ApprovalPermit,
   type ApprovalPolicyOutcome,
   type ApprovalPreferences,
   type ApprovalRecord,
+  type ApprovalRecoveryContext,
+  type ApprovalRecoveryOutcome,
+  type ApprovalRecoveryPort,
   ApprovalRefusedError,
-  ApprovalNotFoundError,
   type ApprovalRule,
   type ApprovalRuleInput,
   type ApprovalStore,
   type ApprovalTeamSettings,
-  type EmployeeSecuritySettings,
-  type EmployeeToolMode,
-  EMPLOYEE_TOOL_BEHAVIOUR,
   approvalAction,
   approvalArgsPreview,
   approvalPreview,
   currentApprovalContext,
+  EMPLOYEE_TOOL_BEHAVIOUR,
+  type EmployeeSecuritySettings,
+  type EmployeeToolMode,
   type HostCommandPolicy,
   parseApprovalContinuation,
+  validateApprovalRecoveryContext,
   withApprovalContext,
 } from "./types";
 
@@ -204,7 +207,9 @@ export function createApprovalService(
     : undefined;
   // Decided once, here: a resume never reads an option, so a blocked retry touches nothing.
   const databaseSettled =
-    options.settlement === "database" && !fresh && !options.continuationRecovery;
+    options.settlement === "database" &&
+    !fresh &&
+    !options.continuationRecovery;
   /**
    * The row this frame reads must be the owner's own, stamped with the frame's tenant, and bound to
    * the run and call it was opened for (G01). Anything else is never run and never answered.
@@ -213,7 +218,12 @@ export function createApprovalService(
     if (!store.getRecoveryContext) throw new ApprovalRecoveryBlockedError();
     try {
       const context = await store.getRecoveryContext(owner, request.id);
-      validateApprovalRecoveryContext(context, owner, request.id, currentTenant());
+      validateApprovalRecoveryContext(
+        context,
+        owner,
+        request.id,
+        currentTenant(),
+      );
       if (!isDeepStrictEqual(context.request.action, request.action))
         throw new ApprovalRecoveryBlockedError();
     } catch (error) {
@@ -713,7 +723,8 @@ export function createApprovalService(
           candidate: { ...candidate, effect },
           team: teamRules,
           personal,
-          ...(employee?.ownerUserId && employee.ownerUserId !== candidate.actorId
+          ...(employee?.ownerUserId &&
+          employee.ownerUserId !== candidate.actorId
             ? { owner: employee.rules }
             : {}),
           customRulesEnabled: team.customRulesEnabled,
@@ -732,7 +743,9 @@ export function createApprovalService(
         effect: candidate.effect,
         scope: candidate.scope,
         outcome,
-        ...(continuation?.initiator ? { initiator: continuation.initiator } : {}),
+        ...(continuation?.initiator
+          ? { initiator: continuation.initiator }
+          : {}),
       });
       return outcome.reason;
     },
@@ -824,7 +837,9 @@ export function createApprovalService(
     async employeePermissions(actorId: string, botId: string) {
       const policy = store.policy;
       if (!policy?.employee)
-        throw new ApprovalRefusedError("Employee permissions are unavailable here.");
+        throw new ApprovalRefusedError(
+          "Employee permissions are unavailable here.",
+        );
       // Another person's private Bot is not found, rather than having its owner's settings read out.
       if (policy.botVisible && !(await policy.botVisible(botId)))
         throw new ApprovalNotFoundError();
@@ -833,8 +848,11 @@ export function createApprovalService(
         policy.teamSettings(),
         policy.teamRules(),
       ]);
-      const forThisBot = (rule: { botId: string; effect: string; scope: string }) =>
-        rule.botId === botId && rule.effect === "*" && rule.scope === "*";
+      const forThisBot = (rule: {
+        botId: string;
+        effect: string;
+        scope: string;
+      }) => rule.botId === botId && rule.effect === "*" && rule.scope === "*";
       return {
         botId,
         editable: employee.ownerUserId === actorId,
@@ -846,14 +864,16 @@ export function createApprovalService(
           behaviour: rule.behaviour,
         })),
         teamRules: teamRules
-          .filter((rule) => ruleMatches(rule, {
-            actorId,
-            botId,
-            toolRef: rule.toolRef,
-            effect: rule.effect,
-            scope: rule.scope,
-            args: null,
-          }))
+          .filter((rule) =>
+            ruleMatches(rule, {
+              actorId,
+              botId,
+              toolRef: rule.toolRef,
+              effect: rule.effect,
+              scope: rule.scope,
+              args: null,
+            }),
+          )
           .map((rule) => ({
             id: rule.id,
             toolRef: rule.toolRef,
@@ -883,7 +903,9 @@ export function createApprovalService(
     ) {
       const policy = store.policy;
       if (!policy?.employee)
-        throw new ApprovalRefusedError("Employee permissions are unavailable here.");
+        throw new ApprovalRefusedError(
+          "Employee permissions are unavailable here.",
+        );
       const employee = await policy.employee(botId);
       if (employee.ownerUserId !== ownerUserId)
         throw new ApprovalRefusedError(
@@ -925,7 +947,9 @@ export function createApprovalService(
     ) {
       const policy = store.policy;
       if (!policy?.employee || !policy.setEmployeeSecurity)
-        throw new ApprovalRefusedError("Employee permissions are unavailable here.");
+        throw new ApprovalRefusedError(
+          "Employee permissions are unavailable here.",
+        );
       if ((await policy.employee(botId)).ownerUserId !== ownerUserId)
         throw new ApprovalRefusedError(
           "Only this Bot's owner can change what it may do.",
@@ -954,12 +978,16 @@ export function createApprovalService(
       // EXISTING frozen seed before validation, execution or any result write.
       // The no-result/no-producer case is decided first so a blocked retry
       // reads no recovery option or store capability at all.
-      else if ((!request.result && !fresh) || !options.continuationRecovery ||
-          !store.getRecoveryContext)
+      else if (
+        (!request.result && !fresh) ||
+        !options.continuationRecovery ||
+        !store.getRecoveryContext
+      )
         throw new ApprovalRecoveryBlockedError();
-      const prepared = !request.result && fresh
-        ? await freshOperation(() => fresh.prepare(request, ownerUserId))
-        : undefined;
+      const prepared =
+        !request.result && fresh
+          ? await freshOperation(() => fresh.prepare(request, ownerUserId))
+          : undefined;
       let executionClaimed = false;
       const saveFresh = async (
         value: NonNullable<ApprovalRecord["result"]>,
@@ -968,9 +996,13 @@ export function createApprovalService(
         // Compare-and-set on the SQL NULL result: one answer is kept, and only its saver goes on.
         if (databaseSettled) return store.saveResult(ownerUserId, id, value);
         if (!prepared) throw new ApprovalRecoveryBlockedError();
-        return freshOperation(() => prepared.commit(
-          value, disposition, executionClaimed ? "consumed" : request.status,
-        ));
+        return freshOperation(() =>
+          prepared.commit(
+            value,
+            disposition,
+            executionClaimed ? "consumed" : request.status,
+          ),
+        );
       };
       const continuation = request.action.continuation;
       if (!continuation)
@@ -1001,10 +1033,13 @@ export function createApprovalService(
       if (refused) {
         // Only the process that saves the refusal ends the request.
         if (
-          !(await saveFresh({
-            content: refused,
-            error: refused,
-          }, "final"))
+          !(await saveFresh(
+            {
+              content: refused,
+              error: refused,
+            },
+            "final",
+          ))
         )
           return;
         if (!fresh) throw new ApprovalRecoveryBlockedError();
@@ -1102,7 +1137,8 @@ export function createApprovalService(
       const published = fresh
         ? await freshOperation(() => fresh.publish(request, ownerUserId))
         : { request, final: false };
-      if (!published.final) await recoverSaved(published.request, ownerUserId, "resume");
+      if (!published.final)
+        await recoverSaved(published.request, ownerUserId, "resume");
     },
     async abandon(
       ownerUserId: string,
@@ -1133,18 +1169,31 @@ export function createApprovalService(
         return;
       }
       if (!request.result) {
-        if (!fresh || !options.continuationRecovery || !store.getRecoveryContext)
+        if (
+          !fresh ||
+          !options.continuationRecovery ||
+          !store.getRecoveryContext
+        )
           throw new ApprovalRecoveryBlockedError();
-        const prepared = await freshOperation(() => fresh.prepare(request, ownerUserId));
-        const content = request.status === "consumed"
-          ? APPROVAL_OUTCOME_UNKNOWN
-          : `This action could not be carried out: ${reason}. It was not run by this recovery attempt.`;
-        if (!(await freshOperation(() => prepared.commit({ content, error: content })))) return;
+        const prepared = await freshOperation(() =>
+          fresh.prepare(request, ownerUserId),
+        );
+        const content =
+          request.status === "consumed"
+            ? APPROVAL_OUTCOME_UNKNOWN
+            : `This action could not be carried out: ${reason}. It was not run by this recovery attempt.`;
+        if (
+          !(await freshOperation(() =>
+            prepared.commit({ content, error: content }),
+          ))
+        )
+          return;
       }
       const published = fresh
         ? await freshOperation(() => fresh.publish(request, ownerUserId))
         : { request, final: false };
-      if (!published.final) await recoverSaved(published.request, ownerUserId, "abandon");
+      if (!published.final)
+        await recoverSaved(published.request, ownerUserId, "abandon");
     },
   };
 }

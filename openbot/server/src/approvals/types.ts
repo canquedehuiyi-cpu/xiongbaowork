@@ -448,8 +448,9 @@ export class ApprovalNeedsConversationError extends ApprovalRefusedError {
   }
 }
 /**
- * This same call was answered already: it was denied, it failed, or its approval was used. What it
- * got then is what it gets now. Nothing new was turned away, so the action's code records nothing new.
+ * This same call was answered already: it was denied, it failed, or its approval was used or
+ * revoked. What it got then is what it gets now. Nothing new was turned away, so the code that asked
+ * the gate records nothing new for it.
  */
 export class ApprovalAlreadyAnsweredError extends ApprovalRefusedError {
   constructor(message: string) {
