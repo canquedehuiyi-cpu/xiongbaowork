@@ -968,7 +968,11 @@ export async function exchangeRefreshTokenOverHttp(input: {
 
   const response = await fetch(input.tokenUrl, {
     method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      // GitHub answers form-encoded unless asked for JSON — see `redeemAuthorizationCode`.
+      accept: "application/json",
+    },
     body: params,
     /*
      * A redirect is a refusal, not a detour to be followed.

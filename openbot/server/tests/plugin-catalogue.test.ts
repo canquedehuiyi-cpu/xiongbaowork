@@ -133,12 +133,20 @@ describe("whose credential a server uses", () => {
       // person's authorization code and receives their refresh token at.
       expect(entry.auth.authorizationUrl.startsWith("https://")).toBe(true);
       expect(entry.auth.tokenUrl.startsWith("https://")).toBe(true);
-      expect(entry.auth.revokeUrl.startsWith("https://")).toBe(true);
+      // Absent only where the vendor's own metadata publishes no revocation endpoint; never http.
+      if (entry.auth.revokeUrl !== undefined) {
+        expect(entry.auth.revokeUrl.startsWith("https://")).toBe(true);
+      }
       // No scopes means consent to nothing, which would fail at the vendor with a message that
       // does not name us — except for a vendor whose consent screen itself is the scoping
       // (Notion, with dynamic client registration), where a scope string would assert a control
-      // that does not exist.
-      if (entry.auth.clientRegistration !== "dynamic") {
+      // that does not exist. Two administrator-registered clients are reviewed exceptions by
+      // name: GitHub, whose GitHub App ignores `scope` (its permissions are the scoping), and
+      // HubSpot, whose MCP auth app publishes no scopes at all.
+      if (
+        entry.auth.clientRegistration !== "dynamic" &&
+        !["github", "hubspot"].includes(entry.key)
+      ) {
         expect(entry.auth.scopes.length).toBeGreaterThan(0);
       }
       if (entry.auth.clientRegistration === "dynamic") {
@@ -150,13 +158,9 @@ describe("whose credential a server uses", () => {
   test("a vendor this build has never heard of is not an entry", () => {
     // The five bearer vendors that used to be asserted here are gone. What matters now is the same
     // property from the other side: a key with no entry resolves to nothing rather than to a default.
-    for (const key of [
-      "atlassian",
-      "box",
-      "slack",
-      "salesforce",
-      "servicenow",
-    ]) {
+    // Atlassian and Slack came back in the MCP market's second batch as user-oauth entries, after
+    // their own review; Zapier was reviewed in that batch and deliberately left out.
+    for (const key of ["box", "salesforce", "servicenow", "zapier"]) {
       expect(catalogueEntry(key)).toBeNull();
       expect(resolveServerUrl(key)).toBeNull();
     }
@@ -604,7 +608,9 @@ test("a recorded read cannot take an action off a curated entry's write list", (
 
 describe("owner assembly source eligibility", () => {
   test("only the explicitly reviewed anonymous source opts in", () => {
-    expect(CATALOGUE.filter(ownerAssemblySource).map((entry) => entry.key)).toEqual(["parallel"]);
+    expect(
+      CATALOGUE.filter(ownerAssemblySource).map((entry) => entry.key),
+    ).toEqual(["parallel"]);
     expect(ownerAssemblySource(null)).toBe(false);
   });
 
@@ -612,13 +618,21 @@ describe("owner assembly source eligibility", () => {
     const source = catalogueEntry("parallel");
     expect(source).not.toBeNull();
     if (!source) throw new Error("Missing reviewed test source.");
-    expect(ownerAssemblySource({ ...source, ownerAssembly: false })).toBe(false);
-    expect(ownerAssemblySource({ ...source, auth: { kind: "deployment-bearer" } })).toBe(false);
-    expect(ownerAssemblySource({ ...source, auth: { kind: "builtin" } })).toBe(false);
+    expect(ownerAssemblySource({ ...source, ownerAssembly: false })).toBe(
+      false,
+    );
+    expect(
+      ownerAssemblySource({ ...source, auth: { kind: "deployment-bearer" } }),
+    ).toBe(false);
+    expect(ownerAssemblySource({ ...source, auth: { kind: "builtin" } })).toBe(
+      false,
+    );
     const personal = catalogueEntry("google-drive");
     expect(personal).not.toBeNull();
     if (!personal) throw new Error("Missing personal credential source.");
-    expect(ownerAssemblySource({ ...personal, ownerAssembly: true })).toBe(false);
+    expect(ownerAssemblySource({ ...personal, ownerAssembly: true })).toBe(
+      false,
+    );
   });
 });
 
@@ -627,5 +641,7 @@ test("anonymous authentication alone does not opt a source into owner assembly",
   if (!source) throw new Error("Missing reviewed test source.");
   const { ownerAssembly: _optIn, ...withoutOptIn } = source;
   expect(ownerAssemblySource(withoutOptIn)).toBe(false);
-  expect(ownerAssemblySource(catalogueEntry("unknown-owner-source"))).toBe(false);
+  expect(ownerAssemblySource(catalogueEntry("unknown-owner-source"))).toBe(
+    false,
+  );
 });
