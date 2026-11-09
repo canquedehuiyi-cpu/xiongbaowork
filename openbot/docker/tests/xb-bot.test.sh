@@ -50,8 +50,12 @@ mkdir -p /run/s6/container_environment
 echo secret-token >/run/s6/container_environment/COMPUTER_TOKEN
 chmod 0755 /run/s6/container_environment
 chmod 0644 /run/s6/container_environment/COMPUTER_TOKEN
-COMPUTER_PER_BOT_USERS=on "$XB" restore || fail "restore at start exited $?"
+COMPUTER_PER_BOT_USERS=on "$XB" restore 2>"$T/err" || fail "restore at start exited $?: $(cat "$T/err")"
 pass "restore at start"
+# restore blocks the API's start, so it says when it begins and how long it took.
+grep -q '^xb-bot: restore 开始' "$T/err" || fail "restore did not log its start: $(cat "$T/err")"
+grep -q '^xb-bot: restore 完成，耗时 [0-9][0-9]* 秒' "$T/err" || fail "restore did not log its end with the time taken: $(cat "$T/err")"
+pass "restore logs its start and its end with the time taken"
 [ "$(stat -c '%U %a' /run/xb-bot)" = "root 700" ] || fail "/run/xb-bot is $(stat -c '%U %a' /run/xb-bot 2>&1)"
 [ "$(stat -c '%U %a' /run/xb-bot/lock)" = "root 600" ] || fail "/run/xb-bot/lock is $(stat -c '%U %a' /run/xb-bot/lock 2>&1)"
 pass "the lock is root's alone (/run/xb-bot 700, lock 600)"
@@ -126,6 +130,15 @@ bun --version && npm init -y >/dev/null && npm install --no-audit --no-fund
 ' || fail "A could not use npm and bun in its directory: $(cat "$T/err")"
 [ "$(stat -c %U "$DIRA/package-lock.json" 2>&1)" = "xb-$A" ] || fail "npm install left no package-lock.json of A's: $(stat -c %U "$DIRA/package-lock.json" 2>&1)"
 pass "an employee installs with npm and bun in its own directory"
+
+# Common tools are in the image, and Python installs go into a venv in the employee's directory.
+as "$A" 60 'PATH=/usr/local/bin:/usr/bin:/bin
+
+git --version && jq --version && python3 -m venv .venv && .venv/bin/python -c "print(1)"
+' || fail "A could not use git, jq and a venv in its directory: $(cat "$T/err")"
+[ "$(tail -n 1 "$T/out")" = 1 ] || fail "A's venv python printed $(cat "$T/out")"
+[ "$(stat -c %U "$DIRA/.venv/bin/python" 2>&1)" = "xb-$A" ] || fail "A's .venv is not A's: $(stat -c %U "$DIRA/.venv/bin/python" 2>&1)"
+pass "an employee has git, jq and python3, and builds a venv in its own directory"
 
 # --- run --------------------------------------------------------------------------------------
 as "$A" 10 'PATH=/usr/bin:/bin

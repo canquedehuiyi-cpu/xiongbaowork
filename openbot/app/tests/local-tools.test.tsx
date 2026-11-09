@@ -323,13 +323,18 @@ test("in the cloud the shell and file tools keep their own words", async () => {
   expect(run?.description).toContain(
     "Run a shell command on your own computer",
   );
-  // Employees do not sudo (user decision 2026-11-09): new tools go in the workspace.
-  expect(run?.description).not.toMatch(/apt-get|sudo apt/);
-  expect(run?.description).toContain("Do not use sudo");
-  // The image has no python3, so only the two installers that are there are named.
+  // True in every form of the computer: an employee with its own user (no sudo), the shared user
+  // (package managers through sudo) and a supervisor computer (root). New tools go in the workspace
+  // first, and a refused sudo is not something to work around.
+  expect(run?.description).not.toMatch(
+    /apt-get|sudo apt|Do not use sudo|cannot install/,
+  );
   expect(run?.description).toContain("npm install");
   expect(run?.description).toContain("bun add");
-  expect(run?.description).not.toMatch(/\bpip\b|python|npm install -g/);
+  expect(run?.description).toContain("python3 -m venv .venv");
+  expect(run?.description).toContain(".venv/bin/pip install");
+  expect(run?.description).toContain("do not try to escalate");
+  expect(run?.description).not.toMatch(/npm install -g|pip install --user/);
   const example = (
     z.toJSONSchema(run?.parameters as z.ZodType) as unknown as {
       properties: { command: { description: string } };
