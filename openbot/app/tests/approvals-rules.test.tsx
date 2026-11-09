@@ -312,25 +312,25 @@ test("in the real transcript shape a waiting click is folded into browser activi
 
 /** A change the Bot's owner asked to be asked about (SEC1 D9), added for the one test below. */
 const ownerAsked = {
-      id: "request-2",
-      status: "pending",
-      createdAt: new Date().toISOString(),
-      action: {
-        botId: "Desk",
-        toolRef: "computer_run_command",
-        effect: "write",
-        scope: "workspace",
-        threadId: "thread",
-        args: { command: "rm -rf build" },
-        target: {},
-        toolCallId: "rm-call",
-        policy: {
-          behaviour: "ask",
-          source: "owner_rule",
-          reason: "A rule asks before this kind of action.",
-        },
-      },
-    };
+  id: "request-2",
+  status: "pending",
+  createdAt: new Date().toISOString(),
+  action: {
+    botId: "Desk",
+    toolRef: "computer_run_command",
+    effect: "write",
+    scope: "workspace",
+    threadId: "thread",
+    args: { command: "rm -rf build" },
+    target: {},
+    toolCallId: "rm-call",
+    policy: {
+      behaviour: "ask",
+      source: "owner_rule",
+      reason: "A rule asks before this kind of action.",
+    },
+  },
+};
 
 test("a sensitive-window request names its source 敏感窗口", async () => {
   const asked = {
@@ -399,7 +399,9 @@ test("SEC1: only an administrator sees and sets the team's 强制危险命令审
   role = "admin";
   try {
     const view = draw();
-    const toggle = await view.findByRole("switch", { name: "强制危险命令审批" });
+    const toggle = await view.findByRole("switch", {
+      name: "强制危险命令审批",
+    });
     fireEvent.click(toggle);
     await waitFor(() =>
       expect(sent).toContainEqual({

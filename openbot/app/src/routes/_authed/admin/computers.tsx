@@ -36,22 +36,51 @@ import {
   stopHostAccessMutationOptions,
 } from "@/lib/computers/host-access";
 import { setComputerStateMutationOptions } from "@/lib/computers/mutations";
-import { computerFleetQueryOptions } from "@/lib/computers/queries";
+import {
+  type ComputerProfile,
+  computerFleetQueryOptions,
+} from "@/lib/computers/queries";
 
-// M4: 待接入 上游 manage/computers-page.tsx 的「每人一台电脑、员工可单独要一台」（#871）与分区（InactiveComputersSection、NetworkSection）
+// M4: 待接入 上游 manage/computers-page.tsx 的分区（InactiveComputersSection 空闲电脑何时停、NetworkSection 能连到哪里，fork 仍在企业管控页）与「教员工」浏览器命名（#1229）
 export const Route = createFileRoute("/_authed/admin/computers")({
   component: ComputersPage,
 });
 
+/**
+ * One row of the list: whose computer it is (`person:<id>` or `bot:<id>`, upstream #871 "one computer
+ * per person, with Isolated Bots on request"), and on a shared computer the Bot's seat on it.
+ */
+type Target = { computer: string; botId?: string };
+
+/** A row's own key: the computer, and on a shared computer the seat. */
+function keyOf(target: Target): string {
+  return target.botId ? `${target.computer}#${target.botId}` : target.computer;
+}
+
 function ComputersPage() {
-  /** Bot id currently running a stop/reset request. */
+  /** The row currently running a stop/reset/update request. */
   const [busy, setBusy] = useState<string | null>(null);
   /** Reset deletes the browser profile, so it requires confirmation. */
-  const [confirming, setConfirming] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<ComputerProfile | null>(null);
   /** Updating restarts a running computer mid-task, so it is confirmed too. */
-  const [confirmingUpdate, setConfirmingUpdate] = useState<string | null>(null);
+  const [confirmingUpdate, setConfirmingUpdate] =
+    useState<ComputerProfile | null>(null);
   const queryClient = useQueryClient();
   const nameFor = useBotNames();
+  /** Whose computer a row is, in words: the person (and the Bot's seat), or the isolated Bot. */
+  const ownerOf = (computer: ComputerProfile): string => {
+    if (computer.kind === "person") {
+      const who =
+        computer.person?.name ?? computer.person?.email ?? computer.personId;
+      const person = who ?? "某个人";
+      return computer.botId
+        ? `${person} · ${nameFor(computer.botId)}`
+        : `${person} 的电脑`;
+    }
+    return computer.botId
+      ? `${nameFor(computer.botId)}（单独一台）`
+      : computer.computer;
+  };
 
   const fleet = useQuery(computerFleetQueryOptions());
   const hostAccess = useQuery(hostAccessQueryOptions());
@@ -84,16 +113,23 @@ function ComputersPage() {
           ? stopHostAccess.error.message
           : null;
 
-  const run = (botId: string, action: "stop" | "reset" | "update") => {
-    setBusy(botId);
+  const run = (target: Target, action: "stop" | "reset" | "update") => {
+    setBusy(keyOf(target));
     setConfirming(null);
     setConfirmingUpdate(null);
-    setState.mutate({ action, botId }, { onSettled: () => setBusy(null) });
+    setState.mutate(
+      {
+        action,
+        computer: target.computer,
+        ...(target.botId ? { botId: target.botId } : {}),
+      },
+      { onSettled: () => setBusy(null) },
+    );
   };
 
   return (
     <PageShell
-      description="每位员工的浏览器以及它保留的配置文件。配置文件让员工明天还保持登录；重置会让它从所有服务里退出登录。"
+      description="每个人（以及单独要了一台的员工）的电脑、浏览器和它保留的配置文件。配置文件让员工明天还保持登录；重置会让它从所有服务里退出登录。"
       title="电脑"
     >
       {problem ? (
@@ -109,11 +145,11 @@ function ComputersPage() {
         <p className="mt-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">
           <span className="font-medium">所有员工在共用一台电脑。</span>{" "}
           它们共享登录状态、文件和会话，所以一位员工能碰到另一位员工登录过的东西。设置{" "}
-          <code>COMPUTER_SUPERVISOR_URL</code> 可以让每位员工各用一台。
+          <code>COMPUTER_SUPERVISOR_URL</code> 可以让每个人各用一台。
         </p>
-      ) : isolation === "per-bot" ? (
+      ) : isolation === "per-person" ? (
         <p className="mt-4 rounded-md border border-border bg-muted/40 px-3 py-2 text-muted-foreground text-sm">
-          每位员工都有自己的电脑：自己的容器、自己的文件和自己的浏览器配置文件。
+          每个人都有自己的电脑：自己的容器、自己的文件和自己的浏览器配置文件，他的员工在上面干活。单独要了一台的员工另有一台。
         </p>
       ) : null}
 
@@ -157,11 +193,11 @@ function ComputersPage() {
         ) : (
           <PageRows>
             {computers.map((computer, index) => (
-              <StaggerItem index={index} key={computer.botId}>
+              <StaggerItem index={index} key={keyOf(computer)}>
                 <Item size="sm">
                   <ItemContent>
-                    <ItemTitle title={computer.botId}>
-                      {nameFor(computer.botId)}
+                    <ItemTitle title={computer.computer}>
+                      {ownerOf(computer)}
                     </ItemTitle>
                     <ItemDescription>
                       {computer.running
@@ -179,8 +215,8 @@ function ComputersPage() {
                   <ItemActions>
                     {computer.updateAvailable ? (
                       <Button
-                        disabled={busy === computer.botId}
-                        onClick={() => setConfirmingUpdate(computer.botId)}
+                        disabled={busy === keyOf(computer)}
+                        onClick={() => setConfirmingUpdate(computer)}
                         size="sm"
                         variant="outline"
                       >
@@ -188,16 +224,16 @@ function ComputersPage() {
                       </Button>
                     ) : null}
                     <Button
-                      disabled={busy === computer.botId || !computer.running}
-                      onClick={() => void run(computer.botId, "stop")}
+                      disabled={busy === keyOf(computer) || !computer.running}
+                      onClick={() => void run(computer, "stop")}
                       size="sm"
                       variant="outline"
                     >
-                      {busy === computer.botId ? "处理中…" : "停止浏览器"}
+                      {busy === keyOf(computer) ? "处理中…" : "停止浏览器"}
                     </Button>
                     <Button
-                      disabled={busy === computer.botId}
-                      onClick={() => setConfirming(computer.botId)}
+                      disabled={busy === keyOf(computer)}
+                      onClick={() => setConfirming(computer)}
                       size="sm"
                       variant="outline"
                     >
@@ -227,7 +263,7 @@ function ComputersPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              重置 {confirming ? nameFor(confirming) : ""} 的电脑？
+              重置「{confirming ? ownerOf(confirming) : ""}」？
             </DialogTitle>
             <DialogDescription>
               它的配置文件会被删除，员工会从所有登录过的服务里退出，从头开始。此操作无法撤销。
@@ -242,14 +278,16 @@ function ComputersPage() {
               取消
             </Button>
             <Button
-              disabled={busy === confirming}
+              disabled={confirming !== null && busy === keyOf(confirming)}
               onClick={() => {
                 if (confirming) void run(confirming, "reset");
               }}
               size="sm"
               variant="destructive"
             >
-              {busy === confirming ? "正在重置…" : "重置"}
+              {confirming !== null && busy === keyOf(confirming)
+                ? "正在重置…"
+                : "重置"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -264,7 +302,7 @@ function ComputersPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              更新 {confirmingUpdate ? nameFor(confirmingUpdate) : ""} 的电脑？
+              更新「{confirmingUpdate ? ownerOf(confirmingUpdate) : ""}」？
             </DialogTitle>
             <DialogDescription>
               它会换到这个部署当前使用的电脑镜像上，文件和登录状态都会保留。如果正在运行，它会重启，正在做的事会被打断。
@@ -279,13 +317,17 @@ function ComputersPage() {
               取消
             </Button>
             <Button
-              disabled={busy === confirmingUpdate}
+              disabled={
+                confirmingUpdate !== null && busy === keyOf(confirmingUpdate)
+              }
               onClick={() => {
                 if (confirmingUpdate) void run(confirmingUpdate, "update");
               }}
               size="sm"
             >
-              {busy === confirmingUpdate ? "正在更新…" : "更新"}
+              {confirmingUpdate !== null && busy === keyOf(confirmingUpdate)
+                ? "正在更新…"
+                : "更新"}
             </Button>
           </DialogFooter>
         </DialogContent>

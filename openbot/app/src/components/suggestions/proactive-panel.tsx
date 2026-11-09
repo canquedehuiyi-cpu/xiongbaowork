@@ -567,9 +567,7 @@ function SettingRow({
               <ItemContent>
                 <ItemTitle>{checkInStatus(setting, blocked)}</ItemTitle>
                 {onItsWay ? (
-                  <ItemDescription>
-                    已排队，一分钟内开始巡检。
-                  </ItemDescription>
+                  <ItemDescription>已排队，一分钟内开始巡检。</ItemDescription>
                 ) : last ? (
                   <ItemDescription
                     className={cn(

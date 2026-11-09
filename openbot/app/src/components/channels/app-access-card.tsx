@@ -23,7 +23,6 @@ import {
 } from "../../../../shared/app-access-request";
 import { ConnectAppCard } from "./connect-app-card";
 
-
 /**
  * `request_app_access` 的回答里的卡片，不是这个工具或不是卡片时为 null。
  *

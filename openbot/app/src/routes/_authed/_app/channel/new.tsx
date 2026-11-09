@@ -362,6 +362,7 @@ function NewConversation({ composition }: { composition: string }) {
                   commandIds: [],
                   attachments: [],
                   agentId: recipients[0]?.id ?? null,
+                  crewTemplateId: null,
                   isEmpty: false,
                 })
               }

@@ -3,7 +3,6 @@ import {
   mutationOptions,
   type QueryClient,
 } from "@tanstack/react-query";
-import { botLifecycleKeys } from "@/lib/bot-lifecycle/queries";
 import { client, tryClient } from "@/lib/client";
 import { settingsKeys } from "@/lib/settings/queries";
 import { type AgentChannel, type ChannelPage, channelKeys } from "./queries";
@@ -103,11 +102,9 @@ export function setChannelPinnedMutationOptions(queryClient: QueryClient) {
  * Stamp a channel read for this member, patching the cache before the wire answers.
  *
  * Patched in onMutate rather than refetched on success: the dot must clear the instant the channel
- * opens, not a round-trip later. No rollback on failure and no roster invalidation — a mark-read
- * that did not land is a dot that returns on the next refetch, which is the truth reasserting
- * itself, and a roster refetch here would race the socket's own patches for nothing. The Bots
- * badge counts unread on the server, so once the mark lands its count is asked for again rather
- * than left lit until its next poll.
+ * opens, not a round-trip later. No rollback on failure and no invalidation — a mark-read that did
+ * not land is a dot that returns on the next refetch, which is the truth reasserting itself, and a
+ * refetch here would race the socket's own patches for nothing.
  */
 export function markChannelReadMutationOptions(queryClient: QueryClient) {
   return mutationOptions({
@@ -117,8 +114,6 @@ export function markChannelReadMutationOptions(queryClient: QueryClient) {
         fallback: "无法把这段会话标为已读",
       });
     },
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: botLifecycleKeys.attention }),
     onMutate: (channelId) => {
       const now = new Date().toISOString();
       queryClient.setQueryData(

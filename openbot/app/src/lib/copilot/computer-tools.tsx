@@ -2,12 +2,12 @@ import { outcomeForPerson } from "@openbot/shared/approval-outcomes";
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import { ToolLine } from "@/components/channels/tool-line";
+import { ComputerView } from "@/components/computer/computer-view";
+import { HelpRequestCard } from "@/components/computer/help-request-card";
 import {
   commandStatus,
   TerminalBlock,
 } from "@/components/computer/terminal-block";
-import { ComputerView } from "@/components/computer/computer-view";
-import { HelpRequestCard } from "@/components/computer/help-request-card";
 import { client, tryClient } from "@/lib/client";
 import { noteBrowsed, outputOf, readOutcome } from "@/lib/computers/activity";
 import { callComputer, type ToolOutcome } from "@/lib/computers/call";
@@ -17,12 +17,6 @@ import {
   runHelpRequest,
   runNavigation,
 } from "@/lib/computers/handoff";
-import {
-  type ToolCallContext,
-  useActiveBotHolder,
-  useBotOfCall,
-  useDeclaredBotId,
-} from "./active-bot";
 import {
   type ComputerMachine,
   computerToolPlace,
@@ -36,6 +30,12 @@ import {
   CANDIDATE_REF,
   LOCAL_TOOL_DESCRIPTIONS,
 } from "../../../../shared/local-tools";
+import {
+  type ToolCallContext,
+  useActiveBotHolder,
+  useBotOfCall,
+  useDeclaredBotId,
+} from "./active-bot";
 import { useFrontendTool } from "./approval-tools";
 import { type OfferRule, useOfferedTo } from "./bot-offer";
 import {

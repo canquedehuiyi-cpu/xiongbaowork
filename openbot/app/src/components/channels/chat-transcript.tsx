@@ -107,7 +107,11 @@ import { useResultVisibility } from "@/lib/product-telemetry";
 import { readTeamBotConsent } from "@/lib/team-bots";
 import { cn } from "@/lib/utils";
 import { VOICE_CHAT_ACTIVITY, type VoiceChatEntry } from "@/lib/voice/archive";
-import { AppAccessCard, AppAccessRequestCard, readAppAccessCard } from "./app-access-card";
+import {
+  AppAccessCard,
+  AppAccessRequestCard,
+  readAppAccessCard,
+} from "./app-access-card";
 import { ChannelAvatar } from "./avatar";
 import { isBrowserStep } from "./browser-activity";
 import {
@@ -1709,7 +1713,9 @@ export function ServerToolLine({
   const detail =
     named.detail ??
     folderStepSubject(name, args, folders) ??
-    ownToolSubject(name, args);
+    ownToolSubject(name, args) ??
+    // 文件夹里的命令：上面两处只认文件，命令本身也要写出来（「wc -c notes.txt · 你拒绝了这一步。」）。
+    (name.startsWith("host_") ? hostStepSubject(args) : undefined);
   /*
    * A refusal is not a result, and must not read like one.
    *
@@ -1818,6 +1824,21 @@ export function ServerToolLine({
       ) : null}
     </ToolLine>
   );
+}
+
+/** 文件夹步骤针对的文件或命令，从调用参数里读；读不到就不写。授权 id 永远不上屏。 */
+function hostStepSubject(args: string | undefined): string | undefined {
+  if (!args) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(args);
+    if (!parsed || typeof parsed !== "object") return undefined;
+    const { path, command } = parsed as { path?: unknown; command?: unknown };
+    if (typeof command === "string" && command.trim()) return command;
+    if (typeof path === "string" && path.trim() && path !== ".") return path;
+    return undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /**

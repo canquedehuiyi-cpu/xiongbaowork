@@ -118,92 +118,99 @@ export function useFrontendTool<T extends Record<string, unknown>>(
   });
   const hidden = toolIsDisabled(disabledToolRefs(permissions.data), tool.name);
   const render = tool.render;
-  useSDKFrontendTool({
-    ...tool,
-    ...(hidden ? { available: false } : {}),
-    // Every computer tool, not only changes: a look a rule asks about waits on the same card.
-    ...(tool.name.startsWith("computer_")
-      ? {
-          // A component, so the approval card can use hooks; the SDK keeps this function forever.
-          render: (props: RenderProps) => {
-            const Original = render as
-              | ((props: RenderProps) => ReactNode)
-              | undefined;
-            return (
-              <InlineApproval
-                toolCallId={props.toolCallId}
-                fallback={Original ? <Original {...props} /> : null}
-              />
+  useSDKFrontendTool(
+    {
+      ...tool,
+      ...(hidden ? { available: false } : {}),
+      // Every computer tool, not only changes: a look a rule asks about waits on the same card.
+      ...(tool.name.startsWith("computer_")
+        ? {
+            // A component, so the approval card can use hooks; the SDK keeps this function forever.
+            render: (props: RenderProps) => {
+              const Original = render as
+                | ((props: RenderProps) => ReactNode)
+                | undefined;
+              return (
+                <InlineApproval
+                  toolCallId={props.toolCallId}
+                  fallback={Original ? <Original {...props} /> : null}
+                />
+              );
+            },
+          }
+        : {}),
+      handler: tool.handler
+        ? async (args, context) => {
+            let direct: unknown;
+            const everyStep = await asksEveryStep(
+              queryClient,
+              context.agent?.threadId,
             );
-          },
-        }
-      : {}),
-    handler: tool.handler
-      ? async (args, context) => {
-          let direct: unknown;
-          const everyStep = await asksEveryStep(
-            queryClient,
-            context.agent?.threadId,
-          );
-          if (!writes.has(tool.name) && !everyStep) {
-            direct = await tool.handler?.(args, context);
-            if (!needsConversation(direct)) return direct;
+            if (!writes.has(tool.name) && !everyStep) {
+              direct = await tool.handler?.(args, context);
+              if (!needsConversation(direct)) return direct;
+            }
+            let snapshot: ReturnType<typeof frontendApprovalSnapshot>;
+            try {
+              snapshot = frontendApprovalSnapshot(context);
+            } catch {
+              /*
+               * A surface with no observed conversation. The server still gates the action; it can
+               * run it when nothing asks, and says why when something does. A look already went.
+               * Not in a conversation that asks before every step: sent without its conversation,
+               * the server could not tell, so the step is not taken at all.
+               */
+              if (everyStep) return { ok: false, reason: NOT_ASKED };
+              return direct ?? tool.handler?.(args, context);
+            }
+            let response: Response;
+            try {
+              // The gate of the Bot whose run this is, which the person may have navigated away from.
+              response = await tryClient(
+                `/api/approvals/computer/${encodeURIComponent(botOf(context.agent))}`,
+                { method: "POST", body: snapshot, signal: context.signal },
+              );
+            } catch (error) {
+              // The same two answers callComputer gives when the request itself does not complete.
+              if (error instanceof DOMException && error.name === "AbortError")
+                return { ok: false, reason: "Stopped.", stopped: true };
+              return {
+                ok: false,
+                reason: "The assistant's computer could not be reached.",
+              };
+            }
+            const payload: unknown = await response.json().catch(() => null);
+            if (response.status === 202) {
+              if (!context.agent)
+                throw new Error("The interrupted conversation is unavailable.");
+              // Stop signals the SDK to discard this handler's unfinished result. The server owns
+              // resume: the decision executes the action once and continues this conversation.
+              copilotkit.stopAgent({ agent: context.agent });
+              // Draw the card now rather than on the inbox's next poll.
+              void queryClient.invalidateQueries({ queryKey: ["approvals"] });
+              return WAITING_FOR_PERSON;
+            }
+            // Answered, not thrown: a thrown handler ends the Bot's turn with nothing said (see
+            // failedComputerCall), where a failed result lets it snapshot again or try another way.
+            if (!response.ok)
+              return failedComputerCall(
+                response.status,
+                payload && typeof payload === "object"
+                  ? (payload as Record<string, unknown>)
+                  : null,
+              );
+            if (
+              !payload ||
+              typeof payload !== "object" ||
+              !("result" in payload)
+            )
+              return failedComputerCall(response.status, {
+                error: "The computer action returned no result.",
+              });
+            return payload.result;
           }
-          let snapshot: ReturnType<typeof frontendApprovalSnapshot>;
-          try {
-            snapshot = frontendApprovalSnapshot(context);
-          } catch {
-            /*
-             * A surface with no observed conversation. The server still gates the action; it can
-             * run it when nothing asks, and says why when something does. A look already went.
-             * Not in a conversation that asks before every step: sent without its conversation,
-             * the server could not tell, so the step is not taken at all.
-             */
-            if (everyStep) return { ok: false, reason: NOT_ASKED };
-            return direct ?? tool.handler?.(args, context);
-          }
-          let response: Response;
-          try {
-            // The gate of the Bot whose run this is, which the person may have navigated away from.
-            response = await tryClient(
-              `/api/approvals/computer/${encodeURIComponent(botOf(context.agent))}`,
-              { method: "POST", body: snapshot, signal: context.signal },
-            );
-          } catch (error) {
-            // The same two answers callComputer gives when the request itself does not complete.
-            if (error instanceof DOMException && error.name === "AbortError")
-              return { ok: false, reason: "Stopped.", stopped: true };
-            return {
-              ok: false,
-              reason: "The assistant's computer could not be reached.",
-            };
-          }
-          const payload: unknown = await response.json().catch(() => null);
-          if (response.status === 202) {
-            if (!context.agent)
-              throw new Error("The interrupted conversation is unavailable.");
-            // Stop signals the SDK to discard this handler's unfinished result. The server owns
-            // resume: the decision executes the action once and continues this conversation.
-            copilotkit.stopAgent({ agent: context.agent });
-            // Draw the card now rather than on the inbox's next poll.
-            void queryClient.invalidateQueries({ queryKey: ["approvals"] });
-            return WAITING_FOR_PERSON;
-          }
-          // Answered, not thrown: a thrown handler ends the Bot's turn with nothing said (see
-          // failedComputerCall), where a failed result lets it snapshot again or try another way.
-          if (!response.ok)
-            return failedComputerCall(
-              response.status,
-              payload && typeof payload === "object"
-                ? (payload as Record<string, unknown>)
-                : null,
-            );
-          if (!payload || typeof payload !== "object" || !("result" in payload))
-            return failedComputerCall(response.status, {
-              error: "The computer action returned no result.",
-            });
-          return payload.result;
-        }
-      : undefined,
-  }, [hidden]);
+        : undefined,
+    },
+    [hidden],
+  );
 }

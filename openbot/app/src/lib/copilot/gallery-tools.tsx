@@ -3,8 +3,8 @@ import { NOT_SHOWN, NOT_SHOWN_TAIL } from "@openbot/shared/component-markers";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   useCallback,
-  useEffect,
   useContext,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -42,8 +42,8 @@ import {
   galleryManifest,
 } from "@/lib/copilot/gallery-registry";
 import {
-  cardState,
   COULDNT_CHECK,
+  cardState,
   createGrantStore,
   type GrantStore,
   grantsFrom,
@@ -228,12 +228,7 @@ export function makeGalleryRender(spec: GalleryComponent, store: GrantStore) {
      */
     const failure = galleryCallFailure(spec, props);
     if (failure) {
-      return (
-        <FailedCard
-          reason={failure}
-          title={spec.title}
-        />
-      );
+      return <FailedCard reason={failure} title={spec.title} />;
     }
     // From the polled grants, so a revocation shows before a new call starts. Unknown draws.
     const state = cardState(snapshot, spec.name, spec.title, props.toolCallId);

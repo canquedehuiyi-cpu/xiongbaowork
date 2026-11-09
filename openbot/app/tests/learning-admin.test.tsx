@@ -895,7 +895,7 @@ describe("reviewing proposed skills", () => {
       "/api/admin/learning/proposals",
       "/api/admin/learning/skills",
     ].map(count);
-    fireEvent.click(view.getByRole("button", { name: "Refresh status" }));
+    fireEvent.click(view.getByRole("button", { name: "刷新状态" }));
     await waitFor(() =>
       expect(
         [
@@ -1076,7 +1076,7 @@ describe("reviewing proposed skills", () => {
       { preconnect: originalFetch.preconnect },
     );
     const view = shared();
-    fireEvent.click(await view.findByLabelText(/Turn on automatic learning/));
+    fireEvent.click(await view.findByLabelText(/启用自动学习与技能下发/));
     fireEvent.click(
       await view.findByRole("button", {
         name: /Who approves skills learned from people's recordings/,

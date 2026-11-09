@@ -472,9 +472,7 @@ test("a live read that fails says so in the person's words, never the model's", 
     />,
   );
   const alert = await view.findByRole("alert");
-  expect(alert.textContent).toBe(
-    "没能读到 Gmail 的状态，请稍后再试。",
-  );
+  expect(alert.textContent).toBe("没能读到 Gmail 的状态，请稍后再试。");
   expect(view.container.textContent).not.toContain("Do not browse");
 });
 

@@ -384,6 +384,20 @@ export type PluginConnections = {
  * There is no version of this scoped to anybody else: the endpoint answers for whoever is asking,
  * so a page cannot accidentally render somebody else's.
  */
+/**
+ * The rows that are the person's own connection, for a screen asking "is this mine".
+ *
+ * Upstream filters out rows held by the deployment for everybody (shared accounts, #757). This
+ * fork does not take shared accounts, so every row `/api/plugins/connections` answers is the
+ * asking person's own and the whole list is returned. Kept as a function so the screens read the
+ * same as upstream's and the filter has one place to live if shared accounts ever arrive.
+ */
+export function personalConnections(
+  rows: PluginConnection[],
+): PluginConnection[] {
+  return rows;
+}
+
 export function connectionsQueryOptions() {
   return queryOptions({
     queryKey: pluginKeys.connections(),

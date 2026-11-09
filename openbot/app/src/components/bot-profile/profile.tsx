@@ -71,6 +71,10 @@ const KIND_LABEL: Record<UpdateKind, { title: string; description: string }> = {
     title: "提问",
     description: "员工问了你、正在等你回答的事。",
   },
+  attention: {
+    title: "主动巡检",
+    description: "员工在主动巡检里发现、需要你处理的事，一次提醒汇总所有员工。",
+  },
 };
 
 const TRANSPORTS: { id: UpdateTransport; label: string }[] = [

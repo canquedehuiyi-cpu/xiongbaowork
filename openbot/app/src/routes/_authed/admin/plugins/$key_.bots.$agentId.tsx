@@ -226,7 +226,9 @@ function RouteComponent() {
   }
 
   // From the row itself where there is one: the id-to-name lookup is built from the visible roster.
-  const botName = bot?.name ?? nameFor(agentId);
+  // `nameFor` answers "" while the roster loads (upstream: a Bot is named, never shown as an empty
+  // label), so the id stands in until a name is known, as upstream's own page does.
+  const botName = bot?.name ?? (nameFor(agentId) || agentId);
   const held = (tool: PluginTool) => tool.grantedTo.includes(agentId);
 
   /*
