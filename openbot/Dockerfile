@@ -106,14 +106,20 @@ ARG S6_OVERLAY_VERSION=3.2.1.0
 # to be translated. Hardcoding one of them builds fine on the other and then fails at start with an
 # exec format error, which reads as a broken image rather than a wrong download.
 ARG TARGETARCH
-ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz /tmp/
+# Both tarballs through curl with retries, not `ADD <url>`. BuildKit fetches a remote ADD once to
+# compute its cache key and fails the whole build on the first 5xx, with no retry; GitHub's release
+# downloads answer 504 often enough that this broke the image job several times in one day, and
+# an outage there has lasted over a minute, so curl keeps retrying for up to five minutes.
 RUN case "${TARGETARCH}" in \
       amd64) S6_ARCH=x86_64 ;; \
       arm64) S6_ARCH=aarch64 ;; \
       *) echo "unsupported architecture: ${TARGETARCH}" >&2; exit 1 ;; \
     esac \
-  && curl -fsSL -o /tmp/s6-overlay-arch.tar.xz \
-    "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-${S6_ARCH}.tar.xz" \
+  && base="https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}" \
+  && curl -fsSL --retry 30 --retry-all-errors --retry-delay 10 --retry-max-time 300 -o /tmp/s6-overlay-noarch.tar.xz \
+    "${base}/s6-overlay-noarch.tar.xz" \
+  && curl -fsSL --retry 30 --retry-all-errors --retry-delay 10 --retry-max-time 300 -o /tmp/s6-overlay-arch.tar.xz \
+    "${base}/s6-overlay-${S6_ARCH}.tar.xz" \
   && tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz \
   && tar -C / -Jxpf /tmp/s6-overlay-arch.tar.xz \
   && rm /tmp/s6-overlay-*.tar.xz
