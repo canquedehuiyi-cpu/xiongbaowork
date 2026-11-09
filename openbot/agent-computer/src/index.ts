@@ -54,7 +54,6 @@ import {
   sensitiveRefs,
 } from "./secret-masking";
 import { type BotSession, createSessions } from "./sessions";
-import { createShell } from "./shell";
 import { fillSignIn, parseSignInFill } from "./sign-in";
 import { startVirtualDisplay } from "./virtual-display";
 import {
@@ -269,9 +268,6 @@ const profiles = createProfiles(
     await sessions.get(botId)?.viewer.releaseAll(COMPUTER_STOPPED);
   },
 );
-// Rooted in the same workspace the file tools use, so a command and a written file see one
-// directory rather than two.
-const shell = createShell(process.env.WORKSPACE_DIR?.trim() || "/workspace");
 
 /**
  * The id normally arrives as a header on every request. This is the fallback for a caller that has no
@@ -1183,6 +1179,8 @@ serve<StreamData>({
           return json({ error: timeout.error }, 400);
         }
         try {
+          // The employee's own shell; with its own user unavailable, a 503 rather than the shared one.
+          const shell = await perBot.shellFor(botId);
           return json(
             await shell.run({
               command: body.command,
@@ -1195,7 +1193,7 @@ serve<StreamData>({
         } catch (error) {
           return json(
             { error: describe(error, "The command could not be run.") },
-            500,
+            error instanceof PerBotUnavailableError ? 503 : 500,
           );
         }
       }

@@ -247,10 +247,61 @@ function clamp(text: string): { text: string; truncated: boolean } {
   return { text: kept, truncated: true };
 }
 
+/** How the root helper is reached. `-n`: never a password prompt nobody is there to answer. */
+const DEFAULT_RUN_AS_LAUNCHER = ["sudo", "-n", "/usr/local/sbin/xb-bot"];
+
+/**
+ * Names the employee's own user gets from the helper rather than from here.
+ *
+ * HOME and TMPDIR are the employee's directory and its `.tmp`, which the helper sets; USER, LOGNAME
+ * and SHELL describe the account, and passing this process's values would describe pwuser.
+ */
+const SET_BY_HELPER = new Set(["HOME", "TMPDIR", "USER", "LOGNAME", "SHELL"]);
+
+/**
+ * How long, after asking the command to stop, before the whole group is killed. Long enough for sudo
+ * to relay the signal and the command to exit on it.
+ */
+const RUN_AS_KILL_AFTER_MS = 5_000;
+
+/**
+ * What the helper reads on stdin: `NAME=VALUE` lines, an empty line, then the command exactly as
+ * written. A value with a newline or NUL cannot be one line, so it is left out rather than split.
+ */
+function runAsInput(env: Record<string, string>, command: string): string {
+  const lines = Object.entries(env)
+    .filter(
+      ([name, value]) =>
+        ENV_NAME.test(name) &&
+        !SET_BY_HELPER.has(name) &&
+        !value.includes("\n") &&
+        !value.includes("\0"),
+    )
+    .map(([name, value]) => `${name}=${value}\n`);
+  return `${lines.join("")}\n${command}`;
+}
+
+export type RunAs = {
+  /** The employee's botKey: twelve hex digits, the hash part of its user name `xb-<key>`. */
+  key: string;
+  /** What is spawned before `run <key> <timeout_s>`. Defaults to `sudo -n /usr/local/sbin/xb-bot`. */
+  launcher?: string[];
+};
+
+/**
+ * A shell for one workspace.
+ *
+ * With `runAs`, the command runs as the employee's own Linux user rather than this process's: it is
+ * handed to the root helper as `run <key> <timeout_s>` with the environment and the command on stdin,
+ * never in argv. Without it, nothing about the command changes.
+ */
 export function createShell(
   workspaceDir: string,
   sourceEnv: NodeJS.ProcessEnv = process.env,
+  options: { runAs?: RunAs } = {},
 ) {
+  const runAs = options.runAs;
+  const launcher = runAs?.launcher ?? DEFAULT_RUN_AS_LAUNCHER;
   return {
     async run(input: {
       command: string;
@@ -315,21 +366,37 @@ export function createShell(
        * runs on and the caller waits for the transport to give up instead. Killing the negative pid
        * signals the whole group.
        */
-      const shell = commandShell(input.command, process.platform, sourceEnv);
-      const windows = process.platform === "win32";
+      // The egress filter's address last, so a command cannot be pointed around it.
+      const commandEnv = {
+        ...environmentForCommand(sourceEnv, workspaceDir),
+        ...egressShellEnvironment(),
+      };
+      const shell = runAs
+        ? {
+            executable: launcher[0] ?? DEFAULT_RUN_AS_LAUNCHER[0],
+            args: [
+              ...launcher.slice(1),
+              "run",
+              runAs.key,
+              String(Math.ceil(timeoutMs / 1000)),
+            ],
+          }
+        : commandShell(input.command, process.platform, sourceEnv);
+      const windows = process.platform === "win32" && !runAs;
       const codePage = windows
         ? await windowsCodePage(shell.executable)
         : undefined;
       const child = spawn(shell.executable, shell.args, {
         cwd: workspaceDir,
-        // The egress filter's address last, so a command cannot be pointed around it.
-        env: {
-          ...environmentForCommand(sourceEnv, workspaceDir),
-          ...egressShellEnvironment(),
-        },
+        env: commandEnv,
         detached: process.platform !== "win32",
         windowsHide: true,
       });
+      if (runAs) {
+        // A helper that refused before reading all of it closes the pipe; that is its exit code's story.
+        child.stdin?.on("error", () => {});
+        child.stdin?.end(runAsInput(commandEnv, input.command));
+      }
 
       let timedOut = false;
 
@@ -383,10 +450,37 @@ export function createShell(
         failStop = reject;
       });
       let stopping: Promise<void> | undefined;
+      let stopRequested = false;
+      let killLater: ReturnType<typeof setTimeout> | undefined;
+      const killGroup = (pid: number) => {
+        try {
+          process.kill(-pid, "SIGKILL");
+        } catch {
+          // Gone already, or EPERM: the rest of the group belongs to the employee's user, and the
+          // helper's own limit ends what this process may not signal.
+        }
+      };
       const stop = () => {
         const { pid } = child;
         if (pid === undefined) return;
         if (stopping) return;
+        if (runAs) {
+          /*
+           * Asked first, then killed. The child is sudo, which relays SIGTERM to the command running as
+           * the employee; the group gets it too, for whatever this process is allowed to signal.
+           */
+          if (stopRequested) return;
+          stopRequested = true;
+          for (const target of [pid, -pid]) {
+            try {
+              process.kill(target, "SIGTERM");
+            } catch {
+              // EPERM or already gone: the kill below, and the helper's own limit, still apply.
+            }
+          }
+          killLater = setTimeout(() => killGroup(pid), RUN_AS_KILL_AFTER_MS);
+          return;
+        }
         if (process.platform === "win32") {
           stopping = new Promise<void>((resolve, reject) => {
             const systemRoot =
@@ -466,6 +560,9 @@ export function createShell(
       } finally {
         clearTimeout(timer);
         input.signal?.removeEventListener("abort", onAbort);
+        if (killLater) clearTimeout(killLater);
+        // Whatever the command backgrounded and left in its group goes with it, as without `runAs`.
+        if (stopRequested && child.pid !== undefined) killGroup(child.pid);
       }
 
       if (outDecoder) outBuffer.add(outDecoder.end());

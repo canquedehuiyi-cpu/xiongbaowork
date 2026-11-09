@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 
+import { createShell, type Shell } from "./shell";
 import { createWorkspace } from "./workspace";
 
 /**
@@ -134,11 +135,17 @@ export function createPerBotComputer(options: {
   defaultBotId: string;
   enabled: boolean;
   helper?: HelperRunner;
+  /** What an employee's command is handed to; the shell's own default (`sudo -n xb-bot`) if unset. */
+  launcher?: string[];
 }) {
-  const { workspaceRoot, defaultBotId, enabled } = options;
+  const { workspaceRoot, defaultBotId, enabled, launcher } = options;
   const helper = options.helper ?? sudoHelper;
   const shared = createWorkspace(workspaceRoot);
+  // Rooted in the same workspace the file tools use, so a command and a written file see one
+  // directory rather than two.
+  const sharedShell = createShell(workspaceRoot);
   const workspaces = new Map<string, ReturnType<typeof createWorkspace>>();
+  const shells = new Map<string, Shell>();
   const ensured = new Map<string, Promise<void>>();
   let probe:
     | Promise<{ enabled: boolean; ready: boolean; reason?: string }>
@@ -191,6 +198,23 @@ export function createPerBotComputer(options: {
         workspaces.set(key, workspace);
       }
       return workspace;
+    },
+    /**
+     * The shell an employee's commands run in: the shared one for the default employee, otherwise
+     * one that hands each command to the helper to run as the employee's own user.
+     */
+    async shellFor(botId: string): Promise<Shell> {
+      if (!usesOwnUser(botId, defaultBotId, enabled)) return sharedShell;
+      await ensure(botId);
+      const key = botKeyOf(botId);
+      let shell = shells.get(key);
+      if (!shell) {
+        shell = createShell(homeFor(botId), process.env, {
+          runAs: { key, ...(launcher ? { launcher } : {}) },
+        });
+        shells.set(key, shell);
+      }
+      return shell;
     },
     /**
      * Whether an employee could be given its own user now, asked of the helper once and remembered.

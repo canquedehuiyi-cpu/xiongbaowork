@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -242,5 +242,63 @@ describe("createPerBotComputer", () => {
     expect(seenByB.entries.map((entry) => entry.path)).not.toContain("x.txt");
     const seenByA = await (await perBot.workspaceFor("bot-a")).list();
     expect(seenByA.entries.map((entry) => entry.path)).toContain("x.txt");
+  });
+
+  test("shellFor: the default employee keeps the shared shell, and nobody is ensured for it", async () => {
+    const { calls, helper } = fakeHelper(() => ({ code: 0 }));
+    const perBot = createPerBotComputer({
+      workspaceRoot: root,
+      defaultBotId: "shared",
+      enabled: true,
+      helper,
+    });
+    const shell = await perBot.shellFor("shared");
+    expect(await perBot.shellFor("shared")).toBe(shell);
+    const result = await shell.run({ command: "pwd" });
+    expect(result.stdout.trim()).toBe(root);
+    expect(calls).toEqual([]);
+  });
+
+  test("shellFor: an employee is ensured once, then its commands go to the helper as its own key, in its own directory", async () => {
+    const { calls, helper } = fakeHelper(() => ({ code: 0 }));
+    const launcher = join(root, "fake-xb.sh");
+    await writeFile(
+      launcher,
+      [
+        "#!/bin/sh",
+        'echo "$@"',
+        'while IFS= read -r line; do [ -z "$line" ] && break; done',
+        'exec sh -c "$(cat)"',
+        "",
+      ].join("\n"),
+    );
+    await chmod(launcher, 0o755);
+    const perBot = createPerBotComputer({
+      workspaceRoot: root,
+      defaultBotId: "shared",
+      enabled: true,
+      helper,
+      launcher: [launcher],
+    });
+    const shell = await perBot.shellFor("bot-a");
+    expect(await perBot.shellFor("bot-a")).toBe(shell);
+    expect(calls).toEqual([["ensure", botKeyOf("bot-a")]]);
+    const result = await shell.run({ command: "pwd", timeoutMs: 5_000 });
+    expect(result.stdout).toContain(`run ${botKeyOf("bot-a")} 5\n`);
+    expect(result.stdout).toContain(
+      `${join(root, "bots", botKeyOf("bot-a"))}\n`,
+    );
+  });
+
+  test("shellFor: an unavailable helper is an error, never the shared shell", async () => {
+    const { helper } = fakeHelper(() => ({ code: 65, stderr: "no user" }));
+    const perBot = createPerBotComputer({
+      workspaceRoot: root,
+      defaultBotId: "shared",
+      enabled: true,
+      helper,
+    });
+    const failure = await perBot.shellFor("bot-a").catch((error) => error);
+    expect(failure).toBeInstanceOf(PerBotUnavailableError);
   });
 });
