@@ -2694,7 +2694,8 @@ describe("each coworker runs on the model it was bound to", () => {
       [],
       null,
       plan,
-      undefined,
+      // The binding goes where the signature takes it. A stray placeholder here once pushed it into
+      // the next position, so this test passed without ever handing the binding over.
       bound,
     );
 

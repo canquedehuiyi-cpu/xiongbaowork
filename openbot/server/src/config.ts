@@ -1,3 +1,7 @@
+import {
+  isLearningContainerId,
+  type LearningTarget,
+} from "../../shared/learning";
 /**
  * What the runtime can do, and it has exactly one answer: durable threads and memory live in this
  * deployment's own PostgreSQL. Configuration the product cannot function without belongs at the boot
@@ -170,6 +174,22 @@ export type HandoffCaps = {
   maxPerRun: number;
 };
 
+/**
+ * CopilotKit Intelligence, when this deployment is connected to one. OPTIONAL: threads stay in this
+ * deployment's own PostgreSQL either way, and nothing here is read unless `INTELLIGENCE_API_KEY` is
+ * set. With it, Intelligence serves what only it can — published learned skills (Automatic
+ * Learning) and, from later phases, memory — while every conversation remains local.
+ *
+ * `apiUrl` and `gatewayWsUrl` are optional because managed Intelligence has defaults for both; a
+ * self-hosted Intelligence needs `apiUrl`, and its licence in `COPILOTKIT_LICENSE_TOKEN`.
+ */
+export type IntelligenceSettings = {
+  apiUrl?: string;
+  gatewayWsUrl?: string;
+  apiKey: string;
+  licenseToken?: string;
+};
+
 export type DeploymentConfig = {
   /** Audio configuration is independent of agent model providers. */
   transcription?: TranscriptionConfig;
@@ -252,6 +272,14 @@ export type DeploymentConfig = {
   appUrl: string | undefined;
   tenantPackageDirectory: string;
   runtime: RuntimeCapabilities;
+  /** Connected CopilotKit Intelligence, or undefined (the default): see {@link IntelligenceSettings}. */
+  intelligence?: IntelligenceSettings;
+  /**
+   * The Automatic Learning container a fresh deployment starts with, from
+   * `CPK_INTELLIGENCE_LEARNING_CONTAINER_ID` (and `CPK_INTELLIGENCE_SKILLS_REVISION`). Saved admin
+   * settings take precedence. Ignored without {@link DeploymentConfig.intelligence}.
+   */
+  learning?: LearningTarget;
   /**
    * How long a Bot's stream may say nothing before this deployment ends the turn, in milliseconds.
    *
@@ -963,6 +991,54 @@ function runtimeCapabilities(environment: Environment): RuntimeCapabilities {
 }
 
 /**
+ * Optional CopilotKit Intelligence (R0). No key, no Intelligence: the deployment runs exactly as it
+ * did. A URL or licence given without the key is a half-configured Intelligence, which is refused at
+ * boot with what is missing rather than quietly ignored.
+ */
+function intelligenceSettings(
+  environment: Environment,
+): IntelligenceSettings | undefined {
+  const apiKey = optional(environment, "INTELLIGENCE_API_KEY");
+  const apiUrl = url(environment, "INTELLIGENCE_API_URL");
+  const gatewayWsUrl = url(environment, "INTELLIGENCE_GATEWAY_WS_URL");
+  const licenseToken = optional(environment, "COPILOTKIT_LICENSE_TOKEN");
+  if (!apiKey) {
+    const given = Object.entries({
+      INTELLIGENCE_API_URL: apiUrl,
+      INTELLIGENCE_GATEWAY_WS_URL: gatewayWsUrl,
+      COPILOTKIT_LICENSE_TOKEN: licenseToken,
+    })
+      .filter(([, value]) => value)
+      .map(([name]) => name);
+    if (given.length > 0)
+      throw new Error(
+        `CopilotKit Intelligence is optional, and is half configured: ${given.join(", ")} set without INTELLIGENCE_API_KEY. Set the key, or remove these.`,
+      );
+    return undefined;
+  }
+  return {
+    apiKey,
+    ...(apiUrl ? { apiUrl } : {}),
+    ...(gatewayWsUrl ? { gatewayWsUrl } : {}),
+    ...(licenseToken ? { licenseToken } : {}),
+  };
+}
+
+function learningDefault(environment: Environment): LearningTarget | undefined {
+  const containerId = optional(
+    environment,
+    "CPK_INTELLIGENCE_LEARNING_CONTAINER_ID",
+  );
+  if (!containerId) return undefined;
+  if (!isLearningContainerId(containerId))
+    throw new TypeError(
+      "CPK_INTELLIGENCE_LEARNING_CONTAINER_ID must use 1–64 lowercase letters, numbers, and single hyphens.",
+    );
+  const revision = optional(environment, "CPK_INTELLIGENCE_SKILLS_REVISION");
+  return { containerId, ...(revision ? { revision } : {}) };
+}
+
+/**
  * `TENANT_RUNTIME`, with the two answers named so a typo cannot pick one of them for you.
  *
  * UNSET DEPENDS ON WHERE IT RUNS (F6). A deployed server — `NODE_ENV=production`, which the image
@@ -1376,6 +1452,12 @@ export function loadConfig(
     tenantPackageDirectory:
       optional(environment, "TENANT_PACKAGE_DIR") ?? "../examples/qoderwake",
     runtime: runtimeCapabilities(environment),
+    ...(intelligenceSettings(environment)
+      ? { intelligence: intelligenceSettings(environment) }
+      : {}),
+    ...(learningDefault(environment)
+      ? { learning: learningDefault(environment) }
+      : {}),
     agentStallTimeoutMs: agentStallTimeoutMs(environment),
     auditRetentionDays: auditRetentionDays(environment),
     oauth: { google },

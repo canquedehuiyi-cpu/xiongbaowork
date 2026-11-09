@@ -23,4 +23,10 @@ git merge-tree --write-tree --merge-base=<上次同步点> <本仓库 openbot �
 - 上游新增的数据库迁移改编为 recovery overlay 续号（从 0160 起），新表补 `tenant_id` 与 RLS。
 - 界面文案保持中文与熊宝品牌。
 
+## 已恢复的分叉时删除项
+
+- R0：CopilotKit Intelligence 改为**可选接入**（`INTELLIGENCE_API_KEY`），恢复自动学习的设置、
+  管理页与技能下发、self-host banner 的付费判断；对话线程仍留在本地 PostgreSQL，学习证据不会
+  自动送进 Intelligence（见 `docs/automatic-learning.md` 顶部说明）。
+
 阶段计划与进度见仓库根目录的 PR 列表（分支 `claude/upstream-*`）。

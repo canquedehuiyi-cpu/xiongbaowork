@@ -16,6 +16,7 @@ export * from "./flow-source-original-records";
 export * from "./flow-source-run-records";
 export * from "./flow-source-runtime-records";
 export * from "./group";
+export * from "./learning";
 export * from "./lifecycle";
 export * from "./memory";
 export * from "./model";

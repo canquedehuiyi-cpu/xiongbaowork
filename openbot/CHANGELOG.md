@@ -8,6 +8,18 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+- **Automatic Learning is back, as an option.** Set `INTELLIGENCE_API_KEY` (and, for a
+  self-hosted CopilotKit Intelligence, `INTELLIGENCE_API_URL` and `COPILOTKIT_LICENSE_TOKEN`) and
+  **Admin → 自动学习** chooses a default learning container and which coworkers take part; each run
+  then loads the skills published in Intelligence (built-in coworkers get the catalog and the
+  reader tools, remote ones a verified snapshot). Without the key nothing changes, and the admin
+  page says Intelligence is not connected. A URL or licence set without the key is refused at boot
+  as half-configured. Conversations stay in this deployment's PostgreSQL, so they are **not** sent
+  to Intelligence as learning evidence: skills are produced and published in Intelligence itself.
+  Migration `0146_learning` recreates `learning_settings` (deployment-wide) and
+  `learning_thread_bindings` (per person, with `tenant_id` and row security). The self-host bar
+  also hides itself for a deployment that pays for a connected Intelligence.
+
 - **Merged upstream OpenBot 0.1.1 and 0.1.2** (CopilotKit/openbot `63f99cf` → `bbd882c8`; the
   synced point is recorded in `UPSTREAM.md`). What a deployment notices:
   - CopilotKit 1.77.0 (`@copilotkit/runtime`, `react-core`, `a2ui-renderer`, from 1.73.1) and AG-UI

@@ -18,6 +18,12 @@ import {
   type ActorAgentResolver,
   CoworkerUnavailableError,
 } from "./agents/agent-resolver";
+import { RemoteLearnedSkillsMiddleware } from "./learning/remote";
+import {
+  type AcquireLearnedSkills,
+  LEARNED_SKILL_TOOL_NAMES,
+  type LearnedSkillInvocation,
+} from "./learning/runtime";
 import type { ThreadLock, ThreadRunner } from "./agents/handoff-delivery";
 import { sanitizeSeededHistory } from "./agents/history-sanitize";
 import {
@@ -61,7 +67,7 @@ import {
   selectTools,
 } from "./plugins/selection";
 import type { GrantedTool } from "./plugins/tools";
-import { grantedToolGuidance } from "./plugins/tools";
+import { grantedToolGuidance, parametersFor } from "./plugins/tools";
 import {
   isPersonTenant,
   runAsTenant,
@@ -606,6 +612,12 @@ export function builtInAgentConfiguration(
    * selection but a different transport with its own endpoint and harness.
    */
   agentModel?: LanguageModel,
+  /**
+   * The published Automatic Learning skills this run was given (R0, optional Intelligence). Their
+   * tools are offered beside the granted ones and their catalog is the last prompt section, as
+   * upstream does. Absent — no Intelligence, or learning off for this Bot — changes nothing.
+   */
+  learnedSkills?: LearnedSkillInvocation,
 ): BuiltInAgentConfiguration {
   if (!apiKey && !planModel && !agentModel) {
     return {
@@ -624,6 +636,15 @@ export function builtInAgentConfiguration(
   const project = projectGuidance(agent.currentProject);
   const persona = personaGuidance(agent.persona);
   const bible = bibleGuidance(agent.bible);
+  const allTools = [
+    ...tools,
+    ...(learnedSkills?.tools.map((tool) => ({
+      name: tool.name,
+      description: tool.description,
+      parameters: parametersFor(tool.parameters),
+      execute: (args: unknown) => learnedSkills.execute(tool.name, args),
+    })) ?? []),
+  ];
 
   return {
     model: planModel ?? agentModel ?? `${model.provider}/${model.defaultModel}`,
@@ -664,6 +685,7 @@ export function builtInAgentConfiguration(
         ? [grantedToolGuidance(tools, connectedVendors)]
         : []),
       ...(computerGuidance ? [computerGuidance] : []),
+      ...(learnedSkills?.catalog ? [learnedSkills.catalog] : []),
     ].join("\n\n"),
     ...(planModel || agentModel ? {} : { apiKey: apiKey ?? undefined }),
     /*
@@ -675,9 +697,9 @@ export function builtInAgentConfiguration(
      * bounds a model that would otherwise call tools in a circle. Interrupt tools, if any are ever
      * added here, require the default of one and must not be mixed in.
      */
-    ...(tools.length > 0
+    ...(allTools.length > 0
       ? {
-          tools: tools.map((tool) => ({
+          tools: allTools.map((tool) => ({
             ...tool,
             execute: (args: unknown, execution?: { toolCallId?: string }) =>
               executeNativeApprovalTool(
@@ -803,6 +825,8 @@ export async function buildAgents(
   loadAvatarSources?: LoadAvatarSources,
   /** The current project of each built-in Bot (story RES2). Appended last; absent tells none. */
   loadCurrentProject?: LoadCurrentProject,
+  /** Published Automatic Learning skills, per Bot per run (R0). Absent without Intelligence. */
+  acquireLearnedSkills?: AcquireLearnedSkills,
 ): Promise<Record<string, AbstractAgent>> {
   let vendors: readonly string[] = [];
   try {
@@ -896,6 +920,7 @@ export async function buildAgents(
           loadAttachment,
           markAttachmentsSent,
           resolveAgentModel,
+          acquireLearnedSkills,
         );
         if (loadPersonalMemory)
           built.use(new PersonalMemoryMiddleware(agent.id, loadPersonalMemory));
@@ -1158,6 +1183,7 @@ async function buildAgent(
   /** How this run records that those files were sent. See {@link buildAgents}. */
   markAttachmentsSent?: MarkAttachmentsSent,
   resolveAgentModel?: AgentModelResolver,
+  acquireLearnedSkills?: AcquireLearnedSkills,
 ): Promise<AbstractAgent> {
   if (agent.type === "unavailable") {
     return new UnavailableAgent(agent);
@@ -1260,6 +1286,7 @@ async function buildAgent(
       markAttachmentsSent,
       handoff,
       initiator,
+      acquireLearnedSkills,
     );
   }
 
@@ -1295,6 +1322,7 @@ async function buildAgent(
     tools: GrantedTool[],
     input?: RunAgentInput,
     signal?: AbortSignal,
+    learnedSkills?: LearnedSkillInvocation,
   ) =>
     new BuiltInAgentWithSaneHistory(
       builtInAgentConfiguration(
@@ -1315,18 +1343,33 @@ async function buildAgent(
             )
           : undefined,
         agentModel,
+        learnedSkills,
       ),
       loadAttachment,
       markAttachmentsSent,
     );
 
   const whole = withTools(granted);
-  if (!narrowing && !handoff && !model.plan) return whole;
+  if (!narrowing && !handoff && !model.plan && !acquireLearnedSkills)
+    return whole;
 
   return new RunBuiltAgent(
     { agentId: agent.id, description: agent.name },
     whole,
     async (input, signal) => {
+      // Fetched per run, so a skill published a moment ago reaches the next run (upstream 0046).
+      const learnedSkills = await acquireLearnedSkills?.(agent.id, signal);
+      signal.throwIfAborted();
+      // Neither a grant nor a tool the caller brings may stand in for the learned-skill reader.
+      if (
+        learnedSkills &&
+        [...granted, ...input.tools].some((tool) =>
+          LEARNED_SKILL_TOOL_NAMES.has(tool.name),
+        )
+      )
+        throw new Error(
+          "Learned Skill tool names are reserved by Automatic Learning.",
+        );
       const offered = narrowing ? await offeredFor(input, signal) : granted;
       signal.throwIfAborted();
       /*
@@ -1343,10 +1386,11 @@ async function buildAgent(
       // Nothing added and nothing narrowed means nothing to rebuild, and reusing the agent already
       // built for this request keeps that path allocation-for-allocation what it was.
       return !model.plan &&
+        !learnedSkills &&
         tools.length === granted.length &&
         passing.length === 0
         ? whole
-        : withTools(tools, input, signal);
+        : withTools(tools, input, signal, learnedSkills);
     },
   );
 }
@@ -1568,6 +1612,8 @@ function remoteAgentWithStandingRole(
   markAttachmentsSent?: MarkAttachmentsSent,
   coordination?: HandoffForRun,
   initiator?: AuditInitiator,
+  /** Published Automatic Learning skills, forwarded as a verified snapshot per run (R0). */
+  acquireLearnedSkills?: AcquireLearnedSkills,
 ) {
   /*
    * What this Bot holds, as a second standing message.
@@ -1784,6 +1830,10 @@ function remoteAgentWithStandingRole(
         );
       return owned ? observeModelConnection(stream) : stream;
     });
+    if (acquireLearnedSkills)
+      target.use(
+        new RemoteLearnedSkillsMiddleware(agent.id, acquireLearnedSkills),
+      );
   });
 }
 
@@ -2197,6 +2247,7 @@ export async function resolveRuntimeAgents(
   loadAvatarSources?: LoadAvatarSources,
   /** Each built-in Bot's current project (story RES2). Appended last; see {@link buildAgents}. */
   loadCurrentProject?: LoadCurrentProject,
+  acquireLearnedSkills?: AcquireLearnedSkills,
 ): Promise<Record<string, AbstractAgent>> {
   const all = await loadAgents();
   if (all.length === 0) {
@@ -2235,6 +2286,7 @@ export async function resolveRuntimeAgents(
     resolveAgentModel,
     loadAvatarSources,
     loadCurrentProject,
+    acquireLearnedSkills,
   );
 }
 

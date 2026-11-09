@@ -248,6 +248,12 @@ import { hostAccessTools } from "./host-access/tools";
 import { createKnowledgeRoutes } from "./knowledge/routes";
 import { createKnowledgeStore } from "./knowledge/store";
 import { KNOWLEDGE_TOOL_NAMES, knowledgeTools } from "./knowledge/tools";
+import { createIntelligenceClient } from "./intelligence-client";
+import {
+  clearLearningRevisionFallback,
+  createLearningRuntime,
+} from "./learning/runtime";
+import { createLearningSettingsStore } from "./learning/settings";
 import { createMemoryIngestion } from "./memory/ingestion";
 import { createMemoryStore } from "./memory/store";
 import { memoryTools } from "./memory/tools";
@@ -336,6 +342,7 @@ import { createIntentRouter } from "./routing/classify";
 import { createModelCompleter } from "./routing/model";
 import { createTaskProjector } from "./tasks/projector";
 import { createTaskRoutes } from "./tasks/routes";
+import { createSelfHostBanner } from "./self-host-banner";
 import { createTeamBots } from "./team-bots/team-bots";
 import { isAccessRevoked } from "./tenant/access";
 import {
@@ -369,10 +376,7 @@ import { coworkerFaceAccess } from "./portraits/coworker-access";
 import { createPortraitRoutes } from "./portraits/routes";
 import { createPortraitStore } from "./portraits/store";
 import { createTranslationRoutes } from "./translations/routes";
-import {
-  createTranslationStore,
-  translatePending,
-} from "./translations/store";
+import { createTranslationStore, translatePending } from "./translations/store";
 import { createTranslator } from "./translations/translator";
 import { createUserPreferencesStore } from "./user-preferences";
 import { createVoiceSessionStore } from "./voice/sessions";
@@ -386,10 +390,7 @@ import {
   createWakerFlowRoutes,
   createWakerFlowShareRoutes,
 } from "./wakerflows/routes";
-import {
-  createWakerFlowStore,
-  flowRunEventWriter,
-} from "./wakerflows/store";
+import { createWakerFlowStore, flowRunEventWriter } from "./wakerflows/store";
 import { repeatAfterEach } from "./work/loop";
 import {
   createWorkQueue,
@@ -398,6 +399,8 @@ import {
 } from "./work/queue";
 
 const config = loadConfig();
+// The revision default was read into `config.learning`; the variable must not be read again later.
+clearLearningRevisionFallback();
 // Read with the rest of the configuration, where an empty variable is an absent one. See
 // `serverPort` in config.ts for what `process.env.PORT ?? …` did with `PORT=` instead.
 const port = config.port;
@@ -538,7 +541,9 @@ await startupLifecycle.run(async (startup) => {
   // After the user row: its admin role in `user_roles`, which RLS and the admin capability read.
   await startup.step(() => seedDevActorRole(database, config.singleUser));
   // After the user row exists: the actor gets a real Free subscription row (audit #7 follow-up).
-  await startup.step(() => provisionDevActorTenant(database, config.singleUser));
+  await startup.step(() =>
+    provisionDevActorTenant(database, config.singleUser),
+  );
   // The vault, built before the agent store because a customer's agent may sit behind a key and that
   // key belongs here rather than on the agent row. See agents/auth-header.ts.
   const credentialStore = createCredentialStore(database);
@@ -567,9 +572,7 @@ await startupLifecycle.run(async (startup) => {
    * Told after every flush, so the outcome of an action that waited for an away machine reaches the
    * conversation that queued it. Assigned once the thread runner exists, further down.
    */
-  let queuedResults:
-    | ReturnType<typeof createQueuedResultNotices>
-    | undefined;
+  let queuedResults: ReturnType<typeof createQueuedResultNotices> | undefined;
   const deviceChannel = createDeviceChannel({
     queue: deviceQueue,
     authorize: (target, version) => deviceStore.isRegistered(target, version),
@@ -601,7 +604,8 @@ await startupLifecycle.run(async (startup) => {
           bot: botId,
           actor: userId,
           device: target.deviceId,
-          reason: "The person's live screen closed, so control went back to the coworker.",
+          reason:
+            "The person's live screen closed, so control went back to the coworker.",
         },
       }).catch(() => undefined),
   });
@@ -1613,39 +1617,39 @@ await startupLifecycle.run(async (startup) => {
     initiator: AuditInitiator,
     botId: string,
   ) => [
-      ...wakeUpTools({
-        store: wakeUpStore,
-        ownerUserId: actorId,
-        agentId: botId,
-        initiator,
-      }),
-      ...memoryTools({
-        store: personalMemoryStore,
-        ingestion: memoryIngestion,
-        ownerUserId: actorId,
-        agentId: botId,
-      }),
-      ...(await knowledgeTools({
-        store: knowledgeStore,
-        ownerUserId: actorId,
-        agentId: botId,
-      })),
-      ...(await grantedTools({
-        store: pluginStore,
-        botId,
-        actorId,
-        initiator,
-        // A Team Bot reaches its owner's accounts, and a teammate's own only with their consent.
-        credentialActorFor: teamBots.credentialActorFor(actorId, botId),
-      })),
-      ...hostAccessTools({
-        broker: hostAccessBroker,
-        botId,
-        actorId,
-        auditStore: bootAuditStore,
-        initiator,
-      }),
-    ];
+    ...wakeUpTools({
+      store: wakeUpStore,
+      ownerUserId: actorId,
+      agentId: botId,
+      initiator,
+    }),
+    ...memoryTools({
+      store: personalMemoryStore,
+      ingestion: memoryIngestion,
+      ownerUserId: actorId,
+      agentId: botId,
+    }),
+    ...(await knowledgeTools({
+      store: knowledgeStore,
+      ownerUserId: actorId,
+      agentId: botId,
+    })),
+    ...(await grantedTools({
+      store: pluginStore,
+      botId,
+      actorId,
+      initiator,
+      // A Team Bot reaches its owner's accounts, and a teammate's own only with their consent.
+      credentialActorFor: teamBots.credentialActorFor(actorId, botId),
+    })),
+    ...hostAccessTools({
+      broker: hostAccessBroker,
+      botId,
+      actorId,
+      auditStore: bootAuditStore,
+      initiator,
+    }),
+  ];
 
   /** One person's standing instructions, for both the /api/settings routes and every run they start. */
   const userInstructionsStore = createUserInstructionsStore(database);
@@ -2486,6 +2490,25 @@ await startupLifecycle.run(async (startup) => {
    * around each whole request (or the catalogue frame for nobody), a hop around its `agentFor`, and
    * `buildAgentFor` above around the owner.
    */
+  /*
+   * CopilotKit Intelligence, only when this deployment is connected to one (R0, optional). It serves
+   * Automatic Learning's published skills to each Bot's run; threads stay in this database either
+   * way. Without `INTELLIGENCE_API_KEY` none of this exists and every Bot is built as before.
+   */
+  const intelligenceClient = config.intelligence
+    ? createIntelligenceClient(config.intelligence)
+    : undefined;
+  const learningSettings = intelligenceClient
+    ? createLearningSettingsStore(database, config.learning)
+    : undefined;
+  const learning =
+    intelligenceClient && learningSettings
+      ? createLearningRuntime({
+          store: learningSettings,
+          client: intelligenceClient,
+        })
+      : undefined;
+
   const actorAgentResolver = createActorAgentResolver({
     loadAgents: runtimeAgentsForActor,
     model: runtimeModel,
@@ -2527,6 +2550,8 @@ await startupLifecycle.run(async (startup) => {
     loadAvatarSourcesForActor,
     // The project each coworker works in on the person's machine (story RES2).
     loadCurrentProjectForActor,
+    // Published Automatic Learning skills, only with a connected Intelligence.
+    acquireLearnedSkills: learning?.acquire,
   });
 
   /**
@@ -2541,7 +2566,9 @@ await startupLifecycle.run(async (startup) => {
     {
       // A run started or ended on a thread; light the channel it belongs to. Fire-and-forget.
       onRunBusy: (input) => {
-        void channelStore.signalBusy(input.threadId, input.busy).catch(() => {});
+        void channelStore
+          .signalBusy(input.threadId, input.busy)
+          .catch(() => {});
       },
       // The thread store, and the runtime's runner: one object, `threads/postgres-runner.ts`.
       localRunner: localThreadRunner,
@@ -2598,7 +2625,10 @@ await startupLifecycle.run(async (startup) => {
                     ...(signInService ? { signIn: signInService } : {}),
                     machine: computerMachine,
                     apps: await usesDeviceApps(context.agentId, actor.id),
-                    disabled: await approvalService.disabledTools(actor.id, context.agentId),
+                    disabled: await approvalService.disabledTools(
+                      actor.id,
+                      context.agentId,
+                    ),
                   })
                 : [];
             return [
@@ -4372,6 +4402,21 @@ await startupLifecycle.run(async (startup) => {
     createLocalThreadReader(database),
     // The plan ceilings, so a coworker created over them is refused by the write path (ticket 022).
     quota,
+    // Automatic Learning's admin page, only with a connected Intelligence (R0).
+    learningSettings
+      ? {
+          store: learningSettings,
+          status: learning?.status,
+          inspect: learning?.inspect,
+        }
+      : undefined,
+    // The self-host bar: the operator's switch, and hidden for a deployment paying for Intelligence.
+    createSelfHostBanner({
+      enabled: config.selfHostBanner,
+      ...(intelligenceClient
+        ? { entitlements: () => intelligenceClient.getRuntimeEntitlements() }
+        : {}),
+    }),
   );
 
   /*
@@ -4863,29 +4908,27 @@ await startupLifecycle.run(async (startup) => {
                   captureInFrame(data, message.action, (...args) =>
                     demonstrationRecorder.capture(...args),
                   ).catch((error) => {
-                      console.error(
+                    console.error(
+                      JSON.stringify({
+                        type: "demonstration-capture-error",
+                        error:
+                          error instanceof Error ? error.name : "UnknownError",
+                        context: { recordingId: data.recordingId },
+                        timestamp: new Date().toISOString(),
+                      }),
+                    );
+                    try {
+                      ws.send(
                         JSON.stringify({
-                          type: "demonstration-capture-error",
+                          type: "error",
                           error:
-                            error instanceof Error
-                              ? error.name
-                              : "UnknownError",
-                          context: { recordingId: data.recordingId },
-                          timestamp: new Date().toISOString(),
+                            "A browser step could not be saved. Stop and review the demonstration before continuing.",
                         }),
                       );
-                      try {
-                        ws.send(
-                          JSON.stringify({
-                            type: "error",
-                            error:
-                              "A browser step could not be saved. Stop and review the demonstration before continuing.",
-                          }),
-                        );
-                      } catch {
-                        /* A closed viewer cannot receive the already logged failure. */
-                      }
-                    });
+                    } catch {
+                      /* A closed viewer cannot receive the already logged failure. */
+                    }
+                  });
                   return;
                 }
               }

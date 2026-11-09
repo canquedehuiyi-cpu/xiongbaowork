@@ -105,6 +105,14 @@ jobs:
         with:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
+      # The Bots are not root workspaces and each keeps its own lockfile (as upstream CI installs them).
+      # Restored upstream suites spawn agent-bot and import agent-mastra's receiver (R0, learning).
+      - run: bun install --frozen-lockfile
+        working-directory: openbot/agent-bot
+      - run: bun install --frozen-lockfile
+        working-directory: openbot/agent-langgraph
+      - run: bun install
+        working-directory: openbot/agent-mastra
       - name: Prepare frozen baseline and separate databases
         run: |
           bash scripts/ci/prepare-baseline.sh

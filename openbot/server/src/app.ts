@@ -120,11 +120,16 @@ import { createGithubResponsibilityRoutes } from "./responsibilities/github";
 import { createResponsibilityRoutes } from "./responsibilities/routes";
 import type { TriggerStore } from "./responsibilities/triggers";
 import type { ResponsibilityStore } from "./responsibilities/types";
+import {
+  createLearningRoutes,
+  type LearningAdminDependencies,
+} from "./learning/routes";
 import { createRoutineRoutes, type RoutineStore } from "./routines/routes";
 import type { RoutineRunner } from "./routines/runner";
 import type { IntentRouter } from "./routing/classify";
 import { createRoutingRoutes } from "./routing/routes";
 import { createCoworkerRoutingService } from "./routing/service";
+import type { SelfHostBanner } from "./self-host-banner";
 import { createTeamBotRoutes } from "./team-bots/routes";
 import type { TeamBots } from "./team-bots/team-bots";
 import type { PackageStatusReader } from "./tenant-package";
@@ -442,6 +447,17 @@ export function createApp(
    * work it cannot price, which is the same degraded direction every other optional here takes.
    */
   quota?: QuotaService,
+  /**
+   * Automatic Learning's admin seams (R0). Present only with a connected CopilotKit Intelligence:
+   * absent, `/api/admin/learning` answers that Intelligence is not connected, and voice treats no Bot
+   * as learning-enabled. Appended last, like everything above it.
+   */
+  learning?: LearningAdminDependencies,
+  /**
+   * Whether to offer help self-hosting, which also hides it from a deployment that pays for
+   * Intelligence. Absent falls back to the operator's switch alone (`OPENBOT_SELF_HOST_BANNER`).
+   */
+  selfHostBanner?: SelfHostBanner,
 ) {
   const app = new Hono<{ Variables: AppVariables }>();
   mountDesktopConnectionFailure(app, desktopHostToken);
@@ -471,7 +487,9 @@ export function createApp(
        */
       wakerflowAutomations: coworker?.wakerflowAutomations === true,
       // Whether to offer help self-hosting. A fork running this for its own people turns it off.
-      selfHostBanner: config.selfHostBanner,
+      selfHostBanner: selfHostBanner
+        ? await selfHostBanner.shown()
+        : config.selfHostBanner,
       transcription: Boolean(config.transcription),
       voice: Boolean(config.voice),
       /*
@@ -689,6 +707,10 @@ export function createApp(
       channelStore,
       agentProfileStore,
       voiceSessions,
+      learning?.status
+        ? async (agentId) =>
+            (await learning.status?.(agentId))?.configured ?? false
+        : undefined,
     ),
   );
 
@@ -820,6 +842,38 @@ export function createApp(
 
     return context.json({ instructions: saved });
   });
+  /*
+   * Automatic Learning's admin page (R0). With a connected Intelligence, the settings and the
+   * read-only inspection upstream serves; without one, a plain answer the page can say in words
+   * rather than a 404 that reads like a broken deployment.
+   */
+  if (learning) {
+    app.route(
+      "/api/admin/learning",
+      createLearningRoutes(
+        learning,
+        requireUser,
+        [
+          ...(config.auth?.trustedOrigins ?? []),
+          ...(config.appUrl ? [config.appUrl] : []),
+        ],
+        auditStore,
+      ),
+    );
+  } else {
+    app.all("/api/admin/learning/*", requireUser, (context) => {
+      const denied = requireAdmin(context);
+      if (denied) return denied;
+      return context.json(
+        {
+          error:
+            "这个部署没有接入 CopilotKit Intelligence，自动学习不可用。设置 INTELLIGENCE_API_KEY 后重启即可启用。",
+          intelligence: false,
+        },
+        503,
+      );
+    });
+  }
   app.get("/api/admin/status", requireUser, (context) => {
     const denied = requireAdmin(context);
     return denied ?? context.json({ status: "ok" });

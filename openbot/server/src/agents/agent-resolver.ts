@@ -15,6 +15,7 @@ import {
   type SignRun,
   type ToolSelection,
 } from "../copilot";
+import type { AcquireLearnedSkills } from "../learning/runtime";
 import type { LoadPersonalMemory } from "../memory/tools";
 import type { AgentModelResolver } from "../models/runtime-resolver";
 import type { AgentActor } from "./profile-types";
@@ -80,6 +81,11 @@ export type ActorAgentResolverDependencies = {
   loadAvatarSourcesForActor?: (actorId: string) => LoadAvatarSources;
   /** Each Bot's current project (story RES2), per actor. */
   loadCurrentProjectForActor?: (actorId: string) => LoadCurrentProject;
+  /**
+   * Published Automatic Learning skills for a Bot's run. Only with a connected CopilotKit
+   * Intelligence (R0, optional); absent, every Bot is built exactly as without learning.
+   */
+  acquireLearnedSkills?: AcquireLearnedSkills;
 };
 
 /**
@@ -125,6 +131,7 @@ export function createActorAgentResolver(
       deps.resolveAgentModel,
       deps.loadAvatarSourcesForActor?.(actor.id),
       deps.loadCurrentProjectForActor?.(actor.id),
+      deps.acquireLearnedSkills,
     );
 
   const resolveAgentsForActor = async (actor: AgentActor) =>
