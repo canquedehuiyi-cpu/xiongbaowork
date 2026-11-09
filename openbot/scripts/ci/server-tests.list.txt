@@ -273,6 +273,8 @@ tests/plugin-catalogue-market.test.ts
 tests/plugin-catalogue.test.ts
 tests/plugin-connect-route.test.ts
 tests/plugin-credential-binding.integration.test.ts
+tests/plugin-credential-placement.integration.test.ts
+tests/plugin-credential-placement.test.ts
 tests/plugin-credential-rotation.integration.test.ts
 tests/plugin-curated-credential.integration.test.ts
 tests/plugin-grants-validation.test.ts

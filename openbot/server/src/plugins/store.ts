@@ -73,8 +73,11 @@ import {
 } from "./broker";
 import {
   type CatalogueEntry,
+  type CredentialPlacement,
   catalogueEntry,
   classifyTool,
+  credentialFormatRefusal,
+  credentialPlacement,
   customUrlRefusal,
   resolveServerUrl,
   serverCredentialKind,
@@ -463,6 +466,23 @@ export class CatalogueEntryUnknownError extends Error {
   constructor(key: string) {
     super(`${key} is not a server this deployment will connect to.`);
     this.name = "CatalogueEntryUnknownError";
+  }
+}
+
+/**
+ * The deployment's stored OAuth client could not be read: the vault read or the decryption failed.
+ *
+ * Distinct from "there is none" (missing, revoked, or not a client), because only that may be
+ * answered by registering a new one. The client is one row every replica shares, so a replica that
+ * cannot decrypt it and registers around it replaces the client for every replica that still can.
+ *
+ * Carries nothing of the fault it stands for, never its message or cause: a vault or parser message
+ * can quote the stored client.
+ */
+export class OAuthClientReadError extends Error {
+  constructor() {
+    super("The stored OAuth client could not be read.");
+    this.name = "OAuthClientReadError";
   }
 }
 
@@ -1186,6 +1206,7 @@ export type PluginStoreOptions = {
       actorId?: string;
       botId?: string;
       outbound?: OutboundPolicy;
+      placement?: CredentialPlacement;
     },
     toolName: string,
     args: Record<string, unknown>,
@@ -1776,7 +1797,7 @@ export function createPluginStore(options: PluginStoreOptions) {
     entry: CatalogueEntry | null,
     actorId: string,
     access: ServerAccess,
-  ): Promise<{ token?: string }> {
+  ): Promise<{ token?: string; placement?: CredentialPlacement }> {
     /*
      * A brokered app, where the deployment holds one key and Composio keeps the accounts apart.
      *
@@ -1915,6 +1936,44 @@ export function createPluginStore(options: PluginStoreOptions) {
     }
 
     if (access.credential !== "person-oauth") {
+      /*
+       * A PLACED DEPLOYMENT CREDENTIAL, which is a bearer token in every respect but where it goes.
+       *
+       * CRITERION. A placed entry with no credential is refused here, in words an administrator can
+       * act on, and never dialled; one with a credential travels WITH its placement, so the only
+       * module that builds a request is the one that puts the key into it.
+       *
+       * REASON. The bearer branch below answers `undefined` for a server with no credential and
+       * dials anyway, which is right for a server that may or may not need one. A placed vendor
+       * always does — its key is the whole of how the deployment is billed and identified — and some
+       * answer an anonymous handshake (Amap and Tencent both did, on 2026-11-09), so a dial without
+       * one would look connected while running on nobody's quota. And a placed key handed to a
+       * transport that does not read the placement would go out as `Authorization: Bearer`, which
+       * is why any transport but MCP is refused rather than trusted to ignore it.
+       */
+      const placement = entry ? credentialPlacement(entry) : null;
+      if (placement && entry) {
+        if (access.transport !== "mcp") {
+          throw new PluginInvariantError(
+            `${row.id} places its credential on the request, and only the MCP transport reads a placement.`,
+          );
+        }
+        if (!row.credentialId) {
+          throw new PluginRefusedError(
+            `${entry.title}还没有录入「${placement.label}」，所以没有拨号。请管理员在「插件 › 凭据」中录入后再试。`,
+            null,
+          );
+        }
+        const { secret } = await serverSecretFor(
+          {
+            id: row.id,
+            tenantId: row.tenantId,
+            credentialId: row.credentialId,
+          },
+          `${entry.title}的「${placement.label}」已失效或被撤销。请管理员在「插件 › 凭据」中重新录入。`,
+        );
+        return { token: secret, placement };
+      }
       const token = row.credentialId
         ? (
             await serverSecretFor(
@@ -2089,7 +2148,7 @@ export function createPluginStore(options: PluginStoreOptions) {
         parsed = JSON.parse(decrypted);
       } catch {
         /*
-         * Unreadable is the same as none, exactly as it is for {@link heldOAuthClient} and
+         * Unparseable is the same as none, exactly as it is for {@link heldOAuthClient} and
          * {@link storedOAuthClient}: there is nothing here to present to a vendor. Those two answer
          * null because their callers are deciding whether a consent flow can start; this one is
          * already mid-call, and its every caller would have to turn a null into this same refusal
@@ -2494,6 +2553,50 @@ export function createPluginStore(options: PluginStoreOptions) {
   });
 
   /**
+   * A stored-client read, with every fault it raises turned into {@link OAuthClientReadError}.
+   *
+   * Only the READ is wrapped — the server row, the vault row, the decryption — never a vendor
+   * registration or a vault write after it, so a registration that fails is not reported as a client
+   * nobody could read. Missing, revoked and unparseable answer null inside `work` and pass through.
+   *
+   * The fault is logged by its name alone (a wrong key is `OperationError`, a vault outage whatever
+   * the driver throws), because its message can quote the stored value. The error thrown in its place
+   * carries nothing of it, so this line is all an operator gets.
+   */
+  async function readClient(
+    serverId: string,
+    work: () => Promise<OAuthClient | null>,
+  ): Promise<OAuthClient | null> {
+    try {
+      return await work();
+    } catch (error) {
+      console.error(
+        JSON.stringify({
+          type: "mcp-oauth-client-read-failed",
+          server: serverId,
+          error: error instanceof Error ? error.name : "UnknownError",
+        }),
+      );
+      throw new OAuthClientReadError();
+    }
+  }
+
+  /**
+   * A decrypted client, or null when it is not one.
+   *
+   * Never rethrown: `JSON.parse` reports failure by quoting the input, and the input is the decrypted
+   * client. A value that parsed and is not a client is the same none — see {@link isUsableClient}.
+   */
+  function clientFromStoredJson(plaintext: string): OAuthClient | null {
+    try {
+      const parsed: unknown = JSON.parse(plaintext);
+      return isUsableClient(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * One writer at a time for one server's OAuth client, across the whole deployment.
    *
    * Everything that stores a client reads "is there a live one" and then writes accordingly, and the
@@ -2538,46 +2641,43 @@ export function createPluginStore(options: PluginStoreOptions) {
     transaction: Transaction,
     serverId: string,
   ): Promise<OAuthClient | null> {
-    const [server] = await transaction
-      .select({
-        id: mcpServers.id,
-        tenantId: mcpServers.tenantId,
-        credentialId: mcpServers.credentialId,
-      })
-      .from(mcpServers)
-      .where(atServerAddress(serverId))
-      .orderBy(ownRowFirst())
-      .limit(1);
-    if (!server?.credentialId) return null;
+    return readClient(serverId, async () => {
+      const [server] = await transaction
+        .select({
+          id: mcpServers.id,
+          tenantId: mcpServers.tenantId,
+          credentialId: mcpServers.credentialId,
+        })
+        .from(mcpServers)
+        .where(atServerAddress(serverId))
+        .orderBy(ownRowFirst())
+        .limit(1);
+      if (!server?.credentialId) return null;
 
-    // A team server's client, in a person's frame, through the broker (G01-E P10).
-    const [held] = throughBroker(server)
-      ? [await brokeredSecret(transaction, server.id)]
-      : await transaction
-          .select({
-            encryptedValue: credentialRows.encryptedValue,
-            revokedAt: credentialRows.revokedAt,
-            id: credentialRows.id,
-            tenantId: credentialRows.tenantId,
-            kind: credentialRows.kind,
-          })
-          .from(credentialRows)
-          .where(eq(credentialRows.id, server.credentialId))
-          .limit(1);
-    if (!held || held.revokedAt) return null;
+      // A team server's client, in a person's frame, through the broker (G01-E P10).
+      const [held] = throughBroker(server)
+        ? [await brokeredSecret(transaction, server.id)]
+        : await transaction
+            .select({
+              encryptedValue: credentialRows.encryptedValue,
+              revokedAt: credentialRows.revokedAt,
+              id: credentialRows.id,
+              tenantId: credentialRows.tenantId,
+              kind: credentialRows.kind,
+            })
+            .from(credentialRows)
+            .where(eq(credentialRows.id, server.credentialId))
+            .limit(1);
+      if (!held || held.revokedAt) return null;
 
-    try {
-      const parsed: unknown = JSON.parse(
-        await openCredential(encryptionKey, held),
-      );
-      // A value that parsed and is not a client is unreadable in the same way and for the same
-      // caller — see {@link isUsableClient}. Null, because that is what this reader's caller acts
-      // on: it goes and registers one, which is the answer to holding none.
-      return isUsableClient(parsed) ? parsed : null;
-    } catch {
-      // Unreadable is the same as none: there is nothing to send anybody to consent with.
-      return null;
-    }
+      /*
+       * A decryption fault does not mean the vendor forgot this client, and it is not "none". The
+       * caller answers null by registering, under this lock, over the one row every replica shares:
+       * a replica holding the wrong key would replace the client for every replica that can still
+       * read it. So it throws, and only an unparseable value is none.
+       */
+      return clientFromStoredJson(await openCredential(encryptionKey, held));
+    });
   }
 
   /**
@@ -2753,19 +2853,19 @@ export function createPluginStore(options: PluginStoreOptions) {
   async function storedOAuthClient(
     serverId: string,
   ): Promise<OAuthClient | null> {
-    const [row] = await database
-      .select({
-        id: mcpServers.id,
-        tenantId: mcpServers.tenantId,
-        credentialId: mcpServers.credentialId,
-      })
-      .from(mcpServers)
-      .where(atServerAddress(serverId))
-      .orderBy(ownRowFirst())
-      .limit(1);
-    if (!row?.credentialId) return null;
+    return readClient(serverId, async () => {
+      const [row] = await database
+        .select({
+          id: mcpServers.id,
+          tenantId: mcpServers.tenantId,
+          credentialId: mcpServers.credentialId,
+        })
+        .from(mcpServers)
+        .where(atServerAddress(serverId))
+        .orderBy(ownRowFirst())
+        .limit(1);
+      if (!row?.credentialId) return null;
 
-    try {
       // A team server's client, in a person's frame, through the broker (G01-E P10).
       const brokered = throughBroker(row)
         ? await brokeredSecret(database, row.id)
@@ -2773,22 +2873,25 @@ export function createPluginStore(options: PluginStoreOptions) {
       if (brokered !== undefined && (!brokered || brokered.revokedAt)) {
         return null;
       }
-      const parsed: unknown = JSON.parse(
-        brokered
+      let plaintext: string;
+      try {
+        plaintext = brokered
           ? await openCredential(encryptionKey, brokered)
           : await serverCredentialById({
               tenantId: row.tenantId,
               credentialId: row.credentialId,
-            }),
-      );
-      // A client that parsed and is not one is as unusable as the revoked or missing row the catch
-      // below answers for, and is the same none to every caller — see {@link isUsableClient}.
-      return isUsableClient(parsed) ? parsed : null;
-    } catch {
-      // A revoked, missing or unreadable client is the same as none for every caller: there is
-      // nothing to send anybody to consent with, and the answer is to obtain one again.
-      return null;
-    }
+            });
+      } catch (error) {
+        /*
+         * Only a confirmed missing, revoked or not-this-server's credential is none, and permits
+         * obtaining a replacement. A failed read or decryption is a fault: answering null here sends
+         * `ensureOAuthClient` to register over a client the other replicas can still use.
+         */
+        if (error instanceof CredentialUnusableError) return null;
+        throw error;
+      }
+      return clientFromStoredJson(plaintext);
+    });
   }
 
   /**
@@ -3083,6 +3186,26 @@ export function createPluginStore(options: PluginStoreOptions) {
        * here now rather than in the review that re-adds one.
        */
       const credentialId = input.credentialId?.trim() || undefined;
+      /*
+       * A PLACED CREDENTIAL IS NEVER ATTACHED BY ID, only stored through `replaceServerToken`.
+       *
+       * CRITERION. Adding a placed entry with a `credentialId` is refused before anything is
+       * written; its key reaches the vault only through the door that checks its shape first.
+       *
+       * REASON. An id names a credential that was sealed elsewhere — by the generic credentials
+       * route, which knows nothing of placements — so a DingTalk address on another host, or a key
+       * with a line in it, would be in the vault and pointed at before anything had looked at it,
+       * and refused only on the first dial, in `last_error`. Decrypting it here to check would be a
+       * second reader of a team secret on a path that never needed one. So the add takes no key at
+       * all, and `replaceServerToken` (which runs `credentialFormatRefusal` before it seals) is how
+       * the first key arrives as well as every later one — the same check, refused at the form.
+       */
+      const placement = credentialPlacement(resolved.entry);
+      if (credentialId && placement) {
+        throw new CustomServerRefusedError(
+          `${resolved.entry.title}的「${placement.label}」不能按凭据 ID 绑定。请先启用插件，再在「插件 › 凭据」里录入，录入时会先校验格式。`,
+        );
+      }
       if (credentialId) {
         await requireCredentialOfKind(
           resolved.entry.title,
@@ -3511,6 +3634,18 @@ export function createPluginStore(options: PluginStoreOptions) {
         throw new CustomServerRefusedError(
           `${input.serverId} is not reached with a deployment token.`,
         );
+      }
+      /*
+       * A placed credential is checked for its shape before it is sealed, so a DingTalk address on
+       * another host or a key with a line in it is refused at the form rather than stored and refused
+       * on every call after. The sentence is built from the reviewed placement only and never echoes
+       * what was typed. The dial asks the same question again (`placeCredential`), because a
+       * credential can reach the vault by the generic credentials route as well as this one.
+       */
+      const placement = entry ? credentialPlacement(entry) : null;
+      if (placement) {
+        const refusal = credentialFormatRefusal(placement, plaintext);
+        if (refusal !== null) throw new CustomServerRefusedError(refusal);
       }
       // Only the team's row or the frame's own, as for an OAuth client: see writeOAuthClient.
       if (row.tenantId !== TEAM_TENANT && row.tenantId !== currentTenant()) {
@@ -4452,13 +4587,15 @@ export function createPluginStore(options: PluginStoreOptions) {
          * their personal settings page to grant access, so that a token could be minted and handed to
          * a function that discards it. The gate outlived the reason for it.
          */
-        const token = transport.listNeedsCredential
-          ? (await connectionTokenFor(row, entry, actorId, access)).token
-          : undefined;
+        const { token, placement } = transport.listNeedsCredential
+          ? await connectionTokenFor(row, entry, actorId, access)
+          : {};
 
         listed = await transport.listTools({
           url: effectiveUrl(row, entry),
           token,
+          // Beside the token it places, so a placed key never reaches the vendor as a bearer header.
+          ...(placement ? { placement } : {}),
           ...tenantChosenOutbound(
             entry,
             access.transport,
@@ -5935,9 +6072,35 @@ export function createPluginStore(options: PluginStoreOptions) {
     /**
      * The deployment's OAuth client for a server, or null if none is registered.
      *
-     * Reads only. {@link ensureOAuthClient} is the one that will go and get one.
+     * Reads only. {@link ensureOAuthClient} is the one that will go and get one. A client that is
+     * held and cannot be read is {@link OAuthClientReadError}, not null.
      */
     oauthClientFor: storedOAuthClient,
+
+    /**
+     * The trail row for a Connect that stopped because the deployment's client could not be read.
+     *
+     * Written in the caller's frame, like every other row this store writes for a person's act: the
+     * Connect route runs in the person's own. Who pressed it goes in the payload with the server and
+     * the operation; the fault itself never does, not its name and not its message, because a vault or
+     * decryption message can quote the stored client. The server's log line has the name.
+     */
+    async recordOAuthClientReadFailure(input: {
+      serverId: string;
+      actorId: string;
+    }): Promise<void> {
+      await recordAuditEvent(auditStore, {
+        eventType: "mcp.oauth_client_read_failed",
+        targetType: "mcp_server",
+        targetId: input.serverId,
+        payload: {
+          actor: input.actorId,
+          server: input.serverId,
+          operation: "connect",
+          reason: "credential_read_failed",
+        },
+      });
+    },
 
     /** Which `user-oauth` servers this person has connected, for their own settings page. */
     async connectionsFor(
@@ -8417,7 +8580,7 @@ export function createPluginStore(options: PluginStoreOptions) {
        * it did.
        */
       try {
-        const { token } = await connectionTokenFor(
+        const { token, placement } = await connectionTokenFor(
           row,
           entry,
           input.credentialActorId ?? input.actorId,
@@ -8429,6 +8592,7 @@ export function createPluginStore(options: PluginStoreOptions) {
           {
             url: effectiveUrl(row, entry),
             token,
+            ...(placement ? { placement } : {}),
             actorId: input.credentialActorId ?? input.actorId,
             botId: input.botId,
             ...tenantChosenOutbound(

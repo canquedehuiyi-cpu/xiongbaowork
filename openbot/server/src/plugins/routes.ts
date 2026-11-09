@@ -42,6 +42,7 @@ import {
   deploymentFaultSentence,
   isDeploymentFault,
   type OAuthClient,
+  OAuthClientReadError,
   type PluginKind,
   PluginRefusedError,
   type PluginStore,
@@ -60,6 +61,47 @@ import {
  * this grant to belong to.
  */
 export type ConnectingPersonCheck = (userId: string) => Promise<boolean>;
+
+/**
+ * What the Plugins page is told about how an entry is reached: the question it has to ask an
+ * administrator, and the words to ask it in.
+ *
+ * THE PLACED KINDS ARE `deployment-bearer` TO THE PAGE, deliberately. What the page decides from
+ * `auth` is whose credential it collects — one an administrator types once for everybody — and for
+ * a key that goes into a query parameter, a vendor header or a per-customer address the answer is
+ * the same. Where the key sits on the request is the server's business (`placeCredential`), and a
+ * browser has no more use for the parameter or header name than for a vendor's OAuth addresses.
+ * What does differ is what to call the thing, so the reviewed label and hint travel beside it;
+ * neither ever holds a value.
+ */
+function pageAuth(entry: CatalogueEntry): {
+  auth: "none" | "deployment-bearer" | "user-oauth" | "builtin";
+  credentialLabel?: string;
+  credentialHint?: string;
+} {
+  const auth = entry.auth;
+  switch (auth.kind) {
+    case "none":
+    case "deployment-bearer":
+    case "user-oauth":
+    case "builtin":
+      return { auth: auth.kind };
+    case "deployment-query":
+    case "deployment-header":
+    case "deployment-address":
+      return {
+        auth: "deployment-bearer",
+        credentialLabel: auth.credentialLabel,
+        credentialHint: auth.credentialHint,
+      };
+    default: {
+      const unknown: never = auth;
+      throw new Error(
+        `Unknown catalogue auth kind ${(unknown as { kind?: unknown }).kind}`,
+      );
+    }
+  }
+}
 
 /**
  * What somebody is told when the broker itself failed, and what is deliberately kept out of it.
@@ -288,7 +330,7 @@ export function createPluginRoutes(
          * authorization code to is not improved by also existing in every browser that opens the
          * Plugins page.
          */
-        auth: entry.auth.kind,
+        ...pageAuth(entry),
         perInstance: entry.host === null,
       })),
       /*
@@ -1747,6 +1789,24 @@ export function createPluginRoutes(
        */
       if (error instanceof PluginRefusedError) {
         return context.json({ error: error.message }, 409);
+      }
+      /*
+       * The deployment holds a client and this replica could not read it: a vault fault, or a key
+       * that will not decrypt it. Nothing was registered over it, because that would replace the
+       * client for every replica that still can. Recorded, and answered as a fault rather than as a
+       * missing client: there is nothing for the person to fix, and nothing of the fault is said.
+       */
+      if (error instanceof OAuthClientReadError) {
+        await store.recordOAuthClientReadFailure({
+          serverId,
+          actorId: context.var.actor.id,
+        });
+        return context.json(
+          {
+            error: `暂时无法连接 ${entry.title}。请稍后重试；如果一直这样，请联系管理员。`,
+          },
+          503,
+        );
       }
       throw error;
     }

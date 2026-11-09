@@ -1,6 +1,7 @@
 import type { OutboundPolicy } from "../net/outbound-guard";
 import * as baiduNetdiskRest from "./baidu-netdisk-rest";
 import * as builtinRoutines from "./builtin-routines";
+import type { CredentialPlacement } from "./catalogue";
 import * as composio from "./composio";
 import * as driveRest from "./google-drive-rest";
 import type { ListedTool, McpCallResult } from "./mcp";
@@ -84,6 +85,12 @@ export type VendorTransport = {
     botId?: string;
     /** Set for a tenant-chosen MCP URL; read by `./mcp` only. See its `Connection.outbound`. */
     outbound?: OutboundPolicy;
+    /**
+     * Where `token` goes for a placed deployment credential; read by `./mcp` only. See its
+     * `Connection.placement`. The store refuses a placed entry on any other transport rather than
+     * hand one a key it would send as a bearer token.
+     */
+    placement?: CredentialPlacement;
   }): Promise<ListedTool[]>;
   callTool(
     connection: {
@@ -108,6 +115,8 @@ export type VendorTransport = {
       botId?: string;
       /** Set for a tenant-chosen MCP URL; read by `./mcp` only. See its `Connection.outbound`. */
       outbound?: OutboundPolicy;
+      /** As on `listTools` above: read by `./mcp` only. */
+      placement?: CredentialPlacement;
     },
     toolName: string,
     args: Record<string, unknown>,
