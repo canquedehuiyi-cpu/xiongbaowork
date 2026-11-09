@@ -51,6 +51,7 @@ tests/approval-outcomes-for-person.test.ts
 tests/approval-recovery-port.integration.test.ts
 tests/approval-recovery-port.test.ts
 tests/approvals-ask-once.test.ts
+tests/approvals-confirm-receipt.test.ts
 tests/approvals-consequential.integration.test.ts
 tests/approvals-continuation-protocol.test.ts
 tests/approvals-continuation-recovery.test.ts
