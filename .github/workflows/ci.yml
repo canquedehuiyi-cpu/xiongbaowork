@@ -667,11 +667,48 @@ jobs:
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Compile the runner sidecar
         run: bun desktop-device/scripts/build-sidecar.ts
+      # The bundler downloads NSIS and nsis_tauri_utils.dll itself, once per attempt, and GitHub's release
+      # downloads answered 504 for minutes at a time, outlasting the retry below. Seed the exact cache it
+      # checks first (%LOCALAPPDATA%\tauri\NSIS, the files and SHA-1s pinned by tauri-bundler 2.11.4)
+      # with curl retrying for up to ten minutes per file. If the layout ever stops matching, the
+      # bundler only logs "missing some files" and downloads them as before.
+      - name: Seed Tauri's NSIS toolset (curl with retries, SHA-1 verified)
+        run: |
+          $tools = Join-Path $env:LOCALAPPDATA 'tauri'
+          $nsis = Join-Path $tools 'NSIS'
+          $dll = Join-Path $nsis 'Plugins\x86-unicode\additional\nsis_tauri_utils.dll'
+          function Fetch($url, $out, $sha1) {
+            curl.exe -fsSL --retry 40 --retry-all-errors --retry-delay 15 --retry-max-time 600 -o $out $url
+            if ($LASTEXITCODE -ne 0) { throw "download failed: $url" }
+            $got = (Get-FileHash -Algorithm SHA1 $out).Hash
+            if ($got -ne $sha1) { throw "SHA-1 mismatch for $url ($got)" }
+          }
+          if (-not (Test-Path (Join-Path $nsis 'Bin\makensis.exe'))) {
+            New-Item -ItemType Directory -Force $tools | Out-Null
+            $zip = Join-Path $tools 'nsis-3.11.zip'
+            Fetch 'https://github.com/tauri-apps/binary-releases/releases/download/nsis-3.11/nsis-3.11.zip' $zip 'EF7FF767E5CBD9EDD22ADD3A32C9B8F4500BB10D'
+            if (Test-Path $nsis) { Remove-Item -Recurse -Force $nsis }
+            Expand-Archive -Force $zip $tools
+            Rename-Item (Join-Path $tools 'nsis-3.11') 'NSIS'
+            Remove-Item $zip
+          }
+          New-Item -ItemType Directory -Force (Split-Path $dll) | Out-Null
+          Fetch 'https://github.com/tauri-apps/nsis-tauri-utils/releases/download/nsis_tauri_utils-v0.5.3/nsis_tauri_utils.dll' $dll '75197FEE3C6A814FE035788D1C34EAD39349B860'
       - name: Bundle the unsigned NSIS installer
         working-directory: openbot/desktop-device
+        # The bundler downloads NSIS from GitHub releases, which answered 504 intermittently and failed
+        # this job on PRs that touched nothing here. Retry only that failure; any other error throws.
         run: |
-          ../desktop/node_modules/.bin/tauri build --ci --bundles nsis --config src-tauri/tauri.bundle.conf.json
-          if ($LASTEXITCODE -ne 0) { throw "tauri build exited $LASTEXITCODE" }
+          for ($attempt = 1; $attempt -le 4; $attempt++) {
+            ../desktop/node_modules/.bin/tauri build --ci --bundles nsis --config src-tauri/tauri.bundle.conf.json 2>&1 | Tee-Object -Variable output
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($attempt -lt 4 -and ($output | Out-String) -match 'http status: 5\d\d') {
+              Write-Host "NSIS download failed with a 5xx (attempt $attempt); retrying in 30s"
+              Start-Sleep -Seconds 30
+              continue
+            }
+            throw "tauri build exited $LASTEXITCODE"
+          }
       - name: Check the installer's payload, product name and version, and that it is unsigned
         working-directory: openbot/desktop-device
         run: |
