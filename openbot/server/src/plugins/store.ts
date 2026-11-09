@@ -648,6 +648,9 @@ function storableSchema(
  */
 export const LISTING_REVISION = 1;
 
+/** 升级后重新列 broker 应用时，同一个应用、同一个版本最多连续试几次（本进程内）。 */
+export const RELIST_ATTEMPTS = 3;
+
 /**
  * What a vendor listed, as rows this database will actually take.
  *
@@ -3225,6 +3228,12 @@ export function createPluginStore(options: PluginStoreOptions) {
     return schemeKind(await brokeredAppScheme(toolkit));
   }
 
+  /**
+   * 本进程里每个 broker 应用在某个 `listing_revision` 上重新列失败了几次，键是 `行 id@版本`。
+   * 只是本进程的重试上限，不是共享状态：别的副本、下一次启动各自从零开始。
+   */
+  const relistFailures = new Map<string, number>();
+
   return {
     /**
      * Add a server from the catalogue.
@@ -5145,12 +5154,18 @@ export function createPluginStore(options: PluginStoreOptions) {
      * 只有部署配置了 Composio（有 broker）才做：broker 用部署自己的 key 列清单，不需要任何人的账号；
      * 没配置时 Composio transport 本来就列不出东西。刷新失败时版本不前进，下一次再试；在那之前存下的
      * 工具照常可用，按原来的方式询问。跨所有租户：调用方要在平台帧里调用（`index.ts` 每一轮都这样）。
-     * 失败不在这里记日志，由调用方按行只报一次（见 `./relist`）。
+     * 按准确的行 id 刷新（`exactRow`），遍历到哪一行就刷新哪一行。
+     *
+     * 日志：vendor 的失败落在应用的 `lastError`；`refreshTools` 抛出的（部署自己的故障、url 里没有
+     * 应用的 brokered 行）写一行结构化日志，只写错误名，不写 message（可能带语句或 vendor 的原话）。
+     * 同一个应用、同一个 `listing_revision` 连续失败 {@link RELIST_ATTEMPTS} 次，本进程里就不再
+     * 重试，记一条日志，也不再算作落后；下一次启动或管理员的「刷新工具」会再试。
      */
     async relistOutdatedBrokeredApps(): Promise<string[]> {
       if (!broker) return [];
+      requireServerWriter();
       const outdated = await database
-        .select({ id: mcpServers.id })
+        .select({ id: mcpServers.id, revision: mcpServers.listingRevision })
         .from(mcpServers)
         .where(
           and(
@@ -5160,17 +5175,43 @@ export function createPluginStore(options: PluginStoreOptions) {
         )
         .orderBy(asc(mcpServers.id));
       const behind: string[] = [];
-      for (const { id } of outdated) {
+      for (const { id, revision } of outdated) {
+        const attempt = `${id}@${revision}`;
+        if ((relistFailures.get(attempt) ?? 0) >= RELIST_ATTEMPTS) continue;
         try {
-          await this.refreshTools(id);
-        } catch {
-          // 版本没有前进，下面会把它算作落后；为什么失败，见应用的 `lastError` 或下一次的重试。
+          await this.refreshTools(id, "", { exactRow: true });
+        } catch (error) {
+          console.warn(
+            JSON.stringify({
+              type: "brokered-app-relist-failed",
+              serverId: id,
+              error: error instanceof Error ? error.name : typeof error,
+            }),
+          );
         }
         const [after] = await database
           .select({ revision: mcpServers.listingRevision })
           .from(mcpServers)
           .where(eq(mcpServers.id, id));
-        if (after && after.revision < LISTING_REVISION) behind.push(id);
+        if (!after || after.revision >= LISTING_REVISION) {
+          relistFailures.delete(attempt);
+          continue;
+        }
+        const failures = (relistFailures.get(attempt) ?? 0) + 1;
+        relistFailures.set(attempt, failures);
+        if (failures >= RELIST_ATTEMPTS) {
+          console.warn(
+            JSON.stringify({
+              type: "brokered-app-relist-given-up",
+              serverId: id,
+              listingRevision: revision,
+              attempts: failures,
+              note: "Listed again after the upgrade and failed every time, so this process stops trying. Its stored actions keep working and ask as before; the next start, or Refresh tools on the app's page, tries again.",
+            }),
+          );
+          continue;
+        }
+        behind.push(id);
       }
       return behind;
     },

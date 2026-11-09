@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { startBrokeredRelist } from "../src/plugins/relist";
 
 /**
@@ -10,20 +10,21 @@ import { startBrokeredRelist } from "../src/plugins/relist";
 
 const warnings: string[] = [];
 const realWarn = console.warn;
-console.warn = (...args: unknown[]) => {
-  warnings.push(args.map(String).join(" "));
-};
 
 let stop: (() => void) | undefined;
+
+// 只在每个用例里替换，结束就恢复：CI 分片在同一个进程里跑多个文件。
+beforeEach(() => {
+  console.warn = (...args: unknown[]) => {
+    warnings.push(args.map(String).join(" "));
+  };
+});
 
 afterEach(() => {
   stop?.();
   stop = undefined;
-  warnings.length = 0;
-});
-
-process.on("exit", () => {
   console.warn = realWarn;
+  warnings.length = 0;
 });
 
 const until = async (condition: () => boolean) => {

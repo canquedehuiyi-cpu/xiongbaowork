@@ -2,6 +2,7 @@ import {
   afterAll,
   afterEach,
   beforeAll,
+  beforeEach,
   describe,
   expect,
   test,
@@ -30,6 +31,7 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
  *
  * `mcp_servers.listing_revision` 记下这些工具是按哪一版的读法存的；落后的应用在启动时重新列一次，
  * 列成功才写上当前版本，所以失败的会被重试，成功的不会再问第二次。只有部署配置了 Composio 时才做。
+ * 按准确的行 id 刷新；同一个应用、同一个版本连续失败 3 次，本进程里就不再重试。
  */
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
@@ -37,11 +39,21 @@ const suite = randomUUID().slice(0, 8);
 
 const OK_APP = `relist_ok_${suite}`;
 const DOWN_APP = `relist_down_${suite}`;
+const SHADOWED_APP = `relist_shadowed_${suite}`;
 const OK_ROW = `relist-${suite}-ok`;
 const DOWN_ROW = `relist-${suite}-down`;
+/** url 里没有应用：`refreshTools` 不写 `lastError`，直接抛 `PluginInvariantError`。 */
+const BROKEN_ROW = `relist-${suite}-broken`;
+/**
+ * legacy `system` 行，id 恰好是另一行（`DECOY_ROW`）的 catalogue_key。经「id 或 catalogue_key、
+ * team 行优先」重新查找时会落到 `DECOY_ROW` 上。
+ */
+const SHADOWED_ROW = `relist-${suite}-shadowed`;
+const DECOY_ROW = `team:relist-${suite}-shadowed`;
 /** 不是 broker 的应用：它的清单要用某个人或部署的凭据去问，启动时不碰。 */
 const OTHER_ROW = `relist-${suite}-other`;
-const ROWS = [OK_ROW, DOWN_ROW, OTHER_ROW];
+const ROWS = [OK_ROW, DOWN_ROW, BROKEN_ROW, SHADOWED_ROW, DECOY_ROW, OTHER_ROW];
+const BROKEN_SECRET_WORDS = "no app in its url";
 
 /** 什么标签都没有的动作：旧版记为普通写操作，这一版记为 unclassified。 */
 const UNLABELLED = {
@@ -65,6 +77,7 @@ const actions: ComposioActions = {
   listActions: async (toolkit) => {
     asked.push(toolkit);
     if (toolkit === OK_APP) return [UNLABELLED, READ];
+    if (toolkit === SHADOWED_APP) return [{ ...READ, slug: "SHADOWED_FETCH" }];
     throw new Error("Composio could not be reached");
   },
   execute: async () => {
@@ -83,10 +96,25 @@ const storeWith = (broker: ComposioBroker | undefined) =>
   });
 // 只看它在不在：重新列工具不经过 broker 的任何方法，清单走的是 Composio transport。
 const store = storeWith({} as ComposioBroker);
+const relist = () => asPlatform(() => store.relistOutdatedBrokeredApps());
 
 const asPlatform = <T>(work: () => Promise<T>) => runAsTenant("platform", work);
 
-async function revisionOf(id: string) {
+/** 这个文件里每条 console.warn，每个用例结束后恢复原来的 console.warn。 */
+const warned: string[] = [];
+const realWarn = console.warn;
+const logged = (type: string, serverId: string) =>
+  warned
+    .map((line) => {
+      try {
+        return JSON.parse(line) as Record<string, unknown>;
+      } catch {
+        return null;
+      }
+    })
+    .filter((line) => line?.type === type && line.serverId === serverId);
+
+async function rowOf(id: string) {
   const [row] = await asPlatform(() =>
     database
       .select({
@@ -114,25 +142,31 @@ async function toolsOf(id: string) {
   return Object.fromEntries(rows.map(({ name, ...rest }) => [name, rest]));
 }
 
+const composioRow = (tenantId: string, id: string, url: string) => ({
+  tenantId,
+  id,
+  title: id,
+  vendor: "Composio",
+  url,
+  provenance: "composio",
+});
+
 beforeAll(async () => {
   useComposioClient(actions);
   await asPlatform(async () => {
     await database.insert(mcpServers).values([
+      composioRow("team", OK_ROW, `composio://${OK_APP}`),
+      composioRow("team", DOWN_ROW, `composio://${DOWN_APP}`),
+      composioRow("team", BROKEN_ROW, "composio://"),
+      composioRow("system", SHADOWED_ROW, `composio://${SHADOWED_APP}`),
       {
         tenantId: "team",
-        id: OK_ROW,
-        title: "Relist OK",
-        vendor: "Composio",
-        url: `composio://${OK_APP}`,
-        provenance: "composio",
-      },
-      {
-        tenantId: "team",
-        id: DOWN_ROW,
-        title: "Relist down",
-        vendor: "Composio",
-        url: `composio://${DOWN_APP}`,
-        provenance: "composio",
+        id: DECOY_ROW,
+        catalogueKey: SHADOWED_ROW,
+        title: "Somebody's MCP server",
+        vendor: "Example",
+        url: "https://mcp.relist-decoy.example.test/mcp",
+        provenance: "custom",
       },
       {
         tenantId: "team",
@@ -169,7 +203,14 @@ beforeAll(async () => {
   });
 });
 
+beforeEach(() => {
+  console.warn = (...args: unknown[]) => {
+    warned.push(args.map(String).join(" "));
+  };
+});
+
 afterEach(() => {
+  console.warn = realWarn;
   asked.length = 0;
 });
 
@@ -185,16 +226,14 @@ afterAll(async () => {
 describe("listing each broker app again once after an upgrade", () => {
   test("rows stored before the column existed are behind", async () => {
     expect(LISTING_REVISION).toBeGreaterThan(0);
-    expect((await revisionOf(OK_ROW))?.revision).toBe(0);
-    expect((await revisionOf(OTHER_ROW))?.revision).toBe(0);
+    expect((await rowOf(OK_ROW))?.revision).toBe(0);
+    expect((await rowOf(OTHER_ROW))?.revision).toBe(0);
   });
 
   test("an app that answers is recorded as a fresh install would, and is caught up", async () => {
-    const behind = await asPlatform(() => store.relistOutdatedBrokeredApps());
+    const behind = await relist();
 
-    expect(asked).toEqual(expect.arrayContaining([OK_APP, DOWN_APP]));
-    expect(behind).toContain(DOWN_ROW);
-    expect(behind).not.toContain(OK_ROW);
+    expect([...behind].sort()).toEqual([BROKEN_ROW, DOWN_ROW].sort());
     expect(await toolsOf(OK_ROW)).toEqual({
       [UNLABELLED.slug]: {
         effect: "write",
@@ -203,11 +242,19 @@ describe("listing each broker app again once after an upgrade", () => {
       },
       [READ.slug]: { effect: "read", destructive: false, unclassified: false },
     });
-    expect((await revisionOf(OK_ROW))?.revision).toBe(LISTING_REVISION);
+    expect((await rowOf(OK_ROW))?.revision).toBe(LISTING_REVISION);
+  });
+
+  test("the row walked is the row refreshed, even where its id is another row's catalogue key", async () => {
+    expect((await rowOf(SHADOWED_ROW))?.revision).toBe(LISTING_REVISION);
+    expect(Object.keys(await toolsOf(SHADOWED_ROW))).toEqual([
+      "SHADOWED_FETCH",
+    ]);
+    expect(await rowOf(DECOY_ROW)).toEqual({ revision: 0, lastError: null });
   });
 
   test("an app that could not be reached keeps what it had and stays behind", async () => {
-    const down = await revisionOf(DOWN_ROW);
+    const down = await rowOf(DOWN_ROW);
     expect(down?.revision).toBe(0);
     expect(down?.lastError).toBeTruthy();
     expect(Object.keys(await toolsOf(DOWN_ROW))).toEqual([
@@ -215,17 +262,41 @@ describe("listing each broker app again once after an upgrade", () => {
     ]);
   });
 
+  test("a failure refreshTools raises is logged by its name, never its words", () => {
+    const lines = logged("brokered-app-relist-failed", BROKEN_ROW);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]?.error).toBe("PluginInvariantError");
+    expect(warned.join("\n")).not.toContain(BROKEN_SECRET_WORDS);
+  });
+
   test("an app that is not the broker's is left alone", async () => {
-    expect((await revisionOf(OTHER_ROW))?.revision).toBe(0);
+    expect(await rowOf(OTHER_ROW)).toEqual({ revision: 0, lastError: null });
     expect(await toolsOf(OTHER_ROW)).toEqual({});
   });
 
   test("the next attempt asks only the app still behind", async () => {
-    const behind = await asPlatform(() => store.relistOutdatedBrokeredApps());
+    const behind = await relist();
 
-    expect(asked).toContain(DOWN_APP);
-    expect(asked).not.toContain(OK_APP);
-    expect(behind).toContain(DOWN_ROW);
+    expect(asked).toEqual([DOWN_APP]);
+    expect([...behind].sort()).toEqual([BROKEN_ROW, DOWN_ROW].sort());
+  });
+
+  test("after three failures at the same revision, an app is given up on for this process, said once", async () => {
+    const before = warned.length;
+    const behind = await relist();
+
+    expect(asked).toEqual([DOWN_APP]);
+    expect(behind).toEqual([]);
+    for (const id of [DOWN_ROW, BROKEN_ROW])
+      expect(logged("brokered-app-relist-given-up", id)).toHaveLength(1);
+
+    const again = await relist();
+    expect(again).toEqual([]);
+    expect(asked).toEqual([DOWN_APP]);
+    expect(warned.length).toBe(before + 3);
+    for (const id of [DOWN_ROW, BROKEN_ROW])
+      expect(logged("brokered-app-relist-given-up", id)).toHaveLength(1);
+    expect(logged("brokered-app-relist-failed", BROKEN_ROW)).toHaveLength(3);
   });
 
   test("a deployment with no Composio configured asks nothing", async () => {
