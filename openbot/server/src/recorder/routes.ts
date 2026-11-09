@@ -18,6 +18,7 @@ import { bodyLimit } from "hono/body-limit";
 import { type AuditStore, DEPLOYMENT_INITIATOR } from "../audit";
 import type { AppVariables, AuthenticatedActor } from "../auth/guards";
 import { reasonWithoutStatement } from "../db/query-failure";
+import { asPlatform } from "../tenant/context";
 import { recorderAudit, recorderConnected } from "./connected";
 import type {
   RecorderConnectionStore,
@@ -136,89 +137,102 @@ export function createRecorderRoutes(deps: RecorderRouteDeps) {
   );
 
   // The code is the credential here, so the only gate is who is asking: Chrome sets Origin and a page cannot forge it.
-  routes.post("/connections", jsonOnly, smallBody, async (context) => {
-    const origin = context.req.header("origin");
-    const extensionId = extensionIdFromOrigin(
-      origin,
-      deps.allowedExtensionIds(),
-    );
-    if (!extensionId) {
-      await audit({
-        eventType: "recorder.connect_refused",
-        targetType: "recorder_connection",
-        initiator: DEPLOYMENT_INITIATOR,
-        payload: { reason: "origin", origin: origin ?? null },
-      });
-      return context.json(
-        { error: "Only the OpenBot Recorder extension can finish connecting." },
-        403,
+  /*
+   * No session: the extension presents a connect code, and nobody is known until it is spent. So the
+   * refusals and the person's details are read as `platform` (G01), and the connection itself is made
+   * in the code's owner's frame (`exchange`).
+   */
+  routes.post(
+    "/connections",
+    jsonOnly,
+    smallBody,
+    (_context, next) => asPlatform(() => next()),
+    async (context) => {
+      const origin = context.req.header("origin");
+      const extensionId = extensionIdFromOrigin(
+        origin,
+        deps.allowedExtensionIds(),
       );
-    }
-    const body = exchangeRequestSchema.safeParse(
-      await context.req.json().catch(() => null),
-    );
-    if (!body.success) {
-      return context.json(
-        { error: "The connection request was not complete." },
-        400,
+      if (!extensionId) {
+        await audit({
+          eventType: "recorder.connect_refused",
+          targetType: "recorder_connection",
+          initiator: DEPLOYMENT_INITIATOR,
+          payload: { reason: "origin", origin: origin ?? null },
+        });
+        return context.json(
+          {
+            error: "Only the OpenBot Recorder extension can finish connecting.",
+          },
+          403,
+        );
+      }
+      const body = exchangeRequestSchema.safeParse(
+        await context.req.json().catch(() => null),
       );
-    }
-    let made: Awaited<ReturnType<RecorderConnectionStore["exchange"]>>;
-    try {
-      made = await deps.connections.exchange({
-        code: body.data.code,
-        label: body.data.label,
-        installId: body.data.installId,
-        extensionId,
-      });
-    } catch (error) {
-      // The connection and its row are written together, so neither was: the code still stands, to be tried again.
-      console.error(
-        JSON.stringify({
-          type: "recorder-connect-failed",
-          error: reasonWithoutStatement(error),
-        }),
-      );
-      return context.json(
-        { error: "This browser could not be connected. Try again." },
-        500,
-      );
-    }
-    if (!made) {
-      // Unknown, expired and already used look the same here: a used or expired code is deleted.
-      await audit({
-        eventType: "recorder.connect_refused",
-        targetType: "recorder_connection",
-        initiator: DEPLOYMENT_INITIATOR,
-        payload: {
-          reason: "code",
-          extensionId,
+      if (!body.success) {
+        return context.json(
+          { error: "The connection request was not complete." },
+          400,
+        );
+      }
+      let made: Awaited<ReturnType<RecorderConnectionStore["exchange"]>>;
+      try {
+        made = await deps.connections.exchange({
+          code: body.data.code,
+          label: body.data.label,
           installId: body.data.installId,
-        },
-      });
-      return context.json(
-        {
-          error:
-            "This connection code has expired or was already used. Choose Connect this browser in OpenBot again.",
-        },
-        400,
-      );
-    }
-    recorderConnected({ userId: made.userId, onConnected: deps.onConnected });
-    const user = await deps.user(made.userId);
-    if (!user) {
-      return context.json(
-        { error: "This person could not be found. Try again." },
-        500,
-      );
-    }
-    const answer: ExchangeResponse = {
-      token: made.token,
-      connection: made.connection,
-      user,
-    };
-    return context.json(answer, 201);
-  });
+          extensionId,
+        });
+      } catch (error) {
+        // The connection and its row are written together, so neither was: the code still stands, to be tried again.
+        console.error(
+          JSON.stringify({
+            type: "recorder-connect-failed",
+            error: reasonWithoutStatement(error),
+          }),
+        );
+        return context.json(
+          { error: "This browser could not be connected. Try again." },
+          500,
+        );
+      }
+      if (!made) {
+        // Unknown, expired and already used look the same here: a used or expired code is deleted.
+        await audit({
+          eventType: "recorder.connect_refused",
+          targetType: "recorder_connection",
+          initiator: DEPLOYMENT_INITIATOR,
+          payload: {
+            reason: "code",
+            extensionId,
+            installId: body.data.installId,
+          },
+        });
+        return context.json(
+          {
+            error:
+              "This connection code has expired or was already used. Choose Connect this browser in OpenBot again.",
+          },
+          400,
+        );
+      }
+      recorderConnected({ userId: made.userId, onConnected: deps.onConnected });
+      const user = await deps.user(made.userId);
+      if (!user) {
+        return context.json(
+          { error: "This person could not be found. Try again." },
+          500,
+        );
+      }
+      const answer: ExchangeResponse = {
+        token: made.token,
+        connection: made.connection,
+        user,
+      };
+      return context.json(answer, 201);
+    },
+  );
 
   // Settings, Browsers, which asks again while it is open: each live connection, and whether its Recorder is recording
   // now by its own latest report, which a recording sends every 30 s. Its last use cannot say so: a recording streams to

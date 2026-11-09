@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import type { AbstractAgent } from "@ag-ui/client";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -100,7 +99,6 @@ import {
 } from "./automations/sweep";
 import {
   createWakerAutomationExecutor,
-  firingOfInitiator,
   wakerflowAutomationTarget,
 } from "./automations/waker-executor";
 import { createAutomationTargetRegistry } from "./automations/types";
@@ -847,9 +845,12 @@ await startupLifecycle.run(async (startup) => {
   const tenantPackage = await startup.step(() =>
     loadTenantPackage(config.tenantPackageDirectory),
   );
-  const threadIdentity = createThreadIdentity(
-    config.deploymentId ?? tenantPackage.tenantId,
-  );
+  // The package's id unless DEPLOYMENT_ID says otherwise, and the id the deployment was set up under
+  // if the package has since been renamed. See `deploymentNameOf`, which frames its own read.
+  const deploymentId =
+    config.deploymentId ??
+    (await startup.step(() => deploymentNameOf(database, tenantPackage)));
+  const threadIdentity = createThreadIdentity(deploymentId);
   const baseChannelStore = createChannelStore(
     database,
     agentProfileStore,
@@ -1038,12 +1039,11 @@ await startupLifecycle.run(async (startup) => {
   const { resolveRequestActor, identifyUser, identifyActor } =
     createRequestActor({
       singleUser: config.singleUser,
-      resolveRecorder: (request) =>
-        asPlatform(() => recorderExtension.resolve(request)),
+      // Framed as `platform` by the Recorder's wiring itself (recorder/wiring.ts).
+      resolveRecorder: (request) => recorderExtension.resolve(request),
       getSession: async (headers) =>
         (await asPlatform(() => auth?.api.getSession({ headers }))) ?? null,
-      rolesForUser: (id) =>
-        asPlatform(() => roleRepository.rolesForUser(id)),
+      rolesForUser: (id) => asPlatform(() => roleRepository.rolesForUser(id)),
     });
   // Where a person's own OpenBot browser may go: not where Bots may, but where their browser on their
   // own laptop would (browser/egress.ts). On a host-side computer of people's browsers that is their
@@ -1203,7 +1203,8 @@ await startupLifecycle.run(async (startup) => {
     database,
     authoriseQuestion,
     routineIntelligence: {
-      getThreadMessages: (input) => routineIntelligence.getThreadMessages(input),
+      getThreadMessages: (input) =>
+        routineIntelligence.getThreadMessages(input),
     },
     approvalComputerTools: (ownerUserId, agentId, initiator) =>
       approvalComputerTools(ownerUserId, agentId, initiator),
@@ -1341,7 +1342,11 @@ await startupLifecycle.run(async (startup) => {
             (
               await asPlatform(() =>
                 database
-                  .select({ id: users.id, name: users.name, email: users.email })
+                  .select({
+                    id: users.id,
+                    name: users.name,
+                    email: users.email,
+                  })
                   .from(users)
                   .where(inArray(users.id, ids)),
               )
@@ -2734,10 +2739,8 @@ await startupLifecycle.run(async (startup) => {
         { resume: false },
       ),
     asksEveryStep: async (ownerUserId, threadId) =>
-      (await approvalService.store.asksEveryChange?.(
-        ownerUserId,
-        threadId,
-      )) === true,
+      (await approvalService.store.asksEveryChange?.(ownerUserId, threadId)) ===
+      true,
   });
 
   /*
@@ -2965,10 +2968,11 @@ await startupLifecycle.run(async (startup) => {
      */
     handoffForActor: (actorId, initiator, depth) =>
       restrictCoordinationForRun(initiator, async (botId, input) => [
-        ...(await coordinationForActor(actorId, initiator, depth)(
-          botId,
-          input,
-        )),
+        ...(await coordinationForActor(
+          actorId,
+          initiator,
+          depth,
+        )(botId, input)),
         subagents.toolForRun({
           actorId,
           botId,
@@ -3391,7 +3395,9 @@ await startupLifecycle.run(async (startup) => {
   const proactiveEngine = createProactiveEngine({
     store: proactiveStore,
     // A check-in forms memories only where there is memory.
-    ...(editionHasMemory(config.edition) ? { memory: personalMemoryStore } : {}),
+    ...(editionHasMemory(config.edition)
+      ? { memory: personalMemoryStore }
+      : {}),
     queue: createWorkQueue(database),
     owner: workOwner("proactive"),
     board: taskProjector,
@@ -4385,6 +4391,8 @@ await startupLifecycle.run(async (startup) => {
         },
         credentials: credentialStore,
         modelCheckAtBoot,
+        // M3: the checklist's "Back end" row is upstream's required Intelligence. Intelligence is
+        // optional in this fork (R0), so without it the row reads as unreachable.
         entitlements: () =>
           intelligenceClient
             ? intelligenceClient.getRuntimeEntitlements()

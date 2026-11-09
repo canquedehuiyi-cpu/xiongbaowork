@@ -50,7 +50,6 @@ import {
   routines,
 } from "../db/schema";
 import { runAsTenant } from "../tenant/context";
-import type { HeadlessWaiting } from "@openbot/toolkit/headless-tools";
 import { describeCron, nextOccurrence, ScheduleRefusedError } from "./schedule";
 
 const SWEEP_ID = "routines";

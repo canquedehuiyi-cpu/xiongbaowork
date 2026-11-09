@@ -747,10 +747,11 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
     threadOwners.set(thread.id, thread.tenantId);
     if (runs.length === 0) return;
     if ((ɵGLOBAL_STORE.peek(thread.id)?.historicRuns.length ?? 0) > 0) return;
-    ɵGLOBAL_STORE.getOrCreate(thread.id);
+    // The entry the runs are appended to: the store drops a run whose writer is no longer the entry.
+    const writer = ɵGLOBAL_STORE.getOrCreate(thread.id);
     const snapshot = thread.messages as Message[];
     runs.forEach((run, index) => {
-      ɵGLOBAL_STORE.appendRun(thread.id, {
+      ɵGLOBAL_STORE.appendRun(thread.id, writer, {
         threadId: thread.id,
         runId: run.id,
         agentId: run.agentId,

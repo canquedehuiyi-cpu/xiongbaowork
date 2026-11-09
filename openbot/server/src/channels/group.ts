@@ -49,13 +49,21 @@ import {
 } from "../db/schema/group";
 import { TEAM_TENANT } from "../db/schema/tenant";
 import { workItems } from "../db/schema/work";
-import { leadingSkillCommand } from "../plugins/picked-skill";
 import type { CheckPrivateShare } from "../proactive/private-share";
-import type { TurnRunner } from "@openbot/toolkit/run-turn";
-import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 import type { TaskProjector } from "../tasks/projector";
 import { currentTenant, runAsClaimedTenant } from "../tenant/context";
 import type { WorkQueue } from "../work/queue";
+
+/**
+ * The command a message starts with, or undefined: a skill picked from the composer's `/` menu.
+ *
+ * M3: upstream reads this from plugins/picked-skill.ts (`leadingSkillCommand`), which the fork's
+ * plugins do not have yet; the same rule is spelled here. Only at the very start, and only a whole
+ * command followed by a space, a line break or the end.
+ */
+function leadingSkillCommand(text: string): string | undefined {
+  return /^\s*\/([a-z0-9]+(?:-[a-z0-9]+)*)(?=\s|$)/.exec(text)?.[1];
+}
 
 export const GROUP_TURN_KIND = "group.turn";
 

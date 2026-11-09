@@ -15,6 +15,7 @@ import {
 } from "../auth/organization";
 import type { OpenBotRole } from "../auth/roles";
 import { reasonWithoutStatement } from "../db/query-failure";
+import { runAsTenant } from "../tenant/context";
 import type { RecorderConnectionStore } from "./connections";
 import type { RecorderVariables } from "./variables";
 
@@ -217,7 +218,8 @@ export function createRequireRecorder(
       const { connectionId, ...person } = resolution.actor;
       context.set("actor", person);
       context.set("recorderConnectionId", connectionId);
-      return next();
+      // The Recorder acts for its person, in their own frame, as a signed-in request does (G01).
+      return runAsTenant(person.id, () => next());
     }
     if (resolution && "unavailable" in resolution) {
       // The organization's sign-in server could not answer: transient, not a sign-out.

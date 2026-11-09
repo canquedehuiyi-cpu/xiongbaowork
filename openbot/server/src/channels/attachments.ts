@@ -27,13 +27,6 @@ import {
   intelligenceChannelMappings,
 } from "../db/schema";
 import { currentTenant, runAsTenant } from "../tenant/context";
-import {
-  classifyAttachment,
-  MAX_ATTACHMENTS_PER_MESSAGE,
-  MAX_FILE_BYTES,
-  MAX_IMAGE_BYTES,
-  namesNoFormat,
-} from "@openbot/shared/attachments";
 import { sniffMimeType } from "./attachment-mime";
 import type { StoredAttachment } from "./attachment-parts";
 

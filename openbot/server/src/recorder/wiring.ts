@@ -16,6 +16,7 @@ import type { Database } from "../db/client";
 import { users } from "../db/schema";
 import type { PersonalLearningSpaces } from "../learning/personal-space";
 import type { PeopleStore } from "../people/store";
+import { asPlatform } from "../tenant/context";
 import {
   createRecorderConnectionStore,
   type RecorderConnectionLifetime,
@@ -175,7 +176,7 @@ export function createRecorderExtension(deps: {
         .where(eq(users.id, userId))
         .limit(1)
     )[0] ?? null;
-  const resolve = createRecorderResolver({
+  const resolveUnframed = createRecorderResolver({
     connections,
     mode,
     user: userRow,
@@ -188,6 +189,16 @@ export function createRecorderExtension(deps: {
       );
     },
   });
+
+  /*
+   * Who a Recorder token is, asked before anybody is known: as `platform` (G01), like the request
+   * guard reads a session. What the Recorder then does runs in its person's frame (`requireRecorder`).
+   * A refusal is filed as nobody's, as `platform` too.
+   */
+  const resolve: RecorderResolver = (request) =>
+    asPlatform(() => resolveUnframed(request));
+  const recorderRefusals = createRecorderRefusalAudit(deps.auditStore);
+  const trajectoryRefusals = createTrajectoryRefusalAudit(deps.auditStore);
 
   // Sealed with when the cookie itself expires, which the connection made from it keeps and ends at.
   const sealOrganizationSession: RecorderExtensionDeps["sealOrganizationSession"] =
@@ -249,7 +260,7 @@ export function createRecorderExtension(deps: {
     },
     sealOrganizationSession,
     resolve,
-    onRefused: createRecorderRefusalAudit(deps.auditStore),
+    onRefused: (refusal) => asPlatform(() => recorderRefusals(refusal)),
     signOut: createRecorderSignOut({
       connections,
       auditStore: deps.auditStore,
@@ -258,7 +269,7 @@ export function createRecorderExtension(deps: {
       gate: createTrajectoryConnectHook({
         resolveRecorder: resolve,
         bind: trajectoryBindings.bind,
-        audit: createTrajectoryRefusalAudit(deps.auditStore),
+        audit: (refusal) => asPlatform(() => trajectoryRefusals(refusal)),
       }),
       selectLearningContainers: createTrajectoryLearningSelector({
         isBoundTo: trajectoryBindings.isBoundTo,

@@ -14,9 +14,8 @@
  * as nobody's (`system`, `platform`) is never named, and neither is one whose thread belongs to
  * somebody other than the tenant it is filed under.
  */
-import { and, asc, eq, isNull, notExists, notInArray, sql } from "drizzle-orm";
 import { readFiring } from "@openbot/shared/routine-firing";
-import { and, asc, eq, isNull, notExists, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, notExists, notInArray, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { NOBODY_TENANTS } from "../db/schema/tenant";
 import {

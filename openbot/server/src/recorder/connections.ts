@@ -31,6 +31,7 @@ import {
   recorderConnectCodes,
   recorderConnections,
 } from "../db/schema/recorder";
+import { asPlatform, runAsTenant } from "../tenant/context";
 
 /** A live connection's last use is written at most this often. */
 const LAST_USED_INTERVAL_MS = 60_000;
@@ -257,81 +258,106 @@ export function createRecorderConnectionStore(
       installId: string;
     }) {
       const at = now();
-      return database.transaction(async (transaction) => {
-        const [consumed] = await transaction
-          .delete(recorderConnectCodes)
+      /*
+       * WHOSE CODE THIS IS is asked before anybody is known (the extension presents only the code), so
+       * as `platform`; the connection is then made in the code's owner's frame, where its rows belong
+       * (G01). The transaction below consumes the code again in that frame, so a code another replica
+       * spent in between is still spent once.
+       */
+      const [owner] = await asPlatform(() =>
+        database
+          .select({ userId: recorderConnectCodes.userId })
+          .from(recorderConnectCodes)
           .where(
             and(
               eq(recorderConnectCodes.codeHash, digest(input.code)),
               gt(recorderConnectCodes.expiresAt, at),
             ),
           )
-          .returning();
-        if (!consumed) return null;
-        await lock(
-          transaction,
-          `recorder-install\u001f${consumed.userId}\u001f${input.installId}`,
-        );
-        const replaced = await transaction
-          .update(recorderConnections)
-          .set({
-            revokedAt: at,
-            organizationSession: null,
-            organizationSessionExpiresAt: null,
-          })
-          .where(
-            and(
-              eq(recorderConnections.userId, consumed.userId),
-              eq(recorderConnections.installId, input.installId),
-              isNull(recorderConnections.revokedAt),
-            ),
-          )
-          .returning({
-            id: recorderConnections.id,
-            userId: recorderConnections.userId,
-            via: recorderConnections.via,
-          });
-        const token = secretWithPrefix(RECORDER_TOKEN_PREFIX);
-        const [connection] = await transaction
-          .insert(recorderConnections)
-          .values({
-            id: randomUUID(),
+          .limit(1),
+      );
+      if (!owner) return null;
+      return runAsTenant(owner.userId, () =>
+        database.transaction(async (transaction) => {
+          const [consumed] = await transaction
+            .delete(recorderConnectCodes)
+            .where(
+              and(
+                eq(recorderConnectCodes.codeHash, digest(input.code)),
+                gt(recorderConnectCodes.expiresAt, at),
+              ),
+            )
+            .returning();
+          if (!consumed) return null;
+          await lock(
+            transaction,
+            `recorder-install\u001f${consumed.userId}\u001f${input.installId}`,
+          );
+          const replaced = await transaction
+            .update(recorderConnections)
+            .set({
+              revokedAt: at,
+              organizationSession: null,
+              organizationSessionExpiresAt: null,
+            })
+            .where(
+              and(
+                eq(recorderConnections.userId, consumed.userId),
+                eq(recorderConnections.installId, input.installId),
+                isNull(recorderConnections.revokedAt),
+              ),
+            )
+            .returning({
+              id: recorderConnections.id,
+              userId: recorderConnections.userId,
+              via: recorderConnections.via,
+            });
+          const token = secretWithPrefix(RECORDER_TOKEN_PREFIX);
+          const [connection] = await transaction
+            .insert(recorderConnections)
+            .values({
+              id: randomUUID(),
+              userId: consumed.userId,
+              tokenHash: digest(token),
+              label: input.label,
+              via: consumed.via,
+              extensionId: input.extensionId,
+              installId: input.installId,
+              organizationSession: consumed.organizationSession,
+              organizationSessionExpiresAt:
+                consumed.organizationSessionExpiresAt,
+              createdAt: at,
+            })
+            .returning();
+          if (!connection) throw new Error("The connection was not stored.");
+          const made = connectionView(connection);
+          if (auditFor) {
+            await recordAuditEvent(
+              auditFor(transaction as unknown as Database),
+              {
+                eventType: "recorder.connected",
+                targetType: "recorder_connection",
+                targetId: made.id,
+                actorUserId: consumed.userId,
+                payload: {
+                  connectionId: made.id,
+                  via: made.via,
+                  extensionId: made.extensionId,
+                  installId: made.installId,
+                  label: made.label,
+                },
+              },
+            );
+          }
+          await auditRevoked(transaction, replaced, "replaced");
+          return {
+            token,
+            connection: made,
             userId: consumed.userId,
-            tokenHash: digest(token),
-            label: input.label,
-            via: consumed.via,
-            extensionId: input.extensionId,
-            installId: input.installId,
-            organizationSession: consumed.organizationSession,
-            organizationSessionExpiresAt: consumed.organizationSessionExpiresAt,
-            createdAt: at,
-          })
-          .returning();
-        if (!connection) throw new Error("The connection was not stored.");
-        const made = connectionView(connection);
-        if (auditFor) {
-          await recordAuditEvent(auditFor(transaction as unknown as Database), {
-            eventType: "recorder.connected",
-            targetType: "recorder_connection",
-            targetId: made.id,
-            actorUserId: consumed.userId,
-            payload: {
-              connectionId: made.id,
-              via: made.via,
-              extensionId: made.extensionId,
-              installId: made.installId,
-              label: made.label,
-            },
-          });
-        }
-        await auditRevoked(transaction, replaced, "replaced");
-        return {
-          token,
-          connection: made,
-          userId: consumed.userId,
-          replaced: replaced[0]?.id ?? null,
-        };
-      });
+            replaced: replaced[0]?.id ?? null,
+          };
+        }),
+      );
     },
 
     /** Live connections only, oldest first. */
