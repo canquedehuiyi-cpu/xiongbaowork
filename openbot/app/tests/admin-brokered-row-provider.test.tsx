@@ -21,12 +21,10 @@ import type { PluginServer, PluginsPage } from "@/lib/plugins/queries";
 import { Route as AdminPluginRoute } from "@/routes/_authed/admin/plugins/$key";
 
 /**
- * The admin app-detail page's brokered row, on each broker (spec D11).
+ * The admin app-detail page's brokered row on a deployment with no Composio key (spec D11): the
+ * sentence is pinned as an exact string.
  *
- * The row is drawn by `BrokeredAccountRow`, which is told the provider by its caller.
- * The page already knows the provider, so it must tell the row — in both places it draws one (the
- * personal row and the Shared-mode team row). Arcade is scanned over text AND markup; Composio's
- * affected sentence is pinned as an exact string.
+ * 熊宝版只有 Composio 一个中转，也没有共享账号，所以上游按 Arcade、共享账号行和只能共享的应用写的用例不收。
  */
 
 beforeAll(() => GlobalRegistrator.register());
@@ -61,47 +59,35 @@ afterEach(() => {
   restoreRouteState(AdminPluginRoute, snapshot);
 });
 
-type Provider = "composio" | "arcade";
-
-function server(provider: Provider, shared: boolean): PluginServer {
+function server(): PluginServer {
   return {
     authScheme: "OAUTH2",
     id: APP,
     title: "Gmail",
     vendor: "Google",
-    url: provider === "arcade" ? "arcade://gmail" : "https://example.invalid",
+    url: "https://example.invalid",
     summary: "Mail.",
     docsUrl: "",
-    provenance: provider,
+    provenance: "composio",
     hasCredential: false,
     toolsRefreshedAt: null,
     lastError: null,
     addedBy: null,
     dynamicClient: false,
-    accountMode: shared ? "shared" : null,
-    sharedVendorConnected: false,
-    ownerGrants: shared ? "admin" : "any",
-    ownerGrantsChosen: null,
+    adminConnectOnly: false,
     tools: [],
     withdrawn: [],
   };
 }
 
-function install(setup: {
-  provider: Provider;
-  shared: boolean;
-  configured: boolean;
-  overrides?: Partial<PluginServer>;
-}) {
+function install(setup: { configured: boolean }) {
   const page: PluginsPage = {
     catalogue: [],
-    servers: [{ ...server(setup.provider, setup.shared), ...setup.overrides }],
+    servers: [server()],
     skills: [],
     botsMayCallBack: true,
     redirectUri: null,
     composioConfigured: setup.configured,
-    authorizesPerAction: setup.provider === "arcade",
-    provider: setup.provider,
   };
   const json = (body: unknown, status = 200) =>
     new Response(JSON.stringify(body), {
@@ -161,72 +147,13 @@ function renderScreen() {
   );
 }
 
-/** Every string the page puts in front of anyone: its text AND its markup, attributes included. */
-function everythingRendered(view: ReturnType<typeof render>): string {
-  return `${view.container.textContent ?? ""}\n${view.container.innerHTML}`;
-}
-
-/** Waits for the row only, whichever broker it names: the assertions below do the judging. */
-const WAIT_FOR_ROW = /^Set [A-Z]+_API_KEY on this deployment\./;
-
 const COMPOSIO_KEY_MISSING =
-  "Set COMPOSIO_API_KEY on this deployment. Until then, this account can't be connected or disconnected here. The app stays turned on, and its tool grants still stand.";
-const ARCADE_KEY_MISSING =
-  "Set ARCADE_API_KEY on this deployment. Until then, this account can't be connected or disconnected here. The app stays turned on, and its tool grants still stand.";
+  "请在这个部署上设置 COMPOSIO_API_KEY。没有它就连不到中转服务，所以这个账号在这里既连不上也断不开。应用仍保持启用，它工具上的授权也都还在。";
 
-for (const shared of [false, true]) {
-  const row = shared ? "team row" : "personal row";
-
-  test(`on an Arcade deployment the admin page's brokered ${row} says nothing of Composio`, async () => {
-    install({ provider: "arcade", shared, configured: false });
-    const view = renderScreen();
-    await view.findByText(WAIT_FOR_ROW);
-    const rendered = everythingRendered(view);
-    expect(rendered).not.toMatch(/composio/i);
-    expect(rendered).not.toContain("COMPOSIO_API_KEY");
-    expect(rendered).toContain(ARCADE_KEY_MISSING);
-  });
-
-  test(`on a Composio deployment the admin page's brokered ${row} renders its sentence verbatim`, async () => {
-    install({ provider: "composio", shared, configured: false });
-    const view = renderScreen();
-    await view.findByText(WAIT_FOR_ROW);
-    expect(view.container.textContent).toContain(COMPOSIO_KEY_MISSING);
-  });
-}
-
-/*
- * AN APP THAT CAN ONLY HOLD A SHARED ACCOUNT (it signs in with the deployment's own client) is
- * offered no personal Connect, and once Shared no way back to Personal. Read off `sharedOnly` on
- * the listing, never off the app's name; the server refuses a personal connect whatever is drawn.
- */
-const SHARED_ONLY = {
-  authScheme: "S2S_OAUTH2",
-  sharedOnly: true,
-  title: "Store",
-} as const;
-
-test("an app that can only hold a shared account offers no personal Connect, only the switch to shared", async () => {
-  install({
-    provider: "composio",
-    shared: false,
-    configured: true,
-    overrides: { ...SHARED_ONLY, accountMode: "personal" },
-  });
+test("on a Composio deployment with no key the admin page's brokered personal row renders its sentence verbatim", async () => {
+  install({ configured: false });
   const view = renderScreen();
-  await view.findByText(/connects only as one shared account/);
-  expect(view.queryByRole("button", { name: /^Connect/ })).toBeNull();
-  expect(view.getByRole("button", { name: "Make shared" })).toBeTruthy();
-});
-
-test("an app that can only hold a shared account, once shared, cannot be made personal", async () => {
-  install({
-    provider: "composio",
-    shared: true,
-    configured: true,
-    overrides: SHARED_ONLY,
-  });
-  const view = renderScreen();
-  await view.findByText(/so it can't be made personal/);
-  expect(view.queryByRole("button", { name: "Make personal" })).toBeNull();
+  expect((await view.findByText(COMPOSIO_KEY_MISSING)).textContent).toBe(
+    COMPOSIO_KEY_MISSING,
+  );
 });

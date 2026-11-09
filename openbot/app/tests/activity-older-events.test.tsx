@@ -10,15 +10,15 @@ import {
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import type { ComponentType } from "react";
 import { agentKeys } from "@/lib/agents/queries";
-import { deploymentKeys } from "@/lib/deployment/queries";
-import { pluginKeys } from "@/lib/plugins/queries";
-import { Route as ActivityRoute } from "@/routes/_authed/settings/_personal/activity";
+import { Route as AuditRoute } from "@/routes/_authed/admin/audit";
 import { settleReactWork } from "./settle-react-work";
 
 /*
- * FOUND ON A USED INSTALL (personal edition, 1.0 RC1 candidate, 298 events in the trail): Settings >
- * Activity showed the newest 50 events as "49 events", as if that were everything, with no way to
- * see an older one. The server answered `nextCursor` and the page never asked for it.
+ * FOUND ON A USED INSTALL (1.0 RC1 candidate, 298 events in the trail): the trail showed the newest
+ * 50 events as if that were everything, with no way to see an older one. The server answered
+ * `nextCursor` and the page never asked for it.
+ *
+ * 熊宝版没有个人版的「活动」页，审计记录在管理端 /admin/audit；分页（「更早的记录」）在那一页上测。
  */
 
 beforeAll(() => GlobalRegistrator.register());
@@ -72,7 +72,7 @@ function serve(url: URL) {
   return { events: Array.from({ length: 10 }, (_, i) => storedRow(i + 51)) };
 }
 
-test("Activity names what it shows as the newest events, and Show older events reaches the rest", async () => {
+test("the audit trail shows the newest page, and 更早的记录 reaches the rest", async () => {
   asked = [];
   globalThis.fetch = Object.assign(
     async (input: RequestInfo | URL) => {
@@ -90,22 +90,11 @@ test("Activity names what it shows as the newest events, and Show older events r
       queries: { retry: false, staleTime: Number.POSITIVE_INFINITY },
     },
   });
-  queryClient.setQueryData(deploymentKeys.capabilities(), {
-    generativeUi: true,
-    selfHostBanner: false,
-    localEvaluation: true,
-    edition: "personal",
-  });
-  queryClient.setQueryData(pluginKeys.page(), {
-    catalogue: [],
-    servers: [],
-    skills: [],
-  });
   queryClient.setQueryData(agentKeys.list(false), [
     { id: "personal-assistant", name: "Personal Assistant" },
   ]);
   queryClient.setQueryData(agentKeys.list(true), []);
-  const Page = ActivityRoute.options.component as ComponentType;
+  const Page = AuditRoute.options.component as ComponentType;
   const router = createRouter({
     routeTree: createRootRoute({ component: () => <Page /> }),
     history: createMemoryHistory({ initialEntries: ["/"] }),
@@ -116,28 +105,30 @@ test("Activity names what it shows as the newest events, and Show older events r
     </QueryClientProvider>,
   );
 
-  // The first page, and a count that does not pass itself off as the whole trail.
-  await view.findByText("最新的 50 条事件");
+  // The first page, and a way to ask for what is older.
+  await view.findByRole("button", { name: "更早的记录" });
+  expect(view.container.querySelectorAll("tbody tr").length).toBe(50);
   expect(view.container.textContent).toContain("Button 50");
   expect(view.container.textContent).not.toContain("Button 51");
 
-  fireEvent.click(view.getByRole("button", { name: "Show older events" }));
+  fireEvent.click(view.getByRole("button", { name: "更早的记录" }));
 
   // The older page, asked for with the same view and the server's cursor, under the newer rows.
-  await view.findByText("60 条事件");
-  expect(view.container.textContent).toContain("Button 60");
-  expect(view.container.querySelectorAll("tbody tr[data-outcome]").length).toBe(
-    60,
+  await waitFor(() =>
+    expect(view.container.querySelectorAll("tbody tr").length).toBe(60),
   );
+  expect(view.container.textContent).toContain("Button 60");
   expect(asked).toHaveLength(2);
   expect(asked[1]?.searchParams.get("cursor")).toBe(CURSOR);
-  expect(asked[1]?.searchParams.get("excludeEventType")).toBe(
-    asked[0]?.searchParams.get("excludeEventType") ?? "missing",
+  const withoutCursor = new URLSearchParams(asked[1]?.searchParams);
+  withoutCursor.delete("cursor");
+  expect(withoutCursor.toString()).toBe(
+    asked[0]?.searchParams.toString() ?? "missing",
   );
   // The last page has no cursor, so there is nothing older to offer.
   await waitFor(() =>
     expect(
-      view.queryByRole("button", { name: "Show older events" }),
+      view.queryByRole("button", { name: "更早的记录" }),
     ).toBeNull(),
   );
 });

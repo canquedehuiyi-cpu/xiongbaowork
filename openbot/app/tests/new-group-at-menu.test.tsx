@@ -182,7 +182,10 @@ const routeTree = rootRoute.addChildren([
   ]),
 ]);
 
-/** The personal edition. A new conversation starts with nobody in To:, so each test picks its Bots. */
+/**
+ * A new conversation starts with nobody in To:, so each test picks its Bot. This deployment's To:
+ * holds one Bot (a group starts from its own group pages), so `@` offers that one.
+ */
 function renderNewConversation(agents: AgentProfile[]) {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -194,7 +197,7 @@ function renderNewConversation(agents: AgentProfile[]) {
     generativeUi: true,
     selfHostBanner: false,
     localEvaluation: true,
-    edition: "personal",
+    edition: "team",
   } satisfies DeploymentCapabilities);
   const router = createRouter({
     routeTree,
@@ -220,14 +223,19 @@ async function addToTo(view: View, name: string) {
   fireEvent.click(
     await view.findByRole("option", { hidden: true, name: new RegExp(name) }),
   );
-  await view.findByRole("button", { hidden: true, name: `Remove ${name}` });
+  // The field shows the Bot it now holds.
+  await waitFor(() =>
+    expect(
+      view.getByRole<HTMLInputElement>("combobox", { hidden: true }).value,
+    ).toBe(name),
+  );
 }
 
 /** Type `@` in the composer and read the names the menu offers. */
 async function namesOfferedByAt(view: View): Promise<string[]> {
   const editor = await view.findByRole("textbox", {
     hidden: true,
-    name: "Message",
+    name: "消息",
   });
   const user = userEvent.setup({ document });
   await user.click(editor);
@@ -240,84 +248,6 @@ async function namesOfferedByAt(view: View): Promise<string[]> {
     (option) => option.textContent ?? "",
   );
 }
-
-test("@ in a new conversation with two Bots in To: offers both, and the first message goes to the one picked", async () => {
-  const view = renderNewConversation([CLAUDE, ASSISTANT]);
-  await addToTo(view, "Personal Assistant");
-  await addToTo(view, "Claude Agent SDK");
-
-  const offered = await namesOfferedByAt(view);
-  expect(offered).toEqual([
-    expect.stringContaining("Personal Assistant"),
-    expect.stringContaining("Claude Agent SDK"),
-  ]);
-  expect(offered.join()).not.toContain("No Bots in this conversation");
-
-  const user = userEvent.setup({ document });
-  await user.keyboard("Claude");
-  await user.click(
-    await view.findByRole("option", {
-      hidden: true,
-      name: /Claude Agent SDK/,
-    }),
-  );
-  await user.keyboard("hello{Enter}");
-
-  // The group is made with both Bots, and its first message is addressed to the one picked.
-  await waitFor(() => expect(sent).toHaveLength(2));
-  expect(sent[0]).toEqual({
-    method: "POST",
-    path: "/api/groups",
-    body: { agentIds: [ASSISTANT.id, CLAUDE.id] },
-  });
-  expect(sent[1]?.path).toBe("/api/groups/group-1");
-  expect(sent[1]?.body).toMatchObject({
-    agentId: CLAUDE.id,
-    text: "@Claude Agent SDK hello",
-  });
-  await waitFor(() =>
-    expect(view.router.state.location.pathname).toBe("/group/group-1"),
-  );
-});
-
-test("a first message to a new group with no @ still goes to every Bot", async () => {
-  const view = renderNewConversation([CLAUDE, ASSISTANT]);
-  await addToTo(view, "Personal Assistant");
-  await addToTo(view, "Claude Agent SDK");
-  const editor = await view.findByRole("textbox", {
-    hidden: true,
-    name: "Message",
-  });
-  const user = userEvent.setup({ document });
-  await user.click(editor);
-  await user.keyboard("hello both{Enter}");
-
-  await waitFor(() => expect(sent).toHaveLength(2));
-  expect(sent[1]?.body).toMatchObject({ agentId: null, text: "hello both" });
-});
-
-test("a Bot taken out of To: is no longer offered by @", async () => {
-  const view = renderNewConversation([CLAUDE, ASSISTANT]);
-  await addToTo(view, "Personal Assistant");
-  await addToTo(view, "Claude Agent SDK");
-  fireEvent.click(
-    view.getByRole("button", {
-      hidden: true,
-      name: "Remove Personal Assistant",
-    }),
-  );
-  await waitFor(() =>
-    expect(
-      view.queryByRole("button", {
-        hidden: true,
-        name: "Remove Personal Assistant",
-      }),
-    ).toBeNull(),
-  );
-
-  const offered = await namesOfferedByAt(view);
-  expect(offered).toEqual([expect.stringContaining("Claude Agent SDK")]);
-});
 
 test("a new conversation with its one Bot picked offers that Bot to @, and sends to it alone", async () => {
   const view = renderNewConversation([CLAUDE]);

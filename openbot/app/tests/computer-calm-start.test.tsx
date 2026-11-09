@@ -15,15 +15,15 @@ import { ComputerView } from "@/components/computer/computer-view";
 test("a call turned away by a computer still starting reads as not done yet, not as a failure", () => {
   const view = render(
     <ToolLine
-      label="Clicked"
-      detail="The computer is still starting."
+      label="点击了"
+      detail="电脑还在启动。"
       notYet
     />,
   );
-  const line = view.getByText("Clicked, not done yet");
+  const line = view.getByText("点击了，还没做");
   expect(line.closest(".text-amber-600")).toBeNull();
   expect(line.closest(".text-destructive")).toBeNull();
-  expect(view.queryByText(/didn't work/)).toBeNull();
+  expect(view.queryByText(/没有成功/)).toBeNull();
 });
 
 /**
@@ -151,7 +151,7 @@ test("a computer that is starting says so, calmly, and shows no problem", async 
 
   expect(
     await view.findByText(
-      "Starting Sales's computer. The first start takes about a minute.",
+      "正在启动Sales的电脑。第一次启动大约需要一分钟。",
     ),
   ).toBeDefined();
   expect(view.queryByText(/can't show the screen/i)).toBeNull();
@@ -178,7 +178,7 @@ test("failed screenshots during a start are not a problem until the grace runs o
     />,
   );
 
-  await view.findByText(/^Starting Sales's computer/);
+  await view.findByText(/^正在启动Sales的电脑/);
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 60));
   });
@@ -187,7 +187,7 @@ test("failed screenshots during a start are not a problem until the grace runs o
   // Past the grace, with still no frame, it is worth saying.
   expect(
     await view.findByText(
-      "Can't show the screen right now",
+      "现在看不到屏幕",
       {},
       { timeout: 1000 },
     ),
@@ -216,7 +216,7 @@ test("a computer the server cannot reach is a problem straight away", async () =
   );
 
   expect(
-    await view.findByText("Sales's computer can't be reached right now."),
+    await view.findByText("Sales的电脑暂时连不上。"),
   ).toBeDefined();
   // The provider's own words are for an admin, not this screen.
   expect(view.queryByText(/supervisor down/)).toBeNull();
@@ -240,7 +240,7 @@ test("a computer that is off, watched from the side panel, says it starts when t
 
   expect(
     await view.findByText(
-      "Sales's computer is off. It starts when the Bot next uses it.",
+      "Sales的电脑已关机。员工下次用到它时会自动启动。",
     ),
   ).toBeDefined();
   // Off is not stalled: waiting past the grace still shows no problem.
@@ -260,8 +260,8 @@ test("a live stream that drops shows a quiet badge, not the Retry panel", async 
   const view = renderWithQueries(
     <ComputerView active computerId="sales" intervalMs={10} name="Sales" />,
   );
-  await view.findByAltText("What the Bot is looking at");
-  fireEvent.click(view.getByLabelText("Open the Bot's screen full size"));
+  await view.findByAltText("员工正在看的内容");
+  fireEvent.click(view.getByLabelText("全屏打开员工的屏幕"));
   await waitFor(() => expect(SocketDouble.all.length).toBe(1));
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -272,7 +272,7 @@ test("a live stream that drops shows a quiet badge, not the Retry panel", async 
   });
 
   expect(view.getByText("正在重新连接…")).toBeDefined();
-  expect(view.queryByText("Retry")).toBeNull();
+  expect(view.queryByText("重试")).toBeNull();
 });
 
 test("a computer that was off and then fails is not called off for ever", async () => {
@@ -301,7 +301,7 @@ test("a computer that was off and then fails is not called off for ever", async 
 
   expect(
     await view.findByText(
-      "Can't show the screen right now",
+      "现在看不到屏幕",
       {},
       { timeout: 1000 },
     ),
@@ -323,13 +323,13 @@ test("a computer that goes to sleep stops showing its last frame", async () => {
     <ComputerView active computerId="sales" intervalMs={10} name="Sales" />,
   );
 
-  await view.findByAltText("What the Bot is looking at");
+  await view.findByAltText("员工正在看的内容");
   await waitFor(() => {
     expect(
       view.getByText(
-        "Sales's computer is off. It starts when the Bot next uses it.",
+        "Sales的电脑已关机。员工下次用到它时会自动启动。",
       ),
     ).toBeDefined();
-    expect(view.queryByAltText("What the Bot is looking at")).toBeNull();
+    expect(view.queryByAltText("员工正在看的内容")).toBeNull();
   });
 });

@@ -34,10 +34,9 @@ import { settleReactWork } from "./settle-react-work";
 
 /*
  * Settings > Components gallery is a page anybody can open, so it speaks to a person. Seen on
- * Windows, personal edition: the Activity report card read "Show what this deployment has actually
- * been doing, read from its own records rather than from anything you know", which is what the model
- * is told, and the intro said an admin controls which components each Bot can use, where there is no
- * admin. Every card now shows its summary; the team edition keeps its admin.
+ * Windows: the Activity report card read "Show what this deployment has actually been doing, read
+ * from its own records rather than from anything you know", which is what the model is told. Every
+ * card now shows its summary; the team edition keeps its admin.
  */
 
 beforeAll(() => GlobalRegistrator.register({ url: "http://127.0.0.1/" }));
@@ -146,32 +145,15 @@ function draw(
   return { view, restore: () => useParams.mockRestore() };
 }
 
-const PERSONAL_INTRO =
-  "Browse the components your Bots can show in conversations. Every Bot can use all of them.";
+/*
+ * 熊宝中文版只有团队版：个人版（以及它不提管理员的说法）有意不收，只留团队版的说明。
+ */
 const TEAM_INTRO =
-  "Browse components that Bots can display in conversations. An admin controls which components each Bot can use.";
+  "员工可以在对话里直接画出来、代替大段文字描述的组件。某位员工能用哪些，由管理员决定。";
+const ACTIVITY_SUMMARY =
+  "从本部署自己的记录里读出员工们都做了什么、有哪些被拒绝了。";
 
-test("the personal gallery says what each component shows, not what the model is told", async () => {
-  const { view, restore } = draw("personal", "/settings/components-gallery");
-  try {
-    expect(await view.findByText(PERSONAL_INTRO)).toBeTruthy();
-    for (const spec of ALL) {
-      const card = view.getByTestId(`gallery-${spec.name}`);
-      expect(card.textContent).toContain(spec.summary);
-      expect(card.textContent).not.toContain(spec.description);
-    }
-    const text = view.container.textContent ?? "";
-    expect(text).toContain(
-      "Shows what your Bots have been doing and what was refused, read from OpenBot's own records.",
-    );
-    expect(text).not.toContain("deployment");
-    expect(text).not.toMatch(/\badmin/i);
-  } finally {
-    restore();
-  }
-});
-
-test("the team gallery keeps its admin and shows the same summaries", async () => {
+test("the team gallery keeps its admin and says what each component shows, not what the model is told", async () => {
   const { view, restore } = draw("team", "/settings/components-gallery");
   try {
     expect(await view.findByText(TEAM_INTRO)).toBeTruthy();
@@ -180,45 +162,35 @@ test("the team gallery keeps its admin and shows the same summaries", async () =
       expect(card.textContent).toContain(spec.summary);
       expect(card.textContent).not.toContain(spec.description);
     }
-    expect(view.container.textContent).not.toContain("deployment");
+    const text = view.container.textContent ?? "";
+    expect(text).toContain(ACTIVITY_SUMMARY);
+    expect(text).not.toContain("deployment");
   } finally {
     restore();
   }
 });
 
-test("an empty personal gallery does not wait on an admin", async () => {
+test("an empty gallery says nothing has been published yet", async () => {
+  const { view, restore } = draw("team", "/settings/components-gallery", []);
+  try {
+    expect(await view.findByText("还没有发布任何组件")).toBeTruthy();
+  } finally {
+    restore();
+  }
+});
+
+test("one component's page says what it shows", async () => {
   const { view, restore } = draw(
-    "personal",
-    "/settings/components-gallery",
-    [],
+    "team",
+    "/settings/components-gallery/showActivityReport",
   );
   try {
-    expect(await view.findByText("No components yet")).toBeTruthy();
-    expect(view.container.textContent).not.toMatch(/\badmin/i);
+    expect(await view.findByText(ACTIVITY_SUMMARY)).toBeTruthy();
+    const text = view.container.textContent ?? "";
+    expect(text).not.toContain("deployment");
+    expect(text).not.toContain("you will not see them");
   } finally {
     restore();
-  }
-});
-
-test("one component's page says what it shows, in either edition", async () => {
-  for (const edition of ["personal", "team"] as const) {
-    const { view, restore } = draw(
-      edition,
-      "/settings/components-gallery/showActivityReport",
-    );
-    try {
-      expect(
-        await view.findByText(
-          "Shows what your Bots have been doing and what was refused, read from OpenBot's own records.",
-        ),
-      ).toBeTruthy();
-      const text = view.container.textContent ?? "";
-      expect(text).not.toContain("deployment");
-      expect(text).not.toContain("you will not see them");
-    } finally {
-      restore();
-      cleanup();
-    }
   }
 });
 

@@ -19,7 +19,6 @@ import {
 import type { ReactNode } from "react";
 import { AccessRequestsSection } from "@/components/plugins/access-requests";
 import type { AppAccessRequest } from "@/lib/app-access/queries";
-import { Route as PluginsIndexRoute } from "@/routes/_authed/admin/plugins/index";
 import { settleReactWork } from "./settle-react-work";
 
 /**
@@ -100,6 +99,7 @@ function serving(options: {
             title: "Gmail",
             summary: "Mail.",
             tools: [],
+            withdrawn: [],
             lastError: null,
           },
           {
@@ -107,6 +107,7 @@ function serving(options: {
             title: "Notion",
             summary: "Docs.",
             tools: [],
+            withdrawn: [],
             lastError: null,
           },
         ],
@@ -288,28 +289,4 @@ test("nothing waiting draws no section at all", async () => {
   );
   await settleReactWork();
   expect(view.queryByText("申请")).toBeNull();
-});
-
-test("the Plugins list puts every request first and counts them on each app's row", async () => {
-  serving({
-    requests: [
-      request(),
-      request({ id: "req_2", kind: "enable" }),
-      // An app with no row of its own: its request is still listed, at the top.
-      request({
-        id: "req_3",
-        appKey: "composio-slack",
-        appTitle: "Slack",
-        kind: "enable",
-      }),
-    ],
-  });
-  const Page = PluginsIndexRoute.options.component as () => ReactNode;
-  const view = draw(Page);
-  expect(await view.findByText("申请")).toBeTruthy();
-  expect(view.getByText("为Expenses打开 Slack")).toBeTruthy();
-  const gmail = within(await view.findByTestId("plugin-composio-gmail"));
-  expect(gmail.getByText("2 requests")).toBeTruthy();
-  const notion = within(view.getByTestId("plugin-notion"));
-  expect(notion.queryByText(/request/)).toBeNull();
 });

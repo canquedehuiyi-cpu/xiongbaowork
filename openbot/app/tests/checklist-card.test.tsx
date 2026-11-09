@@ -30,7 +30,7 @@ test("a finished item reads as done, never as crossed out", () => {
   expect(view.container.querySelector(".line-through")).toBeNull();
   for (const item of FIXES.items) {
     const row = view.getByText(item.text).closest("li");
-    expect(row?.textContent).toContain(item.done ? "Done" : "To do");
+    expect(row?.textContent).toContain(item.done ? "已完成" : "待办");
   }
   expect(view.getByText("2 of 3")).toBeDefined();
 });

@@ -123,7 +123,8 @@ beforeAll(() => {
         trail.push("create");
         return NativeResponse.json({ channel }, { status: 201 });
       }
-      if (url.pathname === "/api/models") return NativeResponse.json(catalogue);
+      if (url.pathname === "/api/model-catalogue")
+        return NativeResponse.json(catalogue);
       if (url.pathname === `/api/channels/${channel.id}/model`) {
         if (method === "PUT") {
           const pick = JSON.parse(String(init?.body)) as ConversationModel;
@@ -297,7 +298,7 @@ test("a model and effort picked before the first message are both saved before i
   // Nothing is saved while the conversation does not exist.
   expect(trail).toEqual([]);
 
-  const editor = await view.findByRole("textbox", { name: "Message" });
+  const editor = await view.findByRole("textbox", { name: "消息" });
   await user.click(editor);
   await user.keyboard("Summarise the quarter.{Enter}");
 

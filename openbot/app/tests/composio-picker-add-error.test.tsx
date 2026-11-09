@@ -187,9 +187,9 @@ test("an add that fails while a second one is pressed still says what went wrong
   const view = renderPicker();
 
   // Both rows, in the order the screen sorts them: Gmail then Slack.
-  // `directory-…`, not `composio-…`: one provider-blind screen draws both brokers' directories.
-  const slackRow = await view.findByTestId("directory-slack");
-  const gmailRow = await view.findByTestId("directory-gmail");
+  // `composio-…`: 熊宝中文版的目录页只服务 Composio（上游与 Arcade 共用的目录页不收）。
+  const slackRow = await view.findByTestId("composio-slack");
+  const gmailRow = await view.findByTestId("composio-gmail");
 
   // The press that will fail, held open by the stub.
   await userEvent.click(

@@ -246,7 +246,7 @@ test("the first message of a new conversation carries its skill, as the next one
   );
 
   const user = userEvent.setup({ document });
-  const editor = await view.findByRole("textbox", { name: "Message" });
+  const editor = await view.findByRole("textbox", { name: "消息" });
   await waitFor(() =>
     expect(editor.getAttribute("aria-disabled")).not.toBe("true"),
   );

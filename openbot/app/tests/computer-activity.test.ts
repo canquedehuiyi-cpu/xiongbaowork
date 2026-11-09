@@ -358,7 +358,7 @@ describe("reading a conversation's computer calls", () => {
         did: {
           kind: "command",
           subject: "rm -f notes.md",
-          output: "You declined it.",
+          output: "你拒绝了这一步。",
           refused: true,
           declined: true,
         },

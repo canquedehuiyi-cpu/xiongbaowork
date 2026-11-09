@@ -34,9 +34,6 @@ mock.module("@/lib/marks", () => ({ markFor: vendoredMarkFor }));
 const { allowedSummary } = await import(
   "@/components/admin/controls/model-sections"
 );
-const { Route: EnterpriseRoute } = await import(
-  "@/routes/_authed/admin/enterprise"
-);
 const { PermissionsPage } = await import("@/routes/_authed/admin/permissions");
 const { ProvidersPage } = await import("@/routes/_authed/admin/providers");
 
@@ -98,7 +95,7 @@ function serving() {
         otel: { configured: false },
         actionRecordRetentionDays: 90,
       });
-    if (path === "/api/models/available")
+    if (path === "/api/model-catalogue/available")
       return Response.json({
         provider: "openai",
         source,
@@ -245,9 +242,9 @@ test("the allowlist is picked from the provider's models, and takes one it doesn
 
   // Every listed model is offered, with the deployment's own marked and how each thinks.
   await waitFor(() => expect(dialog.textContent).toContain("GPT-6 Sol"));
-  expect(dialog.textContent).toContain("openai/gpt-5.6-terra · default");
+  expect(dialog.textContent).toContain("openai/gpt-5.6-terra · 默认");
   expect(dialog.textContent).toContain(
-    "openai/gpt-6-sol · Thinking: Low, Medium, High",
+    "openai/gpt-6-sol · 思考强度：低、中、高",
   );
   // The maker's mark, as the composer's picker draws it.
   expect(dialog.querySelector('img[data-mark="GPT-6 Sol"]')).toBeTruthy();
@@ -327,18 +324,6 @@ test("the allowed-models row names the first few models", () => {
   expect(
     allowedSummary(["openai/a", "openai/b", "openai/c", "openai/d", "x/e"]),
   ).toBe("openai/a、openai/b、openai/c等另外 2 个");
-});
-
-test("an old link to Enterprise controls opens the Admin overview", () => {
-  let thrown: unknown;
-  try {
-    (EnterpriseRoute.options.beforeLoad as unknown as () => void)();
-  } catch (error) {
-    thrown = error;
-  }
-  expect(
-    (thrown as { options?: { to?: string } } | undefined)?.options?.to,
-  ).toBe("/admin");
 });
 
 test("cancelling allowlist edits restores the saved choices when reopened", async () => {

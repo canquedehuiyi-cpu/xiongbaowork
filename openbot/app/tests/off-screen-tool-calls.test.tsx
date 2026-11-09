@@ -510,10 +510,10 @@ async function leaveBeforeTheCall(
   const view = render(app("conversation"));
   const user = userEvent.setup({ document: view.container.ownerDocument });
   await user.type(
-    await view.findByRole("textbox", { name: "Message" }),
+    await view.findByRole("textbox", { name: "消息" }),
     "Pull up Northwind",
   );
-  await user.click(view.getByRole("button", { name: "Send message" }));
+  await user.click(view.getByRole("button", { name: "发送消息" }));
   await waitFor(() => expect(runs).toHaveLength(1), { timeout: 5000 });
   const agent = core?.getAgent(`channel:${channel.id}`);
 
@@ -521,7 +521,7 @@ async function leaveBeforeTheCall(
   if (place === "elsewhere") await view.findByText("Settings");
   else
     await waitFor(() =>
-      expect(view.queryByRole("textbox", { name: "Message" })).toBeTruthy(),
+      expect(view.queryByRole("textbox", { name: "消息" })).toBeTruthy(),
     );
   await meanwhile(view);
   const before = runs.length;
@@ -702,10 +702,10 @@ test("a Bot's first run, started while another Bot's turn is still going, is off
   await leaveBeforeTheCall("another Bot", async (view) => {
     const user = userEvent.setup({ document: view.container.ownerDocument });
     await user.type(
-      await view.findByRole("textbox", { name: "Message" }),
+      await view.findByRole("textbox", { name: "消息" }),
       "What changed today?",
     );
-    await user.click(view.getByRole("button", { name: "Send message" }));
+    await user.click(view.getByRole("button", { name: "发送消息" }));
     await waitFor(() =>
       expect(runs.some((run) => run.threadId === otherChannel.threadId)).toBe(
         true,

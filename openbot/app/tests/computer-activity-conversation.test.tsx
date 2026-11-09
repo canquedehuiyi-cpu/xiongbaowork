@@ -461,8 +461,8 @@ function entries(view: ReturnType<typeof render>): string[] {
 
 async function ask(view: ReturnType<typeof render>, text: string) {
   const user = userEvent.setup({ document: view.container.ownerDocument });
-  await user.type(await view.findByRole("textbox", { name: "Message" }), text);
-  await user.click(view.getByRole("button", { name: "Send message" }));
+  await user.type(await view.findByRole("textbox", { name: "消息" }), text);
+  await user.click(view.getByRole("button", { name: "发送消息" }));
   return user;
 }
 
@@ -499,7 +499,7 @@ test("a command the gate runs at once shows in Activity with what it printed and
   const view = render(app());
   expect(
     await activityOf(view).findByText(
-      "Nothing yet. Commands the Bot runs and files it reads appear here.",
+      "还没有。员工执行的命令和读取的文件会实时出现在这里。",
     ),
   ).toBeTruthy();
 
@@ -528,7 +528,7 @@ test("a command the gate runs at once shows in Activity with what it printed and
     pane.getByText("ls: cannot access '/nope': No such file or directory"),
   ).toBeTruthy();
   // How it exited, as the terminal block's status.
-  expect(pane.getByText("Exit 2")).toBeTruthy();
+  expect(pane.getByText("退出码 2")).toBeTruthy();
   // Newest first, each once, though the conversation redrew on every streamed word after them.
   const [newest, oldest] = entries(view);
   expect(newest).toContain("ls /nope");
@@ -594,11 +594,11 @@ test("a command that waits for approval shows once the person allows it and its 
 
   // Waiting on the person: nothing has run, so nothing is in Activity.
   await user.click(
-    await view.findByRole("button", { name: "Allow once" }, { timeout: 5000 }),
+    await view.findByRole("button", { name: "允许一次" }, { timeout: 5000 }),
   );
   expect(
     activityOf(view).getByText(
-      "Nothing yet. Commands the Bot runs and files it reads appear here.",
+      "还没有。员工执行的命令和读取的文件会实时出现在这里。",
     ),
   ).toBeTruthy();
 
@@ -684,9 +684,9 @@ test("a command the person declines shows as declined in their words, not in the
 
   // Pick Deny, then send it: the button is named for the answer picked.
   await user.click(
-    await view.findByRole("radio", { name: "Deny" }, { timeout: 5000 }),
+    await view.findByRole("radio", { name: "拒绝" }, { timeout: 5000 }),
   );
-  await user.click(view.getByRole("button", { name: "Deny" }));
+  await user.click(view.getByRole("button", { name: "拒绝" }));
   act(() => {
     queryClient.setQueryData<InfiniteData<ChannelPage>>(
       channelKeys.list(),
@@ -708,12 +708,12 @@ test("a command the person declines shows as declined in their words, not in the
   expect(
     await pane.findByText("rm -rf build", {}, { timeout: 3000 }),
   ).toBeTruthy();
-  expect(pane.getByText("You declined it.")).toBeTruthy();
+  expect(pane.getByText("你拒绝了这一步。")).toBeTruthy();
   // Said as declined, not as what it would have done: "Ran" read as if it had run.
   const [declinedEntry] = entries(view);
   if (declinedEntry === undefined)
     throw new Error("The declined command was not listed.");
-  expect(declinedEntry.startsWith("Declined")).toBe(true);
+  expect(declinedEntry.startsWith("已拒绝")).toBe(true);
   // The sentence written to the model never reaches the person, in the pane or in the transcript.
   expect(view.container.textContent).not.toContain("Do not try this action");
   expect(entries(view)).toHaveLength(1);
@@ -723,11 +723,11 @@ test("a command the person declines shows as declined in their words, not in the
    * and said "Ran a command  rm -rf build ▸ It printed nothing." beside a pane saying it was declined.
    */
   const line = transcriptLines(view).find((text) =>
-    text.includes("Ran a command"),
+    text.includes("执行了命令"),
   );
-  expect(line).toContain("Declined");
-  expect(line).toContain("You declined it.");
-  expect(view.container.textContent).not.toContain("It printed nothing.");
+  expect(line).toContain("已拒绝");
+  expect(line).toContain("你拒绝了这一步。");
+  expect(view.container.textContent).not.toMatch(/没有(任何)?输出/);
 });
 
 test("a command the person did themselves shows as done by them, not as refused, in the transcript and in Activity", async () => {
@@ -794,7 +794,7 @@ test("a command the person did themselves shows as done by them, not as refused,
   await user.click(
     await view.findByRole(
       "button",
-      { name: "I did it myself" },
+      { name: "我自己做了" },
       { timeout: 5000 },
     ),
   );
@@ -817,7 +817,7 @@ test("a command the person did themselves shows as done by them, not as refused,
 
   const pane = activityOf(view);
   expect(await pane.findByText("passwd", {}, { timeout: 3000 })).toBeTruthy();
-  expect(pane.getByText("You did it yourself.")).toBeTruthy();
+  expect(pane.getByText("你自己完成了这一步。")).toBeTruthy();
   expect(entries(view)).toHaveLength(1);
   // Done, so nothing in the entry is drawn as a refusal or a failure.
   expect(
@@ -827,13 +827,13 @@ test("a command the person did themselves shows as done by them, not as refused,
   ).toHaveLength(0);
 
   const line = transcriptLines(view).find((text) =>
-    text.includes("Ran a command"),
+    text.includes("执行了命令"),
   );
-  expect(line).toContain("Done by you");
+  expect(line).toContain("你自己做了");
   expect(line).toContain("passwd");
-  expect(line).not.toContain("Blocked");
+  expect(line).not.toContain("已拦下");
   // Nothing ran on the computer, so nothing claims it printed nothing.
-  expect(view.container.textContent).not.toContain("It printed nothing.");
+  expect(view.container.textContent).not.toMatch(/没有(任何)?输出/);
   // The sentence written to the model never reaches the person.
   expect(view.container.textContent).not.toContain("Do not repeat it");
 });
@@ -871,11 +871,11 @@ test("a file the Bot saves shows its path and size, never its contents, beside a
   // The save went through the gate; the read, which changes nothing, straight to the computer.
   expect(gated.map((step) => step.toolName)).toEqual(["computer_write_file"]);
   expect(direct).toContain("/files/read");
-  expect(saved).toContain("Saved");
+  expect(saved).toContain("保存了");
   expect(saved).toContain("notes.md");
   expect(saved).toContain("9 bytes");
   expect(saved).not.toContain("Buy milk");
-  expect(read).toContain("Read");
+  expect(read).toContain("读取了");
   expect(read).toContain("Buy milk");
 });
 
@@ -974,12 +974,12 @@ test("a command the person declines on the Bot's own approval card is listed onc
   expect(
     await pane.findByText("rm -f notes.md", {}, { timeout: 3000 }),
   ).toBeTruthy();
-  expect(pane.getByText("You declined it.")).toBeTruthy();
+  expect(pane.getByText("你拒绝了这一步。")).toBeTruthy();
   // Said as declined, not as what it would have done: "Ran" read as if it had run.
   const [declinedEntry] = entries(view);
   if (declinedEntry === undefined)
     throw new Error("The declined command was not listed.");
-  expect(declinedEntry.startsWith("Declined")).toBe(true);
+  expect(declinedEntry.startsWith("已拒绝")).toBe(true);
   expect(entries(view)).toHaveLength(1);
   // Declined here, so it says when.
   expect(
@@ -990,8 +990,8 @@ test("a command the person declines on the Bot's own approval card is listed onc
   expect(direct.filter((route) => route === "/exec")).toEqual([]);
   // The card says the same: declined, the command shown once. Activity's terminal block says it in its
   // header and its status, so the word appears three times: once on the card and twice in the pane.
-  expect(view.getAllByText("Declined")).toHaveLength(3);
-  expect(activityOf(view).getAllByText("Declined")).toHaveLength(2);
+  expect(view.getAllByText("已拒绝")).toHaveLength(3);
+  expect(activityOf(view).getAllByText("已拒绝")).toHaveLength(2);
   // The card's own command line, not the inline code the Bot wrote into its summary, which the card
   // now draws as markdown the way a reply would.
   const commandLines = (root: Element) =>
@@ -1038,7 +1038,7 @@ test("a command allowed on the Bot's own approval card is listed once, as the co
   // Once: the card is not a second entry for the command it allowed.
   expect(entries(view)).toHaveLength(1);
   expect(entries(view)[0]).toContain("rm -f notes.md");
-  expect(view.container.textContent).not.toContain("You declined it.");
+  expect(view.container.textContent).not.toContain("你拒绝了这一步。");
   expect(gated.map((step) => step.args.command)).toEqual(["rm -f notes.md"]);
 });
 
@@ -1064,12 +1064,12 @@ test("reopened, a command declined on an approval card is still listed, once, wi
   expect(
     await pane.findByText("rm -f notes.md", {}, { timeout: 5000 }),
   ).toBeTruthy();
-  expect(pane.getByText("You declined it.")).toBeTruthy();
+  expect(pane.getByText("你拒绝了这一步。")).toBeTruthy();
   // Said as declined, not as what it would have done: "Ran" read as if it had run.
   const [declinedEntry] = entries(view);
   if (declinedEntry === undefined)
     throw new Error("The declined command was not listed.");
-  expect(declinedEntry.startsWith("Declined")).toBe(true);
+  expect(declinedEntry.startsWith("已拒绝")).toBe(true);
   expect(entries(view)).toHaveLength(1);
   expect(
     view.getByRole("region", { name: "Activity" }).querySelectorAll("time"),
@@ -1239,7 +1239,7 @@ test("a step held for the person before a reload, allowed on the opened page, sa
   const view = render(app());
   const user = userEvent.setup({ document: view.container.ownerDocument });
   await user.click(
-    await view.findByRole("button", { name: "Allow once" }, { timeout: 5000 }),
+    await view.findByRole("button", { name: "允许一次" }, { timeout: 5000 }),
   );
   act(() => {
     queryClient.setQueryData<InfiniteData<ChannelPage>>(
@@ -1325,9 +1325,9 @@ test("a file save the person declines says what was tried, live and when opened 
   const view = render(app());
   const user = await ask(view, "Save notes.txt for me.");
   await user.click(
-    await view.findByRole("radio", { name: "Deny" }, { timeout: 5000 }),
+    await view.findByRole("radio", { name: "拒绝" }, { timeout: 5000 }),
   );
-  await user.click(view.getByRole("button", { name: "Deny" }));
+  await user.click(view.getByRole("button", { name: "拒绝" }));
   act(() => {
     queryClient.setQueryData<InfiniteData<ChannelPage>>(
       channelKeys.list(),
@@ -1348,7 +1348,7 @@ test("a file save the person declines says what was tried, live and when opened 
   // Live: what was tried, what it was aimed at, and why it did not happen. Never "Saved a file".
   await waitFor(() =>
     expect(saveLine(view)).toBe(
-      "Blocked: Save a filenotes.txt · You declined it.",
+      "已拦截：保存文件notes.txt · 你拒绝了这一步。",
     ),
   );
 
@@ -1370,7 +1370,7 @@ test("a file save the person declines says what was tried, live and when opened 
       ),
   ).toBe(false);
   expect(saveLine(view)).toBe(
-    "Blocked: Save a filenotes.txt · You declined it.",
+    "已拦截：保存文件notes.txt · 你拒绝了这一步。",
   );
   cleanup();
 
@@ -1381,7 +1381,7 @@ test("a file save the person declines says what was tried, live and when opened 
   ).toBeTruthy();
   await waitFor(() =>
     expect(saveLine(again)).toBe(
-      "Blocked: Save a filenotes.txt · You declined it.",
+      "已拦截：保存文件notes.txt · 你拒绝了这一步。",
     ),
   );
 });
