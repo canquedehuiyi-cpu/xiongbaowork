@@ -50,6 +50,20 @@ if [ -n "${COMPUTER_SHELL_ENV:-}" ]; then
   IFS=$oldifs
 fi
 
+# NO EMPLOYEE PROCESS OUTLIVES THE COMPUTER. An employee (uid 20000-59999, xb-bot) can leave a
+# process outside its command's group with setsid. While the computer is down, such a process could
+# take port 4100 first, or read the argv below, and catch COMPUTER_TOKEN. So every employee process
+# is ended here, as root, before the computer (re)starts; nothing can start one again until it is up,
+# because only the computer asks the helper to run a command.
+n=0
+while [ "$n" -lt 10 ]; do
+  pids=$(ps -e -o pid= -o ruid= -o stat= | awk '$2 >= 20000 && $2 <= 59999 && $3 !~ /^Z/ { print $1 }')
+  [ -n "$pids" ] || break
+  # shellcheck disable=SC2086
+  kill -s KILL $pids 2>/dev/null || true
+  n=$((n + 1))
+done
+
 exec s6-setuidgid pwuser env -i "$@" \
   HOME=/home/pwuser PORT=4100 WORKSPACE_DIR=/workspace PROFILES_DIR="${PROFILES_DIR:-/profiles}" \
   /usr/local/bin/bun src/index.ts

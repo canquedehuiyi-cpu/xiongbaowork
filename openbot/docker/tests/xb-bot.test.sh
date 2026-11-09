@@ -105,6 +105,15 @@ cat /tmp/a-group.txt
 ' && fail "B read A's group-readable file in /tmp: $(cat "$T/out")"
 pass "B cannot read A's group-readable file in /tmp"
 
+# A file A creates outside its directory with no chmod at all (umask 077) is not B's to read.
+as "$A" 10 '
+echo umask-private > /tmp/a-umask.txt
+' || fail "A could not write /tmp/a-umask.txt"
+as "$B" 10 '
+cat /tmp/a-umask.txt
+' && fail "B read A's /tmp/a-umask.txt, created with A's default umask: $(cat "$T/out")"
+pass "B cannot read what A writes to /tmp with its default umask"
+
 # Employees may not install system packages; pwuser (the default employee) still may.
 as "$A" 10 '
 sudo -n apt-get --version
