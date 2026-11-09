@@ -88,6 +88,7 @@ import {
   type CatalogueEntry,
   type CredentialPlacement,
   catalogueEntry,
+  checkInRead,
   classifyTool,
   credentialFormatRefusal,
   credentialPlacement,
@@ -159,6 +160,12 @@ export type ToolRecord = {
    * of a claim rather than a claim of safety.
    */
   destructive: boolean;
+  /**
+   * 无人值守的 check-in 能不能把它当读来调用：厂商记录为读，或目录 `readTools` 审查过，见
+   * {@link checkInRead}。`effect` 是聊天的判定，可能是 {@link classifyTool} 推断出来的读，所以
+   * check-in 的读集合（`proactive/restriction.ts`）看的是这个字段，不是 `effect`。
+   */
+  checkInRead: boolean;
   grantedTo: string[];
 };
 
@@ -5498,6 +5505,7 @@ export function createPluginStore(options: PluginStoreOptions) {
                 ref,
                 effect: classifyTool(entry, tool.name, true, tool.effect),
                 destructive: tool.destructive,
+                checkInRead: checkInRead(entry, tool.name, tool),
                 grantedTo: grants.get(ref) ?? [],
               };
             }),
@@ -9014,14 +9022,16 @@ export function createPluginStore(options: PluginStoreOptions) {
        * check-in reaching a tool by any other route is refused before the policy, the vault or the
        * vendor. A read here is the one `createReadOnlyClassifier` counts: advertised, classified a
        * read, not destructive, and not an action the broker said nothing about (`unclassified`).
+       *
+       * 而且必须有人作证：厂商记录为读，或目录 `readTools` 审查过（{@link checkInRead}）。
+       * `classifyTool` 对没有任何标签的工具推断出的读，在这里不算。
        */
       if (
         isProactiveInitiator(input.initiator) &&
         !(
           advertised[0] &&
           effect === "read" &&
-          advertised[0].destructive !== true &&
-          advertised[0].unclassified !== true
+          checkInRead(entry, toolName, advertised[0])
         )
       ) {
         await recordAuditEvent(auditStore, {

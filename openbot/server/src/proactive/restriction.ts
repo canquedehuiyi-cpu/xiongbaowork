@@ -3,6 +3,8 @@
  *
  * A proactive run is a Bot looking through a person's apps while nobody is watching. It may read:
  * connected-app actions its catalogue marks `read` and not destructive, and the person's own memory.
+ * 而且这个「读」必须有人作证：厂商列出时记录为读，或目录 `readTools` 审查过（见 plugins/catalogue.ts
+ * 的 `checkInRead`）。聊天里 `classifyTool` 对没有标签的工具推断出的读，在这里不算。
  * It may not write to an app, send a message, hand work to another Bot or person, or drive a browser
  * or the computer. That is decided here, by the deployment, and never by telling the model.
  *
@@ -45,7 +47,16 @@ type CatalogueReader = {
     {
       id: string;
       title: string;
-      tools: { ref: string; effect: string; destructive: boolean }[];
+      tools: {
+        ref: string;
+        effect: string;
+        destructive: boolean;
+        /**
+         * check-in 能否依赖它是读，插件 store 对每个工具都给出（`ToolRecord.checkInRead`）。为 false
+         * 时，即使 `effect` 是 read（聊天里推断出来的读）也不算。类型上必填，src 里的读者都得给。
+         */
+        checkInRead: boolean;
+      }[];
     }[]
   >;
 };
@@ -57,7 +68,11 @@ export function createReadOnlyClassifier(plugins: CatalogueReader) {
     const refs = new Set<string>(PROACTIVE_MEMORY_READS);
     for (const server of servers)
       for (const tool of server.tools)
-        if (tool.effect === "read" && tool.destructive !== true)
+        if (
+          tool.effect === "read" &&
+          tool.destructive !== true &&
+          tool.checkInRead !== false
+        )
           refs.add(tool.ref);
     return refs;
   };
