@@ -15829,6 +15829,11 @@ fn main() {
             // behind it is not shown as it is (`owned_app_url`), and the tests about that say so.
             let own = upgrade::own();
             for root in [&selected, &owned] {
+                // M3: the manifest moves to that release too. This fork reads an image reference
+                // only from a manifest whose version is the installed stamp's (`deployment::
+                // checked_images`), so a stamp of this app's release over the v0.0.8 manifest
+                // written above named no image, and local folder access never started.
+                test_support::installed_release(root, &own.version, []);
                 deployment::record(root, &own.version, own.pinned).unwrap();
             }
             let source = base.join("listener.rs");
