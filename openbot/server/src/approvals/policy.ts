@@ -649,6 +649,10 @@ export function appEnableReason(name: string, source: string): string {
 export const DESTRUCTIVE_TOOL_REASON =
   "这个操作会删除或覆盖内容，总是先征得你同意。";
 
+/** 应用工具要把内容发给别人（发信、回复、转发、发帖、分享、邀请）时，卡片上写的理由。 */
+export const OUTBOUND_SEND_REASON =
+  "这个操作会把内容发给别人，总是先征得你同意。";
+
 /**
  * 没有歧义的删除词：在工具名的任意位置、作为整词出现就按删除处理（参照上游）。资源名在前的命名
  * 很常见，`posts_delete`、`SHAREPOINT_LIST_ITEM_DELETE` 里删除词前面的是名词。整词匹配，所以
@@ -670,6 +674,22 @@ const OTHER_VERBS =
 /** 参照上游 `FIRST_VERB`：按出现顺序，名字里第一个认得的动作词就是这个工具做的事。 */
 const FIRST_VERB = new RegExp(`\\b(${FIRST_VERB_DELETING}|${OTHER_VERBS})\\b`);
 const DELETING_FIRST_VERB = new RegExp(`^(${FIRST_VERB_DELETING})$`);
+
+/**
+ * 对外发送的动作词：工具名的第一个动词是其中之一，就是把内容发给别人（用户决定，2026-11-09）。
+ * `GMAIL_SEND_EMAIL`、`GMAIL_REPLY_TO_THREAD`、`SLACK_POST_MESSAGE` 都算。`posts`、`shares` 这类
+ * 复数多半是资源名（`posts_list`），不在此列。
+ */
+const OUTBOUND_FIRST_VERB =
+  /^(send|sends|reply|replies|forward|post|publish|share|invite)$/;
+/**
+ * 找对外发送的第一个动词时多认几个词：`replies` 本身就是发送动词；`draft` 是写草稿，排在前面时
+ * 后面的 reply 只是草稿的内容（`draft_reply`），不是发出去。只用于这条底线，删除类的
+ * {@link FIRST_VERB} 不变。
+ */
+const OUTBOUND_VERB_SCAN = new RegExp(
+  `\\b(${FIRST_VERB_DELETING}|${OTHER_VERBS}|replies|draft|drafts)\\b`,
+);
 
 /**
  * Bot 自己电脑上的操作（`computer_*`）和主人电脑上的命令（`host/`）有自己的底线，删除类底线
@@ -723,6 +743,29 @@ export function destructiveFloor(
     : undefined;
 }
 
+/** 工具名是否说它会把内容发给别人：第一个动词是发送类动词。写草稿不算。 */
+function sendsByName(toolRef: string): boolean {
+  const first = toolWords(toolRef).match(OUTBOUND_VERB_SCAN)?.[1] ?? "";
+  return OUTBOUND_FIRST_VERB.test(first);
+}
+
+/**
+ * 对外发送底线（用户决定，2026-11-09）：应用工具把内容发给别人，例如 Gmail 发信、回复、转发，或在
+ * Slack 发消息，总是先问，且只给「允许一次 / 拒绝」（见 types 的 `offersStandingRule`）。
+ *
+ * 只管应用工具：来源按插件调用路径设置的 `subject.connector` 认定，和删除类底线同一个标记。Bot
+ * 自己的工具、`computer_*` 和 `host/` 上的命令都不在此列。读操作不在此列。
+ */
+export function outboundSendFloor(
+  candidate: ApprovalCandidate,
+): { source: "outbound_send"; reason: string } | undefined {
+  if (candidate.effect === "read") return undefined;
+  if (candidate.subject?.connector !== true) return undefined;
+  return sendsByName(candidate.toolRef)
+    ? { source: "outbound_send", reason: OUTBOUND_SEND_REASON }
+    : undefined;
+}
+
 /**
  * The whole decision, layer by layer (SEC1 §4.2). The first layer that settles the action decides,
  * and every later one can only make it stricter:
@@ -737,6 +780,8 @@ export function destructiveFloor(
  *     删除类底线：删除、归档或应用标为破坏性的改动总是先问，规则问过的也改记为这条底线，卡片因此
  *     只给「允许一次 / 拒绝」（见 {@link destructiveFloor}）。它和上面几条底线管的工具互不相交
  *     （那几条只看 `computer_*`、`host/` 的命令、路径和本机应用），在链里排第几不影响结果。
+ *     对外发送底线：应用工具把内容发给别人时同样总是先问、只给「允许一次 / 拒绝」
+ *     （见 {@link outboundSendFloor}）。一个工具既删除又发送时，按删除类底线问。
  *  5. The strictest rule across the team's, the owner's and the person's own; then the reviewer
  *     where it applies; then the person's own "ask before making changes" default.
  */
@@ -781,9 +826,11 @@ export async function decideAction(input: {
       reason: safety.reason,
     };
   const destructive = destructiveFloor(candidate);
+  const outbound = outboundSendFloor(candidate);
   const floor:
     | SecurityFloor
     | { source: "destructive_tool"; reason: string }
+    | { source: "outbound_send"; reason: string }
     // --- app discovery (sub-project 3) ---
     | { source: "host_command_cap" | "app_tool" | "app_enable"; reason: string }
     // --- end app discovery ---
@@ -797,6 +844,7 @@ export async function decideAction(input: {
       input.enforceDangerousCommands === true,
     ) ??
     destructive ??
+    outbound ??
     (runnerCommand && input.hostCommandsCap === "ask"
       ? {
           source: "host_command_cap",
@@ -830,9 +878,13 @@ export async function decideAction(input: {
   // --- end desktop control ---
   const decided = await decideByRules(input, matched);
   // A floor only raises: an action the rules let through still asks; one already asked about or
-  // handed off keeps the stricter answer it had. 删除类底线多做一步：规则、偏好或审查本来就要问的，
-  // 也改记为这条底线，卡片才不会给出一条存了也永远用不上的「总是允许」；原来的理由接在后面保留。
-  const restated = floor === destructive && decided.behaviour === "ask";
+  // handed off keeps the stricter answer it had. 删除类和对外发送底线多做一步：规则、偏好或审查
+  // 本来就要问的，也改记为这条底线，卡片才不会给出一条存了也永远用不上的「总是允许」；原来的理由
+  // 接在后面保留。
+  const restated =
+    floor !== undefined &&
+    (floor === destructive || floor === outbound) &&
+    decided.behaviour === "ask";
   const outcome: ApprovalPolicyOutcome =
     floor && (decided.behaviour === "allow" || restated)
       ? {

@@ -5,6 +5,7 @@ import {
   type ApprovalDecision,
   approvalInboxOptions,
   decideApproval,
+  offersStandingRule,
 } from "@/lib/approvals";
 
 /**
@@ -42,13 +43,13 @@ export function InlineApproval({
       ]
     : [
         ["allow_once", "允许一次"],
-        // 删除类底线问的动作每次都要问，存下的规则用不上，所以不给这个选项（服务端也会拒绝）。
-        ...(request.action.policy?.source === "destructive_tool"
-          ? []
-          : ([["allow_always", "在这里总是允许"]] as [
+        // 删除类和对外发送底线问的动作每次都要问，存下的规则用不上，所以不给这个选项（服务端也会拒绝）。
+        ...(offersStandingRule(request.action.policy)
+          ? ([["allow_always", "在这里总是允许"]] as [
               ApprovalDecision,
               string,
-            ][])),
+            ][])
+          : []),
         ["deny", "拒绝"],
       ];
   return (

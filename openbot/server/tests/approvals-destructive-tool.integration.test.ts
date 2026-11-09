@@ -1,7 +1,10 @@
 import { afterAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
-import { DESTRUCTIVE_TOOL_REASON } from "../src/approvals/policy";
+import {
+  DESTRUCTIVE_TOOL_REASON,
+  OUTBOUND_SEND_REASON,
+} from "../src/approvals/policy";
 import { createApprovalService } from "../src/approvals/service";
 import { createApprovalStore } from "../src/approvals/store";
 import {
@@ -43,6 +46,8 @@ const email = `${person}@destructive.test`;
 const server = `dtool${suite}`;
 /** 名字里看不出会删除什么，只有应用自己的标注说它会。 */
 const RESET = `${server}/reset_pipeline`;
+/** 把内容发给别人的应用工具：对外发送底线一律先问。 */
+const SEND = `${server}/send_email`;
 /**
  * 管理员按 URL 添加、起名撞上内部前缀的自定义服务器（官方参考实现 server-memory 就叫 memory）。
  * id 就是这两个字面值，所以开跑前先确认库里没有同名的行，免得删到别人的。
@@ -90,6 +95,13 @@ await runAsTenant("platform", async () => {
     effect: "write",
     destructive: true,
   });
+  await database.insert(mcpTools).values({
+    tenantId: "team",
+    serverId: server,
+    name: "send_email",
+    description: "Send an email to a customer.",
+    effect: "write",
+  });
 });
 await runAsTenant("platform", async () => {
   const taken = await database
@@ -130,7 +142,11 @@ await runAsTenant(person, () =>
     scope: "write",
   }),
 );
-for (const ref of [RESET, ...LOOKALIKES.map((id) => `${id}/delete_entities`)])
+for (const ref of [
+  RESET,
+  SEND,
+  ...LOOKALIKES.map((id) => `${id}/delete_entities`),
+])
   await runAsTenant(person, () =>
     plugins.grant("mcp", ref, avatarAgentId(person), email, {
       selfService: true,
@@ -243,6 +259,68 @@ test("一次 MCP 调用：应用标为破坏性的工具在「总是允许」规
     approvals.decide(person, request?.id as string, "allow_once"),
   );
   expect(once).toMatchObject({ decision: "allow_once", status: "approved" });
+});
+
+test("一次 MCP 调用：把内容发给别人的工具在「总是允许」规则之上仍要问，且只能「允许一次」", async () => {
+  // 上一条测试已经存了「任何事都不问」的规则；这里再确认一次它在。
+  expect(
+    (await runAsTenant(person, () => approvalStore.rules(person))).some(
+      (row) => row.toolRef === "*" && row.behaviour === "allow",
+    ),
+  ).toBeTrue();
+  const toolCallId = randomUUID();
+  const args = { to: "client@example.test", subject: "报价", body: "见附件" };
+  const thrown = await runAsTenant(person, () =>
+    withApprovalContext(
+      {
+        runId: randomUUID(),
+        threadId: `${person}-thread-send`,
+        toolCallId,
+        toolName: SEND,
+        args,
+        messages: [{ id: "u1", role: "user", content: "把报价发给客户。" }],
+        state: {},
+        context: [],
+        forwardedProps: {},
+      },
+      () =>
+        plugins.callTool({
+          ref: SEND,
+          args,
+          botId: avatarAgentId(person),
+          actorId: person,
+        }),
+    ),
+  ).catch((error: unknown) => error);
+  expect(thrown).toBeInstanceOf(HeadlessToolSuspension);
+  expect(vendorCalls).toEqual([]);
+
+  const [request] = (
+    await runAsTenant(person, () => approvalStore.list(person))
+  ).filter((row) => row.action.toolCallId === toolCallId);
+  expect(request?.status).toBe("pending");
+  expect(request?.action.policy).toMatchObject({
+    behaviour: "ask",
+    source: "outbound_send",
+    reason: OUTBOUND_SEND_REASON,
+  });
+  expect(offersStandingRule(request?.action ?? {})).toBeFalse();
+  const rulesBefore = await runAsTenant(person, () =>
+    approvalStore.rules(person),
+  );
+  await expect(
+    runAsTenant(person, () =>
+      approvals.decide(person, request?.id as string, "allow_always"),
+    ),
+  ).rejects.toThrow("这个操作会把内容发给别人，每次都要你确认");
+  expect(await runAsTenant(person, () => approvalStore.rules(person))).toEqual(
+    rulesBefore,
+  );
+  expect(
+    await runAsTenant(person, () =>
+      approvals.decide(person, request?.id as string, "allow_once"),
+    ),
+  ).toMatchObject({ decision: "allow_once", status: "approved" });
 });
 
 test("一个叫 memory 或 host 的 MCP 服务器上的 delete_entities 同样要问：按调用路径认应用工具，不看名字", async () => {
