@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { SelfHostBanner } from "@/components/layout/self-host-banner";
 import { SidebarShell } from "@/components/layout/sidebar-shell";
+import { UpdateBanner } from "@/components/layout/update-banner";
 import { AppSidebar } from "./app-sidebar";
 import { ButlerButton } from "./butler-button";
 import { ConversationWorkspace } from "./conversation-workspace";
@@ -27,6 +28,8 @@ export function AppShell({
       <AppSidebar />
       {secondary ?? <ConversationWorkspace />}
       <main className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        {/* Only inside OpenBot Desktop: the banner asks the desktop app, and draws nothing in a browser. */}
+        <UpdateBanner />
         <SelfHostBanner />
         {children}
         <ButlerButton />

@@ -14,6 +14,7 @@ import {
   PageShell,
 } from "@/components/layout/page-shell";
 import { RowMark } from "@/components/layout/row-mark";
+import { DeploymentClientsSection } from "@/components/plugins/deployment-clients";
 import {
   Item,
   ItemActions,
@@ -285,6 +286,11 @@ function RouteComponent() {
               )}
             </PageRows>
           </PageSection>
+
+          {/* Only where the directory can be browsed: a client is for an app found there. */}
+          {plugins.data?.composioConfigured ? (
+            <DeploymentClientsSection />
+          ) : null}
         </>
       )}
     </PageShell>

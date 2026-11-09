@@ -1,10 +1,10 @@
+import { OPENBOT_HARNESS_NAME } from "@openbot/shared/harnesses";
 import {
   IconChevronRight,
   IconDeviceDesktop,
   IconNotes,
   IconStack2,
 } from "@tabler/icons-react";
-import { OPENBOT_HARNESS_NAME } from "@openbot/shared/harnesses";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { PageRows, PageSection } from "@/components/layout/page-shell";
@@ -135,7 +135,10 @@ export function BotRuntimeSection({ agent }: { agent: AgentProfile }) {
 export function frameworkName(
   agent: Pick<AgentProfile, "framework" | "builtIn">,
 ): string {
-  if (agent.framework === OPENBOT_HARNESS_NAME || (!agent.framework && agent.builtIn))
+  if (
+    agent.framework === OPENBOT_HARNESS_NAME ||
+    (!agent.framework && agent.builtIn)
+  )
     return "熊宝内置";
   return agent.framework ?? "未注明（按地址接入的外部员工）";
 }

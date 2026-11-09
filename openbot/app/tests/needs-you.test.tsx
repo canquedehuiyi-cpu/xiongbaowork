@@ -158,7 +158,9 @@ function serving() {
       items = items.filter((entry) => entry !== found);
       return Response.json({ suggestion: { ...found, status: "dismissed" } });
     }
-    const acted = path.match(/^\/api\/bot-tasks\/(.+)\/(resolve|reopen|again)$/);
+    const acted = path.match(
+      /^\/api\/bot-tasks\/(.+)\/(resolve|reopen|again)$/,
+    );
     if (acted) {
       const [, id, action] = acted;
       tasks = tasks.map((entry) =>
@@ -412,7 +414,10 @@ test("tasks list what to read, answer and retry first, and each acts from its ro
 
   fireEvent.click(bots.getByRole("button", { name: "Try again" }));
   await waitFor(() =>
-    expect(sent).toContainEqual({ method: "POST", path: "/api/bot-tasks/f/again" }),
+    expect(sent).toContainEqual({
+      method: "POST",
+      path: "/api/bot-tasks/f/again",
+    }),
   );
   await waitFor(() =>
     expect(

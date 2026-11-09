@@ -27,20 +27,23 @@ import { responsibilitiesQueryOptions } from "@/lib/responsibilities";
 /**
  * 长期职责 as a section of a skin's screen: one row per responsibility, saying where it stands, each
  * opening this fork's own 长期职责 page, where it is worded, triggered, paused and completed. Given an
- * employee, only that employee's.
+ * employee, only that employee's, and the page opens narrowed to it (`?agent=`).
  *
  * Upstream's skins draw its own responsibilities list with its dialogs in place. This fork's page is
  * a different design (its triggers, GitHub bindings and runs), so the skins link to it rather than
  * carrying a second editor.
  */
-// M4: 待接入 上游 components/responsibilities/*（在皮肤里就地新建、编辑长期职责的对话框）；目前链到 /responsibilities。
+// M4: 待接入 上游 components/responsibilities/*（在皮肤里就地新建、编辑长期职责的对话框）；目前链到 /responsibilities（带员工筛选）。
 export function BotResponsibilities({ agentId }: { agentId?: string }) {
   const goals = useQuery(responsibilitiesQueryOptions());
   const shown = (goals.data ?? []).filter(
     (goal) => agentId === undefined || goal.agentId === agentId,
   );
+  const page = (
+    <Link search={agentId ? { agent: agentId } : {}} to="/responsibilities" />
+  );
   const add = (
-    <Button render={<Link to="/responsibilities" />} size="sm" variant="ghost">
+    <Button render={page} size="sm" variant="ghost">
       <IconPlus />
       新建长期职责
     </Button>
@@ -62,7 +65,7 @@ export function BotResponsibilities({ agentId }: { agentId?: string }) {
           {shown.map((goal, index) => (
             <Fragment key={goal.id}>
               {index > 0 ? <Separator /> : null}
-              <Item render={<Link to="/responsibilities" />} size="sm">
+              <Item render={page} size="sm">
                 <ItemMedia variant="icon">
                   <IconTargetArrow />
                 </ItemMedia>

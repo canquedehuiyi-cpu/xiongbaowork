@@ -383,6 +383,14 @@ function DutiesSection({ profile }: { profile: AgentProfile }) {
         </ItemGroup>
       )}
 
+      <Link
+        className="mt-2 inline-block text-muted-foreground text-xs underline-offset-2 hover:underline"
+        search={{ agent: profile.id }}
+        to="/responsibilities"
+      >
+        去长期职责页管理
+      </Link>
+
       <h3 className="mt-6 font-medium text-sm">定时任务</h3>
       <RoutineSummary agentId={profile.id} />
     </PageSection>

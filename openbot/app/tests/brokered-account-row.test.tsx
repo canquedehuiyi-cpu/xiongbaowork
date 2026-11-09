@@ -23,7 +23,7 @@ import {
   BrokeredAccountRow,
   useBrokeredAccount,
 } from "@/components/plugins/brokered-account-row";
-import type { BrokerField } from "@/lib/plugins/mutations";
+import type { BrokerField, KeyGuide } from "@/lib/plugins/mutations";
 import type { PluginServer, PluginsPage } from "@/lib/plugins/queries";
 import { Route as AdminAppRoute } from "@/routes/_authed/admin/plugins/$key";
 import { Route as ConnectedAccountRoute } from "@/routes/_authed/settings/connected-accounts/$key";
@@ -107,6 +107,8 @@ const SERVER_FIELD_SCHEMES = [
   "BASIC",
   "BEARER_TOKEN",
   "BASIC_WITH_JWT",
+  // A server-to-server grant on the deployment's own client (upstream #950).
+  "S2S_OAUTH2",
   /*
    * AND ONE THE SCREEN HAS NEVER HEARD OF. Composio's catalogue is the vendor's, so it may name a
    * typed scheme tomorrow that this app's copy of the list does not carry — and the screen's own
@@ -162,9 +164,13 @@ function asDay(iso: string): string {
 }
 
 /** A minimal but complete brokered `PluginServer` — the row shape only Composio produces. */
-function brokeredServer(authScheme: string): PluginServer {
+function brokeredServer(
+  authScheme: string,
+  adminConnectOnly = false,
+): PluginServer {
   return {
     authScheme,
+    adminConnectOnly,
     id: APP_KEY,
     title: "Gmail",
     vendor: "Google",
@@ -185,10 +191,11 @@ function brokeredServer(authScheme: string): PluginServer {
 function pluginsPage(
   composioConfigured: boolean,
   authScheme: string,
+  adminConnectOnly = false,
 ): PluginsPage {
   return {
     catalogue: [],
-    servers: [brokeredServer(authScheme)],
+    servers: [brokeredServer(authScheme, adminConnectOnly)],
     skills: [],
     botsMayCallBack: true,
     redirectUri: null,
@@ -286,6 +293,15 @@ type Deployment = {
    * cannot explain; the authored refusals on that same press are 400, 409 and 503.
    */
   refusesFields?: { error: string; status: 400 | 409 | 502 | 503 };
+  /**
+   * Where the key comes from, as the route answers a first press that asked for it with
+   * `{ guide: true }` (upstream #1297). Left off, the route answers no guide.
+   */
+  guide?: KeyGuide;
+  /** The server's `adminConnectOnly` on this app (upstream #950). False where left off. */
+  adminConnectOnly?: boolean;
+  /** Who `/api/me` says is reading. Left off, `/api/me` answers 404 and nobody is known. */
+  role?: "admin" | "user";
   /**
    * Whether `/api/plugins/connections` answers 500, with `/api/plugins` answering perfectly.
    *
@@ -549,7 +565,14 @@ function installDeployment(deployment: Deployment): Server {
         );
       }
       if (SERVER_FIELD_SCHEMES.includes(state.authScheme)) {
-        return json({ fields: state.fields });
+        const askedForGuide =
+          typeof init?.body === "string" &&
+          (JSON.parse(init.body) as { guide?: unknown }).guide === true;
+        return json(
+          askedForGuide && state.guide
+            ? { fields: state.fields, guide: state.guide }
+            : { fields: state.fields },
+        );
       }
       return json({ authorizationUrl: CONSENT_URL });
     }
@@ -622,8 +645,24 @@ function installDeployment(deployment: Deployment): Server {
       return json({ ok: true });
     }
     if (path.startsWith("/api/agents")) return json({ agents: [] });
+    if (path === "/api/me" && state.role) {
+      return json({
+        user: {
+          id: "reader",
+          email: "reader@example.invalid",
+          name: "Reader",
+          role: state.role,
+        },
+      });
+    }
     if (path.startsWith("/api/plugins")) {
-      return json(pluginsPage(state.composioConfigured, state.authScheme));
+      return json(
+        pluginsPage(
+          state.composioConfigured,
+          state.authScheme,
+          state.adminConnectOnly ?? false,
+        ),
+      );
     }
     return new Response(null, { status: 404 });
   }) as typeof fetch;
@@ -918,6 +957,117 @@ test("a key app asks for what the app asked for, with its own help text", async 
   expect(view.queryByText(/starting with 'pplx-'/)).toBeTruthy();
 });
 
+test("连接表单的第一下要密钥指引，并在表单上方显示步骤和去哪里拿的链接（上游 #1297）", async () => {
+  installDeployment({
+    authScheme: "API_KEY",
+    composioConfigured: true,
+    confirms: false,
+    fields: [PERPLEXITY_KEY],
+    guide: {
+      steps: "登录 Perplexity，在 API Keys 页面新建一个密钥并复制。",
+      url: "https://www.perplexity.ai/settings/api",
+    },
+    recorded: false,
+  });
+
+  const view = renderAccountScreen(queryClient());
+
+  await userEvent.click(await view.findByRole("button", { name: "连接" }));
+
+  // 只有请求里带了 `{ guide: true }`，桩才会答出指引；看到它就说明第一下是这样问的。
+  expect(
+    await view.findByText(
+      "登录 Perplexity，在 API Keys 页面新建一个密钥并复制。",
+    ),
+  ).toBeTruthy();
+  const link = view.getByRole("link", { name: /去哪里拿密钥/ });
+  expect(link.getAttribute("href")).toBe(
+    "https://www.perplexity.ai/settings/api",
+  );
+  expect(link.getAttribute("target")).toBe("_blank");
+  // 表单照旧画出来，指引只是放在它上面。
+  expect(await view.findByLabelText("API Key")).toBeTruthy();
+});
+
+test("没有链接的指引只显示步骤，不画一个去不了的链接", async () => {
+  installDeployment({
+    authScheme: "API_KEY",
+    composioConfigured: true,
+    confirms: false,
+    fields: [PERPLEXITY_KEY],
+    guide: {
+      steps: "登录 Gmail，在它的设置或开发者页面里找 API 密钥（API key）。",
+      url: null,
+    },
+    recorded: false,
+  });
+
+  const view = renderAccountScreen(queryClient());
+
+  await userEvent.click(await view.findByRole("button", { name: "连接" }));
+
+  expect(
+    await view.findByText(/在它的设置或开发者页面里找 API 密钥/),
+  ).toBeTruthy();
+  expect(view.queryByRole("link", { name: /去哪里拿密钥/ })).toBeNull();
+});
+
+test("只能由管理员连接的应用，普通成员看不到「连接」，只看到需由管理员连接（上游 #950）", async () => {
+  installDeployment({
+    adminConnectOnly: true,
+    authScheme: "S2S_OAUTH2",
+    composioConfigured: true,
+    confirms: false,
+    fields: [PERPLEXITY_KEY],
+    recorded: false,
+    role: "user",
+  });
+
+  const view = renderAccountScreen(queryClient());
+
+  expect(await view.findByText("需由管理员连接")).toBeTruthy();
+  expect(view.getByText(/需要由管理员连接/)).toBeTruthy();
+  expect(view.queryByRole("button", { name: "连接" })).toBeNull();
+});
+
+test("只能由管理员连接的应用，管理员照常看到「连接」，并按填写表单的方式连接", async () => {
+  installDeployment({
+    adminConnectOnly: true,
+    authScheme: "S2S_OAUTH2",
+    composioConfigured: true,
+    confirms: false,
+    fields: [PERPLEXITY_KEY],
+    recorded: false,
+    role: "admin",
+  });
+
+  const view = renderAccountScreen(queryClient());
+
+  await userEvent.click(await view.findByRole("button", { name: "连接" }));
+  // S2S_OAUTH2 是要填写的方案：打开的是表单，不是去授权页面。
+  expect(await view.findByLabelText("API Key")).toBeTruthy();
+  expect(view.queryByText("需由管理员连接")).toBeNull();
+});
+
+test("已不是管理员的人手里的这类连接，提示需管理员重新连接，并保留「断开」", async () => {
+  installDeployment({
+    adminConnectOnly: true,
+    authScheme: "S2S_OAUTH2",
+    composioConfigured: true,
+    confirms: true,
+    fields: [PERPLEXITY_KEY],
+    recorded: true,
+    role: "user",
+  });
+
+  const view = renderAccountScreen(queryClient());
+
+  expect(await view.findByText(/你现在不是管理员/)).toBeTruthy();
+  expect(view.getByText(/再请管理员重新连接/)).toBeTruthy();
+  expect(view.getByRole("button", { name: "断开" })).toBeTruthy();
+  expect(view.queryByRole("button", { name: "重新检查" })).toBeNull();
+});
+
 test("a key app nobody has connected says it will ask for a key, not send you off", async () => {
   installDeployment({
     authScheme: "API_KEY",
@@ -937,7 +1087,7 @@ test("a key app nobody has connected says it will ask for a key, not send you of
    * Connect on this app opens a form instead. Promising a trip to the vendor here is not a vaguer
    * sentence than the truth; it is a different act from the one about to happen.
    */
-  expect(view.queryByText(/先带你到 Composio，再到服务商那边授权/)).toBeNull();
+  expect(view.queryByText(/带你到服务商那边授权/)).toBeNull();
 });
 
 test("a key app nobody has connected keeps the screen's own reassurance", async () => {
@@ -1386,7 +1536,7 @@ test("a check that did not come back clean says so, without ruling on the key", 
   expect(
     view.getByText(/没有顺利通过——可能是密钥的问题，也可能是 Gmail 本身的问题/),
   ).toBeTruthy();
-  expect(view.getByText(/这个账号在 Composio 那边仍然有效/)).toBeTruthy();
+  expect(view.getByText(/这个账号仍然保持连接/)).toBeTruthy();
   /*
    * AND NEVER A VERDICT ABOUT THE CREDENTIAL. The pair behind this sentence is written off
    * Composio's `{ data, error, successful }` envelope, which carries no status and no error code —
@@ -1616,7 +1766,7 @@ test("disconnecting a key names the step this deployment cannot take", () => {
 
   // The account ends at Composio and the key does not end anywhere. Saying "disconnected" and
   // stopping would leave somebody believing they had ended access they still have live.
-  expect(view.getByText(/已从 Composio 移除/)).toBeTruthy();
+  expect(view.getByText(/已断开。你的密钥在/)).toBeTruthy();
   expect(
     view.getByText(
       /你的密钥在 Gmail 那边仍然有效——如果你是想终止它的访问，请到那边轮换密钥/,
@@ -1657,7 +1807,7 @@ test("a key re-checked and then disconnected stops claiming it was checked", asy
   await userEvent.click(view.getByRole("button", { name: "断开" }));
 
   await waitFor(() =>
-    expect(view.queryByText(/已从 Composio 移除/)).toBeTruthy(),
+    expect(view.queryByText(/已断开。你的密钥在/)).toBeTruthy(),
   );
   // The account is gone; the answer the re-check gave was about it and must go with it.
   expect(view.queryByText(/上次检查于/)).toBeNull();
@@ -1987,7 +2137,7 @@ test("a rejected key still says so on a page that has only read, and still offer
   const view = renderAccountScreen(queryClient());
 
   expect(await view.findByText(/做的检查没有顺利通过/)).toBeTruthy();
-  expect(view.getByText(/在 Composio 那边仍然有效/)).toBeTruthy();
+  expect(view.getByText(/这个账号仍然保持连接/)).toBeTruthy();
   // And never the sentence that is false here.
   expect(view.queryByText(/接受时没有对 Gmail 做检查/)).toBeNull();
   // The way back: a key corrected at the vendor is worth a second check, not a second connection.
@@ -2556,7 +2706,7 @@ test("a re-check that spent nothing leaves the rejection the record still names"
 
   // And the three facts this person can act on are all still on the row.
   expect(view.getByText(/做的检查没有顺利通过/)).toBeTruthy();
-  expect(view.getByText(/在 Composio 那边仍然有效/)).toBeTruthy();
+  expect(view.getByText(/这个账号仍然保持连接/)).toBeTruthy();
   // Never the absolution, which is the other app's state and not this one's.
   expect(view.queryByText(/接受时没有对 Gmail 做检查/)).toBeNull();
 });

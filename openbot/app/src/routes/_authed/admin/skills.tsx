@@ -1,6 +1,6 @@
-import { IconFileText, IconPlus } from "@tabler/icons-react";
+import { IconChevronRight, IconFileText, IconPlus } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import * as React from "react";
 import { useState } from "react";
 import {
@@ -9,19 +9,7 @@ import {
   PageSection,
   PageShell,
 } from "@/components/layout/page-shell";
-import { TranslatedInstructions } from "@/components/skills/translated-instructions";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogBody,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import {
   Item,
   ItemActions,
@@ -33,7 +21,6 @@ import {
 } from "@/components/ui/item";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 import { useBotNames } from "@/lib/agents/bot-names";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import {
@@ -43,7 +30,6 @@ import {
 } from "@/lib/plugins/crew-grant";
 import {
   removeSkillMutationOptions,
-  saveSkillMutationOptions,
   setListingMutationOptions,
   setPluginGrantMutationOptions,
 } from "@/lib/plugins/mutations";
@@ -66,15 +52,14 @@ import {
  * themselves on their own Skills page, while adding an MCP server stays an administrator's decision.
  * Sitting in a list of vendors made it look like a third kind of thing a Bot could reach.
  *
- * Kept as the fork's one page (crews, listings, translated instructions, inline writing) rather than
- * upstream's `components/manage/skills-page.tsx` list.
+ * Kept as the fork's one list (crews, listings, a chip per coworker) rather than upstream's
+ * `components/manage/skills-page.tsx`. Each row's name opens the skill's own page (upstream's
+ * `admin/skills_.$slug.tsx`: a switch per coworker, editing its words and tools, deleting it), and
+ * writing one is upstream's page of its own (`admin/skills_.new.tsx`), which picks its tools too.
  */
-// M4: 待接入 上游的单个技能页（admin/skills_.$slug.tsx、skills_.new.tsx → manage/skill-page.tsx、new-skill-page.tsx）尚未从本页的行链接过去
 export const Route = createFileRoute("/_authed/admin/skills")({
   component: RouteComponent,
 });
-
-const EMPTY_DRAFT = { slug: "", title: "", summary: "", instructions: "" };
 
 function RouteComponent() {
   const queryClient = useQueryClient();
@@ -88,8 +73,6 @@ function RouteComponent() {
   const crews = useQuery(wakerGroupsQueryOptions());
 
   const [error, setError] = useState<string | null>(null);
-  const [writing, setWriting] = useState(false);
-  const [draft, setDraft] = useState(EMPTY_DRAFT);
   /** The last group press's sentence, on the row of the skill it was about. */
   const [batch, setBatch] = useState<{
     slug: string;
@@ -99,10 +82,6 @@ function RouteComponent() {
   const [busy, setBusy] = useState(false);
 
   const report = { onError: (thrown: Error) => setError(thrown.message) };
-  const saveSkill = useMutation({
-    ...saveSkillMutationOptions(queryClient),
-    ...report,
-  });
   const removeSkill = useMutation({
     ...removeSkillMutationOptions(queryClient),
     ...report,
@@ -157,7 +136,10 @@ function RouteComponent() {
   return (
     <PageShell
       action={
-        <Button onClick={() => setWriting(true)} size="lg" type="button">
+        <Button
+          render={(props) => <Link to="/admin/skills/new" {...props} />}
+          size="lg"
+        >
           <IconPlus />
           写一个技能
         </Button>
@@ -198,10 +180,20 @@ function RouteComponent() {
                   </ItemMedia>
                   <ItemContent>
                     <ItemTitle>
-                      <code className="font-mono text-foreground/80 text-xs">
-                        /{skill.slug}
-                      </code>{" "}
-                      {skill.title}
+                      <Link
+                        className="inline-flex items-center gap-1 underline-offset-4 hover:underline"
+                        params={{ slug: skill.slug }}
+                        to="/admin/skills/$slug"
+                      >
+                        <code className="font-mono text-foreground/80 text-xs">
+                          /{skill.slug}
+                        </code>{" "}
+                        {skill.title}
+                        <IconChevronRight
+                          aria-hidden="true"
+                          className="size-3.5 text-muted-foreground"
+                        />
+                      </Link>
                     </ItemTitle>
                     <ItemDescription>{skill.summary}</ItemDescription>
                     {/* A set, so it wraps onto its own line rather than crowding the title. */}
@@ -313,96 +305,6 @@ function RouteComponent() {
           </PageRows>
         )}
       </PageSection>
-
-      <Dialog onOpenChange={setWriting} open={writing}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>为部署写一个技能</DialogTitle>
-            <DialogDescription>
-              标识是人们在斜杠后面输入的内容，输入后这些指令会加到这次运行里。这里每个人都能用它，由你决定哪些员工拥有它。
-            </DialogDescription>
-          </DialogHeader>
-          <DialogBody className="mt-4">
-            <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor="skill-slug">标识</FieldLabel>
-                <Input
-                  id="skill-slug"
-                  onChange={(event) =>
-                    setDraft((current) => ({
-                      ...current,
-                      slug: event.target.value,
-                    }))
-                  }
-                  placeholder="standup-notes"
-                  value={draft.slug}
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="skill-title">标题</FieldLabel>
-                <Input
-                  id="skill-title"
-                  onChange={(event) =>
-                    setDraft((current) => ({
-                      ...current,
-                      title: event.target.value,
-                    }))
-                  }
-                  placeholder="标题"
-                  value={draft.title}
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="skill-summary">摘要</FieldLabel>
-                <Input
-                  id="skill-summary"
-                  onChange={(event) =>
-                    setDraft((current) => ({
-                      ...current,
-                      summary: event.target.value,
-                    }))
-                  }
-                  placeholder="一句话"
-                  value={draft.summary}
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="skill-instructions">指令</FieldLabel>
-                <Textarea
-                  className="h-28 font-mono text-sm"
-                  id="skill-instructions"
-                  onChange={(event) =>
-                    setDraft((current) => ({
-                      ...current,
-                      instructions: event.target.value,
-                    }))
-                  }
-                  placeholder="用到这个技能时，员工应该做什么。"
-                  value={draft.instructions}
-                />
-                <TranslatedInstructions text={draft.instructions} />
-              </Field>
-            </FieldGroup>
-          </DialogBody>
-          <DialogFooter className="mt-4">
-            <Button onClick={() => setWriting(false)} size="sm" variant="ghost">
-              取消
-            </Button>
-            <Button
-              disabled={!(draft.slug && draft.title && draft.instructions)}
-              onClick={() => {
-                // Admin-authored skills are the deployment's; a person's own are made elsewhere.
-                saveSkill.mutate({ ...draft, global: true });
-                setDraft(EMPTY_DRAFT);
-                setWriting(false);
-              }}
-              size="sm"
-            >
-              安装技能
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </PageShell>
   );
 }

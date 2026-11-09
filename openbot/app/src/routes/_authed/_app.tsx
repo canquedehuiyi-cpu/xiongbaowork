@@ -17,7 +17,8 @@ function RouteComponent() {
     );
   }
 
-  // M4: 待接入 上游在这一层加了桌面端更新提示（components/layout/update-banner.tsx 的 UpdateBanner），fork 的 AppShell 只有 SelfHostBanner
+  // The desktop update bar (upstream's `UpdateBanner` at this level) is drawn inside AppShell, above
+  // its SelfHostBanner, so settings, which share the shell, show it too.
   return (
     <AppShell>
       <Outlet />

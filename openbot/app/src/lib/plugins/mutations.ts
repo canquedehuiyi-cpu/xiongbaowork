@@ -594,7 +594,9 @@ export type BrokerFieldsAnswer = {
  */
 export function brokeredConnectionFieldsMutationOptions() {
   return mutationOptions({
-    mutationFn: async (serverId: string): Promise<BrokerFieldsAnswer | null> => {
+    mutationFn: async (
+      serverId: string,
+    ): Promise<BrokerFieldsAnswer | null> => {
       const response = await client(
         `/api/plugins/servers/${encodeURIComponent(serverId)}/connect`,
         {

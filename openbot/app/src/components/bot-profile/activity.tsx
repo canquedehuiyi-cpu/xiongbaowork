@@ -83,7 +83,7 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 /** Where an item opens: its conversation when it has one, otherwise the screen that owns its kind. */
-function linkFor(item: ActivityItem) {
+function linkFor(item: ActivityItem, agentId: string) {
   if (item.channelId)
     return (
       <Link to="/channel/$channelId" params={{ channelId: item.channelId }} />
@@ -93,7 +93,7 @@ function linkFor(item: ActivityItem) {
     case "question":
       return <Link to="/approvals" />;
     case "responsibility":
-      return <Link to="/responsibilities" />;
+      return <Link search={{ agent: agentId }} to="/responsibilities" />;
     case "routine":
       return <Link search={{ trigger: "schedule" }} to="/autonomous" />;
     default:
@@ -114,7 +114,7 @@ function ActivityRow({
   const stop = useMutation(stopHandoffMutationOptions(queryClient));
   const cancel = useMutation(cancelFollowUpMutationOptions(queryClient));
   const Icon = ICONS[item.kind];
-  const link = linkFor(item);
+  const link = linkFor(item, agentId);
   const when = relativeTime(item.at);
   const control = item.stoppable ? (
     <Button

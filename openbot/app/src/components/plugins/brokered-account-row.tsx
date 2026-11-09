@@ -56,7 +56,18 @@ import {
 export type BrokeredAccountKind = "consent" | "fields" | "no-auth";
 
 /** The schemes whose secret a person types, which is the whole of what `fields` means here. */
-const FIELD_SCHEMES = ["API_KEY", "BASIC", "BEARER_TOKEN", "BASIC_WITH_JWT"];
+const FIELD_SCHEMES = [
+  "API_KEY",
+  "BASIC",
+  "BEARER_TOKEN",
+  "BASIC_WITH_JWT",
+  /*
+   * A server-to-server grant on this deployment's own client (upstream #950; Shopify is one): the
+   * administrator connecting types what the connection names, a store subdomain, and the client is
+   * the deployment's. The server's `isFieldScheme` carries it too.
+   */
+  "S2S_OAUTH2",
+];
 
 /**
  * Which of the three a recorded scheme is.
@@ -992,7 +1003,9 @@ export function BrokeredAccountRow({
                  * end the state from inside it. The sentence above still reads the record, because
                  * what to SAY is what happened; what to OFFER is what is possible now.
                  */}
-                {account.kind === "fields" && account.checkable && !needsAdmin ? (
+                {account.kind === "fields" &&
+                account.checkable &&
+                !needsAdmin ? (
                   <Button
                     disabled={account.rechecking}
                     onClick={account.recheck}

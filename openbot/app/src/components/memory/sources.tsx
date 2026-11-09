@@ -255,9 +255,7 @@ export function MemorySources({ agentId: fixedBot }: { agentId?: string }) {
                         .map((entry) => entry.trim())
                         .filter(Boolean);
                     else if (setting.schema.type === "object")
-                      throw new Error(
-                        "这个动作的设置熊宝显示不了，请换一个。",
-                      );
+                      throw new Error("这个动作的设置熊宝显示不了，请换一个。");
                     else values[setting.name] = value;
                   }
                   setError("");

@@ -169,9 +169,7 @@ function RouteComponent() {
           </p>
         ) : listed.length === 0 ? (
           <PageEmpty>
-            {query
-              ? `没有匹配「${query}」的应用。`
-              : "没有找到任何应用。"}
+            {query ? `没有匹配「${query}」的应用。` : "没有找到任何应用。"}
           </PageEmpty>
         ) : (
           <PageRows>
@@ -195,6 +193,13 @@ function RouteComponent() {
                     <ItemContent>
                       <ItemTitle>{entry.name}</ItemTitle>
                       <ItemDescription>{zh(entry.description)}</ItemDescription>
+                      {/* An app on this deployment's own client (upstream #950): only an
+                          administrator connects it, and calls through it are made as them. */}
+                      {entry.connection?.authScheme === "S2S_OAUTH2" ? (
+                        <ItemDescription>
+                          用部署专属客户端连接，只能由管理员连接。
+                        </ItemDescription>
+                      ) : null}
                     </ItemContent>
                     <ItemActions>
                       {/* The size of the decision, stated before it is made: an app is not one
