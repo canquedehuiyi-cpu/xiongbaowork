@@ -20,6 +20,11 @@ import {
   vendorSentence,
   withheldArguments,
 } from "./composio";
+import {
+  DEPLOYMENT_CLIENT_SCHEME,
+  type DeploymentClient,
+  deploymentClientMissingSentence,
+} from "./deployment-clients";
 
 /**
  * The one file in `server/src` that imports `@composio/core`, and what it owes the rest of them.
@@ -709,6 +714,12 @@ const FIELD_SCHEME_ORDER: Record<FieldScheme, number> = {
   BEARER_TOKEN: 1,
   BASIC: 2,
   BASIC_WITH_JWT: 3,
+  /*
+   * A server-to-server grant last (upstream #950): it is offered only on the deployment's own
+   * client (see {@link connectionOf}), and an app that also takes a key the person holds is better
+   * connected with that key than through a client the operator registered.
+   */
+  S2S_OAUTH2: 4,
 };
 
 /**
@@ -878,8 +889,16 @@ export function connectionOf(row: VendorToolkit): BrokerConnection {
   }
   if (offered.includes("DCR_OAUTH")) return { kind: "self-registering" };
 
+  /*
+   * A SERVER-TO-SERVER GRANT IS NEVER CHOSEN HERE (upstream #950). What Composio exchanges for its
+   * token is the client this deployment registered, held in the vault, and this function reads only
+   * the catalogue row. So it is left out of the pick, and an app that publishes it with nothing else
+   * this deployment can drive is marked `awaitsClient` below: `withDeploymentClients` turns it into
+   * the field scheme, per request, for the apps a client is stored for.
+   */
   const field = offered
     .filter((scheme) => isFieldScheme(scheme))
+    .filter((scheme) => scheme !== DEPLOYMENT_CLIENT_SCHEME)
     .sort(
       (left, right) => FIELD_SCHEME_ORDER[left] - FIELD_SCHEME_ORDER[right],
     )[0];
@@ -892,6 +911,13 @@ export function connectionOf(row: VendorToolkit): BrokerConnection {
    * nothing — about a row that published something this deployment simply cannot drive.
    */
   const published = [...new Set([...offered, ...managed])];
+  if (offered.includes(DEPLOYMENT_CLIENT_SCHEME)) {
+    return {
+      kind: "unsupported",
+      reason: `${published.join(", ")}：${at} 要用这个部署自己注册的 OAuth 客户端，通过服务器到服务器授权连接，而这个部署还没有为 ${at} 保存客户端。请管理员先在插件页为它保存客户端 ID 和密钥。`,
+      awaitsClient: true,
+    };
+  }
   return {
     kind: "unsupported",
     reason: published.length
@@ -2101,7 +2127,7 @@ export type ComposioVendor = {
              * nothing THROUGH that check, and the type says so rather than leaving the next reader
              * to discover it from a failed enable.
              */
-            credentials: Record<string, never>;
+            credentials: Record<string, never> | DeploymentClient;
           },
     ): Promise<{ id?: unknown } | null>;
     /**
@@ -3148,6 +3174,7 @@ export function buildComposioClient(
       toolkit,
       name,
       connection,
+      client,
     }): Promise<AuthConfigOutcome> {
       /*
        * NOTHING AT ALL FOR AN APP THAT NEEDS NO AUTHENTICATION, AND THAT IS THE VENDOR'S RULE
@@ -3236,6 +3263,21 @@ export function buildComposioClient(
       const configName = `${name} ${CONFIG_SUFFIX}`;
 
       /*
+       * EXCEPT A SERVER-TO-SERVER GRANT, WHOSE CREDENTIAL IS THE DEPLOYMENT'S AND NOT A PERSON'S
+       * (upstream #950). `S2S_OAUTH2` is a client-credentials grant: Composio exchanges a client id
+       * and secret for the token itself, so the client belongs on the config, and it is the one this
+       * deployment holds in its vault (`deployment-clients.ts`), handed in by the caller. Without it
+       * a config would be created that Composio accepts and every connect against it fails on, so
+       * that is refused, by name, and nothing is created.
+       */
+      const s2s =
+        connection.kind === "fields" &&
+        connection.authScheme === DEPLOYMENT_CLIENT_SCHEME;
+      if (s2s && !client) {
+        throw new BrokerRefusalError(deploymentClientMissingSentence(toolkit));
+      }
+
+      /*
        * WHICH TYPE OF CONFIG, AND THE MANAGED ONE IS RIGHT FOR EXACTLY ONE OF THE THREE KINDS THAT
        * REACH HERE. It was sent for all of them, and only one of the failures announced itself:
        * Composio has no OAuth client of its own for a self-registering app, so the managed path
@@ -3263,18 +3305,32 @@ export function buildComposioClient(
                * THE EMPTY RECORD IS THE VENDOR'S PRICE FOR SENDING NOTHING — see the field's own
                * comment on {@link ComposioVendor}. Omitting it is a `ValidationError` raised before
                * any request, which reads as a refusal to enable rather than as the secret-free
-               * config this branch is for.
+               * config this branch is for. A server-to-server grant's is the one config that is
+               * sent something, and its client was refused above if it was missing.
                */
-              credentials: {},
+              credentials: s2s && client ? client : {},
             } as const);
 
-      const created = await askVendor(
-        {
-          outcome: `the app is not enabled, and whether an authorization config for ${toolkit} now stands at Composio is not something this deployment can tell`,
-          app: toolkit,
-        },
-        () => vendor.authConfigs.create(toolkit, options),
-      );
+      const outcome = `the app is not enabled, and whether an authorization config for ${toolkit} now stands at Composio is not something this deployment can tell`;
+      /*
+       * A SERVER-TO-SERVER CONFIG CARRIES THE DEPLOYMENT'S CLIENT SECRET, SO ITS FAILURE IS READ AND
+       * DROPPED, NEVER ATTACHED (review M-5). It is the second call here that sends a secret, after
+       * {@link ComposioBroker.connectWithFields}, and it keeps that call's rule for the same reason:
+       * the vendor's error object carries the request, and the request is the secret. Only the
+       * vendor's own sentence leaves this block, through `vendorSentence`, the one door for it.
+       */
+      const created = s2s
+        ? await vendor.authConfigs.create(toolkit, options).catch((error) => {
+            const said = vendorSentence(error);
+            throw new BrokerRefusalError(
+              said === null
+                ? `Composio did not accept the authorization config for ${toolkit} and said nothing this deployment can pass on, so ${outcome}. The failure itself was dropped rather than recorded, because the request carried this deployment's own OAuth client.`
+                : `Composio refused the authorization config for ${toolkit}: ${said} So ${outcome}. Nothing further is kept, because the request carried this deployment's own OAuth client.`,
+            );
+          })
+        : await askVendor({ outcome, app: toolkit }, () =>
+            vendor.authConfigs.create(toolkit, options),
+          );
 
       /*
        * THE REPLY IS READ, WHICH IS THE HALF THAT WAS MISSING. Composio names the config it just
@@ -4637,7 +4693,22 @@ export function buildComposioClient(
              */
             state: {
               authScheme,
-              val: { ...values, status: "ACTIVE" },
+              /*
+               * EXCEPT A SERVER-TO-SERVER GRANT, WHICH CARRIES NO STATUS AT ALL (upstream #950).
+               * `ACTIVE` claims the token is already in hand, and for `S2S_OAUTH2` it is not:
+               * Composio refuses that request for the missing `access_token`. Left out, Composio
+               * exchanges the config's client for the token itself. A value typed under the name
+               * `status` is dropped rather than sent, so no typed value can say what state Composio
+               * is asked for.
+               */
+              val:
+                authScheme === DEPLOYMENT_CLIENT_SCHEME
+                  ? Object.fromEntries(
+                      Object.entries(values).filter(
+                        ([fieldName]) => fieldName !== "status",
+                      ),
+                    )
+                  : { ...values, status: "ACTIVE" },
             },
           },
         });

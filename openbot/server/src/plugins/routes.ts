@@ -26,6 +26,16 @@ import {
 } from "./broker";
 import { CATALOGUE, type CatalogueEntry, catalogueEntry } from "./catalogue";
 import { toolkitOf, vendorSentence } from "./composio";
+import {
+  adminConnectOnly,
+  adminConnectOnlySentence,
+  CLIENT_ID_MAX,
+  CLIENT_SECRET_MAX,
+  DEPLOYMENT_CLIENT_SLUG_MAX,
+  deploymentClientFrom,
+  deploymentClientSlug,
+  withDeploymentClients,
+} from "./deployment-clients";
 import { fieldsForPerson, keyGuideFor } from "./key-guides";
 import {
   authorizationUrlFor,
@@ -44,6 +54,7 @@ import {
   CustomServerRefusedError,
   deploymentFaultSentence,
   isDeploymentFault,
+  isServerWriteRefusal,
   type OAuthClient,
   OAuthClientReadError,
   type PluginKind,
@@ -829,6 +840,126 @@ export function createPluginRoutes(
   });
 
   /**
+   * Which brokered apps this deployment holds its own OAuth client for (upstream #950), as a set of
+   * app names for `withDeploymentClients`. A vault that cannot be read leaves every such app as it
+   * was without one, `unsupported`, rather than failing the directory: nothing is offered that the
+   * enable below could not then carry out.
+   */
+  const heldClients = async (): Promise<ReadonlySet<string>> => {
+    try {
+      return await store.deploymentClientToolkits();
+    } catch (error) {
+      console.error(
+        JSON.stringify({
+          type: "composio-deployment-clients-unreadable",
+          error: error instanceof Error ? error.name : "UnknownError",
+        }),
+      );
+      return new Set();
+    }
+  };
+
+  /** What the client routes answer an administrator whose request holds no capability (M-2). */
+  const CLIENTS_NEED_CAPABILITY =
+    "保存、查看或删除部署自己的应用客户端，需要以管理员身份在管理页面操作。";
+  const BAD_CLIENT_SLUG = `应用名只能包含字母、数字、下划线和连字符，最长 ${DEPLOYMENT_CLIENT_SLUG_MAX} 个字符。`;
+
+  /**
+   * The OAuth clients this deployment holds for brokered apps that connect with a server-to-server
+   * grant (upstream #950; Shopify is one). Administrator only. The id and when it was stored come
+   * back; the secret never does, from this route or any other.
+   */
+  routes.get("/composio/clients", capable, async (context) => {
+    const forbidden = requireAdmin(context);
+    if (forbidden) return forbidden;
+    try {
+      return context.json({ clients: await store.listDeploymentClients() });
+    } catch (error) {
+      if (isServerWriteRefusal(error)) {
+        return context.json({ error: CLIENTS_NEED_CAPABILITY }, 403);
+      }
+      if (isDeploymentFault(error)) {
+        return context.json({ error: deploymentFaultSentence(error) }, 409);
+      }
+      throw error;
+    }
+  });
+
+  /**
+   * Store this deployment's own OAuth client for one brokered app, into the vault. Body:
+   * `{ "client_id": "...", "client_secret": "..." }`, both required. Administrator only.
+   */
+  routes.put("/composio/clients/:slug", capable, async (context) => {
+    const forbidden = requireAdmin(context);
+    if (forbidden) return forbidden;
+    const toolkit = deploymentClientSlug(context.req.param("slug"));
+    if (!toolkit) return context.json({ error: BAD_CLIENT_SLUG }, 400);
+    const client = deploymentClientFrom(
+      await context.req.json().catch(() => null),
+    );
+    if (!client) {
+      return context.json(
+        {
+          error: `客户端 ID 和客户端密钥都要填写，ID 不超过 ${CLIENT_ID_MAX} 个字符、密钥不超过 ${CLIENT_SECRET_MAX} 个字符，且不能包含控制字符。`,
+        },
+        400,
+      );
+    }
+    try {
+      const { replaced } = await store.storeDeploymentClient({
+        toolkit,
+        client,
+        by: actorEmail(context),
+      });
+      return context.json({ toolkit, clientId: client.client_id, replaced });
+    } catch (error) {
+      if (isServerWriteRefusal(error)) {
+        return context.json({ error: CLIENTS_NEED_CAPABILITY }, 403);
+      }
+      if (error instanceof CustomServerRefusedError) {
+        return context.json({ error: error.message }, 400);
+      }
+      if (isDeploymentFault(error)) {
+        return context.json({ error: deploymentFaultSentence(error) }, 409);
+      }
+      throw error;
+    }
+  });
+
+  /** Retire this deployment's own OAuth client for one brokered app. Administrator only. */
+  routes.delete("/composio/clients/:slug", capable, async (context) => {
+    const forbidden = requireAdmin(context);
+    if (forbidden) return forbidden;
+    const toolkit = deploymentClientSlug(context.req.param("slug"));
+    if (!toolkit) return context.json({ error: BAD_CLIENT_SLUG }, 400);
+    try {
+      const removed = await store.removeDeploymentClient({
+        toolkit,
+        by: actorEmail(context),
+      });
+      return context.json({
+        ...removed,
+        ...(removed.stillInUseByEnabledApp
+          ? {
+              note: `删除只影响以后的启用：已经启用的 ${toolkit} 仍在用这个客户端。要停用它，请移除这个应用，并在 ${toolkit} 后台轮换客户端密钥。`,
+            }
+          : {}),
+      });
+    } catch (error) {
+      if (isServerWriteRefusal(error)) {
+        return context.json({ error: CLIENTS_NEED_CAPABILITY }, 403);
+      }
+      if (error instanceof CustomServerRefusedError) {
+        return context.json({ error: error.message }, 400);
+      }
+      if (isDeploymentFault(error)) {
+        return context.json({ error: deploymentFaultSentence(error) }, 409);
+      }
+      throw error;
+    }
+  });
+
+  /**
    * The broker's catalogue, as an administrator chooses an app out of it.
    *
    * THE SEARCH IS OURS, AND HAS TO BE. `@composio/core`'s toolkit listing forwards category,
@@ -851,7 +982,7 @@ export function createPluginRoutes(
    * until somebody renamed a row. `serverUrls` hands over the urls and nothing else, which is that
    * property made structural: there is no id here to read by mistake.
    */
-  routes.get("/composio/apps", requireUser, async (context) => {
+  routes.get("/composio/apps", capable, async (context) => {
     /*
      * INSIDE THE HANDLER, and the response returned. `requireAdmin` is a function that answers a
      * response, not Hono middleware: put in the middleware position it typechecks against Hono's
@@ -876,6 +1007,8 @@ export function createPluginRoutes(
       const refusal = brokerRefusal(error, DIRECTORY_UNAVAILABLE);
       return context.json({ error: refusal.error }, refusal.status);
     }
+    // An app awaiting this deployment's own client is connectable once one is stored (#950).
+    directory = withDeploymentClients(directory, await heldClients());
     /*
      * AN APP THAT CANNOT BE CONNECTED IS NOT AN APP TO OFFER. Every kind but this one ends at a
      * person with a working account; `unsupported` ends at an administrator pressing Add and
@@ -972,7 +1105,10 @@ export function createPluginRoutes(
     let directory: BrokerApp[] = [];
     if (slug) {
       try {
-        directory = await composio.broker.listApps();
+        directory = withDeploymentClients(
+          await composio.broker.listApps(),
+          await heldClients(),
+        );
       } catch (error) {
         /*
          * The same failure the directory route answers, in the same words, because it is the same
@@ -1391,6 +1527,21 @@ export function createPluginRoutes(
             error: `${row.title} needs no account, so there is nothing to connect. A Bot granted its tools can use it as it is.`,
           },
           400,
+        );
+      }
+
+      /*
+       * AN APP ON THE DEPLOYMENT'S OWN CLIENT IS NEVER A PERSON'S ACCOUNT, AND IS REFUSED BEFORE THE
+       * FORM IS EVEN ASKED FOR (upstream #950). What a person would type is a store subdomain; what
+       * Composio would exchange is the client this deployment registered, so their account would
+       * be the organization's access under their name, granted by nobody. Only an administrator,
+       * who holds that client already, connects it (`adminConnectOnly`). 403, because the person
+       * pressing Connect cannot make this request succeed by changing what they send.
+       */
+      if (adminConnectOnly(authScheme) && context.var.actor.role !== "admin") {
+        return context.json(
+          { error: adminConnectOnlySentence(row.title) },
+          403,
         );
       }
 
