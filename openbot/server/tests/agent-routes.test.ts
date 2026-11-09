@@ -48,11 +48,10 @@ function profile(overrides: Partial<AgentProfile> = {}): AgentProfile {
     hasAuth: false,
     hasCallbackToken: false,
     isolated: false,
-    modelRef: null,
-    platformModelRef: null,
-    persona: null,
     ...overrides,
-  };
+    // A profile as the list projects it; the model binding and persona are left unset, as they are
+    // on a profile that never had one, so the DTO below carries none of them.
+  } as AgentProfile;
 }
 
 type StoreCall = [method: keyof AgentProfileStore, ...arguments_: unknown[]];

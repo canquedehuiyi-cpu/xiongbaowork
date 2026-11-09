@@ -1993,8 +1993,7 @@ describe("0106 snapshot-derived plugin assembly foundations, no runtime activati
     expect(fk.onDelete).toBe("no action");expect(fk.onUpdate).toBe("no action");
     const roles=previous.tables["public.user_roles"];assert.ok(roles);
     expect(roles.columns.user_id?.type).toBe("text");
-    // The snapshot's column carries `typeSchema` for an enum, which drizzle-kit's `Column` type does not name.
-    expect(roles.columns.role as Record<string, unknown> | undefined).toEqual({name:"role",type:"role",typeSchema:"public",primaryKey:false,notNull:true});
+    expect(roles.columns.role).toEqual({name:"role",type:"role",typeSchema:"public",primaryKey:false,notNull:true});
     // Policy subquery existence is structural only; no admin row, GUC trust or runtime privilege is asserted.
   });
   test("two nonunique btree indexes retain column order ASC NULLS LAST with empty flags",()=>{

@@ -213,7 +213,7 @@ test("pool one: prepare runs once on the exact store-owned transaction before le
   let preparedSession: { pid: number; xid: string } | undefined;
   const result = await store.ensureWithPreparation(input, async (tx) => {
     preparation++;
-    expect(observation.active).toBe(tx);
+    expect(tx).toBe(observation.active);
     expect(observation.count).toBe(1);
     const absent = await tx.select().from(ledger).where(eq(ledger.approvalId, input.approvalId));
     expect(absent).toHaveLength(0);
@@ -370,7 +370,7 @@ test("own frozen eight-field snapshot survives caller mutation while authorizer 
   });
   const pending = store.ensureWithPreparation(input, async (tx) => {
     preparation++;
-    expect(observation.active).toBe(tx);
+    expect(tx).toBe(observation.active);
   }).then(
     (value) => ({ kind: "resolved" as const, value }),
     (error: unknown) => ({ kind: "rejected" as const, error }),
