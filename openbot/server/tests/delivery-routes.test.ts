@@ -262,17 +262,17 @@ test("unbound and unattributed senders get instructions, never a run", async () 
     messages: [{ id: "m1", role: "user", content: "<@UBOT> hi" }],
   });
   expect(unbound.events[0]).toMatchObject({ type: "RUN_STARTED" });
-  expect(said(unbound.events)).toContain("link <code>");
+  expect(said(unbound.events)).toContain("link <关联码>");
   expect(unbound.events.at(-1)).toMatchObject({ type: "RUN_FINISHED" });
   const anonymous = await run(f, {
     messages: [{ id: "m1", role: "user", content: "hi" }],
   });
-  expect(said(anonymous.events)).toContain("did not say who sent");
+  expect(said(anonymous.events)).toContain("没有告诉熊宝这条消息是谁发的");
   const twice = await run(f, {
     context: [sender(), sender("slack:T1:U2")],
     messages: [{ id: "m1", role: "user", content: "hi" }],
   });
-  expect(said(twice.events)).toContain("did not say who sent");
+  expect(said(twice.events)).toContain("没有告诉熊宝这条消息是谁发的");
   expect(
     f.calls.filter((c) => (c as { converse?: unknown }).converse),
   ).toHaveLength(0);
@@ -289,7 +289,7 @@ test("a link code binds the verified sender to the challenge's own scope", async
       },
     ],
   });
-  expect(said(result.events)).toContain("Linked");
+  expect(said(result.events)).toContain("关联好了。");
   expect(f.calls).toEqual([
     {
       bind: {
@@ -307,7 +307,7 @@ test("a link code binds the verified sender to the challenge's own scope", async
 });
 const IDENTITY_CODE = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
 const EXPIRED =
-  "That link code expired, was already used, or is for another app. Create a new one in OpenBot.";
+  "这个关联码已经过期、用过了，或者是别的应用的。请在熊宝里重新生成一个。";
 function identityFixture(
   outcome?: "linked" | "conflict" | "invalid",
   live = true,
@@ -344,7 +344,7 @@ test("a Reachability code is checked before the identity adapter", async () => {
     context: [sender()],
     ...linkMessage("11111111-2222-4333-8444-555555555555"),
   });
-  expect(said(result.events)).toContain("Linked");
+  expect(said(result.events)).toContain("关联好了。");
   expect(f.calls).toHaveLength(1);
   expect(redeemed).toEqual([]);
 });
@@ -355,12 +355,12 @@ test("an identity code from a Slack sender is redeemed through the adapter", asy
     ...linkMessage(IDENTITY_CODE),
   });
   expect(said(result.events)).toBe(
-    "Linked your Slack account to OpenBot. You can see it under Connections.",
+    "你的 Slack 账号已经关联到熊宝，可以在「已连接的账号」里看到。",
   );
   expect(redeemed).toEqual([[IDENTITY_CODE, { teamId: "T1", userId: "U1" }]]);
 });
 const CANCELLED =
-  "That code was posted where others could see it, so I cancelled it. Create a new one in OpenBot and send it to me in a direct message.";
+  "这个关联码发在了别人也看得到的地方，我已经把它作废了。请在熊宝里重新生成一个，用私信发给我。";
 test("an identity code sent where others can read it is cancelled, never redeemed", async () => {
   for (const conversation of [{ id: "C0123456789", kind: "channel" }, null]) {
     const { f, redeemed, discarded } = identityFixture("linked");
@@ -423,7 +423,7 @@ test("a Reachability code in a direct message still links", async () => {
     context: [sender()],
     ...linkMessage(REACHABILITY_CODE),
   });
-  expect(said(result.events)).toContain("Linked.");
+  expect(said(result.events)).toContain("关联好了。");
   expect(f.calls).toHaveLength(1);
 });
 test("a Reachability code in a Teams personal chat still links", async () => {
@@ -439,7 +439,7 @@ test("a Reachability code in a Teams personal chat still links", async () => {
     ],
     ...linkMessage(REACHABILITY_CODE),
   });
-  expect(said(result.events)).toContain("Linked.");
+  expect(said(result.events)).toContain("关联好了。");
   expect(f.calls).toEqual([
     {
       bind: expect.objectContaining({ transport: "teams", identity: "user1" }),
@@ -460,7 +460,7 @@ test("a Reachability code in a shared Teams chat still links until Teams' privat
     ],
     ...linkMessage(REACHABILITY_CODE),
   });
-  expect(said(result.events)).toContain("Linked.");
+  expect(said(result.events)).toContain("关联好了。");
   expect(f.calls).toEqual([
     {
       bind: expect.objectContaining({ transport: "teams", identity: "user1" }),
@@ -582,7 +582,7 @@ test("an identity code conflict gets the already-linked reply", async () => {
     ...linkMessage(IDENTITY_CODE),
   });
   expect(said(result.events)).toBe(
-    "This Slack account is already linked to another OpenBot user.",
+    "这个 Slack 账号已经关联到熊宝的另一位用户。",
   );
 });
 test("an invalid identity code gets the expired reply", async () => {
@@ -711,7 +711,7 @@ test("in a conversation others may read, the answer goes to the owner privately"
       messages: [{ id: "m1", role: "user", content: "<@UBOT> status?" }],
     });
     expect(said(result.events)).toBe(
-      "Other people may be able to read this conversation, so I sent my answer to you directly.",
+      "这个对话可能有别人能看到，所以我把回答私信发给你了。",
     );
     expect(
       result.events.some(
@@ -804,9 +804,9 @@ test("card resume decides through the approvals service as the binding owner onl
   expect(f.decisions).toEqual([["owner", APPROVAL, "allow_always"]]);
   expect(
     said((await resume({ confirmed: true, by: "slack:T1:U2" })).events),
-  ).toContain("not linked");
+  ).toContain("没有关联到这个审批的主人");
   expect(said((await resume({ confirmed: true })).events)).toContain(
-    "did not say who answered",
+    "没有说明是谁回答的",
   );
   expect(f.decisions).toHaveLength(1);
   await resume({ confirmed: false, by: "slack:T1:U1" });
@@ -1207,7 +1207,7 @@ test("OpenTag links, converses, answers privately and decides as the row's own t
       },
     ],
   });
-  expect(said(link.events)).toContain("Linked");
+  expect(said(link.events)).toContain("关联好了。");
   expect(linked.frames).toEqual([
     "readChallenge:platform",
     "consumeChallenge:owner",
@@ -1263,7 +1263,7 @@ test("a binding or link code stamped as nobody's runs, binds and decides nothing
         },
       ],
     });
-    expect(said(link.events)).toContain("expired");
+    expect(said(link.events)).toContain("已经过期");
     expect(linking.calls).toHaveLength(0);
 
     const f = fixture({ stamp });
@@ -1271,7 +1271,7 @@ test("a binding or link code stamped as nobody's runs, binds and decides nothing
       context: [sender()],
       messages: [{ id: "m1", role: "user", content: "<@UBOT> hi" }],
     });
-    expect(said(chat.events)).toContain("link <code>");
+    expect(said(chat.events)).toContain("link <关联码>");
     const card = await run(f, {
       forwardedProps: {
         command: {
@@ -1284,7 +1284,7 @@ test("a binding or link code stamped as nobody's runs, binds and decides nothing
         },
       },
     });
-    expect(said(card.events)).toContain("not linked");
+    expect(said(card.events)).toContain("没有关联到这个审批的主人");
     expect(
       f.calls.filter((c) => !(c as { trigger?: unknown }).trigger),
     ).toEqual([]);
