@@ -81,6 +81,7 @@ tests/arcade-classify.test.ts
 tests/arcade-config.test.ts
 tests/arcade-errors.test.ts
 tests/arcade-listing.test.ts
+tests/arcade-single-user.test.ts
 tests/arcade-transport-registry.test.ts
 tests/arcade-transport.test.ts
 tests/arcade-verifier-notice.test.ts

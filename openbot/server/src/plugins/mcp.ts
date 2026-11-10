@@ -617,8 +617,10 @@ export type McpCallResult = {
   isError: boolean;
   truncated: boolean;
   /**
-   * 厂商拒绝这个账号执行这个动作（Arcade 要求授权）。只由 Arcade 传输层设置；store 据此给出
-   * 「重新连接」的提示，并先问 broker 账号是否还在，再决定要不要结束连接行。
+   * 厂商拒绝这个账号执行这个动作（Arcade 要求授权）。只由 Arcade 传输层设置。
+   *
+   * X5 还没有接上：store 目前只把它当作一次失败的调用（失败文字给模型、审计 `mcp.call_failed`），
+   * 不出上游的「重新连接」卡片，也不去问 broker 账号是否还在、不结束连接行。
    */
   actionNotAllowed?: true;
 };
