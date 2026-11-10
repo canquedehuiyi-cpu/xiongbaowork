@@ -2,7 +2,6 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import { cutAtCodeUnits } from "../channels/text";
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
 import { createGuardedFetch, type OutboundPolicy } from "../net/outbound-guard";
 import {
   type CredentialPlacement,
@@ -11,9 +10,7 @@ import {
   withoutSecrets,
   withoutSecretsDeep,
 } from "./catalogue";
-=======
 import { transientFailure } from "./transient";
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
 
 /**
  * The only place in this deployment that speaks MCP to somebody else's server.
@@ -526,17 +523,13 @@ async function withClient<T>(
   } catch (error) {
     // Rewrapped so a caller never has to care whether the failure came from the transport, the
     // handshake or the call, and so the message that reaches an audit row and an admin page is one
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
     // sentence rather than a stack. Every spelling of the credential is taken out first: this
     // message is written into `last_error`, an audit row and a model's context, and a transport
     // error that quotes the URL it dialled would otherwise quote a key placed in it.
     throw new McpServerError(
       withoutSecrets(vendorFailure(error, dial.secrets), dial.secrets),
+      transientFailure(error),
     );
-=======
-    // sentence rather than a stack.
-    throw new McpServerError(vendorFailure(error), transientFailure(error));
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
   } finally {
     await client.close().catch(() => {
       // A server that will not say goodbye is not a failure of the work that just succeeded.

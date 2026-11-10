@@ -304,16 +304,7 @@ export const auditEventTypes = [
   "app_access.approved",
   "app_access.dismissed",
   "app_access.refused",
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
-=======
-  /*
-   * A Bot's owner giving one of their own apps to their own Bot, or taking it back, without an
-   * administrator (`plugins/owner-grants.ts`). Target the app key; payload `app`, `bot`, and the
-   * refs given or taken. Each ref also has its own `plugin_granted` / `plugin_revoked` row marked
-   * `grantedAs: owner`.
-   */
-  "app_access.owner_granted",
-  "app_access.owner_revoked",
+  // M5: 留给 X 系列（owner grants：app_access.owner_granted / app_access.owner_revoked）
   /**
    * An admin described what one Bot may do in one app, and the deployment's model chose the app's
    * actions for it (plugins/grant-translate.ts).
@@ -334,7 +325,6 @@ export const auditEventTypes = [
    * `app`, `bot`, `added` and `removed` (refs), and `authoring` (`{ source: "english", text }`).
    */
   "plugin.grants_changed",
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
   // Every action a Bot takes on its computer, allowed or refused. Both, always: a trail that records
   // only what was permitted cannot answer whether the Bot tried.
   "computer.action_allowed",
@@ -1478,7 +1468,6 @@ function botCondition(bots: string[] | undefined) {
 
 export function createAuditReader(database: Database): AuditReader {
   return {
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
     list: async (query) =>
       readAuditPage(
         database,
@@ -1486,94 +1475,28 @@ export function createAuditReader(database: Database): AuditReader {
           matchesRequested(
             auditEvents.eventType,
             requestedValues(query.eventType),
-=======
-    list: async (query) => {
-      const conditions = [
-        matchesRequested(
-          auditEvents.eventType,
-          requestedValues(query.eventType),
-        ),
-        notRequested(
-          auditEvents.eventType,
-          requestedValues(query.excludeEventType),
-        ),
-        notSucceededCall(requestedValues(query.excludeCalls)),
-        actorCondition(query.actorUserId),
-        matchesRequested(
-          auditEvents.initiatorKind,
-          requestedValues(query.initiatorKind),
-        ),
-        matchesRequested(
-          auditEvents.targetType,
-          requestedValues(query.targetType),
-        ),
-        query.targetId ? eq(auditEvents.targetId, query.targetId) : undefined,
-        botCondition(requestedValues(query.bot)),
-        appCondition(requestedValues(query.app)),
-        toolCondition(requestedValues(query.tool)),
-        effectCondition(query.effect?.trim()),
-        intentCondition(requestedValues(query.intent)),
-        ruleCondition(query.rule),
-        query.from
-          ? gt(auditEvents.createdAt, new Date(query.from))
-          : undefined,
-        query.to ? lt(auditEvents.createdAt, new Date(query.to)) : undefined,
-      ];
-      const cursor = query.cursor ? decodeCursor(query.cursor) : undefined;
-
-      if (cursor) {
-        // Bound as text and cast by PostgreSQL, not as a `Date`, which would drop the microseconds
-        // the cursor below carries.
-        const createdAt = sql`${cursor.createdAt}::timestamptz`;
-        conditions.push(
-          or(
-            lt(auditEvents.createdAt, createdAt),
-            and(
-              eq(auditEvents.createdAt, createdAt),
-              lt(auditEvents.id, cursor.id),
-            ),
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
           ),
           notRequested(
             auditEvents.eventType,
             requestedValues(query.excludeEventType),
           ),
           notSucceededCall(requestedValues(query.excludeCalls)),
-          query.actorUserId
-            ? eq(auditEvents.actorUserId, query.actorUserId)
-            : undefined,
+          actorCondition(query.actorUserId),
           matchesRequested(
             auditEvents.initiatorKind,
             requestedValues(query.initiatorKind),
           ),
-          query.targetType
-            ? eq(auditEvents.targetType, query.targetType)
-            : undefined,
+          matchesRequested(
+            auditEvents.targetType,
+            requestedValues(query.targetType),
+          ),
           query.targetId ? eq(auditEvents.targetId, query.targetId) : undefined,
-          query.bot
-            ? or(
-                eq(sql<string>`${auditEvents.payload} ->> 'bot'`, query.bot),
-                and(
-                  eq(auditEvents.targetType, "agent"),
-                  eq(auditEvents.targetId, query.bot),
-                ),
-                and(
-                  eq(auditEvents.targetType, "host_access"),
-                  eq(
-                    sql<string>`${auditEvents.payload} ->> 'botId'`,
-                    query.bot,
-                  ),
-                ),
-                // A routine is its Bot's, whoever made it.
-                and(
-                  eq(auditEvents.targetType, "routine"),
-                  eq(
-                    sql<string>`${auditEvents.payload} ->> 'agentId'`,
-                    query.bot,
-                  ),
-                ),
-              )
-            : undefined,
+          botCondition(requestedValues(query.bot)),
+          appCondition(requestedValues(query.app)),
+          toolCondition(requestedValues(query.tool)),
+          effectCondition(query.effect?.trim()),
+          intentCondition(requestedValues(query.intent)),
+          ruleCondition(query.rule),
           query.tenantId ? eq(auditEvents.tenantId, query.tenantId) : undefined,
           query.from
             ? gt(auditEvents.createdAt, new Date(query.from))

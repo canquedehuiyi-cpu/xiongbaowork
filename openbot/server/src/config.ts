@@ -249,19 +249,12 @@ export type DeploymentConfig = {
   recorder: { extraExtensionIds: string[] };
   /**
    * Whether OpenBot assigns the Intelligence project's `openbot` Learning container as the default
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
    * when nobody has chosen one (learning/auto-assign.ts). Only with {@link DeploymentConfig.intelligence}:
    * without the optional Intelligence there is no container to assign. On unless OPENBOT_LEARNING_AUTO_ASSIGN is
-   * "false" or "0", and off whenever CPK_INTELLIGENCE_LEARNING_CONTAINER_ID names a container. It
-   * never overrides a saved Admin setting. It creates the container only with a credential that can
-   * (see `learningSetup`), never with the runtime key.
-=======
-   * when nobody has chosen one (learning/auto-assign.ts). On unless OPENBOT_LEARNING_AUTO_ASSIGN is
    * "false" or "0". A container CPK_INTELLIGENCE_LEARNING_CONTAINER_ID names stands it aside once
    * Intelligence confirms it has that container; one it does not have is ignored, and this assigns
    * as though nothing was named. It never overrides a saved Admin setting. It creates the container
    * only with a credential that can (see `learningSetup`), never with the runtime key.
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
    */
   learningAutoAssign: boolean;
   /**

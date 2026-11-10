@@ -192,15 +192,10 @@ export function createActorAgentResolver(
       deps.loadPersonalMemoryForActor?.(actor.id),
       deps.recordToolLimitRefusalForActor?.(actor.id, context?.initiator),
       context?.holdsTools,
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
-      deps.pickedModelForActor?.(actor.id),
+      deps.pickedModelForActor?.(actor.id, context?.initiator),
       deps.resolveAgentModel,
       deps.loadAvatarSourcesForActor?.(actor.id),
       deps.loadCurrentProjectForActor?.(actor.id),
-=======
-      deps.pickedModelForActor?.(actor.id, context?.initiator),
-      deps.loadAppsForActor?.(actor.id),
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
     ).then((agents) => {
       const loadName = deps.loadNameForActor;
       if (loadName) {

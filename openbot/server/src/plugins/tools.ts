@@ -4,17 +4,8 @@ import { ApprovalRefusedError } from "../approvals/types";
 import type { AuditInitiator } from "../audit";
 import { HeadlessToolSuspension } from "../computer/headless-tools";
 import { markUntrusted } from "../untrusted-content";
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
-=======
-import { withAccountArgument } from "./account-argument";
-import type { AppAccess, AppAccessState } from "./app-access";
-import {
-  type CatalogueEntry,
-  catalogueEntry,
-  researchRoleFor,
-} from "./catalogue";
+// M5: 上游这里还引入了 account-argument（多账号）和 app-access（应用卡片），留给 X 系列（共享使用/多账号、app-access）。
 import { appCallsOfRun, sameArguments } from "./run-calls";
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
 import type { SelectableSkill } from "./selection";
 import {
   isDeploymentFault,
@@ -235,29 +226,15 @@ export function grantedToolGuidance(
     ),
     ...(tools.length > 0
       ? [
-          "Use them for anything about those systems. Do not browse to one of their websites instead: your",
+          "Use them for anything about those systems. Do NOT browse to one of their websites instead: your",
           "browser is signed in as nobody, so it sees less than these tools do and will meet a sign-in wall",
           "that connecting an account has already solved.",
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
+          // M5: 上游这句按 waiting/later/个人版分开说，留给 X 系列（个人版、app-access）；这里保留 fork 原句（tests/browser-search-guidance.test.ts 逐字钉住）。
           "If one of these systems is involved and no tool above covers the part you need, that is a",
           "missing grant and not something to work around. Say so plainly, name the capability you would",
           "need, and say an administrator can grant it on that connector. Do not reach for the browser, do",
           "not ask the person to sign in, and do not ask them to fetch it for you: they already have the",
           "access, and the thing that is missing is yours, not theirs.",
-=======
-          ...(laterBySystem.size > 0
-            ? [
-                "A tool offered on a turn that needs it is one you hold: never say you lack it or that it",
-                "has to be granted.",
-              ]
-            : []),
-          `If one of these systems is involved and no tool you hold covers the part you need${waiting.size > 0 ? ` (search with ${SEARCH_TOOLS} first)` : ""},`,
-          personal
-            ? "say so plainly and name the capability you would need. Every action an app here offers is already yours: never say one has to be added or granted, or that anybody else has to do it, because the person you work for is the only one here."
-            : "that is a missing grant. Say so plainly, name the capability you would need, and say an administrator can grant it on that connector.",
-          "Do not reach for the browser, do not ask the person to sign in, and do not ask them to fetch it",
-          "for you.",
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
         ]
       : []),
     // 只有内部工具（记忆、跟进等）时不说：它们不经审批门。
@@ -284,50 +261,13 @@ export function grantedToolGuidance(
      */
     ...(missing.length > 0
       ? [
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
           ...(tools.length > 0 || browser ? [""] : []),
           `This deployment also connects to: ${missing.join(", ")}. You hold none of their tools.`,
           "If a question needs one of them, say plainly that you have not been granted it and that an",
           "administrator can grant it on that connector. Do NOT browse to its website: that is not the",
           "same thing, your browser is signed in as nobody, and it will meet a sign-in wall that the",
           "connector exists to avoid. Do not ask the person to sign in there either.",
-=======
-          ...(callable.length > 0 ? [""] : []),
-          `This deployment also connects to: ${missing.map(named).join(", ")}. You hold none of their tools.`,
-          ...(showsCards
-            ? [
-                `If a question needs one of them, call ${SHOW_APP_ACCESS_TOOL} with its name: that puts a card in`,
-                "front of the person saying you have not been granted it, with a button to ask an administrator",
-                "for it. Then say so in a sentence; the card already carries the rest.",
-              ]
-            : [
-                "If a question needs one of them, say plainly that you have not been granted it and that an",
-                "administrator can grant it on that connector.",
-              ]),
-          "Do not browse to its website: that is not the same thing, your browser is signed in as nobody,",
-          "and it will meet a sign-in wall that the connector exists to avoid. Do not ask the person to",
-          "sign in there either.",
-        ]
-      : []),
-    /*
-     * AN APP THIS DEPLOYMENT DOES NOT CONNECT AT ALL is the one case nothing above names, and the
-     * one a Bot met most bluntly: asked about Gmail on a deployment that has not switched it on, it
-     * had no word for Gmail anywhere in its instructions and either browsed or said it could not.
-     * The card says whether it can be switched on and lets the person ask for it.
-     */
-    ...(showsCards
-      ? [
-          ...(callable.length > 0 ||
-          (missing.length > 0 && !personal) ||
-          apps?.length
-            ? [""]
-            : []),
-          `If the person needs a work app that is not named here at all${notNamedExamples(apps)}, call`,
-          `${SHOW_APP_ACCESS_TOOL} with its name before saying you cannot reach it: the card tells them whether it`,
-          personal
-            ? "is connected and offers the step that connects it. Do not browse to its website instead."
-            : "can be switched on and lets them ask an administrator. Do not browse to its website instead.",
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
+          // M5: 上游这里换成 show_app_access 卡片和应用显示名，留给 X 系列（app-access）。
         ]
       : []),
   ].join("\n");
@@ -351,51 +291,7 @@ export async function grantedTools(options: {
   const { store, botId, actorId, initiator, credentialActorFor } = options;
   const granted = await store.listForAgent(botId);
 
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
-=======
-  /*
-   * WHICH ACCOUNTS THE PERSON HOLDS AT EACH APP, so a Bot holding Gmail tools knows there are two
-   * mailboxes and what they are called. Asked about the person whose accounts the call opens, which
-   * for a Team Bot is its owner. Only an app with more than one account changes a tool: the schema
-   * gains an `account` argument listing them (see `./account-argument`), and the call path checks
-   * whatever comes back against the same person's accounts.
-   */
-  const servers = [
-    ...new Set(granted.tools.map((tool) => tool.ref.split("/")[0] ?? "")),
-  ].filter(Boolean);
-  const opensAsFor = new Map<string, string>();
-  for (const tool of granted.tools) {
-    opensAsFor.set(
-      tool.ref,
-      credentialActorFor ? await credentialActorFor(tool.ref) : actorId,
-    );
-  }
-  const choicesByPerson = new Map<
-    string,
-    Awaited<ReturnType<PluginStore["accountChoicesForServers"]>>
-  >();
-  for (const person of new Set(opensAsFor.values())) {
-    /*
-     * A list that cannot be read leaves every tool as the app wrote it: the call still runs in the
-     * person's default account, and nothing about which tools a Bot holds depends on this read.
-     */
-    let held: Awaited<ReturnType<PluginStore["accountChoicesForServers"]>>;
-    try {
-      held = await store.accountChoicesForServers(person, servers);
-    } catch {
-      held = new Map();
-    }
-    choicesByPerson.set(person, held);
-  }
-  const schemaFor = (tool: (typeof granted.tools)[number]) => {
-    const server = tool.ref.split("/")[0] ?? "";
-    const held = choicesByPerson
-      .get(opensAsFor.get(tool.ref) ?? actorId)
-      ?.get(server);
-    return held
-      ? withAccountArgument(tool.inputSchema, held.title, held.choices)
-      : tool.inputSchema;
-  };
+  // M5: 上游在这里按人给多账号应用的工具加 `account` 参数（account-argument），留给 X 系列（共享使用/多账号）。
 
   /*
    * This run's app calls, a few at a time, and a read asked twice answered once. One per call of this
@@ -405,7 +301,6 @@ export async function grantedTools(options: {
    */
   const calls = appCallsOfRun();
 
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
   return granted.tools.map((tool) => ({
     name: tool.toolName,
     ref: tool.ref,
@@ -414,12 +309,7 @@ export async function grantedTools(options: {
     searchable: true as const,
     ...(tool.read ? { reads: true as const } : {}),
     initiator,
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
     // 应用标为破坏性的工具，名字不一定看得出来：在描述末尾写明 OpenBot 会先问，Bot 不必再问。
-=======
-    // OpenBot always asks before a tool its app marks destructive, and the Bot is told so here, on
-    // the tool, since its name needn't say it (ASKING_GUIDANCE names these words).
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
     description: tool.destructive
       ? [tool.description.trim(), DESTRUCTIVE_TOOL_NOTE]
           .filter(Boolean)
@@ -427,32 +317,6 @@ export async function grantedTools(options: {
       : tool.description,
     parameters: parametersFor(tool.inputSchema),
     execute: async (args: unknown) => {
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
-      try {
-        const result = await store.callTool({
-          ref: tool.ref,
-          // The runtime hands through whatever the model produced. Anything that is not an object
-          // is not a set of arguments, and the vendor should be the one to say so.
-          args:
-            args && typeof args === "object" && !Array.isArray(args)
-              ? (args as Record<string, unknown>)
-              : {},
-          botId,
-          actorId,
-          ...(initiator ? { initiator } : {}),
-          ...(credentialActorFor
-            ? { credentialActorId: await credentialActorFor(tool.ref) }
-            : {}),
-        });
-        return vendorAnswer(result);
-      } catch (error) {
-        if (error instanceof HeadlessToolSuspension) throw error;
-        if (
-          error instanceof PluginRefusedError ||
-          error instanceof ApprovalRefusedError
-        ) {
-          return `${REFUSAL_MARKER} ${error.message}`;
-=======
       // The runtime hands through whatever the model produced. Anything that is not an object is
       // not a set of arguments, and the vendor should be the one to say so.
       const callArgs =
@@ -476,8 +340,7 @@ export async function grantedTools(options: {
           return { text: vendorAnswer(result), reusable: !result.isError };
         } catch (error) {
           if (error instanceof HeadlessToolSuspension) throw error;
-          return { text: failedCall(error, botId), reusable: false };
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
+          return { text: failedCall(error), reusable: false };
         }
       });
     },
@@ -487,17 +350,13 @@ export async function grantedTools(options: {
 /**
  * What a Bot is told about a call that did not come back with an answer: a refusal, or a failure.
  */
-function failedCall(error: unknown, botId: string): string {
+function failedCall(error: unknown): string {
   if (
     error instanceof PluginRefusedError ||
     error instanceof ApprovalRefusedError
   ) {
-    /*
-     * A refusal that carries an app card names the Bot here, the one place both are known: in a
-     * channel several Bots answer in, the card has to ask what the app is for this person on THIS
-     * Bot, not on whichever one the surface happens to have declared.
-     */
-    return `${REFUSAL_MARKER} ${addressedTo(error.message, botId)}`;
+    // M5: 上游在这里给拒绝里的应用卡片署上 Bot（addressedTo），留给 X 系列（app-access）；fork 原样转述拒绝。
+    return `${REFUSAL_MARKER} ${error.message}`;
   }
   /*
    * A contradiction in this deployment's own tables says nothing to a model.

@@ -30,8 +30,11 @@ export const APPROVAL_DECISIONS = [
 ] as const satisfies readonly ApprovalDecision[];
 /**
  * The kinds of action OpenBot recognises by name and asks about whatever the person's own switch
- * says (`safetyRequirement` in ./policy). Open by default: the person can allow one once, for the
- * conversation, or always. An admin can close each kind (`ApprovalTeamSettings.actionKinds`).
+ * says (`safetyRequirement` in ./policy). An admin can close each kind further
+ * (`ApprovalTeamSettings.actionKinds`).
+ *
+ * 本部署的审批底线（#398）不随上游 #1394 打开：删除、对外发送、分享、公开发布总是先问且只给
+ * 「允许一次」，付款、改凭据、改安全设置交给本人。管理员的设置只能让它更严（交给本人），不能放宽。
  */
 export type ActionKind =
   | "deleting"
@@ -51,9 +54,9 @@ export const ACTION_KINDS = [
   "security_settings",
 ] as const satisfies readonly ActionKind[];
 /**
- * What the admin lets members do about one kind of action. `open` (the default) asks, and the person
- * can allow it once, for the conversation, or always. `ask` asks every time, with Allow once and Deny
- * only. `hand_off` leaves it to the person to do themselves.
+ * What the admin lets members do about one kind of action. `open` (the default) leaves it to the
+ * deployment's floor; `ask` asks every time, with Allow once and Deny only. `hand_off` leaves it to
+ * the person to do themselves. A floor stricter than the setting wins (see `closedKind`).
  */
 export type ActionKindPolicy = "open" | "ask" | "hand_off";
 export const ACTION_KIND_POLICIES = [
@@ -286,16 +289,12 @@ export type ApprovalRule = {
   effect: string;
   scope: string;
   behaviour: RuleBehaviour;
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
-=======
-  /** The one account the rule is for, or null for the app whichever account; see `ruleMatches`. */
-  account?: string | null;
+  // M5: 留给 X 系列（多账号）：上游这里还有按账号的 `account`。
   /**
    * The kind of action the rule was saved from, by "Always allow here" on that kind's card, or null.
    * An allow reaches an action of a kind only when it was saved from that kind (see `reachesKind`).
    */
   kind?: ActionKind | null;
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
   revokedAt: Date | null;
   createdAt: Date;
 };
@@ -314,6 +313,7 @@ export type ApprovalConversationGrant = {
   toolRef: string;
   effect: string;
   scope: string;
+  /** M5: 留给 X 系列（多账号）。本部署的审批不分账号，总是 null。 */
   account: string | null;
   kind: ActionKind | null;
   createdAt: Date;
@@ -343,7 +343,6 @@ export type ApprovalTeamSettings = {
   enforceAutoReview: boolean;
   customRulesEnabled: boolean;
   hostCommandsCap: HostCommandPolicy;
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
   /** Every Bot asks before a dangerous command, whatever its own switch says (SEC1 D10). */
   enforceDangerousCommands: boolean;
 };
@@ -385,7 +384,6 @@ export type EmployeePolicy = {
   ownerUserId: string | null;
   rules: ApprovalRule[];
   security: EmployeeSecuritySettings;
-=======
   /** The kinds the admin closed. A kind not named is `open`. */
   actionKinds: Partial<Record<ActionKind, ActionKindPolicy>>;
 };
@@ -398,7 +396,6 @@ export type ReviewerGuidanceChange = {
   /** The admin's email, as the trail's other admin rows name them. */
   actor?: string;
   reading?: { summary: string | null; explanation: string };
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
 };
 /** Rules, preferences and team settings. Optional on the store so older fakes keep working. */
 export type ApprovalPolicyStore = {
@@ -482,7 +479,6 @@ export type ApprovalPolicyStore = {
     options?: { resume?: boolean },
   ): Promise<string[]>;
   /**
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
    * The owner's side of one Bot (SEC1 D9): its owner, the owner's rules and its security floors,
    * read in the owner's frame whoever asks. Optional so older fakes keep working; absent, no owner
    * rule applies and the floors are their defaults.
@@ -496,7 +492,6 @@ export type ApprovalPolicyStore = {
     botId: string,
     input: Partial<EmployeeSecuritySettings>,
   ): Promise<EmployeeSecuritySettings>;
-=======
    * The person's "Allow for this conversation" answers still in force in this conversation: not
    * turned off, and the conversation not deleted. Optional so older fakes keep working.
    */
@@ -510,7 +505,6 @@ export type ApprovalPolicyStore = {
   ): Promise<ApprovalConversationGrant[]>;
   /** Turn one off. Owner-scoped: another person's id is not found. Audited. */
   revokeConversationGrant?(ownerUserId: string, id: string): Promise<void>;
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
   /** One audit row per settled action, so every verdict can be read back. */
   recordDecision(input: {
     ownerUserId: string;

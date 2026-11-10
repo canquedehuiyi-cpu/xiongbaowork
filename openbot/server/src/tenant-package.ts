@@ -1382,6 +1382,62 @@ export async function synchronizeTenantPackage(
           }
         }
 
+        /*
+         * A personal starter still running on instructions an earlier OpenBot shipped, word for word.
+         *
+         * The starter's instructions are seeded once and then belong to the person, so a fix to the
+         * package's `system_prompt` reached only fresh installs. The earlier wording told the Bot to ask
+         * whenever something was ambiguous, which stopped it short of finishing, and to ask the person
+         * to sign in and wait, which contradicted OpenBot's own rule that a sign-in is handed over with
+         * a tool call. A starter that still carries one of those texts exactly has never been edited, so
+         * it moves to the current one. One that somebody changed, by a single word, is theirs and stays.
+         */
+        const shippedInstructions = tenantPackage.agents.find(
+          ({ id }) => id === PERSONAL_ASSISTANT,
+        )?.configuration.systemPrompt;
+        if (
+          bundledPersonal &&
+          !freshPersonal &&
+          typeof shippedInstructions === "string"
+        ) {
+          const starters = await transaction
+            .select({
+              id: agentTable.id,
+              type: agentTable.type,
+              configuration: agentTable.configuration,
+            })
+            .from(agentTable)
+            .innerJoin(agentProfiles, eq(agentTable.id, agentProfiles.agentId))
+            .where(
+              and(
+                eq(agentTable.packageId, deploymentPackage.id),
+                inArray(agentTable.id, [PERSONAL_ASSISTANT, PICKED_HARNESS]),
+                isNull(agentProfiles.ownerUserId),
+              ),
+            );
+          for (const starter of starters) {
+            const configuration = storedConfiguration(starter.configuration);
+            if (configuration?.personalStarter !== true) continue;
+            // Where `starterInstructionsKey` keeps them: the prompt a Bot that runs here runs on, or
+            // the instructions a harness is sent in its standing role.
+            const key =
+              starter.type === "built_in" ? "systemPrompt" : "standingInstructions";
+            const stored = configuration[key];
+            if (
+              typeof stored !== "string" ||
+              !EARLIER_STARTER_INSTRUCTIONS.includes(stored.trim())
+            )
+              continue;
+            await transaction
+              .update(agentTable)
+              .set({
+                configuration: { ...configuration, [key]: shippedInstructions },
+                updatedAt: new Date(),
+              })
+              .where(eq(agentTable.id, starter.id));
+          }
+        }
+
         // Disable only explicitly unconfigured agents still owned by this package. Keep canonical
         // rows and conversation memberships: runtime tombstones preserve their readable history.
         // Normal seeding below clears deletedAt if an endpoint is configured again.
@@ -1479,7 +1535,6 @@ export async function synchronizeTenantPackage(
           }
         }
 
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
         const members = [...new Set(memberUserIds)];
 
         /*
@@ -1518,88 +1573,6 @@ export async function synchronizeTenantPackage(
         const declaredAgentIds = [
           ...new Set(
             [...tenantPackage.agents, ...agents].map((agent) => agent.id),
-=======
-    /*
-     * A personal starter still running on instructions an earlier OpenBot shipped, word for word.
-     *
-     * The starter's instructions are seeded once and then belong to the person, so a fix to the
-     * package's `system_prompt` reached only fresh installs. The earlier wording told the Bot to ask
-     * whenever something was ambiguous, which stopped it short of finishing, and to ask the person
-     * to sign in and wait, which contradicted OpenBot's own rule that a sign-in is handed over with
-     * a tool call. A starter that still carries one of those texts exactly has never been edited, so
-     * it moves to the current one. One that somebody changed, by a single word, is theirs and stays.
-     */
-    const shippedInstructions = tenantPackage.agents.find(
-      ({ id }) => id === PERSONAL_ASSISTANT,
-    )?.configuration.systemPrompt;
-    if (
-      bundledPersonal &&
-      !freshPersonal &&
-      typeof shippedInstructions === "string"
-    ) {
-      const starters = await transaction
-        .select({
-          id: agentTable.id,
-          type: agentTable.type,
-          configuration: agentTable.configuration,
-        })
-        .from(agentTable)
-        .innerJoin(agentProfiles, eq(agentTable.id, agentProfiles.agentId))
-        .where(
-          and(
-            eq(agentTable.packageId, deploymentPackage.id),
-            inArray(agentTable.id, [PERSONAL_ASSISTANT, PICKED_HARNESS]),
-            isNull(agentProfiles.ownerUserId),
-          ),
-        );
-      for (const starter of starters) {
-        const configuration = storedConfiguration(starter.configuration);
-        if (configuration?.personalStarter !== true) continue;
-        // Where `starterInstructionsKey` keeps them: the prompt a Bot that runs here runs on, or
-        // the instructions a harness is sent in its standing role.
-        const key =
-          starter.type === "built_in" ? "systemPrompt" : "standingInstructions";
-        const stored = configuration[key];
-        if (
-          typeof stored !== "string" ||
-          !EARLIER_STARTER_INSTRUCTIONS.includes(stored.trim())
-        )
-          continue;
-        await transaction
-          .update(agentTable)
-          .set({
-            configuration: { ...configuration, [key]: shippedInstructions },
-            updatedAt: new Date(),
-          })
-          .where(eq(agentTable.id, starter.id));
-      }
-    }
-
-    // Disable only explicitly unconfigured agents still owned by this package. Keep canonical
-    // rows and conversation memberships: runtime tombstones preserve their readable history.
-    // Normal seeding below clears deletedAt if an endpoint is configured again.
-    if (omittedAgentIds.length > 0) {
-      const now = new Date();
-      await transaction
-        .update(agentProfiles)
-        .set({ deletedAt: now, updatedAt: now })
-        .where(
-          and(
-            isNull(agentProfiles.ownerUserId),
-            isNull(agentProfiles.deletedAt),
-            inArray(
-              agentProfiles.agentId,
-              transaction
-                .select({ id: agentTable.id })
-                .from(agentTable)
-                .where(
-                  and(
-                    eq(agentTable.packageId, deploymentPackage.id),
-                    inArray(agentTable.id, omittedAgentIds),
-                  ),
-                ),
-            ),
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
           ),
         ];
         /*
