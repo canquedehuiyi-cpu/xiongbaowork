@@ -4,6 +4,7 @@ import { reasonWithoutStatement } from "../db/query-failure";
 import { toolkitOfFor } from "./access";
 import { normalizeArcadeError } from "./arcade-adapter";
 import type { PendingAuthorization } from "./arcade-attempts";
+import { isServerWriteRefusal } from "./store";
 import {
   type ArcadeBroker,
   type AuthorizationFlow,
@@ -221,7 +222,8 @@ export async function startArcadeAuthorization(
         server: input.serverId,
         attemptStartedAt: claim.attempt.createdAt,
         note: "The vendor did not answer an authorization clearly, so whether it started a flow is unknown. The attempt was left standing with no authorization id: it cannot complete, and nobody was sent to a consent screen.",
-        error: reasonWithoutStatement(error),
+        // 评审 M5：认不出的错误只记类名，它的 message 可能带着授权链接。
+        error: error instanceof Error ? error.name : typeof error,
       }),
     );
     return context.json(
@@ -284,25 +286,95 @@ async function stillPermitted(
   store: PluginStore,
   attempt: PendingAuthorization,
   account: AccountRef,
-): Promise<{ toolkit: string } | { refused: "context-changed" }> {
+): Promise<
+  | { toolkit: string; refused?: undefined }
+  | { toolkit: string | null; refused: "context-changed" }
+> {
   const row = await store.serverAddress(attempt.serverId);
   const toolkit = row ? toolkitOfFor("arcade", row.url) : null;
-  if (!row || !toolkit) return { refused: "context-changed" };
+  if (!row || !toolkit) return { toolkit, refused: "context-changed" };
   const app = await store.appAccount(toolkit);
-  if (!app) return { refused: "context-changed" };
+  if (!app) return { toolkit, refused: "context-changed" };
   if (account.holder === "person") {
-    if (app.mode === "shared") return { refused: "context-changed" };
+    if (app.mode === "shared") return { toolkit, refused: "context-changed" };
     if (account.userId !== context.var.actor.id)
-      return { refused: "context-changed" };
+      return { toolkit, refused: "context-changed" };
     return { toolkit };
   }
   if (
     app.mode !== "shared" ||
-    app.shared?.vendorUserId !== account.vendorUserId ||
-    context.var.actor.role !== "admin"
+    app.shared?.vendorUserId !== account.vendorUserId
   )
-    return { refused: "context-changed" };
+    return { toolkit, refused: "context-changed" };
+  /*
+   * 评审 M2：会话里的角色是登录时定的，真正的门是管理员能力（X1 的 `requireTeamAccountWriter`）。
+   * 降权的管理员在这里被拒，而不是等到写应用行时被行安全过滤。
+   */
+  try {
+    store.requireTeamAccountWriter();
+  } catch (error) {
+    if (!isServerWriteRefusal(error)) throw error;
+    return { toolkit, refused: "context-changed" };
+  }
   return { toolkit };
+}
+
+/**
+ * 评审 I1：一个记不下来的授权在厂商那边已经生效时怎么办。
+ *
+ * 团队账号：在厂商那边撤销。团队身份是每个应用、每次切换随机铸出的（`mintDeploymentVendorUserId`），
+ * 它下面只有这一个应用，撤销不会连带别的应用；不撤，它就会在之后被别人的「确认」收养。撤销失败才落回
+ * 留痕。个人：授权是本人自己的，记在本人 id 下；撤销会连带本人同一认证提供商下的其他应用，所以只留痕。
+ */
+async function leftoverGrant(
+  deps: ArcadeRouteDeps,
+  input: {
+    actorId: string;
+    attempt: PendingAuthorization;
+    account: AccountRef;
+    toolkit: string | null;
+    why: string;
+  },
+): Promise<"withdrawn" | "left-live"> {
+  const { store, arcade } = deps;
+  if (input.account.holder === "deployment" && input.toolkit) {
+    const toolkit = input.toolkit;
+    const withdrawn = await withVendorDeadline(() =>
+      arcade.revoke({ account: input.account, toolkit }),
+    ).then(
+      () => true,
+      (error: unknown) => {
+        console.error(
+          JSON.stringify({
+            type: "arcade-team-grant-not-withdrawn",
+            server: input.attempt.serverId,
+            app: toolkit,
+            error: error instanceof Error ? error.name : typeof error,
+          }),
+        );
+        return false;
+      },
+    );
+    if (withdrawn) return "withdrawn";
+  }
+  await store
+    .recordCancelledGrantLeftLive({
+      actorId: input.actorId,
+      attempt: input.attempt,
+      toolkit: input.toolkit ?? input.attempt.serverId,
+      why: input.why,
+      siblings: [],
+    })
+    .catch((error: unknown) =>
+      console.error(
+        JSON.stringify({
+          type: "arcade-cancelled-grant-left-live-not-filed",
+          server: input.attempt.serverId,
+          error: reasonWithoutStatement(error),
+        }),
+      ),
+    );
+  return "left-live";
 }
 
 /**
@@ -357,7 +429,13 @@ export function mountArcadeRoutes(
     let recorded = false;
     try {
       const actorId = context.var.actor.id;
-      const attempt = await store.authorizationAttemptFor(actorId);
+      /*
+       * 活着的那一次；没有就看刚被取消的那一次（评审 I1）：取消后厂商那边仍可能完成同意，这个遗留
+       * 授权要核对清楚是不是这一次的，团队账号的再撤销。
+       */
+      const live = await store.authorizationAttemptFor(actorId);
+      const attempt = live ?? (await store.withdrawnAttemptFor(actorId));
+      const cancelled = live === null && attempt !== null;
       if (!attempt || attempt.authId === null) return refusedWith("no-attempt");
       const account = accountOf(attempt);
       if (!account) return refusedWith("no-attempt");
@@ -404,6 +482,25 @@ export function mountArcadeRoutes(
         );
         return refusedWith("vendor-unavailable");
       }
+      if (cancelled) {
+        // 取消之后：没有完成就什么也没生效；完成了，团队账号撤销，个人留痕。
+        if (
+          settled.status !== "completed" ||
+          settled.userId !== account.vendorUserId
+        )
+          return refusedWith("cancelled");
+        const row = await store.serverAddress(attempt.serverId);
+        const outcome = await leftoverGrant(current, {
+          actorId,
+          attempt,
+          account,
+          toolkit: row ? toolkitOfFor("arcade", row.url) : null,
+          why: "the attempt was cancelled before the consent completed",
+        });
+        return refusedWith(
+          outcome === "withdrawn" ? "cancelled" : "cancelled-left-live",
+        );
+      }
       if (settled.status === "failed") {
         await store.failAuthorizationAttempt({ actorId, authId });
         return refusedWith("authorization-failed");
@@ -415,17 +512,35 @@ export function mountArcadeRoutes(
       }
 
       const permitted = await stillPermitted(context, store, attempt, account);
-      if ("refused" in permitted) {
+      if (permitted.refused) {
+        // 团队账号：在厂商那边撤销（评审 I1），结束为已撤回；撤不了、或是个人的，结束为未对账并审计。
+        const withdrawn =
+          account.holder === "deployment" && permitted.toolkit
+            ? await withVendorDeadline(() =>
+                arcade.revoke({
+                  account,
+                  toolkit: permitted.toolkit as string,
+                }),
+              ).then(
+                () => true,
+                () => false,
+              )
+            : false;
         console.error(
           JSON.stringify({
             type: "arcade-completion-not-permitted",
             server: attempt.serverId,
             authorizationId: authId,
             holder: account.holder,
-            note: "A person returned from a consent screen who may no longer record this app's account, so nothing was recorded and nothing was withdrawn. The consent is live at the vendor on the account the attempt was for; the attempt was closed unreconciled.",
+            withdrawn,
+            note: withdrawn
+              ? "A team account's consent came back to somebody who may no longer write it; the grant was withdrawn at the vendor."
+              : "A person returned from a consent screen who may no longer record this app's account, so nothing was recorded. The consent may be live at the vendor on the account the attempt was for; the attempt was closed unreconciled.",
           }),
         );
-        await store.markAuthorizationUnreconciled({ actorId, authId });
+        if (withdrawn)
+          await store.markAuthorizationWithdrawn({ actorId, authId });
+        else await store.markAuthorizationUnreconciled({ actorId, authId });
         return refusedWith("not-permitted");
       }
 
@@ -470,25 +585,17 @@ export function mountArcadeRoutes(
           .catch(() => null);
         if (completedElsewhere === null) return refusedWith("not-recorded");
         if (!completedElsewhere) {
-          // 尝试在同意期间被取消了，授权却完成了：不撤销（可能连带别的应用），留痕并告诉这个人。
-          await store
-            .recordCancelledGrantLeftLive({
-              actorId,
-              attempt,
-              toolkit: permitted.toolkit,
-              why: "the attempt was cancelled before the consent completed",
-              siblings: [],
-            })
-            .catch((error: unknown) =>
-              console.error(
-                JSON.stringify({
-                  type: "arcade-cancelled-grant-left-live-not-filed",
-                  server: attempt.serverId,
-                  error: reasonWithoutStatement(error),
-                }),
-              ),
-            );
-          return refusedWith("cancelled-left-live");
+          // 尝试在同意期间被取消了，授权却完成了：团队账号撤销，个人留痕（评审 I1）。
+          const outcome = await leftoverGrant(current, {
+            actorId,
+            attempt,
+            account,
+            toolkit: permitted.toolkit,
+            why: "the attempt was cancelled before the consent completed",
+          });
+          return refusedWith(
+            outcome === "withdrawn" ? "cancelled" : "cancelled-left-live",
+          );
         }
         recorded = true;
       }
@@ -522,10 +629,17 @@ export function mountArcadeRoutes(
     if (!attempt || attempt.serverId !== serverId) {
       return context.json({ cancelled: false });
     }
-    const cancelled = await store.discardAuthorizationAttempt({
-      actorId,
-      createdAt: attempt.createdAt,
-    });
+    // 已经拿到链接的那一次结束为「已撤回」而不是删掉：之后厂商那边若仍完成了同意，回程还能认出它（评审 I1）。
+    const cancelled =
+      attempt.authId === null
+        ? await store.discardAuthorizationAttempt({
+            actorId,
+            createdAt: attempt.createdAt,
+          })
+        : await store.markAuthorizationWithdrawn({
+            actorId,
+            authId: attempt.authId,
+          });
     if (cancelled) {
       await store.recordAuthorizationCancelled({ actorId, attempt });
     } else if (

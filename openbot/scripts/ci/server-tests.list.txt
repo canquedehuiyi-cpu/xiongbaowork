@@ -104,6 +104,7 @@ tests/arcade-provider-check.test.ts
 tests/arcade-revoke-invariant.test.ts
 tests/arcade-single-user.test.ts
 tests/arcade-store-call.integration.test.ts
+tests/arcade-team-account.integration.test.ts
 tests/arcade-toolkit-listing-deadline-engine.test.ts
 tests/arcade-transport-registry.test.ts
 tests/arcade-transport.test.ts

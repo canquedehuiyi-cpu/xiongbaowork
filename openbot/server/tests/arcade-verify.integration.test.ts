@@ -377,7 +377,8 @@ describe("connecting an Arcade app binds the consent to the person who pressed C
     const authId = `ar_${suite}_${state.minted.length}`;
     consented("flow-dana-cal", DANA, authId);
     const late = await verify(DANA, "flow-dana-cal");
-    expect(reasonOf(late)).toBe("no-attempt");
+    // 取消后才完成的个人授权：不记连接，不撤销（会连带本人的其他应用），留痕并告诉本人（评审 I1）。
+    expect(reasonOf(late)).toBe("cancelled-left-live");
     expect(
       (await connectionsOf(DANA)).map((row) => row.toolkit).sort(),
     ).toEqual([GMAIL]);
