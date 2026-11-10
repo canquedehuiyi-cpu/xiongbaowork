@@ -164,10 +164,10 @@ export const mcpServers = pgTable(
      * `plugins/account-mode.ts` 切换。
      *
      * 默认 `personal`，而上游是 NULL 再回填：fork 在这一列出现之前每个 broker 应用都是个人账号，默认值就是
-     * 那个既有行为，不需要谁重新决定。显式写成 NULL 或别的值的 broker 行会被 `accountFor` 拒绝而不是猜。
+     * 那个既有行为，不需要谁重新决定。NOT NULL；`accountFor` 对读不懂的值仍拒绝而不是猜。
      * 对不需要账号的应用（`NO_AUTH`）与非 broker 行，这一列不被读取。
      */
-    accountMode: text("account_mode").default("personal"),
+    accountMode: text("account_mode").notNull().default("personal"),
     /**
      * Shared 应用的团队账号在 vendor 处登记的身份，切到 Shared 时由 `mintDeploymentVendorUserId` 铸一次；
      * Personal 应用为 NULL（CHECK 保证）。
@@ -194,11 +194,11 @@ export const mcpServers = pgTable(
   (table) => [
     check(
       "mcp_servers_account_mode_check",
-      sql`${table.accountMode} IS NULL OR ${table.accountMode} IN ('personal', 'shared')`,
+      sql`${table.accountMode} IN ('personal', 'shared')`,
     ),
     check(
       "mcp_servers_shared_account_check",
-      sql`(${table.accountMode} = 'shared' AND ${table.sharedVendorUserId} IS NOT NULL) OR (${table.accountMode} IS DISTINCT FROM 'shared' AND ${table.sharedVendorUserId} IS NULL AND ${table.sharedConnectedAt} IS NULL)`,
+      sql`(${table.accountMode} = 'shared' AND ${table.sharedVendorUserId} IS NOT NULL AND (${table.sharedConnectedAt} IS NULL OR ${table.sharedConnectedBy} IS NOT NULL)) OR (${table.accountMode} = 'personal' AND ${table.sharedVendorUserId} IS NULL AND ${table.sharedConnectedAt} IS NULL AND ${table.sharedConnectedBy} IS NULL AND ${table.sharedVerified} = false AND ${table.sharedVerifiedAt} IS NULL AND ${table.sharedProbeAction} IS NULL)`,
     ),
     /*
      * One row per tenant per catalogue entry — the constraint spec J4 actually asks for, and the whole
