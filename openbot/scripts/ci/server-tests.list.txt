@@ -150,6 +150,7 @@ tests/browser-search-guidance.test.ts
 tests/built-in-tool-labels.test.ts
 tests/builtin-routines.test.ts
 tests/bunfig-preload.test.ts
+tests/capability-activity-events.test.ts
 tests/catalogue-bot-grants.integration.test.ts
 tests/channel-activity-input.test.ts
 tests/channel-activity.integration.test.ts
