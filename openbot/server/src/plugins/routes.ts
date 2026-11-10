@@ -67,6 +67,7 @@ import {
   deploymentFaultSentence,
   isDeploymentFault,
   isServerWriteRefusal,
+  isUuid,
   type OAuthClient,
   OAuthClientReadError,
   type PluginKind,
@@ -3893,6 +3894,11 @@ export function createPluginRoutes(
   /** 申请人撤回自己的一条 pending 申请。别人的读起来和不存在的一样，从这里看不出谁申请了什么。 */
   routes.delete("/access-requests/:id", requireUser, async (context) => {
     const id = context.req.param("id");
+    /*
+     * 不是申请 id 的，和不存在的一样答 404（fork 测试钉住的答复），不读库、不写轨迹：URL 参数谁都能随手
+     * 填，不让它成为往审计里写任意长字符串的入口（评审 M5）。
+     */
+    if (!isUuid(id)) return context.json({ error: NO_SUCH_REQUEST }, 404);
     const cancelled = await store.cancelAppAccessRequest({
       id,
       requesterUserId: context.var.actor.id,
@@ -3913,8 +3919,7 @@ export function createPluginRoutes(
     }
     const existing = await store.appAccessRequest(id);
     const mine = existing?.requesterUserId === context.var.actor.id;
-    await store.recordAppAccessEvent({
-      eventType: "app_access.refused",
+    await store.recordAppAccessRefusal({
       targetId: mine ? (existing?.appKey ?? "") : "",
       actorUserId: context.var.actor.id,
       payload: {

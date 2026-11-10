@@ -1008,7 +1008,7 @@ export type AppAccessRequestRecord = {
 };
 
 /** 路由和工具传进来的申请 id 是任意文字；不是 uuid 的在查询之前就答"没有"，不让 Postgres 报类型错误。 */
-const isUuid = (value: string) =>
+export const isUuid = (value: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 
 /**
@@ -6740,48 +6740,6 @@ export function createPluginStore(options: PluginStoreOptions) {
     },
 
     /**
-     * 申请访问（迁移 0153）：员工说出的应用，对应到本部署的哪一行应用。
-     *
-     * 按应用行 id、目录键或应用名（不区分大小写）找；id 或目录键精确命中的排在按名字命中的前面，同名时
-     * 团队的行在前（{@link ownRowFirst}）。在调用者的帧里读，所以只找得到这个人看得见的应用。null 表示本
-     * 部署没有这个应用，申请无从提起。
-     */
-    async findAppForRequest(app: string): Promise<{
-      serverId: string;
-      appKey: string;
-      title: string;
-      /** 这一行是调用者自己添加的（盖的是调用者的租户章），不是本部署的应用。 */
-      own: boolean;
-    } | null> {
-      const wanted = app.trim().toLowerCase();
-      if (!wanted) return null;
-      const byKey = sql`(lower(${mcpServers.id}) = ${wanted} or lower(${mcpServers.catalogueKey}) = ${wanted})`;
-      const [row] = await database
-        .select({
-          id: mcpServers.id,
-          tenantId: mcpServers.tenantId,
-          catalogueKey: mcpServers.catalogueKey,
-          title: mcpServers.title,
-        })
-        .from(mcpServers)
-        .where(or(byKey, sql`lower(${mcpServers.title}) = ${wanted}`))
-        .orderBy(
-          sql`case when ${byKey} then 0 else 1 end`,
-          ownRowFirst(),
-          asc(mcpServers.id),
-        )
-        .limit(1);
-      return row
-        ? {
-            serverId: row.id,
-            appKey: row.catalogueKey ?? row.id,
-            title: row.title,
-            own: row.tenantId === currentTenant(),
-          }
-        : null;
-    },
-
-    /**
      * 提一条申请，或拿到已有的那条。
      *
      * 写在调用者的帧里，行盖的就是申请人的租户章。同一个人、同一位员工、同一个应用、同一种类型已有
@@ -6802,15 +6760,15 @@ export function createPluginStore(options: PluginStoreOptions) {
       | { outcome: "created" | "existing"; request: AppAccessRequestRecord }
       | { outcome: "limited" }
     > {
+      /*
+       * 与部分唯一索引 `app_access_requests_pending_idx`（0187）同一个键：`coalesce(server_id, app_key)`。
+       * broker 应用打开后行 id 恰好是申请时记下的键（`composio-<slug>`），所以「还没有行时提的那条」和
+       * 「有行之后再提的这条」是同一个申请；只按 `server_id` 查会查不到它，插入又撞上索引（评审 I1）。
+       */
       const samePending = and(
         eq(appAccessRequests.requesterUserId, input.requesterUserId),
         eq(appAccessRequests.botId, input.botId),
-        input.serverId === null
-          ? and(
-              isNull(appAccessRequests.serverId),
-              eq(appAccessRequests.appKey, input.appKey ?? ""),
-            )
-          : eq(appAccessRequests.serverId, input.serverId),
+        sql`coalesce(${appAccessRequests.serverId}, ${appAccessRequests.appKey}) = ${input.serverId ?? input.appKey ?? ""}`,
         eq(appAccessRequests.kind, input.kind),
         eq(appAccessRequests.status, "pending"),
       );

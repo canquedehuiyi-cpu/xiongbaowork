@@ -2,12 +2,13 @@ import type { Context, Hono, MiddlewareHandler } from "hono";
 import type { BotAccessCheck } from "../agents/profile-policy";
 import type { AppVariables } from "../auth/guards";
 import { appsPageZh } from "../edition";
-import type {
-  AppAccess,
-  AppAccessRequestKind,
-  Unavailable,
+import {
+  type AppAccess,
+  type AppAccessRequestKind,
+  nothingToRequest,
+  type Unavailable,
 } from "./app-access";
-import type { AppDirectory } from "./app-access-store";
+import { type AppDirectory, requestPlanFor } from "./app-access-store";
 import { MAX_PENDING_APP_ACCESS_REQUESTS } from "./app-access-tool";
 import type { CatalogueEntry } from "./catalogue";
 import type { AppAccessRequestRecord, PluginStore } from "./store";
@@ -57,23 +58,6 @@ export function unavailableSentence(
       return `「${title}」还没有 OAuth 客户端。请在${appsPageZh()}它的页面上登记，然后${again}。`;
     case "token_missing":
       return `「${title}」还没有密钥。请在${appsPageZh()}它的页面上填写，然后${again}。`;
-  }
-}
-
-/** 一个状态没有什么可以请管理员做时，答给申请人的话。 */
-function nothingToRequest(access: AppAccess): string {
-  const name = access.displayName;
-  switch (access.state) {
-    case "ready":
-      return `「${name}」已经可以使用了，不需要向管理员申请。`;
-    case "owner_grantable":
-      return `这是你的员工，你可以自己把「${name}」给它。`;
-    case "shared_not_connected":
-      return `「${name}」用的是一个共享的团队账号，管理员还没有连接它。连接之后再试。`;
-    case "shared_not_approved":
-      return `「${name}」用的是一个共享的团队账号，管理员还没有批准这位员工使用它（共享使用批准将在后续版本提供）。`;
-    default:
-      return `「${name}」用的是你自己的账号，不需要管理员。请自己连接它。`;
   }
 }
 
@@ -143,8 +127,8 @@ export function mountAppAccessRoutes(options: {
       kind?: string;
     },
   ) => {
-    await store.recordAppAccessEvent({
-      eventType: "app_access.refused",
+    // 去重、限频后写（评审 M5）：拒绝谁都能反复按出来，轨迹不能因此无界地长。答复每次照给。
+    await store.recordAppAccessRefusal({
       targetId: input.app,
       actorUserId: context.var.actor.id,
       payload: {
@@ -215,6 +199,7 @@ export function mountAppAccessRoutes(options: {
         access: AppAccess;
         requestKind: Exclude<AppAccessRequestKind, "connect_shared">;
         serverId: string | null;
+        pendingId: string | null;
       }
   > => {
     const agentId = typeof rawAgentId === "string" ? rawAgentId.trim() : "";
@@ -234,10 +219,8 @@ export function mountAppAccessRoutes(options: {
         error: "没有这位员工。",
         status: 404,
       });
-    const found = await inspect(context, agentId, app);
-    const inspected =
-      found && (found.vouched || found.access.granted) ? found : null;
-    if (!inspected)
+    const plan = requestPlanFor(await inspect(context, agentId, app));
+    if (plan.refused === "no_such_app")
       return refused(context, {
         app,
         bot: agentId,
@@ -245,9 +228,9 @@ export function mountAppAccessRoutes(options: {
         error: `这个部署没有叫「${app}」的应用。`,
         status: 404,
       });
-    const { access } = inspected;
+    const { access } = plan;
     // 自己添加的应用不归管理员管：申请只会让管理员看到一个在他的帧里不存在的应用，永远批不了。
-    if (inspected.own)
+    if (plan.refused === "own_app")
       return refused(context, {
         app: access.key,
         bot: agentId,
@@ -255,29 +238,38 @@ export function mountAppAccessRoutes(options: {
         error: `「${access.displayName}」是你自己添加的应用，不需要向管理员申请。请在插件页自己把它装到这位员工上。`,
         status: 409,
       });
-    const kind = access.requestKind;
-    if (kind !== "enable" && kind !== "grant")
+    if (plan.refused !== undefined)
       return refused(context, {
         app: access.key,
         bot: agentId,
-        reason: `nothing_to_request:${access.state}`,
+        reason: plan.refused,
         error: nothingToRequest(access),
         status: 409,
       });
     return {
       agentId,
       access,
-      requestKind: kind,
-      serverId: inspected.answeringId,
+      requestKind: plan.kind,
+      serverId: plan.serverId,
+      pendingId: plan.pendingId,
     };
   };
 
-  const fileFor = (
+  /**
+   * 已有一条在等的（卡片上的 `request`，可能是工具提的）就答它，不再建第二条（评审 M4）；否则提一条。
+   * 那条在读的这一刻被处理掉了，就照常提新的。
+   */
+  const fileFor = async (
     context: RouteContext,
     asked: Exclude<Awaited<ReturnType<typeof requestable>>, Response>,
     note: string | null,
-  ) =>
-    store.fileAppAccessRequest({
+  ) => {
+    const waiting = asked.pendingId
+      ? await store.appAccessRequest(asked.pendingId)
+      : null;
+    if (waiting?.status === "pending")
+      return { outcome: "existing" as const, request: waiting };
+    return store.fileAppAccessRequest({
       serverId: asked.serverId,
       ...(asked.serverId === null
         ? { appKey: asked.access.key, appTitle: asked.access.displayName }
@@ -288,6 +280,7 @@ export function mountAppAccessRoutes(options: {
       note,
       maxPending: MAX_PENDING_APP_ACCESS_REQUESTS,
     });
+  };
 
   /**
    * 在浏览器里向管理员申请。请求体写员工和应用（可选一句理由 `note`）；类型是服务端的。
@@ -326,6 +319,27 @@ export function mountAppAccessRoutes(options: {
     );
   });
 
+  /** 一按批准没做成时撤回它替管理员提的那条申请，并写一行带 `direct` 的 `app_access.cancelled`。 */
+  const withdrawDirect = async (requestId: string, by: string) => {
+    const withdrawn = await store.cancelAppAccessRequest({
+      id: requestId,
+      requesterUserId: by,
+    });
+    if (withdrawn)
+      await store.recordAppAccessEvent({
+        eventType: "app_access.cancelled",
+        targetId: withdrawn.appKey,
+        actorUserId: by,
+        payload: {
+          request: withdrawn.id,
+          app: withdrawn.appKey,
+          bot: withdrawn.botId,
+          kind: withdrawn.kind,
+          direct: true,
+        },
+      });
+  };
+
   /**
    * 管理员在卡片上一按：替自己提这个应用在这位员工上需要的申请，并当场批准。轨迹和两次按下一样——
    * `app_access.requested`，然后带 `direct` 的 `app_access.approved`。
@@ -356,31 +370,26 @@ export function mountAppAccessRoutes(options: {
         error: `你已经有 ${MAX_PENDING_APP_ACCESS_REQUESTS} 条申请在等处理。先处理掉一些再试。`,
         status: 429,
       });
-    const response = await options.carryOut(
-      context,
-      filed.request,
-      undefined,
-      true,
-    );
-    if (response.status !== 200 && filed.outcome === "created") {
-      const withdrawn = await store.cancelAppAccessRequest({
-        id: filed.request.id,
-        requesterUserId: by,
-      });
-      if (withdrawn)
-        await store.recordAppAccessEvent({
-          eventType: "app_access.cancelled",
-          targetId: withdrawn.appKey,
-          actorUserId: by,
-          payload: {
-            request: withdrawn.id,
-            app: withdrawn.appKey,
-            bot: withdrawn.botId,
-            kind: withdrawn.kind,
-            direct: true,
-          },
-        });
+    /*
+     * try/finally（照上游）：`carryOut` 答了非 200，或者干脆抛出（没映射的错误、数据库错误），这次新提的
+     * 申请都要撤回，不能留在管理员的收件箱里（评审 M1）。撤回本身失败只记日志，不盖住原来的答复或异常。
+     */
+    let carried: Response | undefined;
+    try {
+      carried = await options.carryOut(context, filed.request, undefined, true);
+      return carried;
+    } finally {
+      if (filed.outcome === "created" && carried?.status !== 200)
+        await withdrawDirect(filed.request.id, by).catch((error: unknown) =>
+          console.warn(
+            JSON.stringify({
+              type: "app-access-direct-withdraw-failed",
+              request: filed.request.id,
+              reason: error instanceof Error ? error.message : String(error),
+              timestamp: new Date().toISOString(),
+            }),
+          ),
+        );
     }
-    return response;
   });
 }
