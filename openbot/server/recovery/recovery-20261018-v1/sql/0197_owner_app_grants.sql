@@ -10,7 +10,13 @@
  *   自己的账号，不用主人的（`team-bots.ts` 的 `credentialActorFor`）：发布员工不能把主人的邮箱交给队友。
  *   管理员在同一个动作上再授予一次，这条就成了管理员的；主人的授予不会覆盖管理员的。
  *
- * 两列都只加 CHECK，无回填：NULL 就是这之前的含义。行安全不变（两张表原有的策略都按行而不是按列）。
+ * 回填（与上游不同）：这之前已经添加的每个应用都设为 `admin`，升级不改变谁能把它给员工——原来只有
+ * 管理员（上架、批准申请），升级后仍然如此，直到管理员在应用设置里明确放开「主人可授予」（`any`）。
+ * 这之后新添加的应用为 NULL，按上游的默认值。`granted_as` 不回填：NULL 读作管理员，正是这之前每一条授予
+ * 的含义。行安全不变（两张表原有的策略都按行而不是按列）。
+ *
+ * 应用行有 `team` 标记，FORCE 行安全对表的属主也生效，所以回填在本事务里以 `platform` 帧做，结束时清掉
+ * （与 0125 相同的写法）；只改 `owner_grants`，不碰 0122 行守卫看着的租户与关联列。
  */
 ALTER TABLE "public"."mcp_servers" ADD COLUMN "owner_grants" text;
 --> statement-breakpoint
@@ -19,3 +25,9 @@ ALTER TABLE "public"."plugin_grants" ADD COLUMN "granted_as" text;
 ALTER TABLE "public"."mcp_servers" ADD CONSTRAINT "mcp_servers_owner_grants_check" CHECK ("owner_grants" IS NULL OR "owner_grants" IN ('any', 'admin'));
 --> statement-breakpoint
 ALTER TABLE "public"."plugin_grants" ADD CONSTRAINT "plugin_grants_granted_as_check" CHECK ("granted_as" IS NULL OR "granted_as" IN ('admin', 'owner'));
+--> statement-breakpoint
+SELECT set_config('app.tenant_id', 'platform', true);
+--> statement-breakpoint
+UPDATE "public"."mcp_servers" SET "owner_grants" = 'admin' WHERE "owner_grants" IS NULL;
+--> statement-breakpoint
+SELECT set_config('app.tenant_id', '', true);

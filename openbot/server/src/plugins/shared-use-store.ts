@@ -24,6 +24,7 @@ import {
 } from "../db/schema/team-bots";
 import { currentTenant, runAsTenant } from "../tenant/context";
 import { toolkitOf } from "./composio";
+import { ownerStillGives } from "./owner-grants";
 import {
   type ActorFacts,
   type ApprovalMember,
@@ -199,6 +200,7 @@ export function createSharedUseStore(database: Database) {
         audience: sharedUseApprovals.audience,
         outsideInput: sharedUseApprovals.outsideInput,
         approvedAs: sharedUseApprovals.approvedAs,
+        tenantId: sharedUseApprovals.tenantId,
       })
       .from(sharedUseApprovals)
       .where(
@@ -236,7 +238,15 @@ export function createSharedUseStore(database: Database) {
     const serverId = await appIdOf(anyServerId);
     const row = await storedApproval(botId, serverId, tenant);
     if (!row) return null;
-    if (row.approvedAs === "owner" && !(await ownersDecide(serverId)))
+    /*
+     * 主人定的受众还要主人仍能「给」：人还在、`ownerApps` 没被关掉（`ownerStillGives`，调用时判定）。行属于
+     * 员工的主人，所以行的租户就是那位主人。
+     */
+    if (
+      row.approvedAs === "owner" &&
+      (!(await ownersDecide(serverId)) ||
+        !(await ownerStillGives(database, row.tenantId)))
+    )
       return null;
     const members = await database
       .select({
@@ -262,8 +272,11 @@ export function createSharedUseStore(database: Database) {
    * 应用的规则是否让员工的主人决定：应答行是 Shared，且管理员明确选了 `any`（Shared 应用的默认值是只有
    * 管理员）。见 {@link approvalFor}。
    */
-  async function ownersDecide(serverId: string): Promise<boolean> {
-    const [app] = await database
+  async function ownersDecide(
+    serverId: string,
+    executor: Database | Transaction = database,
+  ): Promise<boolean> {
+    const [app] = await executor
       .select({
         accountMode: mcpServers.accountMode,
         ownerGrants: mcpServers.ownerGrants,
@@ -294,12 +307,17 @@ export function createSharedUseStore(database: Database) {
     if (!(await ownersDecide(serverId))) return null;
     if (await storedApproval(input.botId, serverId)) return null;
     await assertOwnerFrame(input.botId);
+    const facts = await botFacts(input.botId);
+    // 读不到员工资料（已删除、不在这个帧里）时不设受众：读不到的开放范围不能写成批准。
+    if (facts.ownerUserId === null) return null;
     const approval: SharedUseApproval = {
-      ...exposureOf(await botFacts(input.botId)),
+      ...exposureOf(facts),
       outsideInput: false,
     };
     const written = await database.transaction(async (tx) => {
       const appId = await lockApproval(tx, input.botId, serverId);
+      // 拿到应用的锁之后再读一次规则：管理员在这之间改了规则，就不写。
+      if (!(await ownersDecide(appId, tx))) return false;
       return writeApproval(tx, {
         botId: input.botId,
         serverId: appId,
