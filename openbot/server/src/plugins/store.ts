@@ -72,9 +72,13 @@ import {
 } from "../tenant/context";
 import {
   accessFor,
+  BROKERED_PROFILE,
+  type BrokerProvider,
   type ServerAccess,
   ServerUnresolvableError,
+  toolkitOfFor,
 } from "./access";
+import { createArcadeAttempts } from "./arcade-attempts";
 import {
   type BrokerConnection,
   BrokerRefusalError,
@@ -767,6 +771,9 @@ export const RELIST_ATTEMPTS = 3;
  * FIRST OCCURRENCE WINS, and the order is the vendor's own. Anything else needs a rule for which
  * of two identical names is the real one, and there is no such rule.
  */
+/** 模型 API 接受的工具名字符（X5）。 */
+const OFFERABLE_TOOL_NAME = /^[A-Za-z0-9_-]+$/;
+
 export function storableTools(
   serverId: string,
   listed: ListedTool[],
@@ -794,12 +801,20 @@ export function storableTools(
       destructive: boolean;
       unclassified: boolean;
       version: string | null;
+      vendorName?: string;
     }
   >();
 
   for (const tool of listed) {
     const name = tool.name.replaceAll(NUL, "");
     if (byName.has(name)) continue;
+    /*
+     * X5：厂商名与本部署的名字不同的动作（Arcade），本部署的名字必须是模型工具名能用的字符。认不出的
+     * 名字（第二个点、别的字符）不猜着修，只把这一个动作排除，其余照常记录。只看带 `vendorName` 的，
+     * 其他传输层的清单与以前一样。
+     */
+    const vendorName = tool.vendorName?.replaceAll(NUL, "");
+    if (vendorName !== undefined && !OFFERABLE_TOOL_NAME.test(name)) continue;
     /*
      * vendor 只字未提的工具，只在 catalogue 名单没有覆盖它时记为 unclassified。MCP 的沉默不记
      * effect，条目在就由名单整体决定（名单外按读），所以条目在就算覆盖；broker 的沉默记成了
@@ -842,6 +857,9 @@ export function storableTools(
       // vendor 只字未提、又没有名单覆盖；见 `mcpTools.unclassified`。
       unclassified,
       version: tool.version?.replaceAll(NUL, "") ?? null,
+      ...(vendorName !== undefined && vendorName !== name
+        ? { vendorName }
+        : {}),
     });
   }
 
@@ -1417,6 +1435,11 @@ export type PluginStoreOptions = {
    * above — invent a broker to get a store.
    */
   broker?: ComposioBroker;
+  /**
+   * 活动的连接应用提供商（X5）。不给时是 Composio，与以前完全一样。决定 broker 应用的 id 前缀、url scheme、
+   * provenance，以及个人连接行记在哪个提供商名下。
+   */
+  brokerProvider?: BrokerProvider;
   /** Where the vendor sends people back; needed to (re)register a dynamic client. */
   redirectUri?: string;
   /**
@@ -1597,6 +1620,17 @@ function refusedByRowSecurity(error: unknown): boolean {
 
 export function createPluginStore(options: PluginStoreOptions) {
   const { database, auditStore, credentials, encryptionKey } = options;
+  /** 活动的提供商与它的命名（X5）。默认 Composio：`composio-<slug>`、`composio://<slug>`。 */
+  const brokerProvider: BrokerProvider = options.brokerProvider ?? "composio";
+  const brokered = BROKERED_PROFILE[brokerProvider];
+  /** 一个 broker 应用行的 url 说的是哪个应用，按活动提供商的解析器（Arcade 保留大小写）。 */
+  const appOf = (url: string) => toolkitOfFor(brokerProvider, url);
+  /** 进行中的 Arcade 授权（X5）；方法并进 store，Composio 部署从不调用。 */
+  const arcadeAttempts = createArcadeAttempts({
+    database,
+    auditStore,
+    provider: brokerProvider,
+  });
 
   /**
    * Whether this Bot's profile, as the caller's frame sees it, is stamped `team` (G01-E P8b): its
@@ -1637,7 +1671,12 @@ export function createPluginStore(options: PluginStoreOptions) {
     work: () => Promise<T>,
   ): Promise<T> => (team ? runAsTenant("platform", work) : work());
   /** 一个人在每个 broker 应用上的多个账号（上游 #1298）；见 `./brokered-accounts`。 */
-  const accounts = createAccountBook({ database, broker, auditStore });
+  const accounts = createAccountBook({
+    database,
+    broker,
+    auditStore,
+    provider: brokerProvider,
+  });
 
   /*
    * One exchange at a time per (server, person). A rotating vendor invalidates the refresh
@@ -2113,7 +2152,7 @@ export function createPluginStore(options: PluginStoreOptions) {
       const answer = accountFor(
         {
           title: row.title,
-          provenance: "composio",
+          provenance: brokerProvider,
           authScheme: appScheme,
           accountMode: app?.accountMode ?? null,
         },
@@ -3455,7 +3494,7 @@ export function createPluginStore(options: PluginStoreOptions) {
   async function brokeredAppRow(
     toolkit: string,
   ): Promise<BrokeredAppRow | null> {
-    const url = `composio://${toolkit}`;
+    const url = `${brokered.scheme}${toolkit}`;
     return (await brokeredAppRowsAt([url])).get(url) ?? null;
   }
 
@@ -3625,6 +3664,7 @@ export function createPluginStore(options: PluginStoreOptions) {
   }
 
   return {
+    ...arcadeAttempts,
     /**
      * Add a server from the catalogue.
      *
@@ -3903,6 +3943,12 @@ export function createPluginStore(options: PluginStoreOptions) {
       if (input.id.startsWith("composio-")) {
         throw new CustomServerRefusedError(
           `Names beginning composio- belong to the Composio apps this deployment enables, so ${input.id} is not a name a server added by URL can take. Choose another.`,
+        );
+      }
+      // X5：`arcade-` 同样是 broker 应用的命名空间，不论 Arcade 当前是否启用。
+      if (input.id.startsWith("arcade-")) {
+        throw new CustomServerRefusedError(
+          `以 arcade- 开头的名字属于这个部署启用的 Arcade 应用，${input.id} 不能用作按地址添加的服务器名。请换一个。`,
         );
       }
       if (!/^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$/.test(input.id)) {
@@ -4435,8 +4481,8 @@ export function createPluginStore(options: PluginStoreOptions) {
       // could not then write would be one nothing here names (G01-E P10).
       requireServerWriter();
 
-      const url = `composio://${input.slug}`;
-      if (toolkitOf(url) !== input.slug) {
+      const url = `${brokered.scheme}${input.slug}`;
+      if (appOf(url) !== input.slug) {
         throw new CustomServerRefusedError(
           `${input.slug} is not a name a Composio app can have. An app is named in letters, numbers, underscores and hyphens, because that name is read back out of this row's url to decide which app a call is against.`,
         );
@@ -4511,16 +4557,16 @@ export function createPluginStore(options: PluginStoreOptions) {
       await database
         .insert(mcpServers)
         .values({
-          id: `composio-${input.slug}`,
+          id: `${brokered.idPrefix}${input.slug}`,
           // The team's, like every server (G01-E P10).
           tenantId: TEAM_TENANT,
           title: input.title,
           logo: input.logo ?? null,
           // The broker, whoever publishes the app behind it. `vendor` is what the first-party rule
           // is checked against, and Composio is who this deployment is actually talking to.
-          vendor: "Composio",
+          vendor: brokered.vendor,
           url,
-          provenance: "composio",
+          provenance: brokerProvider,
           // Nothing for the vault to hold. A brokered call runs as the person asking, on their own
           // connection at the vendor, which is a `composio_connections` row rather than a secret.
           credentialId: null,
@@ -4580,8 +4626,8 @@ export function createPluginStore(options: PluginStoreOptions) {
              * host somebody typed is answering that rule about a server this deployment no longer
              * dials.
              */
-            provenance: "composio",
-            vendor: "Composio",
+            provenance: brokerProvider,
+            vendor: brokered.vendor,
             addedBy: input.by,
             updatedAt: new Date(),
             /*
@@ -4632,7 +4678,8 @@ export function createPluginStore(options: PluginStoreOptions) {
        * in a binding so that nothing below can take it by mistake.
        */
       const answering =
-        (await brokeredAppRow(input.slug))?.id ?? `composio-${input.slug}`;
+        (await brokeredAppRow(input.slug))?.id ??
+        `${brokered.idPrefix}${input.slug}`;
 
       /**
        * WHICH ROW EACH ACT OF AN ENABLE NAMES, WRITTEN DOWN BECAUSE NOTHING ELSE CAN SAY IT.
@@ -5898,7 +5945,7 @@ export function createPluginStore(options: PluginStoreOptions) {
        * ONE EXTRA READ FOR THE WHOLE LIST, and none where the deployment has enabled no apps.
        */
       const brokeredApps = await brokeredAppRowsAt(
-        rows.filter((row) => toolkitOf(row.url) !== null).map((row) => row.url),
+        rows.filter((row) => appOf(row.url) !== null).map((row) => row.url),
       );
 
       return rows.map((row) => {
@@ -5924,13 +5971,13 @@ export function createPluginStore(options: PluginStoreOptions) {
             entry.auth.clientRegistration === "dynamic",
           // The app's, for a row whose url names one; this row's own column for everything else,
           // which is a null on every server that is not brokered. See the read above.
-          authScheme: toolkitOf(row.url)
+          authScheme: appOf(row.url)
             ? (brokeredApps.get(row.url)?.authScheme ?? null)
             : row.authScheme,
           adminConnectOnly:
-            toolkitOf(row.url) !== null &&
+            appOf(row.url) !== null &&
             adminConnectOnly(brokeredApps.get(row.url)?.authScheme ?? null),
-          ...(toolkitOf(row.url) !== null
+          ...(appOf(row.url) !== null
             ? {
                 sharedOnly: adminConnectOnly(
                   brokeredApps.get(row.url)?.authScheme ?? null,
@@ -6044,7 +6091,7 @@ export function createPluginStore(options: PluginStoreOptions) {
         .orderBy(ownRowFirst())
         .limit(1);
       if (!row) return undefined;
-      const toolkit = toolkitOf(row.url);
+      const toolkit = appOf(row.url);
       if (!toolkit) return row;
       return { ...row, authScheme: await brokeredAppScheme(toolkit) };
     },
@@ -7767,6 +7814,10 @@ export function createPluginStore(options: PluginStoreOptions) {
           verified: input.verified,
           verifiedAt,
           probeAction: input.probeAction,
+          // X5：Arcade 的连接记在 Arcade 名下；Composio 用列默认值，写入的语句与以前一样。
+          ...(brokerProvider === "composio"
+            ? {}
+            : { provider: brokerProvider }),
         })
         .onConflictDoUpdate({
           target: [composioConnections.toolkit, composioConnections.userId],
@@ -9845,6 +9896,7 @@ export function createPluginStore(options: PluginStoreOptions) {
           destructive: mcpTools.destructive,
           unclassified: mcpTools.unclassified,
           version: mcpTools.version,
+          vendorName: mcpTools.vendorName,
         })
         .from(mcpTools)
         .where(and(eq(mcpTools.serverId, row.id), eq(mcpTools.name, toolName)))
@@ -10366,7 +10418,8 @@ export function createPluginStore(options: PluginStoreOptions) {
               customServerPrivateHosts,
             ),
           },
-          toolName,
+          // 厂商执行用的名字（Arcade 的 `Gmail.ListEmails`）；没有时就是本部署记的名字（X5）。
+          advertised[0]?.vendorName ?? toolName,
           vendorArgs,
         );
         await recordAuditEvent(auditStore, {

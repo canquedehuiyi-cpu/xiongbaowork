@@ -37,7 +37,7 @@ export const brokeredAccounts = pgTable(
   {
     tenantId: tenantId(),
     id: uuid("id").primaryKey().defaultRandom(),
-    provider: text("provider").notNull(),
+    provider: text("provider").$type<"composio" | "arcade">().notNull(),
     app: text("app").notNull(),
     userId: text("user_id").notNull(),
     vendorUserId: text("vendor_user_id").notNull(),
@@ -54,7 +54,7 @@ export const brokeredAccounts = pgTable(
   (table) => [
     check(
       "brokered_accounts_provider_check",
-      sql`${table.provider} IN ('composio')`,
+      sql`${table.provider} IN ('composio', 'arcade')`,
     ),
     uniqueIndex("brokered_accounts_account_idx").on(
       table.provider,

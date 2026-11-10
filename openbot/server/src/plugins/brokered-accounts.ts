@@ -3,7 +3,7 @@ import { type AuditStore, recordAuditEvent } from "../audit";
 import type { Database } from "../db/client";
 import { brokeredAccounts, mcpServers } from "../db/schema";
 import type { ComposioBroker } from "./broker";
-import { toolkitOf } from "./composio";
+import { type BrokerProvider, toolkitOfFor } from "./access";
 import { filedUnderPerson } from "./shared-accounts";
 
 /**
@@ -13,13 +13,11 @@ import { filedUnderPerson } from "./shared-accounts";
  * store 的账号方法与调用路径共用这一份，所以「一次调用指向哪个账号」与「页面列出哪些账号」按同一种读法。
  *
  * 与上游的差异：
- * - fork 只有 Composio，所以 provider 固定为 `composio`，vendor 的 user id 永远是本人的用户 id。
+ * - provider 是活动的那一个（Composio，或 X5 起的 Arcade），vendor 的 user id 永远是本人的用户 id。
  * - 一个人的账号行落在写入时的帧（本人的租户，见迁移 0180），别人的帧看不到。Team Bot 的队友在自己的帧里
  *   读不到主人的账号行，`pick` 因此答 null，调用照旧不指定账号。
  * - 拒绝的句子是中文。
  */
-
-const PROVIDER = "composio";
 
 /** 一个人的账号，按他的应用页面与 Bot 的调用读它的样子。 */
 export type BrokeredAccountRecord = {
@@ -86,8 +84,11 @@ export function createAccountBook(context: {
   database: Database;
   broker: ComposioBroker | undefined;
   auditStore: AuditStore;
+  /** 活动的提供商（X5）；不给时是 Composio，与以前一样。 */
+  provider?: BrokerProvider;
 }) {
   const { database, broker, auditStore } = context;
+  const PROVIDER: BrokerProvider = context.provider ?? "composio";
 
   const rowsFor = (toolkit: string, userId: string) =>
     database
@@ -283,7 +284,7 @@ export function createAccountBook(context: {
       const apps = new Map<string, { id: string; title: string }[]>();
       for (const server of servers) {
         if (server.accountMode === "shared") continue;
-        const app = toolkitOf(server.url);
+        const app = toolkitOfFor(PROVIDER, server.url);
         if (!app) continue;
         apps.set(app, [
           ...(apps.get(app) ?? []),

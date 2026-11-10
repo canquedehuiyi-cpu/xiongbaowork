@@ -297,6 +297,12 @@ export const mcpTools = pgTable(
      * than a reason to guess — a guessed version is a call against an action's other behaviour.
      */
     version: text("version"),
+    /**
+     * 厂商执行这个动作用的名字，与 {@link mcpTools.name} 不同时才有（X5，上游 0057）。Arcade 的
+     * `qualified_name` 是 `Gmail.ListEmails`，点号不能出现在模型工具名里，所以 `name` 记 `ListEmails`、
+     * 这里记原名，调用时发这里的。NULL 表示与 `name` 相同（迁移 0192 不回填）。
+     */
+    vendorName: text("vendor_name"),
     createdAt: createdAt(),
   },
   (table) => [primaryKey({ columns: [table.serverId, table.name] })],
@@ -467,9 +473,21 @@ export const composioConnections = pgTable(
      * the app's listing has moved since the check.
      */
     probeAction: text("probe_action"),
+    /**
+     * 这一行连接属于哪个提供商（X5，迁移 0192）。默认 `composio`：这之前的每一行都是。启动时据此拒绝在
+     * 另一个提供商还持有连接时切换（`assertActivatable`）。同一时间只有一个提供商写入，所以主键不变。
+     */
+    provider: text("provider")
+      .$type<"composio" | "arcade">()
+      .notNull()
+      .default("composio"),
     updatedAt: updatedAt(),
   },
   (table) => [
+    check(
+      "composio_connections_provider_check",
+      sql`${table.provider} IN ('composio', 'arcade')`,
+    ),
     primaryKey({ columns: [table.toolkit, table.userId] }),
     // "What has this person connected" is the settings page's only query, and offboarding's.
     index("composio_connections_user_idx").on(table.userId),
@@ -756,3 +774,54 @@ export const sandboxedComponents = pgTable("sandboxed_components", {
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
+
+/**
+ * 一次进行中的 Arcade 授权：回程验证拿它核对回来的浏览器（X5，上游 0057，迁移 0192）。
+ *
+ * `actor_id` 是会话主体（`users.id`），从不是 Team Bot 的 `credentialActorId`：验证路由按回来的浏览器的
+ * 会话找这一行。键只有发起人，所以一个人同时最多一次；过期（15 分钟）或已结束的行可被新的发起接管。
+ * `auth_id` 把回调绑定到这一次，为 NULL 的尝试永远完成不了；`completed_at` 让完成只发生一次。
+ * `user_id` 只能是发起人自己（`person`）或 NULL（`deployment`，团队账号），删一个人不会带走别人发起的尝试。
+ */
+export const pendingAuthorizations = pgTable(
+  "pending_authorizations",
+  {
+    tenantId: tenantId(),
+    actorId: text("actor_id")
+      .primaryKey()
+      .references(() => users.id, { onDelete: "cascade" }),
+    serverId: text("server_id")
+      .notNull()
+      .references(() => mcpServers.id, { onDelete: "cascade" }),
+    /** 按「授权」为之发起的那一个动作；「连接」（整应用）为 NULL。 */
+    action: text("action"),
+    holder: text("holder").$type<"person" | "deployment">().notNull(),
+    userId: text("user_id"),
+    vendorUserId: text("vendor_user_id").notNull(),
+    authId: text("auth_id"),
+    createdAt: createdAt(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    outcome: text("outcome").$type<
+      "completed" | "failed" | "unreconciled" | "withdrawn"
+    >(),
+  },
+  (table) => [
+    check(
+      "pending_authorizations_holder_check",
+      sql`(${table.holder} = 'person' AND ${table.userId} IS NOT NULL) OR (${table.holder} = 'deployment' AND ${table.userId} IS NULL)`,
+    ),
+    check(
+      "pending_authorizations_outcome_check",
+      sql`${table.outcome} IS NULL OR ${table.outcome} IN ('completed', 'failed', 'unreconciled', 'withdrawn')`,
+    ),
+    check(
+      "pending_authorizations_completion_check",
+      sql`(${table.completedAt} IS NULL) = (${table.outcome} IS NULL)`,
+    ),
+    check(
+      "pending_authorizations_user_is_actor_check",
+      sql`${table.userId} IS NULL OR ${table.userId} = ${table.actorId}`,
+    ),
+    index("pending_authorizations_server_idx").on(table.serverId),
+  ],
+);

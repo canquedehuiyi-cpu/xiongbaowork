@@ -168,7 +168,8 @@ describe("brokered_accounts", () => {
       await violation(() =>
         runAsTenant(person, () =>
           database.insert(brokeredAccounts).values({
-            provider: "arcade",
+            // X5 起 Arcade 也是 broker（迁移 0192 放宽）；仍拒绝不认识的提供商。
+            provider: "zapier" as "composio",
             app,
             userId: person,
             vendorUserId: person,
