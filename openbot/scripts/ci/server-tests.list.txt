@@ -221,6 +221,7 @@ tests/database-pool-closing.test.ts
 tests/database.test.ts
 tests/db-client-address.test.ts
 tests/decision-waits.integration.test.ts
+tests/deepseek-thinking.test.ts
 tests/delivery-attention.integration.test.ts
 tests/delivery-link-audit.test.ts
 tests/delivery-providers.test.ts

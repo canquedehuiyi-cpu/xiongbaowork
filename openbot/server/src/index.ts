@@ -302,6 +302,7 @@ import { createMemoryStore } from "./memory/store";
 import { offeredMemoryTools } from "./memory/tools";
 import { reportModelAvailability } from "./model-availability-check";
 import { createModelCatalogue } from "./model-catalogue";
+import { installDeepSeekThinkingOff } from "./models/deepseek-thinking";
 import { createModelRoutes } from "./models/routes";
 import {
   createNamedAgentModelResolver,
@@ -1848,6 +1849,13 @@ await startupLifecycle.run(async (startup) => {
 
   // Before anything reads the model environment: blank base URLs removed, Anthropic given its `/v1`.
   normalizeModelBaseUrls();
+  // DeepSeek 的思考模式要求传回每一轮的思考内容，员工的历史里没有，所以对它的对话请求关闭思考。
+  // 见 models/deepseek-thinking.ts；`DEEPSEEK_THINKING=enabled` 保留 DeepSeek 自己的默认。
+  if (installDeepSeekThinkingOff()) {
+    console.info(
+      JSON.stringify({ type: "deepseek-thinking", thinking: "disabled" }),
+    );
+  }
   const runtimeModel = runtimeModelForEnvironment(tenantPackage.model);
   /**
    * Where local Intelligence's Learning thinks on the person's plan, with a record of what became of
