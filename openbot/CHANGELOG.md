@@ -8,6 +8,8 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+## 0.2.7
+
 - **界面同步到上游 OpenBot v1.0.0，保留员工/群组结构与中文。** 前端（`app/`）三方合并了上游 6fb38c8b 到 v1.0.0
   的界面改动，CopilotKit 前端从 1.77 升到 1.85。新增或换新的地方：
   - 员工详情页多了「需要你」、动态速览（「全部动态」打开 `/bots/<员工>/activity`，列出这位员工做过的每个动作）、
