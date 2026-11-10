@@ -460,7 +460,7 @@ describe("the person's routes", () => {
     context,
     next,
   ) => {
-    context.set("actor", { id: A, email: `${A}@example.test`, role: "member" });
+    context.set("actor", { id: A, email: `${A}@example.test`, role: "user" });
     await runAsTenant(A, () => next());
   };
   const app = new Hono().route(

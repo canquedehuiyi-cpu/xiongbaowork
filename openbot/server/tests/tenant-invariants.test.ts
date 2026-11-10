@@ -249,6 +249,10 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   // M3: upstream's engine asks as `platform` what is unoffered, whom to ping, what is stale and
   // what is due; each setting then runs in the tenant stamped on its own row.
   "src/proactive/engine.ts": { 'runAsTenant("platform"': 5 },
+  // L1: the local learning sweep asks as `platform` which people have had conversations lately and
+  // claims those due (one conditional upsert on `local_learning_state`, people who still exist only),
+  // and closes runs a dead process left `running`. Each person then learns in their own frame.
+  "src/local-learning/engine.ts": { "asPlatform(": 2 },
   "src/quota/routes.ts": { 'runAsTenant("platform"': 1 },
   // M3: the Recorder (upstream): a connect code is spent before anybody is known, so its refusals,
   // the code's owner and every live connection are read as `platform`; the connection itself is made
