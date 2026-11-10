@@ -60,7 +60,6 @@ export class SharedUseRequestDecidedError extends Error {
   }
 }
 
-/** 批准只能写在员工主人的帧里；别的帧（包括管理员自己的）写不进来。 */
 /** 应用此刻不是 Shared：不写批准（切换账号模式之后才落下的批准会在再切回时复活）。 */
 export class SharedUseNotSharedError extends Error {
   constructor() {
@@ -81,6 +80,7 @@ export function sharedUseAppLockKey(url: string | null, appId: string) {
 const inFrame = <T>(tenant: string, read: () => Promise<T>): Promise<T> =>
   tenant === currentTenant() ? read() : runAsTenant(tenant, read);
 
+/** 批准只能写在员工主人的帧里；别的帧（包括管理员自己的）写不进来。 */
 export class SharedUseFrameError extends Error {
   constructor(message: string) {
     super(message);

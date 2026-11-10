@@ -45,6 +45,7 @@ import {
   teamBotPublications,
 } from "../db/schema/team-bots";
 import { PLATFORM_TENANT, TEAM_TENANT } from "../db/schema/tenant";
+import { grantedByOwner } from "../plugins/owner-grants";
 import { PluginRefusedError } from "../plugins/store";
 import { capabilityFor, currentTenant } from "../tenant/context";
 import {
@@ -145,12 +146,16 @@ export function createTeamBots(options: {
 
   /**
    * Whether this action is on the Bot only because its owner gave it one of their own apps
-   * (`plugin_grants.granted_as = owner`, X3). A grant an administrator made, or one from before the
-   * column, is not. Read in the asker's frame, which sees a Team Bot's `team` grants.
+   * (`plugin_grants.granted_as = owner`, X3), or a grant from before the column whose granter is the
+   * Bot's owner (`grantedByOwner`, failing closed). A grant an administrator made is not. Read in the
+   * asker's frame, which sees a Team Bot's `team` grants.
    */
   async function givenByOwner(botId: string, ref: string): Promise<boolean> {
     const [grant] = await database
-      .select({ grantedAs: pluginGrants.grantedAs })
+      .select({
+        grantedAs: pluginGrants.grantedAs,
+        grantedBy: pluginGrants.grantedBy,
+      })
       .from(pluginGrants)
       .where(
         and(
@@ -160,7 +165,7 @@ export function createTeamBots(options: {
         ),
       )
       .limit(1);
-    return grant?.grantedAs === "owner";
+    return grant ? grantedByOwner(database, botId, grant) : false;
   }
 
   /**

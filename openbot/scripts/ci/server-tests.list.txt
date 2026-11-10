@@ -399,6 +399,7 @@ tests/own-app-tools-refresh.integration.test.ts
 tests/owner-app-grants.integration.test.ts
 tests/owner-assembly-audit.test.ts
 tests/owner-grants-hardening.integration.test.ts
+tests/owner-grants-legacy.integration.test.ts
 tests/page-frame-retention.integration.test.ts
 tests/paging.test.ts
 tests/passwords-sign-in.test.ts

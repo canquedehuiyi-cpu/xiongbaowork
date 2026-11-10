@@ -21,7 +21,11 @@ import {
   ownerGrantRefusal,
   withdrawOwnersSharedUse,
 } from "./owner-grants";
-import type { SharedAudience, SharedUseStore } from "./shared-use-store";
+import {
+  type SharedAudience,
+  SharedUseNotSharedError,
+  type SharedUseStore,
+} from "./shared-use-store";
 import {
   type AppAccessRequestRecord,
   isServerWriteRefusal,
@@ -467,12 +471,17 @@ export function mountAppAccessRoutes(options: {
      * 之后，按一下「给」就把受众放回来。
      */
     const approveShared = async () => {
-      if (options.shared)
+      if (!options.shared) return;
+      try {
         await approveOwnersSharedUse(
           options.shared.audience,
           options.shared.store,
           { botId: agentId, serverId, ownerId: context.var.actor.id },
         );
+      } catch (error) {
+        // 这之间应用被切走了模式：不设受众（闭合的方向），授予照常答复，不报 500。
+        if (!(error instanceof SharedUseNotSharedError)) throw error;
+      }
     };
     if (access.granted) {
       if (access.givenByOwner) await approveShared();

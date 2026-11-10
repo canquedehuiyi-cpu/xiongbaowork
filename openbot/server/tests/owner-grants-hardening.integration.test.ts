@@ -25,7 +25,10 @@ import {
 } from "../src/db/schema";
 import { sharedUseApprovals } from "../src/db/schema/shared-use";
 import type { ComposioBroker } from "../src/plugins/broker";
-import { ownerStillGives } from "../src/plugins/owner-grants";
+import {
+  ownerGrantRefusal,
+  ownerStillGives,
+} from "../src/plugins/owner-grants";
 import {
   createSharedAudience,
   createSharedUseStore,
@@ -256,7 +259,7 @@ describe("upgrading keeps who may give an app what it was", () => {
 });
 
 describe("switching the account mode", () => {
-  test("puts who may give the app back to the default, so an owner cannot open the team account with an old choice", async () => {
+  test("sets who may give the app to admin-only, so an owner cannot open the team account with an old choice", async () => {
     await asPlatform(() =>
       database
         .update(mcpServers)
@@ -276,8 +279,8 @@ describe("switching the account mode", () => {
         .from(mcpServers)
         .where(eq(mcpServers.id, MAIL)),
     );
-    expect(row?.ownerGrants).toBeNull();
-    // Shared 应用默认只有管理员能给，主人的授予设不下受众。
+    expect(row?.ownerGrants).toBe("admin");
+    // 只有管理员能给，主人的授予设不下受众。
     await runAsTenant(OWNER, () =>
       plugins.grant("mcp", `${MAIL}/LIST`, TEAM_BOT, OWNER, { as: "owner" }),
     );
@@ -305,12 +308,79 @@ describe("switching the account mode", () => {
       expect.objectContaining({
         change: "owner_grants_changed",
         from: "any",
-        to: null,
+        to: "admin",
         reason: "account_mode_switched",
       }),
     );
     await asPlatform(() =>
       plugins.setAccountModeColumns(MAIL, "personal", null),
+    );
+  });
+
+  test("a Personal app set to admin-only stays so through Personal → Shared → Personal, and each switch is in the trail", async () => {
+    // 升级回填后的状态：只有管理员能给。
+    await asPlatform(() =>
+      database
+        .update(mcpServers)
+        .set({ ownerGrants: "admin" })
+        .where(eq(mcpServers.id, MAIL)),
+    );
+    const before = new Date();
+    await asPlatform(() =>
+      plugins.setAccountModeColumns(
+        MAIL,
+        "shared",
+        `openbot-deployment:${suite}:M`,
+      ),
+    );
+    await asPlatform(() =>
+      database
+        .update(mcpServers)
+        .set({ ownerGrants: null })
+        .where(eq(mcpServers.id, MAIL)),
+    );
+    await asPlatform(() =>
+      plugins.setAccountModeColumns(MAIL, "personal", null),
+    );
+    expect(
+      await runAsTenant(OWNER, () => plugins.ownerGrantsSetting(MAIL)),
+    ).toEqual({ ownerGrants: "admin", chosen: "admin" });
+    // 主人对它「给」被拒，和 `/give` 同一个判断。
+    const inspected = await runAsTenant(OWNER, () =>
+      plugins.inspectApp({
+        app: MAIL,
+        agentId: BOT,
+        userId: OWNER,
+        composioConfigured: true,
+      }),
+    );
+    expect(inspected).not.toBeNull();
+    expect(
+      await runAsTenant(OWNER, () =>
+        ownerGrantRefusal(plugins, OWNER, BOT, inspected as never),
+      ),
+    ).toContain("只有管理员");
+    // 第二次切换时原值是 NULL，也写下回到只有管理员。
+    const trail = await asPlatform(() =>
+      database
+        .select({ payload: auditEvents.payload, at: auditEvents.createdAt })
+        .from(auditEvents)
+        .where(
+          and(
+            eq(auditEvents.eventType, "configuration.changed"),
+            eq(auditEvents.targetId, MAIL),
+          ),
+        ),
+    );
+    expect(
+      trail.filter((entry) => entry.at >= before).map((entry) => entry.payload),
+    ).toContainEqual(
+      expect.objectContaining({
+        change: "owner_grants_changed",
+        from: null,
+        to: "admin",
+        reason: "account_mode_switched",
+      }),
     );
   });
 });
