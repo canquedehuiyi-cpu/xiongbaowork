@@ -22,7 +22,11 @@ import { createAccountModeSwitch } from "../src/plugins/account-mode";
 import type { ComposioBroker } from "../src/plugins/broker";
 import { createPluginRoutes } from "../src/plugins/routes";
 import { DEPLOYMENT_VENDOR_PREFIX } from "../src/plugins/shared-accounts";
-import { createPluginStore, PluginRefusedError } from "../src/plugins/store";
+import {
+  createPluginStore,
+  PluginRefusedError,
+  ServerWriteRefusedError,
+} from "../src/plugins/store";
 import { asPlatform, runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { bindTestRoleWriter } from "./support/role-writer";
@@ -31,9 +35,10 @@ import { bindTestRoleWriter } from "./support/role-writer";
  * 共享账号与账号模式（上游 #757：`account-mode.integration`、`shared-brokered-routes`、
  * `shared-gated-mode`，按 fork 改写成一个文件）。
  *
- * 断言的是安全规则本身：谁能连接团队账号（只有管理员）、谁能驾驶团队账号（X1 只有员工的主人和管理员，
- * 且发起者必须说得出是谁在驾驶）、Team Bot 的队友拿不到团队账号、check-in 碰不到团队账号、切换模式在
- * vendor 处全部撤销成功之前什么都不变、切到 Shared 立起「写之前先问」规则。
+ * 断言的是安全规则本身：谁能连接团队账号（只有持有管理员能力的请求，降权的会话不行）、谁能驾驶团队账号
+ * （X3 并入共享使用批准之前没有任何批准，所以谁都不能——主人、管理员、自助授权的成员、Team Bot 队友，与
+ * 上游「没有批准就拒绝」一致；发起者说不清是谁在驾驶、check-in 同样拒绝）、切换模式在 vendor 处全部撤销
+ * 成功之前什么都不变、切到 Shared 立起「写之前先问」规则、团队身份下的账号不论是否确认都会被撤销。
  *
  * 真实的 store、路由、管理员能力中间件和行级安全；broker 和 vendor 调用是替身，记下被问了什么。直接调用
  * 切换时在 platform 帧里（等同持有能力的管理员）；经路由时由管理员能力中间件给出能力。
@@ -43,12 +48,17 @@ const suite = randomUUID().slice(0, 8);
 const ADMIN = `sa-${suite}-admin`;
 const OWNER = `sa-${suite}-owner`;
 const TEAMMATE = `sa-${suite}-teammate`;
-const people = [ADMIN, OWNER, TEAMMATE];
+/** 会话里还是管理员、数据库里已被收回管理员角色的人。 */
+const DEMOTED = `sa-${suite}-demoted`;
+const people = [ADMIN, OWNER, TEAMMATE, DEMOTED];
+/** OWNER 自己的私人员工（自助安装 / 给自己的员工授权的路径）。 */
+const OWN_BOT = `sa-${suite}-own-bot`;
 const BOT = `sa-${suite}-bot`;
 const made: string[] = [];
 let releaseRoleWriter: (() => Promise<void>) | undefined;
 
-const roleOf = (id: string) => (id === ADMIN ? "admin" : "user");
+const roleOf = (id: string) =>
+  id === ADMIN || id === DEMOTED ? "admin" : "user";
 
 /** broker 替身：持有的团队身份、被问的撤销与链接，以及一个会失败的撤销。 */
 function fakeBroker() {
@@ -74,6 +84,7 @@ function fakeBroker() {
       held.delete(userId);
       return true;
     },
+    deleteAuthConfig: async () => {},
     connectionFields: async () => [
       {
         name: "subdomain",
@@ -123,7 +134,7 @@ function fakeTeamRules() {
   };
 }
 
-function harness() {
+function harness(options: { deploymentId?: string } = {}) {
   const toolkit = `shared_${suite.replace(/-/g, "_")}_${made.length}`;
   made.push(toolkit);
   const vendor = fakeBroker();
@@ -144,7 +155,7 @@ function harness() {
   const modes = createAccountModeSwitch({
     store,
     teamRules: rules.store,
-    deploymentId: `acme-${suite}`,
+    deploymentId: options.deploymentId ?? `acme-${suite}`,
     audit: createAuditStore(database),
   });
   const adminScope = createAdminScope({
@@ -268,6 +279,22 @@ beforeAll(async () => {
       avatarSeed: suite,
       visibility: "public",
     });
+    await database.insert(agents).values({
+      id: OWN_BOT,
+      tenantId: OWNER,
+      name: "Mine",
+      type: "built_in",
+      configuration: {},
+    });
+    await database.insert(agentProfiles).values({
+      agentId: OWN_BOT,
+      tenantId: OWNER,
+      ownerUserId: OWNER,
+      title: "Mine",
+      roleDescription: "测试员工",
+      avatarSeed: `${suite}-own`,
+      visibility: "private",
+    });
   });
 });
 
@@ -277,10 +304,12 @@ afterAll(async () => {
       await database
         .delete(composioConnections)
         .where(inArray(composioConnections.toolkit, made));
-      await database.delete(pluginGrants).where(eq(pluginGrants.agentId, BOT));
+      await database
+        .delete(pluginGrants)
+        .where(inArray(pluginGrants.agentId, [BOT, OWN_BOT]));
       await database.delete(mcpServers).where(inArray(mcpServers.id, made));
     }
-    await database.delete(agents).where(eq(agents.id, BOT));
+    await database.delete(agents).where(inArray(agents.id, [BOT, OWN_BOT]));
     await database.delete(users).where(inArray(users.id, people));
   });
   await releaseRoleWriter?.();
@@ -656,25 +685,234 @@ describe("connecting the team account", () => {
   });
 });
 
-describe("who may steer a run on the team account", () => {
-  test("the Bot's owner and an administrator reach it, as the team identity", async () => {
+describe("guarding the team account itself", () => {
+  test("a session that still says admin, without the role behind it, cannot connect, confirm or end it, and the vendor is never asked", async () => {
     const h = harness();
     await enable(h.toolkit, "OAUTH2");
     const vendorId = await sharedAndConnected(h);
+    h.vendor.asked.authorized.length = 0;
 
-    expect((await h.call(OWNER)).isError).toBe(false);
-    expect((await h.call(ADMIN)).isError).toBe(false);
-    // 一次由人开始、经转交的运行，驾驶的仍是那个人。
+    const demoted = h.as(DEMOTED);
+    const ended = await demoted.request(
+      `/api/plugins/servers/${h.toolkit}/connection`,
+      { method: "DELETE" },
+    );
+    expect(ended.status).toBe(403);
+    const confirmed = await demoted.request(
+      `/api/plugins/servers/${h.toolkit}/connection/confirm`,
+      { method: "POST" },
+    );
+    expect(confirmed.status).toBe(403);
+    expect(h.vendor.asked.revoked).toEqual([]);
+    expect((await appRow(h.toolkit))?.sharedConnectedAt).not.toBeNull();
+
+    // 断开之后再连：降权的会话拿不到以团队身份发起的授权链接。
+    await h.as(ADMIN).request(`/api/plugins/servers/${h.toolkit}/connection`, {
+      method: "DELETE",
+    });
+    expect(h.vendor.asked.revoked).toEqual([vendorId]);
+    const connect = await demoted.request(
+      `/api/plugins/servers/${h.toolkit}/connect`,
+      { method: "POST" },
+    );
+    expect(connect.status).toBe(403);
+    expect(h.vendor.asked.authorized).toEqual([]);
+
+    // store 自己也拒绝：没有管理员能力的帧里，团队账号方法在问 vendor 之前就停下。
+    await expect(
+      runAsTenant(DEMOTED, () =>
+        h.store.disconnectShared({
+          toolkit: h.toolkit,
+          by: DEMOTED,
+          reason: "self",
+        }),
+      ),
+    ).rejects.toThrow();
+    expect(h.vendor.asked.revoked).toEqual([vendorId]);
+  });
+
+  test("a key app's team account is never connected from a frame without the administrator's capability", async () => {
+    // 填写字段的应用：没有能力检查的话，下面这一步会把内容以团队身份交给 vendor（复核 N4）。
+    const h = harness();
+    await enable(h.toolkit, "API_KEY");
+    await asPlatform(() =>
+      h.modes.switchMode({
+        serverId: h.toolkit,
+        mode: "shared",
+        by: ADMIN,
+        confirm: true,
+      }),
+    );
+
+    await expect(
+      runAsTenant(ADMIN, () =>
+        h.store.connectSharedWithFields({
+          toolkit: h.toolkit,
+          values: { api_key: "a-key" },
+          by: ADMIN,
+        }),
+      ),
+    ).rejects.toBeInstanceOf(ServerWriteRefusedError);
+    expect(h.vendor.asked.fields).toEqual([]);
+
+    // 同一个调用在持有能力的帧里（platform 等同）照常连上，说明拦下它的就是能力检查。
+    await asPlatform(() =>
+      h.store.connectSharedWithFields({
+        toolkit: h.toolkit,
+        values: { api_key: "a-key" },
+        by: ADMIN,
+      }),
+    );
+    expect(h.vendor.asked.fields).toEqual([
+      (await appRow(h.toolkit))?.sharedVendorUserId as string,
+    ]);
+  });
+
+  test("an account authorised under the team identity but never confirmed is ended when the app goes back to Personal", async () => {
+    const h = harness();
+    await enable(h.toolkit, "OAUTH2");
+    await asPlatform(() =>
+      h.modes.switchMode({
+        serverId: h.toolkit,
+        mode: "shared",
+        by: ADMIN,
+        confirm: true,
+      }),
+    );
+    const vendorId = (await appRow(h.toolkit))?.sharedVendorUserId as string;
+    // 管理员在同意屏幕上授权了，却没有回来确认。
+    h.vendor.held.add(vendorId);
+    expect((await appRow(h.toolkit))?.sharedConnectedAt).toBeNull();
+
+    // 撤销失败：模式与团队身份都不变，这个账号仍能从这里被撤销。
+    h.vendor.failing.add(vendorId);
+    const failed = await asPlatform(() =>
+      h.modes.switchMode({
+        serverId: h.toolkit,
+        mode: "personal",
+        by: ADMIN,
+        confirm: true,
+      }),
+    );
+    expect(failed).toMatchObject({ changed: false });
+    expect((await appRow(h.toolkit))?.accountMode).toBe("shared");
+    expect((await appRow(h.toolkit))?.sharedVendorUserId).toBe(vendorId);
+
+    h.vendor.failing.clear();
+    const back = await asPlatform(() =>
+      h.modes.switchMode({
+        serverId: h.toolkit,
+        mode: "personal",
+        by: ADMIN,
+        confirm: true,
+      }),
+    );
+    expect(back).toEqual({ changed: true, revoked: 1 });
+    expect(h.vendor.asked.revoked).toEqual([vendorId]);
+    expect(h.vendor.held.has(vendorId)).toBe(false);
+  });
+
+  test("removing a Shared app ends its team account, confirmed or not, and the trail never names the team identity", async () => {
+    const h = harness();
+    await enable(h.toolkit, "OAUTH2");
+    await asPlatform(() =>
+      h.modes.switchMode({
+        serverId: h.toolkit,
+        mode: "shared",
+        by: ADMIN,
+        confirm: true,
+      }),
+    );
+    const vendorId = (await appRow(h.toolkit))?.sharedVendorUserId as string;
+    h.vendor.held.add(vendorId);
+
+    await asPlatform(() => h.store.removeServer(h.toolkit, ADMIN));
+
+    expect(h.vendor.asked.revoked).toEqual([vendorId]);
+    const trail = await asPlatform(() =>
+      database
+        .select({ payload: auditEvents.payload })
+        .from(auditEvents)
+        .where(
+          and(
+            eq(auditEvents.eventType, "mcp.account_disconnected"),
+            eq(auditEvents.targetId, h.toolkit),
+          ),
+        ),
+    );
+    expect(trail.map((entry) => entry.payload)).toContainEqual(
+      expect.objectContaining({ holder: "deployment" }),
+    );
+    expect(JSON.stringify(trail)).not.toContain(DEPLOYMENT_VENDOR_PREFIX);
+  });
+
+  test("a deployment with no id refuses the switch before anybody's account is ended", async () => {
+    const h = harness({ deploymentId: "  " });
+    await enable(h.toolkit, "OAUTH2");
+    await connectPerson(h.toolkit, OWNER);
+
+    await expect(
+      asPlatform(() =>
+        h.modes.switchMode({
+          serverId: h.toolkit,
+          mode: "shared",
+          by: ADMIN,
+          confirm: true,
+        }),
+      ),
+    ).rejects.toThrow(/DEPLOYMENT_ID/);
+    expect(h.vendor.asked.revoked).toEqual([]);
     expect(
-      (
-        await h.call(OWNER, {
-          kind: "handoff",
-          id: "another-bot",
-          origin: { kind: "person" },
-        } as AuditInitiator)
-      ).isError,
-    ).toBe(false);
-    expect(h.reached).toEqual([vendorId, vendorId, vendorId]);
+      await asPlatform(() =>
+        database
+          .select()
+          .from(composioConnections)
+          .where(eq(composioConnections.toolkit, h.toolkit)),
+      ),
+    ).toHaveLength(1);
+  });
+});
+
+describe("who may steer a run on the team account", () => {
+  test("without an administrator's approval nobody reaches it: not the owner, not an administrator", async () => {
+    const h = harness();
+    await enable(h.toolkit, "OAUTH2");
+    await sharedAndConnected(h);
+
+    for (const [actor, initiator] of [
+      [OWNER, { kind: "person" }],
+      [ADMIN, { kind: "person" }],
+      [
+        OWNER,
+        { kind: "handoff", id: "another-bot", origin: { kind: "person" } },
+      ],
+    ] as [string, AuditInitiator][]) {
+      const refused = h.call(actor, initiator);
+      await expect(refused).rejects.toBeInstanceOf(PluginRefusedError);
+      await expect(refused).rejects.toThrow(/管理员还没有批准/);
+    }
+    expect(h.reached).toEqual([]);
+  });
+
+  test("a member who grants the app to their own Bot still does not reach the team account", async () => {
+    const h = harness();
+    await enable(h.toolkit, "OAUTH2");
+    await sharedAndConnected(h);
+    // 成员给自己的员工授予这个应用的工具（自助安装落在同一处）。
+    await runAsTenant(OWNER, () => h.store.grant("mcp", h.ref, OWN_BOT, OWNER));
+
+    const refused = runAsTenant(OWNER, () =>
+      h.store.callTool({
+        ref: h.ref,
+        args: {},
+        botId: OWN_BOT,
+        actorId: OWNER,
+        initiator: { kind: "person" },
+      }),
+    );
+    await expect(refused).rejects.toBeInstanceOf(PluginRefusedError);
+    await expect(refused).rejects.toThrow(/管理员还没有批准/);
+    expect(h.reached).toEqual([]);
   });
 
   test("a teammate on the owner's Team Bot does not reach the team account", async () => {
@@ -684,7 +922,7 @@ describe("who may steer a run on the team account", () => {
 
     const refused = h.call(TEAMMATE);
     await expect(refused).rejects.toBeInstanceOf(PluginRefusedError);
-    await expect(refused).rejects.toThrow(/只有这位员工的主人和管理员/);
+    await expect(refused).rejects.toThrow(/管理员还没有批准/);
     expect(h.reached).toEqual([]);
     const trail = await asPlatform(() =>
       database
@@ -732,7 +970,8 @@ describe("who may steer a run on the team account", () => {
         confirm: true,
       }),
     );
-    await expect(h.call(OWNER)).rejects.toThrow(/还没有管理员连接/);
+    // X3 之前共享闸门先拒绝（没有批准），未连接的检查在它之后，同样到不了 vendor。
+    await expect(h.call(OWNER)).rejects.toBeInstanceOf(PluginRefusedError);
     await expect(
       h.call(OWNER, { kind: "person" }, { account: "x@example.test" }),
     ).rejects.toThrow(/没有账号可选/);
