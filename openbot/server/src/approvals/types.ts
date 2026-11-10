@@ -191,6 +191,12 @@ export type ApprovalCandidate = {
    * the person approves, so not in the action's digest.
    */
   declined?: AuditEventInput;
+  /**
+   * 调用进的是这个人在该应用上的哪一个账号（按本人认得的地址），只在他有不止一个账号时才有（上游
+   * #1298）。它是「两个动作是不是同一个动作」的一部分：对一个邮箱的调用，永远不会被关于另一个邮箱的
+   * 批准、拒绝或保存的规则回答。
+   */
+  account?: string;
 };
 
 export type ApprovalAction = ApprovalCandidate & {
@@ -232,6 +238,8 @@ export type ApprovalRule = {
   effect: string;
   scope: string;
   behaviour: RuleBehaviour;
+  /** 规则只针对的那一个账号；NULL 是「这个应用，不论哪个账号」，能放行什么见 `ruleMatches`。 */
+  account?: string | null;
   revokedAt: Date | null;
   createdAt: Date;
 };
@@ -608,6 +616,8 @@ export function approvalAction(candidate: ApprovalCandidate): ApprovalAction {
         scope: candidate.scope,
         args: candidate.args,
         target: candidate.target,
+        // 只在有账号时才加，所以账号出现之前打开的请求摘要不变。
+        ...(candidate.account ? { account: candidate.account } : {}),
       }),
     )
     .digest("hex");

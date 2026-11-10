@@ -86,6 +86,10 @@ const ruleScope = (action: ApprovalAction) =>
     eq(approvalRules.toolRef, action.toolRef),
     eq(approvalRules.effect, action.effect),
     eq(approvalRules.scope, action.scope),
+    // 一个邮箱保存的规则从不回答另一个邮箱；不点名账号的调用只由不点名账号的规则回答（上游 #1298）。
+    action.account
+      ? eq(approvalRules.account, action.account)
+      : isNull(approvalRules.account),
     eq(approvalRules.behaviour, "allow"),
     isNull(approvalRules.revokedAt),
   );
@@ -148,6 +152,9 @@ export function createApprovalStore(
       eq(approvalRules.toolRef, action.toolRef),
       eq(approvalRules.effect, action.effect),
       eq(approvalRules.scope, action.scope),
+      action.account
+        ? eq(approvalRules.account, action.account)
+        : isNull(approvalRules.account),
       eq(approvalRules.behaviour, "allow"),
       isNull(approvalRules.revokedAt),
     );
@@ -260,6 +267,7 @@ export function createApprovalStore(
             toolRef: request.action.toolRef,
             effect: request.action.effect,
             scope: request.action.scope,
+            account: request.action.account ?? null,
           });
         const [updated] = await tx
           .update(approvalRequests)

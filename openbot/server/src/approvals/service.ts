@@ -103,6 +103,8 @@ export function equivalenceOf(candidate: ApprovalCandidate): string {
         // alone made every later call to that tool "the same" as one the person declined.
         stable(candidate.target),
         stable(candidate.args),
+        // 哪个邮箱：拒绝了从一个账号发出的邮件，不代表另一个账号也被拒绝。
+        ...(candidate.account ? [candidate.account] : []),
       ]),
     )
     .digest("hex");
@@ -863,14 +865,18 @@ export function createApprovalService(
         })),
         teamRules: teamRules
           .filter((rule) =>
-            ruleMatches(rule, {
-              actorId,
-              botId,
-              toolRef: rule.toolRef,
-              effect: rule.effect,
-              scope: rule.scope,
-              args: null,
-            }),
+            ruleMatches(
+              rule,
+              {
+                actorId,
+                botId,
+                toolRef: rule.toolRef,
+                effect: rule.effect,
+                scope: rule.scope,
+                args: null,
+              },
+              "team_rule",
+            ),
           )
           .map((rule) => ({
             id: rule.id,
@@ -1232,6 +1238,8 @@ function publicApproval(request: ApprovalRecord) {
       toolCallId: action.toolCallId,
       args: approvalArgsPreview(action),
       target: approvalPreview(action.target),
+      // 卡片点名的账号：「send email（Gmail 账号 dana@work.example）」。
+      ...(action.account ? { account: action.account } : {}),
       ...(action.policy
         ? {
             policy: {

@@ -146,6 +146,12 @@ export const approvalRules = pgTable(
       .$type<RuleBehaviour>()
       .notNull()
       .default("allow"),
+    /**
+     * 规则针对这个人在该应用上的哪一个账号（他有多个账号时）：按「这里始终允许」时卡片点名的地址
+     * （上游 0085，fork 迁移 0181）。一个邮箱的规则从不覆盖另一个。NULL 是「这个应用，不论哪个账号」，
+     * 它还能放行什么见 approvals/policy.ts 的 `ruleMatches`。
+     */
+    account: text("account"),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

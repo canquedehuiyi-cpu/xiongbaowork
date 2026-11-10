@@ -1177,6 +1177,13 @@
       "when": 1794318601977,
       "tag": "0180_brokered_accounts",
       "breakpoints": true
+    },
+    {
+      "idx": 181,
+      "version": "7",
+      "when": 1794318911781,
+      "tag": "0181_approval_rule_account",
+      "breakpoints": true
     }
   ]
 }

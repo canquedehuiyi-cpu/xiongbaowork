@@ -178,6 +178,8 @@ export function approvalWords(action: {
   scope: string;
   /** What the action is aimed at, as the server resolved it. A folder's carries its name. */
   target?: unknown;
+  /** 这个人在该应用上的哪一个账号（他有多个时）：地点读作「Gmail 账号 dana@work.example」。 */
+  account?: string;
 }): {
   action: string;
   place: string;
@@ -196,6 +198,8 @@ export function approvalPhrase(action: {
   toolRef: string;
   scope: string;
   target?: unknown;
+  /** 这个人在该应用上的哪一个账号（他有多个时）：地点读作「Gmail 账号 dana@work.example」。 */
+  account?: string;
 }): string {
   const { action: words, place, form } = approvalParts(action);
   if (form === "in") return `${words}（${inFolder(undefined, place)}）`;
@@ -222,14 +226,22 @@ function approvalParts(action: {
   toolRef: string;
   scope: string;
   target?: unknown;
+  account?: string;
 }): { action: string; place: string; form: "at" | "in" | "follows" } {
   const slash = action.toolRef.indexOf("/");
   const app = action.toolRef.slice(0, slash);
   if (slash > 0 && app === action.scope) {
     const { label } = appToolName(app, action.toolRef.slice(slash + 1));
+    /*
+     * 哪个账号（上游 #1298）：这个人在该应用上有不止一个账号时，卡片要说清楚问的是哪一个，
+     * 「send email（Gmail 账号 dana@work.example）」。只有一个账号时没有什么要区分的，读法不变。
+     */
+    const account = action.account?.trim();
     return {
       action: lowerFirst(label),
-      place: connectorName(app),
+      place: account
+        ? `${connectorName(app)} 账号 ${account}`
+        : connectorName(app),
       form: "at",
     };
   }
