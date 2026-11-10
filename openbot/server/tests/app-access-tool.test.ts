@@ -92,7 +92,7 @@ describe("show_app_access", () => {
     ["not_connected", /卡片上有「连接」/],
     ["reconnect", /卡片上有「重新连接」/],
     ["shared_not_connected", /要等管理员连接/],
-    ["shared_not_approved", /只有你的主人和管理员/],
+    ["shared_not_approved", /管理员还没有批准你使用它/],
     ["disabled", /还没有打开.*申请打开/],
     ["not_granted", /没有授予你.*申请授予/],
     ["owner_grantable", /可以自己给你/],
