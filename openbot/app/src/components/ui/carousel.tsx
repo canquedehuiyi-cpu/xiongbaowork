@@ -1,14 +1,14 @@
+import { IconChevronLeft, IconChevronRight } from "@tabler/icons-react";
+import useEmblaCarousel, {
+  type UseEmblaCarouselType,
+} from "embla-carousel-react";
 import * as React from "react";
+
+import { Button } from "@/components/ui/button";
 // Upstream generates `import { cn } from "cn"`, pulling in a second class-merging package. This app
 // already has one at `@/lib/utils` — which is what `components.json` declares as the `utils` alias —
 // and every other file in this directory imports it from there. Re-point on regeneration.
 import { cn } from "@/lib/utils";
-import useEmblaCarousel, {
-  type UseEmblaCarouselType,
-} from "embla-carousel-react";
-
-import { Button } from "@/components/ui/button";
-import { IconChevronLeft, IconChevronRight } from "@tabler/icons-react";
 
 type CarouselApi = UseEmblaCarouselType[1];
 type UseCarouselParameters = Parameters<typeof useEmblaCarousel>;
@@ -41,6 +41,26 @@ function useCarousel() {
   }
 
   return context;
+}
+
+export function carouselKeyboardAction(
+  orientation: "horizontal" | "vertical",
+  key: string,
+  target: EventTarget | null,
+): "prev" | "next" | null {
+  if (
+    target instanceof HTMLElement &&
+    (target.matches("input, textarea, select") || target.isContentEditable)
+  )
+    return null;
+  if (orientation === "horizontal") {
+    if (key === "ArrowLeft") return "prev";
+    if (key === "ArrowRight") return "next";
+  } else {
+    if (key === "ArrowUp") return "prev";
+    if (key === "ArrowDown") return "next";
+  }
+  return null;
 }
 
 function Carousel({
@@ -78,15 +98,17 @@ function Carousel({
 
   const handleKeyDown = React.useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
-      if (event.key === "ArrowLeft") {
-        event.preventDefault();
-        scrollPrev();
-      } else if (event.key === "ArrowRight") {
-        event.preventDefault();
-        scrollNext();
-      }
+      const action = carouselKeyboardAction(
+        orientation,
+        event.key,
+        event.target,
+      );
+      if (!action) return;
+      event.preventDefault();
+      if (action === "prev") scrollPrev();
+      else scrollNext();
     },
-    [scrollPrev, scrollNext],
+    [orientation, scrollPrev, scrollNext],
   );
 
   React.useEffect(() => {
@@ -101,7 +123,8 @@ function Carousel({
     api.on("select", onSelect);
 
     return () => {
-      api?.off("select", onSelect);
+      api.off("reInit", onSelect);
+      api.off("select", onSelect);
     };
   }, [api, onSelect]);
 
@@ -233,11 +256,11 @@ function CarouselNext({
 }
 
 export {
-  type CarouselApi,
   Carousel,
+  type CarouselApi,
   CarouselContent,
   CarouselItem,
-  CarouselPrevious,
   CarouselNext,
+  CarouselPrevious,
   useCarousel,
 };

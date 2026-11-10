@@ -5,6 +5,7 @@ import {
   WAKERFLOW_STEP_KINDS,
   type WakerFlowPlan,
   type WakerFlowStep,
+  type WakerFlowWorkerStep,
 } from "../../shared/wakerflows";
 import { stepInstruction } from "../src/pipeline/store";
 import {
@@ -36,7 +37,7 @@ const worker = (
   id: string,
   inputKeys: string[],
   outputKey: string,
-  extra: Partial<Extract<WakerFlowStep, { agentId: string }>> = {},
+  extra: Partial<WakerFlowWorkerStep> = {},
 ): WakerFlowStep => ({
   id,
   agentId: "writer",

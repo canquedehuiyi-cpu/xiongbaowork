@@ -1,11 +1,8 @@
 import { createHash } from "node:crypto";
-import {
-  EventSchemas,
-  HttpAgent,
-  type Message,
-  type RunAgentInput,
-} from "@ag-ui/client";
+import { HttpAgent, type Message, type RunAgentInput } from "@ag-ui/client";
+import { EventSchemas } from "@ag-ui/core/schemas";
 import type { BuiltInAgentClassicConfig } from "@copilotkit/runtime/v2";
+import { PLAN_RUN_COMPLETED } from "@openbot/toolkit/copilotkit/agents";
 import type { Subscription } from "rxjs";
 import {
   clearDesktopConnectionFailure,
@@ -28,7 +25,7 @@ export type PlanModelConfig = {
   endpoint: URL;
   token: string;
 };
-export const PLAN_RUN_COMPLETED = Symbol("plan-run-completed");
+export { PLAN_RUN_COMPLETED };
 
 /** A plan is an explicit desktop credential choice, not an API-key fallback. */
 export function planModelForEnvironment(
@@ -80,12 +77,34 @@ const UNKNOWN_USAGE: GenerateResult["usage"] = {
   outputTokens: { total: undefined, text: undefined, reasoning: undefined },
 };
 
+/**
+ * The conversation as the plan's harness is sent it.
+ *
+ * A user message that is only words goes as one string, the shape a browser sends every Bot. Sent
+ * as parts, the Claude harness put each part in a block of its own, and Claude Code reads the last
+ * block it is sent as what was typed at its own prompt: a message that started with the command
+ * the `/` menu puts there ("/tide-report lighthouses") was taken for a slash command of Claude
+ * Code's, answered "Unknown command: /tide-report", and never reached the model. A message with an
+ * image still goes as parts, and the harness closes such a replay itself (`conversation_content`
+ * in agent-claude-sdk/src/replay.py).
+ */
 export function planMessages(prompt: Options["prompt"]): Message[] {
   const messages: Message[] = [];
   for (const [index, message] of prompt.entries()) {
     const id = `prompt-${index}`;
     if (message.role === "system") {
       messages.push({ id, role: "system", content: message.content });
+    } else if (
+      message.role === "user" &&
+      message.content.every((part) => part.type === "text")
+    ) {
+      messages.push({
+        id,
+        role: "user",
+        content: message.content
+          .map((part) => (part.type === "text" ? part.text : ""))
+          .join("\n\n"),
+      });
     } else if (message.role === "user") {
       messages.push({
         id,
@@ -97,11 +116,20 @@ export function planMessages(prompt: Options["prompt"]): Message[] {
               `Plan models cannot receive ${part.mediaType} attachments.`,
             );
           const data = part.data;
-          const url =
-            data instanceof URL
-              ? data.href
-              : `data:${part.mediaType};base64,${typeof data === "string" ? data : Buffer.from(data).toString("base64")}`;
-          return { type: "binary", mimeType: part.mediaType, url };
+          return {
+            type: "image",
+            source:
+              data instanceof URL
+                ? { type: "url", value: data.href, mimeType: part.mediaType }
+                : {
+                    type: "data",
+                    value:
+                      typeof data === "string"
+                        ? data
+                        : Buffer.from(data).toString("base64"),
+                    mimeType: part.mediaType,
+                  },
+          };
         }),
       });
     } else if (message.role === "assistant") {
@@ -152,37 +180,6 @@ export function planMessages(prompt: Options["prompt"]): Message[] {
   return messages;
 }
 
-/** The pinned JS client uses binary parts; current Python AG-UI uses image/source. */
-function planWireBody(
-  body: BodyInit | null | undefined,
-): BodyInit | null | undefined {
-  if (typeof body !== "string") return body;
-  const input = JSON.parse(body) as RunAgentInput;
-  return JSON.stringify({
-    ...input,
-    messages: input.messages.map((message) => {
-      if (message.role !== "user" || typeof message.content === "string")
-        return message;
-      return {
-        ...message,
-        content: message.content.map((part) => {
-          if (part.type !== "binary") return part;
-          if (!part.mimeType.startsWith("image/"))
-            throw new Error("The plan model only supports image media parts.");
-          const encoded = part.data ?? part.url?.split(";base64,", 2)[1];
-          return {
-            type: "image",
-            source:
-              encoded !== undefined
-                ? { type: "data", value: encoded, mimeType: part.mimeType }
-                : { type: "url", value: part.url, mimeType: part.mimeType },
-          };
-        }),
-      };
-    }),
-  });
-}
-
 /** Model transport only. BuiltInAgent still validates and executes every server tool. */
 export class PlanModel implements PlanLanguageModel {
   readonly specificationVersion = "v3";
@@ -199,6 +196,11 @@ export class PlanModel implements PlanLanguageModel {
     input: Pick<RunAgentInput, "threadId">,
     frontendTools: ReadonlySet<string> = new Set(),
     signal?: AbortSignal,
+    /**
+     * The model and effort from the plan's own listing, picked by the person or the middle of the
+     * plan's line. Absent: the harness falls back to a model its plan offers.
+     */
+    private readonly choice?: { model: string; reasoningEffort?: string },
   ) {
     this.provider = `openbot-${config.provider}-plan`;
     this.modelId = config.provider;
@@ -278,7 +280,9 @@ export class PlanModel implements PlanLanguageModel {
     this.streaming = true;
     this.pendingTools = [];
     const messages = planMessages(options.prompt);
-    const tools = (options.tools ?? []).map((tool) => {
+    const answerOnly = options.toolChoice?.type === "none";
+    // The plan harnesses consume AG-UI tools, not the AI SDK's toolChoice. Omit the tools too.
+    const tools = (answerOnly ? [] : (options.tools ?? [])).map((tool) => {
       if (tool.type !== "function")
         throw new Error(
           "Built-in plan Bots only support caller-owned function tools.",
@@ -296,7 +300,6 @@ export class PlanModel implements PlanLanguageModel {
       fetch: (url, init) =>
         fetch(url, {
           ...init,
-          body: planWireBody(init?.body),
           redirect: "error",
           signal: AbortSignal.any([
             ...(init?.signal ? [init.signal] : []),
@@ -339,6 +342,14 @@ export class PlanModel implements PlanLanguageModel {
             forwardedProps: {
               openbotModelOnly: true,
               openbotBotId: this.botId,
+              ...(this.choice ? { openbotModel: this.choice } : {}),
+              /*
+               * Claude must replace its still-running SDK query to change the tools it holds. The
+               * harness does so whenever a step's `tools` differ from what that query started
+               * with (a tool `search_tools` found, or none on the last step); see
+               * agent-claude-sdk/src/adapter.py `run`.
+               */
+              ...(answerOnly ? { openbotAnswerOnly: true } : {}),
             },
           })
           .subscribe({
@@ -428,6 +439,9 @@ export class PlanModel implements PlanLanguageModel {
                   }
                   case "RUN_ERROR": {
                     const error = new Error(event.message);
+                    // The harness's code, so the run can say a provider's refusal in words. See
+                    // `provider-refusal.ts`.
+                    if (event.code) Object.assign(error, { code: event.code });
                     if (event.code === "OPENBOT_MODEL_AUTH_REQUIRED") {
                       error.name = "OpenBotModelAuthenticationError";
                       recordDesktopConnectionFailure({

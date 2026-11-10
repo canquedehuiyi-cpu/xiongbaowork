@@ -132,6 +132,9 @@ const agentBase: AgentProfile = {
   systemOwned: false,
   canManage: true,
   mine: true,
+  isolated: false,
+  isolationActive: false,
+  isolationOffReason: null,
 };
 
 const agent = (over: Partial<AgentProfile> & Pick<AgentProfile, "id">) => ({
@@ -240,6 +243,8 @@ const ATTENTION: BotAttention[] = [
     unread: 2,
     paused: false,
     notify: "all",
+    items: 0,
+    tasks: { needsInput: 0, ready: 0, failed: 0 },
   },
   {
     agentId: "agent-support",
@@ -250,6 +255,8 @@ const ATTENTION: BotAttention[] = [
     unread: 0,
     paused: false,
     notify: "needs_input",
+    items: 0,
+    tasks: { needsInput: 0, ready: 0, failed: 0 },
   },
   {
     agentId: "agent-writer",
@@ -260,6 +267,8 @@ const ATTENTION: BotAttention[] = [
     unread: 0,
     paused: true,
     notify: "none",
+    items: 0,
+    tasks: { needsInput: 0, ready: 0, failed: 0 },
   },
 ];
 
@@ -593,6 +602,7 @@ const PLUGIN_SERVERS: PluginServer[] = [
     lastError: null,
     addedBy: "user-demo",
     dynamicClient: false,
+    adminConnectOnly: false,
     authScheme: "bearer",
     tools: [
       {
@@ -632,6 +642,7 @@ const PLUGIN_SERVERS: PluginServer[] = [
     lastError: null,
     addedBy: "user-demo",
     dynamicClient: false,
+    adminConnectOnly: false,
     authScheme: "bearer",
     tools: [
       {
@@ -671,6 +682,7 @@ const PLUGIN_SERVERS: PluginServer[] = [
     lastError: "凭据已过期，请重新连接。",
     addedBy: null,
     dynamicClient: false,
+    adminConnectOnly: false,
     authScheme: null,
     tools: [],
     withdrawn: [],
@@ -1282,6 +1294,8 @@ const CAPABILITIES: CapabilitiesBody = {
   generativeUi: false,
   wakerflowAutomations: true,
   selfHostBanner: false,
+  localEvaluation: false,
+  edition: "team",
   transcription: false,
   voice: false,
   authProviders: [],
@@ -1315,6 +1329,9 @@ const copilotInfo = (agents: AgentProfile[]): CopilotRuntimeInfo => ({
 const PREFERENCES: UserPreferences = {
   messageListEmphasis: "thread",
   selfHostBannerDismissed: true,
+  narration: null,
+  skin: "openbot",
+  proactive: "on",
 };
 
 const reachability = (scenario: Scenario): Reachability => ({
@@ -1363,7 +1380,7 @@ const reachability = (scenario: Scenario): Reachability => ({
           {
             id: "delivery-01",
             transport: "slack",
-            kind: "progress",
+            kind: "reply",
             state: "sent",
             error: null,
             createdAt: at(136),
@@ -1459,6 +1476,7 @@ const ROUTING: UpdateRouting = {
   progress: ["push"],
   decision: "all",
   question: "all",
+  attention: "all",
 };
 
 /* ------------------------------------------------------------------------------------------------ */
@@ -1550,7 +1568,13 @@ const ROUTINES: RoutinesPage = {
       schedule: "0 9 * * 1",
       timezone: "Asia/Shanghai",
       instruction: "每周一 09:00 汇总上周销售数据并发出经营周报",
-      channel: { id: "channel-analyst", name: "经营周报", gone: false },
+      title: null,
+      channel: {
+        id: "channel-analyst",
+        name: "经营周报",
+        title: "经营周报",
+        gone: false,
+      },
       enabled: true,
       nextRunAt: at(144),
       lastRun: { status: "succeeded", at: at(120) },
@@ -1561,7 +1585,13 @@ const ROUTINES: RoutinesPage = {
       schedule: "0 18 * * *",
       timezone: "Asia/Shanghai",
       instruction: "每天 18:00 检查库存低于安全线的商品",
-      channel: { id: "channel-analyst", name: "经营周报", gone: false },
+      title: null,
+      channel: {
+        id: "channel-analyst",
+        name: "经营周报",
+        title: "经营周报",
+        gone: false,
+      },
       enabled: false,
       nextRunAt: at(142),
       lastRun: { status: "failed", at: at(106) },
@@ -1572,7 +1602,13 @@ const ROUTINES: RoutinesPage = {
       schedule: "0 10 * * *",
       timezone: "Asia/Shanghai",
       instruction: "每天 10:00 跟进未回复超过 24 小时的工单",
-      channel: { id: "channel-support", name: "客户咨询", gone: false },
+      title: null,
+      channel: {
+        id: "channel-support",
+        name: "客户咨询",
+        title: "客户咨询",
+        gone: false,
+      },
       enabled: true,
       nextRunAt: at(138),
       lastRun: { status: "succeeded", at: at(114) },
@@ -1685,6 +1721,7 @@ const CONTROL: ControlState = {
   holder: "bot",
   since: at(100),
   requested: false,
+  recoveryRequired: false,
   transitioning: false,
   resumeSnapshotRequired: false,
 };

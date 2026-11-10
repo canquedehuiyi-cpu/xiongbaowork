@@ -1,4 +1,5 @@
 import { IconLock } from "@tabler/icons-react";
+import { ruleTitle } from "@openbot/shared/tool-name";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { CARD_FACE, Tag } from "@/components/resources/resource-kit";
@@ -6,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { GONE_BOT, useBotNames } from "@/lib/agents/bot-names";
 import {
   type ApprovalDecision,
   type ApprovalRuleInput,
@@ -13,11 +15,12 @@ import {
   answerPersonQuestion,
   approvalInboxOptions,
   BEHAVIOUR_LABELS,
-  POLICY_SOURCE_LABELS,
   createApprovalRule,
   createTeamApprovalRule,
   decideApproval,
   type HostCommandPolicy,
+  offersStandingRule,
+  POLICY_SOURCE_LABELS,
   type RuleBehaviour,
   revokeApprovalRule,
   revokeTeamApprovalRule,
@@ -28,6 +31,12 @@ import {
   updateTeamApprovalRule,
 } from "@/lib/approvals";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
+import {
+  type HostFolderGrant,
+  hostAccessQueryOptions,
+} from "@/lib/computers/host-access";
+import { approvalTargetName } from "./inline-approval";
+import { afterChinese } from "./waiting";
 
 const HOST_LABELS: Record<HostCommandPolicy, string> = {
   ask: "每次都问",
@@ -71,6 +80,7 @@ export function ApprovalInbox() {
     onSuccess: refresh,
   });
   const { data: me } = useQuery(currentUserQueryOptions());
+  const botName = useBotNames();
   const isAdmin = me?.role === "admin";
   const preferences = useMutation({
     mutationFn: setApprovalPreferences,
@@ -156,7 +166,7 @@ export function ApprovalInbox() {
               <div className="flex items-start gap-[10px]">
                 <Tag tone="warning">提问</Tag>
                 <h3 className="min-w-0 font-semibold text-[14px] leading-[20px]">
-                  {question.botId} 问：{question.question}
+                  {botName(question.botId)} 问：{question.question}
                 </h3>
               </div>
               {question.why ? (
@@ -217,14 +227,16 @@ export function ApprovalInbox() {
                         : "待批准"}
                     </Tag>
                     <h3 className="min-w-0 font-semibold text-[14px] leading-[20px]">
-                      {request.action.botId} 想要{" "}
-                      {request.action.toolRef
-                        .replace(/^computer_|^host\//, "")
-                        .replaceAll("_", " ")}
+                      {botName(request.action.botId)} 想要
+                      {afterChinese(
+                        request.action.toolRef
+                          .replace(/^computer_|^host\//, "")
+                          .replaceAll("_", " "),
+                      )}
                     </h3>
                   </div>
-                  <p className="font-mono text-[12px] text-muted-foreground">
-                    {request.action.scope}
+                  <p className="text-[12px] text-muted-foreground">
+                    {approvalTargetName(request.action)}
                   </p>
                   {request.action.policy ? (
                     <p className="text-[13px]">
@@ -277,18 +289,21 @@ export function ApprovalInbox() {
                     >
                       允许一次
                     </Button>
-                    <Button
-                      variant="outline"
-                      disabled={decision.isPending}
-                      onClick={() =>
-                        decision.mutate({
-                          id: request.id,
-                          choice: "allow_always",
-                        })
-                      }
-                    >
-                      在这里总是允许
-                    </Button>
+                    {/* 删除类和对外发送底线问的动作每次都要问，存下的规则用不上，所以不画这个按钮。 */}
+                    {!offersStandingRule(request.action.policy) ? null : (
+                      <Button
+                        variant="outline"
+                        disabled={decision.isPending}
+                        onClick={() =>
+                          decision.mutate({
+                            id: request.id,
+                            choice: "allow_always",
+                          })
+                        }
+                      >
+                        在这里总是允许
+                      </Button>
+                    )}
                     <Button
                       variant="outline"
                       disabled={decision.isPending}
@@ -409,11 +424,11 @@ export function ApprovalInbox() {
           </p>
         ) : (
           /*
-           * A table you scan: one rule per row, each part of the match in its own column. On a phone
+           * A table you scan: one rule per row, what it covers said in words beside how it is handled. On a phone
            * the card scrolls sideways inside itself instead of widening the page.
            */
           <div className={`${CARD_FACE} overflow-x-auto`}>
-            <table className="w-full min-w-[640px] border-collapse text-left text-[13px]">
+            <table className="w-full min-w-[520px] border-collapse text-left text-[13px]">
               <caption className="sr-only">审批规则</caption>
               <thead>
                 <tr className="border-border border-b text-[11px] text-faint uppercase tracking-[0.06em]">
@@ -421,16 +436,7 @@ export function ApprovalInbox() {
                     处理方式
                   </th>
                   <th className="px-[10px] py-[9px] font-medium" scope="col">
-                    工具或应用
-                  </th>
-                  <th className="px-[10px] py-[9px] font-medium" scope="col">
-                    动作类型
-                  </th>
-                  <th className="px-[10px] py-[9px] font-medium" scope="col">
-                    目标
-                  </th>
-                  <th className="px-[10px] py-[9px] font-medium" scope="col">
-                    员工
+                    规则
                   </th>
                   <th
                     className="px-[14px] py-[9px] text-right font-medium"
@@ -606,7 +612,73 @@ function SectionTitle({
   );
 }
 
-function RuleRow({
+/** What kind of action a rule covers, in words. Any other kind is left unsaid. */
+const EFFECT_WORDS: Record<string, string> = {
+  read: "读取",
+  write: "修改",
+  destructive: "删除",
+  delegate: "转交工作",
+};
+
+/** A rule saved from a folder's card is on the id OpenBot gave that folder (`host-access/broker.ts`). */
+const FOLDER_GRANT = "host-grant-";
+
+/**
+ * A folder rule's place by the folder's name, as the computer settings show it: 「在 share 中」. A
+ * grant ends when OpenBot stops, so a rule on one that is gone says so rather than naming its id.
+ */
+function folderWords(
+  grantId: string,
+  grants: readonly HostFolderGrant[] | undefined,
+): string {
+  if (!grants) return "在一个文件夹中";
+  const grant = grants.find((candidate) => candidate.id === grantId);
+  return grant && !grant.revoked
+    ? `在 ${grant.displayName} 中`
+    : "在一个已不再共享的文件夹中";
+}
+
+/** 「员工 Expenses」; nothing until the names arrive, so an employee is never named by its id. */
+function forBot(name: string): string | null {
+  if (!name) return null;
+  return name === GONE_BOT ? GONE_BOT : `员工 ${name}`;
+}
+
+/**
+ * What a saved rule matches beyond its title, in words: the kind of action, the place, the employee.
+ * Never the id OpenBot gave a folder (`host-grant-…`), an employee's id, or the raw kind of action.
+ */
+export function useRuleMatch(rule: ApprovalRuleRow): {
+  title: string;
+  match: string;
+} {
+  const { title, place } = ruleTitle(rule);
+  const botName = useBotNames();
+  const folderRule = rule.scope.startsWith(FOLDER_GRANT);
+  const folders = useQuery({
+    ...hostAccessQueryOptions(),
+    refetchInterval: false,
+    enabled: folderRule,
+  });
+  const match = [
+    EFFECT_WORDS[rule.effect] ?? null,
+    rule.scope === "*" || place
+      ? null
+      : folderRule
+        ? folderWords(rule.scope, folders.data?.grants)
+        : `在 ${rule.scope} 上`,
+    rule.botId === "*"
+      ? null
+      : rule.botId.includes("*")
+        ? `名字匹配 ${rule.botId} 的员工`
+        : forBot(botName(rule.botId)),
+  ]
+    .filter(Boolean)
+    .join("，");
+  return { title, match };
+}
+
+export function RuleRow({
   rule,
   team,
   locked,
@@ -622,8 +694,7 @@ function RuleRow({
   onChange: (behaviour: RuleBehaviour) => void;
 }) {
   const label = `${BEHAVIOUR_LABELS[rule.behaviour]}${team ? "（团队规则）" : ""}`;
-  const any = (value: string) =>
-    value === "*" ? <span className="text-faint">全部</span> : value;
+  const { title, match } = useRuleMatch(rule);
   return (
     <tr className="align-middle">
       <td className="px-[14px] py-[10px]">
@@ -637,7 +708,7 @@ function RuleRow({
           </span>
         ) : (
           <select
-            aria-label={`「${rule.toolRef}」的处理方式`}
+            aria-label={`「${title}」的处理方式`}
             className={selectClass}
             value={rule.behaviour}
             disabled={disabled}
@@ -655,17 +726,11 @@ function RuleRow({
           </select>
         )}
       </td>
-      <td className="px-[10px] py-[10px] font-mono text-[12px]">
-        {rule.toolRef}
-      </td>
-      <td className="px-[10px] py-[10px] text-muted-foreground">
-        {any(rule.effect)}
-      </td>
-      <td className="px-[10px] py-[10px] text-muted-foreground">
-        {any(rule.scope)}
-      </td>
-      <td className="px-[10px] py-[10px] text-muted-foreground">
-        {any(rule.botId)}
+      <td className="px-[10px] py-[10px]">
+        <p className="font-medium">{title}</p>
+        {match ? (
+          <p className="break-all text-[12px] text-muted-foreground">{match}</p>
+        ) : null}
       </td>
       <td className="px-[14px] py-[10px] text-right">
         {locked ? (

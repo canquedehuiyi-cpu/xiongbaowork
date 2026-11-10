@@ -41,6 +41,29 @@ export function parseNavigateUrl(input: unknown): NavigateParseResult {
   return { ok: true, url: trimmed };
 }
 
+/**
+ * An address as a person types one: a full http(s) url, or a host with the scheme left off.
+ *
+ * http and https only, as for a Bot's navigation, and deliberately so for the hosted browser:
+ * `file://` there would read the computer's own files, its environment and secrets among them.
+ */
+export function addressFrom(input: string): string | null {
+  const trimmed = input.trim();
+  const direct = parseNavigateUrl(trimmed);
+  if (direct.ok) return direct.url;
+  // Any other scheme is refused rather than guessed at. `example.com:8080` names a port, not one.
+  if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed) && !/^[^:/]+:\d/.test(trimmed))
+    return null;
+  // Words with spaces are a search, which is the app's to turn into an address.
+  if (/\s/.test(trimmed)) return null;
+  const guessed = parseNavigateUrl(`https://${trimmed}`);
+  if (!guessed.ok) return null;
+  const host = new URL(guessed.url).hostname;
+  return host.includes(".") || host === "localhost" || host.startsWith("[")
+    ? guessed.url
+    : null;
+}
+
 export type ExecTimeoutParseResult =
   | { ok: true; timeoutMs: number | undefined }
   | { ok: false; error: string };
@@ -125,11 +148,27 @@ export function parseInputMessage(input: unknown): InputMessageParseResult {
     }
     if (
       body.button !== undefined &&
+      body.button !== "none" &&
       body.button !== "left" &&
       body.button !== "right" &&
       body.button !== "middle"
     ) {
       return { ok: false, error: "A mouse button must be named." };
+    }
+    if (body.button === "none" && body.event !== "moved") {
+      return { ok: false, error: "A press or a release needs a button." };
+    }
+    if (
+      body.buttons !== undefined &&
+      (typeof body.buttons !== "number" ||
+        !Number.isInteger(body.buttons) ||
+        body.buttons < 0 ||
+        body.buttons > 31)
+    ) {
+      return {
+        ok: false,
+        error: "The buttons held must be a whole number from 0 to 31.",
+      };
     }
     return { ok: true, message: body as unknown as InputMessage };
   }

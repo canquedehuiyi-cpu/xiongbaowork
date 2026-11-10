@@ -9,6 +9,7 @@ import type * as React from "react";
 import { cn } from "@/lib/utils";
 import { ButlerButton } from "../app-sidebar/butler-button";
 import { Button } from "../ui/button";
+import { PageHeader } from "./page-parts";
 import { SidebarToggle, useSidebarToggleVisible } from "./sidebar-toggle";
 
 /**
@@ -32,10 +33,13 @@ import { SidebarToggle, useSidebarToggleVisible } from "./sidebar-toggle";
  * is where prose stays comfortable, and a row of label-and-control has no business being wider than
  * the sentence explaining it.
  *
- * `wide` exists for one page. An audit log is a table you scan, and forcing it into the prose column
- * would wrap every row. It is not a licence for anything else to be wide.
+ * `wide` is for pages that are a table you scan, where forcing the prose column would wrap every
+ * row. It is not a licence for anything else to be wide.
+ *
+ * `full` is upstream's frame for the audit log (`page-parts.tsx`): exactly the panel's height, never
+ * scrolls, so the table inside can be the one thing that scrolls.
  */
-type ShellWidth = "prose" | "wide" | "workbench";
+type ShellWidth = "prose" | "wide" | "workbench" | "full";
 
 /*
  * `workbench` is the primary pages' frame (docs/design/ios-studio): full width, with a gutter that
@@ -43,7 +47,7 @@ type ShellWidth = "prose" | "wide" | "workbench";
  * px because this app's root font size is 15px and Tailwind's rem steps would land a few px short.
  */
 const GUTTER = "px-[13px] md:px-[clamp(21px,3vw,47px)]";
-const WIDTHS: Record<ShellWidth, string> = {
+const WIDTHS: Record<Exclude<ShellWidth, "full">, string> = {
   prose: "mx-auto max-w-2xl px-4",
   wide: "mx-auto max-w-5xl px-4",
   workbench: `w-full max-w-[1750px] ${GUTTER}`,
@@ -124,22 +128,42 @@ export function PageShell({
    */
   const bar = showToggle || !!backButton;
 
+  const barRow = bar ? (
+    <div className="max-w-7xl w-full h-14 flex items-center gap-1 px-3">
+      {showToggle ? <SidebarToggle /> : null}
+      {!!backButton && (
+        <Button
+          variant="ghost"
+          render={(props) => <Link {...backButton.linkProps} {...props} />}
+        >
+          <IconChevronLeft />
+          {backButton.label}
+        </Button>
+      )}
+    </div>
+  ) : null;
+
+  if (width === "full") {
+    return (
+      /*
+       * Exactly the panel's height, never scrolls. `min-w-0` lets a table wider than the pane scroll
+       * inside its own container instead of pushing the page sideways.
+       */
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        {barRow}
+        <div className={cn("shrink-0 px-4", bar ? "pt-8" : "pt-12")}>
+          <PageHeader title={title} action={action} description={description} />
+        </div>
+        <div className={cn("mt-6 flex min-h-0 flex-1 flex-col", className)}>
+          {children}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
-      {bar ? (
-        <div className="max-w-7xl w-full h-14 flex items-center gap-1 px-3">
-          {showToggle ? <SidebarToggle /> : null}
-          {!!backButton && (
-            <Button
-              variant="ghost"
-              render={(props) => <Link {...backButton.linkProps} {...props} />}
-            >
-              <IconChevronLeft />
-              {backButton.label}
-            </Button>
-          )}
-        </div>
-      ) : null}
+      {barRow}
       {/*
        * The scroller, and it has to live here rather than in either shell, because the two shells
        * this frame is used under disagree about who scrolls.
@@ -170,10 +194,15 @@ export function PageShell({
             className,
           )}
         >
-          <header className="flex flex-col gap-2">
-            {eyebrow ? <Eyebrow text={eyebrow} /> : null}
+          {/* `page-header` and `page-title` are the hooks a skin reads the page's title from (skins/). */}
+          <header className="flex flex-col gap-2" data-slot="page-header">
             <div className="flex flex-row items-center justify-between gap-4">
-              <h1 className="font-bold text-2xl tracking-tight">{title}</h1>
+              <h1
+                className="font-bold text-2xl tracking-tight"
+                data-slot="page-title"
+              >
+                {title}
+              </h1>
               {action}
             </div>
             {description ? (
@@ -331,6 +360,7 @@ function WorkbenchShell({
               eyebrow ? "md:min-h-[164px]" : null,
               art ? "md:min-h-[206px] md:items-center" : null,
             )}
+            data-slot="page-header"
           >
             {art ? (
               <div
@@ -354,6 +384,7 @@ function WorkbenchShell({
                     ? "mt-[11px] mb-[10px] text-[clamp(35px,4.5vw,55px)] leading-[1.06] tracking-[-0.05em]"
                     : "mb-[6px] text-[28px] leading-[1.2] tracking-[-0.03em]",
                 )}
+                data-slot="page-title"
               >
                 {title}
               </h1>
@@ -376,82 +407,4 @@ function WorkbenchShell({
   );
 }
 
-/**
- * A titled group of rows.
- *
- * The gap above a section is deliberately large. These pages are lists of unrelated decisions, and
- * the space is what stops the eye running two of them together — it is doing the work a divider
- * would otherwise do, without drawing a line.
- */
-export function PageSection({
-  action,
-  children,
-  className,
-  description,
-  title,
-}: {
-  action?: React.ReactNode;
-  children?: React.ReactNode;
-  className?: string;
-  description?: React.ReactNode;
-  title?: string;
-}) {
-  return (
-    <section className={cn("mt-12", className)}>
-      {title ? (
-        <div className="flex min-h-8 flex-row items-center justify-between gap-4">
-          <h2 className="font-bold text-lg">{title}</h2>
-          {action}
-        </div>
-      ) : null}
-      {description ? (
-        <p className="mt-1 max-w-prose text-pretty text-muted-foreground text-sm leading-relaxed">
-          {description}
-        </p>
-      ) : null}
-      {children}
-    </section>
-  );
-}
-
-/**
- * The card that rows live in.
- *
- * Rows are `<Item size="sm">` with a `<Separator />` between them; this is only the border around
- * them. Rendering nothing when there is nothing is deliberate — an empty bordered box reads as a
- * thing that failed to load, where absence reads as nothing to see yet.
- */
-export function PageRows({
-  children,
-  className,
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    /*
-     * The rows are squared off and the card clips them. `Item` carries `rounded-lg` of its own, which
-     * inside a card of divided rows painted a hover as a floating pill: a middle row has no corners,
-     * and the first and last cannot be concentric with the card while sitting a border inside it.
-     */
-    <div
-      className={cn(
-        "mt-4 overflow-hidden rounded-[14px] border border-border bg-card shadow-[inset_0_1px_0_rgb(255_255_255/0.03)]",
-        "[&_[data-slot=item]]:rounded-none",
-        className,
-      )}
-    >
-      {children}
-    </div>
-  );
-}
-
-/**
- * What a section says when it has nothing to list.
- *
- * Said in a sentence rather than drawn as an illustration with a heading: on a configuration screen
- * "nothing here yet" is a fact, not an event, and the page already told you what the section is for.
- */
-export function PageEmpty({ children }: { children: React.ReactNode }) {
-  return <p className="mt-4 text-muted-foreground text-sm">{children}</p>;
-}
+export { PageCard, PageEmpty, PageRows, PageSection } from "./page-parts";

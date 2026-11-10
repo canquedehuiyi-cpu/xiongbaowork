@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
-import { createServer } from "node:net";
+import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { reservePort } from "../../tests/support/reserved-port";
 
 /**
  * The reset handler, driven over HTTP against the real process.
@@ -27,22 +27,6 @@ import { join } from "node:path";
 const asked = process.env.OPENBOT_LIVE_SCREEN === "1";
 
 const TOKEN = "test-computer-token";
-
-/**
- * A port the operating system says is free, rather than one picked in advance: a fixed number fails
- * the whole file at import when anything else holds it, and reports as one broken test rather than
- * as a port clash.
- */
-async function freePort(): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const probe = createServer();
-    probe.on("error", reject);
-    probe.listen(0, "127.0.0.1", () => {
-      const found = (probe.address() as { port: number }).port;
-      probe.close(() => resolve(found));
-    });
-  });
-}
 
 let BASE = "";
 let root = "";
@@ -75,7 +59,7 @@ beforeAll(async () => {
   // Headless rather than whatever a previous file left set: this process starts no browser, so the
   // mode only decides whether module load tries to start a virtual display.
   process.env.COMPUTER_BROWSER_MODE = "headless";
-  process.env.PORT = String(await freePort());
+  process.env.PORT = String(await reservePort());
   BASE = `http://127.0.0.1:${process.env.PORT}`;
   process.env.PROFILES_DIR = join(root, "profiles");
   process.env.WORKSPACE_DIR = join(root, "workspace");
@@ -192,5 +176,69 @@ describe.skipIf(!asked)("the run this computer reports", () => {
     expect(taken.status).toBe(200);
 
     expect(await run("bot-8")).toBeTruthy();
+  });
+});
+
+/**
+ * Seats on a computer many people share, over HTTP against the real process.
+ *
+ * The header the server adds on that computer is the whole mechanism, so it is driven here as the
+ * server sends it rather than through the helpers the unit tests cover.
+ */
+describe.skipIf(!asked)("seats on a shared computer", () => {
+  const as = (bot: string, person?: string) => ({
+    "x-openbot-bot-id": bot,
+    ...(person ? { "x-openbot-person-id": person } : {}),
+    "x-openbot-computer-token": TOKEN,
+  });
+
+  test("two people on one Bot have two runs, and neither is the Bot's own", async () => {
+    const ada = await fetch(`${BASE}/run`, { headers: as("pub-bot", "ada") });
+    const bo = await fetch(`${BASE}/run`, { headers: as("pub-bot", "bo") });
+    const shared = await fetch(`${BASE}/run`, { headers: as("pub-bot") });
+    const runs = await Promise.all(
+      [ada, bo, shared].map(
+        async (r) => ((await r.json()) as { run: string }).run,
+      ),
+    );
+    expect(new Set(runs).size).toBe(3);
+  });
+
+  test("a person id that could forge another seat is refused", async () => {
+    const response = await fetch(`${BASE}/run`, {
+      headers: as("pub-bot", "ada~other"),
+    });
+    expect(response.status).toBe(400);
+  });
+
+  test("a private Bot's old profile moves to its owner's seat once", async () => {
+    const profiles = join(root, "profiles");
+    await mkdir(join(profiles, "private-bot", "Default"), { recursive: true });
+    await writeFile(join(profiles, "private-bot", "Default", "Cookies"), "x");
+
+    const carry = () =>
+      fetch(`${BASE}/computers/carry-over`, {
+        method: "POST",
+        headers: as("private-bot", "ada"),
+      }).then(async (r) => ((await r.json()) as { outcome: string }).outcome);
+
+    expect(await carry()).toBe("moved");
+    expect(await carry()).toBe("kept");
+    const names = await readdir(profiles);
+    expect(names).toContain("ada~private-bot");
+    expect(names).not.toContain("private-bot");
+
+    const listed = (await (
+      await fetch(`${BASE}/computers`, { headers: as("private-bot", "ada") })
+    ).json()) as {
+      computers: { seat: string; botId: string; personId?: string }[];
+    };
+    expect(listed.computers).toContainEqual(
+      expect.objectContaining({
+        seat: "ada~private-bot",
+        botId: "private-bot",
+        personId: "ada",
+      }),
+    );
   });
 });

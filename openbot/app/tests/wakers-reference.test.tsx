@@ -53,6 +53,9 @@ afterAll(async () => {
 afterEach(() => cleanup());
 
 const base: AgentProfile = {
+  isolated: false,
+  isolationActive: false,
+  isolationOffReason: null,
   id: "agent-avatar",
   name: "我的分身",
   title: "助理",
@@ -92,6 +95,8 @@ const attentionRow = (
   unread: 0,
   paused: false,
   notify: "all",
+  items: 0,
+  tasks: { needsInput: 0, ready: 0, failed: 0 },
   ...over,
 });
 
@@ -104,9 +109,11 @@ function seed({ crews = [] as WakerGroup[] } = {}) {
   client.setQueryData(agentKeys.list(false), [base, reviewer]);
   client.setQueryData(agentKeys.list(true), []);
   client.setQueryData(wakerGroupKeys.list(), crews);
-  client.setQueryData(botLifecycleKeys.attention, [
-    attentionRow("agent-avatar", { questions: 2 }),
-  ]);
+  // `GET /api/bots/attention` answers `{ bots, lastPingId }`; the cache holds the whole body.
+  client.setQueryData(botLifecycleKeys.attention, {
+    bots: [attentionRow("agent-avatar", { questions: 2 })],
+    lastPingId: null,
+  });
   client.setQueryData(runningTasksQueryOptions().queryKey, [
     {
       id: "run-1",

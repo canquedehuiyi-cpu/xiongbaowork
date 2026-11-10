@@ -122,6 +122,16 @@ export const mcpServers = pgTable(
     toolsRefreshedAt: timestamp("tools_refreshed_at", { withTimezone: true }),
     /** The last failure, kept so the Plugins page can say why a server has no tools. */
     lastError: text("last_error"),
+    /**
+     * 这台应用的工具是按哪一版的清单读法存下的：每次存下工具的刷新都写 `plugins/store.ts` 里的
+     * `LISTING_REVISION`，这一列出现之前存的行是 0（迁移 0152，上游 0080）。
+     *
+     * 同一份 vendor 清单，OpenBot 记下的东西会随版本变：0146 开始把 Composio 什么标签都没给的动作
+     * 记为 `unclassified`，之前记的是普通写操作。存下的行分不清这两种，所以不改写，而是重新列：
+     * 每次启动，配置了 Composio 的部署把落后的 broker 应用重新列一次（`relistOutdatedBrokeredApps`），
+     * 升级上来的部署就记下和全新安装一样的东西，不需要谁去按「刷新工具」。
+     */
+    listingRevision: integer("listing_revision").notNull().default(0),
     addedBy: text("added_by"),
     /**
      * WHICH CATALOGUE ENTRY this row is an instance of — ADR-0002's option B, and the reason the row
@@ -222,6 +232,18 @@ export const mcpTools = pgTable(
      * an approver to click through the colour.
      */
     destructive: boolean("destructive").notNull().default(false),
+    /**
+     * vendor 列出了这个动作，却对它做什么只字未提：MCP 服务器没有 `readOnlyHint` 也没有
+     * `destructiveHint`，或 Composio 没有只读、破坏性、新建、修改中的任何一个标签（迁移 0146）。
+     *
+     * 和 {@link mcpTools.destructive} 分开记：destructive 是 vendor 自己说的，会让每次调用都先问；
+     * 这里没人说过它会删除什么。{@link mcpTools.effect} 记为 `write`，聊天里按普通修改处理；后台
+     * 只读路径（连接探测等）对它和 destructive 一样谨慎，不去调用。
+     *
+     * 只在 catalogue 条目的名单没有覆盖它时才记：名单覆盖的工具照旧由名单决定读写，这里是 `false`。
+     * 本列出现之前列出的行也是 `false`，应用下次刷新时重新记录。
+     */
+    unclassified: boolean("unclassified").notNull().default(false),
     /**
      * The vendor's version for this action, as the listing gave it — `20260903_00` and the like.
      *

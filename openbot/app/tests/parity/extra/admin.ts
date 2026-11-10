@@ -348,9 +348,11 @@ const IDENTITY_PROVIDERS: IdentityProvider[] = [
 ];
 
 const FLEET: ComputerFleet = {
-  isolation: "per-bot",
+  isolation: "per-person",
   computers: [
     {
+      computer: "bot:agent-analyst",
+      kind: "bot",
       botId: "agent-analyst",
       running: true,
       startedAt: "2026-11-07T00:10:00.000Z",
@@ -358,6 +360,8 @@ const FLEET: ComputerFleet = {
       updateAvailable: false,
     },
     {
+      computer: "bot:agent-ops",
+      kind: "bot",
       botId: "agent-ops",
       running: true,
       startedAt: "2026-11-06T22:00:00.000Z",
@@ -365,6 +369,8 @@ const FLEET: ComputerFleet = {
       updateAvailable: true,
     },
     {
+      computer: "bot:agent-research",
+      kind: "bot",
       botId: "agent-research",
       running: false,
       startedAt: null,
@@ -446,6 +452,9 @@ function enterprise(data: boolean): EnterpriseOverview {
         models: data ? ["claude-sonnet-4-5", "gpt-4.1"] : [],
       },
       mcpAllowlist: { enabled: false, servers: [] },
+      skillSharing: false,
+      proactiveDailyRuns: 24,
+      modelSelection: false,
     },
     groups: data ? ["运营组", "研究组"] : [],
     network: [

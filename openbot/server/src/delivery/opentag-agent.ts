@@ -13,13 +13,21 @@
  * owner. A row stamped as nobody's is treated as no binding at all.
  */
 import { randomUUID } from "node:crypto";
+import { approvalPhrase } from "@openbot/shared/tool-name";
+import type { DrawnComponent } from "@openbot/toolkit/run-turn";
 import { z } from "zod";
-import { type ApprovalDecision, approvalArgsPreview } from "../approvals/types";
+import {
+  type ApprovalDecision,
+  type ApprovalPolicyOutcome,
+  afterChinese,
+  approvalArgsPreview,
+  offersStandingRule,
+  wantsTo,
+} from "../approvals/types";
 import {
   ingestSlackEvent,
   type SlackTriggerEvent,
 } from "../responsibilities/slack";
-import type { DrawnComponent } from "../routines/runner";
 import {
   assertPersonTenant,
   runAsTenant,
@@ -30,6 +38,7 @@ import {
   approvalFields,
   COMPONENT_CALL_PREFIX,
   chartForOpenTag,
+  chartSourcesLine,
   componentCallEvents,
   confirmWriteInterrupt,
   isComponentFollowUp,
@@ -64,8 +73,16 @@ export type PairedApprovals = {
         botId: string;
         toolRef: string;
         effect: string;
+        /** Where it acts, and what it is aimed at: the card names the action by both. */
+        scope: string;
+        target?: unknown;
         threadId: string;
         args: unknown;
+        /**
+         * Why the gate asked. A check-in task's approval, and one the delete/outbound floors raised
+         * (删除类和对外发送底线问的), offers no "Always allow".
+         */
+        policy?: ApprovalPolicyOutcome;
       };
     }>;
   };
@@ -103,15 +120,95 @@ export type OpenTagAgentDeps = {
   approvals?: PairedApprovals;
   /** Slack trigger ingest; defaults to the responsibilities lane's `ingestSlackEvent`. */
   ingestSlack?: (event: SlackTriggerEvent) => Promise<unknown>;
+  /**
+   * OpenBot linked-account codes (Connections) from a Slack sender. Reachability
+   * codes are checked first; this is used for any code that is not a live one (an expired or used
+   * Reachability code falls through too, matches no account code, and gets the usual expired reply).
+   * An account code is redeemed only in a direct message. One posted in a shared conversation is
+   * cancelled (`discard`), since anyone there could send it first and bind their own Slack account
+   * to its issuer: with a mention the issuer is told to make a new one; without one (an observed
+   * post) it is cancelled quietly and redacted before the Slack triggers see the message.
+   */
+  identity?: {
+    redeem(
+      code: string,
+      sender: { teamId: string; userId: string },
+    ): Promise<"linked" | "conflict" | "invalid">;
+    /** Cancels a live account code; true when one was cancelled. */
+    discard(code: string): Promise<boolean>;
+  };
 };
 
 const LINK =
   /\blink\s+([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b/i;
+const LINKS = new RegExp(LINK.source, "gi");
+
+/**
+ * A channel post the app was not mentioned in: everyone there has seen any link code in it,
+ * Reachability or account, so on Slack each one is cancelled, quietly (an observe run never
+ * replies; Teams waits on the same rule as `link`). The codes are redacted rather than
+ * the message dropped, so the post still fires the owners' message triggers without carrying a
+ * code. A failed cancel is logged and never stops the triggers.
+ */
+async function withoutLinkCodes(
+  deps: OpenTagAgentDeps,
+  sender: { transport: ChatTransport },
+  text: string,
+) {
+  const codes = [...text.matchAll(LINKS)].map((m) => m[1]?.toLowerCase());
+  if (!codes.length) return text;
+  for (const code of codes) {
+    if (!code) continue;
+    // Each cancel is tried on its own: a store that fails to spend a Reachability code must not
+    // leave an account code with the same value live, and the other way round.
+    if (sender.transport !== "slack") continue;
+    await logFailure(() => cancelReachabilityCode(deps, code));
+    const identity = deps.identity;
+    if (identity) await logFailure(() => identity.discard(code));
+  }
+  return text.replace(LINKS, "link [code removed]");
+}
+
+async function logFailure(cancel: () => Promise<unknown>) {
+  try {
+    await cancel();
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        type: "opentag-link-code-discard-error",
+        errorType: error instanceof Error ? error.name : "UnknownError",
+      }),
+    );
+  }
+}
+
+/**
+ * Spends a live Reachability code without binding anyone; true when one was cancelled. Read as the
+ * platform and spent as its issuer, as the mentioned path does (G01); an untrusted stamp is left to
+ * expire.
+ */
+async function cancelReachabilityCode(deps: OpenTagAgentDeps, code: string) {
+  const challenge = await runAsTenant("platform", () =>
+    deps.store.readChallenge(code),
+  );
+  if (!challenge) return false;
+  const issuer = trustedTenant(challenge.tenantId, challenge.ownerUserId);
+  if (!issuer) return false;
+  return Boolean(
+    await runAsTenant(issuer, () =>
+      deps.store.consumeChallenge(code, challenge.ownerUserId),
+    ),
+  );
+}
+
+const CANCELLED_IN_SHARED =
+  "这个关联码发在了别人也看得到的地方，我已经把它作废了。请在熊宝里重新生成一个，用私信发给我。";
+
 const platformName = (transport: ChatTransport) =>
   transport === "teams" ? "Microsoft Teams" : "Slack";
 
 export function linkInstructions(transport: ChatTransport) {
-  return `I don't know who you are in OpenBot yet, so I did not run anything. In OpenBot, open Reachability, choose the conversation and Bot, pick ${platformName(transport)}, and send me the \`link <code>\` message it shows you.`;
+  return `我还不知道你在熊宝里是谁，所以什么都没有执行。请在熊宝的「触达方式」里选好对话和 ${platformName(transport)}，把页面上给出的 \`link <关联码>\` 消息发给我。`;
 }
 
 export async function handleOpenTagRun(
@@ -171,6 +268,7 @@ export async function handleOpenTagRun(
             args,
           ))
             emit(event);
+          say(chartSourcesLine(component.args));
         }
       if (outcome.interrupt)
         emit({
@@ -221,22 +319,21 @@ async function answer(
   const sender = senderFromContext(input);
   if (!sender)
     return {
-      text: "OpenTag did not say who sent this message, so OpenBot did not run anything. Update OpenTag to a version that forwards the OpenBot sender context.",
+      text: "OpenTag 没有告诉熊宝这条消息是谁发的，所以什么都没有执行。请把 OpenTag 升级到会转发发送者信息的版本。",
     };
   // Something to watch, not to answer: feed the owner's Slack triggers and stay quiet.
   if (sender.observe) {
+    const text =
+      sender.observe === "message" ? latestUserMessage(input)?.text : undefined;
     await feedSlackTriggers(deps, sender, {
       type: sender.observe,
-      text:
-        sender.observe === "message"
-          ? latestUserMessage(input)?.text
-          : undefined,
+      text: text && (await withoutLinkCodes(deps, sender, text)),
     });
     return { text: "" };
   }
   const message = latestUserMessage(input);
   if (!message?.text)
-    return { text: "Send me a message and I'll pass it to your Bot." };
+    return { text: "给我发消息，我会转给你的员工。" };
 
   const code = LINK.exec(message.text)?.[1];
   if (code) return link(deps, sender, code.toLowerCase());
@@ -278,7 +375,7 @@ async function answerAsBinding(
   if (answered) {
     const bot = await deps.store.botIdentity(bound.agentId);
     return {
-      text: `Thanks. I passed your answer to ${bot?.name ?? "your Bot"}; it is continuing and will reply here.`,
+      text: `谢谢，你的回答已经转给 ${bot?.name ?? YOUR_BOT}，它会接着做，并在这里回复你。`,
     };
   }
 
@@ -296,7 +393,7 @@ async function answerAsBinding(
   if (result.kind === "unbound")
     return { text: linkInstructions(sender.transport) };
   if (result.kind === "duplicate")
-    return { text: "I already passed that message to your Bot." };
+    return { text: "这条消息已经转给你的员工了。" };
   if (result.kind === "failed") return { text: `${result.message}` };
 
   if (!sender.private) return answerPrivately(deps, result);
@@ -304,22 +401,22 @@ async function answerAsBinding(
   const questions = result.extras.questions.map((q) => q.text);
   const approvalId = result.extras.approvals[0];
   const parts = [result.replyText, ...questions].filter(Boolean);
-  if (questions.length) parts.push("Reply here to answer.");
+  if (questions.length) parts.push("直接在这里回复就能回答。");
   if (approvalId) {
     const card = await approvalCard(deps, result.binding, approvalId);
     if (result.extras.approvals.length > 1)
       parts.push(
-        `${result.extras.approvals.length - 1} more approval request(s) are waiting in your OpenBot approval inbox.`,
+        `还有 ${result.extras.approvals.length - 1} 个审批在熊宝的员工页上等你处理。`,
       );
     if (card) return { text: parts.join("\n\n"), interrupt: card };
     parts.push(
-      "Your Bot is waiting for an approval. Open your OpenBot approval inbox to review it.",
+      "你的员工在等一个审批。请到熊宝的员工页上查看。",
     );
   } else if (result.kind === "waiting" && !parts.length) {
-    parts.push("Your Bot is waiting for a person. Open OpenBot to continue.");
+    parts.push("你的员工在等人处理。请打开熊宝继续。");
   }
   return {
-    text: parts.join("\n\n") || "Done.",
+    text: parts.join("\n\n") || "完成了。",
     ...(result.components ? { components: result.components } : {}),
   };
 }
@@ -360,12 +457,12 @@ async function answerPrivately(
   for (const approvalId of result.extras.approvals)
     await deps.router.notify(scope, {
       id: approvalId,
-      text: `${bot?.name ?? "Your Bot"} is waiting for your approval. Open your OpenBot approval inbox to review it.`,
+      text: `${bot?.name ?? YOUR_BOT} 在等你审批。请到熊宝的员工页上查看。`,
       kind: "approval",
       requestId: approvalId,
     });
   return {
-    text: "Other people may be able to read this conversation, so I sent my answer to you directly.",
+    text: "这个对话可能有别人能看到，所以我把回答私信发给你了。",
   };
 }
 
@@ -388,7 +485,12 @@ export async function answerOpenQuestion(
 
 async function link(
   deps: OpenTagAgentDeps,
-  sender: { transport: ChatTransport; realm: string; identity: string },
+  sender: {
+    transport: ChatTransport;
+    realm: string;
+    identity: string;
+    private: boolean;
+  },
   code: string,
 ) {
   // The code is the only thing that names a person here, so it is read as the platform; the rest
@@ -396,12 +498,52 @@ async function link(
   const challenge = await runAsTenant("platform", () =>
     deps.store.readChallenge(code),
   );
+  // A Reachability code binds whoever sends it to its issuer's Bot: their messages run as the
+  // issuer, and the Bot's questions and approval requests go to them. Anyone else in a shared
+  // conversation has seen it and could send it first, so it is only redeemed in a direct message
+  // and one posted here is spent, the same rule as for an account code below. Slack only for now:
+  // a Teams chat is private only by its conversation kind, and until OpenTag is confirmed to send
+  // `personal` for a one-to-one chat, this rule could spend every code sent from Teams.
+  if (challenge && sender.transport === "slack" && !sender.private) {
+    const issuer = trustedTenant(challenge.tenantId, challenge.ownerUserId);
+    // Spent as its issuer, whose row it is (G01); an untrusted stamp is left to expire.
+    if (issuer)
+      await runAsTenant(issuer, () =>
+        deps.store.consumeChallenge(code, challenge.ownerUserId),
+      );
+    return { text: CANCELLED_IN_SHARED };
+  }
+  if (!challenge && sender.transport === "slack" && deps.identity) {
+    // Anyone else in a shared conversation has now seen the code and could send it first, binding
+    // their own Slack account to its issuer, so an account code is only redeemed in a direct
+    // message and one posted here is cancelled (an unmentioned channel post is cancelled in
+    // `withoutLinkCodes`).
+    if (!sender.private) {
+      if (await deps.identity.discard(code))
+        return { text: CANCELLED_IN_SHARED };
+      return {
+        text: "这个关联码已经过期、用过了，或者是别的应用的。请在熊宝里重新生成一个。",
+      };
+    }
+    const outcome = await deps.identity.redeem(code, {
+      teamId: sender.realm,
+      userId: sender.identity,
+    });
+    if (outcome === "linked")
+      return {
+        text: "你的 Slack 账号已经关联到熊宝，可以在「已连接的账号」里看到。",
+      };
+    if (outcome === "conflict")
+      return {
+        text: "这个 Slack 账号已经关联到熊宝的另一位用户。",
+      };
+  }
   const tenant = challenge
     ? trustedTenant(challenge.tenantId, challenge.ownerUserId)
     : null;
   if (!challenge || !tenant || challenge.transport !== sender.transport)
     return {
-      text: "That link code expired, was already used, or is for another app. Create a new one in OpenBot.",
+      text: "这个关联码已经过期、用过了，或者是别的应用的。请在熊宝里重新生成一个。",
     };
   return runAsTenant(tenant, () => linkAs(deps, sender, code, challenge));
 }
@@ -423,7 +565,7 @@ async function linkAs(
     !(await deps.store.consumeChallenge(code, challenge.ownerUserId))
   )
     return {
-      text: "That conversation changed. Create a new link code in OpenBot.",
+      text: "那个对话已经变了。请在熊宝里重新生成关联码。",
     };
   try {
     await deps.store.bind({
@@ -440,9 +582,12 @@ async function linkAs(
   }
   const bot = await deps.store.botIdentity(scope.agentId);
   return {
-    text: `Linked. Messages you send me here now go to ${bot?.name ?? "your Bot"} in your OpenBot conversation, and its questions and approval requests will reach you here.`,
+    text: `关联好了。你在这里发给我的消息会转到熊宝里和 ${bot?.name ?? YOUR_BOT} 的对话，它的提问和审批也会发到这里。`,
   };
 }
+
+/** 找不到员工的名字时，卡片和回复里对它的称呼。 */
+const YOUR_BOT = "你的员工";
 
 async function approvalCard(
   deps: OpenTagAgentDeps,
@@ -464,11 +609,13 @@ async function approvalCard(
   const bot = await deps.store.botIdentity(record.action.botId);
   return confirmWriteInterrupt({
     approvalId,
-    action: `${bot?.name ?? "Your Bot"}: ${record.action.toolRef}`,
+    // In the words the approval card in OpenBot uses, never the tool's id ("Your Bot: computer_click").
+    action: wantsTo(bot?.name ?? YOUR_BOT, record.action),
     approver: `${binding.transport}:${binding.identity}`,
     effect: record.action.effect,
     // The approvals preview already redacts secrets and private content.
     fields: approvalFields(approvalArgsPreview(record.action)),
+    allowAlways: offersStandingRule(record.action),
   });
 }
 
@@ -478,23 +625,23 @@ async function decideFromCard(
 ): Promise<{ text: string }> {
   if (resume.invalid)
     return {
-      text: "That approval answer could not be read, so nothing was decided.",
+      text: "没能读懂这次审批的回答，所以什么都没有决定。",
     };
   if (!deps.approvals)
     return {
-      text: "Approvals from chat are unavailable on this deployment. Decide in your OpenBot approval inbox.",
+      text: "这个部署不能在聊天里审批。请到熊宝的员工页上决定。",
     };
   const person = parseChannelUser(resume.by);
   if (!person)
     return {
-      text: "This approval card did not say who answered it, so nothing was decided. Update OpenTag, or decide in your OpenBot approval inbox.",
+      text: "这张审批卡片没有说明是谁回答的，所以什么都没有决定。请升级 OpenTag，或者到熊宝的员工页上决定。",
     };
   // The clicker is mapped exactly like a message sender; OpenTag already refused anyone but the
   // named approver, and OpenBot then decides only as that binding's owner.
   const owned = await ownedBinding(deps, person);
   if (!owned)
     return {
-      text: "You are not linked to this approval's owner, so nothing was decided.",
+      text: "你没有关联到这个审批的主人，所以什么都没有决定。",
     };
   // Decided as the binding's own tenant, so the approval's resume is stamped as that person (G01).
   return runAsTenant(owned.tenant, () =>
@@ -512,7 +659,7 @@ async function decideAsBinding(
 ): Promise<{ text: string }> {
   if (!deps.approvals)
     return {
-      text: "Approvals from chat are unavailable on this deployment. Decide in your OpenBot approval inbox.",
+      text: "这个部署不能在聊天里审批。请到熊宝的「审批」里决定。",
     };
   let record: Awaited<ReturnType<PairedApprovals["store"]["get"]>>;
   try {
@@ -522,30 +669,32 @@ async function decideAsBinding(
     );
   } catch {
     return {
-      text: "That approval is not yours or no longer exists, so nothing was decided.",
+      text: "这个审批不是你的，或者已经不存在了，所以什么都没有决定。",
     };
   }
   if (record.action.threadId !== binding.threadId)
     return {
-      text: "That approval belongs to another conversation, so nothing was decided.",
+      text: "这个审批属于另一个对话，所以什么都没有决定。",
     };
   if (record.status !== "pending")
     return {
-      text: "That approval was already decided. Check its result in OpenBot.",
+      text: "这个审批已经决定过了。可以在熊宝里查看结果。",
     };
+  // An older card may still offer "Always allow" on a check-in task's approval: that is once.
+  // 删除类底线问的动作没有「总是允许」：旧卡片上按的 always 只当作这一次。
   const decision: ApprovalDecision = !resume.confirmed
     ? "deny"
-    : resume.always
+    : resume.always && offersStandingRule(record.action)
       ? "allow_always"
       : "allow_once";
   await deps.approvals.decide(binding.ownerUserId, resume.approvalId, decision);
   const bot = await deps.store.botIdentity(record.action.botId);
-  const name = bot?.name ?? "Your Bot";
+  const name = bot?.name ?? YOUR_BOT;
   return {
     text:
       decision === "deny"
-        ? `Denied. ${name} will not run ${record.action.toolRef}.`
-        : `${decision === "allow_always" ? "Always allowed" : "Allowed once"}. ${name} is continuing and will send its result here.`,
+        ? `已拒绝。${name} 不会${afterChinese(approvalPhrase(record.action))}。`
+        : `${decision === "allow_always" ? "已设为总是允许" : "已允许这一次"}。${name} 会继续，并把结果发到这里。`,
   };
 }
 

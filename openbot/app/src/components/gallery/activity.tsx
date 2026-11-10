@@ -1,17 +1,24 @@
-import { useEffect, useState } from "react";
+import { auditEventWords } from "@openbot/shared/audit-words";
+import { useContext, useEffect, useState } from "react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
+import { useBotNames } from "@/lib/agents/bot-names";
 import { callComponentFunction } from "@/lib/components/queries";
 import { useActiveBotId } from "@/lib/copilot/active-bot";
 import { useConversation } from "@/lib/copilot/conversation";
 import type { GalleryComponent } from "@/lib/copilot/gallery-registry";
+import { keyedLookup } from "@/lib/lookup";
+import { FailedCard, UNREADABLE } from "./failed";
 import { GalleryFrame } from "./frame";
 import { seriesColour } from "./palette";
+import { GalleryDecidedContext, GalleryStreamingContext } from "./streaming";
 
 /**
  * Server-filled report component. The model chooses report arguments; data and permissions come
  * from the deployment.
  */
+
+const TITLE = "Activity report";
 
 export const ActivityReportProps = z.object({
   report: z
@@ -33,11 +40,19 @@ export const ActivityReportProps = z.object({
 
 type ActivityArgs = z.infer<typeof ActivityReportProps>;
 
-/** Which server-side function each report reads. Not the model's choice. */
-const FUNCTION_FOR: Record<string, string> = {
-  activity: "botActivity",
-  refusals: "recentRefusals",
-};
+/**
+ * Which server-side function each report reads. Not the model's choice.
+ *
+ * A Map, read through `keyedLookup`, because the key is a string somebody else chose: an object
+ * lookup answers `toString` or `constructor` with a member inherited from `Object.prototype`,
+ * which is truthy and so walks straight past the `functionName ?` guards below — handing a
+ * function to the grant check as the data function this component reads, and to
+ * `callComponentFunction` as a function name.
+ */
+const FUNCTION_FOR: ReadonlyMap<string, string> = new Map([
+  ["activity", "botActivity"],
+  ["refusals", "recentRefusals"],
+]);
 
 type ActivityRow = { bot: string; actions: number };
 type RefusalRow = {
@@ -60,12 +75,17 @@ export function ActivityReportCard({
   const botId = useActiveBotId();
   const conversation = useConversation();
   const [state, setState] = useState<State>({ status: "reading" });
+  const streaming = useContext(GalleryStreamingContext);
+  const decided = useContext(GalleryDecidedContext);
 
-  const functionName = report ? FUNCTION_FOR[report] : undefined;
+  const functionName = report ? keyedLookup(FUNCTION_FOR, report) : undefined;
 
   useEffect(() => {
-    // Nothing to read until the arguments have finished streaming in.
-    if (!functionName) return;
+    /*
+     * Nothing to read until the arguments are final and the call is allowed. A refused call is drawn
+     * as its refusal and never reads, so one try is one row on the trail.
+     */
+    if (!functionName || streaming || !decided) return;
     let current = true;
 
     void callComponentFunction(
@@ -88,9 +108,14 @@ export function ActivityReportCard({
     return () => {
       current = false;
     };
-  }, [functionName, days, botId]);
+  }, [functionName, days, botId, streaming, decided]);
 
-  if (!report) {
+  /*
+   * No report it can read. While the call streams, the name is still arriving. Once its arguments
+   * are final there is nothing to read, and "Choosing" or "Reading" would stay on screen for good.
+   */
+  if (!functionName) {
+    if (!streaming) return <FailedCard reason={UNREADABLE} title={TITLE} />;
     return (
       <GalleryFrame title="报告">
         <p className="text-sm text-muted-foreground">正在选择报告…</p>
@@ -139,6 +164,8 @@ function ActivityChart({
   title?: string;
   ask?: (text: string) => void;
 }) {
+  // Bots by the names people know them by: the trail counts them by id.
+  const nameFor = useBotNames();
   const rows = data?.rows ?? [];
   if (rows.length === 0) {
     return (
@@ -159,7 +186,9 @@ function ActivityChart({
         ask && busiest ? (
           <Button
             onClick={() =>
-              ask(`${busiest.bot} 最近到底在做什么？看看审计记录，总结一下。`)
+              ask(
+                `${nameFor(busiest.bot) || busiest.bot} 最近到底在做什么？看看审计记录，总结一下。`,
+              )
             }
             size="sm"
             variant="outline"
@@ -175,7 +204,7 @@ function ActivityChart({
         {rows.map((row, index) => (
           <li className="flex items-center gap-3" key={row.bot}>
             <span className="w-40 shrink-0 truncate text-xs text-muted-foreground">
-              {row.bot}
+              {nameFor(row.bot)}
             </span>
             <span className="h-4 flex-1 overflow-hidden rounded bg-foreground/5">
               <span
@@ -206,6 +235,7 @@ function RefusalList({
   title?: string;
   ask?: (text: string) => void;
 }) {
+  const nameFor = useBotNames();
   const rows = data?.rows ?? [];
   if (rows.length === 0) {
     return (
@@ -239,9 +269,12 @@ function RefusalList({
         {rows.map((row) => (
           <li className="text-sm" key={`${row.at}-${row.what}`}>
             <div className="flex items-baseline gap-2">
-              <span className="font-medium">{row.what}</span>
+              {/* In words, as Activity says it: the trail stores `computer.action_refused`. */}
+              <span className="font-medium">{auditEventWords(row.what)}</span>
               {row.bot ? (
-                <span className="text-xs text-muted-foreground">{row.bot}</span>
+                <span className="text-xs text-muted-foreground">
+                  {nameFor(row.bot)}
+                </span>
               ) : null}
               <span className="ml-auto text-xs text-muted-foreground">
                 {new Date(row.at).toLocaleString()}
@@ -266,8 +299,9 @@ export const GALLERY: GalleryComponent[] = [
      * only means to show what the component looks like. Admin draws it as unpreviewable instead.
      */
     name: "showActivityReport",
-    title: "Activity report",
+    title: TITLE,
     kind: "card",
+    summary: "从本部署自己的记录里读出员工们都做了什么、有哪些被拒绝了。",
     description:
       "Show what this deployment has actually been doing, read from its own records rather than from anything you know. Use for 'what have the Bots been up to' and 'what has been refused'. You choose the report and the period; the figures are read for you and you will not see them.",
     parameters: ActivityReportProps,
@@ -276,7 +310,9 @@ export const GALLERY: GalleryComponent[] = [
       "The report is on screen for the person, filled with figures read from this deployment. You were not given the figures.",
     reads: (args) => {
       const report = typeof args.report === "string" ? args.report : undefined;
-      const functionName = report ? FUNCTION_FOR[report] : undefined;
+      const functionName = report
+        ? keyedLookup(FUNCTION_FOR, report)
+        : undefined;
       return functionName ? [functionName] : [];
     },
   },

@@ -36,8 +36,21 @@ import {
 } from "@/lib/responsibilities";
 import { queryClient } from "@/query-client";
 
+/**
+ * `agent`: only this employee's responsibilities, as an employee's own page links here. Absent, or
+ * not a string, is everybody's, so every older link to the page keeps its meaning.
+ */
+export function responsibilitiesSearch(search: Record<string, unknown>): {
+  agent?: string;
+} {
+  return typeof search.agent === "string" && search.agent
+    ? { agent: search.agent }
+    : {};
+}
+
 export const Route = createFileRoute("/_authed/_app/responsibilities")({
   component: ResponsibilitiesPage,
+  validateSearch: responsibilitiesSearch,
 });
 /*
  * docs/design/ios-studio, for a working page: graphite cards on a hairline, 13px labels over the
@@ -64,6 +77,11 @@ async function refresh() {
 
 function ResponsibilitiesPage() {
   const goals = useQuery(responsibilitiesQueryOptions());
+  const { agent } = responsibilitiesSearch(Route.useSearch());
+  const bots = useQuery(agentListQueryOptions());
+  const shown = (goals.data ?? []).filter(
+    (goal) => agent === undefined || goal.agentId === agent,
+  );
   return (
     <PageShell
       title="长期职责"
@@ -83,8 +101,22 @@ function ResponsibilitiesPage() {
             <h2 className={SECTION_TITLE} id="duties-list">
               在跟进的职责
             </h2>
-            {goals.data?.length ? <Tag>{goals.data.length} 项</Tag> : null}
+            {shown.length ? <Tag>{shown.length} 项</Tag> : null}
           </div>
+          {agent ? (
+            <p className="text-[13px] text-muted-foreground" role="status">
+              只显示{" "}
+              {bots.data?.find((bot) => bot.id === agent)?.name ?? "这位员工"}{" "}
+              的长期职责 ·{" "}
+              <Link
+                className="text-foreground underline underline-offset-4"
+                search={{}}
+                to="/responsibilities"
+              >
+                看全部
+              </Link>
+            </p>
+          ) : null}
           {goals.isPending ? (
             <div
               aria-label="正在读取长期职责"
@@ -102,13 +134,13 @@ function ResponsibilitiesPage() {
             >
               {goals.error.message}
             </p>
-          ) : goals.data?.length ? (
-            goals.data.map((goal) => <GoalCard key={goal.id} goal={goal} />)
+          ) : shown.length ? (
+            shown.map((goal) => <GoalCard key={goal.id} goal={goal} />)
           ) : (
             <WorkbenchEmpty
               className="border border-border"
               description="在「新建长期职责」里交给员工一个长期目标。"
-              title="你还没有长期职责。"
+              title={agent ? "这位员工还没有长期职责。" : "你还没有长期职责。"}
             />
           )}
         </section>

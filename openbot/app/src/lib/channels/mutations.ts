@@ -4,6 +4,7 @@ import {
   type QueryClient,
 } from "@tanstack/react-query";
 import { client, tryClient } from "@/lib/client";
+import { settingsKeys } from "@/lib/settings/queries";
 import { type AgentChannel, type ChannelPage, channelKeys } from "./queries";
 
 /**
@@ -22,7 +23,13 @@ export function createChannelMutationOptions(queryClient: QueryClient) {
       return ((await response.json()) as { channel: AgentChannel }).channel;
     },
     onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: channelKeys.all }),
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: channelKeys.all }),
+        // Creating the first starter-Bot conversation claims this person's tour on the server.
+        queryClient.invalidateQueries({
+          queryKey: [...settingsKeys.all, "preferences"],
+        }),
+      ]),
   });
 }
 
@@ -140,13 +147,19 @@ export function markChannelReadMutationOptions(queryClient: QueryClient) {
 }
 
 /** Soft-delete a channel for everyone in it. The server keeps the transcript; the roster forgets. */
-export function deleteChannelMutationOptions(queryClient: QueryClient) {
+export function deleteChannelMutationOptions(
+  queryClient: QueryClient,
+  discardFailedStart = false,
+) {
   return mutationOptions({
     mutationFn: async (channelId: string) => {
-      await client(`/api/channels/${channelId}`, {
-        method: "DELETE",
-        fallback: "无法删除这段会话",
-      });
+      await client(
+        `/api/channels/${channelId}${discardFailedStart ? "?discardFailedStart=true" : ""}`,
+        {
+          method: "DELETE",
+          fallback: "无法删除这段会话",
+        },
+      );
     },
     // The roster only. The open channel's detail query would refetch into the fresh 404 and
     // flash an error before the navigate-home lands; left alone, it keeps its cache and the

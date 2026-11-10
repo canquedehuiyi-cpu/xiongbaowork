@@ -272,4 +272,5 @@ afterAll(async () => {
       await database.delete(users).where(eq(users.id, tenant));
     });
   }
+  await database.$client.close();
 });

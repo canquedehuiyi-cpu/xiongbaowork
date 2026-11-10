@@ -150,14 +150,15 @@ export function useApprovalDecision() {
    */
   const [failure, setFailure] = useState<Error | null>(null);
   const mutation = useMutation({
-    mutationFn: (input: {
+    mutationFn: async (input: {
       approvalId: string;
       decision: BoardAnswer;
       response?: string;
-    }) =>
-      input.decision === "answer"
-        ? answerPersonQuestion(input.approvalId, input.response ?? "")
-        : decideApproval(input.approvalId, input.decision),
+    }): Promise<void> => {
+      if (input.decision === "answer")
+        await answerPersonQuestion(input.approvalId, input.response ?? "");
+      else await decideApproval(input.approvalId, input.decision);
+    },
     // A decision is not replayable: a lost response may still have landed.
     retry: false,
     onMutate: async (input) => ({

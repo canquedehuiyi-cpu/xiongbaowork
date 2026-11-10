@@ -39,7 +39,7 @@ const requireUser: MiddlewareHandler<{ Variables: AppVariables }> = async (
   context,
   next,
 ) => {
-  context.set("actor", { id: tenantA, role: "user" as const });
+  context.set("actor", { id: tenantA, email: `${tenantA}@example.test`, role: "user" as const });
   await next();
 };
 const routes = createAutonomousRoutes(store, requireUser);
@@ -274,7 +274,7 @@ test("an unfinished routine keeps its newest start, schedule order and activity 
       context,
       next,
     ) => {
-      context.set("actor", { id: fixture.owner, role: "user" });
+      context.set("actor", { id: fixture.owner, email: `${fixture.owner}@example.test`, role: "user" });
       await next();
     };
     const response = await runAsTenant(fixture.owner, () =>
@@ -372,7 +372,7 @@ test("the new in-flight projection does not expose another owner's routine or st
       context,
       next,
     ) => {
-      context.set("actor", { id: fixture.foreign, role: "user" });
+      context.set("actor", { id: fixture.foreign, email: `${fixture.foreign}@example.test`, role: "user" });
       await next();
     };
     const response = await runAsTenant(fixture.foreign, () =>
@@ -554,7 +554,7 @@ test("summaryForAll answers every coworker of this tenant, and nobody else's", a
       const as =
         (actor: string): MiddlewareHandler<{ Variables: AppVariables }> =>
         async (context, next) => {
-          context.set("actor", { id: actor, role: "user" });
+          context.set("actor", { id: actor, email: `${actor}@example.test`, role: "user" });
           await next();
         };
       const mine = await runAsTenant(fixture.owner, () =>

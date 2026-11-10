@@ -260,16 +260,21 @@ test("the step comes right after the welcome, and moving to it is saved", async 
   await user.click(view.getByRole("button", { name: "继续" }));
 
   await view.findByText("告诉你的分身，你的资料在哪里");
-  expect(writes()).toEqual([
-    { method: "POST", path: "/api/me/onboarding", body: { step: 1 } },
-  ]);
+  // Every step has a number of its own (welcome 1, sources 4, see STEP_NUMBER in the route): the
+  // welcome is saved on arrival, then the move to this step.
+  await waitFor(() =>
+    expect(writes()).toEqual([
+      { method: "POST", path: "/api/me/onboarding", body: { step: 1 } },
+      { method: "POST", path: "/api/me/onboarding", body: { step: 4 } },
+    ]),
+  );
   // The step carries its own ways forward, so the wizard's 继续 is not shown under it.
   expect(view.queryByRole("button", { name: "继续" })).toBeNull();
 });
 
 test("a reload resumes at the step the server holds", async () => {
   serve();
-  const { view } = drawWizard(1);
+  const { view } = drawWizard(4);
 
   expect(await view.findByText("告诉你的分身，你的资料在哪里")).toBeTruthy();
   expect(view.queryByText(/欢迎来到/)).toBeNull();

@@ -55,7 +55,7 @@ const requireUser: MiddlewareHandler<{ Variables: AppVariables }> = async (
   context,
   next,
 ) => {
-  context.set("actor", { id: tenant, role: "user" as const });
+  context.set("actor", { id: tenant, email: `${tenant}@example.test`, role: "user" as const });
   // As createRequireUser does: the whole request runs inside its tenant, so a transaction a route
   // opens is scoped to it rather than to the context-free default.
   await runAsTenant(tenant, () => next());
@@ -90,7 +90,7 @@ const requireAdminUser: MiddlewareHandler<{ Variables: AppVariables }> = async (
   context,
   next,
 ) => {
-  context.set("actor", { id: tenant, role: "admin" as const });
+  context.set("actor", { id: tenant, email: `${tenant}@example.test`, role: "admin" as const });
   // As createRequireUser does: the whole request runs inside its tenant, so a transaction a route
   // opens is scoped to it rather than to the context-free default.
   await runAsTenant(tenant, () => next());
@@ -99,7 +99,7 @@ const adminQuotaRoutes = createQuotaRoutes(database, quota, requireAdminUser);
 const board = createTaskProjector(database, undefined, quota);
 
 async function call<T>(
-  app: { request: (input: Request) => Promise<Response> },
+  app: { request: (input: Request) => Response | Promise<Response> },
   method: string,
   path: string,
   body?: unknown,
@@ -479,7 +479,7 @@ test("a workspace with no subscription is held to the Free ceilings, not left un
     database,
     quota,
     async (context, next) => {
-      context.set("actor", { id: stranger, role: "user" as const });
+      context.set("actor", { id: stranger, email: `${stranger}@example.test`, role: "user" as const });
       await next();
     },
   );

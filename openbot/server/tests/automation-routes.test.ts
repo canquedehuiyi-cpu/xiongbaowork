@@ -110,6 +110,7 @@ afterAll(async () => {
   for (const { tenant, id } of created) {
     await runAsTenant(tenant, () => store.softDelete(id)).catch(() => false);
   }
+  await database.$client.close();
 });
 
 describe("every route asks who is calling", () => {

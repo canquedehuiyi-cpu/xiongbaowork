@@ -8,6 +8,14 @@ import {
 } from "../src/delivery/types";
 import { currentTenant, runAsTenant } from "../src/tenant/context";
 
+type RouterStore = Parameters<typeof createDeliveryRouter>[0]["store"];
+/**
+ * The fixture store as the router takes it. Every method is here (the key set is checked), but the rows
+ * are cut to what the router reads: the store's own row types carry every column of the table.
+ */
+const routerStore = (store: Record<keyof RouterStore, unknown>) =>
+  store as unknown as RouterStore;
+
 const scope = {
   ownerUserId: "owner",
   channelId: "channel",
@@ -76,6 +84,8 @@ function fixture(
         : null,
     binding: async () => ownedBinding,
     bindingsFor: async () => [ownedBinding],
+    bindingsByUse: async () => [ownedBinding],
+    checkInConversations: async () => [],
     devices: async () => [],
     offerInbox: async (input: unknown) => {
       offered.push(input);
@@ -90,7 +100,8 @@ function fixture(
       return outbound;
     },
     outbox: async () => outbound,
-    startOutbox: async () => outbound,
+    // A test replaces it with one that finds nothing to start.
+    startOutbox: async (): Promise<typeof outbound | null> => outbound,
     setOutbox: async (
       _id: string,
       state: string,
@@ -134,10 +145,11 @@ function fixture(
     release: async () => true,
   };
   const router = createDeliveryRouter({
-    store,
+    store: routerStore(store),
     queue,
     owner: "worker",
     authoriseScope: async () => live,
+    scopeFor: async () => null,
     runTurn: async (input) => {
       calls.push(input);
       await turnHook?.(router);
@@ -207,6 +219,27 @@ test("queue invokes selected Bot and original conversation, emits durable async 
   });
   expect(f.statuses.at(-1)).toMatchObject({ state: "sent" });
 });
+test("a turn knows where its message was written, so its surface can be told", async () => {
+  const queued = fixture();
+  await queued.router.sweep("delivery.inbound");
+  const native = fixture();
+  native.inbox.source = "native";
+  await native.router.sweep("delivery.inbound");
+  const paired = fixture();
+  await paired.router.converse({
+    transport: "teams",
+    realm: "T",
+    identity: "U",
+    externalId: "m1",
+    text: "Hi",
+    signal: new AbortController().signal,
+  });
+  expect(
+    [queued, native, paired].map(
+      (f) => (f.calls[0] as { source?: unknown }).source,
+    ),
+  ).toEqual(["slack", "native", "teams"]);
+});
 test("revoked source ownership and lost lease cannot execute turns or sends", async () => {
   const f = fixture();
   f.revoke();
@@ -230,10 +263,11 @@ test("uncertain recovered outbound is never silently resent", async () => {
 test("provider refusal persists failure while uncertain network persists unknown", async () => {
   const f = fixture();
   const router = createDeliveryRouter({
-    store: f.store,
+    store: routerStore(f.store),
     queue: f.queue,
     owner: "w",
     authoriseScope: async () => true,
+    scopeFor: async () => null,
     runTurn: async () => ({ replyText: "" }),
     providers: {
       slack: {
@@ -325,10 +359,11 @@ test("a suspended governed turn reports its pending approval", async () => {
     waiting: { kind: "approval", approvalId: "a9", requestId: "a9" },
   });
   const router = createDeliveryRouter({
-    store: f.store,
+    store: routerStore(f.store),
     queue: f.queue,
     owner: "w",
     authoriseScope: async () => true,
+    scopeFor: async () => null,
     runTurn: async () => {
       throw suspended;
     },
@@ -371,10 +406,11 @@ test("chat sends carry the Bot's identity; SMS after STOP is recorded opted out,
   const refused = fixture({ transport: "sms" });
   refused.outbound.transport = "sms";
   const router = createDeliveryRouter({
-    store: refused.store,
+    store: routerStore(refused.store),
     queue: refused.queue,
     owner: "w",
     authoriseScope: async () => true,
+    scopeFor: async () => null,
     runTurn: async () => ({ replyText: "" }),
     audit: async (event) => {
       refused.calls.push({ audit: event });
@@ -416,10 +452,11 @@ test("the person's update routing decides which transports carry each kind", asy
   f.store.devices = async () => devices;
   const kinds: string[] = [];
   const router = createDeliveryRouter({
-    store: f.store,
+    store: routerStore(f.store),
     queue: f.queue,
     owner: "w",
     authoriseScope: async () => true,
+    scopeFor: async () => null,
     runTurn: async () => ({ replyText: "" }),
     providers: {},
     routeFor: async ({ kind }) => {
@@ -629,10 +666,11 @@ describe("whose delivery it is (G01)", () => {
     };
     const audited: Array<{ id: string; frame: string }> = [];
     const router = createDeliveryRouter({
-      store: f.store,
+      store: routerStore(f.store),
       queue: f.queue,
       owner: "w",
       authoriseScope: async () => true,
+      scopeFor: async () => null,
       runTurn: async () => ({ replyText: "" }),
       audit: async (event) => {
         audited.push({ id: event.id, frame: currentTenant() });

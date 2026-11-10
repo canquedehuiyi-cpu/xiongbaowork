@@ -1,7 +1,24 @@
 import { createHash, randomUUID } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
-import { and, desc, eq, inArray, isNull, notInArray, or } from "drizzle-orm";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import {
+  HARNESSES,
+  type Harness,
+  OPENBOT_HARNESS_NAME,
+} from "@openbot/shared/harnesses";
+import { isPersonBrowserId } from "@openbot/shared/openbot-browser";
+import {
+  and,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  ne,
+  notInArray,
+  or,
+  sql,
+} from "drizzle-orm";
 import { parse } from "yaml";
 import { DEPLOYMENT_ROUTES } from "./computer/deployment-routes";
 import type { Database } from "./db/client";
@@ -222,6 +239,16 @@ type TenantChannel = {
 
 export type TenantPackage = {
   tenantId: string;
+  /**
+   * Ids this package was published under before `tenantId` (`tenant.former_ids` in brand.yaml).
+   *
+   * A deployment set up under one of them holds its Bots and channels under that id, and a package
+   * may not take over a Bot another package seeded (see the refusal in
+   * {@link synchronizeTenantPackage}). So a renamed package would stop its own deployments booting.
+   * Naming the old id here says those rows are this package's: the synchronise carries them over,
+   * and {@link deploymentNameOf} keeps the deployment's name.
+   */
+  formerTenantIds: string[];
   productName: string;
   /** The product's name in English (`tenant.english_name`), drawn beside the Chinese one. Optional. */
   englishName?: string;
@@ -334,6 +361,13 @@ function requiredString(value: unknown, name: string): string {
   return value;
 }
 
+function agentTitle(value: unknown): string {
+  if (typeof value !== "string" || value.trim().length > 120) {
+    throw new Error("agent.title must be text of 120 characters or fewer");
+  }
+  return value.trim();
+}
+
 function stringArray(value: unknown, name: string): string[] {
   if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
     throw new Error(`${name} must be an array of strings`);
@@ -424,6 +458,13 @@ function parseAgents(
         `${source}: agent.id "${id}" is reserved for a deployment route and cannot name a Bot`,
       );
     }
+    // Nor after a person's own OpenBot browser, which is a computer named the same way a Bot's is: a Bot with that id
+    // would share its computer with the person whose browser it is.
+    if (isPersonBrowserId(id)) {
+      throw new Error(
+        `${source}: agent.id "${id}" is the shape of a person's OpenBot browser and cannot name a Bot`,
+      );
+    }
     if (type === "remote_ag_ui" || type === "remote_mastra") {
       const endpoint =
         typeof agent.endpoint === "string" ? agent.endpoint.trim() : "";
@@ -436,7 +477,7 @@ function parseAgents(
       {
         id,
         name: requiredString(agent.name, "agent.name"),
-        title: requiredString(agent.title, "agent.title"),
+        title: agentTitle(agent.title),
         roleDescription: requiredString(
           agent.role_description,
           "agent.role_description",
@@ -683,8 +724,23 @@ export function validateTenantPackage(files: PackageFiles): TenantPackage {
     },
   );
 
+  const tenantId = requiredString(tenant.id, "tenant.id");
+  const formerTenantIds =
+    tenant.former_ids === undefined
+      ? []
+      : stringArray(tenant.former_ids, "tenant.former_ids");
+  for (const formerId of formerTenantIds) {
+    requiredString(formerId, "tenant.former_ids[]");
+    if (formerId === tenantId) {
+      throw new Error(
+        `tenant.former_ids names "${formerId}", which is this package's own tenant.id`,
+      );
+    }
+  }
+
   return {
-    tenantId: requiredString(tenant.id, "tenant.id"),
+    tenantId,
+    formerTenantIds,
     productName: requiredString(tenant.product_name, "tenant.product_name"),
     ...(tenant.english_name === undefined
       ? {}
@@ -871,6 +927,143 @@ export async function loadTenantPackage(
   };
 }
 
+const PERSONAL_PACKAGE_PATH = fileURLToPath(
+  new URL("../../examples/personal", import.meta.url),
+);
+const PERSONAL_ASSISTANT = "personal-assistant";
+const PICKED_HARNESS = "picked-harness";
+
+/**
+ * Names the catalogue gave a framework before its current one. A Bot an earlier version seeded under
+ * one of these is still named after its framework, so it follows a change of harness like one under
+ * the current name.
+ */
+const EARLIER_HARNESS_NAMES: Readonly<Record<string, readonly string[]>> = {
+  langgraph: ["LangGraph", "LangChain (LangGraph)"],
+};
+
+function catalogueNamesOf(harness: Harness): string[] {
+  return [harness.name, ...(EARLIER_HARNESS_NAMES[harness.id] ?? [])];
+}
+
+/**
+ * "Powered by <framework>" for any framework the installer can run, longest name first so that
+ * an earlier "LangChain (LangGraph)" is read whole rather than as "LangChain" followed by text.
+ */
+const POWERED_BY = new RegExp(
+  `Powered by (?:${HARNESSES.filter(({ image }) => image !== null)
+    .flatMap(catalogueNamesOf)
+    .sort((a, b) => b.length - a.length)
+    .map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("|")})(?![\\w])`,
+);
+
+/**
+ * A subtitle with its "Powered by" part following the harness the installer runs now.
+ *
+ * Only that part changes, so a subtitle the person wrote around it keeps their words. When what runs
+ * the Bot now is not a framework the installer knows by name, the claim is dropped rather than kept
+ * untrue, unless it is all the subtitle says.
+ */
+function attributionFollowing(title: string, harness: Harness | undefined) {
+  if (!POWERED_BY.test(title)) return title;
+  if (harness) return title.replace(POWERED_BY, `Powered by ${harness.name}`);
+  const rest = title
+    .replace(new RegExp(`\\s*${POWERED_BY.source}\\.?`), "")
+    .trim();
+  return rest || title;
+}
+
+/**
+ * A Bot's stored configuration as an object. Earlier desktops stored some as a JSON string, which
+ * the queries above read the same way.
+ */
+function storedConfiguration(value: unknown): Record<string, unknown> | null {
+  let parsed = value;
+  if (typeof value === "string") {
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      return null;
+    }
+  }
+  return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+    ? (parsed as Record<string, unknown>)
+    : null;
+}
+
+function personalStarterSeed(
+  tenantPackage: LoadedTenantPackage,
+  fresh: boolean,
+) {
+  const fallback = tenantPackage.agents.find(
+    ({ id }) => id === PERSONAL_ASSISTANT,
+  );
+  const picked = tenantPackage.agents.find(({ id }) => id === PICKED_HARNESS);
+  const agents = tenantPackage.agents.filter(
+    ({ id }) => id !== PERSONAL_ASSISTANT && id !== PICKED_HARNESS,
+  );
+  if (fresh && fallback) {
+    const harness =
+      picked &&
+      HARNESSES.find(
+        ({ name, image }) => image !== null && name === picked.name,
+      );
+    // Starter copy is ordinary editable profile text, written only on the first seed.
+    // A Bot that runs here is powered by OpenBot itself, as examples/personal/agents.yaml says.
+    const harnessName = picked
+      ? harness
+        ? harness.name
+        : null
+      : OPENBOT_HARNESS_NAME;
+    const title = harnessName
+      ? `Everyday life. Powered by ${harnessName}.`
+      : "Everyday life.";
+    /*
+     * What it does is the package's `role_description`, the sentence written for the person, and
+     * what a conversation's header shows. Its instructions are the package's `system_prompt`,
+     * written for the model, and they stay where the Bot reads them: the prompt a Bot that runs here
+     * runs on, or the instructions a harness is sent in its standing role.
+     */
+    agents.unshift(
+      picked
+        ? {
+            ...fallback,
+            title,
+            id: picked.id,
+            type: picked.type,
+            configuration: {
+              ...picked.configuration,
+              standingInstructions: String(fallback.configuration.systemPrompt),
+              personalStarter: true,
+            },
+          }
+        : {
+            ...fallback,
+            title,
+            configuration: { ...fallback.configuration, personalStarter: true },
+          },
+    );
+  }
+  const channels = tenantPackage.channels.flatMap((channel) => {
+    if (channel.id === PERSONAL_ASSISTANT && !fresh) return [];
+    if (!fresh || !picked || !fallback) return [channel];
+    return [
+      {
+        ...channel,
+        permittedAgents: [
+          ...new Set(
+            channel.permittedAgents.map((id) =>
+              id === PERSONAL_ASSISTANT ? PICKED_HARNESS : id,
+            ),
+          ),
+        ],
+      },
+    ];
+  });
+  return { agents, channels, picked };
+}
+
 export async function synchronizeTenantPackage(
   database: Database,
   tenantPackage: LoadedTenantPackage,
@@ -916,31 +1109,273 @@ export async function synchronizeTenantPackage(
           );
         }
 
-        const [deploymentPackage] = await transaction
-          .insert(deploymentPackages)
-          .values({
-            tenantId: tenantPackage.tenantId,
-            sourcePath: tenantPackage.sourcePath,
-            checksum: tenantPackage.checksum,
-          })
-          .onConflictDoUpdate({
-            target: deploymentPackages.tenantId,
-            set: {
-              sourcePath: tenantPackage.sourcePath,
-              checksum: tenantPackage.checksum,
-              loadedAt: new Date(),
-            },
-          })
-          .returning();
+        const bundledPersonal =
+          resolve(tenantPackage.sourcePath) === PERSONAL_PACKAGE_PATH;
+        const packageValues = {
+          tenantId: tenantPackage.tenantId,
+          sourcePath: tenantPackage.sourcePath,
+          checksum: tenantPackage.checksum,
+        };
+
+        // The unique tenant row makes seeding atomic. A competing startup waits for this transaction
+        // to commit or roll back before it can decide whether it owns the initial seed.
+        const [initial] = bundledPersonal
+          ? await transaction
+              .insert(deploymentPackages)
+              .values(packageValues)
+              .onConflictDoNothing({ target: deploymentPackages.tenantId })
+              .returning()
+          : [];
+        const [deploymentPackage] = initial
+          ? [initial]
+          : await transaction
+              .insert(deploymentPackages)
+              .values(packageValues)
+              .onConflictDoUpdate({
+                target: deploymentPackages.tenantId,
+                set: {
+                  sourcePath: tenantPackage.sourcePath,
+                  checksum: tenantPackage.checksum,
+                  loadedAt: new Date(),
+                },
+              })
+              .returning();
 
         if (!deploymentPackage) {
           throw new Error("Tenant package could not be synchronized");
         }
 
+        const formerPackages =
+          tenantPackage.formerTenantIds.length > 0
+            ? await transaction
+                .select({ id: deploymentPackages.id })
+                .from(deploymentPackages)
+                .where(
+                  inArray(
+                    deploymentPackages.tenantId,
+                    tenantPackage.formerTenantIds,
+                  ),
+                )
+            : [];
+        const formerPackageIds = formerPackages.map(({ id }) => id);
+
+        /*
+         * A deployment set up under one of this package's former ids. Its Bots and channels are this
+         * package's, so they move to this package's row before the seeding below, which would otherwise
+         * refuse them as another package's and stop the deployment booting. The former row itself stays,
+         * owning nothing, because it is how `deploymentNameOf` knows this deployment's name.
+         */
+        if (formerPackageIds.length > 0) {
+          await transaction
+            .update(agentTable)
+            .set({ packageId: deploymentPackage.id })
+            .where(inArray(agentTable.packageId, formerPackageIds));
+          await transaction
+            .update(channelTable)
+            .set({ packageId: deploymentPackage.id })
+            .where(inArray(channelTable.packageId, formerPackageIds));
+          // The fork's catalogue skills carry their brand too (migration 0074), so they move with it;
+          // a person's own copies of the channels move in that person's scope, after this transaction.
+          await transaction
+            .update(skillTable)
+            .set({ packageId: deploymentPackage.id })
+            .where(inArray(skillTable.packageId, formerPackageIds));
+        }
+
+        const freshPersonal = Boolean(initial && formerPackageIds.length === 0);
+        const personal = bundledPersonal
+          ? personalStarterSeed(tenantPackage, freshPersonal)
+          : undefined;
+        const agents = personal?.agents ?? tenantPackage.agents;
+        const channels = personal?.channels ?? tenantPackage.channels;
+        const omittedAgentIds = bundledPersonal
+          ? tenantPackage.omittedAgentIds.filter((id) => id !== PICKED_HARNESS)
+          : tenantPackage.omittedAgentIds;
+
+        if (personal?.picked && !freshPersonal) {
+          const { picked } = personal;
+          // Earlier desktops addressed their own container by its Compose service name. A custom
+          // package can share the tenant and Bot IDs, so those IDs alone do not confer ownership.
+          const stored = sql`(case when jsonb_typeof(${agentTable.configuration}) = 'string'
+            then (${agentTable.configuration} #>> '{}')::jsonb
+            else ${agentTable.configuration}
+          end)`;
+          const [legacy] = await transaction
+            .select({ name: agentTable.name, title: agentProfiles.title })
+            .from(agentTable)
+            .innerJoin(agentProfiles, eq(agentTable.id, agentProfiles.agentId))
+            .where(
+              and(
+                eq(agentTable.id, PICKED_HARNESS),
+                eq(agentTable.packageId, deploymentPackage.id),
+                isNull(agentProfiles.ownerUserId),
+                isNull(agentProfiles.deletedAt),
+                sql`coalesce(${stored}->>'personalStarter', 'false') <> 'true'`,
+                sql`(${stored}->'installerManaged' = 'true'::jsonb or ${stored}->>'endpoint' ~ '^http://agent-harness:[0-9]+([/?]|$)')`,
+              ),
+            );
+          const selected = HARNESSES.find(
+            ({ name, image }) => image !== null && name === picked.name,
+          );
+          if (legacy && selected) {
+            const catalogueNames = HARNESSES.flatMap(catalogueNamesOf);
+            // The subtitle says what runs the Bot. Earlier seeds repeated the framework's name there.
+            const catalogueTitles = catalogueNames.flatMap((name) => [
+              name,
+              `Powered by ${name}`,
+            ]);
+            if (catalogueNames.includes(legacy.name)) {
+              await transaction
+                .update(agentTable)
+                .set({ name: selected.name })
+                .where(eq(agentTable.id, PICKED_HARNESS));
+            }
+            if (catalogueTitles.includes(legacy.title)) {
+              await transaction
+                .update(agentProfiles)
+                .set({ title: `Powered by ${selected.name}` })
+                .where(eq(agentProfiles.agentId, PICKED_HARNESS));
+            }
+          }
+          const connection = JSON.stringify({
+            ...picked.configuration,
+            installerManaged: true,
+          });
+          /*
+           * A starter marked as the person's own connection only because it was renamed.
+           *
+           * Up to this release, saving the starter's Setup page with nothing but a new name or title
+           * stored the installer's address back with a "/" added (`http://agent-harness:4212/`) and
+           * marked the connection as the person's, so a later provider change left it dialling a harness
+           * that no longer ran. That address on the installer's own container, with no key, is the mark
+           * of that save: the container only ever runs the harness the installer picked, so no agent of
+           * the person's can live there, and a person who set a key set something of their own and keeps
+           * it. Such a starter goes back to following the installer.
+           */
+          const renamedOnly = sql`(${stored}->'personalStarter' = 'true'::jsonb
+            and ${stored}->'auth' is null
+            and ${stored}->>'endpoint' ~ '^http://agent-harness:[0-9]+/$')`;
+          const [managed] = await transaction
+            .update(agentTable)
+            .set({
+              type: picked.type,
+              configuration: sql`(${stored} - 'remoteAgentId' - 'personalConnection') || ${connection}::text::jsonb`,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(agentTable.id, PICKED_HARNESS),
+                ne(agentTable.type, "built_in"),
+                sql`(coalesce(${stored}->>'personalConnection', 'false') <> 'true' or ${renamedOnly})`,
+                sql`(${stored}->'personalStarter' = 'true'::jsonb
+                  or ${stored}->'installerManaged' = 'true'::jsonb
+                  or ${stored}->>'endpoint' ~ '^http://agent-harness:[0-9]+([/?]|$)')`,
+                eq(agentTable.packageId, deploymentPackage.id),
+                inArray(
+                  agentTable.id,
+                  transaction
+                    .select({ id: agentProfiles.agentId })
+                    .from(agentProfiles)
+                    .where(
+                      and(
+                        isNull(agentProfiles.ownerUserId),
+                        isNull(agentProfiles.deletedAt),
+                      ),
+                    ),
+                ),
+              ),
+            )
+            .returning({ id: agentTable.id });
+          /*
+           * And what the subtitle says runs it, for a Bot that now runs on what the installer picked.
+           * The starter is seeded "Everyday life. Powered by Claude Agent SDK.", and a person may have
+           * rewritten the first half; either way it went on naming the harness it was moved off. A
+           * connection the person set themselves is not moved above, so its subtitle is not touched.
+           */
+          if (managed) {
+            const [profile] = await transaction
+              .select({ title: agentProfiles.title })
+              .from(agentProfiles)
+              .where(
+                and(
+                  eq(agentProfiles.agentId, PICKED_HARNESS),
+                  isNull(agentProfiles.ownerUserId),
+                ),
+              );
+            const title = profile && attributionFollowing(profile.title, selected);
+            if (profile && title !== profile.title) {
+              await transaction
+                .update(agentProfiles)
+                .set({ title })
+                .where(eq(agentProfiles.agentId, PICKED_HARNESS));
+            }
+          }
+        }
+
+        /*
+         * A personal starter seeded before what it does and what it is told were kept apart.
+         *
+         * Those seeds (0.3.2) wrote the package's `system_prompt` as the starter's role description,
+         * so every conversation's header showed the person the instructions written for the model.
+         * Whatever that text says now is what the Bot runs on, since an edit to it moved the Bot's
+         * instructions with it, so it becomes the instructions, and what it does goes back to the
+         * package's own sentence. A starter whose instructions are already apart is left alone, so
+         * this changes a deployment once.
+         */
+        const description = tenantPackage.agents.find(
+          ({ id }) => id === PERSONAL_ASSISTANT,
+        )?.roleDescription;
+        if (bundledPersonal && !freshPersonal && description) {
+          const starters = await transaction
+            .select({
+              id: agentTable.id,
+              type: agentTable.type,
+              configuration: agentTable.configuration,
+              roleDescription: agentProfiles.roleDescription,
+            })
+            .from(agentTable)
+            .innerJoin(agentProfiles, eq(agentTable.id, agentProfiles.agentId))
+            .where(
+              and(
+                eq(agentTable.packageId, deploymentPackage.id),
+                inArray(agentTable.id, [PERSONAL_ASSISTANT, PICKED_HARNESS]),
+                isNull(agentProfiles.ownerUserId),
+              ),
+            );
+          for (const starter of starters) {
+            const configuration = storedConfiguration(starter.configuration);
+            if (configuration?.personalStarter !== true) continue;
+            if (starter.roleDescription === description) continue;
+            const together =
+              starter.type === "built_in"
+                ? configuration.systemPrompt === starter.roleDescription
+                : typeof configuration.standingInstructions !== "string" ||
+                  configuration.standingInstructions.trim() === "";
+            if (!together) continue;
+            const updatedAt = new Date();
+            if (starter.type !== "built_in") {
+              await transaction
+                .update(agentTable)
+                .set({
+                  configuration: {
+                    ...configuration,
+                    standingInstructions: starter.roleDescription,
+                  },
+                  updatedAt,
+                })
+                .where(eq(agentTable.id, starter.id));
+            }
+            await transaction
+              .update(agentProfiles)
+              .set({ roleDescription: description, updatedAt })
+              .where(eq(agentProfiles.agentId, starter.id));
+          }
+        }
+
         // Disable only explicitly unconfigured agents still owned by this package. Keep canonical
         // rows and conversation memberships: runtime tombstones preserve their readable history.
         // Normal seeding below clears deletedAt if an endpoint is configured again.
-        if (tenantPackage.omittedAgentIds.length > 0) {
+        if (omittedAgentIds.length > 0) {
           const now = new Date();
           await transaction
             .update(agentProfiles)
@@ -957,7 +1392,7 @@ export async function synchronizeTenantPackage(
                     .where(
                       and(
                         eq(agentTable.packageId, deploymentPackage.id),
-                        inArray(agentTable.id, tenantPackage.omittedAgentIds),
+                        inArray(agentTable.id, omittedAgentIds),
                       ),
                     ),
                 ),
@@ -965,7 +1400,7 @@ export async function synchronizeTenantPackage(
             );
         }
 
-        for (const agent of tenantPackage.agents) {
+        for (const agent of agents) {
           const updatedAt = new Date();
           const [canonicalAgent] = await transaction
             .insert(agentTable)
@@ -995,6 +1430,11 @@ export async function synchronizeTenantPackage(
             );
           }
 
+          // A personal starter is editable by the local administrator, not a published Team Bot.
+          const visibility =
+            bundledPersonal && agent.configuration.personalStarter === true
+              ? "private"
+              : "public";
           const [profile] = await transaction
             .insert(agentProfiles)
             .values({
@@ -1003,7 +1443,7 @@ export async function synchronizeTenantPackage(
               title: agent.title,
               roleDescription: agent.roleDescription,
               avatarSeed: agent.avatarSeed ?? canonicalAgent.id,
-              visibility: "public",
+              visibility,
               deletedAt: null,
               updatedAt,
             })
@@ -1015,7 +1455,7 @@ export async function synchronizeTenantPackage(
                 title: agent.title,
                 roleDescription: agent.roleDescription,
                 avatarSeed: agent.avatarSeed ?? canonicalAgent.id,
-                visibility: "public",
+                visibility,
                 deletedAt: null,
                 updatedAt,
               },
@@ -1059,8 +1499,23 @@ export async function synchronizeTenantPackage(
          * would take a person's work down with a brand's rename. Switching back clears the tombstone in the
          * loop below, which writes `deletedAt: null` for everything the package declares again.
          */
-        const declaredAgentIds = tenantPackage.agents.map((agent) => agent.id);
-        if (declaredAgentIds.length > 0) {
+        /*
+         * Everything the package declares, not only what this boot seeds: the bundled personal package
+         * seeds its starter once and then leaves it to the person (upstream `personalStarterSeed`), and
+         * a starter left alone is still declared, so it must not read as retired here.
+         */
+        const declaredAgentIds = [
+          ...new Set(
+            [...tenantPackage.agents, ...agents].map((agent) => agent.id),
+          ),
+        ];
+        /*
+         * M3: never for the bundled personal package. Its starter is seeded once and then the
+         * person's (upstream `personalStarterSeed`): an existing installation keeps the Bots it has,
+         * a customized general-assistant from an earlier desktop and a picked Bot left without an
+         * endpoint (which keeps its last connection) among them. There is no brand to switch away from.
+         */
+        if (!bundledPersonal && declaredAgentIds.length > 0) {
           const retiredAt = new Date();
           await transaction
             .update(agentProfiles)
@@ -1086,7 +1541,7 @@ export async function synchronizeTenantPackage(
         }
 
         if (members.length === 0) {
-          for (const channel of tenantPackage.channels) {
+          for (const channel of channels) {
             const [ownedChannel] = await transaction
               .insert(channelTable)
               .values({
@@ -1227,14 +1682,13 @@ export async function synchronizeTenantPackage(
          * somebody's deliberate decision is not something a redeploy should do quietly.
          */
         const wantedBy = new Map<string, string[]>();
-        for (const agent of tenantPackage.agents) {
+        for (const agent of agents) {
           for (const slug of agent.skills) {
             wantedBy.set(slug, [...(wantedBy.get(slug) ?? []), agent.id]);
           }
         }
-        await transaction
-          .delete(pluginGrants)
-          .where(
+        if (!bundledPersonal || agents.length > 0) {
+          await transaction.delete(pluginGrants).where(
             and(
               eq(pluginGrants.kind, "skill"),
               eq(pluginGrants.grantedBy, PACKAGE_GRANT),
@@ -1243,10 +1697,22 @@ export async function synchronizeTenantPackage(
                 transaction
                   .select({ id: agentTable.id })
                   .from(agentTable)
-                  .where(eq(agentTable.packageId, deploymentPackage.id)),
+                  .where(
+                    and(
+                      eq(agentTable.packageId, deploymentPackage.id),
+                      // Personal only replaces grants for Bots it is actively seeding.
+                      bundledPersonal
+                        ? inArray(
+                            agentTable.id,
+                            agents.map(({ id }) => id),
+                          )
+                        : undefined,
+                    ),
+                  ),
               ),
             ),
           );
+        }
 
         /*
          * Which of this package's skills it actually owns once seeded, slug to row id. The 分身's grants
@@ -1436,7 +1902,13 @@ export async function synchronizeTenantPackage(
         return {
           deploymentPackage,
           members,
-          channels: tenantPackage.channels,
+          formerPackageIds,
+          // What to write this boot, and everything the package declares (which a person's copies
+          // are kept against): the personal starter's channel is declared but seeded only once.
+          channels,
+          declaredChannelIds: tenantPackage.channels.map(
+            (channel) => channel.id,
+          ),
           avatarSkillIds: (tenantPackage.avatarSkills ?? []).flatMap((slug) => {
             const id = ownedSkills.get(slug);
             return id ? [id] : [];
@@ -1505,8 +1977,25 @@ export async function synchronizeTenantPackage(
        * membership and the thread mapping go with the channel -- both are `ON DELETE CASCADE` -- so a
        * retired conversation leaves no row that would list itself and then refuse to open.
        */
-      const kept = synced.channels.map((channel) =>
-        packageChannelId(userId, channel.id),
+      /*
+       * A person's copies made under one of the package's former ids are this package's too, the same
+       * as the catalogue rows moved inside the transaction above; they are the person's rows, so they
+       * move here, in the person's scope, before the sweep and the upserts would refuse them.
+       */
+      if (synced.formerPackageIds.length > 0) {
+        await database
+          .update(channelTable)
+          .set({ packageId: synced.deploymentPackage.id })
+          .where(
+            and(
+              eq(channelTable.tenantId, userId),
+              inArray(channelTable.packageId, synced.formerPackageIds),
+            ),
+          );
+      }
+
+      const kept = synced.declaredChannelIds.map((channelId) =>
+        packageChannelId(userId, channelId),
       );
       if (kept.length > 0) {
         await database
@@ -1635,6 +2124,39 @@ export async function synchronizeTenantPackage(
   }
 
   return synced.deploymentPackage;
+}
+
+
+/**
+ * What this deployment calls itself when `DEPLOYMENT_ID` is unset: the package's tenant id, unless
+ * the deployment was set up under one of the package's former ids, in which case that one.
+ *
+ * The name goes into every thread id the deployment mints (channels/thread-identity.ts) and into the
+ * vendor identity of an account made Shared, so it has to outlive a package rename. Read from the
+ * former package rows the synchronise keeps, in the order the package lists them.
+ */
+export async function deploymentNameOf(
+  database: Database,
+  tenantPackage: Pick<TenantPackage, "tenantId" | "formerTenantIds">,
+): Promise<string> {
+  if (tenantPackage.formerTenantIds.length === 0) return tenantPackage.tenantId;
+  /*
+   * In the catalogue's own `system` frame, as the synchronise writes these rows: asked once at boot,
+   * where there is no frame, and every statement needs one (G01-E). `deployment_packages` is exempt
+   * from row-level security (migration 0062), so the frame decides nothing about which rows answer.
+   */
+  const formerIds = tenantPackage.formerTenantIds;
+  const rows = await runAsTenant(SYSTEM_TENANT, () =>
+    database
+      .select({ tenantId: deploymentPackages.tenantId })
+      .from(deploymentPackages)
+      .where(inArray(deploymentPackages.tenantId, formerIds)),
+  );
+  const present = new Set(rows.map((row) => row.tenantId));
+  return (
+    tenantPackage.formerTenantIds.find((id) => present.has(id)) ??
+    tenantPackage.tenantId
+  );
 }
 
 export function createPackageStatusReader(

@@ -1,4 +1,11 @@
-import { beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  test,
+} from "bun:test";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import type { WakerFlowPlan } from "../../shared/wakerflows";
@@ -1014,4 +1021,8 @@ describe("a WakerFlow target (AUT3)", () => {
     });
     expect(starts).toHaveLength(0);
   });
+});
+
+afterAll(async () => {
+  await database.$client.close();
 });

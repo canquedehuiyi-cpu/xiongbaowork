@@ -55,7 +55,7 @@ async function rowsOf(id: string) {
 
 const asAdmin = (id: string): MiddlewareHandler<{ Variables: AppVariables }> =>
   async function actor(context, next) {
-    context.set("actor", { id, role: "admin" });
+    context.set("actor", { id, email: `${id}@example.test`, role: "admin" });
     await next();
   };
 

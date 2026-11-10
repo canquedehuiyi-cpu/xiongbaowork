@@ -1,7 +1,24 @@
+import { IconChevronRight, IconNotes } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { PageSection } from "@/components/layout/page-shell";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemMedia,
+  ItemTitle,
+} from "@/components/ui/item";
 import { Textarea } from "@/components/ui/textarea";
 import { saveInstructionsMutationOptions } from "@/lib/settings/mutations";
 import {
@@ -19,7 +36,67 @@ import { queryClient } from "@/query-client";
  * is for, this says how the person wants things done. Without that sentence the obvious mistake is
  * to write a job description here and get it applied to every coworker at once.
  */
+const DESCRIPTION =
+  "对所有频道里的所有员工都生效。员工的角色说明写它做什么；这里写你希望事情怎么做，比如写作风格，或者怎么介绍你的公司。";
+
+/**
+ * The standing instructions as a row on General: what they say, cut to two lines, and a dialog to write them. A free
+ * text is a summary and a dialog on these screens, so a long box does not take over the page.
+ */
+export function StandingInstructionsRow() {
+  const stored = useQuery(instructionsQueryOptions());
+  const [open, setOpen] = useState(false);
+  const written = stored.data?.trim();
+  return (
+    <>
+      <Item
+        render={<button onClick={() => setOpen(true)} type="button" />}
+        size="sm"
+      >
+        <ItemMedia variant="icon">
+          <IconNotes />
+        </ItemMedia>
+        <ItemContent>
+          <ItemTitle>长期指令</ItemTitle>
+          <ItemDescription>
+            {stored.error
+              ? "长期指令没能加载。"
+              : written || "还没有。告诉所有员工你希望事情怎么做。"}
+          </ItemDescription>
+        </ItemContent>
+        <ItemActions>
+          <IconChevronRight className="size-4 text-muted-foreground" />
+        </ItemActions>
+      </Item>
+      <Dialog onOpenChange={setOpen} open={open}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>长期指令</DialogTitle>
+            <DialogDescription>{DESCRIPTION}</DialogDescription>
+          </DialogHeader>
+          <DialogBody className="mt-4">
+            <StandingInstructionsEditor />
+          </DialogBody>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+/**
+ * The fork's settings page draws the instructions as a section of their own rather than as upstream's
+ * row and dialog; both are kept so the page can use either.
+ */
 export function StandingInstructions() {
+  return (
+    <PageSection description={DESCRIPTION} title="长期指令">
+      <StandingInstructionsEditor />
+    </PageSection>
+  );
+}
+
+/** The box itself, with its count and Save: in the row's dialog. */
+function StandingInstructionsEditor() {
   const stored = useQuery(instructionsQueryOptions());
   const save = useMutation(saveInstructionsMutationOptions(queryClient));
 
@@ -56,16 +133,13 @@ export function StandingInstructions() {
   };
 
   return (
-    <PageSection
-      description="对所有频道里的所有员工都生效。员工的角色说明写它做什么；这里写你希望事情怎么做，比如写作风格，或者怎么介绍你的公司。"
-      title="长期指令"
-    >
+    <>
       {stored.isPending ? null : stored.error ? (
-        <p className="mt-4 text-destructive text-sm" role="alert">
+        <p className="text-destructive text-sm" role="alert">
           {stored.error.message}
         </p>
       ) : (
-        <div className="mt-4 flex flex-col gap-2">
+        <div className="flex flex-col gap-2">
           <Textarea
             aria-label="长期指令"
             className="min-h-40"
@@ -110,6 +184,6 @@ export function StandingInstructions() {
           </div>
         </div>
       )}
-    </PageSection>
+    </>
   );
 }

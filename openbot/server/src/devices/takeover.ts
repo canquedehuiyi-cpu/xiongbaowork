@@ -210,6 +210,9 @@ export function createDeviceTakeovers(
       // A device answers between frames: there is no in-flight action to drain before a person drives.
       transitioning: false,
       resumeSnapshotRequired: false,
+      // A device's browser is the person's own and is never stopped from here, so nothing a person had
+      // open is left for them to check before the Bot acts.
+      recoveryRequired: false,
       // Which of the tenant's own machines, so the surface can say so. Never another tenant's: the
       // gateway only asks for the device the Bot's owner was resolved to.
       device: { deviceId: target.deviceId },

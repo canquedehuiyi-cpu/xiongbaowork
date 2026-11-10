@@ -1,4 +1,10 @@
-import { IconLock, IconShieldCheck, IconUser } from "@tabler/icons-react";
+import {
+  IconLock,
+  IconSearch,
+  IconShieldCheck,
+  IconUser,
+  IconUsers,
+} from "@tabler/icons-react";
 import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
@@ -127,10 +133,11 @@ function PeoplePage() {
             读不到成员列表。
           </p>
         ) : rows.length === 0 ? (
-          <PageEmpty>
-            {query
-              ? `没有人匹配「${query}」。`
-              : "还没有人登录过。有人登录后会出现在这里。"}
+          <PageEmpty
+            icon={query ? IconSearch : IconUsers}
+            title={query ? "没有匹配的人" : "还没有人登录过"}
+          >
+            {query ? `没有人匹配「${query}」。` : "有人登录后会出现在这里。"}
           </PageEmpty>
         ) : (
           <PageRows>

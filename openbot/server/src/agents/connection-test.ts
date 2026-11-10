@@ -46,6 +46,20 @@ async function readOpening(body: ReadableStream<Uint8Array>): Promise<string> {
       if (done) break;
       bytes += value.byteLength;
       text += decoder.decode(value, { stream: true });
+      /*
+       * ONE RECOGNISED EVENT IS THE WHOLE QUESTION, so stop on it.
+       *
+       * The cap and the end of the stream were the only two ways out, and an agentic harness
+       * supplies neither: it opens with `RUN_STARTED` — ninety bytes, nowhere near the cap — and
+       * then goes away to call a model and run tools, holding the stream open for as long as that
+       * takes. The read therefore waited out the whole run and was cut off by the request timeout,
+       * which surfaced as "The agent started answering and the connection broke" about an agent
+       * that had answered correctly in its first event. Measured against `agent-antigravity`.
+       *
+       * Events rather than bytes, because bytes prove nothing: a stream of SSE comments or
+       * heartbeats would satisfy a "something arrived" test while being no evidence of an agent.
+       */
+      if (eventTypesFrom(text).length > 0) break;
     }
   } finally {
     // The agent is very likely still writing. Nothing is going to read the rest, and leaving it open
@@ -126,6 +140,10 @@ export async function testAgentConnection(
     headers?: Record<string, string>;
     allowPrivateHosts?: boolean;
     allowedHosts?: ReadonlySet<string>;
+    /** The deployment's own agent addresses, reachable at exactly those URLs; see checkAgentEndpoint. */
+    managedEndpoints?: readonly (string | URL)[];
+    /** Where a loopback address is dialled from a server in a container; see onThisMachine. */
+    thisMachineHost?: string;
     fetchImpl?: typeof fetch;
     timeoutMs?: number;
   } = {},
@@ -135,6 +153,9 @@ export async function testAgentConnection(
   const verdict = checkAgentEndpoint(rawEndpoint, {
     allowPrivateHosts: options.allowPrivateHosts,
     ...(options.allowedHosts ? { allowedHosts: options.allowedHosts } : {}),
+    ...(options.managedEndpoints
+      ? { managedEndpoints: options.managedEndpoints }
+      : {}),
   });
   if (!verdict.allowed) return { ok: false, reason: verdict.reason };
 
@@ -142,8 +163,14 @@ export async function testAgentConnection(
   // Checking only what the person typed leaves the redirect as the way around it.
   const doFetch = createAgentFetch({
     ...(options.allowedHosts ? { allowedHosts: options.allowedHosts } : {}),
+    ...(options.managedEndpoints
+      ? { managedEndpoints: options.managedEndpoints }
+      : {}),
     ...(options.allowPrivateHosts !== undefined
       ? { allowPrivateHosts: options.allowPrivateHosts }
+      : {}),
+    ...(options.thisMachineHost
+      ? { thisMachineHost: options.thisMachineHost }
       : {}),
     ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
   });

@@ -1,6 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
-import { type ApprovalGate, currentApprovalContext } from "../approvals/types";
+import { ALREADY_WAITING, DECLINED_BY_PERSON } from "../approvals/service";
+import {
+  ApprovalAlreadyAnsweredError,
+  type ApprovalGate,
+  ApprovalRefusedError,
+  currentApprovalContext,
+} from "../approvals/types";
 import {
   type AuditInitiator,
   type AuditStore,
@@ -31,6 +37,7 @@ import {
 import {
   agentProfiles,
   agents,
+  appAccessRequests,
   composioConnections,
   // Aliased: `credentials` is already the injected vault interface in this module, and the table and
   // the interface are two different things to reach for.
@@ -41,13 +48,21 @@ import {
   pluginGrants,
   skills,
   skillTools,
+  userRoles,
+  users,
 } from "../db/schema";
+import type {
+  AppAccessRequestKind,
+  AppAccessRequestStatus,
+} from "../db/schema/app-access-requests";
 import {
   type InstallListingKind,
   pluginInstallListings,
 } from "../db/schema/plugin-install-listings";
 import { SYSTEM_TENANT, TEAM_TENANT } from "../db/schema/tenant";
+import { appsPage } from "../edition";
 import type { OutboundLookup, OutboundPolicy } from "../net/outbound-guard";
+import { isProactiveInitiator } from "../proactive/initiator";
 import type { CheckPrivateShare } from "../proactive/private-share";
 import {
   capabilityFor,
@@ -73,8 +88,12 @@ import {
 } from "./broker";
 import {
   type CatalogueEntry,
+  type CredentialPlacement,
   catalogueEntry,
+  checkInRead,
   classifyTool,
+  credentialFormatRefusal,
+  credentialPlacement,
   customUrlRefusal,
   resolveServerUrl,
   serverCredentialKind,
@@ -86,6 +105,18 @@ import {
   VERSION_ARG,
 } from "./composio";
 import { inspectToolArguments } from "./content-governance";
+import {
+  adminConnectionLapsedSentence,
+  adminConnectOnly,
+  adminConnectOnlySentence,
+  DEPLOYMENT_CLIENT_PROVIDER,
+  DEPLOYMENT_CLIENT_SCHEME,
+  type DeploymentClient,
+  deploymentClientFrom,
+  deploymentClientKey,
+  deploymentClientSlug,
+  toolkitOfDeploymentClientKey,
+} from "./deployment-clients";
 import { type ListedTool, McpServerError } from "./mcp";
 import { registerDynamicClient } from "./oauth";
 import { shareTargetOf } from "./share-target";
@@ -143,6 +174,12 @@ export type ToolRecord = {
    * of a claim rather than a claim of safety.
    */
   destructive: boolean;
+  /**
+   * 无人值守的 check-in 能不能把它当读来调用：厂商记录为读，或目录 `readTools` 审查过，见
+   * {@link checkInRead}。`effect` 是聊天的判定，可能是 {@link classifyTool} 推断出来的读，所以
+   * check-in 的读集合（`proactive/restriction.ts`）看的是这个字段，不是 `effect`。
+   */
+  checkInRead: boolean;
   grantedTo: string[];
 };
 
@@ -202,6 +239,15 @@ export type ServerRecord = {
    * Null is not an older brokered row. It is a row that is not brokered at all.
    */
   authScheme: string | null;
+  /**
+   * Whether only an administrator may connect this app (upstream #950's `sharedOnly`, reshaped for a
+   * fork with no shared accounts). True for an app connected on this deployment's own OAuth client,
+   * a server-to-server grant: what a person would type is a store subdomain and the credential is
+   * the deployment's, so a person's account would be the organization's access under their name.
+   * Read off the recorded scheme by `adminConnectOnly`, so a screen decides what to offer from this
+   * and never from the app's name. The connect route and the store refuse whatever a screen draws.
+   */
+  adminConnectOnly: boolean;
   tools: ToolRecord[];
   /**
    * Grants on tools this server no longer advertises.
@@ -285,6 +331,8 @@ export type GrantedPlugins = {
     toolName: string;
     description: string;
     inputSchema: Record<string, unknown>;
+    /** 应用把它标为破坏性（`mcp_tools.destructive`）；提供给模型时描述里会写明。 */
+    destructive: boolean;
   }[];
   skills: {
     slug: string;
@@ -466,11 +514,41 @@ export class CatalogueEntryUnknownError extends Error {
   }
 }
 
+/**
+ * The deployment's stored OAuth client could not be read: the vault read or the decryption failed.
+ *
+ * Distinct from "there is none" (missing, revoked, or not a client), because only that may be
+ * answered by registering a new one. The client is one row every replica shares, so a replica that
+ * cannot decrypt it and registers around it replaces the client for every replica that still can.
+ *
+ * Carries nothing of the fault it stands for, never its message or cause: a vault or parser message
+ * can quote the stored client.
+ */
+export class OAuthClientReadError extends Error {
+  constructor() {
+    super("The stored OAuth client could not be read.");
+    this.name = "OAuthClientReadError";
+  }
+}
+
 /** A URL an administrator offered that this deployment will not point itself at. */
 export class CustomServerRefusedError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "CustomServerRefusedError";
+  }
+}
+
+/**
+ * {@link CustomServerRefusedError} for the one refusal that is about WHO asked rather than what was
+ * sent: the caller is not an administrator holding the capability. Its own class so a route can
+ * answer it 403 by asking the class, not by reading a message (review M-2). Still a
+ * {@link CustomServerRefusedError}, so every reader of that class reads it as before.
+ */
+export class ServerWriteRefusedError extends CustomServerRefusedError {
+  constructor(message: string) {
+    super(message);
+    this.name = "ServerWriteRefusedError";
   }
 }
 
@@ -618,6 +696,21 @@ function storableSchema(
 }
 
 /**
+ * 当前这一版对 vendor 清单的读法，每次存下应用工具的刷新都写到这台应用的行上
+ * （`mcpServers.listingRevision`）。同一份清单记下的东西变了就加一，下次启动时，配置了 Composio
+ * 的部署会把每个 broker 应用重新列一次。
+ *
+ * 1：Composio 什么标签都没给的动作记为 `unclassified`，不再是普通写操作（迁移 0146）。
+ */
+export const LISTING_REVISION = 1;
+
+/**
+ * 升级后重新列 broker 应用时，退避到最长一档之后，同一个应用、同一个版本最多再连续失败几次就放弃
+ * （本进程内）。
+ */
+export const RELIST_ATTEMPTS = 3;
+
+/**
  * What a vendor listed, as rows this database will actually take.
  *
  * CRITERION ONE. No two rows carry the same name, whatever the vendor listed.
@@ -649,7 +742,7 @@ function storableSchema(
  * FIRST OCCURRENCE WINS, and the order is the vendor's own. Anything else needs a rule for which
  * of two identical names is the real one, and there is no such rule.
  */
-function storableTools(
+export function storableTools(
   serverId: string,
   listed: ListedTool[],
   /**
@@ -657,6 +750,11 @@ function storableTools(
    * other than its server, so a `team` server's tools are `team` and a catalogue server's `system`).
    */
   serverTenant?: string,
+  /**
+   * 这台服务器的 catalogue 条目，没有就是 null（管理员按 URL 添加的服务器、Composio 应用）。
+   * 条目的名单覆盖的工具由名单决定读写，vendor 的沉默不再记为 unclassified。
+   */
+  entry: CatalogueEntry | null = null,
 ) {
   const stamp = serverTenant ? { tenantId: serverTenant } : {};
   const byName = new Map<
@@ -669,6 +767,7 @@ function storableTools(
       inputSchema: Record<string, unknown>;
       effect: "read" | "write" | null;
       destructive: boolean;
+      unclassified: boolean;
       version: string | null;
     }
   >();
@@ -676,6 +775,15 @@ function storableTools(
   for (const tool of listed) {
     const name = tool.name.replaceAll(NUL, "");
     if (byName.has(name)) continue;
+    /*
+     * vendor 只字未提的工具，只在 catalogue 名单没有覆盖它时记为 unclassified。MCP 的沉默不记
+     * effect，条目在就由名单整体决定（名单外按读），所以条目在就算覆盖；broker 的沉默记成了
+     * write，名单只覆盖它点名的写操作。没有覆盖时，它是不算 destructive 的写操作。
+     */
+    const covered =
+      entry !== null &&
+      (tool.effect === undefined || entry.writeTools.includes(name));
+    const unclassified = tool.unclassified === true && !covered;
     byName.set(name, {
       ...stamp,
       serverId,
@@ -704,8 +812,10 @@ function storableTools(
        * nothing, and `classifyTool` reads null as silence rather than as a value, which is what
        * leaves Notion and Drive classified by their reviewed write list exactly as they were.
        */
-      effect: tool.effect ?? null,
+      effect: tool.effect ?? (unclassified ? "write" : null),
       destructive: tool.destructive ?? false,
+      // vendor 只字未提、又没有名单覆盖；见 `mcpTools.unclassified`。
+      unclassified,
       version: tool.version?.replaceAll(NUL, "") ?? null,
     });
   }
@@ -746,6 +856,10 @@ export function deploymentFaultSentence(error: Error): string {
  * person to read: rewording the sentence — translating it, dropping the parenthesis — would have
  * turned self-registration off with every test still green. A field cannot be reworded by accident.
  */
+/** 成员连接时遇到 vendor 逐出 OAuth client（`invalid_client`），写进 `lastError` 的那句说明。 */
+export const EVICTED_CLIENT_NOTE =
+  "应用的 OAuth 客户端已失效，需要管理员在应用页面点击「刷新工具」或重新连接。";
+
 export class TokenRefusedError extends McpServerError {
   constructor(
     message: string,
@@ -829,6 +943,33 @@ export function unlistedAdvertisedTools(
 
 const iso = (value: Date | string | null): string | null =>
   value === null ? null : value instanceof Date ? value.toISOString() : value;
+
+/** 一条申请访问（迁移 0153），连同收件箱和卡片要显示的名字。 */
+export type AppAccessRequestRecord = {
+  id: string;
+  /** 申请人的租户：管理员处理时就在这个帧里改它。 */
+  tenantId: string;
+  /** `mcp_servers.id`，应用行本身。 */
+  serverId: string;
+  /** 应用的标识：目录键，没有目录键时是行自己的 id。上架和授予的 ref 都按它写。 */
+  appKey: string;
+  appTitle: string;
+  botId: string;
+  botName: string | null;
+  requesterUserId: string;
+  requesterName: string | null;
+  requesterEmail: string | null;
+  kind: AppAccessRequestKind;
+  status: AppAccessRequestStatus;
+  note: string | null;
+  decidedBy: string | null;
+  decidedAt: string | null;
+  createdAt: string;
+};
+
+/** 路由和工具传进来的申请 id 是任意文字；不是 uuid 的在查询之前就答"没有"，不让 Postgres 报类型错误。 */
+const isUuid = (value: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 
 /**
  * The two things an actor field says when the actor is not a person, and they are not the same
@@ -968,7 +1109,11 @@ export async function exchangeRefreshTokenOverHttp(input: {
 
   const response = await fetch(input.tokenUrl, {
     method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      // GitHub answers form-encoded unless asked for JSON — see `redeemAuthorizationCode`.
+      accept: "application/json",
+    },
     body: params,
     /*
      * A redirect is a refusal, not a detour to be followed.
@@ -1125,8 +1270,18 @@ const CLIENT_REREGISTRATION_BACKOFF_MS = 5 * 60_000;
  *
  * Anchored at the end, because these are suffixes of a prefixed action name — `STRIPE_GET_ME`,
  * `LINEAR_GET_ME` — and an unanchored match would take `SLACK_PROFILE_SET` for an identity read.
+ *
+ * 商店类应用的身份就是商店本身（`SHOPIFY_GET_SHOP_DETAILS`）：探测它不需要额外权限范围。否则按字母
+ * 顺序会挑到 `SHOPIFY_COUNT_BLOGS`，它要 `read_content`，只授了订单和商品范围的商店会被误判为密钥无效。
  */
-const IDENTITY_ACTION = /(_GET_ME|_PROFILE|_CURRENT_USER|_USER_INFO|_WHOAMI)$/;
+export const IDENTITY_ACTION =
+  /(_GET_ME|_PROFILE|_CURRENT_USER|_USER_INFO|_WHOAMI|_GET_SHOP_DETAILS)$/;
+
+/**
+ * The server half of every ref OpenBot's own memory tools carry (`memory/recall_personal_memory`,
+ * see `memory/tools.ts`). No server may be added under it: see `addCustomServer`.
+ */
+export const MEMORY_TOOLS_SERVER = "memory";
 
 /** What a vendor's token endpoint gave back for a refresh token. */
 export type AccessToken = {
@@ -1140,6 +1295,21 @@ export type AccessToken = {
    * persisted before the access token beside it is used for anything.
    */
   refreshToken?: string;
+};
+
+/**
+ * `refreshTools` 的内部选项，只有 store 自己传，路由不传。
+ *
+ * - `exactRow`：`serverId` 就是准确的行 id，不经过「id 或 catalogue_key、team 行优先」的查找
+ *   （批量刷新用，见 `requireServerRow`）。
+ * - `reRegister: false`：遇到 vendor 逐出 client 也不重新注册（见 `connectionTokenFor`）。
+ * - `writeAs`：列完清单之后的读写（工具行、服务器行、审计）放在哪个帧里跑；不给就是调用方的帧。
+ *   给了它，写权限检查也在那个帧里做，列清单仍在调用方的帧里。
+ */
+type RefreshOptions = {
+  exactRow?: boolean;
+  reRegister?: boolean;
+  writeAs?: <T>(work: () => Promise<T>) => Promise<T>;
 };
 
 export type PluginStoreOptions = {
@@ -1182,6 +1352,7 @@ export type PluginStoreOptions = {
       actorId?: string;
       botId?: string;
       outbound?: OutboundPolicy;
+      placement?: CredentialPlacement;
     },
     toolName: string,
     args: Record<string, unknown>,
@@ -1313,6 +1484,14 @@ function ownRowFirst() {
  */
 const SERVER_WRITE_REFUSAL =
   "Changing this deployment's apps takes an administrator, from the administrator's own screens.";
+
+/**
+ * Whether a refusal is {@link SERVER_WRITE_REFUSAL}: the caller is not an administrator holding
+ * the capability. A route answers it 403, not as a mistake in what was sent (review M-2).
+ */
+export function isServerWriteRefusal(error: unknown): boolean {
+  return error instanceof ServerWriteRefusedError;
+}
 
 /**
  * The tenants a skill slug can name for the caller: their own, then the platform's (audit #9).
@@ -1642,7 +1821,7 @@ export function createPluginStore(options: PluginStoreOptions) {
 
   function requireServerWriter(): void {
     if (!writesTeamServers()) {
-      throw new CustomServerRefusedError(SERVER_WRITE_REFUSAL);
+      throw new ServerWriteRefusedError(SERVER_WRITE_REFUSAL);
     }
   }
 
@@ -1755,6 +1934,17 @@ export function createPluginStore(options: PluginStoreOptions) {
    * `deployment-token` is decrypted out of the vault per call, and a `brokered` key is never held
    * here at all.
    */
+  /** Whether this person holds the administrator role right now, as `user_roles` says. */
+  async function holdsAdminRole(userId: string): Promise<boolean> {
+    if (!userId) return false;
+    const [held] = await database
+      .select({ role: userRoles.role })
+      .from(userRoles)
+      .where(and(eq(userRoles.userId, userId), eq(userRoles.role, "admin")))
+      .limit(1);
+    return held !== undefined;
+  }
+
   async function connectionTokenFor(
     row: {
       id: string;
@@ -1772,7 +1962,13 @@ export function createPluginStore(options: PluginStoreOptions) {
     entry: CatalogueEntry | null,
     actorId: string,
     access: ServerAccess,
-  ): Promise<{ token?: string }> {
+    /**
+     * `reRegister: false`：vendor 逐出 client（`invalid_client`）时只拒绝，不重新注册、不替换。
+     * 连接回调列工具的路径（`discoverToolsOnConnect`）一律这样：替换的是全部署共享的 client，
+     * 不能由一个成员的连接触发（G01-E P10）。
+     */
+    options: { reRegister?: boolean } = {},
+  ): Promise<{ token?: string; placement?: CredentialPlacement }> {
     /*
      * A brokered app, where the deployment holds one key and Composio keeps the accounts apart.
      *
@@ -1858,7 +2054,8 @@ export function createPluginStore(options: PluginStoreOptions) {
        * per connector on any deployment, and the call it guards is a network round trip to the
        * vendor.
        */
-      if ((await brokeredAppKind(access.toolkit)) === "none") return {};
+      const appScheme = await brokeredAppScheme(access.toolkit);
+      if (schemeKind(appScheme) === "none") return {};
 
       /**
        * WHAT THAT GATE ANSWERS FOR EACH KIND OF APP, WRITTEN DOWN BECAUSE THE LINE ABOVE DOES NOT.
@@ -1907,10 +2104,69 @@ export function createPluginStore(options: PluginStoreOptions) {
         );
       }
 
+      /*
+       * AN ACCOUNT ON THE DEPLOYMENT'S OWN CLIENT IS ONLY EVER AN ADMINISTRATOR'S, AND THAT IS ASKED
+       * ON EVERY CALL, NOT ONLY WHEN IT WAS MADE (upstream #950; review I-1).
+       *
+       * A server-to-server app connects with the client this deployment registered, so the account
+       * is the organization's access filed under one person. The connect route and
+       * `connectBrokeredWithFields` let only an administrator make one; but an administrator who is
+       * later made an ordinary member keeps the row, and every call through it — their own Bots',
+       * and a teammate's through their Team Bot, which reaches the owner's account
+       * (`credentialActorFor`) — would go on spending the organization's access in their name. So
+       * the person whose account the call goes out on must still hold the administrator role now.
+       * Read from `user_roles` (no row security: role facts belong to no tenant), the same table
+       * the admin capability is granted from.
+       */
+      if (adminConnectOnly(appScheme) && !(await holdsAdminRole(actorId))) {
+        throw new PluginRefusedError(
+          adminConnectionLapsedSentence(row.title),
+          null,
+        );
+      }
+
       return {};
     }
 
     if (access.credential !== "person-oauth") {
+      /*
+       * A PLACED DEPLOYMENT CREDENTIAL, which is a bearer token in every respect but where it goes.
+       *
+       * CRITERION. A placed entry with no credential is refused here, in words an administrator can
+       * act on, and never dialled; one with a credential travels WITH its placement, so the only
+       * module that builds a request is the one that puts the key into it.
+       *
+       * REASON. The bearer branch below answers `undefined` for a server with no credential and
+       * dials anyway, which is right for a server that may or may not need one. A placed vendor
+       * always does — its key is the whole of how the deployment is billed and identified — and some
+       * answer an anonymous handshake (Amap and Tencent both did, on 2026-11-09), so a dial without
+       * one would look connected while running on nobody's quota. And a placed key handed to a
+       * transport that does not read the placement would go out as `Authorization: Bearer`, which
+       * is why any transport but MCP is refused rather than trusted to ignore it.
+       */
+      const placement = entry ? credentialPlacement(entry) : null;
+      if (placement && entry) {
+        if (access.transport !== "mcp") {
+          throw new PluginInvariantError(
+            `${row.id} places its credential on the request, and only the MCP transport reads a placement.`,
+          );
+        }
+        if (!row.credentialId) {
+          throw new PluginRefusedError(
+            `${entry.title}还没有录入「${placement.label}」，所以没有拨号。请管理员在「插件 › 凭据」中录入后再试。`,
+            null,
+          );
+        }
+        const { secret } = await serverSecretFor(
+          {
+            id: row.id,
+            tenantId: row.tenantId,
+            credentialId: row.credentialId,
+          },
+          `${entry.title}的「${placement.label}」已失效或被撤销。请管理员在「插件 › 凭据」中重新录入。`,
+        );
+        return { token: secret, placement };
+      }
       const token = row.credentialId
         ? (
             await serverSecretFor(
@@ -2085,7 +2341,7 @@ export function createPluginStore(options: PluginStoreOptions) {
         parsed = JSON.parse(decrypted);
       } catch {
         /*
-         * Unreadable is the same as none, exactly as it is for {@link heldOAuthClient} and
+         * Unparseable is the same as none, exactly as it is for {@link heldOAuthClient} and
          * {@link storedOAuthClient}: there is nothing here to present to a vendor. Those two answer
          * null because their callers are deciding whether a consent flow can start; this one is
          * already mid-call, and its every caller would have to turn a null into this same refusal
@@ -2259,6 +2515,23 @@ export function createPluginStore(options: PluginStoreOptions) {
          * Rethrows anything that is not the vendor disowning our client, which is every ordinary
          * failure: a withdrawn grant, a vendor being down, a disconnect mid-queue.
          */
+        if (options.reRegister === false) {
+          /*
+           * vendor 把 client 逐出了，而这条路径不能替换它。原话后面接一句面向管理员的说明，
+           * 落在应用的 `lastError` 里：只有管理员在自己的请求里刷新或重新连接，才会重新注册。
+           * 只截 vendor 原话，说明完整保留（`lastError` 最多 400 字）。
+           */
+          if (
+            error instanceof TokenRefusedError &&
+            error.code === INVALID_CLIENT
+          ) {
+            throw new TokenRefusedError(
+              `${reasonWithoutStatement(error).slice(0, 400 - EVICTED_CLIENT_NOTE.length - 1)} ${EVICTED_CLIENT_NOTE}`,
+              error.code,
+            );
+          }
+          throw error;
+        }
         return await refuseAndReplaceEvictedClient({
           error,
           clientRegisteredAt: stored.registeredAt,
@@ -2490,6 +2763,50 @@ export function createPluginStore(options: PluginStoreOptions) {
   });
 
   /**
+   * A stored-client read, with every fault it raises turned into {@link OAuthClientReadError}.
+   *
+   * Only the READ is wrapped — the server row, the vault row, the decryption — never a vendor
+   * registration or a vault write after it, so a registration that fails is not reported as a client
+   * nobody could read. Missing, revoked and unparseable answer null inside `work` and pass through.
+   *
+   * The fault is logged by its name alone (a wrong key is `OperationError`, a vault outage whatever
+   * the driver throws), because its message can quote the stored value. The error thrown in its place
+   * carries nothing of it, so this line is all an operator gets.
+   */
+  async function readClient(
+    serverId: string,
+    work: () => Promise<OAuthClient | null>,
+  ): Promise<OAuthClient | null> {
+    try {
+      return await work();
+    } catch (error) {
+      console.error(
+        JSON.stringify({
+          type: "mcp-oauth-client-read-failed",
+          server: serverId,
+          error: error instanceof Error ? error.name : "UnknownError",
+        }),
+      );
+      throw new OAuthClientReadError();
+    }
+  }
+
+  /**
+   * A decrypted client, or null when it is not one.
+   *
+   * Never rethrown: `JSON.parse` reports failure by quoting the input, and the input is the decrypted
+   * client. A value that parsed and is not a client is the same none — see {@link isUsableClient}.
+   */
+  function clientFromStoredJson(plaintext: string): OAuthClient | null {
+    try {
+      const parsed: unknown = JSON.parse(plaintext);
+      return isUsableClient(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * One writer at a time for one server's OAuth client, across the whole deployment.
    *
    * Everything that stores a client reads "is there a live one" and then writes accordingly, and the
@@ -2534,45 +2851,97 @@ export function createPluginStore(options: PluginStoreOptions) {
     transaction: Transaction,
     serverId: string,
   ): Promise<OAuthClient | null> {
-    const [server] = await transaction
-      .select({
-        id: mcpServers.id,
-        tenantId: mcpServers.tenantId,
-        credentialId: mcpServers.credentialId,
-      })
-      .from(mcpServers)
-      .where(atServerAddress(serverId))
-      .orderBy(ownRowFirst())
-      .limit(1);
-    if (!server?.credentialId) return null;
+    return readClient(serverId, async () => {
+      const [server] = await transaction
+        .select({
+          id: mcpServers.id,
+          tenantId: mcpServers.tenantId,
+          credentialId: mcpServers.credentialId,
+        })
+        .from(mcpServers)
+        .where(atServerAddress(serverId))
+        .orderBy(ownRowFirst())
+        .limit(1);
+      if (!server?.credentialId) return null;
 
-    // A team server's client, in a person's frame, through the broker (G01-E P10).
-    const [held] = throughBroker(server)
-      ? [await brokeredSecret(transaction, server.id)]
-      : await transaction
-          .select({
-            encryptedValue: credentialRows.encryptedValue,
-            revokedAt: credentialRows.revokedAt,
-            id: credentialRows.id,
-            tenantId: credentialRows.tenantId,
-            kind: credentialRows.kind,
-          })
-          .from(credentialRows)
-          .where(eq(credentialRows.id, server.credentialId))
-          .limit(1);
-    if (!held || held.revokedAt) return null;
+      // A team server's client, in a person's frame, through the broker (G01-E P10).
+      const [held] = throughBroker(server)
+        ? [await brokeredSecret(transaction, server.id)]
+        : await transaction
+            .select({
+              encryptedValue: credentialRows.encryptedValue,
+              revokedAt: credentialRows.revokedAt,
+              id: credentialRows.id,
+              tenantId: credentialRows.tenantId,
+              kind: credentialRows.kind,
+            })
+            .from(credentialRows)
+            .where(eq(credentialRows.id, server.credentialId))
+            .limit(1);
+      if (!held || held.revokedAt) return null;
 
+      /*
+       * A decryption fault does not mean the vendor forgot this client, and it is not "none". The
+       * caller answers null by registering, under this lock, over the one row every replica shares:
+       * a replica holding the wrong key would replace the client for every replica that can still
+       * read it. So it throws, and only an unparseable value is none.
+       */
+      return clientFromStoredJson(await openCredential(encryptionKey, held));
+    });
+  }
+
+  /**
+   * The vault key one brokered app's deployment client is stored under, sealed to `team` (upstream
+   * #950, `deployment-clients.ts`). `team` because it is the deployment's and not anybody's: every
+   * administrator holding the capability reaches it, and no member's frame can select it.
+   */
+  const deploymentClientVaultKey = (toolkit: string) => ({
+    ...deploymentClientKey(toolkit),
+    target: TEAM_TENANT as typeof TEAM_TENANT,
+  });
+
+  /**
+   * This deployment's own OAuth client for one brokered app, opened out of the vault, or null when
+   * none is stored. Read in the caller's frame, so only an administrator holding the capability
+   * finds one; a fault opening it is the same {@link OAuthClientReadError} a catalogue client's is,
+   * and carries nothing of the value.
+   */
+  async function readDeploymentClient(
+    toolkit: string,
+  ): Promise<DeploymentClient | null> {
+    const live = await credentials.findLiveByKey(
+      deploymentClientVaultKey(toolkit),
+    );
+    if (!live) return null;
     try {
-      const parsed: unknown = JSON.parse(
-        await openCredential(encryptionKey, held),
+      const [held] = await database
+        .select({
+          encryptedValue: credentialRows.encryptedValue,
+          revokedAt: credentialRows.revokedAt,
+          id: credentialRows.id,
+          tenantId: credentialRows.tenantId,
+          kind: credentialRows.kind,
+        })
+        .from(credentialRows)
+        .where(eq(credentialRows.id, live.id))
+        .limit(1);
+      if (!held || held.revokedAt) return null;
+      const plaintext = await openCredential(encryptionKey, held);
+      try {
+        return deploymentClientFrom(JSON.parse(plaintext));
+      } catch {
+        // Never rethrown: `JSON.parse` reports failure by quoting its input, which is the client.
+        return null;
+      }
+    } catch (error) {
+      console.error(
+        JSON.stringify({
+          type: "composio-deployment-client-read-failed",
+          toolkit,
+          error: error instanceof Error ? error.name : "UnknownError",
+        }),
       );
-      // A value that parsed and is not a client is unreadable in the same way and for the same
-      // caller — see {@link isUsableClient}. Null, because that is what this reader's caller acts
-      // on: it goes and registers one, which is the answer to holding none.
-      return isUsableClient(parsed) ? parsed : null;
-    } catch {
-      // Unreadable is the same as none: there is nothing to send anybody to consent with.
-      return null;
+      throw new OAuthClientReadError();
     }
   }
 
@@ -2749,19 +3118,19 @@ export function createPluginStore(options: PluginStoreOptions) {
   async function storedOAuthClient(
     serverId: string,
   ): Promise<OAuthClient | null> {
-    const [row] = await database
-      .select({
-        id: mcpServers.id,
-        tenantId: mcpServers.tenantId,
-        credentialId: mcpServers.credentialId,
-      })
-      .from(mcpServers)
-      .where(atServerAddress(serverId))
-      .orderBy(ownRowFirst())
-      .limit(1);
-    if (!row?.credentialId) return null;
+    return readClient(serverId, async () => {
+      const [row] = await database
+        .select({
+          id: mcpServers.id,
+          tenantId: mcpServers.tenantId,
+          credentialId: mcpServers.credentialId,
+        })
+        .from(mcpServers)
+        .where(atServerAddress(serverId))
+        .orderBy(ownRowFirst())
+        .limit(1);
+      if (!row?.credentialId) return null;
 
-    try {
       // A team server's client, in a person's frame, through the broker (G01-E P10).
       const brokered = throughBroker(row)
         ? await brokeredSecret(database, row.id)
@@ -2769,22 +3138,25 @@ export function createPluginStore(options: PluginStoreOptions) {
       if (brokered !== undefined && (!brokered || brokered.revokedAt)) {
         return null;
       }
-      const parsed: unknown = JSON.parse(
-        brokered
+      let plaintext: string;
+      try {
+        plaintext = brokered
           ? await openCredential(encryptionKey, brokered)
           : await serverCredentialById({
               tenantId: row.tenantId,
               credentialId: row.credentialId,
-            }),
-      );
-      // A client that parsed and is not one is as unusable as the revoked or missing row the catch
-      // below answers for, and is the same none to every caller — see {@link isUsableClient}.
-      return isUsableClient(parsed) ? parsed : null;
-    } catch {
-      // A revoked, missing or unreadable client is the same as none for every caller: there is
-      // nothing to send anybody to consent with, and the answer is to obtain one again.
-      return null;
-    }
+            });
+      } catch (error) {
+        /*
+         * Only a confirmed missing, revoked or not-this-server's credential is none, and permits
+         * obtaining a replacement. A failed read or decryption is a fault: answering null here sends
+         * `ensureOAuthClient` to register over a client the other replicas can still use.
+         */
+        if (error instanceof CredentialUnusableError) return null;
+        throw error;
+      }
+      return clientFromStoredJson(plaintext);
+    });
   }
 
   /**
@@ -2923,7 +3295,27 @@ export function createPluginStore(options: PluginStoreOptions) {
       .orderBy(ownRowFirst())
       .limit(1);
     if (!row) throw new CatalogueEntryUnknownError(serverId);
+    return resolvedRow(row);
+  }
 
+  /**
+   * 按准确的行 id 取一行，不经过 {@link atServerAddress} 的「id 或 catalogue_key、team 行优先」。
+   *
+   * 给跨租户的批量刷新用（`refreshOwnListings`、`relistOutdatedBrokeredApps`）：遍历到哪一行就刷新
+   * 哪一行。经 `requireServer` 重新查找时，legacy `system` 行 `routines` 会解析成 catalogue_key 为
+   * `routines` 的 `team:routines`，于是 system 行永远停在旧清单，team 行每次启动都被重写。
+   */
+  async function requireServerRow(rowId: string) {
+    const [row] = await database
+      .select()
+      .from(mcpServers)
+      .where(eq(mcpServers.id, rowId))
+      .limit(1);
+    if (!row) throw new CatalogueEntryUnknownError(rowId);
+    return resolvedRow(row);
+  }
+
+  function resolvedRow(row: typeof mcpServers.$inferSelect) {
     // Null for a custom server, and every caller handles that by assuming the worst about it.
     const entry = catalogueEntry(row.catalogueKey ?? row.id);
     if (row.provenance === "first-party" && !entry) {
@@ -3048,6 +3440,94 @@ export function createPluginStore(options: PluginStoreOptions) {
     return schemeKind(await brokeredAppScheme(toolkit));
   }
 
+  /**
+   * 本进程里每个 broker 应用在某个 `listing_revision` 上重新列失败了几次，键是 `行 id@版本`。
+   * 只是本进程的重试上限，不是共享状态：别的副本、下一次启动各自从零开始。
+   */
+  const relistFailures = new Map<string, number>();
+
+  /**
+   * 申请访问的行，带上应用名、员工名和申请人，在调用者的帧里读，最新的在前。
+   *
+   * 三个都是左连接：应用、员工、人各自有自己的行安全，看不见时卡片和收件箱退回到 id，而不是让这条申请
+   * 从列表里消失。三个连接都按主键，不会把一条申请连成几行。
+   */
+  async function appAccessRequestRows(
+    where: ReturnType<typeof and>,
+  ): Promise<AppAccessRequestRecord[]> {
+    const rows = await database
+      .select({
+        id: appAccessRequests.id,
+        tenantId: appAccessRequests.tenantId,
+        serverId: appAccessRequests.serverId,
+        catalogueKey: mcpServers.catalogueKey,
+        appTitle: mcpServers.title,
+        botId: appAccessRequests.botId,
+        botName: agents.name,
+        requesterUserId: appAccessRequests.requesterUserId,
+        requesterName: users.name,
+        requesterEmail: users.email,
+        kind: appAccessRequests.kind,
+        status: appAccessRequests.status,
+        note: appAccessRequests.note,
+        decidedBy: appAccessRequests.decidedBy,
+        decidedAt: appAccessRequests.decidedAt,
+        createdAt: appAccessRequests.createdAt,
+      })
+      .from(appAccessRequests)
+      .leftJoin(mcpServers, eq(mcpServers.id, appAccessRequests.serverId))
+      .leftJoin(agents, eq(agents.id, appAccessRequests.botId))
+      .leftJoin(users, eq(users.id, appAccessRequests.requesterUserId))
+      .where(where)
+      .orderBy(
+        sql`${appAccessRequests.createdAt} desc`,
+        asc(appAccessRequests.id),
+      );
+    return rows.map((row) => ({
+      id: row.id,
+      tenantId: row.tenantId,
+      serverId: row.serverId,
+      appKey: row.catalogueKey ?? row.serverId,
+      appTitle: row.appTitle ?? row.serverId,
+      botId: row.botId,
+      botName: row.botName,
+      requesterUserId: row.requesterUserId,
+      requesterName: row.requesterName,
+      requesterEmail: row.requesterEmail,
+      kind: row.kind as AppAccessRequestKind,
+      status: row.status as AppAccessRequestStatus,
+      note: row.note,
+      decidedBy: row.decidedBy,
+      decidedAt: iso(row.decidedAt),
+      createdAt: iso(row.createdAt) ?? "",
+    }));
+  }
+
+  /** 把一条仍是 pending 的申请关掉，只关一次；没关上（不存在、看不见、已处理）答 null。 */
+  async function closeAppAccessRequest(
+    id: string,
+    status: "approved" | "dismissed" | "cancelled",
+    /** 处理人；申请人自己撤回时为 null，`cancelled` 本身就说明了是谁。 */
+    by: string | null,
+    narrower?: ReturnType<typeof eq>,
+  ): Promise<AppAccessRequestRecord | null> {
+    if (!isUuid(id)) return null;
+    const closed = await database
+      .update(appAccessRequests)
+      .set({ status, decidedBy: by, decidedAt: new Date() })
+      .where(
+        and(
+          eq(appAccessRequests.id, id),
+          eq(appAccessRequests.status, "pending"),
+          narrower,
+        ),
+      )
+      .returning({ id: appAccessRequests.id });
+    if (closed.length === 0) return null;
+    const [row] = await appAccessRequestRows(eq(appAccessRequests.id, id));
+    return row ?? null;
+  }
+
   return {
     /**
      * Add a server from the catalogue.
@@ -3079,6 +3559,26 @@ export function createPluginStore(options: PluginStoreOptions) {
        * here now rather than in the review that re-adds one.
        */
       const credentialId = input.credentialId?.trim() || undefined;
+      /*
+       * A PLACED CREDENTIAL IS NEVER ATTACHED BY ID, only stored through `replaceServerToken`.
+       *
+       * CRITERION. Adding a placed entry with a `credentialId` is refused before anything is
+       * written; its key reaches the vault only through the door that checks its shape first.
+       *
+       * REASON. An id names a credential that was sealed elsewhere — by the generic credentials
+       * route, which knows nothing of placements — so a DingTalk address on another host, or a key
+       * with a line in it, would be in the vault and pointed at before anything had looked at it,
+       * and refused only on the first dial, in `last_error`. Decrypting it here to check would be a
+       * second reader of a team secret on a path that never needed one. So the add takes no key at
+       * all, and `replaceServerToken` (which runs `credentialFormatRefusal` before it seals) is how
+       * the first key arrives as well as every later one — the same check, refused at the form.
+       */
+      const placement = credentialPlacement(resolved.entry);
+      if (credentialId && placement) {
+        throw new CustomServerRefusedError(
+          `${resolved.entry.title}的「${placement.label}」不能按凭据 ID 绑定。请先启用插件，再在「插件 › 凭据」里录入，录入时会先校验格式。`,
+        );
+      }
       if (credentialId) {
         await requireCredentialOfKind(
           resolved.entry.title,
@@ -3265,6 +3765,18 @@ export function createPluginStore(options: PluginStoreOptions) {
       if (input.id === "composio") {
         throw new CustomServerRefusedError(
           "composio is the name of this deployment's own Composio screen, so a server added there could never be opened. Choose another.",
+        );
+      }
+
+      /*
+       * Nor the name OpenBot's own memory tools are spelled under. Their refs are `memory/<tool>`
+       * (`memory/tools.ts`), so a server at `memory` would list `memory/recall_personal_memory` beside
+       * them: two tools one name, and the one an admin typed could be taken for the person's own
+       * memory by anything that reads a ref.
+       */
+      if (input.id === MEMORY_TOOLS_SERVER) {
+        throw new CustomServerRefusedError(
+          `${input.id} is the name of OpenBot's own memory tools. Choose another.`,
         );
       }
 
@@ -3508,6 +4020,18 @@ export function createPluginStore(options: PluginStoreOptions) {
           `${input.serverId} is not reached with a deployment token.`,
         );
       }
+      /*
+       * A placed credential is checked for its shape before it is sealed, so a DingTalk address on
+       * another host or a key with a line in it is refused at the form rather than stored and refused
+       * on every call after. The sentence is built from the reviewed placement only and never echoes
+       * what was typed. The dial asks the same question again (`placeCredential`), because a
+       * credential can reach the vault by the generic credentials route as well as this one.
+       */
+      const placement = entry ? credentialPlacement(entry) : null;
+      if (placement) {
+        const refusal = credentialFormatRefusal(placement, plaintext);
+        if (refusal !== null) throw new CustomServerRefusedError(refusal);
+      }
       // Only the team's row or the frame's own, as for an OAuth client: see writeOAuthClient.
       if (row.tenantId !== TEAM_TENANT && row.tenantId !== currentTenant()) {
         throw new CustomServerRefusedError(
@@ -3585,6 +4109,185 @@ export function createPluginStore(options: PluginStoreOptions) {
     },
 
     /**
+     * The brokered apps this deployment holds its own OAuth client for (upstream #950).
+     *
+     * Read in the caller's frame: an administrator holding the capability finds every one, and a
+     * member finds none, which leaves those apps `unsupported` in what a member browses. Only the
+     * app names come back; nothing of any client is read.
+     */
+    async deploymentClientToolkits(): Promise<Set<string>> {
+      const rows = await database
+        .select({ keyId: credentialRows.keyId })
+        .from(credentialRows)
+        .where(
+          and(
+            eq(credentialRows.tenantId, TEAM_TENANT),
+            eq(credentialRows.kind, "mcp_oauth_client"),
+            eq(credentialRows.provider, DEPLOYMENT_CLIENT_PROVIDER),
+            isNull(credentialRows.revokedAt),
+          ),
+        );
+      return new Set(
+        rows
+          .map((row) => toolkitOfDeploymentClientKey(row.keyId))
+          .filter((toolkit): toolkit is string => toolkit !== null),
+      );
+    },
+
+    /**
+     * What an administrator's page shows about the clients this deployment holds: the app, the
+     * client id (not a secret, and copied into the row's metadata so naming it decrypts nothing),
+     * and when it was stored. Never the secret.
+     */
+    async listDeploymentClients(): Promise<
+      { toolkit: string; clientId: string | null; storedAt: string | null }[]
+    > {
+      requireServerWriter();
+      const rows = await database
+        .select({
+          keyId: credentialRows.keyId,
+          metadata: credentialRows.metadata,
+          updatedAt: credentialRows.updatedAt,
+        })
+        .from(credentialRows)
+        .where(
+          and(
+            eq(credentialRows.tenantId, TEAM_TENANT),
+            eq(credentialRows.kind, "mcp_oauth_client"),
+            eq(credentialRows.provider, DEPLOYMENT_CLIENT_PROVIDER),
+            isNull(credentialRows.revokedAt),
+          ),
+        )
+        .orderBy(asc(credentialRows.keyId));
+      return rows.flatMap((row) => {
+        const toolkit = toolkitOfDeploymentClientKey(row.keyId);
+        if (!toolkit) return [];
+        const clientId = (row.metadata as { clientId?: unknown } | null)
+          ?.clientId;
+        return [
+          {
+            toolkit,
+            clientId: typeof clientId === "string" ? clientId : null,
+            storedAt: iso(row.updatedAt),
+          },
+        ];
+      });
+    },
+
+    /**
+     * Store this deployment's own OAuth client for one brokered app, replacing any it held.
+     *
+     * Into the vault, sealed to `team` with an envelope bound to its row, and nowhere else: the id is
+     * copied into metadata for the page to name, the secret is in the envelope alone, and the trail
+     * row names the app, the client id and who stored it. Replacing revokes the previous row rather
+     * than orphaning it, so "what does this deployment hold" keeps one answer per app.
+     *
+     * A config already standing at Composio keeps the client it was created with: rotating the client
+     * an enabled app uses means removing the app and enabling it again after this.
+     */
+    async storeDeploymentClient(input: {
+      toolkit: string;
+      client: DeploymentClient;
+      by: string;
+    }): Promise<{ replaced: boolean }> {
+      requireServerWriter();
+      // The catalogue's own spelling, which the directory matches on (review M-3).
+      const slug = deploymentClientSlug(input.toolkit);
+      const url = `composio://${slug}`;
+      if (slug !== input.toolkit || toolkitOf(url) !== input.toolkit) {
+        throw new CustomServerRefusedError(
+          `${input.toolkit} 不是一个应用能用的名字。应用名只能包含小写字母、数字、下划线和连字符。`,
+        );
+      }
+      if (!deploymentClientFrom(input.client)) {
+        throw new CustomServerRefusedError(
+          "客户端 ID 和客户端密钥都要填写，且不能过长或包含控制字符。",
+        );
+      }
+      const key = deploymentClientVaultKey(input.toolkit);
+      const { replaced } = await withOAuthClientLock(
+        `composio-s2s:${input.toolkit}`,
+        async (transaction) => {
+          const value = {
+            ...key,
+            metadata: {
+              toolkit: input.toolkit,
+              clientId: input.client.client_id,
+            },
+            seal: (binding: CredentialBinding) =>
+              sealCredential(
+                encryptionKey,
+                binding,
+                JSON.stringify(input.client),
+              ),
+          };
+          const live = await credentials.findLiveByKey(key, transaction);
+          if (live) {
+            await credentials.rotate(
+              { ...value, previousCredentialId: live.id },
+              transaction,
+            );
+          } else {
+            await credentials.create(value, transaction);
+          }
+          return { replaced: live !== null };
+        },
+      );
+      await recordAuditEvent(auditStore, {
+        // The same event a catalogue server's client is filed under: this is the same act.
+        eventType: "mcp.oauth_client_registered",
+        targetType: "composio_app",
+        targetId: input.toolkit,
+        payload: {
+          actor: input.by,
+          toolkit: input.toolkit,
+          // The id, never the secret: what somebody checks against the vendor's console.
+          clientId: input.client.client_id,
+          replaced,
+        },
+      });
+      return { replaced };
+    },
+
+    /**
+     * Retire this deployment's own OAuth client for one brokered app. A config already standing at
+     * Composio keeps its copy until the app is removed; what this stops is the next enable using it.
+     */
+    async removeDeploymentClient(input: {
+      toolkit: string;
+      by: string;
+    }): Promise<{ removed: boolean; stillInUseByEnabledApp: boolean }> {
+      requireServerWriter();
+      const key = deploymentClientVaultKey(input.toolkit);
+      const removed = await withOAuthClientLock(
+        `composio-s2s:${input.toolkit}`,
+        async (transaction) => {
+          const live = await credentials.findLiveByKey(key, transaction);
+          if (!live) return false;
+          await credentials.revoke(live.id, transaction, TEAM_TENANT);
+          return true;
+        },
+      );
+      if (removed) {
+        await recordAuditEvent(auditStore, {
+          eventType: "credential.revoked",
+          targetType: "composio_app",
+          targetId: input.toolkit,
+          payload: { actor: input.by, toolkit: input.toolkit },
+        });
+      }
+      /*
+       * WHAT THE REMOVAL DID NOT DO, SAID (review M-4). An app already enabled keeps the client in
+       * its authorization config at Composio, and its connections keep working; removing the vault
+       * row only stops the next enable from using it. So the answer says whether such an app stands.
+       */
+      const stillInUseByEnabledApp = adminConnectOnly(
+        await brokeredAppScheme(input.toolkit),
+      );
+      return { removed, stillInUseByEnabledApp };
+    },
+
+    /**
      * Enable one app of the broker's catalogue, which is a third way for a server to arrive.
      *
      * NO URL IS TAKEN FROM A CALLER, WHICH IS WHY THERE IS NO HOST RULE HERE. `addCustomServer`
@@ -3652,10 +4355,22 @@ export function createPluginStore(options: PluginStoreOptions) {
        */
       const recorded = await brokeredAppScheme(input.slug);
 
+      /*
+       * A server-to-server grant's config carries this deployment's own client, read out of the vault
+       * here and handed to the broker, which refuses the enable by name when there is none
+       * (upstream #950; `deployment-clients.ts`). Every other kind is sent no secret at all.
+       */
+      const client =
+        input.connection.kind === "fields" &&
+        input.connection.authScheme === DEPLOYMENT_CLIENT_SCHEME
+          ? await readDeploymentClient(input.slug)
+          : null;
+
       const configured = await broker.ensureAuthConfig({
         toolkit: input.slug,
         name: input.title,
         connection: input.connection,
+        ...(client ? { client } : {}),
       });
 
       /*
@@ -4349,10 +5064,16 @@ export function createPluginStore(options: PluginStoreOptions) {
     async refreshTools(
       serverId: string,
       actorId = "",
+      internal: RefreshOptions = {},
     ): Promise<{ tools: number }> {
+      // 列完清单之后的读写在哪个帧里跑；见 {@link RefreshOptions}。
+      const write =
+        internal.writeAs ?? (<T>(work: () => Promise<T>): Promise<T> => work());
       // It rewrites the server's tool rows and its status columns: an administrator's (G01-E P10).
-      requireServerWriter();
-      const { row, entry, access } = await requireServer(serverId);
+      await write(async () => requireServerWriter());
+      const { row, entry, access } = internal.exactRow
+        ? await requireServerRow(serverId)
+        : await requireServer(serverId);
 
       /*
        * WHICH OF THE PARAMETER'S TWO MEANINGS each statement below needs.
@@ -4448,13 +5169,17 @@ export function createPluginStore(options: PluginStoreOptions) {
          * their personal settings page to grant access, so that a token could be minted and handed to
          * a function that discards it. The gate outlived the reason for it.
          */
-        const token = transport.listNeedsCredential
-          ? (await connectionTokenFor(row, entry, actorId, access)).token
-          : undefined;
+        const { token, placement } = transport.listNeedsCredential
+          ? await connectionTokenFor(row, entry, actorId, access, {
+              reRegister: internal.reRegister,
+            })
+          : {};
 
         listed = await transport.listTools({
           url: effectiveUrl(row, entry),
           token,
+          // Beside the token it places, so a placed key never reaches the vendor as a bearer header.
+          ...(placement ? { placement } : {}),
           ...tenantChosenOutbound(
             entry,
             access.transport,
@@ -4518,20 +5243,22 @@ export function createPluginStore(options: PluginStoreOptions) {
         // explanation reads as a server that offers nothing, and an operator would go looking in
         // the wrong place. The tools already held are left alone: a vendor being briefly
         // unreachable is not a reason to revoke what Bots are using.
-        await database
-          .update(mcpServers)
-          .set({
-            /*
-             * Capped at the same 400 characters `callTool` caps its recorded failure at.
-             *
-             * Parts of this sentence come from a vendor, and it is drawn on the admin page — neither
-             * is a promise about length, and the two paths that show a vendor's words to an operator
-             * should not disagree about how much of them to keep.
-             */
-            lastError: message.slice(0, 400),
-            updatedAt: new Date(),
-          })
-          .where(eq(mcpServers.id, rowId));
+        await write(async () =>
+          database
+            .update(mcpServers)
+            .set({
+              /*
+               * Capped at the same 400 characters `callTool` caps its recorded failure at.
+               *
+               * Parts of this sentence come from a vendor, and it is drawn on the admin page — neither
+               * is a promise about length, and the two paths that show a vendor's words to an operator
+               * should not disagree about how much of them to keep.
+               */
+              lastError: message.slice(0, 400),
+              updatedAt: new Date(),
+            })
+            .where(eq(mcpServers.id, rowId)),
+        );
         return { tools: 0 };
       }
 
@@ -4575,26 +5302,30 @@ export function createPluginStore(options: PluginStoreOptions) {
        * rather than branched on here.
        */
       if (listed.length === 0) {
-        const held = await database
-          .select({ name: mcpTools.name })
-          .from(mcpTools)
-          .where(eq(mcpTools.serverId, rowId));
+        const held = await write(async () =>
+          database
+            .select({ name: mcpTools.name })
+            .from(mcpTools)
+            .where(eq(mcpTools.serverId, rowId)),
+        );
 
         if (held.length > 0) {
-          await database
-            .update(mcpServers)
-            .set({
-              // Named as the state it is, because "listed nothing" and "would not answer" send an
-              // operator to different places, and reaching this line settles which one it was: a
-              // listing that could not be made throws and lands in the `catch` above instead. So
-              // this sentence must not send anybody to check their configuration — that is the
-              // other state's sentence, written by the transport that refused. No
-              // `toolsRefreshedAt`: that column says when this deployment last learned what the app
-              // offers, and it did not learn it here.
-              lastError: `This app was asked and answered with no actions at all, so the ${held.length} already recorded for it were kept rather than deleted. Check whether it still publishes them, then refresh again.`,
-              updatedAt: new Date(),
-            })
-            .where(eq(mcpServers.id, rowId));
+          await write(async () =>
+            database
+              .update(mcpServers)
+              .set({
+                // Named as the state it is, because "listed nothing" and "would not answer" send an
+                // operator to different places, and reaching this line settles which one it was: a
+                // listing that could not be made throws and lands in the `catch` above instead. So
+                // this sentence must not send anybody to check their configuration — that is the
+                // other state's sentence, written by the transport that refused. No
+                // `toolsRefreshedAt`: that column says when this deployment last learned what the app
+                // offers, and it did not learn it here.
+                lastError: `This app was asked and answered with no actions at all, so the ${held.length} already recorded for it were kept rather than deleted. Check whether it still publishes them, then refresh again.`,
+                updatedAt: new Date(),
+              })
+              .where(eq(mcpServers.id, rowId)),
+          );
           // What the app advertises, which is what it advertised before: the honest count, because
           // nothing was replaced.
           return { tools: held.length };
@@ -4628,24 +5359,26 @@ export function createPluginStore(options: PluginStoreOptions) {
        */
       let storable: ReturnType<typeof storableTools>;
       try {
-        storable = storableTools(rowId, listed, row.tenantId);
+        storable = storableTools(rowId, listed, row.tenantId, entry);
       } catch (error) {
         const reason =
           error instanceof Error ? withoutStatement(error) : String(error);
-        await database
-          .update(mcpServers)
-          .set({
-            // Capped where every other quoted failure in this file is capped, and for the same
-            // reason: part of this sentence comes from elsewhere and none of it is a promise about
-            // length.
-            lastError:
-              `This app answered with an action whose schema could not be stored as it arrived, so the actions already recorded for it were kept rather than replaced. ${reason}`.slice(
-                0,
-                400,
-              ),
-            updatedAt: new Date(),
-          })
-          .where(eq(mcpServers.id, rowId));
+        await write(async () =>
+          database
+            .update(mcpServers)
+            .set({
+              // Capped where every other quoted failure in this file is capped, and for the same
+              // reason: part of this sentence comes from elsewhere and none of it is a promise about
+              // length.
+              lastError:
+                `This app answered with an action whose schema could not be stored as it arrived, so the actions already recorded for it were kept rather than replaced. ${reason}`.slice(
+                  0,
+                  400,
+                ),
+              updatedAt: new Date(),
+            })
+            .where(eq(mcpServers.id, rowId)),
+        );
         return { tools: 0 };
       }
 
@@ -4671,14 +5404,16 @@ export function createPluginStore(options: PluginStoreOptions) {
        * is not something the vendor did.
        */
       try {
-        await database.transaction(async (transaction) => {
-          await transaction
-            .delete(mcpTools)
-            .where(eq(mcpTools.serverId, rowId));
-          if (storable.length > 0) {
-            await transaction.insert(mcpTools).values(storable);
-          }
-        });
+        await write(async () =>
+          database.transaction(async (transaction) => {
+            await transaction
+              .delete(mcpTools)
+              .where(eq(mcpTools.serverId, rowId));
+            if (storable.length > 0) {
+              await transaction.insert(mcpTools).values(storable);
+            }
+          }),
+        );
       } catch (error) {
         /*
          * A database failure, with the statement and its parameters left behind.
@@ -4703,14 +5438,18 @@ export function createPluginStore(options: PluginStoreOptions) {
         );
       }
 
-      await database
-        .update(mcpServers)
-        .set({
-          toolsRefreshedAt: new Date(),
-          lastError: null,
-          updatedAt: new Date(),
-        })
-        .where(eq(mcpServers.id, rowId));
+      await write(async () =>
+        database
+          .update(mcpServers)
+          .set({
+            toolsRefreshedAt: new Date(),
+            lastError: null,
+            // 按这一版的清单读法存下的；见 `relistOutdatedBrokeredApps`。
+            listingRevision: LISTING_REVISION,
+            updatedAt: new Date(),
+          })
+          .where(eq(mcpServers.id, rowId)),
+      );
 
       /*
        * A grant left pointing at nothing goes in the trail, at the moment it starts pointing at
@@ -4730,25 +5469,29 @@ export function createPluginStore(options: PluginStoreOptions) {
       // The names as STORED, so a grant is compared against a row that exists: a duplicate the
       // vendor listed twice is one row, and a name is spelled here the way the insert spelled it.
       const advertised = new Set(storable.map((tool) => tool.name));
-      const stranded = [...(await mcpGrantsForServers([entryKey])).entries()]
+      const stranded = [
+        ...(await write(() => mcpGrantsForServers([entryKey]))).entries(),
+      ]
         .filter(([ref]) => !advertised.has(ref.slice(entryKey.length + 1)))
         .sort(([left], [right]) => left.localeCompare(right));
 
       if (stranded.length > 0) {
-        await recordAuditEvent(auditStore, {
-          eventType: "configuration.changed",
-          targetType: "mcp_server",
-          targetId: entryKey,
-          payload: {
-            actor: auditActor,
-            change: "grants_not_advertised",
-            server: entryKey,
-            // The refs, because that is what a grant is keyed on and what an administrator revokes.
-            refs: stranded.map(([ref]) => ref),
-            bots: [...new Set(stranded.flatMap(([, agents]) => agents))],
-            note: "Held by a Bot and not offered to any model, because this server no longer advertises the tool. Offered again if it starts.",
-          },
-        });
+        await write(() =>
+          recordAuditEvent(auditStore, {
+            eventType: "configuration.changed",
+            targetType: "mcp_server",
+            targetId: entryKey,
+            payload: {
+              actor: auditActor,
+              change: "grants_not_advertised",
+              server: entryKey,
+              // The refs, because that is what a grant is keyed on and what an administrator revokes.
+              refs: stranded.map(([ref]) => ref),
+              bots: [...new Set(stranded.flatMap(([, agents]) => agents))],
+              note: "Held by a Bot and not offered to any model, because this server no longer advertises the tool. Offered again if it starts.",
+            },
+          }),
+        );
       }
 
       /*
@@ -4765,24 +5508,217 @@ export function createPluginStore(options: PluginStoreOptions) {
        */
       const unlisted = unlistedAdvertisedTools(entry, [...advertised]);
       if (unlisted.length > 0) {
-        await recordAuditEvent(auditStore, {
-          eventType: "configuration.changed",
-          targetType: "mcp_server",
-          targetId: entryKey,
-          payload: {
-            actor: auditActor,
-            change: "unlisted_tools_advertised",
-            server: entryKey,
-            tools: unlisted,
-            note: "Advertised by this server and not named in its reviewed write list, so each is offered to models as a read. This vendor has no read-only scope behind that list, so anything here that writes should be added to the entry.",
-          },
-        });
+        await write(() =>
+          recordAuditEvent(auditStore, {
+            eventType: "configuration.changed",
+            targetType: "mcp_server",
+            targetId: entryKey,
+            payload: {
+              actor: auditActor,
+              change: "unlisted_tools_advertised",
+              server: entryKey,
+              tools: unlisted,
+              note: "Advertised by this server and not named in its reviewed write list, so each is offered to models as a read. This vendor has no read-only scope behind that list, so anything here that writes should be added to the entry.",
+            },
+          }),
+        );
       }
 
       // What was recorded, which is what "this app offers N actions" means on the page. Counting
       // the listing instead reported a duplicate the vendor named twice as two actions the
       // deployment holds, when `mcp_tools` holds one row for it.
       return { tools: storable.length };
+    },
+
+    /**
+     * 把工具清单就是本部署代码的应用（Routines、Google Drive、百度网盘）保存的工具刷新到正在运行的
+     * 这一版。回答刷新了哪些行。上游 #1130。
+     *
+     * 标准：升级之后，Bot 拿到的是它所运行的这一版的工具名、描述和 schema，而不是添加应用那一版的。
+     *
+     * 原因：清单在添加应用时保存，之后只有 {@link refreshTools} 替换它，而它只在添加、按「刷新工具」
+     * 等时候运行。vendor 的应用这样做是对的：问一次要花一个请求，提供什么由 vendor 决定。工具就是
+     * 本代码的应用，保存的清单只是旧版的副本，某一版改了工具名或描述，已有部署永远收不到。
+     *
+     * 只写变了的：逐行比较，普通的一次启动什么都不写，也不留审计。经 `this.refreshTools` 刷新，和
+     * 管理员按「刷新工具」一样：授权按名字记，不受影响。
+     *
+     * 跨所有租户：调用方要在平台帧里调用（启动时由 `index.ts` 打开）。遍历到哪一行就刷新哪一行，
+     * 按准确的行 id（`exactRow`，见 {@link requireServerRow}），不经过「id 或 catalogue_key、team
+     * 行优先」的重新查找；工具按这台服务器自己的 tenant 盖戳（`storableTools` 用 `row.tenantId`）。
+     * `ids` 只给测试用，限定只看这些行；启动时不给，看整张表。
+     * 列清单不出网、不取凭据：这三个 transport 的清单就是常量。某一行失败只记一条警告，不让启动
+     * 失败：保存的清单照常可用，下次启动再试。
+     */
+    async refreshOwnListings(ids?: readonly string[]): Promise<string[]> {
+      requireServerWriter();
+      const refreshed: string[] = [];
+      const rows = await database
+        .select()
+        .from(mcpServers)
+        .where(ids ? inArray(mcpServers.id, [...ids]) : undefined)
+        .orderBy(asc(mcpServers.id));
+      for (const row of rows) {
+        const entry = catalogueEntry(row.catalogueKey ?? row.id);
+        if (!entry) continue;
+        // 条目没写 transport 就是 MCP；只有清单就是本代码的 transport 才在启动时刷新。
+        const transport = transportFor(entry.transport ?? "mcp");
+        if (!transport.listIsThisCode) continue;
+        try {
+          const listed = await transport.listTools({
+            url: effectiveUrl(row, entry),
+          });
+          const held = await database
+            .select()
+            .from(mcpTools)
+            .where(eq(mcpTools.serverId, row.id));
+          if (
+            sameListing(
+              held,
+              storableTools(row.id, listed, row.tenantId, entry),
+            )
+          )
+            continue;
+          await this.refreshTools(row.id, "", { exactRow: true });
+          refreshed.push(row.id);
+        } catch (error) {
+          console.warn(
+            JSON.stringify({
+              type: "own-app-tools-refresh-failed",
+              serverId: row.id,
+              error: reasonWithoutStatement(error),
+            }),
+          );
+        }
+      }
+      return refreshed;
+    },
+
+    /**
+     * 只能按个人凭据列出工具的应用，在一个工具都没有时，以刚连接的这个人的身份问它提供什么。
+     * 上游 #1073。
+     *
+     * 标准：第一个人连接这类应用之后，它的工具就列出来、提供给 Bot，不需要谁去按「刷新工具」。
+     *
+     * 原因：添加时运行的那次刷新没有人可以代表，只能记下拒绝、一个工具也不存（见
+     * {@link refreshTools}）。连接就是第一个有人可以代表的时刻，过去却什么都没做：应用显示「已连接」，
+     * 每个 Bot 却被告知没有它的工具。
+     *
+     * 只在一个工具都没有时：刷新会替换每个 Bot 拿到的工具，那是管理员的按钮。填满一张空清单不拿走
+     * 任何人的东西；每个成员连接时都替换整张清单，就等于让每个人都成了它的作者。
+     *
+     * 租户帧（fork 特有）：调用方在这个人自己的帧里（连接回调就是），只能替自己列，帧不是这个人就
+     * 拒绝。行在本人帧里解析；取 token 和问 vendor 也在本人帧里，和这个人自己调用工具时一样，所以
+     * P10 的写权限检查照常生效。之后的写（工具行、服务器行、审计）属于服务器（`team`），只有管理员
+     * 或平台帧能写，只有这一段放进平台帧（`writeAs`）。
+     *
+     * 一律不重新注册 OAuth client（`reRegister: false`）：vendor 回 `invalid_client` 时只记
+     * `lastError`。替换的是全部署共享的 client，所有人的 refresh token 都绑在旧的上，不能由一个成员
+     * 的连接触发。
+     */
+    async discoverToolsOnConnect(
+      serverId: string,
+      userId: string,
+    ): Promise<{ tools: number } | null> {
+      if (!isPersonTenant(userId) || currentTenant() !== userId) {
+        throw new PluginInvariantError(
+          "Listing an app's tools on connect runs as the person who connected, in their own frame.",
+        );
+      }
+      const { row } = await requireServer(serverId);
+      const [held] = await database
+        .select({ name: mcpTools.name })
+        .from(mcpTools)
+        .where(eq(mcpTools.serverId, row.id))
+        .limit(1);
+      if (held) return null;
+      return this.refreshTools(row.id, userId, {
+        exactRow: true,
+        reRegister: false,
+        writeAs: (work) => runAsTenant("platform", work),
+      });
+    },
+
+    /**
+     * 把 broker（Composio）的每个应用里、工具按旧版读法存下的（`mcpServers.listingRevision` 落后于
+     * {@link LISTING_REVISION}），重新列一次。回答仍然落后的行。上游 #1185。
+     *
+     * 标准：升级之后，应用的动作记成和全新安装一样，不需要谁去按「刷新工具」。
+     *
+     * 原因：0146 开始把 Composio 什么标签都没给的动作记为 `unclassified`，之前记的是普通写操作。
+     * 存下的行分不清「标了 create/update」和「什么都没标」，所以不在迁移里改写，而是重新问一次。
+     *
+     * 只有部署配置了 Composio（有 broker）才做：broker 用部署自己的 key 列清单，不需要任何人的账号；
+     * 没配置时 Composio transport 本来就列不出东西。刷新失败时版本不前进，下一次再试；在那之前存下的
+     * 工具照常可用，按原来的方式询问。跨所有租户：调用方要在平台帧里调用（`index.ts` 每一轮都这样）。
+     * 按准确的行 id 刷新（`exactRow`），遍历到哪一行就刷新哪一行。
+     *
+     * 日志：vendor 的失败落在应用的 `lastError`；`refreshTools` 抛出的（部署自己的故障、url 里没有
+     * 应用的 brokered 行）写一行结构化日志，只写错误名，不写 message（可能带语句或 vendor 的原话）。
+     * 放弃：只有 `countFailures` 为 true 的一轮失败才计数，后台循环在退避推进到最长一档之后才这样
+     * 要求（见 `./relist`），所以退避表的每一档都会走到。同一个应用、同一个 `listing_revision`
+     * 计数满 {@link RELIST_ATTEMPTS} 次，本进程里就不再重试，记一条日志，也不再算作落后；下一次
+     * 启动或管理员的「刷新工具」会再试。成功一次就清零。
+     */
+    async relistOutdatedBrokeredApps(
+      options: { countFailures?: boolean } = {},
+    ): Promise<string[]> {
+      if (!broker) return [];
+      requireServerWriter();
+      const outdated = await database
+        .select({ id: mcpServers.id, revision: mcpServers.listingRevision })
+        .from(mcpServers)
+        .where(
+          and(
+            eq(mcpServers.provenance, "composio"),
+            sql`${mcpServers.listingRevision} < ${LISTING_REVISION}`,
+          ),
+        )
+        .orderBy(asc(mcpServers.id));
+      const behind: string[] = [];
+      for (const { id, revision } of outdated) {
+        const attempt = `${id}@${revision}`;
+        if ((relistFailures.get(attempt) ?? 0) >= RELIST_ATTEMPTS) continue;
+        try {
+          await this.refreshTools(id, "", { exactRow: true });
+        } catch (error) {
+          console.warn(
+            JSON.stringify({
+              type: "brokered-app-relist-failed",
+              serverId: id,
+              error: error instanceof Error ? error.name : typeof error,
+            }),
+          );
+        }
+        const [after] = await database
+          .select({ revision: mcpServers.listingRevision })
+          .from(mcpServers)
+          .where(eq(mcpServers.id, id));
+        if (!after || after.revision >= LISTING_REVISION) {
+          relistFailures.delete(attempt);
+          continue;
+        }
+        if (!options.countFailures) {
+          behind.push(id);
+          continue;
+        }
+        const failures = (relistFailures.get(attempt) ?? 0) + 1;
+        relistFailures.set(attempt, failures);
+        if (failures >= RELIST_ATTEMPTS) {
+          console.warn(
+            JSON.stringify({
+              type: "brokered-app-relist-given-up",
+              serverId: id,
+              listingRevision: revision,
+              attempts: failures,
+              note: "Listed again after the upgrade through every backoff step and then failed three times at the longest, so this process stops trying. Its stored actions keep working and ask as before; the next start, or Refresh tools on the app's page, tries again.",
+            }),
+          );
+          continue;
+        }
+        behind.push(id);
+      }
+      return behind;
     },
 
     async listServers(): Promise<ServerRecord[]> {
@@ -4880,6 +5816,9 @@ export function createPluginStore(options: PluginStoreOptions) {
           authScheme: toolkitOf(row.url)
             ? (brokeredApps.get(row.url)?.authScheme ?? null)
             : row.authScheme,
+          adminConnectOnly:
+            toolkitOf(row.url) !== null &&
+            adminConnectOnly(brokeredApps.get(row.url)?.authScheme ?? null),
           tools: tools
             .filter((tool) => tool.serverId === row.id)
             .map((tool) => {
@@ -4892,6 +5831,7 @@ export function createPluginStore(options: PluginStoreOptions) {
                 ref,
                 effect: classifyTool(entry, tool.name, true, tool.effect),
                 destructive: tool.destructive,
+                checkInRead: checkInRead(entry, tool.name, tool),
                 grantedTo: grants.get(ref) ?? [],
               };
             }),
@@ -5618,6 +6558,208 @@ export function createPluginStore(options: PluginStoreOptions) {
       return true;
     },
 
+    /**
+     * 申请访问（迁移 0153）：员工说出的应用，对应到本部署的哪一行应用。
+     *
+     * 按应用行 id、目录键或应用名（不区分大小写）找；id 或目录键精确命中的排在按名字命中的前面，同名时
+     * 团队的行在前（{@link ownRowFirst}）。在调用者的帧里读，所以只找得到这个人看得见的应用。null 表示本
+     * 部署没有这个应用，申请无从提起。
+     */
+    async findAppForRequest(app: string): Promise<{
+      serverId: string;
+      appKey: string;
+      title: string;
+      /** 这一行是调用者自己添加的（盖的是调用者的租户章），不是本部署的应用。 */
+      own: boolean;
+    } | null> {
+      const wanted = app.trim().toLowerCase();
+      if (!wanted) return null;
+      const byKey = sql`(lower(${mcpServers.id}) = ${wanted} or lower(${mcpServers.catalogueKey}) = ${wanted})`;
+      const [row] = await database
+        .select({
+          id: mcpServers.id,
+          tenantId: mcpServers.tenantId,
+          catalogueKey: mcpServers.catalogueKey,
+          title: mcpServers.title,
+        })
+        .from(mcpServers)
+        .where(or(byKey, sql`lower(${mcpServers.title}) = ${wanted}`))
+        .orderBy(
+          sql`case when ${byKey} then 0 else 1 end`,
+          ownRowFirst(),
+          asc(mcpServers.id),
+        )
+        .limit(1);
+      return row
+        ? {
+            serverId: row.id,
+            appKey: row.catalogueKey ?? row.id,
+            title: row.title,
+            own: row.tenantId === currentTenant(),
+          }
+        : null;
+    },
+
+    /**
+     * 提一条申请，或拿到已有的那条。
+     *
+     * 写在调用者的帧里，行盖的就是申请人的租户章。同一个人、同一位员工、同一个应用、同一种类型已有
+     * pending 的，答已有那条（`existing`），不再写；一个人同时等着的申请到了 `maxPending` 条，答
+     * `limited`。并发的两次提交由部分唯一索引兜住，后到的那次读回先到的那条。
+     */
+    async fileAppAccessRequest(input: {
+      serverId: string;
+      botId: string;
+      requesterUserId: string;
+      kind: AppAccessRequestKind;
+      note: string | null;
+      maxPending: number;
+    }): Promise<
+      | { outcome: "created" | "existing"; request: AppAccessRequestRecord }
+      | { outcome: "limited" }
+    > {
+      const samePending = and(
+        eq(appAccessRequests.requesterUserId, input.requesterUserId),
+        eq(appAccessRequests.botId, input.botId),
+        eq(appAccessRequests.serverId, input.serverId),
+        eq(appAccessRequests.kind, input.kind),
+        eq(appAccessRequests.status, "pending"),
+      );
+      const [existing] = await appAccessRequestRows(samePending);
+      if (existing) return { outcome: "existing", request: existing };
+      const [waiting] = await database
+        .select({ count: sql<number>`count(*)::int` })
+        .from(appAccessRequests)
+        .where(
+          and(
+            eq(appAccessRequests.requesterUserId, input.requesterUserId),
+            eq(appAccessRequests.status, "pending"),
+          ),
+        );
+      if ((waiting?.count ?? 0) >= input.maxPending)
+        return { outcome: "limited" };
+      const inserted = await database
+        .insert(appAccessRequests)
+        .values({
+          serverId: input.serverId,
+          botId: input.botId,
+          requesterUserId: input.requesterUserId,
+          kind: input.kind,
+          note: input.note,
+        })
+        .onConflictDoNothing()
+        .returning({ id: appAccessRequests.id });
+      const [request] = await appAccessRequestRows(
+        inserted[0] ? eq(appAccessRequests.id, inserted[0].id) : samePending,
+      );
+      if (!request)
+        throw new PluginInvariantError(
+          "An access request was filed and then could not be read back in the same frame.",
+        );
+      if (!inserted[0]) return { outcome: "existing", request };
+      await recordAuditEvent(auditStore, {
+        eventType: "configuration.changed",
+        targetType: "app_access_request",
+        targetId: request.id,
+        actorUserId: input.requesterUserId,
+        payload: {
+          change: "app_access_requested",
+          app: request.appKey,
+          bot: request.botId,
+          kind: request.kind,
+        },
+      });
+      return { outcome: "created", request };
+    },
+
+    /** 一条申请，在调用者的帧里读；看不见或不存在都是 null。 */
+    async appAccessRequest(id: string): Promise<AppAccessRequestRecord | null> {
+      if (!isUuid(id)) return null;
+      const [row] = await appAccessRequestRows(eq(appAccessRequests.id, id));
+      return row ?? null;
+    },
+
+    /**
+     * 调用者的帧里所有待处理的申请，最新的在前。本人的帧里是自己的；`platform` 帧里是所有人的，
+     * 管理员收件箱经 `asAdminPlatform` 读的就是这个。
+     */
+    async pendingAppAccessRequests(filter?: {
+      requesterUserId?: string;
+    }): Promise<AppAccessRequestRecord[]> {
+      return appAccessRequestRows(
+        and(
+          eq(appAccessRequests.status, "pending"),
+          filter?.requesterUserId
+            ? eq(appAccessRequests.requesterUserId, filter.requesterUserId)
+            : undefined,
+        ),
+      );
+    },
+
+    /**
+     * 申请人撤回自己的一条 pending 申请。别人的、已处理的、不存在的，都答 null，什么也不改，所以从答案
+     * 里看不出是谁申请了什么。
+     */
+    async cancelAppAccessRequest(input: {
+      id: string;
+      requesterUserId: string;
+    }): Promise<AppAccessRequestRecord | null> {
+      const closed = await closeAppAccessRequest(
+        input.id,
+        "cancelled",
+        null,
+        eq(appAccessRequests.requesterUserId, input.requesterUserId),
+      );
+      if (closed)
+        await recordAuditEvent(auditStore, {
+          eventType: "configuration.changed",
+          targetType: "app_access_request",
+          targetId: closed.id,
+          actorUserId: input.requesterUserId,
+          payload: {
+            change: "app_access_cancelled",
+            app: closed.appKey,
+            bot: closed.botId,
+            kind: closed.kind,
+          },
+        });
+      return closed;
+    },
+
+    /**
+     * 把一条 pending 申请关成 approved 或 dismissed，只关一次。在申请人的帧里调用（管理员经
+     * `adminActAsOwner` 进来），所以轨迹和这次改动都归申请人。已处理或看不见的答 null。
+     */
+    async decideAppAccessRequest(input: {
+      id: string;
+      status: "approved" | "dismissed";
+      by: string;
+    }): Promise<AppAccessRequestRecord | null> {
+      const closed = await closeAppAccessRequest(
+        input.id,
+        input.status,
+        input.by,
+      );
+      if (closed)
+        await recordAuditEvent(auditStore, {
+          eventType: "configuration.changed",
+          targetType: "app_access_request",
+          targetId: closed.id,
+          payload: {
+            actor: input.by,
+            change:
+              input.status === "approved"
+                ? "app_access_approved"
+                : "app_access_dismissed",
+            app: closed.appKey,
+            bot: closed.botId,
+            kind: closed.kind,
+            requester: closed.requesterUserId,
+          },
+        });
+      return closed;
+    },
+
     /** Everything one Bot may use. The runtime asks this and offers exactly what comes back. */
     async listForAgent(agentId: string): Promise<GrantedPlugins> {
       /*
@@ -5728,6 +6870,7 @@ export function createPluginStore(options: PluginStoreOptions) {
                 name: mcpTools.name,
                 description: mcpTools.description,
                 inputSchema: mcpTools.inputSchema,
+                destructive: mcpTools.destructive,
               })
               .from(mcpTools)
               .innerJoin(mcpServers, eq(mcpServers.id, mcpTools.serverId))
@@ -5744,6 +6887,7 @@ export function createPluginStore(options: PluginStoreOptions) {
             toolName: toolNameFor(ref),
             description: row.description,
             inputSchema: row.inputSchema as Record<string, unknown>,
+            destructive: row.destructive,
           };
         });
 
@@ -5931,9 +7075,35 @@ export function createPluginStore(options: PluginStoreOptions) {
     /**
      * The deployment's OAuth client for a server, or null if none is registered.
      *
-     * Reads only. {@link ensureOAuthClient} is the one that will go and get one.
+     * Reads only. {@link ensureOAuthClient} is the one that will go and get one. A client that is
+     * held and cannot be read is {@link OAuthClientReadError}, not null.
      */
     oauthClientFor: storedOAuthClient,
+
+    /**
+     * The trail row for a Connect that stopped because the deployment's client could not be read.
+     *
+     * Written in the caller's frame, like every other row this store writes for a person's act: the
+     * Connect route runs in the person's own. Who pressed it goes in the payload with the server and
+     * the operation; the fault itself never does, not its name and not its message, because a vault or
+     * decryption message can quote the stored client. The server's log line has the name.
+     */
+    async recordOAuthClientReadFailure(input: {
+      serverId: string;
+      actorId: string;
+    }): Promise<void> {
+      await recordAuditEvent(auditStore, {
+        eventType: "mcp.oauth_client_read_failed",
+        targetType: "mcp_server",
+        targetId: input.serverId,
+        payload: {
+          actor: input.actorId,
+          server: input.serverId,
+          operation: "connect",
+          reason: "credential_read_failed",
+        },
+      });
+    },
 
     /** Which `user-oauth` servers this person has connected, for their own settings page. */
     async connectionsFor(
@@ -6307,6 +7477,7 @@ export function createPluginStore(options: PluginStoreOptions) {
           inputSchema: mcpTools.inputSchema,
           effect: mcpTools.effect,
           destructive: mcpTools.destructive,
+          unclassified: mcpTools.unclassified,
           version: mcpTools.version,
         })
         .from(mcpTools)
@@ -6317,7 +7488,13 @@ export function createPluginStore(options: PluginStoreOptions) {
       // condition below has a version by definition, and building the answer here is what carries
       // that fact into the type instead of leaving the caller to re-check it.
       const safe = actions.flatMap((action) => {
-        if (action.effect !== "read" || action.destructive) return [];
+        // vendor 只字未提的也不碰：它没说会删除什么，但也没说不会（见 `mcpTools.unclassified`）。
+        if (
+          action.effect !== "read" ||
+          action.destructive ||
+          action.unclassified
+        )
+          return [];
         // Null in the column and blank in the data are the same nothing, and neither is a version
         // the transport can put on a call.
         const version = action.version?.trim();
@@ -7069,7 +8246,24 @@ export function createPluginStore(options: PluginStoreOptions) {
       const authScheme = await brokeredAppScheme(input.toolkit);
       if (!isFieldScheme(authScheme)) {
         throw new BrokerRefusalError(
-          `${input.toolkit} is not an app this deployment connects with values somebody types, so nothing was sent. Open the app on the Plugins page and connect it the way it asks for; if it is not listed there at all, an administrator has to enable it first.`,
+          `${input.toolkit} is not an app this deployment connects with values somebody types, so nothing was sent. Open the app on the ${appsPage()} page and connect it the way it asks for; if it is not listed there at all, an administrator has to enable it first.`,
+        );
+      }
+
+      /*
+       * AND A PERSON IS NEVER CONNECTED ON THE DEPLOYMENT'S OWN CLIENT (upstream #950). The connect
+       * route refuses this before the form is drawn; it is asked again here, before the values
+       * travel, because this method is callable without that route and what it would make is the
+       * organization's access filed as one person's account (see `adminConnectOnly`).
+       *
+       * DECIDED HERE, NOT TAKEN FROM THE CALLER (review M-1): an administrator's request holds the
+       * capability, which is what {@link writesTeamServers} asks, so no caller can say it on their
+       * behalf.
+       */
+      if (adminConnectOnly(authScheme) && !writesTeamServers()) {
+        throw new PluginRefusedError(
+          adminConnectOnlySentence(input.toolkit),
+          null,
         );
       }
 
@@ -7245,7 +8439,7 @@ export function createPluginStore(options: PluginStoreOptions) {
          * presses that end it either way.
          */
         throw new PluginRefusedError(
-          `${input.toolkit} was connected, and the check this deployment then ran against it did not come back clean: ${probed.sentence} That may be the key, and it may be the app — what came back does not say which — so the account is left standing and recorded as unchecked. Re-check it on the Plugins page once, and if it still will not answer, disconnect it and connect it again with a fresh key.`,
+          `${input.toolkit} was connected, and the check this deployment then ran against it did not come back clean: ${probed.sentence} That may be the key, and it may be the app — what came back does not say which — so the account is left standing and recorded as unchecked. Re-check it on the ${appsPage()} page once, and if it still will not answer, disconnect it and connect it again with a fresh key.`,
           null,
         );
       }
@@ -7466,7 +8660,7 @@ export function createPluginStore(options: PluginStoreOptions) {
       >;
       if ((await brokeredAppKind(input.toolkit)) !== "key") {
         throw new PluginRefusedError(
-          `${input.toolkit} is not an app this deployment holds a key for, so there is nothing here to re-check. It was connected at ${input.toolkit}'s own sign-in screen, and if it has stopped working, disconnecting it on the Plugins page and connecting it again is what fixes it.`,
+          `${input.toolkit} is not an app this deployment holds a key for, so there is nothing here to re-check. It was connected at ${input.toolkit}'s own sign-in screen, and if it has stopped working, disconnecting it on the ${appsPage()} page and connecting it again is what fixes it.`,
           null,
         );
       }
@@ -7487,7 +8681,7 @@ export function createPluginStore(options: PluginStoreOptions) {
 
       if (!held) {
         throw new PluginRefusedError(
-          `You have no connection to ${input.toolkit} here, so there is nothing to re-check. Connect it on the Plugins page and it will be checked as it is made.`,
+          `You have no connection to ${input.toolkit} here, so there is nothing to re-check. Connect it on the ${appsPage()} page and it will be checked as it is made.`,
           null,
         );
       }
@@ -7518,7 +8712,7 @@ export function createPluginStore(options: PluginStoreOptions) {
        */
       if (probed.outcome === "unreachable") {
         throw new PluginRefusedError(
-          `${input.toolkit} could not be checked just now: ${probed.sentence} Nothing here changed — your connection is still recorded exactly as the last check left it — so pressing Re-check again when Composio is answering is the whole of the retry.`,
+          `${input.toolkit} could not be checked just now: ${probed.sentence} Nothing here changed — your connection is still recorded exactly as the last check left it — so pressing Re-check again in a moment is the whole of the retry.`,
           null,
         );
       }
@@ -7585,7 +8779,7 @@ export function createPluginStore(options: PluginStoreOptions) {
        */
       if (!wrote) {
         throw new PluginRefusedError(
-          `Your connection to ${input.toolkit} was disconnected while this check was still running, so nothing was recorded about it: what the check found is about an account you no longer have here. Connect ${input.toolkit} again on the Plugins page if that was not what you meant.`,
+          `Your connection to ${input.toolkit} was disconnected while this check was still running, so nothing was recorded about it: what the check found is about an account you no longer have here. Connect ${input.toolkit} again on the ${appsPage()} page if that was not what you meant.`,
           null,
         );
       }
@@ -8104,6 +9298,12 @@ export function createPluginStore(options: PluginStoreOptions) {
        * reaching its owner's account (team-bots/team-bots.ts). Every gate is still the asker's.
        */
       credentialActorId?: string;
+      /**
+       * The conversation the call is made in, when the caller knows it (a conversation's own run says
+       * it through the approval context instead). Routines and goals use it to post where they were
+       * asked, rather than asking which conversation (upstream #1159, #1161).
+       */
+      threadId?: string;
     }): Promise<{ text: string; isError: boolean }> {
       const [serverId, ...rest] = input.ref.split("/");
       const toolName = rest.join("/");
@@ -8149,6 +9349,7 @@ export function createPluginStore(options: PluginStoreOptions) {
           inputSchema: mcpTools.inputSchema,
           effect: mcpTools.effect,
           destructive: mcpTools.destructive,
+          unclassified: mcpTools.unclassified,
           version: mcpTools.version,
         })
         .from(mcpTools)
@@ -8161,6 +9362,45 @@ export function createPluginStore(options: PluginStoreOptions) {
         advertised.length > 0,
         advertised[0]?.effect,
       );
+
+      /*
+       * A CHECK-IN ONLY READS, AND THAT IS DECIDED HERE TOO, not only where its tools are loaded.
+       *
+       * `proactive/restriction.ts` offers a check-in only the tools the catalogue calls a read, and
+       * checks again before each call. This is the same rule at the one door every call passes, so a
+       * check-in reaching a tool by any other route is refused before the policy, the vault or the
+       * vendor. A read here is the one `createReadOnlyClassifier` counts: advertised, classified a
+       * read, not destructive, and not an action the broker said nothing about (`unclassified`).
+       *
+       * 而且必须有人作证：厂商记录为读，或目录 `readTools` 审查过（{@link checkInRead}）。
+       * `classifyTool` 对没有任何标签的工具推断出的读，在这里不算。
+       */
+      if (
+        isProactiveInitiator(input.initiator) &&
+        !(
+          advertised[0] &&
+          effect === "read" &&
+          checkInRead(entry, toolName, advertised[0])
+        )
+      ) {
+        await recordAuditEvent(auditStore, {
+          eventType: "mcp.call_rejected",
+          targetType: "mcp_tool",
+          targetId: input.ref,
+          ...(input.initiator ? { initiator: input.initiator } : {}),
+          payload: {
+            actor: auditActor,
+            bot: input.botId,
+            server: serverId,
+            tool: toolName,
+            refusal: "check_in_not_a_read",
+          },
+        });
+        throw new PluginRefusedError(
+          `${input.ref} is not available during a check-in, which can only read.`,
+          null,
+        );
+      }
 
       const args = withoutEmptyOptionals(
         input.args,
@@ -8385,16 +9625,58 @@ export function createPluginStore(options: PluginStoreOptions) {
         }
       }
 
-      const approval = await options.approvalGate?.({
-        actorId: input.actorId,
-        botId: input.botId,
-        toolRef: input.ref,
-        effect,
-        scope: serverId,
-        args: vendorArgs,
-        target: { serverId, toolName, url: row.url, effect },
-        continuation: currentApprovalContext(),
+      /** A call the approval gate or the person turned away, as this surface's other refusals read. */
+      const refusedRow = (refusal: string, reason: string) => ({
+        eventType: "mcp.call_rejected" as const,
+        targetType: "mcp_tool",
+        targetId: input.ref,
+        ...(input.initiator ? { initiator: input.initiator } : {}),
+        payload: {
+          ...decided,
+          decision: { ...decided.decision, carriedOut: false },
+          refusal,
+          reason,
+        },
       });
+      const approval = await options
+        .approvalGate?.({
+          actorId: input.actorId,
+          botId: input.botId,
+          toolRef: input.ref,
+          effect,
+          scope: serverId,
+          args: vendorArgs,
+          target: { serverId, toolName, url: row.url, effect },
+          // 列出应用时它把这个工具标成了破坏性：不管叫什么，都按删除处理，总是先问。
+          ...(advertised[0]?.destructive ? { destructive: true as const } : {}),
+          // 标明它来自插件调用路径：删除类底线按来源认应用工具，不看服务器叫什么。
+          subject: { connector: true },
+          continuation: currentApprovalContext(),
+          /*
+           * The row for the person's own "no": the approval store writes it, once, when they deny.
+           * Built here from the same facts as the rows above and never holding the arguments.
+           */
+          declined: refusedRow("person_declined", DECLINED_BY_PERSON),
+        })
+        ?.catch(async (error: unknown) => {
+          /*
+           * Turned away at the gate: a rule that disables the tool, or an equivalent call the person
+           * declined earlier in this conversation. It is on the trail like every other refusal here,
+           * in the caller's frame, with the same fields as the rows above and never the arguments.
+           * A call already waiting for the person, and one answered already (denied, failed or its
+           * approval used), turn nothing new away, and a suspension is a wait rather than a refusal,
+           * so none of them writes a row. Only the audit is added: the error
+           * goes on to the caller exactly as it came.
+           */
+          const reason =
+            error instanceof ApprovalRefusedError &&
+            !(error instanceof ApprovalAlreadyAnsweredError)
+              ? withoutStatement(error)
+              : undefined;
+          if (reason !== undefined && reason !== ALREADY_WAITING)
+            await recordAuditEvent(auditStore, refusedRow("approval", reason));
+          throw error;
+        });
       if (approval && "replay" in approval)
         return approval.replay as { text: string; isError: boolean };
 
@@ -8413,7 +9695,7 @@ export function createPluginStore(options: PluginStoreOptions) {
        * it did.
        */
       try {
-        const { token } = await connectionTokenFor(
+        const { token, placement } = await connectionTokenFor(
           row,
           entry,
           input.credentialActorId ?? input.actorId,
@@ -8425,8 +9707,16 @@ export function createPluginStore(options: PluginStoreOptions) {
           {
             url: effectiveUrl(row, entry),
             token,
+            ...(placement ? { placement } : {}),
             actorId: input.credentialActorId ?? input.actorId,
             botId: input.botId,
+            // The conversation the call was made in: Routines and goals post where they were asked.
+            ...((input.threadId ?? currentApprovalContext()?.threadId)
+              ? {
+                  threadId:
+                    input.threadId ?? currentApprovalContext()?.threadId,
+                }
+              : {}),
             ...tenantChosenOutbound(
               entry,
               access.transport,
@@ -8532,3 +9822,39 @@ function withoutEmptyOptionals(
 
 export type PluginStore = ReturnType<typeof createPluginStore>;
 export type { CatalogueEntry };
+
+/**
+ * 一个应用保存的工具，是不是它的清单现在会保存的样子：名字相同，每一个的描述、schema 和分类也相同。
+ * schema 按排好序的键比较，因为 PostgreSQL 的 `jsonb` 按自己的顺序保存键，读回来也是那个顺序。
+ */
+function sameListing(
+  held: (typeof mcpTools.$inferSelect)[],
+  wanted: ReturnType<typeof storableTools>,
+): boolean {
+  if (held.length !== wanted.length) return false;
+  const saved = new Map(held.map((tool) => [tool.name, tool]));
+  return wanted.every((tool) => {
+    const was = saved.get(tool.name);
+    return (
+      was !== undefined &&
+      was.description === tool.description &&
+      sortedJson(was.inputSchema) === sortedJson(tool.inputSchema) &&
+      was.effect === tool.effect &&
+      was.destructive === tool.destructive &&
+      was.unclassified === tool.unclassified &&
+      was.version === tool.version
+    );
+  });
+}
+
+function sortedJson(value: unknown): string {
+  return JSON.stringify(value, (_key, inner: unknown) =>
+    inner && typeof inner === "object" && !Array.isArray(inner)
+      ? Object.fromEntries(
+          Object.entries(inner).sort(([left], [right]) =>
+            left < right ? -1 : left > right ? 1 : 0,
+          ),
+        )
+      : inner,
+  );
+}

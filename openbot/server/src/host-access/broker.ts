@@ -106,6 +106,38 @@ export function createHostAccessBroker(
     operations.set(cancelOperation.operationId, cancelState);
   }
 
+  function queueStopFor(actorId: string) {
+    const stopOperation: HostAccessDesktopOperation = {
+      operationId: randomUUID(),
+      kind: "stop",
+      botId: "*",
+      actorId,
+    };
+    const stopState: OperationState = {
+      operation: stopOperation,
+      actorId,
+      botId: stopOperation.botId,
+      leasedUntil: null,
+      expiresAt: now() + operationTtlMs,
+      expiryTimer: null,
+      resolve: () => {},
+      reject: () => {},
+      settled: false,
+    };
+    // A stop is addressed to a desktop that may never come back for it, for the same reason a
+    // cancel is: nothing but `resolveDesktopOperation` ever removed this entry, so a worker that
+    // never polled left it here for the life of the process, growing `operations` by one per press
+    // of Stop and leaving `statusFor` reporting it to the person as pending for ever. Deleted rather
+    // than failed, because a stop has nobody left to reject: it used to be built by `enqueue` and
+    // discarded with `void`, so it carried a promise nobody held, and a second Stop failed it
+    // through that promise with no handler attached.
+    stopState.expiryTimer = setTimeout(() => {
+      operations.delete(stopOperation.operationId);
+    }, operationTtlMs);
+    unrefTimer(stopState.expiryTimer);
+    operations.set(stopOperation.operationId, stopState);
+  }
+
   function failOperation(state: OperationState, reason: string) {
     if (state.settled) return;
     state.settled = true;
@@ -229,16 +261,26 @@ export function createHostAccessBroker(
       grants.set(grant.id, publicGrant(grant));
     },
 
-    async callHost(input: {
-      kind: "list_files" | "read_file" | "write_file" | "run_command";
-      botId: string;
-      actorId: string;
-      grantId: string;
-      relativePath?: string;
-      content?: string;
-      command?: string;
-      writable?: boolean;
-    }): Promise<unknown> {
+    async callHost(
+      input: {
+        kind: "list_files" | "read_file" | "write_file" | "run_command";
+        botId: string;
+        actorId: string;
+        grantId: string;
+        relativePath?: string;
+        content?: string;
+        command?: string;
+        writable?: boolean;
+      },
+      hooks?: {
+        /**
+         * Called as the operation goes to the desktop, after every check here has passed and never
+         * for one refused or answered from storage. The Bot's tools write the action's Activity row
+         * here, so the row is on the trail before the desktop can act, as a computer's is.
+         */
+        onDispatch?: () => Promise<void>;
+      },
+    ): Promise<unknown> {
       expireDesktopLeaseIfNeeded();
       try {
         requireGrant({
@@ -279,6 +321,8 @@ export function createHostAccessBroker(
             grantId: grant.id,
             displayName: grant.displayName,
             relativePath: input.relativePath ?? "",
+            // What the card and the trail name a command by. See `targetSubject`.
+            ...(input.command ? { command: input.command } : {}),
           },
           // For the gate's dangerous-command and sensitive-path floors (SEC1 §4.3, §4.4).
           subject: {
@@ -292,7 +336,10 @@ export function createHostAccessBroker(
       if (approval && "replay" in approval) return approval.replay;
       // The owner may revoke the grant while approval storage was being consulted.
       requireGrant(input);
-      const result = await enqueue<unknown>({
+      // Started before the operation is queued and awaited with it, so the queueing itself stays in
+      // this tick (see above).
+      const dispatched = hooks?.onDispatch?.();
+      const queued = enqueue<unknown>({
         operationId: randomUUID(),
         kind: input.kind,
         botId: input.botId,
@@ -304,6 +351,7 @@ export function createHostAccessBroker(
         ...(input.writable === true ? { writable: true } : {}),
         ...(commandPolicy ? { commandPolicy } : {}),
       });
+      const [result] = await Promise.all([queued, dispatched]);
       await approval?.complete(result);
       return result;
     },
@@ -364,7 +412,8 @@ export function createHostAccessBroker(
       state.resolve(result.result ?? {});
     },
 
-    revokeGrant(grantId: string, actorId: string) {
+    /** Ends a folder grant, and answers with it, so the trail can name the Bot and the folder. */
+    revokeGrant(grantId: string, actorId: string): HostAccessGrant {
       expireDesktopLeaseIfNeeded();
       const grant = grants.get(grantId);
       if (!grant || grant.actorId !== actorId) {
@@ -383,6 +432,7 @@ export function createHostAccessBroker(
           "That folder grant was revoked before the operation finished.",
         );
       }
+      return publicGrant(grant);
     },
 
     stop(actorId: string) {
@@ -392,17 +442,14 @@ export function createHostAccessBroker(
       }
       const affected = [...operations.values()].filter(
         (state) =>
-          state.actorId === actorId && state.operation.kind !== "cancel",
+          state.actorId === actorId &&
+          state.operation.kind !== "cancel" &&
+          state.operation.kind !== "stop",
       );
       for (const state of affected) {
         failOperation(state, "Host access was stopped.");
       }
-      void enqueue({
-        operationId: randomUUID(),
-        kind: "stop",
-        botId: "*",
-        actorId,
-      });
+      queueStopFor(actorId);
     },
 
     statusFor(actorId: string): HostAccessStatus {

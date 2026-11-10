@@ -1,4 +1,6 @@
 import { Composio } from "@composio/core";
+import { appsPageZh, askAdminToZh, itsAppPage } from "../edition";
+import { displayName } from "./app-names";
 import {
   type AuthConfigOutcome,
   type BrokerApp,
@@ -9,6 +11,7 @@ import {
   type FieldScheme,
   flagOf,
   isFieldScheme,
+  type KeyGuideSource,
 } from "./broker";
 import {
   type ComposioAction,
@@ -16,7 +19,13 @@ import {
   type ComposioResult,
   LISTING_LIMIT,
   vendorSentence,
+  withheldArguments,
 } from "./composio";
+import {
+  DEPLOYMENT_CLIENT_SCHEME,
+  type DeploymentClient,
+  deploymentClientMissingSentence,
+} from "./deployment-clients";
 
 /**
  * The one file in `server/src` that imports `@composio/core`, and what it owes the rest of them.
@@ -182,6 +191,11 @@ type VendorToolkit = {
  */
 type VendorToolkitDetail = {
   auth_config_details?: unknown;
+  /**
+   * The app's own page about connecting it, where Composio publishes one. Read by
+   * {@link KeyGuideSource.connectionGuideUrl} alone, and only ever as a link to show a person.
+   */
+  auth_guide_url?: unknown;
 };
 
 /**
@@ -701,6 +715,12 @@ const FIELD_SCHEME_ORDER: Record<FieldScheme, number> = {
   BEARER_TOKEN: 1,
   BASIC: 2,
   BASIC_WITH_JWT: 3,
+  /*
+   * A server-to-server grant last (upstream #950): it is offered only on the deployment's own
+   * client (see {@link connectionOf}), and an app that also takes a key the person holds is better
+   * connected with that key than through a client the operator registered.
+   */
+  S2S_OAUTH2: 4,
 };
 
 /**
@@ -870,8 +890,16 @@ export function connectionOf(row: VendorToolkit): BrokerConnection {
   }
   if (offered.includes("DCR_OAUTH")) return { kind: "self-registering" };
 
+  /*
+   * A SERVER-TO-SERVER GRANT IS NEVER CHOSEN HERE (upstream #950). What Composio exchanges for its
+   * token is the client this deployment registered, held in the vault, and this function reads only
+   * the catalogue row. So it is left out of the pick, and an app that publishes it with nothing else
+   * this deployment can drive is marked `awaitsClient` below: `withDeploymentClients` turns it into
+   * the field scheme, per request, for the apps a client is stored for.
+   */
   const field = offered
     .filter((scheme) => isFieldScheme(scheme))
+    .filter((scheme) => scheme !== DEPLOYMENT_CLIENT_SCHEME)
     .sort(
       (left, right) => FIELD_SCHEME_ORDER[left] - FIELD_SCHEME_ORDER[right],
     )[0];
@@ -884,6 +912,13 @@ export function connectionOf(row: VendorToolkit): BrokerConnection {
    * nothing — about a row that published something this deployment simply cannot drive.
    */
   const published = [...new Set([...offered, ...managed])];
+  if (offered.includes(DEPLOYMENT_CLIENT_SCHEME)) {
+    return {
+      kind: "unsupported",
+      reason: `${published.join(", ")}：${at} 要用这个部署自己注册的 OAuth 客户端，通过服务器到服务器授权连接，而这个部署还没有为 ${at} 保存客户端。${askAdminToZh(`先在${appsPageZh()}为它保存客户端 ID 和密钥`)}。`,
+      awaitsClient: true,
+    };
+  }
   return {
     kind: "unsupported",
     reason: published.length
@@ -925,7 +960,7 @@ export function connectionOf(row: VendorToolkit): BrokerConnection {
  * that had no app in it. A guard whose absence is argued from a dereference that does not
  * dereference is not a guard anything should rest on.
  */
-function appOf(row: VendorToolkit, position: number): BrokerApp {
+export function appOf(row: VendorToolkit, position: number): BrokerApp {
   const at = `row ${position + 1} of Composio's app catalogue`;
 
   if (typeof row !== "object" || row === null || Array.isArray(row)) {
@@ -1060,7 +1095,8 @@ function appOf(row: VendorToolkit, position: number): BrokerApp {
 
   return {
     slug,
-    name,
+    // The brand's own spelling where the catalogue lowercased it. See `./app-names`.
+    name: displayName(slug, name),
     description,
     logo,
     categories,
@@ -1432,9 +1468,9 @@ function withdrawalDeclined(
  *
  * A PLAIN `Error` RATHER THAN A `BrokerRefusalError`, because this listing's failures are not
  * answered to a route. `./composio` records them in an app's `lastError` for an administrator to
- * read on its Plugins page, and `listingSentence` passes an authored message through untouched.
+ * read on ${itsAppPage()}, and `listingSentence` passes an authored message through untouched.
  */
-function actionOf(
+export function actionOf(
   row: VendorToolRow,
   position: number,
   toolkit: string,
@@ -1734,7 +1770,7 @@ function vendorRefusal(
      */
     case "ComposioToolNotFoundError":
       return refusal(
-        `Composio would not hand that action over at the version this deployment recorded for it, so ${outcome}. This deployment's @composio/core reports an action Composio has withdrawn and a request for one that failed — a timeout, a dropped connection, a 500, a refused key — under one condition and says nothing that tells the two apart, so neither can this deployment. Refreshing ${app}'s tools on its Plugins page records what Composio publishes now, which settles it where the action is gone; where every action of every app is failing the same way, it is the request rather than the action, and Composio's status page is where that shows.`,
+        `Composio would not hand that action over at the version this deployment recorded for it, so ${outcome}. This deployment's @composio/core reports an action Composio has withdrawn and a request for one that failed — a timeout, a dropped connection, a 500, a refused key — under one condition and says nothing that tells the two apart, so neither can this deployment. Refreshing ${app}'s tools on ${itsAppPage()} records what Composio publishes now, which settles it where the action is gone; where every action of every app is failing the same way, it is the request rather than the action, and Composio's status page is where that shows.`,
       );
 
     /*
@@ -1745,7 +1781,7 @@ function vendorRefusal(
      */
     case "ComposioToolVersionRequiredError":
       return refusal(
-        `Composio refuses a call whose toolkit version is "latest", and that is the version travelling with this one, so ${outcome}. A dated version is recorded when an app's actions are listed, so refreshing ${app}'s tools on its Plugins page replaces "latest" with a version Composio will accept.`,
+        `Composio refuses a call whose toolkit version is "latest", and that is the version travelling with this one, so ${outcome}. A dated version is recorded when an app's actions are listed, so refreshing ${app}'s tools on ${itsAppPage()} replaces "latest" with a version Composio will accept.`,
       );
 
     /*
@@ -2092,7 +2128,7 @@ export type ComposioVendor = {
              * nothing THROUGH that check, and the type says so rather than leaving the next reader
              * to discover it from a failed enable.
              */
-            credentials: Record<string, never>;
+            credentials: Record<string, never> | DeploymentClient;
           },
     ): Promise<{ id?: unknown } | null>;
     /**
@@ -2440,6 +2476,30 @@ const REVOCABLE: VendorAccountStatus[] = [
 const DIRECTORY_TTL_MS = 10 * 60 * 1000;
 
 /**
+ * The toolkits Composio publishes about ITSELF, which are left out of the directory entirely.
+ *
+ * Composio's catalogue lists its own tooling beside the apps it connects: "Composio" (its meta
+ * tools), "Composio Search" and "Browser Tool". None of them is an app a person works in, and each
+ * puts the connector provider's name in front of a person browsing for apps, which is the one word
+ * these screens are written not to say. Verified against the live catalogue, which publishes the
+ * three under exactly these slugs, each as a no-auth toolkit.
+ *
+ * DROPPED WHERE THE DIRECTORY IS READ, so every caller agrees: the admin picker and its search, the
+ * enable route's check (a hand-composed request for one is refused as not listed), and the chat's
+ * connect suggestions, which name an app nobody enabled out of this same directory. An app already
+ * enabled is untouched: its row, its grants and its calls never read the directory, so it stays
+ * in that deployment's enabled apps and keeps working until an administrator removes it.
+ *
+ * Slugs, never names: the slug is the only identifier Composio keeps stable. Exa and every other
+ * search or browser app stay, because they are third-party apps rather than Composio's own.
+ */
+export const VENDOR_OWN_TOOLKITS: ReadonlySet<string> = new Set([
+  "composio",
+  "composio_search",
+  "browser_tool",
+]);
+
+/**
  * The held catalogue as a copy nobody else holds, which is what makes handing it out safe.
  *
  * WHAT WAS HANDED OUT WAS THE CACHE ITSELF. One array of one set of row objects was returned to
@@ -2496,12 +2556,49 @@ function copyOf(apps: Promise<BrokerApp[]>): Promise<BrokerApp[]> {
  * {@link ComposioBroker.listApps}, because the seam's callers are routes and none of them has an
  * opinion about what time it is.
  */
+/**
+ * The provider's page for making an app's key, where Composio publishes one (upstream #1297).
+ *
+ * Two places can carry it: `auth_hint_url` on the connection mode the app was added with, and
+ * `auth_guide_url` on the app. Both are empty for nearly every app, so null is the ordinary answer.
+ * Anything that is not text is read as no link: this is a link shown beside a form, and a shape this
+ * file cannot read is no reason to refuse the form a person came for.
+ *
+ * NOT ONE OF THE SEAM'S DOORS, so it is answered beside the broker as `guides` rather than on it;
+ * see {@link KeyGuideSource}.
+ */
+function connectionGuideUrlFor(
+  vendor: ComposioVendor,
+): KeyGuideSource["connectionGuideUrl"] {
+  return async ({ toolkit, authScheme }) => {
+    const detail = await askVendor(
+      {
+        outcome: `where to get ${toolkit}'s key could not be read`,
+        app: toolkit,
+      },
+      () => vendor.toolkits.retrieve(toolkit),
+    );
+    if (typeof detail !== "object" || detail === null) return null;
+    const modes = Array.isArray(detail.auth_config_details)
+      ? detail.auth_config_details
+      : [];
+    const mode = modes.find(
+      (entry: unknown) =>
+        typeof entry === "object" &&
+        entry !== null &&
+        textOf((entry as { mode?: unknown }).mode) === authScheme,
+    ) as { auth_hint_url?: unknown } | undefined;
+    return textOf(mode?.auth_hint_url) ?? textOf(detail.auth_guide_url) ?? null;
+  };
+}
+
 export function buildComposioClient(
   vendor: ComposioVendor,
   now: () => number = Date.now,
 ): {
   actions: ComposioActions;
   broker: ComposioBroker;
+  guides: KeyGuideSource;
 } {
   /**
    * This person's accounts for this app, in whichever states the ASKING question is about.
@@ -2806,7 +2903,9 @@ export function buildComposioClient(
      * toolkit measured, so this is a guard against the vendor rather than a routine case. A count
      * that arrives as something other than a number is the different case and is refused.
      */
-    return toolkits.map(appOf);
+    return toolkits
+      .map(appOf)
+      .filter((app) => !VENDOR_OWN_TOOLKITS.has(app.slug));
   };
 
   const actions: ComposioActions = {
@@ -2962,7 +3061,36 @@ export function buildComposioClient(
         throw new Error(
           `${call.slug} was not sent to Composio: this connection is for ${call.toolkit}, and Composio resolves that action to ${
             ran ?? "no app at all"
-          }. Refreshing this app's tools on its Plugins page recovers it where the action was recorded against a url that has since changed.`,
+          }. Refreshing this app's tools on ${itsAppPage()} recovers it where the action was recorded against a url that has since changed.`,
+        );
+      }
+
+      /*
+       * A FILE PARAMETER THE LISTING LEFT OUT IS REFUSED HERE, AND THE RESOLVE IS WHAT MAKES THAT
+       * POSSIBLE. `./composio` offers an action whose file parameters are all optional with those
+       * parameters removed, because the only value a model can put in one is a staging key it made
+       * up. A model can still send one, so the call has to be checked against the action's own
+       * schema, and the tool resolved above at the recorded version is that schema: the same
+       * definition the listing was read from, asked the same question by the same walk. See
+       * {@link withheldArguments}.
+       *
+       * REFUSED IN A SENTENCE RATHER THAN STRIPPED, which is how this file answers every call it
+       * will not send. Dropping the value quietly would run a different call from the one the model
+       * made and tell it nothing, so the email would go without the attachment the model believes it
+       * attached. The sentence names the parameter and the remedy, which is the same call without it.
+       *
+       * ONE LIMIT, WRITTEN DOWN RATHER THAN HIDDEN. What resolves here has been through
+       * `ToolSchema.parse`, which keeps `properties`, `required`, the composition keywords, `items`
+       * and the flag itself, and drops the rarer 2020-12 applicators (`prefixItems`, `contains` and
+       * the like). A file reachable only through one of those is withheld by the listing and not
+       * seen here. In the fifteen toolkits read when this was written, every file sat directly on a
+       * named property or under its `anyOf` or `items`, all of which survive the parse.
+       */
+      const withheld = withheldArguments(resolved.inputParameters, args);
+      if (withheld.length > 0) {
+        const named = withheld.join(", ");
+        throw new Error(
+          `${call.slug} was not run, because it included ${named}, which is a file. OpenBot can't pass a file to this action, so any value there could only have been made up, and the action is offered without ${named} for that reason. Try again without ${named}.`,
         );
       }
 
@@ -3047,6 +3175,7 @@ export function buildComposioClient(
       toolkit,
       name,
       connection,
+      client,
     }): Promise<AuthConfigOutcome> {
       /*
        * NOTHING AT ALL FOR AN APP THAT NEEDS NO AUTHENTICATION, AND THAT IS THE VENDOR'S RULE
@@ -3135,6 +3264,21 @@ export function buildComposioClient(
       const configName = `${name} ${CONFIG_SUFFIX}`;
 
       /*
+       * EXCEPT A SERVER-TO-SERVER GRANT, WHOSE CREDENTIAL IS THE DEPLOYMENT'S AND NOT A PERSON'S
+       * (upstream #950). `S2S_OAUTH2` is a client-credentials grant: Composio exchanges a client id
+       * and secret for the token itself, so the client belongs on the config, and it is the one this
+       * deployment holds in its vault (`deployment-clients.ts`), handed in by the caller. Without it
+       * a config would be created that Composio accepts and every connect against it fails on, so
+       * that is refused, by name, and nothing is created.
+       */
+      const s2s =
+        connection.kind === "fields" &&
+        connection.authScheme === DEPLOYMENT_CLIENT_SCHEME;
+      if (s2s && !client) {
+        throw new BrokerRefusalError(deploymentClientMissingSentence(toolkit));
+      }
+
+      /*
        * WHICH TYPE OF CONFIG, AND THE MANAGED ONE IS RIGHT FOR EXACTLY ONE OF THE THREE KINDS THAT
        * REACH HERE. It was sent for all of them, and only one of the failures announced itself:
        * Composio has no OAuth client of its own for a self-registering app, so the managed path
@@ -3162,18 +3306,32 @@ export function buildComposioClient(
                * THE EMPTY RECORD IS THE VENDOR'S PRICE FOR SENDING NOTHING — see the field's own
                * comment on {@link ComposioVendor}. Omitting it is a `ValidationError` raised before
                * any request, which reads as a refusal to enable rather than as the secret-free
-               * config this branch is for.
+               * config this branch is for. A server-to-server grant's is the one config that is
+               * sent something, and its client was refused above if it was missing.
                */
-              credentials: {},
+              credentials: s2s && client ? client : {},
             } as const);
 
-      const created = await askVendor(
-        {
-          outcome: `the app is not enabled, and whether an authorization config for ${toolkit} now stands at Composio is not something this deployment can tell`,
-          app: toolkit,
-        },
-        () => vendor.authConfigs.create(toolkit, options),
-      );
+      const outcome = `the app is not enabled, and whether an authorization config for ${toolkit} now stands at Composio is not something this deployment can tell`;
+      /*
+       * A SERVER-TO-SERVER CONFIG CARRIES THE DEPLOYMENT'S CLIENT SECRET, SO ITS FAILURE IS READ AND
+       * DROPPED, NEVER ATTACHED (review M-5). It is the second call here that sends a secret, after
+       * {@link ComposioBroker.connectWithFields}, and it keeps that call's rule for the same reason:
+       * the vendor's error object carries the request, and the request is the secret. Only the
+       * vendor's own sentence leaves this block, through `vendorSentence`, the one door for it.
+       */
+      const created = s2s
+        ? await vendor.authConfigs.create(toolkit, options).catch((error) => {
+            const said = vendorSentence(error);
+            throw new BrokerRefusalError(
+              said === null
+                ? `Composio did not accept the authorization config for ${toolkit} and said nothing this deployment can pass on, so ${outcome}. The failure itself was dropped rather than recorded, because the request carried this deployment's own OAuth client.`
+                : `Composio refused the authorization config for ${toolkit}: ${said} So ${outcome}. Nothing further is kept, because the request carried this deployment's own OAuth client.`,
+            );
+          })
+        : await askVendor({ outcome, app: toolkit }, () =>
+            vendor.authConfigs.create(toolkit, options),
+          );
 
       /*
        * THE REPLY IS READ, WHICH IS THE HALF THAT WAS MISSING. Composio names the config it just
@@ -3249,7 +3407,7 @@ export function buildComposioClient(
          * {@link ComposioBroker.deleteAuthConfig} states.
          *
          * IT IS A BLOCK, AND THE BLOCK IS THE POINT. The app's row survives this throw —
-         * `removeServer` deletes it only after this returns — so the app stays on its Plugins page
+         * `removeServer` deletes it only after this returns — so the app stays on ${itsAppPage()}
          * and stays removable, which is the one thing a silent success took away. The remedy is an
          * operator's and it is one act in a dashboard: rename the config back so it ends with the
          * suffix and remove the app again, which finishes the withdrawal, or satisfy yourself that
@@ -3305,7 +3463,7 @@ export function buildComposioClient(
        * unreadable next time.
        *
        * STILL A REFUSAL, WHICH IS THE HALF THAT DOES NOT MOVE. `removeServer` deletes the app's row
-       * only after this returns, so the app stays on its Plugins page and stays removable; a quiet
+       * only after this returns, so the app stays on ${itsAppPage()} and stays removable; a quiet
        * return here would file the app away over rows that may be this deployment's own configs,
        * holding live grants, under an answer it could not read.
        */
@@ -3349,7 +3507,7 @@ export function buildComposioClient(
          * reported after — {@link readableConfigs} says why at length: refusing before the first
          * delete meant one unreadable row made an app permanently unremovable, with the readable
          * configs of ours standing the whole time. It is still a refusal, so `removeServer` does
-         * not delete the app's row and the app stays on its Plugins page.
+         * not delete the app's row and the app stays on ${itsAppPage()}.
          *
          * TWO CLAUSES BECAUSE THEY ARE TWO REMEDIES. A config Composio refused is one a second press
          * reaches. A row it described with no id or no name is not — it will be exactly as
@@ -3424,7 +3582,7 @@ export function buildComposioClient(
           );
         }
         throw new BrokerRefusalError(
-          `This deployment has no authorization config at Composio for ${toolkit}, so there is nothing to connect an account against. An administrator removing the app on its Plugins page and adding it again creates one.`,
+          `This deployment has no authorization config at Composio for ${toolkit}, so there is nothing to connect an account against. An administrator removing the app on ${itsAppPage()} and adding it again creates one.`,
         );
       }
 
@@ -3501,7 +3659,7 @@ export function buildComposioClient(
         const disabled = ours.length - unsettled.length;
         if (disabled > 0) {
           left.push(
-            `Composio calls ${disabled} of this deployment's ${ours.length} authorization configs for ${toolkit} disabled, and an administrator can enable it in Composio's dashboard, or remove the app on its Plugins page and add it again.`,
+            `Composio calls ${disabled} of this deployment's ${ours.length} authorization configs for ${toolkit} disabled, and an administrator can enable it in Composio's dashboard, or remove the app on ${itsAppPage()} and add it again.`,
           );
         }
         if (unsettled.length > 0) {
@@ -4104,7 +4262,7 @@ export function buildComposioClient(
        */
       if (mode === undefined || mode === null) {
         throw new BrokerRefusalError(
-          `Composio no longer publishes a ${authScheme} connection for ${toolkit}, and ${toolkit}'s authorization config here was created as ${authScheme}, so there is nothing to ask this person for — and an empty form is a box they cannot fill in and a connection carrying no credential at all. An administrator removing the app on its Plugins page and adding it again is what records the scheme Composio publishes for it now.`,
+          `Composio no longer publishes a ${authScheme} connection for ${toolkit}, and ${toolkit}'s authorization config here was created as ${authScheme}, so there is nothing to ask this person for — and an empty form is a box they cannot fill in and a connection carrying no credential at all. An administrator removing the app on ${itsAppPage()} and adding it again is what records the scheme Composio publishes for it now.`,
         );
       }
       /*
@@ -4423,7 +4581,7 @@ export function buildComposioClient(
           );
         }
         throw new BrokerRefusalError(
-          `This deployment has no authorization config at Composio for ${toolkit}, so there is nothing to connect an account against and nothing was sent. An administrator removing the app on its Plugins page and adding it again creates one.`,
+          `This deployment has no authorization config at Composio for ${toolkit}, so there is nothing to connect an account against and nothing was sent. An administrator removing the app on ${itsAppPage()} and adding it again creates one.`,
         );
       }
 
@@ -4464,7 +4622,7 @@ export function buildComposioClient(
         const disabled = ours.length - unsettled.length;
         if (disabled > 0) {
           left.push(
-            `Composio calls ${disabled} of this deployment's ${ours.length} authorization configs for ${toolkit} disabled, and an administrator can enable it in Composio's dashboard, or remove the app on its Plugins page and add it again.`,
+            `Composio calls ${disabled} of this deployment's ${ours.length} authorization configs for ${toolkit} disabled, and an administrator can enable it in Composio's dashboard, or remove the app on ${itsAppPage()} and add it again.`,
           );
         }
         if (unsettled.length > 0) {
@@ -4536,7 +4694,22 @@ export function buildComposioClient(
              */
             state: {
               authScheme,
-              val: { ...values, status: "ACTIVE" },
+              /*
+               * EXCEPT A SERVER-TO-SERVER GRANT, WHICH CARRIES NO STATUS AT ALL (upstream #950).
+               * `ACTIVE` claims the token is already in hand, and for `S2S_OAUTH2` it is not:
+               * Composio refuses that request for the missing `access_token`. Left out, Composio
+               * exchanges the config's client for the token itself. A value typed under the name
+               * `status` is dropped rather than sent, so no typed value can say what state Composio
+               * is asked for.
+               */
+              val:
+                authScheme === DEPLOYMENT_CLIENT_SCHEME
+                  ? Object.fromEntries(
+                      Object.entries(values).filter(
+                        ([fieldName]) => fieldName !== "status",
+                      ),
+                    )
+                  : { ...values, status: "ACTIVE" },
             },
           },
         });
@@ -4550,7 +4723,8 @@ export function buildComposioClient(
         throw new BrokerRefusalError(
           said === null
             ? `Composio did not accept the connection to ${toolkit} and said nothing this deployment can pass on. The failure arrived through this deployment's @composio/core with no sentence of Composio's on it, which is what an outage, a cancelled request and a reply the package could not read all look like from here — and the failure itself was dropped rather than recorded, because on this one call the object carrying it also carries what was typed into the form. Nothing was attached. Composio's own dashboard logs the attempt, and asking again is what settles whether the request ever landed.`
-            : `Composio refused the connection to ${toolkit}: ${said} Nothing was attached. Nothing further about this attempt is kept here, because what the failure carried was the value typed into the form — the request id in Composio's own words above is what their dashboard searches on.`,
+            : // A person reads this one (upstream #1223): the vendor's own sentence, and no broker named.
+              `${toolkit} 没有接受你填写的内容：${said} 没有连接任何账号。请检查填写的内容后重试。`,
         );
       }
 
@@ -4655,7 +4829,11 @@ export function buildComposioClient(
     },
   };
 
-  return { actions, broker };
+  return {
+    actions,
+    broker,
+    guides: { connectionGuideUrl: connectionGuideUrlFor(vendor) },
+  };
 }
 
 /**
@@ -4695,6 +4873,7 @@ export function buildComposioClient(
 export function createComposioClient(apiKey: string): {
   actions: ComposioActions;
   broker: ComposioBroker;
+  guides: KeyGuideSource;
 } {
   /*
    * THREE ENTRIES, EVERY ONE OF THEM LOAD-BEARING, AND ALL THREE PINNED BY A TEST. What this
@@ -4744,12 +4923,13 @@ export function createComposioClient(apiKey: string): {
      * have to re-derive it.
      *
      * `dangerouslyAllowAutoUploadDownloadFiles` defaults OFF (`ConfigDefaults.node.ts:4`) and is
-     * the premise `./composio`'s file filter is written on; that filter drops every action whose
-     * schema stages a file under EITHER setting, so the premise is defended by a tested guard
-     * rather than by this literal, and turning the flag on here would be a change to make against
-     * that filter. `sensitiveFileUploadProtection`, `fileUploadPathDenySegments`, `fileUploadDirs`
-     * and `fileDownloadDir` only bear on uploads and downloads that the same filter means never
-     * happen. `provider` defaults to the SDK's `OpenAIProvider`, which this adapter never asks to
+     * the premise `./composio`'s file filter is written on; under EITHER setting that filter drops
+     * every action that needs a file and offers one that only accepts a file without that
+     * parameter, and the execute path refuses a call that carries it anyway. So the premise is
+     * defended by tested guards rather than by this literal, and turning the flag on here would be
+     * a change to make against that filter. `sensitiveFileUploadProtection`,
+     * `fileUploadPathDenySegments`, `fileUploadDirs` and `fileDownloadDir` only bear on uploads
+     * and downloads that the same filter means never happen. `provider` defaults to the SDK's `OpenAIProvider`, which this adapter never asks to
      * format anything — every read here goes through the raw client or the SDK's own models.
      * `host` and `defaultHeaders` are telemetry and header cosmetics, and telemetry is off above.
      * `toolkitVersions` defaults to "latest", which is the literal every listing in this file

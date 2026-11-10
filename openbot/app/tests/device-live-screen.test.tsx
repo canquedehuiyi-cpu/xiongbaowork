@@ -107,6 +107,7 @@ function server(device?: string) {
     holder: "bot",
     since: "2026-11-04T00:00:00Z",
     requested: false,
+    recoveryRequired: false,
     transitioning: false,
     resumeSnapshotRequired: false,
     ...(device ? { device: { deviceId: device } } : {}),

@@ -582,6 +582,7 @@ function RouteComponent() {
         open={creatingCrew}
         queryClient={queryClient}
       />
+      {/* M4: 待接入 上游的新建界面 NewBotSheet（components/agents/new-bot-sheet.tsx：选框架/harness、Isolated、托管运行）未接到这里：它是英文且没有 fork 向导的人设、模型库与头像步骤；新对话页的「新建员工」也用本向导 */}
       <CreateAgentDialog
         onClose={closeDialog}
         onCreated={(agentId) =>

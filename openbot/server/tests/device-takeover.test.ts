@@ -4,6 +4,7 @@ import {
   HandoffRequestError,
   HumanHasControlError,
 } from "../src/computer/client";
+import { personSeat } from "../src/computer/computer-key";
 import {
   createComputerGateway,
   DEVICE_TAKEOVER_RULE,
@@ -32,6 +33,8 @@ import {
 
 const OWNER = "tenant-a";
 const ACTOR = { id: OWNER };
+/** A Bot on its owner's computer, which is the paired machine here. */
+const seat = (botId: string) => personSeat(OWNER, botId);
 const PERMISSIVE: ActionPolicy = {
   mode: "enforce",
   deny: [],
@@ -119,16 +122,16 @@ function harness(options: { now?: () => number; graceMs?: number } = {}) {
 
 /** Take the wheel the way the surface does: ask, then take the request that was opened. */
 async function take(h: ReturnType<typeof harness>, botId = "bot-1") {
-  const asked = await h.gateway.requestHelp(botId, ACTOR, "接管");
+  const asked = await h.gateway.requestHelp(seat(botId), ACTOR, "接管");
   const id = asked.request?.id ?? "";
-  const taken = await h.gateway.takeControl(botId, ACTOR, id);
+  const taken = await h.gateway.takeControl(seat(botId), ACTOR, id);
   expect(taken.holder).toBe("human");
   return id;
 }
 
 test("while a person holds the wheel, every Bot action is refused with a row and no runner frame", async () => {
   const h = harness();
-  await h.gateway.runCommand("bot-1", ACTOR, { command: "pwd" });
+  await h.gateway.runCommand(seat("bot-1"), ACTOR, { command: "pwd" });
   expect(h.actions()).toHaveLength(1);
 
   const requestId = await take(h);
@@ -138,25 +141,25 @@ test("while a person holds the wheel, every Bot action is refused with a row and
   const attempts: [string, () => Promise<unknown>][] = [
     [
       "computer_navigate",
-      () => h.gateway.navigate("bot-1", ACTOR, "https://example.test/next"),
+      () => h.gateway.navigate(seat("bot-1"), ACTOR, "https://example.test/next"),
     ],
     [
       "computer_run_command",
-      () => h.gateway.runCommand("bot-1", ACTOR, { command: "rm -rf ./out" }),
+      () => h.gateway.runCommand(seat("bot-1"), ACTOR, { command: "rm -rf ./out" }),
     ],
     [
       "computer_write_file",
       () =>
-        h.gateway.writeFile("bot-1", ACTOR, {
+        h.gateway.writeFile(seat("bot-1"), ACTOR, {
           path: "notes.txt",
-          content: "x",
+          contents: "x",
         }),
     ],
     [
       "computer_scroll",
-      () => h.gateway.scroll("bot-1", ACTOR, { deltaY: 400 }),
+      () => h.gateway.scroll(seat("bot-1"), ACTOR, { deltaY: 400 }),
     ],
-    ["computer_key", () => h.gateway.key("bot-1", ACTOR, { key: "Enter" })],
+    ["computer_key", () => h.gateway.key(seat("bot-1"), ACTOR, { key: "Enter" })],
   ];
   for (const [, attempt] of attempts) {
     const error = await attempt().catch((caught) => caught);
@@ -194,16 +197,16 @@ test("while a person holds the wheel, every Bot action is refused with a row and
 test("handing back lets the Bot act again, and the trail records both ends", async () => {
   const h = harness();
   const requestId = await take(h);
-  const released = await h.gateway.releaseControl("bot-1", ACTOR, requestId);
+  const released = await h.gateway.releaseControl(seat("bot-1"), ACTOR, requestId);
   expect(released.holder).toBe("bot");
   // The surface is told this is the tenant's own machine, and which one.
   expect(released.device).toEqual({ deviceId: "laptop-1" });
   expect(released.request).toBeUndefined();
-  expect((await h.gateway.control("bot-1", requestId)).request?.status).toBe(
+  expect((await h.gateway.control(seat("bot-1"), requestId)).request?.status).toBe(
     "completed",
   );
 
-  await h.gateway.runCommand("bot-1", ACTOR, { command: "pwd" });
+  await h.gateway.runCommand(seat("bot-1"), ACTOR, { command: "pwd" });
   expect(h.actions().map((frame) => frame.action)).toEqual(["exec"]);
   const kinds = h.rows.map((row) => row.eventType);
   expect(kinds).toContain("computer.help_requested");
@@ -215,7 +218,7 @@ test("handing back lets the Bot act again, and the trail records both ends", asy
 test("a takeover is one Bot on one machine: another Bot, or the same Bot elsewhere, still acts", async () => {
   const h = harness();
   await take(h, "bot-1");
-  await h.gateway.runCommand("bot-2", ACTOR, { command: "pwd" });
+  await h.gateway.runCommand(seat("bot-2"), ACTOR, { command: "pwd" });
   expect(h.actions()).toHaveLength(1);
 
   const desktop = { tenantId: OWNER, deviceId: "desktop-2" };
@@ -224,7 +227,7 @@ test("a takeover is one Bot on one machine: another Bot, or the same Bot elsewhe
     answeringSocket(() => h.channel, desktop, h.frames),
   );
   h.moveTo(desktop);
-  await h.gateway.runCommand("bot-1", ACTOR, { command: "pwd" });
+  await h.gateway.runCommand(seat("bot-1"), ACTOR, { command: "pwd" });
   expect(h.actions()).toHaveLength(2);
 });
 
@@ -232,7 +235,7 @@ test("a Bot asking for help is refused until the request is taken, cancelled or 
   let clock = Date.parse("2026-11-04T08:00:00Z");
   const h = harness({ now: () => clock });
   const asked = await h.gateway.requestHelp(
-    "bot-1",
+    seat("bot-1"),
     ACTOR,
     "请帮我登录",
     "call-1",
@@ -240,38 +243,38 @@ test("a Bot asking for help is refused until the request is taken, cancelled or 
   expect(asked).toMatchObject({ holder: "bot", requested: true });
   expect(asked.request?.source).toBe("model");
   await expect(
-    h.gateway.runCommand("bot-1", ACTOR, { command: "pwd" }),
+    h.gateway.runCommand(seat("bot-1"), ACTOR, { command: "pwd" }),
   ).rejects.toBeInstanceOf(HumanHasControlError);
 
   const id = asked.request?.id ?? "";
-  await h.gateway.cancelControl("bot-1", ACTOR, id);
-  await h.gateway.runCommand("bot-1", ACTOR, { command: "pwd" });
+  await h.gateway.cancelControl(seat("bot-1"), ACTOR, id);
+  await h.gateway.runCommand(seat("bot-1"), ACTOR, { command: "pwd" });
   expect(h.actions()).toHaveLength(1);
 
-  const again = await h.gateway.requestHelp("bot-1", ACTOR, "再帮一次");
+  const again = await h.gateway.requestHelp(seat("bot-1"), ACTOR, "再帮一次");
   clock += 11 * 60 * 1000;
   expect(
-    (await h.gateway.control("bot-1", again.request?.id)).request?.status,
+    (await h.gateway.control(seat("bot-1"), again.request?.id)).request?.status,
   ).toBe("expired");
-  await h.gateway.runCommand("bot-1", ACTOR, { command: "pwd" });
+  await h.gateway.runCommand(seat("bot-1"), ACTOR, { command: "pwd" });
   expect(h.actions()).toHaveLength(2);
 });
 
 test("a handback names its own request: an unknown one is 404, a finished one 409", async () => {
   const h = harness();
   await expect(
-    h.gateway.takeControl("bot-1", ACTOR, "nope"),
+    h.gateway.takeControl(seat("bot-1"), ACTOR, "nope"),
   ).rejects.toMatchObject({ status: 404 });
   const requestId = await take(h);
-  await h.gateway.releaseControl("bot-1", ACTOR, requestId);
+  await h.gateway.releaseControl(seat("bot-1"), ACTOR, requestId);
   const error = await h.gateway
-    .takeControl("bot-1", ACTOR, requestId)
+    .takeControl(seat("bot-1"), ACTOR, requestId)
     .catch((caught) => caught);
   expect(error).toBeInstanceOf(HandoffRequestError);
   expect((error as HandoffRequestError).status).toBe(409);
   // Releasing twice is the same release.
   expect(
-    (await h.gateway.releaseControl("bot-1", ACTOR, requestId)).holder,
+    (await h.gateway.releaseControl(seat("bot-1"), ACTOR, requestId)).holder,
   ).toBe("bot");
 });
 
@@ -331,10 +334,10 @@ test("closing the holder's last screen hands the wheel back after the grace, and
   await Bun.sleep(60);
   expect(h.takeovers.holder(laptop, "bot-1")).toBeNull();
   expect(h.released).toEqual([requestId]);
-  expect((await h.gateway.control("bot-1", requestId)).request?.status).toBe(
+  expect((await h.gateway.control(seat("bot-1"), requestId)).request?.status).toBe(
     "completed",
   );
-  await h.gateway.runCommand("bot-1", ACTOR, { command: "pwd" });
+  await h.gateway.runCommand(seat("bot-1"), ACTOR, { command: "pwd" });
   expect(h.actions()).toHaveLength(1);
 });
 
@@ -352,6 +355,6 @@ test("a gateway without a takeover registry keeps posting handovers to the trans
     transport: createRunnerTransport(channel),
     resolveDevice: async () => laptop,
   });
-  await gateway.control("bot-1");
+  await gateway.control(seat("bot-1"));
   expect(frames.map((frame) => frame.action)).toEqual(["control"]);
 });

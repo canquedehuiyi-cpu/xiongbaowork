@@ -66,6 +66,9 @@ const waker = (id: string, name: string): AgentProfile => ({
   systemOwned: false,
   canManage: true,
   mine: true,
+  isolated: false,
+  isolationActive: false,
+  isolationOffReason: null,
 });
 
 const FLOW_ID = "5f0c1f8e-8a39-4f4e-9d8f-0e5a3c6b7d21";

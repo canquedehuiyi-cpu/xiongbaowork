@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import {
   createPolicyStore,
@@ -80,4 +80,8 @@ describe("the computer boundary is the deployment's row", () => {
     );
     expect(await stored()).toHaveLength(0);
   });
+});
+
+afterAll(async () => {
+  await database.$client.close();
 });

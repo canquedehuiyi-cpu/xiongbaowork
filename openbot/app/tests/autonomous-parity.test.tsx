@@ -118,6 +118,9 @@ const agent = (over: Partial<AgentProfile>): AgentProfile => ({
   systemOwned: false,
   canManage: true,
   mine: true,
+  isolated: false,
+  isolationActive: false,
+  isolationOffReason: null,
   ...over,
 });
 

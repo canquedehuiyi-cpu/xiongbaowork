@@ -27,6 +27,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Separator } from "@/components/ui/separator";
+import { currentUserQueryOptions } from "@/lib/auth/queries";
 import { connectAccountMutationOptions } from "@/lib/plugins/mutations";
 import {
   appKeyOf,
@@ -52,6 +53,8 @@ function RouteComponent() {
   });
   const plugins = useQuery(pluginsPageQueryOptions());
   const connections = useQuery(connectionsQueryOptions());
+  // Already in the cache: the `_authed` guard loaded it before this page could be entered.
+  const me = useQuery(currentUserQueryOptions());
   const [notice, setNotice] = useState<string | null>(null);
 
   const connect = useMutation({
@@ -218,13 +221,18 @@ function RouteComponent() {
     /* Bound once because the row below is told it twice — once inside the whole disconnected
        sentence and once on its own — and two copies of it would drift. */
     const reassurance = "没有员工能以你的身份读取它。";
+    /*
+     * An app on this deployment's own client is connected by an administrator only (upstream #950):
+     * the server says which apps are, and who is reading decides whether that is this person.
+     */
+    const needsAdmin = server.adminConnectOnly && me.data?.role !== "admin";
 
     return (
       <PageShell
         width="workbench"
         className="max-w-4xl"
         backButton={back}
-        description="通过 Composio 连接，账号由它保管，所以员工只能看到你能看到的东西。"
+        description="通过熊宝连接你自己的账号，所以员工只能看到你能看到的东西。"
         title={server.title}
       >
         {notice ? (
@@ -241,12 +249,13 @@ function RouteComponent() {
               /* Said beside the button rather than after it: disconnecting ends the account at
                  Composio, so what it undoes is not the row here but the grant on your own mailbox,
                  and connecting again is a fresh consent. */
-              connectedDescription={`被授予它的工具的员工会以你的身份读取你的 ${server.title}。断开会在 Composio 那边结束这个账号，而不只是这里。`}
-              disconnectedDescription={`${reassurance}连接时会先带你到 Composio，再到服务商那边授权。`}
+              connectedDescription={`被授予它的工具的员工会以你的身份读取你的 ${server.title}。断开也会收回熊宝对你账号的访问，而不只是这里的记录。`}
+              disconnectedDescription={`${reassurance}连接时会带你到服务商那边授权。`}
               /* What is true either way. The trip to Composio is not — an app whose key somebody
                  types never leaves this page — but which Bots can read this person's mail is the
                  whole point of the screen and holds for both kinds. */
               disconnectedReassurance={reassurance}
+              needsAdmin={needsAdmin}
               title={server.title}
             />
           </PageRows>

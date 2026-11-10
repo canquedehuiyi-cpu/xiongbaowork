@@ -72,6 +72,7 @@ import {
 } from "@/lib/enterprise/queries";
 import { queryClient } from "@/query-client";
 
+// M4: 待接入 上游已把本页各分区拆到 权限/模型提供方/身份提供方/电脑/插件/自动学习/审计 页，并把 /admin/enterprise 重定向到 /admin；fork 保留本页，与新页有重复的设置项
 export const Route = createFileRoute("/_authed/admin/enterprise")({
   component: EnterprisePage,
 });

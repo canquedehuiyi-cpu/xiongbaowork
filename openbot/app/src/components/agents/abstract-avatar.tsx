@@ -1,6 +1,8 @@
 import { QueryClientContext } from "@tanstack/react-query";
 import Avatar from "boring-avatars";
 import { useContext } from "react";
+import { useBotLook } from "@/components/agents/bot-look";
+import { BotOrb } from "@/components/agents/bot-orb";
 import { usePortraitSrc } from "@/components/portraits/use-portrait";
 import type { PortraitKind } from "@/lib/portraits/queries";
 
@@ -20,20 +22,25 @@ type FaceProps = {
   portrait?: { kind: PortraitKind; id: string };
 };
 
+/** A coworker's avatar: a chosen portrait, else its orb, or its face in a skin that has not opted in to orbs. */
 export function AbstractAvatar(props: FaceProps) {
+  const look = useBotLook();
   /*
    * Only read the workspace's portraits where there is a query client to read them with. A face is
    * also drawn in isolated previews and tests that have none, and there the seed's drawing is right.
    */
   const queryClient = useContext(QueryClientContext);
   if (props.portrait && queryClient) {
-    return <PortraitFace {...props} portrait={props.portrait} />;
+    return <PortraitFace {...props} look={look} portrait={props.portrait} />;
   }
-  return <Face {...props} />;
+  return <Face {...props} look={look} />;
 }
 
 function PortraitFace(
-  props: FaceProps & { portrait: { kind: PortraitKind; id: string } },
+  props: FaceProps & {
+    look: "orb" | "face";
+    portrait: { kind: PortraitKind; id: string };
+  },
 ) {
   const src = usePortraitSrc(props.portrait.kind, props.portrait.id);
   return <Face {...props} src={src ?? undefined} />;
@@ -45,7 +52,19 @@ function Face({
   size = 40,
   decorative = false,
   src,
-}: FaceProps & { src?: string }) {
+  look,
+}: FaceProps & { src?: string; look: "orb" | "face" }) {
+  // A skin that draws coworkers as orbs still shows a portrait somebody chose for them.
+  if (look === "orb" && !src) {
+    const orb = <BotOrb name={name} seed={seed} size={size} />;
+    return decorative ? (
+      <span aria-hidden="true" className="inline-flex shrink-0">
+        {orb}
+      </span>
+    ) : (
+      orb
+    );
+  }
   const drawing = src ? (
     <img
       alt=""

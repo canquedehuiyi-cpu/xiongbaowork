@@ -181,6 +181,9 @@ function renderShell(path: string, options: Options = {}) {
   queryClient.setQueryData(userPreferencesQueryOptions("user").queryKey, {
     messageListEmphasis: "thread",
     selfHostBannerDismissed: true,
+    narration: null,
+    skin: "openbot",
+    proactive: "on",
   });
   queryClient.setQueryData(authKeys.currentUser(), {
     id: "user",
@@ -197,7 +200,10 @@ function renderShell(path: string, options: Options = {}) {
     staleTime: Number.POSITIVE_INFINITY,
     refetchInterval: false,
   });
-  queryClient.setQueryData(botLifecycleKeys.attention, options.attention ?? []);
+  queryClient.setQueryData(botLifecycleKeys.attention, {
+    bots: options.attention ?? [],
+    lastPingId: null,
+  });
   if (options.groups !== "error") {
     queryClient.setQueryData(wakerGroupKeys.list(), options.groups ?? []);
   }
@@ -400,6 +406,8 @@ test("what an employee needs from you rides on its row: a count badge and a paus
         unread: 0,
         paused: false,
         notify: "all",
+        items: 0,
+        tasks: { needsInput: 0, ready: 0, failed: 0 },
       },
       {
         agentId: "agent-writer",
@@ -410,6 +418,8 @@ test("what an employee needs from you rides on its row: a count badge and a paus
         unread: 0,
         paused: true,
         notify: "all",
+        items: 0,
+        tasks: { needsInput: 0, ready: 0, failed: 0 },
       },
     ],
   });
@@ -723,7 +733,10 @@ test("settings keep the app sidebar and add their own column with a way back", a
     .filter((link) => textOf(link) !== "返回");
   expect(entries.map((link) => [textOf(link), hrefOf(link)])).toEqual([
     ["通用", "/settings"],
+    ["通知", "/settings/notifications"],
     ["已连接的账号", "/settings/connected-accounts"],
+    ["浏览器", "/settings/browsers"],
+    ["学习", "/settings/learning"],
     ["密码", "/settings/passwords"],
     ["组件展示", "/settings/components-gallery"],
   ]);

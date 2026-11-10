@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import type { AbstractAgent, BaseEvent, Message } from "@ag-ui/client";
+import { LockLapsedError } from "@openbot/toolkit/lease";
 import { Observable } from "rxjs";
 import { createHandoffDelivery } from "../src/agents/handoff-delivery";
 import type { HandoffWork } from "../src/agents/handoff-runner";
 import { runAsTenant } from "../src/tenant/context";
+import { serverTurnAdmission } from "../src/agents/turn-admission";
 
 /**
  * Turning a hop into a turn.
@@ -29,6 +31,20 @@ const PRIOR: Message[] = [
 
 const FINISHED = [{ type: "RUN_FINISHED" }] as unknown as BaseEvent[];
 
+/**
+ * The one message a forward hop hands the addressed Bot, as text: the asking conversation set out
+ * above the ask, attributed. Parts that are not text are left out of the reading.
+ */
+function theAsk(messages: readonly Message[]): string {
+  expect(messages).toHaveLength(1);
+  const content = (messages[0] as { content?: unknown }).content;
+  if (typeof content === "string") return content;
+  return (content as { type?: string; text?: string }[])
+    .filter((part) => part.type === "text")
+    .map((part) => part.text)
+    .join("\n\n");
+}
+
 /** Enough of an agent for the delivery to hand a conversation to. */
 function stubAgent(): AbstractAgent {
   const agent = {
@@ -45,7 +61,11 @@ function delivery(
   events: BaseEvent[],
   agent: AbstractAgent | null = stubAgent(),
   lockHeld = true,
-  options: { history?: readonly unknown[]; deadlineMs?: number } = {},
+  options: {
+    history?: readonly unknown[];
+    deadlineMs?: number;
+    busyWaitMs?: number;
+  } = {},
 ) {
   const requests: Array<{
     threadId: string;
@@ -61,9 +81,13 @@ function delivery(
     released,
     builtFor,
     delivery: createHandoffDelivery({
+      admission: serverTurnAdmission,
       ...(options.deadlineMs === undefined
         ? {}
         : { deadlineMs: options.deadlineMs }),
+      ...(options.busyWaitMs === undefined
+        ? {}
+        : { busyWaitMs: options.busyWaitMs }),
       agentFor: async (input) => {
         builtFor.push(input);
         return agent;
@@ -119,12 +143,18 @@ describe("turning a hop into a turn", () => {
 
     const messages = requests[0]?.input.messages as Message[];
     // The conversation, then the ask. A Bot handed only the task answers a question whose other half
-    // was settled three messages ago.
-    expect(messages.map((m) => m.id).slice(0, 2)).toEqual(["m1", "m2"]);
-    expect(messages.at(-1)).toMatchObject({
-      role: "user",
-      content: "assistant has asked you to help",
-    });
+    // was settled three messages ago. Both arrive in one message, the conversation attributed to
+    // whoever said it: none of it was said to this Bot, and handed over as its own turns, the
+    // person's words to the asking Bot read as instructions to it.
+    const ask = theAsk(messages);
+    expect(messages[0]).toMatchObject({ role: "user" });
+    const person = ask.indexOf("The person: we had an outage yesterday");
+    const asker = ask.indexOf("assistant: I will find out when");
+    const request = ask.indexOf("assistant has asked you to help");
+    expect(person).toBeGreaterThan(-1);
+    expect(asker).toBeGreaterThan(person);
+    expect(request).toBeGreaterThan(asker);
+    expect(ask).toEndWith("assistant has asked you to help");
   });
 
   test("the run carries the deployment's signed statement of what it is", async () => {
@@ -228,11 +258,11 @@ describe("holding the conversation while a Bot answers", () => {
    * a failure. The hop goes back on the queue and is tried again.
    */
   test("a conversation somebody else is running in is waited for, not failed", async () => {
-    const { delivery: deliver, requests } = delivery(
-      FINISHED,
-      stubAgent(),
-      false,
-    );
+    const {
+      delivery: deliver,
+      requests,
+      lockCalls,
+    } = delivery(FINISHED, stubAgent(), false, { busyWaitMs: 600 });
 
     await expect(
       runAsTenant(WORK.actorId, () =>
@@ -245,6 +275,9 @@ describe("holding the conversation while a Bot answers", () => {
       ),
     ).rejects.toThrow("busy");
     expect(requests).toEqual([]);
+    // Asked again while it waited, then given back to the queue holding nothing.
+    expect(lockCalls.length).toBeGreaterThan(1);
+    expect(new Set(lockCalls)).toEqual(new Set(["acquire"]));
   });
 
   /*
@@ -307,8 +340,9 @@ describe("which conversation the turn runs in", () => {
     );
 
     // Its own conversation is new and empty; reading that would tell it nothing.
-    const messages = requests[0]?.input.messages as Array<{ id: string }>;
-    expect(messages.map((m) => m.id).slice(0, 2)).toEqual(["m1", "m2"]);
+    const ask = theAsk(requests[0]?.input.messages as Message[]);
+    expect(ask).toContain("we had an outage yesterday");
+    expect(ask).toContain("I will find out when");
   });
 });
 
@@ -354,10 +388,13 @@ describe("the conversation that crosses a hop", () => {
 
     const messages = requests[0]?.input.messages as Message[];
     expect(messages.map((message) => message.id)).toEqual([
-      "m1",
-      "m4",
-      `handoff-platform-run`,
+      "handoff-platform-run",
     ]);
+    const ask = theAsk(messages);
+    expect(ask).toContain("The person: ask the researcher");
+    expect(ask).toContain("assistant: I have asked them.");
+    expect(ask).not.toContain("Handed to Researcher");
+    expect(ask).toEndWith("the ask");
   });
 });
 
@@ -375,6 +412,7 @@ describe("a delivery that never finishes", () => {
     });
     // A run that emits nothing and never completes, which is what a stalled Bot looks like.
     const stalled = createHandoffDelivery({
+      admission: serverTurnAdmission,
       deadlineMs: 20,
       agentFor: async () => stubAgent(),
       history: async () => PRIOR,
@@ -403,6 +441,136 @@ describe("a delivery that never finishes", () => {
     // Given back, or the conversation stays unusable until the lock expires.
     expect(lockCalls).toContain("release");
     void deliver;
+  });
+
+  /*
+   * A renewal that did not arrive is not a lock that was lost. Stopped here, the hop would be retried
+   * from the start, and a Bot that had already acted would act again.
+   */
+  test("a renewal that merely failed does not stop the hop", async () => {
+    let renewals = 0;
+    const hop = createHandoffDelivery({
+      admission: serverTurnAdmission,
+      deadlineMs: 5_000,
+      renewEveryMs: 2,
+      agentFor: async () => stubAgent(),
+      history: async () => PRIOR,
+      newRunId: () => "run-2",
+      mintThreadId: () => "scratch-thread",
+      lock: {
+        acquire: async () => ({ runId: "platform-run" }),
+        renew: () => {
+          renewals += 1;
+          return Promise.reject(new TypeError("fetch failed"));
+        },
+        release: async () => {},
+      },
+      runner: {
+        run: () =>
+          new Observable<BaseEvent>((subscriber) => {
+            const finish = setTimeout(() => {
+              for (const event of FINISHED) subscriber.next(event);
+              subscriber.complete();
+            }, 30);
+            return () => clearTimeout(finish);
+          }),
+      },
+    });
+
+    await runAsTenant(WORK.actorId, () =>
+      runAsTenant(WORK.actorId, () =>
+        hop.deliver({ work: WORK, message: "m", shown: "s", assertion: "s" }),
+      ),
+    );
+    expect(renewals).toBeGreaterThan(0);
+  });
+
+  /*
+   * A renewal refused as a conflict means somebody else holds the conversation now — on a relay,
+   * most likely the person, typing in their own channel. The hop stops rather than write its answer
+   * into their run, gives the lock back, and fails into a retry with the platform's reason.
+   */
+  /*
+   * Renewals that never answer at all. No error ever arrives to say the lock was lost, so the only
+   * thing that can stop the hop is the lock's lifetime running out.
+   */
+  test("renewals that never settle stop the hop once the lock's lifetime has passed", async () => {
+    const stopped: string[] = [];
+    const released: string[] = [];
+    const hop = createHandoffDelivery({
+      admission: serverTurnAdmission,
+      deadlineMs: 5_000,
+      renewEveryMs: 2,
+      lockLifetimeMs: 20,
+      agentFor: async () => stubAgent(),
+      history: async () => PRIOR,
+      newRunId: () => "run-2",
+      mintThreadId: () => "scratch-thread",
+      lock: {
+        acquire: async () => ({ runId: "platform-run" }),
+        renew: () => new Promise(() => {}),
+        release: async (input) => {
+          released.push(input.threadId);
+        },
+      },
+      runner: {
+        // A run that would go on for ever, so only the lapsed lock can end it.
+        run: () => new Observable<BaseEvent>(() => {}),
+        stop: async (input) => {
+          stopped.push(input.runId);
+          return true;
+        },
+      },
+    });
+
+    await expect(
+      runAsTenant(WORK.actorId, () =>
+        hop.deliver({ work: WORK, message: "m", shown: "s", assertion: "s" }),
+      ),
+    ).rejects.toBeInstanceOf(LockLapsedError);
+    expect(stopped).toEqual(["platform-run"]);
+    expect(released).toEqual(["scratch-thread"]);
+  });
+
+  test("a renewal refused as a conflict stops the hop and gives the lock back", async () => {
+    const conflict = Object.assign(
+      new Error("Intelligence platform error 409: THREAD_LOCK_RENEWAL_FAILED"),
+      { name: "PlatformRequestError", status: 409 },
+    );
+    const stopped: string[] = [];
+    const released: string[] = [];
+    const hop = createHandoffDelivery({
+      admission: serverTurnAdmission,
+      deadlineMs: 5_000,
+      renewEveryMs: 2,
+      agentFor: async () => stubAgent(),
+      history: async () => PRIOR,
+      newRunId: () => "run-2",
+      mintThreadId: () => "scratch-thread",
+      lock: {
+        acquire: async () => ({ runId: "platform-run" }),
+        renew: () => Promise.reject(conflict),
+        release: async (input) => {
+          released.push(input.threadId);
+        },
+      },
+      runner: {
+        // A run that would go on for ever, so only the lost lock can end it.
+        run: () => new Observable<BaseEvent>(() => {}),
+        stop: async (input) => {
+          stopped.push(input.runId);
+          return true;
+        },
+      },
+    });
+
+    await expect(
+      runAsTenant(WORK.actorId, () =>
+        hop.deliver({ work: WORK, message: "m", shown: "s", assertion: "s" }),
+      ),
+    ).rejects.toBe(conflict);
+    expect(stopped).toEqual(["platform-run"]);
+    expect(released).toEqual(["scratch-thread"]);
   });
 
   test("the lock is given back on the conversation it was taken on", async () => {
@@ -483,11 +651,12 @@ describe("what the addressed Bot is actually given", () => {
 
     const given = (agent as unknown as { messages: Message[] }).messages;
     expect(given.map((message) => message.id)).toEqual([
-      "m1",
-      "m2",
       "handoff-platform-run",
     ]);
-    expect(given.at(-1)).toMatchObject({ role: "user", content: "the ask" });
+    expect(given[0]).toMatchObject({ role: "user" });
+    const ask = theAsk(given);
+    expect(ask).toContain("we had an outage yesterday");
+    expect(ask).toEndWith("the ask");
     // And it runs in its own conversation, which the agent also carries.
     expect((agent as unknown as { threadId: string }).threadId).toBe(
       "scratch-thread",
@@ -506,6 +675,7 @@ describe("the working indicator", () => {
   function withBusy() {
     const busy: Array<{ threadId: string; busy: boolean }> = [];
     const deliver = createHandoffDelivery({
+      admission: serverTurnAdmission,
       agentFor: async () => stubAgent(),
       history: async () => PRIOR,
       newRunId: () => "run-2",
@@ -596,6 +766,7 @@ describe("what comes back for the relay", () => {
   /** A runner that drives the agent the way the real one does, then completes. */
   function throughTheAgent(agent: AbstractAgent) {
     return createHandoffDelivery({
+      admission: serverTurnAdmission,
       agentFor: async () => agent,
       history: async () => PRIOR,
       newRunId: () => "run-2",
@@ -675,6 +846,7 @@ describe("what comes back for the relay", () => {
       { type: "TEXT_MESSAGE_END" },
     ]);
     const deliver = createHandoffDelivery({
+      admission: serverTurnAdmission,
       agentFor: async () => agent,
       history: async () => PRIOR,
       newRunId: () => "run-2",
@@ -775,10 +947,25 @@ describe("a conversation that is not all plain strings", () => {
 
     const messages = requests[0]?.input.messages as Message[];
     expect(messages.map((message) => message.id)).toEqual([
-      "m1",
-      "m2",
       "handoff-platform-run",
     ]);
+    // The text is quoted and the picture travels with it, after the line it belongs to.
+    const parts = (messages[0] as { content: unknown[] }).content;
+    expect(parts).toContainEqual({
+      type: "text",
+      text: "The person: here is the invoice",
+    });
+    const line = parts.findIndex(
+      (part) =>
+        (part as { text?: string }).text === "The person: here is the invoice",
+    );
+    expect(parts[line + 1]).toEqual({
+      type: "image",
+      url: "https://example.test/a.png",
+    });
+    const ask = theAsk(messages);
+    expect(ask).toContain("assistant: I will read it");
+    expect(ask).toEndWith("the ask");
   });
 
   /*
@@ -810,9 +997,11 @@ describe("a conversation that is not all plain strings", () => {
 
     const messages = requests[0]?.input.messages as Message[];
     expect(messages.map((message) => message.id)).toEqual([
-      "m3",
       "handoff-platform-run",
     ]);
+    const ask = theAsk(messages);
+    expect(ask).toContain("The person: what does it say?");
+    expect(typeof (messages[0] as { content: unknown }).content).toBe("string");
   });
 });
 
@@ -825,6 +1014,7 @@ describe("a history read that fails", () => {
   test("takes no lock, so nothing is leaked for the retry to collide with", async () => {
     const lockCalls: string[] = [];
     const deliver = createHandoffDelivery({
+      admission: serverTurnAdmission,
       agentFor: async () => stubAgent(),
       history: async () => {
         throw new Error("the platform answered 500");
@@ -914,6 +1104,7 @@ describe("a hop to a Bot that is paused while it works", () => {
       started = resolve;
     });
     const hop = createHandoffDelivery({
+      admission: serverTurnAdmission,
       deadlineMs: 5_000,
       agentFor: async () => stubAgent(),
       history: async () => PRIOR,
@@ -952,6 +1143,62 @@ describe("a hop to a Bot that is paused while it works", () => {
       await expect(delivered).rejects.toBeInstanceOf(BotPausedError);
       expect(stopped).toEqual(["platform-run"]);
       expect(released).toEqual(["scratch-thread"]);
+    } finally {
+      resetBotLifecycleForTests();
+    }
+  });
+
+  /*
+   * Admitted before the lock, as every headless turn is. A hop used to take the conversation's lock
+   * first and only then find the Bot paused, so a paused Bot's relay held the person's own channel
+   * for a moment on every retry.
+   */
+  test("a Bot paused before the hop never touches the lock and never runs", async () => {
+    const { BotPausedError, configureBotLifecycle, resetBotLifecycleForTests } =
+      await import("../src/agents/lifecycle");
+    const query = {
+      from: () => query,
+      where: () => query,
+      limit: async () => [{ pausedAt: new Date() }],
+    };
+    configureBotLifecycle({
+      database: { select: () => query } as unknown as Parameters<
+        typeof configureBotLifecycle
+      >[0]["database"],
+    });
+    const lockCalls: string[] = [];
+    let runs = 0;
+    const hop = createHandoffDelivery({
+      admission: serverTurnAdmission,
+      agentFor: async () => stubAgent(),
+      history: async () => PRIOR,
+      newRunId: () => "run-2",
+      mintThreadId: () => "scratch-thread",
+      lock: {
+        acquire: async () => {
+          lockCalls.push("acquire");
+          return { runId: "platform-run" };
+        },
+        renew: async () => {},
+        release: async () => {
+          lockCalls.push("release");
+        },
+      },
+      runner: {
+        run: () => {
+          runs += 1;
+          return new Observable<BaseEvent>(() => {});
+        },
+      },
+    });
+    try {
+      await expect(
+        runAsTenant(WORK.actorId, () =>
+          hop.deliver({ work: WORK, message: "m", shown: "s", assertion: "s" }),
+        ),
+      ).rejects.toBeInstanceOf(BotPausedError);
+      expect(lockCalls).toEqual([]);
+      expect(runs).toBe(0);
     } finally {
       resetBotLifecycleForTests();
     }

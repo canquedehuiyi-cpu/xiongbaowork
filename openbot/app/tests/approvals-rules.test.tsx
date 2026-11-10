@@ -12,11 +12,12 @@ import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ApprovalInbox } from "@/components/approvals/inbox";
 import { InlineApproval } from "@/components/approvals/inline-approval";
-import {
-  BrowserActivity,
-  groupBrowserSteps,
-} from "@/components/channels/browser-activity";
 import { toVisibleChatItems } from "@/components/channels/chat-messages";
+import {
+  groupToolSteps,
+  ToolActivity,
+} from "@/components/channels/tool-activity";
+import { offersStandingRule, POLICY_SOURCE_LABELS } from "@/lib/approvals";
 
 beforeAll(() => GlobalRegistrator.register());
 afterEach(cleanup);
@@ -139,7 +140,7 @@ test("team rules are locked for members, enforced auto-review is shown as requir
   const view = draw();
   await view.findByText("做之前先问（团队规则）");
   const mine = view.getByRole("combobox", {
-    name: "「mcp/gmail/*」的处理方式",
+    name: "「Gmail 上的任何操作」的处理方式",
   }) as HTMLSelectElement;
   expect(mine.value).toBe("allow");
   expect(view.getByText("已锁定")).toBeTruthy();
@@ -153,7 +154,7 @@ test("team rules are locked for members, enforced auto-review is shown as requir
 test("a member changes a saved rule in place", async () => {
   const view = draw();
   const mine = await view.findByRole("combobox", {
-    name: "「mcp/gmail/*」的处理方式",
+    name: "「Gmail 上的任何操作」的处理方式",
   });
   fireEvent.change(mine, { target: { value: "hand_off" } });
   await waitFor(() =>
@@ -238,7 +239,7 @@ test("a pending change is drawn in the conversation where the action was, and de
     </QueryClientProvider>,
   );
   await view.findByRole("region", { name: "等你批准" });
-  expect(view.getByText(/需要你来做：click，目标 shop\.example/)).toBeTruthy();
+  expect(view.getByText("在 shop.example 上点击")).toBeTruthy();
   // Another call's line is left to its own renderer.
   expect(view.getByText("Filled in field")).toBeTruthy();
   expect(view.queryByText("Clicked on page")).toBeNull();
@@ -255,7 +256,7 @@ test("a pending change is drawn in the conversation where the action was, and de
 test("in the real transcript shape a waiting click is folded into browser activity, so its card is drawn beside the group", async () => {
   // What the channel transcript builds from the conversation: a navigate that finished and the
   // click the chat stopped on, unanswered, grouped into one browser-activity line.
-  const items = groupBrowserSteps(
+  const items = groupToolSteps(
     toVisibleChatItems([
       { id: "u1", role: "user", content: "Order a pizza on httpbin" },
       {
@@ -288,17 +289,19 @@ test("in the real transcript shape a waiting click is folded into browser activi
         content: '{"ok":true,"url":"https://httpbin.org/forms/post"}',
       },
     ] as never),
+    // Browser steps fold whatever the app draws, so nothing else needs naming here.
+    () => false,
   );
-  const group = items.find((item) => item.kind === "browser");
-  if (group?.kind !== "browser") throw new Error("no browser group");
+  const group = items.find((item) => item.kind === "tools");
+  if (group?.kind !== "tools") throw new Error("no tool group");
   const view = render(
     <QueryClientProvider
       client={
         new QueryClient({ defaultOptions: { queries: { retry: false } } })
       }
     >
-      {/* BrowserActivity mounts the waiting cards beside its folded line itself. */}
-      <BrowserActivity group={group} active={false} />
+      {/* ToolActivity mounts the waiting cards beside its folded line itself. */}
+      <ToolActivity group={group} active={false} />
     </QueryClientProvider>,
   );
   await view.findByRole("region", { name: "等你批准" });
@@ -309,25 +312,25 @@ test("in the real transcript shape a waiting click is folded into browser activi
 
 /** A change the Bot's owner asked to be asked about (SEC1 D9), added for the one test below. */
 const ownerAsked = {
-      id: "request-2",
-      status: "pending",
-      createdAt: new Date().toISOString(),
-      action: {
-        botId: "Desk",
-        toolRef: "computer_run_command",
-        effect: "write",
-        scope: "workspace",
-        threadId: "thread",
-        args: { command: "rm -rf build" },
-        target: {},
-        toolCallId: "rm-call",
-        policy: {
-          behaviour: "ask",
-          source: "owner_rule",
-          reason: "A rule asks before this kind of action.",
-        },
-      },
-    };
+  id: "request-2",
+  status: "pending",
+  createdAt: new Date().toISOString(),
+  action: {
+    botId: "Desk",
+    toolRef: "computer_run_command",
+    effect: "write",
+    scope: "workspace",
+    threadId: "thread",
+    args: { command: "rm -rf build" },
+    target: {},
+    toolCallId: "rm-call",
+    policy: {
+      behaviour: "ask",
+      source: "owner_rule",
+      reason: "A rule asks before this kind of action.",
+    },
+  },
+};
 
 test("a sensitive-window request names its source 敏感窗口", async () => {
   const asked = {
@@ -379,7 +382,7 @@ async function ownerLayerShown() {
   expect(view.getByText(/（来源：员工所有者设定）/)).toBeTruthy();
   // A member can choose 禁用 for a rule of their own.
   const mine = view.getByRole("combobox", {
-    name: "「mcp/gmail/*」的处理方式",
+    name: "「Gmail 上的任何操作」的处理方式",
   });
   fireEvent.change(mine, { target: { value: "deny" } });
   await waitFor(() =>
@@ -396,7 +399,9 @@ test("SEC1: only an administrator sees and sets the team's 强制危险命令审
   role = "admin";
   try {
     const view = draw();
-    const toggle = await view.findByRole("switch", { name: "强制危险命令审批" });
+    const toggle = await view.findByRole("switch", {
+      name: "强制危险命令审批",
+    });
     fireEvent.click(toggle);
     await waitFor(() =>
       expect(sent).toContainEqual({
@@ -408,4 +413,116 @@ test("SEC1: only an administrator sees and sets the team's 强制危险命令审
   } finally {
     role = "user";
   }
+});
+
+test("删除类底线问的动作只给「允许一次 / 拒绝」，收件箱和对话里都不画「在这里总是允许」", async () => {
+  const deleting = {
+    ...ownerAsked,
+    id: "request-archive",
+    action: {
+      ...ownerAsked.action,
+      toolRef: "hubspot/HUBSPOT_ARCHIVE_CONTACT",
+      scope: "hubspot",
+      args: { contactId: "42" },
+      toolCallId: "archive-call",
+      policy: {
+        behaviour: "ask",
+        source: "destructive_tool",
+        reason: "这个操作会删除或覆盖内容，总是先征得你同意。",
+      },
+    },
+  };
+  // The other pending request is a hand-off, so every 允许一次 drawn here is the deleting one's.
+  inbox.requests.push(deleting as unknown as (typeof inbox.requests)[number]);
+  try {
+    const view = draw();
+    await view.findByText(/这个操作会删除或覆盖内容/);
+    expect(view.getByText(/（来源：删除类操作）/)).toBeTruthy();
+    expect(view.getAllByRole("button", { name: "允许一次" })).toHaveLength(1);
+    expect(view.queryByRole("button", { name: "在这里总是允许" })).toBeNull();
+    cleanup();
+
+    const inline = render(
+      <QueryClientProvider
+        client={
+          new QueryClient({ defaultOptions: { queries: { retry: false } } })
+        }
+      >
+        <InlineApproval toolCallId="archive-call" fallback={<p>Archived</p>} />
+      </QueryClientProvider>,
+    );
+    await inline.findByRole("region", { name: "等你批准" });
+    // 对话里的卡片是一张决策卡：选项是单选，发送按钮写着选中的那一项（默认第一项）。
+    expect(inline.getByRole("button", { name: "允许一次" })).toBeTruthy();
+    expect(inline.getByRole("radio", { name: /拒绝/ })).toBeTruthy();
+    expect(inline.queryByRole("radio", { name: /在这里总是允许/ })).toBeNull();
+    expect(inline.queryByRole("button", { name: "在这里总是允许" })).toBeNull();
+    fireEvent.click(inline.getByRole("button", { name: "允许一次" }));
+    await waitFor(() =>
+      expect(sent).toContainEqual({
+        path: "/api/approvals/request-archive/decision",
+        method: "POST",
+        body: { decision: "allow_once" },
+      }),
+    );
+  } finally {
+    inbox.requests.pop();
+  }
+});
+
+test("对外发送底线问的动作同样只给「允许一次 / 拒绝」，来源写成「对外发送」", async () => {
+  const sending = {
+    ...ownerAsked,
+    id: "request-send",
+    action: {
+      ...ownerAsked.action,
+      toolRef: "composio-gmail/GMAIL_SEND_EMAIL",
+      scope: "composio-gmail",
+      args: { to: "client@example.com" },
+      toolCallId: "send-call",
+      policy: {
+        behaviour: "ask",
+        source: "outbound_send",
+        reason: "这个操作可能会把内容发给别人，总是先征得你同意。",
+      },
+    },
+  };
+  inbox.requests.push(sending as unknown as (typeof inbox.requests)[number]);
+  try {
+    const view = draw();
+    await view.findByText(/这个操作可能会把内容发给别人/);
+    expect(view.getByText(/（来源：对外发送）/)).toBeTruthy();
+    expect(view.getAllByRole("button", { name: "允许一次" })).toHaveLength(1);
+    expect(view.queryByRole("button", { name: "在这里总是允许" })).toBeNull();
+    cleanup();
+
+    const inline = render(
+      <QueryClientProvider
+        client={
+          new QueryClient({ defaultOptions: { queries: { retry: false } } })
+        }
+      >
+        <InlineApproval toolCallId="send-call" fallback={<p>Sent</p>} />
+      </QueryClientProvider>,
+    );
+    await inline.findByRole("region", { name: "等你批准" });
+    expect(inline.getByRole("button", { name: "允许一次" })).toBeTruthy();
+    expect(inline.queryByRole("button", { name: "在这里总是允许" })).toBeNull();
+  } finally {
+    inbox.requests.pop();
+  }
+});
+
+test("分享与公开发布底线同样只给「允许一次」，来源有中文名字", () => {
+  expect(POLICY_SOURCE_LABELS.share_access).toBe("分享与授权");
+  expect(POLICY_SOURCE_LABELS.publish_post).toBe("公开发布");
+  for (const source of [
+    "destructive_tool",
+    "outbound_send",
+    "share_access",
+    "publish_post",
+  ])
+    expect(offersStandingRule({ source })).toBeFalse();
+  expect(offersStandingRule({ source: "default" })).toBeTrue();
+  expect(offersStandingRule(undefined)).toBeTrue();
 });

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { SelfHostBanner } from "@/components/layout/self-host-banner";
 import { SidebarShell } from "@/components/layout/sidebar-shell";
+import { UpdateBanner } from "@/components/layout/update-banner";
 import { AppSidebar } from "./app-sidebar";
 import { ConversationWorkspace } from "./conversation-workspace";
 
@@ -22,10 +23,12 @@ export function AppShell({
   return (
     // One viewport, never scrolls: panes scroll inside it. A growable shell lets the transcript's
     // scroller size against the page, grow it, and grow again.
-    <SidebarShell className="h-svh overflow-hidden" width="226px">
+    <SidebarShell className="h-svh overflow-hidden" name="app" width="226px">
       <AppSidebar />
       {secondary ?? <ConversationWorkspace />}
       <main className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        {/* Only inside OpenBot Desktop: the banner asks the desktop app, and draws nothing in a browser. */}
+        <UpdateBanner />
         <SelfHostBanner />
         {children}
       </main>

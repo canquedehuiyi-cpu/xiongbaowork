@@ -16,6 +16,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import type * as React from "react";
 import { useEffect, useId, useState } from "react";
 import { useAttentionNotifications } from "@/components/bot-profile/attention";
+import { BrowserNavItem } from "@/components/browser/browser-nav-item";
 import { BrandLogo } from "@/components/layout/brand-logo";
 import { Button } from "@/components/ui/button";
 import {
@@ -240,7 +241,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
    * A page that lives under 更多 opens the section, so the current place is always marked: folded
    * away, a person on /approvals would see no entry lit at all.
    */
-  const inMore = MORE_NAV.some((item) => underPath(pathname, item.to));
+  const inMore =
+    MORE_NAV.some((item) => underPath(pathname, item.to)) ||
+    underPath(pathname, "/browser");
   const [moreOpen, setMoreOpen] = useState(() => readMoreOpen() || inMore);
   useEffect(() => {
     if (inMore) setMoreOpen(true);
@@ -297,6 +300,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               {MORE_NAV.map((item) => (
                 <NavRow key={item.to} {...item} />
               ))}
+              {/*
+               * 上游 v1.0.0 的「教员工做事」（自己的浏览器 + Recorder，取代了旧的演示录制）。只在服务端
+               * 说能为这个人跑浏览器时出现，所以不进 MORE_NAV，按上游组件原样挂在这里。
+               */}
+              <BrowserNavItem />
             </SidebarMenu>
           </nav>
         ) : null}

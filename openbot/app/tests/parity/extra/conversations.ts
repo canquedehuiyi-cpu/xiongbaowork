@@ -260,6 +260,7 @@ const CHART_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="2
 const SIGN_IN_REQUEST: SignInRequest = {
   id: "signin-crm",
   botId: "agent-support",
+  toolCallId: "call-signin-crm",
   origin: "https://crm.example.com",
   reason:
     "客服小熊要登录客户管理系统，才能查到订单 SO-20261106-0042 的发货记录。",

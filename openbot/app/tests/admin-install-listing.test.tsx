@@ -90,6 +90,7 @@ const pageFor = (serverId: string): PluginsPage => ({
       lastError: null,
       addedBy: null,
       dynamicClient: false,
+      adminConnectOnly: false,
       authScheme: null,
       tools: [
         {

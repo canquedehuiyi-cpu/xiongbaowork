@@ -2,7 +2,7 @@ import { afterAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { eq, inArray } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
-import type { AppVariables } from "../src/app-variables";
+import type { AppVariables } from "../src/auth/guards";
 import { createDatabase } from "../src/db/client";
 import {
   agents,
@@ -40,7 +40,7 @@ const suite = randomUUID().slice(0, 8);
 const tenant = `open-${suite}`;
 const stranger = `open-stranger-${suite}`;
 
-const actor = { id: tenant, role: "user" as const };
+const actor = { id: tenant, email: `${tenant}@example.test`, role: "user" as const };
 const requireUser: MiddlewareHandler<{ Variables: AppVariables }> = async (
   context,
   next,

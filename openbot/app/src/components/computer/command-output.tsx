@@ -28,7 +28,7 @@ export function CommandOutput({
     <div className="space-y-1.5">
       {truncated ? (
         <p className="text-muted-foreground text-xs">
-          输出开头被截掉了，下面是它的结尾部分。
+          输出太长，下面是它的结尾部分。
         </p>
       ) : null}
       {output ? (

@@ -104,6 +104,77 @@ describe("a key a person presses while they hold the wheel", () => {
     // A form field ignores a bare Enter or Backspace without this, which is why it is sent at all.
     const params = await dispatched(typed("down", "Enter", "Enter", 13));
     expect(params.windowsVirtualKeyCode).toBe(13);
-    expect(params.nativeVirtualKeyCode).toBe(13);
+  });
+
+  test("no key names a native key code, so none reaches the browser's own shortcuts", async () => {
+    // With one, Chrome passes a key the page did not take on to the browser, and on macOS reads the code as the Mac's
+    // own key number: ArrowLeft's 37 is the Mac's L, Home's 36 its Return. A person's ArrowLeft reached the page as an
+    // unnamed key, opened chrome://settings/help and left the browser spinning (screencast.ts says how it was measured,
+    // and screencast-keys-browser.test.ts drives it against Chromium itself).
+    for (const [key, code, keyCode] of [
+      ["ArrowLeft", "ArrowLeft", 37],
+      ["Home", "Home", 36],
+      ["Enter", "Enter", 13],
+      ["a", "KeyA", 65],
+    ] as const) {
+      for (const event of ["down", "up"] as const) {
+        const params = await dispatched(typed(event, key, code, keyCode));
+        expect(params).not.toHaveProperty("nativeVirtualKeyCode");
+      }
+    }
+  });
+});
+
+describe("frame pacing", () => {
+  /** A CDP session that lets the test fire a screencast frame and see when it was acked. */
+  function casting() {
+    const acks: number[] = [];
+    let onFrame: ((event: unknown) => void) | undefined;
+    const client = {
+      on(event: string, handler: (event: unknown) => void) {
+        if (event === "Page.screencastFrame") onFrame = handler;
+      },
+      async send(method: string, params: Record<string, unknown> = {}) {
+        if (method === "Page.screencastFrameAck")
+          acks.push(params.sessionId as number);
+      },
+      async detach() {},
+    };
+    const page = {
+      context: () => ({ newCDPSession: async () => client }),
+    } as unknown as Page;
+    const frame = (sessionId: number) =>
+      onFrame?.({
+        data: "",
+        sessionId,
+        metadata: { deviceWidth: 1280, deviceHeight: 800 },
+      });
+    return { page, acks, frame };
+  }
+
+  const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  test("a frame the viewer has taken is acked straight away", async () => {
+    const { page, acks, frame } = casting();
+    const sent: string[] = [];
+    await startScreencast(page, (taken) => {
+      sent.push(JSON.stringify(taken));
+    });
+    frame(1);
+    await tick();
+    expect(acks).toEqual([1]);
+    // The server's proxy tells a frame from an error by this prefix, to hold back only frames when behind.
+    expect(sent[0]?.startsWith('{"type":"frame"')).toBe(true);
+  });
+
+  test("a frame is acked as it arrives, however long the viewer takes over it", async () => {
+    // Held until the viewer had it, Chrome dropped what the page did meanwhile and never sent it:
+    // see screencast-pacing-browser.test.ts, which measures that against Chromium itself.
+    const { page, acks, frame } = casting();
+    await startScreencast(page, () => new Promise<void>(() => {}));
+    frame(7);
+    frame(8);
+    await tick();
+    expect(acks).toEqual([7, 8]);
   });
 });

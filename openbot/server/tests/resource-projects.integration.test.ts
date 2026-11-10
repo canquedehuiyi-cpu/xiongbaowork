@@ -261,7 +261,8 @@ describe("the database", () => {
           deviceId: device.id,
           scope: "public",
           name: "直接写入",
-          source,
+          // Whatever the case writes, straight past the route: the CHECK is what refuses it.
+          source: source as Record<string, unknown>,
         }),
       );
     const git = (fields: Record<string, unknown>) => ({

@@ -4,6 +4,8 @@ import {
   frontendApprovalSnapshot,
   observeApprovalAgent,
 } from "../../app/src/lib/copilot/approval-context";
+import { DECLINED_BY_PERSON as DRAWN_AS_DECLINED } from "../../app/src/lib/plugins/tool-result";
+import { DECLINED_BY_PERSON } from "../src/approvals/service";
 import { parseApprovalContinuation } from "../src/approvals/types";
 
 test("the real frontend AG-UI agent supplies canonical call identity, original context and live state for a pending change", async () => {
@@ -48,7 +50,10 @@ test("the real frontend AG-UI agent supplies canonical call identity, original c
     },
     url: "https://agent.example/ag-ui",
   });
-  const cleanup = observeApprovalAgent(agent);
+  // M3: the app is on @ag-ui/client 1.0.1 (react-core 1.77) and the server on 1.0.2, so the one agent
+  // has two declarations of its class; the app's functions are handed it as theirs.
+  const appAgent = agent as unknown as Parameters<typeof observeApprovalAgent>[0];
+  const cleanup = observeApprovalAgent(appAgent);
   await agent.runAgent({
     runId: "canonical-run",
     tools: [],
@@ -61,7 +66,7 @@ test("the real frontend AG-UI agent supplies canonical call identity, original c
   if (message?.role !== "assistant" || !message.toolCalls?.[0])
     throw new Error("missing tool call");
   const snapshot = parseApprovalContinuation(
-    frontendApprovalSnapshot({ agent, toolCall: message.toolCalls[0] }),
+    frontendApprovalSnapshot({ agent: appAgent, toolCall: message.toolCalls[0] }),
   );
   expect(snapshot).toMatchObject({
     runId: "canonical-run",
@@ -76,6 +81,14 @@ test("the real frontend AG-UI agent supplies canonical call identity, original c
   expect(snapshot.messages).toEqual(agent.messages);
   cleanup();
   expect(() =>
-    frontendApprovalSnapshot({ agent, toolCall: message.toolCalls[0] }),
+    frontendApprovalSnapshot({ agent: appAgent, toolCall: message.toolCalls[0] }),
   ).toThrow("active conversation");
+});
+
+/*
+ * 主人拒绝一步时审批服务答给 Bot 的那句话，前端照原文认出来画成「已拒绝」。两端各声明一份，
+ * 和 REFUSAL_MARKER 一样；这里保证两份一字不差，改了一边另一边就会失败。
+ */
+test("the transcript recognises exactly the sentence the approval service answers a declined step with", () => {
+  expect(DRAWN_AS_DECLINED).toBe(DECLINED_BY_PERSON);
 });

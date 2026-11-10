@@ -9,7 +9,7 @@ import type { ReactNode } from "react";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import { AgentAuditTrail } from "@/components/agents/audit-trail";
 import { AvatarSourcesPanel } from "@/components/avatar/avatar-sources";
-import { BotActivitySections } from "@/components/bot-profile/activity";
+import { BotActivityGlance } from "@/components/bot-profile/activity";
 import { BotPausedBanner } from "@/components/bot-profile/pause-banner";
 import { BotPermissions } from "@/components/bot-profile/permissions";
 import {
@@ -23,10 +23,15 @@ import {
   ProfilePanel,
   ProfileSection,
 } from "@/components/bot-profile/profile-kit";
+import { BotRuntimeSection } from "@/components/bot-profile/runtime";
 import { PageShell } from "@/components/layout/page-shell";
 import { QueryError } from "@/components/layout/query-error";
+import { MemorySources } from "@/components/memory/sources";
+import { BotNeedsYou } from "@/components/needs-you/board";
+import { DoneTasks, useNeedsYou } from "@/components/needs-you/needs-you";
 import { EditablePortrait } from "@/components/portraits/portrait-picker";
 import { ProjectPicker } from "@/components/projects/project-picker";
+import { ProactiveResearchSettings } from "@/components/suggestions/proactive-panel";
 import { Button } from "@/components/ui/button";
 import {
   Item,
@@ -73,8 +78,10 @@ import { cn } from "@/lib/utils";
  * A sibling of `/wakers` (the trailing underscore), not a child: the card wall has no outlet and
  * this page is a whole screen of its own. It reads only what other screens already serve — the
  * coworker's profile, its responsibilities and routines, the board's running rows, its plugin
- * grants and its audit trail — and edits none of them here: changing a skill is the assembly
+ * grants and its audit trail — and edits none of those here: changing a skill is the assembly
  * screen's job, and a second place to grant one would be a second place to get the policy wrong.
+ * What it does edit is upstream's Bot page's own: the person's 对你 controls, its memory sources
+ * and check-ins, and the 运行方式 rows (its own computer, the starter's instructions).
  *
  * Each section owns its loading, error and empty state, so one read failing never blanks the
  * others.
@@ -195,17 +202,21 @@ function WakerDetailPage() {
        * what it is doing for them and what it is set up with fills the main one.
        */}
       <div className="mt-[28px] grid grid-cols-1 gap-x-[28px] gap-y-[28px] min-[1180px]:grid-cols-[minmax(0,1fr)_minmax(340px,420px)]">
-        <div className="flex min-w-0 flex-col gap-[28px] min-[1180px]:col-start-2 min-[1180px]:row-start-1">
+        <div className="flex min-w-0 flex-col gap-[28px] min-[1180px]:col-start-2 min-[1180px]:row-start-1 [&>*]:mt-0!">
           <BotControls agent={profile} />
           <ProjectSection profile={profile} />
           <AvatarSourcesSection profile={profile} />
+          <BotRuntimeSection agent={profile} />
           <UpdateRoutingSection />
         </div>
-        <div className="flex min-w-0 flex-col gap-[28px] min-[1180px]:col-start-1 min-[1180px]:row-start-1">
-          <BotActivitySections agentId={profile.id} />
+        <div className="flex min-w-0 flex-col gap-[28px] min-[1180px]:col-start-1 min-[1180px]:row-start-1 [&>*]:mt-0!">
+          <BotNeedsYou agentId={profile.id} />
+          <BotActivityGlance agentId={profile.id} />
+          <DoneThisWeek agentId={profile.id} />
           <RunningTasksSection agentId={profile.id} />
           <DutiesSection profile={profile} />
           <SkillGrantsSection agentId={profile.id} />
+          <MemorySection agentId={profile.id} />
           <BotPermissions agentId={profile.id} />
           <ProfileSection
             description="谁在什么时候对它做了什么，读自现有的审计记录。"
@@ -377,6 +388,38 @@ function ProfileCard({ profile }: { profile: AgentProfile }) {
   );
 }
 
+/** Tasks the person marked done this week from this employee's check-ins, folded until asked for. */
+function DoneThisWeek({ agentId }: { agentId: string }) {
+  const { done } = useNeedsYou(agentId);
+  return <DoneTasks done={done} />;
+}
+
+/**
+ * This employee's memory sources and check-ins (upstream's /bots/$agentId/memory), on its own page.
+ * What the person told every employee directly is not this employee's, so it stays in 能力与资源,
+ * and this says where.
+ */
+function MemorySection({ agentId }: { agentId: string }) {
+  return (
+    <>
+      {/* A flex item of the page's column, which already spaces it from the section above. */}
+      <p className="text-[13px] text-muted-foreground">
+        你直接告诉所有员工的事在
+        <Link
+          className="text-foreground underline underline-offset-4"
+          search={{ tab: "sources" }}
+          to="/resources"
+        >
+          能力与资源 › 信息源与记忆
+        </Link>
+        里。
+      </p>
+      <MemorySources agentId={agentId} />
+      <ProactiveResearchSettings agentId={agentId} />
+    </>
+  );
+}
+
 /**
  * The 分身's information sources (story F1, spec D3): where a person who skipped the onboarding step
  * configures it, and where anybody lists, adds and removes them later.
@@ -536,7 +579,15 @@ function DutiesSection({ profile }: { profile: AgentProfile }) {
         </ProfilePanel>
       )}
 
-      <SubHead>定时任务</SubHead>
+      <Link
+        className="mt-2 inline-block text-muted-foreground text-xs underline-offset-2 hover:underline"
+        search={{ agent: profile.id }}
+        to="/responsibilities"
+      >
+        去长期职责页管理
+      </Link>
+
+      <h3 className="mt-6 font-medium text-sm">定时任务</h3>
       <RoutineSummary agentId={profile.id} />
     </ProfileSection>
   );
@@ -632,7 +683,7 @@ function RunningTasksSection({ agentId }: { agentId: string }) {
           在看板上看
         </Button>
       }
-      description="任务看板上由它执行、还没结束的任务；上面的「进行中」是它替你跟进的事和等你处理的事。"
+      description="任务看板上由它执行、还没结束的任务；上面的「需要你」是等你处理的事，「动态」是它替你跟进的事。"
       title="看板上的进行中任务"
     >
       {running.isPending ? (

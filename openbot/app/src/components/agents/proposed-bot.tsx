@@ -189,14 +189,7 @@ export function ProposedBotCard({
         </p>
       ) : null}
 
-      <div className="mt-4 flex gap-2">
-        <Button
-          disabled={Boolean(sending)}
-          onClick={() => void make()}
-          size="sm"
-        >
-          {sending === "create" ? "正在创建…" : "创建"}
-        </Button>
+      <div className="mt-4 flex justify-end gap-2">
         <Button
           disabled={Boolean(sending)}
           onClick={() => void decline()}
@@ -204,6 +197,13 @@ export function ProposedBotCard({
           variant="outline"
         >
           {sending === "decline" ? "…" : "不创建"}
+        </Button>
+        <Button
+          disabled={Boolean(sending)}
+          onClick={() => void make()}
+          size="sm"
+        >
+          {sending === "create" ? "正在创建…" : "创建"}
         </Button>
       </div>
     </GalleryFrame>

@@ -15,6 +15,8 @@
  *   opened this screen working exactly as it did.
  */
 
+import { currentEdition, PERSONAL_CAPABILITIES } from "../edition";
+
 export const CAPABILITIES = [
   "useBots",
   "cloudBrowser",
@@ -25,6 +27,9 @@ export const CAPABILITIES = [
   "passwordManager",
   "slackTeams",
   "teamBots",
+  "ownerApps",
+  "isolatedComputers",
+  "proactive",
 ] as const;
 
 export type Capability = (typeof CAPABILITIES)[number];
@@ -80,12 +85,29 @@ export const CAPABILITY_LABELS: Record<
     title: "Team Bots",
     description: "People may publish a Bot for the whole team to use.",
   },
+  ownerApps: {
+    title: "Give apps to their own Bots",
+    description:
+      "People may let Bots they own use apps they connected themselves.",
+  },
+  isolatedComputers: {
+    title: "Isolated Bots",
+    description:
+      "People may give a Bot a computer of its own instead of sharing theirs.",
+  },
+  proactive: {
+    title: "Check-ins",
+    description:
+      "Bots check people's apps in the background and tell them when something needs them.",
+  },
 };
 
 /**
  * What an untouched deployment allows.
  *
- * Everything the product already did stays on.
+ * Everything the product already did stays on. Check-ins are on too: a Bot checking quietly and
+ * reaching out only when something needs the person is the product, and an admin who wants it off
+ * turns it off for everybody here (`proactive/engine.ts` asks before any model call).
  */
 export const DEFAULT_CAPABILITIES: Record<Capability, boolean> = {
   useBots: true,
@@ -97,6 +119,9 @@ export const DEFAULT_CAPABILITIES: Record<Capability, boolean> = {
   passwordManager: true,
   slackTeams: true,
   teamBots: true,
+  ownerApps: true,
+  isolatedComputers: true,
+  proactive: true,
 };
 
 export type CapabilityRow = {
@@ -120,6 +145,14 @@ export function resolveCapability(
   member: Member,
   capability: Capability,
 ): CapabilityAnswer {
+  if (currentEdition() === "personal") {
+    return {
+      allowed: PERSONAL_CAPABILITIES[capability],
+      decidedBy: "default",
+      scopeId: "",
+    };
+  }
+
   const forCapability = rows.filter((row) => row.capability === capability);
 
   const widening = forCapability.find(
@@ -171,5 +204,8 @@ export function resolveAllCapabilities(
 
 /** The sentence a refused person reads. */
 export function capabilityRefusal(capability: Capability): string {
-  return `An administrator has turned off "${CAPABILITY_LABELS[capability].title}" for you, so that was not done.`;
+  // The person is the admin here, and nothing they can switch turns this on.
+  if (currentEdition() === "personal")
+    return `"${CAPABILITY_LABELS[capability].title}" isn't part of OpenBot Personal, so that wasn't done.`;
+  return `An admin has turned off "${CAPABILITY_LABELS[capability].title}" for you, so that wasn't done.`;
 }

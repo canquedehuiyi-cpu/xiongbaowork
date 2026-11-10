@@ -1,4 +1,4 @@
-import type { HandoffRequest } from "../../../shared/computer-control";
+import type { HandoffRequest } from "@openbot/shared/computer-control";
 import type { NavigateResult } from "./schema";
 import { checkNavigationTarget } from "./target";
 
@@ -26,11 +26,61 @@ export class ComputerStoppedError extends ComputerUnavailableError {
   }
 }
 
+/**
+ * What every caller is told when a computer did not finish starting in time.
+ *
+ * Written for the model and for a person at once, because both read it: the headless tools hand it
+ * to the model as the result, and the routes send it to the browser, which shows it on the line.
+ */
+export const STILL_STARTING_MESSAGE =
+  "The computer is still starting. This call was not performed. Try it again in a moment.";
+
+/**
+ * The wait for a cold computer ran out before it could take the call.
+ *
+ * A NORMAL WAIT THAT RAN LONG, NOT AN OUTAGE. A computer that was asleep costs a pod schedule and a
+ * browser launch to wake, and the first start pulls an image as well, so a minute is ordinary and
+ * two is not unheard of. Reporting that as a failure put red text and "did not become ready" in
+ * front of somebody whose computer was, at that moment, finishing its start.
+ *
+ * A subclass of `ComputerUnavailableError`, so everything that already catches an unavailable
+ * computer still does. What the type adds is that every surface can say the gentle thing instead:
+ * the route marks the body `starting`, the headless tools answer with a result rather than a throw,
+ * and the browser renders it as a wait rather than a failure. The message says the call was NOT
+ * performed, which is true by construction: this is only thrown before anything reached the
+ * computer, so a retry cannot do the thing twice.
+ */
+export class ComputerStillStartingError extends ComputerUnavailableError {
+  constructor(reason: string = STILL_STARTING_MESSAGE) {
+    super(reason);
+    this.name = "ComputerStillStartingError";
+  }
+}
+
 /** The requested element is not on the current page. */
 export class ElementNotFoundError extends Error {
   constructor(reason: string) {
     super(reason);
     this.name = "ElementNotFoundError";
+  }
+}
+
+/**
+ * The element is on the page, and the action on it could not finish.
+ *
+ * The page refused to send its form, something covers the element, it is hidden or turned off, or the
+ * page is still loading what the action set off. The computer says which
+ * (agent-computer/src/action-failure.ts). Its own condition because the next step differs from a stale
+ * ref: a fresh snapshot returns the same ref, so a Bot told to take one clicks the same button again,
+ * and repeating a click whose form is still being sent can send it twice.
+ */
+export class ActionUnfinishedError extends Error {
+  constructor(
+    reason: string,
+    readonly unfinished: string,
+  ) {
+    super(reason);
+    this.name = "ActionUnfinishedError";
   }
 }
 
@@ -134,11 +184,45 @@ export type ComputerTransportOptions = {
   fetchImpl?: typeof fetch;
 };
 
+/**
+ * Which computer a request goes to, and the token that computer takes.
+ *
+ * The token belongs to the computer, not to the deployment: a computer made for one person holds a
+ * token of its own (computer-token.ts), so the gateway names it with the address on every call. A bare
+ * address is sent the transport's own `token`, which is how a caller with one computer (the shared
+ * one, a test) still calls it.
+ */
+export type ComputerEndpoint = string | { url: string; token?: string };
+
+/**
+ * Which seat on the computer a request is for.
+ *
+ * The Bot alone on a computer of one person's own (or an isolated Bot's), where each Bot is a seat;
+ * the Bot and the person on the computer many people share, where the seat is the pair. A string is
+ * the Bot alone.
+ */
+export type SeatAddress = string | { botId: string; personId?: string };
+
+/**
+ * What a navigation carries besides its address.
+ *
+ * `signal` is the person's Stop: a navigation aborted before it is sent is never sent, and one aborted
+ * in flight is answered as stopped, as every other acting call is.
+ *
+ * `citation` is set when the navigation is a followed link: the ref and snapshot it was read from.
+ * The computer checks them against the live page exactly as `/click` would, and refuses the
+ * navigation as stale when the page has moved on, so an old snapshot cannot open its old links.
+ */
+export type NavigateOptions = {
+  signal?: AbortSignal;
+  citation?: { ref: string; snapshotId: number };
+};
+
 /** Internal HTTP interface used only by ComputerGateway. */
 export interface ComputerTransport {
   call<T>(
-    baseUrl: string,
-    botId: string,
+    baseUrl: ComputerEndpoint,
+    botId: SeatAddress,
     path: string,
     init?: RequestInit,
     caller?: AbortSignal,
@@ -147,8 +231,8 @@ export interface ComputerTransport {
     idempotencyKey?: string,
   ): Promise<T>;
   post<T>(
-    baseUrl: string,
-    botId: string,
+    baseUrl: ComputerEndpoint,
+    botId: SeatAddress,
     path: string,
     payload: unknown,
     caller?: AbortSignal,
@@ -157,18 +241,29 @@ export interface ComputerTransport {
     idempotencyKey?: string,
   ): Promise<T>;
   navigate(
-    baseUrl: string,
-    botId: string,
+    baseUrl: ComputerEndpoint,
+    botId: SeatAddress,
     url: string,
     toolCallId?: string,
+    options?: NavigateOptions,
   ): Promise<NavigateResult>;
   download(
-    baseUrl: string,
-    botId: string,
+    baseUrl: ComputerEndpoint,
+    botId: SeatAddress,
     path: string,
     caller?: AbortSignal,
     timeoutMs?: number,
   ): Promise<ComputerDownload>;
+}
+
+/** The headers that name a seat to the computer. See {@link SeatAddress}. */
+export function seatHeaders(seat: SeatAddress): Record<string, string> {
+  const { botId, personId } =
+    typeof seat === "string" ? { botId: seat, personId: undefined } : seat;
+  return {
+    "x-openbot-bot-id": botId,
+    ...(personId ? { "x-openbot-person-id": personId } : {}),
+  };
 }
 
 /**
@@ -184,8 +279,8 @@ export function createComputerTransport(
   const defaultTimeoutMs = options.timeoutMs ?? 45_000;
 
   async function request(
-    baseUrl: string,
-    botId: string,
+    computer: ComputerEndpoint,
+    botId: SeatAddress,
     path: string,
     init?: RequestInit,
     caller?: AbortSignal,
@@ -204,17 +299,19 @@ export function createComputerTransport(
      * this becomes the backstop rather than the limit.
      */
     const timeoutMs = timeoutMsOverride ?? defaultTimeoutMs;
-    const target = baseUrl.replace(/\/$/, "");
+    const { url, token } =
+      typeof computer === "string"
+        ? { url: computer, token: options.token }
+        : computer;
+    const target = url.replace(/\/$/, "");
     let response: Response;
     try {
       response = await doFetch(`${target}${path}`, {
         ...init,
         headers: {
           ...(init?.headers as Record<string, string> | undefined),
-          "x-openbot-bot-id": botId,
-          ...(options.token
-            ? { "x-openbot-computer-token": options.token }
-            : {}),
+          ...seatHeaders(botId),
+          ...(token ? { "x-openbot-computer-token": token } : {}),
         },
         signal: caller
           ? AbortSignal.any([caller, AbortSignal.timeout(timeoutMs)])
@@ -235,16 +332,16 @@ export function createComputerTransport(
       }
       throw new ComputerUnavailableError(
         error instanceof Error && error.name === "TimeoutError"
-          ? "The assistant's computer did not respond in time."
-          : "The assistant's computer is not running.",
+          ? "The Bot's computer didn't respond in time."
+          : "The Bot's computer isn't running.",
       );
     }
     return response;
   }
 
   async function call<T>(
-    baseUrl: string,
-    botId: string,
+    baseUrl: ComputerEndpoint,
+    botId: SeatAddress,
     path: string,
     init?: RequestInit,
     caller?: AbortSignal,
@@ -269,8 +366,8 @@ export function createComputerTransport(
   }
 
   async function download(
-    baseUrl: string,
-    botId: string,
+    baseUrl: ComputerEndpoint,
+    botId: SeatAddress,
     path: string,
     caller?: AbortSignal,
     timeoutMs?: number,
@@ -300,15 +397,15 @@ export function createComputerTransport(
       // fails must not replace the refusal the caller is told about.
       await response.body?.cancel().catch(() => undefined);
       throw new ComputerUnavailableError(
-        "The assistant's computer returned an invalid file download.",
+        "The Bot's computer sent back a file that couldn't be read.",
       );
     }
     return { body: response.body, bytes };
   }
 
   function post<T>(
-    baseUrl: string,
-    botId: string,
+    baseUrl: ComputerEndpoint,
+    botId: SeatAddress,
     path: string,
     payload: unknown,
     caller?: AbortSignal,
@@ -329,10 +426,11 @@ export function createComputerTransport(
   }
 
   async function navigate(
-    baseUrl: string,
-    botId: string,
+    baseUrl: ComputerEndpoint,
+    botId: SeatAddress,
     url: string,
     toolCallId?: string,
+    navigateOptions?: NavigateOptions,
   ): Promise<NavigateResult> {
     const verdict = checkNavigationTarget(url, {
       allowPrivateHosts: options.allowPrivateHosts,
@@ -340,10 +438,20 @@ export function createComputerTransport(
     if (!verdict.allowed) {
       throw new NavigationRefusedError(verdict.reason);
     }
-    return post<NavigateResult>(baseUrl, botId, "/navigate", {
-      url: verdict.url,
-      ...(toolCallId ? { toolCallId } : {}),
-    });
+    const citation = navigateOptions?.citation;
+    return post<NavigateResult>(
+      baseUrl,
+      botId,
+      "/navigate",
+      {
+        url: verdict.url,
+        ...(toolCallId ? { toolCallId } : {}),
+        ...(citation
+          ? { ref: citation.ref, snapshotId: citation.snapshotId }
+          : {}),
+      },
+      navigateOptions?.signal,
+    );
   }
 
   return { call, post, navigate, download };
@@ -371,6 +479,9 @@ function throwMappedError(
           ? (body.handoff as HandoffRequest)
           : undefined,
       );
+    }
+    if (typeof body?.unfinished === "string") {
+      throw new ActionUnfinishedError(detail, body.unfinished);
     }
     throw new StaleSnapshotError(detail, body?.snapshotRequired === true);
   }

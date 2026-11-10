@@ -10,6 +10,7 @@ import {
   createRoutingRoutes,
   defaultRoutingProfile,
 } from "../src/routing/routes";
+import { createCoworkerRoutingService } from "../src/routing/service";
 
 /**
  * Why a conversation went where it went, for every conversation.
@@ -30,7 +31,7 @@ import {
 
 const ACTOR = { id: "u1", email: "person@openbot.test", role: "user" } as const;
 
-const ROSTER = [
+const ROSTER: Parameters<typeof profile>[0][] = [
   {
     id: "general-assistant",
     name: "General Assistant",
@@ -70,6 +71,8 @@ function profile(input: {
     hasAuth: false,
     hasCallbackToken: false,
     hidden: false,
+    pinned: false,
+    isolated: false,
     id: input.id,
     name: input.name,
     ownerUserId: ACTOR.id,
@@ -77,6 +80,9 @@ function profile(input: {
     systemOwned: false,
     title: input.name,
     visibility: input.visibility,
+    modelRef: null,
+    platformModelRef: null,
+    persona: null,
   };
 }
 
@@ -90,7 +96,8 @@ function app(
   options: {
     routed?: string;
     undecided?: RoutingUndecided;
-    roster?: readonly (typeof ROSTER)[number][];
+    roster?: readonly Parameters<typeof profile>[0][];
+    skillsFor?: (id: string) => Promise<readonly string[]>;
   } = {},
 ) {
   const written: Recorded[] = [];
@@ -108,7 +115,7 @@ function app(
 
   const roster = options.roster ?? ROSTER;
   const store = {
-    list: async () => roster,
+    list: async () => roster.map(profile),
   } as unknown as AgentProfileStore;
 
   const router = {
@@ -135,7 +142,15 @@ function app(
   const server = new Hono<{ Variables: AppVariables }>();
   server.route(
     "/api/route",
-    createRoutingRoutes(store, router, asActor, auditStore),
+    createRoutingRoutes(
+      createCoworkerRoutingService({
+        store,
+        router,
+        auditStore,
+        skillsFor: options.skillsFor,
+      }),
+      asActor,
+    ),
   );
   return { server, written, asked, defaults };
 }
@@ -394,4 +409,59 @@ describe("recording why a message was not routed", () => {
       undecided: null,
     });
   });
+});
+
+test("the HTTP adapter refuses oversized routing input with 400", async () => {
+  const { server, asked, written } = app();
+  const response = await post(server, { text: "x".repeat(10001) });
+  expect(response.status).toBe(400);
+  expect(await response.json()).toEqual({
+    error: "A message of at most 10000 characters is required.",
+  });
+  expect(asked).toEqual([]);
+  expect(written).toEqual([]);
+});
+
+test("the HTTP route filters by all skill commands before recording the recipient", async () => {
+  const { server, written } = app({
+    skillsFor: async (id) =>
+      id === "knowledge" ? ["first", "second"] : ["first"],
+  });
+  const response = await post(server, {
+    text: "Help me",
+    skillSlugs: ["first", "second"],
+  });
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({ agentId: "knowledge" });
+  expect(written).toHaveLength(1);
+  expect(written[0]).toMatchObject({
+    targetId: "knowledge",
+    payload: { candidates: ["knowledge"] },
+  });
+});
+
+test("the HTTP route refuses skills no Bot offers together", async () => {
+  const { server, written, asked } = app({ skillsFor: async () => [] });
+  const response = await post(server, {
+    text: "Help me",
+    skillSlugs: ["first", "second"],
+  });
+  expect(response.status).toBe(409);
+  expect(await response.json()).toMatchObject({
+    error:
+      "No Bot offers all the selected skills. Choose different skills or a Bot with @.",
+  });
+  expect(written).toHaveLength(0);
+  expect(asked).toHaveLength(0);
+});
+
+test("the HTTP route rejects malformed skill constraints", async () => {
+  const { server, written, asked } = app();
+  for (const skillSlugs of ["first", [null], ["bad command"]]) {
+    expect((await post(server, { text: "Help me", skillSlugs })).status).toBe(
+      400,
+    );
+  }
+  expect(written).toHaveLength(0);
+  expect(asked).toHaveLength(0);
 });

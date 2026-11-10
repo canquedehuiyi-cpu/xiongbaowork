@@ -5,6 +5,7 @@ import type { AdminScope } from "../auth/admin-scope";
 import type { AppVariables } from "../auth/guards";
 import { requireAdmin } from "../auth/guards";
 import { reasonWithoutStatement } from "../db/query-failure";
+import { appsPage, appsPageZh, askAdminTo, askAdminToZh } from "../edition";
 import {
   capabilityFor,
   currentTenant,
@@ -20,11 +21,23 @@ import {
   type ComposioBroker,
   type Decides,
   isFieldScheme,
+  type KeyGuideSource,
   type SchemeKind,
   schemeKind,
 } from "./broker";
 import { CATALOGUE, type CatalogueEntry, catalogueEntry } from "./catalogue";
 import { toolkitOf, vendorSentence } from "./composio";
+import {
+  adminConnectOnly,
+  adminConnectOnlySentence,
+  CLIENT_ID_MAX,
+  CLIENT_SECRET_MAX,
+  DEPLOYMENT_CLIENT_SLUG_MAX,
+  deploymentClientFrom,
+  deploymentClientSlug,
+  withDeploymentClients,
+} from "./deployment-clients";
+import { fieldsForPerson, keyGuideFor } from "./key-guides";
 import {
   authorizationUrlFor,
   type ConnectOrigin,
@@ -37,11 +50,14 @@ import {
   sealConnectState,
 } from "./oauth";
 import {
+  type AppAccessRequestRecord,
   CatalogueEntryUnknownError,
   CustomServerRefusedError,
   deploymentFaultSentence,
   isDeploymentFault,
+  isServerWriteRefusal,
   type OAuthClient,
+  OAuthClientReadError,
   type PluginKind,
   PluginRefusedError,
   type PluginStore,
@@ -60,6 +76,47 @@ import {
  * this grant to belong to.
  */
 export type ConnectingPersonCheck = (userId: string) => Promise<boolean>;
+
+/**
+ * What the Plugins page is told about how an entry is reached: the question it has to ask an
+ * administrator, and the words to ask it in.
+ *
+ * THE PLACED KINDS ARE `deployment-bearer` TO THE PAGE, deliberately. What the page decides from
+ * `auth` is whose credential it collects — one an administrator types once for everybody — and for
+ * a key that goes into a query parameter, a vendor header or a per-customer address the answer is
+ * the same. Where the key sits on the request is the server's business (`placeCredential`), and a
+ * browser has no more use for the parameter or header name than for a vendor's OAuth addresses.
+ * What does differ is what to call the thing, so the reviewed label and hint travel beside it;
+ * neither ever holds a value.
+ */
+function pageAuth(entry: CatalogueEntry): {
+  auth: "none" | "deployment-bearer" | "user-oauth" | "builtin";
+  credentialLabel?: string;
+  credentialHint?: string;
+} {
+  const auth = entry.auth;
+  switch (auth.kind) {
+    case "none":
+    case "deployment-bearer":
+    case "user-oauth":
+    case "builtin":
+      return { auth: auth.kind };
+    case "deployment-query":
+    case "deployment-header":
+    case "deployment-address":
+      return {
+        auth: "deployment-bearer",
+        credentialLabel: auth.credentialLabel,
+        credentialHint: auth.credentialHint,
+      };
+    default: {
+      const unknown: never = auth;
+      throw new Error(
+        `Unknown catalogue auth kind ${(unknown as { kind?: unknown }).kind}`,
+      );
+    }
+  }
+}
 
 /**
  * What somebody is told when the broker itself failed, and what is deliberately kept out of it.
@@ -104,6 +161,81 @@ function brokerRefusal(
   if (authored) return { error: authored, status: 503 };
   return { error: vendorSentence(error) ?? generic, status: 502 };
 }
+
+/**
+ * The broker's name, in whatever case a sentence spells it.
+ *
+ * A person connects their work apps through 熊宝 and is never told which company sits behind it
+ * (upstream #1223). Most of the broker layer's sentences were written for an operator who can open
+ * that company's dashboard, so they name it. Case-insensitive, so `composio://linear` is caught as
+ * well as "Composio"; `COMPOSIO_API_KEY` is left alone by the word boundary (the underscore is part
+ * of the word), because that is the setting an admin sets and naming it is how a person knows what
+ * to ask for.
+ */
+const NAMES_THE_BROKER = /\bcomposio\b/i;
+const NAMES_THE_BROKER_EVERYWHERE = /\bcomposio\b/gi;
+
+/**
+ * A refusal the STORE wrote for the person, with only the broker's name taken out.
+ *
+ * The store's sentences say what is now true (an account left standing and recorded as unchecked, a
+ * key the app rejected, a check that wrote a new verdict), and that is what the person needs to act
+ * on. Swapping the whole sentence for a route's generic one told somebody whose account was in fact
+ * made that it was not (review M-7), so here the facts stay and the name goes.
+ */
+export function withoutBrokerName(sentence: string): string {
+  return sentence.replace(
+    NAMES_THE_BROKER_EVERYWHERE,
+    "the connection service",
+  );
+}
+
+/**
+ * A broker-layer refusal a person reads, kept free of the broker's name.
+ *
+ * Those sentences were written for the operator, and their remedy is somewhere a person cannot go
+ * (a dashboard, a setting), so the person gets the route's own sentence instead, which says what
+ * failed and who to ask. The status is unchanged: only the words differ.
+ *
+ * NOTHING OF THE ORIGINAL SENTENCE IS LOGGED (review M-8). On the key flow it can carry the vendor's
+ * own words about what was typed, so the log line says only that a sentence was kept back, on which
+ * route, about which app; the operator reproduces the failure from there.
+ */
+export function forPerson(
+  sentence: string,
+  generic: string,
+  where: { route: string; toolkit?: string } = { route: "unknown" },
+): string {
+  if (!NAMES_THE_BROKER.test(sentence)) return sentence;
+  console.error(
+    JSON.stringify({
+      type: "broker-sentence-kept-from-person",
+      route: where.route,
+      ...(where.toolkit ? { toolkit: where.toolkit } : {}),
+    }),
+  );
+  return generic;
+}
+
+/** {@link brokerRefusal} for a route a person calls: see {@link forPerson}. */
+function personRefusal(
+  error: unknown,
+  generic: string,
+  where?: { route: string; toolkit?: string },
+): { error: string; status: 502 | 503 } {
+  const refusal = brokerRefusal(error, generic);
+  return { ...refusal, error: forPerson(refusal.error, generic, where) };
+}
+
+/**
+ * What a person is told on a route they call when this deployment has no broker at all.
+ *
+ * {@link BrokerUnconfiguredError}'s own message is written for an operator and names the provider;
+ * a person reads this instead. It still names the setting, because that is what they ask an admin
+ * to set. The admin directory keeps the operator's sentence.
+ */
+const PERSON_UNCONFIGURED =
+  "这个部署还没有设置好连接应用（需要管理员设置 COMPOSIO_API_KEY），所以什么也没有问。请联系管理员。";
 
 /**
  * What a reader is told when Composio would not answer with its directory.
@@ -217,7 +349,7 @@ export function createPluginRoutes(
    * trap `connect` documents applies here with one more argument in it — every parameter from that
    * position on is optional, so a misplaced one typechecks and quietly does nothing.
    */
-  composio?: { broker: ComposioBroker },
+  composio?: { broker: ComposioBroker; guides?: KeyGuideSource },
   /**
    * `createAdminScope(...)`: its `adminCapability` is mounted on the grant routes (G01-E P8b) and on
    * every route that writes the deployment's servers, their OAuth clients and their secrets (P10):
@@ -288,7 +420,7 @@ export function createPluginRoutes(
          * authorization code to is not improved by also existing in every browser that opens the
          * Plugins page.
          */
-        auth: entry.auth.kind,
+        ...pageAuth(entry),
         perInstance: entry.host === null,
       })),
       /*
@@ -709,6 +841,126 @@ export function createPluginRoutes(
   });
 
   /**
+   * Which brokered apps this deployment holds its own OAuth client for (upstream #950), as a set of
+   * app names for `withDeploymentClients`. A vault that cannot be read leaves every such app as it
+   * was without one, `unsupported`, rather than failing the directory: nothing is offered that the
+   * enable below could not then carry out.
+   */
+  const heldClients = async (): Promise<ReadonlySet<string>> => {
+    try {
+      return await store.deploymentClientToolkits();
+    } catch (error) {
+      console.error(
+        JSON.stringify({
+          type: "composio-deployment-clients-unreadable",
+          error: error instanceof Error ? error.name : "UnknownError",
+        }),
+      );
+      return new Set();
+    }
+  };
+
+  /** What the client routes answer an administrator whose request holds no capability (M-2). */
+  const CLIENTS_NEED_CAPABILITY =
+    "保存、查看或删除部署自己的应用客户端，需要以管理员身份在管理页面操作。";
+  const BAD_CLIENT_SLUG = `应用名只能包含字母、数字、下划线和连字符，最长 ${DEPLOYMENT_CLIENT_SLUG_MAX} 个字符。`;
+
+  /**
+   * The OAuth clients this deployment holds for brokered apps that connect with a server-to-server
+   * grant (upstream #950; Shopify is one). Administrator only. The id and when it was stored come
+   * back; the secret never does, from this route or any other.
+   */
+  routes.get("/composio/clients", capable, async (context) => {
+    const forbidden = requireAdmin(context);
+    if (forbidden) return forbidden;
+    try {
+      return context.json({ clients: await store.listDeploymentClients() });
+    } catch (error) {
+      if (isServerWriteRefusal(error)) {
+        return context.json({ error: CLIENTS_NEED_CAPABILITY }, 403);
+      }
+      if (isDeploymentFault(error)) {
+        return context.json({ error: deploymentFaultSentence(error) }, 409);
+      }
+      throw error;
+    }
+  });
+
+  /**
+   * Store this deployment's own OAuth client for one brokered app, into the vault. Body:
+   * `{ "client_id": "...", "client_secret": "..." }`, both required. Administrator only.
+   */
+  routes.put("/composio/clients/:slug", capable, async (context) => {
+    const forbidden = requireAdmin(context);
+    if (forbidden) return forbidden;
+    const toolkit = deploymentClientSlug(context.req.param("slug"));
+    if (!toolkit) return context.json({ error: BAD_CLIENT_SLUG }, 400);
+    const client = deploymentClientFrom(
+      await context.req.json().catch(() => null),
+    );
+    if (!client) {
+      return context.json(
+        {
+          error: `客户端 ID 和客户端密钥都要填写，ID 不超过 ${CLIENT_ID_MAX} 个字符、密钥不超过 ${CLIENT_SECRET_MAX} 个字符，且不能包含控制字符。`,
+        },
+        400,
+      );
+    }
+    try {
+      const { replaced } = await store.storeDeploymentClient({
+        toolkit,
+        client,
+        by: actorEmail(context),
+      });
+      return context.json({ toolkit, clientId: client.client_id, replaced });
+    } catch (error) {
+      if (isServerWriteRefusal(error)) {
+        return context.json({ error: CLIENTS_NEED_CAPABILITY }, 403);
+      }
+      if (error instanceof CustomServerRefusedError) {
+        return context.json({ error: error.message }, 400);
+      }
+      if (isDeploymentFault(error)) {
+        return context.json({ error: deploymentFaultSentence(error) }, 409);
+      }
+      throw error;
+    }
+  });
+
+  /** Retire this deployment's own OAuth client for one brokered app. Administrator only. */
+  routes.delete("/composio/clients/:slug", capable, async (context) => {
+    const forbidden = requireAdmin(context);
+    if (forbidden) return forbidden;
+    const toolkit = deploymentClientSlug(context.req.param("slug"));
+    if (!toolkit) return context.json({ error: BAD_CLIENT_SLUG }, 400);
+    try {
+      const removed = await store.removeDeploymentClient({
+        toolkit,
+        by: actorEmail(context),
+      });
+      return context.json({
+        ...removed,
+        ...(removed.stillInUseByEnabledApp
+          ? {
+              note: `删除只影响以后的启用：已经启用的 ${toolkit} 仍在用这个客户端。要停用它，请移除这个应用，并在 ${toolkit} 后台轮换客户端密钥。`,
+            }
+          : {}),
+      });
+    } catch (error) {
+      if (isServerWriteRefusal(error)) {
+        return context.json({ error: CLIENTS_NEED_CAPABILITY }, 403);
+      }
+      if (error instanceof CustomServerRefusedError) {
+        return context.json({ error: error.message }, 400);
+      }
+      if (isDeploymentFault(error)) {
+        return context.json({ error: deploymentFaultSentence(error) }, 409);
+      }
+      throw error;
+    }
+  });
+
+  /**
    * The broker's catalogue, as an administrator chooses an app out of it.
    *
    * THE SEARCH IS OURS, AND HAS TO BE. `@composio/core`'s toolkit listing forwards category,
@@ -731,7 +983,7 @@ export function createPluginRoutes(
    * until somebody renamed a row. `serverUrls` hands over the urls and nothing else, which is that
    * property made structural: there is no id here to read by mistake.
    */
-  routes.get("/composio/apps", requireUser, async (context) => {
+  routes.get("/composio/apps", capable, async (context) => {
     /*
      * INSIDE THE HANDLER, and the response returned. `requireAdmin` is a function that answers a
      * response, not Hono middleware: put in the middleware position it typechecks against Hono's
@@ -756,6 +1008,8 @@ export function createPluginRoutes(
       const refusal = brokerRefusal(error, DIRECTORY_UNAVAILABLE);
       return context.json({ error: refusal.error }, refusal.status);
     }
+    // An app awaiting this deployment's own client is connectable once one is stored (#950).
+    directory = withDeploymentClients(directory, await heldClients());
     /*
      * AN APP THAT CANNOT BE CONNECTED IS NOT AN APP TO OFFER. Every kind but this one ends at a
      * person with a working account; `unsupported` ends at an administrator pressing Add and
@@ -852,7 +1106,10 @@ export function createPluginRoutes(
     let directory: BrokerApp[] = [];
     if (slug) {
       try {
-        directory = await composio.broker.listApps();
+        directory = withDeploymentClients(
+          await composio.broker.listApps(),
+          await heldClients(),
+        );
       } catch (error) {
         /*
          * The same failure the directory route answers, in the same words, because it is the same
@@ -963,7 +1220,7 @@ export function createPluginRoutes(
       if (error instanceof CatalogueEntryUnknownError) {
         return context.json(
           {
-            error: `${app.name} was added, and then could not be read back out of this deployment's own servers — so the row and its trail entry stand, and what is on this page may be missing it. Reload the Plugins page: if ${app.name} is there it is enabled and there is nothing to redo, and if it is not, adding it again is safe.`,
+            error: `${app.name} was added, and then could not be read back out of this deployment's own servers — so the row and its trail entry stand, and what is on this page may be missing it. Reload the ${appsPage()} page: if ${app.name} is there it is enabled and there is nothing to redo, and if it is not, adding it again is safe.`,
           },
           409,
         );
@@ -1126,10 +1383,7 @@ export function createPluginRoutes(
     const toolkit = row ? toolkitOf(row.url) : null;
     if (row && toolkit) {
       if (!composio) {
-        return context.json(
-          { error: new BrokerUnconfiguredError().message },
-          503,
-        );
+        return context.json({ error: PERSON_UNCONFIGURED }, 503);
       }
 
       /*
@@ -1277,6 +1531,21 @@ export function createPluginRoutes(
         );
       }
 
+      /*
+       * AN APP ON THE DEPLOYMENT'S OWN CLIENT IS NEVER A PERSON'S ACCOUNT, AND IS REFUSED BEFORE THE
+       * FORM IS EVEN ASKED FOR (upstream #950). What a person would type is a store subdomain; what
+       * Composio would exchange is the client this deployment registered, so their account would
+       * be the organization's access under their name, granted by nobody. Only an administrator,
+       * who holds that client already, connects it (`adminConnectOnly`). 403, because the person
+       * pressing Connect cannot make this request succeed by changing what they send.
+       */
+      if (adminConnectOnly(authScheme) && context.var.actor.role !== "admin") {
+        return context.json(
+          { error: adminConnectOnlySentence(row.title) },
+          403,
+        );
+      }
+
       if (isFieldScheme(authScheme)) {
         /*
          * A SUBMISSION IS AN OBJECT OF VALUES, AND ANYTHING ELSE IS THE FIRST PRESS. The browser
@@ -1286,6 +1555,7 @@ export function createPluginRoutes(
          */
         const body = (await context.req.json().catch(() => null)) as {
           values?: unknown;
+          guide?: unknown;
         } | null;
         const submitted =
           typeof body?.values === "object" &&
@@ -1307,11 +1577,36 @@ export function createPluginRoutes(
             authScheme,
           });
         } catch (error) {
-          const refusal = brokerRefusal(
+          const refusal = personRefusal(
             error,
-            `Composio would not say what ${row.title} asks for, and said nothing about why. Try again, and ask an administrator to check this deployment's Composio key if it persists.`,
+            `没能查到连接 ${row.title} 需要填写什么。请重试；如果一直这样，请联系管理员。`,
+            { route: "connect.form", toolkit },
           );
           return context.json({ error: refusal.error }, refusal.status);
+        }
+
+        /*
+         * THE FIRST PRESS, ASKED FOR THE GUIDE, ANSWERS THE FORM A PERSON CAN FOLLOW (upstream
+         * #1297): the same boxes under the same names, labelled and explained in their words, and a
+         * guide saying where the key comes from. The names are untouched, so the second press is
+         * checked against `published` exactly as before. The broker's own link is asked for and a
+         * failure there costs only the link: the form is what the person came for, and
+         * `./key-guides` has the fallback.
+         *
+         * ASKED FOR WITH `{ "guide": true }`, which is the fork's one difference from upstream: a
+         * first press without it is answered exactly as it always was, the vendor's form verbatim,
+         * so a browser that predates the guide reads what it has always read.
+         */
+        if (submitted === null && body?.guide === true) {
+          return context.json({
+            fields: fieldsForPerson(toolkit, published),
+            guide: await keyGuideFor({
+              ask: composio.guides?.connectionGuideUrl.bind(composio.guides),
+              toolkit,
+              authScheme,
+              title: row.title,
+            }),
+          });
         }
 
         if (submitted === null) return context.json({ fields: published });
@@ -1339,7 +1634,8 @@ export function createPluginRoutes(
         if (published.length === 0) {
           return context.json(
             {
-              error: `${row.title} publishes no boxes to fill in, so there is nothing you could type that would reach it and no account was made. An administrator has to look at how ${row.title} is set up at Composio; removing it on the Plugins page and adding it again is what records the way Composio connects it now.`,
+              // A person reads this (upstream #1223): no connector provider named.
+              error: `${row.title} 没有要填写的内容，所以没有建立任何连接。${askAdminToZh(`在${appsPageZh()}移除它，再重新添加`)}。`,
             },
             400,
           );
@@ -1417,7 +1713,8 @@ export function createPluginRoutes(
           const optional = published.map((field) => field.name).join(", ");
           return context.json(
             {
-              error: `${row.title} publishes no box it says has to be filled in — only ${optional} — so nothing you could type would be a credential it insists on, and no account was made. An app that genuinely needs none is one Composio publishes as needing no authentication, and ${row.title} is recorded here as an app whose secret you type. An administrator has to look at how ${row.title} is set up at Composio; removing it on the Plugins page and adding it again is what records the way Composio connects it now.`,
+              // A person reads this (upstream #1223): no connector provider named.
+              error: `${row.title} 没有标出必须填写的项（只有 ${optional}），所以没有建立任何连接。${askAdminToZh(`在${appsPageZh()}移除它，再重新添加`)}。`,
             },
             400,
           );
@@ -1566,13 +1863,17 @@ export function createPluginRoutes(
            * reason the skills route gives its own refusal one: it is something the person who made
            * the request can fix, and the message says what to fix.
            */
+          const generic = `没能用你填写的内容连接 ${row.title}。请重试；如果一直这样，请联系管理员。`;
           if (error instanceof PluginRefusedError) {
-            return context.json({ error: error.message }, 400);
+            return context.json(
+              { error: withoutBrokerName(error.message) },
+              400,
+            );
           }
-          const refusal = brokerRefusal(
-            error,
-            `${row.title} could not be connected with what you entered, and Composio said nothing about why. Try again, and ask an administrator to check this deployment's Composio key if it persists.`,
-          );
+          const refusal = personRefusal(error, generic, {
+            route: "connect.fields",
+            toolkit,
+          });
           return context.json({ error: refusal.error }, refusal.status);
         }
       }
@@ -1598,7 +1899,8 @@ export function createPluginRoutes(
       if (kind === "unreadable") {
         return context.json(
           {
-            error: `This deployment cannot tell how ${row.title} connects, so nothing was sent to Composio and no account was made. An administrator has to remove it on the Plugins page and add it again, which records the way Composio connects it now.`,
+            // English, because the route's tests pin "cannot tell how"; no provider named (upstream #1223).
+            error: `OpenBot cannot tell how ${row.title} connects, so nothing was sent and no account was made. ${askAdminTo(`remove it on the ${appsPage()} page and add it again`)}.`,
           },
           400,
         );
@@ -1682,9 +1984,10 @@ export function createPluginRoutes(
           ),
         }));
       } catch (error) {
-        const refusal = brokerRefusal(
+        const refusal = personRefusal(
           error,
-          `Composio would not begin a connection to ${row.title}, and said nothing about why. Try again, and ask an administrator to check this deployment's Composio key if it persists.`,
+          `没能开始连接 ${row.title}。请重试；如果一直这样，请联系管理员。`,
+          { route: "connect.consent", toolkit },
         );
         return context.json({ error: refusal.error }, refusal.status);
       }
@@ -1747,6 +2050,24 @@ export function createPluginRoutes(
        */
       if (error instanceof PluginRefusedError) {
         return context.json({ error: error.message }, 409);
+      }
+      /*
+       * The deployment holds a client and this replica could not read it: a vault fault, or a key
+       * that will not decrypt it. Nothing was registered over it, because that would replace the
+       * client for every replica that still can. Recorded, and answered as a fault rather than as a
+       * missing client: there is nothing for the person to fix, and nothing of the fault is said.
+       */
+      if (error instanceof OAuthClientReadError) {
+        await store.recordOAuthClientReadFailure({
+          serverId,
+          actorId: context.var.actor.id,
+        });
+        return context.json(
+          {
+            error: `暂时无法连接 ${entry.title}。请稍后重试；如果一直这样，请联系管理员。`,
+          },
+          503,
+        );
       }
       throw error;
     }
@@ -1839,7 +2160,7 @@ export function createPluginRoutes(
     }
     if (!composio) {
       return {
-        refusal: { error: new BrokerUnconfiguredError().message, status: 503 },
+        refusal: { error: PERSON_UNCONFIGURED, status: 503 },
       };
     }
     return { toolkit };
@@ -1907,9 +2228,14 @@ export function createPluginRoutes(
          * no. So the page is told the ask failed, and what it goes on showing is the last answer
          * Composio gave rather than a guess about this one.
          */
-        const refusal = brokerRefusal(
+        const refusal = personRefusal(
           error,
-          "Composio would not say whether this account is connected, and gave no reason, so what is shown here is the last answer it gave rather than a fresh one. Try again, and ask an administrator to check this deployment's Composio key if it persists.",
+          /*
+           * English, because the route's existing tests pin "last answer"; upstream #1223's own
+           * wording, which names no broker.
+           */
+          "Couldn't check whether this account is connected. This shows the last answer. Try again, or ask an admin if it keeps happening.",
+          { route: "connection.confirm", toolkit: resolved.toolkit },
         );
         return context.json({ error: refusal.error }, refusal.status);
       }
@@ -1982,18 +2308,20 @@ export function createPluginRoutes(
          * send them to an administrator about this deployment's key. 400 because it is theirs to
          * fix and the message says what to fix.
          */
+        const generic =
+          "没能检查这个连接是否还能用，这里显示的是上一次检查的结果。请再按一次重新检查；如果一直这样，请联系管理员。";
         if (error instanceof PluginRefusedError) {
-          return context.json({ error: error.message }, 400);
+          return context.json({ error: withoutBrokerName(error.message) }, 400);
         }
         /*
          * And a failure this deployment cannot explain says what is on the screen instead of
          * guessing. Nothing was written on the way out of the store here, so the row still carries
          * the last answer anybody earned rather than a verdict invented by a call that failed.
          */
-        const refusal = brokerRefusal(
-          error,
-          "Composio would not say whether this connection still works, and gave no reason, so what is shown here is the last answer it gave rather than a fresh one. Press Re-check again, and ask an administrator to check this deployment's Composio key if it persists.",
-        );
+        const refusal = personRefusal(error, generic, {
+          route: "connection.recheck",
+          toolkit: resolved.toolkit,
+        });
         return context.json({ error: refusal.error }, refusal.status);
       }
     },
@@ -2051,9 +2379,11 @@ export function createPluginRoutes(
        * one thing a person needs is the button to press, not this deployment's theory of where it
        * stopped.
        */
-      const refusal = brokerRefusal(
+      const refusal = personRefusal(
         error,
-        "Composio would not end this account, and gave no reason. Press Disconnect again: the revoke at Composio runs before anything here is deleted, so repeating it is safe and is the whole recovery. Ask an administrator to check this deployment's Composio key if it persists.",
+        // English for the same reason as confirm's: the route's tests pin "Disconnect again".
+        "Couldn't disconnect this account. Press Disconnect again. It's safe to repeat. Ask an admin if it keeps happening.",
+        { route: "connection.disconnect", toolkit: resolved.toolkit },
       );
       return context.json({ error: refusal.error }, refusal.status);
     }
@@ -2218,6 +2548,31 @@ export function createPluginRoutes(
           }),
         );
         return context.redirect(failed);
+      }
+
+      /*
+       * 应用提供什么，以刚连接的这个人的身份问（上游 #1073）。
+       *
+       * 只能按个人凭据列出工具的应用，在有人连接之前一个工具也没有，而这是第一个有人连接的时刻。
+       * 等它做完再跳转，这样这个人回到的页面已经列出工具，下一次 Bot 运行也拿得到。见
+       * `discoverToolsOnConnect`：只在一个工具都没有时才列，在这个人的帧里调用。
+       *
+       * 连接已经写下，这里的任何失败都不会把它变成连接失败。vendor 不肯回答，会在刷新里落到应用的
+       * `lastError`；我们自己的故障只记日志，应用页上的「刷新工具」还可以再问一次。
+       */
+      try {
+        await asPerson(() =>
+          store.discoverToolsOnConnect(state.serverId, userId),
+        );
+      } catch (error) {
+        console.error(
+          JSON.stringify({
+            type: "oauth-connection-tools-not-listed",
+            serverId: state.serverId,
+            note: "A person connected and their account was recorded, but asking the app what it offers failed. Refresh tools on the app's page asks again.",
+            error: reasonWithoutStatement(error),
+          }),
+        );
       }
 
       return context.redirect(
@@ -3051,6 +3406,267 @@ export function createPluginRoutes(
       );
     }
   });
+
+  /**
+   * 申请访问（迁移 0153，上游 #814 的收件箱部分）。
+   *
+   * 申请由员工在对话里调用 `request_app_access` 提出，行属于申请人的租户。申请人在自己的帧里看、撤回自己的
+   * 申请；管理员经 `asAdminPlatform` 列出所有人的 pending 申请，处理结果经 `adminActAsOwner` 写回申请人的帧，
+   * 轨迹也归申请人。
+   *
+   * 批准不新增授权路径：`enable` 调用现有的上架（`addInstallListing`，和 POST /listings 同一个），之后员工的
+   * 主人按 D08 自己装；`grant` 走现有的授予（`asBotOwner` + `enablementDecision` + `store.grant`，和 POST
+   * /grants 同一套），只授予应用标为只读、非破坏性的动作，写操作仍由管理员在插件页逐个授予。任一步失败时
+   * 申请保持 pending，并返回中文原因。
+   */
+  const NO_SUCH_REQUEST = "没有这条申请。";
+  const ALREADY_DECIDED = "这条申请已经处理过了。";
+
+  /**
+   * 能处理申请的人：现有的插件管理权限，也就是管理员角色加上 `adminCapability` 重新读过角色后给的
+   * capability。角色被收回的管理员拿不到 capability，同样被拒。
+   */
+  const decisionRefusal = (context: { var: AppVariables }): string | null =>
+    context.var.actor?.role === "admin" &&
+    adminScope &&
+    capabilityFor(currentTenant()) === "admin"
+      ? null
+      : "只有拥有插件管理权限的管理员可以处理访问申请。";
+
+  /** 管理员读一条申请，跨租户，所以在 platform 帧里读；调用前已确认持有 capability。 */
+  const requestForAdmin = (context: { var: AppVariables }, id: string) =>
+    (adminScope as NonNullable<typeof adminScope>).asAdminPlatform(
+      context.var.actor,
+      () => store.appAccessRequest(id),
+    );
+
+  /** 把处理结果写回申请人的帧（I6）：这次改动和它的轨迹都归申请人。 */
+  const decideAsRequester = (
+    context: { var: AppVariables },
+    request: AppAccessRequestRecord,
+    status: "approved" | "dismissed",
+  ) =>
+    (adminScope as NonNullable<typeof adminScope>).adminActAsOwner(
+      context.var.actor,
+      request.tenantId,
+      () =>
+        store.decideAppAccessRequest({
+          id: request.id,
+          status,
+          by: actorEmail(context),
+        }),
+    );
+
+  /** 批准没有干净地完成时记一行日志：哪条申请、做到哪一步、已写入了哪些授予。 */
+  const logApproval = (
+    outcome: "refused" | "grant_failed" | "applied_but_closed",
+    request: AppAccessRequestRecord,
+    granted: string[],
+    reason?: string,
+  ) =>
+    console.warn(
+      JSON.stringify({
+        type: "app-access-approve",
+        outcome,
+        request: request.id,
+        kind: request.kind,
+        app: request.appKey,
+        bot: request.botId,
+        granted,
+        ...(reason ? { reason } : {}),
+        timestamp: new Date().toISOString(),
+      }),
+    );
+
+  /** 申请人自己的 pending 申请，最新的在前。 */
+  routes.get("/access-requests/mine", requireUser, async (context) =>
+    context.json({
+      requests: await store.pendingAppAccessRequests({
+        requesterUserId: context.var.actor.id,
+      }),
+    }),
+  );
+
+  /** 所有人的 pending 申请，给管理员收件箱。 */
+  routes.get("/access-requests", signedInWithCapability, async (context) => {
+    const refusal = decisionRefusal(context);
+    if (refusal) return context.json({ error: refusal }, 403);
+    const requests = await (
+      adminScope as NonNullable<typeof adminScope>
+    ).asAdminPlatform(context.var.actor, () =>
+      store.pendingAppAccessRequests(),
+    );
+    return context.json({ requests });
+  });
+
+  /** 申请人自己的一条申请，卡片据此显示当前状态。别人的和不存在的一样答 404。 */
+  routes.get("/access-requests/:id", requireUser, async (context) => {
+    const request = await store.appAccessRequest(context.req.param("id"));
+    if (!request || request.requesterUserId !== context.var.actor.id)
+      return context.json({ error: NO_SUCH_REQUEST }, 404);
+    return context.json({ request });
+  });
+
+  /** 申请人撤回自己的一条 pending 申请。别人的读起来和不存在的一样，从这里看不出谁申请了什么。 */
+  routes.delete("/access-requests/:id", requireUser, async (context) => {
+    const id = context.req.param("id");
+    const cancelled = await store.cancelAppAccessRequest({
+      id,
+      requesterUserId: context.var.actor.id,
+    });
+    if (cancelled) return context.json({ request: cancelled });
+    const existing = await store.appAccessRequest(id);
+    if (existing && existing.requesterUserId === context.var.actor.id)
+      return context.json({ error: ALREADY_DECIDED }, 409);
+    return context.json({ error: NO_SUCH_REQUEST }, 404);
+  });
+
+  routes.post(
+    "/access-requests/:id/approve",
+    signedInWithCapability,
+    async (context) => {
+      const refusal = decisionRefusal(context);
+      if (refusal) return context.json({ error: refusal }, 403);
+      const request = await requestForAdmin(context, context.req.param("id"));
+      if (!request) return context.json({ error: NO_SUCH_REQUEST }, 404);
+      if (request.status !== "pending")
+        return context.json({ error: ALREADY_DECIDED }, 409);
+      const title = request.appTitle;
+      let granted: string[] = [];
+
+      if (request.kind === "enable") {
+        // 和 POST /listings 一样的检查：上架的是应用，必须是目录里的条目或本部署已添加的应用。
+        if (
+          catalogueEntry(request.appKey) === null &&
+          !(await store.serverExists(request.appKey))
+        )
+          return context.json(
+            { error: `「${title}」已经不是本部署的应用，无法上架。` },
+            409,
+          );
+        await store.addInstallListing(
+          "mcp",
+          request.appKey,
+          actorEmail(context),
+        );
+      } else {
+        const outcome = await asBotOwner(context, request.botId, async () => {
+          const server = (await store.listServers()).find(
+            (candidate) => candidate.id === request.serverId,
+          );
+          if (!server)
+            return {
+              error: `「${title}」已经不是本部署的应用，无法授予。`,
+              status: 409 as const,
+            };
+          if (server.tools.length === 0)
+            return {
+              error: `「${title}」还没有列出任何工具。请先在插件页刷新它的工具，再批准这条申请。`,
+              status: 409 as const,
+            };
+          const refs = server.tools
+            .filter((tool) => tool.effect === "read" && !tool.destructive)
+            .map((tool) => tool.ref);
+          if (refs.length === 0)
+            return {
+              error: `「${title}」没有标为只读的动作，在这里批准什么也授予不了。请在插件页为这位员工逐个选择可以使用的动作，再处理这条申请。`,
+              status: 409 as const,
+            };
+          for (const ref of refs) {
+            const decision = await enablementDecision(
+              context,
+              "mcp",
+              ref,
+              request.botId,
+              "grant",
+            );
+            if (decision.refusal !== null) {
+              // 原文是英文、写给开发者的；收件箱里给管理员看中文，原文只进日志（M-2）。
+              logApproval("refused", request, [], decision.refusal);
+              return {
+                error: `无法把「${title}」授予这位员工：员工或应用已不存在，或这项授予不由管理员在这里决定。`,
+                status: 403 as const,
+                granted: [] as string[],
+              };
+            }
+          }
+          /*
+           * 逐个写入，记下写成了哪些。中途失败时前面写入的授予会留下（每个都是幂等的 upsert，重试会补齐），
+           * 所以响应和日志都写明已写入了哪些，申请保持 pending。
+           */
+          const written: string[] = [];
+          try {
+            for (const ref of refs) {
+              await store.grant("mcp", ref, request.botId, actorEmail(context));
+              written.push(ref);
+            }
+          } catch (error) {
+            logApproval(
+              "grant_failed",
+              request,
+              written,
+              error instanceof Error ? error.message : String(error),
+            );
+            const done = written.length > 0 ? written.join("、") : "无";
+            return {
+              error: `授予「${title}」时中途失败，申请保持待处理。已写入：${done}。${error instanceof PluginRefusedError ? "其余的这项授予不由管理员在这里决定。" : "其余的没有写入，可以稍后再批准一次补齐。"}`,
+              status: (error instanceof PluginRefusedError ? 403 : 500) as
+                | 403
+                | 500,
+              granted: written,
+            };
+          }
+          return { refs };
+        });
+        if ("error" in outcome)
+          return context.json(
+            { error: outcome.error, granted: outcome.granted },
+            outcome.status,
+          );
+        granted = outcome.refs;
+      }
+
+      const decided = await decideAsRequester(context, request, "approved");
+      if (!decided) {
+        /*
+         * 上架或授予已经生效，但关单时发现申请在此期间已被撤回或驳回（I-1）。这和「什么都没做成」的
+         * 409 不是一回事：返回一个可以区分的答复（`applied: true`），写明做了什么、申请状态没改，
+         * 由管理员决定要不要到插件页撤销。
+         */
+        logApproval("applied_but_closed", request, granted);
+        const what =
+          request.kind === "enable"
+            ? `「${title}」已上架`
+            : `「${title}」已授予（${granted.join("、")}）`;
+        return context.json(
+          {
+            error: `${what}，但这条申请在此期间已被撤回或驳回，申请状态未改。如不需要，请到插件页${request.kind === "enable" ? "下架" : "撤销"}。`,
+            applied: true,
+            granted,
+          },
+          409,
+        );
+      }
+      return context.json({ request: decided, granted });
+    },
+  );
+
+  /** 驳回：只关掉这条申请，别的什么也不改。 */
+  routes.post(
+    "/access-requests/:id/dismiss",
+    signedInWithCapability,
+    async (context) => {
+      const refusal = decisionRefusal(context);
+      if (refusal) return context.json({ error: refusal }, 403);
+      const request = await requestForAdmin(context, context.req.param("id"));
+      if (!request) return context.json({ error: NO_SUCH_REQUEST }, 404);
+      if (request.status !== "pending")
+        return context.json({ error: ALREADY_DECIDED }, 409);
+      const decided = await decideAsRequester(context, request, "dismissed");
+      if (!decided) return context.json({ error: ALREADY_DECIDED }, 409);
+      return context.json({ request: decided });
+    },
+  );
 
   return routes;
 }

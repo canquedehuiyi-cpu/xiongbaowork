@@ -1,6 +1,9 @@
 import { cutAtCodeUnits } from "../channels/text";
+import { appsPage, itsAppPage } from "../edition";
 import { brokerSentence, flagOf } from "./broker";
+import { type ActionShape, shapeOf } from "./composio-shapes";
 import { type ListedTool, MAX_RESULT_CHARS, type McpCallResult } from "./mcp";
+import { fitJsonResult } from "./result-fit";
 
 /**
  * The Composio transport: an app somebody enabled, reached as the person asking.
@@ -88,8 +91,9 @@ export type ComposioAction = {
    * THAT IS NOW WHAT THE ADAPTER DOES, FOR A REASON THAT HAD NOTHING TO DO WITH THIS FIELD. The
    * wrapper is the one method of the vendor's tool model that cannot be paged, so the listing moved
    * to the raw client to follow Composio's cursor — and the keys came back as a side effect. What
-   * this module promises is unchanged and is now worth more: it adds nothing to this schema and
-   * removes nothing from it, so what a model is shown is what the vendor published.
+   * this module promises is now worth more: it adds nothing to this schema, and the one thing it
+   * removes is a file parameter the action can do without, which no model can fill in (see
+   * {@link withoutOptionalFiles}). Everything else a model is shown is what the vendor published.
    *
    * Absent for the occasional action that publishes none. An action that published `{}` now arrives
    * as `{}` rather than as absent — the SDK normalized that away before parsing
@@ -297,16 +301,17 @@ export function toolkitOf(url: string): string | null {
 /**
  * What an action does, from the labels Composio publishes with it.
  *
- * SIX LABELS, AND ONLY TWO DECIDE ANYTHING. `readOnlyHint` is the one thing that can produce a read.
- * `destructiveHint` produces a destructive write. `createHint` and `updateHint` are writes, which is
- * also what an unlabelled action is, so reading them buys nothing over the default. `idempotentHint`
- * and `openWorldHint` say nothing about effect — DELETE is idempotent, so treating idempotence as
- * safety would wave through exactly the calls worth asking about.
+ * SIX LABELS, AND ONLY TWO DECIDE THE EFFECT. `readOnlyHint` is the one thing that can produce a
+ * read. `destructiveHint` produces a destructive write. `createHint` and `updateHint` are plain
+ * writes. `idempotentHint` and `openWorldHint` say nothing about effect — DELETE is idempotent, so
+ * treating idempotence as safety would wave through exactly the calls worth asking about.
  *
- * ANYTHING UNLABELLED IS A WRITE. Measured across Gmail, Linear, Calendar, Notion and Slack, every
- * action carried at least one label, so this is a guard against the future rather than the present: an
- * app that labels nothing, or a label added later that this code has never heard of, must land on
- * write. The opposite default would silently classify new actions as safe.
+ * ANYTHING UNLABELLED IS AN UNCLASSIFIED WRITE. Measured across Gmail, Linear, Calendar, Notion and
+ * Slack, every action carried at least one label, so this is a guard against the future rather than
+ * the present: an app that labels nothing, or a label added later that this code has never heard
+ * of, must land on write. The opposite default would silently classify new actions as safe. 它记为
+ * `unclassified` 而不是 `destructive`：Composio 并没有说它会删除什么，所以调用时不按删除类底线
+ * 总是先问；后台只读路径对它和 destructive 一样谨慎（见 `mcpTools.unclassified`）。
  *
  * DESTRUCTIVE WINS OVER READ-ONLY. Both at once is somebody else's bug, and the strict reading is the
  * only safe one.
@@ -314,6 +319,8 @@ export function toolkitOf(url: string): string | null {
 export function effectOf(tags: readonly string[] | undefined): {
   effect: "read" | "write";
   destructive: boolean;
+  /** Composio 没有给出只读、破坏性、新建或修改中的任何一个标签。 */
+  unclassified?: true;
 } {
   /*
    * AND THE LABEL IS THE WORD, WHICH IS THE SAME READ THE SLUG AND THE VERSION BESIDE IT ALREADY
@@ -332,7 +339,9 @@ export function effectOf(tags: readonly string[] | undefined): {
   if (labels.has("destructiveHint"))
     return { effect: "write", destructive: true };
   if (labels.has("readOnlyHint")) return { effect: "read", destructive: false };
-  return { effect: "write", destructive: false };
+  if (labels.has("createHint") || labels.has("updateHint"))
+    return { effect: "write", destructive: false };
+  return { effect: "write", destructive: false, unclassified: true };
 }
 
 /**
@@ -365,7 +374,7 @@ function schemaNode(value: unknown): Record<string, unknown> | null {
 const SCHEMA_DEPTH = 64;
 
 /**
- * What the walk below answers: whether the action stages a file, or why that could not be settled.
+ * What the walk below answers: whether a schema stages a file, or why that could not be settled.
  *
  * THE THIRD ANSWER IS A CLAUSE RATHER THAN A `null`, so the refusal {@link listTools} writes can say
  * WHICH shape stopped the read without this function knowing the app or the action it is about. It
@@ -375,12 +384,18 @@ const SCHEMA_DEPTH = 64;
 type FileVerdict = boolean | string;
 
 /**
- * Whether an action asks for a file, anywhere in its schema.
+ * Whether a schema asks for a file, anywhere in it.
  *
  * `file_uploadable` is Composio's own extension keyword, and one of the few the SDK's
  * `JSONSchemaPropertySchema` whitelists rather than strips (`@composio/core` 0.18.1,
  * `src/types/tool.types.ts:89`) — so unlike most of what the vendor publishes, this one is still
- * here to be read. See {@link listTools} for what is done with the answer.
+ * here to be read.
+ *
+ * IT IS NO LONGER ASKED OF A WHOLE ACTION. {@link withoutOptionalFiles} walks an action's named
+ * properties itself, because a file under a property the action can do without is a parameter to
+ * leave out rather than a reason to drop the action, and hands this walk everything else a schema
+ * says. A `true` from here is therefore a file no property can be left out to remove, which is
+ * still an action nobody can call. See {@link listTools} for what is done with either answer.
  *
  * WALKED, NOT LOOKED UP. Composio toolkits routinely put the flag behind a `$ref`/`$defs`
  * indirection or inside an `anyOf` variant, which is why the vendor's own predicate recurses
@@ -490,6 +505,201 @@ function stagesAFile(schema: unknown, depth = 0): FileVerdict {
 }
 
 /**
+ * An action's schema with the file parameters it can do without taken out, and which those were.
+ *
+ * `withheld` names each removed parameter by its path of property names from the root, such as
+ * `["attachment"]`, or `["message", "attachment"]` for one inside an object parameter, because the
+ * call path has to recognise a call that carries one anyway. See {@link withheldArguments}.
+ */
+type OfferedSchema = { schema: unknown; withheld: string[][] };
+
+/**
+ * What {@link withoutOptionalFiles} answers: the schema an action is offered under, `true` where no
+ * call to it can leave the file out, or the clause {@link stagesAFile} gives for a schema it could
+ * not read to the bottom.
+ */
+type FileOffer = OfferedSchema | true | string;
+
+/**
+ * The schema an action is offered under once every file parameter it can do without is removed.
+ *
+ * A FILE THE ACTION ONLY ACCEPTS IS NOT A FILE IT NEEDS, and this deployment used to treat the two
+ * the same. The walk asked whether a schema carried `file_uploadable` anywhere and dropped the action
+ * if it did, so Gmail's GMAIL_SEND_EMAIL, GMAIL_CREATE_EMAIL_DRAFT, GMAIL_REPLY_TO_THREAD and
+ * GMAIL_UPDATE_DRAFT were never offered: each carries an `attachment` that is a single file or a list
+ * of them, and none of them requires it. A Bot could read a mailbox and could not send, draft or
+ * reply. The argument for dropping (see {@link listTools}) is that a model can only invent the
+ * staging key a file parameter asks for, and that is exactly as true of an optional one. What
+ * differs is the remedy: a call that leaves the parameter out is a call that works, so the
+ * parameter goes and the action stays.
+ *
+ * WHAT IS REMOVED IS A NAMED PROPERTY THAT NOTHING REQUIRES, which is the one shape that can be taken
+ * out of a schema without changing what the rest of it means. A property that carries a file
+ * anywhere beneath it (on itself, under `anyOf`, as the `items` of a list, inside an object of its
+ * own) is a file parameter, and it is withheld only where the object naming it does not require it
+ * (see {@link requiresName}). The rest of the object is kept as the vendor wrote it: every other
+ * property, its `required`, its descriptions.
+ *
+ * THE UNIT IS THE DEEPEST PROPERTY A CALL CAN LEAVE OUT. A file the object around it requires makes
+ * that object a file parameter in turn, one level up, so the question is asked again of the object's
+ * own parent: an optional `message` whose `attachment` it requires is withheld whole, and a required
+ * `message` whose `attachment` is optional keeps everything but the `attachment`. Required all the
+ * way to the root is an action nobody can call, which answers `true` and is dropped as before.
+ *
+ * EVERYTHING ELSE IS STILL {@link stagesAFile}'S, AND STILL A DROP. A file under
+ * `additionalProperties`, `patternProperties` or a composition of the object itself is not behind a
+ * name that a call could leave out, and one in `$defs` is reached through a `$ref` this deployment
+ * does not resolve, so no property can be withheld to remove either. None of the fifteen toolkits
+ * read when this was written spells a file any of those ways. The same
+ * goes for the two shapes nothing can read: a flag that is not a flag and a schema nested past
+ * {@link SCHEMA_DEPTH} still answer their clause, here as there.
+ *
+ * NOTHING THE VENDOR HANDED OVER IS CHANGED. Where nothing is withheld the answer is the object that
+ * arrived, so an ordinary schema reaches a model as the same object; where something is, each object
+ * on the path to it is copied and everything off that path is shared.
+ */
+function withoutOptionalFiles(schema: unknown, depth = 0): FileOffer {
+  if (depth > SCHEMA_DEPTH)
+    return `nests more than ${SCHEMA_DEPTH} objects deep`;
+  const node = schemaNode(schema);
+  if (!node) return { schema, withheld: [] };
+  const flagged = flagOf(node.file_uploadable, false);
+  if (flagged === null)
+    return "publishes a file_uploadable in it that is not a flag";
+  if (flagged) return true;
+
+  const { properties, ...besides } = node;
+  const named = schemaNode(properties);
+  const kept: [string, unknown][] = [];
+  const withheld: string[][] = [];
+  for (const [name, child] of Object.entries(named ?? {})) {
+    const answer = withoutOptionalFiles(child, depth + 1);
+    if (typeof answer === "string") return answer;
+    if (answer === true) {
+      if (requiresName(node, name)) return true;
+      withheld.push([name]);
+      continue;
+    }
+    kept.push([name, answer.schema]);
+    for (const path of answer.withheld) withheld.push([name, ...path]);
+  }
+
+  const elsewhere = stagesAFile(besides, depth);
+  if (elsewhere !== false) return elsewhere;
+
+  if (withheld.length === 0) return { schema, withheld };
+  // `fromEntries` rather than assignment, so a property named `__proto__` stays a property.
+  return {
+    schema: { ...node, properties: Object.fromEntries(kept) },
+    withheld,
+  };
+}
+
+/**
+ * Whether the object schema `node` requires its property `name`, which is what decides whether a
+ * file under that property can be left out.
+ *
+ * IT ANSWERS YES WHENEVER IT CANNOT BE SURE, because a wrong yes and a wrong no cost very different
+ * things. A wrong yes drops an action, which is what every action carrying a file used to get. A
+ * wrong no offers an action with a parameter removed that the vendor then insists on, and every call
+ * to it fails, which is the outcome the whole filter exists to prevent.
+ *
+ * So a `required` is read wherever one can apply to the object itself: its own, under the
+ * composition and conditional keywords, and in `dependentRequired`, `dependentSchemas` and draft-07
+ * `dependencies`, where supplying some other parameter can require this one. A `required` that is
+ * not a list of names, a `$ref` (which needs a resolver this deployment does not have) and a schema
+ * nested past {@link SCHEMA_DEPTH} all answer yes rather than being guessed at. `not` is the one
+ * keyword passed over, because a name it requires is one the object must NOT carry.
+ */
+function requiresName(
+  node: Record<string, unknown>,
+  name: string,
+  depth = 0,
+): boolean {
+  if (depth > SCHEMA_DEPTH) return true;
+  if (node.$ref !== undefined) return true;
+  if (listsName(node.required, name)) return true;
+
+  for (const key of ["allOf", "anyOf", "oneOf", "if", "then", "else"]) {
+    const branch = node[key];
+    for (const child of Array.isArray(branch) ? branch : [branch]) {
+      const arm = schemaNode(child);
+      if (arm && requiresName(arm, name, depth + 1)) return true;
+    }
+  }
+
+  for (const key of ["dependentRequired", "dependentSchemas", "dependencies"]) {
+    for (const value of Object.values(schemaNode(node[key]) ?? {})) {
+      // A boolean is a whole subschema saying yes or no, and it names nobody.
+      if (typeof value === "boolean") continue;
+      const arm = schemaNode(value);
+      if (arm ? requiresName(arm, name, depth + 1) : listsName(value, name))
+        return true;
+    }
+  }
+
+  return false;
+}
+
+/** Whether a list of required names includes this one, which an unreadable list is taken to. */
+function listsName(list: unknown, name: string): boolean {
+  if (list === undefined || list === null) return false;
+  if (!Array.isArray(list)) return true;
+  return list.some(
+    (entry) => typeof entry !== "string" || entry.trim() === name.trim(),
+  );
+}
+
+/**
+ * The file parameters a call carries that the listing left out of the action, by name.
+ *
+ * WHY A CALL CAN CARRY ONE AT ALL. {@link listTools} removes such a parameter from the schema a
+ * model is shown, and a model that follows the schema never sends it. Nothing makes it follow the
+ * schema: Gmail's leaves other properties open, the built-in runtime's `parametersFor` (in
+ * `@openbot/toolkit`) passes an open property straight through to the call, and a model that has
+ * seen Gmail's API elsewhere knows the parameter is called `attachment`. What it would put there is
+ * the one value the parameter was removed for: a staging key it made up.
+ *
+ * ASKED OF THE SCHEMA THE CALL IS ABOUT, by the same walk the listing used, so the two cannot come
+ * apart over which parameters count. `./composio-client/actions.ts` asks this with the tool it has
+ * just resolved at the recorded version, and refuses the call in a sentence when anything comes
+ * back. An action the walk would drop, or cannot read, answers nothing here: it was never offered,
+ * and what a call to it carries is the vendor's to judge, as it always was.
+ *
+ * A NULL IS NOT A FILE. Composio documents `null` as "no attachment", so a call that spells the
+ * absence that way carries nothing that needs refusing. 空数组和空字符串同理：模型用它们表示「没有
+ * 附件」，拒掉只会多花一轮重试，审批之后被拒还会让人批准过的信发不出去。
+ */
+export function withheldArguments(
+  schema: unknown,
+  args: Record<string, unknown>,
+): string[] {
+  const offer = withoutOptionalFiles(schema);
+  if (offer === true || typeof offer === "string") return [];
+  return offer.withheld
+    .filter((path) => {
+      let value: unknown = args;
+      for (const name of path) {
+        const holder = schemaNode(value);
+        if (!holder || !Object.hasOwn(holder, name)) return false;
+        value = holder[name];
+      }
+      return !isNoFile(value);
+    })
+    .map((path) => path.join("."));
+}
+
+/** 一个文件参数的值是否等于「没有文件」：未给、null、空数组或空字符串。 */
+function isNoFile(value: unknown): boolean {
+  return (
+    value === undefined ||
+    value === null ||
+    value === "" ||
+    (Array.isArray(value) && value.length === 0)
+  );
+}
+
+/**
  * Whether an action published under this schema would be refused if it were called with no arguments.
  *
  * WHO ASKS, AND WHAT A WRONG ANSWER COSTS. `probeActionFor` in `store.ts` picks the read action a
@@ -558,9 +768,10 @@ export function asksForArguments(schema: unknown, depth = 0): boolean {
  *
  * An action with no schema is still listed, with an open one. The vendor is the right party to reject a
  * bad argument, and an action silently missing from the list reads to an administrator as an app that
- * does not have it. The one exception is an action that asks for a FILE, which is dropped — see the
- * criterion beside the filter below, and note that it turns on the action being uncallable rather
- * than on its schema being unfamiliar.
+ * does not have it. The one exception is an action that NEEDS A FILE, which is dropped, and an action
+ * that only accepts one is listed with that parameter removed. See the criterion beside the filter
+ * below, and note that it turns on the action being uncallable rather than on its schema being
+ * unfamiliar.
  *
  * A listing that could not be read at all is a THROW rather than an empty list, for the same reason
  * turned around: an empty list is what an app with no actions looks like, so answering emptily would
@@ -596,7 +807,7 @@ export async function listTools(connection: {
   const toolkit = toolkitOf(connection.url);
   if (!toolkit) {
     throw new Error(
-      `${connection.url} does not name a Composio app, so nothing was asked what it offers. A row reached through this transport is one whose provenance says composio, and its url has to be composio:// followed by an app slug; correct the url on the Plugins page.`,
+      `${connection.url} does not name a Composio app, so nothing was asked what it offers. A row reached through this transport is one whose provenance says composio, and its url has to be composio:// followed by an app slug; correct the url on the ${appsPage()} page.`,
     );
   }
   if (!installed) {
@@ -682,8 +893,16 @@ export async function listTools(connection: {
    * one, so the only value it can produce is invented and the vendor's staging lookup rejects the
    * call. The SDK says as much itself in the warning it logs on that path (`:349-366`).
    *
-   * WHY THIS IS NOT THE SAME AS THE SCHEMALESS ACTION BELOW, which is deliberately still offered.
-   * There the vendor is the right party to reject a bad argument, and the action might well
+   * SO THE PARAMETER IS WHAT FAILS, AND IT IS THE ACTION ONLY WHERE A CALL CANNOT LEAVE IT OUT. An
+   * action whose file parameters are all optional is offered with them removed from its schema:
+   * Gmail's GMAIL_SEND_EMAIL with no `attachment` sends an email, and dropping it, which is what
+   * this filter used to do, left a Bot able to read a mailbox and unable to send, draft or reply.
+   * An action that requires a file, directly or inside a parameter it requires, is still dropped.
+   * {@link withoutOptionalFiles} decides which, and the call path refuses a call that carries a
+   * removed parameter anyway (see {@link withheldArguments}).
+   *
+   * WHY A DROPPED ONE IS NOT THE SAME AS THE SCHEMALESS ACTION BELOW, which is deliberately still
+   * offered. There the vendor is the right party to reject a bad argument, and the action might well
    * succeed. Here it cannot: every call is a rejection, and an advertised action that can only
    * fail is worse than an absent one, because an administrator grants it, the audit trail records
    * attempts against it, and the model spends turns retrying with a different invented key.
@@ -720,14 +939,14 @@ export async function listTools(connection: {
       typeof action.slug === "string" && action.slug.trim() !== ""
         ? action.slug.trim()
         : `action ${position + 1} of the listing`,
-    verdict: stagesAFile(action.inputParameters),
+    verdict: withoutOptionalFiles(action.inputParameters),
   }));
 
   /*
    * A SCHEMA THIS DEPLOYMENT COULD NOT READ TO THE BOTTOM IS A REFUSAL, NOT AN ACTION OFFERED.
    *
-   * The two shapes {@link stagesAFile} cannot settle are a `file_uploadable` that is not a flag and
-   * a schema nested past {@link SCHEMA_DEPTH}, and read as "no file" they are both an action
+   * The two shapes {@link withoutOptionalFiles} cannot settle are a `file_uploadable` that is not a
+   * flag and a schema nested past {@link SCHEMA_DEPTH}, and read as "no file" they are both an action
    * published to a model whose every call fails at the vendor's staging lookup. That is the exact
    * thing the filter below exists to prevent, so the answer is the one the three field guards after
    * it already give: refuse while a sentence can still name the app and the action, and keep every
@@ -742,13 +961,27 @@ export async function listTools(connection: {
   const unreadableSchema = read.find((row) => typeof row.verdict === "string");
   if (unreadableSchema) {
     throw new Error(
-      `Composio's action list for ${toolkit} carries an input schema for ${unreadableSchema.named} that this deployment could not read to the bottom: it ${unreadableSchema.verdict}. Whether an action stages a file is what decides whether this deployment can offer it at all — one that does is dropped, because a model can only invent the staging key it asks for — so a schema that settles neither is not one to publish an action from. Nothing was refreshed and the actions already recorded for this app are kept rather than replaced by a listing whose schemas could not be read.`,
+      `Composio's action list for ${toolkit} carries an input schema for ${unreadableSchema.named} that this deployment could not read to the bottom: it ${unreadableSchema.verdict}. Whether an action stages a file is what decides whether this deployment can offer it at all: one that needs a file is dropped, and one that only accepts one is offered without it, because a model can only invent the staging key a file asks for. So a schema that settles neither is not one to publish an action from. Nothing was refreshed and the actions already recorded for this app are kept rather than replaced by a listing whose schemas could not be read.`,
     );
   }
 
-  const offered = read
-    .filter((row) => row.verdict !== true)
-    .map((row) => row.action);
+  /*
+   * EACH OFFERED ACTION CARRIES THE SCHEMA IT IS OFFERED UNDER from here on, which is the vendor's
+   * own object wherever nothing was withheld from it. So the guards below and the map at the end
+   * read one action, and what `mcp_tools` records is what a model is shown.
+   */
+  const offered: ComposioAction[] = [];
+  for (const { action, verdict } of read) {
+    if (verdict === true || typeof verdict === "string") continue;
+    offered.push(
+      verdict.withheld.length === 0
+        ? action
+        : {
+            ...action,
+            inputParameters: verdict.schema as Record<string, unknown>,
+          },
+    );
+  }
 
   /*
    * AN ACTION WITH NO SLUG BREAKS THE LISTING RATHER THAN BEING DROPPED FROM IT.
@@ -772,9 +1005,10 @@ export async function listTools(connection: {
    * nobody could even be told which action went missing, because the thing that names it is the
    * thing that is absent.
    *
-   * NOR IS IT THE FILE FILTER'S CASE, which drops actions and is right to, and which now runs
-   * ABOVE this. Those are well-formed actions the vendor published in full that this deployment
-   * cannot serve — a standing decision about a known action, taken the same way on every refresh —
+   * NOR IS IT THE FILE FILTER'S CASE, which drops the actions that need a file and is right to, and
+   * which now runs ABOVE this. Those are well-formed actions the vendor published in full that this
+   * deployment cannot serve — a standing decision about a known action, taken the same way on every
+   * refresh —
    * and an action it dropped is one the map never sees, so a missing slug on one of those is not
    * this guard's business. This is an answer that could not be read about an action that WILL be
    * published, which is the criterion the element check above already throws on, one field in.
@@ -1001,12 +1235,12 @@ export async function listTools(connection: {
    */
   if (actions.length > 0 && offered.length === 0) {
     throw new Error(
-      `Every one of the ${actions.length} actions Composio listed for ${toolkit} asks for a file upload, which this deployment cannot stage, so there is none it can offer. Recording that would say the app advertises nothing and delete every action, effect and version already held for it, so nothing was refreshed and those are kept.`,
+      `Every one of the ${actions.length} actions Composio listed for ${toolkit} needs a file upload, which this deployment cannot stage, so there is none it can offer. Recording that would say the app advertises nothing and delete every action, effect and version already held for it, so nothing was refreshed and those are kept.`,
     );
   }
 
   return offered.map((action) => {
-    const { effect, destructive } = effectOf(action.tags);
+    const { effect, destructive, unclassified } = effectOf(action.tags);
     /*
      * TRIMMED HERE BECAUSE IT IS TRIMMED AT THE OTHER END. {@link callTool} trims the recorded
      * version and refuses an empty one, so a whitespace-only string that counted as a version
@@ -1049,10 +1283,14 @@ export async function listTools(connection: {
        * is the right party to reject a bad argument — and `storableSchema` in `./store` walks any
        * shape into the `jsonb` column. So an unreadable schema already has an answer that keeps the
        * action callable, and refusing the app's whole listing over it would cost more than it saves.
+       *
+       * It is the schema the action is OFFERED under, which is the vendor's own object unless the
+       * file filter above withheld a parameter from it.
        */
       inputSchema: action.inputParameters ?? {},
       effect,
       destructive,
+      ...(unclassified ? { unclassified } : {}),
       ...(version ? { version } : {}),
     };
   });
@@ -1311,9 +1549,10 @@ function listingSentence(toolkit: string, error: unknown): string {
 }
 
 /**
- * The cap every string this module puts in front of a model goes through.
+ * The cap a failure's sentence goes through. A result goes through `fitJsonResult` in
+ * `./result-fit` instead, which keeps a list's records whole and says how to read the rest.
  *
- * Its own function because BOTH ANSWERS NEED IT, and only one of them used to get it. A refusal lands
+ * Its own function because BOTH ANSWERS NEED A CAP, and only one of them used to get it. A refusal lands
  * in a model's context exactly as a result does, and a vendor's sentence is no shorter for being a
  * failure — so {@link failure} capping nothing and reporting `truncated: false` was the silent
  * truncation's mirror image: unbounded text, plus a field stating that nothing had been cut.
@@ -1397,14 +1636,29 @@ const NOTHING = new Set(["", "null", "{}"]);
  *
  * The same cap the MCP transport applies and for the same reason: a tool result goes straight into a
  * model's context, so an unbounded one is somebody else's server deciding how much of our context
- * window to spend. Truncated visibly, never silently. An empty answer is stated in words rather than
+ * window to spend. Truncated visibly, never silently, and with the way to the rest: a list is cut
+ * between its records and the note names the call that fetches the others. An empty answer is
+ * stated in words rather than
  * returned empty — an empty string reads as "the action had nothing to say" rather than "there is
  * nothing there", and a model closes that gap from memory.
  *
  * CAN THROW, and is called from outside the vendor's `try` for that reason. See {@link callTool}.
  */
-function resultOf(data: ComposioResult["data"] | undefined): McpCallResult {
-  const text: string | undefined = JSON.stringify(data ?? null, null, 2);
+function resultOf(
+  data: ComposioResult["data"] | undefined,
+  toolName: string,
+  shape: ActionShape | null,
+): McpCallResult {
+  /*
+   * AN ACTION OPENBOT ASKS FOR IN ITS OWN WAY IS READ IN ITS OWN WAY TOO: a Gmail listing loses the
+   * raw MIME it was asked not to carry, and keeps its messages whole when it is cut. See
+   * `./composio-shapes`.
+   */
+  const shown =
+    shape && data && typeof data === "object" && !Array.isArray(data)
+      ? shape.answer(data)
+      : data;
+  const text: string | undefined = JSON.stringify(shown ?? null, null, 2);
   /*
    * `JSON.stringify` ANSWERS `undefined` RATHER THAN THROWING for a value with no JSON form — a
    * function, a symbol — and this field is the vendor's while the type saying it is a record is
@@ -1425,7 +1679,10 @@ function resultOf(data: ComposioResult["data"] | undefined): McpCallResult {
       truncated: false,
     };
   }
-  return { ...cap(text), isError: false };
+  return {
+    ...fitJsonResult(shown, text, toolName, shape?.list),
+    isError: false,
+  };
 }
 
 /**
@@ -1662,6 +1919,7 @@ export async function askAction(
   }
 
   const { [VERSION_ARG]: rawVersion, ...rest } = args;
+  const shape = shapeOf(toolName);
   const version = typeof rawVersion === "string" ? rawVersion.trim() : "";
   if (!version) {
     /*
@@ -1679,7 +1937,7 @@ export async function askAction(
      * condition under which it helps, which is the part nobody in this deployment controls.
      */
     return unreached(
-      `${toolName} has no recorded version, so it cannot be called: Composio requires a specific one and rejects "latest", so there is nothing to fall back on. Refreshing this app's tools on its Plugins page recovers it only if Composio publishes a version for this action. Where Composio publishes none, no refresh will make it callable.`,
+      `${toolName} has no recorded version, so it cannot be called: Composio requires a specific one and rejects "latest", so there is nothing to fall back on. Refreshing this app's tools on ${itsAppPage()} recovers it only if Composio publishes a version for this action. Where Composio publishes none, no refresh will make it callable.`,
     );
   }
 
@@ -1737,7 +1995,7 @@ export async function askAction(
          */
         ...(account === null ? {} : { connectedAccountId: account }),
       },
-      rest,
+      shape?.request ? shape.request(rest) : rest,
     );
   } catch (error) {
     /*
@@ -1847,7 +2105,10 @@ export async function askAction(
 
   try {
     // The action ran and Composio answered, which is the plainest `answered` there is.
-    return { result: resultOf(answer.data), answered: true };
+    return {
+      result: resultOf(answer.data, toolName, shape),
+      answered: true,
+    };
   } catch (error) {
     /*
      * THE LAST PATH THAT REACHED A MODEL WITHOUT PASSING THE DOOR. This quoted a raw `error.message`

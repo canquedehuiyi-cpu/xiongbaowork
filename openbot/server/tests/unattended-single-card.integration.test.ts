@@ -2,9 +2,12 @@ import { afterAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import {
   AbstractAgent,
+  type AgentSubscriber,
   type BaseEvent,
   EventType,
   type RunAgentInput,
+  type RunAgentParameters,
+  type RunAgentResult,
 } from "@ag-ui/client";
 import { asc, eq } from "drizzle-orm";
 import { EMPTY } from "rxjs";
@@ -116,11 +119,16 @@ async function settledCardCount(tenant: string): Promise<number> {
  */
 class AnsweringAgent extends AbstractAgent {
   override async runAgent(
-    input: RunAgentInput,
-    handlers: { onEvent: (arg: { event: BaseEvent }) => void },
-  ): Promise<void> {
+    parameters?: RunAgentParameters,
+    subscriber?: AgentSubscriber,
+  ): Promise<RunAgentResult> {
+    // The runtime hands a turn's whole input and an `onEvent` subscriber, which is all this answers with.
+    const input = parameters as RunAgentInput;
     const messageId = `reply-${input.runId}`;
-    const emit = (event: BaseEvent) => handlers.onEvent({ event });
+    const emit = (event: BaseEvent) =>
+      subscriber?.onEvent?.({ event } as Parameters<
+        NonNullable<AgentSubscriber["onEvent"]>
+      >[0]);
     emit({
       type: EventType.RUN_STARTED,
       threadId: input.threadId,
@@ -142,6 +150,7 @@ class AnsweringAgent extends AbstractAgent {
       ...this.messages,
       { id: messageId, role: "assistant", content: "这一步做完了。" },
     ] as typeof this.messages;
+    return { result: undefined, newMessages: [] };
   }
 
   run() {
@@ -617,7 +626,7 @@ test("eight chat turns competing for the final slot call the mock agent only onc
   class CountedAgent extends AnsweringAgent {
     override async runAgent(...args: Parameters<AnsweringAgent["runAgent"]>) {
       calls++;
-      await super.runAgent(...args);
+      return await super.runAgent(...args);
     }
   }
   const outcomes = await Promise.all(

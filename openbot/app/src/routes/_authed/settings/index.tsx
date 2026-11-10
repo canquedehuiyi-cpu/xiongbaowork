@@ -1,3 +1,4 @@
+import { IconMoon } from "@tabler/icons-react";
 import { createFileRoute } from "@tanstack/react-router";
 import React from "react";
 import {
@@ -7,18 +8,21 @@ import {
 } from "@/components/layout/page-shell";
 import { MessageListPreference } from "@/components/settings/message-list-preference";
 import { MyDevices } from "@/components/settings/my-devices";
-import { StandingInstructions } from "@/components/settings/standing-instructions";
+import { NameRow } from "@/components/settings/profile";
+import { StandingInstructionsRow } from "@/components/settings/standing-instructions";
 import { useTheme } from "@/components/theme-provider";
 import {
   Item,
   ItemActions,
   ItemContent,
   ItemDescription,
+  ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { formatHotkey, HOTKEYS } from "@/lib/hotkeys/hotkeys";
+import { SkinPicker } from "@/skins/skin-picker";
 
 export const Route = createFileRoute("/_authed/settings/")({
   component: RouteComponent,
@@ -38,12 +42,26 @@ function RouteComponent() {
   return (
     <PageShell
       width="workbench"
-      description="应用在你这里的外观和行为。消息列表偏好会随账号同步；主题只保存在这个浏览器里。"
+      description="你的名字、应用在你这里的外观，以及所有员工都会遵循的长期指令。消息列表偏好会随账号同步；主题只保存在这个浏览器里。"
       title="偏好设置"
     >
-      <PageSection title="通用">
+      {/*
+       * What OpenBot and every Bot know of the person, first: their name and how they want things done. Both are free
+       * text, so both are a summary that opens a dialog.
+       */}
+      <PageSection title="关于你">
+        <PageRows>
+          <NameRow />
+          <Separator />
+          <StandingInstructionsRow />
+        </PageRows>
+      </PageSection>
+      <PageSection title="外观">
         <PageRows>
           <Item size="sm">
+            <ItemMedia variant="icon">
+              <IconMoon />
+            </ItemMedia>
             <ItemContent>
               <ItemTitle>深色主题</ItemTitle>
               <ItemDescription>在整个应用里使用深色外观。</ItemDescription>
@@ -56,14 +74,11 @@ function RouteComponent() {
               />
             </ItemActions>
           </Item>
+          <Separator />
+          <SkinPicker />
         </PageRows>
         <MessageListPreference />
       </PageSection>
-      {/*
-       * Above the shortcuts and below the appearance preferences, because it is the only thing on this
-       * screen that changes what a coworker says rather than what this browser looks like.
-       */}
-      <StandingInstructions />
       {/*
        * The one section here that is not about this account's own settings. A machine is paired once
        * and then runs unattended, so it belongs with the other things a person configures and then

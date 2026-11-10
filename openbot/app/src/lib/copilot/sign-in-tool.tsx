@@ -1,4 +1,5 @@
 import { IconLock } from "@tabler/icons-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { z } from "zod";
 import { ToolLine } from "@/components/channels/tool-line";
@@ -13,10 +14,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { readSignIn, requestSignIn } from "@/lib/passwords/mutations";
-import { FINAL_SIGN_IN } from "@/lib/passwords/queries";
-import { useActiveBotHolder } from "./active-bot";
+import {
+  FINAL_SIGN_IN,
+  passwordKeys,
+  pendingSignInRequestsQueryOptions,
+} from "@/lib/passwords/queries";
+import { type ToolCallContext, useBotOfCall } from "./active-bot";
 import { useFrontendTool } from "./approval-tools";
-import { useComputerAvailable } from "./computer-available";
+import { type OfferRule, useOfferedTo } from "./bot-offer";
+import { offeredBrowser } from "./computer-available";
 
 /** How long the open chat waits for the person to answer. The server's request lasts as long. */
 const WAIT_MS = 15 * 60_000;
@@ -52,15 +58,23 @@ function parse(result: string | undefined): Outcome {
  * private form in a dialog. The form posts to the server, never into this tool call, so neither the
  * arguments nor the result the model reads ever carry a credential. An unattended turn uses the
  * headless tool of the same name, and its owner gets the form as a link on their delivery channels.
+ *
+ * THE CARD FINDS ITS REQUEST ON THE SERVER, by the tool call that asked, never from state the
+ * handler sets here. The SDK keeps the renderer from this component's first render and does not
+ * re-register it when it changes (see approval-tools.tsx), so the request id the handler used to put
+ * in state never reached the card, and it waited with no way to open the form.
  */
+/** A sign-in is typed into the Bot's browser, so it is offered with the browser; see `bot-offer.ts`. */
+const OFFERED: Readonly<Record<string, OfferRule>> = {
+  computer_request_sign_in: offeredBrowser,
+};
+
 export function SignInTool() {
-  const bot = useActiveBotHolder();
-  // The request the handler opened, so the render can show its form before the call finishes.
-  const [pending, setPending] = useState<Record<string, string>>({});
-  // A sign-in is typed into the Bot's computer; see useComputerAvailable.
-  const available = useComputerAvailable();
+  const botOf = useBotOfCall();
+  // Stable for the provider's life, so the SDK's once-registered handler may keep it.
+  const queryClient = useQueryClient();
+  useOfferedTo(OFFERED);
   useFrontendTool({
-    available,
     name: "computer_request_sign_in",
     description: DESCRIPTION,
     parameters: z.object({
@@ -74,14 +88,12 @@ export function SignInTool() {
     }),
     handler: async (
       input: { site: string; reason?: string },
-      {
-        signal,
-        toolCall,
-      }: { signal?: AbortSignal; toolCall?: { id?: string } } = {},
+      { signal, toolCall, agent }: ToolCallContext = {},
     ) => {
       const asked = await requestSignIn(
         {
-          botId: bot.current,
+          // Into the browser of the Bot that asked, which need not be the one on screen.
+          botId: botOf(agent),
           site: input.site,
           ...(input.reason ? { reason: input.reason } : {}),
           ...(toolCall?.id ? { toolCallId: toolCall.id } : {}),
@@ -90,10 +102,9 @@ export function SignInTool() {
       );
       if (!asked.ok) return { ok: false, reason: asked.reason };
       const id = asked.request.id;
-      if (toolCall?.id) {
-        const callId = toolCall.id;
-        setPending((current) => ({ ...current, [callId]: id }));
-      }
+      // Draw the button now: a background tab does not poll, and the card may have looked before
+      // the request existed.
+      void queryClient.invalidateQueries({ queryKey: passwordKeys.pending() });
       const deadline = Date.now() + WAIT_MS;
       while (Date.now() < deadline) {
         if (signal?.aborted)
@@ -124,35 +135,46 @@ export function SignInTool() {
         result: "Nobody signed in. Do not ask for the login another way.",
       };
     },
-    render: ({ args, result, status, toolCallId }) => {
-      const outcome = parse(result);
-      const requestId =
-        outcome.requestId ?? (toolCallId ? pending[toolCallId] : undefined);
-      return (
-        <SignInCard
-          site={typeof args?.site === "string" ? args.site : ""}
-          requestId={requestId}
-          running={status !== "complete"}
-          outcome={outcome}
-        />
-      );
-    },
+    render: ({ args, result, status, toolCallId }) => (
+      <SignInCard
+        site={typeof args?.site === "string" ? args.site : ""}
+        toolCallId={toolCallId}
+        running={status !== "complete"}
+        outcome={parse(result)}
+      />
+    ),
   });
   return null;
 }
 
 function SignInCard({
   site,
-  requestId,
+  toolCallId,
   running,
   outcome,
 }: {
   site: string;
-  requestId?: string;
+  toolCallId?: string;
   running: boolean;
   outcome: Outcome;
 }) {
   const [open, setOpen] = useState(false);
+  // While the call waits there is no result to carry the id, so the open request that this call
+  // asked for is looked up instead, polled until the handler has opened it.
+  const lookup = running && !outcome.requestId && Boolean(toolCallId);
+  const { data: requests } = useQuery({
+    ...pendingSignInRequestsQueryOptions(),
+    enabled: lookup,
+    refetchInterval: (query) =>
+      query.state.data?.some((request) => request.toolCallId === toolCallId)
+        ? false
+        : POLL_MS,
+  });
+  const requestId =
+    outcome.requestId ??
+    (lookup
+      ? requests?.find((request) => request.toolCallId === toolCallId)?.id
+      : undefined);
   return (
     <div className="flex flex-col gap-2">
       <ToolLine
@@ -185,7 +207,7 @@ function SignInCard({
                 </DialogDescription>
               </DialogHeader>
               <DialogBody className="mt-4 overflow-y-auto">
-                <SignInForm requestId={requestId} />
+                <SignInForm inDialog requestId={requestId} />
               </DialogBody>
             </DialogContent>
           </Dialog>

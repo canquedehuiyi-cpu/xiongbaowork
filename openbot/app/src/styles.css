@@ -4,6 +4,14 @@
 /* Composer chips/dropdown. Reads the shadcn tokens declared below, so it themes itself. */
 @import "prompt-area/tailwind.css";
 @import "@fontsource-variable/inter";
+@import "./theme.css";
+/*
+ * 上游这里还引入了 ./frame.css（OpenBot 自己的彩色玻璃外框）。熊宝用自己的红金玻璃底，不引入；
+ * 皮肤各自画自己的外框，不受影响。
+ */
+/* OpenBot's own typeface, the one open.bot is set in. Remove for theme.css's Inter. */
+@import "./typeface.css";
+@import "./skins/skins.css";
 
 /*
  * Streamdown draws a Bot's prose, and Tailwind only ships classes it can see used. Its markup lives
@@ -11,9 +19,18 @@
  * of the spacing that makes it readable. The path is relative to this file.
  */
 @source "../node_modules/streamdown/dist/*.js";
+/* Its code plugin, which Streamdown's docs say to scan the same way. */
+@source "../node_modules/@streamdown/code/dist/*.js";
 
-@custom-variant dark (&:is(.dark *));
-
+/*
+ * 熊宝的品牌层，叠在上游 theme.css（shadcn 令牌）之上：同名令牌在这里重新声明，排在 theme.css 之后，
+ * 所以熊宝的配色生效；上游新加、这里没有的令牌（如 `--empty-pattern*`）照用 theme.css 的。
+ * `@custom-variant dark` 已在 theme.css 里声明，这里不再重复。
+ *
+ * The root is 15px, as this app's px-measured layouts assume. theme.css instead keeps a 16px root and
+ * scales `--text-*` by 15/16; both together would shrink every size twice, so the `@theme` below puts
+ * Tailwind's own text scale back.
+ */
 html {
   font-size: 15px;
 }
@@ -152,20 +169,37 @@ body {
 }
 
 /*
- * THERE IS DELIBERATELY NO `button, input, textarea, select { font: inherit }` HERE.
- *
- * Form controls do need it — Chrome otherwise draws them in its own ~13.3px system font — and
- * Tailwind's Preflight already does exactly that, inside `@layer base`, where a utility can still
- * override it. A second copy written here would sit in NO layer, and an unlayered rule outranks
- * every layered one no matter how specific: a bare `input` selector beats `.text-sm`. That is not a
- * specificity fight anybody wins, because layers are resolved before specificity is even consulted.
- *
- * One was here, and it silently disabled every `text-*` on every button, input, textarea and select
- * in the app. Nothing looked broken; the sizes were simply never applied, and the labels — which are
- * not in that selector list — rendered a size smaller than the fields they belonged to.
+ * OpenBot Desktop on macOS has no separate title bar over this page: the window's buttons sit over
+ * the top-left corner and the sidebar runs to the top edge, as in Mac apps with a sidebar. The
+ * desktop marks the page (`data-desktop-titlebar`) and makes the sidebar's header the drag handle;
+ * here the header makes room for the buttons above its own row. With the sidebar collapsed the
+ * buttons are over the main column instead, so that moves down. The main column is the shell's own
+ * `<main>`; the primitive's `SidebarInset`, which an earlier rule aimed at, is used by no shell.
+ * Outside the desktop nothing changes.
  */
+:root[data-desktop-titlebar="overlay"] [data-slot="sidebar-header"] {
+  height: auto;
+  padding-top: 36px;
+}
+
+:root[data-desktop-titlebar="overlay"]
+  [data-slot="sidebar-wrapper"]:has(
+    > [data-slot="sidebar"][data-state="collapsed"]
+  )
+  > main {
+  padding-top: 28px;
+}
 
 @theme inline {
+  /* Tailwind's own text scale, on the 15px root (see the note above `html`). */
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+  --text-4xl: 2.25rem;
   --font-heading: var(--font-sans);
   --font-sans:
     "Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI",
@@ -229,34 +263,23 @@ body {
   }
 }
 
-@layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
-  html {
-    @apply font-sans;
-  }
+/*
+ * 上游 typeface.css 给 OpenBot 自己的外观（没有皮肤时）换成 Atkinson Hyperlegible Next，但它的字体栈没有
+ * 中文字体。同样的选择器、排在它后面，补上苹方与微软雅黑作为中文回退；皮肤仍用各自的字体。
+ */
+:root:not([data-skin]),
+:root:not([data-skin]) body,
+:root:not([data-skin]) .font-sans,
+:root:not([data-skin]) .font-heading {
+  font-family:
+    "Atkinson Hyperlegible Next Variable", "PingFang SC", "Microsoft YaHei",
+    ui-sans-serif, system-ui, sans-serif;
+}
 
-  ::-webkit-scrollbar {
-    width: 5px;
-  }
-
-  ::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  ::-webkit-scrollbar-thumb {
-    background: var(--border);
-    border-radius: 5px;
-  }
-
-  * {
-    scrollbar-width: thin;
-    scrollbar-color: var(--border) transparent;
-  }
+/* While the sidebar's edge is dragged, it follows the pointer rather than easing after it. */
+[data-slot="sidebar-wrapper"][data-resizing] [data-slot="sidebar-container"],
+[data-slot="sidebar-wrapper"][data-resizing] [data-slot="sidebar-gap"] {
+  transition: none;
 }
 
 /*
@@ -280,9 +303,9 @@ body {
   -webkit-background-clip: text;
   /*
    * THE GLYPH FILL, NOT `color`. This was `color: transparent`, which blanked the gradient too —
-   * `currentColor` resolves against this element's own `color` — so nothing was ever drawn. This
-   * rule is unlayered and beats the `text-*` utility it is given, so the reduced-motion branch
-   * below, which puts `color` back, was the only place the text was readable.
+   * `currentColor` resolves against this element's own `color` — so nothing was ever drawn. The
+   * transparent fill only works while the gradient is painted behind it, so the reduced-motion
+   * branch below, which drops the gradient, has to put the fill back as well.
    */
   -webkit-text-fill-color: transparent;
   animation: tool-line-sweep 1.6s linear infinite;
@@ -294,32 +317,22 @@ body {
   }
 }
 
-/* Preserve running-state text without shimmer for reduced-motion users. */
+/*
+ * Reduced motion keeps the words and drops the sweep. Without the gradient a transparent fill draws
+ * nothing, and on a computer with animations off every running step showed only its caret. The
+ * fill goes back to the line's own colour, the tone the sweep is drawn in, rather than the darker
+ * colour of whatever holds the line.
+ */
 @media (prefers-reduced-motion: reduce) {
   .tool-line-running {
     animation: none;
     background-image: none;
-    color: inherit;
+    -webkit-text-fill-color: currentColor;
   }
 }
 
 .tool-line[open] .tool-line-chevron {
   transform: rotate(90deg);
-}
-
-/*
- * Row descriptions wrap on sense rather than on width.
- *
- * Here rather than on the `ItemDescription` primitive, which is where this started. The reason was
- * that the primitive was vendored and the next `shadcn add item` would silently remove anything put
- * inside it; the primitives are the repository's own now, so that is no longer true. It stays here
- * because it belongs with the other layout rules rather than inside one primitive.
- *
- * The primitive already emits the attribute this selects, so nothing has to be edited for it to
- * apply, and nothing upstream can take it away.
- */
-[data-slot="item-description"] {
-  text-wrap: pretty;
 }
 
 /*
@@ -354,4 +367,188 @@ body {
  */
 :where(div:has(> iframe.websandbox__frame)) {
   min-height: 200px;
+}
+
+/*
+ * The composer's @ menu, at the width prompt-area allows rather than the width of its longest name,
+ * so a Bot's title reads in full. prompt-area takes no class for its menu; it labels it by the
+ * trigger's character, so "@ suggestions" is this menu and not the `/` one. 20rem is the package's
+ * own cap, which its placement assumes when it keeps the menu inside the window, and its inline
+ * `max-width` still narrows the menu on a small screen.
+ *
+ * Each row centres the Bot's avatar on its name and title; the package aligns an icon to the first
+ * line, sized for a glyph, not a face.
+ */
+[role="listbox"][aria-label="@ suggestions"] {
+  width: 20rem;
+
+  & > [role="option"] {
+    align-items: center;
+    gap: --spacing(3);
+  }
+
+  /* A flex box, not an inline one, so no line-height space sits under the face. */
+  & > [role="option"] > span:first-child {
+    display: flex;
+    margin-top: 0;
+  }
+}
+
+/*
+ * A conversation's newest rows rendering in as it opens. The delay is set per row as
+ * `--arrive-delay`; see
+ * `openingStagger` in chat-transcript.tsx. Opacity and transform only, so nothing the scroller
+ * measured moves.
+ */
+.history-arrive {
+  animation: history-arrive 240ms cubic-bezier(0.23, 1, 0.32, 1) both;
+  animation-delay: var(--arrive-delay, 0ms);
+}
+
+@keyframes history-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/* Reduced motion keeps the fade and drops the movement and the queue: gentler, not absent. */
+@media (prefers-reduced-motion: reduce) {
+  .history-arrive {
+    animation-name: history-arrive-fade;
+    animation-delay: 0ms;
+  }
+}
+
+@keyframes history-arrive-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+/*
+ * A component a Bot draws keeps its reading width (max-w-2xl) wherever it is previewed, but in a
+ * conversation it fills the answer column, which is wider than the composer, so a chart or table
+ * lines up with the code and tool cards around it. Unlayered, so it outranks the utility.
+ */
+[data-transcript-column] [data-slot="gallery-frame"] {
+  max-width: none;
+}
+
+/*
+ * Markdown and code in an interface a Bot generates are drawn by a reply's renderer (see
+ * lib/copilot/a2ui-markdown.tsx), inside a surface that also carries CopilotKit's own stylesheet.
+ * That stylesheet is in no layer, so its heading sizes, and the `color: inherit` it gives every
+ * button inside a Card, outrank Tailwind's utilities however specific those are: headings came out
+ * smaller than in a reply and the copy buttons lost their muted colour. `revert-layer` hands exactly
+ * those properties back to the layered rules, which are the ones a reply is drawn with.
+ */
+.a2ui-surface
+  .openbot-markdown
+  :is(h1, h2, h3, h4, h5, h6, button, input, select, textarea) {
+  font: revert-layer;
+  color: revert-layer;
+}
+
+/*
+ * The pattern behind an empty state. One rule, read entirely from the `--empty-pattern*` tokens in
+ * theme.css, so changing the pattern never means changing a component: the tile is a mask over a
+ * flat fill of `--empty-pattern-color`, faded out from the top-right corner by a second mask so it
+ * sits behind the empty state rather than across its text.
+ */
+.empty-pattern {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-color: var(--empty-pattern-color);
+  opacity: var(--empty-pattern-opacity);
+  mask-image:
+    var(--empty-pattern),
+    radial-gradient(
+      circle at 85% 15%,
+      #000 0,
+      rgb(0 0 0 / 0.4) 30%,
+      transparent 60%
+    );
+  mask-repeat: repeat, no-repeat;
+  mask-size:
+    auto,
+    100% 100%;
+  mask-composite: intersect;
+}
+
+/*
+ * The same pattern as a halo behind a Bot's orb at the top of a conversation, from the same tokens,
+ * so swapping or turning off the empty-state pattern does the same here. It fades out from the
+ * center instead of a corner.
+ */
+.orb-pattern {
+  position: absolute;
+  inset: -40px;
+  z-index: -1;
+  pointer-events: none;
+  background-color: var(--empty-pattern-color);
+  opacity: var(--empty-pattern-opacity);
+  mask-image:
+    var(--empty-pattern),
+    radial-gradient(circle, #000 30%, rgb(0 0 0 / 0.35) 55%, transparent 72%);
+  mask-repeat: repeat, no-repeat;
+  mask-size:
+    auto,
+    100% 100%;
+  mask-composite: intersect;
+}
+
+/*
+ * A Bot's live orb, toned for the app's surfaces. AgentOrb's own contrast boost and full-strength
+ * halftone wash light colors out to white; these keep each Bot's palette true. Only `BotOrb`
+ * carries `.bot-orb-live`, so the orb anywhere else is unchanged.
+ */
+.bot-orb-live .agent-orb::before {
+  filter: blur(var(--blur-amount)) contrast(1.15) saturate(1.3);
+}
+.bot-orb-live .agent-orb::after {
+  opacity: 0.25;
+  backdrop-filter: blur(calc(var(--blur-amount) * 1.5)) contrast(1.25);
+}
+.dark .bot-orb-live .agent-orb::before {
+  filter: blur(var(--blur-amount)) contrast(1) saturate(0.95) brightness(1.18);
+}
+
+/*
+ * Teach a Bot's three steps sit on one soft gradient, the way an app's introduction does in other products. The
+ * colours are fixed tints rather than tokens, with a darker set for the dark theme, so the stage reads as a showcase
+ * while the cards on it keep the app's own colours.
+ */
+.teach-stage {
+  background:
+    radial-gradient(120% 90% at 0% 0%, #fbcfe8 0%, transparent 55%),
+    radial-gradient(90% 90% at 100% 100%, #c7d2fe 0%, transparent 60%),
+    linear-gradient(135deg, #fde2e4, #ede9fe);
+}
+.dark .teach-stage {
+  background:
+    radial-gradient(120% 90% at 0% 0%, #5b2147 0%, transparent 55%),
+    radial-gradient(90% 90% at 100% 100%, #2e3170 0%, transparent 60%),
+    linear-gradient(135deg, #2a1622, #1f1b33);
+}
+
+/* The steps the Recorder keeps, appearing one after another beside the window, and the form filling in. */
+@media (prefers-reduced-motion: no-preference) {
+  .teach-step {
+    animation: teach-arrive 0.4s ease-out both;
+  }
+  .teach-type {
+    animation: teach-arrive 0.4s ease-out 0.6s both;
+  }
+  .teach-delay-1 {
+    animation-delay: 1.2s;
+  }
+}
+@keyframes teach-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
 }

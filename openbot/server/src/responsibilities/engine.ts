@@ -1,5 +1,4 @@
-import { BOT_PAUSED_REASON, isBotPaused } from "../agents/lifecycle";
-import { HeadlessToolSuspension } from "../computer/headless-tools";
+import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 import { QuotaExceeded, type QuotaService } from "../quota/limits";
 import {
   type DeliverableComponent,
@@ -7,6 +6,8 @@ import {
   type TaskProjector,
 } from "../tasks/projector";
 import { runAsTenant } from "../tenant/context";
+import { isThreadBusy } from "@openbot/toolkit/lease";
+import { BOT_PAUSED_REASON, isBotPaused } from "../agents/lifecycle";
 import type { WorkQueue } from "../work/queue";
 import type { ResponsibilityRunContext, ResponsibilityStore } from "./types";
 
@@ -27,8 +28,36 @@ export type ResponsibilityDispatchReport = {
   succeeded: string[];
   waiting: string[];
   skipped: string[];
+  /** Put back to wait for a conversation another run was using. Nothing ran. */
+  busy: string[];
   failed: { runId: string; error: string }[];
 };
+
+/**
+ * How long a run waits for a conversation another run is using: `firstMs`, doubling, never more than
+ * `maxMs` between tries, for at most `tries` tries before the run fails.
+ *
+ * FOUND LIVE: "Create a goal … then run it now" in one message started the goal's run while the Bot
+ * was still answering in that conversation. Intelligence refused the run's lock with 409
+ * `THREAD_LOCK_FAILED`, marked retryable, and the run was recorded as failed with the platform's
+ * response body as its reason. The defaults wait about nine minutes in all: far longer than a
+ * Bot's answer, and short enough that a goal stuck behind something else says so the same day.
+ */
+export type BusyRetry = { firstMs: number; maxMs: number; tries: number };
+export const BUSY_RETRY: BusyRetry = {
+  firstMs: 5_000,
+  maxMs: 60_000,
+  tries: 12,
+};
+
+/** The longest a run waits in all, in whole minutes, for the sentence that says it gave up. */
+function waitedFor({ firstMs, maxMs, tries }: BusyRetry): string {
+  let total = 0;
+  for (let index = 0; index < tries; index += 1)
+    total += Math.min(firstMs * 2 ** index, maxMs);
+  const minutes = Math.max(1, Math.round(total / 60_000));
+  return minutes === 1 ? "a minute" : `${minutes} minutes`;
+}
 
 function errorText(error: unknown) {
   return Array.from(error instanceof Error ? error.message : String(error))
@@ -37,8 +66,11 @@ function errorText(error: unknown) {
 }
 
 export function createResponsibilityEngine(options: {
-  store: Pick<ResponsibilityStore, "ingestEvent" | "beginRun" | "settleRun">;
-  queue: Pick<WorkQueue, "claim" | "renew" | "finish">;
+  store: Pick<
+    ResponsibilityStore,
+    "ingestEvent" | "beginRun" | "settleRun" | "requeueRun"
+  >;
+  queue: Pick<WorkQueue, "claim" | "renew" | "finish" | "release">;
   runTurn: RunResponsibilityTurn;
   /**
    * The task board (ticket 020, spec C2): an event that woke a coworker is work somebody should see
@@ -58,6 +90,7 @@ export function createResponsibilityEngine(options: {
     context: ResponsibilityRunContext,
     replyText: string,
   ) => Promise<void>;
+  busyRetry?: BusyRetry;
 }) {
   const {
     store,
@@ -69,6 +102,7 @@ export function createResponsibilityEngine(options: {
     deviceIdOf,
     accessRevokedOf,
   } = options;
+  const busyRetry = options.busyRetry ?? BUSY_RETRY;
   return {
     ingest: (event: unknown) => store.ingestEvent(event),
     async dispatch(input: {
@@ -83,6 +117,7 @@ export function createResponsibilityEngine(options: {
         succeeded: [],
         waiting: [],
         skipped: [],
+        busy: [],
         failed: [],
       };
       const items = await queue.claim({
@@ -215,6 +250,8 @@ export function createResponsibilityEngine(options: {
           }
         };
         const controller = new AbortController();
+        /** Put back on the queue to wait for its conversation, so not finished here. */
+        let released = false;
         let stopped = false;
         let timer: ReturnType<typeof setTimeout> | undefined;
         let renewing: Promise<void> | undefined;
@@ -296,6 +333,43 @@ export function createResponsibilityEngine(options: {
              * would create a card only a signature nobody made can move.
              */
             await closeCard(false);
+          } else if (isThreadBusy(error) && !lostLease) {
+            /*
+             * ANOTHER RUN HAS THE CONVERSATION, SO NOTHING RAN. The lock is taken before anything
+             * is streamed, and the platform said to try again: the run goes back to queued and the
+             * item back on the queue, uncounted, to be tried after a wait that doubles. Only once
+             * the waits are spent is it a failure, in words a person reads.
+             */
+            const waited = Number(
+              (item.payload as { busyRetries?: unknown }).busyRetries ?? 0,
+            );
+            const tries = Number.isFinite(waited) ? waited : 0;
+            if (tries >= busyRetry.tries) {
+              const reason = `This goal's conversation was busy for about ${waitedFor(busyRetry)}, so the run never started and nothing was done. Run the goal again when the conversation is free.`;
+              await store.settleRun(runId, { status: "failed", error: reason });
+              report.failed.push({ runId, error: reason });
+              await closeCard(true);
+            } else if (!(await store.requeueRun(runId))) {
+              report.skipped.push(runId);
+            } else {
+              released = await queue.release({
+                kind: RESPONSIBILITY_RUN_KIND,
+                key: item.key,
+                owner: input.owner,
+                delayMs: Math.min(
+                  busyRetry.firstMs * 2 ** tries,
+                  busyRetry.maxMs,
+                ),
+                reason: errorText(error),
+                uncounted: true,
+                payload: { busyRetries: tries + 1 },
+              });
+              if (!released)
+                throw new Error(
+                  "Responsibility work lease was lost before the run could wait.",
+                );
+              report.busy.push(runId);
+            }
           } else {
             const reason = errorText(error);
             await store.settleRun(runId, { status: "failed", error: reason });
@@ -306,7 +380,7 @@ export function createResponsibilityEngine(options: {
           stopped = true;
           if (timer) clearTimeout(timer);
           await renewing;
-          await finish(item.key);
+          if (!released) await finish(item.key);
         }
       }
       return report;

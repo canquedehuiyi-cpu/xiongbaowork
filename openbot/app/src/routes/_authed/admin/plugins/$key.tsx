@@ -74,6 +74,7 @@ import { wakerGroupsQueryOptions } from "@/lib/waker-groups/queries";
  * third, and then a grant per tool per Bot. The screen this replaced tried to hold all of that in a
  * list and grew a column per Bot, which is how a grant goes unread.
  */
+// M4: 待接入 上游 manage/plugin-page.tsx：添加前说明哪些应用要密钥、去哪拿（#1297），工具统一按名称列出（#1296），从目录添加的应用关闭后回到连接页（#1192）
 export const Route = createFileRoute("/_authed/admin/plugins/$key")({
   component: RouteComponent,
 });
@@ -337,11 +338,25 @@ function RouteComponent() {
   }));
 
   const auth = connectionKindFor(server, entry?.auth);
+  /*
+   * What the deployment credential is called. A vendor that takes it somewhere other than a bearer
+   * header names it in the catalogue ("高德 Web 服务 Key", "钉钉 MCP 专属地址"), and where it goes on
+   * the request is the server's business — so the page only swaps the words, never the flow.
+   */
+  const credentialLabel = entry?.credentialLabel ?? "访问令牌";
   const title = zh(entry?.title ?? server?.title ?? key);
 
   /* Bound once because the brokered row below is told it twice — once inside the whole
      disconnected sentence and once on its own — and two copies of it would drift. */
   const reassurance = "不连也算配置完成；连上后只会碰到你自己的文档。";
+  /*
+   * An app on this deployment's own client (upstream #950) is only ever connected by an
+   * administrator, and the account is the organization's access rather than anybody's own: said on
+   * the row, because it is the one thing about this connection the words around it get wrong.
+   */
+  const adminHeld = server?.adminConnectOnly
+    ? "这类连接用的是部署自己的应用凭据，只能由管理员连接；员工通过它调用时以管理员身份。"
+    : "";
 
   /*
    * Everything the brokered row below reads and does, shared with the personal connected-accounts
@@ -384,12 +399,21 @@ function RouteComponent() {
     checkable: connection?.checkable ?? false,
   });
 
+  /*
+   * Whether this vendor's credential is placed somewhere other than a bearer header (a key in a
+   * query parameter, a per-customer address). Its key is never stored through the generic
+   * credentials route: the server refuses to attach one by id, and takes it only through
+   * `POST /servers/:id/token`, which checks its shape before anything is sealed — so a malformed
+   * key is refused at the form on the first add exactly as on every replacement.
+   */
+  const placedCredential = entry?.credentialLabel !== undefined;
+
   /** Adding is two writes when a token was typed: the credential, then the record pointing at it. */
   const add = async () => {
     setError(null);
     try {
       const credentialId =
-        auth === "deployment-bearer"
+        auth === "deployment-bearer" && !placedCredential
           ? await storeMcpToken(appKey, token || undefined)
           : undefined;
       await addCurated.mutateAsync({
@@ -397,6 +421,11 @@ function RouteComponent() {
         instanceHost: instanceHost || undefined,
         credentialId,
       });
+      if (placedCredential && token.trim()) {
+        // Through the checked door, after the server exists. A refusal throws into the catch
+        // below, so the dialog stays open with the server's sentence and nothing was sealed.
+        await replaceServerToken.mutateAsync({ serverId: key, token });
+      }
       if (auth === "user-oauth" && client.clientId && client.clientSecret) {
         await registerClient.mutateAsync({ serverId: key, ...client });
       }
@@ -618,7 +647,7 @@ function RouteComponent() {
                 ? "内置在这个部署里。没有要连的服务商，也没有要保管的凭据——调用以提问者的身份运行。"
                 : auth === "brokered"
                   ? /* The row below says how, at length. This says whose account it is, which is the part that decides what an administrator has to do here — which is nothing. */
-                    "通过 Composio 连接，由它保管每个人自己的账号。"
+                    "通过熊宝连接，每个人连接自己的账号。"
                   : "这个部署向服务商出示的凭据。一份凭据，所有人共用。"
           }
           title="连接"
@@ -675,13 +704,12 @@ function RouteComponent() {
                 <ItemContent>
                   <ItemTitle>如何连接</ItemTitle>
                   <ItemDescription>
-                    这个应用通过 Composio
-                    连接，账号由它保管。部署只发送一个密钥和提问者的名字，所以每个人连接自己的账号，员工只能看到那个人能看到的东西。不需要粘贴令牌。
+                    这个应用通过熊宝连接。部署只发送一个密钥和提问者的名字，所以每个人连接自己的账号，员工只能看到那个人能看到的东西。不需要粘贴令牌。
                   </ItemDescription>
                 </ItemContent>
                 <ItemActions>
                   <span className="text-muted-foreground text-xs">
-                    经由 Composio
+                    通过熊宝
                   </span>
                 </ItemActions>
               </Item>
@@ -695,9 +723,11 @@ function RouteComponent() {
                 size="sm"
               >
                 <ItemContent>
-                  <ItemTitle>访问令牌</ItemTitle>
+                  <ItemTitle>{credentialLabel}</ItemTitle>
                   <ItemDescription>
-                    每次调用这个服务商时作为 Bearer 令牌发送。
+                    {entry?.credentialHint
+                      ? `${entry.credentialHint}管理员录入一次，所有人共用；部署按服务商要求放进请求，不会显示或记录。`
+                      : "每次调用这个服务商时作为 Bearer 令牌发送。"}
                   </ItemDescription>
                 </ItemContent>
                 <ItemActions>
@@ -791,8 +821,8 @@ function RouteComponent() {
                     /* Said beside the button rather than after it: disconnecting ends the account
                        at Composio, so what it undoes is not the row here but the grant on this
                        person's mailbox, and connecting again is a fresh consent. */
-                    connectedDescription={`已连接。被授予这些工具的员工会以你的身份使用你的 ${title}。断开会在 Composio 那边结束这个账号，而不只是这里。`}
-                    disconnectedDescription={`连接你自己的账号来试用这个连接器。${reassurance}`}
+                    connectedDescription={`已连接。被授予这些工具的员工会以你的身份使用你的 ${title}。${adminHeld}断开也会收回熊宝对你账号的访问，而不只是这里的记录。`}
+                    disconnectedDescription={`连接你自己的账号来试用这个连接器。${adminHeld}${reassurance}`}
                     /* The half of the line above that is true whichever way this app connects.
                        An app whose key somebody types gets a different first sentence from the
                        row — pressing Connect opens a form rather than leaving for a consent
@@ -1143,14 +1173,14 @@ function RouteComponent() {
                 ? `${title} 的 OAuth 客户端`
                 : dialog === "instance"
                   ? `${title} 的实例地址`
-                  : `${title} 的访问令牌`}
+                  : `${title} 的${credentialLabel}`}
             </DialogTitle>
             <DialogDescription>
               {dialog === "client"
                 ? "来自服务商的控制台。密钥保存在这个部署的保险库里，永远不会被读回来。"
                 : dialog === "instance"
                   ? "你在这个服务商那里的主机名。保存前会按他们的格式校验。"
-                  : "保存在这个部署的保险库里，永远不会被读回来。"}
+                  : `${entry?.credentialHint ?? ""}保存在这个部署的保险库里，永远不会被读回来。`}
             </DialogDescription>
           </DialogHeader>
           <DialogBody className="mt-4">
@@ -1197,7 +1227,9 @@ function RouteComponent() {
                 </Field>
               ) : (
                 <Field>
-                  <FieldLabel htmlFor="access-token">访问令牌</FieldLabel>
+                  <FieldLabel htmlFor="access-token">
+                    {credentialLabel}
+                  </FieldLabel>
                   <Input
                     id="access-token"
                     onChange={(event) => setToken(event.target.value)}

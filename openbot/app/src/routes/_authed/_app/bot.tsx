@@ -4,6 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
+import { ConversationApprovals } from "@/components/approvals/inline-approval";
+import { TelemetryAssistantMessage } from "@/components/channels/telemetry-assistant-message";
 import { ComputerChatControls } from "@/components/computer/computer-controls";
 import { ComputerViewPanel } from "@/components/computer/computer-panel";
 import { DetailPanel } from "@/components/layout/detail-panel";
@@ -17,16 +19,25 @@ import {
   agentListQueryOptions,
 } from "@/lib/agents/queries";
 import { tryClient } from "@/lib/client";
+import { useOpenComputerOnRequest } from "@/lib/computers/panel-view";
 import { useActiveBot } from "@/lib/copilot/active-bot";
+import { useBotActivity } from "@/lib/copilot/bot-activity";
 import { useBotThread } from "@/lib/copilot/bot-thread";
 import { useStoppedTurn } from "@/lib/copilot/stopped-turn";
+import { searchTextEntry } from "@/lib/search-text";
 
 export const Route = createFileRoute("/_authed/_app/bot")({
   component: RouteComponent,
+  /*
+   * `?agent=` is read as text whatever the router parsed it into (`searchText`), because search
+   * values are JSON-parsed and a Bot id made of digits would otherwise arrive as a number and open
+   * this deployment's default Bot rather than the named one. `?watch=` is a flag and is read as the
+   * boolean it is parsed into: anything else is not the flag being set.
+   */
   validateSearch: (
     search: Record<string, unknown>,
   ): { agent?: string; watch?: boolean } => ({
-    ...(typeof search.agent === "string" ? { agent: search.agent } : {}),
+    ...searchTextEntry("agent", search.agent),
     ...(search.watch === true ? { watch: true } : {}),
   }),
 });
@@ -101,17 +112,15 @@ const BOT_CHAT_LABELS = {
  * important to win over it rather than relying on which stylesheet happened to load last.
  */
 const BOT_CHAT_VIEW = {
-  messageView: {
-    userMessage: {
-      messageRenderer:
-        "bg-secondary! text-secondary-foreground! dark:bg-[#e9e9e9]! dark:text-[#161617]! rounded-[16px]!",
-    },
-    assistantMessage: {
-      markdownRenderer:
-        "rounded-[14px] border border-border bg-card px-4 py-3 text-card-foreground shadow-[inset_0_1px_0_rgb(255_255_255/0.03)] *:first:mt-0 *:last:mb-0",
-    },
+  userMessage: {
+    messageRenderer:
+      "bg-secondary! text-secondary-foreground! dark:bg-[#e9e9e9]! dark:text-[#161617]! rounded-[16px]!",
   },
 };
+
+/** The coworker's answer on a graphite card, reached through the answer's own `data-slot`. */
+const ASSISTANT_CARD =
+  "[&_[data-slot=assistant-answer]]:rounded-[14px] [&_[data-slot=assistant-answer]]:border [&_[data-slot=assistant-answer]]:border-border [&_[data-slot=assistant-answer]]:bg-card [&_[data-slot=assistant-answer]]:px-4 [&_[data-slot=assistant-answer]]:py-3 [&_[data-slot=assistant-answer]]:text-card-foreground [&_[data-slot=assistant-answer]]:shadow-[inset_0_1px_0_rgb(255_255_255/0.03)]";
 
 /** A whole-screen sentence (a read that failed, a Bot this deployment does not have), with 熊宝. */
 function BotNotice({
@@ -216,18 +225,23 @@ function BotChat({ agentId, name }: { agentId: string; name: string }) {
    * a provider this app does not mount.
    */
   const stopped = useStoppedTurn(agentId);
+  // What the Bot did on its computer in this conversation, for the Activity pane beside its screen.
+  useBotActivity(agentId);
   const { watch } = Route.useSearch();
   const navigate = Route.useNavigate();
   const showComputer = (open: boolean) =>
     navigate({
       search: (previous) => ({ ...previous, watch: open ? true : undefined }),
     });
+  // A command in the chat clicked opens the Computer on its terminal.
+  useOpenComputerOnRequest(agentId, () => showComputer(true));
 
   return (
     <DetailPanel
       title="电脑"
       open={watch === true}
       onClose={() => showComputer(false)}
+      waiting={threadId ? <ConversationApprovals threadId={threadId} /> : null}
       detail={<ComputerViewPanel agentId={agentId} name={name} />}
     >
       <div className="flex h-full min-h-0 flex-col">
@@ -317,7 +331,9 @@ function BotChat({ agentId, name }: { agentId: string; name: string }) {
          * The package's input pill, framed like every composer in the app: graphite, a hairline that
          * brightens on focus, no drop shadow. Reached by the package's own stable class name.
          */}
-        <div className="min-h-0 flex-1 [&_.copilotKitInput:focus-within]:border-foreground/30 [&_.copilotKitInput]:rounded-[16px]! [&_.copilotKitInput]:border [&_.copilotKitInput]:border-border [&_.copilotKitInput]:bg-card! [&_.copilotKitInput]:shadow-[inset_0_1px_0_rgb(255_255_255/0.03)]!">
+        <div
+          className={`min-h-0 flex-1 ${ASSISTANT_CARD} [&_.copilotKitInput:focus-within]:border-foreground/30 [&_.copilotKitInput]:rounded-[16px]! [&_.copilotKitInput]:border [&_.copilotKitInput]:border-border [&_.copilotKitInput]:bg-card! [&_.copilotKitInput]:shadow-[inset_0_1px_0_rgb(255_255_255/0.03)]!`}
+        >
           {/*
            * Keyed on the thread as well as the agent. Switching agents was already handled by
            * `agentId`, but `startNew` changes only the thread while the agent stays put, and the
@@ -330,7 +346,10 @@ function BotChat({ agentId, name }: { agentId: string; name: string }) {
           {threadId ? (
             <CopilotChat
               agentId={agentId}
-              chatView={BOT_CHAT_VIEW}
+              messageView={{
+                ...BOT_CHAT_VIEW,
+                assistantMessage: TelemetryAssistantMessage,
+              }}
               key={`${agentId}:${threadId}`}
               labels={BOT_CHAT_LABELS}
               threadId={threadId}

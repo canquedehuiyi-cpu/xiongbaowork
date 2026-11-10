@@ -143,18 +143,53 @@ export function applicableRules(input: {
   };
 }
 
+/** 按钮上动词前面的确认词：「Yes, delete」「Confirm transfer」（参照上游 `CONFIRMING`）。 */
+const CONFIRMING =
+  "(?:(?:yes|ok|okay|confirm|continue and|i want to|permanently)[,\\s]+)?";
+/**
+ * 中文按钮前面的确认词（「确认删除」「确定」「是，删除」），以及按钮文字末尾可有可无的快捷键提示
+ * （「发送(S)」「发送（Ctrl+Enter）」）。中文没有 `\b` 词边界，所以中文按钮都整段锚定：开头一个
+ * 动作词，后面只许跟一个明确的宾语，再到结尾。「删除线」「发布时间」「购买记录」因此不算。
+ */
+const CN_CONFIRMING = "(?:(?:确认|确定|是的?)[，,\\s]*)?";
+const CN_END = "\\s*(?:[（(][^）)]*[）)])?$";
+/**
+ * 中文付款按钮文字里可有可无的金额：「支付 ¥128.00」「提交订单 共¥99」「提交订单 实付：¥45.50」。
+ */
+const CN_AMOUNT =
+  "(?:\\s*(?:共|合计|总计|实付|应付)?[:：]?\\s*[¥￥$]?\\s*[\\d.,]+\\s*元?)?";
+
 /**
  * Built-in safety requirements. These always hand the action to the person, before and regardless of
  * any rule, preference or reviewer verdict, and they are not configurable.
  *
- * Matched on the words of the action and its target, for effects that change something. A read is
- * never handed off here: reading a checkout page is not paying. Deliberately broad; a false hand-off
- * costs the person one click, a missed one costs them their account or their money.
+ * Matched on the words of the action and its target, for effects that change something, and for
+ * payments also on what an app tool is called (see {@link actionName}). A read is never handed off
+ * here: reading a checkout page is not paying. Deliberately broad; a false hand-off costs the person
+ * one click, a missed one costs them their account or their money.
  */
 const SAFETY_REQUIREMENTS: readonly {
-  id: string;
+  id: "credentials" | "security_settings" | "payments";
   reason: string;
+  /** Matched on every word of the action: its tool, target, arguments and page. */
   pattern: RegExp;
+  /**
+   * 页面地址只取来源和路径，去掉查询串和片段再匹配（见 {@link pageWithoutQuery}，参照上游 #1109）。
+   */
+  pagePathOnly?: true;
+  /** 只匹配应用工具自己的名字（见 {@link actionName}，参照上游 #998、#1015）。 */
+  tool?: RegExp;
+  /** 只匹配网页上点击的按钮的文字（见 {@link actionName}）。 */
+  click?: RegExp;
+  /** 同上，按钮文字的中文写法。 */
+  clickZh?: RegExp;
+  /**
+   * 中文写的输入框名字或标签（「新密码」「验证码」「银行卡号」），只在电脑工具一侧、元素是能往里
+   * 写字的输入框时才看（见 {@link chineseSurface}）。纯文本「密码强度说明」不算。
+   */
+  fieldZh?: RegExp;
+  /** 中文写的页面路径（解码后，见 {@link chineseSurface}），只在电脑工具一侧看。 */
+  pageZh?: RegExp;
 }[] = [
   {
     id: "credentials",
@@ -162,6 +197,24 @@ const SAFETY_REQUIREMENTS: readonly {
       "Changing a password, passcode, two-factor setting, recovery code or other credential is always done by the person.",
     pattern:
       /pass(word|code|phrase)|passwd|\b2fa\b|two[-_ ]?factor|\bmfa\b|one[-_ ]?time[-_ ]?code|\botp\b|recovery[-_ ]?(code|key|email|phone)|security[-_ ]?question|api[-_ ]?key|access[-_ ]?token|credential|sign[-_ ]?in[-_ ]?method/i,
+    /*
+     * 页面是不是凭据页，看它在哪里，不看地址带了什么（上游 #1109）。为一次下载签名的链接、登录后的
+     * 回跳地址，查询串或片段里常带 `X-Amz-Credential=`、`access_token=`、`api_key=`，在这种页面上往
+     * 表单里填名字不是改凭据。页面的路径、字段和按钮照样算。
+     */
+    pagePathOnly: true,
+    /*
+     * 中文的凭据页（阶段 2f）。中文正文里「密码」「验证码」很常见（「新密码稍后发你」），所以这些词
+     * 不用在应用工具的参数上，只看电脑工具一侧的输入框名字、按钮文字和页面路径。
+     */
+    fieldZh: /密码|口令|验证码|校验码|动态码|短信码|身份证|证件号/,
+    clickZh: new RegExp(
+      `^${CN_CONFIRMING}(?:修改|更改|重置|重设|设置|找回|忘记|更换|保存|确认)(?:新的?)?(?:登录|支付|交易|账号|账户|帐号|帐户)?(?:新的?)?密码[?？]?${CN_END}` +
+        `|^(?:免费)?(?:获取|发送|重新获取|重新发送|重发)(?:短信)?(?:验证码|动态码|校验码)${CN_END}` +
+        `|^${CN_CONFIRMING}(?:开启|关闭|设置|绑定|解绑)?(?:两步验证|二次验证|双重验证|双重认证|两步认证)${CN_END}`,
+    ),
+    pageZh:
+      /修改密码|更改密码|重置密码|重设密码|找回密码|设置密码|忘记密码|密码设置|密码管理|支付密码|交易密码|两步验证|二次验证|双重验证/,
   },
   {
     id: "security_settings",
@@ -174,22 +227,169 @@ const SAFETY_REQUIREMENTS: readonly {
     id: "payments",
     reason: "Paying, purchasing or moving money is always done by the person.",
     pattern:
-      /payment|\bpay(ing)?\b|pay[-_ ]?now|checkout|purchase|place[-_ ]?order|buy[-_ ]?now|\bwire\b|bank[-_ ]?transfer|transfer[-_ ]?(money|funds)|send[-_ ]?money|credit[-_ ]?card|card[-_ ]?number|\bcvv\b|\biban\b|routing[-_ ]?number|billing/i,
+      // 退款也是动钱（上游 #904）。电汇是动钱，新闻通稿（Business Wire、news wire、press wire）不是：
+      // Bot 填资料来源时写上它，不该因此交给本人（上游）。wire transfer 不管前面是什么都算。
+      /payment|refund|\bpay(ing)?\b|pay[-_ ]?now|checkout|purchase|place[-_ ]?order|buy[-_ ]?now|(?<!\b(business|news|press)[-_ ]?)\bwire\b|\bwire[-_ ]?transfer\b|bank[-_ ]?transfer|transfer[-_ ]?(money|funds)|send[-_ ]?money|credit[-_ ]?card|card[-_ ]?number|\bcvv\b|\biban\b|routing[-_ ]?number|billing/i,
+    /*
+     * 按应用工具的名字认出的动钱和购买（上游 #998、#1015）：转账、提现、付款单、下单、工资发放、
+     * 升降级付费套餐。这些在参数里不会出现，只在名字里，所以只看名字：备注里写了 transfer、buy 仍是
+     * 普通编辑。
+     *
+     * 不是钱的转移（转让仓库、转让所有权、转接电话）不算，前面带不带冠词都一样。pay 后面要跟付的
+     * 东西（pay invoice、pay order）才算：工资应用里它常作名词（update pay schedule）。工资发放
+     * （submit on demand payroll、run payroll）算，工资单的文件和设置不算。
+     */
+    tool: /\b(payouts?|transfers?(?! (an? |the )?(ownership|of ownership|files?|domains?|calls?|chats?|conversations?|repositor(y|ies)|repos?)\b)|withdraw(als?)?|charges?|buy|purchases?|remit|pay (an? |the )?(invoices?|orders?|bills?|balances?)|(create|place|submit) (an? )?order|send money|(submit|run|process|approve|execute|confirm|pay) (an? |the )?(\w+ ){0,3}?(payrolls?|pay runs?|payruns?)(?! (migration|imports?|amendments?|entries|settings?|reports?)\b)|(upgrade|downgrade) (an? |the |your |my )?(\w+ ){0,2}?(plans?|subscriptions?|tiers?|seats?|licen[cs]es?)|(change|switch) (an? |the |your |my )?(\w+ ){0,2}?(plans?|subscriptions?|tiers?)|(create|start|purchase) (an? )?app subscriptions?)\b/,
+    // 网页上的付款、购买、带金额的发送和升降级套餐按钮。
+    click: new RegExp(
+      `^${CONFIRMING}(transfer|withdraw|pay|buy|send money)\\b|^${CONFIRMING}(send|pay|transfer|donate|tip)\\b.*[$€£¥₹]\\s?\\d|\\b(place (your )?order|(complete|confirm|submit) (your )?(purchase|order)|order now|buy now|buy it now)\\b|^${CONFIRMING}(upgrade|downgrade|(change|switch) (your |my |the )?plan|start (my |your )?(subscription|membership))\\b`,
+    ),
+    // 同一批按钮的中文写法：支付、付款、立即购买、提交订单、去结算、转账、开通会员……
+    /*
+     * 「提交订单」「确认并支付」后面可以带金额；绑定银行卡也是动钱的入口（阶段 2f）。#403 评审补上：
+     * 「…并支付」（确认订单并支付、提交订单并付款）；按支付方式命名的按钮（微信支付、使用余额支付），
+     * 免密支付时点下去钱就转出去了；付款码是付款人给商家扣款用的。都从开头锚定到结尾，「支付记录」
+     * 「支付方式说明」「查看支付详情」「收款码」不算。
+     */
+    clickZh: new RegExp(
+      `^${CN_CONFIRMING}(?:立即|马上|去)?(?:支付|付款|购买|下单|结算|充值|转账|汇款|提现|打赏)${CN_AMOUNT}${CN_END}|^(?:提交|确认)订单${CN_AMOUNT}${CN_END}|^(?:立即|马上)?(?:开通|升级|续费)(?:会员|套餐|vip|高级版|专业版)?${CN_END}` +
+        `|^(?:确认|同意)并(?:支付|付款|购买|下单)${CN_AMOUNT}${CN_END}` +
+        `|^${CN_CONFIRMING}(?:绑定|添加|新增)(?:新的?)?(?:银行卡|信用卡|储蓄卡)${CN_END}` +
+        `|^\\S{0,8}并(?:支付|付款)${CN_AMOUNT}${CN_END}` +
+        `|^(?:使用|用)?(?:微信|支付宝|余额|零钱|银行卡|信用卡|储蓄卡|花呗|云闪付|qq钱包|apple ?pay)支付${CN_AMOUNT}${CN_END}` +
+        `|^(?:出示|查看|打开|展示)?付款码${CN_END}` +
+        // 确认收货：平台托管的货款随之打给卖家，撤不回来。只认整段，「确认收货地址」「待收货」不算。
+        `|^${CN_CONFIRMING}(?:立即|马上|去)?确认收货${CN_END}`,
+    ),
+    // 卡和收付款账户的字段。只写「账号」会把用户名字段也交给本人，所以账号要带上银行、收款、支付宝。
+    fieldZh:
+      /卡号|银行卡|信用卡|储蓄卡|cvv|cvc|安全码|付款码|持卡人|有效期|\bpin\b|银行账[号户]|收款账[号户]|支付宝账[号户]/,
+    pageZh:
+      /收银台|确认支付|确认付款|支付订单|订单支付|在线支付|绑定银行卡|添加银行卡/,
   },
 ];
 
+/** How deep a value is read. Anything nested further is not, so matching stays cheap. */
+const MAX_DEPTH = 6;
+
 function flatten(value: unknown, depth = 0): string {
-  if (depth > 6 || value === null || value === undefined) return "";
-  if (typeof value === "string") return value;
+  return wordsOf(value, depth).text;
+}
+
+/**
+ * 一个值里的词，以及它是否装了东西（参照上游 #930）。
+ *
+ * 留空的字段说明不了这个动作：Bot 没填的 `billing_address` 不该让一条订单备注被当成动钱。所以字段
+ * 名只在它装了东西时才算。`filled` 和 `text` 分开，是因为深度上限：超过上限的值不再读，它的文字
+ * 总是空的，但没读过不等于空。只有一眼看上去就是空的值（空串、空数组、空对象）算没填，其余的保留
+ * 字段名，嵌得再深也按名字判定。
+ */
+function wordsOf(
+  value: unknown,
+  depth: number,
+): { text: string; filled: boolean } {
+  if (value === null || value === undefined) return { text: "", filled: false };
+  if (depth > MAX_DEPTH) return { text: "", filled: !plainlyEmpty(value) };
+  if (typeof value === "string") return { text: value, filled: value !== "" };
   if (typeof value === "number" || typeof value === "boolean")
-    return String(value);
-  if (Array.isArray(value))
-    return value.map((entry) => flatten(entry, depth + 1)).join(" ");
-  if (typeof value === "object")
-    return Object.entries(value)
-      .map(([key, entry]) => `${key} ${flatten(entry, depth + 1)}`)
-      .join(" ");
-  return "";
+    return { text: String(value), filled: true };
+  if (Array.isArray(value)) {
+    const entries = value.map((entry) => wordsOf(entry, depth + 1));
+    return {
+      text: entries.map((entry) => entry.text).join(" "),
+      filled: entries.some((entry) => entry.filled),
+    };
+  }
+  if (typeof value === "object") {
+    const fields = Object.entries(value).map(([key, entry]) => {
+      const read = wordsOf(entry, depth + 1);
+      return {
+        text: read.filled ? `${key} ${read.text}` : "",
+        filled: read.filled,
+      };
+    });
+    return {
+      text: fields.map((field) => field.text).join(" "),
+      filled: fields.some((field) => field.filled),
+    };
+  }
+  // 函数、symbol、bigint 之类：读不出词，但不是空的。
+  return { text: "", filled: true };
+}
+
+function plainlyEmpty(value: unknown): boolean {
+  if (value === "") return true;
+  if (Array.isArray(value)) return value.length === 0;
+  if (typeof value === "object" && value !== null)
+    return Object.keys(value).length === 0;
+  return false;
+}
+
+/**
+ * 目标里页面地址只留来源和路径，去掉查询串和片段（上游 #1109）。没有页面，或地址解析不了，原样
+ * 返回：读不懂的地址照旧整段匹配，而不是不匹配。
+ *
+ * 片段以 `#/` 或 `#!/` 开头时是单页应用的路由，它就是路径，保留下来（片段里自己的查询串照样去掉）：
+ * `https://mail.example.com/#/settings/password` 仍是改密码的页面。其它片段（OAuth 回跳带的
+ * `#access_token=…`）照旧去掉。
+ */
+function pageWithoutQuery(target: unknown): unknown {
+  if (target === null || typeof target !== "object" || Array.isArray(target))
+    return target;
+  const page = (target as { pageUrl?: unknown }).pageUrl;
+  if (typeof page !== "string") return target;
+  try {
+    const url = new URL(page);
+    return { ...target, pageUrl: `${url.origin}${pagePath(url)}` };
+  } catch {
+    return target;
+  }
+}
+
+/** 页面的路径，加上单页应用 `#/` 或 `#!/` 的路由（见 {@link pageWithoutQuery}）。 */
+function pagePath(url: URL): string {
+  const route = /^#!?\//.test(url.hash) ? url.hash.split("?")[0] : "";
+  return `${url.pathname}${route}`;
+}
+
+/**
+ * 中文关键词只在电脑工具一侧看的那几处（阶段 2f）：能往里写字的元素的名字（字段名或标签，去掉
+ * 空白），以及页面路径（解码成中文，查询串和片段照旧不算，单页应用的路由算）。应用工具不看：它的
+ * 参数是正文，备注里写「支付方案」「新密码稍后发你」不是在付款或改密码。
+ *
+ * 浏览器的页面标题不在审批门拿到的目标里（网关只存了地址），所以「页面」这一维只能看路径。
+ */
+function chineseSurface(candidate: ApprovalCandidate): {
+  field?: string;
+  page?: string;
+} {
+  if (
+    !candidate.toolRef.startsWith("computer_") ||
+    candidate.subject?.connector === true
+  )
+    return {};
+  const target = candidate.target as
+    | { element?: unknown; pageUrl?: unknown }
+    | undefined;
+  const element = target?.element;
+  const field =
+    element !== null &&
+    typeof element === "object" &&
+    entersText(element as { role?: unknown; type?: unknown })
+      ? elementName(candidate).replace(/\s+/g, "")
+      : undefined;
+  let page: string | undefined;
+  if (typeof target?.pageUrl === "string") {
+    try {
+      page = decodeURIComponent(pagePath(new URL(target.pageUrl)));
+    } catch {
+      // 解不开的地址：英文规则照旧整段匹配它，中文这一维不看。
+    }
+  }
+  return {
+    ...(field ? { field } : {}),
+    ...(page ? { page } : {}),
+  };
 }
 
 /**
@@ -200,19 +400,318 @@ function flatten(value: unknown, depth = 0): string {
 const NOT_ACCOUNT_ACTIONS =
   /^(computer_(write_file|read_file|list_files|run_command)|host\/)/;
 
-export function safetyRequirement(
+/** 总是先问、只给「允许一次 / 拒绝」的底线（见 types 的 `offersStandingRule`）。 */
+export type OnceOnlyFloor = {
+  source:
+    | "destructive_tool"
+    | "outbound_send"
+    | "share_access"
+    | "publish_post";
+  reason: string;
+};
+
+/**
+ * 内置安全要求对这个动作怎么说（参照上游 `safetyRequirement`，带 `behaviour`）：
+ *  - `hand_off`：改凭据、改安全或分享设置、付款动钱，总是交给本人做；
+ *  - `ask`：删除、对外发送、分享、公开发布，总是先问，只给「允许一次 / 拒绝」。`id` 是 fork 的
+ *    底线来源（`destructive_tool`、`outbound_send`、`share_access`、`publish_post`）。
+ * 都在任何规则、偏好和审查之前，且不可配置。交给本人的优先。
+ */
+export function safetyRequirement(candidate: ApprovalCandidate):
+  | {
+      id: "credentials" | "security_settings" | "payments";
+      reason: string;
+      behaviour: "hand_off";
+    }
+  | { id: OnceOnlyFloor["source"]; reason: string; behaviour: "ask" }
+  | undefined {
+  const handOff = handOffRequirement(candidate);
+  if (handOff) return { ...handOff, behaviour: "hand_off" };
+  const floor = onceOnlyFloor(candidate);
+  return floor
+    ? { id: floor.source, reason: floor.reason, behaviour: "ask" }
+    : undefined;
+}
+
+/** {@link safetyRequirement} 里交给本人的那一半。 */
+function handOffRequirement(
   candidate: ApprovalCandidate,
-): { id: string; reason: string } | undefined {
+):
+  | { id: "credentials" | "security_settings" | "payments"; reason: string }
+  | undefined {
   if (candidate.effect === "read") return undefined;
-  if (NOT_ACCOUNT_ACTIONS.test(candidate.toolRef)) return undefined;
-  const words = [
-    candidate.toolRef,
-    candidate.scope,
-    flatten(candidate.args),
-    flatten(candidate.target),
-  ].join(" ");
-  const hit = SAFETY_REQUIREMENTS.find((entry) => entry.pattern.test(words));
+  // 管理员可以把自定义 MCP 服务器叫做 `host`：经插件调用路径来的应用工具不因名字前缀豁免。
+  if (
+    NOT_ACCOUNT_ACTIONS.test(candidate.toolRef) &&
+    candidate.subject?.connector !== true
+  )
+    return undefined;
+  /*
+   * Bot 往字段里输入的内容是内容，不是动作（上游 #836）：CRM 备注里写「采购订单」不是采购。输入框
+   * 本身和所在页面说明了动作是什么（「卡号」「…/checkout」「新密码」），它们照样读。只去掉
+   * `computer_type` 的 `text`，其它工具的参数照旧全读。
+   */
+  const args =
+    candidate.toolRef === "computer_type" &&
+    candidate.args !== null &&
+    typeof candidate.args === "object" &&
+    !Array.isArray(candidate.args)
+      ? { ...(candidate.args as Record<string, unknown>), text: undefined }
+      : candidate.args;
+  const wordsWith = (target: unknown) =>
+    [candidate.toolRef, candidate.scope, flatten(args), flatten(target)].join(
+      " ",
+    );
+  const words = wordsWith(candidate.target);
+  const pathWords = wordsWith(pageWithoutQuery(candidate.target));
+  const named = actionName(candidate);
+  const zh = chineseSurface(candidate);
+  const hit =
+    SAFETY_REQUIREMENTS.find(
+      (entry) =>
+        entry.pattern.test(entry.pagePathOnly ? pathWords : words) ||
+        (named !== undefined &&
+          (named.kind === "tool"
+            ? entry.tool?.test(named.name) === true
+            : entry.click?.test(named.name) === true ||
+              entry.clickZh?.test(named.name) === true)) ||
+        (zh.field !== undefined && entry.fieldZh?.test(zh.field) === true) ||
+        (zh.page !== undefined && entry.pageZh?.test(zh.page) === true),
+    ) ??
+    (paysToSubscribe(candidate, named)
+      ? SAFETY_REQUIREMENTS.find((entry) => entry.id === "payments")
+      : undefined);
   return hit ? { id: hit.id, reason: hit.reason } : undefined;
+}
+
+/**
+ * 「订阅」按钮是不是在买付费套餐（上游 #1015）：按钮文字带价格或套餐，或者它所在的页面讲的是
+ * 套餐、定价、账单。订阅频道或免费简报什么也没买，交给本人反而让 Bot 根本按不了。
+ */
+function paysToSubscribe(
+  candidate: ApprovalCandidate,
+  named: ReturnType<typeof actionName>,
+): boolean {
+  if (
+    named?.kind !== "click" ||
+    !new RegExp(`^${CONFIRMING}subscribe\\b`).test(named.name)
+  )
+    return false;
+  if (
+    /[$€£¥₹]\s?\d|\b(premium|pro|plus|membership|plans?|annual|annually|monthly|yearly|month|year|trial)\b/.test(
+      named.name,
+    )
+  )
+    return true;
+  const page = (candidate.target as { pageUrl?: unknown } | undefined)?.pageUrl;
+  if (typeof page !== "string") return false;
+  try {
+    const url = new URL(page);
+    return /\b(pricing|plans?|billing|checkout|subscriptions?|membership|premium|upgrade|payment)\b/i.test(
+      `${url.pathname} ${url.search}`,
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 这个动作叫什么，和它带了什么无关（参照上游 `actionName`）：应用工具自己的名字，拆成小写单词
+ * （见 {@link toolWords}），只认经插件调用路径来的应用工具（`subject.connector`）；或者网页上点击
+ * 的按钮的文字（「Place your order」），来自网关从快照里解析出的元素。其它电脑动作没有名字。
+ */
+function actionName(
+  candidate: ApprovalCandidate,
+): { kind: "tool" | "click"; name: string } | undefined {
+  if (candidate.subject?.connector === true)
+    return { kind: "tool", name: toolWords(candidate.toolRef) };
+  if (candidate.toolRef !== "computer_click" && !pressesElement(candidate))
+    return undefined;
+  const label = elementName(candidate).replace(/\s+/g, " ").trim();
+  return label ? { kind: "click", name: label } : undefined;
+}
+
+/**
+ * 在按钮、链接这类元素上按 Enter 或空格，就是点它（网关的 `intentOf` 也把这几个键记为 activate）。
+ * 所以 `computer_key` 带着解析出来的元素、按的是 Enter 或空格（不论修饰键），并且元素不是输入框时，
+ * 按点击这个元素处理，走同一套按钮底线，包括交给本人的付款按钮。输入框里的 Enter 由
+ * {@link pressesSend} 判断。
+ */
+function pressesElement(candidate: ApprovalCandidate): boolean {
+  if (candidate.toolRef !== "computer_key") return false;
+  const pressed = pressedKey(candidate);
+  if (pressed?.main !== "enter" && pressed?.main !== "space") return false;
+  const element = (candidate.target as { element?: unknown } | undefined)
+    ?.element;
+  return (
+    element !== null &&
+    typeof element === "object" &&
+    !entersText(element as { role?: unknown; type?: unknown })
+  );
+}
+
+/** 能往里写字的元素：输入框、文本域、可编辑区域。按钮、链接、菜单项都不是。 */
+const TEXT_ROLES = new Set([
+  "textbox",
+  "searchbox",
+  "combobox",
+  "textarea",
+  "spinbutton",
+]);
+const NON_TEXT_INPUTS = new Set([
+  "submit",
+  "button",
+  "image",
+  "reset",
+  "checkbox",
+  "radio",
+  "file",
+  "color",
+  "range",
+]);
+function entersText(element: { role?: unknown; type?: unknown }): boolean {
+  const role =
+    typeof element.role === "string" ? element.role.toLowerCase() : "";
+  const type =
+    typeof element.type === "string" ? element.type.toLowerCase() : "";
+  if (TEXT_ROLES.has(role)) return true;
+  return role === "input" && !NON_TEXT_INPUTS.has(type);
+}
+
+/** 修饰键的各种写法，规范成 Playwright 的四个：control、meta、alt、shift。 */
+const MODIFIER_NAMES: Record<string, string> = {
+  control: "control",
+  ctrl: "control",
+  meta: "meta",
+  cmd: "meta",
+  command: "meta",
+  os: "meta",
+  win: "meta",
+  super: "meta",
+  alt: "alt",
+  option: "alt",
+  altgraph: "alt",
+  shift: "shift",
+  controlormeta: "control",
+};
+
+/**
+ * 这次调用按的键，按 Playwright 的键名规则规范化（电脑端的按键由 Playwright 执行）：
+ *  - 用 `+` 拆成修饰键和主键，`Shift++` 的主键是 `+`；
+ *  - `"\n"`、`"\r"` 是 Enter 的别名，Return、NumpadEnter 也是 Enter；`" "`、Space 是空格；
+ *  - 修饰键去掉 Left、Right 后缀再认（ControlLeft 就是 Control），Ctrl、Cmd、Option 这类别名
+ *    也认；
+ *  - 大小写不论。
+ * 要按的键优先取调用处给的（`subject.key`，网关从工具的输入里取，`computer_type` 带 `submit` 时是
+ * Enter），没有时才看参数。不是 `computer_key` 或 `computer_type` 时返回 undefined。
+ */
+function pressedKey(
+  candidate: ApprovalCandidate,
+): { main: string; modifiers: string[] } | undefined {
+  if (
+    candidate.toolRef !== "computer_key" &&
+    candidate.toolRef !== "computer_type"
+  )
+    return undefined;
+  const args = (
+    candidate.args !== null && typeof candidate.args === "object"
+      ? candidate.args
+      : {}
+  ) as { key?: unknown; submit?: unknown };
+  const fromArgs =
+    candidate.toolRef === "computer_key"
+      ? typeof args.key === "string"
+        ? args.key
+        : ""
+      : args.submit === true
+        ? "Enter"
+        : "";
+  return parsedKey(candidate.subject?.key ?? fromArgs);
+}
+
+/** 一个键名的各段：`Shift++` 的主键是 `+`。 */
+const KEY_PARTS = /\+(?=[\s\S])/;
+
+/** 按上面的规则拆开并规范化一个键名（小写，修饰键是 control、meta、alt、shift 之一或原样）。 */
+function parsedKey(key: string): { main: string; modifiers: string[] } {
+  const parts = key.split(KEY_PARTS).map(normalisedKey);
+  return {
+    main: parts.at(-1) ?? "",
+    modifiers: parts.slice(0, -1).map(modifierName),
+  };
+}
+
+function modifierName(part: string): string {
+  const name = part.replace(/(left|right)$/, "");
+  return Object.hasOwn(MODIFIER_NAMES, name) ? MODIFIER_NAMES[name] : part;
+}
+
+/** 规范化后的修饰键按这个顺序写，用 Playwright 的名字。 */
+const MODIFIER_ORDER = ["control", "meta", "alt", "shift"] as const;
+const PLAYWRIGHT_KEY_NAMES: Record<string, string> = {
+  control: "Control",
+  meta: "Meta",
+  alt: "Alt",
+  shift: "Shift",
+  enter: "Enter",
+  space: "Space",
+};
+
+/**
+ * 一个键名规范化以后的写法，给部署策略判定用（阶段 2f；见 computer/gateway 的
+ * `evaluateComputerPolicy`）。和 {@link pressedKey} 同一套规则：
+ *  - `"\n"`、`"\r"`、Return、NumpadEnter、大小写不同的 enter 都写成 `Enter`，`" "`、Spacebar
+ *    写成 `Space`；
+ *  - 修饰键去掉 Left、Right 后缀、认别名，写成 `Control`、`Meta`、`Alt`、`Shift`，去重，按这个
+ *    顺序排在前面；
+ *  - 其它键原样保留（`a`、`Tab`、`ArrowLeft`），认不出的修饰段也原样保留，排在已知修饰键之后。
+ * 只用于判定：发给浏览器的键和审计行里记的键都是原样的。
+ */
+export function canonicalKeyName(key: string): string {
+  const raw = key.split(KEY_PARTS);
+  const { main, modifiers } = parsedKey(key);
+  const known = new Set(
+    modifiers.filter((name) =>
+      (MODIFIER_ORDER as readonly string[]).includes(name),
+    ),
+  );
+  const unknown = raw
+    .slice(0, -1)
+    .filter(
+      (_, index) =>
+        !(MODIFIER_ORDER as readonly string[]).includes(modifiers[index] ?? ""),
+    );
+  const named = (name: string) =>
+    Object.hasOwn(PLAYWRIGHT_KEY_NAMES, name)
+      ? PLAYWRIGHT_KEY_NAMES[name]
+      : undefined;
+  const mainName = named(main) ?? named(modifierName(main)) ?? raw.at(-1) ?? "";
+  return [
+    ...MODIFIER_ORDER.filter((name) => known.has(name)).map(
+      (name) => PLAYWRIGHT_KEY_NAMES[name],
+    ),
+    ...unknown,
+    mainName,
+  ].join("+");
+}
+
+function normalisedKey(part: string): string {
+  if (part === "\n" || part === "\r") return "enter";
+  if (part === " ") return "space";
+  const name = part.trim().toLowerCase();
+  if (name === "return" || name === "numpadenter") return "enter";
+  if (name === "spacebar") return "space";
+  return name;
+}
+
+/** 网关交给审批门的元素名字（`target.element.name`），小写；没有就是空串。 */
+function elementName(candidate: ApprovalCandidate): string {
+  const target = candidate.target as
+    | { element?: { name?: unknown } }
+    | undefined;
+  return typeof target?.element?.name === "string"
+    ? target.element.name.toLowerCase()
+    : "";
 }
 
 /**
@@ -645,6 +1144,434 @@ export function appEnableReason(name: string, source: string): string {
 }
 // --- end app discovery ---
 
+/** 删除、归档或应用标为破坏性的操作要先问时，卡片上写的理由。 */
+export const DESTRUCTIVE_TOOL_REASON =
+  "这个操作会删除或覆盖内容，总是先征得你同意。";
+
+/** 应用工具要把内容发给别人（发信、回复、转发、发帖、分享、邀请）时，卡片上写的理由。 */
+export const OUTBOUND_SEND_REASON =
+  "这个操作可能会把内容发给别人，总是先征得你同意。";
+
+/** 应用工具或网页按钮要分享内容、改动谁能访问（共享链接、权限、协作者）时，卡片上写的理由。 */
+export const SHARE_ACCESS_REASON =
+  "这个操作会把内容分享给别人，或改变谁能访问，总是先征得你同意。";
+
+/** 应用工具或网页按钮要公开发布（发帖、转发、开直播、发版本）时，卡片上写的理由。 */
+export const PUBLISH_POST_REASON = "这个操作会公开发布内容，总是先征得你同意。";
+
+/**
+ * 没有歧义的删除词：在工具名的任意位置、作为整词出现就按删除处理（参照上游）。资源名在前的命名
+ * 很常见，`posts_delete`、`SHAREPOINT_LIST_ITEM_DELETE` 里删除词前面的是名词。整词匹配，所以
+ * `undelete_message`、`list_deleted_items` 不算。
+ */
+const ALWAYS_DELETING =
+  /\b(delete|deletes|trash|destroy|erase|purge|wipe|discard)\b/;
+/**
+ * 有歧义的删除词：只在它是工具名的第一个动词时才按删除处理。`remove_collaborator` 收回别人的
+ * 访问权限也算（fork 没有单独的分享分类，按删除问一次就够了）；`get_archive_settings` 不算。
+ */
+const FIRST_VERB_DELETING = "remove|removes|archive|archives";
+/**
+ * 工具名里常见的其它动作词，只用来找出「第一个动词」：`list_archived_emails` 的第一个动词是 list，
+ * `unarchive_thread` 是 unarchive，都不是删除。
+ */
+const OTHER_VERBS =
+  "unarchive|unarchives|untrash|undelete|restore|restores|recover|get|gets|list|lists|fetch|fetches|retrieve|search|find|read|reads|count|lookup|export|download|create|creates|add|adds|insert|update|updates|edit|patch|modify|set|mark|unmark|send|sends|post|posts|reply|forward|write|upload|share|invite|schedule|submit|publish|copy|duplicate|rename";
+/** 参照上游 `FIRST_VERB`：按出现顺序，名字里第一个认得的动作词就是这个工具做的事。 */
+const FIRST_VERB = new RegExp(`\\b(${FIRST_VERB_DELETING}|${OTHER_VERBS})\\b`);
+const DELETING_FIRST_VERB = new RegExp(`^(${FIRST_VERB_DELETING})$`);
+
+/*
+ * 对外发送按名字判定，三条规则任一成立就问（用户决定 2026-11-09「对外发送一律先问」，阶段 6 评审
+ * 后扩大）：
+ *  (a) 没有歧义的发送词出现在名字任意位置（整词）：`drafts_send`、`create_and_send_email`、
+ *      `resend_invite`、`EMAIL_DISPATCH`；
+ *  (b) 第一个动词是回复、转发、发帖、发布、分享、邀请：`GMAIL_REPLY_TO_THREAD`、`SLACK_POST_MESSAGE`；
+ *  (c) 第一个动词是新建、定时、撰写，并且后面说的是一条消息、帖子、邮件、短信、推文、评论或聊天：
+ *      `TWILIO_CREATE_MESSAGE`、`SLACK_SCHEDULE_MESSAGE`、`LINKEDIN_CREATE_LINKED_IN_POST`。
+ * 草稿只有一种豁免：名字里没有 (a) 类的词，第一个动词是 create、update、save，并且含有 draft。
+ */
+/** (a) 出现在任意位置就算发送的词。 */
+const ALWAYS_SENDING = /\b(send|sends|resend|dispatch)\b/;
+/** (b) 作为第一个动词时算发送的词。`posts`、`shares` 这类复数多半是资源名（`posts_list`），不在此列。 */
+const SENDING_FIRST_VERB =
+  /^(reply|replies|forward|post|publish|share|invite)$/;
+/** (c) 作为第一个动词、且后面跟着 {@link SENT_THING} 时算发送的词。 */
+const COMPOSING_FIRST_VERB = /^(create|schedule|compose|new)$/;
+/** (c) 新建或定时出来就是要发给别人的东西。 */
+const SENT_THING =
+  /\b(message|messages|post|email|mail|sms|tweet|comment|chat)\b/;
+/** 草稿豁免要求的第一个动词。 */
+const DRAFTING_FIRST_VERB = /^(create|update|save)$/;
+const DRAFT = /\b(draft|drafts)\b/;
+/**
+ * 找对外发送的第一个动词时用的词表：删除类的 {@link FIRST_VERB} 加上 replies、compose、new、
+ * save、resend、dispatch。只用于这条底线，删除类的词表不变。
+ */
+const OUTBOUND_VERB_SCAN = new RegExp(
+  `\\b(${FIRST_VERB_DELETING}|${OTHER_VERBS}|replies|compose|new|save|resend|dispatch)\\b`,
+);
+
+/**
+ * Bot 自己电脑上的操作（`computer_*`）和主人电脑上的命令（`host/`）有自己的底线，删除类底线
+ * 不管它们。只按前缀认不够：管理员可以把自定义 MCP 服务器叫做 `host`，所以经插件调用路径来的
+ * 工具由调用处标明（`subject.connector`），不看名字。
+ */
+const OWN_COMPUTER_TOOLS = /^(computer_|host\/)/;
+
+/**
+ * 工具名拆成小写单词，分隔符是 `_`、`-`、`.`、`/`、空白或大小写边界：
+ * `HUBSPOT_ARCHIVE_CONTACT` 是 "hubspot archive contact"，`postsDelete` 是 "posts delete"。
+ * 只看 ref 里服务器之后的部分。
+ */
+function toolWords(toolRef: string): string {
+  // 先把大写缩写和后面的单词分开：`HTTPDelete` 是 "http delete"。
+  return toolRef
+    .slice(toolRef.indexOf("/") + 1)
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[-_./\s]+/g, " ")
+    .toLowerCase()
+    .trim();
+}
+
+/** 工具名是否说它会删除东西。 */
+function deletesByName(toolRef: string): boolean {
+  const words = toolWords(toolRef);
+  // 不因名字里有 restore、recover 之类就放过：`delete_restore_point`、`wipe_and_recover` 都是删除。
+  // 代价是 `restore_from_trash` 也会问一次，宁可多问，不能漏问。
+  const first = words.match(FIRST_VERB)?.[1] ?? "";
+  return ALWAYS_DELETING.test(words) || DELETING_FIRST_VERB.test(first);
+}
+
+/**
+ * 删除类底线：一个改动只要满足其一就总是先问，
+ *  - 应用把这个工具标为破坏性（`candidate.destructive`，列出应用时记下的），不管它叫什么；
+ *  - 工具名说它会删除：没有歧义的删除词出现在名字任意位置，或 remove、archive 是第一个动词。
+ * 被分类成读也照样问：读的分类名单并不完整，应用自己标了破坏性的以应用为准。
+ * Bot 或主人电脑上的工具不在此列，除非它是经插件调用路径来的。
+ */
+export function destructiveFloor(
+  candidate: ApprovalCandidate,
+): { source: "destructive_tool"; reason: string } | undefined {
+  if (
+    candidate.subject?.connector !== true &&
+    OWN_COMPUTER_TOOLS.test(candidate.toolRef)
+  )
+    return undefined;
+  // 不看 effect：分类名单不完整，被当成读的删除工具仍要问；应用标了破坏性的以应用为准。
+  return candidate.destructive === true || deletesByName(candidate.toolRef)
+    ? { source: "destructive_tool", reason: DESTRUCTIVE_TOOL_REASON }
+    : undefined;
+}
+
+/** 工具名是否说它会（或可能会）把内容发给别人，规则见 {@link ALWAYS_SENDING} 上方。 */
+function sendsByName(toolRef: string): boolean {
+  const words = toolWords(toolRef);
+  if (ALWAYS_SENDING.test(words)) return true;
+  const scanned = words.match(OUTBOUND_VERB_SCAN);
+  const first = scanned?.[1] ?? "";
+  if (SENDING_FIRST_VERB.test(first)) return true;
+  if (DRAFTING_FIRST_VERB.test(first) && DRAFT.test(words)) return false;
+  if (!COMPOSING_FIRST_VERB.test(first)) return false;
+  // 只看第一个动词之后的词：`message_create` 不是「新建一条消息」的说法。
+  const after = words.slice((scanned?.index ?? 0) + first.length);
+  return SENT_THING.test(after);
+}
+
+/**
+ * 对外发送底线（用户决定，2026-11-09）：应用工具把内容发给别人，例如 Gmail 发信、回复、转发，或在
+ * Slack 发消息，总是先问，且只给「允许一次 / 拒绝」（见 types 的 `offersStandingRule`）。
+ *
+ * 只管应用工具：来源按插件调用路径设置的 `subject.connector` 认定，和删除类底线同一个标记。Bot
+ * 自己的工具、`computer_*` 和 `host/` 上的命令都不在此列。
+ *
+ * 不看 effect：工具被分类成读也照样问。catalogue 的 writeTools 名单并不完整，没列进去的工具会被
+ * 当成读，名字是这时唯一的兜底。
+ */
+export function outboundSendFloor(
+  candidate: ApprovalCandidate,
+): { source: "outbound_send"; reason: string } | undefined {
+  if (candidate.subject?.connector !== true) return undefined;
+  // 先看 fork 原有的规则，原来问的照旧问；上游另外认出的发送（见 {@link sendsLikeUpstream}）追加在后。
+  return sendsByName(candidate.toolRef) ||
+    sendsLikeUpstream(candidate) ||
+    addressesPeople(candidate)
+    ? { source: "outbound_send", reason: OUTBOUND_SEND_REASON }
+    : undefined;
+}
+
+/*
+ * 下面几条移植自上游的「后果严重的动作」（#998、#1015）：发送、分享、公开发布，按动作叫什么判定，
+ * 从不看它带了什么。它们只追加：fork 原有的删除类、对外发送规则先判，原来问的照旧问、来源不变；
+ * 上游认出而 fork 漏掉的才落到这里。
+ */
+
+/**
+ * 只作用在消息、评论、帖子上而不发送或发布它的动词：mark comment as spam、add post to bookmarks、
+ * like tweet、update comment、cancel scheduled send。名字的第一个动词是这些时，后面的发送、发布词
+ * 是它的宾语，不是动作（上游 `NOT_SENDING_VERBS`）。
+ */
+const NOT_SENDING_VERBS =
+  "update|updates|edit|patch|modify|set|mark|unmark|approve|restore|resolve|unresolve|hide|unhide|toggle|like|likes|unlike|react|bookmark|unbookmark|pin|unpin|star|unstar|flag|report|moderate|redact|translate|make|cancel|pause|unschedule|undo|unrepost|unretweet|get|list|fetch|retrieve|search|find|read|count|lookup|export|download|remove|removes|delete|archive|archives|unarchive|watch|mute|unmute|subscribe|unsubscribe";
+/** 名字的第一个动词，就是它的动作（上游 `FIRST_VERB`）。 */
+const ACTION_FIRST_VERB = new RegExp(
+  `\\b(${NOT_SENDING_VERBS}|create|creation|add|adds|post|posts|send|sends|write|submit|publish|schedule|reschedule|reply|forward|leave|share|invite|respond|notify|broadcast)\\b`,
+);
+const NOT_SENDING = new RegExp(`^(${NOT_SENDING_VERBS})$`);
+/** 跟在后面、让这个词成了别的东西的一部分：评论的表情回应、Gmail 的 send-as。 */
+const PART_OF_SOMETHING_ELSE =
+  /^ (as|reactions?|redactions?|attachments?|extensions?|restrictions?|restrict|rules?|settings?)\b/;
+/** 只读的动作词：读权限、列活动、搜共享盘都不是分享或发送。 */
+const READ_VERBS =
+  /^(get|gets|list|lists|fetch|fetches|retrieve|search|find|read|reads|count|lookup|export|download)$/;
+
+/**
+ * 名字匹配 `pattern`，且匹配到的就是动作：它前面的第一个动词不是只作用在它上面的那种，它不是
+ * 表情回应的对象，后面也没有让它成为别的东西的一部分的词（上游 `actsBy`）。
+ */
+function actsBy(pattern: RegExp): { test(name: string): boolean } {
+  const every = new RegExp(pattern.source, "g");
+  return {
+    test: (name) =>
+      [...name.matchAll(every)].some((match) => {
+        const before = name.slice(0, match.index);
+        const first = before.match(ACTION_FIRST_VERB)?.[1];
+        return (
+          !(first !== undefined && NOT_SENDING.test(first)) &&
+          !/\breactions?\b/.test(before) &&
+          !PART_OF_SOMETHING_ELSE.test(
+            name.slice(match.index + match[0].length),
+          )
+        );
+      }),
+  };
+}
+
+/** 上游的发送名单（定时发送也算：到点发出去时同样没人问）。 */
+const SENDING_TOOL = actsBy(
+  /\b(send|sends|reply|replies|forward|respond|notify|broadcast|invite|invites|comment|comments|(create|post|add) (an? )?(chat |channel )?messages?(?! templates?\b)|schedules? (an? |the |single )?((?!with |for |to |of )\w+ )?(messages?|emails?|mails?|campaigns?|dms?|sms|texts?|newsletters?|sends?)|create scheduled (\w+ )?(messages?|emails?|mails?|dms?|sms|texts?))\b/,
+);
+/** 上游的分享名单：分享、共享链接、权限、协作者、访问控制。 */
+const SHARING_TOOL =
+  /\b(share|shares|sharing|shared link|permission|permissions|collaborators?|acl|grant (access|role))\b/;
+/**
+ * 上游的发布名单。post 只在后面跟着要发的东西（post comment、post photo）或作为新建的东西
+ * （create post）时才算，所以 `STRIPE_POST_V1_PLANS` 这种 HTTP 动词不算。
+ */
+const PUBLISHING_TOOL = actsBy(
+  /\b(publish|publishes|go live|(create|publish) (an? )?release|retweets?|reposts?|tweets?|post (an? |the |new )?(\w+ ){0,3}?(comments?|repl(y|ies)|messages?|mentions?|tweets?|threads?|status(es)?|stor(y|ies)|photos?|videos?|articles?|reels?)|(create|creation of|publish|submit|schedule|reschedule|share|write|send) (an? |the |new )?(\w+ ){0,3}?(?<!\bvia )posts?(?! (drafts?|templates?)\b))\b/,
+);
+
+/**
+ * 应用工具的名字按上游的规则判。被分类成读的工具，只有名字的第一个动词不是读（get、list……）时
+ * 才判：上游对读从不问，fork 的原则是分类名单不完整、按名字的底线不给「读」让路，两者都满足。
+ */
+function namedLikeUpstream(
+  candidate: ApprovalCandidate,
+  rule: { test(name: string): boolean },
+): boolean {
+  if (candidate.subject?.connector !== true) return false;
+  const name = toolWords(candidate.toolRef);
+  if (
+    candidate.effect === "read" &&
+    READ_VERBS.test(name.match(ACTION_FIRST_VERB)?.[1] ?? "")
+  )
+    return false;
+  return rule.test(name);
+}
+
+/** 上游另外认出的发送。草稿是给本人准备的，没人发它就什么也没发出去。 */
+function sendsLikeUpstream(candidate: ApprovalCandidate): boolean {
+  const name = toolWords(candidate.toolRef);
+  if (/\bdrafts?\b/.test(name) && !/\bsend\b/.test(name)) return false;
+  return namedLikeUpstream(candidate, SENDING_TOOL);
+}
+
+/** 连接器放收件人的参数名。 */
+const RECIPIENT_KEYS = new Set([
+  "to",
+  "cc",
+  "bcc",
+  "recipient",
+  "recipients",
+  "recipient_email",
+  "extra_recipients",
+]);
+/**
+ * 放受邀人的参数名，各家拼法不同：`attendees`、`attendee_emails`、`attendees_info`、
+ * `settings__meeting__invitees`、`event_guests`。`guestsCanModify` 这类设置里没有地址，下面的地址
+ * 检查会把它排除。
+ */
+const INVITED = /(^|_)(attendees?|invitees?|guests?)(_|$)/;
+const READ_WORD =
+  /\b(get|gets|list|lists|fetch|fetches|retrieve|search|find|read|reads|count|lookup|export|download|query)\b/;
+const EDIT_WORD = /\b(update|updates|edit|patch|modify|set|mark|unmark)\b/;
+/** 名字里另有发送类动作时，读、编辑的排除不算数：`update_and_notify`、`export_and_email_report`。 */
+const SENDING_WORD =
+  /\b(send|notify|forward|reply|respond|broadcast|invite|email|mail|sms|dm)\b/;
+
+/**
+ * 应用工具的调用写明了要发给谁的邮箱地址（上游 `addressesPeople`）：带受邀人的日历活动会给他们
+ * 发邀请，不管工具叫什么。只看顶层参数，只认地址，所以指向文件夹的 `to` 不算。
+ *
+ * 比上游多两道排除，都是 fork 现有测试划定的：名字里有读的动作（`list_sent_messages` 按收件人
+ * 筛选）不算；收件人类参数（to、cc、bcc）配上编辑动作（`update_post`）不算。名字里另有发送类动作
+ * 时两道排除都不算（`update_and_notify`、`query_and_mail`）。受邀人参数配编辑照样算：改日历活动
+ * 加了人，也会发邀请。草稿不算。
+ */
+function addressesPeople(candidate: ApprovalCandidate): boolean {
+  if (candidate.subject?.connector !== true) return false;
+  const { args } = candidate;
+  if (args === null || typeof args !== "object" || Array.isArray(args))
+    return false;
+  const name = toolWords(candidate.toolRef);
+  if (/\bdrafts?\b/.test(name)) return false;
+  const sending = SENDING_WORD.test(name);
+  if (READ_WORD.test(name) && !sending) return false;
+  const editing = EDIT_WORD.test(name) && !sending;
+  return Object.entries(args as Record<string, unknown>).some(
+    ([key, value]) => {
+      const invited = INVITED.test(
+        key.replace(/([a-z])([A-Z])/g, "$1_$2").toLowerCase(),
+      );
+      const recipient = RECIPIENT_KEYS.has(key.toLowerCase()) && !editing;
+      return (invited || recipient) && /\S@\S/.test(flatten(value));
+    },
+  );
+}
+
+/**
+ * 分享底线（上游 #998）：应用工具把内容分享给别人，或改变谁能访问（共享链接、权限、协作者、
+ * 访问控制），总是先问，只给「允许一次 / 拒绝」。只管应用工具（`subject.connector`）。
+ */
+export function shareAccessFloor(
+  candidate: ApprovalCandidate,
+): { source: "share_access"; reason: string } | undefined {
+  return namedLikeUpstream(candidate, SHARING_TOOL)
+    ? { source: "share_access", reason: SHARE_ACCESS_REASON }
+    : undefined;
+}
+
+/**
+ * 公开发布底线（上游 #998、#1015）：应用工具发帖、转发、开直播、发版本，总是先问，只给「允许
+ * 一次 / 拒绝」。只管应用工具（`subject.connector`）。
+ */
+export function publishPostFloor(
+  candidate: ApprovalCandidate,
+): { source: "publish_post"; reason: string } | undefined {
+  return namedLikeUpstream(candidate, PUBLISHING_TOOL)
+    ? { source: "publish_post", reason: PUBLISH_POST_REASON }
+    : undefined;
+}
+
+/**
+ * 总是先问、只给「允许一次」的底线，按顺序取第一条：删除类、对外发送、分享、公开发布。一个工具
+ * 既删除又发送时按删除问；fork 原有两条在前，所以它们原来认出的动作来源不变。
+ */
+export function onceOnlyFloor(
+  candidate: ApprovalCandidate,
+): OnceOnlyFloor | undefined {
+  return (
+    destructiveFloor(candidate) ??
+    outboundSendFloor(candidate) ??
+    shareAccessFloor(candidate) ??
+    publishPostFloor(candidate) ??
+    browserActionFloor(candidate)
+  );
+}
+
+/**
+ * 网页上的按钮（上游 #998、#1015）：动词在按钮文字的开头才算（「Delete」「Send」「Post」），所以
+ * 叫「Sent」的文件夹、叫「Posts」的标签页、「Shared with me」列表是在浏览，不是在动作。Remove、
+ * Comment、Reply 只认整个按钮文字（以及 Add comment 这类整段说法）：「Remove filter」「Reply all
+ * settings」不算。
+ *
+ * 中文按钮整段锚定（见 {@link CN_END}）：「删除」「发送(S)」「分享到微信」「发布动态」算，「删除线」
+ * 「已发送」「分享给我的」「发布时间」「评论区」不算。更长的常见写法也认（阶段 2f）：「发送消息给张三」
+ * 「全部回复」「发布回答」「移到已删除邮件」；仍然从开头锚定，「回复全部设置」不算。
+ */
+const CLICK_FLOORS: readonly { floor: OnceOnlyFloor; click: RegExp }[] = [
+  {
+    floor: { source: "destructive_tool", reason: DESTRUCTIVE_TOOL_REASON },
+    click: new RegExp(
+      `^${CONFIRMING}(delete|permanently delete|move to (the )?(trash|bin)|trash|empty (the )?(trash|bin)|discard|erase|destroy)\\b|^${CONFIRMING}remove( permanently)?$` +
+        `|^${CN_CONFIRMING}(?:永久|彻底)?(?:删除|移到回收站|移至回收站|放入回收站|清空回收站|移到已删除|移至已删除|移除|丢弃)(?:文件|邮件|消息|记录|评论|帖子|账号|账户|此项|该项|全部|所选)?${CN_END}`,
+    ),
+  },
+  {
+    floor: { source: "outbound_send", reason: OUTBOUND_SEND_REASON },
+    click: new RegExp(
+      `^${CONFIRMING}(send\\b|(comment|reply)$|(add|leave|write) (a |your )?(comment|reply)$)` +
+        `|^${CN_CONFIRMING}(?:立即)?(?:发送(?:消息|邮件|短信|私信|评论)?(?:给\\S{1,16})?|回复|全部回复|回复全部|评论|发表(?:评论|回复))${CN_END}`,
+    ),
+  },
+  {
+    floor: { source: "share_access", reason: SHARE_ACCESS_REASON },
+    click: new RegExp(
+      `^${CONFIRMING}(share|invite|add people)\\b` +
+        `|^${CN_CONFIRMING}(?:立即)?(?:分享|共享)(?:到\\S{1,8}|给(?:好友|朋友|他人|成员|同事))?${CN_END}` +
+        `|^${CN_CONFIRMING}(?:邀请(?:成员|好友|协作者|同事)?|添加(?:成员|协作者|同事))${CN_END}`,
+    ),
+  },
+  {
+    floor: { source: "publish_post", reason: PUBLISH_POST_REASON },
+    click: new RegExp(
+      `^${CONFIRMING}(post|publish|tweet|repost|retweet|go live)\\b` +
+        `|^${CN_CONFIRMING}(?:立即)?(?:发布|发表|发帖|转发|发微博|发动态)(?:动态|文章|帖子|视频|笔记|微博|评论|作品|回答|想法|问题|专栏|日志)?${CN_END}`,
+    ),
+  },
+];
+
+/**
+ * 电脑工具一侧，按 fork 的电脑工具审批路径（网关给的 `target` 和 `subject`）：点了删除、发送、
+ * 分享、发布按钮，或者用键盘发送（见 {@link pressesSend}），总是先问，只给「允许一次 / 拒绝」。
+ * 不看 effect：点击和按键在网关那里都是改动。
+ */
+function browserActionFloor(
+  candidate: ApprovalCandidate,
+): OnceOnlyFloor | undefined {
+  const named = actionName(candidate);
+  const clicked =
+    named?.kind === "click"
+      ? CLICK_FLOORS.find((entry) => entry.click.test(named.name))?.floor
+      : undefined;
+  if (clicked) return clicked;
+  return pressesSend(candidate)
+    ? { source: "outbound_send", reason: OUTBOUND_SEND_REASON }
+    : undefined;
+}
+
+/** 写消息、回复、评论的输入框，英文和中文；搜索框不算。 */
+const MESSAGE_FIELD =
+  /\b(message|reply|comment|chat|compose|tweet|post)\b|what'?s happening|消息|回复|评论|留言|私信|聊天|说点什么|写点什么|说说|发表|弹幕/;
+const SEARCH_FIELD = /\bsearch\b|搜索|查找/;
+
+/**
+ * 一次按键是不是把页面上写的东西发出去了（上游 #998，按 #398 评审补全）：
+ *  - 按键先按 Playwright 的规则规范化（见 {@link pressedKey}）；
+ *  - 看不出焦点在哪（没有解析出元素：不带 ref 的页面级按键，或者网关没有这一页的快照）时，Enter
+ *    和空格都按发送问：焦点可能正在刚写好的消息框或者一个发送按钮上；
+ *  - 焦点在输入框上：带 Shift 以外修饰键的 Enter（Ctrl、Cmd、Alt，左右都算）一律算发送；只按着
+ *    Shift 是换行，不算；不带修饰键的 Enter 只在写消息、回复、评论的输入框里算（中英文）。
+ * 带 `submit` 的 `computer_type` 在输完后按 Enter，所以也算 Enter。按钮、链接上的 Enter 和空格见
+ * {@link pressesElement}。Ctrl+Enter 在有些编辑器里是插入分页符，问一次只多一次点击。
+ */
+function pressesSend(candidate: ApprovalCandidate): boolean {
+  const pressed = pressedKey(candidate);
+  if (pressed === undefined) return false;
+  const element = (candidate.target as { element?: unknown } | undefined)
+    ?.element;
+  if (element === null || typeof element !== "object")
+    return pressed.main === "enter" || pressed.main === "space";
+  if (pressed.main !== "enter") return false;
+  if (pressed.modifiers.some((modifier) => modifier !== "shift")) return true;
+  // Shift+Enter 在写消息的输入框里是换行。
+  if (pressed.modifiers.length > 0) return false;
+  const field = elementName(candidate);
+  return MESSAGE_FIELD.test(field) && !SEARCH_FIELD.test(field);
+}
+
 /**
  * The whole decision, layer by layer (SEC1 §4.2). The first layer that settles the action decides,
  * and every later one can only make it stricter:
@@ -656,6 +1583,10 @@ export function appEnableReason(name: string, source: string): string {
  *  4. The deterministic floors: a dangerous command or a sensitive path asks at least (§4.3, §4.4),
  *     and so does the team cap of `ask` for a command on a paired computer, and so does a local
  *     app's tool the device does not list as read-only. The cap also covers `computer_app_call`.
+ *     只给「允许一次」的底线（见 {@link onceOnlyFloor}）：删除类、对外发送、分享、公开发布总是
+ *     先问，规则问过的也改记为这条底线，卡片因此只给「允许一次 / 拒绝」。它们和上面几条底线管的
+ *     工具互不相交（那几条只看 `computer_*`、`host/` 的命令、路径和本机应用），在链里排第几不影响
+ *     结果。一个工具既删除又发送时，按删除类底线问。
  *  5. The strictest rule across the team's, the owner's and the person's own; then the reviewer
  *     where it applies; then the person's own "ask before making changes" default.
  */
@@ -693,14 +1624,20 @@ export async function decideAction(input: {
   if (refused) return refused;
   const runnerCommand = isRunnerCommand(candidate);
   const safety = safetyRequirement(candidate);
-  if (safety)
+  if (safety?.behaviour === "hand_off")
     return {
       behaviour: "hand_off",
       source: "safety",
       reason: safety.reason,
     };
+  // 内置安全要求里要先问的那一半（删除、对外发送、分享、公开发布），作为只给「允许一次」的底线。
+  const onceOnly: OnceOnlyFloor | undefined =
+    safety?.behaviour === "ask"
+      ? { source: safety.id, reason: safety.reason }
+      : undefined;
   const floor:
     | SecurityFloor
+    | OnceOnlyFloor
     // --- app discovery (sub-project 3) ---
     | { source: "host_command_cap" | "app_tool" | "app_enable"; reason: string }
     // --- end app discovery ---
@@ -713,6 +1650,7 @@ export async function decideAction(input: {
       input.security ?? DEFAULT_EMPLOYEE_SECURITY,
       input.enforceDangerousCommands === true,
     ) ??
+    onceOnly ??
     (runnerCommand && input.hostCommandsCap === "ask"
       ? {
           source: "host_command_cap",
@@ -746,13 +1684,19 @@ export async function decideAction(input: {
   // --- end desktop control ---
   const decided = await decideByRules(input, matched);
   // A floor only raises: an action the rules let through still asks; one already asked about or
-  // handed off keeps the stricter answer it had.
+  // handed off keeps the stricter answer it had. 只给「允许一次」的底线（删除类、对外发送、分享、
+  // 公开发布）多做一步：规则、偏好或审查本来就要问的，也改记为这条底线，卡片才不会给出一条存了也
+  // 永远用不上的「总是允许」；原来的理由接在后面保留。
+  const restated =
+    floor !== undefined && floor === onceOnly && decided.behaviour === "ask";
   const outcome: ApprovalPolicyOutcome =
-    floor && decided.behaviour === "allow"
+    floor && (decided.behaviour === "allow" || restated)
       ? {
           behaviour: "ask",
           source: floor.source,
-          reason: floor.reason,
+          reason: restated
+            ? `${floor.reason}（${decided.reason}）`
+            : floor.reason,
           ...(decided.ruleId ? { ruleId: decided.ruleId } : {}),
           ...(decided.review ? { review: decided.review } : {}),
         }

@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
-import type { AppVariables } from "../src/app-variables";
+import type { AppVariables } from "../src/auth/guards";
 import { createApprovalRoutes } from "../src/approvals/routes";
 import { createApprovalService } from "../src/approvals/service";
 import { createApprovalStore } from "../src/approvals/store";
@@ -96,7 +96,11 @@ const routesFor = (actorId: string) => {
     context,
     next,
   ) => {
-    context.set("actor", { id: actorId, role });
+    context.set("actor", {
+      id: actorId,
+      email: `${actorId}@example.test`,
+      role,
+    });
     await runAsTenant(actorId, () => next());
   };
   return createApprovalRoutes(service, requireUser, scope.adminCapability);
@@ -187,10 +191,11 @@ afterAll(async () => {
     await database.delete(users).where(inArray(users.id, people));
   });
   await releaseRoleWriter?.();
+  await database.$client.close();
 });
 
 test("the owner's inbox holds the request, so the refusals below are about tenancy", async () => {
-  const inbox = await call(owner, "");
+  const inbox = await call(owner, "", "GET");
   expect(inbox.status).toBe(200);
   const body = (await inbox.json()) as { requests: { id: string }[] };
   expect(body.requests.map((entry) => entry.id)).toContain(requestId);
@@ -201,7 +206,7 @@ test("the request is absent from a stranger's inbox", async () => {
    * The row sits in the owner's tenant, so row-level security keeps it from this caller; the store's
    * owner predicate would keep it out of a stranger's list even where the database did not.
    */
-  const inbox = await call(stranger, "");
+  const inbox = await call(stranger, "", "GET");
   expect(inbox.status).toBe(200);
   const body = (await inbox.json()) as { requests: { id: string }[] };
   expect(body.requests.map((entry) => entry.id)).not.toContain(requestId);
@@ -323,7 +328,7 @@ test("admin A's team rule is stamped `team`, and member M's frame reads and appl
   const seen = await runAsTenant(stranger, () => store.policy!.teamRules());
   expect(seen.map((rule) => rule.id)).toContain(teamRuleId);
   // ...and through the member's own inbox, as the locked rows they are shown.
-  const inbox = await call(stranger, "");
+  const inbox = await call(stranger, "", "GET");
   expect(inbox.status).toBe(200);
   const body = (await inbox.json()) as { teamRules: { id: string }[] };
   expect(body.teamRules.map((rule) => rule.id)).toContain(teamRuleId);
@@ -422,7 +427,11 @@ test("an admin with the capability cannot re-stamp a team rule into their own te
   const restamp = createApprovalRoutes(
     service,
     async (context, next) => {
-      context.set("actor", { id: adminA, role: "admin" });
+      context.set("actor", {
+        id: adminA,
+        email: `${adminA}@example.test`,
+        role: "admin",
+      });
       await runAsTenant(adminA, () => next());
     },
     scope.adminCapability,
@@ -555,7 +564,11 @@ test("an admin the database does not know as one gets 403 on a team write, not a
   const routes = createApprovalRoutes(
     service,
     async (context, next) => {
-      context.set("actor", { id: stranger, role: "admin" });
+      context.set("actor", {
+        id: stranger,
+        email: `${stranger}@example.test`,
+        role: "admin",
+      });
       await runAsTenant(stranger, () => next());
     },
     scope.adminCapability,

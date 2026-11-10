@@ -14,7 +14,9 @@ import { MCPMock, type MCPToolDefinition } from "@copilotkit/aimock/mcp";
 import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import { and, asc, eq, gte, inArray, sql } from "drizzle-orm";
 import { TOOL_DISABLED } from "../src/approvals/policy";
+import { ALREADY_WAITING, DECLINED_BY_PERSON } from "../src/approvals/service";
 import {
+  ApprovalAlreadyAnsweredError,
   type ApprovalCandidate,
   type ApprovalGate,
   ApprovalRefusedError,
@@ -46,14 +48,18 @@ import {
   CatalogueTransportUnroutableError,
   ServerRowAmbiguousError,
 } from "../src/plugins/access";
+import { listTools as listBaiduNetdiskTools } from "../src/plugins/baidu-netdisk-rest";
 import type { BrokerConnection, ComposioBroker } from "../src/plugins/broker";
+import { listTools as listRoutineTools } from "../src/plugins/builtin-routines";
 import type { CatalogueEntry } from "../src/plugins/catalogue";
 import { catalogueEntry } from "../src/plugins/catalogue";
 import {
   type ComposioResult,
   useComposioClient,
 } from "../src/plugins/composio";
+import { actionOf } from "../src/plugins/composio-adapter";
 import { redirectUriFor } from "../src/plugins/oauth";
+import { createPluginRoutes } from "../src/plugins/routes";
 import {
   type AccessToken,
   CustomServerRefusedError,
@@ -62,14 +68,22 @@ import {
   INVALID_CLIENT,
   isDeploymentFault,
   type OAuthClient,
+  OAuthClientReadError,
   PluginInvariantError,
   PluginRefusedError,
   type PluginStore,
+  storableTools,
   TokenRefusedError,
   unlistedAdvertisedTools,
 } from "../src/plugins/store";
 import { grantedTools, REFUSAL_MARKER } from "../src/plugins/tools";
+import {
+  proactiveInitiator,
+  restrictToolsForRun,
+} from "../src/proactive/restriction";
+import { checkInCatalogue, createCheckInScope } from "../src/proactive/scope";
 import { runAsTenant } from "../src/tenant/context";
+import fileActions from "./fixtures/composio-file-actions.json";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -2931,6 +2945,418 @@ describe("a dynamic client the vendor has evicted", () => {
       expect(registrations).toEqual([]);
     }));
 
+  /*
+   * A replica that cannot read the deployment's client must not register around it (upstream #922).
+   *
+   * The client is ONE row shared by every replica. Reading "I could not decrypt it" as "there is
+   * none" sends the vendor a fresh registration and points the server row at it, which replaces the
+   * client for every replica that could still read the old one — and every grant issued to the old
+   * one stops working. Missing or revoked is none; a read or decryption fault is a fault.
+   */
+
+  /** Every `mcp.oauth_client_read_failed` row for this server written since the run began. */
+  const readFailureRows = () =>
+    database
+      .select()
+      .from(auditEvents)
+      .where(
+        and(
+          eq(auditEvents.eventType, "mcp.oauth_client_read_failed"),
+          eq(auditEvents.targetId, dynamicServerId),
+          sinceThisRun(),
+        ),
+      );
+
+  /** The Connect route over a given store, signed in as the suite's person (platform frame). */
+  function connectRoutes(over: PluginStore) {
+    const routes = createPluginRoutes(
+      over,
+      async (context, next) => {
+        context.set("actor", {
+          id: dynamicUserId,
+          email: "person@openbot.test",
+          role: "user",
+        } as never);
+        // The suite's server row and client are planted in the platform frame, so that is the frame
+        // the route reads them in. The person-frame write is pinned by its own test below.
+        await asPlatform(() => next());
+      },
+      async () => false,
+      {
+        encryptionKey: DYNAMIC_KEY,
+        publicUrl: "https://openbot.test",
+        appUrl: "https://openbot.test",
+        personHasAccess: async () => true,
+      },
+    );
+    const escaped: unknown[] = [];
+    routes.onError((error) => {
+      escaped.push(error);
+      return new Response("escaped", { status: 500 });
+    });
+    const press = () =>
+      routes.request(`http://openbot.test/servers/${dynamicServerId}/connect`, {
+        method: "POST",
+      });
+    return { press, escaped };
+  }
+
+  /** A store that reads the vault through `vault` with `key`, otherwise the suite's own. */
+  const storeReading = (over: typeof vault, key: string): PluginStore =>
+    createPluginStore({
+      database,
+      auditStore: createAuditStore(database),
+      credentials: over,
+      encryptionKey: key,
+      policy: () => policy,
+      ...seams,
+      redirectUri: REDIRECT_URI,
+    });
+
+  const WRONG_KEY = Buffer.alloc(32, 1).toString("base64");
+
+  test("Connect does not misclassify a vendor registration fault as a client read failure", () =>
+    asPlatform(async () => {
+      await clearClient();
+      registrations.length = 0;
+      const previousIssue = issue;
+      const vendorFailure = new Error("vendor registration unavailable");
+      issue = () => {
+        throw vendorFailure;
+      };
+      const before = await readFailureRows();
+      const { press, escaped } = connectRoutes(dynamicStore);
+      try {
+        const response = await press();
+        expect(response.status).toBe(500);
+        expect(escaped).toEqual([vendorFailure]);
+        expect(registrations).toHaveLength(1);
+        expect(await readFailureRows()).toHaveLength(before.length);
+      } finally {
+        issue = previousIssue;
+        await putClient(EVICTED);
+      }
+    }));
+
+  for (const fault of ["wrong-key", "reader-fault"] as const) {
+    test(`Connect audits a client read fault (${fault}) without replacing or exposing it`, () =>
+      asPlatform(async () => {
+        await putClient(EVICTED);
+        registrations.length = 0;
+        issue = () => FRESH;
+        const sentinel = "private-client-secret-must-not-escape";
+        const beforeEvents = await readFailureRows();
+        const [before] = await database
+          .select({ credentialId: mcpServers.credentialId })
+          .from(mcpServers)
+          .where(eq(mcpServers.id, dynamicServerId));
+        const failingStore = storeReading(
+          fault === "reader-fault"
+            ? {
+                ...vault,
+                readSecret: async () => {
+                  throw new Error(sentinel);
+                },
+              }
+            : vault,
+          fault === "wrong-key" ? WRONG_KEY : DYNAMIC_KEY,
+        );
+        const { press, escaped } = connectRoutes(failingStore);
+        const said: string[] = [];
+        const realError = console.error;
+        console.error = (...args: unknown[]) => {
+          said.push(args.map(String).join(" "));
+        };
+        try {
+          const response = await press();
+          console.error = realError;
+          const body = await response.text();
+          // The operator's only clue is the fault's name, never its message, which can quote the
+          // stored client.
+          expect(
+            said
+              .filter((line) => line.includes("mcp-oauth-client-read-failed"))
+              .map((line) => JSON.parse(line)),
+          ).toEqual([
+            {
+              type: "mcp-oauth-client-read-failed",
+              server: dynamicServerId,
+              error: fault === "wrong-key" ? "OperationError" : "Error",
+            },
+          ]);
+          expect(said.join("\n")).not.toContain(sentinel);
+          expect(response.status).toBe(503);
+          expect(JSON.parse(body)).toEqual({
+            error:
+              "暂时无法连接 Notion。请稍后重试；如果一直这样，请联系管理员。",
+          });
+          expect(escaped).toEqual([]);
+
+          const written = (await readFailureRows()).filter(
+            (event) => !beforeEvents.some((seen) => seen.id === event.id),
+          );
+          expect(written).toHaveLength(1);
+          expect(written[0]).toMatchObject({
+            targetType: "mcp_server",
+            targetId: dynamicServerId,
+            payload: {
+              actor: dynamicUserId,
+              server: dynamicServerId,
+              operation: "connect",
+              reason: "credential_read_failed",
+            },
+          });
+          expect(body + JSON.stringify(written)).not.toContain(sentinel);
+
+          const [after] = await database
+            .select({ credentialId: mcpServers.credentialId })
+            .from(mcpServers)
+            .where(eq(mcpServers.id, dynamicServerId));
+          expect(registrations).toEqual([]);
+          expect(after?.credentialId).toBe(before?.credentialId);
+          expect(await dynamicStore.oauthClientFor(dynamicServerId)).toEqual(
+            EVICTED,
+          );
+        } finally {
+          console.error = realError;
+          await putClient(EVICTED);
+        }
+      }));
+  }
+
+  test("the read-failure row a person's Connect writes is filed in that person's tenant", async () => {
+    await runAsTenant(dynamicUserId, () =>
+      dynamicStore.recordOAuthClientReadFailure({
+        serverId: dynamicServerId,
+        actorId: dynamicUserId,
+      }),
+    );
+    const rows = await asPlatform(() =>
+      database
+        .select({
+          tenantId: auditEvents.tenantId,
+          payload: auditEvents.payload,
+        })
+        .from(auditEvents)
+        .where(
+          and(
+            eq(auditEvents.eventType, "mcp.oauth_client_read_failed"),
+            eq(auditEvents.targetId, dynamicServerId),
+            eq(auditEvents.tenantId, dynamicUserId),
+            sinceThisRun(),
+          ),
+        ),
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.payload).toEqual({
+      actor: dynamicUserId,
+      server: dynamicServerId,
+      operation: "connect",
+      reason: "credential_read_failed",
+    });
+  });
+
+  for (const where of ["before-lock", "under-lock"] as const) {
+    test(`a client decryption fault ${where} does not replace the deployment's client`, () =>
+      asPlatform(async () => {
+        await putClient(EVICTED);
+        registrations.length = 0;
+        issue = () => FRESH;
+        const [before] = await database
+          .select({ credentialId: mcpServers.credentialId })
+          .from(mcpServers)
+          .where(eq(mcpServers.id, dynamicServerId));
+        // The first read can find no row while the read under the lock finds one. Neither may take a
+        // decryption failure as permission to register over the working client.
+        const wrongKeyStore = storeReading(
+          where === "under-lock"
+            ? { ...vault, readSecret: async () => null }
+            : vault,
+          WRONG_KEY,
+        );
+        const realError = console.error;
+        console.error = () => {};
+        try {
+          const outcome = await wrongKeyStore
+            .ensureOAuthClient(dynamicServerId, "someone@openbot.test")
+            .then(
+              () => "returned",
+              (error: unknown) =>
+                error instanceof OAuthClientReadError ? "read-error" : error,
+            );
+          console.error = realError;
+          const [after] = await database
+            .select({ credentialId: mcpServers.credentialId })
+            .from(mcpServers)
+            .where(eq(mcpServers.id, dynamicServerId));
+          expect({
+            outcome,
+            registrations: registrations.length,
+            pointerUnchanged: before?.credentialId === after?.credentialId,
+            client: await dynamicStore.oauthClientFor(dynamicServerId),
+          }).toEqual({
+            outcome: "read-error",
+            registrations: 0,
+            pointerUnchanged: true,
+            client: EVICTED,
+          });
+        } finally {
+          console.error = realError;
+          await putClient(EVICTED);
+        }
+      }));
+  }
+
+  /*
+   * The read OUTSIDE the lock, on its own. `ensureOAuthClient` reads again under the lock with the
+   * same key, so a fault the first read swallowed is thrown by the second and the tests above pass
+   * either way. `oauthClientFor` is that first read, and the callback route calls it with no second
+   * read behind it.
+   */
+  for (const fault of ["wrong-key", "reader-fault"] as const) {
+    test(`the read outside the lock classifies a client read fault (${fault}) by itself`, () =>
+      asPlatform(async () => {
+        await putClient(EVICTED);
+        registrations.length = 0;
+        const reader = storeReading(
+          fault === "reader-fault"
+            ? {
+                ...vault,
+                readSecret: async () => {
+                  throw new Error("vault unavailable");
+                },
+              }
+            : vault,
+          fault === "wrong-key" ? WRONG_KEY : DYNAMIC_KEY,
+        );
+        const said: string[] = [];
+        const realError = console.error;
+        console.error = (...args: unknown[]) => {
+          said.push(args.map(String).join(" "));
+        };
+        try {
+          const outcome = await reader.oauthClientFor(dynamicServerId).then(
+            (client) => client,
+            (error: unknown) =>
+              error instanceof OAuthClientReadError ? "read-error" : error,
+          );
+          console.error = realError;
+          expect(outcome).toBe("read-error");
+          expect(
+            said.filter((line) =>
+              line.includes("mcp-oauth-client-read-failed"),
+            ),
+          ).toHaveLength(1);
+          expect(registrations).toEqual([]);
+        } finally {
+          console.error = realError;
+          await putClient(EVICTED);
+        }
+      }));
+  }
+
+  /*
+   * Missing or revoked is still none (upstream #922 keeps this, and so must we): only a FAULT stops
+   * Connect. An administrator who revoked the client in the vault expects the next Connect to register
+   * a fresh one, not a 503 and a read-failure row on every press.
+   */
+  test("a client whose credential was revoked is none: read as null, and registered again", () =>
+    asPlatform(async () => {
+      await putClient(EVICTED);
+      const [pointed] = await database
+        .select({ credentialId: mcpServers.credentialId })
+        .from(mcpServers)
+        .where(eq(mcpServers.id, dynamicServerId));
+      if (!pointed?.credentialId) throw new Error("client was not pointed at");
+      // The pointer stays; the row it names is retired.
+      await database
+        .update(credentials)
+        .set({ revokedAt: new Date() })
+        .where(eq(credentials.id, pointed.credentialId));
+      registrations.length = 0;
+      issue = () => FRESH;
+      const said: string[] = [];
+      const realError = console.error;
+      console.error = (...args: unknown[]) => {
+        said.push(args.map(String).join(" "));
+      };
+      try {
+        expect(await dynamicStore.oauthClientFor(dynamicServerId)).toBeNull();
+        expect(
+          await dynamicStore.ensureOAuthClient(
+            dynamicServerId,
+            "someone@openbot.test",
+          ),
+        ).toEqual(FRESH);
+        console.error = realError;
+        expect(registrations).toEqual([
+          { registrationUrl: REGISTRATION_URL, redirectUri: REDIRECT_URI },
+        ]);
+        expect(await dynamicStore.oauthClientFor(dynamicServerId)).toEqual(
+          FRESH,
+        );
+        expect(
+          said.filter((line) => line.includes("mcp-oauth-client-read-failed")),
+        ).toEqual([]);
+      } finally {
+        console.error = realError;
+        await putClient(EVICTED);
+      }
+    }));
+
+  test("a client whose credential row is gone is none, not a read failure", () =>
+    asPlatform(async () => {
+      await putClient(EVICTED);
+      // The vault answers "no such row" for the pointer the server row still holds.
+      const reader = storeReading(
+        { ...vault, readSecret: async () => null },
+        DYNAMIC_KEY,
+      );
+      const said: string[] = [];
+      const realError = console.error;
+      console.error = (...args: unknown[]) => {
+        said.push(args.map(String).join(" "));
+      };
+      try {
+        expect(await reader.oauthClientFor(dynamicServerId)).toBeNull();
+        console.error = realError;
+        expect(
+          said.filter((line) => line.includes("mcp-oauth-client-read-failed")),
+        ).toEqual([]);
+      } finally {
+        console.error = realError;
+        await putClient(EVICTED);
+      }
+    }));
+
+  test("a client that decrypts and is not JSON is none, and nothing of it is thrown", () =>
+    asPlatform(async () => {
+      const plaintext = "bare-client-secret-not-json";
+      await clientFixture.retireClients();
+      const [row] = await database
+        .insert(credentials)
+        .values({
+          kind: "mcp_oauth_client",
+          provider: dynamicServerId,
+          keyId: `oauth-client-${dynamicServerId}`,
+          metadata: {},
+          encryptedValue: await encryptSecret(DYNAMIC_KEY, plaintext),
+        })
+        .returning({ id: credentials.id });
+      if (!row) throw new Error("client was not stored");
+      clientFixture.track(row.id);
+      await database
+        .update(mcpServers)
+        .set({ credentialId: row.id })
+        .where(eq(mcpServers.id, dynamicServerId));
+      try {
+        // Missing, revoked and unparseable all answer null; only a fault throws.
+        expect(await dynamicStore.oauthClientFor(dynamicServerId)).toBeNull();
+      } finally {
+        await putClient(EVICTED);
+      }
+    }));
+
   test("a dynamic entry with no client gets one, kept and recorded", () =>
     asPlatform(async () => {
       await clearClient();
@@ -3669,6 +4095,30 @@ describe("a custom server may not be named after one of the app's own screens", 
         .select({ id: mcpServers.id })
         .from(mcpServers)
         .where(eq(mcpServers.id, "composio"));
+      expect(rows).toHaveLength(0);
+    }));
+});
+
+/*
+ * Nor the id OpenBot's own memory tools are spelled under (upstream proactive-connected-reads).
+ * Their refs are `memory/<tool>`, so a server at `memory` would list a second
+ * `memory/recall_personal_memory` beside the person's own.
+ */
+describe("the memory tools' own id", () => {
+  test("no server can be added under it", () =>
+    asPlatform(async () => {
+      const added = store.addCustomServer({
+        id: "memory",
+        title: "Memory",
+        url: "https://memory.invalid/mcp",
+        by: "admin@example.com",
+      });
+      await expect(added).rejects.toBeInstanceOf(CustomServerRefusedError);
+      await expect(added).rejects.toThrow("memory tools");
+      const rows = await database
+        .select({ id: mcpServers.id })
+        .from(mcpServers)
+        .where(eq(mcpServers.id, "memory"));
       expect(rows).toHaveLength(0);
     }));
 });
@@ -4983,12 +5433,16 @@ test("an identity a model puts in the arguments does not change whose account th
         // not read from arguments at all.
         userId: "user_asker",
         // Passed through whole, minus nothing: the reserved version key is the only thing the call
-        // path removes, and the model sent none.
+        // path removes, and the model sent none. The last three are OpenBot's own settings for a
+        // Gmail listing (`plugins/composio-shapes.ts`), added beside the model's, never read from them.
         args: {
           userId: "user_stranger",
           user_id: "user_stranger",
           entityId: "user_stranger",
           query: "is:unread",
+          include_payload: false,
+          verbose: false,
+          max_results: 20,
         },
       },
     ]);
@@ -5008,9 +5462,12 @@ test("SEC1: a connector call the gate refuses or holds never reaches the vendor"
         asked.push(candidate);
         if (answer === "refuse") throw new ApprovalRefusedError(TOOL_DISABLED);
         if (answer === "hold")
-          throw new HeadlessToolSuspension("This action is waiting for your approval.", {
-            kind: "approval",
-          });
+          throw new HeadlessToolSuspension(
+            "This action is waiting for your approval.",
+            {
+              kind: "approval",
+            },
+          );
         return undefined;
       },
     });
@@ -5036,7 +5493,9 @@ test("SEC1: a connector call the gate refuses or holds never reaches the vendor"
     await expect(call()).rejects.toBeInstanceOf(HeadlessToolSuspension);
     expect(executed).toBe(0);
     expect(
-      auditStore.recorded().filter((event) => event.eventType === "mcp.call_succeeded"),
+      auditStore
+        .recorded()
+        .filter((event) => event.eventType === "mcp.call_succeeded"),
     ).toEqual([]);
     expect(asked.map((candidate) => candidate.toolRef)).toEqual([
       "gmail/GMAIL_FETCH_EMAILS",
@@ -5045,6 +5504,874 @@ test("SEC1: a connector call the gate refuses or holds never reaches the vendor"
     answer = "allow";
     await call();
     expect(executed).toBe(1);
+  }));
+
+/*
+ * A call the approval gate turns away is on the trail as refused (upstream #1106, plugin store). The
+ * row says who was refused and by what, never what was sent: no argument values, and it is filed in
+ * the caller's own tenant frame like the other refusals this method writes. A call already waiting
+ * for the person turns nothing new away and writes nothing.
+ */
+test("a connector call the approval gate turns away is a refused row, with no arguments and in the caller's tenant", () =>
+  asPlatform(async () => {
+    const DECLINED = "The person declined this action, so it was not done.";
+    let answer: "decline" | "waiting" = "decline";
+    const { store, database, auditStore } = await freshStore({
+      approvalGate: async () => {
+        throw new ApprovalRefusedError(
+          answer === "decline" ? DECLINED : ALREADY_WAITING,
+        );
+      },
+    });
+    let executed = 0;
+    useComposioClient({
+      listActions: async () => [],
+      execute: async () => {
+        executed += 1;
+        return vendorAnswered({ messages: [] });
+      },
+    });
+    await seedComposioGmail(database, store);
+    const call = () =>
+      store.callTool({
+        ref: "gmail/GMAIL_FETCH_EMAILS",
+        args: { query: "needle-argument-value-7731" },
+        botId: "bot_helper",
+        actorId: "user_asker",
+      });
+
+    await expect(call()).rejects.toThrow(DECLINED);
+    const refused = () =>
+      auditStore
+        .recorded()
+        .filter((event) => event.eventType === "mcp.call_rejected");
+    expect(refused()).toHaveLength(1);
+    expect(refused()[0]).toMatchObject({
+      targetType: "mcp_tool",
+      targetId: "gmail/GMAIL_FETCH_EMAILS",
+      payload: {
+        actor: "user_asker",
+        bot: "bot_helper",
+        server: "gmail",
+        tool: "GMAIL_FETCH_EMAILS",
+        decision: { carriedOut: false },
+        refusal: "approval",
+        reason: DECLINED,
+      },
+    });
+    expect(JSON.stringify(refused())).not.toContain(
+      "needle-argument-value-7731",
+    );
+
+    const [row] = await database
+      .select({ tenantId: auditEvents.tenantId })
+      .from(auditEvents)
+      .where(
+        and(
+          eq(auditEvents.eventType, "mcp.call_rejected"),
+          eq(sql<string>`${auditEvents.payload} ->> 'refusal'`, "approval"),
+          eq(sql<string>`${auditEvents.payload} ->> 'bot'`, "bot_helper"),
+        ),
+      );
+    // The frame the call ran in (the grant above is the deployment's, so this suite calls as it).
+    expect(row?.tenantId).toBe("platform");
+
+    answer = "waiting";
+    await expect(call()).rejects.toThrow(ALREADY_WAITING);
+    expect(refused()).toHaveLength(1);
+    expect(executed).toBe(0);
+  }));
+
+/*
+ * What the person's own "no" leaves on the trail (upstream #1106, `declined`). The call hands the
+ * gate the refused row it would have written itself, so the approval store can write it, once, the
+ * moment the person denies: refusal "person_declined", this tool and this Bot, never the arguments.
+ * A call the gate answers again with what it said before (an answer already given) turns nothing
+ * new away and writes nothing.
+ */
+test("a connector call hands the approval gate the refused row for the person's denial", () =>
+  asPlatform(async () => {
+    const asked: ApprovalCandidate[] = [];
+    let answer: "hold" | "answered" = "hold";
+    const { store, database, auditStore } = await freshStore({
+      approvalGate: async (candidate) => {
+        asked.push(candidate);
+        if (answer === "answered")
+          throw new ApprovalAlreadyAnsweredError(DECLINED_BY_PERSON);
+        throw new HeadlessToolSuspension(
+          "This action is waiting for your approval.",
+          { kind: "approval" },
+        );
+      },
+    });
+    useComposioClient({
+      listActions: async () => [],
+      execute: async () => vendorAnswered({ messages: [] }),
+    });
+    await seedComposioGmail(database, store);
+    const call = () =>
+      store.callTool({
+        ref: "gmail/GMAIL_FETCH_EMAILS",
+        args: { query: "needle-argument-value-5529" },
+        botId: "bot_helper",
+        actorId: "user_asker",
+      });
+
+    await expect(call()).rejects.toBeInstanceOf(HeadlessToolSuspension);
+    const declined = asked[0]?.declined;
+    expect(declined).toMatchObject({
+      eventType: "mcp.call_rejected",
+      targetType: "mcp_tool",
+      targetId: "gmail/GMAIL_FETCH_EMAILS",
+      payload: {
+        actor: "user_asker",
+        bot: "bot_helper",
+        server: "gmail",
+        tool: "GMAIL_FETCH_EMAILS",
+        decision: { carriedOut: false },
+        refusal: "person_declined",
+        reason: DECLINED_BY_PERSON,
+      },
+    });
+    expect(JSON.stringify(declined)).not.toContain(
+      "needle-argument-value-5529",
+    );
+    // Handing it over writes nothing: the row is the approval store's to write, on denial.
+    const refused = () =>
+      auditStore
+        .recorded()
+        .filter((event) => event.eventType === "mcp.call_rejected");
+    expect(refused()).toEqual([]);
+
+    // The same call answered already: nothing new was turned away, so no row.
+    answer = "answered";
+    await expect(call()).rejects.toThrow(DECLINED_BY_PERSON);
+    expect(refused()).toEqual([]);
+  }));
+
+/*
+ * A check-in only reads (upstream proactive-connected-reads), and the plugin store is the one door
+ * every call passes, so the rule is held there too and not only where a check-in's tools are loaded.
+ *
+ * Seeded the way a refresh records them: a vendor-labelled read; an action Composio said nothing
+ * about (`unclassified`, recorded as a write since 0146); a read the vendor also said destroys
+ * something; a plain write; and a server an administrator added by URL whose tool carries no label
+ * at all.
+ */
+const checkInNotes = `team-notes-${suite}`;
+async function seedCheckInTools(database: Database, store: PluginStore) {
+  await seedComposioGmail(database, store);
+  await database.insert(mcpTools).values([
+    {
+      serverId: "gmail",
+      name: "GMAIL_ARCHIVE",
+      description: "Archive an email.",
+      effect: "write",
+      unclassified: true,
+      version: "20260903_00",
+    },
+    {
+      serverId: "gmail",
+      name: "GMAIL_PURGE",
+      description: "Purge the trash.",
+      effect: "read",
+      destructive: true,
+      version: "20260903_00",
+    },
+    {
+      serverId: "gmail",
+      name: "GMAIL_SEND_EMAIL",
+      description: "Send an email.",
+      effect: "write",
+      version: "20260903_00",
+    },
+  ]);
+  await database.insert(mcpServers).values({
+    id: checkInNotes,
+    title: "Team Notes",
+    vendor: "Acme",
+    url: "https://notes.example.test/mcp",
+    provenance: "custom",
+  });
+  await database.insert(mcpTools).values({
+    serverId: checkInNotes,
+    name: "notes_digest",
+    description: "A digest of the notes.",
+  });
+  for (const granted of [
+    "gmail/GMAIL_ARCHIVE",
+    "gmail/GMAIL_PURGE",
+    "gmail/GMAIL_SEND_EMAIL",
+    `${checkInNotes}/notes_digest`,
+  ])
+    await store.grant("mcp", granted, "bot_helper", "admin@example.com");
+}
+
+test("a tool with no read-only label is not a read to a check-in", () =>
+  asPlatform(async () => {
+    const { store, database } = await freshStore();
+    await seedCheckInTools(database, store);
+    try {
+      // M3: a check-in's reads are its scope (`proactive/scope.ts`) over this store's catalogue, not
+      // upstream's read-only classifier. Both servers count as the person's own here, so only the
+      // labels decide.
+      const reads = await createCheckInScope({
+        catalogue: checkInCatalogue(store),
+        ownConnections: async () => new Set(["gmail", checkInNotes]),
+      })("user_asker", "bot_helper");
+      expect(reads.has("gmail/GMAIL_FETCH_EMAILS")).toBe(true);
+      for (const notARead of [
+        "gmail/GMAIL_ARCHIVE",
+        "gmail/GMAIL_PURGE",
+        "gmail/GMAIL_SEND_EMAIL",
+        `${checkInNotes}/notes_digest`,
+      ])
+        expect(reads.has(notARead)).toBe(false);
+    } finally {
+      await database.delete(mcpServers).where(eq(mcpServers.id, checkInNotes));
+    }
+  }));
+
+test("a check-in calling anything but a labelled read is refused at the store, as check_in_not_a_read, before the vendor", () =>
+  asPlatform(async () => {
+    const { store, database, auditStore } = await freshStore();
+    const executed: string[] = [];
+    useComposioClient({
+      listActions: async () => [],
+      execute: async (call) => {
+        executed.push(call.slug);
+        return vendorAnswered({ messages: [] });
+      },
+    });
+    await seedCheckInTools(database, store);
+    try {
+      const initiator = proactiveInitiator(`check-in-${suite}`);
+
+      for (const refused of [
+        "gmail/GMAIL_ARCHIVE",
+        "gmail/GMAIL_PURGE",
+        "gmail/GMAIL_SEND_EMAIL",
+        `${checkInNotes}/notes_digest`,
+      ]) {
+        await expect(
+          store.callTool({
+            ref: refused,
+            args: {},
+            botId: "bot_helper",
+            actorId: "user_asker",
+            initiator,
+          }),
+        ).rejects.toBeInstanceOf(PluginRefusedError);
+        const [server, tool] = refused.split("/");
+        expect(
+          auditStore
+            .recorded()
+            .filter(
+              (event) =>
+                event.eventType === "mcp.call_rejected" &&
+                event.targetId === refused,
+            ),
+        ).toEqual([
+          expect.objectContaining({
+            targetType: "mcp_tool",
+            initiator,
+            payload: {
+              actor: "user_asker",
+              bot: "bot_helper",
+              server,
+              tool,
+              refusal: "check_in_not_a_read",
+            },
+          }),
+        ]);
+      }
+      expect(executed).toEqual([]);
+
+      // The labelled read still goes through for the check-in.
+      const read = await store.callTool({
+        ref: "gmail/GMAIL_FETCH_EMAILS",
+        args: {},
+        botId: "bot_helper",
+        actorId: "user_asker",
+        initiator,
+      });
+      expect(read.isError).toBe(false);
+      expect(executed).toHaveLength(1);
+    } finally {
+      await database.delete(mcpServers).where(eq(mcpServers.id, checkInNotes));
+    }
+  }));
+
+test("a person's own call to a write is not a check-in's refusal", () =>
+  asPlatform(async () => {
+    const { store, database, auditStore } = await freshStore();
+    useComposioClient({
+      listActions: async () => [],
+      execute: async () => vendorAnswered({ messages: [] }),
+    });
+    await seedCheckInTools(database, store);
+    try {
+      await store
+        .callTool({
+          ref: "gmail/GMAIL_SEND_EMAIL",
+          args: {},
+          botId: "bot_helper",
+          actorId: "user_asker",
+        })
+        .catch(() => undefined);
+      expect(
+        auditStore
+          .recorded()
+          .filter(
+            (event) =>
+              (event.payload as { refusal?: string } | undefined)?.refusal ===
+              "check_in_not_a_read",
+          ),
+      ).toEqual([]);
+    } finally {
+      await database.delete(mcpServers).where(eq(mcpServers.id, checkInNotes));
+    }
+  }));
+
+/*
+ * 上游 proactive-connected-reads 的用例「Notion, connected with the person's own account: its
+ * read-only tool is read, its unlabeled and destructive tools are never offered, and chat still asks
+ * first」，按 fork 的接口改写。
+ *
+ * fork 没有上游那套端到端搭建（aimock、ownConnections、checkInToolsFor），也不记服务器自报的
+ * `readOnlyHint`（上游 0072 的 declared_read），所以这里：
+ * - Notion 的工具用 `storableTools` 按一次真实刷新的样子存下：自报只读的、什么标签都没有的、
+ *   标了 destructiveHint 的，外加上游审查名单里的 `notion-search`。前两个在 fork 里存下来是一样的，
+ *   都没有厂商记录的效果。
+ * - check-in 的工具清单是 `restrictToolsForRun` 包住 `grantedTools` 的结果，读集合是
+ *   `createReadOnlyClassifier(store)`，和 index.ts 的接法一样。
+ * - Notion 的 MCP 清单不带厂商记录的效果，所以 Notion 上能被 check-in 读的只有目录 `readTools`
+ *   审查过的名字（这里是 `notion-search`）；另外能读的是 Composio 记录为读的 Gmail 动作。
+ * - 聊天里，Notion 有了 `readTools`，名单外的名字都按写处理，人自己的调用按写来问。
+ */
+const notionDigest = `notion-digest-${suite}`; // 服务器自报 readOnlyHint，不在任何审查名单上
+const notionDraft = `notion-draft-${suite}`; // 什么标签都没有
+const notionErase = `notion-erase-${suite}`; // destructiveHint
+async function seedNotionForCheckIn(database: Database, store: PluginStore) {
+  await seedComposioGmail(database, store);
+  await database.insert(mcpTools).values({
+    serverId: "gmail",
+    name: "GMAIL_SEND_EMAIL",
+    description: "Send an email.",
+    effect: "write",
+    version: "20260903_00",
+  });
+  await database.insert(mcpServers).values({
+    id: "notion",
+    title: "Notion",
+    vendor: "Notion",
+    url: "https://mcp.notion.com/mcp",
+    provenance: "first-party",
+  });
+  const listed: Parameters<typeof storableTools>[1] = [
+    { name: "notion-search", description: "Search.", inputSchema: {} },
+    { name: notionDigest, description: "A digest.", inputSchema: {} },
+    {
+      name: notionDraft,
+      description: "A draft.",
+      inputSchema: {},
+      unclassified: true,
+    },
+    {
+      name: notionErase,
+      description: "Erase a page.",
+      inputSchema: {},
+      effect: "write",
+      destructive: true,
+    },
+  ];
+  await database
+    .insert(mcpTools)
+    .values(
+      storableTools("notion", listed, undefined, catalogueEntry("notion")),
+    );
+  for (const granted of [
+    "gmail/GMAIL_SEND_EMAIL",
+    "notion/notion-search",
+    `notion/${notionDigest}`,
+    `notion/${notionDraft}`,
+    `notion/${notionErase}`,
+  ])
+    await store.grant("mcp", granted, "bot_helper", "admin@example.com");
+}
+
+/**
+ * M3: a check-in's reads are its scope (`proactive/scope.ts`) over this store's catalogue, as index.ts
+ * wires it, not upstream's read-only classifier. Every server counts as the person's own here, so only
+ * the labels decide, which is what these cases are about.
+ */
+function checkInScopeOf(store: PluginStore) {
+  return createCheckInScope({
+    catalogue: checkInCatalogue(store),
+    ownConnections: async () =>
+      new Set((await store.listServers()).map((server) => server.id)),
+  });
+}
+function createReadOnlyClassifier(store: PluginStore) {
+  return () => checkInScopeOf(store)("user_asker", "bot_helper");
+}
+
+/** 一次 check-in 拿到的工具：`grantedTools` 经 `restrictToolsForRun` 收窄，和 index.ts 一样。 */
+async function checkInToolRefs(store: PluginStore, runId: string) {
+  const initiator = proactiveInitiator(runId);
+  const load = restrictToolsForRun(
+    initiator,
+    "user_asker",
+    (botId) =>
+      grantedTools({
+        store,
+        botId,
+        actorId: "user_asker",
+        initiator,
+      }),
+    checkInScopeOf(store),
+  );
+  return (await load("bot_helper")).map((tool) => tool.ref).sort();
+}
+
+/** 以 check-in 的身份调用，确认在 store 门被拒，写的是 check_in_not_a_read。 */
+async function expectCheckInRefused(
+  store: PluginStore,
+  auditStore: {
+    recorded(): {
+      eventType: string;
+      targetId?: string | null;
+      payload?: unknown;
+    }[];
+  },
+  ref: string,
+  runId: string,
+) {
+  await expect(
+    store.callTool({
+      ref,
+      args: {},
+      botId: "bot_helper",
+      actorId: "user_asker",
+      initiator: proactiveInitiator(runId),
+    }),
+  ).rejects.toBeInstanceOf(PluginRefusedError);
+  expect(
+    auditStore
+      .recorded()
+      .filter(
+        (event) =>
+          event.eventType === "mcp.call_rejected" && event.targetId === ref,
+      )
+      .map((event) => (event.payload as { refusal?: string }).refusal),
+  ).toEqual(["check_in_not_a_read"]);
+}
+
+test("Notion, connected with the person's own account: its reviewed read is read, its unlabeled, self-declared and destructive tools are never offered to a check-in, and chat still asks first", () =>
+  asPlatform(async () => {
+    const gateAsked: { toolRef: string; effect: string }[] = [];
+    const { store, database, auditStore } = await freshStore({
+      approvalGate: async (candidate) => {
+        gateAsked.push({
+          toolRef: candidate.toolRef,
+          effect: candidate.effect,
+        });
+        throw new ApprovalRefusedError(TOOL_DISABLED);
+      },
+    });
+    const executed: string[] = [];
+    useComposioClient({
+      listActions: async () => [],
+      execute: async (call) => {
+        executed.push(call.slug);
+        return vendorAnswered({ messages: [] });
+      },
+    });
+    await seedNotionForCheckIn(database, store);
+    const runId = `notion-check-in-${suite}`;
+
+    // 提供给 check-in 的：Gmail 记录为读的动作，Notion 审查过的读。没有标签的、自报只读的、
+    // 破坏性的 Notion 工具都不在，Gmail 的发送也不在。
+    expect(await checkInToolRefs(store, runId)).toEqual(
+      ["gmail/GMAIL_FETCH_EMAILS", "notion/notion-search"].sort(),
+    );
+    const reads = await createReadOnlyClassifier(store)();
+    for (const notARead of [
+      `notion/${notionDigest}`,
+      `notion/${notionDraft}`,
+      `notion/${notionErase}`,
+      "gmail/GMAIL_SEND_EMAIL",
+    ])
+      expect(reads.has(notARead)).toBe(false);
+
+    // 别的路径直接到 store，也一样被拒，且在审批门、凭据和厂商之前。
+    for (const ref of [
+      `notion/${notionDigest}`,
+      `notion/${notionDraft}`,
+      `notion/${notionErase}`,
+    ])
+      await expectCheckInRefused(store, auditStore, ref, runId);
+    expect(gateAsked).toEqual([]);
+    expect(executed).toEqual([]);
+
+    // 审查过的读和 Gmail 记录为读的动作能过 check-in 的门，接着才问审批门。
+    for (const ref of ["notion/notion-search", "gmail/GMAIL_FETCH_EMAILS"])
+      await expect(
+        store.callTool({
+          ref,
+          args: {},
+          botId: "bot_helper",
+          actorId: "user_asker",
+          initiator: proactiveInitiator(runId),
+        }),
+      ).rejects.toThrow(TOOL_DISABLED);
+    expect(gateAsked).toEqual([
+      { toolRef: "notion/notion-search", effect: "read" },
+      { toolRef: "gmail/GMAIL_FETCH_EMAILS", effect: "read" },
+    ]);
+
+    // 聊天：Notion 列了 readTools，名单外的名字都是写，人自己的调用按写来问。
+    const listed = (await store.listServers()).find(
+      (server) => server.id === "notion",
+    );
+    const effectOf = (name: string) =>
+      listed?.tools.find((tool) => tool.name === name)?.effect;
+    expect(effectOf("notion-search")).toBe("read");
+    expect(effectOf(notionDigest)).toBe("write");
+    expect(effectOf(notionDraft)).toBe("write");
+    expect(effectOf(notionErase)).toBe("write");
+    gateAsked.length = 0;
+    await expect(
+      store.callTool({
+        ref: `notion/${notionDigest}`,
+        args: {},
+        botId: "bot_helper",
+        actorId: "user_asker",
+      }),
+    ).rejects.toThrow(TOOL_DISABLED);
+    expect(gateAsked).toEqual([
+      { toolRef: `notion/${notionDigest}`, effect: "write" },
+    ]);
+  }));
+
+/*
+ * classifyTool 的默认推断不让工具进 check-in。
+ *
+ * Linear 的目录条目只有 `writeTools`，没有 `readTools`。它广播、又不在写名单上的工具，聊天里照旧
+ * 按读处理（这一条路径不变）；但没有厂商标签、也没有审查过的读名单替它作证，check-in 拿不到它，
+ * store 的门也拒绝它。
+ */
+test("a tool carrying no label at all is not in a check-in's tools, and the store refuses a check-in's call to it, though chat still reads it", () =>
+  asPlatform(async () => {
+    const gateAsked: { toolRef: string; effect: string }[] = [];
+    const { store, database, auditStore } = await freshStore({
+      approvalGate: async (candidate) => {
+        gateAsked.push({
+          toolRef: candidate.toolRef,
+          effect: candidate.effect,
+        });
+        throw new ApprovalRefusedError(TOOL_DISABLED);
+      },
+    });
+    useComposioClient({
+      listActions: async () => [],
+      execute: async () => vendorAnswered({ messages: [] }),
+    });
+    await seedComposioGmail(database, store);
+    const linearRow = `check-in-linear-${suite}`;
+    const unlabelled = `list_things_${suite}`;
+    expect(catalogueEntry("linear")?.readTools).toBeUndefined();
+    expect(catalogueEntry("linear")?.writeTools).not.toContain(unlabelled);
+    await database.insert(mcpServers).values({
+      id: linearRow,
+      catalogueKey: "linear",
+      title: "Linear",
+      vendor: "Linear",
+      url: "https://mcp.linear.app/mcp",
+      provenance: "first-party",
+    });
+    try {
+      await database.insert(mcpTools).values({
+        serverId: linearRow,
+        name: unlabelled,
+        description: "List things.",
+      });
+      await store.grant(
+        "mcp",
+        `linear/${unlabelled}`,
+        "bot_helper",
+        "admin@example.com",
+      );
+      const runId = `unlabelled-check-in-${suite}`;
+
+      // 聊天里照旧：广播了、不在写名单上，判为读。
+      const listed = (await store.listServers()).find(
+        (server) => server.id === linearRow,
+      );
+      expect(
+        listed?.tools.find((tool) => tool.name === unlabelled)?.effect,
+      ).toBe("read");
+
+      // check-in 里：不在工具清单，也不在读集合。
+      expect(await checkInToolRefs(store, runId)).toEqual([
+        "gmail/GMAIL_FETCH_EMAILS",
+      ]);
+      expect(
+        (await createReadOnlyClassifier(store)()).has(`linear/${unlabelled}`),
+      ).toBe(false);
+
+      // store 门拒绝，在审批门之前。
+      await expectCheckInRefused(
+        store,
+        auditStore,
+        `linear/${unlabelled}`,
+        runId,
+      );
+      expect(gateAsked).toEqual([]);
+
+      // 人自己在聊天里调用，check-in 的门不管，照旧按读去问审批门。
+      await expect(
+        store.callTool({
+          ref: `linear/${unlabelled}`,
+          args: {},
+          botId: "bot_helper",
+          actorId: "user_asker",
+        }),
+      ).rejects.toThrow(TOOL_DISABLED);
+      expect(gateAsked).toEqual([
+        { toolRef: `linear/${unlabelled}`, effect: "read" },
+      ]);
+    } finally {
+      await database.delete(mcpServers).where(eq(mcpServers.id, linearRow));
+    }
+  }));
+
+/*
+ * Notion 有了 `readTools` 以后，名单外的名字都按写处理：一个 Notion 以后新加、谁也没审查过的工具，
+ * 聊天里人自己调用要按写去问，check-in 既拿不到它，store 的门也拒绝它。
+ */
+test("a Notion tool off its reviewed read list is a write in chat and unavailable to a check-in", () =>
+  asPlatform(async () => {
+    const gateAsked: { toolRef: string; effect: string }[] = [];
+    const { store, database, auditStore } = await freshStore({
+      approvalGate: async (candidate) => {
+        gateAsked.push({
+          toolRef: candidate.toolRef,
+          effect: candidate.effect,
+        });
+        throw new ApprovalRefusedError(TOOL_DISABLED);
+      },
+    });
+    await seedComposioGmail(database, store);
+    await database.insert(mcpServers).values({
+      id: "notion",
+      title: "Notion",
+      vendor: "Notion",
+      url: "https://mcp.notion.com/mcp",
+      provenance: "first-party",
+    });
+    const added = `notion-archive-${suite}`;
+    const notion = catalogueEntry("notion");
+    expect(notion?.readTools).not.toContain(added);
+    expect(notion?.writeTools).not.toContain(added);
+    await database.insert(mcpTools).values(
+      storableTools(
+        "notion",
+        [
+          { name: "notion-fetch", description: "Fetch.", inputSchema: {} },
+          {
+            name: added,
+            description: "Archive a page.",
+            inputSchema: {},
+            unclassified: true,
+          },
+        ],
+        undefined,
+        notion,
+      ),
+    );
+    for (const granted of ["notion/notion-fetch", `notion/${added}`])
+      await store.grant("mcp", granted, "bot_helper", "admin@example.com");
+    const runId = `notion-unlisted-${suite}`;
+
+    // check-in：只拿到审查过的读，名单外的不在清单里，store 门也拒绝，在审批门之前。
+    expect(await checkInToolRefs(store, runId)).toEqual(
+      ["gmail/GMAIL_FETCH_EMAILS", "notion/notion-fetch"].sort(),
+    );
+    await expectCheckInRefused(store, auditStore, `notion/${added}`, runId);
+    expect(gateAsked).toEqual([]);
+
+    // 聊天：名单里的是读，名单外的是写，人自己的调用按写去问。
+    const listed = (await store.listServers()).find(
+      (server) => server.id === "notion",
+    );
+    const effectOf = (name: string) =>
+      listed?.tools.find((tool) => tool.name === name)?.effect;
+    expect(effectOf("notion-fetch")).toBe("read");
+    expect(effectOf(added)).toBe("write");
+    await expect(
+      store.callTool({
+        ref: `notion/${added}`,
+        args: {},
+        botId: "bot_helper",
+        actorId: "user_asker",
+      }),
+    ).rejects.toThrow(TOOL_DISABLED);
+    expect(gateAsked).toEqual([
+      { toolRef: `notion/${added}`, effect: "write" },
+    ]);
+  }));
+
+/*
+ * Google Drive 和百度网盘是 fork 自己写的内置传输，工具定义就在 google-drive-rest.ts 和
+ * baidu-netdisk-rest.ts 里，每个都只发 GET 请求。目录条目列了 `readTools` 以后，check-in 重新能读
+ * 它们：工具在 check-in 的清单里，store 的门放行，接着才去问审批门。
+ *
+ * Drive 用这个文件自己的 `google-drive` 行（beforeAll 建好的，只存了 `search_files`）。网盘用一行
+ * 带本套件后缀的服务器，`catalogueKey` 指向 `baidu-netdisk`，工具按真实刷新的样子用 `storableTools`
+ * 存下这个适配器广播的全部五个。
+ */
+test("a check-in reads Google Drive and Baidu Netdisk again, through their reviewed read lists", () =>
+  asPlatform(async () => {
+    const gateAsked: { toolRef: string; effect: string }[] = [];
+    const { store, database, auditStore } = await freshStore({
+      approvalGate: async (candidate) => {
+        gateAsked.push({
+          toolRef: candidate.toolRef,
+          effect: candidate.effect,
+        });
+        throw new ApprovalRefusedError(TOOL_DISABLED);
+      },
+    });
+    await seedComposioGmail(database, store);
+    const netdiskRow = `check-in-baidu-${suite}`;
+    const netdisk = catalogueEntry("baidu-netdisk");
+    const netdiskTools = await listBaiduNetdiskTools({
+      url: "https://pan.baidu.com/rest/2.0/xpan",
+    });
+    await database.insert(mcpServers).values({
+      id: netdiskRow,
+      catalogueKey: "baidu-netdisk",
+      title: "Baidu Netdisk",
+      vendor: "Baidu",
+      url: "https://pan.baidu.com/rest/2.0/xpan",
+      provenance: "first-party",
+    });
+    try {
+      await database
+        .insert(mcpTools)
+        .values(storableTools(netdiskRow, netdiskTools, undefined, netdisk));
+      const refs = [
+        `${serverId}/${toolName}`,
+        ...netdiskTools.map((tool) => `baidu-netdisk/${tool.name}`),
+      ];
+      for (const granted of refs)
+        await store.grant("mcp", granted, "bot_helper", "admin@example.com");
+      const runId = `builtin-reads-${suite}`;
+
+      expect(await checkInToolRefs(store, runId)).toEqual(
+        ["gmail/GMAIL_FETCH_EMAILS", ...refs].sort(),
+      );
+
+      for (const granted of refs)
+        await expect(
+          store.callTool({
+            ref: granted,
+            args: {},
+            botId: "bot_helper",
+            actorId: "user_asker",
+            initiator: proactiveInitiator(runId),
+          }),
+        ).rejects.toThrow(TOOL_DISABLED);
+      expect(gateAsked).toEqual(
+        refs.map((granted) => ({ toolRef: granted, effect: "read" })),
+      );
+      expect(
+        auditStore
+          .recorded()
+          .filter(
+            (event) =>
+              (event.payload as { refusal?: string } | undefined)?.refusal ===
+              "check_in_not_a_read",
+          ),
+      ).toEqual([]);
+    } finally {
+      await database.delete(mcpServers).where(eq(mcpServers.id, netdiskRow));
+    }
+  }));
+
+/*
+ * `list_triggers` 列出的 webhook 地址和邮件入站地址能触发任务，所以 check-in 读不到它：它不在
+ * Routines 的读名单上，不出现在 check-in 的清单里，store 的门也拒绝它。同一传输上的 `list_routines`
+ * 照旧能读。Routines 行带本套件后缀，`catalogueKey` 指向 `routines`，工具按真实刷新的样子存下。
+ */
+test("list_triggers is not available to a check-in, though list_routines is", () =>
+  asPlatform(async () => {
+    const gateAsked: { toolRef: string; effect: string }[] = [];
+    const { store, database, auditStore } = await freshStore({
+      approvalGate: async (candidate) => {
+        gateAsked.push({
+          toolRef: candidate.toolRef,
+          effect: candidate.effect,
+        });
+        throw new ApprovalRefusedError(TOOL_DISABLED);
+      },
+    });
+    await seedComposioGmail(database, store);
+    const routinesRow = `check-in-routines-${suite}`;
+    await database.insert(mcpServers).values({
+      id: routinesRow,
+      catalogueKey: "routines",
+      title: "Routines",
+      vendor: "OpenBot",
+      url: "builtin://routines/",
+      provenance: "first-party",
+    });
+    try {
+      await database
+        .insert(mcpTools)
+        .values(
+          storableTools(
+            routinesRow,
+            await listRoutineTools(),
+            undefined,
+            catalogueEntry("routines"),
+          ),
+        );
+      for (const granted of [
+        "routines/list_routines",
+        "routines/list_triggers",
+      ])
+        await store.grant("mcp", granted, "bot_helper", "admin@example.com");
+      const runId = `list-triggers-${suite}`;
+
+      expect(await checkInToolRefs(store, runId)).toEqual(
+        ["gmail/GMAIL_FETCH_EMAILS", "routines/list_routines"].sort(),
+      );
+      await expectCheckInRefused(
+        store,
+        auditStore,
+        "routines/list_triggers",
+        runId,
+      );
+      expect(gateAsked).toEqual([]);
+
+      // 同一传输上的 list_routines 能过 check-in 的门，接着才问审批门。
+      await expect(
+        store.callTool({
+          ref: "routines/list_routines",
+          args: {},
+          botId: "bot_helper",
+          actorId: "user_asker",
+          initiator: proactiveInitiator(runId),
+        }),
+      ).rejects.toThrow(TOOL_DISABLED);
+      expect(gateAsked).toEqual([
+        { toolRef: "routines/list_routines", effect: "read" },
+      ]);
+    } finally {
+      await database.delete(mcpServers).where(eq(mcpServers.id, routinesRow));
+    }
   }));
 
 test("a Composio call is recorded as reaching the vendor as the person, not as the deployment", () =>
@@ -5971,7 +7298,11 @@ test("a catalogue entry declaring the broker's transport is refused, not dialled
 
   expect(() =>
     accessFor(
-      { provenance: "first-party", url: "https://mcp.example.com/mcp" },
+      {
+        provenance: "first-party",
+        url: "https://mcp.example.com/mcp",
+        authScheme: null,
+      },
       brokered,
     ),
   ).toThrow(CatalogueTransportUnroutableError);
@@ -5980,7 +7311,11 @@ test("a catalogue entry declaring the broker's transport is refused, not dialled
   // per-person vendor does, so what is refused is the value and not the fixture.
   expect(
     accessFor(
-      { provenance: "first-party", url: "https://mcp.example.com/mcp" },
+      {
+        provenance: "first-party",
+        url: "https://mcp.example.com/mcp",
+        authScheme: null,
+      },
       { ...brokered, transport: undefined },
     ),
   ).toEqual({
@@ -6871,6 +8206,9 @@ test("enabling an app writes a brokered row, and asks for its auth config first"
       authorize: unasked("begin somebody's connection"),
       isConnected: unasked("check somebody's connection"),
       revoke: unasked("withdraw somebody's grant"),
+      connectionFields: unasked("draw a connect form"),
+      connectWithFields: unasked("connect with typed fields"),
+      revokeAccount: unasked("undo one account"),
     };
 
     const { store, database, auditStore } = await freshStore({ broker });
@@ -7968,12 +9306,11 @@ describe("a vault read that fails on a query of this deployment's own", () => {
    * read. Its own policy rather than the file's mutable `policy`, so a describe that ran earlier and
    * left it somewhere else cannot decide whether this call gets as far as the vault.
    */
+  const faultVault = createDatabase(unreachableVault(), TEST_POOL);
   const faultStore = createPluginStore({
     database,
     auditStore: createAuditStore(database),
-    credentials: createCredentialStore(
-      createDatabase(unreachableVault(), TEST_POOL),
-    ),
+    credentials: createCredentialStore(faultVault),
     encryptionKey: "x".repeat(44),
     policy: () => ({ mode: "enforce", deny: [], allow: ["true"] }),
     // Loud rather than silent: the token is read before the vendor is dialled, so a call that gets
@@ -8065,6 +9402,9 @@ describe("a vault read that fails on a query of this deployment's own", () => {
       }
     }),
   );
+  afterAll(async () => {
+    await faultVault.$client.close();
+  });
 
   test("is refused as this deployment's own fault, never as a withdrawn credential", () =>
     asPlatform(async () => {
@@ -8118,4 +9458,69 @@ describe("a vault read that fails on a query of this deployment's own", () => {
       expect(written).not.toContain("Failed query:");
       expect(written).not.toContain(faultCredentialId ?? "<none>");
     }));
+});
+
+/**
+ * A COMPOSIO ACTION WHOSE ONLY FILE IS OPTIONAL IS RECORDED, WITHOUT THE FILE.
+ *
+ * The listing used to drop every action with a `file_uploadable` parameter in it, so a refresh of
+ * Gmail recorded 59 of its 63 actions and never GMAIL_SEND_EMAIL, GMAIL_CREATE_EMAIL_DRAFT,
+ * GMAIL_REPLY_TO_THREAD or GMAIL_UPDATE_DRAFT: no row to grant, so no Bot could send, draft or
+ * reply. The rows below are Composio's own (`fixtures/composio-file-actions.json`), mapped through
+ * `actionOf` exactly as the adapter maps a page, and what is asserted is the row a grant points at
+ * and a model is shown.
+ */
+describe("a Composio action whose only file is optional", () => {
+  test("is recorded with its version and without the attachment a model cannot fill in", () =>
+    asPlatform(async () => {
+      const { store, database } = await freshStore();
+      useComposioClient({
+        listActions: async () =>
+          fileActions.gmail.map((row, position) =>
+            actionOf(structuredClone(row), position, "gmail"),
+          ),
+        execute: async () => vendorAnswered(),
+      });
+      await seedComposioGmail(database, store);
+
+      expect(await store.refreshTools("gmail", "admin_user")).toEqual({
+        tools: 5,
+      });
+
+      const stored = await database
+        .select({
+          name: mcpTools.name,
+          inputSchema: mcpTools.inputSchema,
+          version: mcpTools.version,
+        })
+        .from(mcpTools)
+        .where(eq(mcpTools.serverId, "gmail"))
+        .orderBy(asc(mcpTools.name));
+
+      expect(stored.map((row) => row.name)).toEqual([
+        "GMAIL_CREATE_EMAIL_DRAFT",
+        "GMAIL_FETCH_EMAILS",
+        "GMAIL_REPLY_TO_THREAD",
+        "GMAIL_SEND_EMAIL",
+        "GMAIL_UPDATE_DRAFT",
+      ]);
+      // Callable: the version Composio published, which a call has to send back.
+      expect(new Set(stored.map((row) => row.version))).toEqual(
+        new Set(["20261018_00"]),
+      );
+      const send = stored.find((row) => row.name === "GMAIL_SEND_EMAIL")
+        ?.inputSchema as { properties?: Record<string, unknown> } | undefined;
+      const properties = Object.keys(send?.properties ?? {});
+      expect(properties).not.toContain("attachment");
+      expect(properties).toContain("recipient_email");
+      expect(properties).toContain("body");
+      // No staging descriptor in any row a model is shown.
+      expect(
+        JSON.stringify(stored.map((row) => row.inputSchema)),
+      ).not.toContain("file_uploadable");
+    }));
+});
+
+afterAll(async () => {
+  await database.$client.close();
 });

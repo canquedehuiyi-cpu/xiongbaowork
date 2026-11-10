@@ -1,8 +1,13 @@
-import { IconRefresh } from "@tabler/icons-react";
-import { useQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { IconDownload, IconRefresh, IconX } from "@tabler/icons-react";
+import { useInfiniteQuery } from "@tanstack/react-query";
+import {
+  createFileRoute,
+  useNavigate,
+  useSearch,
+} from "@tanstack/react-router";
 import { useState } from "react";
 import { TablePanel } from "@/components/admin/admin-kit";
+import { z } from "zod";
 import {
   PageEmpty,
   PageSection,
@@ -16,15 +21,32 @@ import {
   outcomeOf,
   REFUSED_EVENT_TYPES,
 } from "@/lib/audit/outcome";
-import { auditEventsQueryOptions } from "@/lib/audit/queries";
+import { auditEventsQueryOptions, auditExportUrl } from "@/lib/audit/queries";
 import { silenceOf } from "@/lib/audit/silence";
+import { client } from "@/lib/client";
 
 /**
- * Read surface for policy, computer, component, MCP, and credential audit events.
+ * Read surface for policy, computer, component, MCP, and credential audit events. `bot` narrows it
+ * to one Bot, which is how a Bot's own activity links here (upstream #1108).
+ *
+ * Kept as the fork's page rather than upstream's `components/manage/audit-page.tsx`; the bot filter
+ * and the "older events" paging (#1326) are carried over from it.
  */
+// M4: 待接入 上游 manage/audit-page.tsx 的事件搜索框、按动作合并行（oneRowPerAction），以及放在本页的操作录制分区（RecordingSection，fork 仍在企业管控页）
 export const Route = createFileRoute("/_authed/admin/audit")({
+  validateSearch: z.object({ bot: z.string().optional() }),
   component: AuditPage,
 });
+
+/** A saved view's query with one Bot's rows asked for too, for the table and the export alike. */
+function withBot(search: string, bot: string | undefined): string {
+  if (!bot) return search;
+  const params = new URLSearchParams(
+    search.startsWith("?") ? search.slice(1) : search,
+  );
+  params.set("bot", bot);
+  return `?${params.toString()}`;
+}
 
 /** One row as the API returns it. */
 type AuditEvent = {
@@ -63,10 +85,57 @@ const FILTERS = [
 ] as const;
 
 function AuditPage() {
-  const [search, setSearch] = useState<string>(FILTERS[0].search);
-  const events = useQuery(auditEventsQueryOptions(search));
-  const rows = (events.data?.events ?? []) as AuditEvent[];
+  /*
+   * Read without `strict`, so the page also renders where it is mounted on a route of another name,
+   * as the audit tests do. The route's own `validateSearch` has already checked it.
+   */
+  const { bot } = useSearch({ strict: false }) as { bot?: string };
+  const navigate = useNavigate();
+  const [view, setView] = useState<string>(FILTERS[0].search);
+  const search = withBot(view, bot);
+  // A page at a time, newest first; "更早的记录" under the last row asks for the next.
+  const events = useInfiniteQuery(auditEventsQueryOptions(search));
+  const rows = (events.data?.pages.flatMap((page) => page.events) ??
+    []) as AuditEvent[];
   const nameFor = useBotNames();
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [exportCapped, setExportCapped] = useState<number | null>(null);
+
+  /*
+   * The same filtered query as the table, downloaded as a file. The server walks every
+   * matching page up to its cap, so this stays a single request no matter how many pages
+   * the filter matches; the filename carries the day it was pulled.
+   */
+  async function exportCsv() {
+    if (exporting) return;
+    setExporting(true);
+    setExportError(null);
+    setExportCapped(null);
+    try {
+      const response = await client(auditExportUrl(search), {
+        fallback: "导出审计记录失败",
+      });
+      // A file that stopped early must say so, or it reads as the whole trail.
+      const capped = Number(response.headers.get("x-audit-export-truncated"));
+      if (Number.isInteger(capped) && capped > 0) setExportCapped(capped);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `audit-events-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setExportError(
+        error instanceof Error ? error.message : "导出审计记录失败",
+      );
+    } finally {
+      setExporting(false);
+    }
+  }
 
   return (
     /*
@@ -77,10 +146,21 @@ function AuditPage() {
      */
     <PageShell
       action={
-        <Button onClick={() => events.refetch()} size="sm" variant="ghost">
-          <IconRefresh />
-          刷新
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            disabled={exporting}
+            onClick={exportCsv}
+            size="sm"
+            variant="outline"
+          >
+            <IconDownload />
+            {exporting ? "正在导出…" : "导出 CSV"}
+          </Button>
+          <Button onClick={() => events.refetch()} size="sm" variant="ghost">
+            <IconRefresh />
+            刷新
+          </Button>
+        </div>
       }
       description="员工做过的每个动作，以及这个部署的策略拒绝过的每个动作。"
       title="审计"
@@ -88,20 +168,46 @@ function AuditPage() {
     >
       <PageSection>
         <div className="flex flex-wrap gap-2">
+          {bot ? (
+            <Button
+              aria-label={`显示所有员工，而不只是 ${nameFor(bot)}`}
+              onClick={() => void navigate({ to: "/admin/audit" })}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              只看 {nameFor(bot)}
+              <IconX />
+            </Button>
+          ) : null}
           {FILTERS.map((filter) => (
             <Button
               key={filter.label}
-              onClick={() => setSearch(filter.search)}
+              onClick={() => setView(filter.search)}
               size="sm"
               type="button"
               /* The fill is the state, as on every other set of switches in the app. */
-              variant={search === filter.search ? "default" : "outline"}
+              variant={view === filter.search ? "default" : "outline"}
             >
               {filter.label}
             </Button>
           ))}
         </div>
 
+        {exportError ? (
+          <p
+            className="mt-4 rounded-[12px] border border-signal/30 bg-signal-soft px-3 py-2 text-[13px] text-signal-ink"
+            role="alert"
+          >
+            {exportError}
+          </p>
+        ) : null}
+        {exportCapped ? (
+          <p className="mt-4 text-muted-foreground text-sm" role="status">
+            文件只包含最新的 {exportCapped.toLocaleString()}{" "}
+            条记录，不是全部。缩小筛选条件或日期范围，再导出其余部分。
+          </p>
+        ) : null}
         {events.isPending ? (
           <p className="mt-4 text-muted-foreground text-sm" role="status">
             正在读取审计记录…
@@ -134,6 +240,23 @@ function AuditPage() {
             </table>
           </TablePanel>
         )}
+        {events.hasNextPage ? (
+          <div className="mt-4 flex items-center justify-center gap-3">
+            {events.isFetchNextPageError ? (
+              <p className="text-destructive text-sm" role="alert">
+                读不到更早的记录，请重试。
+              </p>
+            ) : null}
+            <Button
+              disabled={events.isFetchingNextPage}
+              onClick={() => void events.fetchNextPage()}
+              size="sm"
+              variant="outline"
+            >
+              {events.isFetchingNextPage ? "正在加载…" : "更早的记录"}
+            </Button>
+          </div>
+        ) : null}
       </PageSection>
     </PageShell>
   );

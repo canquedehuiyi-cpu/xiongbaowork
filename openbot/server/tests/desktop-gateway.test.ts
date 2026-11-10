@@ -512,13 +512,22 @@ test("a refusal from the gate (deny) never sends the read", async () => {
   });
   await expect(attempt).rejects.toBeInstanceOf(ApprovalRefusedError);
   expect(h.paths()).toEqual(["/desktop/windows"]);
-  // The decision row and the failure row; neither names the window's contents.
+  // M3: an action's allowed row is written only once it is attempted, after the approval gate, so a
+  // refusal is one row: the approval's refusal, not carried out. It does not name the window's
+  // contents.
   const rows = h
     .payloads()
     .filter((p) => p.action === "computer_desktop_snapshot");
-  expect(rows).toHaveLength(2);
-  expect(rows[1]?.failure).toBe("主人拒绝了。");
-  expect(rows[1]?.desktop).toMatchObject({ title: BANK.title });
+  expect(rows).toHaveLength(1);
+  expect(rows[0]).toMatchObject({
+    refusal: "approval",
+    reason: "主人拒绝了。",
+    decision: { carriedOut: false },
+  });
+  expect(rows[0]?.desktop).toMatchObject({
+    title: BANK.title,
+    screenshot: false,
+  });
 });
 
 test("the window cache replaces a whole listing, ages entries out, and keeps a bounded number of keys", () => {

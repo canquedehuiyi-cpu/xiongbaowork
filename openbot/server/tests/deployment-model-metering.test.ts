@@ -58,6 +58,11 @@ const build = (resolveAgentModel?: AgentModelResolver) =>
     undefined,
     undefined,
     undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
     resolveAgentModel,
   );
 
@@ -90,7 +95,6 @@ async function withRecorder<T>(
     const base = await recorder.start();
     process.env.OPENAI_BASE_URL = base;
     recorder.onMessage(/.*/, {
-      type: "text",
       content: "METER001 fixture completed.",
     });
     return await work(recorder, base);
@@ -154,6 +158,11 @@ describe("the deployment default model is metered", () => {
             [reviewer],
             model,
             key,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
             undefined,
             undefined,
             undefined,

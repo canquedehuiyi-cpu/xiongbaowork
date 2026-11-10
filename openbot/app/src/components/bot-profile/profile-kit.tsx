@@ -77,6 +77,9 @@ export function ProfilePanel({
         "mt-[10px] overflow-hidden [&>*+*]:border-t [&>*+*]:border-t-border!",
         PANEL_FACE,
         "[&>[data-slot=item]]:rounded-none [&>[data-slot=item]]:px-[14px] [&>[data-slot=item]]:py-[11px]",
+        // Rows written for PageRows divide themselves with a <Separator />; here the panel draws the
+        // hairline between children, so a separator would make it two.
+        "[&>[data-slot=separator]]:hidden",
         className,
       )}
       data-slot="profile-panel"

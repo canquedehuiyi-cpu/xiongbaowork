@@ -2,6 +2,11 @@
  * One employee, one detail page (user decision: 合并成一个详情页). /wakers/$agentId holds what the
  * old /bots/$agentId profile had — the 对你 controls, the activity feed, tool permissions and where
  * updates go — next to its own sections, and /bots/$agentId redirects there.
+ *
+ * M4 brought upstream v1.0.0's Bot page onto it: what the employee waits on the person for (需要你),
+ * a glance at its activity with the full lists one row away on /bots/$agentId/activity, the tasks
+ * marked done this week, its memory sources and check-ins, and the 运行方式 rows (framework, a
+ * computer of its own, the starter's instructions).
  */
 import {
   afterAll,
@@ -21,7 +26,13 @@ import {
   Outlet,
   RouterProvider,
 } from "@tanstack/react-router";
-import { cleanup, render, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import type { AgentProfile } from "@/lib/agents/queries";
 import { authKeys } from "@/lib/auth/queries";
 import type {
@@ -30,7 +41,9 @@ import type {
 } from "@/lib/bot-lifecycle/queries";
 import type { ResponsibilityRecord } from "@/lib/responsibilities";
 import type { RoutineRecord } from "@/lib/routines/queries";
+import type { BotTask } from "@/lib/tasks/queries";
 import { Route as BotProfileRoute } from "@/routes/_authed/_app/bots.$agentId";
+import { Route as BotActivityRoute } from "@/routes/_authed/_app/bots.$agentId.activity";
 import { Route as WakerDetailRoute } from "@/routes/_authed/_app/wakers_.$agentId";
 import { settleReactWork } from "./settle-react-work";
 
@@ -62,7 +75,7 @@ afterEach(() => {
 });
 
 const originalFetch = globalThis.fetch;
-const calls: { method: string; path: string }[] = [];
+const calls: { method: string; path: string; body?: unknown }[] = [];
 
 const agentId = "agent-1";
 const meId = "user-me";
@@ -85,6 +98,10 @@ const profile: AgentProfile = {
   systemOwned: false,
   canManage: true,
   mine: true,
+  isolated: false,
+  isolationActive: false,
+  isolationOffReason: null,
+  framework: "OpenBot",
 };
 
 const duty = (
@@ -113,7 +130,8 @@ const routine = (id: string, owner: string, instruction: string) =>
     schedule: "0 9 * * *",
     timezone: "Asia/Shanghai",
     instruction,
-    channel: { id: "c1", name: "日报", gone: false },
+    title: null,
+    channel: { id: "c1", name: "日报", title: null, gone: false },
     enabled: true,
     nextRunAt: "2026-11-03T01:00:00.000Z",
     lastRun: null,
@@ -149,7 +167,38 @@ type Answers = {
   audit: Record<string, Answer>;
   /** `GET /api/models`; absent answers 404 like any unfaked path. */
   models?: Answer;
+  /** `GET /api/approvals`: the questions and actions waiting on the person. */
+  approvals?: Answer;
+  /** `GET /api/bot-tasks`: started check-in work, the source of 本周完成. */
+  botTasks?: Answer;
+  /** `GET /api/agents/capabilities`: whether this deployment can give a computer of its own. */
+  capabilities?: Answer;
 };
+
+const botTask = (
+  id: string,
+  owner: string,
+  title: string,
+  status: BotTask["status"],
+): BotTask => ({
+  id,
+  agentId: owner,
+  channelId: `c-${id}`,
+  threadId: `t-${id}`,
+  title,
+  why: null,
+  origin: "check_in",
+  suggestionId: null,
+  sourceApp: null,
+  sourceLink: null,
+  status,
+  failure: null,
+  failedAt: null,
+  next: null,
+  resolvedAt: status === "resolved" ? new Date().toISOString() : null,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+});
 
 const fullAnswers = (): Answers => ({
   agent: ok({ agent: profile }),
@@ -215,10 +264,39 @@ function serve(answers: Answers) {
   ): Promise<Response> => {
     const path = String(input);
     const method = init?.method ?? "GET";
-    calls.push({ method, path });
+    calls.push({
+      method,
+      path,
+      ...(init?.body ? { body: JSON.parse(String(init.body)) } : {}),
+    });
     const url = new URL(path, "http://localhost");
     let answer: Answer | undefined;
     if (url.pathname === `/api/agents/${agentId}`) answer = answers.agent;
+    else if (url.pathname === "/api/agents/capabilities")
+      answer = answers.capabilities ?? ok({ capabilities: {} });
+    else if (url.pathname === "/api/agents") answer = ok({ agents: [profile] });
+    else if (url.pathname === "/api/admin/enterprise/me")
+      answer = ok({ capabilities: {}, enforced: false });
+    else if (url.pathname === "/api/approvals")
+      answer =
+        answers.approvals ??
+        ok({
+          enabled: true,
+          rules: [],
+          teamRules: [],
+          requests: [],
+          questions: [],
+        });
+    else if (url.pathname === "/api/bot-tasks")
+      answer = answers.botTasks ?? ok({ tasks: [] });
+    else if (url.pathname === "/api/proactive/suggestions")
+      answer = ok({ suggestions: [] });
+    else if (url.pathname === "/api/proactive/settings")
+      answer = ok({ settings: [], allowed: true });
+    else if (url.pathname === "/api/memory/sources")
+      answer = ok({ sources: [] });
+    else if (url.pathname === "/api/channels")
+      answer = ok({ channels: [], nextCursor: null });
     else if (url.pathname === "/api/responsibilities") answer = answers.duties;
     else if (url.pathname === "/api/routines") answer = answers.routines;
     else if (url.pathname === "/api/tasks") answer = answers.tasks;
@@ -282,16 +360,30 @@ function draw(answers: Answers, path = `/wakers/${agentId}`) {
         path: "/wakers/$agentId",
       } as never),
       // The page's links need their addresses to resolve; the screens behind them are not under test.
-      BotProfileRoute.update({
-        getParentRoute: () => root,
-        path: "/bots/$agentId",
-      } as never),
+      // The archived profile keeps its activity page under it, as the app's route tree does.
+      (
+        BotProfileRoute.update({
+          getParentRoute: () => root,
+          path: "/bots/$agentId",
+        } as never) as unknown as {
+          addChildren: (children: unknown[]) => unknown;
+        }
+      ).addChildren([
+        BotActivityRoute.update({
+          getParentRoute: () => BotProfileRoute,
+          path: "activity",
+        } as never),
+      ]) as never,
       stub("/wakers"),
       stub("/channel/new"),
       stub("/assemble/$agentId"),
       stub("/tasks"),
       stub("/routines"),
       stub("/responsibilities"),
+      stub("/resources"),
+      stub("/approvals"),
+      stub("/autonomous"),
+      stub("/channel/$channelId"),
     ]),
   });
   currentRouter = router;
@@ -317,17 +409,22 @@ describe("the merged employee detail page", () => {
     const titles = headings(screen);
     for (const title of [
       "对你",
-      "进行中",
-      "已排期",
-      "已完成",
+      "动态",
       "权限",
       "消息发到哪里",
       "职责",
       "看板上的进行中任务",
       "技能授权",
+      "运行方式",
+      "记忆来源",
+      "主动巡检",
       "最近审计",
     ]) {
       expect(titles).toContain(title);
+    }
+    // The full lists moved to the activity page; this page only glances at what is under way.
+    for (const title of ["进行中", "已排期"]) {
+      expect(titles).not.toContain(title);
     }
     // One page, so no section appears twice.
     expect(new Set(titles).size).toBe(titles.length);
@@ -349,5 +446,187 @@ describe("the merged employee detail page", () => {
     expect(
       screen.getByRole("heading", { level: 2, name: "看板上的进行中任务" }),
     ).toBeTruthy();
+  });
+
+  test("「需要你」列出这位员工在等你的事，「本周完成」收着这周标完成的任务", async () => {
+    const answers = fullAnswers();
+    answers.approvals = ok({
+      enabled: true,
+      rules: [],
+      teamRules: [],
+      requests: [],
+      questions: [
+        {
+          id: "q1",
+          botId: agentId,
+          question: "报价要按含税还是不含税算？",
+          createdAt: new Date().toISOString(),
+        },
+        {
+          id: "q2",
+          botId: "agent-2",
+          question: "别的员工的问题",
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    });
+    answers.botTasks = ok({
+      tasks: [
+        botTask("bt1", agentId, "整理上周的客户回访", "resolved"),
+        botTask("bt2", "agent-2", "别人的完成任务", "resolved"),
+      ],
+    });
+    const screen = draw(answers);
+
+    const needsYou = await screen.findByRole("heading", {
+      level: 2,
+      name: "需要你",
+    });
+    const board = needsYou.closest("section") as HTMLElement;
+    expect(
+      await within(board).findByText(/报价要按含税还是不含税算/),
+    ).toBeTruthy();
+    // Only this employee's: another employee's question is not on its page.
+    expect(within(board).queryByText(/别的员工的问题/)).toBeNull();
+
+    const done = await screen.findByRole("heading", {
+      level: 2,
+      name: "已完成",
+    });
+    const doneSection = done.closest("section") as HTMLElement;
+    expect(
+      within(doneSection).getByText("这周你标为完成的任务有 1 项。"),
+    ).toBeTruthy();
+    // Folded until asked for.
+    expect(within(doneSection).queryByText("整理上周的客户回访")).toBeNull();
+    fireEvent.click(within(doneSection).getByRole("button", { name: "展开" }));
+    expect(within(doneSection).getByText("整理上周的客户回访")).toBeTruthy();
+    expect(within(doneSection).queryByText("别人的完成任务")).toBeNull();
+    // Started work is read from its own address, not from the board's `/api/tasks`.
+    expect(calls.some((call) => call.path === "/api/bot-tasks")).toBe(true);
+  });
+
+  test("「全部动态」打开 /bots/$agentId/activity，那里不再被送回员工页", async () => {
+    const screen = draw(fullAnswers());
+    await screen.findByText("替你追问供应商报价");
+    const all = screen.getByRole("link", { name: /全部动态/ });
+    expect(all.getAttribute("href")).toBe(`/bots/${agentId}/activity`);
+
+    fireEvent.click(all);
+    await waitFor(() =>
+      expect(currentRouter?.state.location.pathname).toBe(
+        `/bots/${agentId}/activity`,
+      ),
+    );
+    // The activity page's own full lists, under its own title.
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "动态" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("heading", { level: 2, name: "已排期" }),
+    ).toBeTruthy();
+  });
+
+  test("「独立运行」开关只改这一项，整份资料原样带回", async () => {
+    const answers = fullAnswers();
+    answers.capabilities = ok({
+      capabilities: { builtInAvailable: true, isolationAvailable: true },
+    });
+    const screen = draw(answers);
+    const runtime = (
+      await screen.findByRole("heading", { level: 2, name: "运行方式" })
+    ).closest("section") as HTMLElement;
+    expect(within(runtime).getByTestId("coworker-framework").textContent).toBe(
+      "熊宝内置",
+    );
+    const toggle = await waitFor(() => {
+      const found = within(runtime).getByRole("switch", { name: "独立运行" });
+      expect(found.hasAttribute("data-disabled")).toBe(false);
+      return found;
+    });
+    fireEvent.click(toggle);
+    await waitFor(() =>
+      expect(
+        calls.find(
+          (call) =>
+            call.method === "PATCH" && call.path === `/api/agents/${agentId}`,
+        )?.body,
+      ).toEqual({
+        name: profile.name,
+        title: profile.title,
+        roleDescription: profile.roleDescription,
+        visibility: "private",
+        // A built-in coworker's managed address is never sent back as if somebody typed it.
+        endpoint: "",
+        isolated: true,
+      }),
+    );
+  });
+
+  test("部署给不了独立电脑时，开关不可用并说明原因", async () => {
+    const screen = draw(fullAnswers());
+    const runtime = (
+      await screen.findByRole("heading", { level: 2, name: "运行方式" })
+    ).closest("section") as HTMLElement;
+    expect(
+      await within(runtime).findByText("这个熊宝没法给员工分配独立的电脑。"),
+    ).toBeTruthy();
+    expect(
+      within(runtime)
+        .getByRole("switch", { name: "独立运行" })
+        .hasAttribute("data-disabled"),
+    ).toBe(true);
+  });
+
+  test("内置员工的指令单独显示、单独保存；别的员工没有这一行", async () => {
+    const answers = fullAnswers();
+    answers.agent = ok({
+      agent: { ...profile, instructions: "先问清楚再动手。" },
+    });
+    const screen = draw(answers);
+    const runtime = (
+      await screen.findByRole("heading", { level: 2, name: "运行方式" })
+    ).closest("section") as HTMLElement;
+    fireEvent.click(within(runtime).getByText("先问清楚再动手。"));
+    const dialog = await screen.findByRole("dialog");
+    const box = within(dialog).getByLabelText("指令");
+    fireEvent.change(box, { target: { value: "动手前先列计划。" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "保存" }));
+    await waitFor(() =>
+      expect(calls.find((call) => call.method === "PATCH")?.body).toMatchObject(
+        { instructions: "动手前先列计划。", name: profile.name },
+      ),
+    );
+    cleanup();
+
+    const plain = draw(fullAnswers());
+    const plainRuntime = (
+      await plain.findByRole("heading", { level: 2, name: "运行方式" })
+    ).closest("section") as HTMLElement;
+    expect(within(plainRuntime).queryByText("指令")).toBeNull();
+  });
+
+  test("记忆来源和主动巡检只读这位员工的，并指向你自己记住的内容", async () => {
+    const screen = draw(fullAnswers());
+    const sources = (
+      await screen.findByRole("heading", { level: 2, name: "记忆来源" })
+    ).closest("section") as HTMLElement;
+    expect(await within(sources).findByText("还没有来源")).toBeTruthy();
+    expect(
+      screen
+        .getByRole("link", { name: "能力与资源 › 信息源与记忆" })
+        .getAttribute("href"),
+    ).toBe("/resources?tab=sources");
+    expect(
+      await screen.findByRole("heading", { level: 2, name: "主动巡检" }),
+    ).toBeTruthy();
+  });
+
+  test("职责区链到按这位员工筛选的长期职责页", async () => {
+    const screen = draw(fullAnswers());
+    const link = await screen.findByRole("link", { name: "去长期职责页管理" });
+    expect(link.getAttribute("href")).toBe(
+      `/responsibilities?agent=${agentId}`,
+    );
   });
 });

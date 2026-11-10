@@ -11,12 +11,23 @@ import ts from "typescript";
  * source, Confirm phone, Turn on background research) and the recorder before them. A plain
  * `<button>` defaults to submit, so it counts; a `<Button>` counts only with `type="submit"`.
  *
+ * A submit control outside the form that names it with `form={…}` (a dialog's footer, so the
+ * dialog body keeps scrolling) submits it as surely as one inside, so it counts when the same file
+ * gives the form that `id`.
+ *
  * A form submitted some other way (the composer's Enter key and send action) names itself here with
  * a reason, rather than every form losing the check.
  */
 const SUBMITTED_ELSEWHERE = new Set([
   // Enter submits through the editor, and the send action is its own typed control.
   "src/components/channels/composer/composer.tsx",
+  // The step's form is submitted by the onboarding frame's primary button (`primaryForm`), which
+  // `onboarding-frame.tsx` draws with `form={primary.form}` and `type="submit"`.
+  "src/components/onboarding/name-step.tsx",
+  // An address bar: one field, submitted by Enter in it; the buttons beside it move back and forth.
+  "src/components/browser/browser-bar.tsx",
+  // The new tab's one search field, submitted by Enter in it as a browser's start page is.
+  "src/components/browser/browser-screen.tsx",
 ]);
 
 function attribute(node: ts.JsxOpeningLikeElement, name: string) {
@@ -72,13 +83,27 @@ test("every form with an onSubmit has a control that submits it", async () => {
       ts.forEachChild(node, collect);
     };
     collect(source);
+    /** The `form={…}` of every submit control in this file, as written, for a form that names its `id`. */
+    const submittersByForm = new Set<string>();
+    const findSubmitters = (node: ts.Node) => {
+      if (
+        (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) &&
+        submits(node)
+      ) {
+        const form = attributeText(attribute(node, "form"));
+        if (form !== undefined) submittersByForm.add(form);
+      }
+      ts.forEachChild(node, findSubmitters);
+    };
+    findSubmitters(source);
     const visit = (node: ts.Node) => {
       if (
         ts.isJsxElement(node) &&
         node.openingElement.tagName.getText() === "form" &&
         attribute(node.openingElement, "onSubmit")
       ) {
-        let found = false;
+        const id = attributeText(attribute(node.openingElement, "id"));
+        let found = id !== undefined && submittersByForm.has(id);
         const inside = (child: ts.Node, seen: Set<string>) => {
           if (found) return;
           if (
@@ -122,6 +147,18 @@ test("every form with an onSubmit has a control that submits it", async () => {
    * The cost grows with the codebase; the guard's answer does not depend on how long it takes.
    */
 }, 30_000);
+
+/** An attribute's value as written: a string literal's text, or the expression's source. */
+function attributeText(
+  attribute: ts.JsxAttribute | undefined,
+): string | undefined {
+  const value = attribute?.initializer;
+  if (!value) return undefined;
+  if (ts.isStringLiteral(value)) return value.text;
+  if (ts.isJsxExpression(value) && value.expression)
+    return value.expression.getText();
+  return undefined;
+}
 
 function containsJsx(node: ts.Node): boolean {
   if (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node)) return true;

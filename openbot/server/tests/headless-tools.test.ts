@@ -6,12 +6,18 @@ import {
   HttpAgent,
   type RunAgentInput,
 } from "@ag-ui/client";
+import { HeadlessToolsMiddleware } from "@openbot/toolkit/headless-tools";
 import { Observable } from "rxjs";
 import { parseApprovalContinuation } from "../src/approvals/types";
 import type { AuditEventInput } from "../src/audit";
-import { createComputerGateway } from "../src/computer/gateway";
+import { botSeat } from "../src/computer/computer-key";
+import {
+  ComputerStillStartingError,
+  createComputerGateway,
+} from "../src/computer/gateway";
 import * as headless from "../src/computer/headless-tools";
 import { createTurnRunner, type RunnerLike } from "../src/routines/run-turn";
+import { serverTurnAdmission } from "../src/agents/turn-admission";
 import { runAsTenant } from "../src/tenant/context";
 
 const definition = {
@@ -110,6 +116,7 @@ function turnHarness(
     stop: async () => true,
   };
   const run = createTurnRunner({
+    admission: serverTurnAdmission,
     intelligence: {
       getOrCreateThread: async () => undefined,
       getThreadMessages: async () => ({ messages: [] }),
@@ -284,9 +291,9 @@ function computerHarness(deny: string[] = []) {
   const gateway = createComputerGateway({
     provider: {
       name: "test",
-      isolation: "per-bot",
+      isolation: "per-person",
       locate: async () => "http://computer:4100",
-      status: async (botId) => ({ botId, state: "ready" }),
+      status: async (seat) => ({ botId: seat.botId, state: "ready" }),
       list: async () => [],
       stop: async () => ({ wasRunning: true }),
       reset: async () => ({ cleared: true }),
@@ -346,6 +353,7 @@ function computerHarness(deny: string[] = []) {
           transitioning: false,
           since: "now",
           resumeSnapshotRequired: false,
+          recoveryRequired: false,
           request: {
             id: "durable-handoff",
             status: "waiting",
@@ -374,7 +382,7 @@ test("scheduled computer actions carry the owner and routine into both policy an
     initiator: { kind: "routine" as const, id: "routine" },
   };
   await expect(
-    gateway.runCommand("bot", actor, { command: "pwd" }),
+    gateway.runCommand(botSeat("bot"), actor, { command: "pwd" }),
   ).rejects.toThrow();
   expect(received.some((call) => call.path === "/exec")).toBe(false);
   expect(audit).toContainEqual(
@@ -386,12 +394,81 @@ test("scheduled computer actions carry the owner and routine into both policy an
   );
 });
 
+/**
+ * A cold start that outlasts the wait reaches the model as an answer it can act on.
+ *
+ * Thrown, it was one more error string; the model apologised and gave up on a computer that was
+ * seconds from ready. And a click used to wait for the start twice, once to learn the run and again
+ * to send, so it is also pinned that the wait happens once.
+ */
+test("a computer still starting answers 'not performed, try again' rather than throwing, after one wait", async () => {
+  let locates = 0;
+  const audit: AuditEventInput[] = [];
+  const gateway = createComputerGateway({
+    provider: {
+      name: "test",
+      isolation: "per-person",
+      locate: async () => {
+        locates++;
+        throw new ComputerStillStartingError();
+      },
+      status: async (seat) => ({ botId: seat.botId, state: "starting" }),
+      list: async () => [],
+      stop: async () => ({ wasRunning: false }),
+      reset: async () => ({ cleared: false }),
+    },
+    auditStore: {
+      insert: async (event) => {
+        audit.push(event);
+      },
+    },
+    policy: () => ({ mode: "enforce", allow: ["true"], deny: [] }),
+    fetchImpl: (async () => {
+      throw new Error("nothing should reach the computer");
+    }) as unknown as typeof fetch,
+  });
+  const tools = headless.createHeadlessComputerTools({
+    gateway,
+    seat: botSeat("bot"),
+    actor: { id: "owner", userId: "owner" },
+  });
+  const invoke = (name: string, args: unknown) => {
+    const tool = tools.find((candidate) => candidate.definition.name === name);
+    if (!tool) throw new Error(`Missing ${name}`);
+    return tool.execute(args, {
+      toolCallId: name,
+      signal: new AbortController().signal,
+    });
+  };
+
+  const navigated = await invoke("computer_navigate", {
+    url: "https://example.com",
+  });
+  expect(navigated).toMatchObject({
+    ok: false,
+    starting: true,
+    notPerformed: true,
+  });
+  expect(String((navigated as { reason?: string }).reason)).toContain(
+    "not performed",
+  );
+
+  locates = 0;
+  const clicked = await invoke("computer_click", { ref: "e1", snapshotId: 7 });
+  expect(clicked).toMatchObject({ ok: false, starting: true });
+  expect(locates).toBe(1);
+  // Still on the trail: allowed, then the failure that says it did not happen.
+  expect(audit.map((event) => event.eventType)).toContain(
+    "computer.action_failed",
+  );
+});
+
 test("the headless computer adapter executes shipped browser, command, and file tools through the gateway", async () => {
   expect(typeof headless.createHeadlessComputerTools).toBe("function");
   const { gateway, received, audit } = computerHarness();
   const tools = headless.createHeadlessComputerTools({
     gateway,
-    botId: "bot",
+    seat: botSeat("bot"),
     actor: {
       id: "owner",
       userId: "owner",
@@ -467,7 +544,7 @@ test("an unattended remote computer run snapshots, clicks, runs commands and sav
   const { run, persisted } = turnHarness(remote.agent, async () =>
     headless.createHeadlessComputerTools({
       gateway,
-      botId: "bot",
+      seat: botSeat("bot"),
       actor: {
         id: "owner",
         userId: "owner",
@@ -524,6 +601,109 @@ test("remote backend tool results are persisted without executing the client too
   ).toHaveLength(1);
 });
 
+test("a computer tool the caller offers is left to the caller when OpenBot adds plugin tools beside it", async () => {
+  const remote = remoteTurn((input) =>
+    lifecycle(
+      input,
+      toolCall("computer_navigate", '{"url":"https://example.com"}'),
+    ),
+  );
+  let executions = 0;
+  const middleware = new HeadlessToolsMiddleware([
+    {
+      definition: {
+        name: "web_search",
+        description: "Search the public web",
+        parameters: { type: "object", properties: {} },
+      },
+      execute: async () => {
+        executions += 1;
+        return "Results";
+      },
+    },
+  ]);
+  const events: BaseEvent[] = [];
+  await new Promise<void>((resolve, reject) =>
+    middleware
+      .run(
+        {
+          threadId: "thread",
+          runId: "run",
+          messages: [],
+          state: {},
+          context: [],
+          forwardedProps: {},
+          tools: [
+            {
+              name: "computer_navigate",
+              description: "Open a page in the Bot's browser",
+              parameters: { type: "object", properties: {} },
+            },
+          ],
+        },
+        remote.agent,
+      )
+      .subscribe({
+        next: (event) => events.push(event),
+        error: reject,
+        complete: resolve,
+      }),
+  );
+  expect(executions).toBe(0);
+  expect(remote.requests).toHaveLength(1);
+  expect(
+    events.filter((event) => event.type === EventType.TOOL_CALL_RESULT),
+  ).toHaveLength(0);
+  expect(events.at(-1)?.type).toBe(EventType.RUN_FINISHED);
+});
+
+test("a Bot whose stream stops after it starts is told in words, not as a missing event", async () => {
+  // What the LangGraph harness did on a provider refusal it did not catch: RUN_STARTED, then the
+  // stream ended. The person read "Remote agent ended without a terminal event." in red.
+  const remote = remoteTurn((input) => [
+    {
+      type: EventType.RUN_STARTED,
+      threadId: input.threadId,
+      runId: input.runId,
+    },
+  ]);
+  const middleware = new HeadlessToolsMiddleware([
+    {
+      definition: {
+        name: "web_search",
+        description: "Search the public web",
+        parameters: { type: "object", properties: {} },
+      },
+      execute: async () => "Results",
+    },
+  ]);
+  const events: BaseEvent[] = [];
+  await new Promise<void>((resolve, reject) =>
+    middleware
+      .run(
+        {
+          threadId: "thread",
+          runId: "run",
+          messages: [],
+          state: {},
+          context: [],
+          forwardedProps: {},
+          tools: [],
+        },
+        remote.agent,
+      )
+      .subscribe({
+        next: (event) => events.push(event),
+        error: reject,
+        complete: resolve,
+      }),
+  );
+  expect(events.at(-1)).toMatchObject({
+    type: EventType.RUN_ERROR,
+    message: "The Bot stopped before it finished answering. Try again.",
+  });
+});
+
 test("unknown computer tool calls become error results rather than commands", async () => {
   const remote = remoteTurn((input, index) =>
     lifecycle(
@@ -547,7 +727,7 @@ test("unknown computer tool calls become error results rather than commands", as
   expect(executions).toBe(0);
   expect(
     persisted.filter((event) => event.type === EventType.TOOL_CALL_RESULT),
-  ).toMatchObject([{ error: expect.stringContaining("unavailable") }]);
+  ).toMatchObject([{ content: expect.stringContaining("unavailable") }]);
   expect(remote.requests[1]?.messages).toContainEqual(
     expect.objectContaining({
       role: "tool",
@@ -567,7 +747,7 @@ test("human help creates a durable suspension, persists the waiting event, and r
   const { run, persisted, lockCalls } = turnHarness(remote.agent, async () =>
     headless.createHeadlessComputerTools({
       gateway,
-      botId: "bot",
+      seat: botSeat("bot"),
       actor: {
         id: "owner",
         userId: "owner",
@@ -612,7 +792,7 @@ test("on a paired machine the file and command tools say so; in the deployment's
       headless
         .createHeadlessComputerTools({
           gateway,
-          botId: "bot",
+          seat: botSeat("bot"),
           actor: {
             id: "owner",
             userId: "owner",
@@ -643,6 +823,19 @@ test("on a paired machine the file and command tools say so; in the deployment's
   for (const workspace of [describe("workspace"), describe()]) {
     expect(workspace.computer_run_command).toContain("bash");
     expect(workspace.computer_run_command).not.toContain("paired machine");
+    // True in every form of the computer (own user, shared user, supervisor root): new tools go
+    // in the workspace first, and a refused sudo is not something to work around.
+    expect(workspace.computer_run_command).not.toMatch(
+      /apt-get|sudo apt|Do not use sudo|cannot install/,
+    );
+    expect(workspace.computer_run_command).toContain("npm install");
+    expect(workspace.computer_run_command).toContain("bun add");
+    expect(workspace.computer_run_command).toContain("python3 -m venv .venv");
+    expect(workspace.computer_run_command).toContain(".venv/bin/pip install");
+    expect(workspace.computer_run_command).toContain("do not try to escalate");
+    expect(workspace.computer_run_command).not.toMatch(
+      /npm install -g|pip install --user/,
+    );
     expect(workspace.computer_list_files).not.toContain("paired machine");
   }
 });

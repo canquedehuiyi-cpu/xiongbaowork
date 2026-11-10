@@ -32,7 +32,8 @@ test("atomic persisted completion remains exact across reload and later request"
   control.requestSecret({ ref: "e1", label: "private label" });
   const restored = createControl(undefined, { store });
   expect(restored.get(first.id).request?.status).toBe("completed");
-  expect(restored.get().resumeSnapshotRequired).toBe(true);
+  // The page the person handed back went with the browser that showed it.
+  expect(restored.get().resumeSnapshotRequired).toBe(false);
   expect(restored.requestHelp("Replay", "call-1").request?.id).toBe(first.id);
   restored.requestHelp("Next", "call-2");
   expect(restored.get(first.id).request?.status).toBe("completed");
@@ -119,4 +120,31 @@ test("opaque tool call ids cannot collide with object prototype names", () => {
       request.id,
     );
   }
+});
+
+test("who holds the wheel is saved with it, a state saved before it loads, and a restart lets them go", async () => {
+  const { store, control, directory } = fixture();
+  const first = control.requestHelp("Take control", "call-1").request!;
+  await control.take(first.id, "user-1");
+  expect(store.load()?.heldBy).toBe("user-1");
+
+  // The process starting again interrupts the request, and with it the person's hold.
+  const restarted = createControl(undefined, { store });
+  expect(restarted.get().holder).toBe("bot");
+  expect(restarted.get().heldBy).toBeUndefined();
+  expect(store.load()?.heldBy).toBeUndefined();
+
+  // Saved by a computer from before `heldBy`: loads, and names nobody.
+  const path = join(directory, ".control", "bot-1.json");
+  const saved = JSON.parse(readFileSync(path, "utf8")) as Record<
+    string,
+    unknown
+  >;
+  delete saved.heldBy;
+  writeFileSync(path, JSON.stringify(saved));
+  expect(createControl(undefined, { store }).get().heldBy).toBeUndefined();
+
+  // A name with nobody holding the wheel is not a state this computer writes.
+  writeFileSync(path, JSON.stringify({ ...saved, heldBy: "user-1" }));
+  expect(() => createControl(undefined, { store })).toThrow();
 });

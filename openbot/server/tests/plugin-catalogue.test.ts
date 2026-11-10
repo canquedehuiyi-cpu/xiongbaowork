@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
+import { listTools as netdiskTools } from "../src/plugins/baidu-netdisk-rest";
+import { listTools as routineTools } from "../src/plugins/builtin-routines";
 import {
   CATALOGUE,
   type CatalogueEntry,
   catalogueEntry,
+  checkInRead,
   classifyTool,
   customUrlRefusal,
   hostAdmissible,
@@ -10,6 +13,7 @@ import {
   resolveServerUrl,
   serverCredentialKind,
 } from "../src/plugins/catalogue";
+import { listTools as driveTools } from "../src/plugins/google-drive-rest";
 
 /**
  * The catalogue decides two things that are worth being sure about: which addresses this deployment
@@ -120,9 +124,16 @@ describe("whose credential a server uses", () => {
     // whose, and a reader who guessed would guess the deployment's, which for a user-oauth vendor
     // is the one answer that breaks the promise the connector exists to keep.
     for (const entry of CATALOGUE) {
-      expect(["none", "deployment-bearer", "user-oauth", "builtin"]).toContain(
-        entry.auth.kind,
-      );
+      expect([
+        "none",
+        "deployment-bearer",
+        // The deployment's credential too, placed where the vendor wants it (third batch).
+        "deployment-query",
+        "deployment-header",
+        "deployment-address",
+        "user-oauth",
+        "builtin",
+      ]).toContain(entry.auth.kind);
     }
   });
 
@@ -133,12 +144,20 @@ describe("whose credential a server uses", () => {
       // person's authorization code and receives their refresh token at.
       expect(entry.auth.authorizationUrl.startsWith("https://")).toBe(true);
       expect(entry.auth.tokenUrl.startsWith("https://")).toBe(true);
-      expect(entry.auth.revokeUrl.startsWith("https://")).toBe(true);
+      // Absent only where the vendor's own metadata publishes no revocation endpoint; never http.
+      if (entry.auth.revokeUrl !== undefined) {
+        expect(entry.auth.revokeUrl.startsWith("https://")).toBe(true);
+      }
       // No scopes means consent to nothing, which would fail at the vendor with a message that
       // does not name us — except for a vendor whose consent screen itself is the scoping
       // (Notion, with dynamic client registration), where a scope string would assert a control
-      // that does not exist.
-      if (entry.auth.clientRegistration !== "dynamic") {
+      // that does not exist. Two administrator-registered clients are reviewed exceptions by
+      // name: GitHub, whose GitHub App ignores `scope` (its permissions are the scoping), and
+      // HubSpot, whose MCP auth app publishes no scopes at all.
+      if (
+        entry.auth.clientRegistration !== "dynamic" &&
+        !["github", "hubspot"].includes(entry.key)
+      ) {
         expect(entry.auth.scopes.length).toBeGreaterThan(0);
       }
       if (entry.auth.clientRegistration === "dynamic") {
@@ -150,13 +169,9 @@ describe("whose credential a server uses", () => {
   test("a vendor this build has never heard of is not an entry", () => {
     // The five bearer vendors that used to be asserted here are gone. What matters now is the same
     // property from the other side: a key with no entry resolves to nothing rather than to a default.
-    for (const key of [
-      "atlassian",
-      "box",
-      "slack",
-      "salesforce",
-      "servicenow",
-    ]) {
+    // Atlassian and Slack came back in the MCP market's second batch as user-oauth entries, after
+    // their own review; Zapier was reviewed in that batch and deliberately left out.
+    for (const key of ["box", "salesforce", "servicenow", "zapier"]) {
       expect(catalogueEntry(key)).toBeNull();
       expect(resolveServerUrl(key)).toBeNull();
     }
@@ -278,6 +293,12 @@ describe("Routines", () => {
       "pause_trigger",
       "resume_trigger",
       "delete_trigger",
+      "create_goal",
+      "update_goal",
+      "run_goal",
+      "pause_goal",
+      "resume_goal",
+      "complete_goal",
     ]);
   });
 
@@ -604,7 +625,9 @@ test("a recorded read cannot take an action off a curated entry's write list", (
 
 describe("owner assembly source eligibility", () => {
   test("only the explicitly reviewed anonymous source opts in", () => {
-    expect(CATALOGUE.filter(ownerAssemblySource).map((entry) => entry.key)).toEqual(["parallel"]);
+    expect(
+      CATALOGUE.filter(ownerAssemblySource).map((entry) => entry.key),
+    ).toEqual(["parallel"]);
     expect(ownerAssemblySource(null)).toBe(false);
   });
 
@@ -612,13 +635,21 @@ describe("owner assembly source eligibility", () => {
     const source = catalogueEntry("parallel");
     expect(source).not.toBeNull();
     if (!source) throw new Error("Missing reviewed test source.");
-    expect(ownerAssemblySource({ ...source, ownerAssembly: false })).toBe(false);
-    expect(ownerAssemblySource({ ...source, auth: { kind: "deployment-bearer" } })).toBe(false);
-    expect(ownerAssemblySource({ ...source, auth: { kind: "builtin" } })).toBe(false);
+    expect(ownerAssemblySource({ ...source, ownerAssembly: false })).toBe(
+      false,
+    );
+    expect(
+      ownerAssemblySource({ ...source, auth: { kind: "deployment-bearer" } }),
+    ).toBe(false);
+    expect(ownerAssemblySource({ ...source, auth: { kind: "builtin" } })).toBe(
+      false,
+    );
     const personal = catalogueEntry("google-drive");
     expect(personal).not.toBeNull();
     if (!personal) throw new Error("Missing personal credential source.");
-    expect(ownerAssemblySource({ ...personal, ownerAssembly: true })).toBe(false);
+    expect(ownerAssemblySource({ ...personal, ownerAssembly: true })).toBe(
+      false,
+    );
   });
 });
 
@@ -627,5 +658,244 @@ test("anonymous authentication alone does not opt a source into owner assembly",
   if (!source) throw new Error("Missing reviewed test source.");
   const { ownerAssembly: _optIn, ...withoutOptIn } = source;
   expect(ownerAssemblySource(withoutOptIn)).toBe(false);
-  expect(ownerAssemblySource(catalogueEntry("unknown-owner-source"))).toBe(false);
+  expect(ownerAssemblySource(catalogueEntry("unknown-owner-source"))).toBe(
+    false,
+  );
+});
+
+/*
+ * check-in 只认可靠的读：厂商记录为读的，或目录 `readTools` 里审查过的名字。`classifyTool` 对
+ * 「目录里有、名单都没提到、厂商也没记录」的工具推断为读，这个推断不能让工具进 check-in。
+ */
+describe("what a check-in may read", () => {
+  test("a tool nothing labelled is not a check-in read, even where chat infers a read", () => {
+    const linear = catalogueEntry("linear");
+    expect(linear?.readTools).toBeUndefined();
+    const silent = { effect: null, destructive: false, unclassified: false };
+    // 聊天的判定不变：目录里有、写名单没提到，就是读。
+    expect(classifyTool(linear, "list_things", true, null)).toBe("read");
+    expect(checkInRead(linear, "list_things", silent)).toBe(false);
+    // 没有目录条目的服务器、Notion 广播的没有标签的名字，也一样。
+    expect(checkInRead(null, "list_things", silent)).toBe(false);
+    expect(
+      checkInRead(catalogueEntry("notion"), "notion-delete-page", silent),
+    ).toBe(false);
+  });
+
+  test("a reviewed read is a check-in read, unless something says it writes or destroys", () => {
+    const context7 = catalogueEntry("context7");
+    expect(context7?.readTools).toContain("query-docs");
+    const silent = { effect: null, destructive: false, unclassified: false };
+    expect(checkInRead(context7, "query-docs", silent)).toBe(true);
+    expect(
+      checkInRead(context7, "query-docs", { ...silent, effect: "write" }),
+    ).toBe(false);
+    expect(
+      checkInRead(context7, "query-docs", { ...silent, destructive: true }),
+    ).toBe(false);
+    expect(
+      checkInRead(context7, "query-docs", { ...silent, unclassified: true }),
+    ).toBe(false);
+    // 写名单上的名字永远不是读，哪怕读名单也列了它。
+    const both = { ...context7!, writeTools: ["query-docs"] };
+    expect(checkInRead(both, "query-docs", silent)).toBe(false);
+  });
+
+  test("an action the vendor recorded as a read is a check-in read; any other recorded value is not", () => {
+    const recorded = (effect: string | null) => ({
+      effect,
+      destructive: false,
+      unclassified: false,
+    });
+    expect(checkInRead(null, "GMAIL_FETCH_EMAILS", recorded("read"))).toBe(
+      true,
+    );
+    for (const value of ["write", "", "READ", " read"])
+      expect(checkInRead(null, "GMAIL_FETCH_EMAILS", recorded(value))).toBe(
+        false,
+      );
+    expect(
+      checkInRead(null, "GMAIL_PURGE", {
+        effect: "read",
+        destructive: true,
+        unclassified: false,
+      }),
+    ).toBe(false);
+    // 列了 readTools 的条目，名单外的名字即使厂商记了读也不算：名单只收紧。
+    expect(
+      checkInRead(
+        catalogueEntry("context7"),
+        "some-new-tool",
+        recorded("read"),
+      ),
+    ).toBe(false);
+  });
+});
+
+/*
+ * 目录的只读名单：Notion 的原样取自上游 v1.0.0；三个内置应用（Drive、百度网盘、Routines）的工具
+ * 定义就在本仓库里，名单按代码里每个工具的实际行为列出。列了名单，名单外的名字都是写，所以内置
+ * 应用广播的每个工具都得在读名单或写名单里，不能漏。
+ */
+describe("reviewed read lists for Notion and the built-in apps", () => {
+  test("Notion's read list is upstream v1.0.0's, word for word", () => {
+    const notion = catalogueEntry("notion");
+    expect(notion?.readTools).toEqual([
+      "notion-search",
+      "notion-connector-search",
+      "notion-memory-search",
+      "notion-get-tool-access",
+      "notion-get-self",
+      "notion-download-skill",
+      "notion-get-enabled-skills",
+      "notion-fetch",
+      "notion-get-file-download-urls",
+      "notion-list-private-pages",
+      "notion-list-shared-pages",
+      "notion-list-favorite-pages",
+      "notion-list-recent-pages",
+      "notion-list-page-backlinks",
+      "notion-view-version",
+      "notion-get-version-changes",
+      "notion-download-attachment",
+      "notion-get-comments",
+      "notion-get-suggested-edit",
+      "notion-get-teams",
+      "notion-get-groups",
+      "notion-get-users",
+      "notion-get-async-task",
+      "notion-query-data-sources",
+      "notion-query-multiple-data-sources",
+      "notion-query-meeting-notes",
+      "notion-search-agents",
+      "notion-query-sessions",
+      "notion-search-sessions",
+      "notion-get-session-status",
+      "notion-wait-session",
+      "notion-list-session-events",
+      "notion-read-session-event",
+      "notion-calendar-list-calendars",
+      "notion-calendar-list-events",
+      "notion-calendar-list-coworkers-events",
+      "notion-calendar-list-calendar-resources",
+      "notion-calendar-list-contacts",
+    ]);
+    for (const name of notion?.readTools ?? [])
+      expect(notion?.writeTools).not.toContain(name);
+  });
+
+  test("a Notion tool off the read list is a write in chat and not a check-in read", () => {
+    const notion = catalogueEntry("notion");
+    const silent = { effect: null, destructive: false, unclassified: false };
+    expect(classifyTool(notion, "notion-fetch", true, null)).toBe("read");
+    expect(checkInRead(notion, "notion-fetch", silent)).toBe(true);
+    for (const name of ["notion-delete-page", "notion-new-thing"]) {
+      expect(classifyTool(notion, name, true, null)).toBe("write");
+      expect(checkInRead(notion, name, silent)).toBe(false);
+    }
+  });
+
+  test.each([
+    [
+      "google-drive",
+      async () =>
+        (await driveTools({ url: "https://www.googleapis.com/drive/v3" })).map(
+          (tool) => tool.name,
+        ),
+      [
+        "search_files",
+        "list_recent_files",
+        "get_file_metadata",
+        "read_file_content",
+      ],
+      [],
+    ],
+    [
+      "baidu-netdisk",
+      async () =>
+        (
+          await netdiskTools({ url: "https://pan.baidu.com/rest/2.0/xpan" })
+        ).map((tool) => tool.name),
+      [
+        "search_files",
+        "list_files",
+        "get_file_metadata",
+        "read_file_content",
+        "get_account_info",
+      ],
+      [],
+    ],
+    [
+      "routines",
+      async () => (await routineTools()).map((tool) => tool.name),
+      ["list_routines", "list_goals"],
+      // 只读，但列出的 webhook 地址和邮件入站地址能触发任务，作用接近凭据，所以故意不列进读名单：
+      // 聊天里按写处理（先问人），check-in 读不到。
+      ["list_triggers"],
+    ],
+  ] as const)(
+    "%s names its reads, and every tool it advertises is on one list or the other, or deliberately on neither",
+    async (key, advertised, reads, neither) => {
+      const entry = catalogueEntry(key);
+      expect(entry?.readTools).toEqual([...reads]);
+      const silent = { effect: null, destructive: false, unclassified: false };
+      for (const name of await advertised()) {
+        const read = entry?.readTools?.includes(name) ?? false;
+        const unlisted = (neither as readonly string[]).includes(name);
+        expect(
+          read || unlisted || (entry?.writeTools.includes(name) ?? false),
+        ).toBe(true);
+        expect(read && entry?.writeTools.includes(name)).toBe(false);
+        // 名单里的是读，聊天和 check-in 都认；名单外的（写名单上的、故意两边都不列的）两边都是写。
+        expect(classifyTool(entry, name, true, null)).toBe(
+          read ? "read" : "write",
+        );
+        expect(checkInRead(entry, name, silent)).toBe(read);
+      }
+      // 名单之外、以后才加的名字是写。
+      expect(classifyTool(entry, "some_new_tool", true, null)).toBe("write");
+    },
+  );
+});
+
+/*
+ * 上游 v1.0.0 的 Routines 还带着目标（goal）的六个写工具。整合分支上还没有这些工具，但目录先把它们
+ * 列成写：等它们并进来、被广播出去时，不管 Routines 有没有读名单，都不会被当成读。
+ */
+describe("the goal tools Routines will carry are writes", () => {
+  const goalWrites = [
+    "create_goal",
+    "update_goal",
+    "run_goal",
+    "pause_goal",
+    "resume_goal",
+    "complete_goal",
+  ];
+
+  test("each one is on Routines' write list, off its read list, and classifies as a write", () => {
+    const routines = catalogueEntry("routines");
+    const silent = { effect: null, destructive: false, unclassified: false };
+    for (const name of goalWrites) {
+      expect(routines?.writeTools).toContain(name);
+      expect(routines?.readTools ?? []).not.toContain(name);
+      expect(classifyTool(routines, name, true, null)).toBe("write");
+      // 厂商记录的读也翻不过写名单。
+      expect(classifyTool(routines, name, true, "read")).toBe("write");
+      expect(checkInRead(routines, name, silent)).toBe(false);
+    }
+  });
+});
+
+/*
+ * `list_triggers` 只读，但它列出的 webhook 地址和邮件入站地址能触发任务，作用接近凭据，所以不让
+ * 无人值守的 check-in 读到：它不在 Routines 的读名单上。代价是聊天里它按写处理，要先问人。
+ */
+describe("list_triggers is kept from a check-in", () => {
+  test("it is off Routines' read list, so it is not a check-in read and chat asks first", () => {
+    const routines = catalogueEntry("routines");
+    expect(routines?.readTools).not.toContain("list_triggers");
+    const silent = { effect: null, destructive: false, unclassified: false };
+    expect(checkInRead(routines, "list_triggers", silent)).toBe(false);
+    expect(classifyTool(routines, "list_triggers", true, null)).toBe("write");
+  });
 });

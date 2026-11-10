@@ -617,7 +617,7 @@ export function createLocalTargetStore(
 }
 
 // Parsing actual JSONB is essential: a TS $type does not validate database data.
-import { BaseEventSchema, MessageSchema } from "@ag-ui/client";
+import { BaseEventSchema, MessageSchema } from "@ag-ui/core/schemas";
 function decodeTerminal(
   events: unknown[],
   messages: unknown[],

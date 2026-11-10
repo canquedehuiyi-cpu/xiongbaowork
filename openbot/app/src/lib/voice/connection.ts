@@ -18,14 +18,11 @@ export const connectVoice: ConnectVoice = async (options) => {
     credentials: "include",
     signal: options.signal,
   });
-  if (!response.ok)
-    throw new Error(
-      "Voice calls are unavailable. Check the deployment's voice configuration.",
-    );
+  if (!response.ok) throw new Error("语音通话不可用。请检查熊宝的语音配置。");
   const config: unknown = await response.json();
   if (config && typeof config === "object" && "transport" in config) {
     if (config.transport === "webrtc") return connectWebRtc(options);
     if (config.transport === "websocket") return connectWebSocket(options);
   }
-  throw new Error("This deployment uses an unsupported voice connection.");
+  throw new Error("熊宝用的语音连接方式，这个应用不支持。");
 };

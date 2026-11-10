@@ -14,6 +14,7 @@ import {
   PageShell,
 } from "@/components/layout/page-shell";
 import { RowMark } from "@/components/layout/row-mark";
+import { DeploymentClientsSection } from "@/components/plugins/deployment-clients";
 import {
   Item,
   ItemActions,
@@ -44,6 +45,7 @@ import { useZh } from "@/lib/translations/queries";
  * tool per Bot do not fit on a row, and the previous screen's attempt to fit them made a page that
  * scrolled sideways.
  */
+// M4: 待接入 上游 manage/plugins-list-page.tsx（版式更新、员工模型相关提示）
 export const Route = createFileRoute("/_authed/admin/plugins/")({
   component: RouteComponent,
 });
@@ -236,7 +238,7 @@ function RouteComponent() {
           </PageSection>
 
           <PageSection
-            description="一个未经本部署审核的应用目录，通过 Composio 连接。"
+            description="更多可以通过熊宝连接的应用，这里没有人审核过它们。"
             title="更多应用"
           >
             <PageRows>
@@ -257,7 +259,7 @@ function RouteComponent() {
                     <IconPlug className="size-4" />
                   </RowMark>
                   <ItemContent>
-                    <ItemTitle>浏览 Composio</ItemTitle>
+                    <ItemTitle>浏览应用</ItemTitle>
                     <ItemDescription>
                       几百个应用，以提问者的身份连接。每个人连接自己的账号。
                     </ItemDescription>
@@ -274,17 +276,21 @@ function RouteComponent() {
                     <IconPlug className="size-4" />
                   </RowMark>
                   <ItemContent>
-                    <ItemTitle>Composio</ItemTitle>
+                    <ItemTitle>浏览应用</ItemTitle>
                     <ItemDescription>
-                      添加你的 Composio
-                      密钥即可启用一整套工具目录。请在这个部署上设置
-                      COMPOSIO_API_KEY。
+                      还没有设置。请在这个部署上设置 COMPOSIO_API_KEY
+                      后再浏览这些应用。
                     </ItemDescription>
                   </ItemContent>
                 </Item>
               )}
             </PageRows>
           </PageSection>
+
+          {/* Only where the directory can be browsed: a client is for an app found there. */}
+          {plugins.data?.composioConfigured ? (
+            <DeploymentClientsSection />
+          ) : null}
         </>
       )}
     </PageShell>

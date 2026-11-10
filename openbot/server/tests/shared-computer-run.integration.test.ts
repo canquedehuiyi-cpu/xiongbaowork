@@ -1,6 +1,7 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import type { AuditEventInput, AuditStore } from "../src/audit";
 import { StaleSnapshotError } from "../src/computer/client";
+import { botSeat } from "../src/computer/computer-key";
 import { createComputerGateway } from "../src/computer/gateway";
 import type { ActionPolicy } from "../src/computer/policy";
 import { createSharedComputerProvider } from "../src/computer/provider";
@@ -114,13 +115,13 @@ describe("a Bot on the one shared computer, against the table", () => {
       const computer = sharedComputer();
       try {
         const { gateway, rows, snapshots } = gatewayOn(computer);
-        const taken = await gateway.snapshot("bot-1");
+        const taken = await gateway.snapshot(botSeat("bot-1"));
 
-        await gateway.resetComputer("bot-1", ACTOR);
-        expect(await snapshots.load("bot-1")).toBeUndefined();
+        await gateway.resetComputer(botSeat("bot-1"), ACTOR);
+        expect(await snapshots.load("bot:bot-1")).toBeUndefined();
         computer.replaceRun("run-2");
         // The row is gone, so this inserts rather than conflicting, which is the whole of the race.
-        await snapshots.save("bot-1", {
+        await snapshots.save("bot:bot-1", {
           snapshotId: taken.snapshotId,
           url: taken.url,
           elements: new Map(
@@ -128,10 +129,13 @@ describe("a Bot on the one shared computer, against the table", () => {
           ),
           session: "run-1",
         });
-        expect((await snapshots.load("bot-1"))?.url).toBe(DEAD.url);
+        expect((await snapshots.load("bot:bot-1"))?.url).toBe(DEAD.url);
 
         const refusal = await gateway
-          .click("bot-1", ACTOR, { ref: "e9", snapshotId: taken.snapshotId })
+          .click(botSeat("bot-1"), ACTOR, {
+            ref: "e9",
+            snapshotId: taken.snapshotId,
+          })
           .catch((error: unknown) => error);
 
         expect(refusal).toBeInstanceOf(StaleSnapshotError);
@@ -153,16 +157,16 @@ describe("a Bot on the one shared computer, against the table", () => {
       const computer = sharedComputer();
       try {
         const { gateway, snapshots } = gatewayOn(computer);
-        await gateway.snapshot("bot-1");
-        expect((await snapshots.load("bot-1"))?.snapshotId).toBe(7);
+        await gateway.snapshot(botSeat("bot-1"));
+        expect((await snapshots.load("bot:bot-1"))?.snapshotId).toBe(7);
 
         computer.replaceRun("run-2");
         computer.showing(FRESH);
-        await gateway.snapshot("bot-1");
+        await gateway.snapshot(botSeat("bot-1"));
 
         // Read through a second store, the way a second replica would, rather than from the one that
         // wrote it.
-        const held = await createSnapshotStore(database).load("bot-1");
+        const held = await createSnapshotStore(database).load("bot:bot-1");
         expect(held?.snapshotId).toBe(1);
         expect(held?.url).toBe(FRESH.url);
         expect(held?.session).toBe("run-2");
@@ -178,12 +182,12 @@ describe("a Bot on the one shared computer, against the table", () => {
       const computer = sharedComputer();
       try {
         const { gateway, rows } = gatewayOn(computer);
-        await gateway.snapshot("bot-1");
+        await gateway.snapshot(botSeat("bot-1"));
         computer.replaceRun("run-2");
         computer.showing(FRESH);
-        const fresh = await gateway.snapshot("bot-1");
+        const fresh = await gateway.snapshot(botSeat("bot-1"));
 
-        await gateway.click("bot-1", ACTOR, {
+        await gateway.click(botSeat("bot-1"), ACTOR, {
           ref: "e1",
           snapshotId: fresh.snapshotId,
         });
@@ -202,12 +206,12 @@ describe("a Bot on the one shared computer, against the table", () => {
       const computer = sharedComputer();
       try {
         const { gateway, snapshots } = gatewayOn(computer);
-        await gateway.snapshot("bot-1");
+        await gateway.snapshot(botSeat("bot-1"));
         computer.showing(FRESH);
-        await gateway.snapshot("bot-1");
+        await gateway.snapshot(botSeat("bot-1"));
 
-        expect((await snapshots.load("bot-1"))?.snapshotId).toBe(7);
-        expect((await snapshots.load("bot-1"))?.url).toBe(DEAD.url);
+        expect((await snapshots.load("bot:bot-1"))?.snapshotId).toBe(7);
+        expect((await snapshots.load("bot:bot-1"))?.url).toBe(DEAD.url);
       } finally {
         computer.stop();
       }
@@ -224,10 +228,10 @@ describe("a Bot on the one shared computer, against the table", () => {
       const computer = sharedComputer();
       try {
         const { gateway, rows } = gatewayOn(computer);
-        const taken = await gateway.snapshot("bot-1");
+        const taken = await gateway.snapshot(botSeat("bot-1"));
         computer.stopAnswering();
 
-        await gateway.click("bot-1", ACTOR, {
+        await gateway.click(botSeat("bot-1"), ACTOR, {
           ref: "e9",
           snapshotId: taken.snapshotId,
         });
@@ -275,10 +279,10 @@ describe("a Bot on the one shared computer, against the table", () => {
           snapshots,
         });
 
-        const taken = await gateway.snapshot("bot-1");
-        expect((await snapshots.load("bot-1"))?.session).toBeUndefined();
+        const taken = await gateway.snapshot(botSeat("bot-1"));
+        expect((await snapshots.load("bot:bot-1"))?.session).toBeUndefined();
 
-        await gateway.click("bot-1", ACTOR, {
+        await gateway.click(botSeat("bot-1"), ACTOR, {
           ref: "e9",
           snapshotId: taken.snapshotId,
         });
@@ -289,4 +293,8 @@ describe("a Bot on the one shared computer, against the table", () => {
         server.stop(true);
       }
     }));
+});
+
+afterAll(async () => {
+  await database.$client.close();
 });

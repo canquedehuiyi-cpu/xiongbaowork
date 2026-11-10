@@ -27,6 +27,10 @@ describe("what the trail says a row was", () => {
     expect(outcomeOf("credential.rotation_refused")).toBe("refused");
   });
 
+  test("names a computer of its own refused to a Bot as a refusal", () => {
+    expect(outcomeOf("bot.isolation_refused")).toBe("refused");
+  });
+
   test("names an endpoint this deployment would not dial as a refusal", () => {
     expect(outcomeOf("agent.dial_refused")).toBe("refused");
   });
@@ -68,6 +72,18 @@ describe("what the trail says a row was", () => {
     expect(outcomeOf("component.function_failed")).toBe("did-not-happen");
     // The surface that already got this right, kept here so the three cannot drift apart again.
     expect(outcomeOf("computer.action_failed")).toBe("did-not-happen");
+  });
+
+  test("a Connect that could not read the deployment's OAuth client did not happen", () => {
+    // Written when the vault read or the decryption of the shared client failed and Connect stopped
+    // with a 503. Nothing was refused and nothing was connected: it is the row somebody comes to
+    // this page to find when nobody can connect a connector, and it must not be drawn as "Allowed".
+    expect(outcomeOf("mcp.oauth_client_read_failed")).toBe("did-not-happen");
+    expect(
+      eventTypeFilter(DID_NOT_HAPPEN_EVENT_TYPES)
+        .replace("?eventType=", "")
+        .split(","),
+    ).toContain("mcp.oauth_client_read_failed");
   });
 
   test("a failed call is not filed as something this deployment refused", () => {

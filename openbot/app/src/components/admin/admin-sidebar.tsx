@@ -1,14 +1,18 @@
 import {
   IconArrowLeft,
+  IconBrain,
   IconBuildingBank,
+  IconBulb,
   IconCode,
   IconDeviceDesktop,
-  IconFileText,
   IconKey,
   IconLayoutGrid,
   IconListDetails,
+  IconLockAccess,
   IconPuzzle,
+  IconRadar,
   IconShieldCheck,
+  IconSlash,
   IconUsers,
 } from "@tabler/icons-react";
 import { Link, type LinkOptions } from "@tanstack/react-router";
@@ -72,9 +76,24 @@ const GROUPS: {
         linkOptions: { to: "/admin/plugins" },
       },
       {
+        title: "模型提供方",
+        icon: IconBrain,
+        linkOptions: { to: "/admin/providers" },
+      },
+      {
         title: "技能",
-        icon: IconFileText,
+        icon: IconSlash,
         linkOptions: { to: "/admin/skills" },
+      },
+      {
+        title: "自动学习",
+        icon: IconBulb,
+        linkOptions: { to: "/admin/learning" },
+      },
+      {
+        title: "主动巡检",
+        icon: IconRadar,
+        linkOptions: { to: "/admin/proactive" },
       },
       {
         title: "界面组件",
@@ -95,6 +114,11 @@ const GROUPS: {
         title: "成员",
         icon: IconUsers,
         linkOptions: { to: "/admin/people" },
+      },
+      {
+        title: "权限",
+        icon: IconLockAccess,
+        linkOptions: { to: "/admin/permissions" },
       },
       {
         title: "身份提供方",
@@ -128,7 +152,7 @@ export function AdminSidebar({
   ...props
 }: React.ComponentProps<typeof Sidebar>) {
   return (
-    <Sidebar {...props}>
+    <Sidebar variant="inset" {...props}>
       {/*
        * Pinned to the same height as the app sidebar's header. Left to itself this one is 60px
        * against the app's 45px — `p-2` around a `size="lg"` button rather than a fixed height — so

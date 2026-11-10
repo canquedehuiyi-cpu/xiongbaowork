@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { createRunnerTransport } from "../src/computer/runner-transport";
+import type { NavigateResult } from "../src/computer/schema";
 import {
   createDeviceChannel,
   DeviceOfflineError,

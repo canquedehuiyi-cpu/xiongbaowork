@@ -2,12 +2,12 @@ import { sql } from "drizzle-orm";
 import {
   check,
   foreignKey,
+  index,
   pgTable,
+  primaryKey,
   text,
   timestamp,
-  primaryKey,
   uniqueIndex,
-  index,
   unique,
 } from "drizzle-orm/pg-core";
 import { channels, users } from "./core";

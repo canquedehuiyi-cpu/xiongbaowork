@@ -486,8 +486,8 @@ function PluginDetails({
     ? AUTH_SENTENCE[card.catalogue.auth]
     : card?.server?.provenance === "composio"
       ? card.perPerson
-        ? "通过 Composio 接入，每个人连接自己的账号。"
-        : "通过 Composio 接入，不需要账号。"
+        ? "通过熊宝连接，每个人连接自己的账号。"
+        : "通过熊宝连接，不需要账号。"
       : "管理员按地址添加的插件。";
   return (
     <Sheet
