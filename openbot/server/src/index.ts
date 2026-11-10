@@ -338,6 +338,7 @@ import { redirectUriFor } from "./plugins/oauth";
 import { startBrokeredRelist } from "./plugins/relist";
 import {
   ensureAlwaysOnApp,
+  ensurePersonalAskBeforeChanges,
   ensurePersonalLearning,
   ensurePersonalSkills,
   ensurePersonalSkillsOwned,
@@ -1647,6 +1648,15 @@ await startupLifecycle.run(async (startup) => {
    * 服务器级的事；重试的计时器在这一帧里排下，之后每一次重试仍在平台帧里。授予由 `personalDeps` 在那个人
    * 自己的帧里写。
    */
+  /*
+   * 个人版：先替还没做过选择的人把「改动之前先问」打开，再开始任何授予（下面的常开应用与默认应用）。写不进去
+   * 只记警告：之后每一次给员工应用动作之前都会再写一次，写不进去那次就不给。
+   */
+  await ensurePersonalAskBeforeChanges(personalDeps).catch((error: unknown) =>
+    console.warn(
+      `[plugins] 没能在启动时打开「改动之前先问」，给员工应用动作之前会再试：${error instanceof Error ? error.message : String(error)}`,
+    ),
+  );
   void runAsTenant("platform", async () => {
     if (currentEdition() !== "personal") {
       await pluginStore.refreshOwnListings();

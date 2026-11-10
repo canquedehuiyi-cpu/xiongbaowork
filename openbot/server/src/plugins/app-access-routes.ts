@@ -21,7 +21,7 @@ import {
   ownerGrantRefusal,
   withdrawOwnersSharedUse,
 } from "./owner-grants";
-import { personalRevokeRefusal } from "./personal-defaults";
+import { personalRevokeRefusalFor } from "./personal-defaults";
 import {
   type SharedAudience,
   SharedUseNotSharedError,
@@ -97,7 +97,9 @@ export function unavailableSentence(
  * - 只能问、只能为自己能用的员工申请（`canUseBot`，否则 404，不说员工存不存在）。
  * - 只有目录、行或 broker 目录能作证的应用能申请打开；随手写的 `composio-` 键答没有这个应用。
  * - 类型是服务端的：本人自己能解决的状态（连接、重连、本人自己添加的应用）不建申请。
- * - 一按批准只给管理员（持有能力，`decisionRefusal`）；批准给的是只读、非破坏性的动作，写操作仍逐个授予。
+ * - 一按批准只给管理员（持有能力，`decisionRefusal`）。团队版里批准给的是只读、非破坏性的动作，写操作仍逐个
+ *   授予；个人版里批准前的那次刷新经过个人默认，会给出全部工具（见 `./personal-defaults`），普通写挡在本人的
+ *   「改动之前先问」后面。
  * - Shared 应用在 X3 并入共享使用批准之前对谁都读作 `shared_not_approved`，没有可申请的（X1 的共享闸门
  *   没有批准就拒绝，管理员与员工主人也不例外）。
  */
@@ -373,7 +375,8 @@ export function mountAppAccessRoutes(options: {
    * `app_access.requested`，然后带 `direct` 的 `app_access.approved`。
    *
    * 同样的检查、同样的改动：能申请什么是 `requestable` 的答案，批准做什么是收件箱的 `carryOut`。没有
-   * `refs`：一按给的是收件箱不带 refs 时给的，应用的只读、非破坏性动作。
+   * `refs`：团队版里一按给的是收件箱不带 refs 时给的，应用的只读、非破坏性动作；个人版里批准前的刷新经过
+   * 个人默认，会给出全部工具（见 `./personal-defaults`）。
    *
    * 没能做成就什么也不留：这次新提的申请撤回（写一行带 `direct` 的 `app_access.cancelled`）；本来就在等的
    * 那条原样留着。
@@ -537,12 +540,15 @@ export function mountAppAccessRoutes(options: {
     requireUser,
     async (context) => {
       /*
-       * 个人版里每位员工持有每个已连接应用（`./personal-defaults`），收回会在员工下一次运行时被补回来。答一个
-       * 「已收回」却悄悄还原，不如照实拒绝，和 `DELETE /grants` 同一个答复。
+       * 个人版里个人默认管着的员工持有每个已连接应用（`./personal-defaults`），收回会在它下一次运行时被补回来。
+       * 答一个「已收回」却悄悄还原，不如照实拒绝，和 `DELETE /grants` 同一个答复。分身和远端员工不被补齐，
+       * 照常收回。
        */
-      const personalRefusal = personalRevokeRefusal(
+      const personalRefusal = await personalRevokeRefusalFor(
+        store,
         "mcp",
         context.req.param("app") ?? "",
+        context.req.param("agentId") ?? "",
       );
       if (personalRefusal) return context.json({ error: personalRefusal }, 403);
       const found = await ownersApp(context);
