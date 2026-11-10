@@ -74,10 +74,10 @@ describe("accountFor", () => {
     expect(
       accountFor({ ...brokered("personal"), provenance: "manual" }, "user_a"),
     ).toEqual({ kind: "none" });
-    // Arcade 在 X5 才是 fork 的 broker；在那之前它不是。
+    // X5 起 Arcade 也是 fork 的 broker：它的应用和 Composio 一样有账号。
     expect(
       accountFor({ ...brokered("personal"), provenance: "arcade" }, "user_a"),
-    ).toEqual({ kind: "none" });
+    ).toEqual({ kind: "person", userId: "user_a" });
   });
 });
 

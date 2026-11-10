@@ -209,6 +209,11 @@ export type McpTool = {
  * `McpTool` stays exactly what a `tools/list` answer contains, because that is what it is for.
  */
 export type ListedTool = McpTool & {
+  /**
+   * 厂商调用这个动作用的名字，与 `name` 不同时才有（Arcade 的 `Gmail.ListEmails` 对 `ListEmails`）。
+   * `name` 是本部署的标识、也是模型看到的名字；执行时发这个。没有时就是 `name`。
+   */
+  vendorName?: string;
   /** What the vendor said this action does, when it said anything. */
   effect?: "read" | "write";
   /** Whether the vendor marked it as destroying something. */
@@ -611,6 +616,11 @@ export type McpCallResult = {
   /** True when the server itself reported the call as an error rather than failing to answer. */
   isError: boolean;
   truncated: boolean;
+  /**
+   * 厂商拒绝这个账号执行这个动作（Arcade 要求授权）。只由 Arcade 传输层设置；store 据此给出
+   * 「重新连接」的提示，并先问 broker 账号是否还在，再决定要不要结束连接行。
+   */
+  actionNotAllowed?: true;
 };
 
 /**

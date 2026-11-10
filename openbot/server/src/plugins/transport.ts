@@ -1,4 +1,5 @@
 import type { OutboundPolicy } from "../net/outbound-guard";
+import * as arcade from "./arcade";
 import * as baiduNetdiskRest from "./baidu-netdisk-rest";
 import * as builtinRoutines from "./builtin-routines";
 import type { CredentialPlacement } from "./catalogue";
@@ -147,12 +148,14 @@ export type TransportKind =
   | "google-drive-rest"
   | "baidu-netdisk-rest"
   | "builtin-routines"
-  | "composio";
+  | "composio"
+  | "arcade";
 
 /**
  * The kinds a CATALOGUE ENTRY may name, which is every one except the broker's.
  *
- * CRITERION. `composio` is not writable in a reviewed entry, and the compiler is what says so.
+ * CRITERION. Neither broker's transport (`composio`, `arcade`) is writable in a reviewed entry, and
+ * the compiler is what says so.
  *
  * REASON. A brokered row is reached by an app slug read off its url and a per-person connection
  * looked up by that slug; a catalogue entry has neither, and `accessFor` answers `toolkit: null`
@@ -166,7 +169,10 @@ export type TransportKind =
  * `Exclude` rather than a hand-written second union, so a kind added above is offered to the
  * catalogue automatically and only the broker stays out.
  */
-export type CuratedTransportKind = Exclude<TransportKind, "composio">;
+export type CuratedTransportKind = Exclude<
+  TransportKind,
+  "composio" | "arcade"
+>;
 
 const TRANSPORTS: Record<TransportKind, VendorTransport> = {
   mcp,
@@ -174,6 +180,7 @@ const TRANSPORTS: Record<TransportKind, VendorTransport> = {
   "baidu-netdisk-rest": baiduNetdiskRest,
   "builtin-routines": builtinRoutines,
   composio,
+  arcade,
 };
 
 /**

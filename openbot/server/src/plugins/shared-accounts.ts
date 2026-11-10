@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { appsPageZh, currentEdition } from "../edition";
+import { brokeredProvenance as isBrokeredProvenance } from "./access";
 import { type Decides, type SchemeKind, schemeKind } from "./broker";
 
 /**
@@ -9,8 +10,7 @@ import { type Decides, type SchemeKind, schemeKind } from "./broker";
  * 账号」不会是两个碰巧一致的答案。
  *
  * 与上游的差异：
- * - fork 只有 Composio 一个 broker（Arcade 在 X5 才并入），所以「是不是 broker 应用」就是
- *   `provenance === "composio"`，不读 `access.ts` 的 `brokeredProvenance`（fork 没有）。
+ * - 「是不是 broker 应用」与 `access.ts` 的 `brokeredProvenance` 同一个回答（Composio 或 Arcade，X5）。
  * - fork 没有单用户部署的 `brokered_identities`（上游 0074），所以一个人的 vendor id 永远就是他自己的
  *   用户 id；`personAccount` 仍保留 `filedUnder` 参数，以便以后并入时不改调用方。
  * - 部署团队账号的连接状态记在应用自己的 `mcp_servers` 行上（`shared_*` 列，迁移 0180），而不是上游
@@ -28,9 +28,9 @@ export type AccountRef =
   | { holder: "person"; userId: string; vendorUserId: string }
   | { holder: "deployment"; vendorUserId: string };
 
-/** fork 里会到达 broker 的 provenance。X5 并入 Arcade 时在这里加上 `arcade`。 */
+/** 会到达 broker 的 provenance：Composio 或 Arcade。与 `access.ts` 是同一个判断。 */
 export function brokeredProvenance(provenance: string): boolean {
-  return provenance === "composio";
+  return isBrokeredProvenance(provenance);
 }
 
 /**

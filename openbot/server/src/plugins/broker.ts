@@ -1,3 +1,4 @@
+import type { BrokerProvider } from "./access";
 import type { DeploymentClient } from "./deployment-clients";
 
 /**
@@ -787,4 +788,84 @@ function webAddress(value: string): URL | null {
  */
 export function brokerSentence(error: unknown): string | null {
   return error instanceof BrokerRefusalError ? error.message : null;
+}
+
+/**
+ * 配置说哪个 broker 是活动的，以及它什么都没说时的原因（上游 #770）。
+ *
+ * 三种「没有提供商」不是一回事：没配 key 是没有 broker；两个 key 都配了却没指明是迁移中途，
+ * 两边都可能有连接行；指明了却没配 key 是运维笔误，必须让服务起不来。单一个 `null` 会让
+ * `?? "composio"` 把第二种读成「Composio 是活动的」。
+ */
+export type ProviderDecision =
+  | { kind: "active"; provider: BrokerProvider }
+  /** 一个 key 都没配：这个部署没有 broker。 */
+  | { kind: "unconfigured" }
+  /** 两个 key 都配了，`OPENBOT_BROKER_PROVIDER` 没有指明。 */
+  | { kind: "ambiguous"; configured: BrokerProvider[] }
+  /** `OPENBOT_BROKER_PROVIDER` 指明的提供商没有配 key。 */
+  | { kind: "misnamed"; named: BrokerProvider };
+
+/** 空串或全是空白的 key 不是 key。`providerDecision` 与 `./provider-wiring` 用同一个定义。 */
+export const credential = (key: string | undefined): boolean =>
+  key !== undefined && key.trim() !== "";
+
+/**
+ * 只看配置（不读数据库）决定这个部署用哪个 broker。只配一个 key 就是它；两个都配时由
+ * `brokerProvider` 决定——两个都配是合法的，因为在旧厂商那边结束账号还需要它的 key。
+ *
+ * 不设 `OPENBOT_BROKER_PROVIDER` 且只配了 `COMPOSIO_API_KEY` 时答 Composio，与以前完全一样。
+ */
+export function providerDecision(c: {
+  composioApiKey?: string;
+  arcadeApiKey?: string;
+  brokerProvider?: BrokerProvider;
+}): ProviderDecision {
+  const configured: BrokerProvider[] = [];
+  if (credential(c.composioApiKey)) configured.push("composio");
+  if (credential(c.arcadeApiKey)) configured.push("arcade");
+  const named = c.brokerProvider;
+  if (named !== undefined) {
+    return configured.includes(named)
+      ? { kind: "active", provider: named }
+      : { kind: "misnamed", named };
+  }
+  if (configured.length === 1)
+    return { kind: "active", provider: configured[0] as BrokerProvider };
+  return configured.length === 0
+    ? { kind: "unconfigured" }
+    : { kind: "ambiguous", configured };
+}
+
+/** 活动的提供商；配置没有指明时为 `null`。只给真正问「有没有 broker」的调用方用。 */
+export function activeProvider(c: {
+  composioApiKey?: string;
+  arcadeApiKey?: string;
+  brokerProvider?: BrokerProvider;
+}): BrokerProvider | null {
+  const decision = providerDecision(c);
+  return decision.kind === "active" ? decision.provider : null;
+}
+
+/**
+ * 另一个提供商还持有连接行时，拒绝启用这一个。
+ *
+ * 按行而不是按 key：断开连接要先在厂商那边撤销、再删本地行，直接改环境变量换提供商会留下
+ * 谁也撤销不了的账号。数不出来（NaN、负数、小数）也拒绝，而且不把那个值念出来。
+ */
+export function assertActivatable(
+  candidate: BrokerProvider,
+  otherProviderRows: number,
+): void {
+  const other = candidate === "arcade" ? "Composio" : "Arcade";
+  const self = candidate === "arcade" ? "Arcade" : "Composio";
+  if (!Number.isInteger(otherProviderRows) || otherProviderRows < 0) {
+    throw new BrokerRefusalError(
+      `不能启用 ${self}：没能数清属于 ${other} 的连接。请保留两个 API key，确认数据库可以访问后重新启动；数不清就启用，可能留下谁也撤销不了的账号。`,
+    );
+  }
+  if (otherProviderRows === 0) return;
+  throw new BrokerRefusalError(
+    `不能启用 ${self}：还有 ${otherProviderRows} 个连接属于 ${other}。请让 ${other} 保持启用（保留它的 API key，并设 OPENBOT_BROKER_PROVIDER=${other.toLowerCase()}），先结束这些连接：每个人在自己的「已连接账号」里断开，管理员断开共享应用的团队账号，或者移除应用（会结束连到它的所有账号）。没有一键结束全部的操作。直接改环境变量换提供商会留下谁也撤销不了的账号。`,
+  );
 }
