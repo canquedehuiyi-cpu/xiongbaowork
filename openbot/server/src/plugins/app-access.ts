@@ -243,3 +243,20 @@ export function appAccessState(facts: AppAccessFacts): AppAccessState {
   if (!facts.personal) return "not_connected";
   return facts.personal.usable ? "ready" : "reconnect";
 }
+
+/** 一个状态没有什么可以请管理员做时，答给申请人的话（浏览器入口与 `request_app_access` 共用）。 */
+export function nothingToRequest(access: AppAccess): string {
+  const name = access.displayName;
+  switch (access.state) {
+    case "ready":
+      return `「${name}」已经可以使用了，不需要向管理员申请。`;
+    case "owner_grantable":
+      return `这是你的员工，你可以自己把「${name}」给它。`;
+    case "shared_not_connected":
+      return `「${name}」用的是一个共享的团队账号，管理员还没有连接它。连接之后再试。`;
+    case "shared_not_approved":
+      return `「${name}」用的是一个共享的团队账号，管理员还没有批准这位员工使用它（共享使用批准将在后续版本提供）。`;
+    default:
+      return `「${name}」用的是你自己的账号，不需要管理员。请自己连接它。`;
+  }
+}

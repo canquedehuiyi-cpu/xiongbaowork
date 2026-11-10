@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { eq, inArray, like, or } from "drizzle-orm";
+import { and, eq, inArray, like, or } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
+import { readAppAccessRequestAnswer } from "../../shared/app-access-request";
 import type { AuditEventInput, AuditStore } from "../src/audit";
 import { createAdminScope } from "../src/auth/admin-scope";
 import { type AppVariables, createRoleRepository } from "../src/auth/guards";
@@ -22,7 +23,9 @@ import {
   teamBotPublications,
   users,
 } from "../src/db/schema";
+import { pluginInstallListings } from "../src/db/schema/plugin-install-listings";
 import type { AppAccess } from "../src/plugins/app-access";
+import { appAccessTools } from "../src/plugins/app-access-tool";
 import type { BrokerApp, ComposioBroker } from "../src/plugins/broker";
 import { createPluginRoutes } from "../src/plugins/routes";
 import {
@@ -908,6 +911,343 @@ describe("a teammate on somebody else's Team Bot, and team accounts (X1 底线)"
       state: "not_connected",
       accountHolder: "you",
       asksFirst: false,
+    });
+  });
+});
+
+/*
+ * 安全评审的修正（X2 评审 I1、M1、M2、M4、M5）：每项自备数据，放在最后，不改上面用例的前提。
+ */
+describe("review fixes", () => {
+  /** 申请时还没有行、之后被打开、但仍读不出怎么连接的 broker 应用（I1）。 */
+  const BOX = row("box");
+  /** 已上架、但读不出怎么连接的 broker 应用：状态是 disabled，要的是打开，不是授予（M4）。 */
+  const VAULT = row("vault");
+  /** 一按批准时 carryOut 会抛出的应用（M1）。 */
+  const THROWS = id("throws");
+  /** 两个入口先后申请的应用（M4）。 */
+  const TOOL_FIRST = id("tool-first");
+  const ROUTE_FIRST = id("route-first");
+  const added = [BOX, VAULT, THROWS, TOOL_FIRST, ROUTE_FIRST];
+  const noisy = id("noisy");
+  const repeat = id("repeat");
+  const makersConnectedAt = new Date("2020-01-02T03:04:05.000Z");
+  let boxRequest = "";
+
+  const toolAs = (actorId: string, botId: string) => {
+    const [tool] = appAccessTools({
+      store,
+      botId,
+      actorId,
+      composioConfigured: true,
+      directory: async () => directory,
+    });
+    if (!tool) throw new Error("no request_app_access tool");
+    return (app: string) =>
+      runAsTenant(actorId, () => tool.execute({ app, reason: "评审用例" }));
+  };
+  const refusedBy = (actor: string) =>
+    events.filter(
+      (event) =>
+        event.eventType === "app_access.refused" && event.actorUserId === actor,
+    );
+
+  beforeAll(async () => {
+    const [filed] = await runAsTenant(person, () =>
+      database
+        .insert(appAccessRequests)
+        .values({
+          serverId: null,
+          appKey: BOX,
+          appTitle: `Box ${suite}`,
+          botId: personBot,
+          requesterUserId: person,
+          kind: "enable",
+        })
+        .returning({ id: appAccessRequests.id }),
+    );
+    boxRequest = filed?.id ?? "";
+    await asPlatform(async () => {
+      await database.insert(mcpServers).values([
+        ...[BOX, VAULT].map((serverId) => ({
+          tenantId: "team",
+          id: serverId,
+          title: `${serverId} 应用`,
+          vendor: "composio",
+          url: `composio://${serverId.slice("composio-".length)}`,
+          provenance: "composio",
+          authScheme: null,
+        })),
+        ...[THROWS, TOOL_FIRST, ROUTE_FIRST].map((serverId) => ({
+          tenantId: "team",
+          id: serverId,
+          title: `${serverId} 应用`,
+          vendor: "test",
+          url: "https://example.invalid/mcp",
+          provenance: "custom",
+        })),
+      ]);
+      await database.insert(mcpTools).values(
+        added.map((serverId) => ({
+          tenantId: "team",
+          serverId,
+          name: "read",
+          description: "read",
+          effect: "read",
+        })),
+      );
+      await database.insert(composioConnections).values({
+        tenantId: maker,
+        toolkit: slug("gmail"),
+        userId: maker,
+        verified: true,
+        connectedAt: makersConnectedAt,
+      });
+      await store.addInstallListing("mcp", VAULT, "admin@example.test");
+    });
+  });
+
+  afterAll(async () => {
+    await asPlatform(async () => {
+      await database
+        .delete(appAccessRequests)
+        .where(
+          or(
+            inArray(appAccessRequests.serverId, added),
+            inArray(appAccessRequests.appKey, added),
+          ),
+        );
+      await database
+        .delete(pluginInstallListings)
+        .where(
+          and(
+            eq(pluginInstallListings.tenantId, "system"),
+            eq(pluginInstallListings.ref, VAULT),
+          ),
+        );
+      await database
+        .delete(pluginGrants)
+        .where(like(pluginGrants.ref, `%${suite}%`));
+      await database.delete(mcpTools).where(inArray(mcpTools.serverId, added));
+      await database.delete(mcpServers).where(inArray(mcpServers.id, added));
+    });
+  });
+
+  describe("I1: one dedupe key, the index's", () => {
+    test("asking again after the app was opened answers the request filed before it had a row", async () => {
+      const response = await asPerson().request(
+        "/access-requests",
+        json({ agentId: personBot, app: BOX }),
+      );
+      expect(response.status).toBe(200);
+      expect(
+        (await response.json()) as {
+          request: { id: string };
+          created: boolean;
+        },
+      ).toMatchObject({ request: { id: boxRequest }, created: false });
+    });
+
+    test("the store itself hands back that request when asked under the row's id", async () => {
+      const filed = await runAsTenant(person, () =>
+        store.fileAppAccessRequest({
+          serverId: BOX,
+          botId: personBot,
+          requesterUserId: person,
+          kind: "enable",
+          note: null,
+          maxPending: 20,
+        }),
+      );
+      expect(filed.outcome).toBe("existing");
+      expect(filed.outcome === "limited" ? null : filed.request.id).toBe(
+        boxRequest,
+      );
+    });
+
+    test("so does request_app_access", async () => {
+      const read = readAppAccessRequestAnswer(
+        await toolAs(person, personBot)(BOX),
+      );
+      expect(read?.card).toMatchObject({
+        requestId: boxRequest,
+        status: "existing",
+      });
+    });
+  });
+
+  describe("M1: a one-press approval that throws leaves nothing waiting", () => {
+    test("the request it filed is withdrawn, and the withdrawal is in the trail", async () => {
+      const broken = Object.assign(Object.create(store) as typeof store, {
+        listServers: async () => {
+          throw new Error("the server list could not be read");
+        },
+      });
+      const requireAdmin: MiddlewareHandler<{
+        Variables: AppVariables;
+      }> = async (context, next) => {
+        context.set("actor", {
+          id: admin,
+          role: "admin",
+          email: `${admin}@example.test`,
+        });
+        await runAsTenant(admin, () => next());
+      };
+      const routes = createPluginRoutes(
+        broken,
+        requireAdmin,
+        canUseBot,
+        undefined,
+        { broker },
+        adminScope,
+      );
+      const response = await routes.request(
+        `/for/${personBot}/apps/${THROWS}/approve`,
+        post,
+      );
+      expect(response.status).toBeGreaterThanOrEqual(500);
+      const waiting = await runAsTenant(admin, () =>
+        store.pendingAppAccessRequests({ requesterUserId: admin }),
+      );
+      expect(waiting.filter((request) => request.appKey === THROWS)).toEqual(
+        [],
+      );
+      expect(
+        eventsOf("app_access.cancelled").some(
+          (event) =>
+            event.targetId === THROWS &&
+            (event.payload as { direct?: boolean }).direct === true,
+        ),
+      ).toBe(true);
+      expect(await grantsOn(personBot)).not.toContain(`${THROWS}/read`);
+    });
+  });
+
+  describe("M2: a teammate never reads the owner's connection", () => {
+    test("in the teammate's own frame the owner's account is not there to read", async () => {
+      const app = await access(asPerson(), teamBot, GMAIL);
+      expect(app.accountHolder).toBe("you");
+      expect(app.connectedAt).not.toBe(makersConnectedAt.toISOString());
+      for (const listed of await appsOf(asPerson(), teamBot))
+        expect(listed.connectedAt).not.toBe(makersConnectedAt.toISOString());
+    });
+
+    test("even read from a frame that can see it, the owner's account is only a holder, never its details", async () => {
+      const inspected = await asPlatform(() =>
+        store.inspectApp({
+          app: GMAIL,
+          agentId: teamBot,
+          userId: person,
+          composioConfigured: true,
+        }),
+      );
+      expect(inspected?.access).toMatchObject({
+        state: "ready",
+        accountHolder: "owner",
+        connectedAt: null,
+      });
+    });
+  });
+
+  describe("M4: request_app_access asks for what the state needs", () => {
+    test("a listed app that is still disabled is asked to be opened, as in the browser", async () => {
+      const read = readAppAccessRequestAnswer(
+        await toolAs(person, personBot)(VAULT),
+      );
+      expect(read?.card).toMatchObject({ appKey: VAULT, kind: "enable" });
+      const shown = await access(asPerson(), personBot, VAULT);
+      expect(shown).toMatchObject({ state: "disabled", requestKind: "enable" });
+      expect(shown.request?.id).toBe(read?.card.requestId);
+    });
+
+    test("a state the person fixes themselves files nothing and says so", async () => {
+      const ask = toolAs(person, personBot);
+      for (const app of [STALE, SLACK, LINEAR]) {
+        const answer = await ask(app);
+        expect(readAppAccessRequestAnswer(answer)).toBeNull();
+        expect(answer).not.toContain("已经可以使用");
+      }
+      const pending = await runAsTenant(person, () =>
+        store.pendingAppAccessRequests({ requesterUserId: person }),
+      );
+      expect(
+        pending.filter((request) =>
+          [STALE, SLACK, LINEAR].includes(request.appKey),
+        ),
+      ).toEqual([]);
+    });
+
+    test("the tool's request and the browser's are one: whichever came first is answered", async () => {
+      const fromTool = readAppAccessRequestAnswer(
+        await toolAs(person, personBot)(TOOL_FIRST),
+      );
+      expect(fromTool?.card.status).toBe("created");
+      const fromBrowser = await asPerson().request(
+        "/access-requests",
+        json({ agentId: personBot, app: TOOL_FIRST }),
+      );
+      expect(fromBrowser.status).toBe(200);
+      expect(
+        ((await fromBrowser.json()) as { request: { id: string } }).request.id,
+      ).toBe(fromTool?.card.requestId ?? "");
+
+      const browserFirst = await asPerson().request(
+        "/access-requests",
+        json({ agentId: personBot, app: ROUTE_FIRST }),
+      );
+      expect(browserFirst.status).toBe(201);
+      const { request } = (await browserFirst.json()) as {
+        request: { id: string };
+      };
+      const toolAfter = readAppAccessRequestAnswer(
+        await toolAs(person, personBot)(ROUTE_FIRST),
+      );
+      expect(toolAfter?.card).toMatchObject({
+        requestId: request.id,
+        status: "existing",
+      });
+      const pending = await runAsTenant(person, () =>
+        store.pendingAppAccessRequests({ requesterUserId: person }),
+      );
+      expect(
+        pending.filter((one) => [TOOL_FIRST, ROUTE_FIRST].includes(one.appKey)),
+      ).toHaveLength(2);
+    });
+  });
+
+  describe("M5: refusals cannot fill the trail", () => {
+    test("withdrawing an id that is not a request id is 404 and writes nothing", async () => {
+      const response = await routesAs({ id: noisy, role: "user" }).request(
+        `/access-requests/${"x".repeat(2000)}`,
+        { method: "DELETE" },
+      );
+      expect(response.status).toBe(404);
+      expect(refusedBy(noisy)).toEqual([]);
+    });
+
+    test("the same refusal again is recorded once", async () => {
+      const routes = routesAs({ id: repeat, role: "user" });
+      for (let round = 0; round < 3; round += 1) {
+        const response = await routes.request(
+          "/access-requests",
+          json({ agentId: hidden, app: CALENDAR }),
+        );
+        expect(response.status).toBe(404);
+      }
+      expect(refusedBy(repeat)).toHaveLength(1);
+    });
+
+    test("one person's refusals are capped, while every answer is still given", async () => {
+      const routes = routesAs({ id: noisy, role: "user" });
+      for (let round = 0; round < 60; round += 1) {
+        const response = await routes.request(
+          "/access-requests",
+          json({ agentId: hidden, app: `noise-${round}` }),
+        );
+        expect(response.status).toBe(404);
+      }
+      expect(refusedBy(noisy).length).toBeGreaterThan(0);
+      expect(refusedBy(noisy).length).toBeLessThanOrEqual(30);
     });
   });
 });
