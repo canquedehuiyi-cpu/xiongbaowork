@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { enterpriseControls } from "../admin/controls";
+import { ownerTenantOfBot } from "../agents/bot-owner";
 import type { Database } from "../db/client";
 import { revokedAccess, users } from "../db/schema/core";
 import type { AppInspection } from "./app-access-store";
@@ -29,6 +30,57 @@ export async function ownerAppsAllowed(userId: string): Promise<boolean> {
   return (
     (await enterpriseControls()?.capabilityFor(userId, "ownerApps")) ?? true
   );
+}
+
+/** 员工的主人是谁：id 与邮箱；没有主人为 null；读不出来为 `unknown`（按主人的授予处理，失败闭合）。 */
+export type OwnerIdentity = { id: string; email: string } | null | "unknown";
+
+export async function ownerIdentityOf(
+  database: Database,
+  botId: string,
+): Promise<OwnerIdentity> {
+  try {
+    const owner = await ownerTenantOfBot(database, botId);
+    if (!owner) return null;
+    const [person] = await database
+      .select({ email: users.email })
+      .from(users)
+      .where(eq(users.id, owner))
+      .limit(1);
+    return person ? { id: owner, email: person.email } : "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
+/**
+ * 这条授予是不是员工的主人做的。标了 `owner` 的是；标了 `admin` 的不是；没有标记的（这一列出现之前写的，
+ * 0197 回填之外剩下的）看授予人：就是员工的主人（邮箱不分大小写，或 id）就是主人的。主人读不出来时按
+ * 主人的授予处理——失败闭合：Team Bot 上不会因此走主人的账号。
+ */
+export function isOwnersGrant(
+  grant: { grantedAs: string | null; grantedBy: string | null },
+  owner: OwnerIdentity,
+): boolean {
+  if (grant.grantedAs === "owner") return true;
+  if (grant.grantedAs === "admin") return false;
+  if (!grant.grantedBy || owner === null) return false;
+  if (owner === "unknown") return true;
+  const by = grant.grantedBy.trim().toLowerCase();
+  return (
+    by === owner.email.trim().toLowerCase() || by === owner.id.toLowerCase()
+  );
+}
+
+/** {@link isOwnersGrant}，先读出员工的主人。 */
+export async function grantedByOwner(
+  database: Database,
+  botId: string,
+  grant: { grantedAs: string | null; grantedBy: string | null },
+): Promise<boolean> {
+  if (grant.grantedAs === "owner") return true;
+  if (grant.grantedAs === "admin" || !grant.grantedBy) return false;
+  return isOwnersGrant(grant, await ownerIdentityOf(database, botId));
 }
 
 /**

@@ -103,7 +103,7 @@ import {
 } from "./catalogue";
 import { accountArgumentFor } from "./account-argument";
 import { type AccountMode, accountFor } from "./shared-accounts";
-import { ownerStillGives } from "./owner-grants";
+import { grantedByOwner, ownerStillGives } from "./owner-grants";
 import { steeringOf } from "./shared-use";
 import { type SharedUseGate, sharedUseAppLockKey } from "./shared-use-store";
 import { appAccessMethods, type SharedAudienceCheck } from "./app-access-store";
@@ -9454,16 +9454,21 @@ export function createPluginStore(options: PluginStoreOptions) {
           sharedVerified: false,
           sharedVerifiedAt: null,
           sharedProbeAction: null,
-          /*
-           * 「谁可以给员工」回到默认值，由管理员在新模式下重新决定：在 Personal 下选的 `any` 说的是「主人
-           * 可以把自己的账号给自己的员工」，带到 Shared 就成了主人可以自己打开团队账号。Shared 的默认值是只有
-           * 管理员；Personal 的默认值由按账号的规则给。
-           */
-          ownerGrants: null,
           updatedAt: new Date(),
         })
         .where(eq(mcpServers.id, appId));
-      if (app?.ownerGrants)
+      /*
+       * 「谁可以给员工」回到只有管理员，由管理员在新模式下明确放开：在 Personal 下选的 `any` 说的是「主人
+       * 可以把自己的账号给自己的员工」，带到 Shared 就成了主人可以自己打开团队账号。写 `admin` 而不是 NULL：
+       * Personal 的默认值（NULL）是 `any`，往返一次就会把升级时回填的「只有管理员」变回主人可给。写在应用
+       * 地址上的每一行（与 `setOwnerGrants` 同一范围），每一次切换都进轨迹。
+       */
+      if (app)
+        await database
+          .update(mcpServers)
+          .set({ ownerGrants: "admin", updatedAt: new Date() })
+          .where(eq(mcpServers.url, app.url));
+      if (app && app.ownerGrants !== "admin")
         await recordAuditEvent(auditStore, {
           eventType: "configuration.changed",
           targetType: "mcp_server",
@@ -9472,7 +9477,7 @@ export function createPluginStore(options: PluginStoreOptions) {
             change: "owner_grants_changed",
             server: appId,
             from: app.ownerGrants,
-            to: null,
+            to: "admin",
             reason: "account_mode_switched",
           },
         });
@@ -10197,7 +10202,10 @@ export function createPluginStore(options: PluginStoreOptions) {
        * 不受影响。
        */
       const [ownGrant] = await database
-        .select({ grantedAs: pluginGrants.grantedAs })
+        .select({
+          grantedAs: pluginGrants.grantedAs,
+          grantedBy: pluginGrants.grantedBy,
+        })
         .from(pluginGrants)
         .where(
           and(
@@ -10207,7 +10215,10 @@ export function createPluginStore(options: PluginStoreOptions) {
           ),
         )
         .limit(1);
-      if (ownGrant?.grantedAs === "owner") {
+      if (
+        ownGrant &&
+        (await grantedByOwner(database, input.botId, ownGrant))
+      ) {
         const owner = await ownerTenantOfBot(database, input.botId);
         if (!owner || !(await ownerStillGives(database, owner))) {
           await recordAuditEvent(auditStore, {
