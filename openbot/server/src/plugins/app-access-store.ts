@@ -39,7 +39,11 @@ import {
 import type { BrokerApp, BrokerConnection } from "./broker";
 import { CATALOGUE, type CatalogueEntry, catalogueEntry } from "./catalogue";
 import { toolkitOf } from "./composio";
-import { ownerAppsAllowed } from "./owner-grants";
+import {
+  isOwnersGrant,
+  ownerAppsAllowed,
+  ownerIdentityOf,
+} from "./owner-grants";
 import { asAccountMode, brokeredProvenance } from "./shared-accounts";
 
 /**
@@ -613,18 +617,26 @@ export function appAccessMethods(context: {
     agentId: string,
   ): Promise<Map<string, { byAdmin: boolean }>> {
     const rows = await database
-      .select({ ref: pluginGrants.ref, grantedAs: pluginGrants.grantedAs })
+      .select({
+        ref: pluginGrants.ref,
+        grantedAs: pluginGrants.grantedAs,
+        grantedBy: pluginGrants.grantedBy,
+      })
       .from(pluginGrants)
       .where(
         and(eq(pluginGrants.kind, "mcp"), eq(pluginGrants.agentId, agentId)),
       );
+    // 没有标记、授予人是员工主人的老授予也是主人的（`isOwnersGrant`），只有这时才去读主人。
+    const owner = rows.some((row) => row.grantedAs === null && row.grantedBy)
+      ? await ownerIdentityOf(database, agentId)
+      : null;
     const servers = new Map<string, { byAdmin: boolean }>();
     for (const grant of rows) {
       const serverId = grant.ref.split("/")[0] ?? "";
       if (!serverId) continue;
       servers.set(serverId, {
         byAdmin:
-          grant.grantedAs !== "owner" ||
+          !isOwnersGrant(grant, owner) ||
           (servers.get(serverId)?.byAdmin ?? false),
       });
     }

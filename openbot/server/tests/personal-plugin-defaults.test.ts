@@ -362,3 +362,26 @@ describe("the skills there are, in the personal edition", () => {
     expect(grants.filter((grant) => grant.endsWith(":standup"))).toEqual([]);
   });
 });
+
+/*
+ * 列出员工是每次运行都走的读路径：补齐默认时出了错（库一时读不到、学习设置那一行被锁住），只记一条警告，
+ * 运行照常拿到它已经持有的东西。
+ */
+test("a failure while filling in the defaults does not fail the run", async () => {
+  setEdition("personal");
+  const { store, deps } = fakeStore({ notion: NOTION });
+  deps.bots = async () => {
+    throw new Error("the database is unreachable");
+  };
+  const warn = console.warn;
+  const warned: unknown[] = [];
+  console.warn = (...args: unknown[]) => {
+    warned.push(args);
+  };
+  try {
+    expect(await store.listForAgent("assistant")).toEqual([]);
+  } finally {
+    console.warn = warn;
+  }
+  expect(warned).toHaveLength(1);
+});
