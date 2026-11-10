@@ -516,14 +516,18 @@ describe("requests and decisions", () => {
     );
     expect(filed.created).toBe(true);
     const [pending] = await pendingFor(TEAM_BOT);
-    expect(pending?.proposed).toEqual({
+    expect(pending?.proposed).toMatchObject({
       audience: "people",
       outsideInput: false,
-      members: [
+    });
+    // 名单是集合，不讲顺序。
+    expect(pending?.proposed.members).toHaveLength(2);
+    expect(pending?.proposed.members).toEqual(
+      expect.arrayContaining([
         { kind: "user", value: NAMED },
         { kind: "group", value: `${suite}-platform` },
-      ],
-    });
+      ]),
+    );
     expect(pending?.ownerUserId).toBe(OWNER);
   });
 

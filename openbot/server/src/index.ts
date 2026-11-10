@@ -2293,7 +2293,7 @@ await startupLifecycle.run(async (startup) => {
           : null,
     })),
     // 申请访问：用不了某个应用时替对方向管理员申请（迁移 0153）。只建一条本租户的申请，不碰应用。
-    // 类型与浏览器入口同一个判定，broker 应用的状态要知道 Composio 配没配（评审 M4）。
+    // 类型与浏览器入口同一个判定，broker 应用的状态要知道 Composio 配没配，否则 broker 应用会被读成没打开。
     ...appAccessTools({
       store: pluginStore,
       botId,

@@ -22,7 +22,11 @@ import { createAccountModeSwitch } from "../src/plugins/account-mode";
 import type { ComposioBroker } from "../src/plugins/broker";
 import { createPluginRoutes } from "../src/plugins/routes";
 import { DEPLOYMENT_VENDOR_PREFIX } from "../src/plugins/shared-accounts";
-import { createPluginStore, PluginRefusedError } from "../src/plugins/store";
+import {
+  createPluginStore,
+  PluginRefusedError,
+  ServerWriteRefusedError,
+} from "../src/plugins/store";
 import { asPlatform, runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { bindTestRoleWriter } from "./support/role-writer";
@@ -31,9 +35,10 @@ import { bindTestRoleWriter } from "./support/role-writer";
  * 共享账号与账号模式（上游 #757：`account-mode.integration`、`shared-brokered-routes`、
  * `shared-gated-mode`，按 fork 改写成一个文件）。
  *
- * 断言的是安全规则本身：谁能连接团队账号（只有管理员）、谁能驾驶团队账号（X1 只有员工的主人和管理员，
- * 且发起者必须说得出是谁在驾驶）、Team Bot 的队友拿不到团队账号、check-in 碰不到团队账号、切换模式在
- * vendor 处全部撤销成功之前什么都不变、切到 Shared 立起「写之前先问」规则。
+ * 断言的是安全规则本身：谁能连接团队账号（只有持有管理员能力的请求，降权的会话不行）、谁能驾驶团队账号
+ * （X3 并入共享使用批准之前没有任何批准，所以谁都不能——主人、管理员、自助授权的成员、Team Bot 队友，与
+ * 上游「没有批准就拒绝」一致；发起者说不清是谁在驾驶、check-in 同样拒绝）、切换模式在 vendor 处全部撤销
+ * 成功之前什么都不变、切到 Shared 立起「写之前先问」规则、团队身份下的账号不论是否确认都会被撤销。
  *
  * 真实的 store、路由、管理员能力中间件和行级安全；broker 和 vendor 调用是替身，记下被问了什么。直接调用
  * 切换时在 platform 帧里（等同持有能力的管理员）；经路由时由管理员能力中间件给出能力。
@@ -723,17 +728,44 @@ describe("guarding the team account itself", () => {
         }),
       ),
     ).rejects.toThrow();
+    expect(h.vendor.asked.revoked).toEqual([vendorId]);
+  });
+
+  test("a key app's team account is never connected from a frame without the administrator's capability", async () => {
+    // 填写字段的应用：没有能力检查的话，下面这一步会把内容以团队身份交给 vendor（复核 N4）。
+    const h = harness();
+    await enable(h.toolkit, "API_KEY");
+    await asPlatform(() =>
+      h.modes.switchMode({
+        serverId: h.toolkit,
+        mode: "shared",
+        by: ADMIN,
+        confirm: true,
+      }),
+    );
+
     await expect(
       runAsTenant(ADMIN, () =>
         h.store.connectSharedWithFields({
           toolkit: h.toolkit,
-          values: { subdomain: "acme" },
+          values: { api_key: "a-key" },
           by: ADMIN,
         }),
       ),
-    ).rejects.toThrow();
+    ).rejects.toBeInstanceOf(ServerWriteRefusedError);
     expect(h.vendor.asked.fields).toEqual([]);
-    expect(h.vendor.asked.revoked).toEqual([vendorId]);
+
+    // 同一个调用在持有能力的帧里（platform 等同）照常连上，说明拦下它的就是能力检查。
+    await asPlatform(() =>
+      h.store.connectSharedWithFields({
+        toolkit: h.toolkit,
+        values: { api_key: "a-key" },
+        by: ADMIN,
+      }),
+    );
+    expect(h.vendor.asked.fields).toEqual([
+      (await appRow(h.toolkit))?.sharedVendorUserId as string,
+    ]);
   });
 
   test("an account authorised under the team identity but never confirmed is ended when the app goes back to Personal", async () => {
