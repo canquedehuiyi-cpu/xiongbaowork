@@ -12,7 +12,11 @@ import {
 } from "../db/schema";
 import { QuotaExceeded } from "../quota/limits";
 import { asPlatform, isPersonTenant, runAsTenant } from "../tenant/context";
-import { collectEvidence, type EvidenceThread } from "./evidence";
+import {
+  collectEvidence,
+  type EvidenceThread,
+  MAX_RUNS_PER_PASS,
+} from "./evidence";
 import {
   MIN_THREADS_PER_AGENT,
   type ProposalCall,
@@ -172,7 +176,9 @@ export function createLocalLearningEngine(deps: LocalLearningEngineDeps) {
         .filter((group) => group.threads.length >= MIN_THREADS_PER_AGENT)
         .slice(0, MAX_AGENTS_PER_RUN);
       if (byAgent.length === 0) {
-        // 不够一位员工两段对话：游标不推进，攒到下次一起看。
+        // 不够一位员工两段对话：游标不推进，攒到下次一起看。读满了一窗却还是不够（比如都在
+        // 同一段对话里）时推进，不然下次读到的还是这一窗，永远学不到后面的。
+        if (evidence.runsRead >= MAX_RUNS_PER_PASS) await advance();
         return await skip("no_evidence", evidence.runsRead);
       }
 

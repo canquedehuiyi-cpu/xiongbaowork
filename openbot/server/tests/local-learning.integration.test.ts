@@ -19,6 +19,7 @@ import {
   users,
 } from "../src/db/schema";
 import { createLocalLearningEngine } from "../src/local-learning/engine";
+import { MAX_RUNS_PER_PASS } from "../src/local-learning/evidence";
 import type { ProposalCall } from "../src/local-learning/propose";
 import { createLocalLearningRoutes } from "../src/local-learning/routes";
 import { QuotaExceeded } from "../src/quota/limits";
@@ -32,7 +33,8 @@ const A = `local-learning-a-${suite}`;
 const B = `local-learning-b-${suite}`;
 const AGENT_A = `ll-agent-a-${suite}`;
 const AGENT_B = `ll-agent-b-${suite}`;
-const tenants = [A, B];
+const C = `local-learning-c-${suite}`;
+const tenants = [A, B, C];
 
 /** 模型的提示词，按人记下；回答由测试决定。 */
 const prompts: { tenant: string; prompt: string }[] = [];
@@ -310,6 +312,35 @@ describe("learning once, in the person's own frame", () => {
       quotaFull = false;
     }
   });
+});
+
+test("a full window with too little to learn from still moves on, so the next pass reads further", async () => {
+  const threadId = `ll-thread-${randomUUID()}`;
+  await runAsTenant(C, async () => {
+    await database.insert(threads).values({
+      id: threadId,
+      agentId: AGENT_A,
+      name: "一段很长的对话",
+      messagesSnapshot: [{ id: "m1", role: "user", content: "继续" }],
+    });
+    await database.insert(threadRuns).values(
+      Array.from({ length: MAX_RUNS_PER_PASS }, (_, n) => ({
+        id: `ll-run-${randomUUID()}`,
+        threadId,
+        agentId: AGENT_A,
+        eventCount: 2,
+        createdAt: new Date(Date.now() - 7_200_000 + n * 1_000),
+      })),
+    );
+  });
+
+  const result = await runAsTenant(C, () => engine.learnNow(C));
+
+  expect(result).toEqual({ outcome: "skipped", reason: "no_evidence" });
+  const [state] = await runAsTenant(C, () =>
+    database.select().from(localLearningState),
+  );
+  expect(state?.evidenceCursor).toBeInstanceOf(Date);
 });
 
 describe("the sweep", () => {
