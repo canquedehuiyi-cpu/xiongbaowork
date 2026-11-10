@@ -85,6 +85,24 @@ describe("an app's account mode", () => {
     });
   });
 
+  test("an app always has a mode", async () => {
+    expect(
+      await violation(() => server(`${app}-null`, { accountMode: null })),
+    ).toMatch(/account_mode|not-null|null value/);
+  });
+
+  test("a Shared app's connected team account names who connected it", async () => {
+    expect(
+      await violation(() =>
+        server(`${app}-anonymous`, {
+          accountMode: "shared",
+          sharedVendorUserId: `openbot-deployment:z:${suite}`,
+          sharedConnectedAt: new Date(),
+        }),
+      ),
+    ).toMatch(/mcp_servers_shared_account_check/);
+  });
+
   test("a Personal app holds no team account", async () => {
     expect(
       await violation(() =>
@@ -99,6 +117,14 @@ describe("an app's account mode", () => {
         server(`${app}-connected`, {
           accountMode: "personal",
           sharedConnectedAt: new Date(),
+        }),
+      ),
+    ).toMatch(/mcp_servers_shared_account_check/);
+    expect(
+      await violation(() =>
+        server(`${app}-verified`, {
+          accountMode: "personal",
+          sharedVerified: true,
         }),
       ),
     ).toMatch(/mcp_servers_shared_account_check/);
@@ -177,6 +203,22 @@ describe("brokered_accounts", () => {
         ),
       ),
     ).toMatch(/brokered_accounts_provider_check/);
+  });
+
+  test("a row is only ever a person's, never the platform's or the team's", async () => {
+    expect(
+      await violation(() =>
+        platform(() =>
+          database.insert(brokeredAccounts).values({
+            provider: "composio",
+            app,
+            userId: person,
+            vendorUserId: person,
+            accountId: "ca_platform",
+          }),
+        ),
+      ),
+    ).toMatch(/brokered_accounts_tenant_person/);
   });
 
   test("a person sees their own accounts and nobody else's", async () => {

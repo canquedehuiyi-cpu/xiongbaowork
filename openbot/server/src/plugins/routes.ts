@@ -1453,7 +1453,20 @@ export function createPluginRoutes(
       const shared =
         app?.mode === "shared" && schemeKind(row.authScheme) !== "none";
       if (shared) {
-        if (context.var.actor.role !== "admin") {
+        /*
+         * 会话里的角色是登录时定的；真正的门是管理员能力（重新读过角色）。在把团队身份交给 vendor 之前问
+         * （评审 I1），降权管理员的会话因此碰不到团队账号。
+         */
+        let writer = context.var.actor.role === "admin";
+        if (writer) {
+          try {
+            store.requireTeamAccountWriter();
+          } catch (error) {
+            if (!isServerWriteRefusal(error)) throw error;
+            writer = false;
+          }
+        }
+        if (!writer) {
           return context.json(
             {
               error: `${row.title} 用的是一个共享的团队账号，只有管理员能连接它。没有建立任何连接。`,
@@ -2369,6 +2382,12 @@ export function createPluginRoutes(
             }),
       );
     } catch (error) {
+      if (isServerWriteRefusal(error)) {
+        return context.json(
+          { error: "这个应用用的是共享的团队账号，只有管理员能管理它。" },
+          403,
+        );
+      }
       if (error instanceof PluginRefusedError) {
         return context.json({ error: withoutBrokerName(error.message) }, 400);
       }

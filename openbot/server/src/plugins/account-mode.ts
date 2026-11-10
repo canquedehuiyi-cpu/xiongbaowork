@@ -36,9 +36,9 @@ export class AccountModeRefusedError extends Error {
  * 原模式；已经撤销成功的账号的行照常删掉，因为声称一个 vendor 已不再持有的账号，是另一种说谎。
  *
  * 与上游的差异：
- * - 上游切到 Shared 时为每个持有该应用的员工写「共享使用批准」；那张表在 X3 并入。在那之前共享账号闸门对
- *   每个员工都用最严的一档（`./shared-use` 的 `STRICTEST_APPROVAL`：只有员工主人和管理员），所以这里
- *   不写批准、预览里也没有员工列表。
+ * - 上游切到 Shared 时为管理员在预览里看过的员工写「共享使用批准」；那张表在 X3 并入。在那之前没有任何
+ *   批准，共享闸门对每一次调用都拒绝（与上游「没有批准就拒绝」一致，评审 C1），所以这里不写批准、预览里
+ *   也没有员工列表。
  * - 应用的「写之前先问」团队规则照上游写（`botId: *`、`toolRef: <app>/*`、`effect: write`、`ask`）。
  * - 撤销其他人的连接要跨租户：走 store 里 `removeServer` 的同一道门（`reachEveryPersonOn`），之前先要
  *   管理员能力（`requireServerWriter`）；应用行与团队规则在管理员自己的帧里写。
@@ -87,7 +87,7 @@ export function createAccountModeSwitch(deps: {
         ? 0
         : leaving === "person"
           ? await store.countPeopleConnectedTo(toolkit)
-          : app.shared?.connectedAt
+          : app.shared
             ? 1
             : 0;
     return {
@@ -163,6 +163,14 @@ export function createAccountModeSwitch(deps: {
         return { changed: true, revoked: 0 };
       }
 
+      /*
+       * 前置条件先于任何撤销（评审 M4）：没有部署 id 就铸不出团队身份，那就一个账号都不该撤。
+       */
+      const deploymentId = deps.deploymentId?.trim();
+      if (input.mode === "shared" && !deploymentId)
+        throw new AccountModeRefusedError(
+          "这个部署没有 id，不能持有共享账号。请设置 DEPLOYMENT_ID。",
+        );
       const failures: { account: string; error: string }[] = [];
       let revoked = 0;
       if (input.mode === "shared") {
@@ -172,7 +180,12 @@ export function createAccountModeSwitch(deps: {
         });
         revoked += ended.revoked;
         failures.push(...ended.failures);
-      } else if (app.shared?.connectedAt) {
+      } else if (app.shared) {
+        /*
+         * 只要有团队身份就撤销，不只看是否已确认（评审 I2）：管理员在 vendor 的同意屏幕上授权了、却没有
+         * 回来确认时，vendor 那里已经有一个团队账号，而这里还没有记下。撤销对「没有账号」是幂等的；失败
+         * 就不改模式、不清团队身份，这个账号仍然能从这里被撤销。
+         */
         try {
           await store.disconnectShared({
             toolkit,
@@ -196,15 +209,11 @@ export function createAccountModeSwitch(deps: {
        * Personal：先让模式停止共享使用，再收拾规则，因为先删规则会留下一个不问就写的 Shared 应用。
        */
       if (input.mode === "shared") {
-        if (!deps.deploymentId?.trim())
-          throw new AccountModeRefusedError(
-            "这个部署没有 id，不能持有共享账号。请设置 DEPLOYMENT_ID。",
-          );
         await ensureRule(app.appId, input.by);
         await store.setAccountModeColumns(
           app.appId,
           "shared",
-          mintDeploymentVendorUserId(deps.deploymentId),
+          mintDeploymentVendorUserId(deploymentId as string),
         );
       } else {
         await store.setAccountModeColumns(app.appId, "personal", null);

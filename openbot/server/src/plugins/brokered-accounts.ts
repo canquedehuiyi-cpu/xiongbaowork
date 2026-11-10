@@ -2,6 +2,7 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { type AuditStore, recordAuditEvent } from "../audit";
 import type { Database } from "../db/client";
 import { brokeredAccounts, mcpServers } from "../db/schema";
+import { isPersonTenant, runAsTenant } from "../tenant/context";
 import type { ComposioBroker } from "./broker";
 import { type BrokerProvider, toolkitOfFor } from "./access";
 import { filedUnderPerson } from "./shared-accounts";
@@ -165,6 +166,7 @@ export function createAccountBook(context: {
         })
         .onConflictDoUpdate({
           target: [
+            brokeredAccounts.tenantId,
             brokeredAccounts.provider,
             brokeredAccounts.app,
             brokeredAccounts.userId,
@@ -246,11 +248,55 @@ export function createAccountBook(context: {
     };
   }
 
+  /**
+   * 别人的账号（Team Bot 队友用主人的账号）上一次调用要钉到的账号 id：主人的默认账号，没有默认时是最早
+   * 的那个，与主人自己不点名时一样（评审 N1）。只读 `account_id` 与是否默认，不读名字，所以主人的账号名
+   * 不会进队友的审批卡与审计（M5）。
+   *
+   * 在主人的帧里读：主人的账号行只在主人的租户里，队友的帧看不到；读法与审批里「员工主人那一层的规则
+   * 在主人的帧里读」一样，只读、只读这一列。主人在这里一个账号都没记下时答 null，调用照旧不指定账号
+   * （账号被列出之前的连接）。
+   */
+  async function ownersDefault(input: {
+    toolkit: string;
+    userId: string;
+  }): Promise<{ accountId: string | null } | null> {
+    if (!isPersonTenant(input.userId)) return null;
+    const rows = await runAsTenant(input.userId, () =>
+      database
+        .select({
+          id: brokeredAccounts.id,
+          vendorUserId: brokeredAccounts.vendorUserId,
+          accountId: brokeredAccounts.accountId,
+          isDefault: brokeredAccounts.isDefault,
+          connectedAt: brokeredAccounts.connectedAt,
+          createdAt: brokeredAccounts.createdAt,
+        })
+        .from(brokeredAccounts)
+        .where(
+          and(
+            eq(brokeredAccounts.provider, PROVIDER),
+            eq(brokeredAccounts.app, input.toolkit),
+            eq(brokeredAccounts.userId, input.userId),
+          ),
+        ),
+    );
+    const mine = ordered(
+      rows
+        .filter((row) => filedUnderPerson(row.vendorUserId, input.userId))
+        .map((row) => ({ ...row }) as unknown as Row),
+    );
+    const chosen = mine.find((row) => row.isDefault) ?? mine[0];
+    if (!chosen) return null;
+    return { accountId: chosen.accountId === "" ? null : chosen.accountId };
+  }
+
   return {
     rowsFor,
     sync,
     pick,
     settleDefault,
+    ownersDefault,
 
     /**
      * Bot 的工具所在的每个服务器上，这个人持有账号的 broker 个人应用：标题和他的账号。这是
