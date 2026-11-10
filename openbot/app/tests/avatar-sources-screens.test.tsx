@@ -24,8 +24,8 @@ import {
   runningTasksQueryOptions,
   wakerGroupKeys,
 } from "@/lib/waker-groups/queries";
-import { Route as WakerDetailRoute } from "@/routes/_authed/_app/wakers_.$agentId";
 import { Route as WakersRoute } from "@/routes/_authed/_app/wakers";
+import { Route as WakerDetailRoute } from "@/routes/_authed/_app/wakers_.$agentId";
 import { settleReactWork } from "./settle-react-work";
 
 /**
@@ -75,6 +75,9 @@ const coworker: AgentProfile = {
   systemOwned: false,
   canManage: true,
   mine: true,
+  isolated: false,
+  isolationActive: false,
+  isolationOffReason: null,
 };
 const avatar: AgentProfile = {
   ...coworker,

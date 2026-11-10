@@ -6,7 +6,7 @@
 | 项 | 值 |
 | --- | --- |
 | 分叉点 | `63f99cf`（2026-10-05，#734） |
-| 当前已同步到 | `ac9c16f7`（上游 v1.0.0，2026-11-09） |
+| 当前已同步到 | `ac9c16f7`（上游 v1.0.0，2026-11-09；服务端 M3、前端 M4） |
 
 ## 同步方法
 
@@ -102,4 +102,39 @@ git merge-tree --write-tree --merge-base=<上次同步点> <本仓库 openbot �
   以免员工不问、网关也不问；依赖这些底线的上游用例留 `M3:` 注释暂缓。
 - 员工主动提醒（check-in）：只有提出了事情的那次才开看板卡片、计入当月任务额度（产品决定）；安静的不开卡、
   不计任务，额度用完的人不再调研（跳过原因 `quota`）。模型用量照旧按实际调用计量。
+
+### M4：前端同步到 `ac9c16f7`（v1.0.0）
+
+只做 `app/`（服务端在 M3 已到 v1.0.0）。三方合并以上游 `6fb38c8b:app` 为共同祖先，fork 的 `openbot/app` 为我方，
+上游 `v1.0.0:app` 为对方：171 个冲突文件（内容 162、一边删一边改 70、双方新增 9），按区域分组解决。
+
+**取舍原则（用户决定）**
+
+- 保留 fork 的员工/群组信息架构与中文界面；上游新功能接进 fork 的页面，不换上游的新侧栏、Bot 详情页结构、
+  `settings/_personal` 和 capabilities / connections / manage 区。fork 当初删掉的 66 个上游文件（上游 Bot 详情各子页、
+  审批设置、记忆页等）维持删除，其上的新功能搬进员工详情页、`/approvals`、`/memory` 等 fork 页面。
+- 收：主题皮肤与字体、新手引导与入门任务（去掉预约演示）、员工实时终端界面、教员工做事（Recorder 界面）、
+  按对话选模型、员工任务与「需要你」、员工动态、学到的技能审核与分享、决策卡、管理端新页（模型提供方、权限、
+  主动巡检、单条边界规则、单个技能）。
+- 不收：个人版、Arcade、共享账号 / 多账号（#757、#1298）、OpenBot for Business 与 Book a demo、#931 Entra OBO、
+  上游新侧栏与 connections / capabilities / manage 插件页（删除这些路由与只服务它们的组件和测试）。
+- 插件界面与插件会话对齐：#1226 / 选技能、#1297 密钥指引、#1223 不点名提供商、#950 部署专属客户端在插件会话补齐
+  服务端（main 784e3248 起）后接上前端。
+
+**为 fork 做的改动**
+
+- `shared/tool-name.ts`、`shared/approval-outcomes.ts`、`shared/audit-words.ts` 与服务端包装句中文化（给模型看的不变）；
+  routine 统一叫「定时任务」，与 fork 界面一致。
+- 员工实时终端：拥有独立 Linux 用户的员工经新的 root helper 子命令 `xb-bot shell` 以员工身份起交互式 bash
+  （启动脚本与环境以参数传入，root 不读调用方给的路径；会话结束、调用方被杀时按会话清理员工进程；走出口过滤）。
+  经独立安全审查与复核，测试在镜像里以真实 sudo + pty 验证。
+- 员工任务读写在 `/api/bot-tasks`（`/api/tasks` 是 fork 的任务看板），模型目录在 `/api/model-catalogue`。
+- 单用户闸门：fork 在 `index.ts` 追加的路由都带上 `config.singleUserAccess`（M3 已修）。
+
+**留待后续**
+
+- 学习证据：对话不出库，录制接收接口（`/api/copilotkit/trajectory/:id/connect`）与本地学习证据提取在 L 阶段补，
+  见 `docs/automatic-learning.md`。
+- 设置里的「审批」页（审批规则仍在 `/approvals`）、电脑工具按调用所属员工执行（`useBotOfCall` / `useOfferedTo`）、上游 manage 系列的
+  电脑、凭据、审计分区、新建员工用上游 NewBotSheet 还是 fork 向导（需产品判断）。
 

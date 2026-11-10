@@ -55,9 +55,11 @@ describe("seedMessage", () => {
 });
 
 describe("the first-message stash", () => {
-  test("hands the message to the channel that was just created", () => {
-    stashFirstMessage("channel_a", "hello");
-    expect(takeFirstMessage("channel_a")).toBe("hello");
+  test("hands the message to the channel that was just created, a `/` skill still at its start", () => {
+    stashFirstMessage("channel_a", "/tally-card hello");
+    expect(takeFirstMessage("channel_a")).toEqual({
+      text: "/tally-card hello",
+    });
   });
 
   test("gives it up only once", () => {
@@ -74,7 +76,7 @@ describe("the first-message stash", () => {
   test("keeps two channels' messages apart", () => {
     stashFirstMessage("channel_c", "for c");
     stashFirstMessage("channel_d", "for d");
-    expect(takeFirstMessage("channel_d")).toBe("for d");
-    expect(takeFirstMessage("channel_c")).toBe("for c");
+    expect(takeFirstMessage("channel_d")?.text).toBe("for d");
+    expect(takeFirstMessage("channel_c")?.text).toBe("for c");
   });
 });

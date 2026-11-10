@@ -90,6 +90,7 @@ function server(overrides: Partial<PluginServer>): PluginServer {
     lastError: null,
     addedBy: "admin@example.com",
     dynamicClient: false,
+    adminConnectOnly: false,
     authScheme: null,
     tools: [],
     withdrawn: [],

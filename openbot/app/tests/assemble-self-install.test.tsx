@@ -73,6 +73,9 @@ const base: AgentProfile = {
   systemOwned: false,
   canManage: true,
   mine: true,
+  isolated: false,
+  isolationActive: false,
+  isolationOffReason: null,
 };
 
 const deploymentSkill = (slug: string, title: string) => ({
@@ -144,6 +147,7 @@ function draw({
         lastError: null,
         addedBy: null,
         dynamicClient: false,
+        adminConnectOnly: false,
         authScheme: null,
         tools: ["search", "create_page"].map((name) => ({
           serverId,

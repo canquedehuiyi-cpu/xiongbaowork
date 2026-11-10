@@ -598,8 +598,8 @@ describe("search_tools", () => {
   });
 
   test("is drawn in the conversation in words, not as its name", () => {
-    expect(ownToolLabel(SEARCH_TOOLS, true)).toBe("Looking for a tool");
-    expect(ownToolLabel(SEARCH_TOOLS)).toBe("Looked for a tool");
+    expect(ownToolLabel(SEARCH_TOOLS, true)).toBe("正在查找工具");
+    expect(ownToolLabel(SEARCH_TOOLS)).toBe("查找了工具");
   });
 });
 

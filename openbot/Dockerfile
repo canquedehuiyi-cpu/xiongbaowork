@@ -274,7 +274,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends sudo \
 
 # EACH EMPLOYEE ITS OWN LINUX USER. An employee's commands run as `xb-<botKey>` (a uid in
 # 20000-59999), in `/workspace/bots/<botKey>`, through the narrow root helper `xb-bot`: pwuser may
-# sudo its `ensure` and `run` and nothing else of it. `restore`, which s6 runs as root at start
+# sudo its `ensure`, `run` and `shell` (the employee's live terminal, as the employee) and nothing
+# else of it. `restore`, which s6 runs as root at start
 # (`computer-users`), is not in sudoers. Each employee has a primary group of its own (gid = uid
 # where free, hence the SYS_GID range) and `xbbots` beside it; pwuser is alone in `xbcomp`, the group
 # of every employee directory, so the file tools reach them all.
@@ -298,7 +299,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends acl procps git 
   && sed -i -E '/^#?[[:space:]]*SYS_[UG]ID_(MIN|MAX)[[:space:]]/d' /etc/login.defs \
   && printf '%s\n' 'SYS_UID_MIN 20000' 'SYS_UID_MAX 59999' 'SYS_GID_MIN 20000' 'SYS_GID_MAX 59999' >> /etc/login.defs \
   && printf '%s\n' \
-    'pwuser ALL=(root) NOPASSWD: /usr/local/sbin/xb-bot ensure *, /usr/local/sbin/xb-bot run *' \
+    'pwuser ALL=(root) NOPASSWD: /usr/local/sbin/xb-bot ensure *, /usr/local/sbin/xb-bot run *, /usr/local/sbin/xb-bot shell *' \
     > /etc/sudoers.d/xb-bot \
   && chmod 0440 /etc/sudoers.d/xb-bot \
   && visudo -cf /etc/sudoers.d/xb-bot

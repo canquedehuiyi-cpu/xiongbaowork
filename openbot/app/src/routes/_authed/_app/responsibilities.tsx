@@ -33,8 +33,21 @@ import {
 } from "@/lib/responsibilities";
 import { queryClient } from "@/query-client";
 
+/**
+ * `agent`: only this employee's responsibilities, as an employee's own page links here. Absent, or
+ * not a string, is everybody's, so every older link to the page keeps its meaning.
+ */
+export function responsibilitiesSearch(search: Record<string, unknown>): {
+  agent?: string;
+} {
+  return typeof search.agent === "string" && search.agent
+    ? { agent: search.agent }
+    : {};
+}
+
 export const Route = createFileRoute("/_authed/_app/responsibilities")({
   component: ResponsibilitiesPage,
+  validateSearch: responsibilitiesSearch,
 });
 const fieldClass = "grid gap-1 text-sm";
 const selectClass = "h-9 rounded-md border bg-background px-3 text-sm";
@@ -44,6 +57,11 @@ async function refresh() {
 
 function ResponsibilitiesPage() {
   const goals = useQuery(responsibilitiesQueryOptions());
+  const { agent } = responsibilitiesSearch(Route.useSearch());
+  const bots = useQuery(agentListQueryOptions());
+  const shown = (goals.data ?? []).filter(
+    (goal) => agent === undefined || goal.agentId === agent,
+  );
   return (
     <PageShell
       title="长期职责"
@@ -51,16 +69,32 @@ function ResponsibilitiesPage() {
     >
       <div className="grid gap-6">
         <NewResponsibility />
+        {agent ? (
+          <p className="text-muted-foreground text-sm" role="status">
+            只显示{" "}
+            {bots.data?.find((bot) => bot.id === agent)?.name ?? "这位员工"}{" "}
+            的长期职责 ·{" "}
+            <Link
+              className="underline underline-offset-4"
+              search={{}}
+              to="/responsibilities"
+            >
+              看全部
+            </Link>
+          </p>
+        ) : null}
         {goals.isPending ? (
           <p>正在读取长期职责…</p>
         ) : goals.error ? (
           <p role="alert" className="text-destructive">
             {goals.error.message}
           </p>
-        ) : goals.data?.length ? (
-          goals.data.map((goal) => <GoalCard key={goal.id} goal={goal} />)
+        ) : shown.length ? (
+          shown.map((goal) => <GoalCard key={goal.id} goal={goal} />)
         ) : (
-          <p className="text-muted-foreground">你还没有长期职责。</p>
+          <p className="text-muted-foreground">
+            {agent ? "这位员工还没有长期职责。" : "你还没有长期职责。"}
+          </p>
         )}
         <GithubSources />
       </div>

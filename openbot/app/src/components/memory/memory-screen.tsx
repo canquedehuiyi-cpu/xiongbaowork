@@ -20,13 +20,13 @@ import {
   addMemorySource,
   availableMemorySourcesQueryOptions,
   createMemory,
-  deleteMemory,
+  deleteMemoryMutationOptions,
   type MemoryRecord,
   memoriesQueryOptions,
   memoryKeys,
   memorySourceAction,
   memorySourcesQueryOptions,
-  updateMemory,
+  updateMemoryMutationOptions,
 } from "@/lib/memory";
 import { queryClient } from "@/query-client";
 
@@ -128,21 +128,42 @@ export function MemoryScreen({
     </>
   );
 }
-function MemoryCard({ memory }: { memory: MemoryRecord }) {
+/**
+ * What a memory's status line says: who formed it and where its review stands.
+ *
+ * A memory CopilotKit Intelligence holds for this person keeps only its words there, so it is never
+ * paused or reviewed: it says where it is kept instead (and the card offers only 保存 and 忘掉).
+ */
+export function memoryStatus(memory: MemoryRecord, botName: string): string {
+  if (memory.formedBy === "intelligence") return "保存在后端";
+  if (!memory.enabled) return "已停用";
+  if (memory.formedBy === "bot")
+    return `由 ${botName} 记下${memory.reviewState === "unreviewed" ? " · 待复核" : ""}`;
+  return memory.reviewState === "unreviewed" ? "导入的 · 待复核" : "已复核";
+}
+
+/**
+ * One memory: its words in a box saved in place, then whether it is in use, confirming it and
+ * forgetting it.
+ *
+ * A memory Intelligence holds (`formedBy: "intelligence"`) can only be edited or forgotten: the back
+ * end keeps no switch or review for it, and the server refuses both, so neither is offered.
+ */
+export function MemoryCard({ memory }: { memory: MemoryRecord }) {
   const [content, setContent] = useState(memory.content);
   const id = useId();
-  const save = useMutation({
-    mutationFn: (input: {
-      content?: string;
-      enabled?: boolean;
-      reviewState?: "confirmed";
-    }) => updateMemory(memory.id, input),
-    onSuccess: refresh,
-  });
-  const forget = useMutation({
-    mutationFn: () => deleteMemory(memory.id),
-    onSuccess: refresh,
-  });
+  const agents = useQuery(agentListQueryOptions());
+  const botName =
+    agents.data?.find((agent) => agent.id === memory.formedByAgentId)?.name ??
+    "一位员工";
+  const save = useMutation(updateMemoryMutationOptions(queryClient));
+  const forget = useMutation(deleteMemoryMutationOptions(queryClient));
+  const update = (input: {
+    content?: string;
+    enabled?: boolean;
+    reviewState?: "confirmed";
+  }) => save.mutate({ id: memory.id, input });
+  const heldByIntelligence = memory.formedBy === "intelligence";
   return (
     <article className="grid gap-3 rounded-lg border p-4">
       <div className="flex flex-wrap justify-between gap-2">
@@ -150,13 +171,7 @@ function MemoryCard({ memory }: { memory: MemoryRecord }) {
           {memory.provenance}
         </label>
         <span className="text-xs text-muted-foreground">
-          {!memory.enabled
-            ? "已停用"
-            : memory.reviewState === "unreviewed"
-              ? memory.formedBy === "bot"
-                ? "员工自己记下的 · 待复核"
-                : "导入的 · 待复核"
-              : "已复核"}
+          {memoryStatus(memory, botName)}
         </span>
       </div>
       {memory.formedBy === "bot" && (
@@ -190,31 +205,33 @@ function MemoryCard({ memory }: { memory: MemoryRecord }) {
         <Button
           size="sm"
           disabled={save.isPending || !content.trim()}
-          onClick={() => save.mutate({ content })}
+          onClick={() => update({ content })}
         >
           保存
         </Button>
-        {memory.reviewState === "unreviewed" && (
+        {!heldByIntelligence && memory.reviewState === "unreviewed" && (
           <Button
             size="sm"
             variant="outline"
-            onClick={() => save.mutate({ reviewState: "confirmed" })}
+            onClick={() => update({ reviewState: "confirmed" })}
           >
             确认
+          </Button>
+        )}
+        {heldByIntelligence ? null : (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => update({ enabled: !memory.enabled })}
+          >
+            {memory.enabled ? "停用" : "启用"}
           </Button>
         )}
         <Button
           size="sm"
           variant="outline"
-          onClick={() => save.mutate({ enabled: !memory.enabled })}
-        >
-          {memory.enabled ? "停用" : "启用"}
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
           disabled={forget.isPending}
-          onClick={() => forget.mutate()}
+          onClick={() => forget.mutate(memory.id)}
         >
           忘掉
         </Button>

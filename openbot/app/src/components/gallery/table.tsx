@@ -76,7 +76,7 @@ export function DataTable(props: Record<string, unknown>) {
   if (!parsed.success) {
     // Only a table still being written is waited for. Once its arguments are final, nothing more
     // is coming, and waiting would last for good.
-    if (!streaming) return <FailedCard reason={UNREADABLE} title="数据表格" />;
+    if (!streaming) return <FailedCard reason={UNREADABLE} title={TITLE} />;
     return (
       <GalleryFrame title="表格">
         <p className="text-sm text-muted-foreground">正在等待完整的表格数据…</p>

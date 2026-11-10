@@ -7,25 +7,14 @@ import {
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { memo, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { DeleteConversationDialog } from "@/components/channels/delete-conversation-dialog";
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  deleteChannelMutationOptions,
-  setChannelPinnedMutationOptions,
-} from "@/lib/channels/mutations";
+import { setChannelPinnedMutationOptions } from "@/lib/channels/mutations";
 import type { MessageListEmphasis } from "@/lib/settings/message-list";
 import { useTypedReveal } from "@/lib/typed-reveal";
 
@@ -48,6 +37,7 @@ export const Channel = memo(function Channel({
   participantIds,
   name,
   summary,
+  untitled,
   lastMessage,
   lastMessageAt,
   pinned,
@@ -60,7 +50,9 @@ export const Channel = memo(function Channel({
   name: string;
   /** What the conversation is about, once named. The channel name only says which Bot it is. */
   summary?: string;
-  /** Used as the thread title until the conversation has been named. */
+  /** Used as the thread title until the conversation has been named. See `untitledLine`. */
+  untitled?: string;
+  /** The fork's older name for `untitled`, still passed by `conversation-workspace.tsx`. */
   lastMessage?: string;
   lastMessageAt?: string;
   pinned: boolean;
@@ -79,11 +71,11 @@ export const Channel = memo(function Channel({
   });
   /* Types in only on arrival; an already-named row draws it outright. */
   const revealed = useTypedReveal(summary);
-  const threadTitle = revealed.text || lastMessage || "新会话";
-  const title = summary || lastMessage || "新会话";
+  const untitledTitle = untitled || lastMessage;
+  const threadTitle = revealed.text || untitledTitle || "新会话";
+  const title = summary || untitledTitle || "新会话";
   const group = participantIds.length > 1;
   const setPinned = useMutation(setChannelPinnedMutationOptions(queryClient));
-  const deleteChannel = useMutation(deleteChannelMutationOptions(queryClient));
   const [confirming, setConfirming] = useState(false);
   /**
    * Why a pin did not take, said on the row it was asked of.
@@ -94,28 +86,6 @@ export const Channel = memo(function Channel({
    * the next attempt.
    */
   const [pinProblem, setPinProblem] = useState<string | null>(null);
-
-  const confirmDelete = async () => {
-    /*
-     * Away first when this row's channel is the one on screen.
-     *
-     * The roster invalidates the moment the delete lands, so this row — and the dialog living inside
-     * it — unmounts while the rest of this function is still owed. Navigating after the mutation
-     * therefore ran in a component that was already gone, leaving somebody looking at a conversation
-     * that no longer exists. Leaving before asking is safe in the other direction: a refused delete
-     * puts them on the roster with the channel still in it, and says why in the dialog.
-     */
-    if (isOpen) {
-      await navigate({ to: "/" });
-    }
-    try {
-      await deleteChannel.mutateAsync(channelId);
-    } catch {
-      // The error is on the mutation and rendered in the dialog; leaving it open says "not done".
-      return;
-    }
-    setConfirming(false);
-  };
 
   return (
     <>
@@ -194,11 +164,7 @@ export const Channel = memo(function Channel({
           </ContextMenuItem>
           <ContextMenuItem
             variant="destructive"
-            onClick={() => {
-              // A refusal from a previous attempt is not news about this one.
-              deleteChannel.reset();
-              setConfirming(true);
-            }}
+            onClick={() => setConfirming(true)}
           >
             <IconTrash />
             删除会话…
@@ -210,45 +176,14 @@ export const Channel = memo(function Channel({
           {pinProblem}
         </p>
       ) : null}
-      <Dialog
-        onOpenChange={(open) => {
-          if (!open) setConfirming(false);
-        }}
+      <DeleteConversationDialog
+        channelId={channelId}
+        // Away first when this row's channel is the one on screen.
+        leave={isOpen ? () => navigate({ to: "/" }) : undefined}
+        name={name}
+        onOpenChange={setConfirming}
         open={confirming}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>删除「{name}」？</DialogTitle>
-            <DialogDescription>
-              会话里的所有人都将不再看到这段会话。
-            </DialogDescription>
-          </DialogHeader>
-          {deleteChannel.error ? (
-            <p className="text-destructive text-sm">
-              {deleteChannel.error.message}
-            </p>
-          ) : null}
-          <DialogFooter>
-            <Button
-              onClick={() => setConfirming(false)}
-              size="sm"
-              variant="ghost"
-            >
-              取消
-            </Button>
-            <Button
-              disabled={deleteChannel.isPending}
-              onClick={() => {
-                void confirmDelete();
-              }}
-              size="sm"
-              variant="destructive"
-            >
-              {deleteChannel.isPending ? "正在删除…" : "删除"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      />
     </>
   );
 });

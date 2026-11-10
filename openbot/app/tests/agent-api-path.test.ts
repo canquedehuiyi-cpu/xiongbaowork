@@ -43,7 +43,6 @@ function boundary(id: string, refusal?: "unauthenticated" | "forbidden") {
   const requests: { method: string; path: string; body: unknown }[] = [];
   const profile: AgentProfile = {
     ...input,
-    isolated: false,
     id,
     avatarSeed: id,
     ownerUserId: actor.id,
@@ -57,6 +56,7 @@ function boundary(id: string, refusal?: "unauthenticated" | "forbidden") {
     endpoint: null,
     hasAuth: false,
     hasCallbackToken: false,
+    isolated: false,
   };
   const record = (operation: string, receivedId: string, value?: unknown) => {
     expect(receivedId).toBe(id);

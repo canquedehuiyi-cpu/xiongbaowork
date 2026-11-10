@@ -56,6 +56,7 @@ import {
   credentialListQueryOptions,
 } from "@/lib/credentials/queries";
 
+// M4: 待接入 上游 manage/credentials-page.tsx 与独立的新建凭据页（admin/credentials_.new.tsx）
 export const Route = createFileRoute("/_authed/admin/credentials")({
   component: CredentialsPage,
 });

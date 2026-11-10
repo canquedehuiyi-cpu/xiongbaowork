@@ -72,6 +72,9 @@ const developer: AgentProfile = {
   systemOwned: false,
   canManage: true,
   mine: true,
+  isolated: false,
+  isolationActive: false,
+  isolationOffReason: null,
 };
 const reviewer: AgentProfile = {
   ...developer,

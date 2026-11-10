@@ -48,6 +48,7 @@ import {
  * `$key_` opts this route out of nesting under `$key.tsx`, so the connector page stays a page rather
  * than becoming a layout with an outlet.
  */
+// M4: 待接入 上游 manage/plugin-bot-page.tsx（员工名代替 id、版式更新）
 export const Route = createFileRoute(
   "/_authed/admin/plugins/$key_/bots/$agentId",
 )({ component: RouteComponent });
@@ -225,7 +226,9 @@ function RouteComponent() {
   }
 
   // From the row itself where there is one: the id-to-name lookup is built from the visible roster.
-  const botName = bot?.name ?? nameFor(agentId);
+  // `nameFor` answers "" while the roster loads (upstream: a Bot is named, never shown as an empty
+  // label), so the id stands in until a name is known, as upstream's own page does.
+  const botName = bot?.name ?? (nameFor(agentId) || agentId);
   const held = (tool: PluginTool) => tool.grantedTo.includes(agentId);
 
   /*

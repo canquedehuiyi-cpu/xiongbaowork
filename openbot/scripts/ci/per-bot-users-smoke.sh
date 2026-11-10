@@ -191,6 +191,53 @@ if [ "$healthy" = true ]; then
     fail "no xb-bot run, runuser or timeout of $userA left within 10s (still matching: $(printf '%s' "$left" | tr '\n' '|'); $(docker exec "$name" ps -o user,pid,ppid,pgid,stat,args -A 2>/dev/null | grep -E 'sleep|xb-bot|sudo|timeout|runuser' | grep -v grep | tr '\n' ';'))"
   fi
 
+  # The live terminal of an employee with its own user: a bash as that employee, never pwuser's
+  # (agent-computer ownUserTerminal, `xb-bot shell`). Opening the terminal socket starts it.
+  T_TERM=$(mktemp)
+  docker exec "$name" sh -c '
+    token=$(cat /run/s6/container_environment/COMPUTER_TOKEN)
+    cd /tmp && OPENBOT_SMOKE_TOKEN=$token timeout 20 bun -e "
+      const ws = new WebSocket(\"ws://127.0.0.1:4100/terminal?bot=$1&token=\" + process.env.OPENBOT_SMOKE_TOKEN);
+      const said = [];
+      ws.addEventListener(\"message\", (e) => { if (typeof e.data === \"string\") said.push(e.data); });
+      ws.addEventListener(\"error\", () => { console.log(\"socket error\"); process.exit(1); });
+      setTimeout(() => { console.log(said.join(\"\\n\")); ws.close(); process.exit(0); }, 5000);
+    "
+  ' sh "$A" > "$T_TERM" 2>&1 || true
+  if grep -q '"type":"ready"' "$T_TERM" && ! grep -q '"type":"error"' "$T_TERM"; then
+    pass "$A's live terminal opened"
+  else
+    fail "$A's live terminal opened (socket said: $(tr '\n' ' ' < "$T_TERM" | head -c 300))"
+  fi
+  # The terminal's own bash (started with its startup file on a pipe), as the employee, under runuser.
+  term_pid=$(docker exec "$name" pgrep -u "$userA" -f -- '--rcfile /dev/fd/' 2>/dev/null | head -n 1 || true)
+  term_parent=$( [ -n "$term_pid" ] && docker exec "$name" ps -o args= -p "$(docker exec "$name" ps -o ppid= -p "$term_pid" | tr -d ' ')" 2>/dev/null || true)
+  if [ -n "$term_pid" ] && printf '%s' "$term_parent" | grep -q "runuser -u $userA"; then
+    pass "$A's live terminal runs a bash as $userA, under runuser"
+  else
+    fail "$A's live terminal runs a bash as $userA, under runuser (pid ${term_pid:-none}, parent: ${term_parent:-none}; $(docker exec "$name" ps -o user,pid,ppid,args -A 2>/dev/null | grep -E 'bash|xb-bot|sudo|runuser' | grep -v grep | tr '\n' ';'))"
+  fi
+  if docker exec "$name" pgrep -u pwuser -f -- "bots/$keyA" >/dev/null 2>&1; then
+    fail "no process of pwuser's runs in $A's directory"
+  else
+    pass "no process of pwuser's runs in $A's directory"
+  fi
+  rm -f "$T_TERM"
+  # Stopping A's computer ends its terminal: nothing the terminal started is left as $userA.
+  call "$A" /computers/stop '{}' >/dev/null
+  left_term=""
+  started=$SECONDS
+  while [ $((SECONDS-started)) -le 10 ]; do
+    left_term=$(docker exec "$name" pgrep -u "$userA" -f -- '--rcfile /dev/fd/' 2>/dev/null || true)
+    [ -z "$left_term" ] && break
+    sleep 0.5
+  done
+  if [ -n "$term_pid" ] && [ -z "$left_term" ]; then
+    pass "stopping $A's computer ends its live terminal within 10s"
+  else
+    fail "stopping $A's computer ends its live terminal within 10s (still: ${left_term:-none}; started: ${term_pid:-none})"
+  fi
+
   # A process an employee leaves outside its command's group (setsid) survives the command, so the
   # computer ends every employee process before it (re)starts: otherwise one could take port 4100
   # first, or read the computer's argv, while it comes back up, and catch COMPUTER_TOKEN.

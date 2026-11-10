@@ -104,6 +104,8 @@ beforeEach(() => {
             logo: null,
             categories: [],
             actionCount: 167,
+            // What the server sends on every row; Slack and Gmail are both sign-in apps.
+            connection: { kind: "consent" },
             enabled: false,
           },
           {
@@ -113,6 +115,8 @@ beforeEach(() => {
             logo: null,
             categories: [],
             actionCount: 42,
+            // What the server sends on every row; Slack and Gmail are both sign-in apps.
+            connection: { kind: "consent" },
             enabled: false,
           },
         ],
@@ -183,6 +187,7 @@ test("an add that fails while a second one is pressed still says what went wrong
   const view = renderPicker();
 
   // Both rows, in the order the screen sorts them: Gmail then Slack.
+  // `composio-…`: 熊宝中文版的目录页只服务 Composio（上游与 Arcade 共用的目录页不收）。
   const slackRow = await view.findByTestId("composio-slack");
   const gmailRow = await view.findByTestId("composio-gmail");
 

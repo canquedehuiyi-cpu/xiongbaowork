@@ -16,7 +16,10 @@ function RouteComponent() {
   const channel = useQuery(channelQueryOptions(channelId));
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="sticky top-0 flex min-h-12 flex-row items-center gap-1.5 border-b border-border px-3 py-2">
+      <div
+        className="sticky top-0 flex min-h-12 flex-row items-center gap-1.5 border-b border-border px-3 py-2"
+        data-slot="conversation-header"
+      >
         <SidebarToggle />
         <ChannelAvatar
           participantIds={channel.data?.agentIds ?? []}

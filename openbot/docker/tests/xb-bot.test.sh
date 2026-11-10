@@ -434,5 +434,67 @@ COMPUTER_PER_BOT_USERS=on "$XB" restore 2>"$T/err" || fail "restore exited $?"
 [ ! -e /run/xb-bot/unready ] || fail "a clean restore left the unready mark"
 pass "restore removes stale command files"
 
+# shell: the employee's live terminal, an interactive bash as the employee (agent-computer's
+# ownUserTerminal). The startup file arrives base64 and the environment as NAME=VALUE arguments:
+# the helper reads no path the caller names.
+"$XB" ensure "$A" >/dev/null 2>"$T/err" || fail "ensure of A before shell exited $?: $(cat "$T/err")"
+RC=$(printf 'PS1="xb> "\n' | base64 -w0)
+printf 'id -un; echo "home=$HOME var=$XB_TEST_VAR token=${COMPUTER_TOKEN:-none}"; umask; pwd; exit\n' |
+  COMPUTER_TOKEN=leak "$XB" shell "$A" "$RC" PATH=/usr/local/bin:/usr/bin:/bin HOME=/root USER=root XB_TEST_VAR=from-arg 'BAD-NAME=x' >"$T/out" 2>"$T/err"
+code=$?
+[ "$code" = 0 ] || fail "shell for A exited $code: $(cat "$T/err")"
+grep -qx "xb-$A" "$T/out" || fail "the shell did not run as xb-$A: $(cat "$T/out")"
+grep -qx "home=$DIRA var=from-arg token=none" "$T/out" || fail "the shell's environment is wrong: $(cat "$T/out")"
+grep -qx "0077" "$T/out" || fail "the shell's umask is not 077: $(cat "$T/out")"
+grep -qx "$DIRA" "$T/out" || fail "the shell did not start in $DIRA: $(cat "$T/out")"
+grep -q 'xb> ' "$T/err" || fail "the startup file was not applied: $(head -c 300 "$T/err")"
+pass "shell runs an interactive bash as the employee, in its directory, with the given environment and nothing of the caller's"
+none_left "-u xb-$A -f bash.*--rcfile" || fail "the terminal's bash of xb-$A was left after exit: $(ps -o pid,args -u "xb-$A" | tr '\n' ';')"
+none_left "-f while.kill.-0" || fail "the helper's watcher outlived a normal exit: $(pgrep -af 'while kill -0' | tr '\n' ';')"
+pass "shell leaves nothing of the employee's running once the person exits"
+
+# A background job the person left behind ends with the terminal, not with the computer's restart.
+printf 'sleep 2001 &\nsleep 2002 </dev/null >/dev/null 2>&1 &\nexit\n' |
+  "$XB" shell "$A" "$RC" PATH=/usr/bin:/bin >"$T/out" 2>"$T/err"
+none_left "-u xb-$A -f sleep.200[12]" || fail "a background job of xb-$A outlived the terminal: $(ps -o pid,args -u "xb-$A" | tr '\n' ';')"
+pass "shell ends the employee's background jobs with the terminal"
+
+# The caller killed (sudo, when the computer stops the terminal): what runs in it ends within seconds,
+# a background job and a job that ignores the hang-up included. Through real `sudo -n` on a
+# pseudo-terminal, as agent-computer starts it: with use_pty, sudo's monitor sends HUP, TERM and KILL
+# to the helper's process group, so a watcher in that group would die before it could clean up.
+python3 -I - "$XB" "$A" "$RC" <<'PY'
+import os, pty, sys, time
+xb, key, rc = sys.argv[1:4]
+pid, fd = pty.fork()
+if pid == 0:
+    os.execvp("sudo", ["sudo", "-n", xb, "shell", key, rc, "PATH=/usr/bin:/bin"])
+time.sleep(1.5)
+os.write(fd, b"sleep 2004 &\n")
+time.sleep(0.3)
+os.write(fd, b"trap '' HUP; (trap '' HUP TERM; exec sleep 2005)\n")
+time.sleep(1.5)
+os.kill(pid, 9)
+time.sleep(0.2)
+os.close(fd)
+PY
+started=$(pgrep -u "xb-$A" -f 'sleep 200[45]' | wc -l)
+[ "$started" = 2 ] || fail "both jobs in the terminal should be running when sudo is killed, $started are: $(ps -o pid,args -u "xb-$A" | tr '\n' ';')"
+n=0
+until none_left "-u xb-$A -f sleep.200[45]" || [ "$n" -ge 50 ]; do sleep 0.2; n=$((n + 1)); done
+none_left "-u xb-$A -f sleep.200[45]" || fail "xb-$A's jobs outlived the killed sudo (started: $started): $(ps -o pid,ppid,args -u "xb-$A" | tr '\n' ';')"
+none_left "-f while.kill.-0" || fail "the helper's watcher outlived its work: $(pgrep -af 'while kill -0' | tr '\n' ';')"
+pass "shell ends the employee's processes when sudo is killed on a pseudo-terminal, a hang-up-proof job included"
+
+expect_code 64 "shell with a startup file that is not base64 is refused" -- "$XB" shell "$A" 'not base64!'
+expect_code 64 "shell with an empty startup file argument is refused" -- "$XB" shell "$A" ''
+expect_code 64 "shell with an overlong startup file is refused" -- "$XB" shell "$A" "$(head -c 70000 /dev/zero | tr '\0' 'A')"
+expect_code 64 "shell with too many environment arguments is refused" -- "$XB" shell "$A" "$RC" $(seq 1 70 | sed 's/^/V/; s/$/=x/')
+expect_code 65 "shell for an employee that was never prepared is 65" -- "$XB" shell abcdefabcdef "$RC"
+expect_code 64 "shell with a bad key is 64" -- "$XB" shell ABC "$RC"
+expect_code 64 "shell without a startup file is 64" -- "$XB" shell "$A"
+[ -z "$(ls /run/xb-bot/rc.* 2>/dev/null)" ] || fail "shell left a startup file in /run/xb-bot"
+pass "shell leaves no startup file behind"
+
 rm -rf "$T"
 echo "all xb-bot tests passed"

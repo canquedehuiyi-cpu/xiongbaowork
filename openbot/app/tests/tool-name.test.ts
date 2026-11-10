@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { readToolName } from "../src/lib/plugins/tool-name";
+import { approvalWords, readToolName } from "@openbot/shared/tool-name";
 
 /**
  * What the person watching is told a Bot just did.
@@ -8,10 +8,43 @@ import { readToolName } from "../src/lib/plugins/tool-name";
  * that exists to keep two vendors' `search` apart. A reader should never see either.
  */
 describe("naming a tool call", () => {
+  test("a research call says what it did and not which provider did it", () => {
+    for (const name of [
+      "mcp__exa__web_search_exa",
+      "mcp__exa-authenticated__web_search_exa",
+      "mcp__parallel__web_search",
+      "mcp__firecrawl__firecrawl_search",
+    ]) {
+      expect(readToolName(name)).toEqual({ label: "搜索网页" });
+    }
+    expect(readToolName("mcp__exa__web_fetch_exa")).toEqual({
+      label: "读取网页",
+    });
+    expect(readToolName("mcp__firecrawl__firecrawl_scrape")).toEqual({
+      label: "读取网页",
+    });
+    // Only the research pair is relabelled; a provider's other tools keep their own names.
+    expect(readToolName("mcp__firecrawl__firecrawl_map")).toEqual({
+      label: "Map",
+      detail: "Firecrawl",
+    });
+  });
+
   test("an MCP tool reads as an action against a named server", () => {
     expect(readToolName("mcp__slack__post_message")).toEqual({
       label: "Post message",
       detail: "slack",
+    });
+  });
+
+  test("a vendor that leads its tools with its own name is named once, as the app", () => {
+    expect(readToolName("mcp__notion__notion-fetch")).toEqual({
+      label: "Fetch",
+      detail: "Notion",
+    });
+    expect(readToolName("mcp__google-drive__google_drive_search")).toEqual({
+      label: "Search",
+      detail: "Google Drive",
     });
   });
 
@@ -31,6 +64,16 @@ describe("naming a tool call", () => {
     });
   });
 
+  test("a goal's tools on the Routines app read as a goal's run reads them", () => {
+    // Asked for a goal in a conversation, the step read "Create goal" beside "routines".
+    expect(readToolName("mcp__routines__create_goal")).toEqual({
+      label: "创建了目标",
+    });
+    expect(readToolName("mcp__routines__list_goals", true)).toEqual({
+      label: "正在查看目标",
+    });
+  });
+
   test("camelCase from a vendor reads the same way", () => {
     // The server is dropped here too: the vendor put it in the tool name themselves.
     expect(readToolName("mcp__jira__searchJiraIssues")).toEqual({
@@ -47,9 +90,37 @@ describe("naming a tool call", () => {
     });
   });
 
-  test("a component the app registered is left alone", () => {
-    // These names were chosen by somebody and are already what the reader should see.
-    expect(readToolName("showBarChart")).toEqual({ label: "showBarChart" });
+  test("a brokered app's action is named without any vendor's prefix", () => {
+    // Composio is how this deployment reaches Gmail, which is plumbing: the reader asked their Bot
+    // about their email, not about which broker holds the grant. Composio also prefixes every tool
+    // with the app, so the app is dropped from the action and named once, beside it.
+    expect(readToolName("mcp__composio-gmail__GMAIL_FETCH_EMAILS")).toEqual({
+      label: "Fetch emails",
+      detail: "Gmail",
+    });
+    expect(readToolName("mcp__composio-airtable__AIRTABLE_LIST_BASES")).toEqual(
+      { label: "List bases", detail: "Airtable" },
+    );
+    expect(
+      readToolName("mcp__composio-googlecalendar__GOOGLECALENDAR_CREATE_EVENT"),
+    ).toEqual({ label: "Create event", detail: "Googlecalendar" });
+  });
+
+  test("an action that does not lead with its app is kept whole, beside the app", () => {
+    expect(readToolName("mcp__composio-gmail__FETCH_EMAILS")).toEqual({
+      label: "Fetch emails",
+      detail: "Gmail",
+    });
+  });
+
+  test("a name outside MCP and the label table still reads in words", () => {
+    // A component's line is drawn before its renderer may have loaded, and a model can call a name
+    // it was never offered. Either way the line says it in words, from the first frame.
+    expect(readToolName("showBarChart")).toEqual({ label: "Show bar chart" });
+    expect(readToolName("web_search", true)).toEqual({ label: "Web search" });
+    expect(readToolName("web_search")).toEqual({ label: "Web search" });
+    expect(readToolName("", true)).toEqual({ label: "正在使用工具" });
+    expect(readToolName("__")).toEqual({ label: "使用了工具" });
   });
 
   test("the server is dropped when a hyphenated server's words are already in the label", () => {
@@ -95,5 +166,60 @@ describe("naming a tool call", () => {
       label: "List files",
       detail: "lists",
     });
+  });
+});
+
+describe("this deployment's own tools", () => {
+  test("show_app_access is named for what it is doing, then for what it did", () => {
+    expect(readToolName("show_app_access", true)).toEqual({
+      label: "正在查看应用权限",
+    });
+    expect(readToolName("show_app_access")).toEqual({
+      label: "查看了应用权限",
+    });
+  });
+
+  test("any other bare name reads in words, never as its identifier", () => {
+    expect(readToolName("run_command", true)).toEqual({ label: "Run command" });
+  });
+});
+
+/**
+ * What an approval says it waits on, from the `toolRef` and `scope` the server asks under: an app's
+ * tool as `<app>/<tool>` on the app, a computer action on the site it acts on, a command on the
+ * computer it runs on.
+ */
+describe("naming what an approval asks to do", () => {
+  test("an app's tool reads as the action in words, on the app by its name", () => {
+    expect(
+      approvalWords({ toolRef: "requests/get_request", scope: "requests" }),
+    ).toEqual({ action: "get request", place: "Requests" });
+    expect(
+      approvalWords({
+        toolRef: "google-drive/createFile",
+        scope: "google-drive",
+      }),
+    ).toEqual({ action: "create file", place: "Google Drive" });
+  });
+
+  test("a brokered app is named as the app, and its action without the app's prefix", () => {
+    expect(
+      approvalWords({
+        toolRef: "composio-gmail/GMAIL_SEND_EMAIL",
+        scope: "composio-gmail",
+      }),
+    ).toEqual({ action: "send email", place: "Gmail" });
+  });
+
+  test("a computer action keeps its words, and a file or a command reads as its step does", () => {
+    expect(
+      approvalWords({ toolRef: "computer_click", scope: "example.com" }),
+    ).toEqual({ action: "点击", place: "example.com" });
+    expect(
+      approvalWords({ toolRef: "computer_write_file", scope: "workspace" }),
+    ).toEqual({ action: "保存文件", place: "workspace" });
+    expect(
+      approvalWords({ toolRef: "host/run_command", scope: "grant-1" }),
+    ).toEqual({ action: "执行命令", place: "grant-1" });
   });
 });

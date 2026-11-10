@@ -64,6 +64,7 @@ const server: PluginServer = {
   lastError: null,
   addedBy: "admin@example.com",
   dynamicClient: false,
+  adminConnectOnly: false,
   authScheme: null,
   tools: [
     {

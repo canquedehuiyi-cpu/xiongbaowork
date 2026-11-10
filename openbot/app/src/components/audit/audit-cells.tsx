@@ -1,0 +1,993 @@
+import { outcomeForPerson } from "@openbot/shared/approval-outcomes";
+import {
+  appToolsWords,
+  auditActionWords,
+  auditChangeWords,
+  auditEventWords,
+  dataWords,
+} from "@openbot/shared/audit-words";
+import {
+  type ConnectPrompt,
+  readConnectPrompt,
+} from "@openbot/shared/connect-prompt";
+import { isOpenBotActor } from "@openbot/shared/openbot-actor";
+import { connectorName, humanise, inFolder } from "@openbot/shared/tool-name";
+import { Fragment, type ReactNode } from "react";
+import { type AuditOutcome, outcomeOf } from "@/lib/audit/outcome";
+import { silenceOf } from "@/lib/audit/silence";
+import { galleryComponent } from "@/lib/copilot/gallery-registry";
+
+/** One row as the API returns it. */
+export type AuditEvent = {
+  id: string;
+  actorUserId: string | null;
+  /** Absent on a deployment that has not migrated yet. */
+  initiatorKind?: string;
+  initiatorId?: string | null;
+  eventType: string;
+  targetType: string;
+  targetId: string | null;
+  payload: Record<string, unknown>;
+  createdAt: string;
+  /**
+   * The name the page found for the row's subject, where the trail stores an id: a skill's title
+   * ("Write a skill" for `skill-creator`). Not part of the stored row, so older rows read it too.
+   */
+  subjectTitle?: string;
+};
+
+type NameFor = (botId: string) => string;
+
+/**
+ * Each cell of the Audit table, and the same thing as plain text for the search box.
+ *
+ * The text versions read the same fields in the same order as the cells, so what a person can see
+ * on a row is what they can find it by.
+ */
+
+const WHEN = new Intl.DateTimeFormat(undefined, {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: false,
+});
+
+export function whenText(event: AuditEvent): string {
+  return WHEN.format(new Date(event.createdAt));
+}
+
+const DAY = new Intl.DateTimeFormat(undefined, {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+});
+
+const TIME = new Intl.DateTimeFormat(undefined, {
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: false,
+});
+
+/** The day over the time, so the column is as wide as a date rather than a date and a time. */
+export function WhenCell({ event }: { event: AuditEvent }) {
+  const at = new Date(event.createdAt);
+  return (
+    <>
+      <div>{DAY.format(at)}</div>
+      <div>{TIME.format(at)}</div>
+    </>
+  );
+}
+
+/**
+ * An identifier with a break allowed after each `.`, `/`, `_` and `-`, so `mcp.tools_discovered` or
+ * a file path wraps at its own seams when the column is narrow, and is never cut mid-word.
+ */
+function breakable(text: string): ReactNode {
+  let at = 0;
+  return text.split(/(?<=[./_-])/).map((part) => {
+    const start = at;
+    at += part.length;
+    return (
+      <Fragment key={start}>
+        {start > 0 ? <wbr /> : null}
+        {part}
+      </Fragment>
+    );
+  });
+}
+
+/**
+ * What was done, with what it was done to beneath it. One column rather than two, so the table
+ * fits the Desktop's default window: drawn side by side, What, On, Bot and Started by pushed
+ * Decision off the right edge of a 1000px window.
+ *
+ * In words. `storedName` puts the name the trail keeps it under on hover, for an admin matching a row
+ * against the export or a collector, and keeps a tool's or an app's stored name under it; a page
+ * anybody can open leaves both off and says the tool and the app in words.
+ */
+export function WhatCell({
+  event,
+  storedName = false,
+}: {
+  event: AuditEvent;
+  storedName?: boolean;
+}) {
+  return (
+    <>
+      <div
+        className="font-medium"
+        title={storedName ? whatName(event) : undefined}
+      >
+        {whatText(event, storedName)}
+      </div>
+      <OnCell event={event} storedNames={storedName} />
+    </>
+  );
+}
+
+/** The Bot, with what started it beneath it, for the same reason as {@link WhatCell}. */
+export function WhoCell({
+  deployment,
+  event,
+  nameFor,
+}: {
+  /** What OpenBot itself is called here; see {@link startedByText}. */
+  deployment?: string;
+  event: AuditEvent;
+  nameFor: NameFor;
+}) {
+  return (
+    <>
+      <div>
+        <BotCell event={event} nameFor={nameFor} />
+      </div>
+      <div className="text-xs">
+        <StartedByCell
+          deployment={deployment}
+          event={event}
+          nameFor={nameFor}
+        />
+      </div>
+    </>
+  );
+}
+
+/**
+ * The action a row is about, as the trail stores it. An approval row is about an action too, and
+ * names the tool it was asked about, so it reads as the same action its other rows are; so does an
+ * app's tool call, which names its tool as its target.
+ */
+function actionOf(event: AuditEvent): string | undefined {
+  const action =
+    event.payload?.action ??
+    (event.targetType === "approval" ? event.payload?.tool : undefined);
+  if (typeof action === "string") return action;
+  const legacy = legacyFolderAction(event);
+  if (legacy) return `host/${legacy.operation}`;
+  if (
+    event.eventType.startsWith("mcp.call") &&
+    event.targetType === "mcp_tool" &&
+    event.targetId
+  )
+    return event.targetId;
+  return undefined;
+}
+
+/**
+ * A folder action recorded before folder actions were a computer's (`server/src/host-access/tools.ts`):
+ * a `configuration.changed` row naming the operation and how it went. Read in the same words, since
+ * the trail cannot be rewritten; it keeps its own event type, so the views by type leave it out.
+ */
+export function legacyFolderAction(
+  event: Pick<AuditEvent, "eventType" | "payload">,
+): { operation: string; outcome: string } | undefined {
+  const payload = event.payload ?? {};
+  return event.eventType === "configuration.changed" &&
+    payload.change === "host_access_tool_call" &&
+    typeof payload.operation === "string" &&
+    typeof payload.outcome === "string"
+    ? { operation: payload.operation, outcome: payload.outcome }
+    : undefined;
+}
+
+/** What a row is about, in the trail's own name for it: for search, and for Admin's hover. */
+export function whatName(event: AuditEvent): string {
+  return actionOf(event) ?? event.eventType;
+}
+
+/**
+ * What a row is about, in words: "Save a file", "Choose tools for a run", "Give a Bot tools". See
+ * `audit-words`. A configuration row says what changed when its change has words of its own.
+ *
+ * `storedNames` is false on the personal edition's Activity, where an app given by its one press
+ * was nobody's approval (see {@link givenWithoutAsking}).
+ */
+export function whatText(event: AuditEvent, storedNames = true): string {
+  if (!storedNames && givenWithoutAsking(event)) return "允许员工使用应用";
+  const action = actionOf(event);
+  if (action) return auditActionWords(action);
+  const change =
+    event.eventType === "configuration.changed"
+      ? auditChangeWords(event.payload ?? {})
+      : undefined;
+  return change ?? auditEventWords(event.eventType);
+}
+
+type Element = { role?: string; name?: string } | string | undefined;
+
+/** The `app/tool` refs a row names: the tools one row gave a Bot, or an app's tools it no longer lists. */
+function refsOf(event: AuditEvent): string[] | undefined {
+  const refs = event.payload?.refs;
+  return Array.isArray(refs) &&
+    refs.length > 0 &&
+    refs.every((ref) => typeof ref === "string")
+    ? refs
+    : undefined;
+}
+
+/**
+ * An app's tool or an app, in words, for a page anybody can open: "Send email on Gmail" for a tool
+ * a row gave or took, the app alone ("Gmail") under a call whose What already says the action.
+ * Undefined for anything else, which reads as it does in Admin.
+ */
+function appSubjectWords(event: AuditEvent): string | undefined {
+  const payload = event.payload ?? {};
+  const target = event.targetId;
+  if (event.targetType === "mcp_tool" && target)
+    return event.eventType === "configuration.changed"
+      ? appToolsWords([target])
+      : connectorName(
+          target.slice(0, Math.max(target.indexOf("/"), 0)) || target,
+        );
+  if (event.targetType === "mcp_server" && target) {
+    const refs = refsOf(event);
+    return refs ? appToolsWords(refs) : connectorName(target);
+  }
+  // An approval asked about an app's tool names the app as where it would act.
+  if (
+    event.targetType === "approval" &&
+    typeof payload.scope === "string" &&
+    typeof payload.tool === "string" &&
+    payload.tool.startsWith(`${payload.scope}/`)
+  )
+    return connectorName(payload.scope);
+  return undefined;
+}
+
+/**
+ * What a row is about in words, for a page anybody can open, where Admin shows the name or id the
+ * trail stores: an app or its tools (above), a component by the name the Components gallery gives
+ * it ("Data table", not `showTable`), a skill by its name in words (`find-a-document` reads "Find a
+ * document"), and a saved key by its provider and key ID, never the key's id. Undefined for
+ * anything else, which reads as it does in Admin.
+ */
+function subjectWords(event: AuditEvent): string | undefined {
+  const app = appSubjectWords(event);
+  if (app !== undefined) return app;
+  const payload = event.payload ?? {};
+  const target = event.targetId;
+  if (event.targetType === "component" && target) {
+    // With the data it was given or read: "Activity report · your Bots' activity".
+    const functions = functionsOf(payload);
+    return functions
+      ? `${componentName(target)} · ${dataWords(functions)}`
+      : componentName(target);
+  }
+  // By the title its page shows ("Write a skill"), or its stored name in words once it is gone.
+  if (event.targetType === "skill" && target)
+    return event.subjectTitle || humanise(target);
+  if (event.targetType === "credential") {
+    if (typeof payload.server === "string")
+      return connectorName(payload.server);
+    const named = [payload.provider, payload.keyId].filter(
+      (part): part is string => typeof part === "string" && part !== "",
+    );
+    return named.join(" · ");
+  }
+  return undefined;
+}
+
+/**
+ * The data functions a component row names: one it read or was refused (`function`), or every one
+ * OpenBot Personal gave it in one row (`functions`).
+ */
+function functionsOf(
+  payload: Record<string, unknown>,
+): readonly string[] | undefined {
+  if (typeof payload.function === "string") return [payload.function];
+  const functions = payload.functions;
+  return Array.isArray(functions) &&
+    functions.length > 0 &&
+    functions.every((name) => typeof name === "string")
+    ? functions
+    : undefined;
+}
+
+/** A component by its name in the Components gallery, or its stored name in words. */
+function componentName(name: string): string {
+  return galleryComponent(name)?.title ?? humanise(name);
+}
+
+/**
+ * The row's subject, the part of "On" that is not the page host. Admin (`storedNames`) reads a tool
+ * or an app by the name the trail stores it under; a page anybody can open reads it in words.
+ */
+export function subjectText(event: AuditEvent, storedNames = true): string {
+  const payload = event.payload ?? {};
+  const element = payload.element as Element;
+  if (event.eventType === "mcp.tools_discovered")
+    return typeof payload.offered === "number" &&
+      typeof payload.granted === "number"
+      ? `${payload.offered} / ${payload.granted} 个工具`
+      : "";
+  if (!storedNames) {
+    const words = subjectWords(event);
+    if (words !== undefined) return words;
+  } else if (
+    event.eventType === "configuration.changed" &&
+    payload.change === "plugin_granted"
+  ) {
+    // Every tool one row gave a Bot, as Admin read them when each had a row of its own.
+    const refs = refsOf(event);
+    if (refs) return refs.join(", ");
+  }
+  if (NAMED_TARGETS.has(event.targetType) && event.targetId) {
+    const functions = functionsOf(payload);
+    return functions
+      ? `${event.targetId} · ${functions.join(", ")}`
+      : event.targetId;
+  }
+  /*
+   * A step on a folder on the person's computer names the file and the folder it is in, as its card
+   * and its line in the conversation do ("todo.txt in share"). Rows written before they named the
+   * folder name the file alone.
+   */
+  const folder =
+    typeof payload.folder === "string" && payload.folder
+      ? payload.folder
+      : undefined;
+  if (typeof payload.file === "string")
+    return inFolder(payload.file, folder) ?? payload.file;
+  if (typeof payload.command === "string")
+    return inFolder(payload.command, folder) ?? payload.command;
+  const folders = foldersOf(payload);
+  if (folders) return folders;
+  if (typeof element === "object" && element?.name)
+    return element.role ? `${element.name} (${element.role})` : element.name;
+  if (typeof element === "string") return element;
+  // An app's tool or a folder: where an approval row's action would have acted, when it names no file or page.
+  if (
+    event.targetType === "approval" &&
+    typeof payload.page !== "string" &&
+    typeof payload.scope === "string"
+  )
+    return payload.scope;
+  return "";
+}
+
+/**
+ * The folder a person gave a Bot or took from it, or the folders stopping folder access ended, by
+ * the name Settings > Computer shows. Rows written before they said so name none.
+ */
+function foldersOf(payload: Record<string, unknown>): string | undefined {
+  if (typeof payload.folder === "string" && payload.folder)
+    return payload.folder;
+  const folders = payload.folders;
+  return Array.isArray(folders) &&
+    folders.length > 0 &&
+    folders.every((folder) => typeof folder === "string")
+    ? folders.join(", ")
+    : undefined;
+}
+
+/** The page host under the subject, meaningful only for browser actions. */
+export function hostText(event: AuditEvent): string {
+  const payload = event.payload ?? {};
+  return typeof payload.file !== "string" &&
+    typeof payload.command !== "string" &&
+    typeof payload.page === "string" &&
+    payload.page
+    ? hostOf(payload.page)
+    : "";
+}
+
+/**
+ * The Bot a row is about. Actions a Bot took carry it in the payload; events done TO a Bot (routed
+ * to it, started, handed work, paused) record it as the target instead, and are just as much its row.
+ * A folder given to a Bot before its row said `bot` named it as `botId`.
+ */
+export function botIdOf(event: AuditEvent): string | null {
+  if (typeof event.payload?.bot === "string") return event.payload.bot;
+  if (
+    event.targetType === "host_access" &&
+    typeof event.payload?.botId === "string"
+  )
+    return event.payload.botId;
+  // A routine is its Bot's, whether the Bot or a person made it.
+  if (
+    event.targetType === "routine" &&
+    typeof event.payload?.agentId === "string"
+  )
+    return event.payload.agentId;
+  return event.targetType === "agent" && event.targetId ? event.targetId : null;
+}
+
+export function botText(event: AuditEvent, nameFor: NameFor): string {
+  const bot = botIdOf(event);
+  return bot ? nameFor(bot) : "";
+}
+
+/**
+ * What started a row. Two kinds of row are OpenBot's own change: a configuration row that names
+ * OpenBot as its actor (`openbot:always-on`), and a component a build brought, published on arrival
+ * (the only publish row with a `note`). Rows written before the server recorded that say a person
+ * started them, and the trail cannot be rewritten, so they are read that way here. A row the server
+ * says something other than a person started keeps what it says.
+ */
+function initiatorKindOf(event: AuditEvent): string | undefined {
+  if ((event.initiatorKind ?? "person") !== "person")
+    return event.initiatorKind;
+  const ownChange =
+    (event.eventType === "configuration.changed" &&
+      isOpenBotActor(event.payload?.actor)) ||
+    (event.eventType === "component.published" &&
+      typeof event.payload?.note === "string");
+  return ownChange ? "deployment" : event.initiatorKind;
+}
+
+/**
+ * Who started a row, as the row's 发起方 filter says it, and {@link startedByLine} puts in a
+ * sentence under the Bot. `deployment` is what OpenBot itself is called on this screen: 「本部署」 in
+ * Admin, and the product in the personal edition's Activity, which is anybody's page. The product
+ * is said by its short name, 「熊宝」: 「熊宝数字员工」 reads as one of the person's Bots.
+ */
+export function startedByText(
+  event: AuditEvent,
+  nameFor: NameFor,
+  deployment = "本部署",
+): string {
+  switch (initiatorKindOf(event)) {
+    case "routine":
+      return "定时任务";
+    case "handoff":
+      return event.initiatorId
+        ? `由${spaced(nameFor(event.initiatorId))}转交`
+        : "由其他员工转交";
+    case "memory":
+      return "记忆来源";
+    case "responsibility":
+      return "目标";
+    case "deployment":
+      // The product by its short name: 「熊宝数字员工」 reads as one of the person's Bots.
+      return deployment === "熊宝数字员工" ? "熊宝" : deployment;
+    default:
+      return "某个人";
+  }
+}
+
+/**
+ * An app the personal edition gave a Bot on the one press of its card (Connect): the request and
+ * its approval are written as the team edition's would be, `direct`, and nobody approved anything.
+ * Every Bot may use every app the person turns on there, so the app was allowed by that, on its own.
+ */
+function givenWithoutAsking(event: AuditEvent): boolean {
+  return (
+    event.eventType === "app_access.approved" && event.payload?.direct === true
+  );
+}
+
+/**
+ * What came of a row. `storedNames` is false on the personal edition's Activity; see
+ * {@link givenWithoutAsking}.
+ */
+export function decisionText(event: AuditEvent, storedNames = true): string {
+  const payload = event.payload ?? {};
+  const outcome = outcomeOf(event);
+  if (!storedNames && givenWithoutAsking(event)) return "自动允许";
+  /*
+   * Three different things, and the difference is what somebody comes to this row to find out.
+   *
+   * A person naming a coworker, the router matching one, and the router giving up and using the
+   * default are not the same event, and one label covering all three would make the row worth less
+   * than the reason line under it. Nothing here is a refusal, so none of them take the refusal
+   * colour.
+   */
+  const routed =
+    event.eventType === "channel.routed"
+      ? payload.viaMention === true
+        ? "由用户指定的员工"
+        : payload.fallback === true
+          ? "交给了默认员工"
+          : "交给了对应的员工"
+      : null;
+  const legacy = legacyFolderAction(event);
+  return (
+    routed ??
+    approvalText(event) ??
+    (legacy?.outcome === "requested" ? "已请求" : undefined) ??
+    notConnectedText(event) ??
+    (legacy ? undefined : DECISIONS[event.eventType]) ??
+    (outcome === "refused"
+      ? "已拦截"
+      : outcome === "did-not-happen"
+        ? "没有发生"
+        : "已放行")
+  );
+}
+
+/**
+ * The app a call needed and the asker had not connected, when that is why it did not happen.
+ *
+ * The server records the refusal as the Bot was given it, so `failure` opens with the
+ * `[connect-app]{...}` marker the chat draws as a connect card. Read with the chat's own reader,
+ * so the page and the card agree on what counts as one; nothing of the marker is drawn here.
+ */
+function connectPromptOf(event: AuditEvent): ConnectPrompt | null {
+  const failure = event.payload?.failure;
+  return typeof failure === "string" ? readConnectPrompt(failure) : null;
+}
+
+/**
+ * Not "The server didn't answer": it answered, and the answer was that the app isn't connected.
+ * Still the colour of something that did not happen, which it is.
+ */
+function notConnectedText(event: AuditEvent): string | undefined {
+  const prompt = connectPromptOf(event);
+  if (!prompt) return undefined;
+  return prompt.reason === "reconnect" ? "需要重新连接" : "未连接";
+}
+
+/**
+ * The line under "Not connected". Admin reads the refusal's own sentence, as its other reasons
+ * read as recorded. A page anybody can open says it in its own words, because the recorded one
+ * tells the Bot to "ask again" and this is a page, not a conversation.
+ */
+function notConnectedLine(prompt: ConnectPrompt, storedNames: boolean): string {
+  if (storedNames && prompt.message) return prompt.message;
+  if (prompt.reason === "reconnect")
+    return `${prompt.title} 的连接已失效，请到「已连接的账号」里重新连接。`;
+  if (prompt.reason === "shared")
+    return `${prompt.title} 使用的共享账号还没有人连接，请联系管理员连接。`;
+  return `${prompt.title} 还没有连接，请到「已连接的账号」里连接。`;
+}
+
+/**
+ * What an approval row says: the gate asking or deciding, or the person's answer. One event type
+ * covers every answer, so the answer is read from the row, and a denial never falls through to
+ * "Allowed".
+ */
+function approvalText(event: AuditEvent): string | undefined {
+  const payload = event.payload ?? {};
+  if (event.eventType === "approval.person_decided")
+    return typeof payload.decision === "string"
+      ? PERSON_DECISIONS[payload.decision]
+      : undefined;
+  if (event.eventType === "approval.evaluated") {
+    const behaviour = (payload.outcome as { behaviour?: unknown } | undefined)
+      ?.behaviour;
+    return typeof behaviour === "string"
+      ? GATE_DECISIONS[behaviour]
+      : undefined;
+  }
+  return undefined;
+}
+
+const PERSON_DECISIONS: Record<string, string> = {
+  allow_once: "有人允许了这一次",
+  allow_always: "有人设为总是允许",
+  deny: "有人拒绝了",
+  handled: "有人亲自做了",
+};
+
+const GATE_DECISIONS: Record<string, string> = {
+  allow: "没有询问，直接允许",
+  ask: "先问了人",
+  hand_off: "交给人来做",
+  deny: "已拦截",
+};
+
+/**
+ * Why an action the policy allowed was refused anyway, in a person's words. The Bot is told why in
+ * sentences written for it; the shared table turns them into the ones a person reads.
+ */
+function refusalLine(payload: Record<string, unknown>): string | undefined {
+  if (payload.refusal === "person_declined") return "询问时有人拒绝了。";
+  if (payload.refusal === "approval" && typeof payload.reason === "string")
+    return outcomeForPerson(payload.reason);
+  return undefined;
+}
+
+/**
+ * Why a component was not shown, for a page anybody can open. The stored reason is the one the Bot
+ * is given, which names the component and its data by their ids and sends the person to an admin.
+ */
+const COMPONENT_REFUSALS: Record<string, string> = {
+  "component.refused": "这位员工不能展示它。",
+  "component.function_refused": "它不能读取这些数据。",
+};
+
+/**
+ * Every reason line under the decision, in the order the cell draws them. Admin (`storedNames`)
+ * reads each as recorded; a page anybody can open says a component's refusal in words and leaves
+ * out the policy rule that decided an action, which is an admin's expression.
+ */
+export function decisionDetails(
+  event: AuditEvent,
+  storedNames = true,
+): string[] {
+  const payload = event.payload ?? {};
+  const decision = (payload.decision ?? {}) as {
+    allowed?: boolean;
+    mode?: string;
+    rule?: string | null;
+    carriedOut?: boolean;
+  };
+  const failed = outcomeOf(event) === "did-not-happen";
+  const lines: string[] = [];
+  const refused =
+    event.eventType === "computer.action_refused" ||
+    event.eventType === "mcp.call_rejected"
+      ? refusalLine(payload)
+      : undefined;
+  if (refused) lines.push(refused);
+  else if (!storedNames && Object.hasOwn(COMPONENT_REFUSALS, event.eventType))
+    lines.push(COMPONENT_REFUSALS[event.eventType] as string);
+  // Refusal reasons mirror the conversation-facing reason.
+  else if (
+    (event.eventType === "component.refused" ||
+      event.eventType === "component.function_refused" ||
+      event.eventType === "mcp.call_rejected" ||
+      // A folder action the desktop or its grant turned away says why; see host-access/tools.ts.
+      event.eventType === "computer.action_refused") &&
+    typeof payload.reason === "string"
+  )
+    lines.push(payload.reason);
+  // Why the gate asked, allowed or refused, and why a request stopped waiting.
+  const gate = (payload.outcome ?? {}) as { reason?: unknown };
+  if (
+    event.eventType === "approval.evaluated" &&
+    typeof gate.reason === "string"
+  )
+    lines.push(outcomeForPerson(gate.reason));
+  if (
+    event.eventType === "approval.withdrawn" &&
+    typeof payload.reason === "string"
+  )
+    lines.push(outcomeForPerson(payload.reason));
+  /*
+   * Why this run was offered what it was, which is the only part of a discovery row that cannot be
+   * worked out from the numbers. "Nothing declared" and "selector unavailable" both offer everything
+   * and mean entirely different things about the deployment.
+   */
+  if (
+    event.eventType === "mcp.tools_discovered" &&
+    typeof payload.reason === "string"
+  )
+    lines.push(
+      `${DISCOVERY_REASONS[payload.reason] ?? payload.reason}${
+        Array.isArray(payload.skills) && payload.skills.length > 0
+          ? `：${payload.skills.join(", ")}`
+          : ""
+      }`,
+    );
+  if (
+    event.eventType === "mcp.callback_refused" &&
+    typeof payload.refusal === "string"
+  )
+    lines.push(payload.refusal);
+  /*
+   * Why the conversation went where it went, which is the whole reason the row is written. Without
+   * it a routing row says "Allowed" and names nobody, which is indistinguishable from a row that
+   * failed to write.
+   */
+  if (
+    event.eventType === "channel.routed" &&
+    typeof payload.reason === "string"
+  )
+    lines.push(payload.reason);
+  if (event.eventType === "bot.declined" && typeof payload.reason === "string")
+    lines.push(`${payload.reason}，由员工自己报告`);
+  const notConnected = connectPromptOf(event);
+  if (failed && notConnected)
+    lines.push(notConnectedLine(notConnected, storedNames));
+  else if (failed && typeof payload.failure === "string")
+    lines.push(payload.failure);
+  /*
+   * The two numbers the stall row is worth reading for. Without them every stalled turn looks the
+   * same, and the difference between an endpoint that dies halfway through an answer and one that
+   * never begins is the difference between a slow Bot and a dead one.
+   */
+  const silence =
+    event.eventType === "agent.stream_stalled" ? silenceOf(payload) : null;
+  if (silence) lines.push(silence);
+  // Show concrete policy rules, but suppress the uninformative default `true` allow rule.
+  if (storedNames && decision.rule && decision.rule !== "true")
+    lines.push(decision.rule);
+  if (
+    decision.mode === "dry-run" &&
+    decision.allowed === false &&
+    decision.carriedOut
+  )
+    lines.push("演练模式：只记录，不拦截");
+  return lines;
+}
+
+/** Everything on a row as one lower-cased string, for the search box. */
+export function searchTextOf(
+  event: AuditEvent,
+  nameFor: NameFor,
+  deployment?: string,
+): string {
+  return [
+    whatText(event),
+    whatText(event, false),
+    // The stored name too, so a row is found by what the export and a collector call it.
+    whatName(event),
+    // Both ways a tool or an app is named, so either finds the row on either page.
+    subjectText(event),
+    subjectText(event, false),
+    hostText(event),
+    botText(event, nameFor),
+    startedByText(event, nameFor, deployment),
+    decisionText(event),
+    decisionText(event, false),
+    // Both ways a reason is said, as for the subject above.
+    ...decisionDetails(event),
+    ...decisionDetails(event, false),
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+
+export function OnCell({
+  event,
+  storedNames = true,
+}: {
+  event: AuditEvent;
+  /** Whether a tool or an app reads by its stored name, as Admin's do; see {@link subjectText}. */
+  storedNames?: boolean;
+}) {
+  const payload = event.payload ?? {};
+  const element = payload.element as Element;
+  const subject = subjectText(event, storedNames);
+  const host = hostText(event);
+  /*
+   * Named targets, tool counts, files and commands are identifiers and read in mono; a page element
+   * is a label and does not, and nor is a tool or an app said in words.
+   */
+  const inWords = !storedNames && subjectWords(event) !== undefined;
+  const mono =
+    event.eventType === "mcp.tools_discovered" ||
+    (NAMED_TARGETS.has(event.targetType) && !!event.targetId && !inWords) ||
+    typeof payload.file === "string" ||
+    typeof payload.command === "string" ||
+    foldersOf(payload) !== undefined;
+  // Under the action in the What column, so a row with nothing to name draws nothing.
+  return (
+    <>
+      {!subject ? null : mono ? (
+        <div className="mt-0.5 font-mono text-xs">{breakable(subject)}</div>
+      ) : typeof element === "object" && element?.name ? (
+        <div className="mt-0.5">
+          {element.name}
+          {element.role ? (
+            <span className="text-muted-foreground"> ({element.role})</span>
+          ) : null}
+        </div>
+      ) : inWords ? (
+        /*
+         * A cap, as on the Decision lines: a few tools and their app make a long line, and drawn at
+         * its own width it took the room Decision needs ("Boundary at start-up" broke at its hyphen).
+         */
+        <div className="mt-0.5 max-w-52 text-muted-foreground">{subject}</div>
+      ) : (
+        <div className="mt-0.5 text-muted-foreground">{breakable(subject)}</div>
+      )}
+      {host ? (
+        <div className="text-muted-foreground text-xs">{breakable(host)}</div>
+      ) : null}
+    </>
+  );
+}
+
+export function BotCell({
+  event,
+  nameFor,
+}: {
+  event: AuditEvent;
+  nameFor: NameFor;
+}) {
+  const bot = botIdOf(event);
+  // The name and nothing else, a tooltip included: a person never reads a Bot's id. The CSV keeps it.
+  return bot ? (
+    <span className="text-muted-foreground">{nameFor(bot)}</span>
+  ) : (
+    <span className="text-muted-foreground">-</span>
+  );
+}
+
+export function StartedByCell({
+  deployment,
+  event,
+  nameFor,
+}: {
+  deployment?: string;
+  event: AuditEvent;
+  nameFor: NameFor;
+}) {
+  // Anything that ran with nobody watching is the colour of a warning; a person or the deployment is not.
+  const unattended =
+    event.initiatorKind === "routine" ||
+    event.initiatorKind === "handoff" ||
+    event.initiatorKind === "responsibility" ||
+    event.initiatorKind === "memory";
+  return (
+    <span
+      className={
+        unattended
+          ? "font-medium text-amber-600 dark:text-amber-500"
+          : "text-muted-foreground"
+      }
+    >
+      {startedByLine(startedByText(event, nameFor, deployment))}
+    </span>
+  );
+}
+
+/**
+ * Under the Bot's name, so it says what it is: 「由定时任务发起」「由 Scout 转交」「由熊宝发起」.
+ * A hand-off already says it as a sentence.
+ */
+export function startedByLine(text: string): string {
+  return text.startsWith("由") ? text : `由${spaced(text)}发起`;
+}
+
+/**
+ * A name set inside a Chinese sentence, with the half-width space the copy rules put between
+ * Chinese and English or a number on each side it touches: 「由 Scout 转交」, 「由熊宝发起」.
+ */
+function spaced(name: string): string {
+  const cjk = /[　-鿿＀-￯]/;
+  const before = cjk.test(name.charAt(0)) ? "" : " ";
+  const after = cjk.test(name.at(-1) ?? "") ? "" : " ";
+  return `${before}${name}${after}`;
+}
+
+export function DecisionCell({
+  event,
+  storedNames = true,
+}: {
+  event: AuditEvent;
+  /** Whether reasons read as recorded, as Admin's do; see {@link decisionDetails}. */
+  storedNames?: boolean;
+}) {
+  const outcome = outcomeOf(event);
+  return (
+    <>
+      <span
+        className={
+          outcome === "refused"
+            ? "font-medium text-destructive"
+            : outcome === "did-not-happen"
+              ? "font-medium text-amber-600 dark:text-amber-500"
+              : "text-muted-foreground"
+        }
+      >
+        {decisionText(event, storedNames)}
+      </span>
+      {decisionDetails(event, storedNames).map((line) => (
+        /*
+         * A cap on the line, not a width. A fixed 22rem held the Decision column at least that wide,
+         * and with the columns beside it pushed the table past a 1000px window. The table gives the
+         * column what is left, the sentence wraps inside it, and a long unbroken word (a URL a
+         * router quoted) breaks rather than widening the table.
+         */
+        <div
+          className="mt-0.5 max-w-[22rem] text-muted-foreground text-xs [overflow-wrap:anywhere]"
+          key={line}
+        >
+          {line}
+        </div>
+      ))}
+    </>
+  );
+}
+
+/** The square at the start of each row: what happened, at a glance down the log. */
+export const OUTCOME_MARK: Record<AuditOutcome, string> = {
+  refused: "bg-destructive",
+  "did-not-happen": "bg-amber-500",
+  allowed: "bg-muted-foreground/20",
+};
+
+/** The faint tint on rows worth stopping at. Allowed rows stay plain. */
+export const OUTCOME_ROW: Record<AuditOutcome, string> = {
+  refused: "bg-destructive/5 hover:bg-destructive/10",
+  "did-not-happen": "bg-amber-500/5 hover:bg-amber-500/10",
+  allowed: "",
+};
+
+/**
+ * Why a run was offered the tools it was, in words rather than in the slug the server writes.
+ *
+ * Every one of these looks the same from outside: the Bot was handed some tools. The distinction is
+ * the difference between a deployment that narrowed on purpose, one that has never declared a skill,
+ * and one whose selector could not be reached, and only the last is a fault.
+ */
+const DISCOVERY_REASONS: Record<string, string> = {
+  "under-floor": "工具不多，全部提供",
+  "nothing-declared": "没有技能声明过这些工具",
+  unavailable: "没法挑选，所以全部提供",
+  "nothing-chosen": "没有用上技能，所以全部提供",
+  selected: "按技能挑选",
+};
+
+/** Target types whose id is a name worth putting on screen; anything else falls through. */
+const NAMED_TARGETS = new Set([
+  "component",
+  "mcp_tool",
+  "mcp_server",
+  "skill",
+  "credential",
+]);
+
+const DECISIONS: Record<string, string> = {
+  "bot.declined": "员工拒绝了",
+  // Not a refusal, so not the refusal colour: nothing was blocked. The Bot was asked and never
+  // answered, which is the same complaint as an action that was allowed and then did not happen.
+  "agent.stream_stalled": "员工不再回应",
+  "agent.tool_limit_refused": "工具太多，超出了模型的上限",
+  "computer.policy_loaded": "启动时的边界",
+  "computer.isolation_loaded": "启动时的隔离",
+  "computer.control_taken": "有人接管了操作",
+  "computer.control_released": "已交还给员工",
+  "computer.help_requested": "员工请求帮助",
+  "computer.secret_requested": "员工索要密钥",
+  "computer.secret_supplied": "有人提供了密钥",
+  "computer.reset": "电脑已重置",
+  "computer.browser_cleared": "有人清空了浏览器",
+  "computer.updated": "电脑已更新",
+  "computer.stopped": "有人按了停止",
+
+  "component.granted": "已授予这位员工",
+  "component.revoked": "已从这位员工收回",
+  "component.published": "已发布，所有员工都能用",
+  "component.unpublished": "已取消发布，没有员工能用",
+  "component.draft_saved": "草稿已保存，尚未发布",
+  "component.description_updated": "说明已更新为这个版本的",
+  "component.refused": "已拒绝",
+  "component.function_granted": "可以读取",
+  "component.function_revoked": "不再可以读取",
+  "component.function_called": "读取了真实数据",
+  "component.function_refused": "已拒绝",
+  // A function failure is execution failure, not a policy refusal.
+  "component.function_failed": "没能读取",
+
+  // Not a call and not a decision: the tools this run was allowed to see. Worded so nobody reads it
+  // as permission, which it is not — everything named was already granted.
+  "mcp.tools_discovered": "本次运行提供的工具",
+  "mcp.call_succeeded": "代这位员工调用",
+  "mcp.call_rejected": "已拦截",
+  "mcp.call_failed": "服务器没有回应",
+  // Not "Blocked": nothing about the Bot was judged, because nothing proved which Bot it was.
+  "mcp.callback_refused": "无法确认是哪位员工",
+
+  // A request closed without an answer: asking was turned off, or a rule now allows it.
+  "approval.withdrawn": "已撤回",
+
+  "configuration.changed": "配置已修改",
+  "credential.created": "凭据已保存",
+};
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+}

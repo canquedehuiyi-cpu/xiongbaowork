@@ -293,12 +293,25 @@ export function RoutinesList({
               <Item key={routine.id} variant="muted">
                 {/* Paused reads at a glance: the content dims, and a chip below says the word. */}
                 <ItemContent className={routine.enabled ? "" : "opacity-60"}>
-                  <ItemTitle>
-                    {routine.schedule}
-                    <span className="font-normal text-muted-foreground text-xs">
-                      {routine.timezone}
-                    </span>
-                  </ItemTitle>
+                  {/*
+                   * Named by the person, the name heads the row and the schedule takes a line of
+                   * its own under it, so a narrow window never squeezes the name to fit it.
+                   */}
+                  {routine.title ? (
+                    <>
+                      <ItemTitle>{routine.title}</ItemTitle>
+                      <p className="text-muted-foreground text-xs">
+                        {routine.schedule} · {routine.timezone}
+                      </p>
+                    </>
+                  ) : (
+                    <ItemTitle>
+                      {routine.schedule}
+                      <span className="font-normal text-muted-foreground text-xs">
+                        {routine.timezone}
+                      </span>
+                    </ItemTitle>
+                  )}
                   <ItemDescription className="line-clamp-2">
                     {routine.instruction}
                   </ItemDescription>
@@ -316,7 +329,9 @@ export function RoutinesList({
                           to="/channel/$channelId"
                         >
                           <Chip className="text-muted-foreground transition-colors hover:text-foreground">
-                            {routine.channel.name ?? "未命名频道"}
+                            {routine.channel.title ??
+                              routine.channel.name ??
+                              "未命名频道"}
                           </Chip>
                         </Link>
                       )}

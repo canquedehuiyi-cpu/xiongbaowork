@@ -2,8 +2,8 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { reservePort } from "../../tests/support/reserved-port";
 import type { ComputerControlState } from "../../shared/computer-control";
+import { reservePort } from "../../tests/support/reserved-port";
 
 /**
  * The fresh look a handback asks for, on the real computer: its process, its dispatcher, its control

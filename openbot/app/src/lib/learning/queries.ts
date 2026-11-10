@@ -1,17 +1,66 @@
-import { queryOptions } from "@tanstack/react-query";
-import { client } from "@/lib/client";
 import type {
+  LearnedSkillDetail,
   LearningAutoAssignState,
   LearningDeliveryStatus,
   LearningOverview,
+  LearningProposal,
+  LearningProposalDetail,
+  LearningRunSummary,
   LearningSettings,
+  PeopleProposals,
+  PersonalLearningSharing,
+  PersonalReview,
+  RecordingSkills,
+  SharingRequest,
 } from "@openbot/shared/learning";
+import { queryOptions } from "@tanstack/react-query";
+import { client } from "@/lib/client";
 
 export const learningKeys = {
   all: ["learning"] as const,
   settings: ["learning", "settings"] as const,
   automatic: ["learning", "automatic"] as const,
+  personal: ["learning", "personal"] as const,
+  review: ["learning", "review"] as const,
+  peopleProposals: ["learning", "people-proposals"] as const,
+  sharingRequests: ["learning", "sharing-requests"] as const,
+  personProposal: (userId: string, proposalId: string) =>
+    ["learning", "person-proposal", { userId, proposalId }] as const,
+  recordingSkills: (title: string, since: number, revision: string) =>
+    ["learning", "recording-skills", { title, since, revision }] as const,
+  personalProposal: (container: string, proposalId: string) =>
+    ["learning", "personal-proposal", { container, proposalId }] as const,
+  proposals: (agentId?: string) =>
+    ["learning", "proposals", { agentId: agentId ?? null }] as const,
+  proposal: (proposalId: string, agentId?: string) =>
+    ["learning", "proposal", { proposalId, agentId: agentId ?? null }] as const,
+  runs: (agentId?: string) =>
+    ["learning", "runs", { agentId: agentId ?? null }] as const,
+  skills: (agentId?: string) =>
+    ["learning", "skills", { agentId: agentId ?? null }] as const,
+  skill: (source: LearnedSkillSource, name: string) =>
+    ["learning", "skill", { source, name }] as const,
 };
+
+/** `?agentId=…` for a Bot's own container, nothing for the deployment default. */
+const forBot = (agentId?: string) =>
+  agentId ? `?agentId=${encodeURIComponent(agentId)}` : "";
+/**
+ * Settings, Learning: who else's Bots use the Skills learned from your own recordings, and the Skills in your own
+ * Learning space (null when Intelligence did not deliver them).
+ */
+export function personalLearningQueryOptions() {
+  return queryOptions({
+    queryKey: learningKeys.personal,
+    retry: false,
+    queryFn: async (): Promise<PersonalLearningSharing> =>
+      (
+        await client("/api/settings/learning", {
+          fallback: "读不到你的学习设置。请刷新页面。",
+        })
+      ).json(),
+  });
+}
 export function learningSettingsQueryOptions() {
   return queryOptions({
     queryKey: learningKeys.settings,
@@ -30,7 +79,7 @@ export function learningAutomaticQueryOptions() {
       (await client<LearningAutoAssignState | undefined>(
         "/api/admin/learning/settings",
         "automatic",
-        { fallback: "Learning settings could not be loaded." },
+        { fallback: "读取学习设置失败。" },
       )) ?? null,
   });
 }
@@ -64,7 +113,7 @@ export function createLearningContainer(): Promise<LearningAutoAssignState> {
   return client("/api/admin/learning/container", "automatic", {
     method: "POST",
     body: {},
-    fallback: "The Learning container could not be created.",
+    fallback: "学习空间没能创建。",
   });
 }
 export function saveLearningSettings(
@@ -74,5 +123,212 @@ export function saveLearningSettings(
     method: "PUT",
     body: settings,
     fallback: "保存自动学习设置失败。",
+  });
+}
+
+/** The container a proposal list is for, and its proposed skills, newest first, reviewed ones included. */
+export type LearningProposals = {
+  containerId: string | null;
+  proposals: LearningProposal[];
+};
+
+/** Admin → Automatic learning: the skills Intelligence proposed for a Bot's container, or the default. */
+export function learningProposalsQueryOptions(agentId?: string) {
+  return queryOptions({
+    queryKey: learningKeys.proposals(agentId),
+    retry: false,
+    queryFn: async (): Promise<LearningProposals> =>
+      (
+        await client(`/api/admin/learning/proposals${forBot(agentId)}`, {
+          fallback: "读不到建议的技能。请再试一次。",
+        })
+      ).json(),
+  });
+}
+
+/** One proposed skill with every file it publishes and the evidence behind it. */
+export function learningProposalQueryOptions(
+  proposalId: string,
+  agentId?: string,
+) {
+  return queryOptions({
+    queryKey: learningKeys.proposal(proposalId, agentId),
+    retry: false,
+    queryFn: (): Promise<LearningProposalDetail> =>
+      client(
+        `/api/admin/learning/proposals/${encodeURIComponent(proposalId)}${forBot(agentId)}`,
+        "proposal",
+        { fallback: "读不到这项技能。请再试一次。" },
+      ),
+  });
+}
+
+/** The analysis runs of a Bot's container, or the default, newest first. */
+export function learningRunsQueryOptions(agentId?: string) {
+  return queryOptions({
+    queryKey: learningKeys.runs(agentId),
+    retry: false,
+    queryFn: async (): Promise<{
+      containerId: string | null;
+      runs: LearningRunSummary[];
+    }> =>
+      (
+        await client(`/api/admin/learning/runs${forBot(agentId)}`, {
+          fallback: "读不到分析运行记录。请再试一次。",
+        })
+      ).json(),
+  });
+}
+
+/** The skills published in a Bot's container, or the default. */
+export function learnedSkillsQueryOptions(agentId?: string) {
+  return queryOptions({
+    queryKey: learningKeys.skills(agentId),
+    retry: false,
+    queryFn: async (): Promise<{
+      containerId: string | null;
+      skills: { name: string; description: string }[];
+    }> =>
+      (
+        await client(`/api/admin/learning/skills${forBot(agentId)}`, {
+          fallback: "读不到已发布的技能。请再试一次。",
+        })
+      ).json(),
+  });
+}
+
+/** Whose published skill is being read: an admin's container, your own, or one person's. */
+export type LearnedSkillSource =
+  | { kind: "admin"; agentId?: string }
+  | { kind: "personal" }
+  | { kind: "person"; userId: string };
+
+function learnedSkillPath(source: LearnedSkillSource, name: string) {
+  const skill = encodeURIComponent(name);
+  switch (source.kind) {
+    case "admin":
+      return `/api/admin/learning/skills/${skill}${forBot(source.agentId)}`;
+    case "personal":
+      return `/api/settings/learning/skills/${skill}`;
+    case "person":
+      return `/api/admin/learning/people/${encodeURIComponent(source.userId)}/skills/${skill}`;
+  }
+}
+
+/** One published skill with every file it contains and, from your own space, the recordings it was learned from. */
+export function learnedSkillQueryOptions(
+  source: LearnedSkillSource,
+  name: string,
+) {
+  return queryOptions({
+    queryKey: learningKeys.skill(source, name),
+    retry: false,
+    queryFn: (): Promise<LearnedSkillDetail> =>
+      client(learnedSkillPath(source, name), "skill", {
+        fallback: "读不到这项技能。请再试一次。",
+      }),
+  });
+}
+
+/** Settings, Learning: the skills proposed from your own recordings that wait for your decision. */
+export function personalReviewQueryOptions() {
+  return queryOptions({
+    queryKey: learningKeys.review,
+    retry: false,
+    // While a run is going the review is read again, so what it proposes (or approves) shows up without a reload.
+    refetchInterval: (query) =>
+      query.state.data?.sources.some(
+        (source) =>
+          source.latestRun &&
+          !["succeeded", "failed"].includes(source.latestRun.status),
+      )
+        ? 10_000
+        : false,
+    queryFn: async (): Promise<PersonalReview> =>
+      (
+        await client("/api/settings/learning/review", {
+          fallback: "读不到待你审核的技能。请刷新页面。",
+        })
+      ).json(),
+  });
+}
+
+/** One skill proposed from your own recordings, with every file it publishes. */
+export function personalProposalQueryOptions(
+  container: string,
+  proposalId: string,
+) {
+  return queryOptions({
+    queryKey: learningKeys.personalProposal(container, proposalId),
+    retry: false,
+    queryFn: (): Promise<LearningProposalDetail> =>
+      client(
+        `/api/settings/learning/proposals/${encodeURIComponent(proposalId)}?container=${encodeURIComponent(container)}`,
+        "proposal",
+        { fallback: "读不到这项技能。请再试一次。" },
+      ),
+  });
+}
+
+/** Admin → Learning, People: the skills proposed from each person's own recordings. */
+export function peopleProposalsQueryOptions() {
+  return queryOptions({
+    queryKey: learningKeys.peopleProposals,
+    retry: false,
+    queryFn: async (): Promise<PeopleProposals> =>
+      (
+        await client("/api/admin/learning/people/proposals", {
+          fallback: "读不到大家待审核的技能。请再试一次。",
+        })
+      ).json(),
+  });
+}
+
+/** One skill proposed from a person's own recordings, with every file it publishes. */
+export function personProposalQueryOptions(userId: string, proposalId: string) {
+  return queryOptions({
+    queryKey: learningKeys.personProposal(userId, proposalId),
+    retry: false,
+    queryFn: (): Promise<LearningProposalDetail> =>
+      client(
+        `/api/admin/learning/people/${encodeURIComponent(userId)}/proposals/${encodeURIComponent(proposalId)}`,
+        "proposal",
+        { fallback: "读不到这项技能。请再试一次。" },
+      ),
+  });
+}
+
+/** Admin → Learning: people's requests to open a learned skill to every Bot, waiting for an admin. */
+export function sharingRequestsQueryOptions() {
+  return queryOptions({
+    queryKey: learningKeys.sharingRequests,
+    retry: false,
+    queryFn: (): Promise<SharingRequest[]> =>
+      client("/api/admin/learning/sharing-requests", "requests", {
+        fallback: "读不到共享申请。请再试一次。",
+      }),
+  });
+}
+
+/**
+ * Teach a Bot, after a recording saves: the skills Learning proposed from it, named `title` and stopped at `since`
+ * (milliseconds). `revision` changes whenever the person's review does (a run moves on, a proposal is approved), which
+ * is when there can be something new to find.
+ */
+export function recordingSkillsQueryOptions(
+  title: string,
+  since: number,
+  revision: string,
+) {
+  return queryOptions({
+    queryKey: learningKeys.recordingSkills(title, since, revision),
+    retry: false,
+    queryFn: async (): Promise<RecordingSkills> =>
+      (
+        await client(
+          `/api/settings/learning/recording-skills?title=${encodeURIComponent(title)}&since=${since}`,
+          { fallback: "刚才没能读到你的技能。请再试一次。" },
+        )
+      ).json(),
   });
 }

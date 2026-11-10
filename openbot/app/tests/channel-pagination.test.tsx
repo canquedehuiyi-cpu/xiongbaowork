@@ -28,7 +28,9 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { agentKeys } from "@/lib/agents/queries";
 import { authKeys } from "@/lib/auth/queries";
 import { botLifecycleKeys } from "@/lib/bot-lifecycle/queries";
+import { browserKeys } from "@/lib/browser/queries";
 import { type ChannelSummary, channelKeys } from "@/lib/channels/queries";
+import { deploymentKeys } from "@/lib/deployment/queries";
 import { quotaKeys } from "@/lib/quota/queries";
 import { userPreferencesQueryOptions } from "@/lib/settings/message-list";
 import { wakerGroupKeys } from "@/lib/waker-groups/queries";
@@ -189,13 +191,30 @@ function renderSidebar(first: ChannelSummary = channel("Recent conversation")) {
     onboarding: null,
   });
   queryClient.setQueryData(agentKeys.list(false), []);
+  // Read once per page load in the app; the navigation entries depend on the edition.
+  queryClient.setQueryData(deploymentKeys.capabilities(), {
+    generativeUi: true,
+    selfHostBanner: false,
+    localEvaluation: false,
+    edition: "team",
+  });
   // The sidebar's attention list polls on its own schedule; this test counts channel requests only.
   queryClient.setQueryDefaults(botLifecycleKeys.attention, {
     staleTime: Number.POSITIVE_INFINITY,
     refetchInterval: false,
   });
-  queryClient.setQueryData(botLifecycleKeys.attention, []);
+  queryClient.setQueryData(botLifecycleKeys.attention, {
+    bots: [],
+    lastPingId: null,
+  });
   queryClient.setQueryData(wakerGroupKeys.list(), []);
+  // The Browser entry reads whether there is a browser once; answered here so only channel requests are counted.
+  queryClient.setQueryData(browserKeys.state, {
+    available: false,
+    computerId: "",
+    open: false,
+    tabs: [],
+  });
   queryClient.setQueryData(channelKeys.list(), {
     pages: [{ channels: [first], nextCursor: "older/page" }],
     pageParams: [""],

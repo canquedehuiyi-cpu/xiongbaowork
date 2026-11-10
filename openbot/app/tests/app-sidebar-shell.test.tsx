@@ -30,10 +30,10 @@ import { agentKeys } from "@/lib/agents/queries";
 import { authKeys } from "@/lib/auth/queries";
 import { botLifecycleKeys } from "@/lib/bot-lifecycle/queries";
 import { type ChannelSummary, channelKeys } from "@/lib/channels/queries";
+import { portraitKeys } from "@/lib/portraits/queries";
 import { quotaKeys } from "@/lib/quota/queries";
 import { userPreferencesQueryOptions } from "@/lib/settings/message-list";
 import { wakerGroupKeys } from "@/lib/waker-groups/queries";
-import { portraitKeys } from "@/lib/portraits/queries";
 
 // Keep the sidebar's live-update socket offline; these tests exercise HTTP pagination.
 class OfflineWebSocket extends EventTarget implements WebSocket {

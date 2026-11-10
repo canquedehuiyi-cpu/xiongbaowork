@@ -34,7 +34,7 @@ test("every data function a component can read has words, so a grant or a read n
   );
   expect(missing).toEqual([]);
   expect(dataWords(["botActivity", "recentRefusals"])).toBe(
-    "your Bots' activity and what was refused",
+    "你的员工的活动和被拒绝的内容",
   );
 });
 
@@ -50,16 +50,16 @@ test("no event's words are its stored name, or carry one", () => {
 });
 
 test("an action reads as what was asked for, in the words a conversation uses for an app", () => {
-  expect(auditActionWords("computer_write_file")).toBe("Save a file");
-  expect(auditActionWords("host/read_file")).toBe("Read a file");
+  expect(auditActionWords("computer_write_file")).toBe("保存文件");
+  expect(auditActionWords("host/read_file")).toBe("读取文件");
   // Older rows record a computer's action without its namespace.
-  expect(auditActionWords("click")).toBe("Click on a page");
-  expect(auditActionWords("parallel/web_search")).toBe("Search the web");
+  expect(auditActionWords("click")).toBe("点击页面");
+  expect(auditActionWords("parallel/web_search")).toBe("搜索网页");
   expect(auditActionWords("composio-gmail/GMAIL_SEND_EMAIL")).toBe(
     "Send email",
   );
-  expect(auditActionWords("gmail/*")).toBe("Use Gmail");
-  expect(auditActionWords("bot/message_bot")).toBe("Ask another Bot");
+  expect(auditActionWords("gmail/*")).toBe("使用 Gmail");
+  expect(auditActionWords("bot/message_bot")).toBe("询问另一位员工");
   // A name with no words of its own is still split into words.
   expect(auditActionWords("computer_hover_element")).toBe("Hover element");
 });

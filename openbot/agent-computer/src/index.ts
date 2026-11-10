@@ -34,10 +34,15 @@ import {
   TAKE_CONTROL_FIRST,
 } from "./control";
 import { keyForOpenList } from "./dropdown-list";
-import { handleEgressPolicyRequest, startEgressFilter } from "./egress";
+import {
+  egressShellEnvironment,
+  handleEgressPolicyRequest,
+  startEgressFilter,
+} from "./egress";
 import { enterText, FieldValueError } from "./enter-text";
 import { identity } from "./identity";
 import { createInputQueue, type InputQueue } from "./input-queue";
+import { createLiveShell } from "./live-shell";
 import {
   LOOPBACK_RELAYS_ENV,
   parseLoopbackRelays,
@@ -49,10 +54,12 @@ import {
   type PagePurpose,
 } from "./navigation";
 import {
+  botKeyOf,
   createPerBotComputer,
   PerBotUnavailableError,
   perBotUsersEnabled,
   usesOwnUser,
+  XB_BOT_HELPER,
   XB_BOT_WORKSPACE,
 } from "./per-bot";
 import {
@@ -87,7 +94,7 @@ import {
   unmarkPersonFilled,
 } from "./secret-masking";
 import { type BotSession, createSessions } from "./sessions";
-import type { CommandRunner } from "./shell";
+import { type CommandRunner, environmentForCommand } from "./shell";
 import {
   fillSignIn,
   fillSignInCode,
@@ -328,13 +335,12 @@ const workspaces = createWorkspaces(
 /**
  * Each seat's live shell, as a terminal a person watches and, holding the wheel, types into.
  *
- * Never for an employee with its own Linux user: the live shell is this process's bash, so it would
- * be pwuser's. The upgrade below refuses those seats; this refuses them again, so a path that forgets
- * cannot open one.
+ * An employee with its own Linux user gets one too, but never this process's bash, which would be
+ * pwuser's: `ownUserTerminal` starts it through the root helper as the employee (`xb-bot shell`).
  */
 const terminalSockets = createTerminalSockets<StreamData & TerminalSocketData>({
   shellFor: async (seat) => {
-    if (runsAsOwnUser(seat)) throw new Error(TERMINAL_NOT_FOR_OWN_USER);
+    if (runsAsOwnUser(seat)) return ownUserTerminal(seat);
     return (await workspaces.for(seat)).shell.terminal;
   },
   mayType: (seat) => sessions.for(seat).control.humanMayDrive(),
@@ -485,9 +491,76 @@ function runsAsOwnUser(seat: string): boolean {
   return usesOwnUser(seat, DEFAULT_BOT_ID, PER_BOT_USERS);
 }
 
-/** Said on the terminal socket of an employee with its own user, which has no live shell. */
-const TERMINAL_NOT_FOR_OWN_USER =
-  "This employee runs commands as its own user, so there's no live terminal to show. Its commands still run, one at a time.";
+/**
+ * An employee with its own Linux user: its live terminal, for the person watching.
+ *
+ * A bash started through the root helper as the employee (`sudo -n xb-bot shell <key> <dir>`,
+ * docker/xb-bot.sh), in the employee's directory, with the environment its commands get (egress
+ * filter included). What the
+ * person types runs as the employee, never as pwuser. Only the person's: the employee's own commands
+ * still go one at a time through `run` (`commandsFor`), so they are not typed into this shell and the
+ * terminal shows what the person did here. Prepared like a command is (`ensure`), so the first thing
+ * opened for an employee can be its terminal; a helper that is not ready refuses here, as it does
+ * for a command.
+ */
+const ownUserTerminals = new Map<string, ReturnType<typeof createLiveShell>>();
+
+/** What the helper accepts (docker/xb-bot.sh `cmd_shell`): it refuses more, and drops a longer one. */
+const TERMINAL_ENV_MAX = 64;
+const TERMINAL_ENV_VALUE_MAX = 4096;
+
+/**
+ * The terminal's environment as `NAME=VALUE` arguments, within what the helper accepts. Past it the
+ * helper would refuse the whole terminal, or quietly drop the value; what is left out here is named
+ * in the log instead, so an operator whose COMPUTER_SHELL_ENV is long can see why.
+ */
+function terminalEnvArguments(env: Record<string, string>): string[] {
+  const kept: string[] = [];
+  const dropped: string[] = [];
+  for (const [name, value] of Object.entries(env)) {
+    const argument = `${name}=${value}`;
+    if (
+      kept.length >= TERMINAL_ENV_MAX ||
+      argument.length > TERMINAL_ENV_VALUE_MAX
+    )
+      dropped.push(name);
+    else kept.push(argument);
+  }
+  if (dropped.length > 0)
+    console.warn(
+      `An employee's live terminal is started without ${dropped.join(", ")}: the root helper takes at most ${TERMINAL_ENV_MAX} variables of at most ${TERMINAL_ENV_VALUE_MAX} characters.`,
+    );
+  return kept;
+}
+async function ownUserTerminal(
+  seat: string,
+): Promise<ReturnType<typeof createLiveShell>> {
+  await perBot.ensure(seat);
+  const key = botKeyOf(seat);
+  let shell = ownUserTerminals.get(key);
+  if (!shell) {
+    shell = createLiveShell({
+      cwd: "/",
+      // What the employee's commands get (shell.ts runAs), egress filter last, so what a person types
+      // here goes out through the same policy and the same per-employee identity as a command does.
+      env: () => ({
+        ...environmentForCommand(process.env, "/"),
+        ...egressShellEnvironment(),
+      }),
+      command: ({ rc, env }) => [
+        "sudo",
+        "-n",
+        XB_BOT_HELPER,
+        "shell",
+        key,
+        Buffer.from(rc, "utf8").toString("base64"),
+        ...terminalEnvArguments(env),
+      ],
+    });
+    ownUserTerminals.set(key, shell);
+  }
+  return shell;
+}
 
 /** The seat's files: its own user's directory, or its folder in `workspaces`. */
 async function filesFor(seat: string): Promise<Workspace> {
@@ -1278,12 +1351,10 @@ serve<StreamData & TerminalSocketData>({
           return json({ error: "That is not a usable bot id." }, 400);
         if (isPersonBrowserId(named.bot))
           return json({ error: PERSONS_OWN_BROWSER }, 403);
-        // Opened to say so, as where commands are off: an employee with its own user has no live shell.
+        // Opened to say so where commands are off. An employee with its own user has one too, as itself.
         const terminalRefused = !RUNTIME.allowExec
           ? TERMINAL_UNAVAILABLE
-          : runsAsOwnUser(named.seat)
-            ? TERMINAL_NOT_FOR_OWN_USER
-            : undefined;
+          : undefined;
         if (
           server.upgrade(request, {
             data: {
@@ -1614,6 +1685,13 @@ serve<StreamData & TerminalSocketData>({
           ?.terminal.restart(
             "The computer stopped, so the shell ended. A new one starts when it's next used.",
           );
+        // An employee with its own user: its terminal is the helper's, kept apart (`ownUserTerminal`).
+        if (runsAsOwnUser(botId))
+          ownUserTerminals
+            .get(botKeyOf(botId))
+            ?.restart(
+              "The computer stopped, so the shell ended. A new one starts when it's next used.",
+            );
         await botBrowser.settled(botId);
         return json({ stopped: true, wasRunning });
       }
@@ -1658,6 +1736,13 @@ serve<StreamData & TerminalSocketData>({
           ?.terminal.restart(
             "The computer was reset, so the shell ended. A new one starts when it's next used.",
           );
+        // An employee with its own user: its terminal is the helper's, kept apart (`ownUserTerminal`).
+        if (runsAsOwnUser(botId))
+          ownUserTerminals
+            .get(botKeyOf(botId))
+            ?.restart(
+              "The computer was reset, so the shell ended. A new one starts when it's next used.",
+            );
         await botBrowser.settled(botId);
         /*
          * And a new run, because the browser this session described is gone.

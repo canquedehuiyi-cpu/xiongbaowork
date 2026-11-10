@@ -24,6 +24,7 @@ import { isUsableSeatId, UnusableBotIdError } from "./bot-id";
 import { createShell, type Shell } from "./shell";
 
 export type { Shell };
+
 import { createWorkspace } from "./workspace";
 
 export type Workspace = ReturnType<typeof createWorkspace>;

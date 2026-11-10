@@ -77,6 +77,9 @@ const librarian: AgentProfile = {
   systemOwned: false,
   canManage: true,
   mine: true,
+  isolated: false,
+  isolationActive: false,
+  isolationOffReason: null,
 };
 
 const summary: AutonomousSummary = {
@@ -148,7 +151,9 @@ function draw(
   const root = createRootRoute({ component: () => <Outlet /> });
   const router = createRouter({
     context: {},
-    history: createMemoryHistory({ initialEntries: ["/autonomous?view=agents"] }),
+    history: createMemoryHistory({
+      initialEntries: ["/autonomous?view=agents"],
+    }),
     routeTree: root.addChildren([
       AutonomousRoute.update({
         getParentRoute: () => root,

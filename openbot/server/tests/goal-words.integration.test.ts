@@ -1,9 +1,9 @@
 import {
   afterAll as bunAfterAll,
   beforeAll as bunBeforeAll,
+  test as bunTest,
   describe,
   expect,
-  test as bunTest,
 } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { buildResponsibilityTurn } from "@openbot/shared/responsibility-turn";
@@ -12,11 +12,11 @@ import { eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { createDatabase } from "../src/db/client";
 import { agents, users } from "../src/db/schema/core";
-import { markUntrusted } from "../src/untrusted-content";
 import { createResponsibilityStore } from "../src/responsibilities/store";
 import { responsibilityTools } from "../src/responsibilities/tools";
 import { TRIGGER_TOOLS } from "../src/responsibilities/trigger-tools";
 import { runAsTenant } from "../src/tenant/context";
+import { markUntrusted } from "../src/untrusted-content";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -184,8 +184,8 @@ describe("a goal's steps in the conversation", () => {
       "run_goal",
       "run_responsibility",
     ]) {
-      expect(readToolName(name).label).toMatch(/\bgoal\b/);
-      expect(readToolName(name, true).label).toMatch(/\bgoal\b/);
+      expect(readToolName(name).label).toMatch(/目标/);
+      expect(readToolName(name, true).label).toMatch(/目标/);
     }
   });
 });

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Persona } from "../../../../shared/persona";
+import type { AgentProfile } from "./queries";
 
 /** What the server accepts as an avatar seed (`routes.ts`). Kept in step by hand, like the limits. */
 export const AVATAR_SEED_PATTERN = /^[\w:.-]{1,64}$/;
@@ -29,11 +30,7 @@ export const agentFormSchema = z.object({
     .trim()
     .min(1, "名字为必填项。")
     .max(80, "名字不能超过 80 个字符。"),
-  title: z
-    .string()
-    .trim()
-    .min(1, "头衔为必填项。")
-    .max(120, "头衔不能超过 120 个字符。"),
+  title: z.string().trim().max(120, "头衔不能超过 120 个字符。"),
   roleDescription: z
     .string()
     .trim()
@@ -73,6 +70,20 @@ export const agentFormSchema = z.object({
   avatarSeed: z
     .string()
     .regex(AVATAR_SEED_PATTERN, "头像种子只能是 1 到 64 个字母、数字或 _ - : .")
+    .optional(),
+  /**
+   * A computer of its own. Optional because only the New Bot sheet and the Setup row ask it: every
+   * other form leaves it out, and the server reads absent as "leave it as it is".
+   */
+  isolated: z.boolean().optional(),
+  /**
+   * The starter Bot's instructions, which only its Setup page sends. Absent leaves them as they are.
+   */
+  instructions: z
+    .string()
+    .trim()
+    .min(1, "指令为必填项。")
+    .max(1000, "指令不能超过 1000 个字符。")
     .optional(),
 });
 
@@ -115,5 +126,37 @@ export function agentInputFrom(values: AgentFormPatch) {
     ...(values.avatarSeed === undefined
       ? {}
       : { avatarSeed: values.avatarSeed }),
+    ...(values.isolated === undefined ? {} : { isolated: values.isolated }),
+    ...(values.instructions === undefined
+      ? {}
+      : { instructions: values.instructions }),
   };
+}
+
+/**
+ * The full update body for changing one or two fields of a coworker (upstream's Setup rows; here the
+ * detail page's 运行方式 section).
+ *
+ * The update endpoint takes the whole profile, so unchanged fields ride along as stored. Not a
+ * built-in coworker's endpoint: that is the managed Bot's own address, which nobody typed, and the
+ * route checks any endpoint it is sent as one somebody did. Empty leaves the stored one where it is,
+ * and the empty key keeps the current one. The model binding, persona and avatar are left out, which
+ * the server reads as "leave them as they are".
+ */
+export function profileUpdateInput(
+  profile: Pick<
+    AgentProfile,
+    "name" | "title" | "roleDescription" | "visibility" | "builtIn" | "endpoint"
+  >,
+  patch: Partial<AgentFormValues>,
+) {
+  return agentInputFrom({
+    name: profile.name,
+    title: profile.title,
+    roleDescription: profile.roleDescription,
+    visibility: profile.visibility,
+    endpoint: profile.builtIn ? "" : (profile.endpoint ?? ""),
+    authValue: "",
+    ...patch,
+  });
 }

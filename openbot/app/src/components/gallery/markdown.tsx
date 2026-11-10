@@ -1,6 +1,10 @@
 import { useContext, useState } from "react";
 import { Streamdown } from "streamdown";
-import { markdownComponents } from "@/lib/markdown";
+import {
+  markdownComponents,
+  markdownPlugins,
+  replyRemarkPlugins,
+} from "@/lib/markdown";
 import { cn } from "@/lib/utils";
 import { GalleryStreamingContext } from "./streaming";
 
@@ -12,12 +16,10 @@ import { GalleryStreamingContext } from "./streaming";
  * `[Sender](https://mail.google.com/mail/u/0/#inbox/…) — 5:00 pm. …`, and the card drew that
  * literally: brackets, parentheses and the whole Gmail address on every line, and nothing to click.
  *
- * THE REPLY'S RENDERER, NOT A SECOND ONE. The same Streamdown and components as a Bot's reply in
- * the transcript, so a link is the same link (a new tab, no referrer, which OpenBot Desktop hands to
- * the person's own browser), a connected document is the same chip, and raw HTML is dropped by the
- * same sanitising. Nothing here can drift from the transcript. This fork's transcript passes
- * Streamdown no code or remark plugins (upstream's `markdownPlugins` and `replyRemarkPlugins` are
- * not ported), so neither does this.
+ * THE REPLY'S RENDERER, NOT A SECOND ONE. The same Streamdown, components, plugins and line endings
+ * as a Bot's reply in the transcript, so a link is the same link (a new tab, no referrer, which
+ * OpenBot Desktop hands to the person's own browser), a connected document is the same chip, and raw
+ * HTML is dropped by the same sanitising. Nothing here can drift from the transcript.
  *
  * A LONG LINK WRAPS. A card is narrower than a reply and clips what runs past its edge, so a long
  * URL or path in its text breaks across lines rather than losing its end. Code blocks still scroll.
@@ -45,6 +47,8 @@ export function GalleryMarkdown({
       className={cn("break-words", className)}
       components={markdownComponents}
       mode={mode}
+      plugins={markdownPlugins}
+      remarkPlugins={replyRemarkPlugins}
     >
       {children}
     </Streamdown>

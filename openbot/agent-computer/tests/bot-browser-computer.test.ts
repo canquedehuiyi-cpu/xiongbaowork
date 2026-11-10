@@ -2,10 +2,6 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { reservePort } from "../../tests/support/reserved-port";
-import type { BotBrowserState } from "../../shared/bot-browser";
-import type { ComputerControlState } from "../../shared/computer-control";
-import type { LauncherConnection } from "../../shared/openbot-browser";
 import type { MiddlewareHandler } from "hono";
 import type { AuditEventInput, AuditStore } from "../../server/src/audit";
 import type {
@@ -16,6 +12,10 @@ import { createComputerGateway } from "../../server/src/computer/gateway";
 import type { PolicyStore } from "../../server/src/computer/policy-store";
 import type { ComputerProvider } from "../../server/src/computer/provider";
 import { createComputerRoutes } from "../../server/src/computer/routes";
+import type { BotBrowserState } from "../../shared/bot-browser";
+import type { ComputerControlState } from "../../shared/computer-control";
+import type { LauncherConnection } from "../../shared/openbot-browser";
+import { reservePort } from "../../tests/support/reserved-port";
 import {
   NOT_ITS_OWN_COMPUTER,
   NOT_ITS_OWN_COMPUTER_RECORD,

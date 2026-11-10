@@ -154,7 +154,7 @@ describe.skipIf(!linux)(
       },
     );
 
-    test("an employee's live terminal is refused: the live shell would run as the computer's own user", async () => {
+    test("an employee's live terminal is refused while it cannot be given its own user, never opened as the computer's", async () => {
       const socket = new WebSocket(
         `${computer!.base.replace("http:", "ws:")}/terminal?bot=bot-a&token=${TOKEN}`,
       );
@@ -172,8 +172,11 @@ describe.skipIf(!linux)(
       });
       socket.close();
       expect(message.type).toBe("error");
-      expect(message.fatal).toBe(true);
-      expect(message.error).toContain("runs commands as its own user");
+      // Not fatal: a helper that is not ready now may be later, so the terminal may try again.
+      expect(message.fatal).toBeUndefined();
+      // Not the shared computer's shell: the employee's own (`xb-bot shell`) is prepared like a command
+      // is, and a helper that is not ready refuses it the same way.
+      expect(message.error).toStartWith(UNREADY);
     });
 
     test("/files/download for an employee is a 503", async () => {

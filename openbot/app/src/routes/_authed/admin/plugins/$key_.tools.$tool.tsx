@@ -41,6 +41,7 @@ import {
  * `$key_` opts this route out of nesting under `$key.tsx`, so the connector page stays a page rather
  * than becoming a layout with an outlet.
  */
+// M4: 待接入 上游 manage/plugin-tool-page.tsx（版式更新）
 export const Route = createFileRoute(
   "/_authed/admin/plugins/$key_/tools/$tool",
 )({ component: RouteComponent });

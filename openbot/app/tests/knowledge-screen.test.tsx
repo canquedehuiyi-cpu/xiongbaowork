@@ -90,6 +90,9 @@ function profile(id: string, name: string, mine: boolean): AgentProfile {
     systemOwned: false,
     canManage: mine,
     mine,
+    isolated: false,
+    isolationActive: false,
+    isolationOffReason: null,
   };
 }
 

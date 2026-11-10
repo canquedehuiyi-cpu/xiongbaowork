@@ -14,13 +14,12 @@ import {
   PageShell,
 } from "@/components/layout/page-shell";
 import { RowMark } from "@/components/layout/row-mark";
+import { PluginLogo } from "@/components/plugins/plugin-logo";
 import { LinkedAccountsSection } from "@/components/settings/linked-accounts";
 import {
   linkedNotice,
   visibleLinkedNotice,
 } from "@/components/settings/linked-notice";
-import { linkedAccountsQueryOptions } from "@/lib/identity/queries";
-import { PluginLogo } from "@/components/plugins/plugin-logo";
 import {
   InputGroup,
   InputGroupAddon,
@@ -33,6 +32,7 @@ import {
   ItemDescription,
   ItemTitle,
 } from "@/components/ui/item";
+import { linkedAccountsQueryOptions } from "@/lib/identity/queries";
 import {
   appKeyOf,
   connectionsQueryOptions,
@@ -48,6 +48,7 @@ import {
  * endpoint for an administrator to connect an account on somebody's behalf. A Bot calling one of
  * these runs on your own grant, so it sees exactly what you can see and nothing else.
  */
+// M4: 待接入 上游把已连接账户搬到了 /connections（_app/connections.*.tsx，含按应用的连接页、Composio 目录），并把这里改成重定向；fork 保留设置里的这一页（服务端 OAuth 仍回到 /settings/connected-accounts）
 export const Route = createFileRoute("/_authed/settings/connected-accounts/")({
   component: RouteComponent,
   /*
@@ -95,18 +96,26 @@ export function brokeredAccountsListedOn(
 }
 
 function RouteComponent() {
-  const { connected: outcome, linked } = Route.useSearch();
-  /* Read once, then dropped from the URL, so a refresh does not repeat the news. */
+  const { connected: arrivedOutcome, linked } = Route.useSearch();
+  /*
+   * Both read once, then dropped from the URL together, so a refresh or a back-navigation does not
+   * repeat news that is already over. One navigate for both: each replaces the whole search, so
+   * stripping them one at a time could leave the other behind.
+   */
+  const [outcome] = React.useState(() => arrivedOutcome);
   const [arrival] = React.useState(() => linkedNotice(linked));
   /* The same cached list the linked accounts section reads, so a Disconnect there retracts a success here. */
   const links = useQuery(linkedAccountsQueryOptions());
   const notice = visibleLinkedNotice(arrival, links.data);
   const navigate = Route.useNavigate();
   React.useEffect(() => {
-    if (linked !== undefined) {
-      navigate({ search: ({ linked: _l, ...rest }) => rest, replace: true });
+    if (linked !== undefined || arrivedOutcome !== undefined) {
+      navigate({
+        search: ({ linked: _l, connected: _c, ...rest }) => rest,
+        replace: true,
+      });
     }
-  }, [linked, navigate]);
+  }, [arrivedOutcome, linked, navigate]);
   const [search, setSearch] = React.useState("");
   const plugins = useQuery(pluginsPageQueryOptions());
   const connections = useQuery(connectionsQueryOptions());

@@ -21,10 +21,10 @@ const {
  */
 
 test.each([
-  [DECLINED_BY_PERSON, "You declined it."],
-  [ALREADY_WAITING, "It's already waiting for your answer."],
-  [WITHDRAWN_APPROVALS_OFF, "Withdrawn. You turned off asking before changes."],
-  [WITHDRAWN_RULE_ALLOWS, "Withdrawn. A rule you saved now allows it."],
+  [DECLINED_BY_PERSON, "你拒绝了这一步。"],
+  [ALREADY_WAITING, "这一步已经在等你答复了。"],
+  [WITHDRAWN_APPROVALS_OFF, "已撤回：你关掉了「改动前先问我」。"],
+  [WITHDRAWN_RULE_ALLOWS, "已撤回：你保存的一条规则现在允许这样做。"],
 ])("the server's sentence %#: the person reads their own", (sent, read) => {
   expect(outcomeForPerson(sent)).toBe(read);
 });
@@ -34,7 +34,7 @@ test("a step the person did themselves reads as theirs, and as done", () => {
   // reading "Do not repeat it; continue from what they have done."
   const sent =
     "The person did this themselves. Do not repeat it; continue from what they have done.";
-  expect(outcomeForPerson(sent)).toBe("You did it yourself.");
+  expect(outcomeForPerson(sent)).toBe("你自己完成了这一步。");
   expect(sent).toBe(HANDLED_BY_PERSON);
   expect(doneByPerson(sent)).toBe(true);
   expect(doneByPerson(DECLINED_BY_PERSON)).toBe(false);
@@ -46,7 +46,7 @@ test("a step whose outcome is unknown says so without telling the person what th
   const sent =
     "This action was started but its outcome is unknown. It was not repeated. Check whether it happened before asking the person again.";
   expect(outcomeForPerson(sent)).toBe(
-    "It started, but OpenBot can't tell whether it finished. It wasn't run again.",
+    "已经开始执行，但熊宝无法确定它是否完成，没有再执行一次。",
   );
   expect(sent).toBe(OUTCOME_UNKNOWN);
 });
@@ -56,14 +56,20 @@ test("any other step not done keeps why, and loses the Bot's next step", () => {
     outcomeForPerson(
       "Not done: The rule that allowed this was removed before it ran. Ask the person again if it is still needed.",
     ),
-  ).toBe("Not done: The rule that allowed this was removed before it ran.");
+  ).toBe("没有执行：允许它的规则在它执行前被删除了。");
+  // A why it has no words for is kept as it came, after 「没有执行：」.
+  expect(
+    outcomeForPerson(
+      "Not done: The disk is full. Ask the person again if it is still needed.",
+    ),
+  ).toBe("没有执行：The disk is full.");
   // A reason in parentheses can hold its own full stops; the sentence ends after them.
   expect(
     outcomeForPerson(
       "Not done: this action could not be carried out (the computer said: disk full. try later). Check whether it happened before asking the person again.",
     ),
   ).toBe(
-    "Not done: this action could not be carried out (the computer said: disk full. try later).",
+    "没有执行：这一步没能完成（the computer said: disk full. try later）。",
   );
 });
 

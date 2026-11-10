@@ -1,9 +1,13 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
+import type { ReactNode } from "react";
+import { BotLookProvider } from "../components/agents/bot-look";
 import { QuotaGuidanceDialog } from "../components/quota/quota-guidance-dialog";
 import { currentUserQueryOptions, needsOnboarding } from "../lib/auth/queries";
 import { CopilotProvider } from "../lib/copilot/provider";
 import { AppHotkeys } from "../lib/hotkeys/app-hotkeys";
 import { rememberShareImport, takeShareImport } from "../lib/wakerflows";
+import { SkinAccountSync } from "../skins/account-sync";
+import { useActiveSkin } from "../skins/registry";
 
 export const Route = createFileRoute("/_authed")({
   beforeLoad: async ({ context, location }) => {
@@ -37,7 +41,15 @@ export const Route = createFileRoute("/_authed")({
   component: () => (
     <CopilotProvider>
       <AppHotkeys />
-      <Outlet />
+      {/* The skin saved on the account, drawn over the browser's cached one once it loads. */}
+      <SkinAccountSync />
+      {/*
+       * 上游这里还挂了 TeamFeaturesDialog（个人版「OpenBot for Business」入口打开的销售弹窗），
+       * 属于有意不收的销售入口，不挂。
+       */}
+      <SkinBotLook>
+        <Outlet />
+      </SkinBotLook>
       {/*
        * Every structured quota refusal lands here, once (K4). Here rather than in `_app`, so a refusal
        * met on settings, admin or onboarding gets the same way out as one met in the app shell.
@@ -46,3 +58,12 @@ export const Route = createFileRoute("/_authed")({
     </CopilotProvider>
   ),
 });
+
+/** Bots are drawn the way the active skin asks for, on every authed page. */
+function SkinBotLook({ children }: { children: ReactNode }) {
+  return (
+    <BotLookProvider value={useActiveSkin().botLook ?? "face"}>
+      {children}
+    </BotLookProvider>
+  );
+}

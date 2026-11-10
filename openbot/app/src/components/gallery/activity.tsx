@@ -115,7 +115,7 @@ export function ActivityReportCard({
    * are final there is nothing to read, and "Choosing" or "Reading" would stay on screen for good.
    */
   if (!functionName) {
-    if (!streaming) return <FailedCard reason={UNREADABLE} title="活动报告" />;
+    if (!streaming) return <FailedCard reason={UNREADABLE} title={TITLE} />;
     return (
       <GalleryFrame title="报告">
         <p className="text-sm text-muted-foreground">正在选择报告…</p>

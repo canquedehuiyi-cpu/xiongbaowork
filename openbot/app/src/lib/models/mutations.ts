@@ -1,6 +1,6 @@
 import { mutationOptions, type QueryClient } from "@tanstack/react-query";
 import { client, tryClient } from "@/lib/client";
-import type { ConnectedModel } from "./queries";
+import type { ConnectedModel, ConversationModel } from "./queries";
 import { modelKeys } from "./queries";
 
 /** What a person types into the connect form. The key is write-only: it never comes back. */
@@ -99,5 +99,39 @@ export function modelReferencesMutationOptions() {
       client(`/api/models/${id}/references`, {
         fallback: "无法加载正在使用这个模型的员工。",
       }).then(async (response) => response.json()),
+  });
+}
+
+const CONVERSATION_MODEL_FALLBACK = "无法保存所选模型，请重试。";
+
+/**
+ * Save the model and thinking effort one conversation runs on, or forget either with null. The
+ * server refuses a model it does not offer, an effort the model does not accept, and any pick while
+ * an admin has picking off.
+ *
+ * A plain function as well as the factory below, because starting a conversation saves its pick as
+ * one step inside a larger write (`lib/channels/start.ts`), where no hook can run.
+ */
+export async function saveConversationModel(
+  channelId: string,
+  pick: ConversationModel,
+): Promise<ConversationModel> {
+  return (
+    await client(`/api/channels/${encodeURIComponent(channelId)}/model`, {
+      method: "PUT",
+      body: { model: pick.model, effort: pick.effort },
+      fallback: CONVERSATION_MODEL_FALLBACK,
+    })
+  ).json();
+}
+
+export function setConversationModelMutationOptions(queryClient: QueryClient) {
+  return mutationOptions({
+    mutationFn: (variables: { channelId: string; pick: ConversationModel }) =>
+      saveConversationModel(variables.channelId, variables.pick),
+    onSettled: (_data, _error, variables) =>
+      queryClient.invalidateQueries({
+        queryKey: modelKeys.conversation(variables.channelId),
+      }),
   });
 }

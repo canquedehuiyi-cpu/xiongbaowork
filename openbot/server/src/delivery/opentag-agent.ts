@@ -19,8 +19,10 @@ import { z } from "zod";
 import {
   type ApprovalDecision,
   type ApprovalPolicyOutcome,
+  afterChinese,
   approvalArgsPreview,
   offersStandingRule,
+  wantsTo,
 } from "../approvals/types";
 import {
   ingestSlackEvent,
@@ -200,13 +202,13 @@ async function cancelReachabilityCode(deps: OpenTagAgentDeps, code: string) {
 }
 
 const CANCELLED_IN_SHARED =
-  "That code was posted where others could see it, so I cancelled it. Create a new one in OpenBot and send it to me in a direct message.";
+  "这个关联码发在了别人也看得到的地方，我已经把它作废了。请在熊宝里重新生成一个，用私信发给我。";
 
 const platformName = (transport: ChatTransport) =>
   transport === "teams" ? "Microsoft Teams" : "Slack";
 
 export function linkInstructions(transport: ChatTransport) {
-  return `I don't know who you are in OpenBot yet, so I did not run anything. In OpenBot, open the Bot's page, choose Reaching you and the conversation, pick ${platformName(transport)}, and send me the \`link <code>\` message it shows you.`;
+  return `我还不知道你在熊宝里是谁，所以什么都没有执行。请在熊宝的「触达方式」里选好对话和 ${platformName(transport)}，把页面上给出的 \`link <关联码>\` 消息发给我。`;
 }
 
 export async function handleOpenTagRun(
@@ -317,7 +319,7 @@ async function answer(
   const sender = senderFromContext(input);
   if (!sender)
     return {
-      text: "OpenTag did not say who sent this message, so OpenBot did not run anything. Update OpenTag to a version that forwards the OpenBot sender context.",
+      text: "OpenTag 没有告诉熊宝这条消息是谁发的，所以什么都没有执行。请把 OpenTag 升级到会转发发送者信息的版本。",
     };
   // Something to watch, not to answer: feed the owner's Slack triggers and stay quiet.
   if (sender.observe) {
@@ -331,7 +333,7 @@ async function answer(
   }
   const message = latestUserMessage(input);
   if (!message?.text)
-    return { text: "Send me a message and I'll pass it to your Bot." };
+    return { text: "给我发消息，我会转给你的员工。" };
 
   const code = LINK.exec(message.text)?.[1];
   if (code) return link(deps, sender, code.toLowerCase());
@@ -373,7 +375,7 @@ async function answerAsBinding(
   if (answered) {
     const bot = await deps.store.botIdentity(bound.agentId);
     return {
-      text: `Thanks. I passed your answer to ${bot?.name ?? "your Bot"}; it is continuing and will reply here.`,
+      text: `谢谢，你的回答已经转给 ${bot?.name ?? YOUR_BOT}，它会接着做，并在这里回复你。`,
     };
   }
 
@@ -391,7 +393,7 @@ async function answerAsBinding(
   if (result.kind === "unbound")
     return { text: linkInstructions(sender.transport) };
   if (result.kind === "duplicate")
-    return { text: "I already passed that message to your Bot." };
+    return { text: "这条消息已经转给你的员工了。" };
   if (result.kind === "failed") return { text: `${result.message}` };
 
   if (!sender.private) return answerPrivately(deps, result);
@@ -399,22 +401,22 @@ async function answerAsBinding(
   const questions = result.extras.questions.map((q) => q.text);
   const approvalId = result.extras.approvals[0];
   const parts = [result.replyText, ...questions].filter(Boolean);
-  if (questions.length) parts.push("Reply here to answer.");
+  if (questions.length) parts.push("直接在这里回复就能回答。");
   if (approvalId) {
     const card = await approvalCard(deps, result.binding, approvalId);
     if (result.extras.approvals.length > 1)
       parts.push(
-        `${result.extras.approvals.length - 1} more approval request(s) are waiting on the Bot's page in OpenBot.`,
+        `还有 ${result.extras.approvals.length - 1} 个审批在熊宝的员工页上等你处理。`,
       );
     if (card) return { text: parts.join("\n\n"), interrupt: card };
     parts.push(
-      "Your Bot is waiting for an approval. Open the Bot's page in OpenBot to review it.",
+      "你的员工在等一个审批。请到熊宝的员工页上查看。",
     );
   } else if (result.kind === "waiting" && !parts.length) {
-    parts.push("Your Bot is waiting for a person. Open OpenBot to continue.");
+    parts.push("你的员工在等人处理。请打开熊宝继续。");
   }
   return {
-    text: parts.join("\n\n") || "Done.",
+    text: parts.join("\n\n") || "完成了。",
     ...(result.components ? { components: result.components } : {}),
   };
 }
@@ -455,12 +457,12 @@ async function answerPrivately(
   for (const approvalId of result.extras.approvals)
     await deps.router.notify(scope, {
       id: approvalId,
-      text: `${bot?.name ?? "Your Bot"} is waiting for your approval. Open the Bot's page in OpenBot to review it.`,
+      text: `${bot?.name ?? YOUR_BOT} 在等你审批。请到熊宝的员工页上查看。`,
       kind: "approval",
       requestId: approvalId,
     });
   return {
-    text: "Other people may be able to read this conversation, so I sent my answer to you directly.",
+    text: "这个对话可能有别人能看到，所以我把回答私信发给你了。",
   };
 }
 
@@ -520,7 +522,7 @@ async function link(
       if (await deps.identity.discard(code))
         return { text: CANCELLED_IN_SHARED };
       return {
-        text: "That link code expired, was already used, or is for another app. Create a new one in OpenBot.",
+        text: "这个关联码已经过期、用过了，或者是别的应用的。请在熊宝里重新生成一个。",
       };
     }
     const outcome = await deps.identity.redeem(code, {
@@ -529,11 +531,11 @@ async function link(
     });
     if (outcome === "linked")
       return {
-        text: "Linked your Slack account to OpenBot. You can see it under Connections.",
+        text: "你的 Slack 账号已经关联到熊宝，可以在「已连接的账号」里看到。",
       };
     if (outcome === "conflict")
       return {
-        text: "This Slack account is already linked to another OpenBot user.",
+        text: "这个 Slack 账号已经关联到熊宝的另一位用户。",
       };
   }
   const tenant = challenge
@@ -541,7 +543,7 @@ async function link(
     : null;
   if (!challenge || !tenant || challenge.transport !== sender.transport)
     return {
-      text: "That link code expired, was already used, or is for another app. Create a new one in OpenBot.",
+      text: "这个关联码已经过期、用过了，或者是别的应用的。请在熊宝里重新生成一个。",
     };
   return runAsTenant(tenant, () => linkAs(deps, sender, code, challenge));
 }
@@ -563,7 +565,7 @@ async function linkAs(
     !(await deps.store.consumeChallenge(code, challenge.ownerUserId))
   )
     return {
-      text: "That conversation changed. Create a new link code in OpenBot.",
+      text: "那个对话已经变了。请在熊宝里重新生成关联码。",
     };
   try {
     await deps.store.bind({
@@ -580,9 +582,12 @@ async function linkAs(
   }
   const bot = await deps.store.botIdentity(scope.agentId);
   return {
-    text: `Linked. Messages you send me here now go to ${bot?.name ?? "your Bot"} in your OpenBot conversation, and its questions and approval requests will reach you here.`,
+    text: `关联好了。你在这里发给我的消息会转到熊宝里和 ${bot?.name ?? YOUR_BOT} 的对话，它的提问和审批也会发到这里。`,
   };
 }
+
+/** 找不到员工的名字时，卡片和回复里对它的称呼。 */
+const YOUR_BOT = "你的员工";
 
 async function approvalCard(
   deps: OpenTagAgentDeps,
@@ -605,7 +610,7 @@ async function approvalCard(
   return confirmWriteInterrupt({
     approvalId,
     // In the words the approval card in OpenBot uses, never the tool's id ("Your Bot: computer_click").
-    action: `${bot?.name ?? "Your Bot"} wants to ${approvalPhrase(record.action)}`,
+    action: wantsTo(bot?.name ?? YOUR_BOT, record.action),
     approver: `${binding.transport}:${binding.identity}`,
     effect: record.action.effect,
     // The approvals preview already redacts secrets and private content.
@@ -620,23 +625,23 @@ async function decideFromCard(
 ): Promise<{ text: string }> {
   if (resume.invalid)
     return {
-      text: "That approval answer could not be read, so nothing was decided.",
+      text: "没能读懂这次审批的回答，所以什么都没有决定。",
     };
   if (!deps.approvals)
     return {
-      text: "Approvals from chat are unavailable on this deployment. Decide on the Bot's page in OpenBot.",
+      text: "这个部署不能在聊天里审批。请到熊宝的员工页上决定。",
     };
   const person = parseChannelUser(resume.by);
   if (!person)
     return {
-      text: "This approval card did not say who answered it, so nothing was decided. Update OpenTag, or decide on the Bot's page in OpenBot.",
+      text: "这张审批卡片没有说明是谁回答的，所以什么都没有决定。请升级 OpenTag，或者到熊宝的员工页上决定。",
     };
   // The clicker is mapped exactly like a message sender; OpenTag already refused anyone but the
   // named approver, and OpenBot then decides only as that binding's owner.
   const owned = await ownedBinding(deps, person);
   if (!owned)
     return {
-      text: "You are not linked to this approval's owner, so nothing was decided.",
+      text: "你没有关联到这个审批的主人，所以什么都没有决定。",
     };
   // Decided as the binding's own tenant, so the approval's resume is stamped as that person (G01).
   return runAsTenant(owned.tenant, () =>
@@ -654,7 +659,7 @@ async function decideAsBinding(
 ): Promise<{ text: string }> {
   if (!deps.approvals)
     return {
-      text: "Approvals from chat are unavailable on this deployment. Decide in your OpenBot approval inbox.",
+      text: "这个部署不能在聊天里审批。请到熊宝的「审批」里决定。",
     };
   let record: Awaited<ReturnType<PairedApprovals["store"]["get"]>>;
   try {
@@ -664,16 +669,16 @@ async function decideAsBinding(
     );
   } catch {
     return {
-      text: "That approval is not yours or no longer exists, so nothing was decided.",
+      text: "这个审批不是你的，或者已经不存在了，所以什么都没有决定。",
     };
   }
   if (record.action.threadId !== binding.threadId)
     return {
-      text: "That approval belongs to another conversation, so nothing was decided.",
+      text: "这个审批属于另一个对话，所以什么都没有决定。",
     };
   if (record.status !== "pending")
     return {
-      text: "That approval was already decided. Check its result in OpenBot.",
+      text: "这个审批已经决定过了。可以在熊宝里查看结果。",
     };
   // An older card may still offer "Always allow" on a check-in task's approval: that is once.
   // 删除类底线问的动作没有「总是允许」：旧卡片上按的 always 只当作这一次。
@@ -684,12 +689,12 @@ async function decideAsBinding(
       : "allow_once";
   await deps.approvals.decide(binding.ownerUserId, resume.approvalId, decision);
   const bot = await deps.store.botIdentity(record.action.botId);
-  const name = bot?.name ?? "Your Bot";
+  const name = bot?.name ?? YOUR_BOT;
   return {
     text:
       decision === "deny"
-        ? `Denied. ${name} won't ${approvalPhrase(record.action)}.`
-        : `${decision === "allow_always" ? "Always allowed" : "Allowed once"}. ${name} is continuing and will send its result here.`,
+        ? `已拒绝。${name} 不会${afterChinese(approvalPhrase(record.action))}。`
+        : `${decision === "allow_always" ? "已设为总是允许" : "已允许这一次"}。${name} 会继续，并把结果发到这里。`,
   };
 }
 

@@ -107,7 +107,7 @@ const SRC = join(import.meta.dir, "..", "src");
 const CURATED = [
   "components/channels/browser-activity.tsx",
   "components/channels/chat-transcript.tsx",
-  "components/channels/composer/triggers.ts",
+  "components/channels/composer/triggers.tsx",
   "components/channels/composer/sources.ts",
   "components/agents/agent-dialog.tsx",
   "components/app-sidebar/app-sidebar.tsx",
