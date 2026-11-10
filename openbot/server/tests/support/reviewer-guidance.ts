@@ -280,7 +280,7 @@ export function guidanceApp(options: {
   } as never;
   args[2] = { rolesForUser: async () => [options.role()] } as never;
   args[12] = { insert: async () => undefined } as never;
-  args[34] = {
+  args[33] = {
     approvals: options.service,
     boundaryWriter: options.complete,
   } as never;

@@ -2,6 +2,7 @@ import type { WhatIfVocabulary } from "@openbot/shared/what-if";
 import { and, eq, inArray, like, or } from "drizzle-orm";
 import { createEnterpriseStore } from "../../src/admin/settings-store";
 import { createApprovalStore } from "../../src/approvals/store";
+import { setRole } from "../../src/auth/roles";
 import type { ActionPolicy } from "../../src/computer/policy";
 import type { Database } from "../../src/db/client";
 import {
@@ -14,7 +15,6 @@ import {
   mcpTools,
   networkPolicies,
   pluginGrants,
-  userRoles,
   users,
 } from "../../src/db/schema";
 
@@ -95,7 +95,8 @@ export async function seedWhatIf(database: Database): Promise<void> {
   await database
     .insert(users)
     .values([{ ...ADMIN, groups: [] }, { ...SAM }, { ...CASEY }]);
-  await database.insert(userRoles).values({ userId: ADMIN.id, role: "admin" });
+  // M5: fork 的角色只能经受限的角色写入者写（`setRole`）；调用方先 `bindTestRoleWriter`。
+  await setRole(database, ADMIN.id, "admin");
   for (const bot of [SALES_BOT, RESEARCH_BOT]) {
     await database.insert(agents).values({
       id: bot.id,

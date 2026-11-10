@@ -215,7 +215,7 @@ function appFor(person: typeof ADMIN, role: "admin" | "user", model: string) {
   args[3] = auditReader as never;
   args[12] = auditStore as never;
   args[14] = plugins as never;
-  args[34] = {
+  args[33] = {
     boundaryWriter: createModelCompleter({
       model: { provider: "openai", defaultModel: model },
       resolveApiKey: async () => "test-key",

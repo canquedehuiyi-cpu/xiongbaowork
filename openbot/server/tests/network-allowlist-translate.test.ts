@@ -88,7 +88,7 @@ function appFor(options: {
       audit.push(event);
     },
   } as never;
-  args[34] = {
+  args[33] = {
     boundaryWriter: createModelCompleter({
       model: {
         provider: "openai",

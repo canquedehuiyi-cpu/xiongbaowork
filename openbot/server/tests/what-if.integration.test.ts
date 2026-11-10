@@ -1,11 +1,4 @@
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  describe,
-  expect,
-  test,
-} from "bun:test";
+import { describe, expect } from "bun:test";
 import { LLMock } from "@copilotkit/aimock";
 import type {
   WhatIfAction,
@@ -41,7 +34,19 @@ import { readAuditEvent, readWhatIfVocabulary } from "../src/what-if";
 import type { GovernanceReaders } from "../src/what-if-check";
 import recorded from "./fixtures/what-if-recorded.json";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { asPlatform } from "../src/tenant/context";
 import { testEnvironment } from "./support/environment";
+import { bindTestRoleWriter } from "./support/role-writer";
+/*
+ * M5: fork 是多租户的，数据库读写都要在租户帧里（runAsTenant/asPlatform）。上游这份测试没有租户帧，
+ * 所以每个钩子和用例都在平台帧里跑（tests/support/platform-frame）。
+ */
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  test,
+} from "./support/platform-frame";
 import {
   ADMIN,
   CASEY,
@@ -75,7 +80,7 @@ const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const trail = createAuditStore(database);
 const policyStore = createPolicyStore(POLICY);
 const plugins = createPluginStore({
-  brokerProvider: "composio",
+  // M5: fork 的插件仓库没有 brokerProvider（Arcade），留给 X 系列（Arcade）。
   database,
   auditStore: trail,
   credentials: createCredentialStore(database),
@@ -85,13 +90,17 @@ const plugins = createPluginStore({
 });
 const approvals = createApprovalStore(database);
 let snapshot: EnterpriseSnapshot | undefined;
+/*
+ * M5: read across people as `platform`, the way index.ts wires these readers (`adminRead`): the
+ * question may be about anybody's Bot, and the route runs in the asking admin's own frame.
+ */
 const readers: GovernanceReaders = {
   policy: () => policyStore.get(),
   enterprise: () => ({ snapshot }),
-  grant: (ref, botId) => plugins.decide("mcp", ref, botId),
+  grant: (ref, botId) => asPlatform(() => plugins.decide("mcp", ref, botId)),
   approvals: {
     policy: approvals.policy as ApprovalPolicyStore,
-    rules: (owner) => approvals.rules(owner),
+    rules: (owner) => asPlatform(() => approvals.rules(owner)),
   },
 };
 
@@ -120,10 +129,15 @@ const gateway = createComputerGateway({
 const mock = new LLMock();
 const originalBaseUrl = process.env.OPENAI_BASE_URL;
 let startedAt: Date;
+let releaseRoleWriter: (() => Promise<void>) | undefined;
 
 beforeAll(async () => {
+  releaseRoleWriter = await bindTestRoleWriter(database);
   await seedWhatIf(database);
-  snapshot = await loadEnterpriseSnapshot(createEnterpriseStore(database));
+  snapshot = await loadEnterpriseSnapshot(
+    createEnterpriseStore(database),
+    database,
+  );
   // The enterprise controls as `installEnterpriseControls` installs them, on this OpenBot's settings,
   // so the real `callTool` and the real gateway decide the rows below as a running server would.
   setPolicyOverlay((context) => decideFromSnapshot(snapshot, context));
@@ -144,6 +158,7 @@ afterEach(() => {
 afterAll(async () => {
   setPolicyOverlay(null);
   await clearWhatIf(database);
+  await releaseRoleWriter?.();
   await mock.stop();
   if (originalBaseUrl === undefined) delete process.env.OPENAI_BASE_URL;
   else process.env.OPENAI_BASE_URL = originalBaseUrl;
@@ -180,7 +195,7 @@ function appFor(options: {
       audit.push(event);
     },
   } as never;
-  args[34] = {
+  args[33] = {
     whatIf: {
       complete: createModelCompleter({
         model: {
@@ -192,9 +207,9 @@ function appFor(options: {
       }),
       // The real reader, narrowed to this file's OpenBot so the prompt is the one recorded.
       vocabulary: async () =>
-        ownVocabulary(await readWhatIfVocabulary(database)),
+        ownVocabulary(await asPlatform(() => readWhatIfVocabulary(database))),
       readers,
-      event: (id: string) => readAuditEvent(database, id),
+      event: (id: string) => asPlatform(() => readAuditEvent(database, id)),
     },
   } as never;
   // Positional, built by index, so an appended parameter cannot shift what lands where.

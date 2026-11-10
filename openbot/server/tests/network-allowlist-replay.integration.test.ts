@@ -100,7 +100,7 @@ function appFor() {
   args[2] = { rolesForUser: async () => ["admin"] } as never;
   args[3] = auditReader as never;
   args[12] = auditStore as never;
-  args[34] = {
+  args[33] = {
     boundaryWriter: createModelCompleter({
       model: {
         provider: "openai",

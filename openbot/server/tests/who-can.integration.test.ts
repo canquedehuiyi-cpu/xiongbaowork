@@ -1,11 +1,4 @@
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  describe,
-  expect,
-  test,
-} from "bun:test";
+import { describe, expect } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { LLMock } from "@copilotkit/aimock";
 import { and, desc, eq, like, sql } from "drizzle-orm";
@@ -16,18 +9,25 @@ import {
 } from "../src/admin/controls";
 import { createApp } from "../src/app";
 import { createAuditReader, createAuditStore } from "../src/audit";
+import { setRole } from "../src/auth/roles";
 import { loadConfig } from "../src/config";
 import { createDatabase } from "../src/db/client";
 import {
   auditEvents,
   capabilitySettings,
-  userRoles,
   users,
 } from "../src/db/schema";
 import { createModelCompleter } from "../src/routing/model";
 import recorded from "./fixtures/who-can-recorded.json";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
+import { bindTestRoleWriter } from "./support/role-writer";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  test,
+} from "./support/platform-frame";
 
 /**
  * Who can do what, described in English: "Contractors can't use their own computer" written as switch
@@ -63,13 +63,16 @@ const bot = `who-can-bot-${suite}`;
 
 const mock = new LLMock();
 let controls: EnterpriseControls;
+let releaseRoleWriter: (() => Promise<void>) | undefined;
 const originalBaseUrl = process.env.OPENAI_BASE_URL;
 
 beforeAll(async () => {
   process.env.OPENAI_BASE_URL = await mock.start();
   await database.delete(capabilitySettings);
   await database.insert(users).values(everyone);
-  await database.insert(userRoles).values({ userId: ada.id, role: "admin" });
+  // Roles are written only through the restricted role writer (`setRole`), as the server does.
+  releaseRoleWriter = await bindTestRoleWriter(database);
+  await setRole(database, ada.id, "admin");
   controls = await installEnterpriseControls({
     database,
     databaseUrl: testDatabaseUrl(),
@@ -125,6 +128,7 @@ afterAll(async () => {
   await database.delete(capabilitySettings);
   // Audit rows are append-only by design and stay; they name only this run's throwaway ids.
   await database.delete(users).where(like(users.id, `who-can-%-${suite}`));
+  await releaseRoleWriter?.();
   await database.$client.end({ timeout: 5 });
 });
 
@@ -142,7 +146,7 @@ function appFor(options: { model?: string; role?: "admin" | "user" } = {}) {
   args[2] = { rolesForUser: async () => [options.role ?? "admin"] } as never;
   args[3] = createAuditReader(database) as never;
   args[12] = auditStore as never;
-  args[34] = {
+  args[33] = {
     boundaryWriter: createModelCompleter({
       model: {
         provider: "openai",

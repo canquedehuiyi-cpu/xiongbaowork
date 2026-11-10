@@ -160,7 +160,7 @@ function appFor() {
   } as never;
   args[2] = { rolesForUser: async () => ["admin"] } as never;
   args[3] = createAuditReader(database) as never;
-  args[34] = {
+  args[33] = {
     approvals: service,
     approvalRules: { vocabulary: () => loadRuleVocabulary(database) },
   } as never;
