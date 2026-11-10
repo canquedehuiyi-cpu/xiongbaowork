@@ -133,7 +133,7 @@ export function createLocalLearningRoutes(deps: {
 
   routes.post("/learn", async (context) => {
     if (!engine)
-      return context.json({ error: "这个部署没有开启本地学习。" }, 409);
+      return context.json({ error: "管理员关闭了从对话中学习。" }, 409);
     if (await engine.running())
       return context.json({ error: "正在学习，请稍后再看。" }, 409);
     const [state] = await database

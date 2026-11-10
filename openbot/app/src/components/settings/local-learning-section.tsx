@@ -132,7 +132,7 @@ export function LocalLearningSection() {
     return (
       <PageSection title="从对话中学习">
         <p className="mt-1 text-pretty text-muted-foreground text-sm">
-          这个部署没有开启从对话中学习。
+          管理员关闭了从对话中学习。
         </p>
       </PageSection>
     );

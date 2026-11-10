@@ -160,7 +160,7 @@ async function openCandidate(view: ReturnType<typeof draw>) {
 test("这个部署没开启时只说明这一句", async () => {
   overview = { ...baseOverview(), available: false };
   const view = draw();
-  expect(await view.findByText("这个部署没有开启从对话中学习。")).toBeTruthy();
+  expect(await view.findByText("管理员关闭了从对话中学习。")).toBeTruthy();
   expect(view.queryByRole("switch")).toBeNull();
   expect(view.queryByText("现在学一次")).toBeNull();
 });
