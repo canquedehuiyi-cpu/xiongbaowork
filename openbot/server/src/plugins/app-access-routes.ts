@@ -71,7 +71,7 @@ function nothingToRequest(access: AppAccess): string {
     case "shared_not_connected":
       return `「${name}」用的是一个共享的团队账号，管理员还没有连接它。连接之后再试。`;
     case "shared_not_approved":
-      return `「${name}」用的是一个共享的团队账号，只有这位员工的主人和管理员可以用它。`;
+      return `「${name}」用的是一个共享的团队账号，管理员还没有批准这位员工使用它（共享使用批准将在后续版本提供）。`;
     default:
       return `「${name}」用的是你自己的账号，不需要管理员。请自己连接它。`;
   }
@@ -94,7 +94,8 @@ function nothingToRequest(access: AppAccess): string {
  * - 只有目录、行或 broker 目录能作证的应用能申请打开；随手写的 `composio-` 键答没有这个应用。
  * - 类型是服务端的：本人自己能解决的状态（连接、重连、本人自己添加的应用）不建申请。
  * - 一按批准只给管理员（持有能力，`decisionRefusal`）；批准给的是只读、非破坏性的动作，写操作仍逐个授予。
- * - Team Bot 的队友在 Shared 应用上读作 `shared_not_approved`，没有可申请的（X1 的共享闸门不放行）。
+ * - Shared 应用在 X3 并入共享使用批准之前对谁都读作 `shared_not_approved`，没有可申请的（X1 的共享闸门
+ *   没有批准就拒绝，管理员与员工主人也不例外）。
  */
 export function mountAppAccessRoutes(options: {
   routes: Hono<{ Variables: AppVariables }>;

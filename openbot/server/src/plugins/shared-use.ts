@@ -8,9 +8,9 @@ import type { Decides } from "./broker";
  * 每次调用都检查，而不是在配置变化时检查，所以这里没想到的开始方式会被拒绝而不是放行：事实来自运行
  * 本身，这里没有点名的发起者永远不会被读成一个人。
  *
- * X1 只带来规则与最严的那一档受众（`owner`：只有员工的主人和管理员）。上游的「共享使用批准」
- * （`shared_use_approvals`，按员工放宽到指定的人、群组或全队）与它的申请流程在 X3 并入；在那之前，
- * 每个员工对每个 Shared 应用都按 {@link STRICTEST_APPROVAL} 判。
+ * X1 只带来规则本身。上游的闸门是「先查这个员工对这个应用的共享使用批准，没有批准行就拒绝，管理员也
+ * 不例外；有批准才按受众判」。批准表（`shared_use_approvals`）与申请流程在 X3 并入；在那之前没有任何
+ * 批准，所以 store 的共享闸门在 `steeringOf` 之后一律拒绝（评审 C1）。`admits` 留给 X3 接上批准时用。
  */
 
 export const SHARED_AUDIENCES = ["owner", "people", "team"] as const;
@@ -20,13 +20,6 @@ export type SharedUseApproval = {
   audience: SharedAudience;
   outsideInput: boolean;
   members: ApprovalMember[];
-};
-
-/** X3 之前每个员工对 Shared 应用的批准：只有主人和管理员，不接受外部输入驱动。 */
-export const STRICTEST_APPROVAL: SharedUseApproval = {
-  audience: "owner",
-  outsideInput: false,
-  members: [],
 };
 
 /** 由人写提示词的两种来源。其余每一种来源（包括以后加的）都是外部输入。 */

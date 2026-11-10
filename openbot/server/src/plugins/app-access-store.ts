@@ -15,7 +15,6 @@ import {
   teamBotConsentDefaults,
   teamBotConsents,
   teamBotPublications,
-  userRoles,
 } from "../db/schema";
 import { TEAM_TENANT } from "../db/schema/tenant";
 import { currentTenant } from "../tenant/context";
@@ -37,7 +36,6 @@ import type { BrokerApp, BrokerConnection } from "./broker";
 import { CATALOGUE, type CatalogueEntry, catalogueEntry } from "./catalogue";
 import { toolkitOf } from "./composio";
 import { asAccountMode, brokeredProvenance } from "./shared-accounts";
-import { admits, STRICTEST_APPROVAL } from "./shared-use";
 
 /**
  * 一位员工持有的每个应用、或按名字问的一个应用，对一个人是什么状态（上游 `plugin-store/app-access.ts`，
@@ -49,7 +47,8 @@ import { admits, STRICTEST_APPROVAL } from "./shared-use";
  * 与上游的差异：
  * - 应用的键是 `coalesce(catalogue_key, id)`（fork 的授予 ref 前缀），不是行 id。
  * - Shared 应用的团队账号读应用行的 `shared_*` 列（X1），不是 `brokered_connections` 的 deployment 行。
- * - 共享闸门的受众固定为 X1 的 {@link STRICTEST_APPROVAL}（员工主人与管理员），与调用时的闸门同一个函数。
+ * - 共享闸门与 X1 的调用闸门同一个答案：X3 并入共享使用批准之前没有任何批准，团队账号对谁都是
+ *   `shared_not_approved`（上游没有批准行时也是这样拒绝的，管理员也不例外）。
  * - Team Bot 上谁的账号：与 `teamBots.credentialActorFor` 同一规则的只读版本（主人连了就是主人的；否则是
  *   自己的，没有同意时第一次会先问），不花一次性同意。
  * - 主人自己给员工应用（X3）不在这里：`mayGiveOwn` 恒为 false，`ownerGrants` 只有按账号的默认值。
@@ -497,29 +496,6 @@ export function appAccessMethods(context: {
     return new Set([...forBot, ...forEvery].map((row) => row.serverId));
   }
 
-  async function botOwnerOf(agentId: string): Promise<string | null> {
-    const [row] = await database
-      .select({ ownerUserId: agentProfiles.ownerUserId })
-      .from(agentProfiles)
-      .where(
-        and(
-          eq(agentProfiles.agentId, agentId),
-          isNull(agentProfiles.deletedAt),
-        ),
-      )
-      .limit(1);
-    return row?.ownerUserId ?? null;
-  }
-
-  async function holdsAdminRole(userId: string): Promise<boolean> {
-    const [held] = await database
-      .select({ role: userRoles.role })
-      .from(userRoles)
-      .where(and(eq(userRoles.userId, userId), eq(userRoles.role, "admin")))
-      .limit(1);
-    return held !== undefined;
-  }
-
   /** 这个人在这位员工上待处理的申请，按应用键。 */
   async function pendingFor(userId: string, agentId: string) {
     const rows = await database
@@ -555,15 +531,12 @@ export function appAccessMethods(context: {
     const { userId, agentId } = input;
     const held = await heldKeys(host, agentId, input.ownersHeld);
     const owner = userId ? await teamBotOwnerFor(agentId, userId) : null;
-    const [mine, owners, consented, pending, botOwner, isAdmin] =
-      await Promise.all([
-        userId ? connectionFacts(apps, userId) : null,
-        owner ? connectionFacts(apps, owner) : null,
-        owner && userId ? standingConsents(userId, agentId) : new Set<string>(),
-        userId ? pendingFor(userId, agentId) : [],
-        botOwnerOf(agentId),
-        userId ? holdsAdminRole(userId) : false,
-      ]);
+    const [mine, owners, consented, pending] = await Promise.all([
+      userId ? connectionFacts(apps, userId) : null,
+      owner ? connectionFacts(apps, owner) : null,
+      owner && userId ? standingConsents(userId, agentId) : new Set<string>(),
+      userId ? pendingFor(userId, agentId) : [],
+    ]);
     return apps.map((app) => {
       const granted = [app.key, ...app.rowIds].some((id) => held.has(id));
       const own = mine?.(app);
@@ -588,20 +561,14 @@ export function appAccessMethods(context: {
       };
       const account = accountOf(known);
       /*
-       * 共享闸门：与调用时 store 的闸门同一个函数、同一档受众（X3 之前只有员工主人与管理员）。只在能改变
-       * 答案的地方问：持有、团队账号可用、问到了人。
+       * 共享闸门：与调用时 store 的闸门同一个答案。上游的闸门先查这位员工对这个应用的共享使用批准，没有
+       * 批准就拒绝，管理员也不例外；批准表在 X3 并入，在那之前没有任何批准，X1 的闸门对每一次调用都拒绝
+       * （评审 C1），所以这里一律是「没批准」。X3 接上批准后改为问它的 `admits`。只在能改变答案的地方
+       * 填：持有、团队账号可用、问到了人。
        */
       const facts: AppAccessFacts =
         account === "shared" && sharedUsable && granted && userId
-          ? {
-              ...known,
-              sharedAdmitted: admits(
-                STRICTEST_APPROVAL,
-                botOwner,
-                { actorId: userId, isAdmin, groups: [] },
-                { outside: false },
-              ),
-            }
+          ? { ...known, sharedAdmitted: false }
           : known;
       const state = appAccessState(facts);
       const holder = ownersAccount !== undefined ? "owner" : "you";

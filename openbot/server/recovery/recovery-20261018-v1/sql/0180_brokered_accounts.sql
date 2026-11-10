@@ -9,15 +9,17 @@
  * 二、团队账号的连接状态记在应用行上（`shared_connected_at` 等五列），而不是上游 `brokered_connections`
  * 的 `holder = 'deployment'` 行。应用行已是 `team` 标记：任何人的帧都能读（成员的调用要知道团队账号是否
  * 已连接），只有带管理员能力的请求能写（0122 的 team_write 策略），正好是「谁能连接团队账号」的答案。
- * 一个人的连接仍在 `composio_connections`，不动。CHECK 保证 Personal 应用不残留团队账号。
+ * 一个人的连接仍在 `composio_connections`，不动。`account_mode` NOT NULL；CHECK 保证 Personal 应用的团队账号
+ * 各列全部为空（不残留团队账号），Shared 应用必有团队身份、已连接就必有连接人。
  *
  * 三、`brokered_accounts`：一个人在一个应用上的每一个账号（两个 Gmail），按 vendor 的列表同步，调用按
  * 名字钉到其中之一。只有本人的行，按 0153 的写法：tenant_id、ENABLE + FORCE RLS、四条 tenant_isolation
- * 策略、GRANT openbot_app。与 `composio_connections` 一致，行落在写入时的帧，不加「必须是个人租户」的
- * CHECK。`provider` 只收 `composio`（Arcade 在 X5 并入时放宽）。无回填：账号在应用页第一次打开时从 vendor
+ * 策略、GRANT openbot_app，以及与 0153 相同的「必须是个人租户」CHECK（行只在本人的帧里写）；两个唯一
+ * 索引都以 tenant_id 开头，不同租户的行互不冲突、也不借冲突探测别人的行。`provider` 只收 `composio`
+ *（Arcade 在 X5 并入时放宽）。无回填：账号在应用页第一次打开时从 vendor
  * 列出，之前建立的连接照旧按不指定账号调用。
  */
-ALTER TABLE "public"."mcp_servers" ADD COLUMN "account_mode" text DEFAULT 'personal';
+ALTER TABLE "public"."mcp_servers" ADD COLUMN "account_mode" text DEFAULT 'personal' NOT NULL;
 --> statement-breakpoint
 ALTER TABLE "public"."mcp_servers" ADD COLUMN "shared_vendor_user_id" text;
 --> statement-breakpoint
@@ -31,9 +33,9 @@ ALTER TABLE "public"."mcp_servers" ADD COLUMN "shared_verified_at" timestamp wit
 --> statement-breakpoint
 ALTER TABLE "public"."mcp_servers" ADD COLUMN "shared_probe_action" text;
 --> statement-breakpoint
-ALTER TABLE "public"."mcp_servers" ADD CONSTRAINT "mcp_servers_account_mode_check" CHECK ("account_mode" IS NULL OR "account_mode" IN ('personal', 'shared'));
+ALTER TABLE "public"."mcp_servers" ADD CONSTRAINT "mcp_servers_account_mode_check" CHECK ("account_mode" IN ('personal', 'shared'));
 --> statement-breakpoint
-ALTER TABLE "public"."mcp_servers" ADD CONSTRAINT "mcp_servers_shared_account_check" CHECK (("account_mode" = 'shared' AND "shared_vendor_user_id" IS NOT NULL) OR ("account_mode" IS DISTINCT FROM 'shared' AND "shared_vendor_user_id" IS NULL AND "shared_connected_at" IS NULL));
+ALTER TABLE "public"."mcp_servers" ADD CONSTRAINT "mcp_servers_shared_account_check" CHECK (("account_mode" = 'shared' AND "shared_vendor_user_id" IS NOT NULL AND ("shared_connected_at" IS NULL OR "shared_connected_by" IS NOT NULL)) OR ("account_mode" = 'personal' AND "shared_vendor_user_id" IS NULL AND "shared_connected_at" IS NULL AND "shared_connected_by" IS NULL AND "shared_verified" = false AND "shared_verified_at" IS NULL AND "shared_probe_action" IS NULL));
 --> statement-breakpoint
 CREATE TABLE "public"."brokered_accounts" (
   "tenant_id" text DEFAULT current_setting('app.tenant_id', true) NOT NULL,
@@ -48,12 +50,13 @@ CREATE TABLE "public"."brokered_accounts" (
   "connected_at" timestamp with time zone,
   "created_at" timestamp with time zone DEFAULT now() NOT NULL,
   CONSTRAINT "brokered_accounts_pkey" PRIMARY KEY ("id"),
-  CONSTRAINT "brokered_accounts_provider_check" CHECK ("provider" IN ('composio'))
+  CONSTRAINT "brokered_accounts_provider_check" CHECK ("provider" IN ('composio')),
+  CONSTRAINT "brokered_accounts_tenant_person" CHECK ("tenant_id" NOT IN ('system', 'platform', 'team'))
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX "brokered_accounts_account_idx" ON "public"."brokered_accounts" USING btree ("provider", "app", "user_id", "vendor_user_id", "account_id");
+CREATE UNIQUE INDEX "brokered_accounts_account_idx" ON "public"."brokered_accounts" USING btree ("tenant_id", "provider", "app", "user_id", "vendor_user_id", "account_id");
 --> statement-breakpoint
-CREATE UNIQUE INDEX "brokered_accounts_default_idx" ON "public"."brokered_accounts" USING btree ("provider", "app", "user_id") WHERE "is_default";
+CREATE UNIQUE INDEX "brokered_accounts_default_idx" ON "public"."brokered_accounts" USING btree ("tenant_id", "provider", "app", "user_id") WHERE "is_default";
 --> statement-breakpoint
 CREATE INDEX "brokered_accounts_user_idx" ON "public"."brokered_accounts" USING btree ("user_id");
 --> statement-breakpoint
