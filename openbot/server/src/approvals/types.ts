@@ -345,6 +345,8 @@ export type ApprovalTeamSettings = {
   hostCommandsCap: HostCommandPolicy;
   /** Every Bot asks before a dangerous command, whatever its own switch says (SEC1 D10). */
   enforceDangerousCommands: boolean;
+  /** The kinds the admin closed. A kind not named is `open`. */
+  actionKinds: Partial<Record<ActionKind, ActionKindPolicy>>;
 };
 /** The three modes a Bot's tool can be set to on its permissions page (SEC1 §4.5). */
 export type EmployeeToolMode = "direct" | "ask" | "disabled";
@@ -384,8 +386,6 @@ export type EmployeePolicy = {
   ownerUserId: string | null;
   rules: ApprovalRule[];
   security: EmployeeSecuritySettings;
-  /** The kinds the admin closed. A kind not named is `open`. */
-  actionKinds: Partial<Record<ActionKind, ActionKindPolicy>>;
 };
 /**
  * A save of the admin's guidance for auto-review: the words, or null to remove them, and the
