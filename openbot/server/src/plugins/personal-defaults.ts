@@ -34,7 +34,7 @@ import {
   skills,
 } from "../db/schema/plugins";
 import { currentEdition } from "../edition";
-import { asPlatform, currentTenant, runAsTenant } from "../tenant/context";
+import { currentTenant, runAsTenant } from "../tenant/context";
 
 type ListedTool = { ref: string };
 
@@ -678,18 +678,18 @@ export function skillsGivenSetting(agentId: string): string {
   return `personal_skills_given:${agentId}`;
 }
 
-/** 上面的记忆，从数据库来。 */
+/**
+ * 上面的记忆，从数据库来。那一行是部署的、不属于任何人，调用方在平台帧里用它（`index.ts` 把默认应用的整个
+ * 启动与重试放在平台帧里）。
+ */
 export function personalDefaultAppsMemory(
   database: Database,
 ): DefaultAppsMemory {
-  // 部署唯一的一行设置，不属于任何人：在平台帧里读写（`asPlatform`），和别的部署级设置一样。
   const added = async () => {
-    const [row] = await asPlatform(() =>
-      database
-        .select({ value: enterpriseSettings.value })
-        .from(enterpriseSettings)
-        .where(eq(enterpriseSettings.key, DEFAULT_APPS_SETTING)),
-    );
+    const [row] = await database
+      .select({ value: enterpriseSettings.value })
+      .from(enterpriseSettings)
+      .where(eq(enterpriseSettings.key, DEFAULT_APPS_SETTING));
     const apps = (row?.value as { value?: unknown } | undefined)?.value;
     return new Set(
       Array.isArray(apps)
@@ -701,15 +701,13 @@ export function personalDefaultAppsMemory(
     added,
     async remember(app) {
       const value = { value: [...new Set([...(await added()), app])].sort() };
-      await asPlatform(() =>
-        database
-          .insert(enterpriseSettings)
-          .values({ key: DEFAULT_APPS_SETTING, value, updatedBy: GRANTED_BY })
-          .onConflictDoUpdate({
-            target: enterpriseSettings.key,
-            set: { value, updatedBy: GRANTED_BY, updatedAt: new Date() },
-          }),
-      );
+      await database
+        .insert(enterpriseSettings)
+        .values({ key: DEFAULT_APPS_SETTING, value, updatedBy: GRANTED_BY })
+        .onConflictDoUpdate({
+          target: enterpriseSettings.key,
+          set: { value, updatedBy: GRANTED_BY, updatedAt: new Date() },
+        });
     },
   };
 }

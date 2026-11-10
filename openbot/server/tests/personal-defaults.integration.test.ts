@@ -90,15 +90,14 @@ const store = withPersonalDefaults(
   deps,
 );
 const memory = personalDefaultAppsMemory(database);
-/** `index.ts` 交给默认应用的那几个服务器级的方法：在平台帧里做。 */
-const platformStore = {
-  serverAddress: (id: string) => asPlatform(() => store.serverAddress(id)),
-  addServer: (input: { key: string; by: string }) =>
-    asPlatform(() => store.addServer(input)),
-  refreshTools: (id: string) => asPlatform(() => store.refreshTools(id)),
-};
-/** 一次服务启动：`index.ts` 为默认应用跑的那一步。 */
-const restart = () => ensurePersonalDefaultApps(platformStore, deps, memory);
+/** 一次服务启动：`index.ts` 为默认应用跑的那一步，在平台帧里。 */
+const restart = () =>
+  asPlatform(() => ensurePersonalDefaultApps(store, deps, memory));
+const serverAddress = (id: string) => asPlatform(() => store.serverAddress(id));
+const added = () => asPlatform(() => memory.added());
+/** `index.ts` 在平台帧里开始默认应用的重试，计时器带着这一帧。 */
+const startDefaultApps = (retryMs: number[]) =>
+  asPlatform(() => startPersonalDefaultApps(store, deps, memory, retryMs));
 const asOwner = <T>(work: () => Promise<T>) => runAsTenant(OWNER, work);
 const adminRequest = createAdminRequest(database);
 const asAdmin = <T>(work: () => Promise<T>) => adminRequest(OWNER, work);
@@ -262,7 +261,7 @@ afterAll(async () => {
 describe("Parallel Search in the personal edition", () => {
   test("a fresh start turns it on and the Bot holds web_search and web_fetch", async () => {
     expect(await restart()).toEqual([]);
-    expect(await platformStore.serverAddress(PARALLEL)).toBeDefined();
+    expect(await serverAddress(PARALLEL)).toBeDefined();
     expect(await held(ASSISTANT)).toEqual(SEARCH);
   });
 
@@ -323,7 +322,7 @@ describe("Parallel Search in the personal edition", () => {
     await restart();
     await asAdmin(() => store.removeServer(`team:${PARALLEL}`, OWNER));
     expect(await restart()).toEqual([]);
-    expect(await platformStore.serverAddress(PARALLEL)).toBeUndefined();
+    expect(await serverAddress(PARALLEL)).toBeUndefined();
     expect(await held(ASSISTANT)).toEqual([]);
   });
 
@@ -337,7 +336,7 @@ describe("Parallel Search in the personal edition", () => {
         .where(eq(mcpServers.catalogueKey, PARALLEL)),
     );
     expect(row?.addedBy).toBe(OWNER);
-    expect((await memory.added()).has(PARALLEL)).toBe(true);
+    expect((await added()).has(PARALLEL)).toBe(true);
   });
 
   test("an offline start still starts, and the next start finishes it", async () => {
@@ -352,11 +351,9 @@ describe("Parallel Search in the personal edition", () => {
 
   test("while it runs, it finishes on its own when the network comes back", async () => {
     online = false;
-    const stop = startPersonalDefaultApps(platformStore, deps, memory, [25]);
+    const stop = startDefaultApps([25]);
     try {
-      await waitFor(
-        async () => (await platformStore.serverAddress(PARALLEL)) !== undefined,
-      );
+      await waitFor(async () => (await serverAddress(PARALLEL)) !== undefined);
       expect(await held(ASSISTANT)).toEqual([]);
       online = true;
       await waitFor(async () => (await held(ASSISTANT)).length === 2);
@@ -370,10 +367,10 @@ describe("Parallel Search in the personal edition", () => {
 test("the team edition turns nothing on", async () => {
   setEdition("team");
   expect(await restart()).toEqual([]);
-  startPersonalDefaultApps(platformStore, deps, memory, [25])();
+  startDefaultApps([25])();
   await Bun.sleep(100);
-  expect(await platformStore.serverAddress(PARALLEL)).toBeUndefined();
-  expect(await memory.added()).toEqual(new Set());
+  expect(await serverAddress(PARALLEL)).toBeUndefined();
+  expect(await added()).toEqual(new Set());
   expect(await held(ASSISTANT)).toEqual([]);
 });
 

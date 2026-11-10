@@ -1633,12 +1633,26 @@ await startupLifecycle.run(async (startup) => {
    * 个人版里还要在刷新之后把 Routines 加上（没有时）并把每个应用的全部工具给每位员工
    * （`ensureAlwaysOnApp`，先刷新、后授予，所以这一版新加的工具同一次启动就到每位员工手上）。两件事放在
    * 同一条链上，不会有两次刷新同时替换同一个应用的工具行。
+   *
+   * 个人版的默认应用（Parallel 联网搜索）也在这同一个平台帧里开始：添加应用、要它的工具都是写 `team` 行的
+   * 服务器级的事；重试的计时器在这一帧里排下，之后每一次重试仍在平台帧里。授予由 `personalDeps` 在那个人
+   * 自己的帧里写。
    */
-  void runAsTenant("platform", () =>
-    currentEdition() === "personal"
-      ? ensureAlwaysOnApp(pluginStore, personalDeps)
-      : pluginStore.refreshOwnListings(),
-  ).catch((error: unknown) => {
+  void runAsTenant("platform", () => {
+    if (currentEdition() !== "personal")
+      return pluginStore.refreshOwnListings();
+    startup.acquireSync(
+      () => ({
+        stop: startPersonalDefaultApps(
+          pluginStore,
+          personalDeps,
+          personalDefaultAppsMemory(database),
+        ),
+      }),
+      (resource) => resource.stop(),
+    );
+    return ensureAlwaysOnApp(pluginStore, personalDeps);
+  }).catch((error: unknown) => {
     console.warn(
       "[plugins] OpenBot's own apps' tools could not be brought up to date:",
       error instanceof Error ? error.message : error,
@@ -1647,8 +1661,8 @@ await startupLifecycle.run(async (startup) => {
 
   if (currentEdition() === "personal") {
     /*
-     * 个人版的技能、学习与默认应用（X4）。每一步失败都只是警告：每位员工第一次被列出或运行时会再查一次，
-     * 下一次启动也会再试。服务器级的事（添加 Parallel、要它的工具）在平台帧里做，授予在这个人的帧里写。
+     * 个人版的技能与学习（X4）。每一步失败都只是警告：每位员工第一次被列出或运行时会再查一次，下一次启动
+     * 也会再试。它们只碰那个人自己的行和部署的学习设置，在他自己的帧里做。
      */
     const warnPersonal = (what: string) => (error: unknown) =>
       console.warn(
@@ -1662,23 +1676,6 @@ await startupLifecycle.run(async (startup) => {
     );
     await ensurePersonalLearning(personalDeps, bootAuditStore).catch(
       warnPersonal("没能让每位员工都参与自动学习"),
-    );
-    startup.acquireSync(
-      () => ({
-        stop: startPersonalDefaultApps(
-          {
-            serverAddress: (id) =>
-              asPlatform(() => pluginStore.serverAddress(id)),
-            addServer: (input) =>
-              asPlatform(() => pluginStore.addServer(input)),
-            refreshTools: (id) =>
-              asPlatform(() => pluginStore.refreshTools(id)),
-          },
-          personalDeps,
-          personalDefaultAppsMemory(database),
-        ),
-      }),
-      (resource) => resource.stop(),
     );
   }
 
