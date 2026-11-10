@@ -38,6 +38,7 @@ tests/app-access-routes.integration.test.ts
 tests/app-discovery.test.ts
 tests/app-grants-describe.integration.test.ts
 tests/app-grants-rules.test.ts
+tests/approval-account-binding.integration.test.ts
 tests/approval-activity-words.integration.test.ts
 tests/approval-continuation-preparation-transaction.integration.test.ts
 tests/approval-continuation-store.integration.test.ts

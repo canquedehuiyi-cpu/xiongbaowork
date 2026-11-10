@@ -10514,7 +10514,9 @@ export function createPluginStore(options: PluginStoreOptions) {
            * 哪个账号：只在这个人有不止一个账号时。审批的比较与保存都带着它，所以对一个账号的批准、拒绝或
            * 「这里始终允许」从不回答另一个，卡片也说清是哪个（见 approvals/policy.ts 的 `ruleMatches`）。
            */
-          ...(pinned && pinned.among > 1 ? { account: pinned.label } : {}),
+          ...(pinned && pinned.among > 1
+            ? { account: pinned.label, accountBinding: pinned.binding }
+            : {}),
           continuation: currentApprovalContext(),
           /*
            * The row for the person's own "no": the approval store writes it, once, when they deny.
