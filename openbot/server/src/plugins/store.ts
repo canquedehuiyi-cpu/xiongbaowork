@@ -1412,6 +1412,18 @@ export type PluginStoreOptions = {
    * OpenBot's own API, which no scope may name; see `plugins/entra-access.ts`.
    */
   entra?: EntraOnBehalf;
+  /**
+   * The asker's consent before a call goes out on their own Microsoft sign-in through a Team Bot
+   * someone else published (`teamBots.ownSignInConsent`, X6). Asked here, against the row the token
+   * is sent for, so a server marked after the Team Bot rule looked at it is still asked about.
+   * Throws the consent card; absent, nothing is asked beyond the rule below that a marked server is
+   * never reached as anybody but the asker.
+   */
+  entraConsent?: (input: {
+    actorId: string;
+    botId: string;
+    serverId: string;
+  }) => Promise<void>;
 };
 
 /**
@@ -9811,6 +9823,31 @@ export function createPluginStore(options: PluginStoreOptions) {
        * it did.
        */
       try {
+        /*
+         * A server reached as the signed-in person goes out as the person asking and nobody else,
+         * decided on THIS row, the one the token is sent for (X6, re-review N-1).
+         *
+         * The Team Bot rule picked `credentialActorId` from its own read of the server; if an admin
+         * marked the server since, that read may have named the Bot's owner, or the asker without
+         * asking them. So here: anybody but the asker is refused outright, and the asker's consent is
+         * asked again (and a one-time consent spent) before any token is minted.
+         */
+        if (access.credential === "person-entra") {
+          if (
+            input.credentialActorId !== undefined &&
+            input.credentialActorId !== input.actorId
+          ) {
+            throw new PluginRefusedError(
+              `「${row.title}」只以提问人自己的身份访问，不能借用别人的身份，所以没有发出。`,
+              null,
+            );
+          }
+          await options.entraConsent?.({
+            actorId: input.actorId,
+            botId: input.botId,
+            serverId,
+          });
+        }
         const { token, placement } = await connectionTokenFor(
           row,
           entry,

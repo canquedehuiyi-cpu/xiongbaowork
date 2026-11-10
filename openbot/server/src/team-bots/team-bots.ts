@@ -146,6 +146,66 @@ export function createTeamBots(options: {
     return row !== undefined;
   }
 
+  /**
+   * The asker's consent to a Team Bot reaching their own account on `serverId`, or the card.
+   *
+   * Always allow, for this Bot or every Team Bot, lets it through. A one-time consent lets it
+   * through too; with `spend` it is used up by exactly this call (whichever call deletes it is the
+   * one that may go), without it it is only looked at. Anything else raises the consent card.
+   */
+  async function consentOrCard(
+    actorId: string,
+    botId: string,
+    serverId: string,
+    { spend }: { spend: boolean },
+  ): Promise<void> {
+    const [consent] = await database
+      .select({ decision: teamBotConsents.decision })
+      .from(teamBotConsents)
+      .where(
+        and(
+          eq(teamBotConsents.userId, actorId),
+          eq(teamBotConsents.agentId, botId),
+          eq(teamBotConsents.serverId, serverId),
+        ),
+      )
+      .limit(1);
+    if (consent?.decision === "always") return;
+    const [everyBot] = await database
+      .select({ serverId: teamBotConsentDefaults.serverId })
+      .from(teamBotConsentDefaults)
+      .where(
+        and(
+          eq(teamBotConsentDefaults.userId, actorId),
+          eq(teamBotConsentDefaults.serverId, serverId),
+        ),
+      )
+      .limit(1);
+    if (everyBot) return;
+    if (consent?.decision === "once") {
+      if (!spend) return;
+      // Spent by exactly one call: whichever call deletes it is the one that may go.
+      const spent = await database
+        .delete(teamBotConsents)
+        .where(
+          and(
+            eq(teamBotConsents.userId, actorId),
+            eq(teamBotConsents.agentId, botId),
+            eq(teamBotConsents.serverId, serverId),
+            eq(teamBotConsents.decision, "once"),
+          ),
+        )
+        .returning({ serverId: teamBotConsents.serverId });
+      if (spent.length) return;
+    }
+    const message = `This Team Bot wants to use your own ${serverId} account. Choose Allow once, Always allow, or Skip, then ask again.`;
+    listening.get(`${actorId}\n${botId}`)?.push({ botId, serverId, message });
+    throw new PluginRefusedError(
+      `${TEAM_BOT_CONSENT_MARKER}${JSON.stringify({ botId, serverId })} ${message}`,
+      null,
+    );
+  }
+
   async function publication(botId: string) {
     const [row] = await database
       .select({
@@ -249,59 +309,41 @@ export function createTeamBots(options: {
         const owner = published?.ownerUserId;
         if (!owner || owner === actorId) return actorId;
         const serverId = ref.split("/")[0] ?? "";
-        // The asker's own sign-in: never the owner's, and only with the asker's consent (I-1).
-        const ownSignIn = await reachedOnOwnSignIn(serverId);
-        if (!ownSignIn && (await connectedServers(owner)).has(serverId))
-          return owner;
-        if (!ownSignIn && !(await connectedServers(actorId)).has(serverId))
+        /*
+         * The asker's own sign-in: never the owner's, and only with the asker's consent (I-1).
+         * Asked here without spending a one-time consent: that is spent by {@link ownSignInConsent},
+         * which the plugin store asks against the very row it sends the token for, so a server
+         * marked between this read and that one is still asked about (re-review N-1).
+         */
+        if (await reachedOnOwnSignIn(serverId)) {
+          await consentOrCard(actorId, botId, serverId, { spend: false });
           return actorId;
-        const [consent] = await database
-          .select({ decision: teamBotConsents.decision })
-          .from(teamBotConsents)
-          .where(
-            and(
-              eq(teamBotConsents.userId, actorId),
-              eq(teamBotConsents.agentId, botId),
-              eq(teamBotConsents.serverId, serverId),
-            ),
-          )
-          .limit(1);
-        if (consent?.decision === "always") return actorId;
-        const [everyBot] = await database
-          .select({ serverId: teamBotConsentDefaults.serverId })
-          .from(teamBotConsentDefaults)
-          .where(
-            and(
-              eq(teamBotConsentDefaults.userId, actorId),
-              eq(teamBotConsentDefaults.serverId, serverId),
-            ),
-          )
-          .limit(1);
-        if (everyBot) return actorId;
-        if (consent?.decision === "once") {
-          // Spent by exactly one call: whichever call deletes it is the one that may go.
-          const spent = await database
-            .delete(teamBotConsents)
-            .where(
-              and(
-                eq(teamBotConsents.userId, actorId),
-                eq(teamBotConsents.agentId, botId),
-                eq(teamBotConsents.serverId, serverId),
-                eq(teamBotConsents.decision, "once"),
-              ),
-            )
-            .returning({ serverId: teamBotConsents.serverId });
-          if (spent.length) return actorId;
         }
-        const message = `This Team Bot wants to use your own ${serverId} account. Choose Allow once, Always allow, or Skip, then ask again.`;
-        listening
-          .get(`${actorId}\n${botId}`)
-          ?.push({ botId, serverId, message });
-        throw new PluginRefusedError(
-          `${TEAM_BOT_CONSENT_MARKER}${JSON.stringify({ botId, serverId })} ${message}`,
-          null,
-        );
+        if ((await connectedServers(owner)).has(serverId)) return owner;
+        if (!(await connectedServers(actorId)).has(serverId)) return actorId;
+        await consentOrCard(actorId, botId, serverId, { spend: true });
+        return actorId;
       };
+    },
+
+    /**
+     * The asker's consent for a call that is about to go out on their own Microsoft sign-in, asked
+     * by the plugin store against the same row it sends the token for (X6, re-review N-1).
+     *
+     * {@link credentialActorFor} reads the server once to decide whose account a call reaches; the
+     * store reads it again to send. An admin marking the server between the two reads would have sent
+     * a teammate's Entra identity out with no card. So for a marked server the consent is asked
+     * here, at the send, and a one-time consent is spent here. Nothing for a Bot that is the asker's
+     * own or nobody's Team Bot, where every call is the asker's anyway.
+     */
+    async ownSignInConsent(
+      actorId: string,
+      botId: string,
+      serverId: string,
+    ): Promise<void> {
+      const owner = (await publication(botId))?.ownerUserId;
+      if (!owner || owner === actorId) return;
+      await consentOrCard(actorId, botId, serverId, { spend: true });
     },
 
     /**

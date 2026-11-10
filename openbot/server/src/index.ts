@@ -1584,6 +1584,13 @@ await startupLifecycle.run(async (startup) => {
           },
         }
       : {}),
+    /*
+     * The asker's consent for a call on their own Microsoft sign-in through somebody else's Team
+     * Bot, asked against the row the token is sent for (X6, re-review N-1). `teamBots` is built
+     * further down; this is only called once requests run.
+     */
+    entraConsent: ({ actorId, botId, serverId }) =>
+      teamBots.ownSignInConsent(actorId, botId, serverId),
   });
 
   // Logo metadata is optional; a vendor outage must not prevent the API from starting.
