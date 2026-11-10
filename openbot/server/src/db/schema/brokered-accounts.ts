@@ -29,8 +29,8 @@ const tenantScope = sql`tenant_id = current_setting('app.tenant_id', true) OR cu
  * `identity` 是 vendor 公布的显示名（邮箱或登录名），这是唯一可以出现在页面上的字段；令牌从不读、从不存。
  * `account_id` 是 vendor 的连接账号 id，只在服务端用来把一次调用钉到那个账号上，从不发给浏览器或模型。
  *
- * 租户：与 `composio_connections` 一样，行落在写入时的帧（本人的租户），四条 tenant_isolation 策略，
- * 别人的帧看不到。
+ * 租户：行只在本人的帧里写（与 0153 相同的「必须是个人租户」CHECK），四条 tenant_isolation 策略，别人
+ * 的帧看不到；唯一索引以 tenant_id 开头。
  */
 export const brokeredAccounts = pgTable(
   "brokered_accounts",
@@ -56,7 +56,12 @@ export const brokeredAccounts = pgTable(
       "brokered_accounts_provider_check",
       sql`${table.provider} IN ('composio')`,
     ),
+    check(
+      "brokered_accounts_tenant_person",
+      sql`${table.tenantId} NOT IN ('system', 'platform', 'team')`,
+    ),
     uniqueIndex("brokered_accounts_account_idx").on(
+      table.tenantId,
       table.provider,
       table.app,
       table.userId,
@@ -64,7 +69,7 @@ export const brokeredAccounts = pgTable(
       table.accountId,
     ),
     uniqueIndex("brokered_accounts_default_idx")
-      .on(table.provider, table.app, table.userId)
+      .on(table.tenantId, table.provider, table.app, table.userId)
       .where(sql`${table.isDefault}`),
     index("brokered_accounts_user_idx").on(table.userId),
     pgPolicy("tenant_isolation", {
