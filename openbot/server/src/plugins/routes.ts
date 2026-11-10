@@ -3979,6 +3979,55 @@ export function createPluginRoutes(
     });
 
   /**
+   * 授予之前没有保存任何工具时，先以按下的人的身份再问一次应用（上游 #1277）。添加时保存的清单可能是空的：
+   * 当时 vendor 没回答，或者它只对登录了的人列工具。所以批准替管理员做应用页上「刷新」会做的事，而不是叫他
+   * 去刷新。在按下的人自己的帧里问（批准要持有能力的管理员，刷新 `team` 行要的正是这个），所以只改应用的
+   * 工具行，不碰任何授予。问不到只记日志，接下来照旧按「没有工具」处理。
+   *
+   * 答这个应用的工具是不是要随本人登录才来——只在个人版里会是 true：应用跑在本人自己的账号上、靠 OAuth 或
+   * 同意页连接、本人还没连上，还是一个工具都没有。那时批准就是把它打开、什么都不给；本人登录时列出工具，
+   * `withPersonalDefaults` 把全部工具给每位员工，和在连接页上连接一样。团队版里管理员的批准就是授予本身，
+   * 什么都不给的批准仍被拒绝，所以答 false。
+   */
+  const askForToolsFirst = async (
+    context: Context<{ Variables: AppVariables }>,
+    request: AppAccessRequestRecord,
+  ): Promise<boolean> => {
+    if (!request.serverId) return false;
+    const saved = async () =>
+      (await store.listServers()).find(
+        (candidate) => candidate.id === request.serverId,
+      )?.tools.length ?? 0;
+    if ((await saved()) > 0) return false;
+    try {
+      await store.refreshTools(request.serverId, context.var.actor.id);
+    } catch (error) {
+      console.warn(
+        JSON.stringify({
+          type: "app-access-tools-refresh-failed",
+          request: request.id,
+          app: request.appKey,
+          reason: reasonWithoutStatement(error),
+          timestamp: new Date().toISOString(),
+        }),
+      );
+    }
+    if ((await saved()) > 0 || currentEdition() !== "personal") return false;
+    const mine = await store.inspectApp({
+      app: request.appKey,
+      agentId: request.botId,
+      userId: context.var.actor.id,
+      composioConfigured,
+      directory: appDirectory,
+    });
+    return (
+      mine?.access.account === "personal" &&
+      (mine.access.connect === "oauth" || mine.access.connect === "consent") &&
+      mine.access.connectedAt === null
+    );
+  };
+
+  /**
    * 批准一条申请就是做它要的那件事，然后关单（收件箱的批准与卡片上的一按共用，见 `app-access-routes.ts`）。
    *
    * 先改、后关单（fork 的顺序，fork 测试钉住）：改完发现申请在此期间被撤回或驳回，答一个可区分的 409
@@ -4070,6 +4119,7 @@ export function createPluginRoutes(
       }
       await store.addInstallListing("mcp", request.appKey, actorEmail(context));
     } else {
+      const signInFirst = await askForToolsFirst(context, request);
       const outcome = await asBotOwner(context, request.botId, async () => {
         const server = (await store.listServers()).find(
           (candidate) => candidate.id === request.serverId,
@@ -4079,11 +4129,15 @@ export function createPluginRoutes(
             error: `「${title}」已经不是本部署的应用，无法授予。`,
             status: 409 as const,
           };
-        if (server.tools.length === 0)
+        if (server.tools.length === 0) {
+          // 个人版里随本人登录才列工具的应用：批准就是打开它，什么都不给，登录之后每位员工拿到全部工具。
+          if (signInFirst) return { refs: [] as string[] };
           return {
-            error: `「${title}」还没有列出任何工具。请先在插件页刷新它的工具，再批准这条申请。`,
+            error: `「${title}」还没有可以授予的工具。请在${appsPageZh()}打开它的页面看看原因，然后${again}。`,
             status: 409 as const,
+            reason: "no_tools",
           };
+        }
         const advertised = server.tools.map((tool) => tool.ref);
         const outside = (chosen ?? []).filter(
           (ref) => !advertised.includes(ref),
@@ -4100,7 +4154,7 @@ export function createPluginRoutes(
             .map((tool) => tool.ref);
         if (refs.length === 0)
           return {
-            error: `「${title}」没有标为只读的动作，在这里批准什么也授予不了。请在插件页为这位员工逐个选择可以使用的动作，再处理这条申请。`,
+            error: `「${title}」没有标为只读的动作，在这里批准什么也授予不了。请在${appsPageZh()}为这位员工逐个选择可以使用的动作，再处理这条申请。`,
             status: 409 as const,
           };
         for (const ref of refs) {
@@ -4150,7 +4204,12 @@ export function createPluginRoutes(
         return { refs };
       });
       if ("error" in outcome) {
-        await approvalRefused(context, request, `grant_${outcome.status}`);
+        await approvalRefused(
+          context,
+          request,
+          ("reason" in outcome ? outcome.reason : undefined) ??
+            `grant_${outcome.status}`,
+        );
         return context.json(
           { error: outcome.error, granted: outcome.granted },
           outcome.status,
