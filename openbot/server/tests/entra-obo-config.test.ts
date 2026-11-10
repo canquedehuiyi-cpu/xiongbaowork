@@ -70,6 +70,15 @@ describe("MICROSOFT_OAUTH_OBO_RESOURCES", () => {
       ).toThrow("登记了 Microsoft 的第一方资源");
   });
 
+  test("the same resource written twice stops the server at start-up, rather than one being ignored", () => {
+    expect(() =>
+      entra({
+        MICROSOFT_OAUTH_OBO_RESOURCES:
+          "api://hr-api=hr.example.com,api://hr-api=attacker.example",
+      }),
+    ).toThrow("MICROSOFT_OAUTH_OBO_RESOURCES 里 api://hr-api 写了不止一次");
+  });
+
   test("an entry without a host, or with a URL for one, is refused", () => {
     expect(() =>
       entra({ MICROSOFT_OAUTH_OBO_RESOURCES: "api://hr-api" }),

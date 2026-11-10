@@ -152,6 +152,7 @@ export function parseOboResources(
   entries: readonly string[],
   own: readonly string[],
 ): OboResource[] {
+  const seen = new Set<string>();
   return entries.map((entry) => {
     const at = entry.lastIndexOf("=");
     const resource = at > 0 ? normalized(entry.slice(0, at)) : "";
@@ -175,6 +176,17 @@ export function parseOboResources(
           : `MICROSOFT_OAUTH_OBO_RESOURCES 登记了 Microsoft 的第一方资源（${resource}）。这类 token 权限太大，不能发给自定义服务器。`,
       );
     }
+    /*
+     * One resource, one host. Written twice, only the first would ever be read and the second
+     * quietly ignored, so which host a person's token goes to would hang on the order of a list:
+     * refused as the mistake it is (re-review N-3).
+     */
+    if (seen.has(resource)) {
+      throw new Error(
+        `MICROSOFT_OAUTH_OBO_RESOURCES 里 ${resource} 写了不止一次。一个资源只能登记一个主机，请只留一项。`,
+      );
+    }
+    seen.add(resource);
     return { resource, host };
   });
 }
@@ -206,12 +218,20 @@ export function scopeBindingRefusal(
   if (!registered) {
     return `${resource} 没有登记在部署设置 MICROSOFT_OAUTH_OBO_RESOURCES 里。请运维把它和它的服务器主机一起登记（<资源>=<主机>）。`;
   }
-  let host = "";
+  let address: URL | null = null;
   try {
-    host = new URL(url).hostname.toLowerCase();
+    address = new URL(url);
   } catch {
-    host = "";
+    address = null;
   }
+  /*
+   * Only over https (re-review N-2). A server added by URL may be plain http, and a person's token
+   * sent there would cross the network in the clear.
+   */
+  if (address?.protocol !== "https:") {
+    return "以登录人的身份访问的服务器必须用 https 地址，否则本人的 token 会被明文发出。请把地址改成 https 后重新添加。";
+  }
+  const host = address.hostname.toLowerCase();
   if (host !== registered.host) {
     return `${resource} 登记的服务器主机是 ${registered.host}，和这个服务器的地址（${host || url}）不一致。token 只发往登记的主机。`;
   }

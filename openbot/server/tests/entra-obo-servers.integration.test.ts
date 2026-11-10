@@ -26,6 +26,7 @@ import {
   auditEvents,
   credentials,
   mcpServers,
+  mcpTools,
   revokedAccess,
   users,
 } from "../src/db/schema";
@@ -34,6 +35,7 @@ import { openBotResources } from "../src/plugins/entra-access";
 import {
   CustomServerRefusedError,
   createPluginStore,
+  PluginRefusedError,
 } from "../src/plugins/store";
 import { grantedTools, REFUSAL_MARKER } from "../src/plugins/tools";
 import { asPlatform, runAsTenant } from "../src/tenant/context";
@@ -1163,5 +1165,124 @@ describe("the address rules hold under concurrent adds (review M-1)", () => {
       // Marked at home, or unmarked anywhere: never marked at the other address.
       expect(row?.entraScope === null || row?.url === home).toBe(true);
     }
+  });
+});
+
+describe("hardening after re-review", () => {
+  test("a server reached as the signed-in person must be https, so nobody's token crosses in the clear", async () => {
+    const id = `obo-plaintext-${tag}`;
+    const response = await api(
+      "/plugins/servers/custom",
+      await tokenToOpenBot(ada),
+      {
+        id,
+        title: "Plaintext",
+        url: `http://${HR_HOST}/mcp`,
+        entraScope: HR_SCOPE,
+      },
+    );
+    expect(response.status).toBe(400);
+    // Refused at the address before the scope is even read: a server added by URL is https-only
+    // in this fork. The scope rule says the same again, and the call is checked again below.
+    expect(((await response.json()) as { error: string }).error).toBe(
+      "An MCP server must be reached over https.",
+    );
+    const [row] = await database
+      .select({ id: mcpServers.id })
+      .from(mcpServers)
+      .where(eq(mcpServers.id, id));
+    expect(row).toBeUndefined();
+  });
+
+  test("a marked server stored at an http address is refused at the call, before Entra is asked", async () => {
+    const id = `obo-http-${tag}`;
+    // As a row written before the rule, or by hand: marked, at plain http.
+    await database.insert(mcpServers).values({
+      id,
+      tenantId: "team",
+      title: "Http",
+      vendor: HR_HOST,
+      url: `http://${HR_HOST}/mcp`,
+      provenance: "custom",
+      entraScope: HR_SCOPE,
+    });
+    await database.insert(mcpTools).values({
+      serverId: id,
+      tenantId: "team",
+      name: "whoami",
+      description: "Who this HR system sees calling it.",
+      inputSchema: { type: "object" },
+      effect: "read",
+    });
+    await runAsTenant("system", () =>
+      store.grant("mcp", `${id}/whoami`, BOT, ADMIN),
+    );
+    const caraId = (await userId(cara.upn)) ?? "";
+    const asked = entra.requests.length;
+    const calls = reached.length;
+    expect(await backgroundCall(newEntra(), caraId, id)).toBe(
+      `${REFUSAL_MARKER} 「Http」的 Entra scope 已经不在部署登记的范围里，所以没有发出。请联系管理员。`,
+    );
+    expect(entra.requests.length).toBe(asked);
+    expect(reached.length).toBe(calls);
+  });
+
+  test("a call is never sent as anybody but the asker, whatever the Team Bot rule picked before the server was marked", async () => {
+    const caraId = (await userId(cara.upn)) ?? "";
+    const adminId = (await userId(ADMIN)) ?? "";
+    const asked = entra.requests.length;
+    const calls = reached.length;
+    // As the Team Bot rule would answer for an owner's account it read before the mark landed.
+    const refusal = await runAsTenant(caraId, () =>
+      store.callTool({
+        ref: `${SERVER}/whoami`,
+        args: {},
+        botId: BOT,
+        actorId: caraId,
+        credentialActorId: adminId,
+      }),
+    ).catch((error: unknown) => error);
+    expect(refusal).toBeInstanceOf(PluginRefusedError);
+    expect((refusal as Error).message).toBe(
+      "「HR」只以提问人自己的身份访问，不能借用别人的身份，所以没有发出。",
+    );
+    expect(entra.requests.length).toBe(asked);
+    expect(reached.length).toBe(calls);
+  });
+
+  test("the asker's consent is asked at the send, on the row the token is sent for, before Entra", async () => {
+    const caraId = (await userId(cara.upn)) ?? "";
+    const askedFor: { actorId: string; botId: string; serverId: string }[] = [];
+    const card = new PluginRefusedError("[team-bot-consent] ask first", null);
+    const consenting = createPluginStore({
+      database,
+      auditStore,
+      credentials: credentialReader,
+      encryptionKey: config.keyEncryptionKey,
+      policy: () => ({ mode: "enforce", deny: [], allow: ["true"] }),
+      outboundLookup: async () => [{ address: "93.184.216.34", family: 4 }],
+      entra: framed(newEntra()),
+      entraConsent: async (input) => {
+        askedFor.push(input);
+        throw card;
+      },
+    });
+    const asked = entra.requests.length;
+    const calls = reached.length;
+    const call = (ref: string) =>
+      runAsTenant(caraId, () =>
+        consenting.callTool({ ref, args: {}, botId: BOT, actorId: caraId }),
+      );
+    await expect(call(`${SERVER}/whoami`)).rejects.toBe(card);
+    expect(askedFor).toEqual([
+      { actorId: caraId, botId: BOT, serverId: SERVER },
+    ]);
+    expect(entra.requests.length).toBe(asked);
+    expect(reached.length).toBe(calls);
+    // An unmarked server is not asked about: it goes on the deployment's token, as before.
+    expect((await call(`${PLAIN}/whoami`)).text).toContain(
+      "You are the deployment.",
+    );
+    expect(askedFor).toHaveLength(1);
   });
 });

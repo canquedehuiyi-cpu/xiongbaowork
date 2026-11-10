@@ -504,3 +504,54 @@ describe("which resources a scope may name, and where its token may go (review I
     expect(asked).toBe(0);
   });
 });
+
+describe("hardening after re-review", () => {
+  test("a scope is only ever sent over https (N-2)", () => {
+    const sentence =
+      "以登录人的身份访问的服务器必须用 https 地址，否则本人的 token 会被明文发出。请把地址改成 https 后重新添加。";
+    for (const url of [
+      "http://hr.example.com/mcp",
+      "ws://hr.example.com/mcp",
+      "not a url",
+    ])
+      expect(scopeBindingRefusal(HR, url, BINDING)).toBe(sentence);
+    expect(
+      decideEntraScope(
+        { id: "hr", url: "http://hr.example.com/mcp", entraScope: HR },
+        undefined,
+        BINDING,
+      ),
+    ).toEqual({ refusal: sentence });
+  });
+
+  test("a call to a marked server at plain http is not made", async () => {
+    let asked = 0;
+    await expect(
+      entraTokenFor(
+        {
+          ...BINDING,
+          tokenFor: async () => {
+            asked += 1;
+            return "obo-token";
+          },
+        },
+        { title: "HR", url: "http://hr.example.com/mcp", entraScope: HR },
+        "user-1",
+        refuse,
+      ),
+    ).rejects.toThrow(
+      "「HR」的 Entra scope 已经不在部署登记的范围里，所以没有发出。请联系管理员。",
+    );
+    expect(asked).toBe(0);
+  });
+
+  test("a resource registered twice is refused, whatever the case or trailing slash (N-3)", () => {
+    for (const entries of [
+      ["api://hr-api=hr.example.com", "api://hr-api=attacker.example"],
+      ["api://hr-api=hr.example.com", "API://HR-API/=hr.example.com"],
+    ])
+      expect(() => parseOboResources(entries, BINDING.own)).toThrow(
+        "MICROSOFT_OAUTH_OBO_RESOURCES 里 api://hr-api 写了不止一次。一个资源只能登记一个主机，请只留一项。",
+      );
+  });
+});

@@ -137,10 +137,15 @@ describe("a Team Bot reaching a server marked as reached as the signed-in person
     expect((refusal as Error).message).toStartWith(TEAM_BOT_CONSENT_MARKER);
     expect((refusal as Error).message).toContain(HR);
 
-    // Allow once is one call.
+    // Allow once is one call: looked at when the Bot picks whose account, spent at the send, where
+    // the plugin store asks against the row it sends the token for (re-review N-1).
     await as(teammate, () => teamBots.consent(teammate, bot, HR, "allow_once"));
     expect(await ask(`${HR}/salary`)).toBe(teammate.id);
+    await as(teammate, () => teamBots.ownSignInConsent(teammate.id, bot, HR));
     await expect(ask(`${HR}/salary`)).rejects.toThrow(PluginRefusedError);
+    await expect(
+      as(teammate, () => teamBots.ownSignInConsent(teammate.id, bot, HR)),
+    ).rejects.toThrow(TEAM_BOT_CONSENT_MARKER);
 
     // Always allow, until skipped.
     await as(teammate, () =>
@@ -217,5 +222,47 @@ describe("a Team Bot reaching a server marked as reached as the signed-in person
       teamBots.consent(teammate, bot, HR, "allow_always"),
     );
     expect(await as(teammate, () => lands(`${HR}/salary`))).toBe(true);
+  });
+
+  test("a server marked after the Bot picked whose account is still asked about at the send (re-review N-1)", async () => {
+    const owner = await person();
+    const teammate = await person();
+    const bot = await teamBot(owner);
+    const late = `${prefix}-late`;
+    await asPlatform(() =>
+      database.insert(mcpServers).values({
+        id: late,
+        tenantId: TEAM_TENANT,
+        title: "Late",
+        vendor: "late.example.com",
+        url: "https://late.example.com/mcp",
+        provenance: "custom",
+      }),
+    );
+    try {
+      // Unmarked, and nobody has an account on it: the rule answers the teammate, with no card.
+      expect(
+        await as(teammate, () =>
+          teamBots.credentialActorFor(teammate.id, bot)(`${late}/read`),
+        ),
+      ).toBe(teammate.id);
+      // An admin marks it before the call is sent.
+      await asPlatform(() =>
+        database
+          .update(mcpServers)
+          .set({ entraScope: "api://late/.default" })
+          .where(eq(mcpServers.id, late)),
+      );
+      // The send asks again, on the row it sends for: the card, not the teammate's identity.
+      await expect(
+        as(teammate, () => teamBots.ownSignInConsent(teammate.id, bot, late)),
+      ).rejects.toThrow(TEAM_BOT_CONSENT_MARKER);
+      // The owner on their own Bot is not asked.
+      await as(owner, () => teamBots.ownSignInConsent(owner.id, bot, late));
+    } finally {
+      await asPlatform(() =>
+        database.delete(mcpServers).where(eq(mcpServers.id, late)),
+      );
+    }
   });
 });
