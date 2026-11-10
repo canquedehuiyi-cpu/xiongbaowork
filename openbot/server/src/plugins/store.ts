@@ -9518,15 +9518,21 @@ export function createPluginStore(options: PluginStoreOptions) {
             `这位员工用的是它主人的 ${row.title} 账号，所以不能指定账号，什么都没做。不指定账号再试一次。`,
           );
         }
-        const picked = await accounts.pick({
-          toolkit: brokeredToolkit,
-          title: row.title,
-          userId: opensAs,
-          named: namedAccount,
-        });
-        if (picked !== null && "refused" in picked)
-          await refuseAccount(picked.refused);
-        else pinned = picked;
+        /*
+         * 用别人的账号（Team Bot 队友用主人的账号）时不挑账号（评审 M5）：不读主人的账号行，所以主人
+         * 的账号名不会进队友的审批卡与审计；调用照旧不指定账号，由 vendor 进主人持有的那个，与以前一样。
+         */
+        if (opensAs === input.actorId) {
+          const picked = await accounts.pick({
+            toolkit: brokeredToolkit,
+            title: row.title,
+            userId: opensAs,
+            named: namedAccount,
+          });
+          if (picked !== null && "refused" in picked)
+            await refuseAccount(picked.refused);
+          else pinned = picked;
+        }
       }
 
       const args = withoutEmptyOptionals(

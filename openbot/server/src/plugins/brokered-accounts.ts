@@ -164,6 +164,7 @@ export function createAccountBook(context: {
         })
         .onConflictDoUpdate({
           target: [
+            brokeredAccounts.tenantId,
             brokeredAccounts.provider,
             brokeredAccounts.app,
             brokeredAccounts.userId,
