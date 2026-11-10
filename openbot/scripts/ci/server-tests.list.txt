@@ -123,6 +123,7 @@ tests/bot-lifecycle-routes.test.ts
 tests/bot-lifecycle-watcher.test.ts
 tests/bot-lifecycle.integration.test.ts
 tests/brokered-accounts-schema.integration.test.ts
+tests/brokered-multiple-accounts.integration.test.ts
 tests/brokered-relist.integration.test.ts
 tests/brokered-relist.test.ts
 tests/browser-address.test.ts

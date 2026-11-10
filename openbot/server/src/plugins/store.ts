@@ -98,6 +98,12 @@ import {
   resolveServerUrl,
   serverCredentialKind,
 } from "./catalogue";
+import { accountArgumentFor } from "./account-argument";
+import {
+  type BrokeredAccountRecord,
+  createAccountBook,
+  type PinnedAccount,
+} from "./brokered-accounts";
 import {
   asksForArguments,
   askAction as composioAskAction,
@@ -1353,6 +1359,7 @@ export type PluginStoreOptions = {
       botId?: string;
       outbound?: OutboundPolicy;
       placement?: CredentialPlacement;
+      accountId?: string;
     },
     toolName: string,
     args: Record<string, unknown>,
@@ -1595,6 +1602,8 @@ export function createPluginStore(options: PluginStoreOptions) {
   // No default, unlike the seams above: there is no real implementation in this tree to fall back
   // to, and a deployment with no Composio key is supposed to have no broker. See `./broker`.
   const broker = options.broker;
+  /** 一个人在每个 broker 应用上的多个账号（上游 #1298）；见 `./brokered-accounts`。 */
+  const accounts = createAccountBook({ database, broker, auditStore });
 
   /*
    * One exchange at a time per (server, person). A rotating vendor invalidates the refresh
@@ -4940,6 +4949,7 @@ export function createPluginStore(options: PluginStoreOptions) {
             .delete(composioConnections)
             .where(eq(composioConnections.toolkit, toolkit)),
         );
+        await reach(() => accounts.forgetApp(toolkit));
 
         for (const connection of connected) {
           await recordAuditEvent(auditStore, {
@@ -8914,6 +8924,52 @@ export function createPluginStore(options: PluginStoreOptions) {
      * value that is false by construction would leave exactly that act unrecorded. The field
      * answers what was asked of the provider; `ended` answers whether anything was there.
      */
+    /**
+     * 这个人在一个应用上的账号，按 vendor 现在列出的重建后答出（上游 #1298）；见
+     * `./brokered-accounts` 的 `sync`。
+     */
+    async syncBrokeredAccounts(input: {
+      toolkit: string;
+      userId: string;
+    }): Promise<BrokeredAccountRecord[]> {
+      return accounts.sync(input);
+    },
+
+    /**
+     * Bot 的工具所在的每个服务器上，这个人在 broker 个人应用上持有的账号：`grantedTools` 告诉模型的。
+     * 只读表，不问 vendor。
+     */
+    async accountChoicesForServers(
+      userId: string,
+      serverIds: string[],
+    ): Promise<
+      Map<string, { title: string; choices: BrokeredAccountRecord[] }>
+    > {
+      return accounts.choicesForServers(userId, serverIds);
+    },
+
+    /** 把这个人的一个账号设为不点名时用的那个。不是他在这个应用上的账号时答 false。 */
+    async setDefaultBrokeredAccount(input: {
+      toolkit: string;
+      userId: string;
+      id: string;
+    }): Promise<boolean> {
+      return accounts.setDefault(input);
+    },
+
+    /**
+     * 断开这个人在一个应用上的一个账号，其余保留；是最后一个时答 `only`，调用方改走整个连接的断开。
+     * 不是他的账号时答 null。
+     */
+    async disconnectBrokeredAccount(input: {
+      toolkit: string;
+      userId: string;
+      id: string;
+      by: string;
+    }): Promise<{ only: true } | { remaining: number } | null> {
+      return accounts.disconnectOne(input);
+    },
+
     async disconnectBrokered(input: {
       toolkit: string;
       userId: string;
@@ -8985,6 +9041,8 @@ export function createPluginStore(options: PluginStoreOptions) {
           ),
         )
         .returning({ toolkit: composioConnections.toolkit });
+      // 整个连接结束了：vendor 那里这个人的每个账号都已撤销，账号行一并忘掉（上游 #1298）。
+      await accounts.forget({ toolkit: input.toolkit, userId: input.userId });
 
       if (deleted || ended) {
         await recordAuditEvent(auditStore, {
@@ -9201,6 +9259,8 @@ export function createPluginStore(options: PluginStoreOptions) {
             ),
           ),
         );
+        for (const entry of withdrawn)
+          await accounts.forget({ toolkit: entry.toolkit, userId });
       }
 
       for (const connection of withdrawn) {
@@ -9402,8 +9462,75 @@ export function createPluginStore(options: PluginStoreOptions) {
         );
       }
 
+      /*
+       * 选哪一个账号（上游 #1298）。broker 应用的工具多一个可选的 `account` 参数（见
+       * `./account-argument`），在这里从参数里拿掉，所以 vendor 从来看不到它，也不进动作摘要的参数部分。
+       * 它只是一个名字，只和「调用所开账号的主人」自己的账号名比较；对不上的，在策略、审批和 vendor 之前
+       * 就被拒绝。不点名时用这个人的默认账号；他在这里一个账号都没记下（账号被列出之前的连接）时，调用
+       * 照旧不指定账号。动作自己的 schema 里有 `account` 的，参数原样交给 vendor。
+       *
+       * fork 比上游更严的一条：Team Bot 的队友用的是主人的账号时（`credentialActorId` 不是提问者），
+       * 不能点名账号——队友只拿到主人的默认账号，和以前一样，拿不到主人别的邮箱。
+       */
+      const brokeredToolkit =
+        access.credential === "brokered" ? access.toolkit : null;
+      const accountArg =
+        brokeredToolkit !== null
+          ? accountArgumentFor(
+              advertised[0]?.inputSchema as Record<string, unknown> | undefined,
+            )
+          : null;
+      const accountNamed =
+        accountArg !== null && Object.hasOwn(input.args, accountArg);
+      const namedAccount = accountNamed
+        ? input.args[accountArg as string]
+        : undefined;
+      const callArgs = accountNamed
+        ? Object.fromEntries(
+            Object.entries(input.args).filter(([key]) => key !== accountArg),
+          )
+        : input.args;
+      let pinned: PinnedAccount | null = null;
+      if (brokeredToolkit !== null) {
+        const opensAs = input.credentialActorId ?? input.actorId;
+        const names =
+          namedAccount !== undefined &&
+          namedAccount !== null &&
+          namedAccount !== "";
+        const refuseAccount = async (message: string): Promise<never> => {
+          await recordAuditEvent(auditStore, {
+            eventType: "mcp.call_rejected",
+            targetType: "mcp_tool",
+            targetId: input.ref,
+            ...(input.initiator ? { initiator: input.initiator } : {}),
+            payload: {
+              actor: auditActor,
+              bot: input.botId,
+              server: serverId,
+              tool: toolName,
+              refusal: "unknown_account",
+            },
+          });
+          throw new PluginRefusedError(message, null);
+        };
+        if (names && opensAs !== input.actorId) {
+          await refuseAccount(
+            `这位员工用的是它主人的 ${row.title} 账号，所以不能指定账号，什么都没做。不指定账号再试一次。`,
+          );
+        }
+        const picked = await accounts.pick({
+          toolkit: brokeredToolkit,
+          title: row.title,
+          userId: opensAs,
+          named: namedAccount,
+        });
+        if (picked !== null && "refused" in picked)
+          await refuseAccount(picked.refused);
+        else pinned = picked;
+      }
+
       const args = withoutEmptyOptionals(
-        input.args,
+        callArgs,
         advertised[0]?.inputSchema as Record<string, unknown> | undefined,
       );
 
@@ -9498,6 +9625,8 @@ export function createPluginStore(options: PluginStoreOptions) {
           access,
           input.credentialActorId ?? input.actorId,
         ),
+        // 这个人在该应用上有不止一个账号时，调用进了哪一个（按名字）。
+        ...(pinned ? { reachedAccount: pinned.label } : {}),
         decision: {
           allowed: verdict.allowed,
           mode: verdict.mode,
@@ -9651,6 +9780,11 @@ export function createPluginStore(options: PluginStoreOptions) {
           ...(advertised[0]?.destructive ? { destructive: true as const } : {}),
           // 标明它来自插件调用路径：删除类底线按来源认应用工具，不看服务器叫什么。
           subject: { connector: true },
+          /*
+           * 哪个账号：只在这个人有不止一个账号时。审批的比较与保存都带着它，所以对一个账号的批准、拒绝或
+           * 「这里始终允许」从不回答另一个，卡片也说清是哪个（见 approvals/policy.ts 的 `ruleMatches`）。
+           */
+          ...(pinned && pinned.among > 1 ? { account: pinned.label } : {}),
           continuation: currentApprovalContext(),
           /*
            * The row for the person's own "no": the approval store writes it, once, when they deny.
@@ -9710,6 +9844,7 @@ export function createPluginStore(options: PluginStoreOptions) {
             ...(placement ? { placement } : {}),
             actorId: input.credentialActorId ?? input.actorId,
             botId: input.botId,
+            ...(pinned?.accountId ? { accountId: pinned.accountId } : {}),
             // The conversation the call was made in: Routines and goals post where they were asked.
             ...((input.threadId ?? currentApprovalContext()?.threadId)
               ? {

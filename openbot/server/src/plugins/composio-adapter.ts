@@ -3,6 +3,7 @@ import { appsPageZh, askAdminToZh, itsAppPage } from "../edition";
 import { displayName } from "./app-names";
 import {
   type AuthConfigOutcome,
+  type BrokerAccount,
   type BrokerApp,
   type BrokerConnection,
   type BrokerField,
@@ -417,6 +418,27 @@ function textOf(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const text = value.trim();
   return text === "" ? null : text;
+}
+
+/** vendor 为一个账号公布的名字：`data.displayName`，其次 `state.val.displayName`。令牌从不读。 */
+function displayNameOf(row: { id?: unknown }): string | null {
+  const named = (value: unknown): string | null =>
+    value && typeof value === "object" && "displayName" in value
+      ? textOf((value as { displayName?: unknown }).displayName)
+      : null;
+  const state = (row as { state?: unknown }).state;
+  const val =
+    state && typeof state === "object"
+      ? (state as { val?: unknown }).val
+      : undefined;
+  return named((row as { data?: unknown }).data) ?? named(val);
+}
+
+/** vendor 说这个账号何时建立（`createdAt` 或 `created_at`），读不成日期时为 null。 */
+function connectedAtOf(row: { id?: unknown }): string | null {
+  const shaped = row as { createdAt?: unknown; created_at?: unknown };
+  const when = textOf(shaped.createdAt) ?? textOf(shaped.created_at);
+  return when !== null && !Number.isNaN(Date.parse(when)) ? when : null;
 }
 
 /**
@@ -2275,7 +2297,7 @@ export type ComposioVendor = {
     link(
       userId: string,
       authConfigId: string,
-      options: { callbackUrl: string },
+      options: { callbackUrl: string; allowMultiple?: boolean },
     ): Promise<{ redirectUrl?: unknown }>;
     /**
      * Create one person's account from the secret they typed, WITHOUT a consent screen anywhere.
@@ -2599,6 +2621,7 @@ export function buildComposioClient(
   actions: ComposioActions;
   broker: ComposioBroker;
   guides: KeyGuideSource;
+  accounts: Pick<Required<ComposioBroker>, "accountsOf">;
 } {
   /**
    * This person's accounts for this app, in whichever states the ASKING question is about.
@@ -3535,6 +3558,7 @@ export function buildComposioClient(
       userId,
       toolkit,
       returnUrl,
+      another,
     }): Promise<{ redirectUrl: string }> {
       /*
        * THE CONFIG THIS DEPLOYMENT ALREADY MADE, AND NO SECOND ONE MADE HERE.
@@ -3753,6 +3777,11 @@ export function buildComposioClient(
         () =>
           vendor.connectedAccounts.link(userId, config.id, {
             callbackUrl: returnUrl,
+            /*
+             * 只在这个人明确要「再连一个账号」时才放开（上游 #1298）：账号由调用按名字指定之后，第二个
+             * 账号就不再是 vendor 替谁选的了。平常的 Connect 仍不带它，上面那条「一个人一个账号」的规则照旧。
+             */
+            ...(another === true ? { allowMultiple: true } : {}),
           }),
       );
 
@@ -4829,11 +4858,68 @@ export function buildComposioClient(
     },
   };
 
+  /*
+   * 不放进 `broker` 本身：`broker` 与 `actions` 的每个方法都在 vendor 失败的接缝表里有一行（见
+   * composio-adapter.test），这一个由 {@link brokerWithAccounts} 并到部署实际用的 broker 上。它的每次
+   * vendor 调用都经 `accountsFor` 走 `askVendor`，与其余方法一样。
+   */
+  /*
+   * 每一个有效账号，按 id 与 vendor 为它公布的名字（上游 `composio-client/accounts.ts`）。账号生效后
+   * Composio 在 `data` 与 `state.val` 上都填 `displayName`（邮箱或登录名），名字只读这一个字段；旁边的
+   * 令牌从不读。没有 id 的账号无法被一次调用指名，被略过。最早的在前，所以一个人最先连接的账号保持为默认。
+   */
+  const accounts = {
+    async accountsOf({
+      userId,
+      toolkit,
+    }: {
+      userId: string;
+      toolkit: string;
+    }): Promise<BrokerAccount[]> {
+      const rows = await accountsFor(userId, toolkit, CONNECTED);
+      const listed = new Map<
+        string,
+        {
+          accountId: string;
+          identity: string | null;
+          connectedAt: string | null;
+        }
+      >();
+      for (const row of rows) {
+        const id = textOf(row.id);
+        if (id === null || listed.has(id)) continue;
+        listed.set(id, {
+          accountId: id,
+          identity: displayNameOf(row),
+          connectedAt: connectedAtOf(row),
+        });
+      }
+      return [...listed.values()].sort((left, right) =>
+        (left.connectedAt ?? "") < (right.connectedAt ?? "")
+          ? -1
+          : (left.connectedAt ?? "") > (right.connectedAt ?? "")
+            ? 1
+            : 0,
+      );
+    },
+  };
+
   return {
     actions,
     broker,
     guides: { connectionGuideUrl: connectionGuideUrlFor(vendor) },
+    accounts,
   };
+}
+
+/**
+ * 部署实际用的 broker：adapter 的 broker 加上逐个列账号（上游 #1298 的 `accountsOf`）。
+ */
+export function brokerWithAccounts(client: {
+  broker: ComposioBroker;
+  accounts: Pick<Required<ComposioBroker>, "accountsOf">;
+}): ComposioBroker {
+  return { ...client.broker, accountsOf: client.accounts.accountsOf };
 }
 
 /**
@@ -4874,6 +4960,7 @@ export function createComposioClient(apiKey: string): {
   actions: ComposioActions;
   broker: ComposioBroker;
   guides: KeyGuideSource;
+  accounts: Pick<Required<ComposioBroker>, "accountsOf">;
 } {
   /*
    * THREE ENTRIES, EVERY ONE OF THEM LOAD-BEARING, AND ALL THREE PINNED BY A TEST. What this

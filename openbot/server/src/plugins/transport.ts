@@ -123,6 +123,12 @@ export type VendorTransport = {
       outbound?: OutboundPolicy;
       /** As on `listTools` above: read by `./mcp` only. */
       placement?: CredentialPlacement;
+      /**
+       * 调用进这个人在该应用上的哪一个账号（Composio 的 connected account id），由调用路径从本人自己的
+       * 账号里挑出，从不读 `args`（上游 #1298）。没有时进 vendor 为这个人持有的那个账号，和以前一样。
+       * 只有 `./composio` 读它。
+       */
+      accountId?: string;
     },
     toolName: string,
     args: Record<string, unknown>,

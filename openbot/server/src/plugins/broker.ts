@@ -463,9 +463,30 @@ export type ComposioBroker = {
      * address through that before it hands it here.
      */
     returnUrl: string;
+    /**
+     * 这个人在该应用上已经有账号，这次是在旁边再加一个（上游 #1298）。
+     *
+     * Composio 的 SDK 对已持有账号的人拒绝再发链接，除非明说要多个（`allowMultiple`）。只有在本人的连接
+     * 行已存在、且他明确按了「再连一个账号」时才置位；平常的 Connect 不带它，vendor 照旧替这里执行
+     * 「一个人一个账号」的规则。
+     */
+    another?: boolean;
   }): Promise<{ redirectUrl: string }>;
   /** Whether this person currently has an account attached to this app at the vendor. */
   isConnected(request: { userId: string; toolkit: string }): Promise<boolean>;
+  /**
+   * 这个人在该应用上每一个仍有效的账号，按 vendor 列出的，最早的在前（上游 #1298）。
+   *
+   * 应用页面按名字列出的、Bot 的调用可以指向的，就是这些。`accountId` 是 vendor 用来区分一个人多个账号的
+   * id（Composio 的 connected account id）；`identity` 是 vendor 公布的显示名（邮箱、登录名），从不从令牌
+   * 里读。
+   *
+   * 可选：不能逐个列账号的 broker 照样能连一个账号，只是页面只显示那一个连接，调用不点名账号，和以前一样。
+   */
+  accountsOf?(request: {
+    userId: string;
+    toolkit: string;
+  }): Promise<BrokerAccount[]>;
   /**
    * Ask the vendor to withdraw this person's grant, answering WHAT WAS ACTUALLY ASKED.
    *
@@ -612,6 +633,13 @@ export type ComposioBroker = {
  * what raising it asks the route to do. A failure this file cannot explain stays a plain `Error`,
  * so the route keeps reaching for the vendor's own words instead of inventing better ones.
  */
+/** 一个人在某应用上的一个有效账号；见 {@link ComposioBroker.accountsOf}。 */
+export type BrokerAccount = {
+  accountId: string | null;
+  identity: string | null;
+  connectedAt: string | null;
+};
+
 export class BrokerRefusalError extends Error {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
