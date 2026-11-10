@@ -441,7 +441,16 @@ export function createPluginRoutes(
        * screen needs is whether to draw the app directory, which is a yes or a no.
        */
       composioConfigured: Boolean(composio),
-      servers: await store.listServers(),
+      /*
+       * `canConnect` 是针对这次请求者的判断：只有管理员能连接的应用（`adminConnectOnly`），成员看到
+       * false，其余为 true。前端照它渲染「连接」，不用自己拿角色去拼。连接路由和 store 照旧各自拒绝，
+       * 这个字段只是把同一条规则提前告诉页面。
+       */
+      servers: (await store.listServers()).map((server) => ({
+        ...server,
+        canConnect:
+          !server.adminConnectOnly || context.var.actor.role === "admin",
+      })),
       // Scoped: the deployment's skills plus this person's own. An administrator sees them all.
       skills: await store.listSkills(skillActor(context)),
       /*
@@ -1021,13 +1030,24 @@ export function createPluginRoutes(
       (candidate) => candidate.connection.kind !== "unsupported",
     );
     const term = (context.req.query("q") ?? "").trim().toLowerCase();
-    const matched = term
-      ? connectable.filter((app) =>
-          [app.slug, app.name, app.description].some((field) =>
-            field.toLowerCase().includes(term),
-          ),
-        )
-      : connectable;
+    const matches = (app: BrokerApp) =>
+      !term ||
+      [app.slug, app.name, app.description].some((field) =>
+        field.toLowerCase().includes(term),
+      );
+    const matched = connectable.filter(matches);
+    /*
+     * 在等这个部署自己客户端的应用（#950，例如 Shopify）：不进 `apps`，因为现在还连不上；单独列出名字，
+     * 管理员在「部署专属客户端」里从这里挑，不用手填应用名。保存客户端以后，它就进 `apps`。
+     */
+    const awaitingClient = directory
+      .filter(
+        (candidate) =>
+          candidate.connection.kind === "unsupported" &&
+          candidate.connection.awaitsClient === true &&
+          matches(candidate),
+      )
+      .map((candidate) => ({ slug: candidate.slug, name: candidate.name }));
 
     /*
      * THE ONE CALL ON THIS ROUTE THAT IS NOT THE VENDOR'S, AND IT WAS THE ONE NOTHING ANSWERED FOR.
@@ -1061,6 +1081,7 @@ export function createPluginRoutes(
     );
     return context.json({
       apps: matched.map((app) => ({ ...app, enabled: enabled.has(app.slug) })),
+      awaitingClient,
     });
   });
 
