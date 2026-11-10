@@ -12,7 +12,6 @@ import {
   type AuditStore,
   recordAuditEvent,
 } from "../audit";
-import type { EntraTokens } from "../auth/entra-refusal";
 import {
   type ActionPolicy,
   evaluateActionPolicy,
@@ -118,7 +117,12 @@ import {
   deploymentClientSlug,
   toolkitOfDeploymentClientKey,
 } from "./deployment-clients";
-import { decideEntraScope, entraTokenFor } from "./entra-access";
+import {
+  decideEntraScope,
+  type EntraOnBehalf,
+  entraTokenFor,
+  MOVED_WHILE_ADDING,
+} from "./entra-access";
 import { type ListedTool, McpServerError } from "./mcp";
 import { registerDynamicClient } from "./oauth";
 import { shareTargetOf } from "./share-target";
@@ -1404,8 +1408,10 @@ export type PluginStoreOptions = {
    * Tokens Entra issues for a person on their behalf, for a server an admin marked as reached as
    * the signed-in person (`auth/entra.ts`, 上游 #931). Absent on a deployment with no Microsoft
    * sign-in, where such a server cannot be added and a call to one already stored is refused.
+   * Carries the resources the deployment registered for it (`MICROSOFT_OAUTH_OBO_RESOURCES`) and
+   * OpenBot's own API, which no scope may name; see `plugins/entra-access.ts`.
    */
-  entra?: EntraTokens;
+  entra?: EntraOnBehalf;
 };
 
 /**
@@ -1966,8 +1972,14 @@ export function createPluginStore(options: PluginStoreOptions) {
       credentialId: string | null;
       /** `team` for a server an administrator added: its secret is then read through the broker. */
       tenantId: string;
-      /** The Entra scope a `person-entra` server is reached with; see `mcpServers.entraScope`. */
-      entraScope?: string | null;
+      /** Where the call goes; a `person-entra` token is only sent to the host its scope is bound to. */
+      url: string;
+      /**
+       * The Entra scope a `person-entra` server is reached with; see `mcpServers.entraScope`.
+       * REQUIRED, and checked below (review M-2): a reading that leaves the column out must not
+       * resolve a marked server as one on the deployment's credential and spend that credential.
+       */
+      entraScope: string | null;
       /*
        * NO `authScheme` HERE, DELIBERATELY. The scheme that decides whether a brokered call needs a
        * connection row is the APP'S, read through `brokeredAppScheme` below — and this row's own
@@ -2150,6 +2162,19 @@ export function createPluginStore(options: PluginStoreOptions) {
      * deployment's credential, for the reason the `person-oauth` branch below gives. Held in memory
      * by `auth/entra.ts` until shortly before it expires, never written down here.
      */
+    /*
+     * Fail closed on a row read without the column (review M-2). `accessFor` answers
+     * `deployment-token` for a custom row with no `entraScope`, which is right for a row that has
+     * none and wrong for one whose reader forgot to select it: the deployment's credential would go
+     * out for a server marked to be reached as the person. Every row here comes from a full
+     * `select()`, so the key is always present; a row without it is ours to fix, never a call.
+     */
+    if (!entry && (row as { entraScope?: unknown }).entraScope === undefined) {
+      throw new PluginInvariantError(
+        `${row.id} was read without its entra_scope column, so how it is reached cannot be told.`,
+      );
+    }
+
     if (access.credential === "person-entra") {
       return {
         token: await entraTokenFor(
@@ -3929,7 +3954,12 @@ export function createPluginStore(options: PluginStoreOptions) {
       const entra = decideEntraScope(
         input,
         existing,
-        entraTokens !== undefined,
+        entraTokens
+          ? {
+              resources: entraTokens.resources ?? [],
+              own: entraTokens.own ?? [],
+            }
+          : undefined,
       );
       if ("refusal" in entra) throw new CustomServerRefusedError(entra.refusal);
 
@@ -3954,7 +3984,7 @@ export function createPluginStore(options: PluginStoreOptions) {
         );
       }
 
-      await database
+      const written = await database
         .insert(mcpServers)
         .values({
           id: input.id,
@@ -4010,7 +4040,28 @@ export function createPluginStore(options: PluginStoreOptions) {
             addedBy: input.by,
             updatedAt: new Date(),
           },
-        });
+          /*
+           * THE ADDRESS RULES AGAIN, UNDER THE ROW LOCK (review M-1).
+           *
+           * Both rules above — a credential is spent at the address it was given to, and a marked
+           * server is not moved — were read off `existing` before this write, so two requests at
+           * once could each pass and land a marked server at the other's address. The conflict
+           * update is taken against the row as it stands now, locked: it lands only where the
+           * address is unchanged, or where neither the row nor this write carries a credential or a
+           * mark. Otherwise nothing is written and the add is refused below.
+           */
+          setWhere: or(
+            eq(mcpServers.url, sql`excluded.url`),
+            and(
+              isNull(mcpServers.entraScope),
+              isNull(mcpServers.credentialId),
+              entra.scope || credentialId ? sql`false` : sql`true`,
+            ),
+          ),
+        })
+        .returning({ id: mcpServers.id });
+      if (written.length === 0)
+        throw new CustomServerRefusedError(MOVED_WHILE_ADDING);
 
       await recordAuditEvent(auditStore, {
         eventType: "configuration.changed",

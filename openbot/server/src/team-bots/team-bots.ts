@@ -36,6 +36,7 @@ import type { AgentActor } from "../agents/profile-types";
 import type { Database } from "../db/client";
 import { agents, users } from "../db/schema/core";
 import { agentProfiles } from "../db/schema/coworker";
+import { mcpServers } from "../db/schema/plugins";
 import {
   teamBotAssignments,
   teamBotAudience,
@@ -118,6 +119,32 @@ export function createTeamBots(options: {
    * them here and puts the card in the shared transcript.
    */
   const listening = new Map<string, TeamBotConsentAsk[]>();
+
+  /**
+   * Whether a server is reached on the ASKER'S OWN Microsoft sign-in (`entra_scope`, 上游 #931, X6).
+   *
+   * Such a server has no connection row for anybody, so `connectedServers` never names it — and the
+   * rule below read that as "nobody's own account", sending a teammate's call out as the teammate
+   * with no card. It is the opposite: every call lands in the asker's own account at that system,
+   * exactly what the consent card exists for (review I-1). Nor is it ever the owner's to lend: an
+   * owner never connected it, they merely signed in, so a Team Bot does not reach a teammate's
+   * data as its owner either.
+   */
+  async function reachedOnOwnSignIn(serverId: string): Promise<boolean> {
+    if (!serverId) return false;
+    const [row] = await database
+      .select({ id: mcpServers.id })
+      .from(mcpServers)
+      .where(
+        and(
+          eq(mcpServers.id, serverId),
+          eq(mcpServers.provenance, "custom"),
+          sql`${mcpServers.entraScope} IS NOT NULL`,
+        ),
+      )
+      .limit(1);
+    return row !== undefined;
+  }
 
   async function publication(botId: string) {
     const [row] = await database
@@ -222,8 +249,12 @@ export function createTeamBots(options: {
         const owner = published?.ownerUserId;
         if (!owner || owner === actorId) return actorId;
         const serverId = ref.split("/")[0] ?? "";
-        if ((await connectedServers(owner)).has(serverId)) return owner;
-        if (!(await connectedServers(actorId)).has(serverId)) return actorId;
+        // The asker's own sign-in: never the owner's, and only with the asker's consent (I-1).
+        const ownSignIn = await reachedOnOwnSignIn(serverId);
+        if (!ownSignIn && (await connectedServers(owner)).has(serverId))
+          return owner;
+        if (!ownSignIn && !(await connectedServers(actorId)).has(serverId))
+          return actorId;
         const [consent] = await database
           .select({ decision: teamBotConsents.decision })
           .from(teamBotConsents)
@@ -291,7 +322,11 @@ export function createTeamBots(options: {
       if (!owner || owner === actorId) return null;
       return async (ref) => {
         const serverId = ref.split("/")[0] ?? "";
-        if ((await connectedServers(owner)).has(serverId)) return false;
+        if (
+          !(await reachedOnOwnSignIn(serverId)) &&
+          (await connectedServers(owner)).has(serverId)
+        )
+          return false;
         const [consent] = await database
           .select({ decision: teamBotConsents.decision })
           .from(teamBotConsents)

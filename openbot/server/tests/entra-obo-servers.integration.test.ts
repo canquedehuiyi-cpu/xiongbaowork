@@ -30,6 +30,7 @@ import {
   users,
 } from "../src/db/schema";
 import { createPeopleStore } from "../src/people/store";
+import { openBotResources } from "../src/plugins/entra-access";
 import {
   CustomServerRefusedError,
   createPluginStore,
@@ -359,6 +360,8 @@ const config = loadConfig(
     MICROSOFT_OAUTH_CLIENT_SECRET: CLIENT_SECRET,
     MICROSOFT_OAUTH_TENANT_ID: TENANT,
     MICROSOFT_OAUTH_ALLOWED_CLIENTS: APP_CLIENT,
+    // The two systems a server may be marked for, each bound to the host its tokens go to (I-2).
+    MICROSOFT_OAUTH_OBO_RESOURCES: `api://${DOWNSTREAM_APP}=${HR_HOST},api://payroll=${HR_HOST}`,
     BETTER_AUTH_URL: "http://127.0.0.1:7480",
     INITIAL_ADMIN_EMAILS: ADMIN,
   }),
@@ -464,6 +467,8 @@ function framed(instance: ReturnType<typeof createEntra>) {
   return {
     tokenFor: (id: string, scope: string) =>
       asPlatform(() => instance.tokenFor(id, scope)),
+    resources: microsoft?.oboResources ?? [],
+    own: openBotResources(CLIENT_ID, `api://${CLIENT_ID}/.default`),
   };
 }
 
@@ -1038,5 +1043,125 @@ describe("what does not change", () => {
       `${REFUSAL_MARKER} 「HR」需要 Microsoft 登录，但这里还没有配置。请联系管理员配置。`,
     );
     expect(reached.length).toBe(calls);
+  });
+});
+
+describe("a scope only reaches a registered system, at its own host (review I-2)", () => {
+  const refusedAdd = async (body: Record<string, unknown>) => {
+    const response = await api(
+      "/plugins/servers/custom",
+      await tokenToOpenBot(ada),
+      { title: "Harvest", ...body },
+    );
+    expect(response.status).toBe(400);
+    const [row] = await database
+      .select({ id: mcpServers.id })
+      .from(mcpServers)
+      .where(eq(mcpServers.id, body.id as string));
+    // Nothing was written, and nobody's token was minted for it.
+    expect(row).toBeUndefined();
+    return ((await response.json()) as { error: string }).error;
+  };
+
+  test("Microsoft Graph cannot be marked, whatever the address", async () => {
+    const asked = entra.requests.length;
+    expect(
+      await refusedAdd({
+        id: `obo-graph-${tag}`,
+        url: `https://${HR_HOST}/mcp`,
+        entraScope: "https://graph.microsoft.com/.default",
+      }),
+    ).toContain("Microsoft 的第一方资源");
+    expect(entra.requests.length).toBe(asked);
+  });
+
+  test("OpenBot's own API cannot be marked, so no token that could call back in is minted", async () => {
+    expect(
+      await refusedAdd({
+        id: `obo-self-${tag}`,
+        url: `https://${HR_HOST}/mcp`,
+        entraScope: `api://${CLIENT_ID}/.default`,
+      }),
+    ).toContain("OpenBot 自己的 API");
+  });
+
+  test("a registered system's scope cannot be sent to another host", async () => {
+    expect(
+      await refusedAdd({
+        id: `obo-elsewhere-${tag}`,
+        url: `https://harvest-${tag}.obo.test/mcp`,
+        entraScope: HR_SCOPE,
+      }),
+    ).toContain("token 只发往登记的主机");
+  });
+
+  test("a system the deployment did not register cannot be marked", async () => {
+    expect(
+      await refusedAdd({
+        id: `obo-unlisted-${tag}`,
+        url: `https://${HR_HOST}/mcp`,
+        entraScope: `api://${randomUUID()}/.default`,
+      }),
+    ).toContain("没有登记在部署设置 MICROSOFT_OAUTH_OBO_RESOURCES 里");
+  });
+
+  test("a server marked before its registration was withdrawn is refused at the call, before Entra is asked", async () => {
+    const caraId = (await userId(cara.upn)) ?? "";
+    const asked = entra.requests.length;
+    const calls = reached.length;
+    const withdrawn = createPluginStore({
+      database,
+      auditStore,
+      credentials: credentialReader,
+      encryptionKey: config.keyEncryptionKey,
+      policy: () => ({ mode: "enforce", deny: [], allow: ["true"] }),
+      outboundLookup: async () => [{ address: "93.184.216.34", family: 4 }],
+      entra: { ...framed(newEntra()), resources: [] },
+    });
+    const answer = await runAsTenant(caraId, async () => {
+      const [tool] = (
+        await grantedTools({
+          store: withdrawn,
+          botId: BOT,
+          actorId: caraId,
+          initiator: { kind: "routine", id: `routine-${tag}` },
+        })
+      ).filter((granted) => granted.ref === `${SERVER}/whoami`);
+      return String(await tool?.execute({}));
+    });
+    expect(answer).toBe(
+      `${REFUSAL_MARKER} 「HR」的 Entra scope 已经不在部署登记的范围里，所以没有发出。请联系管理员。`,
+    );
+    expect(entra.requests.length).toBe(asked);
+    expect(reached.length).toBe(calls);
+  });
+});
+
+describe("the address rules hold under concurrent adds (review M-1)", () => {
+  test("a server is never left marked at an address it was not marked for", async () => {
+    const elsewhere = `https://moved-${tag}.obo.test/mcp`;
+    const home = `https://${HR_HOST}/mcp`;
+    for (let round = 0; round < 6; round += 1) {
+      const id = `obo-race-${round}-${tag}`;
+      await store.addCustomServer({ id, title: "Race", url: home, by: ADMIN });
+      // One admin marks it where it is; another moves it, naming no scope. Both read it unmarked.
+      await Promise.allSettled([
+        store.addCustomServer({
+          id,
+          title: "Race",
+          url: home,
+          entraScope: HR_SCOPE,
+          by: ADMIN,
+          actorId: (await userId(ADMIN)) ?? "",
+        }),
+        store.addCustomServer({ id, title: "Race", url: elsewhere, by: ADMIN }),
+      ]);
+      const [row] = await database
+        .select({ url: mcpServers.url, entraScope: mcpServers.entraScope })
+        .from(mcpServers)
+        .where(eq(mcpServers.id, id));
+      // Marked at home, or unmarked anywhere: never marked at the other address.
+      expect(row?.entraScope === null || row?.url === home).toBe(true);
+    }
   });
 });

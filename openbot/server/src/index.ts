@@ -324,6 +324,7 @@ import { appAccessTools } from "./plugins/app-access-tool";
 import { useRoutineTools } from "./plugins/builtin-routines";
 import { useComposioClient } from "./plugins/composio";
 import { createComposioClient } from "./plugins/composio-adapter";
+import { openBotResources } from "./plugins/entra-access";
 import { backfillComposioLogos } from "./plugins/logos";
 import { redirectUriFor } from "./plugins/oauth";
 import { startBrokeredRelist } from "./plugins/relist";
@@ -1567,9 +1568,22 @@ await startupLifecycle.run(async (startup) => {
     /*
      * Entra on-behalf-of, for a server an admin marked as reached as the signed-in person (上游
      * #931). The framed door above: the person's sign-in and the tokens minted from it are identity
-     * rows read as `platform`, while the call that asks runs in the person's own frame.
+     * rows read as `platform`, while the call that asks runs in the person's own frame. With it go
+     * the resources the deployment registered (MICROSOFT_OAUTH_OBO_RESOURCES) and OpenBot's own API,
+     * so a scope is only ever minted for a registered resource and sent to its host (X6, I-2).
      */
-    ...(entra ? { entra } : {}),
+    ...(entra && config.auth?.microsoft
+      ? {
+          entra: {
+            tokenFor: entra.tokenFor,
+            resources: config.auth.microsoft.oboResources ?? [],
+            own: openBotResources(
+              config.auth.microsoft.clientId,
+              config.auth.microsoft.apiScope,
+            ),
+          },
+        }
+      : {}),
   });
 
   // Logo metadata is optional; a vendor outage must not prevent the API from starting.

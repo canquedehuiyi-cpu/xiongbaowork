@@ -9,6 +9,11 @@ import {
   decideEntraScope,
   entraRefusalSentence,
   entraTokenFor,
+  forbiddenResource,
+  openBotResources,
+  parseOboResources,
+  scopeBindingRefusal,
+  scopeResource,
 } from "../src/plugins/entra-access";
 
 /**
@@ -20,6 +25,13 @@ import {
  */
 
 const HR = "api://hr-api/.default";
+const HR_URL = "https://hr.example.com/mcp";
+const OPENBOT = "6e74172b-be56-4843-9ff4-e66a39bb12e3";
+/** What a deployment registered: the HR API, bound to the HR system's host. */
+const BINDING = {
+  resources: [{ resource: "api://hr-api", host: "hr.example.com" }],
+  own: openBotResources(OPENBOT, `api://${OPENBOT}/.default`),
+};
 const refuse = (sentence: string) => new Error(sentence);
 
 describe("accessFor", () => {
@@ -105,14 +117,16 @@ describe("decideEntraScope", () => {
       decideEntraScope(
         { id: "hr", url, entraScope: `  ${HR} ` },
         undefined,
-        true,
+        BINDING,
       ),
     ).toEqual({ named: HR, scope: HR });
   });
 
   test("naming none keeps the mark a server already has", () => {
     expect(
-      read(decideEntraScope({ id: "hr", url }, { url, entraScope: HR }, true)),
+      read(
+        decideEntraScope({ id: "hr", url }, { url, entraScope: HR }, BINDING),
+      ),
     ).toEqual({ named: "not named", scope: HR });
   });
 
@@ -122,7 +136,7 @@ describe("decideEntraScope", () => {
         decideEntraScope(
           { id: "hr", url, entraScope: null },
           { url, entraScope: HR },
-          true,
+          BINDING,
         ),
       ),
     ).toEqual({ named: null, scope: "no scope" });
@@ -130,7 +144,7 @@ describe("decideEntraScope", () => {
 
   test("marking is refused where Microsoft sign-in is not set up", () => {
     expect(
-      decideEntraScope({ id: "hr", url, entraScope: HR }, undefined, false),
+      decideEntraScope({ id: "hr", url, entraScope: HR }, undefined, undefined),
     ).toEqual({
       refusal:
         "还没有配置 Microsoft 登录，所以不能把服务器设为以登录人的身份访问。请先设置 MICROSOFT_OAUTH_CLIENT_ID 和 MICROSOFT_OAUTH_CLIENT_SECRET。",
@@ -142,7 +156,7 @@ describe("decideEntraScope", () => {
       decideEntraScope(
         { id: "hr", url, entraScope: HR, credentialId: "cred" },
         undefined,
-        true,
+        BINDING,
       ),
     ).toEqual({
       refusal:
@@ -152,7 +166,7 @@ describe("decideEntraScope", () => {
       decideEntraScope(
         { id: "hr", url, credentialId: "cred" },
         { url, entraScope: HR },
-        true,
+        BINDING,
       ),
     ).toEqual({
       refusal:
@@ -163,7 +177,7 @@ describe("decideEntraScope", () => {
   test("more than one scope, or one too long to be a scope, is refused", () => {
     for (const entraScope of [`${HR} api://payroll/.default`, "a".repeat(257)])
       expect(
-        decideEntraScope({ id: "hr", url, entraScope }, undefined, true),
+        decideEntraScope({ id: "hr", url, entraScope }, undefined, BINDING),
       ).toEqual({
         refusal: "请只填一个 Entra scope，例如 api://hr-api/.default。",
       });
@@ -175,30 +189,39 @@ describe("decideEntraScope", () => {
       refusal:
         "hr 以登录人的身份访问，已经在另一个地址。要换地址，请先移除再重新添加。",
     };
+    // Marking one that was not marked while moving it says so, rather than that it was marked.
+    const markingWhileMoving = {
+      refusal:
+        "hr 已经在另一个地址。换地址时不能同时设为以登录人的身份访问，请先移除再重新添加。",
+    };
     expect(
-      decideEntraScope({ id: "hr", url: moved }, { url, entraScope: HR }, true),
+      decideEntraScope(
+        { id: "hr", url: moved },
+        { url, entraScope: HR },
+        BINDING,
+      ),
     ).toEqual(refusal);
     expect(
       decideEntraScope(
         { id: "hr", url: moved, entraScope: null },
         { url, entraScope: HR },
-        true,
+        BINDING,
       ),
     ).toEqual(refusal);
     expect(
       decideEntraScope(
         { id: "hr", url: moved, entraScope: HR },
         { url, entraScope: null },
-        true,
+        BINDING,
       ),
-    ).toEqual(refusal);
+    ).toEqual(markingWhileMoving);
     // An unmarked server moving is the deployment-token rule's business, not this one's.
     expect(
       read(
         decideEntraScope(
           { id: "hr", url: moved },
           { url, entraScope: null },
-          true,
+          BINDING,
         ),
       ),
     ).toEqual({ named: "not named", scope: "no scope" });
@@ -206,12 +229,13 @@ describe("decideEntraScope", () => {
 });
 
 describe("entraTokenFor", () => {
-  const row = { title: "HR", entraScope: HR };
+  const row = { title: "HR", url: HR_URL, entraScope: HR };
 
   test("hands back the token Entra issued for the person and this scope", async () => {
     const asked: [string, string][] = [];
     const token = await entraTokenFor(
       {
+        ...BINDING,
         tokenFor: async (userId, scope) => {
           asked.push([userId, scope]);
           return "obo-token";
@@ -228,6 +252,7 @@ describe("entraTokenFor", () => {
   test("a run attributed to nobody, and a deployment with no Microsoft sign-in, never ask Entra", async () => {
     let asked = 0;
     const tokens = {
+      ...BINDING,
       tokenFor: async () => {
         asked += 1;
         return "obo-token";
@@ -277,6 +302,7 @@ describe("entraTokenFor", () => {
       await expect(
         entraTokenFor(
           {
+            ...BINDING,
             tokenFor: async () => {
               throw new EntraTokenRefusedError(
                 reason,
@@ -297,6 +323,7 @@ describe("entraTokenFor", () => {
     await expect(
       entraTokenFor(
         {
+          ...BINDING,
           tokenFor: async () => {
             throw fault;
           },
@@ -306,5 +333,174 @@ describe("entraTokenFor", () => {
         refuse,
       ),
     ).rejects.toBe(fault);
+  });
+});
+
+describe("which resources a scope may name, and where its token may go (review I-2)", () => {
+  test("the resource is the scope less its permission, and a bare permission names none", () => {
+    expect(scopeResource("api://hr-api/.default")).toBe("api://hr-api");
+    expect(scopeResource("API://HR-API/read")).toBe("api://hr-api");
+    expect(scopeResource("https://contoso.com/hr/.default")).toBe(
+      "https://contoso.com/hr",
+    );
+    expect(scopeResource(`${OPENBOT}/.default`)).toBe(OPENBOT);
+    // What Entra reads as Microsoft Graph, and shapes with no permission at all.
+    for (const named of ["User.Read", "api://hr-api", "api://hr-api/"])
+      expect(scopeResource(named)).toBeNull();
+  });
+
+  test("OpenBot's own API, by any of its names or under it, is never a resource", () => {
+    for (const resource of [
+      OPENBOT,
+      `api://${OPENBOT}`,
+      `API://${OPENBOT.toUpperCase()}`,
+      `api://${OPENBOT}/admin`,
+    ])
+      expect(forbiddenResource(resource, BINDING.own)).toBe("own");
+    // A custom API scope's resource is OpenBot's too.
+    expect(
+      forbiddenResource(
+        "api://openbot.example.com",
+        openBotResources(OPENBOT, "api://openbot.example.com/access_as_user"),
+      ),
+    ).toBe("own");
+  });
+
+  test("Microsoft's first-party resources are never a resource", () => {
+    for (const resource of [
+      "https://graph.microsoft.com",
+      "00000003-0000-0000-c000-000000000000",
+      "00000003-0000-0ff1-ce00-000000000000",
+      "https://contoso.sharepoint.com",
+      "https://outlook.office365.com",
+      "https://management.azure.com",
+      "https://vault.azure.net",
+      "797f4846-ba00-4fd7-ba43-dac1f8f63013",
+    ])
+      expect(forbiddenResource(resource, BINDING.own)).toBe("microsoft");
+    expect(forbiddenResource("api://hr-api", BINDING.own)).toBeNull();
+    expect(
+      forbiddenResource("https://hr.contoso.com/api", BINDING.own),
+    ).toBeNull();
+  });
+
+  test("a deployment registers each resource with the one host its tokens go to", () => {
+    expect(
+      parseOboResources(
+        [
+          "API://HR-API=HR.example.com",
+          "https://contoso.com/pay/=pay.contoso.com",
+        ],
+        BINDING.own,
+      ),
+    ).toEqual([
+      { resource: "api://hr-api", host: "hr.example.com" },
+      { resource: "https://contoso.com/pay", host: "pay.contoso.com" },
+    ]);
+    expect(() => parseOboResources(["api://hr-api"], BINDING.own)).toThrow(
+      "MICROSOFT_OAUTH_OBO_RESOURCES 的「api://hr-api」写法不对。",
+    );
+    expect(() =>
+      parseOboResources(["api://hr-api=https://hr.example.com"], BINDING.own),
+    ).toThrow("写法不对");
+    expect(() =>
+      parseOboResources([`api://${OPENBOT}=hr.example.com`], BINDING.own),
+    ).toThrow("登记了 OpenBot 自己的 API");
+    expect(() =>
+      parseOboResources(
+        ["https://graph.microsoft.com=hr.example.com"],
+        BINDING.own,
+      ),
+    ).toThrow("登记了 Microsoft 的第一方资源");
+  });
+
+  test("a scope is refused unless it names a registered resource and the server is at its host", () => {
+    expect(scopeBindingRefusal(HR, HR_URL, BINDING)).toBeNull();
+    expect(scopeBindingRefusal("User.Read", HR_URL, BINDING)).toContain(
+      "没有写明资源",
+    );
+    expect(
+      scopeBindingRefusal(`api://${OPENBOT}/.default`, HR_URL, BINDING),
+    ).toBe(
+      "不能用 OpenBot 自己的 API 作为 Entra scope：换出来的 token 能冒充本人调用 OpenBot。",
+    );
+    expect(
+      scopeBindingRefusal(
+        "https://graph.microsoft.com/.default",
+        HR_URL,
+        BINDING,
+      ),
+    ).toBe(
+      "不能用 Microsoft 的第一方资源（例如 Microsoft Graph）作为 Entra scope：这类 token 权限太大，不能发给自定义服务器。",
+    );
+    expect(scopeBindingRefusal("api://payroll/.default", HR_URL, BINDING)).toBe(
+      "api://payroll 没有登记在部署设置 MICROSOFT_OAUTH_OBO_RESOURCES 里。请运维把它和它的服务器主机一起登记（<资源>=<主机>）。",
+    );
+    expect(
+      scopeBindingRefusal(HR, "https://attacker.example/mcp", BINDING),
+    ).toBe(
+      "api://hr-api 登记的服务器主机是 hr.example.com，和这个服务器的地址（attacker.example）不一致。token 只发往登记的主机。",
+    );
+    // A subdomain is another host.
+    expect(
+      scopeBindingRefusal(HR, "https://evil.hr.example.com/mcp", BINDING),
+    ).not.toBeNull();
+    // Nothing registered, nothing marked.
+    expect(
+      scopeBindingRefusal(HR, HR_URL, { resources: [], own: BINDING.own }),
+    ).not.toBeNull();
+  });
+
+  test("marking is refused on the same grounds, before anything is written", () => {
+    expect(
+      decideEntraScope(
+        {
+          id: "x",
+          url: "https://attacker.example/mcp",
+          entraScope: "https://graph.microsoft.com/.default",
+        },
+        undefined,
+        BINDING,
+      ),
+    ).toEqual({
+      refusal:
+        "不能用 Microsoft 的第一方资源（例如 Microsoft Graph）作为 Entra scope：这类 token 权限太大，不能发给自定义服务器。",
+    });
+    expect(
+      decideEntraScope(
+        { id: "x", url: "https://attacker.example/mcp", entraScope: HR },
+        undefined,
+        BINDING,
+      ),
+    ).toHaveProperty("refusal");
+  });
+
+  test("a call is not made when the scope is no longer registered for the server's host", async () => {
+    let asked = 0;
+    const tokenFor = async () => {
+      asked += 1;
+      return "obo-token";
+    };
+    const sentence =
+      "「HR」的 Entra scope 已经不在部署登记的范围里，所以没有发出。请联系管理员。";
+    // Registered for another host since; registered nowhere; a caller that passed no resources.
+    for (const tokens of [
+      {
+        ...BINDING,
+        resources: [{ resource: "api://hr-api", host: "hr2.example.com" }],
+        tokenFor,
+      },
+      { ...BINDING, resources: [], tokenFor },
+      { tokenFor },
+    ])
+      await expect(
+        entraTokenFor(
+          tokens,
+          { title: "HR", url: HR_URL, entraScope: HR },
+          "user-1",
+          refuse,
+        ),
+      ).rejects.toThrow(sentence);
+    expect(asked).toBe(0);
   });
 });
