@@ -47,6 +47,8 @@ import {
   withDeploymentClients,
 } from "./deployment-clients";
 import { fieldsForPerson, keyGuideFor } from "./key-guides";
+import { mountSharedUseRoutes } from "./shared-use-routes";
+import type { SharedAudience, SharedUseStore } from "./shared-use-store";
 import {
   authorizationUrlFor,
   type ConnectOrigin,
@@ -358,7 +360,12 @@ export function createPluginRoutes(
    * trap `connect` documents applies here with one more argument in it — every parameter from that
    * position on is optional, so a misplaced one typechecks and quietly does nothing.
    */
-  composio?: { broker: ComposioBroker; guides?: KeyGuideSource },
+  composio?: {
+    broker: ComposioBroker;
+    guides?: KeyGuideSource;
+    /** 共享使用批准（X3，`./shared-use-store`）。没给时共享使用路由不挂，团队账号照样一律拒绝。 */
+    sharedUse?: { store: SharedUseStore; audience: SharedAudience };
+  },
   /**
    * `createAdminScope(...)`: its `adminCapability` is mounted on the grant routes (G01-E P8b) and on
    * every route that writes the deployment's servers, their OAuth clients and their secrets (P10):
@@ -375,6 +382,7 @@ export function createPluginRoutes(
   accountModes?: AccountModeSwitch,
 ) {
   const routes = new Hono<{ Variables: AppVariables }>();
+  const sharedUse = composio?.sharedUse;
   const adminCapability = adminScope?.adminCapability;
   const signedInWithCapability: MiddlewareHandler<{
     Variables: AppVariables;
@@ -3845,15 +3853,24 @@ export function createPluginRoutes(
     }),
   );
 
+  /**
+   * 管理员收件箱里所有人的待处理申请：应用访问申请，以及共享使用申请（X3）。跨租户，所以在 platform 帧
+   * 里读，两种申请是同一次读、同一道门；调用前已确认持有 capability。
+   */
+  const pendingForAdmin = (context: { var: AppVariables }) =>
+    (adminScope as NonNullable<typeof adminScope>).asAdminPlatform(
+      context.var.actor,
+      async () => ({
+        appAccess: await store.pendingAppAccessRequests(),
+        sharedUse: sharedUse ? await sharedUse.store.listRequests() : [],
+      }),
+    );
+
   /** 所有人的 pending 申请，给管理员收件箱。 */
   routes.get("/access-requests", signedInWithCapability, async (context) => {
     const refusal = decisionRefusal(context);
     if (refusal) return context.json({ error: refusal }, 403);
-    const all = await (
-      adminScope as NonNullable<typeof adminScope>
-    ).asAdminPlatform(context.var.actor, () =>
-      store.pendingAppAccessRequests(),
-    );
+    const all = (await pendingForAdmin(context)).appAccess;
     // 上游的形状（X2）：`?app=` 只看一个应用的，`counts` 让插件列表给每个应用标数字而不用再读一次。
     const byApp: Record<string, number> = {};
     for (const request of all)
@@ -4178,6 +4195,17 @@ export function createPluginRoutes(
       );
     },
   );
+
+  if (sharedUse)
+    mountSharedUseRoutes({
+      routes,
+      shared: sharedUse,
+      capable: signedInWithCapability,
+      decisionRefusal,
+      asBotOwner,
+      pendingForAdmin: async (context) =>
+        (await pendingForAdmin(context)).sharedUse,
+    });
 
   mountAppAccessRoutes({
     routes,

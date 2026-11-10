@@ -296,6 +296,14 @@ export const auditEventTypes = [
   "app_access.approved",
   "app_access.dismissed",
   "app_access.refused",
+  /*
+   * 共享使用（X3，上游 #757）：请管理员批准一位员工使用一个 Shared 应用的团队账号（被拒的调用替主人申请，
+   * 或主人自己申请），以及管理员的批准、驳回。目标是应用；payload `bot`、`server`、`request`，申请带
+   * `reason`，决定带 `audience`、`outsideInput`。
+   */
+  "shared_use.requested",
+  "shared_use.approved",
+  "shared_use.declined",
   // Every action a Bot takes on its computer, allowed or refused. Both, always: a trail that records
   // only what was permitted cannot answer whether the Bot tried.
   "computer.action_allowed",

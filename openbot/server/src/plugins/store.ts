@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, like, or, sql } from "drizzle-orm";
 import { ALREADY_WAITING, DECLINED_BY_PERSON } from "../approvals/service";
 import {
   ApprovalAlreadyAnsweredError,
@@ -59,6 +59,7 @@ import {
   type InstallListingKind,
   pluginInstallListings,
 } from "../db/schema/plugin-install-listings";
+import { sharedUseApprovals } from "../db/schema/shared-use";
 import { SYSTEM_TENANT, TEAM_TENANT } from "../db/schema/tenant";
 import { appsPage, appsPageZh } from "../edition";
 import type { OutboundLookup, OutboundPolicy } from "../net/outbound-guard";
@@ -101,6 +102,7 @@ import {
 import { accountArgumentFor } from "./account-argument";
 import { type AccountMode, accountFor } from "./shared-accounts";
 import { steeringOf } from "./shared-use";
+import type { SharedUseGate } from "./shared-use-store";
 import { appAccessMethods } from "./app-access-store";
 import {
   type BrokeredAccountRecord,
@@ -1437,6 +1439,11 @@ export type PluginStoreOptions = {
    * （`./shared-use`）。没给时，由职责开始的运行一律按外部输入处理，团队账号不接受——闭合的方向。
    */
   responsibilitySources?: (responsibilityId: string) => Promise<string[]>;
+  /**
+   * 共享使用闸门（X3，`./shared-use-store`）：员工对这个 Shared 应用的批准是否放这次运行进团队账号。没给时
+   * 团队账号对每一次调用都拒绝（X1 评审 C1），闭合的方向。
+   */
+  sharedUse?: SharedUseGate;
 };
 
 /**
@@ -9252,6 +9259,10 @@ export function createPluginStore(options: PluginStoreOptions) {
     /**
      * 写应用的账号模式（只由 `./account-mode` 调用）。切到 Shared 时带上新铸的团队身份，切回 Personal 时
      * 团队账号的连接状态一起清空（CHECK 也这样要求）。
+     *
+     * 两个方向都结束这个应用的每一条共享使用批准（X3，上游 `deleteApprovalsFor`）：批准是关于一个团队账号的，
+     * 切走再切回来是另一个账号，留下的批准会在再切回 Shared 的那一刻把它交回去。按应用地址上的每一行删，
+     * 包括应答行以外的重复行；跨每位员工的主人，所以经 {@link reachEveryPersonOn}，之前先要管理员能力。
      */
     async setAccountModeColumns(
       appId: string,
@@ -9259,6 +9270,30 @@ export function createPluginStore(options: PluginStoreOptions) {
       sharedVendorUserId: string | null,
     ): Promise<void> {
       requireServerWriter();
+      const [app] = await database
+        .select({ url: mcpServers.url, tenantId: mcpServers.tenantId })
+        .from(mcpServers)
+        .where(eq(mcpServers.id, appId));
+      const toolkit = app ? toolkitOf(app.url) : null;
+      await reachEveryPersonOn(app?.tenantId === TEAM_TENANT, async () => {
+        const atApp = toolkit
+          ? (
+              await database
+                .select({ id: mcpServers.id, url: mcpServers.url })
+                .from(mcpServers)
+                .where(like(mcpServers.url, "composio://%"))
+            )
+              .filter((row) => toolkitOf(row.url) === toolkit)
+              .map((row) => row.id)
+          : [];
+        await database
+          .delete(sharedUseApprovals)
+          .where(
+            inArray(sharedUseApprovals.serverId, [
+              ...new Set([appId, ...atApp]),
+            ]),
+          );
+      });
       await database
         .update(mcpServers)
         .set({
@@ -10011,6 +10046,8 @@ export function createPluginStore(options: PluginStoreOptions) {
         : input.args;
       let pinned: PinnedAccount | null = null;
       let sharedApp = false;
+      /** Shared 应用的应答行：批准是关于应用的事实，按它问，不按授予恰好经过的那一行。 */
+      let sharedAppId = serverId;
       if (brokeredToolkit !== null) {
         const opensAs = input.credentialActorId ?? input.actorId;
         const names =
@@ -10037,6 +10074,7 @@ export function createPluginStore(options: PluginStoreOptions) {
         sharedApp =
           app?.accountMode === "shared" &&
           schemeKind(app.authScheme) !== "none";
+        if (sharedApp && app) sharedAppId = app.id;
         if (sharedApp) {
           // Shared 应用只有一个团队账号，没有可选的。
           if (names)
@@ -10072,11 +10110,14 @@ export function createPluginStore(options: PluginStoreOptions) {
        * 一个员工被开放给比管理员批准的更多的人，就等于把这个账号交给了他们。每次调用都在这里判：
        * - check-in 只能读本人自己连接的账号，团队账号不行；
        * - 发起者必须说得出是谁在驾驶（`steeringOf`）：部署自身、没有起点的转交、认不出的开始方式都拒绝；
-       * - 受众：X3 并入「共享使用批准」之前，每个员工都按最严的一档（只有员工的主人和管理员，且不接受
-       *   外部输入驱动的职责）。Team Bot 的队友因此用不到团队账号，除非他是管理员。
+       * - 受众：管理员为这位员工在这个应用上批准的（`options.sharedUse`，X3）。没有批准就拒绝，员工的主人
+       *   和管理员也不例外；有批准时按受众（`admits`）判，外部输入驱动的运行还要批准里允许外部输入。
        */
       if (sharedApp) {
-        const refuseShared = async (why: string): Promise<never> => {
+        const refuseShared = async (
+          why: string,
+          refusal = "shared_account_not_approved",
+        ): Promise<never> => {
           await recordAuditEvent(auditStore, {
             eventType: "mcp.call_rejected",
             targetType: "mcp_tool",
@@ -10087,7 +10128,7 @@ export function createPluginStore(options: PluginStoreOptions) {
               bot: input.botId,
               server: serverId,
               tool: toolName,
-              refusal: "shared_account_not_approved",
+              refusal,
               reason: why,
             },
           });
@@ -10104,14 +10145,21 @@ export function createPluginStore(options: PluginStoreOptions) {
         );
         if (steering.kind === "refuse") await refuseShared(steering.why);
         /*
-         * 没有批准就拒绝（评审 C1，与上游 `createSharedUseGate` 一致）：上游先查这个员工对这个应用的共享
-         * 使用批准，没有批准行就拒绝，管理员本人也不例外；有批准才按受众（`admits`）判。批准表与管理员
-         * 批准的流程在 X3 并入，在那之前任何员工都没有批准，所以团队账号对每一次调用都拒绝——包括成员
-         * 自助安装、或给自己的员工授权之后。团队账号的连接、断开与模式切换照常可用。
+         * 没有批准就拒绝（评审 C1，与上游 `createSharedUseGate` 一致）：先查这位员工对这个应用的共享使用
+         * 批准，没有批准行就拒绝，管理员本人也不例外；有批准才按受众（`admits`）判。没接上闸门的部署无从
+         * 回答这个问题，同样拒绝——包括成员自助安装、或给自己的员工授权之后。
          */
-        await refuseShared(
-          "管理员还没有批准这位员工使用它（共享使用批准将在后续版本提供）",
-        );
+        if (!options.sharedUse)
+          await refuseShared("管理员还没有批准这位员工使用它");
+        const verdict = await (options.sharedUse as SharedUseGate)({
+          botId: input.botId,
+          serverId: sharedAppId,
+          title: row.title,
+          actorId: input.actorId,
+          ...(input.initiator ? { initiator: input.initiator } : {}),
+          outside: steering.kind === "actor" && steering.outside,
+        });
+        if (!verdict.allowed) await refuseShared(verdict.why, verdict.refusal);
       }
 
       const args = withoutEmptyOptionals(

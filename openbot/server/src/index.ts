@@ -326,6 +326,10 @@ import { useRoutineTools } from "./plugins/builtin-routines";
 import { useComposioClient } from "./plugins/composio";
 import { createAccountModeSwitch } from "./plugins/account-mode";
 import {
+  createSharedAudience,
+  createSharedUseStore,
+} from "./plugins/shared-use-store";
+import {
   brokerWithAccounts,
   createComposioClient,
 } from "./plugins/composio-adapter";
@@ -1540,7 +1544,18 @@ await startupLifecycle.run(async (startup) => {
     : undefined;
 
   // M3: upstream wraps this store in the personal edition's defaults (plugins/personal-defaults.ts)
-  // and gives it shared use, the broker provider and Entra on-behalf-of; none is adopted here.
+  // and gives it the broker provider and Entra on-behalf-of; neither is adopted here.
+  /*
+   * 共享使用批准（X3，上游 #757）：谁可以驾驶用到 Shared 应用团队账号的运行。批准记在员工主人名下，
+   * 闸门在主人帧里只读它（`plugins/shared-use-store.ts`）。职责的触发来源由同一个存储读，读不到的职责
+   * 按外部输入处理。
+   */
+  const sharedUseStore = createSharedUseStore(database);
+  const sharedAudience = createSharedAudience(
+    database,
+    sharedUseStore,
+    bootAuditStore,
+  );
   const pluginStore = createPluginStore({
     database,
     auditStore: bootAuditStore,
@@ -1571,6 +1586,8 @@ await startupLifecycle.run(async (startup) => {
      * attempted.
      */
     broker: composioBroker,
+    sharedUse: sharedAudience.gate,
+    responsibilitySources: sharedUseStore.sourcesOf,
   });
   /*
    * 应用的账号模式 Personal ⇄ Shared（X1，上游 #757）：切到 Shared 时写「写之前先问」团队规则，团队账号
@@ -4269,7 +4286,12 @@ await startupLifecycle.run(async (startup) => {
     // Absent without a key, which leaves the routes reporting no broker rather than listing apps
     // nobody could connect.
     composio && composioBroker
-      ? { broker: composioBroker, guides: composio.guides, accountModes }
+      ? {
+          broker: composioBroker,
+          guides: composio.guides,
+          accountModes,
+          sharedUse: { store: sharedUseStore, audience: sharedAudience },
+        }
       : undefined,
     process.env.OPENBOT_MODEL_OAUTH_FILE?.trim()
       ? createProviderOAuthProxy(process.env.OPENBOT_MODEL_OAUTH_FILE.trim())

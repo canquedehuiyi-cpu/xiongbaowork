@@ -137,6 +137,10 @@ import { createProfileRoutes, type ProfileStore } from "./people/profile";
 import { MAX_PAGE, type PeopleStore } from "./people/store";
 import type { ComposioBroker, KeyGuideSource } from "./plugins/broker";
 import type { AccountModeSwitch } from "./plugins/account-mode";
+import type {
+  SharedAudience,
+  SharedUseStore,
+} from "./plugins/shared-use-store";
 import { createPluginRoutes } from "./plugins/routes";
 import {
   isDeploymentFault,
@@ -444,6 +448,8 @@ export function createApp(
     guides?: KeyGuideSource;
     /** 应用账号模式的切换（X1，`plugins/account-mode.ts`）。 */
     accountModes?: AccountModeSwitch;
+    /** 共享使用批准（X3，`plugins/shared-use-store.ts`）。 */
+    sharedUse?: { store: SharedUseStore; audience: SharedAudience };
   },
   /** Native model OAuth stays server-side; callers hold only a separate local bearer. */
   modelProviderProxy?: ModelProviderProxy,
