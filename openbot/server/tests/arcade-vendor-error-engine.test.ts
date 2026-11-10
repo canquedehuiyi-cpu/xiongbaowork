@@ -182,9 +182,10 @@ describe("a refusal from Arcade is an Error this deployment wrote", () => {
       // 2. NOTHING THE VENDOR WROTE, at any depth a reader can reach.
       expect(asLogged(thrown)).not.toContain(BEARER);
       expect(asLogged(thrown)).not.toContain(VENDOR_PROSE);
-      expect(
-        JSON.stringify(thrown, Object.keys(thrown as object)),
-      ).not.toContain("SECRET-BEARER");
+      // 自身的每一个可枚举字段，在每一层（fork 的断言形状门禁不收 `Object.keys` 作 replacer）。
+      expect(JSON.stringify({ ...(thrown as object) })).not.toContain(
+        "SECRET-BEARER",
+      );
       let cause: unknown = (thrown as { cause?: unknown }).cause;
       for (let depth = 0; depth < 8 && cause !== undefined; depth += 1) {
         expect(asLogged(cause)).not.toContain(BEARER);
