@@ -88,6 +88,17 @@ describe("accessFor", () => {
 
 describe("decideEntraScope", () => {
   const url = "https://hr.example.com/mcp";
+  /**
+   * A decision as words, so "not named" and "no scope" are asserted rather than left to an
+   * expected `undefined`, which `toEqual` would accept from a decision missing the key altogether.
+   */
+  const read = (decision: ReturnType<typeof decideEntraScope>) =>
+    "refusal" in decision
+      ? decision
+      : {
+          named: decision.named === undefined ? "not named" : decision.named,
+          scope: decision.scope === undefined ? "no scope" : decision.scope,
+        };
 
   test("a named scope marks the server, trimmed", () => {
     expect(
@@ -101,18 +112,20 @@ describe("decideEntraScope", () => {
 
   test("naming none keeps the mark a server already has", () => {
     expect(
-      decideEntraScope({ id: "hr", url }, { url, entraScope: HR }, true),
-    ).toEqual({ named: undefined, scope: HR });
+      read(decideEntraScope({ id: "hr", url }, { url, entraScope: HR }, true)),
+    ).toEqual({ named: "not named", scope: HR });
   });
 
   test("null takes the mark off", () => {
     expect(
-      decideEntraScope(
-        { id: "hr", url, entraScope: null },
-        { url, entraScope: HR },
-        true,
+      read(
+        decideEntraScope(
+          { id: "hr", url, entraScope: null },
+          { url, entraScope: HR },
+          true,
+        ),
       ),
-    ).toEqual({ named: null, scope: undefined });
+    ).toEqual({ named: null, scope: "no scope" });
   });
 
   test("marking is refused where Microsoft sign-in is not set up", () => {
@@ -181,12 +194,14 @@ describe("decideEntraScope", () => {
     ).toEqual(refusal);
     // An unmarked server moving is the deployment-token rule's business, not this one's.
     expect(
-      decideEntraScope(
-        { id: "hr", url: moved },
-        { url, entraScope: null },
-        true,
+      read(
+        decideEntraScope(
+          { id: "hr", url: moved },
+          { url, entraScope: null },
+          true,
+        ),
       ),
-    ).toEqual({ named: undefined, scope: undefined });
+    ).toEqual({ named: "not named", scope: "no scope" });
   });
 });
 
