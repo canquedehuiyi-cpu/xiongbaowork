@@ -9470,7 +9470,8 @@ export function createPluginStore(options: PluginStoreOptions) {
        * 照旧不指定账号。动作自己的 schema 里有 `account` 的，参数原样交给 vendor。
        *
        * fork 比上游更严的一条：Team Bot 的队友用的是主人的账号时（`credentialActorId` 不是提问者），
-       * 不能点名账号——队友只拿到主人的默认账号，和以前一样，拿不到主人别的邮箱。
+       * 不能点名账号——调用钉到主人的默认账号（`ownersDefault`，评审 N1），拿不到主人别的邮箱；主人的
+       * 账号名不进队友的审批卡与审计（评审 M5）。
        */
       const brokeredToolkit =
         access.credential === "brokered" ? access.toolkit : null;
@@ -9491,6 +9492,8 @@ export function createPluginStore(options: PluginStoreOptions) {
           )
         : input.args;
       let pinned: PinnedAccount | null = null;
+      /** 队友用主人的账号时钉到的主人默认账号 id（不带名字）。 */
+      let ownersAccountId: string | null = null;
       if (brokeredToolkit !== null) {
         const opensAs = input.credentialActorId ?? input.actorId;
         const names =
@@ -9519,10 +9522,19 @@ export function createPluginStore(options: PluginStoreOptions) {
           );
         }
         /*
-         * 用别人的账号（Team Bot 队友用主人的账号）时不挑账号（评审 M5）：不读主人的账号行，所以主人
-         * 的账号名不会进队友的审批卡与审计；调用照旧不指定账号，由 vendor 进主人持有的那个，与以前一样。
+         * 用别人的账号（Team Bot 队友用主人的账号）时：不按名字挑，只在主人的帧里读主人默认账号的 id 钉
+         * 上去（评审 N1）——不钉的话 vendor 会进它自己挑的那个，可能是主人没设为默认的邮箱。名字不读，
+         * 所以不进队友的审批卡与审计（评审 M5）。
          */
-        if (opensAs === input.actorId) {
+        if (opensAs !== input.actorId) {
+          ownersAccountId =
+            (
+              await accounts.ownersDefault({
+                toolkit: brokeredToolkit,
+                userId: opensAs,
+              })
+            )?.accountId ?? null;
+        } else {
           const picked = await accounts.pick({
             toolkit: brokeredToolkit,
             title: row.title,
@@ -9850,7 +9862,9 @@ export function createPluginStore(options: PluginStoreOptions) {
             ...(placement ? { placement } : {}),
             actorId: input.credentialActorId ?? input.actorId,
             botId: input.botId,
-            ...(pinned?.accountId ? { accountId: pinned.accountId } : {}),
+            ...((pinned?.accountId ?? ownersAccountId)
+              ? { accountId: pinned?.accountId ?? ownersAccountId ?? "" }
+              : {}),
             // The conversation the call was made in: Routines and goals post where they were asked.
             ...((input.threadId ?? currentApprovalContext()?.threadId)
               ? {

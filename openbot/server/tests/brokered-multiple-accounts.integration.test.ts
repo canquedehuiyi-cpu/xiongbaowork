@@ -745,8 +745,10 @@ describe("a teammate on the owner's account", () => {
 
     expect(result.isError).toBe(false);
     expect(asked.map((candidate) => candidate.account)).toEqual([undefined]);
-    // 不指定账号，由 vendor 进主人持有的那个。
-    expect(composio.asked.executed).toEqual([{ userId: PERSON }]);
+    // 钉到主人的默认账号（最先连接的工作邮箱），不是 vendor 自己挑的那个。
+    expect(composio.asked.executed).toEqual([
+      { userId: PERSON, connectedAccountId: "ca_dana_work" },
+    ]);
     const trail = await platform(() =>
       database
         .select({ payload: auditEvents.payload })
@@ -755,6 +757,55 @@ describe("a teammate on the owner's account", () => {
     );
     expect(JSON.stringify(trail)).not.toContain(WORK);
     expect(JSON.stringify(trail)).not.toContain(HOME);
+  });
+});
+
+describe("a teammate reaching the owner's mailboxes", () => {
+  test("only ever reaches the owner's default mailbox, and follows the owner when they change it", async () => {
+    const toolkit = `gmail-${suite}-owner-default`;
+    await enableGmail(toolkit);
+    const composio = composioHolding(toolkit, twoMailboxes(toolkit));
+    const store = storeFor(composio.broker);
+    const owner = routesAs(store, composio.broker, PERSON);
+    const listed = await listAccounts(owner, toolkit);
+    await as(PERSON, () =>
+      store.grant("mcp", `${toolkit}/GMAIL_FETCH_EMAILS`, BOT, PERSON),
+    );
+    const teammateCall = () =>
+      platform(() =>
+        store.callTool({
+          ref: `${toolkit}/GMAIL_FETCH_EMAILS`,
+          args: { query: "is:unread" },
+          botId: BOT,
+          actorId: OTHER,
+          credentialActorId: PERSON,
+        }),
+      );
+
+    await teammateCall();
+    // 主人把私人邮箱设为默认后，队友跟着进私人邮箱；队友自己选不了。
+    const home = listed.accounts.find((account) => account.label === HOME);
+    await owner.request(
+      `/api/plugins/servers/${toolkit}/accounts/${home?.id}/default`,
+      { method: "POST" },
+    );
+    await teammateCall();
+    await expect(
+      platform(() =>
+        store.callTool({
+          ref: `${toolkit}/GMAIL_FETCH_EMAILS`,
+          args: { account: WORK },
+          botId: BOT,
+          actorId: OTHER,
+          credentialActorId: PERSON,
+        }),
+      ),
+    ).rejects.toBeInstanceOf(PluginRefusedError);
+
+    expect(composio.asked.executed).toEqual([
+      { userId: PERSON, connectedAccountId: "ca_dana_work" },
+      { userId: PERSON, connectedAccountId: "ca_dana_home" },
+    ]);
   });
 });
 
