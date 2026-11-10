@@ -4,6 +4,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { act, cleanup, render, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StrictMode } from "react";
+import { settleReactWork } from "./settleReactWork";
 
 type Invoke = (command: string, args?: unknown) => Promise<unknown>;
 type ProgressEvent = {
@@ -80,7 +81,10 @@ afterEach(() => {
   progressListeners.clear();
   quitListeners.clear();
 });
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(async () => {
+  await settleReactWork();
+  await GlobalRegistrator.unregister();
+});
 
 async function renderApp(strictMode = false) {
   let view!: ReturnType<typeof render>;

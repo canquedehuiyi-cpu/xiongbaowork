@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, expect, mock, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import type { Checked } from "./CheckForUpdates";
+import { settleReactWork } from "./settleReactWork";
 import type { AppUpdate } from "./UpdateOffer";
 
 /*
@@ -62,7 +63,10 @@ afterEach(() => {
   calls.length = 0;
   cleanup();
 });
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(async () => {
+  await settleReactWork();
+  await GlobalRegistrator.unregister();
+});
 
 async function check() {
   const view = render(<CheckForUpdates />);

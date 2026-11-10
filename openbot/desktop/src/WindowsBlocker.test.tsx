@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, expect, mock, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { settleReactWork } from "./settleReactWork";
 
 let invokeCalls: Array<{ command: string; args?: unknown }> = [];
 let answer: (command: string) => Promise<unknown> = async () => null;
@@ -22,7 +23,10 @@ afterEach(() => {
   invokeCalls = [];
   answer = async () => null;
 });
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(async () => {
+  await settleReactWork();
+  await GlobalRegistrator.unregister();
+});
 
 const ADMINISTRATOR_INSTRUCTION =
   "Setting up Windows Subsystem for Linux needs administrator rights. Ask an administrator to open Windows Terminal or PowerShell as an administrator and run `dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart`, `dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart`, and `wsl --install`. Restart Windows, then start OpenBot again in your own account.";
