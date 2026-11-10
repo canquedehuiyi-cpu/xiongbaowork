@@ -166,6 +166,7 @@ tests/composio-file-parameters.test.ts
 tests/composio-gmail-listing.test.ts
 tests/composio-live.test.ts
 tests/composio-own-toolkits-hidden.test.ts
+tests/composio-s2s-admin-visibility.test.ts
 tests/composio-transport.test.ts
 tests/computer-action-unfinished.test.ts
 tests/computer-client.test.ts
