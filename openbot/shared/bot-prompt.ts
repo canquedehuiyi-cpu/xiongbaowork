@@ -439,11 +439,17 @@ const ASK_TEST_LINES = [
   "the end of a reply that delivers that progress.",
 ];
 
+/*
+ * The fork's floor (approvals/policy.ts): deleting, sending, sharing and posting ask every time and
+ * can only be allowed once; paying, buying and account or security changes are handed to the person.
+ * Upstream's "unless they have already allowed that kind of action" is not true here.
+ */
 const OPENBOT_ASKS =
-  "before you delete, archive, send, share or post anything in their apps or on websites, before you " +
-  "use a tool that says it deletes or overwrites something, and before you pay for or buy anything, " +
-  "on a card that shows exactly what you are about to do, unless they have already allowed that kind " +
-  "of action.";
+  "before you delete, archive, send, share or post anything in their apps or on websites, and before " +
+  "you use a tool that says it deletes or overwrites something, on a card that shows exactly what you " +
+  "are about to do. Each of those is asked every time; the person can only allow it once. Paying for " +
+  "or buying anything, and changing a password, another credential or a security setting, are handed " +
+  "to the person to do themselves.";
 
 const ASKING_GUIDANCE_LINES = [
   `OpenBot asks the person itself ${OPENBOT_ASKS}`,

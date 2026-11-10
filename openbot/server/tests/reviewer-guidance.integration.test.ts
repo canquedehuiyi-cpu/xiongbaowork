@@ -12,12 +12,12 @@ import { guidanceForPrompt, reviewPrompt } from "../src/approvals/policy";
 import { REFUSALS } from "../src/approvals/reviewer-guidance";
 import { createApprovalService } from "../src/approvals/service";
 import { createApprovalStore } from "../src/approvals/store";
+import { setRole } from "../src/auth/roles";
 import { createDatabase } from "../src/db/client";
 import { auditEvents } from "../src/db/schema";
 import { approvalTeamSettings } from "../src/db/schema/approvals";
 import { users } from "../src/db/schema/core";
 import { workItems } from "../src/db/schema/work";
-import { setRole } from "../src/auth/roles";
 import { createModelCompleter } from "../src/routing/model";
 import { runAsTenant } from "../src/tenant/context";
 import recorded from "./fixtures/reviewer-guidance-recorded.json";
@@ -275,8 +275,29 @@ test("saved guidance changes what the live reviewer decides about the next actio
   });
 });
 
-test("the backtest replays the reviewer with the guidance over requests people decided, and says where it disagrees", async () => {
+test("the backtest never replays another person's requests, so their conversations never reach the admin", async () => {
   await runAsTenant(ana, () => seedDecided(service, ana, bot));
+  const before = prompts().length;
+
+  const preview = await call("/backtest?limit=5", "GET");
+  const response = await call("/backtest", "POST", {
+    text: GUIDANCE.deals,
+    limit: 5,
+  });
+
+  expect(await preview.json()).toMatchObject({ calls: 0 });
+  expect(response.status).toBe(200);
+  expect(((await response.json()) as { rows: unknown[] }).rows).toEqual([]);
+  expect(prompts().length).toBe(before);
+});
+
+test("the backtest replays the reviewer with the guidance over requests people decided, and says where it disagrees", async () => {
+  /*
+   * The admin's own decided requests. The replay hands each request's conversation to the model and
+   * returns its reason, so it reads only the admin's own requests, never other people's (M5 security
+   * review): another person's are not replayed (see the test below).
+   */
+  await runAsTenant(admin.id, () => seedDecided(service, admin.id, bot));
 
   // Before it runs: how many model calls it will make. It makes none to say so.
   const preview = await call("/backtest?limit=5", "GET");

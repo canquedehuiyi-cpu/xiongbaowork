@@ -458,7 +458,7 @@ async function approvalLayers(
       return layer(
         "safety",
         "asks",
-        `Built in: ${asksFirst}. They can allow it once, for the conversation, or always.`,
+        `Built in: ${asksFirst} every time. They can only allow it once, and no rule or saved allow changes that.`,
       );
     if (floorDecided(outcome))
       return layer(

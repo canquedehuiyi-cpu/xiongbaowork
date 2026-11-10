@@ -2174,10 +2174,13 @@ export function createApp(
     app.route(
       "/api/approvals/team/guidance",
       createReviewerGuidanceRoutes({
-        // M5: with the admin capability, as `createApprovalRoutes` is mounted, and replayed over
-        // everybody's requests (`adminApprovals`).
+        // M5: with the admin capability, as `createApprovalRoutes` is mounted, and replayed over the
+        // admin's OWN requests only (`approvals/store.ts` `recentRequests`). Not `adminApprovals`: this
+        // replay hands each request's conversation and arguments to a model and returns the model's
+        // reason, so over everybody's requests it would read other people's conversations back to the
+        // admin. The team-rule replay may read everybody's: it returns only what the audit trail shows.
         requireUser: requireAdminUser,
-        service: adminApprovals ?? coworker.approvals,
+        service: coworker.approvals,
         ...(coworker.boundaryWriter
           ? { complete: coworker.boundaryWriter }
           : {}),
