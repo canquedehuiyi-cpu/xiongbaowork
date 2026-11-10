@@ -100,7 +100,7 @@ import {
 } from "./catalogue";
 import { accountArgumentFor } from "./account-argument";
 import { type AccountMode, accountFor } from "./shared-accounts";
-import { admits, STRICTEST_APPROVAL, steeringOf } from "./shared-use";
+import { steeringOf } from "./shared-use";
 import {
   type BrokeredAccountRecord,
   createAccountBook,
@@ -1636,6 +1636,14 @@ export function createPluginStore(options: PluginStoreOptions) {
     team: boolean,
     work: () => Promise<T>,
   ): Promise<T> => (team ? runAsTenant("platform", work) : work());
+  /**
+   * 写团队账号状态时一行都没写到：调用方没有写这个团队应用行的权限（行级安全静默过滤）。报错而不是
+   * 答成功（评审 I1），否则页面会说一件没发生的事。
+   */
+  const unwritten = (title: string) =>
+    new ServerWriteRefusedError(
+      `${title} 的团队账号状态没有写进去：这次请求不能修改这个应用。没有改变任何东西。`,
+    );
   /** 一个人在每个 broker 应用上的多个账号（上游 #1298）；见 `./brokered-accounts`。 */
   const accounts = createAccountBook({ database, broker, auditStore });
 
@@ -5022,12 +5030,17 @@ export function createPluginStore(options: PluginStoreOptions) {
          * Shared 应用的团队账号（X1）也是这个应用上的一个账号：应用移除时同样先在 vendor 撤销，记在同一条
          * 审计里，owner 是团队身份。应用行随后删除，团队账号的状态随之消失。
          */
-        const connected =
-          existing?.accountMode === "shared" &&
-          existing.sharedConnectedAt &&
-          existing.sharedVendorUserId
-            ? [...people, { userId: existing.sharedVendorUserId }]
-            : people;
+        /*
+         * 只要有团队身份就撤销，不只看是否已确认（评审 I2）：同意屏幕上授权了却没确认的团队账号也在
+         * vendor 那里。
+         */
+        const teamIdentity =
+          existing?.accountMode === "shared"
+            ? (existing.sharedVendorUserId ?? null)
+            : null;
+        const connected = teamIdentity
+          ? [...people, { userId: teamIdentity }]
+          : people;
 
         /*
          * What the broker was actually asked for each of them, kept so the trail below records the
@@ -5079,7 +5092,10 @@ export function createPluginStore(options: PluginStoreOptions) {
             payload: {
               actor: by,
               server: toolkit,
-              owner: connection.userId,
+              // 团队账号记 holder，不记它在 vendor 处的身份（评审 M6）。
+              ...(connection.userId === teamIdentity
+                ? { holder: "deployment" }
+                : { owner: connection.userId }),
               // The same three-way distinction the vault loop above draws, and the same answer: an
               // administrator took the whole app away and the person did nothing.
               reason: "mcp_server_removed",
@@ -9049,6 +9065,14 @@ export function createPluginStore(options: PluginStoreOptions) {
      * answers what was asked of the provider; `ended` answers whether anything was there.
      */
     /**
+     * 团队账号的任何写操作之前（评审 I1）：持有管理员能力的请求，或 platform。给路由在把团队身份交给
+     * vendor（铸授权链接）之前问；store 自己的团队账号方法也各自先问。
+     */
+    requireTeamAccountWriter(): void {
+      requireServerWriter();
+    },
+
+    /**
      * 一个 broker 应用的账号模式与团队账号（X1，上游 #757），读自应用的应答行。非 broker 应用答 null。
      */
     async appAccount(toolkit: string): Promise<{
@@ -9208,6 +9232,8 @@ export function createPluginStore(options: PluginStoreOptions) {
       toolkit: string;
       by: string;
     }): Promise<{ connected: boolean }> {
+      // 团队账号只由持有管理员能力的请求动（评审 I1），在问 vendor 之前。
+      requireServerWriter();
       if (!broker) throw new BrokerUnconfiguredError();
       const app = await this.appAccount(input.toolkit);
       if (!app?.shared || app.mode !== "shared")
@@ -9222,7 +9248,7 @@ export function createPluginStore(options: PluginStoreOptions) {
       if (!connected) return { connected: false };
       const consent = schemeKind(app.authScheme) === "consent";
       const now = new Date();
-      await database
+      const written = await database
         .update(mcpServers)
         .set({
           sharedConnectedAt: app.shared.connectedAt
@@ -9238,7 +9264,9 @@ export function createPluginStore(options: PluginStoreOptions) {
             : {}),
           updatedAt: now,
         })
-        .where(eq(mcpServers.id, app.appId));
+        .where(eq(mcpServers.id, app.appId))
+        .returning({ id: mcpServers.id });
+      if (written.length === 0) throw unwritten(app.title);
       if (!app.shared.connectedAt) {
         await recordAuditEvent(auditStore, {
           eventType: "mcp.account_connected",
@@ -9263,6 +9291,7 @@ export function createPluginStore(options: PluginStoreOptions) {
       values: Record<string, string>;
       by: string;
     }): Promise<{ connected: true; verified: false }> {
+      requireServerWriter();
       if (!broker) throw new BrokerUnconfiguredError();
       const app = await this.appAccount(input.toolkit);
       if (!app?.shared || app.mode !== "shared")
@@ -9288,7 +9317,7 @@ export function createPluginStore(options: PluginStoreOptions) {
         values: input.values,
       });
       const now = new Date();
-      await database
+      const written = await database
         .update(mcpServers)
         .set({
           sharedConnectedAt: now,
@@ -9298,7 +9327,9 @@ export function createPluginStore(options: PluginStoreOptions) {
           sharedProbeAction: null,
           updatedAt: now,
         })
-        .where(eq(mcpServers.id, app.appId));
+        .where(eq(mcpServers.id, app.appId))
+        .returning({ id: mcpServers.id });
+      if (written.length === 0) throw unwritten(app.title);
       await recordAuditEvent(auditStore, {
         eventType: "mcp.account_connected",
         targetType: "mcp_server",
@@ -9321,6 +9352,7 @@ export function createPluginStore(options: PluginStoreOptions) {
       by: string;
       reason: "self" | "mode_switched";
     }): Promise<{ vendorRevocationRequested: boolean }> {
+      requireServerWriter();
       if (!broker) throw new BrokerUnconfiguredError();
       const app = await this.appAccount(input.toolkit);
       if (!app?.shared) return { vendorRevocationRequested: false };
@@ -9330,7 +9362,7 @@ export function createPluginStore(options: PluginStoreOptions) {
       });
       const vendorRevocationRequested =
         schemeKind(app.authScheme) === "key" ? false : ended;
-      await database
+      const written = await database
         .update(mcpServers)
         .set({
           sharedConnectedAt: null,
@@ -9340,7 +9372,9 @@ export function createPluginStore(options: PluginStoreOptions) {
           sharedProbeAction: null,
           updatedAt: new Date(),
         })
-        .where(eq(mcpServers.id, app.appId));
+        .where(eq(mcpServers.id, app.appId))
+        .returning({ id: mcpServers.id });
+      if (written.length === 0) throw unwritten(app.title);
       if (app.shared.connectedAt || ended) {
         await recordAuditEvent(auditStore, {
           eventType: "mcp.account_disconnected",
@@ -10018,25 +10052,15 @@ export function createPluginStore(options: PluginStoreOptions) {
           options.responsibilitySources ?? (async () => ["unknown"]),
         );
         if (steering.kind === "refuse") await refuseShared(steering.why);
-        else {
-          const owner = await this.agentOwner(input.botId);
-          const allowed = admits(
-            STRICTEST_APPROVAL,
-            owner ?? null,
-            {
-              actorId: input.actorId,
-              isAdmin: await holdsAdminRole(input.actorId),
-              groups: [],
-            },
-            steering,
-          );
-          if (!allowed)
-            await refuseShared(
-              steering.outside
-                ? "这次运行由外部输入驱动，团队账号只接受员工主人或管理员亲自写的提示"
-                : "只有这位员工的主人和管理员可以用它",
-            );
-        }
+        /*
+         * 没有批准就拒绝（评审 C1，与上游 `createSharedUseGate` 一致）：上游先查这个员工对这个应用的共享
+         * 使用批准，没有批准行就拒绝，管理员本人也不例外；有批准才按受众（`admits`）判。批准表与管理员
+         * 批准的流程在 X3 并入，在那之前任何员工都没有批准，所以团队账号对每一次调用都拒绝——包括成员
+         * 自助安装、或给自己的员工授权之后。团队账号的连接、断开与模式切换照常可用。
+         */
+        await refuseShared(
+          "管理员还没有批准这位员工使用它（共享使用批准将在后续版本提供）",
+        );
       }
 
       const args = withoutEmptyOptionals(
