@@ -1150,7 +1150,7 @@ function holdsWebSearch(tools: readonly GrantedTool[]): boolean {
  * (audit defect #11): a model the runtime builds from a string inside itself never passes through
  * the meter. `undefined` if it cannot be built, which leaves the string path, as before.
  */
-function deploymentModel(
+export function deploymentModel(
   model: RuntimeModel,
   apiKey: string,
 ): DeploymentModel | undefined {

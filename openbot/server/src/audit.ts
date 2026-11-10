@@ -690,6 +690,12 @@ export const auditEventTypes = [
   "learning.sharing_requested",
   /* An admin answered such a request. Target `skill`; payload `skill`, `userId` and `decision`, `approved` or `declined`. */
   "learning.sharing_decided",
+  /*
+   * A person approved or rejected a skill drafted from their own conversations (local learning, L1).
+   * Target the draft; payload `agentId`, `proposedSlug`, `decision` (`approved` or `rejected`) and, when
+   * approved, `skillSlug`. Never the skill's text.
+   */
+  "learning.local_candidate_reviewed",
 ] as const;
 
 export type AuditEventType = (typeof auditEventTypes)[number];

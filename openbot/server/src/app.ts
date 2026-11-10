@@ -122,6 +122,8 @@ import {
   createPersonalLearningRoutes,
   type PersonalLearningRouteDeps,
 } from "./learning/sharing-routes";
+import type { LocalLearningEngine } from "./local-learning/engine";
+import { createLocalLearningRoutes } from "./local-learning/routes";
 import type { MemoryIngestion } from "./memory/ingestion";
 import { createMemoryRoutes } from "./memory/routes";
 import type { MemoryStore } from "./memory/store";
@@ -472,6 +474,14 @@ export function createApp(
     };
     memory?: { store: MemoryStore; ingestion: MemoryIngestion };
     proactive?: { store: ProactiveStore; engine: ProactiveEngine };
+    /**
+     * 本地学习（L1）的本人路由。`engine` 不在时（`OPENBOT_LOCAL_LEARNING=off`）路由照样回答设置页，
+     * 说明这个部署没有开启。
+     */
+    localLearning?: {
+      database: Database;
+      engine: LocalLearningEngine | undefined;
+    };
     /** Started items, each run as a task in a conversation of its own. See tasks/runner.ts. */
     tasks?: { store: TaskStore; runner: TaskRunner };
     responsibilities?: {
@@ -2003,6 +2013,15 @@ export function createApp(
       createPasswordRoutes(coworker.passwords, requireUser),
     );
   }
+  if (coworker?.localLearning)
+    app.route(
+      "/api/local-learning",
+      createLocalLearningRoutes({
+        ...coworker.localLearning,
+        requireUser,
+        auditStore,
+      }),
+    );
   if (coworker?.proactive)
     app.route(
       "/api/proactive",
