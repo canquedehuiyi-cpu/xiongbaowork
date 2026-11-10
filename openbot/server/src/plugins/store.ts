@@ -6756,7 +6756,7 @@ export function createPluginStore(options: PluginStoreOptions) {
       /*
        * 与部分唯一索引 `app_access_requests_pending_idx`（0187）同一个键：`coalesce(server_id, app_key)`。
        * broker 应用打开后行 id 恰好是申请时记下的键（`composio-<slug>`），所以「还没有行时提的那条」和
-       * 「有行之后再提的这条」是同一个申请；只按 `server_id` 查会查不到它，插入又撞上索引（评审 I1）。
+       * 「有行之后再提的这条」是同一个申请；只按 `server_id` 查会查不到它，插入又撞上索引，答成 500。
        */
       const samePending = and(
         eq(appAccessRequests.requesterUserId, input.requesterUserId),

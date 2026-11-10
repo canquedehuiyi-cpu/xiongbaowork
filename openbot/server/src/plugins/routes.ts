@@ -3879,7 +3879,7 @@ export function createPluginRoutes(
     const id = context.req.param("id");
     /*
      * 不是申请 id 的，和不存在的一样答 404（fork 测试钉住的答复），不读库、不写轨迹：URL 参数谁都能随手
-     * 填，不让它成为往审计里写任意长字符串的入口（评审 M5）。
+     * 填，不让它成为往审计里写任意长字符串的入口。
      */
     if (!isUuid(id)) return context.json({ error: NO_SUCH_REQUEST }, 404);
     const cancelled = await store.cancelAppAccessRequest({
