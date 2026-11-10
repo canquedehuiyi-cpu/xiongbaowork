@@ -4,6 +4,7 @@ export * from "./admin";
 export * from "./agent-security-settings";
 export * from "./app-access-requests";
 export * from "./approvals";
+export * from "./brokered-accounts";
 export * from "./components";
 export * from "./computer";
 export * from "./core";

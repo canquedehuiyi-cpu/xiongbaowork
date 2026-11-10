@@ -1,3 +1,4 @@
+tests/account-argument.test.ts
 tests/activity-folder-actions.integration.test.ts
 tests/activity-plumbing-rows.integration.test.ts
 tests/activity-report-counts.integration.test.ts
@@ -120,6 +121,7 @@ tests/bot-lifecycle-audit.test.ts
 tests/bot-lifecycle-routes.test.ts
 tests/bot-lifecycle-watcher.test.ts
 tests/bot-lifecycle.integration.test.ts
+tests/brokered-accounts-schema.integration.test.ts
 tests/brokered-relist.integration.test.ts
 tests/brokered-relist.test.ts
 tests/browser-address.test.ts
@@ -588,6 +590,7 @@ tests/server-readiness-gates.test.ts
 tests/server-side-tools.integration.test.ts
 tests/settings-instructions-routes.test.ts
 tests/setup-checklist.test.ts
+tests/shared-accounts.test.ts
 tests/shared-computer-run.integration.test.ts
 tests/single-user.test.ts
 tests/skill-ownership.integration.test.ts
