@@ -12,6 +12,7 @@ import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { AccessRequestInbox } from "@/components/approvals/access-requests";
 import { RequestError } from "@/lib/client";
 import { accessRequestQueryOptions } from "@/lib/plugins/access-requests";
+import { settleReactWork } from "./settle-react-work";
 
 /**
  * 管理员的访问申请收件箱（审批页上，紧挨着审批收件箱）：列出待处理的申请，批准或驳回。
@@ -19,7 +20,11 @@ import { accessRequestQueryOptions } from "@/lib/plugins/access-requests";
  */
 beforeAll(() => GlobalRegistrator.register());
 afterEach(cleanup);
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(async () => {
+  // 先把 React 已排上的回调跑完，再拿走 document（见 settle-react-work.ts）。
+  await settleReactWork();
+  GlobalRegistrator.unregister();
+});
 
 const originalFetch = global.fetch;
 let role: "user" | "admin" = "admin";
@@ -32,7 +37,11 @@ let approveAnswer: { status: number; body: unknown } = {
 const sent: { path: string; method: string }[] = [];
 const requested: string[] = [];
 
-const pending = [
+/**
+ * 每个测试开始时的待处理申请。测试会改动 `pending`（驳回后删掉、清空成「没有待处理」），
+ * 所以每次都从这份原样复制一份，测试之间互不影响，也不依赖执行顺序。
+ */
+const initialPending = [
   {
     id: "r1",
     appKey: "notion",
@@ -62,8 +71,10 @@ const pending = [
     createdAt: new Date().toISOString(),
   },
 ];
+let pending = initialPending.map((request) => ({ ...request }));
 
 beforeEach(() => {
+  pending = initialPending.map((request) => ({ ...request }));
   sent.length = 0;
   requested.length = 0;
   role = "admin";
