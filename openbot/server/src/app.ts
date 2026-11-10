@@ -1,10 +1,17 @@
 import { MAX_IMAGE_BYTES } from "@openbot/shared/attachments";
+<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
 import type { Context, Hono as HonoApp, MiddlewareHandler } from "hono";
+=======
+import type { WhatIfVocabulary } from "@openbot/shared/what-if";
+import type { Hono as HonoApp, MiddlewareHandler } from "hono";
+>>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { serveStatic } from "hono/bun";
+import { createCapabilityChangeRoutes } from "./admin/capability-translate";
 import { enterpriseControls } from "./admin/controls";
 import { createEnterpriseGate } from "./admin/gate";
+import { createNetworkAllowlistRoutes } from "./admin/network-routes";
 import {
   createEnterpriseAdminRoutes,
   createProactiveAdminRoutes,
@@ -26,8 +33,13 @@ import type { BotAccessCheck } from "./agents/profile-policy";
 import type { AgentProfileStore } from "./agents/profile-store";
 import { createAgentRoutes } from "./agents/routes";
 import { createApprovalRoutes } from "./approvals/routes";
+import { createReviewerGuidanceRoutes } from "./approvals/reviewer-guidance";
+import { createApprovalRuleDraftRoutes } from "./approvals/rule-translate";
+import type { RuleVocabulary } from "./approvals/rule-vocabulary";
 import type { ApprovalService } from "./approvals/service";
+import { type AuditVocabulary, createAuditAskRoutes } from "./audit-ask";
 import {
+  type AuditEvent,
   type AuditEventType,
   type AuditInitiator,
   AuditQueryError,
@@ -84,6 +96,7 @@ import type { ComponentStore } from "./components/store";
 import type { ComputerGateway } from "./computer/gateway";
 import type { PageFrameStore } from "./computer/page-frames";
 import type { PolicyStore } from "./computer/policy-store";
+import { createPolicyTranslateRoutes } from "./computer/policy-translate";
 import { createComputerRoutes } from "./computer/routes";
 import {
   configuredAuthProviders,
@@ -137,7 +150,14 @@ import type { SignInService } from "./passwords/service";
 import type { OnboardingStore } from "./people/onboarding";
 import { createProfileRoutes, type ProfileStore } from "./people/profile";
 import { MAX_PAGE, type PeopleStore } from "./people/store";
+<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
 import type { ComposioBroker, KeyGuideSource } from "./plugins/broker";
+=======
+import type { BrokerProvider } from "./plugins/access";
+import type { AccountModeSwitch } from "./plugins/account-mode";
+import type { ComposioBroker } from "./plugins/broker";
+import { createAppGrantDraftRoutes } from "./plugins/grant-translate";
+>>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
 import { createPluginRoutes } from "./plugins/routes";
 import {
   isDeploymentFault,
@@ -170,6 +190,7 @@ import type { ResponsibilityStore } from "./responsibilities/types";
 import { createRoutineRoutes, type RoutineStore } from "./routines/routes";
 import type { RoutineRunner } from "./routines/runner";
 import type { IntentRouter } from "./routing/classify";
+import type { ModelCompleter } from "./routing/model";
 import { createRoutingRoutes } from "./routing/routes";
 import { createCoworkerRoutingService } from "./routing/service";
 import type { SelfHostBanner } from "./self-host-banner";
@@ -197,6 +218,8 @@ import {
   DIRECTORY_PATH as WEB_BOT_AUTH_DIRECTORY_PATH,
   directoryResponse as webBotAuthDirectory,
 } from "./web-bot-auth";
+import { createWhatIfRoutes } from "./what-if";
+import type { GovernanceReaders } from "./what-if-check";
 
 /**
  * How much of a multipart body is boundary, headers and other fields rather than file.
@@ -514,6 +537,43 @@ export function createApp(
      * learning/model-endpoint.ts. Absent, nothing is mounted.
      */
     learningModel?: LearningModelEndpoint;
+    /**
+     * The deployment's own model, for writing a boundary from an admin's description
+     * (computer/policy-translate.ts), team approval rules from one (approvals/rule-translate.ts), a
+     * Bot's actions in one app from one (plugins/grant-translate.ts), the network allowlist from
+     * one (admin/network-translate.ts), and for reading an admin's guidance for auto-review
+     * (approvals/reviewer-guidance.ts). Absent, `/api/computers/policy-translate` is not mounted,
+     * and approval rules, app actions, the network allowlist and guidance
+     * say a model is needed.
+     */
+    boundaryWriter?: ModelCompleter;
+    /**
+     * What a team approval rule can name: this OpenBot's apps, their tools and its Bots
+     * (approvals/rule-vocabulary.ts). Absent, `/api/approvals/team/rules/{translate,backtest,batch}`
+     * are not mounted.
+     */
+    approvalRules?: { vocabulary: () => Promise<RuleVocabulary> };
+    /**
+     * Questions about the audit trail in plain English (audit-ask.ts): the deployment's own model,
+     * and what a filter may name. Absent, `/api/admin/audit-events/ask` is not mounted.
+     */
+    auditQuestions?: {
+      complete: ModelCompleter;
+      vocabulary: () => Promise<AuditVocabulary>;
+      /** The clock a question's "yesterday" is read against. A test fixes it; absent is now. */
+      now?: () => Date;
+    };
+    /**
+     * "What would happen if…" (what-if.ts): the deployment's own model to read a question as one
+     * action, what an action may name, the stores the real deciders read, and one audit row by id
+     * for "Why did this happen?". Absent, `/api/admin/what-if` is not mounted.
+     */
+    whatIf?: {
+      complete: ModelCompleter;
+      vocabulary: () => Promise<WhatIfVocabulary>;
+      readers: GovernanceReaders;
+      event: (id: string) => Promise<AuditEvent | null>;
+    };
   },
   /**
    * Whether a conversation this deployment keeps is still there, for `GET /api/threads/:threadId`.
@@ -823,10 +883,39 @@ export function createApp(
       "/api/telemetry",
       createProductTelemetryRoutes(requireUser, coworker.productTelemetry),
     );
+<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
   app.route(
     "/api/admin/enterprise",
     createEnterpriseAdminRoutes(requireUser, adminScope),
   );
+=======
+  // Before the enterprise routes it shares a prefix with: describing a network allowlist and
+  // replaying one over page visits. The list itself is still saved by `PUT /network` below.
+  app.route(
+    "/api/admin/enterprise/network",
+    createNetworkAllowlistRoutes({
+      requireUser,
+      ...(coworker?.boundaryWriter
+        ? { complete: coworker.boundaryWriter }
+        : {}),
+      ...(auditStore ? { auditStore } : {}),
+      ...(auditReader ? { auditReader } : {}),
+    }),
+  );
+  // Before `/api/admin/enterprise`, which shares the prefix: describing, previewing and saving
+  // permission changes together.
+  app.route(
+    "/api/admin/enterprise/capabilities",
+    createCapabilityChangeRoutes({
+      requireUser,
+      ...(coworker?.boundaryWriter
+        ? { complete: coworker.boundaryWriter }
+        : {}),
+      ...(auditReader ? { auditReader } : {}),
+    }),
+  );
+  app.route("/api/admin/enterprise", createEnterpriseAdminRoutes(requireUser));
+>>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
   app.route("/api/admin/proactive", createProactiveAdminRoutes(requireUser));
   app.on(["PUT", "PATCH", "DELETE"], "/api/auth/scim/*", (context) =>
     auth
@@ -1083,6 +1172,7 @@ export function createApp(
           503,
         );
       }
+<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
       const withoutCapability = capabilityMissing(context);
       if (withoutCapability) return withoutCapability;
 
@@ -1100,6 +1190,16 @@ export function createApp(
             400,
           );
         }
+=======
+      /*
+       * The export answers the same filtered query as the list — `eventType`,
+       * `actorUserId`, `initiatorKind`, `targetType`, `targetId`, `bot`, `app`, `tool`, `effect`,
+       * `intent`, `rule`, `from`, `to` — so the downloaded file and the table agree. Paging (`cursor`, `limit`) belongs to the
+       * JSON list and is ignored here; the export walks every matching page up to the
+       * cap in `readAuditExportRows` and names the file after the day it was pulled.
+       */
+      if (format === "csv") {
+>>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
         const query = auditQueryFromUrl(url);
         /*
          * The export answers the same filtered query as the list — `eventType`, `actorUserId`,
@@ -1156,8 +1256,41 @@ export function createApp(
         }
         throw error;
       }
+<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
     },
   );
+=======
+      return context.json(await auditReader.list(auditQueryFromUrl(url)));
+    } catch (error) {
+      if (error instanceof AuditQueryError) {
+        return context.json({ error: error.message }, 400);
+      }
+      throw error;
+    }
+  });
+  if (coworker?.auditQuestions)
+    app.route(
+      "/api/admin/audit-events",
+      createAuditAskRoutes({
+        requireUser,
+        complete: coworker.auditQuestions.complete,
+        vocabulary: coworker.auditQuestions.vocabulary,
+        ...(coworker.auditQuestions.now
+          ? { now: coworker.auditQuestions.now }
+          : {}),
+        ...(auditStore ? { auditStore } : {}),
+      }),
+    );
+  if (coworker?.whatIf)
+    app.route(
+      "/api/admin/what-if",
+      createWhatIfRoutes({
+        requireUser,
+        ...coworker.whatIf,
+        ...(auditStore ? { auditStore } : {}),
+      }),
+    );
+>>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
   /*
    * Who is here, and what they may do.
    *
@@ -1699,8 +1832,20 @@ export function createApp(
                 : {}),
             })
           : undefined,
+        auditStore,
       ),
     );
+    // Beside `/policy` and named in DEPLOYMENT_ROUTES with it: the computer router's Bot guard
+    // steps aside for the name, and this answers it.
+    if (coworker?.boundaryWriter)
+      app.route(
+        "/api/computers",
+        createPolicyTranslateRoutes({
+          requireUser,
+          complete: coworker.boundaryWriter,
+          ...(auditStore ? { auditStore } : {}),
+        }),
+      );
   }
 
   if (hostAccessBroker) {
@@ -1989,6 +2134,33 @@ export function createApp(
       "/api/team-bots",
       createTeamBotRoutes(coworker.teamBots, requireUser, adminScope),
     );
+  // Before `/api/approvals` for the same reason: describing, replaying and saving team rules together.
+  if (coworker?.approvals && coworker.approvalRules)
+    app.route(
+      "/api/approvals/team/rules",
+      createApprovalRuleDraftRoutes({
+        requireUser,
+        service: coworker.approvals,
+        vocabulary: coworker.approvalRules.vocabulary,
+        ...(coworker.boundaryWriter
+          ? { complete: coworker.boundaryWriter }
+          : {}),
+        ...(auditStore ? { auditStore } : {}),
+        ...(auditReader ? { auditReader } : {}),
+      }),
+    );
+  // Before `/api/approvals` too: the admin's guidance for auto-review, checked, replayed and saved.
+  if (coworker?.approvals)
+    app.route(
+      "/api/approvals/team/guidance",
+      createReviewerGuidanceRoutes({
+        requireUser,
+        service: coworker.approvals,
+        ...(coworker.boundaryWriter
+          ? { complete: coworker.boundaryWriter }
+          : {}),
+      }),
+    );
   if (coworker?.approvals)
     app.route(
       "/api/approvals",
@@ -2101,6 +2273,19 @@ export function createApp(
   }
 
   if (pluginStore) {
+    // Describing what one Bot may do in one app, and replaying it. The save is the grants route's own.
+    app.route(
+      "/api/plugins",
+      createAppGrantDraftRoutes({
+        requireUser,
+        store: pluginStore,
+        ...(coworker?.boundaryWriter
+          ? { complete: coworker.boundaryWriter }
+          : {}),
+        ...(auditStore ? { auditStore } : {}),
+        ...(auditReader ? { auditReader } : {}),
+      }),
+    );
     app.route(
       "/api/plugins",
       createPluginRoutes(

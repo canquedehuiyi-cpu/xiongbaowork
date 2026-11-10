@@ -138,16 +138,26 @@ async function connect(cookie: string, installId: string) {
   return (await exchanged.json()) as ExchangeResponse;
 }
 
-const clearOrganizationFailure = () =>
-  clearDesktopConnectionFailure("organization");
+// Every kind and not just the organization's: the failure state is one per process, the endpoint
+// answers with whichever failure it holds, and these tests assert it is empty. A file that ran
+// earlier in the same process and left a model failure behind failed them when the suite was first
+// split into shards.
+const clearDesktopFailures = () => {
+  for (const connection of ["model", "intelligence", "organization"] as const)
+    clearDesktopConnectionFailure(connection);
+};
 beforeEach(() => {
+<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
   clearOrganizationFailure();
   // The failure state is one per process: a model failure an earlier file recorded in the same run
   // is not this file's to read (the desktop answers the first failure it holds).
   clearDesktopConnectionFailure("model");
+=======
+  clearDesktopFailures();
+>>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
   answer = signedIn;
 });
-afterEach(clearOrganizationFailure);
+afterEach(clearDesktopFailures);
 
 /** Signing in through the organization writes the person's role, which only the role writer may. */
 let releaseRoleWriter: (() => Promise<void>) | undefined;

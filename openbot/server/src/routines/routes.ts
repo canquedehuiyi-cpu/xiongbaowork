@@ -6,7 +6,11 @@ import type { AppVariables } from "../auth/guards";
 import type { RoutineRunner } from "./runner";
 import { MINIMUM_INTERVAL_MS } from "./schedule";
 import {
+<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
   RoutineLimitError,
+=======
+  NO_SHARED_CHANNEL,
+>>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
   RoutineNotFoundError,
   RoutineRefusedError,
   type RoutineRunOutcome,
@@ -17,6 +21,7 @@ import {
 export type { RoutineStore } from "./store";
 
 /**
+<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
  * The routines page: what a person's standing instructions are, how to add one, and a switch to stop one.
  *
  * THERE IS NO EDIT ENDPOINT. `update` is the conversational tool path's; the page changes a schedule by
@@ -32,15 +37,34 @@ export type { RoutineStore } from "./store";
  * the instruction limits and the "which conversation did you mean" question all stay in `store.ts` and
  * `schedule.ts` and are inherited by the call there. A second copy of a guardrail is a guardrail that
  * drifts, and the store's refusals are already written to be read aloud.
+=======
+ * The routines page: what a person's standing instructions are, a way to set one up, and a switch
+ * to stop one.
+ *
+ * CREATE IS HERE, AND IT IS THE BOT'S OWN PATH. A person who has never met a routine looks for one
+ * place to set one up, the way the Scheduled section of other assistants works, so the page offers
+ * New routine. It writes through `routineStore.create`, the call `create_routine` makes in
+ * `plugins/builtin-routines.ts`: the same instruction and title rules, the same frequency floor and
+ * cap, the same audit row, and the same check that the conversation is one the person and the Bot
+ * share. The page builds the five cron fields from a picker of common schedules; anything stranger
+ * is still a conversation with the Bot. There is no edit endpoint: changing a routine stays
+ * conversational.
+>>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
  *
  * THERE IS ALSO NO GET-BY-ID. A routine id is never a page's own state — nothing links to one, and
  * nothing needs to fetch one in isolation — so the list is the read, the same way the channel
  * roster is a list with no companion single-channel screen.
  *
  * Owner-scoped through the store on every route, never by filtering a broader read afterwards:
+<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
  * `listFor`, `create`, `setEnabled` and `remove` all take the caller's id and answer as if a routine that
  * belongs to somebody else does not exist, which is what keeps a wrong id and somebody else's id
  * indistinguishable from outside.
+=======
+ * `create`, `listFor`, `setEnabled` and `remove` all take the caller's id and answer as if a routine
+ * that belongs to somebody else does not exist, which is what keeps a wrong id and somebody else's
+ * id indistinguishable from outside.
+>>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
  */
 export function createRoutineRoutes(
   routineStore: RoutineStore,
@@ -208,6 +232,79 @@ export function createRoutineRoutes(
       routines: routines.map(routineDto),
       sweep: sweepDto(sweptAt),
     });
+  });
+
+  /*
+   * New routine, from the page. The owner is the caller and never a field; the Bot is the one the
+   * person picked, and the store accepts it only with a conversation the two of them share, which is
+   * also what proves the person may use that Bot. The conversation is required here: the store's
+   * fallbacks (the conversation a run was asked in, the only one shared) are for a Bot mid-turn, and
+   * their refusals are questions written for the model.
+   */
+  routes.post("/", requireUser, async (context) => {
+    const body = (await context.req.json().catch(() => null)) as Record<
+      string,
+      unknown
+    > | null;
+    const text = (key: string): string | undefined => {
+      const value = body?.[key];
+      return typeof value === "string" && value.trim() !== ""
+        ? value.trim()
+        : undefined;
+    };
+    const agentId = text("agentId");
+    if (!agentId) {
+      return context.json({ error: "Choose a Bot for this routine." }, 400);
+    }
+    const instruction = text("instruction");
+    if (!instruction) {
+      return context.json({ error: "Say what the Bot should do." }, 400);
+    }
+    const cron = text("cron");
+    if (!cron) {
+      return context.json({ error: "Choose when it runs." }, 400);
+    }
+    const channelId = text("channelId");
+    if (!channelId) {
+      return context.json(
+        { error: "Choose a conversation for it to post in." },
+        400,
+      );
+    }
+    try {
+      const routine = await routineStore.create({
+        ownerUserId: context.var.actor.id,
+        agentId,
+        instruction,
+        title: text("title"),
+        cron,
+        timezone: text("timezone"),
+        channelId,
+      });
+      const summary = (await routineStore.listFor(context.var.actor.id)).find(
+        (candidate) => candidate.id === routine.id,
+      );
+      return context.json(
+        { routine: summary ? routineDto(summary) : { id: routine.id } },
+        201,
+      );
+    } catch (error) {
+      // The store lists the shared conversations by id for a model to pick from; a person picks
+      // from the form instead.
+      if (
+        error instanceof RoutineRefusedError &&
+        error.message.startsWith(NO_SHARED_CHANNEL)
+      ) {
+        return context.json(
+          {
+            error:
+              "This Bot isn't in that conversation. Choose another one, or a new conversation.",
+          },
+          400,
+        );
+      }
+      return mapStoreError(context, error);
+    }
   });
 
   routes.put("/:id/enabled", requireUser, async (context) => {

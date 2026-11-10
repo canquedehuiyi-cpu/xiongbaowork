@@ -54,6 +54,7 @@ import type { WebBotAuth } from "../web-bot-auth";
 import { lastUsedByComputer, runningComputers } from "../work/culler";
 import {
   type Capability,
+  type CapabilityAnswer,
   type CapabilityRow,
   capabilityRefusal,
   DEFAULT_CAPABILITIES,
@@ -171,6 +172,15 @@ export type EnterpriseControls = {
   terminateInactiveComputers: () => Promise<{ stopped: string[] } | null>;
   pushNetworkPolicies: () => Promise<void>;
   policyForBot: (botId: string) => Promise<EgressPolicy>;
+  /**
+   * Whose network policy a Bot's computer is under: its owner, as a member with their groups, and
+   * whether their "Cloud network access" capability is on. The lookup `policyForBot` makes, for a
+   * replay of a candidate policy (admin/network-replay.ts). Undefined until the controls have read
+   * their settings.
+   */
+  networkMemberFor: (
+    botId: string,
+  ) => Promise<{ member: Member; cloudNetwork: boolean } | undefined>;
   offboard: (userId: string, by: string) => Promise<void>;
   stop: () => Promise<void>;
 };
@@ -232,11 +242,69 @@ export function decideFromSnapshot(
   snapshot: Snapshot | undefined,
   context: PolicyContext,
 ): PolicyDecision | null {
+  // The first refusal, and nothing past it is worked out: a generator stops where this stops.
+  for (const check of enterpriseChecks(snapshot, context))
+    if (check.refusal) return check.refusal;
+  return null;
+}
+
+/** The snapshot the computer boundary answers from, for a reader outside this module. */
+export type EnterpriseSnapshot = Snapshot;
+
+/** The snapshot as {@link installEnterpriseControls} reads it, for a reader that needs one now. */
+export const loadEnterpriseSnapshot = (store: EnterpriseStore) =>
+  loadSnapshot(store);
+
+/**
+ * One switch the overlay looked at, what it found, and the refusal it makes, if any. In the order the
+ * overlay looks at them, which is the order {@link decideFromSnapshot} refuses in.
+ */
+export type EnterpriseCheck =
+  | { control: "unavailable"; refusal: PolicyDecision }
+  | {
+      control: "app_allowlist";
+      server: string;
+      enabled: boolean;
+      /** Built in and always on (Routines), which the list never holds back. */
+      builtIn: boolean;
+      approved: boolean;
+      refusal: PolicyDecision | null;
+    }
+  | {
+      control: "capability";
+      capability: Capability;
+      answer: CapabilityAnswer;
+      refusal: PolicyDecision | null;
+    }
+  | {
+      control: "network";
+      host: string;
+      port: number;
+      policy: EgressPolicy & { from: string };
+      /** Null when only the computer can decide: an IP-range rule needs the resolved address. */
+      decision: { allowed: boolean; reason: string } | null;
+      refusal: PolicyDecision | null;
+    };
+
+/**
+ * Every switch the overlay asks about one action, each with what it found.
+ *
+ * The overlay itself ({@link decideFromSnapshot}) stops at the first refusal. "What would happen if…"
+ * (`what-if-check.ts`) reads all of them, so an admin sees every switch's answer and which one decides.
+ */
+export function* enterpriseChecks(
+  snapshot: Snapshot | undefined,
+  context: PolicyContext,
+): Generator<EnterpriseCheck> {
   if (!snapshot) {
-    return refusal(
-      "enterprise:unavailable",
-      "This deployment's enterprise controls have not loaded yet, so the action was refused.",
-    );
+    yield {
+      control: "unavailable",
+      refusal: refusal(
+        "enterprise:unavailable",
+        "This deployment's enterprise controls have not loaded yet, so the action was refused.",
+      ),
+    };
+    return;
   }
   const member = memberFrom(snapshot, context.actor.id);
   const needed: Capability[] = ["useBots"];
@@ -252,6 +320,7 @@ export function decideFromSnapshot(
      * M3: upstream v1.0.0 also exempts its always-on Routines app here (`isAlwaysOn`, from
      * `plugins/personal-defaults.ts`), which this fork's plugins do not have; the fork's rule stands.
      */
+<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
     const server = context.mcp.server;
     const approved = allowlist.servers.some(
       (entry) => entry === server || snapshot.mcpAppOfRow.get(entry) === server,
@@ -262,6 +331,24 @@ export function decideFromSnapshot(
         `The MCP server "${context.mcp.server}" is not on this deployment's approved list, so ${context.mcp.tool} was not called.`,
       );
     }
+=======
+    const builtIn = isAlwaysOn(context.mcp.server);
+    const approved = allowlist.servers.includes(context.mcp.server);
+    yield {
+      control: "app_allowlist",
+      server: context.mcp.server,
+      enabled: allowlist.enabled,
+      builtIn,
+      approved,
+      refusal:
+        allowlist.enabled && !builtIn && !approved
+          ? refusal(
+              "mcp_allowlist",
+              `The MCP server "${context.mcp.server}" is not on this deployment's approved list, so ${context.mcp.tool} was not called.`,
+            )
+          : null,
+    };
+>>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
   } else if (context.tool.name.startsWith("computer_")) {
     if (context.intent && COMPUTER_INTENTS.has(context.intent)) {
       needed.push("cloudComputer");
@@ -272,9 +359,15 @@ export function decideFromSnapshot(
   }
 
   for (const capability of needed) {
-    if (!resolveCapability(snapshot.rows, member, capability).allowed) {
-      return refusal(`capability:${capability}`, capabilityRefusal(capability));
-    }
+    const answer = resolveCapability(snapshot.rows, member, capability);
+    yield {
+      control: "capability",
+      capability,
+      answer,
+      refusal: answer.allowed
+        ? null
+        : refusal(`capability:${capability}`, capabilityRefusal(capability)),
+    };
   }
 
   /*
@@ -290,21 +383,25 @@ export function decideFromSnapshot(
   if (destination) {
     const policy = effectiveNetworkPolicy(snapshot.network, member, true);
     const hasRanges = policy.rules.some((rule) => rule.type === "cidr");
-    if (!hasRanges || /^[\d.:[\]]+$/.test(destination.host)) {
-      const decision = egressDecision(
-        policy,
-        destination.host,
-        destination.port,
-      );
-      if (!decision.allowed) {
-        return refusal(
-          `network:${policy.from}`,
-          `${decision.reason} An admin can add it.`,
-        );
-      }
-    }
+    const decision =
+      !hasRanges || /^[\d.:[\]]+$/.test(destination.host)
+        ? egressDecision(policy, destination.host, destination.port)
+        : null;
+    yield {
+      control: "network",
+      host: destination.host,
+      port: destination.port,
+      policy,
+      decision,
+      refusal:
+        decision && !decision.allowed
+          ? refusal(
+              `network:${policy.from}`,
+              `${decision.reason} An admin can add it.`,
+            )
+          : null,
+    };
   }
-  return null;
 }
 
 /**
@@ -316,7 +413,9 @@ export function decideFromSnapshot(
  * `erp.internal:8080` and matched none of them, so every allowed destination on a non-default port
  * was refused here, before the computer's filter, which reads the host and port apart, was asked.
  */
-function destinationOf(url: string): { host: string; port: number } | null {
+export function destinationOf(
+  url: string,
+): { host: string; port: number } | null {
   try {
     const parsed = new URL(url);
     if (!parsed.hostname) return null;
@@ -440,6 +539,121 @@ async function initializeEnterpriseControls(
         failures.push(
           new Error(`Enterprise controls ${stage} failed or is unconfirmed.`),
         );
+<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
+=======
+      exporter?.emit({
+        eventType: "action.recorded",
+        targetType: "computer",
+        targetId: botId,
+        actorUserId: event.actorUserId ?? null,
+        initiatorKind: event.initiatorKind,
+        initiatorId: event.initiatorId,
+        payload: { bot: botId, tool: toolName, command: scrubbed, outcome },
+        surface: "bot",
+      });
+    }),
+  );
+
+  const audit = (input: Parameters<typeof recordAuditEvent>[1]) =>
+    recordAuditEvent(deps.auditStore, input).catch((error) =>
+      console.error(
+        JSON.stringify({
+          type: "enterprise-audit-failed",
+          eventType: input.eventType,
+          error: String(error),
+        }),
+      ),
+    );
+
+  const networkMemberFor: EnterpriseControls["networkMemberFor"] = async (
+    botId,
+  ) => {
+    const current = snapshot;
+    if (!current) return undefined;
+    const [profile] = await deps.database
+      .select({ owner: agentProfiles.ownerUserId })
+      .from(agentProfiles)
+      .where(eq(agentProfiles.agentId, botId))
+      .limit(1);
+    const member: Member = profile?.owner
+      ? await store.member(profile.owner)
+      : { role: "user", groups: [] };
+    return {
+      member,
+      cloudNetwork: resolveCapability(current.rows, member, "cloudNetwork")
+        .allowed,
+    };
+  };
+
+  const policyForBot = async (botId: string): Promise<EgressPolicy> => {
+    // A person's own browser has no Bot and no owner to read a policy for, and the organization's is for Bots.
+    if (isPersonBrowserId(botId))
+      return deps.personBrowserPolicy ?? { mode: "deny_all", rules: [] };
+    const current = snapshot;
+    const owner = await networkMemberFor(botId);
+    if (!current || !owner) return { mode: "deny_all", rules: [] };
+    const { from: _from, ...policy } = effectiveNetworkPolicy(
+      current.network,
+      owner.member,
+      owner.cloudNetwork,
+    );
+    return deps.duringRecording ? deps.duringRecording(botId, policy) : policy;
+  };
+
+  // Tried again within seconds until it lands, quietly while a computer is likely still starting.
+  const delivery = deliverEgressPolicies({
+    push: () =>
+      pushEgressPolicies({
+        provider: deps.provider as ComputerProvider,
+        token: deps.computerToken,
+        policyForBot,
+        ...(deps.webBotAuth ? { webBotAuth: deps.webBotAuth } : {}),
+      }),
+  });
+  const pushNetworkPolicies = async () => {
+    if (!deps.provider) return;
+    return delivery.push();
+  };
+
+  const ownedBots = async (userId: string) =>
+    (
+      await deps.database
+        .select({ agentId: agentProfiles.agentId })
+        .from(agentProfiles)
+        .where(eq(agentProfiles.ownerUserId, userId))
+    ).map((row) => row.agentId);
+
+  const terminateMemberComputers: EnterpriseControls["terminateMemberComputers"] =
+    async (userId, by) => {
+      const result = {
+        stopped: [] as string[],
+        failed: [] as { computer: string; reason: string }[],
+      };
+      if (!deps.provider) return result;
+      /*
+       * Their own computer, which every Bot they used runs on, and the computer of each Bot of theirs
+       * that has one of its own. Asking about an isolated Bot that never had a computer is a stop of
+       * nothing, which answers that nothing was running.
+       */
+      const keys: ComputerKey[] = [
+        { kind: "person", personId: userId },
+        ...(await ownedBots(userId)).map((botId) => ({
+          kind: "bot" as const,
+          botId,
+        })),
+      ];
+      for (const key of keys) {
+        const computer = computerKeyText(key);
+        try {
+          const { wasRunning } = await deps.provider.stop({ key });
+          if (wasRunning) result.stopped.push(computer);
+        } catch (error) {
+          result.failed.push({
+            computer,
+            reason: error instanceof Error ? error.message : String(error),
+          });
+        }
+>>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
       }
     };
     for (const timer of timers)
@@ -889,6 +1103,7 @@ async function initializeEnterpriseControls(
     for (const timer of timers) timer.unref?.();
     void pushNetworkPolicies();
 
+<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
     controls = {
       store,
       deps,
@@ -926,6 +1141,41 @@ async function initializeEnterpriseControls(
     }
     throw new Error("Enterprise controls initialization failed.");
   }
+=======
+  installed = {
+    store,
+    deps,
+    exporter,
+    snapshot: () => snapshot,
+    refresh,
+    capabilityFor: async (userId, capability) =>
+      resolveCapability(
+        await store.capabilityRows(),
+        await store.member(userId),
+        capability,
+      ).allowed,
+    capabilitiesFor: async (userId) =>
+      resolveAllCapabilities(
+        await store.capabilityRows(),
+        await store.member(userId),
+      ),
+    terminateMemberComputers,
+    terminateInactiveComputers,
+    pushNetworkPolicies,
+    policyForBot,
+    networkMemberFor,
+    offboard,
+    stop: async () => {
+      for (const timer of timers) clearInterval(timer);
+      delivery.stop();
+      for (const remove of removeTaps) remove();
+      setPolicyOverlay(null);
+      installed = undefined;
+      await Promise.allSettled([connection.end(), exporter?.shutdown()]);
+    },
+  };
+  return installed;
+>>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
 }
 
 /** For the break-glass rule, which is decided before the controls may be installed. */

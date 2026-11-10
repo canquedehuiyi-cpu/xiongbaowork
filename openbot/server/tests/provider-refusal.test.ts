@@ -12,11 +12,15 @@ import {
   type RuntimeModel,
   registeredAgentFromRow,
 } from "../src/copilot";
+<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
 import { createDatabase } from "../src/db/client";
 import { threadRuns, threads } from "../src/db/schema";
 import { runAsTenant } from "../src/tenant/context";
 import { PostgresAgentRunner } from "../src/threads/postgres-runner";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+=======
+import { clearDesktopConnectionFailure } from "../src/desktop-connection-failure";
+>>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
 import { testEnvironment } from "./support/environment";
 
 /**
@@ -314,6 +318,9 @@ beforeAll(() => {
 });
 
 afterEach(() => {
+  // A refused key goes through the real path, which records a model failure for Desktop to ask for
+  // the credential again. That state is one per process, so it is not left for the next file.
+  clearDesktopConnectionFailure("model");
   for (const [name, value] of [
     ["OPENAI_BASE_URL", saved.openai],
     ["ANTHROPIC_BASE_URL", saved.anthropic],

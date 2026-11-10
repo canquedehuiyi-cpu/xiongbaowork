@@ -33,8 +33,10 @@ import type { ApprovalQuestions } from "./questions";
 import {
   type ApprovalAction,
   ApprovalAlreadyAnsweredError,
+  APPROVAL_DECISIONS,
   type ApprovalCandidate,
   type ApprovalContinuation,
+  type ApprovalConversationGrant,
   type ApprovalDecision,
   type ApprovalFreshProducerPort,
   ApprovalNotFoundError,
@@ -47,6 +49,7 @@ import {
   type ApprovalRecoveryPort,
   ApprovalRefusedError,
   type ApprovalRule,
+  type ApprovalRuleAuthoring,
   type ApprovalRuleInput,
   type ApprovalStore,
   type ApprovalTeamSettings,
@@ -107,6 +110,16 @@ export function equivalenceOf(candidate: ApprovalCandidate): string {
     )
     .digest("hex");
 }
+/** The call a verdict is about, for the trail, so its request pairs with it (see `recordDecision`). */
+const callOf = (continuation: ApprovalContinuation | undefined) =>
+  continuation?.runId && continuation.toolCallId
+    ? {
+        call: {
+          runId: continuation.runId,
+          toolCallId: continuation.toolCallId,
+        },
+      }
+    : {};
 const userTurnsOf = (continuation: ApprovalContinuation | undefined) =>
   (continuation?.messages ?? []).filter((message) => message.role === "user")
     .length;
@@ -326,35 +339,61 @@ export function createApprovalService(
   ): Promise<ApprovalPolicyOutcome | undefined> {
     const policy = store.policy;
     if (!policy) return undefined;
+<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
     /*
      * The Bot owner's side is read in the owner's frame whoever acts (SEC1 D9). A failure to read it
      * is not "no owner rules": it throws, and the action is not carried out (fail closed).
      */
     const [preferences, team, teamRules, personal, employee] =
+=======
+    const [preferences, team, teamRules, personal, guidance] =
+>>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
       await Promise.all([
         policy.preferences(candidate.actorId),
         policy.teamSettings(),
         policy.teamRules(),
         store.rules(candidate.actorId),
+<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
         policy.employee?.(candidate.botId),
+=======
+        // The admin's guidance for auto-review, which the reviewer reads below the built-in rules.
+        policy.reviewerGuidance?.() ?? null,
+>>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
       ]);
     const continuation = candidate.continuation ?? currentApprovalContext();
+    // Only this conversation's answers: one given in another conversation never reaches this one.
+    const conversation =
+      continuation?.threadId && policy.conversationGrants
+        ? await policy.conversationGrants(
+            candidate.actorId,
+            continuation.threadId,
+          )
+        : [];
     const outcome = await decideAction({
       candidate,
       messages: continuation?.messages,
       team: teamRules,
       personal,
+<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
       // The owner's own rules are already their personal rules when the owner is the one acting.
       ...(employee?.ownerUserId && employee.ownerUserId !== candidate.actorId
         ? { owner: employee.rules }
         : {}),
+=======
+      conversation,
+      actionKinds: team.actionKinds,
+>>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
       customRulesEnabled: team.customRulesEnabled,
       autoReview: preferences.autoReview || team.enforceAutoReview,
       askBeforeChanges: preferences.enabled,
       ...(options.review ? { model: options.review } : {}),
+<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
       ...(employee ? { security: employee.security } : {}),
       enforceDangerousCommands: team.enforceDangerousCommands,
       hostCommandsCap: team.hostCommandsCap,
+=======
+      ...(guidance ? { guidance } : {}),
+>>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
     });
     // An unremarkable read is not a verdict anybody asked for; everything else is on the trail.
     if (
@@ -373,11 +412,17 @@ export function createApprovalService(
         ...(continuation?.initiator
           ? { initiator: continuation.initiator }
           : {}),
+        ...callOf(continuation),
       });
     return outcome;
   }
   return {
     store,
+    /**
+     * The reviewer model the gate asks, so a replay of auto-review over past requests asks the very
+     * same one (./reviewer-guidance.ts). Absent where none is configured, and then the gate fails closed.
+     */
+    reviewer: options.review,
     async frontendAction(ownerUserId: string, botId: string, input: unknown) {
       if (!frontend)
         throw new ApprovalRefusedError(
@@ -509,6 +554,7 @@ export function createApprovalService(
             ...(continuation.initiator
               ? { initiator: continuation.initiator }
               : {}),
+            ...callOf(continuation),
           });
           throw new ApprovalRefusedError(DECLINED_BY_PERSON);
         }
@@ -609,13 +655,21 @@ export function createApprovalService(
       );
     },
     async decide(ownerUserId: string, id: string, decision: ApprovalDecision) {
-      if (!["allow_once", "allow_always", "deny", "handled"].includes(decision))
+      if (!(APPROVAL_DECISIONS as readonly string[]).includes(decision))
         throw new ApprovalRefusedError(
-          "Choose allow once, allow always, deny, or done.",
+          "Choose allow once, allow for this conversation, always allow, deny, or done.",
         );
       return store.decide(ownerUserId, id, decision);
     },
     revoke: (ownerUserId: string, id: string) => store.revoke(ownerUserId, id),
+    /** Turn off one "Allow for this conversation": the next such call in it asks again. */
+    async revokeConversationGrant(ownerUserId: string, id: string) {
+      if (!store.policy?.revokeConversationGrant)
+        throw new ApprovalRefusedError(
+          "Conversation approvals are unavailable here.",
+        );
+      return store.policy.revokeConversationGrant(ownerUserId, id);
+    },
     async answerQuestion(
       ownerUserId: string,
       id: string,
@@ -658,6 +712,9 @@ export function createApprovalService(
         requests: requests.map(publicApproval),
         rules: await store.rules(ownerUserId),
         teamRules,
+        conversationGrants: (
+          (await policy?.allConversationGrants?.(ownerUserId)) ?? []
+        ).map(publicGrant),
         ...(preferences && team
           ? {
               preferences,
@@ -959,6 +1016,16 @@ export function createApprovalService(
         throw new ApprovalRefusedError("Team rules are unavailable here.");
       return store.policy.revokeTeamRule(by, id);
     },
+    /** Several team rules in one save, with the sentence they were written from. */
+    async createTeamRules(
+      by: string,
+      input: readonly ApprovalRuleInput[],
+      authoring?: ApprovalRuleAuthoring,
+    ) {
+      if (!store.policy?.createTeamRules)
+        throw new ApprovalRefusedError("Team rules are unavailable here.");
+      return store.policy.createTeamRules(by, input, authoring);
+    },
     async resume(
       ownerUserId: string,
       id: string,
@@ -1217,6 +1284,20 @@ function permanentReason(error: unknown): string {
     return "the saved request no longer has a valid shape.";
   return "the app it needs is no longer available.";
 }
+/** A conversation answer as the browser reads it: what it allows, where, and how to turn it off. */
+function publicGrant(grant: ApprovalConversationGrant) {
+  return {
+    id: grant.id,
+    threadId: grant.threadId,
+    botId: grant.botId,
+    toolRef: grant.toolRef,
+    effect: grant.effect,
+    scope: grant.scope,
+    ...(grant.account ? { account: grant.account } : {}),
+    ...(grant.kind ? { kind: grant.kind } : {}),
+    createdAt: grant.createdAt,
+  };
+}
 function publicApproval(request: ApprovalRecord) {
   const { action, ...record } = request;
   return {
@@ -1238,6 +1319,8 @@ function publicApproval(request: ApprovalRecord) {
               behaviour: action.policy.behaviour,
               source: action.policy.source,
               reason: action.policy.reason,
+              ...(action.policy.kind ? { kind: action.policy.kind } : {}),
+              ...(action.policy.closed ? { closed: true } : {}),
             },
           }
         : {}),

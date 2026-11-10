@@ -229,9 +229,24 @@ describe("custom rules", () => {
 });
 
 describe("built-in safety requirements", () => {
-  test("credentials, security settings and payments always go to the person, whatever the rules say", async () => {
+  test("credentials, security settings and payments ask, open by default; a credential typed on a website is the person's", async () => {
+    // A password typed into a form: only the person has it, so no answer of theirs can stand in.
+    const typed = candidate({
+      toolRef: "computer_type",
+      args: { ref: "e3", text: "hunter2", field: "New password" },
+    });
+    expect(safetyRequirement(typed)).toMatchObject({
+      id: "credentials",
+      behaviour: "hand_off",
+    });
+    expect(
+      await decideAction({
+        ...base,
+        candidate: typed,
+        personal: [rule("allow", { toolRef: "*", kind: "credentials" })],
+      }),
+    ).toMatchObject({ behaviour: "hand_off", source: "safety" });
     for (const [args, id] of [
-      [{ ref: "e3", text: "hunter2", field: "New password" }, "credentials"],
       [{ url: "https://github.com/settings/security" }, "security_settings"],
       [
         { button: "Place order", url: "https://shop.example/checkout" },
@@ -239,17 +254,40 @@ describe("built-in safety requirements", () => {
       ],
     ] as const) {
       const action = candidate({ toolRef: "computer_type", args });
-      expect(safetyRequirement(action)?.id).toBe(id);
-      const outcome = await decideAction({
-        ...base,
-        candidate: action,
-        team: [team("allow", { toolRef: "*" })],
-        personal: [rule("allow", { toolRef: "*" })],
-      });
-      expect(outcome).toMatchObject({
-        behaviour: "hand_off",
-        source: "safety",
-      });
+      expect(safetyRequirement(action)).toMatchObject({ id, behaviour: "ask" });
+      // A broad allow typed in Settings, or the team's, was written about something else.
+      expect(
+        await decideAction({
+          ...base,
+          candidate: action,
+          team: [team("allow", { toolRef: "*" })],
+          personal: [rule("allow", { toolRef: "*" })],
+        }),
+      ).toMatchObject({ behaviour: "ask", source: "safety", kind: id });
+      // "Always allow here" on this kind's own card reaches it.
+      expect(
+        await decideAction({
+          ...base,
+          candidate: action,
+          personal: [rule("allow", { toolRef: "*", kind: id })],
+        }),
+      ).toMatchObject({ behaviour: "allow", source: "personal_rule" });
+      // The admin closes it: then it asks every time, whatever the person allowed.
+      expect(
+        await decideAction({
+          ...base,
+          candidate: action,
+          personal: [rule("allow", { toolRef: "*", kind: id })],
+          actionKinds: { [id]: "ask" },
+        }),
+      ).toMatchObject({ behaviour: "ask", source: "safety", closed: true });
+      expect(
+        await decideAction({
+          ...base,
+          candidate: action,
+          actionKinds: { [id]: "hand_off" },
+        }),
+      ).toMatchObject({ behaviour: "hand_off", source: "safety", kind: id });
     }
     // The Bot's own workspace is not an account.
     expect(
@@ -294,8 +332,13 @@ describe("built-in safety requirements", () => {
       expect({ toolRef, asked: asked(toolRef) }).toEqual({
         toolRef,
         asked: {
+<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
           id: "destructive_tool",
           reason: DESTRUCTIVE_TOOL_REASON,
+=======
+          id: "deleting",
+          reason: "Deleting something asks you first.",
+>>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
           behaviour: "ask",
         },
       });
@@ -319,12 +362,21 @@ describe("built-in safety requirements", () => {
       destructive: true,
     });
     expect(safetyRequirement(destructive)).toEqual({
+<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
       id: "destructive_tool",
       reason: DESTRUCTIVE_TOOL_REASON,
       behaviour: "ask",
     });
     // Before any rule: an allow rule, the person's or the team's, doesn't answer it. M3: the fork
     // files it under its delete floor, which offers "allow once" only.
+=======
+      id: "deleting",
+      reason:
+        "The app marks this as deleting or overwriting something, so it asks you first.",
+      behaviour: "ask",
+    });
+    // An allow typed in Settings, the person's or the team's, doesn't answer it.
+>>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
     expect(
       await decideAction({
         ...base,
@@ -609,7 +661,7 @@ describe("the reviewer's safety classification", () => {
       model: model(answer),
     });
 
-  test("adds a hand-off the keywords missed, even over an allow rule", async () => {
+  test("asks about a kind the keywords missed, even over an allow typed in Settings", async () => {
     expect(
       await decide({
         verdict: "proceed",
@@ -617,7 +669,27 @@ describe("the reviewer's safety classification", () => {
         safety: "payments",
         reason: "This submits a transfer.",
       }),
-    ).toMatchObject({ behaviour: "hand_off", source: "safety" });
+    ).toMatchObject({ behaviour: "ask", source: "safety", kind: "payments" });
+  });
+
+  test("hands off a kind the keywords missed, where the admin leaves that kind to the person", async () => {
+    const outcome = await decideAction({
+      ...base,
+      candidate: candidate({
+        toolRef: "mcp/bank/submit_form",
+        args: { form: "f1" },
+      }),
+      autoReview: true,
+      personal: [rule("allow", { toolRef: "*", kind: "payments" })],
+      actionKinds: { payments: "hand_off" },
+      model: model({
+        verdict: "proceed",
+        preApproved: true,
+        safety: "payments",
+        reason: "This submits a transfer.",
+      }),
+    });
+    expect(outcome).toMatchObject({ behaviour: "hand_off", source: "safety" });
   });
 
   test("cannot remove the keyword floor", async () => {
@@ -882,7 +954,11 @@ function memoryStore(options: {
         enforceAutoReview: false,
         customRulesEnabled: true,
         hostCommandsCap: "allow",
+<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
         enforceDangerousCommands: false,
+=======
+        actionKinds: {},
+>>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
         ...options.team,
       }),
       setTeamSettings: async () => {
@@ -979,6 +1055,7 @@ describe("the approval gate", () => {
     });
   });
 
+<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
   test("a hand-off is marked done by the person and is never executed for them", () =>
     asOwner(async () => {
       const { store, requests } = memoryStore({});
@@ -1018,6 +1095,47 @@ describe("the approval gate", () => {
       expect(executed).toBeFalse();
       expect(continued).toEqual([{ content: HANDLED_BY_PERSON }]);
     }));
+=======
+  test("a hand-off is marked done by the person and is never executed for them", async () => {
+    const { store, requests } = memoryStore({});
+    const service = createApprovalService(store);
+    // A password typed on a website: the one thing always handed to the person.
+    const paying = candidate({
+      toolRef: "computer_type",
+      args: { field: "New password", text: "x" },
+    });
+    const suspended = await withApprovalContext(context, () =>
+      service.gate(paying),
+    ).catch((failure: unknown) => failure);
+    expect(suspended).toBeInstanceOf(HeadlessToolSuspension);
+    expect((suspended as HeadlessToolSuspension).message).toContain(
+      "This needs you",
+    );
+    expect((suspended as HeadlessToolSuspension).waiting.handoff).toBeTrue();
+    const [request] = [...requests.values()];
+    await expect(
+      service.decide("owner", request?.id as string, "allow_once"),
+    ).rejects.toThrow("handed to you");
+    await service.decide("owner", request?.id as string, "handled");
+    const permit = await withApprovalContext(context, () =>
+      service.gate(paying),
+    );
+    expect(permit).toMatchObject({ replay: HANDLED_BY_PERSON });
+    let executed = false;
+    const continued: unknown[] = [];
+    await service.resume("owner", request?.id as string, {
+      validate: async (action) => action,
+      execute: async () => {
+        executed = true;
+      },
+      continue: async (input) => {
+        continued.push(input.result);
+      },
+    });
+    expect(executed).toBeFalse();
+    expect(continued).toEqual([{ content: HANDLED_BY_PERSON }]);
+  });
+>>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
 });
 
 describe("delegation is gated", () => {

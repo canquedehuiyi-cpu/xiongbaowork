@@ -22,6 +22,7 @@
     "@better-auth/sso": "^1.7.1",
     "@composio/core": "^0.18.1",
     "@copilotkit/runtime": "1.85.0",
+    "@copilotkit/shared": "1.85.0",
     "@mastra/client-js": "^1.43.0",
     "@mastra/core": "^1.64.0",
     "@modelcontextprotocol/sdk": "^1.30.0",
@@ -40,11 +41,13 @@
     "http-message-sig": "0.3.0",
     "jose": "^6.2.10",
     "mdast-util-from-markdown": "2.1.0",
+    "p-queue": "9.3.5",
     "postgres": "^3.4.9",
     "rxjs": "7.8.1",
     "twilio": "5.13.0",
     "web-bot-auth": "0.2.0",
     "yaml": "^2.9.0",
+<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
     "zod": "^4.4.3",
     "@ai-sdk/openai": "^3.0.99",
     "@ai-sdk/anthropic": "^3.0.111",
@@ -52,6 +55,9 @@
     "@ai-sdk/openai-compatible": "^1.0.48",
     "@copilotkit/shared": "1.85.0",
     "ai": "^6.0.104"
+=======
+    "zod": "^4.4.3"
+>>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
   },
   "devDependencies": {
     "@copilotkit/aimock": "1.43.0",

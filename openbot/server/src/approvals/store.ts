@@ -1,16 +1,25 @@
+<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { ownerTenantOfBot } from "../agents/bot-owner";
+=======
+import { and, desc, eq, isNull, notExists, sql } from "drizzle-orm";
+>>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
 import { createAuditStore, recordAuditEvent } from "../audit";
 import type { Database } from "../db/client";
 import { agentSecuritySettings } from "../db/schema/agent-security-settings";
 import {
+  approvalConversationGrants,
   approvalPreferences,
   approvalRequests,
   approvalRules,
   approvalTeamRules,
   approvalTeamSettings,
 } from "../db/schema/approvals";
+<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
 import { agents, intelligenceChannelMappings } from "../db/schema/core";
+=======
+import { channels, intelligenceChannelMappings } from "../db/schema/core";
+>>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
 import { botTasks } from "../db/schema/tasks";
 import { TEAM_TENANT } from "../db/schema/tenant";
 import { workItems } from "../db/schema/work";
@@ -71,6 +80,7 @@ const DEFAULT_TEAM: ApprovalTeamSettings = {
   enforceAutoReview: false,
   customRulesEnabled: true,
   hostCommandsCap: "allow",
+<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
   enforceDangerousCommands: false,
 };
 
@@ -139,6 +149,25 @@ export function createApprovalStore(
   database: Database,
   board?: TaskProjector,
 ): ApprovalStore {
+=======
+  // Every kind open: OpenBot opens things by default, and closing one is the admin's call.
+  actionKinds: {},
+};
+
+/**
+ * A conversation answer still in force: not turned off, and its conversation not deleted. Deleting a
+ * conversation ends what was allowed in it, though the soft-deleted row and its thread stay.
+ */
+const grantInForce = () =>
+  and(
+    isNull(approvalConversationGrants.revokedAt),
+    notExists(
+      sql`(select 1 from ${intelligenceChannelMappings} inner join ${channels} on ${channels.id} = ${intelligenceChannelMappings.channelId} where ${intelligenceChannelMappings.threadId} = ${approvalConversationGrants.threadId} and ${channels.deletedAt} is not null)`,
+    ),
+  );
+
+export function createApprovalStore(database: Database): ApprovalStore {
+>>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
   const owned = (owner: string, id: string) =>
     and(eq(approvalRequests.ownerUserId, owner), eq(approvalRequests.id, id));
   const ruleScope = (action: ApprovalAction) =>
@@ -245,13 +274,26 @@ export function createApprovalStore(
           throw new ApprovalRefusedError(
             "Only an action handed to you can be marked done by you.",
           );
+<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
         // 只给「允许一次」的底线（删除类、对外发送、分享、公开发布）问的动作在任何规则之后都还要
         // 问，存一条「总是允许」只会误导人。从 check-in 开始的任务（M3/upstream）同理：每一步都要问。
         if (decision === "allow_always" && !offersStandingRule(request.action))
           throw new ApprovalRefusedError(
             ONCE_ONLY_REFUSALS[request.action.policy?.source ?? ""] ??
               "Tasks started from a check-in ask before every change. Allow this once, or deny it.",
+=======
+        if (
+          (decision === "allow_always" || decision === "allow_conversation") &&
+          !offersStandingRule(request.action)
+        )
+          throw new ApprovalRefusedError(
+            request.action.policy?.closed
+              ? "Your admin set this to ask every time. Allow it once, or deny it."
+              : "Tasks started from a check-in ask before every change. Allow this once, or deny it.",
+>>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
           );
+        // The kind the card was for, so the answer reaches later actions of that kind and no other.
+        const kind = request.action.policy?.kind ?? null;
         if (decision === "allow_always")
           await tx.insert(approvalRules).values({
             id: crypto.randomUUID(),
@@ -260,6 +302,24 @@ export function createApprovalStore(
             toolRef: request.action.toolRef,
             effect: request.action.effect,
             scope: request.action.scope,
+<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
+=======
+            account: request.action.account ?? null,
+            kind,
+          });
+        if (decision === "allow_conversation")
+          await tx.insert(approvalConversationGrants).values({
+            id: crypto.randomUUID(),
+            ownerUserId: owner,
+            threadId: request.action.threadId,
+            approvalId: id,
+            botId: request.action.botId,
+            toolRef: request.action.toolRef,
+            effect: request.action.effect,
+            scope: request.action.scope,
+            account: request.action.account ?? null,
+            kind,
+>>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
           });
         const [updated] = await tx
           .update(approvalRequests)
@@ -338,6 +398,20 @@ export function createApprovalStore(
             .for("share")
             .limit(1);
           if (!rule) return false;
+        }
+        // Turned off before it ran: not carried out, as a revoked "Always allow" is not.
+        if (request.decision === "allow_conversation") {
+          const [grant] = await tx
+            .select({ id: approvalConversationGrants.id })
+            .from(approvalConversationGrants)
+            .where(
+              and(
+                eq(approvalConversationGrants.approvalId, id),
+                isNull(approvalConversationGrants.revokedAt),
+              ),
+            )
+            .limit(1);
+          if (!grant) return false;
         }
         const rows = await tx
           .update(approvalRequests)
@@ -427,6 +501,29 @@ export function createApprovalStore(
   };
 }
 
+/** A team rule as the trail records it: what it matches and does, without its bookkeeping. */
+function ruleRow(rule: typeof approvalTeamRules.$inferSelect) {
+  return {
+    id: rule.id,
+    botId: rule.botId,
+    toolRef: rule.toolRef,
+    effect: rule.effect,
+    scope: rule.scope,
+    behaviour: rule.behaviour,
+  };
+}
+
+/** The team rules in force, as the trail records them before and after a save. */
+async function teamRuleRows(executor: Database) {
+  if (currentEdition() === "personal") return [];
+  const rows = await executor
+    .select()
+    .from(approvalTeamRules)
+    .where(isNull(approvalTeamRules.revokedAt))
+    .orderBy(desc(approvalTeamRules.createdAt));
+  return rows.map(ruleRow);
+}
+
 function createPolicyStore(database: Database): ApprovalPolicyStore {
   const audit = createAuditStore(database);
   /** One Bot's floors as the CURRENT frame sees them: its owner's row, or the defaults. */
@@ -498,7 +595,11 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
           enforceAutoReview: row.enforceAutoReview,
           customRulesEnabled: row.customRulesEnabled,
           hostCommandsCap: row.hostCommandsCap,
+<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
           enforceDangerousCommands: row.enforceDangerousCommands,
+=======
+          actionKinds: row.actionKinds ?? {},
+>>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
         }
       : { ...DEFAULT_TEAM };
   };
@@ -533,7 +634,13 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
      * in the acting admin's frame.
      */
     async setTeamSettings(by, input) {
-      const next = { ...(await teamSettings()), ...input };
+      const current = await teamSettings();
+      // One kind at a time: a change to one leaves the others as the admin set them.
+      const next = {
+        ...current,
+        ...input,
+        actionKinds: { ...current.actionKinds, ...input.actionKinds },
+      };
       await database
         .insert(approvalTeamSettings)
         .values({ id: TEAM, ...next, updatedBy: by, tenantId: TEAM_TENANT })
@@ -579,6 +686,7 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
       return row;
     },
     async createTeamRule(by, input) {
+      const before = await teamRuleRows(database);
       const [row] = await database
         .insert(approvalTeamRules)
         .values({
@@ -594,9 +702,112 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
         targetType: "approval_rule",
         targetId: row.id,
         actorUserId: by,
-        payload: { change: "created", layer: "team", rule: input },
+        payload: {
+          change: "created",
+          layer: "team",
+          rule: input,
+          before,
+          after: await teamRuleRows(database),
+        },
       });
       return row;
+    },
+    /*
+     * One save, one row on the trail: the rules a description was written into are added together or
+     * not at all, and the row says who saved them, the team rules either side, and the sentence.
+     */
+    async createTeamRules(by, inputs, authoring) {
+      return database.transaction(async (tx) => {
+        const executor = tx as unknown as Database;
+        const before = await teamRuleRows(executor);
+        const rows = inputs.length
+          ? await tx
+              .insert(approvalTeamRules)
+              .values(
+                inputs.map((input) => ({
+                  id: crypto.randomUUID(),
+                  createdBy: by,
+                  ...input,
+                })),
+              )
+              .returning()
+          : [];
+        await recordAuditEvent(createAuditStore(executor), {
+          eventType: "approval.rule_changed",
+          targetType: "approval_rule",
+          targetId: TEAM,
+          actorUserId: by,
+          payload: {
+            change: "created",
+            layer: "team",
+            added: rows.map(ruleRow),
+            before,
+            after: await teamRuleRows(executor),
+            ...(authoring ? { authoring } : {}),
+          },
+        });
+        return rows;
+      });
+    },
+    async recentRequests(limit) {
+      return database
+        .select()
+        .from(approvalRequests)
+        .orderBy(desc(approvalRequests.createdAt))
+        .limit(limit);
+    },
+    async reviewerGuidance() {
+      // No team and no admin screen: the gate reads none, as it reads no team settings.
+      if (currentEdition() === "personal") return null;
+      const [row] = await database
+        .select({ guidance: approvalTeamSettings.reviewerGuidance })
+        .from(approvalTeamSettings)
+        .where(eq(approvalTeamSettings.id, TEAM))
+        .limit(1);
+      return row?.guidance?.trim() || null;
+    },
+    /*
+     * One save, one row on the trail, in the same transaction: the guidance either side and how it
+     * was read, so "who told the reviewer this, and in what words" has an answer for as long as the
+     * trail is kept. The table only holds the words in force now.
+     */
+    async setReviewerGuidance(by, change) {
+      const after = change.text?.trim() || null;
+      return database.transaction(async (tx) => {
+        const [current] = await tx
+          .select({ guidance: approvalTeamSettings.reviewerGuidance })
+          .from(approvalTeamSettings)
+          .where(eq(approvalTeamSettings.id, TEAM))
+          .limit(1);
+        const before = current?.guidance?.trim() || null;
+        await tx
+          .insert(approvalTeamSettings)
+          .values({ id: TEAM, reviewerGuidance: after, updatedBy: by })
+          .onConflictDoUpdate({
+            target: approvalTeamSettings.id,
+            set: {
+              reviewerGuidance: after,
+              updatedBy: by,
+              updatedAt: sql`now()`,
+            },
+          });
+        await recordAuditEvent(createAuditStore(tx as unknown as Database), {
+          eventType: "approval.guidance_changed",
+          targetType: "approval_settings",
+          targetId: TEAM,
+          actorUserId: by,
+          payload: {
+            ...(change.actor ? { actor: change.actor } : {}),
+            change: after === null ? "removed" : "saved",
+            before,
+            after,
+            ...(after !== null && change.reading
+              ? { reading: change.reading }
+              : {}),
+          },
+        });
+        return after;
+      });
     },
     async updateRule(owner, id, input) {
       const [row] = await database
@@ -621,6 +832,7 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
       return row;
     },
     async updateTeamRule(by, id, input) {
+      const before = await teamRuleRows(database);
       const [row] = await database
         .update(approvalTeamRules)
         .set(input)
@@ -638,11 +850,18 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
         targetType: "approval_rule",
         targetId: id,
         actorUserId: by,
-        payload: { change: "updated", layer: "team", changed: input },
+        payload: {
+          change: "updated",
+          layer: "team",
+          changed: input,
+          before,
+          after: await teamRuleRows(database),
+        },
       });
       return row;
     },
     async revokeTeamRule(by, id) {
+      const before = await teamRuleRows(database);
       const rows = await database
         .update(approvalTeamRules)
         .set({ revokedAt: sql`now()` })
@@ -660,7 +879,12 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
         targetType: "approval_rule",
         targetId: id,
         actorUserId: by,
-        payload: { change: "revoked", layer: "team" },
+        payload: {
+          change: "revoked",
+          layer: "team",
+          before,
+          after: await teamRuleRows(database),
+        },
       });
     },
     async findEquivalent(input) {
@@ -739,6 +963,7 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
       }
       return withdrawn;
     },
+<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
     /*
      * The owner's side of a Bot, whoever asks (SEC1 D9). Whose the Bot is comes from the narrow
      * identity lookup in `agents/bot-owner.ts` (its own `platform` read, where only the owner's id
@@ -806,6 +1031,64 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
         },
       });
       return next;
+=======
+    async conversationGrants(owner, threadId) {
+      return database
+        .select()
+        .from(approvalConversationGrants)
+        .where(
+          and(
+            eq(approvalConversationGrants.ownerUserId, owner),
+            eq(approvalConversationGrants.threadId, threadId),
+            grantInForce(),
+          ),
+        );
+    },
+    async allConversationGrants(owner) {
+      return database
+        .select()
+        .from(approvalConversationGrants)
+        .where(
+          and(
+            eq(approvalConversationGrants.ownerUserId, owner),
+            grantInForce(),
+          ),
+        )
+        .orderBy(desc(approvalConversationGrants.createdAt))
+        .limit(100);
+    },
+    async revokeConversationGrant(owner, id) {
+      const [row] = await database
+        .update(approvalConversationGrants)
+        .set({ revokedAt: sql`now()` })
+        .where(
+          and(
+            eq(approvalConversationGrants.ownerUserId, owner),
+            eq(approvalConversationGrants.id, id),
+            isNull(approvalConversationGrants.revokedAt),
+          ),
+        )
+        .returning();
+      if (!row) throw new ApprovalNotFoundError();
+      await recordAuditEvent(audit, {
+        eventType: "approval.rule_changed",
+        targetType: "approval_rule",
+        targetId: id,
+        actorUserId: owner,
+        payload: {
+          change: "revoked",
+          layer: "conversation",
+          rule: {
+            botId: row.botId,
+            toolRef: row.toolRef,
+            effect: row.effect,
+            scope: row.scope,
+            ...(row.kind ? { kind: row.kind } : {}),
+          },
+          threadId: row.threadId,
+        },
+      });
+>>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
     },
     async recordDecision(input) {
       await recordAuditEvent(audit, {
@@ -822,6 +1105,7 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
           scope: input.scope,
           ...targetSubject(input.target),
           outcome: input.outcome,
+          ...(input.call ? { call: input.call } : {}),
         },
       });
     },

@@ -8,12 +8,17 @@ import {
   DESKTOP_WINDOW_ID,
 } from "@openbot/shared/desktop-control";
 import type { BotAccessCheck } from "../agents/profile-policy";
+<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
 import {
   ApprovalNeedsConversationError,
   ApprovalRefusedError,
 } from "../approvals/types";
 import type { AuditReader } from "../audit";
 import type { AdminScope } from "../auth/admin-scope";
+=======
+import { ApprovalNeedsConversationError } from "../approvals/types";
+import { type AuditReader, type AuditStore, recordAuditEvent } from "../audit";
+>>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
 import type { AppVariables } from "../auth/guards";
 import { requireAdmin } from "../auth/guards";
 import { DeviceActionError, DeviceOfflineError } from "../devices/channel";
@@ -49,8 +54,18 @@ import {
   WorkspaceTooLargeError,
 } from "./gateway";
 import type { PageFrameStore } from "./page-frames";
-import { dryRunAgainstHistory, REPLAYABLE_EVENT_TYPES } from "./policy-dry-run";
-import { type PolicyStore, parseActionPolicy } from "./policy-store";
+import { uncheckableRule } from "./policy";
+import {
+  dryRunAgainstHistory,
+  REPLAYABLE_EVENT_TYPES,
+  REPLAYABLE_TARGET_TYPES,
+} from "./policy-dry-run";
+import {
+  type PolicyStore,
+  parseActionPolicy,
+  parsePolicyAuthoring,
+  policyChange,
+} from "./policy-store";
 
 /**
  * The Bot computer's surface, behind the same session guard as every other API route.
@@ -94,6 +109,11 @@ export function createComputerRoutes(
    * `/:botId/browser`. Absent where this OpenBot has no Recorder: nothing about it is mounted.
    */
   botBrowser?: BotBrowser,
+  /**
+   * Where a saved boundary is recorded (`computer.policy_changed`). Optional the way `auditReader`
+   * is: a deployment wired without a trail still saves its boundary, and has nowhere to record it.
+   */
+  auditStore?: AuditStore,
 ) {
   const routes = new Hono<{ Variables: AppVariables }>();
   const adminCapability: MiddlewareHandler<{ Variables: AppVariables }> =
@@ -994,11 +1014,28 @@ export function createComputerRoutes(
     const denied = requireAdmin(context);
     if (denied) return denied;
 
-    const parsed = parseActionPolicy(
-      await context.req.json().catch(() => null),
-    );
+    const body = (await context.req.json().catch(() => null)) as Record<
+      string,
+      unknown
+    > | null;
+    const parsed = parseActionPolicy(body);
     if (!parsed.ok) {
       return context.json({ error: parsed.error }, 400);
+    }
+    const authoring = parsePolicyAuthoring(body?.authoring);
+    if (!authoring.ok) {
+      return context.json({ error: authoring.error }, 400);
+    }
+    /*
+     * Every rule it adds has to be one the evaluator can run. A deny rule that cannot be evaluated
+     * counts as a match, so a typo saved here would stop every action every Bot takes until somebody
+     * noticed. Refused with the rule and why, and nothing is saved. Rules already in force are not
+     * judged again: see `uncheckableRule`.
+     */
+    const before = policyStore.get();
+    const broken = uncheckableRule(parsed.policy, before);
+    if (broken) {
+      return context.json({ error: broken.error, rule: broken.rule }, 400);
     }
     try {
       await policyStore.set(parsed.policy, context.var.actor.email);
@@ -1016,9 +1053,44 @@ export function createComputerRoutes(
         503,
       );
     }
+    const after = policyStore.get();
+    if (auditStore) {
+      /*
+       * After the save, so the trail never records a boundary that did not take. A save the trail
+       * could not record is said to be one: the rule is in force, and an admin told only "saved"
+       * would believe Audit shows who changed it.
+       */
+      try {
+        await recordAuditEvent(auditStore, {
+          eventType: "computer.policy_changed",
+          targetType: "policy",
+          actorUserId: context.var.actor.id,
+          payload: policyChange(
+            before,
+            after,
+            context.var.actor.email,
+            authoring.authoring,
+          ),
+        });
+      } catch (error) {
+        console.error(
+          JSON.stringify({
+            type: "policy-change-unrecorded",
+            error: String(error),
+          }),
+        );
+        return context.json(
+          {
+            error:
+              "The rule was saved, but Audit couldn't record the change. Save it again to record it.",
+          },
+          500,
+        );
+      }
+    }
     // Echoed back so a caller can see exactly what is now in force rather than assuming its request
     // was stored verbatim.
-    return context.json({ policy: policyStore.get() });
+    return context.json({ policy: after });
   });
 
   /**
@@ -1043,7 +1115,54 @@ export function createComputerRoutes(
       const denied = requireAdmin(context);
       if (denied) return denied;
 
+<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
       if (!auditReader) {
+=======
+    if (!auditReader) {
+      return context.json(
+        {
+          error:
+            "This deployment records no readable trail, so there is no history to test against.",
+        },
+        501,
+      );
+    }
+
+    const body = (await context.req.json().catch(() => null)) as {
+      policy?: unknown;
+      limit?: unknown;
+    } | null;
+    const parsed = parseActionPolicy(body?.policy);
+    if (!parsed.ok) {
+      return context.json({ error: parsed.error }, 400);
+    }
+    /*
+     * A rule that can't be evaluated is reported, not replayed. Replayed, it would match every action
+     * it met, fail closed, and the preview would show it stopping everything: true of the broken rule
+     * once saved, and nothing like what its author meant. The same check a save makes.
+     */
+    const broken = uncheckableRule(parsed.policy, policyStore.get());
+    if (broken) {
+      return context.json({ error: broken.error, rule: broken.rule }, 400);
+    }
+
+    // Bounded, and biased to recency: the question is what this rule does to the traffic the
+    // deployment actually has, and last week's traffic answers that better than a full scan.
+    //
+    // Strict on purpose. This used to read `typeof limit === "number" ? limit : 200` and clamp,
+    // so `"abc"`, `null` and `true` silently became 200, `Infinity` silently became 500, and
+    // `NaN` became `NaN` and travelled into `auditReader.list` as one. A what-if answered from
+    // the wrong slice of history is worse than no answer, because it is believed.
+    const rawLimit = body?.limit;
+    let limit = 200;
+    if (rawLimit !== undefined) {
+      if (
+        typeof rawLimit !== "number" ||
+        !Number.isInteger(rawLimit) ||
+        rawLimit < 1 ||
+        rawLimit > 500
+      ) {
+>>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
         return context.json(
           {
             error:
@@ -1053,6 +1172,7 @@ export function createComputerRoutes(
         );
       }
 
+<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
       const body = (await context.req.json().catch(() => null)) as {
         policy?: unknown;
         limit?: unknown;
@@ -1061,6 +1181,15 @@ export function createComputerRoutes(
       if (!parsed.ok) {
         return context.json({ error: parsed.error }, 400);
       }
+=======
+    // Computer actions and app calls, newest first across both: one policy decides both, and a rule
+    // about an app previewed against computer actions alone reports that it changes nothing.
+    const { events } = await auditReader.list({
+      limit,
+      eventType: REPLAYABLE_EVENT_TYPES.join(","),
+      targetType: REPLAYABLE_TARGET_TYPES.join(","),
+    });
+>>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
 
       // Bounded, and biased to recency: the question is what this rule does to the traffic the
       // deployment actually has, and last week's traffic answers that better than a full scan.

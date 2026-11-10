@@ -101,8 +101,14 @@ export type ActorAgentResolverDependencies = {
    */
   acquireLearnedSkills?: AcquireLearnedSkills;
   loadPersonalMemoryForActor?: (actorId: string) => LoadPersonalMemory;
-  /** The model a person picked for the conversation a run answers in. Absent, the deployment's. */
-  pickedModelForActor?: (actorId: string) => PickedModel;
+  /**
+   * The model a person picked for the conversation a run answers in. Absent, the deployment's. Given
+   * what started the run, so a run nobody is watching can think harder (`runModeOf`).
+   */
+  pickedModelForActor?: (
+    actorId: string,
+    initiator?: AuditInitiator,
+  ) => PickedModel;
   /** Writes the row for a run refused for sending more tools than its model accepts. */
   recordToolLimitRefusalForActor?: (
     actorId: string,
@@ -186,10 +192,15 @@ export function createActorAgentResolver(
       deps.loadPersonalMemoryForActor?.(actor.id),
       deps.recordToolLimitRefusalForActor?.(actor.id, context?.initiator),
       context?.holdsTools,
+<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
       deps.pickedModelForActor?.(actor.id),
       deps.resolveAgentModel,
       deps.loadAvatarSourcesForActor?.(actor.id),
       deps.loadCurrentProjectForActor?.(actor.id),
+=======
+      deps.pickedModelForActor?.(actor.id, context?.initiator),
+      deps.loadAppsForActor?.(actor.id),
+>>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
     ).then((agents) => {
       const loadName = deps.loadNameForActor;
       if (loadName) {

@@ -86,6 +86,7 @@ export type SummaryReport = {
 export async function offerChannelsAwaitingSummary(
   options: Pick<ChannelSummaryOptions, "database" | "queue" | "limit">,
 ): Promise<{ offered: string[] }> {
+<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
   // A question about every tenant's conversations, so asked as the platform rather than as `system`,
   // which would see only the platform's own and leave every person's unnamed.
   const rows = await runAsTenant("platform", () =>
@@ -116,6 +117,34 @@ export async function offerChannelsAwaitingSummary(
                   eq(workItems.kind, CHANNEL_SUMMARY_KIND),
                   eq(workItems.key, channels.id),
                 ),
+=======
+  const rows = await options.database
+    .select({ id: channels.id })
+    .from(channels)
+    .where(
+      and(
+        isNull(channels.summary),
+        // A conversation its owner named needs no name from the model. Cleared, it is offered again.
+        isNull(channels.title),
+        isNull(channels.deletedAt),
+        sql`${channels.lastMessageAt} is not null`,
+        /*
+         * Not one the queue already holds a row for, pending or settled.
+         *
+         * Offering it again changes nothing, but it takes one of the `limit` places. A conversation
+         * this cannot name keeps no summary and so never leaves the set above, and enough of them
+         * ahead of a new conversation left the new one unoffered on every pass. Once its settled row
+         * is forgotten it is offered again, as before.
+         */
+        notExists(
+          options.database
+            .select({ key: workItems.key })
+            .from(workItems)
+            .where(
+              and(
+                eq(workItems.kind, CHANNEL_SUMMARY_KIND),
+                eq(workItems.key, channels.id),
+>>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
               ),
           ),
         ),
@@ -369,13 +398,19 @@ async function summariseOne(
           and(
             eq(channels.id, channelId),
             isNull(channels.summary),
+            /*
+             * Renamed while the model worked: the person's name stands, and announcing the summary
+             * would put the model's words on every member's row in its place until they reload.
+             */
+            isNull(channels.title),
             isNull(channels.deletedAt),
           ),
         )
         .returning({ id: channels.id });
       if (applied.length === 0) {
-        // Another writer's title stands, but a conversation deleted while the model worked is gone.
-        // Both settle the queue item; only a surviving conversation counts as named.
+        // Another writer's title stands, and so does a name the person gave it, but a conversation
+        // deleted while the model worked is gone. All settle the queue item; only a surviving
+        // conversation counts as named.
         const [remaining] = await transaction
           .select({ id: channels.id })
           .from(channels)

@@ -4,6 +4,9 @@ import { type AppVariables, requireAdmin } from "../auth/guards";
 import type { ApprovalService } from "./service";
 import { DEFAULT_SENSITIVE_PATHS, SENSITIVE_PATH_PATTERN } from "./policy";
 import {
+  ACTION_KIND_POLICIES,
+  ACTION_KINDS,
+  APPROVAL_DECISIONS,
   ApprovalNotFoundError,
   ApprovalRefusedError,
   RULE_BEHAVIOURS,
@@ -209,7 +212,14 @@ export function createApprovalRoutes(
         enforceAutoReview: z.boolean().optional(),
         customRulesEnabled: z.boolean().optional(),
         hostCommandsCap: hostCommands.optional(),
+<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
         enforceDangerousCommands: z.boolean().optional(),
+=======
+        // One or more kinds of action, each open, asked every time, or left to the person.
+        actionKinds: z
+          .partialRecord(z.enum(ACTION_KINDS), z.enum(ACTION_KIND_POLICIES))
+          .optional(),
+>>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
       })
       .parse(await context.req.json());
     return context.json(
@@ -315,7 +325,7 @@ export function createApprovalRoutes(
   routes.post("/:id/decision", async (context) => {
     const input = z
       .strictObject({
-        decision: z.enum(["allow_once", "allow_always", "deny", "handled"]),
+        decision: z.enum(APPROVAL_DECISIONS),
       })
       .parse(await context.req.json());
     const request = await service.decide(
@@ -324,6 +334,14 @@ export function createApprovalRoutes(
       input.decision,
     );
     return context.json({ id: request.id, status: request.status });
+  });
+  /** Turn off one "Allow for this conversation": the next such call in it asks again. */
+  routes.delete("/conversation-grants/:id", async (context) => {
+    await service.revokeConversationGrant(
+      context.var.actor.id,
+      context.req.param("id"),
+    );
+    return context.json({ revoked: true });
   });
   routes.delete("/rules/:id", async (context) => {
     await service.revoke(context.var.actor.id, context.req.param("id"));

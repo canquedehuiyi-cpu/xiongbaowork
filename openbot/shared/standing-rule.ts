@@ -1,22 +1,36 @@
 /**
- * Whether an approval may be answered with a standing rule ("Always allow here").
+ * Whether an approval may be answered with a standing answer: "Always allow here", or "Allow for
+ * this conversation".
+ *
+ * OPEN BY DEFAULT. Deleting, sending, sharing, posting, paying and changing account settings ask
+ * (server/src/approvals/policy.ts), and the person can allow each of them once, for the conversation,
+ * or always, as they can anything else that asks. An admin closes a kind of action for everybody
+ * (Admin → Approvals); then it asks every time and only Allow once and Deny stay (`closed`).
  *
  * Not one a task started from a check-in raised: those ask before every change whatever the
- * person's rules say (`TASK_ASKS` in server/src/approvals/service.ts), so a rule saved from one
- * would be ignored the next time and only mislead. Allow once and Deny stay.
+ * person's rules say (`TASK_ASKS` in server/src/approvals/service.ts), so a standing answer saved from
+ * one would be ignored the next time and only mislead.
  *
- * Nor one the safety policy raised: deleting, sending, sharing and publishing ask every time
- * (server/src/approvals/policy.ts), before any rule is read, so a saved rule could never answer one.
+ * Not a hand-off: the person does that themselves, so there is nothing for the Bot to be allowed.
  *
- * ONE DECLARATION, READ FROM BOTH SIDES, so the two cannot drift apart. The server refuses such a
- * rule (server/src/approvals/store.ts) and leaves the button off a chat card
+ * ONE DECLARATION, READ FROM BOTH SIDES, so the two cannot drift apart. The server refuses such an
+ * answer (server/src/approvals/store.ts) and leaves the button off a chat card
  * (server/src/delivery/opentag-agent.ts); the browser draws its approval cards from the same answer
  * (app/src/components/approvals).
  */
 export function offersStandingRule(action: {
-  policy?: { source: string } | undefined;
+  policy?: { source: string; behaviour?: string; closed?: boolean } | undefined;
 }): boolean {
+<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
   return !ONCE_ONLY_SOURCES.has(action.policy?.source ?? "");
+=======
+  const policy = action.policy;
+  return (
+    policy?.source !== "task" &&
+    policy?.closed !== true &&
+    policy?.behaviour !== "hand_off"
+  );
+>>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
 }
 
 /**
