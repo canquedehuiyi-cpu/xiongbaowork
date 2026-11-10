@@ -59,7 +59,10 @@ import {
   type InstallListingKind,
   pluginInstallListings,
 } from "../db/schema/plugin-install-listings";
-import { sharedUseApprovals } from "../db/schema/shared-use";
+import {
+  sharedUseApprovals,
+  sharedUseRequests,
+} from "../db/schema/shared-use";
 import { SYSTEM_TENANT, TEAM_TENANT } from "../db/schema/tenant";
 import { appsPage, appsPageZh } from "../edition";
 import type { OutboundLookup, OutboundPolicy } from "../net/outbound-guard";
@@ -102,7 +105,7 @@ import {
 import { accountArgumentFor } from "./account-argument";
 import { type AccountMode, accountFor } from "./shared-accounts";
 import { steeringOf } from "./shared-use";
-import type { SharedUseGate } from "./shared-use-store";
+import { type SharedUseGate, sharedUseAppLockKey } from "./shared-use-store";
 import { appAccessMethods } from "./app-access-store";
 import {
   type BrokeredAccountRecord,
@@ -1656,6 +1659,60 @@ export function createPluginStore(options: PluginStoreOptions) {
     team: boolean,
     work: () => Promise<T>,
   ): Promise<T> => (team ? runAsTenant("platform", work) : work());
+  /**
+   * 结束一个应用（地址上的每一行）的共享使用批准，跨每位员工的主人（经 {@link reachEveryPersonOn}，调用方
+   * 先过 `requireServerWriter`）。在应用的排他锁下（`sharedUseAppLockKey`，写批准拿它的共享锁）。`onlyOwners`
+   * 只结束主人的授予设下的受众；`requests` 同时把待处理的申请作废——它们是按旧的账号算的。答被结束批准的
+   * 员工。
+   */
+  const endSharedUseAt = (input: {
+    appId: string;
+    url: string;
+    team: boolean;
+    onlyOwners?: boolean;
+    requests?: boolean;
+  }): Promise<string[]> =>
+    reachEveryPersonOn(input.team, () =>
+      database.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtext(${sharedUseAppLockKey(input.url, input.appId)}))`,
+        );
+        const toolkit = toolkitOf(input.url);
+        const atApp = toolkit
+          ? (
+              await tx
+                .select({ id: mcpServers.id, url: mcpServers.url })
+                .from(mcpServers)
+                .where(like(mcpServers.url, "composio://%"))
+            )
+              .filter((row) => toolkitOf(row.url) === toolkit)
+              .map((row) => row.id)
+          : [];
+        const ids = [...new Set([input.appId, ...atApp])];
+        const ended = await tx
+          .delete(sharedUseApprovals)
+          .where(
+            and(
+              inArray(sharedUseApprovals.serverId, ids),
+              ...(input.onlyOwners
+                ? [eq(sharedUseApprovals.approvedAs, "owner")]
+                : []),
+            ),
+          )
+          .returning({ botId: sharedUseApprovals.agentId });
+        if (input.requests)
+          await tx
+            .update(sharedUseRequests)
+            .set({ status: "superseded", decidedAt: new Date() })
+            .where(
+              and(
+                inArray(sharedUseRequests.serverId, ids),
+                eq(sharedUseRequests.status, "pending"),
+              ),
+            );
+        return [...new Set(ended.map((row) => row.botId))];
+      }),
+    );
   /**
    * 写团队账号状态时一行都没写到：调用方没有写这个团队应用行的权限（行级安全静默过滤）。报错而不是
    * 答成功（评审 I1），否则页面会说一件没发生的事。
@@ -9232,26 +9289,11 @@ export function createPluginStore(options: PluginStoreOptions) {
         .select({ url: mcpServers.url, tenantId: mcpServers.tenantId })
         .from(mcpServers)
         .where(eq(mcpServers.id, appId));
-      const toolkit = app ? toolkitOf(app.url) : null;
-      await reachEveryPersonOn(app?.tenantId === TEAM_TENANT, async () => {
-        const atApp = toolkit
-          ? (
-              await database
-                .select({ id: mcpServers.id, url: mcpServers.url })
-                .from(mcpServers)
-                .where(like(mcpServers.url, "composio://%"))
-            )
-              .filter((row) => toolkitOf(row.url) === toolkit)
-              .map((row) => row.id)
-          : [];
-        await database
-          .delete(sharedUseApprovals)
-          .where(
-            inArray(sharedUseApprovals.serverId, [
-              ...new Set([appId, ...atApp]),
-            ]),
-          );
-      });
+      /*
+       * 先改模式，再在应用的排他锁下结束批准与待处理申请：一次写批准要么在锁之前提交、在这里被删掉，要么
+       * 在锁之后开始、读到新的模式而不写（`SharedUseNotSharedError`）。反过来的顺序会留下一个窗口，让切换
+       * 之后才落下的批准在再切回 Shared 时复活。
+       */
       await database
         .update(mcpServers)
         .set({
@@ -9265,6 +9307,13 @@ export function createPluginStore(options: PluginStoreOptions) {
           updatedAt: new Date(),
         })
         .where(eq(mcpServers.id, appId));
+      if (app)
+        await endSharedUseAt({
+          appId,
+          url: app.url,
+          team: app.tenantId === TEAM_TENANT,
+          requests: true,
+        });
     },
 
     /**

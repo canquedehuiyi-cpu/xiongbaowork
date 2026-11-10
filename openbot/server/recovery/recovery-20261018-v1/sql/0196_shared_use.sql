@@ -20,8 +20,9 @@
  * 批准经已有的 `asBotOwner`（`adminActAsOwner`）在主人的帧里写；收件箱列出所有人的申请经插件路由已有的
  * 那道 `asAdminPlatform`。
  *
- * 主键与唯一索引都以 tenant_id 开头：别人在自己租户里写一行同样员工、同样应用的行，占不住主人的键，
- * 而且服务端只在员工真正的主人的帧里读，那样的行永远不会被读到。没有主人的员工（目录里的公开员工）没有
+ * 主键与每一条索引都以 tenant_id 开头：别人在自己租户里写一行同样员工、同样应用的行，占不住主人的键，
+ * 而且服务端只在员工真正的主人的帧里读，那样的行永远不会被读到。申请照 0153 的 `decided` 约束：只有
+ * 待处理的申请没有决定时刻，作废（superseded）也算决定。没有主人的员工（目录里的公开员工）没有
  * 可以记批准的租户，团队账号对它们一律拒绝。
  *
  * 无回填：这之前没有任何批准。
@@ -66,10 +67,11 @@ CREATE TABLE "public"."shared_use_requests" (
   "decided_by" text,
   "decided_at" timestamp with time zone,
   "created_at" timestamp with time zone DEFAULT now() NOT NULL,
-  CONSTRAINT "shared_use_requests_pkey" PRIMARY KEY ("id"),
+  CONSTRAINT "shared_use_requests_pkey" PRIMARY KEY ("tenant_id", "id"),
   CONSTRAINT "shared_use_requests_audience_check" CHECK ("proposed_audience" IN ('owner', 'people', 'team')),
   CONSTRAINT "shared_use_requests_reason_check" CHECK ("reason" IN ('publish', 'trigger', 'grant', 'refused_call')),
   CONSTRAINT "shared_use_requests_status_check" CHECK ("status" IN ('pending', 'approved', 'declined', 'superseded')),
+  CONSTRAINT "shared_use_requests_decided" CHECK (("status" = 'pending') = ("decided_at" IS NULL)),
   CONSTRAINT "shared_use_requests_tenant_person" CHECK ("tenant_id" NOT IN ('system', 'platform', 'team'))
 );
 --> statement-breakpoint
@@ -85,9 +87,9 @@ ALTER TABLE "public"."shared_use_requests" ADD CONSTRAINT "shared_use_requests_s
 --> statement-breakpoint
 CREATE UNIQUE INDEX "shared_use_requests_pending_idx" ON "public"."shared_use_requests" USING btree ("tenant_id", "agent_id", "server_id") WHERE "status" = 'pending';
 --> statement-breakpoint
-CREATE INDEX "shared_use_requests_status_idx" ON "public"."shared_use_requests" USING btree ("status", "created_at");
+CREATE INDEX "shared_use_requests_status_idx" ON "public"."shared_use_requests" USING btree ("tenant_id", "status", "created_at");
 --> statement-breakpoint
-CREATE INDEX "shared_use_approvals_server_idx" ON "public"."shared_use_approvals" USING btree ("server_id");
+CREATE INDEX "shared_use_approvals_server_idx" ON "public"."shared_use_approvals" USING btree ("tenant_id", "server_id");
 --> statement-breakpoint
 ALTER TABLE "public"."shared_use_approvals" ENABLE ROW LEVEL SECURITY;
 --> statement-breakpoint

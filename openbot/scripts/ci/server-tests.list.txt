@@ -598,6 +598,7 @@ tests/setup-checklist.test.ts
 tests/shared-accounts.test.ts
 tests/shared-brokered-accounts.integration.test.ts
 tests/shared-computer-run.integration.test.ts
+tests/shared-use-hardening.integration.test.ts
 tests/shared-use-routes.integration.test.ts
 tests/shared-use-store.integration.test.ts
 tests/shared-use.test.ts

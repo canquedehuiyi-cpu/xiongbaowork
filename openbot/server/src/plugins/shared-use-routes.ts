@@ -4,6 +4,7 @@ import { covers, exposureOf } from "./shared-use";
 import {
   type SharedAudience,
   SharedUseFrameError,
+  SharedUseNotSharedError,
   SharedUseRequestDecidedError,
   type SharedUseRequestRow,
   type SharedUseStore,
@@ -110,12 +111,45 @@ export function mountSharedUseRoutes(options: {
       } catch (error) {
         if (error instanceof SharedUseRequestDecidedError)
           return context.json({ error: ALREADY_DECIDED }, 409);
-        if (error instanceof SharedUseFrameError)
+        if (
+          error instanceof SharedUseFrameError ||
+          error instanceof SharedUseNotSharedError
+        )
           return context.json({ error: error.message }, 409);
         throw error;
       }
     });
   }
+
+  /**
+   * 管理员撤销一位员工在一个应用上的批准（管理员的或主人的都算），在员工主人的帧里，轨迹也落在那里。之后
+   * 这位员工对团队账号的调用被拒绝，直到再有批准。只给持有能力的管理员。
+   */
+  routes.delete(
+    "/shared-use/bot/:botId/:serverId",
+    capable,
+    async (context) => {
+      const refusal = decisionRefusal(context);
+      if (refusal) return context.json({ error: refusal }, 403);
+      const botId = context.req.param("botId");
+      const serverId = context.req.param("serverId");
+      if (!(await audience.ownerOf(botId)))
+        return context.json({ error: NO_OWNER }, 409);
+      const revoked = await asBotOwner(context, botId, async () => {
+        const appId = await store.appIdOf(serverId);
+        const done = await store.revokeApproval({ botId, serverId: appId });
+        if (done)
+          await audience.record({
+            eventType: "shared_use.revoked",
+            targetId: appId,
+            actorUserId: context.var.actor.id,
+            payload: { bot: botId, server: appId },
+          });
+        return done;
+      });
+      return context.json({ revoked });
+    },
+  );
 
   /**
    * 员工的主人（或持有能力的管理员）为员工持有的一个 Shared 应用申请批准。理由只收 `trigger`（加了外部
