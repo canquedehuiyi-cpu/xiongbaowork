@@ -1184,6 +1184,13 @@
       "when": 1794318911781,
       "tag": "0181_approval_rule_account",
       "breakpoints": true
+    },
+    {
+      "idx": 187,
+      "version": "7",
+      "when": 1794323193638,
+      "tag": "0187_app_access_upstream",
+      "breakpoints": true
     }
   ]
 }

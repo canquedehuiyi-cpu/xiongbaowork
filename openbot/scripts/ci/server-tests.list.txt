@@ -35,6 +35,8 @@ tests/agent-test-connection-managed.test.ts
 tests/agent-tool-call-input.test.ts
 tests/app-access-requests.integration.test.ts
 tests/app-access-routes.integration.test.ts
+tests/app-access-state.test.ts
+tests/app-access-upstream.integration.test.ts
 tests/app-discovery.test.ts
 tests/approval-activity-words.integration.test.ts
 tests/approval-continuation-preparation-transaction.integration.test.ts

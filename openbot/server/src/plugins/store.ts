@@ -101,6 +101,7 @@ import {
 import { accountArgumentFor } from "./account-argument";
 import { type AccountMode, accountFor } from "./shared-accounts";
 import { admits, STRICTEST_APPROVAL, steeringOf } from "./shared-use";
+import { appAccessMethods } from "./app-access-store";
 import {
   type BrokeredAccountRecord,
   createAccountBook,
@@ -974,7 +975,10 @@ export type AppAccessRequestRecord = {
   id: string;
   /** 申请人的租户：管理员处理时就在这个帧里改它。 */
   tenantId: string;
-  /** `mcp_servers.id`，应用行本身。 */
+  /**
+   * `mcp_servers.id`，应用行本身。申请的是一个还没有行的应用时（X2，迁移 0187，列为 NULL）这里是空串：
+   * 字段的类型是 fork 既有测试钉住的 `string`；是哪个应用看 `appKey`。
+   */
   serverId: string;
   /** 应用的标识：目录键，没有目录键时是行自己的 id。上架和授予的 ref 都按它写。 */
   appKey: string;
@@ -990,6 +994,15 @@ export type AppAccessRequestRecord = {
   decidedBy: string | null;
   decidedAt: string | null;
   createdAt: string;
+  /*
+   * 上游 `AppAccessRequestRecord` 的字段名（X2）：同一条申请，上游前端按这些名字读。`agentId` 即 `botId`，
+   * `requestedBy` 即 `requesterUserId`，`resolvedAt` / `resolvedBy` 即 `decidedAt` / `decidedBy`（fork 记的是
+   * 处理人的邮箱，上游是用户 id；收件箱照旧显示邮箱）。
+   */
+  agentId: string;
+  requestedBy: string;
+  resolvedAt: string | null;
+  resolvedBy: string | null;
 };
 
 /** 路由和工具传进来的申请 id 是任意文字；不是 uuid 的在查询之前就答"没有"，不让 Postgres 报类型错误。 */
@@ -3558,6 +3571,8 @@ export function createPluginStore(options: PluginStoreOptions) {
         serverId: appAccessRequests.serverId,
         catalogueKey: mcpServers.catalogueKey,
         appTitle: mcpServers.title,
+        requestAppKey: appAccessRequests.appKey,
+        requestAppTitle: appAccessRequests.appTitle,
         botId: appAccessRequests.botId,
         botName: agents.name,
         requesterUserId: appAccessRequests.requesterUserId,
@@ -3582,9 +3597,14 @@ export function createPluginStore(options: PluginStoreOptions) {
     return rows.map((row) => ({
       id: row.id,
       tenantId: row.tenantId,
-      serverId: row.serverId,
-      appKey: row.catalogueKey ?? row.serverId,
-      appTitle: row.appTitle ?? row.serverId,
+      serverId: row.serverId ?? "",
+      appKey: row.catalogueKey ?? row.serverId ?? row.requestAppKey ?? "",
+      appTitle:
+        row.appTitle ??
+        row.requestAppTitle ??
+        row.serverId ??
+        row.requestAppKey ??
+        "",
       botId: row.botId,
       botName: row.botName,
       requesterUserId: row.requesterUserId,
@@ -3596,6 +3616,10 @@ export function createPluginStore(options: PluginStoreOptions) {
       decidedBy: row.decidedBy,
       decidedAt: iso(row.decidedAt),
       createdAt: iso(row.createdAt) ?? "",
+      agentId: row.botId,
+      requestedBy: row.requesterUserId,
+      resolvedAt: iso(row.decidedAt),
+      resolvedBy: row.decidedBy,
     }));
   }
 
@@ -6742,7 +6766,10 @@ export function createPluginStore(options: PluginStoreOptions) {
      * `limited`。并发的两次提交由部分唯一索引兜住，后到的那次读回先到的那条。
      */
     async fileAppAccessRequest(input: {
-      serverId: string;
+      /** 应用行；申请一个还没有行的应用时为 null，这时必须给 `appKey` 与 `appTitle`（X2）。 */
+      serverId: string | null;
+      appKey?: string;
+      appTitle?: string;
       botId: string;
       requesterUserId: string;
       kind: AppAccessRequestKind;
@@ -6755,7 +6782,12 @@ export function createPluginStore(options: PluginStoreOptions) {
       const samePending = and(
         eq(appAccessRequests.requesterUserId, input.requesterUserId),
         eq(appAccessRequests.botId, input.botId),
-        eq(appAccessRequests.serverId, input.serverId),
+        input.serverId === null
+          ? and(
+              isNull(appAccessRequests.serverId),
+              eq(appAccessRequests.appKey, input.appKey ?? ""),
+            )
+          : eq(appAccessRequests.serverId, input.serverId),
         eq(appAccessRequests.kind, input.kind),
         eq(appAccessRequests.status, "pending"),
       );
@@ -6776,6 +6808,9 @@ export function createPluginStore(options: PluginStoreOptions) {
         .insert(appAccessRequests)
         .values({
           serverId: input.serverId,
+          ...(input.serverId === null
+            ? { appKey: input.appKey, appTitle: input.appTitle }
+            : {}),
           botId: input.botId,
           requesterUserId: input.requesterUserId,
           kind: input.kind,
@@ -6798,6 +6833,19 @@ export function createPluginStore(options: PluginStoreOptions) {
         actorUserId: input.requesterUserId,
         payload: {
           change: "app_access_requested",
+          app: request.appKey,
+          bot: request.botId,
+          kind: request.kind,
+        },
+      });
+      // 上游的词汇（X2）：审计页按 `app_access.*` 读申请的来龙去脉；fork 的 configuration.changed 行照旧保留。
+      await recordAuditEvent(auditStore, {
+        eventType: "app_access.requested",
+        targetType: "mcp_server",
+        targetId: request.appKey,
+        actorUserId: input.requesterUserId,
+        payload: {
+          request: request.id,
           app: request.appKey,
           bot: request.botId,
           kind: request.kind,
@@ -6893,6 +6941,9 @@ export function createPluginStore(options: PluginStoreOptions) {
         });
       return closed;
     },
+
+    /** 应用访问的状态（X2，`./app-access-store`）：员工页与对话卡片读的「这个人能不能用这个应用」。 */
+    ...appAccessMethods({ database, auditStore }),
 
     /** Everything one Bot may use. The runtime asks this and offers exactly what comes back. */
     async listForAgent(agentId: string): Promise<GrantedPlugins> {
