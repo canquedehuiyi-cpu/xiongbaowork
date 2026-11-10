@@ -52,7 +52,7 @@ describe("normalizeArcadeError", () => {
       normalizeArcadeError(
         new APIError(500, undefined, undefined, new Headers()),
       ),
-    ).toEqual({
+    ).toStrictEqual({
       status: 500,
       name: undefined,
       message: undefined,
@@ -60,8 +60,10 @@ describe("normalizeArcadeError", () => {
   });
 
   test("a connection failure keeps status undefined", () => {
-    expect(
-      normalizeArcadeError(new APIConnectionError({ message: "down" }))?.status,
-    ).toBeUndefined();
+    const failure = normalizeArcadeError(
+      new APIConnectionError({ message: "down" }),
+    );
+    expect(failure).not.toBeNull();
+    expect(failure === null ? "no failure" : failure.status).toBeUndefined();
   });
 });
