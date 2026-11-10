@@ -160,7 +160,7 @@ export type AppInspection = {
 };
 
 /**
- * 一次申请会是什么，或者为什么不建（评审 M4）。浏览器入口（`POST /access-requests`、一按批准）与工具
+ * 一次申请会是什么，或者为什么不建。浏览器入口（`POST /access-requests`、一按批准）与工具
  * `request_app_access` 都从同一次 `inspectApp` 走这个函数，所以能不能申请、申请哪一种、已有哪一条在等，
  * 两个入口是同一个答案：
  * - 叫不出、或除了调用者的话没有东西作证（又没被授予）的应用：没有这个应用。
@@ -208,7 +208,7 @@ type Host = {
 const COMPOSIO_ID_PREFIX = "composio-";
 
 /**
- * 申请人被拒绝时写的 `app_access.refused` 限多少（评审 M5）：任何登录的人都能反复按出拒绝，每次一行
+ * 申请人被拒绝时写的 `app_access.refused` 限多少：任何登录的人都能反复按出拒绝，每次一行
  * 就能把轨迹写满。同一个人、同一位员工、同一个应用、同一个原因在窗口内只记第一次；一个人在窗口内最多
  * 记 `REFUSALS_PER_ACTOR` 行。只管轨迹，不管答复：每一次请求照样得到它的答复。
  *
@@ -819,7 +819,7 @@ export function appAccessMethods(context: {
               !facts.personal?.usable,
             /*
              * 主人的账号只说是谁的（`accountHolder`），不说它的细节：队友的卡片与响应里不放主人连接的时间
-             * （X1：队友不读主人的账号信息；评审 M2）。在队友的帧里主人的连接行本来就读不到（行安全），
+             * （X1：队友不读主人的账号信息）。在队友的帧里主人的连接行本来就读不到（行安全），
              * 这里是防御，免得哪天有人在能读到它的帧里调用。
              */
             connectedAt:
@@ -926,9 +926,7 @@ export function appAccessMethods(context: {
      * 一个应用的「谁可以给员工」：现在生效的（管理员选的，或按账号的默认值）与管理员选的（没选为 null）。
      * 没有这个应用时为 null。
      */
-    async ownerGrantsSetting(
-      serverId: string,
-    ): Promise<{
+    async ownerGrantsSetting(serverId: string): Promise<{
       ownerGrants: OwnerGrants;
       chosen: OwnerGrants | null;
     } | null> {

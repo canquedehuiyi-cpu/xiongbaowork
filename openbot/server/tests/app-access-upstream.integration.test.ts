@@ -881,7 +881,7 @@ describe("a teammate on somebody else's Team Bot, and team accounts (X1 底线)"
   });
 
   test("until shared use is approved (X3), nobody drives a team account: not the owner, not an administrator", async () => {
-    // X1 的闸门（评审 C1）：没有共享使用批准就拒绝，管理员也不例外；状态与调用时的答案一致。
+    // X1 的闸门：没有共享使用批准就拒绝，管理员也不例外；状态与调用时的答案一致。
     expect((await access(asMaker(), teamBot, SLACK)).state).toBe(
       "shared_not_approved",
     );
@@ -916,16 +916,17 @@ describe("a teammate on somebody else's Team Bot, and team accounts (X1 底线)"
 });
 
 /*
- * 安全评审的修正（X2 评审 I1、M1、M2、M4、M5）：每项自备数据，放在最后，不改上面用例的前提。
+ * 两个申请入口是一套、失败不留申请、队友读不到主人账号的细节、拒绝写不满轨迹：每项自备数据，放在最后，
+ * 不改上面用例的前提。
  */
-describe("review fixes", () => {
-  /** 申请时还没有行、之后被打开、但仍读不出怎么连接的 broker 应用（I1）。 */
+describe("one request per app, nothing left behind, nothing of the owner's, a bounded trail", () => {
+  /** 申请时还没有行、之后被打开、但仍读不出怎么连接的 broker 应用：再申请要答申请时那条。 */
   const BOX = row("box");
-  /** 已上架、但读不出怎么连接的 broker 应用：状态是 disabled，要的是打开，不是授予（M4）。 */
+  /** 已上架、但读不出怎么连接的 broker 应用：状态是 disabled，要的是打开，不是授予。 */
   const VAULT = row("vault");
-  /** 一按批准时 carryOut 会抛出的应用（M1）。 */
+  /** 一按批准时 carryOut 会抛出的应用。 */
   const THROWS = id("throws");
-  /** 两个入口先后申请的应用（M4）。 */
+  /** 两个入口先后申请的应用：后到的答先到的那条。 */
   const TOOL_FIRST = id("tool-first");
   const ROUTE_FIRST = id("route-first");
   const added = [BOX, VAULT, THROWS, TOOL_FIRST, ROUTE_FIRST];
@@ -944,7 +945,7 @@ describe("review fixes", () => {
     });
     if (!tool) throw new Error("no request_app_access tool");
     return (app: string) =>
-      runAsTenant(actorId, () => tool.execute({ app, reason: "评审用例" }));
+      runAsTenant(actorId, () => tool.execute({ app, reason: "需要它" }));
   };
   const refusedBy = (actor: string) =>
     events.filter(
@@ -1033,7 +1034,7 @@ describe("review fixes", () => {
     });
   });
 
-  describe("I1: one dedupe key, the index's", () => {
+  describe("asking again answers the request already waiting, under the index's key", () => {
     test("asking again after the app was opened answers the request filed before it had a row", async () => {
       const response = await asPerson().request(
         "/access-requests",
@@ -1076,7 +1077,7 @@ describe("review fixes", () => {
     });
   });
 
-  describe("M1: a one-press approval that throws leaves nothing waiting", () => {
+  describe("a one-press approval that throws leaves nothing waiting", () => {
     test("the request it filed is withdrawn, and the withdrawal is in the trail", async () => {
       const broken = Object.assign(Object.create(store) as typeof store, {
         listServers: async () => {
@@ -1123,7 +1124,7 @@ describe("review fixes", () => {
     });
   });
 
-  describe("M2: a teammate never reads the owner's connection", () => {
+  describe("a teammate never reads the owner's connection", () => {
     test("in the teammate's own frame the owner's account is not there to read", async () => {
       const app = await access(asPerson(), teamBot, GMAIL);
       expect(app.accountHolder).toBe("you");
@@ -1149,7 +1150,7 @@ describe("review fixes", () => {
     });
   });
 
-  describe("M4: request_app_access asks for what the state needs", () => {
+  describe("request_app_access asks for what the state needs", () => {
     test("a listed app that is still disabled is asked to be opened, as in the browser", async () => {
       const read = readAppAccessRequestAnswer(
         await toolAs(person, personBot)(VAULT),
@@ -1215,7 +1216,7 @@ describe("review fixes", () => {
     });
   });
 
-  describe("M5: refusals cannot fill the trail", () => {
+  describe("refusals cannot fill the trail", () => {
     test("withdrawing an id that is not a request id is 404 and writes nothing", async () => {
       const response = await routesAs({ id: noisy, role: "user" }).request(
         `/access-requests/${"x".repeat(2000)}`,

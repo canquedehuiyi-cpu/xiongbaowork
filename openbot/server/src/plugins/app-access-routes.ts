@@ -144,7 +144,7 @@ export function mountAppAccessRoutes(options: {
       kind?: string;
     },
   ) => {
-    // 去重、限频后写（评审 M5）：拒绝谁都能反复按出来，轨迹不能因此无界地长。答复每次照给。
+    // 去重、限频后写：拒绝谁都能反复按出来，轨迹不能因此无界地长。答复每次照给。
     await store.recordAppAccessRefusal({
       targetId: input.app,
       actorUserId: context.var.actor.id,
@@ -279,7 +279,7 @@ export function mountAppAccessRoutes(options: {
   };
 
   /**
-   * 已有一条在等的（卡片上的 `request`，可能是工具提的）就答它，不再建第二条（评审 M4）；否则提一条。
+   * 已有一条在等的（卡片上的 `request`，可能是工具提的）就答它，不再建第二条，免得同一个应用在收件箱里挂两条；否则提一条。
    * 那条在读的这一刻被处理掉了，就照常提新的。
    */
   const fileFor = async (
@@ -395,7 +395,7 @@ export function mountAppAccessRoutes(options: {
       });
     /*
      * try/finally（照上游）：`carryOut` 答了非 200，或者干脆抛出（没映射的错误、数据库错误），这次新提的
-     * 申请都要撤回，不能留在管理员的收件箱里（评审 M1）。撤回本身失败只记日志，不盖住原来的答复或异常。
+     * 申请都要撤回，不能留在管理员的收件箱里。撤回本身失败只记日志，不盖住原来的答复或异常。
      */
     let carried: Response | undefined;
     try {
