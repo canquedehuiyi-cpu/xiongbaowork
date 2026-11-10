@@ -33,6 +33,8 @@ const attempt = (overrides: Record<string, unknown>) => {
     (overrides.actorId as string | undefined) ??
     `actor-${randomUUID().slice(0, 8)}`;
   return {
+    // fork X5 评审 M1：一次尝试落在发起人自己的租户里。
+    tenantId: actorId,
     actorId,
     serverId,
     action: "connect",
@@ -397,5 +399,21 @@ describe("an attempt belongs to the person who started it", () => {
           .values(attempt({ actorId, userId: otherId }) as any),
       ),
     ).toBe("pending_authorizations_user_is_actor_check");
+  });
+
+  test("an attempt filed under a tenant other than its actor's is refused (review M1)", async () => {
+    const actorId = `tenant-${randomUUID().slice(0, 8)}`;
+    await seedPeople(database, [actorId]);
+    seeded.add(actorId);
+    for (const tenantId of ["platform", "team", "system", `x-${actorId}`]) {
+      expect(
+        await refusedBy(() =>
+          database
+            .insert(pendingAuthorizations)
+            // biome-ignore lint/suspicious/noExplicitAny: a row in somebody else's tenant is what is asked about.
+            .values(attempt({ actorId, userId: actorId, tenantId }) as any),
+        ),
+      ).toBe("pending_authorizations_tenant_is_actor_check");
+    }
   });
 });

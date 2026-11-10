@@ -11,6 +11,7 @@ import { asComposioBroker } from "../src/plugins/arcade-adapter";
 import type { ArcadeBroker } from "../src/plugins/broker";
 import type { AccountRef } from "../src/plugins/shared-accounts";
 import { createPluginStore } from "../src/plugins/store";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { removePeople, seedPeople } from "./support/people";
 
@@ -68,13 +69,16 @@ const account = (actor: string): AccountRef => ({
   vendorUserId: `v-${actor}`,
 });
 
+// fork 评审 M1：一次尝试只能落在发起人自己的租户里，所以认领在发起人的帧里做（与请求守卫一样）。
 const claim = (actorId: string, action = "connect") =>
-  store.claimAuthorizationAttempt({
-    actorId,
-    serverId,
-    action,
-    account: account(actorId),
-  });
+  runAsTenant(actorId, () =>
+    store.claimAuthorizationAttempt({
+      actorId,
+      serverId,
+      action,
+      account: account(actorId),
+    }),
+  );
 
 const age = (actorId: string, interval: string) =>
   database.execute(
@@ -438,6 +442,7 @@ describe("naming an attempt by created_at", () => {
     const [row] = await database
       .insert(pendingAuthorizations)
       .values({
+        tenantId: actorId,
         actorId,
         serverId,
         action: "connect",

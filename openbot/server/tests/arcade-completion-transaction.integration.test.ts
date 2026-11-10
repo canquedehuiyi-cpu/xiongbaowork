@@ -18,6 +18,7 @@ import { asComposioBroker } from "../src/plugins/arcade-adapter";
 import type { ArcadeBroker } from "../src/plugins/broker";
 import type { AccountRef } from "../src/plugins/shared-accounts";
 import { createPluginStore } from "../src/plugins/store";
+import { runAsTenant } from "../src/tenant/context";
 import { testDatabaseUrl } from "./support/database";
 import { removePeople, seedPeople } from "./support/people";
 
@@ -142,12 +143,15 @@ const toolkit = (name: string) => `tk-${name}-${suite}`;
 
 /** A claimed attempt carrying a minted `ar_...`, which is what a callback arrives against. */
 const attemptWith = async (actorId: string, authId: string) => {
-  const claimed = await store.claimAuthorizationAttempt({
-    actorId,
-    serverId,
-    action: "Google.SendEmail",
-    account: account(actorId),
-  });
+  // fork 评审 M1：尝试落在发起人自己的租户里，认领在发起人的帧里做。
+  const claimed = await runAsTenant(actorId, () =>
+    store.claimAuthorizationAttempt({
+      actorId,
+      serverId,
+      action: "Google.SendEmail",
+      account: account(actorId),
+    }),
+  );
   if (!claimed.claimed) throw new Error("claim failed");
   const minted = await store.recordAuthorizationMint({
     actorId,
@@ -280,12 +284,14 @@ describe("completeAuthorizationAttempt", () => {
       authId: string,
       ref: AccountRef,
     ) => {
-      const claimed = await store.claimAuthorizationAttempt({
-        actorId,
-        serverId: appId,
-        action: null,
-        account: ref,
-      });
+      const claimed = await runAsTenant(actorId, () =>
+        store.claimAuthorizationAttempt({
+          actorId,
+          serverId: appId,
+          action: null,
+          account: ref,
+        }),
+      );
       if (!claimed.claimed) throw new Error("claim failed");
       if (
         !(await store.recordAuthorizationMint({

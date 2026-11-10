@@ -392,6 +392,27 @@ export function createArcadeAttempts(context: {
       return row !== undefined;
     },
 
+    /**
+     * 这个人刚被取消（撤回）、带着 mint id 的那一次，还在 15 分钟内（X5 评审 I1）。取消后厂商那边仍可能
+     * 完成同意；回程拿它核对这个遗留授权是不是这一次的，再决定撤销还是留痕。
+     */
+    async withdrawnAttemptFor(
+      actorId: string,
+    ): Promise<PendingAuthorization | null> {
+      const [row] = await database
+        .select()
+        .from(pendingAuthorizations)
+        .where(
+          and(
+            eq(pendingAuthorizations.actorId, actorId),
+            eq(pendingAuthorizations.outcome, "withdrawn"),
+            sql`${pendingAuthorizations.authId} IS NOT NULL`,
+            sql`${pendingAuthorizations.createdAt} >= now() - ${ATTEMPT_TTL}`,
+          ),
+        );
+      return row ?? null;
+    },
+
     /** 这个人活着的那一次：没结束、没过期。 */
     async authorizationAttemptFor(
       actorId: string,
