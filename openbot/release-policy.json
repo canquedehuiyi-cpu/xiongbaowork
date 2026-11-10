@@ -1,44 +1,19 @@
 {
   "$schema": "./shared/release-policy.schema.json",
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
   "version": "v0.2.7",
-=======
-  "version": "v1.0.1",
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
   "compatibility": {
     "launcherApi": 1,
     "configSchema": 1,
     "extensionApi": 1,
     "database": {
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
       "from": ["0080_wakerflow_quota_contracts"],
       "to": "0080_wakerflow_quota_contracts",
-=======
-      "from": [
-        "0085_approval_rule_account",
-        "0083_learning_skill_approvals",
-        "0082_routine_goal",
-        "0077_channel_opening"
-      ],
-      "to": "0088_approval_reviewer_guidance",
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
       "rollbackCompatible": false
     },
     "intelligenceCapabilities": []
   },
   "upgrade": {
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
     "fromVersions": ["v0.2.6"],
-=======
-    "fromVersions": [
-      "v1.0.0",
-      "v0.3.4",
-      "v0.3.3",
-      "v0.3.2",
-      "v0.3.1",
-      "v0.3.0"
-    ],
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
     "requiresDowntime": true,
     "recovery": "restore-backup"
   }

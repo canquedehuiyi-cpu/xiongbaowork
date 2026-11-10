@@ -1914,14 +1914,10 @@ async fn prepare_installation_inner(
         let saved = preparation::saved_engine(&root);
         let address = tauri::async_runtime::block_on(engine_ready(&app, saved))?.pin()?;
         attempt.require_current()?;
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
         tauri::async_runtime::block_on(deployment_ready_for_generation(&app, &root, attempt.generation))?;
-=======
-        tauri::async_runtime::block_on(deployment_ready(&app, &root))?;
         // Made now, minutes before the first Start mounts it: Docker Desktop's file sharing refused
         // one made a moment before `up` (`stack::make_sign_in_folder`).
         stack::make_sign_in_folder(&root)?;
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
         // Saved once the folder is there, before any image is pulled into the engine. Every later
         // install and start uses this engine: see `preparation::saved_engine`.
         if saved.is_none() {
@@ -2329,12 +2325,8 @@ async fn deployment_ready_for_generation<R: tauri::Runtime>(
         };
         current()?;
         if deployment::needs_fetch(&target, &version) {
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
             if prepared_context.is_none() { prepared_context = Some(context()?); }
-            report_running(
-=======
             report_running_line(
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
                 &handle,
                 "deployment",
                 engine::StepLine::here("Downloading OpenBot.")
