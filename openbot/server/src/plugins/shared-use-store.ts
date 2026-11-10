@@ -205,8 +205,8 @@ export function createSharedUseStore(database: Database) {
   /**
    * 这位员工在这个应用上的批准，没有为 null。
    *
-   * `ownersDecide` 是 X3 第二部分（主人自己给应用）接上的：主人定的受众只在应用规则仍让主人决定时才算。
-   * 在那之前没有主人定的受众，它恒为 false，所以 `approved_as = owner` 的行一律读作没有批准（闭合的方向）。
+   * 主人定的受众只在应用规则仍让主人决定时才算（{@link ownersDecide}）：管理员不再让主人决定时它会被
+   * 撤回，但一行撤回失败、或别处切了规则没撤回而留下的，不能让团队账号继续开着。
    */
   async function approvalFor(
     botId: string,
@@ -238,9 +238,79 @@ export function createSharedUseStore(database: Database) {
     };
   }
 
-  /** 应用的规则是否让员工的主人决定。见 {@link approvalFor}。 */
-  async function ownersDecide(_serverId: string): Promise<boolean> {
-    return false;
+  /**
+   * 应用的规则是否让员工的主人决定：应答行是 Shared，且管理员明确选了 `any`（Shared 应用的默认值是只有
+   * 管理员）。见 {@link approvalFor}。
+   */
+  async function ownersDecide(serverId: string): Promise<boolean> {
+    const [app] = await database
+      .select({
+        accountMode: mcpServers.accountMode,
+        ownerGrants: mcpServers.ownerGrants,
+      })
+      .from(mcpServers)
+      .where(eq(mcpServers.id, serverId))
+      .limit(1);
+    return app?.accountMode === "shared" && app.ownerGrants === "any";
+  }
+
+  /**
+   * 员工的主人把一个应用规则让主人决定的 Shared 应用给了自己的员工：这次授予设下的受众，写下并答回；不设
+   * 时为 null（上游 `approveOwnerGrant`）。在员工主人的帧里。
+   *
+   * 受众正是现在能用这位员工的人：私人员工是主人自己，Team Bot 是它发布给的人；从不包括外部输入——一封
+   * 邮件或一个 Webhook 驾驶团队账号不是「能用这位员工的人」，仍要管理员批准。它是快照，和管理员的批准
+   * 一样：之后把员工发布得更宽，由闸门拦下并请管理员批准。
+   *
+   * 从不覆盖已有的批准：管理员的有它的理由，主人自己之前的已经就是这个。只有应答行是 Shared、规则此刻是
+   * `any` 时才写，这里重新读，不信调用方。
+   */
+  async function approveOwnerGrant(input: {
+    botId: string;
+    serverId: string;
+    by: string;
+  }): Promise<SharedUseApproval | null> {
+    const serverId = await appIdOf(input.serverId);
+    if (!(await ownersDecide(serverId))) return null;
+    if (await storedApproval(input.botId, serverId)) return null;
+    await assertOwnerFrame(input.botId);
+    const approval: SharedUseApproval = {
+      ...exposureOf(await botFacts(input.botId)),
+      outsideInput: false,
+    };
+    const written = await database.transaction(async (tx) => {
+      const appId = await lockApproval(tx, input.botId, serverId);
+      return writeApproval(tx, {
+        botId: input.botId,
+        serverId: appId,
+        approval,
+        by: input.by,
+        as: "owner",
+      });
+    });
+    return written ? approval : null;
+  }
+
+  /**
+   * 撤回主人的授予在一个应用上设下的受众（一位员工的），管理员定的一条都不动。在员工主人的帧里，答撤回了
+   * 哪些员工，好各写一行轨迹。
+   */
+  async function withdrawOwnerApprovals(input: {
+    serverId: string;
+    botId: string;
+  }): Promise<string[]> {
+    const { ids } = await rowsOfApp(input.serverId);
+    const withdrawn = await database
+      .delete(sharedUseApprovals)
+      .where(
+        and(
+          inArray(sharedUseApprovals.serverId, ids),
+          eq(sharedUseApprovals.approvedAs, "owner"),
+          eq(sharedUseApprovals.agentId, input.botId),
+        ),
+      )
+      .returning({ botId: sharedUseApprovals.agentId });
+    return [...new Set(withdrawn.map((row) => row.botId))];
   }
 
   type ApprovalInput = {
@@ -709,6 +779,8 @@ export function createSharedUseStore(database: Database) {
     approvalFor,
     approvalSource,
     setApproval,
+    approveOwnerGrant,
+    withdrawOwnerApprovals,
     botFacts,
     actorFacts,
     sourcesOf,
@@ -830,7 +902,9 @@ export function createSharedAudience(
       eventType:
         | "shared_use.requested"
         | "shared_use.approved"
-        | "shared_use.declined";
+        | "shared_use.declined"
+        | "shared_use.owner_approved"
+        | "shared_use.owner_withdrawn";
     },
   ) => recordAuditEvent(audit, { ...event, targetType: "mcp_server" });
 

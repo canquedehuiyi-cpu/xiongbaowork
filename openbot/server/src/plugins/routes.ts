@@ -4223,6 +4223,7 @@ export function createPluginRoutes(
     directory: appDirectory,
     decisionRefusal,
     carryOut: carryOutApproval,
+    ...(sharedUse ? { shared: sharedUse } : {}),
   });
 
   /** 驳回：只关掉这条申请，别的什么也不改。 */

@@ -103,7 +103,10 @@ import { accountArgumentFor } from "./account-argument";
 import { type AccountMode, accountFor } from "./shared-accounts";
 import { steeringOf } from "./shared-use";
 import type { SharedUseGate } from "./shared-use-store";
-import { appAccessMethods } from "./app-access-store";
+import {
+  appAccessMethods,
+  type SharedAudienceCheck,
+} from "./app-access-store";
 import {
   type BrokeredAccountRecord,
   createAccountBook,
@@ -1444,6 +1447,11 @@ export type PluginStoreOptions = {
    * 团队账号对每一次调用都拒绝（X1 评审 C1），闭合的方向。
    */
   sharedUse?: SharedUseGate;
+  /**
+   * 同一个闸门的只读问法（`SharedAudience.admitsPerson`）：应用卡片与工具说一个 Shared 应用对这个人是否
+   * 可用时问它。没给时读作没批准。
+   */
+  sharedAdmits?: SharedAudienceCheck;
 };
 
 /**
@@ -6469,8 +6477,17 @@ export function createPluginStore(options: PluginStoreOptions) {
        * Spec E3: an owner installed a listed entry on their own Waker, with no administrator in the
        * loop. Recorded in the trail so a reader can tell that grant from one an administrator made.
        */
-      options?: { selfService?: boolean },
+      options?: {
+        selfService?: boolean;
+        /**
+         * 谁做的这条授予（X3，`plugin_grants.granted_as`）：默认管理员；`owner` 是员工的主人把自己的应用
+         * 给自己的员工（`./owner-grants`）。主人的授予从不覆盖管理员的：同一个动作已经有授予时什么都不写，
+         * 也不进轨迹（那一条是管理员的，或主人自己之前的）。管理员在主人的那一条上再授予，就成了管理员的。
+         */
+        as?: "admin" | "owner";
+      },
     ): Promise<void> {
+      const grantedAs = options?.as ?? "admin";
       /*
        * A team Bot's grant is stamped `team` (G01-E P8b/P10): that is the stamp `listForAgent` reads
        * for it, in its owner's frame, a teammate's and `platform`. Stamped with the writer's frame
@@ -6480,18 +6497,23 @@ export function createPluginStore(options: PluginStoreOptions) {
        */
       const team = await isTeamBot(agentId);
       try {
-        await database
-          .insert(pluginGrants)
-          .values({
-            kind,
-            ref,
-            agentId,
-            grantedBy: by,
-            ...(team ? { tenantId: TEAM_TENANT } : {}),
-          })
-          .onConflictDoUpdate({
+        const insert = database.insert(pluginGrants).values({
+          kind,
+          ref,
+          agentId,
+          grantedBy: by,
+          grantedAs,
+          ...(team ? { tenantId: TEAM_TENANT } : {}),
+        });
+        if (grantedAs === "owner") {
+          const written = await insert
+            .onConflictDoNothing()
+            .returning({ ref: pluginGrants.ref });
+          if (written.length === 0) return;
+        } else
+          await insert.onConflictDoUpdate({
             target: [pluginGrants.kind, pluginGrants.ref, pluginGrants.agentId],
-            set: { grantedBy: by, updatedAt: new Date() },
+            set: { grantedBy: by, grantedAs: "admin", updatedAt: new Date() },
           });
       } catch (error) {
         if (refusedByRowSecurity(error)) {
@@ -6517,8 +6539,55 @@ export function createPluginStore(options: PluginStoreOptions) {
           ref,
           bot: agentId,
           selfService: options?.selfService === true,
+          ...(grantedAs === "owner" ? { grantedAs: "owner" } : {}),
         },
       });
+    },
+
+    /**
+     * 收回员工的主人在一个应用上给的（X3，上游 `revokeOwnerGrants`）：这些服务器行上主人做的每一条授予，
+     * 管理员做的一条都不动。答收回了哪些，每一条各写一行轨迹，和 {@link revoke} 一样。
+     */
+    async revokeOwnerGrants(
+      serverIds: string[],
+      agentId: string,
+      by: string,
+    ): Promise<string[]> {
+      if (serverIds.length === 0) return [];
+      const owned = and(
+        eq(pluginGrants.kind, "mcp"),
+        eq(pluginGrants.agentId, agentId),
+        eq(pluginGrants.grantedAs, "owner"),
+      );
+      const refs = (
+        await database
+          .select({ ref: pluginGrants.ref })
+          .from(pluginGrants)
+          .where(owned)
+      )
+        .map((row) => row.ref)
+        .filter((ref) => serverIds.includes(ref.split("/")[0] ?? ""));
+      if (refs.length === 0) return [];
+      const removed = await database
+        .delete(pluginGrants)
+        .where(and(owned, inArray(pluginGrants.ref, refs)))
+        .returning({ ref: pluginGrants.ref });
+      const taken = removed.map((row) => row.ref);
+      for (const ref of taken)
+        await recordAuditEvent(auditStore, {
+          eventType: "configuration.changed",
+          targetType: grantTargetType("mcp"),
+          targetId: ref,
+          payload: {
+            actor: by,
+            change: "plugin_revoked",
+            kind: "mcp",
+            ref,
+            bot: agentId,
+            grantedAs: "owner",
+          },
+        });
+      return taken;
     },
 
     async revoke(
@@ -6924,7 +6993,11 @@ export function createPluginStore(options: PluginStoreOptions) {
     },
 
     /** 应用访问的状态（X2，`./app-access-store`）：员工页与对话卡片读的「这个人能不能用这个应用」。 */
-    ...appAccessMethods({ database, auditStore }),
+    ...appAccessMethods({
+      database,
+      auditStore,
+      ...(options.sharedAdmits ? { sharedAudience: options.sharedAdmits } : {}),
+    }),
 
     /** Everything one Bot may use. The runtime asks this and offers exactly what comes back. */
     async listForAgent(agentId: string): Promise<GrantedPlugins> {
@@ -9265,6 +9338,69 @@ export function createPluginStore(options: PluginStoreOptions) {
           updatedAt: new Date(),
         })
         .where(eq(mcpServers.id, appId));
+    },
+
+    /**
+     * 谁可以把这个应用给员工（X3，上游 `setOwnerGrants`）：员工的主人（`any`）、只有管理员（`admin`），或
+     * 按账号的默认值（null）。写在应用地址上的每一行，重复行答得一样；进轨迹。只有持有能力的管理员写（应用
+     * 行是 `team` 标记）。没有这个应用答 null。
+     *
+     * 不再是 `any` 时，主人的授予在这个应用上设下的共享使用受众一并撤回（管理员的批准不动）：它们此刻已经
+     * 不会被读（`approvalFor` 只在规则是 `any` 时读主人的），撤回是为了规则再改回 `any` 时它们不会回来。
+     * 跨每位员工的主人，经 {@link reachEveryPersonOn}。答撤回了哪些员工，好各写一行轨迹。
+     */
+    async setOwnerGrants(input: {
+      serverId: string;
+      ownerGrants: "any" | "admin" | null;
+      by: string;
+    }): Promise<{ withdrawn: string[] } | null> {
+      requireServerWriter();
+      const [row] = await database
+        .select({
+          url: mcpServers.url,
+          tenantId: mcpServers.tenantId,
+          ownerGrants: mcpServers.ownerGrants,
+        })
+        .from(mcpServers)
+        .where(eq(mcpServers.id, input.serverId))
+        .limit(1);
+      if (!row) return null;
+      const updated = await database
+        .update(mcpServers)
+        .set({ ownerGrants: input.ownerGrants, updatedAt: new Date() })
+        .where(eq(mcpServers.url, row.url))
+        .returning({ id: mcpServers.id });
+      if (updated.length === 0)
+        throw new ServerWriteRefusedError(
+          "这次请求不能修改这个应用，谁可以给员工没有改变。",
+        );
+      await recordAuditEvent(auditStore, {
+        eventType: "configuration.changed",
+        targetType: "mcp_server",
+        targetId: input.serverId,
+        payload: {
+          actor: input.by,
+          change: "owner_grants_changed",
+          from: row.ownerGrants,
+          to: input.ownerGrants,
+        },
+      });
+      if (input.ownerGrants === "any") return { withdrawn: [] };
+      const ids = updated.map((server) => server.id);
+      const withdrawn = await reachEveryPersonOn(
+        row.tenantId === TEAM_TENANT,
+        () =>
+          database
+            .delete(sharedUseApprovals)
+            .where(
+              and(
+                inArray(sharedUseApprovals.serverId, ids),
+                eq(sharedUseApprovals.approvedAs, "owner"),
+              ),
+            )
+            .returning({ botId: sharedUseApprovals.agentId }),
+      );
+      return { withdrawn: [...new Set(withdrawn.map((bot) => bot.botId))] };
     },
 
     /**

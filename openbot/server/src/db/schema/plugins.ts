@@ -188,10 +188,19 @@ export const mcpServers = pgTable(
     sharedVerified: boolean("shared_verified").notNull().default(false),
     sharedVerifiedAt: timestamp("shared_verified_at", { withTimezone: true }),
     sharedProbeAction: text("shared_probe_action"),
+    /**
+     * 谁可以把这个应用给员工（X3，迁移 0197，上游 0064）：员工的主人（`any`）或只有管理员（`admin`）；
+     * NULL 用按账号的默认值，见 `plugins/app-access.ts` 的 `ownerGrantsOf`。只有管理员写。
+     */
+    ownerGrants: text("owner_grants").$type<"any" | "admin">(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (table) => [
+    check(
+      "mcp_servers_owner_grants_check",
+      sql`${table.ownerGrants} IS NULL OR ${table.ownerGrants} IN ('any', 'admin')`,
+    ),
     check(
       "mcp_servers_account_mode_check",
       sql`${table.accountMode} IN ('personal', 'shared')`,
@@ -686,6 +695,12 @@ export const pluginGrants = pgTable(
       .notNull()
       .references(() => agents.id, { onDelete: "cascade" }),
     grantedBy: text("granted_by"),
+    /**
+     * 谁做的这条授予（X3，迁移 0197，上游 0064）：管理员（`admin`，NULL 也是），或员工的主人把自己的应用
+     * 给了自己的员工（`owner`）。主人做的授予在 Team Bot 上永远用提问人自己的账号，见
+     * `team-bots/team-bots.ts` 的 `credentialActorFor`。
+     */
+    grantedAs: text("granted_as").$type<"admin" | "owner">(),
     assemblyBinding: jsonb("assembly_binding"),
     grantedAt: createdAt(),
     updatedAt: updatedAt(),
@@ -693,6 +708,10 @@ export const pluginGrants = pgTable(
   (table) => [
     primaryKey({ columns: [table.kind, table.ref, table.agentId] }),
     index("plugin_grants_agent_idx").on(table.agentId),
+    check(
+      "plugin_grants_granted_as_check",
+      sql`${table.grantedAs} IS NULL OR ${table.grantedAs} IN ('admin', 'owner')`,
+    ),
   ],
 );
 

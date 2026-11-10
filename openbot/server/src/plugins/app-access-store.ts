@@ -12,6 +12,7 @@ import {
   credentials as credentialRows,
   mcpServers,
   mcpUserCredentials,
+  pluginGrants,
   teamBotConsentDefaults,
   teamBotConsents,
   teamBotPublications,
@@ -23,9 +24,11 @@ import {
   type AppAccessFacts,
   type AppAccessRequestKind,
   type AppAccessState,
+  type AppAccount,
   type AppConnect,
   type AppProvider,
   accountOf,
+  type OwnerGrants,
   appAccessState,
   connectOf,
   ownerGrantsOf,
@@ -36,6 +39,7 @@ import {
 import type { BrokerApp, BrokerConnection } from "./broker";
 import { CATALOGUE, type CatalogueEntry, catalogueEntry } from "./catalogue";
 import { toolkitOf } from "./composio";
+import { ownerAppsAllowed } from "./owner-grants";
 import { asAccountMode, brokeredProvenance } from "./shared-accounts";
 
 /**
@@ -48,15 +52,54 @@ import { asAccountMode, brokeredProvenance } from "./shared-accounts";
  * 与上游的差异：
  * - 应用的键是 `coalesce(catalogue_key, id)`（fork 的授予 ref 前缀），不是行 id。
  * - Shared 应用的团队账号读应用行的 `shared_*` 列（X1），不是 `brokered_connections` 的 deployment 行。
- * - 共享闸门与 X1 的调用闸门同一个答案：X3 并入共享使用批准之前没有任何批准，团队账号对谁都是
- *   `shared_not_approved`（上游没有批准行时也是这样拒绝的，管理员也不例外）。
+ * - 共享闸门与调用时的闸门同一个答案（X3）：路由把 `sharedAudience`（`SharedAudience.admitsPerson`，在
+ *   员工主人的帧里只读批准）交进来；没交时一律读作没批准（`shared_not_approved`），与没接上闸门的 store
+ *   一致。
  * - Team Bot 上谁的账号：与 `teamBots.credentialActorFor` 同一规则的只读版本（主人连了就是主人的；否则是
  *   自己的，没有同意时第一次会先问），不花一次性同意。
- * - 主人自己给员工应用（X3）不在这里：`mayGiveOwn` 恒为 false，`ownerGrants` 只有按账号的默认值。
+ * - 主人自己给员工应用（X3）：`ownerGrants` 读应用行的 `owner_grants`（没选时按账号的默认值）；
+ *   `mayGiveOwn` 是「按主人视角读（`ownerView`），看的人就是员工的主人，且管理员没关掉 `ownerApps`」；`givenByOwner` 是这位员工在这个
+ *   应用上的每一条授予都是主人做的（`plugin_grants.granted_as`），那时 Team Bot 的调用用提问人自己的账号，
+ *   不问主人连没连（与 `credentialActorFor` 同一规则）。
  */
 
 /** 只问没有行的应用时才问目录。 */
 export type AppDirectory = () => Promise<BrokerApp[]>;
+
+/** 共享闸门会不会让这个人经这位员工进团队账号（`SharedAudience.admitsPerson`，X3）。 */
+export type SharedAudienceCheck = (input: {
+  botId: string;
+  serverId: string;
+  actorId: string;
+}) => Promise<boolean>;
+
+/** 这个人可以给自己员工的一个应用。 */
+export type GiveableApp = {
+  key: string;
+  displayName: string;
+  logo: string | null;
+  account: AppAccount;
+};
+
+/** 管理员选的「谁可以给员工」，读不懂的按没选。 */
+const asOwnerGrants = (value: string | null): OwnerGrants | null =>
+  value === "any" || value === "admin" ? value : null;
+
+type DescribeInput = {
+  userId: string | null;
+  agentId: string;
+  composioConfigured: boolean;
+  ownersHeld?: OwnersHeld;
+  sharedAudience?: SharedAudienceCheck;
+  /** 管理员有没有让这个人把自己的应用给自己的员工（`ownerApps` 能力）；没给时现读。 */
+  ownerGrantsAllowed?: boolean;
+  /**
+   * 按主人的视角读（X3）：看的人是员工的主人时，他自己能给的应用读作 `owner_grantable`。只在调用方要时才
+   * 这样读：fork 的申请流程（X2）里，主人对自己员工上没授予的应用仍读作 `not_granted`、可以向管理员申请，
+   * 那条既有行为与它的测试不变。员工页「给」的开关按这个视角读。
+   */
+  ownerView?: boolean;
+};
 
 /** 员工主人帧里的授予（路由经 `asBotOwner` 读）；见 `heldKeys`。 */
 export type OwnersHeld = () => Promise<{ tools: { ref: string }[] }>;
@@ -71,6 +114,7 @@ type ServerRow = {
   provenance: string;
   authScheme: string | null;
   accountMode: string | null;
+  ownerGrants: string | null;
   credentialId: string | null;
   sharedConnectedAt: Date | null;
   sharedVerified: boolean;
@@ -91,6 +135,8 @@ type AppCandidate = {
   authScheme: string | null;
   listedConnect: AppConnect;
   accountMode: "personal" | "shared" | null;
+  /** 管理员为这个应用选的「谁可以给员工」（X3，迁移 0197）；没选为 null。 */
+  ownerGrants: OwnerGrants | null;
   hasCredential: boolean;
   /** 这个应用只有调用者自己添加的行：是他自己的，不归管理员管。 */
   own: boolean;
@@ -191,6 +237,8 @@ function connectOfListing(connection: BrokerConnection): AppConnect {
 export function appAccessMethods(context: {
   database: Database;
   auditStore: AuditStore;
+  /** 共享闸门的只读问法（X3）；store 的选项给，调用方也可以每次覆盖。 */
+  sharedAudience?: SharedAudienceCheck;
 }) {
   const { database, auditStore } = context;
   /** 窗口内已记过的拒绝（键 → 过期时刻），和每个人窗口内已记的行数。 */
@@ -237,6 +285,7 @@ export function appAccessMethods(context: {
         provenance: mcpServers.provenance,
         authScheme: mcpServers.authScheme,
         accountMode: mcpServers.accountMode,
+        ownerGrants: mcpServers.ownerGrants,
         credentialId: mcpServers.credentialId,
         sharedConnectedAt: mcpServers.sharedConnectedAt,
         sharedVerified: mcpServers.sharedVerified,
@@ -288,6 +337,7 @@ export function appAccessMethods(context: {
           authScheme: head.authScheme,
           listedConnect: null,
           accountMode: mode,
+          ownerGrants: asOwnerGrants(head.ownerGrants),
           hasCredential: head.credentialId !== null,
           own:
             head.tenantId === currentTenant() && head.tenantId !== TEAM_TENANT,
@@ -334,6 +384,7 @@ export function appAccessMethods(context: {
       authScheme: null,
       listedConnect: input.listedConnect ?? null,
       accountMode: null,
+      ownerGrants: null,
       hasCredential: false,
       own: false,
       team: null,
@@ -539,6 +590,47 @@ export function appAccessMethods(context: {
           : undefined;
   }
 
+  /** 员工的主人，在调用者的帧里读（主人看得到自己的员工，包括已发布到 `team` 的）；读不到为 null。 */
+  async function botOwnerOf(agentId: string): Promise<string | null> {
+    const [row] = await database
+      .select({ ownerUserId: agentProfiles.ownerUserId })
+      .from(agentProfiles)
+      .where(
+        and(
+          eq(agentProfiles.agentId, agentId),
+          isNull(agentProfiles.deletedAt),
+        ),
+      )
+      .limit(1);
+    return row?.ownerUserId ?? null;
+  }
+
+  /**
+   * 员工 MCP 授予的服务器部分，各自有没有管理员做的那一条（上游 `grantsByServer`）。每一条都是主人做的
+   * 服务器读作 `byAdmin: false`。在调用者的帧里读。
+   */
+  async function grantsByServer(
+    agentId: string,
+  ): Promise<Map<string, { byAdmin: boolean }>> {
+    const rows = await database
+      .select({ ref: pluginGrants.ref, grantedAs: pluginGrants.grantedAs })
+      .from(pluginGrants)
+      .where(
+        and(eq(pluginGrants.kind, "mcp"), eq(pluginGrants.agentId, agentId)),
+      );
+    const servers = new Map<string, { byAdmin: boolean }>();
+    for (const grant of rows) {
+      const serverId = grant.ref.split("/")[0] ?? "";
+      if (!serverId) continue;
+      servers.set(serverId, {
+        byAdmin:
+          grant.grantedAs !== "owner" ||
+          (servers.get(serverId)?.byAdmin ?? false),
+      });
+    }
+    return servers;
+  }
+
   /** 已发布的 Team Bot 的主人，看的人不是主人时；其余为 null。与 `teamBots.credentialActorFor` 读同一张表。 */
   async function teamBotOwnerFor(agentId: string, userId: string) {
     const [row] = await database
@@ -605,132 +697,157 @@ export function appAccessMethods(context: {
   async function describe(
     host: Host,
     apps: AppCandidate[],
-    input: {
-      userId: string | null;
-      agentId: string;
-      composioConfigured: boolean;
-      ownersHeld?: OwnersHeld;
-    },
+    input: DescribeInput,
   ): Promise<AppInspection[]> {
     const { userId, agentId } = input;
     const held = await heldKeys(host, agentId, input.ownersHeld);
     const owner = userId ? await teamBotOwnerFor(agentId, userId) : null;
-    const [mine, owners, consented, pending] = await Promise.all([
+    const sharedAudience = input.sharedAudience ?? context.sharedAudience;
+    const mayGiveOwn =
+      input.ownerView === true &&
+      userId !== null &&
+      (await botOwnerOf(agentId)) === userId &&
+      (input.ownerGrantsAllowed ?? (await ownerAppsAllowed(userId)));
+    const [mine, owners, consented, pending, grants] = await Promise.all([
       userId ? connectionFacts(apps, userId) : null,
       owner ? connectionFacts(apps, owner) : null,
       owner && userId ? standingConsents(userId, agentId) : new Set<string>(),
       userId ? pendingFor(userId, agentId) : [],
+      grantsByServer(agentId),
     ]);
-    return apps.map((app) => {
-      const granted = [app.key, ...app.rowIds].some((id) => held.has(id));
-      const own = mine?.(app);
-      /*
-       * 主人连了就是主人的账号（与 `teamBots.credentialActorFor` 同一规则）。队友的回合与路由都在队友自己
-       * 的帧里跑，`composio_connections` 与 `mcp_user_credentials` 按人分租户、受行安全保护，所以这里在
-       * 现有调用处读不到主人的行，`ownersAccount` 恒为 undefined——与调用时 `credentialActorFor` 在同一帧
-       * 里的答案一致。读得到时（比如在 platform 帧里调用），也只用它的「能不能用」，不把细节交给队友。
-       */
-      const ownersAccount = owners?.(app);
-      const personal = ownersAccount ?? own;
-      const sharedUsable = app.team?.usable === true;
-      const known: AppAccessFacts = {
-        provider: app.provider,
-        present: app.present,
-        composioConfigured: input.composioConfigured,
-        authScheme: app.authScheme,
-        listedConnect: app.listedConnect,
-        accountMode: app.accountMode,
-        catalogueAuth: app.entry?.auth ?? null,
-        hasCredential: app.hasCredential,
-        granted,
-        ownerGrants: null,
-        mayGiveOwn: false,
-        personal: personal === undefined ? null : { usable: personal.usable },
-        shared: app.team ? { usable: sharedUsable } : null,
-        sharedAdmitted: null,
-      };
-      const account = accountOf(known);
-      /*
-       * 共享闸门：与调用时 store 的闸门同一个答案。上游的闸门先查这位员工对这个应用的共享使用批准，没有
-       * 批准就拒绝，管理员也不例外；批准表在 X3 并入，在那之前没有任何批准，X1 的闸门对每一次调用都拒绝
-       * （评审 C1），所以这里一律是「没批准」。X3 接上批准后改为问它的 `admits`。只在能改变答案的地方
-       * 填：持有、团队账号可用、问到了人。
-       */
-      const facts: AppAccessFacts =
-        account === "shared" && sharedUsable && granted && userId
-          ? { ...known, sharedAdmitted: false }
-          : known;
-      const state = appAccessState(facts);
-      const holder = ownersAccount !== undefined ? "owner" : "you";
-      const requestKind = REQUEST_KIND_FOR[state];
-      /*
-       * 这个状态那一种申请；fork 的工具对已有行、未上架的应用提的是 enable（请管理员上架），批准后主人自己装，
-       * 同样能让员工用上，所以已有行时它也算「已申请」。
-       */
-      const request =
-        requestKind === null
-          ? undefined
-          : pending.find(
-              (row) =>
-                row.key === app.key &&
-                (row.kind === requestKind ||
-                  (requestKind === "grant" &&
-                    row.kind === "enable" &&
-                    app.present)),
-            );
-      return {
-        access: {
-          key: app.key,
-          displayName: app.title,
-          logo: app.logo,
+    return Promise.all(
+      apps.map(async (app) => {
+        const granted = [app.key, ...app.rowIds].some((id) => held.has(id));
+        const byWhom = [app.key, ...app.rowIds]
+          .map((id) => grants.get(id))
+          .filter((found) => found !== undefined);
+        /** 这位员工在这个应用上的每一条授予（读得到的）都是主人做的。 */
+        const givenByOwner =
+          granted &&
+          byWhom.length > 0 &&
+          byWhom.every((found) => !found.byAdmin);
+        const own = mine?.(app);
+        /*
+         * 主人连了就是主人的账号（与 `teamBots.credentialActorFor` 同一规则）。队友的回合与路由都在队友自己
+         * 的帧里跑，`composio_connections` 与 `mcp_user_credentials` 按人分租户、受行安全保护，所以这里在
+         * 现有调用处读不到主人的行，`ownersAccount` 恒为 undefined——与调用时 `credentialActorFor` 在同一帧
+         * 里的答案一致。读得到时（比如在 platform 帧里调用），也只用它的「能不能用」，不把细节交给队友。
+         */
+        const ownersAccount = givenByOwner ? undefined : owners?.(app);
+        const personal = ownersAccount ?? own;
+        const sharedUsable = app.team?.usable === true;
+        const known: AppAccessFacts = {
           provider: app.provider,
-          account,
-          connect: connectOf(facts),
-          authScheme: brokeredProvenance(app.provider) ? app.authScheme : null,
+          present: app.present,
+          composioConfigured: input.composioConfigured,
+          authScheme: app.authScheme,
+          listedConnect: app.listedConnect,
           accountMode: app.accountMode,
-          state,
-          unavailable: unavailableReason(facts),
-          accountHolder: account === "personal" ? holder : null,
-          asksFirst:
-            state === "ready" &&
-            account === "personal" &&
-            holder === "you" &&
-            owner !== null &&
-            ![app.key, ...app.rowIds].some((id) => consented.has(id)),
+          catalogueAuth: app.entry?.auth ?? null,
+          hasCredential: app.hasCredential,
           granted,
-          ownerGrants: ownerGrantsOf(facts),
-          givenByOwner: false,
-          needsConnect: false,
-          /*
-           * 主人的账号只说是谁的（`accountHolder`），不说它的细节：队友的卡片与响应里不放主人连接的时间
-           * （X1：队友不读主人的账号信息；评审 M2）。在队友的帧里主人的连接行本来就读不到（行安全），
-           * 这里是防御，免得哪天有人在能读到它的帧里调用。
-           */
-          connectedAt:
-            account === "shared"
-              ? iso(app.team?.connectedAt)
-              : account === "personal" && holder === "you"
-                ? (own?.connectedAt ?? null)
-                : null,
-          requestKind,
-          request: request
+          ownerGrants: app.ownerGrants,
+          mayGiveOwn,
+          personal: personal === undefined ? null : { usable: personal.usable },
+          shared: app.team ? { usable: sharedUsable } : null,
+          sharedAdmitted: null,
+        };
+        const account = accountOf(known);
+        /*
+         * 共享闸门：与调用时 store 的闸门同一个答案（X3）。没有批准就拒绝，管理员也不例外；有批准按受众判。
+         * 只在能改变答案的地方问：持有、团队账号可用、问到了人。没交 `sharedAudience` 时读作没批准。
+         */
+        const facts: AppAccessFacts =
+          account === "shared" && sharedUsable && granted && userId
             ? {
-                id: request.id,
-                kind: request.kind as AppAccessRequestKind,
-                createdAt: iso(request.createdAt) ?? "",
+                ...known,
+                sharedAdmitted:
+                  sharedAudience && app.answeringId
+                    ? await sharedAudience({
+                        botId: agentId,
+                        serverId: app.answeringId,
+                        actorId: userId,
+                      })
+                    : false,
               }
-            : null,
-        },
-        unavailable: unavailableReason(facts),
-        answeringId: app.answeringId,
-        rowIds: app.rowIds,
-        toolkit: app.toolkit,
-        entry: app.entry,
-        sharedUsable,
-        vouched: app.vouched,
-        own: app.own,
-      };
-    });
+            : known;
+        const state = appAccessState(facts);
+        const holder = ownersAccount !== undefined ? "owner" : "you";
+        const requestKind = REQUEST_KIND_FOR[state];
+        /*
+         * 这个状态那一种申请；fork 的工具对已有行、未上架的应用提的是 enable（请管理员上架），批准后主人自己装，
+         * 同样能让员工用上，所以已有行时它也算「已申请」。
+         */
+        const request =
+          requestKind === null
+            ? undefined
+            : pending.find(
+                (row) =>
+                  row.key === app.key &&
+                  (row.kind === requestKind ||
+                    (requestKind === "grant" &&
+                      row.kind === "enable" &&
+                      app.present)),
+              );
+        return {
+          access: {
+            key: app.key,
+            displayName: app.title,
+            logo: app.logo,
+            provider: app.provider,
+            account,
+            connect: connectOf(facts),
+            authScheme: brokeredProvenance(app.provider)
+              ? app.authScheme
+              : null,
+            accountMode: app.accountMode,
+            state,
+            unavailable: unavailableReason(facts),
+            accountHolder: account === "personal" ? holder : null,
+            asksFirst:
+              state === "ready" &&
+              account === "personal" &&
+              holder === "you" &&
+              owner !== null &&
+              ![app.key, ...app.rowIds].some((id) => consented.has(id)),
+            granted,
+            ownerGrants: ownerGrantsOf(facts),
+            givenByOwner,
+            needsConnect:
+              state === "owner_grantable" &&
+              account === "personal" &&
+              !facts.personal?.usable,
+            /*
+             * 主人的账号只说是谁的（`accountHolder`），不说它的细节：队友的卡片与响应里不放主人连接的时间
+             * （X1：队友不读主人的账号信息；评审 M2）。在队友的帧里主人的连接行本来就读不到（行安全），
+             * 这里是防御，免得哪天有人在能读到它的帧里调用。
+             */
+            connectedAt:
+              account === "shared"
+                ? iso(app.team?.connectedAt)
+                : account === "personal" && holder === "you"
+                  ? (own?.connectedAt ?? null)
+                  : null,
+            requestKind,
+            request: request
+              ? {
+                  id: request.id,
+                  kind: request.kind as AppAccessRequestKind,
+                  createdAt: iso(request.createdAt) ?? "",
+                }
+              : null,
+          },
+          unavailable: unavailableReason(facts),
+          answeringId: app.answeringId,
+          rowIds: app.rowIds,
+          toolkit: app.toolkit,
+          entry: app.entry,
+          sharedUsable,
+          vouched: app.vouched,
+          own: app.own,
+        };
+      }),
+    );
   }
 
   return {
@@ -745,6 +862,9 @@ export function appAccessMethods(context: {
         composioConfigured: boolean;
         directory?: AppDirectory;
         ownersHeld?: OwnersHeld;
+        sharedAudience?: SharedAudienceCheck;
+        ownerGrantsAllowed?: boolean;
+        ownerView?: boolean;
       },
     ): Promise<AppAccess[]> {
       const held = await heldKeys(this, input.agentId, input.ownersHeld);
@@ -787,6 +907,9 @@ export function appAccessMethods(context: {
         composioConfigured: boolean;
         directory?: AppDirectory;
         ownersHeld?: OwnersHeld;
+        sharedAudience?: SharedAudienceCheck;
+        ownerGrantsAllowed?: boolean;
+        ownerView?: boolean;
       },
     ): Promise<AppInspection | null> {
       const candidate = await candidateFor(
@@ -800,6 +923,76 @@ export function appAccessMethods(context: {
     },
 
     /**
+     * 一个应用的「谁可以给员工」：现在生效的（管理员选的，或按账号的默认值）与管理员选的（没选为 null）。
+     * 没有这个应用时为 null。
+     */
+    async ownerGrantsSetting(
+      serverId: string,
+    ): Promise<{
+      ownerGrants: OwnerGrants;
+      chosen: OwnerGrants | null;
+    } | null> {
+      const app = group(await allRows()).byName.get(serverId);
+      if (!app) return null;
+      return {
+        ownerGrants: ownerGrantsOf({
+          provider: app.provider,
+          authScheme: app.authScheme,
+          accountMode: app.accountMode,
+          catalogueAuth: app.entry?.auth ?? null,
+          ownerGrants: app.ownerGrants,
+        }),
+        chosen: app.ownerGrants,
+      };
+    },
+
+    /**
+     * 这个人可以给自己员工的应用（X3，上游 `giveableApps`）：新建员工时默认勾上的、员工页上的开关。打开了
+     * 且可用、对主人开放（{@link ownerGrantsOf}），跑在每个人自己账号上的还要这个人自己连上了、没被拒。
+     * 不针对哪一位员工：给不给得了某一位，在给的时候问。按名字排序。
+     */
+    async giveableApps(input: {
+      userId: string;
+      composioConfigured: boolean;
+    }): Promise<GiveableApp[]> {
+      const apps = [...group(await allRows()).byKey.values()];
+      const connections = await connectionFacts(apps, input.userId);
+      const giveable: GiveableApp[] = [];
+      for (const app of apps) {
+        const own = connections(app);
+        const facts: AppAccessFacts = {
+          provider: app.provider,
+          present: app.present,
+          composioConfigured: input.composioConfigured,
+          authScheme: app.authScheme,
+          listedConnect: app.listedConnect,
+          accountMode: app.accountMode,
+          catalogueAuth: app.entry?.auth ?? null,
+          hasCredential: app.hasCredential,
+          granted: false,
+          ownerGrants: app.ownerGrants,
+          mayGiveOwn: true,
+          personal: own ? { usable: own.usable } : null,
+          shared: null,
+          sharedAdmitted: null,
+        };
+        if (unavailableReason(facts) !== null) continue;
+        if (ownerGrantsOf(facts) !== "any") continue;
+        const account = accountOf(facts);
+        if (account === "personal" && !own?.usable) continue;
+        giveable.push({
+          key: app.key,
+          displayName: app.title,
+          logo: app.logo,
+          account,
+        });
+      }
+      return giveable.sort((left, right) =>
+        left.displayName.localeCompare(right.displayName),
+      );
+    },
+
+    /**
      * 审计轨迹里关于申请的一行（上游 `app_access.*` 词汇），经与其他插件事件同一个脱敏写入器写。目标是
      * 应用键。
      */
@@ -810,7 +1003,9 @@ export function appAccessMethods(context: {
           | "app_access.cancelled"
           | "app_access.approved"
           | "app_access.dismissed"
-          | "app_access.refused";
+          | "app_access.refused"
+          | "app_access.owner_granted"
+          | "app_access.owner_revoked";
       },
     ): Promise<void> {
       await recordAuditEvent(auditStore, {

@@ -1587,6 +1587,7 @@ await startupLifecycle.run(async (startup) => {
      */
     broker: composioBroker,
     sharedUse: sharedAudience.gate,
+    sharedAdmits: sharedAudience.admitsPerson,
     responsibilitySources: sharedUseStore.sourcesOf,
   });
   /*
