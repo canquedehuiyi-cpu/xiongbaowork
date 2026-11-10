@@ -8,6 +8,14 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+- **员工可以用登录人自己的身份调用公司在 Microsoft Entra 后面的系统（上游 #931，OBO）。** 管理员按 URL 添加
+  MCP 服务器时带上 `entraScope`（例如 `api://hr-api/.default`），之后每次调用都用 Entra 代表提问人换来的
+  token，系统看到的是本人、只能看到本人能看的；例行任务用本人保存的 Microsoft 登录换取。被管理员移除的人立刻
+  失效。拿不到 token 时本人会看到一句中文说明（没有 Microsoft 登录、登录过期、管理员没授权等）。需要先配好
+  Microsoft 登录；设置见 `docs/configuration.md`「Company systems behind Microsoft Entra」。**升级须知：**
+  迁移 0186 给 `mcp_servers` 加一个可空列 `entra_scope`，无回填。与上游不同：已标记的服务器不能直接换地址
+  （要先移除再添加），check-in 不读这类服务器。
+
 ## 0.2.7
 
 - **用 DeepSeek 时群聊能对话了，审批通过后也能接着做。** DeepSeek 的思考模式要求每次都把之前的思考过程

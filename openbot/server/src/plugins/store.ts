@@ -12,6 +12,7 @@ import {
   type AuditStore,
   recordAuditEvent,
 } from "../audit";
+import type { EntraTokens } from "../auth/entra-refusal";
 import {
   type ActionPolicy,
   evaluateActionPolicy,
@@ -117,6 +118,7 @@ import {
   deploymentClientSlug,
   toolkitOfDeploymentClientKey,
 } from "./deployment-clients";
+import { decideEntraScope, entraTokenFor } from "./entra-access";
 import { type ListedTool, McpServerError } from "./mcp";
 import { registerDynamicClient } from "./oauth";
 import { shareTargetOf } from "./share-target";
@@ -248,6 +250,11 @@ export type ServerRecord = {
    * and never from the app's name. The connect route and the store refuse whatever a screen draws.
    */
   adminConnectOnly: boolean;
+  /**
+   * The Entra scope a server added by URL is reached with as the signed-in person, or null where it
+   * is reached on the deployment's own credential. See `mcpServers.entraScope`. 上游 #931。
+   */
+  entraScope?: string | null;
   tools: ToolRecord[];
   /**
    * Grants on tools this server no longer advertises.
@@ -1393,6 +1400,12 @@ export type PluginStoreOptions = {
   broker?: ComposioBroker;
   /** Where the vendor sends people back; needed to (re)register a dynamic client. */
   redirectUri?: string;
+  /**
+   * Tokens Entra issues for a person on their behalf, for a server an admin marked as reached as
+   * the signed-in person (`auth/entra.ts`, 上游 #931). Absent on a deployment with no Microsoft
+   * sign-in, where such a server cannot be added and a call to one already stored is refused.
+   */
+  entra?: EntraTokens;
 };
 
 /**
@@ -1595,6 +1608,7 @@ export function createPluginStore(options: PluginStoreOptions) {
   // No default, unlike the seams above: there is no real implementation in this tree to fall back
   // to, and a deployment with no Composio key is supposed to have no broker. See `./broker`.
   const broker = options.broker;
+  const entraTokens = options.entra;
 
   /*
    * One exchange at a time per (server, person). A rotating vendor invalidates the refresh
@@ -1952,6 +1966,8 @@ export function createPluginStore(options: PluginStoreOptions) {
       credentialId: string | null;
       /** `team` for a server an administrator added: its secret is then read through the broker. */
       tenantId: string;
+      /** The Entra scope a `person-entra` server is reached with; see `mcpServers.entraScope`. */
+      entraScope?: string | null;
       /*
        * NO `authScheme` HERE, DELIBERATELY. The scheme that decides whether a brokered call needs a
        * connection row is the APP'S, read through `brokeredAppScheme` below — and this row's own
@@ -2126,6 +2142,23 @@ export function createPluginStore(options: PluginStoreOptions) {
       }
 
       return {};
+    }
+
+    /*
+     * A server reached as the signed-in person through Microsoft (上游 #931): a token Entra issues
+     * for the person asking, from their own Microsoft sign-in, for this server's scope. Never the
+     * deployment's credential, for the reason the `person-oauth` branch below gives. Held in memory
+     * by `auth/entra.ts` until shortly before it expires, never written down here.
+     */
+    if (access.credential === "person-entra") {
+      return {
+        token: await entraTokenFor(
+          entraTokens,
+          row,
+          actorId,
+          (sentence) => new PluginRefusedError(sentence, null),
+        ),
+      };
     }
 
     if (access.credential !== "person-oauth") {
@@ -3740,7 +3773,18 @@ export function createPluginStore(options: PluginStoreOptions) {
       title: string;
       url: string;
       credentialId?: string;
+      /**
+       * The Entra scope to reach this server with as the signed-in person (上游 #931), for example
+       * `api://hr-api/.default`. Null puts it back on `credentialId`. Absent keeps whatever the
+       * server already has, as `credentialId` does. See `decideEntraScope`.
+       */
+      entraScope?: string | null;
       by: string;
+      /**
+       * Who is adding it, by id. A server reached as the signed-in person is asked what it offers
+       * as the admin adding it, since there is no deployment credential to ask with.
+       */
+      actorId?: string;
     }): Promise<ServerRecord> {
       requireServerWriter();
       const refusal = customUrlRefusal(input.url);
@@ -3865,6 +3909,8 @@ export function createPluginStore(options: PluginStoreOptions) {
           provenance: mcpServers.provenance,
           // The third of what `accessFor` resolves a row with. See there.
           authScheme: mcpServers.authScheme,
+          // Kept when the caller names none; see `decideEntraScope`.
+          entraScope: mcpServers.entraScope,
         })
         .from(mcpServers)
         .where(eq(mcpServers.id, input.id));
@@ -3878,6 +3924,14 @@ export function createPluginStore(options: PluginStoreOptions) {
        * survivable. See {@link requireNotBrokered}.
        */
       requireNotBrokered(input.id, existing);
+
+      // How it is reached once this write lands, or why it may not be (上游 #931).
+      const entra = decideEntraScope(
+        input,
+        existing,
+        entraTokens !== undefined,
+      );
+      if ("refusal" in entra) throw new CustomServerRefusedError(entra.refusal);
 
       if (
         existing &&
@@ -3911,6 +3965,7 @@ export function createPluginStore(options: PluginStoreOptions) {
           url: input.url,
           provenance: "custom",
           credentialId: credentialId ?? null,
+          entraScope: entra.scope ?? null,
           addedBy: input.by,
         })
         .onConflictDoUpdate({
@@ -3950,6 +4005,8 @@ export function createPluginStore(options: PluginStoreOptions) {
              * this endpoint does, and nothing asks it to.
              */
             ...(credentialId ? { credentialId } : {}),
+            // Kept when the caller names none, for the reason `decideEntraScope` gives.
+            ...(entra.named !== undefined ? { entraScope: entra.named } : {}),
             addedBy: input.by,
             updatedAt: new Date(),
           },
@@ -3967,10 +4024,17 @@ export function createPluginStore(options: PluginStoreOptions) {
           // Named in the trail, because "who added a server nobody reviewed" is a question somebody
           // will ask and the answer should not require reading the catalogue of a past build.
           provenance: "custom",
+          ...(entra.scope
+            ? { reachedAs: "person", entraScope: entra.scope }
+            : {}),
         },
       });
 
-      await this.refreshTools(input.id);
+      // A marked server is asked what it offers as the admin adding it, on their own Entra token.
+      await this.refreshTools(
+        input.id,
+        entra.scope ? (input.actorId ?? "") : undefined,
+      );
       const added = (await this.listServers()).find(
         (server) => server.id === input.id,
       );
@@ -5819,6 +5883,7 @@ export function createPluginStore(options: PluginStoreOptions) {
           adminConnectOnly:
             toolkitOf(row.url) !== null &&
             adminConnectOnly(brokeredApps.get(row.url)?.authScheme ?? null),
+          entraScope: row.entraScope,
           tools: tools
             .filter((tool) => tool.serverId === row.id)
             .map((tool) => {

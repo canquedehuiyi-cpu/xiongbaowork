@@ -658,6 +658,12 @@ Marking a server this way needs Microsoft sign-in configured. Adding the same se
 `entraScope` keeps the mark; send `"entraScope": null` to reach it on a token again. The server's
 page under Plugins shows the mark and its scope.
 
+In this fork, three things differ from upstream. A marked server cannot be moved to another address
+(nor marked while moving): every call carries the person's own token for that system, so to move
+it, remove it and add it again. A check-in reads only apps a person connected with their own
+account, so it does not reach a marked server; routines do. And what the person is told when it
+cannot work is in Chinese.
+
 **Apps can call OpenBot with an Entra token.** An app that signed somebody in with Entra asks for a
 token to `MICROSOFT_OAUTH_API_SCOPE` and sends it as `Authorization: Bearer <token>` on any API or
 agent request. It is checked against the directory's published keys, its issuer (the directory
