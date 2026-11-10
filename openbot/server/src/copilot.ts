@@ -135,6 +135,7 @@ import {
 } from "./plugins/tools";
 import { type ProjectForPrompt, projectGuidance } from "./projects/context";
 import { withQuotaRunErrors } from "./quota/limits";
+import { createTrajectoryConnect } from "./recorder/trajectory-connect";
 import { corsOrigin } from "./request-trust";
 import type { ProductTelemetry } from "./telemetry/product";
 import { productRuntimeHook } from "./telemetry/product-boundaries";
@@ -3573,10 +3574,11 @@ export function mountCopilotRuntime(
      * through, and the selector that assigns the trajectory to its person's own Learning space
      * (`recorder/wiring.ts`).
      *
-     * M3: only the gate is applied. The selector configures the Intelligence client upstream builds
-     * for the runtime, and this runtime has none: it keeps its threads in the local runner (R0). The
-     * gate still stands in front of the route, so whatever the runtime answers there, only a
-     * connected browser reaches it.
+     * The runtime's own handler refuses every pass on a runtime without Intelligence (this one keeps
+     * its threads in the local runner, R0), so with an Intelligence key configured the pass is
+     * answered by `recorder/trajectory-connect.ts` instead: the gate in front, the selector on a
+     * client of its own. Without a key the gate still stands in front of the runtime's route, so only
+     * a connected browser ever hears its refusal.
      */
     trajectoryCapture?: {
       gate: NonNullable<CopilotRuntimeHooks["onBeforeHandler"]>;
@@ -3597,6 +3599,16 @@ export function mountCopilotRuntime(
     localRunner,
     trajectoryCapture,
   } = options;
+  /** The Recorder's pass, answered here when there is an Intelligence to join it to. */
+  const trajectoryConnect =
+    config.intelligence && trajectoryCapture
+      ? createTrajectoryConnect({
+          intelligence: config.intelligence,
+          gate: trajectoryCapture.gate,
+          selectLearningContainers: trajectoryCapture.selectLearningContainers,
+          identifyUser,
+        })
+      : undefined;
   /*
    * Who one request is, asked once. The frame below and the agent factory inside it both need it,
    * and they must not disagree. The runtime hands the factory the `Request` it was given; where it
@@ -3852,6 +3864,14 @@ export function mountCopilotRuntime(
      * empties while the rows stay; so the person's first request that can touch a thread loads their
      * stored threads, in their frame, and every later one finds that load done. `/info` touches none.
      */
+    const trajectoryId =
+      trajectoryConnect && request.method === "POST"
+        ? trajectoryIdOf(new URL(request.url).pathname, basePath)
+        : undefined;
+    if (trajectoryConnect && trajectoryId !== undefined)
+      return runAsRuntimeActor(actor, () =>
+        trajectoryConnect(request, trajectoryId),
+      );
     return runAsRuntimeActor(actor, async () => {
       if (!describesItself) await runner.hydrate();
       return runtimeRoutes.fetch(request);
@@ -3918,4 +3938,22 @@ export function mountCopilotRuntime(
       return runner.getThreadMessages(input.threadId);
     },
   };
+}
+
+/** The trajectory a capture-pass path names (`<base>/trajectory/:id/connect`), or undefined for any other path. */
+function trajectoryIdOf(
+  pathname: string,
+  basePath: string,
+): string | undefined {
+  const base = basePath.replace(/\/+$/, "");
+  if (!pathname.startsWith(`${base}/trajectory/`)) return undefined;
+  const match = /^\/trajectory\/([^/]+)\/connect\/?$/.exec(
+    pathname.slice(base.length),
+  );
+  if (!match?.[1]) return undefined;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
 }
