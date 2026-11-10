@@ -1,4 +1,11 @@
-import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  expect,
+  test,
+} from "bun:test";
 import type { RunAgentInput } from "@ag-ui/core";
 import { RunAgentInputSchema } from "@ag-ui/core/schemas";
 import { CopilotKitProvider } from "@copilotkit/react-core/v2";
@@ -256,6 +263,14 @@ beforeAll(() => {
     },
   );
 });
+
+/*
+ * The screens here read the signed-in person from the app's own client (`@/query-client`), and a
+ * person cached there is used as it is for a minute. One another file left behind, without an id,
+ * meant no preferences were ever asked for and no starter suggestions were drawn, so whichever test
+ * ran first after such a file failed. Each test starts from an empty shared client, as it leaves it.
+ */
+beforeEach(() => queryClient.clear());
 
 afterEach(() => {
   cleanup();
