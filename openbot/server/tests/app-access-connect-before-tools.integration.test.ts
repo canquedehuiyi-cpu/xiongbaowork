@@ -83,6 +83,8 @@ const store = withPersonalDefaults(plain, {
 });
 /** 批准里每一次「再问一次应用要工具」，按的是谁。 */
 const refreshedAs: { serverId: string; actor: string | undefined }[] = [];
+/** 每一次刷新带的内部选项（第三个参数）。 */
+const refreshedWith: unknown[] = [];
 const refresh = store.refreshTools;
 store.refreshTools = async function (
   this: typeof store,
@@ -91,6 +93,7 @@ store.refreshTools = async function (
   ...rest: never[]
 ) {
   refreshedAs.push({ serverId, actor: actorId });
+  refreshedWith.push(rest[0]);
   return refresh.call(this, serverId, actorId, ...rest);
 } as typeof store.refreshTools;
 
@@ -255,6 +258,7 @@ beforeEach(async () => {
   parallelOnline = true;
   events.length = 0;
   refreshedAs.length = 0;
+  refreshedWith.length = 0;
   await forget();
 });
 
@@ -360,5 +364,29 @@ describe("an app whose tools come with the person's own sign-in, in the personal
       "「Parallel Search」还没有可以授予的工具。请在连接页打开它的页面看看原因，然后再试一次。",
     );
     expect(await holds(PARALLEL)).toEqual([]);
+  });
+});
+
+/*
+ * 批准里的刷新只为列出工具：vendor 答 `invalid_client` 时不能顺手替换部署共用的 OAuth 客户端（那是应用页上
+ * 管理员的事，和连接时列工具 `discoverToolsOnConnect` 的做法一样）。
+ */
+test("the press's refresh never re-registers the deployment's OAuth client", async () => {
+  await turnedOnWithNothingListed(NOTION);
+  await press(NOTION);
+  expect(refreshedWith).toContainEqual({ reRegister: false });
+  expect(refreshedWith).not.toContainEqual({ reRegister: true });
+});
+
+/*
+ * 「打开、什么都不给」和「授予了 0 个」在轨迹上要分得开：前者是在等本人登录，后者不会发生（团队版拒绝）。
+ */
+test("turning an app on for a sign-in is told apart from a grant on the trail", async () => {
+  setEdition("personal");
+  await turnedOnWithNothingListed(NOTION);
+  await press(NOTION);
+  expect(eventsOf("app_access.approved").at(-1)?.payload).toMatchObject({
+    granted: 0,
+    opened: true,
   });
 });
