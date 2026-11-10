@@ -13,6 +13,7 @@ import {
 } from "../src/admin/controls";
 import { createEnterpriseStore } from "../src/admin/settings-store";
 import { createApp } from "../src/app";
+import { saveRuleKind } from "../src/approvals/extra-columns";
 import { createApprovalStore } from "../src/approvals/store";
 import type { ApprovalPolicyStore } from "../src/approvals/types";
 import { type AuditEventInput, createAuditStore } from "../src/audit";
@@ -41,12 +42,7 @@ import { bindTestRoleWriter } from "./support/role-writer";
  * M5: fork 是多租户的，数据库读写都要在租户帧里（runAsTenant/asPlatform）。上游这份测试没有租户帧，
  * 所以每个钩子和用例都在平台帧里跑（tests/support/platform-frame）。
  */
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  test,
-} from "./support/platform-frame";
+import { afterAll, afterEach, beforeAll, test } from "./support/platform-frame";
 import {
   ADMIN,
   CASEY,
@@ -564,9 +560,10 @@ describe("checking an action the admin set", () => {
         toolRef: `${GMAIL}/send_email`,
         effect: "write",
         scope: "*",
-        kind: "sending",
       })
       .returning();
+    // `kind` 不在冻结的 db/schema/approvals.ts 里，照 store 的写法补写（approvals/extra-columns.ts）。
+    if (rule) await saveRuleKind(database, rule.id, "sending");
     try {
       const { body } = await checkOf(app, action({}));
       expect(body.result.outcome).toBe("allowed");

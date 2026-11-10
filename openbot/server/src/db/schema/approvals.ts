@@ -5,8 +5,6 @@ import {
   check,
   foreignKey,
   index,
-  type PgTableExtraConfigValue,
-  pgPolicy,
   pgTable,
   primaryKey,
   text,
@@ -14,14 +12,13 @@ import {
   unique,
   uniqueIndex,
   uuid,
+  type PgTableExtraConfigValue,
 } from "drizzle-orm/pg-core";
 import type {
   ContinuationReceipt,
   ContinuationRecord,
 } from "../../approvals/continuation-protocol";
 import type {
-  ActionKind,
-  ActionKindPolicy,
   ApprovalAction,
   ApprovalDecision,
   HostCommandPolicy,
@@ -31,9 +28,6 @@ import { approvalExactInputObjects } from "./approval-exact-input-objects";
 import { users } from "./core";
 import { jsonb } from "./json";
 import { tenantId } from "./tenant";
-
-/* 每张租户表自 0072 起都有的两种范围：本人的帧，和 platform 帧。 */
-const tenantScope = sql`tenant_id = current_setting('app.tenant_id', true) OR current_setting('app.tenant_id', true) = 'platform'`;
 export const approvalPreferences = pgTable(
   "approval_preferences",
   {
@@ -78,20 +72,6 @@ export const approvalTeamSettings = pgTable(
       .default("allow"),
     /** SEC1 D10 (0131): every Bot asks before a dangerous command, whatever its own switch says. */
     enforceDangerousCommands: boolean("enforce_dangerous_commands").notNull().default(false),
-    /**
-     * The kinds of action the admin closed: `ask` asks every time with Allow once and Deny only,
-     * `hand_off` leaves it to the person. A kind not named is open (see approvals/policy.ts).
-     */
-    actionKinds: jsonb("action_kinds")
-      .$type<Partial<Record<ActionKind, ActionKindPolicy>>>()
-      .notNull()
-      .default({}),
-    /**
-     * What the admin told auto-review, in their own words. Added to the reviewer's prompt in a section
-     * of its own, below the built-in safety requirements, which it never changes (approvals/policy.ts,
-     * `reviewPrompt`). Null is none. Read only by the gate and the admin's screen, never by members.
-     */
-    reviewerGuidance: text("reviewer_guidance"),
     updatedBy: text("updated_by").references(() => users.id, {
       onDelete: "set null",
     }),
@@ -145,7 +125,7 @@ export const approvalRequests = pgTable(
     ),
     check(
       "approval_decision_check",
-      sql`${table.decision} IN ('allow_once', 'allow_conversation', 'allow_always', 'deny', 'handled')`,
+      sql`${table.decision} IN ('allow_once', 'allow_always', 'deny', 'handled')`,
     ),
   ],
 );
@@ -166,12 +146,6 @@ export const approvalRules = pgTable(
       .$type<RuleBehaviour>()
       .notNull()
       .default("allow"),
-    // M5: 留给 X 系列（多账号）：上游这里还有按账号的 `account` 列。
-    /**
-     * The kind of action the rule was saved from ("Always allow here" on a send card is `sending`),
-     * or null (0177). An allow reaches a kind only when it was saved from it (`reachesKind`).
-     */
-    kind: text("kind").$type<ActionKind>(),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -304,69 +278,3 @@ export const approvalContinuationSteps = pgTable(
     check("approval_continuation_steps_fence_check", sql`${table.fence} >= 0`),
   ],
 ).enableRLS();
-
-/**
- * "Allow for this conversation": one action (Bot, tool, effect, target, account) allowed for the
- * rest of one conversation, for one person. The gate reads the ones for the conversation an action is
- * in (`conversationGrant` in approvals/policy.ts); a revoked one, or one whose conversation was
- * deleted, no longer allows anything.
- *
- * 按人的数据：照本仓库的约定带 `tenant_id`、行级安全和四条策略（恢复层迁移 0177）。
- */
-export const approvalConversationGrants = pgTable(
-  "approval_conversation_grants",
-  {
-    tenantId: tenantId(),
-    id: text("id").primaryKey(),
-    ownerUserId: text("owner_user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    threadId: text("thread_id").notNull(),
-    approvalId: text("approval_id")
-      .notNull()
-      .references(() => approvalRequests.id, { onDelete: "cascade" }),
-    botId: text("bot_id").notNull(),
-    toolRef: text("tool_ref").notNull(),
-    effect: text("effect").notNull(),
-    scope: text("scope").notNull(),
-    /** M5: 留给 X 系列（多账号）。本部署的审批不分账号，总是 null。 */
-    account: text("account"),
-    kind: text("kind").$type<ActionKind>(),
-    revokedAt: timestamp("revoked_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-  },
-  (table) => [
-    index("approval_conversation_grants_thread_idx").on(
-      table.ownerUserId,
-      table.threadId,
-    ),
-    index("approval_conversation_grants_tenant_idx").on(table.tenantId),
-    pgPolicy("tenant_isolation", {
-      as: "permissive",
-      for: "select",
-      to: "public",
-      using: tenantScope,
-    }),
-    pgPolicy("tenant_isolation_insert", {
-      as: "permissive",
-      for: "insert",
-      to: "public",
-      withCheck: tenantScope,
-    }),
-    pgPolicy("tenant_isolation_update", {
-      as: "permissive",
-      for: "update",
-      to: "public",
-      using: tenantScope,
-      withCheck: tenantScope,
-    }),
-    pgPolicy("tenant_isolation_delete", {
-      as: "permissive",
-      for: "delete",
-      to: "public",
-      using: tenantScope,
-    }),
-  ],
-);

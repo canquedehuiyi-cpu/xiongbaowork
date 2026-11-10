@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { describe, expect } from "bun:test";
 import { appKey } from "@openbot/shared/audit-filters";
 import { sql } from "drizzle-orm";
 import { createApp } from "../src/app";
@@ -15,6 +15,11 @@ import { loadConfig } from "../src/config";
 import { createDatabase } from "../src/db/client";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
+/*
+ * M5: fork 是多租户的，数据库读写都要在租户帧里（runAsTenant/asPlatform）。上游这份测试没有租户帧，
+ * 所以每个钩子和用例都在平台帧里跑（tests/support/platform-frame）。
+ */
+import { afterAll, beforeAll, test } from "./support/platform-frame";
 
 /**
  * The trail's payload filters, asked of PostgreSQL: which app, which tool, read or write, what an

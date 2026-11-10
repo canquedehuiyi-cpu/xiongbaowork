@@ -1198,6 +1198,13 @@
       "when": 1794318168188,
       "tag": "0178_approval_reviewer_guidance",
       "breakpoints": true
+    },
+    {
+      "idx": 179,
+      "version": "7",
+      "when": 1794318168189,
+      "tag": "0179_team_channel_guard_title_opening",
+      "breakpoints": true
     }
   ]
 }

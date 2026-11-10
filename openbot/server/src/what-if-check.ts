@@ -751,6 +751,9 @@ export async function checkAction(
           scope: server,
           args: {},
           ...(facts.destructive ? { destructive: true as const } : {}),
+          // M5: as fork's `callTool` marks it, so the floors that read app tools by where they came
+          // from (outbound send, share, publish, delete) see this as the app call it would be.
+          subject: { connector: true },
         },
         facts.group,
         (id) => (id === server && names.app ? names.app : connectorName(id)),

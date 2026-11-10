@@ -3,6 +3,11 @@ import { createHash, randomUUID } from "node:crypto";
 import { LLMock } from "@copilotkit/aimock";
 import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 import { and, desc, eq, inArray } from "drizzle-orm";
+import {
+  saveTeamActionKinds,
+  saveTeamReviewerGuidance,
+  teamSettingsColumns,
+} from "../src/approvals/extra-columns";
 import { guidanceForPrompt, reviewPrompt } from "../src/approvals/policy";
 import { REFUSALS } from "../src/approvals/reviewer-guidance";
 import { createApprovalService } from "../src/approvals/service";
@@ -44,7 +49,12 @@ const ana = `${prefix}-ana`;
 const ben = `${prefix}-ben`;
 const bot = `${prefix}-bot`;
 let role: "admin" | "user" = "admin";
-let priorTeam: typeof approvalTeamSettings.$inferSelect | undefined;
+let priorTeam: Awaited<ReturnType<typeof readTeamRow>>[number] | undefined;
+const readTeamRow = () =>
+  database
+    .select(teamSettingsColumns)
+    .from(approvalTeamSettings)
+    .where(eq(approvalTeamSettings.id, "team"));
 
 const mock = new LLMock();
 const originalBaseUrl = process.env.OPENAI_BASE_URL;
@@ -132,10 +142,7 @@ beforeAll(async () => {
     { id: ben, email: `${ben}@example.test` },
   ]);
   // The team settings row is deployment-wide, so this file puts it back as it found it.
-  [priorTeam] = await database
-    .select()
-    .from(approvalTeamSettings)
-    .where(eq(approvalTeamSettings.id, "team"));
+  [priorTeam] = await readTeamRow();
   await store.policy?.setTeamSettings(admin.id, { enforceAutoReview: true });
   await store.policy?.setReviewerGuidance?.(admin.id, { text: null });
 });
@@ -144,10 +151,8 @@ beforeEach(async () => {
   role = "admin";
   mock.clearRequests();
   // Each test starts with no guidance, straight in the table so the trail holds only the tests' saves.
-  await database
-    .update(approvalTeamSettings)
-    .set({ reviewerGuidance: null })
-    .where(eq(approvalTeamSettings.id, "team"));
+  // `reviewerGuidance` 不在冻结的 db/schema/approvals.ts 里（approvals/extra-columns.ts）。
+  await saveTeamReviewerGuidance(database, null);
 });
 
 afterAll(async () => {
@@ -166,7 +171,14 @@ afterAll(async () => {
   await database
     .delete(approvalTeamSettings)
     .where(eq(approvalTeamSettings.id, "team"));
-  if (priorTeam) await database.insert(approvalTeamSettings).values(priorTeam);
+  // `actionKinds`、`reviewerGuidance` 不在冻结的 db/schema/approvals.ts 里，另写回去
+  // （approvals/extra-columns.ts）。
+  if (priorTeam) {
+    const { actionKinds, reviewerGuidance, ...columns } = priorTeam;
+    await database.insert(approvalTeamSettings).values(columns);
+    await saveTeamActionKinds(database, actionKinds);
+    await saveTeamReviewerGuidance(database, reviewerGuidance);
+  }
   // Audit rows are append-only by design and stay; they name only this run's throwaway ids.
   await database.delete(users).where(inArray(users.id, [admin.id, ana, ben]));
   await database.$client.close();

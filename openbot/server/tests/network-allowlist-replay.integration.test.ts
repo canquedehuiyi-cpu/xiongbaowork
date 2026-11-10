@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { describe, expect } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { LLMock } from "@copilotkit/aimock";
 import { and, eq, inArray, like, sql } from "drizzle-orm";
@@ -8,6 +8,7 @@ import {
 } from "../src/admin/controls";
 import { createApp } from "../src/app";
 import { createAuditReader, createAuditStore } from "../src/audit";
+import { setRole } from "../src/auth/roles";
 import { botSeat } from "../src/computer/computer-key";
 import {
   ActionRefusedError,
@@ -25,9 +26,17 @@ import {
   users,
 } from "../src/db/schema";
 import { createModelCompleter } from "../src/routing/model";
+import { runAsTenant } from "../src/tenant/context";
 import recorded from "./fixtures/network-allowlist-recorded.json";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
+/*
+ * M5: fork 是多租户的，数据库读写都要在租户帧里（runAsTenant/asPlatform）。上游这份测试没有租户帧：
+ * 钩子和用例在平台帧里跑（tests/support/platform-frame），每个人的 Bot 写在本人的帧里，Bot 打开网页
+ * 也在主人的帧里（和真正的运行一样），管理员的角色经受限的角色写入者写入。
+ */
+import { afterAll, beforeAll, test } from "./support/platform-frame";
+import { bindTestRoleWriter } from "./support/role-writer";
 
 /**
  * The network allowlist, described, replayed and saved, against a real PostgreSQL.
@@ -88,6 +97,7 @@ const gateway = createComputerGateway({
 const mock = new LLMock();
 const originalBaseUrl = process.env.OPENAI_BASE_URL;
 let controls: EnterpriseControls;
+let releaseRoleWriter: (() => Promise<void>) | undefined;
 
 /** The app as the deployment builds it, signed in as the admin. */
 function appFor() {
@@ -134,7 +144,9 @@ function send(
 /** Opens a page as the Bot's owner would have it opened, and says whether the controls let it. */
 async function visit(bot: string, owner: string, url: string) {
   try {
-    await gateway.navigate(botSeat(bot), { id: owner, userId: owner }, url);
+    await runAsTenant(owner, () =>
+      gateway.navigate(botSeat(bot), { id: owner, userId: owner }, url),
+    );
     return "allowed";
   } catch (error) {
     if (error instanceof ActionRefusedError) return "refused";
@@ -154,27 +166,29 @@ beforeAll(async () => {
     { ...SALES, name: "Sales", groups: [GROUP] },
     { ...OPS, name: "Ops" },
   ]);
-  await database.insert(agents).values(
-    [SALES_BOT, OPS_BOT].map((id) => ({
-      id,
-      name: id,
-      type: "built_in" as const,
-      configuration: {},
-    })),
-  );
-  await database.insert(agentProfiles).values(
-    [
-      [SALES_BOT, SALES.id],
-      [OPS_BOT, OPS.id],
-    ].map(([agentId, ownerUserId]) => ({
-      agentId: agentId as string,
-      ownerUserId: ownerUserId as string,
-      title: "Test",
-      roleDescription: "Test",
-      avatarSeed: "x",
-      visibility: "private" as const,
-    })),
-  );
+  releaseRoleWriter = await bindTestRoleWriter(database);
+  await setRole(database, ADMIN.id, "admin");
+  // Each Bot is its owner's row, written in the owner's own frame.
+  for (const [agentId, ownerUserId] of [
+    [SALES_BOT, SALES.id],
+    [OPS_BOT, OPS.id],
+  ] as const)
+    await runAsTenant(ownerUserId, async () => {
+      await database.insert(agents).values({
+        id: agentId,
+        name: agentId,
+        type: "built_in" as const,
+        configuration: {},
+      });
+      await database.insert(agentProfiles).values({
+        agentId,
+        ownerUserId,
+        title: "Test",
+        roleDescription: "Test",
+        avatarSeed: "x",
+        visibility: "private" as const,
+      });
+    });
   controls = await installEnterpriseControls({
     database,
     databaseUrl: testDatabaseUrl(),
@@ -191,6 +205,7 @@ afterAll(async () => {
   await clean();
   await database.delete(agents).where(inArray(agents.id, [SALES_BOT, OPS_BOT]));
   await database.delete(users).where(like(users.email, `%${suite}%`));
+  await releaseRoleWriter?.();
   await database.$client.end({ timeout: 5 });
 });
 

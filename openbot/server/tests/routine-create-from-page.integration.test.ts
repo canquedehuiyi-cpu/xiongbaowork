@@ -21,6 +21,7 @@ import {
 import { createRoutineRoutes } from "../src/routines/routes";
 import { createRoutineRunner } from "../src/routines/runner";
 import { createRoutineStore } from "../src/routines/store";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -48,7 +49,15 @@ const createdUserIds: string[] = [];
 const createdAgentIds: string[] = [];
 const createdChannelIds: string[] = [];
 
-afterEach(async () => {
+/*
+ * M5: fork 是多租户的（G01）。每个人的 Bot、会话和定时任务写在本人的租户里，浏览器的请求在本人的帧里跑
+ * （和真正的 requireUser 一样），跨人的读和清理在 `platform` 帧里做。
+ */
+const asPlatform = <T>(fn: () => T): T => runAsTenant("platform", fn);
+
+afterEach(() => asPlatform(clearCreated));
+
+async function clearCreated() {
   for (const userId of createdUserIds) {
     await database.delete(routines).where(eq(routines.ownerUserId, userId));
   }
@@ -67,7 +76,7 @@ afterEach(async () => {
   for (const userId of createdUserIds.splice(0)) {
     await database.delete(users).where(eq(users.id, userId));
   }
-});
+}
 
 afterAll(async () => {
   await database.$client.close();
@@ -75,28 +84,34 @@ afterAll(async () => {
 
 async function createUser(): Promise<AgentActor> {
   const id = `${testPrefix}-user-${randomUUID()}`;
-  await database.insert(users).values({
-    id,
-    email: `${id}@example.test`,
-    name: "Routine Page Test User",
-  });
+  await runAsTenant(id, () =>
+    database.insert(users).values({
+      id,
+      email: `${id}@example.test`,
+      name: "Routine Page Test User",
+    }),
+  );
   createdUserIds.push(id);
   return { id, role: "user" };
 }
 
 async function createBot(owner: AgentActor, name: string) {
-  const profile = await profileStore.create(owner, {
-    name,
-    title: "Sales Operations",
-    roleDescription: "Summarise new leads.",
-    visibility: "private",
-  });
+  const profile = await runAsTenant(owner.id, () =>
+    profileStore.create(owner, {
+      name,
+      title: "Sales Operations",
+      roleDescription: "Summarise new leads.",
+      visibility: "private",
+    }),
+  );
   createdAgentIds.push(profile.id);
   return profile.id;
 }
 
 async function createChannel(owner: AgentActor, agentIds: string[]) {
-  const channel = await channelStore.create(owner, agentIds);
+  const channel = await runAsTenant(owner.id, () =>
+    channelStore.create(owner, agentIds),
+  );
   createdChannelIds.push(channel.id);
   return channel;
 }
@@ -112,7 +127,8 @@ function appFor(owner: AgentActor, runTurn: TurnRunner) {
       email: `${owner.id}@example.test`,
       role: "user",
     } as AppVariables["actor"]);
-    await next();
+    // As the real `requireUser` does: the request runs in the signed-in person's own frame.
+    await runAsTenant(owner.id, () => next());
   };
   const app = new Hono<{ Variables: AppVariables }>();
   app.route(
@@ -222,10 +238,12 @@ describe("New routine from the Routines page", () => {
       instruction: "Send me a summary of yesterday's new leads",
     });
     expect((await listed(app))[0]?.lastRun?.status).toBe("succeeded");
-    const [conversation] = await database
-      .select({ lastMessage: channels.lastMessage })
-      .from(channels)
-      .where(eq(channels.id, channel.id));
+    const [conversation] = await asPlatform(() =>
+      database
+        .select({ lastMessage: channels.lastMessage })
+        .from(channels)
+        .where(eq(channels.id, channel.id)),
+    );
     expect(conversation?.lastMessage).toBe(
       "Done: Send me a summary of yesterday's new leads",
     );
@@ -269,7 +287,7 @@ describe("New routine from the Routines page", () => {
     };
 
     const refusals: [unknown, string][] = [
-      [{ ...valid, channelId: undefined }, "Choose a conversation"],
+      // M5: 熊宝不指定对话也能建（见下一条用例），所以「缺 conversation 应拒绝」这一行不收。
       [{ ...valid, instruction: "  " }, "请写下员工要做什么。"],
       [{ ...valid, agentId: "" }, "请为这个定时任务选一位员工。"],
       [{ ...valid, cron: "*/5 * * * *" }, "at most every 15 minutes"],
@@ -290,5 +308,32 @@ describe("New routine from the Routines page", () => {
     expect((await post(app, valid)).status).toBe(201);
     const strangerApp = appFor(stranger, async () => ({ replyText: "ok" }));
     expect(await listed(strangerApp)).toEqual([]);
+  });
+
+  /*
+   * M5: 上游（#1406）要求页面上新建必须指定对话，否则 400「Choose a conversation」。熊宝保留自己的行为：
+   * 不指定对话也能建，系统自动找这位员工所在的对话（只有一个时就用它），和员工自己的 create_routine 一样。
+   */
+  test("without a conversation picked, the one the Bot is in is found for it", async () => {
+    const owner = await createUser();
+    const bot = await createBot(owner, "Lead Desk");
+    const otherBot = await createBot(owner, "Inbox Helper");
+    const channel = await createChannel(owner, [bot]);
+    await createChannel(owner, [otherBot]);
+    const app = appFor(owner, async () => ({ replyText: "ok" }));
+
+    const created = await post(app, {
+      agentId: bot,
+      instruction: "Send me the new leads",
+      cron: "0 9 * * *",
+      timezone: "UTC",
+    });
+    expect(created.status).toBe(201);
+    const { routine } = (await created.json()) as { routine: ListedRoutine };
+    expect(routine).toMatchObject({
+      agentId: bot,
+      channel: { id: channel.id },
+    });
+    expect((await listed(app)).map((row) => row.id)).toEqual([routine.id]);
   });
 });

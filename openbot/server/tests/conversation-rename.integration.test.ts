@@ -1,6 +1,6 @@
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import postgres from "postgres";
@@ -32,6 +32,8 @@ import {
   users,
   workItems,
 } from "../src/db/schema";
+import { TEAM_TENANT } from "../src/db/schema/tenant";
+import { runAsTenant } from "../src/tenant/context";
 import { createWorkQueue } from "../src/work/queue";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
@@ -61,7 +63,15 @@ const createdUserIds: string[] = [];
 const createdAgentIds: string[] = [];
 const createdChannelIds: string[] = [];
 
-afterEach(async () => {
+/*
+ * M5: fork 是多租户的（G01）。每个人的会话、Bot 和排队的起名都写在那个人自己的租户里，跨人的读和
+ * 清理在 `platform` 帧里做；浏览器的请求在本人的帧里跑，和真正的 requireUser 一样。
+ */
+const asPlatform = <T>(fn: () => T): T => runAsTenant("platform", fn);
+
+afterEach(() => asPlatform(clearCreated));
+
+async function clearCreated() {
   for (const channelId of createdChannelIds.splice(0)) {
     await database.delete(workItems).where(eq(workItems.key, channelId));
     await database
@@ -78,7 +88,7 @@ afterEach(async () => {
   for (const userId of createdUserIds.splice(0)) {
     await database.delete(users).where(eq(users.id, userId));
   }
-});
+}
 
 afterAll(async () => {
   await database.$client.close();
@@ -87,28 +97,43 @@ afterAll(async () => {
 async function person(): Promise<AuthenticatedActor> {
   const id = `${suite}-user-${randomUUID()}`;
   const email = `${id}@example.test`;
-  await database.insert(users).values({ id, email, name: "Rename Test" });
+  await runAsTenant(id, () =>
+    database.insert(users).values({ id, email, name: "Rename Test" }),
+  );
   createdUserIds.push(id);
   return { id, email, role: "user" };
 }
 
-/** A conversation `owner` started with one of their Bots, with their first message in it. */
-async function conversationOf(owner: AuthenticatedActor) {
-  const profile = await profileStore.create(owner, {
-    name: "Expense Manager",
-    title: "Finance Operations",
-    roleDescription: "Review receipts.",
-    visibility: "private",
+/**
+ * A conversation `owner` started with one of their Bots, with their first message in it. In the
+ * owner's own frame, where every request of theirs runs. `shared` makes it a group others can be
+ * added to: in the fork a conversation with other people in it is stamped `team` (G01-E).
+ */
+async function conversationOf(
+  owner: AuthenticatedActor,
+  options: { shared?: boolean } = {},
+) {
+  return await runAsTenant(owner.id, async () => {
+    const profile = await profileStore.create(owner, {
+      name: "Expense Manager",
+      title: "Finance Operations",
+      roleDescription: "Review receipts.",
+      visibility: options.shared ? "public" : "private",
+    });
+    createdAgentIds.push(profile.id);
+    const channel = await store.create(
+      owner,
+      [profile.id],
+      options.shared ? { shared: true } : undefined,
+    );
+    createdChannelIds.push(channel.id);
+    await store.recordActivity(owner, channel.id, {
+      text: "Which of these receipts count as travel?",
+      agentId: null,
+      at: new Date(),
+    });
+    return channel.id;
   });
-  createdAgentIds.push(profile.id);
-  const channel = await store.create(owner, [profile.id]);
-  createdChannelIds.push(channel.id);
-  await store.recordActivity(owner, channel.id, {
-    text: "Which of these receipts count as travel?",
-    agentId: null,
-    at: new Date(),
-  });
-  return channel.id;
 }
 
 /** The browser's side: the rename it sends, and the roster row it draws after a reload. */
@@ -118,7 +143,8 @@ function browserFor(actor: AuthenticatedActor) {
     next,
   ) => {
     context.set("actor", actor);
-    await next();
+    // As the real `requireUser` does: the request runs in the signed-in person's own frame.
+    await runAsTenant(actor.id, () => next());
   };
   const app = new Hono<{ Variables: AppVariables }>();
   app.route("/api/channels", createChannelRoutes(store, requireUser));
@@ -159,7 +185,17 @@ const transcript: ThreadTranscript = {
 
 /** One pass of the naming sweep over this conversation alone. See `offer` in channel-summary. */
 async function sweep(channelId: string, title: ChannelTitler) {
-  await queue.offer({ kind: CHANNEL_SUMMARY_KIND, key: channelId });
+  // Offered from the conversation's own tenant, as the real offer does, so the row is that person's.
+  const [row] = await asPlatform(() =>
+    database
+      .select({ tenantId: channels.tenantId })
+      .from(channels)
+      .where(eq(channels.id, channelId)),
+  );
+  if (!row) throw new Error(`sweep: no conversation ${channelId}`);
+  await runAsTenant(row.tenantId, () =>
+    queue.offer({ kind: CHANNEL_SUMMARY_KIND, key: channelId }),
+  );
   return await summariseClaimedChannels({
     database,
     queue,
@@ -190,17 +226,36 @@ describe("renaming a conversation", () => {
 
     // The sweep coming round again leaves it alone, and so does a summary cleared for a redo.
     await sweep(channelId, async () => "Something the model thought of");
-    await database
-      .update(channels)
-      .set({ summary: null })
-      .where(eq(channels.id, channelId));
+    await asPlatform(() =>
+      database
+        .update(channels)
+        .set({ summary: null })
+        .where(eq(channels.id, channelId)),
+    );
     // With its settled work forgotten too, so nothing but the name keeps it from being offered.
-    await database.delete(workItems).where(eq(workItems.key, channelId));
+    await asPlatform(() =>
+      database.delete(workItems).where(eq(workItems.key, channelId)),
+    );
     const { offered } = await offerChannelsAwaitingSummary({
       database,
       queue,
       limit: 500,
     });
+    // M5: the real offer asks as the platform and so queues every person's unnamed conversation in
+    // this database; what it queued for conversations this file did not make is taken off again, so
+    // no later claim titles somebody else's (as channel-summary's `offerAll` does).
+    const foreign = offered.filter((id) => !createdChannelIds.includes(id));
+    if (foreign.length > 0)
+      await asPlatform(() =>
+        database
+          .delete(workItems)
+          .where(
+            and(
+              eq(workItems.kind, CHANNEL_SUMMARY_KIND),
+              inArray(workItems.key, foreign),
+            ),
+          ),
+      );
     expect(offered).not.toContain(channelId);
     expect((await browser.row(channelId)).summary).toBe("Q3 trip receipts");
   });
@@ -230,8 +285,10 @@ describe("renaming a conversation", () => {
       });
 
       // NOTIFY is commit-ordered, so the barrier arriving means every announcement before it has.
-      await database.execute(
-        sql`select pg_notify(${CHANNEL_ACTIVITY_TOPIC}, ${barrier})`,
+      await asPlatform(() =>
+        database.execute(
+          sql`select pg_notify(${CHANNEL_ACTIVITY_TOPIC}, ${barrier})`,
+        ),
       );
       await drained.promise;
       expect(report.skipped).toEqual([]);
@@ -274,16 +331,21 @@ describe("who may rename a conversation", () => {
     const owner = await person();
     const member = await person();
     const outsider = await person();
-    const channelId = await conversationOf(owner);
+    // M5: in the fork a conversation other people are in is a shared group, stamped `team`.
+    const channelId = await conversationOf(owner, { shared: true });
     // Added the way a group adds somebody: a membership and a thread of their own.
-    await database
-      .insert(channelMemberships)
-      .values({ channelId, userId: member.id });
-    await database.insert(intelligenceChannelMappings).values({
-      userId: member.id,
-      channelId,
-      threadId: `thread-${randomUUID()}`,
-    });
+    await runAsTenant(owner.id, () =>
+      database
+        .insert(channelMemberships)
+        .values({ channelId, userId: member.id, tenantId: TEAM_TENANT }),
+    );
+    await runAsTenant(member.id, () =>
+      database.insert(intelligenceChannelMappings).values({
+        userId: member.id,
+        channelId,
+        threadId: `thread-${randomUUID()}`,
+      }),
+    );
     await browserFor(owner).rename(channelId, "Expenses");
 
     const asMember = await browserFor(member).rename(channelId, "Mine now");

@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { expect } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 import { and, eq, inArray } from "drizzle-orm";
@@ -8,6 +8,7 @@ import { createApprovalService } from "../src/approvals/service";
 import { createApprovalStore } from "../src/approvals/store";
 import type { ApprovalCandidate } from "../src/approvals/types";
 import { createAuditReader } from "../src/audit";
+import { setRole } from "../src/auth/roles";
 import { loadConfig } from "../src/config";
 import { createDatabase } from "../src/db/client";
 import {
@@ -19,9 +20,19 @@ import {
   mcpTools,
 } from "../src/db/schema";
 import { users } from "../src/db/schema/core";
+import { TEAM_TENANT } from "../src/db/schema/tenant";
 import { workItems } from "../src/db/schema/work";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
+/*
+ * M5: fork 是多租户的，数据库读写都要在租户帧里（runAsTenant/asPlatform）。上游这份测试没有租户帧：
+ * 钩子和用例在平台帧里跑（tests/support/platform-frame）；本人的审批（闸门、回答、自己的设置）在本人
+ * 的帧里，和真正的运行一样；部署的应用和共享 Bot 盖 `team` 章（G01-E）；管理员的角色经受限的角色
+ * 写入者写入，这样团队规则的保存在数据库的策略里也认得他是管理员。
+ */
+import { afterAll, beforeAll, test } from "./support/platform-frame";
+import { bindTestRoleWriter } from "./support/role-writer";
 
 /**
  * Team rules written from a description, replayed over history the approval gate really made, and
@@ -42,6 +53,9 @@ const bot = `agent_rules-${suite}`;
 const store = createApprovalStore(database);
 const service = createApprovalService(store);
 const savedRuleIds: string[] = [];
+let releaseRoleWriter: (() => Promise<void>) | undefined;
+/** What the owner's own requests and runs do, in the owner's own frame. */
+const asOwner = <T>(work: () => T): T => runAsTenant(owner, work);
 const ADMIN = {
   id: admin,
   email: `${admin}@example.test`,
@@ -54,35 +68,52 @@ beforeAll(async () => {
     { id: owner, email: `${owner}@example.test` },
     { id: admin, email: ADMIN.email },
   ]);
+  releaseRoleWriter = await bindTestRoleWriter(database);
+  await setRole(database, admin, "admin");
   await database.insert(mcpServers).values({
     id: app,
+    tenantId: TEAM_TENANT,
     title: "Salesforce",
     vendor: "Composio",
     url: `composio://salesforce-${suite}`,
     provenance: "composio",
     authScheme: "OAUTH2",
-    accountMode: "personal",
+    // M5: 上游的 accountMode（个人账号/共享账号）留给 X 系列（共享账号）。
   });
   await database.insert(mcpTools).values([
-    { serverId: app, name: "SALESFORCE_UPDATE_OPPORTUNITY", effect: "write" },
-    { serverId: app, name: "SALESFORCE_GET_ACCOUNT", effect: "read" },
+    {
+      serverId: app,
+      tenantId: TEAM_TENANT,
+      name: "SALESFORCE_UPDATE_OPPORTUNITY",
+      effect: "write",
+    },
+    {
+      serverId: app,
+      tenantId: TEAM_TENANT,
+      name: "SALESFORCE_GET_ACCOUNT",
+      effect: "read",
+    },
   ]);
   await database.insert(agents).values({
     id: bot,
+    tenantId: TEAM_TENANT,
     name: "Sales Assistant",
     type: "built_in",
     configuration: {},
   });
   await database.insert(agentProfiles).values({
     agentId: bot,
+    tenantId: TEAM_TENANT,
     title: "Sales Assistant",
     roleDescription: "",
     avatarSeed: bot,
     visibility: "public",
   });
   // Ask before making changes, so an ordinary update asks: a `default` verdict a rule can change.
-  await store.setEnabled(owner, true);
-  await service.setPreferences(owner, { enabled: true });
+  await asOwner(async () => {
+    await store.setEnabled(owner, true);
+    await service.setPreferences(owner, { enabled: true });
+  });
 });
 
 afterAll(async () => {
@@ -95,7 +126,7 @@ afterAll(async () => {
       eq(workItems.kind, "approval.resume"),
       inArray(
         workItems.key,
-        (await store.list(owner)).map((request) => request.id),
+        (await asOwner(() => store.list(owner))).map((request) => request.id),
       ),
     ),
   );
@@ -103,6 +134,7 @@ afterAll(async () => {
   await database.delete(agents).where(eq(agents.id, bot));
   // Audit rows are append-only by design and stay; they name only this run's throwaway ids.
   await database.delete(users).where(inArray(users.id, [owner, admin]));
+  await releaseRoleWriter?.();
   await database.$client.close();
 });
 
@@ -142,13 +174,15 @@ async function asked(
   args: unknown,
   decision: "allow_once" | "deny",
 ) {
-  const suspended = await service.gate(candidate(toolName, args)).then(
+  const suspended = await asOwner(() =>
+    service.gate(candidate(toolName, args)),
+  ).then(
     () => false,
     (error: unknown) => error instanceof HeadlessToolSuspension,
   );
   expect(suspended).toBeTrue();
-  const [request] = await store.list(owner);
-  await service.decide(owner, request?.id as string, decision);
+  const [request] = await asOwner(() => store.list(owner));
+  await asOwner(() => service.decide(owner, request?.id as string, decision));
 }
 
 function appFor() {
@@ -330,6 +364,8 @@ test("saving rules from a description adds them together, with one row naming wh
 
   // In force: the next update by this Bot is allowed by the team rule, without asking.
   await expect(
-    service.gate(candidate("SALESFORCE_UPDATE_OPPORTUNITY", { id: "006C" })),
+    asOwner(() =>
+      service.gate(candidate("SALESFORCE_UPDATE_OPPORTUNITY", { id: "006C" })),
+    ),
   ).resolves.toBeUndefined();
 });

@@ -901,6 +901,32 @@ export function createApp(
         },
       }
     : undefined;
+  /*
+   * M5: the same for the approval requests the team-rule and auto-review drafts are replayed over
+   * (`recentRequests`): every person's requests are their own rows, so an administrator holding the
+   * capability reads them as `platform`, and anybody else reads only their own.
+   */
+  const adminApprovals = (() => {
+    const service = coworker?.approvals;
+    const policy = service?.store.policy;
+    const recent = policy?.recentRequests;
+    if (!service || !policy || !recent || !adminScope) return service;
+    return {
+      ...service,
+      store: {
+        ...service.store,
+        policy: {
+          ...policy,
+          recentRequests: (limit: number) => {
+            const frame = currentTenant();
+            return capabilityFor(frame) === "admin"
+              ? adminScope.asAdminPlatform({ id: frame }, () => recent(limit))
+              : recent(limit);
+          },
+        },
+      },
+    };
+  })();
   // Before the enterprise routes it shares a prefix with: describing a network allowlist and
   // replaying one over page visits. The list itself is still saved by `PUT /network` below.
   app.route(
@@ -2134,7 +2160,7 @@ export function createApp(
         // M5: with the admin capability, as `createApprovalRoutes` is mounted, and replayed over the
         // whole deployment's trail (`adminAuditReader`).
         requireUser: requireAdminUser,
-        service: coworker.approvals,
+        service: adminApprovals ?? coworker.approvals,
         vocabulary: coworker.approvalRules.vocabulary,
         ...(coworker.boundaryWriter
           ? { complete: coworker.boundaryWriter }
@@ -2148,9 +2174,10 @@ export function createApp(
     app.route(
       "/api/approvals/team/guidance",
       createReviewerGuidanceRoutes({
-        // M5: with the admin capability, as `createApprovalRoutes` is mounted.
+        // M5: with the admin capability, as `createApprovalRoutes` is mounted, and replayed over
+        // everybody's requests (`adminApprovals`).
         requireUser: requireAdminUser,
-        service: coworker.approvals,
+        service: adminApprovals ?? coworker.approvals,
         ...(coworker.boundaryWriter
           ? { complete: coworker.boundaryWriter }
           : {}),

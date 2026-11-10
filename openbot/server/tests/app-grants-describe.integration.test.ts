@@ -11,6 +11,7 @@ import { LLMock } from "@copilotkit/aimock";
 import { and, eq, inArray, like, sql } from "drizzle-orm";
 import { createApp } from "../src/app";
 import { createAuditReader, createAuditStore } from "../src/audit";
+import { setRole } from "../src/auth/roles";
 import { loadConfig } from "../src/config";
 import { createCredentialStore } from "../src/credentials";
 import { createDatabase } from "../src/db/client";
@@ -21,7 +22,9 @@ import {
   mcpServers,
   mcpTools,
   pluginGrants,
+  users,
 } from "../src/db/schema";
+import { TEAM_TENANT } from "../src/db/schema/tenant";
 import { createPluginStore, PluginRefusedError } from "../src/plugins/store";
 import { createModelCompleter } from "../src/routing/model";
 import { asPlatform } from "../src/tenant/context";
@@ -29,6 +32,7 @@ import recorded from "./fixtures/app-grants-recorded.json";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
 import { GMAIL_APP_ID, gmailTools } from "./support/gmail-grant-app";
+import { bindTestRoleWriter } from "./support/role-writer";
 
 /*
  * M5: fork 是多租户的，数据库读写都要在租户帧里（runAsTenant/asPlatform）。上游这份测试没有租户帧，
@@ -107,13 +111,29 @@ const HELD = [
 async function clear() {
   await database.delete(mcpServers).where(eq(mcpServers.id, APP));
   await database.delete(agents).where(eq(agents.id, BOT));
+  await database.delete(users).where(inArray(users.id, [ADMIN.id, MEMBER.id]));
 }
+
+let releaseRoleWriter: (() => Promise<void>) | undefined;
 
 beforeAll(async () => {
   process.env.OPENAI_BASE_URL = await mock.start();
   await clear();
+  /*
+   * M5: the database's own policies admit a write to a shared (`team`) Bot's grants for an
+   * administrator holding the capability only when `user_roles` says they are one (0122), so the
+   * admin is a real person with a real role, written through the restricted role writer.
+   */
+  releaseRoleWriter = await bindTestRoleWriter(database);
+  await database.insert(users).values([
+    { id: ADMIN.id, email: ADMIN.email, name: ADMIN.name },
+    { id: MEMBER.id, email: MEMBER.email, name: MEMBER.name },
+  ]);
+  await setRole(database, ADMIN.id, "admin");
+  // M5: an app the deployment turned on is the team's in the fork (G01-E), stamped `team`.
   await database.insert(mcpServers).values({
     id: APP,
+    tenantId: TEAM_TENANT,
     title: "Gmail",
     vendor: "Google",
     url: "https://gmail.example.test/mcp",
@@ -122,6 +142,7 @@ beforeAll(async () => {
   await database.insert(mcpTools).values(
     gmailTools.map((tool) => ({
       serverId: APP,
+      tenantId: TEAM_TENANT,
       name: tool.name,
       description: tool.description,
       inputSchema: {},
@@ -129,14 +150,20 @@ beforeAll(async () => {
       destructive: tool.destructive,
     })),
   );
+  /*
+   * M5: a Bot every member reaches is a shared one in the fork, stamped `team` (G01-E) with its
+   * grants, so the admin's own request frame sees it. Owned by nobody, as upstream's is.
+   */
   await database.insert(agents).values({
     id: BOT,
+    tenantId: TEAM_TENANT,
     name: "Inbox Helper",
     type: "built_in",
     configuration: {},
   });
   await database.insert(agentProfiles).values({
     agentId: BOT,
+    tenantId: TEAM_TENANT,
     title: "Inbox Helper",
     roleDescription: "",
     avatarSeed: BOT,
@@ -147,6 +174,7 @@ beforeAll(async () => {
       kind: "mcp" as const,
       ref: ref(name),
       agentId: BOT,
+      tenantId: TEAM_TENANT,
       grantedBy: ADMIN.email,
     })),
   );
@@ -172,6 +200,7 @@ afterAll(async () => {
   // The tools go with the app, the grants with the Bot. Audit rows are append-only and stay; they
   // name only this run's throwaway ids.
   await clear();
+  await releaseRoleWriter?.();
   await database.$client.close();
 });
 
@@ -522,7 +551,7 @@ describe("describing a Bot's actions in one app", () => {
     });
     expect(unknown.status).toBe(400);
     expect((await unknown.json()).error).toBe(
-      `${ref("GMAIL_SEND_FAX")} isn't an action this app offers now.`,
+      `这个应用现在没有这些操作：${ref("GMAIL_SEND_FAX")}。`,
     );
     expect(await held()).toEqual(before);
     expect(

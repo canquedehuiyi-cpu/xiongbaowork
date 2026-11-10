@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { expect } from "bun:test";
 import { randomUUID } from "node:crypto";
 import type { BaseEvent, RunAgentInput } from "@ag-ui/client";
 import { LLMock } from "@copilotkit/aimock";
@@ -19,6 +19,11 @@ import {
 import { createPluginStore } from "../src/plugins/store";
 import { grantedTools } from "../src/plugins/tools";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+/*
+ * M5: fork 是多租户的，数据库读写都要在租户帧里（runAsTenant/asPlatform）。上游这份测试没有租户帧，
+ * 所以每个钩子和用例都在平台帧里跑（tests/support/platform-frame），就像 boundaries-replay 那样。
+ */
+import { afterAll, beforeAll, test } from "./support/platform-frame";
 
 /**
  * A Bot's app calls come back: a burst runs a few at a time, a read asked twice is answered once,
@@ -40,7 +45,7 @@ const model: RuntimeModel = { provider: "openai", defaultModel: "gpt-5.5" };
 const policy: ActionPolicy = { mode: "enforce", deny: [], allow: ["true"] };
 
 const store = createPluginStore({
-  brokerProvider: "composio",
+  // M5: fork 的插件仓库没有 brokerProvider（Arcade），留给 X 系列（Arcade）。
   database,
   auditStore: createAuditStore(database),
   // The tracker needs no credential, so the vault is never read.
@@ -49,6 +54,9 @@ const store = createPluginStore({
   >[0]["credentials"],
   encryptionKey: "x".repeat(44),
   policy: () => policy,
+  // M5: the tracker below listens on plain http on loopback; fork's outbound guard admits it only
+  // when told (as server-side-tools.integration.test.ts does).
+  customServerPrivateHosts: true,
 });
 
 const tracker = new MCPMock();

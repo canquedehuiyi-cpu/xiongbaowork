@@ -3,8 +3,8 @@ import { ownerTenantOfBot } from "../agents/bot-owner";
 import { createAuditStore, recordAuditEvent } from "../audit";
 import type { Database } from "../db/client";
 import { agentSecuritySettings } from "../db/schema/agent-security-settings";
+import { approvalConversationGrants } from "../db/schema/approval-conversation-grants";
 import {
-  approvalConversationGrants,
   approvalPreferences,
   approvalRequests,
   approvalRules,
@@ -22,6 +22,14 @@ import { workItems } from "../db/schema/work";
 import { currentEdition } from "../edition";
 import type { TaskProjector } from "../tasks/projector";
 import { currentTenant, runAsTenant } from "../tenant/context";
+import {
+  ruleColumns,
+  saveRuleKind,
+  saveTeamActionKinds,
+  saveTeamReviewerGuidance,
+  teamReviewerGuidance,
+  teamSettingsColumns,
+} from "./extra-columns";
 import {
   type ApprovalAction,
   ApprovalNotFoundError,
@@ -279,16 +287,19 @@ export function createApprovalStore(
           );
         // The kind the card was for, so the answer reaches later actions of that kind and no other.
         const kind = request.action.policy?.kind ?? null;
-        if (decision === "allow_always")
+        if (decision === "allow_always") {
+          const ruleId = crypto.randomUUID();
           await tx.insert(approvalRules).values({
-            id: crypto.randomUUID(),
+            id: ruleId,
             ownerUserId: owner,
             botId: request.action.botId,
             toolRef: request.action.toolRef,
             effect: request.action.effect,
             scope: request.action.scope,
-            kind,
           });
+          // `kind` 不在冻结的 approvals.ts 里，同一事务里补写（approvals/extra-columns.ts）。
+          await saveRuleKind(tx, ruleId, kind);
+        }
         if (decision === "allow_conversation")
           await tx.insert(approvalConversationGrants).values({
             id: crypto.randomUUID(),
@@ -428,7 +439,7 @@ export function createApprovalStore(
     },
     async rules(owner) {
       return database
-        .select()
+        .select(ruleColumns)
         .from(approvalRules)
         .where(
           and(
@@ -539,7 +550,7 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
   };
   const liveRules = (owner: string) =>
     database
-      .select()
+      .select(ruleColumns)
       .from(approvalRules)
       .where(
         and(
@@ -568,7 +579,7 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
     // No team, and no screen for these: a team deployment's values are not read.
     if (currentEdition() === "personal") return { ...DEFAULT_TEAM };
     const [row] = await database
-      .select()
+      .select(teamSettingsColumns)
       .from(approvalTeamSettings)
       .where(
         and(
@@ -625,13 +636,24 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
         ...input,
         actionKinds: { ...current.actionKinds, ...input.actionKinds },
       };
-      await database
-        .insert(approvalTeamSettings)
-        .values({ id: TEAM, ...next, updatedBy: by, tenantId: TEAM_TENANT })
-        .onConflictDoUpdate({
-          target: approvalTeamSettings.id,
-          set: { ...next, updatedBy: by, updatedAt: sql`now()` },
-        });
+      // `actionKinds` 不在冻结的 approvals.ts 里：同一事务里先写其余设置，再补写这一列
+      // （approvals/extra-columns.ts）。
+      const { actionKinds, ...columns } = next;
+      await database.transaction(async (tx) => {
+        await tx
+          .insert(approvalTeamSettings)
+          .values({
+            id: TEAM,
+            ...columns,
+            updatedBy: by,
+            tenantId: TEAM_TENANT,
+          })
+          .onConflictDoUpdate({
+            target: approvalTeamSettings.id,
+            set: { ...columns, updatedBy: by, updatedAt: sql`now()` },
+          });
+        await saveTeamActionKinds(tx, actionKinds);
+      });
       await recordAuditEvent(audit, {
         eventType: "approval.settings_changed",
         targetType: "approval_settings",
@@ -658,7 +680,7 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
       const [row] = await database
         .insert(approvalRules)
         .values({ id: crypto.randomUUID(), ownerUserId: owner, ...input })
-        .returning();
+        .returning(ruleColumns);
       if (!row) throw new ApprovalNotFoundError();
       await recordAuditEvent(audit, {
         eventType: "approval.rule_changed",
@@ -750,7 +772,7 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
       // No team and no admin screen: the gate reads none, as it reads no team settings.
       if (currentEdition() === "personal") return null;
       const [row] = await database
-        .select({ guidance: approvalTeamSettings.reviewerGuidance })
+        .select({ guidance: teamReviewerGuidance })
         .from(approvalTeamSettings)
         .where(
           and(
@@ -770,7 +792,7 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
       const after = change.text?.trim() || null;
       return database.transaction(async (tx) => {
         const [current] = await tx
-          .select({ guidance: approvalTeamSettings.reviewerGuidance })
+          .select({ guidance: teamReviewerGuidance })
           .from(approvalTeamSettings)
           .where(
             and(
@@ -781,22 +803,23 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
           .limit(1);
         const before = current?.guidance?.trim() || null;
         // 团队设置那一行盖 `team` 的章（见 setTeamSettings）；冲突更新不改 `tenantId`。
+        // `reviewerGuidance` 不在冻结的 approvals.ts 里：先确保这一行在，再补写这一列
+        // （approvals/extra-columns.ts）。
         await tx
           .insert(approvalTeamSettings)
           .values({
             id: TEAM,
-            reviewerGuidance: after,
             updatedBy: by,
             tenantId: TEAM_TENANT,
           })
           .onConflictDoUpdate({
             target: approvalTeamSettings.id,
             set: {
-              reviewerGuidance: after,
               updatedBy: by,
               updatedAt: sql`now()`,
             },
           });
+        await saveTeamReviewerGuidance(tx, after);
         await recordAuditEvent(createAuditStore(tx as unknown as Database), {
           eventType: "approval.guidance_changed",
           targetType: "approval_settings",
@@ -826,7 +849,7 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
             isNull(approvalRules.revokedAt),
           ),
         )
-        .returning();
+        .returning(ruleColumns);
       if (!row) throw new ApprovalNotFoundError();
       await recordAuditEvent(audit, {
         eventType: "approval.rule_changed",

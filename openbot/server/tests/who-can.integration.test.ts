@@ -12,22 +12,13 @@ import { createAuditReader, createAuditStore } from "../src/audit";
 import { setRole } from "../src/auth/roles";
 import { loadConfig } from "../src/config";
 import { createDatabase } from "../src/db/client";
-import {
-  auditEvents,
-  capabilitySettings,
-  users,
-} from "../src/db/schema";
+import { auditEvents, capabilitySettings, users } from "../src/db/schema";
 import { createModelCompleter } from "../src/routing/model";
 import recorded from "./fixtures/who-can-recorded.json";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
 import { bindTestRoleWriter } from "./support/role-writer";
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  test,
-} from "./support/platform-frame";
+import { afterAll, afterEach, beforeAll, test } from "./support/platform-frame";
 
 /**
  * Who can do what, described in English: "Contractors can't use their own computer" written as switch

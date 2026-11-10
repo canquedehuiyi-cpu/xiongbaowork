@@ -3,6 +3,11 @@ import { randomUUID } from "node:crypto";
 import { offersStandingRule } from "@openbot/shared/standing-rule";
 import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import {
+  saveTeamActionKinds,
+  saveTeamReviewerGuidance,
+  teamSettingsColumns,
+} from "../src/approvals/extra-columns";
 import { createApprovalService } from "../src/approvals/service";
 import { createApprovalStore } from "../src/approvals/store";
 import {
@@ -10,8 +15,8 @@ import {
   withApprovalContext,
 } from "../src/approvals/types";
 import { createDatabase } from "../src/db/client";
+import { approvalConversationGrants } from "../src/db/schema/approval-conversation-grants";
 import {
-  approvalConversationGrants,
   approvalRequests,
   approvalTeamRules,
   approvalTeamSettings,
@@ -42,7 +47,12 @@ const teamRuleIds: string[] = [];
 const admin = `${prefix}-admin`;
 const store = createApprovalStore(database);
 const service = createApprovalService(store);
-let priorTeam: typeof approvalTeamSettings.$inferSelect | undefined;
+let priorTeam: Awaited<ReturnType<typeof readTeamRow>>[number] | undefined;
+const readTeamRow = () =>
+  database
+    .select(teamSettingsColumns)
+    .from(approvalTeamSettings)
+    .where(eq(approvalTeamSettings.id, "team"));
 
 async function person() {
   const id = `${prefix}-${people.length}`;
@@ -142,10 +152,7 @@ const thread = () => `${prefix}-thread-${randomUUID()}`;
 beforeAll(async () => {
   setEdition("team");
   await database.insert(users).values({ id: admin, email: `${admin}@x.test` });
-  [priorTeam] = await database
-    .select()
-    .from(approvalTeamSettings)
-    .where(eq(approvalTeamSettings.id, "team"));
+  [priorTeam] = await readTeamRow();
 });
 
 afterAll(async () => {
@@ -156,7 +163,14 @@ afterAll(async () => {
   await database
     .delete(approvalTeamSettings)
     .where(eq(approvalTeamSettings.id, "team"));
-  if (priorTeam) await database.insert(approvalTeamSettings).values(priorTeam);
+  // `actionKinds`、`reviewerGuidance` 不在冻结的 db/schema/approvals.ts 里，另写回去
+  // （approvals/extra-columns.ts）。
+  if (priorTeam) {
+    const { actionKinds, reviewerGuidance, ...columns } = priorTeam;
+    await database.insert(approvalTeamSettings).values(columns);
+    await saveTeamActionKinds(database, actionKinds);
+    await saveTeamReviewerGuidance(database, reviewerGuidance);
+  }
   if (people.length) {
     const decided = await database
       .select({ id: approvalRequests.id })
