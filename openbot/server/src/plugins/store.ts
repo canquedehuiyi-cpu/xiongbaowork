@@ -9290,6 +9290,17 @@ export function createPluginStore(options: PluginStoreOptions) {
         .from(mcpServers)
         .where(eq(mcpServers.id, appId));
       /*
+       * 切到 Shared 之前先结束一次：上一次切走时若在改模式与结束批准之间中断，留下的批准在 Personal 下不被
+       * 读，但会在这次「先改模式、后结束」之间的一刻被读到。
+       */
+      if (app && mode === "shared")
+        await endSharedUseAt({
+          appId,
+          url: app.url,
+          team: app.tenantId === TEAM_TENANT,
+          requests: true,
+        });
+      /*
        * 先改模式，再在应用的排他锁下结束批准与待处理申请：一次写批准要么在锁之前提交、在这里被删掉，要么
        * 在锁之后开始、读到新的模式而不写（`SharedUseNotSharedError`）。反过来的顺序会留下一个窗口，让切换
        * 之后才落下的批准在再切回 Shared 时复活。

@@ -354,6 +354,39 @@ describe("switching the account mode", () => {
   });
 });
 
+describe("an approval left behind by an interrupted switch", () => {
+  test("is ended before the app becomes Shared again", async () => {
+    await asPlatform(() =>
+      plugins.setAccountModeColumns(APP, "personal", null),
+    );
+    // 上一次切走时在改模式与结束批准之间中断留下的批准。
+    await runAsTenant(OWNER, () =>
+      database.insert(sharedUseApprovals).values({
+        agentId: BOT,
+        serverId: APP,
+        audience: "team",
+        outsideInput: false,
+        approvedBy: ADMIN,
+      }),
+    );
+    await asPlatform(() =>
+      plugins.setAccountModeColumns(
+        APP,
+        "shared",
+        `openbot-deployment:${suite}:R`,
+      ),
+    );
+    expect(
+      await asPlatform(() =>
+        database
+          .select()
+          .from(sharedUseApprovals)
+          .where(eq(sharedUseApprovals.agentId, BOT)),
+      ),
+    ).toEqual([]);
+  });
+});
+
 describe("closed by default", () => {
   test("a Bot whose profile cannot be read is read as private, never as the whole team", async () => {
     const facts = await runAsTenant(OWNER, () => store.botFacts(GONE_BOT));
