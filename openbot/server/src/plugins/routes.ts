@@ -56,7 +56,7 @@ import { fieldsForPerson, keyGuideFor } from "./key-guides";
 import {
   ALWAYS_ON_REFUSAL,
   alwaysOnHere,
-  personalRevokeRefusal,
+  personalRevokeRefusalFor,
 } from "./personal-defaults";
 import { mountSharedUseRoutes } from "./shared-use-routes";
 import type { SharedAudience, SharedUseStore } from "./shared-use-store";
@@ -3512,8 +3512,14 @@ export function createPluginRoutes(
     }
     const trimmedRef = ref.trim();
     const trimmedAgentId = agentId.trim();
-    // 个人版里每位员工持有每个应用、能问每位员工，从一位身上收回会被拒绝（见 `./personal-defaults`）。
-    const personalRefusal = personalRevokeRefusal(kind, trimmedRef);
+    // 个人版里个人默认管着的员工持有每个应用、能问每位员工，从一位身上收回会被拒绝；分身和远端员工照常收回
+    // （见 `./personal-defaults`）。
+    const personalRefusal = await personalRevokeRefusalFor(
+      store,
+      kind,
+      trimmedRef,
+      trimmedAgentId,
+    );
     if (personalRefusal) return context.json({ error: personalRefusal }, 403);
     return asBotOwner(context, trimmedAgentId, async () => {
       const decision = await enablementDecision(

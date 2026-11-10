@@ -6376,6 +6376,16 @@ export function createPluginStore(options: PluginStoreOptions) {
       return null;
     },
 
+    /** 员工的类型（`built_in` / `remote_ag_ui` / `remote_mastra`）；这一帧看不见或不存在时为 undefined。 */
+    async agentType(agentId: string): Promise<string | undefined> {
+      const [row] = await database
+        .select({ type: agents.type })
+        .from(agents)
+        .where(eq(agents.id, agentId))
+        .limit(1);
+      return row?.type;
+    },
+
     async agentOwner(agentId: string): Promise<string | null | undefined> {
       const [row] = await database
         .select({ ownerUserId: agentProfiles.ownerUserId })
@@ -6568,12 +6578,28 @@ export function createPluginStore(options: PluginStoreOptions) {
      * 别人租户里的员工永远不在里面。团队版照旧只认授予。
      */
     async botsReachableFrom(agentId: string): Promise<string[]> {
-      if (currentEdition() === "personal") {
+      /*
+       * 「每位员工」和个人默认是同一个范围：内置的普通员工，不含分身和远端员工（`./personal-defaults` 的
+       * `coveredByPersonalDefaults`）。范围外的员工照团队版只认授予，所以从它身上收回的另一位员工真的够不着了；
+       * 也不会被自动交到分身或外部端点手上。
+       */
+      if (
+        currentEdition() === "personal" &&
+        (await this.agentType(agentId)) === "built_in" &&
+        !agentId.startsWith("avatar-")
+      ) {
         const everyOther = await database
           .select({ id: agents.id })
           .from(agents)
           .innerJoin(agentProfiles, eq(agentProfiles.agentId, agents.id))
-          .where(and(ne(agents.id, agentId), isNull(agentProfiles.deletedAt)));
+          .where(
+            and(
+              ne(agents.id, agentId),
+              isNull(agentProfiles.deletedAt),
+              eq(agents.type, "built_in"),
+              sql`${agents.id} NOT LIKE 'avatar-%'`,
+            ),
+          );
         return everyOther.map((row) => row.id);
       }
       const rows = await database

@@ -411,6 +411,7 @@ tests/people-routes.test.ts
 tests/persona.test.ts
 tests/personal-activity-report.integration.test.ts
 tests/personal-defaults-boundaries.integration.test.ts
+tests/personal-defaults-scope.integration.test.ts
 tests/personal-defaults.integration.test.ts
 tests/personal-edition-defaults.test.ts
 tests/personal-handoff.integration.test.ts

@@ -66,6 +66,7 @@ type Store = {
     ref: string,
     agentId: string,
     by: string,
+    ...rest: never[]
   ): Promise<void>;
   grantTools(
     app: string,
@@ -160,20 +161,52 @@ export const EVERY_BOT_ASKS_REFUSAL =
   "OpenBot 个人版里，每位员工都可以请你的其他员工帮忙。";
 
 /**
- * 个人版里不能从一位员工身上收回的东西，`DELETE /grants` 先问它（上游 `revokeRefusal` 的前三行）：
- * 常开的 Routines、任何一个应用（每位员工都持有每个已连接的应用）、另一位员工（每位员工都能问其他员工，
- * 删掉一行什么也不会改变）。团队版答 null，照旧由 `enablementDecision` 决定。技能不在其中：个人版里技能
- * 可以为一位员工关掉，而且会一直关着。
+ * 一位员工在不在个人默认的「每位员工」里：内置的普通员工在；分身（它的连接器来源只写只读工具，移除就收回，
+ * 见 `avatar-sources.ts`）和远端员工（本人不控制的外部端点）不在。和 `personalDefaultsDeps` 的 `bots()` 是
+ * 同一条规则。
+ */
+export function coveredByPersonalDefaults(
+  agentId: string,
+  type: string | undefined,
+): boolean {
+  return type === "built_in" && !agentId.startsWith(AVATAR_PREFIX);
+}
+
+/**
+ * 个人版里不能从一位员工身上收回的东西，`DELETE /grants` 和 `DELETE /for/:agentId/apps/:app/give` 先问它
+ * （上游 `revokeRefusal` 的前三行）：常开的 Routines、任何一个应用（每位员工都持有每个已连接的应用）、另一位
+ * 员工（每位员工都能问其他员工，删掉一行什么也不会改变）。
+ *
+ * 只对个人默认管着的员工拒绝：分身和远端员工不被补齐，它们的授予来自批准、主人或管理员，必须能从它们身上
+ * 单独收回，收回之后也不会被加回来。团队版答 null，照旧由 `enablementDecision` 决定。技能不在其中：个人版里
+ * 技能可以为一位员工关掉，而且会一直关着。
  */
 export function personalRevokeRefusal(
   kind: string,
   ref: string,
+  /** 收回的是哪位员工的授予；不给时按个人默认管着的员工答（只看授予本身时用）。 */
+  bot?: { id: string; type: string | undefined },
 ): string | null {
   if (currentEdition() !== "personal") return null;
+  if (bot && !coveredByPersonalDefaults(bot.id, bot.type)) return null;
   if (kind === "mcp" && isAlwaysOn(ref)) return ALWAYS_ON_REFUSAL;
   if (kind === "mcp") return EVERY_BOT_REFUSAL;
   if (kind === "bot") return EVERY_BOT_ASKS_REFUSAL;
   return null;
+}
+
+/** {@link personalRevokeRefusal}，员工的类型从 store 读；团队版不读库。 */
+export async function personalRevokeRefusalFor(
+  store: { agentType(agentId: string): Promise<string | undefined> },
+  kind: string,
+  ref: string,
+  agentId: string,
+): Promise<string | null> {
+  if (currentEdition() !== "personal") return null;
+  return personalRevokeRefusal(kind, ref, {
+    id: agentId,
+    type: await store.agentType(agentId),
+  });
 }
 
 /** 分身的 id 前缀（`tenant/provisioning.ts` 的 `avatarAgentId`）。 */
@@ -245,6 +278,18 @@ export async function ensurePersonalSkills(
     await deps.forgetDepartedBots?.();
     await giveEverySkillOnce(store, deps, await deps.bots());
   });
+}
+
+/**
+ * 个人版启动时：替还没做过选择的人把「改动之前先问」打开，不等有工具要补。默认值因此不依赖这次启动有没有
+ * 东西要给；给工具的每条路径另外还会在给之前再确保一次（`withPersonalDefaults` 的 `grant` 包装）。团队版
+ * 什么也不写。
+ */
+export async function ensurePersonalAskBeforeChanges(
+  deps: Pick<PersonalDefaultsDeps, "askBeforeChangesFirst">,
+): Promise<void> {
+  if (currentEdition() !== "personal") return;
+  await deps.askBeforeChangesFirst?.();
 }
 
 /**
@@ -540,6 +585,25 @@ export function withPersonalDefaults<S extends Store>(
   } as S["listForAgent"];
 
   /*
+   * 个人版里给任何一位员工应用动作之前（管理员手动授予、主人给、批准、卡片一按），先确保本人的「改动之前
+   * 先问」已经写下：没做过选择的人默认是开。写不进去就抛出、这次什么都不给（失败闭合），不让员工在默认不问
+   * 的状态下拿到写工具。本人选过的不动。技能不经过这里。
+   */
+  const grantOne = store.grant;
+  store.grant = async function (
+    this: S,
+    kind: "mcp" | "skill",
+    ref: string,
+    agentId: string,
+    by: string,
+    ...rest: never[]
+  ) {
+    if (currentEdition() === "personal" && kind === "mcp")
+      await deps.askBeforeChangesFirst?.();
+    return grantOne.call(this, kind, ref, agentId, by, ...rest);
+  } as S["grant"];
+
+  /*
    * 个人版里新技能给每位员工，和新应用一样：写它的人就是这里唯一的人，一个没有员工提供的技能，在他找到开关
    * 之前什么也做不了。只在它是新的时候：再保存一次是编辑，不能把他在技能页上为某位员工关掉的又打开。
    */
@@ -782,13 +846,19 @@ export function personalDefaultsDeps(
             }),
         }
       : {}),
-    /** 已删除（软删）的员工不再需要「技能已给过」那一行；只看这个人能看见的员工。 */
+    /*
+     * 已删除（软删）的员工不再需要「技能已给过」那一行；只看这个人能看见的员工。包里带来的员工除外：导入会
+     * 把退役的包员工复活（`tenant-package.ts`），清掉的话它复活后会被再给一遍全部技能，本人为它关掉的也会回来。
+     */
     forgetDepartedBots: () =>
       framed(async () => {
         const departed = await database
           .select({ id: agentProfiles.agentId })
           .from(agentProfiles)
-          .where(isNotNull(agentProfiles.deletedAt));
+          .innerJoin(agents, eq(agents.id, agentProfiles.agentId))
+          .where(
+            and(isNotNull(agentProfiles.deletedAt), isNull(agents.packageId)),
+          );
         if (departed.length === 0) return;
         await database.delete(enterpriseSettings).where(
           inArray(
