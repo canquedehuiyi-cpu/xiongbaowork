@@ -53,11 +53,13 @@ import {
 import {
   closedKind,
   decideAction,
+  KIND_OF_SAFETY,
   reviewable,
   safetyRequirement,
   strictestRule,
 } from "./approvals/policy";
 import type {
+  ActionKind,
   ApprovalCandidate,
   ApprovalPolicyStore,
   ApprovalRule,
@@ -156,6 +158,16 @@ const ORDER: Record<"app" | "computer", WhatIfLayerId[]> = {
   ],
   computer: ["capabilities", "network", "boundaries", "safety", "approvals"],
 };
+
+/**
+ * The kind of action a safety requirement is about. The fork's requirement ids name where the floor came
+ * from (`destructive_tool`, `outbound_send`, …); upstream's kinds name the action (`deleting`, `sending`, …).
+ */
+function safetyKind(id: string): ActionKind {
+  return (
+    KIND_OF_SAFETY[id as keyof typeof KIND_OF_SAFETY] ?? (id as ActionKind)
+  );
+}
 
 /** What a built-in safety requirement is about, for an admin rather than the person it asks. */
 const SAFETY_WORDS: Record<string, string> = {
@@ -385,7 +397,7 @@ async function approvalLayers(
   appName: (id: string) => string = connectorName,
 ): Promise<{ safety: Layer; approvals: Layer }> {
   const safety = safetyRequirement(candidate);
-  const words = safety ? (SAFETY_WORDS[safety.id] ?? "this") : "";
+  const words = safety ? (SAFETY_WORDS[safetyKind(safety.id)] ?? "this") : "";
   // Before the approvals are read: a kind OpenBot always hands to the person, or none at all.
   const fixedSafety: Layer | undefined = !safety
     ? layer(
@@ -412,7 +424,9 @@ async function approvalLayers(
     actionKinds: Parameters<typeof closedKind>[1],
   ): Layer => {
     if (fixedSafety) return fixedSafety;
-    const id = safety?.id as Parameters<typeof closedKind>[0];
+    const id = (safety ? safetyKind(safety.id) : undefined) as Parameters<
+      typeof closedKind
+    >[0];
     const closed = closedKind(id, actionKinds);
     if (closed?.behaviour === "hand_off")
       return layer(
@@ -487,7 +501,9 @@ async function approvalLayers(
     candidate,
     teamRules,
     team.customRulesEnabled ? personal : [],
-    safety && safety.behaviour !== "hand_off" ? { kind: safety.id } : {},
+    safety && safety.behaviour !== "hand_off"
+      ? { kind: safetyKind(safety.id) }
+      : {},
   );
   const whose =
     matched?.layer === "team_rule" ? "A team rule" : "A personal rule";

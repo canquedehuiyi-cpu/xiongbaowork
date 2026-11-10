@@ -216,7 +216,7 @@ function fromRequest(request: ApprovalRecord): Recorded {
     toolRef: action.toolRef,
     effect: action.effect,
     scope: action.scope,
-    ...(action.account ? { account: action.account } : {}),
+    // M5: 留给 X 系列（多账号）：请求按账号回放。
     subject: targetSubject(action.target),
     // A request opened by older code carries no verdict: it asked because the person's switch did.
     outcome: action.policy
@@ -308,7 +308,7 @@ export function recordedActions(
           source: policy.source,
           ...(policy.review ? { review: policy.review } : {}),
         };
-      if (request.action.account) match.account = request.action.account;
+      // M5: 留给 X 系列（多账号）：按账号匹配。
       // The request names the action's target in full; the row only what the trail keeps.
       match.subject = {
         ...targetSubject(request.action.target),
@@ -370,7 +370,7 @@ export function backtestApprovalRules(
         effect: action.effect,
         scope: action.scope,
         args: null,
-        ...(action.account ? { account: action.account } : {}),
+        // M5: 留给 X 系列（多账号）：请求按账号回放。
       },
       team,
       [],

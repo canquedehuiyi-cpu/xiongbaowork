@@ -72,6 +72,8 @@ const INTENTS: Record<Intent, string> = {
   read_tool: "an app tool call that only reads",
   write_tool:
     "an app tool call that changes something, or that is not known to be a read",
+  app_call:
+    "any call to a connected app's tool, whether it reads or changes something",
 };
 
 /**
