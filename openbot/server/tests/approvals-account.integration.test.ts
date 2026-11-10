@@ -11,7 +11,7 @@ import {
   approvalAction,
 } from "../src/approvals/types";
 import { createDatabase } from "../src/db/client";
-import { approvalRules, users } from "../src/db/schema";
+import { users } from "../src/db/schema";
 import { workItems } from "../src/db/schema/work";
 import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
@@ -113,12 +113,7 @@ test("Always allow here for one account is saved for that account, and does not 
   keys.push(first.id);
   await asOwner(() => store.decide(owner, first.id, "allow_always"));
 
-  const [saved] = await asOwner(() =>
-    database
-      .select()
-      .from(approvalRules)
-      .where(eq(approvalRules.ownerUserId, owner)),
-  );
+  const [saved] = await asOwner(() => store.rules(owner));
   expect(saved?.account).toBe(WORK);
 
   const againFromWork = await asOwner(() =>

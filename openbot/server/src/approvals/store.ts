@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, getTableColumns, isNull, sql } from "drizzle-orm";
 import { ownerTenantOfBot } from "../agents/bot-owner";
 import { createAuditStore, recordAuditEvent } from "../audit";
 import type { Database } from "../db/client";
@@ -16,6 +16,7 @@ import { TEAM_TENANT } from "../db/schema/tenant";
 import { workItems } from "../db/schema/work";
 import { currentEdition } from "../edition";
 import type { TaskProjector } from "../tasks/projector";
+import { ruleAccount } from "./rule-account";
 import { currentTenant, runAsTenant } from "../tenant/context";
 import {
   type ApprovalAction,
@@ -79,6 +80,12 @@ type StoredApprovalTransaction = Parameters<
   Parameters<Database["transaction"]>[0]
 >[0];
 
+/** 读一条规则时连同它针对的账号一起读（迁移 0181，见 `./rule-account`）。 */
+const rulesWithAccount = {
+  ...getTableColumns(approvalRules),
+  account: ruleAccount,
+};
+
 const ruleScope = (action: ApprovalAction) =>
   and(
     eq(approvalRules.ownerUserId, action.actorId),
@@ -88,8 +95,8 @@ const ruleScope = (action: ApprovalAction) =>
     eq(approvalRules.scope, action.scope),
     // 一个邮箱保存的规则从不回答另一个邮箱；不点名账号的调用只由不点名账号的规则回答（上游 #1298）。
     action.account
-      ? eq(approvalRules.account, action.account)
-      : isNull(approvalRules.account),
+      ? sql`${ruleAccount} = ${action.account}`
+      : sql`${ruleAccount} is null`,
     eq(approvalRules.behaviour, "allow"),
     isNull(approvalRules.revokedAt),
   );
@@ -153,8 +160,8 @@ export function createApprovalStore(
       eq(approvalRules.effect, action.effect),
       eq(approvalRules.scope, action.scope),
       action.account
-        ? eq(approvalRules.account, action.account)
-        : isNull(approvalRules.account),
+        ? sql`${ruleAccount} = ${action.account}`
+        : sql`${ruleAccount} is null`,
       eq(approvalRules.behaviour, "allow"),
       isNull(approvalRules.revokedAt),
     );
@@ -259,16 +266,22 @@ export function createApprovalStore(
             ONCE_ONLY_REFUSALS[request.action.policy?.source ?? ""] ??
               "Tasks started from a check-in ask before every change. Allow this once, or deny it.",
           );
-        if (decision === "allow_always")
+        if (decision === "allow_always") {
+          const ruleId = crypto.randomUUID();
           await tx.insert(approvalRules).values({
-            id: crypto.randomUUID(),
+            id: ruleId,
             ownerUserId: owner,
             botId: request.action.botId,
             toolRef: request.action.toolRef,
             effect: request.action.effect,
             scope: request.action.scope,
-            account: request.action.account ?? null,
           });
+          // 卡片点名的账号（迁移 0181），同一事务里写上，见 `./rule-account`。
+          if (request.action.account)
+            await tx.execute(
+              sql`update "approval_rules" set "account" = ${request.action.account} where "id" = ${ruleId}`,
+            );
+        }
         const [updated] = await tx
           .update(approvalRequests)
           .set({
@@ -380,7 +393,7 @@ export function createApprovalStore(
     },
     async rules(owner) {
       return database
-        .select()
+        .select(rulesWithAccount)
         .from(approvalRules)
         .where(
           and(
@@ -463,7 +476,7 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
   };
   const liveRules = (owner: string) =>
     database
-      .select()
+      .select(rulesWithAccount)
       .from(approvalRules)
       .where(
         and(
