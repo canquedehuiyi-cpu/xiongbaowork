@@ -153,7 +153,11 @@ describe("an Arcade app in the fork's store", () => {
     // Composio 与 MCP 的清单没有 vendorName，记录与以前一模一样。
     expect(
       storableTools("composio-gmail", [
-        { name: "GMAIL_FETCH", inputSchema: { type: "object" } },
+        {
+          name: "GMAIL_FETCH",
+          description: "",
+          inputSchema: { type: "object" },
+        },
       ])[0],
     ).not.toHaveProperty("vendorName");
 
@@ -176,14 +180,12 @@ describe("an Arcade app in the fork's store", () => {
       store.grant("mcp", `${appId}/ListEmails`, BOT, PERSON),
     );
     await as(PERSON, () =>
-      database
-        .insert(composioConnections)
-        .values({
-          toolkit,
-          userId: PERSON,
-          verified: true,
-          provider: "arcade",
-        }),
+      database.insert(composioConnections).values({
+        toolkit,
+        userId: PERSON,
+        verified: true,
+        provider: "arcade",
+      }),
     );
 
     sent.length = 0;

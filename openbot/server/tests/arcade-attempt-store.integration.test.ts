@@ -34,6 +34,7 @@ const broker: ArcadeBroker = {
     },
   },
   grantsFor: async () => [],
+  accountsOf: async () => [],
   listApps: async () => [],
   ensureAuthConfig: async () => "standing",
   deleteAuthConfig: async () => {},
@@ -59,7 +60,6 @@ const store = createPluginStore({
   encryptionKey: "x".repeat(44),
   policy: () => policy,
   broker: asComposioBroker(broker),
-  deploymentId: `acme-${suite}`,
 });
 
 const account = (actor: string): AccountRef => ({

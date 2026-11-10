@@ -48,6 +48,7 @@ const broker: ArcadeBroker = {
     },
   },
   grantsFor: async () => [],
+  accountsOf: async () => [],
   listApps: async () => [],
   ensureAuthConfig: async () => "standing",
   deleteAuthConfig: async () => {},
@@ -74,7 +75,6 @@ const storeOn = (handle: typeof database) =>
     encryptionKey: "x".repeat(44),
     policy: () => policy,
     broker: asComposioBroker(broker),
-    deploymentId: `acme-${suite}`,
   });
 
 const store = storeOn(database);
