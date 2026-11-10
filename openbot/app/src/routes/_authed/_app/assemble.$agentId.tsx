@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
 import { wakersBackLink } from "@/components/wakers/wakers-search";
-import { agentQueryOptions } from "@/lib/agents/queries";
+import { type AgentProfile, agentQueryOptions } from "@/lib/agents/queries";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
 import {
   knowledgeForAgentQueryOptions,
@@ -183,7 +183,10 @@ const emptyProfile = {
   systemOwned: false,
   canManage: false,
   mine: false,
-};
+  isolated: false,
+  isolationActive: false,
+  isolationOffReason: null,
+} satisfies AgentProfile;
 
 /**
  * The grant mutation, with every write still in flight tracked by what it names.

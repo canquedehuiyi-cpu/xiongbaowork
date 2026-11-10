@@ -12,7 +12,6 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { reservePort } from "../../tests/support/reserved-port";
 import type { Page } from "playwright";
 import type {
   BrowserState,
@@ -20,6 +19,7 @@ import type {
 } from "../../shared/openbot-browser";
 import { RECORDER_SIGNED_OUT } from "../../shared/recorder-api";
 import { RECORDER_EXTENSION_ID } from "../../shared/recorder-extension";
+import { reservePort } from "../../tests/support/reserved-port";
 import type { BrowserHost } from "../src/browser-host";
 import type { BrowserRuntime } from "../src/browser-runtime";
 import {

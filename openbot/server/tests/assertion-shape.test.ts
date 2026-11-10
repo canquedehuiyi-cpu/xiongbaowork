@@ -588,6 +588,39 @@ const ALLOW: Allowed[] = [
     finding: "round 2 — auth-client.test.ts, six sites",
   },
   {
+    file: "app/tests/auth-client.test.ts",
+    shape: "a",
+    context: [
+      '"signInWithEmailDomain"',
+      '"throws what the client said when it refuses"',
+    ],
+    expression:
+      'expect(signInWithEmailDomain("someone@company.com",refuse),).rejects.toThrow("That domain is registered to another tenant.")',
+    finding: "round 2 — auth-client.test.ts, six sites",
+  },
+  {
+    file: "app/tests/auth-client.test.ts",
+    shape: "a",
+    context: [
+      '"signInWithEmailDomain"',
+      '"says no provider is registered when the client says nothing"',
+    ],
+    expression:
+      'expect(signInWithEmailDomain("someone@company.com",refuse),).rejects.toThrow("这个邮箱地址没有登记任何身份提供方。")',
+    finding: "round 2 — auth-client.test.ts, six sites",
+  },
+  {
+    file: "app/tests/auth-client.test.ts",
+    shape: "a",
+    context: [
+      '"signInWithEmailDomain"',
+      '"resolves quietly when the redirect is under way"',
+    ],
+    expression:
+      'expect(signInWithEmailDomain("someone@company.com",async()=>({error:null,})),).resolves.toBeUndefined()',
+    finding: "round 2 — auth-client.test.ts, six sites",
+  },
+  {
     file: "server/tests/audit-initiator.integration.test.ts",
     shape: "a",
     context: [

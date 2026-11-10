@@ -1,22 +1,25 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import {
+  type BotBrowserApiState,
+  botBrowserApiPaths,
+} from "@openbot/shared/bot-browser";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import { DemonstrationRecorder } from "@/components/computer/demonstration-recorder";
+import { BotRecordPanel } from "@/components/computer/bot-browser";
 import { LiveScreen } from "@/components/computer/live-screen";
 import { queryClient } from "@/query-client";
-import { settleReactWork } from "./settle-react-work";
 
 /**
  * This page's own fields while a person drives a Bot's browser.
  *
- * LiveScreen takes every keystroke on the window while someone holds the wheel, because the canvas
- * cannot hold focus. The full-size view also carries fields of its own, the recorder's workflow name
- * and the secret box, and taking their keys left them dead: typing into "流程名称" did nothing,
- * and every letter went to the Bot's browser instead. And the recorder's button, a Base UI Button,
- * defaults to type="button", so pressing it never submitted the form and no recording ever started.
+ * LiveScreen used to take every keystroke on the window while someone held the wheel, because its canvas could not
+ * hold focus. The full-size view also carries fields of its own, the name of a task to record and the secret box, and
+ * taking their keys left them dead: typing into the name did nothing, and every letter went to the Bot's browser
+ * instead. The screen now takes only the keys aimed at it, once a click (or Tab) has given it the focus. And Record, a
+ * Base UI Button, defaults to type="button", so pressing it never submitted the form and no recording ever started.
  */
 
 class SocketDouble {
@@ -66,10 +69,21 @@ beforeAll(() => {
     });
     if (url.includes("/control"))
       return Response.json({ holder: "human", transitioning: false });
-    if (url.startsWith("/api/demonstrations") && method === "POST")
-      return Response.json({ demonstration: { id: "d1" } });
-    if (url.startsWith("/api/demonstrations"))
-      return Response.json({ demonstrations: [] });
+    // A person who has already answered whether to narrate, so Record starts at once rather than asking.
+    if (url === "/api/me")
+      return Response.json({
+        user: { id: "me", email: "me@example.com", role: "user" },
+      });
+    if (url === "/api/settings/preferences")
+      return Response.json({
+        preferences: {
+          messageListEmphasis: "thread",
+          selfHostBannerDismissed: false,
+          narration: "off",
+        },
+      });
+    if (url === botBrowserApiPaths.recording("fields-test"))
+      return Response.json(held);
     return new Response(null, { status: 404 });
   }) as typeof fetch;
 });
@@ -81,12 +95,25 @@ afterEach(() => {
   SocketDouble.latest = undefined;
 });
 
-afterAll(async () => {
-  await settleReactWork();
+afterAll(() => {
   globalThis.WebSocket = originalWebSocket;
   globalThis.fetch = originalFetch;
   GlobalRegistrator.unregister();
 });
+
+/** The Bot's browser while the person drives it, as the server answers for them. */
+const held: BotBrowserApiState = {
+  open: true,
+  tabs: [],
+  recorder: {
+    connected: false,
+    phase: "idle",
+    actions: 0,
+    narration: "external",
+  },
+  mine: true,
+  recordingIsMine: false,
+};
 
 function Field() {
   const [value, setValue] = useState("");
@@ -141,56 +168,84 @@ test("a paste into a field on this page stays in the field", async () => {
   expect(socket.sent).toEqual([]);
 });
 
-test("keys with no field focused still go to the Bot's browser", async () => {
-  const { socket } = await driving(<Field />);
-  const key = new KeyboardEvent("keydown", {
-    key: "a",
-    code: "KeyA",
-    keyCode: 65,
-    bubbles: true,
-    cancelable: true,
-  });
+test("keys typed after clicking the screen go to the Bot's browser, with no second click", async () => {
+  const { socket, user } = await driving(<Field />);
 
-  document.body.dispatchEvent(key);
+  await user.click(document.querySelector("canvas") as HTMLCanvasElement);
+  await user.keyboard("a");
 
-  expect(key.defaultPrevented).toBe(true);
-  expect(socket.sent).toEqual([
+  // The key, not its legacy code, which the test DOM's keyboard leaves at zero (live-screen-keyboard.test.tsx pins it).
+  expect(
+    socket.sent.map(({ windowsVirtualKeyCode: _zero, ...sent }) => sent),
+  ).toEqual([
     {
       type: "key",
       event: "down",
       key: "a",
       code: "KeyA",
       text: "a",
-      windowsVirtualKeyCode: 65,
       modifiers: 0,
     },
+    { type: "key", event: "up", key: "a", code: "KeyA", modifiers: 0 },
   ]);
 });
 
-test("naming a workflow and pressing Record your steps starts a recording", async () => {
+test("a key with nothing focused, or a button focused, stays on this page", async () => {
+  const { socket } = await driving(<button type="button">Hand back</button>);
+  const nowhere = new KeyboardEvent("keydown", {
+    key: "a",
+    code: "KeyA",
+    keyCode: 65,
+    bubbles: true,
+    cancelable: true,
+  });
+  document.body.dispatchEvent(nowhere);
+  const button = document.querySelector("button") as HTMLButtonElement;
+  button.focus();
+  const enter = new KeyboardEvent("keydown", {
+    key: "Enter",
+    code: "Enter",
+    keyCode: 13,
+    bubbles: true,
+    cancelable: true,
+  });
+  button.dispatchEvent(enter);
+
+  expect(nowhere.defaultPrevented).toBe(false);
+  expect(enter.defaultPrevented).toBe(false);
+  expect(socket.sent).toEqual([]);
+});
+
+test("naming a task and pressing Record starts a recording", async () => {
   const { socket, view, user } = await driving(
-    <DemonstrationRecorder
-      botId="fields-test"
-      driving
-      onRecordingChange={() => {}}
-    />,
+    <BotRecordPanel botId="fields-test" state={held} />,
   );
 
-  await user.click(view.getByLabelText("流程名称"));
+  await waitFor(() =>
+    expect(
+      requests.some((request) => request.url === "/api/settings/preferences"),
+    ).toBe(true),
+  );
+  await user.click(view.getByLabelText("任务名称"));
   await user.keyboard("Find an invoice");
-  await user.click(view.getByRole("button", { name: "录制你的步骤" }));
+  await user.click(view.getByRole("button", { name: "录制" }));
 
   await waitFor(() =>
     expect(
       requests.filter(
         (request) =>
-          request.method === "POST" && request.url === "/api/demonstrations",
+          request.method === "POST" &&
+          request.url === botBrowserApiPaths.recording("fields-test"),
       ),
     ).toEqual([
       {
         method: "POST",
-        url: "/api/demonstrations",
-        body: { botId: "fields-test", title: "Find an invoice" },
+        url: botBrowserApiPaths.recording("fields-test"),
+        body: {
+          action: "start",
+          title: "Find an invoice",
+          language: navigator.language,
+        },
       },
     ]),
   );

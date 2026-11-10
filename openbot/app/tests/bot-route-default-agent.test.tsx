@@ -20,7 +20,6 @@ import {
 } from "@testing-library/react";
 import { type AgentProfile, agentKeys } from "@/lib/agents/queries";
 import { Route as BotRoute } from "@/routes/_authed/_app/bot";
-import { settleReactWork } from "./settle-react-work";
 
 let originalRect: typeof HTMLElement.prototype.getBoundingClientRect;
 beforeAll(() => {
@@ -36,10 +35,7 @@ afterEach(() => {
   HTMLElement.prototype.getBoundingClientRect = originalRect;
 });
 
-afterAll(async () => {
-  await settleReactWork();
-  GlobalRegistrator.unregister();
-});
+afterAll(() => GlobalRegistrator.unregister());
 
 function agent(
   overrides: Partial<AgentProfile> & { id: string },
@@ -53,6 +49,9 @@ function agent(
     persona: null,
     hasAuth: false,
     hasCallbackToken: false,
+    isolated: false,
+    isolationActive: false,
+    isolationOffReason: null,
     hidden: false,
     pinned: false,
     mine: true,
@@ -311,6 +310,7 @@ test("/bot opens a live Computer sidebar with ownership controls and preserves t
           requested: false,
           transitioning: false,
           resumeSnapshotRequired: false,
+          recoveryRequired: false,
         });
       return Response.json({ error: "No frame yet" }, { status: 404 });
     },
@@ -374,6 +374,7 @@ test("/bot?watch=true restores the live Computer panel on reload", async () => {
         requested: false,
         transitioning: false,
         resumeSnapshotRequired: false,
+        recoveryRequired: false,
       }),
     { preconnect: originalFetch.preconnect },
   );

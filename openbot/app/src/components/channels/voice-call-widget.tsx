@@ -258,7 +258,7 @@ export function VoiceCallWidget({
                 <div className="mt-3 h-16 overflow-y-auto rounded-xl bg-muted/40 p-2 text-xs leading-relaxed text-muted-foreground">
                   {state.reply ||
                     state.transcript ||
-                    "准备好就开口说。这次通话使用当前的对话。"}
+                    "准备好就开口说。这次通话属于当前的对话。"}
                 </div>
               </motion.div>
             )}

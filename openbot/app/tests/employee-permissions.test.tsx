@@ -21,7 +21,6 @@ import {
   type EmployeePermissions,
   toolIsDisabled,
 } from "@/lib/approvals";
-import { settleReactWork } from "./settle-react-work";
 
 /**
  * SEC1 §4.5, §6.4: a Bot's 权限 section. Each tool is 直接 / 询问 / 禁用 and writes the matching rule;
@@ -31,10 +30,7 @@ import { settleReactWork } from "./settle-react-work";
  */
 beforeAll(() => GlobalRegistrator.register());
 afterEach(cleanup);
-afterAll(async () => {
-  await settleReactWork();
-  GlobalRegistrator.unregister();
-});
+afterAll(() => GlobalRegistrator.unregister());
 
 const originalFetch = global.fetch;
 let role: "user" | "admin" = "user";

@@ -107,6 +107,9 @@ const coworker: AgentProfile = {
   systemOwned: false,
   canManage: true,
   mine: true,
+  isolated: false,
+  isolationActive: false,
+  isolationOffReason: null,
 };
 
 function json(body: unknown, status = 200) {

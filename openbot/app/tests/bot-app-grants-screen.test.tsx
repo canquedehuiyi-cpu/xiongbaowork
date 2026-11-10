@@ -24,7 +24,6 @@ import {
   pluginKeys,
 } from "@/lib/plugins/queries";
 import { Route as BotAppRoute } from "@/routes/_authed/admin/plugins/$key_.bots.$agentId";
-import { settleReactWork } from "./settle-react-work";
 
 /**
  * What the per-Bot grant screen draws: which of its three pages a failed read returns, and the one
@@ -56,10 +55,7 @@ import { settleReactWork } from "./settle-react-work";
 
 beforeAll(() => GlobalRegistrator.register());
 afterEach(cleanup);
-afterAll(async () => {
-  await settleReactWork();
-  GlobalRegistrator.unregister();
-});
+afterAll(() => GlobalRegistrator.unregister());
 
 const originalFetch = global.fetch;
 
@@ -133,6 +129,7 @@ function server(overrides: Partial<PluginServer> & { id: string }) {
     lastError: null,
     addedBy: null,
     dynamicClient: false,
+    adminConnectOnly: false,
     // Not brokered unless a case says otherwise, which is what a null means here.
     authScheme: null,
     tools: [],

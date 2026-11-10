@@ -7,6 +7,7 @@ import {
   test,
 } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import type { UserPreferences } from "@openbot/shared/user-preferences";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, waitFor } from "@testing-library/react";
 import { MessageListPreference } from "@/components/settings/message-list-preference";
@@ -15,8 +16,6 @@ import {
   saveUserPreferencesMutationOptions,
   userPreferencesQueryOptions,
 } from "@/lib/settings/message-list";
-import type { UserPreferences } from "@openbot/shared/user-preferences";
-import { settleReactWork } from "./settle-react-work";
 
 const originalFetch = globalThis.fetch;
 const clients: QueryClient[] = [];
@@ -45,10 +44,7 @@ afterEach(() => {
   clients.length = 0;
   globalThis.fetch = originalFetch;
 });
-afterAll(async () => {
-  await settleReactWork();
-  GlobalRegistrator.unregister();
-});
+afterAll(() => GlobalRegistrator.unregister());
 
 function setup() {
   const client = new QueryClient({
@@ -75,7 +71,7 @@ function setup() {
 test("loads preferences from the account and renders the saved emphasis", async () => {
   const { view } = setup();
   const agent = await view.findByText("我的分身");
-  expect(agent.className).toContain("text-[0.9rem]");
+  expect(agent.className).toContain("text-sm");
   expect(requests).toEqual([
     { path: "/api/settings/preferences", method: "GET", body: undefined },
   ]);
@@ -104,7 +100,7 @@ test("successful writes update only the current account cache; failures preserve
     messageListEmphasis: "agent",
     selfHostBannerDismissed: false,
     narration: null,
-    skin: "openbot",
+    skin: "opendots",
     proactive: "on",
   });
   const mutation = client
@@ -122,9 +118,7 @@ test("successful writes update only the current account cache; failures preserve
     });
   await mutation.execute({ messageListEmphasis: "thread" });
   await waitFor(() =>
-    expect(view.getByText("规划下周").className).toContain(
-      "text-[0.9rem]",
-    ),
+    expect(view.getByText("规划下周").className).toContain("text-sm"),
   );
   expect(requests.at(-1)).toEqual({
     path: "/api/settings/preferences",
@@ -135,7 +129,7 @@ test("successful writes update only the current account cache; failures preserve
     messageListEmphasis: "agent",
     selfHostBannerDismissed: false,
     narration: null,
-    skin: "openbot",
+    skin: "opendots",
     proactive: "on",
   });
   response = async () =>

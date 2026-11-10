@@ -20,7 +20,6 @@ import { AgentDialog } from "@/components/agents/agent-dialog";
 import type { AgentProfileStore } from "../../server/src/agents/profile-store";
 import type { AgentProfile } from "../../server/src/agents/profile-types";
 import { createAgentRoutes } from "../../server/src/agents/routes";
-import { settleReactWork } from "./settle-react-work";
 
 /**
  * Editing a coworker that runs on this deployment's own Bot.
@@ -41,10 +40,7 @@ import { settleReactWork } from "./settle-react-work";
 
 beforeAll(() => GlobalRegistrator.register());
 afterEach(cleanup);
-afterAll(async () => {
-  await settleReactWork();
-  GlobalRegistrator.unregister();
-});
+afterAll(() => GlobalRegistrator.unregister());
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {

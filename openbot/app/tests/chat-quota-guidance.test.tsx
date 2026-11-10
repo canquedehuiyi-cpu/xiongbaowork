@@ -19,7 +19,6 @@ import {
   reportIfQuotaRunError,
   subscribeQuotaGuidance,
 } from "@/lib/quota/guidance";
-import { settleReactWork } from "./settle-react-work";
 
 /**
  * Story K4 in the chat: a turn refused for quota shows the same guidance as every other refusal.
@@ -33,10 +32,7 @@ import { settleReactWork } from "./settle-react-work";
  */
 
 beforeAll(() => GlobalRegistrator.register());
-afterAll(async () => {
-  await settleReactWork();
-  GlobalRegistrator.unregister();
-});
+afterAll(() => GlobalRegistrator.unregister());
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {

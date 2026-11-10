@@ -138,6 +138,17 @@ export type LiveShellOptions = {
   env: () => Record<string, string>;
   /** The bash to run. Found on PATH when absent; see `findBash`. */
   bash?: string;
+  /**
+   * Start the shell some other way than this process's own bash: the argv to run, given the startup
+   * file's text (the prompt marks) and the environment the shell should have.
+   *
+   * For an employee with its own Linux user (`sudo -n xb-bot shell <key> <rc> NAME=VALUE...`,
+   * docker/xb-bot.sh), whose shell must not be this process's user. Both travel in the argv, never as
+   * a path for the program to read: a path is something it could be made to read something else
+   * through. Stopping it is a kill of what was started (sudo), at once; the helper sees its caller
+   * gone and ends the employee's processes in that terminal itself.
+   */
+  command?: (start: { rc: string; env: Record<string, string> }) => string[];
 };
 
 /**
@@ -434,7 +445,16 @@ export function createLiveShell(options: LiveShellOptions) {
     promptWaiters.push(readyResolve);
 
     const child = Bun.spawn(
-      [options.bash ?? findBash(), "--noprofile", "--rcfile", rcFile, "-i"],
+      options.command
+        ? options.command({
+            rc: startupFile(turnFile),
+            env: Object.fromEntries(
+              Object.entries(env).filter(
+                ([, value]) => !value.includes("\n") && !value.includes("\0"),
+              ),
+            ),
+          })
+        : [options.bash ?? findBash(), "--noprofile", "--rcfile", rcFile, "-i"],
       {
         cwd: options.cwd,
         env,

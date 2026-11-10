@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { CopilotKitProvider, useCopilotKit } from "@copilotkit/react-core/v2";
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import {
   focusManager,
   QueryClient,
@@ -72,20 +72,27 @@ function serving(open: (typeof signInRequest)[]) {
 }
 
 type Renderer = ComponentType<Record<string, unknown>>;
-type Kept = {
-  renderer?: Renderer;
-  handler?: (args: unknown, context: unknown) => Promise<unknown>;
-};
+type Handler = (args: unknown, context: unknown) => Promise<unknown>;
 
-function Capture({ kept }: { kept: Kept }) {
-  const { copilotkit } = useCopilotKit();
-  const entry = copilotkit.renderToolCalls.find(
-    (candidate) => candidate.name === "computer_request_sign_in",
-  );
-  kept.renderer = entry?.render as Renderer | undefined;
-  kept.handler = copilotkit.getTool({
-    toolName: "computer_request_sign_in",
-  })?.handler as Kept["handler"];
+/**
+ * Read from the SDK when asked, not when Capture renders: the provider does not re-render its
+ * consumers when a tool is added, so a read at render time sees the registry before the tool did.
+ */
+class Registry {
+  copilotkit?: ReturnType<typeof useCopilotKit>["copilotkit"];
+  get renderer() {
+    return this.copilotkit?.renderToolCalls.find(
+      (candidate) => candidate.name === "computer_request_sign_in",
+    )?.render as Renderer | undefined;
+  }
+  get handler() {
+    return this.copilotkit?.getTool({ toolName: "computer_request_sign_in" })
+      ?.handler as Handler | undefined;
+  }
+}
+
+function Capture({ kept }: { kept: Registry }) {
+  kept.copilotkit = useCopilotKit().copilotkit;
   return null;
 }
 
@@ -108,7 +115,7 @@ test("the waiting card offers the private sign-in once the request exists", asyn
   const queries = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  const kept: Kept = {};
+  const kept = new Registry();
   const tree = render(
     <Providers queries={queries}>
       <SignInTool />
@@ -160,4 +167,76 @@ test("the waiting card offers the private sign-in once the request exists", asyn
 
   stop.abort();
   await answered;
+});
+
+/**
+ * The dialog's own spacing, not a page's. The form's sections are page sections, and a page puts
+ * 48px above each one to keep unrelated decisions apart. In the dialog that left a large empty gap
+ * above "Use a saved login" and another above "Enter your login".
+ */
+test("the private sign-in dialog spaces its sections as a dialog does", async () => {
+  const offered = {
+    ...signInRequest,
+    passwordManager: true,
+    savedLogins: [{ id: "login-1", username: "tomsmith" }],
+  };
+  global.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      const path = new URL(String(input), "http://127.0.0.1").pathname;
+      if (path === "/api/sign-in-requests")
+        return Response.json({ requests: [offered] });
+      if (path === `/api/sign-in-requests/${offered.id}`)
+        return Response.json(offered);
+      return Response.json({ error: "Not found" }, { status: 404 });
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const queries = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const kept = new Registry();
+  const tree = render(
+    <Providers queries={queries}>
+      <SignInTool />
+      <Capture kept={kept} />
+    </Providers>,
+  );
+  await waitFor(() => expect(kept.renderer).toBeDefined());
+  const Kept = kept.renderer as Renderer;
+  tree.rerender(
+    <Providers queries={queries}>
+      <SignInTool />
+      <Capture kept={kept} />
+      <Kept
+        name="computer_request_sign_in"
+        args={{ site: SITE }}
+        status="executing"
+        toolCallId={TOOL_CALL_ID}
+      />
+    </Providers>,
+  );
+  fireEvent.click(
+    await tree.findByRole(
+      "button",
+      { name: /打开私密登录/ },
+      { timeout: 4000 },
+    ),
+  );
+
+  const body = (await tree.findByText("使用已保存的登录")).closest(
+    "[data-slot=dialog-body]",
+  ) as HTMLElement;
+  expect(body).not.toBeNull();
+  const sections = [...body.querySelectorAll(":scope > section")];
+  expect(
+    sections.map((section) => section.querySelector("h2")?.textContent),
+  ).toEqual(["使用已保存的登录", "输入你的登录信息"]);
+  for (const section of sections) {
+    // Spaced by the dialog body's own gap, with no page margin of its own above it.
+    expect(section.className.split(/\s+/)).toContain("mt-0");
+    expect(section.className.split(/\s+/)).not.toContain("mt-12");
+  }
+  // And the fields sit a step below the words that introduce them, not hard against them.
+  const form = body.querySelector("form") as HTMLFormElement;
+  expect(form.className.split(/\s+/)).toContain("mt-4");
 });

@@ -34,7 +34,6 @@ import { deploymentKeys } from "@/lib/deployment/queries";
 import { quotaKeys } from "@/lib/quota/queries";
 import { userPreferencesQueryOptions } from "@/lib/settings/message-list";
 import { wakerGroupKeys } from "@/lib/waker-groups/queries";
-import { settleReactWork } from "./settle-react-work";
 
 class OfflineWebSocket extends EventTarget implements WebSocket {
   static readonly CONNECTING = 0;
@@ -94,8 +93,7 @@ afterEach(() => {
   for (const client of clients) client.clear();
   clients.length = 0;
 });
-afterAll(async () => {
-  await settleReactWork();
+afterAll(() => {
   globalThis.fetch = originalFetch;
   globalThis.WebSocket = originalWebSocket;
   GlobalRegistrator.unregister();
@@ -202,7 +200,10 @@ function renderShell(path: string, options: Options = {}) {
     staleTime: Number.POSITIVE_INFINITY,
     refetchInterval: false,
   });
-  queryClient.setQueryData(botLifecycleKeys.attention, options.attention ?? []);
+  queryClient.setQueryData(botLifecycleKeys.attention, {
+    bots: options.attention ?? [],
+    lastPingId: null,
+  });
   if (options.groups !== "error") {
     queryClient.setQueryData(wakerGroupKeys.list(), options.groups ?? []);
   }
@@ -405,6 +406,8 @@ test("what an employee needs from you rides on its row: a count badge and a paus
         unread: 0,
         paused: false,
         notify: "all",
+        items: 0,
+        tasks: { needsInput: 0, ready: 0, failed: 0 },
       },
       {
         agentId: "agent-writer",
@@ -415,6 +418,8 @@ test("what an employee needs from you rides on its row: a count badge and a paus
         unread: 0,
         paused: true,
         notify: "all",
+        items: 0,
+        tasks: { needsInput: 0, ready: 0, failed: 0 },
       },
     ],
   });
@@ -732,7 +737,10 @@ test("settings keep the app sidebar and add their own column with a way back", a
     .filter((link) => textOf(link) !== "返回");
   expect(entries.map((link) => [textOf(link), hrefOf(link)])).toEqual([
     ["通用", "/settings"],
+    ["通知", "/settings/notifications"],
     ["已连接的账号", "/settings/connected-accounts"],
+    ["浏览器", "/settings/browsers"],
+    ["学习", "/settings/learning"],
     ["密码", "/settings/passwords"],
     ["组件展示", "/settings/components-gallery"],
   ]);

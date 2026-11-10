@@ -12,7 +12,6 @@ import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { AccessRequestInbox } from "@/components/approvals/access-requests";
 import { RequestError } from "@/lib/client";
 import { accessRequestQueryOptions } from "@/lib/plugins/access-requests";
-import { settleReactWork } from "./settle-react-work";
 
 /**
  * 管理员的访问申请收件箱（审批页上，紧挨着审批收件箱）：列出待处理的申请，批准或驳回。
@@ -20,11 +19,7 @@ import { settleReactWork } from "./settle-react-work";
  */
 beforeAll(() => GlobalRegistrator.register());
 afterEach(cleanup);
-afterAll(async () => {
-  // 先把 React 已排上的回调跑完，再拿走 document（见 settle-react-work.ts）。
-  await settleReactWork();
-  GlobalRegistrator.unregister();
-});
+afterAll(() => GlobalRegistrator.unregister());
 
 const originalFetch = global.fetch;
 let role: "user" | "admin" = "admin";

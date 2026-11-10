@@ -24,7 +24,6 @@ import type {
   PluginsPage,
 } from "@/lib/plugins/queries";
 import { Route as AdminAppRoute } from "@/routes/_authed/admin/plugins/$key";
-import { settleReactWork } from "./settle-react-work";
 
 /**
  * Changing an MCP server that is already added: its token, and its instance address.
@@ -49,10 +48,7 @@ import { settleReactWork } from "./settle-react-work";
 
 beforeAll(() => GlobalRegistrator.register());
 afterEach(cleanup);
-afterAll(async () => {
-  await settleReactWork();
-  GlobalRegistrator.unregister();
-});
+afterAll(() => GlobalRegistrator.unregister());
 
 const NEW_TOKEN = "fixture-token-not-a-secret";
 const NEW_HOST = "https://globex.vendor.example";
@@ -94,6 +90,7 @@ function server(overrides: Partial<PluginServer>): PluginServer {
     lastError: null,
     addedBy: "admin@example.com",
     dynamicClient: false,
+    adminConnectOnly: false,
     authScheme: null,
     tools: [],
     withdrawn: [],

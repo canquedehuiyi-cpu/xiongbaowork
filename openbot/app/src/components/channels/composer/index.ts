@@ -18,7 +18,6 @@ export {
   type QueueTransition,
   reduceQueue,
 } from "./queue";
-export { PLACEHOLDER_COMMANDS } from "./sources";
 export type { CrewOption } from "./triggers";
 export {
   type AgentOption,

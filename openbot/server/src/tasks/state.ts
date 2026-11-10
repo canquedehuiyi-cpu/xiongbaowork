@@ -192,6 +192,9 @@ export function replyTail(reply: string | null | undefined): string | null {
   return replyEnding(reply).tail;
 }
 
+/** A task's next step while its Bot waits on a question it asked, before the question itself. */
+const WAITING_FOR_ANSWER = "等你回答";
+
 /** How long a question the Bot asked may run as a task's next step. */
 const QUOTE_MAX = 120;
 
@@ -230,9 +233,9 @@ export function waitingLine(
 ): string {
   if (waiting.kind === "question") {
     const words = Array.from(waiting.question.trim());
-    return `Waiting for your answer: ${words.length > QUOTE_MAX ? `${words.slice(0, QUOTE_MAX - 1).join("")}…` : words.join("")}`;
+    return `${WAITING_FOR_ANSWER}：${words.length > QUOTE_MAX ? `${words.slice(0, QUOTE_MAX - 1).join("")}…` : words.join("")}`;
   }
-  return `${waiting.handOff ? "This needs you" : "Waiting for your approval"}: ${approvalPhrase(waiting)}`;
+  return `${waiting.handOff ? "需要你来做" : "等你批准"}：${approvalPhrase(waiting)}`;
 }
 
 /** The suffix of the line a task's turn records when it fails on its last run. */
@@ -510,7 +513,7 @@ export async function readTaskStates(
       decision.createdAt,
       decision.title
         ? waitingLine({ kind: "question", question: decision.title })
-        : "Waiting for your answer",
+        : WAITING_FOR_ANSWER,
     );
   for (const question of questions)
     waitsFor(

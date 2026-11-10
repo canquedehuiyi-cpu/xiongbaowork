@@ -82,6 +82,9 @@ const profile: AgentProfile = {
   systemOwned: false,
   canManage: true,
   mine: true,
+  isolated: false,
+  isolationActive: false,
+  isolationOffReason: null,
 };
 
 const duty = (
@@ -110,7 +113,8 @@ const routine = (id: string, owner: string, instruction: string) =>
     schedule: "0 9 * * *",
     timezone: "Asia/Shanghai",
     instruction,
-    channel: { id: "c1", name: "日报", gone: false },
+    title: null,
+    channel: { id: "c1", name: "日报", title: "日报", gone: false },
     enabled: true,
     nextRunAt: "2026-11-03T01:00:00.000Z",
     lastRun: null,

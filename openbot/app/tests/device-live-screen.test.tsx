@@ -12,7 +12,6 @@ import {
 import { ComputerView } from "@/components/computer/computer-view";
 import type { ControlState } from "@/lib/computers/control";
 import { queryClient } from "@/query-client";
-import { settleReactWork } from "./settle-react-work";
 
 /**
  * The existing viewer, for a coworker whose browser runs on the tenant's own machine (F2 stage 2).
@@ -82,8 +81,7 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
-afterAll(async () => {
-  await settleReactWork();
+afterAll(() => {
   globalThis.WebSocket = originalWebSocket;
   globalThis.fetch = originalFetch;
   if (originalIntersectionObserver) {

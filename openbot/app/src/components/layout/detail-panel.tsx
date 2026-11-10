@@ -13,6 +13,11 @@ import { EASE_OUT } from "@/lib/motion";
  *
  * The pane is animated by width and the content inside it is given that width outright, so the
  * content is laid out once and the pane reveals it.
+ *
+ * A SHEET COVERS THE MAIN PANE, so whatever there is waiting on the person (`waiting`, an approval
+ * card) is drawn at the top of the sheet as well. A Bot's screen opens itself while the Bot works,
+ * and on a narrow window that sheet used to hide the approval the Bot then stopped for, until the
+ * person thought to close it. Beside the main pane it is already in view, and is not repeated.
  */
 
 const ANIMATION_DURATION_SECONDS = 0.3;
@@ -34,6 +39,7 @@ export function DetailPanel({
   title,
   detail,
   detailWidth = DEFAULT_DETAIL_WIDTH,
+  waiting,
   children,
 }: {
   open: boolean;
@@ -43,6 +49,8 @@ export function DetailPanel({
   detail?: ReactNode;
   /** Open width of the detail pane, in pixels. */
   detailWidth?: number;
+  /** What in the main pane waits on the person: drawn atop the sheet, which would cover it. */
+  waiting?: ReactNode;
   children: ReactNode;
 }) {
   // Reduced motion keeps the fade, which explains the change, and drops the movement.
@@ -80,6 +88,9 @@ export function DetailPanel({
               {title ?? "详情"}
             </SheetTitle>
             <div className="flex-1 min-h-0 overflow-y-auto">
+              {open && waiting ? (
+                <div className="px-4 pt-4 empty:hidden">{waiting}</div>
+              ) : null}
               {open ? detail : null}
             </div>
           </SheetContent>
@@ -97,11 +108,18 @@ export function DetailPanel({
         >
           <div
             className="flex h-full flex-col bg-sidebar border-l border-border"
+            data-slot="detail-pane"
             style={{ width: detailWidth }}
           >
             {/* Rendered for the whole animation, so the way out is available immediately. */}
-            <div className="h-12 shrink-0 sticky top-0 flex flex-row items-center justify-between px-2 gap-2">
-              <div className="flex min-w-0 w-full items-center gap-1.5">
+            <div
+              className="h-12 shrink-0 sticky top-0 flex flex-row items-center justify-between px-2 gap-2"
+              data-slot="detail-pane-header"
+            >
+              <div
+                className="flex min-w-0 w-full items-center gap-1.5"
+                data-slot="detail-pane-title"
+              >
                 {title}
               </div>
               <div className="flex flex-row gap-1.5">

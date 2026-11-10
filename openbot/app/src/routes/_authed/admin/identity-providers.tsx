@@ -121,8 +121,16 @@ function IdentityProvidersPage() {
             读不到身份提供方。
           </p>
         ) : providers.data?.length === 0 ? (
-          <PageEmpty>
-            还没有登记任何身份提供方。用身份团队提供的元数据添加一个。
+          <PageEmpty
+            action={
+              <Button onClick={() => setOpen(true)} size="sm" variant="outline">
+                添加身份提供方
+              </Button>
+            }
+            icon={IconBuildingBank}
+            title="还没有登记任何身份提供方"
+          >
+            用身份团队提供的元数据添加一个。
           </PageEmpty>
         ) : (
           <PageRows>
@@ -157,6 +165,10 @@ function IdentityProvidersPage() {
           </PageRows>
         )}
       </PageSection>
+      {/*
+       * Upstream draws its Sign-in section (require SSO) here. This deployment keeps that switch on
+       * the Enterprise controls page (/admin/enterprise), so it is not drawn twice.
+       */}
 
       <Dialog onOpenChange={setOpen} open={open}>
         <DialogContent>

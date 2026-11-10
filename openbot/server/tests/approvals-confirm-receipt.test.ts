@@ -79,7 +79,11 @@ async function handedOff(candidate: ApprovalCandidate) {
   };
 }
 
-const PAYMENTS = { behaviour: "hand_off", source: "safety", id: "payments" };
+const PAYMENTS = {
+  behaviour: "hand_off",
+  source: "safety",
+  id: "payments",
+} as const;
 
 describe("「确认收货」交给本人", () => {
   test.each([

@@ -19,6 +19,7 @@ import {
   type ChangeEvent,
   type DragEvent,
   type FormEvent,
+  type ReactNode,
   useCallback,
   useEffect,
   useMemo,
@@ -56,9 +57,12 @@ import {
 } from "./draft";
 import { screenPickedFiles } from "./picked-files";
 import { type RejectedFile, RejectedFiles } from "./rejected-files";
-import { PLACEHOLDER_COMMANDS } from "./sources";
 import { type AgentOption, buildTriggers, type CrewOption } from "./triggers";
 import { useDictation } from "./use-dictation";
+
+/** One shared empty list, so a box with no commands does not rebuild its triggers per render. */
+const NO_COMMANDS: readonly CommandOption[] = [];
+const NO_CREWS: readonly CrewOption[] = [];
 
 /**
  * The SDK's upload failure, derived rather than imported for the reason `attachments.ts` records
@@ -83,6 +87,7 @@ type UploadFailure = Parameters<
  * the files. It is read off the queue ACTION instead, by `conversation-view.tsx`, which is the one
  * place that has both halves in hand.
  */
+
 export type DroppedAttachmentCause =
   /** Several parked messages became one turn, and the joined message overran the per-message cap. */
   | "merged-over-cap"
@@ -115,10 +120,11 @@ function stagedModality(attachment: Attachment) {
 
 const MAX_HEIGHT_PX = 220;
 /**
- * Tracks the compact `text-sm` line box so PromptArea stays vertically centered in one row.
+ * Two `text-sm` lines: the compact composer's message box sits on its own row above the controls,
+ * so it opens two lines tall and grows from there.
  */
-const COMPACT_MIN_HEIGHT_PX = 19;
-const COMPACT_MAX_HEIGHT_PX = 96;
+const COMPACT_MIN_HEIGHT_PX = 38;
+const COMPACT_MAX_HEIGHT_PX = 160;
 
 export type ComposerProps = {
   className?: string;
@@ -130,10 +136,16 @@ export type ComposerProps = {
   editorClassName?: string;
   compact?: boolean;
   voiceCall?: { active: boolean; supported: boolean; onStart(): void };
+  /**
+   * The model picker, drawn beside the microphone. Built by the screen, which knows the Bot and the
+   * conversation; the composer only gives it a place. Absent draws nothing.
+   */
+  modelPicker?: ReactNode;
   /** Agents that `@` can address. Empty means the mention menu reports an empty channel. */
   agents?: readonly AgentOption[];
   /** Crew flows `@` can start, alongside the agents. Empty offers no crew entry. */
   crews?: readonly CrewOption[];
+  /** What `/` offers: the skills of the Bot this box sends to. Empty offers nothing. */
   commands?: readonly CommandOption[];
   /**
    * Receives the whole draft rather than a string, so a mention or a command reaches the caller as
@@ -162,6 +174,12 @@ export type ComposerProps = {
    * stops a person typing.
    */
   disabled?: boolean;
+  /**
+   * The message can be written but has nowhere to go yet: a new conversation with nobody in To:.
+   * Enter and Send call this instead of sending and leave the words in the box, so the caller can
+   * say what is missing. Unlike `disabled`, it does not stop anybody writing.
+   */
+  onSendHeld?: () => void;
   /**
    * A turn is in flight. It gates sending, not writing: a channel is `pending` while it is still
    * connecting and restoring its history, and the composer is on screen throughout.
@@ -261,9 +279,8 @@ function overCap(draft: ComposerDraft): boolean {
 /** What the person is told when Send is held shut by the cap, and what to do about it. */
 function tooManyStagedReason(count: number): string {
   return (
-    `已暂存 ${count} 个附件，但一条消息最多只能带 ` +
-    `${MAX_ATTACHMENTS_PER_MESSAGE} 个。请先移除 ` +
-    `${count - MAX_ATTACHMENTS_PER_MESSAGE} 个再发送。`
+    `一条消息最多只能带 ${MAX_ATTACHMENTS_PER_MESSAGE} 个附件。` +
+    `请先移除 ${count - MAX_ATTACHMENTS_PER_MESSAGE} 个再发送。`
   );
 }
 
@@ -307,11 +324,10 @@ const DROPPED_REASON: Record<DroppedAttachmentCause, string> = {
  * second time.
  */
 const UNACCEPTED_DROP_REASON = {
-  "cannot-send":
-    "was not attached: this conversation can no longer take messages.",
+  "cannot-send": "没有附上。这段对话已经不能再发消息了。",
   "no-conversation":
-    "was not attached: there is no conversation here yet. Send this " +
-    "message first, then attach to the one it opens.",
+    "没有附上。这里还没有对话。请先发送消息，" +
+    "再到由此开始的对话里附加文件。",
 } as const;
 
 export function Composer({
@@ -319,13 +335,15 @@ export function Composer({
   editorClassName,
   compact = false,
   voiceCall,
+  modelPicker,
   agents = [],
-  crews = [],
-  commands = PLACEHOLDER_COMMANDS,
+  crews = NO_CREWS,
+  commands = NO_COMMANDS,
   onSubmit,
   onQueue,
   onStop,
   disabled = false,
+  onSendHeld,
   pending = false,
   autoFocus = false,
   channelId,
@@ -1117,6 +1135,12 @@ export function Composer({
         return;
       }
 
+      // Before anything is cleared or parked: a held send keeps every word where it was typed.
+      if (onSendHeld) {
+        onSendHeld();
+        return;
+      }
+
       /*
        * A TURN IS IN FLIGHT, AND THIS IS THE FORK THE WHOLE AFFORDANCE HANGS ON.
        *
@@ -1245,6 +1269,7 @@ export function Composer({
       dismissRejections,
       isBusy,
       onQueue,
+      onSendHeld,
       onSubmit,
       releaseStagedRows,
       removeAttachment,
@@ -1351,6 +1376,7 @@ export function Composer({
     <Button
       aria-label="停止员工"
       className={actionClassName}
+      data-slot="composer-stop"
       data-testid="composer-stop"
       onClick={onStop}
       size="icon"
@@ -1366,7 +1392,7 @@ export function Composer({
           ? callAction.active
             ? "显示语音通话"
             : "和这位员工通话"
-          : "语音通话需要 HTTPS 或 localhost，以及麦克风支持"
+          : "语音通话需要麦克风和安全的（HTTPS）连接"
       }
       className={actionClassName}
       disabled={disabled || dictation.busy || !callAction.supported}
@@ -1380,6 +1406,7 @@ export function Composer({
     <Button
       aria-label={sendLabel}
       className={actionClassName}
+      data-slot="composer-send"
       disabled={!canSend}
       size="icon"
       type="submit"
@@ -1485,24 +1512,17 @@ export function Composer({
         {tooManyStagedNotice}
         <form
           aria-busy={isBusy}
+          data-slot="composer"
           className={cn(
             /*
-             * `py-3` IS LOAD-BEARING ONCE THE TEXT WRAPS. On one line `min-h-14` and the controls
-             * row's own `items-center` fake the vertical padding, so it read as correct for as long
-             * as nobody typed a paragraph. Past that the box grows to fit its content exactly and
-             * the glyphs sit against the border.
+             * The padding goes on the form rather than on the editor because the editor scrolls
+             * internally at COMPACT_MAX_HEIGHT_PX: padding inside that box would scroll away with
+             * the text, so the first visible line would touch the top edge on a long message.
              *
-             * It goes on the form rather than on the editor because the editor scrolls internally
-             * at COMPACT_MAX_HEIGHT_PX: padding inside that box would scroll away with the text, so
-             * the first visible line would still touch the top edge on a long message.
+             * A column: the attachment strip across the top, the message box under it, and the
+             * controls row at the bottom.
              */
-            /*
-             * A COLUMN, SO THE ATTACHMENT STRIP CAN HAVE THE FULL WIDTH. It used to be one row —
-             * attach button, editor, send — with the strip inside the editor's column, which
-             * started it 42px in from the frame's left edge with nothing under it. The strip is
-             * its own row across the top now, and the three controls keep their row below it.
-             */
-            "flex min-h-14 flex-col rounded-2xl border border-border bg-card px-3 py-3 focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50",
+            "flex flex-col rounded-2xl border border-border bg-card px-3 py-3",
             className,
           )}
           onSubmit={handleFormSubmit}
@@ -1515,44 +1535,15 @@ export function Composer({
               onRemove={discardAttachment}
             />
             {/*
-             * `self-end` ON THE THREE CONTROLS, AND IT COSTS NOTHING ON ONE LINE. The row is
-             * `items-center`, which is right while everything in it is a single line high. A long
-             * message grows the editor to `COMPACT_MAX_HEIGHT_PX`, and centred buttons then float to
-             * the middle of that block rather than sitting on the line the person is typing. Empty,
-             * the row is exactly a button tall, so centred and bottom are the same pixel.
+             * TWO ROWS: the message box across the full width, then the controls under it. Attach
+             * and the model on the left, the microphone and send on the right, so the controls
+             * keep their place however long the message grows.
              */}
-            <div className="flex items-center gap-3">
-              {attachmentsEnabled ? (
-                <Button
-                  aria-label="添加附件"
-                  className="self-end"
-                  // The button stays, and stays labelled: a conversation that cannot take another
-                  // message has not lost the ability to attach, it has lost the message. Swapping it
-                  // for the "unavailable" placeholder would say the wrong thing about why.
-                  disabled={disabled}
-                  onClick={() => fileInputRef.current?.click()}
-                  size="icon"
-                  type="button"
-                  variant="ghost"
-                >
-                  <IconPlus className="size-5" />
-                </Button>
-              ) : (
-                <Button
-                  aria-label="暂无更多消息选项"
-                  className="self-end disabled:opacity-100"
-                  disabled
-                  size="icon"
-                  type="button"
-                  variant="ghost"
-                >
-                  <IconPlus className="size-5" />
-                </Button>
-              )}
+            <div className="min-w-0" data-slot="composer-input">
               <PromptArea
                 aria-label="消息"
                 className={cn(
-                  "min-w-0 flex-1 border-0 bg-transparent p-0 text-sm shadow-none",
+                  "w-full border-0 bg-transparent p-0 text-sm shadow-none",
                   editorClassName,
                 )}
                 disabled={disabled}
@@ -1566,11 +1557,44 @@ export function Composer({
                 triggers={triggers}
                 value={value}
               />
-              <DictationButton
-                dictation={dictation}
-                disabled={disabled || voiceCall?.active === true}
-              />
-              {primaryAction}
+            </div>
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-1">
+                {attachmentsEnabled ? (
+                  <Button
+                    aria-label="添加附件"
+                    data-slot="composer-attach"
+                    // The button stays, and stays labelled: a conversation that cannot take another
+                    // message has not lost the ability to attach, it has lost the message.
+                    disabled={disabled}
+                    onClick={() => fileInputRef.current?.click()}
+                    size="icon"
+                    type="button"
+                    variant="ghost"
+                  >
+                    <IconPlus className="size-5" />
+                  </Button>
+                ) : (
+                  <Button
+                    aria-label="暂无更多消息选项"
+                    className="disabled:opacity-100"
+                    disabled
+                    size="icon"
+                    type="button"
+                    variant="ghost"
+                  >
+                    <IconPlus className="size-5" />
+                  </Button>
+                )}
+                {modelPicker}
+              </div>
+              <div className="flex shrink-0 items-center gap-1">
+                <DictationButton
+                  dictation={dictation}
+                  disabled={disabled || voiceCall?.active === true}
+                />
+                {primaryAction}
+              </div>
             </div>
           </DictationSurface>
         </form>
@@ -1591,6 +1615,7 @@ export function Composer({
       <form
         aria-busy={isBusy}
         className="overflow-hidden rounded-2xl border border-border bg-card"
+        data-slot="composer"
         onSubmit={handleFormSubmit}
       >
         <DictationSurface
@@ -1606,23 +1631,25 @@ export function Composer({
               images={images}
               onRemove={discardAttachment}
             />
-            <PromptArea
-              aria-label="消息"
-              autoGrow
-              className={cn(
-                "w-full border-0 bg-transparent p-0 text-sm shadow-none",
-                editorClassName,
-              )}
-              disabled={disabled}
-              maxHeight={MAX_HEIGHT_PX}
-              onChange={handleChange}
-              onImagePaste={canAttach ? stagePastedImage : undefined}
-              onSubmit={submitDraft}
-              placeholder="有什么需要，尽管说"
-              ref={promptAreaRef}
-              triggers={triggers}
-              value={value}
-            />
+            <div data-slot="composer-input">
+              <PromptArea
+                aria-label="消息"
+                autoGrow
+                className={cn(
+                  "w-full border-0 bg-transparent p-0 text-sm shadow-none",
+                  editorClassName,
+                )}
+                disabled={disabled}
+                maxHeight={MAX_HEIGHT_PX}
+                onChange={handleChange}
+                onImagePaste={canAttach ? stagePastedImage : undefined}
+                onSubmit={submitDraft}
+                placeholder="有什么需要，尽管说"
+                ref={promptAreaRef}
+                triggers={triggers}
+                value={value}
+              />
+            </div>
           </div>
 
           <div className="flex items-center justify-between">
@@ -1630,6 +1657,7 @@ export function Composer({
               <Button
                 aria-label="添加附件"
                 className="size-7 rounded-full p-0"
+                data-slot="composer-attach"
                 disabled={disabled}
                 onClick={() => fileInputRef.current?.click()}
                 type="button"
@@ -1642,6 +1670,7 @@ export function Composer({
             )}
 
             <div className="flex items-center gap-1">
+              {modelPicker}
               <DictationButton
                 dictation={dictation}
                 disabled={disabled || voiceCall?.active === true}

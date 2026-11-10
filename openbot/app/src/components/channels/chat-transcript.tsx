@@ -1,9 +1,24 @@
 import type { ActivityMessage, Message } from "@ag-ui/core";
 import type { Attachment } from "@copilotkit/react-core/v2";
 import {
+  useCopilotKit,
   useRenderActivityMessage,
   useRenderToolCall,
 } from "@copilotkit/react-core/v2";
+import { outcomeForPerson } from "@openbot/shared/approval-outcomes";
+import {
+  readConnectPrompt,
+  SHOW_APP_ACCESS_TOOL,
+} from "@openbot/shared/connect-prompt";
+import { answeredBy } from "@openbot/shared/handoff-markers";
+import { SUBAGENT_TOOL } from "@openbot/shared/subagent";
+import {
+  answersTheModel,
+  ownToolAttempt,
+  ownToolSubject,
+  readToolName,
+} from "@openbot/shared/tool-name";
+import { SEARCH_TOOLS, toolsFound } from "@openbot/shared/tool-search";
 import {
   IconAlertTriangle,
   IconBox,
@@ -12,9 +27,13 @@ import {
   IconFile,
   IconX,
 } from "@tabler/icons-react";
+import { useQuery } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "motion/react";
 import {
+  createContext,
   memo,
+  useCallback,
+  useContext,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -22,6 +41,11 @@ import {
   useState,
 } from "react";
 import { Streamdown } from "streamdown";
+import { InlineApproval } from "@/components/approvals/inline-approval";
+import {
+  ArgumentsArrivingContext,
+  TurnInFlightContext,
+} from "@/components/gallery/streaming";
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import {
   Dialog,
@@ -33,6 +57,7 @@ import {
 import {
   MessageContent,
   MessageFooter,
+  MessageHeader,
   Message as MessageRow,
 } from "@/components/ui/message";
 import {
@@ -42,15 +67,34 @@ import {
   MessageScrollerItem,
   MessageScrollerProvider,
   MessageScrollerViewport,
-  useMessageScroller,
 } from "@/components/ui/message-scroller";
 import { Skeleton } from "@/components/ui/skeleton";
+import { agentListQueryOptions } from "@/lib/agents/queries";
 import { attachmentUrl } from "@/lib/channels/attachments";
 import { readResponsibilityTurn } from "@/lib/channels/responsibility-turn";
 import { readFiring } from "@/lib/channels/routine-firing";
-import { markdownComponents } from "@/lib/markdown";
+import type { CardPlace } from "@/lib/copilot/carry-on";
+import { foreignCodingCall } from "@/lib/copilot/coding-calls";
+import { ToolPlaceContext } from "@/lib/copilot/tool-place";
+import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
+import {
+  type FolderNames,
+  FolderNamesContext,
+  folderNamesIn,
+  folderStepBody,
+  folderStepSubject,
+} from "@/lib/folders/folder-steps";
+import {
+  markdownComponents,
+  markdownPlugins,
+  replyRemarkPlugins,
+} from "@/lib/markdown";
 import { EASE_OUT, ENTRANCE_SECONDS } from "@/lib/motion";
-import { readToolName } from "@/lib/plugins/tool-name";
+import {
+  RESEARCH_RESULTS_LABELS,
+  readResearchSources,
+  researchRoleOfCall,
+} from "@/lib/plugins/research-results";
 import {
   asText,
   forDisplay,
@@ -59,15 +103,17 @@ import {
   UNOFFERED_TOOL_SENTENCE,
   unofferedTool,
 } from "@/lib/plugins/tool-result";
+import { useResultVisibility } from "@/lib/product-telemetry";
 import { readTeamBotConsent } from "@/lib/team-bots";
 import { cn } from "@/lib/utils";
 import { VOICE_CHAT_ACTIVITY, type VoiceChatEntry } from "@/lib/voice/archive";
-import { AppAccessRequestCard, readAppAccessCard } from "./app-access-card";
 import {
-  BrowserActivity,
-  groupBrowserSteps,
-  type TranscriptItem,
-} from "./browser-activity";
+  AppAccessCard,
+  AppAccessRequestCard,
+  readAppAccessCard,
+} from "./app-access-card";
+import { ChannelAvatar } from "./avatar";
+import { isBrowserStep } from "./browser-activity";
 import {
   attachmentModality,
   type SentAttachment,
@@ -75,15 +121,46 @@ import {
 } from "./chat-messages";
 import { splitChatOrigin } from "./chat-origin";
 import type { QueuedMessage } from "./composer";
+import { FollowScroll, RESUME_PX, useFollowIntent } from "./follow-intent";
+import { LateRenderersContext, LateRenderersWatch } from "./late-renderers";
+import { usePacedReveal } from "./paced-reveal";
+import { ResearchResults } from "./research-results";
 import { TeamBotConsentCard } from "./team-bot-consent";
-import { ToolRenderBoundary } from "./tool-boundary";
+import {
+  dropRepeatedAppCards,
+  groupToolSteps,
+  ToolActivity,
+  type ToolGroup,
+  type TranscriptItem,
+  useDrawnTool,
+} from "./tool-activity";
+import { ToolRenderBoundary, toolCallFinal } from "./tool-boundary";
 import { ToolLine } from "./tool-line";
+import { shouldDrawEarlier, useTranscriptPages } from "./transcript-pages";
+import { TranscriptRail } from "./transcript-rail";
+import {
+  AT_END_PX,
+  currentTurn,
+  isPersonSentMessage,
+  type Turn,
+  turnsOf,
+} from "./transcript-turns";
 import { VoiceChatCard } from "./voice-chat-card";
 
 type ChatTranscriptProps = {
+  /** Server-owned thread identity, used only to correlate rendered result messages. */
+  threadId?: string;
   busy?: boolean;
-  /** Comma-separated `/` command names, used to tell a skill chip from a leading slash. */
-  commandNames?: string;
+  /**
+   * The `/` commands, as JSON from each command to its name: tells a skill chip from a leading
+   * slash, and names the skill on its badge. See `skillLabels`.
+   */
+  commandLabels?: string;
+  /**
+   * Drawn above the first message, as the first thing in the scroll content, so it scrolls away
+   * with the conversation. Only once the earliest page is drawn: see where it is rendered.
+   */
+  intro?: React.ReactNode;
   messages: ReadonlyArray<Readonly<Message>>;
   /**
    * Typed while the Bot had the turn, and waiting for it to finish. Empty on a screen that does not
@@ -102,33 +179,67 @@ type ChatTranscriptProps = {
    * be told, and only the thing that ended the turn knows which one happened.
    */
   stopped?: string;
+  /**
+   * Work this conversation is waiting on that is not this tab's run: a Bot it asked, a routine.
+   * Drawn in the same slot as `Thinking`, under the last thing said, because that is where the
+   * answer will appear.
+   */
+  working?: React.ReactNode;
 };
 
 /** One shared empty array, so a screen without a queue does not hand down a new one per render. */
 const EMPTY_QUEUE: readonly QueuedMessage[] = [];
 
 /**
+ * The `/` commands handed to the transcript, from each command to the skill's name.
+ *
+ * A string of JSON rather than an object, because message rows are memoised on primitives; see
+ * where `ChatTranscript` is drawn. Built by {@link skillLabels}, read back by {@link splitSkillChip}.
+ */
+export function skillLabels(
+  commands: readonly { id: string; name: string }[],
+): string {
+  return JSON.stringify(
+    Object.fromEntries(commands.map((command) => [command.id, command.name])),
+  );
+}
+
+function readLabels(labels: string): Record<string, string> {
+  try {
+    const parsed: unknown = JSON.parse(labels || "{}");
+    return parsed && typeof parsed === "object"
+      ? (parsed as Record<string, string>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
  * Split a person's message into the skill they invoked and the rest of what they typed.
  *
  * ONLY A KNOWN COMMAND COUNTS. "/etc/hosts is broken" is a sentence, not a skill, and drawing a chip
- * around it would invent a thing that never happened. The names come from the same list the `/` menu
- * was built from, so this stays true as skills are granted and revoked.
+ * around it would invent a thing that never happened. The commands come from the same list the `/`
+ * menu was built from, so this stays true as skills are granted and revoked.
+ *
+ * The message carries the command (`/standup`), which never changes; the badge shows the skill's
+ * name, as the menu and the composer's chip did.
  *
  * The trigger only opens at the start of a line, so the chip is the first token or there is none.
  */
 function splitSkillChip(
   text: string,
-  commandNames: string,
+  commandLabels: string,
 ): { chip: string; rest: string } | null {
   const match = /^\/([a-z0-9][a-z0-9-]*)(\s|$)/.exec(text);
-  if (!match) {
+  if (!match?.[1]) {
     return null;
   }
-  const known = commandNames.split(",").filter(Boolean);
-  if (!known.includes(match[1])) {
+  const name = readLabels(commandLabels)[match[1]];
+  if (!name) {
     return null;
   }
-  return { chip: match[1], rest: text.slice(match[0].length) };
+  return { chip: name, rest: text.slice(match[0].length) };
 }
 
 /**
@@ -399,65 +510,116 @@ function Queued({
  * alternative is threading a ref out through three components with no other reason to know a
  * scroller exists.
  */
-function ScrollNewestQueuedIntoView({ newest }: { newest: string | null }) {
-  const { scrollToEnd } = useMessageScroller();
-
+function ScrollNewestQueuedIntoView({
+  newest,
+  onQueued,
+}: {
+  newest: string | null;
+  onQueued: () => void;
+}) {
   useEffect(() => {
     if (newest === null) {
       return;
     }
-    scrollToEnd();
-  }, [newest, scrollToEnd]);
+    // Through the follow state, so the view is told to follow before it is sent to the end.
+    onQueued();
+  }, [newest, onQueued]);
 
   return null;
 }
 
 /**
- * How many of the newest turns cascade when a channel is opened, and how far apart.
+ * How many of the newest rows render in when a conversation opens, and how far apart.
  *
- * The tail rather than the head: opening a channel lands you at the bottom, so these are the ones
- * actually on screen. Staggering from the top of a long history would spend the whole budget on
- * messages nobody can see and leave the visible ones arriving last.
- *
- * Twelve at 40ms is 440ms of cascade before the last one starts. Past roughly half a second this
- * stops reading as settling and starts reading as waiting.
+ * The view has already landed at the bottom before the first paint, so these are the rows on
+ * screen; the stagger runs top of the screen first, newest last. Short on purpose: eight rows 30ms
+ * apart is a little over 200ms before the last one starts, which reads as the conversation
+ * appearing rather than as it loading. Older rows, above the fold, are simply there.
  */
-const FIRST_PAINT_STAGGER_COUNT = 12;
-const FIRST_PAINT_STAGGER_SECONDS = 0.04;
+const OPENING_STAGGER_COUNT = 8;
+const OPENING_STAGGER_MS = 30;
 
 /**
- * Decide, once per message, whether it waits its turn.
+ * The opening stagger, decided once from the rows present when the conversation opens.
  *
- * FROZEN PER ID ON PURPOSE. `delay` is a prop on a memoised component, so a value that changed
- * between renders would break the memo that makes the streaming path cheap — and worse, a message
- * whose delay changed could replay its entrance mid-stream. Each id is decided the first time it is
- * seen and never revisited.
- *
- * `settled` flips after the first render that has any items, which is NOT the first render: history
- * is restored asynchronously, so a channel's transcript is empty for a beat. Anything appearing
- * after that is a live turn and is given no delay at all.
+ * Applied as a CSS animation on the scroller's row wrapper, not on the memoised row inside it: the
+ * row's props stay the same and a streaming answer can never replay it, and a transform composites
+ * without moving the layout box the scroller just landed on. Exported for its tests.
  */
-function createFirstPaintDelays() {
-  const decided = new Map<string, number>();
-  let settled = false;
+export function openingStagger(ids: readonly string[]): Map<string, string> {
+  const start = Math.max(0, ids.length - OPENING_STAGGER_COUNT);
+  return new Map(
+    ids
+      .slice(start)
+      .map((id, index) => [id, `${index * OPENING_STAGGER_MS}ms`] as const),
+  );
+}
 
-  return {
-    settle() {
-      settled = true;
-    },
-    delayFor(id: string, index: number, total: number): number {
-      const known = decided.get(id);
-      if (known !== undefined) {
-        return known;
-      }
-      const offset = total - FIRST_PAINT_STAGGER_COUNT;
-      const place = index - Math.max(0, offset);
-      const delay =
-        settled || place < 0 ? 0 : place * FIRST_PAINT_STAGGER_SECONDS;
-      decided.set(id, delay);
-      return delay;
-    },
-  };
+/** Where a turn jumped to from the rail sits below the top of the view. */
+const TURN_INSET_PX = 24;
+
+/**
+ * Since when a row mounting now is arriving live, rather than having been there when the
+ * conversation opened: null while it is not.
+ *
+ * A ref, not state: it is read once, at a row's first render, and setting it must not re-render
+ * anything. `ArrivalsLive` provides a fresh one with the scroller, so it is null for the commit that
+ * mounts the whole history and set to the time in the effect after it; every row mounted from then
+ * on is something that arrived while the person was here. The time is for a row that can say when
+ * what it shows happened (see `useArrivedLive`).
+ */
+const ArrivalsLiveContext = createContext<React.RefObject<
+  number | null
+> | null>(null);
+
+/*
+ * For rows drawn later but older than everything on screen: an earlier page added above as the
+ * reader scrolls up (`useTranscriptPages`). They are history, so they draw at rest.
+ */
+const AT_REST: React.RefObject<number | null> = { current: null };
+
+function ArrivalsLive({ children }: { children: React.ReactNode }) {
+  const live = useRef<number | null>(null);
+  useEffect(() => {
+    live.current = Date.now();
+  }, []);
+  return (
+    <ArrivalsLiveContext.Provider value={live}>
+      {children}
+    </ArrivalsLiveContext.Provider>
+  );
+}
+
+/**
+ * Whether this row arrived while the conversation was open, decided once at its first render (see
+ * `ArrivalsLiveContext`), so a reply streaming into it can never change the answer.
+ *
+ * `happenedAt` is for a row that is late rather than new: a voice chat from before the conversation
+ * opened, when the voice service answered after the conversation was already showing. It mounts
+ * among rows on screen but is history, and draws at rest.
+ */
+function useArrivedLive(happenedAt?: string): boolean {
+  const liveRef = useContext(ArrivalsLiveContext);
+  const [live] = useState(() => {
+    if (liveRef === null) return true;
+    const since = liveRef.current;
+    if (since === null) return false;
+    return happenedAt === undefined || !(Date.parse(happenedAt) < since);
+  });
+  return live;
+}
+
+/**
+ * How Streamdown draws a Bot's message, decided once when the message mounts. History is finished
+ * text and takes the static renderer, which does no repair of half-written markdown; anything that
+ * arrived live, or was still streaming when the conversation opened, takes the streaming one and
+ * keeps it after it finishes, so the renderer never changes under the reader. Exported for its test.
+ */
+export function messageMode(
+  live: boolean,
+  streaming: boolean,
+): "static" | "streaming" {
+  return live || streaming ? "streaming" : "static";
 }
 
 /**
@@ -479,19 +641,20 @@ function createFirstPaintDelays() {
  * accelerated and drops frames exactly when the main thread is busy, which here is while a reply is
  * streaming.
  *
- * STAGGERED ONLY ON THE FIRST PAINT OF A CHANNEL. A turn sent mid-conversation arrives alone and
- * must not wait behind anything, so `delay` is zero for it. Opening a channel is the one moment the
- * whole history mounts at once, and cascading the last few reads as the conversation settling
- * rather than as a page appearing all at once. `createFirstPaintDelays` decides which is which.
+ * ONLY FOR WHAT ARRIVES WHILE THE CONVERSATION IS OPEN. A row mounted with the history draws at
+ * rest here and takes the opening stagger instead (`openingStagger`); `ArrivalsLiveContext` says
+ * which is which, decided once at the row's first render so a streaming answer can never replay it.
  */
 function Arriving({
   children,
-  delay = 0,
+  happenedAt,
 }: {
   children: React.ReactNode;
-  delay?: number;
+  /** When what the row shows happened, if it can say; see `useArrivedLive`. */
+  happenedAt?: string;
 }) {
   const shouldReduceMotion = useReducedMotion();
+  const live = useArrivedLive(happenedAt);
 
   return (
     <motion.div
@@ -512,15 +675,16 @@ function Arriving({
        * all outside a flex container.
        */
       className="flex w-full flex-col"
-      initial={{
-        opacity: 0,
-        // Reduced motion keeps the fade and drops the movement: gentler, not absent.
-        transform: shouldReduceMotion ? "none" : "translateY(8px)",
-      }}
+      initial={
+        live
+          ? {
+              opacity: 0,
+              // Reduced motion keeps the fade and drops the movement: gentler, not absent.
+              transform: shouldReduceMotion ? "none" : "translateY(8px)",
+            }
+          : false
+      }
       transition={{
-        // Reduced motion gets the fade with no queue: a cascade is movement too, just spread over
-        // time, and somebody who asked for less of it should not wait for their history to arrive.
-        delay: shouldReduceMotion ? 0 : delay,
         duration: ENTRANCE_SECONDS,
         ease: EASE_OUT,
       }}
@@ -621,28 +785,46 @@ function ResponsibilityFiring({
  * It is also what keeps the entrance honest — no remount means no replay of the fade.
  */
 const TranscriptMessage = memo(function TranscriptMessage({
-  commandNames = "",
-  delay,
+  commandLabels = "",
   role,
+  streaming = false,
+  settled = true,
   text,
+  threadId,
+  messageId,
 }: {
-  commandNames?: string;
-  delay: number;
+  commandLabels?: string;
   role: "user" | "assistant";
+  threadId?: string;
+  messageId: string;
+  /* This is the Bot's reply still being written: the last row of a turn in flight. */
+  streaming?: boolean;
+  settled?: boolean;
   text: string;
 }) {
   const isUser = role === "user";
+  const live = useArrivedLive();
+  const [mode] = useState(() => messageMode(live, streaming));
+  // A person's message arrives whole; only a Bot's reply is paced.
+  const revealed = usePacedReveal(text, {
+    live: live && !isUser,
+    streaming,
+  });
   /*
    * Checked before anything else a person's message gets. A firing is not a person's message: the
    * chip split, the end alignment and the bubble are all wrong for it, and each one of them would
    * have to learn about firings separately if this branched any later.
    */
+  const resultRef = useResultVisibility(
+    threadId ? { threadId, messageId } : undefined,
+    !isUser && settled && revealed.trim().length > 0,
+  );
   const firing = isUser ? readFiring(text) : null;
   if (firing !== null) {
     return (
       <MessageRow align="start">
         <MessageContent>
-          <Arriving delay={delay}>
+          <Arriving>
             <RoutineFiring instruction={firing} />
           </Arriving>
         </MessageContent>
@@ -653,12 +835,27 @@ const TranscriptMessage = memo(function TranscriptMessage({
   // Slack/Teams turns carry a model-facing participant line; show a marker instead of the line.
   const origin = isUser ? splitChatOrigin(text) : null;
   const said = origin ? origin.text : text;
-  const invoked = isUser ? splitSkillChip(said, commandNames) : null;
+  const invoked = isUser ? splitSkillChip(said, commandLabels) : null;
+  /*
+   * Another Bot's answer, asked for by this one: drawn under that Bot's face and name, as a group
+   * conversation draws each Bot, so it reads as the Bot that was asked speaking rather than as this
+   * Bot saying something new. The id is what says whose it is; see `answerMessageId`.
+   */
+  const answerer = isUser ? null : answeredBy(messageId);
 
   return (
-    <MessageRow align={align}>
+    <MessageRow
+      align={align}
+      {...(answerer ? { "data-speaker": answerer } : {})}
+    >
+      {answerer ? (
+        <div className="shrink-0 pt-0.5">
+          <ChannelAvatar participantIds={[answerer]} size={24} />
+        </div>
+      ) : null}
       <MessageContent>
-        <Arriving delay={delay}>
+        <Arriving>
+          {answerer ? <AnswererName botId={answerer} /> : null}
           {/*
             A Bot's message takes the whole column, not the width of its words: block content
             inside it — a fenced code block, a table — should span the transcript rather than
@@ -690,8 +887,9 @@ const TranscriptMessage = memo(function TranscriptMessage({
                        * `align-middle` rather than a block: this sits mid-sentence, and a badge that
                        * breaks the line it is in reads as a separate message.
                        */}
-                      <span className="mr-1 inline-flex items-center gap-1 rounded bg-foreground/10 px-1.5 py-0.5 align-middle font-mono text-foreground/80 text-xs">
-                        <IconBox className="size-3 shrink-0" />/{invoked.chip}
+                      <span className="mr-1 inline-flex items-center gap-1 rounded bg-foreground/10 px-1.5 py-0.5 align-middle text-foreground/80 text-xs">
+                        <IconBox className="size-3 shrink-0" />
+                        {invoked.chip}
                       </span>
                       {invoked.rest}
                     </>
@@ -709,7 +907,16 @@ const TranscriptMessage = memo(function TranscriptMessage({
                  * closing token arrives, so the answer visibly rewrites itself as it lands. This
                  * closes them for the duration.
                  */
-                <Streamdown components={markdownComponents}>{text}</Streamdown>
+                <div ref={resultRef}>
+                  <Streamdown
+                    components={markdownComponents}
+                    mode={mode}
+                    plugins={markdownPlugins}
+                    remarkPlugins={replyRemarkPlugins}
+                  >
+                    {revealed}
+                  </Streamdown>
+                </div>
               )}
             </BubbleContent>
           </Bubble>
@@ -718,6 +925,18 @@ const TranscriptMessage = memo(function TranscriptMessage({
     </MessageRow>
   );
 });
+
+/** Whose answer this is, by the name the person knows the Bot by. */
+function AnswererName({ botId }: { botId: string }) {
+  const { data: bots } = useQuery(agentListQueryOptions());
+  // Nothing until the roster arrives, rather than a placeholder that is replaced a moment later.
+  if (!bots) return null;
+  return (
+    <MessageHeader className="text-xs font-medium text-muted-foreground">
+      {bots.find((bot) => bot.id === botId)?.name ?? "已不在的员工"}
+    </MessageHeader>
+  );
+}
 
 /**
  * The one shape an attachment url is allowed to have, taken from the helper that builds it rather
@@ -740,7 +959,6 @@ const ATTACHMENT_URL_PREFIX = attachmentUrl("");
  */
 type AttachmentRowProps = {
   attachments: readonly SentAttachment[];
-  delay: number;
 };
 
 /**
@@ -766,9 +984,6 @@ export function sameAttachmentRow(
   previous: AttachmentRowProps,
   next: AttachmentRowProps,
 ): boolean {
-  if (previous.delay !== next.delay) {
-    return false;
-  }
   if (previous.attachments.length !== next.attachments.length) {
     return false;
   }
@@ -788,12 +1003,11 @@ export function sameAttachmentRow(
 
 export const TranscriptAttachments = memo(function TranscriptAttachments({
   attachments,
-  delay,
 }: AttachmentRowProps) {
   return (
     <MessageRow align="end">
       <MessageContent>
-        <Arriving delay={delay}>
+        <Arriving>
           <AttachmentTiles attachments={attachments} />
         </Arriving>
       </MessageContent>
@@ -1255,23 +1469,31 @@ function activityName(activityType: string): string {
  * from re-rendering a mounted iframe.
  */
 const TranscriptActivity = memo(function TranscriptActivity({
-  delay,
   message,
 }: {
-  delay: number;
   message: ActivityMessage;
 }) {
   const { renderActivityMessage } = useRenderActivityMessage();
-  const drawn =
-    message.activityType === VOICE_CHAT_ACTIVITY ? (
-      <VoiceChatCard call={message.content.call as VoiceChatEntry} />
-    ) : (
-      renderActivityMessage(message)
-    );
+  /*
+   * Drawn before generative UI was switched on (a cold load: the capabilities answer or the runtime
+   * connection still on its way), an activity found no renderer. Read so it redraws when the
+   * renderers arrive, rather than staying blank until its own message next changes; see
+   * `LateRenderersWatch`, which the transcript mounts once for all of them.
+   */
+  useContext(LateRenderersContext);
+  const call =
+    message.activityType === VOICE_CHAT_ACTIVITY
+      ? (message.content.call as VoiceChatEntry)
+      : null;
+  const drawn = call ? (
+    <VoiceChatCard call={call} />
+  ) : (
+    renderActivityMessage(message)
+  );
   if (!drawn) return null;
 
   return (
-    <Arriving delay={delay}>
+    <Arriving happenedAt={call?.startedAt}>
       <ToolRenderBoundary name={activityName(message.activityType)}>
         {drawn}
       </ToolRenderBoundary>
@@ -1289,18 +1511,22 @@ const TranscriptActivity = memo(function TranscriptActivity({
  * `useRenderToolCall` is called HERE rather than passed in as a prop: a function whose identity the
  * parent cannot guarantee is the classic way to make a memo boundary useless.
  */
-const TranscriptToolCall = memo(function TranscriptToolCall({
-  delay,
+const ToolCallBody = memo(function ToolCallBody({
   toolCallId,
   name,
   args,
   result,
+  latest,
+  spokeAfter,
 }: {
-  delay: number;
   toolCallId: string;
   name: string;
   args: string;
   result?: string;
+  /** Nothing said or queued since this call, and the Bot is not working. See `CardPlace`. */
+  latest: boolean;
+  /** The Bot said something after this call in its turn. See `ToolPlace`. */
+  spokeAfter: boolean;
 }) {
   const renderToolCall = useRenderToolCall();
   const toolCall = useMemo(
@@ -1312,23 +1538,35 @@ const TranscriptToolCall = memo(function TranscriptToolCall({
     [toolCallId, name, args],
   );
 
-  const drawn = renderToolCall({
-    toolCall,
-    ...(result === undefined
-      ? {}
-      : {
-          toolMessage: {
-            id: `${toolCallId}-result`,
-            role: "tool",
-            toolCallId,
-            content: result,
-          },
-        }),
-  });
+  // Another harness's tool under one of Claude Code's names is drawn as any other tool is.
+  const drawn = foreignCodingCall(name, args)
+    ? null
+    : renderToolCall({
+        toolCall,
+        ...(result === undefined
+          ? {}
+          : {
+              toolMessage: {
+                id: `${toolCallId}-result`,
+                role: "tool",
+                toolCallId,
+                content: result,
+              },
+            }),
+      });
+
+  const place = useMemo(
+    () => ({ toolCallId, latest, spokeAfter }),
+    [toolCallId, latest, spokeAfter],
+  );
 
   return (
-    <Arriving delay={delay}>
-      <ToolRenderBoundary name={name}>
+    <ToolRenderBoundary
+      final={toolCallFinal(args, result)}
+      name={name}
+      resetKey={args}
+    >
+      <ToolPlaceContext.Provider value={place}>
         {/*
          * A TOOL WITH NO REGISTERED RENDERER STILL HAPPENED, and since tools moved to the server
          * that is now the ordinary case rather than the exception: MCP tools execute in the runtime
@@ -1337,33 +1575,147 @@ const TranscriptToolCall = memo(function TranscriptToolCall({
          *
          * What was called, shimmering until its result arrives, and then the server's own words
          * drawn the way a Bot's prose is drawn.
+         *
+         * WHILE OPENBOT ASKS ABOUT IT, ITS CARD IS DRAWN HERE INSTEAD. The server stops the turn and
+         * opens a request for the person, and this line would otherwise shimmer with no way to
+         * answer it but the Bots page. The same card a computer step draws (see `approval-tools`),
+         * read from the same inbox, and the line comes back once it is decided.
          */}
-        {drawn ?? <ServerToolLine args={args} name={name} result={result} />}
-      </ToolRenderBoundary>
-    </Arriving>
+        {drawn ?? (
+          <InlineApproval
+            toolCallId={toolCallId}
+            fallback={
+              <ServerToolLine
+                args={args}
+                name={name}
+                place={{ toolCallId, latest }}
+                result={result}
+              />
+            }
+          />
+        )}
+      </ToolPlaceContext.Provider>
+    </ToolRenderBoundary>
   );
 });
+
+/**
+ * A row of tool calls, drawn by ONE component whatever it holds, so a row is never rebuilt as its
+ * calls change. A lone call is the line or card it always was; a run, or a browser step, is the
+ * folded group. Both a `tools` group and a single `tool` item come through here, because a lone call
+ * can be either over its life (it stops folding once its answer asks the person) under one key; see
+ * `groupToolSteps`.
+ */
+type ToolRowProps = {
+  id: string;
+  steps: ToolGroup["steps"];
+  active: boolean;
+  /** The row's turn is still running. See `TurnInFlightContext`. */
+  inFlight: boolean;
+  latest: boolean;
+  /** The Bot said something after this row in its turn. See `ToolPlace`. */
+  spokeAfter: boolean;
+};
+
+/**
+ * Whether a tool row would draw the same thing. `groupToolSteps` builds new step objects and a new
+ * array on every render (it has to: the agent mutates the messages in place), so the default memo
+ * check saw a change on every token of a reply streaming below and redrew every finished tool group
+ * in the history, markdown inside collapsed details included. What a row draws is its steps' calls
+ * and results, and those are what is compared. Exported for its test.
+ */
+export function sameToolRow(a: ToolRowProps, b: ToolRowProps): boolean {
+  return (
+    a.id === b.id &&
+    a.active === b.active &&
+    a.inFlight === b.inFlight &&
+    a.latest === b.latest &&
+    a.spokeAfter === b.spokeAfter &&
+    a.steps.length === b.steps.length &&
+    a.steps.every((step, index) => {
+      const other = b.steps[index];
+      return (
+        other !== undefined &&
+        step.id === other.id &&
+        step.result === other.result &&
+        step.toolCall.function.name === other.toolCall.function.name &&
+        step.toolCall.function.arguments === other.toolCall.function.arguments
+      );
+    })
+  );
+}
+
+const ToolRow = memo(function ToolRow({
+  id,
+  steps,
+  active,
+  inFlight,
+  latest,
+  spokeAfter,
+}: ToolRowProps) {
+  const [only] = steps;
+  return (
+    <TurnInFlightContext.Provider value={inFlight}>
+      <Arriving>
+        {steps.length === 1 &&
+        only &&
+        !isBrowserStep(only) &&
+        // A subtask is drawn as work even alone, so a second call joining it does not change its shape.
+        only.toolCall.function.name !== SUBAGENT_TOOL ? (
+          <ArgumentsArrivingContext.Provider value={active}>
+            <ToolCallBody
+              args={only.toolCall.function.arguments}
+              latest={latest}
+              name={only.toolCall.function.name}
+              result={only.result}
+              spokeAfter={spokeAfter}
+              toolCallId={only.toolCall.id}
+            />
+          </ArgumentsArrivingContext.Provider>
+        ) : (
+          <ToolActivity active={active} group={{ kind: "tools", id, steps }} />
+        )}
+      </Arriving>
+    </TurnInFlightContext.Provider>
+  );
+}, sameToolRow);
 
 /**
  * A tool the runtime executed, drawn for the person watching.
  *
  * Named from the reader's side: what was done, against which server, with the server's own words
  * behind a disclosure. The identifier the model was offered never reaches the screen.
+ *
+ * Exported for its tests, which draw it without the CopilotKit provider `ToolCallBody` needs.
  */
 export function ServerToolLine({
   name,
   args,
   result,
+  place,
 }: {
   name: string;
-  /** 调用的参数，JSON 文本。只用来给主人电脑上的文件夹步骤写出文件或命令。 */
+  /** What the call was given, as the model wrote it. Read only for what a step acted on. */
   args?: string;
   result?: string;
+  /** Where this call sits in the conversation, for an app card that may carry the task on. */
+  place?: CardPlace;
 }) {
+  const running = result === undefined;
+  const named = readToolName(name, running);
+  const { label } = named;
+  const folders = useContext(FolderNamesContext);
   // 员工替对方申请访问某个应用：画成卡片，申请人可以在上面撤回（迁移 0153）。
   const accessRequest = readAppAccessCard(name, result);
   if (accessRequest) return <AppAccessRequestCard {...accessRequest} />;
-  const { label, detail } = readToolName(name);
+  // The file a file step read or saved, as a computer's own file steps name it; a step on a folder
+  // on the person's computer names the folder too ("todo.txt in share").
+  const detail =
+    named.detail ??
+    folderStepSubject(name, args, folders) ??
+    ownToolSubject(name, args) ??
+    // 文件夹里的命令：上面两处只认文件，命令本身也要写出来（「wc -c notes.txt · 你拒绝了这一步。」）。
+    (name.startsWith("host_") ? hostStepSubject(args) : undefined);
   /*
    * A refusal is not a result, and must not read like one.
    *
@@ -1373,9 +1725,11 @@ export function ServerToolLine({
    * 一步不带标记，`refusalOf` 照审批服务的原话认出它。
    */
   const answer = result === undefined ? undefined : asText(result);
+  // Behind the marker, or a step the person declined on the conversation's card. See `refusalOf`.
   const refusal = refusalOf(answer);
   const refused = refusal !== undefined;
-  // 调用了从没提供给它的工具：没有成功，运行时那句列满工具名的话是写给模型的。
+  const reason = refusal?.reason;
+  // Asked for a tool it was never offered: it didn't work, and what the runtime said was for the model.
   const unoffered = unofferedTool(result);
   const failed = !refused && (unoffered || toolResultFailed(result));
   /*
@@ -1384,36 +1738,87 @@ export function ServerToolLine({
    * times over by the end of the sentence. Stripped here rather than on the server, because the
    * server's copy is what the model is told and "Refused." in front of a reason is right for it.
    */
-  const body = refusal ? refusal.reason : answer;
+  const body = refused ? reason : answer;
   // A Team Bot asking to use this person's own account draws its consent card, not the sentence.
   const consent = refused ? readTeamBotConsent(body) : null;
   if (consent) return <TeamBotConsentCard {...consent} />;
   /*
-   * 主人电脑上文件夹里没有做成的一步，在这一行上写出是哪个文件或哪条命令、为什么，
-   * 「notes.txt · 你拒绝了这一步。」，不写授权 id，也不再展开。
+   * An app this call could not use draws a card with the step that fixes it, not the name of a
+   * screen: a refusal carrying the marker, or the answer of the one tool whose whole job is to put
+   * that card on screen. Only that tool's ordinary answer is read for a marker — any other result
+   * is somebody else's text, and a card must not be conjured out of it.
+   */
+  const card = refused
+    ? readConnectPrompt(body)
+    : name === SHOW_APP_ACCESS_TOOL
+      ? readConnectPrompt(answer)
+      : null;
+  if (card) return <AppAccessCard place={place} prompt={card} />;
+  /*
+   * THAT TOOL'S OTHER ANSWERS ARE FOR THE MODEL. An app nobody can name comes back as plain text
+   * telling the Bot to say so plainly and not to browse to it — an instruction, which read by the
+   * person looks like the Bot being told off in front of them. The line still says the check
+   * happened; the Bot's own reply says what it found.
+   */
+  /*
+   * A folder step that did not happen says which file and why on its line, as a step on the Bot's
+   * own computer does ("Blocked: Save a file  notes.txt · You declined it."), and the reason is said
+   * in the person's words, not the sentence written for the Bot.
    */
   const folderRefusal =
     refused && name.startsWith("host_")
-      ? [hostStepSubject(args), refusal.reason].filter(Boolean).join(" · ")
+      ? [detail, outcomeForPerson(reason ?? "")].filter(Boolean).join(" · ")
       : undefined;
   const shown =
-    folderRefusal !== undefined
+    name === SHOW_APP_ACCESS_TOOL || folderRefusal !== undefined
       ? undefined
       : unoffered
         ? UNOFFERED_TOOL_SENTENCE
-        : body;
-  const lineDetail = folderRefusal ?? detail;
+        : refused && body
+          ? outcomeForPerson(body)
+          : answersTheModel(name)
+            ? // Written for the model. A tool search opens to the tools it found, in words.
+              name === SEARCH_TOOLS
+              ? foundToolsInWords(answer)
+              : undefined
+            : // A folder step's answer for the model (JSON, grant ids) is said in words or left out.
+              folderStepBody(name, body);
+  /*
+   * A web search or a page read opens to the pages it found, not to the provider's JSON. The list
+   * bounds itself (a few results, each cut to a few lines), so the line does not scroll around it.
+   */
+  const role = researchRoleOfCall(name);
+  const sources =
+    role && shown && !refused && !failed ? readResearchSources(shown) : null;
+  if (role && sources)
+    return (
+      <ToolLine
+        {...(detail ? { detail } : {})}
+        bare
+        label={label}
+        running={running}
+      >
+        <ResearchResults
+          label={RESEARCH_RESULTS_LABELS[role]}
+          sources={sources}
+        />
+      </ToolLine>
+    );
   return (
     <ToolLine
-      {...(lineDetail ? { detail: lineDetail } : {})}
+      {...((folderRefusal ?? detail)
+        ? { detail: folderRefusal ?? detail }
+        : {})}
+      // A blocked step did not happen: "Blocked: Save a file", never "Blocked: Saved a file".
+      {...(refused ? { attempted: ownToolAttempt(name) ?? undefined } : {})}
       label={label}
       refused={refused}
       declined={refusal?.declined ?? false}
       failed={failed}
-      running={result === undefined}
+      running={running}
     >
       {shown ? (
-        <Streamdown components={markdownComponents}>
+        <Streamdown components={markdownComponents} plugins={markdownPlugins}>
           {unoffered ? shown : forDisplay(shown)}
         </Streamdown>
       ) : null}
@@ -1437,21 +1842,48 @@ function hostStepSubject(args: string | undefined): string | undefined {
 }
 
 /**
- * Whether a text item is the person actually sending something, as opposed to a routine firing that
- * merely arrived wearing `role: "user"`.
- *
- * A FIRING IS NOT THE PERSON SPEAKING — `TranscriptMessage` already knows that and draws it as
- * `RoutineFiring` rather than as their bubble, via the same `readFiring` check used here. The scroll
- * machinery below was the one place left that had not caught up: it smooth-scrolled and anchored on
- * `role === "user"` alone, so a routine firing while somebody was reading back through the channel
- * yanked their viewport to the bottom as though they had just typed and sent something. They hadn't;
- * the schedule had. Exported so this can be checked without mounting anything.
+ * The tools a search found, one to a line by the name a step gives each ("Send email on Gmail"). The
+ * search answers the model, naming each tool by the id it is offered under
+ * (`mcp__composio-gmail__GMAIL_SEND_EMAIL`), and the step opened to that answer as it was.
  */
-export function isPersonSentMessage(
-  role: "user" | "assistant",
-  text: string,
-): boolean {
-  return role === "user" && readFiring(text) === null;
+function foundToolsInWords(answer: string | undefined): string | undefined {
+  const names = answer ? toolsFound(answer) : [];
+  if (names.length === 0) return undefined;
+  return names
+    .map((name) => {
+      const { label, detail } = readToolName(name);
+      return `- ${detail ? `${label}（${detail}）` : label}`;
+    })
+    .join("\n");
+}
+
+/* Moved beside the turns it also decides; re-exported for the callers that read it from here. */
+export { isPersonSentMessage };
+
+/**
+ * WHERE THE CONVERSATION HAS GOT TO, for an app card that may carry its task on once the app is
+ * ready (see `lib/copilot/carry-on.ts`): the index from which a row is still the latest thing, or
+ * past the end when none is.
+ *
+ * A card is the latest thing while nothing has been said to the Bot since it, nothing is queued, and
+ * the Bot is not working: past that, the conversation has moved on, and an older task is not picked
+ * up again underneath it. ANY USER TURN COUNTS, a routine firing included — unlike the scroll
+ * machinery's `isPersonSentMessage`. A firing is not the person speaking, but it is a new task the
+ * Bot has answered, and "please carry on" sent after it would land on the routine's work rather than
+ * on the task the card interrupted. Exported so it can be checked without mounting anything.
+ */
+export function latestFrom(
+  items: readonly TranscriptItem[],
+  { busy, queued }: { busy: boolean; queued: number },
+): number {
+  if (busy || queued > 0) return items.length;
+  return (
+    items.findLastIndex(
+      (item) =>
+        (item.kind === "text" && item.role === "user") ||
+        item.kind === "attachments",
+    ) + 1
+  );
 }
 
 /**
@@ -1520,24 +1952,77 @@ function assertNever(_item: never): null {
 
 const SEND_SCROLL_MS = 700;
 
+/**
+ * Whether the viewport should glide for a beat because the person just sent something.
+ *
+ * ONLY FOR A SEND MADE WHILE THE CONVERSATION IS OPEN. The newest person-sent id also changes while
+ * history is restored, batch by batch, and gliding then animated the scroller's jump to the bottom
+ * of a channel being opened: the conversation visibly loaded and then slid. The first id seen once
+ * history is in is the baseline, never a send.
+ *
+ * Exported so it can be checked without mounting anything.
+ */
+export function shouldGlideOnSend({
+  previous,
+  next,
+  restoring,
+  reducedMotion,
+}: {
+  previous: string | null;
+  next: string | null;
+  restoring: boolean;
+  reducedMotion: boolean;
+}): boolean {
+  return (
+    !restoring &&
+    !reducedMotion &&
+    previous !== null &&
+    next !== null &&
+    previous !== next
+  );
+}
+
 function useSmoothSendScroll(
   viewport: React.RefObject<HTMLDivElement | null>,
   newestUserMessageId: string | null,
+  restoring: boolean,
+  onSend: () => void,
 ) {
   const reducedMotion = useReducedMotion();
   const seenRef = useRef<string | null>(null);
+  /*
+   * Whether the conversation has been seen open since it was restored. Separate from `seenRef`:
+   * the glide needs a previous message to compare with, but a send does not. In a routine's channel
+   * that holds only firings, the person's first message has nothing before it and is still a send.
+   */
+  const openRef = useRef(false);
 
   useLayoutEffect(() => {
     const element = viewport.current;
     const previous = seenRef.current;
-    seenRef.current = newestUserMessageId;
+    const wasOpen = openRef.current;
+    // Nothing is recorded while restoring, so the first id after it is a baseline (see above).
+    seenRef.current = restoring ? null : newestUserMessageId;
+    openRef.current = !restoring;
+
+    // A send picks following back up whatever the motion setting; only the glide depends on it.
+    if (
+      wasOpen &&
+      !restoring &&
+      newestUserMessageId !== null &&
+      newestUserMessageId !== previous
+    ) {
+      onSend();
+    }
 
     if (
       element === null ||
-      newestUserMessageId === null ||
-      previous === null ||
-      previous === newestUserMessageId ||
-      reducedMotion
+      !shouldGlideOnSend({
+        previous,
+        next: newestUserMessageId,
+        restoring,
+        reducedMotion: reducedMotion ?? false,
+      })
     ) {
       return;
     }
@@ -1551,18 +2036,44 @@ function useSmoothSendScroll(
       window.clearTimeout(timer);
       element.style.scrollBehavior = "";
     };
-  }, [newestUserMessageId, reducedMotion, viewport]);
+  }, [newestUserMessageId, onSend, reducedMotion, restoring, viewport]);
+}
+
+/** The transcript's one `LateRenderersWatch`, with what it needs from the provider and the server. */
+function TranscriptRenderersWatch({
+  onVersion,
+}: {
+  onVersion: (version: number) => void;
+}) {
+  const { copilotkit } = useCopilotKit();
+  const { data: capabilities } = useQuery(deploymentCapabilitiesQueryOptions());
+  return (
+    <LateRenderersWatch
+      core={copilotkit}
+      onVersion={onVersion}
+      settled={capabilities?.generativeUi}
+    />
+  );
 }
 
 export function ChatTranscript({
+  threadId,
   busy = false,
-  commandNames = "",
+  commandLabels = "",
+  intro,
   messages,
   onRemoveQueued,
   queued = EMPTY_QUEUE,
   restoring = false,
   stopped,
+  working,
 }: ChatTranscriptProps) {
+  const isDrawn = useDrawnTool();
+  /**
+   * The transcript's column, shared by the restoring state and the scroller. 768px, wider than the
+   * composer's 672px, which is the reading width ChatGPT and Claude.ai give an answer.
+   */
+  const column = "mx-auto w-full max-w-3xl px-4";
   /*
    * NOT MEMOISED, AND THAT IS DELIBERATE. `useMemo` keyed on `messages` looks obviously right and
    * silently broke the transcript: the agent hands back the SAME array and mutates it, so the
@@ -1573,7 +2084,29 @@ export function ChatTranscript({
    * cost was markdown parsing and chart SVGs, and those are skipped by the memoised children below,
    * which is where the 25x came from. This runs per render and is not worth guarding.
    */
-  const items = groupBrowserSteps(toVisibleChatItems(messages));
+  /* Which row each tool step was drawn in, so a row keeps its key; see `groupToolSteps`. */
+  const rowIdsRef = useRef(new Map<string, string>());
+  const visible = dropRepeatedAppCards(toVisibleChatItems(messages));
+  const items = groupToolSteps(visible, isDrawn, rowIdsRef.current);
+  /*
+   * The folders this conversation's "Check your folders" steps named, for its other folder steps.
+   * The same map while the names are the same: a new one on every render is a new context value,
+   * and every finished tool row under it drew again while a reply streamed.
+   */
+  const foldersRef = useRef<{ key: string; names: FolderNames }>({
+    key: "",
+    names: new Map(),
+  });
+  const named = folderNamesIn(
+    visible.filter(
+      (item): item is Extract<typeof item, { kind: "tool" }> =>
+        item.kind === "tool",
+    ),
+  );
+  const namedKey = JSON.stringify([...named]);
+  if (namedKey !== foldersRef.current.key)
+    foldersRef.current = { key: namedKey, names: named };
+  const folders = foldersRef.current.names;
 
   /*
    * ONLY WHILE THERE IS NOTHING ELSE TO LOOK AT. Once a reply starts streaming, or a tool line
@@ -1582,11 +2115,21 @@ export function ChatTranscript({
    *
    * So: the turn is in flight AND the last thing in the conversation is still the person's own
    * message. A tool call that is running shimmers on its own line and needs nothing from here.
+   *
+   * OR the last thing is a tool row whose every call has its answer. The tools are done and the
+   * model is reading what they returned, which with five emails in hand can take a while, and a
+   * finished line does not shimmer. Seen on the Desktop: "Used Gmail" and its five steps sat still
+   * with nothing under them, and the person took the Bot for dead while it was still writing.
    */
   const lastItem = items.at(-1);
-  const waitingOnFirstToken =
+  const toolsAllAnswered =
+    lastItem?.kind === "tools"
+      ? lastItem.steps.every((step) => step.result !== undefined)
+      : lastItem?.kind === "tool" && lastItem.result !== undefined;
+  const waitingOnTheModel =
     busy &&
-    ((lastItem?.kind === "text" && lastItem.role === "user") ||
+    (toolsAllAnswered ||
+      (lastItem?.kind === "text" && lastItem.role === "user") ||
       /*
        * A screenshot pasted with no caption is still a person sending something, and they are
        * watching the same spot under it for the Bot's answer as they would under a typed question.
@@ -1602,184 +2145,486 @@ export function ChatTranscript({
       (item) =>
         (item.kind === "text" && isPersonSentMessage(item.role, item.text)) ||
         /*
-         * Same reasoning as `waitingOnFirstToken` above: an attachment is always the person's own,
+         * Same reasoning as `waitingOnTheModel` above: an attachment is always the person's own,
          * so a turn that is only a file still counts as them sending something. This id decides
          * nothing but whether the viewport scrolls smoothly for a beat; where it lands is
          * `anchoredTurns` below.
          */
         item.kind === "attachments",
     )?.id ?? null;
-  useSmoothSendScroll(viewportRef, newestUserMessageId);
+  /* Whether the view follows a streaming reply; see `follow-intent`. */
+  const follow = useFollowIntent(viewportRef, restoring);
+  const { dispatch: dispatchFollow } = follow;
+  const followOnSend = useCallback(
+    () => dispatchFollow({ type: "send" }),
+    [dispatchFollow],
+  );
+  const followOnQueued = useCallback(
+    () => dispatchFollow({ type: "queued" }),
+    [dispatchFollow],
+  );
+  useSmoothSendScroll(
+    viewportRef,
+    newestUserMessageId,
+    restoring,
+    followOnSend,
+  );
+
+  /* Which tool calls are still the latest thing, for an app card: see `latestFrom`. */
+  const latestIndex = latestFrom(items, { busy, queued: queued.length });
+  /* Where the turn in flight starts: every row from here on is still running while the Bot works. */
+  const turnStart =
+    items.findLastIndex(
+      (item) =>
+        (item.kind === "text" && item.role === "user") ||
+        item.kind === "attachments",
+    ) + 1;
+  /* The last thing the Bot said, so a call can tell whether its turn went on to say anything: see `ToolPlace`. */
+  const lastBotWords = items.findLastIndex(
+    (item) => item.kind === "text" && item.role === "assistant",
+  );
 
   /* One rule for both kinds of row — see `anchorRowIds`, which is where it is written down. */
   const anchorRows = anchorRowIds(items);
 
   /*
-   * One decider per mounted transcript, so opening a different channel starts the cascade over and
-   * a message never inherits a delay from a conversation it was not in.
+   * Decided once, from the rows present when the scroller mounts, and forgotten while restoring so
+   * a conversation opened again staggers again. Rows that arrive later are not in it: they have
+   * their own entrance (`Arriving`).
    */
-  const delaysRef = useRef<ReturnType<typeof createFirstPaintDelays> | null>(
-    null,
-  );
-  if (delaysRef.current === null) {
-    delaysRef.current = createFirstPaintDelays();
+  const openingRef = useRef<Map<string, string> | null>(null);
+  if (restoring) {
+    openingRef.current = null;
+  } else if (openingRef.current === null) {
+    openingRef.current = openingStagger(items.map((item) => item.id));
   }
-  const delays = delaysRef.current;
+  const opening = openingRef.current;
+  const openingProps = (id: string) => {
+    const delay = opening?.get(id);
+    return delay === undefined
+      ? {}
+      : {
+          className: "history-arrive",
+          style: { "--arrive-delay": delay } as React.CSSProperties,
+        };
+  };
+
+  /* Which rows are drawn; see `useTranscriptPages`. */
+  const pages = useTranscriptPages(
+    items.map((item) => item.id),
+    restoring,
+  );
+  const { drawEarlier, drawTo, from: pagesFrom } = pages;
+  const drawEarlierNearTop = useCallback(
+    (from: number) => {
+      const element = viewportRef.current;
+      if (
+        element !== null &&
+        shouldDrawEarlier({
+          from,
+          scrollTop: element.scrollTop,
+          scrollHeight: element.scrollHeight,
+        })
+      ) {
+        drawEarlier();
+      }
+    },
+    [drawEarlier],
+  );
+  /*
+   * After every page: a page that does not reach LOAD_MARGIN_PX above the fold (short rows, a tall
+   * screen) draws the one before it. ON THE NEXT FRAME, NOT IN THIS COMMIT. The scroller puts the
+   * reader back after a prepend from a MutationObserver callback, which runs after layout effects;
+   * checked here, a reader at the very top (where the browser has nothing to anchor against) still
+   * read `scrollTop` 0, drew another page, read 0 again, and drew the whole history in one burst,
+   * which past about fifty pages is more nested updates than React allows. A frame later the
+   * position is the restored one, and a page is only drawn if the reader really is still near the
+   * top. Each extra page lands above the fold and is held in place, so the wait is never seen.
+   */
+  useLayoutEffect(() => {
+    if (restoring) return;
+    const frame = window.requestAnimationFrame(() =>
+      drawEarlierNearTop(pagesFrom),
+    );
+    return () => window.cancelAnimationFrame(frame);
+  }, [pagesFrom, restoring, drawEarlierNearTop]);
+
+  /* Activities that may be waiting on their renderers; see `LateRenderersWatch`. */
+  const [renderersVersion, setRenderersVersion] = useState(0);
+  const hasActivities = items.some(
+    (item) =>
+      item.kind === "activity" &&
+      item.message.activityType !== VOICE_CHAT_ACTIVITY,
+  );
+
+  /* The rail's marks, and which turn is being read; see `TranscriptRail`. */
+  const turns = turnsOf(items);
+  const turnIds = turns.map((turn) => turn.id).join("\n");
+  const [activeTurn, setActiveTurn] = useState<string | null>(null);
+  /*
+   * Read at most once a frame, with one query: while a reply streams the scroller scrolls on every
+   * resize, and a lookup and a layout read per turn per scroll event was real work on a long
+   * conversation.
+   */
+  const activeFrameRef = useRef<number | null>(null);
+  const readActiveTurnNow = useCallback(() => {
+    activeFrameRef.current = null;
+    const element = viewportRef.current;
+    if (element === null || turnIds === "") return;
+    const wanted = new Set(turnIds.split("\n"));
+    const view = element.getBoundingClientRect();
+    const rows: { id: string; top: number }[] = [];
+    for (const row of element.querySelectorAll<HTMLElement>(
+      "[data-message-id]",
+    )) {
+      const id = row.dataset.messageId;
+      if (id !== undefined && wanted.has(id)) {
+        rows.push({ id, top: row.getBoundingClientRect().top - view.top });
+      }
+    }
+    setActiveTurn(
+      currentTurn(
+        rows,
+        element.clientHeight / 3,
+        element.scrollHeight - element.scrollTop - element.clientHeight <=
+          AT_END_PX,
+      ),
+    );
+  }, [turnIds]);
+  const readActiveTurn = useCallback(() => {
+    if (activeFrameRef.current !== null) return;
+    activeFrameRef.current = window.requestAnimationFrame(readActiveTurnNow);
+  }, [readActiveTurnNow]);
+  useEffect(
+    () => () => {
+      if (activeFrameRef.current !== null) {
+        window.cancelAnimationFrame(activeFrameRef.current);
+      }
+    },
+    [],
+  );
+  useLayoutEffect(() => {
+    if (!restoring) readActiveTurnNow();
+  }, [restoring, readActiveTurnNow]);
 
   /*
-   * Settled AFTER the render that first had items, not on mount: history arrives asynchronously, so
-   * on mount there is nothing to stagger yet and marking it settled then would mean the history
-   * cascade never happens.
+   * A jump from the rail. A turn already drawn is gone to now; one in a page not drawn yet draws
+   * every page down to it first, and is gone to a frame after that commit, once the scroller has put
+   * the reader back where they were (the same wait as the fill check above). Instant, never smooth:
+   * a smooth scroll up passes the top margin and draws pages above while it is moving, and the
+   * scroller's hold on the reader's place would fight it.
    */
-  const hasItems = items.length > 0;
-  useEffect(() => {
-    if (hasItems) {
-      delays.settle();
-    }
-  }, [hasItems, delays]);
+  const jumpRef = useRef<string | null>(null);
+  const goToTurn = useCallback((id: string) => {
+    const element = viewportRef.current;
+    const row = element?.querySelector(`[data-message-id="${CSS.escape(id)}"]`);
+    if (!element || !row) return;
+    // Less the transcript's own top padding (`py-6`), so the turn sits where a first row would.
+    element.scrollTop +=
+      row.getBoundingClientRect().top -
+      element.getBoundingClientRect().top -
+      TURN_INSET_PX;
+  }, []);
+  /*
+   * Following stops as the view moves, not before the pages are drawn: the scroller holds the
+   * reader's place across a prepend by moving `scrollTop` down by what was added, and at the end of
+   * the conversation that reads exactly like the person scrolling back to the end, which picks
+   * following up again (`nextFollow`).
+   */
+  const goToTurnStill = useCallback(
+    (id: string) => {
+      goToTurn(id);
+      /*
+       * Not when the move left the view at the end: a short last turn is clamped there, nothing
+       * scrolls, and nothing would ever pick following up again.
+       */
+      const element = viewportRef.current;
+      if (
+        element !== null &&
+        element.scrollHeight - element.scrollTop - element.clientHeight >
+          RESUME_PX
+      ) {
+        dispatchFollow({ type: "jump" });
+      }
+    },
+    [dispatchFollow, goToTurn],
+  );
+  const jump = useCallback(
+    (turn: Turn) => {
+      setActiveTurn(turn.id);
+      if (turn.index < pagesFrom) {
+        jumpRef.current = turn.id;
+        drawTo(turn.index);
+      } else {
+        goToTurnStill(turn.id);
+      }
+    },
+    [drawTo, goToTurnStill, pagesFrom],
+  );
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs after the commit that drew the pages a jump asked for, which is a change of `pagesFrom`.
+  useLayoutEffect(() => {
+    const id = jumpRef.current;
+    if (id === null) return;
+    const frame = window.requestAnimationFrame(() => {
+      jumpRef.current = null;
+      goToTurnStill(id);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [pagesFrom, goToTurnStill]);
+
+  /*
+   * NOTHING BUT THE PLACEHOLDER UNTIL HISTORY IS COMPLETE, AND THE SCROLLER MOUNTED FRESH AFTER IT.
+   *
+   * History arrives in pieces: the gateway snapshot, then the stored thread merged into it, then
+   * the voice archive. Drawing each piece as it came showed a conversation that loaded and then
+   * moved. And the scroller decides where to land ONCE, in a layout effect, the first time it sees
+   * any child (`defaultScrollPosition`, applied by `ie()` in `@shadcn/react`'s message-scroller).
+   * Mounted early, it spent that on the always-present `contents` block below, and the restored
+   * rows then took the "rows appended" path, which pins a lone person's message to the top instead
+   * of going to the end. Mounted here, with every row in the same commit, its one landing is the
+   * bottom of the whole conversation, before the browser paints anything.
+   */
+  if (restoring) {
+    return (
+      <div className="flex size-full min-h-0 flex-col overflow-hidden">
+        <div
+          className={cn("flex flex-col gap-6 py-6", column)}
+          data-transcript-column
+        >
+          <RestoringTranscript />
+          {/*
+           * A message typed while history loads is parked, not lost, and must be seen to be: a
+           * composer that cleared with nothing appearing reads as a message that vanished, and the
+           * person types it again.
+           */}
+          {queued.map((message) => (
+            <Queued
+              attachments={message.attachments}
+              key={message.id}
+              onRemove={
+                onRemoveQueued ? () => onRemoveQueued(message.id) : undefined
+              }
+              text={message.text}
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  /*
+   * One row, wherever it is drawn. `index` is the row's place in `items`, not in the slice being
+   * drawn, so "the last row" and "latest" mean the same with or without older pages above.
+   */
+  const renderRow = (item: TranscriptItem, index: number) =>
+    item.kind === "tools" || item.kind === "tool" ? (
+      <MessageScrollerItem
+        key={item.id}
+        messageId={item.id}
+        {...openingProps(item.id)}
+      >
+        <ToolRow
+          active={busy && index === items.length - 1}
+          id={item.id}
+          inFlight={busy && index >= turnStart}
+          latest={index >= latestIndex}
+          spokeAfter={lastBotWords > index}
+          steps={item.kind === "tools" ? item.steps : [item]}
+        />
+      </MessageScrollerItem>
+    ) : item.kind === "activity" ? (
+      <MessageScrollerItem
+        key={item.id}
+        messageId={item.id}
+        {...openingProps(item.id)}
+      >
+        <TranscriptActivity message={item.message} />
+      </MessageScrollerItem>
+    ) : item.kind === "text" ? (
+      <MessageScrollerItem
+        key={item.id}
+        messageId={item.id}
+        scrollAnchor={anchorRows.has(item.id)}
+        {...openingProps(item.id)}
+      >
+        <TranscriptMessage
+          threadId={threadId}
+          messageId={item.id}
+          settled={!busy || index < turnStart}
+          commandLabels={commandLabels}
+          role={item.role}
+          streaming={
+            busy && item.role === "assistant" && index === items.length - 1
+          }
+          text={item.text}
+        />
+      </MessageScrollerItem>
+    ) : item.kind === "attachments" ? (
+      <MessageScrollerItem
+        key={item.id}
+        messageId={item.id}
+        scrollAnchor={anchorRows.has(item.id)}
+        {...openingProps(item.id)}
+      >
+        <TranscriptAttachments attachments={item.attachments} />
+      </MessageScrollerItem>
+    ) : (
+      // Every member of the union is handled above. `assertNever` types `item` as
+      // `never` here, so a future addition to `VisibleChatItem` fails to typecheck at
+      // this call instead of silently falling into this branch and rendering nothing.
+      assertNever(item)
+    );
 
   return (
-    <MessageScrollerProvider autoScroll scrollPreviousItemPeek={48}>
-      <MessageScroller>
-        <MessageScrollerViewport ref={viewportRef}>
-          <MessageScrollerContent
-            aria-busy={busy}
-            className="mx-auto w-full max-w-2xl px-4 py-6"
-            spacerClassName="order-2"
+    <ArrivalsLive>
+      {hasActivities ? (
+        <TranscriptRenderersWatch onVersion={setRenderersVersion} />
+      ) : null}
+      <FolderNamesContext.Provider value={folders}>
+        <LateRenderersContext.Provider value={renderersVersion}>
+          <MessageScrollerProvider
+            autoScroll={follow.following}
+            scrollPreviousItemPeek={48}
           >
-            {/*
-             * DRAWN LAST, WRITTEN FIRST, AND THE SCROLLER IS WHY. Three reviewers have now arrived
-             * at this block, worked the mechanism out from the library's bundle, and reached the
-             * same place; it had no comment for any of them to read. This is that comment.
-             *
-             * `MessageScrollerContent` is `flex flex-col`, so `order` is live: the spacer takes
-             * `order-2`, these children take `order-1`, and the transcript rows below keep the
-             * default `0`. Visual order is therefore items, then anything parked or in flight, then
-             * the spacer — while DOM order puts this block first.
-             *
-             * IT CANNOT SIMPLY BE MOVED DOWN. The scroller finds a newly appended row POSITIONALLY.
-             * On every content change it takes `Array.from(content.children)` minus the spacer,
-             * compares the length against the previous length, and when it grew scans FROM THE OLD
-             * LENGTH FORWARD for the next `data-scroll-anchor="true"` (`je(a, T)` in
-             * `@shadcn/react/dist/message-scroller`). A new row is only found when it lands at the
-             * very end of that list. Put this block after `items.map` and every appended row lands
-             * one slot short of the end, the scan finds this div instead, returns null, and the
-             * caller falls through to its follow-the-bottom branch — so a new turn stops aligning
-             * to the top of the viewport with a peek of the previous one, silently, with no test
-             * failing.
-             *
-             * `display: contents` IS LOAD-BEARING FOR THE SAME REASON, and not a layout trick. It
-             * promotes these children to flex items of the column so they can carry `order`, while
-             * the div itself stays a single, always-present entry in `content.children` — one
-             * stable slot the row count can be offset by. Wrapping `items.map` the same way would
-             * be the natural symmetry and is fatal: the rows would leave `content.children`
-             * entirely and the scroller would see a transcript of two elements, neither carrying a
-             * `data-message-id`, so nothing would register, be tracked as visible, or anchor.
-             *
-             * WHAT THIS COSTS, STATED RATHER THAN LEFT TO BE REDISCOVERED. `order` moves paint and
-             * not the DOM, so it moves neither focus order nor the reading order of the enclosing
-             * `role="log"`. A keyboard user tabbing in reaches the "Remove queued message: …"
-             * button of every parked message before any control in the conversation, though those
-             * lines are drawn at the very bottom (WCAG 2.4.3); a screen reader reading the log
-             * linearly hears the parked messages, and `Stopped`, ahead of the conversation they
-             * follow on screen (WCAG 1.3.2).
-             *
-             * THAT IS A KNOWN, UNPAID DEBT AND NOT AN OVERSIGHT. The fixes available from inside
-             * this file were each tried on paper and each breaks something worse: `aria-owns` needs
-             * a generated id per row and re-sequences only the accessibility tree, leaving tab
-             * order inverted; positive `tabIndex` hijacks the tab sequence of the whole page;
-             * hoisting the queue out of `MessageScrollerContent` into a sibling region — the
-             * cleanest END STATE, since a parked message is genuinely not a log entry — puts it
-             * outside a column that is `min-h-full`, so it lands below the fold on a short
-             * transcript, outside the `gap-6` rhythm, and outside the spacer's height arithmetic.
-             * Paying it properly means the scroller identifying new rows by identity rather than by
-             * position, which is the library's to change and is worth asking for.
-             */}
-            <div className="contents [&>*]:order-1">
-              {stopped ? (
-                <Stopped reason={stopped} />
-              ) : waitingOnFirstToken ? (
-                <Thinking />
-              ) : null}
-              {queued.map((message) => (
-                <Queued
-                  attachments={message.attachments}
-                  key={message.id}
-                  onRemove={
-                    onRemoveQueued
-                      ? () => onRemoveQueued(message.id)
-                      : undefined
-                  }
-                  text={message.text}
-                />
-              ))}
-            </div>
-            {items.length === 0 && restoring ? <RestoringTranscript /> : null}
-            {items.map((item, index) =>
-              item.kind === "browser" ? (
-                <MessageScrollerItem key={item.id} messageId={item.id}>
-                  <Arriving
-                    delay={delays.delayFor(item.id, index, items.length)}
-                  >
-                    <BrowserActivity
-                      group={item}
-                      active={busy && index === items.length - 1}
-                    />
-                  </Arriving>
-                </MessageScrollerItem>
-              ) : item.kind === "tool" ? (
-                <MessageScrollerItem key={item.id} messageId={item.id}>
-                  <TranscriptToolCall
-                    args={item.toolCall.function.arguments}
-                    delay={delays.delayFor(item.id, index, items.length)}
-                    name={item.toolCall.function.name}
-                    result={item.result}
-                    toolCallId={item.toolCall.id}
-                  />
-                </MessageScrollerItem>
-              ) : item.kind === "activity" ? (
-                <MessageScrollerItem key={item.id} messageId={item.id}>
-                  <TranscriptActivity
-                    delay={delays.delayFor(item.id, index, items.length)}
-                    message={item.message}
-                  />
-                </MessageScrollerItem>
-              ) : item.kind === "text" ? (
-                <MessageScrollerItem
-                  key={item.id}
-                  messageId={item.id}
-                  scrollAnchor={anchorRows.has(item.id)}
+            <MessageScroller className="@container">
+              <MessageScrollerViewport
+                {...follow.viewportHandlers}
+                data-following={follow.following}
+                onScroll={(event) => {
+                  follow.viewportHandlers.onScroll?.(event);
+                  drawEarlierNearTop(pagesFrom);
+                  readActiveTurn();
+                }}
+                ref={viewportRef}
+              >
+                <MessageScrollerContent
+                  aria-busy={busy}
+                  className={cn("py-6", column)}
+                  data-transcript-column
+                  spacerClassName="order-2"
                 >
-                  <TranscriptMessage
-                    commandNames={commandNames}
-                    delay={delays.delayFor(item.id, index, items.length)}
-                    role={item.role}
-                    text={item.text}
-                  />
-                </MessageScrollerItem>
-              ) : item.kind === "attachments" ? (
-                <MessageScrollerItem
-                  key={item.id}
-                  messageId={item.id}
-                  scrollAnchor={anchorRows.has(item.id)}
-                >
-                  <TranscriptAttachments
-                    attachments={item.attachments}
-                    delay={delays.delayFor(item.id, index, items.length)}
-                  />
-                </MessageScrollerItem>
-              ) : (
-                // Every member of the union is handled above. `assertNever` types `item` as
-                // `never` here, so a future addition to `VisibleChatItem` fails to typecheck at
-                // this call instead of silently falling into this branch and rendering nothing.
-                assertNever(item)
-              ),
-            )}
-          </MessageScrollerContent>
-        </MessageScrollerViewport>
-        <MessageScrollerButton />
-        <ScrollNewestQueuedIntoView newest={queued.at(-1)?.id ?? null} />
-      </MessageScroller>
-    </MessageScrollerProvider>
+                  {/*
+                   * THE INTRO IS THE FIRST CHILD, AND ONLY ONCE THE EARLIEST PAGE IS DRAWN. The scroller
+                   * reads "the first child moved" as rows prepended and holds the reader's place (see the
+                   * block below). Drawn while older pages are still to come, the intro would stay the
+                   * first child and every page drawn under it would be read as appended rows instead.
+                   * Drawn in the same commit as the earliest page, it is the prepend.
+                   */}
+                  {pages.from === 0 ? intro : null}
+                  {/*
+                   * DRAWN LAST, WRITTEN FIRST, AND THE SCROLLER IS WHY. Three reviewers have now arrived
+                   * at this block, worked the mechanism out from the library's bundle, and reached the
+                   * same place; it had no comment for any of them to read. This is that comment.
+                   *
+                   * `MessageScrollerContent` is `flex flex-col`, so `order` is live: the spacer takes
+                   * `order-2`, these children take `order-1`, and the transcript rows below keep the
+                   * default `0`. Visual order is therefore items, then anything parked or in flight, then
+                   * the spacer — while DOM order puts this block first.
+                   *
+                   * IT CANNOT SIMPLY BE MOVED DOWN. The scroller finds a newly appended row POSITIONALLY.
+                   * On every content change it takes `Array.from(content.children)` minus the spacer,
+                   * compares the length against the previous length, and when it grew scans FROM THE OLD
+                   * LENGTH FORWARD for the next `data-scroll-anchor="true"` (`je(a, T)` in
+                   * `@shadcn/react/dist/message-scroller`). A new row is only found when it lands at the
+                   * very end of that list. Put this block after `items.map` and every appended row lands
+                   * one slot short of the end, the scan finds this div instead, returns null, and the
+                   * caller falls through to its follow-the-bottom branch — so a new turn stops aligning
+                   * to the top of the viewport with a peek of the previous one, silently, with no test
+                   * failing.
+                   *
+                   * OLDER PAGES GO BEFORE THIS BLOCK, AND THAT IS THE SAME MECHANISM USED ON PURPOSE.
+                   * When the reader nears the top, the page before is drawn (`useTranscriptPages`). Drawn
+                   * here, ahead of this block, it moves whatever was the first child, and a first child
+                   * that moved is the scroller's own "rows were prepended" case: it puts the row the
+                   * reader was looking at back where it was (`de()`), and never runs the scan above, which
+                   * would read the shifted rows as new ones and jump to an old turn. Rows that arrive
+                   * live still go after this block, at the end, where that scan looks for them.
+                   *
+                   * ONE CASE IT DOES NOT COVER. The scroller takes one path per batch of changes, so a page
+                   * drawn above and a sent message landing in the SAME commit would be held in place and
+                   * the new turn not aligned to the top. They come from different updates (a scroll near
+                   * the top, a send at the bottom) and in practice never commit together; if they ever
+                   * do, the turn is not aligned when it arrives, and a later change that keeps the row
+                   * count can align to it then instead (the scroller's `Ge`), a beat late.
+                   *
+                   * `display: contents` IS LOAD-BEARING FOR THE SAME REASON, and not a layout trick. It
+                   * promotes these children to flex items of the column so they can carry `order`, while
+                   * the div itself stays a single, always-present entry in `content.children` — one
+                   * stable slot the row count can be offset by. Wrapping `items.map` the same way would
+                   * be the natural symmetry and is fatal: the rows would leave `content.children`
+                   * entirely and the scroller would see a transcript of two elements, neither carrying a
+                   * `data-message-id`, so nothing would register, be tracked as visible, or anchor.
+                   *
+                   * WHAT THIS COSTS, STATED RATHER THAN LEFT TO BE REDISCOVERED. `order` moves paint and
+                   * not the DOM, so it moves neither focus order nor the reading order of the enclosing
+                   * `role="log"`. A keyboard user tabbing in reaches the "Remove queued message: …"
+                   * button of every parked message before any control in the conversation, though those
+                   * lines are drawn at the very bottom (WCAG 2.4.3); a screen reader reading the log
+                   * linearly hears the parked messages, and `Stopped`, ahead of the conversation they
+                   * follow on screen (WCAG 1.3.2).
+                   *
+                   * THAT IS A KNOWN, UNPAID DEBT AND NOT AN OVERSIGHT. The fixes available from inside
+                   * this file were each tried on paper and each breaks something worse: `aria-owns` needs
+                   * a generated id per row and re-sequences only the accessibility tree, leaving tab
+                   * order inverted; positive `tabIndex` hijacks the tab sequence of the whole page;
+                   * hoisting the queue out of `MessageScrollerContent` into a sibling region — the
+                   * cleanest END STATE, since a parked message is genuinely not a log entry — puts it
+                   * outside a column that is `min-h-full`, so it lands below the fold on a short
+                   * transcript, outside the `gap-6` rhythm, and outside the spacer's height arithmetic.
+                   * Paying it properly means the scroller identifying new rows by identity rather than by
+                   * position, which is the library's to change and is worth asking for.
+                   */}
+                  <ArrivalsLiveContext.Provider value={AT_REST}>
+                    {items
+                      .slice(pages.from, pages.split)
+                      .map((item, offset) =>
+                        renderRow(item, pages.from + offset),
+                      )}
+                  </ArrivalsLiveContext.Provider>
+                  <div className="contents [&>*]:order-1">
+                    {stopped ? (
+                      <Stopped reason={stopped} />
+                    ) : waitingOnTheModel ? (
+                      <Thinking />
+                    ) : null}
+                    {working}
+                    {queued.map((message) => (
+                      <Queued
+                        attachments={message.attachments}
+                        key={message.id}
+                        onRemove={
+                          onRemoveQueued
+                            ? () => onRemoveQueued(message.id)
+                            : undefined
+                        }
+                        text={message.text}
+                      />
+                    ))}
+                  </div>
+                  {items
+                    .slice(pages.split)
+                    .map((item, offset) =>
+                      renderRow(item, pages.split + offset),
+                    )}
+                </MessageScrollerContent>
+              </MessageScrollerViewport>
+              <MessageScrollerButton
+                onClick={(event) => {
+                  // Ours, not the scroller's: it would scroll before it had been told to follow again.
+                  event.preventDefault();
+                  dispatchFollow({ type: "button" });
+                }}
+              />
+              <ScrollNewestQueuedIntoView
+                newest={queued.at(-1)?.id ?? null}
+                onQueued={followOnQueued}
+              />
+              <FollowScroll request={follow.request} />
+              <TranscriptRail active={activeTurn} onJump={jump} turns={turns} />
+            </MessageScroller>
+          </MessageScrollerProvider>
+        </LateRenderersContext.Provider>
+      </FolderNamesContext.Provider>
+    </ArrivalsLive>
   );
 }

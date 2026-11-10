@@ -8,7 +8,6 @@ import {
   DECLINED_BY_PERSON,
   UNOFFERED_TOOL_SENTENCE,
 } from "@/lib/plugins/tool-result";
-import { settleReactWork } from "./settle-react-work";
 
 /*
  * 一行工具步骤怎么读：成功、失败、被拦截、被主人拒绝、调用了没有的工具，各说各的。
@@ -17,10 +16,7 @@ import { settleReactWork } from "./settle-react-work";
 
 beforeAll(() => GlobalRegistrator.register());
 afterEach(() => cleanup());
-afterAll(async () => {
-  await settleReactWork();
-  GlobalRegistrator.unregister();
-});
+afterAll(() => GlobalRegistrator.unregister());
 
 function line(name: string, result?: string, args = "{}") {
   const view = render(
@@ -31,7 +27,7 @@ function line(name: string, result?: string, args = "{}") {
 
 test("a refused line names what was tried, not what was done", () => {
   const text = render(
-    <ToolLine blockedLabel="执行命令" label="执行了命令" refused />,
+    <ToolLine attempted="执行命令" label="执行了命令" refused />,
   ).container.textContent;
   expect(text).toContain("已拦截：执行命令");
   // 「执行了命令」说的是命令已经执行了，被拦截时正好相反。
@@ -39,11 +35,11 @@ test("a refused line names what was tried, not what was done", () => {
 });
 
 test("a line that was not refused keeps its done label", () => {
-  const text = render(<ToolLine blockedLabel="执行命令" label="执行了命令" />)
+  const text = render(<ToolLine attempted="执行命令" label="执行了命令" />)
     .container.textContent;
   expect(text).toContain("执行了命令");
   const failed = render(
-    <ToolLine blockedLabel="保存文件" failed label="保存了文件" />,
+    <ToolLine attempted="保存文件" failed label="保存了文件" />,
   ).container.textContent;
   expect(failed).toContain("保存了文件，没有成功");
 });
@@ -70,7 +66,7 @@ test("every computer step names, for a blocked line, what it tried", () => {
     按下了: "按键",
     列出了文件: "列出文件",
     读取了文件: "读取文件",
-    执行了命令: "执行命令",
+    // 执行命令不在这张表里：computer_run_command 画成终端块（terminal-block.tsx），拦下时由状态徽标「已拦下」说。
     保存了文件: "保存文件",
     追加到文件: "追加到文件",
     滚动了: "滚动",
@@ -89,7 +85,29 @@ test("every computer step names, for a blocked line, what it tried", () => {
     const at = source.indexOf(`"${label}"`);
     const near = source.slice(Math.max(0, at - 200), at + 200);
     expect(near).toContain(`"${blocked}"`);
-    expect(near).toContain("blockedLabel");
+    expect(near).toContain("attempted");
+  }
+});
+
+/*
+ * 主人在对话卡片上拒绝员工电脑上的一步时，结果带 `declined: true`。电脑工具的每一行都要把它交给
+ * ToolLine，不然主人自己的拒绝读成「已拦截」，像是策略拦下的。漏传一处，这条就会失败。
+ */
+test("every computer step that can be refused also says when the person declined it", () => {
+  const source = readFileSync(
+    new URL("../src/lib/copilot/computer-tools.tsx", import.meta.url),
+    "utf8",
+  );
+  const refusals = [
+    ...source.matchAll(
+      /refused=\{(outcomeOf\(result\)|outcome)\.refused === true\}/g,
+    ),
+  ];
+  expect(refusals.length).toBeGreaterThan(0);
+  for (const refusal of refusals) {
+    const at = refusal.index ?? 0;
+    const near = source.slice(Math.max(0, at - 200), at);
+    expect(near).toContain(`declined={${refusal[1]}.declined === true}`);
   }
 });
 
@@ -126,7 +144,7 @@ test("a tool the Bot doesn't have reads as one sentence, not the runtime's list"
     "web_search",
     "Error: Model tried to call unavailable tool 'web_search'. Available tools: computer_navigate, computer_read.",
   );
-  expect(text).toContain("web_search，没有成功");
+  expect(text).toContain("Web search，没有成功");
   expect(text).toContain(UNOFFERED_TOOL_SENTENCE);
   expect(text).not.toContain("computer_navigate");
 });
@@ -178,7 +196,7 @@ test("a folder step that could not be completed reads as not having worked", () 
     "That host operation could not be completed: ENOENT: no such file",
     JSON.stringify({ grantId: "g", path: "missing.txt" }),
   );
-  expect(text).toContain("host_read_file，没有成功");
+  expect(text).toContain("读取了文件，没有成功");
   expect(text).not.toContain("已拦截");
 });
 

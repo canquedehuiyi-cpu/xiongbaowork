@@ -14,7 +14,6 @@ import {
   readThreadMessages,
   type StoredThread,
 } from "../src/lib/copilot/thread-messages";
-import { settleReactWork } from "./settle-react-work";
 
 function HistoryNoticeProbe({
   lastMessageAt,
@@ -61,10 +60,7 @@ async function withFetch(handler: FetchHandler, run: () => Promise<void>) {
 
 beforeAll(() => GlobalRegistrator.register());
 afterEach(() => cleanup());
-afterAll(async () => {
-  await settleReactWork();
-  GlobalRegistrator.unregister();
-});
+afterAll(() => GlobalRegistrator.unregister());
 
 describe("channel history notice", () => {
   test("failed history retrieval does not claim the CopilotKit project changed", () => {

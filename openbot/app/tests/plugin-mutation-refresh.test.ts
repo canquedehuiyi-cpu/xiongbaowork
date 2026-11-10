@@ -19,9 +19,11 @@ import {
   recheckBrokeredConnectionMutationOptions,
   refreshPluginServerMutationOptions,
   registerOAuthClientMutationOptions,
+  removeDeploymentClientMutationOptions,
   removePluginServerMutationOptions,
   removeSkillMutationOptions,
   replaceServerTokenMutationOptions,
+  saveDeploymentClientMutationOptions,
   saveSkillMutationOptions,
   setListingMutationOptions,
   setPluginGrantMutationOptions,
@@ -308,6 +310,23 @@ const REFUSALS: {
     },
   },
   {
+    name: "saving a deployment client",
+    route: "PUT /api/plugins/composio/clients/:slug",
+    status: 400,
+    message: "应用名只能包含字母、数字、下划线和连字符，最长 64 个字符。",
+    factory: saveDeploymentClientMutationOptions,
+    variables: { toolkit: "shopify", clientId: "abc", clientSecret: "shh" },
+  },
+  {
+    name: "removing a deployment client",
+    route: "DELETE /api/plugins/composio/clients/:slug",
+    status: 403,
+    message:
+      "保存、查看或删除部署自己的应用客户端，需要以管理员身份在管理页面操作。",
+    factory: removeDeploymentClientMutationOptions,
+    variables: "shopify",
+  },
+  {
     name: "re-checking a key",
     route: "POST /api/plugins/servers/:id/connection/recheck",
     status: 400,
@@ -330,7 +349,7 @@ test("asking an app what it wants refetches nothing, because it writes nothing",
   /*
    * THE ONE WRITE-SHAPED PRESS THAT IS NOT A WRITE, and the reason this file does not simply say
    * "every mutation invalidates". The first press on an app whose key somebody types is a question
-   * about the APP — `POST /connect` with no body — and the route answers it out of Composio's
+   * about the APP — `POST /connect` with only `{ guide: true }` — and the route answers it out of Composio's
    * published field list without touching a row. Nothing changed, so there is nothing to refetch,
    * and a refusal here is the same fact as a success: this deployment now knows no more than it did.
    *
@@ -370,7 +389,7 @@ const NOT_A_MUTATION_FACTORY: Record<string, string> = {
  */
 const NOT_A_REFUSABLE_WRITE: Record<string, string> = {
   brokeredConnectionFieldsMutationOptions:
-    "Asks an app what it wants typed in. `POST /connect` with no body writes nothing on either outcome, and the factory takes no QueryClient. Its own test is above.",
+    "Asks an app what it wants typed in. `POST /connect` with only `{ guide: true }` writes nothing on either outcome, and the factory takes no QueryClient. Its own test is above.",
   connectAccountMutationOptions:
     "Starts a consent connection and hands back the vendor's URL for the browser to leave for. Nothing on this screen survives that navigation to be refetched, and this factory takes no QueryClient either — it takes which screen to come back to.",
 };
@@ -556,6 +575,18 @@ const ENCODED_REQUESTS: {
     url: `/api/plugins/servers/${ENCODED_ID}/connect`,
     build: connectBrokeredWithFieldsMutationOptions,
     variables: { serverId: HOSTILE_ID, values: { api_key: "typed" } },
+  },
+  {
+    name: "saving a deployment client",
+    url: `/api/plugins/composio/clients/${ENCODED_ID}`,
+    build: saveDeploymentClientMutationOptions,
+    variables: { toolkit: HOSTILE_ID, clientId: "abc", clientSecret: "shh" },
+  },
+  {
+    name: "removing a deployment client",
+    url: `/api/plugins/composio/clients/${ENCODED_ID}`,
+    build: removeDeploymentClientMutationOptions,
+    variables: HOSTILE_ID,
   },
   {
     name: "re-checking a key",

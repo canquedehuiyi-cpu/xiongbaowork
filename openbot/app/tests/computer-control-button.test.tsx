@@ -13,7 +13,6 @@ import {
   ComputerControlButton,
 } from "@/components/computer/computer-controls";
 import type { ControlState } from "@/lib/computers/control";
-import { settleReactWork } from "./settle-react-work";
 
 const originalFetch = globalThis.fetch;
 beforeAll(() => GlobalRegistrator.register());
@@ -21,19 +20,16 @@ afterEach(() => {
   cleanup();
   globalThis.fetch = originalFetch;
 });
-afterAll(async () => {
-  await settleReactWork();
-  GlobalRegistrator.unregister();
-});
+afterAll(() => GlobalRegistrator.unregister());
 
 function server(initial: "bot" | "human" = "bot") {
   let state: ControlState = {
     holder: initial,
     since: "2026-09-26T00:00:00Z",
     requested: false,
-    recoveryRequired: false,
     transitioning: false,
     resumeSnapshotRequired: false,
+    recoveryRequired: false,
     ...(initial === "human"
       ? {
           request: {

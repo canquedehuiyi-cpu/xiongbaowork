@@ -10,7 +10,6 @@ import {
   tabPanelProps,
 } from "@/components/layout/segmented-tabs";
 import { WorkbenchEmpty } from "@/components/layout/workbench-empty";
-import { settleReactWork } from "./settle-react-work";
 
 /*
  * The controls every workbench page shares, shaped after the reference screenshots in
@@ -29,8 +28,7 @@ beforeAll(() => {
 afterEach(() => {
   cleanup();
 });
-afterAll(async () => {
-  await settleReactWork();
+afterAll(() => {
   if (registeredHere) GlobalRegistrator.unregister();
 });
 

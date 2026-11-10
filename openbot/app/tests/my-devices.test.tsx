@@ -5,7 +5,6 @@ import { cleanup, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MyDevices } from "@/components/settings/my-devices";
 import { deviceKeys, type RegisteredDevice } from "@/lib/devices/queries";
-import { settleReactWork } from "./settle-react-work";
 
 /**
  * Ticket 016 acceptance, at the screen where a person actually decides it: pairing a machine has to
@@ -20,10 +19,7 @@ afterEach(() => {
   calls.length = 0;
   globalThis.fetch = originalFetch;
 });
-afterAll(async () => {
-  await settleReactWork();
-  GlobalRegistrator.unregister();
-});
+afterAll(() => GlobalRegistrator.unregister());
 
 const originalFetch = globalThis.fetch;
 const calls: { method: string; path: string }[] = [];

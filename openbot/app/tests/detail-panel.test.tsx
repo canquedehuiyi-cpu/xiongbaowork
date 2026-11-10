@@ -9,7 +9,6 @@ import {
 } from "@testing-library/react";
 import { useEffect } from "react";
 import { DetailPanel } from "@/components/layout/detail-panel";
-import { settleReactWork } from "./settle-react-work";
 
 class Observer implements ResizeObserver {
   static targets = new Map<Element, Observer>();
@@ -50,8 +49,7 @@ afterEach(() => {
   cleanup();
   Observer.targets.clear();
 });
-afterAll(async () => {
-  await settleReactWork();
+afterAll(() => {
   globalThis.ResizeObserver = originalObserver;
   GlobalRegistrator.unregister();
 });

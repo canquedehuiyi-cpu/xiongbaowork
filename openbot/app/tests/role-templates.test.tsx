@@ -26,7 +26,6 @@ import {
   type RoleProfile,
   roleProfileToMarkdown,
 } from "../../shared/role-profile";
-import { settleReactWork } from "./settle-react-work";
 
 /**
  * Story ROLE1, the screens (spec §5 ROLE1-4): the 角色模板 page's editor with Markdown import and
@@ -38,10 +37,7 @@ import { settleReactWork } from "./settle-react-work";
  */
 beforeAll(() => GlobalRegistrator.register());
 afterEach(cleanup);
-afterAll(async () => {
-  await settleReactWork();
-  GlobalRegistrator.unregister();
-});
+afterAll(() => GlobalRegistrator.unregister());
 
 const originalFetch = global.fetch;
 let originalConfirm: typeof window.confirm;

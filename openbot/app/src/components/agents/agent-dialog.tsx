@@ -1,3 +1,4 @@
+import { readToolName } from "@openbot/shared/tool-name";
 import {
   IconAdjustments,
   IconArrowsExchange,
@@ -89,7 +90,6 @@ import {
   savePersonaTemplateMutationOptions,
 } from "@/lib/personas/queries";
 import { agentPluginsQueryOptions } from "@/lib/plugins/queries";
-import { readToolName } from "@/lib/plugins/tool-name";
 import type { Persona } from "../../../../shared/persona";
 
 /**
@@ -766,6 +766,7 @@ function ConnectionSection({
       {profile.canManage ? (
         <CallbackTokenPanel
           agentId={agentId}
+          fromOpenBot={profile.keyFromOpenBot === true}
           hasToken={profile.hasCallbackToken}
         />
       ) : null}

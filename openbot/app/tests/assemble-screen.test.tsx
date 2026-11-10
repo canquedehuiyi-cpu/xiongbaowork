@@ -78,6 +78,9 @@ const base: AgentProfile = {
   systemOwned: false,
   canManage: true,
   mine: true,
+  isolated: false,
+  isolationActive: false,
+  isolationOffReason: null,
 };
 
 function routine(
@@ -91,8 +94,9 @@ function routine(
     schedule: `0 9 * * 1-5 ${id}`,
     timezone: "Asia/Shanghai",
     instruction,
+    title: null,
     // Gone, so the row draws a chip rather than a link into a route this test does not mount.
-    channel: { id: `channel-${id}`, name: null, gone: true },
+    channel: { id: `channel-${id}`, name: null, title: null, gone: true },
     enabled: true,
     nextRunAt: new Date(Date.now() + 86_400_000).toISOString(),
     lastRun: null,

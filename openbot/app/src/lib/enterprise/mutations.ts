@@ -1,5 +1,7 @@
 import { mutationOptions, type QueryClient } from "@tanstack/react-query";
+import { agentKeys } from "@/lib/agents/queries";
 import { client } from "@/lib/client";
+import { modelKeys } from "@/lib/models/queries";
 import {
   type CapabilityKey,
   type EgressRule,
@@ -29,7 +31,15 @@ export function setCapabilityMutationOptions(queryClient: QueryClient) {
         fallback: FALLBACK,
       });
     },
-    onSuccess: () => invalidateEnterprise(queryClient),
+    /*
+     * A Bot's profile says whether its computer of its own is in effect, which is decided from its
+     * owner's "Isolated Bots" switch, so a switch changing is a change to Bots as well.
+     */
+    onSuccess: () =>
+      Promise.all([
+        invalidateEnterprise(queryClient),
+        queryClient.invalidateQueries({ queryKey: agentKeys.all }),
+      ]),
   });
 }
 
@@ -45,7 +55,15 @@ export function setEnterpriseSettingMutationOptions(queryClient: QueryClient) {
         fallback: FALLBACK,
       });
     },
-    onSuccess: () => invalidateEnterprise(queryClient),
+    /*
+     * The model switch and allowlist change what the composer's picker offers, which the server
+     * reads through them, so the picker's catalogue is asked again too.
+     */
+    onSuccess: () =>
+      Promise.all([
+        invalidateEnterprise(queryClient),
+        queryClient.invalidateQueries({ queryKey: modelKeys.all }),
+      ]),
   });
 }
 

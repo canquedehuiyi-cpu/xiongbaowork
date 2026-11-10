@@ -1,14 +1,18 @@
 import {
+  IconBrain,
   IconBuildingBank,
+  IconBulb,
   IconChevronRight,
   IconCode,
   IconDeviceDesktop,
-  IconFileText,
   IconKey,
   IconLayoutGrid,
   IconListDetails,
+  IconLockAccess,
   IconPuzzle,
+  IconRadar,
   IconShieldCheck,
+  IconSlash,
   IconUsers,
 } from "@tabler/icons-react";
 import {
@@ -69,7 +73,7 @@ const SECTIONS: {
       },
       {
         title: "电脑",
-        description: "员工运行工具用的机器。",
+        description: "员工运行工具用的机器、空闲多久停下，以及它们能连到哪里。",
         icon: IconDeviceDesktop,
         linkOptions: { to: "/admin/computers" },
       },
@@ -77,19 +81,39 @@ const SECTIONS: {
   },
   {
     title: "员工能做什么",
-    description: "所有员工都能用的能力和界面组件。",
+    description: "所有员工能用的模型、应用、技能和界面组件。",
     items: [
       {
         title: "插件",
-        description: "这个部署能连到的服务，以及哪些员工可以用。",
+        description:
+          "这个部署能连到的服务、哪些员工可以用，以及审批 MCP 服务器。",
         icon: IconPuzzle,
         linkOptions: { to: "/admin/plugins" },
       },
       {
+        title: "模型提供方",
+        description: "看员工的模型由谁提供，并选出员工可以用哪些模型。",
+        icon: IconBrain,
+        linkOptions: { to: "/admin/providers" },
+      },
+      {
         title: "技能",
         description: "任何人都能用斜杠调用的具名指令。",
-        icon: IconFileText,
+        icon: IconSlash,
         linkOptions: { to: "/admin/skills" },
+      },
+      {
+        title: "自动学习",
+        description:
+          "从结束的对话里学习，审核它提出的技能，并决定大家能否分享自己的技能。",
+        icon: IconBulb,
+        linkOptions: { to: "/admin/learning" },
+      },
+      {
+        title: "主动巡检",
+        description: "开关主动巡检、限制频率，并查看大家多常接手员工提出的事。",
+        icon: IconRadar,
+        linkOptions: { to: "/admin/proactive" },
       },
       {
         title: "界面组件",
@@ -116,6 +140,13 @@ const SECTIONS: {
         linkOptions: { to: "/admin/people" },
       },
       {
+        title: "权限",
+        description:
+          "决定大家能拿员工做什么，可以对所有人设置，也可以按角色或分组设置。",
+        icon: IconLockAccess,
+        linkOptions: { to: "/admin/permissions" },
+      },
+      {
         title: "企业管控",
         description:
           "按角色和分组的能力、强制 SSO、SCIM、网络策略、MCP 与模型白名单、操作录制。",
@@ -125,7 +156,7 @@ const SECTIONS: {
       {
         title: "身份提供方",
         description:
-          "公司自己的 SAML 或 OpenID Connect 身份提供方，按邮箱域名分流。",
+          "公司自己的 SAML 或 OpenID Connect 身份提供方，按邮箱域名分流，并可强制 SSO。",
         icon: IconBuildingBank,
         linkOptions: { to: "/admin/identity-providers" },
       },
@@ -137,7 +168,8 @@ const SECTIONS: {
     items: [
       {
         title: "审计",
-        description: "这个部署里发生的每个动作，以及是谁做的。",
+        description:
+          "这个部署里发生的每个动作、是谁做的，以及员工执行过的命令记录。",
         icon: IconListDetails,
         linkOptions: { to: "/admin/audit" },
       },
@@ -168,8 +200,8 @@ function RouteComponent() {
                   render={(props) => <Link {...item.linkOptions} {...props} />}
                   size="sm"
                 >
-                  <ItemMedia>
-                    <item.icon className="size-4 text-muted-foreground" />
+                  <ItemMedia variant="icon">
+                    <item.icon />
                   </ItemMedia>
                   <ItemContent>
                     <ItemTitle>{item.title}</ItemTitle>

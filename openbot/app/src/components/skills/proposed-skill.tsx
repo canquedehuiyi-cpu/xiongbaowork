@@ -38,6 +38,11 @@ export type ProposedSkillCardProps = {
   /** The recorded answer, once there is one. Completed cards show it instead of controls. */
   result?: string;
   save: (values: SkillFormValues) => Promise<void>;
+  /**
+   * The personal edition, where a saved skill is on every Bot already (the server grants it), so
+   * there is no "Put it on a Bot" step to point at.
+   */
+  personal?: boolean;
 };
 
 /**
@@ -56,6 +61,7 @@ export function ProposedSkillCard({
   respond,
   result,
   save,
+  personal = false,
 }: ProposedSkillCardProps) {
   const [sending, setSending] = useState<"save" | "decline" | null>(null);
   /**
@@ -74,7 +80,7 @@ export function ProposedSkillCard({
         title={titleFor(args.slug, replaces)}
       >
         <p className="text-sm">{result}</p>
-        {args.slug && wasSaved(result) ? (
+        {args.slug && wasSaved(result) && !personal ? (
           <PutItOnABot slug={args.slug} />
         ) : null}
       </GalleryFrame>
@@ -153,7 +159,7 @@ export function ProposedSkillCard({
 
       {values.tools.length > 0 ? (
         <p className="mt-2 text-muted-foreground text-xs">
-          列出工具不等于授予。只有管理员已经把这些工具授予某位员工，它才会拿到。
+          列出工具不等于授予。员工只有已经拥有这些工具，才能用上它们。
         </p>
       ) : null}
 
@@ -163,14 +169,7 @@ export function ProposedSkillCard({
         </p>
       ) : null}
 
-      <div className="mt-4 flex gap-2">
-        <Button
-          disabled={Boolean(sending)}
-          onClick={() => void create()}
-          size="sm"
-        >
-          {sending === "save" ? "正在保存…" : replaces ? "替换" : "创建"}
-        </Button>
+      <div className="mt-4 flex justify-end gap-2">
         <Button
           disabled={Boolean(sending)}
           onClick={() => void decline()}
@@ -178,6 +177,13 @@ export function ProposedSkillCard({
           variant="outline"
         >
           {sending === "decline" ? "…" : "不保存"}
+        </Button>
+        <Button
+          disabled={Boolean(sending)}
+          onClick={() => void create()}
+          size="sm"
+        >
+          {sending === "save" ? "正在保存…" : replaces ? "替换" : "创建"}
         </Button>
       </div>
     </GalleryFrame>

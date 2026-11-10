@@ -78,6 +78,14 @@ export type PluginServer = {
    * Null is not an older brokered row. It is a row that is not brokered at all.
    */
   authScheme: string | null;
+  /**
+   * Whether only an administrator may connect this app (upstream #950). True for an app connected
+   * on this deployment's own OAuth client, a server-to-server grant (`S2S_OAUTH2`, Shopify is one):
+   * the credential is the deployment's, so an account on it is the organization's access and only an
+   * administrator holds one. The server's verdict about the app; whether the person reading is an
+   * administrator is theirs to combine it with. The connect route refuses whatever a screen draws.
+   */
+  adminConnectOnly: boolean;
   tools: PluginTool[];
   /** Empty for a healthy connector. See {@link WithdrawnGrant}. */
   withdrawn: WithdrawnGrant[];
@@ -143,6 +151,23 @@ export type ComposioApp = {
   /** The size of the decision, shown before enabling. */
   actionCount: number;
   enabled: boolean;
+  /**
+   * How a person connects it, as the server decided from what the app publishes. Only the part
+   * this page reads: an app on this deployment's own client (upstream #950) arrives as
+   * `{ kind: "fields", authScheme: "S2S_OAUTH2" }` once its client is saved, and is hidden until then.
+   */
+  connection?: { kind: string; authScheme?: string };
+};
+
+/**
+ * One OAuth client this deployment holds for a brokered app that connects server to server
+ * (upstream #950; Shopify is one). The id and when it was saved; the secret is never read back.
+ * `clientId` and `storedAt` are null for a client whose record carries neither.
+ */
+export type DeploymentClient = {
+  toolkit: string;
+  clientId: string | null;
+  storedAt: string | null;
 };
 
 export type PluginsPage = {
@@ -199,6 +224,7 @@ export const pluginKeys = {
   connections: () => ["plugins", "connections"] as const,
   composioApps: (query: string) =>
     ["plugins", "composio", "apps", query] as const,
+  deploymentClients: () => ["plugins", "composio", "clients"] as const,
   listings: () => ["plugins", "listings"] as const,
   installedByMe: (agentId: string) =>
     ["plugins", "installed-by-me", agentId] as const,
@@ -379,6 +405,20 @@ export type PluginConnections = {
 };
 
 /**
+ * The rows that are the person's own connection, for a screen asking "is this mine".
+ *
+ * Upstream filters out rows held by the deployment for everybody (shared accounts, #757). This
+ * fork does not take shared accounts, so every row `/api/plugins/connections` answers is the
+ * asking person's own and the whole list is returned. Kept as a function so the screens read the
+ * same as upstream's and the filter has one place to live if shared accounts ever arrive.
+ */
+export function personalConnections(
+  rows: PluginConnection[],
+): PluginConnection[] {
+  return rows;
+}
+
+/**
  * The signed-in person's own connections.
  *
  * There is no version of this scoped to anybody else: the endpoint answers for whoever is asking,
@@ -420,10 +460,26 @@ export function composioAppsQueryOptions(query: string) {
     queryFn: async (): Promise<{ apps: ComposioApp[] }> => {
       const response = await client(
         `/api/plugins/composio/apps?q=${encodeURIComponent(query)}`,
-        { fallback: "读不到 Composio 的应用目录。" },
+        { fallback: "读不到可以连接的应用。请刷新页面。" },
       );
       return response.json();
     },
+  });
+}
+
+/**
+ * The OAuth clients this deployment holds for server-to-server apps. Administrators only.
+ *
+ * Under the `plugins` key, so saving or removing one refetches the directory too: an app on such a
+ * client appears there only once its client is saved.
+ */
+export function deploymentClientsQueryOptions() {
+  return queryOptions({
+    queryKey: pluginKeys.deploymentClients(),
+    queryFn: (): Promise<DeploymentClient[]> =>
+      client("/api/plugins/composio/clients", "clients", {
+        fallback: "读不到部署专属客户端。",
+      }),
   });
 }
 

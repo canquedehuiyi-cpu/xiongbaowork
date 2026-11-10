@@ -35,7 +35,7 @@ export const PLUGIN_CATEGORIES: readonly {
   { id: "team", label: "团队凭据" },
   { id: "builtin", label: "内置能力" },
   { id: "open", label: "免凭据" },
-  { id: "composio", label: "Composio 应用" },
+  { id: "composio", label: "第三方应用" },
   { id: "custom", label: "自定义" },
 ];
 

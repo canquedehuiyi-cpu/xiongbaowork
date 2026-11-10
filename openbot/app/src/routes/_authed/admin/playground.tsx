@@ -193,14 +193,14 @@ function PlaygroundPage() {
      * standard prose column and it lands below the fold, so you would be typing at something you
      * cannot see. It takes the header and the controls, and keeps the two panes.
      */
-    <div className="flex h-screen flex-col">
+    <div className="flex min-h-0 flex-1 flex-col">
       <header className="flex flex-wrap items-start justify-between gap-4 border-border border-b px-6 py-4">
         {/* Inline rather than in a band of its own: this screen is an editor beside a live preview
             and every 48px of height is taken from the thing being previewed. */}
         <div className="flex items-start gap-2">
           <SidebarToggle className="-ml-2 shrink-0" />
           <div>
-            <h1 className="font-bold text-2xl">试验台</h1>
+            <h1 className="font-semibold text-2xl tracking-tight">试验台</h1>
             <p className="mt-1 max-w-prose text-pretty text-muted-foreground text-sm leading-relaxed">
               在这里写组件，不用重新部署就能发布。你编辑的是草稿；对话里只会画出已发布的版本。
             </p>
@@ -328,7 +328,7 @@ function PlaygroundPage() {
             </div>
             {(components ?? []).length === 0 ? (
               <p className="px-4 py-3 text-muted-foreground text-sm">
-                还没有。
+                还没有保存过。保存一份草稿后会显示在这里。
               </p>
             ) : (
               <ul className="divide-y divide-border">

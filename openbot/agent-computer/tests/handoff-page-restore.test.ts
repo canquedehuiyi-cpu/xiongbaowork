@@ -2,8 +2,8 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { reservePort } from "../../tests/support/reserved-port";
 import type { ComputerControlState } from "../../shared/computer-control";
+import { reservePort } from "../../tests/support/reserved-port";
 import type { StoredControl } from "../src/control-store";
 
 /**

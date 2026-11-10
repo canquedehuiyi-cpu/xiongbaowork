@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { RunAgentInputSchema } from "@ag-ui/core/schemas";
+import { approvalPhrase } from "@openbot/shared/tool-name";
 import {
   type ApprovalContinuation,
   currentApprovalContext,
@@ -801,4 +802,21 @@ export interface ApprovalFreshProducerPort {
   publishSaved(
     context: ApprovalRecoveryContext,
   ): Promise<"continue" | "final" | "blocked" | "unknown">;
+}
+
+/**
+ * 员工请求批准的动作，作为给人看的一整句（聊天平台上的审批卡片、通知）：「Research Bot 想要在
+ * example.com 上打开页面」「Research Bot 想要 send email（Gmail）」。动作的说法来自 `approvalPhrase`，
+ * 和对话里的审批卡片一致。
+ */
+export function wantsTo(
+  botName: string,
+  action: Parameters<typeof approvalPhrase>[0],
+): string {
+  return `${botName} 想要${afterChinese(approvalPhrase(action))}`;
+}
+
+/** 接在中文后面的一段说法：以英文、数字或路径开头时，前面留一个半角空格。 */
+export function afterChinese(text: string): string {
+  return /^[　-鿿＀-￯]/.test(text) ? text : ` ${text}`;
 }

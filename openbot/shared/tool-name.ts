@@ -37,14 +37,14 @@ export function readToolName(name: string, running = false): ToolName {
         wordsOf(name).length > 0
           ? humanise(name)
           : running
-            ? "Using a tool"
-            : "Used a tool",
+            ? "正在使用工具"
+            : "使用了工具",
     };
 
   const [, rawServer, ...rest] = parts;
   /*
    * OpenBot's own Routines app also carries a goal's tools for a conversation. They are the tools a
-   * goal's run holds, so they read in its words, "Created a goal", and not "Create goal" beside
+   * goal's run holds, so they read in its words, 「创建了目标」, and not "Create goal" beside
    * "routines".
    */
   if (rawServer === ROUTINES_APP) {
@@ -145,13 +145,31 @@ export function connectorName(server: string): string {
 }
 
 /**
- * What an approval asks to do and where, as its card says it: "Waiting for your approval: {action}
- * on {place}", and "{Bot} wants to {action}" over the place on a list.
+ * 给人看的「动作 + 地点」怎么拼成中文。这个文件里所有把动作和地点放在一起的地方都按这几条写：
+ *
+ * 1. 动作是中文（OpenBot 自己的动作，浏览器、电脑、文件夹）：地点在前，「在 {地点} 上{动作}」——
+ *    「在 en.wikipedia.org 上点击链接「Python」」「在 en.wikipedia.org 上打开页面」。
+ * 2. 动作是英文：第三方应用的工具名由 `appToolName`/`humanise` 从厂商标识符生成，本来就是英文，
+ *    不翻；从标识符拼出来的其他动作名也一样。英文动作不塞进「在…上」里（「在 Gmail 上send email」
+ *    读不通），而是「{动作}（{地点}）」——「send email（Gmail）」。中文动作和英文动作只按动作的
+ *    第一个字分：以中文开头的是第 1 条，其余是第 2 条（{@link atPlace}）。
+ * 3. 文件夹里的一个文件：先说动作和文件，文件夹放在括号里，「保存文件 todo.txt（在 share 中）」；
+ *    对整个文件夹的动作（列出文件、执行命令），「执行命令（在 share 中）」。文件和文件夹的说法
+ *    由 {@link inFolder} 统一给出，审批卡、步骤和活动记录读起来一样。
+ * 4. 员工自己电脑上的文件，动作后面直接跟路径：「保存文件 /home/bot/todo.txt」。
+ *
+ * 中文和英文、数字、路径之间留一个半角空格；括号、引号用全角（「」（））。
+ */
+
+/**
+ * What an approval asks to do and where, as its card says it: the action ("保存文件", or an app's
+ * "send email") over the place ("Gmail", "todo.txt（在 share 中）") on a list, and
+ * 「{员工} 想要{action}」 above it.
  *
  * An app's tool is asked about as `<app>/<tool>` on the app itself (`toolRef` and `scope` in
  * server/src/plugins/plugin-store/calls.ts), so it read "requests/get request on requests": the app's
  * key twice and the tool's raw name. It is named the way the conversation names the same call, the
- * action in words and the app by its name, so the card reads "get request on Requests". Every other
+ * action in words and the app by its name, so the card reads "get request（Requests）". Every other
  * action keeps the words it had: a computer's on the site or folder it acts on, a command on the
  * computer it runs on.
  */
@@ -169,24 +187,42 @@ export function approvalWords(action: {
 }
 
 /**
- * What an approval waits on as one phrase, for a card's title and a task's waiting line: "send
- * email on Gmail", "click on example.com", and a file as its step and its Activity row name it,
- * "save a file todo.txt in share". A step on a whole folder is "in" it.
+ * What an approval waits on as one phrase, for a card's title and a task's waiting line, by the
+ * rules above: "send email（Gmail）", 「在 example.com 上点击」, and a file as its step and its
+ * Activity row name it, 「保存文件 todo.txt（在 share 中）」. A step on a whole folder is
+ * 「执行命令（在 share 中）」.
  */
 export function approvalPhrase(action: {
   toolRef: string;
   scope: string;
   target?: unknown;
 }): string {
-  const { action: words, place, joiner } = approvalParts(action);
-  return joiner ? `${words} ${joiner} ${place}` : `${words} ${place}`;
+  const { action: words, place, form } = approvalParts(action);
+  if (form === "in") return `${words}（${inFolder(undefined, place)}）`;
+  if (form === "follows") return `${words} ${place}`;
+  return atPlace(words, place);
 }
 
+/**
+ * An action at a place: 「在 {place} 上{action}」 when the action is in Chinese, and
+ * "{action}（{place}）" when it is a name made from an English identifier (rule 2 above).
+ */
+function atPlace(action: string, place: string): string {
+  return /^[　-鿿＀-￯]/.test(action)
+    ? `在 ${place} 上${action}`
+    : `${action}（${place}）`;
+}
+
+/**
+ * The action, the place, and how the two are joined: `at` a site, an app or a computer; `in` a whole
+ * folder (the place is the folder's name); or a place that `follows` the action as it is, a file
+ * already said with its folder or a path.
+ */
 function approvalParts(action: {
   toolRef: string;
   scope: string;
   target?: unknown;
-}): { action: string; place: string; joiner: "on" | "in" | "" } {
+}): { action: string; place: string; form: "at" | "in" | "follows" } {
   const slash = action.toolRef.indexOf("/");
   const app = action.toolRef.slice(0, slash);
   if (slash > 0 && app === action.scope) {
@@ -194,18 +230,19 @@ function approvalParts(action: {
     return {
       action: lowerFirst(label),
       place: connectorName(app),
-      joiner: "on",
+      form: "at",
     };
   }
   /*
    * A browser action on the site it acts on, with the control it presses when the page named one:
-   * "click the link “Python” on en.wikipedia.org". Activity said "Approve computer_click".
+   * 「在 en.wikipedia.org 上点击链接「Python」」. Activity said "Approve computer_click".
    */
   const browser = browserAction(action.toolRef, action.target);
-  if (browser) return { action: browser, place: action.scope, joiner: "on" };
+  if (browser) return { action: browser, place: action.scope, form: "at" };
   /*
    * A computer's or a folder's own action in the words its step and its Activity row use. The card
    * said "write file on todo.txt in share" above a step that read "Save a file todo.txt in share".
+   * One with no words of its own keeps the words of its identifier, in English (rule 2 above).
    */
   const own = ownToolAttempt(action.toolRef.replace(/^host\//, "host_"));
   const words = own
@@ -219,19 +256,19 @@ function approvalParts(action: {
   if (action.toolRef.startsWith("host/")) {
     const file = folderFile(action.target);
     const folder = folderName(action.target);
-    // "save a file todo.txt in share"; a command or a listing is in the folder itself.
+    // 「保存文件 todo.txt（在 share 中）」；a command or a listing is in the folder itself.
     if (file)
       return {
         action: words,
         place: inFolder(file, folder) ?? file,
-        joiner: "",
+        form: "follows",
       };
-    if (folder) return { action: words, place: folder, joiner: "in" };
+    if (folder) return { action: words, place: folder, form: "in" };
   }
   // A file on the Bot's own computer by its path, as its step names it, not the folder it is in.
   const path = computerFile(action.target);
-  if (path) return { action: words, place: path, joiner: "" };
-  return { action: words, place: action.scope, joiner: "on" };
+  if (path) return { action: words, place: path, form: "follows" };
+  return { action: words, place: action.scope, form: "at" };
 }
 
 /** Handles the model cites and the run carries, which name nothing a person could check. */
@@ -239,6 +276,7 @@ const INTERNAL_ARGS = new Set(["ref", "snapshotId", "toolCallId", "signal"]);
 
 /**
  * What an approval would send, as labelled lines for its card: "Text: hello", "To: sam@example.test".
+ * 标签由参数名生成（`wordsOf`），和应用工具名一样保持英文，不翻；值里的是/否写成中文。
  * The card showed the arguments as JSON, and a click read `{ "ref": "f3e43", "snapshotId": 4 }`, two
  * handles to a page snapshot nobody can see. Those are left out, so a click has nothing to add to its
  * title and shows no lines at all. Everything else stays whole: nobody allows what they were not shown.
@@ -255,8 +293,8 @@ export function approvalDetails(
         ? value
         : typeof value === "boolean"
           ? value
-            ? "Yes"
-            : "No"
+            ? "是"
+            : "否"
           : typeof value === "number"
             ? String(value)
             : Array.isArray(value) &&
@@ -276,9 +314,9 @@ const ACRONYMS: Record<string, string> = { url: "URL", id: "ID" };
 
 /**
  * A saved approval rule's title, in the words its approval card used for the action it covers:
- * "Click", "Send email on Gmail", "Any action on Gmail". The list titled each rule by its tool id
+ * 「点击」, "Send email（Gmail）", 「Gmail 上的任何操作」. The list titled each rule by its tool id
  * ("computer_click", "mcp/gmail/*"). `place` is true when the title already names where the rule
- * applies, so the line under it need not say "on composio-gmail" again. A pattern a person typed
+ * applies, so the line under it need not say "composio-gmail" again. A pattern a person typed
  * that matches several actions some other way is kept as they wrote it.
  */
 export function ruleTitle(rule: { toolRef: string; scope: string }): {
@@ -286,9 +324,9 @@ export function ruleTitle(rule: { toolRef: string; scope: string }): {
   place: boolean;
 } {
   const upper = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
-  if (rule.toolRef === "*") return { title: "Any action", place: false };
+  if (rule.toolRef === "*") return { title: "任何操作", place: false };
   if (rule.toolRef === "host/*")
-    return { title: "Any action in your folders", place: false };
+    return { title: "你的文件夹中的任何操作", place: false };
   const ref = rule.toolRef.replace(/^mcp\//, "");
   const slash = ref.indexOf("/");
   if (slash > 0 && !ref.startsWith("host/")) {
@@ -297,10 +335,10 @@ export function ruleTitle(rule: { toolRef: string; scope: string }): {
     if (app.includes("*")) return { title: rule.toolRef, place: false };
     const named = rule.scope === "*" || rule.scope === app;
     if (tool === "*")
-      return { title: `Any action on ${connectorName(app)}`, place: named };
+      return { title: `${connectorName(app)} 上的任何操作`, place: named };
     if (tool.includes("*")) return { title: rule.toolRef, place: false };
     const { action, place } = approvalWords({ toolRef: ref, scope: app });
-    return { title: `${upper(action)} on ${place}`, place: named };
+    return { title: atPlace(upper(action), place), place: named };
   }
   if (ref.includes("*")) return { title: rule.toolRef, place: false };
   return {
@@ -311,26 +349,26 @@ export function ruleTitle(rule: { toolRef: string; scope: string }): {
 
 /** What a browser action asks to do, said as its step says it. */
 const BROWSER_ACTIONS: Record<string, string> = {
-  computer_navigate: "open a page",
-  computer_click: "click",
-  computer_type: "fill in a field",
-  computer_key: "press a key",
-  computer_scroll: "scroll the page",
+  computer_navigate: "打开页面",
+  computer_click: "点击",
+  computer_type: "填写字段",
+  computer_key: "按下按键",
+  computer_scroll: "滚动页面",
 };
 
 /** A page control's role in the words a person uses for it. */
 const CONTROL_WORDS: Record<string, string> = {
-  link: "link",
-  button: "button",
-  checkbox: "checkbox",
-  radio: "option",
-  option: "option",
-  tab: "tab",
-  menuitem: "menu item",
-  switch: "switch",
-  textbox: "field",
-  searchbox: "search field",
-  combobox: "list",
+  link: "链接",
+  button: "按钮",
+  checkbox: "复选框",
+  radio: "选项",
+  option: "选项",
+  tab: "标签页",
+  menuitem: "菜单项",
+  switch: "开关",
+  textbox: "输入框",
+  searchbox: "搜索框",
+  combobox: "下拉列表",
 };
 
 /**
@@ -350,11 +388,12 @@ function browserAction(toolRef: string, target: unknown): string | undefined {
       : "";
   const role =
     typeof element?.role === "string" ? CONTROL_WORDS[element.role] : undefined;
+  // 「点击链接「Python」」「点击按钮」「填写「搜索」」。
   if (toolRef === "computer_click") {
-    if (name) return `click ${role ? `the ${role} ` : ""}“${clipName(name)}”`;
-    return role ? `click ${/^[aeiou]/.test(role) ? "an" : "a"} ${role}` : base;
+    if (name) return `点击${role ?? ""}「${clipName(name)}」`;
+    return role ? `点击${role}` : base;
   }
-  if (toolRef === "computer_type" && name) return `fill in “${clipName(name)}”`;
+  if (toolRef === "computer_type" && name) return `填写「${clipName(name)}」`;
   return base;
 }
 
@@ -373,15 +412,15 @@ function computerFile(target: unknown): string | undefined {
 
 /**
  * A file and the folder on the person's computer it is in, said the same way on the approval card,
- * on the step and in Activity: "todo.txt in share". A step on the whole folder (a listing, a
- * command) is "in share". Undefined when neither is known.
+ * on the step and in Activity: 「todo.txt（在 share 中）」. A step on the whole folder (a listing, a
+ * command) is 「在 share 中」. Undefined when neither is known.
  */
 export function inFolder(
   file: string | undefined,
   folder: string | undefined,
 ): string | undefined {
-  if (file && folder) return `${file} in ${folder}`;
-  if (folder) return `in ${folder}`;
+  if (file && folder) return `${file}（在 ${folder} 中）`;
+  if (folder) return `在 ${folder} 中`;
   return file || undefined;
 }
 
@@ -409,7 +448,7 @@ type OwnTool = {
   running: string;
   done: string;
   /**
-   * What was asked for, for a step that was blocked: "Save a file", not "Saved a file". A blocked
+   * What was asked for, for a step that was blocked: 「保存文件」, not 「保存了文件」. A blocked
    * step did not happen, so its line says what was tried. Without it the line keeps `done`.
    */
   attempted?: string;
@@ -434,19 +473,19 @@ function goalTools(names: {
   complete: string;
 }): Record<string, OwnTool> {
   return {
-    [names.create]: { running: "Creating a goal", done: "Created a goal" },
-    [names.list]: { running: "Checking goals", done: "Checked goals" },
-    [names.update]: { running: "Updating a goal", done: "Updated a goal" },
+    [names.create]: { running: "正在创建目标", done: "创建了目标" },
+    [names.list]: { running: "正在查看目标", done: "查看了目标" },
+    [names.update]: { running: "正在更新目标", done: "更新了目标" },
     [names.report]: {
-      running: "Recording progress",
-      done: "Recorded progress",
+      running: "正在记录进展",
+      done: "记录了进展",
     },
-    [names.run]: { running: "Starting a goal", done: "Started a goal" },
-    [names.pause]: { running: "Pausing a goal", done: "Paused a goal" },
-    [names.resume]: { running: "Resuming a goal", done: "Resumed a goal" },
+    [names.run]: { running: "正在启动目标", done: "启动了目标" },
+    [names.pause]: { running: "正在暂停目标", done: "暂停了目标" },
+    [names.resume]: { running: "正在恢复目标", done: "恢复了目标" },
     [names.complete]: {
-      running: "Marking a goal complete",
-      done: "Marked a goal complete",
+      running: "正在把目标标记为已完成",
+      done: "把目标标记为已完成",
     },
   };
 }
@@ -463,110 +502,114 @@ function goalTools(names: {
  * same call is also a step inside a subtask, a line in a conversation opened where its card is not
  * registered, and a line in a run with no browser at all. `server/tests/built-in-tool-labels.test.ts`
  * reads every tool OpenBot registers and fails on one missing here.
+ *
+ * 中文时态：`running` 用进行时（「正在保存文件」），`done` 用完成时（「保存了文件」），`attempted`
+ * 写尝试做什么（「保存文件」），被拦下时拼成「已拦截：保存文件」。术语跟 app 一致：Bot 叫员工，
+ * Goal 叫目标，check-in 叫主动巡检，notebooks 叫知识库。
  */
 const OWN_TOOLS: Record<string, OwnTool> = {
   [SHOW_APP_ACCESS_TOOL]: {
-    running: "Checking app access",
-    done: "Checked app access",
+    running: "正在查看应用权限",
+    done: "查看了应用权限",
     answersTheModel: true,
   },
   [SEARCH_TOOLS]: {
-    running: "Looking for a tool",
-    done: "Looked for a tool",
+    running: "正在查找工具",
+    done: "查找了工具",
     answersTheModel: true,
   },
 
   // Bringing someone else in.
-  ask_person: { running: "Asking you", done: "Asked you" },
-  message_bot: { running: "Asking another Bot", done: "Asked another Bot" },
-  [SUBAGENT_TOOL]: { running: "Working on a subtask", done: "Ran a subtask" },
+  ask_person: { running: "正在问你", done: "问了你" },
+  message_bot: { running: "正在问另一位员工", done: "问了另一位员工" },
+  [SUBAGENT_TOOL]: { running: "正在处理子任务", done: "处理了子任务" },
   // A voice conversation handing what was said to the Bot behind it.
-  ask_agent: { running: "Asking the Bot", done: "Asked the Bot" },
+  ask_agent: { running: "正在问员工", done: "问了员工" },
 
   // Skills: the ones it learned, and the ones a person writes with it.
-  copilotkit_load_skill: { running: "Using a skill", done: "Used a skill" },
+  copilotkit_load_skill: { running: "正在使用技能", done: "使用了技能" },
   copilotkit_read_skill_file: {
-    running: "Reading a file from a skill",
-    done: "Read a file from a skill",
+    running: "正在读取技能里的文件",
+    done: "读取了技能里的文件",
   },
   list_skills: {
-    running: "Checking existing skills",
-    done: "Checked existing skills",
+    running: "正在查看已有技能",
+    done: "查看了已有技能",
   },
-  read_skill: { running: "Reading a skill", done: "Read a skill" },
+  read_skill: { running: "正在读取技能", done: "读取了技能" },
   list_skill_tools: {
-    running: "Checking available tools",
-    done: "Checked available tools",
+    running: "正在查看可用工具",
+    done: "查看了可用工具",
   },
-  save_skill: { running: "Proposing a skill", done: "Proposed a skill" },
+  save_skill: { running: "正在提议新技能", done: "提议了新技能" },
 
   /*
    * Drawing a generated interface in the conversation. The runtime offers it, not an OpenBot
    * registration, so `built-in-tool-labels.test.ts` cannot find it; its words go here by hand.
    */
-  render_ui: { running: "Drawing an interface", done: "Drew an interface" },
+  render_ui: { running: "正在绘制界面", done: "绘制了界面" },
 
   // Making a Bot from a conversation.
   list_bots: {
-    running: "Checking existing Bots",
-    done: "Checked existing Bots",
+    running: "正在查看已有员工",
+    done: "查看了已有员工",
   },
   read_bot: {
-    running: "Reading a Bot's instructions",
-    done: "Read a Bot's instructions",
+    running: "正在读取员工的指令",
+    done: "读取了员工的指令",
   },
   list_bot_skills: {
-    running: "Checking available skills",
-    done: "Checked available skills",
+    running: "正在查看可用技能",
+    done: "查看了可用技能",
   },
-  save_bot: { running: "Proposing a new Bot", done: "Proposed a new Bot" },
+  save_bot: { running: "正在提议新员工", done: "提议了新员工" },
 
   // Its memory of you.
   recall_personal_memory: {
-    running: "Checking its memory of you",
-    done: "Checked its memory of you",
+    running: "正在查看关于你的记忆",
+    done: "查看了关于你的记忆",
   },
   remember_personal_fact: {
-    running: "Saving a memory",
-    done: "Saved a memory",
+    running: "正在保存记忆",
+    done: "保存了记忆",
   },
   save_observed_memory: {
-    running: "Noting something about you",
-    done: "Noted something about you",
+    running: "正在记下关于你的事",
+    done: "记下了关于你的事",
   },
   form_memory: {
-    running: "Noting something about you",
-    done: "Noted something about you",
+    running: "正在记下关于你的事",
+    done: "记下了关于你的事",
   },
   forget_personal_memory: {
-    running: "Forgetting a memory",
-    done: "Forgot a memory",
+    running: "正在忘掉一条记忆",
+    done: "忘掉了一条记忆",
   },
 
   // Follow-ups, check-ins and next steps.
   schedule_follow_up: {
-    running: "Scheduling a follow-up",
-    done: "Scheduled a follow-up",
+    running: "正在安排跟进",
+    done: "安排了跟进",
   },
   list_follow_ups: {
-    running: "Checking follow-ups",
-    done: "Checked follow-ups",
+    running: "正在查看跟进",
+    done: "查看了跟进",
   },
   cancel_follow_up: {
-    running: "Cancelling a follow-up",
-    done: "Cancelled a follow-up",
+    running: "正在取消跟进",
+    done: "取消了跟进",
   },
   [OFFER_CHECK_IN_TOOL]: {
-    running: "Offering a check-in",
-    done: "Offered a check-in",
+    running: "正在提议主动巡检",
+    done: "提议了主动巡检",
   },
   suggest_next_step: {
-    running: "Suggesting a next step",
-    done: "Suggested a next step",
+    running: "正在建议下一步",
+    done: "建议了下一步",
   },
   clear_next_step: {
-    running: "Clearing a next step",
-    done: "Cleared a next step",
+    running: "正在清除下一步",
+    done: "清除了下一步",
   },
 
   // Goals. The `*_responsibility` names are what a goal's tools were called before they said goal,
@@ -593,122 +636,123 @@ const OWN_TOOLS: Record<string, OwnTool> = {
   }),
 
   // The browser. A folded group names these steps in the same words (`browser-activity.ts`).
-  computer_navigate: { running: "Opening page", done: "Opened page" },
-  computer_read: { running: "Reading page", done: "Read page" },
-  computer_snapshot: { running: "Inspecting page", done: "Inspected page" },
-  computer_click: { running: "Clicking on page", done: "Clicked on page" },
-  computer_type: { running: "Filling in field", done: "Filled in field" },
-  computer_key: { running: "Pressing key", done: "Pressed key" },
-  computer_scroll: { running: "Scrolling page", done: "Scrolled page" },
+  computer_navigate: { running: "正在打开页面", done: "打开了页面" },
+  computer_read: { running: "正在读取页面", done: "读取了页面" },
+  computer_snapshot: { running: "正在查看页面结构", done: "查看了页面结构" },
+  computer_click: { running: "正在点击页面", done: "点击了页面" },
+  computer_type: { running: "正在填写字段", done: "填写了字段" },
+  computer_key: { running: "正在按键", done: "按了按键" },
+  computer_scroll: { running: "正在滚动页面", done: "滚动了页面" },
   computer_screenshot: {
-    running: "Taking a screenshot",
-    done: "Took a screenshot",
+    running: "正在截屏",
+    done: "截了屏",
   },
 
   // The Bot's computer, and folders on yours. The same action reads the same on either.
   computer_list_files: {
-    running: "Listing files",
-    done: "Listed files",
-    attempted: "List files",
+    running: "正在列出文件",
+    done: "列出了文件",
+    attempted: "列出文件",
   },
   computer_read_file: {
-    running: "Reading a file",
-    done: "Read a file",
-    attempted: "Read a file",
+    running: "正在读取文件",
+    done: "读取了文件",
+    attempted: "读取文件",
     subject: "path",
   },
   computer_write_file: {
-    running: "Saving a file",
-    done: "Saved a file",
-    attempted: "Save a file",
+    running: "正在保存文件",
+    done: "保存了文件",
+    attempted: "保存文件",
     subject: "path",
   },
   computer_run_command: {
-    running: "Running a command",
-    done: "Ran a command",
-    attempted: "Run a command",
+    running: "正在执行命令",
+    done: "执行了命令",
+    attempted: "执行命令",
   },
   host_list_folders: {
-    running: "Checking your folders",
-    done: "Checked your folders",
-    attempted: "Check your folders",
+    running: "正在查看你的文件夹",
+    done: "查看了你的文件夹",
+    attempted: "查看你的文件夹",
   },
   host_list_files: {
-    running: "Listing files",
-    done: "Listed files",
-    attempted: "List files",
+    running: "正在列出文件",
+    done: "列出了文件",
+    attempted: "列出文件",
   },
   host_read_file: {
-    running: "Reading a file",
-    done: "Read a file",
-    attempted: "Read a file",
+    running: "正在读取文件",
+    done: "读取了文件",
+    attempted: "读取文件",
     subject: "path",
   },
   host_write_file: {
-    running: "Saving a file",
-    done: "Saved a file",
-    attempted: "Save a file",
+    running: "正在保存文件",
+    done: "保存了文件",
+    attempted: "保存文件",
     subject: "path",
   },
   host_run_command: {
-    running: "Running a command",
-    done: "Ran a command",
-    attempted: "Run a command",
+    running: "正在执行命令",
+    done: "执行了命令",
+    attempted: "执行命令",
   },
 
   // Apps and windows on the person's own paired computer.
   computer_apps: {
-    running: "Checking apps on your computer",
-    done: "Checked apps on your computer",
+    running: "正在查看你电脑上的应用",
+    done: "查看了你电脑上的应用",
   },
   computer_app_call: {
-    running: "Using an app on your computer",
-    done: "Used an app on your computer",
-    attempted: "Use an app on your computer",
+    running: "正在使用你电脑上的应用",
+    done: "使用了你电脑上的应用",
+    attempted: "使用你电脑上的应用",
   },
   computer_app_enable: {
-    running: "Turning on an app on your computer",
-    done: "Turned on an app on your computer",
-    attempted: "Turn on an app on your computer",
+    running: "正在开启你电脑上的应用",
+    done: "开启了你电脑上的应用",
+    attempted: "开启你电脑上的应用",
   },
   computer_desktop_windows: {
-    running: "Checking windows on your computer",
-    done: "Checked windows on your computer",
+    running: "正在查看你电脑上的窗口",
+    done: "查看了你电脑上的窗口",
   },
   computer_desktop_snapshot: {
-    running: "Reading a window on your computer",
-    done: "Read a window on your computer",
+    running: "正在读取你电脑上的窗口",
+    done: "读取了你电脑上的窗口",
+    attempted: "读取你电脑上的窗口",
   },
 
   // Asking an admin for an app the Bot cannot use yet (migration 0153).
   request_app_access: {
-    running: "Asking for access to an app",
-    done: "Asked for access to an app",
+    running: "正在申请使用应用",
+    done: "申请了使用应用",
   },
 
   // Notebooks the person let the Bot read.
-  list_knowledge: { running: "Checking notebooks", done: "Checked notebooks" },
+  list_knowledge: { running: "正在查看知识库", done: "查看了知识库" },
   search_knowledge: {
-    running: "Searching notebooks",
-    done: "Searched notebooks",
+    running: "正在搜索知识库",
+    done: "搜索了知识库",
   },
 
   // Asking the person, from the computer.
   computer_request_help: {
-    running: "Asking you for help",
-    done: "Asked you for help",
+    running: "正在向你求助",
+    done: "向你求助了",
   },
   computer_request_secret: {
-    running: "Waiting for you to fill in a field",
-    done: "Asked you to fill in a field",
+    running: "正在等你填写字段",
+    done: "已请你填写字段",
   },
   computer_request_sign_in: {
-    running: "Waiting for you to sign in",
-    done: "Asked you to sign in",
+    running: "正在等你登录",
+    done: "已请你登录",
   },
   report_refusal: {
-    running: "Noting a declined request",
-    done: "Noted a declined request",
+    running: "正在记录被拒绝的请求",
+    done: "记录了被拒绝的请求",
   },
 };
 

@@ -183,7 +183,7 @@ test("a composer with no channel keeps the button that says so, and takes no fil
     new File(["hello"], "ignored.txt", { type: "text/plain" }),
   ]);
   expect(container.querySelector('[role="alert"]')?.textContent).toContain(
-    "no conversation here yet",
+    "这里还没有对话",
   );
 
   rerender(<Composer channelId="channel-1" compact onSubmit={() => {}} />);
@@ -301,7 +301,7 @@ test("a disabled composer takes no dropped file, and offers no way to pick one",
    * sent, and `移除 refused.txt` proves nothing was staged.
    */
   expect(container.querySelector('[role="alert"]')?.textContent).toContain(
-    "can no longer take messages",
+    "已经不能再发消息了",
   );
 });
 

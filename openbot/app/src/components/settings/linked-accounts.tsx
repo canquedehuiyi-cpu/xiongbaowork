@@ -1,7 +1,11 @@
 import { IconBrandGithub, IconBrandSlack, IconLink } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { PageRows, PageSection } from "@/components/layout/page-shell";
+import {
+  PageEmpty,
+  PageRows,
+  PageSection,
+} from "@/components/layout/page-shell";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -63,11 +67,21 @@ const linkableProviders = [
   { provider: "github", title: "GitHub" },
 ] as const;
 
+export type LinkableProvider = (typeof linkableProviders)[number]["provider"];
+
+/** The name a linkable provider is shown under. */
+export function linkableProviderTitle(provider: LinkableProvider): string {
+  return (
+    linkableProviders.find((entry) => entry.provider === provider)?.title ??
+    provider
+  );
+}
+
 export type LinkedAccountsEntry =
   | { kind: "linked"; account: LinkedAccount }
   | {
       kind: "available";
-      provider: (typeof linkableProviders)[number]["provider"];
+      provider: LinkableProvider;
       title: string;
     };
 
@@ -85,11 +99,14 @@ export type LinkedAccountsEntry =
 export function linkedAccountsSectionState({
   data,
   error,
+  only,
   providers,
   providersError = null,
 }: {
   data: LinkedAccount[] | undefined;
   error: Error | null;
+  /** One provider's page draws only that provider's links and offer. */
+  only?: LinkableProvider;
   providers?: IdentityProviders;
   providersError?: Error | null;
 }): {
@@ -100,13 +117,14 @@ export function linkedAccountsSectionState({
   const links = data ?? [];
   const entries: LinkedAccountsEntry[] = [];
   for (const { provider, title } of linkableProviders) {
+    if (only && provider !== only) continue;
     const linked = links.filter((account) => account.provider === provider);
     for (const account of linked) entries.push({ kind: "linked", account });
     if (linked.length === 0 && data !== undefined && providers?.[provider]) {
       entries.push({ kind: "available", provider, title });
     }
   }
-  for (const account of links) {
+  for (const account of only ? [] : links) {
     if (
       !linkableProviders.some(({ provider }) => provider === account.provider)
     )
@@ -139,7 +157,16 @@ export function connectGithubPending(mutation: {
  * Separate from the connector rows above it: those are services a Bot reads as you, these are how
  * this deployment recognises you when a message or an event arrives from somewhere else.
  */
-export function LinkedAccountsSection() {
+/**
+ * The person's own account at one provider, on that provider's Connections page: the link with a
+ * Disconnect button, or Connect where this deployment can link it.
+ */
+export function LinkedAccountSection({
+  provider,
+}: {
+  /** Left out, every provider this deployment can link: the fork's settings page draws them together. */
+  provider?: LinkableProvider;
+}) {
   const links = useQuery(linkedAccountsQueryOptions());
   const providers = useQuery(identityProvidersQueryOptions());
   const issueCode = useMutation(issueSlackCodeMutationOptions());
@@ -169,10 +196,21 @@ export function LinkedAccountsSection() {
   const state = linkedAccountsSectionState({
     data: links.data,
     error: links.error,
+    only: provider,
     providers: providers.data,
     providersError: providers.error,
   });
-  if (!state) return null;
+  if (!state) {
+    if (!provider) return null;
+    return (
+      <PageSection title="你的账号">
+        <PageEmpty icon={IconLink} title="还没有设置">
+          现在还不能关联 {linkableProviderTitle(provider)}{" "}
+          账号，需要管理员先完成设置。
+        </PageEmpty>
+      </PageSection>
+    );
+  }
   const connect = {
     slack: {
       pending: issueCode.isPending,
@@ -188,7 +226,7 @@ export function LinkedAccountsSection() {
     },
   };
   return (
-    <PageSection title="关联的外部账号">
+    <PageSection title={provider ? "你的账号" : "关联的外部账号"}>
       {state.entries.length > 0 ? (
         <PageRows>
           {state.entries.map((entry, index) => (
@@ -364,6 +402,11 @@ function LinkedAccountRow({ account }: { account: LinkedAccount }) {
  * Write text to the clipboard, answering whether it landed. The clipboard is missing on plain-http
  * hosts and a write is refused when permission is denied; both are a "no", not an exception.
  */
+/** Every account this person can link, together: the fork's settings page (connected accounts). */
+export function LinkedAccountsSection() {
+  return <LinkedAccountSection />;
+}
+
 export async function copyText(
   text: string,
   clipboard: Pick<Clipboard, "writeText"> | undefined,

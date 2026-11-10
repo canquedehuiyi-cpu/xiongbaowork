@@ -1,5 +1,4 @@
 import { isDeepStrictEqual } from "node:util";
-import { approvalPhrase } from "@openbot/shared/tool-name";
 import type { HeadlessTool } from "@openbot/toolkit/headless-tools";
 import type { IntelligenceLike } from "@openbot/toolkit/run-turn";
 import { type RunAssertion, readRunAssertion } from "../agents/callback-token";
@@ -16,7 +15,7 @@ import {
   type PersonQuestion,
 } from "./questions";
 import { createApprovalService } from "./service";
-import { ApprovalRefusedError, type ApprovalStore } from "./types";
+import { ApprovalRefusedError, type ApprovalStore, wantsTo } from "./types";
 
 type ThreadHistory = Awaited<
   ReturnType<Pick<IntelligenceLike, "getThreadMessages">["getThreadMessages"]>
@@ -158,7 +157,7 @@ export function createServerApprovalService(deps: {
                 id: request.id,
                 kind: "approval",
                 requestId: request.id,
-                text: `${botName} wants to ${approvalPhrase(action)}. Open the Bot's page in OpenBot to review it.`,
+                text: `${wantsTo(botName, action)}。请在熊宝里打开这位员工的页面查看。`,
               },
             );
         }

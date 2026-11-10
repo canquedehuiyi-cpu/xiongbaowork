@@ -6,7 +6,6 @@ import { TranslatedInstructions } from "@/components/skills/translated-instructi
 import { agentPluginsQueryOptions } from "@/lib/plugins/queries";
 import { useSkillCommands } from "@/lib/plugins/skill-commands";
 import { translationKeys, useZh } from "@/lib/translations/queries";
-import { settleReactWork } from "./settle-react-work";
 
 /*
  * Skills and plugins that arrived in English are shown in Chinese where a translation exists, and as
@@ -22,8 +21,7 @@ beforeAll(() => {
   }
 });
 afterEach(() => cleanup());
-afterAll(async () => {
-  await settleReactWork();
+afterAll(() => {
   if (registeredHere) GlobalRegistrator.unregister();
 });
 
@@ -71,7 +69,7 @@ test("a skill's English instructions get a folded Chinese reading under the orig
   expect(blocks[0]?.textContent).toContain("生效的是上面的原文");
 });
 
-test("the / menu describes a skill in Chinese and still carries its original instruction", () => {
+test("the / menu describes a skill in Chinese and carries no instruction of its own", () => {
   // Seeded and never stale, so the probe reads the cache and asks no server.
   const queryClient = new QueryClient({
     defaultOptions: { queries: { staleTime: Number.POSITIVE_INFINITY } },
@@ -100,5 +98,11 @@ test("the / menu describes a skill in Chinese and still carries its original ins
     </QueryClientProvider>,
   );
   expect(commands[0]?.description).toBe("每周销售摘要");
-  expect(commands[0]?.prompt).toBe("Summarise the week's sales.");
+  expect(commands[0]?.name).toBe("Digest");
+  // 服务端按消息开头的 `/digest` 找技能并把说明交给员工（上游 #1226），浏览器不再带说明。
+  // 没有这一项时读到的是 `prompt`，断言照样失败。
+  expect(Object.keys(commands[0] ?? { prompt: "缺少命令" })).not.toContain(
+    "prompt",
+  );
+  expect(commands[0]?.kind).toBe("chip");
 });

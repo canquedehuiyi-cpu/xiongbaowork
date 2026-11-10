@@ -214,7 +214,7 @@ function conversation(name: string, args: Record<string, unknown>) {
     function: { name, arguments: JSON.stringify(args) },
   };
   const subscribers: {
-    onRunInitialized?: (input: { input: unknown }) => void;
+    onRunInitialized?: (input: { input: unknown; messages: unknown[] }) => void;
   }[] = [];
   const agent = {
     threadId: "thread",
@@ -240,6 +240,8 @@ function conversation(name: string, args: Record<string, unknown>) {
         state: {},
         forwardedProps: {},
       },
+      // The SDK hands the subscriber the agent's messages beside the run input.
+      messages: agent.messages,
     });
   return { agent, toolCall, stop };
 }

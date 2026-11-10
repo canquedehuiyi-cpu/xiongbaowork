@@ -2,6 +2,8 @@ import { CopilotChat } from "@copilotkit/react-core/v2";
 import { IconPlus } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
+import { ConversationApprovals } from "@/components/approvals/inline-approval";
+import { TelemetryAssistantMessage } from "@/components/channels/telemetry-assistant-message";
 import { ComputerChatControls } from "@/components/computer/computer-controls";
 import { ComputerViewPanel } from "@/components/computer/computer-panel";
 import { DetailPanel } from "@/components/layout/detail-panel";
@@ -14,16 +16,25 @@ import {
   agentListQueryOptions,
 } from "@/lib/agents/queries";
 import { tryClient } from "@/lib/client";
+import { useOpenComputerOnRequest } from "@/lib/computers/panel-view";
 import { useActiveBot } from "@/lib/copilot/active-bot";
+import { useBotActivity } from "@/lib/copilot/bot-activity";
 import { useBotThread } from "@/lib/copilot/bot-thread";
 import { useStoppedTurn } from "@/lib/copilot/stopped-turn";
+import { searchTextEntry } from "@/lib/search-text";
 
 export const Route = createFileRoute("/_authed/_app/bot")({
   component: RouteComponent,
+  /*
+   * `?agent=` is read as text whatever the router parsed it into (`searchText`), because search
+   * values are JSON-parsed and a Bot id made of digits would otherwise arrive as a number and open
+   * this deployment's default Bot rather than the named one. `?watch=` is a flag and is read as the
+   * boolean it is parsed into: anything else is not the flag being set.
+   */
   validateSearch: (
     search: Record<string, unknown>,
   ): { agent?: string; watch?: boolean } => ({
-    ...(typeof search.agent === "string" ? { agent: search.agent } : {}),
+    ...searchTextEntry("agent", search.agent),
     ...(search.watch === true ? { watch: true } : {}),
   }),
 });
@@ -151,18 +162,23 @@ function BotChat({ agentId, name }: { agentId: string; name: string }) {
    * a provider this app does not mount.
    */
   const stopped = useStoppedTurn(agentId);
+  // What the Bot did on its computer in this conversation, for the Activity pane beside its screen.
+  useBotActivity(agentId);
   const { watch } = Route.useSearch();
   const navigate = Route.useNavigate();
   const showComputer = (open: boolean) =>
     navigate({
       search: (previous) => ({ ...previous, watch: open ? true : undefined }),
     });
+  // A command in the chat clicked opens the Computer on its terminal.
+  useOpenComputerOnRequest(agentId, () => showComputer(true));
 
   return (
     <DetailPanel
       title="电脑"
       open={watch === true}
       onClose={() => showComputer(false)}
+      waiting={threadId ? <ConversationApprovals threadId={threadId} /> : null}
       detail={<ComputerViewPanel agentId={agentId} name={name} />}
     >
       <div className="flex h-full min-h-0 flex-col">
@@ -242,6 +258,7 @@ function BotChat({ agentId, name }: { agentId: string; name: string }) {
           {threadId ? (
             <CopilotChat
               agentId={agentId}
+              messageView={{ assistantMessage: TelemetryAssistantMessage }}
               key={`${agentId}:${threadId}`}
               threadId={threadId}
             />

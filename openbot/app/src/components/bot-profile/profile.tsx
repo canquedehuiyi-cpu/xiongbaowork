@@ -46,7 +46,12 @@ import {
   type UpdateTransport,
   updateRoutingQueryOptions,
 } from "@/lib/bot-lifecycle/queries";
+import {
+  requestNotificationPermission,
+  useNotificationPermission,
+} from "@/lib/notifications/permission";
 import { queryClient } from "@/query-client";
+import { BotActivityRow } from "./activity";
 
 const NOTIFY_LABEL: Record<BotNotify, string> = {
   all: "全部",
@@ -66,6 +71,10 @@ const KIND_LABEL: Record<UpdateKind, { title: string; description: string }> = {
   question: {
     title: "提问",
     description: "员工问了你、正在等你回答的事。",
+  },
+  attention: {
+    title: "主动巡检",
+    description: "员工在主动巡检里发现、需要你处理的事，一次提醒汇总所有员工。",
   },
 };
 
@@ -253,26 +262,21 @@ export function UpdateRoutingSection() {
   );
 }
 
-/** A Bot's own page: its state for you, what it is doing, and the lifecycle controls. */
 /**
  * 对你: this person's relationship with one employee — pause, notifications, a new conversation,
- * reset. One section of the employee's detail page (/wakers/$agentId); the activity feed, tool
- * permissions and update routing that used to share a page with it are their own exports.
+ * reset, and the row to its activity when nothing is running or lined up (`BotActivityRow`; with
+ * something under way, `BotActivityGlance` draws its own section under this one). One section of
+ * the employee's detail page (/wakers/$agentId); tool permissions and update routing that used to
+ * share a page with it are their own exports.
  */
 export function BotControls({ agent }: { agent: AgentProfile }) {
   const lifecycle = useQuery(botLifecycleQueryOptions(agent.id));
   const pause = useMutation(setBotPausedMutationOptions(queryClient));
   const notify = useMutation(setBotNotifyMutationOptions(queryClient));
   const [resetOpen, setResetOpen] = useState(false);
-  const [permission, setPermission] = useState<string>(() => {
-    try {
-      return typeof Notification === "undefined"
-        ? "unsupported"
-        : Notification.permission;
-    } catch {
-      return "unsupported";
-    }
-  });
+  // The browser's answer, shared with the prompt a conversation offers, so a yes there shows here
+  // (upstream: one reading for the browser and OpenBot Desktop alike).
+  const permission = useNotificationPermission();
 
   return (
     <>
@@ -353,13 +357,7 @@ export function BotControls({ agent }: { agent: AgentProfile }) {
                   </ItemContent>
                   <ItemActions>
                     <Button
-                      onClick={async () => {
-                        try {
-                          setPermission(await Notification.requestPermission());
-                        } catch {
-                          setPermission("unsupported");
-                        }
-                      }}
+                      onClick={() => void requestNotificationPermission()}
                       size="sm"
                       variant="outline"
                     >
@@ -399,6 +397,7 @@ export function BotControls({ agent }: { agent: AgentProfile }) {
                 </ItemDescription>
               </ItemContent>
             </Item>
+            <BotActivityRow agentId={agent.id} />
           </PageRows>
         )}
       </PageSection>

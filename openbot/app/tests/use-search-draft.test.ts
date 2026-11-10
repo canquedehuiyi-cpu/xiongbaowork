@@ -2,7 +2,6 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { act, renderHook } from "@testing-library/react";
 import { useSearchDraft } from "@/lib/use-search-draft";
-import { settleReactWork } from "./settle-react-work";
 
 /*
  * A search box mirrored into the address (`?q=`) but drawn from local state. The router commits a
@@ -18,8 +17,7 @@ beforeAll(() => {
     registeredHere = true;
   }
 });
-afterAll(async () => {
-  await settleReactWork();
+afterAll(() => {
   if (registeredHere) GlobalRegistrator.unregister();
 });
 

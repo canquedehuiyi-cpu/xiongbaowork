@@ -50,11 +50,16 @@ function routingText(text: string): string {
 export async function routeMessage(
   text: string,
   agentId?: string,
+  skillSlugs: readonly string[] = [],
 ): Promise<RoutingDecision> {
   const asked = routingText(text);
   const response = await tryClient("/api/route", {
     method: "POST",
-    body: agentId ? { text: asked, agentId } : { text: asked },
+    body: {
+      text: asked,
+      ...(agentId ? { agentId } : {}),
+      ...(skillSlugs.length ? { skillSlugs } : {}),
+    },
   });
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as {
@@ -62,9 +67,7 @@ export async function routeMessage(
       names?: unknown;
     } | null;
     const message =
-      typeof body?.error === "string"
-        ? body.error
-        : "Could not choose a coworker.";
+      typeof body?.error === "string" ? body.error : "没能选出员工。";
     if (
       response.status === 409 &&
       Array.isArray(body?.names) &&

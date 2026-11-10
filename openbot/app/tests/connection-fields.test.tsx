@@ -5,14 +5,10 @@ import userEvent from "@testing-library/user-event";
 import { ConnectionFields } from "@/components/plugins/connection-fields";
 import type { BrokerField } from "@/lib/plugins/mutations";
 import { BROKER_FIELD_KEYS } from "../../server/src/plugins/broker";
-import { settleReactWork } from "./settle-react-work";
 
 beforeAll(() => GlobalRegistrator.register());
 afterEach(cleanup);
-afterAll(async () => {
-  await settleReactWork();
-  GlobalRegistrator.unregister();
-});
+afterAll(() => GlobalRegistrator.unregister());
 
 /**
  * The form one app's published fields are drawn into, and the names in it are the VENDOR's.

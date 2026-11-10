@@ -21,7 +21,6 @@ import { type PluginsPage, pluginKeys } from "@/lib/plugins/queries";
 import { Route as AdminAppRoute } from "@/routes/_authed/admin/plugins/$key";
 import { Route as AdminToolRoute } from "@/routes/_authed/admin/plugins/$key_.tools.$tool";
 import { Route as ConnectedAccountRoute } from "@/routes/_authed/settings/connected-accounts/$key";
-import { settleReactWork } from "./settle-react-work";
 
 /**
  * A connector's own pages, when `GET /api/plugins` fails.
@@ -43,10 +42,7 @@ import { settleReactWork } from "./settle-react-work";
 
 beforeAll(() => GlobalRegistrator.register());
 afterEach(cleanup);
-afterAll(async () => {
-  await settleReactWork();
-  GlobalRegistrator.unregister();
-});
+afterAll(() => GlobalRegistrator.unregister());
 
 const APP_KEY = "slack";
 const TOOL_NAME = "list_channels";

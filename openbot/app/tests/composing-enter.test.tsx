@@ -19,10 +19,10 @@ import userEvent from "@testing-library/user-event";
 import type { ComponentType, ReactNode } from "react";
 import { AgentDialog } from "@/components/agents/agent-dialog";
 import { CreateAgentDialog } from "@/components/agents/create-agent-dialog";
+import { NewBotSheet } from "@/components/agents/new-bot-sheet";
 import { type AgentProfile, agentKeys } from "@/lib/agents/queries";
 import { computerKeys } from "@/lib/computers/queries";
-import { Route as BoundariesRoute } from "@/routes/_authed/admin/boundaries";
-import { settleReactWork } from "./settle-react-work";
+import { Route as NewRuleRoute } from "@/routes/_authed/admin/boundaries_.new";
 
 /**
  * The Enter that confirms a character an input method is composing is not an Enter.
@@ -32,7 +32,8 @@ import { settleReactWork } from "./settle-react-work";
  * Chromium marks it `isComposing`, and WebKit sends it after `compositionend` with the key code 229.
  * The chat composer already skips it: `prompt-area` checks `isComposing` on every Enter it handles.
  * Three text fields in the app acted on it instead, each with a text field's text still unconfirmed:
- * a coworker's name saved in place, the new-coworker wizard moving on to its next step, and a
+ * a coworker's name saved in place, the new-coworker wizard (and the New Bot sheet) moving on to its
+ * next step, and a
  * boundary rule saved into the policy in force.
  *
  * THE HARNESS IS THIS REPOSITORY'S: `GlobalRegistrator` in `beforeAll`/`afterAll`, `cleanup` in
@@ -43,10 +44,7 @@ import { settleReactWork } from "./settle-react-work";
 
 beforeAll(() => GlobalRegistrator.register());
 afterEach(cleanup);
-afterAll(async () => {
-  await settleReactWork();
-  GlobalRegistrator.unregister();
-});
+afterAll(() => GlobalRegistrator.unregister());
 
 const originalFetch = global.fetch;
 
@@ -66,6 +64,9 @@ const PROFILE: AgentProfile = {
   persona: null,
   hasAuth: false,
   hasCallbackToken: false,
+  isolated: false,
+  isolationActive: false,
+  isolationOffReason: null,
   hidden: false,
   pinned: false,
   systemOwned: false,
@@ -192,33 +193,64 @@ test("the new-coworker wizard does not move on from the Enter that confirms a co
   expect(await view.findByText("第 2 步，共 3 步")).toBeTruthy();
 });
 
-test("a boundary rule is not saved by the Enter that confirms a composed character", async () => {
-  const Boundaries = BoundariesRoute.options.component as ComponentType;
-  const view = draw(<Boundaries />, (client) =>
+test("the New Bot sheet does not create from the Enter that confirms a composed character", async () => {
+  const view = draw(
+    <NewBotSheet onClose={() => {}} onCreated={() => {}} open />,
+  );
+
+  // The details screen opens first, with Run here selected by default.
+  const name = await view.findByLabelText("名称");
+  await type(name, "経費");
+
+  await confirmComposedCharacter(name);
+  await settle();
+  expect(writes.map((write) => write.request)).toEqual([]);
+
+  // An ordinary Enter still means Create.
+  await act(async () => {
+    fireEvent.keyDown(name, { key: "Enter", keyCode: 13 });
+  });
+  await settle();
+  expect(writes.map((write) => write.request)).toEqual(["POST /api/agents"]);
+});
+
+test("a boundary rule is not added by the Enter that confirms a composed character", async () => {
+  const NewRule = NewRuleRoute.options.component as ComponentType;
+  const view = draw(<NewRule />, (client) =>
     client.setQueryData(computerKeys.policy(), POLICY),
   );
 
-  const field = await view.findByLabelText("一条用 CEL 写的规则");
+  fireEvent.click(await view.findByText("自己写"));
+  const field = await view.findByLabelText("规则");
   expect(field.getAttribute("spellcheck")).toBe("false");
   expect(field.getAttribute("autocorrect")).toBe("off");
   expect(field.getAttribute("autocapitalize")).toBe("off");
   const rule = 'contains(element.name, "送信")';
   await type(field, rule);
+  const name = view.getByLabelText("名称");
+  await type(name, "送信しない");
 
-  await confirmComposedCharacter(field);
+  // The composing Enter is held back from the form; an ordinary one is left to submit it.
+  expect(fireEvent.keyDown(name, { key: "Enter", isComposing: true })).toBe(
+    false,
+  );
+  expect(fireEvent.keyDown(name, { key: "Enter", keyCode: 229 })).toBe(false);
+  expect(fireEvent.keyDown(name, { key: "Enter", keyCode: 13 })).toBe(true);
   await settle();
   expect(writes).toEqual([]);
-  expect(view.getByDisplayValue(rule)).toBeTruthy();
 
-  // An ordinary Enter still adds the rule, once.
   await act(async () => {
-    fireEvent.keyDown(field, { key: "Enter", keyCode: 13 });
+    fireEvent.click(view.getByRole("button", { name: "添加规则" }));
   });
   await settle();
   expect(writes).toEqual([
     {
       request: "PUT /api/computers/policy",
-      body: { ...POLICY, deny: [rule] },
+      body: {
+        ...POLICY,
+        deny: [rule],
+        labels: { [rule]: { name: "送信しない", description: "" } },
+      },
     },
   ]);
 });

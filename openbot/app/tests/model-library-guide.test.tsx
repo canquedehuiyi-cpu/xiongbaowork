@@ -12,7 +12,6 @@ import { cleanup, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ModelLibraryGuide } from "@/components/onboarding/model-library-guide";
 import { type ConnectedModel, modelKeys } from "@/lib/models/queries";
-import { settleReactWork } from "./settle-react-work";
 
 /**
  * Story J1: after sign-up, a tenant with an empty model library is pointed at connecting one.
@@ -24,10 +23,7 @@ import { settleReactWork } from "./settle-react-work";
 
 beforeAll(() => GlobalRegistrator.register());
 afterEach(cleanup);
-afterAll(async () => {
-  await settleReactWork();
-  GlobalRegistrator.unregister();
-});
+afterAll(() => GlobalRegistrator.unregister());
 
 const originalFetch = global.fetch;
 let library: { status: number; models: ConnectedModel[] } = {

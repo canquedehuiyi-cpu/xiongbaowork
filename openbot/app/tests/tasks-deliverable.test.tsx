@@ -8,7 +8,6 @@ import {
   AttentionRegion,
   deliverableSummary,
 } from "@/routes/_authed/_app/tasks";
-import { settleReactWork } from "./settle-react-work";
 
 /**
  * Spec A9 on the board: a card in 查收结果 says what its run produced, and 查收 is the button beside
@@ -44,8 +43,7 @@ afterEach(() => {
   for (const client of clients) client.clear();
   clients.clear();
 });
-afterAll(async () => {
-  await settleReactWork();
+afterAll(() => {
   if (registeredHere) GlobalRegistrator.unregister();
 });
 

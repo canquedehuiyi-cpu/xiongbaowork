@@ -65,34 +65,66 @@ export function notCarriedOut(reason: string): string {
   return `Not done: this action could not be carried out (${reason.slice(0, 300)}). Check whether it happened before asking the person again.`;
 }
 
+/*
+ * 下面是给人看的那一半：上面那些写给员工（模型）的英文句子保持原样，人读到的换成中文。
+ */
 const FOR_PERSON = new Map<string, string>([
-  [DECLINED_BY_PERSON, "You declined it."],
-  [ALREADY_WAITING, "It's already waiting for your answer."],
-  [WITHDRAWN_APPROVALS_OFF, "Withdrawn. You turned off asking before changes."],
-  [WITHDRAWN_RULE_ALLOWS, "Withdrawn. A rule you saved now allows it."],
-  [HANDLED_BY_PERSON, "You did it yourself."],
+  [DECLINED_BY_PERSON, "你拒绝了这一步。"],
+  [ALREADY_WAITING, "这一步已经在等你答复了。"],
+  [WITHDRAWN_APPROVALS_OFF, "已撤回：你关掉了「改动前先问我」。"],
+  [WITHDRAWN_RULE_ALLOWS, "已撤回：你保存的一条规则现在允许这样做。"],
+  [HANDLED_BY_PERSON, "你自己完成了这一步。"],
+  [NOT_RUN_WHILE_WAITING, "没有执行：员工停下来等你处理另一步了。"],
+  [OUTCOME_UNKNOWN, "已经开始执行，但熊宝无法确定它是否完成，没有再执行一次。"],
+  [NOT_DONE, "没有执行。"],
+]);
+
+/** 「没有执行：」后面跟的原因。 */
+const NOT_DONE_FOR_PERSON = "没有执行：";
+
+/**
+ * 「Not done: <why>」里已知的 why，换成人读的中文。它们来自服务端（`server/src/approvals/service.ts`
+ * 的 `ApprovalRefusedError` 和 `permanentReason`）和 app 自己的审批工具，原句写给员工，保持英文不改；
+ * 认不出的 why 原样跟在「没有执行：」后面。
+ */
+const WHY_FOR_PERSON = new Map<string, string>([
   [
-    NOT_RUN_WHILE_WAITING,
-    "Not done. The Bot stopped to wait for you on another step.",
+    "The rule that allowed this was removed before it ran.",
+    "允许它的规则在它执行前被删除了。",
   ],
+  ["it is waiting for another decision first.", "它要先等另一个决定。"],
   [
-    OUTCOME_UNKNOWN,
-    "It started, but OpenBot can't tell whether it finished. It wasn't run again.",
+    "the saved request no longer has a valid shape.",
+    "保存下来的请求已经失效。",
+  ],
+  ["the app it needs is no longer available.", "它要用的应用已经不可用了。"],
+  [
+    "this conversation asks before every step, and this step couldn't be asked about here.",
+    "这个对话每一步都要先问你，而这一步没法在这里问。",
   ],
 ]);
 
 /**
  * The sentence a person reads for a step the Bot did not carry out. A known sentence is replaced
  * whole. Any other "Not done: <why>." keeps its first sentence and loses what follows it, which is
- * the Bot's next step ("Ask the person again if it is still needed."). Anything else is a boundary
- * or the computer speaking, already written for a person, and is returned as it is.
+ * the Bot's next step ("Ask the person again if it is still needed."), and is said as
+ * 「没有执行：<why>」, the why in Chinese where it is one of the known ones. Anything else is a
+ * boundary or the computer speaking, already written for a person, and is returned as it is.
  */
 export function outcomeForPerson(text: string): string {
   const known = FOR_PERSON.get(text.trim());
   if (known) return known;
   if (!text.startsWith("Not done:")) return text;
   const end = firstSentenceEnd(text);
-  return end === -1 ? text : text.slice(0, end + 1);
+  const why = (end === -1 ? text : text.slice(0, end + 1))
+    .slice("Not done:".length)
+    .trim();
+  // notCarriedOut: "this action could not be carried out (<reason>)."
+  const carried = /^this action could not be carried out \((.*)\)\.$/s.exec(
+    why,
+  );
+  if (carried) return `${NOT_DONE_FOR_PERSON}这一步没能完成（${carried[1]}）。`;
+  return `${NOT_DONE_FOR_PERSON}${WHY_FOR_PERSON.get(why) ?? why}`;
 }
 
 /**

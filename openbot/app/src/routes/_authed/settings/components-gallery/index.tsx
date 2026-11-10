@@ -11,14 +11,20 @@ import {
 } from "@/components/ui/empty";
 import { componentDisplayTitle } from "@/lib/components/display-title";
 import { componentListQueryOptions } from "@/lib/components/queries";
+import { galleryComponent } from "@/lib/copilot/gallery-registry";
 
 /**
  * What a Bot can draw, for the person it draws for.
  *
  * The same gallery an administrator governs, with none of the governing. Published components only:
  * an unpublished one is not something any Bot can put on screen, so listing it here would describe a
- * capability nobody has. The description shown is the published one — what the model is actually
- * told — rather than a draft an administrator may be part-way through rewording.
+ * capability nobody has.
+ *
+ * Each card says what the component shows in the person's words, its `summary`. Not the published
+ * description: that is written for the model, names other tools and says "deployment", and was shown
+ * here until a person read "Show what this deployment has actually been doing" under Activity
+ * report. A playground component has no words but the ones its admin
+ * published, so it keeps those.
  */
 export const Route = createFileRoute("/_authed/settings/components-gallery/")({
   component: RouteComponent,
@@ -48,7 +54,7 @@ function RouteComponent() {
           </EmptyHeader>
         </Empty>
       ) : (
-        <div className="mx-auto mt-12 grid w-full max-w-2xl grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="mt-12 grid w-full grid-cols-1 gap-4 md:grid-cols-2">
           {published?.map((component) => (
             /*
              * No status dot, unlike the Admin tiles. Everything listed here is published by
@@ -66,7 +72,8 @@ function RouteComponent() {
                   {componentDisplayTitle(component)}
                 </h4>
                 <p className="mt-2 line-clamp-2 text-muted-foreground text-xs">
-                  {component.publishedDescription}
+                  {galleryComponent(component.name)?.summary ??
+                    component.publishedDescription}
                 </p>
               </div>
               <div className="relative flex-1">

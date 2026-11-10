@@ -3,7 +3,6 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { cleanup, render } from "@testing-library/react";
 import { PageShell } from "@/components/layout/page-shell";
 import { SidebarProvider } from "@/components/ui/sidebar";
-import { settleReactWork } from "./settle-react-work";
 
 /*
  * The five workbench pages share one frame (parity plan F1): full width, left-aligned 40 CSS px
@@ -17,8 +16,7 @@ beforeAll(() => {
 afterEach(() => {
   cleanup();
 });
-afterAll(async () => {
-  await settleReactWork();
+afterAll(() => {
   GlobalRegistrator.unregister();
 });
 

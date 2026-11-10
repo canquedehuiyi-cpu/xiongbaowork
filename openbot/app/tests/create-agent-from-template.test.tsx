@@ -21,7 +21,6 @@ import { CreateAgentDialog } from "@/components/agents/create-agent-dialog";
 import { AgentRolePanel } from "@/components/roles/role-editor";
 import type { AgentProfile } from "@/lib/agents/queries";
 import type { RoleProfile } from "../../shared/role-profile";
-import { settleReactWork } from "./settle-react-work";
 
 /**
  * Story ROLE1 (spec §3.3, ROLE1-4 acceptance 3): a new coworker started from a role template is
@@ -33,10 +32,7 @@ import { settleReactWork } from "./settle-react-work";
  */
 beforeAll(() => GlobalRegistrator.register());
 afterEach(cleanup);
-afterAll(async () => {
-  await settleReactWork();
-  GlobalRegistrator.unregister();
-});
+afterAll(() => GlobalRegistrator.unregister());
 
 const originalFetch = global.fetch;
 let writes: { request: string; body: unknown }[] = [];
@@ -87,6 +83,9 @@ const CREATED: AgentProfile = {
   systemOwned: false,
   canManage: true,
   mine: true,
+  isolated: false,
+  isolationActive: false,
+  isolationOffReason: null,
 };
 
 beforeEach(() => {

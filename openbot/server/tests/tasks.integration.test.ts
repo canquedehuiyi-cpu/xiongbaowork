@@ -656,9 +656,7 @@ describe("where a task stands", () => {
     if (!request) throw new Error("No approval was asked for.");
     expect(request.action.threadId).toBe(waiting.threadId ?? "");
     // Its next step is what it waits for, in the words of the approval card in its conversation.
-    expect(waiting.next).toBe(
-      "Waiting for your approval: send message on Mail",
-    );
+    expect(waiting.next).toBe("等你批准：send message（Mail）");
     // Still that, once the person has said something there, never their own words back to them.
     await channelStore.recordActivity(owner, task.channelId, {
       text: "Also copy Ana on it.",
@@ -667,7 +665,7 @@ describe("where a task stands", () => {
     });
     expect(await taskStore.get(owner.id, task.id)).toMatchObject({
       status: "needs_input",
-      next: "Waiting for your approval: send message on Mail",
+      next: "等你批准：send message（Mail）",
     });
 
     await asOwner(owner, () =>
@@ -737,7 +735,7 @@ describe("where a task stands", () => {
     });
     expect(await taskStore.get(owner.id, task.id)).toMatchObject({
       status: "needs_input",
-      next: "Waiting for your approval: send message on Mail",
+      next: "等你批准：send message（Mail）",
     });
     // A standing rule would be ignored by the next task, so none is saved from one: once, or no.
     await expect(
@@ -1394,7 +1392,7 @@ describe("what needs the person", () => {
     );
     // Asked after the approval, the question is what it now waits for.
     expect((await taskStore.get(owner.id, task.id)).next).toBe(
-      "Waiting for your answer: Which date works?",
+      "等你回答：Which date works?",
     );
     // ...and an approval waits in the person's own conversation with it, which is no task's.
     await asOwner(owner, () =>
@@ -1475,9 +1473,7 @@ describe("what needs the person", () => {
     });
     const waiting = await taskStore.get(owner.id, task.id);
     expect(waiting.status).toBe("needs_input");
-    expect(waiting.next).toBe(
-      "Waiting for your answer: Plan your next project",
-    );
+    expect(waiting.next).toBe("等你回答：Plan your next project");
 
     const lifecycleRoutes = new Hono<{ Variables: AppVariables }>();
     lifecycleRoutes.route(
