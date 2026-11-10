@@ -1,6 +1,7 @@
 import { and, asc, eq, gt, inArray, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { threadRunEvents, threadRuns, threads } from "../db/schema";
+import { currentTenant } from "../tenant/context";
 
 /**
  * 一位员工最近的一段对话，作为本地学习的证据。
@@ -42,6 +43,7 @@ export async function collectEvidence(
   runsRead: number;
   cursor: Date | null;
 }> {
+  const tenant = currentTenant();
   const floor =
     input.since ??
     new Date(input.now.getTime() - (input.lookbackDays ?? 14) * 86_400_000);
@@ -54,7 +56,10 @@ export async function collectEvidence(
       createdAt: threadRuns.createdAt,
     })
     .from(threadRuns)
-    .where(gt(threadRuns.createdAt, floor))
+    // 只要本人租户的行：线程表的读策略也放行 `system` 线程（G01-E 之前的共享线程），那不是本人的对话。
+    .where(
+      and(eq(threadRuns.tenantId, tenant), gt(threadRuns.createdAt, floor)),
+    )
     .orderBy(asc(threadRuns.createdAt))
     .limit(MAX_RUNS_PER_PASS);
   if (runs.length === 0)
@@ -73,6 +78,7 @@ export async function collectEvidence(
             .from(threadRunEvents)
             .where(
               and(
+                eq(threadRunEvents.tenantId, tenant),
                 inArray(
                   threadRunEvents.runId,
                   finished.map((run) => run.id),
@@ -100,7 +106,12 @@ export async function collectEvidence(
       messages: threads.messagesSnapshot,
     })
     .from(threads)
-    .where(inArray(threads.id, [...latest.keys()]));
+    .where(
+      and(
+        eq(threads.tenantId, tenant),
+        inArray(threads.id, [...latest.keys()]),
+      ),
+    );
 
   const evidence: EvidenceThread[] = [];
   for (const row of rows) {
@@ -113,25 +124,13 @@ export async function collectEvidence(
       runId: run.id,
       agentId: run.agentId ?? row.agentId,
       at: run.createdAt,
-      name: row.name,
+      // 线程名常由对话自动生成，可能带人名或邮箱，也要脱敏截短。
+      name: row.name ? clip(mask(bounded(row.name))) : null,
       transcript,
     });
   }
   evidence.sort((a, b) => a.at.getTime() - b.at.getTime());
   return { threads: evidence, runsRead: runs.length, cursor };
-}
-
-/** 一条线程是不是这个人的：行级安全之外再确认一次，读的是本人帧。 */
-export async function threadExists(
-  database: Database,
-  threadId: string,
-): Promise<boolean> {
-  const [row] = await database
-    .select({ id: threads.id })
-    .from(threads)
-    .where(eq(threads.id, threadId))
-    .limit(1);
-  return row !== undefined;
 }
 
 type MessageLike = {
@@ -153,12 +152,12 @@ export function transcriptOf(messages: unknown): string {
   for (const raw of messages as MessageLike[]) {
     if (!raw || typeof raw !== "object") continue;
     if (raw.role === "user") {
-      const text = clip(mask(textOf(raw.content)));
+      const text = clip(mask(bounded(textOf(raw.content))));
       if (!text) continue;
       heardPerson = true;
       lines.push(`Person: ${text}`);
     } else if (raw.role === "assistant") {
-      const text = clip(mask(textOf(raw.content)));
+      const text = clip(mask(bounded(textOf(raw.content))));
       const tools = toolNamesOf(raw.toolCalls);
       if (text) lines.push(`Bot: ${text}`);
       if (tools.length > 0) lines.push(`(Bot used tools: ${tools.join(", ")})`);
@@ -198,6 +197,16 @@ function toolNamesOf(calls: unknown): string[] {
   return names;
 }
 
+/**
+ * 脱敏之前先截到一个上限：正则在很长、没有空格的串上是平方级的，一条几百 KB 的消息会把整个进程
+ * 的事件循环卡住几分钟（任何人都能发这样一条消息，再点「现在学一次」）。截完再脱敏、再按显示长度截。
+ */
+function bounded(text: string): string {
+  return text.length > MAX_MESSAGE_CHARS * 2
+    ? text.slice(0, MAX_MESSAGE_CHARS * 2)
+    : text;
+}
+
 function clip(text: string): string {
   const flat = text.replace(/\s+/g, " ").trim();
   return flat.length > MAX_MESSAGE_CHARS
@@ -218,7 +227,7 @@ export function mask(text: string): string {
       "[key]",
     )
     .replace(
-      /\b(?=[A-Za-z0-9_-]*\d)(?=[A-Za-z0-9_-]*[A-Za-z])[A-Za-z0-9_-]{32,}\b/g,
+      /\b(?=[A-Za-z0-9_-]{0,200}\d)(?=[A-Za-z0-9_-]{0,200}[A-Za-z])[A-Za-z0-9_-]{32,200}\b/g,
       "[key]",
     )
     .replace(/(https?:\/\/[^\s?#]+)\?[^\s#]*/g, "$1")

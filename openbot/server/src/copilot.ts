@@ -3869,8 +3869,12 @@ export function mountCopilotRuntime(
         ? trajectoryIdOf(new URL(request.url).pathname, basePath)
         : undefined;
     if (trajectoryConnect && trajectoryId !== undefined)
-      return runAsRuntimeActor(actor, () =>
-        trajectoryConnect(request, trajectoryId),
+      return withRuntimeCors(
+        request,
+        await runAsRuntimeActor(actor, () =>
+          trajectoryConnect(request, trajectoryId),
+        ),
+        corsOrigin(config),
       );
     return runAsRuntimeActor(actor, async () => {
       if (!describesItself) await runner.hydrate();
@@ -3956,4 +3960,26 @@ function trajectoryIdOf(
   } catch {
     return match[1];
   }
+}
+
+/**
+ * The runtime's CORS answer on a response the runtime did not write: the request's origin echoed when
+ * it is one of this deployment's own or the Recorder (`corsOrigin`), nothing otherwise. The capture pass
+ * answered by `recorder/trajectory-connect.ts` bypasses the runtime's routes, and so its `cors` too.
+ */
+function withRuntimeCors(
+  request: Request,
+  response: Response,
+  allowed: (origin: string) => string | null,
+): Response {
+  const origin = request.headers.get("origin");
+  const echoed = origin ? allowed(origin) : null;
+  const headers = new Headers(response.headers);
+  headers.append("Vary", "Origin");
+  if (echoed) headers.set("Access-Control-Allow-Origin", echoed);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
 }

@@ -85,6 +85,8 @@ export function createLocalLearningEngine(deps: LocalLearningEngineDeps) {
       WITH active AS (
         SELECT r.tenant_id
         FROM (SELECT DISTINCT tenant_id FROM thread_runs WHERE created_at > ${since}) r
+        -- 只认还在的人：设置行随这个人删除（外键），删掉的人留下的运行不该再建行。
+        JOIN users u ON u.id = r.tenant_id
         LEFT JOIN local_learning_state s ON s.tenant_id = r.tenant_id
         WHERE r.tenant_id NOT IN ('system', 'team', 'platform')
           AND (s.tenant_id IS NULL OR (s.enabled AND (s.next_run_at IS NULL OR s.next_run_at <= ${at})))
@@ -125,7 +127,7 @@ export function createLocalLearningEngine(deps: LocalLearningEngineDeps) {
     try {
       await database
         .insert(localLearningRuns)
-        .values({ id: runId, startedAt: now() });
+        .values({ tenantId, id: runId, startedAt: now() });
     } catch (error) {
       if (uniqueViolation(error)) return { outcome: "busy" };
       throw error;
@@ -165,7 +167,11 @@ export function createLocalLearningEngine(deps: LocalLearningEngineDeps) {
         evidence.cursor
           ? database
               .insert(localLearningState)
-              .values({ evidenceCursor: evidence.cursor, updatedAt: now() })
+              .values({
+                tenantId,
+                evidenceCursor: evidence.cursor,
+                updatedAt: now(),
+              })
               .onConflictDoUpdate({
                 target: localLearningState.tenantId,
                 set: { evidenceCursor: evidence.cursor, updatedAt: now() },
@@ -184,11 +190,17 @@ export function createLocalLearningEngine(deps: LocalLearningEngineDeps) {
 
       const taken = new Set(
         [
+          // 本人的技能和部署自带的技能都算占用（行级安全给本人看的正是这两种）：同名会遮住或替换它。
           ...(await database.select({ slug: skills.slug }).from(skills)),
           ...(await database
             .select({ slug: localSkillCandidates.slug })
             .from(localSkillCandidates)
-            .where(eq(localSkillCandidates.status, "pending_review"))),
+            .where(
+              and(
+                eq(localSkillCandidates.tenantId, tenantId),
+                eq(localSkillCandidates.status, "pending_review"),
+              ),
+            )),
         ].map((row) => row.slug),
       );
       const names = new Map(
@@ -225,6 +237,7 @@ export function createLocalLearningEngine(deps: LocalLearningEngineDeps) {
         for (const proposal of proposals) {
           taken.add(proposal.slug);
           await database.insert(localSkillCandidates).values({
+            tenantId,
             id: randomUUID(),
             runId,
             agentId: group.agentId,
@@ -285,7 +298,7 @@ export function createLocalLearningEngine(deps: LocalLearningEngineDeps) {
       const next = new Date(now().getTime() + LEARN_EVERY_MS);
       await database
         .insert(localLearningState)
-        .values({ nextRunAt: next, updatedAt: now() })
+        .values({ tenantId, nextRunAt: next, updatedAt: now() })
         .onConflictDoUpdate({
           target: localLearningState.tenantId,
           set: { nextRunAt: next, updatedAt: now() },
@@ -294,11 +307,16 @@ export function createLocalLearningEngine(deps: LocalLearningEngineDeps) {
     },
 
     /** 有没有正在学的。在本人帧里调用。 */
-    async running(): Promise<boolean> {
+    async running(tenantId: string): Promise<boolean> {
       const [row] = await database
         .select({ id: localLearningRuns.id })
         .from(localLearningRuns)
-        .where(eq(localLearningRuns.outcome, "running"))
+        .where(
+          and(
+            eq(localLearningRuns.tenantId, tenantId),
+            eq(localLearningRuns.outcome, "running"),
+          ),
+        )
         .limit(1);
       return row !== undefined;
     },

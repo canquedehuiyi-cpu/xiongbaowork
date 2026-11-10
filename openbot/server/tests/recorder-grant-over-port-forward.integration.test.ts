@@ -279,6 +279,10 @@ describe("the Recorder's capture pass, answered by OpenBot with Intelligence con
 
     expect(answer.status).toBe(200);
     expect(answer.headers.get("cache-control")).toBe("no-store");
+    // The runtime's CORS answer, though the runtime did not write this response.
+    expect(answer.headers.get("access-control-allow-origin")).toBe(
+      RECORDER_ORIGIN,
+    );
     const grant = (await answer.json()) as {
       joinToken: string;
       realtime: { clientUrl: string; topic: string };
@@ -300,6 +304,33 @@ describe("the Recorder's capture pass, answered by OpenBot with Intelligence con
 
     expect(answer.status).toBe(401);
     expect(joins.length).toBe(before);
+  });
+
+  test("a signed-in page with no Recorder token gets no pass, and Intelligence is not asked", async () => {
+    const before = joins.length;
+    const trajectoryId = randomUUID();
+    trajectories.push(trajectoryId);
+
+    const answer = await fetch(
+      `http://127.0.0.1:${port}${recorderPaths.trajectoryConnect(trajectoryId)}`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: `http://127.0.0.1:${port}`,
+        },
+        body: "{}",
+      },
+    );
+
+    expect(answer.status).toBe(401);
+    expect(joins.length).toBe(before);
+  });
+
+  test("another site's page is answered without CORS, so it cannot read the grant", async () => {
+    const answer = await pass({ origin: "https://elsewhere.example" });
+
+    expect(answer.headers.get("access-control-allow-origin")).toBeNull();
   });
 
   test("Intelligence's refusal reaches the Recorder in the runtime's own words", async () => {

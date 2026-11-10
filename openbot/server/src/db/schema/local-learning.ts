@@ -15,6 +15,7 @@ import {
   timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { users } from "./core";
 import { jsonb } from "./json";
 import { tenantId } from "./tenant";
 
@@ -70,7 +71,9 @@ const policies = [
 export const localLearningState = pgTable(
   "local_learning_state",
   {
-    tenantId: tenantId().primaryKey(),
+    tenantId: tenantId()
+      .primaryKey()
+      .references(() => users.id, { onDelete: "cascade" }),
     enabled: boolean("enabled").notNull().default(true),
     nextRunAt: timestamp("next_run_at", { withTimezone: true }),
     /** 已经读过的运行里最晚的 `thread_runs.created_at`；下一次只读它之后的。 */
@@ -86,7 +89,7 @@ export const localLearningState = pgTable(
 export const localLearningRuns = pgTable(
   "local_learning_runs",
   {
-    tenantId: tenantId(),
+    tenantId: tenantId().references(() => users.id, { onDelete: "cascade" }),
     id: text("id").primaryKey(),
     startedAt: timestamp("started_at", { withTimezone: true })
       .notNull()
@@ -131,7 +134,7 @@ export type LocalCandidateEvidence = {
 export const localSkillCandidates = pgTable(
   "local_skill_candidates",
   {
-    tenantId: tenantId(),
+    tenantId: tenantId().references(() => users.id, { onDelete: "cascade" }),
     id: text("id").primaryKey(),
     runId: text("run_id").notNull(),
     agentId: text("agent_id").notNull(),

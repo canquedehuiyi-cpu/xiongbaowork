@@ -66,6 +66,18 @@ describe("what the model is shown", () => {
     expect(transcriptOf("not messages")).toBe("");
   });
 
+  test("a huge message with no spaces is cut before it is masked, so it cannot stall the process", () => {
+    const started = performance.now();
+
+    const text = transcriptOf([
+      { role: "user", content: "a-".repeat(200_000) },
+      { role: "user", content: "a".repeat(400_000) },
+    ]);
+
+    expect(performance.now() - started).toBeLessThan(1_000);
+    expect(text.length).toBeLessThan(1_200);
+  });
+
   test("addresses, numbers, keys and query strings are masked", () => {
     expect(
       mask(
@@ -136,6 +148,16 @@ describe("what the model answered", () => {
 
     expect(drafts.map((d) => d.slug)).toEqual(["weekly-report", "second"]);
     expect(drafts.length).toBe(MAX_PROPOSALS_PER_AGENT);
+  });
+
+  test("an item that is not an object is skipped, not a failed run", () => {
+    expect(
+      parseProposals(
+        JSON.stringify({ skills: [null, "x", [1], skill()] }),
+        shown,
+        new Set(),
+      ).map((d) => d.slug),
+    ).toEqual(["weekly-report"]);
   });
 
   test("an answer that is not JSON proposes nothing", () => {

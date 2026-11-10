@@ -119,6 +119,7 @@ export function parseProposals(
   const seen = new Set(taken);
   for (const raw of parsed.skills) {
     if (proposals.length >= MAX_PROPOSALS_PER_AGENT) break;
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
     const skill = raw as Record<string, unknown>;
     const slug = stringOf(skill.slug).toLowerCase();
     const title = stringOf(skill.title);

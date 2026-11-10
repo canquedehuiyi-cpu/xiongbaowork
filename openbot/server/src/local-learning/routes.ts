@@ -28,6 +28,9 @@ import type { LocalLearningEngine } from "./engine";
  * 交给员工，和「员工起草技能 → 本人确认保存」走同一条路、同一套检查（谁的员工、能不能授予）；
  * 这里只在确认这个人的技能库里真有这条技能之后，把草案记为已批准。拒绝只改状态。
  */
+/** 两次「现在学一次」之间至少隔多久。 */
+export const LEARN_NOW_COOLDOWN_MS = 10 * 60_000;
+
 export function createLocalLearningRoutes(deps: {
   database: Database;
   engine: LocalLearningEngine | undefined;
@@ -49,23 +52,38 @@ export function createLocalLearningRoutes(deps: {
     return context.json({ error: "本地学习暂时不可用，请稍后再试。" }, 503);
   });
 
-  const overview = async (): Promise<LocalLearningOverview> => {
-    const [state] = await database.select().from(localLearningState).limit(1);
+  const overview = async (tenant: string): Promise<LocalLearningOverview> => {
+    const [state] = await database
+      .select()
+      .from(localLearningState)
+      .where(eq(localLearningState.tenantId, tenant))
+      .limit(1);
     const [lastRun] = await database
       .select()
       .from(localLearningRuns)
+      .where(eq(localLearningRuns.tenantId, tenant))
       .orderBy(desc(localLearningRuns.startedAt))
       .limit(1);
     const pending = await database
       .select()
       .from(localSkillCandidates)
-      .where(eq(localSkillCandidates.status, "pending_review"))
+      .where(
+        and(
+          eq(localSkillCandidates.tenantId, tenant),
+          eq(localSkillCandidates.status, "pending_review"),
+        ),
+      )
       .orderBy(desc(localSkillCandidates.createdAt))
       .limit(50);
     const reviewed = await database
       .select()
       .from(localSkillCandidates)
-      .where(ne(localSkillCandidates.status, "pending_review"))
+      .where(
+        and(
+          eq(localSkillCandidates.tenantId, tenant),
+          ne(localSkillCandidates.status, "pending_review"),
+        ),
+      )
       .orderBy(desc(localSkillCandidates.reviewedAt))
       .limit(20);
     const names = await agentNames([...pending, ...reviewed]);
@@ -104,16 +122,23 @@ export function createLocalLearningRoutes(deps: {
     );
   }
 
-  const candidate = async (id: string) => {
+  const candidate = async (tenant: string, id: string) => {
     const [row] = await database
       .select()
       .from(localSkillCandidates)
-      .where(eq(localSkillCandidates.id, id))
+      .where(
+        and(
+          eq(localSkillCandidates.tenantId, tenant),
+          eq(localSkillCandidates.id, id),
+        ),
+      )
       .limit(1);
     return row;
   };
 
-  routes.get("/", async (context) => context.json(await overview()));
+  routes.get("/", async (context) =>
+    context.json(await overview(context.var.actor.id)),
+  );
 
   routes.put("/", async (context) => {
     const body = (await context.req.json().catch(() => null)) as {
@@ -123,32 +148,47 @@ export function createLocalLearningRoutes(deps: {
       return context.json({ error: "需要说明开还是关。" }, 400);
     await database
       .insert(localLearningState)
-      .values({ enabled: body.enabled, updatedAt: new Date() })
+      .values({
+        tenantId: context.var.actor.id,
+        enabled: body.enabled,
+        updatedAt: new Date(),
+      })
       .onConflictDoUpdate({
         target: localLearningState.tenantId,
         set: { enabled: body.enabled, updatedAt: new Date() },
       });
-    return context.json(await overview());
+    return context.json(await overview(context.var.actor.id));
   });
 
   routes.post("/learn", async (context) => {
     if (!engine)
       return context.json({ error: "管理员关闭了从对话中学习。" }, 409);
-    if (await engine.running())
+    if (await engine.running(context.var.actor.id))
       return context.json({ error: "正在学习，请稍后再看。" }, 409);
+    const tenant = context.var.actor.id;
     const [state] = await database
       .select({ enabled: localLearningState.enabled })
       .from(localLearningState)
+      .where(eq(localLearningState.tenantId, tenant))
       .limit(1);
     if (state && !state.enabled)
       return context.json({ error: "先打开「从对话中学习」。" }, 409);
+    // 一次学习要调用模型、计入本人用量；隔一会儿才能再点，免得连点把同一批对话反复送给模型。
+    const [last] = await database
+      .select({ startedAt: localLearningRuns.startedAt })
+      .from(localLearningRuns)
+      .where(eq(localLearningRuns.tenantId, tenant))
+      .orderBy(desc(localLearningRuns.startedAt))
+      .limit(1);
+    if (last && Date.now() - last.startedAt.getTime() < LEARN_NOW_COOLDOWN_MS)
+      return context.json({ error: "刚学过一次，过几分钟再试。" }, 429);
     // 不等它学完：一次学习要调用模型，可能要一两分钟。仍在本人帧里跑（异步上下文随调用延续）。
     void engine.learnNow(context.var.actor.id).catch(() => {});
     return context.json({ started: true }, 202);
   });
 
   routes.get("/candidates/:id", async (context) => {
-    const row = await candidate(context.req.param("id"));
+    const row = await candidate(context.var.actor.id, context.req.param("id"));
     if (!row) return context.json({ error: "找不到这条草案。" }, 404);
     const names = await agentNames([row]);
     const threadIds = row.evidence.map((item) => item.threadId);
@@ -159,7 +199,12 @@ export function createLocalLearningRoutes(deps: {
             await database
               .select({ id: threads.id, name: threads.name })
               .from(threads)
-              .where(inArray(threads.id, threadIds))
+              .where(
+                and(
+                  eq(threads.tenantId, context.var.actor.id),
+                  inArray(threads.id, threadIds),
+                ),
+              )
           ).map((thread) => [thread.id, thread.name]),
     );
     const detail: LocalSkillCandidateDetail = {
@@ -179,7 +224,7 @@ export function createLocalLearningRoutes(deps: {
     const body = (await context.req.json().catch(() => null)) as {
       slug?: unknown;
     } | null;
-    const row = await candidate(context.req.param("id"));
+    const row = await candidate(context.var.actor.id, context.req.param("id"));
     if (!row) return context.json({ error: "找不到这条草案。" }, 404);
     if (row.status !== "pending_review")
       return context.json({ error: "这条草案已经处理过了。" }, 409);
@@ -201,7 +246,7 @@ export function createLocalLearningRoutes(deps: {
     if (!saved)
       return context.json({ error: "技能库里还没有这项技能，先保存它。" }, 409);
     const reviewedAt = new Date();
-    await database
+    const approved = await database
       .update(localSkillCandidates)
       .set({
         status: "approved",
@@ -214,7 +259,11 @@ export function createLocalLearningRoutes(deps: {
           eq(localSkillCandidates.id, row.id),
           eq(localSkillCandidates.status, "pending_review"),
         ),
-      );
+      )
+      .returning({ id: localSkillCandidates.id });
+    // 同时到的批准和拒绝只有一个改得动它；改不动的那个不写审计、不说成功。
+    if (approved.length === 0)
+      return context.json({ error: "这条草案已经处理过了。" }, 409);
     await audit(context.var.actor.id, row, "approved", slug);
     const names = await agentNames([row]);
     return context.json({
@@ -226,12 +275,12 @@ export function createLocalLearningRoutes(deps: {
   });
 
   routes.post("/candidates/:id/reject", async (context) => {
-    const row = await candidate(context.req.param("id"));
+    const row = await candidate(context.var.actor.id, context.req.param("id"));
     if (!row) return context.json({ error: "找不到这条草案。" }, 404);
     if (row.status !== "pending_review")
       return context.json({ error: "这条草案已经处理过了。" }, 409);
     const reviewedAt = new Date();
-    await database
+    const rejected = await database
       .update(localSkillCandidates)
       .set({
         status: "rejected",
@@ -243,7 +292,10 @@ export function createLocalLearningRoutes(deps: {
           eq(localSkillCandidates.id, row.id),
           eq(localSkillCandidates.status, "pending_review"),
         ),
-      );
+      )
+      .returning({ id: localSkillCandidates.id });
+    if (rejected.length === 0)
+      return context.json({ error: "这条草案已经处理过了。" }, 409);
     await audit(context.var.actor.id, row, "rejected", null);
     const names = await agentNames([row]);
     return context.json({

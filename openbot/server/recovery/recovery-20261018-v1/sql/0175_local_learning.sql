@@ -1,6 +1,6 @@
 /*
  * 本地学习（L1）：从这个人自己的对话里提出技能草案，本人批准后存进技能库。
- * 三张按人的表，带 `tenant_id`、ENABLE + FORCE 行级安全、四条策略与 GRANT。对话内容不复制到这里。
+ * 三张按人的表，带 `tenant_id`（随这个人删除）、ENABLE + FORCE 行级安全、四条策略与 GRANT。对话内容不复制到这里。
  */
 CREATE TABLE "local_learning_state" (
 	"tenant_id" text DEFAULT current_setting('app.tenant_id', true) NOT NULL PRIMARY KEY,
@@ -9,6 +9,8 @@ CREATE TABLE "local_learning_state" (
 	"evidence_cursor" timestamp with time zone,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
+--> statement-breakpoint
+ALTER TABLE "local_learning_state" ADD CONSTRAINT "local_learning_state_tenant_id_users_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
 --> statement-breakpoint
 ALTER TABLE "public"."local_learning_state" ENABLE ROW LEVEL SECURITY;
 --> statement-breakpoint
@@ -40,6 +42,8 @@ CREATE TABLE "local_learning_runs" (
 CREATE INDEX "local_learning_runs_tenant_started_idx" ON "public"."local_learning_runs" ("tenant_id","started_at");
 --> statement-breakpoint
 CREATE UNIQUE INDEX "local_learning_runs_one_running_idx" ON "public"."local_learning_runs" ("tenant_id") WHERE "local_learning_runs"."outcome" = 'running';
+--> statement-breakpoint
+ALTER TABLE "local_learning_runs" ADD CONSTRAINT "local_learning_runs_tenant_id_users_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
 --> statement-breakpoint
 ALTER TABLE "public"."local_learning_runs" ENABLE ROW LEVEL SECURITY;
 --> statement-breakpoint
@@ -75,6 +79,8 @@ CREATE TABLE "local_skill_candidates" (
 );
 --> statement-breakpoint
 CREATE INDEX "local_skill_candidates_tenant_status_idx" ON "public"."local_skill_candidates" ("tenant_id","status","created_at");
+--> statement-breakpoint
+ALTER TABLE "local_skill_candidates" ADD CONSTRAINT "local_skill_candidates_tenant_id_users_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
 --> statement-breakpoint
 ALTER TABLE "public"."local_skill_candidates" ENABLE ROW LEVEL SECURITY;
 --> statement-breakpoint

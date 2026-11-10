@@ -127,6 +127,7 @@ beforeAll(async () => {
   await database.insert(users).values([
     { id: A, email: `${A}@example.test` },
     { id: B, email: `${B}@example.test` },
+    { id: C, email: `${C}@example.test` },
   ]);
   await runAsTenant(A, () =>
     database.insert(agents).values({
@@ -262,6 +263,46 @@ describe("learning once, in the person's own frame", () => {
     );
     expect(state?.evidenceCursor).toBeInstanceOf(Date);
     expect(state?.nextRunAt?.getTime()).toBeGreaterThan(Date.now());
+  });
+
+  test("a shared thread from before per-person threads is not the person's conversation", async () => {
+    // 行级安全给每个人看 `system` 线程（G01-E 之前的共享线程）；在它上面跑出的运行记在本人名下。
+    const threadId = `ll-system-${randomUUID()}`;
+    await runAsTenant("system", () =>
+      database.insert(threads).values({
+        id: threadId,
+        agentId: AGENT_A,
+        name: "共享线程",
+        messagesSnapshot: [
+          { id: "m1", role: "user", content: "别人的话，不该被读到" },
+        ],
+      }),
+    );
+    try {
+      await runAsTenant(A, async () => {
+        for (let n = 0; n < 2; n++)
+          await database.insert(threadRuns).values({
+            id: `ll-run-${randomUUID()}`,
+            threadId,
+            agentId: AGENT_A,
+            eventCount: 2,
+            createdAt: new Date(Date.now() - 1_000 + n),
+          });
+      });
+      const before = prompts.length;
+
+      await runAsTenant(A, () => engine.learnNow(A));
+
+      for (const { prompt } of prompts.slice(before))
+        expect(prompt).not.toContain("别人的话");
+    } finally {
+      await runAsTenant(A, () =>
+        database.delete(threadRuns).where(eq(threadRuns.threadId, threadId)),
+      );
+      await runAsTenant("system", () =>
+        database.delete(threads).where(eq(threads.id, threadId)),
+      );
+    }
   });
 
   test("another person sees none of it", async () => {
@@ -567,6 +608,57 @@ describe("the person's routes", () => {
         .where(and(eq(localSkillCandidates.id, ofB?.id ?? ""))),
     );
     expect(still?.status).toBe("pending_review");
+  });
+
+  test("an approval and a rejection arriving together decide it once, and only the winner is audited", async () => {
+    const id = randomUUID();
+    await runAsTenant(A, async () => {
+      await database.insert(localSkillCandidates).values({
+        tenantId: A,
+        id,
+        runId: "r",
+        agentId: AGENT_A,
+        slug: "race",
+        title: "同时到",
+        summary: "同时到",
+        instructions: "照做。",
+        reason: "测试",
+      });
+      await database.insert(skills).values({
+        id: randomUUID(),
+        ownerUserId: A,
+        slug: "race",
+        title: "同时到",
+        summary: "同时到",
+        instructions: "照做。",
+        origin: "learned",
+      });
+    });
+    const audited = audit.length;
+
+    const answers = await Promise.all([
+      post(`/candidates/${id}/approve`, { slug: "race" }),
+      post(`/candidates/${id}/reject`),
+    ]);
+
+    expect(answers.map((r) => r.status).sort()).toEqual([200, 409]);
+    expect(audit.length).toBe(audited + 1);
+    const [row] = await runAsTenant(A, () =>
+      database
+        .select({ status: localSkillCandidates.status })
+        .from(localSkillCandidates)
+        .where(eq(localSkillCandidates.id, id)),
+    );
+    expect(audit.at(-1)?.payload.decision).toBe(row?.status);
+  });
+
+  test("learning now again right after a run is refused for a while", async () => {
+    const response = await post("/learn");
+
+    expect(response.status).toBe(429);
+    expect(((await response.json()) as { error: string }).error).toBe(
+      "刚学过一次，过几分钟再试。",
+    );
   });
 
   test("turning it off is the person's own setting", async () => {
