@@ -7,7 +7,9 @@
  * `outcome` 同时设置或都不设（CHECK），`outcome` 只收四个值；`person` 尝试只能是发起人自己的账号
  * （`user_id IS NULL OR user_id = actor_id`），删除一个人不会带走别人发起的尝试。上游的 CHECK 原样保留，
  * 另按 0153 的写法加 tenant_id、ENABLE + FORCE RLS、四条 tenant_isolation 策略、GRANT openbot_app：
- * 尝试落在发起请求的帧里，回程由同一个人的会话读取。
+ * 尝试落在发起请求的帧里，回程由同一个人的会话读取。租户 CHECK 比 0153 的「必须是个人租户」更严：
+ * `tenant_id = actor_id`（发起人自己的帧，管理员能力不换帧），所以只以 `actor_id` 为主键也不会让
+ * `ON CONFLICT (actor_id)` 撞上本人帧里看不见的行。
  *
  * 二、`mcp_tools.vendor_name`：厂商执行动作用的名字（Arcade 的 `Gmail.ListEmails`），`name` 仍是本部署的
  * 标识与模型看到的名字。可空，NULL 表示与 `name` 相同；不回填（上游 0058 的回填只是把 name 抄一遍，
@@ -35,7 +37,8 @@ CREATE TABLE "public"."pending_authorizations" (
   CONSTRAINT "pending_authorizations_holder_check" CHECK (("holder" = 'person' AND "user_id" IS NOT NULL) OR ("holder" = 'deployment' AND "user_id" IS NULL)),
   CONSTRAINT "pending_authorizations_outcome_check" CHECK ("outcome" IS NULL OR "outcome" IN ('completed', 'failed', 'unreconciled', 'withdrawn')),
   CONSTRAINT "pending_authorizations_completion_check" CHECK (("completed_at" IS NULL) = ("outcome" IS NULL)),
-  CONSTRAINT "pending_authorizations_user_is_actor_check" CHECK ("user_id" IS NULL OR "user_id" = "actor_id")
+  CONSTRAINT "pending_authorizations_user_is_actor_check" CHECK ("user_id" IS NULL OR "user_id" = "actor_id"),
+  CONSTRAINT "pending_authorizations_tenant_is_actor_check" CHECK ("tenant_id" = "actor_id")
 );
 --> statement-breakpoint
 ALTER TABLE "public"."pending_authorizations" ADD CONSTRAINT "pending_authorizations_actor_id_users_id_fk" FOREIGN KEY ("actor_id") REFERENCES "public"."users" ("id") ON DELETE CASCADE ON UPDATE NO ACTION;

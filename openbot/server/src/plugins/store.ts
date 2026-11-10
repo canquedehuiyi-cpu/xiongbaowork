@@ -8134,6 +8134,11 @@ export function createPluginStore(options: PluginStoreOptions) {
         )
         .limit(1);
       const existing = held !== undefined;
+      /*
+       * X5 评审 I1：Arcade 的新连接只经回程验证（`/arcade/verify`，绑定发起人）记下。厂商那边有一个
+       * 这里没有行的授权（取消后才完成、回程被拒的遗留），「确认」不能把它收养成连接，只刷新已有的。
+       */
+      if (brokerProvider === "arcade" && !existing) return { connected: false };
 
       /*
        * THE SCHEME ON THE APP'S ROW, WHICH IS WHAT DECIDES WHETHER THE YES ABOVE IS A CHECK.
@@ -9292,6 +9297,9 @@ export function createPluginStore(options: PluginStoreOptions) {
           `${app?.title ?? input.toolkit} 不是共享账号应用。`,
           null,
         );
+      // X5 评审 I1：Arcade 的团队账号只经回程验证记下；「确认 / 重新检查」只刷新已经连接的。
+      if (brokerProvider === "arcade" && !app.shared.connectedAt)
+        return { connected: false };
       const connected = await broker.isConnected({
         userId: app.shared.vendorUserId,
         toolkit: input.toolkit,

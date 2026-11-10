@@ -822,6 +822,11 @@ export const pendingAuthorizations = pgTable(
       "pending_authorizations_user_is_actor_check",
       sql`${table.userId} IS NULL OR ${table.userId} = ${table.actorId}`,
     ),
+    // 一次尝试落在发起人自己的租户里（评审 M1，迁移 0192）。
+    check(
+      "pending_authorizations_tenant_is_actor_check",
+      sql`${table.tenantId} = ${table.actorId}`,
+    ),
     index("pending_authorizations_server_idx").on(table.serverId),
   ],
 );
