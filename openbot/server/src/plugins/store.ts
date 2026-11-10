@@ -7516,12 +7516,12 @@ export function createPluginStore(options: PluginStoreOptions) {
        * an app this deployment has since removed, and the settings page has no row to draw for it.
        */
       const named = await brokeredAppRowsAt(
-        connections.map((row) => `composio://${row.toolkit}`),
+        connections.map((row) => `${brokered.scheme}${row.toolkit}`),
       );
 
       const rows = connections
         .flatMap((row) => {
-          const serverId = named.get(`composio://${row.toolkit}`)?.id;
+          const serverId = named.get(`${brokered.scheme}${row.toolkit}`)?.id;
           return serverId === undefined ? [] : [{ ...row, serverId }];
         })
         // By server id, as the join's own `order by` was, so this read and `connectionsFor` hand the

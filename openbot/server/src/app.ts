@@ -135,7 +135,12 @@ import type { SignInService } from "./passwords/service";
 import type { OnboardingStore } from "./people/onboarding";
 import { createProfileRoutes, type ProfileStore } from "./people/profile";
 import { MAX_PAGE, type PeopleStore } from "./people/store";
-import type { ComposioBroker, KeyGuideSource } from "./plugins/broker";
+import type { BrokerProvider } from "./plugins/access";
+import type {
+  ArcadeBroker,
+  ComposioBroker,
+  KeyGuideSource,
+} from "./plugins/broker";
 import type { AccountModeSwitch } from "./plugins/account-mode";
 import { createPluginRoutes } from "./plugins/routes";
 import {
@@ -438,12 +443,14 @@ export function createApp(
    * configured, which is the correct degraded behaviour: a deployment with no Composio API key has
    * no app directory to offer, rather than one that lists apps nobody can connect.
    */
-  // M3: upstream also passes a broker `provider` (Arcade); the fork's plugins keep Composio alone.
+  // X5：Arcade 时还带活动提供商与 Arcade 的 broker（回程验证、授权尝试），见 `plugins/arcade-routes.ts`。
   composio?: {
     broker: ComposioBroker;
     guides?: KeyGuideSource;
     /** 应用账号模式的切换（X1，`plugins/account-mode.ts`）。 */
     accountModes?: AccountModeSwitch;
+    provider?: BrokerProvider;
+    arcade?: ArcadeBroker;
   },
   /** Native model OAuth stays server-side; callers hold only a separate local bearer. */
   modelProviderProxy?: ModelProviderProxy,

@@ -324,6 +324,15 @@ import { appAccessTools } from "./plugins/app-access-tool";
 import { useRoutineTools } from "./plugins/builtin-routines";
 import { useComposioClient } from "./plugins/composio";
 import { createAccountModeSwitch } from "./plugins/account-mode";
+import { useArcadeClient } from "./plugins/arcade";
+import { asComposioBroker, createArcadeClient } from "./plugins/arcade-adapter";
+import { connectionsHeldBy } from "./plugins/arcade-attempts";
+import { assertActivatable } from "./plugins/broker";
+import {
+  arcadeVerifierNotice,
+  ownsBrokerProject,
+  selectProviderWiring,
+} from "./plugins/provider-wiring";
 import {
   brokerWithAccounts,
   createComposioClient,
@@ -1469,14 +1478,31 @@ await startupLifecycle.run(async (startup) => {
    * Installing a client built from an absent key would turn all of that into a vendor error at first
    * use, which sends an operator looking for a broken Composio instead of at their own configuration.
    */
-  // M3: upstream decides between Composio and Arcade here (`selectProviderWiring`); Arcade is not
-  // adopted in this fork, so Composio stays the one broker.
-  const composio = config.composioApiKey
-    ? createComposioClient(config.composioApiKey)
-    : null;
+  /*
+   * X5：按配置选出唯一的连接应用提供商（上游 `selectProviderWiring`）。只配 COMPOSIO_API_KEY、不设
+   * OPENBOT_BROKER_PROVIDER 时构造的就是以前那一个 Composio 客户端；指明了却没 key、或两个 key 都配了
+   * 却没指明，服务起不来（只说变量名，不说值）。Arcade 时它的 broker 桥接成 fork 的形状交给 store 与路由。
+   */
+  const brokerWiring = selectProviderWiring(config, {
+    composio: (apiKey) => createComposioClient(apiKey),
+    arcade: (apiKey, options) => createArcadeClient(apiKey, options),
+  });
+  const composio = brokerWiring.clients.composio;
+  const arcade = brokerWiring.clients.arcade;
   if (composio) useComposioClient(composio.actions);
-  // 部署用的 broker：adapter 的 broker 加上逐个列账号（上游 #1298）。
-  const composioBroker = composio ? brokerWithAccounts(composio) : undefined;
+  if (arcade) useArcadeClient(arcade.actions);
+  // 部署用的 broker：adapter 的 broker 加上逐个列账号（上游 #1298）；Arcade 时是桥接后的 broker。
+  const composioBroker = composio
+    ? brokerWithAccounts(composio)
+    : arcade
+      ? asComposioBroker(arcade.broker)
+      : undefined;
+  if (arcade) {
+    const notice = arcadeVerifierNotice(config.publicUrl, {
+      ownsProject: ownsBrokerProject(config),
+    });
+    if (notice) console.warn(`[plugins] ${notice}`);
+  }
 
   /**
    * The private sign-in form and the Passwords vault. A Bot asks to be signed in; the person answers
@@ -1570,6 +1596,9 @@ await startupLifecycle.run(async (startup) => {
      * attempted.
      */
     broker: composioBroker,
+    ...(brokerWiring.provider === "arcade"
+      ? { brokerProvider: "arcade" as const }
+      : {}),
   });
   /*
    * 应用的账号模式 Personal ⇄ Shared（X1，上游 #757）：切到 Shared 时写「写之前先问」团队规则，团队账号
@@ -1580,6 +1609,9 @@ await startupLifecycle.run(async (startup) => {
     teamRules: storedApprovals.policy,
     deploymentId,
     audit: bootAuditStore,
+    ...(brokerWiring.provider === "arcade"
+      ? { provider: "arcade" as const }
+      : {}),
   });
 
   // Logo metadata is optional; a vendor outage must not prevent the API from starting.
@@ -1595,15 +1627,25 @@ await startupLifecycle.run(async (startup) => {
    * 自带应用（Routines、Google Drive、百度网盘）保存的工具，刷新到这一版的代码（见
    * `refreshOwnListings`）。跨所有租户读 `mcp_servers`、按每台服务器的 tenant 写 `mcp_tools`，所以
    * 在平台帧里跑。不 await：启动不等它，失败只记日志，保存的清单照常可用，下次启动再试。
+   *
+   * X5：同一个平台帧里先做连接应用提供商的启用检查（上游 `assertActivatable`）：另一个提供商还持有
+   * 连接时拒绝启用这一个，直接换环境变量会留下谁也撤销不了的账号。这一步要等，启动在它失败时停下。
    */
-  void runAsTenant("platform", () => pluginStore.refreshOwnListings()).catch(
-    (error: unknown) => {
+  await runAsTenant("platform", async () => {
+    if (brokerWiring.provider) {
+      const other = brokerWiring.provider === "arcade" ? "composio" : "arcade";
+      assertActivatable(
+        brokerWiring.provider,
+        await connectionsHeldBy(database, other),
+      );
+    }
+    void pluginStore.refreshOwnListings().catch((error: unknown) => {
       console.warn(
         "[plugins] OpenBot's own apps' tools could not be brought up to date:",
         error instanceof Error ? error.message : error,
       );
-    },
-  );
+    });
+  });
 
   /*
    * 工具按旧版清单读法存下的 Composio 应用，重新列一次，让升级上来的部署记下和全新安装一样的东西
@@ -4258,8 +4300,15 @@ await startupLifecycle.run(async (startup) => {
     // The app directory, behind the same client the plugin store and the transport already share.
     // Absent without a key, which leaves the routes reporting no broker rather than listing apps
     // nobody could connect.
-    composio && composioBroker
-      ? { broker: composioBroker, guides: composio.guides, accountModes }
+    composioBroker
+      ? {
+          broker: composioBroker,
+          ...(composio ? { guides: composio.guides } : {}),
+          accountModes,
+          ...(arcade
+            ? { provider: "arcade" as const, arcade: arcade.broker }
+            : {}),
+        }
       : undefined,
     process.env.OPENBOT_MODEL_OAUTH_FILE?.trim()
       ? createProviderOAuthProxy(process.env.OPENBOT_MODEL_OAUTH_FILE.trim())
@@ -4467,7 +4516,7 @@ await startupLifecycle.run(async (startup) => {
           ...(config.computer?.token ? { token: config.computer.token } : {}),
           ...(config.webBotAuth ? { webBotAuth: config.webBotAuth } : {}),
         }),
-        apps: { configured: Boolean(composio) },
+        apps: { configured: Boolean(composio || arcade) },
         chat: Boolean(deliveryProviders.slack),
       }),
     },
