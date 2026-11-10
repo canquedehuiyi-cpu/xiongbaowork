@@ -9,7 +9,13 @@ import {
   AccountModeRefusedError,
 } from "./account-mode";
 import { reasonWithoutStatement } from "../db/query-failure";
-import { appsPage, appsPageZh, askAdminTo, askAdminToZh } from "../edition";
+import {
+  appsPage,
+  appsPageZh,
+  askAdminTo,
+  askAdminToZh,
+  currentEdition,
+} from "../edition";
 import {
   capabilityFor,
   currentTenant,
@@ -47,6 +53,11 @@ import {
   withDeploymentClients,
 } from "./deployment-clients";
 import { fieldsForPerson, keyGuideFor } from "./key-guides";
+import {
+  ALWAYS_ON_REFUSAL,
+  alwaysOnHere,
+  personalRevokeRefusal,
+} from "./personal-defaults";
 import { mountSharedUseRoutes } from "./shared-use-routes";
 import type { SharedAudience, SharedUseStore } from "./shared-use-store";
 import {
@@ -775,6 +786,9 @@ export function createPluginRoutes(
     if (forbidden) return forbidden;
 
     const serverId = context.req.param("id");
+    // 个人版的 Routines 一直开着（见 `./personal-defaults`）；团队版里它和别的应用一样可以关。
+    if (alwaysOnHere(serverId))
+      return context.json({ error: ALWAYS_ON_REFUSAL }, 403);
     try {
       await store.removeServer(serverId, actorEmail(context));
     } catch (error) {
@@ -3063,7 +3077,13 @@ export function createPluginRoutes(
         title: body.title.trim(),
         summary: body.summary ?? "",
         instructions: body.instructions.trim(),
-        ownerUserId: body.global ? null : actor.id,
+        /*
+         * 只在有别人时才是所有人的（上游 #1273）：个人版只有一个人，设置 › 技能就是管理 › 技能，也带
+         * `global` 保存；存成谁的都不是，员工的「你的技能」里就没有它。个人版里它归这个人，之前存下的在
+         * 启动时给他（`ensurePersonalSkillsOwned`）。
+         */
+        ownerUserId:
+          body.global && currentEdition() !== "personal" ? null : actor.id,
         ...(tools === undefined ? {} : { tools }),
         by: actorEmail(context),
       });
@@ -3492,6 +3512,9 @@ export function createPluginRoutes(
     }
     const trimmedRef = ref.trim();
     const trimmedAgentId = agentId.trim();
+    // 个人版里每位员工持有每个应用、能问每位员工，从一位身上收回会被拒绝（见 `./personal-defaults`）。
+    const personalRefusal = personalRevokeRefusal(kind, trimmedRef);
+    if (personalRefusal) return context.json({ error: personalRefusal }, 403);
     return asBotOwner(context, trimmedAgentId, async () => {
       const decision = await enablementDecision(
         context,

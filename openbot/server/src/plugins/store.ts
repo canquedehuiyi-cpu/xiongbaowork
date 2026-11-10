@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, eq, inArray, isNull, like, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, like, ne, or, sql } from "drizzle-orm";
 import { ALREADY_WAITING, DECLINED_BY_PERSON } from "../approvals/service";
 import {
   ApprovalAlreadyAnsweredError,
@@ -62,7 +62,7 @@ import {
 } from "../db/schema/plugin-install-listings";
 import { sharedUseApprovals } from "../db/schema/shared-use";
 import { SYSTEM_TENANT, TEAM_TENANT } from "../db/schema/tenant";
-import { appsPage, appsPageZh } from "../edition";
+import { appsPage, appsPageZh, currentEdition } from "../edition";
 import type { OutboundLookup, OutboundPolicy } from "../net/outbound-guard";
 import { isProactiveInitiator } from "../proactive/initiator";
 import type { CheckPrivateShare } from "../proactive/private-share";
@@ -6506,8 +6506,20 @@ export function createPluginStore(options: PluginStoreOptions) {
      * configured while no hop ever happened.
      *
      * The join keeps a grant held by a Bot that no longer exists from counting.
+     *
+     * 个人版里是其余每一位没删除的员工，授予与否都一样（上游 personal-defaults 同一处）：只有一个人，每位员工
+     * 都是他的，没有谁需要被挡在另一位员工外面，也没有别人来授予。读的是这一帧行安全看得见的员工，所以
+     * 别人租户里的员工永远不在里面。团队版照旧只认授予。
      */
     async botsReachableFrom(agentId: string): Promise<string[]> {
+      if (currentEdition() === "personal") {
+        const everyOther = await database
+          .select({ id: agents.id })
+          .from(agents)
+          .innerJoin(agentProfiles, eq(agentProfiles.agentId, agents.id))
+          .where(and(ne(agents.id, agentId), isNull(agentProfiles.deletedAt)));
+        return everyOther.map((row) => row.id);
+      }
       const rows = await database
         .select({ ref: pluginGrants.ref })
         .from(pluginGrants)
@@ -6592,6 +6604,61 @@ export function createPluginStore(options: PluginStoreOptions) {
           ...(grantedAs === "owner" ? { grantedAs: "owner" } : {}),
         },
       });
+    },
+
+    /**
+     * 一次给员工同一个应用的几个动作，轨迹上只写一行：目标是应用，payload 里列出 `refs`（上游 #1315）。
+     *
+     * 给 OpenBot 自己替人做的授予用（个人版里每个应用的全部动作，见 `./personal-defaults`）：逐个调用
+     * {@link grant} 时，一次升级给三位员工各加七个动作，Activity 上就是二十一行「有人改了设置」。`by` 是
+     * OpenBot 自己的名字（`openbot:` 开头）时，这一行记为部署发起。
+     *
+     * 只写还没有的：同一个动作已有授予（管理员的、主人的或平台的）时一行都不动，所以主人的授予不会被改成
+     * 管理员的，平台的 `system` 行也不会被这一帧碰到。Team Bot 的授予照 {@link grant} 记成 `team`。
+     *
+     * @returns 真正写下的 refs
+     */
+    async grantTools(
+      app: string,
+      refs: string[],
+      agentId: string,
+      by: string,
+    ): Promise<string[]> {
+      if (refs.length === 0) return [];
+      const team = await isTeamBot(agentId);
+      const written = await database
+        .insert(pluginGrants)
+        .values(
+          refs.map((ref) => ({
+            kind: "mcp" as const,
+            ref,
+            agentId,
+            grantedBy: by,
+            grantedAs: "admin" as const,
+            ...(team ? { tenantId: TEAM_TENANT } : {}),
+          })),
+        )
+        .onConflictDoNothing()
+        .returning({ ref: pluginGrants.ref });
+      const given = written.map((row) => row.ref).sort();
+      if (given.length === 0) return [];
+      await recordAuditEvent(auditStore, {
+        eventType: "configuration.changed",
+        targetType: "mcp_server",
+        targetId: app,
+        ...(by.startsWith("openbot:")
+          ? { initiator: { kind: "deployment" } as AuditInitiator }
+          : {}),
+        payload: {
+          actor: by,
+          change: "plugin_granted",
+          kind: "mcp",
+          app,
+          refs: given,
+          bot: agentId,
+        },
+      });
+      return given;
     },
 
     /**

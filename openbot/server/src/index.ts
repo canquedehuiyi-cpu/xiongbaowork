@@ -336,6 +336,16 @@ import {
 import { backfillComposioLogos } from "./plugins/logos";
 import { redirectUriFor } from "./plugins/oauth";
 import { startBrokeredRelist } from "./plugins/relist";
+import {
+  ensureAlwaysOnApp,
+  ensurePersonalLearning,
+  ensurePersonalSkills,
+  ensurePersonalSkillsOwned,
+  personalDefaultAppsMemory,
+  personalDefaultsDeps,
+  startPersonalDefaultApps,
+  withPersonalDefaults,
+} from "./plugins/personal-defaults";
 import { createPluginStore } from "./plugins/store";
 import {
   grantedSkills,
@@ -1543,8 +1553,11 @@ await startupLifecycle.run(async (startup) => {
       })
     : undefined;
 
-  // M3: upstream wraps this store in the personal edition's defaults (plugins/personal-defaults.ts)
-  // and gives it the broker provider and Entra on-behalf-of; neither is adopted here.
+  /*
+   * 个人版的默认（`plugins/personal-defaults.ts`，X4）：个人版里应用列出的每个工具给每位员工，新技能给每位
+   * 员工，每位员工都参与自动学习。授予在那一个人（`DEV_ACTOR`）的帧里写。团队版里包装原样放行。
+   */
+  const personalDeps = personalDefaultsDeps(database, DEV_ACTOR.id);
   /*
    * 共享使用批准（X3，上游 #757）：谁可以驾驶用到 Shared 应用团队账号的运行。批准记在员工主人名下，
    * 闸门在主人帧里只读它（`plugins/shared-use-store.ts`）。职责的触发来源由同一个存储读，读不到的职责
@@ -1556,7 +1569,7 @@ await startupLifecycle.run(async (startup) => {
     sharedUseStore,
     bootAuditStore,
   );
-  const pluginStore = createPluginStore({
+  const storeWithoutDefaults = createPluginStore({
     database,
     auditStore: bootAuditStore,
     credentials: credentialStore,
@@ -1590,6 +1603,7 @@ await startupLifecycle.run(async (startup) => {
     sharedAdmits: sharedAudience.admitsPerson,
     responsibilitySources: sharedUseStore.sourcesOf,
   });
+  const pluginStore = withPersonalDefaults(storeWithoutDefaults, personalDeps);
   /*
    * 应用的账号模式 Personal ⇄ Shared（X1，上游 #757）：切到 Shared 时写「写之前先问」团队规则，团队账号
    * 的身份由部署 id 铸出。
@@ -1615,14 +1629,58 @@ await startupLifecycle.run(async (startup) => {
    * `refreshOwnListings`）。跨所有租户读 `mcp_servers`、按每台服务器的 tenant 写 `mcp_tools`，所以
    * 在平台帧里跑。不 await：启动不等它，失败只记日志，保存的清单照常可用，下次启动再试。
    */
-  void runAsTenant("platform", () => pluginStore.refreshOwnListings()).catch(
-    (error: unknown) => {
+  /*
+   * 个人版里还要在刷新之后把 Routines 加上（没有时）并把每个应用的全部工具给每位员工
+   * （`ensureAlwaysOnApp`，先刷新、后授予，所以这一版新加的工具同一次启动就到每位员工手上）。两件事放在
+   * 同一条链上，不会有两次刷新同时替换同一个应用的工具行。
+   */
+  void runAsTenant("platform", () =>
+    currentEdition() === "personal"
+      ? ensureAlwaysOnApp(pluginStore, personalDeps)
+      : pluginStore.refreshOwnListings(),
+  ).catch((error: unknown) => {
+    console.warn(
+      "[plugins] OpenBot's own apps' tools could not be brought up to date:",
+      error instanceof Error ? error.message : error,
+    );
+  });
+
+  if (currentEdition() === "personal") {
+    /*
+     * 个人版的技能、学习与默认应用（X4）。每一步失败都只是警告：每位员工第一次被列出或运行时会再查一次，
+     * 下一次启动也会再试。服务器级的事（添加 Parallel、要它的工具）在平台帧里做，授予在这个人的帧里写。
+     */
+    const warnPersonal = (what: string) => (error: unknown) =>
       console.warn(
-        "[plugins] OpenBot's own apps' tools could not be brought up to date:",
-        error instanceof Error ? error.message : error,
+        `[plugins] ${what}，下一次启动会再试：${error instanceof Error ? error.message : String(error)}`,
       );
-    },
-  );
+    await ensurePersonalSkills(pluginStore, personalDeps).catch(
+      warnPersonal("没能在启动时把技能给每位员工"),
+    );
+    await ensurePersonalSkillsOwned(database, DEV_ACTOR, bootAuditStore).catch(
+      warnPersonal("没能把你写的技能记为你的"),
+    );
+    await ensurePersonalLearning(personalDeps, bootAuditStore).catch(
+      warnPersonal("没能让每位员工都参与自动学习"),
+    );
+    startup.acquireSync(
+      () => ({
+        stop: startPersonalDefaultApps(
+          {
+            serverAddress: (id) =>
+              asPlatform(() => pluginStore.serverAddress(id)),
+            addServer: (input) =>
+              asPlatform(() => pluginStore.addServer(input)),
+            refreshTools: (id) =>
+              asPlatform(() => pluginStore.refreshTools(id)),
+          },
+          personalDeps,
+          personalDefaultAppsMemory(database),
+        ),
+      }),
+      (resource) => resource.stop(),
+    );
+  }
 
   /*
    * 工具按旧版清单读法存下的 Composio 应用，重新列一次，让升级上来的部署记下和全新安装一样的东西
@@ -1655,8 +1713,7 @@ await startupLifecycle.run(async (startup) => {
    */
   const routineStore = createRoutineStore(database);
   useRoutineTools(routineStore);
-  // M3: upstream turns on the personal edition's always-on apps, skills and Learning here
-  // (plugins/personal-defaults.ts) and relists brokered apps (plugins/relist.ts); not adopted.
+  // 个人版的常开应用、技能与学习在上面 `ensureAlwaysOnApp` 一段里接上（X4）。
   const responsibilityStore = createResponsibilityStore(database, {
     resolveTarget: async (ownerUserId, agentId, channelId) => {
       const actor = await actorFor(ownerUserId);
