@@ -9938,7 +9938,8 @@ export function createPluginStore(options: PluginStoreOptions) {
        * 照旧不指定账号。动作自己的 schema 里有 `account` 的，参数原样交给 vendor。
        *
        * fork 比上游更严的一条：Team Bot 的队友用的是主人的账号时（`credentialActorId` 不是提问者），
-       * 不能点名账号——队友只拿到主人的默认账号，和以前一样，拿不到主人别的邮箱。
+       * 不能点名账号——调用钉到主人的默认账号（`ownersDefault`，评审 N1），拿不到主人别的邮箱；主人的
+       * 账号名不进队友的审批卡与审计（评审 M5）。
        */
       const brokeredToolkit =
         access.credential === "brokered" ? access.toolkit : null;
@@ -9960,6 +9961,8 @@ export function createPluginStore(options: PluginStoreOptions) {
         : input.args;
       let pinned: PinnedAccount | null = null;
       let sharedApp = false;
+      /** 队友用主人的账号时钉到的主人默认账号 id（不带名字）。 */
+      let ownersAccountId: string | null = null;
       if (brokeredToolkit !== null) {
         const opensAs = input.credentialActorId ?? input.actorId;
         const names =
@@ -9999,10 +10002,19 @@ export function createPluginStore(options: PluginStoreOptions) {
             );
           }
           /*
-           * 用别人的账号（Team Bot 队友用主人的账号）时不挑账号（评审 M5）：不读主人的账号行，所以主人
-           * 的账号名不会进队友的审批卡与审计；调用照旧不指定账号，由 vendor 进主人持有的那个。
+           * 用别人的账号（Team Bot 队友用主人的账号）时：不按名字挑，只在主人的帧里读主人默认账号的 id
+           * 钉上去（评审 N1）——不钉的话 vendor 会进它自己挑的那个，可能是主人没设为默认的邮箱。名字不读，
+           * 所以不进队友的审批卡与审计（评审 M5）。
            */
-          if (opensAs === input.actorId) {
+          if (opensAs !== input.actorId) {
+            ownersAccountId =
+              (
+                await accounts.ownersDefault({
+                  toolkit: brokeredToolkit,
+                  userId: opensAs,
+                })
+              )?.accountId ?? null;
+          } else {
             const picked = await accounts.pick({
               toolkit: brokeredToolkit,
               title: row.title,
@@ -10021,8 +10033,8 @@ export function createPluginStore(options: PluginStoreOptions) {
        * 一个员工被开放给比管理员批准的更多的人，就等于把这个账号交给了他们。每次调用都在这里判：
        * - check-in 只能读本人自己连接的账号，团队账号不行；
        * - 发起者必须说得出是谁在驾驶（`steeringOf`）：部署自身、没有起点的转交、认不出的开始方式都拒绝；
-       * - 受众：X3 并入「共享使用批准」之前，每个员工都按最严的一档（只有员工的主人和管理员，且不接受
-       *   外部输入驱动的职责）。Team Bot 的队友因此用不到团队账号，除非他是管理员。
+       * - 批准：与上游一致，没有共享使用批准就拒绝，管理员也不例外。批准表在 X3 并入，在那之前没有任何
+       *   批准，所以通过了上面两条的调用也在这里一律拒绝（评审 C1）。
        */
       if (sharedApp) {
         const refuseShared = async (why: string): Promise<never> => {
@@ -10381,7 +10393,9 @@ export function createPluginStore(options: PluginStoreOptions) {
             // Shared 应用以团队账号的身份调用；其余进调用所开账号的主人（提问者，或 Team Bot 的主人）。
             actorId: vendorUserId ?? input.credentialActorId ?? input.actorId,
             botId: input.botId,
-            ...(pinned?.accountId ? { accountId: pinned.accountId } : {}),
+            ...((pinned?.accountId ?? ownersAccountId)
+              ? { accountId: pinned?.accountId ?? ownersAccountId ?? "" }
+              : {}),
             // The conversation the call was made in: Routines and goals post where they were asked.
             ...((input.threadId ?? currentApprovalContext()?.threadId)
               ? {
