@@ -419,6 +419,15 @@ async function approvalLayers(
    * by default: it asks unless an allow saved from that kind's card covers it, and an admin can close
    * it to ask every time or to leave it to the person. So this layer is read from what the gate did.
    */
+  /*
+   * M5: whether the safety floor settled it. Upstream's open-by-default kinds answer with `safety`;
+   * in this OpenBot deleting, sending, sharing and posting are a floor that only offers Allow once
+   * (the user's decision, #398), and the gate answers with that floor's own source
+   * (`outbound_send`, …), whatever a rule or a saved allow says.
+   */
+  const floorDecided = (outcome: Awaited<ReturnType<typeof decideAction>>) =>
+    outcome.source === "safety" ||
+    (safety?.behaviour === "ask" && outcome.source === safety.id);
   const kindLayer = (
     outcome: Awaited<ReturnType<typeof decideAction>>,
     actionKinds: Parameters<typeof closedKind>[1],
@@ -450,6 +459,12 @@ async function approvalLayers(
         "safety",
         "asks",
         `Built in: ${asksFirst}. They can allow it once, for the conversation, or always.`,
+      );
+    if (floorDecided(outcome))
+      return layer(
+        "safety",
+        "asks",
+        `Built in: ${asksFirst}, every time. They can only allow it once, and no rule or saved allow changes that.`,
       );
     // A rule, or an allow the person saved for this kind, decides it: the approvals layer says which.
     return layer(
@@ -515,7 +530,7 @@ async function approvalLayers(
   };
 
   let approvals: Layer;
-  if (outcome.source === "safety") {
+  if (floorDecided(outcome)) {
     /*
      * The safety floor settled it before any rule was read, so this layer is never reached. What the
      * rules would say is still worth seeing, from the rule the gate would have found.

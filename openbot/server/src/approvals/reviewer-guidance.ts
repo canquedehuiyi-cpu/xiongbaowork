@@ -34,6 +34,7 @@ import {
 } from "../routing/model";
 import {
   guidanceForPrompt,
+  KIND_OF_SAFETY,
   type ReviewModel,
   type ReviewVerdict,
   requestOf,
@@ -253,7 +254,18 @@ export function guidanceSample(
     if (sample.length >= size) break;
     if (!request.decision || !DECIDED.has(request.decision)) continue;
     if (!reviewable(request.action)) continue;
-    if (safetyRequirement(request.action)) {
+    /*
+     * M5: what a built-in requirement decided is not the reviewer's. Read from the action, and from
+     * the verdict it was asked with: fork's floors that read an app tool by where it came from
+     * (sending, deleting, sharing, posting) need the call site's `subject`, which a saved action
+     * never keeps, so the request's own source (`outbound_send`, …) is what says so.
+     */
+    const source = request.action.policy?.source;
+    if (
+      safetyRequirement(request.action) ||
+      source === "safety" ||
+      (source !== undefined && source in KIND_OF_SAFETY)
+    ) {
       skippedSafety += 1;
       continue;
     }

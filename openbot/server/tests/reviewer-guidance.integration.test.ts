@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
+import { expect } from "bun:test";
 import { createHash, randomUUID } from "node:crypto";
 import { LLMock } from "@copilotkit/aimock";
 import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
@@ -17,9 +17,22 @@ import { auditEvents } from "../src/db/schema";
 import { approvalTeamSettings } from "../src/db/schema/approvals";
 import { users } from "../src/db/schema/core";
 import { workItems } from "../src/db/schema/work";
+import { setRole } from "../src/auth/roles";
 import { createModelCompleter } from "../src/routing/model";
+import { runAsTenant } from "../src/tenant/context";
 import recorded from "./fixtures/reviewer-guidance-recorded.json";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+/*
+ * M5: fork 是多租户的，数据库读写都要在租户帧里（runAsTenant/asPlatform）。上游这份测试没有租户帧：
+ * 钩子和用例在平台帧里跑（tests/support/platform-frame）；每个人的审批（闸门、请求）在本人的帧里，
+ * 和真正的运行一样；管理员的角色经受限的角色写入者写入，团队设置的保存在数据库的策略里才认得他。
+ */
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  test,
+} from "./support/platform-frame";
 import {
   ACTIONS,
   type ActionName,
@@ -29,7 +42,13 @@ import {
   reviewerOf,
   seedDecided,
 } from "./support/reviewer-guidance";
+import { bindTestRoleWriter } from "./support/role-writer";
 
+/*
+ * M5: 和上游不同的地方。上游 #1394 让发送等动作「默认打开」、安全要求是先问；用户定了保留熊宝的审批底线：
+ * 删除、对外发送、分享、发帖只能「允许一次」（底线以自己的来源 `outbound_send` 等回答），付款、改凭据、
+ * 改安全设置交给本人（`hand_off`）。所以下面关于安全要求的断言按熊宝的底线写；指引越不过底线这一点不变。
+ */
 /**
  * Guidance for auto-review, end to end: an admin's words checked by an independent reading, replayed
  * over the requests people decided, saved on the trail, and read by the real reviewer path on the
@@ -49,6 +68,7 @@ const ana = `${prefix}-ana`;
 const ben = `${prefix}-ben`;
 const bot = `${prefix}-bot`;
 let role: "admin" | "user" = "admin";
+let releaseRoleWriter: (() => Promise<void>) | undefined;
 let priorTeam: Awaited<ReturnType<typeof readTeamRow>>[number] | undefined;
 const readTeamRow = () =>
   database
@@ -105,11 +125,12 @@ const call = (path: string, method: string, body?: unknown) =>
 /** The gate on an action of Ben's, as an app's tool call reaches it. Null when it was allowed. */
 async function gate(name: ActionName) {
   try {
-    await service.gate(candidateFor(name, ben, bot));
+    await runAsTenant(ben, () => service.gate(candidateFor(name, ben, bot)));
     return null;
   } catch (error) {
     if (!(error instanceof HeadlessToolSuspension)) throw error;
-    return store.get(ben, error.waiting.requestId as string);
+    const id = error.waiting.requestId as string;
+    return runAsTenant(ben, () => store.get(ben, id));
   }
 }
 
@@ -141,6 +162,8 @@ beforeAll(async () => {
     { id: ana, email: `${ana}@example.test` },
     { id: ben, email: `${ben}@example.test` },
   ]);
+  releaseRoleWriter = await bindTestRoleWriter(database);
+  await setRole(database, admin.id, "admin");
   // The team settings row is deployment-wide, so this file puts it back as it found it.
   [priorTeam] = await readTeamRow();
   await store.policy?.setTeamSettings(admin.id, { enforceAutoReview: true });
@@ -159,9 +182,10 @@ afterAll(async () => {
   await mock.stop();
   if (originalBaseUrl === undefined) delete process.env.OPENAI_BASE_URL;
   else process.env.OPENAI_BASE_URL = originalBaseUrl;
-  const ids = [...(await store.list(ana)), ...(await store.list(ben))].map(
-    (request) => request.id,
-  );
+  const ids = [
+    ...(await runAsTenant(ana, () => store.list(ana))),
+    ...(await runAsTenant(ben, () => store.list(ben))),
+  ].map((request) => request.id);
   if (ids.length)
     await database
       .delete(workItems)
@@ -181,6 +205,7 @@ afterAll(async () => {
   }
   // Audit rows are append-only by design and stay; they name only this run's throwaway ids.
   await database.delete(users).where(inArray(users.id, [admin.id, ana, ben]));
+  await releaseRoleWriter?.();
   await database.$client.close();
 });
 
@@ -251,7 +276,7 @@ test("saved guidance changes what the live reviewer decides about the next actio
 });
 
 test("the backtest replays the reviewer with the guidance over requests people decided, and says where it disagrees", async () => {
-  await seedDecided(service, ana, bot);
+  await runAsTenant(ana, () => seedDecided(service, ana, bot));
 
   // Before it runs: how many model calls it will make. It makes none to say so.
   const preview = await call("/backtest?limit=5", "GET");
@@ -353,9 +378,10 @@ test("built-in safety still wins over guidance that tries to loosen it", async (
   ).toBe(false);
 
   // Without guidance, safety decides a reset of someone's sign-in factors: a change to security
-  // settings, which asks the person first.
+  // settings. M5: under 熊宝's floor a security change is handed to the person, never asked (see the
+  // file's header), so it is `hand_off` where upstream asks.
   expect((await gate("mfaReset"))?.action.policy).toMatchObject({
-    behaviour: "ask",
+    behaviour: "hand_off",
     source: "safety",
     kind: "security_settings",
   });
@@ -388,17 +414,18 @@ test("built-in safety still wins over guidance that tries to loosen it", async (
   );
   const send = await gate("sendEmail");
   expect(prompts()).toHaveLength(1);
+  // M5: 熊宝's sending floor, which only offers Allow once, answers with its own source.
   expect(send?.action.policy).toMatchObject({
     behaviour: "ask",
-    source: "safety",
-    kind: "sending",
+    source: "outbound_send",
     review: { verdict: "proceed" },
   });
-  // The reset, which only the reviewer recognises as a sign-in change, still asks the person as
-  // safety: the reviewer's finding can only add an ask, whatever the guidance says.
+  // The reset, which only the reviewer recognises as a sign-in change, still goes to the person as
+  // safety: the reviewer's finding can only add to what is asked, whatever the guidance says.
+  // M5: under 熊宝's floor a credential change is handed to the person (`hand_off`), not asked.
   const reset = await gate("mfaReset");
   expect(reset?.action.policy).toMatchObject({
-    behaviour: "ask",
+    behaviour: "hand_off",
     source: "safety",
     kind: "credentials",
     review: { safety: "credentials" },

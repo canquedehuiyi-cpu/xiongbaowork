@@ -71,6 +71,12 @@ import {
  * real API to these exact prompts (`fixtures/what-if-recorded.json`). The rows "Why did this happen?"
  * is asked about are written by the real plugin store's `callTool` and the real computer gateway.
  */
+/*
+ * M5: 和上游不同的地方。上游 #1394 让删除、发送、分享、发帖「默认打开」，可以「在这段对话里都允许」
+ * 或「总是允许」，what-if 也照此回答。用户定了保留熊宝的审批底线：这些动作只能「允许一次」，付款、
+ * 改凭据、改安全设置交给本人。所以这里发送邮件由安全要求决定（先问），存下的允许也越不过它，审批那一层
+ * 只说出规则本来会怎样。
+ */
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const trail = createAuditStore(database);
@@ -384,8 +390,9 @@ describe("asking what would happen", () => {
       ["approvals", "allows", "unreached"],
     ]);
     expect(layerOf(body.result, "boundaries").basis).toBe("Everything else");
+    // M5: 熊宝的底线：发送只能「允许一次」（见文件头）。
     expect(layerOf(body.result, "safety").summary).toBe(
-      "Built in: sending something to other people asks the person first. They can allow it once, for the conversation, or always.",
+      "Built in: sending something to other people asks the person first, every time. They can only allow it once, and no rule or saved allow changes that.",
     );
   });
 
@@ -548,7 +555,11 @@ describe("checking an action the admin set", () => {
     }
   });
 
-  test("an allow the person saved for the kind lets it through, and the approvals layer says whose", async () => {
+  /*
+   * M5: 上游这里断言「为这种动作存下的允许让它通过」。熊宝的底线下发送只能允许一次，存下的允许也越不过
+   * 底线：仍然先问，由安全要求决定；审批这一层照旧说出那条规则本来会怎样。
+   */
+  test("an allow the person saved for the kind doesn't get past the floor: it still asks, and the approvals layer says what the rule would do", async () => {
     const { app } = appFor({});
     // As "Always allow here" on a sending card saves it: the rule with the kind it was given for.
     const [rule] = await database
@@ -566,16 +577,18 @@ describe("checking an action the admin set", () => {
     if (rule) await saveRuleKind(database, rule.id, "sending");
     try {
       const { body } = await checkOf(app, action({}));
-      expect(body.result.outcome).toBe("allowed");
-      expect(body.result.decidedBy).toBeNull();
+      expect(body.result.outcome).toBe("asks");
+      expect(body.result.decidedBy).toBe("safety");
       expect(layerOf(body.result, "safety")).toMatchObject({
-        verdict: "allows",
+        verdict: "asks",
+        decides: true,
         summary:
-          "Built in: sending something to other people asks the person first, unless a rule or an allow saved for it decides. Here one does.",
+          "Built in: sending something to other people asks the person first, every time. They can only allow it once, and no rule or saved allow changes that.",
       });
       expect(layerOf(body.result, "approvals")).toMatchObject({
         verdict: "allows",
-        summary: "A personal rule lets it run without asking.",
+        unreached: true,
+        summary: "A personal rule would let it run without asking.",
       });
     } finally {
       if (rule) await approvals.revoke(SAM.id, rule.id);

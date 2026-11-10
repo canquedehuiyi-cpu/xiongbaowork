@@ -202,6 +202,9 @@ export function candidateFor(
     scope: action.scope,
     args: action.args,
     target: action.target,
+    // M5: as fork's `callTool` marks an app's tool call, so the floors that read app tools by where
+    // they came from (sending, deleting, sharing, posting) see it as the call it is.
+    subject: { connector: true },
     continuation: continuationFor(name),
   };
 }

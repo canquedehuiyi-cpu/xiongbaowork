@@ -908,7 +908,7 @@ export function createApp(
    */
   const adminApprovals = (() => {
     const service = coworker?.approvals;
-    const policy = service?.store.policy;
+    const policy = service?.store?.policy;
     const recent = policy?.recentRequests;
     if (!service || !policy || !recent || !adminScope) return service;
     return {

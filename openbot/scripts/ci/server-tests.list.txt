@@ -273,7 +273,6 @@ tests/entra-held-tokens.test.ts
 tests/entra-obo.integration.test.ts
 tests/entra-profile.test.ts
 tests/github-oauth-signup.test.ts
-tests/gmail-reads-by-default.integration.test.ts
 tests/goal-conversation.integration.test.ts
 tests/goal-run-busy-conversation.integration.test.ts
 tests/goal-run-recurring.integration.test.ts

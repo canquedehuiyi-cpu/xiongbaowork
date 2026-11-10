@@ -142,13 +142,13 @@ beforeAll(async () => {
       provenance: "custom",
     })
     .onConflictDoNothing();
+  // M5: fork 的 mcp_tools 没有上游的 vendor_name 列，工具名就是厂商名。
   await database
     .insert(mcpTools)
     .values([
       {
         serverId,
         name: "search_issues",
-        vendorName: "search_issues",
         description: "Search issues by keyword.",
         inputSchema: searchSchema,
         effect: "read",
@@ -156,7 +156,6 @@ beforeAll(async () => {
       {
         serverId,
         name: "post_comment",
-        vendorName: "post_comment",
         description: "Comment on an issue.",
         inputSchema: commentSchema,
         effect: "write",

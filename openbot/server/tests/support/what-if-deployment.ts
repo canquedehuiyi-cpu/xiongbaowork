@@ -132,7 +132,6 @@ export async function seedWhatIf(database: Database): Promise<void> {
   await database.insert(mcpTools).values(
     TOOLS.map((tool) => ({
       ...tool,
-      vendorName: tool.name,
       inputSchema: {},
     })),
   );
