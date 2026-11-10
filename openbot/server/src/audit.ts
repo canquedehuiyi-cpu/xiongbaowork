@@ -304,6 +304,8 @@ export const auditEventTypes = [
   "shared_use.requested",
   "shared_use.approved",
   "shared_use.declined",
+  // 管理员撤销一位员工在一个应用上的批准。目标是应用；payload `bot`、`server`。
+  "shared_use.revoked",
   /*
    * 员工的主人把一个规则让主人决定的 Shared 应用给了自己的员工，这次授予设下的受众（`owner_approved`，
    * payload `bot`、`server`、`audience`、`members`、`outsideInput`），以及它被撤回（`owner_withdrawn`，

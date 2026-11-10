@@ -1,4 +1,7 @@
+import { eq } from "drizzle-orm";
 import { enterpriseControls } from "../admin/controls";
+import type { Database } from "../db/client";
+import { revokedAccess, users } from "../db/schema/core";
 import type { AppInspection } from "./app-access-store";
 import type { SharedAudience, SharedUseStore } from "./shared-use-store";
 import type { PluginStore } from "./store";
@@ -26,6 +29,31 @@ export async function ownerAppsAllowed(userId: string): Promise<boolean> {
   return (
     (await enterpriseControls()?.capabilityFor(userId, "ownerApps")) ?? true
   );
+}
+
+/**
+ * 员工的主人还能不能「给」：人还在（没有被移出部署，`revoked_access`），并且管理员没对他关掉 `ownerApps`。
+ * 主人设下的团队账号受众与主人做的授予都在调用时问它，所以主人离开或被关掉能力之后，它们不再生效，
+ * 不需要先清理。`allowed` 只为测试替换。
+ */
+export async function ownerStillGives(
+  database: Database,
+  ownerId: string,
+  allowed: (userId: string) => Promise<boolean> = ownerAppsAllowed,
+): Promise<boolean> {
+  const [person] = await database
+    .select({ email: users.email })
+    .from(users)
+    .where(eq(users.id, ownerId))
+    .limit(1);
+  if (!person) return false;
+  const [removed] = await database
+    .select({ email: revokedAccess.email })
+    .from(revokedAccess)
+    .where(eq(revokedAccess.email, person.email.trim().toLowerCase()))
+    .limit(1);
+  if (removed) return false;
+  return allowed(ownerId);
 }
 
 /**
