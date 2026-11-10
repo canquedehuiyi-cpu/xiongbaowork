@@ -270,12 +270,12 @@ describe("New routine from the Routines page", () => {
 
     const refusals: [unknown, string][] = [
       [{ ...valid, channelId: undefined }, "Choose a conversation"],
-      [{ ...valid, instruction: "  " }, "Say what the Bot should do."],
-      [{ ...valid, agentId: "" }, "Choose a Bot for this routine."],
+      [{ ...valid, instruction: "  " }, "请写下员工要做什么。"],
+      [{ ...valid, agentId: "" }, "请为这个定时任务选一位员工。"],
       [{ ...valid, cron: "*/5 * * * *" }, "at most every 15 minutes"],
       // A conversation the Bot is not in, and somebody else's conversation, read the same.
-      [{ ...valid, channelId: elsewhere.id }, "This Bot isn't in that"],
-      [{ ...valid, channelId: strangersChannel.id }, "This Bot isn't in that"],
+      [{ ...valid, channelId: elsewhere.id }, "这位员工不在那个对话里"],
+      [{ ...valid, channelId: strangersChannel.id }, "这位员工不在那个对话里"],
     ];
     for (const [body, words] of refusals) {
       const response = await post(app, body);

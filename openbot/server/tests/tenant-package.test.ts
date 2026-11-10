@@ -2220,9 +2220,6 @@ describe("bundled personal starter", () => {
     },
   );
 
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
-  catalogueTest("the starter's Setup page saves its instructions over HTTP", async () => {
-=======
   /*
    * A desktop installed before the starter's instructions were rewritten holds the text that told
    * it to ask whenever something was ambiguous and to ask the person to sign in and wait. A
@@ -2231,7 +2228,7 @@ describe("bundled personal starter", () => {
    */
   const shippedUntilNow =
     "You are a personal assistant for one person. Help with their email, calendar, research, planning and everyday errands. Be clear and brief, and ask when something is ambiguous rather than guessing. When you send, buy, delete or post anything, say exactly what you are doing; OpenBot asks the person before it happens, so do not ask them yourself first. Never type a password yourself: ask the person to sign in, and wait for them.";
-  test.each([
+  catalogueTest.each([
     ["OpenBot", ""],
     ["Claude Agent SDK", claude],
   ])(
@@ -2281,8 +2278,7 @@ describe("bundled personal starter", () => {
     },
   );
 
-  test("the starter's Setup page saves its instructions over HTTP", async () => {
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
+  catalogueTest("the starter's Setup page saves its instructions over HTTP", async () => {
     const tenantId = starterTestTenant();
     await synchronizeTenantPackage(
       database,

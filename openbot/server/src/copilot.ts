@@ -8,11 +8,7 @@ import type {
 import { CopilotRuntime, resolveModel } from "@copilotkit/runtime/v2";
 import { createCopilotHonoHandler } from "@copilotkit/runtime/v2/hono";
 import {
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
-  approvalGuidance,
-  COMPONENT_GUIDANCE,
-=======
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
+  builtInAskingGuidance,
   type ComputerGuidance,
   frameworkGuidance,
   modelGuidance,
@@ -29,13 +25,10 @@ import {
 } from "@openbot/shared/model-providers";
 import { MODEL_TOOL_LIMIT } from "@openbot/shared/model-tool-limit";
 import { runTimeZone } from "@openbot/shared/person-time-zone";
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
 import { type Persona, personaGuidance } from "@openbot/shared/persona";
 import { researchRoleOfToolName } from "@openbot/shared/research";
-=======
 import { checklistNotice } from "@openbot/shared/run-notices";
 import { SUBAGENT_TOOL } from "@openbot/shared/subagent";
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
 import {
   type BuiltInAgentHooks,
   BuiltInAgentWithSaneHistory,
@@ -44,14 +37,9 @@ import {
   RunBuiltAgent,
   UnavailableAgent,
 } from "@openbot/toolkit/copilotkit/agents";
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
-import type { GrantedTool } from "@openbot/toolkit/granted-tool";
-=======
 import { firingChecklist } from "@openbot/toolkit/copilotkit/firing-checklist";
 import { UNATTENDED_STEPS } from "@openbot/toolkit/copilotkit/last-step";
-import { createIntelligenceThreadLock } from "@openbot/toolkit/copilotkit/thread-lock";
 import type { GrantedTool, ToolExecution } from "@openbot/toolkit/granted-tool";
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
 import { parametersFor } from "@openbot/toolkit/granted-tool";
 import { HeadlessToolsMiddleware } from "@openbot/toolkit/headless-tools";
 import { sanitizeSeededHistory } from "@openbot/toolkit/history-sanitize";
@@ -134,11 +122,7 @@ import type {
 } from "./models/runtime-resolver";
 import { withModelRun } from "./models/token-metering";
 import { pickedSkillGuidance } from "./plugins/picked-skill";
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
-=======
-import { refFromToolName } from "./plugins/plugin-store/model";
 import { appCallsOfRun, withAppCallsOf } from "./plugins/run-calls";
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
 import type { SelectableSkill, Selection } from "./plugins/selection";
 import {
   latestUserText,
@@ -376,35 +360,6 @@ export function standingRoleMessage(
     id: `${STANDING_ROLE_ID_PREFIX}${profile.id}`,
     role: "system",
     content: [
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
-      [
-        `You are ${profile.name}, ${title}${titleEnd} ${selfAddressGuidance(profile.name)}`,
-        ...(framework ? [frameworkGuidance(framework)] : []),
-      ].join(" "),
-      profile.roleDescription,
-      // The persona rides along for the reason the two guidance blocks below it do: for a remote
-      // coworker this message is the only instruction that reaches it.
-      ...(personaGuidance(profile.persona)
-        ? [personaGuidance(profile.persona)]
-        : []),
-      ...(bibleGuidance(profile.bible) ? [bibleGuidance(profile.bible)] : []),
-      ...(instructions ? [instructions] : []),
-      "This standing role applies in every channel. Treat channel messages as task-specific instructions within it.",
-      /*
-       * Shared by every remote Bot. Its own role describes the work, and OpenBot adds this
-       * guidance to the same message. The compliance Bot that answered a filing question with
-       * thresholds and deadlines and no source was a `remote-ag-ui` agent whose entire prompt was
-       * "Investigate policies, transaction monitoring, and control evidence."
-       */
-      PROVENANCE_GUIDANCE,
-      // When to answer with a component, which a remote Bot is offered through the run's tools.
-      COMPONENT_GUIDANCE,
-      // When to share its work out to subagents, which OpenBot runs for it through the same tools.
-      ORCHESTRATION_GUIDANCE,
-      // And for the same reason, how to read the untrusted-content envelope its tool results carry.
-      UNTRUSTED_GUIDANCE,
-    ].join("\n\n"),
-=======
       ...promptSection(
         "identity",
         [
@@ -416,6 +371,14 @@ export function standingRoleMessage(
         "role",
         [
           profile.roleDescription,
+          // The persona and the handbook ride along in the role: for a remote coworker this message
+          // is the only instruction that reaches it.
+          ...(personaGuidance(profile.persona)
+            ? [personaGuidance(profile.persona)]
+            : []),
+          ...(bibleGuidance(profile.bible)
+            ? [bibleGuidance(profile.bible)]
+            : []),
           ...(instructions ? [instructions] : []),
           ROLE_SCOPE_GUIDANCE,
         ].join("\n\n"),
@@ -423,7 +386,6 @@ export function standingRoleMessage(
     ]
       .join("\n\n")
       .concat(BROUGHT_BOT_GUIDANCE),
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
   };
 }
 
@@ -976,7 +938,6 @@ export function builtInAgentConfiguration(
    * M3: upstream's `apps` (the apps this Bot holds, as they stand for this person) is not taken: its
    * `BotApp` type and the `grantedToolGuidance` that reads it are not in the fork's plugins yet.
    */
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
   /**
    * The language model this coworker speaks with: the one it was bound to in the tenant's model
    * library, or the deployment model metered for this person. Absent, the runtime builds the
@@ -995,12 +956,9 @@ export function builtInAgentConfiguration(
    * 原因同上。
    */
   runToolNames: readonly string[] = [],
-): BuiltInAgentConfiguration {
-  if (!apiKey && !planModel && !agentModel) {
-=======
-  apps?: readonly BotApp[],
   /**
-   * What this run is, beyond its tools. Appended last for the positional reason `buildAgents` gives.
+   * What this run is, beyond its tools. Appended last (after the fork's `agentModel` and `runToolNames`) for the positional reason
+   * `buildAgents` gives.
    *
    * `mode` says whether anybody is watching (`runModeOf`): a routine or a check-in is told it runs
    * unattended, and a run told that may take up to `UNATTENDED_STEPS.most` steps rather than chat's
@@ -1013,8 +971,7 @@ export function builtInAgentConfiguration(
   run: { mode?: RunMode; usesComputer?: boolean } = {},
 ): BuiltInAgentConfiguration {
   const unattended = isUnattended(run.mode);
-  if (!apiKey && !planModel) {
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
+  if (!apiKey && !planModel && !agentModel) {
     return {
       type: "custom",
       // biome-ignore lint/correctness/useYield: this agent must fail when iteration starts.
@@ -1108,21 +1065,6 @@ export function builtInAgentConfiguration(
        * Who it is, first. A remote Bot run here for a check-in (`onOpenBotRunner`) carries its
        * standing role, which is already in sections and names it the same way.
        */
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
-      ...(agent.systemPrompt.includes(selfAddressGuidance(agent.name))
-        ? []
-        : [identityGuidance(agent.name, agent.title, agent.framework)]),
-      agent.systemPrompt,
-      // Who it is, before whose preferences it is working under and before what it holds.
-      ...(persona ? [persona] : []),
-      // Its handbook, right after who it is (ROLE1): written by the same owner, read as reference.
-      ...(bible ? [bible] : []),
-      ...(standing ? [standing] : []),
-      // The 分身's declared sources, beside the person's instructions: both are about who it works for.
-      ...(sources ? [sources] : []),
-      // Where its files and commands run (RES2): the person's choice, so beside who it works for.
-      ...(project ? [project] : []),
-=======
       ...(agent.systemPrompt.startsWith("<identity>")
         ? [agent.systemPrompt]
         : [
@@ -1137,38 +1079,33 @@ export function builtInAgentConfiguration(
               `${agent.systemPrompt}\n\n${ROLE_SCOPE_GUIDANCE}`,
             ),
           ]),
+      // Who it is, before whose preferences it is working under and before what it holds.
+      ...promptSection("persona", persona),
+      // Its handbook, right after who it is (ROLE1): written by the same owner, read as reference.
+      ...promptSection("handbook", bible),
       ...promptSection("person_instructions", standing),
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
+      // The 分身's declared sources, beside the person's instructions: both are about who it works for.
+      ...promptSection("avatar_sources", sources),
+      // Where its files and commands run (RES2): the person's choice, so beside who it works for.
+      ...promptSection("project", project),
       /*
        * Unconditional: how to work, when to ask (OpenBot asks before consequential actions, so the
        * Bot does not ask as well), where answers come from (a Bot with no tools needs that most: all
        * it says is its own knowledge), when to draw a component, when to use subagents, and how to
        * read the untrusted-content envelope every outside result arrives in.
        */
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
-      PROVENANCE_GUIDANCE,
-      // When to answer with a component. Also unconditional: the tools it names vary, the rule not.
-      COMPONENT_GUIDANCE,
-      // When to give work to subagents. Worded for a run that holds the tool, which most do.
-      ORCHESTRATION_GUIDANCE,
       /*
-       * OpenBot asks the person before consequential actions, so the Bot does not ask as well. Worded
-       * for this fork's floors (approvals/policy.ts), and the connected-app bullet only for a run that
-       * holds a connected-app tool, as `CONNECTOR_APPROVAL_GUIDANCE` is. See `approvalGuidance`.
+       * The asking section is this fork's: OpenBot asks the person before consequential actions, so
+       * the Bot does not ask as well. Worded for this fork's floors (approvals/policy.ts), and the
+       * connected-app bullet only for a run that holds a connected-app tool, as
+       * `CONNECTOR_APPROVAL_GUIDANCE` is; then upstream's closed test. See `builtInAskingGuidance`.
        */
-      approvalGuidance({ apps: holdsAppTools(tools) }),
-      // How to read the untrusted-content envelope every outside result arrives in.
-      UNTRUSTED_GUIDANCE,
+      ...workingGuidance({
+        untrusted: UNTRUSTED_GUIDANCE,
+        asking: builtInAskingGuidance({ apps: holdsAppTools(tools) }),
+      }),
       // M3: the fork's guidance; see the note on the plugins imports.
-      ...(holdings ? [holdings] : []),
-      ...(computerGuidance
-        ? [
-=======
-      ...workingGuidance({ untrusted: UNTRUSTED_GUIDANCE }),
-      ...promptSection(
-        "apps",
-        grantedToolGuidance(tools, connectedVendors, shown, apps),
-      ),
+      ...promptSection("apps", holdings),
       /*
        * Only for a run that holds the computer. A third of the prompt is about the browser, and a
        * Linear-and-Notion routine that never opens one read all of it ahead of its own job.
@@ -1176,7 +1113,6 @@ export function builtInAgentConfiguration(
       ...(computerGuidance && run.usesComputer !== false
         ? promptSection(
             "computer",
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
             computerGuidance({
               search: holdsWebSearch(tools),
               personal: currentEdition() === "personal",
@@ -1792,9 +1728,6 @@ async function buildAgent(
     return new UnavailableAgent(agent);
   }
 
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
-  const granted = await loadTools(agent.id);
-=======
   // Whether anybody is watching this run: a routine or a check-in is told it runs unattended.
   const mode = runModeOf(initiator);
   /*
@@ -1805,21 +1738,7 @@ async function buildAgent(
   const granted = await withAppCallsOf(appCalls, () => loadTools(agent.id));
   // Nobody is watching, so the run has to finish on its own: the same reading the prompt is given.
   const unattended = isUnattended(mode);
-  /*
-   * Best-effort, like the vendors: a failed read leaves the Bot told what its tools say, as before,
-   * and must not stop the run. Never log the thrown value: database errors can carry row contents.
-   */
-  let apps: readonly BotApp[] | undefined;
-  try {
-    apps = await loadApps?.(agent.id);
-  } catch {
-    console.error({
-      error: "bot_app_lookup_failed",
-      context: { operation: "loadApps", agentId: agent.id },
-      timestamp: new Date().toISOString(),
-    });
-  }
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
+  // M3: upstream's `loadApps` (the apps this Bot holds, as they stand) is not taken; see the plugins imports.
 
   /*
    * Whether narrowing can do anything here at all.
@@ -2170,7 +2089,6 @@ async function buildAgent(
         (input?.tools.length ?? 0) +
         RUNTIME_STATE_TOOLS.length,
     });
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
     const configurationFor = (runToolNames?: readonly string[]) =>
       builtInAgentConfiguration(
         agent,
@@ -2197,45 +2115,18 @@ async function buildAgent(
         pickedSkill,
         runAgentModel,
         runToolNames,
+        {
+          mode,
+          /*
+           * Whether this run was offered the computer, known once the request is: the browser offers
+           * the computer tools only to a Bot the person may drive, and a background turn only to one
+           * whose owner's computer it may use. Unknown before the first request.
+           */
+          ...(input ? { usesComputer: input.tools.some(isComputerTool) } : {}),
+        },
       );
     const runToolNames = input?.tools.map((tool) => tool.name);
     const configuration = configurationFor(runToolNames);
-=======
-    const configuration = builtInAgentConfiguration(
-      agent,
-      runModel,
-      apiKey,
-      tools,
-      computerGuidance,
-      connectedVendors,
-      standingInstructions,
-      model.plan && input
-        ? new PlanModel(
-            model.plan,
-            agent.id,
-            input,
-            new Set(input.tools.map((tool) => tool.name)),
-            signal,
-            planChoice(runModel),
-          )
-        : undefined,
-      learnedSkills,
-      waiting,
-      undefined,
-      timeZone,
-      pickedSkill,
-      apps,
-      {
-        mode,
-        /*
-         * Whether this run was offered the computer, known once the request is: the browser offers
-         * the computer tools only to a Bot the person may drive, and a background turn only to one
-         * whose owner's computer it may use. Unknown before the first request.
-         */
-        ...(input ? { usesComputer: input.tools.some(isComputerTool) } : {}),
-      },
-    );
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
     // What really waits: nothing, when the model could not be wrapped and is sent every tool.
     const held = searchesTools(
       "model" in configuration ? configuration.model : undefined,
@@ -2243,12 +2134,8 @@ async function buildAgent(
       ? waiting
       : new Set<string>();
     const admit = admitTools(held, runModel);
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
     const hooks: BuiltInAgentHooks = {
-=======
-    return new BuiltInAgentWithSaneHistory(configuration, {
       ...(unattended ? { unattended } : {}),
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
       /*
        * A provider's refusal is told in words, naming the provider, rather than as the SDK's text, a
        * "Forbidden" or a retry count. Out of credit keeps its own sentence, from `model-billing.ts`.
@@ -3787,13 +3674,6 @@ export function mountCopilotRuntime(
      */
     decisionWaits?: DecisionWaits;
     basePath?: string;
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
-=======
-    onRunBusy?: (input: { threadId: string; busy: boolean }) => void;
-    learningSettings?: LearningSettingsStore;
-    /** A Learning container found missing on this Intelligence (the environment's, or the saved default). See learning/runtime.ts. */
-    learningContainerForgotten?: (containerId: string) => boolean;
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
     /**
      * Told when a run starts and ends on a thread, so a channel can show it is working. A side
      * effect only: never awaited in the lock path, and a failure in it never touches the lock.
@@ -3824,20 +3704,16 @@ export function mountCopilotRuntime(
      * configure the learning runtime upstream builds on its runtime's Intelligence client. Automatic
      * Learning, when the deployment has its optional Intelligence client, is built beside it in
      * `index.ts` (which can pass `personalSkills` to `createLearningRuntime` as `people`) and reaches
-     * a run through the resolver's `acquireLearnedSkills`.
+     * a run through the resolver's `acquireLearnedSkills`. So is upstream's
+     * `learningContainerForgotten` (#1363/#1366): `index.ts` passes it to `createLearningRuntime` as
+     * `forgotten`.
      */
   } = {},
 ): MountedCopilotRuntime {
   const {
     basePath = "/api/copilotkit",
     onRunBusy,
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
     localRunner,
-=======
-    learningSettings,
-    learningContainerForgotten,
-    personalSkills,
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
     trajectoryCapture,
   } = options;
   /** The Recorder's pass, answered here when there is an Intelligence to join it to. */
@@ -3913,25 +3789,12 @@ export function mountCopilotRuntime(
    */
   const runner = localRunnerOrRefused(localRunner);
 
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
   /*
    * The runner as the runtime is handed it. A turn refused for quota is said on its stream, not
    * dropped with it (story K4), and the watchers below patch their own layer on top. See
    * {@link patchableRunner}.
    */
   const runtimeRunner = patchableRunner(withQuotaRunErrors(runner));
-=======
-  const learning: LearningRuntime | undefined = learningSettings
-    ? createLearningRuntime({
-        store: learningSettings,
-        client: intelligenceClient,
-        ...(personalSkills ? { people: personalSkills } : {}),
-        ...(learningContainerForgotten
-          ? { forgotten: learningContainerForgotten }
-          : {}),
-      })
-    : undefined;
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
 
   /**
    * Everything the runtime is configured with, apart from the one option that says where its threads
@@ -4198,7 +4061,6 @@ export function mountCopilotRuntime(
   };
 }
 
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
 /** The trajectory a capture-pass path names (`<base>/trajectory/:id/connect`), or undefined for any other path. */
 function trajectoryIdOf(
   pathname: string,
@@ -4237,10 +4099,10 @@ function withRuntimeCors(
     statusText: response.statusText,
     headers,
   });
-=======
+}
+
 /** The checklist a routine's firing in these messages carries, as words, or nothing. */
 function routineChecklistOf(messages: Message[]): string | undefined {
   const { parts } = firingChecklist(messages);
   return parts.length > 0 ? checklistNotice(parts) : undefined;
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
 }

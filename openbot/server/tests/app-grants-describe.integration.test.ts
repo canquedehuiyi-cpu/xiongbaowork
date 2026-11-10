@@ -1,10 +1,10 @@
 import {
-  afterAll,
-  afterEach,
-  beforeAll,
+  afterAll as bun_afterAll,
+  afterEach as bun_afterEach,
+  beforeAll as bun_beforeAll,
+  test as bun_test,
   describe,
   expect,
-  test,
 } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { LLMock } from "@copilotkit/aimock";
@@ -22,13 +22,24 @@ import {
   mcpTools,
   pluginGrants,
 } from "../src/db/schema";
-import { PluginRefusedError } from "../src/plugins/plugin-store/model";
-import { createPluginStore } from "../src/plugins/store";
+import { createPluginStore, PluginRefusedError } from "../src/plugins/store";
 import { createModelCompleter } from "../src/routing/model";
+import { asPlatform } from "../src/tenant/context";
 import recorded from "./fixtures/app-grants-recorded.json";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
 import { GMAIL_APP_ID, gmailTools } from "./support/gmail-grant-app";
+
+/*
+ * M5: fork 是多租户的，数据库读写都要在租户帧里（runAsTenant/asPlatform）。上游这份测试没有租户帧，
+ * 所以每个钩子和用例都在平台帧里跑，就像 fork 的 plugin-store.integration.test.ts 那样。
+ */
+type Body = () => unknown;
+const framed = (fn: Body) => () => asPlatform(async () => fn());
+const afterAll = (fn: Body) => bun_afterAll(framed(fn));
+const afterEach = (fn: Body) => bun_afterEach(framed(fn));
+const beforeAll = (fn: Body) => bun_beforeAll(framed(fn));
+const test = (name: string, fn: Body) => bun_test(name, framed(fn));
 
 /**
  * An admin describes what one Bot may do in Gmail, and the Bot's app page turns it into an exact set
@@ -63,7 +74,7 @@ const MEMBER = {
 const ref = (name: string) => `${APP}/${name}`;
 
 const plugins = createPluginStore({
-  brokerProvider: "composio",
+  // M5: fork 的插件仓库没有 brokerProvider（Arcade），留给 X 系列（Arcade）。
   database,
   auditStore,
   credentials: createCredentialStore(database),
@@ -112,7 +123,6 @@ beforeAll(async () => {
     gmailTools.map((tool) => ({
       serverId: APP,
       name: tool.name,
-      vendorName: tool.name,
       description: tool.description,
       inputSchema: {},
       effect: tool.effect,
@@ -489,11 +499,11 @@ describe("describing a Bot's actions in one app", () => {
     );
     expect(refused.status).toBe(403);
     expect(await refused.json()).toEqual({
-      error: "Only an admin can choose which Bots use a tool.",
+      error: "An administrator decides which Bots may reach a tool.",
       problems: [
         {
           ref: ref("GMAIL_FETCH_EMAILS"),
-          error: "Only an admin can choose which Bots use a tool.",
+          error: "An administrator decides which Bots may reach a tool.",
         },
       ],
     });

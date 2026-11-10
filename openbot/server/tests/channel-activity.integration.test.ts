@@ -285,32 +285,12 @@ describe("channel activity", () => {
           createdAt: expect.any(Date),
           pinned: false,
           lastReadAt: null,
+          // The person who started it.
+          canRename: true,
           task: false,
         },
       ]);
     });
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
-=======
-
-    expect((await store.list(owner)).channels).toEqual([
-      {
-        ...channel,
-        // Nothing has named this conversation: the sweep that does runs outside this store.
-        summary: null,
-        // Only a person's message opens a conversation, and this one was the Bot's.
-        opening: null,
-        lastMessage: "Categorized three expenses.",
-        lastMessageAgentId: agentId,
-        lastMessageAt: at,
-        createdAt: expect.any(Date),
-        pinned: false,
-        lastReadAt: null,
-        // The person who started it.
-        canRename: true,
-        task: false,
-      },
-    ]);
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
   });
 
   test("keeps a person's roster to the channels they belong to", async () => {

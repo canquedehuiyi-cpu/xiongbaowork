@@ -1328,16 +1328,13 @@ export function createComputerGateway(
         actorId: actor.id,
         botId: seat.botId,
         toolRef: toolName,
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
+        // M5: 电脑动作本身用上游的 `approvalEffectOf`/`approvalScopeOf`（#1381/#1402 的重放和 what-if 用同一套），
+        // 本地应用和桌面窗口仍按 fork 的说法。
         effect: app
           ? app.readOnly === true
             ? "read"
             : "write"
-          : ["activate", "type", "write_file", "run_command"].includes(
-                intent ?? "",
-              )
-            ? "write"
-            : "read",
+          : approvalEffectOf(intent),
         /*
          * A local app's tool is its own target, so a rule or an "always allow" names one tool of one
          * app rather than every tool the app has.
@@ -1350,11 +1347,11 @@ export function createComputerGateway(
             : // --- end desktop control ---
               app
               ? `${app.name}/${app.tool}`
-              : filePath
-                ? filePath.split("/").slice(0, -1).join("/") || "workspace"
-                : subject.command
-                  ? "workspace"
-                  : hostOf(pageUrl) || "browser",
+              : approvalScopeOf({
+                  filePath,
+                  command: subject.command,
+                  pageUrl,
+                }),
         ...(app?.description
           ? { display: { description: app.description } }
           : {}),
@@ -1372,19 +1369,6 @@ export function createComputerGateway(
           // --- desktop control (sub-project 2) ---
           desktop: undefined,
           // --- end desktop control ---
-=======
-        effect: approvalEffectOf(intent),
-        scope: approvalScopeOf({
-          filePath,
-          command: subject.command,
-          pageUrl,
-        }),
-        args: continuation?.args ?? { ...subject, signal: undefined },
-        target: {
-          pageUrl,
-          ...(element ? { element, snapshotId } : {}),
-          ...(filePath ? { filePath } : {}),
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
         },
         /*
          * A local app's tool is named by the app and the tool alone. Its description is for the card

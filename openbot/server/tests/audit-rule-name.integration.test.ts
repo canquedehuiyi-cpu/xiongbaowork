@@ -1,4 +1,10 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import {
+  afterAll as bun_afterAll,
+  beforeAll as bun_beforeAll,
+  test as bun_test,
+  describe,
+  expect,
+} from "bun:test";
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
@@ -23,9 +29,19 @@ import {
   mcpTools,
   pluginGrants,
 } from "../src/db/schema";
-import { PluginRefusedError } from "../src/plugins/plugin-store/model";
-import { createPluginStore } from "../src/plugins/store";
+import { createPluginStore, PluginRefusedError } from "../src/plugins/store";
+import { asPlatform } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+
+/*
+ * M5: fork 是多租户的，数据库读写都要在租户帧里（runAsTenant/asPlatform）。上游这份测试没有租户帧，
+ * 所以每个钩子和用例都在平台帧里跑，就像 fork 的 plugin-store.integration.test.ts 那样。
+ */
+type Body = () => unknown;
+const framed = (fn: Body) => () => asPlatform(async () => fn());
+const afterAll = (fn: Body) => bun_afterAll(framed(fn));
+const beforeAll = (fn: Body) => bun_beforeAll(framed(fn));
+const test = (name: string, fn: Body) => bun_test(name, framed(fn));
 
 /**
  * A refusal names the rule that made it, as the Boundaries page names it.
@@ -91,7 +107,7 @@ const asAdmin: MiddlewareHandler<{ Variables: AppVariables }> = async (
   next,
 ) => {
   context.set("actor", { ...ADMIN });
-  await next();
+  await asPlatform(() => next());
 };
 
 const routes = new Hono<{ Variables: AppVariables }>().route(
@@ -103,6 +119,7 @@ const routes = new Hono<{ Variables: AppVariables }>().route(
     async () => false,
     undefined,
     undefined,
+    undefined, // M5: fork 在这里多一个 adminScope 参数
     undefined,
     auditStore,
   ),
@@ -131,7 +148,7 @@ const gateway = createComputerGateway({
 });
 
 const plugins = createPluginStore({
-  brokerProvider: "composio",
+  // M5: fork 的插件仓库没有 brokerProvider（Arcade），留给 X 系列（Arcade）。
   database,
   auditStore,
   credentials: createCredentialStore(database),
@@ -168,7 +185,6 @@ beforeAll(async () => {
   await database.insert(mcpTools).values({
     serverId: APP,
     name: "update_record",
-    vendorName: "update_record",
     inputSchema: {},
     effect: "write",
   });

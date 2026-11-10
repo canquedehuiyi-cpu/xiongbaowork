@@ -252,8 +252,10 @@ export function decideFromSnapshot(
 export type EnterpriseSnapshot = Snapshot;
 
 /** The snapshot as {@link installEnterpriseControls} reads it, for a reader that needs one now. */
-export const loadEnterpriseSnapshot = (store: EnterpriseStore) =>
-  loadSnapshot(store);
+export const loadEnterpriseSnapshot = (
+  store: EnterpriseStore,
+  database: Database,
+) => loadSnapshot(store, database);
 
 /**
  * One switch the overlay looked at, what it found, and the refusal it makes, if any. In the order the
@@ -320,23 +322,15 @@ export function* enterpriseChecks(
      * M3: upstream v1.0.0 also exempts its always-on Routines app here (`isAlwaysOn`, from
      * `plugins/personal-defaults.ts`), which this fork's plugins do not have; the fork's rule stands.
      */
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
     const server = context.mcp.server;
+    // M5: 留给 X 系列（personal-defaults：上游的 `isAlwaysOn` 常开应用豁免）。fork 没有常开应用，所以 builtIn 恒为 false。
+    const builtIn = false;
     const approved = allowlist.servers.some(
       (entry) => entry === server || snapshot.mcpAppOfRow.get(entry) === server,
     );
-    if (allowlist.enabled && !approved) {
-      return refusal(
-        "mcp_allowlist",
-        `The MCP server "${context.mcp.server}" is not on this deployment's approved list, so ${context.mcp.tool} was not called.`,
-      );
-    }
-=======
-    const builtIn = isAlwaysOn(context.mcp.server);
-    const approved = allowlist.servers.includes(context.mcp.server);
     yield {
       control: "app_allowlist",
-      server: context.mcp.server,
+      server,
       enabled: allowlist.enabled,
       builtIn,
       approved,
@@ -348,7 +342,6 @@ export function* enterpriseChecks(
             )
           : null,
     };
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
   } else if (context.tool.name.startsWith("computer_")) {
     if (context.intent && COMPUTER_INTENTS.has(context.intent)) {
       needed.push("cloudComputer");
@@ -539,121 +532,6 @@ async function initializeEnterpriseControls(
         failures.push(
           new Error(`Enterprise controls ${stage} failed or is unconfirmed.`),
         );
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
-=======
-      exporter?.emit({
-        eventType: "action.recorded",
-        targetType: "computer",
-        targetId: botId,
-        actorUserId: event.actorUserId ?? null,
-        initiatorKind: event.initiatorKind,
-        initiatorId: event.initiatorId,
-        payload: { bot: botId, tool: toolName, command: scrubbed, outcome },
-        surface: "bot",
-      });
-    }),
-  );
-
-  const audit = (input: Parameters<typeof recordAuditEvent>[1]) =>
-    recordAuditEvent(deps.auditStore, input).catch((error) =>
-      console.error(
-        JSON.stringify({
-          type: "enterprise-audit-failed",
-          eventType: input.eventType,
-          error: String(error),
-        }),
-      ),
-    );
-
-  const networkMemberFor: EnterpriseControls["networkMemberFor"] = async (
-    botId,
-  ) => {
-    const current = snapshot;
-    if (!current) return undefined;
-    const [profile] = await deps.database
-      .select({ owner: agentProfiles.ownerUserId })
-      .from(agentProfiles)
-      .where(eq(agentProfiles.agentId, botId))
-      .limit(1);
-    const member: Member = profile?.owner
-      ? await store.member(profile.owner)
-      : { role: "user", groups: [] };
-    return {
-      member,
-      cloudNetwork: resolveCapability(current.rows, member, "cloudNetwork")
-        .allowed,
-    };
-  };
-
-  const policyForBot = async (botId: string): Promise<EgressPolicy> => {
-    // A person's own browser has no Bot and no owner to read a policy for, and the organization's is for Bots.
-    if (isPersonBrowserId(botId))
-      return deps.personBrowserPolicy ?? { mode: "deny_all", rules: [] };
-    const current = snapshot;
-    const owner = await networkMemberFor(botId);
-    if (!current || !owner) return { mode: "deny_all", rules: [] };
-    const { from: _from, ...policy } = effectiveNetworkPolicy(
-      current.network,
-      owner.member,
-      owner.cloudNetwork,
-    );
-    return deps.duringRecording ? deps.duringRecording(botId, policy) : policy;
-  };
-
-  // Tried again within seconds until it lands, quietly while a computer is likely still starting.
-  const delivery = deliverEgressPolicies({
-    push: () =>
-      pushEgressPolicies({
-        provider: deps.provider as ComputerProvider,
-        token: deps.computerToken,
-        policyForBot,
-        ...(deps.webBotAuth ? { webBotAuth: deps.webBotAuth } : {}),
-      }),
-  });
-  const pushNetworkPolicies = async () => {
-    if (!deps.provider) return;
-    return delivery.push();
-  };
-
-  const ownedBots = async (userId: string) =>
-    (
-      await deps.database
-        .select({ agentId: agentProfiles.agentId })
-        .from(agentProfiles)
-        .where(eq(agentProfiles.ownerUserId, userId))
-    ).map((row) => row.agentId);
-
-  const terminateMemberComputers: EnterpriseControls["terminateMemberComputers"] =
-    async (userId, by) => {
-      const result = {
-        stopped: [] as string[],
-        failed: [] as { computer: string; reason: string }[],
-      };
-      if (!deps.provider) return result;
-      /*
-       * Their own computer, which every Bot they used runs on, and the computer of each Bot of theirs
-       * that has one of its own. Asking about an isolated Bot that never had a computer is a stop of
-       * nothing, which answers that nothing was running.
-       */
-      const keys: ComputerKey[] = [
-        { kind: "person", personId: userId },
-        ...(await ownedBots(userId)).map((botId) => ({
-          kind: "bot" as const,
-          botId,
-        })),
-      ];
-      for (const key of keys) {
-        const computer = computerKeyText(key);
-        try {
-          const { wasRunning } = await deps.provider.stop({ key });
-          if (wasRunning) result.stopped.push(computer);
-        } catch (error) {
-          result.failed.push({
-            computer,
-            reason: error instanceof Error ? error.message : String(error),
-          });
-        }
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
       }
     };
     for (const timer of timers)
@@ -809,18 +687,20 @@ async function initializeEnterpriseControls(
         ),
       );
 
-    const policyForBot = async (botId: string): Promise<EgressPolicy> => {
-      // A person's own browser has no Bot and no owner to read a policy for, and the organization's is for Bots.
-      if (isPersonBrowserId(botId))
-        return deps.personBrowserPolicy ?? { mode: "deny_all", rules: [] };
+    /*
+     * Whose network policy a Bot's computer is under (upstream #1398): the lookup `policyForBot`
+     * makes, also used to replay a candidate policy (admin/network-replay.ts).
+     *
+     * As `platform` (G01): "whose Bot is this" is asked by the 30-second push and by a computer
+     * waking, for a Bot of any tenant. Left to the caller's frame it ran as `system` (or as whoever
+     * woke it), row-level security hid the owner's profile, and the Bot was given the network policy
+     * of nobody in particular instead of its owner's.
+     */
+    const networkMemberFor: EnterpriseControls["networkMemberFor"] = async (
+      botId,
+    ) => {
       const current = snapshot;
-      if (!current) return { mode: "deny_all", rules: [] };
-      /*
-       * As `platform` (G01): "whose Bot is this" is asked by the 30-second push and by a computer
-       * waking, for a Bot of any tenant. Left to the caller's frame it ran as `system` (or as whoever
-       * woke it), row-level security hid the owner's profile, and the Bot was given the network policy
-       * of nobody in particular instead of its owner's.
-       */
+      if (!current) return undefined;
       const [profile] = await runAsTenant("platform", () =>
         deps.database
           .select({ owner: agentProfiles.ownerUserId })
@@ -832,15 +712,24 @@ async function initializeEnterpriseControls(
       const member: Member = owner
         ? await runAsTenant("platform", () => store.member(owner))
         : { role: "user", groups: [] };
-      const cloudNetwork = resolveCapability(
-        current.rows,
+      return {
         member,
-        "cloudNetwork",
-      ).allowed;
+        cloudNetwork: resolveCapability(current.rows, member, "cloudNetwork")
+          .allowed,
+      };
+    };
+
+    const policyForBot = async (botId: string): Promise<EgressPolicy> => {
+      // A person's own browser has no Bot and no owner to read a policy for, and the organization's is for Bots.
+      if (isPersonBrowserId(botId))
+        return deps.personBrowserPolicy ?? { mode: "deny_all", rules: [] };
+      const current = snapshot;
+      const owner = await networkMemberFor(botId);
+      if (!current || !owner) return { mode: "deny_all", rules: [] };
       const { from: _from, ...policy } = effectiveNetworkPolicy(
         current.network,
-        member,
-        cloudNetwork,
+        owner.member,
+        owner.cloudNetwork,
       );
       return deps.duringRecording
         ? deps.duringRecording(botId, policy)
@@ -1103,7 +992,6 @@ async function initializeEnterpriseControls(
     for (const timer of timers) timer.unref?.();
     void pushNetworkPolicies();
 
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
     controls = {
       store,
       deps,
@@ -1125,6 +1013,7 @@ async function initializeEnterpriseControls(
       terminateInactiveComputers,
       pushNetworkPolicies,
       policyForBot,
+      networkMemberFor,
       offboard,
       stop,
     };
@@ -1141,41 +1030,6 @@ async function initializeEnterpriseControls(
     }
     throw new Error("Enterprise controls initialization failed.");
   }
-=======
-  installed = {
-    store,
-    deps,
-    exporter,
-    snapshot: () => snapshot,
-    refresh,
-    capabilityFor: async (userId, capability) =>
-      resolveCapability(
-        await store.capabilityRows(),
-        await store.member(userId),
-        capability,
-      ).allowed,
-    capabilitiesFor: async (userId) =>
-      resolveAllCapabilities(
-        await store.capabilityRows(),
-        await store.member(userId),
-      ),
-    terminateMemberComputers,
-    terminateInactiveComputers,
-    pushNetworkPolicies,
-    policyForBot,
-    networkMemberFor,
-    offboard,
-    stop: async () => {
-      for (const timer of timers) clearInterval(timer);
-      delivery.stop();
-      for (const remove of removeTaps) remove();
-      setPolicyOverlay(null);
-      installed = undefined;
-      await Promise.allSettled([connection.end(), exporter?.shutdown()]);
-    },
-  };
-  return installed;
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
 }
 
 /** For the break-glass rule, which is decided before the controls may be installed. */

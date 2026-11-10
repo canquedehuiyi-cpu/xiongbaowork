@@ -31,9 +31,9 @@ import {
 } from "./policy";
 import type { ApprovalQuestions } from "./questions";
 import {
+  APPROVAL_DECISIONS,
   type ApprovalAction,
   ApprovalAlreadyAnsweredError,
-  APPROVAL_DECISIONS,
   type ApprovalCandidate,
   type ApprovalContinuation,
   type ApprovalConversationGrant,
@@ -339,26 +339,19 @@ export function createApprovalService(
   ): Promise<ApprovalPolicyOutcome | undefined> {
     const policy = store.policy;
     if (!policy) return undefined;
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
     /*
      * The Bot owner's side is read in the owner's frame whoever acts (SEC1 D9). A failure to read it
      * is not "no owner rules": it throws, and the action is not carried out (fail closed).
      */
-    const [preferences, team, teamRules, personal, employee] =
-=======
-    const [preferences, team, teamRules, personal, guidance] =
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
+    const [preferences, team, teamRules, personal, employee, guidance] =
       await Promise.all([
         policy.preferences(candidate.actorId),
         policy.teamSettings(),
         policy.teamRules(),
         store.rules(candidate.actorId),
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
         policy.employee?.(candidate.botId),
-=======
         // The admin's guidance for auto-review, which the reviewer reads below the built-in rules.
         policy.reviewerGuidance?.() ?? null,
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
       ]);
     const continuation = candidate.continuation ?? currentApprovalContext();
     // Only this conversation's answers: one given in another conversation never reaches this one.
@@ -374,26 +367,20 @@ export function createApprovalService(
       messages: continuation?.messages,
       team: teamRules,
       personal,
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
       // The owner's own rules are already their personal rules when the owner is the one acting.
       ...(employee?.ownerUserId && employee.ownerUserId !== candidate.actorId
         ? { owner: employee.rules }
         : {}),
-=======
       conversation,
       actionKinds: team.actionKinds,
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
       customRulesEnabled: team.customRulesEnabled,
       autoReview: preferences.autoReview || team.enforceAutoReview,
       askBeforeChanges: preferences.enabled,
       ...(options.review ? { model: options.review } : {}),
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
       ...(employee ? { security: employee.security } : {}),
       enforceDangerousCommands: team.enforceDangerousCommands,
       hostCommandsCap: team.hostCommandsCap,
-=======
       ...(guidance ? { guidance } : {}),
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
     });
     // An unremarkable read is not a verdict anybody asked for; everything else is on the trail.
     if (

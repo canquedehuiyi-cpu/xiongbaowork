@@ -141,7 +141,7 @@ const ONCE_ONLY = [
 
 const CONSEQUENTIAL = {
   money: {
-    kind: "payments",
+    behaviour: "hand_off",
     cases: [
       tool("composio-stripe", "STRIPE_CREATE_TRANSFER", {
         amount: 5000,
@@ -167,7 +167,7 @@ const CONSEQUENTIAL = {
     ],
   },
   buying: {
-    kind: "payments",
+    behaviour: "hand_off",
     cases: [
       click(
         "https://www.amazon.com/gp/buy/spc/handlers/display.html",
@@ -181,7 +181,7 @@ const CONSEQUENTIAL = {
     ],
   },
   deleting: {
-    kind: "deleting",
+    behaviour: "ask",
     cases: [
       tool("composio-googledrive", "GOOGLEDRIVE_DELETE_FILE", {
         file_id: "1abc",
@@ -208,7 +208,7 @@ const CONSEQUENTIAL = {
     ],
   },
   sending: {
-    kind: "sending",
+    behaviour: "ask",
     cases: [
       click(
         "https://mail.google.com/mail/u/0/#inbox?compose=new",
@@ -248,7 +248,7 @@ const CONSEQUENTIAL = {
     ],
   },
   sharing: {
-    kind: "sharing",
+    behaviour: "ask",
     cases: [
       tool("composio-googledrive", "GOOGLEDRIVE_ADD_FILE_SHARING_PREFERENCE", {
         file_id: "1abc",
@@ -260,7 +260,7 @@ const CONSEQUENTIAL = {
     ],
   },
   publishing: {
-    kind: "publishing",
+    behaviour: "ask",
     cases: [
       click("https://x.com/compose/post", "button", "Post"),
       click("https://medium.com/new-story", "button", "Publish"),
@@ -378,12 +378,10 @@ describe.each(EDITIONS)("the %s edition", (edition) => {
     owner = await person();
   });
 
-  /*
-   * OPEN BY DEFAULT, reversing #998: each kind asks, and the card offers Allow once, Allow for this
-   * conversation and Always allow here. An admin can close a kind (approvals-open-by-default).
-   */
-  for (const [category, { kind, cases }] of Object.entries(CONSEQUENTIAL)) {
-    test(`${category} asks, whether by an app or a click, and offers every answer`, async () => {
+  for (const [category, { behaviour, cases }] of Object.entries(
+    CONSEQUENTIAL,
+  )) {
+    test(`${category} asks, whether by an app or a click, and offers no Always allow`, async () => {
       setEdition(edition);
       expect(await store.enabled(owner)).toBe(false);
       for (const action of cases) {
@@ -392,7 +390,6 @@ describe.each(EDITIONS)("the %s edition", (edition) => {
         expect({
           action: action.toolRef,
           target: action.target,
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
           behaviour: policy?.behaviour,
           once:
             behaviour === "hand_off"
@@ -403,18 +400,11 @@ describe.each(EDITIONS)("the %s edition", (edition) => {
         await expect(
           service.decide(owner, request?.id ?? "", "allow_always"),
         ).rejects.toThrow();
-=======
-          policy: request?.action.policy,
-        }).toMatchObject({
-          policy: { behaviour: "ask", source: "safety", kind },
-        });
-        expect(offersStandingRule(request?.action ?? {})).toBeTrue();
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
       }
     });
   }
 
-  test("an archive answered with Allow once or Deny is answered that one time", async () => {
+  test("an archive is answered with Allow once or Deny, each that one time", async () => {
     setEdition(edition);
     const archive = tool("composio-hubspot", "HUBSPOT_ARCHIVE_CONTACT", {
       contact_id: "51",
@@ -422,13 +412,8 @@ describe.each(EDITIONS)("the %s edition", (edition) => {
     const allowed = await gate(owner, archive);
     expect(allowed?.action.policy).toMatchObject({
       behaviour: "ask",
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
       source: SOURCE_OF.deleting,
       reason: DESTRUCTIVE_TOOL_REASON,
-=======
-      source: "safety",
-      reason: "Deleting something asks you first.",
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
     });
     expect(
       (await service.decide(owner, allowed?.id ?? "", "allow_once")).status,
@@ -457,15 +442,15 @@ describe.each(EDITIONS)("the %s edition", (edition) => {
     });
   }
 
-  // An admin can close payments to a hand-off, so one that moves no money must not count as one.
-  test("a transfer or a 'pay' that moves no money is not asked about as a payment", async () => {
+  // A hand-off means the Bot can't do it at all, so one that moves no money must not get one.
+  test("a transfer or a 'pay' that moves no money is not handed to the person as a payment", async () => {
     setEdition(edition);
     for (const action of NOT_MONEY) {
       const request = await gate(owner, action);
       expect({
         action: action.toolRef,
-        kind: request?.action.policy?.kind,
-      }).not.toMatchObject({ kind: "payments" });
+        behaviour: request?.action.policy?.behaviour,
+      }).not.toMatchObject({ behaviour: "hand_off" });
     }
   });
 });
@@ -513,14 +498,10 @@ async function outcomes(
     const policy = request?.action.policy;
     seen[name] = policy
       ? {
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
           category:
             CATEGORY_OF[policy.source] ??
             CATEGORY_OF[policy.reason] ??
             policy.reason,
-=======
-          category: CATEGORY_OF[policy.kind ?? ""] ?? policy.reason,
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
           behaviour: policy.behaviour as "ask" | "hand_off",
         }
       : { category: null };
@@ -533,19 +514,11 @@ async function outcomes(
 
 /** M3: a once-only floor by the fork's source; a hand-off by its reason, as upstream has it. */
 const CATEGORY_OF: Record<string, string> = {
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
   "Paying, purchasing or moving money is always done by the person.": "money",
   destructive_tool: "deleting",
   outbound_send: "sending",
   share_access: "sharing",
   publish_post: "publishing",
-=======
-  payments: "money",
-  deleting: "deleting",
-  sending: "sending",
-  sharing: "sharing",
-  publishing: "publishing",
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
 };
 
 const nothing: Expected = { category: null };
@@ -677,22 +650,22 @@ const MISSED = {
     tool("composio-deel", "DEEL_SUBMIT_ON_DEMAND_PAYROLL", {
       payroll_id: "p1",
     }),
-    { category: "money" },
+    { category: "money", behaviour: "hand_off" },
   ],
   "a payroll run": [
     tool("composio-gusto", "GUSTO_SUBMIT_PAYROLL", {
       company_id: "co1",
       payroll_id: "p1",
     }),
-    { category: "money" },
+    { category: "money", behaviour: "hand_off" },
   ],
   "an Upgrade button": [
     click("https://app.example.com/settings/workspace", "button", "Upgrade"),
-    { category: "money" },
+    { category: "money", behaviour: "hand_off" },
   ],
   "a Subscribe button on a plans page": [
     click("https://www.nytimes.com/subscription", "button", "Subscribe"),
-    { category: "money" },
+    { category: "money", behaviour: "hand_off" },
   ],
   "a Subscribe button with a price": [
     click(
@@ -700,14 +673,14 @@ const MISSED = {
       "button",
       "Subscribe for $4/month",
     ),
-    { category: "money" },
+    { category: "money", behaviour: "hand_off" },
   ],
   "a paid plan changed by an app": [
     tool("composio-shopify", "SHOPIFY_CREATE_APP_SUBSCRIPTION", {
       name: "Pro",
       price: 29,
     }),
-    { category: "money" },
+    { category: "money", behaviour: "hand_off" },
   ],
 } as const;
 
@@ -840,7 +813,7 @@ describe.each(EDITIONS)("named words in the %s edition", (edition) => {
     expect(seen).toEqual(wanted);
   });
 
-  test("a free subscription and a payroll file are not asked about as payments", async () => {
+  test("a free subscription and a payroll file are not handed off", async () => {
     setEdition(edition);
     const { seen, wanted } = await outcomes(owner, FREE);
     expect(seen).toEqual(wanted);
@@ -971,7 +944,7 @@ describe("a tool its app marks destructive, called through the app", () => {
     );
   };
 
-  test("it asks, whatever it is called; an unmarked tool of the same app runs", async () => {
+  test("it asks with Allow once or Deny, whatever it is called; an unmarked tool of the same app runs", async () => {
     setEdition("personal");
     expect(await store.enabled(owner)).toBe(false);
 
@@ -982,17 +955,10 @@ describe("a tool its app marks destructive, called through the app", () => {
     );
     expect(request?.action.policy).toEqual({
       behaviour: "ask",
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
       source: "destructive_tool",
       reason: DESTRUCTIVE_TOOL_REASON,
-=======
-      source: "safety",
-      kind: "deleting",
-      reason:
-        "The app marks this as deleting or overwriting something, so it asks you first.",
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
     });
-    expect(offersStandingRule(request?.action ?? {})).toBeTrue();
+    expect(offersStandingRule(request?.action ?? {})).toBeFalse();
     expect(vendorCalls).toEqual([]);
 
     expect((await call("rename_workspace")).asked).toBeFalse();

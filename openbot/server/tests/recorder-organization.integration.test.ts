@@ -147,14 +147,7 @@ const clearDesktopFailures = () => {
     clearDesktopConnectionFailure(connection);
 };
 beforeEach(() => {
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
-  clearOrganizationFailure();
-  // The failure state is one per process: a model failure an earlier file recorded in the same run
-  // is not this file's to read (the desktop answers the first failure it holds).
-  clearDesktopConnectionFailure("model");
-=======
   clearDesktopFailures();
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
   answer = signedIn;
 });
 afterEach(clearDesktopFailures);

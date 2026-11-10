@@ -70,8 +70,8 @@ import {
   type PolicyContext,
   type PolicyDecision,
 } from "./computer/policy";
-import { appCallPolicyContext } from "./plugins/plugin-store/call-policy";
-import type { PluginDecision } from "./plugins/plugin-store/model";
+// M5: fork 没有采用插件拆分，这两个在 plugins/store.ts。
+import { appCallPolicyContext, type PluginDecision } from "./plugins/store";
 
 /** Where the deciders read this OpenBot's settings from: the same stores the live path reads. */
 export type GovernanceReaders = {

@@ -122,16 +122,10 @@ const WHY_FOR_PERSON = new Map<string, string>([
 
 /**
  * The sentence a person reads for a step the Bot did not carry out. A known sentence is replaced
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
- * whole. Any other "Not done: <why>." keeps its first sentence and loses what follows it, which is
- * the Bot's next step ("Ask the person again if it is still needed."), and is said as
- * 「没有执行：<why>」, the why in Chinese where it is one of the known ones. Anything else is a
+ * whole. Any other "Not done: <why>." or "Not run: <why>." keeps its first sentence and loses what
+ * follows it, which is the Bot's next step ("Ask the person again if it is still needed."), and is
+ * said as 「没有执行：<why>」, the why in Chinese where it is one of the known ones. Anything else is a
  * boundary or the computer speaking, already written for a person, and is returned as it is.
-=======
- * whole. Any other "Not done: <why>." or "Not run: <why>." keeps its first sentence and loses what follows it, which is
- * the Bot's next step ("Ask the person again if it is still needed."). Anything else is a boundary
- * or the computer speaking, already written for a person, and is returned as it is.
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
  */
 export function outcomeForPerson(text: string): string {
   const known = FOR_PERSON.get(text.trim());

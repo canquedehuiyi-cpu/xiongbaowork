@@ -1,10 +1,6 @@
 import { MAX_IMAGE_BYTES } from "@openbot/shared/attachments";
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
-import type { Context, Hono as HonoApp, MiddlewareHandler } from "hono";
-=======
 import type { WhatIfVocabulary } from "@openbot/shared/what-if";
-import type { Hono as HonoApp, MiddlewareHandler } from "hono";
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
+import type { Context, Hono as HonoApp, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { serveStatic } from "hono/bun";
@@ -32,12 +28,11 @@ import {
 import type { BotAccessCheck } from "./agents/profile-policy";
 import type { AgentProfileStore } from "./agents/profile-store";
 import { createAgentRoutes } from "./agents/routes";
-import { createApprovalRoutes } from "./approvals/routes";
 import { createReviewerGuidanceRoutes } from "./approvals/reviewer-guidance";
+import { createApprovalRoutes } from "./approvals/routes";
 import { createApprovalRuleDraftRoutes } from "./approvals/rule-translate";
 import type { RuleVocabulary } from "./approvals/rule-vocabulary";
 import type { ApprovalService } from "./approvals/service";
-import { type AuditVocabulary, createAuditAskRoutes } from "./audit-ask";
 import {
   type AuditEvent,
   type AuditEventType,
@@ -53,6 +48,7 @@ import {
   recordPersonAuditEvent,
   recordPlatformAuditEvent,
 } from "./audit";
+import { type AuditVocabulary, createAuditAskRoutes } from "./audit-ask";
 import { createAdminScope } from "./auth/admin-scope";
 import { createDevRequireUser } from "./auth/dev-actor";
 import {
@@ -150,14 +146,9 @@ import type { SignInService } from "./passwords/service";
 import type { OnboardingStore } from "./people/onboarding";
 import { createProfileRoutes, type ProfileStore } from "./people/profile";
 import { MAX_PAGE, type PeopleStore } from "./people/store";
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
+// M5: 留给 X 系列（共享账号/多账号：上游的 `BrokerProvider`、`AccountModeSwitch` 类型导入）
 import type { ComposioBroker, KeyGuideSource } from "./plugins/broker";
-=======
-import type { BrokerProvider } from "./plugins/access";
-import type { AccountModeSwitch } from "./plugins/account-mode";
-import type { ComposioBroker } from "./plugins/broker";
 import { createAppGrantDraftRoutes } from "./plugins/grant-translate";
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
 import { createPluginRoutes } from "./plugins/routes";
 import {
   isDeploymentFault,
@@ -202,7 +193,7 @@ import { createTeamBotRoutes } from "./team-bots/routes";
 import type { TeamBots } from "./team-bots/team-bots";
 import type { ProductTelemetry } from "./telemetry/product";
 import { createProductTelemetryRoutes } from "./telemetry/product-routes";
-import { capabilityFor, runAsTenant } from "./tenant/context";
+import { capabilityFor, currentTenant, runAsTenant } from "./tenant/context";
 import type { PackageStatusReader } from "./tenant-package";
 import {
   INSTRUCTIONS_LIMIT,
@@ -883,23 +874,44 @@ export function createApp(
       "/api/telemetry",
       createProductTelemetryRoutes(requireUser, coworker.productTelemetry),
     );
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
-  app.route(
-    "/api/admin/enterprise",
-    createEnterpriseAdminRoutes(requireUser, adminScope),
-  );
-=======
+  /*
+   * M5: upstream's admin routes that replay a draft over the trail (#1381, #1398, #1399) read it with
+   * the reader they are handed. Signed in through `requireAdminUser`, an administrator holds the
+   * admin capability (`adminCapability`, G01-E P7) for the request, and `adminAuditReader` then reads
+   * the whole deployment's trail as `platform`, as the list below does (`asAdminPlatform`). Anyone
+   * else reads in their own frame, which shows them only their own rows; each route still answers a
+   * non-admin with its own `requireAdmin`.
+   */
+  const requireAdminUser: MiddlewareHandler<{ Variables: AppVariables }> = (
+    context,
+    next,
+  ) =>
+    requireUser(context, async () => {
+      await adminCapability(context, next);
+    });
+  const adminAuditReader: AuditReader | undefined = auditReader
+    ? {
+        list: (query) => {
+          const frame = currentTenant();
+          return adminScope && capabilityFor(frame) === "admin"
+            ? adminScope.asAdminPlatform({ id: frame }, () =>
+                auditReader.list(query),
+              )
+            : auditReader.list(query);
+        },
+      }
+    : undefined;
   // Before the enterprise routes it shares a prefix with: describing a network allowlist and
   // replaying one over page visits. The list itself is still saved by `PUT /network` below.
   app.route(
     "/api/admin/enterprise/network",
     createNetworkAllowlistRoutes({
-      requireUser,
+      requireUser: requireAdminUser,
       ...(coworker?.boundaryWriter
         ? { complete: coworker.boundaryWriter }
         : {}),
       ...(auditStore ? { auditStore } : {}),
-      ...(auditReader ? { auditReader } : {}),
+      ...(adminAuditReader ? { auditReader: adminAuditReader } : {}),
     }),
   );
   // Before `/api/admin/enterprise`, which shares the prefix: describing, previewing and saving
@@ -907,15 +919,17 @@ export function createApp(
   app.route(
     "/api/admin/enterprise/capabilities",
     createCapabilityChangeRoutes({
-      requireUser,
+      requireUser: requireAdminUser,
       ...(coworker?.boundaryWriter
         ? { complete: coworker.boundaryWriter }
         : {}),
-      ...(auditReader ? { auditReader } : {}),
+      ...(adminAuditReader ? { auditReader: adminAuditReader } : {}),
     }),
   );
-  app.route("/api/admin/enterprise", createEnterpriseAdminRoutes(requireUser));
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
+  app.route(
+    "/api/admin/enterprise",
+    createEnterpriseAdminRoutes(requireUser, adminScope),
+  );
   app.route("/api/admin/proactive", createProactiveAdminRoutes(requireUser));
   app.on(["PUT", "PATCH", "DELETE"], "/api/auth/scim/*", (context) =>
     auth
@@ -1172,7 +1186,6 @@ export function createApp(
           503,
         );
       }
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
       const withoutCapability = capabilityMissing(context);
       if (withoutCapability) return withoutCapability;
 
@@ -1190,21 +1203,11 @@ export function createApp(
             400,
           );
         }
-=======
-      /*
-       * The export answers the same filtered query as the list — `eventType`,
-       * `actorUserId`, `initiatorKind`, `targetType`, `targetId`, `bot`, `app`, `tool`, `effect`,
-       * `intent`, `rule`, `from`, `to` — so the downloaded file and the table agree. Paging (`cursor`, `limit`) belongs to the
-       * JSON list and is ignored here; the export walks every matching page up to the
-       * cap in `readAuditExportRows` and names the file after the day it was pulled.
-       */
-      if (format === "csv") {
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
         const query = auditQueryFromUrl(url);
         /*
          * The export answers the same filtered query as the list — `eventType`, `actorUserId`,
-         * `initiatorKind`, `targetType`, `targetId`, `from`, `to` — so the downloaded file and the
-         * table agree. Paging (`cursor`, `limit`) belongs to the JSON list and is ignored here; the
+         * `initiatorKind`, `targetType`, `targetId`, `bot`, `app`, `tool`, `effect`, `intent`,
+         * `rule`, `from`, `to` — so the downloaded file and the table agree. Paging (`cursor`, `limit`) belongs to the JSON list and is ignored here; the
          * export walks every matching page up to the cap in `readAuditExportRows` and names the file
          * after the day it was pulled. Read as `platform`, as the list is (below).
          */
@@ -1256,23 +1259,13 @@ export function createApp(
         }
         throw error;
       }
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
     },
   );
-=======
-      return context.json(await auditReader.list(auditQueryFromUrl(url)));
-    } catch (error) {
-      if (error instanceof AuditQueryError) {
-        return context.json({ error: error.message }, 400);
-      }
-      throw error;
-    }
-  });
   if (coworker?.auditQuestions)
     app.route(
       "/api/admin/audit-events",
       createAuditAskRoutes({
-        requireUser,
+        requireUser: requireAdminUser,
         complete: coworker.auditQuestions.complete,
         vocabulary: coworker.auditQuestions.vocabulary,
         ...(coworker.auditQuestions.now
@@ -1285,12 +1278,11 @@ export function createApp(
     app.route(
       "/api/admin/what-if",
       createWhatIfRoutes({
-        requireUser,
+        requireUser: requireAdminUser,
         ...coworker.whatIf,
         ...(auditStore ? { auditStore } : {}),
       }),
     );
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
   /*
    * Who is here, and what they may do.
    *
@@ -2139,14 +2131,16 @@ export function createApp(
     app.route(
       "/api/approvals/team/rules",
       createApprovalRuleDraftRoutes({
-        requireUser,
+        // M5: with the admin capability, as `createApprovalRoutes` is mounted, and replayed over the
+        // whole deployment's trail (`adminAuditReader`).
+        requireUser: requireAdminUser,
         service: coworker.approvals,
         vocabulary: coworker.approvalRules.vocabulary,
         ...(coworker.boundaryWriter
           ? { complete: coworker.boundaryWriter }
           : {}),
         ...(auditStore ? { auditStore } : {}),
-        ...(auditReader ? { auditReader } : {}),
+        ...(adminAuditReader ? { auditReader: adminAuditReader } : {}),
       }),
     );
   // Before `/api/approvals` too: the admin's guidance for auto-review, checked, replayed and saved.
@@ -2154,7 +2148,8 @@ export function createApp(
     app.route(
       "/api/approvals/team/guidance",
       createReviewerGuidanceRoutes({
-        requireUser,
+        // M5: with the admin capability, as `createApprovalRoutes` is mounted.
+        requireUser: requireAdminUser,
         service: coworker.approvals,
         ...(coworker.boundaryWriter
           ? { complete: coworker.boundaryWriter }
@@ -2277,13 +2272,14 @@ export function createApp(
     app.route(
       "/api/plugins",
       createAppGrantDraftRoutes({
-        requireUser,
+        // M5: replayed over the whole deployment's trail, as an administrator reads it.
+        requireUser: requireAdminUser,
         store: pluginStore,
         ...(coworker?.boundaryWriter
           ? { complete: coworker.boundaryWriter }
           : {}),
         ...(auditStore ? { auditStore } : {}),
-        ...(auditReader ? { auditReader } : {}),
+        ...(adminAuditReader ? { auditReader: adminAuditReader } : {}),
       }),
     );
     app.route(

@@ -5,22 +5,19 @@ import { inArray, like } from "drizzle-orm";
 import { createActorAgentResolver } from "../src/agents/agent-resolver";
 import { createAgentFetch } from "../src/agents/endpoint";
 import { loadConfig } from "../src/config";
-import { currentEdition, setEdition } from "../src/edition";
 import {
   mountCopilotRuntime,
   type RegisteredAgent,
   type RuntimeModel,
   registeredAgentFromRow,
 } from "../src/copilot";
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
 import { createDatabase } from "../src/db/client";
 import { threadRuns, threads } from "../src/db/schema";
+import { clearDesktopConnectionFailure } from "../src/desktop-connection-failure";
+import { currentEdition, setEdition } from "../src/edition";
 import { runAsTenant } from "../src/tenant/context";
 import { PostgresAgentRunner } from "../src/threads/postgres-runner";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
-=======
-import { clearDesktopConnectionFailure } from "../src/desktop-connection-failure";
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
 import { testEnvironment } from "./support/environment";
 
 /**

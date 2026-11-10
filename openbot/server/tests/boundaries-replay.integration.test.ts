@@ -1,12 +1,18 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import {
+  afterAll as bun_afterAll,
+  beforeAll as bun_beforeAll,
+  test as bun_test,
+  describe,
+  expect,
+} from "bun:test";
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import {
+  type AuditEvent,
   createAuditReader,
   createAuditStore,
-  type AuditEvent,
 } from "../src/audit";
 import type { AppVariables } from "../src/auth/guards";
 import type { ActionPolicy } from "../src/computer/policy";
@@ -22,9 +28,19 @@ import {
   mcpTools,
   pluginGrants,
 } from "../src/db/schema";
-import { PluginRefusedError } from "../src/plugins/plugin-store/model";
-import { createPluginStore } from "../src/plugins/store";
+import { createPluginStore, PluginRefusedError } from "../src/plugins/store";
+import { asPlatform } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+
+/*
+ * M5: fork 是多租户的，数据库读写都要在租户帧里（runAsTenant/asPlatform）。上游这份测试没有租户帧，
+ * 所以每个钩子和用例都在平台帧里跑，就像 fork 的 plugin-store.integration.test.ts 那样。
+ */
+type Body = () => unknown;
+const framed = (fn: Body) => () => asPlatform(async () => fn());
+const afterAll = (fn: Body) => bun_afterAll(framed(fn));
+const beforeAll = (fn: Body) => bun_beforeAll(framed(fn));
+const test = (name: string, fn: Body) => bun_test(name, framed(fn));
 
 /**
  * The boundaries backtest over real app calls, and the trail a saved boundary leaves.
@@ -56,7 +72,7 @@ const NO_CRM_WRITES = `mcp.server == "${APP}" && mcp.effect == "write"`;
 
 let live: ActionPolicy = ALLOW_ALL;
 const plugins = createPluginStore({
-  brokerProvider: "composio",
+  // M5: fork 的插件仓库没有 brokerProvider（Arcade），留给 X 系列（Arcade）。
   database,
   auditStore,
   credentials: createCredentialStore(database),
@@ -88,7 +104,7 @@ function app() {
     next,
   ) => {
     context.set("actor", { ...ADMIN });
-    await next();
+    await asPlatform(() => next());
   };
   const policyStore = createPolicyStore(ALLOW_ALL);
   const routes = createComputerRoutes(
@@ -98,6 +114,7 @@ function app() {
     async () => false,
     undefined,
     auditReader,
+    undefined, // M5: fork 在这里多一个 adminScope 参数
     undefined,
     auditStore,
   );
@@ -159,7 +176,6 @@ beforeAll(async () => {
     ].map(([name, effect]) => ({
       serverId: APP,
       name: name as string,
-      vendorName: name as string,
       inputSchema: {},
       effect: effect as "read" | "write",
     })),

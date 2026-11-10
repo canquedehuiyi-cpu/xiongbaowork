@@ -1,8 +1,8 @@
 import { Hono, type MiddlewareHandler } from "hono";
 import { z } from "zod";
 import { type AppVariables, requireAdmin } from "../auth/guards";
-import type { ApprovalService } from "./service";
 import { DEFAULT_SENSITIVE_PATHS, SENSITIVE_PATH_PATTERN } from "./policy";
+import type { ApprovalService } from "./service";
 import {
   ACTION_KIND_POLICIES,
   ACTION_KINDS,
@@ -212,14 +212,11 @@ export function createApprovalRoutes(
         enforceAutoReview: z.boolean().optional(),
         customRulesEnabled: z.boolean().optional(),
         hostCommandsCap: hostCommands.optional(),
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
         enforceDangerousCommands: z.boolean().optional(),
-=======
         // One or more kinds of action, each open, asked every time, or left to the person.
         actionKinds: z
           .partialRecord(z.enum(ACTION_KINDS), z.enum(ACTION_KIND_POLICIES))
           .optional(),
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
       })
       .parse(await context.req.json());
     return context.json(

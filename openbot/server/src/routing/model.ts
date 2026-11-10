@@ -76,19 +76,9 @@ export function createModelCompleter(deps: {
    * model allowlist) applies to the next call and not the next restart.
    */
   fastModel?: string | (() => string | undefined);
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
-  /** How long one answer may take; a router has to be quick, a translation of a page need not be. */
-  timeoutMs?: number;
-  /** Anthropic's answer limit; a router's answer is one small object, a translation is longer. */
-  maxTokens?: number;
-}): (prompt: string, signal?: AbortSignal) => Promise<string> {
-  const timeoutMs = deps.timeoutMs ?? 10_000;
-  return async (prompt: string, signal?: AbortSignal) => {
-=======
 }): ModelCompleter {
   const timeoutMs = deps.timeoutMs ?? 10_000;
   return async (prompt, signal, options) => {
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
     if (deps.model.plan) return askPlan(deps.model.plan, prompt, signal);
     const fast =
       typeof deps.fastModel === "function" ? deps.fastModel() : deps.fastModel;
@@ -162,10 +152,6 @@ export function createModelCompleter(deps: {
              * and the confidence floor still sends an unsure match to the default.
              */
             ...(anthropic
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
-              ? { max_tokens: deps.maxTokens ?? 1024 }
-              : { response_format: { type: "json_object" } }),
-=======
               ? {
                   max_tokens: deps.maxTokens ?? 1024,
                   ...(schema
@@ -191,7 +177,6 @@ export function createModelCompleter(deps: {
                       }
                     : { type: "json_object" },
                 }),
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
             messages: [{ role: "user", content: prompt }],
           }),
           signal: signal

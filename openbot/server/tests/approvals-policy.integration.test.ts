@@ -252,7 +252,6 @@ test("personal and team rules layer, the strictest wins, and switching custom ru
   expect(inbox.team).toMatchObject({ customRulesEnabled: true });
 });
 
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
 test("a safety hand-off is stored, cannot be allowed, and is marked done by the person", () =>
   asOwner(async () => {
     const paying = candidate({
@@ -280,31 +279,6 @@ test("a safety hand-off is stored, cannot be allowed, and is marked done by the 
       replay: HANDLED_BY_PERSON,
     });
   }));
-=======
-test("a safety hand-off is stored, cannot be allowed, and is marked done by the person", async () => {
-  // A password typed on a website: the one thing always handed to the person.
-  const paying = candidate({
-    toolRef: "computer_type",
-    args: { field: "New password", text: "x" },
-  });
-  expect(await suspends(service.gate(paying))).toBeTrue();
-  const [request] = (await store.list(owner)).filter(
-    (row) => row.action.toolCallId === paying.continuation?.toolCallId,
-  );
-  expect(request?.action.policy).toMatchObject({
-    behaviour: "hand_off",
-    source: "safety",
-  });
-  await expect(
-    service.decide(owner, request?.id as string, "allow_always"),
-  ).rejects.toThrow("handed to you");
-  const decided = await service.decide(owner, request?.id as string, "handled");
-  expect(decided.decision).toBe("handled");
-  await expect(service.gate(paying)).resolves.toMatchObject({
-    replay: HANDLED_BY_PERSON,
-  });
-});
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
 
 test("'Always allow here' saves a personal allow rule that the gate then honours", () =>
   asOwner(async () => {

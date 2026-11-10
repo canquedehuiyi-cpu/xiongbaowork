@@ -8,17 +8,12 @@ import {
   DESKTOP_WINDOW_ID,
 } from "@openbot/shared/desktop-control";
 import type { BotAccessCheck } from "../agents/profile-policy";
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
 import {
   ApprovalNeedsConversationError,
   ApprovalRefusedError,
 } from "../approvals/types";
-import type { AuditReader } from "../audit";
-import type { AdminScope } from "../auth/admin-scope";
-=======
-import { ApprovalNeedsConversationError } from "../approvals/types";
 import { type AuditReader, type AuditStore, recordAuditEvent } from "../audit";
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
+import type { AdminScope } from "../auth/admin-scope";
 import type { AppVariables } from "../auth/guards";
 import { requireAdmin } from "../auth/guards";
 import { DeviceActionError, DeviceOfflineError } from "../devices/channel";
@@ -1082,7 +1077,7 @@ export function createComputerRoutes(
         return context.json(
           {
             error:
-              "The rule was saved, but Audit couldn't record the change. Save it again to record it.",
+              "规则已保存，但审计没能记下这次修改。请再保存一次，好让审计记下来。",
           },
           500,
         );
@@ -1115,54 +1110,7 @@ export function createComputerRoutes(
       const denied = requireAdmin(context);
       if (denied) return denied;
 
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
       if (!auditReader) {
-=======
-    if (!auditReader) {
-      return context.json(
-        {
-          error:
-            "This deployment records no readable trail, so there is no history to test against.",
-        },
-        501,
-      );
-    }
-
-    const body = (await context.req.json().catch(() => null)) as {
-      policy?: unknown;
-      limit?: unknown;
-    } | null;
-    const parsed = parseActionPolicy(body?.policy);
-    if (!parsed.ok) {
-      return context.json({ error: parsed.error }, 400);
-    }
-    /*
-     * A rule that can't be evaluated is reported, not replayed. Replayed, it would match every action
-     * it met, fail closed, and the preview would show it stopping everything: true of the broken rule
-     * once saved, and nothing like what its author meant. The same check a save makes.
-     */
-    const broken = uncheckableRule(parsed.policy, policyStore.get());
-    if (broken) {
-      return context.json({ error: broken.error, rule: broken.rule }, 400);
-    }
-
-    // Bounded, and biased to recency: the question is what this rule does to the traffic the
-    // deployment actually has, and last week's traffic answers that better than a full scan.
-    //
-    // Strict on purpose. This used to read `typeof limit === "number" ? limit : 200` and clamp,
-    // so `"abc"`, `null` and `true` silently became 200, `Infinity` silently became 500, and
-    // `NaN` became `NaN` and travelled into `auditReader.list` as one. A what-if answered from
-    // the wrong slice of history is worse than no answer, because it is believed.
-    const rawLimit = body?.limit;
-    let limit = 200;
-    if (rawLimit !== undefined) {
-      if (
-        typeof rawLimit !== "number" ||
-        !Number.isInteger(rawLimit) ||
-        rawLimit < 1 ||
-        rawLimit > 500
-      ) {
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
         return context.json(
           {
             error:
@@ -1172,7 +1120,6 @@ export function createComputerRoutes(
         );
       }
 
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
       const body = (await context.req.json().catch(() => null)) as {
         policy?: unknown;
         limit?: unknown;
@@ -1181,15 +1128,6 @@ export function createComputerRoutes(
       if (!parsed.ok) {
         return context.json({ error: parsed.error }, 400);
       }
-=======
-    // Computer actions and app calls, newest first across both: one policy decides both, and a rule
-    // about an app previewed against computer actions alone reports that it changes nothing.
-    const { events } = await auditReader.list({
-      limit,
-      eventType: REPLAYABLE_EVENT_TYPES.join(","),
-      targetType: REPLAYABLE_TARGET_TYPES.join(","),
-    });
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
 
       // Bounded, and biased to recency: the question is what this rule does to the traffic the
       // deployment actually has, and last week's traffic answers that better than a full scan.
@@ -1219,11 +1157,27 @@ export function createComputerRoutes(
       if (adminScope && capabilityFor(context.var.actor.id) !== "admin") {
         return context.json({ error: "Administrator access required." }, 403);
       }
+      /*
+       * A rule that can't be evaluated is reported, not replayed. Replayed, it would match every
+       * action it met, fail closed, and the preview would show it stopping everything: true of the
+       * broken rule once saved, and nothing like what its author meant. The same check a save makes.
+       * After the capability check, so a demoted admin is refused before anything is read; and a
+       * candidate with no rules has nothing to check, so the policy in force is not asked for.
+       */
+      const broken =
+        parsed.policy.deny.length + parsed.policy.allow.length > 0
+          ? uncheckableRule(parsed.policy, policyStore.get())
+          : null;
+      if (broken) {
+        return context.json({ error: broken.error, rule: broken.rule }, 400);
+      }
+      // Computer actions and app calls, newest first across both: one policy decides both, and a rule
+      // about an app previewed against computer actions alone reports that it changes nothing.
       const recent = () =>
         auditReader.list({
           limit,
           eventType: REPLAYABLE_EVENT_TYPES.join(","),
-          targetType: "computer",
+          targetType: REPLAYABLE_TARGET_TYPES.join(","),
         });
       // The deployment's traffic, not the administrator's own: every judged action is stamped with the
       // person whose Bot took it, so the replay reads the trail as `platform`.

@@ -36,9 +36,12 @@ import {
   type ModelCompleter,
   ModelNotConfiguredError,
 } from "../routing/model";
-import { APP_CALL_EVENT_TYPES } from "./plugin-store/call-policy";
-import type { ToolRecord } from "./plugin-store/model";
-import type { PluginStore } from "./store";
+// M5: fork 没有采用插件拆分，这些在 ./store。
+import {
+  APP_CALL_EVENT_TYPES,
+  type PluginStore,
+  type ToolRecord,
+} from "./store";
 
 /** One action the app offers, as the writer, the check, the reader and the replay see it. */
 export type GrantTool = Pick<

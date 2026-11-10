@@ -1421,7 +1421,9 @@ export async function synchronizeTenantPackage(
             // Where `starterInstructionsKey` keeps them: the prompt a Bot that runs here runs on, or
             // the instructions a harness is sent in its standing role.
             const key =
-              starter.type === "built_in" ? "systemPrompt" : "standingInstructions";
+              starter.type === "built_in"
+                ? "systemPrompt"
+                : "standingInstructions";
             const stored = configuration[key];
             if (
               typeof stored !== "string" ||

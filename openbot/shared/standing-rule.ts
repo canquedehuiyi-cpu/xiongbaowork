@@ -2,9 +2,10 @@
  * Whether an approval may be answered with a standing answer: "Always allow here", or "Allow for
  * this conversation".
  *
- * OPEN BY DEFAULT. Deleting, sending, sharing, posting, paying and changing account settings ask
- * (server/src/approvals/policy.ts), and the person can allow each of them once, for the conversation,
- * or always, as they can anything else that asks. An admin closes a kind of action for everybody
+ * Upstream (#1394) opens every kind of action that asks to standing answers by default. THIS
+ * DEPLOYMENT KEEPS ITS FLOORS (#398): deleting, sending, sharing and posting ask every time with
+ * Allow once and Deny only (`ONCE_ONLY_SOURCES` below), and paying or changing account settings is
+ * handed to the person (server/src/approvals/policy.ts). An admin can close any other kind further
  * (Admin → Approvals); then it asks every time and only Allow once and Deny stay (`closed`).
  *
  * Not one a task started from a check-in raised: those ask before every change whatever the
@@ -21,25 +22,22 @@
 export function offersStandingRule(action: {
   policy?: { source: string; behaviour?: string; closed?: boolean } | undefined;
 }): boolean {
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
-  return !ONCE_ONLY_SOURCES.has(action.policy?.source ?? "");
-=======
   const policy = action.policy;
   return (
-    policy?.source !== "task" &&
+    !ONCE_ONLY_SOURCES.has(policy?.source ?? "") &&
     policy?.closed !== true &&
     policy?.behaviour !== "hand_off"
   );
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
 }
 
 /**
- * The sources answered only once. `task` and `safety` as above; `destructive_tool` (deleting,
- * archiving, a tool its app marks destructive), `outbound_send` (an app tool sending something to
- * other people, a send button or a keyboard send on a web page), `share_access` (sharing, changing
- * permissions, adding collaborators) and `publish_post` (forwarding, going live, publishing a
- * release, posting) are the floors this deployment asks for after every rule, so a saved rule could
- * never answer one either.
+ * The sources answered only once. `task` as above; `safety` (a built-in requirement or the
+ * reviewer's safety category, or a kind the admin closed); `destructive_tool` (deleting, archiving, a
+ * tool its app marks destructive), `outbound_send` (an app tool sending something to other people, a
+ * send button or a keyboard send on a web page), `share_access` (sharing, changing permissions,
+ * adding collaborators) and `publish_post` (forwarding, going live, publishing a release, posting)
+ * are the floors this deployment asks for after every rule, so a saved rule or a conversation answer
+ * could never answer one either.
  */
 export const ONCE_ONLY_SOURCES: ReadonlySet<string> = new Set([
   "task",

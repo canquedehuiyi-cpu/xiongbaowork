@@ -1,13 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import {
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
   APPROVAL_GUIDANCE,
   APPROVAL_GUIDANCE_APPS,
-  approvalGuidance,
-=======
   ASKING_GUIDANCE,
+  approvalGuidance,
   BROUGHT_BOT_ASKING_GUIDANCE,
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
   DESTRUCTIVE_TOOL_NOTE,
 } from "@openbot/shared/bot-prompt";
 import type { GrantedTool } from "@openbot/toolkit/granted-tool";
@@ -87,7 +84,6 @@ const flat = (text: string) => text.replace(/\s+/g, " ");
 
 describe("a Bot OpenBot runs leaves the asking to OpenBot", () => {
   test("it is told OpenBot asks before consequential actions, and not to ask first", () => {
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
     expect(APPROVAL_GUIDANCE).toContain("所以你不要先问");
     // With a connected app's tool, the whole guidance, the app-tools bullet included.
     expect(promptHolding([tool("mcp__acme-crm__delete_contact")])).toContain(
@@ -99,10 +95,6 @@ describe("a Bot OpenBot runs leaves the asking to OpenBot", () => {
       expect(prompt).toContain(approvalGuidance({ apps: false }));
       expect(prompt).not.toContain(APPROVAL_GUIDANCE_APPS);
     }
-=======
-    expect(prompt).toContain(ASKING_GUIDANCE);
-    expect(ASKING_GUIDANCE).toContain("do not ask them first");
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
   });
 
   test("a remote Bot is told so only for what OpenBot gives it: its own tools don't go through OpenBot's gate", () => {
@@ -112,10 +104,8 @@ describe("a Bot OpenBot runs leaves the asking to OpenBot", () => {
       title: "Risk desk",
       roleDescription: "Investigate policies.",
     });
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
     expect(role.content).not.toContain(approvalGuidance({ apps: false }));
     expect(role.content).not.toContain(APPROVAL_GUIDANCE_APPS);
-=======
     expect(role.content).not.toContain(ASKING_GUIDANCE);
     expect(role.content).toContain(BROUGHT_BOT_ASKING_GUIDANCE);
     const said = BROUGHT_BOT_ASKING_GUIDANCE.replace(/\s+/g, " ");
@@ -126,12 +116,10 @@ describe("a Bot OpenBot runs leaves the asking to OpenBot", () => {
     expect(said).toContain(
       "Tools of your own that OpenBot did not give you are not covered: ask before one of those does something that cannot be undone.",
     );
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
   });
 
   // Each button the guidance names, as a Bot presses it: the policy must ask about every one.
   test.each([
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
     ["删除", "Delete", "destructive_tool"],
     ["删除", "删除", "destructive_tool"],
     ["移除", "Remove", "destructive_tool"],
@@ -158,19 +146,6 @@ describe("a Bot OpenBot runs leaves the asking to OpenBot", () => {
         id: source,
         behaviour: "ask",
       });
-=======
-    ["delete", "Delete", "ask"],
-    ["send", "Send", "ask"],
-    ["share", "Share", "ask"],
-    ["post", "Post", "ask"],
-    ["pay for", "Pay", "ask"],
-    ["buy", "Buy now", "ask"],
-  ] as const)(
-    "the guidance says OpenBot asks before you %s, and it does",
-    (said, button, behaviour) => {
-      expect(ASKING_GUIDANCE.replace(/\s+/g, " ")).toContain(said);
-      expect(safetyRequirement(click(button))?.behaviour).toBe(behaviour);
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
     },
   );
 
@@ -186,16 +161,9 @@ describe("a Bot OpenBot runs leaves the asking to OpenBot", () => {
       ).toBe("ask");
   });
 
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
   test("Enter or Space on the page with no element named asks", () => {
     expect(APPROVAL_GUIDANCE).toContain(
       "没有指明元素时在页面上按 Enter 或空格",
-=======
-  test("the guidance promises a card for deleting in the person's apps, never on the Bot's own computer", () => {
-    const guidance = ASKING_GUIDANCE.replace(/\s+/g, " ");
-    expect(guidance).toContain(
-      "before you delete, archive, send, share or post anything in their apps or on websites",
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
     );
     for (const key of ["Enter", "Space"])
       expect(
@@ -270,7 +238,6 @@ describe("a Bot OpenBot runs leaves the asking to OpenBot", () => {
     );
   });
 
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
   test("the guidance says OpenBot asks before an app tool named to delete or archive, and it does", () => {
     expect(APPROVAL_GUIDANCE_APPS).toContain("名字表明会删除或归档的");
     for (const name of [
@@ -287,21 +254,6 @@ describe("a Bot OpenBot runs leaves the asking to OpenBot", () => {
   test("a tool its app marks destructive says so on itself, as the guidance names it, and OpenBot asks", () => {
     expect(APPROVAL_GUIDANCE_APPS).toContain(
       "应用标为破坏性的（会删除或覆盖内容）",
-=======
-  test("the guidance says OpenBot asks before you archive, and it does", () => {
-    expect(ASKING_GUIDANCE.replace(/\s+/g, " ")).toContain(
-      "delete, archive, send",
-    );
-    expect(safetyRequirement(app("HUBSPOT_ARCHIVE_CONTACT"))?.behaviour).toBe(
-      "ask",
-    );
-  });
-
-  test("a tool its app marks destructive says so on itself, in the words the guidance names, and OpenBot asks", () => {
-    const guidance = ASKING_GUIDANCE.replace(/\s+/g, " ");
-    expect(guidance).toContain(
-      "before you use a tool that says it deletes or overwrites something",
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
     );
     expect(DESTRUCTIVE_TOOL_NOTE).toContain("deletes or overwrites something");
     expect(DESTRUCTIVE_TOOL_NOTE).toContain("Don't ask them first.");

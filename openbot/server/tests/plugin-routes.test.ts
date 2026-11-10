@@ -2134,13 +2134,14 @@ describe("connecting a brokered app", () => {
     await connect({}, "?returnTo=settings&from=desktop");
     await connect({}, "?from=https%3A%2F%2Fevil.test");
 
+    // M5: fork 的 broker.authorize 按 userId 记人（上游是 account，属 X 系列多账号）。
     expect(authorized).toEqual([
       {
-        account: ADMIN_ACCOUNT,
+        userId: ADMIN.id,
         toolkit: "linear",
         returnUrl: DESKTOP_RETURN_URL,
       },
-      { account: ADMIN_ACCOUNT, toolkit: "linear", returnUrl: RETURN_URL },
+      { userId: ADMIN.id, toolkit: "linear", returnUrl: RETURN_URL },
     ]);
   });
 

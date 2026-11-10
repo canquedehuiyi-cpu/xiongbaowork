@@ -1,9 +1,11 @@
 import type { Message } from "@ag-ui/client";
 import { z } from "zod";
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
 import { desktopFloor } from "./desktop-policy";
 import {
+  type ActionKind,
+  type ActionKindPolicy,
   type ApprovalCandidate,
+  type ApprovalConversationGrant,
   type ApprovalPolicyOutcome,
   type ApprovalRule,
   type ApprovalTeamRule,
@@ -12,18 +14,6 @@ import {
   type HostCommandPolicy,
   type RuleBehaviour,
   TIGHTENING_BEHAVIOURS,
-=======
-import type {
-  ActionKind,
-  ActionKindPolicy,
-  ApprovalCandidate,
-  ApprovalConversationGrant,
-  ApprovalPolicyOutcome,
-  ApprovalRule,
-  ApprovalTeamRule,
-  HostCommandPolicy,
-  RuleBehaviour,
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
 } from "./types";
 
 /**
@@ -69,18 +59,23 @@ export function globMatches(pattern: string, value: string): boolean {
 type AnyRule = Pick<
   ApprovalRule,
   "id" | "botId" | "toolRef" | "effect" | "scope" | "behaviour"
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
->;
-=======
-> & { account?: string | null; kind?: ActionKind | null };
+> & { kind?: ActionKind | null };
 
-/** The layers a rule can come from: the admin's, the person's, and this conversation's answers. */
-export type RuleLayer = "team_rule" | "personal_rule" | "conversation";
+/**
+ * The layers a rule can come from: the admin's, the Bot owner's (SEC1 D9), the person's, and this
+ * conversation's answers.
+ */
+export type RuleLayer =
+  | "team_rule"
+  | "owner_rule"
+  | "personal_rule"
+  | "conversation";
 
 /**
  * Whether a rule may decide an action of this kind (see `ActionKind`).
  *
- * ASKING ALWAYS REACHES: a rule that asks or hands off is stricter, so it holds for any kind.
+ * ASKING ALWAYS REACHES: a rule that asks, hands off or disables the tool (or one this code cannot
+ * read) is stricter, so it holds for any kind.
  *
  * ALLOWING REACHES ONLY ITS OWN KIND. An allow saved from a send card ("Always allow here", "Allow
  * for this conversation") carries `kind: "sending"`, and reaches later sends of that action. A rule
@@ -91,10 +86,9 @@ export type RuleLayer = "team_rule" | "personal_rule" | "conversation";
  */
 export function reachesKind(rule: AnyRule, kind: ActionKind | undefined) {
   if (kind === undefined) return true;
-  if (rule.behaviour === "ask" || rule.behaviour === "hand_off") return true;
+  if (tightens(rule.behaviour)) return true;
   return rule.kind === kind;
 }
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
 
 export function ruleMatches(rule: AnyRule, candidate: ApprovalCandidate) {
   return (
@@ -105,14 +99,6 @@ export function ruleMatches(rule: AnyRule, candidate: ApprovalCandidate) {
   );
 }
 
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
-export type RuleLayer = "team_rule" | "owner_rule" | "personal_rule";
-
-/**
- * The strictest matching rule across the layers: the team's, the Bot owner's (SEC1 D9), and the
- * acting person's own. A tie goes to the earlier layer, so the team's locked row wins it, then the
- * owner's.
-=======
 /** A conversation answer as a rule: it allows exactly the action it was given on. */
 function grantRule(grant: ApprovalConversationGrant): AnyRule {
   return {
@@ -122,60 +108,65 @@ function grantRule(grant: ApprovalConversationGrant): AnyRule {
     effect: grant.effect,
     scope: grant.scope,
     behaviour: "allow",
-    account: grant.account,
     kind: grant.kind,
   };
 }
 
 /**
  * The person's "Allow for this conversation" answer that covers this action, if any: the same Bot,
- * tool, target and account, and the same kind. Exact values, never globs: it was given on one card.
- * The caller passes only the answers of this conversation (`conversationGrants` on the store).
+ * tool, target, and the same kind. Exact values, never globs: it was given on one card. The caller
+ * passes only the answers of this conversation (`conversationGrants` on the store).
+ *
+ * M5: 留给 X 系列（多账号）：上游还要求账号相同；本部署的审批不分账号。
  */
 export function conversationGrant(
   candidate: ApprovalCandidate,
   grants: readonly ApprovalConversationGrant[],
   kind: ActionKind | undefined,
 ): ApprovalConversationGrant | undefined {
-  const account = candidate.account?.trim().toLowerCase() || null;
   return grants.find(
     (grant) =>
       grant.botId === candidate.botId &&
       grant.toolRef === candidate.toolRef &&
       grant.effect === candidate.effect &&
       grant.scope === candidate.scope &&
-      (grant.account?.trim().toLowerCase() || null) === account &&
       reachesKind(grantRule(grant), kind),
   );
 }
 
+/** What {@link strictestRule} also weighs: this conversation's answers, and the action's kind. */
+export type StrictestRuleOptions = {
+  conversation?: readonly ApprovalConversationGrant[];
+  kind?: ActionKind;
+};
+
 /**
- * The strictest matching rule across the layers. A tie goes to the team's locked row, then to the
- * person's saved rule, then to this conversation's answer. A team rule that asks or hands off beats
- * any allow of the person's, saved or for this conversation.
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
+ * The strictest matching rule across the layers: the team's, the Bot owner's (SEC1 D9), the acting
+ * person's own, and the person's "Allow for this conversation" answer in this conversation. A tie
+ * goes to the earlier layer, so the team's locked row wins it, then the owner's, then the person's
+ * saved rule. A rule that asks, hands off or disables beats any allow of the person's, saved or for
+ * this conversation. For a kind, only an allow saved from that kind's card reaches it
+ * (`reachesKind`).
+ *
+ * The fourth argument is the owner's rules, or, as upstream calls it, the options in their place.
  */
 export function strictestRule(
   candidate: ApprovalCandidate,
   team: readonly ApprovalTeamRule[],
   personal: readonly ApprovalRule[],
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
-  owner: readonly ApprovalRule[] = [],
+  ownerOrOptions: readonly ApprovalRule[] | StrictestRuleOptions = [],
+  moreOptions: StrictestRuleOptions = {},
 ): { rule: AnyRule; layer: RuleLayer } | undefined {
-  let best: { rule: AnyRule; layer: RuleLayer } | undefined;
-=======
-  options: {
-    conversation?: readonly ApprovalConversationGrant[];
-    kind?: ActionKind;
-  } = {},
-): { rule: AnyRule; layer: RuleLayer } | undefined {
+  const owner = Array.isArray(ownerOrOptions) ? ownerOrOptions : [];
+  const options: StrictestRuleOptions = Array.isArray(ownerOrOptions)
+    ? moreOptions
+    : (ownerOrOptions as StrictestRuleOptions);
   let best: { rule: AnyRule; layer: RuleLayer } | undefined;
   const granted = conversationGrant(
     candidate,
     options.conversation ?? [],
     options.kind,
   );
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
   for (const [layer, rules] of [
     ["team_rule", team],
     ["owner_rule", owner],
@@ -183,21 +174,9 @@ export function strictestRule(
     ["conversation", granted ? [grantRule(granted)] : []],
   ] as const) {
     for (const rule of rules) {
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
       if (!ruleMatches(rule, candidate)) continue;
-      if (!best || rankOf(rule.behaviour) > rankOf(best.rule.behaviour))
-=======
-      if (
-        !ruleMatches(
-          rule,
-          candidate,
-          layer === "team_rule" ? "team_rule" : "personal_rule",
-        )
-      )
-        continue;
       if (!reachesKind(rule, options.kind)) continue;
-      if (!best || RANK[rule.behaviour] > RANK[best.rule.behaviour])
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
+      if (!best || rankOf(rule.behaviour) > rankOf(best.rule.behaviour))
         best = { rule, layer };
     }
   }
@@ -269,35 +248,49 @@ const CN_AMOUNT =
   "(?:\\s*(?:共|合计|总计|实付|应付)?[:：]?\\s*[¥￥$]?\\s*[\\d.,]+\\s*元?)?";
 
 /**
- * What each kind of action is, in the words its card and its reasons use.
+ * 每种动作在卡片和理由里的说法（上游 `KIND_PHRASES`，给人看，所以是中文）。
+ *
+ * 上游 #1394 把这些动作默认打开，把付款和改账号设置从「交给本人」改成「先问」，把改凭据只在网页上
+ * 输入时交给本人。本部署不跟：审批底线（#398）照旧，删除、对外发送、分享、公开发布总是先问且只给
+ * 「允许一次」，付款、改凭据、改安全设置总是交给本人（见 {@link safetyRequirement}）。
  */
 export const KIND_PHRASES: Record<ActionKind, string> = {
-  deleting: "Deleting something",
-  sending: "Sending something to other people",
-  sharing: "Sharing something with other people",
-  publishing: "Posting or publishing something",
-  payments: "Paying, buying or moving money",
-  credentials: "Changing a password or other sign-in detail",
-  security_settings: "Changing security, sharing or access settings",
+  deleting: "删除内容",
+  sending: "把内容发给别人",
+  sharing: "把内容分享给别人或改变谁能访问",
+  publishing: "公开发布内容",
+  payments: "付款、购买或转账",
+  credentials: "修改密码或其它登录凭据",
+  security_settings: "修改安全、分享或访问设置",
 };
 
-/** Why a kind asks, on its card, while it is open: the person can allow it from there. */
-const askReason = (kind: ActionKind) => `${KIND_PHRASES[kind]} asks you first.`;
-
 /**
- * THE ONE KIND THAT STAYS WITH THE PERSON WHATEVER IS SET: a credential changed on a website. The
- * Bot would type a password or a code into a form, and only the person has it. No standing answer can
- * supply it, so it is handed to them. A credential an app's own tool changes (rotating an API key)
- * needs nothing only the person has, and asks like every other kind.
+ * 内置安全要求的 id（fork 的底线来源）对应的动作种类（上游 `ActionKind`）：管理员的按种类设置、
+ * 规则和对话授权按种类认它。
  */
-const TYPED_CREDENTIAL =
-  "Changing a password or other sign-in detail on a website needs you to type it, so it's yours to do.";
+export const KIND_OF_SAFETY: Record<
+  | "credentials"
+  | "security_settings"
+  | "payments"
+  | "destructive_tool"
+  | "outbound_send"
+  | "share_access"
+  | "publish_post",
+  ActionKind
+> = {
+  credentials: "credentials",
+  security_settings: "security_settings",
+  payments: "payments",
+  destructive_tool: "deleting",
+  outbound_send: "sending",
+  share_access: "sharing",
+  publish_post: "publishing",
+};
 
 /**
  * Account-level actions: credentials, security settings and payments.
  *
  * Matched on the words of the action and its target, for effects that change something, and for
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
  * payments also on what an app tool is called (see {@link actionName}). A read is never handed off
  * here: reading a checkout page is not paying. Deliberately broad; a false hand-off costs the person
  * one click, a missed one costs them their account or their money.
@@ -305,17 +298,6 @@ const TYPED_CREDENTIAL =
 const SAFETY_REQUIREMENTS: readonly {
   id: "credentials" | "security_settings" | "payments";
   reason: string;
-=======
- * payments also on what the action is called (see {@link actionName}). A read never matches here:
- * reading a checkout page is not paying. Deliberately broad; a false ask costs the person one click,
- * a missed one costs them their account or their money.
- *
- * Each asks, open by default as every kind is (see {@link decideAction}), except a credential typed
- * on a website ({@link TYPED_CREDENTIAL}).
- */
-const SAFETY_REQUIREMENTS: readonly {
-  id: ActionKind;
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
   /** Matched on every word of the action: its tool, target, arguments and page. */
   pattern: RegExp;
   /**
@@ -338,6 +320,8 @@ const SAFETY_REQUIREMENTS: readonly {
 }[] = [
   {
     id: "credentials",
+    reason:
+      "Changing a password, passcode, two-factor setting, recovery code or other credential is always done by the person.",
     pattern:
       /pass(word|code|phrase)|passwd|\b2fa\b|two[-_ ]?factor|\bmfa\b|one[-_ ]?time[-_ ]?code|\botp\b|recovery[-_ ]?(code|key|email|phone)|security[-_ ]?question|api[-_ ]?key|access[-_ ]?token|credential|sign[-_ ]?in[-_ ]?method/i,
     /*
@@ -361,11 +345,14 @@ const SAFETY_REQUIREMENTS: readonly {
   },
   {
     id: "security_settings",
+    reason:
+      "Changing security, sharing or access settings on an account is always done by the person.",
     pattern:
       /security[-_ ]?settings?|\/settings\/security|account[-_ ]?security|sharing[-_ ]?settings?|share[-_ ]?with[-_ ]?(anyone|public)|make[-_ ]?public|admin[-_ ]?role|grant[-_ ]?admin|permission[-_ ]?settings?|delete[-_ ]?(my[-_ ]?)?account|close[-_ ]?account/i,
   },
   {
     id: "payments",
+    reason: "Paying, purchasing or moving money is always done by the person.",
     pattern:
       // 退款也是动钱（上游 #904）。电汇是动钱，新闻通稿（Business Wire、news wire、press wire）不是：
       // Bot 填资料来源时写上它，不该因此交给本人（上游）。wire transfer 不管前面是什么都算。
@@ -417,24 +404,13 @@ function flatten(value: unknown, depth = 0): string {
 }
 
 /**
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
  * 一个值里的词，以及它是否装了东西（参照上游 #930）。
-=======
- * Consequential actions: deleting, sending to other people, sharing and publishing. Each one asks in
- * every edition, whatever the person's "Ask before making changes" says. OPEN BY DEFAULT: the person
- * can allow it once, for the conversation, or always, and an admin can close each kind so it asks
- * every time or is left to the person (see {@link decideAction} and `offersStandingRule`).
- *
- * This reverses #998, which made these ask every time with Allow once and Deny only. OpenBot opens
- * things by default, and closing them is the organisation's call.
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
  *
  * 留空的字段说明不了这个动作：Bot 没填的 `billing_address` 不该让一条订单备注被当成动钱。所以字段
  * 名只在它装了东西时才算。`filled` 和 `text` 分开，是因为深度上限：超过上限的值不再读，它的文字
  * 总是空的，但没读过不等于空。只有一眼看上去就是空的值（空串、空数组、空对象）算没填，其余的保留
  * 字段名，嵌得再深也按名字判定。
  */
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
 function wordsOf(
   value: unknown,
   depth: number,
@@ -560,53 +536,15 @@ export type OnceOnlyFloor = {
     | "publish_post";
   reason: string;
 };
-=======
-const CONSEQUENTIAL: readonly {
-  id: ActionKind;
-  tool: { test(name: string): boolean };
-  click: RegExp;
-}[] = [
-  {
-    id: "deleting",
-    tool: /\b(delete|deletes|trash|destroy|erase|purge|wipe|discard)\b/,
-    click: new RegExp(
-      `^${CONFIRMING}(delete|permanently delete|move to (the )?(trash|bin)|trash|empty (the )?(trash|bin)|discard|erase|destroy)\\b|^${CONFIRMING}remove( permanently)?$`,
-    ),
-  },
-  {
-    id: "sending",
-    // A scheduled send is a send: it goes to them later, with nobody asked then either.
-    tool: toOthers(
-      actsBy(
-        /\b(send|sends|reply|replies|forward|respond|notify|broadcast|invite|invites|comment|comments|(create|post|add) (an? )?(chat |channel )?messages?(?! templates?\b)|schedules? (an? |the |single )?((?!with |for |to |of )\w+ )?(messages?|emails?|mails?|campaigns?|dms?|sms|texts?|newsletters?|sends?)|create scheduled (\w+ )?(messages?|emails?|mails?|dms?|sms|texts?))\b/,
-      ),
-    ),
-    // A Comment or a Reply button is how a comment or a reply is sent. Only the whole label.
-    click: new RegExp(`^${CONFIRMING}(send\\b|(comment|reply)$)`),
-  },
-  {
-    id: "sharing",
-    tool: /\b(share|shares|sharing|shared link|permission|permissions|collaborators?|acl|grant (access|role))\b/,
-    click: new RegExp(`^${CONFIRMING}(share|invite|add people)\\b`),
-  },
-  {
-    id: "publishing",
-    tool: actsBy(
-      /\b(publish|publishes|go live|(create|publish) (an? )?release|retweets?|reposts?|tweets?|post (an? |the |new )?(\w+ ){0,3}?(comments?|repl(y|ies)|messages?|mentions?|tweets?|threads?|status(es)?|stor(y|ies)|photos?|videos?|articles?|reels?)|(create|creation of|publish|submit|schedule|reschedule|share|write|send) (an? |the |new )?(\w+ ){0,3}?(?<!\bvia )posts?(?! (drafts?|templates?)\b))\b/,
-    ),
-    click: new RegExp(
-      `^${CONFIRMING}(post|publish|tweet|repost|retweet|go live)\\b`,
-    ),
-  },
-];
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
 
 /**
  * 内置安全要求对这个动作怎么说（参照上游 `safetyRequirement`，带 `behaviour`）：
  *  - `hand_off`：改凭据、改安全或分享设置、付款动钱，总是交给本人做；
  *  - `ask`：删除、对外发送、分享、公开发布，总是先问，只给「允许一次 / 拒绝」。`id` 是 fork 的
  *    底线来源（`destructive_tool`、`outbound_send`、`share_access`、`publish_post`）。
- * 都在任何规则、偏好和审查之前，且不可配置。交给本人的优先。
+ * 都在任何规则、偏好和审查之前；管理员按种类的设置（上游 #1394 的 `actionKinds`）只能让它更严。
+ * 交给本人的优先。上游的动作种类由 {@link KIND_OF_SAFETY} 按 `id` 给出（结果里不另带，`id` 的形状
+ * 保持 fork 原样）。
  */
 export function safetyRequirement(candidate: ApprovalCandidate):
   | {
@@ -711,7 +649,6 @@ function paysToSubscribe(
  * （见 {@link toolWords}），只认经插件调用路径来的应用工具（`subject.connector`）；或者网页上点击
  * 的按钮的文字（「Place your order」），来自网关从快照里解析出的元素。其它电脑动作没有名字。
  */
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
 function actionName(
   candidate: ApprovalCandidate,
 ): { kind: "tool" | "click"; name: string } | undefined {
@@ -721,172 +658,6 @@ function actionName(
     return undefined;
   const label = elementName(candidate).replace(/\s+/g, " ").trim();
   return label ? { kind: "click", name: label } : undefined;
-=======
-function pageWithoutQuery(target: unknown): unknown {
-  if (target === null || typeof target !== "object" || Array.isArray(target))
-    return target;
-  const page = (target as { pageUrl?: unknown }).pageUrl;
-  if (typeof page !== "string") return target;
-  try {
-    const url = new URL(page);
-    return { ...target, pageUrl: `${url.origin}${url.pathname}` };
-  } catch {
-    return target;
-  }
-}
-
-/** How deep a value is read. Anything nested further is not, so matching stays cheap. */
-const MAX_DEPTH = 6;
-
-function flatten(value: unknown, depth = 0): string {
-  return words(value, depth).text;
-}
-
-/**
- * The words of a value, and whether it holds anything at all.
- *
- * `filled` is separate from `text` because of the depth cap. A value past the cap is never read, so
- * its text is empty whether or not it holds something, and an unread value is not an empty one.
- */
-function words(
-  value: unknown,
-  depth: number,
-): { text: string; filled: boolean } {
-  if (value === null || value === undefined) return { text: "", filled: false };
-  // Not read, so not known to be empty. Only a value that is plainly empty on its face counts as
-  // nothing sent; anything else keeps its field's name in the words.
-  if (depth > MAX_DEPTH) return { text: "", filled: !plainlyEmpty(value) };
-  if (typeof value === "string") return { text: value, filled: value !== "" };
-  if (typeof value === "number" || typeof value === "boolean")
-    return { text: String(value), filled: true };
-  if (Array.isArray(value)) {
-    const entries = value.map((entry) => words(entry, depth + 1));
-    return {
-      text: entries.map((entry) => entry.text).join(" "),
-      filled: entries.some((entry) => entry.filled),
-    };
-  }
-  if (typeof value === "object") {
-    const fields = Object.entries(value).map(([key, entry]) => {
-      // A field left empty says nothing about the action: match the arguments actually
-      // sent, not a name like "billing_address" with nothing in it.
-      const read = words(entry, depth + 1);
-      return {
-        text: read.filled ? `${key} ${read.text}` : "",
-        filled: read.filled,
-      };
-    });
-    return {
-      text: fields.map((field) => field.text).join(" "),
-      filled: fields.some((field) => field.filled),
-    };
-  }
-  return { text: "", filled: false };
-}
-
-function plainlyEmpty(value: unknown): boolean {
-  if (value === "") return true;
-  if (Array.isArray(value)) return value.length === 0;
-  if (typeof value === "object" && value !== null)
-    return Object.keys(value).length === 0;
-  return false;
-}
-
-/**
- * The Bot's own sandbox workspace and commands on the person's computer do not reach an account:
- * a config file that mentions a password is not a password change. Host commands are also shown
- * verbatim in the native dialog on that computer.
- */
-const NOT_ACCOUNT_ACTIONS =
-  /^(computer_(write_file|read_file|list_files|run_command)|host\/)/;
-
-/** Why a tool its app marks destructive asks, when its name doesn't say it deletes. */
-const DESTRUCTIVE_REASON =
-  "The app marks this as deleting or overwriting something, so it asks you first.";
-
-/**
- * The kind of action this is, where OpenBot recognises one, and how it asks by default: `ask` for
- * every kind, open to standing answers, and `hand_off` only for a credential typed on a website
- * ({@link TYPED_CREDENTIAL}). The admin's setting for the kind is applied in {@link decideAction}.
- */
-export function safetyRequirement(
-  candidate: ApprovalCandidate,
-):
-  | { id: ActionKind; reason: string; behaviour: "hand_off" | "ask" }
-  | undefined {
-  if (candidate.effect === "read") return undefined;
-  if (NOT_ACCOUNT_ACTIONS.test(candidate.toolRef)) return undefined;
-  // What a Bot types is content, as reading a checkout page is not paying: a CRM note about a
-  // customer's purchase orders is not a purchase. The field it types into and the page it is on
-  // say what the action is ("Card number", ".../checkout", "New password"), so they are read.
-  const args =
-    candidate.toolRef === "computer_type" &&
-    candidate.args !== null &&
-    typeof candidate.args === "object" &&
-    !Array.isArray(candidate.args)
-      ? { ...(candidate.args as Record<string, unknown>), text: undefined }
-      : candidate.args;
-  const wordsWith = (target: unknown) =>
-    [candidate.toolRef, candidate.scope, flatten(args), flatten(target)].join(
-      " ",
-    );
-  const words = wordsWith(candidate.target);
-  const pathWords = wordsWith(pageWithoutQuery(candidate.target));
-  const named = actionName(candidate);
-  const matches = (entry: {
-    tool?: { test(name: string): boolean };
-    click?: RegExp;
-  }) =>
-    named !== undefined &&
-    (named.kind === "tool" ? entry.tool : entry.click)?.test(named.name) ===
-      true;
-  const handOff =
-    SAFETY_REQUIREMENTS.find(
-      (entry) =>
-        entry.pattern.test(entry.pagePathOnly ? pathWords : words) ||
-        matches(entry),
-    ) ??
-    (paysToSubscribe(candidate, named)
-      ? SAFETY_REQUIREMENTS.find((entry) => entry.id === "payments")
-      : undefined);
-  if (handOff)
-    return handOff.id === "credentials" &&
-      candidate.toolRef.startsWith("computer_")
-      ? { id: handOff.id, reason: TYPED_CREDENTIAL, behaviour: "hand_off" }
-      : { id: handOff.id, reason: askReason(handOff.id), behaviour: "ask" };
-  // The Bot's own memory and settings are its own, as auto-review treats them (see `reviewable`).
-  if (OWN_TOOLS.test(candidate.toolRef)) return undefined;
-  const asks =
-    CONSEQUENTIAL.find((entry) => {
-      if (!matches(entry)) return false;
-      // A draft is staged for the person, and sends nothing until somebody sends it.
-      return !(
-        entry.id === "sending" &&
-        named?.kind === "tool" &&
-        /\bdrafts?\b/.test(named.name) &&
-        !/\bsend\b/.test(named.name)
-      );
-    }) ??
-    (named?.kind === "tool" &&
-    !/\bdrafts?\b/.test(named.name) &&
-    addressesPeople(candidate.args)
-      ? CONSEQUENTIAL.find((entry) => entry.id === "sending")
-      : undefined) ??
-    (pressesSend(candidate)
-      ? CONSEQUENTIAL.find((entry) => entry.id === "sending")
-      : undefined) ??
-    // Last, so taking somebody's access away ("remove collaborator") is asked about as sharing.
-    (named?.kind === "tool" &&
-    /^(removes?|archives?)$/.test(named.name.match(FIRST_VERB)?.[1] ?? "")
-      ? CONSEQUENTIAL.find((entry) => entry.id === "deleting")
-      : undefined);
-  if (asks)
-    return { id: asks.id, reason: askReason(asks.id), behaviour: "ask" };
-  // Whatever it is called, a tool its app marks destructive asks as deleting does.
-  return named?.kind === "tool" && candidate.destructive === true
-    ? { id: "deleting", reason: DESTRUCTIVE_REASON, behaviour: "ask" }
-    : undefined;
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
 }
 
 /**
@@ -1410,11 +1181,11 @@ const verdictSchema = z.object({
 const SAFETY_REASONS: Record<(typeof SAFETY_CATEGORIES)[number], string> = {
   none: "",
   credentials:
-    "The reviewer found this changes a password or other sign-in detail, so it asks you first.",
+    "The reviewer found this changes a password, passcode, two-factor setting or other credential, which is always done by the person.",
   security_settings:
-    "The reviewer found this changes security, sharing or access settings, so it asks you first.",
+    "The reviewer found this changes security, sharing or access settings, which is always done by the person.",
   payments:
-    "The reviewer found this pays, buys or moves money, so it asks you first.",
+    "The reviewer found this pays, purchases or moves money, which is always done by the person.",
 };
 
 /**
@@ -1536,7 +1307,6 @@ export async function reviewAction(input: {
   }
 }
 
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
 /** What a refused action tells the Bot: final, and not something to work around. */
 export const TOOL_DISABLED =
   "This tool is disabled for this Bot, so the action was not done and cannot be approved. Do not try it, or anything equivalent, another way; tell the person it is disabled.";
@@ -1996,75 +1766,32 @@ function pressesSend(candidate: ApprovalCandidate): boolean {
  *     先问，规则问过的也改记为这条底线，卡片因此只给「允许一次 / 拒绝」。它们和上面几条底线管的
  *     工具互不相交（那几条只看 `computer_*`、`host/` 的命令、路径和本机应用），在链里排第几不影响
  *     结果。一个工具既删除又发送时，按删除类底线问。
- *  5. The strictest rule across the team's, the owner's and the person's own; then the reviewer
- *     where it applies; then the person's own "ask before making changes" default.
-=======
-/** Why a kind the admin closed asks every time, or is left to the person. */
-const closedReason = (kind: ActionKind, to: "ask" | "hand_off") =>
-  to === "ask"
-    ? `${KIND_PHRASES[kind]} asks you every time. Your admin set this.`
-    : `${KIND_PHRASES[kind]} is yours to do. Your admin set this.`;
-
-/**
- * A kind of action, as the admin set it (`actionKinds` in the team settings): handed to the person,
- * asked every time, or undefined while it is open and the rules below decide it.
- */
-export function closedKind(
-  kind: ActionKind,
-  actionKinds: Partial<Record<ActionKind, ActionKindPolicy>> | undefined,
-): ApprovalPolicyOutcome | undefined {
-  const set = actionKinds?.[kind] ?? "open";
-  if (set === "hand_off")
-    return {
-      behaviour: "hand_off",
-      source: "safety",
-      kind,
-      reason: closedReason(kind, "hand_off"),
-    };
-  if (set === "ask")
-    return {
-      behaviour: "ask",
-      source: "safety",
-      kind,
-      closed: true,
-      reason: closedReason(kind, "ask"),
-    };
-  return undefined;
-}
-
-/**
- * The whole decision, layer by layer.
+ *  5. The strictest rule across the team's, the owner's and the person's own, and the person's
+ *     "Allow for this conversation" answers in this conversation (`conversationGrant`, upstream
+ *     #1394); then the reviewer where it applies, with the admin's guidance (#1397); then the
+ *     person's own "ask before making changes" default.
  *
- * 1. A kind of action OpenBot recognises (`safetyRequirement`): a credential typed on a website is
- *    handed to the person, and a kind the admin closed asks every time or is handed to the person
- *    (`closedKind`). Nothing below changes either.
- * 2. The strictest rule: the admin's, the person's, and the person's "Allow for this conversation"
- *    answers in this conversation (`conversationGrant`). For a kind, only an allow saved from that
- *    kind's card reaches it (`reachesKind`); a team rule that asks or hands off always does.
- * 3. The reviewer, where it applies.
- * 4. A kind still open with nothing allowing it asks, with every answer offered. Otherwise the
- *    person's own "ask before making changes" default.
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
+ * 上游 #1394 的按种类设置（`actionKinds`）在第 3 步之后读：管理员把一种动作设成「交给本人」时交给
+ * 本人。设成「每次都问」或「打开」不放宽任何底线：删除、对外发送、分享、公开发布照旧只给「允许一次」，
+ * 付款、改凭据、改安全设置照旧交给本人。审查认出的安全类别照旧交给本人（上游改成了先问）。
  */
 export async function decideAction(input: {
   candidate: ApprovalCandidate;
   messages?: readonly Message[];
   team: readonly ApprovalTeamRule[];
   personal: readonly ApprovalRule[];
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
   /** The Bot owner's rules, when somebody other than the owner is acting (D9). */
   owner?: readonly ApprovalRule[];
-=======
   /** This person's "Allow for this conversation" answers in the conversation the action is in. */
   conversation?: readonly ApprovalConversationGrant[];
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
   customRulesEnabled: boolean;
   autoReview: boolean;
   askBeforeChanges: boolean;
   /** The kinds the admin closed (`ApprovalTeamSettings.actionKinds`). */
   actionKinds?: Partial<Record<ActionKind, ActionKindPolicy>>;
   model?: ReviewModel;
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
+  /** The admin's guidance for auto-review. It reaches the reviewer and nothing else here. */
+  guidance?: string | null;
   /** The Bot's security floors. Absent means the defaults: both floors ask. */
   security?: EmployeeSecuritySettings;
   /** The team's "every Bot asks before a dangerous command" switch (D10). */
@@ -2078,29 +1805,35 @@ export async function decideAction(input: {
     ...(input.owner ? { owner: input.owner } : {}),
     customRulesEnabled: input.customRulesEnabled,
   });
+  /*
+   * A personal rule and a conversation answer are both the person's own standing answers, so a
+   * workspace that switched personal rules off switches both off (upstream #1394). A conversation
+   * answer only ever allows, so it is not one of the rules that tighten.
+   */
   const matched = strictestRule(
     candidate,
     input.team,
     layers.personal,
     layers.owner,
+    {
+      conversation: input.customRulesEnabled ? (input.conversation ?? []) : [],
+    },
   );
   const refused = refusedOutright(input);
   if (refused) return refused;
   const runnerCommand = isRunnerCommand(candidate);
-=======
-  /** The admin's guidance for auto-review. It reaches the reviewer and nothing else here. */
-  guidance?: string | null;
-}): Promise<ApprovalPolicyOutcome> {
-  const { candidate } = input;
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
   const safety = safetyRequirement(candidate);
+  const kind = safety ? KIND_OF_SAFETY[safety.id] : undefined;
   if (safety?.behaviour === "hand_off")
     return {
       behaviour: "hand_off",
       source: "safety",
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
+      ...(kind ? { kind } : {}),
       reason: safety.reason,
     };
+  // 管理员把这种动作设成「交给本人」：比只给「允许一次」的底线更严，照办。
+  const closed = kind ? closedKind(kind, input.actionKinds) : undefined;
+  if (closed?.behaviour === "hand_off") return closed;
   // 内置安全要求里要先问的那一半（删除、对外发送、分享、公开发布），作为只给「允许一次」的底线。
   const onceOnly: OnceOnlyFloor | undefined =
     safety?.behaviour === "ask"
@@ -2157,7 +1890,7 @@ export async function decideAction(input: {
   // A floor only raises: an action the rules let through still asks; one already asked about or
   // handed off keeps the stricter answer it had. 只给「允许一次」的底线（删除类、对外发送、分享、
   // 公开发布）多做一步：规则、偏好或审查本来就要问的，也改记为这条底线，卡片才不会给出一条存了也
-  // 永远用不上的「总是允许」；原来的理由接在后面保留。
+  // 永远用不上的「总是允许」或「在这段对话里都允许」；原来的理由接在后面保留。
   const restated =
     floor !== undefined && floor === onceOnly && decided.behaviour === "ask";
   const outcome: ApprovalPolicyOutcome =
@@ -2170,6 +1903,9 @@ export async function decideAction(input: {
             : floor.reason,
           ...(decided.ruleId ? { ruleId: decided.ruleId } : {}),
           ...(decided.review ? { review: decided.review } : {}),
+          // 底线的结果不另带上游的 `kind`：它的 `source` 已经说明种类（见 KIND_OF_SAFETY），且 fork 的
+          // 测试按原样比对这一结果。管理员设成「每次都问」时记下 `closed`。
+          ...(floor === onceOnly && closed ? { closed: true as const } : {}),
         }
       : decided;
   // --- app discovery (sub-project 3) ---
@@ -2192,6 +1928,42 @@ export async function decideAction(input: {
     };
   // --- end app discovery ---
   return outcome;
+}
+
+/** Why a kind the admin closed asks every time, or is left to the person. */
+const closedReason = (kind: ActionKind, to: "ask" | "hand_off") =>
+  to === "ask"
+    ? `${KIND_PHRASES[kind]}每次都要先问你，这是管理员的设置。`
+    : `${KIND_PHRASES[kind]}由你自己来做，这是管理员的设置。`;
+
+/**
+ * A kind of action, as the admin set it (`actionKinds` in the team settings): handed to the person,
+ * asked every time, or undefined while it is open and the rules below decide it.
+ *
+ * 本部署里每种动作本来就有底线（只给「允许一次」或交给本人），所以 {@link decideAction} 只用它的
+ * 「交给本人」；「每次都问」只在底线的结果上记下 `closed`。
+ */
+export function closedKind(
+  kind: ActionKind,
+  actionKinds: Partial<Record<ActionKind, ActionKindPolicy>> | undefined,
+): ApprovalPolicyOutcome | undefined {
+  const set = actionKinds?.[kind] ?? "open";
+  if (set === "hand_off")
+    return {
+      behaviour: "hand_off",
+      source: "safety",
+      kind,
+      reason: closedReason(kind, "hand_off"),
+    };
+  if (set === "ask")
+    return {
+      behaviour: "ask",
+      source: "safety",
+      kind,
+      closed: true,
+      reason: closedReason(kind, "ask"),
+    };
+  return undefined;
 }
 
 /**
@@ -2279,31 +2051,6 @@ async function decideByRules(
   matched: ReturnType<typeof strictestRule>,
 ): Promise<ApprovalPolicyOutcome> {
   const { candidate } = input;
-=======
-      kind: safety.id,
-      reason: safety.reason,
-    };
-  if (safety) {
-    const closed = closedKind(safety.id, input.actionKinds);
-    if (closed) return closed;
-  }
-  /*
-   * A personal rule and a conversation answer are both the person's own standing answers, so a
-   * workspace that switched personal rules off switches both off.
-   */
-  const personal = input.customRulesEnabled ? input.personal : [];
-  const conversation = input.customRulesEnabled
-    ? (input.conversation ?? [])
-    : [];
-  const ruleFor = (kind: ActionKind | undefined) =>
-    strictestRule(candidate, input.team, personal, {
-      conversation,
-      ...(kind ? { kind } : {}),
-    });
-  const kind = safety?.id;
-  const matched = ruleFor(kind);
-  const kindOf = kind ? { kind } : {};
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
   const rule = matched
     ? {
         ruleId: matched.rule.id,
@@ -2313,10 +2060,9 @@ async function decideByRules(
   if (matched?.rule.behaviour === "hand_off")
     return {
       behaviour: "hand_off",
-      source: matched.layer === "team_rule" ? "team_rule" : "personal_rule",
+      source: matched.layer,
       ruleId: matched.rule.id,
       reason: "A rule hands this kind of action to the person.",
-      ...kindOf,
     };
   const review =
     (input.autoReview && reviewable(candidate)) ||
@@ -2337,40 +2083,25 @@ async function decideByRules(
         })
       : undefined;
   /*
-   * The reviewer's own safety classification, on top of the keyword match above. It can only make
-   * the action ask (or what the admin set for the kind): a reviewer that says "none" or cannot be
-   * reached leaves the keyword result standing. Open, it asks unless an allow saved from that kind's
-   * card covers it.
+   * The reviewer's own safety classification, on top of the keyword floor above. It can only add a
+   * hand-off: a reviewer that says "none" or cannot be reached leaves the keyword result standing.
+   * 上游 #1394 把它改成了先问（可被按种类保存的允许放行）；本部署保留交给本人，更严。管理员的指引
+   * 只到审查模型，改不了这一步。
    */
   const category = review?.safety;
   if (
-    !safety &&
     category &&
     category !== "none" &&
     !review.failedClosed &&
     !NOT_ACCOUNT_ACTIONS.test(candidate.toolRef)
-  ) {
-    const reason = SAFETY_REASONS[category];
-    const closed = closedKind(category, input.actionKinds);
-    if (closed) return { ...closed, review };
-    const allowed = ruleFor(category);
-    if (allowed?.rule.behaviour === "allow")
-      return {
-        behaviour: "allow",
-        source: allowed.layer,
-        ruleId: allowed.rule.id,
-        kind: category,
-        reason: allowedReason(allowed.layer),
-        review,
-      };
+  )
     return {
-      behaviour: "ask",
+      behaviour: "hand_off",
       source: "safety",
       kind: category,
-      reason,
+      reason: SAFETY_REASONS[category],
       review,
     };
-  }
   if (review && input.autoReview && reviewable(candidate)) {
     if (review.verdict === "hand_off")
       return {
@@ -2379,7 +2110,6 @@ async function decideByRules(
         reason: review.reason,
         review,
         ...(rule ? { ruleId: rule.ruleId } : {}),
-        ...kindOf,
       };
     if (review.verdict === "needs_approval")
       return {
@@ -2388,17 +2118,15 @@ async function decideByRules(
         reason: review.reason,
         review,
         ...(rule ? { ruleId: rule.ruleId } : {}),
-        ...kindOf,
       };
   }
   if (matched?.rule.behaviour === "ask")
     return {
       behaviour: "ask",
-      source: matched.layer === "team_rule" ? "team_rule" : "personal_rule",
+      source: matched.layer,
       ruleId: matched.rule.id,
       reason: "A rule asks before this kind of action.",
       ...(review ? { review } : {}),
-      ...kindOf,
     };
   if (matched?.rule.behaviour === "pre_approved")
     return review?.preApproved && !review.failedClosed
@@ -2408,7 +2136,6 @@ async function decideByRules(
           ruleId: matched.rule.id,
           reason: "The person asked for this exact action in this run.",
           review,
-          ...kindOf,
         }
       : {
           behaviour: "ask",
@@ -2417,7 +2144,6 @@ async function decideByRules(
           reason:
             "A rule allows this only when the person asked for it, and this run's request did not.",
           ...(review ? { review } : {}),
-          ...kindOf,
         };
   if (matched?.rule.behaviour === "allow")
     return {
@@ -2425,16 +2151,6 @@ async function decideByRules(
       source: matched.layer,
       ruleId: matched.rule.id,
       reason: allowedReason(matched.layer),
-      ...(review ? { review } : {}),
-      ...kindOf,
-    };
-  // A kind, open, that nothing allows: it asks, and the card offers every answer.
-  if (safety)
-    return {
-      behaviour: "ask",
-      source: "safety",
-      kind: safety.id,
-      reason: safety.reason,
       ...(review ? { review } : {}),
     };
   if (input.askBeforeChanges && candidate.effect !== "read")
@@ -2455,7 +2171,7 @@ async function decideByRules(
 /** Why an allow decided it, by the layer it came from. */
 function allowedReason(layer: RuleLayer): string {
   return layer === "conversation"
-    ? "You allowed this for this conversation."
+    ? "你在这段对话里允许过这样做。"
     : "A rule allows this kind of action.";
 }
 

@@ -30,7 +30,6 @@ import {
   readRunAssertion,
 } from "./agents/callback-token";
 import { canUseComputer } from "./agents/computer-access";
-import { isUnattended, runModeOf } from "./agents/run-mode";
 import { wireCoordination } from "./agents/coordination-wiring";
 import { createAgentFetch } from "./agents/endpoint";
 import { createHandoffDesk } from "./agents/handoff";
@@ -45,6 +44,7 @@ import {
 import { createBotReset } from "./agents/lifecycle-reset";
 import { createAgentProfileStore } from "./agents/profile-store";
 import type { AgentActor } from "./agents/profile-types";
+import { isUnattended, runModeOf } from "./agents/run-mode";
 import { createRuntimeAgentLoader } from "./agents/runtime-agents";
 import { createSubagents, SUBAGENT_HANDED_BACK } from "./agents/subagent";
 import { toolLimitRecorder } from "./agents/tool-limit";
@@ -432,7 +432,12 @@ import {
   productHeadlessBoundary,
 } from "./telemetry/product-boundaries";
 import { isAccessRevoked } from "./tenant/access";
-import { asPlatform, runAsTenant } from "./tenant/context";
+import {
+  asPlatform,
+  capabilityFor,
+  currentTenant,
+  runAsTenant,
+} from "./tenant/context";
 import {
   createPackageStatusReader,
   deploymentNameOf,
@@ -452,7 +457,6 @@ import { createUserInstructionsStore } from "./user-instructions";
 import { createUserPreferencesStore } from "./user-preferences";
 import { createVoiceSessionStore } from "./voice/sessions";
 import { createVoiceSummarizer } from "./voice/summary";
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
 import { createWakerGroupRoutes } from "./waker-groups/routes";
 import { createWakerGroupStore } from "./waker-groups/store";
 import { createFlowGenerator } from "./wakerflows/generator";
@@ -463,9 +467,7 @@ import {
   createWakerFlowShareRoutes,
 } from "./wakerflows/routes";
 import { createWakerFlowStore, flowRunEventWriter } from "./wakerflows/store";
-=======
 import { readAuditEvent, readWhatIfVocabulary } from "./what-if";
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
 import { repeatAfterEach } from "./work/loop";
 import { createWorkQueue, startWorkOfferedListener } from "./work/queue";
 
@@ -502,7 +504,6 @@ checkDatabaseCredential({
       : console.warn(JSON.stringify(event)),
 });
 const database = createDatabase(config.databaseUrl);
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
 const roleWriterLifecycle = createRoleWriterLifecycle({
   application: database,
   url: roleWriterUrl,
@@ -511,144 +512,6 @@ const roleWriterLifecycle = createRoleWriterLifecycle({
   stop: stopRoleWriter,
   close: async (writer) => {
     await writer.$client.close();
-=======
-const productTelemetry = await createProductTelemetry({
-  privacyKey: config.keyEncryptionKey,
-  deploymentId: config.deploymentId,
-});
-addAuditTap(productTelemetry.recordAudit);
-const prepareProductRunInput = productHeadlessBoundary(productTelemetry);
-const profileStore = createProfileStore(database);
-// Every dispatch point asks this database whether its person paused the Bot. See agents/lifecycle.ts.
-configureBotLifecycle({ database });
-// The environment's container, until the boot check finds this Intelligence has no such container
-// (learning/auto-assign.ts). A name left over from a setup against another Intelligence then gives
-// way to automatic assignment instead of failing every new thread.
-const configuredLearning = configuredLearningContainer(config.learning);
-const learningSettingsStore = createLearningSettingsStore(
-  database,
-  configuredLearning,
-);
-// Its own client, like the self-host banner's: the constructor opens nothing.
-const learningProbeIntelligence = createIntelligenceClient(
-  config.runtime.intelligence,
-);
-/*
- * Who can create a Learning container here. First the runtime key itself, on an Intelligence that
- * lets a project key create one in its own project, at the address the server already uses (a
- * Service in the cluster with the bundled Intelligence). On one that does not, a service token the
- * operator configured (local evaluation installs), or a CopilotKit CLI login on this machine, which
- * is what a laptop running `bun run start` has: those two only over HTTPS, or HTTP on loopback.
- * None of them, and the log and Admin say exactly what to run instead.
- */
-const learningApiUrl = config.runtime.intelligence.apiUrl.replace(/\/+$/, "");
-const learningApiOrigin = (() => {
-  try {
-    return intelligenceApiOrigin(learningApiUrl);
-  } catch {
-    return undefined;
-  }
-})();
-/** The credentials that can create a Learning container, for the `openbot` default and for each person's own space. */
-const learningCredentials = (): LearningContainerCredentials => ({
-  directory: process.cwd(),
-  apiUrl: learningApiOrigin ?? learningApiUrl,
-  nonInteractive: true,
-  key: keyIntelligence(
-    learningApiUrl,
-    config.runtime.intelligence.apiKey,
-    config.runtime.intelligence.gatewayWsUrl,
-  ),
-  cliLogin: learningApiOrigin !== undefined && cliLoginPresent(),
-  ...(config.learningSetup && learningApiOrigin
-    ? {
-        serviceToken: {
-          token: config.learningSetup.serviceToken,
-          projectId: config.learningSetup.projectId,
-        },
-      }
-    : {}),
-});
-const learningAutoAssign = createLearningAutoAssign({
-  enabled: config.learningAutoAssign,
-  configured: configuredLearning,
-  store: learningSettingsStore,
-  probe: (containerId) =>
-    probeLearningContainer(learningProbeIntelligence, containerId),
-  instructions: learningSetupInstructions(learningApiOrigin ?? learningApiUrl),
-  create: () => ensureLearningContainer(learningCredentials()),
-  audit: createAuditStore(database),
-});
-/*
- * Each person's own Learning space: every recording they make joins it, and every Bot they run uses its Skills. Made
- * with the same credential as the default container, on first need: when their browser connects, and again on a
- * capture pass if it is still missing. With no such credential a missing space cannot be made, and the Recorder says so.
- */
-const personalLearningSpaces = createPersonalLearningSpaces({
-  readSettings: () => learningSettingsStore.read(),
-  snapshots: learningProbeIntelligence,
-  store: createPersonSpaceStore(database),
-  create: (container) =>
-    createLearningContainer({ ...learningCredentials(), container }),
-  nameFor: async (userId) =>
-    (
-      await database
-        .select({ name: users.name })
-        .from(users)
-        .where(eq(users.id, userId))
-        .limit(1)
-    ).map((row) => row.name?.trim() || null)[0] ?? null,
-});
-const skillApprovalStore = createSkillApprovalStore(database);
-const learningSharingStore = createLearningSharingStore(database);
-/** What everyone opened to every Bot, in memory: runs read this, never each person's space or the table. */
-const openSkillIndex = createOpenSkillIndex({
-  read: () => learningSharingStore.openSources(),
-});
-const learningSettings = withLearningAutoAssign(
-  learningSettingsStore,
-  learningAutoAssign,
-);
-learningAutoAssign.start();
-await initializeDevActorUser(database, config.singleUser);
-// The vault, built before the agent store because a customer's agent may sit behind a key and that
-// key belongs here rather than on the agent row. See agents/auth-header.ts.
-const credentialStore = createCredentialStore(database);
-const identityStore = createIdentityStore(database, credentialStore);
-const agentVault = {
-  store: credentialStore,
-  reader: credentialStore,
-  encryptionKey: config.keyEncryptionKey,
-};
-const agentProfileStore = createAgentProfileStore(
-  database,
-  config.managedAgent?.endpoint,
-  agentVault,
-);
-// Read here rather than beside the synchronise below, because the package names the deployment and
-// the channel store needs that name before it can mint a thread id.
-const tenantPackage = await loadTenantPackage(config.tenantPackageDirectory);
-// The package's id unless DEPLOYMENT_ID says otherwise, and the id the deployment was set up under if
-// the package has since been renamed. See `deploymentNameOf`.
-const deploymentId =
-  config.deploymentId ?? (await deploymentNameOf(database, tenantPackage));
-const threadIdentity = createThreadIdentity(deploymentId);
-const baseChannelStore = createChannelStore(
-  database,
-  agentProfileStore,
-  threadIdentity,
-);
-/**
- * A person spoke in one of their conversations. Bound once memory defaults exist (memory/defaults.ts):
- * a conversation with one Bot switches on that Bot's research and memory sources for this person.
- */
-let personSpoke: ((ownerUserId: string, channelId: string) => void) | undefined;
-const channelStore: ChannelStore = {
-  ...baseChannelStore,
-  async recordActivity(actor, channelId, activity, source) {
-    await baseChannelStore.recordActivity(actor, channelId, activity, source);
-    if (activity.agentId === null) personSpoke?.(actor.id, channelId);
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
   },
 });
 const startupLifecycle = createStartupLifecycle({
@@ -701,7 +564,6 @@ await startupLifecycle.run(async (startup) => {
     privacyKey: config.keyEncryptionKey,
     deploymentId: config.deploymentId,
   });
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
   addAuditTap(productTelemetry.recordAudit);
   startup.acquireSync(
     () => productTelemetry,
@@ -729,8 +591,14 @@ await startupLifecycle.run(async (startup) => {
    * Automatic Learning, only with a connected Intelligence (R0). Its settings are the deployment's,
    * and the `openbot` container is assigned automatically when nobody has chosen one (upstream #774).
    */
+  /*
+   * The environment's container, until the boot check finds this Intelligence has no such container
+   * (learning/auto-assign.ts). A name left over from a setup against another Intelligence then gives
+   * way to automatic assignment instead of failing every new thread (upstream #1363).
+   */
+  const configuredLearning = configuredLearningContainer(config.learning);
   const learningSettingsStore = intelligenceClient
-    ? createLearningSettingsStore(database, config.learning)
+    ? createLearningSettingsStore(database, configuredLearning)
     : undefined;
   /*
    * Who can create a Learning container here. First the runtime key itself, on an Intelligence that
@@ -777,6 +645,7 @@ await startupLifecycle.run(async (startup) => {
     const credentials = learningCredentials();
     const assign = createLearningAutoAssign({
       enabled: config.learningAutoAssign,
+      configured: configuredLearning,
       store: learningSettingsStore,
       probe: (containerId) =>
         probeLearningContainer(intelligenceClient, containerId),
@@ -784,169 +653,6 @@ await startupLifecycle.run(async (startup) => {
         ? {
             instructions: learningSetupInstructions(
               learningApiOrigin ?? learningApiUrl,
-=======
-
-/**
- * Pass one of tool selection, on the model the built-in Bots run on: their key, or their plan's
- * harness. See `createSkillChooser`. Built once rather than per request, because it holds nothing
- * about a person.
- */
-const chooseSkills = createSkillChooser(
-  runtimeModel,
-  resolveDeploymentModelKey,
-);
-
-/**
- * The approval reviewer's model: the deployment's own, with its key or on its plan's harness (see
- * `createModelCompleter`). On a plan it threw on every call and failed closed, so Auto-review asked
- * the person about everything. It still fails closed on an error or a timeout (`reviewAction`).
- */
-const reviewActions = createModelCompleter({
-  model: runtimeModel,
-  resolveApiKey: resolveDeploymentModelKey,
-});
-
-/**
- * Writes a boundary from an admin's description, and reads it back (computer/policy-translate.ts).
- * The deployment's own model, with longer to answer than the router: an admin pressed a button and
- * is waiting for a rule, which is a longer answer than a router's one name, and a reasoning model
- * spends seconds before it starts.
- */
-const writeBoundaries = createModelCompleter({
-  model: runtimeModel,
-  resolveApiKey: resolveDeploymentModelKey,
-  timeoutMs: 45_000,
-  // Room for the thinking a current Claude model does before it answers, which counts against it.
-  maxTokens: 16_000,
-});
-
-/**
- * Reads an admin's question about the audit trail as filters, and reads the filters back
- * (audit-ask.ts). The deployment's own model, given as long as a boundary's writer for the same
- * reason: an admin pressed Ask and is waiting.
- */
-const askTheAuditTrail = createModelCompleter({
-  model: runtimeModel,
-  resolveApiKey: resolveDeploymentModelKey,
-  timeoutMs: 45_000,
-  maxTokens: 16_000,
-});
-
-/** Reads "what would happen if…" as one action (what-if.ts), for an admin who pressed Ask. */
-const readWhatIfQuestions = createModelCompleter({
-  model: runtimeModel,
-  resolveApiKey: resolveDeploymentModelKey,
-  timeoutMs: 45_000,
-  maxTokens: 16_000,
-});
-
-/*
- * The pair a headless turn is driven through, built ONCE.
- *
- * Not the runtime's own pair: `mountCopilotRuntime` keeps its client and its runner inside
- * `CopilotRuntime` and hands neither back, and reaching into that object would be a worse seam than
- * building our own from the same three settings. Built from `config.runtime.intelligence`, which is
- * required and not optional — `RuntimeCapabilities` has exactly one mode and every Intelligence field
- * with it (`config.ts:10-22`), and `loadConfig` refuses to boot without them — so there is no
- * not-in-Intelligence-mode branch to write here. If a second mode is ever added, THIS is the line that
- * has to grow a guard, and the routine runner must then be left off `createApp` entirely.
- *
- * One runner for the process, reused across firings: it opens a socket per run and holds no idle
- * connection, but its `threads` map is per instance, and a runner per turn would fragment the
- * already-running check that keeps two turns off one thread. See `toolkit/run-turn.ts`.
- */
-const routineIntelligence = observeIntelligenceAuthentication(
-  new CopilotKitIntelligence({
-    apiUrl: config.runtime.intelligence.apiUrl,
-    wsUrl: config.runtime.intelligence.gatewayWsUrl,
-    apiKey: config.runtime.intelligence.apiKey,
-  }),
-);
-const approvalComputerTools = async (
-  ownerUserId: string,
-  agentId: string,
-  initiator: AuditInitiator,
-) => {
-  const actor = await actorFor(ownerUserId);
-  const profile = await agentProfileStore.get(actor, agentId);
-  if (!profile)
-    throw new ApprovalRefusedError("That Bot is no longer available to you.");
-  // A Team Bot's teammate uses the Bot, not its owner's signed-in computer.
-  return computerGateway && canUseComputer(profile, actor)
-    ? createHeadlessComputerTools({
-        gateway: computerGateway,
-        seat: await computerGateway.seatFor(agentId, actor.id),
-        actor: { id: actor.id, userId: actor.id, initiator },
-        auditStore: bootAuditStore,
-        ...(signInService ? { signIn: signInService } : {}),
-      })
-    : [];
-};
-
-const approvalService = createServerApprovalService({
-  storedApprovals,
-  config,
-  sourceForCoordinationRun,
-  agentProfileStore,
-  actorFor,
-  database,
-  authoriseQuestion,
-  routineIntelligence,
-  approvalComputerTools,
-  review: (prompt, signal) => reviewActions(prompt, signal),
-  // Assigned further down, once delivery is wired.
-  notify: (scope, input) => deliveryNotifications(scope, input),
-});
-// Check-ins' settings, items, run ledger and pings. See proactive/store.ts.
-const proactiveStore = createProactiveStore(database);
-// Housekeeping on a schedule: audit rows when asked for, screenshots and the check-in ledger always,
-// one timer. See audit-retention.ts.
-const retentionSweeps = startRetentionSweeps(
-  config.databaseUrl,
-  config.auditRetentionDays,
-  pageFrameStore,
-  { proactive: proactiveStore },
-);
-/**
- * Whose computer a Bot runs on: the person it acts for, unless the Bot is isolated and its owner
- * still holds the switch (`runsIsolated`, agents/isolation.ts). A provider that cannot make a
- * computer for one Bot (the one shared computer) gives every Bot a seat for the person instead.
- */
-const computerSeats = computerProvider
-  ? createComputerSeatResolver({
-      runsIsolated: (botId) => runsIsolated(database, botId),
-      bot: botOwnership(database),
-      canIsolate: computerProvider.isolation === "per-person",
-    })
-  : undefined;
-
-const computerGateway = computerProvider
-  ? createComputerGateway({
-      provider: computerProvider,
-      ...(computerSeats ? { seats: computerSeats } : {}),
-      // Who each person's computer belongs to, for the admin list.
-      people: async (ids) =>
-        new Map(
-          (
-            await database
-              .select({ id: users.id, name: users.name, email: users.email })
-              .from(users)
-              .where(inArray(users.id, ids))
-          ).map((row) => [row.id, { name: row.name, email: row.email }]),
-        ),
-      // Whose OpenBot browser each one is: the server minted its Recorder connection under the browser's own install id.
-      browserOwners: async (computerIds) => {
-        const rows = await database
-          .selectDistinct({ userId: recorderConnections.userId })
-          .from(recorderConnections)
-          .where(
-            and(
-              eq(recorderConnections.via, "openbot-browser"),
-              inArray(
-                recorderConnections.installId,
-                computerIds.map(personBrowserInstallId),
-              ),
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
             ),
           }
         : {}),
@@ -1036,6 +742,11 @@ const computerGateway = computerProvider
       ? createLearningRuntime({
           store: learningSettings,
           client: intelligenceClient,
+          // The environment's container, or a saved default, that this Intelligence was found not to
+          // have (upstream #1363/#1366).
+          forgotten: (containerId) =>
+            configuredLearning.forgotten(containerId) ||
+            (learningSettingsStore?.isSetAside(containerId) ?? false),
           people: {
             containerFor: personalLearningSpaces.containerFor,
             openSkills: () => openSkillIndex.sources(),
@@ -2267,6 +1978,51 @@ const computerGateway = computerProvider
   });
 
   /**
+   * M5: a read for one of upstream's admin drafting routes, across every person when the request
+   * holds the admin capability (`requireAdminUser` in app.ts mounts it), as the audit list reads as
+   * `platform` (G01-E P7). Anyone else reads in their own frame; the routes answer them with
+   * `requireAdmin` before any read.
+   */
+  const adminRead = <T>(work: () => T): T =>
+    capabilityFor(currentTenant()) === "admin" ? asPlatform(work) : work();
+
+  /**
+   * Writes a boundary from an admin's description, and reads it back (computer/policy-translate.ts),
+   * and likewise team approval rules, a Bot's actions in one app, the network allowlist and the
+   * guidance for auto-review (upstream #1372/#1381/#1396/#1397/#1398/#1399). The deployment's own
+   * model, with longer to answer than the router: an admin pressed a button and is waiting for a rule,
+   * which is a longer answer than a router's one name, and a reasoning model spends seconds before it
+   * starts.
+   */
+  const writeBoundaries = createModelCompleter({
+    model: runtimeModel,
+    resolveApiKey: resolveRuntimeModelApiKey,
+    timeoutMs: 45_000,
+    // Room for the thinking a current Claude model does before it answers, which counts against it.
+    maxTokens: 16_000,
+  });
+
+  /**
+   * Reads an admin's question about the audit trail as filters, and reads the filters back
+   * (audit-ask.ts, upstream #1380). The deployment's own model, given as long as a boundary's writer
+   * for the same reason: an admin pressed Ask and is waiting.
+   */
+  const askTheAuditTrail = createModelCompleter({
+    model: runtimeModel,
+    resolveApiKey: resolveRuntimeModelApiKey,
+    timeoutMs: 45_000,
+    maxTokens: 16_000,
+  });
+
+  /** Reads "what would happen if…" as one action (what-if.ts, upstream #1402), for an admin who pressed Ask. */
+  const readWhatIfQuestions = createModelCompleter({
+    model: runtimeModel,
+    resolveApiKey: resolveRuntimeModelApiKey,
+    timeoutMs: 45_000,
+    maxTokens: 16_000,
+  });
+
+  /**
    * The models a person may pick for a Bot's run, and how hard each can think, asked of whatever
    * serves the model: the provider, the gateway in OPENAI_BASE_URL, or a signed-in plan's own listing.
    * One person on their own machine picks from all of them; in a team, people pick among the models an
@@ -2583,379 +2339,6 @@ const computerGateway = computerProvider
   /** One person's standing instructions, for both the /api/settings routes and every run they start. */
   const userInstructionsStore = createUserInstructionsStore(database);
 
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
-=======
-/*
- * What this person has told every built-in coworker they run.
- *
- * Per actor and read per build, for the reason every other per-person fact here is: somebody who
- * edits their instructions and sends a message expects the message to land on the new ones, and a
- * value captured at boot would serve the whole deployment whatever the first person to sign in had
- * written.
- */
-const loadInstructionsForActor = (actorId: string) => () =>
-  userInstructionsStore.read(actorId);
-
-/*
- * The file behind an attachment reference, read when a turn turns out to name one.
- *
- * Read per turn rather than held, for the reason the bytes are in the database at all: a message
- * carries a `/api/attachments/<id>` URL, and a model provider is not going to go and fetch it. The
- * row is fetched here and the bytes go up inline, so the Bot sees the file the person attached
- * instead of a link it cannot follow.
- *
- * Built per actor and passed to both turn paths — the request path through `mountCopilotRuntime` and
- * a routine's turn through `buildAgentFor` — so a routine firing at three in the morning inlines
- * exactly as a person's chat turn does, on exactly the same footing.
- *
- * NARROWED BY ACTOR AND BY CONVERSATION, and not silent. The reference reaches the loader out of
- * browser-supplied message content, so a turn can name an attachment in a channel the asker was
- * never in — or in one they ARE in but which is not the channel this turn is running in.
- * `loadAttachmentForTurn` answers both with the same membership join the fetch route uses plus the
- * run's own thread, and null when there is no row this person may see here.
- * `resolveAttachmentParts` fails the turn on that null rather than letting a Bot read a file back
- * to somebody who cannot open it.
- *
- * The thread is the CLOSURE'S ARGUMENT rather than something baked in beside the actor, because one
- * of these is built per actor per request and then used for however many runs that request makes;
- * a thread captured here would be the first run's, silently, for all of them.
- *
- * A PURE READ. `attachedAt` is written by the send rather than by anything here; see
- * `markAttachmentsSentForActor` below.
- */
-const loadAttachmentForActor =
-  (actorId: string) => (id: string, threadId: string) =>
-    loadAttachmentForTurn(database, { actorId, threadId }, id);
-
-/**
- * That the files on a message went out in it, recorded when a turn turns out to be a send.
- *
- * Bound per actor and handed to the same two turn paths as the reader above, so a routine's send at
- * three in the morning is recorded exactly as a person's chat turn is. `inlineAttachments`
- * (copilot.ts) calls it with the ids on the message being asked about and no others: history is
- * replayed on every turn and by whoever is running it, so nothing behind that message is evidence
- * of a send.
- *
- * NARROWED BY ACTOR, and more strictly than the reader is. Reading is scoped to channel
- * membership, because members are meant to see each other's sent files; recording a send is scoped
- * to the UPLOADER, because `attachedAt` is what the sweeper, the upload cap and the withdrawal
- * route all read as "this file rode in a message somebody sent" — and a member who could write it
- * on a colleague's staged row would freeze that colleague's own withdrawal at 409 and leave the row
- * unsweepable. See `markAttachmentsSent` in channels/attachments.ts.
- *
- * AND NARROWED BY CONVERSATION, taking the thread as an argument for the reason the reader does.
- * A stamp written against a channel that never saw the file freezes the row the same way, and is
- * reached without any colleague being involved: one person, two channels of their own, a file
- * named from the wrong one.
- */
-const markAttachmentsSentForActor =
-  (actorId: string) => (ids: readonly string[], threadId: string) =>
-    markAttachmentsSent(database, { actorId, threadId }, ids);
-
-/*
- * What the deployment tells a remote Bot about the run it is starting.
- *
- * Signed here, where the encryption key lives, so the runtime module never holds a secret. The Bot
- * hands this back when it calls a tool, and it is where the Bot id and the person's name come
- * from: its own token proves which agent is calling, this proves who it is calling for, and
- * neither is read out of the request body any more.
- */
-const signRunForActor =
-  (
-    actorId: string,
-    initiator: AuditInitiator = PERSON_INITIATOR,
-    // How deep in a Bot-to-Bot chain a headless turn already is; see createGroupConversations.
-    depth?: number,
-  ) =>
-  (
-    botId: string,
-    runId: string,
-    threadId?: string,
-    previousAssertion?: unknown,
-  ) => {
-    const previous = readRunAssertion(
-      previousAssertion,
-      config.keyEncryptionKey,
-    );
-    if (previous?.handoff) {
-      if (previous.botId !== botId || previous.actorId !== actorId)
-        throw new Error(
-          "The delegated run identity does not match this Bot and owner.",
-        );
-      return previousAssertion as string;
-    }
-    return mintRunAssertion(
-      {
-        botId,
-        actorId,
-        runId,
-        threadId,
-        initiator,
-        ...(depth ? { depth } : {}),
-      },
-      config.keyEncryptionKey,
-    );
-  };
-
-/*
- * Which vendors this deployment connects to, held by a Bot or not.
- *
- * A Bot holding no grants used to be told nothing about connectors at all, so it treated a
- * connected vendor as an ordinary website and browsed to it: a Bot with no Drive grant opened
- * Google's sign-in page and asked a person to sign in to an account the deployment had already
- * connected. Naming them lets it say which one it has not been granted instead.
- *
- * Only the ones whose tools were listed: an app whose sign-in never finished is not connected, and
- * was being named to every Bot as one an administrator could grant. See `connectedSystems`.
- *
- * Read per request rather than held, because a connector added a minute ago has to count.
- * Let failures reach buildAgents, which reports the missing guidance once and keeps the run usable.
- */
-const loadVendors = async () =>
-  connectedSystems(await pluginStore.listServers());
-
-/*
- * How a run's tools are narrowed to the ones it is about.
- *
- * A model picks the right tool reliably out of about ten, and a deployment of this template
- * clears that as soon as it connects a second vendor. Past it the wrong tool gets called, or
- * none does and the answer comes from memory, and neither says so. So a Bot holding more than a
- * handful is offered the tools of the skills that match the message rather than everything at
- * once. See `plugins/selection.ts`.
- *
- * This narrows the offer and nothing else. What a Bot may call is the grant, checked in
- * `callTool` with the policy and the audit row exactly as before, so every path through here can
- * be wrong without a Bot gaining anything. That is also why every failure below is silent and
- * lands on the whole catalogue: the narrowing is worth an accuracy point, never a capability.
- */
-const selectionForActor = (actorId: string): ToolSelection => ({
-  loadSkills: (botId) => grantedSkills({ store: pluginStore, botId }),
-  // The deployment's own model and key, the same pair the intent router uses, so selection is
-  // never a second thing to configure. It throws on a missing key, which reads as "could not
-  // choose" and leaves the whole catalogue offered.
-  choose: chooseSkills,
-  record: async (botId, selection) => {
-    await recordAuditEvent(bootAuditStore, {
-      eventType: "mcp.tools_discovered",
-      targetType: "bot",
-      targetId: botId,
-      actorUserId: actorId,
-      payload: {
-        bot: botId,
-        reason: selection.reason,
-        granted: selection.granted,
-        offered: selection.offered.length,
-        skills: selection.skills,
-        // Set when the offer was cut to what one request may carry. See `fitToolLimit`.
-        ...(selection.limit === undefined ? {} : { limit: selection.limit }),
-      },
-    });
-  },
-});
-
-// Every run dials the stored endpoint again, so the check that was applied when it was
-// registered has to be applied to wherever it redirects now.
-// Absent computer configuration means nothing opted into private hosts, which is the safe
-// reading and the same one `createApp` takes.
-const agentFetch = createAgentFetch({
-  allowPrivateHosts: config.computer?.allowPrivateHosts === true,
-  // Named addresses are reachable on every hop, not only the one that was registered.
-  allowedHosts: config.agentEndpointAllowedHosts,
-  // The deployment's own agent, at exactly its configured addresses: a local deployment keeps it
-  // on loopback, which the private-network check would otherwise refuse on every run.
-  managedEndpoints: [
-    config.managedAgent?.endpoint,
-    config.managedAgent?.alsoRun,
-  ].filter((url): url is URL => url !== undefined),
-  // An agent the person runs on their own loopback, reached from this server's container.
-  ...(config.thisMachineHost
-    ? { thisMachineHost: config.thisMachineHost }
-    : {}),
-  // The refusal is what the run already knows; this is what the deployment knows. Written here
-  // rather than in `endpoint.ts` so that file keeps deciding and nothing else, the way the
-  // target check it reuses does.
-  onRefusal: ({ address, reason }) => {
-    void recordAuditEvent(bootAuditStore, {
-      eventType: "agent.dial_refused",
-      targetType: "agent_endpoint",
-      targetId: address,
-      payload: { address, reason },
-    }).catch((error) => {
-      // A trail that cannot be written must not take a refusal down with it: the request is
-      // already refused by the time this runs, and the alternative to a logged failure here is
-      // an unhandled rejection.
-      console.error("Could not record a refused agent dial.", error);
-    });
-  },
-});
-const { coordination, coordinationForActor } = wireCoordination({
-  handoffDesk,
-  config,
-  approvalService,
-  agentProfileStore,
-  actorFor,
-  channelSourceForRun,
-  database,
-  pluginStore,
-  bootAuditStore,
-  peopleStore,
-  sourceForCoordinationRun,
-  channelStore,
-  // Assigned further down, once delivery is wired.
-  notify: (scope, input) => deliveryNotifications(scope, input),
-});
-
-/**
- * One Bot, built for a routine's turn, as its owner.
- *
- * Per turn rather than per boot, for the same reason the request path rebuilds: a Bot registered or
- * edited since the last firing has to count, and a private coworker must be absent for everybody but
- * its owner. No header and no request are involved — the owner is asserted by construction, from the
- * routine row — which is the whole point of doing it here rather than adding an impersonation path to
- * a public route.
- */
-const buildAgentFor = async ({
-  ownerUserId,
-  agentId,
-  initiator,
-  depth,
-  subagent,
-}: {
-  ownerUserId: string;
-  agentId: string;
-  initiator: AuditInitiator;
-  depth?: number;
-  /** A subagent's run: the same Bot with no coordination. See agents/subagent.ts. */
-  subagent?: boolean;
-}) => {
-  const actor = await actorFor(ownerUserId);
-  let agent: AbstractAgent | undefined;
-  try {
-    agent = await actorAgentResolver.resolveAgentForActor(actor, agentId, {
-      initiator,
-      depth,
-      ...(subagent ? { subagent } : {}),
-    });
-  } catch (error) {
-    if (!(error instanceof CoworkerUnavailableError)) throw error;
-  }
-  if (!agent) {
-    /*
-     * Named, and raised rather than swallowed. The routine's Bot was deleted, or made private by
-     * somebody else, or the owner lost the role that could see it. The runner turns this into a
-     * failed run row with this sentence on it, the first failure is said once in the channel, and
-     * the fatigue rule switches the routine off after ten — which is exactly the right handling for
-     * a routine pointed at something that is not coming back.
-     */
-    const error = new Error(
-      `That Bot is no longer registered, so this routine has nothing to run: ${agentId}.`,
-    );
-    error.name = "RoutineBotNotRegistered";
-    throw error;
-  }
-  return agent;
-};
-const routineAgentRunner = new IntelligenceAgentRunner({
-  url: routineIntelligence.ɵgetRunnerWsUrl(),
-  authToken: routineIntelligence.ɵgetRunnerAuthToken(),
-});
-
-const routineRunner = createRoutineRunner({
-  routineStore,
-  channelStore,
-  runTurn: createTurnRunner({
-    prepareRunInput: prepareProductRunInput,
-    onKnownStop: productTelemetry.stopKnown,
-    admission: serverTurnAdmission,
-    intelligence: routineIntelligence,
-    runner: routineAgentRunner,
-    components: componentCatalog,
-    buildAgentFor,
-    toolsForTurn: async ({ ownerUserId, agentId, initiator }) => {
-      if (!computerGateway) return [];
-      const actor = await actorFor(ownerUserId);
-      const profile = await agentProfileStore.get(actor, agentId);
-      if (!profile) throw new Error("That Bot is not available to this owner.");
-      // A Team Bot's teammate uses the Bot, not its owner's signed-in computer.
-      if (!canUseComputer(profile, actor)) return [];
-      return createHeadlessComputerTools({
-        gateway: computerGateway,
-        seat: await computerGateway.seatFor(agentId, actor.id),
-        actor: { id: actor.id, userId: actor.id, initiator },
-        auditStore: bootAuditStore,
-        ...(signInService ? { signIn: signInService } : {}),
-      });
-    },
-    learningContainerForThread: (input) =>
-      copilotRuntime.learning?.containerForThread(input) ??
-      Promise.resolve(undefined),
-  }),
-});
-
-/**
- * Subagents: every Bot's way to give part of its work to a fresh run of itself (agents/subagent.ts).
- *
- * A subagent's turn is a background turn like a routine's, on the same runner and with the same
- * computer, built as a subagent so it holds no coordination. Its approval requests are withdrawn
- * without resuming its thread, because the action goes back to the conversation instead.
- */
-const subagents = createSubagents({
-  turn: {
-    prepareRunInput: prepareProductRunInput,
-    onKnownStop: productTelemetry.stopKnown,
-    admission: serverTurnAdmission,
-    intelligence: routineIntelligence,
-    runner: routineAgentRunner,
-    toolsForTurn: ({ ownerUserId, agentId, initiator }) =>
-      approvalComputerTools(ownerUserId, agentId, initiator),
-    learningContainerForThread: (input) =>
-      copilotRuntime.learning?.containerForThread(input) ??
-      Promise.resolve(undefined),
-  },
-  buildAgentFor: (input) => buildAgentFor({ ...input, subagent: true }),
-  withdrawApprovals: async (ownerUserId, runId) =>
-    approvalService.store.policy?.withdrawPending(
-      ownerUserId,
-      SUBAGENT_HANDED_BACK,
-      (action) => action.runId === runId,
-      { resume: false },
-    ),
-  asksEveryStep: async (ownerUserId, threadId) =>
-    (await approvalService.store.asksEveryChange?.(ownerUserId, threadId)) ===
-    true,
-});
-
-/**
- * The runtime, and the two things beside it a hop needs.
- *
- * `agentFor` builds the addressed Bot exactly the way a person's run builds it, and `history` reads
- * the conversation through the same client. Taken from here rather than assembled again, because a
- * Bot built by parallel wiring drifts the first time one of these arguments changes, and the drift is
- * invisible: it runs, and quietly holds different tools or a different role from the one the person
- * is talking to.
- */
-const actorAgentResolver = createActorAgentResolver({
-  productTelemetry,
-  loadAgents: loadAgentsForActor,
-  model: runtimeModel,
-  resolveModelApiKey: resolveRuntimeModelApiKey,
-  pickedModelForActor: (actorId, initiator) => (input) =>
-    modelChoices.forRun(actorId, input.threadId, {
-      unattended: isUnattended(runModeOf(initiator)),
-    }),
-  stallGuard,
-  loadToolsForActor: (actorId, initiator) =>
-    restrictToolsForRun(
-      initiator,
-      actorId,
-      // A goal's run holds the goal's own tools; the Routines copies would be a second set.
-      withoutGoalCopiesInGoalRun(
-        initiator,
-        loadToolsForActor(actorId, initiator),
-      ),
-      checkInScope,
-    ),
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
   /*
    * What this person has told every built-in coworker they run.
    *
@@ -3000,75 +2383,6 @@ const actorAgentResolver = createActorAgentResolver({
         )
         .catch(() => undefined);
     },
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
-=======
-    learningSettings,
-    // The environment's container, or a saved default, that this Intelligence was found not to have.
-    learningContainerForgotten: (containerId) =>
-      configuredLearning.forgotten(containerId) ||
-      learningSettingsStore.isSetAside(containerId),
-    personalSkills: {
-      containerFor: personalLearningSpaces.containerFor,
-      openSkills: () => openSkillIndex.sources(),
-      // Read on every run, never from the index: an approval made on another replica counts at once.
-      withheld: (userIds) => skillApprovalStore.withheld(userIds),
-      sharingAllowed: skillSharingInSnapshot,
-    },
-    trajectoryCapture: recorderExtension.trajectoryCapture,
-  },
-);
-
-/** Reads one named skill from a container; throws when the runtime or the read is unavailable, null when absent. */
-const skillIn = async (containerId: string, name: string) => {
-  const read = await copilotRuntime.learning?.containerSkills(containerId);
-  if (!read || "unavailable" in read) {
-    throw new Error("Skills are unavailable.");
-  }
-  return read.skills.find((skill) => skill.name === name) ?? null;
-};
-
-const responsibilityEngine = createServerResponsibilityEngine({
-  productTelemetry,
-  database,
-  responsibilityStore,
-  routineIntelligence,
-  routineAgentRunner,
-  componentCatalog,
-  buildAgentFor,
-  actorFor,
-  computerGateway,
-  agentProfileStore,
-  bootAuditStore,
-  signInService,
-  copilotRuntime,
-  channelStore,
-  // Assigned further down, once delivery is wired.
-  notify: (scope, input) => deliveryNotifications(scope, input),
-});
-/**
- * A turn for a responsibility that is not one of the engine's own firings: a person answering the
- * question its run asked. Same tools, same initiator and the same run to report progress against,
- * so the Bot can carry on with the goal instead of being unable to record it.
- */
-const responsibilityAnswerTurn = ({
-  responsibility,
-  responsibilityRunId,
-}: {
-  responsibility: Responsibility;
-  responsibilityRunId: string | undefined;
-}) => {
-  const initiator: AuditInitiator = {
-    kind: "responsibility",
-    id: responsibility.id,
-  };
-  const tools = responsibilityTools({
-    store: responsibilityStore,
-    engine: responsibilityEngine,
-    ownerUserId: responsibility.ownerUserId,
-    agentId: responsibility.agentId,
-    channelId: responsibility.channelId,
-    ...(responsibilityRunId ? { responsibilityRunId } : {}),
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
   });
   const loadAvatarSourcesForActor = avatarSourcesForActor(avatarSourceStore);
 
@@ -3728,8 +3042,11 @@ const responsibilityAnswerTurn = ({
     model: runtimeModel,
     resolveModelApiKey: resolveRuntimeModelApiKey,
     // The model the person picked for this conversation, or the catalogue's default.
-    pickedModelForActor: (actorId) => (input) =>
-      modelChoices.forRun(actorId, input.threadId),
+    // Given what started the run, so a run nobody is watching can think harder (upstream #1407).
+    pickedModelForActor: (actorId, initiator) => (input) =>
+      modelChoices.forRun(actorId, input.threadId, {
+        unattended: isUnattended(runModeOf(initiator)),
+      }),
     stallGuard,
     /*
      * Restricted by who started the run: a check-in reads only what the person connected (scope.ts).
@@ -4769,261 +4086,6 @@ const responsibilityAnswerTurn = ({
       timeoutMs: 60_000,
       maxTokens: 4096,
     }),
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
-=======
-    channels: channelStore,
-  },
-  {
-    store: learningSettings,
-    autoAssign: learningAutoAssign,
-    status: copilotRuntime.learning?.status,
-    // Read directly: the runtime client refuses a snapshot without dashboard links.
-    inspect: copilotRuntime.learning
-      ? createInspectorLearningReader(config.runtime.intelligence)
-      : undefined,
-    manage: learningProbeIntelligence.experimental.learning,
-    modelUnavailable: learningModelUnavailable(process.env),
-    skills: copilotRuntime.learning?.containerSkills,
-    approvals: skillApprovalStore,
-    people: createLearningPeople(database),
-    personSkill: (userId, name) =>
-      skillIn(personalLearningSpaces.containerFor(userId), name),
-    invalidate: () => openSkillIndex.invalidate(),
-    recordingTitles: recorderExtension.recordingTitles,
-  },
-  {
-    productTelemetry,
-    approvals: approvalService,
-    shared: { modes: accountModes, use: sharedUseStore },
-    ...(signInService ? { passwords: signInService } : {}),
-    recorder: recorderExtension,
-    // A Bot's browser, worked by the person holding its wheel: its bar and Record, wherever Bots have computers.
-    ...(computerGateway
-      ? {
-          botBrowser: {
-            recorder: recorderExtension,
-            openbotUrl: openbotAddress(config),
-            // The Bot's policy, which `botBrowserNetwork` widens while a recording runs, to the computer of the seat
-            // the recording is on: the person's own, or the isolated Bot's. Under that computer's own token.
-            pushPolicy: async (seat) => {
-              const policy = await enterpriseControls()?.policyForBot(
-                seat.botId,
-              );
-              if (!policy) return;
-              const token = computerGateway.tokenFor(seat);
-              await pushEgressPolicy(
-                await computerGateway.locate(seat),
-                seat.botId,
-                policy,
-                {
-                  ...(token ? { token } : {}),
-                  ...(config.webBotAuth
-                    ? { webBotAuth: config.webBotAuth }
-                    : {}),
-                },
-              );
-            },
-            singleUser: config.singleUser,
-            // Where every Bot shares one computer, Record is refused in all their browsers (browser/host.ts).
-            ...(recordRefused ? { recordRefused } : {}),
-          },
-        }
-      : {}),
-    // Only where a person's browser can run: a host-side computer of people's browsers, computers Bots run on that give
-    // each its own, or the personal edition's one computer. Where every Bot shares one, the routes have no computers and
-    // say why (browser/host.ts).
-    ...(computerGateway || config.browser
-      ? {
-          browser: {
-            ...personBrowserPlace({
-              provider: computerProvider,
-              browserUrl: config.browser?.url,
-              edition: config.edition,
-              computers: () =>
-                computerGateway
-                  ? gatewayBrowserComputers(
-                      computerGateway,
-                      config.browser?.url,
-                    )
-                  : directBrowserComputers({
-                      browserUrl: (config.browser as { url: string }).url,
-                      policy: personBrowserPolicy,
-                      ...(config.browser?.token
-                        ? { token: config.browser.token }
-                        : {}),
-                    }),
-            }),
-            recorder: recorderExtension,
-            openbotUrl: openbotAddress(config),
-            // On a single-user OpenBot the person is its admin: a setup failure is theirs to see to.
-            singleUser: config.singleUser,
-          },
-        }
-      : {}),
-    learningModel: learningModelEndpoint,
-    boundaryWriter: writeBoundaries,
-    approvalRules: { vocabulary: () => loadRuleVocabulary(database) },
-    auditQuestions: {
-      complete: askTheAuditTrail,
-      vocabulary: () => readAuditVocabulary(database, () => policyStore.get()),
-    },
-    // The stores the live path decides from: the same boundary, controls snapshot, grants and gate.
-    whatIf: {
-      complete: readWhatIfQuestions,
-      vocabulary: () => readWhatIfVocabulary(database),
-      readers: {
-        policy: () => policyStore.get(),
-        enterprise: () => {
-          const controls = enterpriseControls();
-          return controls ? { snapshot: controls.snapshot() } : null;
-        },
-        grant: (ref, botId) => pluginStore.decide("mcp", ref, botId),
-        ...(approvalService.store.policy
-          ? {
-              approvals: {
-                policy: approvalService.store.policy,
-                rules: (owner: string) => approvalService.store.rules(owner),
-              },
-            }
-          : {}),
-      },
-      event: (id) => readAuditEvent(database, id),
-    },
-    personalLearning: {
-      store: learningSharingStore,
-      ...(learningModelEndpoint?.calls
-        ? { modelCalls: learningModelEndpoint.calls }
-        : {}),
-      approvals: skillApprovalStore,
-      autoApprover,
-      skillsOf: (userId) =>
-        copilotRuntime.learning?.personalSkills(userId) ??
-        Promise.resolve({ unavailable: "unavailable" as const }),
-      skillOf: (userId, name) =>
-        skillIn(personalLearningSpaces.containerFor(userId), name),
-      containerSkills: (id) =>
-        copilotRuntime.learning?.containerSkills(id) ??
-        Promise.resolve({ unavailable: "unavailable" as const }),
-      invalidate: () => openSkillIndex.invalidate(),
-      sharingAllowed: skillSharingAllowed,
-      manage: learningProbeIntelligence.experimental.learning,
-      modelUnavailable: learningModelUnavailable(process.env),
-      recordingTitles: recorderExtension.recordingTitles,
-      settings: learningSettings,
-      scopesFor: async (actor) =>
-        learningScopes({
-          edition: currentEdition(),
-          userId: actor.id,
-          settings: await learningSettings.read(),
-        }),
-    },
-    delivery: {
-      authenticated: {
-        store: deliveryStore,
-        router: deliveryRouter,
-        scopeFor: deliveryScopeFor,
-        listConversations: async (owner, cursor) =>
-          channelStore.list(await actorFor(owner), { cursor, limit: 100 }),
-        history: (scope) =>
-          routineIntelligence.getThreadMessages({
-            threadId: scope.threadId,
-            userId: scope.ownerUserId,
-          }),
-        slack: deliveryProviders.slack,
-        twilio: deliveryProviders.sms,
-        pushProjectId: deliveryProviders.pushProjectId,
-      },
-      webhooks: {
-        store: deliveryStore,
-        router: deliveryRouter,
-        approvals: approvalService,
-        scopeFor: deliveryScopeFor,
-        slack: deliveryProviders.slack,
-        twilio: deliveryProviders.sms,
-        identity: slackCodeRedeemer(identityStore, bootAuditStore),
-      },
-    },
-    memory: { store: personalMemoryStore, ingestion: memoryIngestion },
-    proactive: { store: proactiveStore, engine: proactiveEngine },
-    tasks: { store: taskStore, runner: taskRunner },
-    responsibilities: {
-      store: responsibilityStore,
-      engine: responsibilityEngine,
-      bindings: responsibilityBindings,
-      triggers: responsibilityTriggers,
-    },
-    groups: groupConversations,
-    teamBots,
-    lifecycle: {
-      lifecycle: createBotLifecycleStore(database),
-      reset: createBotReset({
-        database,
-        softDeleteChannel: (actor, channelId) =>
-          channelStore.softDelete(actor, channelId),
-      }),
-      activity: createActivityStore(database),
-      wakeUps: wakeUpStore,
-      profiles: agentProfileStore,
-      tasks: taskRunner,
-      auditStore: bootAuditStore,
-    },
-    models: modelCatalogue,
-    modelChoices,
-    // The checklist onboarding ends on. Facts and verdicts about this configuration, never values.
-    setup: createSetupSources({
-      productName: tenantPackage.productName,
-      config,
-      environment: process.env,
-      model: {
-        provider: runtimeModel.provider,
-        keyId: tenantPackage.model.credentialSecretRef,
-        defaultModel: runtimeModel.defaultModel,
-        plan: Boolean(runtimeModel.plan),
-        check: checkModelAvailability,
-      },
-      credentials: credentialStore,
-      modelCheckAtBoot,
-      entitlements: () => selfHostBannerIntelligence.getRuntimeEntitlements(),
-      computer: Boolean(config.computer),
-      computerCheck: createComputerCheck({
-        provider: computerProvider,
-        controls: enterpriseControls,
-        ...(config.computer?.token ? { token: config.computer.token } : {}),
-        ...(config.webBotAuth ? { webBotAuth: config.webBotAuth } : {}),
-      }),
-      apps: {
-        configured: Boolean(composio),
-        provider: composio?.provider ?? config.brokerProvider ?? "composio",
-      },
-      chat: Boolean(deliveryProviders.slack),
-    }),
-  },
-  createSelfHostBanner({
-    enabled: config.selfHostBanner,
-    entitlements: () => selfHostBannerIntelligence.getRuntimeEntitlements(),
-  }),
-
-  identityStore,
-  identityGithubCallback,
-  profileStore,
-);
-
-startHttpServer({
-  port,
-  config,
-  resolveRequestActor,
-  agentProfileStore,
-  computerGateway,
-  app,
-});
-
-if (config.singleUser) {
-  // Loud, every boot. A server that is not checking who is asking should never be a quiet default.
-  console.warn(
-    "No identity provider is configured, so every request is treated as " +
-      `${DEV_ACTOR.email} (administrator). Configure GOOGLE_OAUTH_*, ` +
-      "MICROSOFT_OAUTH_* or OKTA_OAUTH_* before anybody else can reach this.",
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
   );
   startup.acquireSync(
     () =>
@@ -5385,6 +4447,47 @@ if (config.singleUser) {
       ...(learningModelEndpoint
         ? { learningModel: learningModelEndpoint }
         : {}),
+      // Upstream #1372/#1381/#1396/#1397/#1398/#1399: drafts written from an admin's description.
+      boundaryWriter: writeBoundaries,
+      approvalRules: {
+        vocabulary: () => adminRead(() => loadRuleVocabulary(database)),
+      },
+      // Upstream #1380: questions about the audit trail in plain English.
+      auditQuestions: {
+        complete: askTheAuditTrail,
+        vocabulary: () =>
+          adminRead(() =>
+            readAuditVocabulary(database, () => policyStore.get()),
+          ),
+      },
+      /*
+       * Upstream #1402, "what would happen if…": the stores the live path decides from, the same
+       * boundary, controls snapshot, grants and gate. Read across people as an administrator reads
+       * the trail (`adminRead`), since the question may be about anybody's Bot.
+       */
+      whatIf: {
+        complete: readWhatIfQuestions,
+        vocabulary: () => adminRead(() => readWhatIfVocabulary(database)),
+        readers: {
+          policy: () => policyStore.get(),
+          enterprise: () => {
+            const controls = enterpriseControls();
+            return controls ? { snapshot: controls.snapshot() } : null;
+          },
+          grant: (ref, botId) =>
+            adminRead(() => pluginStore.decide("mcp", ref, botId)),
+          ...(approvalService.store.policy
+            ? {
+                approvals: {
+                  policy: approvalService.store.policy,
+                  rules: (owner: string) =>
+                    adminRead(() => approvalService.store.rules(owner)),
+                },
+              }
+            : {}),
+        },
+        event: (id) => adminRead(() => readAuditEvent(database, id)),
+      },
       /*
        * Settings, Learning: who else's Bots use a person's own learned Skills. Only with the optional
        * Intelligence, which is where Learning is.

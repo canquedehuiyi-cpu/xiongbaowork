@@ -18,22 +18,20 @@
 
 import type { AuditEvent, AuditInitiator } from "../audit";
 import {
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
+  APP_CALL_EVENT_TYPES,
+  appCallFromAuditRow,
+  appCallPolicyContext,
+  initiatorFromColumns,
+} from "../plugins/store";
+import {
   describeFile,
   evaluateComputerPolicy,
   hostOf,
   intentOf,
 } from "./gateway";
-=======
-  APP_CALL_EVENT_TYPES,
-  appCallFromAuditRow,
-  appCallPolicyContext,
-  initiatorFromColumns,
-} from "../plugins/plugin-store/call-policy";
-import { describeFile, hostOf, intentOf } from "./gateway";
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
 import {
   type ActionPolicy,
+  evaluateActionPolicy,
   type PolicyContext,
   type PolicyDecision,
   policyInitiator,
@@ -322,28 +320,14 @@ export function dryRunAgainstHistory(
     if (!action) continue;
     report.scanned += 1;
 
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
     /*
-     * The policy's own verdict where the row records one. A refused row is not always the policy's
-     * refusal: the person can deny an action the policy allowed, and that row keeps the policy's
-     * `allowed: true`. Scored by its event type it would read as a refusal no rule made.
+     * Judged as it was judged live: a computer action by the gateway's own check, which normalizes
+     * key names first (see evaluateComputerPolicy, fork), and an app call as `callTool` judges it.
      */
-    const recorded = (
-      event.payload.decision as { allowed?: unknown } | undefined
-    )?.allowed;
-    const was =
-      typeof recorded === "boolean"
-        ? recorded
-          ? "allowed"
-          : "refused"
-        : event.eventType === "computer.action_refused"
-          ? "refused"
-          : "allowed";
-    // 和网关同一个判定：键名规范化以后再判一次（见 evaluateComputerPolicy）。
-    const decision = evaluateComputerPolicy(policy, context);
-=======
-    const decision = evaluateActionPolicy(policy, action.context);
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
+    const decision =
+      action.kind === "computer"
+        ? evaluateComputerPolicy(policy, action.context)
+        : evaluateActionPolicy(policy, action.context);
     const would = decision.allowed ? "allowed" : "refused";
 
     if (action.was === would) {

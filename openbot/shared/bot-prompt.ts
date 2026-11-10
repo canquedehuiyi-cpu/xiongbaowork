@@ -358,7 +358,6 @@ export const ORCHESTRATION_GUIDANCE = asParagraphs(
 /**
  * When a Bot asks the person anything: OpenBot's own cards first, then a closed test for the rest.
  *
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
  * OpenBot puts a card in front of the person before the actions named here, whatever their settings
  * (`server/src/approvals/policy.ts`: the delete, send, share and publish floors on app tools, the
  * delete, send and keyboard-send floors on web pages), and hands any payment, purchase or change to
@@ -382,6 +381,21 @@ export const ORCHESTRATION_GUIDANCE = asParagraphs(
  * A tool marked destructive can be called anything ("reset pipeline"), so the Bot can't tell it from
  * its name. Its description carries {@link DESTRUCTIVE_TOOL_NOTE}, and the app-tools bullet names
  * that label.
+ *
+ * M5: this fork keeps its own wording of OpenBot's cards for a Bot OpenBot runs ({@link approvalGuidance},
+ * worded for this fork's approval floors, which no setting turns off), and takes upstream's closed
+ * test for everything else ({@link builtInAskingGuidance}). Upstream's {@link ASKING_GUIDANCE} and
+ * {@link BROUGHT_BOT_ASKING_GUIDANCE} are kept as upstream wrote them; a brought Bot is told the
+ * latter.
+ *
+ * THE ASK TEST IS CLOSED (upstream #1407). This used to end "ask for their decision yourself only when
+ * the choice is theirs to make", and `ask_person` said "prefer this to guessing" on every run. A
+ * routine that needed twenty lookups kept stopping to ask its person which issue mattered more, and
+ * never delivered. Anthropic measured that a model applies an approval rule as written, so a loose one
+ * holds back about half of the work it covers. The three cases named here are the ones agent products
+ * that finish delegated work use (a wrong guess that is hard to undo, readings that lead to materially
+ * different work, a fact only the person has), and everything else is assumed, said, and carried on
+ * with. `ask_person`'s description says the same test in the same words.
  */
 const APPROVAL_GUIDANCE_OPENING =
   "以下动作由 OpenBot 在执行前亲自询问对方，卡片上写明你要做的具体内容，所以你不要先问：直接说明你要做什么，然后调用工具。";
@@ -417,35 +431,6 @@ export function approvalGuidance(holding: { apps: boolean }): string {
 /** The whole guidance, as a Bot holding a connected-app tool is told it. See {@link approvalGuidance}. */
 export const APPROVAL_GUIDANCE = approvalGuidance({ apps: true });
 
-/**
- * Added to the description of an app tool its app marks destructive (MCP's `destructiveHint`, a
- * broker's destructive flag), where the Bot is offered it. OpenBot always asks before one runs (the
- * delete floor in `server/src/approvals/policy.ts`), so the Bot is told so on the tool itself, as
- * {@link APPROVAL_GUIDANCE} says of a tool its app marks destructive.
-=======
- * OpenBot puts a card in front of the person before any delete, archive, send, share or post in their
- * apps or on websites, before any app tool its app marks destructive, and before any payment or
- * purchase (`server/src/approvals/policy.ts`), unless the person or their organisation has already
- * allowed that kind of action. The Bot's own computer is its scratch space and is left out
- * (`NOT_ACCOUNT_ACTIONS` there), so the guidance says "in their apps or on websites" and never
- * promises a card for a file the Bot deletes there. A Bot told by its approval card's description to
- * ask "before sending a message" asked too, so the person was asked twice for one delete. The card
- * OpenBot shows names the exact action, so it is the one that stays.
- *
- * A tool marked destructive can be called anything ("reset pipeline"), so the Bot can't tell it from
- * its name. Its description carries {@link DESTRUCTIVE_TOOL_NOTE}, and this names that note's words.
- * Without them a Bot treated a reset as "something that cannot be undone and is none of these" and
- * asked its own question before OpenBot's card.
- *
- * THE SECOND PARAGRAPH IS A CLOSED TEST. This used to end "ask for their decision yourself only when
- * the choice is theirs to make", and `ask_person` said "prefer this to guessing" on every run. A
- * routine that needed twenty lookups kept stopping to ask its person which issue mattered more, and
- * never delivered. Anthropic measured that a model applies an approval rule as written, so a loose one
- * holds back about half of the work it covers. The three cases named here are the ones agent products
- * that finish delegated work use (a wrong guess that is hard to undo, readings that lead to materially
- * different work, a fact only the person has), and everything else is assumed, said, and carried on
- * with. `ask_person`'s description says the same test in the same words.
- */
 const ASK_TEST_LINES = [
   "Ask the person something yourself only when you cannot go on without them: a wrong guess would be",
   "hard to undo and OpenBot does not ask about it, the possible readings would lead to materially",
@@ -621,12 +606,18 @@ export function promptSection(
 export function workingGuidance(options: {
   brought?: boolean;
   untrusted: string;
+  /**
+   * The asking section, when the caller words it itself. A Bot OpenBot runs here is told
+   * {@link builtInAskingGuidance}, this fork's floors plus the closed test; absent, upstream's.
+   */
+  asking?: string;
 }): string[] {
   return [
     ...promptSection("how_to_work", HOW_TO_WORK_GUIDANCE),
     ...promptSection(
       "asking",
-      options.brought ? BROUGHT_BOT_ASKING_GUIDANCE : ASKING_GUIDANCE,
+      options.asking ??
+        (options.brought ? BROUGHT_BOT_ASKING_GUIDANCE : ASKING_GUIDANCE),
     ),
     ...promptSection("sources", PROVENANCE_GUIDANCE),
     ...promptSection("answer_format", COMPONENT_GUIDANCE),
@@ -636,10 +627,20 @@ export function workingGuidance(options: {
 }
 
 /**
+ * The asking section for a Bot OpenBot runs: this fork's wording of OpenBot's cards
+ * ({@link approvalGuidance}, the connected-app bullet only for a run that holds a connected-app tool),
+ * then upstream's closed test for every other question.
+ */
+export function builtInAskingGuidance(holding: { apps: boolean }): string {
+  return [approvalGuidance(holding), asParagraphs(ASK_TEST_LINES)].join("\n\n");
+}
+
+/**
  * Added to the description of an app tool its app marks destructive (MCP's `destructiveHint`, a
- * broker's destructive flag), where the Bot is offered it. OpenBot asks before one runs, so the Bot
- * is told so on the tool itself, in the words {@link ASKING_GUIDANCE} names.
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
+ * broker's destructive flag), where the Bot is offered it. OpenBot always asks before one runs (the
+ * delete floor in `server/src/approvals/policy.ts`), so the Bot is told so on the tool itself, as
+ * {@link APPROVAL_GUIDANCE} says of a tool its app marks destructive, in the words
+ * {@link ASKING_GUIDANCE} names.
  */
 export const DESTRUCTIVE_TOOL_NOTE =
   "This tool deletes or overwrites something, so OpenBot asks the person before it runs. Don't ask them first.";

@@ -51,8 +51,8 @@ import {
   users,
 } from "./db/schema";
 import { catalogueEntry, classifyTool } from "./plugins/catalogue";
-import { initiatorFromColumns } from "./plugins/plugin-store/call-policy";
-import { UNATTRIBUTED_ACTOR } from "./plugins/plugin-store/model";
+// M5: fork 没有采用插件拆分，这两个在 plugins/store.ts。
+import { initiatorFromColumns, UNATTRIBUTED_ACTOR } from "./plugins/store";
 import {
   type ModelAnswerSchema,
   type ModelCompleter,

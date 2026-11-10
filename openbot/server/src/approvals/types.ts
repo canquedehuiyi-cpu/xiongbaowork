@@ -492,6 +492,7 @@ export type ApprovalPolicyStore = {
     botId: string,
     input: Partial<EmployeeSecuritySettings>,
   ): Promise<EmployeeSecuritySettings>;
+  /**
    * The person's "Allow for this conversation" answers still in force in this conversation: not
    * turned off, and the conversation not deleted. Optional so older fakes keep working.
    */

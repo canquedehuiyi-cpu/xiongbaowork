@@ -1,9 +1,5 @@
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
-import { ownerTenantOfBot } from "../agents/bot-owner";
-=======
 import { and, desc, eq, isNull, notExists, sql } from "drizzle-orm";
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
+import { ownerTenantOfBot } from "../agents/bot-owner";
 import { createAuditStore, recordAuditEvent } from "../audit";
 import type { Database } from "../db/client";
 import { agentSecuritySettings } from "../db/schema/agent-security-settings";
@@ -15,11 +11,11 @@ import {
   approvalTeamRules,
   approvalTeamSettings,
 } from "../db/schema/approvals";
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
-import { agents, intelligenceChannelMappings } from "../db/schema/core";
-=======
-import { channels, intelligenceChannelMappings } from "../db/schema/core";
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
+import {
+  agents,
+  channels,
+  intelligenceChannelMappings,
+} from "../db/schema/core";
 import { botTasks } from "../db/schema/tasks";
 import { TEAM_TENANT } from "../db/schema/tenant";
 import { workItems } from "../db/schema/work";
@@ -80,9 +76,22 @@ const DEFAULT_TEAM: ApprovalTeamSettings = {
   enforceAutoReview: false,
   customRulesEnabled: true,
   hostCommandsCap: "allow",
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
   enforceDangerousCommands: false,
+  // 上游：每种动作默认「打开」。本部署的审批底线不随它放宽（见 approvals/policy.ts 的 decideAction）。
+  actionKinds: {},
 };
+
+/**
+ * A conversation answer still in force: not turned off, and its conversation not deleted. Deleting a
+ * conversation ends what was allowed in it, though the soft-deleted row and its thread stay.
+ */
+const grantInForce = () =>
+  and(
+    isNull(approvalConversationGrants.revokedAt),
+    notExists(
+      sql`(select 1 from ${intelligenceChannelMappings} inner join ${channels} on ${channels.id} = ${intelligenceChannelMappings.channelId} where ${intelligenceChannelMappings.threadId} = ${approvalConversationGrants.threadId} and ${channels.deletedAt} is not null)`,
+    ),
+  );
 
 /** The real transaction callback type supplied by the tenant-bound DB client. */
 type StoredApprovalTransaction = Parameters<
@@ -149,25 +158,6 @@ export function createApprovalStore(
   database: Database,
   board?: TaskProjector,
 ): ApprovalStore {
-=======
-  // Every kind open: OpenBot opens things by default, and closing one is the admin's call.
-  actionKinds: {},
-};
-
-/**
- * A conversation answer still in force: not turned off, and its conversation not deleted. Deleting a
- * conversation ends what was allowed in it, though the soft-deleted row and its thread stay.
- */
-const grantInForce = () =>
-  and(
-    isNull(approvalConversationGrants.revokedAt),
-    notExists(
-      sql`(select 1 from ${intelligenceChannelMappings} inner join ${channels} on ${channels.id} = ${intelligenceChannelMappings.channelId} where ${intelligenceChannelMappings.threadId} = ${approvalConversationGrants.threadId} and ${channels.deletedAt} is not null)`,
-    ),
-  );
-
-export function createApprovalStore(database: Database): ApprovalStore {
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
   const owned = (owner: string, id: string) =>
     and(eq(approvalRequests.ownerUserId, owner), eq(approvalRequests.id, id));
   const ruleScope = (action: ApprovalAction) =>
@@ -274,23 +264,18 @@ export function createApprovalStore(database: Database): ApprovalStore {
           throw new ApprovalRefusedError(
             "Only an action handed to you can be marked done by you.",
           );
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
         // 只给「允许一次」的底线（删除类、对外发送、分享、公开发布）问的动作在任何规则之后都还要
-        // 问，存一条「总是允许」只会误导人。从 check-in 开始的任务（M3/upstream）同理：每一步都要问。
-        if (decision === "allow_always" && !offersStandingRule(request.action))
-          throw new ApprovalRefusedError(
-            ONCE_ONLY_REFUSALS[request.action.policy?.source ?? ""] ??
-              "Tasks started from a check-in ask before every change. Allow this once, or deny it.",
-=======
+        // 问，存一条「总是允许」或「在这段对话里都允许」只会误导人。管理员设成「每次都问」的种类、
+        // 从 check-in 开始的任务（M3/upstream）同理：每一步都要问。
         if (
           (decision === "allow_always" || decision === "allow_conversation") &&
           !offersStandingRule(request.action)
         )
           throw new ApprovalRefusedError(
-            request.action.policy?.closed
-              ? "Your admin set this to ask every time. Allow it once, or deny it."
-              : "Tasks started from a check-in ask before every change. Allow this once, or deny it.",
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
+            ONCE_ONLY_REFUSALS[request.action.policy?.source ?? ""] ??
+              (request.action.policy?.closed
+                ? "管理员把这类操作设成了每次都要你确认，只能「允许一次」或拒绝。"
+                : "Tasks started from a check-in ask before every change. Allow this once, or deny it."),
           );
         // The kind the card was for, so the answer reaches later actions of that kind and no other.
         const kind = request.action.policy?.kind ?? null;
@@ -302,9 +287,6 @@ export function createApprovalStore(database: Database): ApprovalStore {
             toolRef: request.action.toolRef,
             effect: request.action.effect,
             scope: request.action.scope,
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
-=======
-            account: request.action.account ?? null,
             kind,
           });
         if (decision === "allow_conversation")
@@ -317,9 +299,9 @@ export function createApprovalStore(database: Database): ApprovalStore {
             toolRef: request.action.toolRef,
             effect: request.action.effect,
             scope: request.action.scope,
-            account: request.action.account ?? null,
+            // M5: 留给 X 系列（多账号）：本部署的审批不分账号。
+            account: null,
             kind,
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
           });
         const [updated] = await tx
           .update(approvalRequests)
@@ -519,7 +501,12 @@ async function teamRuleRows(executor: Database) {
   const rows = await executor
     .select()
     .from(approvalTeamRules)
-    .where(isNull(approvalTeamRules.revokedAt))
+    .where(
+      and(
+        eq(approvalTeamRules.tenantId, TEAM_TENANT),
+        isNull(approvalTeamRules.revokedAt),
+      ),
+    )
     .orderBy(desc(approvalTeamRules.createdAt));
   return rows.map(ruleRow);
 }
@@ -595,11 +582,8 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
           enforceAutoReview: row.enforceAutoReview,
           customRulesEnabled: row.customRulesEnabled,
           hostCommandsCap: row.hostCommandsCap,
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
           enforceDangerousCommands: row.enforceDangerousCommands,
-=======
           actionKinds: row.actionKinds ?? {},
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
         }
       : { ...DEFAULT_TEAM };
   };
@@ -728,6 +712,8 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
                   id: crypto.randomUUID(),
                   createdBy: by,
                   ...input,
+                  // 团队规则盖 `team` 的章，和 createTeamRule 一样（G01-E）。
+                  tenantId: TEAM_TENANT,
                 })),
               )
               .returning()
@@ -749,6 +735,10 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
         return rows;
       });
     },
+    /*
+     * 本部署是多租户：在管理员自己的帧里读，行级安全只放出这个帧看得见的请求，不会为了重放去读别的
+     * 租户（上游是「每个人的」）。要跨人重放，另定读法再放开。
+     */
     async recentRequests(limit) {
       return database
         .select()
@@ -762,7 +752,12 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
       const [row] = await database
         .select({ guidance: approvalTeamSettings.reviewerGuidance })
         .from(approvalTeamSettings)
-        .where(eq(approvalTeamSettings.id, TEAM))
+        .where(
+          and(
+            eq(approvalTeamSettings.id, TEAM),
+            eq(approvalTeamSettings.tenantId, TEAM_TENANT),
+          ),
+        )
         .limit(1);
       return row?.guidance?.trim() || null;
     },
@@ -777,12 +772,23 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
         const [current] = await tx
           .select({ guidance: approvalTeamSettings.reviewerGuidance })
           .from(approvalTeamSettings)
-          .where(eq(approvalTeamSettings.id, TEAM))
+          .where(
+            and(
+              eq(approvalTeamSettings.id, TEAM),
+              eq(approvalTeamSettings.tenantId, TEAM_TENANT),
+            ),
+          )
           .limit(1);
         const before = current?.guidance?.trim() || null;
+        // 团队设置那一行盖 `team` 的章（见 setTeamSettings）；冲突更新不改 `tenantId`。
         await tx
           .insert(approvalTeamSettings)
-          .values({ id: TEAM, reviewerGuidance: after, updatedBy: by })
+          .values({
+            id: TEAM,
+            reviewerGuidance: after,
+            updatedBy: by,
+            tenantId: TEAM_TENANT,
+          })
           .onConflictDoUpdate({
             target: approvalTeamSettings.id,
             set: {
@@ -963,7 +969,6 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
       }
       return withdrawn;
     },
-<<<<<<< 9772fc7e2b1ae57f9300ef67de28e9fefd5ee29e
     /*
      * The owner's side of a Bot, whoever asks (SEC1 D9). Whose the Bot is comes from the narrow
      * identity lookup in `agents/bot-owner.ts` (its own `platform` read, where only the owner's id
@@ -1031,7 +1036,7 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
         },
       });
       return next;
-=======
+    },
     async conversationGrants(owner, threadId) {
       return database
         .select()
@@ -1088,7 +1093,6 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
           threadId: row.threadId,
         },
       });
->>>>>>> e4f4ac8578f5545794cad028b21ac396fa6c816b
     },
     async recordDecision(input) {
       await recordAuditEvent(audit, {
