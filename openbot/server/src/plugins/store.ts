@@ -48,6 +48,7 @@ import {
   pluginGrants,
   skills,
   skillTools,
+  teamBotPublications,
   userRoles,
   users,
 } from "../db/schema";
@@ -103,10 +104,7 @@ import { accountArgumentFor } from "./account-argument";
 import { type AccountMode, accountFor } from "./shared-accounts";
 import { steeringOf } from "./shared-use";
 import type { SharedUseGate } from "./shared-use-store";
-import {
-  appAccessMethods,
-  type SharedAudienceCheck,
-} from "./app-access-store";
+import { appAccessMethods, type SharedAudienceCheck } from "./app-access-store";
 import {
   type BrokeredAccountRecord,
   createAccountBook,
@@ -1008,7 +1006,34 @@ export type AppAccessRequestRecord = {
   requestedBy: string;
   resolvedAt: string | null;
   resolvedBy: string | null;
+  /**
+   * 批准作用在哪（X3，X2 评审 M3）：`team_bot` 是已发布的 Team Bot——授予写在员工身上，批准后每一个能用
+   * 这位员工的人都拿到它，不只是申请人；`bot` 是其余的员工。行为不变（上游的设计），只是说清楚。
+   */
+  appliesTo: "team_bot" | "bot";
+  /**
+   * 申请人和这位员工的关系：员工的主人（`owner`）、Team Bot 的队友（`teammate`，不是主人、用的是别人发布
+   * 的员工），或其余（`other`，例如没有主人的公开员工）。读不到员工资料时按 `other`。
+   */
+  requesterRole: "owner" | "teammate" | "other";
+  /** 给管理员看的中文提示；`appliesTo` 为 `team_bot` 时说明批准对整个 Team Bot 生效，其余为 null。 */
+  scopeNote: string | null;
 };
+
+/** {@link AppAccessRequestRecord.scopeNote} 的句子。 */
+export function appAccessScopeNote(
+  appliesTo: "team_bot" | "bot",
+  requesterRole: "owner" | "teammate" | "other",
+): string | null {
+  if (appliesTo !== "team_bot") return null;
+  const who =
+    requesterRole === "owner"
+      ? "申请人是这位员工的主人。"
+      : requesterRole === "teammate"
+        ? "申请人是使用这位员工的队友，不是它的主人。"
+        : "";
+  return `批准将对整个 Team Bot 生效：授予写在员工身上，每一个能用这位员工的人都会拿到它，不只是申请人。${who}`;
+}
 
 /** 路由和工具传进来的申请 id 是任意文字；不是 uuid 的在查询之前就答"没有"，不让 Postgres 报类型错误。 */
 export const isUuid = (value: string) =>
@@ -3607,43 +3632,68 @@ export function createPluginStore(options: PluginStoreOptions) {
         decidedBy: appAccessRequests.decidedBy,
         decidedAt: appAccessRequests.decidedAt,
         createdAt: appAccessRequests.createdAt,
+        botOwner: agentProfiles.ownerUserId,
+        published: teamBotPublications.agentId,
       })
       .from(appAccessRequests)
       .leftJoin(mcpServers, eq(mcpServers.id, appAccessRequests.serverId))
       .leftJoin(agents, eq(agents.id, appAccessRequests.botId))
       .leftJoin(users, eq(users.id, appAccessRequests.requesterUserId))
+      .leftJoin(
+        agentProfiles,
+        eq(agentProfiles.agentId, appAccessRequests.botId),
+      )
+      .leftJoin(
+        teamBotPublications,
+        and(
+          eq(teamBotPublications.agentId, appAccessRequests.botId),
+          eq(teamBotPublications.tenantId, TEAM_TENANT),
+        ),
+      )
       .where(where)
       .orderBy(
         sql`${appAccessRequests.createdAt} desc`,
         asc(appAccessRequests.id),
       );
-    return rows.map((row) => ({
-      id: row.id,
-      tenantId: row.tenantId,
-      serverId: row.serverId ?? "",
-      appKey: row.catalogueKey ?? row.serverId ?? row.requestAppKey ?? "",
-      appTitle:
-        row.appTitle ??
-        row.requestAppTitle ??
-        row.serverId ??
-        row.requestAppKey ??
-        "",
-      botId: row.botId,
-      botName: row.botName,
-      requesterUserId: row.requesterUserId,
-      requesterName: row.requesterName,
-      requesterEmail: row.requesterEmail,
-      kind: row.kind as AppAccessRequestKind,
-      status: row.status as AppAccessRequestStatus,
-      note: row.note,
-      decidedBy: row.decidedBy,
-      decidedAt: iso(row.decidedAt),
-      createdAt: iso(row.createdAt) ?? "",
-      agentId: row.botId,
-      requestedBy: row.requesterUserId,
-      resolvedAt: iso(row.decidedAt),
-      resolvedBy: row.decidedBy,
-    }));
+    return rows.map((row) => {
+      const appliesTo = row.published !== null ? "team_bot" : "bot";
+      const requesterRole =
+        row.botOwner !== null && row.botOwner === row.requesterUserId
+          ? "owner"
+          : appliesTo === "team_bot"
+            ? "teammate"
+            : "other";
+      return {
+        id: row.id,
+        tenantId: row.tenantId,
+        serverId: row.serverId ?? "",
+        appKey: row.catalogueKey ?? row.serverId ?? row.requestAppKey ?? "",
+        appTitle:
+          row.appTitle ??
+          row.requestAppTitle ??
+          row.serverId ??
+          row.requestAppKey ??
+          "",
+        botId: row.botId,
+        botName: row.botName,
+        requesterUserId: row.requesterUserId,
+        requesterName: row.requesterName,
+        requesterEmail: row.requesterEmail,
+        kind: row.kind as AppAccessRequestKind,
+        status: row.status as AppAccessRequestStatus,
+        note: row.note,
+        decidedBy: row.decidedBy,
+        decidedAt: iso(row.decidedAt),
+        createdAt: iso(row.createdAt) ?? "",
+        agentId: row.botId,
+        requestedBy: row.requesterUserId,
+        resolvedAt: iso(row.decidedAt),
+        resolvedBy: row.decidedBy,
+        appliesTo,
+        requesterRole,
+        scopeNote: appAccessScopeNote(appliesTo, requesterRole),
+      } satisfies AppAccessRequestRecord;
+    });
   }
 
   /** 把一条仍是 pending 的申请关掉，只关一次；没关上（不存在、看不见、已处理）答 null。 */
