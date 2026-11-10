@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { ownerTenantOfBot } from "../agents/bot-owner";
 import type { AuditEventInput, AuditInitiator } from "../audit";
 import { type AuditStore, recordAuditEvent } from "../audit";
@@ -60,6 +60,26 @@ export class SharedUseRequestDecidedError extends Error {
 }
 
 /** 批准只能写在员工主人的帧里；别的帧（包括管理员自己的）写不进来。 */
+/** 应用此刻不是 Shared：不写批准（切换账号模式之后才落下的批准会在再切回时复活）。 */
+export class SharedUseNotSharedError extends Error {
+  constructor() {
+    super("这个应用现在不是团队账号，不需要也不能批准。");
+    this.name = "SharedUseNotSharedError";
+  }
+}
+
+/**
+ * 一个应用的共享使用锁的键：写批准拿共享锁，改「谁可以给员工」、切换账号模式拿排他锁。按 broker 应用的
+ * 工具包（同一地址上的每一行是同一个应用），读不出时按行 id。
+ */
+export function sharedUseAppLockKey(url: string | null, appId: string) {
+  return JSON.stringify(["shared-use-app", (url && toolkitOf(url)) || appId]);
+}
+
+/** 在指定的人的帧里只读；本来就在那里时不换帧。 */
+const inFrame = <T>(tenant: string, read: () => Promise<T>): Promise<T> =>
+  tenant === currentTenant() ? read() : runAsTenant(tenant, read);
+
 export class SharedUseFrameError extends Error {
   constructor(message: string) {
     super(message);
@@ -337,16 +357,29 @@ export function createSharedUseStore(database: Database) {
     botId: string,
     serverId: string,
   ) {
-    const appId = await appIdOf(serverId, tx);
+    const { appId, url } = await rowsOfApp(serverId, tx);
+    /*
+     * 先拿应用这一把的共享锁：改规则、切换账号模式拿它的排他锁（`sharedUseAppLockKey`），所以一次写批准
+     * 要么整个在它们之前提交、被它们随后删掉，要么在它们之后开始、重读到新的规则与模式。
+     */
+    await tx.execute(
+      sql`select pg_advisory_xact_lock_shared(hashtext(${sharedUseAppLockKey(url, appId)}))`,
+    );
     await tx.execute(
       sql`select pg_advisory_xact_lock(hashtext(${JSON.stringify(["shared-use-approval", botId, appId])}))`,
     );
     return appId;
   }
 
-  /** 在决定所在的事务里写；调用方已经持有锁。 */
+  /** 在决定所在的事务里写；调用方已经持有锁。应用此刻不是 Shared 时不写。 */
   async function writeApproval(tx: Transaction, input: ApprovalInput) {
     const serverId = input.serverId;
+    const [app] = await tx
+      .select({ accountMode: mcpServers.accountMode })
+      .from(mcpServers)
+      .where(eq(mcpServers.id, serverId))
+      .limit(1);
+    if (app?.accountMode !== "shared") throw new SharedUseNotSharedError();
     const approvedAs = input.as ?? "admin";
     const insertion = tx.insert(sharedUseApprovals).values({
       agentId: input.botId,
@@ -464,7 +497,9 @@ export function createSharedUseStore(database: Database) {
         visibility: agentProfiles.visibility,
       })
       .from(agentProfiles)
-      .where(eq(agentProfiles.agentId, botId))
+      .where(
+        and(eq(agentProfiles.agentId, botId), isNull(agentProfiles.deletedAt)),
+      )
       .limit(1);
     const [published] = await database
       .select({ audience: teamBotPublications.audience })
@@ -493,9 +528,9 @@ export function createSharedUseStore(database: Database) {
       await Promise.all(goals.map((goal) => sourcesOf(goal.id)))
     ).flat();
     return {
-      /* 读不到资料的员工按公开、没有主人处理：最宽的开放范围。 */
+      /* 读不到资料（不在这个帧里、已删除）的员工按没有主人、不公开处理：失败闭合。 */
       ownerUserId: profile?.ownerUserId ?? null,
-      visibility: profile?.visibility ?? "public",
+      visibility: profile?.visibility ?? "private",
       publication: published
         ? {
             audience: published.audience as "team" | "people",
@@ -639,7 +674,7 @@ export function createSharedUseStore(database: Database) {
           return { id: pending.id, created: false };
         await tx
           .update(sharedUseRequests)
-          .set({ status: "superseded" })
+          .set({ status: "superseded", decidedAt: new Date() })
           .where(eq(sharedUseRequests.id, pending.id));
       }
       const [created] = await tx
@@ -690,10 +725,9 @@ export function createSharedUseStore(database: Database) {
           outsideInput: request.proposedOutsideInput,
           members: request.proposedMembers,
         },
-        current: await approvalFor(
-          request.agentId,
-          request.serverId,
-          request.tenantId,
+        // 在申请所在的（员工主人的）帧里只读：platform 帧看得到别人同地址的私有行，会选错应答行。
+        current: await inFrame(request.tenantId, () =>
+          approvalFor(request.agentId, request.serverId),
         ),
         reason: request.reason,
         requestedBy: request.requestedBy,
@@ -712,6 +746,27 @@ export function createSharedUseStore(database: Database) {
         eq(sharedUseRequests.status, "pending"),
       ),
     );
+
+  /**
+   * 撤销一位员工在一个应用上的批准（管理员的入口，路由经 `asBotOwner` 进主人的帧）。答撤销了没有。
+   */
+  async function revokeApproval(input: {
+    botId: string;
+    serverId: string;
+  }): Promise<boolean> {
+    await assertOwnerFrame(input.botId);
+    const { ids } = await rowsOfApp(input.serverId);
+    const removed = await database
+      .delete(sharedUseApprovals)
+      .where(
+        and(
+          eq(sharedUseApprovals.agentId, input.botId),
+          inArray(sharedUseApprovals.serverId, ids),
+        ),
+      )
+      .returning({ botId: sharedUseApprovals.agentId });
+    return removed.length > 0;
+  }
 
   /** 管理员批准或驳回一条申请。在员工主人的帧里（路由经 `asBotOwner` 进来）。 */
   async function decide(input: {
@@ -790,6 +845,7 @@ export function createSharedUseStore(database: Database) {
     listRequests,
     pendingFor,
     decide,
+    revokeApproval,
   };
 }
 
@@ -814,6 +870,13 @@ export function createSharedAudience(
     initiator,
     outside,
   }) => {
+    // 说不出是谁在问的调用：团队账号不猜（`identifyActor` 认不出人时答空串）。
+    if (!actorId)
+      return {
+        allowed: false,
+        refusal: "shared_account_not_approved",
+        why: "这次调用说不出是谁在问",
+      };
     const owner = await ownerTenantOfBot(database, botId);
     if (!owner)
       return {
@@ -904,7 +967,8 @@ export function createSharedAudience(
         | "shared_use.approved"
         | "shared_use.declined"
         | "shared_use.owner_approved"
-        | "shared_use.owner_withdrawn";
+        | "shared_use.owner_withdrawn"
+        | "shared_use.revoked";
     },
   ) => recordAuditEvent(audit, { ...event, targetType: "mcp_server" });
 

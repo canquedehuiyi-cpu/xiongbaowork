@@ -94,6 +94,7 @@ export const AUDIT_EVENT_WORDS: Readonly<Record<string, string>> = {
   "shared_use.requested": "申请使用团队账号",
   "shared_use.approved": "批准使用团队账号",
   "shared_use.declined": "拒绝使用团队账号",
+  "shared_use.revoked": "撤销团队账号的使用批准",
   "shared_use.owner_approved": "允许员工使用团队账号",
   "shared_use.owner_withdrawn": "收回团队账号的使用",
   "app_access.owner_granted": "把自己的应用给员工",
