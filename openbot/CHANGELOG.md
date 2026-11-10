@@ -10,6 +10,11 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## 0.2.7
 
+- **用 DeepSeek 时群聊能对话了，审批通过后也能接着做。** DeepSeek 的思考模式要求每次都把之前的思考过程
+  传回去，员工的对话历史里没有这部分，所以有前文的对话（群聊、审批后继续执行）会被 DeepSeek 拒绝（400）。
+  现在发往 `api.deepseek.com` 的对话请求一律关闭思考模式（请求里已经写明 `thinking` 的照写的发）。这是
+  部署级的设置，会作用到所有用 DeepSeek 的员工，包括在模型库里用自己密钥的；想保留思考模式，设
+  `DEEPSEEK_THINKING=enabled`（届时有前文的带工具对话仍会被拒）。
 - **界面同步到上游 OpenBot v1.0.0，保留员工/群组结构与中文。** 前端（`app/`）三方合并了上游 6fb38c8b 到 v1.0.0
   的界面改动，CopilotKit 前端从 1.77 升到 1.85。新增或换新的地方：
   - 员工详情页多了「需要你」、动态速览（「全部动态」打开 `/bots/<员工>/activity`，列出这位员工做过的每个动作）、
