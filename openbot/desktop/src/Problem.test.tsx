@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, expect, mock, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { settleReactWork } from "./settleReactWork";
 
 let invokeCalls: Array<{ command: string; args?: unknown }> = [];
 let invokeFailure: string | null = null;
@@ -30,7 +31,10 @@ afterEach(() => {
   else process.env.VITE_OPENBOT_SUPPORT_URL = previousSupportUrl;
   cleanup();
 });
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(async () => {
+  await settleReactWork();
+  await GlobalRegistrator.unregister();
+});
 
 test("problem_ui_has_no_credential_restore_action", () => {
   const view = render(

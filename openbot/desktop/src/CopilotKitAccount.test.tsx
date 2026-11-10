@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, expect, mock, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { cleanup, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { settleReactWork } from "./settleReactWork";
 
 type Call = { command: string; args?: Record<string, unknown> };
 
@@ -23,7 +24,10 @@ afterEach(() => {
   cleanup();
   invokeCalls = [];
 });
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(async () => {
+  await settleReactWork();
+  await GlobalRegistrator.unregister();
+});
 
 // As the CLI prints it for a sign-in waiting on the browser, with a synthetic code.
 const PAGE = {

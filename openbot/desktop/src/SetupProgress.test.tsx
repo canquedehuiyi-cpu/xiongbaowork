@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { cleanup, render, within } from "@testing-library/react";
+import { settleReactWork } from "./settleReactWork";
 
 const { INSTALL_BLURB, SetupProgress, plainInstallSteps } = await import(
   "./SetupProgress"
@@ -8,7 +9,10 @@ const { INSTALL_BLURB, SetupProgress, plainInstallSteps } = await import(
 
 beforeAll(() => GlobalRegistrator.register());
 afterEach(() => cleanup());
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(async () => {
+  await settleReactWork();
+  await GlobalRegistrator.unregister();
+});
 
 type Downloads = {
   done?: number;

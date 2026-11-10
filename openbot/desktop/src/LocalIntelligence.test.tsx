@@ -7,6 +7,7 @@ import userEvent from "@testing-library/user-event";
 import { useEffect } from "react";
 import type { StartOutcome } from "./LocalIntelligence";
 import type { LocalConnection, LocalReport } from "./localEvalCli";
+import { settleReactWork } from "./settleReactWork";
 
 type Invoke = (command: string, args?: unknown) => Promise<unknown>;
 
@@ -35,7 +36,10 @@ afterEach(() => {
   cleanup();
   invokeCalls = [];
 });
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(async () => {
+  await settleReactWork();
+  await GlobalRegistrator.unregister();
+});
 
 function report(overrides: Partial<LocalReport> = {}): LocalReport {
   return {

@@ -15,6 +15,7 @@ import type {
   ModelChoice,
   Provider,
 } from "./ProviderPicker";
+import { settleReactWork } from "./settleReactWork";
 
 const providers: Provider[] = [
   {
@@ -131,7 +132,10 @@ afterEach(() => {
   invokeCalls = [];
   cleanup();
 });
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(async () => {
+  await settleReactWork();
+  await GlobalRegistrator.unregister();
+});
 
 function deferred<T>() {
   let resolve!: (value: T) => void;

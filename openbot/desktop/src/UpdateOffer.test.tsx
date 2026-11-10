@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, expect, mock, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { settleReactWork } from "./settleReactWork";
 import type { AppUpdate } from "./UpdateOffer";
 
 /*
@@ -57,7 +58,10 @@ afterEach(() => {
   calls.length = 0;
   cleanup();
 });
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(async () => {
+  await settleReactWork();
+  await GlobalRegistrator.unregister();
+});
 
 function available(version = "0.3.2"): AppUpdate {
   return { version, current: "0.3.1", installing: null, updatesItself: true };
