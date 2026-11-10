@@ -716,6 +716,48 @@ describe("asking the person first", () => {
   });
 });
 
+describe("a teammate on the owner's account", () => {
+  test("is never shown which of the owner's accounts a call runs in, even from a frame that could read them", async () => {
+    const toolkit = `gmail-${suite}-owner-name`;
+    await enableGmail(toolkit);
+    const composio = composioHolding(toolkit, twoMailboxes(toolkit));
+    const asked: ApprovalCandidate[] = [];
+    const store = storeFor(composio.broker, async (candidate) => {
+      asked.push(candidate);
+      return undefined;
+    });
+    // PERSON（主人）列出了两个账号。
+    await listAccounts(routesAs(store, composio.broker, PERSON), toolkit);
+    await as(PERSON, () =>
+      store.grant("mcp", `${toolkit}/GMAIL_FETCH_EMAILS`, BOT, PERSON),
+    );
+
+    // OTHER 是队友，调用开的是主人的账号；在读得到主人账号行的帧里调用。
+    const result = await platform(() =>
+      store.callTool({
+        ref: `${toolkit}/GMAIL_FETCH_EMAILS`,
+        args: { query: "is:unread" },
+        botId: BOT,
+        actorId: OTHER,
+        credentialActorId: PERSON,
+      }),
+    );
+
+    expect(result.isError).toBe(false);
+    expect(asked.map((candidate) => candidate.account)).toEqual([undefined]);
+    // 不指定账号，由 vendor 进主人持有的那个。
+    expect(composio.asked.executed).toEqual([{ userId: PERSON }]);
+    const trail = await platform(() =>
+      database
+        .select({ payload: auditEvents.payload })
+        .from(auditEvents)
+        .where(eq(auditEvents.targetId, `${toolkit}/GMAIL_FETCH_EMAILS`)),
+    );
+    expect(JSON.stringify(trail)).not.toContain(WORK);
+    expect(JSON.stringify(trail)).not.toContain(HOME);
+  });
+});
+
 describe("a connection made before accounts were listed", () => {
   test("calls exactly as it did: as the person, naming no account", async () => {
     const toolkit = `gmail-${suite}-legacy`;
