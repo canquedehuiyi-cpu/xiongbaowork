@@ -343,6 +343,7 @@ import {
   ensurePersonalSkillsOwned,
   personalDefaultAppsMemory,
   personalDefaultsDeps,
+  personalGrantsLeftInTeam,
   startPersonalDefaultApps,
   withPersonalDefaults,
 } from "./plugins/personal-defaults";
@@ -1557,7 +1558,11 @@ await startupLifecycle.run(async (startup) => {
    * 个人版的默认（`plugins/personal-defaults.ts`，X4）：个人版里应用列出的每个工具给每位员工，新技能给每位
    * 员工，每位员工都参与自动学习。授予在那一个人（`DEV_ACTOR`）的帧里写。团队版里包装原样放行。
    */
-  const personalDeps = personalDefaultsDeps(database, DEV_ACTOR.id);
+  const personalDeps = personalDefaultsDeps(
+    database,
+    DEV_ACTOR.id,
+    bootAuditStore,
+  );
   /*
    * 共享使用批准（X3，上游 #757）：谁可以驾驶用到 Shared 应用团队账号的运行。批准记在员工主人名下，
    * 闸门在主人帧里只读它（`plugins/shared-use-store.ts`）。职责的触发来源由同一个存储读，读不到的职责
@@ -1603,7 +1608,11 @@ await startupLifecycle.run(async (startup) => {
     sharedAdmits: sharedAudience.admitsPerson,
     responsibilitySources: sharedUseStore.sourcesOf,
   });
-  const pluginStore = withPersonalDefaults(storeWithoutDefaults, personalDeps);
+  const pluginStore = withPersonalDefaults(
+    storeWithoutDefaults,
+    personalDeps,
+    bootAuditStore,
+  );
   /*
    * 应用的账号模式 Personal ⇄ Shared（X1，上游 #757）：切到 Shared 时写「写之前先问」团队规则，团队账号
    * 的身份由部署 id 铸出。
@@ -1638,9 +1647,18 @@ await startupLifecycle.run(async (startup) => {
    * 服务器级的事；重试的计时器在这一帧里排下，之后每一次重试仍在平台帧里。授予由 `personalDeps` 在那个人
    * 自己的帧里写。
    */
-  void runAsTenant("platform", () => {
-    if (currentEdition() !== "personal")
-      return pluginStore.refreshOwnListings();
+  void runAsTenant("platform", async () => {
+    if (currentEdition() !== "personal") {
+      await pluginStore.refreshOwnListings();
+      /*
+       * 同一个库从个人版换成团队版时，个人默认写下的宽授予原样生效。只提醒，不删：删掉哪些是管理员的决定。
+       */
+      if (await personalGrantsLeftInTeam(database))
+        console.warn(
+          "[plugins] 这个库里还有个人版替每位员工写下的授予（granted_by 以 openbot: 开头）。团队版由管理员逐个授予，请在插件页核对并收回不需要的。",
+        );
+      return;
+    }
     startup.acquireSync(
       () => ({
         stop: startPersonalDefaultApps(

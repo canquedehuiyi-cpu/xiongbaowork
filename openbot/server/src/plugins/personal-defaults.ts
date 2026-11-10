@@ -9,14 +9,29 @@
  * 团队版里是管理员要像对待别的应用一样授予的能力，见 `catalogue.ts` 的 routines 条目）。
  *
  * 安全面（每一条都有测试）：
- * - 授予只改「员工持有什么」，不改调用时的任何一道门：审批底线（`approvals/policy.ts`，写之前先问、
- *   外发必审）、共享使用闸门（X3）、账号规则（X1）、check-in 只认可靠读，都在调用那一刻照旧判。
+ * - 授予只改「员工持有什么」，不改调用时的任何一道门：审批底线（`approvals/policy.ts`：交给本人、删除和
+ *   外发只给允许一次）、共享使用闸门（X3）、账号规则（X1）、check-in 只认可靠读，都在调用那一刻照旧判。
+ * - 个人默认会把写工具也给每位员工（和上游一样），而底线不管普通写（新建、修改）。所以在给出第一个工具
+ *   之前，先把这个人的「改动之前先问」打开（`askBeforeChangesFirst`）：默认配置下普通写也要本人点头，网页里
+ *   的提示注入不能让员工默默改写他的内容。他自己选过的（包括关掉）原样保留，之后也可以在设置里关掉。
+ *   和上游不同：上游个人版默认不问普通写。
+ * - 「每位员工」是这个人能看见的、内置的普通员工：分身不算（它的连接器来源只写只读工具，移除来源就收回，
+ *   见 `avatar-sources.ts`），远端员工不算（本人不控制的外部端点）。
  * - 拒绝过的不再回来：关掉的默认应用记在 `personal_default_apps` 里，下次启动不再打开；一位员工身上关掉的
  *   技能，那位员工记过「已给过一次」，之后的启动和运行都不再给。
  * - 帧：授予写在个人版那个人自己的帧里（`asPerson`），所以落成他的行；读员工也在那一帧里读，行安全看不见
  *   的员工永远不会被授予。服务器级的事（添加应用、刷新工具）由调用方放在平台帧里做。
  */
-import { and, eq, isNull, like, or, sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  like,
+  notLike,
+  sql,
+} from "drizzle-orm";
 import {
   type AuditStore,
   DEPLOYMENT_INITIATOR,
@@ -25,6 +40,8 @@ import {
 import type { Database } from "../db/client";
 import { reasonWithoutStatement } from "../db/query-failure";
 import { enterpriseSettings } from "../db/schema/admin";
+import { approvalPreferences } from "../db/schema/approvals";
+import { agents } from "../db/schema/core";
 import { agentProfiles } from "../db/schema/coworker";
 import { learningSettings } from "../db/schema/learning";
 import {
@@ -63,7 +80,7 @@ type Store = {
 export type PersonalDefaultsDeps = {
   /** 部署为一个应用（行 id 或目录键）记下的工具，ref 写成授予用的 `<应用键>/<工具名>`。 */
   tools(app: string): Promise<ListedTool[]>;
-  /** 这个人能看见的每一位员工（没有删除的）。 */
+  /** 这个人能看见的每一位内置的普通员工（没有删除的；不含分身和远端员工）。 */
   bots(): Promise<string[]>;
   /** 一位员工在一个应用（键）上持有的授予 ref。 */
   granted(agentId: string, appKey: string): Promise<Set<string>>;
@@ -84,6 +101,12 @@ export type PersonalDefaultsDeps = {
    * 答带回来的员工。
    */
   includeEveryBotInLearning(): Promise<string[]>;
+  /**
+   * 第一次给员工工具之前，把这个人的「改动之前先问」打开；他选过的不动。只在个人版里调。
+   */
+  askBeforeChangesFirst?: () => Promise<void>;
+  /** 清掉已删除员工的「技能已给过」记录。 */
+  forgetDepartedBots?: () => Promise<void>;
   /**
    * 在个人版那个人自己的帧里做一件事（fork 的租户模型）：授予写成他的行，读员工、读授予都只读他能看见的。
    * 不给时就在调用方当前的帧里做。
@@ -153,6 +176,9 @@ export function personalRevokeRefusal(
   return null;
 }
 
+/** 分身的 id 前缀（`tenant/provisioning.ts` 的 `avatarAgentId`）。 */
+const AVATAR_PREFIX = "avatar-";
+
 /** 授予 ref 的应用键部分：`notion/search` → `notion`。 */
 const appKeyOf = (ref: string): string => ref.split("/")[0] ?? ref;
 
@@ -180,8 +206,9 @@ async function grantEveryTool(
         .map((tool) => tool.ref)
         .filter((ref) => !held.has(ref))
         .sort();
-      if (missing.length > 0)
-        await store.grantTools(key, missing, bot, grantedBy);
+      if (missing.length === 0) continue;
+      await deps.askBeforeChangesFirst?.();
+      await store.grantTools(key, missing, bot, grantedBy);
     }
   }
 }
@@ -214,9 +241,10 @@ export async function ensurePersonalSkills(
   deps: PersonalDefaultsDeps,
 ): Promise<void> {
   if (currentEdition() !== "personal") return;
-  await inPersonsFrame(deps, async () =>
-    giveEverySkillOnce(store, deps, await deps.bots()),
-  );
+  await inPersonsFrame(deps, async () => {
+    await deps.forgetDepartedBots?.();
+    await giveEverySkillOnce(store, deps, await deps.bots());
+  });
 }
 
 /**
@@ -297,7 +325,8 @@ async function everyBotApps(deps: PersonalDefaultsDeps): Promise<string[]> {
 /**
  * 个人版启动时：Routines 还没添加就添加，把工具清单就是 OpenBot 自己代码的应用（Routines、Drive、百度网盘）
  * 刷新到这一版（见 `refreshOwnListings`），然后把每个应用的全部工具给每位员工。会改东西的也给：排程本来就
- * 是它的用处；「改动之前总是先问」开着时，员工每次用之前照旧先问。
+ * 是它的用处。给之前先把这个人的「改动之前先问」打开（他自己关掉过的除外），所以默认配置下员工每次改东西
+ * 之前都先问。
  *
  * 先刷新、后授予，所以这一版新加的工具在同一次启动里就到了每位员工手上，不必等下一次。
  *
@@ -432,8 +461,9 @@ export function startPersonalDefaultApps(
 
 /**
  * 个人版里，连上一个应用就是全部的决定：每位员工拿到它列出的每个工具，会改东西的也给，轨迹上记为管理员
- * 授予。只有一个人，没有谁需要被挡在应用外面；挡在一次写操作前面的是「改动之前总是先问」，在对话里允许一次、
- * 在这里一直允许或拒绝。从一位员工身上收回应用会被拒绝（{@link EVERY_BOT_REFUSAL}），关掉应用就从所有员工
+ * 授予。对话卡片上的「连接」也经过这里，所以个人版里那一按给出的不只是只读动作。只有一个人，没有谁需要被
+ * 挡在应用外面；挡在一次普通写操作前面的是「改动之前先问」，个人默认在给出第一个工具之前把它打开（本人选过
+ * 的不动），删除、外发、分享、发布另由审批底线每次只给允许一次。从一位员工身上收回应用会被拒绝（{@link EVERY_BOT_REFUSAL}），关掉应用就从所有员工
  * 身上拿走。
  *
  * 装在 `refreshTools` 上，因为得知一个应用的工具的每条路都经过它：添加应用、连接账号、按刷新。store 的方法
@@ -444,6 +474,8 @@ export function startPersonalDefaultApps(
 export function withPersonalDefaults<S extends Store>(
   store: S,
   deps: PersonalDefaultsDeps,
+  /** 运行时把员工带回自动学习也进轨迹；不给时只在启动那一步（`ensurePersonalLearning`）写。 */
+  audit?: AuditStore,
 ): S {
   const refresh = store.refreshTools;
   store.refreshTools = async function (
@@ -472,6 +504,9 @@ export function withPersonalDefaults<S extends Store>(
    */
   const list = store.listForAgent;
   store.listForAgent = async function (this: S, agentId: string) {
+    /*
+     * 这是每次运行都走的读路径：补齐默认时出了错，只记一条警告，运行照常拿到它已经持有的东西，下一次再补。
+     */
     if (currentEdition() === "personal")
       await inPersonsFrame(deps, async () => {
         if (!(await deps.bots()).includes(agentId)) return;
@@ -483,8 +518,24 @@ export function withPersonalDefaults<S extends Store>(
           GRANTED_BY,
         );
         await giveEverySkillOnce(this, deps, [agentId]);
-        await deps.includeEveryBotInLearning();
-      });
+        const included = await deps.includeEveryBotInLearning();
+        if (included.length > 0 && audit)
+          await recordAuditEvent(audit, {
+            eventType: "configuration.changed",
+            targetType: "learning",
+            initiator: DEPLOYMENT_INITIATOR,
+            payload: { change: "every_bot_included_personal", bots: included },
+          });
+      }).catch((error: unknown) =>
+        console.warn(
+          JSON.stringify({
+            type: "personal-defaults-fill-failed",
+            bot: agentId,
+            reason: reasonWithoutStatement(error),
+            timestamp: new Date().toISOString(),
+          }),
+        ),
+      );
     return list.call(this, agentId);
   } as S["listForAgent"];
 
@@ -520,31 +571,66 @@ const serverKey = sql<string>`coalesce(${mcpServers.catalogueKey}, ${mcpServers.
 export function personalDefaultsDeps(
   database: Database,
   person?: string,
+  /** 替这个人打开「改动之前先问」时写的轨迹。 */
+  audit?: AuditStore,
 ): PersonalDefaultsDeps {
   const asPerson = person
     ? <T>(work: () => Promise<T>): Promise<T> => runAsTenant(person, work)
     : undefined;
   const framed = <T>(work: () => Promise<T>): Promise<T> =>
     asPerson ? asPerson(work) : work();
+  /** 一个应用的那一行：按行 id；给的是目录键时取那一个键下的一行，`team` 行优先。 */
+  const rowOf = async (app: string): Promise<string | undefined> => {
+    const [exact] = await database
+      .select({ id: mcpServers.id })
+      .from(mcpServers)
+      .where(eq(mcpServers.id, app))
+      .limit(1);
+    if (exact) return exact.id;
+    const [byKey] = await database
+      .select({ id: mcpServers.id })
+      .from(mcpServers)
+      .where(eq(mcpServers.catalogueKey, app))
+      .orderBy(sql`${mcpServers.tenantId} = 'team' desc`, mcpServers.id)
+      .limit(1);
+    return byKey?.id;
+  };
   return {
     ...(asPerson ? { asPerson } : {}),
+    /*
+     * 只读那一行列出的工具：同一个目录键下另一行（某个人旧时留下的）列出的工具，不是这次刷新得知的。
+     */
     tools: (app) =>
       framed(async () => {
+        const row = await rowOf(app);
+        if (!row) return [];
         const rows = await database
           .select({ key: serverKey, name: mcpTools.name })
           .from(mcpTools)
           .innerJoin(mcpServers, eq(mcpServers.id, mcpTools.serverId))
-          .where(or(eq(mcpServers.id, app), eq(mcpServers.catalogueKey, app)));
+          .where(eq(mcpServers.id, row));
         return [...new Set(rows.map((row) => `${row.key}/${row.name}`))].map(
           (ref) => ({ ref }),
         );
       }),
+    /*
+     * 分身不算：它的连接器来源只写只读工具，移除来源就收回（`avatar-sources.ts`），给它全部工具会让来源失去
+     * 意义，移除的也会在下一次运行时被加回来。远端员工不算：它们是本人不控制的外部端点，不该拿到本人全部
+     * 账号的全部工具。
+     */
     bots: () =>
       framed(async () => {
         const rows = await database
           .select({ id: agentProfiles.agentId })
           .from(agentProfiles)
-          .where(isNull(agentProfiles.deletedAt));
+          .innerJoin(agents, eq(agents.id, agentProfiles.agentId))
+          .where(
+            and(
+              isNull(agentProfiles.deletedAt),
+              eq(agents.type, "built_in"),
+              notLike(agentProfiles.agentId, `${AVATAR_PREFIX}%`),
+            ),
+          );
         return rows.map((row) => row.id);
       }),
     granted: (agentId, appKey) =>
@@ -556,7 +642,7 @@ export function personalDefaultsDeps(
             and(
               eq(pluginGrants.kind, "mcp"),
               eq(pluginGrants.agentId, agentId),
-              like(pluginGrants.ref, `${appKey}/%`),
+              sql`split_part(${pluginGrants.ref}, '/', 1) = ${appKey}`,
             ),
           );
         return new Set(rows.map((row) => row.ref));
@@ -618,6 +704,22 @@ export function personalDefaultsDeps(
      */
     includeEveryBotInLearning: () =>
       framed(async () => {
+        /*
+         * 先不加锁地看一眼有没有被排除的员工：这在每次运行时都会走，绝大多数时候一个都没有，不该每次都
+         * 锁住部署唯一的那一行设置。
+         */
+        const [leftOut] = await database
+          .select({ id: learningSettings.id })
+          .from(learningSettings)
+          .where(
+            and(
+              eq(learningSettings.id, "current"),
+              sql`jsonb_typeof(${learningSettings.settings}->'agents') = 'object'`,
+              sql`EXISTS (SELECT 1 FROM jsonb_each(${learningSettings.settings}->'agents') AS mapping(bot, target) WHERE target = 'null'::jsonb)`,
+            ),
+          )
+          .limit(1);
+        if (!leftOut) return [];
         const rows = await database.execute<{ bots: string[] }>(sql`
           WITH old AS (
             SELECT ${learningSettings.settings} AS settings
@@ -651,6 +753,49 @@ export function personalDefaultsDeps(
           ) AS bots
         `);
         return [...rows].flatMap((row) => row.bots);
+      }),
+    /*
+     * 写下这个人的「改动之前先问」= 开，只在他还没有任何选择时（`onConflictDoNothing`）。他关掉过的、打开过
+     * 的都原样保留。写下了就记一行由 OpenBot 发起的轨迹，和他自己在设置里改时同一个事件。只在真有工具要给时
+     * 才走到这里，所以每次多的只是一条什么都不改的插入。
+     */
+    ...(person
+      ? {
+          askBeforeChangesFirst: () =>
+            framed(async () => {
+              const written = await database
+                .insert(approvalPreferences)
+                .values({ ownerUserId: person, enabled: true })
+                .onConflictDoNothing()
+                .returning({ owner: approvalPreferences.ownerUserId });
+              if (written.length > 0 && audit)
+                await recordAuditEvent(audit, {
+                  eventType: "approval.settings_changed",
+                  targetType: "approval_settings",
+                  targetId: person,
+                  initiator: DEPLOYMENT_INITIATOR,
+                  payload: {
+                    change: "ask_before_changes_personal_default",
+                    enabled: true,
+                  },
+                });
+            }),
+        }
+      : {}),
+    /** 已删除（软删）的员工不再需要「技能已给过」那一行；只看这个人能看见的员工。 */
+    forgetDepartedBots: () =>
+      framed(async () => {
+        const departed = await database
+          .select({ id: agentProfiles.agentId })
+          .from(agentProfiles)
+          .where(isNotNull(agentProfiles.deletedAt));
+        if (departed.length === 0) return;
+        await database.delete(enterpriseSettings).where(
+          inArray(
+            enterpriseSettings.key,
+            departed.map((row) => skillsGivenSetting(row.id)),
+          ),
+        );
       }),
     /** fork 的技能按租户唯一：只问这一帧自己的行，自带技能同名时这个人的新技能仍算新的。 */
     skillExists: (slug) =>
@@ -710,4 +855,21 @@ export function personalDefaultAppsMemory(
         });
     },
   };
+}
+
+/**
+ * 团队版里还在生效的、由个人默认写下的授予有没有（`granted_by` 以 `openbot:` 开头）。同一个库从个人版换成
+ * 团队版时，这些宽授予原样生效，「管理员逐个授予」的前提不再成立；`index.ts` 在团队版启动时据此提醒运维。
+ * 调用方在平台帧里问，数的是整个部署。
+ */
+export async function personalGrantsLeftInTeam(
+  database: Database,
+): Promise<boolean> {
+  if (currentEdition() !== "team") return false;
+  const [row] = await database
+    .select({ ref: pluginGrants.ref })
+    .from(pluginGrants)
+    .where(like(pluginGrants.grantedBy, "openbot:%"))
+    .limit(1);
+  return row !== undefined;
 }

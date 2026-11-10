@@ -21,6 +21,7 @@ import {
   ownerGrantRefusal,
   withdrawOwnersSharedUse,
 } from "./owner-grants";
+import { personalRevokeRefusal } from "./personal-defaults";
 import {
   type SharedAudience,
   SharedUseNotSharedError,
@@ -535,6 +536,15 @@ export function mountAppAccessRoutes(options: {
     "/for/:agentId/apps/:app/give",
     requireUser,
     async (context) => {
+      /*
+       * 个人版里每位员工持有每个已连接应用（`./personal-defaults`），收回会在员工下一次运行时被补回来。答一个
+       * 「已收回」却悄悄还原，不如照实拒绝，和 `DELETE /grants` 同一个答复。
+       */
+      const personalRefusal = personalRevokeRefusal(
+        "mcp",
+        context.req.param("app") ?? "",
+      );
+      if (personalRefusal) return context.json({ error: personalRefusal }, 403);
       const found = await ownersApp(context);
       if (found instanceof Response) return found;
       const { agentId, inspected } = found;

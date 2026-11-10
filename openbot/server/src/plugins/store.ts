@@ -6661,6 +6661,10 @@ export function createPluginStore(options: PluginStoreOptions) {
         eventType: "configuration.changed",
         targetType: grantTargetType(kind),
         targetId: ref,
+        // OpenBot 自己替人做的授予（`openbot:` 开头，见 `./personal-defaults`）记为部署发起，不读成有人按了按钮。
+        ...(by.startsWith("openbot:")
+          ? { initiator: { kind: "deployment" } as AuditInitiator }
+          : {}),
         payload: {
           actor: by,
           change: "plugin_granted",
@@ -10282,10 +10286,7 @@ export function createPluginStore(options: PluginStoreOptions) {
           ),
         )
         .limit(1);
-      if (
-        ownGrant &&
-        (await grantedByOwner(database, input.botId, ownGrant))
-      ) {
+      if (ownGrant && (await grantedByOwner(database, input.botId, ownGrant))) {
         const owner = await ownerTenantOfBot(database, input.botId);
         if (!owner || !(await ownerStillGives(database, owner))) {
           await recordAuditEvent(auditStore, {
