@@ -26,7 +26,7 @@ export const MAX_PENDING_APP_ACCESS_REQUESTS = 20;
  * 拿到的只是一个角色的名字，没有办法去找。这个工具替对方把申请直接放进管理员的收件箱，对话里留一张卡片
  * 说明这件事，对方还可以撤回。
  *
- * 类型由服务端定，不由模型定，与浏览器入口同一个判定（`requestPlanFor`，评审 M4）：按应用对这个人的状态，
+ * 类型由服务端定，不由模型定，与浏览器入口同一个判定（`requestPlanFor`）：按应用对这个人的状态，
  * 已就绪或本人自己能解决的不建申请；应用还没打开（disabled）申请 `enable`；有行但没给这位员工时，已上架
  * （D08）申请 `grant`，还没上架申请 `enable`。批准时走 fork 现有的上架和授予接口，这里不授予任何东西。
  *
@@ -80,7 +80,7 @@ export function appAccessTools(options: {
           return `${REFUSAL_MARKER} 这次对话没有可以代为申请的人。`;
         const { app, reason } = parsed.data;
         /*
-         * 与浏览器入口同一个判定（评审 M4）：同一次 `inspectApp`、同一个 `requestPlanFor`，所以能不能申请、
+         * 与浏览器入口同一个判定：同一次 `inspectApp`、同一个 `requestPlanFor`，所以能不能申请、
          * 已有哪一条在等，两个入口答的一样；本人自己能解决的状态（连接、重连、团队账号未连接或未批准）
          * 不建申请。
          */
