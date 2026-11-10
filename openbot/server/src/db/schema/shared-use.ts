@@ -85,7 +85,7 @@ export const sharedUseApprovals = pgTable(
       name: "shared_use_approvals_pkey",
       columns: [table.tenantId, table.agentId, table.serverId],
     }),
-    index("shared_use_approvals_server_idx").on(table.serverId),
+    index("shared_use_approvals_server_idx").on(table.tenantId, table.serverId),
     check(
       "shared_use_approvals_audience_check",
       sql`${table.audience} IN ('owner', 'people', 'team')`,
@@ -152,7 +152,7 @@ export const sharedUseRequests = pgTable(
   "shared_use_requests",
   {
     tenantId: tenantId(),
-    id: uuid("id").primaryKey().defaultRandom(),
+    id: uuid("id").notNull().defaultRandom(),
     agentId: text("agent_id")
       .notNull()
       .references(() => agents.id, { onDelete: "cascade" }),
@@ -182,10 +182,22 @@ export const sharedUseRequests = pgTable(
       .defaultNow(),
   },
   (table) => [
+    primaryKey({
+      name: "shared_use_requests_pkey",
+      columns: [table.tenantId, table.id],
+    }),
     uniqueIndex("shared_use_requests_pending_idx")
       .on(table.tenantId, table.agentId, table.serverId)
       .where(sql`${table.status} = 'pending'`),
-    index("shared_use_requests_status_idx").on(table.status, table.createdAt),
+    index("shared_use_requests_status_idx").on(
+      table.tenantId,
+      table.status,
+      table.createdAt,
+    ),
+    check(
+      "shared_use_requests_decided",
+      sql`(${table.status} = 'pending') = (${table.decidedAt} IS NULL)`,
+    ),
     check(
       "shared_use_requests_audience_check",
       sql`${table.proposedAudience} IN ('owner', 'people', 'team')`,

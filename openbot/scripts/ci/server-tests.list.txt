@@ -398,6 +398,7 @@ tests/outbound-guard.test.ts
 tests/own-app-tools-refresh.integration.test.ts
 tests/owner-app-grants.integration.test.ts
 tests/owner-assembly-audit.test.ts
+tests/owner-grants-hardening.integration.test.ts
 tests/page-frame-retention.integration.test.ts
 tests/paging.test.ts
 tests/passwords-sign-in.test.ts
@@ -602,6 +603,7 @@ tests/setup-checklist.test.ts
 tests/shared-accounts.test.ts
 tests/shared-brokered-accounts.integration.test.ts
 tests/shared-computer-run.integration.test.ts
+tests/shared-use-hardening.integration.test.ts
 tests/shared-use-routes.integration.test.ts
 tests/shared-use-store.integration.test.ts
 tests/shared-use.test.ts
