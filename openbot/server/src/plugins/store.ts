@@ -60,7 +60,7 @@ import {
   pluginInstallListings,
 } from "../db/schema/plugin-install-listings";
 import { SYSTEM_TENANT, TEAM_TENANT } from "../db/schema/tenant";
-import { appsPage } from "../edition";
+import { appsPage, appsPageZh } from "../edition";
 import type { OutboundLookup, OutboundPolicy } from "../net/outbound-guard";
 import { isProactiveInitiator } from "../proactive/initiator";
 import type { CheckPrivateShare } from "../proactive/private-share";
@@ -99,6 +99,8 @@ import {
   serverCredentialKind,
 } from "./catalogue";
 import { accountArgumentFor } from "./account-argument";
+import { type AccountMode, accountFor } from "./shared-accounts";
+import { admits, STRICTEST_APPROVAL, steeringOf } from "./shared-use";
 import {
   type BrokeredAccountRecord,
   createAccountBook,
@@ -254,6 +256,23 @@ export type ServerRecord = {
    * and never from the app's name. The connect route and the store refuse whatever a screen draws.
    */
   adminConnectOnly: boolean;
+  /**
+   * 上游 #950 的 `sharedOnly`：这个应用只能作为共享的团队账号连接（部署自己的 S2S 客户端）。与
+   * `adminConnectOnly` 同一个判断；fork 在 Personal 模式下仍允许管理员以自己的名义连接（既有行为），切到
+   * Shared 后由团队账号承担（X1）。可选，只在 broker 行上出现。
+   */
+  sharedOnly?: boolean;
+  /** broker 应用的账号模式（X1）：`personal` 或 `shared`；非 broker 行没有。 */
+  accountMode?: string | null;
+  /**
+   * Shared 应用的团队账号：是否已连接、何时、由谁、是否经过检查。vendor 处的身份不在这里，不发给浏览器。
+   */
+  sharedAccount?: {
+    connected: boolean;
+    connectedAt: string | null;
+    connectedBy: string | null;
+    verified: boolean;
+  } | null;
   tools: ToolRecord[];
   /**
    * Grants on tools this server no longer advertises.
@@ -1400,6 +1419,11 @@ export type PluginStoreOptions = {
   broker?: ComposioBroker;
   /** Where the vendor sends people back; needed to (re)register a dynamic client. */
   redirectUri?: string;
+  /**
+   * 一个职责的触发来源（`manual`、`schedule`、渠道……），给共享账号闸门判断这次运行是否由外部输入驱动
+   * （`./shared-use`）。没给时，由职责开始的运行一律按外部输入处理，团队账号不接受——闭合的方向。
+   */
+  responsibilitySources?: (responsibilityId: string) => Promise<string[]>;
 };
 
 /**
@@ -1602,6 +1626,16 @@ export function createPluginStore(options: PluginStoreOptions) {
   // No default, unlike the seams above: there is no real implementation in this tree to fall back
   // to, and a deployment with no Composio key is supposed to have no broker. See `./broker`.
   const broker = options.broker;
+  /**
+   * 一个 `team` 服务器上每个人的行，而不只是这个帧看得到的（G01-E P21、I5）——`removeServer` 的那道门，
+   * 提出来让账号模式切换（X1）共用同一个入口：切到 Shared 前要结束每个人在这个团队应用上的个人账号，
+   * 和移除应用是同一件事的一部分。调用方先过 `requireServerWriter`（持有能力的管理员或 platform），只碰
+   * 以这个服务器为键的行。非 `team` 服务器不开门。
+   */
+  const reachEveryPersonOn = <T>(
+    team: boolean,
+    work: () => Promise<T>,
+  ): Promise<T> => (team ? runAsTenant("platform", work) : work());
   /** 一个人在每个 broker 应用上的多个账号（上游 #1298）；见 `./brokered-accounts`。 */
   const accounts = createAccountBook({ database, broker, auditStore });
 
@@ -1977,7 +2011,12 @@ export function createPluginStore(options: PluginStoreOptions) {
      * 不能由一个成员的连接触发（G01-E P10）。
      */
     options: { reRegister?: boolean } = {},
-  ): Promise<{ token?: string; placement?: CredentialPlacement }> {
+  ): Promise<{
+    token?: string;
+    placement?: CredentialPlacement;
+    /** Shared 应用：调用以团队账号的身份发给 vendor，而不是提问者（`./shared-accounts`）。 */
+    vendorUserId?: string;
+  }> {
     /*
      * A brokered app, where the deployment holds one key and Composio keeps the accounts apart.
      *
@@ -2063,8 +2102,34 @@ export function createPluginStore(options: PluginStoreOptions) {
        * per connector on any deployment, and the call it guards is a network round trip to the
        * vendor.
        */
-      const appScheme = await brokeredAppScheme(access.toolkit);
+      const app = await brokeredAppRow(access.toolkit);
+      const appScheme = app?.authScheme ?? null;
       if (schemeKind(appScheme) === "none") return {};
+
+      /*
+       * 谁的账号（X1，上游 #757）：由应用的账号模式决定，只在 `accountFor` 一处判定。Shared 应用进部署
+       * 的团队账号，不论谁问；它必须已由管理员连接。谁可以驾驶团队账号在 `callTool` 的共享闸门里已判过。
+       */
+      const answer = accountFor(
+        {
+          title: row.title,
+          provenance: "composio",
+          authScheme: appScheme,
+          accountMode: app?.accountMode ?? null,
+        },
+        actorId,
+      );
+      if (answer.kind === "ambiguous")
+        throw new PluginRefusedError(answer.message, null);
+      if (answer.kind === "deployment") {
+        if (!app?.sharedVendorUserId || !app.sharedConnectedAt) {
+          throw new PluginRefusedError(
+            `${row.title} 用的是一个共享的团队账号，还没有管理员连接它，所以没有调用。请管理员在${appsPageZh()}连接 ${row.title}。`,
+            null,
+          );
+        }
+        return { vendorUserId: app.sharedVendorUserId };
+      }
 
       /**
        * WHAT THAT GATE ANSWERS FOR EACH KIND OF APP, WRITTEN DOWN BECAUSE THE LINE ABOVE DOES NOT.
@@ -3345,7 +3410,16 @@ export function createPluginStore(options: PluginStoreOptions) {
   }
 
   /** What a row that answers for an app is asked for: which row it is, and how the app connects. */
-  type BrokeredAppRow = { id: string; authScheme: string | null };
+  type BrokeredAppRow = {
+    id: string;
+    authScheme: string | null;
+    /** 应用的账号模式与团队账号（迁移 0180）；见 `./shared-accounts`。 */
+    accountMode: string | null;
+    sharedVendorUserId: string | null;
+    sharedConnectedAt: Date | null;
+    sharedConnectedBy: string | null;
+    sharedVerified: boolean;
+  };
 
   /**
    * The one `mcp_servers` row that answers for the app a url names: its id, and its scheme.
@@ -3414,13 +3488,26 @@ export function createPluginStore(options: PluginStoreOptions) {
         id: mcpServers.id,
         url: mcpServers.url,
         authScheme: mcpServers.authScheme,
+        accountMode: mcpServers.accountMode,
+        sharedVendorUserId: mcpServers.sharedVendorUserId,
+        sharedConnectedAt: mcpServers.sharedConnectedAt,
+        sharedConnectedBy: mcpServers.sharedConnectedBy,
+        sharedVerified: mcpServers.sharedVerified,
       })
       .from(mcpServers)
       .where(inArray(mcpServers.url, urls))
       .orderBy(asc(mcpServers.id));
     for (const row of rows) {
       if (!answering.has(row.url)) {
-        answering.set(row.url, { id: row.id, authScheme: row.authScheme });
+        answering.set(row.url, {
+          id: row.id,
+          authScheme: row.authScheme,
+          accountMode: row.accountMode,
+          sharedVendorUserId: row.sharedVendorUserId,
+          sharedConnectedAt: row.sharedConnectedAt,
+          sharedConnectedBy: row.sharedConnectedBy,
+          sharedVerified: row.sharedVerified,
+        });
       }
     }
     return answering;
@@ -4721,6 +4808,10 @@ export function createPluginStore(options: PluginStoreOptions) {
           url: mcpServers.url,
           // The third of what `accessFor` resolves a row with. See there.
           authScheme: mcpServers.authScheme,
+          // 账号模式与团队账号（X1）：Shared 应用的团队账号同样要在移除时撤销。
+          accountMode: mcpServers.accountMode,
+          sharedVendorUserId: mcpServers.sharedVendorUserId,
+          sharedConnectedAt: mcpServers.sharedConnectedAt,
         })
         .from(mcpServers)
         .where(atServerAddress(serverId))
@@ -4767,7 +4858,7 @@ export function createPluginStore(options: PluginStoreOptions) {
        */
       const team = existing?.tenantId === TEAM_TENANT;
       const reach = <T>(work: () => Promise<T>): Promise<T> =>
-        team ? runAsTenant("platform", work) : work();
+        reachEveryPersonOn(team, work);
 
       /**
        * Whether that token is still live, read rather than inferred from a
@@ -4920,13 +5011,23 @@ export function createPluginStore(options: PluginStoreOptions) {
          * are where the people are. Sorted, so two removals of the same app revoke in the same
          * order and write their trail rows in the same order.
          */
-        const connected = await reach(() =>
+        const people = await reach(() =>
           database
             .select({ userId: composioConnections.userId })
             .from(composioConnections)
             .where(eq(composioConnections.toolkit, toolkit))
             .orderBy(asc(composioConnections.userId)),
         );
+        /*
+         * Shared 应用的团队账号（X1）也是这个应用上的一个账号：应用移除时同样先在 vendor 撤销，记在同一条
+         * 审计里，owner 是团队身份。应用行随后删除，团队账号的状态随之消失。
+         */
+        const connected =
+          existing?.accountMode === "shared" &&
+          existing.sharedConnectedAt &&
+          existing.sharedVendorUserId
+            ? [...people, { userId: existing.sharedVendorUserId }]
+            : people;
 
         /*
          * What the broker was actually asked for each of them, kept so the trail below records the
@@ -5829,6 +5930,29 @@ export function createPluginStore(options: PluginStoreOptions) {
           adminConnectOnly:
             toolkitOf(row.url) !== null &&
             adminConnectOnly(brokeredApps.get(row.url)?.authScheme ?? null),
+          ...(toolkitOf(row.url) !== null
+            ? {
+                sharedOnly: adminConnectOnly(
+                  brokeredApps.get(row.url)?.authScheme ?? null,
+                ),
+                accountMode: brokeredApps.get(row.url)?.accountMode ?? null,
+                sharedAccount:
+                  brokeredApps.get(row.url)?.accountMode === "shared"
+                    ? {
+                        connected: Boolean(
+                          brokeredApps.get(row.url)?.sharedConnectedAt,
+                        ),
+                        connectedAt: iso(
+                          brokeredApps.get(row.url)?.sharedConnectedAt ?? null,
+                        ),
+                        connectedBy:
+                          brokeredApps.get(row.url)?.sharedConnectedBy ?? null,
+                        verified:
+                          brokeredApps.get(row.url)?.sharedVerified === true,
+                      }
+                    : null,
+              }
+            : {}),
           tools: tools
             .filter((tool) => tool.serverId === row.id)
             .map((tool) => {
@@ -8925,6 +9049,316 @@ export function createPluginStore(options: PluginStoreOptions) {
      * answers what was asked of the provider; `ended` answers whether anything was there.
      */
     /**
+     * 一个 broker 应用的账号模式与团队账号（X1，上游 #757），读自应用的应答行。非 broker 应用答 null。
+     */
+    async appAccount(toolkit: string): Promise<{
+      appId: string;
+      title: string;
+      mode: AccountMode | null;
+      authScheme: string | null;
+      shared: {
+        vendorUserId: string;
+        connectedAt: string | null;
+        connectedBy: string | null;
+        verified: boolean;
+        verifiedAt: string | null;
+      } | null;
+    } | null> {
+      const app = await brokeredAppRow(toolkit);
+      if (!app) return null;
+      const [row] = await database
+        .select({
+          title: mcpServers.title,
+          accountMode: mcpServers.accountMode,
+          sharedVendorUserId: mcpServers.sharedVendorUserId,
+          sharedConnectedAt: mcpServers.sharedConnectedAt,
+          sharedConnectedBy: mcpServers.sharedConnectedBy,
+          sharedVerified: mcpServers.sharedVerified,
+          sharedVerifiedAt: mcpServers.sharedVerifiedAt,
+        })
+        .from(mcpServers)
+        .where(eq(mcpServers.id, app.id))
+        .limit(1);
+      if (!row) return null;
+      const mode =
+        row.accountMode === "personal" || row.accountMode === "shared"
+          ? row.accountMode
+          : null;
+      return {
+        appId: app.id,
+        title: row.title,
+        mode,
+        authScheme: app.authScheme,
+        shared: row.sharedVendorUserId
+          ? {
+              vendorUserId: row.sharedVendorUserId,
+              connectedAt: row.sharedConnectedAt?.toISOString() ?? null,
+              connectedBy: row.sharedConnectedBy,
+              verified: row.sharedVerified,
+              verifiedAt: row.sharedVerifiedAt?.toISOString() ?? null,
+            }
+          : null,
+      };
+    },
+
+    /**
+     * 这个团队应用上有几个人连着个人账号（账号模式切换的预览，X1）。经 {@link reachEveryPersonOn}：先要
+     * 管理员能力。
+     */
+    async countPeopleConnectedTo(toolkit: string): Promise<number> {
+      requireServerWriter();
+      const app = await brokeredAppRow(toolkit);
+      const [row] = app
+        ? await database
+            .select({ tenantId: mcpServers.tenantId })
+            .from(mcpServers)
+            .where(eq(mcpServers.id, app.id))
+        : [];
+      return reachEveryPersonOn(
+        row?.tenantId === TEAM_TENANT,
+        async () =>
+          (
+            await database
+              .select({ userId: composioConnections.userId })
+              .from(composioConnections)
+              .where(eq(composioConnections.toolkit, toolkit))
+          ).length,
+      );
+    },
+
+    /**
+     * 切到 Shared 之前，结束每个人在这个团队应用上的个人账号（X1）：逐个在 vendor 撤销，撤销成功的行删掉，
+     * 失败的列出来，调用方因此不改模式。经 {@link reachEveryPersonOn}：先要管理员能力。
+     */
+    async revokeEveryPersonOn(input: { toolkit: string; by: string }): Promise<{
+      revoked: number;
+      failures: { account: string; error: string }[];
+    }> {
+      requireServerWriter();
+      const app = await brokeredAppRow(input.toolkit);
+      const [row] = app
+        ? await database
+            .select({ tenantId: mcpServers.tenantId })
+            .from(mcpServers)
+            .where(eq(mcpServers.id, app.id))
+        : [];
+      return reachEveryPersonOn(row?.tenantId === TEAM_TENANT, async () => {
+        const people = await database
+          .select({ userId: composioConnections.userId })
+          .from(composioConnections)
+          .where(eq(composioConnections.toolkit, input.toolkit))
+          .orderBy(asc(composioConnections.userId));
+        const failures: { account: string; error: string }[] = [];
+        let revoked = 0;
+        for (const person of people) {
+          try {
+            await this.disconnectBrokered({
+              toolkit: input.toolkit,
+              userId: person.userId,
+              by: input.by,
+              reason: "mode_switched",
+            });
+            revoked += 1;
+          } catch (error) {
+            failures.push({
+              account: person.userId,
+              // 去掉 SQL 语句再给管理员看，与调用路径记失败时一样。
+              error:
+                error instanceof Error
+                  ? withoutStatement(error)
+                  : String(error),
+            });
+          }
+        }
+        return { revoked, failures };
+      });
+    },
+
+    /**
+     * 写应用的账号模式（只由 `./account-mode` 调用）。切到 Shared 时带上新铸的团队身份，切回 Personal 时
+     * 团队账号的连接状态一起清空（CHECK 也这样要求）。
+     */
+    async setAccountModeColumns(
+      appId: string,
+      mode: AccountMode,
+      sharedVendorUserId: string | null,
+    ): Promise<void> {
+      requireServerWriter();
+      await database
+        .update(mcpServers)
+        .set({
+          accountMode: mode,
+          sharedVendorUserId: mode === "shared" ? sharedVendorUserId : null,
+          sharedConnectedAt: null,
+          sharedConnectedBy: null,
+          sharedVerified: false,
+          sharedVerifiedAt: null,
+          sharedProbeAction: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(mcpServers.id, appId));
+    },
+
+    /**
+     * 管理员从 vendor 的同意屏幕回来后确认团队账号（X1）。问 vendor 团队身份下是否已有账号：有就记下连接；
+     * 没有就答 `connected: false`，什么都不写。同意屏幕类应用的同意本身就是检查，所以记为已验证；输入
+     * 密钥的应用保持已记下的状态。
+     */
+    async confirmSharedConnection(input: {
+      toolkit: string;
+      by: string;
+    }): Promise<{ connected: boolean }> {
+      if (!broker) throw new BrokerUnconfiguredError();
+      const app = await this.appAccount(input.toolkit);
+      if (!app?.shared || app.mode !== "shared")
+        throw new PluginRefusedError(
+          `${app?.title ?? input.toolkit} 不是共享账号应用。`,
+          null,
+        );
+      const connected = await broker.isConnected({
+        userId: app.shared.vendorUserId,
+        toolkit: input.toolkit,
+      });
+      if (!connected) return { connected: false };
+      const consent = schemeKind(app.authScheme) === "consent";
+      const now = new Date();
+      await database
+        .update(mcpServers)
+        .set({
+          sharedConnectedAt: app.shared.connectedAt
+            ? new Date(app.shared.connectedAt)
+            : now,
+          sharedConnectedBy: app.shared.connectedBy ?? input.by,
+          ...(consent
+            ? {
+                sharedVerified: true,
+                sharedVerifiedAt: now,
+                sharedProbeAction: null,
+              }
+            : {}),
+          updatedAt: now,
+        })
+        .where(eq(mcpServers.id, app.appId));
+      if (!app.shared.connectedAt) {
+        await recordAuditEvent(auditStore, {
+          eventType: "mcp.account_connected",
+          targetType: "mcp_server",
+          targetId: input.toolkit,
+          payload: {
+            actor: input.by,
+            server: input.toolkit,
+            holder: "deployment",
+          },
+        });
+      }
+      return { connected: true };
+    },
+
+    /**
+     * 管理员用输入的内容（密钥，或部署自己的 S2S 客户端需要的店铺子域名等）连接团队账号（X1）。只记
+     * 「已连接、未检查」：上游对个人密钥做的试调用与失败撤回，团队账号在 X1 不做，管理员可以随时断开重连。
+     */
+    async connectSharedWithFields(input: {
+      toolkit: string;
+      values: Record<string, string>;
+      by: string;
+    }): Promise<{ connected: true; verified: false }> {
+      if (!broker) throw new BrokerUnconfiguredError();
+      const app = await this.appAccount(input.toolkit);
+      if (!app?.shared || app.mode !== "shared")
+        throw new PluginRefusedError(
+          `${app?.title ?? input.toolkit} 不是共享账号应用。`,
+          null,
+        );
+      if (app.shared.connectedAt)
+        throw new PluginRefusedError(
+          `${app.title} 已经连接了一个团队账号。要换一个，先断开它。`,
+          null,
+        );
+      const authScheme = app.authScheme;
+      if (!isFieldScheme(authScheme))
+        throw new PluginRefusedError(
+          `${app.title} 不是通过填写内容连接的。`,
+          null,
+        );
+      await broker.connectWithFields({
+        userId: app.shared.vendorUserId,
+        toolkit: input.toolkit,
+        authScheme,
+        values: input.values,
+      });
+      const now = new Date();
+      await database
+        .update(mcpServers)
+        .set({
+          sharedConnectedAt: now,
+          sharedConnectedBy: input.by,
+          sharedVerified: false,
+          sharedVerifiedAt: null,
+          sharedProbeAction: null,
+          updatedAt: now,
+        })
+        .where(eq(mcpServers.id, app.appId));
+      await recordAuditEvent(auditStore, {
+        eventType: "mcp.account_connected",
+        targetType: "mcp_server",
+        targetId: input.toolkit,
+        payload: {
+          actor: input.by,
+          server: input.toolkit,
+          holder: "deployment",
+        },
+      });
+      return { connected: true, verified: false };
+    },
+
+    /**
+     * 断开团队账号（X1）：先在 vendor 撤销，再清应用行上的连接状态，写一行审计。团队身份保留（模式仍是
+     * Shared），管理员可以再连。
+     */
+    async disconnectShared(input: {
+      toolkit: string;
+      by: string;
+      reason: "self" | "mode_switched";
+    }): Promise<{ vendorRevocationRequested: boolean }> {
+      if (!broker) throw new BrokerUnconfiguredError();
+      const app = await this.appAccount(input.toolkit);
+      if (!app?.shared) return { vendorRevocationRequested: false };
+      const ended = await broker.revoke({
+        userId: app.shared.vendorUserId,
+        toolkit: input.toolkit,
+      });
+      const vendorRevocationRequested =
+        schemeKind(app.authScheme) === "key" ? false : ended;
+      await database
+        .update(mcpServers)
+        .set({
+          sharedConnectedAt: null,
+          sharedConnectedBy: null,
+          sharedVerified: false,
+          sharedVerifiedAt: null,
+          sharedProbeAction: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(mcpServers.id, app.appId));
+      if (app.shared.connectedAt || ended) {
+        await recordAuditEvent(auditStore, {
+          eventType: "mcp.account_disconnected",
+          targetType: "mcp_server",
+          targetId: input.toolkit,
+          payload: {
+            actor: input.by,
+            server: input.toolkit,
+            holder: "deployment",
+            reason: input.reason,
+            vendorRevocationRequested,
+          },
+        });
+      }
+      return { vendorRevocationRequested };
+    },
+
+    /**
      * 这个人在一个应用上的账号，按 vendor 现在列出的重建后答出（上游 #1298）；见
      * `./brokered-accounts` 的 `sync`。
      */
@@ -8982,7 +9416,7 @@ export function createPluginStore(options: PluginStoreOptions) {
        * if it is the same word every time, so the type is the pair rather than whatever sentence a
        * caller happened to spell.
        */
-      reason: "self" | "person_removed";
+      reason: "self" | "person_removed" | "mode_switched";
     }): Promise<{ vendorRevocationRequested: boolean }> {
       if (!broker) throw new BrokerUnconfiguredError();
 
@@ -9491,6 +9925,7 @@ export function createPluginStore(options: PluginStoreOptions) {
           )
         : input.args;
       let pinned: PinnedAccount | null = null;
+      let sharedApp = false;
       if (brokeredToolkit !== null) {
         const opensAs = input.credentialActorId ?? input.actorId;
         const names =
@@ -9513,20 +9948,89 @@ export function createPluginStore(options: PluginStoreOptions) {
           });
           throw new PluginRefusedError(message, null);
         };
-        if (names && opensAs !== input.actorId) {
-          await refuseAccount(
-            `这位员工用的是它主人的 ${row.title} 账号，所以不能指定账号，什么都没做。不指定账号再试一次。`,
-          );
+        const app = await brokeredAppRow(brokeredToolkit);
+        sharedApp =
+          app?.accountMode === "shared" &&
+          schemeKind(app.authScheme) !== "none";
+        if (sharedApp) {
+          // Shared 应用只有一个团队账号，没有可选的。
+          if (names)
+            await refuseAccount(
+              `${row.title} 用的是一个共享的团队账号，没有账号可选，所以什么都没做。不指定账号再试一次。`,
+            );
+        } else {
+          if (names && opensAs !== input.actorId) {
+            await refuseAccount(
+              `这位员工用的是它主人的 ${row.title} 账号，所以不能指定账号，什么都没做。不指定账号再试一次。`,
+            );
+          }
+          const picked = await accounts.pick({
+            toolkit: brokeredToolkit,
+            title: row.title,
+            userId: opensAs,
+            named: namedAccount,
+          });
+          if (picked !== null && "refused" in picked)
+            await refuseAccount(picked.refused);
+          else pinned = picked;
         }
-        const picked = await accounts.pick({
-          toolkit: brokeredToolkit,
-          title: row.title,
-          userId: opensAs,
-          named: namedAccount,
-        });
-        if (picked !== null && "refused" in picked)
-          await refuseAccount(picked.refused);
-        else pinned = picked;
+      }
+
+      /*
+       * 谁可以驾驶团队账号（X1，上游 #757 的共享使用闸门）。Shared 应用对所有人都是同一个团队账号，所以
+       * 一个员工被开放给比管理员批准的更多的人，就等于把这个账号交给了他们。每次调用都在这里判：
+       * - check-in 只能读本人自己连接的账号，团队账号不行；
+       * - 发起者必须说得出是谁在驾驶（`steeringOf`）：部署自身、没有起点的转交、认不出的开始方式都拒绝；
+       * - 受众：X3 并入「共享使用批准」之前，每个员工都按最严的一档（只有员工的主人和管理员，且不接受
+       *   外部输入驱动的职责）。Team Bot 的队友因此用不到团队账号，除非他是管理员。
+       */
+      if (sharedApp) {
+        const refuseShared = async (why: string): Promise<never> => {
+          await recordAuditEvent(auditStore, {
+            eventType: "mcp.call_rejected",
+            targetType: "mcp_tool",
+            targetId: input.ref,
+            ...(input.initiator ? { initiator: input.initiator } : {}),
+            payload: {
+              actor: auditActor,
+              bot: input.botId,
+              server: serverId,
+              tool: toolName,
+              refusal: "shared_account_not_approved",
+              reason: why,
+            },
+          });
+          throw new PluginRefusedError(
+            `${row.title} 用的是一个共享的团队账号，${why}，所以没有调用。`,
+            null,
+          );
+        };
+        if (isProactiveInitiator(input.initiator))
+          await refuseShared("主动提醒只能读你自己连接的账号");
+        const steering = await steeringOf(
+          input.initiator,
+          options.responsibilitySources ?? (async () => ["unknown"]),
+        );
+        if (steering.kind === "refuse") await refuseShared(steering.why);
+        else {
+          const owner = await this.agentOwner(input.botId);
+          const allowed = admits(
+            STRICTEST_APPROVAL,
+            owner ?? null,
+            {
+              actorId: input.actorId,
+              isAdmin: await holdsAdminRole(input.actorId),
+              groups: [],
+            },
+            steering,
+          );
+          if (!allowed)
+            await refuseShared(
+              steering.outside
+                ? "这次运行由外部输入驱动，团队账号只接受员工主人或管理员亲自写的提示"
+                : "只有这位员工的主人和管理员可以用它",
+            );
+        }
       }
 
       const args = withoutEmptyOptionals(
@@ -9627,6 +10131,8 @@ export function createPluginStore(options: PluginStoreOptions) {
         ),
         // 这个人在该应用上有不止一个账号时，调用进了哪一个（按名字）。
         ...(pinned ? { reachedAccount: pinned.label } : {}),
+        // 进的是部署的团队账号（Shared 应用）。
+        ...(sharedApp ? { reachedAccount: "shared" } : {}),
         decision: {
           allowed: verdict.allowed,
           mode: verdict.mode,
@@ -9829,7 +10335,7 @@ export function createPluginStore(options: PluginStoreOptions) {
        * it did.
        */
       try {
-        const { token, placement } = await connectionTokenFor(
+        const { token, placement, vendorUserId } = await connectionTokenFor(
           row,
           entry,
           input.credentialActorId ?? input.actorId,
@@ -9842,7 +10348,8 @@ export function createPluginStore(options: PluginStoreOptions) {
             url: effectiveUrl(row, entry),
             token,
             ...(placement ? { placement } : {}),
-            actorId: input.credentialActorId ?? input.actorId,
+            // Shared 应用以团队账号的身份调用；其余进调用所开账号的主人（提问者，或 Team Bot 的主人）。
+            actorId: vendorUserId ?? input.credentialActorId ?? input.actorId,
             botId: input.botId,
             ...(pinned?.accountId ? { accountId: pinned.accountId } : {}),
             // The conversation the call was made in: Routines and goals post where they were asked.

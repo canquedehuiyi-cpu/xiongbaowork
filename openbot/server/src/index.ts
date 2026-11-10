@@ -323,6 +323,7 @@ import { createPlatformRoutes } from "./platform/routes";
 import { appAccessTools } from "./plugins/app-access-tool";
 import { useRoutineTools } from "./plugins/builtin-routines";
 import { useComposioClient } from "./plugins/composio";
+import { createAccountModeSwitch } from "./plugins/account-mode";
 import {
   brokerWithAccounts,
   createComposioClient,
@@ -1569,6 +1570,16 @@ await startupLifecycle.run(async (startup) => {
      * attempted.
      */
     broker: composioBroker,
+  });
+  /*
+   * 应用的账号模式 Personal ⇄ Shared（X1，上游 #757）：切到 Shared 时写「写之前先问」团队规则，团队账号
+   * 的身份由部署 id 铸出。
+   */
+  const accountModes = createAccountModeSwitch({
+    store: pluginStore,
+    teamRules: storedApprovals.policy,
+    deploymentId,
+    audit: bootAuditStore,
   });
 
   // Logo metadata is optional; a vendor outage must not prevent the API from starting.
@@ -4248,7 +4259,7 @@ await startupLifecycle.run(async (startup) => {
     // Absent without a key, which leaves the routes reporting no broker rather than listing apps
     // nobody could connect.
     composio && composioBroker
-      ? { broker: composioBroker, guides: composio.guides }
+      ? { broker: composioBroker, guides: composio.guides, accountModes }
       : undefined,
     process.env.OPENBOT_MODEL_OAUTH_FILE?.trim()
       ? createProviderOAuthProxy(process.env.OPENBOT_MODEL_OAUTH_FILE.trim())

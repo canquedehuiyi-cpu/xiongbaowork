@@ -593,6 +593,7 @@ tests/server-side-tools.integration.test.ts
 tests/settings-instructions-routes.test.ts
 tests/setup-checklist.test.ts
 tests/shared-accounts.test.ts
+tests/shared-brokered-accounts.integration.test.ts
 tests/shared-computer-run.integration.test.ts
 tests/single-user.test.ts
 tests/skill-ownership.integration.test.ts
