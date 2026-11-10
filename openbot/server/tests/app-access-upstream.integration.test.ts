@@ -384,10 +384,12 @@ describe("what each app a Bot holds is, for the person asking", () => {
     });
     expect(byKey.get(GMAIL)?.connectedAt).not.toBeNull();
     expect(byKey.get(STALE)?.state).toBe("reconnect");
+    // 团队账号已连接，但 X3 之前没有共享使用批准：调用会被 X1 的闸门拒绝，状态照实说，也没有可申请的。
     expect(byKey.get(SLACK)).toMatchObject({
       account: "shared",
       accountMode: "shared",
-      state: "ready",
+      state: "shared_not_approved",
+      requestKind: null,
     });
     expect(byKey.get(LINEAR)).toMatchObject({
       account: "shared",
@@ -860,7 +862,7 @@ describe("an administrator's one press on a card", () => {
   });
 });
 
-describe("a teammate on somebody else's Team Bot (X1 底线)", () => {
+describe("a teammate on somebody else's Team Bot, and team accounts (X1 底线)", () => {
   test("a Shared app is not theirs to drive: shared_not_approved, and nothing to request", async () => {
     const app = await access(asPerson(), teamBot, SLACK);
     expect(app).toMatchObject({
@@ -875,9 +877,14 @@ describe("a teammate on somebody else's Team Bot (X1 底线)", () => {
     expect(filed.status).toBe(409);
   });
 
-  test("the Bot's owner and an administrator may drive it", async () => {
-    expect((await access(asMaker(), teamBot, SLACK)).state).toBe("ready");
-    expect((await access(asAdmin(), teamBot, SLACK)).state).toBe("ready");
+  test("until shared use is approved (X3), nobody drives a team account: not the owner, not an administrator", async () => {
+    // X1 的闸门（评审 C1）：没有共享使用批准就拒绝，管理员也不例外；状态与调用时的答案一致。
+    expect((await access(asMaker(), teamBot, SLACK)).state).toBe(
+      "shared_not_approved",
+    );
+    expect((await access(asAdmin(), teamBot, SLACK)).state).toBe(
+      "shared_not_approved",
+    );
   });
 
   test("with no owner account, the teammate's own, asked first until they always allow it", async () => {
