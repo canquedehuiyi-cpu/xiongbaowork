@@ -127,6 +127,7 @@ tests/avatar-notebook-connector.integration.test.ts
 tests/avatar-sources.test.ts
 tests/baidu-netdisk-rest.test.ts
 tests/ban-freezes-execution.test.ts
+tests/batch-grants-shared-use.integration.test.ts
 tests/bot-access.test.ts
 tests/bot-answer-attribution.test.ts
 tests/bot-browser-routes.integration.test.ts

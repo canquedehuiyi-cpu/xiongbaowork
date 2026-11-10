@@ -48,8 +48,14 @@ import {
   withDeploymentClients,
 } from "./deployment-clients";
 import { fieldsForPerson, keyGuideFor } from "./key-guides";
-import { mountSharedUseRoutes } from "./shared-use-routes";
-import type { SharedAudience, SharedUseStore } from "./shared-use-store";
+import { approveOwnersSharedUse } from "./owner-grants";
+import { mountSharedUseRoutes, sharedGrantApproval } from "./shared-use-routes";
+import {
+  type SharedAudience,
+  SharedUseFrameError,
+  SharedUseNotSharedError,
+  type SharedUseStore,
+} from "./shared-use-store";
 import {
   authorizationUrlFor,
   type ConnectOrigin,
@@ -3550,7 +3556,7 @@ export function createPluginRoutes(
         text: z.string().trim().min(1).max(2_000),
       })
       .optional(),
-    // M5: 上游在这里收共享应用的使用审批（sharedGrantApproval），留给 X 系列（共享使用/多账号）。
+    // 管理员随这次保存为 Shared 应用记下的共享使用批准（{@link sharedGrantApproval}）。
     approval: z.unknown().optional(),
   });
 
@@ -3565,8 +3571,13 @@ export function createPluginRoutes(
    * approved. Then each is written by the store as the routes write it, with its own row on the trail,
    * and one more row says they were one change, with the sentence it came from.
    *
-   * M5: 上游这里还有主人授权（owner grants）和共享应用的使用审批，留给 X 系列（owner grants、共享使用）；
-   * fork 的主人自助安装（上架）照 `enablementDecision` 走。
+   * A SHARED APP'S AUDIENCE IS DECIDED ONCE, as upstream's `POST /grants` decides it for each grant:
+   * every action here is the same app's, and {@link sharedGrantApproval} depends on the app and the
+   * Bot alone. An admin's save records the approval it sent, or the Bot's exposure now when none was
+   * sent and no admin decided one before; an approval this deployment cannot read refuses the save
+   * before anything is written. An owner's self-service install (a listed app, `enablementDecision`)
+   * sets the owner's audience where the admin lets owners decide ({@link approveOwnersSharedUse}),
+   * as `/give` does. A Bot with no owner has nowhere to record either, and its calls stay refused.
    */
   routes.post(
     "/for/:agentId/apps/:app/grants",
@@ -3637,10 +3648,11 @@ export function createPluginRoutes(
          * permission checks, so somebody who may not change this Bot learns nothing about the app
          * from the answer. Turning off is not held to it: taking away is always allowed.
          */
+        const server =
+          add.length > 0
+            ? (await store.listServers()).find((row) => row.id === app)
+            : undefined;
         if (add.length > 0) {
-          const server = (await store.listServers()).find(
-            (row) => row.id === app,
-          );
           const offered = new Set(server?.tools.map((tool) => tool.ref) ?? []);
           const unknown = add.filter((ref) => !offered.has(ref));
           if (unknown.length > 0)
@@ -3655,6 +3667,22 @@ export function createPluginRoutes(
               400,
             );
         }
+
+        const asOwner = add.some((ref) => selfService.get(ref) === true);
+        const decided =
+          add.length > 0 && !asOwner && sharedUse
+            ? await sharedGrantApproval(sharedUse.store, {
+                serverId: app,
+                agentId,
+                accountMode: server?.accountMode,
+                sent: parsed.data.approval,
+              })
+            : null;
+        if (decided === "unreadable")
+          return context.json(
+            { error: "这份共享使用批准这个部署读不懂，所以什么都没有改。" },
+            400,
+          );
 
         const by = actorEmail(context);
         try {
@@ -3679,6 +3707,44 @@ export function createPluginRoutes(
           if (error instanceof PluginRefusedError)
             return context.json({ error: error.message }, 403);
           throw error;
+        }
+        try {
+          if (decided?.approval && sharedUse) {
+            await sharedUse.store.setApproval({
+              botId: agentId,
+              serverId: decided.appId,
+              approval: decided.approval,
+              by: context.var.actor.id,
+            });
+            await sharedUse.audience.record({
+              eventType: "shared_use.approved",
+              targetId: decided.appId,
+              actorUserId: context.var.actor.id,
+              payload: {
+                bot: agentId,
+                server: decided.appId,
+                audience: decided.approval.audience,
+                outsideInput: decided.approval.outsideInput,
+              },
+            });
+          }
+          if (asOwner && sharedUse)
+            await approveOwnersSharedUse(sharedUse.audience, sharedUse.store, {
+              botId: agentId,
+              serverId: app,
+              ownerId: context.var.actor.id,
+            });
+        } catch (error) {
+          /*
+           * Nowhere to record it: the Bot has no owner, or the app stopped being Shared in between.
+           * No approval is the closed direction (the gate refuses the team account), and the grants
+           * the person saved stand, as `/give` answers the same race.
+           */
+          if (
+            !(error instanceof SharedUseFrameError) &&
+            !(error instanceof SharedUseNotSharedError)
+          )
+            throw error;
         }
         await store.recordGrantsChanged({
           app,
