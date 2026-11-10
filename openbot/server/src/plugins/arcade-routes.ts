@@ -34,11 +34,13 @@ import { withVendorDeadline } from "./vendor-deadline";
  * 失败回到「已连接账号」页，`?authorized=<原因>`，原因只是一个词。
  *
  * 与上游的差异（保底线、缩范围，报告里逐条写明）：
- * - 回来时账号已经不归这个人用了（应用切成了共享、团队身份换了、他不再是管理员），一律按上游的
- *   `not-permitted` 处理：结束为「未对账」并审计，不在厂商那边撤销。上游会在能判断「不会连带别的
- *   应用」时撤销被替换的授权；fork 还没有按认证提供商列出兄弟应用的那一层，撤销可能连带结束这个人
- *   别的应用，所以不撤。
- * - 尝试在同意期间被取消、授权却完成了：不撤销，审计 `mcp.cancelled_grant_left_live`，告诉这个人。
+ * - 「已取消」与「不再允许」（应用切成了共享、团队身份换了、没有管理员能力了）在请厂商确认
+ *   （`confirmUser`）之前判：不确认，同意在 Arcade 那边就不生效，不留遗留授权。上游是先确认再判。
+ * - 只剩一种遗留授权：回程进行中尝试被取消（竞争），厂商已经确认、记录时认领不到。
+ *   团队账号：在厂商那边撤销。团队身份每个应用、每次切换随机铸出，撤销不会连带别的应用；只有厂商答
+ *   「撤了」才算撤回，答 false 或抛错都如实留痕（审计 `mcp.cancelled_grant_left_live`）。
+ *   个人账号：只留痕并告诉本人。授权是本人自己的、记在本人 id 下，不算越权；撤销会连带本人同一认证
+ *   提供商下的其他应用（fork 还没有上游按认证提供商列出兄弟应用的那一层），所以不撤。
  * - 单个动作的授权（`POST /servers/:id/authorize`）与授权清单（`GET /servers/:id/grants`）不在 X5：
  *   「连接」一次要整个应用需要的权限。
  * - 一个人的第二个 Arcade 账号（`?another=1`）不在 X5。
@@ -342,7 +344,19 @@ async function leftoverGrant(
     const withdrawn = await withVendorDeadline(() =>
       arcade.revoke({ account: input.account, toolkit }),
     ).then(
-      () => true,
+      // 只有厂商答「撤了」才算撤回；答 false（没找到可撤的连接）与抛错一样是没有完成（复核 1）。
+      (ended) => {
+        if (ended === true) return true;
+        console.error(
+          JSON.stringify({
+            type: "arcade-team-grant-not-withdrawn",
+            server: input.attempt.serverId,
+            app: toolkit,
+            error: "the vendor found no connection to withdraw",
+          }),
+        );
+        return false;
+      },
       (error: unknown) => {
         console.error(
           JSON.stringify({
@@ -430,16 +444,34 @@ export function mountArcadeRoutes(
     try {
       const actorId = context.var.actor.id;
       /*
-       * 活着的那一次；没有就看刚被取消的那一次（评审 I1）：取消后厂商那边仍可能完成同意，这个遗留
-       * 授权要核对清楚是不是这一次的，团队账号的再撤销。
+       * 活着的那一次；没有就看刚被取消的那一次（评审 I1）。
+       *
+       * 「已取消」与「不再允许」都在请厂商确认（`confirmUser`）之前判（复核建议）：在自定义验证地址模式下，
+       * 正是这一步让同意在 Arcade 那边生效。所以这两种情况根本不确认，遗留授权不会出现，也就不用撤销；
+       * 团队账号与个人一样。
        */
       const live = await store.authorizationAttemptFor(actorId);
       const attempt = live ?? (await store.withdrawnAttemptFor(actorId));
-      const cancelled = live === null && attempt !== null;
       if (!attempt || attempt.authId === null) return refusedWith("no-attempt");
       const account = accountOf(attempt);
       if (!account) return refusedWith("no-attempt");
       const authId = attempt.authId;
+      if (live === null) return refusedWith("cancelled");
+
+      const permitted = await stillPermitted(context, store, attempt, account);
+      if (permitted.refused) {
+        console.error(
+          JSON.stringify({
+            type: "arcade-completion-not-permitted",
+            server: attempt.serverId,
+            authorizationId: authId,
+            holder: account.holder,
+            note: "A person returned from a consent screen who may no longer record this app's account. The return was not confirmed at the vendor, so the consent does not take effect; the attempt was closed as withdrawn.",
+          }),
+        );
+        await store.markAuthorizationWithdrawn({ actorId, authId });
+        return refusedWith("not-permitted");
+      }
 
       let confirmed: Awaited<ReturnType<AuthorizationFlow["confirmReturn"]>>;
       try {
@@ -482,25 +514,6 @@ export function mountArcadeRoutes(
         );
         return refusedWith("vendor-unavailable");
       }
-      if (cancelled) {
-        // 取消之后：没有完成就什么也没生效；完成了，团队账号撤销，个人留痕。
-        if (
-          settled.status !== "completed" ||
-          settled.userId !== account.vendorUserId
-        )
-          return refusedWith("cancelled");
-        const row = await store.serverAddress(attempt.serverId);
-        const outcome = await leftoverGrant(current, {
-          actorId,
-          attempt,
-          account,
-          toolkit: row ? toolkitOfFor("arcade", row.url) : null,
-          why: "the attempt was cancelled before the consent completed",
-        });
-        return refusedWith(
-          outcome === "withdrawn" ? "cancelled" : "cancelled-left-live",
-        );
-      }
       if (settled.status === "failed") {
         await store.failAuthorizationAttempt({ actorId, authId });
         return refusedWith("authorization-failed");
@@ -509,39 +522,6 @@ export function mountArcadeRoutes(
       if (settled.userId !== account.vendorUserId) {
         await store.failAuthorizationAttempt({ actorId, authId });
         return refusedWith("not-your-authorization");
-      }
-
-      const permitted = await stillPermitted(context, store, attempt, account);
-      if (permitted.refused) {
-        // 团队账号：在厂商那边撤销（评审 I1），结束为已撤回；撤不了、或是个人的，结束为未对账并审计。
-        const withdrawn =
-          account.holder === "deployment" && permitted.toolkit
-            ? await withVendorDeadline(() =>
-                arcade.revoke({
-                  account,
-                  toolkit: permitted.toolkit as string,
-                }),
-              ).then(
-                () => true,
-                () => false,
-              )
-            : false;
-        console.error(
-          JSON.stringify({
-            type: "arcade-completion-not-permitted",
-            server: attempt.serverId,
-            authorizationId: authId,
-            holder: account.holder,
-            withdrawn,
-            note: withdrawn
-              ? "A team account's consent came back to somebody who may no longer write it; the grant was withdrawn at the vendor."
-              : "A person returned from a consent screen who may no longer record this app's account, so nothing was recorded. The consent may be live at the vendor on the account the attempt was for; the attempt was closed unreconciled.",
-          }),
-        );
-        if (withdrawn)
-          await store.markAuthorizationWithdrawn({ actorId, authId });
-        else await store.markAuthorizationUnreconciled({ actorId, authId });
-        return refusedWith("not-permitted");
       }
 
       const authProvider = await withVendorDeadline(() =>

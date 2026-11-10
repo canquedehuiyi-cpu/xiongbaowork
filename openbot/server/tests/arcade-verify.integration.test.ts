@@ -376,9 +376,11 @@ describe("connecting an Arcade app binds the consent to the person who pressed C
     expect(await cancelled.json()).toEqual({ cancelled: true });
     const authId = `ar_${suite}_${state.minted.length}`;
     consented("flow-dana-cal", DANA, authId);
+    const confirmsBefore = state.confirms.length;
     const late = await verify(DANA, "flow-dana-cal");
-    // 取消后才完成的个人授权：不记连接，不撤销（会连带本人的其他应用），留痕并告诉本人（评审 I1）。
-    expect(reasonOf(late)).toBe("cancelled-left-live");
+    // 取消之后回来的不请厂商确认（复核建议），同意不生效，什么也不记。
+    expect(reasonOf(late)).toBe("cancelled");
+    expect(state.confirms.length).toBe(confirmsBefore);
     expect(
       (await connectionsOf(DANA)).map((row) => row.toolkit).sort(),
     ).toEqual([GMAIL]);
@@ -400,7 +402,8 @@ describe("connecting an Arcade app binds the consent to the person who pressed C
       const answer = await verify(EVE, "flow-eve-cal");
       logged.mockRestore();
       expect(reasonOf(answer)).toBe("not-permitted");
-      expect((await attemptOf(EVE))?.outcome).toBe("unreconciled");
+      // 不再允许的回程不请厂商确认，同意不生效，尝试结束为已撤回（复核建议）。
+      expect((await attemptOf(EVE))?.outcome).toBe("withdrawn");
       expect(await connectionsOf(EVE)).toEqual([]);
     } finally {
       await platform(() =>

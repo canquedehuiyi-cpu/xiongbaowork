@@ -7,6 +7,7 @@ import type { AppVariables } from "../src/auth/guards";
 import { setRole } from "../src/auth/roles";
 import { createDatabase } from "../src/db/client";
 import {
+  auditEvents,
   composioConnections,
   mcpServers,
   pendingAuthorizations,
@@ -45,6 +46,11 @@ const state = {
   flows: new Map<string, { vendorUserId: string; authId: string }>(),
   status: new Map<string, { status: string; userId: string | null }>(),
   minted: 0,
+  confirms: 0,
+  /** 厂商确认回程时顺带做的事：模拟「回程进行中，尝试被取消」的竞争。 */
+  onConfirm: undefined as (() => Promise<unknown>) | undefined,
+  /** 撤销怎么答：默认按连接是否存在答真假；`throws` 模拟厂商出错。 */
+  revokeAnswer: undefined as "throws" | false | undefined,
 };
 
 const arcade: ArcadeBroker = {
@@ -55,6 +61,8 @@ const arcade: ArcadeBroker = {
       scopes: [],
     }),
     confirmReturn: async (q) => {
+      state.confirms += 1;
+      await state.onConfirm?.();
       const flow = state.flows.get(q.handle);
       if (!flow || flow.vendorUserId !== q.vendorUserId)
         return { mismatch: true };
@@ -77,6 +85,9 @@ const arcade: ArcadeBroker = {
   isConnected: async ({ account }) => state.connected.has(account.vendorUserId),
   revoke: async ({ account }) => {
     state.revoked.push(account.vendorUserId);
+    if (state.revokeAnswer === "throws")
+      throw new Error("vendor down: https://consent.example/?state=SECRET");
+    if (state.revokeAnswer === false) return false;
     return state.connected.delete(account.vendorUserId);
   },
   connectionFields: async () => [],
@@ -245,9 +256,14 @@ function consented(handle: string, authId: string) {
   state.connected.add(TEAM);
 }
 
-describe("a team account's leftover consent is withdrawn at the vendor", () => {
-  test("cancelled before the consent completed: withdrawn, and a later Confirm adopts nothing", async () => {
+describe("a team account's consent that may no longer be recorded never takes effect", () => {
+  /*
+   * 复核建议：「已取消」与「不再允许」在请厂商确认（confirmUser）之前判。在自定义验证地址模式下，
+   * 正是这一步让同意生效，所以这里一次都不确认，厂商那边不会出现遗留授权，也就没有东西要撤。
+   */
+  test("cancelled before the consent completed: never confirmed, and a later Confirm adopts nothing", async () => {
     const authId = await adminConnects();
+    const confirmsBefore = state.confirms;
     const cancelled = await call(
       { id: ADMIN, admin: true },
       `/api/plugins/servers/${app(SHARED)}/authorize`,
@@ -261,8 +277,8 @@ describe("a team account's leftover consent is withdrawn at the vendor", () => {
       "/api/plugins/arcade/verify?flow_id=flow-cancelled",
     );
     expect(reasonOf(back)).toBe("cancelled");
-    expect(state.revoked).toEqual([TEAM]);
-    expect(state.connected.has(TEAM)).toBe(false);
+    expect(state.confirms).toBe(confirmsBefore);
+    expect(state.revoked).toEqual([]);
 
     // 就算厂商那边还说已连接，「确认」也不新建团队账号连接。
     state.connected.add(TEAM);
@@ -276,11 +292,12 @@ describe("a team account's leftover consent is withdrawn at the vendor", () => {
     state.connected.delete(TEAM);
   });
 
-  test("an administrator demoted mid-consent: withdrawn rather than left live", async () => {
+  test("an administrator demoted mid-consent: never confirmed, so nothing is left live", async () => {
     state.revoked.length = 0;
     const logged = spyOn(console, "error").mockImplementation(() => {});
     try {
       const authId = await adminConnects();
+      const confirmsBefore = state.confirms;
       consented("flow-demoted", authId);
       // 会话里还是管理员，管理员能力已经没了。
       const back = await call(
@@ -288,7 +305,8 @@ describe("a team account's leftover consent is withdrawn at the vendor", () => {
         "/api/plugins/arcade/verify?flow_id=flow-demoted",
       );
       expect(reasonOf(back)).toBe("not-permitted");
-      expect(state.revoked).toEqual([TEAM]);
+      expect(state.confirms).toBe(confirmsBefore);
+      expect(state.revoked).toEqual([]);
       expect((await attemptOf(ADMIN))?.outcome).toBe("withdrawn");
       expect((await sharedRow())?.connectedAt).toBeNull();
     } finally {
@@ -342,5 +360,74 @@ describe("a person's Confirm under Arcade refreshes, never creates", () => {
       "POST",
     );
     expect(await confirm.json()).toEqual({ connected: true });
+  });
+});
+
+/**
+ * 回程进行中尝试被取消（竞争）：厂商已经确认了同意，记录时却认领不到。团队账号的遗留授权要在厂商那边
+ * 撤销；撤销没有完成（抛错，或答 false：没找到可撤的连接）都不能当成已撤回，要如实留痕。
+ */
+describe("a team grant whose withdrawal does not complete is reported, not assumed", () => {
+  const cancelDuringReturn = () => {
+    state.onConfirm = async () => {
+      state.onConfirm = undefined;
+      await call(
+        { id: ADMIN, admin: true },
+        `/api/plugins/servers/${app(SHARED)}/authorize`,
+        "DELETE",
+      );
+    };
+  };
+  const leftLiveEvents = () =>
+    platform(() =>
+      database
+        .select({ payload: auditEvents.payload })
+        .from(auditEvents)
+        .where(eq(auditEvents.eventType, "mcp.cancelled_grant_left_live")),
+    ).then((rows) =>
+      rows.filter((row) => (row.payload as { actor?: string }).actor === ADMIN),
+    );
+
+  test.each(["throws", false] as const)(
+    "a withdrawal that answers %p leaves the grant reported live",
+    async (answer) => {
+      const before = (await leftLiveEvents()).length;
+      const logged = spyOn(console, "error").mockImplementation(() => {});
+      state.revokeAnswer = answer;
+      try {
+        const authId = await adminConnects();
+        consented(`flow-race-${String(answer)}`, authId);
+        cancelDuringReturn();
+        const back = await call(
+          { id: ADMIN, admin: true },
+          `/api/plugins/arcade/verify?flow_id=flow-race-${String(answer)}`,
+        );
+        expect(reasonOf(back)).toBe("cancelled-left-live");
+        expect((await leftLiveEvents()).length).toBe(before + 1);
+        expect(JSON.stringify(logged.mock.calls)).not.toContain("SECRET");
+        expect((await sharedRow())?.connectedAt).toBeNull();
+      } finally {
+        state.revokeAnswer = undefined;
+        state.onConfirm = undefined;
+        state.connected.delete(TEAM);
+        logged.mockRestore();
+      }
+    },
+  );
+
+  test("a withdrawal the vendor confirms is the one case reported as withdrawn", async () => {
+    const before = (await leftLiveEvents()).length;
+    state.revoked.length = 0;
+    const authId = await adminConnects();
+    consented("flow-race-ended", authId);
+    cancelDuringReturn();
+    const back = await call(
+      { id: ADMIN, admin: true },
+      "/api/plugins/arcade/verify?flow_id=flow-race-ended",
+    );
+    expect(reasonOf(back)).toBe("cancelled");
+    expect(state.revoked).toEqual([TEAM]);
+    expect(state.connected.has(TEAM)).toBe(false);
+    expect((await leftLiveEvents()).length).toBe(before);
   });
 });
