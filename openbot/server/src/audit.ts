@@ -304,6 +304,20 @@ export const auditEventTypes = [
   "shared_use.requested",
   "shared_use.approved",
   "shared_use.declined",
+  /*
+   * 员工的主人把一个规则让主人决定的 Shared 应用给了自己的员工，这次授予设下的受众（`owner_approved`，
+   * payload `bot`、`server`、`audience`、`members`、`outsideInput`），以及它被撤回（`owner_withdrawn`，
+   * payload `bot`、`server`、`why`：`owner_took_back` 或 `owner_grants_changed`）。管理员的批准不在这里。
+   */
+  "shared_use.owner_approved",
+  "shared_use.owner_withdrawn",
+  /*
+   * 员工的主人把自己的应用给了自己的员工（`owner_granted`），或收回（`owner_revoked`），没有管理员参与
+   * （X3，`plugins/owner-grants.ts`）。目标是应用键；payload `app`、`bot`、`refs`。每一条授予另有它自己的
+   * `configuration.changed` 行，标着 `grantedAs: owner`。
+   */
+  "app_access.owner_granted",
+  "app_access.owner_revoked",
   // Every action a Bot takes on its computer, allowed or refused. Both, always: a trail that records
   // only what was permitted cannot answer whether the Bot tried.
   "computer.action_allowed",
