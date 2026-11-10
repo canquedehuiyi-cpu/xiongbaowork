@@ -22,6 +22,7 @@ import {
   type AppAccess,
   type AppAccessFacts,
   type AppAccessRequestKind,
+  type AppAccessState,
   type AppConnect,
   type AppProvider,
   accountOf,
@@ -112,12 +113,65 @@ export type AppInspection = {
   own: boolean;
 };
 
+/**
+ * 一次申请会是什么，或者为什么不建（评审 M4）。浏览器入口（`POST /access-requests`、一按批准）与工具
+ * `request_app_access` 都从同一次 `inspectApp` 走这个函数，所以能不能申请、申请哪一种、已有哪一条在等，
+ * 两个入口是同一个答案：
+ * - 叫不出、或除了调用者的话没有东西作证（又没被授予）的应用：没有这个应用。
+ * - 调用者自己添加的应用：不归管理员管。
+ * - 状态没有可请管理员做的（`REQUEST_KIND_FOR` 为 null）：不建，说明为什么。
+ * - 这个人对这个状态已有一条在等的（卡片上的 `request`，含工具对已有行提的上架申请）：答那一条，不再建。
+ */
+export type RequestPlan =
+  | { refused: "no_such_app" }
+  | {
+      refused: "own_app" | `nothing_to_request:${AppAccessState}`;
+      access: AppAccess;
+    }
+  | {
+      refused?: undefined;
+      access: AppAccess;
+      kind: Exclude<AppAccessRequestKind, "connect_shared">;
+      /** 授予与申请记在哪一行；没有行时为 null。 */
+      serverId: string | null;
+      /** 这个人已在等的那条；有它就不再建。 */
+      pendingId: string | null;
+    };
+
+export function requestPlanFor(found: AppInspection | null): RequestPlan {
+  if (!found || !(found.vouched || found.access.granted))
+    return { refused: "no_such_app" };
+  const { access } = found;
+  if (found.own) return { refused: "own_app", access };
+  const kind = access.requestKind;
+  if (kind !== "enable" && kind !== "grant")
+    return { refused: `nothing_to_request:${access.state}`, access };
+  return {
+    access,
+    kind,
+    serverId: found.answeringId,
+    pendingId: access.request?.id ?? null,
+  };
+}
+
 /** 读这些事实时要用到的 store 方法（`this`），由 store 把本模块的方法并进自己时提供。 */
 type Host = {
   listForAgent(agentId: string): Promise<{ tools: { ref: string }[] }>;
 };
 
 const COMPOSIO_ID_PREFIX = "composio-";
+
+/**
+ * 申请人被拒绝时写的 `app_access.refused` 限多少（评审 M5）：任何登录的人都能反复按出拒绝，每次一行
+ * 就能把轨迹写满。同一个人、同一位员工、同一个应用、同一个原因在窗口内只记第一次；一个人在窗口内最多
+ * 记 `REFUSALS_PER_ACTOR` 行。只管轨迹，不管答复：每一次请求照样得到它的答复。
+ *
+ * 记在进程里：多实例部署时每个实例各自数，上限按实例数放大，仍然有界。
+ */
+export const REFUSAL_WINDOW_MS = 10 * 60 * 1000;
+export const REFUSALS_PER_ACTOR = 30;
+/** 记着的键多到这个数就清掉过期的；还多就整个重来（宁可多记一行，不让这张表无界地长）。 */
+const REFUSAL_KEYS_KEPT = 10_000;
 const iso = (value: Date | null | undefined) =>
   value ? value.toISOString() : null;
 
@@ -139,6 +193,36 @@ export function appAccessMethods(context: {
   auditStore: AuditStore;
 }) {
   const { database, auditStore } = context;
+  /** 窗口内已记过的拒绝（键 → 过期时刻），和每个人窗口内已记的行数。 */
+  const refusalsSeen = new Map<string, number>();
+  const refusalsByActor = new Map<string, { count: number; until: number }>();
+
+  /** 这次拒绝要不要写进轨迹；要写时同时记下它。 */
+  function refusalWorthRecording(key: string, actor: string): boolean {
+    const at = Date.now();
+    if (refusalsSeen.size + refusalsByActor.size > REFUSAL_KEYS_KEPT) {
+      for (const [seen, until] of refusalsSeen)
+        if (until <= at) refusalsSeen.delete(seen);
+      for (const [who, tally] of refusalsByActor)
+        if (tally.until <= at) refusalsByActor.delete(who);
+      if (refusalsSeen.size + refusalsByActor.size > REFUSAL_KEYS_KEPT) {
+        refusalsSeen.clear();
+        refusalsByActor.clear();
+      }
+    }
+    const seenUntil = refusalsSeen.get(key);
+    if (seenUntil !== undefined && seenUntil > at) return false;
+    const tally = refusalsByActor.get(actor);
+    const current =
+      tally && tally.until > at
+        ? tally
+        : { count: 0, until: at + REFUSAL_WINDOW_MS };
+    if (current.count >= REFUSALS_PER_ACTOR) return false;
+    current.count += 1;
+    refusalsByActor.set(actor, current);
+    refusalsSeen.set(key, at + REFUSAL_WINDOW_MS);
+    return true;
+  }
 
   /** 调用者帧里看得见的所有应用行：team 的在前，自己的其次，同一顺序下按 id。 */
   async function allRows(): Promise<ServerRow[]> {
@@ -540,6 +624,12 @@ export function appAccessMethods(context: {
     return apps.map((app) => {
       const granted = [app.key, ...app.rowIds].some((id) => held.has(id));
       const own = mine?.(app);
+      /*
+       * 主人连了就是主人的账号（与 `teamBots.credentialActorFor` 同一规则）。队友的回合与路由都在队友自己
+       * 的帧里跑，`composio_connections` 与 `mcp_user_credentials` 按人分租户、受行安全保护，所以这里在
+       * 现有调用处读不到主人的行，`ownersAccount` 恒为 undefined——与调用时 `credentialActorFor` 在同一帧
+       * 里的答案一致。读得到时（比如在 platform 帧里调用），也只用它的「能不能用」，不把细节交给队友。
+       */
       const ownersAccount = owners?.(app);
       const personal = ownersAccount ?? own;
       const sharedUsable = app.team?.usable === true;
@@ -611,11 +701,16 @@ export function appAccessMethods(context: {
           ownerGrants: ownerGrantsOf(facts),
           givenByOwner: false,
           needsConnect: false,
+          /*
+           * 主人的账号只说是谁的（`accountHolder`），不说它的细节：队友的卡片与响应里不放主人连接的时间
+           * （X1：队友不读主人的账号信息；评审 M2）。在队友的帧里主人的连接行本来就读不到（行安全），
+           * 这里是防御，免得哪天有人在能读到它的帧里调用。
+           */
           connectedAt:
             account === "shared"
               ? iso(app.team?.connectedAt)
-              : account === "personal"
-                ? (personal?.connectedAt ?? null)
+              : account === "personal" && holder === "you"
+                ? (own?.connectedAt ?? null)
                 : null,
           requestKind,
           request: request
@@ -721,6 +816,34 @@ export function appAccessMethods(context: {
       await recordAuditEvent(auditStore, {
         ...event,
         targetType: "mcp_server",
+      });
+    },
+
+    /**
+     * 申请人一侧的拒绝（`app_access.refused`），按 (人, 员工, 应用, 原因) 去重、按人限频后写；答复不受
+     * 影响。管理员处理申请时的拒绝不走这里，照旧逐条写。
+     */
+    async recordAppAccessRefusal(event: {
+      actorUserId: string;
+      targetId: string;
+      payload: { app: string; reason: string; bot?: string | null } & Record<
+        string,
+        unknown
+      >;
+    }): Promise<void> {
+      const key = [
+        event.actorUserId,
+        event.payload.bot ?? "",
+        event.payload.app,
+        event.payload.reason,
+      ].join("\u0000");
+      if (!refusalWorthRecording(key, event.actorUserId)) return;
+      await recordAuditEvent(auditStore, {
+        eventType: "app_access.refused",
+        targetType: "mcp_server",
+        targetId: event.targetId,
+        actorUserId: event.actorUserId,
+        payload: event.payload,
       });
     },
   };
