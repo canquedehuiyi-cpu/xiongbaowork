@@ -40,7 +40,10 @@ describe("the account argument", () => {
       { label: WORK, isDefault: true },
       { label: HOME, isDefault: false },
     ]) as {
-      properties: Record<string, { enum?: string[]; description?: string }>;
+      properties: Record<
+        string,
+        { type?: string; enum?: string[]; description?: string }
+      >;
       required?: string[];
     };
     expect(offered.properties.query).toEqual({ type: "string" });
