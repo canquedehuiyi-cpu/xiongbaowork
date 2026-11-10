@@ -21,6 +21,7 @@ import { type AgentProfile, agentKeys } from "@/lib/agents/queries";
 import { Route as AgentsRoute } from "@/routes/_authed/_app/agents/index";
 import { Route as HomeRoute } from "@/routes/_authed/_app/index";
 import { Route as WakersRoute } from "@/routes/_authed/_app/wakers";
+import { settleReactWork } from "./settle-react-work";
 
 /**
  * Both agent-facing screens read the same `agentListQueryOptions()` query, and both drew their
@@ -48,7 +49,10 @@ import { Route as WakersRoute } from "@/routes/_authed/_app/wakers";
 
 beforeAll(() => GlobalRegistrator.register());
 afterEach(cleanup);
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(async () => {
+  await settleReactWork();
+  GlobalRegistrator.unregister();
+});
 
 const originalFetch = global.fetch;
 

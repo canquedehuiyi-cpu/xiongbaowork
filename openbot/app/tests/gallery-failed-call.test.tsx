@@ -10,6 +10,7 @@ import {
 } from "@/components/gallery/failed";
 import { GALLERY as TABLES } from "@/components/gallery/table";
 import { galleryCallFailure } from "@/lib/copilot/gallery-tools";
+import { settleReactWork } from "./settle-react-work";
 
 /*
  * gallery 调用结束了却没有可画的内容（上游 #1132）：Claude Code 因为参数不是合法 JSON 拒绝了调用，
@@ -19,7 +20,10 @@ import { galleryCallFailure } from "@/lib/copilot/gallery-tools";
 
 beforeAll(() => GlobalRegistrator.register());
 afterEach(() => cleanup());
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(async () => {
+  await settleReactWork();
+  GlobalRegistrator.unregister();
+});
 
 function spec(name: string) {
   // `import.meta.glob` is Vite's, so under bun the registry is empty; the modules are read directly.

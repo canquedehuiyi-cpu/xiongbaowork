@@ -34,6 +34,7 @@ import { deploymentKeys } from "@/lib/deployment/queries";
 import { quotaKeys } from "@/lib/quota/queries";
 import { userPreferencesQueryOptions } from "@/lib/settings/message-list";
 import { wakerGroupKeys } from "@/lib/waker-groups/queries";
+import { settleReactWork } from "./settle-react-work";
 
 class OfflineWebSocket extends EventTarget implements WebSocket {
   static readonly CONNECTING = 0;
@@ -93,7 +94,8 @@ afterEach(() => {
   for (const client of clients) client.clear();
   clients.length = 0;
 });
-afterAll(() => {
+afterAll(async () => {
+  await settleReactWork();
   globalThis.fetch = originalFetch;
   globalThis.WebSocket = originalWebSocket;
   GlobalRegistrator.unregister();

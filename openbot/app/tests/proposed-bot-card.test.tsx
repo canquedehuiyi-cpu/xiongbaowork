@@ -17,6 +17,7 @@ import {
   createdBotIdIn,
   wasCreated,
 } from "@/lib/agents/proposal";
+import { settleReactWork } from "./settle-react-work";
 
 /**
  * The card a Bot's proposed coworker stops on, and every answer it can give.
@@ -48,7 +49,10 @@ import {
 
 beforeAll(() => GlobalRegistrator.register());
 afterEach(cleanup);
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(async () => {
+  await settleReactWork();
+  GlobalRegistrator.unregister();
+});
 
 /** The instruction under test, long enough that a clamp would visibly cost somebody the end of it. */
 const INSTRUCTIONS =

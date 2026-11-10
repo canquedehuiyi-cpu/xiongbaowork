@@ -24,6 +24,7 @@ import {
   pluginKeys,
 } from "@/lib/plugins/queries";
 import { Route as BotAppRoute } from "@/routes/_authed/admin/plugins/$key_.bots.$agentId";
+import { settleReactWork } from "./settle-react-work";
 
 /**
  * What the per-Bot grant screen draws: which of its three pages a failed read returns, and the one
@@ -55,7 +56,10 @@ import { Route as BotAppRoute } from "@/routes/_authed/admin/plugins/$key_.bots.
 
 beforeAll(() => GlobalRegistrator.register());
 afterEach(cleanup);
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(async () => {
+  await settleReactWork();
+  GlobalRegistrator.unregister();
+});
 
 const originalFetch = global.fetch;
 

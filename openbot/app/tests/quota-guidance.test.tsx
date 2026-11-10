@@ -24,6 +24,7 @@ import {
   subscribeQuotaGuidance,
 } from "@/lib/quota/guidance";
 import { queryClient } from "@/query-client";
+import { settleReactWork } from "./settle-react-work";
 
 /**
  * Story K4: a structured 402 from anywhere in the app opens one guidance surface that names the plan,
@@ -33,7 +34,10 @@ import { queryClient } from "@/query-client";
  */
 
 beforeAll(() => GlobalRegistrator.register());
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(async () => {
+  await settleReactWork();
+  GlobalRegistrator.unregister();
+});
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {

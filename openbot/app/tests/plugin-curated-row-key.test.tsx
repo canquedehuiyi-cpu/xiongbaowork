@@ -26,6 +26,7 @@ import { Route as AdminAppRoute } from "@/routes/_authed/admin/plugins/$key";
 import { Route as AdminListRoute } from "@/routes/_authed/admin/plugins/index";
 import { Route as ConnectedAccountRoute } from "@/routes/_authed/settings/connected-accounts/$key";
 import { Route as ConnectedAccountsRoute } from "@/routes/_authed/settings/connected-accounts/index";
+import { settleReactWork } from "./settle-react-work";
 
 /**
  * A curated connector whose row id is not its catalogue key.
@@ -45,7 +46,10 @@ import { Route as ConnectedAccountsRoute } from "@/routes/_authed/settings/conne
 
 beforeAll(() => GlobalRegistrator.register());
 afterEach(cleanup);
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(async () => {
+  await settleReactWork();
+  GlobalRegistrator.unregister();
+});
 
 const KEY = "baidu-netdisk";
 const ROW_ID = `team:${KEY}`;

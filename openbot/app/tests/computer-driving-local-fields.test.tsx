@@ -7,6 +7,7 @@ import { useState } from "react";
 import { DemonstrationRecorder } from "@/components/computer/demonstration-recorder";
 import { LiveScreen } from "@/components/computer/live-screen";
 import { queryClient } from "@/query-client";
+import { settleReactWork } from "./settle-react-work";
 
 /**
  * This page's own fields while a person drives a Bot's browser.
@@ -80,7 +81,8 @@ afterEach(() => {
   SocketDouble.latest = undefined;
 });
 
-afterAll(() => {
+afterAll(async () => {
+  await settleReactWork();
   globalThis.WebSocket = originalWebSocket;
   globalThis.fetch = originalFetch;
   GlobalRegistrator.unregister();

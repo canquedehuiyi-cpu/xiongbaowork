@@ -22,6 +22,7 @@ import { CreateAgentDialog } from "@/components/agents/create-agent-dialog";
 import { type AgentProfile, agentKeys } from "@/lib/agents/queries";
 import { computerKeys } from "@/lib/computers/queries";
 import { Route as BoundariesRoute } from "@/routes/_authed/admin/boundaries";
+import { settleReactWork } from "./settle-react-work";
 
 /**
  * The Enter that confirms a character an input method is composing is not an Enter.
@@ -42,7 +43,10 @@ import { Route as BoundariesRoute } from "@/routes/_authed/admin/boundaries";
 
 beforeAll(() => GlobalRegistrator.register());
 afterEach(cleanup);
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(async () => {
+  await settleReactWork();
+  GlobalRegistrator.unregister();
+});
 
 const originalFetch = global.fetch;
 

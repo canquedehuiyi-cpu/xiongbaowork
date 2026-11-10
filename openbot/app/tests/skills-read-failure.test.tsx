@@ -22,6 +22,7 @@ import { EditSkill } from "@/components/skills/edit-skill";
 import { type PluginsPage, pluginKeys } from "@/lib/plugins/queries";
 import { Route as ResourcesRoute } from "@/routes/_authed/_app/resources";
 import { Route as AdminSkillsRoute } from "@/routes/_authed/admin/skills";
+import { settleReactWork } from "./settle-react-work";
 
 /**
  * The three places skills are listed or opened, when `GET /api/plugins` fails.
@@ -41,7 +42,10 @@ import { Route as AdminSkillsRoute } from "@/routes/_authed/admin/skills";
 
 beforeAll(() => GlobalRegistrator.register());
 afterEach(cleanup);
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(async () => {
+  await settleReactWork();
+  GlobalRegistrator.unregister();
+});
 
 const originalFetch = global.fetch;
 

@@ -8,6 +8,7 @@ import {
   DECLINED_BY_PERSON,
   UNOFFERED_TOOL_SENTENCE,
 } from "@/lib/plugins/tool-result";
+import { settleReactWork } from "./settle-react-work";
 
 /*
  * 一行工具步骤怎么读：成功、失败、被拦截、被主人拒绝、调用了没有的工具，各说各的。
@@ -16,7 +17,10 @@ import {
 
 beforeAll(() => GlobalRegistrator.register());
 afterEach(() => cleanup());
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(async () => {
+  await settleReactWork();
+  GlobalRegistrator.unregister();
+});
 
 function line(name: string, result?: string, args = "{}") {
   const view = render(

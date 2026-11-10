@@ -11,10 +11,14 @@ import { cleanup, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useEffect } from "react";
 import { a2uiProviderOptions, OPENBOT_A2UI_CATALOG } from "@/lib/copilot/a2ui";
+import { settleReactWork } from "./settle-react-work";
 
 beforeAll(() => GlobalRegistrator.register());
 afterEach(cleanup);
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(async () => {
+  await settleReactWork();
+  GlobalRegistrator.unregister();
+});
 
 const operations: ServerToClientMessage[] = [
   {

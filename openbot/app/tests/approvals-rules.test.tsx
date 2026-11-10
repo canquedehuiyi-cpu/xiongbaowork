@@ -18,10 +18,14 @@ import {
 } from "@/components/channels/browser-activity";
 import { toVisibleChatItems } from "@/components/channels/chat-messages";
 import { offersStandingRule, POLICY_SOURCE_LABELS } from "@/lib/approvals";
+import { settleReactWork } from "./settle-react-work";
 
 beforeAll(() => GlobalRegistrator.register());
 afterEach(cleanup);
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(async () => {
+  await settleReactWork();
+  GlobalRegistrator.unregister();
+});
 
 const originalFetch = global.fetch;
 let role: "user" | "admin" = "user";

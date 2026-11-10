@@ -15,6 +15,7 @@ import { authKeys } from "@/lib/auth/queries";
 import { pluginKeys } from "@/lib/plugins/queries";
 import { Route as AssembleRoute } from "@/routes/_authed/_app/assemble.$agentId";
 import { Route as WakersRoute } from "@/routes/_authed/_app/wakers";
+import { settleReactWork } from "./settle-react-work";
 
 /**
  * Ticket 015 acceptance, at the screen where it is decided: installing a skill on one coworker is a
@@ -30,7 +31,10 @@ afterEach(() => {
   calls.length = 0;
   globalThis.fetch = originalFetch;
 });
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(async () => {
+  await settleReactWork();
+  GlobalRegistrator.unregister();
+});
 
 const originalFetch = globalThis.fetch;
 const calls: { method: string; path: string; body?: unknown }[] = [];

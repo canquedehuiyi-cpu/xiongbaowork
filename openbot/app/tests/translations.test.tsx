@@ -6,6 +6,7 @@ import { TranslatedInstructions } from "@/components/skills/translated-instructi
 import { agentPluginsQueryOptions } from "@/lib/plugins/queries";
 import { useSkillCommands } from "@/lib/plugins/skill-commands";
 import { translationKeys, useZh } from "@/lib/translations/queries";
+import { settleReactWork } from "./settle-react-work";
 
 /*
  * Skills and plugins that arrived in English are shown in Chinese where a translation exists, and as
@@ -21,7 +22,8 @@ beforeAll(() => {
   }
 });
 afterEach(() => cleanup());
-afterAll(() => {
+afterAll(async () => {
+  await settleReactWork();
   if (registeredHere) GlobalRegistrator.unregister();
 });
 

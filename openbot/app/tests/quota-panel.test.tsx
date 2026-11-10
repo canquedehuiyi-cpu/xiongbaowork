@@ -15,6 +15,7 @@ import { UsagePanel } from "@/components/quota/usage-panel";
 import { authKeys } from "@/lib/auth/queries";
 import { quotaKeys, type TokenUsage, tokenReadout } from "@/lib/quota/queries";
 import { Route as PlansRoute } from "@/routes/_authed/_app/plans";
+import { settleReactWork } from "./settle-react-work";
 
 /**
  * Ticket 022 acceptance at the two screens that decide it (spec K2/K3): the panel must show the plan
@@ -29,7 +30,10 @@ afterEach(() => {
   calls.length = 0;
   globalThis.fetch = originalFetch;
 });
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(async () => {
+  await settleReactWork();
+  GlobalRegistrator.unregister();
+});
 
 const originalFetch = globalThis.fetch;
 const calls: { method: string; path: string; body?: unknown }[] = [];

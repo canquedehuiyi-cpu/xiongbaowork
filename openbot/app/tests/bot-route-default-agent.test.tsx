@@ -20,6 +20,7 @@ import {
 } from "@testing-library/react";
 import { type AgentProfile, agentKeys } from "@/lib/agents/queries";
 import { Route as BotRoute } from "@/routes/_authed/_app/bot";
+import { settleReactWork } from "./settle-react-work";
 
 let originalRect: typeof HTMLElement.prototype.getBoundingClientRect;
 beforeAll(() => {
@@ -35,7 +36,10 @@ afterEach(() => {
   HTMLElement.prototype.getBoundingClientRect = originalRect;
 });
 
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(async () => {
+  await settleReactWork();
+  GlobalRegistrator.unregister();
+});
 
 function agent(
   overrides: Partial<AgentProfile> & { id: string },

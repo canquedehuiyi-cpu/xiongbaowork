@@ -13,6 +13,7 @@ import { cleanup, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { type AgentProfile, agentKeys } from "@/lib/agents/queries";
 import { Route as HomeRoute } from "@/routes/_authed/_app/index";
+import { settleReactWork } from "./settle-react-work";
 
 beforeAll(() => GlobalRegistrator.register());
 
@@ -23,7 +24,10 @@ afterEach(() => {
   cleanup();
 });
 
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(async () => {
+  await settleReactWork();
+  GlobalRegistrator.unregister();
+});
 
 function agent(
   overrides: Partial<AgentProfile> & { id: string },

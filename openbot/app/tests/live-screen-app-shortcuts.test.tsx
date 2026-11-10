@@ -12,6 +12,7 @@ import { act, cleanup, render, waitFor } from "@testing-library/react";
 import { LiveScreen } from "@/components/computer/live-screen";
 import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
 import { AppHotkeys } from "@/lib/hotkeys/app-hotkeys";
+import { settleReactWork } from "./settle-react-work";
 
 /**
  * The app's own shortcuts while a person drives a Bot's browser.
@@ -63,7 +64,8 @@ afterEach(() => {
   SocketDouble.latest = undefined;
 });
 
-afterAll(() => {
+afterAll(async () => {
+  await settleReactWork();
   globalThis.WebSocket = originalWebSocket;
   GlobalRegistrator.unregister();
 });

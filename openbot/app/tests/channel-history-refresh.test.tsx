@@ -34,6 +34,7 @@ import {
 import { applyChannelEvent } from "@/lib/channels/use-channel-events";
 import { a2uiProviderOptions, OPENBOT_A2UI_CATALOG } from "@/lib/copilot/a2ui";
 import { queryClient } from "@/query-client";
+import { settleReactWork } from "./settle-react-work";
 
 type ChannelCache = InfiniteData<ChannelPage>;
 const ActivityRequestSchema = z.object({
@@ -167,7 +168,8 @@ afterEach(() => {
   queryClient.clear();
   core = undefined;
 });
-afterAll(() => {
+afterAll(async () => {
+  await settleReactWork();
   globalThis.fetch = originalFetch;
   GlobalRegistrator.unregister();
 });

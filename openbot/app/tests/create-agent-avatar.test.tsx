@@ -27,6 +27,7 @@ import {
   randomAvatarSeed,
 } from "@/lib/agents/form";
 import type { AgentProfile } from "@/lib/agents/queries";
+import { settleReactWork } from "./settle-react-work";
 
 /**
  * Story D2: a new Waker's avatar seed is chosen in the create dialog, and the face shown is the face
@@ -38,7 +39,10 @@ import type { AgentProfile } from "@/lib/agents/queries";
 
 beforeAll(() => GlobalRegistrator.register());
 afterEach(cleanup);
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(async () => {
+  await settleReactWork();
+  GlobalRegistrator.unregister();
+});
 
 const originalFetch = global.fetch;
 

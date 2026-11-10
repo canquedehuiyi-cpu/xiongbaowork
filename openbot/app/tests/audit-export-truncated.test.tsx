@@ -11,6 +11,7 @@ import { cleanup, fireEvent, render } from "@testing-library/react";
 import { agentKeys } from "@/lib/agents/queries";
 import { auditKeys } from "@/lib/audit/queries";
 import { Route as AuditRoute } from "@/routes/_authed/admin/audit";
+import { settleReactWork } from "./settle-react-work";
 
 beforeAll(() => GlobalRegistrator.register());
 
@@ -20,7 +21,10 @@ afterEach(() => {
   globalThis.fetch = realFetch;
 });
 
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(async () => {
+  await settleReactWork();
+  GlobalRegistrator.unregister();
+});
 
 async function exportWith(headers: Record<string, string>) {
   globalThis.fetch = (async () =>

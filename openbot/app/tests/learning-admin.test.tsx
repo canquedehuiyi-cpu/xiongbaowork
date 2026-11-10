@@ -10,9 +10,13 @@ import {
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { LearningPage } from "@/routes/_authed/admin/learning";
 import type { LearningSettings } from "@openbot/shared/learning";
+import { settleReactWork } from "./settle-react-work";
 
 beforeAll(() => GlobalRegistrator.register());
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(async () => {
+  await settleReactWork();
+  GlobalRegistrator.unregister();
+});
 const originalFetch = global.fetch;
 afterEach(() => {
   cleanup();

@@ -15,6 +15,7 @@ import {
 } from "@/components/channels/app-access-card";
 import { ServerToolLine } from "@/components/channels/chat-transcript";
 import { writeAppAccessRequestAnswer } from "../../shared/app-access-request";
+import { settleReactWork } from "./settle-react-work";
 
 /**
  * 对话里的「申请访问」卡片：员工调用 `request_app_access` 后，对话记录把它的回答画成一张卡片，写明应用名和
@@ -23,7 +24,10 @@ import { writeAppAccessRequestAnswer } from "../../shared/app-access-request";
  */
 beforeAll(() => GlobalRegistrator.register());
 afterEach(cleanup);
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(async () => {
+  await settleReactWork();
+  GlobalRegistrator.unregister();
+});
 
 const originalFetch = global.fetch;
 let status: "pending" | "cancelled" | "approved" | "dismissed" | null =

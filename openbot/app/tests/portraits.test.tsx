@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import { PortraitPicker } from "@/components/portraits/portrait-picker";
 import { type Portrait, portraitKeys } from "@/lib/portraits/queries";
+import { settleReactWork } from "./settle-react-work";
 
 /*
  * 头像 in the browser: a face somebody chose is drawn wherever that coworker or group appears, and
@@ -25,7 +26,8 @@ afterEach(() => {
   cleanup();
   globalThis.fetch = originalFetch;
 });
-afterAll(() => {
+afterAll(async () => {
+  await settleReactWork();
   if (registeredHere) GlobalRegistrator.unregister();
 });
 

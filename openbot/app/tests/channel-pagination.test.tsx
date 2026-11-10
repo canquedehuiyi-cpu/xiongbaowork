@@ -32,6 +32,7 @@ import { type ChannelSummary, channelKeys } from "@/lib/channels/queries";
 import { quotaKeys } from "@/lib/quota/queries";
 import { userPreferencesQueryOptions } from "@/lib/settings/message-list";
 import { wakerGroupKeys } from "@/lib/waker-groups/queries";
+import { settleReactWork } from "./settle-react-work";
 
 // Keep the sidebar's live-update socket offline; these tests exercise HTTP pagination.
 class OfflineWebSocket extends EventTarget implements WebSocket {
@@ -138,7 +139,8 @@ afterEach(() => {
   clients.length = 0;
   expect(ScrollObserver.active.size).toBe(0);
 });
-afterAll(() => {
+afterAll(async () => {
+  await settleReactWork();
   globalThis.fetch = originalFetch;
   globalThis.WebSocket = originalWebSocket;
   globalThis.IntersectionObserver = originalObserver;
