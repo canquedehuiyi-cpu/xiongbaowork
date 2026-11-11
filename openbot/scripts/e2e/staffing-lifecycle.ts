@@ -349,6 +349,8 @@ async function freePort(): Promise<number> {
 /** Listed in INITIAL_ADMIN_EMAILS only so sign-in has a list; the role is granted below. */
 const ADMIN_EMAIL = "g6-admin@example.test";
 const OTHER_EMAIL = "g6-other@example.test";
+/** What a conversation the signed-in account is not in renders as. */
+const UNREADABLE_CONVERSATION = "读不到这段会话。";
 
 const PORT = Number(process.env.E2E_SERVER_PORT?.trim() || (await freePort()));
 const ORIGIN = `http://127.0.0.1:${PORT}`;
@@ -758,9 +760,16 @@ try {
       other.setDefaultTimeout(20_000);
       await signUp(other, otherContext, "G6 旁人", OTHER_EMAIL);
       await other.goto(`${ORIGIN}${channelPath}`);
-      // Give the page time to settle: whatever it shows, it must not be a way to act on the drafts.
-      await other.waitForLoadState("networkidle").catch(() => undefined);
-      await Bun.sleep(2000);
+      // Wait for what the page actually settles on before counting what is missing: a conversation the
+      // account is not in reads as unreadable. Counting zero cards on a page still loading proves nothing.
+      await other
+        .getByText(UNREADABLE_CONVERSATION)
+        .first()
+        .waitFor({ timeout: 30_000 });
+      check(
+        true,
+        "the other account's page says it cannot read the conversation",
+      );
       await screenshot("other-account-opens-the-conversation", other);
       for (const label of ["确认创建", "确认建群", "作废", "重试失败的步骤"])
         equal(
