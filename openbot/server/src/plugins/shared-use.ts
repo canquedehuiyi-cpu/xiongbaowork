@@ -175,6 +175,13 @@ export function covers(
   );
 }
 
+/**
+ * 浏览器送来的名单最多多少条、每个名字最长多少：一个人的 id 或一个群组的名字远小于这个数，超出的不是
+ * 一份真的名单，按读不懂处理，不让一份请求体把名单表写得无界地长。
+ */
+export const APPROVAL_MEMBERS_MAX = 500;
+export const APPROVAL_MEMBER_VALUE_MAX = 200;
+
 /** 浏览器送来的一条批准，读得出来才算；其余为 null。名单只在 `people` 时保留。 */
 export function asSharedUseApproval(value: unknown): SharedUseApproval | null {
   if (!value || typeof value !== "object") return null;
@@ -185,14 +192,16 @@ export function asSharedUseApproval(value: unknown): SharedUseApproval | null {
   )
     return null;
   const listed = members === undefined ? [] : members;
-  if (!Array.isArray(listed)) return null;
+  if (!Array.isArray(listed) || listed.length > APPROVAL_MEMBERS_MAX)
+    return null;
   const read: ApprovalMember[] = [];
   for (const member of listed) {
     const { kind, value: named } = (member ?? {}) as Record<string, unknown>;
     if (
       (kind !== "user" && kind !== "group") ||
       typeof named !== "string" ||
-      !named.trim()
+      !named.trim() ||
+      named.length > APPROVAL_MEMBER_VALUE_MAX
     )
       return null;
     read.push({ kind, value: named.trim() });

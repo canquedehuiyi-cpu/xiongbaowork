@@ -641,6 +641,68 @@ export function mountArcadeRoutes(
 }
 
 /**
+ * 这个人持有连接的别的 Arcade 应用（按行的地址读应用名，不含问的这一个）。断开的级联
+ * （{@link clearEndedArcadeSiblings}）和它的预告（{@link arcadeConnectionSiblings}）都从这里拿候选，
+ * 所以两边看的是同一批应用。只读这个人自己的连接行，别人的从不进来。
+ */
+async function otherArcadeAppsOf(
+  store: PluginStore,
+  userId: string,
+  toolkit: string,
+): Promise<string[]> {
+  const others = new Set<string>();
+  for (const connection of await store.brokeredConnectionsFor(userId)) {
+    const row = await store.serverAddress(connection.serverId);
+    const other = row ? toolkitOfFor("arcade", row.url) : null;
+    if (other && other !== toolkit) others.add(other);
+  }
+  return [...others];
+}
+
+/**
+ * 两个应用是不是在同一个认证提供商下，也就是共用一个连接。级联和预告用同一个判断：预告说会一起结束的，
+ * 正是级联去核对的那些。不分大小写，和适配器认连接时一样（`arcade-adapter` 把提供商名转成小写再比）：
+ * 厂商撤销时按这个规则结束的连接，这里也要按这个规则认，否则会留下一行厂商已经结束了的连接。
+ */
+const sameAuthProvider = (left: string | null, right: string): boolean =>
+  left !== null && left.toLowerCase() === right.toLowerCase();
+
+/**
+ * 断开这个应用还会连带结束哪些应用，只回答、不动任何东西（上游的 `siblingApps`）：这个人持有连接、且和
+ * 它在同一个认证提供商下的别的应用，排好序，不含它自己。
+ *
+ * 问不出认证提供商的应用不猜：把一个不会被碰的应用说成会结束，是教人忽略真正要紧的那条提醒。但少说也
+ * 不是没有代价（按了断开，丢了一个没人提醒过的应用），所以问不出的有几个照实给个数，不给名字。问的这个
+ * 应用自己问不出时，谁都判断不了，别的应用全算问不出。厂商超时和厂商答不出是同一个结果，级联那边也是
+ * 这样对待的。
+ *
+ * 每个应用只问厂商一次，同时问：这是有人在等的页面。
+ */
+export async function arcadeConnectionSiblings(input: {
+  store: PluginStore;
+  arcade: ArcadeBroker;
+  userId: string;
+  toolkit: string;
+}): Promise<{ siblings: string[]; unanswered: number }> {
+  const { store, arcade, userId, toolkit } = input;
+  const others = await otherArcadeAppsOf(store, userId, toolkit);
+  if (others.length === 0) return { siblings: [], unanswered: 0 };
+  const providerOf = (app: string) =>
+    withVendorDeadline(() => arcade.authProviderOf(app)).catch(() => null);
+  const [provider, ...answers] = await Promise.all(
+    [toolkit, ...others].map(providerOf),
+  );
+  if (!provider) return { siblings: [], unanswered: others.length };
+  const siblings = others.filter((_app, index) =>
+    sameAuthProvider(answers[index] ?? null, provider),
+  );
+  return {
+    siblings: siblings.sort(),
+    unanswered: answers.filter((answer) => !answer).length,
+  };
+}
+
+/**
  * 断开一个 Arcade 应用之后，结束这个人在同一认证提供商下、厂商那边也已经结束了的兄弟应用的本地行
  * （上游 #770 的断开级联）。Arcade 按认证提供商存连接：撤销 Gmail 的 Google 授权也结束了
  * GoogleCalendar。只结束「提供商相同、厂商也说已经没有连接」的那些；问不到的留着，不猜。
@@ -657,14 +719,12 @@ export async function clearEndedArcadeSiblings(input: {
   ).catch(() => null);
   if (!provider) return [];
   const ended: string[] = [];
-  for (const connection of await store.brokeredConnectionsFor(userId)) {
-    const row = await store.serverAddress(connection.serverId);
-    const sibling = row ? toolkitOfFor("arcade", row.url) : null;
-    if (!sibling || sibling === toolkit) continue;
+  for (const sibling of await otherArcadeAppsOf(store, userId, toolkit)) {
     try {
-      const same =
-        (await withVendorDeadline(() => arcade.authProviderOf(sibling))) ===
-        provider;
+      const same = sameAuthProvider(
+        await withVendorDeadline(() => arcade.authProviderOf(sibling)),
+        provider,
+      );
       if (!same) continue;
       const live = await withVendorDeadline(() =>
         arcade.isConnected({
