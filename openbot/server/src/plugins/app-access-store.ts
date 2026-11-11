@@ -477,9 +477,18 @@ export function appAccessMethods(context: {
 
     const prefixed = lower.startsWith(idPrefix);
     const slug = prefixed ? lower.slice(idPrefix.length) : lower;
-    const bySlug = enabled.find(
+    /*
+     * 按 broker 的应用名找已打开的应用，先看活动的提供商：换过提供商的部署会留着另一家的行（已断开的
+     * `composio-gmail`），两家的应用名常常只差大小写。带活动提供商前缀的名字（`arcade-Gmail`）说的就是
+     * 这一家的应用，从不落到另一家的行上——那样会报错，或替人申请到别家的应用，也走不到下面的目录。
+     * 不带前缀的名字找不到这一家的行时，才退到另一家的行，和以前一样。
+     */
+    const named = enabled.filter(
       (candidate) => candidate.toolkit?.toLowerCase() === slug,
     );
+    const bySlug =
+      named.find((candidate) => candidate.provider === provider) ??
+      (prefixed ? undefined : named[0]);
     if (bySlug) return bySlug;
 
     const keyed = catalogueEntry(lower);
@@ -496,12 +505,13 @@ export function appAccessMethods(context: {
     if (entry) return absentFor(entry.key, undefined, null);
 
     const listed = await readDirectory(directory);
-    const named = listed?.find(
+    const offered = listed?.find(
       (candidate) =>
         candidate.slug.toLowerCase() === slug ||
         candidate.name.toLowerCase() === lower,
     );
-    if (named) return absentFor(`${idPrefix}${named.slug}`, undefined, listed);
+    if (offered)
+      return absentFor(`${idPrefix}${offered.slug}`, undefined, listed);
     // 带前缀的键照原样的大小写问（Arcade 的应用名分大小写），前缀本身不分。
     return absentFor(
       prefixed ? `${idPrefix}${asked.slice(idPrefix.length)}` : asked,

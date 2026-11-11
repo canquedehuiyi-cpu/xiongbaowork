@@ -27,12 +27,25 @@ const BOT = `aaa-bot-${suite}`;
 const DROPBOX = `Dropbox${suite}`;
 const GMAIL = `Gmail${suite}`;
 const GMAIL_ROW = `arcade-${GMAIL}`;
+/** 换提供商之前留下的 Composio 行（已断开），应用名和 Arcade 的只差大小写。 */
+const LEFT_CALENDAR = `composio-calendar${suite}`;
+const LEFT_GMAIL = `aaa-left-gmail-${suite}`;
+const CALENDAR = `Calendar${suite}`;
 
 const directory: BrokerApp[] = [
   {
     slug: DROPBOX,
     name: `Dropbox ${suite}`,
     description: "Files",
+    logo: null,
+    categories: [],
+    actionCount: 1,
+    connection: { kind: "consent" },
+  },
+  {
+    slug: CALENDAR,
+    name: `Calendar ${suite}`,
+    description: "Events",
     logo: null,
     categories: [],
     actionCount: 1,
@@ -89,6 +102,21 @@ beforeAll(async () => {
       authScheme: "OAUTH2",
       accountMode: "personal",
     });
+    await database.insert(mcpServers).values(
+      [
+        [LEFT_CALENDAR, `calendar${suite}`],
+        [LEFT_GMAIL, GMAIL.toLowerCase()],
+      ].map(([id, slug]) => ({
+        id: id ?? "",
+        tenantId: "team",
+        title: `Left over ${slug}`,
+        vendor: "Composio",
+        url: `composio://${slug}`,
+        provenance: "composio",
+        authScheme: "OAUTH2",
+        accountMode: "personal",
+      })),
+    );
   });
 });
 
@@ -97,7 +125,7 @@ afterAll(async () => {
     await database.delete(agents).where(eq(agents.id, BOT));
     await database
       .delete(mcpServers)
-      .where(inArray(mcpServers.id, [GMAIL_ROW]));
+      .where(inArray(mcpServers.id, [GMAIL_ROW, LEFT_CALENDAR, LEFT_GMAIL]));
     await removePeople(database, [PERSON]);
   });
   await database.$client.close();
@@ -148,5 +176,33 @@ describe("an Arcade app that is open", () => {
       });
       expect(found?.toolkit).toBe(GMAIL);
     }
+  });
+});
+
+describe("a row left over from the other broker", () => {
+  test("is never what the active broker's id names, even when the app names differ only in case", async () => {
+    const found = await inspect(`arcade-${CALENDAR}`);
+    expect(found?.access).toMatchObject({
+      key: `arcade-${CALENDAR}`,
+      provider: "arcade",
+      state: "disabled",
+      unavailable: "absent",
+      requestKind: "enable",
+    });
+    expect(found?.answeringId).toBeNull();
+    expect(requestPlanFor(found ?? null)).toMatchObject({ kind: "enable" });
+  });
+
+  test("a bare app name finds the active broker's row first, and the other broker's only when there is none", async () => {
+    // 两家都有这个名字：活动提供商的那一行。
+    expect((await inspect(GMAIL.toLowerCase()))?.access).toMatchObject({
+      key: GMAIL_ROW,
+      provider: "arcade",
+    });
+    // 只有另一家的行：仍然找得到它，和以前一样。
+    expect((await inspect(`calendar${suite}`))?.access).toMatchObject({
+      key: LEFT_CALENDAR,
+      provider: "composio",
+    });
   });
 });
