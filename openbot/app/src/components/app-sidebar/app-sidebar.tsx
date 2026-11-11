@@ -143,14 +143,21 @@ function ViewSwitch({
 }) {
   const agents = useQuery({ ...agentListQueryOptions(), enabled: false });
   const groups = useQuery({ ...wakerGroupsQueryOptions(), enabled: false });
-  const views: { value: SidebarView; label: string; count?: number }[] = [
+  const views: {
+    value: SidebarView;
+    label: string;
+    count?: number;
+    /** What the count counts, for a screen reader: 「员工，6 位」. */
+    unit?: string;
+  }[] = [
     { value: "chats", label: "会话" },
     {
       value: "wakers",
       label: "员工",
       count: agents.data ? listedEmployees(agents.data).length : undefined,
+      unit: "位",
     },
-    { value: "groups", label: "群组", count: groups.data?.length },
+    { value: "groups", label: "群组", count: groups.data?.length, unit: "个" },
   ];
   return (
     <fieldset
@@ -161,9 +168,15 @@ function ViewSwitch({
         const selected = view.value === value;
         return (
           <button
+            aria-label={
+              view.count === undefined
+                ? view.label
+                : `${view.label}，${view.count} ${view.unit}`
+            }
             aria-pressed={selected}
             className={cn(
-              "inline-flex h-[28px] flex-1 items-center justify-center gap-1 rounded-[8px] px-2 font-medium text-[13px] whitespace-nowrap outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/60",
+              // On a phone the 28px plate takes a 44px press: the pseudo-element reaches 8px above and below.
+              "relative inline-flex h-[28px] flex-1 items-center justify-center gap-1 rounded-[8px] px-2 font-medium text-[13px] whitespace-nowrap outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/60 max-md:before:absolute max-md:before:inset-x-0 max-md:before:-inset-y-[8px] max-md:before:content-['']",
               selected
                 ? "bg-background text-foreground shadow-xs dark:bg-foreground/10"
                 : "text-muted-foreground hover:text-foreground",
@@ -292,7 +305,7 @@ function SidebarBrand() {
           )}
           variant="outline"
         >
-          <IconUsersPlus className="size-[16px] text-signal" />
+          <IconUsersPlus className="size-[16px]" />
           新建群聊
         </Button>
       </div>
