@@ -129,9 +129,7 @@ test("an app's call OpenBot asks about draws its card in the conversation", asyn
   expect(card.getByRole("radio", { name: "拒绝" })).toBeTruthy();
   expect(card.queryByRole("radio", { name: "在这里总是允许" })).toBeNull();
   // 本部署的底线（#398）：对外发送只能「允许一次」，不跟上游 #1394 打开「在这段对话里都允许」。
-  expect(
-    card.queryByRole("radio", { name: "在这段对话里都允许" }),
-  ).toBeNull();
+  expect(card.queryByRole("radio", { name: "在这段对话里都允许" })).toBeNull();
 });
 
 test("管理员设成每次都问的发送，同样只给「允许一次 / 拒绝」", async () => {
@@ -161,14 +159,10 @@ test("管理员设成每次都问的发送，同样只给「允许一次 / 拒�
     },
   ];
   const view = draw();
-  const card = within(
-    await view.findByRole("region", { name: "等你批准" }),
-  );
+  const card = within(await view.findByRole("region", { name: "等你批准" }));
   expect(card.getByRole("radio", { name: "允许一次" })).toBeTruthy();
   expect(card.getByRole("radio", { name: "拒绝" })).toBeTruthy();
-  expect(
-    card.queryByRole("radio", { name: "在这段对话里都允许" }),
-  ).toBeNull();
+  expect(card.queryByRole("radio", { name: "在这段对话里都允许" })).toBeNull();
   expect(card.queryByRole("radio", { name: "在这里总是允许" })).toBeNull();
 });
 

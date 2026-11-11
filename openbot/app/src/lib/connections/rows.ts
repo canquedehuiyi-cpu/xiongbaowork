@@ -1,7 +1,25 @@
 import type { IdentityProviders, LinkedAccount } from "@/lib/identity/queries";
-import { schemeNeedsKey } from "@/lib/plugins/enablement-notes";
-import { brokeredProvenance } from "@/lib/plugins/provider-vocabulary";
+import { isBrokeredProvenance } from "@/lib/plugins/brokered";
 import type { CatalogueItem, PluginServer } from "@/lib/plugins/queries";
+
+/**
+ * Whether an added app's recorded scheme is one a person types a key for.
+ *
+ * 上游从 `@/lib/plugins/enablement-notes` 导入 `schemeNeedsKey`。fork 还没有那个模块，而这个文件
+ * 被 `new-bot-sheet.tsx`（`ALWAYS_ON_APP`）引用，导入一个不存在的模块会让它整个加载失败，所以先照
+ * 上游同一张表就地写一份（与 `brokered-account-row.tsx` 的 `FIELD_SCHEMES` 相同）。第二阶段恢复
+ * enablement-notes 后改回导入。
+ */
+const FIELD_SCHEMES = [
+  "API_KEY",
+  "BASIC",
+  "BEARER_TOKEN",
+  "BASIC_WITH_JWT",
+  "S2S_OAUTH2",
+];
+function schemeNeedsKey(authScheme: string | null): boolean {
+  return authScheme !== null && FIELD_SCHEMES.includes(authScheme);
+}
 
 /**
  * Every row on Connections, in one list.
@@ -60,15 +78,14 @@ export function isBrokeredGithub(
   server: Pick<PluginServer, "id" | "provenance">,
 ): boolean {
   return (
-    brokeredProvenance(server.provenance) &&
+    isBrokeredProvenance(server.provenance) &&
     server.id === `${server.provenance}-github`
   );
 }
 
 export const IDENTITY_SUMMARIES = {
-  github:
-    "Lets OpenBot recognise you on GitHub, so a repository's events can start your Bots' work.",
-  slack: "Lets OpenBot recognise you when you message it from Slack.",
+  github: "让熊宝在 GitHub 上认出你，这样仓库里的事件就能让你的员工开始干活。",
+  slack: "让熊宝在你从 Slack 发消息时认出你。",
 } as const;
 
 /**
@@ -76,8 +93,8 @@ export const IDENTITY_SUMMARIES = {
  * sentence was cut off mid-word. The full one stays on each connection's own page.
  */
 const IDENTITY_TILE_SUMMARIES = {
-  github: "Repository events can start Bots.",
-  slack: "Message OpenBot from Slack.",
+  github: "仓库事件可以让员工开始干活。",
+  slack: "从 Slack 给熊宝发消息。",
 } as const;
 
 const IDENTITY_TITLES = { github: "GitHub", slack: "Slack" } as const;
@@ -156,7 +173,7 @@ export function connectionRows(input: {
           // expected a sign-in is surprised when the page asks for one.
           summary:
             !input.connected.has(server.id) && schemeNeedsKey(server.authScheme)
-              ? `Needs a key from ${server.title}`
+              ? `需要 ${server.title} 的密钥`
               : server.summary,
           state: input.connected.has(server.id) ? "connected" : "available",
           notConnected: !input.connected.has(server.id),
@@ -167,7 +184,7 @@ export function connectionRows(input: {
       (server): ConnectionRow => ({
         key: server.id,
         title: server.title,
-        summary: "Your organisation's account. Bots act as the team here.",
+        summary: "组织的账号。员工在这里以团队的身份行事。",
         state: "team",
         mark: { kind: "logo", logo: server.logo },
       }),

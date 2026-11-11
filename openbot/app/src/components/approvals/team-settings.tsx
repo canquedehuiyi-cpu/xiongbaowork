@@ -226,7 +226,9 @@ export function TeamApprovalSettings() {
               </ItemMedia>
               <ItemContent>
                 <ItemTitle>成员电脑上执行命令的上限</ItemTitle>
-                <ItemDescription>成员自己更严格的设置仍然生效。</ItemDescription>
+                <ItemDescription>
+                  成员自己更严格的设置仍然生效。
+                </ItemDescription>
               </ItemContent>
               <ItemActions>
                 <LabelSelect
@@ -249,36 +251,38 @@ export function TeamApprovalSettings() {
           title="总要先问的操作"
         >
           <PageRows>
-            {ACTION_KIND_ROWS.map(({ kind, title, icon: Icon, handedOff }, index) => (
-              <Fragment key={kind}>
-                {index > 0 ? <Separator /> : null}
-                <Item size="sm">
-                  <ItemMedia variant="icon">
-                    <Icon />
-                  </ItemMedia>
-                  <ItemContent>
-                    <ItemTitle>{title}</ItemTitle>
-                  </ItemContent>
-                  <ItemActions>
-                    {handedOff ? (
-                      <span className="text-muted-foreground text-sm">
-                        总是交给成员本人
-                      </span>
-                    ) : (
-                      <LabelSelect
-                        disabled={team.isPending}
-                        label={title}
-                        labels={ACTION_KIND_LABELS}
-                        onChange={(policy) =>
-                          team.mutate({ actionKinds: { [kind]: policy } })
-                        }
-                        value={settings.actionKinds?.[kind] ?? "open"}
-                      />
-                    )}
-                  </ItemActions>
-                </Item>
-              </Fragment>
-            ))}
+            {ACTION_KIND_ROWS.map(
+              ({ kind, title, icon: Icon, handedOff }, index) => (
+                <Fragment key={kind}>
+                  {index > 0 ? <Separator /> : null}
+                  <Item size="sm">
+                    <ItemMedia variant="icon">
+                      <Icon />
+                    </ItemMedia>
+                    <ItemContent>
+                      <ItemTitle>{title}</ItemTitle>
+                    </ItemContent>
+                    <ItemActions>
+                      {handedOff ? (
+                        <span className="text-muted-foreground text-sm">
+                          总是交给成员本人
+                        </span>
+                      ) : (
+                        <LabelSelect
+                          disabled={team.isPending}
+                          label={title}
+                          labels={ACTION_KIND_LABELS}
+                          onChange={(policy) =>
+                            team.mutate({ actionKinds: { [kind]: policy } })
+                          }
+                          value={settings.actionKinds?.[kind] ?? "open"}
+                        />
+                      )}
+                    </ItemActions>
+                  </Item>
+                </Fragment>
+              ),
+            )}
           </PageRows>
         </PageSection>
       ) : null}

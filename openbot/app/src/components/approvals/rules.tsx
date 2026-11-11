@@ -313,8 +313,8 @@ export function RuleForm({
             <DialogTitle>{label}</DialogTitle>
             <DialogDescription>
               用 * 匹配任意内容。应用的工具以应用名开头，所以{" "}
-              {TOOL_PATTERN_EXAMPLE} 表示所有 Gmail 工具。目标写
-              *.example.com 表示这个网站的所有页面。
+              {TOOL_PATTERN_EXAMPLE} 表示所有 Gmail 工具。目标写 *.example.com
+              表示这个网站的所有页面。
             </DialogDescription>
           </DialogHeader>
           <DialogBody className="mt-4">
