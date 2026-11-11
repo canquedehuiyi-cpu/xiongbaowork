@@ -622,6 +622,12 @@ export type ComposioBroker = {
    * it on the evidence that is actually available.
    */
   revokeAccount(accountId: string): Promise<void>;
+  /**
+   * 一个应用的连接记在哪个认证提供商下；不知道、或这个 broker 不按认证提供商存连接时没有这个方法或答
+   * null（上游 `authProviderOf`）。只有 Arcade 有：它按「用户 + 认证提供商」存连接，撤销一个应用的授权
+   * 会结束同一提供商下的其他应用，移除应用时据此把那些已经失效的连接行一并结束。
+   */
+  authProviderOf?(toolkit: string): Promise<string | null>;
 };
 
 /**

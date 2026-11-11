@@ -92,7 +92,6 @@ import {
   redirectUriFor,
   sealConnectState,
 } from "./oauth";
-import { personAccount } from "./shared-accounts";
 import {
   type AppAccessRequestRecord,
   CatalogueEntryUnknownError,
@@ -108,6 +107,8 @@ import {
   type PluginStore,
   type ServerAddress,
 } from "./store";
+import { type AccountRef, anotherArcadeAccount } from "./shared-accounts";
+import { withVendorDeadline } from "./vendor-deadline";
 
 /**
  * Whether the person a consent was started for still has access to this deployment.
@@ -424,8 +425,16 @@ export function createPluginRoutes(
 ) {
   const routes = new Hono<{ Variables: AppVariables }>();
   /** broker 应用的 url 说的是哪个应用，按活动提供商的解析器（X5；Composio 时与以前一样）。 */
+  /*
+   * 没有接上 broker 时按 store 的提供商读（上游 #1017）：store 是按「这个部署的行属于谁」建的，所以撤掉
+   * key 之后留下的 Arcade 行仍用 Arcade 的解析器读，而不是被当成 Composio 的行读丢。
+   */
   const toolkitOf = (url: string) =>
-    toolkitOfFor(composio?.provider ?? "composio", url);
+    toolkitOfFor(
+      // 一个不说自己读哪一家的 store（测试里的替身）按 Composio 读，与以前一样。
+      composio?.provider ?? store.brokerProvider ?? "composio",
+      url,
+    );
   const sharedUse = composio?.sharedUse;
   const adminCapability = adminScope?.adminCapability;
   const signedInWithCapability: MiddlewareHandler<{
@@ -516,20 +525,20 @@ export function createPluginRoutes(
        */
       composioConfigured: Boolean(composio),
       /*
-       * broker 是不是逐个动作授权（上游的 `authorizesPerAction`）。这里恒为 false，即使活动的 broker 声明了
-       * 授权流程（Arcade 的 `authorizations`）：页面按这个字段画逐个动作的授权列表，列表背后是
-       * `GET /servers/:id/grants` 和 `POST /servers/:id/authorize` 两条路由，fork 没有并入它们。答 true 会
-       * 画出一排每按一次都失败的按钮。fork 的 Arcade 连接是整个应用一次授权（`./arcade-routes`），页面按
-       * 普通的「连接」画就对。并入那两条路由时，这里改回上游的 `Boolean(broker.authorizations)`。
+       * broker 是不是逐个动作授权（上游的 `authorizesPerAction`）。页面按这个字段画逐个动作的授权列表，
+       * 列表背后是 `GET /servers/:id/grants` 和 `POST /servers/:id/authorize`（`./arcade-routes`）。这两条
+       * 路由只在接上了 Arcade 的 broker 时有作用，所以按同一个条件答：答 true 而路由不在，会画出一排每按
+       * 一次都失败的按钮。Composio 的应用整个连接一次，答 false。
        */
-      authorizesPerAction: false,
+      authorizesPerAction: Boolean(composio?.arcade),
       /*
        * 这个部署的连接应用由哪一家提供（上游的 `provider`），是个名字，不是密钥，也不是能力。页面上写出
        * 厂商名字的地方（「浏览 Composio」、密钥是哪一项设置）从一行应用上推不出来，只有它能回答；按是不是
-       * 连接应用来筛选的地方不需要它。没有接 broker 时答 composio，那样的部署和以前画得一样。和下面按地址
-       * 认应用的解析器（`toolkitOf`）读的是同一个值，所以页面显示的名字和路由用的解析器不会分开。
+       * 连接应用来筛选的地方不需要它。没有接 broker 时答 store 读写的那一家（撤掉 key 之后留下 Arcade 连接的
+       * 部署仍答 arcade，上游 #1017），一行连接都没有的部署答 composio，和以前画得一样。和下面按地址认应用的
+       * 解析器（`toolkitOf`）读的是同一个值，所以页面显示的名字和路由用的解析器不会分开。
        */
-      provider: composio?.provider ?? "composio",
+      provider: composio?.provider ?? store.brokerProvider ?? "composio",
       /*
        * `canConnect` 是针对这次请求者的判断：只有管理员能连接的应用（`adminConnectOnly`），成员看到
        * false，其余为 true。前端照它渲染「连接」，不用自己拿角色去拼。连接路由和 store 照旧各自拒绝，
@@ -1234,7 +1243,18 @@ export function createPluginRoutes(
         .filter((toolkit): toolkit is string => toolkit !== null),
     );
     return context.json({
-      apps: matched.map((app) => ({ ...app, enabled: enabled.has(app.slug) })),
+      /*
+       * 三个计数总是在，broker 没说时为 null（上游 `BrokerApp` 的形状）：这个应用有多少动作被分了类
+       * （读 / 写 / 破坏性）、要多少项权限、多少动作带权限范围。页面据此在启用一个大多数动作没分类的
+       * toolkit 之前提醒管理员——没分类的动作在审批里一律按最严的算。Composio 的目录不报这些，答 null。
+       */
+      apps: matched.map((app) => ({
+        ...app,
+        classifiedCount: app.classifiedCount ?? null,
+        permissionCount: app.permissionCount ?? null,
+        scopedActionCount: app.scopedActionCount ?? null,
+        enabled: enabled.has(app.slug),
+      })),
       awaitingClient,
     });
   });
@@ -1550,6 +1570,104 @@ export function createPluginRoutes(
   });
 
   /**
+   * 厂商说「这个人的账号已经允许这个应用要的全部权限」，所以没有同意页面可去（上游的 `adoptHeld`）。
+   *
+   * 只在本人自己按下「连接」时到这里：授权记在他自己在厂商那边的名字下，是他同意过的，直接记下。页面
+   * 加载时的确认与重新检查仍然从不新建连接——那两条谁打开页面都会触发，不是谁的决定。
+   */
+  const adoptHeldAccount = async (
+    context: Context<{ Variables: AppVariables }>,
+    toolkit: string,
+    title: string,
+    /** 重新连接的是他的第二个账号时，那个账号在厂商那边的 id。 */
+    vendorUserId?: string,
+  ): Promise<Response> => {
+    let recorded: { connected: boolean };
+    try {
+      recorded = await store.recordHeldConnection({
+        toolkit,
+        userId: context.var.actor.id,
+        by: context.var.actor.id,
+        ...(vendorUserId ? { vendorUserId } : {}),
+      });
+    } catch (error) {
+      const refusal = personRefusal(
+        error,
+        `没能确认 ${title} 是不是已经连接。请重试；如果一直这样，请联系管理员。`,
+        { route: "connect.held", toolkit },
+      );
+      return context.json({ error: refusal.error }, refusal.status);
+    }
+    if (recorded.connected) return context.json(recorded);
+    return context.json(
+      {
+        error: `应用说 ${title} 的账号已经连接，但核对时没有找到，所以没有连接任何东西。请再按一次「连接」；如果一直这样，请联系管理员。`,
+      },
+      409,
+    );
+  };
+
+  /**
+   * 厂商说团队身份已经持有这个应用要的全部权限。
+   *
+   * 团队账号已经连接着：这是就地重新连接而没有新权限可要，什么都不改，照实答已连接。
+   *
+   * 团队账号没有连接：那个授权不收养。它是谁在同意页面上同意的，这里无从知道——可能是一次被取消或被
+   * 拒绝的连接留下的，同意的人也许已经不是管理员，用的也许是他自己的邮箱；记下来就是把那个邮箱变成团队
+   * 账号，连接人还写成现在按下的这位。所以先在厂商那边撤掉它（团队身份每个应用单独铸出，撤销不连带别的
+   * 应用），再为按下「连接」的管理员铸一次新的同意：他自己在同意页面上选账号，回程照旧只认他的会话。
+   * 撤不掉（厂商抛错，或答没有可撤的）就拒绝，什么都不记。到这里之前，连接路由已经确认过这次请求持有
+   * 管理员能力。
+   */
+  const reconsentTeamAccount = async (
+    context: Context<{ Variables: AppVariables }>,
+    input: {
+      serverId: string;
+      toolkit: string;
+      title: string;
+      returnUrl: string;
+      vendorUserId: string;
+      connected: boolean;
+    },
+  ): Promise<Response> => {
+    if (input.connected) return context.json({ connected: true });
+    const arcade = composio?.arcade;
+    const stale = `${input.title} 的团队账号在应用那边留着一个旧的授权，没能撤掉，所以没有连接任何东西。请稍后再试；如果一直这样，请联系管理员。`;
+    if (!arcade) return context.json({ error: stale }, 503);
+    const account: AccountRef = {
+      holder: "deployment",
+      vendorUserId: input.vendorUserId,
+    };
+    const withdrawn = await withVendorDeadline(() =>
+      arcade.revoke({ account, toolkit: input.toolkit }),
+    ).catch((error: unknown) => {
+      console.error(
+        JSON.stringify({
+          type: "arcade-stale-team-grant-not-withdrawn",
+          server: input.serverId,
+          // 只记类名：这条腿上的错误可能带着厂商的回答。
+          error: error instanceof Error ? error.name : typeof error,
+        }),
+      );
+      return false;
+    });
+    if (withdrawn !== true) return context.json({ error: stale }, 503);
+    return startArcadeAuthorization(
+      context,
+      { store, arcade, appUrl: connect?.appUrl },
+      {
+        serverId: input.serverId,
+        account,
+        toolkit: input.toolkit,
+        title: input.title,
+        returnUrl: input.returnUrl,
+        // 撤掉之后厂商仍说已持有：不再绕一圈，如实拒绝。
+        held: async () => context.json({ error: stale }, 503),
+      },
+    );
+  };
+
+  /**
    * Begin connecting one person's own account.
    *
    * Answers with a URL rather than redirecting, so the browser decides when to leave the page. The
@@ -1630,7 +1748,8 @@ export function createPluginRoutes(
             409,
           );
         }
-        if (app.shared.connectedAt) {
+        // Arcade 上团队账号也可以就地重新连接（同一个团队身份再同意一次）；Composio 要先断开。
+        if (app.shared.connectedAt && !composio.arcade) {
           return context.json(
             {
               error: `${row.title} 已经连接了一个团队账号。要换一个，先断开它。`,
@@ -1670,7 +1789,12 @@ export function createPluginRoutes(
         context.req.query("another") === "1" &&
         schemeKind(row.authScheme) === "consent" &&
         Boolean(composio.broker.accountsOf);
-      if (existing && !another) {
+      /*
+       * Arcade 上，在已有的连接上再按「连接」是重新连接：同一个账号再同意一次，权限加在同一条连接上，
+       * 不用先断开（上游 #927）。调用因缺授权被拒时卡片上的「重新连接」走的就是这里。Composio 仍按下面的
+       * 规则拒绝：那边再连一次会在已连接的行后面挂上第二个账号。
+       */
+      if (existing && !another && !composio.arcade) {
         /*
          * Named with the step to take rather than only refused: a second link would attach a
          * second account behind a row that already says connected, and the way to a new one is
@@ -2248,14 +2372,6 @@ export function createPluginRoutes(
        */
       // X5：Arcade 的连接先在发起人名下认领一次尝试，回程由 `/arcade/verify` 核对并记录。
       if (composio.arcade) {
-        if (another) {
-          return context.json(
-            {
-              error: `用 Arcade 连接时，一个人在 ${row.title} 上暂时只能连接一个账号。没有建立任何连接。`,
-            },
-            409,
-          );
-        }
         let returnUrl: string;
         try {
           returnUrl = brokerReturnUrl(
@@ -2269,18 +2385,58 @@ export function createPluginRoutes(
           );
           return context.json({ error: refusal.error }, refusal.status);
         }
+        /*
+         * 卡片上的「重新连接」点名了他的哪一个账号（`?account=<账号表的行 id>`，调用被拒的是他的第二个
+         * 账号时卡片带着它）：授权那个账号，而不是他名字下的。行必须是他自己在这个应用上的；别的一律答
+         * 没有这个账号，什么都不铸。
+         */
+        const named = context.req.query("account");
+        const chosen =
+          !shared && !another && named
+            ? await store.personAccountByRow(toolkit, holderId, named)
+            : null;
+        if (!shared && !another && named && !chosen) {
+          return context.json({ error: "这个账号没有连接。请刷新页面。" }, 404);
+        }
         return startArcadeAuthorization(
           context,
           { store, arcade: composio.arcade, appUrl: connect.appUrl },
           {
             serverId,
+            /*
+             * 谁的账号只来自会话与应用行。「再连一个账号」（`?another=1`，上面已经确认本人有一条现成的
+             * 连接）记在本人自己的另一个 id 下：Arcade 按「用户 id + 认证提供商」只存一个账号。那个 id 在
+             * 这里铸出，请求里带什么都不读。
+             */
             account:
               shared && app?.shared
                 ? { holder: "deployment", vendorUserId: holderId }
-                : personAccount(holderId, null),
+                : another
+                  ? anotherArcadeAccount(store.personAccount(holderId))
+                  : (chosen ?? store.personAccount(holderId)),
             toolkit,
             title: row.title,
             returnUrl,
+            held:
+              shared && app?.shared
+                ? () =>
+                    reconsentTeamAccount(context, {
+                      serverId,
+                      toolkit,
+                      title: row.title,
+                      returnUrl,
+                      vendorUserId: holderId,
+                      connected: Boolean(app.shared?.connectedAt),
+                    })
+                : another
+                  ? undefined
+                  : () =>
+                      adoptHeldAccount(
+                        context,
+                        toolkit,
+                        row.title,
+                        chosen?.vendorUserId,
+                      ),
           },
         );
       }
@@ -2981,17 +3137,36 @@ export function createPluginRoutes(
           return context.json({ error: "这个账号没有连接。请刷新页面。" }, 404);
         }
         // 最后一个账号：整个连接一起断开，走这个应用一直以来的那条路径。
+        /*
+         * 在 Arcade 上断开一个账号也是撤掉那个 id 在一个认证提供商下的整条连接，会连带同一提供商下的其他
+         * 应用；与「断开」路由一样，把厂商那边也结束了的兄弟应用的行一并结束，并在响应里列出来。
+         */
+        const siblingsOf = () =>
+          composio?.arcade
+            ? clearEndedArcadeSiblings({
+                store,
+                arcade: composio.arcade,
+                userId: context.var.actor.id,
+                toolkit: resolved.toolkit,
+              })
+            : Promise.resolve(null);
         if ("only" in ended) {
+          const disconnected = await store.disconnectBrokered({
+            toolkit: resolved.toolkit,
+            userId: context.var.actor.id,
+            by: context.var.actor.id,
+            reason: "self",
+          });
+          const siblings = await siblingsOf();
           return context.json(
-            await store.disconnectBrokered({
-              toolkit: resolved.toolkit,
-              userId: context.var.actor.id,
-              by: context.var.actor.id,
-              reason: "self",
-            }),
+            siblings ? { ...disconnected, siblings } : disconnected,
           );
         }
-        return context.json(ended);
+        // 只断了其中一个账号时，结束了兄弟应用才说出来；平常的响应与以前一样。
+        const siblings = await siblingsOf();
+        return context.json(
+          siblings && siblings.length > 0 ? { ...ended, siblings } : ended,
+        );
       } catch (error) {
         const refusal = personRefusal(
           error,
@@ -3336,7 +3511,13 @@ export function createPluginRoutes(
   // X5：Arcade 的回程验证与取消，只在 Arcade 是活动提供商时有作用。
   mountArcadeRoutes(routes, capable, () =>
     composio?.arcade
-      ? { store, arcade: composio.arcade, appUrl: connect?.appUrl }
+      ? {
+          store,
+          arcade: composio.arcade,
+          appUrl: connect?.appUrl,
+          // 团队账号的授权清单与逐个动作授权只给此刻持有管理员能力的人（与别的管理员路由同一个判断）。
+          adminRefusal: (context) => decisionRefusal(context),
+        }
       : null,
   );
 

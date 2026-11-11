@@ -2,11 +2,12 @@ import { describe, expect, test } from "bun:test";
 import { selectProviderWiring } from "../src/plugins/provider-wiring";
 
 /**
- * fork X5 评审 I2：上游 #927（单用户安装在厂商那边有自己的名字）并入之前，单用户安装一律不启用 Arcade。
+ * 单用户安装（包括个人版）与 Arcade。
  *
- * 单用户安装的那个人在每台机器上都是 `dev-local-user`。几台安装共用一把 ARCADE_API_KEY 时，一台连接的
- * Gmail 另一台的 Bot 就能调用；而且每台每次连接前都会把项目的验证地址改成自己。所以既不构造 Arcade
- * 客户端，也不改写验证地址，启动时用中文说明。Composio 的单用户安装不受影响（行为与以前一样）。
+ * 上游 #927 并入之前这里钉的是「拒绝启动」：那时每台单用户安装的那个人在 Arcade 都是 `dev-local-user`，
+ * 共用一把 ARCADE_API_KEY 的安装互相拿到对方的授权。现在每台安装在 Arcade 那边有自己的名字
+ * （`ensureSingleUserIdentity`），所以照上游启用：构造 Arcade 客户端，而且因为单用户安装拥有它的 Arcade
+ * 项目，连接之前把项目的验证地址指向自己。Composio 的单用户安装与要登录的部署不变。
  */
 describe("a single-user install and Arcade", () => {
   const factories = () => {
@@ -26,42 +27,41 @@ describe("a single-user install and Arcade", () => {
     };
   };
 
-  test("refuses to start rather than share one Arcade name across installs", () => {
+  test("gets Arcade, and points the project's verifier at itself because the project is its own", () => {
     const f = factories();
-    let refusal = "";
-    try {
-      selectProviderWiring(
-        {
-          arcadeApiKey: "arc-secret",
-          singleUser: true,
-          publicUrl: "http://localhost:3001",
-        },
-        f.create,
-      );
-    } catch (error) {
-      refusal = (error as Error).message;
-    }
-    expect(refusal).toContain("单用户");
-    expect(refusal).toContain("Arcade");
-    expect(refusal).not.toContain("arc-secret");
-    // 没有构造客户端，所以也没有任何一次改写验证地址。
-    expect(f.built).toEqual([]);
+    const wiring = selectProviderWiring(
+      {
+        arcadeApiKey: "arc-secret",
+        singleUser: true,
+        publicUrl: "http://localhost:3001",
+      },
+      f.create,
+    );
+    expect(wiring.provider).toBe("arcade");
+    expect(wiring.install.composio).toBeNull();
+    expect(f.built).toEqual(["arcade:true"]);
   });
 
-  test("a named Arcade provider is refused the same way", () => {
+  test("a named Arcade provider is wired the same way, and Composio's client is not built", () => {
     const f = factories();
-    expect(() =>
-      selectProviderWiring(
-        {
-          composioApiKey: "c",
-          arcadeApiKey: "a",
-          brokerProvider: "arcade",
-          singleUser: true,
-        },
-        f.create,
-      ),
-    ).toThrow(/单用户/);
-    expect(f.built).toEqual([]);
+    const wiring = selectProviderWiring(
+      {
+        composioApiKey: "c",
+        arcadeApiKey: "a",
+        brokerProvider: "arcade",
+        singleUser: true,
+        publicUrl: "http://localhost:3001",
+      },
+      f.create,
+    );
+    expect(wiring.provider).toBe("arcade");
+    expect(f.built).toEqual(["arcade:true"]);
+  });
+
+  test("with no public address there is nothing to point the verifier at, so nothing is repointed", () => {
+    const f = factories();
+    selectProviderWiring({ arcadeApiKey: "a", singleUser: true }, f.create);
+    expect(f.built).toEqual(["arcade:false"]);
   });
 
   test("a single-user Composio install is untouched", () => {

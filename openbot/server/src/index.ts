@@ -335,12 +335,19 @@ import { useComposioClient } from "./plugins/composio";
 import { createAccountModeSwitch } from "./plugins/account-mode";
 import { useArcadeClient } from "./plugins/arcade";
 import { asComposioBroker, createArcadeClient } from "./plugins/arcade-adapter";
-import { connectionsHeldBy } from "./plugins/arcade-attempts";
-import { assertActivatable } from "./plugins/broker";
+import { BROKERED_PROFILE } from "./plugins/access";
+import { connectionOwners, connectionsHeldBy } from "./plugins/arcade-attempts";
+import { assertActivatable, providerDecision } from "./plugins/broker";
+import {
+  ensureSingleUserIdentity,
+  underOwnName,
+  vendorNameFor,
+} from "./plugins/single-user-identity";
 import {
   arcadeVerifierNotice,
   ownsBrokerProject,
   selectProviderWiring,
+  storedProvider,
 } from "./plugins/provider-wiring";
 import {
   createSharedAudience,
@@ -366,7 +373,7 @@ import {
   startPersonalDefaultApps,
   withPersonalDefaults,
 } from "./plugins/personal-defaults";
-import { createPluginStore } from "./plugins/store";
+import { createPluginStore, type PluginStore } from "./plugins/store";
 import {
   grantedSkills,
   grantedTools,
@@ -1536,11 +1543,95 @@ await startupLifecycle.run(async (startup) => {
   if (composio) useComposioClient(composio.actions);
   if (arcade) useArcadeClient(arcade.actions);
   // 部署用的 broker：adapter 的 broker 加上逐个列账号（上游 #1298）；Arcade 时是桥接后的 broker。
-  const composioBroker = composio
+  /*
+   * 启动时要跨所有租户做的三件事，在同一个平台帧里（不新增平台入口），放在建 store 之前：
+   *
+   * 一、启用检查（上游 `assertActivatable`）：另一个提供商还持有连接时拒绝启用这一个，直接换环境变量会
+   * 留下谁也撤销不了的账号。要等，启动在它失败时停下。
+   *
+   * 二、这个部署的存储读写哪一家的连接（上游 `storedProvider`，#1017）。这与「哪个 broker 是活动的」是
+   * 两个问题：配置指明了就是它；一个 key 都没有（key 后来撤了）时由实际持有的行说它们属于谁，于是留下的
+   * Arcade 连接仍读作 Arcade 的，页面如实显示，而不是被当成 Composio 的行读丢。两家都持有行而没有活动的
+   * 提供商时拒绝启动：那样的部署里启用任何一边都会被第一条拒绝，所以这里说清楚手动的出路。store、账号
+   * 模式与路由都拿这一个值。
+   *
+   * 三、自带应用的刷新与个人版的默认应用（下面那一段）要用建好的 store，所以它在这个帧里开始、等 store
+   * 建好再往下走；之后每一步仍在平台帧里。不 await：启动不等它。
+   */
+  const storeBuilt = Promise.withResolvers<PluginStore>();
+  const storedBrokerProvider = await runAsTenant("platform", async () => {
+    if (brokerWiring.provider) {
+      const other = brokerWiring.provider === "arcade" ? "composio" : "arcade";
+      assertActivatable(
+        brokerWiring.provider,
+        await connectionsHeldBy(database, other),
+      );
+    }
+    const stored = storedProvider(
+      providerDecision(config),
+      await connectionOwners(database),
+    );
+    void (async () => {
+      const pluginStore = await storeBuilt.promise;
+      if (currentEdition() !== "personal") {
+        await pluginStore.refreshOwnListings();
+        /*
+         * 同一个库从个人版换成团队版时，个人默认写下的宽授予原样生效。只提醒，不删：删掉哪些是管理员的决定。
+         */
+        if (await personalGrantsLeftInTeam(database))
+          console.warn(
+            "[plugins] 这个库里还有个人版替每位员工写下的授予（granted_by 以 openbot: 开头）。团队版由管理员逐个授予，请在插件页核对并收回不需要的。",
+          );
+        return;
+      }
+      startup.acquireSync(
+        () => ({
+          stop: startPersonalDefaultApps(
+            pluginStore,
+            personalDeps,
+            personalDefaultAppsMemory(database),
+          ),
+        }),
+        (resource) => resource.stop(),
+      );
+      return ensureAlwaysOnApp(pluginStore, personalDeps);
+    })().catch((error: unknown) => {
+      console.warn(
+        "[plugins] OpenBot's own apps' tools could not be brought up to date:",
+        error instanceof Error ? error.message : error,
+      );
+    });
+    return stored;
+  });
+  if (!brokerWiring.provider && storedBrokerProvider !== "composio") {
+    console.warn(
+      `[plugins] 没有设置任何连接应用提供商的 API key，所以没有活动的 broker：连接应用现在既不能连接也不能断开。已有的连接读作 ${BROKERED_PROFILE[storedBrokerProvider].vendor} 的。`,
+    );
+  }
+
+  /*
+   * 单用户安装在 broker 那边自己的名字（上游 #927），在 store 解析任何人的账号之前定下。每台单用户安装的
+   * 那个人都是 `dev-local-user`，没有这一步，共用一把 key 的每台安装在厂商那边共用一组账号。仍记在那个
+   * 共享名下的连接在这里退役（只删本地行），从不在厂商那边结束。见 `ensureSingleUserIdentity`。
+   * 要登录的部署这里什么也不写，换名函数原样交回每个人自己的 id。
+   */
+  const vendorNameOf = vendorNameFor(
+    await startup.step(() =>
+      ensureSingleUserIdentity(database, {
+        singleUser: config.singleUser,
+        provider: brokerWiring.provider,
+      }),
+    ),
+  );
+  const builtBroker = composio
     ? brokerWithAccounts(composio)
     : arcade
       ? asComposioBroker(arcade.broker)
       : undefined;
+  // store 与路由拿到的是同一个换过名的 broker：路由自己发起的授权也以这台安装自己的名字发出。
+  const composioBroker = builtBroker
+    ? underOwnName(builtBroker, vendorNameOf)
+    : undefined;
   if (arcade) {
     const notice = arcadeVerifierNotice(config.publicUrl, {
       ownsProject: ownsBrokerProject(config),
@@ -1658,6 +1749,8 @@ await startupLifecycle.run(async (startup) => {
      * attempted.
      */
     broker: composioBroker,
+    // 只有单用户安装带上换名；要登录的部署不给这个选项，store 与以前完全一样。
+    ...(config.singleUser ? { personVendorId: vendorNameOf } : {}),
     /*
      * Entra on-behalf-of, for a server an admin marked as reached as the signed-in person (上游
      * #931). The framed door above: the person's sign-in and the tokens minted from it are identity
@@ -1684,7 +1777,8 @@ await startupLifecycle.run(async (startup) => {
      */
     entraConsent: ({ actorId, botId, serverId }) =>
       teamBots.ownSignInConsent(actorId, botId, serverId),
-    ...(brokerWiring.provider === "arcade"
+    // 只在不是 Composio 时给：只配 COMPOSIO_API_KEY 或什么都没配、也没有 Arcade 行的部署，store 与以前一样。
+    ...(storedBrokerProvider === "arcade"
       ? { brokerProvider: "arcade" as const }
       : {}),
     sharedUse: sharedAudience.gate,
@@ -1705,7 +1799,7 @@ await startupLifecycle.run(async (startup) => {
     teamRules: storedApprovals.policy,
     deploymentId,
     audit: bootAuditStore,
-    ...(brokerWiring.provider === "arcade"
+    ...(storedBrokerProvider === "arcade"
       ? { provider: "arcade" as const }
       : {}),
   });
@@ -1744,44 +1838,8 @@ await startupLifecycle.run(async (startup) => {
    * 服务器级的事；重试的计时器在这一帧里排下，之后每一次重试仍在平台帧里。授予由 `personalDeps` 在那个人
    * 自己的帧里写。
    */
-  await runAsTenant("platform", async () => {
-    if (brokerWiring.provider) {
-      const other = brokerWiring.provider === "arcade" ? "composio" : "arcade";
-      assertActivatable(
-        brokerWiring.provider,
-        await connectionsHeldBy(database, other),
-      );
-    }
-    void (async () => {
-      if (currentEdition() !== "personal") {
-        await pluginStore.refreshOwnListings();
-        /*
-         * 同一个库从个人版换成团队版时，个人默认写下的宽授予原样生效。只提醒，不删：删掉哪些是管理员的决定。
-         */
-        if (await personalGrantsLeftInTeam(database))
-          console.warn(
-            "[plugins] 这个库里还有个人版替每位员工写下的授予（granted_by 以 openbot: 开头）。团队版由管理员逐个授予，请在插件页核对并收回不需要的。",
-          );
-        return;
-      }
-      startup.acquireSync(
-        () => ({
-          stop: startPersonalDefaultApps(
-            pluginStore,
-            personalDeps,
-            personalDefaultAppsMemory(database),
-          ),
-        }),
-        (resource) => resource.stop(),
-      );
-      return ensureAlwaysOnApp(pluginStore, personalDeps);
-    })().catch((error: unknown) => {
-      console.warn(
-        "[plugins] OpenBot's own apps' tools could not be brought up to date:",
-        error instanceof Error ? error.message : error,
-      );
-    });
-  });
+  // 平台帧在上面（建 store 之前）已经打开，里面那一段等的就是这一下：store 建好了，开始刷新与默认应用。
+  storeBuilt.resolve(pluginStore);
 
   if (currentEdition() === "personal") {
     /*
@@ -4823,7 +4881,8 @@ await startupLifecycle.run(async (startup) => {
         }),
         apps: {
           configured: Boolean(composio || arcade),
-          provider: brokerWiring.provider ?? config.brokerProvider ?? "composio",
+          provider:
+            brokerWiring.provider ?? config.brokerProvider ?? "composio",
         },
         chat: Boolean(deliveryProviders.slack),
       }),

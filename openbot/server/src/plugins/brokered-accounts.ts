@@ -1,7 +1,11 @@
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { type AuditStore, recordAuditEvent } from "../audit";
 import type { Database } from "../db/client";
-import { brokeredAccounts, mcpServers } from "../db/schema";
+import {
+  brokeredAccounts,
+  composioConnections,
+  mcpServers,
+} from "../db/schema";
 import { isPersonTenant, runAsTenant } from "../tenant/context";
 import type { ComposioBroker } from "./broker";
 import { type BrokerProvider, toolkitOfFor } from "./access";
@@ -34,6 +38,8 @@ export type BrokeredAccountRecord = {
 
 /** 一次调用进的账号，从它选中的那一行读出。 */
 export type PinnedAccount = {
+  /** 账号表里这一行的 id：页面与卡片用它指名这个账号（不是厂商的 id）。 */
+  id: string;
   vendorUserId: string;
   /** vendor 的账号 id；只凭 user id 就能指名时为 null。 */
   accountId: string | null;
@@ -97,9 +103,20 @@ export function createAccountBook(context: {
   auditStore: AuditStore;
   /** 活动的提供商（X5）；不给时是 Composio，与以前一样。 */
   provider?: BrokerProvider;
+  /**
+   * 一个人的账号在厂商那边记在哪个名字下（上游 #927）；不给时就是本人的用户 id。缓存的行记这个名字，
+   * 所以单用户安装换了名字之后，旧名字下的行在下一次同步时被当作厂商不再列出的账号删掉。
+   */
+  vendorNameOf?: (userId: string) => string;
 }) {
   const { database, broker, auditStore } = context;
   const PROVIDER: BrokerProvider = context.provider ?? "composio";
+  /**
+   * 一个人的账号在厂商那边记在哪个名字下（上游 #927）。缓存的行记的是这个名字，所以「这一行是不是这个人
+   * 自己的账号」也必须拿它来认：拿本地的用户 id 去认，单用户安装的那个人（名字是这台安装自己的）一个账号
+   * 都认不出来，按名字挑账号、Team Bot 用主人的默认账号、断开其中一个都会落空。
+   */
+  const nameOf = context.vendorNameOf ?? ((userId: string) => userId);
 
   const rowsFor = (toolkit: string, userId: string) =>
     database
@@ -112,6 +129,21 @@ export function createAccountBook(context: {
           eq(brokeredAccounts.userId, userId),
         ),
       );
+
+  /** 这个人在这个应用上有没有连接行。 */
+  const hasConnection = async (toolkit: string, userId: string) =>
+    (
+      await database
+        .select({ toolkit: composioConnections.toolkit })
+        .from(composioConnections)
+        .where(
+          and(
+            eq(composioConnections.toolkit, toolkit),
+            eq(composioConnections.userId, userId),
+          ),
+        )
+        .limit(1)
+    ).length > 0;
 
   /** 没有默认账号时，让最早的那个成为默认。 */
   const settleDefault = async (toolkit: string, userId: string) => {
@@ -141,14 +173,49 @@ export function createAccountBook(context: {
     if (!broker?.accountsOf) return recordsOf(await rowsFor(toolkit, userId));
 
     const held = await rowsFor(toolkit, userId);
-    const listed = (await broker.accountsOf({ userId, toolkit })).map(
-      (found) => ({
-        vendorUserId: userId,
-        accountId: found.accountId ?? "",
-        identity: found.identity,
-        connectedAt: found.connectedAt ? new Date(found.connectedAt) : null,
-      }),
-    );
+    /*
+     * Arcade 按认证提供商列连接：一个只连了日历、从没连过邮件的人打开邮件的账号页，厂商答的是他日历
+     * 那条 Google 连接。记下来，就成了一条「邮件、本人名字」的账号行，之后移除或切换邮件的清扫会把
+     * 他当成邮件的用户。所以这个应用上没有他的连接行时，不问厂商、不写，也不列出表里留下的旧行：应用读作
+     * 未连接，列表就是空的；在一行旧的「本人名字」上按「断开」会撤掉他在同一认证提供商下正在用的连接。
+     * 旧行本身留着，清扫路径还要靠它们找到可能仍活着的第二个账号。Composio 按应用列账号，照旧同步。
+     */
+    if (PROVIDER === "arcade" && !(await hasConnection(toolkit, userId)))
+      return [];
+    /*
+     * 这个人在厂商那边的每一个 id：他自己的名字，加上表里已经记下的「另一个账号」的 id（上游 #1298 的
+     * Arcade 一半）。Composio 把一个人的所有账号记在同一个 id 下，这里就只有一个；Arcade 每个 id 一个
+     * 账号，所以逐个 id 去问。另一个 id 只在它的同意经回程完成时写进表里，这里从不凭空生出一个。
+     */
+    const own = nameOf(userId);
+    const filedUnder = [
+      ...new Set([
+        own,
+        ...held
+          .map((row) => row.vendorUserId)
+          .filter((id) => filedUnderPerson(id, own)),
+      ]),
+    ];
+    const listed: {
+      vendorUserId: string;
+      accountId: string;
+      identity: string | null;
+      connectedAt: Date | null;
+    }[] = [];
+    for (const vendorUserId of filedUnder) {
+      // 本人自己的名字按本地 id 去问（broker 那一层换名）；另一个 id 已经是厂商那边的 id，原样去问。
+      for (const found of await broker.accountsOf({
+        userId: vendorUserId === own ? userId : vendorUserId,
+        toolkit,
+      })) {
+        listed.push({
+          vendorUserId,
+          accountId: found.accountId ?? "",
+          identity: found.identity,
+          connectedAt: found.connectedAt ? new Date(found.connectedAt) : null,
+        });
+      }
+    }
 
     const key = (row: { vendorUserId: string; accountId: string }) =>
       `${row.vendorUserId}\u0000${row.accountId}`;
@@ -206,10 +273,11 @@ export function createAccountBook(context: {
     const { toolkit, title, userId, named } = input;
     const mine = async () =>
       ordered(await rowsFor(toolkit, userId)).filter((row) =>
-        filedUnderPerson(row.vendorUserId, userId),
+        filedUnderPerson(row.vendorUserId, nameOf(userId)),
       );
     let rows = await mine();
     const pinned = (row: Row, label: string): PinnedAccount => ({
+      id: row.id,
       vendorUserId: row.vendorUserId,
       accountId: row.accountId === "" ? null : row.accountId,
       label,
@@ -242,8 +310,15 @@ export function createAccountBook(context: {
     /*
      * 还什么都没记下，所以问 vendor 一次：账号被列出之前建立的连接，在应用页面打开之前没有行；一次点名了
      * 账号的调用正是要紧的时刻，在这里列一次，而不是拒绝一个真实的账号。
+     *
+     * 表里有还没记下名字的行时也一样（第二个账号刚完成、本人那一行是随它补记的，厂商的地址都还没同步）：
+     * 否则按原来的邮箱点名会被拒，因为那一行只有 id、没有地址。
      */
-    if (!found.row && rows.length === 0 && wanted !== null) {
+    if (
+      !found.row &&
+      wanted !== null &&
+      (rows.length === 0 || rows.some((row) => row.identity === null))
+    ) {
       await sync({ toolkit, userId }).catch(() => []);
       rows = await mine();
       found = find();
@@ -271,7 +346,7 @@ export function createAccountBook(context: {
   async function ownersDefault(input: {
     toolkit: string;
     userId: string;
-  }): Promise<{ accountId: string | null } | null> {
+  }): Promise<{ accountId: string | null; vendorUserId: string } | null> {
     if (!isPersonTenant(input.userId)) return null;
     const rows = await runAsTenant(input.userId, () =>
       database
@@ -294,12 +369,36 @@ export function createAccountBook(context: {
     );
     const mine = ordered(
       rows
-        .filter((row) => filedUnderPerson(row.vendorUserId, input.userId))
+        .filter((row) =>
+          filedUnderPerson(row.vendorUserId, nameOf(input.userId)),
+        )
         .map((row) => ({ ...row }) as unknown as Row),
     );
     const chosen = mine.find((row) => row.isDefault) ?? mine[0];
     if (!chosen) return null;
-    return { accountId: chosen.accountId === "" ? null : chosen.accountId };
+    return {
+      accountId: chosen.accountId === "" ? null : chosen.accountId,
+      // 这个账号在厂商那边记在哪个 id 下：Arcade 的另一个账号没有账号 id，只能靠它钉住。
+      vendorUserId: chosen.vendorUserId,
+    };
+  }
+
+  /**
+   * 这个人在一个应用上「另一个账号」的 id（不含他自己的名字）。断开整个应用、离职处理、移除应用时用：
+   * Arcade 每个 id 一个账号，只撤本人名字下的那个会把其余的留在厂商那边，这里再也够不着。
+   */
+  async function furtherIds(input: {
+    toolkit: string;
+    userId: string;
+  }): Promise<string[]> {
+    const own = nameOf(input.userId);
+    return [
+      ...new Set(
+        (await rowsFor(input.toolkit, input.userId))
+          .map((row) => row.vendorUserId)
+          .filter((id) => id !== own && filedUnderPerson(id, own)),
+      ),
+    ];
   }
 
   return {
@@ -308,6 +407,7 @@ export function createAccountBook(context: {
     pick,
     settleDefault,
     ownersDefault,
+    furtherIds,
 
     /**
      * Bot 的工具所在的每个服务器上，这个人持有账号的 broker 个人应用：标题和他的账号。这是
@@ -416,8 +516,14 @@ export function createAccountBook(context: {
       by: string;
     }): Promise<{ only: true } | { remaining: number } | null> {
       if (!UUID.test(input.id)) return null;
+      // 这个应用上没有他的连接时，表里留下的旧行不是能单独断开的账号（见 `sync`），答没有这个账号。
+      if (
+        PROVIDER === "arcade" &&
+        !(await hasConnection(input.toolkit, input.userId))
+      )
+        return null;
       const rows = (await rowsFor(input.toolkit, input.userId)).filter((row) =>
-        filedUnderPerson(row.vendorUserId, input.userId),
+        filedUnderPerson(row.vendorUserId, nameOf(input.userId)),
       );
       const row = rows.find((candidate) => candidate.id === input.id);
       if (!row) return null;
@@ -426,11 +532,19 @@ export function createAccountBook(context: {
 
       /*
        * 只断这一个，绝不清扫。`revoke` 会结束一个人在该应用上的所有账号；这里结束的是他点了「断开」的
-       * 那一个。Composio 按账号 id 指名它。没有 id 的账号在 Composio 不会出现（`accountsOf` 不列），
-       * 所以这里总有 id。
+       * 那一个。Composio 按账号 id 指名它。没有 id 的账号在 Composio 不会出现（`accountsOf` 不列）；
+       * Arcade 每个 id 只有一个账号、不给账号 id，所以按这一行自己的 id 撤这个应用的授权——那个 id 是
+       * 这个人名下的，上面已经筛过，撤的也只是这一个账号。
        */
-      if (row.accountId === "") return null;
-      await broker.revokeAccount(row.accountId);
+      if (row.accountId !== "") await broker.revokeAccount(row.accountId);
+      else
+        await broker.revoke({
+          userId:
+            row.vendorUserId === nameOf(input.userId)
+              ? input.userId
+              : row.vendorUserId,
+          toolkit: input.toolkit,
+        });
 
       await database
         .delete(brokeredAccounts)
