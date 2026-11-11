@@ -21,9 +21,13 @@ afterAll(() => GlobalRegistrator.unregister());
 const originalFetch = global.fetch;
 const sent: { body: unknown }[] = [];
 let failing = false;
+/** X7 安全评审后：会话写着 admin、但角色已被收回的人切换时，服务端答 403 和这一句。 */
+const ADMIN_UNCONFIRMED = "你的管理员身份没能确认，没有改变任何东西。";
+let demoted = false;
 beforeEach(() => {
   sent.length = 0;
   failing = false;
+  demoted = false;
   global.fetch = Object.assign(
     async (_path: Parameters<typeof fetch>[0], init?: RequestInit) => {
       const body = init?.body ? JSON.parse(String(init.body)) : undefined;
@@ -43,6 +47,8 @@ beforeEach(() => {
           },
         });
       }
+      if (demoted)
+        return Response.json({ error: ADMIN_UNCONFIRMED }, { status: 403 });
       if (failing)
         return Response.json(
           {
@@ -120,6 +126,18 @@ describe("switching an app to Shared", () => {
       await view.findByRole("button", { name: "把 Linear 改成团队账号" }),
     );
     expect(await view.findByText("Composio said no.")).toBeTruthy();
+    expect(
+      view.getByRole("button", { name: "把 Linear 改成团队账号" }),
+    ).toBeTruthy();
+  });
+
+  test("an admin whose role was taken back is shown the server's sentence, and nothing reads as changed", async () => {
+    demoted = true;
+    const view = draw();
+    await userEvent.click(
+      await view.findByRole("button", { name: "把 Linear 改成团队账号" }),
+    );
+    expect(await view.findByText(ADMIN_UNCONFIRMED)).toBeTruthy();
     expect(
       view.getByRole("button", { name: "把 Linear 改成团队账号" }),
     ).toBeTruthy();

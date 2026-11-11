@@ -559,8 +559,7 @@ async function ask(away: boolean, turnRuns = 2) {
   release();
   await waitFor(() => expect(runs).toHaveLength(turnRuns), { timeout: 5000 });
   await waitFor(
-    () =>
-      expect(view.queryByRole("button", { name: "停止员工" })).toBeNull(),
+    () => expect(view.queryByRole("button", { name: "停止员工" })).toBeNull(),
     { timeout: 5000 },
   );
   await settleReactWork();

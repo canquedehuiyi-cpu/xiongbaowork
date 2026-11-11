@@ -80,6 +80,7 @@ import {
   type CatalogueItem,
   connectionsQueryOptions,
   ownerGrantsQueryOptions,
+  type PluginConnection,
   type PluginServer,
   personalConnections,
   pluginsPageQueryOptions,
@@ -219,6 +220,21 @@ export function connectionKindFor(
   if (server && brokeredProvenance(server.provenance)) return "brokered";
   if (server?.entraScope) return "person-entra";
   return auth ?? "deployment-bearer";
+}
+
+/**
+ * 团队账号连上之后的那句话。
+ *
+ * X7 安全评审后，团队账号行（`holder: "deployment"`）的 `displayName`（vendor 那边的账号名）和
+ * `connectedBy`（谁连的）只给持有管理员能力的人，其余人拿到 null。拿到 null 时不写「账号是 …」，也不留
+ * 空白，只说「团队账号」；拿到哪个就说哪个。
+ */
+export function teamAccountConnectedDescription(
+  row: Pick<PluginConnection, "displayName" | "connectedBy"> | undefined,
+): string {
+  const name = row?.displayName?.trim();
+  const by = row?.connectedBy?.trim();
+  return `已连接${name ? `，团队账号是 ${name}` : "团队账号"}${by ? `，由 ${by} 连接` : ""}。拿到这些工具的每位员工都以这个账号行事。`;
 }
 
 /**
@@ -1216,7 +1232,9 @@ export function PluginPage({
                   <BrokeredAccountRow
                     account={brokeredAccount}
                     edition={paths.edition}
-                    connectedDescription={`已连接${sharedConnection?.displayName ? `，账号是 ${sharedConnection.displayName}` : ""}${sharedConnection?.connectedBy ? `，由 ${sharedConnection.connectedBy} 连接` : ""}。拿到这些工具的每位员工都以这个账号行事。`}
+                    connectedDescription={teamAccountConnectedDescription(
+                      sharedConnection,
+                    )}
                     disconnectedDescription="还没有连接团队账号。拿到这些工具的员工调用时会被拒绝。"
                     heading="团队账号"
                     notice="请用团队账号登录，不要用你自己的账号。"
